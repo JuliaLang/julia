@@ -51,7 +51,7 @@ function eof(s::LibuvStream)
     # and that we won't return true if there's a readerror pending (it'll instead get thrown).
     # This requires some careful ordering here (TODO: atomic loads)
     bytesavailable(s) > 0 && return false
-    open = isopen(s) # must preceed readerror check
+    open = isopen(s) # must precede readerror check
     s.readerror === nothing || throw(s.readerror)
     return !open
 end
@@ -332,7 +332,7 @@ end
 function wait_readnb(x::LibuvStream, nb::Int)
     # fast path before iolock acquire
     bytesavailable(x.buffer) >= nb && return
-    open = isopen(x) # must preceed readerror check
+    open = isopen(x) # must precede readerror check
     x.readerror === nothing || throw(x.readerror)
     open || return
     iolock_begin()

@@ -815,3 +815,15 @@ end
 @testset "flatten empty tuple" begin
     @test isempty(collect(Iterators.flatten(())))
 end
+
+@testset "Iterators.accumulate" begin
+    @test collect(Iterators.accumulate(+, [])) == []
+    @test collect(Iterators.accumulate(+, [1])) == [1]
+    @test collect(Iterators.accumulate(+, [1,2])) == [1,3]
+    @test collect(Iterators.accumulate(+, [1,2,3])) == [1,3,6]
+    @test collect(Iterators.accumulate(=>, [:a,:b,:c])) == [:a, :a => :b, (:a => :b) => :c]
+    @test length(Iterators.accumulate(+, [10,20,30])) == 3
+    @test size(Iterators.accumulate(max, rand(2,3))) == (2,3)
+    @test Base.IteratorSize(Iterators.accumulate(max, rand(2,3))) === Base.IteratorSize(rand(2,3))
+    @test Base.IteratorEltype(Iterators.accumulate(*, ())) isa Base.EltypeUnknown
+end

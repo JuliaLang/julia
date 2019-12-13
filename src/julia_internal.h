@@ -742,9 +742,9 @@ size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTS
 // Record backtrace from a signal handler. `ctx` is the context of the code
 // which was asynchronously interrupted.
 size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx,
-                         int add_interp_frames) JL_NOTSAFEPOINT;
+                         jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
 #ifdef LIBOSXUNWIND
-size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx, int add_interp_frames) JL_NOTSAFEPOINT;
+size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
 #endif
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
 void jl_critical_error(int sig, bt_context_t *context, jl_bt_element_t *bt_data, size_t *bt_size);
@@ -766,10 +766,9 @@ STATIC_INLINE char *jl_copy_str(char **to, const char *from)
     memcpy(*to, from, len);
     return *to;
 }
-JL_DLLEXPORT int jl_is_interpreter_frame(uintptr_t ip) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_is_enter_interpreter_frame(uintptr_t ip) JL_NOTSAFEPOINT;
-JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_data, uintptr_t sp,
-                                            uintptr_t fp, size_t space_remaining) JL_NOTSAFEPOINT;
+
+JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_data,
+        void *frameend, size_t space_remaining) JL_NOTSAFEPOINT;
 
 // Exception stack: a stack of pairs of (exception,raw_backtrace).
 // The stack may be traversed and accessed with the functions below.

@@ -862,19 +862,29 @@ function MethodList(mt::Core.MethodTable)
 end
 
 """
-    methods(f, [types])
+    methods(f, [types], [module])
 
-Returns the method table for `f`.
+Return the method table for `f`.
 
-If `types` is specified, returns an array of methods whose types match.
+If `types` is specified, return an array of methods whose types match.
+If `module` is specified, return an array of methods defined in this module.
+A list of modules can also be specified as an array or tuple.
+
+!!! compat "Julia 1.4"
+    At least Julia 1.4 is required for specifying a module.
 """
-function methods(@nospecialize(f), @nospecialize(t))
+function methods(@nospecialize(f), @nospecialize(t),
+                 @nospecialize(mod::Union{Module,AbstractArray{Module},Tuple{Vararg{Module}},Nothing}=nothing))
+    if mod isa Module
+        mod = (mod,)
+    end
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
     t = to_tuple_type(t)
     world = typemax(UInt)
-    return MethodList(Method[m[3] for m in _methods(f, t, -1, world)], typeof(f).name.mt)
+    MethodList(Method[m[3] for m in _methods(f, t, -1, world) if mod === nothing || m[3].module in mod],
+               typeof(f).name.mt)
 end
 
 methods(f::Core.Builtin) = MethodList(Method[], typeof(f).name.mt)
@@ -887,9 +897,11 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     ms = ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), tt, -1, 1, world, min, max)::Array{Any,1}
     return MethodList(Method[m[3] for m in ms], typeof(f).name.mt)
 end
-function methods(@nospecialize(f))
+
+function methods(@nospecialize(f),
+                 @nospecialize(mod::Union{Module,AbstractArray{Module},Tuple{Vararg{Module}},Nothing}=nothing))
     # return all matches
-    return methods(f, Tuple{Vararg{Any}})
+    return methods(f, Tuple{Vararg{Any}}, mod)
 end
 
 function visit(f, mt::Core.MethodTable)

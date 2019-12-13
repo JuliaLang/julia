@@ -341,7 +341,7 @@ static void finalize_object(arraylist_t *list, jl_value_t *o,
 static void jl_gc_push_arraylist(jl_ptls_t ptls, arraylist_t *list)
 {
     void **items = list->items;
-    items[0] = (void*)(((uintptr_t)list->len - 2) << 1);
+    items[0] = (void*)JL_GC_ENCODE_PUSHARGS(list->len - 2);
     items[1] = ptls->pgcstack;
     ptls->pgcstack = (jl_gcframe_t*)items;
 }
@@ -2045,7 +2045,7 @@ stack: {
         uintptr_t offset = stack->offset;
         uintptr_t lb = stack->lb;
         uintptr_t ub = stack->ub;
-        uint32_t nr = nroots >> 1;
+        uint32_t nr = nroots >> 2;
         uintptr_t nptr = 0;
         while (1) {
             jl_value_t ***rts = (jl_value_t***)(((void**)s) + 2);
@@ -2087,7 +2087,7 @@ stack: {
                 uintptr_t new_nroots = gc_read_stack(&s->nroots, offset, lb, ub);
                 assert(new_nroots <= UINT32_MAX);
                 nroots = stack->nroots = (uint32_t)new_nroots;
-                nr = nroots >> 1;
+                nr = nroots >> 2;
                 continue;
             }
             goto pop;
@@ -2413,8 +2413,7 @@ mark: {
             }
             const jl_datatype_layout_t *layout = jl_task_type->layout;
             assert(layout->fielddesc_type == 0);
-            size_t nfields = layout->nfields;
-            assert(nfields > 0);
+            assert(layout->nfields > 0);
             uint32_t npointers = layout->npointers;
             obj8_begin = (uint8_t*)jl_dt_layout_ptrs(layout);
             obj8_end = obj8_begin + npointers;
@@ -2654,6 +2653,11 @@ JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void)
 void jl_gc_sync_total_bytes(void)
 {
     jl_gc_get_total_bytes(&last_gc_total_bytes);
+}
+
+JL_DLLEXPORT int64_t jl_gc_live_bytes(void)
+{
+    return live_bytes;
 }
 
 static void jl_gc_premark(jl_ptls_t ptls2)

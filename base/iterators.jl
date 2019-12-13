@@ -443,6 +443,59 @@ IteratorSize(::Type{<:Filter}) = SizeUnknown()
 
 reverse(f::Filter) = Filter(f.flt, reverse(f.itr))
 
+# Accumulate -- partial reductions of a function over an iterator
+
+struct Accumulate{F,I}
+    f::F
+    itr::I
+end
+
+"""
+    Iterators.accumulate(f, itr)
+
+Given a 2-argument function `f` and an iterator `itr`, return a new
+iterator that successively applies `f` to the previous value and the
+next element of `itr`.
+
+This is effectively a lazy version of [`Base.accumulate`](@ref).
+
+# Examples
+```jldoctest
+julia> f = Iterators.accumulate(+, [1,2,3,4])
+Base.Iterators.Accumulate{typeof(+),Array{Int64,1}}(+, [1, 2, 3, 4])
+
+julia> foreach(println, f)
+1
+3
+6
+10
+```
+"""
+accumulate(f, itr) = Accumulate(f, itr)
+
+function iterate(itr::Accumulate)
+    state = iterate(itr.itr)
+    if state === nothing
+        return nothing
+    end
+    return (state[1], state)
+end
+
+function iterate(itr::Accumulate, state)
+    nxt = iterate(itr.itr, state[2])
+    if nxt === nothing
+        return nothing
+    end
+    val = itr.f(state[1], nxt[1])
+    return (val, (val, nxt[2]))
+end
+
+length(itr::Accumulate) = length(itr.itr)
+size(itr::Accumulate) = size(itr.itr)
+
+IteratorSize(::Type{Accumulate{F,I}}) where {F,I} = IteratorSize(I)
+IteratorEltype(::Type{<:Accumulate}) = EltypeUnknown()
+
 # Rest -- iterate starting at the given state
 
 struct Rest{I,S}

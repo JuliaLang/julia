@@ -72,6 +72,8 @@ Return the first value in the arguments which is not equal to [`nothing`](@ref),
 if any. Otherwise throw an error.
 Arguments of type [`Some`](@ref) are unwrapped.
 
+See also [`coalesce`](@ref).
+
 # Examples
 ```jldoctest
 julia> something(nothing, 1)

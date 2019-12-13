@@ -2265,7 +2265,7 @@ static AllocaInst *try_emit_union_alloca(jl_codectx_t &ctx, jl_uniontype_t *ut, 
         Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * min_align), (nbytes + min_align - 1) / min_align);
         AllocaInst *lv = emit_static_alloca(ctx, AT);
         if (align > 1)
-            lv->setAlignment(align);
+            lv->setAlignment(Align(align));
         return lv;
     }
     return NULL;

@@ -115,7 +115,7 @@ macro spawn(expr)
     quote
         local task = Task($thunk)
         task.sticky = false
-        if $(Expr(:isdefined, var))
+        if $(Expr(:islocal, var))
             push!($var, task)
         end
         schedule(task)

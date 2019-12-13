@@ -17,7 +17,9 @@
 #else
 #include "clang/StaticAnalyzer/Core/CheckerRegistry.h"
 #endif
+
 #include <iostream>
+#include <memory>
 
 #if defined(__GNUC__)
 #  define USED_FUNC __attribute__((used))
@@ -28,12 +30,18 @@
 #  define USED_FUNC
 #endif
 
+#if LLVM_VERSION_MAJOR >= 10
+using std::make_unique;
+#else
+using llvm::make_unique;
+#endif
+
 namespace {
     using namespace clang;
     using namespace ento;
 
     #define PDP std::shared_ptr<PathDiagnosticPiece>
-    #define MakePDP llvm::make_unique<PathDiagnosticEventPiece>
+    #define MakePDP make_unique<PathDiagnosticEventPiece>
 
     class GCChecker : public Checker<eval::Call,
                                             check::BeginFunction,
@@ -387,13 +395,13 @@ PDP GCChecker::GCValueBugVisitor::ExplainNoPropagationFromExpr(const clang::Expr
     const ValueState *ValS = N->getState()->get<GCValueMap>(Parent);
     assert(ValS);
     if (ValS->isPotentiallyFreed()) {
-        BR.addVisitor(llvm::make_unique<GCValueBugVisitor>(Parent));
+        BR.addVisitor(make_unique<GCValueBugVisitor>(Parent));
         return MakePDP(Pos, "Root not propagated because it may have been freed. Tracking.");
     } else if (ValS->isRooted()) {
-        BR.addVisitor(llvm::make_unique<GCValueBugVisitor>(Parent));
+        BR.addVisitor(make_unique<GCValueBugVisitor>(Parent));
         return MakePDP(Pos, "Root was not propagated due to a bug. Tracking base value.");
     } else {
-        BR.addVisitor(llvm::make_unique<GCValueBugVisitor>(Parent));
+        BR.addVisitor(make_unique<GCValueBugVisitor>(Parent));
         return MakePDP(Pos, "No Root to propagate. Tracking.");
     }
 }
@@ -506,8 +514,8 @@ void GCChecker::report_error(callback f, CheckerContext &C, const char *message)
     if (!BT)
         BT.reset(new BugType(this, "Invalid GC thingy",
                            categories::LogicError));
-    auto Report = llvm::make_unique<BugReport>(*BT, message, N);
-    Report->addVisitor(llvm::make_unique<GCBugVisitor>());
+    auto Report = make_unique<BugReport>(*BT, message, N);
+    Report->addVisitor(make_unique<GCBugVisitor>());
     f(Report.get());
     C.emitReport(std::move(Report));
 }
@@ -522,10 +530,10 @@ void GCChecker::report_value_error(CheckerContext &C, SymbolRef Sym, const char 
     if (!BT)
         BT.reset(new BugType(this, "Invalid GC thingy",
                            categories::LogicError));
-    auto Report = llvm::make_unique<BugReport>(*BT, message, N);
-    Report->addVisitor(llvm::make_unique<GCValueBugVisitor>(Sym));
-    Report->addVisitor(llvm::make_unique<GCBugVisitor>());
-    Report->addVisitor(llvm::make_unique<ConditionBRVisitor>());
+    auto Report = make_unique<BugReport>(*BT, message, N);
+    Report->addVisitor(make_unique<GCValueBugVisitor>(Sym));
+    Report->addVisitor(make_unique<GCBugVisitor>());
+    Report->addVisitor(make_unique<ConditionBRVisitor>());
     if (!range.isInvalid()) {
         Report->addRange(range);
     }
