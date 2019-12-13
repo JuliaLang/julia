@@ -771,9 +771,10 @@ bool GCChecker::isSafepoint(const CallEvent &Call) const
         isCalleeSafepoint = !declHasAnnotation(TDT->getDecl(), "julia_not_safepoint");
       }
     } else if (FD) {
-      if (FD->getBuiltinID() != 0)
+      if (FD->getBuiltinID() != 0 || FD->isTrivial())
         isCalleeSafepoint = false;
-      else if ((FD->getName().startswith_lower("uv_") ||
+      else if (FD->getDeclName().isIdentifier() &&
+               (FD->getName().startswith_lower("uv_") ||
                 FD->getName().startswith_lower("unw_") ||
                 FD->getName().startswith("_U")) &&
                FD->getName() != "uv_run")
