@@ -695,6 +695,9 @@ typedef struct _jl_gcframe_t {
 
 #define jl_pgcstack (jl_get_ptls_states()->pgcstack)
 
+#define JL_GC_ENCODE_PUSHARGS(n)   (((size_t)(n))<<2)
+#define JL_GC_ENCODE_PUSH(n)       ((((size_t)(n))<<2)|1)
+
 #ifdef __clang_analyzer__
 
 // When running with the analyzer make these real function calls, that are
@@ -716,9 +719,6 @@ extern void _JL_GC_PUSHARGS(jl_value_t **, size_t) JL_NOTSAFEPOINT;
 extern void JL_GC_POP() JL_NOTSAFEPOINT;
 
 #else
-
-#define JL_GC_ENCODE_PUSHARGS(n)   (((size_t)(n))<<2)
-#define JL_GC_ENCODE_PUSH(n)       ((((size_t)(n))<<2)|1)
 
 #define JL_GC_PUSH1(arg1)                                                                               \
   void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(1), jl_pgcstack, arg1};                                 \
