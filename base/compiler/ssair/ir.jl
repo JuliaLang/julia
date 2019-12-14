@@ -283,11 +283,13 @@ function setindex!(x::IRCode, @nospecialize(repl), s::SSAValue)
     return x
 end
 
-
+# SSA values that need renaming
 struct OldSSAValue
     id::Int
 end
 
+# SSA values that are in `new_new_nodes` of an `IncrementalCompact` and are to
+# be actually inserted next time (they become `new_nodes` next time)
 struct NewSSAValue
     id::Int
 end
@@ -824,7 +826,7 @@ function process_phinode_values(old_values::Vector{Any}, late_fixup::Vector{Int}
     return values
 end
 
-function renumber_ssa2(val::SSAValue, ssanums::Vector{Any}, used_ssa::Vector{Int}, do_rename_ssa::Bool)
+function renumber_ssa2(val::SSAValue, ssanums::Vector{Any}, used_ssas::Vector{Int}, do_rename_ssa::Bool)
     id = val.id
     if id > length(ssanums)
         return val
@@ -833,14 +835,14 @@ function renumber_ssa2(val::SSAValue, ssanums::Vector{Any}, used_ssa::Vector{Int
         val = ssanums[id]
     end
     if isa(val, SSAValue)
-        if used_ssa !== nothing
-            used_ssa[val.id] += 1
+        if used_ssas !== nothing
+            used_ssas[val.id] += 1
         end
     end
     return val
 end
 
-function renumber_ssa2!(@nospecialize(stmt), ssanums::Vector{Any}, used_ssa::Vector{Int}, late_fixup::Vector{Int}, result_idx::Int, do_rename_ssa::Bool)
+function renumber_ssa2!(@nospecialize(stmt), ssanums::Vector{Any}, used_ssas::Vector{Int}, late_fixup::Vector{Int}, result_idx::Int, do_rename_ssa::Bool)
     urs = userefs(stmt)
     for op in urs
         val = op[]
@@ -848,7 +850,7 @@ function renumber_ssa2!(@nospecialize(stmt), ssanums::Vector{Any}, used_ssa::Vec
             push!(late_fixup, result_idx)
         end
         if isa(val, SSAValue)
-            val = renumber_ssa2(val, ssanums, used_ssa, do_rename_ssa)
+            val = renumber_ssa2(val, ssanums, used_ssas, do_rename_ssa)
         end
         if isa(val, OldSSAValue) || isa(val, NewSSAValue)
             push!(late_fixup, result_idx)
@@ -1308,10 +1310,17 @@ function fixup_node(compact::IncrementalCompact, @nospecialize(stmt))
         for ur in urs
             val = ur[]
             if isa(val, NewSSAValue)
-                ur[] = SSAValue(length(compact.result) + val.id)
+                val = SSAValue(length(compact.result) + val.id)
             elseif isa(val, OldSSAValue)
-                ur[] = compact.ssa_rename[val.id]
+                val = compact.ssa_rename[val.id]
             end
+            if isa(val, SSAValue) && val.id <= length(compact.used_ssas)
+                # If `val.id` is greater than the length of `compact.result` or
+                # `compact.used_ssas`, this SSA value is in `new_new_nodes`, so
+                # don't count the use
+                compact.used_ssas[val.id] += 1
+            end
+            ur[] = val
         end
         return urs[]
     end
