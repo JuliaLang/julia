@@ -274,6 +274,19 @@ function empty!(h::Dict{K,V}) where V where K
     return h
 end
 
+# Fast pass for exactly same `Dict` type:
+function copy!(dst::D, src::D) where {D <: Dict}
+    copy!(dst.vals, src.vals)
+    copy!(dst.keys, src.keys)
+    copy!(dst.slots, src.slots)
+    dst.ndel = src.ndel
+    dst.count = src.count
+    dst.age = src.age
+    dst.idxfloor = src.idxfloor
+    dst.maxprobe = src.maxprobe
+    return dst
+end
+
 # Fast pass when not changing key types (hence not changing hashes).
 # It is unsafe to call this function in the sense it may leave `dst`
 # in a state that is unsafe to use after `unsafe_copy!` failed.
