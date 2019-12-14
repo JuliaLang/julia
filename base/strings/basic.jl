@@ -576,7 +576,7 @@ function map(f, s::AbstractString)
             "map(f, s::AbstractString) requires f to return AbstractChar; " *
             "try map(f, collect(s)) or a comprehension instead"))
         index + 3 > length(out) && resize!(out, unsigned(2 * length(out)))
-        index += __unsafe_string!(out, c′, index)
+        index += __unsafe_string!(out, convert(Char, c′), index)
     end
     resize!(out, index-1)
     sizehint!(out, index-1)
