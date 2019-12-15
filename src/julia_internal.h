@@ -291,6 +291,7 @@ jl_value_t *jl_permbox32(jl_datatype_t *t, int32_t x);
 jl_value_t *jl_permbox64(jl_datatype_t *t, int64_t x);
 jl_svec_t *jl_perm_symsvec(size_t n, ...);
 
+#if !defined(__clang_analyzer__) // this sizeof(__VA_ARGS__) trick can't be computed until C11, but only the analyzer seems to care
 #ifdef __GNUC__
 #define jl_perm_symsvec(n, ...) \
     (jl_perm_symsvec)(__extension__({                                         \
@@ -306,6 +307,7 @@ jl_svec_t *jl_perm_symsvec(size_t n, ...);
                 "Number of passed arguments does not match expected number"); \
             n;                                                                \
         }), __VA_ARGS__)
+#endif
 #endif
 
 jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz);
@@ -742,9 +744,9 @@ size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTS
 // Record backtrace from a signal handler. `ctx` is the context of the code
 // which was asynchronously interrupted.
 size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx,
-                         int add_interp_frames) JL_NOTSAFEPOINT;
+                         jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
 #ifdef LIBOSXUNWIND
-size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx, int add_interp_frames) JL_NOTSAFEPOINT;
+size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
 #endif
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
 void jl_critical_error(int sig, bt_context_t *context, jl_bt_element_t *bt_data, size_t *bt_size);
@@ -754,7 +756,7 @@ JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT;
 void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT;
 void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_data) JL_NOTSAFEPOINT;
 // *to is NULL or malloc'd pointer, from is allowed to be NULL
-STATIC_INLINE char *jl_copy_str(char **to, const char *from)
+STATIC_INLINE char *jl_copy_str(char **to, const char *from) JL_NOTSAFEPOINT
 {
     if (!from) {
         free(*to);
@@ -766,21 +768,20 @@ STATIC_INLINE char *jl_copy_str(char **to, const char *from)
     memcpy(*to, from, len);
     return *to;
 }
-JL_DLLEXPORT int jl_is_interpreter_frame(uintptr_t ip) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_is_enter_interpreter_frame(uintptr_t ip) JL_NOTSAFEPOINT;
-JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_data, uintptr_t sp,
-                                            uintptr_t fp, size_t space_remaining) JL_NOTSAFEPOINT;
+
+JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_data,
+        void *frameend, size_t space_remaining) JL_NOTSAFEPOINT;
 
 // Exception stack: a stack of pairs of (exception,raw_backtrace).
 // The stack may be traversed and accessed with the functions below.
-typedef struct _jl_excstack_t {
+struct _jl_excstack_t { // typedef in julia.h
     size_t top;
     size_t reserved_size;
     // Pack all stack entries into a growable buffer to amortize allocation
     // across repeated exception handling.
     // Layout: [bt_data1... bt_size1 exc1  bt_data2... bt_size2 exc2  ..]
     // jl_bt_element_t data[]; // Access with jl_excstack_raw
-} jl_excstack_t;
+};
 
 STATIC_INLINE jl_bt_element_t *jl_excstack_raw(jl_excstack_t *stack) JL_NOTSAFEPOINT
 {

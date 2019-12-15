@@ -350,7 +350,7 @@ macro async(expr)
     var = esc(sync_varname)
     quote
         local task = Task($thunk)
-        if $(Expr(:isdefined, var))
+        if $(Expr(:islocal, var))
             push!($var, task)
         end
         schedule(task)

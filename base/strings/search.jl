@@ -34,8 +34,8 @@ function _search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 
         return i == n+1 ? 0 : throw(BoundsError(a, i))
     end
     p = pointer(a)
-    q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
-    q == C_NULL ? 0 : Int(q-p+1)
+    q = GC.@preserve a ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
+    return q == C_NULL ? 0 : Int(q-p+1)
 end
 
 function _search(a::ByteArray, b::AbstractChar, i::Integer = 1)
@@ -74,8 +74,8 @@ function _rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer =
         return i == n+1 ? 0 : throw(BoundsError(a, i))
     end
     p = pointer(a)
-    q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i)
-    q == C_NULL ? 0 : Int(q-p+1)
+    q = GC.@preserve a ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i)
+    return q == C_NULL ? 0 : Int(q-p+1)
 end
 
 function _rsearch(a::ByteArray, b::AbstractChar, i::Integer = length(a))

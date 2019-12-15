@@ -1557,7 +1557,7 @@ function hcat(V::Vector{T}...) where T
             throw(DimensionMismatch("vectors must have same lengths"))
         end
     end
-    return T[ V[j][i] for i=1:length(V[1]), j=1:length(V) ]
+    return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
 
 function vcat(arrays::Vector{T}...) where T

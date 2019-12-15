@@ -73,7 +73,9 @@ function quoted(@nospecialize(x))
 end
 
 function is_inlineable_constant(@nospecialize(x))
-    x isa Type && return true
+    if x isa Type || x isa Symbol
+        return true
+    end
     return isbits(x) && Core.sizeof(x) <= MAX_INLINE_CONST_SIZE
 end
 

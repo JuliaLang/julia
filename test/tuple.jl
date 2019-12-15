@@ -254,6 +254,16 @@ end
     @test_throws ArgumentError mapfoldl(abs, =>, ())
 end
 
+@testset "filter" begin
+    @test filter(isodd, (1,2,3)) == (1, 3)
+    @test filter(isequal(2), (true, 2.0, 3)) === (2.0,)
+    @test filter(i -> true, ()) == ()
+    @test filter(identity, (true,)) === (true,)
+    longtuple = ntuple(identity, 20)
+    @test filter(iseven, longtuple) == ntuple(i->2i, 10)
+    @test filter(x -> x<2, (longtuple..., 1.5)) === (1, 1.5)
+end
+
 @testset "comparison and hash" begin
     @test isequal((), ())
     @test isequal((1,2,3), (1,2,3))

@@ -133,7 +133,7 @@ end
 @test Meta.lower(Main, Meta.parse("(; f(x))")) == Expr(:error, "invalid named tuple element \"f(x)\"")
 @test Meta.lower(Main, Meta.parse("(;1=0)")) == Expr(:error, "invalid named tuple field name \"1\"")
 
-@test Meta.parse("(;)") == quote end
+@test eval(Expr(:tuple, Expr(:parameters))) === NamedTuple()
 @test Meta.lower(Main, Meta.parse("(1,;2)")) == Expr(:error, "unexpected semicolon in tuple")
 
 # splatting

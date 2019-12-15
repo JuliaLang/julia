@@ -116,6 +116,12 @@ end
 @test A[OffsetArray([true true;  false true], A.offsets)] == [1,3,4]
 @test_throws BoundsError A[[true true;  false true]]
 
+# begin, end
+a0 = rand(2,3,4,2)
+a = OffsetArray(a0, (-2,-3,4,5))
+@test a[begin,end,end,begin] == a0[begin,end,end,begin] ==
+      a0[1,3,4,1] == a0[end-1,begin+2,begin+3,end-1]
+
 # view
 S = view(A, :, 3)
 @test S == OffsetArray([1,2], (A.offsets[1],))
@@ -344,6 +350,7 @@ v2 = copy(v)
 @test push!(v2, 1) === v2
 @test v2[axes(v, 1)] == v
 @test v2[end] == 1
+@test v2[begin] == v[begin] == v[-2]
 v2 = copy(v)
 @test push!(v2, 2, 1) === v2
 @test v2[axes(v, 1)] == v
@@ -495,6 +502,19 @@ A = OffsetArray(rand(4,4), (-3,5))
 @test vec(A) == reshape(A, :) == reshape(A, 16) == reshape(A, Val(1)) == A[:] == vec(A.parent)
 A = OffsetArray(view(rand(4,4), 1:4, 4:-1:1), (-3,5))
 @test vec(A) == reshape(A, :) == reshape(A, 16) == reshape(A, Val(1)) == A[:] == vec(A.parent)
+# issue #33614
+A = OffsetArray(-1:0, (-2,))
+@test reshape(A, :) === A
+Arsc = reshape(A, :, 1)
+Arss = reshape(A, 2, 1)
+@test Arsc[1,1] == Arss[1,1] == -1
+@test Arsc[2,1] == Arss[2,1] == 0
+@test_throws BoundsError Arsc[0,1]
+@test_throws BoundsError Arss[0,1]
+A = OffsetArray([-1,0], (-2,))
+Arsc = reshape(A, :, 1)
+Arsc[1,1] = 5
+@test first(A) == 5
 
 # broadcast
 a = [1]

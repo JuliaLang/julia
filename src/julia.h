@@ -695,6 +695,9 @@ typedef struct _jl_gcframe_t {
 
 #define jl_pgcstack (jl_get_ptls_states()->pgcstack)
 
+#define JL_GC_ENCODE_PUSHARGS(n)   (((size_t)(n))<<2)
+#define JL_GC_ENCODE_PUSH(n)       ((((size_t)(n))<<2)|1)
+
 #ifdef __clang_analyzer__
 
 // When running with the analyzer make these real function calls, that are
@@ -709,43 +712,43 @@ extern void _JL_GC_PUSHARGS(jl_value_t **, size_t) JL_NOTSAFEPOINT;
 // This is necessary, because otherwise the analyzer considers this undefined
 // behavior and terminates the exploration
 #define JL_GC_PUSHARGS(rts_var, n)     \
-  rts_var = (jl_value_t **)alloca(sizeof(void*) * n); \
-  memset(rts_var,0,sizeof(void*) * n); \
-  _JL_GC_PUSHARGS(rts_var, n);
+  rts_var = (jl_value_t **)alloca(sizeof(void*) * (n)); \
+  memset(rts_var, 0, sizeof(void*) * (n)); \
+  _JL_GC_PUSHARGS(rts_var, (n));
 
 extern void JL_GC_POP() JL_NOTSAFEPOINT;
 
 #else
 
-#define JL_GC_PUSH1(arg1)                                                 \
-  void *__gc_stkf[] = {(void*)3, jl_pgcstack, arg1};                      \
+#define JL_GC_PUSH1(arg1)                                                                               \
+  void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(1), jl_pgcstack, arg1};                                 \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
-#define JL_GC_PUSH2(arg1, arg2)                                           \
-  void *__gc_stkf[] = {(void*)5, jl_pgcstack, arg1, arg2};                \
+#define JL_GC_PUSH2(arg1, arg2)                                                                         \
+  void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(2), jl_pgcstack, arg1, arg2};                           \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
-#define JL_GC_PUSH3(arg1, arg2, arg3)                                     \
-  void *__gc_stkf[] = {(void*)7, jl_pgcstack, arg1, arg2, arg3};          \
+#define JL_GC_PUSH3(arg1, arg2, arg3)                                                                   \
+  void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(3), jl_pgcstack, arg1, arg2, arg3};                     \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
-#define JL_GC_PUSH4(arg1, arg2, arg3, arg4)                               \
-  void *__gc_stkf[] = {(void*)9, jl_pgcstack, arg1, arg2, arg3, arg4};    \
+#define JL_GC_PUSH4(arg1, arg2, arg3, arg4)                                                             \
+  void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(4), jl_pgcstack, arg1, arg2, arg3, arg4};               \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
-#define JL_GC_PUSH5(arg1, arg2, arg3, arg4, arg5)                               \
-  void *__gc_stkf[] = {(void*)11, jl_pgcstack, arg1, arg2, arg3, arg4, arg5};    \
+#define JL_GC_PUSH5(arg1, arg2, arg3, arg4, arg5)                                                       \
+  void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(5), jl_pgcstack, arg1, arg2, arg3, arg4, arg5};         \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
-#define JL_GC_PUSH6(arg1, arg2, arg3, arg4, arg5, arg6)                      \
-  void *__gc_stkf[] = {(void*)13, jl_pgcstack, arg1, arg2, arg3, arg4, arg5, arg6}; \
+#define JL_GC_PUSH6(arg1, arg2, arg3, arg4, arg5, arg6)                                                 \
+  void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(6), jl_pgcstack, arg1, arg2, arg3, arg4, arg5, arg6};   \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
-#define JL_GC_PUSHARGS(rts_var,n)                               \
-  rts_var = ((jl_value_t**)alloca(((n)+2)*sizeof(jl_value_t*)))+2;    \
-  ((void**)rts_var)[-2] = (void*)(((size_t)(n))<<1);                  \
-  ((void**)rts_var)[-1] = jl_pgcstack;                          \
-  memset((void*)rts_var, 0, (n)*sizeof(jl_value_t*));           \
+#define JL_GC_PUSHARGS(rts_var,n)                                                                       \
+  rts_var = ((jl_value_t**)alloca(((n)+2)*sizeof(jl_value_t*)))+2;                                      \
+  ((void**)rts_var)[-2] = (void*)JL_GC_ENCODE_PUSHARGS(n);                                              \
+  ((void**)rts_var)[-1] = jl_pgcstack;                                                                  \
+  memset((void*)rts_var, 0, (n)*sizeof(jl_value_t*));                                                   \
   jl_pgcstack = (jl_gcframe_t*)&(((void**)rts_var)[-2])
 
 #define JL_GC_POP() (jl_pgcstack = jl_pgcstack->prev)
@@ -1673,6 +1676,7 @@ JL_DLLEXPORT void jl_sigatomic_end(void);
 // tasks and exceptions -------------------------------------------------------
 
 typedef struct _jl_timing_block_t jl_timing_block_t;
+typedef struct _jl_excstack_t jl_excstack_t;
 
 // info describing an exception handler
 typedef struct _jl_handler_t {

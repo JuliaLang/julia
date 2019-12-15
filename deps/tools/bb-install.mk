@@ -1,3 +1,9 @@
+#$(call bb-install, \
+#    1 target, \               # name (lowercase)
+#    2 variable, \             # name (uppercase)
+#    3 gfortran, \             # signifies a GCC ABI (e.g. libgfortran version) dependency
+#    4 cxx11)                  # signifies a cxx11 ABI dependency
+
 # Auto-detect triplet once, create different versions that we use as defaults below for each BB install target
 # This is much more efficient than launching `gcc` and `python` once for each BB install target.
 BB_TRIPLET_GCCABI_CXXABI := $(shell python $(JULIAHOME)/contrib/normalize_triplet.py $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) "$(shell $(FC) --version | head -1)" "$(shell echo '\#include <string>' | $(CXX) $(CXXFLAGS) -x c++ -dM -E - | grep _GLIBCXX_USE_CXX11_ABI | awk '{ print $$3 }' )")
@@ -6,7 +12,6 @@ BB_TRIPLET_CXXABI := $(subst $(SPACE),-,$(filter-out gcc%,$(subst -,$(SPACE),$(B
 BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out gcc%,$(subst -,$(SPACE),$(BB_TRIPLET_GCCABI_CXXABI)))))
 
 define bb-install
-# $(3) signifies a GCC ABI (e.g. libgfortran version) dependency, $(4) signifies a cxx11 ABI dependency
 TRIPLET_VAR := BB_TRIPLET
 ifeq ($(3),true)
 TRIPLET_VAR := $$(TRIPLET_VAR)_GCCABI
@@ -26,20 +31,20 @@ $$(SRCCACHE)/$$($(2)_BB_BASENAME): | $$(SRCCACHE)
 
 stage-$(strip $1): $$(SRCCACHE)/$$($(2)_BB_BASENAME)
 install-$(strip $1): $$(build_prefix)/manifest/$(strip $1)
-uninstall-$(strip $1):
-	-rm $$(build_prefix)/manifest/$(strip $1)
-	-cd $$(build_prefix) && rm -dv -- $$$$($(TAR) -tzf $$(SRCCACHE)/$$($(2)_BB_BASENAME) --exclude './$$$$')
 
 reinstall-$(strip $1):
 	+$$(MAKE) uninstall-$(strip $1)
 	+$$(MAKE) stage-$(strip $1)
 	+$$(MAKE) install-$(strip $1)
 
+UNINSTALL_$(strip $1) := $$($(2)_BB_BASENAME:.tar.gz=) bb-uninstaller
+
 $$(build_prefix)/manifest/$(strip $1): $$(SRCCACHE)/$$($(2)_BB_BASENAME) | $(build_prefix)/manifest
+	-+[ ! -e $$@ ] || $$(MAKE) uninstall-$(strip $1)
 	$$(JLCHECKSUM) $$<
 	mkdir -p $$(build_prefix)
 	$(UNTAR) $$< -C $$(build_prefix)
-	echo $2 > $$@
+	echo '$$(UNINSTALL_$(strip $1))' > $$@
 
 clean-bb-download-$(1):
 	rm -f $$(SRCCACHE)/$$($(2)_BB_BASENAME)
@@ -61,4 +66,10 @@ ifeq ($$(lastword $$(subst -,$$(SPACE),$$(BB_TRIPLET_CXXABI))),cxx11)
 $$(error Attempting to use gcc4 $(2) tarball, but compiling with cxx11 string ABI; set "CXXFLAGS=-D_GLIBCXX_USE_CXX11_ABI=0" to avoid linker errors)
 endif
 endif
+endef
+
+define bb-uninstaller
+uninstall-$(strip $1):
+	-cd $$(build_prefix) && rm -fdv -- $$$$($$(TAR) -tzf $$(SRCCACHE)/$2.tar.gz --exclude './$$$$')
+	-rm $$(build_prefix)/manifest/$(strip $1)
 endef

@@ -2701,7 +2701,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         ConstantAsMetadata::get(ConstantInt::get(T_int8, union_max)) }));
                     AllocaInst *lv = emit_static_alloca(ctx, AT);
                     if (al > 1)
-                        lv->setAlignment(al);
+                        lv->setAlignment(Align(al));
                     emit_memcpy(ctx, lv, tbaa_arraybuf, ctx.builder.CreateInBoundsGEP(AT, data, idx), tbaa_arraybuf, elsz, al, false);
                     *ret = mark_julia_slot(lv, ety, ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1), tindex), tbaa_arraybuf);
                 }
@@ -3156,7 +3156,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_code_instance_t 
     case jl_returninfo_t::Union:
         result = emit_static_alloca(ctx, ArrayType::get(T_int8, returninfo.union_bytes));
         if (returninfo.union_align > 1)
-            result->setAlignment(returninfo.union_align);
+            result->setAlignment(Align(returninfo.union_align));
         argvals[idx] = result;
         idx++;
         break;
@@ -3564,10 +3564,8 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
             AllocaInst *varslot = cast<AllocaInst>(vi.value.V);
             Type *T = varslot->getAllocatedType();
             assert(!varslot->isArrayAllocation() && "variables not expected to be VLA");
-            AllocaInst *ssaslot = emit_static_alloca(ctx, T);
-            unsigned al = varslot->getAlignment();
-            if (al)
-                ssaslot->setAlignment(al);
+            AllocaInst *ssaslot = cast<AllocaInst>(varslot->clone());
+            ssaslot->insertAfter(varslot);
             if (vi.isVolatile) {
                 Value *unbox = ctx.builder.CreateLoad(vi.value.V, true);
                 ctx.builder.CreateStore(unbox, ssaslot);
@@ -3575,7 +3573,7 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
             else {
                 const DataLayout &DL = jl_data_layout;
                 uint64_t sz = DL.getTypeStoreSize(T);
-                emit_memcpy(ctx, ssaslot, tbaa_stack, vi.value, sz, al);
+                emit_memcpy(ctx, ssaslot, tbaa_stack, vi.value, sz, ssaslot->getAlignment());
             }
             Value *tindex = NULL;
             if (vi.pTIndex)
@@ -5253,7 +5251,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     case jl_returninfo_t::Union:
         result = ctx.builder.CreateAlloca(ArrayType::get(T_int8, f.union_bytes));
         if (f.union_align > 1)
-            result->setAlignment(f.union_align);
+            result->setAlignment(Align(f.union_align));
         args[idx] = result;
         idx++;
         break;
@@ -5708,7 +5706,7 @@ static std::unique_ptr<Module> emit_function(
 
     if (returninfo.cc == jl_returninfo_t::Union) {
         f->addAttribute(1, Attribute::getWithDereferenceableBytes(jl_LLVMContext, returninfo.union_bytes));
-        f->addAttribute(1, Attribute::getWithAlignment(jl_LLVMContext, returninfo.union_align));
+        f->addAttribute(1, Attribute::getWithAlignment(jl_LLVMContext, Align(returninfo.union_align)));
     }
 
 #ifdef JL_DEBUG_BUILD

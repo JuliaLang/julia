@@ -20,6 +20,11 @@ using Random
     @test s == "ab"
 
     @test isempty(string())
+    @test !isempty("abc")
+    @test !isempty("∀∃")
+    @test !isempty(GenericString("∀∃"))
+    @test isempty(GenericString(""))
+    @test !isempty(GenericString("abc"))
     @test eltype(GenericString) == Char
     @test firstindex("abc") == 1
     @test cmp("ab","abc") == -1
@@ -324,7 +329,12 @@ end
                  eltype(Base.EachStringIndex{String}) ==
                  eltype(Base.EachStringIndex{GenericString}) ==
                  eltype(eachindex("foobar")) == eltype(eachindex(gstr))
-    @test map(uppercase, "foó") == "FOÓ"
+    for T in (GenericString, String)
+        @test map(uppercase, T("foó")) == "FOÓ"
+        @test map(x -> 'ó', T("")) == ""
+        @test map(x -> 'ó', T("x")) == "ó"
+        @test map(x -> 'ó', T("xxx")) == "óóó"
+    end
     @test nextind("fóobar", 0, 3) == 4
 
     @test Symbol(gstr) == Symbol("12")
