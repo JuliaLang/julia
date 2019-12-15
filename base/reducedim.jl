@@ -144,7 +144,7 @@ for (f1, f2, initval) in ((:min, :max, :Inf), (:max, :min, :(-Inf)))
             # otherwise use the min/max of the first slice as initial value
             v0 = mapreduce(f, $f2, A1)
 
-            # but NaNs need to be avoided as intial values
+            # but NaNs need to be avoided as initial values
             v0 = v0 != v0 ? typeof(v0)($initval) : v0
 
             T = _realtype(f, promote_union(eltype(A)))

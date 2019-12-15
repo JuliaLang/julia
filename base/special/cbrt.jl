@@ -52,7 +52,7 @@ Adding a bias of -0.03306235651 to the `(e%3+m)÷3` term reduces the error to ab
 32.
 
 With the IEEE floating point representation, for finite positive normal values, ordinary
-integer divison of the value in bits magically gives almost exactly the RHS of the above
+integer division of the value in bits magically gives almost exactly the RHS of the above
 provided we first subtract the exponent bias and later add it back.  We do the
 subtraction virtually to keep e >= 0 so that ordinary integer division rounds towards
 minus infinity; this is also efficient. All operations can be done in 32-bit.

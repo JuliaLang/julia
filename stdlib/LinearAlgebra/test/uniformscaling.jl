@@ -66,6 +66,15 @@ end
     @test UniformScaling(α)./α == UniformScaling(1.0)
     @test α * UniformScaling(1.0) == UniformScaling(1.0) * α
     @test UniformScaling(α)/α == UniformScaling(1.0)
+
+    β = rand()
+    @test (α*I)^2    == UniformScaling(α^2)
+    @test (α*I)^(-2) == UniformScaling(α^(-2))
+    @test (α*I)^(.5) == UniformScaling(α^(.5))
+    @test (α*I)^β    == UniformScaling(α^β)
+
+    @test (α * I) .^ 2 == UniformScaling(α^2)
+    @test (α * I) .^ β == UniformScaling(α^β)
 end
 
 @testset "det and logdet" begin

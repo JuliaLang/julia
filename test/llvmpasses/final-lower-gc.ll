@@ -26,7 +26,7 @@ top:
   %ptls = call %jl_value_t*** @julia.ptls_states()
 ; CHECK-DAG: [[GCFRAME_SIZE_PTR:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 0
 ; CHECK-DAG: [[GCFRAME_SIZE_PTR2:%.*]] = bitcast %jl_value_t addrspace(10)** [[GCFRAME_SIZE_PTR]] to i64*
-; CHECK-DAG: store i64 4, i64* [[GCFRAME_SIZE_PTR2]], !tbaa !0
+; CHECK-DAG: store i64 8, i64* [[GCFRAME_SIZE_PTR2]], !tbaa !0
 ; CHECK-DAG: [[GCFRAME_SLOT:%.*]] = getelementptr %jl_value_t**, %jl_value_t*** %ptls, i32 0
 ; CHECK-DAG: [[PREV_GCFRAME_PTR:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 1
 ; CHECK-DAG: [[PREV_GCFRAME_PTR2:%.*]] = bitcast %jl_value_t addrspace(10)** [[PREV_GCFRAME_PTR]] to %jl_value_t***

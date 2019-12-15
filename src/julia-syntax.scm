@@ -86,7 +86,7 @@
 (define (expand-compare-chain e)
   (car (expand-vector-compare e)))
 
-;; return the appropriate computation for an `end` symbol for indexing
+;; return the appropriate computation for a `begin` or `end` symbol for indexing
 ;; the array `a` in the `n`th index.
 ;; `tuples` are a list of the splatted arguments that precede index `n`
 ;; `last` = is this last index?
@@ -101,20 +101,31 @@
                                  tuples))))
             `(call (top lastindex) ,a ,dimno))))
 
-;; replace `end` for the closest ref expression, so doesn't go inside nested refs
-(define (replace-end ex a n tuples last)
+(define (begin-val a n tuples last)
+  (if (null? tuples)
+      (if (and last (= n 1))
+          `(call (top firstindex) ,a)
+          `(call (top first) (call (top axes) ,a ,n)))
+      (let ((dimno `(call (top +) ,(- n (length tuples))
+                          ,.(map (lambda (t) `(call (top length) ,t))
+                                 tuples))))
+            `(call (top first) (call (top axes) ,a ,dimno)))))
+
+;; replace `begin` and `end` for the closest ref expression, so doesn't go inside nested refs
+(define (replace-beginend ex a n tuples last)
   (cond ((eq? ex 'end)                (end-val a n tuples last))
+        ((eq? ex 'begin)              (begin-val a n tuples last))
         ((or (atom? ex) (quoted? ex)) ex)
         ((eq? (car ex) 'ref)
          ;; inside ref only replace within the first argument
-         (list* 'ref (replace-end (cadr ex) a n tuples last)
+         (list* 'ref (replace-beginend (cadr ex) a n tuples last)
                 (cddr ex)))
         (else
          (cons (car ex)
-               (map (lambda (x) (replace-end x a n tuples last))
+               (map (lambda (x) (replace-beginend x a n tuples last))
                     (cdr ex))))))
 
-;; go through indices and replace the `end` symbol
+;; go through indices and replace the `begin` or `end` symbol
 ;; a = array being indexed, i = list of indices
 ;; returns (values index-list stmts) where stmts are statements that need
 ;; to execute first.
@@ -133,17 +144,17 @@
                   (loop (cdr lst) (+ n 1)
                         stmts
                         (cons (cadr idx) tuples)
-                        (cons `(... ,(replace-end (cadr idx) a n tuples last))
+                        (cons `(... ,(replace-beginend (cadr idx) a n tuples last))
                               ret))
                   (let ((g (make-ssavalue)))
                     (loop (cdr lst) (+ n 1)
-                          (cons `(= ,g ,(replace-end (cadr idx) a n tuples last))
+                          (cons `(= ,g ,(replace-beginend (cadr idx) a n tuples last))
                                 stmts)
                           (cons g tuples)
                           (cons `(... ,g) ret))))
               (loop (cdr lst) (+ n 1)
                     stmts tuples
-                    (cons (replace-end idx a n tuples last) ret)))))))
+                    (cons (replace-beginend idx a n tuples last) ret)))))))
 
 ;; GF method does not need to keep decl expressions on lambda args
 ;; except for rest arg
@@ -334,7 +345,7 @@
                                                            (cons 'list (map car sparams)))
                                                       ,(if (null? loc) 0 (cadr loc))
                                                       (inert ,(if (null? loc) 'none (caddr loc)))
-                                                      false)))))
+                                                      (false))))))
                              (list gf))
                            '()))
             (types (llist-types argl))
@@ -443,7 +454,7 @@
                                      (string (current-julia-module-counter)))))))
       ;; this is a hack: nest these statements inside a call so they get closure
       ;; converted together, allowing all needed types to be defined before any methods.
-      `(call (core ifelse) false false (block
+      `(call (core ifelse) (false) (false) (block
         ;; forward-declare function so its type can occur in the signature of the inner method below
         ,@(if (or (symbol? name) (globalref? name)) `((method ,name)) '())
 
@@ -742,7 +753,7 @@
                    (if (call (top ult_int) ,(length field-names) ,nf)
                        (call (core throw) (call (top ArgumentError)
                                                 ,(string "new: too many arguments (expected " (length field-names) ")"))))
-                   (new ,tn ,@(map (lambda (fld fty) (field-convert fld fty `(call (core getfield) ,argt ,(+ fld 1) false)))
+                   (new ,tn ,@(map (lambda (fld fty) (field-convert fld fty `(call (core getfield) ,argt ,(+ fld 1) (false))))
                                    (iota (length field-names)) (list-head field-types (length field-names))))))))
           (else
             `(block
@@ -1241,13 +1252,13 @@
            (let ((finalb (cadddr (cdr e))))
              (expand-forms
               `(tryfinally
-                ,(if (not (eq? catchb 'false))
+                ,(if (not (equal? catchb '(false)))
                      `(try ,tryb ,var ,catchb)
                      `(scope-block ,tryb))
                 (scope-block ,finalb)))))
           ((length= e 4)
            (expand-forms
-            (if (and (symbol-like? var) (not (eq? var 'false)))
+            (if (symbol-like? var)
                 `(trycatch (scope-block ,tryb)
                            (scope-block
                             (block (= ,var (the_exception))
@@ -1476,7 +1487,7 @@
   (let ((a    (cadr e))
         (idxs (cddr e)))
     (let* ((reuse (and (pair? a)
-                       (contains (lambda (x) (eq? x 'end))
+                       (contains (lambda (x) (or (eq? x 'begin) (eq? x 'end)))
                                  idxs)))
            (arr   (if reuse (make-ssavalue) a))
            (stmts (if reuse `((= ,arr ,a)) '())))
@@ -1488,7 +1499,7 @@
 
 (define (expand-update-operator op op= lhs rhs . declT)
   (cond ((and (pair? lhs) (eq? (car lhs) 'ref))
-         ;; expand indexing inside op= first, to remove "end" and ":"
+         ;; expand indexing inside op= first, to remove "begin", "end", and ":"
          (let* ((ex (partially-expand-ref lhs))
                 (stmts (butlast (cdr ex)))
                 (refex (last    (cdr ex)))
@@ -1520,18 +1531,18 @@
   (let ((e (cdr (flatten-ex '&& e))))
     (let loop ((tail e))
       (if (null? tail)
-          'true
+          '(true)
           (if (null? (cdr tail))
               (car tail)
               `(if ,(car tail)
                    ,(loop (cdr tail))
-                   false))))))
+                   (false)))))))
 
 (define (expand-or e)
   (let ((e (cdr (flatten-ex '|\|\|| e))))
     (let loop ((tail e))
       (if (null? tail)
-          'false
+          '(false)
           (if (null? (cdr tail))
               (car tail)
               (if (symbol-like? (car tail))
@@ -1768,7 +1779,9 @@
              (current-vals  '())
              (expr          #f))
     (if (null? L)
-        (merge expr (to-nt current-names current-vals))
+        (or (merge expr (to-nt current-names current-vals))
+            ;; if that result is #f the named tuple is empty
+            '(call (core NamedTuple)))
         (let ((el (car L)))
           (cond ((or (assignment? el) (kwarg? el))
                  (if (not (symbol? (cadr el)))
@@ -1816,7 +1829,7 @@
       `(= ,lhs ,rhs)))
 
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref line module toplevel ssavalue null meta using import export)))
+  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref line module toplevel ssavalue null true false meta using import export)))
       e
       (let ((ex (get expand-table (car e) #f)))
         (if ex
@@ -2330,7 +2343,7 @@
     (define (construct-loops itrs iv)
       (if (null? itrs)
           `(block (= ,oneresult ,expr)
-                  (inbounds true)
+                  (inbounds (true))
                   (if ,szunk
                       (call (top push!) ,result ,oneresult)
                       (call (top setindex!) ,result ,oneresult ,idx))
@@ -2497,8 +2510,8 @@
                    ,d)))
         ((eq? (car e) 'islocal)
          (if (memq (var-kind (cadr e) scope) '(global none))
-             'false
-             'true))
+             '(false)
+             '(true)))
         ((eq? (car e) 'lambda)
          (let* ((args (lam:vars e))
                 (body (resolve-scopes- (lam:body e) (make-scope e args '() '() sp '() scope))))
@@ -2594,7 +2607,7 @@
 
 ;; compute set of variables referenced in a lambda but not bound by it
 (define (free-vars- e tab)
-  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e UNUSED) (underscore-symbol? e)) tab)
+  (cond ((or (eq? e UNUSED) (underscore-symbol? e)) tab)
         ((symbol? e) (put! tab e #t))
         ((and (pair? e) (eq? (car e) 'outerref)) tab)
         ((and (pair? e) (eq? (car e) 'break-block)) (free-vars- (caddr e) tab))
@@ -2752,7 +2765,7 @@ f(x) = yt(x)
                (struct_type ,name (call (core svec) ,@P)
                             (call (core svec) ,@(map quotify fields))
                             ,super
-                            (call (core svec) ,@types) false ,(length fields))
+                            (call (core svec) ,@types) (false) ,(length fields))
                (return (null))))))))
 
 (define (type-for-closure name fields super)
@@ -2763,7 +2776,7 @@ f(x) = yt(x)
                                 (call (core svec) ,@(map quotify fields))
                                 ,super
                                 (call (core svec) ,@(map (lambda (v) '(core Box)) fields))
-                                false ,(length fields))
+                                (false) ,(length fields))
                    (return (null)))))))
 
 
@@ -2779,7 +2792,7 @@ f(x) = yt(x)
 ;          (struct_type ,name (call (core svec) ,@P)
 ;                       (call (core svec) ,@(map quotify fields))
 ;                       ,super
-;                       (call (core svec) ,@types) false ,(length fields)))))
+;                       (call (core svec) ,@types) (false) ,(length fields)))))
 
 ;; ... and without parameters
 ;(define (type-for-closure name fields super)
@@ -2789,7 +2802,7 @@ f(x) = yt(x)
 ;                 (call (core svec) ,@(map quotify fields))
 ;                 ,super
 ;                 (call (core svec) ,@(map (lambda (v) 'Any) fields))
-;                 false ,(length fields))))
+;                 (false) ,(length fields))))
 
 
 (define (vinfo:not-capt vi)
@@ -2978,7 +2991,7 @@ f(x) = yt(x)
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          struct_type abstract_type primitive_type thunk with-static-parameters
          global globalref outerref const-if-global
-         const null ssavalue isdefined toplevel module lambda error
+         const null true false ssavalue isdefined toplevel module lambda error
          gc_preserve_begin gc_preserve_end import using export)))
 
 (define (local-in? s lam)
@@ -3165,7 +3178,7 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core globalref outerref line break inert module toplevel null meta) e)
+          ((quote top core globalref outerref line break inert module toplevel null true false meta) e)
           ((=)
            (let ((var (cadr e))
                  (rhs (cl-convert (caddr e) fname lam namemap defined toplevel interp)))
@@ -3199,7 +3212,7 @@ f(x) = yt(x)
                                           `($ (call (core QuoteNode) ,sym))
                                           `(call (core getfield) ,fname (inert ,sym)))))
                           `(call (core isdefined) ,access (inert contents)))
-                        'true))
+                        '(true)))
                    (vi
                     (if (and (vinfo:asgn vi) (vinfo:capt vi))
                         `(call (core isdefined) ,sym (inert contents))
@@ -3646,7 +3659,7 @@ f(x) = yt(x)
     ;; `tail` means we are in tail position, where a value needs to be `return`ed
     ;; from the current function.
     (define (compile e break-labels value tail (linearize-args #t))
-      (if (or (not (pair? e)) (memq (car e) '(null ssavalue quote inert top core copyast the_exception $
+      (if (or (not (pair? e)) (memq (car e) '(null true false ssavalue quote inert top core copyast the_exception $
                                                    globalref outerref cdecl stdcall fastcall thiscall llvmcall)))
           (let ((e1 (if (and arg-map (symbol? e))
                         (get arg-map e e)
@@ -3658,7 +3671,6 @@ f(x) = yt(x)
                 (error (string "all-underscore identifier used as rvalue" (format-loc current-loc))))
             (cond (tail  (emit-return e1))
                   (value e1)
-                  ((or (eq? e1 'true) (eq? e1 'false)) #f)
                   ((symbol? e1) (emit e1) #f)  ;; keep symbols for undefined-var checking
                   ((and (pair? e1) (eq? (car e1) 'outerref)) (emit e1) #f)  ;; keep globals for undefined-var checking
                   ((and (pair? e1) (eq? (car e1) 'globalref)) (emit e1) #f) ;; keep globals for undefined-var checking
@@ -3942,7 +3954,7 @@ f(x) = yt(x)
                                  (let ((l  (make-ssavalue)))
                                    (emit `(= ,l ,(compile lam break-labels #t #f)))
                                    l))))
-                   (emit `(method ,(or (cadr e) 'false) ,sig ,lam))
+                   (emit `(method ,(or (cadr e) '(false)) ,sig ,lam))
                    (if value (compile '(null) break-labels value tail)))
                  (cond (tail  (emit-return e))
                        (value e)

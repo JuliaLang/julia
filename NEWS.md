@@ -11,12 +11,20 @@ New language features
 * Function composition now supports multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
 and splatting `∘(fs...)` for composing an iterable collection of functions ([#33568]).
 
+* Functions `gcd`, `lcm`, and `gcdx` now support `Rational` arguments ([#33910]).
+
+* `a[begin]` can now be used to address the first element of an integer-indexed collection `a`.
+  The index is computed by `firstindex(a)` ([#33946]).
+
 Language changes
 ----------------
 
 * Calling `show` or `repr` on an `undef`/`UndefInitializer()` array initializer now shows valid Julia code ([#33211]).
 
 * Calling `show` or `repr` on a 0-dimensional `AbstractArray` now shows valid code for creating an equivalent 0-dimensional array, instead of only showing the contained value. ([#33206])
+
+* The syntax `(;)`, which used to parse as an empty block expression, is deprecated.
+  In the future it will indicate an empty named tuple ([#30115]).
 
 Multi-threading changes
 -----------------------
@@ -36,6 +44,7 @@ New library functions
 * `readdir` output is now guaranteed to be sorted. The `sort` keyword allows opting out of sorting to get names in OS-native order ([#33542]).
 * The new `only(x)` function returns the one-and-only element of a collection `x`, and throws an `ArgumentError` if `x` contains zero or multiple elements. ([#33129])
 * `takewhile` and `dropwhile` have been added to the Iterators submodule ([#33437]).
+* `accumulate` has been added to the Iterators submodule.
 * `filter` can now act on a `Tuple` ([#32968]).
 * There is a now an `evalpoly` (generated) function meant to take the role of the `@evalpoly` macro. The function is just as efficient as the macro while giving added flexibility, so it should be preferred over `@evalpoly`. `evalpoly` takes a list of coefficients as a tuple, so where one might write `@evalpoly(x, p1, p2, p3)` one would instead write `evalpoly(x, (p1, p2, p3))`.
 
@@ -52,6 +61,8 @@ Standard library changes
 * Sets are now displayed less compactly in the REPL, as a column of elements, like vectors
   and dictionaries ([#33300]).
 
+* `methods` now accepts passing a module (or a list thereof) to filter methods defined in it ([#33403]).
+
 #### Libdl
 
 #### LinearAlgebra
@@ -63,6 +74,12 @@ Standard library changes
 * `ldlt` and non-pivoted `lu` now throw a new `ZeroPivotException` type ([#33372]).
 
 * `cond(A, p)` with `p=1` or `p=Inf` now computes the exact condition number instead of an estimate ([#33547]).
+
+* `UniformScaling` objects may now be exponentiated such that `(a*I)^x = a^x * I`.
+
+#### Markdown
+
+* Tables now have the `align` attribute set when `show`n as HTML ([#33849]).
 
 #### Random
 

@@ -26,6 +26,11 @@
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 
 #include "llvm-version.h"
+
+#if JL_LLVM_VERSION >= 100000
+#include <llvm/InitializePasses.h>
+#endif
+
 #include "codegen_shared.h"
 #include "julia.h"
 #include "julia_internal.h"

@@ -186,7 +186,7 @@ end
 if opt_level > 0
     @test !occursin("%gcframe", get_llvm(pointer_not_safepoint, Tuple{}))
     compare_large_struct_ir = get_llvm(compare_large_struct, Tuple{typeof(create_ref_struct())})
-    @test occursin("call i32 @memcmp", compare_large_struct_ir)
+    @test occursin("call i32 @memcmp(", compare_large_struct_ir) || occursin("call i32 @bcmp(", compare_large_struct_ir)
     @test !occursin("%gcframe", compare_large_struct_ir)
 
     @test occursin("jl_gc_pool_alloc", get_llvm(MutableStruct, Tuple{}))

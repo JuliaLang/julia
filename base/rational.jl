@@ -457,3 +457,20 @@ function lerpi(j::Integer, d::Integer, a::Rational, b::Rational)
 end
 
 float(::Type{Rational{T}}) where {T<:Integer} = float(T)
+
+gcd(x::Rational, y::Rational) = gcd(x.num, y.num) // lcm(x.den, y.den)
+lcm(x::Rational, y::Rational) = lcm(x.num, y.num) // gcd(x.den, y.den)
+function gcdx(x::Rational, y::Rational)
+    c = gcd(x, y)
+    if iszero(c.num)
+        a, b = one(c.num), c.num
+    elseif iszero(c.den)
+        a = ifelse(iszero(x.den), one(c.den), c.den)
+        b = ifelse(iszero(y.den), one(c.den), c.den)
+    else
+        idiv(x, c) = div(x.num, c.num) * div(c.den, x.den)
+        _, a, b = gcdx(idiv(x, c), idiv(y, c))
+    end
+    c, a, b
+end
+
