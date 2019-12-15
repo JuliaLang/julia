@@ -10,8 +10,9 @@ else
     end
 end
 
-include("compiler/ssair/ir.jl")
+include("compiler/ssair/basicblock.jl")
 include("compiler/ssair/domtree.jl")
+include("compiler/ssair/ir.jl")
 include("compiler/ssair/slot2ssa.jl")
 include("compiler/ssair/queries.jl")
 include("compiler/ssair/passes.jl")
