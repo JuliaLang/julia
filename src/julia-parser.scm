@@ -1684,10 +1684,7 @@
   (and (pair? lst) (pair? (car lst)) (eq? (caar lst) 'parameters)))
 
 (define (to-kws lst)
-  (map (lambda (x) (if (assignment? x)
-                       `(kw ,@(cdr x))
-                       x))
-       lst))
+  (map =-to-kw lst))
 
 ;; like parse-arglist, but with `for` parsed as a generator
 (define (parse-call-arglist s closer)
