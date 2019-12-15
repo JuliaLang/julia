@@ -164,6 +164,10 @@ same thing as `partialsort!` but leaving `v` unmodified.
 partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
     partialsort!(copymutable(v), k; kws...)
 
+# This implementation of `midpoint` is performance-optimized but safe
+# only if `lo <= hi`.
+midpoint(lo::T, hi::T) where T<:Integer = lo + ((hi - lo) >>> 0x01)
+midpoint(lo::Integer, hi::Integer) = midpoint(promote(lo, hi)...)
 
 # reference on sorted binary search:
 #   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
@@ -175,7 +179,7 @@ function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering) wher
     lo = lo - u
     hi = hi + u
     @inbounds while lo < hi - u
-        m = (lo + hi) >>> 1
+        m = midpoint(lo, hi)
         if lt(o, v[m], x)
             lo = m
         else
@@ -192,7 +196,7 @@ function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering) where
     lo = lo - u
     hi = hi + u
     @inbounds while lo < hi - u
-        m = (lo + hi) >>> 1
+        m = midpoint(lo, hi)
         if lt(o, x, v[m])
             hi = m
         else
@@ -210,7 +214,7 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering) where T
     lo = ilo - u
     hi = ihi + u
     @inbounds while lo < hi - u
-        m = (lo + hi) >>> 1
+        m = midpoint(lo, hi)
         if lt(o, v[m], x)
             lo = m
         elseif lt(o, x, v[m])
@@ -487,7 +491,7 @@ end
 
 @inline function selectpivot!(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     @inbounds begin
-        mi = (lo+hi)>>>1
+        mi = midpoint(lo, hi)
 
         # sort v[mi] <= v[lo] <= v[hi] such that the pivot is immediately in place
         if lt(o, v[lo], v[mi])
@@ -552,7 +556,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::MergeSortAlg, o::
     @inbounds if lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
-        m = (lo+hi)>>>1
+        m = midpoint(lo, hi)
         (length(t) < m-lo+1) && resize!(t, m-lo+1)
 
         sort!(v, lo,  m,  a, o, t)
