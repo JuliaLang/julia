@@ -255,60 +255,98 @@ shell_escape_posixly(args::AbstractString...) =
     sprint(print_shell_escaped_posixly, args...)
 
 
-function print_shell_escaped_winsomely(io::IO, args::AbstractString...)
-    first = true
-    for arg in args
-        first || write(io, ' ')
-        first = false
-        # Quote any arg that contains a whitespace (' ' or '\t') or a double quote mark '"'.
-        # It's also valid to quote an arg with just a whitespace,
-        # but the following may be 'safer', and both implementations are valid anyways.
-        quotes = any(c -> c in (' ', '\t', '"'), arg) || isempty(arg)
-        quotes && write(io, '"')
-        backslashes = 0
-        for c in arg
-            if c == '\\'
-                backslashes += 1
-            else
-                # escape all backslashes and the following double quote
-                c == '"' && (backslashes = backslashes * 2 + 1)
-                for j = 1:backslashes
-                    # backslashes aren't special here
-                    write(io, '\\')
-                end
-                backslashes = 0
-                write(io, c)
-            end
-        end
-        # escape all backslashes, letting the terminating double quote we add below to then be interpreted as a special char
-        quotes && (backslashes *= 2)
-        for j = 1:backslashes
-            write(io, '\\')
-        end
-        quotes && write(io, '"')
-    end
-    return nothing
-end
-
-
 """
-     shell_escaped_winsomely(args::Union{Cmd,AbstractString...})::String
+    shell_escape_wincmd(s::AbstractString)
+    shell_escape_wincmd(io, s::AbstractString)
 
-Convert the collection of strings `args` into single string suitable for passing as the argument
-string for a Windows command line. Windows passes the entire command line as a single string to
-the application (unlike POSIX systems, where the list of arguments are passed separately).
-Many Windows API applications (including julia.exe), use the conventions of the [Microsoft C
-runtime](https://docs.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments) to
-split that command line into a list of strings. This function implements the inverse of such a
-C runtime command-line parser. It joins command-line arguments to be passed to a Windows console
-application into a command line, escaping or quoting meta characters such as space,
-double quotes and backslash where needed. This may be useful in concert with the `windows_verbatim`
-flag to [`Cmd`](@ref) when constructing process pipelines.
+This function escapes the meta characters `()!^<>&|` processed by the
+Windows `cmd.exe` shell: it places a `^` in front of any metacharacter
+that follows an even number of quotation marks on the command line.
+
+The percent sign (`%`) is not escaped, therefore shell variable
+references (like `%USER%`) will still be substituted by `cmd.exe`.
+
+Input strings should avoid ASCII control characters, as many of these
+cannot be escaped (e.g., NUL, CR, LF).
+
+See also: [`escape_microsoft_c_args`](@ref), [`shell_escape_posixly`](@ref)
 
 # Example
 ```jldoctest
-julia> println(shell_escaped_winsomely("A B\\", "C"))
-"A B\\" C
+julia> println(shell_escape_wincmd(escape_microsoft_c_args("^\\\"^\\", "^ C")))
+"^\\\\\\"^^\\\\" "^^ C"
+```
 """
+function shell_escape_wincmd(io, s::AbstractString)
+    # https://stackoverflow.com/a/4095133/1990689
+    quoted = false
+    for c in s
+        if c == '"'
+            quoted = !quoted
+        else
+            if !quoted && c in ( '(', ')', '!', '^', '<', '>', '&', '|' )
+                write(io, '^')
+            end
+        end
+        write(io, c)
+    end
+end
+shell_escape_wincmd(s::AbstractString) = sprint(shell_escape_wincmd, s;
+                                                sizehint = sizeof(s))
+
+"""
+    escape_microsoft_c_args(args::Union{Cmd,AbstractString...})
+    escape_microsoft_c_args(io, args::Union{Cmd,AbstractString...})
+
+Convert a collection of string arguments into a string that can be
+passed to many Windows command-line applications.
+
+Microsoft Windows passes the entire command line as a single string to
+the application (unlike POSIX systems, where the shell splits the
+command line into a list of arguments). Many Windows API applications
+(including julia.exe), use the conventions of the [Microsoft C/C++
+runtime](https://docs.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments)
+to split that command line into a list of strings.
+
+This function implements the inverse of such a C runtime command-line
+parser. It joins command-line arguments to be passed to a Windows
+C/C++/Julia application into a command line, escaping or quoting the
+meta characters space, TAB, double quote and backslash where needed.
+
+See also: [`shell_escape_wincmd`](@ref), [`escape_raw_string`](@ref)
+"""
+function escape_microsoft_c_args(io, args::AbstractString...)
+    # http://daviddeley.com/autohotkey/parameters/parameters.htm#WINCRULES
+    first = true
+    for arg in args
+        if first
+            first = false
+        else
+            write(io, ' ')  # separator
+        end
+        # Any use of r"[ \t\"]" below causes "error during bootstrap"
+        # when make builds target usr/lib/julia/sys.ji !?!
+        if isempty(arg) ||
+            (occursin(' ', arg) ||
+             occursin('\t', arg) ||
+             occursin('\"', arg))
+            # Julia raw strings happen to use the same escaping convention
+            # as the argv[] parser in Microsoft's C runtime library.
+            escape_raw_string(io, arg)
+        else
+            write(io, arg)
+        end
+    end
+end
+escape_microsoft_c_args(args::AbstractString...) =
+    sprint(escape_microsoft_c_args, args...;
+           sizehint = (sum(sizeof.(args)) + 3*length(args)))
+# The following two lines also cause "error during bootstrap" !?!
+#escape_microsoft_c_args(cmd::Cmd) = escape_microsoft_c_args(cmd.exec...)
+#escape_microsoft_c_args(io, cmd::Cmd) = escape_microsoft_c_args(io, cmd.exec...)
+
+# alias for an earlier implementation (to be removed)
 shell_escape_winsomely(args::AbstractString...) =
-    sprint(print_shell_escaped_winsomely, args..., sizehint=(sum(length, args)) + 3*length(args))
+    escape_microsoft_c_args(args...)
+print_shell_escaped_winsomely(io::IO, args::AbstractString...) =
+    escape_microsoft_c_args(io, args...)
