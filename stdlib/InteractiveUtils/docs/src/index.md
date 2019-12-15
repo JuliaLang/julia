@@ -9,6 +9,7 @@ InteractiveUtils.subtypes
 InteractiveUtils.edit(::AbstractString, ::Integer)
 InteractiveUtils.edit(::Any)
 InteractiveUtils.@edit
+InteractiveUtils.define_editor
 InteractiveUtils.less(::AbstractString)
 InteractiveUtils.less(::Any)
 InteractiveUtils.@less
