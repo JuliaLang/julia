@@ -523,6 +523,59 @@ julia> println(raw"\\\\x \\\\\\"")
 """
 macro raw_str(s); s; end
 
+"""
+    escape_raw_string(s::AbstractString)
+    escape_raw_string(io, s::AbstractString)
+
+Convert a string into a raw-string literal. This function counts in
+input string `s` for any double-quote (`"`) character the number _n_
+of preceeding backslash (`\\`) characters, and then increases there
+the number of backslashes from _n_ to 2_n_+1 (even for _n_ = 0). It
+also doubles any sequence of backslashes at the end of the string.
+Finally, it returns the entire string enclosed with added double-quote
+delimiters.
+
+This escaping convention is used in raw strings and other non-standard
+string literals. (It also happens to be the escaping convention
+expected by the Microsoft C/C++ compiler runtime when it parses a
+command-line string into the argv[] array.)
+
+See also: [`escape_string`](@ref)
+"""
+function escape_raw_string(io, str::AbstractString)
+    write(io, '"')
+    escapes = 0
+    for c in str
+        if c == '\\'
+            escapes += 1
+        else
+            if c == '"'
+                # if one or more backslashes are followed by
+                # a double quote then escape all backslashes
+                # and the double quote
+                escapes = escapes * 2 + 1
+            end
+            while escapes > 0
+                write(io, '\\')
+                escapes -= 1
+            end
+            escapes = 0
+            write(io, c)
+        end
+    end
+    # also escape any trailing backslashes,
+    # so they do not affect the closing quote
+    while escapes > 0
+        write(io, '\\')
+        write(io, '\\')
+        escapes -= 1
+    end
+    write(io, '"')
+end
+escape_raw_string(str::AbstractString) = sprint(escape_raw_string, str;
+                                                sizehint = lastindex(str) + 2)
+
+
 ## multiline strings ##
 
 """
