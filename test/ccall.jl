@@ -1538,7 +1538,11 @@ end
 
 # issue #34061
 o_file = tempname()
-run(`$(Base.julia_cmd()) --output-o=$o_file -e 'Base.reinit_stdio();
+output = read(Cmd(`$(Base.julia_cmd()) --output-o=$o_file -e 'Base.reinit_stdio();
     f() = ccall((:dne, :does_not_exist), Cvoid, ());
-    precompile(f, ())'`)
-@test isfile(o_file)
+    f()'`; ignorestatus=true), String)
+@test occursin(output, """
+ERROR: could not load library "does_not_exist"
+does_not_exist.so: cannot open shared object file: No such file or directory
+""")
+@test !isfile(o_file)
