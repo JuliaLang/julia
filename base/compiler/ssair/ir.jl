@@ -5,38 +5,11 @@ Core.PhiNode() = Core.PhiNode(Any[], Any[])
 
 isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode)
 
-"""
-Like UnitRange{Int}, but can handle the `last` field, being temporarily
-< first (this can happen during compacting)
-"""
-struct StmtRange <: AbstractUnitRange{Int}
-    start::Int
-    stop::Int
-end
-first(r::StmtRange) = r.start
-last(r::StmtRange) = r.stop
-iterate(r::StmtRange, state=0) = (last(r) - first(r) < state) ? nothing : (first(r) + state, state + 1)
-
-StmtRange(range::UnitRange{Int}) = StmtRange(first(range), last(range))
-
-struct BasicBlock
-    stmts::StmtRange
-    preds::Vector{Int}
-    succs::Vector{Int}
-end
-function BasicBlock(stmts::StmtRange)
-    return BasicBlock(stmts, Int[], Int[])
-end
-function BasicBlock(old_bb, stmts)
-    return BasicBlock(stmts, old_bb.preds, old_bb.succs)
-end
-copy(bb::BasicBlock) = BasicBlock(bb.stmts, copy(bb.preds), copy(bb.succs))
-
 struct CFG
     blocks::Vector{BasicBlock}
     index::Vector{Int} # map from instruction => basic-block number
                        # TODO: make this O(1) instead of O(log(n_blocks))?
-    domtree # TODO type
+    domtree::DomTree
 end
 
 function CFG(blocks::Vector{BasicBlock}, index::Vector{Int})
@@ -527,7 +500,7 @@ mutable struct IncrementalCompact
     ir::IRCode
     result::InstructionStream
     result_bbs::Vector{BasicBlock}
-    result_domtree # TODO type
+    result_domtree::DomTree
 
     ssa_rename::Vector{Any}
     # `bb_rename_pred` is for renaming predecessors to the blocks they have
