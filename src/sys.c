@@ -15,7 +15,8 @@
 #include "julia_internal.h"
 
 #ifdef _OS_WINDOWS_
-#include <psapi.h>
+#include <tlhelp32.h> // CreateToolhelp32Snapshot
+#include <psapi.h> // GetProcessMemoryInfo
 #else
 #include <unistd.h>
 #if !defined(_SC_NPROCESSORS_ONLN) || defined(_OS_FREEBSD_) || defined(_OS_DARWIN_)
@@ -550,7 +551,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 #elif defined(_OS_WINDOWS_)
 
     wchar_t *pth16 = (wchar_t*)malloc_s(32768 * sizeof(*pth16)); // max long path length
-    DWORD n16 = GetModuleFileNameW((HMODULE)handle,pth16,32768);
+    DWORD n16 = GetModuleFileNameW((HMODULE)handle, pth16, 32768);
     if (n16 <= 0) {
         free(pth16);
         return NULL;
@@ -589,23 +590,41 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 }
 
 #ifdef _OS_WINDOWS_
-static BOOL CALLBACK jl_EnumerateLoadedModulesProc64(
-  _In_      PCTSTR ModuleName,
-  _In_      DWORD64 ModuleBase,
-  _In_      ULONG ModuleSize,
-  _In_opt_  PVOID a
-)
-{
-    jl_array_grow_end((jl_array_t*)a, 1);
-    //XXX: change to jl_arrayset if array storage allocation for Array{String,1} changes:
-    jl_value_t *v = jl_cstr_to_string(ModuleName);
-    jl_array_ptr_set(a, jl_array_dim0(a)-1, v);
-    return TRUE;
-}
 // Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
 JL_DLLEXPORT int jl_dllist(jl_array_t *list)
 {
-    return EnumerateLoadedModules64(GetCurrentProcess(), jl_EnumerateLoadedModulesProc64, list);
+    HANDLE hModuleSnap = INVALID_HANDLE_VALUE;
+    MODULEENTRY32W me32;
+    me32.dwSize = sizeof(me32);
+
+    do {
+        hModuleSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, 0);
+    } while (hModuleSnap == INVALID_HANDLE_VALUE && GetLastError() == ERROR_BAD_LENGTH);
+    if (hModuleSnap == INVALID_HANDLE_VALUE) {
+        return 0;
+    }
+
+    // Ignore the main exe file
+    if (!Module32FirstW(hModuleSnap, &me32)) {
+        CloseHandle(hModuleSnap);
+        return 0;
+    }
+
+    // Walk the list of modules and append their paths to our list
+    while (Module32NextW(hModuleSnap, &me32)) {
+        char path[MAX_PATH * 4]; // maximum size needed to path converted to utf8
+        DWORD n8 = WideCharToMultiByte(CP_UTF8, 0, me32.szExePath, -1, path, sizeof(path), NULL, NULL);
+        if (n8 > 1) {
+            jl_value_t *v = jl_pchar_to_string(path, n8 - 1);
+            jl_array_grow_end((jl_array_t*)list, 1);
+            //XXX: change to jl_arrayset if array storage allocation for Array{String,1} changes:
+            jl_array_ptr_set(list, jl_array_dim0(list)-1, v);
+        }
+    }
+
+    CloseHandle(hModuleSnap);
+
+    return 1;
 }
 #endif
 
