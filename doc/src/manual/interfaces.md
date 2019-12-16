@@ -565,6 +565,7 @@ end
 find_aac(bc::Base.Broadcast.Broadcasted) = find_aac(bc.args)
 find_aac(args::Tuple) = find_aac(find_aac(args[1]), Base.tail(args))
 find_aac(x) = x
+find_aac(x::Base.Broadcast.Extruded) = x.x
 find_aac(::Tuple{}) = nothing
 find_aac(a::ArrayAndChar, rest) = a
 find_aac(::Any, rest) = find_aac(rest)
