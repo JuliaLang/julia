@@ -108,7 +108,7 @@ edit(m::Module) = edit(pathof(m))
 if Sys.iswindows()
     function less(file::AbstractString, line::Integer)
         pager = shell_split(get(ENV, "PAGER", "more"))
-        if pager[1]=="more"
+        if pager[1] == "more"
             g = ""
             line -= 1
         else
