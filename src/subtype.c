@@ -1333,9 +1333,36 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
     return x == y || jl_egal(x, y);
 }
 
+static int is_indefinite_length_tuple_type(jl_value_t *x)
+{
+    x = jl_unwrap_unionall(x);
+    if (!jl_is_tuple_type(x))
+        return 0;
+    size_t n = jl_nparams(x);
+    return n > 0 && jl_vararg_kind(jl_tparam(x, n-1)) == JL_VARARG_UNBOUND;
+}
+
+static int is_definite_length_tuple_type(jl_value_t *x)
+{
+    if (jl_is_typevar(x))
+        x = ((jl_tvar_t*)x)->ub;
+    x = jl_unwrap_unionall(x);
+    if (!jl_is_tuple_type(x))
+        return 0;
+    size_t n = jl_nparams(x);
+    if (n == 0)
+        return 1;
+    jl_vararg_kind_t k = jl_vararg_kind(jl_tparam(x, n-1));
+    return k == JL_VARARG_NONE || k == JL_VARARG_INT;
+}
+
 static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
     if (obviously_egal(x, y)) return 1;
+
+    if ((is_indefinite_length_tuple_type(x) && is_definite_length_tuple_type(y)) ||
+        (is_definite_length_tuple_type(x) && is_indefinite_length_tuple_type(y)))
+        return 0;
 
     jl_unionstate_t oldLunions = e->Lunions;
     memset(e->Lunions.stack, 0, sizeof(e->Lunions.stack));
