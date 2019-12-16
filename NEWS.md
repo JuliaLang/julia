@@ -46,6 +46,7 @@ New library functions
 Standard library changes
 ------------------------
 
+* `Pkg` won't clobber pre-compilation files as often when switching environments ([#32651])
 * `Pkg` can now download and install binary artifacts through the `Pkg.Artifacts`
    submodule and supporting functions. ([#32918])
 * When `wait` (or `@sync`, or `fetch`) is called on a failing `Task`, the exception is propagated as a
