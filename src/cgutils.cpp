@@ -693,7 +693,9 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
 #endif
                 decl = StructType::get(jl_LLVMContext, latypes);
             }
-            jst->struct_decl = decl;
+            // don't use struct_decl cache for llvmcall
+            if (!llvmcall)
+                jst->struct_decl = decl;
             return decl;
         }
     }
