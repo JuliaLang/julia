@@ -405,8 +405,8 @@ Sometimes you need to wrap a standard array into an extra type to be able to dis
 the need of any real changes to the standard array behavior.
 The following example introduces such a wrapper type and ensures that the new type will work at the same
 speed as a standard array type.
-The key point is the `Base.@propagate_inbounds` which allows predefined functions like `sum`
-to skip bounds checking as they do for a standard array.
+The key point is the usage of `Base.@propagate_inbounds` which allows predefined functions like `sum`
+to skip bounds checking as they would do for a standard array.
 
 ```jldoctest wrapperarray
 julia> mutable struct MyArray{T,N} <: AbstractArray{T,N}
