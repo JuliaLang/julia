@@ -259,9 +259,10 @@ shell_escape_posixly(args::AbstractString...) =
     shell_escape_wincmd(s::AbstractString)
     shell_escape_wincmd(io, s::AbstractString)
 
-This function escapes the meta characters `()!^<>&|` processed by the
-Windows `cmd.exe` shell: it places a `^` in front of any metacharacter
-that follows an even number of quotation marks on the command line.
+The unexported `shell_escape_wincmd` function escapes the meta
+characters `()!^<>&|` processed by the Windows `cmd.exe` shell: it
+places a `^` in front of any metacharacter that follows an even number
+of quotation marks on the command line.
 
 The percent sign (`%`) is not escaped, therefore shell variable
 references (like `%USER%`) will still be substituted by `cmd.exe`.
@@ -296,7 +297,7 @@ shell_escape_wincmd(s::AbstractString) = sprint(shell_escape_wincmd, s;
 
 """
     escape_microsoft_c_args(args::Union{Cmd,AbstractString...})
-    escape_microsoft_c_args(io, args::Union{Cmd,AbstractString...})
+    escape_microsoft_c_args(io::IO, args::Union{Cmd,AbstractString...})
 
 Convert a collection of string arguments into a string that can be
 passed to many Windows command-line applications.
@@ -315,7 +316,7 @@ meta characters space, TAB, double quote and backslash where needed.
 
 See also: [`shell_escape_wincmd`](@ref), [`escape_raw_string`](@ref)
 """
-function escape_microsoft_c_args(io, args::AbstractString...)
+function escape_microsoft_c_args(io::IO, args::AbstractString...)
     # http://daviddeley.com/autohotkey/parameters/parameters.htm#WINCRULES
     first = true
     for arg in args
@@ -324,12 +325,7 @@ function escape_microsoft_c_args(io, args::AbstractString...)
         else
             write(io, ' ')  # separator
         end
-        # Any use of r"[ \t\"]" below causes "error during bootstrap"
-        # when make builds target usr/lib/julia/sys.ji !?!
-        if isempty(arg) ||
-            (occursin(' ', arg) ||
-             occursin('\t', arg) ||
-             occursin('\"', arg))
+        if isempty(arg) || occursin(r"[ \t\"]", arg)
             # Julia raw strings happen to use the same escaping convention
             # as the argv[] parser in Microsoft's C runtime library.
             escape_raw_string(io, arg)
@@ -341,9 +337,6 @@ end
 escape_microsoft_c_args(args::AbstractString...) =
     sprint(escape_microsoft_c_args, args...;
            sizehint = (sum(sizeof.(args)) + 3*length(args)))
-# The following two lines also cause "error during bootstrap" !?!
-#escape_microsoft_c_args(cmd::Cmd) = escape_microsoft_c_args(cmd.exec...)
-#escape_microsoft_c_args(io, cmd::Cmd) = escape_microsoft_c_args(io, cmd.exec...)
 
 # alias for an earlier implementation (to be removed)
 shell_escape_winsomely(args::AbstractString...) =
