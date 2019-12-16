@@ -32,12 +32,26 @@ function threaded_loop(a, r, x)
     end
 end
 
-function test_threaded_loop_and_atomic_add()
+# parallel simd loop with parallel atomic addition
+function threaded_simd_loop(a, r, x)
+    @threads @simd for i in r
+        j = i - firstindex(r) + 1
+        a[j] = 1 + atomic_add!(x, 1)
+    end
+end
+function threaded_simd_ivdep_loop(a, r, x)
+    @threads @simd ivdep for i in r
+        j = i - firstindex(r) + 1
+        a[j] = 1 + atomic_add!(x, 1)
+    end
+end
+
+function test_threaded_loop_and_atomic_add(loop_function)
     for r in [1:10000, collect(1:10000), Base.IdentityUnitRange(-500:500), (1,2,3,4,5,6,7,8,9,10)]
         n = length(r)
         x = Atomic()
         a = zeros(Int, n)
-        threaded_loop(a,r,x)
+        loop_function(a,r,x)
         found = zeros(Bool,n)
         was_inorder = true
         for i=1:length(a)
@@ -54,7 +68,9 @@ function test_threaded_loop_and_atomic_add()
     end
 end
 
-test_threaded_loop_and_atomic_add()
+test_threaded_loop_and_atomic_add(threaded_loop)
+test_threaded_loop_and_atomic_add(threaded_simd_loop)
+test_threaded_loop_and_atomic_add(threaded_simd_ivdep_loop)
 
 # Helper for test_threaded_atomic_minmax that verifies sequential consistency.
 function check_minmax_consistency(old::Array{T,1}, m::T, start::T, o::Base.Ordering) where T
