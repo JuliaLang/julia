@@ -34,12 +34,12 @@ static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintpt
         jl_gcframe_t *prev = pgcstack->prev;
         if (pgcstack->nroots & 2) { // tagged frame
             uintptr_t frame_fp = ((uintptr_t*)pgcstack)[-1];
-            if (frame_fp == 0)
-                continue; // frame wasn't fully initialized yet
-            if (frame_fp >= sp)
-                break; // stack grows down, so frame pointer is monotonically increasing
-            *ppgcstack = prev;
-            return pgcstack;
+            if (frame_fp != 0) { // check that frame was fully initialized
+                if (frame_fp >= sp)
+                    break; // stack grows down, so frame pointer is monotonically increasing
+                *ppgcstack = prev;
+                return pgcstack;
+            }
         }
         *ppgcstack = pgcstack = prev;
     }
