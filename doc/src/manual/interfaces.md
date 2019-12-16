@@ -570,7 +570,7 @@ find_aac(::Tuple{}) = nothing
 find_aac(a::ArrayAndChar, rest) = a
 find_aac(::Any, rest) = find_aac(rest)
 # output
-find_aac (generic function with 6 methods)
+find_aac (generic function with 7 methods)
 ```
 
 From these definitions, one obtains the following behavior:
