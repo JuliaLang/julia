@@ -75,6 +75,9 @@ julia> C
 end
 
 @inline function _rmul_or_fill!(C::AbstractArray, beta::Number)
+    if isempty(C)
+        return C
+    end
     if iszero(beta)
         fill!(C, zero(eltype(C)))
     else

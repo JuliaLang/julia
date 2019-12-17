@@ -341,7 +341,7 @@ static void finalize_object(arraylist_t *list, jl_value_t *o,
 static void jl_gc_push_arraylist(jl_ptls_t ptls, arraylist_t *list)
 {
     void **items = list->items;
-    items[0] = (void*)(((uintptr_t)list->len - 2) << 1);
+    items[0] = (void*)JL_GC_ENCODE_PUSHARGS(list->len - 2);
     items[1] = ptls->pgcstack;
     ptls->pgcstack = (jl_gcframe_t*)items;
 }
@@ -1734,15 +1734,13 @@ STATIC_INLINE int gc_mark_scan_objarray(jl_ptls_t ptls, jl_gc_mark_sp_t *sp,
 
 // Scan an object with 8bits field descriptors. see `gc_mark_obj8_t`
 STATIC_INLINE int gc_mark_scan_obj8(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mark_obj8_t *obj8,
-                                    char *parent, jl_fielddesc8_t *begin, jl_fielddesc8_t *end,
+                                    char *parent, uint8_t *begin, uint8_t *end,
                                     jl_value_t **pnew_obj, uintptr_t *ptag, uint8_t *pbits)
 {
     (void)jl_assume(obj8 == (gc_mark_obj8_t*)sp->data);
     (void)jl_assume(begin < end);
     for (; begin < end; begin++) {
-        if (!begin->isptr)
-            continue;
-        jl_value_t **slot = (jl_value_t**)(parent + begin->offset);
+        jl_value_t **slot = &((jl_value_t**)parent)[*begin];
         *pnew_obj = *slot;
         if (*pnew_obj)
             verify_parent2("object", parent, slot, "field(%d)",
@@ -1769,15 +1767,13 @@ STATIC_INLINE int gc_mark_scan_obj8(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mark
 
 // Scan an object with 16bits field descriptors. see `gc_mark_obj16_t`
 STATIC_INLINE int gc_mark_scan_obj16(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mark_obj16_t *obj16,
-                                     char *parent, jl_fielddesc16_t *begin, jl_fielddesc16_t *end,
+                                     char *parent, uint16_t *begin, uint16_t *end,
                                      jl_value_t **pnew_obj, uintptr_t *ptag, uint8_t *pbits) JL_NOTSAFEPOINT
 {
     (void)jl_assume(obj16 == (gc_mark_obj16_t*)sp->data);
     (void)jl_assume(begin < end);
     for (; begin < end; begin++) {
-        if (!begin->isptr)
-            continue;
-        jl_value_t **slot = (jl_value_t**)(parent + begin->offset);
+        jl_value_t **slot = &((jl_value_t**)parent)[*begin];
         *pnew_obj = *slot;
         if (*pnew_obj)
             verify_parent2("object", parent, slot, "field(%d)",
@@ -1804,15 +1800,13 @@ STATIC_INLINE int gc_mark_scan_obj16(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
 
 // Scan an object with 32bits field descriptors. see `gc_mark_obj32_t`
 STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mark_obj32_t *obj32,
-                                     char *parent, jl_fielddesc32_t *begin, jl_fielddesc32_t *end,
+                                     char *parent, uint32_t *begin, uint32_t *end,
                                      jl_value_t **pnew_obj, uintptr_t *ptag, uint8_t *pbits)
 {
     (void)jl_assume(obj32 == (gc_mark_obj32_t*)sp->data);
     (void)jl_assume(begin < end);
     for (; begin < end; begin++) {
-        if (!begin->isptr)
-            continue;
-        jl_value_t **slot = (jl_value_t**)(parent + begin->offset);
+        jl_value_t **slot = &((jl_value_t**)parent)[*begin];
         *pnew_obj = *slot;
         if (*pnew_obj)
             verify_parent2("object", parent, slot, "field(%d)",
@@ -1963,13 +1957,13 @@ JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp)
 
     gc_mark_obj8_t *obj8;
     char *obj8_parent;
-    jl_fielddesc8_t *obj8_begin;
-    jl_fielddesc8_t *obj8_end;
+    uint8_t *obj8_begin;
+    uint8_t *obj8_end;
 
     gc_mark_obj16_t *obj16;
     char *obj16_parent;
-    jl_fielddesc16_t *obj16_begin;
-    jl_fielddesc16_t *obj16_end;
+    uint16_t *obj16_begin;
+    uint16_t *obj16_end;
 
 pop:
     if (sp.pc == sp.pc_start) {
@@ -2033,8 +2027,8 @@ obj16_loaded:
 obj32: {
         gc_mark_obj32_t *obj32 = gc_pop_markdata(&sp, gc_mark_obj32_t);
         char *parent = (char*)obj32->parent;
-        jl_fielddesc32_t *begin = obj32->begin;
-        jl_fielddesc32_t *end = obj32->end;
+        uint32_t *begin = obj32->begin;
+        uint32_t *end = obj32->end;
         if (gc_mark_scan_obj32(ptls, &sp, obj32, parent, begin, end, &new_obj, &tag, &bits))
             goto mark;
         goto pop;
@@ -2051,7 +2045,7 @@ stack: {
         uintptr_t offset = stack->offset;
         uintptr_t lb = stack->lb;
         uintptr_t ub = stack->ub;
-        uint32_t nr = nroots >> 1;
+        uint32_t nr = nroots >> 2;
         uintptr_t nptr = 0;
         while (1) {
             jl_value_t ***rts = (jl_value_t***)(((void**)s) + 2);
@@ -2093,7 +2087,7 @@ stack: {
                 uintptr_t new_nroots = gc_read_stack(&s->nroots, offset, lb, ub);
                 assert(new_nroots <= UINT32_MAX);
                 nroots = stack->nroots = (uint32_t)new_nroots;
-                nr = nroots >> 1;
+                nr = nroots >> 2;
                 continue;
             }
             goto pop;
@@ -2396,6 +2390,7 @@ mark: {
                 s = ta->gcstack;
 #ifdef COPY_STACKS
                 if (ta->copy_stack) {
+                    assert(tid != -1 && ptls2 != NULL);
                     ub = (uintptr_t)ptls2->stackbase;
                     lb = ub - ta->copy_stack;
                     offset = (uintptr_t)stkbuf - lb;
@@ -2418,12 +2413,12 @@ mark: {
             }
             const jl_datatype_layout_t *layout = jl_task_type->layout;
             assert(layout->fielddesc_type == 0);
-            size_t nfields = layout->nfields;
-            assert(nfields > 0);
-            obj8_begin = (jl_fielddesc8_t*)jl_dt_layout_fields(layout);
-            obj8_end = obj8_begin + nfields;
+            assert(layout->nfields > 0);
+            uint32_t npointers = layout->npointers;
+            obj8_begin = (uint8_t*)jl_dt_layout_ptrs(layout);
+            obj8_end = obj8_begin + npointers;
             // assume tasks always reference young objects: set lowest bit
-            uintptr_t nptr = (9 << 2) | 1 | bits;
+            uintptr_t nptr = (npointers << 2) | 1 | bits;
             gc_mark_obj8_t markdata = {new_obj, obj8_begin, obj8_end, nptr};
             gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(obj8),
                                &markdata, sizeof(markdata), 0);
@@ -2453,17 +2448,12 @@ mark: {
             uint32_t npointers = layout->npointers;
             if (npointers == 0)
                 goto pop;
-            uintptr_t nptr = ((npointers & 0xff) << (npointers & 0x300)) << 2;
-            nptr = nptr | (bits & GC_OLD);
-            uint32_t offsets = jl_datatype_layout_n_nonptr(layout);
-            size_t nfields = layout->nfields;
-            nfields -= offsets & 0xffff;
-            size_t first = offsets >> 16;
+            uintptr_t nptr = npointers << 2 | (bits & GC_OLD);
+            assert(layout->nfields > 0 && layout->fielddesc_type != 3 && "opaque types should have been handled specially");
             if (layout->fielddesc_type == 0) {
-                jl_fielddesc8_t *desc = (jl_fielddesc8_t*)jl_dt_layout_fields(layout);
                 obj8_parent = (char*)new_obj;
-                obj8_begin = desc + first;
-                obj8_end = desc + nfields;
+                obj8_begin = (uint8_t*)jl_dt_layout_ptrs(layout);
+                obj8_end = obj8_begin + npointers;
                 assert(obj8_begin < obj8_end);
                 gc_mark_obj8_t markdata = {new_obj, obj8_begin, obj8_end, nptr};
                 gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(obj8),
@@ -2472,10 +2462,9 @@ mark: {
                 goto obj8_loaded;
             }
             else if (layout->fielddesc_type == 1) {
-                jl_fielddesc16_t *desc = (jl_fielddesc16_t*)jl_dt_layout_fields(layout);
                 obj16_parent = (char*)new_obj;
-                obj16_begin = desc + first;
-                obj16_end = desc + nfields;
+                obj16_begin = (uint16_t*)jl_dt_layout_ptrs(layout);
+                obj16_end = obj16_begin + npointers;
                 assert(obj16_begin < obj16_end);
                 gc_mark_obj16_t markdata = {new_obj, obj16_begin, obj16_end, nptr};
                 gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(obj16),
@@ -2486,9 +2475,9 @@ mark: {
             else if (layout->fielddesc_type == 2) {
                 // This is very uncommon
                 // Do not do store to load forwarding to save some code size
-                jl_fielddesc32_t *desc = (jl_fielddesc32_t*)jl_dt_layout_fields(layout);
-                assert(first < nfields);
-                gc_mark_obj32_t markdata = {new_obj, desc + first, desc + nfields, nptr};
+                uint32_t *obj32_begin = (uint32_t*)jl_dt_layout_ptrs(layout);
+                uint32_t *obj32_end = obj32_begin + npointers;
+                gc_mark_obj32_t markdata = {new_obj, obj32_begin, obj32_end, nptr};
                 gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(obj32),
                                    &markdata, sizeof(markdata), 0);
                 sp.data = (jl_gc_mark_data_t *)(((char*)sp.data) + sizeof(markdata));
@@ -2497,7 +2486,6 @@ mark: {
             else {
                 assert(layout->fielddesc_type == 3);
                 jl_fielddescdyn_t *desc = (jl_fielddescdyn_t*)jl_dt_layout_fields(layout);
-
                 int old = jl_astaggedvalue(new_obj)->bits.gc & 2;
                 export_gc_state(ptls, &sp);
                 uintptr_t young = desc->markfunc(ptls, new_obj);
@@ -2665,6 +2653,11 @@ JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void)
 void jl_gc_sync_total_bytes(void)
 {
     jl_gc_get_total_bytes(&last_gc_total_bytes);
+}
+
+JL_DLLEXPORT int64_t jl_gc_live_bytes(void)
+{
+    return live_bytes;
 }
 
 static void jl_gc_premark(jl_ptls_t ptls2)

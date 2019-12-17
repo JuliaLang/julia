@@ -707,7 +707,7 @@ the arguments of the user function are initialized.
 A `do` block, like any other inner function, can "capture" variables from its
 enclosing scope. For example, the variable `data` in the above example of
 `open...do` is captured from the outer scope. Captured variables
-can create performance challenges as discussed in [performance tips](@ref man-performance-tips).
+can create performance challenges as discussed in [performance tips](@ref man-performance-captured).
 
 ## Function composition and piping
 
@@ -838,8 +838,8 @@ the results (see [Pre-allocating outputs](@ref)). A convenient syntax for this i
 is equivalent to `broadcast!(identity, X, ...)` except that, as above, the `broadcast!` loop is
 fused with any nested "dot" calls. For example, `X .= sin.(Y)` is equivalent to `broadcast!(sin, X, Y)`,
 overwriting `X` with `sin.(Y)` in-place. If the left-hand side is an array-indexing expression,
-e.g. `X[2:end] .= sin.(Y)`, then it translates to `broadcast!` on a `view`, e.g.
-`broadcast!(sin, view(X, 2:lastindex(X)), Y)`,
+e.g. `X[begin+1:end] .= sin.(Y)`, then it translates to `broadcast!` on a `view`, e.g.
+`broadcast!(sin, view(X, firstindex(X)+1:lastindex(X)), Y)`,
 so that the left-hand side is updated in-place.
 
 Since adding dots to many operations and function calls in an expression

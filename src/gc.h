@@ -119,24 +119,24 @@ typedef struct {
 // A normal object with 8bits field descriptors
 typedef struct {
     jl_value_t *parent; // The parent object to trigger write barrier on.
-    jl_fielddesc8_t *begin; // Current field descriptor.
-    jl_fielddesc8_t *end; // End of field descriptor.
+    uint8_t *begin; // Current field descriptor.
+    uint8_t *end; // End of field descriptor.
     uintptr_t nptr; // See notes about `nptr` above.
 } gc_mark_obj8_t;
 
 // A normal object with 16bits field descriptors
 typedef struct {
     jl_value_t *parent; // The parent object to trigger write barrier on.
-    jl_fielddesc16_t *begin; // Current field descriptor.
-    jl_fielddesc16_t *end; // End of field descriptor.
+    uint16_t *begin; // Current field descriptor.
+    uint16_t *end; // End of field descriptor.
     uintptr_t nptr; // See notes about `nptr` above.
 } gc_mark_obj16_t;
 
 // A normal object with 32bits field descriptors
 typedef struct {
     jl_value_t *parent; // The parent object to trigger write barrier on.
-    jl_fielddesc32_t *begin; // Current field descriptor.
-    jl_fielddesc32_t *end; // End of field descriptor.
+    uint32_t *begin; // Current field descriptor.
+    uint32_t *end; // End of field descriptor.
     uintptr_t nptr; // See notes about `nptr` above.
 } gc_mark_obj32_t;
 

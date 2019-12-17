@@ -669,7 +669,7 @@ regex_opts_str(opts) = (isassigned(_regex_opts_str) ? _regex_opts_str[] : init_r
 # UInt32 to String mapping for some compile options
 const _regex_opts_str = Ref{ImmutableDict{UInt32,String}}()
 
-init_regex() = _regex_opts_str[] = foldl(0:15, init=ImmutableDict{UInt32,String}()) do d, o
+@noinline init_regex() = _regex_opts_str[] = foldl(0:15, init=ImmutableDict{UInt32,String}()) do d, o
     opt = UInt32(0)
     str = ""
     if o & 1 != 0

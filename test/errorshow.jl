@@ -5,6 +5,50 @@ using Random, LinearAlgebra
 # For curmod_*
 include("testenv.jl")
 
+
+@testset "SystemError" begin
+    err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, "SystemError: reason: ")
+
+    err = try; systemerror("reason", Cint(0), extrainfo="addend"); false; catch ex; ex; end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, "SystemError (with addend): reason: ")
+
+    err = try
+            Libc.errno(0xc0ffee)
+            systemerror("reason", true)
+            false
+        catch ex
+            ex
+        end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, "SystemError: reason: ")
+
+    err = try; Base.windowserror("reason", UInt32(0)); false; catch ex; ex; end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, Sys.iswindows() ? "SystemError: reason: " :
+        "SystemError (with Base.WindowsErrorInfo(0x00000000, nothing)): reason: ")
+
+    err = try; Base.windowserror("reason", UInt32(0); extrainfo="addend"); false; catch ex; ex; end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, Sys.iswindows() ? "SystemError (with addend): reason: " :
+        "SystemError (with Base.WindowsErrorInfo(0x00000000, \"addend\")): reason: ")
+
+    @static if Sys.iswindows()
+        err = try
+                ccall(:SetLastError, stdcall, Cvoid, (UInt32,), 0x00000000)
+                Base.windowserror("reason", true)
+                false
+            catch ex
+                ex
+            end::SystemError
+        errs = sprint(Base.showerror, err)
+        @test startswith(errs, "SystemError: reason: ")
+    end
+end
+
+
 cfile = " at $(@__FILE__):"
 c1line = @__LINE__() + 1
 method_c1(x::Float64, s::AbstractString...) = true
@@ -596,7 +640,6 @@ for (func,str) in ((TestMethodShadow.:+,":+"), (TestMethodShadow.:(==),":(==)"),
 end
 
 # issue #33539
-
 c33539line = @__LINE__() + 2
 struct Foo33539{S,T}
     a::S
@@ -617,4 +660,3 @@ let ex, buf = IOBuffer()
     Base.show_method_candidates(buf, ex)
     @test String(take!(buf)) == "\nClosest candidates are:\n  (::Type{$(curmod_prefix)Foo33539})(::S, !Matched::T) where {S, T}$cfile$c33539line\n  (::Type{$(curmod_prefix)Foo33539{S,T}})(::Any, !Matched::Any) where {S, T}$cfile$c33539line"
 end
-

@@ -2650,3 +2650,21 @@ end
 
 # Throws ArgumentError for negative dimensions in Array
 @test_throws ArgumentError fill('a', -10)
+
+@testset "Issue 33919" begin
+    A = Array[rand(2, 3), rand(3, 1)]
+    B = Array[rand(2, 2), rand(1, 4)]
+    C = hcat(A, B)
+    @test typeof(C) == Array{Array{Float64,2},2}
+end
+
+# issue #33974
+let n = 12000000, k = 257000000
+    # tests skipped since they use a lot of memory
+    @test_skip filter(x -> x[2] < 1.0, collect(enumerate(vcat(fill(0.5, n), fill(NaN, k)))))[end] == (n, 0.5)
+    @test_skip let v = collect(enumerate(vcat(fill(0.5, n), fill(NaN, k))))
+        resize!(v, n)
+        sizehint!(v, n)
+        v[end] == (n, 0.5)
+    end
+end

@@ -90,7 +90,11 @@ macro threads(args...)
         throw(ArgumentError("need an expression argument to @threads"))
     end
     if ex.head === :for
-        return _threadsfor(ex.args[1], ex.args[2])
+        if ex.args[1] isa Expr && ex.args[1].head === :(=)
+            return _threadsfor(ex.args[1], ex.args[2])
+        else
+            throw(ArgumentError("nested outer loops are not currently supported by @threads"))
+        end
     else
         throw(ArgumentError("unrecognized argument to @threads"))
     end
@@ -115,7 +119,7 @@ macro spawn(expr)
     quote
         local task = Task($thunk)
         task.sticky = false
-        if $(Expr(:isdefined, var))
+        if $(Expr(:islocal, var))
             push!($var, task)
         end
         schedule(task)

@@ -533,7 +533,7 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
     size_t n_alloc;
     jl_value_t **roots;
     JL_GC_PUSHARGS(roots, stackalloc + (extra ? 2 : 0));
-    jl_value_t **newargs = NULL;
+    jl_value_t **newargs;
     jl_svec_t *arg_heap = NULL;
     if (onstack) {
         newargs = roots;
@@ -541,7 +541,9 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
     }
     else {
         // put arguments on the heap if there are too many
+        newargs = NULL;
         n_alloc = 0;
+        assert(precount > 0); // let optimizer know this won't overflow
         _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, precount, extra);
     }
     newargs[0] = f;
@@ -554,6 +556,7 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
             size_t j, al = jl_svec_len(t);
             precount = (precount > al) ? precount - al : 0;
             _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + al, extra);
+            assert(newargs != NULL); // inform GCChecker that we didn't write a NULL here
             for (j = 0; j < al; j++) {
                 newargs[n++] = jl_svecref(t, j);
                 // GC Note: here we assume that the return value of `jl_svecref`
@@ -566,6 +569,7 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
             size_t j, al = jl_nfields(ai);
             precount = (precount > al) ? precount - al : 0;
             _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + al, extra);
+            assert(newargs != NULL); // inform GCChecker that we didn't write a NULL here
             for (j = 0; j < al; j++) {
                 // jl_fieldref may allocate.
                 newargs[n++] = jl_fieldref(ai, j);
@@ -578,6 +582,7 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
             size_t j, al = jl_array_len(aai);
             precount = (precount > al) ? precount - al : 0;
             _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + al, extra);
+            assert(newargs != NULL); // inform GCChecker that we didn't write a NULL here
             if (aai->flags.ptrarray) {
                 for (j = 0; j < al; j++) {
                     jl_value_t *arg = jl_array_ptr_ref(aai, j);
@@ -624,7 +629,9 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
     }
     if (arg_heap) {
         // optimization: keep only the first root, free the others
-        ((void**)roots)[-2] = (void*)(((size_t)1) << 1);
+#ifndef __clang_analyzer__
+        ((void**)roots)[-2] = (void*)JL_GC_ENCODE_PUSHARGS(1);
+#endif
     }
     jl_value_t *result = jl_apply(newargs, n);
     JL_GC_POP();

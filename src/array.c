@@ -600,7 +600,8 @@ JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i)
         ((jl_value_t**)a->data)[i] = NULL;
 }
 
-// at this size and bigger, allocate resized array data with malloc
+// at this size and bigger, allocate resized array data with malloc directly
+// instead of managing them separately as gc objects
 #define MALLOC_THRESH 1048576
 
 // Resize the buffer to a max size of `newlen`
@@ -652,13 +653,7 @@ static int NOINLINE array_resize_buffer(jl_array_t *a, size_t newlen)
     }
     else {
         newbuf = 1;
-        if (
-#ifdef _P64
-            nbytes >= MALLOC_THRESH
-#else
-            elsz > 4
-#endif
-            ) {
+        if (nbytes >= MALLOC_THRESH) {
             a->data = jl_gc_managed_malloc(nbytes);
             jl_gc_track_malloced_array(ptls, a);
             a->flags.how = 2;
@@ -933,8 +928,8 @@ STATIC_INLINE void jl_array_shrink(jl_array_t *a, size_t dec)
     if (a->flags.how == 0) return;
 
     size_t elsz = a->elsize;
-    int newbytes = (a->maxsize - dec) * a->elsize;
-    int oldnbytes = (a->maxsize) * a->elsize;
+    size_t newbytes = (a->maxsize - dec) * a->elsize;
+    size_t oldnbytes = (a->maxsize) * a->elsize;
     int isbitsunion = jl_array_isbitsunion(a);
     if (isbitsunion) {
         newbytes += a->maxsize - dec;
@@ -1107,7 +1102,7 @@ JL_DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz)
 {
     size_t n = jl_array_nrows(a);
 
-    int min = a->offset + a->length;
+    size_t min = a->offset + a->length;
     sz = (sz < min) ? min : sz;
 
     if (sz <= a->maxsize) {

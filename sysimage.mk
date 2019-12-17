@@ -6,6 +6,7 @@ include $(JULIAHOME)/Make.inc
 default: sysimg-$(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: sysimg-release sysimg-debug
 sysimg-ji: $(build_private_libdir)/sys.ji
+sysimg-bc: $(build_private_libdir)/sys-bc.a
 sysimg-release: $(build_private_libdir)/sys.$(SHLIB_EXT)
 sysimg-debug: $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 

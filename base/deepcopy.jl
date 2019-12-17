@@ -66,8 +66,9 @@ function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
     end
     for i in 1:nfields(x)
         if isdefined(x,i)
-            ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), y, i-1,
-                  deepcopy_internal(getfield(x,i), stackdict))
+            xi = getfield(x, i)
+            xi = deepcopy_internal(xi, stackdict)::typeof(xi)
+            ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), y, i-1, xi)
         end
     end
     return y::T
@@ -90,7 +91,7 @@ function _deepcopy_array_t(@nospecialize(x), T, stackdict::IdDict)
         if ccall(:jl_array_isassigned, Cint, (Any, Csize_t), x, i-1) != 0
             xi = ccall(:jl_arrayref, Any, (Any, Csize_t), x, i-1)
             if !isbits(xi)
-                xi = deepcopy_internal(xi, stackdict)
+                xi = deepcopy_internal(xi, stackdict)::typeof(xi)
             end
             ccall(:jl_arrayset, Cvoid, (Any, Any, Csize_t), dest, xi, i-1)
         end

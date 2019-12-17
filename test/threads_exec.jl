@@ -705,3 +705,10 @@ let a = zeros(nthreads())
     _atthreads_with_error(a, false)
     @test a == [1:nthreads();]
 end
+
+try
+    @macroexpand @threads(for i = 1:10, j = 1:10; end)
+catch ex
+    @test ex isa LoadError
+    @test ex.error isa ArgumentError
+end

@@ -112,7 +112,6 @@ class JuliaOJIT {
     private:
         template <typename ObjT, typename LoadResult>
         void registerObject(RTDyldObjHandleT H, const ObjT &Obj, const LoadResult &LO);
-        std::vector<object::OwningBinary<object::ObjectFile>> SavedObjects;
         std::unique_ptr<JITEventListener> JuliaListener;
         JuliaOJIT &JIT;
     };

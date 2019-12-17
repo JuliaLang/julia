@@ -190,3 +190,19 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
     end
 
 end
+
+@testset "REPL printing of UmfpackLU" begin
+    # regular matrix
+    A = sparse([1, 2], [1, 2], Float64[1.0, 1.0])
+    F = lu(A)
+    facstring = sprint((t, s) -> show(t, "text/plain", s), F)
+    lstring = sprint((t, s) -> show(t, "text/plain", s), F.L)
+    ustring = sprint((t, s) -> show(t, "text/plain", s), F.U)
+    @test facstring == "$(summary(F))\nL factor:\n$lstring\nU factor:\n$ustring"
+
+    # singular matrix
+    B = sparse(zeros(Float64, 2, 2))
+    F = lu(B; check=false)
+    facstring = sprint((t, s) -> show(t, "text/plain", s), F)
+    @test facstring == "Failed factorization of type $(summary(F))"
+end

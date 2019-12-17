@@ -618,4 +618,10 @@ end
     @test_throws MethodError zero(eltype(C))
 end
 
+@testset "Issue #33873: genmatmul! with empty operands" begin
+    @test Matrix{Any}(undef, 0, 2) * Matrix{Any}(undef, 2, 3) == Matrix{Any}(undef, 0, 3)
+    @test_throws MethodError Matrix{Any}(undef, 2, 0) * Matrix{Any}(undef, 0, 3)
+    @test Matrix{Int}(undef, 2, 0) * Matrix{Int}(undef, 0, 3) == zeros(Int, 2, 3)
+end
+
 end # module TestMatmul

@@ -346,7 +346,7 @@ using InteractiveUtils: editor
 # Issue #13032
 withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
     # Make sure editor doesn't error when no ENV editor is set.
-    @test isa(editor(), Array)
+    @test isa(editor(), Cmd)
 
     # Invalid editor
     ENV["JULIA_EDITOR"] = ""
@@ -357,29 +357,29 @@ withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
 
     # Editor on the path.
     ENV["JULIA_EDITOR"] = "vim"
-    @test editor() == ["vim"]
+    @test editor() == `vim`
 
     # Absolute path to editor.
     ENV["JULIA_EDITOR"] = "/usr/bin/vim"
-    @test editor() == ["/usr/bin/vim"]
+    @test editor() == `/usr/bin/vim`
 
     # Editor on the path using arguments.
     ENV["JULIA_EDITOR"] = "subl -w"
-    @test editor() == ["subl", "-w"]
+    @test editor() == `subl -w`
 
     # Absolute path to editor with spaces.
     ENV["JULIA_EDITOR"] = "/Applications/Sublime\\ Text.app/Contents/SharedSupport/bin/subl"
-    @test editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl"]
+    @test editor() == `'/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl'`
 
     # Paths with spaces and arguments (#13032).
     ENV["JULIA_EDITOR"] = "/Applications/Sublime\\ Text.app/Contents/SharedSupport/bin/subl -w"
-    @test editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
+    @test editor() == `'/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl' -w`
 
     ENV["JULIA_EDITOR"] = "'/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl' -w"
-    @test editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
+    @test editor() == `'/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl' -w`
 
     ENV["JULIA_EDITOR"] = "\"/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl\" -w"
-    @test editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
+    @test editor() == `'/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl' -w`
 end
 
 # clipboard functionality

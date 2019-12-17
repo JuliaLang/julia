@@ -111,8 +111,7 @@
   (and (pair? e)
        (or (memq (car e) '(toplevel line module import using export
                                     error incomplete))
-           (and (memq (car e) '(global const)) (every symbol? (cdr e))
-                (every (lambda (x) (not (memq x '(true false)))) (cdr e))))))
+           (and (memq (car e) '(global const)) (every symbol? (cdr e))))))
 
 (define *in-expand* #f)
 
