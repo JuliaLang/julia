@@ -11,12 +11,18 @@ struct Rational{T<:Integer} <: Real
     den::T
 
     function Rational{T}(num::Integer, den::Integer) where T<:Integer
-        num == den == zero(T) && __throw_rational_argerror(T)
-        num2, den2 = signbit(den) ? divgcd(-num, -den) : divgcd(num, den)
-        new(num2, den2)
+        num == den == zero(T) && __throw_rational_argerror_zero(T)
+        num2, den2 = divgcd(num, den)
+        if T<:Signed && signbit(den2)
+            den2 = -den2
+            signbit(den2) && __throw_rational_argerror_typemin(T)
+            num2 = -num2
+        end
+        return new(num2, den2)
     end
 end
-@noinline __throw_rational_argerror(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
+@noinline __throw_rational_argerror_zero(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
+@noinline __throw_rational_argerror_typemin(T) = throw(ArgumentError("invalid rational: denominator can't be typemin($T)"))
 
 Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n,d)
 Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
