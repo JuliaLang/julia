@@ -70,6 +70,16 @@ Language changes
 * The line number of function definitions is now added by the parser as an
   additional `LineNumberNode` at the start of each function body ([#35138]).
 
+Compiler/Runtime improvements
+-----------------------------
+
+* Immutable structs (including tuples) that contain references can now be allocated
+  on the stack, and allocated inline within arrays and other structs ([#33886]).
+  This significantly reduces the number of heap allocations in some workloads.
+  Code that requires assumptions about object layout and addresses (usually for
+  interoperability with C or other languages) might need to be updated; for
+  example any object that needs a stable address should be a `mutable struct`.
+
 Command-line option changes
 ---------------------------
 
@@ -78,9 +88,6 @@ Command-line option changes
   `Pkg.test()`. ([#35362]).
 
 * Color now defaults to on when stdout and stderr are TTYs ([#34347])
-
-Command-line option changes
----------------------------
 
   * `-t N`, `--threads N` starts Julia with `N` threads. This option takes precedence over
     `JULIA_NUM_THREADS`. The specified number of threads also propagates to worker
