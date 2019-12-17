@@ -177,7 +177,8 @@ false
 isbitsunion(u::Union) = allocatedinline(u)
 isbitsunion(x) = false
 
-@inbounds function _unsetindex!(A::Array{T}, i::Int) where {T}
+function _unsetindex!(A::Array{T}, i::Int) where {T}
+    @_inline_meta
     @boundscheck checkbounds(A, i)
     t = @_gc_preserve_begin A
     p = Ptr{Ptr{Cvoid}}(pointer(A, i))

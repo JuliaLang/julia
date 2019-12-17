@@ -272,7 +272,7 @@ JL_DLLEXPORT int jl_stored_inline(jl_value_t *eltype) JL_NOTSAFEPOINT
     return jl_islayout_inline(eltype, &fsz, &al);
 }
 
-// whether this type is unique'd by pointer
+// whether instances of this type can use pointer comparison for `===`
 int jl_pointer_egal(jl_value_t *t)
 {
     if (t == (jl_value_t*)jl_any_type)
@@ -1059,7 +1059,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
     size_t offs = jl_field_offset(st, i);
     if (jl_field_isptr(st, i)) {
         jl_value_t *fval = *(jl_value_t**)((char*)v + offs);
-        if (fval == NULL)
+        if (__unlikely(fval == NULL))
             jl_throw(jl_undefref_exception);
         return fval;
     }
@@ -1071,7 +1071,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
         if (jl_is_datatype_singleton((jl_datatype_t*)ty))
             return ((jl_datatype_t*)ty)->instance;
     }
-    return jl_new_bits(ty, (char*)v + offs);
+    return undefref_check((jl_datatype_t*)ty, jl_new_bits(ty, (char*)v + offs));
 }
 
 JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs) JL_NOTSAFEPOINT

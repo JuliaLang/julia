@@ -149,7 +149,7 @@ static Value *uint_cnvt(jl_codectx_t &ctx, Type *to, Value *x)
 
 static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
 {
-    // assumes `jl_justbits(bt, true)`.
+    // assumes `jl_is_pointerfree(bt)`.
     // `ptr` can point to a inline field, do not read the tag from it.
     // make sure to return exactly the type specified by
     // julia_type_to_llvm as this will be assumed by the callee.
@@ -270,7 +270,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
     if (e == jl_false)
         return ConstantInt::get(T_int8, 0);
     jl_value_t *bt = jl_typeof(e);
-    if (!jl_justbits(bt, true))
+    if (!jl_is_pointerfree(bt))
         return NULL;
     return julia_const_to_llvm(e, (jl_datatype_t*)bt);
 }
