@@ -666,14 +666,14 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
     else if (jl_is_array(v)) {
         jl_array_t *ar = (jl_array_t*)v;
         int isunion = jl_is_uniontype(jl_tparam0(jl_typeof(ar)));
-        if (ar->flags.ndims == 1 && ar->elsize <= 0x3f) {
+        if (ar->flags.ndims == 1 && ar->elsize <= 0x1f) {
             write_uint8(s->s, TAG_ARRAY1D);
-            write_uint8(s->s, (ar->flags.ptrarray<<7) | (isunion << 6) | (ar->elsize & 0x3f));
+            write_uint8(s->s, (ar->flags.ptrarray << 7) | (ar->flags.hasptr << 6) | (isunion << 5) | (ar->elsize & 0x1f));
         }
         else {
             write_uint8(s->s, TAG_ARRAY);
             write_uint16(s->s, ar->flags.ndims);
-            write_uint16(s->s, (ar->flags.ptrarray << 15) | (isunion << 14) | (ar->elsize & 0x3fff));
+            write_uint16(s->s, (ar->flags.ptrarray << 15) | (ar->flags.hasptr << 14) | (isunion << 13) | (ar->elsize & 0x1fff));
         }
         for (i = 0; i < ar->flags.ndims; i++)
             jl_serialize_value(s, jl_box_long(jl_array_dim(ar,i)));
@@ -1523,19 +1523,21 @@ static jl_value_t *jl_deserialize_value_array(jl_serializer_state *s, uint8_t ta
 {
     int usetable = (s->mode != MODE_IR);
     int16_t i, ndims;
-    int isunboxed, isunion, elsize;
+    int isptr, isunion, hasptr, elsize;
     if (tag == TAG_ARRAY1D) {
         ndims = 1;
         elsize = read_uint8(s->s);
-        isunboxed = !(elsize >> 7);
-        isunion = elsize >> 6;
-        elsize = elsize & 0x3f;
+        isptr = (elsize >> 7) & 1;
+        hasptr = (elsize >> 6) & 1;
+        isunion = (elsize >> 5) & 1;
+        elsize = elsize & 0x1f;
     }
     else {
         ndims = read_uint16(s->s);
         elsize = read_uint16(s->s);
-        isunboxed = !(elsize >> 15);
-        isunion = elsize >> 14;
+        isptr = (elsize >> 15) & 1;
+        hasptr = (elsize >> 14) & 1;
+        isunion = (elsize >> 13) & 1;
         elsize = elsize & 0x3fff;
     }
     uintptr_t pos = backref_list.len;
@@ -1546,7 +1548,7 @@ static jl_value_t *jl_deserialize_value_array(jl_serializer_state *s, uint8_t ta
         dims[i] = jl_unbox_long(jl_deserialize_value(s, NULL));
     }
     jl_array_t *a = jl_new_array_for_deserialization(
-            (jl_value_t*)NULL, ndims, dims, isunboxed, isunion, elsize);
+            (jl_value_t*)NULL, ndims, dims, !isptr, hasptr, isunion, elsize);
     if (usetable)
         backref_list.items[pos] = a;
     jl_value_t *aty = jl_deserialize_value(s, &jl_astaggedvalue(a)->type);
@@ -1555,6 +1557,11 @@ static jl_value_t *jl_deserialize_value_array(jl_serializer_state *s, uint8_t ta
         size_t extra = jl_array_isbitsunion(a) ? jl_array_len(a) : 0;
         size_t tot = jl_array_len(a) * a->elsize + extra;
         ios_read(s->s, (char*)jl_array_data(a), tot);
+        assert(jl_astaggedvalue(a)->bits.gc == GC_CLEAN); // gc is disabled
+        //if (a->flags.hasptr) {
+        //    for (i = 0; i < numel; i++) {
+        //        jl_gc_wb_multi(a, data[i]);
+        //}
     }
     else {
         jl_value_t **data = (jl_value_t**)jl_array_data(a);

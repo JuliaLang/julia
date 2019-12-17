@@ -1218,6 +1218,7 @@ int gc_slot_to_arrayidx(void *obj, void *_slot)
     jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
     char *start = NULL;
     size_t len = 0;
+    size_t elsize = sizeof(void*);
     if (vt == jl_module_type) {
         jl_module_t *m = (jl_module_t*)obj;
         start = (char*)m->usings.items;
@@ -1233,10 +1234,11 @@ int gc_slot_to_arrayidx(void *obj, void *_slot)
             return -1;
         start = (char*)a->data;
         len = jl_array_len(a);
+        elsize = a->elsize;
     }
-    if (slot < start || slot >= start + sizeof(void*) * len)
+    if (slot < start || slot >= start + elsize * len)
         return -1;
-    return (slot - start) / sizeof(void*);
+    return (slot - start) / elsize;
 }
 
 // Print a backtrace from the bottom (start) of the mark stack up to `sp`

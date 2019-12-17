@@ -1625,7 +1625,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         jl_datatype_t *arydt = (jl_datatype_t*)jl_unwrap_unionall(aryv.typ);
         if (jl_is_array_type(arydt)) {
             jl_value_t *ety = jl_tparam0(arydt);
-            if (jl_array_store_unboxed(ety)) {
+            bool ptrarray = !jl_stored_inline(ety);
+            if (!ptrarray && !jl_type_hasptr(ety)) {
                 JL_GC_POP();
                 return mark_or_box_ccall_result(ctx, ConstantInt::get(T_int32, 1),
                                                 false, rt, unionall, static_rt);
@@ -1633,6 +1634,14 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             else if (!jl_has_free_typevars(ety)) {
                 Value *idx = emit_unbox(ctx, T_size, idxv, (jl_value_t*)jl_ulong_type);
                 Value *arrayptr = emit_bitcast(ctx, emit_arrayptr(ctx, aryv, aryex), T_pprjlvalue);
+                if (!ptrarray) {
+                    size_t elsz = jl_datatype_size(ety);
+                    unsigned align = jl_datatype_align(ety);
+                    size_t stride = LLT_ALIGN(elsz, align) / sizeof(jl_value_t*);
+                    if (stride != 1)
+                        idx = ctx.builder.CreateMul(idx, ConstantInt::get(T_size, stride));
+                    idx = ctx.builder.CreateAdd(idx, ConstantInt::get(T_size, ((jl_datatype_t*)ety)->layout->first_ptr));
+                }
                 Value *slot_addr = ctx.builder.CreateInBoundsGEP(T_prjlvalue, arrayptr, idx);
                 Value *load = tbaa_decorate(tbaa_ptrarraybuf, ctx.builder.CreateLoad(T_prjlvalue, slot_addr));
                 Value *res = ctx.builder.CreateZExt(ctx.builder.CreateICmpNE(load, Constant::getNullValue(T_prjlvalue)), T_int32);
@@ -1782,12 +1791,14 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     bool sretboxed = false;
     if (sret) {
         assert(!retboxed && jl_is_datatype(rt) && "sret return type invalid");
-        if (jl_justbits(rt)) {
+        if (jl_justbits(rt, true)) {
             result = emit_static_alloca(ctx, lrt);
             argvals[0] = ctx.builder.CreateBitCast(result, fargt_sig.at(0));
         }
         else {
             // XXX: result needs to be zero'd and given a GC root here
+            // and has incorrect write barriers.
+            // instead this code path should behave like `unsafe_load`
             assert(jl_datatype_size(rt) > 0 && "sret shouldn't be a singleton instance");
             result = emit_allocobj(ctx, jl_datatype_size(rt),
                                    literal_pointer_val(ctx, (jl_value_t*)rt));

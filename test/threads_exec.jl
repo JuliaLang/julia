@@ -439,16 +439,7 @@ end
 function test_thread_cfunction()
     # ensure a runtime call to `get_trampoline` will be created
     # TODO: get_trampoline is not thread-safe (as this test shows)
-    function complex_cfunction(a)
-        s = zero(eltype(a))
-        @inbounds @simd for i in a
-            s += muladd(a[i], a[i], -2)
-        end
-        return s
-    end
-    fs = [ let a = zeros(10)
-            () -> complex_cfunction(a)
-        end for i in 1:1000 ]
+    fs = [ Core.Box() for i in 1:1000 ]
     @noinline cf(f) = @cfunction $f Float64 ()
     cfs = Vector{Base.CFunction}(undef, length(fs))
     cf1 = cf(fs[1])

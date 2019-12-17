@@ -27,6 +27,8 @@ struct CountTrackedPointers {
     bool derived = false;
     CountTrackedPointers(llvm::Type *T);
 };
+unsigned TrackWithShadow(llvm::Value *Src, llvm::Type *T, bool isptr, llvm::Value *Dst, llvm::IRBuilder<> irbuilder);
+std::vector<llvm::Value*> ExtractTrackedValues(llvm::Value *Src, llvm::Type *STy, bool isptr, llvm::IRBuilder<> irbuilder);
 
 static inline void llvm_dump(llvm::Value *v)
 {
