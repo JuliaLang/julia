@@ -703,3 +703,27 @@ catch ex
     @test ex isa LoadError
     @test ex.error isa ArgumentError
 end
+
+@testset "@spawncall" begin
+    # Issue #30896: evaluating argumentss immediately
+    begin
+        outs = zeros(5)
+        @sync begin
+            local i = 1
+            while i <= 5
+                Threads.@spawncall setindex!(outs, i, i)
+                i += 1
+            end
+        end
+        @test outs == 1:5
+    end
+
+    # Args
+    @test fetch(Threads.@spawncall 2+2) == 4
+    @test fetch(Threads.@spawncall Int(2.0)) == 2
+    a = 2
+    @test fetch(Threads.@spawncall *(a,a)) == a^2
+    # kwargs
+    @test fetch(Threads.@spawncall sort([3 2; 1 0], dims=2)) == [2 3; 0 1]
+    @test fetch(Threads.@spawncall sort([3 2; 1 0]; dims=2)) == [2 3; 0 1]
+end
