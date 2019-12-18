@@ -704,14 +704,14 @@ catch ex
     @test ex.error isa ArgumentError
 end
 
-@testset "@spawncall" begin
+@testset "@spawn interpolation" begin
     # Issue #30896: evaluating argumentss immediately
     begin
         outs = zeros(5)
         @sync begin
             local i = 1
             while i <= 5
-                Threads.@spawncall setindex!(outs, i, i)
+                Threads.@spawn setindex!(outs, $i, $i)
                 i += 1
             end
         end
@@ -719,11 +719,34 @@ end
     end
 
     # Args
-    @test fetch(Threads.@spawncall 2+2) == 4
-    @test fetch(Threads.@spawncall Int(2.0)) == 2
+    @test fetch(Threads.@spawn 2+$2) == 4
+    @test fetch(Threads.@spawn Int($(2.0))) == 2
     a = 2
-    @test fetch(Threads.@spawncall *(a,a)) == a^2
+    @test fetch(Threads.@spawn *($a,$a)) == a^2
     # kwargs
-    @test fetch(Threads.@spawncall sort([3 2; 1 0], dims=2)) == [2 3; 0 1]
-    @test fetch(Threads.@spawncall sort([3 2; 1 0]; dims=2)) == [2 3; 0 1]
+    @test fetch(Threads.@spawn sort($([3 2; 1 0]), dims=2)) == [2 3; 0 1]
+    @test fetch(Threads.@spawn sort([3 $2; 1 $0]; dims=$2)) == [2 3; 0 1]
+
+    # Supports multiple levels of interpolation
+    @test fetch(Threads.@spawn :($a)) == a
+    @test fetch(Threads.@spawn :($($a))) == a
+    @test fetch(Threads.@spawn "$($a)") == "$a"
+
+    # Test the difference between different levels of interpolation
+    let
+        oneinterp  = Vector{Any}(undef, 5)
+        twointerps = Vector{Any}(undef, 5)
+        @sync begin
+            local i = 1
+            while i <= 5
+                Threads.@spawn setindex!(oneinterp, :($i), $i)
+                Threads.@spawn setindex!(twointerps, :($($i)), $i)
+                i += 1
+            end
+        end
+        # The first definition _didn't_ escape i
+        @test oneinterp == fill(6, 5)
+        # The second definition _did_ escape i
+        @test twointerps == 1:5
+    end
 end

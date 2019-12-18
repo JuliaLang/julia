@@ -107,7 +107,7 @@ Create and run a [`Task`](@ref) on any available thread. To wait for the task to
 finish, call [`wait`](@ref) on the result of this macro, or call [`fetch`](@ref)
 to wait and then obtain its return value.
 
-(Values can be interpolated into `@spawn` via `$` to evaluate them in the current task.)
+(Values can be interpolated into `@spawn` via `\$` to evaluate them in the current task.)
 
 !!! note
     This feature is currently considered experimental.
@@ -116,26 +116,9 @@ to wait and then obtain its return value.
     This macro is available as of Julia 1.3.
 """
 macro spawn(expr)
-    # Capture interpolated variables in $() and move them to let-block
-    letargs = Any[]  # store the new gensymed arguments
-    lift_one_interp!(v) = v
-    function lift_one_interp!(expr::Expr)
-        if expr.head == :quote  # Don't try to lift $ out of quotes
-            return expr
-        end
-        if expr.head == :$
-            newarg = gensym()
-            push!(letargs, :($(esc(newarg)) = $(esc(expr.args[1]))))
-            return newarg  # Don't recurse into the $() exprs
-        end
-        for (i,e) in enumerate(expr.args)
-            expr.args[i] = lift_one_interp(e)
-        end
-        expr
-    end
-    lifted_expr = lift_one_interp!(expr)
+    letargs = Base._lift_one_interp!(expr)
 
-    thunk = esc(:(()->($lifted_expr)))
+    thunk = esc(:(()->($expr)))
     var = esc(Base.sync_varname)
     quote
         let $(letargs...)
@@ -148,6 +131,4 @@ macro spawn(expr)
             task
         end
     end
-end
-
 end
