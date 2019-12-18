@@ -563,6 +563,7 @@ JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
         if (jl_is_datatype_singleton((jl_datatype_t*)eltype))
             return ((jl_datatype_t*)eltype)->instance;
     }
+    // TODO: undef ref error when hasptr?
     return jl_new_bits(eltype, &((char*)a->data)[i * a->elsize]);
 }
 

@@ -340,19 +340,19 @@ void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
 {
     jl_array_t *li = (jl_array_t*)ci->linetable;
     size_t i, n = jl_array_len(li);
-    jl_value_t *rt = NULL;
-    JL_GC_PUSH1(&rt);
+    jl_value_t *rt = NULL, *ln = NULL;
+    JL_GC_PUSH2(&rt, &ln);
     for (i = 0; i < n; i++) {
-        jl_value_t *ln = jl_array_ptr_ref(li, i);
+        ln = jl_arrayref(li, i);
         if (jl_is_linenode(ln)) {
             rt = jl_box_long(jl_linenode_line(ln));
             rt = jl_new_struct(jl_lineinfonode_type, name, jl_linenode_file(ln), rt, jl_box_long(0));
-            jl_array_ptr_set(li, i, rt);
+            jl_arrayset(li, rt, i);
         }
         else if (jl_is_expr(ln) && ((jl_expr_t*)ln)->head == line_sym && jl_expr_nargs(ln) == 3) {
             rt = jl_new_struct(jl_lineinfonode_type, jl_symbol("macro expansion"),
                                jl_exprarg(ln, 1), jl_exprarg(ln, 0), jl_exprarg(ln, 2));
-            jl_array_ptr_set(li, i, rt);
+            jl_arrayset(li, rt, i);
         }
     }
     JL_GC_POP();
@@ -505,8 +505,8 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     copy = jl_alloc_vec_any(n);
     // set location from first LineInfoNode
     if (jl_array_len(src->linetable) > 0) {
-        jl_value_t *ln = jl_array_ptr_ref(src->linetable, 0);
-        m->file = (jl_sym_t*)jl_fieldref(ln, 1);
+        jl_value_t *ln = jl_arrayref((jl_array_t*)src->linetable, 0);
+        m->file = (jl_sym_t*)jl_fieldref_noalloc(ln, 1);
         m->line = jl_unbox_long(jl_fieldref(ln, 2));
     }
     for (i = 0; i < n; i++) {

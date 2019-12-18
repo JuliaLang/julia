@@ -6216,9 +6216,11 @@ static std::unique_ptr<Module> emit_function(
         size_t nlocs = jl_array_len(src->linetable);
         std::map<std::tuple<StringRef, StringRef>, DISubprogram*> subprograms;
         linetable.resize(nlocs + 1);
+        jl_value_t *locinfo = NULL;
+        JL_GC_PUSH1(&locinfo);
         for (size_t i = 0; i < nlocs; i++) {
             // LineInfoNode(mod::Module, method::Any, file::Symbol, line::Int, inlined_at::Int)
-            jl_value_t *locinfo = jl_array_ptr_ref(src->linetable, i);
+            locinfo = jl_arrayref((jl_array_t*)src->linetable, i);
             DebugLineTable &info = linetable[i + 1];
             assert(jl_typeis(locinfo, jl_lineinfonode_type));
             jl_value_t *method = jl_fieldref_noalloc(locinfo, 0);
@@ -6284,6 +6286,7 @@ static std::unique_ptr<Module> emit_function(
                 }
             }
         }
+        JL_GC_POP();
     }
 
     std::vector<MDNode*> aliasscopes;

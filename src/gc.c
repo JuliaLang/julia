@@ -1713,7 +1713,7 @@ JL_DLLEXPORT int jl_gc_mark_queue_obj(jl_ptls_t ptls, jl_value_t *obj)
 JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
                                             jl_value_t **objs, size_t nobjs)
 {
-    gc_mark_objarray_t data = { parent, objs, objs + nobjs,
+    gc_mark_objarray_t data = { parent, objs, objs + nobjs, 1,
                                 jl_astaggedvalue(parent)->bits.gc & 2 };
     gc_mark_stack_push(&ptls->gc_cache, &ptls->gc_mark_sp,
                        gc_mark_label_addrs[GC_MARK_L_objarray],

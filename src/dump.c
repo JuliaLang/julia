@@ -678,14 +678,19 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         for (i = 0; i < ar->flags.ndims; i++)
             jl_serialize_value(s, jl_box_long(jl_array_dim(ar,i)));
         jl_serialize_value(s, jl_typeof(ar));
-        if (!ar->flags.ptrarray) {
+        if (ar->flags.ptrarray) {
+            for (i = 0; i < jl_array_len(ar); i++) {
+                jl_serialize_value(s, jl_array_ptr_ref(v, i));
+            }
+        }
+        else if (!ar->flags.hasptr) {
             ios_write(s->s, (char*)jl_array_data(ar), jl_array_len(ar) * ar->elsize);
             if (jl_array_isbitsunion(ar))
                 ios_write(s->s, jl_array_typetagdata(ar), jl_array_len(ar));
         }
         else {
             for (i = 0; i < jl_array_len(ar); i++) {
-                jl_serialize_value(s, jl_array_ptr_ref(v, i));
+                jl_serialize_value(s, jl_arrayref((jl_array_t*)v, i));
             }
         }
     }
@@ -1553,23 +1558,26 @@ static jl_value_t *jl_deserialize_value_array(jl_serializer_state *s, uint8_t ta
         backref_list.items[pos] = a;
     jl_value_t *aty = jl_deserialize_value(s, &jl_astaggedvalue(a)->type);
     jl_set_typeof(a, aty);
-    if (!a->flags.ptrarray) {
-        size_t extra = jl_array_isbitsunion(a) ? jl_array_len(a) : 0;
-        size_t tot = jl_array_len(a) * a->elsize + extra;
-        ios_read(s->s, (char*)jl_array_data(a), tot);
-        assert(jl_astaggedvalue(a)->bits.gc == GC_CLEAN); // gc is disabled
-        //if (a->flags.hasptr) {
-        //    for (i = 0; i < numel; i++) {
-        //        jl_gc_wb_multi(a, data[i]);
-        //}
-    }
-    else {
+    size_t numel = jl_array_len(a);
+    if (a->flags.ptrarray) {
         jl_value_t **data = (jl_value_t**)jl_array_data(a);
-        size_t i, numel = jl_array_len(a);
+        size_t i;
         for (i = 0; i < numel; i++) {
             data[i] = jl_deserialize_value(s, &data[i]);
             if (data[i])
                 jl_gc_wb(a, data[i]);
+        }
+    }
+    else if (!a->flags.hasptr) {
+        size_t extra = jl_array_isbitsunion(a) ? jl_array_len(a) : 0;
+        size_t tot = numel * a->elsize + extra;
+        ios_read(s->s, (char*)jl_array_data(a), tot);
+        assert(jl_astaggedvalue(a)->bits.gc == GC_CLEAN); // gc is disabled
+    }
+    else {
+        size_t i;
+        for (i = 0; i < numel; i++) {
+            jl_arrayset(a, jl_deserialize_value(s, NULL), i);
         }
     }
     return (jl_value_t*)a;
