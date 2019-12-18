@@ -383,11 +383,38 @@ withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
 end
 
 # clipboard functionality
+if Sys.isapple()
+    let str = "abc\0def"
+        clipboard(str)
+        @test clipboard() == str
+    end
+end
 if Sys.iswindows() || Sys.isapple()
     for str in ("Hello, world.", "∀ x ∃ y", "")
         clipboard(str)
         @test clipboard() == str
     end
+end
+@static if Sys.iswindows()
+    @test_broken false # CI has trouble with this test
+    ## concurrent access error
+    #hDesktop = ccall((:GetDesktopWindow, "user32"), stdcall, Ptr{Cvoid}, ())
+    #ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), hDesktop) == 0 && Base.windowserror("OpenClipboard")
+    #try
+    #    @test_throws Base.SystemError("OpenClipboard", 0, Base.WindowsErrorInfo(0x00000005, nothing)) clipboard() # ACCESS_DENIED
+    #finally
+    #    ccall((:CloseClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror("CloseClipboard")
+    #end
+    # empty clipboard failure
+    ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), C_NULL) == 0 && Base.windowserror("OpenClipboard")
+    try
+        ccall((:EmptyClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror("EmptyClipboard")
+    finally
+        ccall((:CloseClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror("CloseClipboard")
+    end
+    @test clipboard() == ""
+    # nul error (unsupported data)
+    @test_throws ArgumentError("Windows clipboard strings cannot contain NUL character") clipboard("abc\0")
 end
 
 # buildbot path updating
