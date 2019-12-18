@@ -118,10 +118,10 @@ end
 const ns_dummy_uuid = UUID("fe0723d6-3a44-4c41-8065-ee0f42c8ceab")
 
 function dummy_uuid(project_file::String)
-    try
-        project_path = realpath(project_file)
+    project_path = try
+        realpath(project_file)
     catch
-        project_path = project_file
+        project_file
     end
     return uuid5(ns_dummy_uuid, project_path)
 end
