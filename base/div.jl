@@ -223,14 +223,14 @@ rem(a::UInt128, b::UInt128, ::typeof(RoundToZero)) = rem(a, b)
 # These are kept for compatibility with external packages overriding fld/cld.
 # In 2.0, packages should extend div(a,b,r) instead, in which case, these can
 # be removed.
-fld(x::Real, y::Real) = div(promote(x,y)..., RoundDown)
-cld(x::Real, y::Real) = div(promote(x,y)..., RoundUp)
+fld(x::Real, y::Real) = fld(promote(x,y)...)
+cld(x::Real, y::Real) = cld(promote(x,y)...)
 fld(x::Signed, y::Unsigned) = div(x, y, RoundDown)
 fld(x::Unsigned, y::Signed) = div(x, y, RoundDown)
 cld(x::Signed, y::Unsigned) = div(x, y, RoundUp)
 cld(x::Unsigned, y::Signed) = div(x, y, RoundUp)
-fld(x::T, y::T) where {T<:Real} = throw(MethodError(div, (x, y, RoundDown)))
-cld(x::T, y::T) where {T<:Real} = throw(MethodError(div, (x, y, RoundUp)))
+fld(x::T, y::T) where {T<:Real} = div(x, y, RoundDown)
+cld(x::T, y::T) where {T<:Real} = div(x, y, RoundUp)
 
 # Promotion
 function div(x::Real, y::Real, r::RoundingMode)
