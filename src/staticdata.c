@@ -642,6 +642,7 @@ static void jl_write_values(jl_serializer_state *s)
         else if (jl_is_array(v)) {
 #define JL_ARRAY_ALIGN(jl_value, nbytes) LLT_ALIGN(jl_value, nbytes)
             jl_array_t *ar = (jl_array_t*)v;
+            jl_value_t *et = jl_tparam0(jl_typeof(v));
             int ndimwords = jl_array_ndimwords(ar->flags.ndims);
             size_t tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords * sizeof(size_t), JL_CACHE_BYTE_ALIGNMENT);
             // copy header
@@ -668,12 +669,20 @@ static void jl_write_values(jl_serializer_state *s)
                 assert(data < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "offset to constant data too large");
                 arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_array_t, data))); // relocation location
                 arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + data)); // relocation target
-                int isbitsunion = jl_array_isbitsunion(ar);
-                if (ar->elsize == 1 && !isbitsunion)
-                    tot += 1;
-                ios_write(s->const_data, (char*)jl_array_data(ar), tot);
-                if (isbitsunion)
-                    ios_write(s->const_data, jl_array_typetagdata(ar), alen);
+                if (jl_is_cpointer_type(et)) {
+                    // reset Ptr elements to C_NULL
+                    size_t i;
+                    for (i = 0; i < alen; i++)
+                        write_pointer(s->const_data);
+                }
+                else {
+                    int isbitsunion = jl_array_isbitsunion(ar);
+                    if (ar->elsize == 1 && !isbitsunion)
+                        tot += 1;
+                    ios_write(s->const_data, (char*)jl_array_data(ar), tot);
+                    if (isbitsunion)
+                        ios_write(s->const_data, jl_array_typetagdata(ar), alen);
+                }
             }
             else {
                 newa->data = (void*)tsz; // relocation offset
@@ -685,12 +694,11 @@ static void jl_write_values(jl_serializer_state *s)
                     ios_write(s->s, data, tot);
                     // the rewrite all of the embedded pointers to null+relocation
                     uint16_t elsz = ar->elsize;
-                    jl_datatype_t *et = (jl_datatype_t*)jl_tparam0(t);
-                    size_t j, np = et->layout->npointers;
+                    size_t j, np = ((jl_datatype_t*)et)->layout->npointers;
                     size_t i;
                     for (i = 0; i < alen; i++) {
                         for (j = 0; j < np; j++) {
-                            size_t offset = i * elsz + jl_ptr_offset(et, j) * sizeof(jl_value_t*);
+                            size_t offset = i * elsz + jl_ptr_offset(((jl_datatype_t*)et), j) * sizeof(jl_value_t*);
                             jl_value_t *fld = *(jl_value_t**)&data[offset];
                             if (fld != NULL) {
                                 arraylist_push(&s->relocs_list, (void*)(uintptr_t)(reloc_offset + tsz + offset)); // relocation location
@@ -706,7 +714,8 @@ static void jl_write_values(jl_serializer_state *s)
                 else {
                     size_t i;
                     for (i = 0; i < alen; i++) {
-                        write_pointerfield(s, jl_array_ptr_ref(v, i));
+                        jl_value_t *e = jl_array_ptr_ref(v, i);
+                        write_pointerfield(s, e);
                     }
                 }
             }
@@ -765,6 +774,7 @@ static void jl_write_values(jl_serializer_state *s)
                 tot = offset;
                 size_t fsz = jl_field_size(t, i);
                 if (t->mutabl && jl_is_cpointer_type(jl_field_type(t, i))) {
+                    // reset Ptr fields to C_NULL
                     assert(!jl_field_isptr(t, i));
                     write_pointer(s->s);
                 }
