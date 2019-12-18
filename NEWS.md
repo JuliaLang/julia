@@ -29,6 +29,8 @@ Language changes
 Multi-threading changes
 -----------------------
 
+* Values can now be interpolated into `@async` and `@spawn` via `$`, which copies the value directly into the constructed
+underlying closure. ([#33119])
 
 Build system changes
 --------------------
