@@ -770,6 +770,13 @@ bool GCChecker::isSafepoint(const CallEvent &Call) const
       if (const TypedefType *TDT = dyn_cast<TypedefType>(Callee->getType())) {
         isCalleeSafepoint = !declHasAnnotation(TDT->getDecl(), "julia_not_safepoint");
       }
+      else if (const CXXPseudoDestructorExpr *PDE = dyn_cast<CXXPseudoDestructorExpr>(Callee)) {
+        // A pseudo-destructor is an expression that looks like a member
+        // access to a destructor of a scalar type. A pseudo-destructor
+        // expression has no run-time semantics beyond evaluating the base
+        // expression (which would have it's own CallEvent, if applicable).
+        isCalleeSafepoint = false;
+      }
     } else if (FD) {
       if (FD->getBuiltinID() != 0 || FD->isTrivial())
         isCalleeSafepoint = false;
@@ -778,7 +785,7 @@ bool GCChecker::isSafepoint(const CallEvent &Call) const
                 FD->getName().startswith_lower("unw_") ||
                 FD->getName().startswith("_U")) &&
                FD->getName() != "uv_run")
-          isCalleeSafepoint = false;
+        isCalleeSafepoint = false;
       else
         isCalleeSafepoint = !isFDAnnotatedNotSafepoint(FD);
     }

@@ -588,7 +588,7 @@ typedef struct {
 typedef std::map<uint64_t, objfileentry_t, revcomp> obfiletype;
 static obfiletype objfilemap;
 
-static bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16])
+static bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16]) JL_NOTSAFEPOINT
 {
     for (auto Load : obj->load_commands())
     {
@@ -885,7 +885,7 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTS
         // the DebugSymbols framework is moved or removed, an alternative would
         // be to directly query Spotlight for the dSYM bundle.
 
-        typedef CFURLRef (*DBGCopyFullDSYMURLForUUIDfn)(CFUUIDRef, CFURLRef);
+        typedef CFURLRef (*DBGCopyFullDSYMURLForUUIDfn)(CFUUIDRef, CFURLRef) JL_NOTSAFEPOINT;
         DBGCopyFullDSYMURLForUUIDfn DBGCopyFullDSYMURLForUUID = NULL;
 
         // First, try to load the private DebugSymbols framework.
