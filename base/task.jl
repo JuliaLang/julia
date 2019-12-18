@@ -344,6 +344,13 @@ end
     @async
 
 Wrap an expression in a [`Task`](@ref) and add it to the local machine's scheduler queue.
+
+Values can be interpolated into `@async` via `\$`, which copies the value directly into the
+constructed underlying closure. This allows you to insert the _value_ of a variable,
+isolating the aysnchronous code from changes to the variable's value in the current task.
+
+!!! compat "Julia 1.4"
+    Interpolating values via `\$` is available as of Julia 1.4.
 """
 macro async(expr)
     letargs = Base._lift_one_interp!(expr)
@@ -378,7 +385,6 @@ function _lift_one_interp_helper(expr::Expr, in_quote_context, letargs)
             newarg = gensym()
             push!(letargs, :($(esc(newarg)) = $(esc(expr.args[1]))))
             return newarg  # Don't recurse into the lifted $() exprs
->>>>>>> fb29992... Factor out `$`-lifting; share b/w `@async` & `@spawn`
         end
     elseif expr.head == :quote
         in_quote_context = true   # Don't try to lift $ directly out of quotes

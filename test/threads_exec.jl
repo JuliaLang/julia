@@ -728,9 +728,13 @@ end
     @test fetch(Threads.@spawn sort([3 $2; 1 $0]; dims=$2)) == [2 3; 0 1]
 
     # Supports multiple levels of interpolation
-    @test fetch(Threads.@spawn :($a)) == a
-    @test fetch(Threads.@spawn :($($a))) == a
     @test fetch(Threads.@spawn "$($a)") == "$a"
+    let a = 1
+        # Interpolate the current value of `a` vs the value of `a` in the closure
+        t = Threads.@spawn :(+($$a, $a, a))
+        a = 2  # update `a` after spawning
+        @test fetch(t) == Expr(:call, :+, 1, 2, :a)
+    end
 
     # Test the difference between different levels of interpolation
     let
@@ -749,4 +753,36 @@ end
         # The second definition _did_ escape i
         @test twointerps == 1:5
     end
+end
+
+@testset "@async interpolation" begin
+    # Args
+    @test fetch(@async 2+$2) == 4
+    @test fetch(@async Int($(2.0))) == 2
+    a = 2
+    @test fetch(@async *($a,$a)) == a^2
+    # kwargs
+    @test fetch(@async sort($([3 2; 1 0]), dims=2)) == [2 3; 0 1]
+    @test fetch(@async sort([3 $2; 1 $0]; dims=$2)) == [2 3; 0 1]
+
+    # Supports multiple levels of interpolation
+    @test fetch(@async :($a)) == a
+    @test fetch(@async :($($a))) == a
+    @test fetch(@async "$($a)") == "$a"
+end
+
+# errors inside @threads
+function _atthreads_with_error(a, err)
+    Threads.@threads for i in eachindex(a)
+        if err
+            error("failed")
+        end
+        a[i] = Threads.threadid()
+    end
+    a
+end
+@test_throws TaskFailedException _atthreads_with_error(zeros(nthreads()), true)
+let a = zeros(nthreads())
+    _atthreads_with_error(a, false)
+    @test a == [1:nthreads();]
 end

@@ -107,13 +107,18 @@ Create and run a [`Task`](@ref) on any available thread. To wait for the task to
 finish, call [`wait`](@ref) on the result of this macro, or call [`fetch`](@ref)
 to wait and then obtain its return value.
 
-(Values can be interpolated into `@spawn` via `\$` to evaluate them in the current task.)
+Values can be interpolated into `@spawn` via `\$`, which copies the value directly into the
+constructed underlying closure. This allows you to insert the _value_ of a variable,
+isolating the aysnchronous code from changes to the variable's value in the current task.
 
 !!! note
     This feature is currently considered experimental.
 
 !!! compat "Julia 1.3"
     This macro is available as of Julia 1.3.
+
+!!! compat "Julia 1.4"
+    Interpolating values via `\$` is available as of Julia 1.4.
 """
 macro spawn(expr)
     letargs = Base._lift_one_interp!(expr)

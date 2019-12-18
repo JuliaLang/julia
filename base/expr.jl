@@ -330,8 +330,6 @@ function is_short_function_def(ex)
     return false
 end
 
-
-
 function findmeta(ex::Expr)
     if ex.head === :function || is_short_function_def(ex)
         body::Expr = ex.args[2]
