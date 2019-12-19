@@ -781,19 +781,3 @@ end
     @test fetch(@async :($($a))) == a
     @test fetch(@async "$($a)") == "$a"
 end
-
-# errors inside @threads
-function _atthreads_with_error(a, err)
-    Threads.@threads for i in eachindex(a)
-        if err
-            error("failed")
-        end
-        a[i] = Threads.threadid()
-    end
-    a
-end
-@test_throws TaskFailedException _atthreads_with_error(zeros(nthreads()), true)
-let a = zeros(nthreads())
-    _atthreads_with_error(a, false)
-    @test a == [1:nthreads();]
-end
