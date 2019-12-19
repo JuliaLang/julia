@@ -3,3 +3,4 @@ image:
 
 tasks:
   - init: make
+    command: ./julia
