@@ -391,3 +391,11 @@ end
 # Warm up
 f_dict_hash_alloc(); g_dict_hash_alloc();
 @test (@allocated f_dict_hash_alloc()) == (@allocated g_dict_hash_alloc())
+
+# issue 33590
+function f33590(b, x)
+    y = b ? nothing : (x[1] + 1,)
+    return something(ifelse(b, x, y))
+end
+@test f33590(true, (3,)) == (3,)
+@test f33590(false, (3,)) == (4,)
