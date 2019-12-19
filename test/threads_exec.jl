@@ -781,3 +781,11 @@ end
     @test fetch(@async :($($a))) == a
     @test fetch(@async "$($a)") == "$a"
 end
+
+# Issue #34138
+@testset "spawn interpolation: macrocalls" begin
+    x = [reshape(1:4, 2, 2);]
+    @test fetch(Threads.@spawn @. $exp(x)) == @. $exp(x)
+    x = 2
+    @test @eval(fetch(@async 2+$x)) == 4
+end
