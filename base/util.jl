@@ -276,21 +276,21 @@ See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
 ```julia-repl
-julia> val, t, bytes, gctime, memallocs = @timed rand(10^6);
+julia> o = @timed rand(10^6);
 
-julia> t
+julia> o.time
 0.006634834
 
-julia> bytes
+julia> o.bytes
 8000256
 
-julia> gctime
+julia> o.gctime
 0.0055765
 
-julia> fieldnames(typeof(memallocs))
+julia> fieldnames(typeof(o.gcdiff))
 (:allocd, :malloc, :realloc, :poolalloc, :bigalloc, :freecall, :total_time, :pause, :full_sweep)
 
-julia> memallocs.total_time
+julia> o.gcdiff.total_time
 5576500
 ```
 """
@@ -302,7 +302,7 @@ macro timed(ex)
         local val = $(esc(ex))
         elapsedtime = time_ns() - elapsedtime
         local diff = GC_Diff(gc_num(), stats)
-        val, elapsedtime/1e9, diff.allocd, diff.total_time/1e9, diff
+        (value=val, time=elapsedtime/1e9, bytes=diff.allocd, gctime=diff.total_time/1e9, gcdiff=diff)
     end
 end
 
