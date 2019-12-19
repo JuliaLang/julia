@@ -2,6 +2,4 @@ image:
   file: .gitpod.Dockerfile
 
 tasks:
-  - init: |
-    git checkout v1.3.0
-    make install
+  - init: make
