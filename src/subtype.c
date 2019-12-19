@@ -1187,7 +1187,7 @@ static int subtype_naked_vararg(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t
 }
 
 #ifdef _OS_EMSCRIPTEN_
-extern int jl_js_instanceof(jl_value_t *, jl_value_t *);
+extern int jl_js_subtype(jl_value_t *, jl_value_t *);
 #endif
 
 // `param` means we are currently looking at a parameter of a type constructor
@@ -1346,10 +1346,12 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
     }
     if (jl_is_jsfunction(x) && jl_is_jsfunction(y)) {
 #ifdef _OS_EMSCRIPTEN_
-        return jl_js_instanceof(x, y);
+        return jl_js_subtype(x, y);
 #else
         jl_error("Hit the correct place");
 #endif
+    } else if (jl_is_jsfunction(x)) {
+        return subtype(y, jl_jsanyobject_type, e, param);
     }
     if (jl_is_type(y))
         return x == jl_bottom_type;

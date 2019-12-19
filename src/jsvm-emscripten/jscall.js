@@ -1,5 +1,5 @@
 mergeInto(LibraryManager.library, {
-  jl_do_jscall: function(libname, fname, args, nargs) {
+  jl_do_jscall: function(libname, isnew, fname, args, nargs) {
     var parent;
     if (libname == 0) {
         parent = self;
@@ -12,7 +12,11 @@ mergeInto(LibraryManager.library, {
       arg_ptr = HEAP32[(args >> 2) + arg_idx];
       js_args[arg_idx] = jlboxed_to_js(arg_ptr);
     }
-    return js_to_jlboxed(Reflect.apply(f, undefined, js_args));
+    if (isnew) {
+      return js_to_jlboxed(Reflect.construct(f, js_args));
+    } else {
+      return js_to_jlboxed(Reflect.apply(f, undefined, js_args));
+    }
   },
   jl_do_f_jscall: function(f, this_arg, args, nargs) {
     f = jlboxed_to_js(f)
@@ -27,7 +31,12 @@ mergeInto(LibraryManager.library, {
   jl_init_jscall: function() {
     initialize_runtime()
   },
-  jl_js_instanceof: function (x, y) {
-    return jlboxed_to_js(x) instanceof jlboxed_to_js(y)
+  jl_js_subtype: function (x, y) {
+    x = jlboxed_to_js(x)
+    y = jlboxed_to_js(y)
+    if (typeof y.prototype == "undefined") {
+      return false
+    }
+    return x === y || x.prototype instanceof y
   }
 });

@@ -3,18 +3,20 @@ module JS
 using .Base.Meta
 import .Base: convert
 
-export @js, JSObject
+export @js, JSObject, @js_str
 
 abstract type JSBoxed end
-primitive type JSObject <: JSBoxed 32 end
+abstract type JSAnyObject <: JSBoxed; end
+primitive type JSFunction <: JSAnyObject 32 end
 primitive type JSString <: JSBoxed 32 end
 primitive type JSSymbol <: JSBoxed 32 end
-primitive type JSFunction <: JSBoxed 32 end
 struct JSUndefined; end
 struct JSNull; end
 
+show(io::IO, f::JSFunction) = print(io, "JSFunction(", reinterpret(UInt32, f), ")")
+
 struct JSBoundFunction
-    this::JSObject
+    this::JSAnyObject
     f::JSFunction
 end
 
@@ -29,7 +31,7 @@ function parse_braces_expr(expr)
     @assert isexpr(expr, :braces)
     ret = Expr(:block)
     s = gensym()
-    push!(ret.args, :($s = $JSObject()))
+    push!(ret.args, :($s = $JSAnyObject()))
     for arg in expr.args
         isexpr(arg, :call) || return :(error("Unrecognized expression `$(arg.head)`"))
         (arg.args[1] === Symbol(":")) || return :(error("Expected `:`, got $(arg.args[1])"))
@@ -47,7 +49,7 @@ function parse_braces_expr(expr)
     ret
 end
 
-function parse_call_expr(expr)
+function parse_call_expr(expr; cc = :jscall)
     target_expr = expr.args[1]
     if isa(target_expr, Symbol)
         target = QuoteNode(target_expr)
@@ -75,7 +77,7 @@ function parse_call_expr(expr)
     atypes = [:JSAny for _ in converted_args]
     quote
         $b
-        $(Expr(:foreigncall, target, :JSAny, Core.svec(atypes...), length(atypes), QuoteNode(:jscall), converted_args...))
+        $(Expr(:foreigncall, target, :JSAny, Core.svec(atypes...), length(atypes), QuoteNode(cc), converted_args...))
     end
 end
 
@@ -87,8 +89,13 @@ macro js(args...)
         call = parse_call_expr(expr)
         return quote
             promise = $call
-            wait_promise(promise)
+            wait(promise)
         end
+    elseif args[1] == :new
+        length(args) == 1 || :(error("`@js new` expects only one additional argument"))
+        expr = args[2]
+        isexpr(expr, :call) || :(error("`@js new` expects a call"))
+        return parse_call_expr(expr; cc=:jsnew)
     else
         length(args) == 1 || :(error("@js macro expects only one argument"))
         expr = args[1]
@@ -98,15 +105,19 @@ macro js(args...)
     elseif isexpr(expr, :braces)
         return parse_braces_expr(expr)
     else
-        return :(error("Invalid expression for @js macro $(expr.head)"))
+        return :(error(string("Invalid expression for @js macro", $(expr.head))))
     end
 end
 
-jsnew(f::JSFunction, args::JSObject) = @js Reflect.construct(f, args)
+macro js_str(str)
+    :(@js eval($str))
+end
 
-jsconvert(x) = convert(JSAny, x)
+jsnew(f::JSFunction, args) = @js Reflect.construct(f, args)
 
-function Base.getproperty(this::JSObject, sym::Symbol)
+jsconvert(x) = isa(typeof(x), JSFunction) || isa(x, JSAny) ? x : convert(JSBoxed, x)
+
+function Base.getproperty(this::JSAnyObject, sym::Symbol)
     result = @js Reflect.get(this, sym)
     if isa(result, JSFunction)
         return JSBoundFunction(this, result)
@@ -114,13 +125,14 @@ function Base.getproperty(this::JSObject, sym::Symbol)
     return result
 end
 
-function Base.setproperty!(this::JSObject, sym::Symbol, val)
+function Base.setproperty!(this::JSAnyObject, sym::Symbol, val)
     @js Reflect.set(this, sym, val)
 end
 
 @eval function (f::JSBoundFunction)(args...)
     ff = f.f
     this = f.this
+    args = map(jsconvert, args)
     $(Expr(:splatforeigncall, :ff, JSAny, Core.svec(JSAny, Vararg{JSAny}), 1, QuoteNode(:jscall), 2, Expr(:tuple, :this), :args))
 end
 
@@ -130,6 +142,7 @@ end
 jsconvert(x::Ptr) = convert(JSNumber, convert(UInt32, x))
 jsconvert(x::AbstractString) = convert(JSString, x)
 jsconvert(x::Symbol) = jsconvert(string(x))
+jsconvert(x::Integer) = convert(Float64, x)
 # This isn't too hard, use Function.prototype.bind()
 jsconvert(x::JSBoundFunction) = error("Not implemented yet.")
 
@@ -144,21 +157,25 @@ global Object = nothing
 global EmptyArray = nothing
 function __init__()
     global Object, EmptyArray
-    ccall(:jl_set_jsfunction_type, Cvoid, (Any,), JSFunction)
+    ccall(:jl_set_jsfunction_type, Cvoid, (Any,Any), JSFunction, JSAnyObject)
     # TODO: Without the eval, this gets codegen'ed into the system image,
     # where we don't yet support this calling convention.
     Core.eval(JS, quote
         @js Module.initialize_jscall_runtime()
         Object = @js eval("Object")
         EmptyArray = @js Array(0.0)
+        function Base.wait(promise::js"Promise")
+            @js enq_wait_promise(promise)
+            wait()
+        end
+        function Base.convert(::Type{Vector{UInt8}}, buf::js"ArrayBuffer")
+            jlbuf = Vector{UInt8}(undef, Int(buf.byteLength))
+            js"HEAPU8".set((@js new Uint8Array(buf)), convert(Int, pointer(jlbuf)))
+            jlbuf
+        end
     end)
 end
 
-JSObject() = jsnew(Object, EmptyArray)::JSObject
-
-function wait_promise(promise::JSObject)
-    @js enq_wait_promise(promise)
-    wait()
-end
+JSAnyObject() = jsnew(Object, EmptyArray)::Object
 
 end

@@ -98,10 +98,12 @@ function jlboxed_to_js(arg_ptr) {
     } else if (arg_type == jl_bool_type) {
         return arg_ptr == jl_true ? true : false;
     } else {
+        arg_type_type = jl_typeof(arg_type)
         assert(arg_type == jl_jsobject_type ||
                 arg_type == jl_jsstring_type ||
                 arg_type == jl_jssymbol_type ||
-                arg_type == jl_jsfunction_type);
+                arg_type == jl_jsfunction_type ||
+                arg_type_type == jl_jsfunction_type);
         obj_idx = HEAP32[arg_ptr >> 2];
         return get_boxed_jsval(obj_idx);
     }
@@ -167,7 +169,7 @@ function makeProxy(ptr) {
 
 function js_to_jlboxed(val) {
     if (typeof val == 'number') {
-        return Module['jl_box_float64'](val);
+        return Module['_jl_box_float64'](val);
     } else if (typeof val == 'undefined') {
         return jl_jsundefined;
     } else if (typeof val == 'object' && val === null) {
@@ -179,19 +181,24 @@ function js_to_jlboxed(val) {
     } else if (typeof val == 'string' || typeof val == 'symbol') {
         let idx = box_primitive(val);
         let ptls = Module['_jl_get_ptls_states']()
-        let ptr = Module['_jl_gc_alloc'](ptls, 2,
+        let ptr = Module['_jl_gc_alloc'](ptls, 4,
             typeof val == 'string'   ? jl_jsstring_type   :
                                        jl_jssymbol_type)
         HEAP32[ptr >> 2] = idx;
         return ptr;
-    } else {
-        assert (typeof val == 'object' ||
-                typeof val == 'function');
+    } else if (typeof val == 'function') {
         let idx = box_jsval(val);
         let ptls = Module['_jl_get_ptls_states']()
-        let ptr = Module['_jl_gc_alloc'](ptls, 2,
-            typeof val == 'function' ? jl_jsfunction_type :
-                                       jl_jsobject_type);
+        // We overallocate to force type-like alignment
+        let ptr = Module['_jl_gc_alloc'](ptls, 8, jl_jsfunction_type);
+        HEAP32[ptr >> 2] = idx;
+        return ptr;
+    } else {
+        let jljstyp = Object.getPrototypeOf(val).constructor;
+        let idx = box_jsval(val);
+        let ptls = Module['_jl_get_ptls_states']()
+        allocated_typ = js_to_jlboxed(jljstyp);
+        let ptr = Module['_jl_gc_alloc'](ptls, 4, allocated_typ);
         HEAP32[ptr >> 2] = idx;
         return ptr;
     }

@@ -45,6 +45,7 @@ jl_datatype_t *jl_datatype_type;
 jl_datatype_t *jl_function_type;
 jl_datatype_t *jl_builtin_type;
 jl_datatype_t *jl_jsfunction_type;
+jl_datatype_t *jl_jsanyobject_type;
 
 jl_datatype_t *jl_typeofbottom_type;
 jl_value_t *jl_bottom_type;
@@ -1002,11 +1003,11 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt)
                 dt->isconcretetype = 0;
         }
         if (istuple && dt->isconcretetype)
-            dt->isconcretetype = (jl_is_datatype(p) && ((jl_datatype_t*)p)->isconcretetype) || p == jl_bottom_type;
+            dt->isconcretetype = (jl_is_datatype(p) && ((jl_datatype_t*)p)->isconcretetype) || jl_is_jsfunction(p) || p == jl_bottom_type;
         if (dt->isdispatchtuple) {
-            dt->isdispatchtuple = jl_is_datatype(p) &&
+            dt->isdispatchtuple = jl_is_jsfunction(p) || (jl_is_datatype(p) &&
                 ((!jl_is_kind(p) && ((jl_datatype_t*)p)->isconcretetype) ||
-                 (((jl_datatype_t*)p)->name == jl_type_typename && !((jl_datatype_t*)p)->hasfreetypevars));
+                 (((jl_datatype_t*)p)->name == jl_type_typename && !((jl_datatype_t*)p)->hasfreetypevars)));
         }
     }
 }
@@ -1680,9 +1681,10 @@ static jl_tvar_t *tvar(const char *name)
                           (jl_value_t*)jl_any_type);
 }
 
-JL_DLLEXPORT void jl_set_jsfunction_type(jl_value_t *jsfunction)
+JL_DLLEXPORT void jl_set_jsfunction_type(jl_value_t *jsfunction, jl_value_t *jsanyobject)
 {
     jl_jsfunction_type = jsfunction;
+    jl_jsanyobject_type = jsanyobject;
 }
 
 void jl_init_types(void) JL_GC_DISABLED

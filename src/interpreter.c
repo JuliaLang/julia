@@ -430,7 +430,7 @@ SECT_INTERP __attribute__((weak)) jl_value_t *eval_foreigncall(jl_sym_t *fname, 
 }
 
 #ifdef _OS_EMSCRIPTEN_
-extern jl_value_t *jl_do_jscall(char *libname, char *fname, jl_value_t **args, size_t nargs);
+extern jl_value_t *jl_do_jscall(char *libname, int8_t isnew, char *fname, jl_value_t **args, size_t nargs);
 extern jl_value_t *jl_do_f_jscall(jl_value_t *f, jl_value_t *this, jl_value_t **args, size_t nargs);
 #endif
 
@@ -588,7 +588,7 @@ SECT_INTERP jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 
         jl_sym_t *cc_sym = *(jl_sym_t**)args[4];
         assert(jl_is_symbol(cc_sym));
-        if (cc_sym == jl_symbol("jscall")) {
+        if (cc_sym == jl_symbol("jscall") || cc_sym == jl_symbol("jsnew")) {
 #ifdef _OS_EMSCRIPTEN_
             jl_value_t **ev_args;
             JL_GC_PUSHARGS(ev_args, nargs-5);
@@ -597,6 +597,7 @@ SECT_INTERP jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             }
             jl_value_t *result =
                 jl_do_jscall(libname ? jl_symbol_name(libname) : NULL,
+                            cc_sym == jl_symbol("jsnew"),
                             jl_symbol_name(fname),
                             ev_args,
                             nargs-5);
