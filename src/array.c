@@ -563,7 +563,7 @@ JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
         if (jl_is_datatype_singleton((jl_datatype_t*)eltype))
             return ((jl_datatype_t*)eltype)->instance;
     }
-    return jl_new_bits(eltype, &((char*)a->data)[i * a->elsize]);
+    return undefref_check((jl_datatype_t*)eltype, jl_new_bits(eltype, &((char*)a->data)[i * a->elsize]));
 }
 
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
@@ -574,9 +574,8 @@ JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
     else if (a->flags.hasptr) {
          jl_datatype_t *eltype = (jl_datatype_t*)jl_tparam0(jl_typeof(a));
          assert(eltype->layout->first_ptr >= 0);
-         jl_value_t **slot =
-             (jl_value_t**)(&((char*)a->data)[i*a->elsize] + eltype->layout->first_ptr);
-         return *slot != NULL;
+         jl_value_t **elem = (jl_value_t**)((char*)a->data + i * a->elsize);
+         return elem[eltype->layout->first_ptr] != NULL;
     }
     return 1;
 }

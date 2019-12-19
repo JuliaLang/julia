@@ -1505,7 +1505,7 @@ std::vector<Value*> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, IRBu
         Value *Elem = ExtractScalar(Src, STy, isptr, Idxs, irbuilder);
         Ptrs.push_back(Elem);
     }
-    return std::move(Ptrs);
+    return Ptrs;
 }
 
 unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilder<> irbuilder) {

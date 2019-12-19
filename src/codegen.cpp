@@ -366,23 +366,24 @@ static MDNode *best_tbaa(jl_value_t *jt) {
 
 // tracks whether codegen is currently able to simply stack-allocate this type
 // note that this includes jl_isbits, although codegen should work regardless
-static bool jl_justbits(jl_value_t* t, bool pointerfree=false)
+static bool jl_is_concrete_immutable(jl_value_t* t)
+{
+    return jl_is_immutable_datatype(t) && ((jl_datatype_t*)t)->layout;
+}
+
+static bool jl_is_pointerfree(jl_value_t* t)
 {
     if (!jl_is_immutable_datatype(t))
         return 0;
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)t)->layout;
-    if (!layout)
-        return 0;
-    if (pointerfree && layout->npointers != 0)
-        return 0;
-    return 1;
+    return layout && layout->npointers == 0;
 }
 
 // these queries are usually related, but we split them out here
 // for convenience and clarity (and because it changes the calling convention)
 static bool deserves_stack(jl_value_t* t, bool pointerfree=false)
 {
-    if (!jl_justbits(t))
+    if (!jl_is_concrete_immutable(t))
         return false;
     return ((jl_datatype_t*)t)->isinlinealloc;
 }
@@ -753,7 +754,7 @@ static inline jl_cgval_t update_julia_type(jl_codectx_t &ctx, const jl_cgval_t &
         if (jl_is_datatype(utyp)) {
             bool alwaysboxed;
             if (jl_is_concrete_type(utyp))
-                alwaysboxed = !jl_justbits(utyp, true);
+                alwaysboxed = !jl_is_pointerfree(utyp);
             else
                 alwaysboxed = !((jl_datatype_t*)utyp)->abstract && ((jl_datatype_t*)utyp)->mutabl;
             if (alwaysboxed) {
@@ -1012,7 +1013,7 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
         return ghostValue(typ);
     Value *new_tindex = NULL;
     if (jl_is_concrete_type(typ)) {
-        if (v.TIndex && !jl_justbits(typ, true)) {
+        if (v.TIndex && !jl_is_pointerfree(typ)) {
             // discovered that this union-split type must actually be isboxed
             if (v.Vboxed) {
                 return jl_cgval_t(v.Vboxed, nullptr, true, typ, NULL);
@@ -2480,8 +2481,8 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
     if (jl_type_intersection(rt1, rt2) == (jl_value_t*)jl_bottom_type) // types are disjoint (exhaustive test)
         return ConstantInt::get(T_int1, 0);
 
-    bool justbits1 = jl_justbits(rt1);
-    bool justbits2 = jl_justbits(rt2);
+    bool justbits1 = jl_is_concrete_immutable(rt1);
+    bool justbits2 = jl_is_concrete_immutable(rt2);
     if (justbits1 || justbits2) { // whether this type is unique'd by value
         jl_value_t *typ = justbits1 ? rt1 : rt2;
         if (rt1 == rt2)
@@ -4110,7 +4111,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         if (var == getfield_undefref_sym) {
             raise_exception_unless(ctx, cond,
                 literal_pointer_val(ctx, jl_undefref_exception));
-        } else {
+        }
+        else {
             undef_var_error_ifnot(ctx, cond, var);
         }
         return ghostValue(jl_void_type);
@@ -4661,7 +4663,7 @@ static Function* gen_cfun_wrapper(
                         ctx.builder.CreateLoad(emit_bitcast(ctx, val, T_pprjlvalue)),
                         true, jl_any_type);
             }
-            else if (static_at && jl_justbits(jargty)) { // anything that could be stored unboxed
+            else if (static_at && jl_is_concrete_immutable(jargty)) { // anything that could be stored unboxed
                 bool isboxed;
                 Type *T = julia_type_to_llvm(jargty, &isboxed);
                 assert(!isboxed);
@@ -5398,7 +5400,7 @@ static bool uses_specsig(jl_value_t *sig, size_t nreq, jl_value_t *rettype, bool
     bool allSingleton = true;
     for (size_t i = 0; i < jl_nparams(sig); i++) {
         jl_value_t *sigt = jl_tparam(sig, i);
-        bool issing = jl_is_datatype_singleton((jl_datatype_t*)sigt);
+        bool issing = jl_is_datatype(sigt) && jl_is_datatype_singleton((jl_datatype_t*)sigt);
         allSingleton &= issing;
         if (!deserves_argbox(sigt) && !issing) {
             return true;
@@ -5948,7 +5950,7 @@ static std::unique_ptr<Module> emit_function(
         }
         else if (varinfo.isArgument && !(specsig && i == (size_t)ctx.vaSlot)) {
             // if we can unbox it, just use the input pointer
-            if (i != (size_t)ctx.vaSlot && jl_justbits(jt))
+            if (i != (size_t)ctx.vaSlot && jl_is_concrete_immutable(jt))
                 return;
         }
         else if (jl_is_uniontype(jt)) {

@@ -760,10 +760,7 @@ JL_CALLABLE(jl_f_getfield)
         jl_sym_t *fld = (jl_sym_t*)args[1];
         idx = jl_field_index(st, fld, 1);
     }
-    jl_value_t *fval = jl_get_nth_field(v, idx);
-    if (fval == NULL)
-        jl_throw(jl_undefref_exception);
-    return fval;
+    return jl_get_nth_field_checked(v, idx);
 }
 
 JL_CALLABLE(jl_f_setfield)

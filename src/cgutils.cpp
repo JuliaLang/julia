@@ -533,7 +533,7 @@ JL_DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed)
     if (isboxed) *isboxed = false;
     if (jt == (jl_value_t*)jl_bottom_type)
         return T_void;
-    if (jl_justbits(jt)) {
+    if (jl_is_concrete_immutable(jt)) {
         if (jl_datatype_nbits(jt) == 0)
             return T_void;
         Type *t = julia_struct_to_llvm(jt, NULL, isboxed);
@@ -768,7 +768,7 @@ static bool for_each_uniontype_small(
         allunbox &= for_each_uniontype_small(f, ((jl_uniontype_t*)ty)->b, counter);
         return allunbox;
     }
-    else if (jl_justbits(ty, true)) {
+    else if (jl_is_pointerfree(ty)) {
         f(++counter, (jl_datatype_t*)ty);
         return true;
     }
@@ -1292,12 +1292,12 @@ std::vector<unsigned> first_ptr(Type *T)
         unsigned i = 0;
         for (Type *ElTy : T->subtypes()) {
             if (isa<PointerType>(ElTy) && ElTy->getPointerAddressSpace() == AddressSpace::Tracked) {
-                return std::move(std::vector<unsigned>{i});
+                return std::vector<unsigned>{i};
             }
             auto path = first_ptr(ElTy);
             if (!path.empty()) {
                 path.push_back(i);
-                return std::move(path);
+                return path;
             }
             i++;
         }
@@ -1529,7 +1529,7 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
     assert(!jl_is_vecelement_type((jl_value_t*)stt));
 
     if (!strct.ispointer()) { // unboxed
-        assert(jl_justbits((jl_value_t*)stt));
+        assert(jl_is_concrete_immutable((jl_value_t*)stt));
         bool isboxed = is_datatype_all_pointers(stt);
         bool issame = is_tupletype_homogeneous(stt->types);
         if (issame) {
@@ -2415,7 +2415,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo)
     }
     else {
         assert(vinfo.V && "Missing data for unboxed value.");
-        assert(jl_justbits(jt) && "This type shouldn't have been unboxed.");
+        assert(jl_is_concrete_immutable(jt) && "This type shouldn't have been unboxed.");
         Type *t = julia_type_to_llvm(jt);
         assert(!type_is_ghost(t)); // ghost values should have been handled by vinfo.constant above!
         box = _boxed_special(ctx, vinfo, t);
@@ -2438,8 +2438,8 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
     if (jl_is_concrete_type(src.typ) || src.constant) {
         jl_value_t *typ = src.constant ? jl_typeof(src.constant) : src.typ;
         Type *store_ty = julia_type_to_llvm(typ);
-        assert(skip || jl_justbits(typ,  true));
-        if (jl_justbits(typ, true)) {
+        assert(skip || jl_is_pointerfree(typ));
+        if (jl_is_pointerfree(typ)) {
             if (!src.ispointer() || src.constant) {
                 emit_unbox(ctx, store_ty, src, typ, dest, tbaa_dst, isVolatile);
             }

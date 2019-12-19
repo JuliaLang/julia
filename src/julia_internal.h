@@ -352,6 +352,17 @@ void jl_set_t_uid_ctr(int i);
 uint32_t jl_get_gs_ctr(void);
 void jl_set_gs_ctr(uint32_t ctr);
 
+STATIC_INLINE jl_value_t *undefref_check(jl_datatype_t *dt, jl_value_t *v) JL_NOTSAFEPOINT
+{
+     if (dt->layout->first_ptr >= 0) {
+        jl_value_t *nullp = ((jl_value_t**)v)[dt->layout->first_ptr];
+        if (__unlikely(nullp == NULL))
+            jl_throw(jl_undefref_exception);
+    }
+    return v;
+}
+
+
 // -- functions -- //
 
 jl_code_info_t *jl_type_infer(jl_method_instance_t *li, size_t world, int force);
