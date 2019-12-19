@@ -388,6 +388,8 @@ function _lift_one_interp_helper(expr::Expr, in_quote_context, letargs)
         end
     elseif expr.head == :quote
         in_quote_context = true   # Don't try to lift $ directly out of quotes
+    elseif expr.head == :macrocall
+        return expr
     end
     for (i,e) in enumerate(expr.args)
         expr.args[i] = _lift_one_interp_helper(e, in_quote_context, letargs)
