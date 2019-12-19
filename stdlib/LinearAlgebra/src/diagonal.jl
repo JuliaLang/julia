@@ -427,7 +427,7 @@ function ldiv!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
     end
     V
 end
-
+ldiv!(x::AbstractArray, A::Diagonal, b::AbstractArray) = (x .= A.diag .\ b)
 
 ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
     (D = adjD.parent; ldiv!(conj(D), B))

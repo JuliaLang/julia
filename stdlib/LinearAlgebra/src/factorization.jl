@@ -140,15 +140,6 @@ function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)
     end
 end
 
-function ldiv!(Y::AbstractVecOrMat, adjA::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
-    checksquare(adjA)
-    return ldiv!(adjA, copyto!(Y, B))
-end
-function ldiv!(Y::AbstractVecOrMat, transA::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat)
-    checksquare(transA)
-    return ldiv!(transA, copyto!(Y, B))
-end
-
 # fallback methods for transposed solves
 \(F::Transpose{<:Any,<:Factorization{<:Real}}, B::AbstractVecOrMat) = adjoint(F.parent) \ B
 \(F::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat) = conj.(adjoint(F.parent) \ conj.(B))

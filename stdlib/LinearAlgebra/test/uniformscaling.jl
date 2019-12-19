@@ -326,6 +326,7 @@ end
     @test lmul!(J, copyto!(C, A)) == target_mul
     @test rmul!(copyto!(C, A), J) == target_mul
     @test ldiv!(J, copyto!(C, A)) == target_div
+    @test ldiv!(C, J, A) == target_div
     @test rdiv!(copyto!(C, A), J) == target_div
 
     A = randn(4, 3)

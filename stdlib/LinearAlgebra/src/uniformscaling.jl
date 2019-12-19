@@ -222,6 +222,7 @@ rmul!(A::AbstractMatrix, J::UniformScaling) = rmul!(A, J.λ)
 lmul!(J::UniformScaling, B::AbstractVecOrMat) = lmul!(J.λ, B)
 rdiv!(A::AbstractMatrix, J::UniformScaling) = rdiv!(A, J.λ)
 ldiv!(J::UniformScaling, B::AbstractVecOrMat) = ldiv!(J.λ, B)
+ldiv!(Y::AbstractVecOrMat, J::UniformScaling, B::AbstractVecOrMat) = (Y .= J.λ .\ B)
 
 Broadcast.broadcasted(::typeof(*), x::Number,J::UniformScaling) = UniformScaling(x*J.λ)
 Broadcast.broadcasted(::typeof(*), J::UniformScaling,x::Number) = UniformScaling(J.λ*x)

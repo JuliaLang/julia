@@ -119,6 +119,7 @@ end
         @testset "Scaling with rdiv! and ldiv!" begin
             @test rdiv!(copy(a), 5.) == a/5
             @test ldiv!(5., copy(a)) == a/5
+            @test ldiv!(zero(a), 5., copy(a)) == a/5
         end
 
         @testset "Scaling with 3-argument mul!" begin

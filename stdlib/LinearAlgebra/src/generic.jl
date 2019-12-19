@@ -241,6 +241,11 @@ function ldiv!(s::Number, X::AbstractArray)
     end
     X
 end
+ldiv!(Y::AbstractArray, s::Number, X::AbstractArray) = Y .= s .\ X
+
+# Generic fallback. This assumes that B and Y have the same sizes.
+ldiv!(Y::AbstractArray, A::AbstractMatrix, B::AbstractArray) = ldiv!(A, copyto!(Y, B))
+
 
 """
     cross(x, y)
