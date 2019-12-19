@@ -353,7 +353,7 @@ isolating the aysnchronous code from changes to the variable's value in the curr
     Interpolating values via `\$` is available as of Julia 1.4.
 """
 macro async(expr)
-    letargs = Base._lift_one_interp!(expr)
+    letargs = Base._lift_one_interp!(__module__, expr)
 
     thunk = esc(:(()->($expr)))
     var = esc(sync_varname)
@@ -370,13 +370,14 @@ macro async(expr)
 end
 
 # Capture interpolated variables in $() and move them to let-block
-function _lift_one_interp!(e)
+function _lift_one_interp!(__module__, e)
     letargs = Any[]  # store the new gensymed arguments
-    _lift_one_interp_helper(e, false, letargs) # Start out _not_ in a quote context (false)
+    newexpr = _lift_one_interp_helper(__module__, e, false, letargs) # Start out _not_ in a quote context (false)
+    e.head, e.args = newexpr.head, newexpr.args
     letargs
 end
-_lift_one_interp_helper(v, _, _) = v
-function _lift_one_interp_helper(expr::Expr, in_quote_context, letargs)
+_lift_one_interp_helper(_, v, _, _) = v
+function _lift_one_interp_helper(__module__, expr::Expr, in_quote_context, letargs)
     if expr.head == :$
         if in_quote_context  # This $ is simply interpolating out of the quote
             # Now, we're out of the quote, so any _further_ $ is ours.
@@ -386,11 +387,14 @@ function _lift_one_interp_helper(expr::Expr, in_quote_context, letargs)
             push!(letargs, :($(esc(newarg)) = $(esc(expr.args[1]))))
             return newarg  # Don't recurse into the lifted $() exprs
         end
-    elseif expr.head == :quote || expr.head == :macrocall
+    elseif expr.head == :quote
         in_quote_context = true   # Don't try to lift $ directly out of quotes
+    elseif expr.head == :macrocall
+        expr = macroexpand(__module__, expr)
+        return _lift_one_interp_helper(__module__, expr, in_quote_context, letargs)
     end
     for (i,e) in enumerate(expr.args)
-        expr.args[i] = _lift_one_interp_helper(e, in_quote_context, letargs)
+        expr.args[i] = _lift_one_interp_helper(__module__, e, in_quote_context, letargs)
     end
     expr
 end
