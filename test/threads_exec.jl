@@ -705,9 +705,10 @@ catch ex
 end
 
 @testset "@spawn interpolation" begin
-    # Issue #30896: evaluating argumentss immediately
+    # Issue #30896: evaluating arguments immediately
     begin
         outs = zeros(5)
+        # Use interpolation to fill outs with the values of `i`
         @sync begin
             local i = 1
             while i <= 5
@@ -718,40 +719,50 @@ end
         @test outs == 1:5
     end
 
-    # Args
+    # Test macro parsing for interpolating into Args
     @test fetch(Threads.@spawn 2+$2) == 4
     @test fetch(Threads.@spawn Int($(2.0))) == 2
     a = 2
     @test fetch(Threads.@spawn *($a,$a)) == a^2
-    # kwargs
+    # Test macro parsing for interpolating into kwargs
     @test fetch(Threads.@spawn sort($([3 2; 1 0]), dims=2)) == [2 3; 0 1]
     @test fetch(Threads.@spawn sort([3 $2; 1 $0]; dims=$2)) == [2 3; 0 1]
 
-    # Supports multiple levels of interpolation
-    @test fetch(Threads.@spawn "$($a)") == "$a"
-    let a = 1
-        # Interpolate the current value of `a` vs the value of `a` in the closure
-        t = Threads.@spawn :(+($$a, $a, a))
-        a = 2  # update `a` after spawning
-        @test fetch(t) == Expr(:call, :+, 1, 2, :a)
-    end
+    # Test macro parsing supports multiple levels of interpolation
+    @testset "spawn macro multiple levels of interpolation" begin
+        # Use `ch` to synchronize within the tests to run after the local variables are
+        # updated, showcasing the problem and the solution.
+        ch = Channel()   # (This synchronization fixes test failure reported in #34141.)
 
-    # Test the difference between different levels of interpolation
-    let
-        oneinterp  = Vector{Any}(undef, 5)
-        twointerps = Vector{Any}(undef, 5)
-        @sync begin
-            local i = 1
-            while i <= 5
-                Threads.@spawn setindex!(oneinterp, :($i), $i)
-                Threads.@spawn setindex!(twointerps, :($($i)), $i)
-                i += 1
-            end
+        @test fetch(Threads.@spawn "$($a)") == "$a"
+        let a = 1
+            # Interpolate the current value of `a` vs the value of `a` in the closure
+            t = Threads.@spawn (take!(ch); :(+($$a, $a, a)))
+            a = 2  # update `a` after spawning, before `t` runs
+            put!(ch, nothing)  # now run t
+            @test fetch(t) == Expr(:call, :+, 1, 2, :a)
         end
-        # The first definition _didn't_ escape i
-        @test oneinterp == fill(6, 5)
-        # The second definition _did_ escape i
-        @test twointerps == 1:5
+
+        # Test the difference between different levels of interpolation
+        # Without interpolation, each spawned task sees the last value of `i` (6);
+        # with interpolation, each spawned task has the value of `i` at time of `@spawn`.
+        let
+           oneinterp  = Vector{Any}(undef, 5)
+           twointerps = Vector{Any}(undef, 5)
+           @sync begin
+               local i = 1
+               while i <= 5
+                   Threads.@spawn (take!(ch); setindex!(oneinterp, :($i), $i))
+                   Threads.@spawn (take!(ch); setindex!(twointerps, :($($i)), $i))
+                   i += 1
+               end
+               for _ in 1:10; put!(ch, nothing); end # Now run all the tasks.
+           end
+           # The first definition _didn't_ interpolate i
+           @test oneinterp == fill(6, 5)
+           # The second definition _did_ interpolate i
+           @test twointerps == 1:5
+        end
     end
 end
 
