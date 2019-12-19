@@ -120,6 +120,12 @@ signature(@nospecialize other) = signature!([], other)
 function argtype(expr::Expr)
     isexpr(expr, :(::))  && return expr.args[end]
     isexpr(expr, :(...)) && return :(Vararg{$(argtype(expr.args[1]))})
+    if isexpr(expr, :meta) && length(expr.args) == 2
+        a1 = expr.args[1]
+        if a1 === :nospecialize || a1 === :specialize
+            return argtype(expr.args[2])
+        end
+    end
     return argtype(expr.args[1])
 end
 argtype(@nospecialize other) = :Any
