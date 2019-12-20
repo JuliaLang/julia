@@ -276,23 +276,26 @@ See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
 ```julia-repl
-julia> o = @timed rand(10^6);
+julia> stats = @timed rand(10^6);
 
-julia> o.time
+julia> stats.time
 0.006634834
 
-julia> o.bytes
+julia> stats.bytes
 8000256
 
-julia> o.gctime
+julia> stats.gctime
 0.0055765
 
-julia> fieldnames(typeof(o.gcdiff))
+julia> propertynames(stats.gcstats)
 (:allocd, :malloc, :realloc, :poolalloc, :bigalloc, :freecall, :total_time, :pause, :full_sweep)
 
-julia> o.gcdiff.total_time
+julia> stats.gcstats.total_time
 5576500
 ```
+
+!!! compat "Julia 1.4"
+    The return type of this macro was changed from `Tuple` to `NamedTuple` in Julia 1.4
 """
 macro timed(ex)
     quote
@@ -302,7 +305,7 @@ macro timed(ex)
         local val = $(esc(ex))
         elapsedtime = time_ns() - elapsedtime
         local diff = GC_Diff(gc_num(), stats)
-        (value=val, time=elapsedtime/1e9, bytes=diff.allocd, gctime=diff.total_time/1e9, gcdiff=diff)
+        (value=val, time=elapsedtime/1e9, bytes=diff.allocd, gctime=diff.total_time/1e9, gcstats=diff)
     end
 end
 
