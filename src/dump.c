@@ -1082,6 +1082,29 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         }
 
         char *data = (char*)jl_data_ptr(v);
+        if (t->mutabl) {
+            // For mutable objects, make a copy that rewrites Ptr fields to NULL
+            size_t sz = jl_datatype_size(t);
+            data = memcpy((char*)malloc_s(sz), data, sz);
+            uint32_t i, nf = t->layout->nfields;
+            for (i = 0; i < nf; i++) {
+                jl_value_t **fld = (jl_value_t**)(data + jl_field_offset(t, i));
+                if (jl_is_cpointer_type(jl_field_type(t, i))) {
+                    // reset Ptr fields to C_NULL
+                    // (although permit MAP_FAILED / INVALID_HANDLE to remain unchanged)
+                    if (*(void**)fld != (void*)-1)
+                        *(void**)fld = NULL;
+                }
+                else if (jl_field_isptr(t, i)) {
+                    jl_value_t *e = *fld;
+                    if (e && jl_is_cpointer(e) && jl_unbox_voidpointer(e) != (void*)-1 && jl_unbox_voidpointer(e) != NULL) {
+                        // we'll detect this sentinel value below and put serialize a C_NULL there
+                        *fld = NULL;
+                    }
+                }
+            }
+        }
+
         size_t i, np = t->layout->npointers;
         const char *start = data;
         for (i = 0; i < np; i++) {
@@ -1091,7 +1114,9 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 ios_write(s->s, start, (const char*)fld - start);
             jl_value_t *e = *fld;
             JL_GC_PROMISE_ROOTED(e);
-            if (t->mutabl && e && jl_is_cpointer(e) && jl_unbox_voidpointer(e) != (void*)-1 && jl_unbox_voidpointer(e) != NULL)
+            if (t->mutabl && e == NULL && (e = ((jl_value_t**)data)[ptr]) != NULL)
+                // this is our sentinel that we need to put a null pointer here
+                // since the copy was NULL but the original was not
                 // reset Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
                 jl_serialize_cnull(s, jl_typeof(e));
             else
@@ -1101,6 +1126,9 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         data += jl_datatype_size(t);
         if (data != start)
             ios_write(s->s, start, data - start);
+        data -= jl_datatype_size(t);
+        if (data != (char*)jl_data_ptr(v))
+            free(data); // free the copy
     }
 }
 
@@ -1943,20 +1971,6 @@ static void jl_deserialize_struct(jl_serializer_state *s, jl_value_t *v) JL_GC_D
     data += jl_datatype_size(dt);
     if (data != start)
         ios_read(s->s, start, data - start);
-    if (dt->mutabl) {
-        char *data = (char*)jl_data_ptr(v);
-        uint32_t nf = dt->layout->nfields;
-        for (i = 0; i < nf; i++) {
-            jl_value_t *t = jl_field_type(dt, i);
-            if (jl_is_cpointer_type(t)) {
-                // reset Ptr fields to C_NULL
-                // (although permit MAP_FAILED / INVALID_HANDLE to remain unchanged)
-                size_t ptr = jl_field_offset(dt, i);
-                if (*(void**)(data + ptr) != (void*)-1)
-                    *(void**)(data + ptr) = NULL;
-            }
-        }
-    }
     if (dt == jl_typemap_entry_type) {
         jl_typemap_entry_t *entry = (jl_typemap_entry_t*)v;
         if (entry->max_world == ~(size_t)0) {
