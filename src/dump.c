@@ -1082,25 +1082,46 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         }
 
         char *data = (char*)jl_data_ptr(v);
-        size_t i, np = t->layout->npointers;
-        const char *start = data;
-        for (i = 0; i < np; i++) {
-            uint32_t ptr = jl_ptr_offset(t, i);
-            jl_value_t **fld = &((jl_value_t**)data)[ptr];
-            if ((const char*)fld != start)
-                ios_write(s->s, start, (const char*)fld - start);
-            jl_value_t *e = *fld;
-            JL_GC_PROMISE_ROOTED(e);
-            if (t->mutabl && e && jl_is_cpointer(e) && jl_unbox_voidpointer(e) != (void*)-1 && jl_unbox_voidpointer(e) != NULL)
-                // reset Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
-                jl_serialize_cnull(s, jl_typeof(e));
-            else
-                jl_serialize_value(s, e);
-            start = (const char*)&fld[1];
+        size_t i, j, np = t->layout->npointers;
+        uint32_t nf = t->layout->nfields;
+        char *last = data;
+        for (i = 0, j = 0; i < nf+1; i++) {
+            char *ptr = data + (i < nf ? jl_field_offset(t, i) : jl_datatype_size(t));
+            if (j < np) {
+                char *prevptr = (char*)&((jl_value_t**)data)[jl_ptr_offset(t, j)];
+                while (ptr > prevptr) {
+                    // previous field contained pointers; write them and their interleaved data
+                    if (prevptr > last)
+                        ios_write(s->s, last, prevptr - last);
+                    jl_value_t *e = *(jl_value_t**)prevptr;
+                    JL_GC_PROMISE_ROOTED(e);
+                    if (t->mutabl && e && jl_field_isptr(t, i - 1) && jl_is_cpointer(e) &&
+                        jl_unbox_voidpointer(e) != (void*)-1 && jl_unbox_voidpointer(e) != NULL)
+                        // reset Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
+                        jl_serialize_cnull(s, jl_typeof(e));
+                    else
+                        jl_serialize_value(s, e);
+                    last = prevptr + sizeof(jl_value_t*);
+                    j++;
+                    if (j < np)
+                        prevptr = (char*)&((jl_value_t**)data)[jl_ptr_offset(t, j)];
+                    else
+                        break;
+                }
+            }
+            if (i == nf)
+                break;
+            if (t->mutabl && jl_is_cpointer_type(jl_field_type(t, i)) && *(void**)ptr != (void*)-1) {
+                if (ptr > last)
+                    ios_write(s->s, last, ptr - last);
+                char *n = NULL;
+                ios_write(s->s, (char*)&n, sizeof(n));
+                last = ptr + sizeof(n);
+            }
         }
-        data += jl_datatype_size(t);
-        if (data != start)
-            ios_write(s->s, start, data - start);
+        char *ptr = data + jl_datatype_size(t);
+        if (ptr > last)
+            ios_write(s->s, last, ptr - last);
     }
 }
 
@@ -1943,20 +1964,6 @@ static void jl_deserialize_struct(jl_serializer_state *s, jl_value_t *v) JL_GC_D
     data += jl_datatype_size(dt);
     if (data != start)
         ios_read(s->s, start, data - start);
-    if (dt->mutabl) {
-        char *data = (char*)jl_data_ptr(v);
-        uint32_t nf = dt->layout->nfields;
-        for (i = 0; i < nf; i++) {
-            jl_value_t *t = jl_field_type(dt, i);
-            if (jl_is_cpointer_type(t)) {
-                // reset Ptr fields to C_NULL
-                // (although permit MAP_FAILED / INVALID_HANDLE to remain unchanged)
-                size_t ptr = jl_field_offset(dt, i);
-                if (*(void**)(data + ptr) != (void*)-1)
-                    *(void**)(data + ptr) = NULL;
-            }
-        }
-    }
     if (dt == jl_typemap_entry_type) {
         jl_typemap_entry_t *entry = (jl_typemap_entry_t*)v;
         if (entry->max_world == ~(size_t)0) {
