@@ -1794,6 +1794,7 @@ STATIC_INLINE int gc_mark_scan_array8(jl_ptls_t ptls, jl_gc_mark_sp_t *sp,
             if (elem_begin < elem_end) {
                 // Haven't done with this one yet. Update the content and push it back
                 ary8->elem.begin = elem_begin;
+                ary8->begin = begin;
                 gc_repush_markdata(sp, gc_mark_array8_t);
             }
             else {
@@ -1812,7 +1813,7 @@ STATIC_INLINE int gc_mark_scan_array8(jl_ptls_t ptls, jl_gc_mark_sp_t *sp,
             }
             return 1;
         }
-        ary8->elem.begin = elem_begin = ary8->rebegin;
+        elem_begin = ary8->rebegin;
     }
     gc_mark_push_remset(ptls, ary8->elem.parent, ary8->elem.nptr);
     return 0;

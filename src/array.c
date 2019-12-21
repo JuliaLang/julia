@@ -619,7 +619,7 @@ JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i)
     else if (a->flags.hasptr) {
         size_t elsize = a->elsize;
         jl_assume(elsize >= sizeof(void*) && elsize % sizeof(void*) == 0);
-        memset(&((jl_value_t**)a->data)[i], 0, elsize);
+        memset((char*)a->data + elsize * i, 0, elsize);
     }
 }
 
