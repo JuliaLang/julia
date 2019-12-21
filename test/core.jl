@@ -1085,8 +1085,8 @@ let
     @test_throws BoundsError(z, -1) getfield(z, -1)
     @test_throws BoundsError(z, 0) getfield(z, 0)
     @test_throws BoundsError(z, 3) getfield(z, 3)
-
-    strct = LoadError("yofile", 0, "bad")
+end
+let strct = LoadError("yofile", 0, "bad")
     @test nfields(strct) == 3 # sanity test
     @test_throws BoundsError(strct, 10) getfield(strct, 10)
     @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, 0, "")
@@ -1098,8 +1098,8 @@ let
     @test getfield(strct, 1) == "yofile"
     @test getfield(strct, 2) === 0
     @test getfield(strct, 3) == "bad"
-
-    mstrct = TestMutable("melm", 1, nothing)
+end
+let mstrct = TestMutable("melm", 1, nothing)
     @test Base.setproperty!(mstrct, :line, 8.0) === 8
     @test mstrct.line === 8
     @test_throws TypeError(:setfield!, "", Int, 8.0) setfield!(mstrct, :line, 8.0)
@@ -1111,6 +1111,14 @@ let
     @test_throws BoundsError(mstrct, 10) getfield(mstrct, 10)
     @test_throws BoundsError(mstrct, 0) setfield!(mstrct, 0, "")
     @test_throws BoundsError(mstrct, 4) setfield!(mstrct, 4, "")
+end
+let strct = LoadError("yofile", 0, "bad")
+    @test_throws(ErrorException("setfield! immutable struct of type LoadError cannot be changed"),
+                 ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), strct, 0, ""))
+end
+let mstrct = TestMutable("melm", 1, nothing)
+    @test_throws(BoundsError(mstrct, 4),
+                 ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), mstrct, 3, ""))
 end
 
 # test getfield-overloading
@@ -3614,10 +3622,19 @@ end
         return nothing
     end
 end
-@test_throws TypeError f1()
-@test_throws TypeError f2()
-@test_throws TypeError f3()
-@test_throws TypeError eval(Expr(:new, B, 1))
+@test_throws TypeError("new", A, 1) f1()
+@test_throws TypeError("new", A, 1) f2()
+@test_throws TypeError("new", A, 1) f3()
+@test_throws TypeError("new", A, 1) eval(Expr(:new, B, 1))
+
+# some tests for handling of malformed syntax--these cases should not be possible in normal code
+@test eval(Expr(:new, B, A())) == B(A())
+@test_throws ErrorException("invalid struct allocation") eval(Expr(:new, B))
+@test_throws ErrorException("invalid struct allocation") eval(Expr(:new, B, A(), A()))
+@test_throws TypeError("new", DataType, Complex) eval(Expr(:new, Complex))
+@test_throws TypeError("new", DataType, Complex.body) eval(Expr(:new, Complex.body))
+@test_throws TypeError("new", DataType, Complex) eval(Expr(:splatnew, Complex, ()))
+@test_throws TypeError("new", DataType, Complex.body) eval(Expr(:splatnew, Complex.body, ()))
 
 end
 

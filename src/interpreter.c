@@ -509,7 +509,6 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         JL_GC_PUSHARGS(argv, nargs);
         for (size_t i = 0; i < nargs; i++)
             argv[i] = eval_value(args[i], s);
-        assert(jl_is_structtype(argv[0]));
         jl_value_t *v = jl_new_structv((jl_datatype_t*)argv[0], &argv[1], nargs - 1);
         JL_GC_POP();
         return v;
@@ -519,7 +518,6 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         JL_GC_PUSHARGS(argv, 2);
         argv[0] = eval_value(args[0], s);
         argv[1] = eval_value(args[1], s);
-        assert(jl_is_structtype(argv[0]));
         jl_value_t *v = jl_new_structt((jl_datatype_t*)argv[0], argv[1]);
         JL_GC_POP();
         return v;

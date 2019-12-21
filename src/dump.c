@@ -2112,7 +2112,7 @@ static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc
         v = jl_new_struct_uninit(tag == TAG_GOTONODE ? jl_gotonode_type : jl_quotenode_type);
         if (usetable)
             arraylist_push(&backref_list, v);
-        jl_set_nth_field(v, 0, jl_deserialize_value(s, NULL));
+        set_nth_field(tag == TAG_GOTONODE ? jl_gotonode_type : jl_quotenode_type, (void*)v, 0, jl_deserialize_value(s, NULL));
         return v;
     case TAG_UNIONALL:
         pos = backref_list.len;
@@ -2228,7 +2228,7 @@ static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc
             arraylist_push(&backref_list, v);
         for (i = 0; i < jl_datatype_nfields(jl_lineinfonode_type); i++) {
             size_t offs = jl_field_offset(jl_lineinfonode_type, i);
-            jl_set_nth_field(v, i, jl_deserialize_value(s, (jl_value_t**)((char*)v + offs)));
+            set_nth_field(jl_lineinfonode_type, (void*)v, i, jl_deserialize_value(s, (jl_value_t**)((char*)v + offs)));
         }
         return v;
     case TAG_DATATYPE:
