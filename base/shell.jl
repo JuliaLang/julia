@@ -257,43 +257,59 @@ shell_escape_posixly(args::AbstractString...) =
 
 """
     shell_escape_wincmd(s::AbstractString)
-    shell_escape_wincmd(io, s::AbstractString)
+    shell_escape_wincmd(io::IO, s::AbstractString)
 
-The unexported `shell_escape_wincmd` function escapes the meta
-characters `()!^<>&|` processed by the Windows `cmd.exe` shell: it
-places a `^` in front of any metacharacter that follows an even number
-of quotation marks on the command line.
+The unexported `shell_escape_wincmd` function escapes Windows
+`cmd.exe` shell meta characters. It escapes `()!^<>&|` by placing a
+`^` in front. An `@` is only escaped at the start of the string. Pairs
+of `"` characters and the strings they enclose are passed through
+unescaped. Any remaining `"` is escaped with `^` to ensure that the
+number of unescaped `"` characters in the result remains even.
 
-The percent sign (`%`) is not escaped, therefore shell variable
-references (like `%USER%`) will still be substituted by `cmd.exe`.
+Since `cmd.exe` substitutes variable references (like `%USER%`)
+_before_ processing the escape characters `^` and `"`, this function
+makes no attempt to escape the percent sign (`%`).
 
-Input strings should avoid ASCII control characters, as many of these
-cannot be escaped (e.g., NUL, CR, LF).
+Input strings with ASCII control characters that cannot be escaped
+(NUL, CR, LF) will cause an `ArgumentError` exception.
+
+With an I/O stream parameter `io`, the result will be written there,
+rather than returned as a string.
 
 See also: [`escape_microsoft_c_args`](@ref), [`shell_escape_posixly`](@ref)
 
 # Example
 ```jldoctest
-julia> println(shell_escape_wincmd(escape_microsoft_c_args("^\\\"^\\", "^ C")))
-"^\\\\\\"^^\\\\" "^^ C"
+julia> shell_escape_wincmd("a^\\"^o\\"^u\\"")
+"a^^\\"^o\\"^^u^\\""
 ```
 """
-function shell_escape_wincmd(io, s::AbstractString)
+function shell_escape_wincmd(io::IO, s::AbstractString)
     # https://stackoverflow.com/a/4095133/1990689
-    quoted = false
-    for c in s
-        if c == '"'
-            quoted = !quoted
+    occursin(r"[\r\n\0]", s) &&
+        throw(ArgumentError("control character unsupported by CMD.EXE"))
+    i = 1
+    len = ncodeunits(s)
+    if len > 0 && codeunit(s,1) == UInt8('@')
+        write(io, '^')
+    end
+    while i <= ncodeunits(s)
+        c = codeunit(s,i)
+        if c == UInt8('"') && (j = findnext('"', s, i+1)) !== nothing
+            write(io, SubString(s,i,j))
+            i = j
         else
-            if !quoted && c in ( '(', ')', '!', '^', '<', '>', '&', '|' )
-                write(io, '^')
+            if c in UInt8.(('"', '(', ')', '!', '^', '<', '>', '&', '|'))
+                write(io, '^', c)
+            else
+                write(io, c)
             end
         end
-        write(io, c)
+        i += 1
     end
 end
 shell_escape_wincmd(s::AbstractString) = sprint(shell_escape_wincmd, s;
-                                                sizehint = sizeof(s))
+                                                sizehint = 2*sizeof(s))
 
 """
     escape_microsoft_c_args(args::Union{Cmd,AbstractString...})
@@ -309,8 +325,8 @@ command line into a list of arguments). Many Windows API applications
 runtime](https://docs.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments)
 to split that command line into a list of strings.
 
-This function implements the inverse of such a C runtime command-line
-parser. It joins command-line arguments to be passed to a Windows
+This function implements an inverse for a parser compatible with these rules.
+It joins command-line arguments to be passed to a Windows
 C/C++/Julia application into a command line, escaping or quoting the
 meta characters space, TAB, double quote and backslash where needed.
 
