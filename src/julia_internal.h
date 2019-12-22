@@ -861,7 +861,8 @@ extern void *jl_crtdll_handle;
 extern void *jl_winsock_handle;
 #endif
 
-void *jl_get_library(const char *f_lib);
+void *jl_get_library_(const char *f_lib, int throw_err);
+#define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name,
                                       void **hnd);
 JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(

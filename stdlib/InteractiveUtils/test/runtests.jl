@@ -251,12 +251,25 @@ end
 @which get_A18434()(1, y=2)
 @test counter18434 == 2
 
-let _true = Ref(true), f, g, h
-    @noinline f() = ccall((:time, "error_library_doesnt_exist\0"), Cvoid, ()) # some expression that throws an error in codegen
+@eval function f_invalid(x)
+    Base.@_noinline_meta
+    $(Expr(:loopinfo, 1.0f0)) # some expression that throws an error in codegen
+    x
+end
+
+let _true = Ref(true), g, h
     @noinline g() = _true[] ? 0 : h()
-    @noinline h() = (g(); f())
+    @noinline h() = (g(); f_invalid(_true[]))
     @test_throws ErrorException @code_native h() # due to a failure to compile f()
     @test g() == 0
+end
+
+let _true = Ref(true), f, g, h
+    @noinline f() = ccall((:time, "error_library_doesnt_exist\0"), Cvoid, ()) # should throw error during runtime
+    @noinline g() = _true[] ? 0 : h()
+    @noinline h() = (g(); f())
+    @test g() == 0
+    @test_throws ErrorException h()
 end
 
 module ReflectionTest
