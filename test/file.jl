@@ -3,7 +3,7 @@
 #############################################
 # Create some temporary files & directories #
 #############################################
-starttime = time()
+starttime = time_ns() / 1e9
 pwd_ = pwd()
 dir = mktempdir()
 file = joinpath(dir, "afile.txt")
@@ -382,12 +382,14 @@ if Sys.iswindows()
 else
     @test filesize(dir) > 0
 end
-nowtime = time()
+# We need both: one to check passed time, one to comapare file's mtime()
+nowtime = time_ns() / 1e9
+nowwall = time()
 # Allow 10s skew in addition to the time it took us to actually execute this code
 let skew = 10 + (nowtime - starttime)
     mfile = mtime(file)
     mdir  = mtime(dir)
-    @test abs(nowtime - mfile) <= skew && abs(nowtime - mdir) <= skew && abs(mfile - mdir) <= skew
+    @test abs(nowwall - mfile) <= skew && abs(nowwall - mdir) <= skew && abs(mfile - mdir) <= skew
 end
 #@test Int(time()) >= Int(mtime(file)) >= Int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
 

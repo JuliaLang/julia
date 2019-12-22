@@ -264,13 +264,14 @@ Returns :ok, :timed_out, or :error
 """
 function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
     pollint > 0 || throw(ArgumentError("cannot set pollint to $pollint seconds"))
-    start = time()
+    start = time_ns()
+    nsecs = 1e9 * secs
     done = Channel(1)
     function timercb(aw)
         try
             if testcb()
                 put!(done, :ok)
-            elseif (time() - start) > secs
+            elseif (time_ns() - start) > nsecs
                 put!(done, :timed_out)
             end
         catch e

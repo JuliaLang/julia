@@ -293,12 +293,11 @@ Base.showerror(io::IO, e::LaunchWorkerError) = print(io, e.msg)
 # The master process uses this to connect to the worker and subsequently
 # setup a all-to-all network.
 function read_worker_host_port(io::IO)
-    t0 = time()
+    t0 = time_ns()
 
     # Wait at most for JULIA_WORKER_TIMEOUT seconds to read host:port
     # info from the worker
-    timeout = worker_timeout()
-
+    timeout = worker_timeout() * 1e9
     # We expect the first line to contain the host:port string. However, as
     # the worker may be launched via ssh or a cluster manager like SLURM,
     # ignore any informational / warning lines printed by the launch command.
@@ -311,7 +310,7 @@ function read_worker_host_port(io::IO)
         while ntries > 0
             readtask = @async readline(io)
             yield()
-            while !istaskdone(readtask) && ((time() - t0) < timeout)
+            while !istaskdone(readtask) && ((time_ns() - t0) < timeout)
                 sleep(0.05)
             end
             !istaskdone(readtask) && break
@@ -695,20 +694,20 @@ function redirect_output_from_additional_worker(pid, port)
 end
 
 function check_master_connect()
-    timeout = worker_timeout()
+    timeout = worker_timeout() * 1e9
     # If we do not have at least process 1 connect to us within timeout
     # we log an error and exit, unless we're running on valgrind
     if ccall(:jl_running_on_valgrind,Cint,()) != 0
         return
     end
     @async begin
-        start = time()
-        while !haskey(map_pid_wrkr, 1) && (time() - start) < timeout
+        start = time_ns()
+        while !haskey(map_pid_wrkr, 1) && (time_ns() - start) < timeout
             sleep(1.0)
         end
 
         if !haskey(map_pid_wrkr, 1)
-            print(stderr, "Master process (id 1) could not connect within $timeout seconds.\nexiting.\n")
+            print(stderr, "Master process (id 1) could not connect within $(timeout/1e9) seconds.\nexiting.\n")
             exit(1)
         end
     end
@@ -1023,10 +1022,10 @@ function _rmprocs(pids, waitfor)
             end
         end
 
-        start = time()
-        while (time() - start) < waitfor
+        start = time_ns()
+        while (time_ns() - start) < waitfor
             all(w -> w.state == W_TERMINATED, rmprocset) && break
-            sleep(min(0.1, waitfor - (time() - start)))
+            sleep(min(0.1, waitfor - (time_ns() - start)/1e9))
         end
 
         unremoved = [wrkr.id for wrkr in filter(w -> w.state != W_TERMINATED, rmprocset)]
