@@ -280,7 +280,7 @@ See also: [`escape_microsoft_c_args`](@ref), [`shell_escape_posixly`](@ref)
 
 # Example
 ```jldoctest
-julia> shell_escape_wincmd("a^\\"^o\\"^u\\"")
+julia> Base.shell_escape_wincmd("a^\\"^o\\"^u\\"")
 "a^^\\"^o\\"^^u^\\""
 ```
 """
