@@ -137,3 +137,71 @@ macro spawn(expr)
         end
     end
 end
+
+"""
+    Threads.what_should_i_name_this(f, items; max_concurrent_tasks=Threads.nthreads(),
+                                    channel_type=Any, channel_size=Inf,
+                                    channel_spawn=false)
+
+Return a `Channel` whose elements are `f(item)` for `item` in `items`. The only
+assumption on `items` is that `iterate` is defined and that each iteration is
+independent.
+
+The returned `Channel`'s size and element type can be set via the corresponding
+keyword arguments. The `channel_spawn` keyword argument is passed as the `Channel`'s
+`spawn` argument.
+
+This function will spawn up to `max_concurrent_tasks` tasks to process multiple
+iterations concurrently using `Threads.@spawn`.
+
+This function is generally useful for workloads where a few of the following
+are true:
+
+- the returned `Channel` is consumed asynchronously
+- `f` is trivially parallel-mappable over `items`
+- executing `f(item)` requires a nontrivial amount of resources
+- storing the result of `f(item)` requires a nontrivial amount of memory
+
+Note that while the returned channel will only ever contain `channel_size` items,
+`channel_size + 1` evaluations of `f` may occur before subsequent `put!` calls
+to the channel are blocked by the `channel_size` limit. This is because the
+argument `f(item)` in `put!(channel, f(item))` is evaluated before the `put!`
+call itself (which may block until a corresponding `take!` is called).
+"""
+function what_should_i_name_this(f, items; max_concurrent_tasks=nthreads(), channel_type=Any,
+                                 channel_size=Inf, channel_spawn=false)
+    return Channel{channel_type}(channel_size; spawn=channel_spawn) do channel
+        initial = iterate(items)
+        initial === nothing && return nothing
+        put!(channel, f(initial[1]))
+        state = initial[2]
+        isdone = false
+        next = () -> begin
+            isdone && return nothing
+            x = iterate(items, state)
+            if x === nothing
+                isdone = true
+                return nothing
+            end
+            state = x[2]
+            # disambiguate between `nothing` as a value vs. as an iteration state
+            return Some(x[1])
+        end
+        next_lock = ReentrantLock()
+        tasks = map(1:max_concurrent_tasks) do _
+            Threads.@spawn begin
+                while true
+                    task = Threads.@spawn begin
+                        x = lock(next, next_lock)
+                        x === nothing && return true
+                        put!(channel, f(something(x)))
+                        return false
+                    end
+                    fetch(task) && break
+                end
+            end
+        end
+        foreach(wait, tasks)
+    end
+    return channel
+end
