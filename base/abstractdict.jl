@@ -19,7 +19,7 @@ haskey(d::AbstractDict, k) = in(k, keys(d))
 function in(p::Pair, a::AbstractDict, valcmp=(==))
     v = get(a,p[1],secret_table_token)
     if v !== secret_table_token
-        return valcmp(v, p[2])
+        return valcmp(p[2], v)
     end
     return false
 end

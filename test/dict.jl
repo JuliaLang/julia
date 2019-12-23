@@ -1072,3 +1072,11 @@ end
         @test testdict[:b] == 1
     end
 end
+
+@testset "in(Pair, AbstractDict, valcmp='a comparison operator')" begin
+    testdict = Dict(:a=>1, :b=>3)
+    @test in(:a=>2, testdict, >)
+    @test !in(:a=>0, testdict, >)
+    @test in(:b=>2, testdict, <)
+    @test !in(:b=>4, testdict, <)
+end
