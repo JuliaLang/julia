@@ -26,7 +26,7 @@ and will be converted automatically at the call site to the appropriate type.
 
 See [`@cfunction`](@ref).
 """
-struct CFunction <: Ref{Cvoid}
+mutable struct CFunction <: Ref{Cvoid}
     ptr::Ptr{Cvoid}
     f::Any
     _1::Ptr{Cvoid}
