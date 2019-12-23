@@ -103,9 +103,9 @@ Standard library changes
 
 #### Distributed
 
-* Added keyword argument `shell` to `addprocs`; use `shell=:wincmd` to invoke Windows workers via ssh connections to `cmd.exe`.
+* Now supports invoking Windows workers via ssh (via new keyword argument `shell=:wincmd` in `addprocs`) ([#30614])
 
-* Added keyword argument `ssh` to `addprocs` to specify the ssh client path.
+* Other new keyword arguments in `addprocs`: `ssh` to specify the ssh client path, `env` to pass environment variables to workers, and `cmdline_cookie` to work around an ssh problem with Windows workers that run older (pre-ConPTY) Windows or Julia versions. ([#30614])
 
 #### Sockets
 

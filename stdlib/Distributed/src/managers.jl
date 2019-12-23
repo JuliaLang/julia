@@ -113,8 +113,20 @@ Keyword arguments:
   are setup lazily, i.e. they are setup at the first instance of a remote call between
   workers. Default is true.
 
-!!! compat "Julia 1.2"
-    The `ssh` and `shell` keyword arguments were added in Julia 1.2.
+* `env`: provide an array of string pairs such as
+  `env=["JULIA_DEPOT_PATH"=>"/depot"] to request that environment variables
+  are set on the remote machine. By default only the environment variable
+  `JULIA_WORKER_TIMEOUT` is passed automatically from the local to the remote
+  environment.
+
+* `cmdline_cookie`: pass the authentication cookie via the `--worker` commandline
+   option. The (more secure) default behaviour of passing the cookie via ssh stdio
+   may hang with Windows workers that use older (pre-ConPTY) Julia or Windows versions,
+   in which case `cmdline_cookie=true` offers a work-around.
+
+!!! compat "Julia 1.4"
+    The keyword arguments `ssh`, `shell`, `env` and `cmdline_cookie`
+    were added in Julia 1.4.
 
 Environment variables:
 
@@ -161,6 +173,8 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     dir = params[:dir]
     exename = params[:exename]
     exeflags = params[:exeflags]
+    cmdline_cookie = params[:cmdline_cookie]
+    env=Dict{String,String}(params[:env]);
 
     # machine could be of the format [user@]host[:port] bind_addr[:bind_port]
     # machine format string is split on whitespace
@@ -170,6 +184,11 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     end
     if length(machine_bind) > 1
         exeflags = `--bind-to $(machine_bind[2]) $exeflags`
+    end
+    if cmdline_cookie
+        exeflags = `$exeflags --worker=$(cluster_cookie())`
+    else
+        exeflags = `$exeflags --worker`
     end
 
     machine_def = split(machine_bind[1], ':')
@@ -191,19 +210,27 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
 
     # Build up the ssh command
 
-    # the default worker timeout
-    tval = get(ENV, "JULIA_WORKER_TIMEOUT", "")
+    # pass on some environment variables by default
+    for var in ["JULIA_WORKER_TIMEOUT"]
+        if !haskey(env, var) && haskey(ENV, var)
+            env[var] = ENV[var]
+        end
+    end
+    for var in keys(ENV)
+        occursin(r"^[a-zA-Z0-9_]+$", var) || throw(ArgumentError(var))
+    end
 
     # Julia process with passed in command line flag arguments
     if shell == :posix
         # ssh connects to a POSIX shell
 
-        cmdline_cookie = false
-        exeflags = `$exeflags --worker`
-        cmds = """
-            cd -- $(shell_escape_posixly(dir))
-            $(isempty(tval) ? "" : "export JULIA_WORKER_TIMEOUT=$(shell_escape_posixly(tval))")
-            $(shell_escape_posixly(exename)) $(shell_escape_posixly(exeflags))"""
+        cmds = "$(shell_escape_posixly(exename)) $(shell_escape_posixly(exeflags))"
+        # set environment variables
+        for (var, val) in env
+            cmds = "export $(var)=$(shell_escape_posixly(val))\n$cmds"
+        end
+        # change working directory
+        cmds = "cd -- $(shell_escape_posixly(dir))\n$cmds"
 
         # shell login (-l) with string command (-c) to launch julia process
         remotecmd = shell_escape_posixly(`sh -l -c $cmds`)
@@ -211,24 +238,17 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     elseif shell == :wincmd
         # ssh connects to Windows cmd.exe
 
-        # Passing the cookie via ssh stdin currently hangs with
-        # Microsoft's Windows port of OpenSSH, so we do it via
-        # --worker on the command line for now, although that may
-        # cause the cookie to become visible to other users (e.g.
-        # using Process Explorer or WMIC).
-        cmdline_cookie = true
-        exeflags = `$exeflags --worker=$(cluster_cookie())`
-
         any(c -> c == '"', exename) && throw(ArgumentError("invalid exename"))
 
         remotecmd = shell_escape_wincmd(escape_microsoft_c_args(exename, exeflags...))
+        # change working directory
         if dir !== nothing && dir != ""
             any(c -> c == '"', dir) && throw(ArgumentError("invalid dir"))
             remotecmd = "pushd \"$(dir)\" && $remotecmd"
         end
-        if tval !== nothing && tval != ""
-            all(isdigit, tval) || throw(ArgumentError("invalid JULIA_WORKER_TIMEOUT"))
-            remotecmd = "set JULIA_WORKER_TIMEOUT=$tval && $remotecmd"
+        # set environment variables
+        for (var, val) in env
+            remotecmd = "set $(var)=$(shell_escape_wincmd(val))&& $remotecmd"
         end
 
     else
