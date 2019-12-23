@@ -102,8 +102,6 @@ shell_escape(cmd::Cmd; special::AbstractString="") =
     shell_escape(cmd.exec..., special=special)
 shell_escape_posixly(cmd::Cmd) =
     shell_escape_posixly(cmd.exec...)
-shell_escape_winsomely(cmd::Cmd) =
-    shell_escape_winsomely(cmd.exec...)
 escape_microsoft_c_args(cmd::Cmd) =
     escape_microsoft_c_args(cmd.exec...)
 escape_microsoft_c_args(io::IO, cmd::Cmd) =

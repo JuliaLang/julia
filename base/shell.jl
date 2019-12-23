@@ -353,9 +353,3 @@ end
 escape_microsoft_c_args(args::AbstractString...) =
     sprint(escape_microsoft_c_args, args...;
            sizehint = (sum(sizeof.(args)) + 3*length(args)))
-
-# alias for an earlier implementation (to be removed)
-shell_escape_winsomely(args::AbstractString...) =
-    escape_microsoft_c_args(args...)
-print_shell_escaped_winsomely(io::IO, args::AbstractString...) =
-    escape_microsoft_c_args(io, args...)

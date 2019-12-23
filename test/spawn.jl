@@ -685,79 +685,79 @@ end
 
     # input :
     # output: ""
-    @test Base.shell_escape_winsomely("") == "\"\""
+    @test Base.escape_microsoft_c_args("") == "\"\""
 
-    @test Base.shell_escape_winsomely("A") == "A"
+    @test Base.escape_microsoft_c_args("A") == "A"
 
-    @test Base.shell_escape_winsomely(`A`) == "A"
+    @test Base.escape_microsoft_c_args(`A`) == "A"
 
     # input : hello world
     # output: "hello world"
-    @test Base.shell_escape_winsomely("hello world") == "\"hello world\""
+    @test Base.escape_microsoft_c_args("hello world") == "\"hello world\""
 
     # input : hello  world
     # output: "hello  world"
-    @test Base.shell_escape_winsomely("hello\tworld") == "\"hello\tworld\""
+    @test Base.escape_microsoft_c_args("hello\tworld") == "\"hello\tworld\""
 
     # input : hello"world
     # output: "hello\"world" (also valid) hello\"world
-    @test Base.shell_escape_winsomely("hello\"world") == "\"hello\\\"world\""
+    @test Base.escape_microsoft_c_args("hello\"world") == "\"hello\\\"world\""
 
     # input : hello""world
     # output: "hello\"\"world" (also valid) hello\"\"world
-    @test Base.shell_escape_winsomely("hello\"\"world") == "\"hello\\\"\\\"world\""
+    @test Base.escape_microsoft_c_args("hello\"\"world") == "\"hello\\\"\\\"world\""
 
     # input : hello\world
     # output: hello\world
-    @test Base.shell_escape_winsomely("hello\\world") == "hello\\world"
+    @test Base.escape_microsoft_c_args("hello\\world") == "hello\\world"
 
     # input : hello\\world
     # output: hello\\world
-    @test Base.shell_escape_winsomely("hello\\\\world") == "hello\\\\world"
+    @test Base.escape_microsoft_c_args("hello\\\\world") == "hello\\\\world"
 
     # input : hello\"world
     # output: "hello\"world" (also valid) hello\"world
-    @test Base.shell_escape_winsomely("hello\\\"world") == "\"hello\\\\\\\"world\""
+    @test Base.escape_microsoft_c_args("hello\\\"world") == "\"hello\\\\\\\"world\""
 
     # input : hello\\"world
     # output: "hello\\\\\"world" (also valid) hello\\\\\"world
-    @test Base.shell_escape_winsomely("hello\\\\\"world")  == "\"hello\\\\\\\\\\\"world\""
+    @test Base.escape_microsoft_c_args("hello\\\\\"world")  == "\"hello\\\\\\\\\\\"world\""
 
     # input : hello world\
     # output: "hello world\\"
-    @test Base.shell_escape_winsomely("hello world\\") == "\"hello world\\\\\""
+    @test Base.escape_microsoft_c_args("hello world\\") == "\"hello world\\\\\""
 
     # input : A\B
     # output: A\B"
-    @test Base.shell_escape_winsomely("A\\B") == "A\\B"
+    @test Base.escape_microsoft_c_args("A\\B") == "A\\B"
 
     # input : [A\, B]
     # output: "A\ B"
-    @test Base.shell_escape_winsomely("A\\", "B") == "A\\ B"
+    @test Base.escape_microsoft_c_args("A\\", "B") == "A\\ B"
 
     # input : A"B
     # output: "A\"B"
-    @test Base.shell_escape_winsomely("A\"B") ==  "\"A\\\"B\""
+    @test Base.escape_microsoft_c_args("A\"B") ==  "\"A\\\"B\""
 
     # input : [A B\, C]
     # output: "A B\\" C
-    @test Base.shell_escape_winsomely("A B\\", "C") == "\"A B\\\\\" C"
+    @test Base.escape_microsoft_c_args("A B\\", "C") == "\"A B\\\\\" C"
 
     # input : [A "B, C]
     # output: "A \"B" C
-    @test Base.shell_escape_winsomely("A \"B", "C") == "\"A \\\"B\" C"
+    @test Base.escape_microsoft_c_args("A \"B", "C") == "\"A \\\"B\" C"
 
     # input : [A B\, C]
     # output: "A B\\" C
-    @test Base.shell_escape_winsomely("A B\\", "C") == "\"A B\\\\\" C"
+    @test Base.escape_microsoft_c_args("A B\\", "C") == "\"A B\\\\\" C"
 
     # input :[A\ B\, C]
     # output: "A\ B\\" C
-    @test Base.shell_escape_winsomely("A\\ B\\", "C") == "\"A\\ B\\\\\" C"
+    @test Base.escape_microsoft_c_args("A\\ B\\", "C") == "\"A\\ B\\\\\" C"
 
     # input : [A\ B\, C, D K]
     # output: "A\ B\\" C "D K"
-    @test Base.shell_escape_winsomely("A\\ B\\", "C", "D K") == "\"A\\ B\\\\\" C \"D K\""
+    @test Base.escape_microsoft_c_args("A\\ B\\", "C", "D K") == "\"A\\ B\\\\\" C \"D K\""
 
     # shell_escape_wincmd
     @test Base.shell_escape_wincmd("") == ""
