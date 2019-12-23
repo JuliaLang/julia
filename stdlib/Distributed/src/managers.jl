@@ -221,7 +221,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
 
         any(c -> c == '"', exename) && throw(ArgumentError("invalid exename"))
 
-        remotecmd = shell_escape_windows(exename, exeflags...)
+        remotecmd = shell_escape_wincmd(escape_microsoft_c_args(exename, exeflags...))
         if dir !== nothing && dir != ""
             any(c -> c == '"', dir) && throw(ArgumentError("invalid dir"))
             remotecmd = "pushd \"$(dir)\" && $remotecmd"
@@ -266,82 +266,6 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     push!(launched, wconfig)
     notify(launch_ntfy)
 end
-
-
-function print_shell_escaped_windows(io, args::AbstractString...)::Nothing
-    first = true
-    quoted = false
-    for arg in args
-        first || write(io, ' ')
-        first = false
-        function isword(c::AbstractChar)
-            return 'a' <= c <= 'z' || 'A' <= c <= 'Z' || '0' <= c <= '9' ||
-                c == '\\' || c == '.' || c == '_' || c == '-' || c == ':' ||
-                c == '/' || c == '=' || c == '"' || c == '%'
-        end
-        quotes = !all(isword, arg) || arg == ""
-        if quotes; write(io, '"'); quoted = !quoted; end
-        backslashes = 0
-        for c in arg
-            if c == '\\'
-                backslashes += 1
-            else
-                if c == '"'
-                    backslashes = backslashes * 2 + 1
-                    quoted = !quoted
-                end
-                for j=1:backslashes
-                    write(io, '\\')
-                end
-                backslashes = 0
-                isword(c) || quoted || write(io, '^')   # for cmd.exe
-                write(io, c)
-            end
-        end
-        if quotes; backslashes *= 2; end
-        for j=1:backslashes
-            write(io, '\\')
-        end
-        if quotes; write(io, '"'); quoted = !quoted; end
-    end
-end
-
-"""
-    shell_escape_windows(args::AbstractString...)::String
-
-Convert the collection of strings `args` into a Windows command line.
-
-Windows passes the entire command line as a single string to the
-application (unlike POSIX systems, where the shell splits the command
-line into a list of arguments). Many Windows API applications
-(including julia.exe), use the conventions of the [Microsoft C
-runtime](https://docs.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments)
-to split that command line into a list of strings.
-
-This function implements the inverse of such a C runtime command-line
-parser. It joins command-line arguments to be passed to a Windows
-C/C++/Julia application into a command line, escaping or quoting meta
-characters such as space, double quotes and backslash where needed.
-
-In addition, this function also escapes meta characters processed by
-`cmd.exe`: it places a ^ in front of any potential metacharacter that
-follows an even number of quotation marks on the command line.
-
-The percent sign (`%`) is not escaped such that shell variable
-references (like `%USER%`) can still be substituted by `cmd.exe`.
-
-Input strings should avoid ASCII control characters, as many of these
-cannot be escaped (e.g., NUL, CR, LF).
-
-# Example
-```jldoctest
-julia> println(Distributed.shell_escape_windows("a b", "\\"", "\\\\\\"", "\\\\", "\\\\ \\\\", "c"))
-\"a b\" \\\" \\\\\\\" \\ \"\\ \\\\\" c
-
-```
-"""
-shell_escape_windows(args::AbstractString...) = sprint(print_shell_escaped_windows, args...,
-                                                       sizehint = (sum(length.(args)) + 3*length(args)))
 
 
 function manage(manager::SSHManager, id::Integer, config::WorkerConfig, op::Symbol)
