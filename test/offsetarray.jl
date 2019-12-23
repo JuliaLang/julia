@@ -475,6 +475,19 @@ v = OffsetArray(rand(8), (-2,))
 @test sortslices(A, dims=2) == OffsetArray(sortslices(parent(A), dims=2), A.offsets)
 @test sort(A, dims=1) == OffsetArray(sort(parent(A), dims=1), A.offsets)
 @test sort(A, dims=2) == OffsetArray(sort(parent(A), dims=2), A.offsets)
+# Issue #33977
+soa = OffsetArray([2,2,3], -2)
+@test searchsorted(soa, 1) == -1:-2
+@test searchsortedfirst(soa, 1) == -1
+@test searchsortedlast(soa, 1) == -2
+@test first(sort!(soa; alg=QuickSort)) == 2
+@test first(sort!(soa; alg=MergeSort)) == 2
+soa = OffsetArray([2,2,3], typemax(Int)-4)
+@test searchsorted(soa, 1) == typemax(Int)-3:typemax(Int)-4
+@test searchsortedfirst(soa, 2) == typemax(Int) - 3
+@test searchsortedlast(soa, 2) == typemax(Int) - 2
+@test first(sort!(soa; alg=QuickSort)) == 2
+@test first(sort!(soa; alg=MergeSort)) == 2
 
 @test mapslices(sort, A, dims=1) == OffsetArray(mapslices(sort, parent(A), dims=1), A.offsets)
 @test mapslices(sort, A, dims=2) == OffsetArray(mapslices(sort, parent(A), dims=2), A.offsets)

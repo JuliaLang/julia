@@ -11,6 +11,21 @@ using Test
     @test ReverseOrdering(Forward) == ReverseOrdering() == Reverse
 end
 
+@testset "midpoint" begin
+    @test Base.Sort.midpoint(1, 3) === 2
+    @test Base.Sort.midpoint(2, 4) === 3
+    @test 2 <= Base.Sort.midpoint(1, 4) <= 3
+    @test Base.Sort.midpoint(-3, -1) === -2
+    @test Base.Sort.midpoint(-4, -2) === -3
+    @test -3 <= Base.Sort.midpoint(-4, -1) <= -2
+    @test Base.Sort.midpoint(-1, 1) ===  0
+    @test -1 <= Base.Sort.midpoint(-2, 1) <= 0
+    @test 0 <= Base.Sort.midpoint(-1, 2) <= 1
+    @test Base.Sort.midpoint(-2, 2) ===  0
+    @test Base.Sort.midpoint(typemax(Int)-2, typemax(Int)) === typemax(Int)-1
+    @test Base.Sort.midpoint(typemin(Int), typemin(Int)+2) === typemin(Int)+1
+    @test -1 <= Base.Sort.midpoint(typemin(Int), typemax(Int)) <= 0
+end
 
 @testset "sort" begin
     @test sort([2,3,1]) == [1,2,3] == sort([2,3,1]; order=Forward)
