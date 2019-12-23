@@ -244,7 +244,7 @@ segfault your program, in the same manner as C.
 function unsafe_copyto!(dest::Ptr{T}, src::Ptr{T}, n) where T
     # Do not use this to copy data between pointer arrays.
     # It can't be made safe no matter how carefully you checked.
-    ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
+    ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
           dest, src, n * aligned_sizeof(T))
     return dest
 end
@@ -268,13 +268,13 @@ function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
         ccall(:jl_array_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
               dest, destp, src, srcp, n)
     elseif isbitstype(T)
-        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
+        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
               destp, srcp, n * aligned_sizeof(T))
     elseif isbitsunion(T)
-        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
+        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
               destp, srcp, n * aligned_sizeof(T))
         # copy selector bytes
-        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
+        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
               ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), dest) + doffs - 1,
               ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), src) + soffs - 1,
               n)
