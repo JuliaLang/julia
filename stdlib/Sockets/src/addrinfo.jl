@@ -1,5 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    DNSError
+
+This exception thrown when an error occurs in DNS lookup. 
+The `host` field indicates the host URL string.
+The `code` field indicates the error code based on libuv.
+"""
 struct DNSError <: Exception
     host::String
     code::Int32
