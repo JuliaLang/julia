@@ -49,7 +49,8 @@
 #end
 #const nothing = Nothing()
 
-#abstract type AbstractArray{T,N} end
+#abstract type ArrayLike{N} end
+#abstract type AbstractArray{T,N} <: ArrayLike{N} end
 #abstract type DenseArray{T,N} <: AbstractArray{T,N} end
 
 #mutable struct Array{T,N} <: DenseArray{T,N}
@@ -146,7 +147,7 @@ export
     # key types
     Any, DataType, Vararg, NTuple,
     Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
-    AbstractArray, DenseArray, NamedTuple,
+    ArrayLike, AbstractArray, DenseArray, NamedTuple,
     # special objects
     Function, Method,
     Module, Symbol, Task, Array, UndefInitializer, undef, WeakRef, VecElement,

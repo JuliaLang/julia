@@ -47,6 +47,7 @@ jl_datatype_t *jl_builtin_type;
 
 jl_datatype_t *jl_typeofbottom_type;
 jl_value_t *jl_bottom_type;
+jl_unionall_t *jl_arraylike_type;
 jl_unionall_t *jl_abstractarray_type;
 jl_unionall_t *jl_densearray_type;
 
@@ -1983,10 +1984,20 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_function_type->name->mt = NULL; // subtypes of Function have independent method tables
     jl_builtin_type->name->mt = NULL;  // so they don't share the Any type table
 
+    tv = jl_svec1(tvar("N"));
+    jl_arraylike_type = (jl_unionall_t*)
+        jl_new_abstracttype((jl_value_t*)jl_symbol("ArrayLike"), core,
+                            jl_any_type, tv)->name->wrapper;
+
+    jl_tvar_t *tv_T = tvar("T");
+    jl_tvar_t *tv_N = tvar("N");
+    tv = jl_svec2(tv_T, tv_N);
+
     tv = jl_svec2(tvar("T"), tvar("N"));
     jl_abstractarray_type = (jl_unionall_t*)
         jl_new_abstracttype((jl_value_t*)jl_symbol("AbstractArray"), core,
-                            jl_any_type, tv)->name->wrapper;
+                            (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_arraylike_type, jl_svec_data(jl_svec1(tv_N)), 1),
+                            tv)->name->wrapper;
 
     tv = jl_svec2(tvar("T"), tvar("N"));
     jl_densearray_type = (jl_unionall_t*)

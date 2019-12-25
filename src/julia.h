@@ -600,6 +600,7 @@ extern JL_DLLEXPORT jl_datatype_t *jl_code_instance_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_code_info_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_method_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_module_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_unionall_t *jl_arraylike_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_unionall_t *jl_abstractarray_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_unionall_t *jl_densearray_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_unionall_t *jl_array_type JL_GLOBALLY_ROOTED;

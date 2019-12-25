@@ -1348,7 +1348,7 @@ end
 @test sprint(show, Main) == "Main"
 
 @test sprint(Base.show_supertypes, Int64) == "Int64 <: Signed <: Integer <: Real <: Number <: Any"
-@test sprint(Base.show_supertypes, Vector{String}) == "Array{String,1} <: DenseArray{String,1} <: AbstractArray{String,1} <: Any"
+@test sprint(Base.show_supertypes, Vector{String}) == "Array{String,1} <: DenseArray{String,1} <: AbstractArray{String,1} <: ArrayLike{1} <: Any"
 
 # static_show
 

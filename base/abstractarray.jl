@@ -3,11 +3,21 @@
 ## Basic functions ##
 
 """
-    AbstractArray{T,N}
+    ArrayLike{N}
+
+Supertype for `N`-dimensional arrays (or array-like types) with or without a
+pre-defined element type. For arrays with a pre-defined eltype, use
+[`AbstractArray`](@ref).
+"""
+ArrayLike
+
+"""
+    AbstractArray{T,N} <: ArrayLike{N}
 
 Supertype for `N`-dimensional arrays (or array-like types) with elements of type `T`.
 [`Array`](@ref) and other types are subtypes of this. See the manual section on the
-[`AbstractArray` interface](@ref man-interface-array).
+[`AbstractArray` interface](@ref man-interface-array). For arrays without a
+pre-defined eltype, use [`ArrayLike`](@ref).
 """
 AbstractArray
 

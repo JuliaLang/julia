@@ -1368,6 +1368,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
 
+    add_builtin("ArrayLike", (jl_value_t*)jl_arraylike_type);
     add_builtin("AbstractArray", (jl_value_t*)jl_abstractarray_type);
     add_builtin("DenseArray", (jl_value_t*)jl_densearray_type);
     add_builtin("Array", (jl_value_t*)jl_array_type);
