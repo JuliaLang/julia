@@ -830,7 +830,11 @@ void jl_init_function(Function *F)
     F->setHasUWTable(); // force NeedsWinEH
 #endif
 #ifdef JL_DISABLE_FPO
+#if LLVM_VERSION_MAJOR >= 8
+    F->addFnAttr("frame-pointer", "all");
+#else
     F->addFnAttr("no-frame-pointer-elim", "true");
+#endif
 #endif
     // record the WIP name
     incomplete_fname.insert(F->getName());
