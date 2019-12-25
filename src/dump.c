@@ -3396,7 +3396,7 @@ void jl_init_serializer(void)
         deser_tag[LAST_TAG+1+i] = (jl_value_t*)vals[i];
         i += 1;
     }
-    assert(LAST_TAG+1+i < 256);
+    assert(LAST_TAG+1+i < 257);
 
     for (i = 2; i < 256; i++) {
         if (deser_tag[i])
