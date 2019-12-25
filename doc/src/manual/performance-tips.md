@@ -1428,7 +1428,7 @@ julia> @code_warntype f(3.2)
 Variables
   #self#::Core.Compiler.Const(f, false)
   x::Float64
-  y::Union{Float64, Int64}
+  y::UNION{FLOAT64, INT64}
 
 Body::Float64
 1 ─      (y = Main.pos(x))
@@ -1443,8 +1443,8 @@ Interpreting the output of [`@code_warntype`](@ref), like that of its cousins [`
 Your code is being presented in form that has been heavily digested on its way to generating
 compiled machine code. Most of the expressions are annotated by a type, indicated by the `::T`
 (where `T` might be [`Float64`](@ref), for example). The most important characteristic of [`@code_warntype`](@ref)
-is that non-concrete types are displayed in red; in the above example, such output is shown in
-uppercase.
+is that non-concrete types are displayed in red; since this document is written in Markdown, which has no color, 
+in this document, red text is denoted by uppercase.
 
 At the top, the inferred return type of the function is shown as `Body::Float64`.
 The next lines represent the body of `f` in Julia's SSA IR form.
