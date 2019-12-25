@@ -3,6 +3,7 @@
 ## Constructors and Types
 
 ```@docs
+Core.ArrayLike
 Core.AbstractArray
 Base.AbstractVector
 Base.AbstractMatrix
