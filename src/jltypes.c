@@ -1993,7 +1993,6 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_tvar_t *tv_N = tvar("N");
     tv = jl_svec2(tv_T, tv_N);
 
-    tv = jl_svec2(tvar("T"), tvar("N"));
     jl_abstractarray_type = (jl_unionall_t*)
         jl_new_abstracttype((jl_value_t*)jl_symbol("AbstractArray"), core,
                             (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_arraylike_type, jl_svec_data(jl_svec1(tv_N)), 1),
