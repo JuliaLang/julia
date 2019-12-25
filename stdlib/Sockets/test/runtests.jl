@@ -135,7 +135,7 @@ defaultport = rand(2000:4000)
                 write(sock, "Hello World\n")
 
                 # test "locked" println to a socket
-                @sync begin
+                @syncany begin
                     for i in 1:100
                         @async println(sock, "a", 1)
                     end
@@ -279,7 +279,7 @@ end
         bind(a, ip"127.0.0.1", randport)
         bind(b, ip"127.0.0.1", randport + 1)
 
-        @sync begin
+        @syncany begin
             let i = 0
                 for _ = 1:30
                     @async let msg = String(recv(a))

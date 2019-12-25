@@ -189,7 +189,7 @@ cd(@__DIR__) do
                 end
             end
         end
-        @sync begin
+        @syncany begin
             for p in workers()
                 @async begin
                     push!(all_tasks, current_task())

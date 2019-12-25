@@ -64,15 +64,14 @@ end
 
 # Odd numbers trigger reads, even numbers timeout
 for (i, intvl) in enumerate(intvls)
-    @sync begin
+    @syncany begin
         global ready = 0
         global ready_c = Condition()
-        t = Vector{Task}(undef, n)
         for idx in 1:n
             if isodd(idx)
-                t[idx] = @async pfd_tst_reads(idx, intvl)
+                @async pfd_tst_reads(idx, intvl)
             else
-                t[idx] = @async pfd_tst_timeout(idx, intvl)
+                @async pfd_tst_timeout(idx, intvl)
             end
         end
 
@@ -96,9 +95,6 @@ for (i, intvl) in enumerate(intvls)
             end
         end
         notify(ready_c, all=true)
-        for idx in 1:n
-            Base.wait(t[idx])
-        end
     end
 end
 

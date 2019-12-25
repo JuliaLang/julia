@@ -253,7 +253,7 @@ end
 
 using Dates
 @testset "timedwait on multiple channels" begin
-    @sync begin
+    @syncany begin
         rr1 = Channel(1)
         rr2 = Channel(1)
         rr3 = Channel(1)
