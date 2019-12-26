@@ -102,12 +102,13 @@
                                       0))
 
 (define unary-ops (append! '(|<:| |>:|)
-                           (add-dots '(+ - ! ~ ¬ √ ∛ ∜ ⋆))))
+                           (add-dots '(+ - ! ~ ¬ √ ∛ ∜ ⋆ ± ∓))))
 
 (define unary-op? (Set unary-ops))
 
 ; operators that are both unary and binary
-(define unary-and-binary-ops '(+ - $ & ~ ⋆ |.+| |.-| |.⋆|))
+(define unary-and-binary-ops (append! '($ & ~)
+                                      (add-dots '(+ - ⋆ ± ∓))))
 
 (define unary-and-binary-op? (Set unary-and-binary-ops))
 
