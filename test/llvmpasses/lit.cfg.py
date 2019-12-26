@@ -16,3 +16,6 @@ config.substitutions.append(('%shlibext', '.dylib' if platform.system() == 'Darw
 path = os.path.pathsep.join((os.path.join(os.path.dirname(__file__),"../../usr/tools"), os.path.join(os.path.dirname(__file__),"../../usr/bin"), config.environment['PATH']))
 config.environment['PATH'] = path
 config.environment['HOME'] = "/tmp"
+
+if platform.machine() == "x86_64":
+    config.available_features.add('x86_64')
