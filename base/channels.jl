@@ -304,14 +304,19 @@ Append an item `v` to the channel `c`. Blocks if the channel is full.
 
 For unbuffered channels, blocks until a [`take!`](@ref) is performed by a different
 task.
+Return the first argument.
 
 !!! compat "Julia 1.1"
     `v` now gets converted to the channel's type with [`convert`](@ref) as `put!` is called.
+
+!!! compat "Julia 1.4"
+    `put!` now returns the channel `c`; older versions of Julia returned `v`.
 """
 function put!(c::Channel{T}, v) where T
     check_channel_state(c)
     v = convert(T, v)
-    return isbuffered(c) ? put_buffered(c, v) : put_unbuffered(c, v)
+    isbuffered(c) ? put_buffered(c, v) : put_unbuffered(c, v)
+    return c
 end
 
 function put_buffered(c::Channel, v)

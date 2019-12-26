@@ -456,3 +456,9 @@ let t = @async nothing
     wait(t)
     @test_throws ErrorException("schedule: Task not runnable") schedule(t, nothing)
 end
+
+@testset "put!(c, v) -> c" begin
+    c = Channel(Inf)
+    @test put!(c, nothing) === c
+    @test push!(c, nothing) === c
+end
