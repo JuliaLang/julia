@@ -19,7 +19,7 @@ end
 
     c = Channel(1)
     @test eltype(c) == Any
-    @test put!(c, 1) == 1
+    @test put!(c, 1) === c
     @test isready(c) == true
     @test take!(c) == 1
     @test isready(c) == false
@@ -35,7 +35,8 @@ end
 
     c = Channel{Int}(Inf)
     @test eltype(c) == Int
-    pvals = map(i->put!(c,i), 1:10^6)
+    pvals = 1:10^6
+    foldl(put!, pvals; init=c)
     tvals = Int[take!(c) for i in 1:10^6]
     @test pvals == tvals
 
@@ -162,7 +163,7 @@ using Distributed
 
     if N > 0
         for i in 1:5
-            @test put!(cs[i], 2) === 2
+            @test put!(cs[i], 2) === cs[i]
         end
     end
     for i in 1:5
@@ -457,8 +458,7 @@ let t = @async nothing
     @test_throws ErrorException("schedule: Task not runnable") schedule(t, nothing)
 end
 
-@testset "put!(c, v) -> c" begin
+@testset "push!(c, v) -> c" begin
     c = Channel(Inf)
-    @test put!(c, nothing) === c
     @test push!(c, nothing) === c
 end
