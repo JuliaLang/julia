@@ -717,15 +717,22 @@ JL_CALLABLE(jl_f_tuple)
         tt = jl_inst_concrete_tupletype(types);
         JL_GC_POP();
     }
-    return jl_new_structv(tt, args, nargs);
+    if (tt->instance != NULL)
+        return tt->instance;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(tt), tt);
+    for (i = 0; i < nargs; i++)
+        set_nth_field(tt, (void*)jv, i, args[i]);
+    return jv;
 }
 
 JL_CALLABLE(jl_f_svec)
 {
     size_t i;
-    if (nargs == 0) return (jl_value_t*)jl_emptysvec;
+    if (nargs == 0)
+        return (jl_value_t*)jl_emptysvec;
     jl_svec_t *t = jl_alloc_svec_uninit(nargs);
-    for(i=0; i < nargs; i++) {
+    for (i = 0; i < nargs; i++) {
         jl_svecset(t, i, args[i]);
     }
     return (jl_value_t*)t;
@@ -785,11 +792,11 @@ JL_CALLABLE(jl_f_setfield)
         JL_TYPECHK(setfield!, symbol, args[1]);
         idx = jl_field_index(st, (jl_sym_t*)args[1], 1);
     }
-    jl_value_t *ft = jl_field_type(st,idx);
+    jl_value_t *ft = jl_field_type(st, idx);
     if (!jl_isa(args[2], ft)) {
         jl_type_error("setfield!", ft, args[2]);
     }
-    jl_set_nth_field(v, idx, args[2]);
+    set_nth_field(st, (void*)v, idx, args[2]);
     return args[2];
 }
 

@@ -897,7 +897,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
     va_start(args, type);
     jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
     for (size_t i = 0; i < nf; i++) {
-        jl_set_nth_field(jv, i, va_arg(args, jl_value_t*));
+        set_nth_field(type, (void*)jv, i, va_arg(args, jl_value_t*));
     }
     va_end(args);
     return jv;
@@ -906,14 +906,15 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
 static void init_struct_tail(jl_datatype_t *type, jl_value_t *jv, size_t na)
 {
     size_t nf = jl_datatype_nfields(type);
-    for(size_t i=na; i < nf; i++) {
+    char *data = (char*)jl_data_ptr(jv);
+    for (size_t i = na; i < nf; i++) {
         if (jl_field_isptr(type, i)) {
-            *(jl_value_t**)((char*)jl_data_ptr(jv)+jl_field_offset(type,i)) = NULL;
+            *(jl_value_t**)(data + jl_field_offset(type, i)) = NULL;
         }
         else {
             jl_value_t *ft = jl_field_type(type, i);
             if (jl_is_uniontype(ft)) {
-                uint8_t *psel = &((uint8_t *)jv)[jl_field_offset(type, i) + jl_field_size(type, i) - 1];
+                uint8_t *psel = &((uint8_t *)data)[jl_field_offset(type, i) + jl_field_size(type, i) - 1];
                 *psel = 0;
             }
         }
@@ -923,6 +924,10 @@ static void init_struct_tail(jl_datatype_t *type, jl_value_t *jv, size_t na)
 JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
+    if (!jl_is_datatype(type) || type->layout == NULL)
+        jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
+    if (type->ninitialized > na || na > jl_datatype_nfields(type))
+        jl_error("invalid struct allocation");
     if (type->instance != NULL) {
         for (size_t i = 0; i < na; i++) {
             jl_value_t *ft = jl_field_type(type, i);
@@ -931,15 +936,13 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, 
         }
         return type->instance;
     }
-    if (type->layout == NULL)
-        jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
     jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
     JL_GC_PUSH1(&jv);
     for (size_t i = 0; i < na; i++) {
         jl_value_t *ft = jl_field_type(type, i);
         if (!jl_isa(args[i], ft))
             jl_type_error("new", ft, args[i]);
-        jl_set_nth_field(jv, i, args[i]);
+        set_nth_field(type, (void*)jv, i, args[i]);
     }
     init_struct_tail(type, jv, na);
     JL_GC_POP();
@@ -951,7 +954,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
     jl_ptls_t ptls = jl_get_ptls_states();
     if (!jl_is_tuple(tup))
         jl_type_error("new", (jl_value_t*)jl_tuple_type, tup);
-    if (type->layout == NULL)
+    if (!jl_is_datatype(type) || type->layout == NULL)
         jl_type_error("new", (jl_value_t *)jl_datatype_type, (jl_value_t *)type);
     size_t nargs = jl_nfields(tup);
     size_t nf = jl_datatype_nfields(type);
@@ -975,7 +978,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
         fi = jl_get_nth_field(tup, i);
         if (!jl_isa(fi, ft))
             jl_type_error("new", ft, fi);
-        jl_set_nth_field(jv, i, fi);
+        set_nth_field(type, (void*)jv, i, fi);
     }
     JL_GC_POP();
     return jv;
@@ -1074,9 +1077,8 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
     return undefref_check((jl_datatype_t*)ty, jl_new_bits(ty, (char*)v + offs));
 }
 
-JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs) JL_NOTSAFEPOINT
+void set_nth_field(jl_datatype_t *st, void *v, size_t i, jl_value_t *rhs) JL_NOTSAFEPOINT
 {
-    jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     size_t offs = jl_field_offset(st, i);
     if (jl_field_isptr(st, i)) {
         *(jl_value_t**)((char*)v + offs) = rhs;
