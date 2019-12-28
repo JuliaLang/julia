@@ -7140,3 +7140,10 @@ end
 struct SplatBadIterate; end
 Base.iterate(s::SplatBadIterate, args...) = ()
 @test_throws BoundsError (SplatBadIterate()...,)
+
+# Issue #34206/34207
+function mre34206(a)
+    b = ntuple(_ -> view(a, :), 1)[1]
+    b.offset1
+end
+@test mre34206([44]) == 0

@@ -2892,20 +2892,22 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         jl_value_t *jt = jl_tparam0(utt);
                         if (jl_is_vararg_type(jt))
                             jt = jl_unwrap_vararg(jt);
-                        Value *vidx = emit_unbox(ctx, T_size, fld, (jl_value_t*)jl_long_type);
-                        // This is not necessary for correctness, but allows to omit
-                        // the extra code for getting the length of the tuple
-                        jl_value_t *boundscheck = (nargs == 3 ? argv[3].constant : jl_true);
-                        if (!bounds_check_enabled(ctx, boundscheck)) {
-                            vidx = ctx.builder.CreateSub(vidx, ConstantInt::get(T_size, 1));
-                        } else {
-                            vidx = emit_bounds_check(ctx, obj, (jl_value_t*)obj.typ, vidx,
-                                emit_datatype_nfields(ctx, emit_typeof_boxed(ctx, obj)),
-                                jl_true);
+                        if (jl_is_datatype(jt) && ((jl_datatype_t*)jt)->isinlinealloc) {
+                            Value *vidx = emit_unbox(ctx, T_size, fld, (jl_value_t*)jl_long_type);
+                            // This is not necessary for correctness, but allows to omit
+                            // the extra code for getting the length of the tuple
+                            jl_value_t *boundscheck = (nargs == 3 ? argv[3].constant : jl_true);
+                            if (!bounds_check_enabled(ctx, boundscheck)) {
+                                vidx = ctx.builder.CreateSub(vidx, ConstantInt::get(T_size, 1));
+                            } else {
+                                vidx = emit_bounds_check(ctx, obj, (jl_value_t*)obj.typ, vidx,
+                                    emit_datatype_nfields(ctx, emit_typeof_boxed(ctx, obj)),
+                                    jl_true);
+                            }
+                            Value *ptr = maybe_decay_tracked(data_pointer(ctx, obj));
+                            *ret = typed_load(ctx, ptr, vidx, jt, obj.tbaa, nullptr, false);
+                            return true;
                         }
-                        Value *ptr = maybe_decay_tracked(data_pointer(ctx, obj));
-                        *ret = typed_load(ctx, ptr, vidx, jt, obj.tbaa, nullptr, false);
-                        return true;
                     }
                 }
             }
