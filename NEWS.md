@@ -80,6 +80,10 @@ Standard library changes
 
 #### SparseArrays
 
+* The return value of `zero(x::AbstractSparseArray)` has no stored zeros anymore ([#31835]).
+  Previously, it would have stored zeros wherever `x` had them. This makes the operation
+  constant time instead of `O(<number of stored values>)`.
+
 #### Dates
 
 #### Statistics
