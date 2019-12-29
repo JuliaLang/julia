@@ -65,6 +65,8 @@ Standard library changes
 
 * `methods` now accepts passing a module (or a list thereof) to filter methods defined in it ([#33403]).
 
+* `delete!` on `WeakKeyDict`s now returns the `WeakKeyDict` itself instead of the underlying `Dict` used for implementation
+
 #### Libdl
 
 #### LinearAlgebra
