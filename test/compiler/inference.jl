@@ -2485,3 +2485,10 @@ end
 # constant prop of `Symbol("")`
 f_getf_computed_symbol(p) = getfield(p, Symbol("first"))
 @test Base.return_types(f_getf_computed_symbol, Tuple{Pair{Int8,String}}) == [Int8]
+
+# issue #33954
+struct X33954
+    x::Ptr{X33954}
+end
+f33954(x) = rand(Bool) ? f33954((x,)) : x
+@test Base.return_types(f33954, Tuple{X33954})[1] >: X33954
