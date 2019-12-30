@@ -856,6 +856,7 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
 
     wkd = WeakKeyDict(A=>1)
     @test delete!(wkd, A) == empty(wkd)
+    @test delete!(wkd, A) === wkd
 
     # issue #26939
     d26939 = WeakKeyDict()
