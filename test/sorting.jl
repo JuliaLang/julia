@@ -138,6 +138,26 @@ end
         @test searchsortedlast(500:1.0:600, -1.0e20) == 0
         @test searchsortedlast(500:1.0:600, 1.0e20) == 101
     end
+
+    @testset "issue #34157" begin
+        @test searchsortedfirst(10:20, -Inf) == 1
+        @test searchsortedfirst(10:20, Inf) == 12
+        @test searchsortedlast(10:20, -Inf) == 0
+        @test searchsortedlast(10:20, Inf) == 11
+
+        @test searchsortedfirst(2:2:4, Inf) == 3
+        @test searchsortedfirst(2:2:4, -Inf) == 1
+        @test searchsortedlast(2:2:4, Inf) == 2
+        @test searchsortedlast(2:2:4, -Inf) == 0
+
+        @test searchsorted(1:2.0, -Inf) === 1:0
+        @test searchsorted([1,2], -Inf) === 1:0
+        @test searchsorted(1:2,   -Inf) === 1:0
+
+        @test searchsorted(1:2.0, Inf) === 3:2
+        @test searchsorted([1,2], Inf) === 3:2
+        @test searchsorted(1:2,   Inf) === 3:2
+    end
 end
 # exercise the codepath in searchsorted* methods for ranges that check for zero step range
 struct ConstantRange{T} <: AbstractRange{T}
