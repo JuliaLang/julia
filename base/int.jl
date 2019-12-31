@@ -173,8 +173,8 @@ signed(x::BitUnsigned) = reinterpret(typeof(convert(Signed, zero(x))), x)
 
 Return the corresponding unsigned type for type `T`.
 
-!!! compat "Julia 1.2"
-    This method requires Julia 1.2 or later.
+!!! compat "Julia 1.4"
+    signed(T)/unsigned(T) on Types requires Julia 1.4 or later.
 
 # Examples
 ```jldoctest
@@ -189,8 +189,8 @@ unsigned(::Type{T}) where {T<:Unsigned} = T
 
 Return the corresponding signed type for type `T`.
 
-!!! compat "Julia 1.2"
-    This method requires Julia 1.2 or later.
+!!! compat "Julia 1.4"
+    signed(T)/unsigned(T) on Types requires Julia 1.4 or later.
 
 #Examples
 ```jldoctest
