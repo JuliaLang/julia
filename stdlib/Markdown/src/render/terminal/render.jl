@@ -116,6 +116,10 @@ function term(io::IO, br::HorizontalRule, columns)
    print(io, ' '^margin, '─'^(columns - 2margin))
 end
 
+function term(io::IO, msg::Message, columns)
+    printstyled(io, msg.msg; msg.fmt...)
+end
+
 term(io::IO, x, _) = show(io, MIME"text/plain"(), x)
 
 # Inline Content

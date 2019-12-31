@@ -1040,6 +1040,26 @@ for line in ["′", "abstract", "type", "|=", ".="]
         sprint(show, Base.eval(REPL._helpmode(IOBuffer(), line))::Union{Markdown.MD,Nothing}))
 end
 
+# Issue #25930
+module BriefExtended
+"""
+    f()
+
+Short docs
+
+# Extended help
+
+Long docs
+"""
+f() = nothing
+end # module BriefExtended
+buf = IOBuffer()
+md = Base.eval(REPL._helpmode(buf, "$(@__MODULE__).BriefExtended.f"))
+@test length(md.content) == 2 && isa(md.content[2], Markdown.Message)
+buf = IOBuffer()
+md = Base.eval(REPL._helpmode(buf, "?$(@__MODULE__).BriefExtended.f"))
+@test length(md.content) == 1 && length(md.content[1].content[1].content) == 4
+
 # PR #27562
 fake_repl() do stdin_write, stdout_read, repl
     repltask = @async begin

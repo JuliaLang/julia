@@ -60,4 +60,30 @@ import Base.Docs: catdoc
 
 catdoc(md::MD...) = MD(md...)
 
+function trimdocs(md::MD, brief::Bool)
+    brief || return md
+    md, trimmed = _trimdocs(md, brief)
+    if trimmed
+        push!(md.content, Message("Extended help is available with `??`", (color=Base.info_color(), bold=true)))
+    end
+    return md
+end
+
+function _trimdocs(md::MD, brief::Bool)
+    content, trimmed = [], false
+    for c in md.content
+        if isa(c, Header{1}) && isa(c.text, AbstractArray) &&
+                                lowercase(c.text[1]) == "extended help"
+            trimmed = true
+            break
+        end
+        c, trm = _trimdocs(c, brief)
+        trimmed |= trm
+        push!(content, c)
+    end
+    return MD(content, md.meta), trimmed
+end
+
+_trimdocs(md, brief::Bool) = md, false
+
 end
