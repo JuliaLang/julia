@@ -23,6 +23,8 @@ New library functions
 
 New library features
 --------------------
+- `RefArray` and `RefValue` objects now accept index
+  `CartesianIndices(())` in `getindex` and `setindex!` ([#34228])
 
 
 Standard library changes
