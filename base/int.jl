@@ -182,8 +182,8 @@ julia> unsigned(Int8)
 UInt8
 ```
 """
-unsigned(::Type{T}) where {T<:BitSigned} = typeof(unsigned(zero(T)))
 unsigned(::Type{T}) where {T<:Unsigned} = T
+unsigned(::Type{T}) where {T<:BitSigned} = typeof(unsigned(zero(T)))
 """
     signed(T::Type)
 
@@ -198,8 +198,8 @@ julia> signed(UInt8)
 Int8
 ```
 """
-signed(::Type{T}) where {T<:Unsigned} = typeof(signed(zero(T)))
-signed(::Type{T}) where {T<:BitSigned} = T
+signed(::Type{T}) where {T<:Signed} = T
+signed(::Type{T}) where {T<:BitUnsigned} = typeof(signed(zero(T)))
 
 
 div(x::BitSigned, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)), y)), x)
