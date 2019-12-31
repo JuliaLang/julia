@@ -1,0 +1,27 @@
+commit 7f4a96a353c06c2fdecb0b2464800bcf8fab6fd7
+Author: Keno Fischer <keno@juliacomputing.com>
+Date:   Sun Dec 29 15:08:13 2019 -0500
+
+    win32: Don't run cleanup if we're about to exit anyway
+    
+    If the process is about to exit, there's no point trying to do
+    a bunch of work to clean up resources. The kernel will release
+    them much more efficiently when the process exits at the end
+    of this function.
+
+diff --git a/exports/dllinit.c b/exports/dllinit.c
+index 02ff092e..56aafa95 100644
+--- a/exports/dllinit.c
++++ b/exports/dllinit.c
+@@ -48,7 +48,10 @@ BOOL APIENTRY DllMain(HINSTANCE hInst, DWORD reason, LPVOID reserved) {
+   }
+ 
+   if (reason == DLL_PROCESS_DETACH) {
+-    gotoblas_quit();
++    // If the process is about to exit, don't bother releasing any resources
++    // The kernel is much better at bulk releasing then.
++    if (!reserved)
++      gotoblas_quit();
+   }
+ 
+   return TRUE;
