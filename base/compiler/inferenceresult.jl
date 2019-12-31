@@ -9,20 +9,15 @@ mutable struct InferenceResult
     result # ::Type, or InferenceState if WIP
     src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
     function InferenceResult(linfo::MethodInstance, given_argtypes = nothing)
-        if isdefined(linfo, :inferred_const)
-            result = Const(linfo.inferred_const)
-        else
-            result = linfo.rettype
-        end
         argtypes, overridden_by_const = matching_cache_argtypes(linfo, given_argtypes)
-        return new(linfo, argtypes, overridden_by_const, result, nothing)
+        return new(linfo, argtypes, overridden_by_const, Any, nothing)
     end
 end
 
 function is_argtype_match(@nospecialize(given_argtype),
                           @nospecialize(cache_argtype),
                           overridden_by_const::Bool)
-    if isa(given_argtype, Const) || isa(given_argtype, PartialTuple)
+    if isa(given_argtype, Const) || isa(given_argtype, PartialStruct)
         return is_lattice_equal(given_argtype, cache_argtype)
     end
     return !overridden_by_const
@@ -66,7 +61,7 @@ function matching_cache_argtypes(linfo::MethodInstance, ::Nothing)
     nargs::Int = toplevel ? 0 : linfo.def.nargs
     cache_argtypes = Vector{Any}(undef, nargs)
     # First, if we're dealing with a varargs method, then we set the last element of `args`
-    # to the appropriate `Tuple` type or `PartialTuple` instance.
+    # to the appropriate `Tuple` type or `PartialStruct` instance.
     if !toplevel && linfo.def.isva
         if linfo.specTypes == Tuple
             if nargs > 1

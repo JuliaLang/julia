@@ -42,11 +42,17 @@ import .Base:
     IOError, _UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
     bytesavailable, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
-    rawhandle, OS_HANDLE, INVALID_OS_HANDLE
+    rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror
+
+import .Base.RefValue
 
 if Sys.iswindows()
     import .Base: cwstring
 end
+
+# Average buffer size including null terminator for several filesystem operations.
+# On Windows we use the MAX_PATH = 260 value on Win32.
+const AVG_PATH = Sys.iswindows() ? 260 : 512
 
 include("path.jl")
 include("stat.jl")
@@ -63,7 +69,7 @@ mutable struct File <: AbstractFile
     File(fd::OS_HANDLE) = new(true, fd)
 end
 if OS_HANDLE !== RawFD
-    File(fd::RawFD) = File(Libc._get_osfhandle(fd))
+    File(fd::RawFD) = File(Libc._get_osfhandle(fd)) # TODO: calling close would now destroy the wrong handle
 end
 
 rawhandle(file::File) = file.handle
@@ -75,8 +81,8 @@ function open(path::AbstractString, flags::Integer, mode::Integer=0)
     try
         ret = ccall(:uv_fs_open, Int32,
                     (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Int32, Int32, Ptr{Cvoid}),
-                    eventloop(), req, path, flags, mode, C_NULL)
-        handle = ccall(:jl_uv_fs_result, Cssize_t, (Ptr{Cvoid},), req)
+                    C_NULL, req, path, flags, mode, C_NULL)
+        handle = ccall(:uv_fs_get_result, Cssize_t, (Ptr{Cvoid},), req)
         ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
         uv_error("open", ret)
     finally # conversion to Cstring could cause an exception
@@ -94,21 +100,28 @@ function check_open(f::File)
 end
 
 function close(f::File)
-    check_open(f)
-    err = ccall(:jl_fs_close, Int32, (OS_HANDLE,), f.handle)
-    uv_error("close", err)
-    f.handle = INVALID_OS_HANDLE
-    f.open = false
-    return nothing
+    if isopen(f)
+        f.open = false
+        err = ccall(:jl_fs_close, Int32, (OS_HANDLE,), f.handle)
+        f.handle = INVALID_OS_HANDLE
+        uv_error("close", err)
+    end
+    nothing
 end
 
-# sendfile is the most efficient way to copy a file (or any file descriptor)
+# sendfile is the most efficient way to copy from a file descriptor
 function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
     check_open(dst)
     check_open(src)
-    err = ccall(:jl_fs_sendfile, Int32, (OS_HANDLE, OS_HANDLE, Int64, Csize_t),
-                src.handle, dst.handle, src_offset, bytes)
-    uv_error("sendfile", err)
+    while true
+        result = ccall(:jl_fs_sendfile, Int32, (OS_HANDLE, OS_HANDLE, Int64, Csize_t),
+                       src.handle, dst.handle, src_offset, bytes)
+        uv_error("sendfile", result)
+        nsent = result
+        bytes -= nsent
+        src_offset += nsent
+        bytes <= 0 && break
+    end
     nothing
 end
 
@@ -127,7 +140,7 @@ function truncate(f::File, n::Integer)
     req = Libc.malloc(_sizeof_uv_fs)
     err = ccall(:uv_fs_ftruncate, Int32,
                 (Ptr{Cvoid}, Ptr{Cvoid}, OS_HANDLE, Int64, Ptr{Cvoid}),
-                eventloop(), req, f.handle, n, C_NULL)
+                C_NULL, req, f.handle, n, C_NULL)
     Libc.free(req)
     uv_error("ftruncate", err)
     return f
@@ -138,7 +151,7 @@ function futime(f::File, atime::Float64, mtime::Float64)
     req = Libc.malloc(_sizeof_uv_fs)
     err = ccall(:uv_fs_futime, Int32,
                 (Ptr{Cvoid}, Ptr{Cvoid}, OS_HANDLE, Float64, Float64, Ptr{Cvoid}),
-                eventloop(), req, f.handle, atime, mtime, C_NULL)
+                C_NULL, req, f.handle, atime, mtime, C_NULL)
     Libc.free(req)
     uv_error("futime", err)
     return f
@@ -153,7 +166,7 @@ end
 
 function read(f::File, ::Type{Char})
     b0 = read(f, UInt8)
-    l = 8(4-leading_ones(b0))
+    l = 8 * (4 - leading_ones(b0))
     c = UInt32(b0) << 24
     if l < 24
         s = 16
@@ -170,6 +183,7 @@ function read(f::File, ::Type{Char})
     end
     return reinterpret(Char, c)
 end
+
 read(f::File, ::Type{T}) where {T<:AbstractChar} = T(read(f, Char)) # fallback
 
 function unsafe_read(f::File, p::Ptr{UInt8}, nel::UInt)

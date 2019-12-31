@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Core: LineInfoNode
-const NullLineInfo = LineInfoNode(@__MODULE__, Symbol(""), Symbol(""), 0, 0)
 
 if false
     import Base: Base, @show
@@ -35,7 +34,7 @@ end
 
 function normalize(@nospecialize(stmt), meta::Vector{Any})
     if isa(stmt, Expr)
-        if stmt.head == :meta
+        if stmt.head === :meta
             args = stmt.args
             if length(args) > 0
                 push!(meta, stmt)
@@ -103,10 +102,9 @@ function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, sv::Opt
     defuse_insts = scan_slot_def_use(nargs, ci, code)
     @timeit "domtree 1" domtree = construct_domtree(cfg)
     ir = let code = Any[nothing for _ = 1:length(code)]
-             argtypes = sv.slottypes[1:(nargs+1)]
-            IRCode(code, Any[], ci.codelocs, flags, cfg, collect(LineInfoNode, ci.linetable), argtypes, meta, sv.sp)
+            IRCode(code, Any[], ci.codelocs, flags, cfg, collect(LineInfoNode, ci.linetable), sv.slottypes, meta, sv.sptypes)
         end
-    @timeit "construct_ssa" ir = construct_ssa!(ci, code, ir, domtree, defuse_insts, nargs, sv.sp, sv.slottypes)
+    @timeit "construct_ssa" ir = construct_ssa!(ci, code, ir, domtree, defuse_insts, nargs, sv.sptypes, sv.slottypes)
     return ir
 end
 

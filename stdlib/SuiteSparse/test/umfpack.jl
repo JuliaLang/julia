@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using SuiteSparse: increment!
+using Serialization
 using LinearAlgebra: Adjoint, Transpose, SingularException
 
 @testset "UMFPACK wrappers" begin
@@ -176,4 +177,32 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
         end
     end
 
+    @testset "deserialization" begin
+        A  = 10*I + sprandn(10, 10, 0.4)
+        F1 = lu(A)
+        b  = IOBuffer()
+        serialize(b, F1)
+        seekstart(b)
+        F2 = deserialize(b)
+        for nm in (:colptr, :m, :n, :nzval, :rowval, :status)
+            @test getfield(F1, nm) == getfield(F2, nm)
+        end
+    end
+
+end
+
+@testset "REPL printing of UmfpackLU" begin
+    # regular matrix
+    A = sparse([1, 2], [1, 2], Float64[1.0, 1.0])
+    F = lu(A)
+    facstring = sprint((t, s) -> show(t, "text/plain", s), F)
+    lstring = sprint((t, s) -> show(t, "text/plain", s), F.L)
+    ustring = sprint((t, s) -> show(t, "text/plain", s), F.U)
+    @test facstring == "$(summary(F))\nL factor:\n$lstring\nU factor:\n$ustring"
+
+    # singular matrix
+    B = sparse(zeros(Float64, 2, 2))
+    F = lu(B; check=false)
+    facstring = sprint((t, s) -> show(t, "text/plain", s), F)
+    @test facstring == "Failed factorization of type $(summary(F))"
 end

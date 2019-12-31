@@ -266,6 +266,14 @@ let s = "\"C:\\\\ \\alpha"
     @test length(c) == 1
 end
 
+# test latex symbol completion in getindex expressions (#24705)
+let s = "tuple[\\alpha"
+    c, r, res = test_complete_context(s)
+    @test c[1] == "α"
+    @test r == 7:12
+    @test length(c) == 1
+end
+
 let s = "\\a"
     c, r, res = test_complete(s)
     "\\alpha" in c
@@ -709,7 +717,7 @@ mktempdir() do path
             s = Sys.iswindows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
             c, r = test_complete(s)
             @test r == lastindex(s)-4:lastindex(s)
-            @test "space\\ .file\"" in c
+            @test "space .file\"" in c
         end
         # Test for issue #10324
         s = "cd(\"$dir_space"
@@ -863,7 +871,7 @@ function test_dict_completion(dict_name)
     @test c == Any[":α]"]
     s = "$dict_name["
     c, r = test_complete(s)
-    @test !isempty(c)
+    @test c == sort!(repr.(keys(Main.CompletionFoo.test_dict)))
 end
 test_dict_completion("CompletionFoo.test_dict")
 test_dict_completion("CompletionFoo.test_customdict")
@@ -960,6 +968,16 @@ let s = "type_test.xx.y"
     @test s[r] == "y"
 end
 
+let s = ":(function foo(::Int) end).args[1].args[2]."
+    c, r = test_complete_context(s)
+    @test c == Any[]
+end
+
+let s = "log(log.(x),"
+    c, r = test_complete_context(s)
+    @test !isempty(c)
+end
+
 let s = "Base.return_types(getin"
     c, r = test_complete_context(s)
     @test "getindex" in c
@@ -977,6 +995,14 @@ let s = "test(1,1, "
     @test !res
     @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Int, Int})))
     @test length(c) == 3
+    @test r == 1:4
+    @test s[r] == "test"
+end
+
+let s = "test.(1,1, "
+    c, r, res = test_complete_context(s)
+    @test !res
+    @test length(c) == 4
     @test r == 1:4
     @test s[r] == "test"
 end

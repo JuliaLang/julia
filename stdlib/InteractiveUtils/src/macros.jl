@@ -99,7 +99,7 @@ function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0)
     arg = ex0[end] # Mandatory argument
     for i in 1:length(ex0)-1
         x = ex0[i]
-        if x isa Expr && x.head == :(=) # Keyword given of the form "foo=bar"
+        if x isa Expr && x.head === :(=) # Keyword given of the form "foo=bar"
             push!(kwargs, x.args)
         else
             return Expr(:call, :error, "@$fcn expects only one non-keyword argument")
@@ -229,7 +229,7 @@ by putting them and their value before the function call, like this:
 
 `optimize` controls whether additional optimizations, such as inlining, are also applied.
 `raw` makes all metadata and dbg.* calls visible.
-`debuginfo` may be one of full, source (default), none, to specify the verbosity of code comments.
+`debuginfo` may be one of `:source` (default) or `:none`,  to specify the verbosity of code comments.
 `dump_module` prints the entire module that encapsulates the function.
 """
 :@code_llvm
@@ -244,6 +244,6 @@ Set the optional keyword argument `debuginfo` by putting it before the function 
 
     @code_native debuginfo=:default f(x)
 
-`debuginfo` may be one of source (default) or none, to specify the verbosity of code comments.
+`debuginfo` may be one of `:source` (default) or `:none`, to specify the verbosity of code comments.
 """
 :@code_native

@@ -1,5 +1,7 @@
 ## DSFMT ##
 
+ifneq ($(USE_BINARYBUILDER_DSFMT),1)
+
 DSFMT_CFLAGS := $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES
 ifneq ($(USEMSVC), 1)
 DSFMT_CFLAGS += -O3 -finline-functions -fomit-frame-pointer -fno-strict-aliasing \
@@ -60,3 +62,11 @@ configure-dsfmt: extract-dsfmt
 compile-dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/build-compiled
 fastcheck-dsfmt: check-dsfmt
 check-dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/build-checked
+
+else
+
+DSFMT_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/dSFMT-v$(DSFMT_VER)-$(DSFMT_BB_REL)
+DSFMT_BB_NAME := dSFMT.v$(DSFMT_VER)
+$(eval $(call bb-install,dsfmt,DSFMT,false))
+
+endif # USE_BINARYBUILDER_DSFMT

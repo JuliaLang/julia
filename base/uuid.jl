@@ -65,3 +65,8 @@ end
 
 print(io::IO, u::UUID) = print(io, string(u))
 show(io::IO, u::UUID) = print(io, "UUID(\"", u, "\")")
+
+isless(a::UUID, b::UUID) = isless(a.value, b.value)
+
+# give UUID scalar behavior in broadcasting
+Base.broadcastable(x::UUID) = Ref(x)

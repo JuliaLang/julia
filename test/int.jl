@@ -60,6 +60,7 @@ end
     @test isa(signed(UInt(3)), Int)
     @test signed(UInt(0) - 1) === -1
     @test_throws InexactError signed(UInt(-3))  # Note that UInt() throws, not signed().
+    @test signed(true) == 1
 end
 @testset "unsigned" begin
     @test unsigned(3) === UInt(3)
@@ -67,6 +68,8 @@ end
     @test isa(unsigned(3), UInt)
     @test unsigned(-1) === typemax(UInt)
     @test_throws InexactError unsigned(Int(typemax(UInt)))  # Int(0xffffffff...) throws
+    @test unsigned(true) isa Unsigned
+    @test unsigned(true) == unsigned(1)
 end
 @testset "[un]signed(::Type{T})" begin
     @testset for (T,UT) in ((Int8,UInt8), (Int,UInt), (Int128,UInt128))
@@ -75,6 +78,7 @@ end
         @test signed(T) === T
         @test signed(UT) === T
     end
+    @test signed(typeof(0x3))(0x3) === signed(0x3)
     @test unsigned(typeof(3))(3) === unsigned(3)
 end
 @testset "bswap" begin
@@ -313,3 +317,55 @@ struct MyInt26779 <: Integer
 end
 @test promote_type(MyInt26779, Int) == Integer
 @test_throws ErrorException MyInt26779(1) + 1
+let i = MyInt26779(1)
+    @test_throws MethodError i >> 1
+    @test_throws MethodError i << 1
+    @test_throws MethodError i >>> 1
+end
+
+@testset "rounding division" begin
+    for x = -100:100
+        for y = 1:100
+            for rnd in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp)
+                @test div(x,y,rnd) == round(x/y,rnd)
+                @test div(x,-y,rnd) == round(x/-y,rnd)
+            end
+        end
+    end
+    for (a, b, nearest, away, up) in (
+            (3, 2, 2, 2, 2),
+            (5, 3, 2, 2, 2),
+            (-3, 2, -2, -2, -1),
+            (5, 2, 2, 3, 3),
+            (-5, 2, -2, -3, -2),
+            (-5, 3, -2, -2, -2),
+            (5, -3, -2, -2, -2))
+        for sign in (+1, -1)
+            (a, b) = (a*sign, b*sign)
+            @test div(a, b, RoundNearest) == nearest
+            @test div(a, b, RoundNearestTiesAway) == away
+            @test div(a, b, RoundNearestTiesUp) == up
+        end
+    end
+
+    @test div(typemax(Int64), typemax(Int64)-1, RoundNearest) == 1
+    @test div(-typemax(Int64), typemax(Int64)-1, RoundNearest) == -1
+    @test div(typemax(Int64), 2, RoundNearest) == 4611686018427387904
+    @test div(-typemax(Int64), 2, RoundNearestTiesUp) == -4611686018427387903
+    @test div(typemax(Int)-2, typemax(Int), RoundNearest) == 1
+
+    # Exhaustively test (U)Int8 to catch any overflow-style issues
+    for r in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp)
+        for T in (UInt8, Int8)
+            for x in typemin(T):typemax(T)
+                for y in typemin(T):typemax(T)
+                    if y == 0 || (T <: Signed && x == typemin(T) && y == -1)
+                        @test_throws DivideError div(x, y, r)
+                    else
+                        @test div(x, y, r) == T(div(widen(T)(x), widen(T)(y), r))
+                    end
+                end
+            end
+        end
+    end
+end

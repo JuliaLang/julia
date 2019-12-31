@@ -9,7 +9,10 @@ using LinearAlgebra
 import LinearAlgebra: Factorization, det, lu, ldiv!
 
 using SparseArrays
+using SparseArrays: getcolptr
 import SparseArrays: nnz
+
+import Serialization: AbstractSerializer, deserialize
 
 import ..increment, ..increment!, ..decrement, ..decrement!
 
@@ -149,11 +152,11 @@ The relation between `F` and `A` is
     `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}` as appropriate.
 """
 function lu(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes}; check::Bool = true)
-    zerobased = S.colptr[1] == 0
-    res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
-                    zerobased ? copy(S.colptr) : decrement(S.colptr),
-                    zerobased ? copy(S.rowval) : decrement(S.rowval),
-                    copy(S.nzval), 0)
+    zerobased = getcolptr(S)[1] == 0
+    res = UmfpackLU(C_NULL, C_NULL, size(S, 1), size(S, 2),
+                    zerobased ? copy(getcolptr(S)) : decrement(getcolptr(S)),
+                    zerobased ? copy(rowvals(S)) : decrement(rowvals(S)),
+                    copy(nonzeros(S)), 0)
     finalizer(umfpack_free_symbolic, res)
     umfpack_numeric!(res)
     check && (issuccess(res) || throw(LinearAlgebra.SingularException(0)))
@@ -187,15 +190,40 @@ function size(F::UmfpackLU, dim::Integer)
     end
 end
 
-function show(io::IO, F::UmfpackLU)
-    print(io, "UMFPACK LU Factorization of a $(size(F)) sparse matrix")
-    F.numeric != C_NULL && print(io, '\n', F.numeric)
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::UmfpackLU)
+    if F.numeric != C_NULL
+        if issuccess(F)
+            summary(io, F); println(io)
+            println(io, "L factor:")
+            show(io, mime, F.L)
+            println(io, "\nU factor:")
+            show(io, mime, F.U)
+        else
+            print(io, "Failed factorization of type $(typeof(F))")
+        end
+    end
+end
+
+function deserialize(s::AbstractSerializer, t::Type{UmfpackLU{Tv,Ti}}) where {Tv,Ti}
+    symbolic = deserialize(s)
+    numeric  = deserialize(s)
+    m        = deserialize(s)
+    n        = deserialize(s)
+    colptr   = deserialize(s)
+    rowval   = deserialize(s)
+    nzval    = deserialize(s)
+    status   = deserialize(s)
+    obj      = UmfpackLU{Tv,Ti}(symbolic, numeric, m, n, colptr, rowval, nzval, status)
+
+    finalizer(umfpack_free_symbolic, obj)
+
+    return obj
 end
 
 ## Wrappers for UMFPACK functions
 
 # generate the name of the C function according to the value and integer types
-umf_nm(nm,Tv,Ti) = "umfpack_" * (Tv == :Float64 ? "d" : "z") * (Ti == :Int64 ? "l_" : "i_") * nm
+umf_nm(nm,Tv,Ti) = "umfpack_" * (Tv === :Float64 ? "d" : "z") * (Ti === :Int64 ? "l_" : "i_") * nm
 
 for itype in UmfpackIndexTypes
     sym_r = umf_nm("symbolic", :Float64, itype)
@@ -468,20 +496,20 @@ end
 
 
 @inline function getproperty(lu::UmfpackLU, d::Symbol)
-    if d == :L || d == :U || d == :p || d == :q || d == :Rs || d == :(:)
+    if d === :L || d === :U || d === :p || d === :q || d === :Rs || d === :(:)
         # Guard the call to umf_extract behaind a branch to avoid infinite recursion
         L, U, p, q, Rs = umf_extract(lu)
-        if d == :L
+        if d === :L
             return L
-        elseif d == :U
+        elseif d === :U
             return U
-        elseif d == :p
+        elseif d === :p
             return p
-        elseif d == :q
+        elseif d === :q
             return q
-        elseif d == :Rs
+        elseif d === :Rs
             return Rs
-        elseif d == :(:)
+        elseif d === :(:)
             return (L, U, p, q, Rs)
         end
     else

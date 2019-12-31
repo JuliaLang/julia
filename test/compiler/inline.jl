@@ -217,3 +217,51 @@ function f_div(x, y)
     return x
 end
 @test length(code_typed(f_div, (Int, Int))[1][1].code) > 1
+
+f_identity_splat(t) = (t...,)
+@test length(code_typed(f_identity_splat, (Tuple{Int,Int},))[1][1].code) == 1
+
+# check that <: can be fully eliminated
+struct SomeArbitraryStruct; end
+function f_subtype()
+    T = SomeArbitraryStruct
+    T <: Bool
+end
+let code = code_typed(f_subtype, Tuple{})[1][1].code
+    @test length(code) == 1
+    @test code[1] == Expr(:return, false)
+end
+
+# check that pointerref gets deleted if unused
+f_pointerref(T::Type{S}) where S = Val(length(T.parameters))
+let code = code_typed(f_pointerref, Tuple{Type{Int}})[1][1].code
+    any_ptrref = false
+    for i = 1:length(code)
+        stmt = code[i]
+        isa(stmt, Expr) || continue
+        stmt.head === :call || continue
+        arg1 = stmt.args[1]
+        if arg1 === Base.pointerref || (isa(arg1, GlobalRef) && arg1.name === :pointerref)
+            any_ptrref = true
+        end
+    end
+    @test !any_ptrref
+end
+
+# Test that inlining can inline _applys of builtins/_applys on SimpleVectors
+function foo_apply_apply_type_svec()
+    A = (Tuple, Float32)
+    B = Tuple{Float32, Float32}
+    Core.apply_type(A..., B.types...)
+end
+let ci = code_typed(foo_apply_apply_type_svec, Tuple{})[1].first
+    @test length(ci.code) == 1 && ci.code[1] == Expr(:return, NTuple{3, Float32})
+end
+
+# The that inlining doesn't drop ambiguity errors (#30118)
+c30118(::Tuple{Ref{<:Type}, Vararg}) = nothing
+c30118(::Tuple{Ref, Ref}) = nothing
+b30118(x...) = c30118(x)
+
+@test_throws MethodError c30118((Base.RefValue{Type{Int64}}(), Ref(Int64)))
+@test_throws MethodError b30118(Base.RefValue{Type{Int64}}(), Ref(Int64))

@@ -113,11 +113,14 @@
 #define JL_STACK_SIZE (2*1024*1024)
 #endif
 
+// allow a suspended Task to restart on a different thread
+//#define MIGRATE_TASKS
+
 // threading options ----------------------------------------------------------
 
 // controls for when threads sleep
 #define THREAD_SLEEP_THRESHOLD_NAME     "JULIA_THREAD_SLEEP_THRESHOLD"
-#define DEFAULT_THREAD_SLEEP_THRESHOLD  1e9    // cycles (1e9==1sec@1GHz)
+#define DEFAULT_THREAD_SLEEP_THRESHOLD  4*1000*1000 // nanoseconds (4ms)
 
 // defaults for # threads
 #define NUM_THREADS_NAME                "JULIA_NUM_THREADS"
@@ -128,6 +131,25 @@
 // affinitization behavior
 #define MACHINE_EXCLUSIVE_NAME          "JULIA_EXCLUSIVE"
 #define DEFAULT_MACHINE_EXCLUSIVE       0
+
+// partr -- parallel tasks runtime options ------------------------------------
+
+// multiq
+    // number of heaps = MULTIQ_HEAP_C * nthreads
+#define MULTIQ_HEAP_C                   4
+    // how many in each heap
+#define MULTIQ_TASKS_PER_HEAP           129
+
+// parfor
+    // tasks = niters / (GRAIN_K * nthreads)
+#define GRAIN_K                         4
+
+// synchronization
+    // narrivers = ((GRAIN_K * nthreads) ^ ARRIVERS_P) + 1
+    // limit for number of recursive parfors
+#define ARRIVERS_P                      2
+    // nreducers = narrivers * REDUCERS_FRAC
+#define REDUCERS_FRAC                   1
 
 
 // sanitizer defaults ---------------------------------------------------------

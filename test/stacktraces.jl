@@ -48,7 +48,7 @@ let (default, with_c, without_c) = (stacktrace(), stacktrace(true), stacktrace(f
     @test isempty(filter(frame -> frame.from_c, without_c))
 end
 
-@test StackTraces.lookup(C_NULL) == [StackTraces.UNKNOWN]
+@test StackTraces.lookup(C_NULL) == [StackTraces.UNKNOWN] == StackTraces.lookup(C_NULL + 1) == StackTraces.lookup(C_NULL - 1)
 
 let ct = current_task()
     # After a task switch, there should be nothing in catch_backtrace
@@ -104,7 +104,7 @@ let src = Meta.lower(Main, quote let x = 1 end end).args[1]::Core.CodeInfo,
     li = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ()),
     sf
 
-    li.inferred = src
+    li.uninferred = src
     li.specTypes = Tuple{}
     li.def = @__MODULE__
     sf = StackFrame(:a, :b, 3, li, false, false, 0)
@@ -118,7 +118,7 @@ let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
 end
 
 let ctestptr = cglobal((:ctest, "libccalltest")),
-    ctest = StackTraces.lookup(ctestptr + 1)
+    ctest = StackTraces.lookup(ctestptr)
 
     @test length(ctest) == 1
     @test ctest[1].func === :ctest
@@ -156,4 +156,38 @@ catch
     bt = stacktrace(catch_backtrace())
 end
 @test bt[1].line == topline+4
+end
+
+# issue #28990
+let bt
+try
+    eval(Expr(:toplevel, LineNumberNode(42, :foo), :(error("blah"))))
+catch
+    bt = stacktrace(catch_backtrace())
+end
+@test bt[2].line == 42
+@test bt[2].file === :foo
+end
+
+@noinline f33065(x; b=1.0, a="") = error()
+@noinline f33065(x, y; b=1.0, a="", c...) = error()
+let bt
+    try
+        f33065(0.0f0)
+    catch
+        bt = stacktrace(catch_backtrace())
+    end
+    @test any(s->startswith(string(s), "f33065(::Float32; b::Float64, a::String)"), bt)
+    try
+        f33065(0.0f0, b=:x)
+    catch
+        bt = stacktrace(catch_backtrace())
+    end
+    @test any(s->startswith(string(s), "f33065(::Float32; b::Symbol, a::String)"), bt)
+    try
+        f33065(0.0f0, 0.0f0, z=0)
+    catch
+        bt = stacktrace(catch_backtrace())
+    end
+    @test any(s->startswith(string(s), "f33065(::Float32, ::Float32; b::Float64, a::String, c::"), bt)
 end
