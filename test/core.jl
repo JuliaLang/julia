@@ -7143,7 +7143,12 @@ Base.iterate(s::SplatBadIterate, args...) = ()
 
 # Issue #34206/34207
 function mre34206(a)
-    b = ntuple(_ -> view(a, :), 1)[1]
+function mre34206(a, n)
+    va = view(a, :)
+    b = ntuple(_ -> va, n)::Tuple{Vararg{typeof(va)}}
+    return b[1].offset1
+end
+@test mre34206([44], 1) == 0
     b.offset1
 end
 @test mre34206([44]) == 0
