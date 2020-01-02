@@ -248,6 +248,18 @@ end
     end
 end
 
+@testset "normalize for multidimensional arrays" begin
+    arr = [ [1.0 0.0]; [0.0 1.0] ]
+    @test normalize(arr) == normalize!(copy(arr))
+    
+    arr = [
+            [1.0 0.0 0.0]; 
+            [0.0 1.0 0.0]
+         ]
+    @test normalize(arr) == normalize!(copy(arr))
+    
+end
+
 @testset "Issue #30466" begin
     @test norm([typemin(Int), typemin(Int)], Inf) == -float(typemin(Int))
     @test norm([typemin(Int), typemin(Int)], 1) == -2float(typemin(Int))
