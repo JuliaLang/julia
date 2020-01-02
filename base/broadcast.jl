@@ -875,6 +875,9 @@ end
     end
 end
 
+# Scalar-like assignment to Refs
+@inline copyto!(dest::Ref, bc::Broadcasted{<:AbstractArrayStyle{0}}) = dest[] = materialize(bc)
+
 # For broadcasted assignments like `broadcast!(f, A, ..., A, ...)`, where `A`
 # appears on both the LHS and the RHS of the `.=`, then we know we're only
 # going to make one pass through the array, and even though `A` is aliasing
@@ -1134,6 +1137,8 @@ end
 # explicit calls to view.   (All of this can go away if slices
 # are changed to generate views by default.)
 
+Base.@propagate_inbounds dotview(A::Ref, ::CartesianIndex{0}) = A
+Base.@propagate_inbounds dotview(A::Ref, ::CartesianIndices{0,Tuple{}}) = A
 Base.@propagate_inbounds dotview(args...) = Base.maybeview(args...)
 
 ############################################################

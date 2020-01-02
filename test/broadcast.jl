@@ -421,6 +421,11 @@ end
 @test (+).(1, Ref(2)) == 3
 @test (+).(Ref(1), Ref(2)) == 3
 @test (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1])) == [[1,1], [2,2]]
+let A = zeros(2), a = Ref(A, 1), b = Ref(0.0)
+    a .= sin.(0.5)
+    b .= sin.(0.5)
+    @test a[] == b[] == sin(0.5)
+end
 
 # Check that broadcast!(f, A) populates A via independent calls to f (#12277, #19722),
 # and similarly for broadcast!(f, A, numbers...) (#19799).

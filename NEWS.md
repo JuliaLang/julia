@@ -23,6 +23,7 @@ New library functions
 
 New library features
 --------------------
+- `Ref` objects are now valid assignment locations in broadcast expressions ([#34228])
 
 
 Standard library changes
