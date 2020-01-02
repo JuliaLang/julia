@@ -4314,20 +4314,22 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         for (size_t i = 0; i < nargs; ++i) {
             argv[i] = emit_expr(ctx, args[i]);
         }
-        size_t nargsboxed = 0;
-        Value **vals = (Value**)alloca(sizeof(Value *) * nargs);
+        std::vector<Value*> vals;
         for (size_t i = 0; i < nargs; ++i) {
-            if (!argv[i].isboxed) {
-                // This is intentionally not an error to allow writing
-                // generic code more easily.
+            const jl_cgval_t &ai = argv[i];
+            if (ai.constant)
                 continue;
-            } else if (argv[i].constant) {
-                continue;
+            if (ai.isboxed) {
+                vals.push_back(ai.Vboxed);
             }
-            vals[nargsboxed++] = argv[i].Vboxed;
+            else if (!jl_is_pointerfree(ai.typ)) {
+                Type *at = julia_type_to_llvm(ai.typ);
+                vals.push_back(emit_unbox(ctx, at, ai, ai.typ));
+            }
         }
-        Value *token = ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func),
-            ArrayRef<Value*>(vals, nargsboxed));
+        Value *token = vals.empty()
+            ? (Value*)ConstantTokenNone::get(jl_LLVMContext)
+            : ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func), vals);
         jl_cgval_t tok(token, NULL, false, (jl_value_t*)jl_void_type, NULL);
         return tok;
     }
@@ -4340,7 +4342,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         }
         jl_cgval_t token = emit_expr(ctx, args[0]);
         assert(token.V->getType()->isTokenTy());
-        ctx.builder.CreateCall(prepare_call(gc_preserve_end_func), {token.V});
+        if (!isa<ConstantTokenNone>(token.V))
+            ctx.builder.CreateCall(prepare_call(gc_preserve_end_func), {token.V});
         return jl_cgval_t((jl_value_t*)jl_void_type);
     }
     else {
