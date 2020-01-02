@@ -295,7 +295,7 @@ seed!(seed::Union{Integer,Vector{UInt32}}) = seed!(default_rng(), seed)
 const THREAD_RNGs = MersenneTwister[]
 @inline default_rng() = default_rng(Threads.threadid())
 @noinline function default_rng(tid::Int)
-    @assert 0 < tid <= length(THREAD_RNGs)
+    0 < tid <= length(THREAD_RNGs) || _rng_length_assert()
     if @inbounds isassigned(THREAD_RNGs, tid)
         @inbounds MT = THREAD_RNGs[tid]
     else
@@ -304,6 +304,8 @@ const THREAD_RNGs = MersenneTwister[]
     end
     return MT
 end
+@noinline _rng_length_assert() =  @assert false "0 < tid <= length(THREAD_RNGs)"
+
 function __init__()
     resize!(empty!(THREAD_RNGs), Threads.nthreads()) # ensures that we didn't save a bad object
 end
