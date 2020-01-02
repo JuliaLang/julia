@@ -138,6 +138,21 @@ let s = "Main.CompletionFoo.f"
     @test !("foobar" in c)
 end
 
+# test method completions when `!` operator precedes
+let
+    s = "!is"
+    c, r = test_complete(s)
+    @test "isa" in c
+    @test s[r] == "is"
+    @test !("!" in c)
+
+    s = "!!is"
+    c, r = test_complete(s)
+    @test "isa" in c
+    @test s[r] == "is"
+    @test !("!" in c)
+end
+
 # issue #6424
 let s = "Main.CompletionFoo.@f"
     c, r = test_complete(s)
@@ -300,6 +315,27 @@ let s = "max("
     end
     @test r == 1:3
     @test s[r] == "max"
+end
+
+# test method completions when `!` operator precedes
+let
+    s = "!("
+    c, r, res = test_complete(s)
+    @test !res
+    @test all(m -> string(m) in c, methods(!))
+    @test s[r] == s[1:end-1]
+
+    s = "!isnothing("
+    c, r, res = test_complete(s)
+    @test !res
+    @test all(m -> string(m) in c, methods(isnothing))
+    @test s[r] == s[1:end-1]
+
+    s = "!!isnothing("
+    c, r, res = test_complete(s)
+    @test !res
+    @test all(m -> string(m) in c, methods(isnothing))
+    @test s[r] == s[1:end-1]
 end
 
 # Test completion of methods with input concrete args and args where typeinference determine their type
