@@ -2903,8 +2903,11 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                 emit_datatype_nfields(ctx, emit_typeof_boxed(ctx, obj)),
                                 jl_true);
                         }
+                        bool isboxed = !jl_datatype_isinlinealloc(jt);
                         Value *ptr = maybe_decay_tracked(data_pointer(ctx, obj));
-                        *ret = typed_load(ctx, ptr, vidx, jt, obj.tbaa, nullptr, false);
+                        *ret = typed_load(ctx, ptr, vidx,
+                                isboxed ? (jl_value_t*)jl_any_type : jt,
+                                obj.tbaa, nullptr, false);
                         return true;
                     }
                 }
