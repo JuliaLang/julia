@@ -991,11 +991,8 @@ end
 @testset "getindex and setindex! for Ref" begin
     for x in [Ref(1), Ref([1,2,3], 1)]
         @test getindex(x) == getindex(x, CartesianIndex()) == 1
-        @test getindex(x) == getindex(x, CartesianIndices(())) == 1
         x[CartesianIndex()] = 10
         @test getindex(x) == getindex(x, CartesianIndex()) == 10
-        x[CartesianIndices(())] = 11
-        @test getindex(x) == getindex(x, CartesianIndices(())) == 11
     end
 end
 
