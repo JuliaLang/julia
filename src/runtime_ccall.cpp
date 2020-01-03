@@ -136,18 +136,21 @@ std::string jl_format_filename(StringRef output_pattern)
     for (auto c : output_pattern) {
         if (special) {
             if (!got_pwd && (c == 'i' || c == 'd' || c == 'u')) {
-                uv_os_get_passwd(&pwd);
-                got_pwd = true;
+                int r = uv_os_get_passwd(&pwd);
+                if (r == 0)
+                    got_pwd = true;
             }
             switch (c) {
             case 'p':
                 outfile << jl_getpid();
                 break;
             case 'd':
-                outfile << pwd.homedir;
+                if (got_pwd)
+                    outfile << pwd.homedir;
                 break;
             case 'i':
-                outfile << pwd.uid;
+                if (got_pwd)
+                    outfile << pwd.uid;
                 break;
             case 'l':
             case 'L':
@@ -163,7 +166,8 @@ std::string jl_format_filename(StringRef output_pattern)
 #endif
                 break;
             case 'u':
-                outfile << pwd.username;
+                if (got_pwd)
+                    outfile << pwd.username;
                 break;
             default:
                 outfile << c;
