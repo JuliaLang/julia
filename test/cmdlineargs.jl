@@ -232,7 +232,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
             "<FILENAME>" => realpath(inputfile))
         covfile = replace(joinpath(dir, "coverage.info"), "%" => "%%")
         @test !isfile(covfile)
-        defaultcov = readchomp(`$exename -E "Bool(Base.JLOptions().code_coverage)" -L $inputfile`)
+        defaultcov = readchomp(`$exename -E "Base.JLOptions().code_coverage != 0" -L $inputfile`)
         opts = Base.JLOptions()
         coverage_file = (opts.output_code_coverage != C_NULL) ?  unsafe_string(opts.output_code_coverage) : ""
         @test !isfile(covfile)
@@ -244,30 +244,29 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
             --code-coverage=$covfile --code-coverage`) == "1"
         @test isfile(covfile)
         got = read(covfile, String)
-        @test occursin(expected, got) || got
         rm(covfile)
+        @test occursin(expected, got) || (expected, got)
         @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=user`) == "1"
         @test isfile(covfile)
         got = read(covfile, String)
-        @test occursin(expected, got) || got
         rm(covfile)
+        @test occursin(expected, got) || (expected, got)
         @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=all`) == "2"
         @test isfile(covfile)
         got = read(covfile, String)
-        @test occursin(expected, got) || got
         rm(covfile)
+        @test occursin(expected, got) || (expected, got)
     end
 
     # --track-allocation
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"`) == "false"
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"
-        --track-allocation=none`) == "false"
+    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0"`) == "false"
+    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=none`) == "false"
 
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"
+    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0"
         --track-allocation`) == "true"
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"
+    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0"
         --track-allocation=user`) == "true"
 
     # --optimize

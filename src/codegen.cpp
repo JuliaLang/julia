@@ -1750,7 +1750,7 @@ const int logdata_blocksize = 32; // target getting nearby lines in the same gen
 typedef uint64_t logdata_block[logdata_blocksize];
 typedef StringMap< std::vector<logdata_block*> > logdata_t;
 
-static void visitLine(jl_codectx_t &ctx, std::vector<logdata_block*> &vec, int line, Value *addend, const char* name)
+static uint64_t *allocLine(std::vector<logdata_block*> &vec, int line)
 {
     unsigned block = line / logdata_blocksize;
     line = line % logdata_blocksize;
@@ -1762,8 +1762,14 @@ static void visitLine(jl_codectx_t &ctx, std::vector<logdata_block*> &vec, int l
     logdata_block &data = *vec[block];
     if (data[line] == 0)
         data[line] = 1;
+    return &data[line];
+}
+
+static void visitLine(jl_codectx_t &ctx, std::vector<logdata_block*> &vec, int line, Value *addend, const char* name)
+{
+    uint64_t *ptr = allocLine(vec, line);
     Value *pv = ConstantExpr::getIntToPtr(
-        ConstantInt::get(T_size, (uintptr_t)&data[line]),
+        ConstantInt::get(T_size, (uintptr_t)ptr),
         T_pint64);
     Value *v = ctx.builder.CreateLoad(pv, true, name);
     v = ctx.builder.CreateAdd(v, addend);
@@ -1781,6 +1787,14 @@ static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
     visitLine(ctx, coverageData[filename], line, ConstantInt::get(T_int64, 1), "lcnt");
+}
+
+static void coverageAllocLine(StringRef filename, int line)
+{
+    assert(!imaging_mode);
+    if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
+        return;
+    allocLine(coverageData[filename], line);
 }
 
 // Memory allocation log (malloc_log)
@@ -4012,7 +4026,8 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     jl_expr_t *ex = (jl_expr_t*)expr;
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     jl_sym_t *head = ex->head;
-    if (head == meta_sym || head == inbounds_sym || head == aliasscope_sym || head == popaliasscope_sym) {
+    if (head == meta_sym || head == inbounds_sym || head == coverageeffect_sym
+            || head == aliasscope_sym || head == popaliasscope_sym) {
         // some expression types are metadata and can be ignored
         // in statement position
         return;
@@ -4293,26 +4308,10 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         I->setMetadata("julia.loopinfo", MD);
         return jl_cgval_t();
     }
-    else if (head == goto_ifnot_sym) {
-        jl_error("Expr(:goto_ifnot) in value position");
-    }
-    else if (head == leave_sym) {
-        jl_error("Expr(:leave) in value position");
-    }
-    else if (head == pop_exception_sym) {
-        jl_error("Expr(:pop_exception) in value position");
-    }
-    else if (head == enter_sym) {
-        jl_error("Expr(:enter) in value position");
-    }
-    else if (head == inbounds_sym) {
-        jl_error("Expr(:inbounds) in value position");
-    }
-    else if (head == aliasscope_sym) {
-        jl_error("Expr(:aliasscope) in value position");
-    }
-    else if (head == popaliasscope_sym) {
-        jl_error("Expr(:popaliasscope) in value position");
+    else if (head == goto_ifnot_sym || head == leave_sym || head == coverageeffect_sym
+            || head == pop_exception_sym || head == enter_sym || head == inbounds_sym
+            || head == aliasscope_sym || head == popaliasscope_sym) {
+        jl_errorf("Expr(:%s) in value position", jl_symbol_name(head));
     }
     else if (head == boundscheck_sym) {
         return mark_julia_const(bounds_check_enabled(ctx, jl_true) ? jl_true : jl_false);
@@ -6416,6 +6415,12 @@ static std::unique_ptr<Module> emit_function(
             dbg = linetable.at(dbg).inlined_at;
         mallocVisitLine(ctx, ctx.file, linetable.at(dbg).line);
     };
+    if (coverage_mode != JL_LOG_NONE) {
+        // record all lines that could be covered
+        for (const auto &info : linetable)
+            if (do_coverage(info.is_user_code))
+                coverageAllocLine(info.file, info.line);
+    }
 
     come_from_bb[0] = ctx.builder.GetInsertBlock();
 
