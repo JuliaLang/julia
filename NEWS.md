@@ -30,7 +30,7 @@ Standard library changes
 
 
 #### LinearAlgebra
-
+* `normalize` now supports multidimensional arrays ([#34234])
 
 #### Markdown
 
