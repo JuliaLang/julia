@@ -612,7 +612,9 @@ function completions(string, pos, context_module=Main)::Completions
     inc_tag==:string && return String[], 0:-1, false
     if inc_tag === :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
-        ex = Meta.parse(partial[frange] * ")", raise=false, depwarn=false)
+        # strip preceding ! operator
+        s = replace(partial[frange], r"\!+([^=\(]+)" => s"\1")
+        ex = Meta.parse(s * ")", raise=false, depwarn=false)
 
         if isa(ex, Expr)
             if ex.head==:call
@@ -627,6 +629,10 @@ function completions(string, pos, context_module=Main)::Completions
 
     dotpos = something(findprev(isequal('.'), string, pos), 0)
     startpos = nextind(string, something(findprev(in(non_identifier_chars), string, pos), 0))
+    # strip preceding ! operator
+    if (m = match(r"^\!+", string[startpos:pos])) !== nothing
+        startpos += length(m.match)
+    end
 
     ffunc = (mod,x)->true
     suggestions = Completion[]
