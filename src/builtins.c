@@ -81,8 +81,8 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
     size_t f, nf = jl_datatype_nfields(dt);
     for (f = 0; f < nf; f++) {
         size_t offs = jl_field_offset(dt, f);
-        char *ao = (char*)jl_data_ptr(a) + offs;
-        char *bo = (char*)jl_data_ptr(b) + offs;
+        char *ao = (char*)a + offs;
+        char *bo = (char*)b + offs;
         if (jl_field_isptr(dt, f)) {
             jl_value_t *af = *(jl_value_t**)ao;
             jl_value_t *bf = *(jl_value_t**)bo;
@@ -190,8 +190,8 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE
     if (sz == 0)
         return 1;
     size_t nf = jl_datatype_nfields(dt);
-    if (nf == 0)
-        return bits_equal(jl_data_ptr(a), jl_data_ptr(b), sz);
+    if (nf == 0 || !dt->layout->haspadding)
+        return bits_equal(a, b, sz);
     if (dt == jl_unionall_type)
         return egal_types(a, b, NULL);
     return compare_fields(a, b, dt);
@@ -277,6 +277,44 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
     return jl_object_id_((jl_value_t*)tv, v);
 }
 
+static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOTSAFEPOINT
+{
+    size_t sz = jl_datatype_size(dt);
+    if (sz == 0)
+        return ~h;
+    size_t f, nf = jl_datatype_nfields(dt);
+    if (nf == 0 || (!dt->layout->haspadding && dt->layout->npointers == 0)) {
+        // operate element-wise if there are unused bits inside,
+        // otherwise just take the whole data block at once
+        // a few select pointers (notably symbol) also have special hash values
+        // which may affect the stability of the objectid hash, even though
+        // they don't affect egal comparison
+        return bits_hash(v, sz) ^ h;
+    }
+    if (dt == jl_unionall_type)
+        return type_object_id_(v, NULL);
+    for (f = 0; f < nf; f++) {
+        size_t offs = jl_field_offset(dt, f);
+        char *vo = (char*)v + offs;
+        uintptr_t u;
+        if (jl_field_isptr(dt, f)) {
+            jl_value_t *f = *(jl_value_t**)vo;
+            u = (f == NULL) ? 0 : jl_object_id(f);
+        }
+        else {
+            jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type_concrete(dt, f);
+            if (jl_is_uniontype(fieldtype)) {
+                uint8_t sel = ((uint8_t*)vo)[jl_field_size(dt, f) - 1];
+                fieldtype = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)fieldtype, sel);
+            }
+            assert(jl_is_datatype(fieldtype) && !fieldtype->abstract && !fieldtype->mutabl);
+            u = immut_id_(fieldtype, (jl_value_t*)vo, 0);
+        }
+        h = bitmix(h, u);
+    }
+    return h;
+}
+
 JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT
 {
     if (tv == (jl_value_t*)jl_symbol_type)
@@ -303,38 +341,7 @@ JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPO
     }
     if (dt->mutabl)
         return inthash((uintptr_t)v);
-    size_t sz = jl_datatype_size(tv);
-    uintptr_t h = jl_object_id(tv);
-    if (sz == 0)
-        return ~h;
-    size_t f, nf = jl_datatype_nfields(dt);
-    if (nf == 0)
-        return bits_hash(jl_data_ptr(v), sz) ^ h;
-    if (dt == jl_unionall_type)
-        return type_object_id_(v, NULL);
-    for (f = 0; f < nf; f++) {
-        size_t offs = jl_field_offset(dt, f);
-        char *vo = (char*)jl_data_ptr(v) + offs;
-        uintptr_t u;
-        if (jl_field_isptr(dt, f)) {
-            jl_value_t *f = *(jl_value_t**)vo;
-            u = (f == NULL) ? 0 : jl_object_id(f);
-        }
-        else {
-            jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type_concrete(dt, f);
-            if (jl_is_uniontype(fieldtype)) {
-                uint8_t sel = ((uint8_t*)vo)[jl_field_size(dt, f) - 1];
-                fieldtype = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)fieldtype, sel);
-            }
-            assert(jl_is_datatype(fieldtype) && !fieldtype->abstract && !fieldtype->mutabl);
-            if (fieldtype->layout->haspadding)
-                u = jl_object_id_((jl_value_t*)fieldtype, (jl_value_t*)vo);
-            else
-                u = bits_hash(vo, fieldtype->size);
-        }
-        h = bitmix(h, u);
-    }
-    return h;
+    return immut_id_(dt, v, jl_object_id(tv));
 }
 
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT
@@ -710,15 +717,22 @@ JL_CALLABLE(jl_f_tuple)
         tt = jl_inst_concrete_tupletype(types);
         JL_GC_POP();
     }
-    return jl_new_structv(tt, args, nargs);
+    if (tt->instance != NULL)
+        return tt->instance;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(tt), tt);
+    for (i = 0; i < nargs; i++)
+        set_nth_field(tt, (void*)jv, i, args[i]);
+    return jv;
 }
 
 JL_CALLABLE(jl_f_svec)
 {
     size_t i;
-    if (nargs == 0) return (jl_value_t*)jl_emptysvec;
+    if (nargs == 0)
+        return (jl_value_t*)jl_emptysvec;
     jl_svec_t *t = jl_alloc_svec_uninit(nargs);
-    for(i=0; i < nargs; i++) {
+    for (i = 0; i < nargs; i++) {
         jl_svecset(t, i, args[i]);
     }
     return (jl_value_t*)t;
@@ -753,10 +767,7 @@ JL_CALLABLE(jl_f_getfield)
         jl_sym_t *fld = (jl_sym_t*)args[1];
         idx = jl_field_index(st, fld, 1);
     }
-    jl_value_t *fval = jl_get_nth_field(v, idx);
-    if (fval == NULL)
-        jl_throw(jl_undefref_exception);
-    return fval;
+    return jl_get_nth_field_checked(v, idx);
 }
 
 JL_CALLABLE(jl_f_setfield)
@@ -781,11 +792,11 @@ JL_CALLABLE(jl_f_setfield)
         JL_TYPECHK(setfield!, symbol, args[1]);
         idx = jl_field_index(st, (jl_sym_t*)args[1], 1);
     }
-    jl_value_t *ft = jl_field_type(st,idx);
+    jl_value_t *ft = jl_field_type(st, idx);
     if (!jl_isa(args[2], ft)) {
         jl_type_error("setfield!", ft, args[2]);
     }
-    jl_set_nth_field(v, idx, args[2]);
+    set_nth_field(st, (void*)v, idx, args[2]);
     return args[2];
 }
 

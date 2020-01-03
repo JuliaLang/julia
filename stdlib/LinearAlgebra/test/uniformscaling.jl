@@ -326,6 +326,7 @@ end
     @test lmul!(J, copyto!(C, A)) == target_mul
     @test rmul!(copyto!(C, A), J) == target_mul
     @test ldiv!(J, copyto!(C, A)) == target_div
+    @test ldiv!(C, J, A) == target_div
     @test rdiv!(copyto!(C, A), J) == target_div
 
     A = randn(4, 3)
@@ -352,6 +353,39 @@ end
     λ = Quaternion(0.44567, 0.755871, 0.882548, 0.423612)
     x, y = Quaternion(rand(4)...), Quaternion(rand(4)...)
     @test dot([x], λ*I, [y]) ≈ dot(x, λ, y) ≈ dot(x, λ*y)
+end
+
+@testset "Factorization solutions" begin
+    J = complex(randn(),randn()) * I
+    qrp = A -> qr(A, Val(true))
+
+    # thin matrices
+    X = randn(3,2)
+    Z = pinv(X)
+    for fac in (qr,qrp,svd)
+        F = fac(X)
+        @test @inferred(F \ I) ≈ Z
+        @test @inferred(F \ J) ≈ Z * J
+    end
+
+    # square matrices
+    X = randn(3,3)
+    X = X'X + rand()I # make positive definite for cholesky
+    Z = pinv(X)
+    for fac in (bunchkaufman,cholesky,lu,qr,qrp,svd)
+        F = fac(X)
+        @test @inferred(F \ I) ≈ Z
+        @test @inferred(F \ J) ≈ Z * J
+    end
+
+    # fat matrices - only rank-revealing variants
+    X = randn(2,3)
+    Z = pinv(X)
+    for fac in (qrp,svd)
+        F = fac(X)
+        @test @inferred(F \ I) ≈ Z
+        @test @inferred(F \ J) ≈ Z * J
+    end
 end
 
 end # module TestUniformscaling

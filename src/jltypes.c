@@ -2347,6 +2347,12 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_compute_field_offsets(jl_unionall_type);
     jl_compute_field_offsets(jl_simplevector_type);
     jl_compute_field_offsets(jl_symbol_type);
+
+    // override the preferred layout for a couple types
+    jl_lineinfonode_type->isinlinealloc = 0; // FIXME: assumed to be a pointer by codegen
+    // It seems like we probably usually end up needing the box for kinds (used in an Any context)--but is that true?
+    jl_uniontype_type->isinlinealloc = 0;
+    jl_unionall_type->isinlinealloc = 0;
 }
 
 #ifdef __cplusplus

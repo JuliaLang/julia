@@ -87,7 +87,7 @@ try
               (::Task)(::UInt8, ::UInt16, ::UInt32) = 2
 
               # issue 16471 (capturing references to a kwfunc)
-              Test.@test_throws ErrorException Core.kwfunc(Base.nothing)
+              Test.@test !isdefined(Base.Nothing.name.mt, :kwsorter)
               Base.nothing(::UInt8, ::UInt16, ::UInt32; x = 52) = x
               const nothingkw = Core.kwfunc(Base.nothing)
 
@@ -163,9 +163,17 @@ try
               _v31488 = Base.StringVector(2)
               resize!(_v31488, 0)
               const a31488 = fill(String(_v31488), 100)
+
+              const ptr1 = Ptr{UInt8}(1)
+              ptr2 = Ptr{UInt8}(1)
+              const ptr3 = Ptr{UInt8}(-1)
+              const layout1 = Ptr{Int8}[Ptr{Int8}(0), Ptr{Int8}(1), Ptr{Int8}(-1)]
+              const layout2 = Any[Ptr{Int8}(0), Ptr{Int16}(1), Ptr{Int32}(-1)]
+              const layout3 = collect(x.match for x in eachmatch(r"..", "abcdefghijk"))::Vector{SubString{String}}
           end
           """)
-    @test_throws ErrorException Core.kwfunc(Base.nothing) # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
+    # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
+    @test !isdefined(Base.Nothing.name.mt, :kwsorter)
 
     # Issue #12623
     @test __precompile__(false) === nothing
@@ -200,6 +208,14 @@ try
         @test Foo.x28998[end] == 6
 
         @test Foo.a31488 == fill("", 100)
+
+        @test Foo.ptr1 === Ptr{UInt8}(1)
+        @test Foo.ptr2 === Ptr{UInt8}(0)
+        @test Foo.ptr3 === Ptr{UInt8}(-1)
+        @test Foo.layout1::Vector{Ptr{Int8}} == Ptr{Int8}[Ptr{Int8}(0), Ptr{Int8}(0), Ptr{Int8}(-1)]
+        @test Foo.layout2 == Any[Ptr{Int8}(0), Ptr{Int16}(0), Ptr{Int32}(-1)]
+        @test typeof.(Foo.layout2) == [Ptr{Int8}, Ptr{Int16}, Ptr{Int32}]
+        @test Foo.layout3 == ["ab", "cd", "ef", "gh", "ij"]
     end
 
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")

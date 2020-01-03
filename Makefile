@@ -222,8 +222,8 @@ ifeq ($(OS),WINNT)
 ifeq ($(XC_HOST),)
 STD_LIB_PATH ?= $(PATH)
 else
-STD_LIB_PATH := $(shell LANG=C $(CC) -print-search-dirs | grep programs | sed -e "s/^programs: =//")
-STD_LIB_PATH += :$(shell LANG=C $(CC) -print-search-dirs | grep libraries | sed -e "s/^libraries: =//")
+STD_LIB_PATH := $(shell LANG=C $(CC) -print-search-dirs | grep '^programs: =' | sed -e "s/^programs: =//")
+STD_LIB_PATH += :$(shell LANG=C $(CC) -print-search-dirs | grep '^libraries: =' | sed -e "s/^libraries: =//")
 ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # the cygwin-mingw32 compiler lies about it search directory paths
 STD_LIB_PATH := $(shell echo '$(STD_LIB_PATH)' | sed -e "s!/lib/!/bin/!g")
 endif
@@ -583,7 +583,7 @@ testall1: check-whitespace $(JULIA_BUILD_MODE)
 	@env JULIA_CPU_THREADS=1 $(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test all JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 test-%: check-whitespace $(JULIA_BUILD_MODE)
-	@([ $$(( $$(date +%s) - $$(date +%s -r $(build_private_libdir)/sys.$(SHLIB_EXT)) )) -le 100 ] && \
+	@([ $$(( $$(date +%s) - $$(date -r $(build_private_libdir)/sys.$(SHLIB_EXT) +%s) )) -le 100 ] && \
 		printf '\033[93m    HINT The system image was recently rebuilt. Are you aware of the test-revise-* targets? See CONTRIBUTING.md. \033[0m\n') || true
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test $* JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 

@@ -36,6 +36,7 @@ end
 @testset "issparse" begin
     @test issparse(sparse(fill(1,5,5)))
     @test !issparse(fill(1,5,5))
+    @test nnz(zero(sparse(fill(1,5,5)))) == 0
 end
 
 @testset "iszero specialization for SparseMatrixCSC" begin

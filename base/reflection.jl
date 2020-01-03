@@ -318,6 +318,7 @@ datatype_fieldtypes(x::DataType) = ccall(:jl_get_fieldtypes, Any, (Any,), x)
 struct DataTypeLayout
     nfields::UInt32
     npointers::UInt32
+    firstptr::Int32
     alignment::UInt32
     # alignment : 9;
     # haspadding : 1;

@@ -211,6 +211,13 @@ function returntype(x::Int)::Int
     x
 end
 
+# @nospecialize (issue #34122)
+"`fnospecialize` for Numbers"
+fnospecialize(@nospecialize(x::Number)) = 1
+
+"`fnospecialize` for arrays"
+fnospecialize(@nospecialize(x::AbstractArray)) = 2
+
 end
 
 let md = meta(DocsTest)[@var(DocsTest)]
@@ -282,6 +289,14 @@ end
 let rt = @var(DocsTest.returntype)
     md = meta(DocsTest)[rt]
     @test md.order == [Tuple{Float64}, Tuple{Int}]
+end
+
+let fns = @var(DocsTest.fnospecialize)
+    md = meta(DocsTest)[fns]
+    d = md.docs[Tuple{Number}]
+    @test docstrings_equal(d, doc"`fnospecialize` for Numbers")
+    d = md.docs[Tuple{AbstractArray}]
+    @test docstrings_equal(d, doc"`fnospecialize` for arrays")
 end
 
 @test docstrings_equal(@doc(DocsTest.TA), doc"TA")

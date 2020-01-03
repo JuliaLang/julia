@@ -647,6 +647,17 @@ end
     @test "a" * 'b' * 'c' == "abc"
 end
 
+# this tests a possible issue in subtyping with long argument lists to `string(...)`
+getString(dic, key) = haskey(dic,key) ? "$(dic[key])" : ""
+function getData(dic)
+    val = getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"") *
+        "," * getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"") *
+        "," * getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"") *
+        "," * getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"") *
+        "," * getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"")
+end
+@test getData(Dict()) == ",,,,,,,,,,,,,,,,,,"
+
 @testset "unrecognized escapes in string/char literals" begin
     @test_throws Meta.ParseError Meta.parse("\"\\.\"")
     @test_throws Meta.ParseError Meta.parse("\'\\.\'")

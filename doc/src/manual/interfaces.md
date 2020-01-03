@@ -164,8 +164,8 @@ julia> collect(Iterators.reverse(Squares(4)))
 |:-------------------- |:-------------------------------- |
 | `getindex(X, i)`     | `X[i]`, indexed element access   |
 | `setindex!(X, v, i)` | `X[i] = v`, indexed assignment   |
-| `firstindex(X)`      | The first index                  |
-| `lastindex(X)`        | The last index, used in `X[end]` |
+| `firstindex(X)`         | The first index, used in `X[begin]` |
+| `lastindex(X)`           | The last index, used in `X[end]` |
 
 For the `Squares` iterable above, we can easily compute the `i`th element of the sequence by squaring
 it.  We can expose this as an indexing expression `S[i]`. To opt into this behavior, `Squares`
@@ -181,8 +181,8 @@ julia> Squares(100)[23]
 529
 ```
 
-Additionally, to support the syntax `S[end]`, we must define [`lastindex`](@ref) to specify the last
-valid index. It is recommended to also define [`firstindex`](@ref) to specify the first valid index:
+Additionally, to support the syntax `S[begin]` and `S[end]`, we must define [`firstindex`](@ref) and
+[`lastindex`](@ref) to specify the first and last valid indices, respectively:
 
 ```jldoctest squaretype
 julia> Base.firstindex(S::Squares) = 1
