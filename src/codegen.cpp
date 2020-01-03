@@ -6475,8 +6475,15 @@ static std::unique_ptr<Module> emit_function(
         BB[label] = bb;
     }
 
-    if (do_coverage(mod_is_user_mod))
+    if (do_coverage(mod_is_user_mod)) {
         coverageVisitLine(ctx, ctx.file, toplineno);
+        if (linetable.size() >= 1) {
+            // avoid double-counting the entry line
+            const auto &info = linetable.at(1);
+            if (info.file == ctx.file && info.line == toplineno && info.is_user_code == mod_is_user_mod)
+                current_lineinfo.push_back(1);
+        }
+    }
     if (do_malloc_log(mod_is_user_mod))
         mallocVisitLine(ctx, ctx.file, toplineno);
     find_next_stmt(0);
