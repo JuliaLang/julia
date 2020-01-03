@@ -294,7 +294,7 @@ julia> stats.gcstats.total_time
 5576500
 ```
 
-!!! compat "Julia 1.4"
+!!! compat "Julia 1.5"
     The return type of this macro was changed from `Tuple` to `NamedTuple` in Julia 1.4
 """
 macro timed(ex)
