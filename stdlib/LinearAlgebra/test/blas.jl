@@ -8,6 +8,7 @@ using LinearAlgebra: BlasReal, BlasComplex
 Random.seed!(100)
 ## BLAS tests - testing the interface code to BLAS routines
 @testset for elty in [Float32, Float64, ComplexF32, ComplexF64]
+
     @testset "syr2k!" begin
         U = randn(5,2)
         V = randn(5,2)
@@ -198,6 +199,46 @@ Random.seed!(100)
             Cnn, Cmn, Cnm = Matrix{elty}.(undef,((n,n), (n+1,n), (n,n+1)))
             @test_throws DimensionMismatch BLAS.trmm('L','U','N','N',one(elty),triu(Cnn),Cmn)
             @test_throws DimensionMismatch BLAS.trmm('R','U','N','N',one(elty),triu(Cnn),Cnm)
+        end
+
+        # hpmv!
+        if elty in (ComplexF32, ComplexF64)
+            @testset "hpmv!" begin
+                # Both matrix dimensions n coincide, as we have Hermitian matrices.
+                # Define the inputs and outputs of hpmv!, y = α*A*x+β*y
+                α = rand(elty)
+                M = rand(elty, n, n)
+                A = (M+M')/elty(2.0)
+                x = rand(elty, n)
+                β = rand(elty)
+                y = rand(elty, n)
+
+                y_result_julia = α*A*x+β*y
+
+                # Create lower triangular packing of A
+                AP = typeof(A[1,1])[]
+                for j in 1:n
+                    for i in j:n
+                        push!(AP, A[i,j])
+                    end
+                end
+
+                y_result_blas_lower = copy(y)
+                BLAS.hpmv!('L', α, AP, x, β, y_result_blas_lower)
+                @test y_result_julia≈y_result_blas_lower
+
+                # Create upper triangular packing of A
+                AP = typeof(A[1,1])[]
+                for j in 1:n
+                    for i in 1:j
+                        push!(AP, A[i,j])
+                    end
+                end
+
+                y_result_blas_upper = copy(y)
+                BLAS.hpmv!('U', α, AP, x, β, y_result_blas_upper)
+                @test y_result_julia≈y_result_blas_upper
+            end
         end
 
         #trsm

@@ -31,6 +31,7 @@ Standard library changes
 
 #### LinearAlgebra
 
+* The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
 
 #### Markdown
 
