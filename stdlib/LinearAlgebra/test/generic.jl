@@ -5,8 +5,13 @@ module TestGeneric
 using Test, LinearAlgebra, Random
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
 isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
 using .Main.Quaternions
+
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
 
 Random.seed!(123)
 
@@ -249,15 +254,28 @@ end
 end
 
 @testset "normalize for multidimensional arrays" begin
-    arr = [ [1.0 0.0]; [0.0 1.0] ]
-    @test normalize(arr) == normalize!(copy(arr))
+    function test_arr(arr)
+        @test normalize(arr) == normalize!(copy(arr))
+        @test size(normalize(arr)) == size(arr)
+        @test vec(normalize(arr)) == normalize(vec(arr))
+    end
+
+    arr = [ 1.0 0.0; 0.0 1.0 ]
+    test_arr(arr)
 
     arr = [
             [1.0 0.0 0.0];
             [0.0 1.0 0.0]
          ]
-    @test normalize(arr) == normalize!(copy(arr))
+    test_arr(arr)
 
+    arr = randn(2,3)
+    test_arr(arr)
+
+    A = OffsetArray([-1,0], (-2,))
+    Arsc = reshape(A, :, 1)
+    Arsc[1,1] = 5
+    test_arr(A)
 end
 
 @testset "Issue #30466" begin
