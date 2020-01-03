@@ -511,7 +511,10 @@ static unsigned convert_struct_offset(Type *lty, unsigned byte_offset)
     const DataLayout &DL = jl_data_layout;
     const StructLayout *SL = DL.getStructLayout(cast<StructType>(lty));
     unsigned idx = SL->getElementContainingOffset(byte_offset);
-    assert(SL->getElementOffset(idx) == byte_offset);
+    if(SL->getElementOffset(idx) != byte_offset) {
+        // sentinel error value
+        return (unsigned)(-1);
+    }
     return idx;
 }
 
@@ -1692,9 +1695,15 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         else if (!jl_field_isptr(jt, idx) && jl_is_uniontype(jfty)) {
             int fsz = jl_field_size(jt, idx) - 1;
             unsigned ptindex = convert_struct_offset(ctx, T, byte_offset + fsz);
+            if(ptindex == (unsigned)(-1)) {
+                jl_errorf("Cannot generate accessor code because of incompatible alignment requirements");
+            }
             AllocaInst *lv = NULL;
             if (fsz > 0) {
                 unsigned st_idx = convert_struct_offset(ctx, T, byte_offset);
+                if(ptindex == (unsigned)(-1)) {
+                    jl_errorf("Cannot generate accessor code because of incompatible alignment requirements");
+                }
                 IntegerType *ET = cast<IntegerType>(T->getStructElementType(st_idx));
                 unsigned align = (ET->getBitWidth() + 7) / 8;
                 lv = emit_static_alloca(ctx, ET);
@@ -1724,12 +1733,16 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         }
         else {
             unsigned st_idx;
-            if (isa<ArrayType>(T))
+            if (isa<ArrayType>(T)) {
                 st_idx = idx;
-            else if (isa<StructType>(T))
+            } else if (isa<StructType>(T)) {
                 st_idx = convert_struct_offset(ctx, T, byte_offset);
-            else
+                if(st_idx == (unsigned)(-1)) {
+                    jl_errorf("Cannot generate accessor code because of incompatible alignment requirements");
+                }
+            } else {
                 llvm_unreachable("encountered incompatible type for a struct");
+            }
             fldv = ctx.builder.CreateExtractValue(obj, makeArrayRef(st_idx));
         }
         if (maybe_null && jl_field_isptr(jt, idx))
@@ -2107,8 +2120,12 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
             return NULL; // TODO: handle this?
         }
         unsigned llvm_idx = i;
-        if (i > 0 && isa<StructType>(constant->getType()))
+        if (i > 0 && isa<StructType>(constant->getType())) {
             llvm_idx = convert_struct_offset(constant->getType(), jl_field_offset(jst, i));
+            if(llvm_idx == (unsigned)(-1)) {
+                jl_errorf("Cannot create an static instance of %s because of incompatible alignment requirements", jl_symbol_name(jst->name->name));
+            }
+        }
         Constant *fld = constant->getAggregateElement(llvm_idx);
         flds[i] = static_constant_instance(fld, ft);
         if (flds[i] == NULL) {
@@ -2617,6 +2634,10 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 Value *dest = NULL;
                 unsigned offs = jl_field_offset(sty, i);
                 unsigned llvm_idx = (i > 0 && isa<StructType>(lt)) ? convert_struct_offset(ctx, lt, offs) : i;
+                if(llvm_idx == (unsigned)(-1)) {
+                    jl_errorf("Cannot create an instance of %s because of incompatible alignment requirements", jl_symbol_name(sty->name->name));
+                }
+
                 if (!init_as_value) {
                     // avoid unboxing the argument explicitly
                     // and use memcpy instead
@@ -2640,6 +2661,9 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                         // then load it and combine with the tindex.
                         // But more efficient to just store it directly.
                         unsigned ptindex = convert_struct_offset(ctx, lt, offs + fsz);
+                        if(ptindex == (unsigned)(-1)) {
+                            jl_errorf("Cannot create an instance of %s because of incompatible alignment requirements", jl_symbol_name(sty->name->name));
+                        }
                         if (fsz > 0 && !fval_info.isghost) {
                             Type *ET = IntegerType::get(jl_LLVMContext, 8 * al);
                             assert(lt->getStructElementType(llvm_idx) == ET);
@@ -2694,6 +2718,9 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     unsigned offs = jl_field_offset(sty, i);
                     int fsz = jl_field_size(sty, i) - 1;
                     unsigned llvm_idx = convert_struct_offset(ctx, cast<StructType>(lt), offs + fsz);
+                    if(llvm_idx == (unsigned)(-1)) {
+                        jl_errorf("Cannot create an instance of %s because of incompatible alignment requirements", jl_symbol_name(sty->name->name));
+                    }
                     if (init_as_value)
                         strct = ctx.builder.CreateInsertValue(strct, ConstantInt::get(T_int8, 0), makeArrayRef(llvm_idx));
                     else
