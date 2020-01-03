@@ -322,6 +322,7 @@ Function *juliapersonality_func;
 #endif
 #endif
 static Function *diff_gc_total_bytes_func;
+static Function *sync_gc_total_bytes_func;
 static Function *jlarray_data_owner_func;
 static GlobalVariable *jlgetworld_global;
 
@@ -1801,17 +1802,18 @@ static void coverageAllocLine(StringRef filename, int line)
 
 static logdata_t mallocData;
 
-static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
+static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, Value *sync)
 {
     assert(!imaging_mode);
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
-    Value *addend = ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
+    Value *addend = sync
+        ? ctx.builder.CreateCall(prepare_call(sync_gc_total_bytes_func), {sync})
+        : ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
     visitLine(ctx, mallocData[filename], line, addend, "bytecnt");
 }
 
-// Resets the malloc counts. Needed to avoid including memory usage
-// from JITting.
+// Resets the malloc counts.
 extern "C" JL_DLLEXPORT void jl_clear_malloc_data(void)
 {
     logdata_t::iterator it = mallocData.begin();
@@ -1828,7 +1830,7 @@ extern "C" JL_DLLEXPORT void jl_clear_malloc_data(void)
             }
         }
     }
-    jl_gc_sync_total_bytes();
+    jl_gc_sync_total_bytes(0);
 }
 
 extern "C" int isabspath(const char *in);
@@ -6408,12 +6410,15 @@ static std::unique_ptr<Module> emit_function(
         }
         new_lineinfo.clear();
     };
-    auto mallocVisitStmt = [&] (unsigned dbg) {
-        if (!do_malloc_log(mod_is_user_mod) || dbg == 0)
+    auto mallocVisitStmt = [&] (unsigned dbg, Value *sync) {
+        if (!do_malloc_log(mod_is_user_mod) || dbg == 0) {
+            if (do_malloc_log(true) && sync)
+                ctx.builder.CreateCall(prepare_call(sync_gc_total_bytes_func), {sync});
             return;
+        }
         while (linetable.at(dbg).inlined_at)
             dbg = linetable.at(dbg).inlined_at;
-        mallocVisitLine(ctx, ctx.file, linetable.at(dbg).line);
+        mallocVisitLine(ctx, ctx.file, linetable.at(dbg).line, sync);
     };
     if (coverage_mode != JL_LOG_NONE) {
         // record all lines that could be covered
@@ -6484,8 +6489,10 @@ static std::unique_ptr<Module> emit_function(
                 current_lineinfo.push_back(1);
         }
     }
-    if (do_malloc_log(mod_is_user_mod))
-        mallocVisitLine(ctx, ctx.file, toplineno);
+    Value *sync_bytes = nullptr;
+    if (do_malloc_log(true))
+        sync_bytes = ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
+
     find_next_stmt(0);
     while (cursor != -1) {
         int32_t debuginfoloc = ((int32_t*)jl_array_data(src->codelocs))[cursor];
@@ -6597,7 +6604,7 @@ static std::unique_ptr<Module> emit_function(
                 }
             }
 
-            mallocVisitStmt(debuginfoloc);
+            mallocVisitStmt(debuginfoloc, sync_bytes);
             if (toplevel)
                 ctx.builder.CreateStore(last_age, ctx.world_age_field);
             assert(type_is_ghost(retty) || returninfo.cc == jl_returninfo_t::SRet ||
@@ -6639,7 +6646,7 @@ static std::unique_ptr<Module> emit_function(
             jl_value_t *cond = args[0];
             int lname = jl_unbox_long(args[1]);
             Value *isfalse = emit_condition(ctx, cond, "if");
-            mallocVisitStmt(debuginfoloc);
+            mallocVisitStmt(debuginfoloc, nullptr);
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
             workstack.push_back(lname - 1);
             BasicBlock *ifnot = BB[lname];
@@ -6677,7 +6684,7 @@ static std::unique_ptr<Module> emit_function(
         }
         else {
             emit_stmtpos(ctx, stmt, cursor);
-            mallocVisitStmt(debuginfoloc);
+            mallocVisitStmt(debuginfoloc, nullptr);
         }
         find_next_stmt(cursor + 1);
     }
@@ -7716,6 +7723,13 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_gc_diff_total_bytes", m);
     add_named_global(diff_gc_total_bytes_func, &jl_gc_diff_total_bytes);
+
+    sync_gc_total_bytes_func =
+        Function::Create(FunctionType::get(T_int64, {T_int64}, false),
+                         Function::ExternalLinkage,
+                         "jl_gc_sync_total_bytes", m);
+    add_named_global(sync_gc_total_bytes_func, &jl_gc_sync_total_bytes);
+
 
     std::vector<Type*> array_owner_args(0);
     array_owner_args.push_back(T_prjlvalue);
