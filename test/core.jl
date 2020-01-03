@@ -7156,3 +7156,11 @@ struct B33954
 end
 @test_broken isbitstype(Tuple{B33954})
 @test_broken isbitstype(B33954)
+
+# Issue #34206/34207
+function mre34206(a, n)
+    va = view(a, :)
+    b = ntuple(_ -> va, n)::Tuple{Vararg{typeof(va)}}
+    return b[1].offset1
+end
+@test mre34206([44], 1) == 0
