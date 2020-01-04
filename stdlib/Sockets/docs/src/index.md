@@ -10,6 +10,7 @@ Sockets.getaddrinfo
 Sockets.getipaddr
 Sockets.getipaddrs
 Sockets.getalladdrinfo
+Sockets.DNSError
 Sockets.getnameinfo
 Sockets.getsockname
 Sockets.getpeername

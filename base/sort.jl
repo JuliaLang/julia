@@ -250,19 +250,37 @@ end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
     require_one_based_indexing(a)
-    if step(a) == 0
+    h = step(a)
+    if h == 0
         lt(o, x, first(a)) ? 0 : length(a)
+    elseif h > 0 && x < first(a)
+        firstindex(a) - 1
+    elseif h > 0 && x >= last(a)
+        lastindex(a)
+    elseif h < 0 && x > first(a)
+        firstindex(a) - 1
+    elseif h < 0 && x <= last(a)
+        lastindex(a)
     else
-        clamp( fld(floor(Integer, x) - first(a), step(a)) + 1, 0, length(a))
+        fld(floor(Integer, x) - first(a), h) + 1
     end
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
     require_one_based_indexing(a)
-    if step(a) == 0
+    h = step(a)
+    if h == 0
         lt(o, first(a), x) ? length(a)+1 : 1
+    elseif h > 0 && x <= first(a)
+        firstindex(a)
+    elseif h > 0 && x > last(a)
+        lastindex(a) + 1
+    elseif h < 0 && x >= first(a)
+        firstindex(a)
+    elseif h < 0 && x < last(a)
+        lastindex(a) + 1
     else
-        clamp(-fld(floor(Integer, -x) + first(a), step(a)) + 1, 1, length(a) + 1)
+        -fld(floor(Integer, -x) + first(a), h) + 1
     end
 end
 

@@ -109,6 +109,7 @@ mutable struct BigFloat <: AbstractFloat
     end
 
     function BigFloat(; precision::Integer=DEFAULT_PRECISION[])
+        precision < 1 && throw(DomainError(precision, "`precision` cannot be less than 1."))
         nb = ccall((:mpfr_custom_get_size,:libmpfr), Csize_t, (Clong,), precision)
         nb = (nb + Core.sizeof(Limb) - 1) ÷ Core.sizeof(Limb) # align to number of Limb allocations required for this
         #d = Vector{Limb}(undef, nb)
