@@ -837,6 +837,9 @@ and splatting `∘(fs...)` for composing an iterable collection of functions.
 !!! compat "Julia 1.4"
     Multiple function composition requires at least Julia 1.4.
 
+!!! compat "Julia 1.5"
+    Composition of zero or one functions requires at least Julia 1.5.
+
 # Examples
 ```jldoctest
 julia> map(uppercase∘first, ["apple", "banana", "carrot"])

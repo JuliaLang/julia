@@ -23,6 +23,7 @@ New library functions
 
 New library features
 --------------------
+* Function composition now works also on zero or one arguments `∘()=identity; ∘(f) = f` (#34251)
 
 
 Standard library changes
