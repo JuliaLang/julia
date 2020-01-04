@@ -119,3 +119,11 @@ for T in (Float64, Float32, Int64, Int32)
         @test b == result
     end
 end
+
+# Eventually, this should not raise an error at all; we're just testing that at least it doesn't abort.
+# see #34245 for details.
+let
+    foo() = ntuple(i -> Core.VecElement{Float64}(i), Val(8));
+    bar(a) = (a, foo())
+    @test_throws ErrorException bar(42.0)
+end
