@@ -1639,7 +1639,7 @@ julia> c = normalize(a, 1)
 julia> norm(c, 1)
 1.0
 
-julia> a = [[1 2 4] ; [1 2 4]]
+julia> a = [1 2 4 ; 1 2 4]
 2×3 Array{Int64,2}:
  1  2  4
  1  2  4
