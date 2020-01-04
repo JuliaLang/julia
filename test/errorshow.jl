@@ -596,6 +596,26 @@ end
     end
 end
 
+@testset "Line number correction" begin
+    getbt() = backtrace()
+    bt = getbt()
+    Base.update_stackframes_callback[] = function(list)
+        modify((sf, n)) = sf.func == :getbt ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
+        map!(modify, list, list)
+    end
+    io = IOBuffer()
+    Base.show_backtrace(io, bt)
+    outputc = split(String(take!(io)), '\n')
+    Base.update_stackframes_callback[] = identity
+    Base.show_backtrace(io, bt)
+    output0 = split(String(take!(io)), '\n')
+    function getline(output)
+        idx = findfirst(str->occursin("getbt", str), output)
+        return parse(Int, match(r":(\d*)$", output[idx]).captures[1])
+    end
+    @test getline(outputc) == getline(output0) + 2
+end
+
 # issue #30633
 @test_throws ArgumentError("invalid index: \"foo\" of type String") [1]["foo"]
 @test_throws ArgumentError("invalid index: nothing of type Nothing") [1][nothing]

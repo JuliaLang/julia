@@ -7140,3 +7140,27 @@ end
 struct SplatBadIterate; end
 Base.iterate(s::SplatBadIterate, args...) = ()
 @test_throws BoundsError (SplatBadIterate()...,)
+
+# issue #33954, layout with circular type parameters but not fields
+struct P33954{T}
+end
+struct A33954
+    x::P33954{A33954}
+end
+@test isbitstype(Tuple{A33954})
+struct Q33954{T}
+    x::Int
+end
+struct B33954
+    x::Q33954{B33954}
+end
+@test_broken isbitstype(Tuple{B33954})
+@test_broken isbitstype(B33954)
+
+# Issue #34206/34207
+function mre34206(a, n)
+    va = view(a, :)
+    b = ntuple(_ -> va, n)::Tuple{Vararg{typeof(va)}}
+    return b[1].offset1
+end
+@test mre34206([44], 1) == 0

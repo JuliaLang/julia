@@ -138,6 +138,42 @@ end
         @test searchsortedlast(500:1.0:600, -1.0e20) == 0
         @test searchsortedlast(500:1.0:600, 1.0e20) == 101
     end
+    @testset "issue #34157" begin
+        @test searchsorted(1:2.0, -Inf) === 1:0
+        @test searchsorted([1,2], -Inf) === 1:0
+        @test searchsorted(1:2,   -Inf) === 1:0
+
+        @test searchsorted(1:2.0, Inf) === 3:2
+        @test searchsorted([1,2], Inf) === 3:2
+        @test searchsorted(1:2,   Inf) === 3:2
+
+        for coll in [
+                Base.OneTo(10),
+                1:2,
+                -4:6,
+                5:2:10,
+                [1,2],
+                1.0:4,
+                [10.0,20.0],
+            ]
+            for huge in [Inf, 1e300]
+                @test searchsortedfirst(coll, huge) === lastindex(coll) + 1
+                @test searchsortedfirst(coll, -huge)=== firstindex(coll)
+                @test searchsortedlast(coll, huge)  === lastindex(coll)
+                @test searchsortedlast(coll, -huge) === firstindex(coll) - 1
+                @test searchsorted(coll, huge)      === lastindex(coll)+1 : lastindex(coll)
+                @test searchsorted(coll, -huge)     === firstindex(coll) : firstindex(coll) - 1
+
+                @test searchsortedfirst(reverse(coll), huge, rev=true) === firstindex(coll)
+                @test searchsortedfirst(reverse(coll), -huge, rev=true) === lastindex(coll) + 1
+                @test searchsortedlast(reverse(coll), huge, rev=true) === firstindex(coll) - 1
+                @test searchsortedlast(reverse(coll), -huge, rev=true) === lastindex(coll)
+                @test searchsorted(reverse(coll), huge, rev=true) === firstindex(coll):firstindex(coll) - 1
+                @test searchsorted(reverse(coll), -huge, rev=true) === lastindex(coll)+1:lastindex(coll)
+
+            end
+        end
+    end
 end
 # exercise the codepath in searchsorted* methods for ranges that check for zero step range
 struct ConstantRange{T} <: AbstractRange{T}

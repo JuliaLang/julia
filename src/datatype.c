@@ -306,6 +306,8 @@ static int references_name(jl_value_t *p, jl_typename_t *name) JL_NOTSAFEPOINT
     if (jl_is_datatype(p)) {
         if (((jl_datatype_t*)p)->name == name)
             return 1;
+        if (((jl_datatype_t*)p)->layout && jl_datatype_nfields(p) == 0)
+            return 0;
         size_t i, l = jl_nparams(p);
         for (i = 0; i < l; i++) {
             if (references_name(jl_tparam(p, i), name))
@@ -401,6 +403,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             jl_value_t *fld = jl_svecref(w->types, i);
             if (references_name(fld, w->name)) {
                 isinlinealloc = 0;
+                isbitstype = 0;
                 break;
             }
         }
