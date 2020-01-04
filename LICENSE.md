@@ -51,11 +51,6 @@ own licenses:
 - [LLVM](http://releases.llvm.org/6.0.0/LICENSE.TXT) [BSD-3, effectively]
 - [UTF8PROC](https://github.com/JuliaStrings/utf8proc) [MIT]
 
-The following components included in `stdlib` have their own separate licenses:
-
-- stdlib/SuiteSparse/umfpack.jl (see [SUITESPARSE](http://suitesparse.com))
-- stdlib/SuiteSparse/cholmod.jl (see [SUITESPARSE](http://suitesparse.com))
-
 Julia's `stdlib` uses the following external libraries, which have their own licenses:
 
 - [DSFMT](http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/LICENSE.txt) [BSD-3]
