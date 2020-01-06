@@ -28,6 +28,8 @@ New library features
 Standard library changes
 ------------------------
 
+* `push!(c::Channel, v)` now returns channel `c`. Previously, it returned the pushed value
+  `v` ([#34202]).
 
 #### LinearAlgebra
 

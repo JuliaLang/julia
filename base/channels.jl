@@ -7,6 +7,9 @@ Representation of a channel passing objects of type `T`.
 """
 abstract type AbstractChannel{T} end
 
+push!(c::AbstractChannel, v) = (put!(c, v); c)
+popfirst!(c::AbstractChannel) = take!(c)
+
 """
     Channel{T=Any}(size::Int=0)
 
@@ -348,8 +351,6 @@ function put_unbuffered(c::Channel, v)
     return v
 end
 
-push!(c::Channel, v) = put!(c, v)
-
 """
     fetch(c::Channel)
 
@@ -395,8 +396,6 @@ function take_buffered(c::Channel)
         unlock(c)
     end
 end
-
-popfirst!(c::Channel) = take!(c)
 
 # 0-size channel
 function take_unbuffered(c::Channel{T}) where T
