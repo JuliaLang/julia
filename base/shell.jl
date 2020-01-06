@@ -290,22 +290,22 @@ function shell_escape_wincmd(io::IO, s::AbstractString)
         throw(ArgumentError("control character unsupported by CMD.EXE"))
     i = 1
     len = ncodeunits(s)
-    if len > 0 && codeunit(s,1) == UInt8('@')
+    if len > 0 && s[1] == '@'
         write(io, '^')
     end
-    while i <= ncodeunits(s)
-        c = codeunit(s,i)
-        if c == UInt8('"') && (j = findnext('"', s, i+1)) !== nothing
+    while i <= len
+        c = s[i]
+        if c == '"' && (j = findnext('"', s, nextind(s,i))) !== nothing
             write(io, SubString(s,i,j))
             i = j
         else
-            if c in UInt8.(('"', '(', ')', '!', '^', '<', '>', '&', '|'))
+            if c in ('"', '(', ')', '!', '^', '<', '>', '&', '|')
                 write(io, '^', c)
             else
                 write(io, c)
             end
         end
-        i += 1
+        i = nextind(s,i)
     end
 end
 shell_escape_wincmd(s::AbstractString) = sprint(shell_escape_wincmd, s;
