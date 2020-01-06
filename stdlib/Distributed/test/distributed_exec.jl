@@ -378,7 +378,6 @@ function test_channel(c)
     put!(c, 1)
     put!(c, "Hello")
     put!(c, 5.0)
-    @test push!(c, :World) === c
 
     @test isready(c) == true
     @test isopen(c) == true
@@ -388,7 +387,6 @@ function test_channel(c)
     @test take!(c) == "Hello"
     @test fetch(c) == 5.0
     @test take!(c) == 5.0
-    @test popfirst!(c) == :World
     @test isready(c) == false
     @test isopen(c) == true
     close(c)
