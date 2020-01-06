@@ -261,6 +261,8 @@ end
         @test axes(normalize(arr)) == axes(arr)
         @test vec(normalize(arr)) == normalize(vec(arr))
     end
+
+    @test typeof(normalize([1 2 3; 4 5 6])) == Array{Float64,2}
 end
 
 @testset "Issue #30466" begin
