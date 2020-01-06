@@ -315,7 +315,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 ```@docs
 Base.:*(::ArrayLike{2}, ::ArrayLike{2})
-Base.:\(::ArrayLike{2}, ::VectorOrMatrixLike)
+Base.:\(::ArrayLike{2}, ::Base.VectorOrMatrixLike)
 LinearAlgebra.SingularException
 LinearAlgebra.PosDefException
 LinearAlgebra.ZeroPivotException
