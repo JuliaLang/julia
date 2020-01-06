@@ -49,7 +49,7 @@ struct LDLt{T,S<:AbstractMatrix{T}} <: Factorization{T}
     end
 end
 LDLt(data::AbstractMatrix{T}) where {T} = LDLt{T,typeof(data)}(data)
-LDLt{T}(data::AbstractMatrix) where {T} = LDLt(convert(AbstractMatrix{T}, data)::AbstractMatrix{T})
+LDLt{T}(data::ArrayLike{2}) where {T} = LDLt(convert(AbstractMatrix{T}, data)::AbstractMatrix{T})
 
 size(S::LDLt) = size(S.data)
 size(S::LDLt, i::Integer) = size(S.data, i)
@@ -165,7 +165,7 @@ end
 
 factorize(S::SymTridiagonal) = ldlt(S)
 
-function ldiv!(S::LDLt{<:Any,<:SymTridiagonal}, B::AbstractVecOrMat)
+function ldiv!(S::LDLt{<:Any,<:SymTridiagonal}, B::VectorOrMatrixLike)
     require_one_based_indexing(B)
     n, nrhs = size(B, 1), size(B, 2)
     if size(S,1) != n
@@ -196,7 +196,7 @@ function ldiv!(S::LDLt{<:Any,<:SymTridiagonal}, B::AbstractVecOrMat)
     return B
 end
 
-rdiv!(B::AbstractVecOrMat, S::LDLt{<:Any,<:SymTridiagonal}) =
+rdiv!(B::VectorOrMatrixLike, S::LDLt{<:Any,<:SymTridiagonal}) =
     transpose(ldiv!(S, transpose(B)))
 
 function logabsdet(F::LDLt{<:Any,<:SymTridiagonal})

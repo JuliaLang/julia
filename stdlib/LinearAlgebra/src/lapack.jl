@@ -14,7 +14,7 @@ import ..LinearAlgebra: BlasFloat, BlasInt, LAPACKException,
 
 using ..LinearAlgebra: triu, tril, dot
 
-using Base: iszero, require_one_based_indexing
+using Base: iszero, require_one_based_indexing, VectorOrMatrixLike
 
 #Generic LAPACK error handlers
 """
@@ -83,10 +83,10 @@ function chkdiag(diag::AbstractChar)
     diag
 end
 
-subsetrows(X::AbstractVector, Y::AbstractArray, k) = Y[1:k]
-subsetrows(X::AbstractMatrix, Y::AbstractArray, k) = Y[1:k, :]
+subsetrows(X::ArrayLike{1}, Y::ArrayLike, k) = Y[1:k]
+subsetrows(X::ArrayLike{2}, Y::ArrayLike, k) = Y[1:k, :]
 
-function chkfinite(A::AbstractMatrix)
+function chkfinite(A::ArrayLike{2})
     for a in A
         if !isfinite(a)
             throw(ArgumentError("matrix contains Infs or NaNs"))
@@ -172,7 +172,7 @@ subdiagonal containing a nonzero band, `ku` is the last superdiagonal
 containing one, and `m` is the first dimension of the matrix `AB`. Returns
 the LU factorization in-place and `ipiv`, the vector of pivots used.
 """
-gbtrf!(kl::Integer, ku::Integer, m::Integer, AB::AbstractMatrix)
+gbtrf!(kl::Integer, ku::Integer, m::Integer, AB::ArrayLike{2})
 
 """
     gbtrs!(trans, kl, ku, m, AB, ipiv, B)
@@ -183,7 +183,7 @@ first subdiagonal containing a nonzero band, `ku` is the last superdiagonal
 containing one, and `m` is the first dimension of the matrix `AB`. `ipiv` is the vector
 of pivots returned from `gbtrf!`. Returns the vector or matrix `X`, overwriting `B` in-place.
 """
-gbtrs!(trans::AbstractChar, kl::Integer, ku::Integer, m::Integer, AB::AbstractMatrix, ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat)
+gbtrs!(trans::AbstractChar, kl::Integer, ku::Integer, m::Integer, AB::ArrayLike{2}, ipiv::AbstractVector{BlasInt}, B::VectorOrMatrixLike)
 
 ## (GE) general matrices: balancing and back-transforming
 for (gebal, gebak, elty, relty) in
@@ -249,7 +249,7 @@ and scaled). Modifies `A` in-place and returns `ilo`, `ihi`, and `scale`. If
 permuting was turned on, `A[i,j] = 0` if `j > i` and `1 < j < ilo` or `j > ihi`.
 `scale` contains information about the scaling/permutations performed.
 """
-gebal!(job::AbstractChar, A::AbstractMatrix)
+gebal!(job::AbstractChar, A::ArrayLike{2})
 
 """
     gebak!(job, side, ilo, ihi, scale, V)
@@ -259,7 +259,7 @@ the unscaled/unpermuted eigenvectors of the original matrix. Modifies `V`
 in-place. `side` can be `L` (left eigenvectors are transformed) or `R`
 (right eigenvectors are transformed).
 """
-gebak!(job::AbstractChar, side::AbstractChar, ilo::BlasInt, ihi::BlasInt, scale::AbstractVector, V::AbstractMatrix)
+gebak!(job::AbstractChar, side::AbstractChar, ilo::BlasInt, ihi::BlasInt, scale::ArrayLike{1}, V::ArrayLike{2})
 
 # (GE) general matrices, direct decompositions
 #
@@ -566,7 +566,7 @@ containing the off-diagonal elements of `B`; `tauq`, containing the
 elementary reflectors representing `Q`; and `taup`, containing the
 elementary reflectors representing `P`.
 """
-gebrd!(A::AbstractMatrix)
+gebrd!(A::ArrayLike{2})
 
 """
     gelqf!(A, tau)
@@ -578,7 +578,7 @@ must have length greater than or equal to the smallest dimension of `A`.
 Returns
 `A` and `tau` modified in-place.
 """
-gelqf!(A::AbstractMatrix, tau::AbstractVector)
+gelqf!(A::ArrayLike{2}, tau::ArrayLike{1})
 
 """
     geqlf!(A, tau)
@@ -589,7 +589,7 @@ must have length greater than or equal to the smallest dimension of `A`.
 
 Returns `A` and `tau` modified in-place.
 """
-geqlf!(A::AbstractMatrix, tau::AbstractVector)
+geqlf!(A::ArrayLike{2}, tau::ArrayLike{1})
 
 """
     geqp3!(A, jpvt, tau)
@@ -602,7 +602,7 @@ smallest dimension of `A`.
 
 `A`, `jpvt`, and `tau` are modified in-place.
 """
-geqp3!(A::AbstractMatrix, jpvt::AbstractVector{BlasInt}, tau::AbstractVector)
+geqp3!(A::ArrayLike{2}, jpvt::AbstractVector{BlasInt}, tau::ArrayLike{1})
 
 """
     geqrt!(A, T)
@@ -615,7 +615,7 @@ dimension of `A`.
 
 Returns `A` and `T` modified in-place.
 """
-geqrt!(A::AbstractMatrix, T::AbstractMatrix)
+geqrt!(A::ArrayLike{2}, T::ArrayLike{2})
 
 """
     geqrt3!(A, T)
@@ -628,7 +628,7 @@ equal the smallest dimension of `A`.
 
 Returns `A` and `T` modified in-place.
 """
-geqrt3!(A::AbstractMatrix, T::AbstractMatrix)
+geqrt3!(A::ArrayLike{2}, T::ArrayLike{2})
 
 """
     geqrf!(A, tau)
@@ -639,7 +639,7 @@ must have length greater than or equal to the smallest dimension of `A`.
 
 Returns `A` and `tau` modified in-place.
 """
-geqrf!(A::AbstractMatrix, tau::AbstractVector)
+geqrf!(A::ArrayLike{2}, tau::ArrayLike{1})
 
 """
     gerqf!(A, tau)
@@ -650,7 +650,7 @@ must have length greater than or equal to the smallest dimension of `A`.
 
 Returns `A` and `tau` modified in-place.
 """
-gerqf!(A::AbstractMatrix, tau::AbstractVector)
+gerqf!(A::ArrayLike{2}, tau::ArrayLike{1})
 
 """
     getrf!(A) -> (A, ipiv, info)
@@ -661,7 +661,7 @@ Returns `A`, modified in-place, `ipiv`, the pivoting information, and an `info`
 code which indicates success (`info = 0`), a singular value in `U`
 (`info = i`, in which case `U[i,i]` is singular), or an error code (`info < 0`).
 """
-getrf!(A::AbstractMatrix, tau::AbstractVector)
+getrf!(A::ArrayLike{2}, tau::ArrayLike{1})
 
 """
     gelqf!(A) -> (A, tau)
@@ -913,7 +913,7 @@ can be unmodified (`trans = N`), transposed (`trans = T`), or conjugate
 transposed (`trans = C`). Returns matrix `C` which is modified in-place
 with the result of the multiplication.
 """
-ormrz!(side::AbstractChar, trans::AbstractChar, A::AbstractMatrix, tau::AbstractVector, C::AbstractMatrix)
+ormrz!(side::AbstractChar, trans::AbstractChar, A::ArrayLike{2}, tau::ArrayLike{1}, C::ArrayLike{2})
 
 """
     tzrzf!(A) -> (A, tau)
@@ -922,7 +922,7 @@ Transforms the upper trapezoidal matrix `A` to upper triangular form in-place.
 Returns `A` and `tau`, the scalar parameters for the elementary reflectors
 of the transformation.
 """
-tzrzf!(A::AbstractMatrix)
+tzrzf!(A::ArrayLike{2})
 
 ## (GE) general matrices, solvers with factorization, solver and inverse
 for (gels, gesv, getrs, getri, elty) in
@@ -1065,7 +1065,7 @@ may be one of `N` (no modification), `T` (transpose), or `C` (conjugate
 transpose). `gels!` searches for the minimum norm/least squares solution.
 `A` may be under or over determined. The solution is returned in `B`.
 """
-gels!(trans::AbstractChar, A::AbstractMatrix, B::AbstractVecOrMat)
+gels!(trans::AbstractChar, A::ArrayLike{2}, B::VectorOrMatrixLike)
 
 """
     gesv!(A, B) -> (B, A, ipiv)
@@ -1075,7 +1075,7 @@ the `LU` factorization of `A`. `A` is overwritten with its `LU`
 factorization and `B` is overwritten with the solution `X`. `ipiv` contains the
 pivoting information for the `LU` factorization of `A`.
 """
-gesv!(A::AbstractMatrix, B::AbstractVecOrMat)
+gesv!(A::ArrayLike{2}, B::VectorOrMatrixLike)
 
 """
     getrs!(trans, A, ipiv, B)
@@ -1086,7 +1086,7 @@ is the `LU` factorization from `getrf!`, with `ipiv` the pivoting
 information. `trans` may be one of `N` (no modification), `T` (transpose),
 or `C` (conjugate transpose).
 """
-getrs!(trans::AbstractChar, A::AbstractMatrix, ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat)
+getrs!(trans::AbstractChar, A::ArrayLike{2}, ipiv::AbstractVector{BlasInt}, B::VectorOrMatrixLike)
 
 """
     getri!(A, ipiv)
@@ -1096,7 +1096,7 @@ Computes the inverse of `A`, using its `LU` factorization found by
 contains the `LU` factorization of `getrf!`. `A` is overwritten with
 its inverse.
 """
-getri!(A::AbstractMatrix, ipiv::AbstractVector{BlasInt})
+getri!(A::ArrayLike{2}, ipiv::AbstractVector{BlasInt})
 
 for (gesvx, elty) in
     ((:dgesvx_,:Float64),
@@ -1264,15 +1264,15 @@ condition number of `A` after equilbrating; `ferr`, the forward error bound for
 each solution vector in `X`; `berr`, the forward error bound for each solution
 vector in `X`; and `work`, the reciprocal pivot growth factor.
 """
-gesvx!(fact::AbstractChar, trans::AbstractChar, A::AbstractMatrix, AF::AbstractMatrix,
-    ipiv::AbstractVector{BlasInt}, equed::AbstractChar, R::AbstractVector, C::AbstractVector, B::AbstractVecOrMat)
+gesvx!(fact::AbstractChar, trans::AbstractChar, A::ArrayLike{2}, AF::ArrayLike{2},
+    ipiv::AbstractVector{BlasInt}, equed::AbstractChar, R::ArrayLike{1}, C::ArrayLike{1}, B::VectorOrMatrixLike)
 
 """
     gesvx!(A, B)
 
 The no-equilibration, no-transpose simplification of `gesvx!`.
 """
-gesvx!(A::AbstractMatrix, B::AbstractVecOrMat)
+gesvx!(A::ArrayLike{2}, B::VectorOrMatrixLike)
 
 for (gelsd, gelsy, elty) in
     ((:dgelsd_,:dgelsy_,:Float64),
@@ -1475,7 +1475,7 @@ is overwritten with the solution `X`. Singular values below `rcond`
 will be treated as zero. Returns the solution in `B` and the effective rank
 of `A` in `rnk`.
 """
-gelsd!(A::AbstractMatrix, B::AbstractVecOrMat, rcond::Real)
+gelsd!(A::ArrayLike{2}, B::VectorOrMatrixLike, rcond::Real)
 
 """
     gelsy!(A, B, rcond) -> (B, rnk)
@@ -1486,7 +1486,7 @@ is overwritten with the solution `X`. Singular values below `rcond`
 will be treated as zero. Returns the solution in `B` and the effective rank
 of `A` in `rnk`.
 """
-gelsy!(A::AbstractMatrix, B::AbstractVecOrMat, rcond::Real)
+gelsy!(A::ArrayLike{2}, B::VectorOrMatrixLike, rcond::Real)
 
 for (gglse, elty) in ((:dgglse_, :Float64),
                       (:sgglse_, :Float32),
@@ -1546,7 +1546,7 @@ Solves the equation `A * x = c` where `x` is subject to the equality
 constraint `B * x = d`. Uses the formula `||c - A*x||^2 = 0` to solve.
 Returns `X` and the residual sum-of-squares.
 """
-gglse!(A::AbstractMatrix, c::AbstractVector, B::AbstractMatrix, d::AbstractVector)
+gglse!(A::ArrayLike{2}, c::ArrayLike{1}, B::ArrayLike{2}, d::ArrayLike{1})
 
 # (GE) general matrices eigenvalue-eigenvector and singular value decompositions
 for (geev, gesvd, gesdd, ggsvd, elty, relty) in
@@ -1845,7 +1845,7 @@ aren't computed. If `jobvl = V` or `jobvr = V`, the corresponding
 eigenvectors are computed. Returns the eigenvalues in `W`, the right
 eigenvectors in `VR`, and the left eigenvectors in `VL`.
 """
-geev!(jobvl::AbstractChar, jobvr::AbstractChar, A::AbstractMatrix)
+geev!(jobvl::AbstractChar, jobvr::AbstractChar, A::ArrayLike{2})
 
 """
     gesdd!(job, A) -> (U, S, VT)
@@ -1857,7 +1857,7 @@ are computed. If `job = O`, `A` is overwritten with the columns of (thin) `U`
 and the rows of (thin) `V'`. If `job = S`, the columns of (thin) `U` and the
 rows of (thin) `V'` are computed and returned separately.
 """
-gesdd!(job::AbstractChar, A::AbstractMatrix)
+gesdd!(job::AbstractChar, A::ArrayLike{2})
 
 """
     gesvd!(jobu, jobvt, A) -> (U, S, VT)
@@ -1873,7 +1873,7 @@ computed and returned separately. `jobu` and `jobvt` can't both be `O`.
 
 Returns `U`, `S`, and `Vt`, where `S` are the singular values of `A`.
 """
-gesvd!(jobu::AbstractChar, jobvt::AbstractChar, A::AbstractMatrix)
+gesvd!(jobu::AbstractChar, jobvt::AbstractChar, A::ArrayLike{2})
 
 """
     ggsvd!(jobu, jobv, jobq, A, B) -> (U, V, Q, alpha, beta, k, l, R)
@@ -1886,7 +1886,7 @@ the orthogonal/unitary matrix `Q` is computed. If `jobu`, `jobv` or `jobq` is
 `N`, that matrix is not computed. This function is only available in LAPACK
 versions prior to 3.6.0.
 """
-ggsvd!(jobu::AbstractChar, jobv::AbstractChar, jobq::AbstractChar, A::AbstractMatrix, B::AbstractMatrix)
+ggsvd!(jobu::AbstractChar, jobv::AbstractChar, jobq::AbstractChar, A::ArrayLike{2}, B::ArrayLike{2})
 
 
 for (f, elty) in ((:dggsvd3_, :Float64),
@@ -2335,7 +2335,7 @@ condition numbers are computed for the right eigenvectors and the
 eigenvectors. If `sense = E,B`, the right and left eigenvectors must be
 computed.
 """
-geevx!(balanc::AbstractChar, jobvl::AbstractChar, jobvr::AbstractChar, sense::AbstractChar, A::AbstractMatrix)
+geevx!(balanc::AbstractChar, jobvl::AbstractChar, jobvr::AbstractChar, sense::AbstractChar, A::ArrayLike{2})
 
 """
     ggev!(jobvl, jobvr, A, B) -> (alpha, beta, vl, vr)
@@ -2345,7 +2345,7 @@ the left eigenvectors aren't computed. If `jobvr = N`, the right
 eigenvectors aren't computed. If `jobvl = V` or `jobvr = V`, the
 corresponding eigenvectors are computed.
 """
-ggev!(jobvl::AbstractChar, jobvr::AbstractChar, A::AbstractMatrix, B::AbstractMatrix)
+ggev!(jobvl::AbstractChar, jobvr::AbstractChar, A::ArrayLike{2}, B::ArrayLike{2})
 
 # One step incremental condition estimation of max/min singular values
 for (laic1, elty) in
@@ -2525,7 +2525,7 @@ superdiagonal.
 
 Overwrites `B` with the solution `X` and returns it.
 """
-gtsv!(dl::AbstractVector, d::AbstractVector, du::AbstractVector, B::AbstractVecOrMat)
+gtsv!(dl::ArrayLike{1}, d::ArrayLike{1}, du::ArrayLike{1}, B::VectorOrMatrixLike)
 
 """
     gttrf!(dl, d, du) -> (dl, d, du, du2, ipiv)
@@ -2536,7 +2536,7 @@ subdiagonal, `d` on the diagonal, and `du` on the superdiagonal.
 Modifies `dl`, `d`, and `du` in-place and returns them and the second
 superdiagonal `du2` and the pivoting vector `ipiv`.
 """
-gttrf!(dl::AbstractVector, d::AbstractVector, du::AbstractVector)
+gttrf!(dl::ArrayLike{1}, d::ArrayLike{1}, du::ArrayLike{1})
 
 """
     gttrs!(trans, dl, d, du, du2, ipiv, B)
@@ -2545,8 +2545,8 @@ Solves the equation `A * X = B` (`trans = N`), `transpose(A) * X = B` (`trans = 
 or `adjoint(A) * X = B` (`trans = C`) using the `LU` factorization computed by
 `gttrf!`. `B` is overwritten with the solution `X`.
 """
-gttrs!(trans::AbstractChar, dl::AbstractVector, d::AbstractVector, du::AbstractVector, du2::AbstractVector,
-       ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat)
+gttrs!(trans::AbstractChar, dl::ArrayLike{1}, d::ArrayLike{1}, du::ArrayLike{1}, du2::ArrayLike{1},
+       ipiv::AbstractVector{BlasInt}, B::VectorOrMatrixLike)
 
 ## (OR) orthogonal (or UN, unitary) matrices, extractors and multiplication
 for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
@@ -2951,7 +2951,7 @@ end
 Explicitly finds the matrix `Q` of a `LQ` factorization after calling
 `gelqf!` on `A`. Uses the output of `gelqf!`. `A` is overwritten by `Q`.
 """
-orglq!(A::AbstractMatrix, tau::AbstractVector, k::Integer = length(tau))
+orglq!(A::ArrayLike{2}, tau::ArrayLike{1}, k::Integer = length(tau))
 
 """
     orgqr!(A, tau, k = length(tau))
@@ -2959,7 +2959,7 @@ orglq!(A::AbstractMatrix, tau::AbstractVector, k::Integer = length(tau))
 Explicitly finds the matrix `Q` of a `QR` factorization after calling
 `geqrf!` on `A`. Uses the output of `geqrf!`. `A` is overwritten by `Q`.
 """
-orgqr!(A::AbstractMatrix, tau::AbstractVector, k::Integer = length(tau))
+orgqr!(A::ArrayLike{2}, tau::ArrayLike{1}, k::Integer = length(tau))
 
 """
     orgql!(A, tau, k = length(tau))
@@ -2967,7 +2967,7 @@ orgqr!(A::AbstractMatrix, tau::AbstractVector, k::Integer = length(tau))
 Explicitly finds the matrix `Q` of a `QL` factorization after calling
 `geqlf!` on `A`. Uses the output of `geqlf!`. `A` is overwritten by `Q`.
 """
-orgql!(A::AbstractMatrix, tau::AbstractVector, k::Integer = length(tau))
+orgql!(A::ArrayLike{2}, tau::ArrayLike{1}, k::Integer = length(tau))
 
 """
     orgrq!(A, tau, k = length(tau))
@@ -2975,7 +2975,7 @@ orgql!(A::AbstractMatrix, tau::AbstractVector, k::Integer = length(tau))
 Explicitly finds the matrix `Q` of a `RQ` factorization after calling
 `gerqf!` on `A`. Uses the output of `gerqf!`. `A` is overwritten by `Q`.
 """
-orgrq!(A::AbstractMatrix, tau::AbstractVector, k::Integer = length(tau))
+orgrq!(A::ArrayLike{2}, tau::ArrayLike{1}, k::Integer = length(tau))
 
 """
     ormlq!(side, trans, A, tau, C)
@@ -2985,7 +2985,7 @@ Computes `Q * C` (`trans = N`), `transpose(Q) * C` (`trans = T`), `adjoint(Q) * 
 for `side = R` using `Q` from a `LQ` factorization of `A` computed using
 `gelqf!`. `C` is overwritten.
 """
-ormlq!(side::AbstractChar, trans::AbstractChar, A::AbstractMatrix, tau::AbstractVector, C::AbstractVecOrMat)
+ormlq!(side::AbstractChar, trans::AbstractChar, A::ArrayLike{2}, tau::ArrayLike{1}, C::VectorOrMatrixLike)
 
 """
     ormqr!(side, trans, A, tau, C)
@@ -2995,7 +2995,7 @@ Computes `Q * C` (`trans = N`), `transpose(Q) * C` (`trans = T`), `adjoint(Q) * 
 for `side = R` using `Q` from a `QR` factorization of `A` computed using
 `geqrf!`. `C` is overwritten.
 """
-ormqr!(side::AbstractChar, trans::AbstractChar, A::AbstractMatrix, tau::AbstractVector, C::AbstractVecOrMat)
+ormqr!(side::AbstractChar, trans::AbstractChar, A::ArrayLike{2}, tau::ArrayLike{1}, C::VectorOrMatrixLike)
 
 """
     ormql!(side, trans, A, tau, C)
@@ -3005,7 +3005,7 @@ Computes `Q * C` (`trans = N`), `transpose(Q) * C` (`trans = T`), `adjoint(Q) * 
 for `side = R` using `Q` from a `QL` factorization of `A` computed using
 `geqlf!`. `C` is overwritten.
 """
-ormql!(side::AbstractChar, trans::AbstractChar, A::AbstractMatrix, tau::AbstractVector, C::AbstractVecOrMat)
+ormql!(side::AbstractChar, trans::AbstractChar, A::ArrayLike{2}, tau::ArrayLike{1}, C::VectorOrMatrixLike)
 
 """
     ormrq!(side, trans, A, tau, C)
@@ -3015,7 +3015,7 @@ Computes `Q * C` (`trans = N`), `transpose(Q) * C` (`trans = T`), `adjoint(Q) * 
 for `side = R` using `Q` from a `RQ` factorization of `A` computed using
 `gerqf!`. `C` is overwritten.
 """
-ormrq!(side::AbstractChar, trans::AbstractChar, A::AbstractMatrix, tau::AbstractVector, C::AbstractVecOrMat)
+ormrq!(side::AbstractChar, trans::AbstractChar, A::ArrayLike{2}, tau::ArrayLike{1}, C::VectorOrMatrixLike)
 
 """
     gemqrt!(side, trans, V, T, C)
@@ -3025,7 +3025,7 @@ Computes `Q * C` (`trans = N`), `transpose(Q) * C` (`trans = T`), `adjoint(Q) * 
 for `side = R` using `Q` from a `QR` factorization of `A` computed using
 `geqrt!`. `C` is overwritten.
 """
-gemqrt!(side::AbstractChar, trans::AbstractChar, V::AbstractMatrix, T::AbstractMatrix, C::AbstractVecOrMat)
+gemqrt!(side::AbstractChar, trans::AbstractChar, V::ArrayLike{2}, T::ArrayLike{2}, C::VectorOrMatrixLike)
 
 # (PO) positive-definite symmetric matrices,
 for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
@@ -3168,7 +3168,7 @@ of `A` is computed. If `uplo = L` the lower Cholesky decomposition of `A`
 is computed. `A` is overwritten by its Cholesky decomposition. `B` is
 overwritten with the solution `X`.
 """
-posv!(uplo::AbstractChar, A::AbstractMatrix, B::AbstractVecOrMat)
+posv!(uplo::AbstractChar, A::ArrayLike{2}, B::VectorOrMatrixLike)
 
 """
     potrf!(uplo, A)
@@ -3177,7 +3177,7 @@ Computes the Cholesky (upper if `uplo = U`, lower if `uplo = L`)
 decomposition of positive-definite matrix `A`. `A` is overwritten and
 returned with an info code.
 """
-potrf!(uplo::AbstractChar, A::AbstractMatrix)
+potrf!(uplo::AbstractChar, A::ArrayLike{2})
 
 """
     potri!(uplo, A)
@@ -3188,7 +3188,7 @@ decomposition.
 
 `A` is overwritten by its inverse and returned.
 """
-potri!(uplo::AbstractChar, A::AbstractMatrix)
+potri!(uplo::AbstractChar, A::ArrayLike{2})
 
 """
     potrs!(uplo, A, B)
@@ -3199,7 +3199,7 @@ positive definite matrix whose Cholesky decomposition was computed by
 computed. If `uplo = L` the lower Cholesky decomposition of `A` was
 computed. `B` is overwritten with the solution `X`.
 """
-potrs!(uplo::AbstractChar, A::AbstractMatrix, B::AbstractVecOrMat)
+potrs!(uplo::AbstractChar, A::ArrayLike{2}, B::VectorOrMatrixLike)
 
 """
     pstrf!(uplo, A, tol) -> (A, piv, rank, info)
@@ -3212,7 +3212,7 @@ Returns `A`, the pivots `piv`, the rank of `A`, and an `info` code. If `info = 0
 the factorization succeeded. If `info = i > 0 `, then `A` is indefinite or
 rank-deficient.
 """
-pstrf!(uplo::AbstractChar, A::AbstractMatrix, tol::Real)
+pstrf!(uplo::AbstractChar, A::ArrayLike{2}, tol::Real)
 
 # (PT) positive-definite, symmetric, tri-diagonal matrices
 # Direct solvers for general tridiagonal and symmetric positive-definite tridiagonal
@@ -3275,7 +3275,7 @@ Solves `A * X = B` for positive-definite tridiagonal `A`. `D` is the
 diagonal of `A` and `E` is the off-diagonal. `B` is overwritten with the
 solution `X` and returned.
 """
-ptsv!(D::AbstractVector, E::AbstractVector, B::AbstractVecOrMat)
+ptsv!(D::ArrayLike{1}, E::ArrayLike{1}, B::VectorOrMatrixLike)
 
 """
     pttrf!(D, E)
@@ -3284,7 +3284,7 @@ Computes the LDLt factorization of a positive-definite tridiagonal matrix
 with `D` as diagonal and `E` as off-diagonal. `D` and `E` are overwritten
 and returned.
 """
-pttrf!(D::AbstractVector, E::AbstractVector)
+pttrf!(D::ArrayLike{1}, E::ArrayLike{1})
 
 for (pttrs, elty, relty) in
     ((:dpttrs_,:Float64,:Float64),
@@ -3357,7 +3357,7 @@ Solves `A * X = B` for positive-definite tridiagonal `A` with diagonal
 `D` and off-diagonal `E` after computing `A`'s LDLt factorization using
 `pttrf!`. `B` is overwritten with the solution `X`.
 """
-pttrs!(D::AbstractVector, E::AbstractVector, B::AbstractVecOrMat)
+pttrs!(D::ArrayLike{1}, E::ArrayLike{1}, B::VectorOrMatrixLike)
 
 ## (TR) triangular matrices: solver and inverse
 for (trtri, trtrs, elty) in
@@ -3424,7 +3424,7 @@ triangular matrix `A`. If `diag = N`, `A` has non-unit diagonal elements.
 If `diag = U`, all diagonal elements of `A` are one. `A` is overwritten
 with its inverse.
 """
-trtri!(uplo::AbstractChar, diag::AbstractChar, A::AbstractMatrix)
+trtri!(uplo::AbstractChar, diag::AbstractChar, A::ArrayLike{2})
 
 """
     trtrs!(uplo, trans, diag, A, B)
@@ -3435,7 +3435,7 @@ triangular matrix `A`. If `diag = N`, `A` has non-unit diagonal elements.
 If `diag = U`, all diagonal elements of `A` are one. `B` is overwritten
 with the solution `X`.
 """
-trtrs!(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar, A::AbstractMatrix, B::AbstractVecOrMat)
+trtrs!(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar, A::ArrayLike{2}, B::VectorOrMatrixLike)
 
 #Eigenvector computation and condition number estimation
 for (trcon, trevc, trrfs, elty) in
@@ -3710,7 +3710,7 @@ diagonal elements. If `diag = U`, all diagonal elements of `A` are one.
 If `norm = I`, the condition number is found in the infinity norm. If
 `norm = O` or `1`, the condition number is found in the one norm.
 """
-trcon!(norm::AbstractChar, uplo::AbstractChar, diag::AbstractChar, A::AbstractMatrix)
+trcon!(norm::AbstractChar, uplo::AbstractChar, diag::AbstractChar, A::ArrayLike{2})
 
 """
     trevc!(side, howmny, select, T, VL = similar(T), VR = similar(T))
@@ -3723,8 +3723,8 @@ eigenvectors are found and backtransformed using `VL` and `VR`. If
 `howmny = S`, only the eigenvectors corresponding to the values in
 `select` are computed.
 """
-trevc!(side::AbstractChar, howmny::AbstractChar, select::AbstractVector{BlasInt}, T::AbstractMatrix,
-        VL::AbstractMatrix = similar(T), VR::AbstractMatrix = similar(T))
+trevc!(side::AbstractChar, howmny::AbstractChar, select::AbstractVector{BlasInt}, T::ArrayLike{2},
+        VL::ArrayLike{2} = similar(T), VR::ArrayLike{2} = similar(T))
 
 """
     trrfs!(uplo, trans, diag, A, B, X, Ferr, Berr) -> (Ferr, Berr)
@@ -3738,8 +3738,8 @@ diagonal elements. If `diag = U`, all diagonal elements of `A` are one.
 `Ferr` and `Berr` are optional inputs. `Ferr` is the forward error and
 `Berr` is the backward error, each component-wise.
 """
-trrfs!(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar, A::AbstractMatrix, B::AbstractVecOrMat,
-       X::AbstractVecOrMat, Ferr::AbstractVector, Berr::AbstractVector)
+trrfs!(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar, A::ArrayLike{2}, B::VectorOrMatrixLike,
+       X::VectorOrMatrixLike, Ferr::ArrayLike{1}, Berr::ArrayLike{1})
 
 ## (ST) Symmetric tridiagonal - eigendecomposition
 for (stev, stebz, stegr, stein, elty) in
@@ -3895,12 +3895,12 @@ for (stev, stebz, stegr, stein, elty) in
         end
     end
 end
-stegr!(jobz::AbstractChar, dv::AbstractVector, ev::AbstractVector) = stegr!(jobz, 'A', dv, ev, 0.0, 0.0, 0, 0)
+stegr!(jobz::AbstractChar, dv::ArrayLike{1}, ev::ArrayLike{1}) = stegr!(jobz, 'A', dv, ev, 0.0, 0.0, 0, 0)
 
 # Allow user to skip specification of iblock and isplit
-stein!(dv::AbstractVector, ev::AbstractVector, w_in::AbstractVector) = stein!(dv, ev, w_in, zeros(BlasInt,0), zeros(BlasInt,0))
+stein!(dv::ArrayLike{1}, ev::ArrayLike{1}, w_in::ArrayLike{1}) = stein!(dv, ev, w_in, zeros(BlasInt,0), zeros(BlasInt,0))
 # Allow user to specify just one eigenvector to get in stein!
-stein!(dv::AbstractVector, ev::AbstractVector, eval::Real) = stein!(dv, ev, [eval], zeros(BlasInt,0), zeros(BlasInt,0))
+stein!(dv::ArrayLike{1}, ev::ArrayLike{1}, eval::Real) = stein!(dv, ev, [eval], zeros(BlasInt,0), zeros(BlasInt,0))
 
 """
     stev!(job, dv, ev) -> (dv, Zmat)
@@ -3910,7 +3910,7 @@ diagonal and `ev` as off-diagonal. If `job = N` only the eigenvalues are
 found and returned in `dv`. If `job = V` then the eigenvectors are also found
 and returned in `Zmat`.
 """
-stev!(job::AbstractChar, dv::AbstractVector, ev::AbstractVector)
+stev!(job::AbstractChar, dv::ArrayLike{1}, ev::ArrayLike{1})
 
 """
     stebz!(range, order, vl, vu, il, iu, abstol, dv, ev) -> (dv, iblock, isplit)
@@ -3923,7 +3923,7 @@ are found. If `range = V`, the eigenvalues in the half-open interval
 block. If `order = E`, they are ordered across all the blocks.
 `abstol` can be set as a tolerance for convergence.
 """
-stebz!(range::AbstractChar, order::AbstractChar, vl, vu, il::Integer, iu::Integer, abstol::Real, dv::AbstractVector, ev::AbstractVector)
+stebz!(range::AbstractChar, order::AbstractChar, vl, vu, il::Integer, iu::Integer, abstol::Real, dv::ArrayLike{1}, ev::ArrayLike{1})
 
 """
     stegr!(jobz, range, dv, ev, vl, vu, il, iu) -> (w, Z)
@@ -3936,7 +3936,7 @@ are found. If `range = V`, the eigenvalues in the half-open interval
 `il` and `iu` are found. The eigenvalues are returned in `w` and the eigenvectors
 in `Z`.
 """
-stegr!(jobz::AbstractChar, range::AbstractChar, dv::AbstractVector, ev::AbstractVector, vl::Real, vu::Real, il::Integer, iu::Integer)
+stegr!(jobz::AbstractChar, range::AbstractChar, dv::ArrayLike{1}, ev::ArrayLike{1}, vl::Real, vu::Real, il::Integer, iu::Integer)
 
 """
     stein!(dv, ev_in, w_in, iblock_in, isplit_in)
@@ -3947,7 +3947,7 @@ eigenvalues for which to find corresponding eigenvectors. `iblock_in`
 specifies the submatrices corresponding to the eigenvalues in `w_in`.
 `isplit_in` specifies the splitting points between the submatrix blocks.
 """
-stein!(dv::AbstractVector, ev_in::AbstractVector, w_in::AbstractVector, iblock_in::AbstractVector{BlasInt}, isplit_in::AbstractVector{BlasInt})
+stein!(dv::ArrayLike{1}, ev_in::ArrayLike{1}, w_in::ArrayLike{1}, iblock_in::AbstractVector{BlasInt}, isplit_in::AbstractVector{BlasInt})
 
 ## (SY) symmetric real matrices - Bunch-Kaufman decomposition,
 ## solvers (direct and factored) and inverse.
@@ -4909,7 +4909,7 @@ is upper triangular. If `uplo = L`, it is lower triangular. `ipiv` is
 the pivot vector from the triangular factorization. `A` is overwritten
 by `L` and `D`.
 """
-syconv!(uplo::AbstractChar, A::AbstractMatrix, ipiv::AbstractVector{BlasInt})
+syconv!(uplo::AbstractChar, A::ArrayLike{2}, ipiv::AbstractVector{BlasInt})
 
 """
     sysv!(uplo, A, B) -> (B, A, ipiv)
@@ -4920,7 +4920,7 @@ the upper half of `A` is stored. If `uplo = L`, the lower half is stored.
 Bunch-Kaufman factorization. `ipiv` contains pivoting information about the
 factorization.
 """
-sysv!(uplo::AbstractChar, A::AbstractMatrix, B::AbstractVecOrMat)
+sysv!(uplo::AbstractChar, A::ArrayLike{2}, B::VectorOrMatrixLike)
 
 """
     sytrf!(uplo, A) -> (A, ipiv, info)
@@ -4934,7 +4934,7 @@ the error code `info` which is a non-negative integer. If `info` is positive
 the matrix is singular and the diagonal part of the factorization is exactly
 zero at position `info`.
 """
-sytrf!(uplo::AbstractChar, A::AbstractMatrix)
+sytrf!(uplo::AbstractChar, A::ArrayLike{2})
 
 """
     sytri!(uplo, A, ipiv)
@@ -4943,7 +4943,7 @@ Computes the inverse of a symmetric matrix `A` using the results of
 `sytrf!`. If `uplo = U`, the upper half of `A` is stored. If `uplo = L`,
 the lower half is stored. `A` is overwritten by its inverse.
 """
-sytri!(uplo::AbstractChar, A::AbstractMatrix, ipiv::AbstractVector{BlasInt})
+sytri!(uplo::AbstractChar, A::ArrayLike{2}, ipiv::AbstractVector{BlasInt})
 
 """
     sytrs!(uplo, A, ipiv, B)
@@ -4953,7 +4953,7 @@ results of `sytrf!`. If `uplo = U`, the upper half of `A` is stored.
 If `uplo = L`, the lower half is stored. `B` is overwritten by the
 solution `X`.
 """
-sytrs!(uplo::AbstractChar, A::AbstractMatrix, ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat)
+sytrs!(uplo::AbstractChar, A::ArrayLike{2}, ipiv::AbstractVector{BlasInt}, B::VectorOrMatrixLike)
 
 
 """
@@ -4965,7 +4965,7 @@ the upper half of `A` is stored. If `uplo = L`, the lower half is stored.
 Bunch-Kaufman factorization. `ipiv` contains pivoting information about the
 factorization.
 """
-hesv!(uplo::AbstractChar, A::AbstractMatrix, B::AbstractVecOrMat)
+hesv!(uplo::AbstractChar, A::ArrayLike{2}, B::VectorOrMatrixLike)
 
 """
     hetrf!(uplo, A) -> (A, ipiv, info)
@@ -4979,7 +4979,7 @@ the error code `info` which is a non-negative integer. If `info` is positive
 the matrix is singular and the diagonal part of the factorization is exactly
 zero at position `info`.
 """
-hetrf!(uplo::AbstractChar, A::AbstractMatrix)
+hetrf!(uplo::AbstractChar, A::ArrayLike{2})
 
 """
     hetri!(uplo, A, ipiv)
@@ -4988,7 +4988,7 @@ Computes the inverse of a Hermitian matrix `A` using the results of
 `sytrf!`. If `uplo = U`, the upper half of `A` is stored. If `uplo = L`,
 the lower half is stored. `A` is overwritten by its inverse.
 """
-hetri!(uplo::AbstractChar, A::AbstractMatrix, ipiv::AbstractVector{BlasInt})
+hetri!(uplo::AbstractChar, A::ArrayLike{2}, ipiv::AbstractVector{BlasInt})
 
 """
     hetrs!(uplo, A, ipiv, B)
@@ -4998,7 +4998,7 @@ results of `sytrf!`. If `uplo = U`, the upper half of `A` is stored.
 If `uplo = L`, the lower half is stored. `B` is overwritten by the
 solution `X`.
 """
-hetrs!(uplo::AbstractChar, A::AbstractMatrix, ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat)
+hetrs!(uplo::AbstractChar, A::ArrayLike{2}, ipiv::AbstractVector{BlasInt}, B::VectorOrMatrixLike)
 
 # Symmetric (real) eigensolvers
 for (syev, syevr, sygvd, elty) in
@@ -5306,7 +5306,7 @@ Finds the eigenvalues (`jobz = N`) or eigenvalues and eigenvectors
 (`jobz = V`) of a symmetric matrix `A`. If `uplo = U`, the upper triangle
 of `A` is used. If `uplo = L`, the lower triangle of `A` is used.
 """
-syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix)
+syev!(jobz::AbstractChar, uplo::AbstractChar, A::ArrayLike{2})
 
 """
     syevr!(jobz, range, uplo, A, vl, vu, il, iu, abstol) -> (W, Z)
@@ -5321,7 +5321,7 @@ found. `abstol` can be set as a tolerance for convergence.
 
 The eigenvalues are returned in `W` and the eigenvectors in `Z`.
 """
-syevr!(jobz::AbstractChar, range::AbstractChar, uplo::AbstractChar, A::AbstractMatrix,
+syevr!(jobz::AbstractChar, range::AbstractChar, uplo::AbstractChar, A::ArrayLike{2},
        vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
 
 """
@@ -5336,7 +5336,7 @@ of `A` and `B` are used. If `uplo = L`, the lower triangles of `A` and
 `A * B * x = lambda * x`. If `itype = 3`, the problem to solve is
 `B * A * x = lambda * x`.
 """
-sygvd!(itype::Integer, jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix, B::AbstractMatrix)
+sygvd!(itype::Integer, jobz::AbstractChar, uplo::AbstractChar, A::ArrayLike{2}, B::ArrayLike{2})
 
 ## (BD) Bidiagonal matrices - singular value decomposition
 for (bdsqr, relty, elty) in
@@ -5398,7 +5398,7 @@ compute the product `Q' * C`.
 
 Returns the singular values in `d`, and the matrix `C` overwritten with `Q' * C`.
 """
-bdsqr!(uplo::AbstractChar, d::AbstractVector, e_::AbstractVector, Vt::AbstractMatrix, U::AbstractMatrix, C::AbstractMatrix)
+bdsqr!(uplo::AbstractChar, d::ArrayLike{1}, e_::ArrayLike{1}, Vt::ArrayLike{2}, U::ArrayLike{2}, C::ArrayLike{2})
 
 #Defined only for real types
 for (bdsdc, elty) in
@@ -5470,7 +5470,7 @@ and vectors are found in compact form. Only works for real types.
 Returns the singular values in `d`, and if `compq = P`, the compact singular
 vectors in `iq`.
 """
-bdsdc!(uplo::AbstractChar, compq::AbstractChar, d::AbstractVector, e_::AbstractVector)
+bdsdc!(uplo::AbstractChar, compq::AbstractChar, d::ArrayLike{1}, e_::ArrayLike{1})
 
 for (gecon, elty) in
     ((:dgecon_,:Float64),
@@ -5548,7 +5548,7 @@ the condition number is found in the infinity norm. If `normtype = O` or
 `1`, the condition number is found in the one norm. `A` must be the
 result of `getrf!` and `anorm` is the norm of `A` in the relevant norm.
 """
-gecon!(normtype::AbstractChar, A::AbstractMatrix, anorm)
+gecon!(normtype::AbstractChar, A::ArrayLike{2}, anorm)
 
 for (gehrd, elty) in
     ((:dgehrd_,:Float64),
@@ -5588,7 +5588,7 @@ for (gehrd, elty) in
         end
     end
 end
-gehrd!(A::AbstractMatrix) = gehrd!(1, size(A, 1), A)
+gehrd!(A::ArrayLike{2}) = gehrd!(1, size(A, 1), A)
 
 """
     gehrd!(ilo, ihi, A) -> (A, tau)
@@ -5598,7 +5598,7 @@ then `ilo` and `ihi` are the outputs of `gebal!`. Otherwise they should be
 `ilo = 1` and `ihi = size(A,2)`. `tau` contains the elementary reflectors of
 the factorization.
 """
-gehrd!(ilo::Integer, ihi::Integer, A::AbstractMatrix)
+gehrd!(ilo::Integer, ihi::Integer, A::ArrayLike{2})
 
 for (orghr, elty) in
     ((:dorghr_,:Float64),
@@ -5646,7 +5646,7 @@ end
 Explicitly finds `Q`, the orthogonal/unitary matrix from `gehrd!`. `ilo`,
 `ihi`, `A`, and `tau` must correspond to the input/output to `gehrd!`.
 """
-orghr!(ilo::Integer, ihi::Integer, A::AbstractMatrix, tau::AbstractVector)
+orghr!(ilo::Integer, ihi::Integer, A::ArrayLike{2}, tau::ArrayLike{1})
 
 for (ormhr, elty) in
     ((:dormhr_,:Float64),
@@ -5749,7 +5749,7 @@ If `uplo = U`, the upper half of `A` is stored; if `uplo = L`, the lower half is
 `tau` contains the elementary reflectors of the factorization, `d` contains the
 diagonal and `e` contains the upper/lower diagonal.
 """
-hetrd!(uplo::AbstractChar, A::AbstractMatrix)
+hetrd!(uplo::AbstractChar, A::ArrayLike{2})
 
 for (orgtr, elty) in
     ((:dorgtr_,:Float64),
@@ -5799,7 +5799,7 @@ end
 Explicitly finds `Q`, the orthogonal/unitary matrix from `hetrd!`. `uplo`,
 `A`, and `tau` must correspond to the input/output to `hetrd!`.
 """
-orgtr!(uplo::AbstractChar, A::AbstractMatrix, tau::AbstractVector)
+orgtr!(uplo::AbstractChar, A::ArrayLike{2}, tau::ArrayLike{1})
 
 for (ormtr, elty) in
     ((:dormtr_,:Float64),
@@ -6052,7 +6052,7 @@ vectors (`jobvs = V`) of matrix `A`. `A` is overwritten by its Schur form.
 Returns `A`, `vs` containing the Schur vectors, and `w`, containing the
 eigenvalues.
 """
-gees!(jobvs::AbstractChar, A::AbstractMatrix)
+gees!(jobvs::AbstractChar, A::ArrayLike{2})
 
 
 """
@@ -6065,7 +6065,7 @@ vectors (`jobsvl = V`), or right Schur vectors (`jobvsr = V`) of `A` and
 The generalized eigenvalues are returned in `alpha` and `beta`. The left Schur
 vectors are returned in `vsl` and the right Schur vectors are returned in `vsr`.
 """
-gges!(jobvsl::AbstractChar, jobvsr::AbstractChar, A::AbstractMatrix, B::AbstractMatrix)
+gges!(jobvsl::AbstractChar, jobvsr::AbstractChar, A::ArrayLike{2}, B::ArrayLike{2})
 
 for (trexc, trsen, tgsen, elty) in
     ((:dtrexc_, :dtrsen_, :dtgsen_, :Float64),
@@ -6370,7 +6370,7 @@ Reorder the Schur factorization of a matrix. If `compq = V`, the Schur
 vectors `Q` are reordered. If `compq = N` they are not modified. `ifst`
 and `ilst` specify the reordering of the vectors.
 """
-trexc!(compq::AbstractChar, ifst::BlasInt, ilst::BlasInt, T::AbstractMatrix, Q::AbstractMatrix)
+trexc!(compq::AbstractChar, ifst::BlasInt, ilst::BlasInt, T::ArrayLike{2}, Q::ArrayLike{2})
 
 """
     trsen!(compq, job, select, T, Q) -> (T, Q, w, s, sep)
@@ -6388,7 +6388,7 @@ Returns `T`, `Q`, reordered eigenvalues in `w`, the condition number of the
 cluster of eigenvalues `s`, and the condition number of the invariant subspace
 `sep`.
 """
-trsen!(compq::AbstractChar, job::AbstractChar, select::AbstractVector{BlasInt}, T::AbstractMatrix, Q::AbstractMatrix)
+trsen!(compq::AbstractChar, job::AbstractChar, select::AbstractVector{BlasInt}, T::ArrayLike{2}, Q::ArrayLike{2})
 
 """
     tgsen!(select, S, T, Q, Z) -> (S, T, alpha, beta, Q, Z)
@@ -6396,7 +6396,7 @@ trsen!(compq::AbstractChar, job::AbstractChar, select::AbstractVector{BlasInt}, 
 Reorders the vectors of a generalized Schur decomposition. `select` specifies
 the eigenvalues in each cluster.
 """
-tgsen!(select::AbstractVector{BlasInt}, S::AbstractMatrix, T::AbstractMatrix, Q::AbstractMatrix, Z::AbstractMatrix)
+tgsen!(select::AbstractVector{BlasInt}, S::ArrayLike{2}, T::ArrayLike{2}, Q::ArrayLike{2}, Z::ArrayLike{2})
 
 for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
                    (:strsyl_, :Float32, :Float32),
@@ -6442,6 +6442,6 @@ transposed. Similarly for `transb` and `B`. If `isgn = 1`, the equation
 
 Returns `X` (overwriting `C`) and `scale`.
 """
-trsyl!(transa::AbstractChar, transb::AbstractChar, A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix, isgn::Int=1)
+trsyl!(transa::AbstractChar, transb::AbstractChar, A::ArrayLike{2}, B::ArrayLike{2}, C::ArrayLike{2}, isgn::Int=1)
 
 end # module

@@ -514,7 +514,7 @@ julia> f2()
     allowing *other code* to remove your bounds checks with [`@inbounds`](@ref).
     As noted there, the caller must verify—using information they can access—that
     their accesses are valid before using `@inbounds`. For indexing into your
-    [`AbstractArray`](@ref) subclasses, for example, this involves checking the
+    [`ArrayLike`](@ref) subclasses, for example, this involves checking the
     indices against its [`size`](@ref). Therefore, `@boundscheck` annotations
     should only be added to a [`getindex`](@ref) or [`setindex!`](@ref)
     implementation after you are certain its behavior is correct.
@@ -617,7 +617,7 @@ end
 
 map(f, v::SimpleVector) = Any[ f(v[i]) for i = 1:length(v) ]
 
-getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]...)
+getindex(v::SimpleVector, I::ArrayLike) = Core.svec(Any[ v[i] for i in I ]...)
 
 """
     isassigned(array, i) -> Bool

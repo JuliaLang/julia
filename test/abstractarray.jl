@@ -250,7 +250,7 @@ T24Linear(::Type{T}, dims::NTuple{N,Int}) where {T,N} = T24Linear{T,N,dims}()
 
 T24Linear(     X::AbstractArray{T,N}) where {T,N  } = T24Linear{T,N}(X)
 T24Linear{T  }(X::AbstractArray{_,N}) where {T,N,_} = T24Linear{T,N}(X)
-T24Linear{T,N}(X::AbstractArray     ) where {T,N  } = T24Linear{T,N,size(X)}(X...)
+T24Linear{T,N}(X::ArrayLike     ) where {T,N  } = T24Linear{T,N,size(X)}(X...)
 
 Base.size(::T24Linear{T,N,dims}) where {T,N,dims} = dims
 import Base: IndexLinear
@@ -269,7 +269,7 @@ TSlow(::Type{T}, dims::NTuple{N,Int}) where {T,N} = TSlow{T,N}(Dict{NTuple{N,Int
 TSlow{T,N}(X::TSlow{T,N})         where {T,N  } = X
 TSlow(     X::AbstractArray{T,N}) where {T,N  } = TSlow{T,N}(X)
 TSlow{T  }(X::AbstractArray{_,N}) where {T,N,_} = TSlow{T,N}(X)
-TSlow{T,N}(X::AbstractArray     ) where {T,N  } = begin
+TSlow{T,N}(X::ArrayLike     ) where {T,N  } = begin
     A = TSlow(T, size(X))
     for I in CartesianIndices(size(X))
         A[I.I...] = X[I.I...]
@@ -489,17 +489,17 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test firstindex(B, 1) == firstindex(A, 1) == first(axes(B, 1))
     @test firstindex(B, 2) == firstindex(A, 2) == first(axes(B, 2))
 
-    # isassigned(a::AbstractArray, i::Int...)
+    # isassigned(a::ArrayLike, i::Int...)
     j = rand(1:length(B))
     @test isassigned(B, j) == true
     if T == T24Linear
         @test isassigned(B, length(B) + 1) == false
     end
 
-    # reshape(a::AbstractArray, dims::Dims)
+    # reshape(a::ArrayLike, dims::Dims)
     @test_throws DimensionMismatch reshape(B, (0, 1))
 
-    # copyto!(dest::AbstractArray, src::AbstractArray)
+    # copyto!(dest::ArrayLike, src::ArrayLike)
     @test_throws BoundsError copyto!(Vector{Int}(undef, 10), [1:11...])
 
     # convert{T, N}(::Type{Array}, A::AbstractArray{T, N})

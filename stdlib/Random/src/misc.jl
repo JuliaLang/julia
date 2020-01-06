@@ -84,7 +84,7 @@ end
 # each element of A is included in S with independent probability p.
 # (Note that this is different from the problem of finding a random
 #  size-m subset of A where m is fixed!)
-function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real)
+function randsubseq!(r::AbstractRNG, S::ArrayLike, A::ArrayLike, p::Real)
     require_one_based_indexing(S, A)
     0 <= p <= 1 || throw(ArgumentError("probability $p not in [0,1]"))
     n = length(A)
@@ -140,7 +140,7 @@ julia> S
  8
 ```
 """
-randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(default_rng(), S, A, p)
+randsubseq!(S::ArrayLike, A::ArrayLike, p::Real) = randsubseq!(default_rng(), S, A, p)
 
 randsubseq(r::AbstractRNG, A::AbstractArray{T}, p::Real) where {T} =
     randsubseq!(r, T[], A, p)
@@ -163,7 +163,7 @@ julia> randsubseq(rng, collect(1:8), 0.3)
  8
 ```
 """
-randsubseq(A::AbstractArray, p::Real) = randsubseq(default_rng(), A, p)
+randsubseq(A::ArrayLike, p::Real) = randsubseq(default_rng(), A, p)
 
 
 ## rand Less Than Masked 52 bits (helper function)
@@ -174,7 +174,7 @@ ltm52(n::Int, mask::Int=nextpow(2, n)-1) = LessThan(n-1, Masked(mask, UInt52Raw(
 ## shuffle & shuffle!
 
 """
-    shuffle!([rng=GLOBAL_RNG,] v::AbstractArray)
+    shuffle!([rng=GLOBAL_RNG,] v::ArrayLike)
 
 In-place version of [`shuffle`](@ref): randomly permute `v` in-place,
 optionally supplying the random-number generator `rng`.
@@ -203,7 +203,7 @@ julia> shuffle!(rng, Vector(1:16))
  13
 ```
 """
-function shuffle!(r::AbstractRNG, a::AbstractArray)
+function shuffle!(r::AbstractRNG, a::ArrayLike)
     require_one_based_indexing(a)
     n = length(a)
     n <= 1 && return a # nextpow below won't work with n == 0
@@ -217,10 +217,10 @@ function shuffle!(r::AbstractRNG, a::AbstractArray)
     return a
 end
 
-shuffle!(a::AbstractArray) = shuffle!(default_rng(), a)
+shuffle!(a::ArrayLike) = shuffle!(default_rng(), a)
 
 """
-    shuffle([rng=GLOBAL_RNG,] v::AbstractArray)
+    shuffle([rng=GLOBAL_RNG,] v::ArrayLike)
 
 Return a randomly permuted copy of `v`. The optional `rng` argument specifies a random
 number generator (see [Random Numbers](@ref)).
@@ -245,8 +245,8 @@ julia> shuffle(rng, Vector(1:10))
   8
 ```
 """
-shuffle(r::AbstractRNG, a::AbstractArray) = shuffle!(r, copymutable(a))
-shuffle(a::AbstractArray) = shuffle(default_rng(), a)
+shuffle(r::AbstractRNG, a::ArrayLike) = shuffle!(r, copymutable(a))
+shuffle(a::ArrayLike) = shuffle(default_rng(), a)
 
 
 ## randperm & randperm!

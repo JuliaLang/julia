@@ -47,7 +47,7 @@ struct LQ{T,S<:AbstractMatrix{T}} <: Factorization{T}
     end
 end
 LQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQ{T,typeof(factors)}(factors, τ)
-function LQ{T}(factors::AbstractMatrix, τ::AbstractVector) where {T}
+function LQ{T}(factors::ArrayLike{2}, τ::ArrayLike{1}) where {T}
     LQ(convert(AbstractMatrix{T}, factors), convert(Vector{T}, τ))
 end
 
@@ -56,10 +56,10 @@ Base.iterate(S::LQ) = (S.L, Val(:Q))
 Base.iterate(S::LQ, ::Val{:Q}) = (S.Q, Val(:done))
 Base.iterate(S::LQ, ::Val{:done}) = nothing
 
-struct LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+struct LQPackedQ{T,S<:ArrayLike{2}} <: AbstractMatrix{T}
     factors::Matrix{T}
     τ::Vector{T}
-    LQPackedQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
+    LQPackedQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:ArrayLike{2}} = new(factors, τ)
 end
 LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQPackedQ{T,typeof(factors)}(factors, τ)
 
@@ -326,7 +326,7 @@ function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
     c2r = reshape(copy(transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
     x = ldiv!(F, c2r)
     return reshape(copy(reinterpret(Complex{T}, copy(transpose(reshape(x, div(length(x), 2), 2))))),
-                           isa(B, AbstractVector) ? (size(F,2),) : (size(F,2), size(B,2)))
+                           isa(B, ArrayLike{1}) ? (size(F,2),) : (size(F,2), size(B,2)))
 end
 
 

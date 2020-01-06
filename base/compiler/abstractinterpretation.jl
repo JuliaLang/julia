@@ -199,7 +199,7 @@ function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecial
         if istopfunction(f, :getindex) || istopfunction(f, :setindex!)
             arrty = argtypes[2]
             # don't propagate constant index into indexing of non-constant array
-            if arrty isa Type && arrty <: AbstractArray && !issingletontype(arrty)
+            if arrty isa Type && arrty <: ArrayLike && !issingletontype(arrty)
                 return Any
             end
         elseif istopfunction(f, :iterate)

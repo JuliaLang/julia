@@ -51,7 +51,7 @@ union(s::AbstractSet) = copy(s)
 const ∪ = union
 
 """
-    union!(s::Union{AbstractSet,AbstractVector}, itrs...)
+    union!(s::Union{AbstractSet,ArrayLike{1}}, itrs...)
 
 Construct the union of passed in sets and overwrite `s` with the result.
 Maintain order with arrays.
@@ -124,7 +124,7 @@ intersect(s::AbstractSet, itr) = mapfilter(_in(s), push!, itr, emptymutable(s))
 const ∩ = intersect
 
 """
-    intersect!(s::Union{AbstractSet,AbstractVector}, itrs...)
+    intersect!(s::Union{AbstractSet,ArrayLike{1}}, itrs...)
 
 Intersect all passed in sets and overwrite `s` with the result.
 Maintain order with arrays.
@@ -215,7 +215,7 @@ symdiff(s, sets...) = symdiff!(emptymutable(s, promote_eltype(s, sets...)), s, s
 symdiff(s) = symdiff!(copy(s))
 
 """
-    symdiff!(s::Union{AbstractSet,AbstractVector}, itrs...)
+    symdiff!(s::Union{AbstractSet,ArrayLike{1}}, itrs...)
 
 Construct the symmetric difference of the passed in sets, and overwrite `s` with the result.
 When `s` is an array, the order is maintained.

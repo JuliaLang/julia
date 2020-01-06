@@ -181,7 +181,7 @@ function unique(f, C)
     return _unique!(f, out, C, seen, i)
 end
 
-function _unique!(f, out::AbstractVector, C, seen::Set, i)
+function _unique!(f, out::ArrayLike{1}, C, seen::Set, i)
     s = iterate(C, i)
     while s !== nothing
         (x, i) = s
@@ -203,7 +203,7 @@ function _unique!(f, out::AbstractVector, C, seen::Set, i)
 end
 
 """
-    unique!(f, A::AbstractVector)
+    unique!(f, A::ArrayLike{1})
 
 Selects one value from `A` for each unique value produced by `f` applied to
 elements of `A` , then return the modified A.
@@ -231,7 +231,7 @@ julia> unique!(iseven, [2, 3, 5, 7, 9])
  3
 ```
 """
-function unique!(f, A::AbstractVector)
+function unique!(f, A::ArrayLike{1})
     if length(A) <= 1
         return A
     end
@@ -244,7 +244,7 @@ function unique!(f, A::AbstractVector)
     return _unique!(f, A, seen, i, i+1)
 end
 
-function _unique!(f, A::AbstractVector, seen::Set, current::Integer, i::Integer)
+function _unique!(f, A::ArrayLike{1}, seen::Set, current::Integer, i::Integer)
     while i <= lastindex(A)
         x = @inbounds A[i]
         y = f(x)
@@ -267,13 +267,13 @@ end
 
 # If A is not grouped, then we will need to keep track of all of the elements that we have
 # seen so far.
-_unique!(A::AbstractVector) = unique!(identity, A::AbstractVector)
+_unique!(A::ArrayLike{1}) = unique!(identity, A::ArrayLike{1})
 
 # If A is grouped, so that each unique element is in a contiguous group, then we only
 # need to keep track of one element at a time. We replace the elements of A with the
 # unique elements that we see in the order that we see them. Once we have iterated
 # through A, we resize A based on the number of unique elements that we see.
-function _groupedunique!(A::AbstractVector)
+function _groupedunique!(A::ArrayLike{1})
     isempty(A) && return A
     idxs = eachindex(A)
     y = first(A)
@@ -291,7 +291,7 @@ function _groupedunique!(A::AbstractVector)
 end
 
 """
-    unique!(A::AbstractVector)
+    unique!(A::ArrayLike{1})
 
 Remove duplicate items as determined by [`isequal`](@ref), then return the modified `A`.
 `unique!` will return the elements of `A` in the order that they occur. If you do not care
@@ -620,9 +620,9 @@ function _replace!(new::Callable, res::T, A::T,
     res
 end
 
-### replace! for AbstractArray
+### replace! for ArrayLike
 
-function _replace!(new::Callable, res::AbstractArray, A::AbstractArray, count::Int)
+function _replace!(new::Callable, res::ArrayLike, A::ArrayLike, count::Int)
     c = 0
     if count >= length(A) # simpler loop allows for SIMD
         for i in eachindex(A)

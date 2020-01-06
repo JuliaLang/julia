@@ -16,7 +16,8 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     setindex!, show, similar, sin, sincos, sinh, size, sqrt,
     strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
 using Base: hvcat_fill, IndexLinear, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_vcat, require_one_based_indexing
+    @propagate_inbounds, @pure, reduce, typed_vcat, require_one_based_indexing,
+    VectorOrMatrixLike
 using Base.Broadcast: Broadcasted, broadcasted
 
 export
@@ -345,7 +346,7 @@ control over the factorization of `B`.
 rdiv!(A, B)
 
 copy_oftype(A::AbstractArray{T}, ::Type{T}) where {T} = copy(A)
-copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractArray{S,N}, A)
+copy_oftype(A::ArrayLike{N}, ::Type{S}) where {N,S} = convert(AbstractArray{S,N}, A)
 
 include("adjtrans.jl")
 include("transpose.jl")

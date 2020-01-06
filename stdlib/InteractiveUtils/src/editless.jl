@@ -105,7 +105,7 @@ end
 
 editor_matches(p::Regex, cmd::Cmd) = occursin(p, shell_escape(cmd))
 editor_matches(p::String, cmd::Cmd) = p == splitext(basename(first(cmd)))[1]
-editor_matches(ps::AbstractArray, cmd::Cmd) = any(editor_matches(p, cmd) for p in ps)
+editor_matches(ps::ArrayLike, cmd::Cmd) = any(editor_matches(p, cmd) for p in ps)
 
 function define_default_editors()
     # fallback: just call the editor with the path as argument

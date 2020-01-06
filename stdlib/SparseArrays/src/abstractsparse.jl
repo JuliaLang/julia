@@ -50,7 +50,7 @@ julia> issparse(Array(sv))
 false
 ```
 """
-issparse(A::AbstractArray) = false
+issparse(A::ArrayLike) = false
 issparse(S::AbstractSparseArray) = true
 
 issparse(S::LinearAlgebra.Symmetric{<:Any,<:AbstractSparseMatrix}) = true

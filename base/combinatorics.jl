@@ -64,7 +64,7 @@ isperm(p::Tuple{Int}) = p[1] == 1
 isperm(p::Tuple{Int,Int}) = ((p[1] == 1) & (p[2] == 2)) | ((p[1] == 2) & (p[2] == 1))
 
 # swap columns i and j of a, in-place
-function swapcols!(a::AbstractMatrix, i, j)
+function swapcols!(a::ArrayLike{2}, i, j)
     i == j && return
     cols = axes(a,2)
     @boundscheck i in cols || throw(BoundsError(a, (:,i)))
@@ -74,7 +74,7 @@ function swapcols!(a::AbstractMatrix, i, j)
     end
 end
 # like permute!! applied to each row of a, in-place in a (overwriting p).
-function permutecols!!(a::AbstractMatrix, p::AbstractVector{<:Integer})
+function permutecols!!(a::ArrayLike{2}, p::AbstractVector{<:Integer})
     require_one_based_indexing(a, p)
     count = 0
     start = 0
@@ -143,7 +143,7 @@ julia> A
  1
 ```
 """
-permute!(a, p::AbstractVector) = permute!!(a, copymutable(p))
+permute!(a, p::ArrayLike{1}) = permute!!(a, copymutable(p))
 
 function invpermute!!(a, p::AbstractVector{<:Integer})
     require_one_based_indexing(a, p)
@@ -190,7 +190,7 @@ julia> A
  1
 ```
 """
-invpermute!(a, p::AbstractVector) = invpermute!!(a, copymutable(p))
+invpermute!(a, p::ArrayLike{1}) = invpermute!!(a, copymutable(p))
 
 """
     invperm(v)
@@ -226,7 +226,7 @@ julia> B[invperm(v)]
  'd'
 ```
 """
-function invperm(a::AbstractVector)
+function invperm(a::ArrayLike{1})
     require_one_based_indexing(a)
     b = zero(a) # similar vector of zeros
     n = length(a)

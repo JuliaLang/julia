@@ -45,7 +45,7 @@ julia> Slower = Symmetric(A, :L)
 
 Note that `Supper` will not be equal to `Slower` unless `A` is itself symmetric (e.g. if `A == transpose(A)`).
 """
-function Symmetric(A::AbstractMatrix, uplo::Symbol=:U)
+function Symmetric(A::ArrayLike{2}, uplo::Symbol=:U)
     checksquare(A)
     return symmetric_type(typeof(A))(A, char_uplo(uplo))
 end
@@ -61,7 +61,7 @@ If a symmetric view of a matrix is to be constructed of which the elements are n
 matrices nor numbers, an appropriate method of `symmetric` has to be implemented. In that
 case, `symmetric_type` has to be implemented, too.
 """
-symmetric(A::AbstractMatrix, uplo::Symbol) = Symmetric(A, uplo)
+symmetric(A::ArrayLike{2}, uplo::Symbol) = Symmetric(A, uplo)
 symmetric(A::Number, ::Symbol) = A
 
 """
@@ -77,8 +77,8 @@ end
 function symmetric_type(::Type{T}) where {S<:Number, T<:AbstractMatrix{S}}
     return Symmetric{S, T}
 end
-function symmetric_type(::Type{T}) where {S<:AbstractMatrix, T<:AbstractMatrix{S}}
-    return Symmetric{AbstractMatrix, T}
+function symmetric_type(::Type{T}) where {S<:ArrayLike{2}, T<:AbstractMatrix{S}}
+    return Symmetric{ArrayLike{2}, T}
 end
 symmetric_type(::Type{T}) where {T<:Number} = T
 
@@ -126,7 +126,7 @@ All non-real parts of the diagonal will be ignored.
 Hermitian(fill(complex(1,1), 1, 1)) == fill(1, 1, 1)
 ```
 """
-function Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
+function Hermitian(A::ArrayLike{2}, uplo::Symbol=:U)
     n = checksquare(A)
     return hermitian_type(typeof(A))(A, char_uplo(uplo))
 end
@@ -143,7 +143,7 @@ If a hermitian view of a matrix is to be constructed of which the elements are n
 matrices nor numbers, an appropriate method of `hermitian` has to be implemented. In that
 case, `hermitian_type` has to be implemented, too.
 """
-hermitian(A::AbstractMatrix, uplo::Symbol) = Hermitian(A, uplo)
+hermitian(A::ArrayLike{2}, uplo::Symbol) = Hermitian(A, uplo)
 hermitian(A::Number, ::Symbol) = convert(typeof(A), real(A))
 
 """
@@ -159,8 +159,8 @@ end
 function hermitian_type(::Type{T}) where {S<:Number, T<:AbstractMatrix{S}}
     return Hermitian{S, T}
 end
-function hermitian_type(::Type{T}) where {S<:AbstractMatrix, T<:AbstractMatrix{S}}
-    return Hermitian{AbstractMatrix, T}
+function hermitian_type(::Type{T}) where {S<:ArrayLike{2}, T<:AbstractMatrix{S}}
+    return Hermitian{ArrayLike{2}, T}
 end
 hermitian_type(::Type{T}) where {T<:Number} = T
 
@@ -268,11 +268,11 @@ end
 Array(A::Union{Symmetric,Hermitian}) = convert(Matrix, A)
 
 parent(A::HermOrSym) = A.data
-Symmetric{T,S}(A::Symmetric{T,S}) where {T,S<:AbstractMatrix} = A
-Symmetric{T,S}(A::Symmetric) where {T,S<:AbstractMatrix} = Symmetric{T,S}(convert(S,A.data),A.uplo)
+Symmetric{T,S}(A::Symmetric{T,S}) where {T,S<:ArrayLike{2}} = A
+Symmetric{T,S}(A::Symmetric) where {T,S<:ArrayLike{2}} = Symmetric{T,S}(convert(S,A.data),A.uplo)
 AbstractMatrix{T}(A::Symmetric) where {T} = Symmetric(convert(AbstractMatrix{T}, A.data), sym_uplo(A.uplo))
-Hermitian{T,S}(A::Hermitian{T,S}) where {T,S<:AbstractMatrix} = A
-Hermitian{T,S}(A::Hermitian) where {T,S<:AbstractMatrix} = Hermitian{T,S}(convert(S,A.data),A.uplo)
+Hermitian{T,S}(A::Hermitian{T,S}) where {T,S<:ArrayLike{2}} = A
+Hermitian{T,S}(A::Hermitian) where {T,S<:ArrayLike{2}} = Hermitian{T,S}(convert(S,A.data),A.uplo)
 AbstractMatrix{T}(A::Hermitian) where {T} = Hermitian(convert(AbstractMatrix{T}, A.data), sym_uplo(A.uplo))
 
 copy(A::Symmetric{T,S}) where {T,S} = (B = copy(A.data); Symmetric{T,typeof(B)}(B,A.uplo))
@@ -554,7 +554,7 @@ end
 
 *(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
 
-function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
+function dot(x::ArrayLike{1}, A::RealHermSymComplexHerm, y::ArrayLike{1})
     require_one_based_indexing(x, y)
     (length(x) == length(y) == size(A, 1)) || throw(DimensionMismatch())
     data = A.data
@@ -581,15 +581,17 @@ end
 
 # Fallbacks to avoid generic_matvecmul!/generic_matmatmul!
 ## Symmetric{<:Number} and Hermitian{<:Real} are invariant to transpose; peel off the t
-*(transA::Transpose{<:Any,<:RealHermSymComplexSym}, B::AbstractVector) = transA.parent * B
-*(transA::Transpose{<:Any,<:RealHermSymComplexSym}, B::AbstractMatrix) = transA.parent * B
-*(A::AbstractMatrix, transB::Transpose{<:Any,<:RealHermSymComplexSym}) = A * transB.parent
+*(transA::Transpose{<:Any,<:RealHermSymComplexSym}, B::ArrayLike{1}) = transA.parent * B
+*(transA::Transpose{<:Any,<:RealHermSymComplexSym}, B::AbstractVector) = transA.parent * B # specific
+*(transA::Transpose{<:Any,<:RealHermSymComplexSym}, B::ArrayLike{2}) = transA.parent * B
+*(A::ArrayLike{2}, transB::Transpose{<:Any,<:RealHermSymComplexSym}) = A * transB.parent
 ## Hermitian{<:Number} and Symmetric{<:Real} are invariant to adjoint; peel off the c
-*(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::AbstractVector) = adjA.parent * B
-*(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::AbstractMatrix) = adjA.parent * B
-*(A::AbstractMatrix, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * adjB.parent
+*(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::ArrayLike{1}) = adjA.parent * B
+*(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::AbstractVector) = adjA.parent * B  # specific
+*(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::ArrayLike{2}) = adjA.parent * B
+*(A::ArrayLike{2}, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * adjB.parent
 
-# ambiguities with transposed AbstractMatrix methods in linalg/matmul.jl
+# ambiguities with transposed ArrayLike{2} methods in linalg/matmul.jl
 *(transA::Transpose{<:Any,<:RealHermSym}, transB::Transpose{<:Any,<:RealHermSym}) = transA * transB.parent
 *(transA::Transpose{<:Any,<:RealHermSym}, transB::Transpose{<:Any,<:RealHermSymComplexSym}) = transA * transB.parent
 *(transA::Transpose{<:Any,<:RealHermSymComplexSym}, transB::Transpose{<:Any,<:RealHermSymComplexSym}) = transA.parent * transB.parent
@@ -631,10 +633,10 @@ det(A::RealHermSymComplexHerm) = real(det(_factorize(A; check=false)))
 det(A::Symmetric{<:Real}) = det(_factorize(A; check=false))
 det(A::Symmetric) = det(_factorize(A; check=false))
 
-\(A::HermOrSym{<:Any,<:StridedMatrix}, B::AbstractVector) = \(factorize(A), B)
+\(A::HermOrSym{<:Any,<:StridedMatrix}, B::ArrayLike{1}) = \(factorize(A), B)
 # Bunch-Kaufman solves can not utilize BLAS-3 for multiple right hand sides
-# so using LU is faster for AbstractMatrix right hand side
-\(A::HermOrSym{<:Any,<:StridedMatrix}, B::AbstractMatrix) = \(lu(A), B)
+# so using LU is faster for ArrayLike{2} right hand side
+\(A::HermOrSym{<:Any,<:StridedMatrix}, B::ArrayLike{2}) = \(lu(A), B)
 
 function _inv(A::HermOrSym)
     n = checksquare(A)
@@ -1023,23 +1025,23 @@ end
 *(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = A.parent * B.parent
 *(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A.parent * B.parent
 # disambiguation methods: *(Adj/Trans of AbsVec/AbsMat, Adj/Trans of RealHermSymComplex{Herm|Sym})
-*(A::Adjoint{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * B.parent
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * B.parent
-*(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = A * B.parent
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = A * B.parent
-*(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * B.parent
-*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * B.parent
-*(A::Transpose{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = A * B.parent
-*(A::Transpose{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = A * B.parent
+*(A::Adjoint{<:Any,<:ArrayLike{1}}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * B.parent
+*(A::Adjoint{<:Any,<:ArrayLike{2}}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * B.parent
+*(A::Adjoint{<:Any,<:ArrayLike{1}}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = A * B.parent
+*(A::Adjoint{<:Any,<:ArrayLike{2}}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = A * B.parent
+*(A::Transpose{<:Any,<:ArrayLike{1}}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * B.parent
+*(A::Transpose{<:Any,<:ArrayLike{2}}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * B.parent
+*(A::Transpose{<:Any,<:ArrayLike{1}}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = A * B.parent
+*(A::Transpose{<:Any,<:ArrayLike{2}}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = A * B.parent
 # disambiguation methods: *(Adj/Trans of RealHermSymComplex{Herm|Sym}, Adj/Trans of AbsVec/AbsMat)
-*(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Adjoint{<:Any,<:AbstractVector}) = A.parent * B
-*(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Adjoint{<:Any,<:AbstractMatrix}) = A.parent * B
-*(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Transpose{<:Any,<:AbstractVector}) = A.parent * B
-*(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Transpose{<:Any,<:AbstractMatrix}) = A.parent * B
-*(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Adjoint{<:Any,<:AbstractVector}) = A.parent * B
-*(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Adjoint{<:Any,<:AbstractMatrix}) = A.parent * B
-*(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Transpose{<:Any,<:AbstractVector}) = A.parent * B
-*(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Transpose{<:Any,<:AbstractMatrix}) = A.parent * B
+*(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Adjoint{<:Any,<:ArrayLike{1}}) = A.parent * B
+*(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Adjoint{<:Any,<:ArrayLike{2}}) = A.parent * B
+*(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Transpose{<:Any,<:ArrayLike{1}}) = A.parent * B
+*(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Transpose{<:Any,<:ArrayLike{2}}) = A.parent * B
+*(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Adjoint{<:Any,<:ArrayLike{1}}) = A.parent * B
+*(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Adjoint{<:Any,<:ArrayLike{2}}) = A.parent * B
+*(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Transpose{<:Any,<:ArrayLike{1}}) = A.parent * B
+*(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Transpose{<:Any,<:ArrayLike{2}}) = A.parent * B
 
 # disambiguation methods: *(Adj/Trans of AbsTri or RealHermSymComplex{Herm|Sym}, Adj/Trans of other)
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * B.parent

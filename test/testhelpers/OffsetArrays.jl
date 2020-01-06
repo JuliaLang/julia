@@ -11,11 +11,11 @@ using Base: Indices, IndexCartesian, IndexLinear, tail
 
 export OffsetArray
 
-struct OffsetArray{T,N,AA<:AbstractArray} <: AbstractArray{T,N}
+struct OffsetArray{T,N,AA<:ArrayLike} <: AbstractArray{T,N}
     parent::AA
     offsets::NTuple{N,Int}
 end
-OffsetVector{T,AA<:AbstractArray} = OffsetArray{T,1,AA}
+OffsetVector{T,AA<:ArrayLike} = OffsetArray{T,1,AA}
 
 OffsetArray(A::AbstractArray{T,N}, offsets::NTuple{N,Int}) where {T,N} = OffsetArray{T,N,typeof(A)}(A, offsets)
 OffsetArray(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) where {T,N} = OffsetArray(A, offsets)
@@ -49,15 +49,15 @@ const OffsetAxis = Union{Integer, UnitRange, Base.IdentityUnitRange{<:UnitRange}
 function Base.similar(A::OffsetArray, T::Type, dims::Dims)
     B = similar(parent(A), T, dims)
 end
-function Base.similar(A::AbstractArray, T::Type, inds::Tuple{OffsetAxis,Vararg{OffsetAxis}})
+function Base.similar(A::ArrayLike, T::Type, inds::Tuple{OffsetAxis,Vararg{OffsetAxis}})
     B = similar(A, T, map(indslength, inds))
     OffsetArray(B, map(indsoffset, inds))
 end
 
-Base.similar(::Type{T}, shape::Tuple{OffsetAxis,Vararg{OffsetAxis}}) where {T<:AbstractArray} =
+Base.similar(::Type{T}, shape::Tuple{OffsetAxis,Vararg{OffsetAxis}}) where {T<:ArrayLike} =
     OffsetArray(T(undef, map(indslength, shape)), map(indsoffset, shape))
 
-Base.reshape(A::AbstractArray, inds::Tuple{OffsetAxis,Vararg{OffsetAxis}}) = OffsetArray(reshape(A, map(indslength, inds)), map(indsoffset, inds))
+Base.reshape(A::ArrayLike, inds::Tuple{OffsetAxis,Vararg{OffsetAxis}}) = OffsetArray(reshape(A, map(indslength, inds)), map(indsoffset, inds))
 
 Base.fill(v, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
     fill!(OffsetArray(Array{typeof(v), N}(undef, map(indslength, inds)), map(indsoffset, inds)), v)

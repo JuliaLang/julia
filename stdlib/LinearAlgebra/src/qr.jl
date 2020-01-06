@@ -44,7 +44,7 @@ struct QR{T,S<:AbstractMatrix{T}} <: Factorization{T}
     end
 end
 QR(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QR{T,typeof(factors)}(factors, τ)
-function QR{T}(factors::AbstractMatrix, τ::AbstractVector) where {T}
+function QR{T}(factors::ArrayLike{2}, τ::ArrayLike{1}) where {T}
     QR(convert(AbstractMatrix{T}, factors), convert(Vector{T}, τ))
 end
 
@@ -118,7 +118,7 @@ struct QRCompactWY{S,M<:AbstractMatrix{S}} <: Factorization{S}
     end
 end
 QRCompactWY(factors::AbstractMatrix{S}, T::Matrix{S}) where {S} = QRCompactWY{S,typeof(factors)}(factors, T)
-function QRCompactWY{S}(factors::AbstractMatrix, T::AbstractMatrix) where {S}
+function QRCompactWY{S}(factors::ArrayLike{2}, T::ArrayLike{2}) where {S}
     QRCompactWY(convert(AbstractMatrix{S}, factors), convert(Matrix{S}, T))
 end
 
@@ -172,7 +172,7 @@ struct QRPivoted{T,S<:AbstractMatrix{T}} <: Factorization{T}
 end
 QRPivoted(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) where {T} =
     QRPivoted{T,typeof(factors)}(factors, τ, jpvt)
-function QRPivoted{T}(factors::AbstractMatrix, τ::AbstractVector, jpvt::AbstractVector) where {T}
+function QRPivoted{T}(factors::ArrayLike{2}, τ::ArrayLike{1}, jpvt::ArrayLike{1}) where {T}
     QRPivoted(convert(AbstractMatrix{T}, factors),
               convert(Vector{T}, τ),
               convert(Vector{BlasInt}, jpvt))
@@ -383,7 +383,7 @@ function qr(A::AbstractMatrix{T}, arg...; kwargs...) where T
     return qr!(AA, arg...; kwargs...)
 end
 qr(x::Number) = qr(fill(x,1,1))
-function qr(v::AbstractVector)
+function qr(v::ArrayLike{1})
     require_one_based_indexing(v)
     qr(reshape(v, (length(v), 1)))
 end
@@ -468,7 +468,7 @@ Base.propertynames(F::QRPivoted, private::Bool=false) =
 abstract type AbstractQ{T} <: AbstractMatrix{T} end
 
 """
-    QRPackedQ <: AbstractMatrix
+    QRPackedQ <: ArrayLike{2}
 
 The orthogonal/unitary ``Q`` matrix of a QR factorization stored in [`QR`](@ref) or
 [`QRPivoted`](@ref) format.
@@ -483,12 +483,12 @@ struct QRPackedQ{T,S<:AbstractMatrix{T}} <: AbstractQ{T}
     end
 end
 QRPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QRPackedQ{T,typeof(factors)}(factors, τ)
-function QRPackedQ{T}(factors::AbstractMatrix, τ::AbstractVector) where {T}
+function QRPackedQ{T}(factors::ArrayLike{2}, τ::ArrayLike{1}) where {T}
     QRPackedQ(convert(AbstractMatrix{T}, factors), convert(Vector{T}, τ))
 end
 
 """
-    QRCompactWYQ <: AbstractMatrix
+    QRCompactWYQ <: ArrayLike{2}
 
 The orthogonal/unitary ``Q`` matrix of a QR factorization stored in [`QRCompactWY`](@ref)
 format.
@@ -503,7 +503,7 @@ struct QRCompactWYQ{S, M<:AbstractMatrix{S}} <: AbstractQ{S}
     end
 end
 QRCompactWYQ(factors::AbstractMatrix{S}, T::Matrix{S}) where {S} = QRCompactWYQ{S,typeof(factors)}(factors, T)
-function QRCompactWYQ{S}(factors::AbstractMatrix, T::AbstractMatrix) where {S}
+function QRCompactWYQ{S}(factors::ArrayLike{2}, T::ArrayLike{2}) where {S}
     QRCompactWYQ(convert(AbstractMatrix{S}, factors), convert(Matrix{S}, T))
 end
 
@@ -537,7 +537,7 @@ lmul!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:Strid
     LAPACK.gemqrt!('L','N',A.factors,A.T,B)
 lmul!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
     LAPACK.ormqr!('L','N',A.factors,A.τ,B)
-function lmul!(A::QRPackedQ, B::AbstractVecOrMat)
+function lmul!(A::QRPackedQ, B::VectorOrMatrixLike)
     require_one_based_indexing(B)
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
@@ -597,7 +597,7 @@ lmul!(adjA::Adjoint{<:Any,<:QRPackedQ{T,S}}, B::StridedVecOrMat{T}) where {T<:Bl
     (A = adjA.parent; LAPACK.ormqr!('L','T',A.factors,A.τ,B))
 lmul!(adjA::Adjoint{<:Any,<:QRPackedQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} =
     (A = adjA.parent; LAPACK.ormqr!('L','C',A.factors,A.τ,B))
-function lmul!(adjA::Adjoint{<:Any,<:QRPackedQ}, B::AbstractVecOrMat)
+function lmul!(adjA::Adjoint{<:Any,<:QRPackedQ}, B::VectorOrMatrixLike)
     require_one_based_indexing(B)
     A = adjA.parent
     mA, nA = size(A.factors)
@@ -860,12 +860,12 @@ end
 # convenience methods
 ## return only the solution of a least squares problem while avoiding promoting
 ## vectors to matrices.
-_cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
-_cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
+_cut_B(x::ArrayLike{1}, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
+_cut_B(X::ArrayLike{2}, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
 
 ## append right hand side with zeros if necessary
-_zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
-_zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
+_zeros(::Type{T}, b::ArrayLike{1}, n::Integer) where {T} = zeros(T, max(length(b), n))
+_zeros(::Type{T}, B::ArrayLike{2}, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
 
 function (\)(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat{TB}) where {TA,TB}
     require_one_based_indexing(B)
@@ -885,8 +885,8 @@ end
 # rhs as a real rhs with twice the number of columns.
 
 # convenience methods to compute the return size correctly for vectors and matrices
-_ret_size(A::Factorization, b::AbstractVector) = (max(size(A, 2), length(b)),)
-_ret_size(A::Factorization, B::AbstractMatrix) = (max(size(A, 2), size(B, 1)), size(B, 2))
+_ret_size(A::Factorization, b::ArrayLike{1}) = (max(size(A, 2), length(b)),)
+_ret_size(A::Factorization, B::ArrayLike{2}) = (max(size(A, 2), size(B, 1)), size(B, 2))
 
 function (\)(A::Union{QR{T},QRCompactWY{T},QRPivoted{T}}, BIn::VecOrMat{Complex{T}}) where T<:BlasReal
     require_one_based_indexing(BIn)

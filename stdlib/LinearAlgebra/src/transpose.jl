@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-adjoint(a::AbstractArray) = error("adjoint not defined for $(typeof(a)). Consider using `permutedims` for higher-dimensional arrays.")
-transpose(a::AbstractArray) = error("transpose not defined for $(typeof(a)). Consider using `permutedims` for higher-dimensional arrays.")
+adjoint(a::ArrayLike) = error("adjoint not defined for $(typeof(a)). Consider using `permutedims` for higher-dimensional arrays.")
+transpose(a::ArrayLike) = error("transpose not defined for $(typeof(a)). Consider using `permutedims` for higher-dimensional arrays.")
 
 ## Matrix transposition ##
 
@@ -38,7 +38,7 @@ julia> A
  8+7im  4+6im
 ```
 """
-transpose!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(transpose, B, A)
+transpose!(B::ArrayLike{2}, A::ArrayLike{2}) = transpose_f!(transpose, B, A)
 
 """
     adjoint!(dest,src)
@@ -73,26 +73,26 @@ julia> A
  8+7im  4+6im
 ```
 """
-adjoint!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(adjoint, B, A)
-function transpose!(B::AbstractVector, A::AbstractMatrix)
+adjoint!(B::ArrayLike{2}, A::ArrayLike{2}) = transpose_f!(adjoint, B, A)
+function transpose!(B::ArrayLike{1}, A::ArrayLike{2})
     axes(B,1) == axes(A,2) && axes(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
     copyto!(B, A)
 end
-function transpose!(B::AbstractMatrix, A::AbstractVector)
+function transpose!(B::ArrayLike{2}, A::ArrayLike{1})
     axes(B,2) == axes(A,1) && axes(B,1) == 1:1 || throw(DimensionMismatch("transpose"))
     copyto!(B, A)
 end
-function adjoint!(B::AbstractVector, A::AbstractMatrix)
+function adjoint!(B::ArrayLike{1}, A::ArrayLike{2})
     axes(B,1) == axes(A,2) && axes(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
     ccopy!(B, A)
 end
-function adjoint!(B::AbstractMatrix, A::AbstractVector)
+function adjoint!(B::ArrayLike{2}, A::ArrayLike{1})
     axes(B,2) == axes(A,1) && axes(B,1) == 1:1 || throw(DimensionMismatch("transpose"))
     ccopy!(B, A)
 end
 
 const transposebaselength=64
-function transpose_f!(f, B::AbstractMatrix, A::AbstractMatrix)
+function transpose_f!(f, B::ArrayLike{2}, A::ArrayLike{2})
     inds = axes(A)
     axes(B,1) == inds[2] && axes(B,2) == inds[1] || throw(DimensionMismatch(string(f)))
 
@@ -110,7 +110,7 @@ function transpose_f!(f, B::AbstractMatrix, A::AbstractMatrix)
     end
     return B
 end
-function transposeblock!(f, B::AbstractMatrix, A::AbstractMatrix, m::Int, n::Int, offseti::Int, offsetj::Int)
+function transposeblock!(f, B::ArrayLike{2}, A::ArrayLike{2}, m::Int, n::Int, offseti::Int, offsetj::Int)
     if m*n<=transposebaselength
         @inbounds begin
             for j = offsetj .+ (1:n)
@@ -175,11 +175,11 @@ julia> copy(T)
 """
 copy(::Union{Transpose,Adjoint})
 
-Base.copy(A::Transpose{<:Any,<:AbstractMatrix}) = transpose!(similar(A.parent, reverse(axes(A.parent))), A.parent)
-Base.copy(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint!(similar(A.parent, reverse(axes(A.parent))), A.parent)
+Base.copy(A::Transpose{<:Any,<:ArrayLike{2}}) = transpose!(similar(A.parent, reverse(axes(A.parent))), A.parent)
+Base.copy(A::Adjoint{<:Any,<:ArrayLike{2}}) = adjoint!(similar(A.parent, reverse(axes(A.parent))), A.parent)
 
-function copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
-                         A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int})
+function copy_transpose!(B::VectorOrMatrixLike, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
+                         A::VectorOrMatrixLike, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int})
     if length(ir_dest) != length(jr_src)
         throw(ArgumentError(string("source and destination must have same size (got ",
                                    length(jr_src)," and ",length(ir_dest),")")))

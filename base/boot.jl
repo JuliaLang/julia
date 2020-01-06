@@ -428,9 +428,9 @@ Array{T,1}() where {T} = Array{T,1}(undef, 0)
 (::Type{Array{T,N} where T})(x::AbstractArray{S,N}) where {S,N} = Array{S,N}(x)
 
 Array(A::AbstractArray{T,N})    where {T,N}   = Array{T,N}(A)
-Array{T}(A::AbstractArray{S,N}) where {T,N,S} = Array{T,N}(A)
+Array{T}(A::ArrayLike{N}) where {T,N} = Array{T,N}(A)
 
-AbstractArray{T}(A::AbstractArray{S,N}) where {T,S,N} = AbstractArray{T,N}(A)
+AbstractArray{T}(A::ArrayLike{N}) where {T,N} = AbstractArray{T,N}(A)
 
 # primitive Symbol constructors
 eval(Core, :(function Symbol(s::String)

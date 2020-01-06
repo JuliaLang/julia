@@ -6,7 +6,7 @@ module Order
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 import .Base:
-    AbstractVector, @propagate_inbounds, isless, identity, getindex,
+    ArrayLike, @propagate_inbounds, isless, identity, getindex,
     +, -, !, &, <, |
 
 ## notions of element ordering ##
@@ -42,7 +42,7 @@ struct Lt{T} <: Ordering
     lt::T
 end
 
-struct Perm{O<:Ordering,V<:AbstractVector} <: Ordering
+struct Perm{O<:Ordering,V<:ArrayLike{1}} <: Ordering
     order::O
     data::V
 end
@@ -58,11 +58,11 @@ lt(o::Lt,                    a, b) = o.lt(a,b)
     lt(p.order, da, db) | (!lt(p.order, db, da) & (a < b))
 end
 
-ordtype(o::ReverseOrdering, vs::AbstractArray) = ordtype(o.fwd, vs)
-ordtype(o::Perm,            vs::AbstractArray) = ordtype(o.order, o.data)
+ordtype(o::ReverseOrdering, vs::ArrayLike) = ordtype(o.fwd, vs)
+ordtype(o::Perm,            vs::ArrayLike) = ordtype(o.order, o.data)
 # TODO: here, we really want the return type of o.by, without calling it
-ordtype(o::By,              vs::AbstractArray) = try typeof(o.by(vs[1])) catch; Any end
-ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
+ordtype(o::By,              vs::ArrayLike) = try typeof(o.by(vs[1])) catch; Any end
+ordtype(o::Ordering,        vs::ArrayLike) = eltype(vs)
 
 _ord(lt::typeof(isless), by::typeof(identity), order::Ordering) = order
 _ord(lt::typeof(isless), by,                   order::Ordering) = By(by)

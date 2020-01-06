@@ -52,7 +52,7 @@ end
 convert(::Type{T}, f::T) where {T<:Factorization} = f
 convert(::Type{T}, f::Factorization) where {T<:Factorization} = T(f)
 
-convert(::Type{T}, f::Factorization) where {T<:AbstractArray} = T(f)
+convert(::Type{T}, f::Factorization) where {T<:ArrayLike} = T(f)
 
 ### General promotion rules
 Factorization{T}(F::Factorization{T}) where {T} = F
@@ -93,14 +93,14 @@ function (/)(B::VecOrMat{Complex{T}}, F::Factorization{T}) where T<:BlasReal
     return copy(reinterpret(Complex{T}, x))
 end
 
-function \(F::Factorization, B::AbstractVecOrMat)
+function \(F::Factorization, B::VectorOrMatrixLike)
     require_one_based_indexing(B)
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
     BB = similar(B, TFB, size(B))
     copyto!(BB, B)
     ldiv!(F, BB)
 end
-function \(adjF::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
+function \(adjF::Adjoint{<:Any,<:Factorization}, B::VectorOrMatrixLike)
     require_one_based_indexing(B)
     F = adjF.parent
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
@@ -109,14 +109,14 @@ function \(adjF::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
     ldiv!(adjoint(F), BB)
 end
 
-function /(B::AbstractMatrix, F::Factorization)
+function /(B::ArrayLike{2}, F::Factorization)
     require_one_based_indexing(B)
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
     BB = similar(B, TFB, size(B))
     copyto!(BB, B)
     rdiv!(BB, F)
 end
-function /(B::AbstractMatrix, adjF::Adjoint{<:Any,<:Factorization})
+function /(B::ArrayLike{2}, adjF::Adjoint{<:Any,<:Factorization})
     require_one_based_indexing(B)
     F = adjF.parent
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
@@ -128,7 +128,7 @@ end
 /(B::TransposeAbsVec, adjF::Adjoint{<:Any,<:Factorization}) = adjoint(adjF.parent \ adjoint(B))
 
 # support the same 3-arg idiom as in our other in-place A_*_B functions:
-function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)
+function ldiv!(Y::VectorOrMatrixLike, A::Factorization, B::VectorOrMatrixLike)
     require_one_based_indexing(Y, B)
     m, n = size(A, 1), size(A, 2)
     if m > n
@@ -141,11 +141,11 @@ function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)
 end
 
 # fallback methods for transposed solves
-\(F::Transpose{<:Any,<:Factorization{<:Real}}, B::AbstractVecOrMat) = adjoint(F.parent) \ B
-\(F::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat) = conj.(adjoint(F.parent) \ conj.(B))
+\(F::Transpose{<:Any,<:Factorization{<:Real}}, B::VectorOrMatrixLike) = adjoint(F.parent) \ B
+\(F::Transpose{<:Any,<:Factorization}, B::VectorOrMatrixLike) = conj.(adjoint(F.parent) \ conj.(B))
 
-/(B::AbstractMatrix, F::Transpose{<:Any,<:Factorization{<:Real}}) = B / adjoint(F.parent)
-/(B::AbstractMatrix, F::Transpose{<:Any,<:Factorization}) = conj.(conj.(B) / adjoint(F.parent))
+/(B::ArrayLike{2}, F::Transpose{<:Any,<:Factorization{<:Real}}) = B / adjoint(F.parent)
+/(B::ArrayLike{2}, F::Transpose{<:Any,<:Factorization}) = conj.(conj.(B) / adjoint(F.parent))
 /(B::AdjointAbsVec, F::Transpose{<:Any,<:Factorization{<:Real}}) = B / adjoint(F.parent)
 /(B::TransposeAbsVec, F::Transpose{<:Any,<:Factorization{<:Real}}) = B / adjoint(F.parent)
 /(B::AdjointAbsVec, F::Transpose{<:Any,<:Factorization}) = conj.(conj.(B) / adjoint(F.parent))

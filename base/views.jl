@@ -121,10 +121,10 @@ end
 # maybeview is like getindex, but returns a view for slicing operations
 # (while remaining equivalent to getindex for scalar indices and non-array types)
 @propagate_inbounds maybeview(A, args...) = getindex(A, args...)
-@propagate_inbounds maybeview(A::AbstractArray, args...) = view(A, args...)
-@propagate_inbounds maybeview(A::AbstractArray, args::Number...) = getindex(A, args...)
+@propagate_inbounds maybeview(A::ArrayLike, args...) = view(A, args...)
+@propagate_inbounds maybeview(A::ArrayLike, args::Number...) = getindex(A, args...)
 @propagate_inbounds maybeview(A) = getindex(A)
-@propagate_inbounds maybeview(A::AbstractArray) = getindex(A)
+@propagate_inbounds maybeview(A::ArrayLike) = getindex(A)
 
 # _views implements the transformation for the @views macro.
 # @views calls esc(_views(...)) to work around #20241,

@@ -47,7 +47,7 @@ julia> t == F.T && z == F.Z && vals == F.values
 true
 ```
 """
-struct Schur{Ty,S<:AbstractMatrix} <: Factorization{Ty}
+struct Schur{Ty,S<:ArrayLike{2}} <: Factorization{Ty}
     T::S
     Z::S
     values::Vector
@@ -218,7 +218,7 @@ with `F.α./F.β`.
 Iterating the decomposition produces the components `F.S`, `F.T`, `F.Q`, `F.Z`,
 `F.α`, and `F.β`.
 """
-struct GeneralizedSchur{Ty,M<:AbstractMatrix} <: Factorization{Ty}
+struct GeneralizedSchur{Ty,M<:ArrayLike{2}} <: Factorization{Ty}
     S::M
     T::M
     α::Vector

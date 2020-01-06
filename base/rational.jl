@@ -67,7 +67,7 @@ end
 //(x::Number, y::Complex) = x*conj(y)//abs2(y)
 
 
-//(X::AbstractArray, y::Number) = X .// y
+//(X::ArrayLike, y::Number) = X .// y
 
 function show(io::IO, x::Rational)
     show(io, numerator(x))

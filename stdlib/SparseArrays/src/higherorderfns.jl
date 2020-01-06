@@ -81,11 +81,11 @@ Broadcast.BroadcastStyle(::PromoteToSparse, ::LinearAlgebra.StructuredMatrixStyl
 Broadcast.BroadcastStyle(::PromoteToSparse, ::SPVM) = PromoteToSparse()
 Broadcast.BroadcastStyle(::PromoteToSparse, ::Broadcast.Style{Tuple}) = Broadcast.DefaultArrayStyle{2}()
 
-# FIXME: currently sparse broadcasts are only well-tested on known array types, while any AbstractArray
+# FIXME: currently sparse broadcasts are only well-tested on known array types, while any ArrayLike
 # could report itself as a DefaultArrayStyle().
 # See https://github.com/JuliaLang/julia/pull/23939#pullrequestreview-72075382 for more details
 is_supported_sparse_broadcast() = true
-is_supported_sparse_broadcast(::AbstractArray, rest...) = false
+is_supported_sparse_broadcast(::ArrayLike, rest...) = false
 is_supported_sparse_broadcast(::AbstractSparseArray, rest...) = is_supported_sparse_broadcast(rest...)
 is_supported_sparse_broadcast(::StructuredMatrix, rest...) = is_supported_sparse_broadcast(rest...)
 is_supported_sparse_broadcast(::Array, rest...) = is_supported_sparse_broadcast(rest...)
@@ -199,7 +199,7 @@ end
 @inline _sumnnzs(A, Bs...) = nnz(A) + _sumnnzs(Bs...)
 @inline _iszero(x) = x == 0
 @inline _iszero(x::Number) = Base.iszero(x)
-@inline _iszero(x::AbstractArray) = Base.iszero(x)
+@inline _iszero(x::ArrayLike) = Base.iszero(x)
 @inline _zeros_eltypes(A) = (zero(eltype(A)),)
 @inline _zeros_eltypes(A, Bs...) = (zero(eltype(A)), _zeros_eltypes(Bs...)...)
 @inline _promote_indtype(A) = indtype(A)
@@ -1073,12 +1073,12 @@ end
     capturescalars((args...)->f(T, args...), Base.tail(mixedargs))
 @inline capturescalars(f, mixedargs::Tuple{SparseVecOrMat, Ref{Type{T}}, Vararg{Any}}) where {T} =
     capturescalars((a1, args...)->f(a1, T, args...), (mixedargs[1], Base.tail(Base.tail(mixedargs))...))
-@inline capturescalars(f, mixedargs::Tuple{Union{Ref,AbstractArray{<:Any,0}}, Ref{Type{T}}, Vararg{Any}}) where {T} =
+@inline capturescalars(f, mixedargs::Tuple{Union{Ref,ArrayLike{0}}, Ref{Type{T}}, Vararg{Any}}) where {T} =
     capturescalars((args...)->f(mixedargs[1], T, args...), Base.tail(Base.tail(mixedargs)))
 
 nonscalararg(::SparseVecOrMat) = true
 nonscalararg(::Any) = false
-scalarwrappedarg(::Union{AbstractArray{<:Any,0},Ref}) = true
+scalarwrappedarg(::Union{ArrayLike{0},Ref}) = true
 scalarwrappedarg(::Any) = false
 
 @inline function _capturescalars()
@@ -1121,7 +1121,7 @@ broadcast(f::Tf, A::AbstractSparseMatrixCSC, ::Type{T}) where {Tf,T} = broadcast
 #
 # for combinations involving only scalars, sparse arrays, structured matrices, and dense
 # vectors/matrices, promote all structured matrices and dense vectors/matrices to sparse
-# and rebroadcast. otherwise, divert to generic AbstractArray broadcast code.
+# and rebroadcast. otherwise, divert to generic ArrayLike broadcast code.
 
 function copy(bc::Broadcasted{PromoteToSparse})
     bcf = flatten(bc)
@@ -1139,8 +1139,8 @@ end
     broadcast!(bcf.f, dest, map(_sparsifystructured, bcf.args)...)
 end
 
-_sparsifystructured(M::AbstractMatrix) = SparseMatrixCSC(M)
-_sparsifystructured(V::AbstractVector) = SparseVector(V)
+_sparsifystructured(M::ArrayLike{2}) = SparseMatrixCSC(M)
+_sparsifystructured(V::ArrayLike{1}) = SparseVector(V)
 _sparsifystructured(M::AbstractSparseMatrix) = SparseMatrixCSC(M)
 _sparsifystructured(V::AbstractSparseVector) = SparseVector(V)
 _sparsifystructured(S::SparseVecOrMat) = S

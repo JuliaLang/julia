@@ -119,7 +119,7 @@ end
 ## arrays & other scalar methods
 
 """
-    randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A
+    randn!([rng=GLOBAL_RNG], A::ArrayLike) -> A
 
 Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
 Also see the [`rand`](@ref) function.
@@ -140,7 +140,7 @@ julia> randn!(rng, zeros(5))
 function randn! end
 
 """
-    randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A
+    randexp!([rng=GLOBAL_RNG], A::ArrayLike) -> A
 
 Fill the array `A` with random numbers following the exponential distribution
 (with scale 1).
@@ -175,7 +175,7 @@ for randfun in [:randn, :randexp]
             A
         end
 
-        $randfun!(A::AbstractArray) = $randfun!(default_rng(), A)
+        $randfun!(A::ArrayLike) = $randfun!(default_rng(), A)
 
         # generating arrays
         $randfun(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) where {T} = $randfun!(rng, Array{T}(undef, dims))

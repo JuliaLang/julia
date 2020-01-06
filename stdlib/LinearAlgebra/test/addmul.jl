@@ -23,7 +23,7 @@ end
 
 constructor_of(::Type{T}) where T = getfield(parentmodule(T), nameof(T))
 
-function _rand(A::Type{<: AbstractArray}, shape)
+function _rand(A::Type{<: ArrayLike}, shape)
     data = _rand(Array{eltype(A)}, shape)
     T = constructor_of(A)
     if A <: Union{Bidiagonal, Hermitian, Symmetric}
@@ -75,7 +75,7 @@ mattypes = [
     UpperTriangular,
 ]
 
-isnanfillable(::AbstractArray) = false
+isnanfillable(::ArrayLike) = false
 isnanfillable(::Array{<:AbstractFloat}) = true
 isnanfillable(A::AbstractArray{<:AbstractFloat}) = parent(A) isa Array
 

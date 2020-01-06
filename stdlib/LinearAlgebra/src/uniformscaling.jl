@@ -114,13 +114,13 @@ isposdef(J::UniformScaling) = isposdef(J.λ)
 (+)(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ+J2.λ)
 (+)(B::BitArray{2}, J::UniformScaling)      = Array(B) + J
 (+)(J::UniformScaling, B::BitArray{2})      = J + Array(B)
-(+)(J::UniformScaling, A::AbstractMatrix)   = A + J
+(+)(J::UniformScaling, A::ArrayLike{2})   = A + J
 
 (-)(J::UniformScaling)                      = UniformScaling(-J.λ)
 (-)(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ-J2.λ)
 (-)(B::BitArray{2}, J::UniformScaling)      = Array(B) - J
 (-)(J::UniformScaling, B::BitArray{2})      = J - Array(B)
-(-)(A::AbstractMatrix, J::UniformScaling)   = A + (-J)
+(-)(A::ArrayLike{2}, J::UniformScaling)   = A + (-J)
 
 # Unit{Lower/Upper}Triangular matrices become {Lower/Upper}Triangular under
 # addition with a UniformScaling
@@ -160,7 +160,7 @@ function (-)(J::UniformScaling{<:Complex}, A::Hermitian)
     return B
 end
 
-function (+)(A::AbstractMatrix, J::UniformScaling)
+function (+)(A::ArrayLike{2}, J::UniformScaling)
     checksquare(A)
     B = copy_oftype(A, Base._return_type(+, Tuple{eltype(A), typeof(J)}))
     @inbounds for i in axes(A, 1)
@@ -169,7 +169,7 @@ function (+)(A::AbstractMatrix, J::UniformScaling)
     return B
 end
 
-function (-)(J::UniformScaling, A::AbstractMatrix)
+function (-)(J::UniformScaling, A::ArrayLike{2})
     checksquare(A)
     B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, -A)
     @inbounds for i in axes(A, 1)
@@ -194,35 +194,35 @@ end
 *(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ*J2.λ)
 *(B::BitArray{2}, J::UniformScaling) = *(Array(B), J::UniformScaling)
 *(J::UniformScaling, B::BitArray{2}) = *(J::UniformScaling, Array(B))
-*(A::AbstractMatrix, J::UniformScaling) = A*J.λ
-*(J::UniformScaling, A::AbstractVecOrMat) = J.λ*A
+*(A::ArrayLike{2}, J::UniformScaling) = A*J.λ
+*(J::UniformScaling, A::VectorOrMatrixLike) = J.λ*A
 *(x::Number, J::UniformScaling) = UniformScaling(x*J.λ)
 *(J::UniformScaling, x::Number) = UniformScaling(J.λ*x)
 
 /(J1::UniformScaling, J2::UniformScaling) = J2.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ/J2.λ)
-/(J::UniformScaling, A::AbstractMatrix) = lmul!(J.λ, inv(A))
-/(A::AbstractMatrix, J::UniformScaling) = J.λ == 0 ? throw(SingularException(1)) : A/J.λ
+/(J::UniformScaling, A::ArrayLike{2}) = lmul!(J.λ, inv(A))
+/(A::ArrayLike{2}, J::UniformScaling) = J.λ == 0 ? throw(SingularException(1)) : A/J.λ
 
 /(J::UniformScaling, x::Number) = UniformScaling(J.λ/x)
 
 \(J1::UniformScaling, J2::UniformScaling) = J1.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ\J2.λ)
 \(A::Union{Bidiagonal{T},AbstractTriangular{T}}, J::UniformScaling) where {T<:Number} =
     rmul!(inv(A), J.λ)
-\(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 0 ? throw(SingularException(1)) : J.λ\A
-\(A::AbstractMatrix, J::UniformScaling) = rmul!(inv(A), J.λ)
+\(J::UniformScaling, A::VectorOrMatrixLike) = J.λ == 0 ? throw(SingularException(1)) : J.λ\A
+\(A::ArrayLike{2}, J::UniformScaling) = rmul!(inv(A), J.λ)
 \(F::Factorization, J::UniformScaling) = F \ J(size(F,1))
 
 \(x::Number, J::UniformScaling) = UniformScaling(x\J.λ)
 
-@inline mul!(C::AbstractMatrix, A::AbstractMatrix, J::UniformScaling, alpha::Number, beta::Number) =
+@inline mul!(C::ArrayLike{2}, A::ArrayLike{2}, J::UniformScaling, alpha::Number, beta::Number) =
     mul!(C, A, J.λ, alpha, beta)
-@inline mul!(C::AbstractVecOrMat, J::UniformScaling, B::AbstractVecOrMat, alpha::Number, beta::Number) =
+@inline mul!(C::VectorOrMatrixLike, J::UniformScaling, B::VectorOrMatrixLike, alpha::Number, beta::Number) =
     mul!(C, J.λ, B, alpha, beta)
-rmul!(A::AbstractMatrix, J::UniformScaling) = rmul!(A, J.λ)
-lmul!(J::UniformScaling, B::AbstractVecOrMat) = lmul!(J.λ, B)
-rdiv!(A::AbstractMatrix, J::UniformScaling) = rdiv!(A, J.λ)
-ldiv!(J::UniformScaling, B::AbstractVecOrMat) = ldiv!(J.λ, B)
-ldiv!(Y::AbstractVecOrMat, J::UniformScaling, B::AbstractVecOrMat) = (Y .= J.λ .\ B)
+rmul!(A::ArrayLike{2}, J::UniformScaling) = rmul!(A, J.λ)
+lmul!(J::UniformScaling, B::VectorOrMatrixLike) = lmul!(J.λ, B)
+rdiv!(A::ArrayLike{2}, J::UniformScaling) = rdiv!(A, J.λ)
+ldiv!(J::UniformScaling, B::VectorOrMatrixLike) = ldiv!(J.λ, B)
+ldiv!(Y::VectorOrMatrixLike, J::UniformScaling, B::VectorOrMatrixLike) = (Y .= J.λ .\ B)
 
 Broadcast.broadcasted(::typeof(*), x::Number,J::UniformScaling) = UniformScaling(x*J.λ)
 Broadcast.broadcasted(::typeof(*), J::UniformScaling,x::Number) = UniformScaling(J.λ*x)
@@ -240,8 +240,8 @@ end
 ==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
 
 ## equality comparison with UniformScaling
-==(J::UniformScaling, A::AbstractMatrix) = A == J
-function ==(A::AbstractMatrix, J::UniformScaling)
+==(J::UniformScaling, A::ArrayLike{2}) = A == J
+function ==(A::ArrayLike{2}, J::UniformScaling)
     require_one_based_indexing(A)
     size(A, 1) == size(A, 2) || return false
     iszero(J.λ) && return iszero(A)
@@ -262,7 +262,7 @@ function isapprox(J1::UniformScaling{T}, J2::UniformScaling{S};
             atol::Real=0, rtol::Real=Base.rtoldefault(T,S,atol), nans::Bool=false) where {T<:Number,S<:Number}
     isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol, nans=nans)
 end
-function isapprox(J::UniformScaling, A::AbstractMatrix;
+function isapprox(J::UniformScaling, A::ArrayLike{2};
                   atol::Real = 0,
                   rtol::Real = Base.rtoldefault(promote_leaf_eltypes(A), eltype(J), atol),
                   nans::Bool = false, norm::Function = norm)
@@ -272,10 +272,10 @@ function isapprox(J::UniformScaling, A::AbstractMatrix;
                                           norm(Diagonal(fill(J.λ, n)))
     return norm(A - J) <= max(atol, rtol * max(norm(A), normJ))
 end
-isapprox(A::AbstractMatrix, J::UniformScaling; kwargs...) = isapprox(J, A; kwargs...)
+isapprox(A::ArrayLike{2}, J::UniformScaling; kwargs...) = isapprox(J, A; kwargs...)
 
 """
-    copyto!(dest::AbstractMatrix, src::UniformScaling)
+    copyto!(dest::ArrayLike{2}, src::UniformScaling)
 
 Copies a [`UniformScaling`](@ref) onto a matrix.
 
@@ -283,7 +283,7 @@ Copies a [`UniformScaling`](@ref) onto a matrix.
     In Julia 1.0 this method only supported a square destination matrix. Julia 1.1. added
     support for a rectangular matrix.
 """
-function copyto!(A::AbstractMatrix, J::UniformScaling)
+function copyto!(A::ArrayLike{2}, J::UniformScaling)
     require_one_based_indexing(A)
     fill!(A, 0)
     λ = J.λ
@@ -303,7 +303,7 @@ end
 # so that the same promotion code can be used for hvcat.  We pass the type T
 # so that we can re-use this code for sparse-matrix hcat etcetera.
 promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = copyto!(Matrix{T}(undef, n,n), J)
-promote_to_arrays_(n::Int, ::Type, A::AbstractVecOrMat) = A
+promote_to_arrays_(n::Int, ::Type, A::VectorOrMatrixLike) = A
 promote_to_arrays(n,k, ::Type) = ()
 promote_to_arrays(n,k, ::Type{T}, A) where {T} = (promote_to_arrays_(n[k], T, A),)
 promote_to_arrays(n,k, ::Type{T}, A, B) where {T} =
@@ -312,11 +312,11 @@ promote_to_arrays(n,k, ::Type{T}, A, B, C) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays_(n[k+2], T, C))
 promote_to_arrays(n,k, ::Type{T}, A, B, Cs...) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays(n,k+2, T, Cs...)...)
-promote_to_array_type(A::Tuple{Vararg{Union{AbstractVecOrMat,UniformScaling}}}) = Matrix
+promote_to_array_type(A::Tuple{Vararg{Union{VectorOrMatrixLike,UniformScaling}}}) = Matrix
 
 for (f,dim,name) in ((:hcat,1,"rows"), (:vcat,2,"cols"))
     @eval begin
-        function $f(A::Union{AbstractVecOrMat,UniformScaling}...)
+        function $f(A::Union{VectorOrMatrixLike,UniformScaling}...)
             n = -1
             for a in A
                 if !isa(a, UniformScaling)
@@ -335,7 +335,7 @@ for (f,dim,name) in ((:hcat,1,"rows"), (:vcat,2,"cols"))
 end
 
 
-function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScaling}...)
+function hvcat(rows::Tuple{Vararg{Int}}, A::Union{VectorOrMatrixLike,UniformScaling}...)
     require_one_based_indexing(A...)
     nr = length(rows)
     sum(rows) == length(A) || throw(ArgumentError("mismatch between row sizes and number of arguments"))
@@ -411,6 +411,6 @@ Array(s::UniformScaling, dims::Dims{2}) = Matrix(s, dims)
 Diagonal{T}(s::UniformScaling, m::Integer) where {T} = Diagonal{T}(fill(T(s.λ), m))
 Diagonal(s::UniformScaling, m::Integer) = Diagonal{eltype(s)}(s, m)
 
-dot(x::AbstractVector, J::UniformScaling, y::AbstractVector) = dot(x, J.λ, y)
-dot(x::AbstractVector, a::Number, y::AbstractVector) = sum(t -> dot(t[1], a, t[2]), zip(x, y))
-dot(x::AbstractVector, a::Union{Real,Complex}, y::AbstractVector) = a*dot(x, y)
+dot(x::ArrayLike{1}, J::UniformScaling, y::ArrayLike{1}) = dot(x, J.λ, y)
+dot(x::ArrayLike{1}, a::Number, y::ArrayLike{1}) = sum(t -> dot(t[1], a, t[2]), zip(x, y))
+dot(x::ArrayLike{1}, a::Union{Real,Complex}, y::ArrayLike{1}) = a*dot(x, y)

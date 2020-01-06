@@ -9,7 +9,7 @@ module Iterators
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base:
-    @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
+    @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, ArrayLike, AbstractVector, Vector,
     tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
     IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange,
     LinearIndices, (:), |, +, -, !==, !, <=, <, missing, map, any, @boundscheck, @inbounds
@@ -86,7 +86,7 @@ last(r::Reverse) = first(r.itr) # the first shall be last
 first(r::Reverse) = last(r.itr) # and the last shall be first
 
 # reverse-order array iterators: assumes more-specialized Reverse for eachindex
-@propagate_inbounds function iterate(A::Reverse{<:AbstractArray}, state=(reverse(eachindex(A.itr)),))
+@propagate_inbounds function iterate(A::Reverse{<:ArrayLike}, state=(reverse(eachindex(A.itr)),))
     y = iterate(state...)
     y === nothing && return y
     idx, itrs = y
@@ -216,13 +216,13 @@ CartesianIndex(2, 2) e
 
 See also: [`IndexStyle`](@ref), [`axes`](@ref).
 """
-pairs(::IndexLinear,    A::AbstractArray) = Pairs(A, LinearIndices(A))
-pairs(::IndexCartesian, A::AbstractArray) = Pairs(A, CartesianIndices(axes(A)))
+pairs(::IndexLinear,    A::ArrayLike) = Pairs(A, LinearIndices(A))
+pairs(::IndexCartesian, A::ArrayLike) = Pairs(A, CartesianIndices(axes(A)))
 
 # preserve indexing capabilities for known indexable types
 # faster than zip(keys(a), values(a)) for arrays
-pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
-pairs(A::AbstractVector) = pairs(IndexLinear(), A)
+pairs(A::ArrayLike)  = pairs(IndexCartesian(), A)
+pairs(A::ArrayLike{1}) = pairs(IndexLinear(), A)
 pairs(tuple::Tuple) = Pairs(tuple, keys(tuple))
 pairs(nt::NamedTuple) = Pairs(nt, keys(nt))
 pairs(v::Core.SimpleVector) = Pairs(v, LinearIndices(v))
@@ -1091,17 +1091,17 @@ struct PartitionIterator{T}
     n::Int
 end
 # Partitions are explicitly a linear indexing operation, so reshape to 1-d immediately
-PartitionIterator(A::AbstractArray, n::Int) = PartitionIterator(vec(A), n)
-PartitionIterator(v::AbstractVector, n::Int) = PartitionIterator{typeof(v)}(v, n)
+PartitionIterator(A::ArrayLike, n::Int) = PartitionIterator(vec(A), n)
+PartitionIterator(v::ArrayLike{1}, n::Int) = PartitionIterator{typeof(v)}(v, n)
 
 eltype(::Type{PartitionIterator{T}}) where {T} = Vector{eltype(T)}
 # Arrays use a generic `view`-of-a-`vec`, so we cannot exactly predict what we'll get back
-eltype(::Type{PartitionIterator{T}}) where {T<:AbstractArray} = AbstractVector{eltype(T)}
+eltype(::Type{PartitionIterator{T}}) where {T<:ArrayLike} = AbstractVector{eltype(T)}
 # But for some common implementations in Base we know the answer exactly
 eltype(::Type{PartitionIterator{T}}) where {T<:Vector} = SubArray{eltype(T), 1, T, Tuple{UnitRange{Int}}, true}
 
 IteratorEltype(::Type{<:PartitionIterator{T}}) where {T} = IteratorEltype(T)
-IteratorEltype(::Type{<:PartitionIterator{T}}) where {T<:AbstractArray} = EltypeUnknown()
+IteratorEltype(::Type{<:PartitionIterator{T}}) where {T<:ArrayLike} = EltypeUnknown()
 IteratorEltype(::Type{<:PartitionIterator{T}}) where {T<:Vector} = IteratorEltype(T)
 
 partition_iteratorsize(::HasShape) = HasLength()
@@ -1121,7 +1121,7 @@ function iterate(itr::PartitionIterator{<:AbstractRange}, state=1)
     return @inbounds itr.c[state:r], r + 1
 end
 
-function iterate(itr::PartitionIterator{<:AbstractArray}, state=1)
+function iterate(itr::PartitionIterator{<:ArrayLike}, state=1)
     state > length(itr.c) && return nothing
     r = min(state + itr.n - 1, length(itr.c))
     return @inbounds view(itr.c, state:r), r + 1
@@ -1298,7 +1298,7 @@ only(x::Tuple{Any}) = x[1]
 only(x::Tuple) = throw(
     ArgumentError("Tuple contains $(length(x)) elements, must contain exactly 1 element")
 )
-only(a::AbstractArray{<:Any, 0}) = @inbounds return a[]
+only(a::ArrayLike{0}) = @inbounds return a[]
 only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
 only(x::NamedTuple) = throw(
     ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")

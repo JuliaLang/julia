@@ -22,7 +22,7 @@ where `copyvalue` defaults to `A[1]`.
 This is typically used to allocate per-thread variables, and
 should be called in `__init__` if `A` is a global constant.
 """
-function resize_nthreads!(A::AbstractVector, copyvalue=A[1])
+function resize_nthreads!(A::ArrayLike{1}, copyvalue=A[1])
     nthr = nthreads()
     nold = length(A)
     resize!(A, nthr)

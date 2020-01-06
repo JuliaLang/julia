@@ -12,7 +12,7 @@ import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, c
     Adjoint
 
 Lazy wrapper type for an adjoint view of the underlying linear algebra object,
-usually an `AbstractVector`/`AbstractMatrix`, but also some `Factorization`, for instance.
+usually an `ArrayLike{1}`/`ArrayLike{2}`, but also some `Factorization`, for instance.
 Usually, the `Adjoint` constructor should not be called directly, use [`adjoint`](@ref)
 instead. To materialize the view use [`copy`](@ref).
 
@@ -43,7 +43,7 @@ end
     Transpose
 
 Lazy wrapper type for a transpose view of the underlying linear algebra object,
-usually an `AbstractVector`/`AbstractMatrix`, but also some `Factorization`, for instance.
+usually an `ArrayLike{1}`/`ArrayLike{2}`, but also some `Factorization`, for instance.
 Usually, the `Transpose` constructor should not be called directly, use [`transpose`](@ref)
 instead. To materialize the view use [`copy`](@ref).
 
@@ -121,7 +121,7 @@ julia> adjoint(A)
  9-2im  4-6im
 ```
 """
-adjoint(A::AbstractVecOrMat) = Adjoint(A)
+adjoint(A::VectorOrMatrixLike) = Adjoint(A)
 
 """
     transpose(A)
@@ -146,7 +146,7 @@ julia> transpose(A)
  9+2im  4+6im
 ```
 """
-transpose(A::AbstractVecOrMat) = Transpose(A)
+transpose(A::VectorOrMatrixLike) = Transpose(A)
 
 # unwrapping lowercase quasi-constructors
 adjoint(A::Adjoint) = A.parent
@@ -157,10 +157,10 @@ transpose(A::Adjoint{<:Real}) = A.parent
 
 # some aliases for internal convenience use
 const AdjOrTrans{T,S} = Union{Adjoint{T,S},Transpose{T,S}} where {T,S}
-const AdjointAbsVec{T} = Adjoint{T,<:AbstractVector}
-const TransposeAbsVec{T} = Transpose{T,<:AbstractVector}
-const AdjOrTransAbsVec{T} = AdjOrTrans{T,<:AbstractVector}
-const AdjOrTransAbsMat{T} = AdjOrTrans{T,<:AbstractMatrix}
+const AdjointAbsVec{T} = Adjoint{T,<:ArrayLike{1}}
+const TransposeAbsVec{T} = Transpose{T,<:ArrayLike{1}}
+const AdjOrTransAbsVec{T} = AdjOrTrans{T,<:ArrayLike{1}}
+const AdjOrTransAbsMat{T} = AdjOrTrans{T,<:ArrayLike{2}}
 
 # for internal use below
 wrapperop(A::Adjoint) = adjoint
@@ -242,15 +242,19 @@ Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) 
 ## multiplication *
 
 # Adjoint/Transpose-vector * vector
-*(u::AdjointAbsVec, v::AbstractVector) = dot(u.parent, v)
+*(u::AdjointAbsVec, v::ArrayLike{1}) = dot(u.parent, v)
+*(u::AdjointAbsVec, v::AbstractVector) = dot(u.parent, v) # specific
 *(u::TransposeAbsVec{T}, v::AbstractVector{T}) where {T<:Real} = dot(u.parent, v)
-function *(u::TransposeAbsVec, v::AbstractVector)
+@inline function multiply_transpose(u, v)
     require_one_based_indexing(u, v)
     @boundscheck length(u) == length(v) || throw(DimensionMismatch())
     return sum(@inbounds(u[k]*v[k]) for k in 1:length(u))
 end
+*(u::TransposeAbsVec, v::ArrayLike{1}) = multiply_transpose(u, v)
+*(u::TransposeAbsVec, v::AbstractVector) = multiply_transpose(u, v) # specific
+
 # vector * Adjoint/Transpose-vector
-*(u::AbstractVector, v::AdjOrTransAbsVec) = broadcast(*, u, v)
+*(u::ArrayLike{1}, v::AdjOrTransAbsVec) = broadcast(*, u, v)
 # Adjoint/Transpose-vector * Adjoint/Transpose-vector
 # (necessary for disambiguation with fallback methods in linalg/matmul)
 *(u::AdjointAbsVec, v::AdjointAbsVec) = throw(MethodError(*, (u, v)))
@@ -277,10 +281,10 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 
 
 ## right-division /
-/(u::AdjointAbsVec, A::AbstractMatrix) = adjoint(adjoint(A) \ u.parent)
-/(u::TransposeAbsVec, A::AbstractMatrix) = transpose(transpose(A) \ u.parent)
-/(u::AdjointAbsVec, A::Transpose{<:Any,<:AbstractMatrix}) = adjoint(conj(A.parent) \ u.parent) # technically should be adjoint(copy(adjoint(copy(A))) \ u.parent)
-/(u::TransposeAbsVec, A::Adjoint{<:Any,<:AbstractMatrix}) = transpose(conj(A.parent) \ u.parent) # technically should be transpose(copy(transpose(copy(A))) \ u.parent)
+/(u::AdjointAbsVec, A::ArrayLike{2}) = adjoint(adjoint(A) \ u.parent)
+/(u::TransposeAbsVec, A::ArrayLike{2}) = transpose(transpose(A) \ u.parent)
+/(u::AdjointAbsVec, A::Transpose{<:Any,<:ArrayLike{2}}) = adjoint(conj(A.parent) \ u.parent) # technically should be adjoint(copy(adjoint(copy(A))) \ u.parent)
+/(u::TransposeAbsVec, A::Adjoint{<:Any,<:ArrayLike{2}}) = transpose(conj(A.parent) \ u.parent) # technically should be transpose(copy(transpose(copy(A))) \ u.parent)
 
 ## complex conjugate
 conj(A::Transpose) = adjoint(A.parent)

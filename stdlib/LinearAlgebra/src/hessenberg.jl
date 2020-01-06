@@ -4,7 +4,7 @@
 # Upper-Hessenberg matrices H+μI, analogous to the UpperTriangular type
 
 """
-    UpperHessenberg(A::AbstractMatrix)
+    UpperHessenberg(A::ArrayLike{2})
 
 Construct an `UpperHessenberg` view of the matrix `A`.
 Entries of `A` below the first subdiagonal are ignored.
@@ -47,9 +47,9 @@ struct UpperHessenberg{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
     end
 end
 UpperHessenberg(H::UpperHessenberg) = H
-UpperHessenberg{T}(A::AbstractMatrix) where {T} = UpperHessenberg(convert(AbstractMatrix{T}, A))
+UpperHessenberg{T}(A::ArrayLike{2}) where {T} = UpperHessenberg(convert(AbstractMatrix{T}, A))
 UpperHessenberg{T}(H::UpperHessenberg) where {T} = UpperHessenberg{T}(H.data)
-UpperHessenberg(A::AbstractMatrix) = UpperHessenberg{eltype(A),typeof(A)}(A)
+UpperHessenberg(A::ArrayLike{2}) = UpperHessenberg{eltype(A),typeof(A)}(A)
 Matrix(H::UpperHessenberg{T}) where {T} = Matrix{T}(H)
 Array(H::UpperHessenberg) = Matrix(H)
 size(H::UpperHessenberg, d) = size(H.data, d)
@@ -124,7 +124,7 @@ fillstored!(H::UpperHessenberg, x) = (fillband!(H.data, x, -1, size(H,2)-1); H)
 # right to left, and doing backsubstitution *simultaneously*.
 
 # solve (H+μI)X = B, storing result in B
-function ldiv!(F::UpperHessenberg, B::AbstractVecOrMat; shift::Number=false)
+function ldiv!(F::UpperHessenberg, B::VectorOrMatrixLike; shift::Number=false)
     checksquare(F)
     m = size(F,1)
     m != size(B,1) && throw(DimensionMismatch("wrong right-hand-side # rows != $m"))
@@ -174,7 +174,7 @@ end
 # of rows/cols.  Essentially, we take the ldiv! algorithm,
 # swap indices of H and X to transpose, and reverse the
 # order of the H indices (or the order of the loops).
-function rdiv!(B::AbstractMatrix, F::UpperHessenberg; shift::Number=false)
+function rdiv!(B::ArrayLike{2}, F::UpperHessenberg; shift::Number=false)
     checksquare(F)
     m = size(F,1)
     m != size(B,2) && throw(DimensionMismatch("wrong right-hand-side # cols != $m"))
@@ -284,7 +284,7 @@ function logabsdet(F::UpperHessenberg; shift::Number=false)
     return (logdeterminant, P)
 end
 
-function dot(x::AbstractVector, H::UpperHessenberg, y::AbstractVector)
+function dot(x::ArrayLike{1}, H::UpperHessenberg, y::ArrayLike{1})
     require_one_based_indexing(x, y)
     m = size(H, 1)
     (length(x) == m == length(y)) || throw(DimensionMismatch())
@@ -324,14 +324,14 @@ end
 A `Hessenberg` object represents the Hessenberg factorization `QHQ'` of a square
 matrix, or a shift `Q(H+μI)Q'` thereof, which is produced by the [`hessenberg`](@ref) function.
 """
-struct Hessenberg{T,SH<:AbstractMatrix,S<:AbstractMatrix,W<:AbstractVector,V<:Number} <: Factorization{T}
+struct Hessenberg{T,SH<:ArrayLike{2},S<:ArrayLike{2},W<:ArrayLike{1},V<:Number} <: Factorization{T}
     H::SH # UpperHessenberg or SymTridiagonal
     uplo::Char
     factors::S # reflector data in uplo triangle, may share data with H
     τ::W # more Q (reflector) data
     μ::V # diagonal shift for copy-free (F+μI) \ b solves and similar
 end
-Hessenberg(factors::AbstractMatrix, τ::AbstractVector, H::AbstractMatrix=UpperHessenberg(factors), uplo::AbstractChar='L'; μ::Number=false) =
+Hessenberg(factors::ArrayLike{2}, τ::ArrayLike{1}, H::ArrayLike{2}=UpperHessenberg(factors), uplo::AbstractChar='L'; μ::Number=false) =
     Hessenberg{typeof(zero(eltype(factors))+μ),typeof(H),typeof(factors),typeof(τ),typeof(μ)}(H, uplo, factors, τ, μ)
 Hessenberg(F::Hessenberg) = F
 Hessenberg(F::Hessenberg, μ::Number) = Hessenberg(F.factors, F.τ, F.H, F.uplo; μ=μ)
@@ -362,7 +362,7 @@ end
 `hessenberg!` is the same as [`hessenberg`](@ref), but saves space by overwriting
 the input `A`, instead of creating a copy.
 """
-hessenberg!(A::AbstractMatrix)
+hessenberg!(A::ArrayLike{2})
 
 """
     hessenberg(A) -> Hessenberg
@@ -441,11 +441,11 @@ matrix `Q` in the Hessenberg factorization `QHQ'` represented by `F`.
 This `F.Q` object can be efficiently multiplied by matrices or vectors,
 and can be converted to an ordinary matrix type with `Matrix(F.Q)`.
 """
-struct HessenbergQ{T,S<:AbstractMatrix,W<:AbstractVector,sym} <: AbstractQ{T}
+struct HessenbergQ{T,S<:ArrayLike{2},W<:ArrayLike{1},sym} <: AbstractQ{T}
     uplo::Char
     factors::S
     τ::W
-    function HessenbergQ{T,S,W,sym}(uplo::AbstractChar, factors, τ) where {T,S<:AbstractMatrix,W<:AbstractVector,sym}
+    function HessenbergQ{T,S,W,sym}(uplo::AbstractChar, factors, τ) where {T,S<:ArrayLike{2},W<:ArrayLike{1},sym}
         new(uplo, factors, τ)
     end
 end
@@ -510,7 +510,7 @@ rmul!(X::Adjoint{T,<:StridedMatrix{T}}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) w
 
 # multiply x by the entries of M in the upper-k triangle, which contains
 # the entries of the upper-Hessenberg matrix H for k=-1
-function rmul_triu!(M::AbstractMatrix, x, k::Integer=0)
+function rmul_triu!(M::ArrayLike{2}, x, k::Integer=0)
     require_one_based_indexing(M)
     m, n = size(M)
     for j = 1:n, i = 1:min(j-k,m)
@@ -518,7 +518,7 @@ function rmul_triu!(M::AbstractMatrix, x, k::Integer=0)
     end
     return M
 end
-function lmul_triu!(x, M::AbstractMatrix, k::Integer=0)
+function lmul_triu!(x, M::ArrayLike{2}, k::Integer=0)
     require_one_based_indexing(M)
     m, n = size(M)
     for j = 1:n, i = 1:min(j-k,m)
@@ -561,7 +561,7 @@ end
 -(F::Hessenberg, J::UniformScaling) = Hessenberg(F, F.μ - J.λ)
 -(J::UniformScaling, F::Hessenberg) = Hessenberg(-F, J.λ - F.μ)
 
-function ldiv!(F::Hessenberg, B::AbstractVecOrMat)
+function ldiv!(F::Hessenberg, B::VectorOrMatrixLike)
     Q = F.Q
     if iszero(F.μ)
         return lmul!(Q, ldiv!(F.H, lmul!(Q', B)))
@@ -570,7 +570,7 @@ function ldiv!(F::Hessenberg, B::AbstractVecOrMat)
     end
 end
 
-function rdiv!(B::AbstractMatrix, F::Hessenberg)
+function rdiv!(B::ArrayLike{2}, F::Hessenberg)
     Q = F.Q
     return rmul!(rdiv!(rmul!(B, Q), F.H; shift=F.μ), Q')
 end
@@ -598,8 +598,8 @@ function rdiv!(B::AbstractVecOrMat{<:Complex}, F::Hessenberg{<:Complex,<:Any,<:A
     return B .= Complex.(Br,Bi)
 end
 
-ldiv!(F::Adjoint{<:Any,<:Hessenberg}, B::AbstractVecOrMat) = rdiv!(B', F')'
-rdiv!(B::AbstractMatrix, F::Adjoint{<:Any,<:Hessenberg}) = ldiv!(F', B')'
+ldiv!(F::Adjoint{<:Any,<:Hessenberg}, B::VectorOrMatrixLike) = rdiv!(B', F')'
+rdiv!(B::ArrayLike{2}, F::Adjoint{<:Any,<:Hessenberg}) = ldiv!(F', B')'
 
 det(F::Hessenberg) = det(F.H; shift=F.μ)
 logabsdet(F::Hessenberg) = logabsdet(F.H; shift=F.μ)

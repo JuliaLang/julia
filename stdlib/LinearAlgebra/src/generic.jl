@@ -74,7 +74,7 @@ julia> C
     return
 end
 
-@inline function _rmul_or_fill!(C::AbstractArray, beta::Number)
+@inline function _rmul_or_fill!(C::ArrayLike, beta::Number)
     if isempty(C)
         return C
     end
@@ -87,7 +87,7 @@ end
 end
 
 
-function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number, _add::MulAddMul)
+function generic_mul!(C::ArrayLike, X::ArrayLike, s::Number, _add::MulAddMul)
     if length(C) != length(X)
         throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
     end
@@ -97,7 +97,7 @@ function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number, _add::MulAd
     C
 end
 
-function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray, _add::MulAddMul)
+function generic_mul!(C::ArrayLike, s::Number, X::ArrayLike, _add::MulAddMul)
     if length(C) != length(X)
         throw(DimensionMismatch("first array has length $(length(C)) which does not
 match the length of the second, $(length(X))."))
@@ -108,15 +108,15 @@ match the length of the second, $(length(X))."))
     C
 end
 
-@inline mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number) =
+@inline mul!(C::ArrayLike, s::Number, X::ArrayLike, alpha::Number, beta::Number) =
     generic_mul!(C, s, X, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number) =
+@inline mul!(C::ArrayLike, X::ArrayLike, s::Number, alpha::Number, beta::Number) =
     generic_mul!(C, X, s, MulAddMul(alpha, beta))
 
 # For better performance when input and output are the same array
 # See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
 """
-    rmul!(A::AbstractArray, b::Number)
+    rmul!(A::ArrayLike, b::Number)
 
 Scale an array `A` by a scalar `b` overwriting `A` in-place.  Use
 [`lmul!`](@ref) to multiply scalar from left.  The scaling operation
@@ -145,7 +145,7 @@ julia> rmul!([NaN], 0.0)
  NaN
 ```
 """
-function rmul!(X::AbstractArray, s::Number)
+function rmul!(X::ArrayLike, s::Number)
     @simd for I in eachindex(X)
         @inbounds X[I] *= s
     end
@@ -154,7 +154,7 @@ end
 
 
 """
-    lmul!(a::Number, B::AbstractArray)
+    lmul!(a::Number, B::ArrayLike)
 
 Scale an array `B` by a scalar `a` overwriting `B` in-place.  Use
 [`rmul!`](@ref) to multiply scalar from right.  The scaling operation
@@ -183,7 +183,7 @@ julia> lmul!(0.0, [Inf])
  NaN
 ```
 """
-function lmul!(s::Number, X::AbstractArray)
+function lmul!(s::Number, X::ArrayLike)
     @simd for I in eachindex(X)
         @inbounds X[I] = s*X[I]
     end
@@ -191,7 +191,7 @@ function lmul!(s::Number, X::AbstractArray)
 end
 
 """
-    rdiv!(A::AbstractArray, b::Number)
+    rdiv!(A::ArrayLike, b::Number)
 
 Divide each entry in an array `A` by a scalar `b` overwriting `A`
 in-place.  Use [`ldiv!`](@ref) to divide scalar from left.
@@ -209,7 +209,7 @@ julia> rdiv!(A, 2.0)
  1.5  2.0
 ```
 """
-function rdiv!(X::AbstractArray, s::Number)
+function rdiv!(X::ArrayLike, s::Number)
     @simd for I in eachindex(X)
         @inbounds X[I] /= s
     end
@@ -217,7 +217,7 @@ function rdiv!(X::AbstractArray, s::Number)
 end
 
 """
-    ldiv!(a::Number, B::AbstractArray)
+    ldiv!(a::Number, B::ArrayLike)
 
 Divide each entry in an array `B` by a scalar `a` overwriting `B`
 in-place.  Use [`rdiv!`](@ref) to divide scalar from right.
@@ -235,16 +235,16 @@ julia> ldiv!(2.0, B)
  1.5  2.0
 ```
 """
-function ldiv!(s::Number, X::AbstractArray)
+function ldiv!(s::Number, X::ArrayLike)
     @simd for I in eachindex(X)
         @inbounds X[I] = s\X[I]
     end
     X
 end
-ldiv!(Y::AbstractArray, s::Number, X::AbstractArray) = Y .= s .\ X
+ldiv!(Y::ArrayLike, s::Number, X::ArrayLike) = Y .= s .\ X
 
 # Generic fallback. This assumes that B and Y have the same sizes.
-ldiv!(Y::AbstractArray, A::AbstractMatrix, B::AbstractArray) = ldiv!(A, copyto!(Y, B))
+ldiv!(Y::ArrayLike, A::ArrayLike{2}, B::ArrayLike) = ldiv!(A, copyto!(Y, B))
 
 
 """
@@ -274,7 +274,7 @@ julia> cross(a,b)
  0
 ```
 """
-function cross(a::AbstractVector, b::AbstractVector)
+function cross(a::ArrayLike{1}, b::ArrayLike{1})
     if !(length(a) == length(b) == 3)
         throw(DimensionMismatch("cross product is only defined for vectors of length 3"))
     end
@@ -305,7 +305,7 @@ julia> triu(a)
  0.0  0.0  0.0  1.0
 ```
 """
-triu(M::AbstractMatrix) = triu!(copy(M))
+triu(M::ArrayLike{2}) = triu!(copy(M))
 
 """
     tril(M)
@@ -329,7 +329,7 @@ julia> tril(a)
  1.0  1.0  1.0  1.0
 ```
 """
-tril(M::AbstractMatrix) = tril!(copy(M))
+tril(M::ArrayLike{2}) = tril!(copy(M))
 
 """
     triu(M, k::Integer)
@@ -360,7 +360,7 @@ julia> triu(a,-3)
  1.0  1.0  1.0  1.0
 ```
 """
-triu(M::AbstractMatrix,k::Integer) = triu!(copy(M),k)
+triu(M::ArrayLike{2},k::Integer) = triu!(copy(M),k)
 
 """
     tril(M, k::Integer)
@@ -391,7 +391,7 @@ julia> tril(a,-3)
  1.0  0.0  0.0  0.0
 ```
 """
-tril(M::AbstractMatrix,k::Integer) = tril!(copy(M),k)
+tril(M::ArrayLike{2},k::Integer) = tril!(copy(M),k)
 
 """
     triu!(M)
@@ -399,7 +399,7 @@ tril(M::AbstractMatrix,k::Integer) = tril!(copy(M),k)
 Upper triangle of a matrix, overwriting `M` in the process.
 See also [`triu`](@ref).
 """
-triu!(M::AbstractMatrix) = triu!(M,0)
+triu!(M::ArrayLike{2}) = triu!(M,0)
 
 """
     tril!(M)
@@ -407,9 +407,9 @@ triu!(M::AbstractMatrix) = triu!(M,0)
 Lower triangle of a matrix, overwriting `M` in the process.
 See also [`tril`](@ref).
 """
-tril!(M::AbstractMatrix) = tril!(M,0)
+tril!(M::ArrayLike{2}) = tril!(M,0)
 
-diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to construct a diagonal matrix"))
+diag(A::ArrayLike{1}) = throw(ArgumentError("use diagm instead of diag to construct a diagonal matrix"))
 
 ###########################################################################################
 # Dot products and norms
@@ -694,7 +694,7 @@ end
 
 
 """
-    opnorm(A::AbstractMatrix, p::Real=2)
+    opnorm(A::ArrayLike{2}, p::Real=2)
 
 Compute the operator norm (or matrix norm) induced by the vector `p`-norm,
 where valid values of `p` are `1`, `2`, or `Inf`. (Note that for sparse matrices,
@@ -729,7 +729,7 @@ julia> opnorm(A, 1)
 5.0
 ```
 """
-function opnorm(A::AbstractMatrix, p::Real=2)
+function opnorm(A::ArrayLike{2}, p::Real=2)
     if p == 2
         return opnorm2(A)
     elseif p == 1
@@ -870,7 +870,7 @@ end
 
 dot(x::Number, y::Number) = conj(x) * y
 
-function dot(x::AbstractArray, y::AbstractArray)
+function dot(x::ArrayLike, y::ArrayLike)
     lx = length(x)
     if lx != length(y)
         throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(length(y))."))
@@ -910,7 +910,7 @@ true
 """
 dot(x, A, y) = dot(x, A*y) # generic fallback for cases that are not covered by specialized methods
 
-function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
+function dot(x::ArrayLike{1}, A::ArrayLike{2}, y::ArrayLike{1})
     (axes(x)..., axes(y)...) == axes(A) || throw(DimensionMismatch())
     T = typeof(dot(first(x), first(A), first(y)))
     s = zero(T)
@@ -928,14 +928,14 @@ function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
     end
     return s
 end
-dot(x::AbstractVector, adjA::Adjoint, y::AbstractVector) = adjoint(dot(y, adjA.parent, x))
-dot(x::AbstractVector, transA::Transpose{<:Real}, y::AbstractVector) = adjoint(dot(y, transA.parent, x))
+dot(x::ArrayLike{1}, adjA::Adjoint, y::ArrayLike{1}) = adjoint(dot(y, adjA.parent, x))
+dot(x::ArrayLike{1}, transA::Transpose{<:Real}, y::ArrayLike{1}) = adjoint(dot(y, transA.parent, x))
 
 ###########################################################################################
 
 """
-    rank(A::AbstractMatrix; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ)
-    rank(A::AbstractMatrix, rtol::Real)
+    rank(A::ArrayLike{2}; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ)
+    rank(A::ArrayLike{2}, rtol::Real)
 
 Compute the rank of a matrix by counting how many singular
 values of `A` have magnitude greater than `max(atol, rtol*σ₁)` where `σ₁` is
@@ -967,7 +967,7 @@ julia> rank(diagm(0 => [1, 0.001, 2]), atol=1.5)
 1
 ```
 """
-function rank(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol))
+function rank(A::ArrayLike{2}; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol))
     isempty(A) && return 0 # 0-dimensional case
     s = svdvals(A)
     tol = max(atol, rtol*s[1])
@@ -991,16 +991,16 @@ julia> tr(A)
 5
 ```
 """
-function tr(A::AbstractMatrix)
+function tr(A::ArrayLike{2})
     checksquare(A)
     sum(diag(A))
 end
 tr(x::Number) = x
 
-#kron(a::AbstractVector, b::AbstractVector)
+#kron(a::ArrayLike{1}, b::ArrayLike{1})
 #kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
 
-#det(a::AbstractMatrix)
+#det(a::ArrayLike{2})
 
 """
     inv(M)
@@ -1055,7 +1055,7 @@ end
 # this method is just an optimization: literal negative powers of A are
 # already turned by literal_pow into powers of inv(A), but for A^-1 this
 # would turn into inv(A)^1 = copy(inv(A)), which makes an extra copy.
-@inline Base.literal_pow(::typeof(^), A::AbstractMatrix, ::Val{-1}) = inv(A)
+@inline Base.literal_pow(::typeof(^), A::ArrayLike{2}, ::Val{-1}) = inv(A)
 
 """
     \\(A, B)
@@ -1086,7 +1086,7 @@ julia> A * X == B
 true
 ```
 """
-function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
+function (\)(A::ArrayLike{2}, B::VectorOrMatrixLike)
     require_one_based_indexing(A, B)
     m, n = size(A)
     if m == n
@@ -1105,20 +1105,20 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
     return qr(A,Val(true)) \ B
 end
 
-(\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
-function (/)(A::AbstractVecOrMat, B::AbstractVecOrMat)
+(\)(a::ArrayLike{1}, b::ArrayLike) = pinv(a) * b
+function (/)(A::VectorOrMatrixLike, B::VectorOrMatrixLike)
     size(A,2) != size(B,2) && throw(DimensionMismatch("Both inputs should have the same number of columns"))
     return copy(adjoint(adjoint(B) \ adjoint(A)))
 end
 # \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
 # /(x::Number,A::StridedMatrix) = x*inv(A)
-/(x::Number, v::AbstractVector) = x*pinv(v)
+/(x::Number, v::ArrayLike{1}) = x*pinv(v)
 
 cond(x::Number) = x == 0 ? Inf : 1.0
 cond(x::Number, p) = cond(x)
 
 #Skeel condition numbers
-condskeel(A::AbstractMatrix, p::Real=Inf) = opnorm(abs.(inv(A))*abs.(A), p)
+condskeel(A::ArrayLike{2}, p::Real=Inf) = opnorm(abs.(inv(A))*abs.(A), p)
 
 """
     condskeel(M, [x, p::Real=Inf])
@@ -1137,7 +1137,7 @@ Valid values for `p` are `1`, `2` and `Inf` (default).
 This quantity is also known in the literature as the Bauer condition number, relative
 condition number, or componentwise relative condition number.
 """
-condskeel(A::AbstractMatrix, x::AbstractVector, p::Real=Inf) = norm(abs.(inv(A))*(abs.(A)*abs.(x)), p)
+condskeel(A::ArrayLike{2}, x::ArrayLike{1}, p::Real=Inf) = norm(abs.(inv(A))*(abs.(A)*abs.(x)), p)
 
 issymmetric(A::AbstractMatrix{<:Real}) = ishermitian(A)
 
@@ -1165,7 +1165,7 @@ julia> issymmetric(b)
 false
 ```
 """
-function issymmetric(A::AbstractMatrix)
+function issymmetric(A::ArrayLike{2})
     indsm, indsn = axes(A)
     if indsm != indsn
         return false
@@ -1204,7 +1204,7 @@ julia> ishermitian(b)
 true
 ```
 """
-function ishermitian(A::AbstractMatrix)
+function ishermitian(A::ArrayLike{2})
     indsm, indsn = axes(A)
     if indsm != indsn
         return false
@@ -1220,7 +1220,7 @@ end
 ishermitian(x::Number) = (x == conj(x))
 
 """
-    istriu(A::AbstractMatrix, k::Integer = 0) -> Bool
+    istriu(A::ArrayLike{2}, k::Integer = 0) -> Bool
 
 Test whether `A` is upper triangular starting from the `k`th superdiagonal.
 
@@ -1249,7 +1249,7 @@ julia> istriu(b, 1)
 false
 ```
 """
-function istriu(A::AbstractMatrix, k::Integer = 0)
+function istriu(A::ArrayLike{2}, k::Integer = 0)
     require_one_based_indexing(A)
     m, n = size(A)
     for j in 1:min(n, m + k - 1)
@@ -1262,7 +1262,7 @@ end
 istriu(x::Number) = true
 
 """
-    istril(A::AbstractMatrix, k::Integer = 0) -> Bool
+    istril(A::ArrayLike{2}, k::Integer = 0) -> Bool
 
 Test whether `A` is lower triangular starting from the `k`th superdiagonal.
 
@@ -1291,7 +1291,7 @@ julia> istril(b, -1)
 false
 ```
 """
-function istril(A::AbstractMatrix, k::Integer = 0)
+function istril(A::ArrayLike{2}, k::Integer = 0)
     require_one_based_indexing(A)
     m, n = size(A)
     for j in max(1, k + 2):n
@@ -1304,7 +1304,7 @@ end
 istril(x::Number) = true
 
 """
-    isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) -> Bool
+    isbanded(A::ArrayLike{2}, kl::Integer, ku::Integer) -> Bool
 
 Test whether `A` is banded with lower bandwidth starting from the `kl`th superdiagonal
 and upper bandwidth extending through the `ku`th superdiagonal.
@@ -1334,7 +1334,7 @@ julia> LinearAlgebra.isbanded(b, -1, 0)
 true
 ```
 """
-isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) = istriu(A, kl) && istril(A, ku)
+isbanded(A::ArrayLike{2}, kl::Integer, ku::Integer) = istriu(A, kl) && istril(A, ku)
 
 """
     isdiag(A) -> Bool
@@ -1360,13 +1360,13 @@ julia> isdiag(b)
 true
 ```
 """
-isdiag(A::AbstractMatrix) = isbanded(A, 0, 0)
+isdiag(A::ArrayLike{2}) = isbanded(A, 0, 0)
 isdiag(x::Number) = true
 
 
 # BLAS-like in-place y = x*α+y function (see also the version in blas.jl
 #                                          for BlasFloat Arrays)
-function axpy!(α, x::AbstractArray, y::AbstractArray)
+function axpy!(α, x::ArrayLike, y::ArrayLike)
     n = length(x)
     if n != length(y)
         throw(DimensionMismatch("x has length $n, but y has length $(length(y))"))
@@ -1377,7 +1377,7 @@ function axpy!(α, x::AbstractArray, y::AbstractArray)
     y
 end
 
-function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractArray, ry::AbstractArray{<:Integer})
+function axpy!(α, x::ArrayLike, rx::AbstractArray{<:Integer}, y::ArrayLike, ry::AbstractArray{<:Integer})
     if length(rx) != length(ry)
         throw(DimensionMismatch("rx has length $(length(rx)), but ry has length $(length(ry))"))
     elseif !checkindex(Bool, eachindex(IndexLinear(), x), rx)
@@ -1391,7 +1391,7 @@ function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractAr
     y
 end
 
-function axpby!(α, x::AbstractArray, β, y::AbstractArray)
+function axpby!(α, x::ArrayLike, β, y::ArrayLike)
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
@@ -1404,7 +1404,7 @@ end
 
 # Elementary reflection similar to LAPACK. The reflector is not Hermitian but
 # ensures that tridiagonalization of Hermitian matrices become real. See lawn72
-@inline function reflector!(x::AbstractVector)
+@inline function reflector!(x::ArrayLike{1})
     require_one_based_indexing(x)
     n = length(x)
     @inbounds begin
@@ -1428,7 +1428,7 @@ end
 end
 
 # apply reflector from left
-@inline function reflectorApply!(x::AbstractVector, τ::Number, A::StridedMatrix)
+@inline function reflectorApply!(x::ArrayLike{1}, τ::Number, A::StridedMatrix)
     require_one_based_indexing(x)
     m, n = size(A)
     if length(x) != m
@@ -1510,7 +1510,7 @@ julia> logabsdet(B)
 (0.6931471805599453, 1.0)
 ```
 """
-logabsdet(A::AbstractMatrix) = logabsdet(lu(A, check=false))
+logabsdet(A::ArrayLike{2}) = logabsdet(lu(A, check=false))
 
 """
     logdet(M)
@@ -1532,7 +1532,7 @@ julia> logdet(Matrix(I, 3, 3))
 0.0
 ```
 """
-function logdet(A::AbstractMatrix)
+function logdet(A::ArrayLike{2})
     d,s = logabsdet(A)
     return d + log(s)
 end
@@ -1563,12 +1563,12 @@ Complex{Float64}
 promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{T,Vararg{T}}}) where {T<:Number} = T
 promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{T,Vararg{T}}}) where {T<:NumberArray} = eltype(T)
 promote_leaf_eltypes(x::T) where {T} = T
-promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_eltypes, promote_type, x; init=Bool)
+promote_leaf_eltypes(x::Union{ArrayLike,Tuple}) = mapreduce(promote_leaf_eltypes, promote_type, x; init=Bool)
 
 # isapprox: approximate equality of arrays [like isapprox(Number,Number)]
 # Supports nested arrays; e.g., for `a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]`
 # `a ≈ a` is `true`.
-function isapprox(x::AbstractArray, y::AbstractArray;
+function isapprox(x::ArrayLike, y::ArrayLike;
     atol::Real=0,
     rtol::Real=Base.rtoldefault(promote_leaf_eltypes(x),promote_leaf_eltypes(y),atol),
     nans::Bool=false, norm::Function=norm)
@@ -1582,18 +1582,18 @@ function isapprox(x::AbstractArray, y::AbstractArray;
 end
 
 """
-    normalize!(v::AbstractVector, p::Real=2)
+    normalize!(v::ArrayLike{1}, p::Real=2)
 
 Normalize the vector `v` in-place so that its `p`-norm equals unity,
 i.e. `norm(v, p) == 1`.
 See also [`normalize`](@ref) and [`norm`](@ref).
 """
-function normalize!(v::AbstractVector, p::Real=2)
+function normalize!(v::ArrayLike{1}, p::Real=2)
     nrm = norm(v, p)
     __normalize!(v, nrm)
 end
 
-@inline function __normalize!(v::AbstractVector, nrm::AbstractFloat)
+@inline function __normalize!(v::ArrayLike{1}, nrm::AbstractFloat)
     # The largest positive floating point number whose inverse is less than infinity
     δ = inv(prevfloat(typemax(nrm)))
 
@@ -1611,7 +1611,7 @@ end
 end
 
 """
-    normalize(v::AbstractVector, p::Real=2)
+    normalize(v::ArrayLike{1}, p::Real=2)
 
 Normalize the vector `v` so that its `p`-norm equals unity,
 i.e. `norm(v, p) == 1`.
@@ -1640,7 +1640,7 @@ julia> norm(c, 1)
 1.0
 ```
 """
-function normalize(v::AbstractVector, p::Real = 2)
+function normalize(v::ArrayLike{1}, p::Real = 2)
     nrm = norm(v, p)
     if !isempty(v)
         vv = copy_oftype(v, typeof(v[1]/nrm))

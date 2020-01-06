@@ -30,7 +30,7 @@ end
 
 Returns `true` if type `S` is backed by a sparse array, and `false` otherwise.
 """
-iswrsparse(::T) where T<:AbstractArray = iswrsparse(T)
+iswrsparse(::T) where T<:ArrayLike = iswrsparse(T)
 iswrsparse(::Type) = false
 iswrsparse(::Type{T}) where T<:AbstractSparseArray = true
 
@@ -40,7 +40,7 @@ iswrsparse(::Type{T}) where T<:AbstractSparseArray = true
 Returns 0 for unwrapped S, and nesting depth for wrapped (nested) abstract arrays.
 """
 depth(::T) where T = depth(T)
-depth(::Type{T}) where T<:AbstractArray = 0
+depth(::Type{T}) where T<:ArrayLike = 0
 
 for wr in (Symmetric, Hermitian,
            LowerTriangular, UnitLowerTriangular, UpperTriangular, UnitUpperTriangular,
@@ -67,14 +67,14 @@ function _sparsewrap(A::Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal})
 end
 
 """
-    unwrap(A::AbstractMatrix)
+    unwrap(A::ArrayLike{2})
 
 In case A is a wrapper type (`SubArray, Symmetric, Adjoint, SubArray, Triangular, Tridiagonal`, etc.)
 convert to `Matrix` or `SparseMatrixCSC`, depending on final storage type of A.
 For other types return A itself.
 """
 unwrap(A::Any) = A
-unwrap(A::AbstractMatrix) = iswrsparse(A) ? convert(SparseMatrixCSC, A) : convert(Array, A)
+unwrap(A::ArrayLike{2}) = iswrsparse(A) ? convert(SparseMatrixCSC, A) : convert(Array, A)
 
 # For pure sparse matrices and vectors return A.
 # For wrapped sparse matrices or vectors convert to SparseMatrixCSC.
@@ -89,7 +89,7 @@ function _sparsem(@nospecialize A::AbstractArray{Tv}) where Tv
         end
     else
         # explicitly call abstract matrix fallback using getindex(A,...)
-        invoke(SparseMatrixCSC{Tv,Int}, Tuple{AbstractMatrix}, A)
+        invoke(SparseMatrixCSC{Tv,Int}, Tuple{ArrayLike{2}}, A)
     end
 end
 
@@ -283,4 +283,3 @@ function _sparse_gen(m, n, newcolptr, newrowval, newnzval)
     newcolptr[1] = 1
     SparseMatrixCSC(m, n, newcolptr, newrowval, newnzval)
 end
-

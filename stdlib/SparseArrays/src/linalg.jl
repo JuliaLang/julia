@@ -299,7 +299,7 @@ function dot(A::AbstractSparseMatrixCSC{T1,S1},B::AbstractSparseMatrixCSC{T2,S2}
     return r
 end
 
-function dot(x::AbstractVector, A::AbstractSparseMatrixCSC, y::AbstractVector)
+function dot(x::ArrayLike{1}, A::AbstractSparseMatrixCSC, y::ArrayLike{1})
     require_one_based_indexing(x, y)
     m, n = size(A)
     (length(x) == m && n == length(y)) || throw(DimensionMismatch())
@@ -1436,7 +1436,7 @@ function lmul!(D::Diagonal, A::AbstractSparseMatrixCSC)
     return A
 end
 
-function \(A::AbstractSparseMatrixCSC, B::AbstractVecOrMat)
+function \(A::AbstractSparseMatrixCSC, B::VectorOrMatrixLike)
     require_one_based_indexing(A, B)
     m, n = size(A)
     if m == n
@@ -1459,7 +1459,7 @@ function \(A::AbstractSparseMatrixCSC, B::AbstractVecOrMat)
 end
 for (xformtype, xformop) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
     @eval begin
-        function \(xformA::($xformtype){<:Any,<:AbstractSparseMatrixCSC}, B::AbstractVecOrMat)
+        function \(xformA::($xformtype){<:Any,<:AbstractSparseMatrixCSC}, B::VectorOrMatrixLike)
             A = xformA.parent
             require_one_based_indexing(A, B)
             m, n = size(A)

@@ -118,7 +118,7 @@ if is_primary_base_module
             return RefArray(ptrs,1,roots)
         end
     end
-    Ref(x::AbstractArray, i::Integer) = RefArray(x, i)
+    Ref(x::ArrayLike, i::Integer) = RefArray(x, i)
 end
 
 cconvert(::Type{Ptr{P}}, a::Array{<:Ptr}) where {P<:Ptr} = a

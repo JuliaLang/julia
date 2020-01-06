@@ -69,12 +69,12 @@ julia> C.L * C.U == A
 true
 ```
 """
-struct Cholesky{T,S<:AbstractMatrix} <: Factorization{T}
+struct Cholesky{T,S<:ArrayLike{2}} <: Factorization{T}
     factors::S
     uplo::Char
     info::BlasInt
 
-    function Cholesky{T,S}(factors, uplo, info) where {T,S<:AbstractMatrix}
+    function Cholesky{T,S}(factors, uplo, info) where {T,S<:ArrayLike{2}}
         require_one_based_indexing(factors)
         new(factors, uplo, info)
     end
@@ -116,7 +116,7 @@ permutation:
  1
 ```
 """
-struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
+struct CholeskyPivoted{T,S<:ArrayLike{2}} <: Factorization{T}
     factors::S
     uplo::Char
     piv::Vector{BlasInt}
@@ -124,7 +124,7 @@ struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
     tol::Real
     info::BlasInt
 
-    function CholeskyPivoted{T,S}(factors, uplo, piv, rank, tol, info) where {T,S<:AbstractMatrix}
+    function CholeskyPivoted{T,S}(factors, uplo, piv, rank, tol, info) where {T,S<:ArrayLike{2}}
         require_one_based_indexing(factors)
         new(factors, uplo, piv, rank, tol, info)
     end
@@ -157,7 +157,7 @@ function _chol!(A::StridedMatrix)
 end
 
 ## Non BLAS/LAPACK element types (generic)
-function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
+function _chol!(A::ArrayLike{2}, ::Type{UpperTriangular})
     require_one_based_indexing(A)
     n = checksquare(A)
     @inbounds begin
@@ -181,7 +181,7 @@ function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
     end
     return UpperTriangular(A), convert(BlasInt, 0)
 end
-function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
+function _chol!(A::ArrayLike{2}, ::Type{LowerTriangular})
     require_one_based_indexing(A)
     n = checksquare(A)
     @inbounds begin
@@ -450,7 +450,7 @@ Base.propertynames(F::CholeskyPivoted, private::Bool=false) =
 
 issuccess(C::Cholesky) = C.info == 0
 
-function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:AbstractMatrix})
+function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:ArrayLike{2}})
     if issuccess(C)
         summary(io, C); println(io)
         println(io, "$(C.uplo) factor:")
@@ -460,7 +460,7 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:Abst
     end
 end
 
-function show(io::IO, mime::MIME{Symbol("text/plain")}, C::CholeskyPivoted{<:Any,<:AbstractMatrix})
+function show(io::IO, mime::MIME{Symbol("text/plain")}, C::CholeskyPivoted{<:Any,<:ArrayLike{2}})
     summary(io, C); println(io)
     println(io, "$(C.uplo) factor with rank $(rank(C)):")
     show(io, mime, C.uplo == 'U' ? C.U : C.L)
@@ -468,10 +468,10 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, C::CholeskyPivoted{<:Any
     show(io, mime, C.p)
 end
 
-ldiv!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+ldiv!(C::Cholesky{T,<:ArrayLike{2}}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     LAPACK.potrs!(C.uplo, C.factors, B)
 
-function ldiv!(C::Cholesky{<:Any,<:AbstractMatrix}, B::StridedVecOrMat)
+function ldiv!(C::Cholesky{<:Any,<:ArrayLike{2}}, B::StridedVecOrMat)
     if C.uplo == 'L'
         return ldiv!(adjoint(LowerTriangular(C.factors)), ldiv!(LowerTriangular(C.factors), B))
     else
@@ -523,7 +523,7 @@ function ldiv!(C::CholeskyPivoted, B::StridedMatrix)
     B
 end
 
-function rdiv!(B::StridedMatrix, C::Cholesky{<:Any,<:AbstractMatrix})
+function rdiv!(B::StridedMatrix, C::Cholesky{<:Any,<:ArrayLike{2}})
     if C.uplo == 'L'
         return rdiv!(rdiv!(B, adjoint(LowerTriangular(C.factors))), LowerTriangular(C.factors))
     else

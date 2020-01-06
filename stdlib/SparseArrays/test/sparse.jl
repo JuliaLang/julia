@@ -62,7 +62,7 @@ end
     @test SparseArrays.indtype(sparse(Int8[1,1],Int8[1,1],[1,1])) == Int8
 end
 
-@testset "conversion to AbstractMatrix/SparseMatrix of same eltype" begin
+@testset "conversion to ArrayLike{2}/SparseMatrix of same eltype" begin
     a = sprand(5, 5, 0.2)
     @test AbstractMatrix{eltype(a)}(a) == a
     @test SparseMatrixCSC{eltype(a)}(a) == a
@@ -1393,7 +1393,7 @@ end
     @test size(rotl90(a)) == (5,3)
 end
 
-function test_getindex_algs(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector, alg::Int) where {Tv,Ti}
+function test_getindex_algs(A::SparseMatrixCSC{Tv,Ti}, I::ArrayLike{1}, J::ArrayLike{1}, alg::Int) where {Tv,Ti}
     # Sorted vectors for indexing rows.
     # Similar to getindex_general but without the transpose trick.
     (m, n) = size(A)
@@ -1505,7 +1505,7 @@ end
     @test_throws BoundsError S[[2,1], [0,1,2]]
 end
 
-@testset "test that sparse / sparsevec constructors work for AbstractMatrix subtypes" begin
+@testset "test that sparse / sparsevec constructors work for ArrayLike{2} subtypes" begin
     D = Diagonal(fill(1,10))
     sm = sparse(D)
     sv = sparsevec(D)

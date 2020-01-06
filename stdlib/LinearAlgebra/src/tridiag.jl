@@ -16,7 +16,7 @@ struct SymTridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
 end
 
 """
-    SymTridiagonal(dv::V, ev::V) where V <: AbstractVector
+    SymTridiagonal(dv::V, ev::V) where V <: ArrayLike{1}
 
 Construct a symmetric tridiagonal matrix from the diagonal (`dv`) and first
 sub/super-diagonal (`ev`), respectively. The result is of type `SymTridiagonal`
@@ -48,13 +48,13 @@ julia> SymTridiagonal(dv, ev)
 """
 SymTridiagonal(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T}(dv, ev)
 SymTridiagonal{T}(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T,V}(dv, ev)
-function SymTridiagonal{T}(dv::AbstractVector, ev::AbstractVector) where {T}
+function SymTridiagonal{T}(dv::ArrayLike{1}, ev::ArrayLike{1}) where {T}
     SymTridiagonal(convert(AbstractVector{T}, dv)::AbstractVector{T},
                    convert(AbstractVector{T}, ev)::AbstractVector{T})
 end
 
 """
-    SymTridiagonal(A::AbstractMatrix)
+    SymTridiagonal(A::ArrayLike{2})
 
 Construct a symmetric tridiagonal matrix from the diagonal and
 first sub/super-diagonal, of the symmetric matrix `A`.
@@ -74,7 +74,7 @@ julia> SymTridiagonal(A)
  ⋅  5  6
 ```
 """
-function SymTridiagonal(A::AbstractMatrix)
+function SymTridiagonal(A::ArrayLike{2})
     if diag(A,1) == diag(A,-1)
         SymTridiagonal(diag(A,0), diag(A,1))
     else
@@ -202,7 +202,7 @@ end
     return C
 end
 
-function dot(x::AbstractVector, S::SymTridiagonal, y::AbstractVector)
+function dot(x::ArrayLike{1}, S::SymTridiagonal, y::ArrayLike{1})
     require_one_based_indexing(x, y)
     nx, ny = length(x), length(y)
     (nx == size(S, 1) == ny) || throw(DimensionMismatch())
@@ -226,8 +226,8 @@ end
 (\)(T::SymTridiagonal, B::StridedVecOrMat) = ldlt(T)\B
 
 # division with optional shift for use in shifted-Hessenberg solvers (hessenberg.jl):
-ldiv!(A::SymTridiagonal, B::AbstractVecOrMat; shift::Number=false) = ldiv!(ldlt(A, shift=shift), B)
-rdiv!(B::AbstractVecOrMat, A::SymTridiagonal; shift::Number=false) = rdiv!(B, ldlt(A, shift=shift))
+ldiv!(A::SymTridiagonal, B::VectorOrMatrixLike; shift::Number=false) = ldiv!(ldlt(A, shift=shift), B)
+rdiv!(B::VectorOrMatrixLike, A::SymTridiagonal; shift::Number=false) = rdiv!(B, ldlt(A, shift=shift))
 
 eigen!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
 eigen(A::SymTridiagonal{T}) where T = eigen!(copy_oftype(A, eigtype(T)))
@@ -435,7 +435,7 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
 end
 
 """
-    Tridiagonal(dl::V, d::V, du::V) where V <: AbstractVector
+    Tridiagonal(dl::V, d::V, du::V) where V <: ArrayLike{1}
 
 Construct a tridiagonal matrix from the first subdiagonal, diagonal, and first superdiagonal,
 respectively. The result is of type `Tridiagonal` and provides efficient specialized linear
@@ -461,7 +461,7 @@ julia> Tridiagonal(dl, d, du)
 """
 Tridiagonal(dl::V, d::V, du::V) where {T,V<:AbstractVector{T}} = Tridiagonal{T,V}(dl, d, du)
 Tridiagonal(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}} = Tridiagonal{T,V}(dl, d, du, du2)
-function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector) where {T}
+function Tridiagonal{T}(dl::ArrayLike{1}, d::ArrayLike{1}, du::ArrayLike{1}) where {T}
     Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du))...)
 end
 
@@ -488,7 +488,7 @@ julia> Tridiagonal(A)
  ⋅  ⋅  3  4
 ```
 """
-Tridiagonal(A::AbstractMatrix) = Tridiagonal(diag(A,-1), diag(A,0), diag(A,1))
+Tridiagonal(A::ArrayLike{2}) = Tridiagonal(diag(A,-1), diag(A,0), diag(A,1))
 
 Tridiagonal(A::Tridiagonal) = A
 Tridiagonal{T}(A::Tridiagonal{T}) where {T} = A
@@ -679,7 +679,7 @@ end
 Base._sum(A::Tridiagonal, ::Colon) = sum(A.d) + sum(A.dl) + sum(A.du)
 Base._sum(A::SymTridiagonal, ::Colon) = sum(A.dv) + 2sum(A.ev)
 
-function dot(x::AbstractVector, A::Tridiagonal, y::AbstractVector)
+function dot(x::ArrayLike{1}, A::Tridiagonal, y::ArrayLike{1})
     require_one_based_indexing(x, y)
     nx, ny = length(x), length(y)
     (nx == size(A, 1) == ny) || throw(DimensionMismatch())

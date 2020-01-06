@@ -16,14 +16,14 @@ end
 function Bidiagonal{T,V}(dv, ev, uplo::Symbol) where {T,V<:AbstractVector{T}}
     Bidiagonal{T,V}(dv, ev, char_uplo(uplo))
 end
-function Bidiagonal{T}(dv::AbstractVector, ev::AbstractVector, uplo::Union{Symbol,AbstractChar}) where {T}
+function Bidiagonal{T}(dv::ArrayLike{1}, ev::ArrayLike{1}, uplo::Union{Symbol,AbstractChar}) where {T}
     Bidiagonal(convert(AbstractVector{T}, dv)::AbstractVector{T},
                convert(AbstractVector{T}, ev)::AbstractVector{T},
                uplo)
 end
 
 """
-    Bidiagonal(dv::V, ev::V, uplo::Symbol) where V <: AbstractVector
+    Bidiagonal(dv::V, ev::V, uplo::Symbol) where V <: ArrayLike{1}
 
 Constructs an upper (`uplo=:U`) or lower (`uplo=:L`) bidiagonal matrix using the
 given diagonal (`dv`) and off-diagonal (`ev`) vectors. The result is of type `Bidiagonal`
@@ -98,7 +98,7 @@ julia> Bidiagonal(A, :L) # contains the main diagonal and first subdiagonal of A
  ⋅  ⋅  4  4
 ```
 """
-function Bidiagonal(A::AbstractMatrix, uplo::Symbol)
+function Bidiagonal(A::ArrayLike{2}, uplo::Symbol)
     Bidiagonal(diag(A, 0), diag(A, uplo === :U ? 1 : -1), uplo)
 end
 
@@ -180,7 +180,7 @@ promote_rule(::Type{<:Tridiagonal}, ::Type{<:Bidiagonal}) = Tridiagonal
 # When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
 AbstractMatrix{T}(A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
 
-convert(T::Type{<:Bidiagonal}, m::AbstractMatrix) = m isa T ? m : T(m)
+convert(T::Type{<:Bidiagonal}, m::ArrayLike{2}) = m isa T ? m : T(m)
 
 # For B<:Bidiagonal, similar(B[, neweltype]) should yield a Bidiagonal matrix.
 # On the other hand, similar(B, [neweltype,] shape...) should yield a sparse matrix.
@@ -338,23 +338,23 @@ end
 
 const BiTriSym = Union{Bidiagonal,Tridiagonal,SymTridiagonal}
 const BiTri = Union{Bidiagonal,Tridiagonal}
-@inline mul!(C::AbstractMatrix,   A::SymTridiagonal,     B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix,   A::BiTriSym,           B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix,   A::AbstractTriangular, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix,   A::AbstractMatrix,     B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix,   A::Diagonal,           B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractVecOrMat}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractVecOrMat}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractVector,   A::BiTriSym,              B::AbstractVector, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix,   A::BiTriSym,              B::AbstractVecOrMat, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractVecOrMat, A::BiTriSym,              B::AbstractVecOrMat, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::BiTriSym, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta)) # around bidiag line 330
-@inline mul!(C::AbstractMatrix, A::BiTriSym, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractVector, A::BiTriSym, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = throw(MethodError(mul!, (C, A, B)), MulAddMul(alpha, beta))
+@inline mul!(C::ArrayLike{2},   A::SymTridiagonal,     B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::ArrayLike{2},   A::BiTriSym,           B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::ArrayLike{2},   A::AbstractTriangular, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::ArrayLike{2},   A::ArrayLike{2},     B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::ArrayLike{2},   A::Diagonal,           B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::ArrayLike{2}, A::Adjoint{<:Any,<:Diagonal}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::ArrayLike{2}, A::Transpose{<:Any,<:Diagonal}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::ArrayLike{2}, A::Adjoint{<:Any,<:AbstractTriangular}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::ArrayLike{2}, A::Transpose{<:Any,<:AbstractTriangular}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::ArrayLike{2}, A::Adjoint{<:Any,<:VectorOrMatrixLike}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::ArrayLike{2}, A::Transpose{<:Any,<:VectorOrMatrixLike}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::ArrayLike{1},   A::BiTriSym,              B::ArrayLike{1}, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::ArrayLike{2},   A::BiTriSym,              B::VectorOrMatrixLike, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::VectorOrMatrixLike, A::BiTriSym,              B::VectorOrMatrixLike, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::ArrayLike{2}, A::BiTriSym, B::Transpose{<:Any,<:VectorOrMatrixLike}, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta)) # around bidiag line 330
+@inline mul!(C::ArrayLike{2}, A::BiTriSym, B::Adjoint{<:Any,<:VectorOrMatrixLike}, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::ArrayLike{1}, A::BiTriSym, B::Transpose{<:Any,<:VectorOrMatrixLike}, alpha::Number, beta::Number) = throw(MethodError(mul!, (C, A, B)), MulAddMul(alpha, beta))
 
 function check_A_mul_B!_sizes(C, A, B)
     require_one_based_indexing(C)
@@ -386,7 +386,7 @@ function _diag(A::Bidiagonal, k)
     end
 end
 
-function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym,
+function A_mul_B_td!(C::ArrayLike{2}, A::BiTriSym, B::BiTriSym,
                      _add::MulAddMul = MulAddMul())
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
@@ -444,7 +444,7 @@ function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym,
     C
 end
 
-function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::Diagonal,
+function A_mul_B_td!(C::ArrayLike{2}, A::BiTriSym, B::Diagonal,
                      _add::MulAddMul = MulAddMul())
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
@@ -479,7 +479,7 @@ function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::Diagonal,
     C
 end
 
-function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat,
+function A_mul_B_td!(C::VectorOrMatrixLike, A::BiTriSym, B::VectorOrMatrixLike,
                      _add::MulAddMul = MulAddMul())
     require_one_based_indexing(C)
     require_one_based_indexing(B)
@@ -510,7 +510,7 @@ function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat,
     C
 end
 
-function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym,
+function A_mul_B_td!(C::ArrayLike{2}, A::ArrayLike{2}, B::BiTriSym,
                      _add::MulAddMul = MulAddMul())
     check_A_mul_B!_sizes(C, A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
@@ -545,7 +545,7 @@ function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym,
     C
 end
 
-function A_mul_B_td!(C::AbstractMatrix, A::Diagonal, B::BiTriSym,
+function A_mul_B_td!(C::ArrayLike{2}, A::Diagonal, B::BiTriSym,
                      _add::MulAddMul = MulAddMul())
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
@@ -688,7 +688,7 @@ function *(A::SymTridiagonal, B::Diagonal)
     A_mul_B_td!(Tridiagonal(zeros(TS, size(A, 1)-1), zeros(TS, size(A, 1)), zeros(TS, size(A, 1)-1)), A, B)
 end
 
-function dot(x::AbstractVector, B::Bidiagonal, y::AbstractVector)
+function dot(x::ArrayLike{1}, B::Bidiagonal, y::ArrayLike{1})
     require_one_based_indexing(x, y)
     nx, ny = length(x), length(y)
     (nx == size(B, 1) == ny) || throw(DimensionMismatch())
@@ -719,10 +719,10 @@ function dot(x::AbstractVector, B::Bidiagonal, y::AbstractVector)
 end
 
 #Linear solvers
-ldiv!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
-ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)
-ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)
-function ldiv!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
+ldiv!(A::Union{Bidiagonal, AbstractTriangular}, b::ArrayLike{1}) = naivesub!(A, b)
+ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::ArrayLike{1}) = ldiv!(copy(A), b)
+ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::ArrayLike{1}) = ldiv!(copy(A), b)
+function ldiv!(A::Union{Bidiagonal,AbstractTriangular}, B::ArrayLike{2})
     require_one_based_indexing(A, B)
     nA,mA = size(A)
     tmp = similar(B,size(B,1))
@@ -737,7 +737,7 @@ function ldiv!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
     end
     B
 end
-function ldiv!(adjA::Adjoint{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::AbstractMatrix)
+function ldiv!(adjA::Adjoint{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::ArrayLike{2})
     require_one_based_indexing(adjA, B)
     A = adjA.parent
     nA,mA = size(A)
@@ -753,7 +753,7 @@ function ldiv!(adjA::Adjoint{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::A
     end
     B
 end
-function ldiv!(transA::Transpose{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::AbstractMatrix)
+function ldiv!(transA::Transpose{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::ArrayLike{2})
     require_one_based_indexing(transA, B)
     A = transA.parent
     nA,mA = size(A)
@@ -770,7 +770,7 @@ function ldiv!(transA::Transpose{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, 
     B
 end
 #Generic solver using naive substitution
-function naivesub!(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b) where T
+function naivesub!(A::Bidiagonal{T}, b::ArrayLike{1}, x::ArrayLike{1} = b) where T
     require_one_based_indexing(A, b, x)
     N = size(A, 2)
     if N != length(b) || N != length(x)
@@ -817,21 +817,21 @@ function \(A::Bidiagonal{<:Number}, B::AbstractVecOrMat{<:Number})
     TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
     ldiv!(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
 end
-\(A::Bidiagonal, B::AbstractVecOrMat) = ldiv!(A, copy(B))
+\(A::Bidiagonal, B::VectorOrMatrixLike) = ldiv!(A, copy(B))
 function \(transA::Transpose{<:Number,<:Bidiagonal{<:Number}}, B::AbstractVecOrMat{<:Number})
     A = transA.parent
     TA, TB = eltype(A), eltype(B)
     TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
     ldiv!(transpose(convert(AbstractArray{TAB}, A)), copy_oftype(B, TAB))
 end
-\(transA::Transpose{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(transpose(transA.parent), copy(B))
+\(transA::Transpose{<:Any,<:Bidiagonal}, B::VectorOrMatrixLike) = ldiv!(transpose(transA.parent), copy(B))
 function \(adjA::Adjoint{<:Number,<:Bidiagonal{<:Number}}, B::AbstractVecOrMat{<:Number})
     A = adjA.parent
     TA, TB = eltype(A), eltype(B)
     TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
     ldiv!(adjoint(convert(AbstractArray{TAB}, A)), copy_oftype(B, TAB))
 end
-\(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(adjoint(adjA.parent), copy(B))
+\(adjA::Adjoint{<:Any,<:Bidiagonal}, B::VectorOrMatrixLike) = ldiv!(adjoint(adjA.parent), copy(B))
 
 factorize(A::Bidiagonal) = A
 

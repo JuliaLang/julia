@@ -537,7 +537,7 @@ Determine whether type `T` was declared as an abstract type
 
 # Examples
 ```jldoctest
-julia> isabstracttype(AbstractArray)
+julia> isabstracttype(ArrayLike)
 true
 
 julia> isabstracttype(Vector)
@@ -751,7 +751,7 @@ function instances end
 
 function to_tuple_type(@nospecialize(t))
     @_pure_meta
-    if isa(t,Tuple) || isa(t,AbstractArray) || isa(t,SimpleVector)
+    if isa(t,Tuple) || isa(t,ArrayLike) || isa(t,SimpleVector)
         t = Tuple{t...}
     end
     if isa(t,Type) && t<:Tuple

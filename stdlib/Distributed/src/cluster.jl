@@ -1176,12 +1176,12 @@ pressing Ctrl-C on the local machine. If no arguments are given, all workers are
 interrupt(pids::Integer...) = interrupt([pids...])
 
 """
-    interrupt(pids::AbstractVector=workers())
+    interrupt(pids::ArrayLike{1}=workers())
 
 Interrupt the current executing task on the specified workers. This is equivalent to
 pressing Ctrl-C on the local machine. If no arguments are given, all workers are interrupted.
 """
-function interrupt(pids::AbstractVector=workers())
+function interrupt(pids::ArrayLike{1}=workers())
     @assert myid() == 1
     @sync begin
         for pid in pids

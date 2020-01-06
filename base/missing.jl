@@ -262,10 +262,10 @@ end
 # Optimized mapreduce implementation
 # The generic method is faster when !(eltype(A) >: Missing) since it does not need
 # additional loops to identify the two first non-missing values of each block
-mapreduce(f, op, itr::SkipMissing{<:AbstractArray}) =
+mapreduce(f, op, itr::SkipMissing{<:ArrayLike}) =
     _mapreduce(f, op, IndexStyle(itr.x), eltype(itr.x) >: Missing ? itr : itr.x)
 
-function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
+function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:ArrayLike})
     A = itr.x
     local ai
     inds = LinearIndices(A)
@@ -295,7 +295,7 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
 # Returns nothing when the input contains only missing values, and Some(x) otherwise
-@noinline function mapreduce_impl(f, op, itr::SkipMissing{<:AbstractArray},
+@noinline function mapreduce_impl(f, op, itr::SkipMissing{<:ArrayLike},
                                   ifirst::Integer, ilast::Integer, blksize::Int)
     A = itr.x
     if ifirst == ilast
@@ -351,7 +351,7 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
 end
 
 """
-    filter(f, itr::SkipMissing{<:AbstractArray})
+    filter(f, itr::SkipMissing{<:ArrayLike})
 
 Return a vector similar to the array wrapped by the given `SkipMissing` iterator
 but with all missing elements and those for which `f` returns `false` removed.
@@ -371,7 +371,7 @@ julia> filter(isodd, skipmissing(x))
  1
 ```
 """
-function filter(f, itr::SkipMissing{<:AbstractArray})
+function filter(f, itr::SkipMissing{<:ArrayLike})
     y = similar(itr.x, eltype(itr), 0)
     for xi in itr.x
         if xi !== missing && f(xi)

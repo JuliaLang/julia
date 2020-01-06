@@ -224,7 +224,7 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
 
 # This is a generic implementation of `mapreduce_impl()`,
 # certain `op` (e.g. `min` and `max`) may have their own specialized versions.
-@noinline function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer, blksize::Int)
+@noinline function mapreduce_impl(f, op, A::ArrayLike, ifirst::Integer, ilast::Integer, blksize::Int)
     if ifirst == ilast
         @inbounds a1 = A[ifirst]
         return mapreduce_first(f, op, a1)
@@ -247,7 +247,7 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
     end
 end
 
-mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer) =
+mapreduce_impl(f, op, A::ArrayLike, ifirst::Integer, ilast::Integer) =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
 """
@@ -380,7 +380,7 @@ The default is `reduce_first(op, f(x))`.
 """
 mapreduce_first(f, op, x) = reduce_first(op, f(x))
 
-_mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
+_mapreduce(f, op, A::ArrayLike) = _mapreduce(f, op, IndexStyle(A), A)
 
 function _mapreduce(f, op, ::IndexLinear, A::AbstractArray{T}) where T
     inds = LinearIndices(A)
@@ -407,7 +407,7 @@ end
 
 mapreduce(f, op, a::Number) = mapreduce_first(f, op, a)
 
-_mapreduce(f, op, ::IndexCartesian, A::AbstractArray) = mapfoldl(f, op, A)
+_mapreduce(f, op, ::IndexCartesian, A::ArrayLike) = mapfoldl(f, op, A)
 
 """
     reduce(op, itr; [init])
@@ -557,7 +557,7 @@ isgoodzero(::typeof(max), x) = isbadzero(min, x)
 isgoodzero(::typeof(min), x) = isbadzero(max, x)
 
 function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
-                        A::AbstractArray, first::Int, last::Int)
+                        A::ArrayLike, first::Int, last::Int)
     a1 = @inbounds A[first]
     v1 = mapreduce_first(f, op, a1)
     v2 = v3 = v4 = v1
@@ -853,7 +853,7 @@ function count(pred, itr)
     end
     return n
 end
-function count(pred, a::AbstractArray)
+function count(pred, a::ArrayLike)
     n = 0
     for i in eachindex(a)
         @inbounds n += pred(a[i])::Bool

@@ -493,8 +493,8 @@ function Array{T,N}(B::BitArray{N}) where {T,N}
     return A
 end
 
-BitArray(A::AbstractArray{<:Any,N}) where {N} = BitArray{N}(A)
-function BitArray{N}(A::AbstractArray{T,N}) where N where T
+BitArray(A::ArrayLike{N}) where {N} = BitArray{N}(A)
+function BitArray{N}(A::ArrayLike{N}) where N
     B = BitArray(undef, size(A))
     Bc = B.chunks
     l = length(B)
@@ -566,7 +566,7 @@ julia> BitArray(x+y == 3 for x = 1:2 for y = 1:3)
 """
 BitArray(itr) = gen_bitarray(IteratorSize(itr), itr)
 
-convert(T::Type{<:BitArray}, a::AbstractArray) = a isa T ? a : T(a)
+convert(T::Type{<:BitArray}, a::ArrayLike) = a isa T ? a : T(a)
 
 # generic constructor from an iterable without compile-time info
 # (we pass start(itr) explicitly to avoid a type-instability with filters)
@@ -687,17 +687,17 @@ end
 indexoffset(i) = first(i)-1
 indexoffset(::Colon) = 0
 
-@propagate_inbounds function setindex!(B::BitArray, X::AbstractArray, J0::Union{Colon,UnitRange{Int}})
+@propagate_inbounds function setindex!(B::BitArray, X::ArrayLike, J0::Union{Colon,UnitRange{Int}})
     _setindex!(IndexStyle(B), B, X, to_indices(B, (J0,))[1])
 end
 
 # Assigning an array of bools is more complicated, but we can still do some
 # work on chunks by combining X and I 64 bits at a time to improve perf by ~40%
-@inline function setindex!(B::BitArray, X::AbstractArray, I::BitArray)
+@inline function setindex!(B::BitArray, X::ArrayLike, I::BitArray)
     @boundscheck checkbounds(B, I)
     _unsafe_setindex!(B, X, I)
 end
-function _unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
+function _unsafe_setindex!(B::BitArray, X::ArrayLike, I::BitArray)
     Bc = B.chunks
     Ic = I.chunks
     length(Bc) == length(Ic) || throw_boundserror(B, I)
@@ -1010,7 +1010,7 @@ end
 
 const _default_bit_splice = BitVector()
 
-function splice!(B::BitVector, r::Union{UnitRange{Int}, Integer}, ins::AbstractArray = _default_bit_splice)
+function splice!(B::BitVector, r::Union{UnitRange{Int}, Integer}, ins::ArrayLike = _default_bit_splice)
     n = length(B)
     i_f = first(r)
     i_l = last(r)
@@ -1700,7 +1700,7 @@ for (T, f) in ((:(Union{typeof(&), typeof(*), typeof(min)}), :(&)),
 end
 
 # If we were able to specialize the function to a known bitwise operation,
-# map across the chunks. Otherwise, fall-back to the AbstractArray method that
+# map across the chunks. Otherwise, fall-back to the ArrayLike method that
 # iterates bit-by-bit.
 function bit_map!(f::F, dest::BitArray, A::BitArray) where F
     size(A) == size(dest) || throw(DimensionMismatch("sizes of dest and A must match"))

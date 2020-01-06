@@ -337,12 +337,12 @@ function rand(rng::AbstractRNG, sp::SamplerBigInt)
 end
 
 
-## random values from AbstractArray
+## random values from ArrayLike
 
-Sampler(::Type{RNG}, r::AbstractArray, n::Repetition) where {RNG<:AbstractRNG} =
+Sampler(::Type{RNG}, r::ArrayLike, n::Repetition) where {RNG<:AbstractRNG} =
     SamplerSimple(r, Sampler(RNG, firstindex(r):lastindex(r), n))
 
-rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractArray,<:Sampler}) =
+rand(rng::AbstractRNG, sp::SamplerSimple{<:ArrayLike,<:Sampler}) =
     @inbounds return sp[][rand(rng, sp.data)]
 
 

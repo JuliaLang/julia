@@ -50,14 +50,14 @@ BroadcastStyle(::Type{Union{}}) = Unknown()  # ambiguity resolution
 
 """
 `Broadcast.AbstractArrayStyle{N} <: BroadcastStyle` is the abstract supertype for any style
-associated with an `AbstractArray` type.
-The `N` parameter is the dimensionality, which can be handy for AbstractArray types
+associated with an `ArrayLike` type.
+The `N` parameter is the dimensionality, which can be handy for ArrayLike types
 that only support specific dimensionalities:
 
     struct SparseMatrixStyle <: Broadcast.AbstractArrayStyle{2} end
     Base.BroadcastStyle(::Type{<:SparseMatrixCSC}) = SparseMatrixStyle()
 
-For `AbstractArray` types that support arbitrary dimensionality, `N` can be set to `Any`:
+For `ArrayLike` types that support arbitrary dimensionality, `N` can be set to `Any`:
 
     struct MyArrayStyle <: Broadcast.AbstractArrayStyle{Any} end
     Base.BroadcastStyle(::Type{<:MyArray}) = MyArrayStyle()
@@ -79,18 +79,18 @@ abstract type AbstractArrayStyle{N} <: BroadcastStyle end
 """
 `Broadcast.ArrayStyle{MyArrayType}()` is a [`BroadcastStyle`](@ref) indicating that an object
 behaves as an array for broadcasting. It presents a simple way to construct
-[`Broadcast.AbstractArrayStyle`](@ref)s for specific `AbstractArray` container types.
+[`Broadcast.AbstractArrayStyle`](@ref)s for specific `ArrayLike` container types.
 Broadcast styles created this way lose track of dimensionality; if keeping track is important
 for your type, you should create your own custom [`Broadcast.AbstractArrayStyle`](@ref).
 """
-struct ArrayStyle{A<:AbstractArray} <: AbstractArrayStyle{Any} end
+struct ArrayStyle{A<:ArrayLike} <: AbstractArrayStyle{Any} end
 ArrayStyle{A}(::Val) where A = ArrayStyle{A}()
 
 """
 `Broadcast.DefaultArrayStyle{N}()` is a [`BroadcastStyle`](@ref) indicating that an object
 behaves as an `N`-dimensional array for broadcasting. Specifically, `DefaultArrayStyle` is
 used for any
-`AbstractArray` type that hasn't defined a specialized style, and in the absence of
+`ArrayLike` type that hasn't defined a specialized style, and in the absence of
 overrides from other `broadcast` arguments the resulting output type is `Array`.
 When there are multiple inputs to `broadcast`, `DefaultArrayStyle` "loses" to any other [`Broadcast.ArrayStyle`](@ref).
 """
@@ -99,7 +99,7 @@ DefaultArrayStyle(::Val{N}) where N = DefaultArrayStyle{N}()
 DefaultArrayStyle{M}(::Val{N}) where {N,M} = DefaultArrayStyle{N}()
 const DefaultVectorStyle = DefaultArrayStyle{1}
 const DefaultMatrixStyle = DefaultArrayStyle{2}
-BroadcastStyle(::Type{<:AbstractArray{T,N}}) where {T,N} = DefaultArrayStyle{N}()
+BroadcastStyle(::Type{<:ArrayLike{N}}) where {N} = DefaultArrayStyle{N}()
 BroadcastStyle(::Type{T}) where {T} = DefaultArrayStyle{ndims(T)}()
 
 # `ArrayConflict` is an internal type signaling that two or more different `AbstractArrayStyle`
@@ -164,7 +164,7 @@ BroadcastStyle(a::AbstractArrayStyle{M}, ::DefaultArrayStyle{N}) where {M,N} =
 #    copyto!(dest::DestType,  bc::Broadcasted{Nothing})
 # that specialize on `DestType` to be easily disambiguated from
 # methods that instead specialize on `BroadcastStyle`,
-#    copyto!(dest::AbstractArray, bc::Broadcasted{MyStyle})
+#    copyto!(dest::ArrayLike, bc::Broadcasted{MyStyle})
 
 struct Broadcasted{Style<:Union{Nothing,BroadcastStyle}, Axes, F, Args<:Tuple}
     f::F
@@ -439,8 +439,8 @@ result_style(s1, s2) = result_join(s1, s2, BroadcastStyle(s1, s2), BroadcastStyl
 result_join(::Any, ::Any, ::Unknown, ::Unknown)   = Unknown()
 result_join(::Any, ::Any, ::Unknown, s::BroadcastStyle) = s
 result_join(::Any, ::Any, s::BroadcastStyle, ::Unknown) = s
-# For AbstractArray types with specialized broadcasting and undefined precedence rules,
-# we have to signal conflict. Because ArrayConflict is a subtype of AbstractArray,
+# For ArrayLike types with specialized broadcasting and undefined precedence rules,
+# we have to signal conflict. Because ArrayConflict is a subtype of ArrayLike,
 # this will "poison" any future operations (if we instead returned `DefaultArrayStyle`, then for
 # 3-array broadcasting the returned type would depend on argument order).
 result_join(::AbstractArrayStyle, ::AbstractArrayStyle, ::Unknown, ::Unknown) =
@@ -575,7 +575,7 @@ Base.@propagate_inbounds Base.getindex(bc::Broadcasted) = bc[CartesianIndex(())]
 
 Index into `A` with `I`, collapsing broadcasted indices to their singleton indices as appropriate.
 """
-Base.@propagate_inbounds _broadcast_getindex(A::Union{Ref,AbstractArray{<:Any,0},Number}, I) = A[] # Scalar-likes can just ignore all indices
+Base.@propagate_inbounds _broadcast_getindex(A::Union{Ref,ArrayLike{0},Number}, I) = A[] # Scalar-likes can just ignore all indices
 Base.@propagate_inbounds _broadcast_getindex(::Ref{Type{T}}, I) where {T} = T
 # Tuples are statically known to be singleton or vector-like
 Base.@propagate_inbounds _broadcast_getindex(A::Tuple{Any}, I) = A[1]
@@ -587,7 +587,7 @@ Base.@propagate_inbounds _broadcast_getindex(A, I) = A[newindex(A, I)]
 # ahead of time (often when the size checks aren't able to be lifted out of the loop).
 # The Extruded struct computes that information ahead of time and stores it as a pair
 # of tuples to optimize indexing later. This is most commonly needed for `Array` and
-# other `AbstractArray` subtypes that wrap `Array` and dynamically ask it for its size.
+# other `ArrayLike` subtypes that wrap `Array` and dynamically ask it for its size.
 struct Extruded{T, K, D}
     x::T
     keeps::K    # A tuple of booleans, specifying which indices should be passed normally
@@ -595,7 +595,7 @@ struct Extruded{T, K, D}
 end
 @inline axes(b::Extruded) = axes(b.x)
 Base.@propagate_inbounds _broadcast_getindex(b::Extruded, i) = b.x[newindex(i, b.keeps, b.defaults)]
-extrude(x::AbstractArray) = Extruded(x, newindexer(x)...)
+extrude(x::ArrayLike) = Extruded(x, newindexer(x)...)
 extrude(x) = x
 
 # For Broadcasted
@@ -638,7 +638,7 @@ Return either `x` or an object like `x` such that it supports [`axes`](@ref), in
 If `x` supports iteration, the returned value should have the same `axes` and indexing
 behaviors as [`collect(x)`](@ref).
 
-If `x` is not an `AbstractArray` but it supports `axes`, indexing, and its type supports
+If `x` is not an `ArrayLike` but it supports `axes`, indexing, and its type supports
 `ndims`, then `broadcastable(::typeof(x))` may be implemented to just return itself.
 Further, if `x` defines its own [`BroadcastStyle`](@ref), then it must define its
 `broadcastable` method to return itself for the custom style to have any effect.
@@ -660,7 +660,7 @@ Base.RefValue{String}("hello")
 """
 broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,Regex,Pair}) = Ref(x)
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
-broadcastable(x::Union{AbstractArray,Number,Ref,Tuple,Broadcasted}) = x
+broadcastable(x::Union{ArrayLike,Number,Ref,Tuple,Broadcasted}) = x
 # Default to collecting iterables — which will error for non-iterables
 broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
@@ -861,10 +861,10 @@ end
 ## general `copyto!` methods
 # The most general method falls back to a method that replaces Style->Nothing
 # This permits specialization on typeof(dest) without introducing ambiguities
-@inline copyto!(dest::AbstractArray, bc::Broadcasted) = copyto!(dest, convert(Broadcasted{Nothing}, bc))
+@inline copyto!(dest::ArrayLike, bc::Broadcasted) = copyto!(dest, convert(Broadcasted{Nothing}, bc))
 
 # Performance optimization for the common identity scalar case: dest .= val
-@inline function copyto!(dest::AbstractArray, bc::Broadcasted{<:AbstractArrayStyle{0}})
+@inline function copyto!(dest::ArrayLike, bc::Broadcasted{<:AbstractArrayStyle{0}})
     # Typically, we must independently execute bc for every storage location in `dest`, but:
     # IF we're in the common no-op identity case with no nested args (like `dest .= val`),
     if bc.f === identity && bc.args isa Tuple{Any} && isflat(bc)
@@ -896,10 +896,10 @@ preprocess_args(dest, args::Tuple{Any}) = (preprocess(dest, args[1]),)
 preprocess_args(dest, args::Tuple{}) = ()
 
 # Specialize this method if all you want to do is specialize on typeof(dest)
-@inline function copyto!(dest::AbstractArray, bc::Broadcasted{Nothing})
+@inline function copyto!(dest::ArrayLike, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
     # Performance optimization: broadcast!(identity, dest, A) is equivalent to copyto!(dest, A) if indices match
-    if bc.f === identity && bc.args isa Tuple{AbstractArray} # only a single input argument to broadcast!
+    if bc.f === identity && bc.args isa Tuple{ArrayLike} # only a single input argument to broadcast!
         A = bc.args[1]
         if axes(dest) == axes(A)
             return copyto!(dest, A)
@@ -917,7 +917,7 @@ end
 @inline function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
     ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
-    length(dest) < 256 && return invoke(copyto!, Tuple{AbstractArray, Broadcasted{Nothing}}, dest, bc)
+    length(dest) < 256 && return invoke(copyto!, Tuple{ArrayLike, Broadcasted{Nothing}}, dest, bc)
     tmp = Vector{Bool}(undef, bitcache_size)
     destc = dest.chunks
     cind = 1

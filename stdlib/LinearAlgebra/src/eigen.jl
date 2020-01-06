@@ -47,7 +47,7 @@ julia> vals == F.values && vecs == F.vectors
 true
 ```
 """
-struct Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
+struct Eigen{T,V,S<:ArrayLike{2},U<:ArrayLike{1}} <: Factorization{T}
     values::U
     vectors::S
     Eigen{T,V,S,U}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V,S,U} =
@@ -109,7 +109,7 @@ julia> vals == F.values && vecs == F.vectors
 true
 ```
 """
-struct GeneralizedEigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
+struct GeneralizedEigen{T,V,S<:ArrayLike{2},U<:ArrayLike{1}} <: Factorization{T}
     values::U
     vectors::S
     GeneralizedEigen{T,V,S,U}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V,S,U} =
@@ -129,7 +129,7 @@ isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0,
 # as is the LAPACK default (for complex λ — LAPACK sorts by λ for the Hermitian/Symmetric case)
 eigsortby(λ::Real) = λ
 eigsortby(λ::Complex) = (real(λ),imag(λ))
-function sorteig!(λ::AbstractVector, X::AbstractMatrix, sortby::Union{Function,Nothing}=eigsortby)
+function sorteig!(λ::ArrayLike{1}, X::ArrayLike{2}, sortby::Union{Function,Nothing}=eigsortby)
     if sortby !== nothing && !issorted(λ, by=sortby)
         p = sortperm(λ; alg=QuickSort, by=sortby)
         permute!(λ, p)
@@ -137,7 +137,7 @@ function sorteig!(λ::AbstractVector, X::AbstractMatrix, sortby::Union{Function,
     end
     return λ, X
 end
-sorteig!(λ::AbstractVector, sortby::Union{Function,Nothing}=eigsortby) = sortby === nothing ? λ : sort!(λ, by=sortby)
+sorteig!(λ::ArrayLike{1}, sortby::Union{Function,Nothing}=eigsortby) = sortby === nothing ? λ : sort!(λ, by=sortby)
 
 """
     eigen!(A, [B]; permute, scale, sortby)
@@ -254,7 +254,7 @@ julia> eigvecs([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
  0.0  0.0  1.0
 ```
 """
-eigvecs(A::Union{Number, AbstractMatrix}; kws...) =
+eigvecs(A::Union{Number, ArrayLike{2}}; kws...) =
     eigvecs(eigen(A; kws...))
 eigvecs(F::Union{Eigen, GeneralizedEigen}) = F.vectors
 
@@ -370,7 +370,7 @@ Stacktrace:
 [...]
 ```
 """
-function eigmax(A::Union{Number, AbstractMatrix}; permute::Bool=true, scale::Bool=true)
+function eigmax(A::Union{Number, ArrayLike{2}}; permute::Bool=true, scale::Bool=true)
     v = eigvals(A, permute = permute, scale = scale)
     if eltype(v)<:Complex
         throw(DomainError(A, "`A` cannot have complex eigenvalues."))
@@ -411,7 +411,7 @@ Stacktrace:
 [...]
 ```
 """
-function eigmin(A::Union{Number, AbstractMatrix};
+function eigmin(A::Union{Number, ArrayLike{2}};
                 permute::Bool=true, scale::Bool=true)
     v = eigvals(A, permute = permute, scale = scale)
     if eltype(v)<:Complex
@@ -604,7 +604,7 @@ julia> eigvecs(A, B)
  -1.0+0.0im  -1.0-0.0im
 ```
 """
-eigvecs(A::AbstractMatrix, B::AbstractMatrix; kws...) = eigvecs(eigen(A, B; kws...))
+eigvecs(A::ArrayLike{2}, B::ArrayLike{2}; kws...) = eigvecs(eigen(A, B; kws...))
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,GeneralizedEigen})
     summary(io, F); println(io)

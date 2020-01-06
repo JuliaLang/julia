@@ -63,7 +63,7 @@ permutation:
  1
 ```
 """
-struct BunchKaufman{T,S<:AbstractMatrix} <: Factorization{T}
+struct BunchKaufman{T,S<:ArrayLike{2}} <: Factorization{T}
     LD::S
     ipiv::Vector{BlasInt}
     uplo::Char
@@ -71,7 +71,7 @@ struct BunchKaufman{T,S<:AbstractMatrix} <: Factorization{T}
     rook::Bool
     info::BlasInt
 
-    function BunchKaufman{T,S}(LD, ipiv, uplo, symmetric, rook, info) where {T,S<:AbstractMatrix}
+    function BunchKaufman{T,S}(LD, ipiv, uplo, symmetric, rook, info) where {T,S<:ArrayLike{2}}
         require_one_based_indexing(LD)
         new(LD, ipiv, uplo, symmetric, rook, info)
     end

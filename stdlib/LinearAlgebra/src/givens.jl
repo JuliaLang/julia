@@ -10,8 +10,8 @@ function (*)(R::AbstractRotation{T}, A::AbstractVecOrMat{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     lmul!(convert(AbstractRotation{TS}, R), TS == S ? copy(A) : convert(AbstractArray{TS}, A))
 end
-(*)(A::AbstractVector, adjR::Adjoint{<:Any,<:AbstractRotation}) = _absvecormat_mul_adjrot(A, adjR)
-(*)(A::AbstractMatrix, adjR::Adjoint{<:Any,<:AbstractRotation}) = _absvecormat_mul_adjrot(A, adjR)
+(*)(A::ArrayLike{1}, adjR::Adjoint{<:Any,<:AbstractRotation}) = _absvecormat_mul_adjrot(A, adjR)
+(*)(A::ArrayLike{2}, adjR::Adjoint{<:Any,<:AbstractRotation}) = _absvecormat_mul_adjrot(A, adjR)
 function _absvecormat_mul_adjrot(A::AbstractVecOrMat{T}, adjR::Adjoint{<:Any,<:AbstractRotation{S}}) where {T,S}
     R = adjR.parent
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
@@ -283,7 +283,7 @@ function givens(f::T, g::T, i1::Integer, i2::Integer) where T
     Givens(i1, i2, convert(T, c), convert(T, s)), r
 end
 """
-    givens(A::AbstractArray, i1::Integer, i2::Integer, j::Integer) -> (G::Givens, r)
+    givens(A::ArrayLike, i1::Integer, i2::Integer, j::Integer) -> (G::Givens, r)
 
 Computes the Givens rotation `G` and scalar `r` such that the result of the multiplication
 ```
@@ -297,12 +297,12 @@ B[i2,j] = 0
 
 See also: [`LinearAlgebra.Givens`](@ref)
 """
-givens(A::AbstractMatrix, i1::Integer, i2::Integer, j::Integer) =
+givens(A::ArrayLike{2}, i1::Integer, i2::Integer, j::Integer) =
     givens(A[i1,j], A[i2,j],i1,i2)
 
 
 """
-    givens(x::AbstractVector, i1::Integer, i2::Integer) -> (G::Givens, r)
+    givens(x::ArrayLike{1}, i1::Integer, i2::Integer) -> (G::Givens, r)
 
 Computes the Givens rotation `G` and scalar `r` such that the result of the multiplication
 ```
@@ -316,7 +316,7 @@ B[i2] = 0
 
 See also: [`LinearAlgebra.Givens`](@ref)
 """
-givens(x::AbstractVector, i1::Integer, i2::Integer) =
+givens(x::ArrayLike{1}, i1::Integer, i2::Integer) =
     givens(x[i1], x[i2], i1, i2)
 
 
@@ -336,7 +336,7 @@ function getindex(G::Givens, i::Integer, j::Integer)
     end
 end
 
-@inline function lmul!(G::Givens, A::AbstractVecOrMat)
+@inline function lmul!(G::Givens, A::VectorOrMatrixLike)
     require_one_based_indexing(A)
     m, n = size(A, 1), size(A, 2)
     if G.i2 > m
@@ -349,7 +349,7 @@ end
     end
     return A
 end
-@inline function rmul!(A::AbstractMatrix, G::Givens)
+@inline function rmul!(A::ArrayLike{2}, G::Givens)
     require_one_based_indexing(A)
     m, n = size(A, 1), size(A, 2)
     if G.i2 > n
@@ -367,13 +367,13 @@ function lmul!(G::Givens, R::Rotation)
     push!(R.rotations, G)
     return R
 end
-function lmul!(R::Rotation, A::AbstractMatrix)
+function lmul!(R::Rotation, A::ArrayLike{2})
     @inbounds for i = 1:length(R.rotations)
         lmul!(R.rotations[i], A)
     end
     return A
 end
-function rmul!(A::AbstractMatrix, adjR::Adjoint{<:Any,<:Rotation})
+function rmul!(A::ArrayLike{2}, adjR::Adjoint{<:Any,<:Rotation})
     R = adjR.parent
     @inbounds for i = 1:length(R.rotations)
         rmul!(A, adjoint(R.rotations[i]))
@@ -386,10 +386,10 @@ end
 # instead be MethodErrors, or revised.
 #
 # disambiguation methods: *(Adj/Trans of AbsVec or AbsMat, Adj of AbstractRotation)
-*(A::Adjoint{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
-*(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
-*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
+*(A::Adjoint{<:Any,<:ArrayLike{1}}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
+*(A::Adjoint{<:Any,<:ArrayLike{2}}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
+*(A::Transpose{<:Any,<:ArrayLike{1}}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
+*(A::Transpose{<:Any,<:ArrayLike{2}}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
 # disambiguation methods: *(Adj/Trans of AbsTri or RealHermSymComplex{Herm|Sym}, Adj of AbstractRotation)
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B

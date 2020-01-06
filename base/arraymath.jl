@@ -27,14 +27,14 @@ julia> A
 conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
 
 for f in (:-, :conj, :real, :imag)
-    @eval ($f)(A::AbstractArray) = broadcast_preserving_zero_d($f, A)
+    @eval ($f)(A::ArrayLike) = broadcast_preserving_zero_d($f, A)
 end
 
 
 ## Binary arithmetic operators ##
 
 for f in (:+, :-)
-    @eval function ($f)(A::AbstractArray, B::AbstractArray)
+    @eval function ($f)(A::ArrayLike, B::ArrayLike)
         promote_shape(A, B) # check size compatibility
         broadcast_preserving_zero_d($f, A, B)
     end
@@ -49,10 +49,10 @@ end
 
 for f in (:/, :\, :*)
     if f !== :/
-        @eval ($f)(A::Number, B::AbstractArray) = broadcast_preserving_zero_d($f, A, B)
+        @eval ($f)(A::Number, B::ArrayLike) = broadcast_preserving_zero_d($f, A, B)
     end
     if f !== :\
-        @eval ($f)(A::AbstractArray, B::Number) = broadcast_preserving_zero_d($f, A, B)
+        @eval ($f)(A::ArrayLike, B::Number) = broadcast_preserving_zero_d($f, A, B)
     end
 end
 
@@ -137,7 +137,7 @@ julia> rotl90(a)
  1  3
 ```
 """
-function rotl90(A::AbstractMatrix)
+function rotl90(A::ArrayLike{2})
     ind1, ind2 = axes(A)
     B = similar(A, (ind2,ind1))
     n = first(ind2)+last(ind2)
@@ -165,7 +165,7 @@ julia> rotr90(a)
  4  2
 ```
 """
-function rotr90(A::AbstractMatrix)
+function rotr90(A::ArrayLike{2})
     ind1, ind2 = axes(A)
     B = similar(A, (ind2,ind1))
     m = first(ind1)+last(ind1)
@@ -192,7 +192,7 @@ julia> rot180(a)
  2  1
 ```
 """
-function rot180(A::AbstractMatrix)
+function rot180(A::ArrayLike{2})
     B = similar(A)
     ind1, ind2 = axes(A,1), axes(A,2)
     m, n = first(ind1)+last(ind1), first(ind2)+last(ind2)
@@ -235,7 +235,7 @@ julia> rotl90(a,4)
  3  4
 ```
 """
-function rotl90(A::AbstractMatrix, k::Integer)
+function rotl90(A::ArrayLike{2}, k::Integer)
     k = mod(k, 4)
     k == 1 ? rotl90(A) :
     k == 2 ? rot180(A) :
@@ -275,7 +275,7 @@ julia> rotr90(a,4)
  3  4
 ```
 """
-rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
+rotr90(A::ArrayLike{2}, k::Integer) = rotl90(A,-k)
 """
     rot180(A, k)
 
@@ -300,4 +300,4 @@ julia> rot180(a,2)
  3  4
 ```
 """
-rot180(A::AbstractMatrix, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)
+rot180(A::ArrayLike{2}, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)

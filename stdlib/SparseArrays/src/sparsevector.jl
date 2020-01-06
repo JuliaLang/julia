@@ -75,7 +75,7 @@ _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) whe
 # parent method for similar that preserves storage space (for old and new dims differ, and new is 2d)
 _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew} =
     SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(nonzeroinds(S), TiNew), similar(nonzeros(S), TvNew))
-# The following methods hook into the AbstractArray similar hierarchy. The first method
+# The following methods hook into the ArrayLike similar hierarchy. The first method
 # covers similar(A[, Tv]) calls, which preserve stored-entry structure, and the latter
 # methods cover similar(A[, Tv], shape...) calls, which preserve nothing if the dims
 # specify a SparseVector result and storage space if the dims specify a SparseMatrixCSC result.
@@ -186,7 +186,7 @@ julia> sparsevec([1, 3, 1, 2, 2], [true, true, false, false, false])
   [3]  =  1
 ```
 """
-function sparsevec(I::AbstractVector{<:Integer}, V::AbstractVector, combine::Function)
+function sparsevec(I::AbstractVector{<:Integer}, V::ArrayLike{1}, combine::Function)
     require_one_based_indexing(I, V)
     length(I) == length(V) ||
         throw(ArgumentError("index and value vectors must be the same length"))
@@ -200,7 +200,7 @@ function sparsevec(I::AbstractVector{<:Integer}, V::AbstractVector, combine::Fun
     _sparsevector!(Vector(I), Vector(V), len, combine)
 end
 
-function sparsevec(I::AbstractVector{<:Integer}, V::AbstractVector, len::Integer, combine::Function)
+function sparsevec(I::AbstractVector{<:Integer}, V::ArrayLike{1}, len::Integer, combine::Function)
     require_one_based_indexing(I, V)
     length(I) == length(V) ||
         throw(ArgumentError("index and value vectors must be the same length"))
@@ -210,25 +210,25 @@ function sparsevec(I::AbstractVector{<:Integer}, V::AbstractVector, len::Integer
     _sparsevector!(Vector(I), Vector(V), len, combine)
 end
 
-sparsevec(I::AbstractVector, V::Union{Number, AbstractVector}, args...) =
+sparsevec(I::ArrayLike{1}, V::Union{Number, ArrayLike{1}}, args...) =
     sparsevec(Vector{Int}(I), V, args...)
 
-sparsevec(I::AbstractVector, V::Union{Number, AbstractVector}) =
+sparsevec(I::ArrayLike{1}, V::Union{Number, ArrayLike{1}}) =
     sparsevec(I, V, +)
 
-sparsevec(I::AbstractVector, V::Union{Number, AbstractVector}, len::Integer) =
+sparsevec(I::ArrayLike{1}, V::Union{Number, ArrayLike{1}}, len::Integer) =
     sparsevec(I, V, len, +)
 
-sparsevec(I::AbstractVector, V::Union{Bool, AbstractVector{Bool}}) =
+sparsevec(I::ArrayLike{1}, V::Union{Bool, AbstractVector{Bool}}) =
     sparsevec(I, V, |)
 
-sparsevec(I::AbstractVector, V::Union{Bool, AbstractVector{Bool}}, len::Integer) =
+sparsevec(I::ArrayLike{1}, V::Union{Bool, AbstractVector{Bool}}, len::Integer) =
     sparsevec(I, V, len, |)
 
-sparsevec(I::AbstractVector, v::Number, combine::Function) =
+sparsevec(I::ArrayLike{1}, v::Number, combine::Function) =
     sparsevec(I, fill(v, length(I)), combine)
 
-sparsevec(I::AbstractVector, v::Number, len::Integer, combine::Function) =
+sparsevec(I::ArrayLike{1}, v::Number, len::Integer, combine::Function) =
     sparsevec(I, fill(v, length(I)), len, combine)
 
 
@@ -378,10 +378,10 @@ julia> sparsevec([1.0, 2.0, 0.0, 0.0, 3.0, 0.0])
 ```
 """
 sparsevec(a::AbstractVector{T}) where {T} = SparseVector{T, Int}(a)
-sparsevec(a::AbstractArray) = sparsevec(vec(a))
+sparsevec(a::ArrayLike) = sparsevec(vec(a))
 sparsevec(a::AbstractSparseArray) = vec(a)
 sparsevec(a::AbstractSparseVector) = vec(a)
-sparse(a::AbstractVector) = sparsevec(a)
+sparse(a::ArrayLike{1}) = sparsevec(a)
 
 function _dense2indval!(nzind::Vector{Ti}, nzval::Vector{Tv}, s::AbstractArray{Tv}) where {Tv,Ti}
     require_one_based_indexing(s)
@@ -431,7 +431,7 @@ SparseVector{Tv,Ti}(s::SparseVector) where {Tv,Ti} =
 SparseVector{Tv}(s::SparseVector{<:Any,Ti}) where {Tv,Ti} =
     SparseVector{Tv,Ti}(length(s::SparseVector), nonzeroinds(s), convert(Vector{Tv}, nonzeros(s)))
 
-convert(T::Type{<:SparseVector}, m::AbstractVector) = m isa T ? m : T(m)
+convert(T::Type{<:SparseVector}, m::ArrayLike{1}) = m isa T ? m : T(m)
 
 convert(T::Type{<:SparseVector}, m::AbstractSparseMatrixCSC) = T(m)
 convert(T::Type{<:AbstractSparseMatrixCSC}, v::SparseVector) = T(v)
@@ -469,7 +469,7 @@ function copyto!(A::SparseVector, B::SparseVector)
     return A
 end
 
-copyto!(A::SparseVector, B::AbstractVector) = copyto!(A, sparsevec(B))
+copyto!(A::SparseVector, B::ArrayLike{1}) = copyto!(A, sparsevec(B))
 
 function copyto!(A::SparseVector, B::AbstractSparseMatrixCSC)
     prep_sparsevec_copy_dest!(A, length(B), nnz(B))
@@ -541,14 +541,14 @@ function getindex(x::AbstractSparseMatrixCSC, I::AbstractUnitRange, j::Integer)
 end
 
 # In the general case, we piggy back upon SparseMatrixCSC's optimized solution
-@inline function getindex(A::AbstractSparseMatrixCSC, I::AbstractVector, J::Integer)
+@inline function getindex(A::AbstractSparseMatrixCSC, I::ArrayLike{1}, J::Integer)
     M = A[I, [J]]
     SparseVector(size(M, 1), rowvals(M), nonzeros(M))
 end
 
 # Row slices
 getindex(A::AbstractSparseMatrixCSC, i::Integer, ::Colon) = A[i, 1:end]
-function Base.getindex(A::AbstractSparseMatrixCSC{Tv,Ti}, i::Integer, J::AbstractVector) where {Tv,Ti}
+function Base.getindex(A::AbstractSparseMatrixCSC{Tv,Ti}, i::Integer, J::ArrayLike{1}) where {Tv,Ti}
     require_one_based_indexing(A, J)
     checkbounds(A, i, J)
     nJ = length(J)
@@ -661,7 +661,7 @@ function getindex(A::AbstractSparseMatrixCSC{Tv}, I::AbstractUnitRange) where Tv
     SparseVector(n, rowvalB, nzvalB)
 end
 
-function getindex(A::AbstractSparseMatrixCSC{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
+function getindex(A::AbstractSparseMatrixCSC{Tv,Ti}, I::ArrayLike{1}) where {Tv,Ti}
     require_one_based_indexing(A, I)
     @boundscheck checkbounds(A, I)
     szA = size(A)
@@ -731,7 +731,7 @@ function findall(p::Function, x::SparseVector{<:Any,Ti}) where Ti
     return I
 end
 findall(p::Base.Fix2{typeof(in)}, x::SparseVector{<:Any,Ti}) where {Ti} =
-    invoke(findall, Tuple{Base.Fix2{typeof(in)}, AbstractArray}, p, x)
+    invoke(findall, Tuple{Base.Fix2{typeof(in)}, ArrayLike}, p, x)
 
 function findnz(x::SparseVector{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(x)
@@ -815,13 +815,13 @@ end
 
 getindex(x::AbstractSparseVector, I::AbstractVector{Bool}) = x[findall(I)]
 getindex(x::AbstractSparseVector, I::AbstractArray{Bool}) = x[findall(I)]
-@inline function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
+@inline function getindex(x::AbstractSparseVector{Tv,Ti}, I::ArrayLike{1}) where {Tv,Ti}
     # SparseMatrixCSC has a nicely optimized routine for this; punt
     S = SparseMatrixCSC(length(x::SparseVector), 1, Ti[1,length(nonzeroinds(x))+1], nonzeroinds(x), nonzeros(x))
     S[I, 1]
 end
 
-function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractArray) where {Tv,Ti}
+function getindex(x::AbstractSparseVector{Tv,Ti}, I::ArrayLike) where {Tv,Ti}
     # punt to SparseMatrixCSC
     S = SparseMatrixCSC(length(x::SparseVector), 1, Ti[1,length(nonzeroinds(x))+1], nonzeroinds(x), nonzeros(x))
     S[I]
@@ -1119,7 +1119,7 @@ macro unarymap_nz2z_z2z(op, TF)
     end)
 end
 
-# the rest of real, conj, imag are handled correctly via AbstractArray methods
+# the rest of real, conj, imag are handled correctly via ArrayLike methods
 @unarymap_nz2z_z2z real Complex
 conj(x::SparseVector{<:Complex}) = SparseVector(length(x), copy(nonzeroinds(x)), conj(nonzeros(x)))
 imag(x::AbstractSparseVector{Tv,Ti}) where {Tv<:Real,Ti<:Integer} = SparseVector(length(x), Ti[], Tv[])
@@ -1354,7 +1354,7 @@ adjoint(sv::SparseVector) = Adjoint(sv)
 
 # axpy
 
-function LinearAlgebra.axpy!(a::Number, x::SparseVectorUnion, y::AbstractVector)
+function LinearAlgebra.axpy!(a::Number, x::SparseVectorUnion, y::ArrayLike{1})
     require_one_based_indexing(x, y)
     length(x) == length(y) || throw(DimensionMismatch())
     nzind = nonzeroinds(x)
@@ -1474,7 +1474,7 @@ end
 ### BLAS-2 / dense A * sparse x -> dense y
 
 # lowrankupdate (BLAS.ger! like)
-function LinearAlgebra.lowrankupdate!(A::StridedMatrix, x::AbstractVector, y::SparseVectorUnion, α::Number = 1)
+function LinearAlgebra.lowrankupdate!(A::StridedMatrix, x::ArrayLike{1}, y::SparseVectorUnion, α::Number = 1)
     require_one_based_indexing(A, x, y)
     nzi = nonzeroinds(y)
     nzv = nonzeros(y)
@@ -1503,7 +1503,7 @@ end
 mul!(y::AbstractVector{Ty}, A::_StridedOrTriangularMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     mul!(y, A, x, true, false)
 
-function mul!(y::AbstractVector, A::_StridedOrTriangularMatrix, x::AbstractSparseVector, α::Number, β::Number)
+function mul!(y::ArrayLike{1}, A::_StridedOrTriangularMatrix, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, A, x)
     m, n = size(A)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
@@ -1542,7 +1542,7 @@ end
 mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     mul!(y, transA, x, true, false)
 
-function mul!(y::AbstractVector, transA::Transpose{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector, α::Number, β::Number)
+function mul!(y::ArrayLike{1}, transA::Transpose{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, transA, x)
     m, n = size(transA)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
@@ -1583,7 +1583,7 @@ end
 mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     mul!(y, adjA, x, true, false)
 
-function mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector, α::Number, β::Number)
+function mul!(y::ArrayLike{1}, adjA::Adjoint{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, adjA, x)
     m, n = size(adjA)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
@@ -1644,7 +1644,7 @@ end
 mul!(y::AbstractVector{Ty}, A::AbstractSparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     mul!(y, A, x, true, false)
 
-function mul!(y::AbstractVector, A::AbstractSparseMatrixCSC, x::AbstractSparseVector, α::Number, β::Number)
+function mul!(y::ArrayLike{1}, A::AbstractSparseMatrixCSC, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, A, x)
     m, n = size(A)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
@@ -1678,17 +1678,17 @@ end
 mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     (A = transA.parent; mul!(y, transpose(A), x, true, false))
 
-mul!(y::AbstractVector, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
+mul!(y::ArrayLike{1}, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
     (A = transA.parent; _At_or_Ac_mul_B!((a,b) -> transpose(a) * b, y, A, x, α, β))
 
 mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     (A = adjA.parent; mul!(y, adjoint(A), x, true, false))
 
-mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
+mul!(y::ArrayLike{1}, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
     (A = adjA.parent; _At_or_Ac_mul_B!((a,b) -> adjoint(a) * b, y, A, x, α, β))
 
 function _At_or_Ac_mul_B!(tfun::Function,
-                          y::AbstractVector, A::AbstractSparseMatrixCSC, x::AbstractSparseVector,
+                          y::ArrayLike{1}, A::AbstractSparseMatrixCSC, x::AbstractSparseVector,
                           α::Number, β::Number)
     require_one_based_indexing(y, A, x)
     m, n = size(A)
@@ -2003,7 +2003,7 @@ function copy!(dst::SparseVector, src::SparseVector)
     return dst
 end
 
-function copy!(dst::SparseVector, src::AbstractVector)
+function copy!(dst::SparseVector, src::ArrayLike{1})
     length(dst::SparseVector) == length(src) || throw(ArgumentError("Sparse vector should have the same length as source for copy!"))
     _dense2indval!(nonzeroinds(dst), nonzeros(dst), src)
     return dst
@@ -2052,7 +2052,7 @@ end
 
 
 # in-place swaps (dense) blocks start:split and split+1:fin in col
-function _swap!(col::AbstractVector, start::Integer, fin::Integer, split::Integer)
+function _swap!(col::ArrayLike{1}, start::Integer, fin::Integer, split::Integer)
     split == fin && return
     reverse!(col, start, split)
     reverse!(col, split + 1, fin)
@@ -2062,7 +2062,7 @@ end
 
 
 # in-place shifts a sparse subvector by r. Used also by sparsematrix.jl
-function subvector_shifter!(R::AbstractVector, V::AbstractVector, start::Integer, fin::Integer, m::Integer, r::Integer)
+function subvector_shifter!(R::ArrayLike{1}, V::ArrayLike{1}, start::Integer, fin::Integer, m::Integer, r::Integer)
     split = fin
     @inbounds for j = start:fin
         # shift positions ...

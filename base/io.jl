@@ -317,8 +317,10 @@ read(io::AbstractPipe) = read(pipe_reader(io))
 readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io), arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io), arg; kw...)
-readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io), target, keep, out)
+readuntil(io::AbstractPipe, arg::ArrayLike{1}; kw...) = readuntil(pipe_reader(io), arg; kw...)
+readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io), arg; kw...) # specific
+readuntil_vector!(io::AbstractPipe, target::ArrayLike{1}, keep::Bool, out) = readuntil_vector!(pipe_reader(io), target, keep, out)
+readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io), target, keep, out) # specific
 
 for f in (
         # peek/mark interface
@@ -381,8 +383,8 @@ read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
 read(filename::AbstractString, ::Type{T}) where {T} = open(io->read(io, T), filename)
 
 """
-    read!(stream::IO, array::AbstractArray)
-    read!(filename::AbstractString, array::AbstractArray)
+    read!(stream::IO, array::ArrayLike)
+    read!(filename::AbstractString, array::ArrayLike)
 
 Read binary data from an I/O stream or file, filling in `array`.
 """
@@ -600,7 +602,7 @@ end
 write(s::IO, x::Bool) = write(s, UInt8(x))
 write(to::IO, p::Ptr) = write(to, convert(UInt, p))
 
-function write(s::IO, A::AbstractArray)
+function write(s::IO, A::ArrayLike)
     if !isbitstype(eltype(A))
         error("`write` is not supported on non-isbits arrays")
     end
@@ -621,7 +623,7 @@ end
 
 function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
     if !isbitstype(T) || !isa(a, StridedArray)
-        return invoke(write, Tuple{IO, AbstractArray}, s, a)
+        return invoke(write, Tuple{IO, ArrayLike}, s, a)
     end
     elsz = sizeof(T)
     colsz = size(a,1) * elsz
@@ -842,7 +844,7 @@ function readuntil(io::IO, target::AbstractString; keep::Bool=false)
     if !(target isa String) && !(target isa SubString{String})
         target = String(target)
     end
-    target = codeunits(target)::AbstractVector
+    target = codeunits(target)::ArrayLike{1}
     return String(readuntil(io, target, keep=keep))
 end
 

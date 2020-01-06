@@ -369,7 +369,7 @@ _sparsesimilar(S::AbstractSparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::D
 _sparsesimilar(S::AbstractSparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) where {TvNew,TiNew} =
     SparseVector(dims..., similar(rowvals(S), TiNew, 0), similar(nonzeros(S), TvNew, 0))
 #
-# The following methods hook into the AbstractArray similar hierarchy. The first method
+# The following methods hook into the ArrayLike similar hierarchy. The first method
 # covers similar(A[, Tv]) calls, which preserve stored-entry structure, and the latter
 # methods cover similar(A[, Tv], shape...) calls, which preserve storage space when the shape
 # calls for a two-dimensional result.
@@ -495,7 +495,7 @@ function SparseMatrixCSC(D::Diagonal{T}) where T
 end
 SparseMatrixCSC(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
 SparseMatrixCSC{Tv}(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
-function SparseMatrixCSC{Tv,Ti}(M::AbstractMatrix) where {Tv,Ti}
+function SparseMatrixCSC{Tv,Ti}(M::ArrayLike{2}) where {Tv,Ti}
     require_one_based_indexing(M)
     I = Ti[]
     V = Tv[]
@@ -558,7 +558,7 @@ function Matrix(S::AbstractSparseMatrixCSC{Tv}) where Tv
 end
 Array(S::AbstractSparseMatrixCSC) = Matrix(S)
 
-convert(T::Type{<:AbstractSparseMatrixCSC}, m::AbstractMatrix) = m isa T ? m : T(m)
+convert(T::Type{<:AbstractSparseMatrixCSC}, m::ArrayLike{2}) = m isa T ? m : T(m)
 
 float(S::SparseMatrixCSC) = SparseMatrixCSC(size(S, 1), size(S, 2), copy(getcolptr(S)), copy(rowvals(S)), float.(nonzeros(S)))
 complex(S::SparseMatrixCSC) = SparseMatrixCSC(size(S, 1), size(S, 2), copy(getcolptr(S)), copy(rowvals(S)), complex(copy(nonzeros(S))))
@@ -566,7 +566,7 @@ complex(S::SparseMatrixCSC) = SparseMatrixCSC(size(S, 1), size(S, 2), copy(getco
 """
     sparse(A)
 
-Convert an AbstractMatrix `A` into a sparse matrix.
+Convert an ArrayLike{2} `A` into a sparse matrix.
 
 # Examples
 ```jldoctest
@@ -664,7 +664,7 @@ function sparse(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{
     end
 end
 
-sparse(I::AbstractVector, J::AbstractVector, V::AbstractVector, m::Integer, n::Integer, combine) =
+sparse(I::ArrayLike{1}, J::ArrayLike{1}, V::ArrayLike{1}, m::Integer, n::Integer, combine) =
     sparse(AbstractVector{Int}(I), AbstractVector{Int}(J), V, m, n, combine)
 
 """
@@ -843,11 +843,11 @@ dimlub(I) = isempty(I) ? 0 : Int(maximum(I)) #least upper bound on required spar
 
 sparse(I,J,v::Number) = sparse(I, J, fill(v,length(I)))
 
-sparse(I,J,V::AbstractVector) = sparse(I, J, V, dimlub(I), dimlub(J))
+sparse(I,J,V::ArrayLike{1}) = sparse(I, J, V, dimlub(I), dimlub(J))
 
 sparse(I,J,v::Number,m,n) = sparse(I, J, fill(v,length(I)), Int(m), Int(n))
 
-sparse(I,J,V::AbstractVector,m,n) = sparse(I, J, V, Int(m), Int(n), +)
+sparse(I,J,V::ArrayLike{1},m,n) = sparse(I, J, V, Int(m), Int(n), +)
 
 sparse(I,J,V::AbstractVector{Bool},m,n) = sparse(I, J, V, Int(m), Int(n), |)
 
@@ -1417,7 +1417,7 @@ function findall(p::Function, S::AbstractSparseMatrixCSC)
     return inds
 end
 findall(p::Base.Fix2{typeof(in)}, x::AbstractSparseMatrixCSC) =
-    invoke(findall, Tuple{Base.Fix2{typeof(in)}, AbstractArray}, p, x)
+    invoke(findall, Tuple{Base.Fix2{typeof(in)}, ArrayLike}, p, x)
 
 function findnz(S::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(S)
@@ -1636,7 +1636,7 @@ function (-)(A::AbstractSparseMatrixCSC)
     return SparseMatrixCSC(size(A, 1), size(A, 2), copy(getcolptr(A)), copy(rowvals(A)), nzval)
 end
 
-# the rest of real, conj, imag are handled correctly via AbstractArray methods
+# the rest of real, conj, imag are handled correctly via ArrayLike methods
 function conj(A::AbstractSparseMatrixCSC{<:Complex})
     nzval = similar(nonzeros(A))
     map!(conj, view(nzval, 1:nnz(A)), nzvalview(A))
@@ -1752,7 +1752,7 @@ function Base._mapreduce(f, op::typeof(*), A::AbstractSparseMatrixCSC{T}) where 
 end
 
 # General mapreducedim
-function _mapreducerows!(f, op, R::AbstractArray, A::AbstractSparseMatrixCSC{T}) where T
+function _mapreducerows!(f, op, R::ArrayLike, A::AbstractSparseMatrixCSC{T}) where T
     require_one_based_indexing(A, R)
     colptr = getcolptr(A)
     rowval = rowvals(A)
@@ -1768,7 +1768,7 @@ function _mapreducerows!(f, op, R::AbstractArray, A::AbstractSparseMatrixCSC{T})
     R
 end
 
-function _mapreducecols!(f, op, R::AbstractArray, A::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
+function _mapreducecols!(f, op, R::ArrayLike, A::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     require_one_based_indexing(A, R)
     colptr = getcolptr(A)
     rowval = rowvals(A)
@@ -1788,7 +1788,7 @@ function _mapreducecols!(f, op, R::AbstractArray, A::AbstractSparseMatrixCSC{Tv,
     R
 end
 
-function Base._mapreducedim!(f, op, R::AbstractArray, A::AbstractSparseMatrixCSC{T}) where T
+function Base._mapreducedim!(f, op, R::ArrayLike, A::AbstractSparseMatrixCSC{T}) where T
     require_one_based_indexing(A, R)
     lsiz = Base.check_reducedims(R,A)
     isempty(A) && return R
@@ -1839,7 +1839,7 @@ end
 
 # Specialized mapreducedim for + cols to avoid allocating a
 # temporary array when f(0) == 0
-function _mapreducecols!(f, op::typeof(+), R::AbstractArray, A::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
+function _mapreducecols!(f, op::typeof(+), R::ArrayLike, A::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     require_one_based_indexing(A, R)
     nzval = nonzeros(A)
     m, n = size(A)
@@ -2012,7 +2012,7 @@ getindex(A::AbstractSparseMatrixCSC, ::Colon, ::Colon) = copy(A)
 getindex(A::AbstractSparseMatrixCSC, i, ::Colon)       = getindex(A, i, 1:size(A, 2))
 getindex(A::AbstractSparseMatrixCSC, ::Colon, i)       = getindex(A, 1:size(A, 1), i)
 
-function getindex_cols(A::AbstractSparseMatrixCSC{Tv,Ti}, J::AbstractVector) where {Tv,Ti}
+function getindex_cols(A::AbstractSparseMatrixCSC{Tv,Ti}, J::ArrayLike{1}) where {Tv,Ti}
     require_one_based_indexing(A, J)
     # for indexing whole columns
     (m, n) = size(A)
@@ -2049,7 +2049,7 @@ end
 getindex_traverse_col(::AbstractUnitRange, lo::Integer, hi::Integer) = lo:hi
 getindex_traverse_col(I::StepRange, lo::Integer, hi::Integer) = step(I) > 0 ? (lo:1:hi) : (hi:-1:lo)
 
-function getindex(A::AbstractSparseMatrixCSC{Tv,Ti}, I::AbstractRange, J::AbstractVector) where {Tv,Ti<:Integer}
+function getindex(A::AbstractSparseMatrixCSC{Tv,Ti}, I::AbstractRange, J::ArrayLike{1}) where {Tv,Ti<:Integer}
     require_one_based_indexing(A, I, J)
     # Ranges for indexing rows
     (m, n) = size(A)
@@ -2097,7 +2097,7 @@ function getindex(A::AbstractSparseMatrixCSC{Tv,Ti}, I::AbstractRange, J::Abstra
     return SparseMatrixCSC(nI, nJ, colptrS, rowvalS, nzvalS)
 end
 
-function getindex_I_sorted(A::AbstractSparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector) where {Tv,Ti}
+function getindex_I_sorted(A::AbstractSparseMatrixCSC{Tv,Ti}, I::ArrayLike{1}, J::ArrayLike{1}) where {Tv,Ti}
     require_one_based_indexing(A, I, J)
     # Sorted vectors for indexing rows.
     # Similar to getindex_general but without the transpose trick.
@@ -2118,7 +2118,7 @@ function getindex_I_sorted(A::AbstractSparseMatrixCSC{Tv,Ti}, I::AbstractVector,
     getindex_I_sorted_linear(A, I, J)
 end
 
-function getindex_I_sorted_bsearch_A(A::AbstractSparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector) where {Tv,Ti}
+function getindex_I_sorted_bsearch_A(A::AbstractSparseMatrixCSC{Tv,Ti}, I::ArrayLike{1}, J::ArrayLike{1}) where {Tv,Ti}
     require_one_based_indexing(A, I, J)
     nI = length(I)
     nJ = length(J)
@@ -2178,7 +2178,7 @@ function getindex_I_sorted_bsearch_A(A::AbstractSparseMatrixCSC{Tv,Ti}, I::Abstr
     return SparseMatrixCSC(nI, nJ, colptrS, rowvalS, nzvalS)
 end
 
-function getindex_I_sorted_linear(A::AbstractSparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector) where {Tv,Ti}
+function getindex_I_sorted_linear(A::AbstractSparseMatrixCSC{Tv,Ti}, I::ArrayLike{1}, J::ArrayLike{1}) where {Tv,Ti}
     require_one_based_indexing(A, I, J)
     nI = length(I)
     nJ = length(J)
@@ -2238,7 +2238,7 @@ function getindex_I_sorted_linear(A::AbstractSparseMatrixCSC{Tv,Ti}, I::Abstract
     return SparseMatrixCSC(nI, nJ, colptrS, rowvalS, nzvalS)
 end
 
-function getindex_I_sorted_bsearch_I(A::AbstractSparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector) where {Tv,Ti}
+function getindex_I_sorted_bsearch_I(A::AbstractSparseMatrixCSC{Tv,Ti}, I::ArrayLike{1}, J::ArrayLike{1}) where {Tv,Ti}
     require_one_based_indexing(A, I, J)
     nI = length(I)
     nJ = length(J)
@@ -2354,7 +2354,7 @@ function permute_rows!(S::AbstractSparseMatrixCSC{Tv,Ti}, pI::Vector{Int}) where
     S
 end
 
-function getindex_general(A::AbstractSparseMatrixCSC, I::AbstractVector, J::AbstractVector)
+function getindex_general(A::AbstractSparseMatrixCSC, I::ArrayLike{1}, J::ArrayLike{1})
     require_one_based_indexing(A, I, J)
     pI = sortperm(I)
     @inbounds Is = I[pI]
@@ -2362,7 +2362,7 @@ function getindex_general(A::AbstractSparseMatrixCSC, I::AbstractVector, J::Abst
 end
 
 # the general case:
-function getindex(A::AbstractSparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector) where {Tv,Ti}
+function getindex(A::AbstractSparseMatrixCSC{Tv,Ti}, I::ArrayLike{1}, J::ArrayLike{1}) where {Tv,Ti}
     require_one_based_indexing(A, I, J)
     (m, n) = size(A)
 
@@ -2387,7 +2387,7 @@ function getindex(A::AbstractSparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::Abstr
     end
 end
 
-function getindex(A::AbstractSparseMatrixCSC{Tv,Ti}, I::AbstractArray) where {Tv,Ti}
+function getindex(A::AbstractSparseMatrixCSC{Tv,Ti}, I::ArrayLike) where {Tv,Ti}
     require_one_based_indexing(A, I)
     szA = size(A)
     nA = szA[1]*szA[2]
@@ -2655,12 +2655,12 @@ function _spsetnz_setindex!(A::AbstractSparseMatrixCSC{Tv}, x::Tv,
 end
 
 # Nonscalar A[I,J] = B: Convert B to a SparseMatrixCSC of the appropriate shape first
-_to_same_csc(::AbstractSparseMatrixCSC{Tv, Ti}, V::AbstractMatrix, I...) where {Tv,Ti} = convert(SparseMatrixCSC{Tv,Ti}, V)
-_to_same_csc(::AbstractSparseMatrixCSC{Tv, Ti}, V::AbstractVector, I...) where {Tv,Ti} = convert(SparseMatrixCSC{Tv,Ti}, reshape(V, map(length, I)))
+_to_same_csc(::AbstractSparseMatrixCSC{Tv, Ti}, V::ArrayLike{2}, I...) where {Tv,Ti} = convert(SparseMatrixCSC{Tv,Ti}, V)
+_to_same_csc(::AbstractSparseMatrixCSC{Tv, Ti}, V::ArrayLike{1}, I...) where {Tv,Ti} = convert(SparseMatrixCSC{Tv,Ti}, reshape(V, map(length, I)))
 
-setindex!(A::AbstractSparseMatrixCSC{Tv}, B::AbstractVecOrMat, I::Integer, J::Integer) where {Tv} = _setindex_scalar!(A, B, I, J)
+setindex!(A::AbstractSparseMatrixCSC{Tv}, B::VectorOrMatrixLike, I::Integer, J::Integer) where {Tv} = _setindex_scalar!(A, B, I, J)
 
-function setindex!(A::AbstractSparseMatrixCSC{Tv,Ti}, V::AbstractVecOrMat, Ix::Union{Integer, AbstractVector{<:Integer}, Colon}, Jx::Union{Integer, AbstractVector{<:Integer}, Colon}) where {Tv,Ti<:Integer}
+function setindex!(A::AbstractSparseMatrixCSC{Tv,Ti}, V::VectorOrMatrixLike, Ix::Union{Integer, AbstractVector{<:Integer}, Colon}, Jx::Union{Integer, AbstractVector{<:Integer}, Colon}) where {Tv,Ti<:Integer}
     require_one_based_indexing(A, V, Ix, Jx)
     (I, J) = Base.ensure_indexable(to_indices(A, (Ix, Jx)))
     checkbounds(A, I, J)
@@ -2795,7 +2795,7 @@ setindex!(A::Matrix, x::AbstractSparseMatrixCSC, I::AbstractVector{Bool}, J::Abs
 setindex!(A::Matrix, x::AbstractSparseMatrixCSC, I::AbstractVector{<:Integer}, J::AbstractVector{Bool}) = setindex!(A, Array(x), I, findall(J))
 setindex!(A::Matrix, x::AbstractSparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = setindex!(A, Array(x), findall(I), J)
 
-function setindex!(A::AbstractSparseMatrixCSC, x::AbstractArray, I::AbstractMatrix{Bool})
+function setindex!(A::AbstractSparseMatrixCSC, x::ArrayLike, I::AbstractMatrix{Bool})
     require_one_based_indexing(A, x, I)
     checkbounds(A, I)
     n = sum(I)
@@ -2896,7 +2896,7 @@ function setindex!(A::AbstractSparseMatrixCSC, x::AbstractArray, I::AbstractMatr
     A
 end
 
-function setindex!(A::AbstractSparseMatrixCSC, x::AbstractArray, Ix::AbstractVector{<:Integer})
+function setindex!(A::AbstractSparseMatrixCSC, x::ArrayLike, Ix::AbstractVector{<:Integer})
     require_one_based_indexing(A, x, Ix)
     (I,) = Base.ensure_indexable(to_indices(A, (Ix,)))
     # We check bounds after sorting I
@@ -2915,7 +2915,7 @@ function setindex!(A::AbstractSparseMatrixCSC, x::AbstractArray, Ix::AbstractVec
         throw(BoundsError(A, I))
     end
 
-    isa(x, AbstractArray) && setindex_shape_check(x, length(I))
+    isa(x, ArrayLike) && setindex_shape_check(x, length(I))
 
     lastcol = 0
     (nrowA, ncolA) = szA
@@ -3129,8 +3129,8 @@ function dropstored!(A::AbstractSparseMatrixCSC,
 end
 dropstored!(A::AbstractSparseMatrixCSC, i::Integer, J::AbstractVector{<:Integer}) = dropstored!(A, [i], J)
 dropstored!(A::AbstractSparseMatrixCSC, I::AbstractVector{<:Integer}, j::Integer) = dropstored!(A, I, [j])
-dropstored!(A::AbstractSparseMatrixCSC, ::Colon, j::Union{Integer,AbstractVector}) = dropstored!(A, 1:size(A,1), j)
-dropstored!(A::AbstractSparseMatrixCSC, i::Union{Integer,AbstractVector}, ::Colon) = dropstored!(A, i, 1:size(A,2))
+dropstored!(A::AbstractSparseMatrixCSC, ::Colon, j::Union{Integer,ArrayLike{1}}) = dropstored!(A, 1:size(A,1), j)
+dropstored!(A::AbstractSparseMatrixCSC, i::Union{Integer,ArrayLike{1}}, ::Colon) = dropstored!(A, i, 1:size(A,2))
 dropstored!(A::AbstractSparseMatrixCSC, ::Colon, ::Colon) = dropstored!(A, 1:size(A,1), 1:size(A,2))
 dropstored!(A::AbstractSparseMatrixCSC, ::Colon) = dropstored!(A, :, :)
 # TODO: Several of the preceding methods are optimization candidates.
@@ -3400,7 +3400,7 @@ function istril(A::AbstractSparseMatrixCSC)
 end
 
 
-function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
+function spdiagm_internal(kv::Pair{<:Integer,<:ArrayLike{1}}...)
     ncoeffs = 0
     for p in kv
         ncoeffs += length(p.second)
@@ -3433,8 +3433,8 @@ function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
 end
 
 """
-    spdiagm(kv::Pair{<:Integer,<:AbstractVector}...)
-    spdiagm(m::Integer, n::Ingeger, kv::Pair{<:Integer,<:AbstractVector}...)
+    spdiagm(kv::Pair{<:Integer,<:ArrayLike{1}}...)
+    spdiagm(m::Integer, n::Ingeger, kv::Pair{<:Integer,<:ArrayLike{1}}...)
 
 Construct a sparse diagonal matrix from `Pair`s of vectors and diagonals.
 Each vector `kv.second` will be placed on the `kv.first` diagonal.  By
@@ -3456,9 +3456,9 @@ julia> spdiagm(-1 => [1,2,3,4], 1 => [4,3,2,1])
   [4, 5]  =  1
 ```
 """
-spdiagm(kv::Pair{<:Integer,<:AbstractVector}...) = _spdiagm(nothing, kv...)
-spdiagm(m::Integer, n::Integer, kv::Pair{<:Integer,<:AbstractVector}...) = _spdiagm((Int(m),Int(n)), kv...)
-function _spdiagm(size, kv::Pair{<:Integer,<:AbstractVector}...)
+spdiagm(kv::Pair{<:Integer,<:ArrayLike{1}}...) = _spdiagm(nothing, kv...)
+spdiagm(m::Integer, n::Integer, kv::Pair{<:Integer,<:ArrayLike{1}}...) = _spdiagm((Int(m),Int(n)), kv...)
+function _spdiagm(size, kv::Pair{<:Integer,<:ArrayLike{1}}...)
     I, J, V = spdiagm_internal(kv...)
     mmax, nmax = dimlub(I), dimlub(J)
     mnmax = max(mmax, nmax)

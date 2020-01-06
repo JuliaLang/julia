@@ -260,13 +260,13 @@ rand(::Type{X}) where {X} = rand(default_rng(), X)
 
 #### arrays
 
-rand!(A::AbstractArray{T}, X) where {T}             = rand!(default_rng(), A, X)
+rand!(A::ArrayLike, X)                              = rand!(default_rng(), A, X)
 rand!(A::AbstractArray{T}, ::Type{X}=T) where {T,X} = rand!(default_rng(), A, X)
 
-rand!(rng::AbstractRNG, A::AbstractArray{T}, X) where {T}             = rand!(rng, A, Sampler(rng, X))
+rand!(rng::AbstractRNG, A::ArrayLike, X)                              = rand!(rng, A, Sampler(rng, X))
 rand!(rng::AbstractRNG, A::AbstractArray{T}, ::Type{X}=T) where {T,X} = rand!(rng, A, Sampler(rng, X))
 
-function rand!(rng::AbstractRNG, A::AbstractArray{T}, sp::Sampler) where T
+function rand!(rng::AbstractRNG, A::ArrayLike, sp::Sampler)
     for i in eachindex(A)
         @inbounds A[i] = rand(rng, sp)
     end

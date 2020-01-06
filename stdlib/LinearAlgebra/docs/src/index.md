@@ -314,8 +314,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
  Sparse factorizations call functions from [SuiteSparse](http://faculty.cse.tamu.edu/davis/suitesparse.html).
 
 ```@docs
-Base.:*(::AbstractMatrix, ::AbstractMatrix)
-Base.:\(::AbstractMatrix, ::AbstractVecOrMat)
+Base.:*(::ArrayLike{2}, ::ArrayLike{2})
+Base.:\(::ArrayLike{2}, ::VectorOrMatrixLike)
 LinearAlgebra.SingularException
 LinearAlgebra.PosDefException
 LinearAlgebra.ZeroPivotException
@@ -405,13 +405,13 @@ LinearAlgebra.tr
 LinearAlgebra.det
 LinearAlgebra.logdet
 LinearAlgebra.logabsdet
-Base.inv(::AbstractMatrix)
+Base.inv(::ArrayLike{2})
 LinearAlgebra.pinv
 LinearAlgebra.nullspace
 Base.kron
 LinearAlgebra.exp(::StridedMatrix{<:LinearAlgebra.BlasFloat})
-Base.:^(::AbstractMatrix, ::Number)
-Base.:^(::Number, ::AbstractMatrix)
+Base.:^(::ArrayLike{2}, ::Number)
+Base.:^(::Number, ::ArrayLike{2})
 LinearAlgebra.log(::StridedMatrix)
 LinearAlgebra.sqrt(::StridedMatrix{<:Real})
 LinearAlgebra.cos(::StridedMatrix{<:Real})

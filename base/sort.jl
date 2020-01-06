@@ -6,7 +6,7 @@ import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base.Order
 using .Base: copymutable, LinearIndices, length, (:),
-    eachindex, axes, first, last, similar, zip, OrdinalRange,
+    eachindex, axes, first, last, similar, zip, OrdinalRange, ArrayLike,
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
@@ -91,7 +91,7 @@ issorted(itr;
     lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
     issorted(itr, ord(lt,by,rev,order))
 
-function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
+function partialsort!(v::ArrayLike{1}, k::Union{Integer,OrdinalRange}, o::Ordering)
     inds = axes(v, 1)
     sort!(v, first(inds), last(inds), PartialQuickSort(k), o)
     maybeview(v, k)
@@ -151,7 +151,7 @@ julia> a
  1
 ```
 """
-partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange};
+partialsort!(v::ArrayLike{1}, k::Union{Integer,OrdinalRange};
              lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
     partialsort!(v, k, ord(lt,by,rev,order))
 
@@ -161,7 +161,7 @@ partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange};
 Variant of [`partialsort!`](@ref) which copies `v` before partially sorting it, thereby returning the
 same thing as `partialsort!` but leaving `v` unmodified.
 """
-partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
+partialsort(v::ArrayLike{1}, k::Union{Integer,OrdinalRange}; kws...) =
     partialsort!(copymutable(v), k; kws...)
 
 # This implementation of `midpoint` is performance-optimized but safe
@@ -174,7 +174,7 @@ midpoint(lo::Integer, hi::Integer) = midpoint(promote(lo, hi)...)
 
 # index of the first value of vector a that is greater than or equal to x;
 # returns length(v)+1 if x is greater than all values in v.
-function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering) where T<:Integer
+function searchsortedfirst(v::ArrayLike{1}, x, lo::T, hi::T, o::Ordering) where T<:Integer
     u = T(1)
     lo = lo - u
     hi = hi + u
@@ -191,7 +191,7 @@ end
 
 # index of the last value of vector a that is less than or equal to x;
 # returns 0 if x is less than all values of v.
-function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering) where T<:Integer
+function searchsortedlast(v::ArrayLike{1}, x, lo::T, hi::T, o::Ordering) where T<:Integer
     u = T(1)
     lo = lo - u
     hi = hi + u
@@ -209,7 +209,7 @@ end
 # returns the range of indices of v equal to x
 # if v does not contain x, returns a 0-length range
 # indicating the insertion point of x
-function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering) where T<:Integer
+function searchsorted(v::ArrayLike{1}, x, ilo::T, ihi::T, o::Ordering) where T<:Integer
     u = T(1)
     lo = ilo - u
     hi = ihi + u
@@ -313,8 +313,8 @@ searchsorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering) =
 
 for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
     @eval begin
-        $s(v::AbstractVector, x, o::Ordering) = (inds = axes(v, 1); $s(v,x,first(inds),last(inds),o))
-        $s(v::AbstractVector, x;
+        $s(v::ArrayLike{1}, x, o::Ordering) = (inds = axes(v, 1); $s(v,x,first(inds),last(inds),o))
+        $s(v::ArrayLike{1}, x;
            lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
             $s(v,x,ord(lt,by,rev,order))
     end
@@ -482,7 +482,7 @@ const DEFAULT_STABLE   = MergeSort
 const SMALL_ALGORITHM  = InsertionSort
 const SMALL_THRESHOLD  = 20
 
-function sort!(v::AbstractVector, lo::Integer, hi::Integer, ::InsertionSortAlg, o::Ordering)
+function sort!(v::ArrayLike{1}, lo::Integer, hi::Integer, ::InsertionSortAlg, o::Ordering)
     @inbounds for i = lo+1:hi
         j = i
         x = v[i]
@@ -507,7 +507,7 @@ end
 # Upon return, the pivot is in v[lo], and v[hi] is guaranteed to be
 # greater than the pivot
 
-@inline function selectpivot!(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
+@inline function selectpivot!(v::ArrayLike{1}, lo::Integer, hi::Integer, o::Ordering)
     @inbounds begin
         mi = midpoint(lo, hi)
 
@@ -533,7 +533,7 @@ end
 #
 # select a pivot, and partition v according to the pivot
 
-function partition!(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
+function partition!(v::ArrayLike{1}, lo::Integer, hi::Integer, o::Ordering)
     pivot = selectpivot!(v, lo, hi, o)
     # pivot == v[lo], v[hi] > pivot
     i, j = lo, hi
@@ -552,7 +552,7 @@ function partition!(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     return j
 end
 
-function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::QuickSortAlg, o::Ordering)
+function sort!(v::ArrayLike{1}, lo::Integer, hi::Integer, a::QuickSortAlg, o::Ordering)
     @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
         j = partition!(v, lo, hi, o)
@@ -570,7 +570,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::QuickSortAlg, o::
     return v
 end
 
-function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::MergeSortAlg, o::Ordering, t=similar(v,0))
+function sort!(v::ArrayLike{1}, lo::Integer, hi::Integer, a::MergeSortAlg, o::Ordering, t=similar(v,0))
     @inbounds if lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
@@ -608,7 +608,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::MergeSortAlg, o::
     return v
 end
 
-function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort{<:Integer},
+function sort!(v::ArrayLike{1}, lo::Integer, hi::Integer, a::PartialQuickSort{<:Integer},
                o::Ordering)
     @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
@@ -631,7 +631,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort{
 end
 
 
-function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort{T},
+function sort!(v::ArrayLike{1}, lo::Integer, hi::Integer, a::PartialQuickSort{T},
                o::Ordering) where T<:OrdinalRange
     @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
@@ -657,10 +657,10 @@ end
 
 ## generic sorting methods ##
 
-defalg(v::AbstractArray) = DEFAULT_STABLE
+defalg(v::ArrayLike) = DEFAULT_STABLE
 defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
 
-function sort!(v::AbstractVector, alg::Algorithm, order::Ordering)
+function sort!(v::ArrayLike{1}, alg::Algorithm, order::Ordering)
     inds = axes(v,1)
     sort!(v,first(inds),last(inds),alg,order)
 end
@@ -704,7 +704,7 @@ julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[2]); v
  (1, "c")
 ```
 """
-function sort!(v::AbstractVector;
+function sort!(v::ArrayLike{1};
                alg::Algorithm=defalg(v),
                lt=isless,
                by=identity,
@@ -770,7 +770,7 @@ julia> v
  2
 ```
 """
-sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
+sort(v::ArrayLike{1}; kws...) = sort!(copymutable(v); kws...)
 
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
@@ -805,7 +805,7 @@ julia> v[p]
  2
 ```
 """
-partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
+partialsortperm(v::ArrayLike{1}, k::Union{Integer,OrdinalRange}; kwargs...) =
     partialsortperm!(similar(Vector{eltype(k)}, axes(v,1)), v, k; kwargs..., initialized=false)
 
 """
@@ -853,7 +853,7 @@ julia> partialsortperm!(ix, v, 2:3, initialized=true)
  3
 ```
  """
-function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
+function partialsortperm!(ix::AbstractVector{<:Integer}, v::ArrayLike{1},
                           k::Union{Integer, OrdinalRange};
                           lt::Function=isless,
                           by::Function=identity,
@@ -905,7 +905,7 @@ julia> v[p]
  3
 ```
 """
-function sortperm(v::AbstractVector;
+function sortperm(v::ArrayLike{1};
                   alg::Algorithm=DEFAULT_UNSTABLE,
                   lt=isless,
                   by=identity,
@@ -955,7 +955,7 @@ julia> v[p]
  3
 ```
 """
-function sortperm!(x::AbstractVector{<:Integer}, v::AbstractVector;
+function sortperm!(x::AbstractVector{<:Integer}, v::ArrayLike{1};
                    alg::Algorithm=DEFAULT_UNSTABLE,
                    lt=isless,
                    by=identity,
@@ -1028,7 +1028,7 @@ julia> sort(A, dims = 2)
  1  2
 ```
 """
-function sort(A::AbstractArray;
+function sort(A::ArrayLike;
               dims::Integer,
               alg::Algorithm=DEFAULT_UNSTABLE,
               lt=isless,
@@ -1088,7 +1088,7 @@ julia> sort!(A, dims = 2); A
  3  4
 ```
 """
-function sort!(A::AbstractArray;
+function sort!(A::ArrayLike;
                dims::Integer,
                alg::Algorithm=defalg(A),
                lt=isless,
@@ -1114,7 +1114,7 @@ end
 module Float
 using ..Sort
 using ...Order
-using ..Base: @inbounds, AbstractVector, Vector, last, axes
+using ..Base: @inbounds, ArrayLike, AbstractVector, Vector, last, axes
 
 import Core.Intrinsics: slt_int
 import ..Sort: sort!
@@ -1137,7 +1137,7 @@ lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
 isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::Perm, i::Integer) = isnan(o.order,o.data[i])
 
-function nans2left!(v::AbstractVector, o::Ordering, lo::Integer=first(axes(v,1)), hi::Integer=last(axes(v,1)))
+function nans2left!(v::ArrayLike{1}, o::Ordering, lo::Integer=first(axes(v,1)), hi::Integer=last(axes(v,1)))
     i = lo
     @inbounds while i <= hi && isnan(o,v[i])
         i += 1
@@ -1152,7 +1152,7 @@ function nans2left!(v::AbstractVector, o::Ordering, lo::Integer=first(axes(v,1))
     end
     return i, hi
 end
-function nans2right!(v::AbstractVector, o::Ordering, lo::Integer=first(axes(v,1)), hi::Integer=last(axes(v,1)))
+function nans2right!(v::ArrayLike{1}, o::Ordering, lo::Integer=first(axes(v,1)), hi::Integer=last(axes(v,1)))
     i = hi
     @inbounds while lo <= i && isnan(o,v[i])
         i -= 1
@@ -1168,8 +1168,8 @@ function nans2right!(v::AbstractVector, o::Ordering, lo::Integer=first(axes(v,1)
     return lo, i
 end
 
-nans2end!(v::AbstractVector, o::ForwardOrdering) = nans2right!(v,o)
-nans2end!(v::AbstractVector, o::ReverseOrdering) = nans2left!(v,o)
+nans2end!(v::ArrayLike{1}, o::ForwardOrdering) = nans2right!(v,o)
+nans2end!(v::ArrayLike{1}, o::ReverseOrdering) = nans2left!(v,o)
 nans2end!(v::AbstractVector{<:Integer}, o::Perm{<:ForwardOrdering}) = nans2right!(v,o)
 nans2end!(v::AbstractVector{<:Integer}, o::Perm{<:ReverseOrdering}) = nans2left!(v,o)
 
@@ -1177,7 +1177,7 @@ issignleft(o::ForwardOrdering, x::Floats) = lt(o, x, zero(x))
 issignleft(o::ReverseOrdering, x::Floats) = lt(o, x, -zero(x))
 issignleft(o::Perm, i::Integer) = issignleft(o.order, o.data[i])
 
-function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
+function fpsort!(v::ArrayLike{1}, a::Algorithm, o::Ordering)
     i, j = lo, hi = nans2end!(v,o)
     @inbounds while true
         while i <= j &&  issignleft(o,v[i]); i += 1; end
@@ -1192,7 +1192,7 @@ function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
 end
 
 
-fpsort!(v::AbstractVector, a::Sort.PartialQuickSort, o::Ordering) =
+fpsort!(v::ArrayLike{1}, a::Sort.PartialQuickSort, o::Ordering) =
     sort!(v, first(axes(v,1)), last(axes(v,1)), a, o)
 
 sort!(v::AbstractVector{<:Floats}, a::Algorithm, o::DirectOrdering) = fpsort!(v,a,o)

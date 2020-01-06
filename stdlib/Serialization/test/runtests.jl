@@ -266,7 +266,7 @@ end
 # Objects that have a SubArray as a type in a type-parameter list
 module ArrayWrappers
 
-struct ArrayWrapper{T,N,A<:AbstractArray} <: AbstractArray{T,N}
+struct ArrayWrapper{T,N,A<:ArrayLike} <: AbstractArray{T,N}
     data::A
 end
 ArrayWrapper(data::AbstractArray{T,N}) where {T,N} = ArrayWrapper{T,N,typeof(data)}(data)

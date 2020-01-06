@@ -2,17 +2,17 @@
 
  ## Basic functions ##
 
-isreal(x::AbstractArray) = all(isreal,x)
-iszero(x::AbstractArray) = all(iszero,x)
+isreal(x::ArrayLike) = all(isreal,x)
+iszero(x::ArrayLike) = all(iszero,x)
 isreal(x::AbstractArray{<:Real}) = true
 
 ## Constructors ##
 
 """
-    vec(a::AbstractArray) -> AbstractVector
+    vec(a::ArrayLike) -> ArrayLike{1}
 
 Reshape the array `a` as a one-dimensional column vector. Return `a` if it is
-already an `AbstractVector`. The resulting array
+already an `ArrayLike{1}`. The resulting array
 shares the same underlying data as `a`, so it will only be mutable if `a` is
 mutable, in which case modifying one will also modify the other.
 
@@ -38,8 +38,8 @@ julia> vec(1:3)
 
 See also [`reshape`](@ref).
 """
-vec(a::AbstractArray) = reshape(a,length(a))
-vec(a::AbstractVector) = a
+vec(a::ArrayLike) = reshape(a,length(a))
+vec(a::ArrayLike{1}) = a
 
 _sub(::Tuple{}, ::Tuple{}) = ()
 _sub(t::Tuple, ::Tuple{}) = t
@@ -68,7 +68,7 @@ julia> dropdims(a; dims=3)
 ```
 """
 dropdims(A; dims) = _dropdims(A, dims)
-function _dropdims(A::AbstractArray, dims::Dims)
+function _dropdims(A::ArrayLike, dims::Dims)
     for i in eachindex(dims)
         1 <= dims[i] <= ndims(A) || throw(ArgumentError("dropped dims must be in range 1:ndims(A)"))
         length(axes(A, dims[i])) == 1 || throw(ArgumentError("dropped dims must all be size 1"))
@@ -84,7 +84,7 @@ function _dropdims(A::AbstractArray, dims::Dims)
     end
     reshape(A, d::typeof(_sub(axes(A), dims)))
 end
-_dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
+_dropdims(A::ArrayLike, dim::Integer) = _dropdims(A, (Int(dim),))
 
 ## Unary operators ##
 
@@ -119,7 +119,7 @@ julia> selectdim(A, 2, 3)
  7
 ```
 """
-@inline selectdim(A::AbstractArray, d::Integer, i) = _selectdim(A, d, i, _setindex(i, d, map(Slice, axes(A))...))
+@inline selectdim(A::ArrayLike, d::Integer, i) = _selectdim(A, d, i, _setindex(i, d, map(Slice, axes(A))...))
 @noinline function _selectdim(A, d, i, idxs)
     d >= 1 || throw(ArgumentError("dimension must be ≥ 1, got $d"))
     nd = ndims(A)
@@ -145,7 +145,7 @@ julia> reverse(b, dims=2)
  4  3
 ```
 """
-function reverse(A::AbstractArray; dims::Integer)
+function reverse(A::ArrayLike; dims::Integer)
     nd = ndims(A); d = dims
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     if isempty(A)
@@ -177,10 +177,10 @@ function reverse(A::AbstractArray; dims::Integer)
     return B
 end
 
-function circshift(a::AbstractArray, shiftamt::Real)
+function circshift(a::ArrayLike, shiftamt::Real)
     circshift!(similar(a), a, (Integer(shiftamt),))
 end
-circshift(a::AbstractArray, shiftamt::DimsInteger) = circshift!(similar(a), a, shiftamt)
+circshift(a::ArrayLike, shiftamt::DimsInteger) = circshift!(similar(a), a, shiftamt)
 """
     circshift(A, shifts)
 
@@ -238,14 +238,14 @@ julia> circshift(a, -1)
 
 See also [`circshift!`](@ref).
 """
-function circshift(a::AbstractArray, shiftamt)
+function circshift(a::ArrayLike, shiftamt)
     circshift!(similar(a), a, map(Integer, (shiftamt...,)))
 end
 
 ## Other array functions ##
 
 """
-    repeat(A::AbstractArray, counts::Integer...)
+    repeat(A::ArrayLike, counts::Integer...)
 
 Construct an array by repeating array `A` a given number of times in each dimension, specified by `counts`.
 
@@ -270,9 +270,9 @@ julia> repeat([1, 2, 3], 2, 3)
  3  3  3
 ```
 """
-repeat(a::AbstractArray, counts::Integer...) = repeat(a, outer = counts)
+repeat(a::ArrayLike, counts::Integer...) = repeat(a, outer = counts)
 
-function repeat(a::AbstractVecOrMat, m::Integer, n::Integer=1)
+function repeat(a::VectorOrMatrixLike, m::Integer, n::Integer=1)
     o, p = size(a,1), size(a,2)
     b = similar(a, o*m, p*n)
     for j=1:n
@@ -286,7 +286,7 @@ function repeat(a::AbstractVecOrMat, m::Integer, n::Integer=1)
     return b
 end
 
-function repeat(a::AbstractVector, m::Integer)
+function repeat(a::ArrayLike{1}, m::Integer)
     o = length(a)
     b = similar(a, o*m)
     for i=1:m
@@ -297,7 +297,7 @@ function repeat(a::AbstractVector, m::Integer)
 end
 
 """
-    repeat(A::AbstractArray; inner=ntuple(x->1, ndims(A)), outer=ntuple(x->1, ndims(A)))
+    repeat(A::ArrayLike; inner=ntuple(x->1, ndims(A)), outer=ntuple(x->1, ndims(A)))
 
 Construct an array by repeating the entries of `A`. The i-th element of `inner` specifies
 the number of times that the individual entries of the i-th dimension of `A` should be
@@ -329,13 +329,13 @@ julia> repeat([1 2; 3 4], inner=(2, 1), outer=(1, 3))
  3  4  3  4  3  4
 ```
 """
-function repeat(A::AbstractArray; inner = nothing, outer = nothing)
+function repeat(A::ArrayLike; inner = nothing, outer = nothing)
     return _repeat_inner_outer(A, inner, outer)
 end
 
 # we have optimized implementations of these cases above
-_repeat_inner_outer(A::AbstractVecOrMat, ::Nothing, r::Union{Tuple{Integer},Tuple{Integer,Integer}}) = repeat(A, r...)
-_repeat_inner_outer(A::AbstractVecOrMat, ::Nothing, r::Integer) = repeat(A, r)
+_repeat_inner_outer(A::VectorOrMatrixLike, ::Nothing, r::Union{Tuple{Integer},Tuple{Integer,Integer}}) = repeat(A, r...)
+_repeat_inner_outer(A::VectorOrMatrixLike, ::Nothing, r::Integer) = repeat(A, r)
 
 _repeat_inner_outer(A, ::Nothing, ::Nothing) = A
 _repeat_inner_outer(A, ::Nothing, outer) = _repeat(A, ntuple(n->1, Val(ndims(A))), rep_kw2tup(outer))
@@ -366,7 +366,7 @@ _rshps(shp, shp_i, sz, i, ::Tuple{}) =
 _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
     "($n) cannot be less than number of dimensions of input ($N)"))
 
-@noinline function _repeat(A::AbstractArray, inner, outer)
+@noinline function _repeat(A::ArrayLike, inner, outer)
     shape, inner_shape = rep_shapes(A, inner, outer)
 
     R = similar(A, shape)
@@ -408,7 +408,7 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
 end
 
 """
-    eachrow(A::AbstractVecOrMat)
+    eachrow(A::VectorOrMatrixLike)
 
 Create a generator that iterates over the first dimension of vector or matrix `A`,
 returning the rows as views.
@@ -418,11 +418,11 @@ See also [`eachcol`](@ref) and [`eachslice`](@ref).
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
 """
-eachrow(A::AbstractVecOrMat) = (view(A, i, :) for i in axes(A, 1))
+eachrow(A::VectorOrMatrixLike) = (view(A, i, :) for i in axes(A, 1))
 
 
 """
-    eachcol(A::AbstractVecOrMat)
+    eachcol(A::VectorOrMatrixLike)
 
 Create a generator that iterates over the second dimension of matrix `A`, returning the
 columns as views.
@@ -432,10 +432,10 @@ See also [`eachrow`](@ref) and [`eachslice`](@ref).
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
 """
-eachcol(A::AbstractVecOrMat) = (view(A, :, i) for i in axes(A, 2))
+eachcol(A::VectorOrMatrixLike) = (view(A, :, i) for i in axes(A, 2))
 
 """
-    eachslice(A::AbstractArray; dims)
+    eachslice(A::ArrayLike; dims)
 
 Create a generator that iterates over dimensions `dims` of `A`, returning views that select all
 the data from the other dimensions in `A`.
@@ -448,7 +448,7 @@ See also [`eachrow`](@ref), [`eachcol`](@ref), and [`selectdim`](@ref).
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
 """
-@inline function eachslice(A::AbstractArray; dims)
+@inline function eachslice(A::ArrayLike; dims)
     length(dims) == 1 || throw(ArgumentError("only single dimensions are supported"))
     dim = first(dims)
     dim <= ndims(A) || throw(DimensionMismatch("A doesn't have $dim dimensions"))

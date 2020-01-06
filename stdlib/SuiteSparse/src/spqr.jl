@@ -362,8 +362,8 @@ end
 # here we have to use \ instead of ldiv! because of limitations in SPQR
 
 ## Two helper methods
-_ret_size(F::QRSparse, b::AbstractVector) = (size(F, 2),)
-_ret_size(F::QRSparse, B::AbstractMatrix) = (size(F, 2), size(B, 2))
+_ret_size(F::QRSparse, b::ArrayLike{1}) = (size(F, 2),)
+_ret_size(F::QRSparse, B::ArrayLike{2}) = (size(F, 2), size(B, 2))
 
 LinearAlgebra.rank(F::QRSparse) = reduce(max, view(rowvals(F.R), 1:nnz(F.R)), init = eltype(rowvals(F.R))(0))
 LinearAlgebra.rank(S::SparseMatrixCSC) = rank(qr(S))

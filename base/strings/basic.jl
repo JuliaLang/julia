@@ -191,7 +191,7 @@ checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Real}) =
     all(i -> checkbounds(Bool, s, i), I)
 checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Integer}) =
     all(i -> checkbounds(Bool, s, i), I)
-checkbounds(s::AbstractString, I::Union{Integer,AbstractArray}) =
+checkbounds(s::AbstractString, I::Union{Integer,ArrayLike}) =
     checkbounds(Bool, s, I) ? nothing : throw(BoundsError(s, I))
 
 ## construction, conversion, promotion ##

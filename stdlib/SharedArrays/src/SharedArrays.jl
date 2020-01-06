@@ -332,7 +332,7 @@ indexpids(S::SharedArray) = S.pidx
 Returns the actual `Array` object backing `S`.
 """
 sdata(S::SharedArray) = S.s
-sdata(A::AbstractArray) = A
+sdata(A::ArrayLike) = A
 
 """
     localindices(S::SharedArray)

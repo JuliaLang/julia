@@ -958,9 +958,9 @@ Base.copyto!(dest::Base.PermutedDimsArrays.PermutedDimsArray, src::Dense) = _cop
 Base.copyto!(dest::Dense{T}, D::Dense{T}) where {T<:VTypes} = _copy!(dest, D)
 Base.copyto!(dest::AbstractArray{T}, D::Dense{T}) where {T<:VTypes} = _copy!(dest, D)
 Base.copyto!(dest::AbstractArray{T,2}, D::Dense{T}) where {T<:VTypes} = _copy!(dest, D)
-Base.copyto!(dest::AbstractArray, D::Dense) = _copy!(dest, D)
+Base.copyto!(dest::ArrayLike, D::Dense) = _copy!(dest, D)
 
-function _copy!(dest::AbstractArray, D::Dense)
+function _copy!(dest::ArrayLike, D::Dense)
     require_one_based_indexing(dest)
     s = unsafe_load(pointer(D))
     n = s.nrow*s.ncol
@@ -1576,7 +1576,7 @@ function lowrankupdowndate!(F::Factor{Tv}, C::Sparse{Tv}, update::Cint) where Tv
 end
 
 #Helper functions for rank updates
-lowrank_reorder(V::AbstractArray,p) = Sparse(sparse(V[p,:]))
+lowrank_reorder(V::ArrayLike,p) = Sparse(sparse(V[p,:]))
 lowrank_reorder(V::AbstractSparseArray,p) = Sparse(V[p,:])
 
 """

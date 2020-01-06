@@ -864,8 +864,8 @@ issubset(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) =
 
 # promote eltype if at least one container wouldn't change, otherwise join container types.
 el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{T,n}}) where {T,n}   = a
-el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{S,n}}) where {T,S,n} = a
-el_same(::Type{T}, a::Type{<:AbstractArray{S,n}}, b::Type{<:AbstractArray{T,n}}) where {T,S,n} = b
+el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:ArrayLike{n}}) where {T,n} = a
+el_same(::Type{T}, a::Type{<:ArrayLike{n}}, b::Type{<:AbstractArray{T,n}}) where {T,n} = b
 el_same(::Type, a, b) = promote_typejoin(a, b)
 
 promote_rule(a::Type{UnitRange{T1}}, b::Type{UnitRange{T2}}) where {T1,T2} =

@@ -608,7 +608,7 @@ end
 contains_warn(output, s::AbstractString) = occursin(s, output)
 contains_warn(output, s::Regex) = occursin(s, output)
 contains_warn(output, s::Function) = s(output)
-contains_warn(output, S::Union{AbstractArray,Tuple}) = all(s -> contains_warn(output, s), S)
+contains_warn(output, S::Union{ArrayLike,Tuple}) = all(s -> contains_warn(output, s), S)
 
 """
     @test_warn msg expr
@@ -1685,7 +1685,7 @@ end
 # 0.7 deprecations
 
 begin
-    approx_full(x::AbstractArray) = x
+    approx_full(x::ArrayLike) = x
     approx_full(x::Number) = x
     approx_full(x) = full(x)
 

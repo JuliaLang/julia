@@ -57,8 +57,8 @@ Parameter `sep::Integer` is number of spaces to put between elements.
 Alignment is reported as a vector of (left,right) tuples, one for each
 column going across the screen.
 """
-function alignment(io::IO, X::AbstractVecOrMat,
-        rows::AbstractVector, cols::AbstractVector,
+function alignment(io::IO, X::VectorOrMatrixLike,
+        rows::ArrayLike{1}, cols::ArrayLike{1},
         cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer)
     a = Tuple{Int, Int}[]
     for j in cols # need to go down each column one at a time
@@ -94,8 +94,8 @@ is specified as string sep.
 `print_matrix_row` will also respect compact output for elements.
 """
 function print_matrix_row(io::IO,
-        X::AbstractVecOrMat, A::Vector,
-        i::Integer, cols::AbstractVector, sep::AbstractString)
+        X::VectorOrMatrixLike, A::Vector,
+        i::Integer, cols::ArrayLike{1}, sep::AbstractString)
     for (k, j) = enumerate(cols)
         k > length(A) && break
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
@@ -151,7 +151,7 @@ string post (printed at the end of the last row of the matrix).
 Also options to use different ellipsis characters hdots, vdots, ddots.
 These are repeated every hmod or vmod elements.
 """
-function print_matrix(io::IO, X::AbstractVecOrMat,
+function print_matrix(io::IO, X::VectorOrMatrixLike,
                       pre::AbstractString = " ",  # pre-matrix string
                       sep::AbstractString = "  ", # separator between elements
                       post::AbstractString = "",  # post-matrix string
@@ -256,7 +256,7 @@ end
 
 # typeinfo agnostic
 # n-dimensional arrays
-function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices::Bool)
+function show_nd(io::IO, a::ArrayLike, print_matrix::Function, label_slices::Bool)
     limit::Bool = get(io, :limit, false)
     if isempty(a)
         return
@@ -303,16 +303,16 @@ end
 # print_array: main helper functions for show(io, text/plain, array)
 # typeinfo agnostic
 # Note that this is for showing the content inside the array, and for `MIME"text/plain".
-# There are `show(::IO, ::A) where A<:AbstractArray` methods that don't use this
+# There are `show(::IO, ::A) where A<:ArrayLike` methods that don't use this
 # e.g. show_vector, show_zero_dim
-print_array(io::IO, X::AbstractArray{<:Any, 0}) =
+print_array(io::IO, X::ArrayLike{0}) =
     isassigned(X) ? show(io, X[]) : print(io, undef_ref_str)
-print_array(io::IO, X::AbstractVecOrMat) = print_matrix(io, X)
-print_array(io::IO, X::AbstractArray) = show_nd(io, X, print_matrix, true)
+print_array(io::IO, X::VectorOrMatrixLike) = print_matrix(io, X)
+print_array(io::IO, X::ArrayLike) = show_nd(io, X, print_matrix, true)
 
 # typeinfo aware
-# implements: show(io::IO, ::MIME"text/plain", X::AbstractArray)
-function show(io::IO, ::MIME"text/plain", X::AbstractArray)
+# implements: show(io::IO, ::MIME"text/plain", X::ArrayLike)
+function show(io::IO, ::MIME"text/plain", X::ArrayLike)
     # 0) show summary before setting :compact
     summary(io, X)
     isempty(X) && return
@@ -354,10 +354,10 @@ end
 # typeinfo agnostic
 
 """
-`_show_nonempty(io, X::AbstractMatrix, prefix)` prints matrix X with opening and closing square brackets,
+`_show_nonempty(io, X::ArrayLike{2}, prefix)` prints matrix X with opening and closing square brackets,
 preceded by `prefix`, supposed to encode the type of the elements.
 """
-function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
+function _show_nonempty(io::IO, X::ArrayLike{2}, prefix::String)
     @assert !isempty(X)
     limit = get(io, :limit, false)::Bool
     indr, indc = axes(X,1), axes(X,2)
@@ -401,21 +401,21 @@ function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
 end
 
 
-_show_nonempty(io::IO, X::AbstractArray, prefix::String) =
+_show_nonempty(io::IO, X::ArrayLike, prefix::String) =
     show_nd(io, X, (io, slice) -> _show_nonempty(io, slice, prefix), false)
 
 # a specific call path is used to show vectors (show_vector)
-_show_nonempty(::IO, ::AbstractVector, ::String) =
-    error("_show_nonempty(::IO, ::AbstractVector, ::String) is not implemented")
+_show_nonempty(::IO, ::ArrayLike{1}, ::String) =
+    error("_show_nonempty(::IO, ::ArrayLike{1}, ::String) is not implemented")
 
-_show_nonempty(io::IO, X::AbstractArray{T,0} where T, prefix::String) = print_array(io, X)
+_show_nonempty(io::IO, X::ArrayLike{0}, prefix::String) = print_array(io, X)
 
 # NOTE: it's not clear how this method could use the :typeinfo attribute
 _show_empty(io::IO, X::Array{T}) where {T} = print(io, "Array{", T, "}(undef,", join(size(X),','), ')')
 _show_empty(io, X) = nothing # by default, we don't know this constructor
 
 # typeinfo aware (necessarily)
-function show(io::IO, X::AbstractArray)
+function show(io::IO, X::ArrayLike)
     ndims(X) == 0 && return show_zero_dim(io, X)
     ndims(X) == 1 && return show_vector(io, X)
     prefix = typeinfo_prefix(io, X)
@@ -468,7 +468,7 @@ end
 # returning Any, as this would cause incorrect printing in e.g. `Vector[Any[1]]`,
 # because eltype(Vector) == Any so `Any` wouldn't be printed in `Any[1]`)
 typeinfo_eltype(typeinfo) = nothing # element type not precisely known
-typeinfo_eltype(typeinfo::Type{<:AbstractArray{T}}) where {T} = eltype(typeinfo)
+typeinfo_eltype(typeinfo::Type{<:AbstractArray{T}}) where {T} = eltype(typeinfo) # specific
 typeinfo_eltype(typeinfo::Type{<:AbstractDict{K,V}}) where {K,V} = eltype(typeinfo)
 typeinfo_eltype(typeinfo::Type{<:AbstractSet{T}}) where {T} = eltype(typeinfo)
 

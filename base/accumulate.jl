@@ -4,7 +4,7 @@
 # stable in certain situations (e.g. sums).
 # it does double the number of operations compared to accumulate,
 # though for cheap operations like + this does not have much impact (20%)
-function _accumulate_pairwise!(op::Op, c::AbstractVector{T}, v::AbstractVector, s, i1, n)::T where {T,Op}
+function _accumulate_pairwise!(op::Op, c::AbstractVector{T}, v::ArrayLike{1}, s, i1, n)::T where {T,Op}
     @inbounds if n < 128
         s_ = v[i1]
         c[i1] = op(s, s_)
@@ -20,7 +20,7 @@ function _accumulate_pairwise!(op::Op, c::AbstractVector{T}, v::AbstractVector, 
     return s_
 end
 
-function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector) where Op
+function accumulate_pairwise!(op::Op, result::ArrayLike{1}, v::ArrayLike{1}) where Op
     li = LinearIndices(v)
     li != LinearIndices(result) && throw(DimensionMismatch("input and output array sizes and indices must match"))
     n = length(li)
@@ -43,21 +43,21 @@ end
 
 Cumulative sum of `A` along the dimension `dims`, storing the result in `B`. See also [`cumsum`](@ref).
 """
-cumsum!(B::AbstractArray{T}, A; dims::Integer) where {T} =
+cumsum!(B::ArrayLike, A; dims::Integer) =
     accumulate!(add_sum, B, A, dims=dims)
 
-function cumsum!(out::AbstractArray, v::AbstractVector; dims::Integer=1)
+function cumsum!(out::ArrayLike, v::ArrayLike{1}; dims::Integer=1)
     # we dispatch on the possibility of numerical stability issues
     _cumsum!(out, v, dims, ArithmeticStyle(eltype(out)))
 end
 
-function _cumsum!(out::AbstractArray{T}, v, dim, ::ArithmeticRounds) where {T}
+function _cumsum!(out::ArrayLike, v, dim, ::ArithmeticRounds)
     dim == 1 ? accumulate_pairwise!(add_sum, out, v) : copyto!(out, v)
 end
-function _cumsum!(out::AbstractArray, v, dim, ::ArithmeticUnknown)
+function _cumsum!(out::ArrayLike, v, dim, ::ArithmeticUnknown)
     _cumsum!(out, v, dim, ArithmeticRounds())
 end
-function _cumsum!(out::AbstractArray{T}, v, dim, ::ArithmeticStyle) where {T}
+function _cumsum!(out::ArrayLike, v, dim, ::ArithmeticStyle)
     dim == 1 ? accumulate!(add_sum, out, v) : copyto!(out, v)
 end
 
@@ -92,7 +92,7 @@ function cumsum(A::AbstractArray{T}; dims::Integer) where T
 end
 
 """
-    cumsum(x::AbstractVector)
+    cumsum(x::ArrayLike{1})
 
 Cumulative sum a vector. See also [`cumsum!`](@ref)
 to use a preallocated output array, both for performance and to control the precision of the
@@ -113,7 +113,8 @@ julia> cumsum([fill(1, 2) for i in 1:3])
  [3, 3]
 ```
 """
-cumsum(x::AbstractVector) = cumsum(x, dims=1)
+cumsum(x::ArrayLike{1}) = cumsum(x, dims=1)
+cumsum(x::AbstractVector) = cumsum(x, dims = 1) # disambiguation
 
 
 """
@@ -122,16 +123,16 @@ cumsum(x::AbstractVector) = cumsum(x, dims=1)
 Cumulative product of `A` along the dimension `dims`, storing the result in `B`.
 See also [`cumprod`](@ref).
 """
-cumprod!(B::AbstractArray{T}, A; dims::Integer) where {T} =
+cumprod!(B::ArrayLike, A; dims::Integer) =
     accumulate!(mul_prod, B, A, dims=dims)
 
 """
-    cumprod!(y::AbstractVector, x::AbstractVector)
+    cumprod!(y::ArrayLike{1}, x::ArrayLike{1})
 
 Cumulative product of a vector `x`, storing the result in `y`.
 See also [`cumprod`](@ref).
 """
-cumprod!(y::AbstractVector, x::AbstractVector) = cumprod!(y, x, dims=1)
+cumprod!(y::ArrayLike{1}, x::ArrayLike{1}) = cumprod!(y, x, dims=1)
 
 """
     cumprod(A; dims::Integer)
@@ -158,12 +159,12 @@ julia> cumprod(a, dims=2)
  4  20  120
 ```
 """
-function cumprod(A::AbstractArray; dims::Integer)
+function cumprod(A::ArrayLike; dims::Integer)
     return accumulate(mul_prod, A, dims=dims)
 end
 
 """
-    cumprod(x::AbstractVector)
+    cumprod(x::ArrayLike{1})
 
 Cumulative product of a vector. See also
 [`cumprod!`](@ref) to use a preallocated output array, both for performance and
@@ -184,7 +185,7 @@ julia> cumprod([fill(1//3, 2, 2) for i in 1:3])
  [4//27 4//27; 4//27 4//27]
 ```
 """
-cumprod(x::AbstractVector) = cumprod(x, dims=1)
+cumprod(x::ArrayLike{1}) = cumprod(x, dims=1)
 
 
 """
@@ -304,13 +305,13 @@ function _accumulate!(op, B, A, dims::Nothing, init::Union{Nothing, Some})
     throw(ArgumentError("Keyword argument dims must be provided for multidimensional arrays"))
 end
 
-function _accumulate!(op, B, A::AbstractVector, dims::Nothing, init::Nothing)
+function _accumulate!(op, B, A::ArrayLike{1}, dims::Nothing, init::Nothing)
     isempty(A) && return B
     v1 = reduce_first(op, first(A))
     _accumulate1!(op, B, v1, A, 1)
 end
 
-function _accumulate!(op, B, A::AbstractVector, dims::Nothing, init::Some)
+function _accumulate!(op, B, A::ArrayLike{1}, dims::Nothing, init::Some)
     isempty(A) && return B
     v1 = op(something(init), first(A))
     _accumulate1!(op, B, v1, A, 1)
@@ -372,7 +373,7 @@ end
     B
 end
 
-function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)
+function _accumulate1!(op, B, v1, A::ArrayLike{1}, dim::Integer)
     dim > 0 || throw(ArgumentError("dim must be a positive integer"))
     inds = LinearIndices(A)
     inds == LinearIndices(B) || throw(DimensionMismatch("LinearIndices of A and B don't match"))

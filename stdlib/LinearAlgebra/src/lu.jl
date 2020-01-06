@@ -60,7 +60,7 @@ end
 function LU(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) where {T}
     LU{T,typeof(factors)}(factors, ipiv, info)
 end
-function LU{T}(factors::AbstractMatrix, ipiv::AbstractVector{<:Integer}, info::Integer) where {T}
+function LU{T}(factors::ArrayLike{2}, ipiv::AbstractVector{<:Integer}, info::Integer) where {T}
     LU(convert(AbstractMatrix{T}, factors),
        convert(Vector{BlasInt}, ipiv),
        BlasInt(info))
@@ -423,18 +423,18 @@ end
 (\)(A::Transpose{T,<:LU{T,<:StridedMatrix}}, B::Transpose{T,<:StridedVecOrMat{T}}) where {T<:BlasFloat} =
     LAPACK.getrs!('T', A.parent.factors, A.parent.ipiv, copy(B))
 
-function (/)(A::AbstractMatrix, F::Adjoint{<:Any,<:LU})
+function (/)(A::ArrayLike{2}, F::Adjoint{<:Any,<:LU})
     T = promote_type(eltype(A), eltype(F))
     return adjoint(ldiv!(F.parent, copy_oftype(adjoint(A), T)))
 end
 # To avoid ambiguities with definitions in adjtrans.jl and factorizations.jl
-(/)(adjA::Adjoint{<:Any,<:AbstractVector}, F::Adjoint{<:Any,<:LU}) = adjoint(F.parent \ adjA.parent)
-(/)(adjA::Adjoint{<:Any,<:AbstractMatrix}, F::Adjoint{<:Any,<:LU}) = adjoint(F.parent \ adjA.parent)
-function (/)(trA::Transpose{<:Any,<:AbstractVector}, F::Adjoint{<:Any,<:LU})
+(/)(adjA::Adjoint{<:Any,<:ArrayLike{1}}, F::Adjoint{<:Any,<:LU}) = adjoint(F.parent \ adjA.parent)
+(/)(adjA::Adjoint{<:Any,<:ArrayLike{2}}, F::Adjoint{<:Any,<:LU}) = adjoint(F.parent \ adjA.parent)
+function (/)(trA::Transpose{<:Any,<:ArrayLike{1}}, F::Adjoint{<:Any,<:LU})
     T = promote_type(eltype(trA), eltype(F))
     return adjoint(ldiv!(F.parent, convert(AbstractVector{T}, conj(trA.parent))))
 end
-function (/)(trA::Transpose{<:Any,<:AbstractMatrix}, F::Adjoint{<:Any,<:LU})
+function (/)(trA::Transpose{<:Any,<:ArrayLike{2}}, F::Adjoint{<:Any,<:LU})
     T = promote_type(eltype(trA), eltype(F))
     return adjoint(ldiv!(F.parent, convert(AbstractMatrix{T}, conj(trA.parent))))
 end
@@ -577,7 +577,7 @@ function getproperty(F::LU{T,Tridiagonal{T,V}}, d::Symbol) where {T,V}
 end
 
 # See dgtts2.f
-function ldiv!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V}
+function ldiv!(A::LU{T,Tridiagonal{T,V}}, B::VectorOrMatrixLike) where {T,V}
     require_one_based_indexing(B)
     n = size(A,1)
     if n != size(B,1)
@@ -609,7 +609,7 @@ function ldiv!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V}
     return B
 end
 
-function ldiv!(transA::Transpose{<:Any,<:LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat) where {T,V}
+function ldiv!(transA::Transpose{<:Any,<:LU{T,Tridiagonal{T,V}}}, B::VectorOrMatrixLike) where {T,V}
     require_one_based_indexing(B)
     A = transA.parent
     n = size(A,1)
@@ -645,8 +645,8 @@ function ldiv!(transA::Transpose{<:Any,<:LU{T,Tridiagonal{T,V}}}, B::AbstractVec
     return B
 end
 
-# Ac_ldiv_B!(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat) where {T<:Real} = At_ldiv_B!(A,B)
-function ldiv!(adjA::Adjoint{<:Any,LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat) where {T,V}
+# Ac_ldiv_B!(A::LU{T,Tridiagonal{T}}, B::VectorOrMatrixLike) where {T<:Real} = At_ldiv_B!(A,B)
+function ldiv!(adjA::Adjoint{<:Any,LU{T,Tridiagonal{T,V}}}, B::VectorOrMatrixLike) where {T,V}
     require_one_based_indexing(B)
     A = adjA.parent
     n = size(A,1)
@@ -682,9 +682,9 @@ function ldiv!(adjA::Adjoint{<:Any,LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat)
     return B
 end
 
-rdiv!(B::AbstractMatrix, A::LU) = transpose(ldiv!(transpose(A), transpose(B)))
-rdiv!(B::AbstractMatrix, A::Transpose{<:Any,<:LU}) = transpose(ldiv!(A.parent, transpose(B)))
-rdiv!(B::AbstractMatrix, A::Adjoint{<:Any,<:LU}) = adjoint(ldiv!(A.parent, adjoint(B)))
+rdiv!(B::ArrayLike{2}, A::LU) = transpose(ldiv!(transpose(A), transpose(B)))
+rdiv!(B::ArrayLike{2}, A::Transpose{<:Any,<:LU}) = transpose(ldiv!(A.parent, transpose(B)))
+rdiv!(B::ArrayLike{2}, A::Adjoint{<:Any,<:LU}) = adjoint(ldiv!(A.parent, adjoint(B)))
 
 # Conversions
 AbstractMatrix(F::LU) = (F.L * F.U)[invperm(F.p),:]

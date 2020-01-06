@@ -7,7 +7,7 @@ module BLAS
 
 import ..axpy!, ..axpby!
 import Base: copyto!
-using Base: require_one_based_indexing
+using Base: require_one_based_indexing, VectorOrMatrixLike
 
 export
 # Level 1
@@ -383,7 +383,7 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
         end
     end
 end
-nrm2(x::Union{AbstractVector,DenseArray}) = GC.@preserve x nrm2(length(x), pointer(x), stride1(x))
+nrm2(x::Union{ArrayLike{1},DenseArray}) = GC.@preserve x nrm2(length(x), pointer(x), stride1(x))
 
 ## asum
 
@@ -416,7 +416,7 @@ for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
         end
     end
 end
-asum(x::Union{AbstractVector,DenseArray}) = GC.@preserve x asum(length(x), pointer(x), stride1(x))
+asum(x::Union{ArrayLike{1},DenseArray}) = GC.@preserve x asum(length(x), pointer(x), stride1(x))
 
 ## axpy
 
@@ -546,7 +546,7 @@ for (fname, elty) in ((:idamax_,:Float64),
         end
     end
 end
-iamax(dx::Union{AbstractVector,DenseArray}) = GC.@preserve dx iamax(length(dx), pointer(dx), stride1(dx))
+iamax(dx::Union{ArrayLike{1},DenseArray}) = GC.@preserve dx iamax(length(dx), pointer(dx), stride1(dx))
 
 """
     iamax(n, dx, incx)
@@ -1473,12 +1473,12 @@ for (fname, elty) in ((:dsyrk_,:Float64),
         end
     end
 end
-function syrk(uplo::AbstractChar, trans::AbstractChar, alpha::Number, A::AbstractVecOrMat)
+function syrk(uplo::AbstractChar, trans::AbstractChar, alpha::Number, A::VectorOrMatrixLike)
     T = eltype(A)
     n = size(A, trans == 'N' ? 1 : 2)
     syrk!(uplo, trans, convert(T,alpha), A, zero(T), similar(A, T, (n, n)))
 end
-syrk(uplo::AbstractChar, trans::AbstractChar, A::AbstractVecOrMat) = syrk(uplo, trans, one(eltype(A)), A)
+syrk(uplo::AbstractChar, trans::AbstractChar, A::VectorOrMatrixLike) = syrk(uplo, trans, one(eltype(A)), A)
 
 """
     herk!(uplo, trans, alpha, A, beta, C)
@@ -1594,7 +1594,7 @@ Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of
 `alpha*transpose(A)*B + alpha*transpose(B)*A`,
 according to [`trans`](@ref stdlib-blas-trans).
 """
-function syr2k(uplo::AbstractChar, trans::AbstractChar, alpha::Number, A::AbstractVecOrMat, B::AbstractVecOrMat)
+function syr2k(uplo::AbstractChar, trans::AbstractChar, alpha::Number, A::VectorOrMatrixLike, B::VectorOrMatrixLike)
     T = eltype(A)
     n = size(A, trans == 'N' ? 1 : 2)
     syr2k!(uplo, trans, convert(T,alpha), A, B, zero(T), similar(A, T, (n, n)))
@@ -1605,7 +1605,7 @@ end
 Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of `A*transpose(B) + B*transpose(A)`
 or `transpose(A)*B + transpose(B)*A`, according to [`trans`](@ref stdlib-blas-trans).
 """
-syr2k(uplo::AbstractChar, trans::AbstractChar, A::AbstractVecOrMat, B::AbstractVecOrMat) = syr2k(uplo, trans, one(eltype(A)), A, B)
+syr2k(uplo::AbstractChar, trans::AbstractChar, A::VectorOrMatrixLike, B::VectorOrMatrixLike) = syr2k(uplo, trans, one(eltype(A)), A, B)
 
 for (fname, elty1, elty2) in ((:zher2k_,:ComplexF64,:Float64), (:cher2k_,:ComplexF32,:Float32))
    @eval begin

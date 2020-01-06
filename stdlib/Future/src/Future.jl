@@ -22,7 +22,7 @@ Copy `src` into `dst`.
 """
 copy!(dst::AbstractSet, src::AbstractSet) = Base.copy!(dst, src)
 copy!(dst::AbstractDict, src::AbstractDict) = Base.copy!(dst, src)
-copy!(dst::AbstractArray, src::AbstractArray) = Base.copy!(dst, src)
+copy!(dst::ArrayLike, src::ArrayLike) = Base.copy!(dst, src)
 
 
 ## randjump

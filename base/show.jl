@@ -700,7 +700,7 @@ function show(io::IO, l::Core.MethodInstance)
     end
 end
 
-function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl,
+function show_delim_array(io::IO, itr::Union{ArrayLike,SimpleVector}, op, delim, cl,
                           delim_one, i1=first(LinearIndices(itr)), l=last(LinearIndices(itr)))
     print(io, op)
     if !show_circular(io, itr)
@@ -2114,7 +2114,7 @@ function summary(x)
 end
 summary(io::IO, t::Tuple) = print(io, t)
 
-## `summary` for AbstractArrays
+## `summary` for ArrayLikes
 # sizes such as 0-dimensional, 4-dimensional, 2x3
 dims2string(d) = isempty(d) ? "0-dimensional" :
                  length(d) == 1 ? "$(d[1])-element" :
@@ -2125,7 +2125,7 @@ _indsstring(i) = string(i)
 _indsstring(i::Union{IdentityUnitRange, Slice}) = string(i.indices)
 
 # anything array-like gets summarized e.g. 10-element Array{Int64,1}
-summary(io::IO, a::AbstractArray) = array_summary(io, a, axes(a))
+summary(io::IO, a::ArrayLike) = array_summary(io, a, axes(a))
 function array_summary(io::IO, a, inds::Tuple{Vararg{OneTo}})
     print(io, dims2string(length.(inds)), " ")
     showarg(io, a, true)
@@ -2219,7 +2219,7 @@ function showarg(io::IO, r::ReinterpretArray{T}, toplevel) where {T}
 end
 
 # pretty printing for Iterators.Pairs
-function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, T}, toplevel) where T<:AbstractArray
+function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, T}, toplevel) where T<:ArrayLike
     print(io, "pairs(IndexLinear(), ::", T, ")")
 end
 

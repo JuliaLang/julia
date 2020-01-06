@@ -6,10 +6,10 @@ import Base: permutedims, permutedims!
 export PermutedDimsArray
 
 # Some day we will want storage-order-aware iteration, so put perm in the parameters
-struct PermutedDimsArray{T,N,perm,iperm,AA<:AbstractArray} <: AbstractArray{T,N}
+struct PermutedDimsArray{T,N,perm,iperm,AA<:ArrayLike} <: AbstractArray{T,N}
     parent::AA
 
-    function PermutedDimsArray{T,N,perm,iperm,AA}(data::AA) where {T,N,perm,iperm,AA<:AbstractArray}
+    function PermutedDimsArray{T,N,perm,iperm,AA}(data::AA) where {T,N,perm,iperm,AA<:ArrayLike}
         (isa(perm, NTuple{N,Int}) && isa(iperm, NTuple{N,Int})) || error("perm and iperm must both be NTuple{$N,Int}")
         isperm(perm) || throw(ArgumentError(string(perm, " is not a valid permutation of dimensions 1:", N)))
         all(map(d->iperm[perm[d]]==d, 1:N)) || throw(ArgumentError(string(perm, " and ", iperm, " must be inverses")))
@@ -20,7 +20,7 @@ end
 """
     PermutedDimsArray(A, perm) -> B
 
-Given an AbstractArray `A`, create a view `B` such that the
+Given an ArrayLike `A`, create a view `B` such that the
 dimensions appear to be permuted. Similar to `permutedims`, except
 that no copying occurs (`B` shares storage with `A`).
 
@@ -78,7 +78,7 @@ end
 @inline genperm(I, perm::AbstractVector{Int}) = genperm(I, (perm...,))
 
 """
-    permutedims(A::AbstractArray, perm)
+    permutedims(A::ArrayLike, perm)
 
 Permute the dimensions of array `A`. `perm` is a vector specifying a permutation of length
 `ndims(A)`.
@@ -108,13 +108,13 @@ julia> permutedims(A, [3, 2, 1])
  6  8
 ```
 """
-function permutedims(A::AbstractArray, perm)
+function permutedims(A::ArrayLike, perm)
     dest = similar(A, genperm(axes(A), perm))
     permutedims!(dest, A, perm)
 end
 
 """
-    permutedims(m::AbstractMatrix)
+    permutedims(m::ArrayLike{2})
 
 Permute the dimensions of the matrix `m`, by flipping the elements across the diagonal of
 the matrix. Differs from `LinearAlgebra`'s [`transpose`](@ref) in that the
@@ -146,10 +146,10 @@ julia> transpose(X)
  [5 7; 6 8]  [13 15; 14 16]
 ```
 """
-permutedims(A::AbstractMatrix) = permutedims(A, (2,1))
+permutedims(A::ArrayLike{2}) = permutedims(A, (2,1))
 
 """
-    permutedims(v::AbstractVector)
+    permutedims(v::ArrayLike{1})
 
 Reshape vector `v` into a `1 × length(v)` row matrix.
 Differs from `LinearAlgebra`'s [`transpose`](@ref) in that
@@ -175,7 +175,7 @@ julia> transpose(V)
  [1 3; 2 4]  [5 7; 6 8]
 ```
 """
-permutedims(v::AbstractVector) = reshape(v, (1, length(v)))
+permutedims(v::ArrayLike{1}) = reshape(v, (1, length(v)))
 
 """
     permutedims!(dest, src, perm)
@@ -188,7 +188,7 @@ regions.
 
 See also [`permutedims`](@ref).
 """
-function permutedims!(dest, src::AbstractArray, perm)
+function permutedims!(dest, src::ArrayLike, perm)
     Base.checkdims_perm(dest, src, perm)
     P = PermutedDimsArray(dest, invperm(perm))
     _copy!(P, src)
@@ -199,7 +199,7 @@ function Base.copyto!(dest::PermutedDimsArray{T,N}, src::AbstractArray{T,N}) whe
     checkbounds(dest, axes(src)...)
     _copy!(dest, src)
 end
-Base.copyto!(dest::PermutedDimsArray, src::AbstractArray) = _copy!(dest, src)
+Base.copyto!(dest::PermutedDimsArray, src::ArrayLike) = _copy!(dest, src)
 
 function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
     # If dest/src are "close to dense," then it pays to be cache-friendly.

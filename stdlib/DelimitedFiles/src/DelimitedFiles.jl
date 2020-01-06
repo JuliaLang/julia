@@ -733,7 +733,7 @@ function writedlm_cell(io::IO, elt::AbstractString, dlm::T, quotes::Bool) where 
     end
 end
 writedlm_cell(io::IO, elt, dlm, quotes) = print(io, elt)
-function writedlm(io::IO, a::AbstractMatrix, dlm; opts...)
+function writedlm(io::IO, a::ArrayLike{2}, dlm; opts...)
     optsd = val_opts(opts)
     quotes = get(optsd, :quotes, true)
     pb = PipeBuffer()
@@ -749,7 +749,7 @@ function writedlm(io::IO, a::AbstractMatrix, dlm; opts...)
     nothing
 end
 
-writedlm(io::IO, a::AbstractArray{<:Any,0}, dlm; opts...) = writedlm(io, reshape(a,1), dlm; opts...)
+writedlm(io::IO, a::ArrayLike{0}, dlm; opts...) = writedlm(io, reshape(a,1), dlm; opts...)
 
 # write an iterable row as dlm-separated items
 function writedlm_row(io::IO, row, dlm, quotes)

@@ -67,7 +67,7 @@ julia> A
  2.0  6.78233
 ```
 """
-isposdef!(A::AbstractMatrix) =
+isposdef!(A::ArrayLike{2}) =
     ishermitian(A) && isposdef(cholesky!(Hermitian(A); check = false))
 
 """
@@ -88,7 +88,7 @@ julia> isposdef(A)
 true
 ```
 """
-isposdef(A::AbstractMatrix) =
+isposdef(A::ArrayLike{2}) =
     ishermitian(A) && isposdef(cholesky(Hermitian(A); check = false))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
@@ -130,7 +130,7 @@ julia> triu!(M, 1)
  0  0  0  0  0
 ```
 """
-function triu!(M::AbstractMatrix, k::Integer)
+function triu!(M::ArrayLike{2}, k::Integer)
     require_one_based_indexing(M)
     m, n = size(M)
     for j in 1:min(n, m + k)
@@ -168,7 +168,7 @@ julia> tril!(M, 2)
  1  2  3  4  5
 ```
 """
-function tril!(M::AbstractMatrix, k::Integer)
+function tril!(M::ArrayLike{2}, k::Integer)
     require_one_based_indexing(M)
     m, n = size(M)
     for j in max(1, k + 1):n
@@ -181,7 +181,7 @@ end
 tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
 """
-    fillband!(A::AbstractMatrix, x, l, u)
+    fillband!(A::ArrayLike{2}, x, l, u)
 
 Fill the band between diagonals `l` and `u` with the value `x`.
 """
@@ -217,7 +217,7 @@ julia> diagind(A,-1)
 2:4:6
 ```
 """
-function diagind(A::AbstractMatrix, k::Integer=0)
+function diagind(A::ArrayLike{2}, k::Integer=0)
     require_one_based_indexing(A)
     diagind(size(A,1), size(A,2), k)
 end
@@ -243,11 +243,11 @@ julia> diag(A,1)
  6
 ```
 """
-diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
+diag(A::ArrayLike{2}, k::Integer=0) = A[diagind(A,k)]
 
 """
-    diagm(kv::Pair{<:Integer,<:AbstractVector}...)
-    diagm(m::Integer, n::Integer, kv::Pair{<:Integer,<:AbstractVector}...)
+    diagm(kv::Pair{<:Integer,<:ArrayLike{1}}...)
+    diagm(m::Integer, n::Integer, kv::Pair{<:Integer,<:ArrayLike{1}}...)
 
 Construct a matrix from `Pair`s of diagonals and vectors.
 Vector `kv.second` will be placed on the `kv.first` diagonal.
@@ -276,9 +276,9 @@ julia> diagm(1 => [1,2,3], -1 => [4,5])
  0  0  0  0
 ```
 """
-diagm(kv::Pair{<:Integer,<:AbstractVector}...) = _diagm(nothing, kv...)
-diagm(m::Integer, n::Integer, kv::Pair{<:Integer,<:AbstractVector}...) = _diagm((Int(m),Int(n)), kv...)
-function _diagm(size, kv::Pair{<:Integer,<:AbstractVector}...)
+diagm(kv::Pair{<:Integer,<:ArrayLike{1}}...) = _diagm(nothing, kv...)
+diagm(m::Integer, n::Integer, kv::Pair{<:Integer,<:ArrayLike{1}}...) = _diagm((Int(m),Int(n)), kv...)
+function _diagm(size, kv::Pair{<:Integer,<:ArrayLike{1}}...)
     A = diagm_container(size, kv...)
     for p in kv
         inds = diagind(A, p.first)
@@ -288,18 +288,18 @@ function _diagm(size, kv::Pair{<:Integer,<:AbstractVector}...)
     end
     return A
 end
-function diagm_size(size::Nothing, kv::Pair{<:Integer,<:AbstractVector}...)
+function diagm_size(size::Nothing, kv::Pair{<:Integer,<:ArrayLike{1}}...)
     mnmax = mapreduce(x -> length(x.second) + abs(Int(x.first)), max, kv; init=0)
     return mnmax, mnmax
 end
-function diagm_size(size::Tuple{Int,Int}, kv::Pair{<:Integer,<:AbstractVector}...)
+function diagm_size(size::Tuple{Int,Int}, kv::Pair{<:Integer,<:ArrayLike{1}}...)
     mmax = mapreduce(x -> length(x.second) - min(0,Int(x.first)), max, kv; init=0)
     nmax = mapreduce(x -> length(x.second) + max(0,Int(x.first)), max, kv; init=0)
     m, n = size
     (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch("invalid size=$size"))
     return m, n
 end
-function diagm_container(size, kv::Pair{<:Integer,<:AbstractVector}...)
+function diagm_container(size, kv::Pair{<:Integer,<:ArrayLike{1}}...)
     T = promote_type(map(x -> eltype(x.second), kv)...)
     return zeros(T, diagm_size(size, kv...)...)
 end
@@ -307,8 +307,8 @@ diagm_container(size, kv::Pair{<:Integer,<:BitVector}...) =
     falses(diagm_size(size, kv...)...)
 
 """
-    diagm(v::AbstractVector)
-    diagm(m::Integer, n::Integer, v::AbstractVector)
+    diagm(v::ArrayLike{1})
+    diagm(m::Integer, n::Integer, v::ArrayLike{1})
 
 Construct a matrix with elements of the vector as diagonal elements.
 By default (if `size=nothing`), the matrix is square and its size is given by
@@ -324,8 +324,8 @@ julia> diagm([1,2,3])
  0  0  3
 ```
 """
-diagm(v::AbstractVector) = diagm(0 => v)
-diagm(m::Integer, n::Integer, v::AbstractVector) = diagm(m, n, 0 => v)
+diagm(v::ArrayLike{1}) = diagm(0 => v)
+diagm(m::Integer, n::Integer, v::ArrayLike{1}) = diagm(m, n, 0 => v)
 
 function tr(A::Matrix{T}) where T
     n = checksquare(A)
@@ -394,14 +394,16 @@ function kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
     R
 end
 
-kron(a::Number, b::Union{Number, AbstractVecOrMat}) = a * b
-kron(a::AbstractVecOrMat, b::Number) = a * b
-kron(a::AbstractVector, b::AbstractVector) = vec(kron(reshape(a ,length(a), 1), reshape(b, length(b), 1)))
-kron(a::AbstractMatrix, b::AbstractVector) = kron(a, reshape(b, length(b), 1))
-kron(a::AbstractVector, b::AbstractMatrix) = kron(reshape(a, length(a), 1), b)
+kron(a::Number, b::Union{Number, VectorOrMatrixLike}) = a * b
+kron(a::VectorOrMatrixLike, b::Number) = a * b
+kron(a::ArrayLike{1}, b::ArrayLike{1}) = vec(kron(reshape(a ,length(a), 1), reshape(b, length(b), 1)))
+kron(a::ArrayLike{2}, b::ArrayLike{1}) = kron(a, reshape(b, length(b), 1))
+kron(a::ArrayLike{1}, b::ArrayLike{2}) = kron(reshape(a, length(a), 1), b)
 
 # Matrix power
-(^)(A::AbstractMatrix, p::Integer) = p < 0 ? power_by_squaring(inv(A), -p) : power_by_squaring(A, p)
+@inline matrix_power(A, p) = p < 0 ? power_by_squaring(inv(A), -p) : power_by_squaring(A, p)
+(^)(A::ArrayLike{2}, p::Integer) = matrix_power(A, p)
+(^)(A::AbstractMatrix, p::Integer) = matrix_power(A, p) # specific
 function (^)(A::AbstractMatrix{T}, p::Integer) where T<:Integer
     # make sure that e.g. [1 1;1 0]^big(3)
     # gets promotes in a similar way as 2^big(3)
@@ -412,7 +414,7 @@ function integerpow(A::AbstractMatrix{T}, p) where T
     TT = promote_op(^, T, typeof(p))
     return (TT == T ? A : copyto!(similar(A, TT), A))^Integer(p)
 end
-function schurpow(A::AbstractMatrix, p)
+function schurpow(A::ArrayLike{2}, p)
     if istriu(A)
         # Integer part
         retmat = A ^ floor(p)
@@ -473,7 +475,7 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
 end
 
 """
-    ^(A::AbstractMatrix, p::Number)
+    ^(A::ArrayLike{2}, p::Number)
 
 Matrix power, equivalent to ``\\exp(p\\log(A))``
 
@@ -485,12 +487,12 @@ julia> [1 2; 0 3]^3
  0  27
 ```
 """
-(^)(A::AbstractMatrix, p::Number) = exp(p*log(A))
+(^)(A::ArrayLike{2}, p::Number) = exp(p*log(A))
 
 # Matrix exponential
 
 """
-    exp(A::AbstractMatrix)
+    exp(A::ArrayLike{2})
 
 Compute the matrix exponential of `A`, defined by
 
@@ -520,7 +522,7 @@ exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
 exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
 
 """
-    ^(b::Number, A::AbstractMatrix)
+    ^(b::Number, A::ArrayLike{2})
 
 Matrix exponential, equivalent to ``\\exp(\\log(b)A)``.
 
@@ -541,9 +543,9 @@ julia> ℯ^[1 2; 0 3]
  0.0      20.0855
 ```
 """
-Base.:^(b::Number, A::AbstractMatrix) = exp!(log(b)*A)
+Base.:^(b::Number, A::ArrayLike{2}) = exp!(log(b)*A)
 # method for ℯ to explicitly elide the log(b) multiplication
-Base.:^(::Irrational{:ℯ}, A::AbstractMatrix) = exp(A)
+Base.:^(::Irrational{:ℯ}, A::ArrayLike{2}) = exp(A)
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
@@ -700,7 +702,7 @@ function log(A::StridedMatrix)
 end
 
 """
-    sqrt(A::AbstractMatrix)
+    sqrt(A::ArrayLike{2})
 
 If `A` has no negative real eigenvalues, compute the principal matrix square root of `A`,
 that is the unique matrix ``X`` with eigenvalues having positive real part such that
@@ -774,7 +776,7 @@ function inv(A::StridedMatrix{T}) where T
 end
 
 """
-    cos(A::AbstractMatrix)
+    cos(A::ArrayLike{2})
 
 Compute the matrix cosine of a square matrix `A`.
 
@@ -807,7 +809,7 @@ function cos(A::AbstractMatrix{<:Complex})
 end
 
 """
-    sin(A::AbstractMatrix)
+    sin(A::ArrayLike{2})
 
 Compute the matrix sine of a square matrix `A`.
 
@@ -844,7 +846,7 @@ function sin(A::AbstractMatrix{<:Complex})
 end
 
 """
-    sincos(A::AbstractMatrix)
+    sincos(A::ArrayLike{2})
 
 Compute the matrix sine and cosine of a square matrix `A`.
 
@@ -893,7 +895,7 @@ function sincos(A::AbstractMatrix{<:Complex})
 end
 
 """
-    tan(A::AbstractMatrix)
+    tan(A::ArrayLike{2})
 
 Compute the matrix tangent of a square matrix `A`.
 
@@ -908,7 +910,7 @@ julia> tan(fill(1.0, (2,2)))
  -1.09252  -1.09252
 ```
 """
-function tan(A::AbstractMatrix)
+function tan(A::ArrayLike{2})
     if ishermitian(A)
         return copytri!(parent(tan(Hermitian(A))), 'U', true)
     end
@@ -918,11 +920,11 @@ function tan(A::AbstractMatrix)
 end
 
 """
-    cosh(A::AbstractMatrix)
+    cosh(A::ArrayLike{2})
 
 Compute the matrix hyperbolic cosine of a square matrix `A`.
 """
-function cosh(A::AbstractMatrix)
+function cosh(A::ArrayLike{2})
     if ishermitian(A)
         return copytri!(parent(cosh(Hermitian(A))), 'U', true)
     end
@@ -932,11 +934,11 @@ function cosh(A::AbstractMatrix)
 end
 
 """
-    sinh(A::AbstractMatrix)
+    sinh(A::ArrayLike{2})
 
 Compute the matrix hyperbolic sine of a square matrix `A`.
 """
-function sinh(A::AbstractMatrix)
+function sinh(A::ArrayLike{2})
     if ishermitian(A)
         return copytri!(parent(sinh(Hermitian(A))), 'U', true)
     end
@@ -946,11 +948,11 @@ function sinh(A::AbstractMatrix)
 end
 
 """
-    tanh(A::AbstractMatrix)
+    tanh(A::ArrayLike{2})
 
 Compute the matrix hyperbolic tangent of a square matrix `A`.
 """
-function tanh(A::AbstractMatrix)
+function tanh(A::ArrayLike{2})
     if ishermitian(A)
         return copytri!(parent(tanh(Hermitian(A))), 'U', true)
     end
@@ -966,7 +968,7 @@ function tanh(A::AbstractMatrix)
 end
 
 """
-    acos(A::AbstractMatrix)
+    acos(A::ArrayLike{2})
 
 Compute the inverse matrix cosine of a square matrix `A`.
 
@@ -985,7 +987,7 @@ julia> acos(cos([0.5 0.1; -0.2 0.3]))
  -0.2+2.63678e-16im  0.3-3.46945e-16im
 ```
 """
-function acos(A::AbstractMatrix)
+function acos(A::ArrayLike{2})
     if ishermitian(A)
         acosHermA = acos(Hermitian(A))
         return isa(acosHermA, Hermitian) ? copytri!(parent(acosHermA), 'U', true) : parent(acosHermA)
@@ -997,7 +999,7 @@ function acos(A::AbstractMatrix)
 end
 
 """
-    asin(A::AbstractMatrix)
+    asin(A::ArrayLike{2})
 
 Compute the inverse matrix sine of a square matrix `A`.
 
@@ -1016,7 +1018,7 @@ julia> asin(sin([0.5 0.1; -0.2 0.3]))
  -0.2+9.71445e-17im  0.3-1.249e-16im
 ```
 """
-function asin(A::AbstractMatrix)
+function asin(A::ArrayLike{2})
     if ishermitian(A)
         asinHermA = asin(Hermitian(A))
         return isa(asinHermA, Hermitian) ? copytri!(parent(asinHermA), 'U', true) : parent(asinHermA)
@@ -1028,7 +1030,7 @@ function asin(A::AbstractMatrix)
 end
 
 """
-    atan(A::AbstractMatrix)
+    atan(A::ArrayLike{2})
 
 Compute the inverse matrix tangent of a square matrix `A`.
 
@@ -1047,7 +1049,7 @@ julia> atan(tan([0.5 0.1; -0.2 0.3]))
  -0.2+6.93889e-17im  0.3-4.16334e-17im
 ```
 """
-function atan(A::AbstractMatrix)
+function atan(A::ArrayLike{2})
     if ishermitian(A)
         return copytri!(parent(atan(Hermitian(A))), 'U', true)
     end
@@ -1058,14 +1060,14 @@ function atan(A::AbstractMatrix)
 end
 
 """
-    acosh(A::AbstractMatrix)
+    acosh(A::ArrayLike{2})
 
 Compute the inverse hyperbolic matrix cosine of a square matrix `A`.  For the theory and
 logarithmic formulas used to compute this function, see [^AH16_4].
 
 [^AH16_4]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 """
-function acosh(A::AbstractMatrix)
+function acosh(A::ArrayLike{2})
     if ishermitian(A)
         acoshHermA = acosh(Hermitian(A))
         return isa(acoshHermA, Hermitian) ? copytri!(parent(acoshHermA), 'U', true) : parent(acoshHermA)
@@ -1077,14 +1079,14 @@ function acosh(A::AbstractMatrix)
 end
 
 """
-    asinh(A::AbstractMatrix)
+    asinh(A::ArrayLike{2})
 
 Compute the inverse hyperbolic matrix sine of a square matrix `A`.  For the theory and
 logarithmic formulas used to compute this function, see [^AH16_5].
 
 [^AH16_5]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 """
-function asinh(A::AbstractMatrix)
+function asinh(A::ArrayLike{2})
     if ishermitian(A)
         return copytri!(parent(asinh(Hermitian(A))), 'U', true)
     end
@@ -1095,14 +1097,14 @@ function asinh(A::AbstractMatrix)
 end
 
 """
-    atanh(A::AbstractMatrix)
+    atanh(A::ArrayLike{2})
 
 Compute the inverse hyperbolic matrix tangent of a square matrix `A`.  For the theory and
 logarithmic formulas used to compute this function, see [^AH16_6].
 
 [^AH16_6]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 """
-function atanh(A::AbstractMatrix)
+function atanh(A::ArrayLike{2})
     if ishermitian(A)
         return copytri!(parent(atanh(Hermitian(A))), 'U', true)
     end
@@ -1119,12 +1121,12 @@ for (finv, f, finvh, fh, fn) in ((:sec, :cos, :sech, :cosh, "secant"),
     hname = string(finvh)
     @eval begin
         @doc """
-            $($name)(A::AbstractMatrix)
+            $($name)(A::ArrayLike{2})
 
         Compute the matrix $($fn) of a square matrix `A`.
         """ ($finv)(A::AbstractMatrix{T}) where {T} = inv(($f)(A))
         @doc """
-            $($hname)(A::AbstractMatrix)
+            $($hname)(A::ArrayLike{2})
 
         Compute the matrix hyperbolic $($fn) of square matrix `A`.
         """ ($finvh)(A::AbstractMatrix{T}) where {T} = inv(($fh)(A))
@@ -1138,10 +1140,10 @@ for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
     hname = string(hfa)
     @eval begin
         @doc """
-            $($tname)(A::AbstractMatrix)
+            $($tname)(A::ArrayLike{2})
         Compute the inverse matrix $($fn) of `A`. """ ($tfa)(A::AbstractMatrix{T}) where {T} = ($tfainv)(inv(A))
         @doc """
-            $($hname)(A::AbstractMatrix)
+            $($hname)(A::ArrayLike{2})
         Compute the inverse matrix hyperbolic $($fn) of `A`. """ ($hfa)(A::AbstractMatrix{T}) where {T} = ($hfainv)(inv(A))
     end
 end
@@ -1397,7 +1399,7 @@ julia> nullspace(M, atol=0.95)
  1.0
 ```
 """
-function nullspace(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol))
+function nullspace(A::ArrayLike{2}; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol))
     m, n = size(A)
     (m == 0 || n == 0) && return Matrix{eltype(A)}(I, n, n)
     SVD = svd(A, full=true)
@@ -1406,7 +1408,7 @@ function nullspace(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A
     return copy(SVD.Vt[indstart:end,:]')
 end
 
-nullspace(A::AbstractVector; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol)) = nullspace(reshape(A, length(A), 1), rtol= rtol, atol= atol)
+nullspace(A::ArrayLike{1}; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol)) = nullspace(reshape(A, length(A), 1), rtol= rtol, atol= atol)
 
 """
     cond(M, p::Real=2)
@@ -1414,7 +1416,7 @@ nullspace(A::AbstractVector; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps
 Condition number of the matrix `M`, computed using the operator `p`-norm. Valid values for
 `p` are `1`, `2` (default), or `Inf`.
 """
-function cond(A::AbstractMatrix, p::Real=2)
+function cond(A::ArrayLike{2}, p::Real=2)
     if p == 2
         v = svdvals(A)
         maxv = maximum(v)

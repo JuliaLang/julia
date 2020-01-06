@@ -66,7 +66,7 @@ struct SVD{T,Tr,M<:AbstractArray{T}} <: Factorization{T}
     end
 end
 SVD(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) where {T,Tr} = SVD{T,Tr,typeof(U)}(U, S, Vt)
-function SVD{T}(U::AbstractArray, S::AbstractVector{Tr}, Vt::AbstractArray) where {T,Tr}
+function SVD{T}(U::ArrayLike, S::AbstractVector{Tr}, Vt::ArrayLike) where {T,Tr}
     SVD(convert(AbstractArray{T}, U),
         convert(Vector{Tr}, S),
         convert(AbstractArray{T}, Vt))
@@ -288,7 +288,7 @@ end
 size(A::SVD, dim::Integer) = dim == 1 ? size(A.U, dim) : size(A.Vt, dim)
 size(A::SVD) = (size(A, 1), size(A, 2))
 
-function show(io::IO, mime::MIME{Symbol("text/plain")}, F::SVD{<:Any,<:Any,<:AbstractArray})
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::SVD{<:Any,<:Any,<:ArrayLike})
     summary(io, F); println(io)
     println(io, "U factor:")
     show(io, mime, F.U)
@@ -560,7 +560,7 @@ end
 Base.propertynames(F::GeneralizedSVD) =
     (:alpha, :beta, :vals, :S, :D1, :D2, :R0, fieldnames(typeof(F))...)
 
-function show(io::IO, mime::MIME{Symbol("text/plain")}, F::GeneralizedSVD{<:Any,<:AbstractArray})
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::GeneralizedSVD{<:Any,<:ArrayLike})
     summary(io, F); println(io)
     println(io, "U factor:")
     show(io, mime, F.U)

@@ -36,6 +36,7 @@ const AbstractMatrix{T} = AbstractArray{T,2}
 Union type of [`AbstractVector{T}`](@ref) and [`AbstractMatrix{T}`](@ref).
 """
 const AbstractVecOrMat{T} = Union{AbstractVector{T}, AbstractMatrix{T}}
+const VectorOrMatrixLike = Union{ArrayLike{1},ArrayLike{2}}
 const RangeIndex = Union{Int, AbstractRange{Int}, AbstractUnitRange{Int}}
 const DimOrInd = Union{Integer, AbstractUnitRange}
 const IntOrInd = Union{Int, AbstractUnitRange}
@@ -513,7 +514,7 @@ for (fname, felt) in ((:zeros, :zero), (:ones, :one))
     end
 end
 
-function _one(unit::T, x::AbstractMatrix) where T
+function _one(unit::T, x::ArrayLike{2}) where T
     require_one_based_indexing(x)
     m,n = size(x)
     m==n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
@@ -530,7 +531,7 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## Conversions ##
 
-convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)
+convert(::Type{T}, a::ArrayLike) where {T<:Array} = a isa T ? a : T(a)
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
@@ -538,8 +539,8 @@ promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(p
 
 if nameof(@__MODULE__) === :Base  # avoid method overwrite
 # constructors should make copies
-Array{T,N}(x::AbstractArray{S,N})         where {T,N,S} = copyto!(Array{T,N}(undef, size(x)), x)
-AbstractArray{T,N}(A::AbstractArray{S,N}) where {T,N,S} = copyto!(similar(A,T), A)
+Array{T,N}(x::ArrayLike{N})         where {T,N} = copyto!(Array{T,N}(undef, size(x)), x)
+AbstractArray{T,N}(A::ArrayLike{N}) where {T,N} = copyto!(similar(A,T), A)
 end
 
 ## copying iterators to containers
@@ -572,10 +573,10 @@ function _collect(::Type{T}, itr, isz::SizeUnknown) where T
 end
 
 # make a collection similar to `c` and appropriate for collecting `itr`
-_similar_for(c::AbstractArray, ::Type{T}, itr, ::SizeUnknown) where {T} = similar(c, T, 0)
-_similar_for(c::AbstractArray, ::Type{T}, itr, ::HasLength) where {T} =
+_similar_for(c::ArrayLike, ::Type{T}, itr, ::SizeUnknown) where {T} = similar(c, T, 0)
+_similar_for(c::ArrayLike, ::Type{T}, itr, ::HasLength) where {T} =
     similar(c, T, Int(length(itr)::Integer))
-_similar_for(c::AbstractArray, ::Type{T}, itr, ::HasShape) where {T} =
+_similar_for(c::ArrayLike, ::Type{T}, itr, ::HasShape) where {T} =
     similar(c, T, axes(itr))
 _similar_for(c, ::Type{T}, itr, isz) where {T} = similar(c, T)
 
@@ -602,7 +603,7 @@ julia> collect(1:2:13)
 """
 collect(itr) = _collect(1:1 #= Array =#, itr, IteratorEltype(itr), IteratorSize(itr))
 
-collect(A::AbstractArray) = _collect_indices(axes(A), A)
+collect(A::ArrayLike) = _collect_indices(axes(A), A)
 
 collect_similar(cont, itr) = _collect(cont, itr, IteratorEltype(itr), IteratorSize(itr))
 
@@ -683,7 +684,7 @@ function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
     collect_to_with_first!(_similar_for(c, typeof(v1), itr, isz), v1, itr, st)
 end
 
-function collect_to_with_first!(dest::AbstractArray, v1, itr, st)
+function collect_to_with_first!(dest::ArrayLike, v1, itr, st)
     i1 = first(LinearIndices(dest))
     dest[i1] = v1
     return collect_to!(dest, itr, i1+1, st)
@@ -827,7 +828,7 @@ function setindex! end
     (@_inline_meta; arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1, i2, I...))
 
 # This is redundant with the abstract fallbacks but needed and helpful for bootstrap
-function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
+function setindex!(A::Array, X::ArrayLike, I::AbstractVector{Int})
     @_propagate_inbounds_meta
     @boundscheck setindex_shape_check(X, length(I))
     require_one_based_indexing(X)
@@ -948,7 +949,7 @@ Use [`push!`](@ref) to add individual items to `collection` which are not alread
 themselves in another collection. The result of the preceding example is equivalent to
 `push!([1, 2, 3], 4, 5, 6)`.
 """
-function append!(a::Vector, items::AbstractVector)
+function append!(a::Vector, items::ArrayLike{1})
     itemindices = eachindex(items)
     n = length(itemindices)
     _growend!(a, n)
@@ -956,8 +957,8 @@ function append!(a::Vector, items::AbstractVector)
     return a
 end
 
-append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
-push!(a::AbstractVector, iter...) = append!(a, iter)
+append!(a::ArrayLike{1}, iter) = _append!(a, IteratorSize(iter), iter)
+push!(a::ArrayLike{1}, iter...) = append!(a, iter)
 
 function _append!(a, ::Union{HasLength,HasShape}, iter)
     n = length(a)
@@ -992,7 +993,7 @@ julia> prepend!([3],[1,2])
 """
 function prepend! end
 
-function prepend!(a::Vector, items::AbstractVector)
+function prepend!(a::Vector, items::ArrayLike{1})
     itemindices = eachindex(items)
     n = length(itemindices)
     _growbeg!(a, n)
@@ -1272,7 +1273,7 @@ Stacktrace:
 ```
 """
 deleteat!(a::Vector, inds) = _deleteat!(a, inds)
-deleteat!(a::Vector, inds::AbstractVector) = _deleteat!(a, to_indices(a, (inds,))[1])
+deleteat!(a::Vector, inds::ArrayLike{1}) = _deleteat!(a, to_indices(a, (inds,))[1])
 
 function _deleteat!(a::Vector, inds)
     n = length(a)
@@ -1510,7 +1511,7 @@ julia> reverse(A, 3, 5)
  3
 ```
 """
-function reverse(A::AbstractVector, s=first(LinearIndices(A)), n=last(LinearIndices(A)))
+function reverse(A::ArrayLike{1}, s=first(LinearIndices(A)), n=last(LinearIndices(A)))
     B = similar(A)
     for i = first(LinearIndices(A)):s-1
         B[i] = A[i]
@@ -1525,9 +1526,9 @@ function reverse(A::AbstractVector, s=first(LinearIndices(A)), n=last(LinearIndi
 end
 
 # to resolve ambiguity with reverse(A; dims)
-reverse(A::Vector) = invoke(reverse, Tuple{AbstractVector}, A)
+reverse(A::Vector) = invoke(reverse, Tuple{ArrayLike{1}}, A)
 
-function reverseind(a::AbstractVector, i::Integer)
+function reverseind(a::ArrayLike{1}, i::Integer)
     li = LinearIndices(a)
     first(li) + last(li) - i
 end
@@ -1558,7 +1559,7 @@ julia> A
  1
 ```
 """
-function reverse!(v::AbstractVector, s=first(LinearIndices(v)), n=last(LinearIndices(v)))
+function reverse!(v::ArrayLike{1}, s=first(LinearIndices(v)), n=last(LinearIndices(v)))
     liv = LinearIndices(v)
     if n <= s  # empty case; ok
     elseif !(first(liv) ≤ s ≤ last(liv))
@@ -1697,7 +1698,7 @@ function findfirst(A)
 end
 
 # Needed for bootstrap, and allows defining only an optimized findnext method
-findfirst(A::Union{AbstractArray, AbstractString}) = findnext(A, first(keys(A)))
+findfirst(A::Union{ArrayLike, AbstractString}) = findnext(A, first(keys(A)))
 
 """
     findnext(predicate::Function, A, i)
@@ -1779,7 +1780,7 @@ function findfirst(testf::Function, A)
 end
 
 # Needed for bootstrap, and allows defining only an optimized findnext method
-findfirst(testf::Function, A::Union{AbstractArray, AbstractString}) =
+findfirst(testf::Function, A::Union{ArrayLike, AbstractString}) =
     findnext(testf, A, first(keys(A)))
 
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
@@ -1879,7 +1880,7 @@ function findlast(A)
 end
 
 # Needed for bootstrap, and allows defining only an optimized findprev method
-findlast(A::Union{AbstractArray, AbstractString}) = findprev(A, last(keys(A)))
+findlast(A::Union{ArrayLike, AbstractString}) = findprev(A, last(keys(A)))
 
 """
     findprev(predicate::Function, A, i)
@@ -1966,7 +1967,7 @@ function findlast(testf::Function, A)
 end
 
 # Needed for bootstrap, and allows defining only an optimized findprev method
-findlast(testf::Function, A::Union{AbstractArray, AbstractString}) =
+findlast(testf::Function, A::Union{ArrayLike, AbstractString}) =
     findprev(testf, A, last(keys(A)))
 
 """
@@ -2245,7 +2246,7 @@ julia> indexin(b, a)
  3
 ```
 """
-function indexin(a, b::AbstractArray)
+function indexin(a, b::ArrayLike)
     inds = keys(b)
     bdict = Dict{eltype(b),eltype(inds)}()
     for (val, ind) in zip(b, inds)
@@ -2256,7 +2257,7 @@ function indexin(a, b::AbstractArray)
     ]
 end
 
-function _findin(a::Union{AbstractArray, Tuple}, b)
+function _findin(a::Union{ArrayLike, Tuple}, b)
     ind  = Vector{eltype(keys(a))}()
     bset = Set(b)
     @inbounds for (i,ai) in pairs(a)
@@ -2268,7 +2269,7 @@ end
 # If two collections are already sorted, _findin can be computed with
 # a single traversal of the two collections. This is much faster than
 # using a hash table (although it has the same complexity).
-function _sortedfindin(v::Union{AbstractArray, Tuple}, w)
+function _sortedfindin(v::Union{ArrayLike, Tuple}, w)
     viter, witer = keys(v), eachindex(w)
     out  = eltype(viter)[]
     vy, wy = iterate(viter), iterate(witer)
@@ -2319,7 +2320,7 @@ function findall(pred::Fix2{typeof(in),<:Union{Array{<:Real},Real}}, x::Array{<:
 end
 # issorted fails for some element types so the method above has to be restricted
 # to element with isless/< defined.
-findall(pred::Fix2{typeof(in)}, x::Union{AbstractArray, Tuple}) = _findin(x, pred.x)
+findall(pred::Fix2{typeof(in)}, x::Union{ArrayLike, Tuple}) = _findin(x, pred.x)
 
 # Copying subregions
 function indcopy(sz::Dims, I::Vector)
@@ -2347,7 +2348,7 @@ end
 ## Filter ##
 
 """
-    filter(f, a::AbstractArray)
+    filter(f, a::ArrayLike)
 
 Return a copy of `a`, removing elements for which `f` is `false`.
 The function `f` is passed one argument.
@@ -2378,7 +2379,7 @@ function filter(f, a::Array{T, N}) where {T, N}
     b
 end
 
-function filter(f, a::AbstractArray)
+function filter(f, a::ArrayLike)
     (IndexStyle(a) != IndexLinear()) && return a[map(f, a)::AbstractArray{Bool}]
 
     j = 1
@@ -2396,7 +2397,7 @@ function filter(f, a::AbstractArray)
 end
 
 """
-    filter!(f, a::AbstractVector)
+    filter!(f, a::ArrayLike{1})
 
 Update `a`, removing elements for which `f` is `false`.
 The function `f` is passed one argument.
@@ -2412,7 +2413,7 @@ julia> filter!(isodd, Vector(1:10))
  9
 ```
 """
-function filter!(f, a::AbstractVector)
+function filter!(f, a::ArrayLike{1})
     j = firstindex(a)
     for ai in a
         @inbounds a[j] = ai
@@ -2443,7 +2444,7 @@ end
 _grow_filter!(seen) = _unique_filter!(∉, push!, seen)
 _shrink_filter!(keep) = _unique_filter!(∈, pop!, keep)
 
-function _grow!(pred!, v::AbstractVector, itrs)
+function _grow!(pred!, v::ArrayLike{1}, itrs)
     filter!(pred!, v) # uniquify v
     for itr in itrs
         mapfilter(pred!, push!, itr, v)
@@ -2457,17 +2458,17 @@ union!(v::AbstractVector{T}, itrs...) where {T} =
 symdiff!(v::AbstractVector{T}, itrs...) where {T} =
     _grow!(_shrink_filter!(symdiff!(Set{T}(), v, itrs...)), v, itrs)
 
-function _shrink!(shrinker!, v::AbstractVector, itrs)
+function _shrink!(shrinker!, v::ArrayLike{1}, itrs)
     seen = Set{eltype(v)}()
     filter!(_grow_filter!(seen), v)
     shrinker!(seen, itrs...)
     filter!(_in(seen), v)
 end
 
-intersect!(v::AbstractVector, itrs...) = _shrink!(intersect!, v, itrs)
-setdiff!(  v::AbstractVector, itrs...) = _shrink!(setdiff!, v, itrs)
+intersect!(v::ArrayLike{1}, itrs...) = _shrink!(intersect!, v, itrs)
+setdiff!(  v::ArrayLike{1}, itrs...) = _shrink!(setdiff!, v, itrs)
 
-vectorfilter(f, v::AbstractVector) = filter(f, v) # TODO: do we want this special case?
+vectorfilter(f, v::ArrayLike{1}) = filter(f, v) # TODO: do we want this special case?
 vectorfilter(f, v) = [x for x in v if f(x)]
 
 function _shrink(shrinker!, itr, itrs)

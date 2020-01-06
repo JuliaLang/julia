@@ -52,15 +52,15 @@ function (*)(A::AbstractMatrix{T}, x::AbstractVector{S}) where {T,S}
 end
 
 # these will throw a DimensionMismatch unless B has 1 row (or 1 col for transposed case):
-function *(a::AbstractVector, transB::Transpose{<:Any,<:AbstractMatrix})
+function *(a::ArrayLike{1}, transB::Transpose{<:Any,<:ArrayLike{2}})
     B = transB.parent
     reshape(a,length(a),1)*transpose(B)
 end
-function *(a::AbstractVector, adjB::Adjoint{<:Any,<:AbstractMatrix})
+function *(a::ArrayLike{1}, adjB::Adjoint{<:Any,<:ArrayLike{2}})
     B = adjB.parent
     reshape(a,length(a),1)*adjoint(B)
 end
-(*)(a::AbstractVector, B::AbstractMatrix) = reshape(a,length(a),1)*B
+(*)(a::ArrayLike{1}, B::ArrayLike{2}) = reshape(a,length(a),1)*B
 
 @inline mul!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T},
              alpha::Number, beta::Number) where {T<:BlasFloat} =
@@ -77,7 +77,7 @@ for elty in (Float32,Float64)
         end
     end
 end
-@inline mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
+@inline mul!(y::ArrayLike{1}, A::VectorOrMatrixLike, x::ArrayLike{1},
              alpha::Number, beta::Number) =
     generic_matvecmul!(y, 'N', A, x, MulAddMul(alpha, beta))
 
@@ -96,7 +96,7 @@ end
     A = transA.parent
     return gemv!(y, 'T', A, x, alpha, beta)
 end
-@inline function mul!(y::AbstractVector, transA::Transpose{<:Any,<:AbstractVecOrMat}, x::AbstractVector,
+@inline function mul!(y::ArrayLike{1}, transA::Transpose{<:Any,<:VectorOrMatrixLike}, x::ArrayLike{1},
                       alpha::Number, beta::Number)
     A = transA.parent
     return generic_matvecmul!(y, 'T', A, x, MulAddMul(alpha, beta))
@@ -123,20 +123,20 @@ end
     A = adjA.parent
     return gemv!(y, 'C', A, x, alpha, beta)
 end
-@inline function mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, x::AbstractVector,
+@inline function mul!(y::ArrayLike{1}, adjA::Adjoint{<:Any,<:VectorOrMatrixLike}, x::ArrayLike{1},
                       alpha::Number, beta::Number)
     A = adjA.parent
     return generic_matvecmul!(y, 'C', A, x, MulAddMul(alpha, beta))
 end
 
 # Vector-Matrix multiplication
-(*)(x::AdjointAbsVec,   A::AbstractMatrix) = (A'*x')'
-(*)(x::TransposeAbsVec, A::AbstractMatrix) = transpose(transpose(A)*transpose(x))
+(*)(x::AdjointAbsVec,   A::ArrayLike{2}) = (A'*x')'
+(*)(x::TransposeAbsVec, A::ArrayLike{2}) = transpose(transpose(A)*transpose(x))
 
 # Matrix-matrix multiplication
 
 """
-    *(A::AbstractMatrix, B::AbstractMatrix)
+    *(A::ArrayLike{2}, B::ArrayLike{2})
 
 Matrix multiplication.
 
@@ -148,7 +148,7 @@ julia> [1 1; 0 1] * [1 0; 1 1]
  1  1
 ```
 """
-function (*)(A::AbstractMatrix, B::AbstractMatrix)
+function (*)(A::ArrayLike{2}, B::ArrayLike{2})
     TS = promote_op(matprod, eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A,1), size(B,2))), A, B)
 end
@@ -231,7 +231,7 @@ julia> C
  730.0  740.0
 ```
 """
-@inline mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat,
+@inline mul!(C::ArrayLike{2}, A::VectorOrMatrixLike, B::VectorOrMatrixLike,
              alpha::Number, beta::Number) =
     generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
 
@@ -310,7 +310,7 @@ lmul!(A, B)
         return gemm_wrapper!(C, 'T', 'N', A, B, alpha, beta)
     end
 end
-@inline function mul!(C::AbstractMatrix, transA::Transpose{<:Any,<:AbstractVecOrMat}, B::AbstractVecOrMat,
+@inline function mul!(C::ArrayLike{2}, transA::Transpose{<:Any,<:VectorOrMatrixLike}, B::VectorOrMatrixLike,
                  alpha::Number, beta::Number)
     A = transA.parent
     return generic_matmatmul!(C, 'T', 'N', A, B, MulAddMul(alpha, beta))
@@ -337,11 +337,11 @@ for elty in (Float32,Float64)
         end
     end
 end
-# collapsing the following two defs with C::AbstractVecOrMat yields ambiguities
-@inline mul!(C::AbstractVector, A::AbstractVecOrMat, transB::Transpose{<:Any,<:AbstractVecOrMat},
+# collapsing the following two defs with C::VectorOrMatrixLike yields ambiguities
+@inline mul!(C::ArrayLike{1}, A::VectorOrMatrixLike, transB::Transpose{<:Any,<:VectorOrMatrixLike},
              alpha::Number, beta::Number) =
     generic_matmatmul!(C, 'N', 'T', A, transB.parent, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::AbstractVecOrMat, transB::Transpose{<:Any,<:AbstractVecOrMat},
+@inline mul!(C::ArrayLike{2}, A::VectorOrMatrixLike, transB::Transpose{<:Any,<:VectorOrMatrixLike},
              alpha::Number, beta::Number) =
     generic_matmatmul!(C, 'N', 'T', A, transB.parent, MulAddMul(alpha, beta))
 
@@ -351,7 +351,7 @@ end
     B = transB.parent
     return gemm_wrapper!(C, 'T', 'T', A, B, alpha, beta)
 end
-@inline function mul!(C::AbstractMatrix, transA::Transpose{<:Any,<:AbstractVecOrMat}, transB::Transpose{<:Any,<:AbstractVecOrMat},
+@inline function mul!(C::ArrayLike{2}, transA::Transpose{<:Any,<:VectorOrMatrixLike}, transB::Transpose{<:Any,<:VectorOrMatrixLike},
                  alpha::Number, beta::Number)
     A = transA.parent
     B = transB.parent
@@ -364,7 +364,7 @@ end
     B = transB.parent
     return gemm_wrapper!(C, 'T', 'C', A, B, alpha, beta)
 end
-@inline function mul!(C::AbstractMatrix, transA::Transpose{<:Any,<:AbstractVecOrMat}, transB::Adjoint{<:Any,<:AbstractVecOrMat},
+@inline function mul!(C::ArrayLike{2}, transA::Transpose{<:Any,<:VectorOrMatrixLike}, transB::Adjoint{<:Any,<:VectorOrMatrixLike},
                  alpha::Number, beta::Number)
     A = transA.parent
     B = transB.parent
@@ -385,7 +385,7 @@ end
         return gemm_wrapper!(C, 'C', 'N', A, B, alpha, beta)
     end
 end
-@inline function mul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, B::AbstractVecOrMat,
+@inline function mul!(C::ArrayLike{2}, adjA::Adjoint{<:Any,<:VectorOrMatrixLike}, B::VectorOrMatrixLike,
                  alpha::Number, beta::Number)
     A = adjA.parent
     return generic_matmatmul!(C, 'C', 'N', A, B, MulAddMul(alpha, beta))
@@ -405,7 +405,7 @@ end
         return gemm_wrapper!(C, 'N', 'C', A, B, alpha, beta)
     end
 end
-@inline function mul!(C::AbstractMatrix, A::AbstractVecOrMat, adjB::Adjoint{<:Any,<:AbstractVecOrMat},
+@inline function mul!(C::ArrayLike{2}, A::VectorOrMatrixLike, adjB::Adjoint{<:Any,<:VectorOrMatrixLike},
                  alpha::Number, beta::Number)
     B = adjB.parent
     return generic_matmatmul!(C, 'N', 'C', A, B, MulAddMul(alpha, beta))
@@ -417,13 +417,13 @@ end
     B = adjB.parent
     return gemm_wrapper!(C, 'C', 'C', A, B, alpha, beta)
 end
-@inline function mul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, adjB::Adjoint{<:Any,<:AbstractVecOrMat},
+@inline function mul!(C::ArrayLike{2}, adjA::Adjoint{<:Any,<:VectorOrMatrixLike}, adjB::Adjoint{<:Any,<:VectorOrMatrixLike},
                  alpha::Number, beta::Number)
     A = adjA.parent
     B = adjB.parent
     return generic_matmatmul!(C, 'C', 'C', A, B, MulAddMul(alpha, beta))
 end
-@inline function mul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, transB::Transpose{<:Any,<:AbstractVecOrMat},
+@inline function mul!(C::ArrayLike{2}, adjA::Adjoint{<:Any,<:VectorOrMatrixLike}, transB::Transpose{<:Any,<:VectorOrMatrixLike},
                  alpha::Number, beta::Number)
     A = adjA.parent
     B = transB.parent
@@ -432,7 +432,7 @@ end
 # Supporting functions for matrix multiplication
 
 # copy transposed(adjoint) of upper(lower) side-digonals. Optionally include diagonal.
-@inline function copytri!(A::AbstractMatrix, uplo::AbstractChar, conjugate::Bool=false, diag::Bool=false)
+@inline function copytri!(A::ArrayLike{2}, uplo::AbstractChar, conjugate::Bool=false, diag::Bool=false)
     n = checksquare(A)
     off = diag ? 0 : 1
     if uplo == 'U'
@@ -602,9 +602,9 @@ end
 # blas.jl defines matmul for floats; other integer and mixed precision
 # cases are handled here
 
-lapack_size(t::AbstractChar, M::AbstractVecOrMat) = (size(M, t=='N' ? 1 : 2), size(M, t=='N' ? 2 : 1))
+lapack_size(t::AbstractChar, M::VectorOrMatrixLike) = (size(M, t=='N' ? 1 : 2), size(M, t=='N' ? 2 : 1))
 
-function copyto!(B::AbstractVecOrMat, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
+function copyto!(B::VectorOrMatrixLike, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::AbstractChar, M::VectorOrMatrixLike, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
     if tM == 'N'
         copyto!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
@@ -614,7 +614,7 @@ function copyto!(B::AbstractVecOrMat, ir_dest::UnitRange{Int}, jr_dest::UnitRang
     B
 end
 
-function copy_transpose!(B::AbstractMatrix, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
+function copy_transpose!(B::ArrayLike{2}, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::AbstractChar, M::VectorOrMatrixLike, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
     if tM == 'N'
         LinearAlgebra.copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
@@ -630,7 +630,7 @@ end
 # NOTE: the generic version is also called as fallback for
 #       strides != 1 cases
 
-function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::AbstractVector,
+function generic_matvecmul!(C::AbstractVector{R}, tA, A::VectorOrMatrixLike, B::ArrayLike{1},
                             _add::MulAddMul = MulAddMul()) where R
     require_one_based_indexing(C, A, B)
     mB = length(B)
@@ -706,7 +706,7 @@ const Abuf = [Vector{UInt8}(undef, tilebufsize)]
 const Bbuf = [Vector{UInt8}(undef, tilebufsize)]
 const Cbuf = [Vector{UInt8}(undef, tilebufsize)]
 
-function generic_matmatmul!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
+function generic_matmatmul!(C::ArrayLike{2}, tA, tB, A::ArrayLike{2}, B::ArrayLike{2},
                             _add::MulAddMul=MulAddMul())
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
@@ -724,7 +724,7 @@ function generic_matmatmul!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::Abs
     _generic_matmatmul!(C, tA, tB, A, B, _add)
 end
 
-generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::AbstractVecOrMat, _add::MulAddMul) =
+generic_matmatmul!(C::VectorOrMatrixLike, tA, tB, A::VectorOrMatrixLike, B::VectorOrMatrixLike, _add::MulAddMul) =
     _generic_matmatmul!(C, tA, tB, A, B, _add)
 
 function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S},
@@ -907,7 +907,7 @@ function matmul2x2(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,
     matmul2x2!(similar(B, promote_op(matprod, T, S), 2, 2), tA, tB, A, B)
 end
 
-function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
+function matmul2x2!(C::ArrayLike{2}, tA, tB, A::ArrayLike{2}, B::ArrayLike{2},
                     _add::MulAddMul = MulAddMul())
     require_one_based_indexing(C, A, B)
     if !(size(A) == size(B) == size(C) == (2,2))
@@ -950,7 +950,7 @@ function matmul3x3(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,
     matmul3x3!(similar(B, promote_op(matprod, T, S), 3, 3), tA, tB, A, B)
 end
 
-function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
+function matmul3x3!(C::ArrayLike{2}, tA, tB, A::ArrayLike{2}, B::ArrayLike{2},
                     _add::MulAddMul = MulAddMul())
     require_one_based_indexing(C, A, B)
     if !(size(A) == size(B) == size(C) == (3,3))

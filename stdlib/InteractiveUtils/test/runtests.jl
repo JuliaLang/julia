@@ -124,7 +124,7 @@ let a = @code_typed 1 + 1
     function thing(a::Array, b::Real)
         println("thing")
     end
-    function thing(a::AbstractArray, b::Int)
+    function thing(a::ArrayLike, b::Int)
         println("blah")
     end
     @test_throws MethodError thing(rand(10), 1)

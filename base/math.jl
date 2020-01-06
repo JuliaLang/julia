@@ -69,12 +69,12 @@ clamp(x::X, lo::L, hi::H) where {X,L,H} =
                   convert(promote_type(X,L,H), x)))
 
 """
-    clamp!(array::AbstractArray, lo, hi)
+    clamp!(array::ArrayLike, lo, hi)
 
 Restrict values in `array` to the specified range, in-place.
 See also [`clamp`](@ref).
 """
-function clamp!(x::AbstractArray, lo, hi)
+function clamp!(x::ArrayLike, lo, hi)
     @inbounds for i in eachindex(x)
         x[i] = clamp(x[i], lo, hi)
     end
@@ -116,7 +116,7 @@ function evalpoly(x, p::Tuple)
     end
 end
 
-evalpoly(x, p::AbstractVector) = _evalpoly(x, p)
+evalpoly(x, p::ArrayLike{1}) = _evalpoly(x, p)
 
 function _evalpoly(x, p)
     N = length(p)
@@ -155,7 +155,7 @@ end
 evalpoly(z::Complex, p::Tuple{<:Any}) = p[1]
 
 
-evalpoly(z::Complex, p::AbstractVector) = _evalpoly(z, p)
+evalpoly(z::Complex, p::ArrayLike{1}) = _evalpoly(z, p)
 
 function _evalpoly(z::Complex, p)
     length(p) == 1 && return p[1]

@@ -90,7 +90,7 @@ module IteratorsMD
 
     # indexing
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
-    Base.get(A::AbstractArray, I::CartesianIndex, default) = get(A, I.I, default)
+    Base.get(A::ArrayLike, I::CartesianIndex, default) = get(A, I.I, default)
     eltype(::Type{T}) where {T<:CartesianIndex} = eltype(fieldtype(T, :I))
 
     # access to index tuple
@@ -144,13 +144,13 @@ module IteratorsMD
     end
 
     # nextind and prevind with CartesianIndex
-    function Base.nextind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
+    function Base.nextind(a::ArrayLike{N}, i::CartesianIndex{N}) where {N}
         iter = CartesianIndices(axes(a))
         # might overflow
         I = inc(i.I, first(iter).I, last(iter).I)
         return I
     end
-    function Base.prevind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
+    function Base.prevind(a::ArrayLike{N}, i::CartesianIndex{N}) where {N}
         iter = CartesianIndices(axes(a))
         # might underflow
         I = dec(i.I, last(iter).I, first(iter).I)
@@ -183,7 +183,7 @@ module IteratorsMD
     Consequently these can be useful for writing algorithms that
     work in arbitrary dimensions.
 
-        CartesianIndices(A::AbstractArray) -> R
+        CartesianIndices(A::ArrayLike) -> R
 
     As a convenience, constructing a `CartesianIndices` from an array makes a
     range of its indices.
@@ -209,7 +209,7 @@ module IteratorsMD
     ## Conversion between linear and cartesian indices
 
     Linear index to cartesian index conversion exploits the fact that a
-    `CartesianIndices` is an `AbstractArray` and can be indexed linearly:
+    `CartesianIndices` is an `ArrayLike` and can be indexed linearly:
 
     ```jldoctest
     julia> cartesian = CartesianIndices((1:3, 1:2))
@@ -259,7 +259,7 @@ module IteratorsMD
     CartesianIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} =
         CartesianIndices(map(i->first(i):last(i), inds))
 
-    CartesianIndices(A::AbstractArray) = CartesianIndices(axes(A))
+    CartesianIndices(A::ArrayLike) = CartesianIndices(axes(A))
 
     """
         (:)(I::CartesianIndex, J::CartesianIndex)
@@ -308,7 +308,7 @@ module IteratorsMD
     convert(::Type{CartesianIndices{N,R}}, inds::CartesianIndices{N}) where {N,R} =
         CartesianIndices(convert(R, inds.indices))
 
-    # AbstractArray implementation
+    # ArrayLike implementation
     Base.axes(iter::CartesianIndices{N,R}) where {N,R} = map(Base.axes1, iter.indices)
     Base.IndexStyle(::Type{CartesianIndices{N,R}}) where {N,R} = IndexCartesian()
     @inline function Base.getindex(iter::CartesianIndices{N,<:NTuple{N,Base.OneTo}}, I::Vararg{Int, N}) where {N}
@@ -324,9 +324,9 @@ module IteratorsMD
     ndims(::Type{CartesianIndices{N}}) where {N} = N
     ndims(::Type{CartesianIndices{N,TT}}) where {N,TT} = N
 
-    eachindex(::IndexCartesian, A::AbstractArray) = CartesianIndices(axes(A))
+    eachindex(::IndexCartesian, A::ArrayLike) = CartesianIndices(axes(A))
 
-    @inline function eachindex(::IndexCartesian, A::AbstractArray, B::AbstractArray...)
+    @inline function eachindex(::IndexCartesian, A::ArrayLike, B::ArrayLike...)
         axsA = axes(A)
         Base._all_match_first(axes, axsA, B...) || Base.throw_eachindex_mismatch(IndexCartesian(), A, B...)
         CartesianIndices(axsA)
@@ -525,7 +525,7 @@ using .IteratorsMD
 
 ## Bounds-checking with CartesianIndex
 # Disallow linear indexing with CartesianIndex
-function checkbounds(::Type{Bool}, A::AbstractArray, i::Union{CartesianIndex, AbstractArray{<:CartesianIndex}})
+function checkbounds(::Type{Bool}, A::ArrayLike, i::Union{CartesianIndex, AbstractArray{<:CartesianIndex}})
     @_inline_meta
     checkbounds_indices(Bool, axes(A), (i,))
 end
@@ -591,7 +591,7 @@ index_ndims() = ()
 @inline index_dimsum(i1, I...) = (index_dimsum(I...)...,)
 @inline index_dimsum(::Colon, I...) = (true, index_dimsum(I...)...)
 @inline index_dimsum(::AbstractArray{Bool}, I...) = (true, index_dimsum(I...)...)
-@inline function index_dimsum(::AbstractArray{<:Any,N}, I...) where N
+@inline function index_dimsum(::ArrayLike{N}, I...) where N
     (ntuple(x->true, Val(N))..., index_dimsum(I...)...)
 end
 index_dimsum() = ()
@@ -599,13 +599,13 @@ index_dimsum() = ()
 # Recursively compute the lengths of a list of indices, without dropping scalars
 index_lengths() = ()
 @inline index_lengths(::Real, rest...) = (1, index_lengths(rest...)...)
-@inline index_lengths(A::AbstractArray, rest...) = (length(A), index_lengths(rest...)...)
+@inline index_lengths(A::ArrayLike, rest...) = (length(A), index_lengths(rest...)...)
 
 # shape of array to create for getindex() with indices I, dropping scalars
 # returns a Tuple{Vararg{AbstractUnitRange}} of indices
 index_shape() = ()
 @inline index_shape(::Real, rest...) = index_shape(rest...)
-@inline index_shape(A::AbstractArray, rest...) = (axes(A)..., index_shape(rest...)...)
+@inline index_shape(A::ArrayLike, rest...) = (axes(A)..., index_shape(rest...)...)
 
 """
     LogicalIndex(mask)
@@ -622,7 +622,7 @@ struct LogicalIndex{T, A<:AbstractArray{Bool}} <: AbstractVector{T}
 end
 LogicalIndex(mask::AbstractVector{Bool}) = LogicalIndex{Int, typeof(mask)}(mask)
 LogicalIndex(mask::AbstractArray{Bool, N}) where {N} = LogicalIndex{CartesianIndex{N}, typeof(mask)}(mask)
-(::Type{LogicalIndex{Int}})(mask::AbstractArray) = LogicalIndex{Int, typeof(mask)}(mask)
+(::Type{LogicalIndex{Int}})(mask::ArrayLike) = LogicalIndex{Int, typeof(mask)}(mask)
 size(L::LogicalIndex) = (L.sum,)
 length(L::LogicalIndex) = L.sum
 collect(L::LogicalIndex) = [i for i in L]
@@ -673,9 +673,9 @@ end
     return ((i1-1)<<6 + tz, (i1, c))
 end
 
-@inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex{<:Any,<:AbstractArray{Bool,1}}) =
+@inline checkbounds(::Type{Bool}, A::ArrayLike, I::LogicalIndex{<:Any,<:AbstractArray{Bool,1}}) =
     eachindex(IndexLinear(), A) == eachindex(IndexLinear(), I.mask)
-@inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex) = axes(A) == axes(I.mask)
+@inline checkbounds(::Type{Bool}, A::ArrayLike, I::LogicalIndex) = axes(A) == axes(I.mask)
 @inline checkindex(::Type{Bool}, indx::AbstractUnitRange, I::LogicalIndex) = (indx,) == axes(I.mask)
 checkindex(::Type{Bool}, inds::Tuple, I::LogicalIndex) = false
 
@@ -720,20 +720,20 @@ getindex(x::Number, i::CartesianIndex{0}) = x
 getindex(t::Tuple,  i::CartesianIndex{1}) = getindex(t, i.I[1])
 
 # These are not defined on directly on getindex to avoid
-# ambiguities for AbstractArray subtypes. See the note in abstractarray.jl
+# ambiguities for ArrayLike subtypes. See the note in abstractarray.jl
 
-@inline function _getindex(l::IndexStyle, A::AbstractArray, I::Union{Real, AbstractArray}...)
+@inline function _getindex(l::IndexStyle, A::ArrayLike, I::Union{Real, ArrayLike}...)
     @boundscheck checkbounds(A, I...)
     return _unsafe_getindex(l, _maybe_reshape(l, A, I...), I...)
 end
 # But we can speed up IndexCartesian arrays by reshaping them to the appropriate dimensionality:
-_maybe_reshape(::IndexLinear, A::AbstractArray, I...) = A
-_maybe_reshape(::IndexCartesian, A::AbstractVector, I...) = A
-@inline _maybe_reshape(::IndexCartesian, A::AbstractArray, I...) = __maybe_reshape(A, index_ndims(I...))
-@inline __maybe_reshape(A::AbstractArray{T,N}, ::NTuple{N,Any}) where {T,N} = A
-@inline __maybe_reshape(A::AbstractArray, ::NTuple{N,Any}) where {N} = reshape(A, Val(N))
+_maybe_reshape(::IndexLinear, A::ArrayLike, I...) = A
+_maybe_reshape(::IndexCartesian, A::ArrayLike{1}, I...) = A
+@inline _maybe_reshape(::IndexCartesian, A::ArrayLike, I...) = __maybe_reshape(A, index_ndims(I...))
+@inline __maybe_reshape(A::ArrayLike{N}, ::NTuple{N,Any}) where {N} = A
+@inline __maybe_reshape(A::ArrayLike, ::NTuple{N,Any}) where {N} = reshape(A, Val(N))
 
-function _unsafe_getindex(::IndexStyle, A::AbstractArray, I::Vararg{Union{Real, AbstractArray}, N}) where N
+function _unsafe_getindex(::IndexStyle, A::ArrayLike, I::Vararg{Union{Real, ArrayLike}, N}) where N
     # This is specifically not inlined to prevent excessive allocations in type unstable code
     shape = index_shape(I...)
     dest = similar(A, shape)
@@ -743,7 +743,7 @@ function _unsafe_getindex(::IndexStyle, A::AbstractArray, I::Vararg{Union{Real, 
 end
 
 # Always index with the exactly indices provided.
-@generated function _unsafe_getindex!(dest::AbstractArray, src::AbstractArray, I::Vararg{Union{Real, AbstractArray}, N}) where N
+@generated function _unsafe_getindex!(dest::ArrayLike, src::ArrayLike, I::Vararg{Union{Real, ArrayLike}, N}) where N
     quote
         @_inline_meta
         D = eachindex(dest)
@@ -763,14 +763,14 @@ end
 @noinline throw_checksize_error(A, sz) = throw(DimensionMismatch("output array is the wrong size; expected $sz, got $(size(A))"))
 
 ## setindex! ##
-function _setindex!(l::IndexStyle, A::AbstractArray, x, I::Union{Real, AbstractArray}...)
+function _setindex!(l::IndexStyle, A::ArrayLike, x, I::Union{Real, ArrayLike}...)
     @_inline_meta
     @boundscheck checkbounds(A, I...)
     _unsafe_setindex!(l, _maybe_reshape(l, A, I...), x, I...)
     A
 end
 
-@generated function _unsafe_setindex!(::IndexStyle, A::AbstractArray, x, I::Union{Real,AbstractArray}...)
+@generated function _unsafe_setindex!(::IndexStyle, A::ArrayLike, x, I::Union{Real,ArrayLike}...)
     N = length(I)
     quote
         x′ = unalias(A, x)
@@ -790,11 +790,11 @@ end
     end
 end
 
-diff(a::AbstractVector) = diff(a, dims=1)
+diff(a::ArrayLike{1}) = diff(a, dims=1)
 
 """
-    diff(A::AbstractVector)
-    diff(A::AbstractArray; dims::Integer)
+    diff(A::ArrayLike{1})
+    diff(A::ArrayLike; dims::Integer)
 
 Finite difference operator on a vector or a multidimensional array `A`. In the
 latter case the dimension to operate on needs to be specified with the `dims`
@@ -822,7 +822,7 @@ julia> diff(vec(a))
  12
 ```
 """
-function diff(a::AbstractArray{T,N}; dims::Integer) where {T,N}
+function diff(a::ArrayLike{N}; dims::Integer) where {N}
     require_one_based_indexing(a)
     1 <= dims <= N || throw(ArgumentError("dimension $dims out of range (1:$N)"))
 
@@ -850,7 +850,7 @@ function mightalias(A::SubArray{T,<:Any,P}, B::SubArray{T,<:Any,P}) where {T,P}
         !_isdisjoint(dataids(A.parent), _splatmap(dataids, B.indices)) ||
         !_isdisjoint(dataids(B.parent), _splatmap(dataids, A.indices))
 end
-_parentsmatch(A::AbstractArray, B::AbstractArray) = A === B
+_parentsmatch(A::ArrayLike, B::ArrayLike) = A === B
 # Two reshape(::Array)s of the same size aren't `===` because they have different headers
 _parentsmatch(A::Array, B::Array) = pointer(A) == pointer(B) && size(A) == size(B)
 
@@ -868,12 +868,12 @@ end
 # And we can check scalars against each other and scalars against arrays quite easily
 @inline _indicesmightoverlap(A::Tuple{Real, Vararg{Any}}, B::Tuple{Real, Vararg{Any}}) =
     A[1] == B[1] ? _indicesmightoverlap(tail(A), tail(B)) : false
-@inline _indicesmightoverlap(A::Tuple{Real, Vararg{Any}}, B::Tuple{AbstractArray, Vararg{Any}}) =
+@inline _indicesmightoverlap(A::Tuple{Real, Vararg{Any}}, B::Tuple{ArrayLike, Vararg{Any}}) =
     A[1] in B[1] ? _indicesmightoverlap(tail(A), tail(B)) : false
-@inline _indicesmightoverlap(A::Tuple{AbstractArray, Vararg{Any}}, B::Tuple{Real, Vararg{Any}}) =
+@inline _indicesmightoverlap(A::Tuple{ArrayLike, Vararg{Any}}, B::Tuple{Real, Vararg{Any}}) =
     B[1] in A[1] ? _indicesmightoverlap(tail(A), tail(B)) : false
 # And small arrays are quick, too
-@inline function _indicesmightoverlap(A::Tuple{AbstractArray, Vararg{Any}}, B::Tuple{AbstractArray, Vararg{Any}})
+@inline function _indicesmightoverlap(A::Tuple{ArrayLike, Vararg{Any}}, B::Tuple{ArrayLike, Vararg{Any}})
     if length(A[1]) == 1
         return A[1][1] in B[1] ? _indicesmightoverlap(tail(A), tail(B)) : false
     elseif length(B[1]) == 1
@@ -927,7 +927,7 @@ function fill!(A::AbstractArray{T}, x) where T
 end
 
 """
-    copyto!(dest::AbstractArray, src) -> dest
+    copyto!(dest::ArrayLike, src) -> dest
 
 
 Copy all elements from collection `src` to array `dest`, whose length must be greater than
@@ -955,7 +955,7 @@ julia> y
 """
 copyto!(dest, src)
 
-function copyto!(dest::AbstractArray{T1,N}, src::AbstractArray{T2,N}) where {T1,T2,N}
+function copyto!(dest::ArrayLike{N}, src::ArrayLike{N}) where {N}
     checkbounds(dest, axes(src)...)
     src′ = unalias(dest, src)
     for I in eachindex(IndexStyle(src′,dest), src′)
@@ -964,8 +964,8 @@ function copyto!(dest::AbstractArray{T1,N}, src::AbstractArray{T2,N}) where {T1,
     dest
 end
 
-function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
-                  src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
+function copyto!(dest::ArrayLike{N}, Rdest::CartesianIndices{N},
+                  src::ArrayLike{N}, Rsrc::CartesianIndices{N}) where {N}
     isempty(Rdest) && return dest
     if size(Rdest) != size(Rsrc)
         throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
@@ -996,10 +996,10 @@ end
 Copy the block of `src` in the range of `Rsrc` to the block of `dest`
 in the range of `Rdest`. The sizes of the two regions must match.
 """
-copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
+copyto!(::ArrayLike, ::CartesianIndices, ::ArrayLike, ::CartesianIndices)
 
 # circshift!
-circshift!(dest::AbstractArray, src, ::Tuple{}) = copyto!(dest, src)
+circshift!(dest::ArrayLike, src, ::Tuple{}) = copyto!(dest, src)
 """
     circshift!(dest, src, shifts)
 
@@ -1011,13 +1011,13 @@ alias each other).
 
 See also [`circshift`](@ref).
 """
-@noinline function circshift!(dest::AbstractArray{T,N}, src, shiftamt::DimsInteger) where {T,N}
+@noinline function circshift!(dest::ArrayLike{N}, src, shiftamt::DimsInteger) where {N}
     dest === src && throw(ArgumentError("dest and src must be separate arrays"))
     inds = axes(src)
     axes(dest) == inds || throw(ArgumentError("indices of src and dest must match (got $inds and $(axes(dest)))"))
     _circshift!(dest, (), src, (), inds, fill_to_length(shiftamt, 0, Val(N)))
 end
-circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt...,))
+circshift!(dest::ArrayLike, src, shiftamt) = circshift!(dest, src, (shiftamt...,))
 
 # For each dimension, we copy the first half of src to the second half
 # of dest, and the second half of src to the first half of dest. This
@@ -1315,7 +1315,7 @@ end
     end
 end
 
-@propagate_inbounds function setindex!(B::BitArray, X::AbstractArray,
+@propagate_inbounds function setindex!(B::BitArray, X::ArrayLike,
         I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
     _setindex!(IndexStyle(B), B, X, to_indices(B, (I0, I...))...)
 end
@@ -1397,7 +1397,7 @@ function permutedims(B::StridedArray, perm)
     permutedims!(P, B, perm)
 end
 
-function checkdims_perm(P::AbstractArray{TP,N}, B::AbstractArray{TB,N}, perm) where {TP,TB,N}
+function checkdims_perm(P::ArrayLike{N}, B::ArrayLike{N}, perm) where {N}
     indsB = axes(B)
     length(perm) == N || throw(ArgumentError("expected permutation of size $N, but length(perm)=$(length(perm))"))
     isperm(perm) || throw(ArgumentError("input is not a permutation"))
@@ -1447,7 +1447,7 @@ end
 hash(x::Prehashed) = x.hash
 
 """
-    unique(A::AbstractArray; dims::Int)
+    unique(A::ArrayLike; dims::Int)
 
 Return unique regions of `A` along dimension `dims`.
 
@@ -1485,11 +1485,11 @@ julia> unique(A, dims=3)
  0  0
 ```
 """
-unique(A::AbstractArray; dims::Union{Colon,Integer} = :) = _unique_dims(A, dims)
+unique(A::ArrayLike; dims::Union{Colon,Integer} = :) = _unique_dims(A, dims)
 
-_unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
+_unique_dims(A::ArrayLike, dims::Colon) = invoke(unique, Tuple{Any}, A)
 
-@generated function _unique_dims(A::AbstractArray{T,N}, dim::Integer) where {T,N}
+@generated function _unique_dims(A::ArrayLike{N}, dim::Integer) where {N}
     quote
         1 <= dim <= $N || return copy(A)
         hashes = zeros(UInt, axes(A, dim))
@@ -1560,7 +1560,7 @@ _unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
 end
 
 """
-    extrema(A::AbstractArray; dims) -> Array{Tuple}
+    extrema(A::ArrayLike; dims) -> Array{Tuple}
 
 Compute the minimum and maximum elements of an array over the given dimensions.
 
@@ -1585,10 +1585,10 @@ julia> extrema(A, dims = (1,2))
  (9, 15)
 ```
 """
-extrema(A::AbstractArray; dims = :) = _extrema_dims(identity, A, dims)
+extrema(A::ArrayLike; dims = :) = _extrema_dims(identity, A, dims)
 
 """
-    extrema(f, A::AbstractArray; dims) -> Array{Tuple}
+    extrema(f, A::ArrayLike; dims) -> Array{Tuple}
 
 Compute the minimum and maximum of `f` applied to each element in the given dimensions
 of `A`.
@@ -1596,11 +1596,11 @@ of `A`.
 !!! compat "Julia 1.2"
     This method requires Julia 1.2 or later.
 """
-extrema(f, A::AbstractArray; dims=:) = _extrema_dims(f, A, dims)
+extrema(f, A::ArrayLike; dims=:) = _extrema_dims(f, A, dims)
 
-_extrema_dims(f, A::AbstractArray, ::Colon) = _extrema_itr(f, A)
+_extrema_dims(f, A::ArrayLike, ::Colon) = _extrema_itr(f, A)
 
-function _extrema_dims(f, A::AbstractArray, dims)
+function _extrema_dims(f, A::ArrayLike, dims)
     sz = [size(A)...]
     for d in dims
         sz[d] = 1
@@ -1634,14 +1634,14 @@ end
 extrema!(B, A) = extrema!(identity, B, A)
 
 # Show for pairs() with Cartesian indices. Needs to be here rather than show.jl for bootstrap order
-function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, T}, toplevel) where T <: Union{AbstractVector, Tuple}
+function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, T}, toplevel) where T <: Union{ArrayLike{1}, Tuple}
     print(io, "pairs(::$T)")
 end
-function Base.showarg(io::IO, r::Iterators.Pairs{<:CartesianIndex, <:Any, <:Any, T}, toplevel) where T <: AbstractArray
+function Base.showarg(io::IO, r::Iterators.Pairs{<:CartesianIndex, <:Any, <:Any, T}, toplevel) where T <: ArrayLike
     print(io, "pairs(::$T)")
 end
 
-function Base.showarg(io::IO, r::Iterators.Pairs{<:CartesianIndex, <:Any, <:Any, T}, toplevel) where T<:AbstractVector
+function Base.showarg(io::IO, r::Iterators.Pairs{<:CartesianIndex, <:Any, <:Any, T}, toplevel) where T<:ArrayLike{1}
     print(io, "pairs(IndexCartesian(), ::$T)")
 end
 
@@ -1764,7 +1764,7 @@ julia> sortslices(reshape([5; 4; 3; 2; 1], (1,1,5)), dims=3, by=x->x[1,1])
  5
 ```
 """
-function sortslices(A::AbstractArray; dims::Union{Integer, Tuple{Vararg{Integer}}}, kws...)
+function sortslices(A::ArrayLike; dims::Union{Integer, Tuple{Vararg{Integer}}}, kws...)
     _sortslices(A, Val{dims}(); kws...)
 end
 
@@ -1783,7 +1783,7 @@ function compute_itspace(A, ::Val{dims}) where {dims}
     vec(permutedims(collect(axs), (dims..., negdims...)))
 end
 
-function _sortslices(A::AbstractArray, d::Val{dims}; kws...) where dims
+function _sortslices(A::ArrayLike, d::Val{dims}; kws...) where dims
     itspace = compute_itspace(A, d)
     vecs = map(its->view(A, its...), itspace)
     p = sortperm(vecs; kws...)

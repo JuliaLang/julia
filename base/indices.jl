@@ -4,7 +4,7 @@
     Dims{N}
 
 An `NTuple` of `N` `Int`s used to represent the dimensions
-of an [`AbstractArray`](@ref).
+of an [`ArrayLike`](@ref).
 """
 Dims{N} = NTuple{N,Int}
 DimsInteger{N} = NTuple{N,Integer}
@@ -41,7 +41,7 @@ struct IndexLinear <: IndexStyle end
 
 Subtype of [`IndexStyle`](@ref) used to describe arrays which
 are optimally indexed by a Cartesian index. This is the default
-for new custom [`AbstractArray`](@ref) subtypes.
+for new custom [`ArrayLike`](@ref) subtypes.
 
 A Cartesian indexing style uses multiple integer indices to describe the position in
 a multidimensional array, with exactly one index per dimension. This means that
@@ -70,7 +70,7 @@ struct IndexCartesian <: IndexStyle end
     IndexStyle(typeof(A))
 
 `IndexStyle` specifies the "native indexing style" for array `A`. When
-you define a new [`AbstractArray`](@ref) type, you can choose to implement
+you define a new [`ArrayLike`](@ref) type, you can choose to implement
 either linear indexing (with [`IndexLinear`](@ref)) or cartesian indexing.
 If you decide to only implement linear indexing, then you must set this trait for your array
 type:
@@ -84,21 +84,21 @@ recompute all indexing operations into the preferred style. This allows users
 to access elements of your array using any indexing style, even when explicit
 methods have not been provided.
 
-If you define both styles of indexing for your `AbstractArray`, this
+If you define both styles of indexing for your `ArrayLike`, this
 trait can be used to select the most performant indexing style. Some
 methods check this trait on their inputs, and dispatch to different
 algorithms depending on the most efficient access pattern. In
 particular, [`eachindex`](@ref) creates an iterator whose type depends
 on the setting of this trait.
 """
-IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
+IndexStyle(A::ArrayLike) = IndexStyle(typeof(A))
 IndexStyle(::Type{Union{}}) = IndexLinear()
-IndexStyle(::Type{<:AbstractArray}) = IndexCartesian()
+IndexStyle(::Type{<:ArrayLike}) = IndexCartesian()
 IndexStyle(::Type{<:Array}) = IndexLinear()
 IndexStyle(::Type{<:AbstractRange}) = IndexLinear()
 
-IndexStyle(A::AbstractArray, B::AbstractArray) = IndexStyle(IndexStyle(A), IndexStyle(B))
-IndexStyle(A::AbstractArray, B::AbstractArray...) = IndexStyle(IndexStyle(A), IndexStyle(B...))
+IndexStyle(A::ArrayLike, B::ArrayLike) = IndexStyle(IndexStyle(A), IndexStyle(B))
+IndexStyle(A::ArrayLike, B::ArrayLike...) = IndexStyle(IndexStyle(A), IndexStyle(B...))
 IndexStyle(::IndexLinear, ::IndexLinear) = IndexLinear()
 IndexStyle(::IndexStyle, ::IndexStyle) = IndexCartesian()
 
@@ -165,7 +165,7 @@ function promote_shape(a::Dims, b::Dims)
     return a
 end
 
-function promote_shape(a::AbstractArray, b::AbstractArray)
+function promote_shape(a::ArrayLike, b::ArrayLike)
     promote_shape(axes(a), axes(b))
 end
 
@@ -194,12 +194,12 @@ function throw_setindex_mismatch(X, I)
     end
 end
 
-# check for valid sizes in A[I...] = X where X <: AbstractArray
+# check for valid sizes in A[I...] = X where X <: ArrayLike
 # we want to allow dimensions that are equal up to permutation, but only
 # for permutations that leave array elements in the same linear order.
 # those are the permutations that preserve the order of the non-singleton
 # dimensions.
-function setindex_shape_check(X::AbstractArray, I::Integer...)
+function setindex_shape_check(X::ArrayLike, I::Integer...)
     li = ndims(X)
     lj = length(I)
     i = j = 1
@@ -233,19 +233,19 @@ function setindex_shape_check(X::AbstractArray, I::Integer...)
     end
 end
 
-setindex_shape_check(X::AbstractArray) =
+setindex_shape_check(X::ArrayLike) =
     (length(X)==1 || throw_setindex_mismatch(X,()))
 
-setindex_shape_check(X::AbstractArray, i::Integer) =
+setindex_shape_check(X::ArrayLike, i::Integer) =
     (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer) =
+setindex_shape_check(X::ArrayLike{1}, i::Integer) =
     (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer, j::Integer) =
+setindex_shape_check(X::ArrayLike{1}, i::Integer, j::Integer) =
     (length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
 
-function setindex_shape_check(X::AbstractArray{<:Any,2}, i::Integer, j::Integer)
+function setindex_shape_check(X::ArrayLike{2}, i::Integer, j::Integer)
     if length(X) != i*j
         throw_setindex_mismatch(X, (i,j))
     end
@@ -269,7 +269,7 @@ special indexing behaviors. Note that some index types (like `Colon`) require
 more context in order to transform them into an array of indices; those get
 converted in the more complicated `to_indices` function. By default, this
 simply calls the generic `to_index(i)`. This must return either an `Int` or an
-`AbstractArray` of scalar indices that are supported by `A`.
+`ArrayLike` of scalar indices that are supported by `A`.
 """
 to_index(A, i) = to_index(i)
 
@@ -283,15 +283,15 @@ to_index(A::Array, i::UInt) = reinterpret(Int, i)
 Convert index `i` to an `Int` or array of `Int`s to be used as an index for all arrays.
 
 Custom index types may specialize `to_index(::CustomIndex)` to provide special
-indexing behaviors. This must return either an `Int` or an `AbstractArray` of
+indexing behaviors. This must return either an `Int` or an `ArrayLike` of
 `Int`s.
 """
 to_index(i::Integer) = convert(Int,i)::Int
 to_index(i::Bool) = throw(ArgumentError("invalid index: $i of type Bool"))
 to_index(I::AbstractArray{Bool}) = LogicalIndex(I)
-to_index(I::AbstractArray) = I
+to_index(I::ArrayLike) = I
 to_index(I::AbstractArray{Union{}}) = I
-to_index(I::AbstractArray{<:Union{AbstractArray, Colon}}) =
+to_index(I::AbstractArray{<:Union{ArrayLike, Colon}}) =
     throw(ArgumentError("invalid index: $(limitrepr(I)) of type $(typeof(I))"))
 to_index(::Colon) = throw(ArgumentError("colons must be converted by to_indices(...)"))
 to_index(i) = throw(ArgumentError("invalid index: $(limitrepr(i)) of type $(typeof(i))"))
@@ -303,7 +303,7 @@ to_index(i) = throw(ArgumentError("invalid index: $(limitrepr(i)) of type $(type
 
 Convert the tuple `I` to a tuple of indices for use in indexing into array `A`.
 
-The returned tuple must only contain either `Int`s or `AbstractArray`s of
+The returned tuple must only contain either `Int`s or `ArrayLike`s of
 scalar indices that are supported by array `A`. It will error upon encountering
 a novel index type that it does not know how to process.
 
@@ -394,14 +394,14 @@ show(io::IO, r::IdentityUnitRange) = print(io, "Base.IdentityUnitRange(", r.indi
 iterate(S::IdentityUnitRange, s...) = iterate(S.indices, s...)
 
 """
-    LinearIndices(A::AbstractArray)
+    LinearIndices(A::ArrayLike)
 
 Return a `LinearIndices` array with the same shape and [`axes`](@ref) as `A`,
 holding the linear index of each entry in `A`. Indexing this array with
 cartesian indices allows mapping them to linear indices.
 
 For arrays with conventional indexing (indices start at 1), or any multidimensional
-array, linear indices range from 1 to `length(A)`. However, for `AbstractVector`s
+array, linear indices range from 1 to `length(A)`. However, for `ArrayLike{1}`s
 linear indices are `axes(A, 1)`, and therefore do not start at 1 for vectors with
 unconventional indexing.
 
@@ -450,7 +450,7 @@ LinearIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =
 LinearIndices(sz::NTuple{N,<:Integer}) where {N} = LinearIndices(map(Base.OneTo, sz))
 LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} =
     LinearIndices(map(i->first(i):last(i), inds))
-LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
+LinearIndices(A::Union{ArrayLike,SimpleVector}) = LinearIndices(axes(A))
 
 promote_rule(::Type{LinearIndices{N,R1}}, ::Type{LinearIndices{N,R2}}) where {N,R1,R2} =
     LinearIndices{N,indices_promote_type(R1,R2)}
@@ -463,7 +463,7 @@ end
 convert(::Type{LinearIndices{N,R}}, inds::LinearIndices{N}) where {N,R} =
     LinearIndices(convert(R, inds.indices))
 
-# AbstractArray implementation
+# ArrayLike implementation
 IndexStyle(::Type{<:LinearIndices}) = IndexLinear()
 axes(iter::LinearIndices) = map(axes1, iter.indices)
 size(iter::LinearIndices) = map(unsafe_length, iter.indices)

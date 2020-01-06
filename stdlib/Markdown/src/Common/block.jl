@@ -252,8 +252,8 @@ mutable struct List
     ordered::Int # `-1` is unordered, `>= 0` is ordered.
     loose::Bool # TODO: Renderers should use this field
 end
-List(x::AbstractVector, b::Integer) = List(x, b, false)
-List(x::AbstractVector) = List(x, -1)
+List(x::ArrayLike{1}, b::Integer) = List(x, b, false)
+List(x::ArrayLike{1}) = List(x, -1)
 List(b::Integer) = List(Any[], b)
 List(xs...) = List(vcat(xs...))
 

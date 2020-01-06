@@ -35,7 +35,7 @@ function showerror(io::IO, ex::BoundsError)
         print(io, ": attempt to access ")
         summary(io, ex.a)
         if isdefined(ex, :i)
-            !isa(ex.a, AbstractArray) && print(io, "\n ")
+            !isa(ex.a, ArrayLike) && print(io, "\n ")
             print(io, " at index [")
             if isa(ex.i, AbstractRange)
                 print(io, ex.i)
@@ -95,7 +95,7 @@ end
 showerror(io::IO, ex::InitError) = showerror(io, ex, [])
 
 function showerror(io::IO, ex::DomainError)
-    if isa(ex.val, AbstractArray)
+    if isa(ex.val, ArrayLike)
         compact = get(io, :compact, true)
         limit = get(io, :limit, true)
         print(IOContext(io, :compact => compact, :limit => limit),
@@ -265,7 +265,7 @@ function showerror(io::IO, ex::MethodError)
         end
         print(io, ")")
     end
-    if ft <: AbstractArray
+    if ft <: ArrayLike
         print(io, "\nUse square brackets [] for indexing an Array.")
     end
     # Check for local functions that shadow methods in Base
