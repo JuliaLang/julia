@@ -254,28 +254,13 @@ end
 end
 
 @testset "normalize for multidimensional arrays" begin
-    function test_arr(arr)
+
+    for arr in ([1.0 2.0 3.0; 4.0 5.0 6.0], OffsetArray([-1,0], (-2,)))
         @test normalize(arr) == normalize!(copy(arr))
         @test size(normalize(arr)) == size(arr)
+        @test axes(normalize(arr)) == axes(arr)
         @test vec(normalize(arr)) == normalize(vec(arr))
     end
-
-    arr = [ 1.0 0.0; 0.0 1.0 ]
-    test_arr(arr)
-
-    arr = [
-            [1.0 0.0 0.0];
-            [0.0 1.0 0.0]
-         ]
-    test_arr(arr)
-
-    arr = randn(2,3)
-    test_arr(arr)
-
-    A = OffsetArray([-1,0], (-2,))
-    Arsc = reshape(A, :, 1)
-    Arsc[1,1] = 5
-    test_arr(A)
 end
 
 @testset "Issue #30466" begin
