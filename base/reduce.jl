@@ -47,18 +47,29 @@ function foldl_impl(op::OP, nt, itr) where {OP}
     return v
 end
 
-function _foldl_impl(op::OP, init, itr) where {OP}
-    # Unroll the while loop once; if init is known, the call to op may
-    # be evaluated at compile time
+function _foldl_impl(op::OP, init::T, itr) where {OP, T}
     y = iterate(itr)
     y === nothing && return init
     v = op(init, y[1])
-    while true
-        y = iterate(itr, y[2])
-        y === nothing && break
-        v = op(v, y[1])
+    if v isa T
+        return _foldl_impl(op, v, itr, y[2])
+    else
+        return _foldl_impl(op, v, itr, y[2])
     end
-    return v
+end
+
+_dec(::Val{n}) where {n} = Val(n - 1)
+
+@inline function _foldl_impl(op::OP, acc::T, itr, state, counter = Val(3)) where {OP,T}
+    while true
+        y = iterate(itr, state)
+        y === nothing && return acc
+        x, state = y
+        result = op(acc, x)
+        counter === Val(0) || result isa T ||
+            return _foldl_impl(op, result, itr, state, _dec(counter))
+        acc = result
+    end
 end
 
 struct _InitialValue end
