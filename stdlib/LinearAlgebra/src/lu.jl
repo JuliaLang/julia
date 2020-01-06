@@ -9,7 +9,7 @@
 Matrix factorization type of the `LU` factorization of a square matrix `A`. This
 is the return type of [`lu`](@ref), the corresponding matrix factorization function.
 
-The individual components of the factorization `F::LU` can be accessed via `getproperty`:
+The individual components of the factorization `F::LU` can be accessed via [`getproperty`](@ref):
 
 | Component | Description                              |
 |:----------|:-----------------------------------------|
@@ -210,10 +210,10 @@ validity (via [`issuccess`](@ref)) lies with the user.
 
 In most cases, if `A` is a subtype `S` of `AbstractMatrix{T}` with an element
 type `T` supporting `+`, `-`, `*` and `/`, the return type is `LU{T,S{T}}`. If
-pivoting is chosen (default) the element type should also support `abs` and
-`<`.
+pivoting is chosen (default) the element type should also support [`abs`](@ref) and
+[`<`](@ref).
 
-The individual components of the factorization `F` can be accessed via `getproperty`:
+The individual components of the factorization `F` can be accessed via [`getproperty`](@ref):
 
 | Component | Description                         |
 |:----------|:------------------------------------|
