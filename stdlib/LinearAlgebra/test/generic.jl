@@ -255,7 +255,14 @@ end
 
 @testset "normalize for multidimensional arrays" begin
 
-    for arr in ([1.0 2.0 3.0; 4.0 5.0 6.0], OffsetArray([-1,0], (-2,)))
+    for arr in (
+        fill(10.0, ()),  # 0 dim
+        [1.0],           # 1 dim
+        [1.0 2.0 3.0; 4.0 5.0 6.0], # 2-dim
+        rand(1,2,3),                # higher dims
+        rand(1,2,3,4),
+        OffsetArray([-1,0], (-2,))  # no index 1
+    )
         @test normalize(arr) == normalize!(copy(arr))
         @test size(normalize(arr)) == size(arr)
         @test axes(normalize(arr)) == axes(arr)
