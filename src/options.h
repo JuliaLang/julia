@@ -101,7 +101,7 @@
 // task options ---------------------------------------------------------------
 
 // select whether to allow the COPY_STACKS stack switching implementation
-#define COPY_STACKS
+//#define COPY_STACKS
 // select whether to use COPY_STACKS for new Tasks by default
 //#define ALWAYS_COPY_STACKS
 
