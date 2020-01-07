@@ -897,6 +897,7 @@ end
 module TestMod33403
 f(x) = 1
 f(x::Int) = 2
+g() = 3
 
 module Sub
 import ..TestMod33403: f
@@ -905,18 +906,19 @@ end
 end
 
 @testset "methods with module" begin
-    using .TestMod33403: f
+    using .TestMod33403: f, g
     @test length(methods(f)) == 3
     @test length(methods(f, (Int,))) == 1
 
     @test length(methods(f, TestMod33403)) == 2
-    @test length(methods(f, (TestMod33403,))) == 2
     @test length(methods(f, [TestMod33403])) == 2
     @test length(methods(f, (Int,), TestMod33403)) == 1
-    @test length(methods(f, (Int,), (TestMod33403,))) == 1
+    @test length(methods(f, (Int,), [TestMod33403])) == 1
 
     @test length(methods(f, TestMod33403.Sub)) == 1
-    @test length(methods(f, (TestMod33403.Sub,))) == 1
+    @test length(methods(f, [TestMod33403.Sub])) == 1
     @test length(methods(f, (Char,), TestMod33403.Sub)) == 1
     @test length(methods(f, (Int,), TestMod33403.Sub)) == 0
+
+    @test length(methods(g, ())) == 1
 end

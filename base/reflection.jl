@@ -868,14 +868,14 @@ end
 Return the method table for `f`.
 
 If `types` is specified, return an array of methods whose types match.
-If `module` is specified, return an array of methods defined in this module.
-A list of modules can also be specified as an array or tuple.
+If `module` is specified, return an array of methods defined in that module.
+A list of modules can also be specified as an array.
 
 !!! compat "Julia 1.4"
     At least Julia 1.4 is required for specifying a module.
 """
 function methods(@nospecialize(f), @nospecialize(t),
-                 @nospecialize(mod::Union{Module,AbstractArray{Module},Tuple{Vararg{Module}},Nothing}=nothing))
+                 @nospecialize(mod::Union{Module,AbstractArray{Module},Nothing}=nothing))
     if mod isa Module
         mod = (mod,)
     end
@@ -900,7 +900,7 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
 end
 
 function methods(@nospecialize(f),
-                 @nospecialize(mod::Union{Module,AbstractArray{Module},Tuple{Vararg{Module}},Nothing}=nothing))
+                 @nospecialize(mod::Union{Module,AbstractArray{Module},Nothing}=nothing))
     # return all matches
     return methods(f, Tuple{Vararg{Any}}, mod)
 end
