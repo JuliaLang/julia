@@ -174,7 +174,7 @@ Hello, Charlie!
 julia> macro saylots(x...)
            return :( println("Say: ", \$(x...)) )
        end
-@sayhello (macro with 1 method)
+@saylots (macro with 1 method)
 
 julia> @saylots "hey " "there " "friend"
 Say: hey there friend
