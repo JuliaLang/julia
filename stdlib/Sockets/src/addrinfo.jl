@@ -297,6 +297,8 @@ julia> getipaddrs(IPv6)
  ip"2001:db8:8:4:c164:402e:7e3c:3668"
  ip"fe80::445e:5fff:fe5d:5500"
 ```
+
+See also: [`islinklocaladdr`](@ref), `split(ENV["SSH_CONNECTION"], ' ')[3]`
 """
 function getipaddrs(addr_type::Type{T}=IPAddr; loopback::Bool=false) where T<:IPAddr
     addresses = T[]
@@ -325,4 +327,30 @@ function getipaddrs(addr_type::Type{T}=IPAddr; loopback::Bool=false) where T<:IP
     end
     ccall(:uv_free_interface_addresses, Cvoid, (Ptr{UInt8}, Int32), addr, count)
     return addresses
+end
+
+"""
+    islinklocaladdr(addr::IPAddr)
+
+Tests if an IP address is a link-local address. Link-local addresses
+are not guaranteed to be unique beyond their network segment,
+therefore routers do not forward them. Link-local addresses are from
+the address blocks `169.254.0.0/16` or `fe80::/10`.
+
+# Example
+```julia
+filter(!islinklocaladdr, getipaddrs())
+```
+"""
+function islinklocaladdr(addr::IPv4)
+    # RFC 3927
+    return (addr.host &
+            0xFFFF0000) ==
+            0xA9FE0000
+end
+function islinklocaladdr(addr::IPv6)
+    # RFC 4291
+    return (addr.host &
+            0xFFC00000000000000000000000000000) ==
+            0xFE800000000000000000000000000000
 end
