@@ -6,7 +6,21 @@ const Callable = Union{Function,Type}
 
 const Bottom = Union{}
 
+"""
+    AbstractSet{T}
+
+Supertype for set-like types whose elements are of type `T`.
+[`Set`](@ref), [`BitSet`](@ref) and other types are subtypes of this.
+"""
 abstract type AbstractSet{T} end
+
+"""
+    AbstractDict{K, V}
+
+Supertype for dictionary-like types with keys of type `K` and values of type `V`.
+[`Dict`](@ref), [`IdDict`](@ref) and other types are subtypes of this.
+An `AbstractDict{K, V}` should be an iterator of `Pair{K, V}`.
+"""
 abstract type AbstractDict{K,V} end
 
 # The real @inline macro is not available until after array.jl, so this
@@ -100,6 +114,8 @@ macro _propagate_inbounds_meta()
     return Expr(:meta, :inline, :propagate_inbounds)
 end
 
+function iterate end
+
 """
     convert(T, x)
 
@@ -150,7 +166,8 @@ true
 """
 function convert end
 
-convert(::Type{Any}, @nospecialize(x)) = x
+convert(::Type{Union{}}, x) = throw(MethodError(convert, (Union{}, x)))
+convert(::Type{Any}, x) = x
 convert(::Type{T}, x::T) where {T} = x
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled
@@ -170,7 +187,23 @@ macro eval(mod, ex)
 end
 
 argtail(x, rest...) = rest
+
+"""
+    tail(x::Tuple)::Tuple
+
+Return a `Tuple` consisting of all but the first component of `x`.
+
+# Examples
+```jldoctest
+julia> Base.tail((1,2,3))
+(2, 3)
+
+julia> Base.tail(())
+ERROR: ArgumentError: Cannot call tail on an empty tuple.
+```
+"""
 tail(x::Tuple) = argtail(x...)
+tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
 
 tuple_type_head(T::Type) = (@_pure_meta; fieldtype(T::Type{<:Tuple}, 1))
 
@@ -183,7 +216,9 @@ function tuple_type_tail(T::Type)
     else
         T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
         if isvatuple(T) && length(T.parameters) == 1
-            return T
+            va = T.parameters[1]
+            (isa(va, DataType) && isa(va.parameters[2], Int)) || return T
+            return Tuple{Vararg{va.parameters[1], va.parameters[2]-1}}
         end
         return Tuple{argtail(T.parameters...)...}
     end
@@ -375,7 +410,7 @@ julia> reinterpret(Float32, UInt32(7))
 
 julia> reinterpret(Float32, UInt32[1 2 3 4 5])
 1×5 reinterpret(Float32, ::Array{UInt32,2}):
- 1.4013e-45  2.8026e-45  4.2039e-45  5.60519e-45  7.00649e-45
+ 1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
 ```
 """
 reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
@@ -408,7 +443,7 @@ If `DataType` `T` does not have a specific size, an error is thrown.
 
 ```jldoctest
 julia> sizeof(AbstractArray)
-ERROR: argument is an abstract type; size is indeterminate
+ERROR: Abstract type AbstractArray does not have a definite size.
 Stacktrace:
 [...]
 ```
@@ -434,7 +469,7 @@ end
 """
     esc(e)
 
-Only valid in the context of an `Expr` returned from a macro. Prevents the macro hygiene
+Only valid in the context of an [`Expr`](@ref) returned from a macro. Prevents the macro hygiene
 pass from turning embedded variables into gensym variables. See the [Macros](@ref man-macros)
 section of the Metaprogramming chapter of the manual for more details and examples.
 """
@@ -570,7 +605,7 @@ eltype(::Type{SimpleVector}) = Any
 keys(v::SimpleVector) = OneTo(length(v))
 isempty(v::SimpleVector) = (length(v) == 0)
 axes(v::SimpleVector) = (OneTo(length(v)),)
-axes(v::SimpleVector, d) = d <= 1 ? axes(v)[d] : OneTo(1)
+axes(v::SimpleVector, d::Integer) = d <= 1 ? axes(v)[d] : OneTo(1)
 
 function ==(v1::SimpleVector, v2::SimpleVector)
     length(v1)==length(v2) || return false
@@ -618,71 +653,6 @@ function isassigned(v::SimpleVector, i::Int)
     x = unsafe_load(convert(Ptr{Ptr{Cvoid}},pointer_from_objref(v)) + i*sizeof(Ptr))
     @_gc_preserve_end t
     return x != C_NULL
-end
-
-
-# used by ... syntax to access the `iterate` function from inside the Core._apply implementation
-# must be a separate function from append(), since Core._apply needs this exact function
-function append_any(xs...)
-    @nospecialize
-    lx = length(xs)
-    l = 4
-    i = 1
-    out = Vector{Any}(undef, l)
-    for xi in 1:lx
-        x = @inbounds xs[xi]
-        # handle some common cases, where we know the length
-        # and can inline the iterator because the runtime
-        # has an optimized version of the iterator
-        if x isa SimpleVector
-            lx = length(x)
-            if i + lx - 1 > l
-                ladd = lx > 16 ? lx : 16
-                _growend!(out, ladd)
-                l += ladd
-            end
-            for j in 1:lx
-                y = @inbounds x[j]
-                arrayset(true, out, y, i)
-                i += 1
-            end
-        elseif x isa Tuple
-            lx = length(x)
-            if i + lx - 1 > l
-                ladd = lx > 16 ? lx : 16
-                _growend!(out, ladd)
-                l += ladd
-            end
-            for j in 1:lx
-                y = @inbounds x[j]
-                arrayset(true, out, y, i)
-                i += 1
-            end
-        elseif x isa Array
-            lx = length(x)
-            if i + lx - 1 > l
-                ladd = lx > 16 ? lx : 16
-                _growend!(out, ladd)
-                l += ladd
-            end
-            for j in 1:lx
-                y = arrayref(true, x, j)
-                arrayset(true, out, y, i)
-                i += 1
-            end
-        else
-            for y in x
-                if i > l
-                    _growend!(out, 16)
-                    l += 16
-                end
-                arrayset(true, out, y, i)
-                i += 1
-            end
-        end
-    end
-    _deleteend!(out, l - i + 1)
-    return out
 end
 
 
@@ -745,6 +715,9 @@ function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
     inner() = f(args...; kwargs...)
     Core._apply_latest(inner)
 end
+
+# TODO: possibly make this an intrinsic
+inferencebarrier(@nospecialize(x)) = Ref{Any}(x)[]
 
 """
     isempty(collection) -> Bool
@@ -856,6 +829,12 @@ next element and the new iteration state should be returned.
 """
 function iterate end
 
+"""
+    isiterable(T) -> Bool
+
+Test if type `T` is an iterable collection type or not,
+that is whether it has an `iterate` method or not.
+"""
 function isiterable(T)::Bool
     return hasmethod(iterate, Tuple{T})
 end

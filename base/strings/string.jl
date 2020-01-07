@@ -66,7 +66,7 @@ Convert a string to a contiguous byte array representation encoded as UTF-8 byte
 This representation is often appropriate for passing strings to C.
 """
 String(s::AbstractString) = print_to_string(s)
-String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
+@pure String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
 unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 
@@ -81,27 +81,31 @@ String(s::CodeUnits{UInt8,String}) = s.s
 pointer(s::String) = unsafe_convert(Ptr{UInt8}, s)
 pointer(s::String, i::Integer) = pointer(s)+(i-1)
 
-ncodeunits(s::String) = Core.sizeof(s)
-sizeof(s::String) = Core.sizeof(s)
+@pure ncodeunits(s::String) = Core.sizeof(s)
+@pure sizeof(s::String) = Core.sizeof(s)
 codeunit(s::String) = UInt8
 
 @inline function codeunit(s::String, i::Integer)
     @boundscheck checkbounds(s, i)
-    GC.@preserve s unsafe_load(pointer(s, i))
+    b = GC.@preserve s unsafe_load(pointer(s, i))
+    return b
 end
 
 ## comparison ##
 
+_memcmp(a::Union{Ptr{UInt8},AbstractString}, b::Union{Ptr{UInt8},AbstractString}, len) =
+    ccall(:memcmp, Cint, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), a, b, len % Csize_t) % Int
+
 function cmp(a::String, b::String)
     al, bl = sizeof(a), sizeof(b)
-    c = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-              a, b, min(al,bl))
+    c = _memcmp(a, b, min(al,bl))
     return c < 0 ? -1 : c > 0 ? +1 : cmp(al,bl)
 end
 
 function ==(a::String, b::String)
+    pointer_from_objref(a) == pointer_from_objref(b) && return true
     al = sizeof(a)
-    al == sizeof(b) && 0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, al)
+    return al == sizeof(b) && 0 == _memcmp(a, b, al)
 end
 
 typemin(::Type{String}) = ""
@@ -109,7 +113,7 @@ typemin(::String) = typemin(String)
 
 ## thisind, nextind ##
 
-Base.@propagate_inbounds thisind(s::String, i::Int) = _thisind_str(s, i)
+@propagate_inbounds thisind(s::String, i::Int) = _thisind_str(s, i)
 
 # s should be String or SubString{String}
 @inline function _thisind_str(s, i::Int)
@@ -130,7 +134,7 @@ Base.@propagate_inbounds thisind(s::String, i::Int) = _thisind_str(s, i)
     return i
 end
 
-Base.@propagate_inbounds nextind(s::String, i::Int) = _nextind_str(s, i)
+@propagate_inbounds nextind(s::String, i::Int) = _nextind_str(s, i)
 
 # s should be String or SubString{String}
 @inline function _nextind_str(s, i::Int)
@@ -177,10 +181,10 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
     b = codeunit(s, i)
     u = UInt32(b) << 24
     between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
-    return next_continued(s, i, u)
+    return iterate_continued(s, i, u)
 end
 
-function next_continued(s::String, i::Int, u::UInt32)
+function iterate_continued(s::String, i::Int, u::UInt32)
     u < 0xc0000000 && (i += 1; @goto ret)
     n = ncodeunits(s)
     # first continuation byte
@@ -248,9 +252,11 @@ getindex(s::String, r::UnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
     j = nextind(s, j) - 1
     n = j - i + 1
     ss = _string_n(n)
-    unsafe_copyto!(pointer(ss), pointer(s, i), n)
+    GC.@preserve s ss unsafe_copyto!(pointer(ss), pointer(s, i), n)
     return ss
 end
+
+length(s::String) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
 
 @inline function length(s::String, i::Int, j::Int)
     @boundscheck begin
@@ -260,12 +266,10 @@ end
     j < i && return 0
     @inbounds i, k = thisind(s, i), i
     c = j - i + (i == k)
-    length(s, i, j, c)
+    length_continued(s, i, j, c)
 end
 
-length(s::String) = length(s, 1, ncodeunits(s), ncodeunits(s))
-
-@inline function length(s::String, i::Int, n::Int, c::Int)
+@inline function length_continued(s::String, i::Int, n::Int, c::Int)
     i < n || return c
     @inbounds b = codeunit(s, i)
     @inbounds while true
@@ -294,6 +298,13 @@ end
 
 isvalid(s::String, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
 
+function isascii(s::String)
+    @inbounds for i = 1:ncodeunits(s)
+        codeunit(s, i) >= 0x80 && return false
+    end
+    return true
+end
+
 """
     repeat(c::AbstractChar, r::Integer) -> String
 
@@ -313,7 +324,7 @@ function repeat(c::Char, r::Integer)
     n = 4 - (leading_zeros(u | 0xff) >> 3)
     s = _string_n(n*r)
     p = pointer(s)
-    if n == 1
+    GC.@preserve s if n == 1
         ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), p, u % UInt8, r)
     elseif n == 2
         p16 = reinterpret(Ptr{UInt16}, p)
@@ -330,10 +341,23 @@ function repeat(c::Char, r::Integer)
             unsafe_store!(p, b3, 3i + 3)
         end
     elseif n == 4
-        p32 = reinterpret(Ptr{UInt32}, pointer(s))
+        p32 = reinterpret(Ptr{UInt32}, p)
         for i = 1:r
             unsafe_store!(p32, u, i)
         end
     end
     return s
+end
+
+function filter(f, s::String)
+    out = StringVector(sizeof(s))
+    offset = 1
+    for c in s
+        if f(c)
+            offset += __unsafe_string!(out, c, offset)
+        end
+    end
+    resize!(out, offset-1)
+    sizehint!(out, offset-1)
+    return String(out)
 end

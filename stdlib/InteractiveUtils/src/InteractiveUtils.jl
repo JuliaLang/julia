@@ -173,7 +173,7 @@ function methodswith(t::Type; supertypes::Bool=false)
 end
 
 # subtypes
-function _subtypes(m::Module, x::Type, sts=Set{Any}(), visited=Set{Module}())
+function _subtypes(m::Module, x::Type, sts=Base.IdSet{Any}(), visited=Base.IdSet{Module}())
     push!(visited, m)
     xt = unwrap_unionall(x)
     if !isa(xt, DataType)
@@ -212,8 +212,8 @@ function _subtypes_in(mods::Array, x::Type)
         # Fast path
         return Type[]
     end
-    sts = Set{Any}()
-    visited = Set{Module}()
+    sts = Base.IdSet{Any}()
+    visited = Base.IdSet{Module}()
     for m in mods
         _subtypes(m, x, sts, visited)
     end

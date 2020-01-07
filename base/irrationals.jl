@@ -17,7 +17,11 @@ symbol `sym`.
 """
 struct Irrational{sym} <: AbstractIrrational end
 
-show(io::IO, x::Irrational{sym}) where {sym} = print(io, "$sym = $(string(float(x))[1:15])...")
+show(io::IO, x::Irrational{sym}) where {sym} = print(io, sym)
+
+function show(io::IO, ::MIME"text/plain", x::Irrational{sym}) where {sym}
+    print(io, sym, " = ", string(float(x))[1:15], "...")
+end
 
 promote_rule(::Type{<:AbstractIrrational}, ::Type{Float16}) = Float16
 promote_rule(::Type{<:AbstractIrrational}, ::Type{Float32}) = Float32
@@ -176,8 +180,10 @@ big(::Type{<:AbstractIrrational}) = BigFloat
 
 # align along = for nice Array printing
 function alignment(io::IO, x::AbstractIrrational)
-    ctx = IOContext(io, :compact=>true)
-    m = match(r"^(.*?)(=.*)$", sprint(show, x, context=ctx, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=ctx, sizehint=0)), 0) :
+    m = match(r"^(.*?)(=.*)$", sprint(show, x, context=io, sizehint=0))
+    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
     (length(m.captures[1]), length(m.captures[2]))
 end
+
+# inv
+inv(x::AbstractIrrational) = 1/x

@@ -36,6 +36,26 @@ JL_DLLEXPORT int jl_is_initialized(void)
     return jl_main_module != NULL;
 }
 
+JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv)
+{
+    if (jl_core_module != NULL) {
+        jl_array_t *args = (jl_array_t*)jl_get_global(jl_core_module, jl_symbol("ARGS"));
+        if (args == NULL) {
+            args = jl_alloc_vec_any(0);
+            JL_GC_PUSH1(&args);
+            jl_set_const(jl_core_module, jl_symbol("ARGS"), (jl_value_t*)args);
+            JL_GC_POP();
+        }
+        assert(jl_array_len(args) == 0);
+        jl_array_grow_end(args, argc);
+        int i;
+        for (i = 0; i < argc; i++) {
+            jl_value_t *s = (jl_value_t*)jl_cstr_to_string(argv[i]);
+            jl_arrayset(args, s, i);
+        }
+    }
+}
+
 // First argument is the usr/bin directory where the julia binary is, or NULL to guess.
 // Second argument is the path of a system image file (*.ji) relative to the
 // first argument path, or relative to the default julia home dir.
@@ -88,7 +108,7 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
     jl_value_t *r;
     JL_TRY {
         const char filename[] = "none";
-        jl_value_t *ast = jl_parse_input_line(str, strlen(str),
+        jl_value_t *ast = jl_parse_all(str, strlen(str),
                 filename, strlen(filename));
         JL_GC_PUSH1(&ast);
         r = jl_toplevel_eval_in(jl_main_module, ast);
@@ -393,6 +413,12 @@ JL_DLLEXPORT jl_value_t *(jl_typeof)(jl_value_t *v)
 {
     return jl_typeof(v);
 }
+
+JL_DLLEXPORT jl_value_t *(jl_get_fieldtypes)(jl_value_t *v)
+{
+    return (jl_value_t*)jl_get_fieldtypes((jl_datatype_t*)v);
+}
+
 
 #ifndef __clang_analyzer__
 JL_DLLEXPORT int8_t (jl_gc_unsafe_enter)(void)

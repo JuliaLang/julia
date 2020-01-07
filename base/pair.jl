@@ -21,7 +21,7 @@ const => = Pair
 
 Construct a `Pair` object with type `Pair{typeof(x), typeof(y)}`. The elements
 are stored in the fields `first` and `second`. They can also be accessed via
-iteration.
+iteration (but a `Pair` is treated as a single "scalar" for broadcasting operations).
 
 See also: [`Dict`](@ref)
 

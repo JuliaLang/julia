@@ -2,10 +2,21 @@
 
 // Declarations for debuginfo.cpp
 
-extern int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int64_t *section_slide,
-                      const object::ObjectFile **object,
-                      llvm::DIContext **context);
+int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
+        llvm::object::SectionRef *Section, llvm::DIContext **context) JL_NOTSAFEPOINT;
 
-extern bool jl_dylib_DI_for_fptr(size_t pointer, const object::ObjectFile **object, llvm::DIContext **context,
-        int64_t *slide, int64_t *section_slide,
-        bool onlySysImg, bool *isSysImg, void **saddr, char **name, char **filename);
+bool jl_dylib_DI_for_fptr(size_t pointer, llvm::object::SectionRef *Section, int64_t *slide, llvm::DIContext **context,
+    bool onlySysImg, bool *isSysImg, void **saddr, char **name, char **filename) JL_NOTSAFEPOINT;
+
+#if JL_LLVM_VERSION >= 90000
+static object::SectionedAddress makeAddress(
+        llvm::object::SectionRef Section, uint64_t address) JL_NOTSAFEPOINT
+{
+    return object::SectionedAddress{address, Section.getIndex()};
+}
+#else
+static uint64_t makeAddress(llvm::object::SectionRef Section, uint64_t address) JL_NOTSAFEPOINT
+{
+    return address;
+}
+#endif

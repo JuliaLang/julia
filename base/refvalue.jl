@@ -11,7 +11,7 @@ RefValue(x::T) where {T} = RefValue{T}(x)
 isassigned(x::RefValue) = isdefined(x, :x)
 
 function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
-    if datatype_pointerfree(RefValue{T})
+    if allocatedinline(T)
         p = pointer_from_objref(b)
     elseif isconcretetype(T) && T.mutable
         p = pointer_from_objref(b.x)

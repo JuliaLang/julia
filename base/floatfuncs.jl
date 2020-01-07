@@ -231,7 +231,8 @@ the square root of [`eps`](@ref) of the type of `x` or `y`, whichever is bigger 
 This corresponds to requiring equality of about half of the significand digits. Otherwise,
 e.g. for integer arguments or if an `atol > 0` is supplied, `rtol` defaults to zero.
 
-`x` and `y` may also be arrays of numbers, in which case `norm` defaults to `vecnorm` but
+`x` and `y` may also be arrays of numbers, in which case `norm` defaults to the usual
+`norm` function in LinearAlgebra, but
 may be changed by passing a `norm::Function` keyword argument. (For numbers, `norm` is the
 same thing as `abs`.) When `x` and `y` are arrays, if `norm(x-y)` is not finite (i.e. `±Inf`
 or `NaN`), the comparison falls back to checking whether all elements of `x` and `y` are
@@ -312,7 +313,7 @@ fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)
 # 1.0000000009313226 = 1 + 1/2^30
 # If fma_llvm() clobbers the rounding mode, the result of 0.1 + 0.2 will be 0.3
 # instead of the properly-rounded 0.30000000000000004; check after calling fma
-if (Sys.ARCH != :i686 && fma_llvm(1.0000305f0, 1.0000305f0, -1.0f0) == 6.103609f-5 &&
+if (Sys.ARCH !== :i686 && fma_llvm(1.0000305f0, 1.0000305f0, -1.0f0) == 6.103609f-5 &&
     (fma_llvm(1.0000000009313226, 1.0000000009313226, -1.0) ==
      1.8626451500983188e-9) && 0.1 + 0.2 == 0.30000000000000004)
     fma(x::Float32, y::Float32, z::Float32) = fma_llvm(x,y,z)

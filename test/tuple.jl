@@ -89,6 +89,13 @@ end
 
     # issue #28915
     @test convert(Union{Tuple{}, Tuple{Int}}, (1,)) === (1,)
+
+    @testset "one-element containers" begin
+        r = Ref(3)
+        @test (3,) === @inferred Tuple(r)
+        z = Array{Float64,0}(undef); z[] = 3.0
+        @test (3.0,) === @inferred Tuple(z)
+    end
 end
 
 @testset "size" begin
@@ -97,6 +104,7 @@ end
     @test length((1,2)) === 2
 
     @test_throws ArgumentError Base.front(())
+    @test_throws ArgumentError Base.tail(())
     @test_throws ArgumentError first(())
 
     @test lastindex(()) === 0
@@ -244,6 +252,16 @@ end
     @test mapfoldl(abs, =>, (), init=-10) == -10
     @test mapfoldl(abs, Pair{Any,Any}, (-30:-1...,)) == mapfoldl(abs, Pair{Any,Any}, [-30:-1...,])
     @test_throws ArgumentError mapfoldl(abs, =>, ())
+end
+
+@testset "filter" begin
+    @test filter(isodd, (1,2,3)) == (1, 3)
+    @test filter(isequal(2), (true, 2.0, 3)) === (2.0,)
+    @test filter(i -> true, ()) == ()
+    @test filter(identity, (true,)) === (true,)
+    longtuple = ntuple(identity, 20)
+    @test filter(iseven, longtuple) == ntuple(i->2i, 10)
+    @test filter(x -> x<2, (longtuple..., 1.5)) === (1, 1.5)
 end
 
 @testset "comparison and hash" begin
@@ -439,3 +457,14 @@ end
     @test findnext(isequal(1), (2, 3), 1) === nothing
     @test findprev(isequal(1), (2, 3), 2) === nothing
 end
+
+@testset "properties" begin
+    ttest = (:a, :b, :c)
+    @test propertynames(ttest) == (1, 2, 3)
+    @test getproperty(ttest, 2) == :b
+    @test map(p->getproperty(ttest, p), propertynames(ttest)) == ttest
+    @test_throws ErrorException setproperty!(ttest, 1, :d)
+end
+
+# tuple_type_tail on non-normalized vararg tuple
+@test Base.tuple_type_tail(Tuple{Vararg{T, 3}} where T<:Real) == Tuple{Vararg{T, 2}} where T<:Real

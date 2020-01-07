@@ -344,7 +344,7 @@ end
 
 function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
                               username_ptr::Cstring, allowed_types::Cuint,
-                              payloads::Dict)
+                              payloads::Dict{Symbol, Any})
     p = payloads[:credentials]
     return credentials_callback(libgit2credptr, url_ptr, username_ptr, allowed_types, p)
 end

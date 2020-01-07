@@ -8,6 +8,7 @@ ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/mbedtls
 endif
 
+ifneq ($(USE_BINARYBUILDER_CURL),1)
 CURL_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
 
 # On older Linuces (those that use OpenSSL < 1.1) we include `libpthread` explicitly.
@@ -66,3 +67,11 @@ configure-curl: $(BUILDDIR)/curl-$(CURL_VER)/build-configured
 compile-curl: $(BUILDDIR)/curl-$(CURL_VER)/build-compiled
 fastcheck-curl: #none
 check-curl: $(BUILDDIR)/curl-$(CURL_VER)/build-checked
+
+else # USE_BINARYBUILDER_CURL
+
+CURL_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LibCURL_jll.jl/releases/download/LibCURL-v$(CURL_VER)+$(CURL_BB_REL)
+CURL_BB_NAME := LibCURL.v$(CURL_VER)
+
+$(eval $(call bb-install,curl,CURL,false))
+endif

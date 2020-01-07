@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+This module provides universally unique identifiers (UUIDs),
+along with functions creating the different variants.
+"""
 module UUIDs
 
 using Random
@@ -46,7 +50,7 @@ julia> uuid1(rng)
 UUID("cfc395e8-590f-11e8-1f13-43a2532b2fa8")
 ```
 """
-function uuid1(rng::AbstractRNG=Random.GLOBAL_RNG)
+function uuid1(rng::AbstractRNG=Random.default_rng())
     u = rand(rng, UInt128)
 
     # mask off clock sequence and node
@@ -83,7 +87,7 @@ julia> uuid4(rng)
 UUID("196f2941-2d58-45ba-9f13-43a2532b2fa8")
 ```
 """
-function uuid4(rng::AbstractRNG=Random.GLOBAL_RNG)
+function uuid4(rng::AbstractRNG=Random.default_rng())
     u = rand(rng, UInt128)
     u &= 0xffffffffffff0fff3fffffffffffffff
     u |= 0x00000000000040008000000000000000

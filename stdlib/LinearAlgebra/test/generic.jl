@@ -5,8 +5,13 @@ module TestGeneric
 using Test, LinearAlgebra, Random
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
 isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
 using .Main.Quaternions
+
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
 
 Random.seed!(123)
 
@@ -116,6 +121,12 @@ end
             @test_throws DimensionMismatch rmul!(a, Diagonal(Vector{Float64}(undef,an+1)))
         end
 
+        @testset "Scaling with rdiv! and ldiv!" begin
+            @test rdiv!(copy(a), 5.) == a/5
+            @test ldiv!(5., copy(a)) == a/5
+            @test ldiv!(zero(a), 5., copy(a)) == a/5
+        end
+
         @testset "Scaling with 3-argument mul!" begin
             @test mul!(similar(a), 5., a) == a*5
             @test mul!(similar(a), a, 5.) == a*5
@@ -126,6 +137,15 @@ end
             @test_throws DimensionMismatch mul!(similar(a), a, Diagonal(Vector{Float64}(undef, an+1)))
             @test mul!(similar(a), a, Diagonal(1.:an)) == a.*Vector(1:an)'
             @test mul!(similar(a), a, Diagonal(1:an))  == a.*Vector(1:an)'
+        end
+
+        @testset "Scaling with 5-argument mul!" begin
+            @test mul!(copy(a), 5., a, 10, 100) == a*150
+            @test mul!(copy(a), a, 5., 10, 100) == a*150
+            @test mul!(copy(a), Diagonal([1.; 2.]), a, 10, 100) == 10a.*[1; 2] .+ 100a
+            @test mul!(copy(a), Diagonal([1; 2]), a, 10, 100)   == 10a.*[1; 2] .+ 100a
+            @test mul!(copy(a), a, Diagonal(1.:an), 10, 100) == 10a.*Vector(1:an)' .+ 100a
+            @test mul!(copy(a), a, Diagonal(1:an), 10, 100)  == 10a.*Vector(1:an)' .+ 100a
         end
     end
 end
@@ -150,6 +170,10 @@ end
     @test conj(q*qmat) ≈ conj(qmat)*conj(q)
     @test q * (q \ qmat) ≈ qmat ≈ (qmat / q) * q
     @test q\qmat ≉ qmat/q
+    alpha = Quaternion(rand(4)...)
+    beta = Quaternion(0, 0, 0, 0)
+    @test mul!(copy(qmat), qmat, q, alpha, beta) ≈ qmat * q * alpha
+    @test mul!(copy(qmat), q, qmat, alpha, beta) ≈ q * qmat * alpha
 end
 @testset "ops on Numbers" begin
     @testset for elty in [Float32,Float64,ComplexF32,ComplexF64]
@@ -163,11 +187,15 @@ end
         @test issymmetric(a)
         @test ishermitian(one(elty))
         @test det(a) == a
+        @test norm(a) == abs(a)
+        @test norm(a, 0) == 1
     end
 
     @test !issymmetric(NaN16)
     @test !issymmetric(NaN32)
     @test !issymmetric(NaN)
+    @test norm(NaN)    === NaN
+    @test norm(NaN, 0) === NaN
 end
 
 @test rank(fill(0, 0, 0)) == 0
@@ -223,6 +251,30 @@ end
             @test isempty(normalize!(T[]))
         end
     end
+end
+
+@testset "normalize for multidimensional arrays" begin
+
+    for arr in (
+        fill(10.0, ()),  # 0 dim
+        [1.0],           # 1 dim
+        [1.0 2.0 3.0; 4.0 5.0 6.0], # 2-dim
+        rand(1,2,3),                # higher dims
+        rand(1,2,3,4),
+        OffsetArray([-1,0], (-2,))  # no index 1
+    )
+        @test normalize(arr) == normalize!(copy(arr))
+        @test size(normalize(arr)) == size(arr)
+        @test axes(normalize(arr)) == axes(arr)
+        @test vec(normalize(arr)) == normalize(vec(arr))
+    end
+
+    @test typeof(normalize([1 2 3; 4 5 6])) == Array{Float64,2}
+end
+
+@testset "Issue #30466" begin
+    @test norm([typemin(Int), typemin(Int)], Inf) == -float(typemin(Int))
+    @test norm([typemin(Int), typemin(Int)], 1) == -2float(typemin(Int))
 end
 
 @testset "potential overflow in normalize!" begin
@@ -380,6 +432,34 @@ end
     @test all(!isnan, rmul!(Any[NaN], false))
     @test all(!isnan, lmul!(false, [NaN]))
     @test all(!isnan, lmul!(false, Any[NaN]))
+end
+
+@testset "generalized dot #32739" begin
+    for elty in (Int, Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Complex{BigFloat})
+        n = 10
+        if elty <: Int
+            A = rand(-n:n, n, n)
+            x = rand(-n:n, n)
+            y = rand(-n:n, n)
+        elseif elty <: Real
+            A = convert(Matrix{elty}, randn(n,n))
+            x = rand(elty, n)
+            y = rand(elty, n)
+        else
+            A = convert(Matrix{elty}, complex.(randn(n,n), randn(n,n)))
+            x = rand(elty, n)
+            y = rand(elty, n)
+        end
+        @test dot(x, A, y) ≈ dot(A'x, y) ≈ *(x', A, y) ≈ (x'A)*y
+        @test dot(x, A', y) ≈ dot(A*x, y) ≈ *(x', A', y) ≈ (x'A')*y
+        elty <: Real && @test dot(x, transpose(A), y) ≈ dot(x, transpose(A)*y) ≈ *(x', transpose(A), y) ≈ (x'*transpose(A))*y
+        B = reshape([A], 1, 1)
+        x = [x]
+        y = [y]
+        @test dot(x, B, y) ≈ dot(B'x, y)
+        @test dot(x, B', y) ≈ dot(B*x, y)
+        elty <: Real && @test dot(x, transpose(B), y) ≈ dot(x, transpose(B)*y)
+    end
 end
 
 end # module TestGeneric

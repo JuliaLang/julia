@@ -16,7 +16,7 @@ end
 
 function factorial_lookup(n::Integer, table, lim)
     n < 0 && throw(DomainError(n, "`n` must not be negative."))
-    n > lim && throw(OverflowError(string(n, " is too large to look up in the table")))
+    n > lim && throw(OverflowError(string(n, " is too large to look up in the table; consider using `factorial(big(", n, "))` instead")))
     n == 0 && return one(n)
     @inbounds f = table[n]
     return oftype(n, f)
@@ -63,8 +63,39 @@ isperm(p::Tuple{}) = true
 isperm(p::Tuple{Int}) = p[1] == 1
 isperm(p::Tuple{Int,Int}) = ((p[1] == 1) & (p[2] == 2)) | ((p[1] == 2) & (p[2] == 1))
 
+# swap columns i and j of a, in-place
+function swapcols!(a::AbstractMatrix, i, j)
+    i == j && return
+    cols = axes(a,2)
+    @boundscheck i in cols || throw(BoundsError(a, (:,i)))
+    @boundscheck j in cols || throw(BoundsError(a, (:,j)))
+    for k in axes(a,1)
+        @inbounds a[k,i],a[k,j] = a[k,j],a[k,i]
+    end
+end
+# like permute!! applied to each row of a, in-place in a (overwriting p).
+function permutecols!!(a::AbstractMatrix, p::AbstractVector{<:Integer})
+    require_one_based_indexing(a, p)
+    count = 0
+    start = 0
+    while count < length(p)
+        ptr = start = findnext(!iszero, p, start+1)::Int
+        next = p[start]
+        count += 1
+        while next != start
+            swapcols!(a, ptr, next)
+            p[ptr] = 0
+            ptr = next
+            next = p[next]
+            count += 1
+        end
+        p[ptr] = 0
+    end
+    a
+end
+
 function permute!!(a, p::AbstractVector{<:Integer})
-    @assert !has_offset_axes(a, p)
+    require_one_based_indexing(a, p)
     count = 0
     start = 0
     while count < length(a)
@@ -115,7 +146,7 @@ julia> A
 permute!(a, p::AbstractVector) = permute!!(a, copymutable(p))
 
 function invpermute!!(a, p::AbstractVector{<:Integer})
-    @assert !has_offset_axes(a, p)
+    require_one_based_indexing(a, p)
     count = 0
     start = 0
     while count < length(a)
@@ -196,7 +227,7 @@ julia> B[invperm(v)]
 ```
 """
 function invperm(a::AbstractVector)
-    @assert !has_offset_axes(a)
+    require_one_based_indexing(a)
     b = zero(a) # similar vector of zeros
     n = length(a)
     @inbounds for (i, j) in enumerate(a)

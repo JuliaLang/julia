@@ -86,6 +86,12 @@ extern "C" JL_DLLEXPORT LLVMBool LLVMExtraInitializeNativeDisassembler()
     return InitializeNativeTargetDisassembler();
 }
 
+// Exporting the Barrier LLVM pass
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddBarrierNoopPass(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createBarrierNoopPass());
+}
 
 // Infrastructure for writing LLVM passes in Julia
 
@@ -170,37 +176,6 @@ LLVMExtraCreateFunctionPass(const char *Name, jl_value_t *Callback)
     return wrap(new JuliaFunctionPass(Name, Callback));
 }
 
-class JuliaBasicBlockPass : public BasicBlockPass {
-public:
-    JuliaBasicBlockPass(const char *Name, jl_value_t *Callback)
-        : BasicBlockPass(CreatePassID(Name)), Callback(Callback)
-    {
-    }
-
-    bool runOnBasicBlock(BasicBlock &BB)
-    {
-        jl_value_t **argv;
-        JL_GC_PUSHARGS(argv, 2);
-        argv[0] = Callback;
-        argv[1] = jl_box_voidpointer(wrap(&BB));
-
-        jl_value_t *ret = jl_apply(argv, 2);
-        bool changed = jl_unbox_bool(ret);
-
-        JL_GC_POP();
-        return changed;
-    }
-
-private:
-    jl_value_t *Callback;
-};
-
-extern "C" JL_DLLEXPORT LLVMPassRef
-LLVMExtraCreateBasicBlockPass(const char *Name, jl_value_t *Callback)
-{
-    return wrap(new JuliaBasicBlockPass(Name, Callback));
-}
-
 
 // Various missing functions
 
@@ -214,11 +189,20 @@ extern "C" JL_DLLEXPORT LLVMContextRef LLVMExtraGetValueContext(LLVMValueRef V)
     return wrap(&unwrap(V)->getContext());
 }
 
+
+#if JL_LLVM_VERSION < 80000
 extern ModulePass *createNVVMReflectPass();
-extern "C" JL_DLLEXPORT void LLVMExtraAddMVVMReflectPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddNVVMReflectPass(LLVMPassManagerRef PM)
 {
-    createNVVMReflectPass();
+    unwrap(PM)->add(createNVVMReflectPass());
 }
+#else
+FunctionPass *createNVVMReflectPass(unsigned int SmVersion);
+extern "C" JL_DLLEXPORT void LLVMExtraAddNVVMReflectFunctionPass(LLVMPassManagerRef PM, unsigned int SmVersion)
+{
+    unwrap(PM)->add(createNVVMReflectPass(SmVersion));
+}
+#endif
 
 extern "C" JL_DLLEXPORT void
 LLVMExtraAddTargetLibraryInfoByTiple(const char *T, LLVMPassManagerRef PM)

@@ -3,6 +3,7 @@
 
 # Run as: fixup-libgfortran.sh [--verbose] <$private_libdir>
 FC=${FC:-gfortran}
+PATCHELF=${PATCHELF:-patchelf}
 
 # If we're invoked with "--verbose", create a `debug` function that prints stuff out
 if [ "$1" = "--verbose" ] || [ "$1" = "-v" ]; then
@@ -35,7 +36,7 @@ find_shlib()
     lib_path="$1"
     if [ -f "$lib_path" ]; then
         if [ "$UNAME" = "Linux" ]; then
-            ldd "$lib_path" | grep $2 | cut -d' ' -f3 | xargs
+            ldd "$lib_path" | grep $2 | grep -v "not found" | cut -d' ' -f3 | xargs
         else # $UNAME is "Darwin", we only have two options, see above
             otool -L "$lib_path" | grep $2 | cut -d' ' -f1 | xargs
         fi
@@ -126,7 +127,7 @@ change_linkage()
         echo " $old_link"
         install_name_tool -change "$old_link" "@rpath/$soname" "$lib_path"
     else # $UNAME is "Linux", we only have two options, see above
-        patchelf --set-rpath \$ORIGIN "$lib_path"
+        ${PATCHELF} --set-rpath \$ORIGIN "$lib_path"
     fi
 }
 

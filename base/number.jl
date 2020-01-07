@@ -60,9 +60,9 @@ true
 isone(x) = x == one(x) # fallback method
 
 size(x::Number) = ()
-size(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : 1
+size(x::Number, d::Integer) = d < 1 ? throw(BoundsError()) : 1
 axes(x::Number) = ()
-axes(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : OneTo(1)
+axes(x::Number, d::Integer) = d < 1 ? throw(BoundsError()) : OneTo(1)
 eltype(::Type{T}) where {T<:Number} = T
 ndims(x::Number) = 0
 ndims(::Type{<:Number}) = 0
@@ -80,36 +80,12 @@ function getindex(x::Number, i::Integer)
 end
 function getindex(x::Number, I::Integer...)
     @_inline_meta
-    @boundscheck all([i == 1 for i in I]) || throw(BoundsError())
+    @boundscheck all(isone, I) || throw(BoundsError())
     x
 end
 first(x::Number) = x
 last(x::Number) = x
 copy(x::Number) = x # some code treats numbers as collection-like
-
-"""
-    divrem(x, y)
-
-The quotient and remainder from Euclidean division. Equivalent to `(div(x,y), rem(x,y))` or
-`(x÷y, x%y)`.
-
-# Examples
-```jldoctest
-julia> divrem(3,7)
-(0, 3)
-
-julia> divrem(7,3)
-(2, 1)
-```
-"""
-divrem(x,y) = (div(x,y),rem(x,y))
-
-"""
-    fldmod(x, y)
-
-The floored quotient and modulus after division. Equivalent to `(fld(x,y), mod(x,y))`.
-"""
-fldmod(x,y) = (fld(x,y),mod(x,y))
 
 """
     signbit(x)
@@ -216,6 +192,9 @@ julia> inv(1 + 2im) * (1 + 2im)
 julia> inv(2//3)
 3//2
 ```
+
+!!! compat "Julia 1.2"
+    `inv(::Missing)` requires at least Julia 1.2.
 """
 inv(x::Number) = one(x)/x
 

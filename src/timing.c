@@ -29,14 +29,14 @@ void jl_print_timings(void)
     }
     for (int i = 0; i < JL_TIMING_LAST; i++) {
         if (jl_timing_data[i] != 0)
-            printf("%-25s : %.2f %%   %" PRIu64 "\n", jl_timing_names[i],
+            fprintf(stderr,"%-25s : %.2f %%   %" PRIu64 "\n", jl_timing_names[i],
                     100 * (((double)jl_timing_data[i]) / total_time), jl_timing_data[i]);
     }
 }
 
 void jl_init_timing(void)
 {
-    jl_root_timing = (jl_timing_block_t*)malloc(sizeof(jl_timing_block_t));
+    jl_root_timing = (jl_timing_block_t*)malloc_s(sizeof(jl_timing_block_t));
     _jl_timing_block_init(jl_root_timing, JL_TIMING_ROOT);
     jl_root_timing->prev = NULL;
 }
