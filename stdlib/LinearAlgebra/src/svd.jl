@@ -390,14 +390,14 @@ object `F` such that `[A;B] = [F.U * F.D1; F.V * F.D2] * F.R0 * F.Q'`
 
 Iterating the decomposition produces the components `U`, `V`, `Q`, `D1`, `D2`, and `R0`.
 
-The generalized SVD is used in applications such as when one wants to compare how much belongs 
-to `A` vs. how much belongs to `B`, as in human vs yeast genome, or signal vs noise, or between 
+The generalized SVD is used in applications such as when one wants to compare how much belongs
+to `A` vs. how much belongs to `B`, as in human vs yeast genome, or signal vs noise, or between
 clusters vs within clusters. (See Edelman and Wang for discussion: https://arxiv.org/abs/1901.00485)
 
-It decomposes `[A; B]` into `[UC; VS]H`, where `[UC; VS]` is a natural orthogonal basis for the 
-column space of `[A; B]`, and `H = RQ'` is a natural non-orthogonal basis for the rowspace of `[A;B]`, 
-where the top rows are most closely attributed to the `A` matrix, and the bottom to the `B` matrix. 
-The multi-cosine/sine matrices `C` and `S` provide a multi-measure of how much `A` vs how much `B`, 
+It decomposes `[A; B]` into `[UC; VS]H`, where `[UC; VS]` is a natural orthogonal basis for the
+column space of `[A; B]`, and `H = RQ'` is a natural non-orthogonal basis for the rowspace of `[A;B]`,
+where the top rows are most closely attributed to the `A` matrix, and the bottom to the `B` matrix.
+The multi-cosine/sine matrices `C` and `S` provide a multi-measure of how much `A` vs how much `B`,
 and `U` and `V` provide directions in which these are measured.
 
 # Examples
