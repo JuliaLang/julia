@@ -944,7 +944,7 @@ end
     @inferred merge!(-, d1, d2)
     @test d1 == Dict("A" => 1, "B" => 15, "C" => 28)
     @inferred merge!(NonFunctionCallable(), d1, d2)
-    @test d1 == Dict("A" => 1, "B" => 21, "C" => 36)
+    @test d1 == Dict("A" => 1, "B" => 18, "C" => 32)
 end
 
 @testset "Dict reduce merge" begin
