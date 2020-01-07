@@ -116,7 +116,17 @@ julia> divrem(7,3)
 ```
 """
 divrem(x, y) = divrem(x, y, RoundToZero)
-divrem(a, b, r::RoundingMode) = (div(a, b, r), rem(a, b, r))
+function divrem(a, b, r::RoundingMode)
+    if r == RoundToZero
+        # For compat. Remove in 2.0.
+        (div(a, b), rem(a, b))
+    elseif r === RoundDown
+        # For compat. Remove in 2.0.
+        (fld(a, b), mod(a, b))
+    else
+        (div(a, b, r), rem(a, b, r))
+    end
+end
 function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearest))
     (q, r) = divrem(x, y)
     if x >= 0
