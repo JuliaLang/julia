@@ -149,6 +149,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     dir = params[:dir]
     exename = params[:exename]
     exeflags = params[:exeflags]
+    tunnel = params[:tunnel]
 
     # machine could be of the format [user@]host[:port] bind_addr[:bind_port]
     # machine format string is split on whitespace
@@ -177,6 +178,14 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
         portopt = ` -p $(machine_def[2]) `
     end
     sshflags = `$(params[:sshflags]) $portopt`
+
+    # First it checks if ssh multiplexing has been already enabled and the master process is running.
+    # If it's already running, later ssh sessions also use the same ssh multiplexing session.
+    # If not, it creates a new ssh multiplexing session to open an ssh tunnel by default.
+    if tunnel && !success(`ssh $sshflags -O check $host`)
+        controlpath = "~/.ssh/julia-%r@%h:%p"
+        sshflags = `$sshflags -o ControlMaster=auto -o ControlPath=$controlpath -o ControlPersist=no`
+    end
 
     # Build up the ssh command
 
@@ -211,7 +220,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     wconfig = WorkerConfig()
     wconfig.io = io.out
     wconfig.host = host
-    wconfig.tunnel = params[:tunnel]
+    wconfig.tunnel = tunnel
     wconfig.sshflags = sshflags
     wconfig.exeflags = exeflags
     wconfig.exename = exename
@@ -264,17 +273,11 @@ Return a port number `localport` such that `localhost:localport` connects to `ho
 function ssh_tunnel(user, host, bind_addr, port, sshflags)
     port = Int(port)
     cnt = ntries = 100
-    # if we cannot do port forwarding, bail immediately
     # the connection is forwarded to `port` on the remote server over the local port `localport`
-    # the -f option backgrounds the ssh session
-    # `sleep 60` command specifies that an alloted time of 60 seconds is allowed to start the
-    # remote julia process and establish the network connections specified by the process topology.
-    # If no connections are made within 60 seconds, ssh will exit and an error will be printed on the
-    # process that launched the remote process.
-    ssh = `ssh -T -a -x -o ExitOnForwardFailure=yes`
+    # It assumes that an ssh multiplexing session has been already started by the remote worker.
     while cnt > 0
         localport = next_tunnel_port()
-        if success(detach(`$ssh -f $sshflags $user@$host -L $localport:$bind_addr:$port sleep 60`))
+        if success(`ssh $sshflags -O forward -L $localport:$bind_addr:$port $user@$host`)
             return localport
         end
         cnt -= 1
@@ -429,7 +432,8 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
         sshflags = notnothing(config.sshflags)
         acquire(sem)
         try
-            (s, bind_addr) = connect_to_worker(pubhost, bind_addr, port, user, sshflags)
+            (s, bind_addr, forward) = connect_to_worker(pubhost, bind_addr, port, user, sshflags)
+            config.forward = forward
         finally
             release(sem)
         end
@@ -516,8 +520,21 @@ end
 
 
 function connect_to_worker(host::AbstractString, bind_addr::AbstractString, port::Integer, tunnel_user::AbstractString, sshflags)
-    s = connect("localhost", ssh_tunnel(tunnel_user, host, bind_addr, UInt16(port), sshflags))
-    (s, bind_addr)
+    localport = ssh_tunnel(tunnel_user, host, bind_addr, UInt16(port), sshflags)
+    s = connect("localhost", localport)
+    forward = "$localport:$bind_addr:$port"
+    (s, bind_addr, forward)
+end
+
+
+function cancel_ssh_tunnel(config::WorkerConfig)
+    host = notnothing(config.host)
+    sshflags = notnothing(config.sshflags)
+    tunnel = something(config.tunnel, false)
+    if tunnel
+        forward = notnothing(config.forward)
+        run(`ssh $sshflags -O cancel -L $forward $host`)
+    end
 end
 
 
@@ -531,7 +548,12 @@ It should cause the remote worker specified by `pid` to exit.
 on `pid`.
 """
 function kill(manager::ClusterManager, pid::Int, config::WorkerConfig)
-    remote_do(exit, pid) # For TCP based transports this will result in a close of the socket
-                       # at our end, which will result in a cleanup of the worker.
+    remote_do(exit, pid)
+    nothing
+end
+
+function kill(manager::SSHManager, pid::Int, config::WorkerConfig)
+    remote_do(exit, pid)
+    cancel_ssh_tunnel(config)
     nothing
 end
