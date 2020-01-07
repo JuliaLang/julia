@@ -213,7 +213,7 @@ Dict{Int64,Int64} with 3 entries:
   1 => 0
 ```
 """
-function merge!(combine::Function, d::AbstractDict, others::AbstractDict...)
+function merge!(combine, d::AbstractDict, others::AbstractDict...)
     for other in others
         for (k,v) in other
             d[k] = haskey(d, k) ? combine(d[k], v) : v
@@ -313,7 +313,7 @@ Dict{String,Float64} with 3 entries:
   "foo" => 0.0
 ```
 """
-merge(combine::Function, d::AbstractDict, others::AbstractDict...) =
+merge(combine, d::AbstractDict, others::AbstractDict...) =
     merge!(combine, _typeddict(d, others...), others...)
 
 promoteK(K) = K
