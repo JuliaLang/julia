@@ -209,6 +209,6 @@ deploydocs(
     deploy_config = BuildBotConfig(),
     target = joinpath(buildroot, "doc", "_build", "html", "en"),
     dirname = "en",
-    devurl = "v1.4-dev",
-    versions = ["v#.#", "v1.4-dev" => "v1.4-dev"]
+    devurl = "v1.5-dev",
+    versions = ["v#.#", "v1.5-dev" => "v1.5-dev"]
 )
