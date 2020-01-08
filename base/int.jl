@@ -155,7 +155,7 @@ julia> signed(unsigned(-2))
 -2
 ```
 """
-unsigned(x) = convert(Unsigned, x)
+unsigned(x) = x % typeof(convert(Unsigned, zero(x)))
 unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 
 """
@@ -164,7 +164,7 @@ unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as
 signed without checking for overflow.
 """
-signed(x) = convert(Signed, x)
+signed(x) = x % typeof(convert(Signed, zero(x)))
 signed(x::BitUnsigned) = reinterpret(typeof(convert(Signed, zero(x))), x)
 
 div(x::BitSigned, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)), y)), x)

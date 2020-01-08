@@ -377,7 +377,7 @@ function _lift_one_interp!(e)
 end
 _lift_one_interp_helper(v, _, _) = v
 function _lift_one_interp_helper(expr::Expr, in_quote_context, letargs)
-    if expr.head == :$
+    if expr.head === :$
         if in_quote_context  # This $ is simply interpolating out of the quote
             # Now, we're out of the quote, so any _further_ $ is ours.
             in_quote_context = false
@@ -386,8 +386,10 @@ function _lift_one_interp_helper(expr::Expr, in_quote_context, letargs)
             push!(letargs, :($(esc(newarg)) = $(esc(expr.args[1]))))
             return newarg  # Don't recurse into the lifted $() exprs
         end
-    elseif expr.head == :quote
+    elseif expr.head === :quote
         in_quote_context = true   # Don't try to lift $ directly out of quotes
+    elseif expr.head === :macrocall
+        return expr  # Don't recur into macro calls, since some other macros use $
     end
     for (i,e) in enumerate(expr.args)
         expr.args[i] = _lift_one_interp_helper(e, in_quote_context, letargs)

@@ -238,6 +238,12 @@ end
 
 # total number of bytes allocated so far
 gc_bytes(b::Ref{Int64}) = ccall(:jl_gc_get_total_bytes, Cvoid, (Ptr{Int64},), b)
+# NOTE: gc_bytes() is deprecated
+function gc_bytes()
+    b = Ref{Int64}()
+    gc_bytes(b)
+    b[]
+end
 
 """
     @allocated

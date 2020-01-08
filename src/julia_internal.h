@@ -352,6 +352,17 @@ void jl_set_t_uid_ctr(int i);
 uint32_t jl_get_gs_ctr(void);
 void jl_set_gs_ctr(uint32_t ctr);
 
+STATIC_INLINE jl_value_t *undefref_check(jl_datatype_t *dt, jl_value_t *v) JL_NOTSAFEPOINT
+{
+     if (dt->layout->first_ptr >= 0) {
+        jl_value_t *nullp = ((jl_value_t**)v)[dt->layout->first_ptr];
+        if (__unlikely(nullp == NULL))
+            jl_throw(jl_undefref_exception);
+    }
+    return v;
+}
+
+
 // -- functions -- //
 
 jl_code_info_t *jl_type_infer(jl_method_instance_t *li, size_t world, int force);
@@ -429,6 +440,7 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt);
 jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
 jl_value_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n);
 void jl_assign_bits(void *dest, jl_value_t *bits) JL_NOTSAFEPOINT;
+void set_nth_field(jl_datatype_t *st, void *v, size_t i, jl_value_t *rhs) JL_NOTSAFEPOINT;
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);
 jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st);
@@ -850,7 +862,8 @@ extern void *jl_crtdll_handle;
 extern void *jl_winsock_handle;
 #endif
 
-void *jl_get_library(const char *f_lib);
+void *jl_get_library_(const char *f_lib, int throw_err);
+#define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name,
                                       void **hnd);
 JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(

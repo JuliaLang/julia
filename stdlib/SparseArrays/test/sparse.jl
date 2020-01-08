@@ -36,6 +36,7 @@ end
 @testset "issparse" begin
     @test issparse(sparse(fill(1,5,5)))
     @test !issparse(fill(1,5,5))
+    @test nnz(zero(sparse(fill(1,5,5)))) == 0
 end
 
 @testset "iszero specialization for SparseMatrixCSC" begin
@@ -2693,6 +2694,9 @@ end
     @test sparse([1,2,3,4,5]') == SparseMatrixCSC([1 2 3 4 5])
     @test sparse(UpperTriangular(A')) == UpperTriangular(B')
     @test sparse(Adjoint(UpperTriangular(A'))) == Adjoint(UpperTriangular(B'))
+    @test sparse(UnitUpperTriangular(spzeros(5,5))) == I
+    deepwrap(A) = (Adjoint(LowerTriangular(view(Symmetric(A), 5:7, 4:6))))
+    @test sparse(deepwrap(A)) == Matrix(deepwrap(B))
 end
 
 @testset "unary operations on matrices where length(nzval)>nnz" begin

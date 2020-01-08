@@ -69,6 +69,7 @@ already work:
 - notepad++
 - Visual Studio Code
 - open
+- pycharm
 
 # Example:
 
@@ -123,7 +124,7 @@ function define_default_editors()
     define_editor(["textmate", "mate", "kate"]) do cmd, path, line
         `$cmd $path -l $line`
     end
-    define_editor([r"\bsubl", r"\batom"]) do cmd, path, line
+    define_editor([r"\bsubl", r"\batom", "pycharm"]) do cmd, path, line
         `$cmd $path:$line`
     end
     define_editor("code") do cmd, path, line
@@ -225,7 +226,12 @@ edit(m::Module) = edit(pathof(m))
 if Sys.iswindows()
     function less(file::AbstractString, line::Integer)
         pager = shell_split(get(ENV, "PAGER", "more"))
-        g = pager[1] == "more" ? "" : "g"
+        if pager[1] == "more"
+            g = ""
+            line -= 1
+        else
+            g = "g"
+        end
         run(Cmd(`$pager +$(line)$(g) \"$file\"`, windows_verbatim = true))
         nothing
     end

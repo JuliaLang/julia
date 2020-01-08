@@ -663,22 +663,18 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
         }
         else {
             void *symaddr;
-            if (!jl_dlsym(jl_get_library(sym.f_lib), sym.f_name, &symaddr, 0)) {
-                std::stringstream msg;
-                msg << "cglobal: could not find symbol ";
-                msg << sym.f_name;
-                if (sym.f_lib != NULL) {
-#ifdef _OS_WINDOWS_
-                    assert(sym.f_lib != JL_EXE_LIBNAME && sym.f_lib != JL_DL_LIBNAME);
-#endif
-                    msg << " in library ";
-                    msg << sym.f_lib;
-                }
-                emit_error(ctx, msg.str());
+
+            void* libsym = jl_get_library_(sym.f_lib, 0);
+            if (!libsym || !jl_dlsym(libsym, sym.f_name, &symaddr, 0)) {
+                // Error mode, either the library or the symbol couldn't be find during compiletime.
+                // Fallback to a runtime symbol lookup.
+                res = runtime_sym_lookup(ctx, cast<PointerType>(T_pint8), sym.f_lib, sym.f_name, ctx.f);
+                res = ctx.builder.CreatePtrToInt(res, lrt);
+            } else {
+                // since we aren't saving this code, there's no sense in
+                // putting anything complicated here: just JIT the address of the cglobal
+                res = ConstantInt::get(lrt, (uint64_t)symaddr);
             }
-            // since we aren't saving this code, there's no sense in
-            // putting anything complicated here: just JIT the address of the cglobal
-            res = ConstantInt::get(lrt, (uint64_t)symaddr);
         }
     }
 
@@ -1791,7 +1787,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     bool sretboxed = false;
     if (sret) {
         assert(!retboxed && jl_is_datatype(rt) && "sret return type invalid");
-        if (jl_justbits(rt, true)) {
+        if (jl_is_pointerfree(rt)) {
             result = emit_static_alloca(ctx, lrt);
             argvals[0] = ctx.builder.CreateBitCast(result, fargt_sig.at(0));
         }
@@ -1877,23 +1873,17 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         }
         else {
             void *symaddr;
-            if (!jl_dlsym(jl_get_library(symarg.f_lib), symarg.f_name, &symaddr, 0)) {
-                std::stringstream msg;
-                msg << "ccall: could not find function ";
-                msg << symarg.f_name;
-                if (symarg.f_lib != NULL) {
-#ifdef _OS_WINDOWS_
-                    assert(symarg.f_lib != JL_EXE_LIBNAME && symarg.f_lib != JL_DL_LIBNAME);
-#endif
-                    msg << " in library ";
-                    msg << symarg.f_lib;
-                }
-                emit_error(ctx, msg.str());
-                return jl_cgval_t();
+
+            void* libsym = jl_get_library_(symarg.f_lib, 0);
+            if (!libsym || !jl_dlsym(libsym, symarg.f_name, &symaddr, 0)) {
+                // either the library or the symbol could not be found, place a runtime
+                // lookup here instead.
+                llvmf = runtime_sym_lookup(ctx, funcptype, symarg.f_lib, symarg.f_name, ctx.f);
+            } else {
+                // since we aren't saving this code, there's no sense in
+                // putting anything complicated here: just JIT the function address
+                llvmf = literal_static_pointer_val(ctx, symaddr, funcptype);
             }
-            // since we aren't saving this code, there's no sense in
-            // putting anything complicated here: just JIT the function address
-            llvmf = literal_static_pointer_val(ctx, symaddr, funcptype);
         }
     }
 
