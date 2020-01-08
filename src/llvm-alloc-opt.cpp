@@ -1360,7 +1360,11 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                                                                           offset - slot.offset);
                             auto sub_size = std::min(slot.offset + slot.size, offset + size) -
                                 std::max(offset, slot.offset);
+#if JL_LLVM_VERSION >= 100000
+                            builder.CreateMemSet(ptr8, val_arg, sub_size, MaybeAlign(0));
+#else
                             builder.CreateMemSet(ptr8, val_arg, sub_size, 0);
+#endif
                         }
                         call->eraseFromParent();
                         return;
