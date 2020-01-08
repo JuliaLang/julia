@@ -1194,6 +1194,27 @@ end
     @test convert(Array{Float64,1}, r) == a
 end
 
+@testset "extrema" begin
+    @test_throws ArgumentError minimum(1:2:-1)
+    @test_throws ArgumentError argmin(Base.OneTo(-1))
+    @test_throws ArgumentError maximum(Base.OneTo(-1))
+    @test_throws ArgumentError argmax(1:-1)
+
+    for (r, imin, imax) in [
+            (Base.OneTo(5), 1, 5),
+            (1:10, 1, 10),
+            (10:-1:0, 11, 1),
+            (range(10, stop=20, length=5), 1, 5),
+            (range(10.3, step=-2, length=7), 7, 1),
+           ]
+        @test minimum(r) === r[imin]
+        @test maximum(r) === r[imax]
+        @test imin === argmin(r)
+        @test imax === argmax(r)
+        @test extrema(r) === (r[imin], r[imax])
+    end
+end
+
 @testset "OneTo" begin
     let r = Base.OneTo(-5)
         @test isempty(r)
@@ -1209,6 +1230,8 @@ end
         @test last(r) == 3
         @test minimum(r) == 1
         @test maximum(r) == 3
+        @test argmin(r) == 1
+        @test argmax(r) == 3
         @test r[2] == 2
         @test r[2:3] === 2:3
         @test_throws BoundsError r[4]
