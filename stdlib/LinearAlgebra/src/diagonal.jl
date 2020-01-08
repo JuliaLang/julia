@@ -528,7 +528,7 @@ eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true) = D.diag
 eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true) = vcat([eigvals(d; permute=permute, scale=scale) for d in D.diag]...)
 eigvecs(D::Diagonal{<:Number}) = Matrix{eltype(D)}(I, size(D))
 function eigvecs(D::Diagonal)
-    vec = vcat([vcat([zeros(size(x,2)) for x in D.diag]) for i=1:length(eigvals(D))])
+    vec = vcat([vcat([zeros(size(x,2)) for x in D.diag]) for i=1:(sum(d -> size(d, 1), D.diag))])
     ind = 0
     for i=1:length(D.diag)
         s = size(D.diag[i],2)
@@ -539,7 +539,7 @@ function eigvecs(D::Diagonal)
             if j[1] == i
                 for k=1:s
                     ind = ind + 1
-                    vec[ind][j[1]] = x[k,:]
+                    vec[ind][j[1]] = x[:,k]
                 end
             end
         end
