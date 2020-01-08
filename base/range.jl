@@ -576,6 +576,7 @@ minimum(r::AbstractUnitRange) = isempty(r) ? throw(ArgumentError("range must be 
 maximum(r::AbstractUnitRange) = isempty(r) ? throw(ArgumentError("range must be non-empty")) : last(r)
 minimum(r::AbstractRange)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : min(first(r), last(r))
 maximum(r::AbstractRange)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : max(first(r), last(r))
+
 function argmin(r::AbstractRange)
     if isempty(r)
         throw(ArgumentError("range must be non-empty"))
