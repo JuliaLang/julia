@@ -12,9 +12,11 @@ Code coverage:
 Documentation:
 [![version 1][docs-img]](https://docs.julialang.org)
 
-|         | Build                               | Test                              |
-| ------- | ----------------------------------- | --------------------------------- | 
-| linux64 | ![package_linux64][package_linux64] | ![tester_linux64][tester_linux64] |
+| Builder   | Status (build)                        | Status (test)                     |
+| --------- | ----------------------------------- | --------------------------------- | 
+| `linux64` | ![package_linux64][package_linux64] | ![tester_linux64][tester_linux64] |
+| `macos64` | ![foo][foo] | ![foo][foo] |
+| `win64`   | ![foo][foo] | ![foo][foo] |
 
 [package_linux64]: https://build.julialang.org/badges/package_linux64.svg
 [package_macos64]: https://build.julialang.org/badges/package_macos64.svg
