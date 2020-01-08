@@ -12,8 +12,18 @@ Code coverage:
 Documentation:
 [![version 1][docs-img]](https://docs.julialang.org)
 
-[travis-img]: https://img.shields.io/travis/JuliaLang/julia/master.svg?label=Linux+/+macOS
-[appveyor-img]: https://img.shields.io/appveyor/ci/JuliaLang/julia/master.svg?label=Windows
+|         | Build                               | Test                              |
+| ------- | ----------------------------------- | --------------------------------- | 
+| linux64 | ![package_linux64][package_linux64] | ![tester_linux64][tester_linux64] |
+
+[package_linux64]: https://build.julialang.org/badges/package_linux64.svg
+[package_macos64]: https://build.julialang.org/badges/package_macos64.svg
+[package_win64]: https://build.julialang.org/badges/package_win64.svg
+
+[tester_linux64]: https://build.julialang.org/badges/tester_linux64.svg
+[tester_macos64]: https://build.julialang.org/badges/tester_macos64.svg
+[tester_win64]: https://build.julialang.org/badges/tester_win64.svg
+
 [coveralls-img]: https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls
 [codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov
 [docs-img]: https://img.shields.io/badge/docs-v1-blue.svg
