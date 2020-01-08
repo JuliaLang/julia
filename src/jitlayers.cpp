@@ -460,7 +460,7 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
 {
 #ifndef JL_NDEBUG
     // validate the relocations for M
-    for (Module::global_object_iterator I = M->global_object_begin(), E = M->global_object_end(); I != E; ) {
+    for (Module::global_object_iterator I = M->global_objects().begin(), E = M->global_objects().end(); I != E; ) {
         GlobalObject *F = &*I;
         ++I;
         if (F->isDeclaration()) {
@@ -771,7 +771,7 @@ static void jl_merge_recursive(Module *m, Module *collector)
     // since the declarations may get destroyed by the jl_merge_module call.
     // this is also why we copy the Name string, rather than save a StringRef
     SmallVector<std::string, 8> to_finalize;
-    for (Module::global_object_iterator I = m->global_object_begin(), E = m->global_object_end(); I != E; ++I) {
+    for (Module::global_object_iterator I = m->global_objects().begin(), E = m->global_objects().end(); I != E; ++I) {
         GlobalObject *F = &*I;
         if (!F->isDeclaration()) {
             module_for_fname.erase(F->getName());
@@ -846,7 +846,7 @@ void jl_finalize_module(Module *m, bool shadow)
 {
     // record the function names that are part of this Module
     // so it can be added to the JIT when needed
-    for (Module::global_object_iterator I = m->global_object_begin(), E = m->global_object_end(); I != E; ++I) {
+    for (Module::global_object_iterator I = m->global_objects().begin(), E = m->global_objects().end(); I != E; ++I) {
         GlobalObject *F = &*I;
         if (!F->isDeclaration()) {
             if (isa<Function>(F)) {
