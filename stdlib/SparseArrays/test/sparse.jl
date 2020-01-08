@@ -2046,12 +2046,21 @@ end
     @test issparse(LinearAlgebra.UnitLowerTriangular(m))
     @test issparse(UpperTriangular(m))
     @test issparse(LinearAlgebra.UnitUpperTriangular(m))
+    @test issparse(adjoint(m))
+    @test issparse(transpose(m))
     @test issparse(Symmetric(Array(m))) == false
     @test issparse(Hermitian(Array(m))) == false
     @test issparse(LowerTriangular(Array(m))) == false
     @test issparse(LinearAlgebra.UnitLowerTriangular(Array(m))) == false
     @test issparse(UpperTriangular(Array(m))) == false
     @test issparse(LinearAlgebra.UnitUpperTriangular(Array(m))) == false
+end
+
+@testset "issparse for sparse vectors #34253" begin
+    v = sprand(10, 0.5)
+    @test issparse(v)
+    @test issparse(v')
+    @test issparse(transpose(v))
 end
 
 @testset "test created type of sprand{T}(::Type{T}, m::Integer, n::Integer, density::AbstractFloat)" begin
