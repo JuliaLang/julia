@@ -801,7 +801,6 @@ end
 @testset "GC utilities" begin
     GC.gc()
     GC.gc(true); GC.gc(false)
-    GC.gc(GC.Auto); GC.gc(GC.Full); GC.gc(GC.Incremental)
 
     GC.safepoint()
 end

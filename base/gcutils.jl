@@ -49,29 +49,20 @@ Module with garbage collection utilities.
 """
 module GC
 
-# @enum-like structure
-struct CollectionType
-    x::Int
-end
-Base.cconvert(::Type{Cint}, collection::CollectionType) = Cint(collection.x)
-
-const Auto          = CollectionType(0)
-const Full          = CollectionType(1)
-const Incremental   = CollectionType(2)
-
 """
-    GC.gc(full::Bool=true)
-    GC.gc(collection::CollectionType)
+    GC.gc()
+    GC.gc(full::Bool)
 
-Perform garbage collection. The argument `full` determines whether a full, but more costly
-collection is performed. Otherwise, heuristics are used to determine which type of
-collection is needed. For exact control, pass an argument of type `CollectionType`.
+Perform garbage collection. The argument `full` determines the kind of collection: A full
+collection scans all objects, while an incremental collection only scans so-called young
+objects and is much quicker. If called without an argument, heuristics are used to determine
+which type of collection is needed.
 
 !!! warning
     Excessive use will likely lead to poor performance.
 """
-gc(full::Bool=true) = ccall(:jl_gc_collect, Cvoid, (Cint,), full)
-gc(collection::CollectionType) = ccall(:jl_gc_collect, Cvoid, (Cint,), collection)
+gc() = ccall(:jl_gc_collect, Cvoid, (Cint,), 0)
+gc(full::Bool) = ccall(:jl_gc_collect, Cvoid, (Cint,), full ? 1 : 2)
 
 """
     GC.enable(on::Bool)
