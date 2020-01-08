@@ -226,6 +226,22 @@ m = Mmap.mmap(s, BitArray, (72,))
 @test Test._check_bitarray_consistency(m)
 @test length(m) == 72
 close(s); finalize(m); m = nothing; GC.gc()
+
+m = Mmap.mmap(file, BitArray, (72,))
+@test Test._check_bitarray_consistency(m)
+@test length(m) == 72
+finalize(m); m = nothing; GC.gc()
+
+s = open(file, "r+")
+m = Mmap.mmap(s, BitArray, 72) # len integer instead of dims
+@test Test._check_bitarray_consistency(m)
+@test length(m) == 72
+close(s); finalize(m); m = nothing; GC.gc()
+
+m = Mmap.mmap(file, BitArray, 72) # len integer instead of dims
+@test Test._check_bitarray_consistency(m)
+@test length(m) == 72
+finalize(m); m = nothing; GC.gc()
 rm(file)
 
 # Mmap.mmap with an offset

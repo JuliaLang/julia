@@ -460,6 +460,9 @@ static value_t read_string(fl_context_t *fl_ctx)
     uint32_t wc=0;
 
     buf = (char*)malloc(sz);
+    if (buf == NULL) {
+        lerror(fl_ctx, fl_ctx->ParseError, "read: out of memory reading string");
+    }
     while (1) {
         if (i >= sz-4) {  // -4: leaves room for longest utf8 sequence
             sz *= 2;

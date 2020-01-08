@@ -454,7 +454,7 @@ function serialize(s::AbstractSerializer, S::SharedArray)
     for n in fieldnames(SharedArray)
         if n in [:s, :pidx, :loc_subarr_1d]
             writetag(s.io, UNDEFREF_TAG)
-        elseif n == :refs
+        elseif n === :refs
             v = getfield(S, n)
             if isa(v[1], Future)
                 # convert to ids to avoid distributed GC overhead
@@ -612,9 +612,9 @@ function print_shmem_limits(slen)
             pfx = "kernel"
         elseif Sys.isapple()
             pfx = "kern.sysv"
-        elseif Sys.KERNEL == :FreeBSD || Sys.KERNEL == :DragonFly
+        elseif Sys.KERNEL === :FreeBSD || Sys.KERNEL === :DragonFly
             pfx = "kern.ipc"
-        elseif Sys.KERNEL == :OpenBSD
+        elseif Sys.KERNEL === :OpenBSD
             pfx = "kern.shminfo"
         else
             # seems NetBSD does not have *.shmall

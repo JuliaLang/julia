@@ -133,6 +133,8 @@ doc(object, sig...)              = doc(object, Tuple{sig...})
 function lookup_doc(ex)
     if haskey(keywords, ex)
         parsedoc(keywords[ex])
+    elseif Meta.isexpr(ex, :incomplete)
+        return :($(Markdown.md"No documentation found."))
     elseif isa(ex, Union{Expr, Symbol})
         binding = esc(bindingexpr(namify(ex)))
         if isexpr(ex, :call) || isexpr(ex, :macrocall)
@@ -317,7 +319,7 @@ function _repl(x)
                     kwarg
                 end
             elseif isexpr(arg, :kw)
-                if kwargs == nothing
+                if kwargs === nothing
                     kwargs = Any[]
                 end
                 lhs = arg.args[1]
@@ -339,7 +341,7 @@ function _repl(x)
                 push!(pargs, arg)
             end
         end
-        if kwargs == nothing
+        if kwargs === nothing
             x.args = Any[x.args[1], pargs...]
         else
             x.args = Any[x.args[1], Expr(:parameters, kwargs...), pargs...]

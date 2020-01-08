@@ -2,7 +2,7 @@
 
 Julia provides a variety of control flow constructs:
 
-  * [Compound Expressions](@ref man-compound-expressions): `begin` and `(;)`.
+  * [Compound Expressions](@ref man-compound-expressions): `begin` and `;`.
   * [Conditional Evaluation](@ref man-conditional-evaluation): `if`-`elseif`-`else` and `?:` (ternary operator).
   * [Short-Circuit Evaluation](@ref): `&&`, `||` and chained comparisons.
   * [Repeated Evaluation: Loops](@ref man-loops): `while` and `for`.
@@ -19,7 +19,7 @@ direct usage of tasks, but certain problems can be solved much more easily by us
 
 Sometimes it is convenient to have a single expression which evaluates several subexpressions
 in order, returning the value of the last subexpression as its value. There are two Julia constructs
-that accomplish this: `begin` blocks and `(;)` chains. The value of both compound expression constructs
+that accomplish this: `begin` blocks and `;` chains. The value of both compound expression constructs
 is that of the last subexpression. Here's an example of a `begin` block:
 
 ```jldoctest
@@ -32,7 +32,7 @@ julia> z = begin
 ```
 
 Since these are fairly small, simple expressions, they could easily be placed onto a single line,
-which is where the `(;)` chain syntax comes in handy:
+which is where the `;` chain syntax comes in handy:
 
 ```jldoctest
 julia> z = (x = 1; y = 2; x + y)
@@ -41,7 +41,7 @@ julia> z = (x = 1; y = 2; x + y)
 
 This syntax is particularly useful with the terse single-line function definition form introduced
 in [Functions](@ref). Although it is typical, there is no requirement that `begin` blocks be multiline
-or that `(;)` chains be single-line:
+or that `;` chains be single-line:
 
 ```jldoctest
 julia> begin x = 1; y = 2; x + y end
@@ -564,6 +564,7 @@ below all interrupt the normal flow of control.
 | [`ArgumentError`](@ref)       |
 | [`BoundsError`](@ref)         |
 | [`CompositeException`](@ref)  |
+| [`DimensionMismatch`](@ref)   |
 | [`DivideError`](@ref)         |
 | [`DomainError`](@ref)         |
 | [`EOFError`](@ref)            |

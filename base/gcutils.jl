@@ -10,6 +10,10 @@
 Register a function `f(x)` to be called when there are no program-accessible references to
 `x`, and return `x`. The type of `x` must be a `mutable struct`, otherwise the behavior of
 this function is unpredictable.
+
+`f` must not cause a task switch, which excludes most I/O operations such as `println`.
+`@schedule println("message")` or `ccall(:jl_, Cvoid, (Any,), "message")` may be helpful for
+debugging purposes.
 """
 function finalizer(@nospecialize(f), @nospecialize(o))
     if isimmutable(o)
@@ -22,8 +26,8 @@ end
 
 function finalizer(f::Ptr{Cvoid}, o::T) where T
     @_inline_meta
-    if isimmutable(T)
-        error("objects of type ", T, " cannot be finalized")
+    if isimmutable(o)
+        error("objects of type ", typeof(o), " cannot be finalized")
     end
     ccall(:jl_gc_add_ptr_finalizer, Cvoid, (Ptr{Cvoid}, Any, Ptr{Cvoid}),
           Core.getptls(), o, f)
@@ -47,13 +51,18 @@ module GC
 
 """
     GC.gc()
+    GC.gc(full::Bool)
 
-Perform garbage collection.
+Perform garbage collection. The argument `full` determines the kind of collection: A full
+collection scans all objects, while an incremental collection only scans so-called young
+objects and is much quicker. If called without an argument, heuristics are used to determine
+which type of collection is needed.
 
 !!! warning
     Excessive use will likely lead to poor performance.
 """
-gc(full::Bool=true) = ccall(:jl_gc_collect, Cvoid, (Int32,), full)
+gc() = ccall(:jl_gc_collect, Cvoid, (Cint,), 0)
+gc(full::Bool) = ccall(:jl_gc_collect, Cvoid, (Cint,), full ? 1 : 2)
 
 """
     GC.enable(on::Bool)
@@ -89,5 +98,20 @@ macro preserve(args...)
         $r
     end)
 end
+
+"""
+    GC.safepoint()
+
+Inserts a point in the program where garbage collection may run.
+This can be useful in rare cases in multi-threaded programs where some threads
+are allocating memory (and hence may need to run GC) but other threads are doing
+only simple operations (no allocation, task switches, or I/O).
+Calling this function periodically in non-allocating threads allows garbage
+collection to run.
+
+!!! compat "Julia 1.4"
+    This function is available as of Julia 1.4.
+"""
+safepoint() = ccall(:jl_gc_safepoint, Cvoid, ())
 
 end # module GC

@@ -24,7 +24,7 @@ module FastMath
 
 export @fastmath
 
-import Core.Intrinsics: sqrt_llvm, neg_float_fast,
+import Core.Intrinsics: sqrt_llvm_fast, neg_float_fast,
     add_float_fast, sub_float_fast, mul_float_fast, div_float_fast, rem_float_fast,
     eq_float_fast, ne_float_fast, lt_float_fast, le_float_fast
 
@@ -91,7 +91,7 @@ const rewrite_op =
 function make_fastmath(expr::Expr)
     if expr.head === :quote
         return expr
-    elseif expr.head == :call && expr.args[1] == :^ && expr.args[3] isa Integer
+    elseif expr.head === :call && expr.args[1] === :^ && expr.args[3] isa Integer
         # mimic Julia's literal_pow lowering of literal integer powers
         return Expr(:call, :(Base.FastMath.pow_fast), make_fastmath(expr.args[2]), Val{expr.args[3]}())
     end
@@ -233,6 +233,15 @@ ComplexTypes = Union{ComplexF32, ComplexF64}
         (a==real(y)) & (T(0)==imag(y))
 
     ne_fast(x::T, y::T) where {T<:ComplexTypes} = !(x==y)
+
+    # Note: we use the same comparison for min, max, and minmax, so
+    # that the compiler can convert between them
+    max_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(y > x, y, x)
+    min_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(y > x, x, y)
+    minmax_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(y > x, (x,y), (y,x))
+
+    max_fast(x::T, y::T, z::T...) where {T<:FloatTypes} = max_fast(max_fast(x, y), z...)
+    min_fast(x::T, y::T, z::T...) where {T<:FloatTypes} = min_fast(min_fast(x, y), z...)
 end
 
 # fall-back implementations and type promotion
@@ -245,7 +254,7 @@ for op in (:abs, :abs2, :conj, :inv, :sign)
     end
 end
 
-for op in (:+, :-, :*, :/, :(==), :!=, :<, :<=, :cmp, :rem)
+for op in (:+, :-, :*, :/, :(==), :!=, :<, :<=, :cmp, :rem, :min, :max, :minmax)
     op_fast = fast_op[op]
     @eval begin
         # fall-back implementation for non-numeric types
@@ -268,7 +277,7 @@ pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64", llvmcall, Float64, (Fl
 pow_fast(x::FloatTypes, ::Val{p}) where {p} = pow_fast(x, p) # inlines already via llvm.powi
 @inline pow_fast(x, v::Val) = Base.literal_pow(^, x, v)
 
-sqrt_fast(x::FloatTypes) = sqrt_llvm(x)
+sqrt_fast(x::FloatTypes) = sqrt_llvm_fast(x)
 
 # libm
 
@@ -303,12 +312,6 @@ sincos_fast(v) = (sin_fast(v), cos_fast(v))
 
 @fastmath begin
     hypot_fast(x::T, y::T) where {T<:FloatTypes} = sqrt(x*x + y*y)
-
-    # Note: we use the same comparison for min, max, and minmax, so
-    # that the compiler can convert between them
-    max_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(y > x, y, x)
-    min_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(y > x, x, y)
-    minmax_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(y > x, (x,y), (y,x))
 
     # complex numbers
 
@@ -362,7 +365,7 @@ for f in (:acos, :acosh, :angle, :asin, :asinh, :atan, :atanh, :cbrt,
     end
 end
 
-for f in (:^, :atan, :hypot, :max, :min, :minmax, :log)
+for f in (:^, :atan, :hypot, :log)
     f_fast = fast_op[f]
     @eval begin
         # fall-back implementation for non-numeric types

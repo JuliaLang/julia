@@ -108,7 +108,7 @@ Float64
 """
 real(T::Type) = typeof(real(zero(T)))
 real(::Type{T}) where {T<:Real} = T
-real(::Type{Complex{T}}) where {T<:Real} = T
+real(C::Type{<:Complex}) = fieldtype(C, 1)
 
 """
     isreal(x) -> Bool
@@ -184,12 +184,16 @@ function show(io::IO, z::Complex)
     compact = get(io, :compact, false)
     show(io, r)
     if signbit(i) && !isnan(i)
-        i = -i
         print(io, compact ? "-" : " - ")
+        if isa(i,Signed) && !isa(i,BigInt) && i == typemin(typeof(i))
+            show(io, -widen(i))
+        else
+            show(io, -i)
+        end
     else
         print(io, compact ? "+" : " + ")
+        show(io, i)
     end
-    show(io, i)
     if !(isa(i,Integer) && !isa(i,Bool) || isa(i,AbstractFloat) && isfinite(i))
         print(io, "*")
     end
@@ -259,7 +263,11 @@ julia> conj(1 + 3im)
 conj(z::Complex) = Complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))
 abs2(z::Complex) = real(z)*real(z) + imag(z)*imag(z)
-inv(z::Complex)  = conj(z)/abs2(z)
+function inv(z::Complex)
+    c, d = reim(z)
+    (isinf(c) | isinf(d)) && return complex(copysign(zero(c), c), flipsign(-zero(d), d))
+    complex(c, -d)/(c * c + d * d)
+end
 inv(z::Complex{<:Integer}) = inv(float(z))
 
 +(z::Complex) = Complex(+real(z), +imag(z))
@@ -346,7 +354,7 @@ function /(a::Complex{T}, b::Complex{T}) where T<:Real
 end
 
 inv(z::Complex{<:Union{Float16,Float32}}) =
-    oftype(z, conj(widen(z))/abs2(widen(z)))
+    oftype(z, inv(widen(z)))
 
 /(z::Complex{T}, w::Complex{T}) where {T<:Union{Float16,Float32}} =
     oftype(z, widen(z)*inv(widen(w)))
@@ -430,6 +438,7 @@ end
 
 function inv(w::ComplexF64)
     c, d = reim(w)
+    (isinf(c) | isinf(d)) && return complex(copysign(0.0, c), flipsign(-0.0, d))
     half = 0.5
     two = 2.0
     cd = max(abs(c), abs(d))

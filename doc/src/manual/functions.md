@@ -11,6 +11,9 @@ julia> function f(x,y)
 f (generic function with 1 method)
 ```
 
+This function accepts two arguments `x` and `y` and returns the value
+of the last expression evaluated, which is `x + y`.
+
 There is a second, more terse syntax for defining a function in Julia. The traditional function
 declaration syntax demonstrated above is equivalent to the following compact "assignment form":
 
@@ -64,8 +67,9 @@ Python, Ruby and Perl, among other dynamic languages.
 
 The value returned by a function is the value of the last expression evaluated, which, by default,
 is the last expression in the body of the function definition. In the example function, `f`, from
-the previous section this is the value of the expression `x + y`. As in C and most other imperative
-or functional languages, the `return` keyword causes a function to return immediately, providing
+the previous section this is the value of the expression `x + y`.
+As an alternative, as in many other languages,
+the `return` keyword causes a function to return immediately, providing
 an expression whose value is returned:
 
 ```julia
@@ -125,7 +129,9 @@ There are three possible points of return from this function, returning the valu
 expressions, depending on the values of `x` and `y`. The `return` on the last line could be omitted
 since it is the last expression.
 
-A return type can also be specified in the function declaration using the `::` operator. This converts
+### Return type
+
+A return type can be specified in the function declaration using the `::` operator. This converts
 the return value to the specified type.
 
 ```jldoctest
@@ -139,6 +145,30 @@ Int8
 
 This function will always return an `Int8` regardless of the types of `x` and `y`.
 See [Type Declarations](@ref) for more on return types.
+
+### Returning nothing
+
+For functions that do not need to return a value (functions used only for some side effects),
+the Julia convention is to return the value [`nothing`](@ref):
+
+```julia
+function printx(x)
+    println("x = $x")
+    return nothing
+end
+```
+
+This is a *convention* in the sense that `nothing` is not a Julia keyword
+but a only singleton object of type `Nothing`.
+Also, you may notice that the `printx` function example above is contrived,
+because `println` already returns `nothing`, so that the `return` line is redundant.
+
+There are two possible shortened forms for the `return nothing` expression.
+On the one hand, the `return` keyword implicitly returns `nothing`, so it can be used alone.
+On the other hand, since functions implicitly return their last expression evaluated,
+`nothing` can be used alone when it's the last expression.
+The preference for the expression `return nothing` as opposed to `return` or `nothing`
+alone is a matter of coding style.
 
 ## Operators Are Functions
 
@@ -235,6 +265,25 @@ An anonymous function accepting multiple arguments can be written using the synt
 A zero-argument anonymous function is written as `()->3`. The idea of a function with no arguments
 may seem strange, but is useful for "delaying" a computation. In this usage, a block of code is
 wrapped in a zero-argument function, which is later invoked by calling it as `f`.
+
+As an example, consider this call to [`get`](@ref):
+
+```julia
+get(dict, key) do
+    # default value calculated here
+    time()
+end
+```
+
+The code above is equivalent to calling `get` with an anonymous function containing the code
+enclosed between `do` and `end`, like so:
+
+```julia
+get(()->time(), dict, key)
+```
+
+The call to [`time`](@ref) is delayed by wrapping it in a 0-argument anonymous function
+that is called only when the requested key is absent from `dict`.
 
 ## Tuples
 
@@ -658,7 +707,7 @@ the arguments of the user function are initialized.
 A `do` block, like any other inner function, can "capture" variables from its
 enclosing scope. For example, the variable `data` in the above example of
 `open...do` is captured from the outer scope. Captured variables
-can create performance challenges as discussed in [performance tips](@ref man-performance-tips).
+can create performance challenges as discussed in [performance tips](@ref man-performance-captured).
 
 ## Function composition and piping
 
@@ -789,8 +838,8 @@ the results (see [Pre-allocating outputs](@ref)). A convenient syntax for this i
 is equivalent to `broadcast!(identity, X, ...)` except that, as above, the `broadcast!` loop is
 fused with any nested "dot" calls. For example, `X .= sin.(Y)` is equivalent to `broadcast!(sin, X, Y)`,
 overwriting `X` with `sin.(Y)` in-place. If the left-hand side is an array-indexing expression,
-e.g. `X[2:end] .= sin.(Y)`, then it translates to `broadcast!` on a `view`, e.g.
-`broadcast!(sin, view(X, 2:lastindex(X)), Y)`,
+e.g. `X[begin+1:end] .= sin.(Y)`, then it translates to `broadcast!` on a `view`, e.g.
+`broadcast!(sin, view(X, firstindex(X)+1:lastindex(X)), Y)`,
 so that the left-hand side is updated in-place.
 
 Since adding dots to many operations and function calls in an expression

@@ -119,8 +119,9 @@ static void _compile_all_tvar_union(jl_value_t *methsig)
 
     int tvarslen = jl_subtype_env_size(methsig);
     jl_value_t *sigbody = methsig;
-    jl_value_t **env;
-    JL_GC_PUSHARGS(env, 2 * tvarslen);
+    jl_value_t **roots;
+    JL_GC_PUSHARGS(roots, 1 + 2 * tvarslen);
+    jl_value_t **env = roots + 1;
     int *idx = (int*)alloca(sizeof(int) * tvarslen);
     int i;
     for (i = 0; i < tvarslen; i++) {
@@ -132,20 +133,19 @@ static void _compile_all_tvar_union(jl_value_t *methsig)
     }
 
     for (i = 0; i < tvarslen; /* incremented by inner loop */) {
-        jl_value_t *sig;
+        jl_value_t **sig = &roots[0];
         JL_TRY {
             // TODO: wrap in UnionAll for each tvar in env[2*i + 1] ?
             // currently doesn't matter much, since jl_compile_hint doesn't work on abstract types
-            sig = (jl_value_t*)jl_instantiate_type_with(sigbody, env, tvarslen);
+            *sig = (jl_value_t*)jl_instantiate_type_with(sigbody, env, tvarslen);
         }
         JL_CATCH {
             goto getnext; // sigh, we found an invalid type signature. should we warn the user?
         }
-        if (!jl_has_concrete_subtype(sig))
+        if (!jl_has_concrete_subtype(*sig))
             goto getnext; // signature wouldn't be callable / is invalid -- skip it
-        if (jl_is_concrete_type(sig)) {
-            JL_GC_PROMISE_ROOTED(sig); // `sig` is rooted because it's a leaftype (JL_ALWAYS_LEAFTYPE)
-            if (jl_compile_hint((jl_tupletype_t*)sig))
+        if (jl_is_concrete_type(*sig)) {
+            if (jl_compile_hint((jl_tupletype_t *)*sig))
                 goto getnext; // success
         }
 

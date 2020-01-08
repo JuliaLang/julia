@@ -124,7 +124,7 @@ end
 """
 struct Time <: TimeType
     instant::Nanosecond
-    Time(instant::Nanosecond) = new(instant)
+    Time(instant::Nanosecond) = new(mod(instant, 86400000000000))
 end
 
 # Convert y,m,d to # of Rata Die days
@@ -170,6 +170,15 @@ or [`nothing`](@ref) if no message is provided. For use by `validargs`.
 argerror(msg::String) = ArgumentError(msg)
 argerror() = nothing
 
+# Julia uses 24-hour clocks internally, but user input can be AM/PM with 12pm == noon and 12am == midnight.
+@enum AMPM AM PM TWENTYFOURHOUR
+function adjusthour(h::Int64, ampm::AMPM)
+    ampm == TWENTYFOURHOUR && return h
+    ampm == PM && h < 12 && return h + 12
+    ampm == AM && h == 12 && return Int64(0)
+    return h
+end
+
 ### CONSTRUCTORS ###
 # Core constructors
 """
@@ -178,24 +187,31 @@ argerror() = nothing
 Construct a `DateTime` type by parts. Arguments must be convertible to [`Int64`](@ref).
 """
 function DateTime(y::Int64, m::Int64=1, d::Int64=1,
-                  h::Int64=0, mi::Int64=0, s::Int64=0, ms::Int64=0)
-    err = validargs(DateTime, y, m, d, h, mi, s, ms)
+                  h::Int64=0, mi::Int64=0, s::Int64=0, ms::Int64=0, ampm::AMPM=TWENTYFOURHOUR)
+    err = validargs(DateTime, y, m, d, h, mi, s, ms, ampm)
     err === nothing || throw(err)
+    h = adjusthour(h, ampm)
     rata = ms + 1000 * (s + 60mi + 3600h + 86400 * totaldays(y, m, d))
     return DateTime(UTM(rata))
 end
 
 function validargs(::Type{DateTime}, y::Int64, m::Int64, d::Int64,
-                   h::Int64, mi::Int64, s::Int64, ms::Int64)
+                   h::Int64, mi::Int64, s::Int64, ms::Int64, ampm::AMPM=TWENTYFOURHOUR)
     0 < m < 13 || return argerror("Month: $m out of range (1:12)")
     0 < d < daysinmonth(y, m) + 1 || return argerror("Day: $d out of range (1:$(daysinmonth(y, m)))")
-    -1 < h < 24 || (h == 24 && mi==s==ms==0) ||
-        return argerror("Hour: $h out of range (0:23)")
+    if ampm == TWENTYFOURHOUR # 24-hour clock
+        -1 < h < 24 || (h == 24 && mi==s==ms==0) ||
+            return argerror("Hour: $h out of range (0:23)")
+    else
+        0 < h < 13 || return argerror("Hour: $h out of range (1:12)")
+    end
     -1 < mi < 60 || return argerror("Minute: $mi out of range (0:59)")
     -1 < s < 60 || return argerror("Second: $s out of range (0:59)")
     -1 < ms < 1000 || return argerror("Millisecond: $ms out of range (0:999)")
     return argerror()
 end
+
+DateTime(dt::Base.Libc.TmStruct) = DateTime(1900 + dt.year, 1 + dt.month, dt.mday, dt.hour, dt.min, dt.sec)
 
 """
     Date(y, [m, d]) -> Date
@@ -214,19 +230,26 @@ function validargs(::Type{Date}, y::Int64, m::Int64, d::Int64)
     return argerror()
 end
 
+Date(dt::Base.Libc.TmStruct) = Date(1900 + dt.year, 1 + dt.month, dt.mday)
+
 """
     Time(h, [mi, s, ms, us, ns]) -> Time
 
 Construct a `Time` type by parts. Arguments must be convertible to [`Int64`](@ref).
 """
-function Time(h::Int64, mi::Int64=0, s::Int64=0, ms::Int64=0, us::Int64=0, ns::Int64=0)
-    err = validargs(Time, h, mi, s, ms, us, ns)
+function Time(h::Int64, mi::Int64=0, s::Int64=0, ms::Int64=0, us::Int64=0, ns::Int64=0, ampm::AMPM=TWENTYFOURHOUR)
+    err = validargs(Time, h, mi, s, ms, us, ns, ampm)
     err === nothing || throw(err)
+    h = adjusthour(h, ampm)
     return Time(Nanosecond(ns + 1000us + 1000000ms + 1000000000s + 60000000000mi + 3600000000000h))
 end
 
-function validargs(::Type{Time}, h::Int64, mi::Int64, s::Int64, ms::Int64, us::Int64, ns::Int64)
-    -1 < h < 24 || return argerror("Hour: $h out of range (0:23)")
+function validargs(::Type{Time}, h::Int64, mi::Int64, s::Int64, ms::Int64, us::Int64, ns::Int64, ampm::AMPM=TWENTYFOURHOUR)
+    if ampm == TWENTYFOURHOUR # 24-hour clock
+        -1 < h < 24 || return argerror("Hour: $h out of range (0:23)")
+    else
+        0 < h < 13 || return argerror("Hour: $h out of range (1:12)")
+    end
     -1 < mi < 60 || return argerror("Minute: $mi out of range (0:59)")
     -1 < s < 60 || return argerror("Second: $s out of range (0:59)")
     -1 < ms < 1000 || return argerror("Millisecond: $ms out of range (0:999)")
@@ -234,6 +257,8 @@ function validargs(::Type{Time}, h::Int64, mi::Int64, s::Int64, ms::Int64, us::I
     -1 < ns < 1000 || return argerror("Nanosecond: $ns out of range (0:999)")
     return argerror()
 end
+
+Time(dt::Base.Libc.TmStruct) = Time(dt.hour, dt.min, dt.sec)
 
 # Convenience constructors from Periods
 function DateTime(y::Year, m::Month=Month(1), d::Day=Day(1),
@@ -339,9 +364,9 @@ function DateTime(dt::Date, t::Time)
 end
 
 # Fallback constructors
-DateTime(y, m=1, d=1, h=0, mi=0, s=0, ms=0) = DateTime(Int64(y), Int64(m), Int64(d), Int64(h), Int64(mi), Int64(s), Int64(ms))
+DateTime(y, m=1, d=1, h=0, mi=0, s=0, ms=0, ampm::AMPM=TWENTYFOURHOUR) = DateTime(Int64(y), Int64(m), Int64(d), Int64(h), Int64(mi), Int64(s), Int64(ms), ampm)
 Date(y, m=1, d=1) = Date(Int64(y), Int64(m), Int64(d))
-Time(h, mi=0, s=0, ms=0, us=0, ns=0) = Time(Int64(h), Int64(mi), Int64(s), Int64(ms), Int64(us), Int64(ns))
+Time(h, mi=0, s=0, ms=0, us=0, ns=0, ampm::AMPM=TWENTYFOURHOUR) = Time(Int64(h), Int64(mi), Int64(s), Int64(ms), Int64(us), Int64(ns), ampm)
 
 # Traits, Equality
 Base.isfinite(::Union{Type{T}, T}) where {T<:TimeType} = true
@@ -372,12 +397,10 @@ Base.promote_rule(::Type{Date}, x::Type{DateTime}) = DateTime
 Base.isless(x::T, y::T) where {T<:TimeType} = isless(value(x), value(y))
 Base.isless(x::TimeType, y::TimeType) = isless(promote(x, y)...)
 (==)(x::T, y::T) where {T<:TimeType} = (==)(value(x), value(y))
-function ==(a::Time, b::Time)
-    return hour(a) == hour(b) && minute(a) == minute(b) &&
-        second(a) == second(b) && millisecond(a) == millisecond(b) &&
-        microsecond(a) == microsecond(b) && nanosecond(a) == nanosecond(b)
-end
 (==)(x::TimeType, y::TimeType) = (===)(promote(x, y)...)
+Base.min(x::AbstractTime) = x
+Base.max(x::AbstractTime) = x
+Base.minmax(x::AbstractTime) = (x, x)
 Base.hash(x::Time, h::UInt) =
     hash(hour(x), hash(minute(x), hash(second(x),
         hash(millisecond(x), hash(microsecond(x), hash(nanosecond(x), h))))))

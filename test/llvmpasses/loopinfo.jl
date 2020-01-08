@@ -5,11 +5,9 @@
 # RUN: cat %t/module.ll | opt -load libjulia%shlibext -LowerSIMDLoop -S - | FileCheck %s -check-prefix=LOWER
 # RUN: julia --startup-file=no %s %t -O && llvm-link -S %t/* -o %t/module.ll
 # RUN: cat %t/module.ll | FileCheck %s -check-prefix=FINAL
-using InteractiveUtils
-using Printf
 
 ## Notes:
-# This script uses the `emit` function (defined at the end) to emit either
+# This script uses the `emit` function (defined llvmpasses.jl) to emit either
 # optimized or unoptimized LLVM IR. Each function is emitted individually and
 # `llvm-link` is used to create a single module that can be passed to opt.
 # The order in which files are emitted and linked is important since `lit` will
@@ -19,17 +17,7 @@ using Printf
 # - `CHECK`: Checks the result of codegen
 # - `LOWER`: Checks the result of -LowerSIMDLoop
 # - `FINAL`: Checks the result of running the entire pipeline
-
-# get a temporary directory
-dir = ARGS[1]
-rm(dir, force=true, recursive=true)
-mkdir(dir)
-
-# toggle between unoptimized (CHECK/LOWER) and optimized IR (FINAL).
-optimize=false
-if length(ARGS) >= 2
-    optimize = ARGS[2]=="-O"
-end
+include(joinpath("..", "testhelpers", "llvmpasses.jl"))
 
 # CHECK-LABEL: @julia_simdf_
 # LOWER-LABEL: @julia_simdf_
@@ -85,8 +73,8 @@ end
 
 # Example from a GPU kernel where we want to unroll the outer loop
 # and the inner loop is a boundschecked single iteration loop.
-# The `@show` is used to bloat the loop and `FINAL-COUNT-10:` seems
-# not to be working so we duplicate the checks.
+# The `@show` is used to bloat the loop and `X-COUNT-10:` seems
+# not to be working so we duplicate the checks. FIXME LLVM8
 # CHECK-LABEL: @julia_loop_unroll2
 # LOWER-LABEL: @julia_loop_unroll2
 # FINAL-LABEL: @julia_loop_unroll2
@@ -141,17 +129,6 @@ end
 # LOWER: [[LOOPUNROLL]] = !{!"llvm.loop.unroll.count", i64 3}
 # LOWER: [[LOOPID4]] = distinct !{[[LOOPID4]], [[LOOPUNROLL2:![0-9]+]]}
 # LOWER: [[LOOPUNROLL2]] = !{!"llvm.loop.unroll.full"}
-
-# Emit LLVM IR to dir
-counter = 0
-function emit(f, tt...)
-    global counter
-    name = nameof(f)
-    open(joinpath(dir, @sprintf("%05d-%s.ll", counter, name)), "w") do io
-        code_llvm(io, f, tt, raw=true, optimize=optimize, dump_module=true, debuginfo=:none)
-    end
-    counter+=1
-end
 
 # Maintaining the order is important
 emit(simdf, Vector{Float64})

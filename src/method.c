@@ -18,6 +18,8 @@ extern "C" {
 extern jl_value_t *jl_builtin_getfield;
 extern jl_value_t *jl_builtin_tuple;
 
+// Resolve references to non-locally-defined variables to become references to global
+// variables in `module` (unless the rvalue is one of the type parameters in `sparam_vals`).
 static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals,
                                    int binding_effects, int eager_resolve)
 {
@@ -120,9 +122,9 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                     jl_error("ccall: missing return type");
                 JL_TYPECHK(ccall method definition, type, rt);
                 JL_TYPECHK(ccall method definition, simplevector, at);
-                JL_TYPECHK(ccall method definition, quotenode, jl_exprarg(e, 3));
-                JL_TYPECHK(ccall method definition, symbol, *(jl_value_t**)jl_exprarg(e, 3));
-                JL_TYPECHK(ccall method definition, long, jl_exprarg(e, 4));
+                JL_TYPECHK(ccall method definition, long, jl_exprarg(e, 3));
+                JL_TYPECHK(ccall method definition, quotenode, jl_exprarg(e, 4));
+                JL_TYPECHK(ccall method definition, symbol, *(jl_value_t**)jl_exprarg(e, 4));
                 jl_exprargset(e, 0, resolve_globals(jl_exprarg(e, 0), module, sparam_vals, binding_effects, 1));
                 i++;
             }
@@ -320,6 +322,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->inlineable = 0;
     src->propagate_inbounds = 0;
     src->pure = 0;
+    src->edges = jl_nothing;
     return src;
 }
 
@@ -375,7 +378,24 @@ STATIC_INLINE jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator
     return code;
 }
 
-// return a newly allocated CodeInfo for the function signature
+// Lower `ex` into Julia IR, and (if it expands into a CodeInfo) resolve global-variable
+// references in light of the provided type parameters.
+// Like `jl_expand`, if there is an error expanding the provided expression, the return value
+// will be an error expression (an `Expr` with `error_sym` as its head), which should be eval'd
+// in the caller's context.
+JL_DLLEXPORT jl_code_info_t *jl_expand_and_resolve(jl_value_t *ex, jl_module_t *module,
+                                                   jl_svec_t *sparam_vals) {
+    jl_code_info_t *func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, module);
+    JL_GC_PUSH1(&func);
+    if (jl_is_code_info(func)) {
+        jl_array_t *stmts = (jl_array_t*)func->code;
+        jl_resolve_globals_in_ir(stmts, module, sparam_vals, 1);
+    }
+    JL_GC_POP();
+    return func;
+}
+
+// Return a newly allocated CodeInfo for the function signature
 // effectively described by the tuple (specTypes, env, Method) inside linfo
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 {
@@ -406,17 +426,16 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
             func = (jl_code_info_t*)ex;
         }
         else {
-            func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, def->module);
+            // Lower the user's expression and resolve references to the type parameters
+            func = jl_expand_and_resolve(ex, def->module, linfo->sparam_vals);
+
             if (!jl_is_code_info(func)) {
                 if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym) {
                     ptls->in_pure_callback = 0;
                     jl_toplevel_eval(def->module, (jl_value_t*)func);
                 }
-                jl_error("generated function body is not pure. this likely means it contains a closure or comprehension.");
+                jl_error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure or comprehension.");
             }
-
-            jl_array_t *stmts = (jl_array_t*)func->code;
-            jl_resolve_globals_in_ir(stmts, def->module, linfo->sparam_vals, 1);
         }
 
         ptls->in_pure_callback = last_in;
@@ -544,6 +563,9 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                 gen_only = 1;
                 st = jl_nothing;
             }
+            else if (nargs == 2 && jl_exprarg(st, 0) == (jl_value_t*)jl_symbol("nkw")) {
+                m->nkw = jl_unbox_long(jl_exprarg(st, 1));
+            }
         }
         else {
             st = resolve_globals(st, m->module, sparam_vars, 1, 0);
@@ -572,6 +594,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->sig = NULL;
     m->slot_syms = NULL;
     m->ambig = jl_nothing;
+    m->resorted = jl_nothing;
     m->roots = NULL;
     m->module = module;
     m->source = NULL;
@@ -582,6 +605,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->line = 0;
     m->called = 0xff;
     m->nospecialize = module->nospecialize;
+    m->nkw = 0;
     m->invokes = NULL;
     m->isva = 0;
     m->nargs = 0;
@@ -621,49 +645,47 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
     return gf;
 }
 
-static jl_datatype_t *first_arg_datatype(jl_value_t *a JL_PROPAGATES_ROOT, int got_tuple1) JL_NOTSAFEPOINT
+static jl_methtable_t *first_methtable(jl_value_t *a JL_PROPAGATES_ROOT, int got_tuple1) JL_NOTSAFEPOINT
 {
     if (jl_is_datatype(a)) {
-        if (got_tuple1)
-            return (jl_datatype_t*)a;
-        if (jl_is_tuple_type(a)) {
-            if (jl_nparams(a) < 1)
-                return NULL;
-            return first_arg_datatype(jl_tparam0(a), 1);
+        if (got_tuple1) {
+            jl_methtable_t *mt = ((jl_datatype_t*)a)->name->mt;
+            if (mt != NULL)
+                return mt;
         }
-        return NULL;
+        if (jl_is_tuple_type(a)) {
+            if (jl_nparams(a) >= 1)
+                return first_methtable(jl_tparam0(a), 1);
+        }
     }
     else if (jl_is_typevar(a)) {
-        return first_arg_datatype(((jl_tvar_t*)a)->ub, got_tuple1);
+        return first_methtable(((jl_tvar_t*)a)->ub, got_tuple1);
     }
     else if (jl_is_unionall(a)) {
-        return first_arg_datatype(((jl_unionall_t*)a)->body, got_tuple1);
+        return first_methtable(((jl_unionall_t*)a)->body, got_tuple1);
     }
     else if (jl_is_uniontype(a)) {
         jl_uniontype_t *u = (jl_uniontype_t*)a;
-        jl_datatype_t *d1 = first_arg_datatype(u->a, got_tuple1);
-        if (d1 == NULL) return NULL;
-        jl_datatype_t *d2 = first_arg_datatype(u->b, got_tuple1);
-        if (d2 == NULL || d1->name != d2->name)
-            return NULL;
-        return d1;
+        jl_methtable_t *m1 = first_methtable(u->a, got_tuple1);
+        if ((jl_value_t*)m1 != jl_nothing) {
+            jl_methtable_t *m2 = first_methtable(u->b, got_tuple1);
+            if (m1 == m2)
+                return m1;
+        }
     }
-    return NULL;
+    return (jl_methtable_t*)jl_nothing;
 }
 
-// get DataType of first tuple element, or NULL if cannot be determined
-JL_DLLEXPORT jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+// get the MethodTable for dispatch, or `nothing` if cannot be determined
+JL_DLLEXPORT jl_methtable_t *jl_method_table_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    return first_arg_datatype(argtypes, 0);
+    return first_methtable(argtypes, 0);
 }
 
-// get DataType implied by a single given type, or `nothing`
-JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+// get the MethodTable implied by a single given type, or `nothing`
+JL_DLLEXPORT jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    jl_datatype_t *dt = first_arg_datatype(argt, 1);
-    if (dt == NULL)
-        return jl_nothing;
-    return (jl_value_t*)dt;
+    return first_methtable(argt, 1);
 }
 
 extern tracer_cb jl_newmeth_tracer;
@@ -683,7 +705,6 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     assert(jl_is_svec(tvars));
     if (!jl_is_type(jl_svecref(atypes, 0)) || (isva && nargs == 1))
         jl_error("function type in method definition is not a type");
-    jl_methtable_t *mt;
     jl_sym_t *name;
     jl_method_t *m = NULL;
     jl_value_t *argtype = NULL;
@@ -698,16 +719,28 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
         argtype = jl_new_struct(jl_unionall_type, tv, argtype);
     }
 
-    jl_datatype_t *ftype = jl_first_argument_datatype(argtype);
-    if (ftype == NULL ||
-        ((!jl_is_type_type((jl_value_t*)ftype)) &&
-         (!jl_is_datatype(ftype) || ftype->abstract || ftype->name->mt == NULL)))
-        jl_error("cannot add methods to an abstract type");
-    if (jl_subtype((jl_value_t*)ftype, (jl_value_t*)jl_builtin_type))
+    jl_methtable_t *mt = jl_method_table_for(argtype);
+    if ((jl_value_t*)mt == jl_nothing)
+        jl_error("Method dispatch is unimplemented currently for this method signature");
+    if (mt->frozen)
         jl_error("cannot add methods to a builtin function");
 
-    mt = ftype->name->mt;
+    // TODO: derive our debug name from the syntax instead of the type
     name = mt->name;
+    if (mt == jl_type_type_mt || mt == jl_nonfunction_mt) {
+        // our value for `name` is bad, try to guess what the syntax might have had,
+        // like `jl_static_show_func_sig` might have come up with
+        jl_datatype_t *dt = jl_first_argument_datatype(argtype);
+        if (dt != NULL) {
+            name = dt->name->name;
+            if (jl_is_type_type((jl_value_t*)dt)) {
+                dt = (jl_datatype_t*)jl_argument_datatype(jl_tparam0(dt));
+                if ((jl_value_t*)dt != jl_nothing) {
+                    name = dt->name->name;
+                }
+            }
+        }
+    }
     if (!jl_is_code_info(f)) {
         // this occurs when there is a closure being added to an out-of-scope function
         // the user should only do this at the toplevel

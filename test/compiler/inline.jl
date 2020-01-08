@@ -257,3 +257,11 @@ end
 let ci = code_typed(foo_apply_apply_type_svec, Tuple{})[1].first
     @test length(ci.code) == 1 && ci.code[1] == Expr(:return, NTuple{3, Float32})
 end
+
+# The that inlining doesn't drop ambiguity errors (#30118)
+c30118(::Tuple{Ref{<:Type}, Vararg}) = nothing
+c30118(::Tuple{Ref, Ref}) = nothing
+b30118(x...) = c30118(x)
+
+@test_throws MethodError c30118((Base.RefValue{Type{Int64}}(), Ref(Int64)))
+@test_throws MethodError b30118(Base.RefValue{Type{Int64}}(), Ref(Int64))

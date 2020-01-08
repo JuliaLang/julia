@@ -34,7 +34,7 @@ end
 
 function normalize(@nospecialize(stmt), meta::Vector{Any})
     if isa(stmt, Expr)
-        if stmt.head == :meta
+        if stmt.head === :meta
             args = stmt.args
             if length(args) > 0
                 push!(meta, stmt)

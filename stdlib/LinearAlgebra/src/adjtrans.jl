@@ -200,9 +200,6 @@ similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent,
 parent(A::AdjOrTrans) = A.parent
 vec(v::TransposeAbsVec) = parent(v)
 
-cmp(A::AdjOrTransAbsVec, B::AdjOrTransAbsVec) = cmp(parent(A), parent(B))
-isless(A::AdjOrTransAbsVec, B::AdjOrTransAbsVec) = isless(parent(A), parent(B))
-
 ### concatenation
 # preserve Adjoint/Transpose wrapper around vectors
 # to retain the associated semantics post-concatenation
@@ -232,7 +229,10 @@ quasiparentt(x) = parent(x); quasiparentt(x::Number) = x # to handle numbers in 
 quasiparenta(x) = parent(x); quasiparenta(x::Number) = conj(x) # to handle numbers in the defs below
 broadcast(f, avs::Union{Number,AdjointAbsVec}...) = adjoint(broadcast((xs...) -> adjoint(f(adjoint.(xs)...)), quasiparenta.(avs)...))
 broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...) -> transpose(f(transpose.(xs)...)), quasiparentt.(tvs)...))
-# TODO unify and allow mixed combinations
+# Hack to preserve behavior after #32122; this needs to be done with a broadcast style instead to support dotted fusion
+Broadcast.broadcast_preserving_zero_d(f, avs::Union{Number,AdjointAbsVec}...) = adjoint(broadcast((xs...) -> adjoint(f(adjoint.(xs)...)), quasiparenta.(avs)...))
+Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...) -> transpose(f(transpose.(xs)...)), quasiparentt.(tvs)...))
+# TODO unify and allow mixed combinations with a broadcast style
 
 ### linear algebra
 
@@ -276,8 +276,12 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 \(u::AdjOrTransAbsVec, v::AdjOrTransAbsVec) = pinv(u) * v
 
 
-## right-division \
+## right-division /
 /(u::AdjointAbsVec, A::AbstractMatrix) = adjoint(adjoint(A) \ u.parent)
 /(u::TransposeAbsVec, A::AbstractMatrix) = transpose(transpose(A) \ u.parent)
 /(u::AdjointAbsVec, A::Transpose{<:Any,<:AbstractMatrix}) = adjoint(conj(A.parent) \ u.parent) # technically should be adjoint(copy(adjoint(copy(A))) \ u.parent)
 /(u::TransposeAbsVec, A::Adjoint{<:Any,<:AbstractMatrix}) = transpose(conj(A.parent) \ u.parent) # technically should be transpose(copy(transpose(copy(A))) \ u.parent)
+
+## complex conjugate
+conj(A::Transpose) = adjoint(A.parent)
+conj(A::Adjoint) = transpose(A.parent)

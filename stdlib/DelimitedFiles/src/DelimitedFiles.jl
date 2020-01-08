@@ -143,8 +143,6 @@ julia> readdlm("delim_file.txt", ',')
  3.0  3.3
  4.0  4.4
 
-julia> rm("delim_file.txt")
-
 julia> z = ["a"; "b"; "c"; "d"];
 
 julia> open("delim_file.txt", "w") do io
@@ -220,13 +218,15 @@ julia> readdlm("delim_file.txt", '\\t', Int, '\\n')
  2  6
  3  7
  4  8
+
+julia> rm("delim_file.txt")
 ```
 """
 readdlm(input, dlm::AbstractChar, T::Type, eol::AbstractChar; opts...) =
     readdlm_auto(input, dlm, T, eol, false; opts...)
 
 readdlm_auto(input::Vector{UInt8}, dlm::AbstractChar, T::Type, eol::AbstractChar, auto::Bool; opts...) =
-    readdlm_string(String(input), dlm, T, eol, auto, val_opts(opts))
+    readdlm_string(String(copyto!(Base.StringVector(length(input)), input)), dlm, T, eol, auto, val_opts(opts))
 readdlm_auto(input::IO, dlm::AbstractChar, T::Type, eol::AbstractChar, auto::Bool; opts...) =
     readdlm_string(read(input, String), dlm, T, eol, auto, val_opts(opts))
 function readdlm_auto(input::AbstractString, dlm::AbstractChar, T::Type, eol::AbstractChar, auto::Bool; opts...)
@@ -455,7 +455,7 @@ function readdlm_string(sbuff::String, dlm::AbstractChar, T::Type, eol::Abstract
             dims = dlm_parse(sbuff, eol, dlm, '"', comment_char, ign_empty, quotes, comments, skipstart, skipblanks, offset_handler)
             break
         catch ex
-            if isa(ex, TypeError) && (ex.func == :store_cell)
+            if isa(ex, TypeError) && (ex.func === :store_cell)
                 T = ex.expected
             else
                 rethrow()
@@ -510,7 +510,7 @@ function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integ
         end
         return result(dh)
     catch ex
-        isa(ex, TypeError) && (ex.func == :store_cell) && (return dlm_fill(ex.expected, offarr, dims, has_header, sbuff, auto, eol))
+        isa(ex, TypeError) && (ex.func === :store_cell) && (return dlm_fill(ex.expected, offarr, dims, has_header, sbuff, auto, eol))
         error("at row $row, column $col : $ex")
     end
 end
@@ -712,7 +712,7 @@ function dlm_parse(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
             end
         end
     catch ex
-        if isa(ex, TypeError) && (ex.func == :store_cell)
+        if isa(ex, TypeError) && (ex.func === :store_cell)
             rethrow()
         else
             error("at row $(nrows+1), column $col : $ex)")

@@ -111,6 +111,7 @@ const latex_symbols = Dict(
     "\\impliedby" => "⟸",
     "\\to" => "→",
     "\\euler" => "ℯ",
+    "\\ohm" => "Ω",
 
     # Superscripts
     "\\^0" => "⁰",
@@ -588,7 +589,9 @@ const latex_symbols = Dict(
     "\\equiv" => "≡",
     "\\nequiv" => "≢",
     "\\le" => "≤",
+    "\\leq" => "≤",
     "\\ge" => "≥",
+    "\\geq" => "≥",
     "\\leqq" => "≦",
     "\\geqq" => "≧",
     "\\lneqq" => "≨",

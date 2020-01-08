@@ -29,6 +29,16 @@ Random.seed!(1234321)
             @test_throws ArgumentError cond(a,3)
         end
     end
+    @testset "Singular matrices" for p in (1, 2, Inf)
+        @test cond(zeros(Int, 2, 2), p) == Inf
+        @test cond(zeros(2, 2), p) == Inf
+        @test cond([0 0; 1 1], p) == Inf
+        @test cond([0. 0.; 1. 1.], p) == Inf
+    end
+    @testset "Issue #33547, condition number of 2x2 matrix" begin
+        M = [1.0 -2.0; -2.0 -1.5]
+        @test cond(M, 1) ≈ 2.227272727272727
+    end
 end
 
 areal = randn(n,n)/2
@@ -89,6 +99,22 @@ bimg  = randn(n,2)/2
     @test diagm(ones(50)) == diagm(0 => ones(50))
     v = randn(500)
     @test diagm(v) == diagm(0 => v)
+    @test diagm(500, 501, v) == diagm(500, 501, 0 => v)
+end
+
+@testset "Non-square diagm" begin
+    x = [7, 8]
+    for m=1:4, n=2:4
+        if m < 2 || n < 3
+            @test_throws DimensionMismatch diagm(m,n, 0 => x,  1 => x)
+            @test_throws DimensionMismatch diagm(n,m, 0 => x,  -1 => x)
+        else
+            M = zeros(m,n)
+            M[1:2,1:3] = [7 7 0; 0 8 8]
+            @test diagm(m,n, 0 => x,  1 => x) == M
+            @test diagm(n,m, 0 => x,  -1 => x) == M'
+        end
+    end
 end
 
 @testset "Test pinv (rtol, atol)" begin
@@ -877,6 +903,29 @@ end
 
     @test @inferred(inv(B'))*B'                     ≈ I
     @test @inferred(inv(transpose(B)))*transpose(B) ≈ I
+end
+
+@testset "Factorize fallback for Adjoint/Transpose" begin
+    a = rand(Complex{Int8}, n, n)
+    @test Array(transpose(factorize(Transpose(a)))) ≈ Array(factorize(a))
+    @test transpose(factorize(transpose(a))) == factorize(a)
+    @test Array(adjoint(factorize(Adjoint(a)))) ≈ Array(factorize(a))
+    @test adjoint(factorize(adjoint(a))) == factorize(a)
+end
+
+@testset "Matrix log issue #32313" begin
+    for A in ([30 20; -50 -30], [10.0im 0; 0 -10.0im], randn(6,6))
+        @test exp(log(A)) ≈ A
+    end
+end
+
+@testset "Matrix log PR #33245" begin
+    # edge case for divided difference
+    A1 = triu(ones(3,3),1) + diagm([1.0, -2eps()-1im, -eps()+0.75im])
+    @test exp(log(A1)) ≈ A1
+    # case where no sqrt is needed (s=0)
+    A2 = [1.01 0.01 0.01; 0 1.01 0.01; 0 0 1.01]
+    @test exp(log(A2)) ≈ A2
 end
 
 end # module TestDense

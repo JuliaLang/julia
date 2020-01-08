@@ -7,6 +7,7 @@ described here might (and likely will) change in the future.
 Base.Threads.threadid
 Base.Threads.nthreads
 Base.Threads.@threads
+Base.Threads.@spawn
 ```
 
 ```@docs
@@ -35,6 +36,5 @@ Base.@threadcall
 These building blocks are used to create the regular synchronization objects.
 
 ```@docs
-Base.Threads.Mutex
 Base.Threads.SpinLock
 ```

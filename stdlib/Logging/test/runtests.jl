@@ -8,6 +8,13 @@ import Logging: min_enabled_level, shouldlog, handle_message
 
 @testset "Logging" begin
 
+@testset "Core" begin
+    # Symbols imported from CoreLogging should appear in tab completions
+    @test :AbstractLogger in names(Logging, all=true)  # exported public type
+    @test :Info in names(Logging, all=true)            # non-exported public constant
+    @test :handle_message in names(Logging, all=true)  # non-exported public function
+end
+
 @testset "ConsoleLogger" begin
     # First pass log limiting
     @test min_enabled_level(ConsoleLogger(devnull, Logging.Debug)) == Logging.Debug
@@ -206,7 +213,7 @@ import Logging: min_enabled_level, shouldlog, handle_message
         │     1.00001  1.00001  1.00001  1.00001  …  1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
-        │     ⋮                                   ⋱                           EOL
+        │     ⋮                                   ⋱                    EOL
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
         │   b =
@@ -214,7 +221,7 @@ import Logging: min_enabled_level, shouldlog, handle_message
         │     2.00002  2.00002  2.00002  2.00002  …  2.00002  2.00002  2.00002
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
-        │     ⋮                                   ⋱                           EOL
+        │     ⋮                                   ⋱                    EOL
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
         └ SUFFIX

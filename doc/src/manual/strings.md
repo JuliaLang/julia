@@ -88,8 +88,8 @@ julia> isvalid(Char, 0x110000)
 false
 ```
 
-As of this writing, the valid Unicode code points are `U+00` through `U+d7ff` and `U+e000` through
-`U+10ffff`. These have not all been assigned intelligible meanings yet, nor are they necessarily
+As of this writing, the valid Unicode code points are `U+0000` through `U+D7FF` and `U+E000` through
+`U+10FFFF`. These have not all been assigned intelligible meanings yet, nor are they necessarily
 interpretable by applications, but all of these values are considered to be valid Unicode characters.
 
 You can input any Unicode character in single quotes using `\u` followed by up to four hexadecimal
@@ -107,7 +107,7 @@ julia> '\u2200'
 '∀': Unicode U+2200 (category Sm: Symbol, math)
 
 julia> '\U10ffff'
-'\U10ffff': Unicode U+10ffff (category Cn: Other, not assigned)
+'\U10ffff': Unicode U+10FFFF (category Cn: Other, not assigned)
 ```
 
 Julia uses your system's locale and language settings to determine which characters can be printed
@@ -169,20 +169,23 @@ julia> """Contains "quote" characters"""
 If you want to extract a character from a string, you index into it:
 
 ```jldoctest helloworldstring
+julia> str[begin]
+'H': ASCII/Unicode U+0048 (category Lu: Letter, uppercase)
+
 julia> str[1]
 'H': ASCII/Unicode U+0048 (category Lu: Letter, uppercase)
 
 julia> str[6]
-',': ASCII/Unicode U+002c (category Po: Punctuation, other)
+',': ASCII/Unicode U+002C (category Po: Punctuation, other)
 
 julia> str[end]
-'\n': ASCII/Unicode U+000a (category Cc: Other, control)
+'\n': ASCII/Unicode U+000A (category Cc: Other, control)
 ```
 
 Many Julia objects, including strings, can be indexed with integers. The index of the first
 element (the first character of a string) is returned by [`firstindex(str)`](@ref), and the index of the last element (character)
-with [`lastindex(str)`](@ref). The keyword `end` can be used inside an indexing
-operation as shorthand for the last index along the given dimension.
+with [`lastindex(str)`](@ref). The keywords `begin` and `end` can be used inside an indexing
+operation as shorthand for the first and last indices, respectively, along the given dimension.
 String indexing, like most indexing in Julia, is 1-based: `firstindex` always returns `1` for any `AbstractString`.
 As we will see below, however, `lastindex(str)` is *not* in general the same as `length(str)` for a string,
 because some Unicode characters can occupy multiple "code units".
@@ -192,24 +195,23 @@ a normal value:
 
 ```jldoctest helloworldstring
 julia> str[end-1]
-'.': ASCII/Unicode U+002e (category Po: Punctuation, other)
+'.': ASCII/Unicode U+002E (category Po: Punctuation, other)
 
 julia> str[end÷2]
 ' ': ASCII/Unicode U+0020 (category Zs: Separator, space)
 ```
 
-Using an index less than 1 or greater than `end` raises an error:
+Using an index less than `begin` (`1`) or greater than `end` raises an error:
 
 ```jldoctest helloworldstring
-julia> str[0]
-ERROR: BoundsError: attempt to access "Hello, world.\n"
+julia> str[begin-1]
+ERROR: BoundsError: attempt to access String
   at index [0]
 [...]
 
 julia> str[end+1]
-ERROR: BoundsError: attempt to access "Hello, world.\n"
+ERROR: BoundsError: attempt to access String
   at index [15]
-Stacktrace:
 [...]
 ```
 
@@ -224,7 +226,7 @@ Notice that the expressions `str[k]` and `str[k:k]` do not give the same result:
 
 ```jldoctest helloworldstring
 julia> str[6]
-',': ASCII/Unicode U+002c (category Po: Punctuation, other)
+',': ASCII/Unicode U+002C (category Po: Punctuation, other)
 
 julia> str[6:6]
 ","
@@ -417,7 +419,7 @@ julia> foreach(display, s)
 '\xc0\xa0': [overlong] ASCII/Unicode U+0020 (category Zs: Separator, space)
 '\xe2\x88': Malformed UTF-8 (category Ma: Malformed, bad data)
 '\xe2': Malformed UTF-8 (category Ma: Malformed, bad data)
-'|': ASCII/Unicode U+007c (category Sm: Symbol, math)
+'|': ASCII/Unicode U+007C (category Sm: Symbol, math)
 
 julia> isvalid.(collect(s))
 4-element BitArray{1}:
@@ -430,7 +432,7 @@ julia> s2 = "\xf7\xbf\xbf\xbf"
 "\U1fffff"
 
 julia> foreach(display, s2)
-'\U1fffff': Unicode U+1fffff (category In: Invalid, too high)
+'\U1fffff': Unicode U+1FFFFF (category In: Invalid, too high)
 ```
 
 We can see that the first two code units in the string `s` form an overlong encoding of

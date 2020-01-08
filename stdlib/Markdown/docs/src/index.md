@@ -1,4 +1,4 @@
-# Markdown
+# [Markdown](@id markdown_stdlib)
 
 This section describes Julia's markdown syntax, which is enabled by the
 Markdown standard library. The following Markdown elements are supported:

@@ -18,7 +18,7 @@ Note that the called function should never call back into Julia.
 """
 macro threadcall(f, rettype, argtypes, argvals...)
     # check for usage errors
-    isa(argtypes,Expr) && argtypes.head == :tuple ||
+    isa(argtypes,Expr) && argtypes.head === :tuple ||
         error("threadcall: argument types must be a tuple")
     length(argtypes.args) == length(argvals) ||
         error("threadcall: wrong number of arguments to C function")

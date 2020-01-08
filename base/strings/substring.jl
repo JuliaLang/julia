@@ -51,7 +51,11 @@ convert(::Type{SubString{S}}, s::AbstractString) where {S<:AbstractString} =
     SubString(convert(S, s))
 convert(::Type{T}, s::T) where {T<:SubString} = s
 
-String(s::SubString{String}) = unsafe_string(pointer(s.string, s.offset+1), s.ncodeunits)
+function String(s::SubString{String})
+    parent = s.string
+    copy = GC.@preserve parent unsafe_string(pointer(parent, s.offset+1), s.ncodeunits)
+    return copy
+end
 
 ncodeunits(s::SubString) = s.ncodeunits
 codeunit(s::SubString) = codeunit(s.string)
@@ -94,8 +98,7 @@ nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
 function cmp(a::SubString{String}, b::SubString{String})
     na = sizeof(a)
     nb = sizeof(b)
-    c = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-              pointer(a), pointer(b), min(na, nb))
+    c = _memcmp(a, b, min(na, nb))
     return c < 0 ? -1 : c > 0 ? +1 : cmp(na, nb)
 end
 
@@ -152,25 +155,27 @@ end
 string(a::String)            = String(a)
 string(a::SubString{String}) = String(a)
 
-@inline function __unsafe_string!(out, c::Char, offs::Integer)
+@inline function __unsafe_string!(out, c::Char, offs::Integer) # out is a (new) String (or StringVector)
     x = bswap(reinterpret(UInt32, c))
     n = ncodeunits(c)
-    unsafe_store!(pointer(out, offs), x % UInt8)
-    n == 1 && return n
-    x >>= 8
-    unsafe_store!(pointer(out, offs+1), x % UInt8)
-    n == 2 && return n
-    x >>= 8
-    unsafe_store!(pointer(out, offs+2), x % UInt8)
-    n == 3 && return n
-    x >>= 8
-    unsafe_store!(pointer(out, offs+3), x % UInt8)
+    GC.@preserve out begin
+        unsafe_store!(pointer(out, offs), x % UInt8)
+        n == 1 && return n
+        x >>= 8
+        unsafe_store!(pointer(out, offs+1), x % UInt8)
+        n == 2 && return n
+        x >>= 8
+        unsafe_store!(pointer(out, offs+2), x % UInt8)
+        n == 3 && return n
+        x >>= 8
+        unsafe_store!(pointer(out, offs+3), x % UInt8)
+    end
     return n
 end
 
 @inline function __unsafe_string!(out, s::Union{String, SubString{String}}, offs::Integer)
     n = sizeof(s)
-    unsafe_copyto!(pointer(out, offs), pointer(s), n)
+    GC.@preserve s out unsafe_copyto!(pointer(out, offs), pointer(s), n)
     return n
 end
 
@@ -201,7 +206,7 @@ function repeat(s::Union{String, SubString{String}}, r::Integer)
         ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), out, b, r)
     else
         for i = 0:r-1
-            unsafe_copyto!(pointer(out, i*n+1), pointer(s), n)
+            GC.@preserve s out unsafe_copyto!(pointer(out, i*n+1), pointer(s), n)
         end
     end
     return out
