@@ -15,8 +15,8 @@ Documentation:
 | Builder   | Status (build)                        | Status (test)                     |
 | --------- | ----------------------------------- | --------------------------------- | 
 | `linux64` | ![package_linux64][package_linux64] | ![tester_linux64][tester_linux64] |
-| `macos64` | ![foo][foo] | ![foo][foo] |
-| `win64`   | ![foo][foo] | ![foo][foo] |
+| `macos64` | ![package_macos64][package_macos64] | ![tester_linux64][tester_linux64] |
+| `win64`   | ![package_win64][package_win64] | ![tester_win64][tester_win64] |
 
 [package_linux64]: https://build.julialang.org/badges/package_linux64.svg
 [package_macos64]: https://build.julialang.org/badges/package_macos64.svg
