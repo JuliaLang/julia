@@ -33,7 +33,7 @@ SUITESPARSE_MFLAGS += UNAME=$(OS)
 endif
 
 $(SRCCACHE)/SuiteSparse-$(SUITESPARSE_VER).tar.gz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ http://faculty.cse.tamu.edu/davis/SuiteSparse/$(notdir $@)
+	$(JLDOWNLOAD) $@ https://github.com/DrTimothyAldenDavis/SuiteSparse/archive/v$(SUITESPARSE_VER).tar.gz
 
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted: $(SRCCACHE)/SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	$(JLCHECKSUM) $<
@@ -155,4 +155,3 @@ install-suitesparse-wrapper: install-suitesparse
 # suitesparse depends on OpenBLAS
 compile-suitesparse: | $(build_prefix)/manifest/openblas
 endif
-
