@@ -1831,15 +1831,21 @@ static void write_log_data(logdata_t &logData, const char *extension)
             if (!isabspath(filename.c_str()))
                 filename = base + filename;
             std::ifstream inf(filename.c_str());
-            if (inf.is_open()) {
-                std::string outfile = filename + extension;
-                std::ofstream outf(outfile.c_str(), std::ofstream::trunc | std::ofstream::out | std::ofstream::binary);
+            if (!inf.is_open())
+                continue;
+            std::string outfile = filename + extension;
+            std::ofstream outf(outfile.c_str(), std::ofstream::trunc | std::ofstream::out | std::ofstream::binary);
+            if (outf.is_open()) {
+                inf.exceptions(std::ifstream::badbit);
+                outf.exceptions(std::ifstream::failbit | std::ifstream::badbit);
                 char line[1024];
                 int l = 1;
                 unsigned block = 0;
                 while (!inf.eof()) {
                     inf.getline(line, sizeof(line));
-                    if (inf.fail() && !inf.bad()) {
+                    if (inf.fail()) {
+                        if (inf.eof())
+                            break; // no content on trailing line
                         // Read through lines longer than sizeof(line)
                         inf.clear();
                         inf.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
@@ -1862,8 +1868,8 @@ static void write_log_data(logdata_t &logData, const char *extension)
                     outf << " " << line << '\n';
                 }
                 outf.close();
-                inf.close();
             }
+            inf.close();
         }
     }
 }
