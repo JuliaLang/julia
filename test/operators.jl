@@ -112,7 +112,7 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
     fs = [x -> x[1:2], uppercase, lowercase]
     @test ∘(fs...)("ABC") == "AB"
 
-    @test ∘()(0) === 0
+    @test_throws ArgumentError ∘()
     @test ∘(x -> (x, 1))(0) === (0, 1)
     @test ∘(x -> (x, 2), x -> (x, 1))(0) === ((0, 1), 2)
     @test ∘(x -> (x, 3), x -> (x, 2), x->(x,1))(0) === (((0, 1), 2), 3)

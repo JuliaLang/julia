@@ -838,7 +838,8 @@ and splatting `∘(fs...)` for composing an iterable collection of functions.
     Multiple function composition requires at least Julia 1.4.
 
 !!! compat "Julia 1.5"
-    Composition of zero or one functions requires at least Julia 1.5.
+    Composition of one function ∘(f)  requires at least Julia 1.5.
+    
 
 # Examples
 ```jldoctest
@@ -859,7 +860,14 @@ julia> ∘(fs...)(3)
 3.0
 ```
 """
-∘() = identity
+function ∘()
+    # Like +() and *() we leave ∘() undefined.
+    # While `∘() = identity` is a reasonable definition for functions, this
+    # would cause headaches for composition of user defined morphisms.
+    # See also #34251
+    msg = """Empty composition ∘() is undefined."""
+    throw(ArgumentError(msg))
+end
 ∘(f) = f
 ∘(f, g) = (x...)->f(g(x...))
 ∘(f, g, h...) = ∘(f ∘ g, h...)
