@@ -945,6 +945,10 @@ function qsort(a::Vector{T}, cmp) where T
 end
 ```
 
+!!! note
+    Closure [`@cfunction`](@ref) rely on LLVM trampolines, which are not available on all
+    platforms (for example ARM and PowerPC).
+
 
 ## Closing a Library
 

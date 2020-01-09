@@ -5075,6 +5075,12 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     }
 
     bool nest = (!fexpr_rt.constant || unionall_env);
+#if defined(_CPU_AARCH64_) || defined(_CPU_ARM_) || defined(_CPU_PPC64_)
+    if (nest) {
+        emit_error(ctx, "cfunction: closures are not supported on this platform");
+        return jl_cgval_t();
+    }
+#endif
     Value *F = gen_cfun_wrapper(
             jl_Module,
             sig, fexpr_rt.constant,
