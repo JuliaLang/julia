@@ -265,9 +265,6 @@ function merge(a::NamedTuple, itr)
     merge(a, NamedTuple{(names...,)}((vals...,)))
 end
 
-# Disambiguation:
-merge(a::NamedTuple, itr::AbstractDict) = invoke(merge, Tuple{NamedTuple, Any}, a, itr)
-
 keys(nt::NamedTuple{names}) where {names} = names
 values(nt::NamedTuple) = Tuple(nt)
 haskey(nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key)
