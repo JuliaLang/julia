@@ -860,14 +860,7 @@ julia> ∘(fs...)(3)
 3.0
 ```
 """
-function ∘()
-    # Like +() and *() we leave ∘() undefined.
-    # While `∘() = identity` is a reasonable definition for functions, this
-    # would cause headaches for composition of user defined morphisms.
-    # See also #34251
-    msg = """Empty composition ∘() is undefined."""
-    throw(ArgumentError(msg))
-end
+function ∘ end
 ∘(f) = f
 ∘(f, g) = (x...)->f(g(x...))
 ∘(f, g, h...) = ∘(f ∘ g, h...)

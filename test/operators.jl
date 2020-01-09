@@ -112,7 +112,12 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
     fs = [x -> x[1:2], uppercase, lowercase]
     @test ∘(fs...)("ABC") == "AB"
 
-    @test_throws ArgumentError ∘()
+    # Like +() and *() we leave ∘() undefined.
+    # While `∘() = identity` is a reasonable definition for functions, this
+    # would cause headaches for composition of user defined morphisms.
+    # See also #34251
+    @test_throws MethodError ∘()
+
     @test ∘(x -> (x, 1))(0) === (0, 1)
     @test ∘(x -> (x, 2), x -> (x, 1))(0) === ((0, 1), 2)
     @test ∘(x -> (x, 3), x -> (x, 2), x->(x,1))(0) === (((0, 1), 2), 3)
