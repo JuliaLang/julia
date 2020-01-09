@@ -27,13 +27,13 @@ New library features
 
 Standard library changes
 ------------------------
-
+* The `@timed` macro now returns a `NamedTuple` ([#34149])
 * `push!(c::Channel, v)` now returns channel `c`. Previously, it returned the pushed value
   `v` ([#34202]).
 
 #### LinearAlgebra
-
 * The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
+* `normalize` now supports multidimensional arrays ([#34239])
 
 #### Markdown
 

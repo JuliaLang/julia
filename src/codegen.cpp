@@ -1831,15 +1831,21 @@ static void write_log_data(logdata_t &logData, const char *extension)
             if (!isabspath(filename.c_str()))
                 filename = base + filename;
             std::ifstream inf(filename.c_str());
-            if (inf.is_open()) {
-                std::string outfile = filename + extension;
-                std::ofstream outf(outfile.c_str(), std::ofstream::trunc | std::ofstream::out | std::ofstream::binary);
+            if (!inf.is_open())
+                continue;
+            std::string outfile = filename + extension;
+            std::ofstream outf(outfile.c_str(), std::ofstream::trunc | std::ofstream::out | std::ofstream::binary);
+            if (outf.is_open()) {
+                inf.exceptions(std::ifstream::badbit);
+                outf.exceptions(std::ifstream::failbit | std::ifstream::badbit);
                 char line[1024];
                 int l = 1;
                 unsigned block = 0;
                 while (!inf.eof()) {
                     inf.getline(line, sizeof(line));
-                    if (inf.fail() && !inf.bad()) {
+                    if (inf.fail()) {
+                        if (inf.eof())
+                            break; // no content on trailing line
                         // Read through lines longer than sizeof(line)
                         inf.clear();
                         inf.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
@@ -1862,8 +1868,8 @@ static void write_log_data(logdata_t &logData, const char *extension)
                     outf << " " << line << '\n';
                 }
                 outf.close();
-                inf.close();
             }
+            inf.close();
         }
     }
 }
@@ -4317,20 +4323,22 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         for (size_t i = 0; i < nargs; ++i) {
             argv[i] = emit_expr(ctx, args[i]);
         }
-        size_t nargsboxed = 0;
-        Value **vals = (Value**)alloca(sizeof(Value *) * nargs);
+        std::vector<Value*> vals;
         for (size_t i = 0; i < nargs; ++i) {
-            if (!argv[i].isboxed) {
-                // This is intentionally not an error to allow writing
-                // generic code more easily.
+            const jl_cgval_t &ai = argv[i];
+            if (ai.constant)
                 continue;
-            } else if (argv[i].constant) {
-                continue;
+            if (ai.isboxed) {
+                vals.push_back(ai.Vboxed);
             }
-            vals[nargsboxed++] = argv[i].Vboxed;
+            else if (!jl_is_pointerfree(ai.typ)) {
+                Type *at = julia_type_to_llvm(ai.typ);
+                vals.push_back(emit_unbox(ctx, at, ai, ai.typ));
+            }
         }
-        Value *token = ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func),
-            ArrayRef<Value*>(vals, nargsboxed));
+        Value *token = vals.empty()
+            ? (Value*)ConstantTokenNone::get(jl_LLVMContext)
+            : ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func), vals);
         jl_cgval_t tok(token, NULL, false, (jl_value_t*)jl_void_type, NULL);
         return tok;
     }
@@ -4343,7 +4351,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         }
         jl_cgval_t token = emit_expr(ctx, args[0]);
         assert(token.V->getType()->isTokenTy());
-        ctx.builder.CreateCall(prepare_call(gc_preserve_end_func), {token.V});
+        if (!isa<ConstantTokenNone>(token.V))
+            ctx.builder.CreateCall(prepare_call(gc_preserve_end_func), {token.V});
         return jl_cgval_t((jl_value_t*)jl_void_type);
     }
     else {

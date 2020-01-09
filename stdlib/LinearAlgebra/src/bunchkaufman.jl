@@ -120,7 +120,7 @@ end
 
 Compute the Bunch-Kaufman [^Bunch1977] factorization of a symmetric or
 Hermitian matrix `A` as `P'*U*D*U'*P` or `P'*L*D*L'*P`, depending on
-which triangle is stored in `A`, and return a `BunchKaufman` object.
+which triangle is stored in `A`, and return a [`BunchKaufman`](@ref) object.
 Note that if `A` is complex symmetric then `U'` and `L'` denote
 the unconjugated transposes, i.e. `transpose(U)` and `transpose(L)`.
 

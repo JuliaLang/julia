@@ -1100,7 +1100,7 @@ function testset_beginend(args, tests, source)
     # action (such as reporting the results)
     ex = quote
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
-        ts = $(testsettype)($desc; $options...)
+        local ts = $(testsettype)($desc; $options...)
         # this empty loop is here to force the block to be compiled,
         # which is needed for backtrace scrubbing to work correctly.
         while false; end
@@ -1109,7 +1109,7 @@ function testset_beginend(args, tests, source)
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
         local RNG = default_rng()
-        oldrng = copy(RNG)
+        local oldrng = copy(RNG)
         try
             # RNG is re-seeded with its own seed to ease reproduce a failed test
             Random.seed!(RNG.seed)
@@ -1195,7 +1195,7 @@ function testset_forloop(args, testloop, source)
         end
     end
     quote
-        arr = Vector{Any}()
+        local arr = Vector{Any}()
         local first_iteration = true
         local ts
         local RNG = default_rng()

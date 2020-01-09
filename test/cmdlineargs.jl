@@ -34,7 +34,13 @@ end
 let
     fn = format_filename("a%d %p %i %L %l %u z")
     hd = withenv("HOME" => nothing) do
-        homedir()
+        # get the homedir, as reported by uv_os_get_passwd, as used by jl_format_filename
+        try
+            homedir()
+        catch ex
+            (ex isa Base.IOError && ex.code == Base.UV_ENOENT) || rethrow(ex)
+            ""
+        end
     end
     @test startswith(fn, "a$hd ")
     @test endswith(fn, " z")
@@ -48,13 +54,17 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     # tests for handling of ENV errors
     let v = writereadpipeline("println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
                 setenv(`$exename -i -E 'empty!(LOAD_PATH); @isdefined InteractiveUtils'`,
-                    "JULIA_LOAD_PATH"=>"", "JULIA_DEPOT_PATH"=>""))
+                    "JULIA_LOAD_PATH" => "",
+                    "JULIA_DEPOT_PATH" => "",
+                    "HOME" => homedir()))
         @test v[1] == "false\nREPL: InteractiveUtilstrue\n"
         @test v[2]
     end
     let v = writereadpipeline("println(\"REPL: \", InteractiveUtils)",
                 setenv(`$exename -i -e 'const InteractiveUtils = 3'`,
-                    "JULIA_LOAD_PATH"=>";;;:::", "JULIA_DEPOT_PATH"=>";;;:::"))
+                    "JULIA_LOAD_PATH" => ";;;:::",
+                    "JULIA_DEPOT_PATH" => ";;;:::",
+                    "HOME" => homedir()))
         # TODO: ideally, `@which`, etc. would still work, but Julia can't handle `using $InterativeUtils`
         @test v[1] == "REPL: 3\n"
         @test v[2]
@@ -71,13 +81,13 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     end
     real_threads = string(ccall(:jl_cpu_threads, Int32, ()))
     for nc in ("0", "-2", "x", "2x", " ", "")
-        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc))
+        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc, "HOME" => homedir()))
         @test v[1]
         @test v[2] == real_threads
         @test v[3] == "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $real_threads."
     end
     for nc in ("1", " 1 ", " +1 ", " 0x1 ")
-        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc))
+        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc, "HOME" => homedir()))
         @test v[1]
         @test v[2] == "1"
         @test isempty(v[3])
@@ -101,7 +111,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     if !Sys.iswindows()
         expanded = abspath(expanduser("~/foo"))
         @test occursin(expanded, readchomp(`$exename --project='~/foo' -E 'Base.active_project()'`))
-        @test occursin(expanded, readchomp(setenv(`$exename -E 'Base.active_project()'`, "JULIA_PROJECT"=>"~/foo")))
+        @test occursin(expanded, readchomp(setenv(`$exename -E 'Base.active_project()'`, "JULIA_PROJECT" => "~/foo", "HOME" => homedir())))
     end
 
     # --quiet, --banner
