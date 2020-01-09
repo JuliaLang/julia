@@ -16,8 +16,8 @@ CHOLMOD_CONFIG += -DNPARTITION
 
 ifneq ($(USE_BINARYBUILDER_SUITESPARSE), 1)
 
-SUITESPARSE_PROJECTS := AMD CAMD CCOLAMD COLAMD CHOLMOD UMFPACK SPQR
-SUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig amd camd ccolamd colamd cholmod umfpack spqr)
+SUITESPARSE_PROJECTS := AMD BTF CAMD CCOLAMD COLAMD CHOLMOD LDL KLU UMFPACK RBio SPQR
+SUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig amd btf camd ccolamd colamd cholmod klu umfpack rbio spqr)
 
 SUITE_SPARSE_LIB := $(LDFLAGS) -L"$(abspath $(BUILDDIR))/SuiteSparse-$(SUITESPARSE_VER)/lib"
 ifeq ($(OS), Darwin)
