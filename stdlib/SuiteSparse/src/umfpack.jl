@@ -194,8 +194,8 @@ validity (via [`issuccess`](@ref)) lies with the user.
     `ComplexF64` elements, `lu!` converts `A` into a copy that is of type
     `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}` as appropriate.
 
-!!! compat "Julia 1.4"
-    `lu!` for `UmfpackLU` requires at least Julia 1.4.
+!!! compat "Julia 1.5"
+    `lu!` for `UmfpackLU` requires at least Julia 1.5.
 
 # Examples
 ```jldoctest
