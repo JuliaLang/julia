@@ -171,7 +171,7 @@ macro test999_str(args...); args; end
 
 # blocks vs. tuples
 @test Meta.parse("()") == Expr(:tuple)
-@test Meta.parse("(;)") == Expr(:block)
+@test_skip Meta.parse("(;)") == Expr(:tuple, Expr(:parameters))
 @test Meta.parse("(;;;;)") == Expr(:block)
 @test_throws ParseError Meta.parse("(,)")
 @test_throws ParseError Meta.parse("(;,)")
@@ -1322,14 +1322,23 @@ end
 @test Meta.parse("-(x)^2")     == Expr(:call, :-, Expr(:call, :^, :x, 2))
 @test Meta.parse("-(a=1)^2")   == Expr(:call, :-, Expr(:call, :^, Expr(:(=), :a, 1), 2))
 @test Meta.parse("-(x;y)^2")   == Expr(:call, :-, Expr(:call, :^, Expr(:block, :x, LineNumberNode(1,:none), :y), 2))
-@test Meta.parse("-(;)^2")     == Expr(:call, :-, Expr(:call, :^, Expr(:block), 2))
+@test_skip Meta.parse("-(;)^2")     == Expr(:call, :-, Expr(:call, :^, Expr(:tuple, Expr(:parameters)), 2))
 @test Meta.parse("-(;;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block), 2))
 @test Meta.parse("-(x;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block, :x), 2))
 @test Meta.parse("+((1,2))")   == Expr(:call, :+, Expr(:tuple, 1, 2))
 
-@test_throws ParseError("space before \"(\" not allowed in \"+ (\"") Meta.parse("1 -+ (a=1, b=2)")
+@test_throws ParseError("space before \"(\" not allowed in \"+ (\" at none:1") Meta.parse("1 -+ (a=1, b=2)")
 # issue #29781
-@test_throws ParseError("space before \"(\" not allowed in \"sin. (\"") Meta.parse("sin. (1)")
+@test_throws ParseError("space before \"(\" not allowed in \"sin. (\" at none:1") Meta.parse("sin. (1)")
+# Parser errors for disallowed space contain line numbers
+@test_throws ParseError("space before \"[\" not allowed in \"f() [\" at none:2") Meta.parse("\nf() [i]")
+@test_throws ParseError("space before \"(\" not allowed in \"f() (\" at none:2") Meta.parse("\nf() (i)")
+@test_throws ParseError("space before \".\" not allowed in \"f() .\" at none:2") Meta.parse("\nf() .i")
+@test_throws ParseError("space before \"{\" not allowed in \"f() {\" at none:2") Meta.parse("\nf() {i}")
+@test_throws ParseError("space before \"m\" not allowed in \"@ m\" at none:2") Meta.parse("\n@ m")
+@test_throws ParseError("space before \".\" not allowed in \"a .\" at none:2") Meta.parse("\nusing a .b")
+@test_throws ParseError("space before \".\" not allowed in \"a .\" at none:2") Meta.parse("\nusing a .b")
+@test_throws ParseError("space before \"(\" not allowed in \"+ (\" at none:2") Meta.parse("\n+ (x, y)")
 
 @test Meta.parse("1 -+(a=1, b=2)") == Expr(:call, :-, 1,
                                            Expr(:call, :+, Expr(:kw, :a, 1), Expr(:kw, :b, 2)))
@@ -1380,7 +1389,7 @@ end
 # Module name cannot be a reserved word.
 @test_throws ParseError Meta.parse("module module end")
 
-@test Meta.lower(@__MODULE__, :(global true)) == Expr(:error, "invalid identifier name \"true\"")
+@test Meta.lower(@__MODULE__, :(global true)) == Expr(:error, "invalid syntax in \"global\" declaration")
 @test Meta.lower(@__MODULE__, :(let ccall end)) == Expr(:error, "invalid identifier name \"ccall\"")
 @test Meta.lower(@__MODULE__, :(cglobal = 0)) == Expr(:error, "invalid assignment location \"cglobal\"")
 
@@ -1845,8 +1854,7 @@ end
 @testset "closure conversion in testsets" begin
     p = (2, 3, 4)
     @test p == (2, 3, 4)
-    identity(p)
-    allocs = @allocated identity(p)
+    allocs = (() -> @allocated identity(p))()
     @test allocs == 0
 end
 
@@ -1912,7 +1920,9 @@ end
 @test Meta.parse(":a..:b") == Expr(:call, :(..), QuoteNode(:a), QuoteNode(:b))
 
 # Non-standard identifiers (PR #32408)
-@test Meta.parse("var\"#\"") == Symbol("#")
+@test Meta.parse("var\"#\"") === Symbol("#")
+@test Meta.parse("var\"true\"") === Symbol("true")
+@test Meta.parse("var\"false\"") === Symbol("false")
 @test_throws ParseError Meta.parse("var\"#\"x") # Reject string macro-like suffix
 @test_throws ParseError Meta.parse("var \"#\"")
 @test_throws ParseError Meta.parse("var\"for\" i = 1:10; end")
@@ -1952,3 +1962,12 @@ end
 
 # issue #31547
 @test Meta.lower(Main, :(a := 1)) == Expr(:error, "unsupported assignment operator \":=\"")
+
+# issue #33841
+let a(; b) = b
+    @test a(b=3) == 3
+end
+
+# issue #33987
+f33987(args::(Vararg{Any, N} where N); kwargs...) = args
+@test f33987(1,2,3) === (1,2,3)

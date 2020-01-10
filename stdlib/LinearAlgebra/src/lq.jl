@@ -5,7 +5,7 @@
     LQ <: Factorization
 
 Matrix factorization type of the `LQ` factorization of a matrix `A`. The `LQ`
-decomposition is the `QR` decomposition of `transpose(A)`. This is the return
+decomposition is the [`QR`](@ref) decomposition of `transpose(A)`. This is the return
 type of [`lq`](@ref), the corresponding matrix factorization function.
 
 If `S::LQ` is the factorization object, the lower triangular component can be
@@ -67,7 +67,7 @@ LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQPackedQ{T,typ
 """
     lq!(A) -> LQ
 
-Compute the LQ factorization of `A`, using the input
+Compute the [`LQ`](@ref) factorization of `A`, using the input
 matrix as a workspace. See also [`lq`](@ref).
 """
 lq!(A::StridedMatrix{<:BlasFloat}) = LQ(LAPACK.gelqf!(A)...)
@@ -75,7 +75,7 @@ lq!(A::StridedMatrix{<:BlasFloat}) = LQ(LAPACK.gelqf!(A)...)
     lq(A) -> S::LQ
 
 Compute the LQ decomposition of `A`. The decomposition's lower triangular
-component can be obtained from the `LQ` object `S` via `S.L`, and the
+component can be obtained from the [`LQ`](@ref) object `S` via `S.L`, and the
 orthogonal/unitary component via `S.Q`, such that `A ≈ S.L*S.Q`.
 
 Iterating the decomposition produces the components `S.L` and `S.Q`.
@@ -124,9 +124,9 @@ Base.copy(F::Adjoint{T,<:LQ{T}}) where {T} =
 
 function getproperty(F::LQ, d::Symbol)
     m, n = size(F)
-    if d == :L
+    if d === :L
         return tril!(getfield(F, :factors)[1:m, 1:min(m,n)])
-    elseif d == :Q
+    elseif d === :Q
         return LQPackedQ(getfield(F, :factors), getfield(F, :τ))
     else
         return getfield(F, d)

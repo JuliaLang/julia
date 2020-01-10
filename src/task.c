@@ -147,8 +147,9 @@ static void NOINLINE JL_NORETURN restore_stack(jl_task_t *t, jl_ptls_t ptls, cha
         }
         restore_stack(t, ptls, p); // pass p to ensure the compiler can't tailcall this or avoid the alloca
     }
-    assert(t->stkbuf != NULL);
-    memcpy_a16((uint64_t*)_x, (uint64_t*)t->stkbuf, nb); // destroys all but the current stackframe
+    void *_y = t->stkbuf;
+    assert(_x != NULL && _y != NULL);
+    memcpy_a16((uint64_t*)_x, (uint64_t*)_y, nb); // destroys all but the current stackframe
 
     sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
     jl_set_fiber(&t->ctx);
@@ -158,8 +159,9 @@ static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *lastt)
 {
     size_t nb = t->copy_stack;
     char *_x = (char*)ptls->stackbase - nb;
-    assert(t->stkbuf != NULL);
-    memcpy_a16((uint64_t*)_x, (uint64_t*)t->stkbuf, nb); // destroys all but the current stackframe
+    void *_y = t->stkbuf;
+    assert(_x != NULL && _y != NULL);
+    memcpy_a16((uint64_t*)_x, (uint64_t*)_y, nb); // destroys all but the current stackframe
     sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
     jl_swap_fiber(&lastt->ctx, &t->ctx);
     sanitizer_finish_switch_fiber();
@@ -261,9 +263,8 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
         arraylist_new(locks, 0);
     }
 
-    int started = t->started;
     int killed = (lastt->state == done_sym || lastt->state == failed_sym);
-    if (!started && !t->copy_stack) {
+    if (!t->started && !t->copy_stack) {
         // may need to allocate the stack
         if (t->stkbuf == NULL) {
             t->stkbuf = jl_alloc_fiber(&t->ctx, &t->bufsz, t);
@@ -324,7 +325,7 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
         // after restoring the stack
         lastt_ctx = NULL;
 #endif
-    if (started) {
+    if (t->started) {
 #ifdef COPY_STACKS
         if (t->copy_stack) {
             if (lastt_ctx)

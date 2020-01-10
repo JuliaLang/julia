@@ -392,4 +392,11 @@ end
 
 end
 
+@testset "issue #33704, casting low-rank CholeskyPivoted to Matrix" begin
+    A = randn(1,8)
+    B = A'A
+    C = cholesky(B, Val(true), check=false)
+    @test B ≈ Matrix(C)
+end
+
 end # module TestCholesky

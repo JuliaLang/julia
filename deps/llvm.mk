@@ -2,14 +2,7 @@
 include $(SRCDIR)/llvm-ver.make
 
 ifneq ($(USE_BINARYBUILDER_LLVM), 1)
-LLVM_GIT_URL_BASE ?= http://llvm.org/git
-LLVM_GIT_URL_LLVM ?= $(LLVM_GIT_URL_BASE)/llvm.git
-LLVM_GIT_URL_CLANG ?= $(LLVM_GIT_URL_BASE)/clang.git
-LLVM_GIT_URL_COMPILER_RT ?= $(LLVM_GIT_URL_BASE)/compiler-rt.git
-LLVM_GIT_URL_LLDB ?= $(LLVM_GIT_URL_BASE)/lldb.git
-LLVM_GIT_URL_LIBCXX ?= $(LLVM_GIT_URL_BASE)/libcxx.git
-LLVM_GIT_URL_LIBCXXABI ?= $(LLVM_GIT_URL_BASE)/libcxxabi.git
-LLVM_GIT_URL_POLLY ?= $(LLVM_GIT_URL_BASE)/polly.git
+LLVM_GIT_URL ?= https://github.com/llvm/llvm-project.git
 
 ifeq ($(BUILD_LLDB), 1)
 BUILD_LLVM_CLANG := 1
@@ -22,6 +15,18 @@ ifneq ($(LLVM_VER),svn)
 $(error USE_POLLY=1 requires LLVM_VER=svn)
 endif
 endif
+endif
+
+# for Monorepo
+LLVM_ENABLE_PROJECTS :=
+ifeq ($(BUILD_LLVM_CLANG), 1)
+LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);clang;compiler-rt
+endif
+ifeq ($(USE_POLLY), 1)
+LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);polly
+endif
+ifeq ($(BUILD_LLDB), 1)
+LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);lldb
 endif
 
 include $(SRCDIR)/llvm-options.mk
@@ -51,8 +56,7 @@ endif
 endif # LLVM_VER != svn
 
 # Figure out which targets to build
-LLVM_TARGETS := host;NVPTX;AMDGPU
-LLVM_EXPERIMENTAL_TARGETS := WebAssembly
+LLVM_TARGETS := host;NVPTX;AMDGPU;WebAssembly
 
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
@@ -60,12 +64,17 @@ LLVM_CPPFLAGS :=
 LLVM_LDFLAGS :=
 LLVM_CMAKE :=
 
+# MONOREPO
+ifeq ($(LLVM_VER),svn)
+LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
+endif
+
 # Allow adding LLVM specific flags
 LLVM_CFLAGS += $(CFLAGS)
 LLVM_CXXFLAGS += $(CXXFLAGS)
 LLVM_CPPFLAGS += $(CPPFLAGS)
 LLVM_LDFLAGS += $(LDFLAGS)
-LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="$(LLVM_EXPERIMENTAL_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
+LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
 LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_HOST_TRIPLE="$(or $(XC_HOST),$(BUILD_MACHINE))"
 ifeq ($(USE_POLLY_ACC),1)
 LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
@@ -244,27 +253,17 @@ else
 BUILT_UNWIND :=
 endif # Building libunwind
 
-$(LLVM_SRC_DIR)/projects/libcxx: $(LLVM_LIBCXX_TAR) | $(LLVM_SRC_DIR)/source-extracted
-	([ ! -d $@ ] && \
-	git clone $(LLVM_GIT_URL_LIBCXX) $@  ) || \
-	(cd $@  && \
-	git pull --ff-only)
-$(LLVM_SRC_DIR)/projects/libcxx/.git/HEAD: | $(LLVM_SRC_DIR)/projects/libcxx
-$(LLVM_SRC_DIR)/projects/libcxxabi: $(LLVM_LIBCXXABI_TAR) | $(LLVM_SRC_DIR)/source-extracted
-	([ ! -d $@ ] && \
-	git clone $(LLVM_GIT_URL_LIBCXXABI) $@ ) || \
-	(cd $@ && \
-	git pull --ff-only)
-$(LLVM_SRC_DIR)/projects/libcxxabi/.git/HEAD: | $(LLVM_SRC_DIR)/projects/libcxxabi
-$(LLVM_BUILD_DIR)/libcxx-build/Makefile: | $(LLVM_SRC_DIR)/projects/libcxx $(LLVM_SRC_DIR)/projects/libcxxabi $(BUILT_UNWIND)
+$(LIBCXX_ROOT_DIR)/libcxx: $(LLVM_LIBCXX_TAR) | $(LLVM_SRC_DIR)/source-extracted
+$(LIBCXX_ROOT_DIR)/libcxxabi: $(LLVM_LIBCXXABI_TAR) | $(LLVM_SRC_DIR)/source-extracted
+$(LLVM_BUILD_DIR)/libcxx-build/Makefile: | $(LIBCXX_ROOT_DIR)/libcxx $(LIBCXX_ROOT_DIR)/libcxxabi $(BUILT_UNWIND)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE_LIBCXX) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_CXX_ABI_INCLUDE_PATHS="$(LLVM_SRC_DIR)/projects/libcxxabi/include" $(LLVM_SRC_DIR)/projects/libcxx -DCMAKE_SHARED_LINKER_FLAGS="$(LDFLAGS) -L$(build_libdir) $(LIBCXX_EXTRA_FLAGS)"
-$(LLVM_BUILD_DIR)/libcxxabi-build/Makefile: | $(LLVM_SRC_DIR)/projects/libcxxabi $(LLVM_SRC_DIR)/projects/libcxx $(BUILT_UNWIND)
+		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE_LIBCXX) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_CXX_ABI_INCLUDE_PATHS="$(LIBCXX_ROOT_DIR)/libcxxabi/include" $(LIBCXX_ROOT_DIR)/libcxx -DCMAKE_SHARED_LINKER_FLAGS="$(LDFLAGS) -L$(build_libdir) $(LIBCXX_EXTRA_FLAGS)"
+$(LLVM_BUILD_DIR)/libcxxabi-build/Makefile: | $(LIBCXX_ROOT_DIR)/libcxxabi $(LIBCXX_ROOT_DIR)/libcxx $(BUILT_UNWIND)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE_LIBCXX) -DLLVM_ABI_BREAKING_CHECKS="WITH_ASSERTS" -DLLVM_PATH="$(LLVM_SRC_DIR)" $(LLVM_SRC_DIR)/projects/libcxxabi -DLIBCXXABI_CXX_ABI_LIBRARIES="$(LIBCXX_EXTRA_FLAGS)" -DCMAKE_CXX_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CXXFLAGS) -std=c++11"
-$(LLVM_BUILD_DIR)/libcxxabi-build/lib/libc++abi.so.1.0: $(LLVM_BUILD_DIR)/libcxxabi-build/Makefile $(LLVM_SRC_DIR)/projects/libcxxabi/.git/HEAD
+		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE_LIBCXX) -DLLVM_ABI_BREAKING_CHECKS="WITH_ASSERTS" -DLLVM_PATH="$(LLVM_SRC_DIR)" $(LIBCXX_ROOT_DIR)/libcxxabi -DLIBCXXABI_CXX_ABI_LIBRARIES="$(LIBCXX_EXTRA_FLAGS)" -DCMAKE_CXX_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CXXFLAGS) -std=c++11"
+$(LLVM_BUILD_DIR)/libcxxabi-build/lib/libc++abi.so.1.0: $(LLVM_BUILD_DIR)/libcxxabi-build/Makefile $(LIBCXX_ROOT_DIR)/libcxxabi/.git/HEAD
 	$(MAKE) -C $(LLVM_BUILD_DIR)/libcxxabi-build
 	touch -c $@
 $(build_libdir)/libc++abi.so.1.0: $(LLVM_BUILD_DIR)/libcxxabi-build/lib/libc++abi.so.1.0
@@ -272,21 +271,22 @@ $(build_libdir)/libc++abi.so.1.0: $(LLVM_BUILD_DIR)/libcxxabi-build/lib/libc++ab
 	touch -c $@
 	# Building this library installs these headers, which breaks other dependencies
 	-rm -rf $(build_includedir)/c++
-$(LLVM_BUILD_DIR)/libcxx-build/lib/libc++.so.1.0: $(build_libdir)/libc++abi.so.1.0 $(LLVM_BUILD_DIR)/libcxx-build/Makefile $(LLVM_SRC_DIR)/projects/libcxx/.git/HEAD
+$(LLVM_BUILD_DIR)/libcxx-build/lib/libc++.so.1.0: $(build_libdir)/libc++abi.so.1.0 $(LLVM_BUILD_DIR)/libcxx-build/Makefile $(LIBCXX_ROOT_DIR)/libcxx/.git/HEAD
 	$(MAKE) -C $(LLVM_BUILD_DIR)/libcxx-build
 $(build_libdir)/libc++.so.1.0: $(LLVM_BUILD_DIR)/libcxx-build/lib/libc++.so.1.0
 	$(MAKE) -C $(LLVM_BUILD_DIR)/libcxx-build install
 	touch -c $@
 	# Building this library installs these headers, which breaks other dependencies
 	-rm -rf $(build_includedir)/c++
-get-libcxx: $(LLVM_SRC_DIR)/projects/libcxx
-get-libcxxabi: $(LLVM_SRC_DIR)/projects/libcxxabi
+get-libcxx: $(LIBCXX_ROOT_DIR)/libcxx
+get-libcxxabi: $(LIBCXX_ROOT_DIR)/libcxxabi
 install-libcxxabi: $(build_libdir)/libc++abi.so.1.0
 install-libcxx: $(build_libdir)/libc++.so.1.0
 endif # BUILD_CUSTOM_LIBCXX
 
 # We want to be able to clean without having to pass BUILD_CUSTOM_LIBCXX=1, so define these
-# outside of the conditional above
+# outside of the conditional above, can't use `LIBCXX_ROOT_DIR` since that might come from
+# the monorepo.
 clean-libcxx:
 	-$(MAKE) -C $(LLVM_BUILD_DIR)/libcxx-build clean
 clean-libcxxabi:
@@ -332,12 +332,12 @@ ifneq ($(LLVM_VER),svn)
 	mkdir -p $(LLVM_SRC_DIR)
 	$(TAR) -C $(LLVM_SRC_DIR) --strip-components 1 -xf $(LLVM_TAR)
 else
-	([ ! -d $(LLVM_SRC_DIR) ] && \
-		git clone $(LLVM_GIT_URL_LLVM) $(LLVM_SRC_DIR) ) || \
-		(cd $(LLVM_SRC_DIR) && \
+	([ ! -d $(LLVM_MONOSRC_DIR) ] && \
+		git clone $(LLVM_GIT_URL) $(LLVM_MONOSRC_DIR) ) || \
+		(cd $(LLVM_MONOSRC_DIR) && \
 		git pull --ff-only)
 ifneq ($(LLVM_GIT_VER),)
-	(cd $(LLVM_SRC_DIR) && \
+	(cd $(LLVM_MONOSRC_DIR) && \
 		git checkout $(LLVM_GIT_VER))
 endif # LLVM_GIT_VER
 	# Debug output only. Disable pager and ignore error.
@@ -357,41 +357,6 @@ ifneq ($(LLVM_LLDB_TAR),)
 	mkdir -p $(LLVM_SRC_DIR)/tools/lldb
 	$(TAR) -C $(LLVM_SRC_DIR)/tools/lldb --strip-components 1 -xf $(LLVM_LLDB_TAR)
 endif # LLVM_LLDB_TAR
-else # LLVM_VER
-ifeq ($(BUILD_LLVM_CLANG),1)
-	([ ! -d $(LLVM_SRC_DIR)/tools/clang ] && \
-		git clone $(LLVM_GIT_URL_CLANG) $(LLVM_SRC_DIR)/tools/clang  ) || \
-		(cd $(LLVM_SRC_DIR)/tools/clang  && \
-		git pull --ff-only)
-	([ ! -d $(LLVM_SRC_DIR)/projects/compiler-rt ] && \
-		git clone $(LLVM_GIT_URL_COMPILER_RT) $(LLVM_SRC_DIR)/projects/compiler-rt  ) || \
-		(cd $(LLVM_SRC_DIR)/projects/compiler-rt  && \
-		git pull --ff-only)
-ifneq ($(LLVM_GIT_VER_CLANG),)
-	(cd $(LLVM_SRC_DIR)/tools/clang && \
-		git checkout $(LLVM_GIT_VER_CLANG))
-endif # LLVM_GIT_VER_CLANG
-endif # BUILD_LLVM_CLANG
-ifeq ($(BUILD_LLDB),1)
-	([ ! -d $(LLVM_SRC_DIR)/tools/lldb ] && \
-		git clone $(LLVM_GIT_URL_LLDB) $(LLVM_SRC_DIR)/tools/lldb  ) || \
-		(cd $(LLVM_SRC_DIR)/tools/lldb  && \
-		git pull --ff-only)
-ifneq ($(LLVM_GIT_VER_LLDB),)
-	(cd $(LLVM_SRC_DIR)/tools/lldb && \
-		git checkout $(LLVM_GIT_VER_LLDB))
-endif # LLVM_GIT_VER_CLANG
-endif # BUILD_LLDB
-ifeq ($(USE_POLLY),1)
-	([ ! -d $(LLVM_SRC_DIR)/tools/polly ] && \
-		git clone $(LLVM_GIT_URL_POLLY) $(LLVM_SRC_DIR)/tools/polly  ) || \
-		(cd $(LLVM_SRC_DIR)/tools/polly  && \
-		git pull --ff-only)
-ifneq ($(LLVM_GIT_VER_POLLY),)
-	(cd $(LLVM_SRC_DIR)/tools/polly && \
-		git checkout $(LLVM_GIT_VER_POLLY))
-endif # LLVM_GIT_VER_POLLY
-endif # USE_POLLY
 endif # LLVM_VER
 	# touch some extra files to ensure bisect works pretty well
 	touch -c $(LLVM_SRC_DIR).extracted
@@ -455,9 +420,9 @@ $(eval $(call LLVM_PATCH,llvm-D51842-win64-byval-cc))
 $(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
 $(eval $(call LLVM_PATCH,llvm-r355582-avxminmax)) # remove for 8.0
 $(eval $(call LLVM_PATCH,llvm-rL349068-llvm-config)) # remove for 8.0
-$(eval $(call LLVM_PATCH,llvm-6.0-D63688-wasm-isLocal))
-$(eval $(call LLVM_PATCH,llvm-6.0-D64032-cmake-cross))
-$(eval $(call LLVM_PATCH,llvm-6.0-D64225-cmake-cross2))
+$(eval $(call LLVM_PATCH,llvm-6.0-D63688-wasm-isLocal)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-6.0-D64032-cmake-cross)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-6.0-D64225-cmake-cross2)) # remove for 9.0
 $(eval $(call LLVM_PATCH,llvm6-WASM-addrspaces)) # WebAssembly
 endif # LLVM_VER 6.0
 
@@ -493,6 +458,12 @@ $(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-8.0-D66401-mingw-reloc)) # remove for 9.0
 $(eval $(call LLVM_PATCH,llvm7-revert-D44485))
+$(eval $(call LLVM_PATCH,llvm-8.0-D63688-wasm-isLocal)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-8.0-D55758-tablegen-cond)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-8.0-D59389-refactor-wmma)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-8.0-D59393-mma-ptx63-fix)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-8.0-D66657-codegen-degenerate)) # remove for 10.0
+$(eval $(call LLVM_PATCH,llvm-8.0-D71495-vectorize-freduce)) # remove for 10.0
 endif # LLVM_VER 8.0
 
 ifeq ($(LLVM_VER_SHORT),9.0)
@@ -507,6 +478,8 @@ $(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
 $(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm7-revert-D44485))
+$(eval $(call LLVM_PATCH,llvm-8.0-D66657-codegen-degenerate)) # remove for 10.0
+$(eval $(call LLVM_PATCH,llvm-8.0-D71495-vectorize-freduce)) # remove for 10.0
 endif # LLVM_VER 9.0
 
 
@@ -588,16 +561,11 @@ check-llvm: $(LLVM_BUILDDIR_withtype)/build-checked
 
 ifeq ($(LLVM_VER),svn)
 update-llvm:
-	(cd $(LLVM_SRC_DIR); git pull --ff-only)
-	([ -d "$(LLVM_SRC_DIR)/tools/clang"  ] || exit 0;          cd $(LLVM_SRC_DIR)/tools/clang; git pull --ff-only)
-	([ -d "$(LLVM_SRC_DIR)/projects/compiler-rt" ] || exit 0;  cd $(LLVM_SRC_DIR)/projects/compiler-rt; git pull --ff-only)
-	([ -d "$(LLVM_SRC_DIR)/tools/lldb" ] || exit 0;            cd $(LLVM_SRC_DIR)/tools/lldb; git pull --ff-only)
-ifeq ($(USE_POLLY),1)
-	([ -d "$(LLVM_SRC_DIR)/tools/polly" ] || exit 0;           cd $(LLVM_SRC_DIR)/tools/polly; git pull --ff-only)
-endif
+	cd $(LLVM_MONOSRC_DIR) && \
+		git pull --ff-only
 endif
 else # USE_BINARYBUILDER_LLVM
-LLVM_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LLVM-v$(LLVM_VER)-$(LLVM_BB_REL)
+LLVM_BB_URL_BASE := https://github.com/staticfloat/LLVMBuilder/releases/download/v$(LLVM_VER)+$(LLVM_BB_REL)
 ifneq ($(BINARYBUILDER_LLVM_ASSERTS), 1)
 LLVM_BB_NAME := LLVM.v$(LLVM_VER)
 else

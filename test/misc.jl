@@ -158,9 +158,18 @@ let t = @elapsed 1+1
 end
 
 let
-    val, t = @timed sin(1)
-    @test val == sin(1)
-    @test isa(t, Real) && t >= 0
+    stats = @timed sin(1)
+    @test stats.value == sin(1)
+    @test isa(stats.time, Real) && stats.time >= 0
+
+    # The return type of gcstats was changed in Julia 1.4 (# 34147)
+    # Test that the 1.0 API still works
+    val, t, bytes, gctime, gcstats = stats
+    @test val === stats.value
+    @test t === stats.time
+    @test bytes === stats.bytes
+    @test gctime === stats.gctime
+    @test gcstats === stats.gcstats
 end
 
 # problem after #11801 - at global scope
@@ -792,7 +801,6 @@ end
 @testset "GC utilities" begin
     GC.gc()
     GC.gc(true); GC.gc(false)
-    GC.gc(GC.Auto); GC.gc(GC.Full); GC.gc(GC.Incremental)
 
     GC.safepoint()
 end

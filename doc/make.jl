@@ -172,6 +172,8 @@ else
         canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/v1/" : nothing,
         assets = ["assets/julia-manual.css", ],
         analytics = "UA-28835595-6",
+        collapselevel = 1,
+        sidebar_sitename = false,
     )
 end
 
@@ -190,28 +192,25 @@ makedocs(
     pages     = PAGES,
 )
 
-# Only deploy docs from 64bit Linux to avoid committing multiple versions of the same
-# docs from different workers.
-if "deploy" in ARGS && Sys.ARCH === :x86_64 && Sys.KERNEL === :Linux
-
-# Override a few environment variables to deploy to the appropriate repository,
-# encode things like branch, whether it's built on a tag, etc....
-env_mappings = [
-    "TRAVIS_REPO_SLUG" => "JuliaLang/docs.julialang.org",
-    "TRAVIS_BRANCH" => Base.GIT_VERSION_INFO.branch,
-]
-
-if Base.GIT_VERSION_INFO.tagged_commit
-    push!(env_mappings, "TRAVIS_TAG" => "v$(Base.VERSION)")
+# Define our own DeployConfig
+struct BuildBotConfig <: Documenter.DeployConfig end
+function Documenter.deploy_folder(::BuildBotConfig; devurl, kwargs...)
+    haskey(ENV, "DOCUMENTER_KEY") || return nothing
+    if Base.GIT_VERSION_INFO.tagged_commit
+        return "v$(Base.VERSION)"
+    elseif Base.GIT_VERSION_INFO.branch == "master"
+        return devurl
+    end
+    return nothing
 end
 
-withenv(env_mappings...) do
-    deploydocs(
-        repo = "github.com/JuliaLang/docs.julialang.org.git",
-        target = joinpath(buildroot, "doc", "_build", "html", "en"),
-        dirname = "en",
-        devurl = "v1.4-dev",
-        versions = ["v#.#", "v1.4-dev" => "v1.4-dev"]
-    )
-end
-end
+const devurl = "v$(VERSION.major).$(VERSION.minor)-dev"
+
+deploydocs(
+    repo = "github.com/JuliaLang/docs.julialang.org.git",
+    deploy_config = BuildBotConfig(),
+    target = joinpath(buildroot, "doc", "_build", "html", "en"),
+    dirname = "en",
+    devurl = devurl,
+    versions = ["v#.#", devurl => devurl]
+)

@@ -24,7 +24,7 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
     # Period accessors
     typs = period in (:Microsecond, :Nanosecond) ? ["Time"] :
            period in (:Hour, :Minute, :Second, :Millisecond) ? ["Time", "DateTime"] : ["Date", "DateTime"]
-    reference = period == :Week ? " For details see [`$accessor_str(::Union{Date, DateTime})`](@ref)." : ""
+    reference = period === :Week ? " For details see [`$accessor_str(::Union{Date, DateTime})`](@ref)." : ""
     for typ_str in typs
         @eval begin
             @doc """
@@ -45,8 +45,8 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
 end
 
 #Print/show/traits
-Base.print(io::IO, p::Period) = print(io, value(p), _units(p))
-Base.show(io::IO, ::MIME"text/plain", p::Period) = print(io, p)
+Base.string(x::Period) = string(value(x), _units(x))
+Base.show(io::IO,x::Period) = print(io, string(x))
 Base.zero(::Union{Type{P},P}) where {P<:Period} = P(0)
 Base.one(::Union{Type{P},P}) where {P<:Period} = 1  # see #16116
 Base.typemin(::Type{P}) where {P<:Period} = P(typemin(Int64))

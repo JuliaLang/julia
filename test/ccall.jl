@@ -1535,3 +1535,14 @@ let
     @test isa(ptr, Ptr{Cvoid})
     @test arr[1] == '0'
 end
+
+# issue #34061
+o_file = tempname()
+output = read(Cmd(`$(Base.julia_cmd()) --output-o=$o_file -e 'Base.reinit_stdio();
+    f() = ccall((:dne, :does_not_exist), Cvoid, ());
+    f()'`; ignorestatus=true), String)
+@test occursin(output, """
+ERROR: could not load library "does_not_exist"
+does_not_exist.so: cannot open shared object file: No such file or directory
+""")
+@test !isfile(o_file)

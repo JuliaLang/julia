@@ -19,6 +19,7 @@ abstract type AbstractSet{T} end
 
 Supertype for dictionary-like types with keys of type `K` and values of type `V`.
 [`Dict`](@ref), [`IdDict`](@ref) and other types are subtypes of this.
+An `AbstractDict{K, V}` should be an iterator of `Pair{K, V}`.
 """
 abstract type AbstractDict{K,V} end
 
@@ -166,7 +167,7 @@ true
 function convert end
 
 convert(::Type{Union{}}, x) = throw(MethodError(convert, (Union{}, x)))
-convert(::Type{Any}, @nospecialize(x)) = x
+convert(::Type{Any}, x) = x
 convert(::Type{T}, x::T) where {T} = x
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled

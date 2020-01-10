@@ -320,8 +320,14 @@ function showerror_ambiguous(io::IO, meth, f, args)
         sigfix = typeintersect(m.sig, sigfix)
     end
     if isa(unwrap_unionall(sigfix), DataType) && sigfix <: Tuple
-        print(io, "\nPossible fix, define\n  ")
-        Base.show_tuple_as_call(io, :function,  sigfix)
+        if all(m->morespecific(sigfix, m.sig), meth)
+            print(io, "\nPossible fix, define\n  ")
+            Base.show_tuple_as_call(io, :function,  sigfix)
+        else
+            println(io)
+            print(io, "To resolve the ambiguity, try making one of the methods more specific, or ")
+            print(io, "adding a new method more specific than any of the existing applicable methods.")
+        end
     end
     nothing
 end

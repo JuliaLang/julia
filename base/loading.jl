@@ -117,7 +117,14 @@ end
 
 const ns_dummy_uuid = UUID("fe0723d6-3a44-4c41-8065-ee0f42c8ceab")
 
-dummy_uuid(project_file::String) = uuid5(ns_dummy_uuid, realpath(project_file))
+function dummy_uuid(project_file::String)
+    project_path = try
+        realpath(project_file)
+    catch
+        project_file
+    end
+    return uuid5(ns_dummy_uuid, project_path)
+end
 
 ## package path slugs: turning UUID + SHA1 into a pair of 4-byte "slugs" ##
 
@@ -490,15 +497,15 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
         state = :top
         for line in eachline(io)
             if occursin(re_section, line)
-                state == :top && root_name == name && return root_uuid
+                state === :top && root_name == name && return root_uuid
                 state = occursin(re_section_deps, line) ? :deps : :other
-            elseif state == :top
+            elseif state === :top
                 if (m = match(re_name_to_string, line)) !== nothing
                     root_name = String(m.captures[1])
                 elseif (m = match(re_uuid_to_string, line)) !== nothing
                     root_uuid = UUID(m.captures[1])
                 end
-            elseif state == :deps
+            elseif state === :deps
                 if (m = match(re_key_to_string, line)) !== nothing
                     m.captures[1] == name && return UUID(m.captures[2])
                 end
@@ -523,7 +530,7 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
                 uuid == where && break
                 uuid = deps = nothing
                 state = :stanza
-            elseif state == :stanza
+            elseif state === :stanza
                 if (m = match(re_uuid_to_string, line)) !== nothing
                     uuid = UUID(m.captures[1])
                 elseif (m = match(re_deps_to_any, line)) !== nothing
@@ -533,7 +540,7 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
                 elseif occursin(re_section, line)
                     state = :other
                 end
-            elseif state == :deps && uuid == where
+            elseif state === :deps && uuid == where
                 # [deps] section format gives both name and uuid
                 if (m = match(re_key_to_string, line)) !== nothing
                     m.captures[1] == name && return UUID(m.captures[2])

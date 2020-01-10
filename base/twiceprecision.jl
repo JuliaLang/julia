@@ -393,7 +393,7 @@ function (:)(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float64}
         stop_n, stop_d = rat(stop)
         if start_d != 0 && stop_d != 0 &&
                 T(start_n/start_d) == start && T(stop_n/stop_d) == stop
-            den = lcm(start_d, step_d) # use same denominator for start and step
+            den = lcm_unchecked(start_d, step_d) # use same denominator for start and step
             m = maxintfloat(T, Int)
             if den != 0 && abs(start*den) <= m && abs(step*den) <= m &&  # will round succeed?
                     rem(den, start_d) == 0 && rem(den, step_d) == 0      # check lcm overflow
@@ -429,7 +429,7 @@ function _range(a::T, st::T, ::Nothing, len::Integer) where T<:Union{Float16,Flo
     step_n, step_d = rat(st)
     if start_d != 0 && step_d != 0 &&
             T(start_n/start_d) == a && T(step_n/step_d) == st
-        den = lcm(start_d, step_d)
+        den = lcm_unchecked(start_d, step_d)
         m = maxintfloat(T, Int)
         if abs(den*a) <= m && abs(den*st) <= m &&
                 rem(den, start_d) == 0 && rem(den, step_d) == 0
@@ -513,7 +513,7 @@ function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::AbstractRange{U}) where {T,
     step_n, step_d = rat(s)
     if start_d != 0 && step_d != 0 &&
             U(start_n/start_d) == f && U(step_n/step_d) == s
-        den = lcm(start_d, step_d)
+        den = lcm_unchecked(start_d, step_d)
         m = maxintfloat(T, Int)
         if den != 0 && abs(f*den) <= m && abs(s*den) <= m &&
                 rem(den, start_d) == 0 && rem(den, step_d) == 0
@@ -582,7 +582,7 @@ function _range(start::T, ::Nothing, stop::T, len::Integer) where {T<:IEEEFloat}
     start_n, start_d = rat(start)
     stop_n, stop_d = rat(stop)
     if start_d != 0 && stop_d != 0
-        den = lcm(start_d, stop_d)
+        den = lcm_unchecked(start_d, stop_d)
         m = maxintfloat(T, Int)
         if den != 0 && abs(den*start) <= m && abs(den*stop) <= m
             start_n = round(Int, den*start)
@@ -690,6 +690,9 @@ function rat(x)
     end
     return a, b
 end
+
+# This version of lcm does not check for overflows
+lcm_unchecked(a::T, b::T) where T<:Integer = a * div(b, gcd(a, b))
 
 narrow(::Type{T}) where {T<:AbstractFloat} = Float64
 narrow(::Type{Float64}) = Float32

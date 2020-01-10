@@ -48,10 +48,10 @@ function +(A::Array, Bs::Array...)
 end
 
 for f in (:/, :\, :*)
-    if f != :/
+    if f !== :/
         @eval ($f)(A::Number, B::AbstractArray) = broadcast_preserving_zero_d($f, A, B)
     end
-    if f != :\
+    if f !== :\
         @eval ($f)(A::AbstractArray, B::Number) = broadcast_preserving_zero_d($f, A, B)
     end
 end

@@ -5,10 +5,6 @@
 </a>
 </div>
 
-Build status:
-[![travis][travis-img]](https://travis-ci.org/JuliaLang/julia)
-[![appveyor][appveyor-img]](https://ci.appveyor.com/project/JuliaLang/julia/branch/master)
-
 Code coverage:
 [![coveralls][coveralls-img]](https://coveralls.io/r/JuliaLang/julia?branch=master)
 [![codecov][codecov-img]](https://codecov.io/github/JuliaLang/julia?branch=master)
@@ -84,7 +80,7 @@ Julia. However, most users should use the most recent stable version
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
-    git checkout v1.2.0
+    git checkout v1.3.0
 
 Now run `make` to build the `julia` executable.
 

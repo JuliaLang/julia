@@ -27,11 +27,12 @@ end
 
 ReverseOrdering(rev::ReverseOrdering) = rev.fwd
 ReverseOrdering(fwd::Fwd) where {Fwd} = ReverseOrdering{Fwd}(fwd)
+ReverseOrdering() = ReverseOrdering(ForwardOrdering())
 
 const DirectOrdering = Union{ForwardOrdering,ReverseOrdering{ForwardOrdering}}
 
 const Forward = ForwardOrdering()
-const Reverse = ReverseOrdering(Forward)
+const Reverse = ReverseOrdering()
 
 struct By{T} <: Ordering
     by::T

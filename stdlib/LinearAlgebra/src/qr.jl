@@ -256,7 +256,7 @@ qr!(A::StridedMatrix{<:BlasFloat}, ::Val{true}) = QRPivoted(LAPACK.geqp3!(A)...)
     qr!(A, pivot=Val(false); blocksize)
 
 `qr!` is the same as [`qr`](@ref) when `A` is a subtype of
-`StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
+[`StridedMatrix`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
 An [`InexactError`](@ref) exception is thrown if the factorization produces a number not
 representable by the element type of `A`, e.g. for integer types.
 
@@ -421,9 +421,9 @@ end
 
 function getproperty(F::QR, d::Symbol)
     m, n = size(F)
-    if d == :R
+    if d === :R
         return triu!(getfield(F, :factors)[1:min(m,n), 1:n])
-    elseif d == :Q
+    elseif d === :Q
         return QRPackedQ(getfield(F, :factors), F.τ)
     else
         getfield(F, d)
@@ -431,9 +431,9 @@ function getproperty(F::QR, d::Symbol)
 end
 function getproperty(F::QRCompactWY, d::Symbol)
     m, n = size(F)
-    if d == :R
+    if d === :R
         return triu!(getfield(F, :factors)[1:min(m,n), 1:n])
-    elseif d == :Q
+    elseif d === :Q
         return QRCompactWYQ(getfield(F, :factors), F.T)
     else
         getfield(F, d)
@@ -444,13 +444,13 @@ Base.propertynames(F::Union{QR,QRCompactWY}, private::Bool=false) =
 
 function getproperty(F::QRPivoted{T}, d::Symbol) where T
     m, n = size(F)
-    if d == :R
+    if d === :R
         return triu!(getfield(F, :factors)[1:min(m,n), 1:n])
-    elseif d == :Q
+    elseif d === :Q
         return QRPackedQ(getfield(F, :factors), F.τ)
-    elseif d == :p
+    elseif d === :p
         return getfield(F, :jpvt)
-    elseif d == :P
+    elseif d === :P
         p = F.p
         n = length(p)
         P = zeros(T, n, n)

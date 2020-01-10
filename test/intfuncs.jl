@@ -35,6 +35,7 @@ using Random
         @test lcm(-typemax(T), T(1)) === typemax(T)
         @test_throws OverflowError lcm(typemin(T), T(1))
         @test_throws OverflowError lcm(typemin(T), typemin(T))
+        @test_throws OverflowError lcm(typemax(T), T(2))
     end
 end
 @testset "gcd/lcm for arrays" begin

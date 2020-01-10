@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Div is truncating by default
 
 """
@@ -52,7 +54,7 @@ without any intermediate rounding.
 
 - if `r == RoundDown`, then the result is in the interval ``[0, y)`` if `y` is positive, or
   ``(y, 0]`` otherwise. The result may not be exact if `x` and `y` have different signs, and
-  `abs(x) < abs(y)`. See also[`RoundDown`](@ref).
+  `abs(x) < abs(y)`. See also [`RoundDown`](@ref).
 
 - if `r == RoundUp`, then the result is in the interval `(-y,0]` if `y` is positive, or
   `[0,-y)` otherwise. The result may not be exact if `x` and `y` have the same sign, and
@@ -114,7 +116,17 @@ julia> divrem(7,3)
 ```
 """
 divrem(x, y) = divrem(x, y, RoundToZero)
-divrem(a, b, r::RoundingMode) = (div(a, b, r), rem(a, b, r))
+function divrem(a, b, r::RoundingMode)
+    if r == RoundToZero
+        # For compat. Remove in 2.0.
+        (div(a, b), rem(a, b))
+    elseif r === RoundDown
+        # For compat. Remove in 2.0.
+        (fld(a, b), mod(a, b))
+    else
+        (div(a, b, r), rem(a, b, r))
+    end
+end
 function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearest))
     (q, r) = divrem(x, y)
     if x >= 0

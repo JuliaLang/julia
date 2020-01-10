@@ -6,7 +6,7 @@
     WeakKeyDict([itr])
 
 `WeakKeyDict()` constructs a hash table where the keys are weak
-references to objects, and thus may be garbage collected even when
+references to objects which may be garbage collected even when
 referenced in a hash table.
 
 See [`Dict`](@ref) for further help.  Note, unlike [`Dict`](@ref),
@@ -105,31 +105,19 @@ function get!(default::Callable, wkh::WeakKeyDict{K}, key) where {K}
 end
 pop!(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> pop!(wkh.ht, key), wkh)
 pop!(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> pop!(wkh.ht, key, default), wkh)
-delete!(wkh::WeakKeyDict, key) = lock(() -> delete!(wkh.ht, key), wkh)
+delete!(wkh::WeakKeyDict, key) = (lock(() -> delete!(wkh.ht, key), wkh); wkh)
 empty!(wkh::WeakKeyDict) = (lock(() -> empty!(wkh.ht), wkh); wkh)
 haskey(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> haskey(wkh.ht, key), wkh)
 getindex(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> getindex(wkh.ht, key), wkh)
 isempty(wkh::WeakKeyDict) = isempty(wkh.ht)
 length(t::WeakKeyDict) = length(t.ht)
 
-function iterate(t::WeakKeyDict{K,V}) where V where K
-    gc_token = Ref{Bool}(false) # no keys will be deleted via finalizers until this token is gc'd
-    finalizer(gc_token) do r
-        if r[]
-            r[] = false
-            unlock(t.lock)
-        end
-    end
-    s = lock(t.lock)
-    iterate(t, (gc_token,))
-end
-function iterate(t::WeakKeyDict{K,V}, state) where V where K
-    gc_token = first(state)
-    y = iterate(t.ht, tail(state)...)
+function iterate(t::WeakKeyDict{K,V}, state...) where {K, V}
+    y = lock(() -> iterate(t.ht, state...), t)
     y === nothing && return nothing
-    wkv, i = y
+    wkv, newstate = y
     kv = Pair{K,V}(wkv[1].value::K, wkv[2])
-    return (kv, (gc_token, i))
+    return (kv, newstate)
 end
 
 filter!(f, d::WeakKeyDict) = filter_in_one_pass!(f, d)
