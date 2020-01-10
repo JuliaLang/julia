@@ -53,15 +53,15 @@ module GC
     GC.gc()
     GC.gc(full::Bool)
 
-Perform garbage collection. The argument `full` determines the kind of collection: A full
-collection scans all objects, while an incremental collection only scans so-called young
-objects and is much quicker. If called without an argument, heuristics are used to determine
-which type of collection is needed.
+Perform garbage collection. The argument `full` determines the kind of
+collection: A full collection (default) sweeps all objects, which makes the
+next GC scan much slower, while an incremental collection may only sweep
+so-called young objects.
 
 !!! warning
     Excessive use will likely lead to poor performance.
 """
-gc() = ccall(:jl_gc_collect, Cvoid, (Cint,), 0)
+gc() = ccall(:jl_gc_collect, Cvoid, (Cint,), 1)
 gc(full::Bool) = ccall(:jl_gc_collect, Cvoid, (Cint,), full ? 1 : 2)
 
 """
