@@ -200,6 +200,12 @@ timesofar("utils")
         end
     end
 
+    @testset "constructor from NTuple" begin
+        for nt in ((true, false, false), NTuple{0,Bool}(), (false,), (true,))
+            @test BitVector(nt) == BitVector(collect(nt))
+        end
+    end
+
     @testset "one" begin
         @test Array(one(BitMatrix(undef, 2,2))) == Matrix(I, 2, 2)
         @test_throws DimensionMismatch one(BitMatrix(undef, 2,3))

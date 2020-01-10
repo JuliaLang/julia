@@ -109,6 +109,7 @@ mutable struct BigFloat <: AbstractFloat
     end
 
     function BigFloat(; precision::Integer=DEFAULT_PRECISION[])
+        precision < 1 && throw(DomainError(precision, "`precision` cannot be less than 1."))
         nb = ccall((:mpfr_custom_get_size,:libmpfr), Csize_t, (Clong,), precision)
         nb = (nb + Core.sizeof(Limb) - 1) ÷ Core.sizeof(Limb) # align to number of Limb allocations required for this
         #d = Vector{Limb}(undef, nb)
@@ -953,27 +954,21 @@ end
 setprecision(f::Function, prec::Integer) = setprecision(f, BigFloat, prec)
 
 function string_mpfr(x::BigFloat, fmt::String)
-    buf = Base.StringVector(0)
-    s = _calculate_buffer_size!(buf, fmt, x)
-    resize!(buf, s)
-    _fill_buffer!(buf, fmt, x)
-    String(buf)
-end
-
-function _calculate_buffer_size!(buf, fmt, x::BigFloat)
-    ccall((:mpfr_snprintf,:libmpfr),
-        Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}...),
-        buf, 0, fmt, x)
-end
-
-function _fill_buffer!(buf, fmt, x::BigFloat)
-    s = length(buf)
-    # we temporarily need one more item in buffer to capture null termination
-    resize!(buf, s + 1)
-    n = ccall((:mpfr_sprintf,:libmpfr), Int32, (Ptr{UInt8}, Ptr{UInt8}, Ref{BigFloat}...), buf, fmt, x)
-    @assert n + 1 == length(buf)
-    @assert last(buf) == 0x00
-    resize!(buf, s)
+    pc = Ref{Ptr{UInt8}}()
+    n = ccall((:mpfr_asprintf,:libmpfr), Cint,
+              (Ptr{Ptr{UInt8}}, Ptr{UInt8}, Ref{BigFloat}...),
+              pc, fmt, x)
+    p = pc[]
+    # convert comma decimal separator to dot
+    for i = 1:n
+        if unsafe_load(p, i) == UInt8(',')
+            unsafe_store!(p, '.', i)
+            break
+        end
+    end
+    str = unsafe_string(p)
+    ccall((:mpfr_free_str, :libmpfr), Cvoid, (Ptr{UInt8},), p)
+    return str
 end
 
 function _prettify_bigfloat(s::String)::String
@@ -1031,8 +1026,9 @@ get_emin() = ccall((:mpfr_get_emin, :libmpfr), Clong, ())
 get_emin_min() = ccall((:mpfr_get_emin_min, :libmpfr), Clong, ())
 get_emin_max() = ccall((:mpfr_get_emin_max, :libmpfr), Clong, ())
 
-set_emax!(x) = ccall((:mpfr_set_emax, :libmpfr), Cvoid, (Clong,), x)
-set_emin!(x) = ccall((:mpfr_set_emin, :libmpfr), Cvoid, (Clong,), x)
+check_exponent_err(ret) = ret == 0 || throw(ArgumentError("Invalid MPFR exponent range"))
+set_emax!(x) = check_exponent_err(ccall((:mpfr_set_emax, :libmpfr), Cint, (Clong,), x))
+set_emin!(x) = check_exponent_err(ccall((:mpfr_set_emin, :libmpfr), Cint, (Clong,), x))
 
 function Base.deepcopy_internal(x::BigFloat, stackdict::IdDict)
     haskey(stackdict, x) && return stackdict[x]

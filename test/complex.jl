@@ -14,6 +14,7 @@ end
 #show
 @test sprint(show, complex(1, 0), context=:compact => true) == "1+0im"
 @test sprint(show, complex(true, true)) == "Complex(true,true)"
+@test sprint(show, Complex{Int8}(0, typemin(Int8))) == "0 - 128im"
 
 @testset "unary operator on complex boolean" begin
     @test +Complex(true, true) === Complex(1, 1)
@@ -993,8 +994,8 @@ end
         join([
             "4-element Array{Complex{Float64},1}:",
             "     1.0 + 1.0e-10im",
-            " 2.0e-15 - 2.0e-5im ",
-            " 1.0e-15 + 2.0im    ",
+            " 2.0e-15 - 2.0e-5im",
+            " 1.0e-15 + 2.0im",
             "     1.0 + 2.0e-15im"], "\n")
 end
 
@@ -1148,3 +1149,6 @@ end
         @test isequal(ComplexF64(cscd(T(-1000, 100000))), ComplexF64(0.0, -0.0))
     end
 end
+
+# real(C) with C a Complex Unionall
+@test real(Complex{<:AbstractFloat}) == AbstractFloat

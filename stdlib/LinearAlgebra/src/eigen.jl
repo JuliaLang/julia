@@ -18,12 +18,12 @@ Iterating the decomposition produces the components `F.values` and `F.vectors`.
 ```jldoctest
 julia> F = eigen([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
 Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}
-eigenvalues:
+values:
 3-element Array{Float64,1}:
   1.0
   3.0
  18.0
-eigenvectors:
+vectors:
 3×3 Array{Float64,2}:
  1.0  0.0  0.0
  0.0  1.0  0.0
@@ -84,11 +84,11 @@ julia> B = [0 1; 1 0]
 
 julia> F = eigen(A, B)
 GeneralizedEigen{Complex{Float64},Complex{Float64},Array{Complex{Float64},2},Array{Complex{Float64},1}}
-eigenvalues:
+values:
 2-element Array{Complex{Float64},1}:
  0.0 - 1.0im
  0.0 + 1.0im
-eigenvectors:
+vectors:
 2×2 Array{Complex{Float64},2}:
   0.0+1.0im   0.0-1.0im
  -1.0+0.0im  -1.0-0.0im
@@ -179,7 +179,7 @@ end
 """
     eigen(A; permute::Bool=true, scale::Bool=true, sortby) -> Eigen
 
-Computes the eigenvalue decomposition of `A`, returning an `Eigen` factorization object `F`
+Computes the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
 matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
@@ -195,19 +195,19 @@ make rows and columns more equal in norm. The default is `true` for both options
 By default, the eigenvalues and vectors are sorted lexicographically by `(real(λ),imag(λ))`.
 A different comparison function `by(λ)` can be passed to `sortby`, or you can pass
 `sortby=nothing` to leave the eigenvalues in an arbitrary order.   Some special matrix types
-(e.g. `Diagonal` or `SymTridiagonal`) may implement their own sorting convention and not
+(e.g. [`Diagonal`](@ref) or [`SymTridiagonal`](@ref)) may implement their own sorting convention and not
 accept a `sortby` keyword.
 
 # Examples
 ```jldoctest
 julia> F = eigen([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
 Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}
-eigenvalues:
+values:
 3-element Array{Float64,1}:
   1.0
   3.0
  18.0
-eigenvectors:
+vectors:
 3×3 Array{Float64,2}:
  1.0  0.0  0.0
  0.0  1.0  0.0
@@ -457,7 +457,7 @@ end
     eigen(A, B) -> GeneralizedEigen
 
 Computes the generalized eigenvalue decomposition of `A` and `B`, returning a
-`GeneralizedEigen` factorization object `F` which contains the generalized eigenvalues in
+[`GeneralizedEigen`](@ref) factorization object `F` which contains the generalized eigenvalues in
 `F.values` and the generalized eigenvectors in the columns of the matrix `F.vectors`.
 (The `k`th generalized eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
@@ -608,9 +608,9 @@ eigvecs(A::AbstractMatrix, B::AbstractMatrix; kws...) = eigvecs(eigen(A, B; kws.
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,GeneralizedEigen})
     summary(io, F); println(io)
-    println(io, "eigenvalues:")
+    println(io, "values:")
     show(io, mime, F.values)
-    println(io, "\neigenvectors:")
+    println(io, "\nvectors:")
     show(io, mime, F.vectors)
 end
 

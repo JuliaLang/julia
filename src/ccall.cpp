@@ -4,7 +4,7 @@
 
 // Map from symbol name (in a certain library) to its GV in sysimg and the
 // DL handle address in the current session.
-typedef StringMap<std::pair<GlobalVariable*,void*>> SymMapGV;
+typedef StringMap<GlobalVariable*> SymMapGV;
 static StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;
 #ifdef _OS_WINDOWS_
 static SymMapGV symMapExe;
@@ -43,65 +43,48 @@ lazyModule(Func &&func)
 
 // Find or create the GVs for the library and symbol lookup.
 // Return `runtime_lib` (whether the library name is a string)
-// Optionally return the symbol address in the current session
-// when `symaddr != nullptr`.
 // The `lib` and `sym` GV returned may not be in the current module.
 template<typename MT>
 static bool runtime_sym_gvs(const char *f_lib, const char *f_name, MT &&M,
-                            GlobalVariable *&lib, GlobalVariable *&sym,
-                            void **symaddr=nullptr)
+                            GlobalVariable *&lib, GlobalVariable *&sym)
 {
-    void *libsym = NULL;
     bool runtime_lib = false;
     GlobalVariable *libptrgv;
     SymMapGV *symMap;
 #ifdef _OS_WINDOWS_
     if ((intptr_t)f_lib == 1) {
         libptrgv = jlexe_var;
-        libsym = jl_exe_handle;
         symMap = &symMapExe;
     }
     else if ((intptr_t)f_lib == 2) {
         libptrgv = jldll_var;
-        libsym = jl_dl_handle;
         symMap = &symMapDl;
     }
     else
 #endif
     if (f_lib == NULL) {
         libptrgv = jlRTLD_DEFAULT_var;
-        libsym = jl_RTLD_DEFAULT_handle;
         symMap = &symMapDefault;
     }
     else {
         std::string name = "ccalllib_";
         name += f_lib;
         runtime_lib = true;
-        auto iter = libMapGV.find(f_lib);
-        if (iter == libMapGV.end()) {
+        auto &libgv = libMapGV[f_lib];
+        if (libgv.first == NULL) {
             libptrgv = new GlobalVariable(*M, T_pint8, false,
                                           GlobalVariable::ExternalLinkage,
-                                          NULL, name);
-            auto &libgv = libMapGV[f_lib];
-            libgv = std::make_pair(global_proto(libptrgv), SymMapGV());
-            symMap = &libgv.second;
-            libsym = jl_get_library(f_lib);
-            assert(libsym != NULL);
-            *jl_emit_and_add_to_shadow(libptrgv) = libsym;
+                                          Constant::getNullValue(T_pint8), name);
+            libgv.first = global_proto(libptrgv);
         }
         else {
-            libptrgv = iter->second.first;
-            symMap = &iter->second.second;
+            libptrgv = libgv.first;
         }
+        symMap = &libgv.second;
     }
-    if (libsym == NULL) {
-        libsym = *(void**)jl_get_globalvar(libptrgv);
-    }
-    assert(libsym != NULL);
 
-    GlobalVariable *llvmgv;
-    auto sym_iter = symMap->find(f_name);
-    if (sym_iter == symMap->end()) {
+    GlobalVariable *&llvmgv = (*symMap)[f_name];
+    if (llvmgv == NULL) {
         // MCJIT forces this to have external linkage eventually, so we would clobber
         // the symbol of the actual function.
         std::string name = "ccall_";
@@ -109,19 +92,9 @@ static bool runtime_sym_gvs(const char *f_lib, const char *f_name, MT &&M,
         name += "_";
         name += std::to_string(globalUnique++);
         llvmgv = new GlobalVariable(*M, T_pvoidfunc, false,
-                                    GlobalVariable::ExternalLinkage, NULL, name);
+                                    GlobalVariable::ExternalLinkage,
+                                    Constant::getNullValue(T_pvoidfunc), name);
         llvmgv = global_proto(llvmgv);
-        void *addr;
-        jl_dlsym(libsym, f_name, &addr, 0);
-        (*symMap)[f_name] = std::make_pair(llvmgv, addr);
-        if (symaddr)
-            *symaddr = addr;
-        *jl_emit_and_add_to_shadow(llvmgv) = addr;
-    }
-    else {
-        if (symaddr)
-            *symaddr = sym_iter->second.second;
-        llvmgv = sym_iter->second.first;
     }
 
     lib = libptrgv;
@@ -218,7 +191,7 @@ static GlobalVariable *emit_plt_thunk(
         const AttributeList &attrs,
         CallingConv::ID cc, const char *f_lib, const char *f_name,
         GlobalVariable *libptrgv, GlobalVariable *llvmgv,
-        void *symaddr, bool runtime_lib)
+        bool runtime_lib)
 {
     PointerType *funcptype = PointerType::get(functype, 0);
     libptrgv = prepare_global_in(M, libptrgv);
@@ -237,8 +210,7 @@ static GlobalVariable *emit_plt_thunk(
     auto gname = funcName.str();
     GlobalVariable *got = new GlobalVariable(*M, T_pvoidfunc, false,
                                              GlobalVariable::ExternalLinkage,
-                                             nullptr, gname);
-    *jl_emit_and_add_to_shadow(got) = symaddr;
+                                             ConstantExpr::getBitCast(plt, T_pvoidfunc), gname);
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", plt);
     IRBuilder<> irbuilder(b0);
     Value *ptr = runtime_sym_lookup(irbuilder, funcptype, f_lib, f_name, plt, libptrgv,
@@ -274,6 +246,7 @@ static GlobalVariable *emit_plt_thunk(
         }
     }
     irbuilder.ClearInsertionPoint();
+
     got = global_proto(got); // exchange got for the permanent global before jl_finalize_module destroys it
     jl_finalize_module(M, true);
 
@@ -297,21 +270,19 @@ static Value *emit_plt(
     assert(!functype->isVarArg());
     GlobalVariable *libptrgv;
     GlobalVariable *llvmgv;
-    void *symaddr;
     auto LM = lazyModule([&] {
             Module *m = new Module(f_name, jl_LLVMContext);
             jl_setup_module(m);
             return m;
         });
-    bool runtime_lib = runtime_sym_gvs(f_lib, f_name, LM,
-                                       libptrgv, llvmgv, &symaddr);
+    bool runtime_lib = runtime_sym_gvs(f_lib, f_name, LM, libptrgv, llvmgv);
     PointerType *funcptype = PointerType::get(functype, 0);
 
     auto &pltMap = allPltMap[attrs];
     auto key = std::make_tuple(llvmgv, functype, cc);
     GlobalVariable *&shadowgot = pltMap[key];
     if (!shadowgot) {
-        shadowgot = emit_plt_thunk(LM.get(), functype, attrs, cc, f_lib, f_name, libptrgv, llvmgv, symaddr, runtime_lib);
+        shadowgot = emit_plt_thunk(LM.get(), functype, attrs, cc, f_lib, f_name, libptrgv, llvmgv, runtime_lib);
     }
     else {
         // `runtime_sym_gvs` shouldn't have created anything in a new module
@@ -672,7 +643,8 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     else {
         rt = (jl_value_t*)jl_voidpointer_type;
     }
-    Type *lrt = julia_type_to_llvm(rt);
+    Type *lrt = T_size;
+    assert(lrt == julia_type_to_llvm(rt));
 
     interpret_symbol_arg(ctx, sym, args[1], "cglobal", false);
 
@@ -691,22 +663,18 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
         }
         else {
             void *symaddr;
-            if (!jl_dlsym(jl_get_library(sym.f_lib), sym.f_name, &symaddr, 0)) {
-                std::stringstream msg;
-                msg << "cglobal: could not find symbol ";
-                msg << sym.f_name;
-                if (sym.f_lib != NULL) {
-#ifdef _OS_WINDOWS_
-                    assert(sym.f_lib != JL_EXE_LIBNAME && sym.f_lib != JL_DL_LIBNAME);
-#endif
-                    msg << " in library ";
-                    msg << sym.f_lib;
-                }
-                emit_error(ctx, msg.str());
+
+            void* libsym = jl_get_library_(sym.f_lib, 0);
+            if (!libsym || !jl_dlsym(libsym, sym.f_name, &symaddr, 0)) {
+                // Error mode, either the library or the symbol couldn't be find during compiletime.
+                // Fallback to a runtime symbol lookup.
+                res = runtime_sym_lookup(ctx, cast<PointerType>(T_pint8), sym.f_lib, sym.f_name, ctx.f);
+                res = ctx.builder.CreatePtrToInt(res, lrt);
+            } else {
+                // since we aren't saving this code, there's no sense in
+                // putting anything complicated here: just JIT the address of the cglobal
+                res = ConstantInt::get(lrt, (uint64_t)symaddr);
             }
-            // since we aren't saving this code, there's no sense in
-            // putting anything complicated here: just JIT the address of the cglobal
-            res = ConstantInt::get(lrt, (uint64_t)symaddr);
         }
     }
 
@@ -917,10 +885,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         jl_value_t *tti = jl_svecref(tt,i);
         bool toboxed;
         Type *t = julia_type_to_llvm(tti, &toboxed);
-        if (toboxed)
-            argtypes.push_back(T_prjlvalue);
-        else
-            argtypes.push_back(t);
+        argtypes.push_back(t);
         if (4 + i > nargs) {
             jl_error("Missing arguments to llvmcall!");
         }
@@ -935,8 +900,6 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     Function *f;
     bool retboxed;
     Type *rettype = julia_type_to_llvm(rtt, &retboxed);
-    if (retboxed)
-        rettype = T_prjlvalue;
     if (isString) {
         // Make sure to find a unique name
         std::string ir_name;
@@ -1193,9 +1156,7 @@ std::string generate_func_sig(const char *fname)
                 }
             }
 
-            t = julia_struct_to_llvm(tti, unionall_env, &isboxed);
-            if (isboxed)
-                t = T_prjlvalue;
+            t = julia_struct_to_llvm(tti, unionall_env, &isboxed, llvmcall);
             if (t == NULL || t == T_void) {
                 return make_errmsg(fname, i + 1, " doesn't correspond to a C type");
             }
@@ -1326,7 +1287,7 @@ static bool verify_ref_type(jl_codectx_t &ctx, jl_value_t* ref, jl_unionall_t *u
 
 static const std::string verify_ccall_sig(jl_value_t *&rt, jl_value_t *at,
                                           jl_unionall_t *unionall_env, jl_svec_t *sparam_vals,
-                                          Type *&lrt, bool &retboxed, bool &static_rt)
+                                          Type *&lrt, bool &retboxed, bool &static_rt, bool llvmcall=false)
 {
     JL_TYPECHK(ccall, type, rt);
     JL_TYPECHK(ccall, simplevector, at);
@@ -1336,11 +1297,9 @@ static const std::string verify_ccall_sig(jl_value_t *&rt, jl_value_t *at,
         rt = (jl_value_t*)jl_any_type;
     }
 
-    lrt = julia_struct_to_llvm(rt, unionall_env, &retboxed);
+    lrt = julia_struct_to_llvm(rt, unionall_env, &retboxed, llvmcall);
     if (lrt == NULL)
         return "return type doesn't correspond to a C type";
-    else if (retboxed)
-        lrt = T_prjlvalue;
 
     // is return type fully statically known?
     if (unionall_env == NULL) {
@@ -1459,7 +1418,9 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
       rt, at, unionall,
       ctx.spvals_ptr == NULL ? ctx.linfo->sparam_vals : NULL,
       /* outputs: */
-      lrt, retboxed, static_rt);
+      lrt, retboxed, static_rt,
+      /* optional arguments */
+      llvmcall);
     if (err.empty()) {
         // some extra checks for ccall
         if (!retboxed && static_rt) {
@@ -1516,7 +1477,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             isboxed = false;
         }
         else {
-            largty = julia_struct_to_llvm(tti, unionall, &isboxed);
+            largty = julia_struct_to_llvm(tti, unionall, &isboxed, llvmcall);
         }
         if (isboxed) {
             ary = boxed(ctx, argv[0]);
@@ -1660,7 +1621,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         jl_datatype_t *arydt = (jl_datatype_t*)jl_unwrap_unionall(aryv.typ);
         if (jl_is_array_type(arydt)) {
             jl_value_t *ety = jl_tparam0(arydt);
-            if (jl_array_store_unboxed(ety)) {
+            bool ptrarray = !jl_stored_inline(ety);
+            if (!ptrarray && !jl_type_hasptr(ety)) {
                 JL_GC_POP();
                 return mark_or_box_ccall_result(ctx, ConstantInt::get(T_int32, 1),
                                                 false, rt, unionall, static_rt);
@@ -1668,6 +1630,14 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             else if (!jl_has_free_typevars(ety)) {
                 Value *idx = emit_unbox(ctx, T_size, idxv, (jl_value_t*)jl_ulong_type);
                 Value *arrayptr = emit_bitcast(ctx, emit_arrayptr(ctx, aryv, aryex), T_pprjlvalue);
+                if (!ptrarray) {
+                    size_t elsz = jl_datatype_size(ety);
+                    unsigned align = jl_datatype_align(ety);
+                    size_t stride = LLT_ALIGN(elsz, align) / sizeof(jl_value_t*);
+                    if (stride != 1)
+                        idx = ctx.builder.CreateMul(idx, ConstantInt::get(T_size, stride));
+                    idx = ctx.builder.CreateAdd(idx, ConstantInt::get(T_size, ((jl_datatype_t*)ety)->layout->first_ptr));
+                }
                 Value *slot_addr = ctx.builder.CreateInBoundsGEP(T_prjlvalue, arrayptr, idx);
                 Value *load = tbaa_decorate(tbaa_ptrarraybuf, ctx.builder.CreateLoad(T_prjlvalue, slot_addr));
                 Value *res = ctx.builder.CreateZExt(ctx.builder.CreateICmpNE(load, Constant::getNullValue(T_prjlvalue)), T_int32);
@@ -1817,12 +1787,14 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     bool sretboxed = false;
     if (sret) {
         assert(!retboxed && jl_is_datatype(rt) && "sret return type invalid");
-        if (jl_justbits(rt)) {
+        if (jl_is_pointerfree(rt)) {
             result = emit_static_alloca(ctx, lrt);
             argvals[0] = ctx.builder.CreateBitCast(result, fargt_sig.at(0));
         }
         else {
             // XXX: result needs to be zero'd and given a GC root here
+            // and has incorrect write barriers.
+            // instead this code path should behave like `unsafe_load`
             assert(jl_datatype_size(rt) > 0 && "sret shouldn't be a singleton instance");
             result = emit_allocobj(ctx, jl_datatype_size(rt),
                                    literal_pointer_val(ctx, (jl_value_t*)rt));
@@ -1901,23 +1873,17 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         }
         else {
             void *symaddr;
-            if (!jl_dlsym(jl_get_library(symarg.f_lib), symarg.f_name, &symaddr, 0)) {
-                std::stringstream msg;
-                msg << "ccall: could not find function ";
-                msg << symarg.f_name;
-                if (symarg.f_lib != NULL) {
-#ifdef _OS_WINDOWS_
-                    assert(symarg.f_lib != JL_EXE_LIBNAME && symarg.f_lib != JL_DL_LIBNAME);
-#endif
-                    msg << " in library ";
-                    msg << symarg.f_lib;
-                }
-                emit_error(ctx, msg.str());
-                return jl_cgval_t();
+
+            void* libsym = jl_get_library_(symarg.f_lib, 0);
+            if (!libsym || !jl_dlsym(libsym, symarg.f_name, &symaddr, 0)) {
+                // either the library or the symbol could not be found, place a runtime
+                // lookup here instead.
+                llvmf = runtime_sym_lookup(ctx, funcptype, symarg.f_lib, symarg.f_name, ctx.f);
+            } else {
+                // since we aren't saving this code, there's no sense in
+                // putting anything complicated here: just JIT the function address
+                llvmf = literal_static_pointer_val(ctx, symaddr, funcptype);
             }
-            // since we aren't saving this code, there's no sense in
-            // putting anything complicated here: just JIT the function address
-            llvmf = literal_static_pointer_val(ctx, symaddr, funcptype);
         }
     }
 
@@ -1965,9 +1931,6 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     }
     else {
         Type *jlrt = julia_type_to_llvm(rt, &jlretboxed); // compute the real "julian" return type and compute whether it is boxed
-        if (jlretboxed) {
-            jlrt = T_prjlvalue;
-        }
         if (type_is_ghost(jlrt)) {
             return ghostValue(rt);
         }
@@ -1990,7 +1953,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     // ARM and AArch64 can use a LLVM type larger than the julia type.
                     // When this happens, cast through memory.
                     auto slot = emit_static_alloca(ctx, resultTy);
-                    slot->setAlignment(boxalign);
+                    slot->setAlignment(Align(boxalign));
                     ctx.builder.CreateAlignedStore(result, slot, boxalign);
                     emit_memcpy(ctx, strct, tbaa, slot, tbaa, rtsz, boxalign, tbaa);
                 }

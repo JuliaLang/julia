@@ -1,4 +1,4 @@
-Julia v1.4 Release Notes
+Julia v1.5 Release Notes
 ========================
 
 New language features
@@ -21,21 +21,31 @@ New library functions
 ---------------------
 
 
+New library features
+--------------------
+
+
 Standard library changes
 ------------------------
-
-
-#### Libdl
-
+* The `@timed` macro now returns a `NamedTuple` ([#34149])
 
 #### LinearAlgebra
+* The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
+* `normalize` now supports multidimensional arrays ([#34239])
+
+#### Markdown
+
+
+#### Random
+
+
+#### REPL
 
 
 #### SparseArrays
-
+* `lu!` accepts `UmfpackLU` as an argument to make use of its symbolic factorization.
 
 #### Dates
-
 
 #### Statistics
 
@@ -45,7 +55,6 @@ Standard library changes
 
 Deprecated or removed
 ---------------------
-
 
 External dependencies
 ---------------------

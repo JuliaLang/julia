@@ -13,7 +13,7 @@ abstract type AbstractSparseArray{Tv,Ti,N} <: AbstractArray{Tv,N} end
     AbstractSparseVector{Tv,Ti}
 
 Supertype for one-dimensional sparse arrays (or array-like types) with elements
-of type `Tv` and index type `Ti`. Alias for `AbstractSparseArray{Tv,Ti,1}``.
+of type `Tv` and index type `Ti`. Alias for `AbstractSparseArray{Tv,Ti,1}`.
 """
 const AbstractSparseVector{Tv,Ti} = AbstractSparseArray{Tv,Ti,1}
 """
@@ -23,6 +23,13 @@ Supertype for two-dimensional sparse arrays (or array-like types) with elements
 of type `Tv` and index type `Ti`. Alias for `AbstractSparseArray{Tv,Ti,2}`.
 """
 const AbstractSparseMatrix{Tv,Ti} = AbstractSparseArray{Tv,Ti,2}
+
+"""
+    AbstractSparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
+
+Supertype for matrix with compressed sparse column (CSC).
+"""
+abstract type AbstractSparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti} end
 
 """
     issparse(S)
@@ -45,6 +52,8 @@ false
 """
 issparse(A::AbstractArray) = false
 issparse(S::AbstractSparseArray) = true
+issparse(S::LinearAlgebra.Adjoint{<:Any,<:AbstractSparseArray}) = true
+issparse(S::LinearAlgebra.Transpose{<:Any,<:AbstractSparseArray}) = true
 
 issparse(S::LinearAlgebra.Symmetric{<:Any,<:AbstractSparseMatrix}) = true
 issparse(S::LinearAlgebra.Hermitian{<:Any,<:AbstractSparseMatrix}) = true

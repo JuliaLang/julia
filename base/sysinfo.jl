@@ -49,6 +49,9 @@ A string containing the full path to the directory containing the `julia` execut
 A string containing the full path to the directory containing the `stdlib` packages.
 """
 STDLIB = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
+# In case STDLIB change after julia is built, the variable below can be used
+# to update cached method locations to updated ones.
+const BUILD_STDLIB_PATH = STDLIB
 
 # helper to avoid triggering precompile warnings
 
@@ -239,14 +242,14 @@ end
 """
     Sys.free_memory()
 
-Get the total free memory in RAM in kilobytes.
+Get the total free memory in RAM in bytes.
 """
 free_memory() = ccall(:uv_get_free_memory, UInt64, ())
 
 """
     Sys.total_memory()
 
-Get the total memory in RAM (including that which is currently used) in kilobytes.
+Get the total memory in RAM (including that which is currently used) in bytes.
 """
 total_memory() = ccall(:uv_get_total_memory, UInt64, ())
 
@@ -459,6 +462,9 @@ for executable permissions only (with `.exe` and `.com` extensions added on
 Windows platforms); no searching of `PATH` is performed.
 """
 function which(program_name::String)
+    if isempty(program_name)
+       return nothing
+    end
     # Build a list of program names that we're going to try
     program_names = String[]
     base_pname = basename(program_name)
@@ -501,7 +507,7 @@ function which(program_name::String)
         for pname in program_names
             program_path = joinpath(path_dir, pname)
             # If we find something that matches our name and we can execute
-            if isexecutable(program_path)
+            if isfile(program_path) && isexecutable(program_path)
                 return realpath(program_path)
             end
         end

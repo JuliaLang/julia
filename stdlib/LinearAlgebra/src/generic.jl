@@ -60,16 +60,24 @@ julia> C
 ```
 """
 @inline @propagate_inbounds function _modify!(p::MulAddMul{ais1, bis0},
-                                              x, C, idx) where {ais1, bis0}
+                                              x, C, idx′) where {ais1, bis0}
+    # `idx′` may be an integer, a tuple of integer, or a `CartesianIndex`.
+    #  Let `CartesianIndex` constructor normalize them so that it can be
+    # used uniformly.  It also acts as a workaround for performance penalty
+    # of splatting a number (#29114):
+    idx = CartesianIndex(idx′)
     if bis0
-        C[idx...] = p(x)
+        C[idx] = p(x)
     else
-        C[idx...] = p(x, C[idx...])
+        C[idx] = p(x, C[idx])
     end
     return
 end
 
 @inline function _rmul_or_fill!(C::AbstractArray, beta::Number)
+    if isempty(C)
+        return C
+    end
     if iszero(beta)
         fill!(C, zero(eltype(C)))
     else
@@ -233,6 +241,11 @@ function ldiv!(s::Number, X::AbstractArray)
     end
     X
 end
+ldiv!(Y::AbstractArray, s::Number, X::AbstractArray) = Y .= s .\ X
+
+# Generic fallback. This assumes that B and Y have the same sizes.
+ldiv!(Y::AbstractArray, A::AbstractMatrix, B::AbstractArray) = ldiv!(A, copyto!(Y, B))
+
 
 """
     cross(x, y)
@@ -872,6 +885,51 @@ function dot(x::AbstractArray, y::AbstractArray)
     s
 end
 
+"""
+    dot(x, A, y)
+
+Compute the generalized dot product `dot(x, A*y)` between two vectors `x` and `y`,
+without storing the intermediate result of `A*y`. As for the two-argument
+[`dot(_,_)`](@ref), this acts recursively. Moreover, for complex vectors, the
+first vector is conjugated.
+
+!!! compat "Julia 1.4"
+    Three-argument `dot` requires at least Julia 1.4.
+
+# Examples
+```jldoctest
+julia> dot([1; 1], [1 2; 3 4], [2; 3])
+26
+
+julia> dot(1:5, reshape(1:25, 5, 5), 2:6)
+4850
+
+julia> ⋅(1:5, reshape(1:25, 5, 5), 2:6) == dot(1:5, reshape(1:25, 5, 5), 2:6)
+true
+```
+"""
+dot(x, A, y) = dot(x, A*y) # generic fallback for cases that are not covered by specialized methods
+
+function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
+    (axes(x)..., axes(y)...) == axes(A) || throw(DimensionMismatch())
+    T = typeof(dot(first(x), first(A), first(y)))
+    s = zero(T)
+    i₁ = first(eachindex(x))
+    x₁ = first(x)
+    @inbounds for j in eachindex(y)
+        yj = y[j]
+        if !iszero(yj)
+            temp = zero(adjoint(A[i₁,j]) * x₁)
+            @simd for i in eachindex(x)
+                temp += adjoint(A[i,j]) * x[i]
+            end
+            s += dot(temp, yj)
+        end
+    end
+    return s
+end
+dot(x::AbstractVector, adjA::Adjoint, y::AbstractVector) = adjoint(dot(y, adjA.parent, x))
+dot(x::AbstractVector, transA::Transpose{<:Real}, y::AbstractVector) = adjoint(dot(y, transA.parent, x))
 
 ###########################################################################################
 
@@ -1524,39 +1582,39 @@ function isapprox(x::AbstractArray, y::AbstractArray;
 end
 
 """
-    normalize!(v::AbstractVector, p::Real=2)
+    normalize!(a::AbstractArray, p::Real=2)
 
-Normalize the vector `v` in-place so that its `p`-norm equals unity,
-i.e. `norm(v, p) == 1`.
+Normalize the array `a` in-place so that its `p`-norm equals unity,
+i.e. `norm(a, p) == 1`.
 See also [`normalize`](@ref) and [`norm`](@ref).
 """
-function normalize!(v::AbstractVector, p::Real=2)
-    nrm = norm(v, p)
-    __normalize!(v, nrm)
+function normalize!(a::AbstractArray, p::Real=2)
+    nrm = norm(a, p)
+    __normalize!(a, nrm)
 end
 
-@inline function __normalize!(v::AbstractVector, nrm::AbstractFloat)
+@inline function __normalize!(a::AbstractArray, nrm::AbstractFloat)
     # The largest positive floating point number whose inverse is less than infinity
     δ = inv(prevfloat(typemax(nrm)))
 
     if nrm ≥ δ # Safe to multiply with inverse
         invnrm = inv(nrm)
-        rmul!(v, invnrm)
+        rmul!(a, invnrm)
 
     else # scale elements to avoid overflow
         εδ = eps(one(nrm))/δ
-        rmul!(v, εδ)
-        rmul!(v, inv(nrm*εδ))
+        rmul!(a, εδ)
+        rmul!(a, inv(nrm*εδ))
     end
 
-    v
+    a
 end
 
 """
-    normalize(v::AbstractVector, p::Real=2)
+    normalize(a::AbstractArray, p::Real=2)
 
-Normalize the vector `v` so that its `p`-norm equals unity,
-i.e. `norm(v, p) == 1`.
+Normalize the array `a` so that its `p`-norm equals unity,
+i.e. `norm(a, p) == 1`.
 See also [`normalize!`](@ref) and [`norm`](@ref).
 
 # Examples
@@ -1580,15 +1638,29 @@ julia> c = normalize(a, 1)
 
 julia> norm(c, 1)
 1.0
+
+julia> a = [1 2 4 ; 1 2 4]
+2×3 Array{Int64,2}:
+ 1  2  4
+ 1  2  4
+
+julia> norm(a)
+6.48074069840786
+
+julia> normalize(a)
+2×3 Array{Float64,2}:
+ 0.154303  0.308607  0.617213
+ 0.154303  0.308607  0.617213
+
 ```
 """
-function normalize(v::AbstractVector, p::Real = 2)
-    nrm = norm(v, p)
-    if !isempty(v)
-        vv = copy_oftype(v, typeof(v[1]/nrm))
-        return __normalize!(vv, nrm)
+function normalize(a::AbstractArray, p::Real = 2)
+    nrm = norm(a, p)
+    if !isempty(a)
+        aa = copy_oftype(a, typeof(first(a)/nrm))
+        return __normalize!(aa, nrm)
     else
-        T = typeof(zero(eltype(v))/nrm)
+        T = typeof(zero(eltype(a))/nrm)
         return T[]
     end
 end

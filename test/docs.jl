@@ -41,6 +41,12 @@ macro macro_doctest() end
 
 @test (@doc @macro_doctest) !== nothing
 
+@test (@eval @doc $(Meta.parse("{a"))) isa Markdown.MD
+@test (@eval @doc $(Meta.parse("``"))) isa Markdown.MD
+@test (@eval @doc $(Meta.parse("``"))) == (@doc @cmd)
+@test (@eval @doc $(Meta.parse("123456789012345678901234567890"))) == (@doc @int128_str)
+@test (@eval @doc $(Meta.parse("1234567890123456789012345678901234567890"))) == (@doc @big_str)
+
 # test that random stuff interpolated into docstrings doesn't break search or other methods here
 @doc doc"""
 break me:
@@ -153,6 +159,18 @@ t(::Int, ::Any)
 "t-3"
 t{S <: Integer}(::S)
 
+# Docstrings to parametric methods after definition using where syntax (#32960):
+tw(x::T) where T = nothing
+tw(x::T, y::U) where {T, U <: Integer} = nothing
+tw(x::T, y::U, z::V) where T where U <: Integer where V <: AbstractFloat = nothing
+
+"tw-1"
+tw(x::T) where T
+"tw-2"
+tw(x::T, y::U) where {T, U <: Integer}
+"tw-3"
+tw(x::T, y::U, z::V) where T where U <: Integer where V <: AbstractFloat
+
 "FieldDocs"
 mutable struct FieldDocs
     "one"
@@ -192,6 +210,13 @@ returntype(x::Float64)::Float64 = x
 function returntype(x::Int)::Int
     x
 end
+
+# @nospecialize (issue #34122)
+"`fnospecialize` for Numbers"
+fnospecialize(@nospecialize(x::Number)) = 1
+
+"`fnospecialize` for arrays"
+fnospecialize(@nospecialize(x::AbstractArray)) = 2
 
 end
 
@@ -264,6 +289,14 @@ end
 let rt = @var(DocsTest.returntype)
     md = meta(DocsTest)[rt]
     @test md.order == [Tuple{Float64}, Tuple{Int}]
+end
+
+let fns = @var(DocsTest.fnospecialize)
+    md = meta(DocsTest)[fns]
+    d = md.docs[Tuple{Number}]
+    @test docstrings_equal(d, doc"`fnospecialize` for Numbers")
+    d = md.docs[Tuple{AbstractArray}]
+    @test docstrings_equal(d, doc"`fnospecialize` for arrays")
 end
 
 @test docstrings_equal(@doc(DocsTest.TA), doc"TA")

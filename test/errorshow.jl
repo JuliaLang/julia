@@ -5,6 +5,50 @@ using Random, LinearAlgebra
 # For curmod_*
 include("testenv.jl")
 
+
+@testset "SystemError" begin
+    err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, "SystemError: reason: ")
+
+    err = try; systemerror("reason", Cint(0), extrainfo="addend"); false; catch ex; ex; end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, "SystemError (with addend): reason: ")
+
+    err = try
+            Libc.errno(0xc0ffee)
+            systemerror("reason", true)
+            false
+        catch ex
+            ex
+        end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, "SystemError: reason: ")
+
+    err = try; Base.windowserror("reason", UInt32(0)); false; catch ex; ex; end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, Sys.iswindows() ? "SystemError: reason: " :
+        "SystemError (with Base.WindowsErrorInfo(0x00000000, nothing)): reason: ")
+
+    err = try; Base.windowserror("reason", UInt32(0); extrainfo="addend"); false; catch ex; ex; end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, Sys.iswindows() ? "SystemError (with addend): reason: " :
+        "SystemError (with Base.WindowsErrorInfo(0x00000000, \"addend\")): reason: ")
+
+    @static if Sys.iswindows()
+        err = try
+                ccall(:SetLastError, stdcall, Cvoid, (UInt32,), 0x00000000)
+                Base.windowserror("reason", true)
+                false
+            catch ex
+                ex
+            end::SystemError
+        errs = sprint(Base.showerror, err)
+        @test startswith(errs, "SystemError: reason: ")
+    end
+end
+
+
 cfile = " at $(@__FILE__):"
 c1line = @__LINE__() + 1
 method_c1(x::Float64, s::AbstractString...) = true
@@ -206,7 +250,7 @@ import ..@except_str
 global +
 +() = nothing
 err_str = @except_str 1 + 2 MethodError
-@test occursin("import Base.+", err_str)
+@test occursin("import Base.:+", err_str)
 
 err_str = @except_str Float64[](1) MethodError
 @test !occursin("import Base.Array", err_str)
@@ -552,6 +596,26 @@ end
     end
 end
 
+@testset "Line number correction" begin
+    getbt() = backtrace()
+    bt = getbt()
+    Base.update_stackframes_callback[] = function(list)
+        modify((sf, n)) = sf.func == :getbt ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
+        map!(modify, list, list)
+    end
+    io = IOBuffer()
+    Base.show_backtrace(io, bt)
+    outputc = split(String(take!(io)), '\n')
+    Base.update_stackframes_callback[] = identity
+    Base.show_backtrace(io, bt)
+    output0 = split(String(take!(io)), '\n')
+    function getline(output)
+        idx = findfirst(str->occursin("getbt", str), output)
+        return parse(Int, match(r":(\d*)$", output[idx]).captures[1])
+    end
+    @test getline(outputc) == getline(output0) + 2
+end
+
 # issue #30633
 @test_throws ArgumentError("invalid index: \"foo\" of type String") [1]["foo"]
 @test_throws ArgumentError("invalid index: nothing of type Nothing") [1][nothing]
@@ -577,4 +641,20 @@ let t1 = @async(error(1)),
     s = String(take!(buf))
     @test length(findall("Stacktrace:", s)) == 2
     @test occursin("[1] error(::Int", s)
+end
+
+module TestMethodShadow
+    struct Foo; x; end
+    +(a::Foo, b::Foo) = Foo(a.x + b.x)
+    ==(a::Foo, b::Foo) = Foo(a.x == b.x)
+    div(a::Foo, b::Foo) = Foo(div(a.x, b.x))
+end
+for (func,str) in ((TestMethodShadow.:+,":+"), (TestMethodShadow.:(==),":(==)"), (TestMethodShadow.:div,"div"))
+    ex = try
+        foo = TestMethodShadow.Foo(3)
+        func(foo,foo)
+    catch e
+       e
+    end::MethodError
+    @test occursin("You may have intended to import Base.$str", sprint(Base.showerror, ex))
 end

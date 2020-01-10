@@ -478,13 +478,8 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             return (jl_value_t*)jl_box_int32((int32_t)i64);
 #endif
     }
-    if (issymbol(e)) {
-        if (e == jl_ast_ctx(fl_ctx)->true_sym)
-            return jl_true;
-        else if (e == jl_ast_ctx(fl_ctx)->false_sym)
-            return jl_false;
+    if (issymbol(e))
         return (jl_value_t*)scmsym_to_julia(fl_ctx, e);
-    }
     if (fl_isstring(fl_ctx, e))
         return jl_pchar_to_string((char*)cvalue_data(e), cvalue_len(e));
     if (iscons(e) || e == fl_ctx->NIL) {
@@ -501,6 +496,10 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
                 return jl_box_slotnumber(numval(car_(cdr_(e))));
             else if (hd == jl_ast_ctx(fl_ctx)->null_sym && llength(e) == 1)
                 return jl_nothing;
+            else if (hd == jl_ast_ctx(fl_ctx)->true_sym && llength(e) == 1)
+                return jl_true;
+            else if (hd == jl_ast_ctx(fl_ctx)->false_sym && llength(e) == 1)
+                return jl_false;
         }
         if (issymbol(hd))
             sym = scmsym_to_julia(fl_ctx, hd);
@@ -643,9 +642,9 @@ static int julia_to_scm_noalloc1(fl_context_t *fl_ctx, jl_value_t *v, value_t *r
     else if (jl_is_symbol(v))
         *retval = symbol(fl_ctx, jl_symbol_name((jl_sym_t*)v));
     else if (v == jl_true)
-        *retval = jl_ast_ctx(fl_ctx)->true_sym;
+        *retval = fl_cons(fl_ctx, jl_ast_ctx(fl_ctx)->true_sym, fl_ctx->NIL);
     else if (v == jl_false)
-        *retval = jl_ast_ctx(fl_ctx)->false_sym;
+        *retval = fl_cons(fl_ctx, jl_ast_ctx(fl_ctx)->false_sym, fl_ctx->NIL);
     else if (v == jl_nothing)
         *retval = fl_cons(fl_ctx, jl_ast_ctx(fl_ctx)->null_sym, fl_ctx->NIL);
     else
@@ -1183,6 +1182,7 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmod
     return expr;
 }
 
+// Lower an expression tree into Julia's intermediate-representation.
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule)
 {
     return jl_expand_with_loc(expr, inmodule, "none", 0);

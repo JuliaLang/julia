@@ -74,7 +74,7 @@ RefArray(x::AbstractArray{T}, i::Int=1, roots::Nothing=nothing) where {T} = RefA
 convert(::Type{Ref{T}}, x::AbstractArray{T}) where {T} = RefArray(x, 1)
 
 function unsafe_convert(P::Type{Ptr{T}}, b::RefArray{T}) where T
-    if datatype_pointerfree(RefValue{T})
+    if allocatedinline(T)
         p = pointer(b.x, b.i)
     elseif isconcretetype(T) && T.mutable
         p = pointer_from_objref(b.x[b.i])

@@ -11,6 +11,17 @@ const libccalltest = "libccalltest"
 const verbose = false
 ccall((:set_verbose, libccalltest), Cvoid, (Int32,), verbose)
 
+@eval function cvarargs()
+    strp = Ref{Ptr{Cchar}}(0)
+    fmt = "%3.1f"
+    len = ccall(:asprintf, Cint, (Ptr{Ptr{Cchar}}, Cstring, Cfloat...), strp, fmt, 0.1)
+    str = unsafe_string(strp[], len)
+    Libc.free(strp[])
+    return str
+end
+@test cvarargs() == "0.1"
+
+
 # test multiple-type vararg handling (there's no syntax for this currently)
 @eval function foreign_varargs()
     strp = Ref{Ptr{Cchar}}(0)
@@ -29,6 +40,7 @@ ccall((:set_verbose, libccalltest), Cvoid, (Int32,), verbose)
     return str
 end
 @test foreign_varargs() == "hi+1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-1.1-2.2-3.3-4.4-5.5-6.6-7.7-8.8-9.9\n"
+
 
 # Test for proper argument register truncation
 ccall_test_func(x) = ccall((:testUcharX, libccalltest), Int32, (UInt8,), x % UInt8)
@@ -1005,6 +1017,20 @@ end
 
 @test ccall(:jl_getpagesize, Clong, ()) == @threadcall(:jl_getpagesize, Clong, ())
 
+# make sure our malloc/realloc/free adapters are thread-safe and repeatable
+for i = 1:8
+    ptr = @threadcall(:jl_malloc, Ptr{Cint}, (Csize_t,), sizeof(Cint))
+    @test ptr != C_NULL
+    unsafe_store!(ptr, 3)
+    @test unsafe_load(ptr) == 3
+    ptr = @threadcall(:jl_realloc, Ptr{Cint}, (Ptr{Cint}, Csize_t,), ptr, 2 * sizeof(Cint))
+    @test ptr != C_NULL
+    unsafe_store!(ptr, 4, 2)
+    @test unsafe_load(ptr, 1) == 3
+    @test unsafe_load(ptr, 2) == 4
+    @threadcall(:jl_free, Cvoid, (Ptr{Cint},), ptr)
+end
+
 # Pointer finalizer (issue #15408)
 let A = [1]
     ccall((:set_c_int, libccalltest), Cvoid, (Cint,), 1)
@@ -1509,3 +1535,14 @@ let
     @test isa(ptr, Ptr{Cvoid})
     @test arr[1] == '0'
 end
+
+# issue #34061
+o_file = tempname()
+output = read(Cmd(`$(Base.julia_cmd()) --output-o=$o_file -e 'Base.reinit_stdio();
+    f() = ccall((:dne, :does_not_exist), Cvoid, ());
+    f()'`; ignorestatus=true), String)
+@test occursin(output, """
+ERROR: could not load library "does_not_exist"
+does_not_exist.so: cannot open shared object file: No such file or directory
+""")
+@test !isfile(o_file)

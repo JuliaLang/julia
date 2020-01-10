@@ -870,11 +870,12 @@ function _test_at_locals1(::Any, ::Any)
     @test @locals() == Dict{Symbol,Any}(:x=>1)
 end
 _test_at_locals1(1,1)
-function _test_at_locals2(a::Any, ::Any)
+function _test_at_locals2(a::Any, ::Any, c::T) where T
     x = 2
-    @test @locals() == Dict{Symbol,Any}(:x=>2,:a=>a)
+    @test @locals() == Dict{Symbol,Any}(:x=>2,:a=>a,:c=>c,:T=>typeof(c))
 end
-_test_at_locals2(1,1)
+_test_at_locals2(1,1,"")
+_test_at_locals2(1,1,0.5f0)
 
 @testset "issue #31687" begin
     import InteractiveUtils._dump_function
@@ -890,3 +891,34 @@ end
 
 @test nameof(Any) === :Any
 @test nameof(:) === :Colon
+@test nameof(Core.Intrinsics.mul_int) === :mul_int
+@test nameof(Core.Intrinsics.arraylen) === :arraylen
+
+module TestMod33403
+f(x) = 1
+f(x::Int) = 2
+g() = 3
+
+module Sub
+import ..TestMod33403: f
+f(x::Char) = 3
+end
+end
+
+@testset "methods with module" begin
+    using .TestMod33403: f, g
+    @test length(methods(f)) == 3
+    @test length(methods(f, (Int,))) == 1
+
+    @test length(methods(f, TestMod33403)) == 2
+    @test length(methods(f, [TestMod33403])) == 2
+    @test length(methods(f, (Int,), TestMod33403)) == 1
+    @test length(methods(f, (Int,), [TestMod33403])) == 1
+
+    @test length(methods(f, TestMod33403.Sub)) == 1
+    @test length(methods(f, [TestMod33403.Sub])) == 1
+    @test length(methods(f, (Char,), TestMod33403.Sub)) == 1
+    @test length(methods(f, (Int,), TestMod33403.Sub)) == 0
+
+    @test length(methods(g, ())) == 1
+end

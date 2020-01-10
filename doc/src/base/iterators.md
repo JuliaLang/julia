@@ -14,5 +14,8 @@ Base.Iterators.product
 Base.Iterators.flatten
 Base.Iterators.partition
 Base.Iterators.filter
+Base.Iterators.accumulate
 Base.Iterators.reverse
+Base.Iterators.only
+Base.Iterators.peel
 ```

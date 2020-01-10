@@ -1676,3 +1676,28 @@ c32703(::Type{<:Str{C}}, str::Str{C}) where {C<:CSE} = str
 @testintersect(Tuple{Pair{Int, DataType}, Any},
                Tuple{Pair{A, B} where B<:Type, Int} where A,
                Tuple{Pair{Int, DataType}, Int})
+
+# issue #33337
+@test !issub(Tuple{Type{T}, T} where T<:NTuple{30, Union{Nothing, Ref}},
+             Tuple{Type{Tuple{Vararg{V, N} where N}}, Tuple{Vararg{V, N} where N}} where V)
+@test  issub(Tuple{Type{Any}, NTuple{4,Union{Int,Nothing}}},
+             Tuple{Type{V}, Tuple{Vararg{V, N} where N}} where V)
+
+# issue #26065
+t26065 = Ref{Tuple{T,Ref{Union{Ref{Tuple{Ref{Union{Ref{Ref{Tuple{Ref{Tuple{Union{Tuple{Ref{Ref{T}},T}, T},T}},T}}}, T}},T}}, Ref{T}, T}}}} where T
+s26065 = Ref{Tuple{T,Ref{Union{Ref{Tuple{Ref{Union{Ref{Ref{Tuple{Ref{Tuple{Union{Tuple{Ref{Ref{T}},T}, T},T}},T}}}, T}},T}}, Ref{T}, T}}}} where T
+@test t26065 <: s26065
+
+# issue #33894
+@testintersect(Tuple{Tuple{Vararg{Any,T}},:N} where T,
+               Tuple{Tuple{Vararg{Any,T}},T} where T,
+               Union{})
+@testintersect(Tuple{Int,Vararg{Any,T}} where T,
+               Tuple{T,Vararg{Any,T}} where T,
+               Union{})
+@testintersect(Tuple{:N,Vararg{Any,T}} where T,
+               Tuple{T,Vararg{Any,T}} where T,
+               Union{})
+
+@test !issub(Tuple{Type{T}, T} where T<:Tuple{String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}},
+             Tuple{Type{Tuple{Vararg{V, N} where N}}, Tuple{Vararg{V, N} where N}} where V)

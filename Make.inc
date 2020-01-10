@@ -52,6 +52,8 @@ USE_SYSTEM_LIBSSH2:=0
 USE_SYSTEM_CURL:=0
 USE_SYSTEM_LIBGIT2:=0
 USE_SYSTEM_PATCHELF:=0
+USE_SYSTEM_ZLIB:=0
+USE_SYSTEM_P7ZIP:=0
 
 # Link to the LLVM shared library
 USE_LLVM_SHLIB := 1
@@ -281,6 +283,7 @@ libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libdir))
 build_private_libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_private_libdir))
 private_libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(private_libdir))
 datarootdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(datarootdir))
+libexecdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libexecdir))
 docdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(docdir))
 sysconfdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(sysconfdir))
 includedir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(includedir))
@@ -472,7 +475,7 @@ endif
 ifeq ($(USECLANG),1)
 CC := $(CROSS_COMPILE)clang
 CXX := $(CROSS_COMPILE)clang++
-JCFLAGS := -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
 JCPPFLAGS := -fasynchronous-unwind-tables
 JCXXFLAGS := -pipe $(fPIC) -fno-rtti -pedantic
@@ -926,6 +929,20 @@ else
 PCRE_CONFIG := $(build_depsbindir)/pcre2-config
 endif
 
+ifeq ($(USE_SYSTEM_PATCHELF), 1)
+PATCHELF := patchelf
+else
+PATCHELF := $(build_depsbindir)/patchelf
+endif
+
+# On aarch64 and powerpc64le, we assume the page size is 64K.  Our binutils linkers
+# and such already assume this, but `patchelf` seems to be behind the times.  We
+# explicitly tell it to use this large page size so that when we rewrite rpaths and
+# such, we don't accidentally create incorrectly-aligned sections in our ELF files.
+ifneq (,$(filter $(ARCH),aarch64 powerpc64le))
+PATCHELF += --page-size=65536
+endif
+
 # Use ILP64 BLAS interface when building openblas from source on 64-bit architectures
 ifeq ($(BINARY), 64)
 ifeq ($(USE_SYSTEM_BLAS), 1)
@@ -1005,7 +1022,7 @@ USE_BINARYBUILDER ?= 0
 endif
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
-BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV
+BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1244,7 +1261,7 @@ ifeq ($(USECLANG),1)
 CXXLDFLAGS += -stdlib=libc++
 else
 ifeq ($(USEGCC),1)
-$(error BUILD_CUSTOM_LIBCXX is currently only supported with Clang. Try setting BUILD_CUSTOM_LIBCXX=0)
+$(error BUILD_CUSTOM_LIBCXX is currently only supported with Clang. Try setting BUILD_CUSTOM_LIBCXX=0 or USECLANG=1)
 endif
 endif # Clang
 CUSTOM_LD_LIBRARY_PATH := LD_LIBRARY_PATH="$(build_libdir)"
