@@ -1977,14 +1977,16 @@ f33987(args::(Vararg{Any, N} where N); kwargs...) = args
     Expr(:call, :/>>, Expr(:call, :|>, Expr(:call, :|>>, :a, :b), :c), :d)
 @test Meta.parse("a<<|b<|c<</d") ==
     Expr(:call, :<<|, :a, Expr(:call, :<|, :b, Expr(:call, :<</, :c, :d)))
-@test Meta.parse("a/>b/>c/>d") ==
-    Expr(:call, :/>, Expr(:call, :/>, Expr(:call, :/>, :a, :b), :c), :d)
-@test Meta.parse(raw"a\>b\>c\>d") ==
-    Expr(:call, :\>, Expr(:call, :\>, Expr(:call, :\>, :a, :b), :c), :d)
-@test Meta.parse("a</b</c</d") ==
-    Expr(:call, :</, :a, Expr(:call, :</, :b, Expr(:call, :</, :c, :d)))
-@test Meta.parse(raw"a<\b<\c<\d") ==
-    Expr(:call, :<\, :a, Expr(:call, :<\, :b, Expr(:call, :<\, :c, :d)))
+@testset for op in [:|>>, :/>, :/>>, :\>, :\>>]
+    @test Meta.parse("a$(op)b$(op)c$(op)d") ==
+        Meta.parse("a $(op) b $(op) c $(op) d") ==
+        Expr(:call, op, Expr(:call, op, Expr(:call, op, :a, :b), :c), :d)
+end
+@testset for op in [:<<|, :</, :<</, :<\, :<<\]
+    @test Meta.parse("a$(op)b$(op)c$(op)d") ==
+        Meta.parse("a $(op) b $(op) c $(op) d") ==
+        Expr(:call, op, :a, Expr(:call, op, :b, Expr(:call, op, :c, :d)))
+end
 
 macro id_for_kwarg(x); x; end
 Xo65KdlD = @id_for_kwarg let x = 1
