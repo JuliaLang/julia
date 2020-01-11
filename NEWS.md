@@ -33,7 +33,7 @@ Standard library changes
 
 * The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
 * `normalize` now supports multidimensional arrays ([#34239])
-* `lq` factorizations can now be used to compute the minimum-norm solution to under-determined systems ([#34348]).
+* `lq` factorizations can now be used to compute the minimum-norm solution to under-determined systems ([#34350]).
 
 #### Markdown
 
