@@ -432,7 +432,7 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
         sshflags = notnothing(config.sshflags)
         acquire(sem)
         try
-            (s, bind_addr, forward) = connect_to_worker(pubhost, bind_addr, port, user, sshflags)
+            (s, bind_addr, forward) = connect_to_worker_with_tunnel(pubhost, bind_addr, port, user, sshflags)
             config.forward = forward
         finally
             release(sem)
@@ -519,7 +519,7 @@ function connect_to_worker(host::AbstractString, port::Integer)
 end
 
 
-function connect_to_worker(host::AbstractString, bind_addr::AbstractString, port::Integer, tunnel_user::AbstractString, sshflags)
+function connect_to_worker_with_tunnel(host::AbstractString, bind_addr::AbstractString, port::Integer, tunnel_user::AbstractString, sshflags)
     localport = ssh_tunnel(tunnel_user, host, bind_addr, UInt16(port), sshflags)
     s = connect("localhost", localport)
     forward = "$localport:$bind_addr:$port"
