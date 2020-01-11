@@ -223,6 +223,11 @@ function exec_options(opts)
     global have_color     = (opts.color == 1) # --color=on
     global is_interactive = (opts.isinteractive != 0)
 
+    #check if stdout is TTY and color is not set manually
+    if isa(stdout, TTY) && !color_set
+        global have_color = true
+    end
+
     # pre-process command line argument list
     arg_is_program = !isempty(ARGS)
     repl = !arg_is_program
