@@ -297,10 +297,9 @@
              (append!
               pairs
               (filter (lambda (v) (not (assq (car v) env)))
-                      (append!
-                       (pair-with-gensyms v)
-                       (map (lambda (v) (cons v v))
-                            (diff (keywords-introduced-by x) globals))))
+                      (pair-with-gensyms v))
+              (map (lambda (v) (cons v v))
+                   (keywords-introduced-by x))
               env)))))))
 
 (define (resolve-expansion-vars-with-new-env x env m parent-scope inarg (outermost #f))
