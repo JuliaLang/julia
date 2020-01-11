@@ -307,7 +307,7 @@ _rightappdimmismatch(rowsorcols) =
         "(the factorization's originating matrix's number of rows)")))
 
 
-function (\)(A::LQ{TA},B::AbstractVecOrMat{TB}) where {TA,TB}
+function (\)(A::LQ{TA},B::StridedVecOrMat{TB}) where {TA,TB}
     S = promote_type(TA,TB)
     m, n = size(A)
     m ≤ n || throw(DimensionMismatch("LQ solver does not support underdetermined systems (more rows than columns)"))
