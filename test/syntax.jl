@@ -1972,6 +1972,11 @@ end
 f33987(args::(Vararg{Any, N} where N); kwargs...) = args
 @test f33987(1,2,3) === (1,2,3)
 
+# PR #34340 issue #25233
+@test Meta.parse("a|>>b|>c/>>d") ==
+    Expr(:call, :/>>, Expr(:call, :|>, Expr(:call, :|>>, :a, :b), :c), :d)
+@test Meta.parse("a<<|b<|c<</d") ==
+    Expr(:call, :<<|, :a, Expr(:call, :<|, :b, Expr(:call, :<</, :c, :d)))
 @test Meta.parse("a/>b/>c/>d") ==
     Expr(:call, :/>, Expr(:call, :/>, Expr(:call, :/>, :a, :b), :c), :d)
 @test Meta.parse(raw"a\>b\>c\>d") ==
