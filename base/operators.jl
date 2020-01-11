@@ -822,6 +822,17 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 """
 |>(x, f) = f(x)
 
+"""
+    |>>(x, f)
+
+Applies a function to the preceding argument, and returns that argument.
+This allows for easy tee function chaining.
+"""
+function |>>(x, f)
+    f(x)
+    return x
+end
+
 # function composition
 
 """

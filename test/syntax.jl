@@ -201,10 +201,13 @@ macro test999_str(args...); args; end
 @test Meta.parse("f(x;)") == Expr(:call, :f, Expr(:parameters), :x)
 
 @test Meta.parse("1 == 2|>3") == Expr(:call, :(==), 1, Expr(:call, :(|>), 2, 3))
+@test Meta.parse("1 == 2|>>3") == Expr(:call, :(==), 1, Expr(:call, :(|>>), 2, 3))
 
 # issue #24153
 @test Meta.parse("a|>b|>c|>d") == Meta.parse("((a|>b)|>c)|>d")
 @test Meta.parse("a<|b<|c<|d") == Meta.parse("a<|(b<|(c<|d))")
+
+@test Meta.parse("a|>>b|>>c|>>d") == Meta.parse("((a|>>b)|>>c)|>>d")
 
 # issue #12501 and pr #12502
 Meta.parse("""

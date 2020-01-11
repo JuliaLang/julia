@@ -354,6 +354,7 @@ end
 end
 
 @testset "operator precedence correctness" begin
+    # TODO Add |>> to this list
     ops = map(Symbol, split("= => || && --> < <| |> : + * // << ^ :: ."))
     for f in ops, g in ops
         f == g && continue
