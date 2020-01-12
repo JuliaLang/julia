@@ -491,19 +491,17 @@ function typeinfo_prefix(io::IO, X)
         typeinfo = Any
     end
 
-    # what the context already knows about the eltype of X:
-    eltype_ctx = typeinfo_eltype(typeinfo)
     eltype_X = eltype(X)
 
     if X isa AbstractDict
-        if eltype_X == eltype_ctx || (!isempty(X) && typeinfo_implicit(keytype(X)) && typeinfo_implicit(valtype(X)))
+        if !isempty(X) && typeinfo_implicit(keytype(X)) && typeinfo_implicit(valtype(X))
             string(typeof(X).name)
         else
             string(typeof(X))
         end
     else
         # Types hard-coded here are those which are created by default for a given syntax
-        if eltype_X == eltype_ctx || (!isempty(X) && typeinfo_implicit(eltype_X))
+        if !isempty(X) && typeinfo_implicit(eltype_X)
             ""
         elseif print_without_params(eltype_X)
             string(unwrap_unionall(eltype_X).name) # Print "Array" rather than "Array{T,N}"
