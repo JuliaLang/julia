@@ -81,7 +81,7 @@ orthogonal/unitary component via `S.Q`, such that `A ≈ S.L*S.Q`.
 Iterating the decomposition produces the components `S.L` and `S.Q`.
 
 The LQ decomposition is the QR decomposition of `transpose(A)`, and it is useful
-in order to compute the minimum-norm solution `lq(A) \\ b` to an overdetermined
+in order to compute the minimum-norm solution `lq(A) \\ b` to an underdetermined
 system of equations (`A` has more columns than rows, but has full row rank).
 
 # Examples
@@ -310,7 +310,7 @@ _rightappdimmismatch(rowsorcols) =
 function (\)(A::LQ{TA},B::StridedVecOrMat{TB}) where {TA,TB}
     S = promote_type(TA,TB)
     m, n = size(A)
-    m ≤ n || throw(DimensionMismatch("LQ solver does not support underdetermined systems (more rows than columns)"))
+    m ≤ n || throw(DimensionMismatch("LQ solver does not support overdetermined systems (more rows than columns)"))
     m == size(B,1) || throw(DimensionMismatch("Both inputs should have the same number of rows"))
     AA = Factorization{S}(A)
     X = _zeros(S, B, n)
