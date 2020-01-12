@@ -19,7 +19,7 @@ Build system changes
 
 New library functions
 ---------------------
-
+* `Iterators.map` is added ([#34352]).
 
 New library features
 --------------------
