@@ -12,7 +12,7 @@ using .Base:
     @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
     tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
     IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange,
-    LinearIndices, (:), |, +, -, !==, !, <=, <, missing, map, any, @boundscheck, @inbounds
+    LinearIndices, (:), |, +, -, !==, !, <=, <, missing, any, @boundscheck, @inbounds
 
 import .Base:
     first, last,
@@ -22,7 +22,27 @@ import .Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition, map
+
+"""
+    Iterators.map(f, iterators...)
+
+Create a lazy mapping.  This is another syntax for writing
+`(f(args...) for args in zip(iterators...))`.
+
+!!! compat "Julia 1.5"
+    This function requires at least Julia 1.5.
+
+# Examples
+```jldoctest
+julia> collect(Iterators.map(x -> x^2, 1:3))
+3-element Array{Int64,1}:
+ 1
+ 4
+ 9
+```
+"""
+map(f, args...) = Base.Generator(f, args...)
 
 tail_if_any(::Tuple{}) = ()
 tail_if_any(x::Tuple) = tail(x)
@@ -314,16 +334,16 @@ function _zip_min_length(is)
     end
 end
 _zip_min_length(is::Tuple{}) = nothing
-size(z::Zip) = _promote_shape(map(size, z.is)...)
-axes(z::Zip) = _promote_shape(map(axes, z.is)...)
+size(z::Zip) = _promote_shape(Base.map(size, z.is)...)
+axes(z::Zip) = _promote_shape(Base.map(axes, z.is)...)
 _promote_shape(a, b...) = promote_shape(a, _promote_shape(b...))
 _promote_shape(a) = a
 eltype(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_eltype(Is)
 _zip_eltype(::Type{Is}) where {Is<:Tuple} =
     tuple_type_cons(eltype(tuple_type_head(Is)), _zip_eltype(tuple_type_tail(Is)))
 _zip_eltype(::Type{Tuple{}}) = Tuple{}
-@inline isdone(z::Zip) = _zip_any_isdone(z.is, map(_ -> (), z.is))
-@inline isdone(z::Zip, ss) = _zip_any_isdone(z.is, map(tuple, ss))
+@inline isdone(z::Zip) = _zip_any_isdone(z.is, Base.map(_ -> (), z.is))
+@inline isdone(z::Zip, ss) = _zip_any_isdone(z.is, Base.map(tuple, ss))
 @inline function _zip_any_isdone(is, ss)
     d1 = isdone(is[1], ss[1]...)
     d1 === true && return true
@@ -331,8 +351,8 @@ _zip_eltype(::Type{Tuple{}}) = Tuple{}
 end
 @inline _zip_any_isdone(::Tuple{}, ::Tuple{}) = false
 
-@propagate_inbounds iterate(z::Zip) = _zip_iterate_all(z.is, map(_ -> (), z.is))
-@propagate_inbounds iterate(z::Zip, ss) = _zip_iterate_all(z.is, map(tuple, ss))
+@propagate_inbounds iterate(z::Zip) = _zip_iterate_all(z.is, Base.map(_ -> (), z.is))
+@propagate_inbounds iterate(z::Zip, ss) = _zip_iterate_all(z.is, Base.map(tuple, ss))
 
 # This first queries isdone from every iterator. If any gives true, it immediately returns
 # nothing. It then iterates all those where isdone returned missing, afterwards all those
@@ -388,7 +408,7 @@ _zip_iterator_eltype(::Type{Is}) where {Is<:Tuple} =
                        _zip_iterator_eltype(tuple_type_tail(Is)))
 _zip_iterator_eltype(::Type{Tuple{}}) = HasEltype()
 
-reverse(z::Zip) = Zip(map(reverse, z.is))
+reverse(z::Zip) = Zip(Base.map(reverse, z.is))
 
 # filter
 
@@ -971,7 +991,7 @@ end
     isdone(P) === true && return nothing
     next = _piterate(P.iterators...)
     next === nothing && return nothing
-    return (map(x -> x[1], next), next)
+    return (Base.map(x -> x[1], next), next)
 end
 
 @inline _piterate1(::Tuple{}, ::Tuple{}) = nothing
@@ -992,10 +1012,10 @@ end
     isdone(P, states) === true && return nothing
     next = _piterate1(P.iterators, states)
     next === nothing && return nothing
-    return (map(x -> x[1], next), next)
+    return (Base.map(x -> x[1], next), next)
 end
 
-reverse(p::ProductIterator) = ProductIterator(map(reverse, p.iterators))
+reverse(p::ProductIterator) = ProductIterator(Base.map(reverse, p.iterators))
 
 # flatten an iterator of iterators
 
