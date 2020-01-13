@@ -19,7 +19,8 @@ Build system changes
 
 New library functions
 ---------------------
-* `Iterators.map` is added ([#34352]).
+* `Iterators.map` is added. It provides another syntax `Iterators.map(f, iterators...)`
+  for wiring `(f(args...) for args in zip(iterators...))` ([#34352]).
 
 New library features
 --------------------
