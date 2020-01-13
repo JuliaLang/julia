@@ -83,6 +83,7 @@ jl_sym_t *runnable_sym;
 
 extern size_t jl_page_size;
 static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) JL_NOTSAFEPOINT;
+static int jl_init_fiber(jl_ucontext_t *t) JL_NOTSAFEPOINT;
 STATIC_OR_JS void jl_set_fiber(jl_ucontext_t *t);
 STATIC_OR_JS void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
 STATIC_OR_JS void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
@@ -647,10 +648,10 @@ void jl_init_tasks(void) JL_GC_DISABLED
     }
 }
 
-// used by codegen as an alternative to the below
+// used by codegen as an alternative to start_task
 JL_DLLEXPORT int jl_start_task_internal(jl_value_t* task)
 {
-    if (jl_setjmp(((jl_task_t*)task)->ctx.uc_mcontext, 0)) {
+    if (jl_init_fiber(&((jl_task_t*)task)->ctx)) {
         jl_ptls_t ptls = jl_get_ptls_states();
         jl_task_t *t = ptls->current_task;
 
@@ -674,7 +675,6 @@ JL_DLLEXPORT int jl_start_task_internal(jl_value_t* task)
     } 
     return 0;
 }
-
 
 STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
 {
@@ -756,6 +756,11 @@ static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) J
 #endif
     return (char*)stk;
 }
+static int jl_init_fiber(jl_ucontext_t *t)
+{
+    jl_error("jl_init_fiber not implemented");
+    return 0;
+}
 static void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     if (lastt)
@@ -824,6 +829,10 @@ static char *jl_alloc_fiber(unw_context_t *t, size_t *ssize, jl_task_t *owner)
         jl_error("unw_set_reg UNW_REG_IP failed");
     }
     return stkbuf;
+}
+static int jl_init_fiber(unw_context_t *t)
+{
+    return jl_setjmp(t->uc_mcontext, 0);
 }
 static void jl_start_fiber(unw_context_t *lastt, unw_context_t *t)
 {
@@ -945,6 +954,10 @@ static void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 #endif
     __builtin_unreachable();
 }
+static int jl_init_fiber(jl_ucontext_t *t)
+{
+    return jl_setjmp(t->uc_mcontext, 0);
+}
 static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     if (jl_setjmp(lastt->uc_mcontext, 0))
@@ -1026,6 +1039,10 @@ static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
     memcpy(&t, &ptls->base_ctx, sizeof(ptls->base_ctx));
     memcpy(&ptls->base_ctx, &base_ctx, sizeof(ptls->base_ctx));
     return (char*)stk;
+}
+static int jl_init_fiber(jl_ucontext_t *t)
+{
+    return jl_setjmp(t->uc_mcontext, 0);
 }
 static void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
