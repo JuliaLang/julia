@@ -11,7 +11,7 @@ Random.seed!(1234321)
 
 asquare = randn(ComplexF64, m, m) / 2
 awide = randn(ComplexF64, m, m+3) / 2
-bcomplex = randn(ComplexF64, m, 2)/2
+bcomplex = randn(ComplexF64, m, 2) / 2
 
 # helper functions to unambiguously recover explicit forms of an LQPackedQ
 squareQ(Q::LinearAlgebra.LQPackedQ) = (n = size(Q.factors, 2); lmul!(Q, Matrix{eltype(Q)}(I, n, n)))
