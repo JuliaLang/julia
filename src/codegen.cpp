@@ -4292,6 +4292,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         return jl_cgval_t();
     }
     else if (head == syncregion_sym) {
+        // XXX: allocate array of tasks?
         Value *token = nullptr;
         jl_cgval_t tok(token, NULL, false, (jl_value_t*)jl_void_type, NULL);
         return tok;
@@ -6654,11 +6655,12 @@ static std::unique_ptr<Module> emit_function(
             Value *retval = boxed(ctx, emit_expr(ctx, jl_reattachnode_retval(stmt)));
             ctx.builder.CreateCall(prepare_call(jlfinishtask_func), { task, retval });
             // unreachable
-             ctx.builder.CreateBr(BB[lname]);
+            ctx.builder.CreateBr(BB[lname]);
             find_next_stmt(lname - 1);
             continue;
         }
         if (jl_is_syncnode(stmt)) {
+            // XXX: Syncronize stmt
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
             ctx.builder.CreateBr(BB[cursor+2]); // fallthrough
             find_next_stmt(cursor + 1);

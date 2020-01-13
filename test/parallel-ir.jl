@@ -16,6 +16,11 @@
 #     end
 #   reattach res
 #
+# TODO: after picking this up in January
+# - syncregion and lowering of task to one with exception causes PhiC and Upsilon insertion
+#   for syncregion
+# - sync doesn't work yet
+# - we need to schedule tasks in `@spawn`
 
 macro syncregion()
     Expr(:syncregion)
