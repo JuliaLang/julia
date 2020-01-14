@@ -238,6 +238,12 @@ end
 
 # total number of bytes allocated so far
 gc_bytes(b::Ref{Int64}) = ccall(:jl_gc_get_total_bytes, Cvoid, (Ptr{Int64},), b)
+# NOTE: gc_bytes() is deprecated
+function gc_bytes()
+    b = Ref{Int64}()
+    gc_bytes(b)
+    b[]
+end
 
 """
     @allocated
@@ -276,23 +282,26 @@ See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
 ```julia-repl
-julia> val, t, bytes, gctime, memallocs = @timed rand(10^6);
+julia> stats = @timed rand(10^6);
 
-julia> t
+julia> stats.time
 0.006634834
 
-julia> bytes
+julia> stats.bytes
 8000256
 
-julia> gctime
+julia> stats.gctime
 0.0055765
 
-julia> fieldnames(typeof(memallocs))
+julia> propertynames(stats.gcstats)
 (:allocd, :malloc, :realloc, :poolalloc, :bigalloc, :freecall, :total_time, :pause, :full_sweep)
 
-julia> memallocs.total_time
+julia> stats.gcstats.total_time
 5576500
 ```
+
+!!! compat "Julia 1.5"
+    The return type of this macro was changed from `Tuple` to `NamedTuple` in Julia 1.5.
 """
 macro timed(ex)
     quote
@@ -302,7 +311,7 @@ macro timed(ex)
         local val = $(esc(ex))
         elapsedtime = time_ns() - elapsedtime
         local diff = GC_Diff(gc_num(), stats)
-        val, elapsedtime/1e9, diff.allocd, diff.total_time/1e9, diff
+        (value=val, time=elapsedtime/1e9, bytes=diff.allocd, gctime=diff.total_time/1e9, gcstats=diff)
     end
 end
 

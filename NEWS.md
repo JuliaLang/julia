@@ -23,16 +23,17 @@ New library functions
 
 New library features
 --------------------
+* Function composition now works also on one argument `∘(f) = f` (#34251)
 
 
 Standard library changes
 ------------------------
-
 * A 1-d `Zip` iterator (where `Base.IteratorSize` is `Base.HasShape{1}()`) with defined length of `n` has now also size of `(n,)` (instead of throwing an error) ([#29927]).
-
+* The `@timed` macro now returns a `NamedTuple` ([#34149])
 
 #### LinearAlgebra
-
+* The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
+* `normalize` now supports multidimensional arrays ([#34239])
 
 #### Markdown
 
@@ -44,6 +45,24 @@ Standard library changes
 
 
 #### SparseArrays
+* `lu!` accepts `UmfpackLU` as an argument to make use of its symbolic factorization.
+
+#### Dates
+
+#### Statistics
+
+
+#### Sockets
+
+
+Deprecated or removed
+---------------------
+
+External dependencies
+---------------------
+
+Tooling Improvements
+---------------------
 
 
 

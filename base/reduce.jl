@@ -112,7 +112,7 @@ struct FlatteningRF{T}
 end
 
 @inline function (op::FlatteningRF)(acc, x)
-    op′, itr′ = _xfadjoint(BottomRF(op.rf), x)
+    op′, itr′ = _xfadjoint(op.rf, x)
     return _foldl_impl(op′, acc, itr′)
 end
 

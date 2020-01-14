@@ -288,6 +288,30 @@ top:
     ret void
 }
 
+define void @gc_preserve_vec([2 x <2 x %jl_value_t addrspace(10)*>] addrspace(11)* nocapture nonnull readonly dereferenceable(16)) {
+; CHECK-LABEL: @gc_preserve_vec
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 6
+top:
+    %ptls = call %jl_value_t*** @julia.ptls_states()
+    %v = load [2 x <2 x %jl_value_t addrspace(10)*>], [2 x <2 x %jl_value_t addrspace(10)*>] addrspace(11)* %0, align 8
+; CHECK-DAG: [[EXTRACT11:%.*]] = extractvalue [2 x <2 x %jl_value_t addrspace(10)*>] %v, 0
+; CHECK-DAG: [[EXTRACT12:%.*]] = extractvalue [2 x <2 x %jl_value_t addrspace(10)*>] %v, 0
+; CHECK-DAG: [[EXTRACT21:%.*]] = extractvalue [2 x <2 x %jl_value_t addrspace(10)*>] %v, 1
+; CHECK-DAG: [[EXTRACT22:%.*]] = extractvalue [2 x <2 x %jl_value_t addrspace(10)*>] %v, 1
+; CHECK-DAG: [[V11:%.*]] = extractelement <2 x %jl_value_t addrspace(10)*> [[EXTRACT11]], i32 0
+; CHECK-DAG: [[V12:%.*]] = extractelement <2 x %jl_value_t addrspace(10)*> [[EXTRACT12]], i32 1
+; CHECK-DAG: [[V21:%.*]] = extractelement <2 x %jl_value_t addrspace(10)*> [[EXTRACT21]], i32 0
+; CHECK-DAG: [[V22:%.*]] = extractelement <2 x %jl_value_t addrspace(10)*> [[EXTRACT22]], i32 1
+; CHECK-DAG: store %jl_value_t addrspace(10)* [[V11]]
+; CHECK-DAG: store %jl_value_t addrspace(10)* [[V12]]
+; CHECK-DAG: store %jl_value_t addrspace(10)* [[V21]]
+; CHECK-DAG: store %jl_value_t addrspace(10)* [[V22]]
+    %tok = call token (...) @llvm.julia.gc_preserve_begin([2 x <2 x %jl_value_t addrspace(10)*>] %v, i64 addrspace(10)* null, %jl_value_t*** %ptls)
+    call void @jl_safepoint()
+    ret void
+}
+
+
 @gv1 = external global %jl_value_t*
 @gv2 = external global %jl_value_t addrspace(10)*
 

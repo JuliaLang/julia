@@ -28,6 +28,7 @@ export
     gemv,
     hemv!,
     hemv,
+    hpmv!,
     sbmv!,
     sbmv,
     symv!,
@@ -822,6 +823,82 @@ Return `A*x`. `A` is assumed to be Hermitian.
 Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 """
 hemv(ul, A, x)
+
+### hpmv!, (HP) Hermitian packed matrix-vector operation defined as y := alpha*A*x + beta*y.
+for (fname, elty) in ((:zhpmv_, :ComplexF64),
+                      (:chpmv_, :ComplexF32))
+    @eval begin
+        # SUBROUTINE ZHPMV(UPLO,N,ALPHA,AP,X,INCX,BETA,Y,INCY)
+        # Y <- ALPHA*AP*X + BETA*Y
+        # *     .. Scalar Arguments ..
+        #       DOUBLE PRECISION ALPHA,BETA
+        #       INTEGER INCX,INCY,N
+        #       CHARACTER UPLO
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION A(N,N),X(N),Y(N)
+        function hpmv!(uplo::AbstractChar,
+                       n::BlasInt,
+                       α::$elty,
+                       AP::Union{Ptr{$elty}, AbstractArray{$elty}},
+                       x::Union{Ptr{$elty}, AbstractArray{$elty}},
+                       incx::Integer,
+                       β::$elty,
+                       y::Union{Ptr{$elty}, AbstractArray{$elty}},
+                       incy::Integer)
+
+            ccall((@blasfunc($fname), libblas), Cvoid,
+                  (Ref{UInt8},     # uplo,
+                   Ref{BlasInt},   # n,
+                   Ref{$elty},     # α,
+                   Ptr{$elty},     # AP,
+                   Ptr{$elty},     # x,
+                   Ref{BlasInt},   # incx,
+                   Ref{$elty},     # β,
+                   Ptr{$elty},     # y, output
+                   Ref{BlasInt}),  # incy
+                  uplo,
+                  n,
+                  α,
+                  AP,
+                  x,
+                  incx,
+                  β,
+                  y,
+                  incy)
+        end
+    end
+end
+
+function hpmv!(uplo::AbstractChar,
+               α::Number, AP::Union{DenseArray{T}, AbstractVector{T}}, x::Union{DenseArray{T}, AbstractVector{T}},
+               β::Number, y::Union{DenseArray{T}, AbstractVector{T}}) where {T <: BlasComplex}
+    require_one_based_indexing(AP, x, y)
+    N = length(x)
+    if N != length(y)
+        throw(DimensionMismatch("x has length $(N), but y has length $(length(y))"))
+    end
+    if length(AP) < Int64(N*(N+1)/2)
+        throw(DimensionMismatch("Packed Hermitian matrix A has size smaller than length(x) =  $(N)."))
+    end
+    GC.@preserve x y AP hpmv!(uplo, BlasInt(N), convert(T, α), AP, pointer(x), BlasInt(stride(x, 1)), convert(T, β), pointer(y), BlasInt(stride(y, 1)))
+    y
+end
+
+"""
+    hpmv!(uplo, α, AP, x, β, y)
+
+Update vector `y` as `α*AP*x + β*y` where `AP` is a packed Hermitian matrix.
+The storage layout for `AP` is described in the reference BLAS module, level-2 BLAS at
+<http://www.netlib.org/lapack/explore-html/>.
+
+The scalar inputs `α` and `β` shall be numbers.
+
+The array inputs `x`, `y` and `AP` must be complex one-dimensional julia arrays of the
+same type that is either `ComplexF32` or `ComplexF64`.
+
+Return the updated `y`.
+"""
+hpmv!
 
 ### sbmv, (SB) symmetric banded matrix-vector multiplication
 for (fname, elty) in ((:dsbmv_,:Float64),

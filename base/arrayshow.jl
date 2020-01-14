@@ -122,7 +122,7 @@ but it also repeated every M elements if desired.
 """
 function print_matrix_vdots(io::IO, vdots::AbstractString,
                             A::Vector, sep::AbstractString, M::Integer, m::Integer,
-                            pad_right::Bool)
+                            pad_right::Bool = true)
     for k = 1:length(A)
         w = A[k][1] + A[k][2]
         if k % M == m

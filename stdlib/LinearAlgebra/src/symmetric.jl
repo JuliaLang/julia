@@ -668,7 +668,7 @@ eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange)
 """
     eigen(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> Eigen
 
-Computes the eigenvalue decomposition of `A`, returning an `Eigen` factorization object `F`
+Computes the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
 matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
@@ -676,7 +676,7 @@ Iterating the decomposition produces the components `F.values` and `F.vectors`.
 
 The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
 
-The `UnitRange` `irange` specifies indices of the sorted eigenvalues to search for.
+The [`UnitRange`](@ref) `irange` specifies indices of the sorted eigenvalues to search for.
 
 !!! note
     If `irange` is not `1:n`, where `n` is the dimension of `A`, then the returned factorization
@@ -694,7 +694,7 @@ eigen!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where {
 """
     eigen(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> Eigen
 
-Computes the eigenvalue decomposition of `A`, returning an `Eigen` factorization object `F`
+Computes the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
 matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
@@ -736,9 +736,10 @@ eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRang
     eigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> values
 
 Returns the eigenvalues of `A`. It is possible to calculate only a subset of the
-eigenvalues by specifying a `UnitRange` `irange` covering indices of the sorted eigenvalues,
+eigenvalues by specifying a [`UnitRange`](@ref) `irange` covering indices of the sorted eigenvalues,
 e.g. the 2nd to 8th eigenvalues.
 
+# Examples
 ```jldoctest
 julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
 3×3 SymTridiagonal{Float64,Array{Float64,1}}:
@@ -778,6 +779,7 @@ eigvals!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where
 Returns the eigenvalues of `A`. It is possible to calculate only a subset of the eigenvalues
 by specifying a pair `vl` and `vu` for the lower and upper boundaries of the eigenvalues.
 
+# Examples
 ```jldoctest
 julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
 3×3 SymTridiagonal{Float64,Array{Float64,1}}:

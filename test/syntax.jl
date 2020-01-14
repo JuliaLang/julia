@@ -1971,3 +1971,18 @@ end
 # issue #33987
 f33987(args::(Vararg{Any, N} where N); kwargs...) = args
 @test f33987(1,2,3) === (1,2,3)
+
+macro id_for_kwarg(x); x; end
+Xo65KdlD = @id_for_kwarg let x = 1
+    function f(; x)
+        x
+    end
+end
+@test_throws UndefKeywordError(:x) Xo65KdlD()
+i0xb23hG = @id_for_kwarg let x = 1
+    function f(; x=2)
+        x
+    end
+end
+@test i0xb23hG() == 2
+@test i0xb23hG(x=10) == 10

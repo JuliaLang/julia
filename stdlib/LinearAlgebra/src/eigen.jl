@@ -179,7 +179,7 @@ end
 """
     eigen(A; permute::Bool=true, scale::Bool=true, sortby) -> Eigen
 
-Computes the eigenvalue decomposition of `A`, returning an `Eigen` factorization object `F`
+Computes the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
 matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
@@ -195,7 +195,7 @@ make rows and columns more equal in norm. The default is `true` for both options
 By default, the eigenvalues and vectors are sorted lexicographically by `(real(λ),imag(λ))`.
 A different comparison function `by(λ)` can be passed to `sortby`, or you can pass
 `sortby=nothing` to leave the eigenvalues in an arbitrary order.   Some special matrix types
-(e.g. `Diagonal` or `SymTridiagonal`) may implement their own sorting convention and not
+(e.g. [`Diagonal`](@ref) or [`SymTridiagonal`](@ref)) may implement their own sorting convention and not
 accept a `sortby` keyword.
 
 # Examples
@@ -457,7 +457,7 @@ end
     eigen(A, B) -> GeneralizedEigen
 
 Computes the generalized eigenvalue decomposition of `A` and `B`, returning a
-`GeneralizedEigen` factorization object `F` which contains the generalized eigenvalues in
+[`GeneralizedEigen`](@ref) factorization object `F` which contains the generalized eigenvalues in
 `F.values` and the generalized eigenvectors in the columns of the matrix `F.vectors`.
 (The `k`th generalized eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
