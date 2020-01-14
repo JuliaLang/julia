@@ -36,9 +36,9 @@ find_shlib()
     lib_path="$1"
     if [ -f "$lib_path" ]; then
         if [ "$UNAME" = "Linux" ]; then
-            ${PATCHELF} --print-needed "$lib_path" | grep $2 | xargs
+            ${PATCHELF} --print-needed "$lib_path" | grep "$2" | xargs
         else # $UNAME is "Darwin", we only have two options, see above
-            otool -L "$lib_path" | grep $2 | cut -d' ' -f1 | xargs
+            otool -L "$lib_path" | grep "$2" | cut -d' ' -f1 | xargs
         fi
     fi
 }
@@ -50,7 +50,7 @@ find_shlib_dir()
     # only get something like `@rpath/libgfortran.5.dylib` when inspecting the
     # libraries.  We can, as a last resort, ask `$FC` directly what the full
     # filepath for this library is, but only if we don't have a direct path to it:
-    if [ $(dirname "$1") = "@rpath" ] || [ $(dirname "$1") = "." ]; then
+    if [ "$(dirname "$1")" = "@rpath" ] || [ "$(dirname "$1")" = "." ]; then
         dirname "$($FC -print-file-name="$(basename "$1")" 2>/dev/null)"
     else
         dirname "$1" 2>/dev/null
@@ -104,6 +104,7 @@ for soname in $SONAMES; do
             cp -v "$dir/$soname" "$private_libdir"
             chmod 755 "$private_libdir/$soname"
             if [ "$UNAME" = "Darwin" ]; then
+                debug "Rewriting identity of ${private_libdir}/${soname} to @rpath/${soname}"
                 install_name_tool -id "@rpath/$soname" "$private_libdir/$soname"
             fi
         fi
@@ -149,6 +150,7 @@ for lib in libopenblas libcholmod liblapack $SONAMES; do
         # Iterate over dependency names that need to be changed
         for soname in $SONAMES; do
             debug "changing linkage of $lib_path to $soname"
+            chmod 755 "$lib_path"
             change_linkage "$lib_path" "$soname"
         done
     done
