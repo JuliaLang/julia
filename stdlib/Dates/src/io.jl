@@ -578,20 +578,13 @@ function format(dt::TimeType, f::AbstractString; locale::Locale=ENGLISH)
 end
 
 # show
-function Base.show(io::IO, dt::DateTime)
+function Base.print(io::IO, dt::DateTime)
     if millisecond(dt) == 0
-        format(io, dt, dateformat"YYYY-mm-dd\THH:MM:SS")
+        str = format(dt, dateformat"YYYY-mm-dd\THH:MM:SS", 24)
     else
-        format(io, dt, dateformat"YYYY-mm-dd\THH:MM:SS.s")
+        str = format(dt, dateformat"YYYY-mm-dd\THH:MM:SS.s", 26)
     end
-end
-
-function Base.string(dt::DateTime)
-    if millisecond(dt) == 0
-        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS", 24)
-    else
-        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS.s", 26)
-    end
+    print(io, str)
 end
 
 function Base.print(io::IO, dt::Date)
@@ -604,6 +597,13 @@ function Base.print(io::IO, dt::Date)
     print(io, "$yy-$mm-$dd")
 end
 
-Base.show(io::IO, ::MIME"text/plain", dt::Date) = print(io, dt)
-Base.show(io::IO, dt::Date) = print(io, Date, "(\"", format(dt, dateformat"YYYY-mm-dd"), "\")")
-Base.typeinfo_implicit(::Type{Date}) = true
+for date_type in (:Date, :DateTime)
+    # Human readable output (i.e. "2012-01-01")
+    @eval Base.show(io::IO, ::MIME"text/plain", dt::$date_type) = print(io, dt)
+    # Parsable output (i.e. Date("2012-01-01"))
+    @eval Base.show(io::IO, dt::$date_type) = print(
+        io, $date_type, "(\"", sprint(print, dt, context=io), "\")"
+    )
+    # Parsable output will have type info displayed, thus it is implied
+    @eval Base.typeinfo_implicit(::Type{$date_type}) = true
+end
