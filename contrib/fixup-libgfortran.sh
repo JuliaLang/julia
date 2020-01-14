@@ -36,7 +36,7 @@ find_shlib()
     lib_path="$1"
     if [ -f "$lib_path" ]; then
         if [ "$UNAME" = "Linux" ]; then
-            "${PATCHELF}" --print-needed "$lib_path" | grep $2 | xargs
+            ${PATCHELF} --print-needed "$lib_path" | grep $2 | xargs
         else # $UNAME is "Darwin", we only have two options, see above
             otool -L "$lib_path" | grep $2 | cut -d' ' -f1 | xargs
         fi
