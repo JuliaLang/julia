@@ -90,13 +90,7 @@ macro preserve(args...)
     for x in syms
         isa(x, Symbol) || error("Preserved variable must be a symbol")
     end
-    s, r = gensym(), gensym()
-    esc(quote
-        $s = $(Expr(:gc_preserve_begin, syms...))
-        $r = $(args[end])
-        $(Expr(:gc_preserve_end, s))
-        $r
-    end)
+    esc(Expr(:gc_preserve, args[end], syms...))
 end
 
 """

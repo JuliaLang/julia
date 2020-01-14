@@ -2318,7 +2318,18 @@
                       ;; TODO: this is a hack to lower simple comprehensions to loops very
                       ;; early, to greatly reduce the # of functions and load on the compiler
                       (lower-comprehension (cadr e) (cadr (caddr e)) ranges))))
-          `(call (top collect) ,(cadr e) ,(caddr e)))))))
+          `(call (top collect) ,(cadr e) ,(caddr e)))))
+
+    'gc_preserve
+    (lambda (e)
+      (let* ((s (make-ssavalue))
+             (r (gensy)))
+        `(block
+          (= ,s (gc_preserve_begin ,@(cddr e)))
+          (= ,r ,(expand-forms (cadr e)))
+          (gc_preserve_end ,s)
+          ,r)))
+    ))
 
 (define (has-return? e)
   (expr-contains-p return? e (lambda (x) (not (function-def? x)))))
@@ -4009,10 +4020,8 @@ f(x) = yt(x)
              '(null))
 
             ((gc_preserve_begin)
-             (let ((s    (make-ssavalue))
-                   (args (compile-args (cdr e) break-labels linearize-args)))
-               (emit `(= ,s ,(cons (car e) args)))
-               s))
+             (let ((args (compile-args (cdr e) break-labels linearize-args)))
+               (cons (car e) args)))
 
             ;; metadata expressions
             ((line meta inbounds loopinfo gc_preserve_end aliasscope popaliasscope)
