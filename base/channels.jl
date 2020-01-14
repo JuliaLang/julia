@@ -175,6 +175,8 @@ Close a channel. An exception (optionally given by `excp`), is thrown by:
 
 * [`put!`](@ref) on a closed channel.
 * [`take!`](@ref) and [`fetch`](@ref) on an empty, closed channel.
+
+Note: it is not necessary to close a channel for it to be deallocated.
 """
 function close(c::Channel, excp::Exception=closed_exception())
     lock(c)
