@@ -220,7 +220,6 @@ julia> getindex("Julia Is The Best Programming Language", 8)
 's': ASCII/Unicode U+0073 (category Ll: Letter, lowercase)
 
 ```
-
     getindex(s::String, r::UnitRange{<:Integer})
 
 Returns a `String` derived from `s` which is situated at indexes from [`Base.first`](@ref) to [`Base.last`](@ref) in `s`.
@@ -237,6 +236,7 @@ julia> getindex("Julia > Python",1:4)
 "Juli"
 ```
 """
+
 @propagate_inbounds function getindex(s::String, i::Int)
     b = codeunit(s, i)
     u = UInt32(b) << 24
