@@ -276,6 +276,7 @@ end
             @test hypot(T(0), T(0)) === T(0)
             @test hypot(T(Inf), T(Inf)) === T(Inf)
             @test hypot(T(Inf), T(x)) === T(Inf)
+            @test hypot(T(Inf), T(NaN)) === T(Inf)
             @test isnan_type(T, hypot(T(x), T(NaN)))
         end
     end
