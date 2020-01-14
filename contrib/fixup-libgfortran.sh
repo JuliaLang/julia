@@ -8,7 +8,7 @@ PATCHELF=${PATCHELF:-patchelf}
 # If we're invoked with "--verbose", create a `debug` function that prints stuff out
 if [ "$1" = "--verbose" ] || [ "$1" = "-v" ]; then
 shift 1
-debug() { echo "$*"; }
+debug() { echo "$*" >&2; }
 else
 debug() { :; }
 fi
