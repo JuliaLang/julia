@@ -940,7 +940,7 @@ endif
 # explicitly tell it to use this large page size so that when we rewrite rpaths and
 # such, we don't accidentally create incorrectly-aligned sections in our ELF files.
 ifneq (,$(filter $(ARCH),aarch64 powerpc64le))
-PATCHELF += --page-size=65536
+PATCHELF += --page-size 65536
 endif
 
 # Use ILP64 BLAS interface when building openblas from source on 64-bit architectures
