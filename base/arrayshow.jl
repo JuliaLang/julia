@@ -101,7 +101,9 @@ function print_matrix_row(io::IO,
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
             x = X[i,j]
             a = alignment(io, x)
-            sx = sprint(show, x, context=io, sizehint=0)
+            sx = sprint(
+                show, "text/plain", x, context=IOContext(io, :compact=>true), sizehint=0
+            )
         else
             a = undef_ref_alignment
             sx = undef_ref_str
