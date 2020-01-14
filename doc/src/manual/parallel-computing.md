@@ -1700,13 +1700,12 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
     via `sshflags`, for example ```sshflags=`-i <keyfile>` ```.
 
     Internally, SSH multiplexing is used to create a tunnel between the master and workers. If you have
-    been configured SSH multiplexing on your own and the connection has already been established,
-    forwarding is set by using the existing connection (`-O forward` option in ssh). This is beneficial
-    if your servers require password authentication; you can avoid authentication in Julia by logging
-    in to the server ahead of `addprocs`. Even if you do not explicitly configure SSH multiplexing,
-    Julia will use multiplexing to reduce the number of authentication. The control socket will be
-    located at `~/.ssh/julia-%r@%h:%p` during the session unless the existing multiplexing connection
-    is used.
+    configured SSH multiplexing on your own and the connection has already been established, forwarding
+    is set by using the existing connection (`-O forward` option in ssh). This is beneficial if your
+    servers require password authentication; you can avoid authentication in Julia by logging in to the
+    server ahead of `addprocs`. Even if you do not explicitly configure SSH multiplexing, Julia will
+    use multiplexing to reduce the number of authentication. The control socket will be located at
+    `~/.ssh/julia-%r@%h:%p` during the session unless the existing multiplexing connection is used.
 
     In an all-to-all topology (the default), all workers connect to each other via plain TCP sockets.
     The security policy on the cluster nodes must thus ensure free connectivity between workers for
