@@ -43,7 +43,11 @@ void jl_init_timing(void)
 
 void jl_destroy_timing(void)
 {
-    _jl_timing_block_destroy(jl_root_timing);
+    jl_timing_block_t *stack = jl_current_task ? jl_current_task->timing_stack : jl_root_timing;
+    while (stack) {
+        _jl_timing_block_destroy(stack);
+        stack = stack->prev;
+    }
     free(jl_root_timing);
 }
 
