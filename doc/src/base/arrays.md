@@ -108,7 +108,8 @@ A “view” is a data structure that acts like an array (it is a subtype of `Ab
 part of another array.
 
 For example, if `x` is an array and `v = @view x[1:10]`, then `v` acts like a 10-element array, but its data is actually
-accessing the first 10 elements of `x`. Writing to a view, e.g. `v[3] = 2`, writes directly to the underlying array `x` (in this case modifying `x[3]`).
+accessing the first 10 elements of `x`. Writing to a view, e.g. `v[3] = 2`, writes directly to the underlying array `x`
+(in this case modifying `x[3]`).
 
 Slicing operations like `x[1:10]` create a copy by default in Julia. `@view x[1:10]` changes it to make a view. The
 `@views` macro can be used on a whole block of code (e.g. `@views function foo() .... end` or `@views begin ... end`)
