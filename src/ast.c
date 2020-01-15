@@ -365,7 +365,7 @@ void jl_init_frontend(void)
     throw_undef_if_not_sym = jl_symbol("throw_undef_if_not");
     getfield_undefref_sym = jl_symbol("##getfield##");
     do_sym = jl_symbol("do");
-    coverageeffect_sym = jl_symbol("code_coverage_marker");
+    coverageeffect_sym = jl_symbol("code_coverage_effect");
     aliasscope_sym = jl_symbol("aliasscope");
     popaliasscope_sym = jl_symbol("popaliasscope");
 }
