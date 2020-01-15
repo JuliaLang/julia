@@ -583,6 +583,16 @@ julia> sqrt(big(complex(-81)))
 sqrt(x::Real) = sqrt(float(x))
 
 """
+    hypot(x, y)
+
+Compute the hypotenuse ``\\sqrt{|x|^2+|y|^2}`` avoiding overflow and underflow.
+
+This code is an implementation of the algorithm described in:
+An Improved Algorithm for `hypot(a,b)`
+by Carlos F. Borges
+The article is available online at ArXiv at the link
+  https://arxiv.org/abs/1904.09481
+
     hypot(x...)
 
 Compute the hypotenuse ``\\sqrt{\\sum |x_i|^2}`` avoiding overflow and underflow.
@@ -610,12 +620,72 @@ julia> hypot(3, 4im, 12.0)
 13.0
 ```
 """
-hypot(x::Number, xs::Number...) = _hypot(float.(promote(x, xs...))...)
+hypot(x::Number) = abs(float(x))
+hypot(x::Number,y::Number,xs::Number...) = _hypot(float.(promote(x,y,xs...))...)
+function _hypot(x::T, y::T) where {T<:Number}
+	# preserves unit
+	axu = abs(x)
+	ayu = abs(y)
+
+	# unitless
+	ax = axu / oneunit(axu)
+	ay = ayu / oneunit(ayu)
+
+    # Return Inf if either or both imputs is Inf (Compliance with IEEE754)
+    if isinf(ax) || isinf(ay)
+    	return oftype(axu, Inf)
+    end
+
+    # Order the operands
+    if ay > ax
+    	axu,ayu = ayu,axu
+        ax,ay = ay,ax
+    end
+
+    # Widely varying operands
+    if ay <= ax*sqrt(eps(typeof(ax))/2)  #Note: This also gets ay == 0
+        return axu
+    end
+
+    # Operands do not vary widely
+    scale = eps(sqrt(floatmin(ax)))  #Rescaling constant
+    if ax > sqrt(floatmax(ax)/2)
+        ax = ax*scale
+        ay = ay*scale
+        scale = inv(scale)
+    elseif ay < sqrt(floatmin(ax))
+        ax = ax/scale
+        ay = ay/scale
+    else
+        scale = oneunit(scale)
+    end
+    h = sqrt(muladd(ax,ax,ay*ay))
+    # This branch is correctly rounded but requires a native hardware fma.
+    if Base.Math.FMA_NATIVE
+        hsquared = h*h
+        axsquared = ax*ax
+        h -= (fma(-ay,ay,hsquared-axsquared) + fma(h,h,-hsquared) - fma(ax,ax,-axsquared))/(2*h)
+    # This branch is within one ulp of correctly rounded.
+    else
+        if h <= 2*ay
+            delta = h-ay
+            h -= muladd(delta,delta-2*(ax-ay),ax*(2*delta - ax))/(2*h)
+        else
+            delta = h-ax
+            h -= muladd(delta,delta,muladd(ay,(4*delta-ay),2*delta*(ax-2*ay)))/(2*h)
+        end
+    end
+    return h*scale*oneunit(axu)
+end
 function _hypot(x::T...) where {T<:Number}
     maxabs = maximum(abs, x)
-    isnan(maxabs) && any(isinf, x) && return oftype(maxabs, Inf)
-    (iszero(maxabs) || isinf(maxabs)) && return maxabs
-    return maxabs * sqrt(sum(y -> abs2(y / maxabs), x))
+    if isnan(maxabs) && any(isinf, x)
+        return oftype(maxabs, Inf)
+    elseif (iszero(maxabs) || isinf(maxabs))
+        return maxabs
+    else
+        return maxabs * sqrt(sum(y -> abs2(y / maxabs), x))
+    end
 end
 
 atan(y::Real, x::Real) = atan(promote(float(y),float(x))...)
