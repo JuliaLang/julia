@@ -29,6 +29,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             end
         else
             if !dominates(domtree, def_bb, use_bb) && !(bb_unreachable(domtree, def_bb) && bb_unreachable(domtree, use_bb))
+                # At the moment, we allow GC preserve tokens outside the standard domination notion
                 #@Base.show ir
                 @verify_error "Basic Block $def_bb does not dominate block $use_bb (tried to use value $(op.id))"
                 error()
@@ -189,10 +190,17 @@ function verify_ir(ir::IRCode)
                     end
                 end
             end
-            if isa(stmt, Expr) && stmt.head === :(=)
-                if stmt.args[1] isa SSAValue
-                    @verify_error "SSAValue as assignment LHS"
-                    error()
+            if isa(stmt, Expr)
+                if stmt.head === :(=)
+                    if stmt.args[1] isa SSAValue
+                        @verify_error "SSAValue as assignment LHS"
+                        error()
+                    end
+                elseif stmt.head === :gc_preserve_end
+                    # We allow gc_preserve_end tokens to span across try/catch
+                    # blocks, which isn't allowed for regular SSA values, so
+                    # we skip the validation below.
+                    continue
                 end
             end
             for op in userefs(stmt)
