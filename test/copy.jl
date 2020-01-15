@@ -213,4 +213,8 @@ end
     r = ones(Int, 3, 3)
     s = [1 2 3 4]'
     @test copyto!(r, s) == [1 4 1; 2 1 1; 3 1 1]
+    a = fill(1, 5)
+    r = Base.IdentityUnitRange(-1:1)
+    copyto!(a, r)
+    @test a[1:3] == [-1, 0, 1]
 end
