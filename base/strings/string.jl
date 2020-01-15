@@ -212,6 +212,7 @@ returns the `Char` in `s` at position `i`, whilst treating it like an Array.
 `i` must be between 0 and [`Base.length(s)`](@ref)
 
 # Examples
+
 ```jldoctest
 julia> getindex("abcdef", 5)
 'e': ASCII/Unicode U+0065 (category Ll: Letter, lowercase)
@@ -220,23 +221,8 @@ julia> getindex("Julia Is The Best Programming Language", 8)
 's': ASCII/Unicode U+0073 (category Ll: Letter, lowercase)
 
 ```
-
-    getindex(s::String, r::UnitRange{<:Integer})
-
-Returns a `String` derived from `s` which is situated at indexes from [`Base.first`](@ref) to [`Base.last`](@ref) in `s`.
-
-# Examples
-```jldoctest
-julia> getindex("hello brother!",1:5)
-"hello"
-
-julia> getindex("hello brother!",1:1)
-"h"
-
-julia> getindex("Julia > Python",1:4)
-"Juli"
-```
 """
+
 @propagate_inbounds function getindex(s::String, i::Int)
     b = codeunit(s, i)
     u = UInt32(b) << 24
@@ -270,6 +256,24 @@ function getindex_continued(s::String, i::Int, u::UInt32)
     return reinterpret(Char, u)
 end
 
+"""
+    getindex(s::String, r::UnitRange{<:Integer})
+
+Returns a `String` derived from `s` which is situated at indexes from [`Base.first`](@ref) to [`Base.last`](@ref) in `s`.
+
+# Examples
+
+```jldoctest
+julia> getindex("hello brother!",1:5)
+"hello"
+
+julia> getindex("hello brother!",1:1)
+"h"
+
+julia> getindex("Julia > Python",1:4)
+"Juli"
+```
+"""
 
 getindex(s::String, r::UnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
 
