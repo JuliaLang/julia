@@ -7164,3 +7164,12 @@ function mre34206(a, n)
     return b[1].offset1
 end
 @test mre34206([44], 1) == 0
+
+# Issue #34247
+function f34247(a)
+    GC.@preserve a try
+    catch
+    end
+    true
+end
+@test f34247("")
