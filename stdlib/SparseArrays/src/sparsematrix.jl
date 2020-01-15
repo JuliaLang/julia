@@ -361,7 +361,7 @@ copyto!(A::PermutedDimsArray, B::AbstractSparseMatrixCSC) = _sparse_copyto!(A, B
 function _sparse_copyto!(dest::AbstractMatrix, src::AbstractSparseMatrixCSC)
     dest === src && return dest
     z = convert(eltype(dest), zero(eltype(src))) # should throw if not possible
-    isempty(dest) && isempty(src) && return dest
+    isempty(src) && return dest
     isrc = LinearIndices(src)
     checkbounds(dest, first(isrc))
     checkbounds(dest, last(isrc))
