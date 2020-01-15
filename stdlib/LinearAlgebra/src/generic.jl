@@ -20,22 +20,22 @@ julia> MulAddMul(12, 34)(56, 78) == 56 * 12 + 78 * 34
 true
 ```
 """
-struct MulAddMul{ais1, bis0, TA, TB}
+struct MulAddMul{TA, TB}
     alpha::TA
     beta::TB
 end
 
-MulAddMul(alpha::TA, beta::TB) where {TA, TB} =
-    MulAddMul{isone(alpha), iszero(beta), TA, TB}(alpha, beta)
-
 MulAddMul() = MulAddMul(true, false)
 
-@inline (::MulAddMul{true})(x) = x
-@inline (p::MulAddMul{false})(x) = x * p.alpha
-@inline (::MulAddMul{true, true})(x, _) = x
-@inline (p::MulAddMul{false, true})(x, _) = x * p.alpha
-@inline (p::MulAddMul{true, false})(x, y) = x + y * p.beta
-@inline (p::MulAddMul{false, false})(x, y) = x * p.alpha + y * p.beta
+@inline (p::MulAddMul)(x) = isone(p.alpha) ? x : x * p.alpha
+@inline function (p::MulAddMul)(x, y)
+    x_mul_a = isone(p.alpha) ? x : x * p.alpha
+    if iszero(p.beta)
+        return x_mul_a
+    else
+        return x_mul_a + y * p.beta
+    end
+end
 
 """
     _modify!(_add::MulAddMul, x, C, idx)
@@ -59,14 +59,13 @@ julia> C
  123.0
 ```
 """
-@inline @propagate_inbounds function _modify!(p::MulAddMul{ais1, bis0},
-                                              x, C, idx′) where {ais1, bis0}
+@inline @propagate_inbounds function _modify!(p::MulAddMul, x, C, idx′)
     # `idx′` may be an integer, a tuple of integer, or a `CartesianIndex`.
     #  Let `CartesianIndex` constructor normalize them so that it can be
     # used uniformly.  It also acts as a workaround for performance penalty
     # of splatting a number (#29114):
     idx = CartesianIndex(idx′)
-    if bis0
+    if iszero(p.beta)
         C[idx] = p(x)
     else
         C[idx] = p(x, C[idx])
