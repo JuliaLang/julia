@@ -1699,20 +1699,22 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
     authenticated via public key infrastructure (PKI). Authentication credentials can be supplied
     via `sshflags`, for example ```sshflags=`-i <keyfile>` ```.
 
-    Internally, SSH multiplexing is used to create a tunnel between the master and workers. If you have
-    configured SSH multiplexing on your own and the connection has already been established, forwarding
-    is set by using the existing connection (`-O forward` option in ssh). This is beneficial if your
-    servers require password authentication; you can avoid authentication in Julia by logging in to the
-    server ahead of `addprocs`. Even if you do not explicitly configure SSH multiplexing, Julia will
-    use multiplexing to reduce the number of authentication. The control socket will be located at
-    `~/.ssh/julia-%r@%h:%p` during the session unless the existing multiplexing connection is used.
-
     In an all-to-all topology (the default), all workers connect to each other via plain TCP sockets.
     The security policy on the cluster nodes must thus ensure free connectivity between workers for
     the ephemeral port range (varies by OS).
 
     Securing and encrypting all worker-worker traffic (via SSH) or encrypting individual messages
     can be done via a custom `ClusterManager`.
+
+  * If you specify `multiplex=true` as an option to `addprocs`, SSH multiplexing is used to create
+    a tunnel between the master and workers. If you have configured SSH multiplexing on your own and
+    the connection has already been established, SSH multiplexing is used regardless of `multiplex`
+    option. If multiplexing is enabled, forwarding is set by using the existing connection
+    (`-O forward` option in ssh). This is beneficial if your servers require password authentication;
+    you can avoid authentication in Julia by logging in to the server ahead of `addprocs`. The control
+    socket will be located at `~/.ssh/julia-%r@%h:%p` during the session unless the existing multiplexing
+    connection is used. Note that bandwidth may be limited if you create multiple processes on a node
+    and enable multiplexing, because in that case processes share a single multiplexing TCP connection.
 
 ### [Cluster Cookie](@id man-cluster-cookie)
 

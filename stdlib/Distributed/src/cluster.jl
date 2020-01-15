@@ -28,6 +28,7 @@ The `userdata` field is used to store information for each worker by external ma
 
 Some fields are used by `SSHManager` and similar managers:
   * `tunnel` -- `true` (use tunneling), `false` (do not use tunneling), or [`nothing`](@ref) (use default for the manager)
+  * `multiplex` -- `true` (use SSH multiplexing for tunneling) or `false`
   * `forward` -- the forwarding option used for `-L` option of ssh
   * `bind_addr` -- the address on the remote host to bind to
   * `sshflags` -- flags to use in establishing the SSH connection
@@ -59,6 +60,7 @@ mutable struct WorkerConfig
 
     # SSHManager / SSH tunnel connections to workers
     tunnel::Union{Bool, Nothing}
+    multiplex::Union{Bool, Nothing}
     forward::Union{AbstractString, Nothing}
     bind_addr::Union{AbstractString, Nothing}
     sshflags::Union{Cmd, Nothing}
@@ -551,7 +553,7 @@ function launch_n_additional_processes(manager, frompid, fromconfig, cnt, launch
             (bind_addr, port) = address
 
             wconfig = WorkerConfig()
-            for x in [:host, :tunnel, :sshflags, :exeflags, :exename, :enable_threaded_blas]
+            for x in [:host, :tunnel, :multiplex, :sshflags, :exeflags, :exename, :enable_threaded_blas]
                 Base.setproperty!(wconfig, x, Base.getproperty(fromconfig, x))
             end
             wconfig.bind_addr = bind_addr

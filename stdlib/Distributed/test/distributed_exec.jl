@@ -718,6 +718,11 @@ if Sys.isunix() # aka have ssh
     print("\nssh addprocs with tunnel\n")
     new_pids = addprocs_with_testenv([("localhost", num_workers)]; tunnel=true, sshflags=sshflags)
     @test length(new_pids) == num_workers
+    test_n_remove_pids(new_pids)
+
+    print("\nssh addprocs with tunnel (SSH multiplexing)\n")
+    new_pids = addprocs_with_testenv([("localhost", num_workers)]; tunnel=true, multiplex=true, sshflags=sshflags)
+    @test length(new_pids) == num_workers
     controlpath = joinpath(homedir(), ".ssh", "julia-$(ENV["USER"])@localhost:22")
     @test issocket(controlpath)
     test_n_remove_pids(new_pids)

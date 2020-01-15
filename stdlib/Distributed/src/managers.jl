@@ -71,6 +71,8 @@ Keyword arguments:
 * `tunnel`: if `true` then SSH tunneling will be used to connect to the worker from the
   master process. Default is `false`.
 
+* `multiplex`: if `true` then SSH multiplexing is used for SSH tunneling. Default is `false`.
+
 * `sshflags`: specifies additional ssh options, e.g. ```sshflags=\`-i /home/foo/bar.pem\````
 
 * `max_parallel`: specifies the maximum number of workers connected to in parallel at a
@@ -113,9 +115,9 @@ This timeout can be controlled via environment variable `JULIA_WORKER_TIMEOUT`.
 The value of `JULIA_WORKER_TIMEOUT` on the master process specifies the number of seconds a
 newly launched worker waits for connection establishment.
 """
-function addprocs(machines::AbstractVector; tunnel=false, sshflags=``, max_parallel=10, kwargs...)
+function addprocs(machines::AbstractVector; tunnel=false, multiplex=false, sshflags=``, max_parallel=10, kwargs...)
     check_addprocs_args(kwargs)
-    addprocs(SSHManager(machines); tunnel=tunnel, sshflags=sshflags, max_parallel=max_parallel, kwargs...)
+    addprocs(SSHManager(machines); tunnel=tunnel, multiplex=multiplex, sshflags=sshflags, max_parallel=max_parallel, kwargs...)
 end
 
 
@@ -150,6 +152,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     exename = params[:exename]
     exeflags = params[:exeflags]
     tunnel = params[:tunnel]
+    multiplex = params[:multiplex]
 
     # machine could be of the format [user@]host[:port] bind_addr[:bind_port]
     # machine format string is split on whitespace
@@ -179,12 +182,18 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     end
     sshflags = `$(params[:sshflags]) $portopt`
 
-    # First it checks if ssh multiplexing has been already enabled and the master process is running.
-    # If it's already running, later ssh sessions also use the same ssh multiplexing session.
-    # If not, it creates a new ssh multiplexing session to open an ssh tunnel by default.
-    if tunnel && !success(`ssh $sshflags -O check $host`)
-        controlpath = "~/.ssh/julia-%r@%h:%p"
-        sshflags = `$sshflags -o ControlMaster=auto -o ControlPath=$controlpath -o ControlPersist=no`
+    if tunnel
+        # First it checks if ssh multiplexing has been already enabled and the master process is running.
+        # If it's already running, later ssh sessions also use the same ssh multiplexing session even if
+        # `multiplex` is not explicitly specified; otherwise the tunneling session launched later won't
+        # go to background and hang. This is because of OpenSSH implementation.
+        if success(`ssh $sshflags -O check $host`)
+            multiplex = true
+        elseif multiplex
+            # automatically create an SSH multiplexing session at the next SSH connection
+            controlpath = "~/.ssh/julia-%r@%h:%p"
+            sshflags = `$sshflags -o ControlMaster=auto -o ControlPath=$controlpath -o ControlPersist=no`
+        end
     end
 
     # Build up the ssh command
@@ -221,6 +230,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     wconfig.io = io.out
     wconfig.host = host
     wconfig.tunnel = tunnel
+    wconfig.multiplex = multiplex
     wconfig.sshflags = sshflags
     wconfig.exeflags = exeflags
     wconfig.exename = exename
@@ -265,19 +275,32 @@ end
 
 
 """
-    ssh_tunnel(user, host, bind_addr, port, sshflags) -> localport
+    ssh_tunnel(user, host, bind_addr, port, sshflags, multiplex) -> localport
 
 Establish an SSH tunnel to a remote worker.
 Return a port number `localport` such that `localhost:localport` connects to `host:port`.
 """
-function ssh_tunnel(user, host, bind_addr, port, sshflags)
+function ssh_tunnel(user, host, bind_addr, port, sshflags, multiplex)
     port = Int(port)
     cnt = ntries = 100
+
     # the connection is forwarded to `port` on the remote server over the local port `localport`
-    # It assumes that an ssh multiplexing session has been already started by the remote worker.
     while cnt > 0
         localport = next_tunnel_port()
-        if success(`ssh $sshflags -O forward -L $localport:$bind_addr:$port $user@$host`)
+        if multiplex
+            # It assumes that an ssh multiplexing session has been already started by the remote worker.
+            cmd = `ssh $sshflags -O forward -L $localport:$bind_addr:$port $user@$host`
+        else
+            # if we cannot do port forwarding, fail immediately
+            # the -f option backgrounds the ssh session
+            # `sleep 60` command specifies that an alloted time of 60 seconds is allowed to start the
+            # remote julia process and establish the network connections specified by the process topology.
+            # If no connections are made within 60 seconds, ssh will exit and an error will be printed on the
+            # process that launched the remote process.
+            ssh = `ssh -T -a -x -o ExitOnForwardFailure=yes`
+            cmd = detach(`$ssh -f $sshflags $user@$host -L $localport:$bind_addr:$port sleep 60`)
+        end
+        if success(cmd)
             return localport
         end
         cnt -= 1
@@ -430,9 +453,10 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
         sem = tunnel_hosts_map[pubhost]
 
         sshflags = notnothing(config.sshflags)
+        multiplex = something(config.multiplex, false)
         acquire(sem)
         try
-            (s, bind_addr, forward) = connect_to_worker_with_tunnel(pubhost, bind_addr, port, user, sshflags)
+            (s, bind_addr, forward) = connect_to_worker_with_tunnel(pubhost, bind_addr, port, user, sshflags, multiplex)
             config.forward = forward
         finally
             release(sem)
@@ -519,8 +543,8 @@ function connect_to_worker(host::AbstractString, port::Integer)
 end
 
 
-function connect_to_worker_with_tunnel(host::AbstractString, bind_addr::AbstractString, port::Integer, tunnel_user::AbstractString, sshflags)
-    localport = ssh_tunnel(tunnel_user, host, bind_addr, UInt16(port), sshflags)
+function connect_to_worker_with_tunnel(host::AbstractString, bind_addr::AbstractString, port::Integer, tunnel_user::AbstractString, sshflags, multiplex)
+    localport = ssh_tunnel(tunnel_user, host, bind_addr, UInt16(port), sshflags, multiplex)
     s = connect("localhost", localport)
     forward = "$localport:$bind_addr:$port"
     (s, bind_addr, forward)
@@ -531,7 +555,8 @@ function cancel_ssh_tunnel(config::WorkerConfig)
     host = notnothing(config.host)
     sshflags = notnothing(config.sshflags)
     tunnel = something(config.tunnel, false)
-    if tunnel
+    multiplex = something(config.multiplex, false)
+    if tunnel && multiplex
         forward = notnothing(config.forward)
         run(`ssh $sshflags -O cancel -L $forward $host`)
     end
