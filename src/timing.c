@@ -12,6 +12,10 @@ extern "C" {
 #ifdef ENABLE_TIMINGS
 #include "timing.h"
 
+#ifndef HAVE_TIMING_SUPPORT
+#error Timings are not supported on your compiler
+#endif
+
 jl_timing_block_t *jl_root_timing;
 uint64_t jl_timing_data[(int)JL_TIMING_LAST] = {0};
 const char *jl_timing_names[(int)JL_TIMING_LAST] =
