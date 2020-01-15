@@ -964,11 +964,12 @@ function copyto!(dest::AbstractArray{T1,N}, src::AbstractArray{T2,N}) where {T1,
         end
     # otherwise enforce linear indexing
     else
-        linds = eachindex(IndexLinear(), src)
-        checkbounds(dest, first(linds))
-        checkbounds(dest, last(linds))
-        for I in linds
-            @inbounds dest[I] = src′[I]
+        isrc = eachindex(IndexLinear(), src)
+        idest = eachindex(IndexLinear(), dest)
+        ΔI = first(idest) - first(isrc)
+        checkbounds(dest, last(isrc) + ΔI)
+        for I in isrc
+            @inbounds dest[I + ΔI] = src′[I]
         end
     end
     return dest
