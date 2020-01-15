@@ -55,12 +55,12 @@ jl_timing_block_t *jl_pop_timing_block(jl_timing_block_t *cur_block)
 
 void jl_timing_block_start(jl_timing_block_t *cur_block)
 {
-    _jl_timing_block_start(cur_block, rdtscp());
+    _jl_timing_block_start(cur_block, cycleclock());
 }
 
 void jl_timing_block_stop(jl_timing_block_t *cur_block)
 {
-    _jl_timing_block_stop(cur_block, rdtscp());
+    _jl_timing_block_stop(cur_block, cycleclock());
 }
 
 #else
