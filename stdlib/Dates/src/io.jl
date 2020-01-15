@@ -601,9 +601,7 @@ for date_type in (:Date, :DateTime)
     # Human readable output (i.e. "2012-01-01")
     @eval Base.show(io::IO, ::MIME"text/plain", dt::$date_type) = print(io, dt)
     # Parsable output (i.e. Date("2012-01-01"))
-    @eval Base.show(io::IO, dt::$date_type) = print(
-        io, $date_type, "(\"", sprint(print, dt, context=io), "\")"
-    )
+    @eval Base.show(io::IO, dt::$date_type) = print(io, typeof(dt), "(\"", dt, "\")")
     # Parsable output will have type info displayed, thus it is implied
     @eval Base.typeinfo_implicit(::Type{$date_type}) = true
 end
