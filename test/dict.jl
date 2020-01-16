@@ -709,6 +709,11 @@ import Base.ImmutableDict
 
     @test_throws KeyError d[k1]
     @test_throws KeyError d1["key2"]
+
+    v = [k1 => v1, k2 => v2]
+    d5 = ImmutableDict(v...)
+    @test d5 == d2
+    @test collect(d5) == v
 end
 
 @testset "filtering" begin
