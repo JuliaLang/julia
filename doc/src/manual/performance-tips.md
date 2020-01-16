@@ -1013,7 +1013,7 @@ example, but in many contexts it is more convenient to just sprinkle
 some dots in your expressions rather than defining a separate function
 for each vectorized operation.)
 
-## Consider using views for slices
+## [Consider using views for slices](@id man-performance-views)
 
 In Julia, an array "slice" expression like `array[1:5, :]` creates
 a copy of that data (except on the left-hand side of an assignment,
