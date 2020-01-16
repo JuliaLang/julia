@@ -23,14 +23,20 @@ true
 struct MulAddMul{TA, TB}
     alpha::TA
     beta::TB
+    ais1::Bool
+    bis0::Bool
 end
+
+MulAddMul(alpha::TA, beta::TB) where {TA, TB} =
+    MulAddMul{TA, TB}(alpha, beta, isone(alpha), iszero(beta))
 
 MulAddMul() = MulAddMul(true, false)
 
-@inline (p::MulAddMul)(x) = isone(p.alpha) ? x : x * p.alpha
+@inline (p::MulAddMul)(x) = p.ais1 ? x : x * p.alpha
+
 @inline function (p::MulAddMul)(x, y)
-    x_mul_a = isone(p.alpha) ? x : x * p.alpha
-    if iszero(p.beta)
+    x_mul_a = p.ais1 ? x : x * p.alpha
+    if p.bis0
         return x_mul_a
     else
         return x_mul_a + y * p.beta
@@ -65,7 +71,7 @@ julia> C
     # used uniformly.  It also acts as a workaround for performance penalty
     # of splatting a number (#29114):
     idx = CartesianIndex(idx′)
-    if iszero(p.beta)
+    if p.bis0
         C[idx] = p(x)
     else
         C[idx] = p(x, C[idx])
