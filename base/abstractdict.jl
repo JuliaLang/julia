@@ -193,7 +193,7 @@ Values with the same key will be combined using the
 combiner function.  The curried form `mergewith!(combine)` returns the
 function `(args...) -> mergewith!(combine, args...)`.
 
-Method `merge!(combine::Function, args...)` as an alias of
+Method `merge!(combine::Union{Function,Type}, args...)` as an alias of
 `mergewith!(combine, args...)` is still available for backward
 compatibility.
 
@@ -317,7 +317,7 @@ the merged collections. Values with the same key will be combined using the
 combiner function.  The curried form `mergewith(combine)` returns the function
 `(args...) -> mergewith(combine, args...)`.
 
-Method `merge(combine::Function, args...)` as an alias of
+Method `merge(combine::Union{Function,Type}, args...)` as an alias of
 `mergewith(combine, args...)` is still available for backward compatibility.
 
 !!! compat "Julia 1.5"
