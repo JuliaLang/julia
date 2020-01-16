@@ -1971,3 +1971,11 @@ end
 # issue #33987
 f33987(args::(Vararg{Any, N} where N); kwargs...) = args
 @test f33987(1,2,3) === (1,2,3)
+
+@test @eval let
+    (z,)->begin
+        $(Expr(:inbounds, true))
+        $(Expr(:inbounds, :pop))
+    end
+    pop = 1
+end == 1
