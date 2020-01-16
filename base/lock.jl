@@ -164,6 +164,52 @@ function lock(f, l::AbstractLock)
     end
 end
 
+"""
+Lockable(value, lock = ReentrantLock())
+
+Creates a `Lockable` object that wraps `value` and
+associates it with the provided `lock`.
+
+!!! compat "Julia 1.5"
+    Requires at least Julia 1.5.
+"""
+struct Lockable{T, L<:AbstractLock}
+    value::T
+    lock::L
+end
+
+"""
+
+Lockable(value)
+
+Creates a `Lockable` object that wraps `value` and
+associates it with a newly created `ReentrantLock`.
+
+!!! compat "Julia 1.5"
+    Requires at least Julia 1.5.
+"""
+Lockable(value) = Lockable(value, ReentrantLock())
+
+"""
+    lock(f::Function, l::Lockable)
+
+Acquire the lock associated with `l`, execute `f` with the lock held,
+and release the lock when `f` returns. `f` will receive one positional
+argument: the value wrapped by `l`. If the lock is already locked by a
+different task/thread, wait for it to become available.
+
+When this function returns, the `lock` has been released, so the caller should
+not attempt to `unlock` it.
+
+!!! compat "Julia 1.5"
+    Requires at least Julia 1.5.
+"""
+function lock(f, l::Lockable)
+    lock(l.lock) do
+        f(l.value)
+    end
+end
+
 function trylock(f, l::AbstractLock)
     if trylock(l)
         try

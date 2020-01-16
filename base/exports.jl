@@ -656,6 +656,7 @@ export
     istaskfailed,
     lock,
     notify,
+    Lockable,
     ReentrantLock,
     schedule,
     task_local_storage,
