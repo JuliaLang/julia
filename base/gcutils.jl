@@ -12,8 +12,19 @@ Register a function `f(x)` to be called when there are no program-accessible ref
 this function is unpredictable.
 
 `f` must not cause a task switch, which excludes most I/O operations such as `println`.
-`@schedule println("message")` or `ccall(:jl_, Cvoid, (Any,), "message")` may be helpful for
-debugging purposes.
+Using the `@async` macro (to defer context switching to outside of the finalizer) or
+`ccall` to directly invoke IO functions in C may be helpful for debugging purposes.
+
+# Examples
+```julia
+finalizer(my_mutable_struct) do x
+    @async println("Finalizing \$x.")
+end
+
+finalizer(my_mutable_struct) do x
+    ccall(:jl_safe_printf, Cvoid, (Cstring, Cstring), "Finalizing %s.", repr(x))
+end
+```
 """
 function finalizer(@nospecialize(f), @nospecialize(o))
     if isimmutable(o)
