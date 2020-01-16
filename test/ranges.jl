@@ -1213,6 +1213,10 @@ end
         @test imax === argmax(r)
         @test extrema(r) === (r[imin], r[imax])
     end
+
+    r = 1f8-10:1f8
+    @test_broken argmin(f) == argmin(collect(r))
+    @test_broken argmax(f) == argmax(collect(r))
 end
 
 @testset "OneTo" begin

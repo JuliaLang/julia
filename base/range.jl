@@ -577,20 +577,35 @@ maximum(r::AbstractUnitRange) = isempty(r) ? throw(ArgumentError("range must be 
 minimum(r::AbstractRange)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : min(first(r), last(r))
 maximum(r::AbstractRange)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : max(first(r), last(r))
 
+"""
+    argmin(r::AbstractRange)
+
+Ranges can have multiple minimal elements. In that case
+`argmin` will return a minimal index, but not necessarily the
+first one.
+"""
 function argmin(r::AbstractRange)
     if isempty(r)
         throw(ArgumentError("range must be non-empty"))
     elseif step(r) > 0
         firstindex(r)
     else
-        lastindex(r)
+        first(searchsorted(r, last(r)))
     end
 end
+
+"""
+    argmax(r::AbstractRange)
+
+Ranges can have multiple maximal elements. In that case
+`argmax` will return a maximal index, but not necessarily the
+first one.
+"""
 function argmax(r::AbstractRange)
     if isempty(r)
         throw(ArgumentError("range must be non-empty"))
     elseif step(r) > 0
-        lastindex(r)
+        first(searchsorted(r, last(r)))
     else
         firstindex(r)
     end

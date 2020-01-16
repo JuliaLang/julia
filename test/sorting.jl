@@ -173,6 +173,11 @@ end
 
             end
         end
+        @testset "issue ##34408" begin
+            r = 1f8-10:1f8
+            # collect(r) = Float32[9.999999e7, 9.999999e7, 9.999999e7, 9.999999e7, 1.0e8, 1.0e8, 1.0e8, 1.0e8, 1.0e8]
+            @test_broken searchsorted(collect(r)) == searchsorted(r)
+        end
     end
 end
 # exercise the codepath in searchsorted* methods for ranges that check for zero step range
