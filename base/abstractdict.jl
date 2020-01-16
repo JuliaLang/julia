@@ -240,7 +240,7 @@ end
 
 mergewith!(combine) = (args...) -> mergewith!(combine, args...)
 
-merge!(combine::Function, args...) = mergewith!(combine, args...)
+merge!(combine::Callable, args...) = mergewith!(combine, args...)
 
 """
     keytype(type)
