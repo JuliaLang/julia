@@ -8,7 +8,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
     U = uinttype(T)
     uf = reinterpret(U, f)
     m = uf & significand_mask(T)
-    e = Int((uf & exponent_mask(T)) >> significand_bits(T))
+    e = ((uf & exponent_mask(T)) >> significand_bits(T)) % Int
 
     ## Step 1
     #  mf * 2^ef == f
