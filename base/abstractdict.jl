@@ -348,7 +348,7 @@ true
 mergewith(combine, d::AbstractDict, others::AbstractDict...) =
     mergewith!(combine, _typeddict(d, others...), others...)
 mergewith(combine) = (args...) -> mergewith(combine, args...)
-merge(combine::Function, d::AbstractDict, others::AbstractDict...) =
+merge(combine::Callable, d::AbstractDict, others::AbstractDict...) =
     merge!(combine, _typeddict(d, others...), others...)
 
 promoteK(K) = K
