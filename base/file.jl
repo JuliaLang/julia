@@ -517,18 +517,10 @@ function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     return (filename, Base.open(filename, "r+"))
 end
 
-# GUID  win32 api (consider # TODO: refactor)
-struct GUID
-    l1::Culong
-    w1::Cushort
-    w2::Cushort
-    b::NTuple{8,Cuchar}
-end
-
 # generates a random temporary string based on a UUID
 function _uiud_string()
-    id = Ref{GUID}()
-    r = ccall((:UuidCreate,:Rpcrt4), stdcall, Cint, (Ref{GUID},), id)
+	id = Ref{UInt128}()
+    r = ccall((:UuidCreate,:Rpcrt4), stdcall, Cint, (Ref{UInt128},), id)
     # ignore expected errors that we don't care about (these shouldn't even be an issue after Vista)
     RPC_S_UUID_LOCAL_ONLY = 1824
     RPC_S_UUID_NO_ADDRESS = 1739
@@ -536,16 +528,9 @@ function _uiud_string()
         windowserror("UuidCreate", r % UInt32) # Throw on unexpected errors. Note, a RPC_STATUS is just a WINERROR with a different signedness of the type.
     end
 
-    nameptr = Ref{Ptr{Cwchar_t}}()
-    r = ccall((:UuidToStringW, :Rpcrt4), stdcall, Cint, (Ref{GUID}, Ref{Ptr{Cwchar_t}}), id, nameptr)
-    r == 0 || windowserror("UuidToString", r % UInt32) # a RPC_STATUS is just a WINERROR with a different signedness of the type
+	name = string(id[] % UInt64, base=36, pad=5) # between 5 and 13 characters, to avoid special file names like COM1
+	name = name[1:min(end, 10)] # truncate to max of 10 characters (why 10? I have no idea, it came from the random number generator)
 
-    namebuf = unsafe_wrap(Vector{Cwchar_t}, nameptr[], ccall(:wcslen, UInt, (Ptr{Cwchar_t},), nameptr[]))
-    name = transcode(String, namebuf)
-
-    ccall((:RpcStringFreeW, :Rpcrt4), stdcall, Cint, (Ref{Ptr{Cwchar_t}},), nameptr)
-
-    name = replace(name, '-' => '_')
     return name
 end
 
