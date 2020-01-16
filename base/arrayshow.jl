@@ -101,9 +101,21 @@ function print_matrix_row(io::IO,
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
             x = X[i,j]
             a = alignment(io, x)
-            sx = sprint(
-                show, "text/plain", x, context=IOContext(io, :compact=>true), sizehint=0
-            )
+
+            # If compact is set, keep the value, else set to true
+            compact = get(io, :compact, nothing)
+            if compact == nothing
+                compact = true
+            end
+            context = IOContext(io, :compact=>compact)
+
+            # First try 3-arg show
+            sx = sprint(show, "text/plain", x, context=context, sizehint=0)
+
+            # If the output contains line breaks, try 2-arg show instead.
+            if occursin('\n', sx)
+                sx = sprint(show, x, context=context, sizehint=0)
+            end
         else
             a = undef_ref_alignment
             sx = undef_ref_str
