@@ -49,9 +49,13 @@ Module with garbage collection utilities.
 """
 module GC
 
+# mirrored from julia.h
+const GC_AUTO = 0
+const GC_FULL = 1
+const GC_INCREMENTAL = 2
+
 """
-    GC.gc()
-    GC.gc(full::Bool)
+    GC.gc([full=true])
 
 Perform garbage collection. The argument `full` determines the kind of
 collection: A full collection (default) sweeps all objects, which makes the
@@ -61,8 +65,8 @@ so-called young objects.
 !!! warning
     Excessive use will likely lead to poor performance.
 """
-gc() = ccall(:jl_gc_collect, Cvoid, (Cint,), 1)
-gc(full::Bool) = ccall(:jl_gc_collect, Cvoid, (Cint,), full ? 1 : 2)
+gc(full::Bool=true) =
+    ccall(:jl_gc_collect, Cvoid, (Cint,), full ? GC_FULL : GC_INCREMENTAL)
 
 """
     GC.enable(on::Bool)
