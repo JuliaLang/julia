@@ -18,7 +18,8 @@ Language changes
 * Outside of the REPL (e.g. in a file), assigning to a variable within a top-level scope
   block is considered ambiguous if a global variable with the same name exists.
   A warning is given if that happens, to alert you that the code will work differently
-  than in the REPL ([#33864]).
+  than in the REPL.
+  A new command line option `--warn-scope` controls this warning ([#33864]).
 
 * Converting arbitrary tuples to `NTuple`, e.g. `convert(NTuple, (1, ""))` now gives an error,
   where it used to be incorrectly allowed. This is because `NTuple` refers only to homogeneous

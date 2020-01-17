@@ -251,6 +251,7 @@ static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx) JL_NOTSAFEPOINT
     ctx->task = NULL;
     ctx->module = NULL;
     set(symbol(fl_ctx, "*depwarn-opt*"), fixnum(jl_options.depwarn));
+    set(symbol(fl_ctx, "*scopewarn-opt*"), fixnum(jl_options.warn_scope));
 }
 
 // There should be no GC allocation while holding this lock
