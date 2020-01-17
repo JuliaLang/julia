@@ -2034,10 +2034,18 @@ end
 
 @eval begin
     $(Expr(:softscope, true))
-    let y28789 = 0
-        let x = 2
-            let y = 3
-                z28789 = 42  # assign to global despite several lets
+    let
+        y28789 = -8  # let is always a hard scope
+    end
+end
+@test y28789 == 56
+
+@eval begin
+    $(Expr(:softscope, true))
+    for y28789 in 0:0
+        for x in 2:2
+            for y in 3:3
+                z28789 = 42  # assign to global despite several loops
             end
         end
     end
@@ -2049,6 +2057,18 @@ end
     let x = 0
         ww28789 = 88  # not global
         let y = 3
+            ww28789 = 89
+        end
+        @test ww28789 == 89
+    end
+end
+@test !@isdefined(ww28789)
+
+@eval begin
+    $(Expr(:softscope, true))
+    for x = 0
+        ww28789 = 88  # not global
+        for y = 3
             ww28789 = 89
         end
         @test ww28789 == 89

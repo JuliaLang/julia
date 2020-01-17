@@ -1102,13 +1102,14 @@
       (cdr (cadr e))
       (list (cadr e))))
 
-(define (expand-let e)
+(define (expand-let e (hard? #t))
   (let ((ex    (caddr e))
-        (binds (let-binds e)))
+        (binds (let-binds e))
+        (hs    (if hard? '((hardscope)) '())))
     (expand-forms
      (if
       (null? binds)
-      `(scope-block (block ,ex))
+      `(scope-block (block ,@hs ,ex))
       (let loop ((binds (reverse binds))
                  (blk   ex))
         (if (null? binds)
@@ -1118,7 +1119,7 @@
               ;; just symbol -> add local
               (loop (cdr binds)
                     `(scope-block
-                      (block
+                      (block ,@hs
                        (local ,(car binds))
                        ,blk))))
              ((and (length= (car binds) 3)
@@ -1132,7 +1133,7 @@
                       (error "invalid let syntax"))
                   (loop (cdr binds)
                         `(scope-block
-                          (block
+                          (block ,@hs
                            ,(if (expr-contains-eq name (caddar binds))
                                 `(local ,name) ;; might need a Box for recursive functions
                                 `(local-def ,name))
@@ -1145,14 +1146,15 @@
                         (if (expr-contains-eq vname (caddar binds))
                             (let ((tmp (make-ssavalue)))
                               `(scope-block
-                                (block (= ,tmp ,(caddar binds))
+                                (block ,@hs
+                                       (= ,tmp ,(caddar binds))
                                        (scope-block
                                         (block
                                          (local-def ,(cadar binds))
                                          (= ,vname ,tmp)
                                          ,blk)))))
                             `(scope-block
-                              (block
+                              (block ,@hs
                                (local-def ,(cadar binds))
                                (= ,vname ,(caddar binds))
                                ,blk))))))
@@ -1167,12 +1169,12 @@
                               `(block
                                 (= ,temp ,(caddr (car binds)))
                                 (scope-block
-                                 (block
+                                 (block ,@hs
                                   ,@(map (lambda (v) `(local-def ,v)) vars)
                                   (= ,(cadr (car binds)) ,temp)
                                   ,blk))))
                             `(scope-block
-                              (block
+                              (block ,@hs
                                ,@(map (lambda (v) `(local-def ,v)) vars)
                                ,(car binds)
                                ,blk))))))
@@ -1584,7 +1586,7 @@
                      (if (null? (cdr lhss))
                          `(break-block
                            loop-cont
-                           (let (block ,@(map (lambda (v) `(= ,v ,v)) copied-vars))
+                           (soft-let (block ,@(map (lambda (v) `(= ,v ,v)) copied-vars))
                              ,body))
                          `(scope-block ,body))))
                `(block (= ,coll ,(car itrs))
@@ -1849,6 +1851,7 @@
    'function       expand-function-def
    '->             expand-arrow
    'let            expand-let
+   'soft-let       (lambda (e) (expand-let e #f))
    'macro          expand-macro-def
    'struct         expand-struct-def
    'try            expand-try
@@ -2447,9 +2450,9 @@
 (define (find-local-def-decls e) (find-decls 'local-def e))
 (define (find-global-decls e) (find-decls 'global e))
 
-(define (find-softscope e)
+(define (find-scope-decl e kind)
   (expr-contains-p
-   (lambda (x) (and (pair? x) (eq? (car x) 'softscope) x))
+   (lambda (x) (and (pair? x) (eq? (car x) kind) x))
    e
    (lambda (x) (not (and (pair? x)
                          (memq (car x) '(lambda scope-block module toplevel)))))))
@@ -2458,9 +2461,9 @@
   (or (valid-name? e)
       (error (string "invalid identifier name \"" e "\""))))
 
-(define (make-scope (lam #f) (args '()) (locals '()) (globals '()) (sp '()) (renames '()) (prev #f) (soft? #f)
-                    (implicit-globals '()) (warn-vars #f))
-  (vector lam args locals globals sp renames prev soft? implicit-globals warn-vars))
+(define (make-scope (lam #f) (args '()) (locals '()) (globals '()) (sp '()) (renames '()) (prev #f)
+                    (soft? #f) (hard? #f) (implicit-globals '()) (warn-vars #f))
+  (vector lam args locals globals sp renames prev soft? hard? implicit-globals warn-vars))
 (define (scope:lam s)     (aref s 0))
 (define (scope:args s)    (aref s 1))
 (define (scope:locals s)  (aref s 2))
@@ -2469,8 +2472,9 @@
 (define (scope:renames s) (aref s 5))
 (define (scope:prev s)    (aref s 6))
 (define (scope:soft? s)   (aref s 7))
-(define (scope:implicit-globals s) (aref s 8))
-(define (scope:warn-vars s) (aref s 9))
+(define (scope:hard? s)   (aref s 8))
+(define (scope:implicit-globals s) (aref s 9))
+(define (scope:warn-vars s) (aref s 10))
 
 (define (var-kind var scope)
   (if scope
@@ -2528,7 +2532,7 @@
          (if (not (in-scope? (cadr e) scope))
              (error "no outer local variable declaration exists for \"for outer\""))
          '(null))
-        ((eq? (car e) 'softscope)
+        ((or (eq? (car e) 'softscope) (eq? (car e) 'hardscope))
          '(null))
         ((eq? (car e) 'locals)
          (let* ((names (filter (lambda (v)
@@ -2564,8 +2568,10 @@
                 (assigned        (find-assigned-vars blok))
                 (locals-def      (find-local-def-decls blok))
                 (local-decls     (find-local-decls blok))
-                (soft?           (and (null? argnames)
-                                      (let ((ss (find-softscope blok)))
+                (hard?           (and (null? argnames) (or (scope:hard? scope)
+                                                           (find-scope-decl blok 'hardscope))))
+                (soft?           (and (null? argnames) (not hard?)
+                                      (let ((ss (find-scope-decl blok 'softscope)))
                                         (cond ((not ss) (scope:soft? scope))
                                               ((equal? (cadr ss) '(true))  #t)
                                               ((equal? (cadr ss) '(false)) #f)
@@ -2596,7 +2602,7 @@
                 (newnames        (append (diff locals-nondef need-rename) renamed))
                 (newnames-def    (append (diff locals-def need-rename-def) renamed-def))
                 (warn-vars
-                 (and (not toplevel?) (null? argnames) (not soft?)
+                 (and (not toplevel?) (null? argnames) (not soft?) (not hard?)
                       (let ((vars (filter (lambda (v)
                                             (and (or (memq v (scope:implicit-globals scope))
                                                      (defined-julia-global v))
@@ -2641,6 +2647,7 @@
                                                   (map cons need-rename-def renamed-def))
                                           scope
                                           (and soft? (null? argnames))
+                                          hard?
                                           (if toplevel?
                                               implicit-globals
                                               (scope:implicit-globals scope))

@@ -1110,7 +1110,9 @@ function testset_beginend(args, tests, source)
         try
             # RNG is re-seeded with its own seed to ease reproduce a failed test
             Random.seed!(RNG.seed)
-            $(esc(tests))
+            let
+                $(esc(tests))
+            end
         catch err
             err isa InterruptException && rethrow()
             # something in the test block threw an error. Count that as an
