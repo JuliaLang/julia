@@ -111,10 +111,14 @@ variable (before SSA conversion), rather than the number of statements in the cr
 To see this scheme in action, consider the function
 
 ```julia
+@noinline opaque() = invokelatest(identity, nothing) # Something opaque
 function foo()
+    local y
     x = 1
     try
         y = 2
+        opaque()
+        y = 3
         error()
     catch
     end
@@ -125,24 +129,26 @@ end
 The corresponding IR (with irrelevant types stripped) is:
 
 ```
-ir = Code
-1 ─       nothing
-2 ─       $(Expr(:enter, 5))
-3 ─ %3  = ϒ (#undef)
-│   %4  = ϒ (1)
-│   %5  = ϒ (2)
-│         Main.bar()
-│   %7  = ϒ (3)
+1 ─       nothing::Nothing
+2 ─ %2  = $(Expr(:enter, #4))
+3 ─ %3  = ϒ (false)
+│   %4  = ϒ (#undef)
+│   %5  = ϒ (1)
+│   %6  = ϒ (true)
+│   %7  = ϒ (2)
+│         invoke Main.opaque()::Any
+│   %9  = ϒ (true)
+│   %10 = ϒ (3)
+│         invoke Main.error()::Union{}
+└──       $(Expr(:unreachable))::Union{}
+4 ┄ %13 = φᶜ (%3, %6, %9)::Bool
+│   %14 = φᶜ (%4, %7, %10)::Core.Compiler.MaybeUndef(Int64)
+│   %15 = φᶜ (%5)::Core.Compiler.Const(1, false)
 └──       $(Expr(:leave, 1))
-4 ─       goto 6
-5 ─ %10 = φᶜ (%3, %5)
-│   %11 = φᶜ (%4, %7)
-└──       $(Expr(:leave, 1))
-6 ┄ %13 = φ (4 => 2, 5 => %10)::NotInferenceDontLookHere.MaybeUndef(NotInferenceDontLookHere.Const(2, false))
-│   %14 = φ (4 => 3, 5 => %11)::Int64
-│         $(Expr(:undefcheck, :y, Core.SSAValue(13)))
-│   %16 = Core.tuple(%14, %13)
-└──       return %17
+5 ─       $(Expr(:pop_exception, :(%2)))::Any
+│         $(Expr(:throw_undef_if_not, :y, :(%13)))::Any
+│   %19 = Core.tuple(%15, %14)
+└──       return %19
 ```
 
 Note in particular that every value live into the critical region gets
