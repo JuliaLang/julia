@@ -242,7 +242,9 @@ subtypes(x::Type) = _subtypes_in(Base.loaded_modules_array(), x)
 """
     supertypes(T::Type)
 
-Return a tuple `(T, ..., Any)` of `T` and all its supertypes, in order of `<:`, terminated by `Any`.
+Return a tuple `(T, ..., Any)` of `T` and all its supertypes, as determined by
+successive calls to the the [`supertype`](@ref) function, listed in order of `<:`
+and terminated by `Any`.
 
 # Examples
 ```jldoctest
