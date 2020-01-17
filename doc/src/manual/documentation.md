@@ -335,7 +335,8 @@ y = MyType("y")
 
 ## Syntax Guide
 
-A comprehensive overview of all documentable Julia syntax.
+This guide provides a comprehensive overview of how to attach documentation to all Julia syntax
+constructs for which providing documentation is possible.
 
 In the following examples `"..."` is used to illustrate an arbitrary docstring.
 

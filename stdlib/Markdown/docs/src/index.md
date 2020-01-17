@@ -21,7 +21,7 @@ A paragraph containing a **bold** word.
 Surround words with one asterisk, `*`, to display the enclosed text in italics.
 
 ```
-A paragraph containing an *emphasized* word.
+A paragraph containing an *italicized* word.
 ```
 
 ### Literals
