@@ -3,20 +3,20 @@
 
 # This type must be kept in sync with the C struct in src/gc.h
 struct GC_Num
-    allocd      ::Int64 # GC internal
-    deferred_alloc::Int64 # GC internal
-    freed       ::Int64 # GC internal
-    malloc      ::UInt64
-    realloc     ::UInt64
-    poolalloc   ::UInt64
-    bigalloc    ::UInt64
-    freecall    ::UInt64
-    total_time  ::UInt64
-    total_allocd::UInt64 # GC internal
-    since_sweep ::UInt64 # GC internal
-    collect     ::Csize_t # GC internal
-    pause       ::Cint
-    full_sweep  ::Cint
+    allocd          ::Int64 # GC internal
+    deferred_alloc  ::Int64 # GC internal
+    freed           ::Int64 # GC internal
+    malloc          ::Int64
+    realloc         ::Int64
+    poolalloc       ::Int64
+    bigalloc        ::Int64
+    freecall        ::Int64
+    total_time      ::Int64
+    total_allocd    ::Int64 # GC internal
+    since_sweep     ::Int64 # GC internal
+    collect         ::Csize_t # GC internal
+    pause           ::Cint
+    full_sweep      ::Cint
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
@@ -35,22 +35,21 @@ struct GC_Diff
 end
 
 gc_total_bytes(gc_num::GC_Num) =
-    (gc_num.allocd + gc_num.deferred_alloc +
-     Int64(gc_num.collect) + Int64(gc_num.total_allocd))
+    gc_num.allocd + gc_num.deferred_alloc + gc_num.total_allocd
 
 function GC_Diff(new::GC_Num, old::GC_Num)
     # logic from `src/gc.c:jl_gc_total_bytes`
     old_allocd = gc_total_bytes(old)
     new_allocd = gc_total_bytes(new)
     return GC_Diff(new_allocd - old_allocd,
-                   Int64(new.malloc       - old.malloc),
-                   Int64(new.realloc      - old.realloc),
-                   Int64(new.poolalloc    - old.poolalloc),
-                   Int64(new.bigalloc     - old.bigalloc),
-                   Int64(new.freecall     - old.freecall),
-                   Int64(new.total_time   - old.total_time),
-                   new.pause              - old.pause,
-                   new.full_sweep         - old.full_sweep)
+                   new.malloc       - old.malloc,
+                   new.realloc      - old.realloc,
+                   new.poolalloc    - old.poolalloc,
+                   new.bigalloc     - old.bigalloc,
+                   new.freecall     - old.freecall,
+                   new.total_time   - old.total_time,
+                   new.pause        - old.pause,
+                   new.full_sweep   - old.full_sweep)
 end
 
 function gc_alloc_count(diff::GC_Diff)
@@ -61,8 +60,18 @@ end
 # total time spend in garbage collection, in nanoseconds
 gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
 
-# total number of bytes allocated so far
-gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
+"""
+    Base.gc_live_bytes()
+
+Return the total size (in bytes) of objects currently in memory.
+This is computed as the total size of live objects after
+the last garbage collection, plus the number of bytes allocated
+since then.
+"""
+function gc_live_bytes()
+    num = gc_num()
+    Int(ccall(:jl_gc_live_bytes, Int64, ())) + num.allocd + num.deferred_alloc
+end
 
 # print elapsed time, return expression value
 const _mem_units = ["byte", "KiB", "MiB", "GiB", "TiB", "PiB"]
@@ -77,39 +86,43 @@ function prettyprint_getunits(value, numunits, factor)
     return number, unit
 end
 
-function padded_nonzero_print(value,str)
+function padded_nonzero_print(value, str)
     if value != 0
-        blanks = "                "[1:18-length(str)]
-        println("$str:$blanks$value")
+        blanks = "                "[1:(18 - length(str))]
+        println(str, ":", blanks, value)
     end
 end
 
-function format_bytes(bytes)
+
+function format_bytes(bytes) # also used by InteractiveUtils
     bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
     if mb == 1
-        Printf.@sprintf("%d %s%s", bytes, _mem_units[mb], bytes==1 ? "" : "s")
+        return string(Int(bytes), " ", _mem_units[mb], bytes==1 ? "" : "s")
     else
-        Printf.@sprintf("%.3f %s", bytes, _mem_units[mb])
+        return string(Ryu.writefixed(Float64(bytes), 3), " ", _mem_units[mb])
     end
 end
 
 function time_print(elapsedtime, bytes=0, gctime=0, allocs=0)
-    Printf.@printf("%10.6f seconds", elapsedtime/1e9)
+    timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
+    length(timestr) < 10 && print(" "^(10 - length(timestr)))
+    print(timestr, " seconds")
     if bytes != 0 || allocs != 0
         allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
         if ma == 1
-            Printf.@printf(" (%d%s allocation%s: ", allocs, _cnt_units[ma], allocs==1 ? "" : "s")
+            print(" (", Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
         else
-            Printf.@printf(" (%.2f%s allocations: ", allocs, _cnt_units[ma])
+            print(" (", Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
         end
         print(format_bytes(bytes))
-        if gctime > 0
-            Printf.@printf(", %.2f%% gc time", 100*gctime/elapsedtime)
-        end
-        print(")")
-    elseif gctime > 0
-        Printf.@printf(", %.2f%% gc time", 100*gctime/elapsedtime)
     end
+    if gctime > 0
+        print(", ", Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
+    end
+    if bytes != 0 || allocs != 0
+        print(")")
+    end
+    nothing
 end
 
 function timev_print(elapsedtime, diff::GC_Diff)
@@ -137,6 +150,11 @@ returning the value of the expression.
 See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
+!!! note
+    For more serious benchmarking, consider the `@btime` macro from the BenchmarkTools.jl
+    package which among other things evaluates the function multiple times in order to
+    reduce noise.
+
 ```julia-repl
 julia> @time rand(10^6);
   0.001525 seconds (7 allocations: 7.630 MiB)
@@ -151,6 +169,7 @@ julia> @time begin
 """
 macro time(ex)
     quote
+        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local stats = gc_num()
         local elapsedtime = time_ns()
         local val = $(esc(ex))
@@ -184,6 +203,7 @@ malloc() calls:    1
 """
 macro timev(ex)
     quote
+        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local stats = gc_num()
         local elapsedtime = time_ns()
         local val = $(esc(ex))
@@ -209,27 +229,27 @@ julia> @elapsed sleep(0.3)
 """
 macro elapsed(ex)
     quote
+        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local t0 = time_ns()
-        local val = $(esc(ex))
-        (time_ns()-t0)/1e9
+        $(esc(ex))
+        (time_ns() - t0) / 1e9
     end
 end
 
-# measure bytes allocated without *most* contamination from compilation
-# Note: This reports a different value from the @time macros, because
-# it wraps the call in a function, however, this means that things
-# like:  @allocated y = foo()
-# will not work correctly, because it will set y in the context of
-# the local function made by the macro, not the current function
+# total number of bytes allocated so far
+gc_bytes(b::Ref{Int64}) = ccall(:jl_gc_get_total_bytes, Cvoid, (Ptr{Int64},), b)
+# NOTE: gc_bytes() is deprecated
+function gc_bytes()
+    b = Ref{Int64}()
+    gc_bytes(b)
+    b[]
+end
+
 """
     @allocated
 
 A macro to evaluate an expression, discarding the resulting value, instead returning the
-total number of bytes allocated during evaluation of the expression. Note: the expression is
-evaluated inside a local function, instead of the current context, in order to eliminate the
-effects of compilation, however, there still may be some allocations due to JIT compilation.
-This also makes the results inconsistent with the `@time` macros, which do not try to adjust
-for the effects of compilation.
+total number of bytes allocated during evaluation of the expression.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@elapsed`](@ref).
@@ -241,15 +261,13 @@ julia> @allocated rand(10^6)
 """
 macro allocated(ex)
     quote
-        let
-            local f
-            function f()
-                b0 = gc_bytes()
-                $(esc(ex))
-                gc_bytes() - b0
-            end
-            f()
-        end
+        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
+        local b0 = Ref{Int64}(0)
+        local b1 = Ref{Int64}(0)
+        gc_bytes(b0)
+        $(esc(ex))
+        gc_bytes(b1)
+        b1[] - b0[]
     end
 end
 
@@ -264,39 +282,43 @@ See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
 ```julia-repl
-julia> val, t, bytes, gctime, memallocs = @timed rand(10^6);
+julia> stats = @timed rand(10^6);
 
-julia> t
+julia> stats.time
 0.006634834
 
-julia> bytes
+julia> stats.bytes
 8000256
 
-julia> gctime
+julia> stats.gctime
 0.0055765
 
-julia> fieldnames(typeof(memallocs))
+julia> propertynames(stats.gcstats)
 (:allocd, :malloc, :realloc, :poolalloc, :bigalloc, :freecall, :total_time, :pause, :full_sweep)
 
-julia> memallocs.total_time
+julia> stats.gcstats.total_time
 5576500
 ```
+
+!!! compat "Julia 1.5"
+    The return type of this macro was changed from `Tuple` to `NamedTuple` in Julia 1.5.
 """
 macro timed(ex)
     quote
+        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local stats = gc_num()
         local elapsedtime = time_ns()
         local val = $(esc(ex))
         elapsedtime = time_ns() - elapsedtime
         local diff = GC_Diff(gc_num(), stats)
-        val, elapsedtime/1e9, diff.allocd, diff.total_time/1e9, diff
+        (value=val, time=elapsedtime/1e9, bytes=diff.allocd, gctime=diff.total_time/1e9, gcstats=diff)
     end
 end
 
 
 ## printing with color ##
 
-const text_colors = AnyDict(
+const text_colors = Dict{Union{Symbol,Int},String}(
     :black         => "\033[30m",
     :red           => "\033[31m",
     :green         => "\033[32m",
@@ -326,7 +348,7 @@ for i in 0:255
     text_colors[i] = "\033[38;5;$(i)m"
 end
 
-const disable_text_style = AnyDict(
+const disable_text_style = Dict{Symbol,String}(
     :bold      => "\033[22m",
     :underline => "\033[24m",
     :blink     => "\033[25m",
@@ -369,7 +391,7 @@ function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args.
         if !iscolor
             print(io, str)
         else
-            bold && color == :bold && (color = :nothing)
+            bold && color === :bold && (color = :nothing)
             enable_ansi  = get(text_colors, color, text_colors[:default]) *
                                (bold ? text_colors[:bold] : "")
             disable_ansi = (bold ? disable_text_style[:bold] : "") *
@@ -399,42 +421,79 @@ printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) 
     with_output_color(print, color, io, msg...; bold=bold)
 printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
     printstyled(stdout, msg...; bold=bold, color=color)
+
 """
     Base.julia_cmd(juliapath=joinpath(Sys.BINDIR::String, julia_exename()))
 
 Return a julia command similar to the one of the running process.
-Propagates the `--cpu-target`, `--sysimage`, --compile `, `--depwarn`
-and `--inline` command line arguments.
+Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
+`--compiled-modules`, `--inline`, `--check-bounds`, `--optimize`, `-g`,
+`--code-coverage`, and `--depwarn`
+command line arguments that are not at their default values.
+
+Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notably not propagated currently.
 
 !!! compat "Julia 1.1"
-    The `--inline` flag is only propagated in Julia 1.1 and later.
+    Only the `--cpu-target`, `--sysimage`, `--depwarn`, `--compile` and `--check-bounds` flags were propagated before Julia 1.1.
 """
 function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
     opts = JLOptions()
     cpu_target = unsafe_string(opts.cpu_target)
     image_file = unsafe_string(opts.image_file)
-    compile = if opts.compile_enabled == 0
-                  "no"
-              elseif opts.compile_enabled == 2
-                  "all"
-              elseif opts.compile_enabled == 3
-                  "min"
-              else
-                  "yes"
-              end
-    depwarn = if opts.depwarn == 0
-                  "no"
-              elseif opts.depwarn == 2
-                  "error"
-              else
-                  "yes"
-              end
-    inline  = if opts.can_inline == 0
-                  "no"
-              else
-                  "yes"
-              end
-    `$julia -C$cpu_target -J$image_file --compile=$compile --depwarn=$depwarn --inline=$inline`
+    addflags = String[]
+    let compile = if opts.compile_enabled == 0
+                      "no"
+                  elseif opts.compile_enabled == 2
+                      "all"
+                  elseif opts.compile_enabled == 3
+                      "min"
+                  else
+                      "" # default = "yes"
+                  end
+        isempty(compile) || push!(addflags, "--compile=$compile")
+    end
+    let depwarn = if opts.depwarn == 0
+                      "no"
+                  elseif opts.depwarn == 2
+                      "error"
+                  else
+                      "" # default = "yes"
+                  end
+        isempty(depwarn) || push!(addflags, "--depwarn=$depwarn")
+    end
+    let check_bounds = if opts.check_bounds == 1
+                      "yes" # on
+                  elseif opts.check_bounds == 2
+                      "no" # off
+                  else
+                      "" # "default"
+                  end
+        isempty(check_bounds) || push!(addflags, "--check-bounds=$check_bounds")
+    end
+    opts.can_inline == 0 && push!(addflags, "--inline=no")
+    opts.use_compiled_modules == 0 && push!(addflags, "--compiled-modules=no")
+    opts.opt_level == 2 || push!(addflags, "-O$(opts.opt_level)")
+    push!(addflags, "-g$(opts.debug_level)")
+    if opts.code_coverage != 0
+        # Forward the code-coverage flag only if applicable (if the filename is pid-dependent)
+        coverage_file = (opts.output_code_coverage != C_NULL) ?  unsafe_string(opts.output_code_coverage) : ""
+        if isempty(coverage_file) || occursin("%p", coverage_file)
+            if opts.code_coverage == 1
+                push!(addflags, "--code-coverage=user")
+            elseif opts.code_coverage == 2
+                push!(addflags, "--code-coverage=all")
+            end
+            isempty(coverage_file) || push!(addflags, "--code-coverage=$coverage_file")
+        end
+    end
+    if opts.malloc_log != 0
+        if opts.malloc_log == 1
+            push!(addflags, "--track-allocation=user")
+        elseif opts.malloc_log == 2
+            push!(addflags, "--track-allocation=all")
+        end
+    end
+    return `$julia -C$cpu_target -J$image_file $addflags`
 end
 
 function julia_exename()
@@ -577,11 +636,8 @@ if Sys.iswindows()
 
         #      2.3: If that failed for any reason other than the user canceling, error out.
         #           If the user canceled, just return nothing
-        if code == ERROR_CANCELLED
-            return nothing
-        elseif code != ERROR_SUCCESS
-            error(Base.Libc.FormatMessage(code))
-        end
+        code == ERROR_CANCELLED && return nothing
+        windowserror(:winprompt, code != ERROR_SUCCESS)
 
         # Step 3: Convert encrypted credentials back to plain text
         passbuf = Vector{UInt16}(undef, 1024)
@@ -593,9 +649,7 @@ if Sys.iswindows()
         succeeded = ccall((:CredUnPackAuthenticationBufferW, "credui.dll"), Bool,
             (UInt32, Ptr{Cvoid}, UInt32, Ptr{UInt16}, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}),
             0, outbuf_data[], outbuf_size[], usernamebuf, usernamelen, dummybuf, Ref{UInt32}(1024), passbuf, passlen)
-        if !succeeded
-            error(Base.Libc.FormatMessage())
-        end
+        windowserror(:winprompt, !succeeded)
 
         # Step 4: Free the encrypted buffer
         # ccall(:SecureZeroMemory, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), outbuf_data[], outbuf_size[]) - not an actual function
@@ -622,7 +676,7 @@ _crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} whe
 _crc32c(s::String, crc::UInt32=0x00000000) = unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
 
 function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
-    nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
+    nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0, got $nb"))
     # use block size 24576=8192*3, since that is the threshold for
     # 3-way parallel SIMD code in the underlying jl_crc32c C function.
     buf = Vector{UInt8}(undef, min(nb, 24576))
@@ -674,9 +728,9 @@ Stacktrace:
 """
 macro kwdef(expr)
     expr = macroexpand(__module__, expr) # to expand @static
-    expr isa Expr && expr.head == :struct || error("Invalid usage of @kwdef")
+    expr isa Expr && expr.head === :struct || error("Invalid usage of @kwdef")
     T = expr.args[2]
-    if T isa Expr && T.head == :<:
+    if T isa Expr && T.head === :<:
         T = T.args[1]
     end
 
@@ -689,13 +743,13 @@ macro kwdef(expr)
     if !isempty(params_ex.args)
         if T isa Symbol
             kwdefs = :(($(esc(T)))($params_ex) = ($(esc(T)))($(call_args...)))
-        elseif T isa Expr && T.head == :curly
+        elseif T isa Expr && T.head === :curly
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
             #   S{A,B}(...) where {A<:AA,B<:BB} = ...
             S = T.args[1]
             P = T.args[2:end]
-            Q = [U isa Expr && U.head == :<: ? U.args[1] : U for U in P]
+            Q = [U isa Expr && U.head === :<: ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
             kwdefs = quote
                 ($(esc(S)))($params_ex) =($(esc(S)))($(call_args...))
@@ -724,12 +778,12 @@ function _kwdef!(blk, params_args, call_args)
             push!(params_args, ei)
             push!(call_args, ei)
         elseif ei isa Expr
-            if ei.head == :(=)
+            if ei.head === :(=)
                 lhs = ei.args[1]
                 if lhs isa Symbol
                     #  var = defexpr
                     var = lhs
-                elseif lhs isa Expr && lhs.head == :(::) && lhs.args[1] isa Symbol
+                elseif lhs isa Expr && lhs.head === :(::) && lhs.args[1] isa Symbol
                     #  var::T = defexpr
                     var = lhs.args[1]
                 else
@@ -741,12 +795,12 @@ function _kwdef!(blk, params_args, call_args)
                 push!(params_args, Expr(:kw, var, esc(defexpr)))
                 push!(call_args, var)
                 blk.args[i] = lhs
-            elseif ei.head == :(::) && ei.args[1] isa Symbol
+            elseif ei.head === :(::) && ei.args[1] isa Symbol
                 # var::Typ
                 var = ei.args[1]
                 push!(params_args, var)
                 push!(call_args, var)
-            elseif ei.head == :block
+            elseif ei.head === :block
                 # can arise with use of @static inside type decl
                 _kwdef!(ei, params_args, call_args)
             end
@@ -775,12 +829,13 @@ function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
         tests = split(tests)
     end
     exit_on_error && push!(tests, "--exit-on-error")
-    seed != nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
+    seed !== nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
     try
         run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
+        nothing
     catch
         buf = PipeBuffer()
         Base.require(Base, :InteractiveUtils).versioninfo(buf)

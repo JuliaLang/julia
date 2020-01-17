@@ -18,6 +18,8 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/curl
 endif
 endif
 
+ifneq ($(USE_BINARYBUILDER_LIBGIT2),1)
+
 LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON -DUSE_BUNDLED_ZLIB=ON
 ifeq ($(OS),WINNT)
 LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON
@@ -42,24 +44,12 @@ endif
 
 LIBGIT2_SRC_PATH := $(SRCCACHE)/$(LIBGIT2_SRC_DIR)
 
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied: $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls2.patch-applied: $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls2.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied
+$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted
 	cd $(LIBGIT2_SRC_PATH) && \
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-agent-nonfatal.patch
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
-	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls2.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied \
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted
@@ -103,9 +93,20 @@ configure-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured
 compile-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 fastcheck-libgit2: #none
 check-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-checked
+$(build_prefix)/manifest/libgit2: $(build_datarootdir)/julia/cert.pem # use libgit2 install status
 
+else # USE_BINARYBUILDER_LIBGIT2
 
-# Also download and install a cacert.pem file:
+LIBGIT2_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LibGit2_jll.jl/releases/download/LibGit2-v$(LIBGIT2_VER)+$(LIBGIT2_BB_REL)
+LIBGIT2_BB_NAME := LibGit2.v$(LIBGIT2_VER)
+$(eval $(call bb-install,libgit2,LIBGIT2,false))
+
+# BB tarball doesn't create a manifest, so directly depend the `install` target
+install-libgit2: $(build_datarootdir)/julia/cert.pem
+endif
+
+# Also download and install a cacert.pem file, regardless of whether or not
+# we're using BinaryBuilder-sourced binaries
 $(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION).pem:
 	$(JLDOWNLOAD) $@ https://curl.haxx.se/ca/cacert-$(MOZILLA_CACERT_VERSION).pem
 
@@ -114,6 +115,6 @@ $(build_datarootdir)/julia/cert.pem: $(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION
 	mkdir -p $(build_datarootdir)/julia
 	cp $< $@
 
-$(build_prefix)/manifest/libgit2: $(build_datarootdir)/julia/cert.pem # use libgit2 install status
-libgit2-install-mozilla-cacert: $(build_datarootdir)/julia/cert.pem
+# When "get"'ing libgit2, download the .pem
 get-libgit2: $(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION).pem
+

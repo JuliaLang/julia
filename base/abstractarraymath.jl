@@ -5,7 +5,6 @@
 isreal(x::AbstractArray) = all(isreal,x)
 iszero(x::AbstractArray) = all(iszero,x)
 isreal(x::AbstractArray{<:Real}) = true
-all(::typeof(isinteger), ::AbstractArray{<:Integer}) = true
 
 ## Constructors ##
 
@@ -70,7 +69,7 @@ julia> dropdims(a; dims=3)
 """
 dropdims(A; dims) = _dropdims(A, dims)
 function _dropdims(A::AbstractArray, dims::Dims)
-    for i in 1:length(dims)
+    for i in eachindex(dims)
         1 <= dims[i] <= ndims(A) || throw(ArgumentError("dropped dims must be in range 1:ndims(A)"))
         length(axes(A, dims[i])) == 1 || throw(ArgumentError("dropped dims must all be size 1"))
         for j = 1:i-1
@@ -120,9 +119,9 @@ julia> selectdim(A, 2, 3)
  7
 ```
 """
-@inline selectdim(A::AbstractArray, d::Integer, i) = _selectdim(A, d, i, setindex(map(Slice, axes(A)), i, d))
+@inline selectdim(A::AbstractArray, d::Integer, i) = _selectdim(A, d, i, _setindex(i, d, map(Slice, axes(A))...))
 @noinline function _selectdim(A, d, i, idxs)
-    d >= 1 || throw(ArgumentError("dimension must be ≥ 1"))
+    d >= 1 || throw(ArgumentError("dimension must be ≥ 1, got $d"))
     nd = ndims(A)
     d > nd && (i == 1 || throw(BoundsError(A, (ntuple(k->Colon(),d-1)..., i))))
     return view(A, idxs...)
@@ -214,27 +213,27 @@ julia> circshift(b, (-1,0))
 
 julia> a = BitArray([true, true, false, false, true])
 5-element BitArray{1}:
-  true
-  true
- false
- false
-  true
+ 1
+ 1
+ 0
+ 0
+ 1
 
 julia> circshift(a, 1)
 5-element BitArray{1}:
-  true
-  true
-  true
- false
- false
+ 1
+ 1
+ 1
+ 0
+ 0
 
 julia> circshift(a, -1)
 5-element BitArray{1}:
-  true
- false
- false
-  true
-  true
+ 1
+ 0
+ 0
+ 1
+ 1
 ```
 
 See also [`circshift!`](@ref).
@@ -376,7 +375,7 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
     end
 
     # fill the first inner block
-    if all(x -> x == 1, inner)
+    if all(isequal(1), inner)
         idxs = (axes(A)..., ntuple(n->OneTo(1), ndims(R)-ndims(A))...) # keep dimension consistent
         R[idxs...] = A
     else
@@ -391,12 +390,12 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
     end
 
     # fill the outer blocks along each dimension
-    if all(x -> x == 1, outer)
+    if all(isequal(1), outer)
         return R
     end
     src_indices  = [1:n for n in inner_shape]
     dest_indices = copy(src_indices)
-    for i in 1:length(outer)
+    for i in eachindex(outer)
         B = view(R, src_indices...)
         for j in 2:outer[i]
             dest_indices[i] = dest_indices[i] .+ inner_shape[i]
@@ -453,6 +452,7 @@ See also [`eachrow`](@ref), [`eachcol`](@ref), and [`selectdim`](@ref).
     length(dims) == 1 || throw(ArgumentError("only single dimensions are supported"))
     dim = first(dims)
     dim <= ndims(A) || throw(DimensionMismatch("A doesn't have $dim dimensions"))
-    idx1, idx2 = ntuple(d->(:), dim-1), ntuple(d->(:), ndims(A)-dim)
-    return (view(A, idx1..., i, idx2...) for i in axes(A, dim))
+    inds_before = ntuple(d->(:), dim-1)
+    inds_after = ntuple(d->(:), ndims(A)-dim)
+    return (view(A, inds_before..., i, inds_after...) for i in axes(A, dim))
 end

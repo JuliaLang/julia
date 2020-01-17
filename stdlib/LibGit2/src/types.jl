@@ -40,7 +40,7 @@ end
     LibGit2.TimeStruct
 
 Time in a signature.
-Matches the [`git_time`](https://libgit2.github.com/libgit2/#HEAD/type/git_time) struct.
+Matches the [`git_time`](https://libgit2.org/libgit2/#HEAD/type/git_time) struct.
 """
 struct TimeStruct
     time::Int64     # time in seconds from epoch
@@ -54,7 +54,7 @@ end
     LibGit2.SignatureStruct
 
 An action signature (e.g. for committers, taggers, etc).
-Matches the [`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) struct.
+Matches the [`git_signature`](https://libgit2.org/libgit2/#HEAD/type/git_signature) struct.
 
 The fields represent:
   * `name`: The full name of the committer or author of the commit.
@@ -72,7 +72,7 @@ end
     LibGit2.StrArrayStruct
 
 A LibGit2 representation of an array of strings.
-Matches the [`git_strarray`](https://libgit2.github.com/libgit2/#HEAD/type/git_strarray) struct.
+Matches the [`git_strarray`](https://libgit2.org/libgit2/#HEAD/type/git_strarray) struct.
 
 When fetching data from LibGit2, a typical usage would look like:
 ```julia
@@ -106,7 +106,7 @@ end
     LibGit2.Buffer
 
 A data buffer for exporting data from libgit2.
-Matches the [`git_buf`](https://libgit2.github.com/libgit2/#HEAD/type/git_buf) struct.
+Matches the [`git_buf`](https://libgit2.org/libgit2/#HEAD/type/git_buf) struct.
 
 When fetching data from LibGit2, a typical usage would look like:
 ```julia
@@ -132,7 +132,7 @@ end
 """
     LibGit2.CheckoutOptions
 
-Matches the [`git_checkout_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_checkout_options) struct.
+Matches the [`git_checkout_options`](https://libgit2.org/libgit2/#HEAD/type/git_checkout_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -197,7 +197,7 @@ end
     LibGit2.TransferProgress
 
 Transfer progress information used by the `transfer_progress` remote callback.
-Matches the [`git_transfer_progress`](https://libgit2.github.com/libgit2/#HEAD/type/git_transfer_progress) struct.
+Matches the [`git_transfer_progress`](https://libgit2.org/libgit2/#HEAD/type/git_transfer_progress) struct.
 """
 @kwdef struct TransferProgress
     total_objects::Cuint    = Cuint(0)
@@ -242,7 +242,7 @@ julia> c = LibGit2.Callbacks(:credentials => (LibGit2.credentials_cb(), LibGit2.
 julia> LibGit2.clone(url, callbacks=c);
 ```
 
-See [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/type/git_remote_callbacks)
+See [`git_remote_callbacks`](https://libgit2.org/libgit2/#HEAD/type/git_remote_callbacks)
 for details on supported callbacks.
 """
 const Callbacks = Dict{Symbol, Tuple{Ptr{Cvoid}, Any}}
@@ -251,7 +251,7 @@ const Callbacks = Dict{Symbol, Tuple{Ptr{Cvoid}, Any}}
     LibGit2.RemoteCallbacks
 
 Callback settings.
-Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/type/git_remote_callbacks) struct.
+Matches the [`git_remote_callbacks`](https://libgit2.org/libgit2/#HEAD/type/git_remote_callbacks) struct.
 """
 struct RemoteCallbacks
     cb::RemoteCallbacksStruct
@@ -282,12 +282,12 @@ end
 
 Options for connecting through a proxy.
 
-Matches the [`git_proxy_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_proxy_options) struct.
+Matches the [`git_proxy_options`](https://libgit2.org/libgit2/#HEAD/type/git_proxy_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
   * `proxytype`: an `enum` for the type of proxy to use.
-     Defined in [`git_proxy_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_proxy_t).
+     Defined in [`git_proxy_t`](https://libgit2.org/libgit2/#HEAD/type/git_proxy_t).
      The corresponding Julia enum is `GIT_PROXY` and has values:
      - `PROXY_NONE`: do not attempt the connection through a proxy.
      - `PROXY_AUTO`: attempt to figure out the proxy configuration from the git configuration.
@@ -336,7 +336,7 @@ end
 """
     LibGit2.FetchOptions
 
-Matches the [`git_fetch_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_fetch_options) struct.
+Matches the [`git_fetch_options`](https://libgit2.org/libgit2/#HEAD/type/git_fetch_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -377,7 +377,7 @@ end
 """
     LibGit2.CloneOptions
 
-Matches the [`git_clone_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_clone_options) struct.
+Matches the [`git_clone_options`](https://libgit2.org/libgit2/#HEAD/type/git_clone_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -407,7 +407,7 @@ end
 """
     LibGit2.DiffOptionsStruct
 
-Matches the [`git_diff_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_options) struct.
+Matches the [`git_diff_options`](https://libgit2.org/libgit2/#HEAD/type/git_diff_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -460,7 +460,7 @@ end
 """
     LibGit2.DescribeOptions
 
-Matches the [`git_describe_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_describe_options) struct.
+Matches the [`git_describe_options`](https://libgit2.org/libgit2/#HEAD/type/git_describe_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -489,7 +489,7 @@ end
 """
     LibGit2.DescribeFormatOptions
 
-Matches the [`git_describe_format_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_describe_format_options) struct.
+Matches the [`git_describe_format_options`](https://libgit2.org/libgit2/#HEAD/type/git_describe_format_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -508,7 +508,7 @@ end
     LibGit2.DiffFile
 
 Description of one side of a delta.
-Matches the [`git_diff_file`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_file) struct.
+Matches the [`git_diff_file`](https://libgit2.org/libgit2/#HEAD/type/git_diff_file) struct.
 
 The fields represent:
   * `id`: the [`GitHash`](@ref) of the item in the diff. If the item is empty on this
@@ -516,7 +516,7 @@ The fields represent:
      be `GitHash(0)`.
   * `path`: a `NULL` terminated path to the item relative to the working directory of the repository.
   * `size`: the size of the item in bytes.
-  * `flags`: a combination of the [`git_diff_flag_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_flag_t)
+  * `flags`: a combination of the [`git_diff_flag_t`](https://libgit2.org/libgit2/#HEAD/type/git_diff_flag_t)
      flags. The `i`th bit of this integer sets the `i`th flag.
   * `mode`: the [`stat`](@ref) mode for the item.
   * `id_abbrev`: only present in LibGit2 versions newer than or equal to `0.25.0`.
@@ -544,7 +544,7 @@ end
     LibGit2.DiffDelta
 
 Description of changes to one entry.
-Matches the [`git_diff_delta`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_delta) struct.
+Matches the [`git_diff_delta`](https://libgit2.org/libgit2/#HEAD/type/git_diff_delta) struct.
 
 The fields represent:
   * `status`: One of `Consts.DELTA_STATUS`, indicating whether the file has been added/modified/deleted.
@@ -577,7 +577,7 @@ end
 """
     LibGit2.MergeOptions
 
-Matches the [`git_merge_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_merge_options) struct.
+Matches the [`git_merge_options`](https://libgit2.org/libgit2/#HEAD/type/git_merge_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -636,7 +636,7 @@ end
 """
     LibGit2.BlameOptions
 
-Matches the [`git_blame_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_blame_options) struct.
+Matches the [`git_blame_options`](https://libgit2.org/libgit2/#HEAD/type/git_blame_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -677,7 +677,7 @@ end
 """
     LibGit2.PushOptions
 
-Matches the [`git_push_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_push_options) struct.
+Matches the [`git_push_options`](https://libgit2.org/libgit2/#HEAD/type/git_push_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -702,7 +702,7 @@ end
 """
     LibGit2.CherrypickOptions
 
-Matches the [`git_cherrypick_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_cherrypick_options) struct.
+Matches the [`git_cherrypick_options`](https://libgit2.org/libgit2/#HEAD/type/git_cherrypick_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -724,7 +724,7 @@ end
 """
     LibGit2.IndexTime
 
-Matches the [`git_index_time`](https://libgit2.github.com/libgit2/#HEAD/type/git_index_time) struct.
+Matches the [`git_index_time`](https://libgit2.org/libgit2/#HEAD/type/git_index_time) struct.
 """
 struct IndexTime
     seconds::Int64
@@ -735,7 +735,7 @@ end
     LibGit2.IndexEntry
 
 In-memory representation of a file entry in the index.
-Matches the [`git_index_entry`](https://libgit2.github.com/libgit2/#HEAD/type/git_index_entry) struct.
+Matches the [`git_index_entry`](https://libgit2.org/libgit2/#HEAD/type/git_index_entry) struct.
 """
 struct IndexEntry
     ctime::IndexTime
@@ -793,7 +793,7 @@ end
     LibGit2.RebaseOperation
 
 Describes a single instruction/operation to be performed during the rebase.
-Matches the [`git_rebase_operation`](https://libgit2.github.com/libgit2/#HEAD/type/git_rebase_operation_t) struct.
+Matches the [`git_rebase_operation`](https://libgit2.org/libgit2/#HEAD/type/git_rebase_operation_t) struct.
 
 The fields represent:
   * `optype`: the type of rebase operation currently being performed. The options are:
@@ -826,7 +826,7 @@ end
     LibGit2.StatusOptions
 
 Options to control how `git_status_foreach_ext()` will issue callbacks.
-Matches the [`git_status_opt_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_status_opt_t) struct.
+Matches the [`git_status_opt_t`](https://libgit2.org/libgit2/#HEAD/type/git_status_opt_t) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -908,7 +908,7 @@ end
 """
     LibGit2.ConfigEntry
 
-Matches the [`git_config_entry`](https://libgit2.github.com/libgit2/#HEAD/type/git_config_entry) struct.
+Matches the [`git_config_entry`](https://libgit2.org/libgit2/#HEAD/type/git_config_entry) struct.
 """
 @kwdef struct ConfigEntry
     name::Cstring       = Cstring(C_NULL)
@@ -1021,7 +1021,7 @@ for (typ, owntyp, sup, cname) in [
                 return obj
             end
         end
-        if isa(owntyp, Expr) && owntyp.args[1] == :Union && owntyp.args[3] == :Nothing
+        if isa(owntyp, Expr) && owntyp.args[1] === :Union && owntyp.args[3] === :Nothing
             @eval begin
                 $typ(ptr::Ptr{Cvoid}, fin::Bool=true) = $typ(nothing, ptr, fin)
             end
@@ -1050,7 +1050,7 @@ end
     LibGit2.GitSignature
 
 This is a Julia wrapper around a pointer to a
-[`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) object.
+[`git_signature`](https://libgit2.org/libgit2/#HEAD/type/git_signature) object.
 """
 mutable struct GitSignature <: AbstractGitObject
     ptr::Ptr{SignatureStruct}
@@ -1080,7 +1080,7 @@ end
 """
     LibGit2.BlameHunk
 
-Matches the [`git_blame_hunk`](https://libgit2.github.com/libgit2/#HEAD/type/git_blame_hunk) struct.
+Matches the [`git_blame_hunk`](https://libgit2.org/libgit2/#HEAD/type/git_blame_hunk) struct.
 The fields represent:
     * `lines_in_hunk`: the number of lines in this hunk of the blame.
     * `final_commit_id`: the [`GitHash`](@ref) of the commit where this section was last changed.
@@ -1205,7 +1205,7 @@ mutable struct UserPasswordCredential <: AbstractCredential
 end
 
 function Base.setproperty!(cred::UserPasswordCredential, name::Symbol, value)
-    if name == :pass
+    if name === :pass
         field = getfield(cred, name)
         Base.shred!(field)
     end
@@ -1240,7 +1240,7 @@ mutable struct SSHCredential <: AbstractCredential
 end
 
 function Base.setproperty!(cred::SSHCredential, name::Symbol, value)
-    if name == :pass
+    if name === :pass
         field = getfield(cred, name)
         Base.shred!(field)
     end

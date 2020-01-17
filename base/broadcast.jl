@@ -11,7 +11,7 @@ using .Base.Cartesian
 using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
 import .Base: copy, copyto!, axes
-export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__
+export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, broadcast_preserving_zero_d
 
 ## Computing the result's axes: deprecated name
 const broadcast_axes = axes
@@ -222,7 +222,8 @@ _eachindex(t::Tuple) = CartesianIndices(t)
 Base.ndims(::Broadcasted{<:Any,<:NTuple{N,Any}}) where {N} = N
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
 
-Base.length(bc::Broadcasted) = prod(map(length, axes(bc)))
+Base.size(bc::Broadcasted) = map(length, axes(bc))
+Base.length(bc::Broadcasted) = prod(size(bc))
 
 function Base.iterate(bc::Broadcasted)
     iter = eachindex(bc)
@@ -259,8 +260,13 @@ of the `Broadcasted` object empty (populated with [`nothing`](@ref)).
     end
     return Broadcasted{Style}(bc.f, bc.args, axes)
 end
-instantiate(bc::Broadcasted{<:Union{AbstractArrayStyle{0}, Style{Tuple}}}) = bc
-
+instantiate(bc::Broadcasted{<:AbstractArrayStyle{0}}) = bc
+# Tuples don't need axes, but when they have axes (for .= assignment), we need to check them (#33020)
+instantiate(bc::Broadcasted{Style{Tuple}, Nothing}) = bc
+function instantiate(bc::Broadcasted{Style{Tuple}})
+    check_broadcast_axes(bc.axes, bc.args...)
+    return bc
+end
 ## Flattening
 
 """
@@ -384,13 +390,45 @@ end
 
 ## logic for deciding the BroadcastStyle
 
-# combine_styles operates on values (arbitrarily many)
+"""
+    combine_styles(cs...) -> BroadcastStyle
+
+Decides which `BroadcastStyle` to use for any number of value arguments.
+Uses [`BroadcastStyle`](@ref) to get the style for each argument, and uses
+[`result_style`](@ref) to combine styles.
+
+# Examples
+
+```jldoctest
+julia> Broadcast.combine_styles([1], [1 2; 3 4])
+Base.Broadcast.DefaultArrayStyle{2}()
+```
+"""
+function combine_styles end
+
 combine_styles() = DefaultArrayStyle{0}()
 combine_styles(c) = result_style(BroadcastStyle(typeof(c)))
 combine_styles(c1, c2) = result_style(combine_styles(c1), combine_styles(c2))
 @inline combine_styles(c1, c2, cs...) = result_style(combine_styles(c1), combine_styles(c2, cs...))
 
-# result_style works on types (singletons and pairs), and leverages `BroadcastStyle`
+"""
+    result_style(s1::BroadcastStyle[, s2::BroadcastStyle]) -> BroadcastStyle
+
+Takes one or two `BroadcastStyle`s and combines them using [`BroadcastStyle`](@ref) to
+determine a common `BroadcastStyle`.
+
+# Examples
+
+```jldoctest
+julia> Broadcast.result_style(Broadcast.DefaultArrayStyle{0}(), Broadcast.DefaultArrayStyle{3}())
+Base.Broadcast.DefaultArrayStyle{3}()
+
+julia> Broadcast.result_style(Broadcast.Unknown(), Broadcast.DefaultArrayStyle{1}())
+Base.Broadcast.DefaultArrayStyle{1}()
+```
+"""
+function result_style end
+
 result_style(s::BroadcastStyle) = s
 result_style(s1::S, s2::S) where S<:BroadcastStyle = S()
 # Test both orders so users typically only have to declare one order
@@ -418,6 +456,20 @@ One of these should be undefined (and thus return Broadcast.Unknown).""")
 end
 
 # Indices utilities
+
+"""
+    combine_axes(As...) -> Tuple
+
+Determine the result axes for broadcasting across all values in `As`.
+
+```jldoctest
+julia> Broadcast.combine_axes([1], [1 2; 3 4; 5 6])
+(Base.OneTo(3), Base.OneTo(2))
+
+julia> Broadcast.combine_axes(1, 1, 1)
+()
+```
+"""
 @inline combine_axes(A, B...) = broadcast_shape(axes(A), combine_axes(B...))
 combine_axes(A) = axes(A)
 
@@ -432,10 +484,10 @@ function _bcs(shape::Tuple, newshape::Tuple)
     return (_bcs1(shape[1], newshape[1]), _bcs(tail(shape), tail(newshape))...)
 end
 # _bcs1 handles the logic for a single dimension
-_bcs1(a::Integer, b::Integer) = a == 1 ? b : (b == 1 ? a : (a == b ? a : throw(DimensionMismatch("arrays could not be broadcast to a common size"))))
-_bcs1(a::Integer, b) = a == 1 ? b : (first(b) == 1 && last(b) == a ? b : throw(DimensionMismatch("arrays could not be broadcast to a common size")))
+_bcs1(a::Integer, b::Integer) = a == 1 ? b : (b == 1 ? a : (a == b ? a : throw(DimensionMismatch("arrays could not be broadcast to a common size; got a dimension with lengths $a and $b"))))
+_bcs1(a::Integer, b) = a == 1 ? b : (first(b) == 1 && last(b) == a ? b : throw(DimensionMismatch("arrays could not be broadcast to a common size; got a dimension with lengths $a and $(length(b))")))
 _bcs1(a, b::Integer) = _bcs1(b, a)
-_bcs1(a, b) = _bcsm(b, a) ? axistype(b, a) : (_bcsm(a, b) ? axistype(a, b) : throw(DimensionMismatch("arrays could not be broadcast to a common size")))
+_bcs1(a, b) = _bcsm(b, a) ? axistype(b, a) : (_bcsm(a, b) ? axistype(a, b) : throw(DimensionMismatch("arrays could not be broadcast to a common size; got a dimension with lengths $(length(a)) and $(length(b))")))
 # _bcsm tests whether the second index is consistent with the first
 _bcsm(a, b) = a == b || length(b) == 1
 _bcsm(a, b::Number) = b == 1
@@ -444,6 +496,7 @@ _bcsm(a::Number, b::Number) = a == b || b == 1
 # (We may not want to define general promotion rules between, say, OneTo and Slice, but if
 #  we get here we know the axes are at least consistent for the purposes of broadcasting)
 axistype(a::T, b::T) where T = a
+axistype(a::OneTo, b::OneTo) = OneTo{Int}(a)
 axistype(a, b) = UnitRange{Int}(a)
 
 ## Check that all arguments are broadcast compatible with shape
@@ -456,7 +509,7 @@ function check_broadcast_shape(shp, Ashp::Tuple)
     _bcsm(shp[1], Ashp[1]) || throw(DimensionMismatch("array could not be broadcast to match destination"))
     check_broadcast_shape(tail(shp), tail(Ashp))
 end
-check_broadcast_axes(shp, A) = check_broadcast_shape(shp, axes(A))
+@inline check_broadcast_axes(shp, A) = check_broadcast_shape(shp, axes(A))
 # comparing many inputs
 @inline function check_broadcast_axes(shp, A, As...)
     check_broadcast_axes(shp, A)
@@ -503,7 +556,7 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 @inline function _newindexer(indsA::Tuple)
     ind1 = indsA[1]
     keep, Idefault = _newindexer(tail(indsA))
-    (Base.length(ind1)!=1, keep...), (first(ind1), Idefault...)
+    (Base.length(ind1)::Integer != 1, keep...), (first(ind1), Idefault...)
 end
 
 @inline function Base.getindex(bc::Broadcasted, I::Union{Integer,CartesianIndex})
@@ -605,11 +658,9 @@ julia> Broadcast.broadcastable("hello") # Strings break convention of matching i
 Base.RefValue{String}("hello")
 ```
 """
-broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val}) = Ref(x)
-broadcastable(x::Ptr) = Ref(x)
+broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,Regex,Pair}) = Ref(x)
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
 broadcastable(x::Union{AbstractArray,Number,Ref,Tuple,Broadcasted}) = x
-broadcastable(r::Regex) = Ref(r)
 # Default to collecting iterables — which will error for non-iterables
 broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
@@ -746,6 +797,22 @@ julia> A
 broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N} = (materialize!(dest, broadcasted(f, As...)); dest)
 
 """
+    broadcast_preserving_zero_d(f, As...)
+
+Like [`broadcast`](@ref), except in the case of a 0-dimensional result where it returns a 0-dimensional container
+
+Broadcast automatically unwraps zero-dimensional results to be just the element itself,
+but in some cases it is necessary to always return a container — even in the 0-dimensional case.
+"""
+@inline function broadcast_preserving_zero_d(f, As...)
+    bc = broadcasted(f, As...)
+    r = materialize(bc)
+    return length(axes(bc)) == 0 ? fill!(similar(bc, typeof(r)), r) : r
+end
+@inline broadcast_preserving_zero_d(f) = fill(f())
+@inline broadcast_preserving_zero_d(f, as::Number...) = fill(f(as...))
+
+"""
     Broadcast.materialize(bc)
 
 Take a lazy `Broadcasted` object and compute the result
@@ -850,22 +917,22 @@ end
 @inline function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
     ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
+    length(dest) < 256 && return invoke(copyto!, Tuple{AbstractArray, Broadcasted{Nothing}}, dest, bc)
     tmp = Vector{Bool}(undef, bitcache_size)
     destc = dest.chunks
-    ind = cind = 1
+    cind = 1
     bc′ = preprocess(dest, bc)
-    @simd for I in eachindex(bc′)
-        @inbounds tmp[ind] = bc′[I]
-        ind += 1
-        if ind > bitcache_size
-            dumpbitcache(destc, cind, tmp)
-            cind += bitcache_chunks
-            ind = 1
+    for P in Iterators.partition(eachindex(bc′), bitcache_size)
+        ind = 1
+        @simd for I in P
+            @inbounds tmp[ind] = bc′[I]
+            ind += 1
         end
-    end
-    if ind > 1
-        @inbounds tmp[ind:bitcache_size] .= false
+        @simd for i in ind:bitcache_size
+            @inbounds tmp[i] = false
+        end
         dumpbitcache(destc, cind, tmp)
+        cind += bitcache_chunks
     end
     return dest
 end
@@ -919,6 +986,15 @@ end
 @noinline throwdm(axdest, axsrc) =
     throw(DimensionMismatch("destination axes $axdest are not compatible with source axes $axsrc"))
 
+function restart_copyto_nonleaf!(newdest, dest, bc, val, I, iter, state, count)
+    # Function barrier that makes the copying to newdest type stable
+    for II in Iterators.take(iter, count)
+        newdest[II] = dest[II]
+    end
+    newdest[I] = val
+    return copyto_nonleaf!(newdest, bc, iter, state, count+1)
+end
+
 function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
     T = eltype(dest)
     while true
@@ -926,18 +1002,13 @@ function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
         y === nothing && break
         I, state = y
         @inbounds val = bc[I]
-        S = typeof(val)
-        if S <: T
+        if val isa T || typeof(val) === T
             @inbounds dest[I] = val
         else
             # This element type doesn't fit in dest. Allocate a new dest with wider eltype,
             # copy over old values, and continue
-            newdest = Base.similar(dest, promote_typejoin(T, S))
-            for II in Iterators.take(iter, count)
-                newdest[II] = dest[II]
-            end
-            newdest[I] = val
-            return copyto_nonleaf!(newdest, bc, iter, state, count+1)
+            newdest = Base.similar(dest, promote_typejoin(T, typeof(val)))
+            return restart_copyto_nonleaf!(newdest, dest, bc, val, I, iter, state, count)
         end
         count += 1
     end
@@ -1074,12 +1145,12 @@ Base.@propagate_inbounds dotview(args...) = Base.maybeview(args...)
 dottable(x) = false # avoid dotting spliced objects (e.g. view calls inserted by @view)
 # don't add dots to dot operators
 dottable(x::Symbol) = (!isoperator(x) || first(string(x)) != '.' || x === :..) && x !== :(:)
-dottable(x::Expr) = x.head != :$
+dottable(x::Expr) = x.head !== :$
 undot(x) = x
 function undot(x::Expr)
-    if x.head == :.=
+    if x.head === :.=
         Expr(:(=), x.args...)
-    elseif x.head == :block # occurs in for x=..., y=...
+    elseif x.head === :block # occurs in for x=..., y=...
         Expr(:block, map(undot, x.args)...)
     else
         x
@@ -1088,22 +1159,22 @@ end
 __dot__(x) = x
 function __dot__(x::Expr)
     dotargs = map(__dot__, x.args)
-    if x.head == :call && dottable(x.args[1])
+    if x.head === :call && dottable(x.args[1])
         Expr(:., dotargs[1], Expr(:tuple, dotargs[2:end]...))
-    elseif x.head == :comparison
+    elseif x.head === :comparison
         Expr(:comparison, (iseven(i) && dottable(arg) && arg isa Symbol && isoperator(arg) ?
                                Symbol('.', arg) : arg for (i, arg) in pairs(dotargs))...)
-    elseif x.head == :$
+    elseif x.head === :$
         x.args[1]
-    elseif x.head == :let # don't add dots to `let x=...` assignments
+    elseif x.head === :let # don't add dots to `let x=...` assignments
         Expr(:let, undot(dotargs[1]), dotargs[2])
-    elseif x.head == :for # don't add dots to for x=... assignments
+    elseif x.head === :for # don't add dots to for x=... assignments
         Expr(:for, undot(dotargs[1]), dotargs[2])
-    elseif (x.head == :(=) || x.head == :function || x.head == :macro) &&
+    elseif (x.head === :(=) || x.head === :function || x.head === :macro) &&
            Meta.isexpr(x.args[1], :call) # function or macro definition
         Expr(x.head, x.args[1], dotargs[2])
     else
-        if x.head == :&& || x.head == :||
+        if x.head === :&& || x.head === :||
             error("""
                 Using `&&` and `||` is disallowed in `@.` expressions.
                 Use `&` or `|` for elementwise logical operations.

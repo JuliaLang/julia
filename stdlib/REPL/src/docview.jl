@@ -21,13 +21,13 @@ helpmode(line::AbstractString) = helpmode(stdout, line)
 
 function _helpmode(io::IO, line::AbstractString)
     line = strip(line)
+    x = Meta.parse(line, raise = false, depwarn = false)
     expr =
-        if haskey(keywords, Symbol(line))
+        if haskey(keywords, Symbol(line)) || isexpr(x, :error) || isexpr(x, :invalid)
             # Docs for keywords must be treated separately since trying to parse a single
             # keyword such as `function` would throw a parse error due to the missing `end`.
             Symbol(line)
         else
-            x = Meta.parse(line, raise = false, depwarn = false)
             # Retrieving docs for macros requires us to make a distinction between the text
             # `@macroname` and `@macroname()`. These both parse the same, but are used by
             # the docsystem to return different results. The first returns all documentation
@@ -133,6 +133,8 @@ doc(object, sig...)              = doc(object, Tuple{sig...})
 function lookup_doc(ex)
     if haskey(keywords, ex)
         parsedoc(keywords[ex])
+    elseif Meta.isexpr(ex, :incomplete)
+        return :($(Markdown.md"No documentation found."))
     elseif isa(ex, Union{Expr, Symbol})
         binding = esc(bindingexpr(namify(ex)))
         if isexpr(ex, :call) || isexpr(ex, :macrocall)
@@ -317,7 +319,7 @@ function _repl(x)
                     kwarg
                 end
             elseif isexpr(arg, :kw)
-                if kwargs == nothing
+                if kwargs === nothing
                     kwargs = Any[]
                 end
                 lhs = arg.args[1]
@@ -339,7 +341,7 @@ function _repl(x)
                 push!(pargs, arg)
             end
         end
-        if kwargs == nothing
+        if kwargs === nothing
             x.args = Any[x.args[1], pargs...]
         else
             x.args = Any[x.args[1], Expr(:parameters, kwargs...), pargs...]

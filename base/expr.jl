@@ -67,8 +67,9 @@ function copy(c::CodeInfo)
     cnew.slotflags = copy(cnew.slotflags)
     cnew.codelocs  = copy(cnew.codelocs)
     cnew.linetable = copy(cnew.linetable)
-    cnew.ssaflags = copy(cnew.ssaflags)
-    ssavaluetypes = cnew.ssavaluetypes
+    cnew.ssaflags  = copy(cnew.ssaflags)
+    cnew.edges     = cnew.edges === nothing ? nothing : copy(cnew.edges)
+    ssavaluetypes  = cnew.ssavaluetypes
     ssavaluetypes isa Vector{Any} && (cnew.ssavaluetypes = copy(ssavaluetypes))
     return cnew
 end
@@ -118,10 +119,11 @@ Return equivalent expression with all macros removed (expanded).
 There are differences between `@macroexpand` and [`macroexpand`](@ref).
 
 * While [`macroexpand`](@ref) takes a keyword argument `recursive`, `@macroexpand`
-is always recursive. For a non recursive macro version, see [`@macroexpand1`](@ref).
+  is always recursive. For a non recursive macro version, see [`@macroexpand1`](@ref).
 
 * While [`macroexpand`](@ref) has an explicit `module` argument, `@macroexpand` always
-expands with respect to the module in which it is called.
+  expands with respect to the module in which it is called.
+
 This is best seen in the following example:
 ```julia-repl
 julia> module M
@@ -196,7 +198,7 @@ end
 """
     @noinline
 
-Prevents the compiler from inlining a function.
+Give a hint to the compiler that it should not inline a function.
 
 Small functions are typically inlined automatically.
 By using `@noinline` on small functions, auto-inlining can be
@@ -208,6 +210,8 @@ prevented. This is shown in the following example:
         Function Definition
     =#
 end
+
+If the function is trivial (for example returning a constant) it might get inlined anyway.
 ```
 """
 macro noinline(ex)
@@ -227,6 +231,7 @@ generic functions. Calls to generic functions depend on method tables which are
 mutable global state.
 Use with caution, incorrect `@pure` annotation of a function may introduce
 hard to identify bugs. Double check for calls to generic functions.
+This macro is intended for internal compiler use and may be subject to changes.
 """
 macro pure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
@@ -241,10 +246,8 @@ macro propagate_inbounds(ex)
     if isa(ex, Expr)
         pushmeta!(ex, :inline)
         pushmeta!(ex, :propagate_inbounds)
-        esc(ex)
-    else
-        esc(ex)
     end
+    esc(ex)
 end
 
 """
@@ -266,7 +269,7 @@ function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
     end
 
     inner = ex
-    while inner.head == :macrocall
+    while inner.head === :macrocall
         inner = inner.args[end]::Expr
     end
 
@@ -284,7 +287,7 @@ popmeta!(body, sym) = _getmeta(body, sym, true)
 peekmeta(body, sym) = _getmeta(body, sym, false)
 
 function _getmeta(body::Expr, sym::Symbol, delete::Bool)
-    body.head == :block || return false, []
+    body.head === :block || return false, []
     _getmeta(body.args, sym, delete)
 end
 _getmeta(arg, sym, delete::Bool) = (false, [])
@@ -319,19 +322,19 @@ function findmetaarg(metaargs, sym)
 end
 
 function is_short_function_def(ex)
-    ex.head == :(=) || return false
+    ex.head === :(=) || return false
     while length(ex.args) >= 1 && isa(ex.args[1], Expr)
-        (ex.args[1].head == :call) && return true
-        (ex.args[1].head == :where || ex.args[1].head == :(::)) || return false
+        (ex.args[1].head === :call) && return true
+        (ex.args[1].head === :where || ex.args[1].head === :(::)) || return false
         ex = ex.args[1]
     end
     return false
 end
 
 function findmeta(ex::Expr)
-    if ex.head == :function || is_short_function_def(ex)
+    if ex.head === :function || is_short_function_def(ex)
         body::Expr = ex.args[2]
-        body.head == :block || error(body, " is not a block expression")
+        body.head === :block || error(body, " is not a block expression")
         return findmeta_block(ex.args)
     end
     error(ex, " is not a function expression")
@@ -343,9 +346,9 @@ function findmeta_block(exargs, argsmatch=args->true)
     for i = 1:length(exargs)
         a = exargs[i]
         if isa(a, Expr)
-            if (a::Expr).head == :meta && argsmatch((a::Expr).args)
+            if (a::Expr).head === :meta && argsmatch((a::Expr).args)
                 return i, exargs
-            elseif (a::Expr).head == :block
+            elseif (a::Expr).head === :block
                 idx, exa = findmeta_block(a.args, argsmatch)
                 if idx != 0
                     return idx, exa

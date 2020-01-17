@@ -70,7 +70,7 @@ struct StateUpdate
     state::VarTable
 end
 
-struct PartialTuple
+struct PartialStruct
     typ
     fields::Vector{Any} # elements are other type lattice members
 end
@@ -125,8 +125,8 @@ function ⊑(@nospecialize(a), @nospecialize(b))
     elseif isa(b, Conditional)
         return false
     end
-    if isa(a, PartialTuple)
-        if isa(b, PartialTuple)
+    if isa(a, PartialStruct)
+        if isa(b, PartialStruct)
             if !(length(a.fields) == length(b.fields) && a.typ <: b.typ)
                 return false
             end
@@ -137,11 +137,18 @@ function ⊑(@nospecialize(a), @nospecialize(b))
             return true
         end
         return isa(b, Type) && a.typ <: b
-    elseif isa(b, PartialTuple)
+    elseif isa(b, PartialStruct)
         if isa(a, Const)
             nfields(a.val) == length(b.fields) || return false
+            widenconst(b).name === widenconst(a).name || return false
+            # We can skip the subtype check if b is a Tuple, since in that
+            # case, the ⊑ of the elements is sufficient.
+            if b.typ.name !== Tuple.name && !(widenconst(a) <: widenconst(b))
+                return false
+            end
             for i in 1:nfields(a.val)
                 # XXX: let's handle varargs later
+                isdefined(a.val, i) || return false
                 ⊑(Const(getfield(a.val, i)), b.fields[i]) || return false
             end
             return true
@@ -161,6 +168,8 @@ function ⊑(@nospecialize(a), @nospecialize(b))
             return a.instance === b.val
         end
         return false
+    elseif isa(a, PartialTypeVar) && b === TypeVar
+        return true
     elseif !(isa(a, Type) || isa(a, TypeVar)) ||
            !(isa(b, Type) || isa(b, TypeVar))
         return a === b
@@ -173,15 +182,16 @@ end
 # `a ⊑ b && b ⊑ a` but with extra performance optimizations.
 function is_lattice_equal(@nospecialize(a), @nospecialize(b))
     a === b && return true
-    if isa(a, PartialTuple)
-        isa(b, PartialTuple) || return false
+    if isa(a, PartialStruct)
+        isa(b, PartialStruct) || return false
         length(a.fields) == length(b.fields) || return false
+        widenconst(a) == widenconst(b) || return false
         for i in 1:length(a.fields)
             is_lattice_equal(a.fields[i], b.fields[i]) || return false
         end
         return true
     end
-    isa(b, PartialTuple) && return false
+    isa(b, PartialStruct) && return false
     a isa Const && return false
     b isa Const && return false
     return a ⊑ b && b ⊑ a
@@ -200,7 +210,7 @@ function widenconst(c::Const)
 end
 widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(c::PartialTypeVar) = TypeVar
-widenconst(t::PartialTuple) = t.typ
+widenconst(t::PartialStruct) = t.typ
 widenconst(@nospecialize(t)) = t
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
@@ -228,7 +238,7 @@ function widenconditional(typ::Conditional)
     end
 end
 
-function stupdate!(state::Tuple{}, changes::StateUpdate)
+function stupdate!(state::Nothing, changes::StateUpdate)
     newst = copy(changes.state)
     if isa(changes.var, Slot)
         changeid = slot_id(changes.var::Slot)
@@ -288,9 +298,9 @@ function stupdate!(state::VarTable, changes::VarTable)
     return newstate
 end
 
-stupdate!(state::Tuple{}, changes::VarTable) = copy(changes)
+stupdate!(state::Nothing, changes::VarTable) = copy(changes)
 
-stupdate!(state::Tuple{}, changes::Tuple{}) = false
+stupdate!(state::Nothing, changes::Nothing) = false
 
 function stupdate1!(state::VarTable, change::StateUpdate)
     if !isa(change.var, Slot)

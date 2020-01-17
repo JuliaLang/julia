@@ -138,7 +138,8 @@ function paynehanek(x::Float64)
     X = (u & significand_mask(Float64)) | (one(UInt64) << significand_bits(Float64))
     # Get k from formula above
     # k = exponent(x)-52
-    k = Int((u & exponent_mask(Float64)) >> significand_bits(Float64)) - exponent_bias(Float64) - significand_bits(Float64)
+    raw_exponent = ((u & exponent_mask(Float64)) >> significand_bits(Float64)) % Int
+    k = raw_exponent - exponent_bias(Float64) - significand_bits(Float64)
 
     # 2. Let α = 1/2π, then:
     #

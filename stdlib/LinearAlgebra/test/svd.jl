@@ -31,29 +31,23 @@ using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted
     @test sf2.U*Diagonal(sf2.S)*sf2.Vt' ≊ m2
 
     @test ldiv!([0., 0.], svd(Matrix(I, 2, 2)), [1., 1.]) ≊ [1., 1.]
+    @test inv(svd(Matrix(I, 2, 2))) ≈ I
+    @test inv(svd([1 2; 3 4])) ≈ [-2.0 1.0; 1.5 -0.5]
+    @test inv(svd([1 0 1; 0 1 0])) ≈ [0.5 0.0; 0.0 1.0; 0.5 0.0]
+    @test_throws SingularException inv(svd([0 0; 0 0]))
 end
 
 n = 10
-
-# Split n into 2 parts for tests needing two matrices
-n1 = div(n, 2)
-n2 = 2*n1
 
 Random.seed!(1234321)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
-a2real = randn(n,n)/2
-a2img  = randn(n,n)/2
 
 @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
     aa = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
-    aa2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     asym = aa' + aa                 # symmetric indefinite
-    apd  = aa' * aa                 # symmetric positive-definite
-    for (a, a2) in ((aa, aa2), (view(aa, 1:n, 1:n), view(aa2, 1:n, 1:n)))
-        ε = εa = eps(abs(float(one(eltya))))
-
+    for a in (aa, view(aa, 1:n, 1:n))
         usv = svd(a)
         @testset "singular value decomposition" begin
             @test usv.S === svdvals(usv)
@@ -63,7 +57,8 @@ a2img  = randn(n,n)/2
             @test_throws ErrorException usv.Z
             b = rand(eltya,n)
             @test usv\b ≈ a\b
-
+            @test Base.propertynames(usv) == (:U, :S, :V, :Vt)
+            @test size(usv) == size(a)
             if eltya <: BlasFloat
                 svdz = svd!(Matrix{eltya}(undef,0,0))
                 @test svdz.U ≈ Matrix{eltya}(I, 0, 0)
@@ -71,28 +66,20 @@ a2img  = randn(n,n)/2
                 @test svdz.Vt ≈ Matrix{eltya}(I, 0, 0)
             end
         end
-        usv = svd(a')
-        @testset "singular value decomposition of adjoint" begin
-            @test usv.S === svdvals(usv)
-            @test usv.U * (Diagonal(usv.S) * usv.Vt) ≈ a'
-            @test convert(Array, usv) ≈ a'
-            @test usv.Vt' ≈ usv.V
-            @test_throws ErrorException usv.Z
-            b = rand(eltya,n)
-            @test usv\b ≈ a'\b
-        end
-        usv = svd(transpose(a))
-        @testset "singular value decomposition of transpose" begin
-            @test usv.S === svdvals(usv)
-            @test usv.U * (Diagonal(usv.S) * usv.Vt) ≈ transpose(a)
-            @test convert(Array, usv) ≈ transpose(a)
-            @test usv.Vt' ≈ usv.V
-            @test_throws ErrorException usv.Z
-            b = rand(eltya,n)
-            @test usv\b ≈ transpose(a)\b
+        @testset "singular value decomposition of adjoint/transpose" begin
+            for transform in (adjoint, transpose)
+                usv = svd(transform(a))
+                @test usv.S === svdvals(usv)
+                @test usv.U * (Diagonal(usv.S) * usv.Vt) ≈ transform(a)
+                @test convert(Array, usv) ≈ transform(a)
+                @test usv.Vt' ≈ usv.V
+                @test_throws ErrorException usv.Z
+                b = rand(eltya,n)
+                @test usv\b ≈ transform(a)\b
+            end
         end
         @testset "Generalized svd" begin
-            a_svd = a[1:n1, :]
+            a_svd = a[1:div(n, 2), :]
             gsvd = svd(a,a_svd)
             @test gsvd.U*gsvd.D1*gsvd.R*gsvd.Q' ≈ a
             @test gsvd.V*gsvd.D2*gsvd.R*gsvd.Q' ≈ a_svd
@@ -120,6 +107,18 @@ a2img  = randn(n,n)/2
             @test gsvd.V*gsvd.D2*gsvd.R*gsvd.Q' ≈ c
         end
     end
+    @testset "singular value decomposition of Hermitian/real-Symmetric" begin
+        for T in (eltya <: Real ? (Symmetric, Hermitian) : (Hermitian,))
+            usv = svd(T(asym))
+            @test usv.S === svdvals(usv)
+            @test usv.U * (Diagonal(usv.S) * usv.Vt) ≈ T(asym)
+            @test convert(Array, usv) ≈ T(asym)
+            @test usv.Vt' ≈ usv.V
+            @test_throws ErrorException usv.Z
+            b = rand(eltya,n)
+            @test usv\b ≈ T(asym)\b
+        end
+    end
     if eltya <: LinearAlgebra.BlasReal
         @testset "Number input" begin
             x, y = randn(eltya, 2)
@@ -143,5 +142,37 @@ a2img  = randn(n,n)/2
         end
     end
 end
+
+
+
+@testset "SVD Algorithms" begin
+    ≊(x,y) = isapprox(x,y,rtol=1e-15)
+
+    x = [0.1 0.2; 0.3 0.4]
+
+    for alg in [LinearAlgebra.QRIteration(), LinearAlgebra.DivideAndConquer()]
+        sx1 = svd(x, alg = alg)
+        @test sx1.U * Diagonal(sx1.S) * sx1.Vt ≊ x
+        @test sx1.V * sx1.Vt ≊ I
+        @test sx1.U * sx1.U' ≊ I
+        @test all(sx1.S .≥ 0)
+
+        sx2 = svd!(copy(x), alg = alg)
+        @test sx2.U * Diagonal(sx2.S) * sx2.Vt ≊ x
+        @test sx2.V * sx2.Vt ≊ I
+        @test sx2.U * sx2.U' ≊ I
+        @test all(sx2.S .≥ 0)
+    end
+end
+
+@testset "REPL printing of SVD" begin
+    svdd = svd(randn(3, 3))
+    svdstring = sprint((t, s) -> show(t, "text/plain", s), svdd)
+    ustring = sprint((t, s) -> show(t, "text/plain", s), svdd.U)
+    sstring = sprint((t, s) -> show(t, "text/plain", s), svdd.S)
+    vtstring = sprint((t, s) -> show(t, "text/plain", s), svdd.Vt)
+    @test svdstring == "$(summary(svdd))\nU factor:\n$ustring\nsingular values:\n$sstring\nVt factor:\n$vtstring"
+end
+
 
 end # module TestSVD

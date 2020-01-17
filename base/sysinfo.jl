@@ -29,6 +29,7 @@ export BINDIR,
        isopenbsd,
        isunix,
        iswindows,
+       isjsvm,
        isexecutable,
        which
 
@@ -48,6 +49,9 @@ A string containing the full path to the directory containing the `julia` execut
 A string containing the full path to the directory containing the `stdlib` packages.
 """
 STDLIB = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
+# In case STDLIB change after julia is built, the variable below can be used
+# to update cached method locations to updated ones.
+const BUILD_STDLIB_PATH = STDLIB
 
 # helper to avoid triggering precompile warnings
 
@@ -202,7 +206,8 @@ end
 function cpu_info()
     UVcpus = Ref{Ptr{UV_cpu_info_t}}()
     count = Ref{Int32}()
-    Base.uv_error("uv_cpu_info",ccall(:uv_cpu_info, Int32, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count))
+    err = ccall(:uv_cpu_info, Int32, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count)
+    Base.uv_error("uv_cpu_info", err)
     cpus = Vector{CPUinfo}(undef, count[])
     for i = 1:length(cpus)
         cpus[i] = CPUinfo(unsafe_load(UVcpus[], i))
@@ -218,7 +223,8 @@ Gets the current system uptime in seconds.
 """
 function uptime()
     uptime_ = Ref{Float64}()
-    Base.uv_error("uv_uptime",ccall(:uv_uptime, Int32, (Ptr{Float64},), uptime_))
+    err = ccall(:uv_uptime, Int32, (Ptr{Float64},), uptime_)
+    Base.uv_error("uv_uptime", err)
     return uptime_[]
 end
 
@@ -233,7 +239,18 @@ function loadavg()
     return loadavg_
 end
 
+"""
+    Sys.free_memory()
+
+Get the total free memory in RAM in bytes.
+"""
 free_memory() = ccall(:uv_get_free_memory, UInt64, ())
+
+"""
+    Sys.total_memory()
+
+Get the total memory in RAM (including that which is currently used) in bytes.
+"""
 total_memory() = ccall(:uv_get_total_memory, UInt64, ())
 
 """
@@ -278,6 +295,12 @@ function isunix(os::Symbol)
     if iswindows(os)
         return false
     elseif islinux(os) || isbsd(os)
+        return true
+    elseif os === :Emscripten
+        # Emscripten implements the POSIX ABI and provides traditional
+        # Unix-style operating system functions such as file system support.
+        # Therefor, we consider it a unix, even though this need not be
+        # generally true for a jsvm embedding.
         return true
     else
         throw(ArgumentError("unknown operating system \"$os\""))
@@ -377,7 +400,18 @@ See documentation in [Handling Operating System Variation](@ref).
 """
 isapple(os::Symbol) = (os === :Apple || os === :Darwin)
 
-for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly)
+"""
+    Sys.isjsvm([os])
+
+Predicate for testing if Julia is running in a JavaScript VM (JSVM),
+including e.g. a WebAssembly JavaScript embedding in a web browser.
+
+!!! compat "Julia 1.2"
+    This function requires at least Julia 1.2.
+"""
+isjsvm(os::Symbol) = (os === :Emscripten)
+
+for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
     @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
 end
 
@@ -428,6 +462,9 @@ for executable permissions only (with `.exe` and `.com` extensions added on
 Windows platforms); no searching of `PATH` is performed.
 """
 function which(program_name::String)
+    if isempty(program_name)
+       return nothing
+    end
     # Build a list of program names that we're going to try
     program_names = String[]
     base_pname = basename(program_name)
@@ -470,7 +507,7 @@ function which(program_name::String)
         for pname in program_names
             program_path = joinpath(path_dir, pname)
             # If we find something that matches our name and we can execute
-            if isexecutable(program_path)
+            if isfile(program_path) && isexecutable(program_path)
                 return realpath(program_path)
             end
         end

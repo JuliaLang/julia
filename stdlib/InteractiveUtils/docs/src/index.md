@@ -1,9 +1,5 @@
 # Interactive Utilities
 
-```@meta
-DocTestSetup = :(using InteractiveUtils)
-```
-
 ```@docs
 InteractiveUtils.apropos
 InteractiveUtils.varinfo
@@ -13,6 +9,7 @@ InteractiveUtils.subtypes
 InteractiveUtils.edit(::AbstractString, ::Integer)
 InteractiveUtils.edit(::Any)
 InteractiveUtils.@edit
+InteractiveUtils.define_editor
 InteractiveUtils.less(::AbstractString)
 InteractiveUtils.less(::Any)
 InteractiveUtils.@less
@@ -27,8 +24,4 @@ InteractiveUtils.@code_llvm
 InteractiveUtils.code_native
 InteractiveUtils.@code_native
 InteractiveUtils.clipboard
-```
-
-```@meta
-DocTestSetup = nothing
 ```

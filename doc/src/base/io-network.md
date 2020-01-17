@@ -7,6 +7,7 @@ Base.stdout
 Base.stderr
 Base.stdin
 Base.open
+Base.IOStream
 Base.IOBuffer
 Base.take!(::Base.GenericIOBuffer)
 Base.fdio
@@ -32,7 +33,6 @@ Base.isreadonly
 Base.iswritable
 Base.isreadable
 Base.isopen
-Base.Grisu.print_shortest
 Base.fd
 Base.redirect_stdout
 Base.redirect_stdout(::Function, ::Any)
@@ -80,7 +80,7 @@ output (such as images, formatted text, or even audio and video), consisting of 
     `x` (with a plain-text fallback).
   * Overloading [`show`](@ref) allows one to indicate arbitrary multimedia representations (keyed by standard
     MIME types) of user-defined types.
-  * Multimedia-capable display backends may be registered by subclassing a generic `AbstractDisplay` type
+  * Multimedia-capable display backends may be registered by subclassing a generic [`AbstractDisplay`](@ref) type
     and pushing them onto a stack of display backends via [`pushdisplay`](@ref).
 
 The base Julia runtime provides only plain-text display, but richer displays may be enabled by
@@ -88,12 +88,15 @@ loading external modules or by using graphical Julia environments (such as the I
 notebook).
 
 ```@docs
+Base.AbstractDisplay
 Base.Multimedia.display
 Base.Multimedia.redisplay
 Base.Multimedia.displayable
 Base.show(::Any, ::Any, ::Any)
 Base.Multimedia.showable
 Base.repr(::MIME, ::Any)
+Base.MIME
+Base.@MIME_str
 ```
 
 As mentioned above, one can also define new display backends. For example, a module that can display
@@ -101,10 +104,10 @@ PNG images in a window can register this capability with Julia, so that calling 
 types with PNG representations will automatically display the image using the module's window.
 
 In order to define a new display backend, one should first create a subtype `D` of the abstract
-class `AbstractDisplay`.  Then, for each MIME type (`mime` string) that can be displayed on `D`, one should
+class [`AbstractDisplay`](@ref).  Then, for each MIME type (`mime` string) that can be displayed on `D`, one should
 define a function `display(d::D, ::MIME"mime", x) = ...` that displays `x` as that MIME type,
 usually by calling [`show(io, mime, x)`](@ref) or [`repr(io, mime, x)`](@ref).
-A `MethodError` should be thrown if `x` cannot be displayed
+A [`MethodError`](@ref) should be thrown if `x` cannot be displayed
 as that MIME type; this is automatic if one calls `show` or `repr`. Finally, one should define a function
 `display(d::D, x)` that queries [`showable(mime, x)`](@ref) for the `mime` types supported by `D`
 and displays the "best" one; a `MethodError` should be thrown if no supported MIME types are found
