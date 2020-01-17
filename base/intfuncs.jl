@@ -87,9 +87,10 @@ lcm(a::Union{Integer,Rational}, b::Union{Integer,Rational}) = lcm(promote(a,b)..
 gcd(a::Union{Integer,Rational}, b::Union{Integer,Rational}...) = gcd(a, gcd(b...))
 lcm(a::Union{Integer,Rational}, b::Union{Integer,Rational}...) = lcm(a, lcm(b...))
 
+gcd(abc::AbstractArray{<:Union{Integer,Rational}}) = reduce(gcd, abc; init=zero(eltype(abc)))
 lcm(abc::AbstractArray{<:Union{Integer,Rational}}) = reduce(lcm, abc; init=one(eltype(abc)))
 
-function gcd(abc::AbstractArray{<:Union{Integer,Rational}})
+function gcd(abc::AbstractArray{<:Integer})
     a = zero(eltype(abc))
     for b in abc
         a = gcd(a,b)
