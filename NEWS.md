@@ -32,6 +32,7 @@ New library features
 Standard library changes
 ------------------------
 * The `@timed` macro now returns a `NamedTuple` ([#34149])
+* New `supertypes(T)` function returns a tuple of all supertypes of `T` ([#34419]).
 
 #### LinearAlgebra
 * The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
