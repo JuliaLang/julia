@@ -220,6 +220,8 @@
           (if (equal? instead "") ""
               (string #\newline "Use `" instead "` instead."))))
 
+(define *scopewarn-opt* 1)
+
 ; Corresponds to --depwarn 0="no", 1="yes", 2="error"
 (define *depwarn-opt* 1)
 

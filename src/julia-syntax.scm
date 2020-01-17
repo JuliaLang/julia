@@ -2667,7 +2667,8 @@
         (else
          (if (and (eq? (car e) '=) (symbol? (cadr e))
                   scope (null? (lam:vars (scope:lam scope)))
-                  (warn-var?! (cadr e) scope))
+                  (warn-var?! (cadr e) scope)
+                  (= *scopewarn-opt* 1))
              (let* ((v    (cadr e))
                     (loc  (extract-line-file loc))
                     (line (if (= (car loc) 0) (julia-current-line) (car loc)))
