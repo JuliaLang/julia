@@ -517,26 +517,23 @@ function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     return (filename, Base.open(filename, "r+"))
 end
 
-# generates a random temporary string based on a UUID
-function _uiud_string()
-	id = Ref{UInt128}()
-    r = ccall((:UuidCreate,:Rpcrt4), stdcall, Cint, (Ref{UInt128},), id)
-    # ignore expected errors that we don't care about (these shouldn't even be an issue after Vista)
-    RPC_S_UUID_LOCAL_ONLY = 1824
-    RPC_S_UUID_NO_ADDRESS = 1739
-    if !(r == 0 || r == RPC_S_UUID_LOCAL_ONLY || r == RPC_S_UUID_NO_ADDRESS)
-        windowserror("UuidCreate", r % UInt32) # Throw on unexpected errors. Note, a RPC_STATUS is just a WINERROR with a different signedness of the type.
-    end
+# generate a random string from random bytes
+function _rand_string()
+	nchars = 10
+	A = Vector{UInt8}(undef, nchars)
+	ccall((:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32), A, sizeof(A))
 
-	name = string(id[] % UInt64, base=36, pad=5) # between 5 and 13 characters, to avoid special file names like COM1
-	name = name[1:min(end, 10)] # truncate to max of 10 characters (why 10? I have no idea, it came from the random number generator)
-
-    return name
+	slug = StringVector(10)
+	chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	for i = 1:nchars
+	    slug[i] = chars[(A[i] % length(chars)) + 1]
+	end
+	return name = String(slug)
 end
 
 function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
     isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
-    name = _uiud_string()
+    name = _rand_string()
     filename = joinpath(parent, temp_prefix * name)
     @assert !ispath(filename)
     cleanup && temp_cleanup_later(filename)
