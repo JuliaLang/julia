@@ -217,9 +217,6 @@ returns the `Char` in `s` at position `i`, whilst treating it like an Array.
 julia> getindex("abcdef", 5)
 'e': ASCII/Unicode U+0065 (category Ll: Letter, lowercase)
 
-julia> getindex("Julia Is The Best Programming Language", 8)
-'s': ASCII/Unicode U+0073 (category Ll: Letter, lowercase)
-
 ```
 """
 
@@ -258,8 +255,6 @@ end
 
 """
     getindex(s::String, r::UnitRange{<:Integer})
-
-Returns a `String` derived from `s` which is situated at indexes from [`Base.first`](@ref) to [`Base.last`](@ref) in `s`.
 
 # Examples
 
