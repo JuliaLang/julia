@@ -1101,9 +1101,6 @@ function testset_beginend(args, tests, source)
     ex = quote
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         local ts = $(testsettype)($desc; $options...)
-        # this empty loop is here to force the block to be compiled,
-        # which is needed for backtrace scrubbing to work correctly.
-        while false; end
         push_testset(ts)
         # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
