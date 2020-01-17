@@ -1202,6 +1202,13 @@ end
     # --> Test dropping a block of the matrix towards the upper left
     SparseArrays.dropstored!(A, 2:5, 2:5)
     @test nnz(A) == 42
+    # --> Test dropping all elements
+    SparseArrays.dropstored!(A, :)
+    @test nnz(A) == 0
+    A[1:2:9, :] .= 1
+    @test nnz(A) == 50
+    SparseArrays.dropstored!(A, :, :)
+    @test nnz(A) == 0
 end
 
 @testset "issue #7507" begin
