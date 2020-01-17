@@ -523,7 +523,7 @@ function _rand_string()
 	A = Vector{UInt8}(undef, nchars)
 	ccall((:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32), A, sizeof(A))
 
-	slug = StringVector(10)
+	slug = Base.StringVector(10)
 	chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	for i = 1:nchars
 	    slug[i] = chars[(A[i] % length(chars)) + 1]
