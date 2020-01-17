@@ -507,6 +507,16 @@ end
     end
 end
 
+@testset "address scope" begin
+    @test islinklocaladdr(ip"169.254.1.0")
+    @test islinklocaladdr(ip"169.254.254.255")
+    @test islinklocaladdr(ip"fe80::")
+    @test islinklocaladdr(ip"febf::")
+    @test !islinklocaladdr(ip"127.0.0.1")
+    @test !islinklocaladdr(ip"2001::")
+
+end
+
 @static if !Sys.iswindows()
     # Issue #29234
     @testset "TCPSocket stdin" begin
