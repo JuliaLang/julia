@@ -21,6 +21,7 @@ Base.Filesystem.ctime
 Base.Filesystem.mtime
 Base.Filesystem.filemode
 Base.Filesystem.filesize
+Base.Filesystem.eof
 Base.Filesystem.uperm
 Base.Filesystem.gperm
 Base.Filesystem.operm
