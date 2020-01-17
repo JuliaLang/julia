@@ -74,6 +74,16 @@ end
 
 rawhandle(file::File) = file.handle
 
+"""
+    Filesystem.open(path::AbstractString, flags::Integer, mode::Integer=0)
+
+# Examples
+
+```julia-repl
+f = Filesystem.open("G:/IMG_20200110_201552.jpg", 0)
+File(true, Base.Libc.WindowsRawSocket(0x00000000000003c0))
+```
+"""
 # Filesystem.open, not Base.open
 function open(path::AbstractString, flags::Integer, mode::Integer=0)
     req = Libc.malloc(_sizeof_uv_fs)
@@ -91,14 +101,65 @@ function open(path::AbstractString, flags::Integer, mode::Integer=0)
     return File(OS_HANDLE(@static Sys.iswindows() ? Ptr{Cvoid}(handle) : Cint(handle)))
 end
 
+"""
+    isopen(f::File)
+
+Returns a boolean whether the File `f` is open or not.
+
+# Examples
+```julia-repl
+julia> f = Filesystem.open("G:/IMG_20200110_201552.jpg", 0)
+File(true, Base.Libc.WindowsRawSocket(0x00000000000003b4))
+
+julia> isopen(f)
+true
+
+```
+"""
 isopen(f::File) = f.open
 
+"""
+    check_open(f::File)
+
+Raises an error if File `f` is not open
+
+# Examples
+```julia-repl
+julia> f = Filesystem.open("G:/IMG_20200110_201552.jpg", 0)
+File(true, Base.Libc.WindowsRawSocket(0x00000000000003a8))
+
+julia> close(f)
+
+julia> Filesystem.check_open(f)
+ERROR: ArgumentError: file is closed
+Stacktrace:
+ [1] check_open(::File) at .\filesystem.jl:92
+ [2] top-level scope at none:0
+
+```
+
+"""
 function check_open(f::File)
     if !isopen(f)
         throw(ArgumentError("file is closed"))
     end
 end
 
+"""
+    Filesystem.close(f::File)
+
+# Examples
+
+```julia-repl
+julia> f = Filesystem.open("G:/IMG_20200110_201552.jpg", 0)
+File(true, Base.Libc.WindowsRawSocket(0x00000000000003c0))
+
+julia> close(f)
+
+julia> f.open
+false
+```
+"""
 function close(f::File)
     if isopen(f)
         f.open = false
@@ -197,6 +258,23 @@ end
 
 bytesavailable(f::File) = max(0, filesize(f) - position(f)) # position can be > filesize
 
+"""
+    Filesystem.eof(f::File)
+
+Returns boolean value which determines whether the end of file has been reached or not
+
+# Examples
+
+```julia-repl
+
+julia> file = Filesystem.open("G:/source.txt", 0)
+File(true, Base.Libc.WindowsRawSocket(0x000000000000038c))
+
+julia> Filesystem.eof(file)
+false
+
+```
+"""
 eof(f::File) = bytesavailable(f) == 0
 
 function readbytes!(f::File, b::Array{UInt8}, nb=length(b))
