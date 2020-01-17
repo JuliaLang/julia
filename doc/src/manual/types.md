@@ -384,19 +384,6 @@ to point to different objects.
 Where required, mutable composite objects can be declared with the keyword [`mutable struct`](@ref), to be
 discussed in the next section.
 
-Immutable composite types with no fields are singletons; there can be only one instance of such types:
-
-```jldoctest
-julia> struct NoFields
-       end
-
-julia> NoFields() === NoFields()
-true
-```
-
-The [`===`](@ref) function confirms that the "two" constructed instances of `NoFields` are actually one
-and the same. Singleton types are described in further detail [below](@ref man-singleton-types).
-
 There is much more to say about how instances of composite types are created, but that discussion
 depends on both [Parametric Types](@ref) and on [Methods](@ref), and is sufficiently important
 to be addressed in its own section: [Constructors](@ref man-constructors).
