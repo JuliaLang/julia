@@ -4,6 +4,8 @@
 Base.Filesystem.pwd
 Base.Filesystem.cd(::AbstractString)
 Base.Filesystem.cd(::Function)
+Base.Filesystem.open
+Base.Filesystem.close(f::File)
 Base.Filesystem.readdir
 Base.Filesystem.walkdir
 Base.Filesystem.mkdir
@@ -45,6 +47,8 @@ Base.Filesystem.issetgid
 Base.Filesystem.issetuid
 Base.Filesystem.issocket
 Base.Filesystem.issticky
+Base.Filesystem.isopen
+Base.Filesystem.check_open
 Base.Filesystem.homedir
 Base.Filesystem.dirname
 Base.Filesystem.basename
