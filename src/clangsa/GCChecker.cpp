@@ -202,7 +202,11 @@ namespace {
 #else
         void checkEndFunction(CheckerContext &Ctx) const;
 #endif
+#if LLVM_VERSION_MAJOR >= 9
+        bool evalCall(const CallEvent &Call, CheckerContext &C) const;
+#else
         bool evalCall(const CallExpr *CE, CheckerContext &C) const;
+#endif
         void checkPreCall(const CallEvent &Call, CheckerContext &C) const;
         void checkPostCall(const CallEvent &Call, CheckerContext &C) const;
         void checkPostStmt(const CStyleCastExpr *CE, CheckerContext &C) const;
@@ -1216,10 +1220,17 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
     }
 }
 
+#if LLVM_VERSION_MAJOR >= 9
+bool GCChecker::evalCall(const CallEvent &Call,
+#else
 bool GCChecker::evalCall(const CallExpr *CE,
+#endif
                                        CheckerContext &C) const {
     // These checks should have no effect on the surrounding environment
     // (globals should not be invalidated, etc), hence the use of evalCall.
+#if LLVM_VERSION_MAJOR >= 9
+    const CallExpr *CE = dyn_cast<CallExpr>(Call.getOriginExpr());
+#endif
     unsigned CurrentDepth = C.getState()->get<GCDepth>();
     auto name = C.getCalleeName(CE);
     SValExplainer Ex(C.getASTContext());
