@@ -41,11 +41,8 @@ and link against `libjulia`. For instance, when Julia is installed to `$JULIA_DI
 the above test program `test.c` with `gcc` using:
 
 ```
-gcc -o test -fPIC -I$JULIA_DIR/include/julia -L$JULIA_DIR/lib test.c -ljulia $JULIA_DIR/lib/julia/libstdc++.so.6
+gcc -o test -fPIC -I$JULIA_DIR/include/julia -L$JULIA_DIR/lib -Wl,-rpath,$JULIA_DIR/lib test.c -ljulia
 ```
-
-Then if the environment variable `JULIA_BINDIR` is set to `$JULIA_DIR/bin`, the output `test` program
-can be executed.
 
 Alternatively, look at the `embedding.c` program in the Julia source tree in the `test/embedding/` folder.
 The file `ui/repl.c` program is another simple example of how to set `jl_options` options while
