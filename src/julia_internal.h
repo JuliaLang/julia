@@ -8,7 +8,6 @@
 #include <uv.h>
 #if !defined(_MSC_VER) && !defined(__MINGW32__)
 #include <unistd.h>
-#include <sched.h>
 #else
 #define sleep(x) Sleep(1000*x)
 #endif
