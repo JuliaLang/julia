@@ -2823,4 +2823,11 @@ end
     @test adjoint(B)*adjoint(complex.(A)) ≈ adjoint(Array(B)) * adjoint(Array(complex.(A)))
 end
 
+@testset "copy a ReshapedArray of SparseMatrixCSC" begin
+    A = sprand(20, 10, 0.2)
+    rA = reshape(A, 10, 20)
+    crA = copy(rA)
+    @test reshape(crA, 20, 10) == A
+end
+
 end # module
