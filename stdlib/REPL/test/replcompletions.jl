@@ -1049,3 +1049,9 @@ let s = "prevind(\"θ\",1,"
     @test r == 1:7
     @test s[r] == "prevind"
 end
+
+# Issue #32840
+let s = "typeof(+)."
+    c, r = test_complete_context(s)
+    @test isempty(c)
+end
