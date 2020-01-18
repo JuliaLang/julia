@@ -341,8 +341,8 @@ julia> old_is
 4-element Array{Float64,1}:
  0.0
  1.0
- 7.0
  3.0
+ 6.0
 
 julia> ids
 4-element Array{Float64,1}:
