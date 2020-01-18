@@ -145,7 +145,32 @@ end
 show(io::IO, manager::SSHManager) = println(io, "SSHManager(machines=", manager.machines, ")")
 
 
-function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, launch_ntfy::Condition)
+function parse_machine(machine::AbstractString)
+    hoststr = ``
+    portstr = ``
+
+    if machine[begin] == '['  # ipv6 bracket notation (RFC 2732)
+        ipv6_end = findlast(']', machine)
+        hoststr = machine[begin+1 : ipv6_end - 1]
+        machine_def = split(machine[ipv6_end : end] , ':')
+    else    # ipv4
+        machine_def = split(machine, ':')
+        hoststr = machine_def[1]
+    end
+
+    if length(machine_def) > 2
+        throw(ArgumentError("invalid machine definition format string: invalid port format \"$machine_def\""))
+    end
+
+    if length(machine_def) == 2
+        portstr = machine_def[2]
+    end
+    (hoststr, portstr)
+end
+
+
+
+function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, params::Dict, launched::Array, launch_ntfy::Condition)
     dir = params[:dir]
     exename = params[:exename]
     exeflags = params[:exeflags]
@@ -161,11 +186,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     end
     exeflags = `$exeflags --worker`
 
-    machine_def = split(machine_bind[1], ':')
-    # if this machine def has a port number, add the port information to the ssh flags
-    if length(machine_def) > 2
-        throw(ArgumentError("invalid machine definition format string: invalid port format \"$machine_def\""))
-    end
+    machine_def = parse_machine(machine_bind[1])
     host = machine_def[1]
     portopt = ``
     if length(machine_def) == 2
