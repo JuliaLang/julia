@@ -186,11 +186,9 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
     end
     exeflags = `$exeflags --worker`
 
-    machine_def = parse_machine(machine_bind[1])
-    host = machine_def[1]
+    host, portstr = parse_machine(machine_bind[1])
     portopt = ``
-    if length(machine_def) == 2
-        portstr = machine_def[2]
+    if portstr != ``
         if !all(isdigit, portstr) || (p = parse(Int,portstr); p < 1 || p > 65535)
             msg = "invalid machine definition format string: invalid port format \"$machine_def\""
             throw(ArgumentError(msg))
