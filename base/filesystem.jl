@@ -79,8 +79,8 @@ rawhandle(file::File) = file.handle
 
 # Examples
 
-```julia-repl
-f = Filesystem.open("G:/IMG_20200110_201552.jpg", 0)
+```jldoctest
+f = Filesystem.open("img1.jpg", 0)
 File(true, Base.Libc.WindowsRawSocket(0x00000000000003c0))
 ```
 """
@@ -107,8 +107,8 @@ end
 Returns a boolean whether the File `f` is open or not.
 
 # Examples
-```julia-repl
-julia> f = Filesystem.open("G:/IMG_20200110_201552.jpg", 0)
+```jldoctest
+julia> f = Filesystem.open("img1.jpg", 0)
 File(true, Base.Libc.WindowsRawSocket(0x00000000000003b4))
 
 julia> isopen(f)
@@ -124,8 +124,8 @@ isopen(f::File) = f.open
 Raises an error if File `f` is not open
 
 # Examples
-```julia-repl
-julia> f = Filesystem.open("G:/IMG_20200110_201552.jpg", 0)
+```jldoctest
+julia> f = Filesystem.open("img1.jpg", 0)
 File(true, Base.Libc.WindowsRawSocket(0x00000000000003a8))
 
 julia> close(f)
@@ -133,7 +133,7 @@ julia> close(f)
 julia> Filesystem.check_open(f)
 ERROR: ArgumentError: file is closed
 Stacktrace:
- [1] check_open(::File) at .\filesystem.jl:92
+ [1] check_open(::File) at .\\filesystem.jl:92
  [2] top-level scope at none:0
 
 ```
@@ -150,8 +150,8 @@ end
 
 # Examples
 
-```julia-repl
-julia> f = Filesystem.open("G:/IMG_20200110_201552.jpg", 0)
+```jldoctest
+julia> f = Filesystem.open("img1".jpg", 0)
 File(true, Base.Libc.WindowsRawSocket(0x00000000000003c0))
 
 julia> close(f)
@@ -265,9 +265,9 @@ Returns boolean value which determines whether the end of file has been reached 
 
 # Examples
 
-```julia-repl
+```jldoctest
 
-julia> file = Filesystem.open("G:/source.txt", 0)
+julia> file = Filesystem.open("source.txt", 0)
 File(true, Base.Libc.WindowsRawSocket(0x000000000000038c))
 
 julia> Filesystem.eof(file)
