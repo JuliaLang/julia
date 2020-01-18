@@ -37,6 +37,8 @@ using Random
         @test_throws OverflowError lcm(typemin(T), typemin(T))
         @test_throws OverflowError lcm(typemax(T), T(2))
     end
+    @test lcm(0x5, 3) == 15
+    @test gcd(0xf, 20) == 5
 end
 @testset "gcd/lcm for arrays" begin
     for T in (Int32, Int64)
