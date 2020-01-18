@@ -291,7 +291,7 @@ jl_value_t *jl_permbox32(jl_datatype_t *t, int32_t x);
 jl_value_t *jl_permbox64(jl_datatype_t *t, int64_t x);
 jl_svec_t *jl_perm_symsvec(size_t n, ...);
 
-#if !defined(__clang_analyzer__) // this sizeof(__VA_ARGS__) trick can't be computed until C11, but only the analyzer seems to care
+#if !defined(__clang_analyzer__) && !defined(JL_ASAN_ENABLED) // this sizeof(__VA_ARGS__) trick can't be computed until C11, but that only matters to Clang in some situations
 #ifdef __GNUC__
 #define jl_perm_symsvec(n, ...) \
     (jl_perm_symsvec)(__extension__({                                         \
