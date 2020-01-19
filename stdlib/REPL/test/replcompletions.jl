@@ -103,6 +103,7 @@ let s = ""
 end
 
 let s = "using REP"
+    @show completions(s, lastindex(s))[1]
     c, r = test_complete(s)
     @test count(isequal("REPL"), c) == 1
     # issue #30234
@@ -1053,5 +1054,5 @@ end
 # Issue #32840
 let s = "typeof(+)."
     c, r = test_complete_context(s)
-    @test isempty(c)
+    @test length(c) == length(fieldnames(DataType))
 end
