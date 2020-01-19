@@ -154,7 +154,7 @@ function complete_symbol(sym, ffunc, context_module=Main)::Vector{Completion}
         # Looking for a member of a type
         if t isa DataType && t != Any
             # Check for cases like Type{typeof(+)}
-            if t isa Type && length(t.parameters) >= 1
+            if t isa Type && !isconcretetype(t) && length(t.parameters) >= 1
                 t = t.parameters[1]
             end
             # Only look for fields if this is a concrete type
