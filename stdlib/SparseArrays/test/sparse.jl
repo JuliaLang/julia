@@ -62,6 +62,10 @@ end
     @test SparseArrays.indtype(sparse(Int8[1,1],Int8[1,1],[1,1])) == Int8
 end
 
+@testset "spzeros de-splatting" begin
+    @test spzeros(Float64, Int64, (2, 2)) == spzeros(Float64, Int64, 2, 2)
+end
+
 @testset "conversion to AbstractMatrix/SparseMatrix of same eltype" begin
     a = sprand(5, 5, 0.2)
     @test AbstractMatrix{eltype(a)}(a) == a
