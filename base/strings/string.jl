@@ -177,7 +177,7 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
 ## required core functionality ##
 
 """
-    iterate(s::String, i::Int=firstindex(s)) -> -> Union{Tuple{<:Char, Int}, Nothing}
+    iterate(s::String, i::Int=firstindex(s)) -> Union{Tuple{<:Char, Int}, Nothing}
 
 Return a tuple of the character in s at index i with the index of the start of the following character in s.
 
