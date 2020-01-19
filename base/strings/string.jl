@@ -176,6 +176,18 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
 
 ## required core functionality ##
 
+"""
+    iterate(s::String, i::Int=firstindex(s)) -> -> Union{Tuple{<:Char, Int}, Nothing}
+
+Return a tuple of the character in s at index i with the index of the start of the following character in s.
+
+# Examples
+```jldoctest
+julia> iterate("Computing", 5)
+('u', 6)
+```
+"""
+
 @propagate_inbounds function iterate(s::String, i::Int=firstindex(s))
     i > ncodeunits(s) && return nothing
     b = codeunit(s, i)
@@ -256,6 +268,18 @@ getindex(s::String, r::UnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
     return ss
 end
 
+"""
+    length(s::String) -> Int
+
+The number of characters in string s.
+
+# Examples
+```jldoctest
+julia> length("julia")
+5
+```
+"""
+
 length(s::String) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
 
 @inline function length(s::String, i::Int, j::Int)
@@ -298,6 +322,20 @@ end
 
 isvalid(s::String, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
 
+"""
+    isascii(s::String) -> Bool
+
+Checks whether all elements of a string belong to the ASCII character set.
+
+# Examples
+```jldoctest
+julia> isascii("abc")
+true
+
+julia> isascii("αβγ")
+false
+```
+"""
 function isascii(s::String)
     @inbounds for i = 1:ncodeunits(s)
         codeunit(s, i) >= 0x80 && return false
