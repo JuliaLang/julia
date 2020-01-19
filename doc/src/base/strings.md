@@ -80,4 +80,7 @@ Base.isuppercase
 Base.isxdigit
 Base.escape_string
 Base.unescape_string
+Base.iterate(::String, ::Int)
+Base.length(::String)
+Base.isascii(::String)
 ```
