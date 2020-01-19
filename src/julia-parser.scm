@@ -2266,7 +2266,7 @@
                      (let ((str (tostr #f b)))
                        (if (= (string-length str) 1)
                            (string.char str 0)
-                           (error "invalid character literal")))))))
+                           (error "character literal contains multiple characters")))))))
 
           ;; symbol/expression quote
           ((eq? t ':)
