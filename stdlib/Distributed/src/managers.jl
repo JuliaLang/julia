@@ -146,8 +146,8 @@ show(io::IO, manager::SSHManager) = println(io, "SSHManager(machines=", manager.
 
 
 function parse_machine(machine::AbstractString)
-    hoststr = ``
-    portstr = ``
+    hoststr = ""
+    portstr = ""
 
     if machine[begin] == '['  # ipv6 bracket notation (RFC 2732)
         ipv6_end = findlast(']', machine)
