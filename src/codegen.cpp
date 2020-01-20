@@ -2903,8 +2903,11 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                 emit_datatype_nfields(ctx, emit_typeof_boxed(ctx, obj)),
                                 jl_true);
                         }
+                        bool isboxed = !jl_datatype_isinlinealloc(jt);
                         Value *ptr = maybe_decay_tracked(data_pointer(ctx, obj));
-                        *ret = typed_load(ctx, ptr, vidx, jt, obj.tbaa, nullptr, false);
+                        *ret = typed_load(ctx, ptr, vidx,
+                                isboxed ? (jl_value_t*)jl_any_type : jt,
+                                obj.tbaa, nullptr, false);
                         return true;
                     }
                 }
@@ -5072,6 +5075,12 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     }
 
     bool nest = (!fexpr_rt.constant || unionall_env);
+#if defined(_CPU_AARCH64_) || defined(_CPU_ARM_) || defined(_CPU_PPC64_)
+    if (nest) {
+        emit_error(ctx, "cfunction: closures are not supported on this platform");
+        return jl_cgval_t();
+    }
+#endif
     Value *F = gen_cfun_wrapper(
             jl_Module,
             sig, fexpr_rt.constant,

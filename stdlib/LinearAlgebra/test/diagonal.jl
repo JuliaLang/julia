@@ -471,32 +471,32 @@ end
 
                 # Triangular * Diagonal
                 R = T * D
-                @test R == Array(T) * Array(D)
+                @test R ≈ Array(T) * Array(D)
                 @test isa(R, rtype)
 
                 # Diagonal * Triangular
                 R = D * T
-                @test R == Array(D) * Array(T)
+                @test R ≈ Array(D) * Array(T)
                 @test isa(R, rtype)
 
                 # Adjoint of Triangular * Diagonal
                 R = T' * D
-                @test R == Array(T)' * Array(D)
+                @test R ≈ Array(T)' * Array(D)
                 @test isa(R, adjtype)
 
                 # Diagonal * Adjoint of Triangular
                 R = D * T'
-                @test R == Array(D) * Array(T)'
+                @test R ≈ Array(D) * Array(T)'
                 @test isa(R, adjtype)
 
                 # Transpose of Triangular * Diagonal
                 R = transpose(T) * D
-                @test R == transpose(Array(T)) * Array(D)
+                @test R ≈ transpose(Array(T)) * Array(D)
                 @test isa(R, adjtype)
 
                 # Diagonal * Transpose of Triangular
                 R = D * transpose(T)
-                @test R == Array(D) * transpose(Array(T))
+                @test R ≈ Array(D) * transpose(Array(T))
                 @test isa(R, adjtype)
             end
         end

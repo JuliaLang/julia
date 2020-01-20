@@ -27,6 +27,7 @@
  *      CPU/Architecture:
  *          _CPU_X86_
  *          _CPU_X86_64_
+ *          _CPU_AARCH64_
  *          _CPU_ARM_
  *          _CPU_WASM_
  */

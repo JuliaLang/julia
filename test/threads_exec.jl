@@ -4,6 +4,9 @@ using Test
 using Base.Threads
 using Base.Threads: SpinLock
 
+# for cfunction_closure
+include("testenv.jl")
+
 # threading constructs
 
 let a = zeros(Int, 2 * nthreads())
@@ -460,10 +463,12 @@ function test_thread_cfunction()
     end
     @test sum(ok) == 10000
 end
-if nthreads() == 1
-    test_thread_cfunction()
-else
-    @test_broken "cfunction trampoline code not thread-safe"
+if cfunction_closure
+    if nthreads() == 1
+        test_thread_cfunction()
+    else
+        @test_broken "cfunction trampoline code not thread-safe"
+    end
 end
 
 # Compare the two ways of checking if threading is enabled.
