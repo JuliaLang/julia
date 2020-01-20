@@ -103,7 +103,6 @@ let s = ""
 end
 
 let s = "using REP"
-    @show completions(s, lastindex(s))[1]
     c, r = test_complete(s)
     @test count(isequal("REPL"), c) == 1
     # issue #30234
