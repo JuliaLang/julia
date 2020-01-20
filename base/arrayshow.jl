@@ -104,7 +104,7 @@ function print_matrix_row(io::IO,
 
             # If compact is set, keep the value, else set to true
             compact = get(io, :compact, nothing)
-            if compact == nothing
+            if compact === nothing
                 compact = true
             end
             context = IOContext(io, :compact=>compact)
