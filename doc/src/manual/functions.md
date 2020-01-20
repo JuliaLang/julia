@@ -732,12 +732,12 @@ The next example composes three functions and maps the result over an array of s
 ```jldoctest
 julia> map(first ∘ reverse ∘ uppercase, split("you can compose functions like this"))
 6-element Array{Char,1}:
- 'U'
- 'N'
- 'E'
- 'S'
- 'E'
- 'S'
+ 'U': ASCII/Unicode U+0055 (category Lu: Letter, uppercase)
+ 'N': ASCII/Unicode U+004E (category Lu: Letter, uppercase)
+ 'E': ASCII/Unicode U+0045 (category Lu: Letter, uppercase)
+ 'S': ASCII/Unicode U+0053 (category Lu: Letter, uppercase)
+ 'E': ASCII/Unicode U+0045 (category Lu: Letter, uppercase)
+ 'S': ASCII/Unicode U+0053 (category Lu: Letter, uppercase)
 ```
 
 Function chaining (sometimes called "piping" or "using a pipe" to send data to a subsequent function) is when you apply a function to the previous function's output:
@@ -786,9 +786,9 @@ julia> A = [1.0, 2.0, 3.0]
 
 julia> sin.(A)
 3-element Array{Float64,1}:
- 0.8414709848078965
- 0.9092974268256817
- 0.1411200080598672
+ 0.841471
+ 0.909297
+ 0.14112
 ```
 
 Of course, you can omit the dot if you write a specialized "vector" method of `f`, e.g. via `f(A::AbstractArray) = map(f, A)`,
@@ -811,9 +811,9 @@ julia> B = [4.0, 5.0, 6.0];
 
 julia> f.(pi, A)
 3-element Array{Float64,1}:
- 13.42477796076938
- 17.42477796076938
- 21.42477796076938
+ 13.4248
+ 17.4248
+ 21.4248
 
 julia> f.(A, B)
 3-element Array{Float64,1}:
@@ -854,10 +854,10 @@ julia> X = similar(Y); # pre-allocate output array
 
 julia> @. X = sin(cos(Y)) # equivalent to X .= sin.(cos.(Y))
 4-element Array{Float64,1}:
-  0.5143952585235492
- -0.4042391538522658
- -0.8360218615377305
- -0.6080830096407656
+  0.514395
+ -0.404239
+ -0.836022
+ -0.608083
 ```
 
 Binary (or unary) operators like `.+` are handled with the same mechanism:

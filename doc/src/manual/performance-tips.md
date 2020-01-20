@@ -166,7 +166,7 @@ julia> push!(a, 1); push!(a, 2.0); push!(a, π)
 3-element Array{Real,1}:
  1
  2.0
- π
+ π = 3.1415926535897...
 ```
 
 Because `a` is a an array of abstract type [`Real`](@ref), it must be able to hold any
@@ -183,7 +183,7 @@ julia> push!(a, 1); push!(a, 2.0); push!(a,  π)
 3-element Array{Float64,1}:
  1.0
  2.0
- 3.141592653589793
+ 3.14159
 ```
 
 Assigning numbers into `a` will now convert them to `Float64` and `a` will be stored as

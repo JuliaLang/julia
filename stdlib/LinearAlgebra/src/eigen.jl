@@ -86,8 +86,8 @@ julia> F = eigen(A, B)
 GeneralizedEigen{Complex{Float64},Complex{Float64},Array{Complex{Float64},2},Array{Complex{Float64},1}}
 values:
 2-element Array{Complex{Float64},1}:
- 0.0 - 1.0im
- 0.0 + 1.0im
+ 0.0-1.0im
+ 0.0+1.0im
 vectors:
 2×2 Array{Complex{Float64},2}:
   0.0+1.0im   0.0-1.0im
@@ -95,8 +95,8 @@ vectors:
 
 julia> F.values
 2-element Array{Complex{Float64},1}:
- 0.0 - 1.0im
- 0.0 + 1.0im
+ 0.0-1.0im
+ 0.0+1.0im
 
 julia> F.vectors
 2×2 Array{Complex{Float64},2}:
@@ -279,8 +279,8 @@ julia> A = [1. 2.; 3. 4.]
 
 julia> eigvals!(A)
 2-element Array{Float64,1}:
- -0.3722813232690143
-  5.372281323269014
+ -0.372281
+  5.37228
 
 julia> A
 2×2 Array{Float64,2}:
@@ -482,8 +482,8 @@ julia> F = eigen(A, B);
 
 julia> F.values
 2-element Array{Complex{Float64},1}:
- 0.0 - 1.0im
- 0.0 + 1.0im
+ 0.0-1.0im
+ 0.0+1.0im
 
 julia> F.vectors
 2×2 Array{Complex{Float64},2}:
@@ -527,8 +527,8 @@ julia> B = [0. 1.; 1. 0.]
 
 julia> eigvals!(A, B)
 2-element Array{Complex{Float64},1}:
- 0.0 - 1.0im
- 0.0 + 1.0im
+ 0.0-1.0im
+ 0.0+1.0im
 
 julia> A
 2×2 Array{Float64,2}:
@@ -571,8 +571,8 @@ julia> B = [0 1; 1 0]
 
 julia> eigvals(A,B)
 2-element Array{Complex{Float64},1}:
- 0.0 - 1.0im
- 0.0 + 1.0im
+ 0.0-1.0im
+ 0.0+1.0im
 ```
 """
 function eigvals(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}; kws...) where {TA,TB}

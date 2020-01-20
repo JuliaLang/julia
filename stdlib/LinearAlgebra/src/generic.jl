@@ -1554,7 +1554,7 @@ julia> a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
 3-element Array{Any,1}:
   Any[1, 2, [3, 4]]
  5.0
-  Any[0 + 6im, [7.0, 8.0]]
+  Any[0+6im, [7.0, 8.0]]
 
 julia> LinearAlgebra.promote_leaf_eltypes(a)
 Complex{Float64}
@@ -1623,18 +1623,18 @@ julia> a = [1,2,4];
 
 julia> b = normalize(a)
 3-element Array{Float64,1}:
- 0.2182178902359924
- 0.4364357804719848
- 0.8728715609439696
+ 0.218218
+ 0.436436
+ 0.872872
 
 julia> norm(b)
 1.0
 
 julia> c = normalize(a, 1)
 3-element Array{Float64,1}:
- 0.14285714285714285
- 0.2857142857142857
- 0.5714285714285714
+ 0.142857
+ 0.285714
+ 0.571429
 
 julia> norm(c, 1)
 1.0

@@ -844,9 +844,9 @@ and splatting `∘(fs...)` for composing an iterable collection of functions.
 ```jldoctest
 julia> map(uppercase∘first, ["apple", "banana", "carrot"])
 3-element Array{Char,1}:
- 'A'
- 'B'
- 'C'
+ 'A': ASCII/Unicode U+0041 (category Lu: Letter, uppercase)
+ 'B': ASCII/Unicode U+0042 (category Lu: Letter, uppercase)
+ 'C': ASCII/Unicode U+0043 (category Lu: Letter, uppercase)
 
 julia> fs = [
            x -> 2x

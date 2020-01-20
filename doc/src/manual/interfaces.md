@@ -302,10 +302,10 @@ julia> s + s
 
 julia> sin.(s)
 4-element Array{Float64,1}:
-  0.8414709848078965
- -0.7568024953079282
-  0.4121184852417566
- -0.2879033166650653
+  0.841471
+ -0.756802
+  0.412118
+ -0.287903
 ```
 
 As a more complicated example, let's define our own toy N-dimensional sparse-like array type built

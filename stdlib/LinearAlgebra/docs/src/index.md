@@ -38,8 +38,8 @@ julia> A = [-4. -17.; 2. 2.]
 
 julia> eigvals(A)
 2-element Array{Complex{Float64},1}:
- -1.0 - 5.0im
- -1.0 + 5.0im
+ -1.0-5.0im
+ -1.0+5.0im
 
 julia> eigvecs(A)
 2×2 Array{Complex{Float64},2}:
@@ -146,9 +146,9 @@ julia> x = [1; 2; 3]
 
 julia> sB\x
 3-element Array{Float64,1}:
- -1.7391304347826084
- -1.1086956521739126
- -1.4565217391304346
+ -1.73913
+ -1.1087
+ -1.45652
 ```
 The `\` operation here performs the linear solution. The left-division operator is pretty powerful and it's easy to write compact, readable code that is flexible enough to solve all sorts of systems of linear equations.
 

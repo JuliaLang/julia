@@ -1434,12 +1434,12 @@ end
 end
 
 @testset "alignment for pairs" begin  # (#22899)
-    @test replstr([1=>22,33=>4]) == "2-element Array{Pair{$Int,$Int},1}:\n  1 => 22\n 33 => 4"
+    @test replstr([1=>22,33=>4]) == "2-element Array{Pair{$Int,$Int},1}:\n  1=>22\n 33=>4"
     # first field may have "=>" in its representation
     @test replstr(Pair[(1=>2)=>3, 4=>5]) ==
-        "2-element Array{Pair,1}:\n (1 => 2) => 3\n        4 => 5"
+        "2-element Array{Pair,1}:\n (1=>2)=>3\n        4=>5"
     @test replstr(Any[Dict(1=>2)=> (3=>4), 1=>2]) ==
-        "2-element Array{Any,1}:\n Dict(1 => 2) => (3 => 4)\n            1 => 2"
+        "2-element Array{Any,1}:\n Dict(1=>2)=>(3=>4)\n            1=>2"
     # left-alignment when not using the "=>" symbol
     @test replstr(Any[Pair{Integer,Int64}(1, 2), Pair{Integer,Int64}(33, 4)]) ==
         "2-element Array{Any,1}:\n Pair{Integer,Int64}(1, 2)\n Pair{Integer,Int64}(33, 4)"
@@ -1452,19 +1452,19 @@ end
     @test replstr(A) == "0-dimensional Array{Pair,0}:\n1 => 2"
     # 1-dim
     @test replstr(zeros(Complex{Int}, 2)) ==
-        "2-element Array{Complex{$Int},1}:\n 0 + 0im\n 0 + 0im"
-    @test replstr([1=>2, 3=>4]) == "2-element Array{Pair{$Int,$Int},1}:\n 1 => 2\n 3 => 4"
+        "2-element Array{Complex{$Int},1}:\n 0+0im\n 0+0im"
+    @test replstr([1=>2, 3=>4]) == "2-element Array{Pair{$Int,$Int},1}:\n 1=>2\n 3=>4"
     # 2-dim
     @test replstr(zeros(Complex{Int}, 2, 1)) ==
-        "2×1 Array{Complex{$Int},2}:\n 0 + 0im\n 0 + 0im"
+        "2×1 Array{Complex{$Int},2}:\n 0+0im\n 0+0im"
     @test replstr(zeros(Complex{Int}, 1, 2)) ==
         "1×2 Array{Complex{$Int},2}:\n 0+0im  0+0im"
     @test replstr([1=>2 3=>4]) == "1×2 Array{Pair{$Int,$Int},2}:\n 1=>2  3=>4"
     @test replstr([1=>2 for x in 1:2, y in 1:1]) ==
-        "2×1 Array{Pair{$Int,$Int},2}:\n 1 => 2\n 1 => 2"
+        "2×1 Array{Pair{$Int,$Int},2}:\n 1=>2\n 1=>2"
     # 3-dim
     @test replstr(zeros(Complex{Int}, 1, 1, 1)) ==
-        "1×1×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0 + 0im"
+        "1×1×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0+0im"
     @test replstr(zeros(Complex{Int}, 1, 2, 1)) ==
         "1×2×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0+0im  0+0im"
 end
@@ -1478,9 +1478,9 @@ end
         "[3.14159 3.14159; 3.14159 3.14159]"
     @test showstr([x x; x x]) == showstr([x x; x x], :compact => false) ==
         "[3.141592653589793 3.141592653589793; 3.141592653589793 3.141592653589793]"
-    @test replstr([x, x]) == replstr([x, x], :compact => false) ==
+    @test replstr([x, x], :compact => false) ==
         "2-element Array{Float64,1}:\n 3.141592653589793\n 3.141592653589793"
-    @test replstr([x, x], :compact => true) ==
+    @test replstr([x, x]) == replstr([x, x], :compact => true) ==
         "2-element Array{Float64,1}:\n 3.14159\n 3.14159"
     @test replstr([x x; x x]) == replstr([x x; x x], :compact => true) ==
         "2×2 Array{Float64,2}:\n 3.14159  3.14159\n 3.14159  3.14159"
@@ -1611,7 +1611,7 @@ end
     @test showstr(Set([[Int16(1)]])) == "Set(Array{Int16,1}[[1]])"
     @test showstr([Float16(1)]) == "Float16[1.0]"
     @test showstr([[Float16(1)]]) == "Array{Float16,1}[[1.0]]"
-    @test replstr(Real[Float16(1)]) == "1-element Array{Real,1}:\n Float16(1.0)"
+    @test replstr(Real[Float16(1)]) == "1-element Array{Real,1}:\n 1.0"
     @test replstr(Array{Real}[Real[1]]) == "1-element Array{Array{Real,N} where N,1}:\n [1]"
     # printing tuples (Issue #25042)
     @test replstr(fill((Int64(1), zeros(Float16, 3)), 1)) ==
@@ -1642,7 +1642,7 @@ end
     @test repr([(1,),(1,2),(1,2,3)]) == "Tuple{$Int,Vararg{$Int,N} where N}[(1,), (1, 2), (1, 2, 3)]"
 
     # issues #25466 & #26256
-    @test replstr([:A => [1]]) == "1-element Array{Pair{Symbol,Array{$Int,1}},1}:\n :A => [1]"
+    @test replstr([:A => [1]]) == "1-element Array{Pair{Symbol,Array{$Int,1}},1}:\n :A=>[1]"
 
     # issue #26881
     @test showstr([keys(Dict('a' => 'b'))]) == "Base.KeySet{Char,Dict{Char,Char}}[['a']]"
@@ -1656,14 +1656,14 @@ end
     @test showstr(Dict((1 => 2) => (3 => 4))) == "Dict((1 => 2) => (3 => 4))"
 
     # issue #27979 (dislaying arrays of pairs containing arrays as first member)
-    @test replstr([[1.0]=>1.0]) == "1-element Array{Pair{Array{Float64,1},Float64},1}:\n [1.0] => 1.0"
+    @test replstr([[1.0]=>1.0]) == "1-element Array{Pair{Array{Float64,1},Float64},1}:\n [1.0]=>1.0"
 
     # issue #28159
     @test replstr([(a=1, b=2), (a=3,c=4)]) == "2-element Array{NamedTuple{names,Tuple{$Int,$Int}} where names,1}:\n (a = 1, b = 2)\n (a = 3, c = 4)"
 
     @test replstr(Vector[Any[1]]) == "1-element Array{Array{T,1} where T,1}:\n Any[1]"
     @test replstr(AbstractDict{Integer,Integer}[Dict{Integer,Integer}(1=>2)]) ==
-        "1-element Array{AbstractDict{Integer,Integer},1}:\n Dict(1 => 2)"
+        "1-element Array{AbstractDict{Integer,Integer},1}:\n Dict(1=>2)"
 end
 
 @testset "#14684: `display` should print associative types in full" begin

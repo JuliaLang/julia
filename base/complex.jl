@@ -150,9 +150,9 @@ julia> complex(7)
 
 julia> complex([1, 2, 3])
 3-element Array{Complex{Int64},1}:
- 1 + 0im
- 2 + 0im
- 3 + 0im
+ 1+0im
+ 2+0im
+ 3+0im
 ```
 """
 complex(z::Complex) = z
