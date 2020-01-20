@@ -190,7 +190,7 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
 
     host, portstr = parse_machine(machine_bind[1])
     portopt = ``
-    if portstr != ""
+    if isempty(portstr)
         portopt = ` -p $(portstr) `
     end
     sshflags = `$(params[:sshflags]) $portopt`
