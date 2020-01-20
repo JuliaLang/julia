@@ -2264,9 +2264,12 @@
                                                   b))
                                   (loop (read-char (ts:port s))))))
                      (let ((str (tostr #f b)))
-                       (if (= (string-length str) 1)
-                           (string.char str 0)
-                           (error "character literal contains multiple characters")))))))
+                       (let ((len (string-length str)))
+                         (if (= len 1)
+                             (string.char str 0)
+                             (if (= len 0)
+                                 (error "invalid empty character literal")
+                                 (error "character literal contains multiple characters")))))))))
 
           ;; symbol/expression quote
           ((eq? t ':)
