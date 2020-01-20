@@ -534,8 +534,8 @@ julia> a
 
 julia> collect(rest)
 2-element Array{Char,1}:
- 'b'
- 'c'
+ 'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
+ 'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
 ```
 """
 function peel(itr)

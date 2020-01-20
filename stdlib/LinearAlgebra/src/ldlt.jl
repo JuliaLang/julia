@@ -149,7 +149,7 @@ julia> ldltS \\ b
 
 julia> S \\ b
 3-element Array{Float64,1}:
- 1.79067
+ 1.7907
  0.627907
  1.34884
 ```
