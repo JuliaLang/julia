@@ -164,11 +164,13 @@ function parse_machine(machine::AbstractString)
 
     if length(machine_def) == 2
         portstr = machine_def[2]
+        if !all(isdigit, portstr) || (p = parse(Int,portstr); p < 1 || p > 65535)
+            msg = "invalid machine definition format string: invalid port format \"$machine_def\""
+            throw(ArgumentError(msg))
+        end
     end
     (hoststr, portstr)
 end
-
-
 
 function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, params::Dict, launched::Array, launch_ntfy::Condition)
     dir = params[:dir]
@@ -188,12 +190,8 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
 
     host, portstr = parse_machine(machine_bind[1])
     portopt = ``
-    if portstr != ``
-        if !all(isdigit, portstr) || (p = parse(Int,portstr); p < 1 || p > 65535)
-            msg = "invalid machine definition format string: invalid port format \"$machine_def\""
-            throw(ArgumentError(msg))
-        end
-        portopt = ` -p $(machine_def[2]) `
+    if portstr != ""
+        portopt = ` -p $(portstr) `
     end
     sshflags = `$(params[:sshflags]) $portopt`
 
