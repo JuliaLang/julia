@@ -3,6 +3,9 @@
 using Base.Iterators
 using Random
 
+import Base: IteratorSize, SizeUnknown
+@test IteratorSize(Any) isa SizeUnknown
+
 # zip and filter iterators
 # issue #4718
 @test collect(Iterators.filter(x->x[1], zip([true, false, true, false],"abcd"))) == [(true,'a'),(true,'c')]
