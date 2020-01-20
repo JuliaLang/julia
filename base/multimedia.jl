@@ -316,7 +316,8 @@ variants, one can also supply the "raw" data in the requested MIME type by passi
 `x::AbstractString` (for MIME types with text-based storage, such as text/html or
 application/postscript) or `x::Vector{UInt8}` (for binary MIME types).
 
-To customize how instances of a type are displayed, overload [`show`](@ref) rather than `display`.
+To customize how instances of a type are displayed, overload [`show`](@ref) rather than `display`,
+as explained in the manual section on [custom pretty-printing](@id man-custom-pretty-printing).
 """
 function display(@nospecialize x)
     for i = length(displays):-1:1
