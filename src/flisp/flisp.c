@@ -51,7 +51,7 @@
 extern "C" {
 #endif
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 #include <malloc.h>
 JL_DLLEXPORT char * dirname(char *);
 #else

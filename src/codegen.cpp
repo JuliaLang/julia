@@ -119,13 +119,13 @@ JL_DLLEXPORT void __stack_chk_fail()
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
-#if defined(_COMPILER_MINGW_)
+#if defined(_COMPILER_GCC_)
 extern void ___chkstk_ms(void);
 #else
 extern void __chkstk(void);
 #endif
 #else
-#if defined(_COMPILER_MINGW_)
+#if defined(_COMPILER_GCC_)
 #undef _alloca
 extern void _alloca(void);
 #else
@@ -7537,7 +7537,7 @@ static void init_julia_llvm_env(Module *m)
 #endif
 #ifndef FORCE_ELF
 #if defined(_CPU_X86_64_)
-#if defined(_COMPILER_MINGW_)
+#if defined(_COMPILER_GCC_)
     Function *chkstk_func = Function::Create(FunctionType::get(T_void, false),
             Function::ExternalLinkage, "___chkstk_ms", m);
     add_named_global(chkstk_func, &___chkstk_ms, /*dllimport*/false);
@@ -7547,7 +7547,7 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(chkstk_func, &__chkstk, /*dllimport*/false);
 #endif
 #else
-#if defined(_COMPILER_MINGW_)
+#if defined(_COMPILER_GCC_)
     Function *chkstk_func = Function::Create(FunctionType::get(T_void, false),
             Function::ExternalLinkage, "_alloca", m);
     add_named_global(chkstk_func, &_alloca, /*dllimport*/false);
