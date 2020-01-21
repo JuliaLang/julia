@@ -197,10 +197,7 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
     exeflags = `$exeflags --worker`
 
     host, portnum = parse_machine(machine_bind[1])
-    portopt = ``
-    if portnum != nothing
-        portopt = ` -p $(portnum) `
-    end
+    portopt = portnum === nothing ? `` : `-p $portnum`
     sshflags = `$(params[:sshflags]) $portopt`
 
     # Build up the ssh command
