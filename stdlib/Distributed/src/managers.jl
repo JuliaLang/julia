@@ -147,7 +147,7 @@ show(io::IO, manager::SSHManager) = println(io, "SSHManager(machines=", manager.
 
 function parse_machine(machine::AbstractString)
     hoststr = ""
-    portstr = ""
+    portnum = nothing
 
     if machine[begin] == '['  # ipv6 bracket notation (RFC 2732)
         ipv6_end = findlast(']', machine)
@@ -164,12 +164,20 @@ function parse_machine(machine::AbstractString)
 
     if length(machine_def) == 2
         portstr = machine_def[2]
-        if !all(isdigit, portstr) || (p = parse(Int,portstr); p < 1 || p > 65535)
+
+        if !all(isdigit, portstr)
             msg = "invalid machine definition format string: invalid port format \"$machine_def\""
             throw(ArgumentError(msg))
         end
+
+        portnum = parse(Int, portstr)
+
+        if portnum < 1 || portnum > 65535
+            msg = "invalid machine definition format string: invalid port number \"$machine_def\""
+            throw(ArgumentError(msg))
+        end
     end
-    (hoststr, portstr)
+    (hoststr, portnum)
 end
 
 function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, params::Dict, launched::Array, launch_ntfy::Condition)
@@ -188,10 +196,10 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
     end
     exeflags = `$exeflags --worker`
 
-    host, portstr = parse_machine(machine_bind[1])
+    host, portnum = parse_machine(machine_bind[1])
     portopt = ``
-    if isempty(portstr)
-        portopt = ` -p $(portstr) `
+    if portnum != nothing
+        portopt = ` -p $(portnum) `
     end
     sshflags = `$(params[:sshflags]) $portopt`
 
