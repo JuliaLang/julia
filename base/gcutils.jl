@@ -49,20 +49,24 @@ Module with garbage collection utilities.
 """
 module GC
 
-"""
-    GC.gc()
-    GC.gc(full::Bool)
+# mirrored from julia.h
+const GC_AUTO = 0
+const GC_FULL = 1
+const GC_INCREMENTAL = 2
 
-Perform garbage collection. The argument `full` determines the kind of collection: A full
-collection scans all objects, while an incremental collection only scans so-called young
-objects and is much quicker. If called without an argument, heuristics are used to determine
-which type of collection is needed.
+"""
+    GC.gc([full=true])
+
+Perform garbage collection. The argument `full` determines the kind of
+collection: A full collection (default) sweeps all objects, which makes the
+next GC scan much slower, while an incremental collection may only sweep
+so-called young objects.
 
 !!! warning
     Excessive use will likely lead to poor performance.
 """
-gc() = ccall(:jl_gc_collect, Cvoid, (Cint,), 0)
-gc(full::Bool) = ccall(:jl_gc_collect, Cvoid, (Cint,), full ? 1 : 2)
+gc(full::Bool=true) =
+    ccall(:jl_gc_collect, Cvoid, (Cint,), full ? GC_FULL : GC_INCREMENTAL)
 
 """
     GC.enable(on::Bool)
