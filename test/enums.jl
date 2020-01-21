@@ -172,7 +172,7 @@ end
 
 # long, discongruous
 @enum Alphabet begin
-    alphabet_a = 28
+    alphabet_a
     alphabet_b
     alphabet_c
     alphabet_d
@@ -197,6 +197,6 @@ end
     alphabet_w
     alphabet_x
     alphabet_y
-    alphabet_z
+    alphabet_z = 26
 end
-@test alphabet_a == Alphabet(27)
+@test alphabet_z == Alphabet(26)
