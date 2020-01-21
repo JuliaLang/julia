@@ -94,17 +94,12 @@ OPENBLAS_BUILD_OPTS += MAKE_NB_JOBS=0
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS), 1)
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-skylakexdgemm.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
-	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
-		patch -p1 -f < $(SRCDIR)/patches/openblas-skylakexdgemm.patch
-	echo 1 > $@
-
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
 	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
 		patch -p1 -f < $(SRCDIR)/patches/openblas-winexit.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-skylakexdgemm.patch-applied $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured

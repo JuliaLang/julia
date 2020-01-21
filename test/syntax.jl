@@ -835,7 +835,7 @@ let ε=1, μ=2, x=3, î=4
     @test µ == μ == 2
     # NFC normalization of identifiers:
     @test Meta.parse("\u0069\u0302") === Meta.parse("\u00ee")
-    @test î == 4
+    @test î == 4
     # latin vs greek ε (#14751)
     @test Meta.parse("\u025B") === Meta.parse("\u03B5")
     @test ɛ == ε == 1
@@ -1994,6 +1994,12 @@ end
     end
     pop = 1
 end == 1
+
+# issue #29982
+@test Meta.parse("'a'") == 'a'
+@test Meta.parse("'\U0061'") == 'a'
+test_parseerror("''", "invalid empty character literal")
+test_parseerror("'abc'", "character literal contains multiple characters")
 
 # optional soft scope: #28789, #33864
 

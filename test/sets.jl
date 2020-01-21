@@ -301,13 +301,15 @@ end
     @test !(Set([1,2,3]) <= Set([1,2,4]))
 end
 
-@testset "issubset, symdiff" begin
+@testset "issubset, symdiff, isdisjoint" begin
     for S in (Set, BitSet, Vector)
         for (l,r) in ((S([1,2]),     S([3,4])),
                       (S([5,6,7,8]), S([7,8,9])),
                       (S([1,2]),     S([3,4])),
                       (S([5,6,7,8]), S([7,8,9])),
                       (S([1,2,3]),   S()),
+                      (S(),          S()),
+                      (S(),          S([1,2,3])),
                       (S([1,2,3]),   S([1])),
                       (S([1,2,3]),   S([1,2])),
                       (S([1,2,3]),   S([1,2,3])),
@@ -317,6 +319,8 @@ end
             @test issubset(intersect(l,r), r)
             @test issubset(l, union(l,r))
             @test issubset(r, union(l,r))
+            @test isdisjoint(l,l) == isempty(l)
+            @test isdisjoint(l,r) == isempty(intersect(l,r))
             if S === Vector
                 @test sort(union(intersect(l,r),symdiff(l,r))) == sort(union(l,r))
             else
