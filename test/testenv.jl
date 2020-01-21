@@ -26,7 +26,14 @@ if !@isdefined(testenv_defined)
         const test_exename = popfirst!(test_exeflags.exec)
     end
 
-    addprocs_with_testenv(X; kwargs...) = addprocs(X; exename=test_exename, exeflags=test_exeflags, kwargs...)
+    function addprocs_with_testenv(X; kwargs...)
+        if X > 1
+            [addprocs(X-1; exename=test_exename, exeflags=test_exeflags, kwargs...);
+             addprocs(1; exename=test_exename, exeflags=`$test_exeflags --compile=min`, kwargs...)]
+        else
+            addprocs(X; exename=test_exename, exeflags=test_exeflags, kwargs...)
+        end
+    end
 
     const curmod = @__MODULE__
     const curmod_name = fullname(curmod)

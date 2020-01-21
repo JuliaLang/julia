@@ -43,14 +43,14 @@ if !all(isfiles)
           join(tests[.!(isfiles)], ", "))
 end
 
-const node1_tests = String[]
-function move_to_node1(t)
-    if t in tests
-        splice!(tests, findfirst(isequal(t), tests))
-        push!(node1_tests, t)
-    end
-    nothing
+function take_tests(query)
+    select_tests = filter(test->occursin(query,test), tests)
+    filter!(test->!occursin(query,test), tests)
+    return select_tests
 end
+
+const node1_tests = String[]
+move_to_node1(t) = append!(node1_tests, take_tests(t))
 
 # Base.compilecache only works from node 1, so precompile test is handled specially
 move_to_node1("precompile")
@@ -63,6 +63,14 @@ move_to_node1("stress")
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
+# The last node runs with --compile=min, and takes tests from the back of the list.
+# Move tests that do not require compilation to the back.
+append!(tests, take_tests(r"LinearAlgebra/.*"))
+# some LinearAlgbra tests are extremely slow without compilation
+for test in ["pinv", "triangular", "bunchkaufman", "lq", "eigen", "givens"]
+    prepend!(tests, take_tests("LinearAlgebra/$test"))
+end
+
 import LinearAlgebra
 cd(@__DIR__) do
     n = 1
@@ -72,6 +80,7 @@ cd(@__DIR__) do
         LinearAlgebra.BLAS.set_num_threads(1)
     end
     skipped = 0
+    compile_min_worker = last(workers())
 
     @everywhere include("testdefs.jl")
 
@@ -187,7 +196,11 @@ cd(@__DIR__) do
                 @async begin
                     push!(all_tasks, current_task())
                     while length(tests) > 0
-                        test = popfirst!(tests)
+                        test = if p == compile_min_worker
+                            pop!(tests)
+                        else
+                            popfirst!(tests)
+                        end
                         running_tests[test] = now()
                         local resp
                         wrkr = p
