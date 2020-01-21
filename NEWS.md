@@ -23,6 +23,7 @@ Build system changes
 New library functions
 ---------------------
 
+* The new `isdisjoint` function indicates whether two collections are disjoint ([#34427]).
 
 New library features
 --------------------

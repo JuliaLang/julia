@@ -381,7 +381,7 @@ end
 """
     isdisjoint(v1, v2) -> Bool
 
-Returns whether the collections `v1` and `v2` are disjoint, i.e. whether
+Return whether the collections `v1` and `v2` are disjoint, i.e. whether
 their intersection is empty.
 
 !!! compat "Julia 1.5"
