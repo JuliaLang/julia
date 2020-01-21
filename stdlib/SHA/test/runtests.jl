@@ -275,7 +275,7 @@ end
 # test error if eltype of input is not UInt8
 for f in sha_funcs
     global nerrors
-    data = UInt32[0x23467, 0x324775]
+    local data = UInt32[0x23467, 0x324775]
     try
         f(data)
     catch ex
