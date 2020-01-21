@@ -48,6 +48,7 @@
 @test (a=1,b=2) != (b=1,a=2)
 @test NamedTuple() === NamedTuple()
 @test NamedTuple() != (a=1,)
+@test !isequal(NamedTuple(), (a=1,))
 
 @test string((a=1,)) == "(a = 1,)"
 @test string((name="", day=:today)) == "(name = \"\", day = :today)"

@@ -31,8 +31,8 @@ check-openlibm: compile-openlibm
 
 else # USE_BINARYBUILDER_OPENLIBM
 
-OPENLIBM_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/OpenLibm-v$(OPENLIBM_VER)-$(OPENLIBM_BB_REL)
+OPENLIBM_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/OpenLibm_jll.jl/releases/download/OpenLibm-v$(OPENLIBM_VER)+$(OPENLIBM_BB_REL)
 OPENLIBM_BB_NAME := OpenLibm.v$(OPENLIBM_VER)
 
-$(eval $(call bb-install,openlibm,OPENLIBM,true))
+$(eval $(call bb-install,openlibm,OPENLIBM,false))
 endif

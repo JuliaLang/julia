@@ -698,18 +698,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     }
 #endif
 
-#if defined(__linux__)
-    int ncores = jl_cpu_threads();
-    if (ncores > 1) {
-        cpu_set_t cpumask;
-        CPU_ZERO(&cpumask);
-        for(int i=0; i < ncores; i++) {
-            CPU_SET(i, &cpumask);
-        }
-        sched_setaffinity(0, sizeof(cpu_set_t), &cpumask);
-    }
-#endif
-
     if ((jl_options.outputo || jl_options.outputbc) &&
         (jl_options.code_coverage || jl_options.malloc_log)) {
         jl_error("cannot generate code-coverage or track allocation information while generating a .o or .bc output file");
