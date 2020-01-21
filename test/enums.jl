@@ -11,7 +11,6 @@ using Main.MacroCalls
 @test_throws MethodError convert(Enum, 1.0)
 
 @test_throws ArgumentError("no arguments given for Enum Foo") @macrocall(@enum Foo)
-@test_throws ArgumentError("")
 @test_throws ArgumentError("invalid base type for Enum Foo2, Foo2::Float64=::Float64; base type must be an integer primitive type") @macrocall(@enum Foo2::Float64 apple=1.)
 
 @enum Fruit apple orange kiwi
