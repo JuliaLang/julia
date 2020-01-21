@@ -172,7 +172,7 @@ end
 
 # long, discongruous
 @enum Alphabet begin
-    alphabet_a = 27
+    alphabet_a = 28
     alphabet_b
     alphabet_c
     alphabet_d
