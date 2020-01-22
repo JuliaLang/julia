@@ -49,7 +49,7 @@ jl_sym_t *global_sym; jl_sym_t *list_sym;
 jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
 jl_sym_t *boundscheck_sym; jl_sym_t *inbounds_sym;
 jl_sym_t *copyast_sym; jl_sym_t *cfunction_sym;
-jl_sym_t *pure_sym; jl_sym_t *simdloop_sym;
+jl_sym_t *pure_sym; jl_sym_t *loopinfo_sym;
 jl_sym_t *meta_sym; jl_sym_t *inert_sym;
 jl_sym_t *polly_sym; jl_sym_t *unused_sym;
 jl_sym_t *static_parameter_sym; jl_sym_t *inline_sym;
@@ -60,7 +60,8 @@ jl_sym_t *nospecialize_sym; jl_sym_t *macrocall_sym;
 jl_sym_t *colon_sym; jl_sym_t *hygienicscope_sym;
 jl_sym_t *throw_undef_if_not_sym; jl_sym_t *getfield_undefref_sym;
 jl_sym_t *gc_preserve_begin_sym; jl_sym_t *gc_preserve_end_sym;
-jl_sym_t *escape_sym;
+jl_sym_t *coverageeffect_sym; jl_sym_t *escape_sym;
+jl_sym_t *aliasscope_sym; jl_sym_t *popaliasscope_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -108,7 +109,7 @@ typedef struct _jl_ast_context_t {
 static jl_ast_context_t jl_ast_main_ctx;
 
 #ifdef __clang_analyzer__
-jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED;
+jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #else
 #define jl_ast_ctx(fl_ctx) container_of(fl_ctx, jl_ast_context_t, fl)
 #endif
@@ -202,7 +203,7 @@ static const builtinspec_t julia_flisp_ast_ext[] = {
     { NULL, NULL }
 };
 
-static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx)
+static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx) JL_NOTSAFEPOINT
 {
     fl_context_t *fl_ctx = &ast_ctx->fl;
     fl_init(fl_ctx, 4*1024*1024);
@@ -340,7 +341,7 @@ void jl_init_frontend(void)
     inbounds_sym = jl_symbol("inbounds");
     newvar_sym = jl_symbol("newvar");
     copyast_sym = jl_symbol("copyast");
-    simdloop_sym = jl_symbol("simdloop");
+    loopinfo_sym = jl_symbol("loopinfo");
     pure_sym = jl_symbol("pure");
     meta_sym = jl_symbol("meta");
     list_sym = jl_symbol("list");
@@ -364,6 +365,9 @@ void jl_init_frontend(void)
     throw_undef_if_not_sym = jl_symbol("throw_undef_if_not");
     getfield_undefref_sym = jl_symbol("##getfield##");
     do_sym = jl_symbol("do");
+    coverageeffect_sym = jl_symbol("code_coverage_effect");
+    aliasscope_sym = jl_symbol("aliasscope");
+    popaliasscope_sym = jl_symbol("popaliasscope");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
@@ -475,13 +479,8 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             return (jl_value_t*)jl_box_int32((int32_t)i64);
 #endif
     }
-    if (issymbol(e)) {
-        if (e == jl_ast_ctx(fl_ctx)->true_sym)
-            return jl_true;
-        else if (e == jl_ast_ctx(fl_ctx)->false_sym)
-            return jl_false;
+    if (issymbol(e))
         return (jl_value_t*)scmsym_to_julia(fl_ctx, e);
-    }
     if (fl_isstring(fl_ctx, e))
         return jl_pchar_to_string((char*)cvalue_data(e), cvalue_len(e));
     if (iscons(e) || e == fl_ctx->NIL) {
@@ -498,6 +497,10 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
                 return jl_box_slotnumber(numval(car_(cdr_(e))));
             else if (hd == jl_ast_ctx(fl_ctx)->null_sym && llength(e) == 1)
                 return jl_nothing;
+            else if (hd == jl_ast_ctx(fl_ctx)->true_sym && llength(e) == 1)
+                return jl_true;
+            else if (hd == jl_ast_ctx(fl_ctx)->false_sym && llength(e) == 1)
+                return jl_false;
         }
         if (issymbol(hd))
             sym = scmsym_to_julia(fl_ctx, hd);
@@ -640,9 +643,9 @@ static int julia_to_scm_noalloc1(fl_context_t *fl_ctx, jl_value_t *v, value_t *r
     else if (jl_is_symbol(v))
         *retval = symbol(fl_ctx, jl_symbol_name((jl_sym_t*)v));
     else if (v == jl_true)
-        *retval = jl_ast_ctx(fl_ctx)->true_sym;
+        *retval = fl_cons(fl_ctx, jl_ast_ctx(fl_ctx)->true_sym, fl_ctx->NIL);
     else if (v == jl_false)
-        *retval = jl_ast_ctx(fl_ctx)->false_sym;
+        *retval = fl_cons(fl_ctx, jl_ast_ctx(fl_ctx)->false_sym, fl_ctx->NIL);
     else if (v == jl_nothing)
         *retval = fl_cons(fl_ctx, jl_ast_ctx(fl_ctx)->null_sym, fl_ctx->NIL);
     else
@@ -889,8 +892,8 @@ finally:
         if (jl_loaderror_type == NULL)
             jl_rethrow();
         else
-            jl_throw(jl_new_struct(jl_loaderror_type, form, result,
-                                   jl_current_exception()));
+            jl_rethrow_other(jl_new_struct(jl_loaderror_type, form, result,
+                                           jl_current_exception()));
     }
     JL_GC_POP();
     return result;
@@ -1027,13 +1030,14 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     jl_value_t *result;
     JL_TRY {
         margs[0] = jl_toplevel_eval(*ctx, margs[0]);
-        jl_method_instance_t *mfunc = jl_method_lookup(jl_gf_mtable(margs[0]), margs, nargs, 1, world);
+        jl_method_instance_t *mfunc = jl_method_lookup(margs, nargs, 1, world);
+        JL_GC_PROMISE_ROOTED(mfunc);
         if (mfunc == NULL) {
-            jl_method_error((jl_function_t*)margs[0], margs, nargs, world);
+            jl_method_error(margs[0], &margs[1], nargs, world);
             // unreachable
         }
         *ctx = mfunc->def.method->module;
-        result = mfunc->invoke(mfunc, margs, nargs);
+        result = jl_invoke(margs[0], &margs[1], nargs - 1, mfunc);
     }
     JL_CATCH {
         if (jl_loaderror_type == NULL) {
@@ -1047,8 +1051,8 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
             else
                 margs[0] = jl_cstr_to_string("<macrocall>");
             margs[1] = jl_fieldref(lno, 0); // extract and allocate line number
-            jl_throw(jl_new_struct(jl_loaderror_type, margs[0], margs[1],
-                                   jl_current_exception()));
+            jl_rethrow_other(jl_new_struct(jl_loaderror_type, margs[0], margs[1],
+                                           jl_current_exception()));
         }
     }
     ptls->world_age = last_age;
@@ -1179,6 +1183,7 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmod
     return expr;
 }
 
+// Lower an expression tree into Julia's intermediate-representation.
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule)
 {
     return jl_expand_with_loc(expr, inmodule, "none", 0);

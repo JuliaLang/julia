@@ -301,13 +301,15 @@ end
     @test !(Set([1,2,3]) <= Set([1,2,4]))
 end
 
-@testset "issubset, symdiff" begin
+@testset "issubset, symdiff, isdisjoint" begin
     for S in (Set, BitSet, Vector)
         for (l,r) in ((S([1,2]),     S([3,4])),
                       (S([5,6,7,8]), S([7,8,9])),
                       (S([1,2]),     S([3,4])),
                       (S([5,6,7,8]), S([7,8,9])),
                       (S([1,2,3]),   S()),
+                      (S(),          S()),
+                      (S(),          S([1,2,3])),
                       (S([1,2,3]),   S([1])),
                       (S([1,2,3]),   S([1,2])),
                       (S([1,2,3]),   S([1,2,3])),
@@ -317,6 +319,8 @@ end
             @test issubset(intersect(l,r), r)
             @test issubset(l, union(l,r))
             @test issubset(r, union(l,r))
+            @test isdisjoint(l,l) == isempty(l)
+            @test isdisjoint(l,r) == isempty(intersect(l,r))
             if S === Vector
                 @test sort(union(intersect(l,r),symdiff(l,r))) == sort(union(l,r))
             else
@@ -347,6 +351,24 @@ end
     # symdiff must NOT uniquify
     @test symdiff([1, 2, 1]) == symdiff!([1, 2, 1]) == [2]
     @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [2]
+
+    # Base.hasfastin
+    @test all(Base.hasfastin, Any[Dict(1=>2), Set(1), BitSet(1), 1:9, 1:2:9,
+                                  Dict, Set, BitSet, UnitRange, StepRange])
+    @test !any(Base.hasfastin, Any[[1, 2, 3], "123",
+                                   Array, String])
+
+    # tests for Dict
+    d1 = Dict(1=>nothing, 2=>nothing)
+    d2 = Dict(1=>nothing, 3=>nothing)
+    d3 = Dict(1=>nothing, 2=>nothing, 3=>nothing)
+    @test d3 == merge(d1, d2)
+    @test !issubset(d1, d2)
+    @test !issubset(d2, d1)
+    @test !issubset(d3, d1)
+    @test !issubset(d3, d2)
+    @test issubset(d1, d3)
+    @test issubset(d2, d3)
 end
 
 @testset "unique" begin
@@ -592,11 +614,16 @@ end
 end
 
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin
-    a = [1, 2]
-    b = [2, 1, 3]
-    for C = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
-        A = C(a)
-        B = C(b)
+    a = [2, 1, 2]
+    b = [2, 3, 1, 3]
+    ua = unique(a)
+    ub = unique(b)
+    for TA in (Tuple, identity, Set, BitSet, Base.IdSet{Int}),
+        TB in (Tuple, identity, Set, BitSet, Base.IdSet{Int}),
+        uA = false:true,
+        uB = false:true
+        A = TA(uA ? ua : a)
+        B = TB(uB ? ub : b)
         @test A ⊆ B
         @test A ⊊ B
         @test !(A ⊈ B)
@@ -611,6 +638,10 @@ end
         @test !(B ⊉ A)
         @test !issetequal(A, B)
         @test !issetequal(B, A)
+        for T = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
+            @test issetequal(A, T(A))
+            @test issetequal(B, T(B))
+        end
         if A isa AbstractSet && B isa AbstractSet
             @test A <= B
             @test A <  B
@@ -620,10 +651,6 @@ end
             @test !(B <  A)
             @test B >= A
             @test B >  A
-        end
-        for D = (Tuple, identity, Set, BitSet)
-            @test issetequal(A, D(A))
-            @test !issetequal(A, D(B))
         end
     end
 end

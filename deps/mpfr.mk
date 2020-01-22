@@ -4,6 +4,8 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured: | $(build_prefix)/manifest/gmp
 endif
 
+ifneq ($(USE_BINARYBUILDER_MPFR),1)
+
 ifeq ($(USE_SYSTEM_MPFR), 0)
 ifeq ($(USE_SYSTEM_GMP), 0)
 MPFR_OPTS := --with-gmp-include=$(abspath $(build_includedir)) --with-gmp-lib=$(abspath $(build_shlibdir))
@@ -70,3 +72,11 @@ configure-mpfr: $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured
 compile-mpfr: $(BUILDDIR)/mpfr-$(MPFR_VER)/build-compiled
 fastcheck-mpfr: check-mpfr
 check-mpfr: $(BUILDDIR)/mpfr-$(MPFR_VER)/build-checked
+
+else # USE_BINARYBUILDER_MPFR
+
+MPFR_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/MPFR_jll.jl/releases/download/MPFR-v$(MPFR_VER)+$(MPFR_BB_REL)
+MPFR_BB_NAME := MPFR.v$(MPFR_VER)
+
+$(eval $(call bb-install,mpfr,MPFR,false))
+endif

@@ -70,6 +70,7 @@ static void jl_init_intrinsic_functions_codegen(Module *m)
     float_func[trunc_llvm] = true;
     float_func[rint_llvm] = true;
     float_func[sqrt_llvm] = true;
+    float_func[sqrt_llvm_fast] = true;
 }
 
 extern "C"
@@ -148,7 +149,7 @@ static Value *uint_cnvt(jl_codectx_t &ctx, Type *to, Value *x)
 
 static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
 {
-    // assumes `jl_justbits(bt)`.
+    // assumes `jl_is_pointerfree(bt)`.
     // `ptr` can point to a inline field, do not read the tag from it.
     // make sure to return exactly the type specified by
     // julia_type_to_llvm as this will be assumed by the callee.
@@ -192,11 +193,11 @@ static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
     std::vector<Constant*> fields(0);
     for (size_t i = 0; i < nf; i++) {
         size_t offs = jl_field_offset(bt, i);
-        assert(!jl_field_isptr(bt, i));
         jl_value_t *ft = jl_field_type(bt, i);
         Type *lft = julia_type_to_llvm(ft);
         if (type_is_ghost(lft))
             continue;
+        assert(!jl_field_isptr(bt, i));
         unsigned llvm_idx = isa<StructType>(lt) ? convert_struct_offset(lt, offs) : i;
         while (fields.size() < llvm_idx)
             fields.push_back(UndefValue::get(lct->getTypeAtIndex(fields.size())));
@@ -269,7 +270,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
     if (e == jl_false)
         return ConstantInt::get(T_int8, 0);
     jl_value_t *bt = jl_typeof(e);
-    if (!jl_justbits(bt))
+    if (!jl_is_pointerfree(bt))
         return NULL;
     return julia_const_to_llvm(e, (jl_datatype_t*)bt);
 }
@@ -285,6 +286,10 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
     if (ty == T_int1 && to == T_int8) {
         // bools may be stored internally as int8
         unboxed = ctx.builder.CreateZExt(unboxed, T_int8);
+    }
+    else if (ty == T_int8 && to == T_int1) {
+        // bools may be stored internally as int8
+        unboxed = ctx.builder.CreateTrunc(unboxed, T_int1);
     }
     else if (ty == T_void || DL.getTypeSizeInBits(ty) != DL.getTypeSizeInBits(to)) {
         // this can happen in dead code
@@ -600,8 +605,13 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         bool isboxed;
         Type *ptrty = julia_type_to_llvm(ety, &isboxed);
         assert(!isboxed);
-        Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-        return typed_load(ctx, thePtr, im1, ety, tbaa_data, true, align_nb);
+        if (!type_is_ghost(ptrty)) {
+            Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
+            return typed_load(ctx, thePtr, im1, ety, tbaa_data, nullptr, true, align_nb);
+        }
+        else {
+            return ghostValue(ety);
+        }
     }
 }
 
@@ -663,10 +673,12 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         bool isboxed;
         Type *ptrty = julia_type_to_llvm(ety, &isboxed);
         assert(!isboxed);
-        thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-        typed_store(ctx, thePtr, im1, x, ety, tbaa_data, NULL, align_nb);
+        if (!type_is_ghost(ptrty)) {
+            thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
+            typed_store(ctx, thePtr, im1, x, ety, tbaa_data, nullptr, nullptr, align_nb);
+        }
     }
-    return mark_julia_type(ctx, thePtr, false, aty);
+    return e;
 }
 
 static Value *emit_checked_srem_int(jl_codectx_t &ctx, Value *x, Value *den)
@@ -753,10 +765,8 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
     }
 
     Value *ifelse_result;
-    bool isboxed;
-    Type *llt1 = julia_type_to_llvm(t1, &isboxed);
-    if (t1 != t2)
-        isboxed = true;
+    bool isboxed = t1 != t2 || !deserves_stack(t1);
+    Type *llt1 = isboxed ? T_prjlvalue : julia_type_to_llvm(t1);
     if (!isboxed) {
         if (type_is_ghost(llt1))
             return x;
@@ -776,18 +786,22 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
             Value *y_vboxed = y.Vboxed;
             Value *x_ptr = (x.isghost ? NULL : data_pointer(ctx, x));
             Value *y_ptr = (y.isghost ? NULL : data_pointer(ctx, y));
+            MDNode *ifelse_tbaa;
             if (!x.isghost && x.constant)
                 x_vboxed = boxed(ctx, x);
             if (!y.isghost && y.constant)
                 y_vboxed = boxed(ctx, y);
-            if (!x_ptr && !y_ptr) {
+            if (!x_ptr && !y_ptr) { // both ghost
                 ifelse_result = NULL;
+                ifelse_tbaa = tbaa_stack;
             }
             else if (!x_ptr) {
                 ifelse_result = y_ptr;
+                ifelse_tbaa = y.tbaa;
             }
             else if (!y_ptr) {
                 ifelse_result = x_ptr;
+                ifelse_tbaa = x.tbaa;
             }
             else {
                 x_ptr = decay_derived(x_ptr);
@@ -795,6 +809,13 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 if (x_ptr->getType() != y_ptr->getType())
                     y_ptr = ctx.builder.CreateBitCast(y_ptr, x_ptr->getType());
                 ifelse_result = ctx.builder.CreateSelect(isfalse, y_ptr, x_ptr);
+                ifelse_tbaa = MDNode::getMostGenericTBAA(x.tbaa, y.tbaa);
+                if (ifelse_tbaa == NULL) {
+                    // LLVM won't return a TBAA result for the root, but mark_julia_struct requires it: make it now
+                    auto *OffsetNode = ConstantAsMetadata::get(ConstantInt::get(T_int64, 0));
+                    Metadata *Ops[] = {tbaa_root, tbaa_root, OffsetNode};
+                    ifelse_tbaa = MDNode::get(jl_LLVMContext, Ops);
+                }
             }
             Value *tindex;
             if (!x_tindex && x.constant) {
@@ -832,7 +853,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 ctx.builder.Insert(ret);
                 tindex = ret;
             }
-            jl_cgval_t ret = mark_julia_slot(ifelse_result, rt_hint, tindex, tbaa_data);
+            jl_cgval_t ret = mark_julia_slot(ifelse_result, rt_hint, tindex, ifelse_tbaa);
             if (x_vboxed || y_vboxed) {
                 if (!x_vboxed)
                     x_vboxed = ConstantPointerNull::get(cast<PointerType>(y_vboxed->getType()));
@@ -929,6 +950,15 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
             xtyp = INTT(xtyp);
         if (!xtyp)
             return emit_runtime_call(ctx, f, argv, nargs);
+        ////Bool are required to be in the range [0,1]
+        ////so while they are represented as i8,
+        ////the operations need to be done in mod 1
+        ////we can either do that now, or truncate them
+        ////later into mod 1.
+        ////LLVM seems to emit better code if we do the latter,
+        ////(more likely to fold away the cast) so that's what we'll do.
+        //if (xtyp == (jl_value_t*)jl_bool_type)
+        //    r = T_int1;
 
         Type **argt = (Type**)alloca(sizeof(Type*) * nargs);
         argt[0] = xtyp;
@@ -953,11 +983,12 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         }
 
         // call the intrinsic
-        jl_value_t *newtyp = NULL;
+        jl_value_t *newtyp = xinfo.typ;
         Value *r = emit_untyped_intrinsic(ctx, f, argvalues, nargs, (jl_datatype_t**)&newtyp, xinfo.typ);
-        if (r->getType() == T_int1)
-            r = ctx.builder.CreateZExt(r, T_int8);
-        return mark_julia_type(ctx, r, false, newtyp ? newtyp : xinfo.typ);
+        // Turn Bool operations into mod 1 now, if needed
+        if (newtyp == (jl_value_t*)jl_bool_type && r->getType() != T_int1)
+            r = ctx.builder.CreateTrunc(r, T_int1);
+        return mark_julia_type(ctx, r, false, newtyp);
     }
     }
     assert(0 && "unreachable");
@@ -1231,6 +1262,10 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     case sqrt_llvm: {
         Value *sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
         return ctx.builder.CreateCall(sqrtintr, x);
+    }
+    case sqrt_llvm_fast: {
+        Value *sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
+        return math_builder(ctx, true)().CreateCall(sqrtintr, x);
     }
 
     default:

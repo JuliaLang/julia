@@ -17,9 +17,7 @@ write(::DevNull, ::UInt8) = 1
 unsafe_write(::DevNull, ::Ptr{UInt8}, n::UInt)::Int = n
 close(::DevNull) = nothing
 flush(::DevNull) = nothing
-wait_connected(::DevNull) = nothing
 wait_readnb(::DevNull) = wait()
-wait_readbyte(::DevNull) = wait()
 wait_close(::DevNull) = wait()
 eof(::DevNull) = true
 

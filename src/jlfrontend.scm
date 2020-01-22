@@ -29,73 +29,7 @@
            '(error "malformed expression"))))
    thk))
 
-
-;; return a lambda expression representing a thunk for a top-level expression
-;; note: expansion of stuff inside module is delayed, so the contents obey
-;; toplevel expansion order (don't expand until stuff before is evaluated).
-(define (expand-toplevel-expr-- e file line)
-  (let ((ex0 (julia-expand-macroscope e)))
-    (if (toplevel-only-expr? ex0)
-        ex0
-        (let* ((ex (julia-expand0 ex0))
-               (th (julia-expand1
-                    `(lambda () ()
-                             (scope-block
-                              ,(blockify ex)))
-                    file line)))
-          (if (and (null? (cdadr (caddr th)))
-                   (and (length= (lam:body th) 2)
-                        (let ((retval (cadadr (lam:body th))))
-                          (or (and (pair? retval) (eq? (car retval) 'lambda))
-                              (simple-atom? retval)))))
-              ;; generated functions use the pattern (body (return (lambda ...))), which
-              ;; needs to be unwrapped to just the lambda (CodeInfo).
-              (cadadr (lam:body th))
-              `(thunk ,th))))))
-
-(define *in-expand* #f)
-
-(define (toplevel-only-expr? e)
-  (and (pair? e)
-       (or (memq (car e) '(toplevel line module import using export
-                                    error incomplete))
-           (and (memq (car e) '(global const)) (every symbol? (cdr e))
-                (every (lambda (x) (not (memq x '(true false)))) (cdr e))))))
-
-(define (expand-toplevel-expr e file line)
-  (cond ((or (atom? e) (toplevel-only-expr? e))
-         (if (underscore-symbol? e)
-             (error "all-underscore identifier used as rvalue"))
-         e)
-        (else
-         (let ((last *in-expand*))
-           (if (not last)
-               (begin (reset-gensyms)
-                      (set! *in-expand* #t)))
-           (begin0 (expand-toplevel-expr-- e file line)
-                   (set! *in-expand* last))))))
-
-;; construct default definitions of `eval` for non-bare modules
-;; called by jl_eval_module_expr
-(define (module-default-defs e)
-  (jl-expand-to-thunk
-   (let* ((name (caddr e))
-          (body (cadddr e))
-          (loc  (cadr body))
-          (loc  (if (and (pair? loc) (eq? (car loc) 'line))
-                    (list loc)
-                    '()))
-          (x    (if (eq? name 'x) 'y 'x)))
-     `(block
-       (= (call eval ,x)
-          (block
-           ,@loc
-           (call (core eval) ,name ,x)))
-       (= (call include ,x)
-          (block
-           ,@loc
-           (call (top include) ,name ,x)))))
-   'none 0))
+;; parser entry points
 
 ;; parse one expression (if greedy) or atom, returning end position
 (define (jl-parse-one s pos0 greedy)
@@ -146,6 +80,54 @@
    (parse-all- (open-input-file filename) filename)
    (lambda (e) #f)))
 
+;; lowering entry points
+
+;; return a lambda expression representing a thunk for a top-level expression
+;; note: expansion of stuff inside module is delayed, so the contents obey
+;; toplevel expansion order (don't expand until stuff before is evaluated).
+(define (expand-toplevel-expr-- e file line)
+  (let ((ex0 (julia-expand-macroscope e)))
+    (if (toplevel-only-expr? ex0)
+        ex0
+        (let* ((ex (julia-expand0 ex0))
+               (th (julia-expand1
+                    `(lambda () ()
+                             (scope-block
+                              ,(blockify ex)))
+                    file line)))
+          (if (and (null? (cdadr (caddr th)))
+                   (and (length= (lam:body th) 2)
+                        ;; 1-element body might be `return` or `goto` (issue #33227)
+                        (return? (cadr (lam:body th)))
+                        (let ((retval (cadadr (lam:body th))))
+                          (or (and (pair? retval) (eq? (car retval) 'lambda))
+                              (simple-atom? retval)))))
+              ;; generated functions use the pattern (body (return (lambda ...))), which
+              ;; needs to be unwrapped to just the lambda (CodeInfo).
+              (cadadr (lam:body th))
+              `(thunk ,th))))))
+
+(define (toplevel-only-expr? e)
+  (and (pair? e)
+       (or (memq (car e) '(toplevel line module import using export
+                                    error incomplete))
+           (and (memq (car e) '(global const)) (every symbol? (cdr e))))))
+
+(define *in-expand* #f)
+
+(define (expand-toplevel-expr e file line)
+  (cond ((or (atom? e) (toplevel-only-expr? e))
+         (if (underscore-symbol? e)
+             (error "all-underscore identifier used as rvalue"))
+         e)
+        (else
+         (let ((last *in-expand*))
+           (if (not last)
+               (begin (reset-gensyms)
+                      (set! *in-expand* #t)))
+           (begin0 (expand-toplevel-expr-- e file line)
+                   (set! *in-expand* last))))))
+
 ; expand a piece of raw surface syntax to an executable thunk
 (define (jl-expand-to-thunk expr file line)
   (error-wrap (lambda ()
@@ -160,6 +142,28 @@
 (define (jl-expand-macroscope expr)
   (error-wrap (lambda ()
                 (julia-expand-macroscope expr))))
+
+;; construct default definitions of `eval` for non-bare modules
+;; called by jl_eval_module_expr
+(define (module-default-defs e)
+  (jl-expand-to-thunk
+   (let* ((name (caddr e))
+          (body (cadddr e))
+          (loc  (cadr body))
+          (loc  (if (and (pair? loc) (eq? (car loc) 'line))
+                    (list loc)
+                    '()))
+          (x    (if (eq? name 'x) 'y 'x)))
+     `(block
+       (= (call eval ,x)
+          (block
+           ,@loc
+           (call (core eval) ,name ,x)))
+       (= (call include ,x)
+          (block
+           ,@loc
+           (call (top include) ,name ,x)))))
+   'none 0))
 
 ; run whole frontend on a string. useful for testing.
 (define (fe str)

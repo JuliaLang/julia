@@ -16,7 +16,7 @@ end
 
 function factorial_lookup(n::Integer, table, lim)
     n < 0 && throw(DomainError(n, "`n` must not be negative."))
-    n > lim && throw(OverflowError(string(n, " is too large to look up in the table")))
+    n > lim && throw(OverflowError(string(n, " is too large to look up in the table; consider using `factorial(big(", n, "))` instead")))
     n == 0 && return one(n)
     @inbounds f = table[n]
     return oftype(n, f)

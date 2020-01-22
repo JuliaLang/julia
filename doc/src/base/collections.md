@@ -128,6 +128,8 @@ Base.mapfoldl(::Any, ::Any, ::Any)
 Base.mapfoldr(::Any, ::Any, ::Any)
 Base.first
 Base.last
+Base.front
+Base.tail
 Base.step
 Base.collect(::Any)
 Base.collect(::Type, ::Any)
@@ -191,6 +193,7 @@ for the key `x`).  Multiple arguments to `D[...]` are converted to tuples; for e
 `D[x,y]`  is equivalent to `D[(x,y)]`, i.e. it refers to the value keyed by the tuple `(x,y)`.
 
 ```@docs
+Base.AbstractDict
 Base.Dict
 Base.IdDict
 Base.WeakKeyDict
@@ -233,6 +236,7 @@ Partially implemented by:
 ## Set-Like Collections
 
 ```@docs
+Base.AbstractSet
 Base.Set
 Base.BitSet
 Base.union
@@ -247,6 +251,7 @@ Base.issubset
 Base.:⊈
 Base.:⊊
 Base.issetequal
+Base.isdisjoint
 ```
 
 Fully implemented by:

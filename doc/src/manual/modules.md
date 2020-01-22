@@ -46,8 +46,8 @@ The statement `using BigLib: thing1, thing2` brings just the identifiers `thing1
 into scope from module `BigLib`. If these names refer to functions, adding methods to them
 will not be allowed (you may only "use" them, not extend them).
 
-The [`import`](@ref) keyword supports the same syntax as [`using`](@ref), but only operates on a single name
-at a time. It does not add modules to be searched the way `using` does. `import` also differs
+The [`import`](@ref) keyword supports the same syntax as [`using`](@ref).
+It does not add modules to be searched the way `using` does. `import` also differs
 from `using` in that functions imported using `import` can be extended with new methods.
 
 In `MyModule` above we wanted to add a method to the standard [`show`](@ref) function, so we had to write
@@ -117,17 +117,10 @@ end
 
 ### Standard modules
 
-There are three important standard modules: `Main`, `Core`, and `Base`.
-
-`Main` is the top-level module, and Julia starts with `Main` set as the current module.  Variables
-defined at the prompt go in `Main`, and [`varinfo()`](@ref) lists variables in `Main`.
-
-`Core` contains all identifiers considered "built in" to the language, i.e. part of the core language
-and not libraries. Every module implicitly specifies `using Core`, since you can't do anything
-without those definitions.
-
-`Base` is a module that contains basic functionality (the contents of `base/`). All modules implicitly contain `using Base`,
-since this is needed in the vast majority of cases.
+There are three important standard modules:
+* [`Core`](@ref) contains all functionality "built into" the language.
+* [`Base`](@ref) contains basic functionality that is useful in almost all cases.
+* [`Main`](@ref) is the top-level module and the current module, when Julia is started.
 
 ### Default top-level definitions and bare modules
 

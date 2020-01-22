@@ -136,7 +136,7 @@ for idx in 1:length(data)
 
         if hash != answers[sha_func][idx]
             print("\n")
-            warn(
+            @warn(
             """
             For $(describe_hash(sha_types[sha_func])) expected:
                 $(answers[sha_func][idx])
@@ -165,7 +165,7 @@ for sha_idx in 1:length(sha_funcs)
     hash = bytes2hex(SHA.digest!(ctx))
     if hash != answers[sha_funcs[sha_idx]][end]
         print("\n")
-        warn(
+        @warn(
         """
         For $(describe_hash(sha_types[sha_funcs[sha_idx]])) expected:
             $(answers[sha_funcs[sha_idx]][end-1])
@@ -206,7 +206,7 @@ for sha_idx in 1:length(sha_funcs)
     hash = bytes2hex(SHA.digest!(ctx))
     if hash != answers[sha_funcs[sha_idx]][end]
         print("\n")
-        warn(
+        @warn(
         """
         For $(describe_hash(sha_types[sha_funcs[sha_idx]])) expected:
             $(answers[sha_funcs[sha_idx]][end-1])
@@ -233,7 +233,7 @@ for (key, msg, fun, hash) in (
     digest = bytes2hex(fun(Vector(key), Vector(msg)))
     if digest != hash
         print("\n")
-        warn(
+        @warn(
         """
         For $fun($(String(key)), $(String(msg))) expected:
             $hash
@@ -257,7 +257,7 @@ for idx in 1:length(ctxs)
         copy(ctxs[idx]())
     catch
         print("\n")
-        warn("Some weird copy error happened with $(ctxs[idx])")
+        @warn("Some weird copy error happened with $(ctxs[idx])")
         nerrors += 1
     end
     VERBOSE && println("Done! [$(nerrors - nerrors_old) errors]")
@@ -266,7 +266,7 @@ for idx in 1:length(ctxs)
     VERBOSE && print("Testing show function @ $(ctxs[idx]) ...")
     if replstr(ctxs[idx]()) != shws[idx]
         print("\n")
-        warn("Some weird show error happened with $(ctxs[idx])")
+        @warn("Some weird show error happened with $(ctxs[idx])")
         nerrors += 1
     end
     VERBOSE && println("Done! [$(nerrors - nerrors_old) errors]")
@@ -275,7 +275,7 @@ end
 # test error if eltype of input is not UInt8
 for f in sha_funcs
     global nerrors
-    data = UInt32[0x23467, 0x324775]
+    local data = UInt32[0x23467, 0x324775]
     try
         f(data)
     catch ex
@@ -286,7 +286,7 @@ for f in sha_funcs
         end
         rethrow()
     end
-    warn("Non-UInt8 Arrays should fail")
+    @warn("Non-UInt8 Arrays should fail")
     nerrors += 1
 end
 

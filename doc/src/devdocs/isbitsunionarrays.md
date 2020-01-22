@@ -6,7 +6,17 @@ Julia also supports Union types, quite literally the union of a set of types. Cu
 
 ## isbits Union Structs
 
-Julia now includes an optimization wherein "isbits Union" fields in types (`mutable struct`, `struct`, etc.) will be stored inline. This is accomplished by determining the "inline size" of the Union type (e.g. `Union{UInt8, Int16}` will have a size of two bytes, which represents the size needed of the largest Union type `Int16`), and in addition, allocating an extra "type tag byte" (`UInt8`), whose value signals the type of the actual value stored inline of the "Union bytes". The type tag byte value is the index of the actual value's type in the Union type's order of types. For example, a type tag value of `0x02` for a field with type `Union{Nothing, UInt8, Int16}` would indicate that an `Int16` value is stored in the 2 bytes of the field in the structure's memory; a `0x01` value would indicate that a `UInt8` value was stored in the first 1 byte of the 2 bytes of the field's memory. Lastly, a value of `0x00` signals that the `nothing` value will be returned for this field, even though, as a singleton type with a single type instance, it technically has a size of 0. The type tag byte for a type's Union field is stored directly after the field's computed Union memory.
+Julia now includes an optimization wherein "isbits Union" fields in types (`mutable struct`, `struct`, etc.) will be stored inline.
+This is accomplished by determining the "inline size" of the Union type
+(e.g. `Union{UInt8, Int16}` will have a size of two bytes, which represents the size needed of the largest Union type `Int16`),
+and in addition, allocating an extra "type tag byte" (`UInt8`), whose value signals the type of the actual value stored inline of the "Union bytes".
+The type tag byte value is the index of the actual value's type in the Union type's order of types.
+For example, a type tag value of `0x02` for a field with type `Union{Nothing, UInt8, Int16}` would indicate that an `Int16` value is stored in
+the 16 bits of the field in the structure's memory;
+a `0x01` value would indicate that a `UInt8` value was stored in the first 8 bits of the 16 bits of the field's memory.
+Lastly, a value of `0x00` signals that the `nothing` value will be returned for this field, even though, as a singleton
+type with a single type instance, it technically has a size of 0. The type tag byte for a type's Union field is stored
+directly after the field's computed Union memory.
 
 ## isbits Union Arrays
 

@@ -137,9 +137,20 @@ end
         @test triu(Tridiagonal(dl,d,du),2)  == Tridiagonal(zerosdl,zerosd,zerosdu)
 
         @test !istril(SymTridiagonal(d,dl))
+        @test istril(SymTridiagonal(d,zerosdl))
         @test !istriu(SymTridiagonal(d,dl))
+        @test istriu(SymTridiagonal(d,zerosdl))
         @test istriu(Tridiagonal(zerosdl,d,du))
+        @test !istriu(Tridiagonal(dl,d,zerosdu))
         @test istril(Tridiagonal(dl,d,zerosdu))
+        @test !istril(Tridiagonal(zerosdl,d,du))
+
+        @test isdiag(SymTridiagonal(d,zerosdl))
+        @test !isdiag(SymTridiagonal(d,dl))
+        @test isdiag(Tridiagonal(zerosdl,d,zerosdu))
+        @test !isdiag(Tridiagonal(dl,d,zerosdu))
+        @test !isdiag(Tridiagonal(zerosdl,d,du))
+        @test !isdiag(Tridiagonal(dl,d,du))
     end
 
     @testset "iszero and isone" begin
@@ -379,9 +390,24 @@ end
                 end
             end
         end
+        @testset "generalized dot" begin
+            x = fill(convert(elty, 1), n)
+            y = fill(convert(elty, 1), n)
+            @test dot(x, A, y) ≈ dot(A'x, y)
+        end
     end
 end
 
+@testset "SymTridiagonal block matrix" begin
+    M = [1 2; 2 4]
+    A = SymTridiagonal(fill(M, 3), fill(M, 2))
+    @test @inferred A[1,1] == Symmetric(M)
+    @test @inferred A[1,2] == M
+    @test @inferred A[2,1] == transpose(M)
+    @test @inferred diag(A, 1) == fill(M, 2)
+    @test @inferred diag(A, 0) == fill(Symmetric(M), 3)
+    @test @inferred diag(A, -1) == fill(transpose(M), 2)
+end
 
 @testset "Issue 12068" begin
     @test SymTridiagonal([1, 2], [0])^3 == [1 0; 0 8]
@@ -435,6 +461,19 @@ end
     A90, b90 = central_difference_discretization(90)
 
     @test A90\b90 ≈ inv(A90)*b90
+end
+
+@testset "singular values of SymTridiag" begin
+    @test svdvals(SymTridiagonal([-4,2,3], [0,0])) ≈ [4,3,2]
+    @test svdvals(SymTridiagonal(collect(0.:10.), zeros(10))) ≈ reverse(0:10)
+    @test svdvals(SymTridiagonal([1,2,1], [1,1])) ≈ [3,1,0]
+    # test that dependent methods such as `cond` also work
+    @test cond(SymTridiagonal([1,2,3], [0,0])) ≈ 3
+end
+
+@testset "sum" begin
+    @test sum(Tridiagonal([1,2], [1,2,3], [7,8])) == 24
+    @test sum(SymTridiagonal([1,2,3], [1,2])) == 12
 end
 
 end # module TestTridiagonal

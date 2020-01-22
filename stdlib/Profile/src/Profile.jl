@@ -7,6 +7,9 @@ module Profile
 
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
 
+# deprecated functions: use `getdict` instead
+lookup(ip::UInt) = lookup(convert(Ptr{Cvoid}, ip))
+
 export @profile
 
 """
@@ -34,7 +37,7 @@ end
 ####
 
 """
-    init(; n::Integer, delay::Float64)
+    init(; n::Integer, delay::Real))
 
 Configure the `delay` between backtraces (measured in seconds), and the number `n` of
 instruction pointers that may be stored. Each instruction pointer corresponds to a single
@@ -42,7 +45,7 @@ line of code; backtraces generally consist of a long list of instruction pointer
 settings can be obtained by calling this function with no arguments, and each can be set
 independently using keywords or in the order `(n, delay)`.
 """
-function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Float64} = nothing)
+function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
@@ -53,7 +56,7 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Float6
     init(nnew, delaynew)
 end
 
-function init(n::Integer, delay::Float64)
+function init(n::Integer, delay::Real)
     status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), n, round(UInt64,10^9*delay))
     if status == -1
         error("could not allocate space for ", n, " instruction pointers")
@@ -85,14 +88,16 @@ struct ProfileFormat
     sortedby::Symbol
     combine::Bool
     C::Bool
+    recur::Symbol
     function ProfileFormat(;
         C = false,
         combine = true,
         maxdepth::Int = typemax(Int),
         mincount::Int = 0,
         noisefloor = 0,
-        sortedby::Symbol = :filefuncline)
-        return new(maxdepth, mincount, noisefloor, sortedby, combine, C)
+        sortedby::Symbol = :filefuncline,
+        recur::Symbol = :off)
+        return new(maxdepth, mincount, noisefloor, sortedby, combine, C, recur)
     end
 end
 
@@ -115,37 +120,50 @@ The keyword arguments can be any combination of:
  - `maxdepth` -- Limits the depth higher than `maxdepth` in the `:tree` format.
 
  - `sortedby` -- Controls the order in `:flat` format. `:filefuncline` (default) sorts by the source
-    line, whereas `:count` sorts in order of number of collected samples.
+    line, `:count` sorts in order of number of collected samples, and `:overhead` sorts by the number of samples
+    incurred by each function by itself.
 
  - `noisefloor` -- Limits frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
     A suggested value to try for this is 2.0 (the default is 0). This parameter hides samples for which `n <= noisefloor * √N`,
     where `n` is the number of samples on this line, and `N` is the number of samples for the callee.
 
  - `mincount` -- Limits the printout to only those lines with at least `mincount` occurrences.
+
+ - `recur` -- Controls the recursion handling in `:tree` format. `:off` (default) prints the tree as normal. `:flat` instead
+    compresses any recursion (by ip), showing the approximate effect of converting any self-recursion into an iterator.
+    `:flatc` does the same but also includes collapsing of C frames (may do odd things around `jl_apply`).
 """
-function print(io::IO, data::Vector{<:Unsigned} = fetch(), lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data);
+function print(io::IO,
+        data::Vector{<:Unsigned} = fetch(),
+        lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data)
+        ;
         format = :tree,
         C = false,
         combine = true,
         maxdepth::Int = typemax(Int),
         mincount::Int = 0,
         noisefloor = 0,
-        sortedby::Symbol = :filefuncline)
-    print(io, data, lidict, ProfileFormat(C = C,
+        sortedby::Symbol = :filefuncline,
+        recur::Symbol = :off)
+    print(io, data, lidict, ProfileFormat(
+            C = C,
             combine = combine,
             maxdepth = maxdepth,
             mincount = mincount,
             noisefloor = noisefloor,
-            sortedby = sortedby),
+            sortedby = sortedby,
+            recur = recur),
         format)
 end
 
 function print(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDict, LineInfoFlatDict}, fmt::ProfileFormat, format::Symbol)
     cols::Int = Base.displaysize(io)[2]
     data = convert(Vector{UInt64}, data)
-    if format == :tree
+    fmt.recur ∈ (:off, :flat, :flatc) || throw(ArgumentError("recur value not recognized"))
+    if format === :tree
         tree(io, data, lidict, cols, fmt)
-    elseif format == :flat
+    elseif format === :flat
+        fmt.recur === :off || throw(ArgumentError("format flat only implements recur=:off"))
         flat(io, data, lidict, cols, fmt)
     else
         throw(ArgumentError("output format $(repr(format)) not recognized"))
@@ -174,12 +192,22 @@ allows you to save profiling results for future analysis.
 """
 function retrieve()
     data = fetch()
-    return (copy(data), getdict(data))
+    return (data, getdict(data))
 end
 
 function getdict(data::Vector{UInt})
-    uip = unique(data)
-    return LineInfoDict(UInt64(ip)=>lookup(ip) for ip in uip)
+    # Lookup is expensive, so do it only once per ip.
+    udata = unique(data)
+    dict = LineInfoDict()
+    for ip in udata
+        st = lookup(convert(Ptr{Cvoid}, ip))
+        # To correct line numbers for moving code, put it in the form expected by
+        # Base.update_stackframes_callback[]
+        stn = map(x->(x, 1), st)
+        try Base.invokelatest(Base.update_stackframes_callback[], stn) catch end
+        dict[UInt64(ip)] = map(first, stn)
+    end
+    return dict
 end
 
 """
@@ -223,6 +251,45 @@ function flatten(data::Vector, lidict::LineInfoDict)
         end
     end
     return (newdata, newdict)
+end
+
+# Take a file-system path and try to form a concise representation of it
+# based on the package ecosystem
+function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
+    return get!(filenamecache, spath) do
+        path = string(spath)
+        if isabspath(path)
+            if ispath(path)
+                # try to replace the file-system prefix with a short "@Module" one,
+                # assuming that profile came from the current machine
+                # (or at least has the same file-system layout)
+                root = path
+                while !isempty(root)
+                    root, base = splitdir(root)
+                    isempty(base) && break
+                    @assert startswith(path, root)
+                    for proj in Base.project_names
+                        project_file = joinpath(root, proj)
+                        if Base.isfile_casesensitive(project_file)
+                            pkgid = Base.project_file_name_uuid(project_file, "")
+                            isempty(pkgid.name) && return path # bad Project file
+                            # return the joined the module name prefix and path suffix
+                            path = path[nextind(path, sizeof(root)):end]
+                            return string("@", pkgid.name, path)
+                        end
+                    end
+                end
+            end
+            return path
+        elseif isfile(joinpath(Sys.BINDIR::String, Base.DATAROOTDIR, "julia", "base", path))
+            # do the same mechanic for Base (or Core/Compiler) files as above,
+            # but they start from a relative path
+            return joinpath("@Base", normpath(path))
+        else
+            # for non-existent relative paths (such as "REPL[1]"), just consider simplifying them
+            return normpath(path) # drop leading "./"
+        end
+    end
 end
 
 """
@@ -299,217 +366,304 @@ error_codes = Dict(
 """
     fetch() -> data
 
-Returns a reference to the internal buffer of backtraces. Note that subsequent operations,
-like [`clear`](@ref), can affect `data` unless you first make a copy. Note that the
+Returns a copy of the buffer of profile backtraces. Note that the
 values in `data` have meaning only on this machine in the current session, because it
 depends on the exact memory addresses used in JIT-compiling. This function is primarily for
 internal use; [`retrieve`](@ref) may be a better choice for most users.
 """
 function fetch()
-    len = len_data()
     maxlen = maxlen_data()
+    len = len_data()
     if (len == maxlen)
         @warn """The profile data buffer is full; profiling probably terminated
                  before your program finished. To profile for longer runs, call
                  `Profile.init()` with a larger buffer and/or larger delay."""
     end
-    return unsafe_wrap(Array, get_data_pointer(), (len,))
+    data = Vector{UInt}(undef, len)
+    GC.@preserve data unsafe_copyto!(pointer(data), get_data_pointer(), len)
+    return data
 end
 
 
 ## Print as a flat list
-# Counts the number of times each line appears, at any nesting level
-function count_flat(data::Vector{UInt64})
-    linecount = Dict{UInt64, Int}()
-    for ip in data
-        if ip != 0
-            linecount[ip] = get(linecount, ip, 0) + 1
-        end
-    end
-    iplist = Vector{UInt64}()
-    n = Vector{Int}()
-    for (k, v) in linecount
-        push!(iplist, k)
-        push!(n, v)
-    end
-    return (iplist, n)
-end
-
-function parse_flat(iplist::Vector{UInt64}, n::Vector{Int}, lidict::Union{LineInfoDict, LineInfoFlatDict}, C::Bool)
-    # Convert instruction pointers to names & line numbers
+# Counts the number of times each line appears, at any nesting level and at the topmost level
+# Merging multiple equivalent entries and recursive calls
+function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, C::Bool) where {T}
     lilist = StackFrame[]
-    nlist = Int[]
-    for (ip, count) in zip(iplist, n)
+    n = Int[]
+    m = Int[]
+    lilist_idx = Dict{T, Int}()
+    recursive = Set{T}()
+    first = true
+    totalshots = 0
+    for ip in data
+        if ip == 0
+            totalshots += 1
+            empty!(recursive)
+            first = true
+            continue
+        end
         frames = lidict[ip]
         nframes = (frames isa Vector ? length(frames) : 1)
-        # add all the inlining frames
-        for i = nframes:-1:1
+        for i = 1:nframes
             frame = (frames isa Vector ? frames[i] : frames)
-            # Keep only the interpretable ones
-            # The ones with no line number might appear multiple times in a single
-            # backtrace, giving the wrong impression about the total number of backtraces.
-            # Delete them too.
-            if frame != UNKNOWN && frame.line != 0 && (C || !frame.from_c)
+            !C && frame.from_c && continue
+            key = (T === UInt64 ? ip : frame)
+            idx = get!(lilist_idx, key, length(lilist) + 1)
+            if idx > length(lilist)
+                push!(recursive, key)
                 push!(lilist, frame)
-                push!(nlist, count)
+                push!(n, 1)
+                push!(m, 0)
+            elseif !(key in recursive)
+                push!(recursive, key)
+                n[idx] += 1
+            end
+            if first
+                m[idx] += 1
+                first = false
             end
         end
     end
-    return (lilist, nlist)
+    @assert length(lilist) == length(n) == length(m) == length(lilist_idx)
+    return (lilist, n, m, totalshots)
 end
 
 function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, cols::Int, fmt::ProfileFormat)
-    iplist, n = count_flat(data)
-    if isempty(n)
+    lilist, n, m, totalshots = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C)
+    if isempty(lilist)
         warning_empty()
         return
     end
-    lilist, n = parse_flat(iplist, n, lidict, fmt.C)
-    print_flat(io, lilist, n, cols, fmt)
+    if false # optional: drop the "non-interpretable" ones
+        keep = map(frame -> frame != UNKNOWN && frame.line != 0, lilist)
+        lilist = lilist[keep]
+        n = n[keep]
+        m = m[keep]
+    end
+    filenamemap = Dict{Symbol,String}()
+    print_flat(io, lilist, n, m, cols, filenamemap, fmt)
+    Base.println(io, "Total snapshots: ", totalshots)
     nothing
 end
 
-function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int},
-        cols::Int, fmt::ProfileFormat)
-    p = liperm(lilist)
+function print_flat(io::IO, lilist::Vector{StackFrame},
+        n::Vector{Int}, m::Vector{Int},
+        cols::Int, filenamemap::Dict{Symbol,String},
+        fmt::ProfileFormat)
+    if fmt.sortedby === :count
+        p = sortperm(n)
+    elseif fmt.sortedby === :overhead
+        p = sortperm(m)
+    else
+        p = liperm(lilist)
+    end
     lilist = lilist[p]
     n = n[p]
-    if fmt.combine
-        # now that lilist is sorted by li,
-        # combine adjacent entries that are equivlent
-        j = 1
-        for i = 2:length(lilist)
-            if lilist[i] == lilist[j]
-                n[j] += n[i]
-                n[i] = 0
-            else
-                j = i
-            end
-        end
-        keep = n .> 0
-        n = n[keep]
-        lilist = lilist[keep]
-    end
-    if fmt.sortedby == :count
-        p = sortperm(n)
-        n = n[p]
-        lilist = lilist[p]
-    end
+    m = m[p]
+    filenames = String[short_path(li.file, filenamemap) for li in lilist]
+    funcnames = String[string(li.func) for li in lilist]
     wcounts = max(6, ndigits(maximum(n)))
-    maxline = 0
+    wself = max(9, ndigits(maximum(m)))
+    maxline = 1
     maxfile = 6
     maxfunc = 10
-    for li in lilist
+    for i in 1:length(lilist)
+        li = lilist[i]
         maxline = max(maxline, li.line)
-        maxfile = max(maxfile, length(string(li.file)))
-        maxfunc = max(maxfunc, length(string(li.func)))
+        maxfunc = max(maxfunc, length(funcnames[i]))
+        maxfile = max(maxfile, length(filenames[i]))
     end
     wline = max(5, ndigits(maxline))
-    ntext = cols - wcounts - wline - 3
-    maxfunc += 25
+    ntext = max(20, cols - wcounts - wself - wline - 3)
+    maxfunc += 25 # for type signatures
     if maxfile + maxfunc <= ntext
         wfile = maxfile
-        wfunc = maxfunc
+        wfunc = ntext - maxfunc # take the full width (for type sig)
     else
-        wfile = floor(Integer, 2*ntext/5)
-        wfunc = floor(Integer, 3*ntext/5)
+        wfile = 2*ntext÷5
+        wfunc = 3*ntext÷5
     end
-    println(io, lpad("Count", wcounts, " "), " ", rpad("File", wfile, " "), " ",
-        lpad("Line", wline, " "), " ", rpad("Function", wfunc, " "))
+    println(io, lpad("Count", wcounts, " "), " ", lpad("Overhead", wself, " "), " ",
+            rpad("File", wfile, " "), " ", lpad("Line", wline, " "), " Function")
+    println(io, lpad("=====", wcounts, " "), " ", lpad("========", wself, " "), " ",
+            rpad("====", wfile, " "), " ", lpad("====", wline, " "), " ========")
     for i = 1:length(n)
         n[i] < fmt.mincount && continue
         li = lilist[i]
         Base.print(io, lpad(string(n[i]), wcounts, " "), " ")
-        Base.print(io, rpad(rtruncto(string(li.file), wfile), wfile, " "), " ")
-        Base.print(io, lpad(string(li.line), wline, " "), " ")
-        fname = string(li.func)
-        if !li.from_c && li.linfo !== nothing
-            fname = sprint(show_spec_linfo, li)
+        Base.print(io, lpad(string(m[i]), wself, " "), " ")
+        if li == UNKNOWN
+            if !fmt.combine && li.pointer != 0
+                Base.print(io, "@0x", string(li.pointer, base=16))
+            else
+                Base.print(io, "[any unknown stackframes]")
+            end
+        else
+            file = filenames[i]
+            isempty(file) && (file = "[unknown file]")
+            Base.print(io, rpad(rtruncto(file, wfile), wfile, " "), " ")
+            Base.print(io, lpad(li.line > 0 ? string(li.line) : "?", wline, " "), " ")
+            fname = funcnames[i]
+            if !li.from_c && li.linfo !== nothing
+                fname = sprint(show_spec_linfo, li)
+            end
+            isempty(fname) && (fname = "[unknown function]")
+            Base.print(io, ltruncto(fname, wfunc))
         end
-        Base.print(io, rpad(ltruncto(fname, wfunc), wfunc, " "))
         println(io)
     end
     nothing
 end
 
 ## A tree representation
-tree_format_linewidth(x::StackFrame) = ndigits(x.line) + 6
 
-function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int, cols::Int)
+# Representation of a prefix trie of backtrace counts
+mutable struct StackFrameTree{T} # where T <: Union{UInt64, StackFrame}
+    # content fields:
+    frame::StackFrame
+    count::Int          # number of frames this appeared in
+    overhead::Int       # number frames where this was the code being executed
+    flat_count::Int     # number of times this frame was in the flattened representation (unlike count, this'll sum to 100% of parent)
+    max_recur::Int      # maximum number of times this frame was the *top* of the recursion in the stack
+    count_recur::Int    # sum of the number of times this frame was the *top* of the recursion in a stack (divide by count to get an average)
+    down::Dict{T, StackFrameTree{T}}
+    # construction workers:
+    recur::Int
+    builder_key::Vector{UInt64}
+    builder_value::Vector{StackFrameTree{T}}
+    up::StackFrameTree{T}
+    StackFrameTree{T}() where {T} = new(UNKNOWN, 0, 0, 0, 0, 0, Dict{T, StackFrameTree{T}}(), 0, UInt64[], StackFrameTree{T}[])
+end
+
+
+const indent_s = "    ╎"^10
+const indent_z = collect(eachindex(indent_s))
+function indent(depth::Int)
+    depth < 1 && return ""
+    depth <= length(indent_z) && return indent_s[1:indent_z[depth]]
+    div, rem = divrem(depth, length(indent_z))
+    return (indent_s^div) * SubString(indent_s, 1, indent_z[rem])
+end
+
+function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, maxes, filenamemap::Dict{Symbol,String}, showpointer::Bool)
     nindent = min(cols>>1, level)
-    ndigcounts = ndigits(maximum(counts))
-    ndigline = maximum([tree_format_linewidth(x) for x in lilist])
-    ntext = cols - nindent - ndigcounts - ndigline - 5
-    widthfile = floor(Integer, 0.4ntext)
-    widthfunc = floor(Integer, 0.6ntext)
-    strs = Vector{String}(undef, length(lilist))
+    ndigoverhead = ndigits(maxes.overhead)
+    ndigcounts = ndigits(maxes.count)
+    ndigline = ndigits(maximum(frame.frame.line for frame in frames)) + 6
+    ntext = max(30, cols - ndigoverhead - nindent - ndigcounts - ndigline - 6)
+    widthfile = 2*ntext÷5 # min 12
+    widthfunc = 3*ntext÷5 # min 18
+    strs = Vector{String}(undef, length(frames))
     showextra = false
     if level > nindent
         nextra = level - nindent
         nindent -= ndigits(nextra) + 2
         showextra = true
     end
-    for i = 1:length(lilist)
-        li = lilist[i]
+    for i = 1:length(frames)
+        frame = frames[i]
+        li = frame.frame
+        stroverhead = lpad(frame.overhead > 0 ? string(frame.overhead) : "", ndigoverhead, " ")
+        base = nindent == 0 ? "" : indent(nindent - 1) * " "
+        if showextra
+            base = string(base, "+", nextra, " ")
+        end
+        strcount = rpad(string(frame.count), ndigcounts, " ")
         if li != UNKNOWN
-            base = " "^nindent
-            if showextra
-                base = string(base, "+", nextra, " ")
-            end
             if li.line == li.pointer
-                strs[i] = string(base,
-                    rpad(string(counts[i]), ndigcounts, " "),
-                    " ",
-                    "unknown function (pointer: 0x",
+                strs[i] = string(stroverhead, "╎", base, strcount, " ",
+                    "[unknown function] (pointer: 0x",
                     string(li.pointer, base = 16, pad = 2*sizeof(Ptr{Cvoid})),
                     ")")
             else
-                fname = string(li.func)
                 if !li.from_c && li.linfo !== nothing
                     fname = sprint(show_spec_linfo, li)
+                else
+                    fname = string(li.func)
                 end
-                strs[i] = string(base,
-                    rpad(string(counts[i]), ndigcounts, " "),
-                    " ",
-                    rtruncto(string(li.file), widthfile),
+                filename = short_path(li.file, filenamemap)
+                if showpointer
+                    fname = string(
+                        "0x",
+                        string(li.pointer, base = 16, pad = 2*sizeof(Ptr{Cvoid})),
+                        " ",
+                        fname)
+                end
+                strs[i] = string(stroverhead, "╎", base, strcount, " ",
+                    rtruncto(filename, widthfile),
                     ":",
                     li.line == -1 ? "?" : string(li.line),
                     "; ",
                     ltruncto(fname, widthfunc))
             end
         else
-            strs[i] = ""
+            strs[i] = string(stroverhead, "╎", base, strcount, " [unknown stackframe]")
         end
     end
     return strs
 end
 
-# Construct a prefix trie of backtrace counts
-mutable struct StackFrameTree{T} # where T <: Union{UInt64, StackFrame}
-    # content fields:
-    frame::StackFrame
-    count::Int
-    down::Dict{T, StackFrameTree{T}}
-    # construction helpers:
-    builder_key::Vector{UInt64}
-    builder_value::Vector{StackFrameTree{T}}
-    up::StackFrameTree{T}
-    StackFrameTree{T}() where {T} = new(UNKNOWN, 0, Dict{T, StackFrameTree{T}}(), UInt64[], StackFrameTree{T}[])
-end
-
 # turn a list of backtraces into a tree (implicitly separated by NULL markers)
-function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, C::Bool) where {T}
+function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, C::Bool, recur::Symbol) where {T}
     parent = root
-    for i in length(all):-1:1
+    tops = Vector{StackFrameTree{T}}()
+    build = Vector{StackFrameTree{T}}()
+    startframe = length(all)
+    for i in startframe:-1:1
         ip = all[i]
         if ip == 0
             # sentinel value indicates the start of a new backtrace
+            empty!(build)
+            root.recur = 0
+            if recur !== :off
+                # We mark all visited nodes to so we'll only count those branches
+                # once for each backtrace. Reset that now for the next backtrace.
+                push!(tops, parent)
+                for top in tops
+                    while top.recur != 0
+                        top.max_recur < top.recur && (top.max_recur = top.recur)
+                        top.recur = 0
+                        top = top.up
+                    end
+                end
+                empty!(tops)
+            end
+            let this = parent
+                while this !== root
+                    this.flat_count += 1
+                    this = this.up
+                end
+            end
+            parent.overhead += 1
             parent = root
-            parent.count += 1
+            root.count += 1
+            startframe = i
         else
+            pushfirst!(build, parent)
+            if recur === :flat || recur === :flatc
+                # Rewind the `parent` tree back, if this exact ip was already present *higher* in the current tree
+                found = false
+                for j in 1:(startframe - i)
+                    if ip == all[i + j]
+                        if recur === :flat # if not flattening C frames, check that now
+                            frames = lidict[ip]
+                            frame = (frames isa Vector ? frames[1] : frames)
+                            frame.from_c && break # not flattening this frame
+                        end
+                        push!(tops, parent)
+                        parent = build[j]
+                        parent.recur += 1
+                        parent.count_recur += 1
+                        found = true
+                        break
+                    end
+                end
+                found && continue
+            end
             builder_key = parent.builder_key
             builder_value = parent.builder_value
-            fastkey = searchsortedfirst(parent.builder_key, ip)
+            fastkey = searchsortedfirst(builder_key, ip)
             if fastkey < length(builder_key) && builder_key[fastkey] === ip
                 # jump forward to the end of the inlining chain
                 # avoiding an extra (slow) lookup of `ip` in `lidict`
@@ -517,8 +671,9 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                 # note that we may even have this === parent (if we're ignoring this frame ip)
                 this = builder_value[fastkey]
                 let this = this
-                    while this !== parent
+                    while this !== parent && (recur === :off || this.recur == 0)
                         this.count += 1
+                        this.recur = 1
                         this = this.up
                     end
                 end
@@ -533,12 +688,13 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                 frame = (frames isa Vector ? frames[i] : frames)
                 !C && frame.from_c && continue
                 key = (T === UInt64 ? ip : frame)
-                this = get!(parent.down, key) do
-                    return StackFrameTree{T}()
+                this = get!(StackFrameTree{T}, parent.down, key)
+                if recur === :off || this.recur == 0
+                    this.frame = frame
+                    this.up = parent
+                    this.count += 1
+                    this.recur = 1
                 end
-                this.frame = frame
-                this.up = parent
-                this.count += 1
                 parent = this
             end
             # record where the end of this chain is for this ip
@@ -547,51 +703,92 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
         end
     end
     function cleanup!(node::StackFrameTree)
-        empty!(node.builder_key)
-        empty!(node.builder_value)
-        foreach(cleanup!, values(node.down))
+        stack = [node]
+        while !isempty(stack)
+            node = pop!(stack)
+            node.recur = 0
+            empty!(node.builder_key)
+            empty!(node.builder_value)
+            append!(stack, values(node.down))
+        end
         nothing
     end
     cleanup!(root)
     return root
 end
 
-# Print a "branch" starting at a particular level. This gets called recursively.
-function tree(io::IO, bt::StackFrameTree, level::Int, cols::Int, fmt::ProfileFormat, noisefloor::Int)
-    level > fmt.maxdepth && return
-    isempty(bt.down) && return
-    # Order the line information
-    nexts = collect(values(bt.down))
-    lilist = collect(frame.frame for frame in nexts)
-    counts = collect(frame.count for frame in nexts)
-    # Generate the string for each line
-    strs = tree_format(lilist, counts, level, cols)
-    # Recurse to the next level
-    for i in liperm(lilist)
-        down = nexts[i]
-        count = down.count
-        count < fmt.mincount && continue
-        count < noisefloor && continue
-        str = strs[i]
-        println(io, isempty(str) ? "$count unknown stackframe" : str)
-        noisefloor_down = fmt.noisefloor > 0 ? floor(Int, fmt.noisefloor * sqrt(count)) : 0
-        tree(io, down, level + 1, cols, fmt, noisefloor_down)
+function maxstats(root::StackFrameTree)
+    maxcount = Ref(0)
+    maxflatcount = Ref(0)
+    maxoverhead = Ref(0)
+    maxmaxrecur = Ref(0)
+    stack = [root]
+    while !isempty(stack)
+        node = pop!(stack)
+        maxcount[] = max(maxcount[], node.count)
+        maxoverhead[] = max(maxoverhead[], node.overhead)
+        maxflatcount[] = max(maxflatcount[], node.flat_count)
+        maxmaxrecur[] = max(maxmaxrecur[], node.max_recur)
+        append!(stack, values(node.down))
     end
-    nothing
+    return (count=maxcount[], count_flat=maxflatcount[], overhead=maxoverhead[], max_recur=maxmaxrecur[])
+end
+
+# Print the stack frame tree starting at a particular root. Uses a worklist to
+# avoid stack overflows.
+function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat) where T
+    maxes = maxstats(bt)
+    filenamemap = Dict{Symbol,String}()
+    worklist = [(bt, 0, 0, "")]
+    println(io, "Overhead ╎ [+additional indent] Count File:Line; Function")
+    println(io, "=========================================================")
+    while !isempty(worklist)
+        (bt, level, noisefloor, str) = popfirst!(worklist)
+        isempty(str) || println(io, str)
+        level > fmt.maxdepth && continue
+        isempty(bt.down) && continue
+        # Order the line information
+        nexts = collect(values(bt.down))
+        # Generate the string for each line
+        strs = tree_format(nexts, level, cols, maxes, filenamemap, T === UInt64)
+        # Recurse to the next level
+        if fmt.sortedby === :count
+            counts = collect(frame.count for frame in nexts)
+            p = sortperm(counts)
+        elseif fmt.sortedby === :overhead
+            m = collect(frame.overhead for frame in nexts)
+            p = sortperm(m)
+        elseif fmt.sortedby === :flat_count
+            m = collect(frame.flat_count for frame in nexts)
+            p = sortperm(m)
+        else
+            lilist = collect(frame.frame for frame in nexts)
+            p = liperm(lilist)
+        end
+        for i in reverse(p)
+            down = nexts[i]
+            count = down.count
+            count < fmt.mincount && continue
+            count < noisefloor && continue
+            str = strs[i]
+            noisefloor_down = fmt.noisefloor > 0 ? floor(Int, fmt.noisefloor * sqrt(count)) : 0
+            pushfirst!(worklist, (down, level + 1, noisefloor_down, str))
+        end
+    end
 end
 
 function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, cols::Int, fmt::ProfileFormat)
     if fmt.combine
-        root = tree!(StackFrameTree{StackFrame}(), data, lidict, fmt.C)
+        root = tree!(StackFrameTree{StackFrame}(), data, lidict, fmt.C, fmt.recur)
     else
-        root = tree!(StackFrameTree{UInt64}(), data, lidict, fmt.C)
+        root = tree!(StackFrameTree{UInt64}(), data, lidict, fmt.C, fmt.recur)
     end
     if isempty(root.down)
         warning_empty()
         return
     end
-    level = 0
-    tree(io, root, level, cols, fmt, 0)
+    print_tree(io, root, cols, fmt)
+    Base.println(io, "Total snapshots: ", root.count)
     nothing
 end
 

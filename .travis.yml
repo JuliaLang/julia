@@ -61,7 +61,7 @@ before_install:
         ln -s /usr/bin/g++-5 $HOME/bin/x86_64-linux-gnu-g++;
         gcc --version;
         BAR="bar -i 30";
-        BUILDOPTS="-j5 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 USECCACHE=1";
+        BUILDOPTS="-j5 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 USECCACHE=1 USE_BINARYBUILDER_LIBUV=0 USE_BINARYBUILDER_LIBUNWIND=0 USE_BINARYBUILDER_LLVM=0";
         echo "override ARCH=$ARCH" >> Make.user;
         sudo sh -c "echo 0 > /proc/sys/net/ipv6/conf/lo/disable_ipv6";
         export JULIA_CPU_THREADS=4;
@@ -129,7 +129,7 @@ script:
     # skip tests if only files within the "doc" dir have changed
     - if [ $(echo "$FILES_CHANGED" | grep -cv '^doc/') -gt 0 ]; then
         /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
-        /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online Pkg/pkg download; fi
+        /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online download; fi
     - popd
     # test that the embedding code works on our installation
     - mkdir /tmp/embedding-test &&

@@ -9,13 +9,8 @@ mutable struct InferenceResult
     result # ::Type, or InferenceState if WIP
     src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
     function InferenceResult(linfo::MethodInstance, given_argtypes = nothing)
-        if isdefined(linfo, :inferred_const)
-            result = Const(linfo.inferred_const)
-        else
-            result = linfo.rettype
-        end
         argtypes, overridden_by_const = matching_cache_argtypes(linfo, given_argtypes)
-        return new(linfo, argtypes, overridden_by_const, result, nothing)
+        return new(linfo, argtypes, overridden_by_const, Any, nothing)
     end
 end
 

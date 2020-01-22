@@ -132,16 +132,24 @@ isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(
 """
     isless(x, y)
 
-Test whether `x` is less than `y`, according to a canonical total order. Values that are
-normally unordered, such as `NaN`, are ordered in an arbitrary but consistent fashion.
+Test whether `x` is less than `y`, according to a fixed total order.
+`isless` is not defined on all pairs of values `(x, y)`. However, if it
+is defined, it is expected to satisfy the following:
+- If `isless(x, y)` is defined, then so is `isless(y, x)` and `isequal(x, y)`,
+  and exactly one of those three yields `true`.
+- The relation defined by `isless` is transitive, i.e.,
+  `isless(x, y) && isless(y, z)` implies `isless(x, z)`.
+
+Values that are normally unordered, such as `NaN`,
+are ordered in an arbitrary but consistent fashion.
 [`missing`](@ref) values are ordered last.
 
 This is the default comparison used by [`sort`](@ref).
 
 # Implementation
-Non-numeric types with a canonical total order should implement this function.
+Non-numeric types with a total order should implement this function.
 Numeric types only need to implement it if they have special values such as `NaN`.
-Types with a canonical partial order should implement [`<`](@ref).
+Types with a partial order should implement [`<`](@ref).
 """
 function isless end
 
@@ -152,11 +160,11 @@ isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x
 
 function ==(T::Type, S::Type)
     @_pure_meta
-    T<:S && S<:T
+    return ccall(:jl_types_equal, Cint, (Any, Any), T, S) != 0
 end
 function !=(T::Type, S::Type)
     @_pure_meta
-    !(T == S)
+    return !(T == S)
 end
 ==(T::TypeVar, S::Type) = false
 ==(T::Type, S::TypeVar) = false
@@ -674,40 +682,6 @@ function >>>(x::Integer, c::Unsigned)
 end
 >>>(x::Integer, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
 
-# fallback div, fld, and cld implementations
-# NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
-# so it is used here as the basis of float div().
-div(x::T, y::T) where {T<:Real} = convert(T,round((x-rem(x,y))/y))
-
-"""
-    fld(x, y)
-
-Largest integer less than or equal to `x/y`.
-
-# Examples
-```jldoctest
-julia> fld(7.3,5.5)
-1.0
-```
-"""
-fld(x::T, y::T) where {T<:Real} = convert(T,round((x-mod(x,y))/y))
-
-"""
-    cld(x, y)
-
-Smallest integer larger than or equal to `x/y`.
-
-# Examples
-```jldoctest
-julia> cld(5.5,2.2)
-3.0
-```
-"""
-cld(x::T, y::T) where {T<:Real} = convert(T,round((x-modCeil(x,y))/y))
-#rem(x::T, y::T) where {T<:Real} = convert(T,x-y*trunc(x/y))
-#mod(x::T, y::T) where {T<:Real} = convert(T,x-y*floor(x/y))
-modCeil(x::T, y::T) where {T<:Real} = convert(T,x-y*ceil(x/y))
-
 # operator alias
 
 """
@@ -744,6 +718,9 @@ julia> 9 ÷ 4
 
 julia> -5 ÷ 3
 -1
+
+julia> 5.0 ÷ 2
+2.0
 ```
 """
 div
@@ -853,6 +830,16 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 Compose functions: i.e. `(f ∘ g)(args...)` means `f(g(args...))`. The `∘` symbol can be
 entered in the Julia REPL (and most editors, appropriately configured) by typing `\\circ<tab>`.
 
+Function composition also works in prefix form: `∘(f, g)` is the same as `f ∘ g`.
+The prefix form supports composition of multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
+and splatting `∘(fs...)` for composing an iterable collection of functions.
+
+!!! compat "Julia 1.4"
+    Multiple function composition requires at least Julia 1.4.
+
+!!! compat "Julia 1.5"
+    Composition of one function ∘(f)  requires at least Julia 1.5.
+
 # Examples
 ```jldoctest
 julia> map(uppercase∘first, ["apple", "banana", "carrot"])
@@ -860,10 +847,22 @@ julia> map(uppercase∘first, ["apple", "banana", "carrot"])
  'A'
  'B'
  'C'
+
+julia> fs = [
+           x -> 2x
+           x -> x/2
+           x -> x-1
+           x -> x+1
+       ];
+
+julia> ∘(fs...)(3)
+3.0
 ```
 """
+function ∘ end
+∘(f) = f
 ∘(f, g) = (x...)->f(g(x...))
-
+∘(f, g, h...) = ∘(f ∘ g, h...)
 
 """
     !f::Function
@@ -1020,7 +1019,7 @@ passes a tuple as that single argument.
 
 # Example usage:
 ```jldoctest
-julia> map(splat(+), zip(1:3,4:6))
+julia> map(Base.splat(+), zip(1:3,4:6))
 3-element Array{Int64,1}:
  5
  7

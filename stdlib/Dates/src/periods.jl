@@ -24,7 +24,7 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
     # Period accessors
     typs = period in (:Microsecond, :Nanosecond) ? ["Time"] :
            period in (:Hour, :Minute, :Second, :Millisecond) ? ["Time", "DateTime"] : ["Date", "DateTime"]
-    reference = period == :Week ? " For details see [`$accessor_str(::Union{Date, DateTime})`](@ref)." : ""
+    reference = period === :Week ? " For details see [`$accessor_str(::Union{Date, DateTime})`](@ref)." : ""
     for typ_str in typs
         @eval begin
             @doc """
@@ -45,8 +45,8 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
 end
 
 #Print/show/traits
-Base.print(io::IO, p::Period) = print(io, value(p), _units(p))
-Base.show(io::IO, ::MIME"text/plain", p::Period) = print(io, p)
+Base.string(x::Period) = string(value(x), _units(x))
+Base.show(io::IO,x::Period) = print(io, string(x))
 Base.zero(::Union{Type{P},P}) where {P<:Period} = P(0)
 Base.one(::Union{Type{P},P}) where {P<:Period} = 1  # see #16116
 Base.typemin(::Type{P}) where {P<:Period} = P(typemin(Int64))
@@ -75,12 +75,10 @@ for op in (:+, :-, :lcm, :gcd)
     @eval ($op)(x::P, y::P) where {P<:Period} = P(($op)(value(x), value(y)))
 end
 
-for op in (:/, :div, :fld)
-    @eval begin
-        ($op)(x::P, y::P) where {P<:Period} = ($op)(value(x), value(y))
-        ($op)(x::P, y::Real) where {P<:Period} = P(($op)(value(x), Int64(y)))
-    end
-end
+/(x::P, y::P) where {P<:Period} = /(value(x), value(y))
+/(x::P, y::Real) where {P<:Period} = P(/(value(x), Int64(y)))
+div(x::P, y::P, r::RoundingMode) where {P<:Period} = div(value(x), value(y), r)
+div(x::P, y::Real, r::RoundingMode) where {P<:Period} = P(div(value(x), Int64(y), r))
 
 for op in (:rem, :mod)
     @eval begin
@@ -460,6 +458,7 @@ toms(c::CompoundPeriod) = isempty(c.periods) ? 0.0 : Float64(sum(toms, c.periods
 tons(x)              = toms(x) * 1000000
 tons(x::Microsecond) = value(x) * 1000
 tons(x::Nanosecond)  = value(x)
+tons(c::CompoundPeriod) = isempty(c.periods) ? 0.0 : Float64(sum(tons, c.periods))
 days(c::Millisecond) = div(value(c), 86400000)
 days(c::Second)      = div(value(c), 86400)
 days(c::Minute)      = div(value(c), 1440)

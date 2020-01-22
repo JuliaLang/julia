@@ -144,7 +144,7 @@ for (f1, f2, initval) in ((:min, :max, :Inf), (:max, :min, :(-Inf)))
             # otherwise use the min/max of the first slice as initial value
             v0 = mapreduce(f, $f2, A1)
 
-            # but NaNs need to be avoided as intial values
+            # but NaNs need to be avoided as initial values
             v0 = v0 != v0 ? typeof(v0)($initval) : v0
 
             T = _realtype(f, promote_union(eltype(A)))
@@ -162,7 +162,7 @@ reducedim_init(f, op::typeof(|), A::AbstractArray, region) = reducedim_initarray
 # specialize to make initialization more efficient for common cases
 
 let
-    BitIntFloat = Union{BitInteger, Math.IEEEFloat}
+    BitIntFloat = Union{BitInteger, IEEEFloat}
     T = Union{
         [AbstractArray{t} for t in uniontypes(BitIntFloat)]...,
         [AbstractArray{Complex{t}} for t in uniontypes(BitIntFloat)]...}
@@ -278,10 +278,13 @@ reducedim!(op, R::AbstractArray{RT}, A::AbstractArray) where {RT} =
     mapreducedim!(identity, op, R, A)
 
 """
-    mapreduce(f, op, A::AbstractArray; dims=:, [init])
+    mapreduce(f, op, A::AbstractArray...; dims=:, [init])
 
 Evaluates to the same as `reduce(op, map(f, A); dims=dims, init=init)`, but is generally
 faster because the intermediate array is avoided.
+
+!!! compat "Julia 1.2"
+    `mapreduce` with multiple iterators requires Julia 1.2 or later.
 
 # Examples
 ```jldoctest
@@ -302,6 +305,7 @@ julia> mapreduce(isodd, |, a, dims=1)
 ```
 """
 mapreduce(f, op, A::AbstractArray; dims=:, kw...) = _mapreduce_dim(f, op, kw.data, A, dims)
+mapreduce(f, op, A::AbstractArray...; kw...) = reduce(op, map(f, A...); kw...)
 
 _mapreduce_dim(f, op, nt::NamedTuple{(:init,)}, A::AbstractArray, ::Colon) = mapfoldl(f, op, A; nt...)
 

@@ -15,10 +15,10 @@ isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
 
 # true if Type{T} is inlineable as constant T
 # requires that T is a singleton, s.t. T == S implies T === S
-isconstType(@nospecialize t) = isType(t) && issingletontype(t.parameters[1])
+isconstType(@nospecialize t) = isType(t) && hasuniquerep(t.parameters[1])
 
-# test whether T is a singleton type, s.t. T == S implies T === S
-function issingletontype(@nospecialize t)
+# test whether type T has a unique representation, s.t. T == S implies T === S
+function hasuniquerep(@nospecialize t)
     # typeof(Bottom) is special since even though it is a leaftype,
     # at runtime, it might be Type{Union{}} instead, so don't attempt inference of it
     t === typeof(Union{}) && return false
@@ -27,21 +27,21 @@ function issingletontype(@nospecialize t)
     iskindtype(typeof(t)) || return true # non-types are always compared by egal in the type system
     isconcretetype(t) && return true # these are also interned and pointer comparable
     if isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
-        return _all(issingletontype, t.parameters)
+        return _all(hasuniquerep, t.parameters)
     end
     return false
 end
 
 function has_nontrivial_const_info(@nospecialize t)
     isa(t, PartialStruct) && return true
-    return isa(t, Const) && !isdefined(typeof(t.val), :instance) && !(isa(t.val, Type) && issingletontype(t.val))
+    return isa(t, Const) && !isdefined(typeof(t.val), :instance) && !(isa(t.val, Type) && hasuniquerep(t.val))
 end
 
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
 # some of these queries, this check can be used to somewhat protect against making incorrect
 # decisions based on incorrect subtyping. Note that this check, itself, is broken for
 # certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
-isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || issingletontype(a.parameters[1]))
+isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || hasuniquerep(a.parameters[1]))
 
 argtypes_to_type(argtypes::Array{Any,1}) = Tuple{anymap(widenconst, argtypes)...}
 
@@ -95,11 +95,10 @@ _typename(union::UnionAll) = _typename(union.body)
 _typename(a::DataType) = Const(a.name)
 
 function tuple_tail_elem(@nospecialize(init), ct::Vector{Any})
-    # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
-    tmerge_maybe_vararg(@nospecialize(a), @nospecialize(b)) = tmerge(a, tvar_extent(unwrapva(b)))
     t = init
     for x in ct
-        t = tmerge_maybe_vararg(t, x)
+        # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
+        t = tmerge(t, tvar_extent(unwrapva(x)))
     end
     return Vararg{widenconst(t)}
 end

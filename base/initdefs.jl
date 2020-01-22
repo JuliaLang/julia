@@ -215,9 +215,9 @@ function init_load_path()
         unsafe_string(Base.JLOptions().project) :
         get(ENV, "JULIA_PROJECT", nothing))
     HOME_PROJECT[] =
-        project == nothing ? nothing :
+        project === nothing ? nothing :
         project == "" ? nothing :
-        project == "@." ? current_project() : abspath(project)
+        project == "@." ? current_project() : abspath(expanduser(project))
     append!(empty!(LOAD_PATH), paths)
 end
 
@@ -293,22 +293,30 @@ end
 
 ## atexit: register exit hooks ##
 
-const atexit_hooks = []
+const atexit_hooks = Callable[Filesystem.temp_cleanup_purge]
 
 """
     atexit(f)
 
 Register a zero-argument function `f()` to be called at process exit. `atexit()` hooks are
 called in last in first out (LIFO) order and run before object finalizers.
+
+Exit hooks are allowed to call `exit(n)`, in which case Julia will exit with
+exit code `n` (instead of the original exit code). If more than one exit hook
+calls `exit(n)`, then Julia will exit with the exit code corresponding to the
+last called exit hook that calls `exit(n)`. (Because exit hooks are called in
+LIFO order, "last called" is equivalent to "first registered".)
 """
 atexit(f::Function) = (pushfirst!(atexit_hooks, f); nothing)
 
 function _atexit()
-    for f in atexit_hooks
+    while !isempty(atexit_hooks)
+        f = popfirst!(atexit_hooks)
         try
             f()
-        catch err
-            show(stderr, err)
+        catch ex
+            showerror(stderr, ex)
+            Base.show_backtrace(stderr, catch_backtrace())
             println(stderr)
         end
     end

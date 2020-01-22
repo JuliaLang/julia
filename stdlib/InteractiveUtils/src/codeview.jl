@@ -66,7 +66,7 @@ import Base.CodegenParams
 # Printing code representations in IR and assembly
 function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrapper::Bool,
                         strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol,
-                        optimize::Bool, debuginfo::Symbol,
+                        optimize::Bool, debuginfo::Symbol=:default,
                         params::CodegenParams=CodegenParams())
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
@@ -86,14 +86,14 @@ end
 
 function _dump_function_linfo(linfo::Core.MethodInstance, world::UInt, native::Bool, wrapper::Bool,
                               strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol,
-                              optimize::Bool, debuginfo::Symbol,
+                              optimize::Bool, debuginfo::Symbol=:default,
                               params::CodegenParams=CodegenParams())
-    if syntax != :att && syntax != :intel
+    if syntax !== :att && syntax !== :intel
         throw(ArgumentError("'syntax' must be either :intel or :att"))
     end
-    if debuginfo == :default
+    if debuginfo === :default
         debuginfo = :source
-    elseif debuginfo != :source && debuginfo != :none
+    elseif debuginfo !== :source && debuginfo !== :none
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     if native

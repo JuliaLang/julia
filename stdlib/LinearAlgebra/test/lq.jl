@@ -5,52 +5,51 @@ module TestLQ
 using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, rmul!, lmul!
 
-n = 10
-
-# Split n into 2 parts for tests needing two matrices
-n1 = div(n, 2)
-n2 = 2*n1
+m = 10
 
 Random.seed!(1234321)
 
-areal = randn(n,n)/2
-aimg  = randn(n,n)/2
-a2real = randn(n,n)/2
-a2img  = randn(n,n)/2
-breal = randn(n,2)/2
-bimg  = randn(n,2)/2
+asquare = randn(ComplexF64, m, m) / 2
+awide = randn(ComplexF64, m, m+3) / 2
+bcomplex = randn(ComplexF64, m, 2) / 2
 
 # helper functions to unambiguously recover explicit forms of an LQPackedQ
 squareQ(Q::LinearAlgebra.LQPackedQ) = (n = size(Q.factors, 2); lmul!(Q, Matrix{eltype(Q)}(I, n, n)))
 rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
 
-@testset for eltya in (Float32, Float64, ComplexF32, ComplexF64)
-    a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
-    a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
-    asym = a' + a                 # symmetric indefinite
-    apd  = a' * a                 # symmetric positive-definite
+@testset for eltya in (Float32, Float64, ComplexF32, ComplexF64), n in (m, size(awide, 2))
+    adata = m == n ? asquare : awide
+    a = convert(Matrix{eltya}, eltya <: Complex ? adata : real(adata))
     ε = εa = eps(abs(float(one(eltya))))
+    n1 = n ÷ 2
+
+    α = rand(eltya)
+    aα = fill(α,1,1)
+    @test lq(α).L*lq(α).Q ≈ lq(aα).L*lq(aα).Q
+    @test abs(lq(α).Q[1,1]) ≈ one(eltya)
 
     @testset for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
-        b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
+        b = eltyb == Int ? rand(1:5, m, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? bcomplex : real(bcomplex))
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
 
-        α = rand(eltya)
-        aα = fill(α,1,1)
-        @test lq(α).L*lq(α).Q ≈ lq(aα).L*lq(aα).Q
-        @test abs(lq(α).Q[1,1]) ≈ one(eltya)
         tab = promote_type(eltya,eltyb)
 
-        for i = 1:2
-            let a = i == 1 ? a : view(a, 1:n - 1, 1:n - 1), b = i == 1 ? b : view(b, 1:n - 1), n = i == 1 ? n : n - 1
+        @testset for isview in (false,true)
+            let a = isview ? view(a, 1:m - 1, 1:n - 1) : a, b = isview ? view(b, 1:m - 1) : b, m = m - isview, n = n - isview
                 lqa   = lq(a)
+                x = lqa\b
                 l,q   = lqa.L, lqa.Q
-                qra   = qr(a)
+                qra   = qr(a, Val(true))
                 @testset "Basic ops" begin
                     @test size(lqa,1) == size(a,1)
                     @test size(lqa,3) == 1
                     @test size(lqa.Q,3) == 1
+                    @test Base.propertynames(lqa) == (:L, :Q)
+                    ref_obs = (l, q)
+                    for (ii, lq_obj) in enumerate(lqa)
+                        @test ref_obs[ii] == lq_obj
+                    end
                     @test_throws ErrorException lqa.Z
                     @test Array(copy(adjoint(lqa))) ≈ a'
                     @test q*squareQ(q)' ≈ Matrix(I, n, n)
@@ -60,32 +59,35 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
                     lstring = sprint(show, l, context = :compact=>true)
                     qstring = sprint(show, q, context = :compact=>true)
                     @test sprint(show,MIME"text/plain"(),lqa) == "$(typeof(lqa)) with factors L and Q:\n$lstring\n$qstring"
+                    @test LinearAlgebra.Factorization{eltya}(lqa) === lqa
+                    @test Matrix{eltya}(q) isa Matrix{eltya}
                 end
                 @testset "Binary ops" begin
-                    @test a*(lqa\b) ≈ b atol=3000ε
-                    @test lqa*b ≈ qra.Q*qra.R*b atol=3000ε
-                    @test (sq = size(q.factors, 2); *(Matrix{eltyb}(I, sq, sq), adjoint(q))*squareQ(q)) ≈ Matrix(I, n, n) atol=5000ε
+                    @test a*x ≈ b rtol=3000ε
+                    @test x ≈ qra \ b rtol=3000ε
+                    @test lqa*x ≈ a*x rtol=3000ε
+                    @test (sq = size(q.factors, 2); *(Matrix{eltyb}(I, sq, sq), adjoint(q))*squareQ(q)) ≈ Matrix(I, n, n) rtol=5000ε
                     if eltya != Int
                         @test Matrix{eltyb}(I, n, n)*q ≈ convert(AbstractMatrix{tab},q)
                     end
-                    @test q*b ≈ squareQ(q)*b atol=100ε
-                    @test transpose(q)*b ≈ transpose(squareQ(q))*b atol=100ε
-                    @test q'*b ≈ squareQ(q)'*b atol=100ε
-                    @test a*q ≈ a*squareQ(q) atol=100ε
-                    @test a*transpose(q) ≈ a*transpose(squareQ(q)) atol=100ε
-                    @test a*q' ≈ a*squareQ(q)' atol=100ε
-                    @test a'*q ≈ a'*squareQ(q) atol=100ε
-                    @test a'*q' ≈ a'*squareQ(q)' atol=100ε
-                    @test_throws DimensionMismatch q*b[1:n1 + 1]
-                    @test_throws DimensionMismatch adjoint(q) * Matrix{eltya}(undef,n+2,n+2)
-                    @test_throws DimensionMismatch Matrix{eltyb}(undef,n+2,n+2)*q
+                    @test q*x ≈ squareQ(q)*x rtol=100ε
+                    @test transpose(q)*x ≈ transpose(squareQ(q))*x rtol=100ε
+                    @test q'*x ≈ squareQ(q)'*x rtol=100ε
+                    @test a*q ≈ a*squareQ(q) rtol=100ε
+                    @test a*transpose(q) ≈ a*transpose(squareQ(q)) rtol=100ε
+                    @test a*q' ≈ a*squareQ(q)' rtol=100ε
+                    @test q*a'≈ squareQ(q)*a' rtol=100ε
+                    @test q'*a' ≈ squareQ(q)'*a' rtol=100ε
+                    @test_throws DimensionMismatch q*x[1:n1 + 1]
+                    @test_throws DimensionMismatch adjoint(q) * Matrix{eltya}(undef,m+2,m+2)
+                    @test_throws DimensionMismatch Matrix{eltyb}(undef,m+2,m+2)*q
                     if isa(a, DenseArray) && isa(b, DenseArray)
                         # use this to test 2nd branch in mult code
                         pad_a = vcat(I, a)
-                        pad_b = hcat(I, b)
-                        @test pad_a*q ≈ pad_a*squareQ(q) atol=100ε
-                        @test transpose(q)*pad_b ≈ transpose(squareQ(q))*pad_b atol=100ε
-                        @test q'*pad_b ≈ squareQ(q)'*pad_b atol=100ε
+                        pad_x = hcat(I, x)
+                        @test pad_a*q ≈ pad_a*squareQ(q) rtol=100ε
+                        @test transpose(q)*pad_x ≈ transpose(squareQ(q))*pad_x rtol=100ε
+                        @test q'*pad_x ≈ squareQ(q)'*pad_x rtol=100ε
                     end
                 end
             end
@@ -182,6 +184,21 @@ end
     @test *(adjoint(C), implicitQ) ≈ *(adjoint(zeroextCdown), explicitQ)
     @test_throws DimensionMismatch C * adjoint(implicitQ)
     @test_throws DimensionMismatch adjoint(C) * adjoint(implicitQ)
+end
+
+@testset "det(Q::LQPackedQ)" begin
+    @testset for n in 1:3, m in 1:3
+        @testset "real" begin
+            _, Q = lq(randn(n, m))
+            @test det(Q) ≈ det(collect(Q))
+            @test abs(det(Q)) ≈ 1
+        end
+        @testset "complex" begin
+            _, Q = lq(randn(ComplexF64, n, m))
+            @test det(Q) ≈ det(collect(Q))
+            @test abs(det(Q)) ≈ 1
+        end
+    end
 end
 
 end # module TestLQ

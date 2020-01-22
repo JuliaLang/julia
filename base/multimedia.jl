@@ -35,7 +35,7 @@ struct MIME{mime} end
     @MIME_str
 
 A convenience macro for writing [`MIME`](@ref) types, typically used when
-adding methods to `show`.
+adding methods to [`show`](@ref).
 For example the syntax `show(io::IO, ::MIME"text/html", x::MyType) = ...`
 could be used to define how to write an HTML representation of `MyType`.
 """
@@ -202,6 +202,12 @@ end
 # cannot be displayed.  The return value of display(...) is up to the
 # AbstractDisplay type.
 
+"""
+    AbstractDisplay
+
+Abstract supertype for rich display output devices. [`TextDisplay`](@ref) is a subtype
+of this.
+"""
 abstract type AbstractDisplay end
 
 # it is convenient to accept strings instead of ::MIME
@@ -309,6 +315,9 @@ a `MethodError` if this type is not supported by either the display(s) or by `x`
 variants, one can also supply the "raw" data in the requested MIME type by passing
 `x::AbstractString` (for MIME types with text-based storage, such as text/html or
 application/postscript) or `x::Vector{UInt8}` (for binary MIME types).
+
+To customize how instances of a type are displayed, overload [`show`](@ref) rather than `display`,
+as explained in the manual section on [custom pretty-printing](@id man-custom-pretty-printing).
 """
 function display(@nospecialize x)
     for i = length(displays):-1:1

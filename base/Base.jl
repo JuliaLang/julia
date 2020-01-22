@@ -4,6 +4,19 @@ baremodule Base
 
 using Core.Intrinsics, Core.IR
 
+# to start, we're going to use a very simple definition of `include`
+# that doesn't require any function (except what we can get from the `Core` top-module)
+const _included_files = Array{Tuple{Module,String},1}()
+function include(mod::Module, path::String)
+    ccall(:jl_array_grow_end, Cvoid, (Any, UInt), _included_files, UInt(1))
+    Core.arrayset(true, _included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)), arraylen(_included_files))
+    Core.println(path)
+    ccall(:jl_uv_flush, Nothing, (Ptr{Nothing},), Core.io_pointer(Core.stdout))
+    Core.include(mod, path)
+end
+include(path::String) = include(Base, path)
+
+# from now on, this is now a top-module for resolving syntax
 const is_primary_base_module = ccall(:jl_module_parent, Ref{Module}, (Any,), Base) === Core.Main
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
 
@@ -14,53 +27,11 @@ getproperty(x::Module, f::Symbol) = getfield(x, f)
 setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v)
 getproperty(x::Type, f::Symbol) = getfield(x, f)
 setproperty!(x::Type, f::Symbol, v) = setfield!(x, f, v)
+getproperty(x::Tuple, f::Int) = getfield(x, f)
+setproperty!(x::Tuple, f::Int, v) = setfield!(x, f, v) # to get a decent error
 
-getproperty(Core.@nospecialize(x), f::Symbol) = getfield(x, f)
+getproperty(x, f::Symbol) = getfield(x, f)
 setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
-
-function include_relative end
-function include(mod::Module, path::AbstractString)
-    local result
-    if INCLUDE_STATE === 1
-        result = _include1(mod, path)
-    elseif INCLUDE_STATE === 2
-        result = _include(mod, path)
-    elseif INCLUDE_STATE === 3
-        result = include_relative(mod, path)
-    end
-    result
-end
-function include(path::AbstractString)
-    local result
-    if INCLUDE_STATE === 1
-        result = _include1(Base, path)
-    elseif INCLUDE_STATE === 2
-        result = _include(Base, path)
-    else
-        # to help users avoid error (accidentally evaluating into Base), this is not allowed
-        error("Base.include(string) is discontinued, use `include(fname)` or `Base.include(@__MODULE__, fname)` instead.")
-    end
-    result
-end
-const _included_files = Array{Tuple{Module,String},1}()
-function _include1(mod::Module, path)
-    Core.Compiler.push!(_included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)))
-    Core.include(mod, path)
-end
-let SOURCE_PATH = ""
-    # simple, race-y TLS, relative include
-    global _include
-    function _include(mod::Module, path)
-        prev = SOURCE_PATH
-        path = normpath(joinpath(dirname(prev), path))
-        push!(_included_files, (mod, abspath(path)))
-        SOURCE_PATH = path
-        result = Core.include(mod, path)
-        SOURCE_PATH = prev
-        result
-    end
-end
-INCLUDE_STATE = 1 # include = Core.include
 
 include("coreio.jl")
 
@@ -136,7 +107,7 @@ include("ntuple.jl")
 include("abstractdict.jl")
 
 include("iterators.jl")
-using .Iterators: zip, enumerate
+using .Iterators: zip, enumerate, only
 using .Iterators: Flatten, Filter, product  # for generators
 
 include("namedtuple.jl")
@@ -145,6 +116,7 @@ include("namedtuple.jl")
 include("hashing.jl")
 include("rounding.jl")
 using .Rounding
+include("div.jl")
 include("float.jl")
 include("twiceprecision.jl")
 include("complex.jl")
@@ -196,7 +168,6 @@ include("c.jl")
 
 # Core I/O
 include("io.jl")
-include("iostream.jl")
 include("iobuffer.jl")
 
 # strings & printing
@@ -207,6 +178,7 @@ include("shell.jl")
 include("regex.jl")
 include("show.jl")
 include("arrayshow.jl")
+include("methodshow.jl")
 
 # multidimensional arrays
 include("cartesian.jl")
@@ -232,18 +204,22 @@ using .Libc: getpid, gethostname, time
 
 const DL_LOAD_PATH = String[]
 if Sys.isapple()
-    push!(DL_LOAD_PATH, "@loader_path/julia")
+    if Base.DARWIN_FRAMEWORK
+        push!(DL_LOAD_PATH, "@loader_path/Frameworks")
+    else
+        push!(DL_LOAD_PATH, "@loader_path/julia")
+    end
     push!(DL_LOAD_PATH, "@loader_path")
 end
 
 include("env.jl")
 
 # Scheduling
-include("libuv.jl")
-include("event.jl")
-include("task.jl")
+include("linked_list.jl")
+include("condition.jl")
 include("threads.jl")
 include("lock.jl")
+include("task.jl")
 include("weakkeydict.jl")
 
 # Logging
@@ -255,12 +231,15 @@ function rand end
 function randn end
 
 # I/O
+include("libuv.jl")
+include("asyncevent.jl")
+include("iostream.jl")
 include("stream.jl")
 include("filesystem.jl")
 using .Filesystem
+include("cmd.jl")
 include("process.jl")
 include("grisu/grisu.jl")
-include("methodshow.jl")
 include("secretbuffer.jl")
 
 # core math functions
@@ -270,7 +249,21 @@ using .Math
 const (√)=sqrt
 const (∛)=cbrt
 
-INCLUDE_STATE = 2 # include = _include (from lines above)
+# now switch to a simple, race-y TLS, relative include for the rest of Base
+delete_method(which(include, (Module, String)))
+let SOURCE_PATH = ""
+    global function include(mod::Module, path::String)
+        prev = SOURCE_PATH
+        path = normpath(joinpath(dirname(prev), path))
+        Core.println(path)
+        ccall(:jl_uv_flush, Nothing, (Ptr{Nothing},), Core.io_pointer(Core.stdout))
+        push!(_included_files, (mod, abspath(path)))
+        SOURCE_PATH = path
+        result = Core.include(mod, path)
+        SOURCE_PATH = prev
+        return result
+    end
+end
 
 # reduction along dims
 include("reducedim.jl")  # macros in this file relies on string.jl
@@ -294,10 +287,15 @@ function deepcopy_internal end
 include("Enums.jl")
 using .Enums
 
-# BigInts and BigFloats
+# BigInts
 include("gmp.jl")
 using .GMP
 
+# float printing: requires BigInt
+include("ryu/Ryu.jl")
+using .Ryu
+
+# BigFloats
 include("mpfr.jl")
 using .MPFR
 
@@ -310,10 +308,6 @@ include("hashing2.jl")
 include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
-
-# (s)printf macros
-include("printf.jl")
-# import .Printf
 
 # metaprogramming
 include("meta.jl")
@@ -345,6 +339,9 @@ include("util.jl")
 
 include("asyncmap.jl")
 
+# experimental API's
+include("experimental.jl")
+
 # deprecated functions
 include("deprecated.jl")
 
@@ -358,6 +355,34 @@ include("docs/Docs.jl")
 using .Docs
 if isdefined(Core, :Compiler) && is_primary_base_module
     Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
+end
+
+# finally, now make `include` point to the full version
+for m in methods(include)
+    delete_method(m)
+end
+# These functions are duplicated in client.jl/include(::String) for
+# nicer stacktraces. Modifications here have to be backported there
+include(mod::Module, path::AbstractString) = include(mod, convert(String, path))
+function include(mod::Module, _path::String)
+    path, prev = _include_dependency(mod, _path)
+    for callback in include_callbacks # to preserve order, must come before Core.include
+        invokelatest(callback, mod, path)
+    end
+    tls = task_local_storage()
+    tls[:SOURCE_PATH] = path
+    local result
+    try
+        # result = Core.include(mod, path)
+        result = ccall(:jl_load_, Any, (Any, Any), mod, path)
+    finally
+        if prev === nothing
+            delete!(tls, :SOURCE_PATH)
+        else
+            tls[:SOURCE_PATH] = prev
+        end
+    end
+    return result
 end
 
 end_base_include = time_ns()
@@ -388,7 +413,7 @@ function __init__()
     nothing
 end
 
-INCLUDE_STATE = 3 # include = include_relative
+
 end
 
 const tot_time_stdlib = RefValue(0.0)
