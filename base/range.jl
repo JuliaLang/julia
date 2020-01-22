@@ -53,7 +53,8 @@ Given a starting value, construct a range either by length or from `start` to `s
 optionally with a given step (defaults to 1, a [`UnitRange`](@ref)).
 One of `length` or `stop` is required.  If `length`, `stop`, and `step` are all specified, they must agree.
 
-In most cases if `step` and `stop` are provided and `length` is not, the overall range length will be computed automatically such that the elements are `step` spaced (a [`StepRange`](@ref)).
+In most cases if `step` and `stop` are provided and `length` is not, the overall range length will
+be computed automatically such that the elements are `step` spaced (a [`StepRange`](@ref)).
 
 In case the elements are not simple numeric, elements are spaced using (a [`LinRange`](@ref))
 # Example
