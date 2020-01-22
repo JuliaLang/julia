@@ -24,4 +24,4 @@ jobs:
       - name: Update external stdlibs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: julia -e 'include("stdlib/BumpStdlibs.jl"); "${{ github.repository }}" == "JuliaLang/julia" && BumpStdlibs.main("${{ github.repository }}", ["Pkg" => "https://github.com/JuliaLang/Pkg.jl", "Statistics" => "https://github.com/JuliaLang/Statistics.jl"]; cc_usernames = String["@DilumAluthge"])'
+        run: julia -e 'include("stdlib/BumpStdlibs.jl"); "${{ github.repository }}" == "aluthge-test/julia" && BumpStdlibs.main("${{ github.repository }}", ["Pkg" => "https://github.com/JuliaLang/Pkg.jl", "Statistics" => "https://github.com/JuliaLang/Statistics.jl"]; cc_usernames = String["@DilumAluthge"])'
