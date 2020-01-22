@@ -32,7 +32,7 @@ New library functions
 * The new `only(x)` function returns the one-and-only element of a collection `x`, and throws an `ArgumentError` if `x` contains zero or multiple elements ([#33129]).
 * `takewhile` and `dropwhile` have been added to the Iterators submodule ([#33437]).
 * `accumulate` has been added to the Iterators submodule ([#34033]).
-* There is a now an `evalpoly` function meant to take the role of the `@evalpoly` macro. The function is just as efficient as the macro while giving added flexibility, so it should be preferred over `@evalpoly`. `evalpoly` takes a list of coefficients as a tuple, so where one might write `@evalpoly(x, p1, p2, p3)` one would instead write `evalpoly(x, (p1, p2, p3))` (#[32753]).
+* There is a now an `evalpoly` function meant to take the role of the `@evalpoly` macro. The function is just as efficient as the macro while giving added flexibility, so it should be preferred over `@evalpoly`. `evalpoly` takes a list of coefficients as a tuple, so where one might write `@evalpoly(x, p1, p2, p3)` one would instead write `evalpoly(x, (p1, p2, p3))` ([#32753]).
 
 New library features
 --------------------
@@ -98,6 +98,7 @@ Standard library changes
 [#32208]: https://github.com/JuliaLang/julia/issues/32208
 [#32448]: https://github.com/JuliaLang/julia/issues/32448
 [#32739]: https://github.com/JuliaLang/julia/issues/32739
+[#32753]: https://github.com/JuliaLang/julia/issues/32753
 [#32968]: https://github.com/JuliaLang/julia/issues/32968
 [#33012]: https://github.com/JuliaLang/julia/issues/33012
 [#33040]: https://github.com/JuliaLang/julia/issues/33040
