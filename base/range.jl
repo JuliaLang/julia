@@ -53,9 +53,13 @@ Given a starting value, construct a range either by length or from `start` to `s
 optionally with a given step (defaults to 1, a [`UnitRange`](@ref)).
 One of `length` or `stop` is required.  If `length`, `stop`, and `step` are all specified, they must agree.
 
-In most cases if `step` and `stop` are provided and `length` is not, the overall range length will be computed automatically such that the elements are `step` spaced (a [`StepRange`](@ref)).
+If numeric `length` and `stop` values are provided but `step` is not specified, the return value is
+a [`StepRangeLen`](@ref) with a computed step.  However, for non-numeric values of
+`start` and `stop` (such as arrays), the `range` function instead returns a
+[`LinRange`](@ref) object.  (Both `StepRangeLen` and `LinRange` correspond
+to equally spaced points up to roundoff errors, but deal with floating-point rounding
+slightly differently.)
 
-In case the elements are not simple numeric, elements are spaced using (a [`LinRange`](@ref))
 # Example
 
 ```jldoctest
