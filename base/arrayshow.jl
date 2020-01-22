@@ -102,19 +102,12 @@ function print_matrix_row(io::IO,
             x = X[i,j]
             a = alignment(io, x)
 
-            # If compact is set, keep the value, else set to true
-            compact = get(io, :compact, nothing)
-            if compact === nothing
-                compact = true
-            end
-            context = IOContext(io, :compact=>compact)
-
             # First try 3-arg show
-            sx = sprint(show, "text/plain", x, context=context, sizehint=0)
+            sx = sprint(show, "text/plain", x, context=io, sizehint=0)
 
             # If the output contains line breaks, try 2-arg show instead.
             if occursin('\n', sx)
-                sx = sprint(show, x, context=context, sizehint=0)
+                sx = sprint(show, x, context=io, sizehint=0)
             end
         else
             a = undef_ref_alignment
@@ -462,6 +455,7 @@ function show_vector(io::IO, v, opn='[', cls=']')
     # directly or indirectly, the context now knows about eltype(v)
     io = IOContext(io, :typeinfo => eltype(v))
     limited = get(io, :limit, false)
+
     if limited && length(v) > 20
         axs1 = axes1(v)
         f, l = first(axs1), last(axs1)
