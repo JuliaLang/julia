@@ -1023,7 +1023,7 @@ function _rmprocs(pids, waitfor)
         end
 
         start = time_ns()
-        while (time_ns() - start) < waitfor
+        while (time_ns() - start) < waitfor*1e9
             all(w -> w.state == W_TERMINATED, rmprocset) && break
             sleep(min(0.1, waitfor - (time_ns() - start)/1e9))
         end
