@@ -1015,7 +1015,7 @@ dynamic_test.x = "test 2"
 function striptrimdocs(expr)
     if Meta.isexpr(expr, :call)
         fex = expr.args[1]
-        if Meta.isexpr(fex, :.) && fex.args[1] == :Markdown
+        if Meta.isexpr(fex, :.) && fex.args[1] == :REPL
             fmex = fex.args[2]
             if isa(fmex, QuoteNode) && fmex.value == :trimdocs
                 expr = expr.args[2]

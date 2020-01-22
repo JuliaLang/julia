@@ -8,13 +8,6 @@ mutable struct MD
         new(content, meta)
 end
 
-# For direct messages to the terminal
-struct Message
-    msg    # AbstractString
-    fmt    # keywords to `printstyled`
-end
-Message(msg) = Message(msg, ())
-
 MD(xs...) = MD(vcat(xs...))
 
 function MD(cfg::Config, xs...)

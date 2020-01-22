@@ -1131,25 +1131,3 @@ let m = Markdown.parse("---"), io = IOBuffer()
     show(io, "text/latex", m)
     @test String(take!(io)) == "\\rule{\\textwidth}{1pt}\n"
 end
-
-# Brief and extended docs (issue #25930)
-let text =
-        """
-            brief_extended()
-
-        Short docs
-
-        # Extended help
-
-        Long docs
-        """,
-        md = Markdown.parse(text)
-    @test md == Markdown.trimdocs(md, false)
-    @test !isa(md.content[end], Markdown.Message)
-    mdbrief = Markdown.trimdocs(md, true)
-    @test length(mdbrief.content) == 3
-    @test isa(mdbrief.content[1], Markdown.Code)
-    @test isa(mdbrief.content[2], Markdown.Paragraph)
-    @test isa(mdbrief.content[3], Markdown.Message)
-    @test occursin("??", mdbrief.content[3].msg)
-end

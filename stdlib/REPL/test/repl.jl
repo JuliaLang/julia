@@ -1041,6 +1041,29 @@ for line in ["′", "abstract", "type", "|=", ".="]
 end
 
 # Issue #25930
+
+# Brief and extended docs (issue #25930)
+let text =
+        """
+            brief_extended()
+
+        Short docs
+
+        # Extended help
+
+        Long docs
+        """,
+    md = Markdown.parse(text)
+    @test md == REPL.trimdocs(md, false)
+    @test !isa(md.content[end], REPL.Message)
+    mdbrief = REPL.trimdocs(md, true)
+    @test length(mdbrief.content) == 3
+    @test isa(mdbrief.content[1], Markdown.Code)
+    @test isa(mdbrief.content[2], Markdown.Paragraph)
+    @test isa(mdbrief.content[3], REPL.Message)
+    @test occursin("??", mdbrief.content[3].msg)
+end
+
 module BriefExtended
 """
     f()
@@ -1055,7 +1078,7 @@ f() = nothing
 end # module BriefExtended
 buf = IOBuffer()
 md = Base.eval(REPL._helpmode(buf, "$(@__MODULE__).BriefExtended.f"))
-@test length(md.content) == 2 && isa(md.content[2], Markdown.Message)
+@test length(md.content) == 2 && isa(md.content[2], REPL.Message)
 buf = IOBuffer()
 md = Base.eval(REPL._helpmode(buf, "?$(@__MODULE__).BriefExtended.f"))
 @test length(md.content) == 1 && length(md.content[1].content[1].content) == 4

@@ -79,6 +79,44 @@ function parsedoc(d::DocStr)
     d.object
 end
 
+## Trimming long help ("# Extended help")
+
+struct Message  # For direct messages to the terminal
+    msg    # AbstractString
+    fmt    # keywords to `printstyled`
+end
+Message(msg) = Message(msg, ())
+
+function Markdown.term(io::IO, msg::Message, columns)
+    printstyled(io, msg.msg; msg.fmt...)
+end
+
+function trimdocs(md::Markdown.MD, brief::Bool)
+    brief || return md
+    md, trimmed = _trimdocs(md, brief)
+    if trimmed
+        push!(md.content, Message("Extended help is available with `??`", (color=Base.info_color(), bold=true)))
+    end
+    return md
+end
+
+function _trimdocs(md::Markdown.MD, brief::Bool)
+    content, trimmed = [], false
+    for c in md.content
+        if isa(c, Markdown.Header{1}) && isa(c.text, AbstractArray) &&
+                                         lowercase(c.text[1]) == "extended help"
+            trimmed = true
+            break
+        end
+        c, trm = _trimdocs(c, brief)
+        trimmed |= trm
+        push!(content, c)
+    end
+    return Markdown.MD(content, md.meta), trimmed
+end
+
+_trimdocs(md, brief::Bool) = md, false
+
 """
     Docs.doc(binding, sig)
 
@@ -366,7 +404,7 @@ function _repl(x, brief=true)
     else
         docs
     end
-    :(Markdown.trimdocs($docs, $brief))
+    :(REPL.trimdocs($docs, $brief))
 end
 
 """
