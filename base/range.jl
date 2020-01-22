@@ -53,11 +53,16 @@ Given a starting value, construct a range either by length or from `start` to `s
 optionally with a given step (defaults to 1, a [`UnitRange`](@ref)).
 One of `length` or `stop` is required.  If `length`, `stop`, and `step` are all specified, they must agree.
 
-If `length` and `stop` are provided and `step` is not, the step size will be computed
-automatically such that there are `length` linearly spaced elements in the range (a [`LinRange`](@ref)).
+In most cases if `step` and `stop` are provided and `length` is not, the overall range length will be computed automatically such that the elements are `step` spaced (a [`StepRange`](@ref)).
 
-If `step` and `stop` are provided and `length` is not, the overall range length will be computed
-automatically such that the elements are `step` spaced (a [`StepRange`](@ref)).
+In case the elements are not simple numeric, elements are spaced using (a [`LinRange`](@ref))
+# Example
+
+```jldoctest
+julia> range([1,2], [3,4], length=10)
+10-element LinRange{Array{Int64,1}}:
+ [1.0, 2.0],[1.22222, 2.22222],…,[2.77778, 3.77778],[3.0, 4.0]
+```
 
 `stop` may be specified as either a positional or keyword argument.
 
