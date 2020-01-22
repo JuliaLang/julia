@@ -33,7 +33,7 @@ U factor:
 singular values:
 4-element Array{Float64,1}:
  3.0
- 2.23607
+ 2.23606797749979
  2.0
  0.0
 Vt factor:
@@ -210,7 +210,7 @@ julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
 julia> svdvals(A)
 4-element Array{Float64,1}:
  3.0
- 2.23607
+ 2.23606797749979
  2.0
  0.0
 ```

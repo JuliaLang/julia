@@ -183,7 +183,7 @@ julia> push!(a, 1); push!(a, 2.0); push!(a,  π)
 3-element Array{Float64,1}:
  1.0
  2.0
- 3.14159
+ 3.141592653589793
 ```
 
 Assigning numbers into `a` will now convert them to `Float64` and `a` will be stored as

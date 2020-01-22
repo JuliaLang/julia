@@ -41,8 +41,8 @@ julia> collect(x)
 
 julia> collect(pairs(x))
 2-element Array{Pair{Symbol,Int64},1}:
- :a=>1
- :b=>2
+ :a => 1
+ :b => 2
 ```
 
 In a similar fashion as to how one can define keyword arguments programmatically,
