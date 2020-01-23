@@ -441,7 +441,7 @@ global function env_override_minlevel(group, _module)
     if !(:all in _debug_groups_exclude) && (:all in _debug_groups_include || !isempty(_debug_groups_exclude))
         if isempty(_debug_groups_exclude)
             return true
-        elseif isa(group, Symbol) && group in _debug_groups_exclude
+        elseif (isa(group, Symbol) && group in _debug_groups_exclude) || (isa(group, AbstractString) && Symbol(group) in _debug_groups_exclude)
             return false
         elseif isa(_module, Module) && (nameof(_module) in _debug_groups_exclude || nameof(Base.moduleroot(_module)) in _debug_groups_exclude)
             return false
@@ -451,7 +451,7 @@ global function env_override_minlevel(group, _module)
     else
         if isempty(_debug_groups_include)
             return false
-        elseif isa(group, Symbol) && group in _debug_groups_include
+        elseif (isa(group, Symbol) && group in _debug_groups_include) || (isa(group, AbstractString) && Symbol(group) in _debug_groups_include)
             return true
         elseif isa(_module, Module) && (nameof(_module) in _debug_groups_include || nameof(Base.moduleroot(_module)) in _debug_groups_include)
             return true
