@@ -5,8 +5,7 @@
 #    4 cxx11)                  # signifies a cxx11 ABI dependency
 
 # Auto-detect triplet once, create different versions that we use as defaults below for each BB install target
-# This is much more efficient than launching `gcc` and `python` once for each BB install target.
-BB_TRIPLET_GCCABI_CXXABI := $(shell python $(JULIAHOME)/contrib/normalize_triplet.py $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) "$(shell $(FC) --version | head -1)" "$(shell echo '\#include <string>' | $(CXX) $(CXXFLAGS) -x c++ -dM -E - | grep _GLIBCXX_USE_CXX11_ABI | awk '{ print $$3 }' )")
+BB_TRIPLET_GCCABI_CXXABI := $(shell $(PYTHON) $(JULIAHOME)/contrib/normalize_triplet.py $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) "$(shell $(FC) --version | head -1)" "$(shell echo '\#include <string>' | $(CXX) $(CXXFLAGS) -x c++ -dM -E - | grep _GLIBCXX_USE_CXX11_ABI | awk '{ print $$3 }' )")
 BB_TRIPLET_GCCABI := $(subst $(SPACE),-,$(filter-out cxx%,$(subst -,$(SPACE),$(BB_TRIPLET_GCCABI_CXXABI))))
 BB_TRIPLET_CXXABI := $(subst $(SPACE),-,$(filter-out gcc%,$(subst -,$(SPACE),$(BB_TRIPLET_GCCABI_CXXABI))))
 BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out gcc%,$(subst -,$(SPACE),$(BB_TRIPLET_GCCABI_CXXABI)))))
