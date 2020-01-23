@@ -3,8 +3,7 @@
 using Base.Iterators
 using Random
 
-import Base: IteratorSize, SizeUnknown
-@test IteratorSize(Any) isa SizeUnknown
+@test Base.IteratorSize(Any) isa Base.SizeUnknown
 
 # zip and filter iterators
 # issue #4718
