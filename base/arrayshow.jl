@@ -324,6 +324,7 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     summary(io, X)
     isempty(X) && return
     print(io, ":")
+    show_circular(io, X) && return
 
     # 1) compute new IOContext
     if !haskey(io, :compact) && length(axes(X, 2)) > 1
@@ -350,7 +351,8 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     io = IOContext(io, :typeinfo => eltype(X))
 
     # 2) show actual content
-    print_array(io, X)
+    recur_io = IOContext(io, :SHOWN_SET => X)
+    print_array(recur_io, X)
 end
 
 ## printing with `show`
