@@ -447,8 +447,11 @@ restart_switch:
         case opt_code_coverage:
             if (optarg != NULL) {
                 size_t endof = strlen(optarg);
-                if (!strcmp(optarg, "user"))
+                if (!strcmp(optarg, "user")) {
                     codecov = JL_LOG_USER;
+                    if (jl_options.output_code_coverage == NULL)
+                        jl_options.output_code_coverage = "tracefile%p.info";
+                }
                 else if (!strcmp(optarg, "all"))
                     codecov = JL_LOG_ALL;
                 else if (!strcmp(optarg, "none"))
