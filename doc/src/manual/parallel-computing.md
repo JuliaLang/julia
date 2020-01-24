@@ -394,7 +394,7 @@ julia> acc[]
 When using multi-threading we have to be careful when using functions that are not
 [pure](https://en.wikipedia.org/wiki/Pure_function) as we might get a wrong answer.
 For instance functions that have their
-[name ending with `!`](https://docs.julialang.org/en/latest/manual/style-guide/#Append-!-to-names-of-functions-that-modify-their-arguments-1)
+[name ending with `!`](@ref bang-convention)
 by convention modify their arguments and thus are not pure. However, there are
 functions that have side effects and their name does not end with `!`. For
 instance [`findfirst(regex, str)`](@ref) mutates its `regex` argument or
