@@ -154,7 +154,7 @@ function parse_machine(machine::AbstractString)
         if ipv6_end == nothing
             throw(ArgumentError("invalid machine definition format string: invalid port format \"$machine_def\""))
         end
-        hoststr = machine[begin+1 : ipv6_end - 1]
+        hoststr = machine[begin+1 : prevind(machine,ipv6_end)]
         machine_def = split(machine[ipv6_end : end] , ':')
     else    # ipv4
         machine_def = split(machine, ':')
