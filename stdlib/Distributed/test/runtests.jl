@@ -3,7 +3,6 @@
 # Run the distributed test outside of the main driver since it needs its own
 # set of dedicated workers.
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
-
 disttestfile = joinpath(@__DIR__, "distributed_exec.jl")
 
 cmd = `$test_exename $test_exeflags $disttestfile`
