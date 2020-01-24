@@ -1,7 +1,5 @@
 using Test
 using Distributed
-using Base: Semaphore
-using Sockets
 
 using Distributed: parse_machine
 
