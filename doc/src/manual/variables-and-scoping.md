@@ -22,7 +22,7 @@ interactive prompt (REPL)                         | global | global
 (mutable) [`struct`](@ref), [`macro`](@ref)       | local  | global
 [`for`](@ref), [`while`](@ref), [`try-catch-finally`](@ref try), [`let`](@ref) |local | global or local
 functions (either syntax, anonymous & do-blocks) | local | global or local
-comprehensions, broadcast-fusing                 | local | global or local
+comprehensions and generators                    | local | global or local
 
 Notably missing from this table are
 [begin blocks](@ref man-compound-expressions) and [if blocks](@ref man-conditional-evaluation)
