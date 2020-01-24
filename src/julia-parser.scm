@@ -2397,6 +2397,10 @@
          `(macrocall ,(macroify-name (cadr call))
                      ,startloc
                      ,@(cddr call)))
+        ((and (pair? call) (eq? (car call) 'curly))
+         `(macrocall ,(macroify-name (cadr call))
+                     ,startloc
+                     (braces ,@(cddr call))))
         ((and (pair? call) (eq? (car call) 'do))
          `(do ,(macroify-call s (cadr call) startloc) ,(caddr call)))
         (else

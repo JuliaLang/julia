@@ -364,3 +364,6 @@ end
         @test expr == Meta.parse(pf > pg ? "(x$(f)y)$(g)z" : "x$(f)(y$(g)z)")
     end
 end
+
+# issue 34498
+@test :(@foo{bar}) == :(@foo {bar})

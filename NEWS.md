@@ -3,7 +3,7 @@ Julia v1.5 Release Notes
 
 New language features
 ---------------------
-
+* Macro calls `@foo {...}` can now also be written `@foo{...}` (without the space) ([#34498]).
 
 Language changes
 ----------------
