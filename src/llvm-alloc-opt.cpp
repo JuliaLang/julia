@@ -593,11 +593,7 @@ void Optimizer::checkInst(Instruction *I)
             if (auto II = dyn_cast<IntrinsicInst>(call)) {
                 if (auto id = II->getIntrinsicID()) {
                     if (id == Intrinsic::memset) {
-#if JL_LLVM_VERSION < 70000
-                        assert(call->getNumArgOperands() == 5);
-#else
                         assert(call->getNumArgOperands() == 4);
-#endif
                         use_info.hasmemset = true;
                         if (cur.offset == UINT32_MAX ||
                             !isa<ConstantInt>(call->getArgOperand(2)) ||

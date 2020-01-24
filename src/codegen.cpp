@@ -79,9 +79,7 @@
 
 using namespace llvm;
 
-#if JL_LLVM_VERSION >= 80000
 typedef Instruction TerminatorInst;
-#endif
 
 #if defined(_OS_WINDOWS_) && !defined(NOMINMAX)
 #define NOMINMAX
@@ -3778,11 +3776,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             Value *isboxed = ctx.builder.CreateICmpNE(
                     ctx.builder.CreateAnd(Tindex_phi, ConstantInt::get(T_int8, 0x80)),
                     ConstantInt::get(T_int8, 0));
-#if JL_LLVM_VERSION >= 70000
             ctx.builder.CreateMemCpy(phi, min_align, dest, 0, nbytes, false);
-#else
-            ctx.builder.CreateMemCpy(phi, dest, nbytes, min_align, false);
-#endif
             ctx.builder.CreateLifetimeEnd(dest);
             Value *ptr = ctx.builder.CreateSelect(isboxed,
                 maybe_bitcast(ctx, decay_derived(ptr_phi), T_pint8),
@@ -3822,14 +3816,9 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
         // here it's moved into phi in the successor (from dest)
         dest = emit_static_alloca(ctx, vtype);
         Value *phi = emit_static_alloca(ctx, vtype);
-#if JL_LLVM_VERSION >= 70000
         ctx.builder.CreateMemCpy(phi, jl_datatype_align(phiType),
              dest, 0,
              jl_datatype_size(phiType), false);
-#else
-        ctx.builder.CreateMemCpy(phi, dest, jl_datatype_size(phiType),
-             jl_datatype_align(phiType), false);
-#endif
         ctx.builder.CreateLifetimeEnd(dest);
         slot = mark_julia_slot(phi, phiType, NULL, tbaa_stack);
     }
@@ -5800,8 +5789,6 @@ static std::unique_ptr<Module> emit_function(
     DebugLoc noDbg, topdebugloc;
     if (ctx.debug_enabled) {
         DICompileUnit::DebugEmissionKind emissionKind = (DICompileUnit::DebugEmissionKind) ctx.params->debug_info_kind;
-
-#if JL_LLVM_VERSION >= 80000
         DICompileUnit::DebugNameTableKind tableKind;
 
         if (JL_FEAT_TEST(ctx, gnu_pubnames)) {
@@ -5810,7 +5797,6 @@ static std::unique_ptr<Module> emit_function(
         else {
             tableKind = DICompileUnit::DebugNameTableKind::None;
         }
-#endif
         topfile = dbuilder.createFile(ctx.file, ".");
         DICompileUnit *CU =
             dbuilder.createCompileUnit(llvm::dwarf::DW_LANG_Julia
@@ -5824,9 +5810,7 @@ static std::unique_ptr<Module> emit_function(
                                        ,0            // DWOId
                                        ,true         // SplitDebugInlining
                                        ,false        // DebugInfoForProfiling
-#if JL_LLVM_VERSION >= 80000
                                        ,tableKind    // NameTableKind
-#endif
                                        );
 
         DISubroutineType *subrty;
@@ -5845,21 +5829,12 @@ static std::unique_ptr<Module> emit_function(
                                      ,topfile          // File
                                      ,toplineno        // LineNo
                                      ,subrty           // Ty
-#if JL_LLVM_VERSION < 80000
-                                     ,false            // isLocalToUnit
-                                     ,true             // isDefinition
-#endif
                                      ,toplineno        // ScopeLine
                                      ,DIFlagZero       // Flags
-#if JL_LLVM_VERSION < 80000
-                                     ,true             // isOptimized
-                                     ,nullptr          // Template Parameters
-#else
                                      ,DISubprogram::SPFlagDefinition | DISubprogram::SPFlagOptimized // SPFlags
                                      ,nullptr          // Template Parameters
                                      ,nullptr          // Template Declaration
                                      ,nullptr          // ThrownTypes
-#endif
                                      );
         topdebugloc = DebugLoc::get(toplineno, 0, SP, NULL);
         f->setSubprogram(SP);
@@ -6281,21 +6256,12 @@ static std::unique_ptr<Module> emit_function(
                                                      ,difile           // File
                                                      ,0                // LineNo
                                                      ,jl_di_func_null_sig // Ty
-#if JL_LLVM_VERSION < 80000
-                                                     ,false            // isLocalToUnit
-                                                     ,true             // isDefinition
-#endif
                                                      ,0                // ScopeLine
                                                      ,DIFlagZero       // Flags
-#if JL_LLVM_VERSION < 80000
-                                                     ,true             // isOptimized
-                                                     ,nullptr          // Template Parameters
-#else
                                                      ,DISubprogram::SPFlagDefinition | DISubprogram::SPFlagOptimized // SPFlags
                                                      ,nullptr          // Template Parameters
                                                      ,nullptr          // Template Declaration
                                                      ,nullptr          // ThrownTypes
-#endif
                                                      );
                     }
                     DebugLoc inl_loc = (info.inlined_at == 0) ? DebugLoc::get(0, 0, SP, NULL) : linetable.at(info.inlined_at).loc;
@@ -7778,11 +7744,9 @@ extern "C" void *jl_init_llvm(void)
     const char *const argv_copyprop[] = {"", "-disable-copyprop"}; // llvm bug 21743
     cl::ParseCommandLineOptions(sizeof(argv_copyprop)/sizeof(argv_copyprop[0]), argv_copyprop, "disable-copyprop\n");
 #endif
-#if JL_LLVM_VERSION >= 70000
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
     const char *const argv_avoidsfb[] = {"", "-x86-disable-avoid-SFB"}; // llvm bug 41629, see https://gist.github.com/vtjnash/192cab72a6cfc00256ff118238163b55
     cl::ParseCommandLineOptions(sizeof(argv_avoidsfb)/sizeof(argv_avoidsfb[0]), argv_avoidsfb, "disable-avoidsfb\n");
-#endif
 #endif
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
 
@@ -7957,19 +7921,11 @@ extern "C" void jl_dump_llvm_debugloc(void *v)
 extern void jl_write_bitcode_func(void *F, char *fname) {
     std::error_code EC;
     raw_fd_ostream OS(fname, EC, sys::fs::F_None);
-#if JL_LLVM_VERSION >= 70000
     llvm::WriteBitcodeToFile(*((llvm::Function*)F)->getParent(), OS);
-#else
-    llvm::WriteBitcodeToFile(((llvm::Function*)F)->getParent(), OS);
-#endif
 }
 
 extern void jl_write_bitcode_module(void *M, char *fname) {
     std::error_code EC;
     raw_fd_ostream OS(fname, EC, sys::fs::F_None);
-#if JL_LLVM_VERSION >= 70000
     llvm::WriteBitcodeToFile(*(llvm::Module*)M, OS);
-#else
-    llvm::WriteBitcodeToFile((llvm::Module*)M, OS);
-#endif
 }

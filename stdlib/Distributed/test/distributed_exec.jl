@@ -1557,7 +1557,7 @@ nprocs()>1 && rmprocs(workers())
 cluster_cookie("")
 
 for close_stdin in (true, false), stderr_to_stdout in (true, false)
-    npids = addprocs_with_testenv(RetainStdioTester(close_stdin,stderr_to_stdout))
+    local npids = addprocs_with_testenv(RetainStdioTester(close_stdin,stderr_to_stdout))
     @test remotecall_fetch(myid, npids[1]) == npids[1]
     @test close_stdin != remotecall_fetch(()->isopen(stdin), npids[1])
     @test stderr_to_stdout == remotecall_fetch(()->(stderr === stdout), npids[1])
@@ -1621,7 +1621,7 @@ a27933 = :_not_defined_27933
 
 # PR #28651
 for T in (UInt8, Int8, UInt16, Int16, UInt32, Int32, UInt64)
-    n = @distributed (+) for i in Base.OneTo(T(10))
+    local n = @distributed (+) for i in Base.OneTo(T(10))
         i
     end
     @test n == 55
