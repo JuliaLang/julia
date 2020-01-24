@@ -184,6 +184,8 @@ ifneq ($(LLVM_VER),svn)
 ifeq (,$(findstring rc,$(LLVM_VER)))
 ifeq ($(shell [ x"$(LLVM_VER)" = x"8.0.1" ]; echo $$?),0)
 LLVM_SRC_URL := https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVM_VER)
+else ifeq ($(shell [ x"$(LLVM_VER)" = x"9.0.1" ]; echo $$?),0)
+LLVM_SRC_URL := https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVM_VER)
 else
 LLVM_SRC_URL := http://releases.llvm.org/$(LLVM_VER)
 endif
@@ -493,13 +495,13 @@ update-llvm:
 		git pull --ff-only
 endif
 else # USE_BINARYBUILDER_LLVM
-LLVM_BB_URL_BASE := https://github.com/staticfloat/LLVMBuilder/releases/download/v$(LLVM_VER)+$(LLVM_BB_REL)
+LLVM_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LLVM_jll.jl/releases/download/LLVM-v$(LLVM_VER)+$(LLVM_BB_REL)
 ifneq ($(BINARYBUILDER_LLVM_ASSERTS), 1)
 LLVM_BB_NAME := LLVM.v$(LLVM_VER)
 else
 LLVM_BB_NAME := LLVM.asserts.v$(LLVM_VER)
 endif
 
-$(eval $(call bb-install,llvm,LLVM,true))
+$(eval $(call bb-install,llvm,LLVM,false,true))
 
 endif # USE_BINARYBUILDER_LLVM
