@@ -1443,7 +1443,7 @@ end
     # left-alignment when not using the "=>" symbol
     @test replstr(Any[Pair{Integer,Int64}(1, 2), Pair{Integer,Int64}(33, 4)]) ==
         "2-element Array{Any,1}:\n Pair{Integer,Int64}(1, 2)\n Pair{Integer,Int64}(33, 4)"
-    end
+end
 
 @testset "display arrays non-compactly when size(⋅, 2) == 1" begin
     # 0-dim
