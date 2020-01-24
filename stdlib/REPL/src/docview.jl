@@ -19,12 +19,16 @@ using InteractiveUtils: subtypes
 helpmode(io::IO, line::AbstractString) = :($REPL.insert_hlines($io, $(REPL._helpmode(io, line))))
 helpmode(line::AbstractString) = helpmode(stdout, line)
 
+const extended_help_on = Ref{Any}(nothing)
+
 function _helpmode(io::IO, line::AbstractString)
     line = strip(line)
     if startswith(line, '?')
         line = line[2:end]
+        extended_help_on[] = line
         brief = false
     else
+        extended_help_on[] = nothing
         brief = true
     end
     x = Meta.parse(line, raise = false, depwarn = false)
@@ -95,7 +99,9 @@ function trimdocs(md::Markdown.MD, brief::Bool)
     brief || return md
     md, trimmed = _trimdocs(md, brief)
     if trimmed
-        push!(md.content, Message("Extended help is available with `??`", (color=Base.info_color(), bold=true)))
+        line = extended_help_on[]
+        line = isa(line, AbstractString) ? line : ""
+        push!(md.content, Message("Extended help is available with `??$line`", (color=Base.info_color(), bold=true)))
     end
     return md
 end
@@ -104,7 +110,9 @@ function _trimdocs(md::Markdown.MD, brief::Bool)
     content, trimmed = [], false
     for c in md.content
         if isa(c, Markdown.Header{1}) && isa(c.text, AbstractArray) &&
-                                         lowercase(c.text[1]) == "extended help"
+                                         lowercase(c.text[1]) ∈ ("extended help",
+                                                                 "extended documentation",
+                                                                 "extended docs")
             trimmed = true
             break
         end
