@@ -168,12 +168,11 @@ function parse_machine(machine::AbstractString)
     if length(machine_def) == 2
         portstr = machine_def[2]
 
-        if !all(isdigit, portstr)
+        portnum = tryparse(Int, portstr)
+        if portnum == nothing
             msg = "invalid machine definition format string: invalid port format \"$machine_def\""
             throw(ArgumentError(msg))
         end
-
-        portnum = parse(Int, portstr)
 
         if portnum < 1 || portnum > 65535
             msg = "invalid machine definition format string: invalid port number \"$machine_def\""
