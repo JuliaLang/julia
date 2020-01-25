@@ -371,5 +371,7 @@ end
     @test :(@foo{bar}) == :(@foo {bar})
     @test :(@foo{bar,baz}) == :(@foo {bar,baz})
     @test :(@foo{bar}(baz)) == :((@foo{bar})(baz))
+    @test :(@foo{bar}{baz}) == :((@foo{bar}){baz})
+    @test :(@foo{bar}[baz]) == :((@foo{bar})[baz])
     @test :(@foo{bar} + baz) == :((@foo{bar}) + baz)
 end

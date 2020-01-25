@@ -1241,7 +1241,10 @@
             ((#\{ )
              (disallow-space s ex t)
              (take-token s)
-             (loop (list* 'curly ex (parse-call-arglist s #\} ))))
+             (let ((args (parse-call-arglist s #\} )))
+               (if macrocall?
+                   `(call ,ex (braces ,@args))
+                   (loop (list* 'curly ex args)))))
             ((#\" #\`)
              (if (and (or (symbol? ex) (valid-modref? ex))
                       (not (operator? ex))
@@ -2394,15 +2397,9 @@
 
 (define (macroify-call s call startloc)
   (cond ((and (pair? call) (eq? (car call) 'call))
-         (if (and (pair? (cadr call)) (eq? (caadr call) 'curly))
-             `(call ,(macroify-call s (cadr call) startloc) ,@(cddr call))
-             `(macrocall ,(macroify-name (cadr call))
-                         ,startloc
-                         ,@(cddr call))))
-        ((and (pair? call) (eq? (car call) 'curly))
          `(macrocall ,(macroify-name (cadr call))
                      ,startloc
-                     (braces ,@(cddr call))))
+                     ,@(cddr call)))
         ((and (pair? call) (eq? (car call) 'do))
          `(do ,(macroify-call s (cadr call) startloc) ,(caddr call)))
         (else
