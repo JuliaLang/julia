@@ -3,7 +3,7 @@
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
 
-have_color = false
+have_color = nothing
 default_color_warn = :yellow
 default_color_error = :light_red
 default_color_info = :cyan
@@ -210,7 +210,19 @@ end
 
 # call include() on a file, ignoring if not found
 include_ifexists(mod::Module, path::AbstractString) = isfile(path) && include(mod, path)
-
+function ttyhascolor()
+    term_type = get(ENV, "TERM","")
+    startswith(term_type, "xterm") && return true
+    try
+        @static if Sys.KERNEL === :FreeBSD
+            return success("tput AF 0")
+        else
+            return success("tput setaf 0")
+        end
+    catch
+        return false
+    end
+end
 function exec_options(opts)
     if !isempty(ARGS)
         idxs = findall(x -> x == "--", ARGS)
@@ -224,7 +236,7 @@ function exec_options(opts)
     global is_interactive = (opts.isinteractive != 0)
 
     #check if stdout is TTY and color is not set manually
-    if isa(stdout, TTY) && !color_set
+    if !color_set && isa(stdout, TTY) && isa(stderr, TTY) && ttyhascolor()
         global have_color = true
     end
 
