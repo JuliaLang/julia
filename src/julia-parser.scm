@@ -2394,9 +2394,11 @@
 
 (define (macroify-call s call startloc)
   (cond ((and (pair? call) (eq? (car call) 'call))
-         `(macrocall ,(macroify-name (cadr call))
-                     ,startloc
-                     ,@(cddr call)))
+         (if (and (pair? (cadr call)) (eq? (caadr call) 'curly))
+             `(call ,(macroify-call s (cadr call) startloc) ,@(cddr call))
+             `(macrocall ,(macroify-name (cadr call))
+                         ,startloc
+                         ,@(cddr call))))
         ((and (pair? call) (eq? (car call) 'curly))
          `(macrocall ,(macroify-name (cadr call))
                      ,startloc
