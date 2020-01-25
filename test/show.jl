@@ -1993,3 +1993,4 @@ end
 @test repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
         ":(a[begin, end, let x = 1\n          begin\n              x + 1\n          end\n      end])"
 @test_repr "a[(bla;)]"
+@weak_test_repr "a[x -> f(x)]"
