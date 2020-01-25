@@ -366,4 +366,8 @@ end
 end
 
 # issue 34498
-@test :(@foo{bar}) == :(@foo {bar})
+@testset "macro calls @foo{...}" begin
+    @test :(@foo{}) == :(@foo {})
+    @test :(@foo{bar}) == :(@foo {bar})
+    @test :(@foo{bar,baz}) == :(@foo {bar,baz})
+end
