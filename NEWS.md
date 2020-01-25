@@ -12,6 +12,14 @@ Language changes
   where it used to be incorrectly allowed. This is because `NTuple` refers only to homogeneous
   tuples (this meaning has not changed) ([#34272]).
 
+* In docstrings, a level-1 markdown header "Extended help" is now
+  interpreted as a marker dividing "brief help" from "extended help."
+  The REPL help mode only shows the brief help (the content before the
+  "Extended help" header) by default; prepend the expression with '?'
+  (in addition to the one that enters the help mode) to see the full
+  docstring. ([#25903])
+
+
 Multi-threading changes
 -----------------------
 
