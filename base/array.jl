@@ -1274,12 +1274,16 @@ Stacktrace:
 deleteat!(a::Vector, inds) = _deleteat!(a, inds)
 deleteat!(a::Vector, inds::AbstractVector) = _deleteat!(a, to_indices(a, (inds,))[1])
 
-function _deleteat!(a::Vector, inds)
+struct Nowhere; end
+push!(::Nowhere, _) = nothing
+
+function _deleteat!(a::Vector, inds, dltd=Nowhere())
     n = length(a)
     y = iterate(inds)
     y === nothing && return a
     n == 0 && throw(BoundsError(a, inds))
     (p, s) = y
+    p <= n && push!(dltd, @inbounds a[p])
     q = p+1
     while true
         y = iterate(inds, s)
@@ -1296,6 +1300,7 @@ function _deleteat!(a::Vector, inds)
             @inbounds a[p] = a[q]
             p += 1; q += 1
         end
+        push!(dltd, @inbounds a[i])
         q = i+1
     end
     while q <= n
@@ -1444,6 +1449,8 @@ function splice!(a::Vector, r::UnitRange{<:Integer}, ins=_default_splice)
     end
     return v
 end
+
+splice!(a::Vector, inds) = (dltds = eltype(a)[]; _deleteat!(a, inds, dltds); dltds)
 
 function empty!(a::Vector)
     _deleteend!(a, length(a))
