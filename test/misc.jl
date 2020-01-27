@@ -804,3 +804,9 @@ end
 
     GC.safepoint()
 end
+
+@testset "traits" begin
+    @test Base.OrderStyle(1) isa Base.Ordered
+    @test Base.ArithmeticStyle(1) isa Base.ArithmeticWraps
+    @test Base.RangeStepStyle(1:2) isa Base.RangeStepRegular
+end
