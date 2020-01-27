@@ -6,7 +6,7 @@
 #include "options.h"
 #include "locks.h"
 #include <uv.h>
-#if !defined(_MSC_VER) && !defined(__MINGW32__)
+#if !defined(_WIN32)
 #include <unistd.h>
 #else
 #define sleep(x) Sleep(1000*x)

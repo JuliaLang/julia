@@ -6,7 +6,7 @@
 
 // Copied from MINGW_FLOAT_H which may not be found due to a collision with the builtin gcc float.h
 // eventually we can probably integrate this into OpenLibm.
-#if defined(_COMPILER_MINGW_)
+#if defined(_COMPILER_GCC_)
 void __cdecl __MINGW_NOTHROW _fpreset (void);
 void __cdecl __MINGW_NOTHROW fpreset (void);
 #else
