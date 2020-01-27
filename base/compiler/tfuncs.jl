@@ -403,20 +403,23 @@ add_tfunc(Core._typevar, 3, 3, typevar_tfunc, 100)
 add_tfunc(applicable, 1, INT_INF, (@nospecialize(f), args...)->Bool, 100)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecialize(x)->Int, 4)
 add_tfunc(arraysize, 2, 2, (@nospecialize(a), @nospecialize(d))->Int, 4)
+function pointer_eltype(@nospecialize(ptr))
+    a = widenconst(ptr)
+    if a <: Ptr
+        if isa(a,DataType) && isa(a.parameters[1],Type)
+            return a.parameters[1]
+        elseif isa(a,UnionAll) && !has_free_typevars(a)
+            unw = unwrap_unionall(a)
+            if isa(unw,DataType)
+                return rewrap_unionall(unw.parameters[1], a)
+            end
+        end
+    end
+    return Any
+end
 add_tfunc(pointerref, 3, 3,
           function (@nospecialize(a), @nospecialize(i), @nospecialize(align))
-              a = widenconst(a)
-              if a <: Ptr
-                  if isa(a,DataType) && isa(a.parameters[1],Type)
-                      return a.parameters[1]
-                  elseif isa(a,UnionAll) && !has_free_typevars(a)
-                      unw = unwrap_unionall(a)
-                      if isa(unw,DataType)
-                          return rewrap_unionall(unw.parameters[1], a)
-                      end
-                  end
-              end
-              return Any
+            return pointer_eltype(a)
           end, 4)
 add_tfunc(pointerset, 4, 4, (@nospecialize(a), @nospecialize(v), @nospecialize(i), @nospecialize(align)) -> a, 5)
 
@@ -1393,22 +1396,31 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
 end
 
 # Query whether the given intrinsic is nothrow
-intrinsic_nothrow(f::IntrinsicFunction) = !(
-        f === Intrinsics.checked_sdiv_int ||
-        f === Intrinsics.checked_udiv_int ||
-        f === Intrinsics.checked_srem_int ||
-        f === Intrinsics.checked_urem_int ||
-        f === Intrinsics.cglobal
-    )
 
 function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
+    # First check that we have the correct number of arguments
+    iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
+    if iidx < 1 || iidx > length(T_IFUNC)
+        # invalid intrinsic
+        return false
+    end
+    tf = T_IFUNC[iidx]
+    tf = tf::Tuple{Int, Int, Any}
+    if !(tf[1] <= length(argtypes) <= tf[2])
+        # wrong # of args
+        return false
+    end
     # TODO: We could do better for cglobal
     f === Intrinsics.cglobal && return false
+    # TODO: We can't know for sure, but the user should have a way to assert
+    # that it won't
+    f === Intrinsics.llvmcall && return false
     if f === Intrinsics.checked_udiv_int || f === Intrinsics.checked_urem_int || f === Intrinsics.checked_srem_int || f === Intrinsics.checked_sdiv_int
         # Nothrow as long as the second argument is guaranteed not to be zero
         isa(argtypes[2], Const) || return false
         den_val = argtypes[2].val
         den_val !== zero(typeof(den_val)) || return false
+        return true
     end
     if f === Intrinsics.checked_sdiv_int
         # Nothrow as long as we additionally don't do typemin(T)/-1
@@ -1421,6 +1433,34 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
         # in that it is legal to remove unused non-volatile loads.
         length(argtypes) == 3 || return false
         return argtypes[1] ⊑ Ptr && argtypes[2] ⊑ Int && argtypes[3] ⊑ Int
+    end
+    if f === Intrinsics.pointerset
+        eT = pointer_eltype(argtypes[1])
+        isprimitivetype(eT) || return false
+        return argtypes[2] ⊑ eT && argtypes[3] ⊑ Int && argtypes[4] ⊑ Int
+    end
+    if f === Intrinsics.arraylen
+        return argtypes[1] ⊑ Array
+    end
+    if f === Intrinsics.bitcast
+        ty = instanceof_tfunc(argtypes[1])[1]
+        xty = widenconst(argtypes[2])
+        return isprimitivetype(ty) && isprimitivetype(xty) && ty.size === xty.size
+    end
+    if f in (Intrinsics.sext_int, Intrinsics.zext_int, Intrinsics.trunc_int,
+             Intrinsics.fptoui, Intrinsics.fptosi, Intrinsics.uitofp,
+             Intrinsics.sitofp, Intrinsics.fptrunc, Intrinsics.fpext)
+        ty = instanceof_tfunc(argtypes[1])[1]
+        xty = widenconst(argtypes[2])
+        return isprimitivetype(ty) && isprimitivetype(xty)
+    end
+    # The remaining intrinsics are math/bits/comparison intrinsics. They work on all
+    # primitive types.
+    for i = 1:length(argtypes)
+        # Intrinsics are defined only on primitive types
+        if !isprimitivetype(widenconst(argtypes[i]))
+            return false
+        end
     end
     return true
 end
