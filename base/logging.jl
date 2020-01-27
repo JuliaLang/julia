@@ -248,6 +248,8 @@ function log_record_id(_module, level, message, log_kws)
     end
 end
 
+default_group(file) = Symbol(splitext(basename(file))[1])
+
 # Generate code for logging macros
 function logmsg_code(_module, file, line, level, message, exs...)
     id = Expr(:quote, log_record_id(_module, level, message, exs))
@@ -293,12 +295,12 @@ function logmsg_code(_module, file, line, level, message, exs...)
     if group === nothing
         group = if isdefined(Base, :basename) && isa(file, String)
             # precompute if we can
-            QuoteNode(splitext(basename(file))[1])
+            QuoteNode(default_group(file))
         else
             # memoized run-time execution
             ref = Ref{Symbol}()
             :(isassigned($ref) ? $ref[]
-                               : $ref[] = Symbol(splitext(basename(something($file, "")))[1]))
+                               : $ref[] = default_group(something($file, "")))
         end
     end
 
