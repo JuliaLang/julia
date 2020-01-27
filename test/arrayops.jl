@@ -2432,6 +2432,19 @@ end
         @test arr_cop ≈ cumprod(arr)
     end
 
+    # multidimensional, dims = 1 with init
+    @test accumulate(+, [1 1; 1 1], dims = 1, init = 1) == [2 2; 3 3]
+
+    @test_throws ArgumentError(
+        "acccumulate does not support the keyword arguments Symbol[:unsupported]"
+    ) accumulate(+, [1]; unsupported = 0)
+    @test_throws ArgumentError(
+        "acccumulate! does not support the keyword arguments Symbol[:unsupported]"
+    ) accumulate!(+, [1], [1]; unsupported = 0)
+    @test_throws ArgumentError(
+        "Keyword argument dims must be provided for multidimensional arrays"
+    ) accumulate(+, [1 2; 3 4])
+
     # exotic indexing
     arr = randn(4)
     oarr = OffsetArray(arr, (-3,))
