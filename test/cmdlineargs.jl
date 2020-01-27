@@ -407,6 +407,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
 
     # test the program name remains constant
     mktempdir() do dir
+        # dir can be case-incorrect sometimes
+        dir = realpath(dir)
+
         a = joinpath(dir, "a.jl")
         b = joinpath(dir, "b.jl")
         c = joinpath(dir, ".julia", "config", "startup.jl")
@@ -430,19 +433,19 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
                 [a, a,
                  b, a]
             @test readsplit(`$exename -L $b -e 'exit(0)'`) ==
-                [realpath(b), ""]
+                [b, ""]
             @test readsplit(`$exename -L $b $a`) ==
-                [realpath(b), a,
+                [b, a,
                  a, a,
                  b, a]
             @test readsplit(`$exename --startup-file=yes -e 'exit(0)'`) ==
                 [c, ""]
             @test readsplit(`$exename --startup-file=yes -L $b -e 'exit(0)'`) ==
                 [c, "",
-                 realpath(b), ""]
+                 b, ""]
             @test readsplit(`$exename --startup-file=yes -L $b $a`) ==
                 [c, a,
-                 realpath(b), a,
+                 b, a,
                  a, a,
                  b, a]
         end
