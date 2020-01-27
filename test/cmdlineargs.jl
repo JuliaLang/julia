@@ -264,10 +264,31 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0"`) == "false"
     @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=none`) == "false"
 
-    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0"
-        --track-allocation`) == "true"
-    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0"
-        --track-allocation=user`) == "true"
+    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation`) == "true"
+    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=user`) == "true"
+    mktempdir() do dir
+        helperdir = joinpath(@__DIR__, "testhelpers")
+        inputfile = joinpath(helperdir, "allocation_file.jl")
+        pid = readchomp(`$exename -E "getpid()" -L $inputfile --track-allocation=user`)
+        memfile = "$inputfile.$pid.mem"
+        got = readlines(memfile)
+        rm(memfile)
+        @test popfirst!(got) == "        0 g(x) = x + 123456"
+        @test popfirst!(got) == "        - function f(x)"
+        @test popfirst!(got) == "       80     []"
+        if Sys.WORD_SIZE == 64
+            @test popfirst!(got) == "       32     Base.invokelatest(g, 0)"
+            @test popfirst!(got) == "       48     Base.invokelatest(g, x)"
+        else
+            @test popfirst!(got) == "       24     Base.invokelatest(g, 0)"
+            @test popfirst!(got) == "       36     Base.invokelatest(g, x)"
+        end
+        @test popfirst!(got) == "       80     []"
+        @test popfirst!(got) == "        - end"
+        @test popfirst!(got) == "        - f(1.23)"
+        @test isempty(got) || got
+    end
+
 
     # --optimize
     @test readchomp(`$exename -E "Base.JLOptions().opt_level"`) == "2"
