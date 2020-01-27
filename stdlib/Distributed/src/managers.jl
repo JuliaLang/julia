@@ -463,13 +463,13 @@ const client_port = Ref{Cushort}(0)
 
 function socket_reuse_port()
     if ccall(:jl_has_so_reuseport, Int32, ()) == 1
-        s = TCPSocket(delay = false)
+        sock = TCPSocket(delay = false)
 
         # Some systems (e.g. Linux) require the port to be bound before setting REUSEPORT
         bind_early = Sys.islinux()
 
         bind_early && bind_client_port(s)
-        rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Cvoid},), s.handle)
+        rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Cvoid},), sock.handle)
         if rc < 0
             # This is an issue only on systems with lots of client connections, hence delay the warning
             nworkers() > 128 && @warn "Error trying to reuse client port number, falling back to regular socket" maxlog=1
@@ -477,8 +477,8 @@ function socket_reuse_port()
             # provide a clean new socket
             return TCPSocket()
         end
-        bind_early || bind_client_port(s)
-        return s
+        bind_early || bind_client_port(sock)
+        return sock
     else
         return TCPSocket()
     end
@@ -500,8 +500,8 @@ function bind_client_port(s::TCPSocket)
 end
 
 function connect_to_worker(host::AbstractString, port::Integer)
-    s = socket_reuse_port()
-    connect(s, host, UInt16(port))
+    sock = socket_reuse_port()
+    connect(sock, host, UInt16(port))
 
     # Avoid calling getaddrinfo if possible - involves a DNS lookup
     # host may be a stringified ipv4 / ipv6 address or a dns name
@@ -511,7 +511,7 @@ function connect_to_worker(host::AbstractString, port::Integer)
     catch
         bind_addr = string(getaddrinfo(host))
     end
-    (s, bind_addr)
+    (sock, bind_addr)
 end
 
 
