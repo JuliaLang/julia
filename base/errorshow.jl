@@ -265,6 +265,13 @@ function showerror(io::IO, ex::MethodError)
         end
         print(io, ")")
     end
+    if f_is_function && applicable(start, ex.args) && !method_exists(f, arg_types)
+        if Base.iteratorsize(ex.args) == Base.HasLength()
+            print(io, "\nYou may consider implementing the `length` method.")
+        elseif Base.iteratorsize(ex.args) == Base.HasShape()
+            print(io, "\nYou may consider implementing the `length` and `size` methods.")
+        end
+    end
     if ft <: AbstractArray
         print(io, "\nUse square brackets [] for indexing an Array.")
     end
