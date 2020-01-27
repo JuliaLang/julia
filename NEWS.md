@@ -17,7 +17,7 @@ Language changes
   The REPL help mode only shows the brief help (the content before the
   "Extended help" header) by default; prepend the expression with '?'
   (in addition to the one that enters the help mode) to see the full
-  docstring. ([#25903])
+  docstring. ([#25930])
 
 
 Multi-threading changes
