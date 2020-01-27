@@ -676,6 +676,13 @@ end
 
     v = [1,2,3]
     @test permutedims(v) == [1 2 3]
+
+    x = PermutedDimsArray([1 2; 3 4], (2, 1))
+    @test size(x) == (2, 2)
+    @test copy(x) == [1 3; 2 4]
+    y = [0, 0, 0, 0]
+    copyto!(y, x)
+    @test y == [1, 2, 3, 4]
 end
 
 @testset "circshift" begin
