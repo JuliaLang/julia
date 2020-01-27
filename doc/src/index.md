@@ -54,7 +54,7 @@ implemented using [LLVM](https://en.wikipedia.org/wiki/Low_Level_Virtual_Machine
 combining features of imperative, functional, and object-oriented programming. Julia provides
 ease and expressiveness for high-level numerical computing, in the same way as languages such
 as R, MATLAB, and Python, but also supports general programming. To achieve this, Julia builds
-upon the lineage of mathematical programming languages, but also borrows much from popular dynamic
+upon the lineage of mathematical programming languages, but also borrows some from popular dynamic
 languages, including [Lisp](https://en.wikipedia.org/wiki/Lisp_(programming_language)), [Perl](https://en.wikipedia.org/wiki/Perl_(programming_language)),
 [Python](https://en.wikipedia.org/wiki/Python_(programming_language)), [Lua](https://en.wikipedia.org/wiki/Lua_(programming_language)),
 and [Ruby](https://en.wikipedia.org/wiki/Ruby_(programming_language)).
