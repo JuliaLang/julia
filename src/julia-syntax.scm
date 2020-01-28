@@ -2682,11 +2682,11 @@
                     (file (if (eq? (cadr loc) 'none) (julia-current-file) (cadr loc))))
                (lowering-warning
                 1000 'warn (symbol (string file line)) file line
-                (string "Assignment to `" v "` in top-level block is ambiguous "
-                        "because an outer global binding by the same name already exists."
-                        " Use `global " v "` to assign to the outer global `" v
-                        "` variable or use `local " v "` to force a new "
-                        "local by the same name."))))
+                (string "Assignment to `" v "` in soft scope is ambiguous "
+                        "because a global variable by the same name exists: "
+                        "`" v "` will be treated as a new local. "
+                        "Disambiguate by using `local " v "` to suppress this warning or "
+                        "`global " v "` to assign to the existing global variable."))))
          (cons (car e)
                (map (lambda (x)
                       (if (linenum? x)

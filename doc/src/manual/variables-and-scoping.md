@@ -282,7 +282,7 @@ for i = 1:10
 end
 s
 @isdefined(t)
- ```
+```
 
 What does this code do? Hint: it's a trick question. The answer is "it depends." If this code is
 entered interactively, it behaves the same way it does in a function body. But if the code appears
@@ -329,7 +329,7 @@ julia> code = """
        """;
 
 julia> include_string(Main, code)
-┌ Warning: Assignment to `s` in top-level block is ambiguous because an outer global binding by the same name already exists. Use `global s` to assign to the outer global `s` variable or use `local s` to force a new local by the same name.
+┌ Warning: Assignment to `s` in soft scope is ambiguous because a global variable by the same name exists: `s` will be treated as a new local. Disambiguate by using `local s` to suppress this warning or `global s` to assign to the existing global variable.
 └ @ string:4
 ERROR: LoadError: UndefVarError: s not defined
 ```
@@ -442,9 +442,7 @@ As of Julia 1.5, this code works without the `global` annotation in interactive 
 REPL or Jupyter notebooks (just like Julia 0.6) and in files and other non-interactive contexts, it
 prints this very direct warning:
 
-> Assignment to `s` in top-level block is ambiguous because an outer global binding by the same name
-already exists. Use `global s` to assign to the outer global `s` variable or use `local s` to force
-a new local by the same name.
+> Assignment to `s` in soft scope is ambiguous because a global variable by the same name exists: `s` will be treated as a new local. Disambiguate by using `local s` to suppress this warning or `global s` to assign to the existing global variable.
 
 This addresses both issues while preserving the "programming at scale" benefits of the 1.0 behavior:
 global variables have no spooky effect on the meaning of code that may be far away; in the REPL
