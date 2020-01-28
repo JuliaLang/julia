@@ -1198,7 +1198,7 @@ function early_inline_special_case(ir::IRCode, s::Signature, e::Expr, params::Op
     return nothing
 end
 
-function late_inline_special_case!(ir::IRCode, sig::Signature, idx::Int, stmt::Expr, params::Params)
+function late_inline_special_case!(ir::IRCode, sig::Signature, idx::Int, stmt::Expr, params::OptimizationParams)
     typ = ir.types[idx]
     f, ft, atypes = sig.f, sig.ft, sig.atypes
     if params.inlining && length(atypes) == 3 && istopfunction(f, :!==)
