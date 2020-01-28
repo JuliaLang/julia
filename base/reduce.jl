@@ -861,3 +861,19 @@ function count(pred, a::AbstractArray)
     return n
 end
 count(itr) = count(identity, itr)
+
+function count(::typeof(identity), x::Array{Bool})
+    n = 0
+    chunks = length(x) ÷ sizeof(UInt)
+    mask = 0x0101010101010101 % UInt
+    GC.@preserve x begin
+        ptr = Ptr{UInt}(pointer(x))
+        for i in 1:chunks
+            n += count_ones(unsafe_load(ptr, i) & mask)
+        end
+    end
+    for i in sizeof(UInt)*chunks+1:length(x)
+        n += x[i]
+    end
+    return n
+end
