@@ -477,19 +477,16 @@ IteratorSize(::Type{<:Channel}) = SizeUnknown()
     threaded_foreach(f, channel::Channel; ntasks=Threads.nthreads(), async=true)
 
 Similar to `foreach(f, channel)`, but iteration over `channel` and calls to
-`f` are split across `ntasks` Tasks spawned by `Threads.@spawn`.
-
-If `async` is `false`, this function will `wait` for all internally spawned tasks
-to complete before returning.
+`f` are split across `ntasks` Tasks spawned by `Threads.@spawn`. This function
+will wait for all internally spawned tasks to complete before returning.
 """
-function threaded_foreach(f, channel::Channel; ntasks=Threads.nthreads(), async=true)
-    tasks = map(1:ntasks) do _
+function threaded_foreach(f, channel::Channel; ntasks=Threads.nthreads())
+    @sync for _ in 1:ntasks
         Threads.@spawn begin
             for item in channel
                 wait(Threads.@spawn f(item))
             end
         end
     end
-    async || foreach(wait, tasks)
     return nothing
 end
