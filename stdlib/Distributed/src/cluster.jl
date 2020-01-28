@@ -569,6 +569,7 @@ end
 function create_worker(manager, wconfig)
     # only node 1 can add new nodes, since nobody else has the full list of address:port
     @assert LPROC.id == 1
+    timeout = worker_timeout()
 
     # initiate a connect. Does not wait for connection completion in case of TCP.
     w = Worker()
@@ -633,9 +634,14 @@ function create_worker(manager, wconfig)
             (notnothing(x.config.ident) in something(wconfig.connect_idents, []))
 
         wlist = filter(filterfunc, PGRP.workers)
+        waittime = 0
         while wconfig.connect_idents !== nothing &&
               length(wlist) < length(wconfig.connect_idents)
+            if waittime >= timeout
+                error("peer workers did not connect within $timeout seconds")
+            end
             sleep(1.0)
+            waittime += 1
             wlist = filter(filterfunc, PGRP.workers)
         end
 
@@ -655,7 +661,13 @@ function create_worker(manager, wconfig)
     send_msg_now(w, MsgHeader(RRID(0,0), ntfy_oid), join_message)
 
     @async manage(w.manager, w.id, w.config, :register)
+    # wait for rr_ntfy_join with timeout
+    timedout = false
+    @async (sleep($timeout); timedout = true; put!(rr_ntfy_join, 1))
     wait(rr_ntfy_join)
+    if timedout
+        error("worker did not connect within $timeout seconds")
+    end
     lock(client_refs) do
         delete!(PGRP.refs, ntfy_oid)
     end
