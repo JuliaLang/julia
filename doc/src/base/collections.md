@@ -189,8 +189,9 @@ Dictionaries may also be created with generators. For example, `Dict(i => f(i) f
 
 Given a dictionary `D`, the syntax `D[x]` returns the value of key `x` (if it exists) or throws
 an error, and `D[x] = y` stores the key-value pair `x => y` in `D` (replacing any existing value
-for the key `x`).  Multiple arguments to `D[...]` are converted to tuples; for example, the syntax
-`D[x,y]`  is equivalent to `D[(x,y)]`, i.e. it refers to the value keyed by the tuple `(x,y)`.
+for the key `x`).
+
+Multiple arguments to `D[...]` are converted to tuples; for example, the syntax `D[x,y]`  is equivalent to `D[(x,y)]`, i.e. it refers to the value keyed by the tuple `(x,y)`.
 
 ```@docs
 Base.AbstractDict
