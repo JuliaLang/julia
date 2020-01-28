@@ -1110,7 +1110,9 @@ function testset_beginend(args, tests, source)
         try
             # RNG is re-seeded with its own seed to ease reproduce a failed test
             Random.seed!(RNG.seed)
-            $(esc(tests))
+            let
+                $(esc(tests))
+            end
         catch err
             err isa InterruptException && rethrow()
             # something in the test block threw an error. Count that as an
@@ -1200,7 +1202,9 @@ function testset_forloop(args, testloop, source)
         Random.seed!(RNG.seed)
         local tmprng = copy(RNG)
         try
-            $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
+            let
+                $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
+            end
         finally
             # Handle `return` in test body
             if !first_iteration
