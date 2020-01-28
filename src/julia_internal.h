@@ -720,6 +720,7 @@ typedef struct {
 
 // Might be called from unmanaged thread
 uint64_t jl_getUnwindInfo(uint64_t dwBase);
+uint64_t jl_trygetUnwindInfo(uint64_t dwBase);
 #ifdef _OS_WINDOWS_
 #include <dbghelp.h>
 JL_DLLEXPORT EXCEPTION_DISPOSITION __julia_personality(
@@ -756,7 +757,7 @@ size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTS
 // Record backtrace from a signal handler. `ctx` is the context of the code
 // which was asynchronously interrupted.
 size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx,
-                         jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
+                         jl_gcframe_t *pgcstack, int lockless) JL_NOTSAFEPOINT;
 #ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
 #endif
