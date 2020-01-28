@@ -485,14 +485,22 @@ function socket_reuse_port()
 end
 
 # TODO: this doesn't belong here, it belongs in Sockets
-function bind_client_port(s::TCPSocket)
+function bind(s, host, port)
     Sockets.iolock_begin()
     @assert s.status == Sockets.StatusInit
-    host_in = Ref(hton(UInt32(0))) # IPv4 0.0.0.0
+    host_in = Ref(hton(host.host))
     err = ccall(:jl_tcp_bind, Int32, (Ptr{Cvoid}, UInt16, Ptr{Cvoid}, Cuint, Cint),
-                s, hton(client_port[]), host_in, 0, false)
+                s, hton(port), host_in, 0, false)
     Sockets.iolock_end()
     uv_error("tcp_bind", err)
+    return true
+end
+
+function bind_client_port(s::TCPSocket)
+    host = Sockets.IPv4("0.0.0.0")
+    p = client_port[]
+
+    bind(s, host, p)
 
     _addr, port = getsockname(s)
     client_port[] = port
