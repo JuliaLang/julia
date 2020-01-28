@@ -535,3 +535,11 @@ x = [j^2 for j in i]
 i = Base.Slice(0:0)
 x = [j+7 for j in i]
 @test sum(x) == 7
+
+@testset "initial value handling with flatten" begin
+    @test mapfoldl(
+        x -> (x, x),
+        ((a, b), (c, d)) -> (min(a, c), max(b, d)),
+        Iterators.flatten((1:2, 3:4)),
+    ) == (1, 4)
+end

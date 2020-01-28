@@ -4,12 +4,12 @@ PCRE_VER = 10.31
 PCRE_BB_REL = 0
 DSFMT_VER = 2.2.3
 DSFMT_BB_REL = 0
-OPENBLAS_VER = 0.3.5
+OPENBLAS_VER = 0.3.7
 OPENBLAS_BB_REL = 2
 LAPACK_VER = 3.5.0
 SUITESPARSE_VER = 5.4.0
 SUITESPARSE_BB_REL = 2
-OPENLIBM_VER = 0.6.0
+OPENLIBM_VER = 0.7.0
 OPENLIBM_BB_REL = 0
 UNWIND_VER = 1.3.1
 UNWIND_BB_REL = 4
@@ -40,4 +40,4 @@ P7ZIP_BB_REL = 1
 # Specify the version of the Mozilla CA Certificate Store to obtain.
 # The versions of cacert.pem are identified by the date (YYYY-MM-DD) of their changes.
 # See https://curl.haxx.se/docs/caextract.html for more details.
-MOZILLA_CACERT_VERSION := 2019-10-16
+MOZILLA_CACERT_VERSION := 2020-01-01

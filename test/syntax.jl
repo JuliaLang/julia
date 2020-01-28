@@ -1971,3 +1971,32 @@ end
 # issue #33987
 f33987(args::(Vararg{Any, N} where N); kwargs...) = args
 @test f33987(1,2,3) === (1,2,3)
+
+macro id_for_kwarg(x); x; end
+Xo65KdlD = @id_for_kwarg let x = 1
+    function f(; x)
+        x
+    end
+end
+@test_throws UndefKeywordError(:x) Xo65KdlD()
+i0xb23hG = @id_for_kwarg let x = 1
+    function f(; x=2)
+        x
+    end
+end
+@test i0xb23hG() == 2
+@test i0xb23hG(x=10) == 10
+
+@test @eval let
+    (z,)->begin
+        $(Expr(:inbounds, true))
+        $(Expr(:inbounds, :pop))
+    end
+    pop = 1
+end == 1
+
+# issue #29982
+@test Meta.parse("'a'") == 'a'
+@test Meta.parse("'\U0061'") == 'a'
+test_parseerror("''", "invalid empty character literal")
+test_parseerror("'abc'", "character literal contains multiple characters")

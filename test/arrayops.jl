@@ -2648,6 +2648,21 @@ end
 # Fix oneunit bug for unitful arrays
 @test oneunit([Second(1) Second(2); Second(3) Second(4)]) == [Second(1) Second(0); Second(0) Second(1)]
 
+@testset "indexing by CartesianIndices" begin
+    A = rand(10,10)
+    for (I,Rs) in ((keys(A), (1:10, 1:10)),
+                   (CartesianIndex(2,2):CartesianIndex(9,9), (2:9, 2:9)),
+                   (CartesianIndex(5,3):CartesianIndex(6,7), (5:6, 3:7)))
+        @test A[I] == A[Rs...] == @view(A[I]) == @view(A[Rs...])
+        @test @view(A[I]) isa StridedArray
+        @test !checkbounds(Bool, [], I)
+        @test !checkbounds(Bool, fill(2,1,1,1), :, I)
+        @test !checkbounds(Bool, fill(2,1,1,1), I, :)
+    end
+    @test !checkbounds(Bool, rand(3,3,3), :, CartesianIndex(0,0):CartesianIndex(1,1))
+    @test !checkbounds(Bool, rand(3,3,3), CartesianIndex(0,0):CartesianIndex(1,1), :)
+end
+
 # Throws ArgumentError for negative dimensions in Array
 @test_throws ArgumentError fill('a', -10)
 

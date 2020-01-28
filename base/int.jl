@@ -155,7 +155,7 @@ julia> signed(unsigned(-2))
 -2
 ```
 """
-unsigned(x) = convert(Unsigned, x)
+unsigned(x) = x % typeof(convert(Unsigned, zero(x)))
 unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 
 """
@@ -164,7 +164,7 @@ unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as
 signed without checking for overflow.
 """
-signed(x) = convert(Signed, x)
+signed(x) = x % typeof(convert(Signed, zero(x)))
 signed(x::BitUnsigned) = reinterpret(typeof(convert(Signed, zero(x))), x)
 
 div(x::BitSigned, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)), y)), x)
@@ -337,7 +337,7 @@ julia> count_ones(7)
 3
 ```
 """
-count_ones(x::BitInteger) = Int(ctpop_int(x))
+count_ones(x::BitInteger) = ctpop_int(x) % Int
 
 """
     leading_zeros(x::Integer) -> Integer
@@ -350,7 +350,7 @@ julia> leading_zeros(Int32(1))
 31
 ```
 """
-leading_zeros(x::BitInteger) = Int(ctlz_int(x))
+leading_zeros(x::BitInteger) = ctlz_int(x) % Int
 
 """
     trailing_zeros(x::Integer) -> Integer
@@ -363,7 +363,7 @@ julia> trailing_zeros(2)
 1
 ```
 """
-trailing_zeros(x::BitInteger) = Int(cttz_int(x))
+trailing_zeros(x::BitInteger) = cttz_int(x) % Int
 
 """
     count_zeros(x::Integer) -> Integer

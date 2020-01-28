@@ -880,7 +880,7 @@ function hpmv!(uplo::AbstractChar,
     if length(AP) < Int64(N*(N+1)/2)
         throw(DimensionMismatch("Packed Hermitian matrix A has size smaller than length(x) =  $(N)."))
     end
-    GC.@preserve x y AP hpmv!(uplo, N, convert(T, α), AP, pointer(x), BlasInt(stride(x, 1)), convert(T, β), pointer(y), BlasInt(stride(y, 1)))
+    GC.@preserve x y AP hpmv!(uplo, BlasInt(N), convert(T, α), AP, pointer(x), BlasInt(stride(x, 1)), convert(T, β), pointer(y), BlasInt(stride(y, 1)))
     y
 end
 

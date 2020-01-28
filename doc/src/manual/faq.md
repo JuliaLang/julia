@@ -141,9 +141,9 @@ When calling `change_value!(x)` in the above example, `y` is a newly created var
 to the value of `x`, i.e. `10`; then `y` is rebound to the constant `17`, while the variable
 `x` of the outer scope is left untouched.
 
-But here is a thing you should pay attention to: suppose `x` is bound to an object of type `Array`
+However, if `x` is bound to an object of type `Array`
 (or any other *mutable* type). From within the function, you cannot "unbind" `x` from this Array,
-but you can change its content. For example:
+but you *can* change its content. For example:
 
 ```jldoctest
 julia> x = [1,2,3]
@@ -334,8 +334,8 @@ unstable (generic function with 1 method)
 
 It returns either an `Int` or a [`Float64`](@ref) depending on the value of its argument.
 Since Julia can't predict the return type of this function at compile-time, any computation
-that uses it will have to guard against both types possibly occurring, making generation of
-fast machine code difficult.
+that uses it must be able to cope with values of both types, which makes it hard to produce
+fast machine code.
 
 ### [Why does Julia give a `DomainError` for certain seemingly-sensible operations?](@id faq-domain-errors)
 
@@ -770,8 +770,9 @@ generate efficient code when working with `Union{T, Nothing}` arguments or field
 To represent missing data in the statistical sense (`NA` in R or `NULL` in SQL), use the
 [`missing`](@ref) object. See the [`Missing Values`](@ref missing) section for more details.
 
-The empty tuple (`()`) is another form of nothingness. But, it should not really be thought of
-as nothing but rather a tuple of zero values.
+In some languages, the empty tuple (`()`) is considered the canonical
+form of nothingness. However, in julia it is best thought of as just
+a regular tuple that happens to contain zero values.
 
 The empty (or "bottom") type, written as `Union{}` (an empty union type), is a type with
 no values and no subtypes (except itself). You will generally not need to use this type.

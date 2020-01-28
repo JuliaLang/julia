@@ -272,6 +272,13 @@ let _true = Ref(true), f, g, h
     @test_throws ErrorException h()
 end
 
+# Issue #33163
+A33163(x; y) = x + y
+B33163(x) = x
+@test (@code_typed A33163(1, y=2))[1].inferred
+@test !(@code_typed optimize=false A33163(1, y=2))[1].inferred
+@test !(@code_typed optimize=false B33163(1))[1].inferred
+
 module ReflectionTest
 using Test, Random, InteractiveUtils
 

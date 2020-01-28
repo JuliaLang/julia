@@ -34,11 +34,8 @@
 #include <llvm/Transforms/Vectorize.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
-
-#if JL_LLVM_VERSION >= 70000
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
-#endif
 
 #if JL_LLVM_VERSION >= 100000
 #include <llvm/Support/CodeGen.h>
@@ -221,11 +218,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 
     // Run instcombine after redundancy elimination to exploit opportunities
     // opened up by them.
-#if JL_LLVM_VERSION < 70000
-    // This pass is a subset of InstructionCombiningPass in LLVM 7
-    // and therefore not required.
-    PM->add(createInstructionSimplifierPass());///////// ****
-#endif
     PM->add(createInstructionCombiningPass());
     PM->add(createJumpThreadingPass());         // Thread jumps
     PM->add(createDeadStoreEliminationPass());  // Delete dead stores
@@ -306,11 +298,7 @@ template <typename ObjT, typename LoadResult>
 void JuliaOJIT::DebugObjectRegistrar::registerObject(RTDyldObjHandleT H, const ObjT &Obj,
                                                      const LoadResult &LO)
 {
-#if JL_LLVM_VERSION >= 70000
     const ObjT* Object = &Obj;
-#else
-    const ObjT& Object = Obj;
-#endif
 
     JIT.NotifyFinalizer(H, *Object, *LO);
     ORCNotifyObjectEmitted(JuliaListener.get(), *Object,
@@ -340,13 +328,8 @@ template <typename ObjSetT, typename LoadResult>
 void JuliaOJIT::DebugObjectRegistrar::operator()(RTDyldObjHandleT H,
                 const ObjSetT &Object, const LoadResult &LOS)
 {
-#if JL_LLVM_VERSION >= 70000
     registerObject(H, Object,
                    static_cast<const RuntimeDyld::LoadedObjectInfo*>(&LOS));
-#else
-    registerObject(H, Object->getBinary(),
-                   static_cast<const RuntimeDyld::LoadedObjectInfo*>(&LOS));
-#endif
 }
 
 
@@ -354,13 +337,8 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
 {
     JL_TIMING(LLVM_OPT);
     jit.PM.run(M);
-#if JL_LLVM_VERSION >= 70000
     std::unique_ptr<MemoryBuffer> ObjBuffer(
         new SmallVectorMemoryBuffer(std::move(jit.ObjBufferSV)));
-#else
-    std::unique_ptr<MemoryBuffer> ObjBuffer(
-        new ObjectMemoryBuffer(std::move(jit.ObjBufferSV)));
-#endif
     auto Obj = object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef());
 
     if (!Obj) {
@@ -373,11 +351,7 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
                                  "The module's content was printed above. Please file a bug report");
     }
 
-#if JL_LLVM_VERSION >= 70000
     return ObjBuffer;
-#else
-    return OwningObj(std::move(*Obj), std::move(ObjBuffer));
-#endif
 }
 
 JuliaOJIT::JuliaOJIT(TargetMachine &TM)
@@ -386,7 +360,6 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
     ObjStream(ObjBufferSV),
     MemMgr(createRTDyldMemoryManager()),
     registrar(*this),
-#if JL_LLVM_VERSION >= 70000
     ES(),
     SymbolResolver(llvm::orc::createLegacyLookupResolver(
           ES,
@@ -406,12 +379,6 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
                     },
         std::ref(registrar)
         ),
-#else
-    ObjectLayer(
-        [&] { return MemMgr; },
-        std::ref(registrar)
-        ),
-#endif
     CompileLayer(
             ObjectLayer,
             CompilerT(this)
@@ -460,7 +427,7 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
 {
 #ifndef JL_NDEBUG
     // validate the relocations for M
-    for (Module::global_object_iterator I = M->global_object_begin(), E = M->global_object_end(); I != E; ) {
+    for (Module::global_object_iterator I = M->global_objects().begin(), E = M->global_objects().end(); I != E; ) {
         GlobalObject *F = &*I;
         ++I;
         if (F->isDeclaration()) {
@@ -480,19 +447,8 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
 #endif
     JL_TIMING(LLVM_MODULE_FINISH);
 
-#if JL_LLVM_VERSION >= 70000
     auto key = ES.allocateVModule();
     cantFail(CompileLayer.addModule(key, std::move(M)));
-#else
-    auto Resolver = orc::createLambdaResolver(
-                        [&](const std::string &Name) {
-                            return this->resolveSymbol(Name);
-                        },
-                        [](const std::string &S) { return nullptr; }
-                    );
-
-    auto key = cantFail(CompileLayer.addModule(std::move(M), std::move(Resolver)));
-#endif
     // Force LLVM to emit the module so that we can register the symbols
     // in our lookup table.
     Error Err = CompileLayer.emitAndFinalize(key);
@@ -573,12 +529,7 @@ void JuliaOJIT::NotifyFinalizer(RTDyldObjHandleT Key,
                                 const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo)
 {
     for (auto &Listener : EventListeners)
-#if JL_LLVM_VERSION >= 80000
         Listener->notifyObjectLoaded(Key, Obj, LoadedObjectInfo);
-#else
-        Listener->NotifyObjectEmitted(Obj, LoadedObjectInfo);
-    (void)Key;
-#endif
 }
 
 const DataLayout& JuliaOJIT::getDataLayout() const
@@ -771,7 +722,7 @@ static void jl_merge_recursive(Module *m, Module *collector)
     // since the declarations may get destroyed by the jl_merge_module call.
     // this is also why we copy the Name string, rather than save a StringRef
     SmallVector<std::string, 8> to_finalize;
-    for (Module::global_object_iterator I = m->global_object_begin(), E = m->global_object_end(); I != E; ++I) {
+    for (Module::global_object_iterator I = m->global_objects().begin(), E = m->global_objects().end(); I != E; ++I) {
         GlobalObject *F = &*I;
         if (!F->isDeclaration()) {
             module_for_fname.erase(F->getName());
@@ -846,7 +797,7 @@ void jl_finalize_module(Module *m, bool shadow)
 {
     // record the function names that are part of this Module
     // so it can be added to the JIT when needed
-    for (Module::global_object_iterator I = m->global_object_begin(), E = m->global_object_end(); I != E; ++I) {
+    for (Module::global_object_iterator I = m->global_objects().begin(), E = m->global_objects().end(); I != E; ++I) {
         GlobalObject *F = &*I;
         if (!F->isDeclaration()) {
             if (isa<Function>(F)) {
@@ -935,11 +886,7 @@ void jl_add_to_shadow(Module *m)
         return;
 #endif
     ValueToValueMapTy VMap;
-#if JL_LLVM_VERSION >= 70000
     std::unique_ptr<Module> clone(CloneModule(*m, VMap));
-#else
-    std::unique_ptr<Module> clone(CloneModule(m, VMap));
-#endif
     for (Module::iterator I = clone->begin(), E = clone->end(); I != E; ++I) {
         Function *F = &*I;
         if (!F->isDeclaration()) {
@@ -1045,15 +992,9 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
         addOptimizationPasses(&PM, jl_options.opt_level, true, true);
     if (bc_fname)
         PM.add(createBitcodeWriterPass(bc_OS));
-#if JL_LLVM_VERSION >= 70000
     if (obj_fname)
         if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
-#else
-    if (obj_fname)
-        if (TM->addPassesToEmitFile(PM, obj_OS, CGFT_ObjectFile, false))
-            jl_safe_printf("ERROR: target does not support generation of object files\n");
-#endif
 
     // Reset the target triple to make sure it matches the new target machine
     shadow_output->setTargetTriple(TM->getTargetTriple().str());

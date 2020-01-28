@@ -260,6 +260,8 @@ true
 """
 issubset, ⊆, ⊇
 
+const FASTIN_SET_THRESHOLD = 70
+
 function issubset(l, r)
     if haslength(r) && (isa(l, AbstractSet) || !hasfastin(r))
         rlen = length(r) # conditions above make this length computed only when needed
@@ -269,7 +271,7 @@ function issubset(l, r)
         end
         # when `in` would be too slow and r is big enough, convert it to a Set
         # this threshold was empirically determined (cf. #26198)
-        if !hasfastin(r) && rlen > 70
+        if !hasfastin(r) && rlen > FASTIN_SET_THRESHOLD
             return issubset(l, Set(r))
         end
     end
@@ -373,6 +375,30 @@ function issetequal(l, r)
     haslength(l) && return issetequal(l, Set(r))
     haslength(r) && return issetequal(r, Set(l))
     return issetequal(Set(l), Set(r))
+end
+
+## set disjoint comparison
+"""
+    isdisjoint(v1, v2) -> Bool
+
+Return whether the collections `v1` and `v2` are disjoint, i.e. whether
+their intersection is empty.
+
+!!! compat "Julia 1.5"
+    This function requires at least Julia 1.5.
+"""
+function isdisjoint(l, r)
+    function _isdisjoint(l, r)
+        hasfastin(r) && return !any(in(r), l)
+        hasfastin(l) && return !any(in(l), r)
+        haslength(r) && length(r) < FASTIN_SET_THRESHOLD &&
+            return !any(in(r), l)
+        return !any(in(Set(r)), l)
+    end
+    if haslength(l) && haslength(r) && length(r) < length(l)
+        return _isdisjoint(r, l)
+    end
+    _isdisjoint(l, r)
 end
 
 ## partial ordering of sets by containment

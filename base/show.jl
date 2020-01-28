@@ -1580,11 +1580,17 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             print(io, '(')
             ind = indent + indent_width
             for i = 1:length(ex.args)
-                i > 1 && print(io, ";\n", ' '^ind)
+                if i > 1
+                    # if there was only a comment before the first semicolon, the expression would get parsed as a NamedTuple
+                    if !(i == 2 && ex.args[1] isa LineNumberNode)
+                        print(io, ';')
+                    end
+                    print(io, "\n", ' '^ind)
+                end
                 show_unquoted(io, ex.args[i], ind, -1, quote_level)
             end
             if length(ex.args) < 2
-                print(isempty(ex.args) ? "nothing;)" : ";)")
+                print(io, isempty(ex.args) ? "nothing;)" : ";)")
             else
                 print(io, ')')
             end
