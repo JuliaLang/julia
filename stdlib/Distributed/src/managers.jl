@@ -485,6 +485,7 @@ function socket_reuse_port()
 end
 
 # TODO: this doesn't belong here, it belongs in Sockets
+# TODO : when I try to use Sockets.bind instead, `make` hangs
 function bind(s, host, port)
     Sockets.iolock_begin()
     @assert s.status == Sockets.StatusInit
