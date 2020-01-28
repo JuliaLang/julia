@@ -285,6 +285,6 @@ end
             b::String
         end
     @test @NamedTuple{a::Int, b} === NamedTuple{(:a, :b),Tuple{Int64,Any}}
-    @test_throws Exception @NamedTuple{a::Int, b, 3}
-    @test_throws Exception @NamedTuple(a::Int, b)
+    @test_throws LoadError include_string(Main, "@NamedTuple{a::Int, b, 3}")
+    @test_throws LoadError include_string(Main, "@NamedTuple(a::Int, b)")
 end
