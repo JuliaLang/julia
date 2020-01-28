@@ -36,7 +36,7 @@ New library functions
 New library features
 --------------------
 * Function composition now works also on one argument `∘(f) = f` (#34251)
-* `@NamedTuple{key1::Type1, ...}` macro for convenient `NamedTuple` declarations.
+* `@NamedTuple{key1::Type1, ...}` macro for convenient `NamedTuple` declarations ([#34548]).
 
 
 Standard library changes
