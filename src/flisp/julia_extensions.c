@@ -59,7 +59,7 @@ value_t fl_skipws(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
 {
     return (cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LL ||
-            cat == UTF8PROC_CATEGORY_LT || cat == UTF8PROC_CATEGORY_LM ||
+            cat == UTF8PROC_CATEGORY_LT ||
             cat == UTF8PROC_CATEGORY_LO || cat == UTF8PROC_CATEGORY_NL ||
             cat == UTF8PROC_CATEGORY_SC ||  // allow currency symbols
             // other symbols, but not arrows
@@ -133,7 +133,7 @@ JL_DLLEXPORT int jl_id_char(uint32_t wc)
     if (cat == UTF8PROC_CATEGORY_MN || cat == UTF8PROC_CATEGORY_MC ||
         cat == UTF8PROC_CATEGORY_ND || cat == UTF8PROC_CATEGORY_PC ||
         cat == UTF8PROC_CATEGORY_SK || cat == UTF8PROC_CATEGORY_ME ||
-        cat == UTF8PROC_CATEGORY_NO ||
+        cat == UTF8PROC_CATEGORY_NO || cat == UTF8PROC_CATEGORY_LM ||
         // primes (single, double, triple, their reverses, and quadruple)
         (wc >= 0x2032 && wc <= 0x2037) || (wc == 0x2057))
         return 1;
