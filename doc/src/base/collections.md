@@ -236,7 +236,7 @@ Partially implemented by:
   * [`Iterators.Pairs`](@ref)
 
 ## Set-Like Collections
-A set is a collection of elements, just like an array or dictionary, with no duplicated elements.
+A [`Set`](@ref) is a collection of elements, just like an array or dictionary, with no duplicated elements.
 
 The two important differences between a set and other types of collection is that in a set you can have only one of each element, and, in a set, the order of elements isn't important (whereas an array can have multiple copies of an element and their order is remembered).
 ```julia

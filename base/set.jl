@@ -19,13 +19,13 @@ empty set. Should be used instead of [`BitSet`](@ref) for sparse integer sets, o
 for sets of arbitrary objects.
 
 # Examples
-```julia
+```jldoctest setexamples
 julia> animals = Set{String}(["cat","fish","dog","bird"])
 Set(["cat","fish","dog","bird"])
 ```
 
 You can let Julia guess the type:
-```julia
+```jldoctest setexamples
 julia> animals = Set(["cat","fish","dog","bird"])
 Set(["cat","fish","dog","bird"])
 
@@ -33,13 +33,20 @@ julia>typeof(animals)
 Set{String}
 ```
 
-You can create an empty set using the [`Set`](@ref) constructor function:
-```julia
+You can create an empty set using the [`Set`](@ref) constructor function and then fill it using `push!` function:
+```jldoctest setexamples
 julia> intContainer = Set{Int64}() # type specified
 Set(Int64[])
 
+julia> push!(intContainer, 2)
+Set([2])
+
+```jldoctest setexamples
 julia> anyContainer = Set() # type not specified
 Set(Any[])
+
+julia> push!(anyContainer, "hi!")
+Set(Any["hi!"])
 ```
 """
 Set(itr) = _Set(itr, IteratorEltype(itr))
