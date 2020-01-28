@@ -92,8 +92,8 @@ Dict{Char,Int64} with 2 entries:
 
 julia> collect(keys(D))
 2-element Array{Char,1}:
- 'a'
- 'b'
+ 'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
+ 'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
 ```
 """
 keys(a::AbstractDict) = KeySet(a)
