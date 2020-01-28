@@ -150,8 +150,8 @@ void gc_sweep_sysimg(void);
 static const int jl_gc_sizeclasses[] = {
 #ifdef _P64
     8,
-#elif MAX_ALIGN == 8
-    // ARM and PowerPC have max alignment of 8,
+#elif MAX_ALIGN > 4
+    // ARM and PowerPC have max alignment larger than pointer,
     // make sure allocation of size 8 has that alignment.
     4, 8,
 #else
