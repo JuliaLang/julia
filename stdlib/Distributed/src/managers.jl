@@ -486,12 +486,12 @@ end
 
 # TODO: this doesn't belong here, it belongs in Sockets
 # TODO : when I try to use Sockets.bind instead, `make` hangs
-function bind(s, host, port)
+function bind(sock, host, port)
     Sockets.iolock_begin()
-    @assert s.status == Sockets.StatusInit
+    @assert sock.status == Sockets.StatusInit
     host_in = Ref(hton(host.host))
     err = ccall(:jl_tcp_bind, Int32, (Ptr{Cvoid}, UInt16, Ptr{Cvoid}, Cuint, Cint),
-                s, hton(port), host_in, 0, false)
+                sock, hton(port), host_in, 0, false)
     Sockets.iolock_end()
     uv_error("tcp_bind", err)
     return true
