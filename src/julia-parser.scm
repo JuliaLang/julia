@@ -1241,7 +1241,10 @@
             ((#\{ )
              (disallow-space s ex t)
              (take-token s)
-             (loop (list* 'curly ex (parse-call-arglist s #\} ))))
+             (let ((args (parse-call-arglist s #\} )))
+               (if macrocall?
+                   `(call ,ex (braces ,@args))
+                   (loop (list* 'curly ex args)))))
             ((#\" #\`)
              (if (and (or (symbol? ex) (valid-modref? ex))
                       (not (operator? ex))
