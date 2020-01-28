@@ -1615,6 +1615,8 @@ JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule);
 JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmodule,
                                             const char *file, int line);
+JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *inmodule,
+                                                 const char *file, int line);
 JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule);
 JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *inmodule,
                                                  const char *file, int line);
@@ -1934,6 +1936,7 @@ typedef struct {
     const char *output_code_coverage;
     int8_t incremental;
     int8_t image_file_specified;
+    int8_t warn_scope;
 } jl_options_t;
 
 extern JL_DLLEXPORT jl_options_t jl_options;
@@ -1989,6 +1992,9 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 
 #define JL_OPTIONS_WARN_OVERWRITE_OFF 0
 #define JL_OPTIONS_WARN_OVERWRITE_ON 1
+
+#define JL_OPTIONS_WARN_SCOPE_OFF 0
+#define JL_OPTIONS_WARN_SCOPE_ON 1
 
 #define JL_OPTIONS_POLLY_ON 1
 #define JL_OPTIONS_POLLY_OFF 0

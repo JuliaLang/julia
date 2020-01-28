@@ -166,7 +166,7 @@ julia> push!(a, 1); push!(a, 2.0); push!(a, π)
 3-element Array{Real,1}:
  1
  2.0
- π
+ π = 3.1415926535897...
 ```
 
 Because `a` is a an array of abstract type [`Real`](@ref), it must be able to hold any

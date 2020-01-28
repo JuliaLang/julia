@@ -244,6 +244,9 @@ end
     @test isequal(sqrt(complex( NaN, 0.0)), complex( NaN, NaN))
     @test isequal(sqrt(complex( NaN, Inf)), complex( Inf, Inf))
     @test isequal(sqrt(complex( NaN,-Inf)), complex( Inf,-Inf))
+
+    # odd binary exponent
+    @test isequal(sqrt(complex(1.0e160, 0.0)), complex(1.0e80, 0.0))
 end
 
 @testset "log(conj(z)) == conj(log(z))" begin

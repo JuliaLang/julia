@@ -179,7 +179,7 @@ else
 JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += libz
 endif
 ifeq ($(USE_LLVM_SHLIB),1)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM libLLVM-8
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM libLLVM-9
 endif
 
 ifeq ($(USE_SYSTEM_LIBM),0)
@@ -570,8 +570,6 @@ distcleanall: cleanall
 
 test: check-whitespace $(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test default JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
-
-JULIA_SYSIMG=$(build_private_libdir)/sys$(JULIA_LIBSUFFIX).$(SHLIB_EXT)
 
 testall: check-whitespace $(JULIA_BUILD_MODE)
 	cp $(JULIA_SYSIMG) $(BUILDROOT)/local.$(SHLIB_EXT)

@@ -8,6 +8,19 @@ New language features
 Language changes
 ----------------
 
+* The interactive REPL now uses "soft scope" for top-level expressions: an assignment inside a
+  scope block such as a `for` loop automatically assigns to a global variable if one has been
+  defined already. This matches the behavior of Julia versions 0.6 and prior, as well as
+  [IJulia](https://github.com/JuliaLang/IJulia.jl).
+  Note that this only affects expressions interactively typed or pasted directly into the
+  default REPL ([#28789], [#33864]).
+
+* Outside of the REPL (e.g. in a file), assigning to a variable within a top-level scope
+  block is considered ambiguous if a global variable with the same name exists.
+  A warning is given if that happens, to alert you that the code will work differently
+  than in the REPL.
+  A new command line option `--warn-scope` controls this warning ([#33864]).
+
 * Converting arbitrary tuples to `NTuple`, e.g. `convert(NTuple, (1, ""))` now gives an error,
   where it used to be incorrectly allowed. This is because `NTuple` refers only to homogeneous
   tuples (this meaning has not changed) ([#34272]).
@@ -19,7 +32,6 @@ Language changes
   (in addition to the one that enters the help mode) to see the full
   docstring. ([#25930])
 
-
 Multi-threading changes
 -----------------------
 
@@ -30,13 +42,20 @@ Build system changes
 
 New library functions
 ---------------------
+
 * `Iterators.map` is added. It provides another syntax `Iterators.map(f, iterators...)`
   for writing `(f(args...) for args in zip(iterators...))`, i.e. a lazy `map` ([#34352]).
+* New functions `mergewith` and `mergewith!` supersede `merge` and `merge!` with `combine`
+  argument.  They don't have the restriction for `combine` to be a `Function` and also
+  provide one-argument method that returns a closure.  The old methods of `merge` and
+  `merge!` are still available for backward compatibility ([#34296]).
 * The new `isdisjoint` function indicates whether two collections are disjoint ([#34427]).
 
 New library features
 --------------------
 * Function composition now works also on one argument `∘(f) = f` (#34251)
+
+* `Ref{NTuple{N,T}}` can be passed to `Ptr{T}`/`Ref{T}` `ccall` signatures ([#34199])
 
 
 Standard library changes
