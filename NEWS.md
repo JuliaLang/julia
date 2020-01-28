@@ -3,10 +3,21 @@ Julia v1.5 Release Notes
 
 New language features
 ---------------------
-
+* Macro calls `@foo {...}` can now also be written `@foo{...}` (without the space) ([#34498]).
 
 Language changes
 ----------------
+
+* Converting arbitrary tuples to `NTuple`, e.g. `convert(NTuple, (1, ""))` now gives an error,
+  where it used to be incorrectly allowed. This is because `NTuple` refers only to homogeneous
+  tuples (this meaning has not changed) ([#34272]).
+
+* In docstrings, a level-1 markdown header "Extended help" is now
+  interpreted as a marker dividing "brief help" from "extended help."
+  The REPL help mode only shows the brief help (the content before the
+  "Extended help" header) by default; prepend the expression with '?'
+  (in addition to the one that enters the help mode) to see the full
+  docstring. ([#25930])
 
 
 Multi-threading changes
@@ -21,9 +32,11 @@ New library functions
 ---------------------
 * `Iterators.map` is added. It provides another syntax `Iterators.map(f, iterators...)`
   for writing `(f(args...) for args in zip(iterators...))`, i.e. a lazy `map` ([#34352]).
+* The new `isdisjoint` function indicates whether two collections are disjoint ([#34427]).
 
 New library features
 --------------------
+* Function composition now works also on one argument `∘(f) = f` (#34251)
 
 
 Standard library changes
@@ -33,6 +46,7 @@ Standard library changes
 #### LinearAlgebra
 * The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
 * `normalize` now supports multidimensional arrays ([#34239])
+* `lq` factorizations can now be used to compute the minimum-norm solution to under-determined systems ([#34350]).
 
 #### Markdown
 

@@ -9,6 +9,7 @@ using Random
     @test iterate(p)[1] == 10
     @test iterate(p, iterate(p)[2])[1] == 20
     @test iterate(p, iterate(p, iterate(p)[2])[2]) == nothing
+    @test firstindex(p) == 1
     @test lastindex(p) == length(p) == 2
     @test Base.indexed_iterate(p, 1, nothing) == (10,2)
     @test Base.indexed_iterate(p, 2, nothing) == (20,3)
@@ -29,6 +30,7 @@ using Random
     @test last(p) == 20
     @test eltype(p) == Int
     @test eltype(4 => 5.6) == Union{Int,Float64}
+    @test vcat(1 => 2.0, 1.0 => 2) == [1.0 => 2.0, 1.0 => 2.0]
 end
 
 @testset "Dict" begin
@@ -709,6 +711,11 @@ import Base.ImmutableDict
 
     @test_throws KeyError d[k1]
     @test_throws KeyError d1["key2"]
+
+    v = [k1 => v1, k2 => v2]
+    d5 = ImmutableDict(v...)
+    @test d5 == d2
+    @test collect(d5) == v
 end
 
 @testset "filtering" begin

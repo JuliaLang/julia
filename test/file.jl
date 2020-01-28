@@ -50,6 +50,18 @@ end
 
 using Random
 
+@testset "that temp names are actually unique" begin
+    temps = [tempname(cleanup=false) for _ = 1:100]
+    @test allunique(temps)
+    temps = map(1:100) do _
+        path, io = mktemp(cleanup=false)
+        close(io)
+        rm(path, force=true)
+        return path
+    end
+    @test allunique(temps)
+end
+
 @testset "tempname with parent" begin
     t = tempname()
     @test dirname(t) == tempdir()

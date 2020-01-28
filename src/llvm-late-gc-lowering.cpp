@@ -38,9 +38,6 @@
 #include "llvm-pass-helpers.h"
 
 #define DEBUG_TYPE "late_lower_gcroot"
-#if JL_LLVM_VERSION < 70000
-#define LLVM_DEBUG DEBUG
-#endif
 
 using namespace llvm;
 
@@ -1950,38 +1947,9 @@ static inline void UpdatePtrNumbering(Value *From, Value *To, State *S)
     }
 }
 
-#if JL_LLVM_VERSION < 80000
-MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
-  MDNode *BaseType = cast<MDNode>(Tag->getOperand(0));
-  MDNode *AccessType = cast<MDNode>(Tag->getOperand(1));
-  Metadata *OffsetNode = Tag->getOperand(2);
-  uint64_t Offset = mdconst::extract<ConstantInt>(OffsetNode)->getZExtValue();
-
-  bool NewFormat = isa<MDNode>(AccessType->getOperand(0));
-
-  // See if the tag is already mutable.
-  unsigned ImmutabilityFlagOp = NewFormat ? 4 : 3;
-  if (Tag->getNumOperands() <= ImmutabilityFlagOp)
-    return Tag;
-
-  // If Tag is already mutable then return it.
-  Metadata *ImmutabilityFlagNode = Tag->getOperand(ImmutabilityFlagOp);
-  if (!mdconst::extract<ConstantInt>(ImmutabilityFlagNode)->getValue())
-    return Tag;
-
-  // Otherwise, create another node.
-  if (!NewFormat)
-    return MDBuilder(Tag->getContext()).createTBAAStructTagNode(BaseType, AccessType, Offset);
-
-  Metadata *SizeNode = Tag->getOperand(3);
-  uint64_t Size = mdconst::extract<ConstantInt>(SizeNode)->getZExtValue();
-  return MDBuilder(Tag->getContext()).createTBAAAccessTag(BaseType, AccessType, Offset, Size);
-}
-#else
 MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
     return MDBuilder(Tag->getContext()).createMutableTBAAAccessTag(Tag);
 }
-#endif
 
 
 bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {

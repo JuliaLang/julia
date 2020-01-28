@@ -283,7 +283,7 @@ restart_switch:
                             c = o->val;
                             goto restart_switch;
                         }
-                        else if (strchr(shortopts, o->val)) {
+                        else if (o->val <= 0xff && strchr(shortopts, o->val)) {
                             jl_errorf("option `-%c/--%s` is missing an argument", o->val, o->name);
                         }
                         else {

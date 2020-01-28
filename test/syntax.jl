@@ -1986,3 +1986,17 @@ i0xb23hG = @id_for_kwarg let x = 1
 end
 @test i0xb23hG() == 2
 @test i0xb23hG(x=10) == 10
+
+@test @eval let
+    (z,)->begin
+        $(Expr(:inbounds, true))
+        $(Expr(:inbounds, :pop))
+    end
+    pop = 1
+end == 1
+
+# issue #29982
+@test Meta.parse("'a'") == 'a'
+@test Meta.parse("'\U0061'") == 'a'
+test_parseerror("''", "invalid empty character literal")
+test_parseerror("'abc'", "character literal contains multiple characters")
