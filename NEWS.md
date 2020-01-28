@@ -32,6 +32,8 @@ Language changes
   (in addition to the one that enters the help mode) to see the full
   docstring. ([#25930])
 
+* The syntax `(;)` (which was deprecated in v1.4) now creates an empty named tuple ([#30115]).
+
 Multi-threading changes
 -----------------------
 

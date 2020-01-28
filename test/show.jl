@@ -220,6 +220,9 @@ end
 @test repr(:((a=1,;x=2))) == ":((a = 1,; x = 2))"
 @test repr(:((a=1,3;x=2))) == ":((a = 1, 3; x = 2))"
 @test repr(:(g(a,; b))) == ":(g(a; b))"
+@test repr(:(;)) == ":((;))"
+@test repr(:(-(;x))) == ":(-(; x))"
+@test repr(:(+(1, 2;x))) == ":(+(1, 2; x))"
 for ex in [Expr(:call, :f, Expr(:(=), :x, 1)),
            Expr(:ref, :f, Expr(:(=), :x, 1)),
            Expr(:vect, 1, 2, Expr(:kw, :x, 1)),
