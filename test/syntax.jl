@@ -172,6 +172,7 @@ macro test999_str(args...); args; end
 # blocks vs. tuples
 @test Meta.parse("()") == Expr(:tuple)
 @test_skip Meta.parse("(;)") == Expr(:tuple, Expr(:parameters))
+@test Meta.parse("(;;)") == Expr(:block)
 @test Meta.parse("(;;;;)") == Expr(:block)
 @test_throws ParseError Meta.parse("(,)")
 @test_throws ParseError Meta.parse("(;,)")
