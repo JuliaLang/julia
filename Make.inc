@@ -1340,17 +1340,19 @@ endif
 exec = $(shell $(call spawn,$(1)))
 
 JULIA_BUILD_MODE := release
-JULIA_LIBSUFFIX:=
 ifeq (,$(findstring release,$(MAKECMDGOALS)))
 ifneq (,$(findstring debug,$(MAKECMDGOALS)))
 JULIA_BUILD_MODE := debug
-JULIA_LIBSUFFIX:=-debug
 endif
 endif
 
 JULIA_EXECUTABLE_debug := $(build_bindir)/julia-debug$(EXE)
 JULIA_EXECUTABLE_release := $(build_bindir)/julia$(EXE)
 JULIA_EXECUTABLE := $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
+
+JULIA_SYSIMG_debug := $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
+JULIA_SYSIMG_release := $(build_private_libdir)/sys.$(SHLIB_EXT)
+JULIA_SYSIMG := $(JULIA_SYSIMG_$(JULIA_BUILD_MODE))
 
 # Colors for make
 ifndef VERBOSE
