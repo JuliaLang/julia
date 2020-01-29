@@ -236,9 +236,8 @@ Partially implemented by:
   * [`Iterators.Pairs`](@ref)
 
 ## Set-Like Collections
-A [`Set`](@ref) is a collection of elements with no duplicated elements and keys.
+A [`Set`](@ref) is a collection of elements with no duplicated elements and keys/indices. So in contrast to other types of collection, in a `Set` you can have only one of each element, and the order of elements isn't important (whereas an array can have multiple copies of an element and their order is remembered).
 
-The two important differences between a set and other types of collection is that in a set you can have only one of each element, and, in a set, the order of elements isn't important (whereas an array can have multiple copies of an element and their order is remembered).
 ```jldoctest set_collections
 julia> colors = Set(["yellow", "blue", "green", "red"])
 Set(["yellow", "blue", "green", "red"])
@@ -256,36 +255,28 @@ You can't use [`pushfirst!`](@ref), because that works only for things that have
 
 To see if something is in the set, you can use [`in`](@ref):
 ```jldoctest set_collections
-julia> in("green", colors)
-true
-```
-or using infix notation
-```jldoctest set_collections
-julia> "green" in colors
+julia> "green" in colors  # or: in("green", colors)
 true
 ```
 
-There are some standard operations you can do with sets. For example, find their union, intersection, and difference, with [`union`](@ref), [`intersect`](@ref), and [`setdiff`](@ref) respectively:
+To access each element of a `Set` you can loop over the elements:
 ```jldoctest set_collections
-julia> rainbow = Set(["red","orange","yellow","green","blue","indigo","violet"])
-Set(["indigo", "yellow", "orange", "blue", "violet", "green", "red"])
+julia> for color in colors
+  println(color)
+end
+yellow
+blue
+green
+red
 ```
-The union of two sets is the set of everything that is in one or the other sets. The result is another set:
+You can also [`filter`](@ref) some of the elements:
 ```jldoctest set_collections
-julia> union(colors, rainbow)
-Set(["indigo", "yellow", "orange", "blue", "violet", "green", "black", "red"])
+julia> filter(c -> c != "yellow", colors)
+Set(["blue", "green", "red"])
+
+julia> filter(c -> in(c, ["yellow", "purple"]), colors)
+Set(["yellow"])
 ```
-The intersection of two sets is the set that contains every element that belongs to both sets:
-```jldoctest set_collections
-julia> intersect(colors, rainbow)
-Set(["yellow", "blue", "green", "red"])
-```
-The difference between two sets is the set of elements that are in the first set, but not in the second. This time, the order in which you supply the sets matters. The [`setdiff`](@ref) function finds the elements that are in the first set, `colors`, but not in the second set, `rainbow`:
-```jldoctest set_collections
-julia> setdiff(colors, rainbow)
-Set(["black"])
- ```
-[ref.](https://en.wikibooks.org/wiki/Introducing_Julia/Dictionaries_and_sets#Sets)
 
 ```@docs
 Base.AbstractSet

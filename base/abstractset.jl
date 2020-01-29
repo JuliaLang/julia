@@ -11,7 +11,9 @@ copy!(dst::AbstractSet, src::AbstractSet) = union!(empty!(dst), src)
     union(s, itrs...)
     ∪(s, itrs...)
 
-Construct the union of sets. Maintain order with arrays.
+Construct the union of sets/collections. Maintain order with arrays.
+
+The union of two set `A` and `B` is a set that contains of the elements that are in `A` or `B`.
 
 # Examples
 ```jldoctest
@@ -39,6 +41,12 @@ Set{Int64} with 3 elements:
   2
   3
   1
+```
+
+```jldoctest
+julia> A = Set(["yellow", "orange"]); B = Set(["blue", "black", "orange"]);
+julia> union(A, B)
+Set(["orange", "blue", "yellow, orange", "black"])
 ```
 """
 function union end
@@ -98,8 +106,9 @@ end
     intersect(s, itrs...)
     ∩(s, itrs...)
 
-Construct the intersection of sets.
-Maintain order with arrays.
+Construct the intersection of sets. Maintain order with arrays.
+
+The intersect of two set `A` and `B` is a set that contains every element that belongs to both `A` and `B`.
 
 # Examples
 ```jldoctest
@@ -115,6 +124,13 @@ julia> intersect([1, 4, 4, 5, 6], [4, 6, 6, 7, 8])
 julia> intersect(Set([1, 2]), BitSet([2, 3]))
 Set{Int64} with 1 element:
   2
+```
+
+```jldoctest
+julia> A = Set(["yellow", "orange"]); B = Set(["blue", "black", "orange"]);
+
+julia> intersect(A, B)
+Set(["orange"])
 ```
 """
 intersect(s::AbstractSet, itr, itrs...) = intersect!(intersect(s, itr), itrs...)
@@ -145,12 +161,24 @@ intersect!(s::AbstractSet, itr) =
 Construct the set of elements in `s` but not in any of the iterables in `itrs`.
 Maintain order with arrays.
 
+For two sets `A` and `B`, setdiff gives the their difference which is a set that contains the elements that are in `A`, but not in `B`.
+
 # Examples
 ```jldoctest
 julia> setdiff([1,2,3], [3,4,5])
 2-element Array{Int64,1}:
  1
  2
+```
+
+```jldoctest
+julia> A = Set(["yellow", "orange"]); B = Set(["blue", "black", "orange"]);
+
+julia> setdiff(A, B)
+Set(["yellow"])
+
+julia> setdiff(B, A)
+Set(["blue", "black"])
 ```
 """
 setdiff(s::AbstractSet, itrs...) = setdiff!(copymutable(s), itrs...)

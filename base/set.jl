@@ -19,33 +19,32 @@ empty set. Should be used instead of [`BitSet`](@ref) for sparse integer sets, o
 for sets of arbitrary objects.
 
 # Examples
-```jldoctest setexamples
+```jldoctest
 julia> animals = Set{String}(["cat","fish","dog","bird"])
 Set(["cat","fish","dog","bird"])
 ```
 
-You can let Julia guess the type:
-```jldoctest setexamples
+If the element type is not given, it is computed by intersecting the types of the arguments:
+```jldoctest
 julia> animals = Set(["cat","fish","dog","bird"])
 Set(["cat","fish","dog","bird"])
 
-julia>typeof(animals)
+julia> typeof(animals)
 Set{String}
 ```
 
-You can create an empty set using the [`Set`](@ref) constructor function and then fill it using `push!` function:
-```jldoctest setexamples
-julia> intContainer = Set{Int64}() # type specified
+A common way of incrementally creating a `Set` is to first create an empty set with `Set()` and then add the elements using the `push!` function:
+```jldoctest
+julia> int_container = Set{Int64}() # type specified
 Set(Int64[])
 
-julia> push!(intContainer, 2)
+julia> push!(int_container, 2)
 Set([2])
 
-```jldoctest setexamples
-julia> anyContainer = Set() # type not specified
+julia> any_container = Set() # type not specified
 Set(Any[])
 
-julia> push!(anyContainer, "hi!")
+julia> push!(any_container, "hi!")
 Set(Any["hi!"])
 ```
 """
