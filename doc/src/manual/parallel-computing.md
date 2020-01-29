@@ -394,7 +394,7 @@ julia> acc[]
 When using multi-threading we have to be careful when using functions that are not
 [pure](https://en.wikipedia.org/wiki/Pure_function) as we might get a wrong answer.
 For instance functions that have their
-[name ending with `!`](https://docs.julialang.org/en/latest/manual/style-guide/#Append-!-to-names-of-functions-that-modify-their-arguments-1)
+[name ending with `!`](@ref bang-convention)
 by convention modify their arguments and thus are not pure. However, there are
 functions that have side effects and their name does not end with `!`.
 
@@ -1617,6 +1617,16 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
 
     Securing and encrypting all worker-worker traffic (via SSH) or encrypting individual messages
     can be done via a custom `ClusterManager`.
+
+  * If you specify `multiplex=true` as an option to `addprocs`, SSH multiplexing is used to create
+    a tunnel between the master and workers. If you have configured SSH multiplexing on your own and
+    the connection has already been established, SSH multiplexing is used regardless of `multiplex`
+    option. If multiplexing is enabled, forwarding is set by using the existing connection
+    (`-O forward` option in ssh). This is beneficial if your servers require password authentication;
+    you can avoid authentication in Julia by logging in to the server ahead of `addprocs`. The control
+    socket will be located at `~/.ssh/julia-%r@%h:%p` during the session unless the existing multiplexing
+    connection is used. Note that bandwidth may be limited if you create multiple processes on a node
+    and enable multiplexing, because in that case processes share a single multiplexing TCP connection.
 
 ### [Cluster Cookie](@id man-cluster-cookie)
 

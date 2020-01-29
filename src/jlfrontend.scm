@@ -29,6 +29,11 @@
            '(error "malformed expression"))))
    thk))
 
+;; this is overwritten when we run in actual julia
+(define (defined-julia-global v) #f)
+(define (julia-current-file) 'none)
+(define (julia-current-line) 0)
+
 ;; parser entry points
 
 ;; parse one expression (if greedy) or atom, returning end position
@@ -128,16 +133,38 @@
            (begin0 (expand-toplevel-expr-- e file line)
                    (set! *in-expand* last))))))
 
-; expand a piece of raw surface syntax to an executable thunk
-(define (jl-expand-to-thunk expr file line)
+;; used to collect warnings during lowering, which are usually discarded
+;; unless logging is requested
+(define lowering-warning (lambda lst (void)))
+
+;; expand a piece of raw surface syntax to an executable thunk
+
+(define (expand-to-thunk- expr file line)
   (error-wrap (lambda ()
                 (expand-toplevel-expr expr file line))))
 
+(define (expand-to-thunk-stmt- expr file line)
+  (expand-to-thunk- (if (toplevel-only-expr? expr)
+                        expr
+                        `(block ,expr (null)))
+                    file line))
+
+(define (jl-expand-to-thunk-warn expr file line stmt)
+  (let ((warnings '()))
+    (with-bindings
+     ((lowering-warning (lambda lst (set! warnings (cons lst warnings)))))
+     (begin0
+      (if stmt
+          (expand-to-thunk-stmt- expr file line)
+          (expand-to-thunk- expr file line))
+      (for-each (lambda (args) (apply julia-logmsg args))
+                (reverse warnings))))))
+
+(define (jl-expand-to-thunk expr file line)
+  (expand-to-thunk- expr file line))
+
 (define (jl-expand-to-thunk-stmt expr file line)
-  (jl-expand-to-thunk (if (toplevel-only-expr? expr)
-                          expr
-                          `(block ,expr (null)))
-                      file line))
+  (expand-to-thunk-stmt- expr file line))
 
 (define (jl-expand-macroscope expr)
   (error-wrap (lambda ()
@@ -214,6 +241,8 @@
           "."
           (if (equal? instead "") ""
               (string #\newline "Use `" instead "` instead."))))
+
+(define *scopewarn-opt* 1)
 
 ; Corresponds to --depwarn 0="no", 1="yes", 2="error"
 (define *depwarn-opt* 1)

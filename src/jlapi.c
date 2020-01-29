@@ -22,7 +22,7 @@ extern "C" {
 #include <fenv.h>
 #endif
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 JL_DLLEXPORT char * __cdecl dirname(char *);
 #else
 #include <libgen.h>

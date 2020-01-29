@@ -14,6 +14,7 @@ export
     getnameinfo,
     getipaddr,
     getipaddrs,
+    islinklocaladdr,
     getpeername,
     getsockname,
     listen,

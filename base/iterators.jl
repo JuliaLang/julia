@@ -534,8 +534,8 @@ julia> a
 
 julia> collect(rest)
 2-element Array{Char,1}:
- 'b'
- 'c'
+ 'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
+ 'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
 ```
 """
 function peel(itr)
@@ -1179,14 +1179,14 @@ julia> popfirst!(a)
 
 julia> collect(Iterators.take(a, 3))
 3-element Array{Char,1}:
- 'b'
- 'c'
- 'd'
+ 'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
+ 'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
+ 'd': ASCII/Unicode U+0064 (category Ll: Letter, lowercase)
 
 julia> collect(a)
 2-element Array{Char,1}:
- 'e'
- 'f'
+ 'e': ASCII/Unicode U+0065 (category Ll: Letter, lowercase)
+ 'f': ASCII/Unicode U+0066 (category Ll: Letter, lowercase)
 ```
 
 ```jldoctest

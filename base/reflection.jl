@@ -42,7 +42,7 @@ function moduleroot(m::Module)
     while true
         is_root_module(m) && return m
         p = parentmodule(m)
-        p == m && return m
+        p === m && return m
         m = p
     end
 end

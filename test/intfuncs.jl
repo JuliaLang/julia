@@ -37,6 +37,8 @@ using Random
         @test_throws OverflowError lcm(typemin(T), typemin(T))
         @test_throws OverflowError lcm(typemax(T), T(2))
     end
+    @test lcm(0x5, 3) == 15
+    @test gcd(0xf, 20) == 5
 end
 @testset "gcd/lcm for arrays" begin
     for T in (Int32, Int64)
@@ -67,6 +69,17 @@ end
     @test gcdx(5, 12) == (1, 5, -2)
     @test gcdx(5, -12) == (1, 5, 2)
     @test gcdx(-25, -4) == (1, -1, 6)
+end
+@testset "gcd/lcm/gcdx for custom types" begin
+    struct MyRational <: Real
+        val::Rational{Int}
+    end
+    Base.promote_rule(::Type{MyRational}, T::Type{<:Real}) = promote_type(Rational{Int}, T)
+    (T::Type{<:Real})(x::MyRational) = T(x.val)
+
+    @test gcd(MyRational(2//3), 3) == gcd(2//3, 3) == gcd(Real[MyRational(2//3), 3])
+    @test lcm(MyRational(2//3), 3) == lcm(2//3, 3) == lcm(Real[MyRational(2//3), 3])
+    @test gcdx(MyRational(2//3), 3) == gcdx(2//3, 3)
 end
 @testset "invmod" begin
     @test invmod(6, 31) === 26

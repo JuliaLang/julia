@@ -1101,9 +1101,6 @@ function testset_beginend(args, tests, source)
     ex = quote
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         local ts = $(testsettype)($desc; $options...)
-        # this empty loop is here to force the block to be compiled,
-        # which is needed for backtrace scrubbing to work correctly.
-        while false; end
         push_testset(ts)
         # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
@@ -1113,7 +1110,9 @@ function testset_beginend(args, tests, source)
         try
             # RNG is re-seeded with its own seed to ease reproduce a failed test
             Random.seed!(RNG.seed)
-            $(esc(tests))
+            let
+                $(esc(tests))
+            end
         catch err
             err isa InterruptException && rethrow()
             # something in the test block threw an error. Count that as an
@@ -1203,7 +1202,9 @@ function testset_forloop(args, testloop, source)
         Random.seed!(RNG.seed)
         local tmprng = copy(RNG)
         try
-            $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
+            let
+                $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
+            end
         finally
             # Handle `return` in test body
             if !first_iteration

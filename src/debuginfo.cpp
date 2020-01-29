@@ -432,6 +432,14 @@ public:
         uv_rwlock_rdlock(&threadsafe);
         return objectmap;
     }
+
+    Optional<std::map<size_t, ObjectInfo, revcomp>*> trygetObjectMap()
+    {
+        if (0 == uv_rwlock_tryrdlock(&threadsafe)) {
+            return &objectmap;
+        }
+        return {};
+    }
 };
 
 JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
@@ -1662,3 +1670,22 @@ uint64_t jl_getUnwindInfo(uint64_t dwAddr)
     uv_rwlock_rdunlock(&threadsafe);
     return ipstart;
 }
+
+extern "C"
+uint64_t jl_trygetUnwindInfo(uint64_t dwAddr)
+{
+    // Might be called from unmanaged thread
+    Optional<std::map<size_t, ObjectInfo, revcomp>*> maybeobjmap = jl_jit_events->trygetObjectMap();
+    if (maybeobjmap) {
+        std::map<size_t, ObjectInfo, revcomp> &objmap = **maybeobjmap;
+        std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(dwAddr);
+        uint64_t ipstart = 0; // ip of the start of the section (if found)
+        if (it != objmap.end() && dwAddr < it->first + it->second.SectionSize) {
+            ipstart = (uint64_t)(uintptr_t)(*it).first;
+        }
+        uv_rwlock_rdunlock(&threadsafe);
+        return ipstart;
+    }
+    return 0;
+}
+

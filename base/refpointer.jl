@@ -126,6 +126,16 @@ cconvert(::Type{Ref{P}}, a::Array{<:Ptr}) where {P<:Ptr} = a
 cconvert(::Type{Ptr{P}}, a::Array) where {P<:Union{Ptr,Cwstring,Cstring}} = Ref{P}(a)
 cconvert(::Type{Ref{P}}, a::Array) where {P<:Union{Ptr,Cwstring,Cstring}} = Ref{P}(a)
 
+# pass NTuple{N,T} as Ptr{T}/Ref{T}
+cconvert(::Type{Ref{T}}, t::NTuple{N,T}) where {N,T} = Ref{NTuple{N,T}}(t)
+cconvert(::Type{Ref{T}}, r::Ref{NTuple{N,T}}) where {N,T} = r
+unsafe_convert(::Type{Ref{T}}, r::Ref{NTuple{N,T}}) where {N,T} =
+    convert(Ptr{T}, unsafe_convert(Ptr{NTuple{N,T}}, r))
+unsafe_convert(::Type{Ptr{T}}, r::Ref{NTuple{N,T}}) where {N,T} =
+    convert(Ptr{T}, unsafe_convert(Ptr{NTuple{N,T}}, r))
+unsafe_convert(::Type{Ptr{T}}, r::Ptr{NTuple{N,T}}) where {N,T} =
+    convert(Ptr{T}, r)
+
 ###
 
 getindex(b::RefArray) = b.x[b.i]

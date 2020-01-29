@@ -92,8 +92,8 @@ Dict{Char,Int64} with 2 entries:
 
 julia> collect(keys(D))
 2-element Array{Char,1}:
- 'a'
- 'b'
+ 'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
+ 'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
 ```
 """
 keys(a::AbstractDict) = KeySet(a)
@@ -184,11 +184,21 @@ function merge!(d::AbstractDict, others::AbstractDict...)
 end
 
 """
-    merge!(combine, d::AbstractDict, others::AbstractDict...)
+    mergewith!(combine, d::AbstractDict, others::AbstractDict...) -> d
+    mergewith!(combine)
+    merge!(combine, d::AbstractDict, others::AbstractDict...) -> d
 
 Update collection with pairs from the other collections.
 Values with the same key will be combined using the
-combiner function.
+combiner function.  The curried form `mergewith!(combine)` returns the
+function `(args...) -> mergewith!(combine, args...)`.
+
+Method `merge!(combine::Union{Function,Type}, args...)` as an alias of
+`mergewith!(combine, args...)` is still available for backward
+compatibility.
+
+!!! compat "Julia 1.5"
+    `mergewith!` requires Julia 1.5 or later.
 
 # Examples
 ```jldoctest
@@ -196,7 +206,7 @@ julia> d1 = Dict(1 => 2, 3 => 4);
 
 julia> d2 = Dict(1 => 4, 4 => 5);
 
-julia> merge!(+, d1, d2);
+julia> mergewith!(+, d1, d2);
 
 julia> d1
 Dict{Int64,Int64} with 3 entries:
@@ -204,16 +214,22 @@ Dict{Int64,Int64} with 3 entries:
   3 => 4
   1 => 6
 
-julia> merge!(-, d1, d1);
+julia> mergewith!(-, d1, d1);
 
 julia> d1
 Dict{Int64,Int64} with 3 entries:
   4 => 0
   3 => 0
   1 => 0
+
+julia> foldl(mergewith!(+), [d1, d2]; init=Dict{Int64,Int64}())
+Dict{Int64,Int64} with 3 entries:
+  4 => 5
+  3 => 0
+  1 => 4
 ```
 """
-function merge!(combine::Function, d::AbstractDict, others::AbstractDict...)
+function mergewith!(combine, d::AbstractDict, others::AbstractDict...)
     for other in others
         for (k,v) in other
             d[k] = haskey(d, k) ? combine(d[k], v) : v
@@ -221,6 +237,10 @@ function merge!(combine::Function, d::AbstractDict, others::AbstractDict...)
     end
     return d
 end
+
+mergewith!(combine) = (args...) -> mergewith!(combine, args...)
+
+merge!(combine::Callable, args...) = mergewith!(combine, args...)
 
 """
     keytype(type)
@@ -287,12 +307,21 @@ merge(d::AbstractDict, others::AbstractDict...) =
     merge!(_typeddict(d, others...), others...)
 
 """
+    mergewith(combine, d::AbstractDict, others::AbstractDict...)
+    mergewith(combine)
     merge(combine, d::AbstractDict, others::AbstractDict...)
 
 Construct a merged collection from the given collections. If necessary, the
 types of the resulting collection will be promoted to accommodate the types of
 the merged collections. Values with the same key will be combined using the
-combiner function.
+combiner function.  The curried form `mergewith(combine)` returns the function
+`(args...) -> mergewith(combine, args...)`.
+
+Method `merge(combine::Union{Function,Type}, args...)` as an alias of
+`mergewith(combine, args...)` is still available for backward compatibility.
+
+!!! compat "Julia 1.5"
+    `mergewith` requires Julia 1.5 or later.
 
 # Examples
 ```jldoctest
@@ -306,14 +335,20 @@ Dict{String,Int64} with 2 entries:
   "bar" => 4711
   "baz" => 17
 
-julia> merge(+, a, b)
+julia> mergewith(+, a, b)
 Dict{String,Float64} with 3 entries:
   "bar" => 4753.0
   "baz" => 17.0
   "foo" => 0.0
+
+julia> ans == mergewith(+)(a, b)
+true
 ```
 """
-merge(combine::Function, d::AbstractDict, others::AbstractDict...) =
+mergewith(combine, d::AbstractDict, others::AbstractDict...) =
+    mergewith!(combine, _typeddict(d, others...), others...)
+mergewith(combine) = (args...) -> mergewith(combine, args...)
+merge(combine::Callable, d::AbstractDict, others::AbstractDict...) =
     merge!(combine, _typeddict(d, others...), others...)
 
 promoteK(K) = K

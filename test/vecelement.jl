@@ -105,12 +105,6 @@ end
 # Test various SIMD Vectors with known good sizes
 for T in (Float64, Float32, Int64, Int32)
     for N in 1:36
-        # For some vectortypes Julia emits llvm arrays instead of vectors
-        if N %  7 == 0 || N % 11 == 0 || N % 13 == 0 || N % 15 == 0 ||
-           N % 19 == 0 || N % 23 == 0 || N % 25 == 0 || N % 27 == 0 ||
-           N % 29 == 0 || N % 31 == 0
-            continue
-        end
         a = ntuple(i->VecElement(T(i)), N)
         result = ntuple(i-> VecElement(T(i+i)), N)
         b = vecadd(a, a)

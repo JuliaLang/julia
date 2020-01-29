@@ -11,12 +11,13 @@ export Furlong
 struct Furlong{p,T<:Number} <: Number
     val::T
     Furlong{p,T}(v::Number) where {p,T} = new(v)
-    Furlong{p,T}(x::Furlong{p}) where {p,T} = new(x.val)
 end
 Furlong(x::T) where {T<:Number} = Furlong{1,T}(x)
+Furlong(x::Furlong) = x
 (::Type{T})(x::Furlong) where {T<:Number} = T(x.val)
 Furlong{p}(v::Number) where {p} = Furlong{p,typeof(v)}(v)
-Furlong{p,T}(x::Furlong{p,S}) where {T,p,S} = Furlong{p,T}(T(x.val))
+Furlong{p}(x::Furlong{q}) where {p,q} = (@assert(p==q); Furlong{p,typeof(x.val)}(x.val))
+Furlong{p,T}(x::Furlong{q}) where {T,p,q} = (@assert(p==q); Furlong{p,T}(T(x.val)))
 
 Base.promote_type(::Type{Furlong{p,T}}, ::Type{Furlong{p,S}}) where {p,T,S} =
     (Base.@_pure_meta; Furlong{p,promote_type(T,S)})
@@ -70,6 +71,8 @@ for (op,eop) in ((:*, :_plus), (:/, :_minus), (://, :_minus), (:div, :_minus))
         $op(x::S, y::Furlong{p}) where {p,S<:Number} = $op(Furlong{0,S}(x),y)
     end
 end
+# to fix an ambiguity
+//(x::Furlong, y::Complex) = x // Furlong{0,typeof(y)}(y)
 for op in (:rem, :mod)
     @eval begin
         $op(x::Furlong{p}, y::Furlong) where {p} = Furlong{p}($op(x.val, y.val))

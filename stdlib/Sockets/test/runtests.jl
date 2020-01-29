@@ -379,11 +379,11 @@ end
         end
 
         function wait_with_timeout(recvs)
-            TIMEOUT_VAL = 3  # seconds
-            t0 = time()
+            TIMEOUT_VAL = 3*1e9 # nanoseconds
+            t0 = time_ns()
             recvs_check = copy(recvs)
             while ((length(filter!(t->!istaskdone(t), recvs_check)) > 0)
-                  && (time() - t0 < TIMEOUT_VAL))
+                  && (time_ns() - t0 < TIMEOUT_VAL))
                 sleep(0.05)
             end
             length(recvs_check) > 0 && error("timeout")
@@ -505,6 +505,16 @@ end
         @test issubset(getipaddrs(), getipaddrs(loopback=true))
         @test issubset(getipaddrs(IPv6), getipaddrs(IPv6, loopback=true))
     end
+end
+
+@testset "address scope" begin
+    @test islinklocaladdr(ip"169.254.1.0")
+    @test islinklocaladdr(ip"169.254.254.255")
+    @test islinklocaladdr(ip"fe80::")
+    @test islinklocaladdr(ip"febf::")
+    @test !islinklocaladdr(ip"127.0.0.1")
+    @test !islinklocaladdr(ip"2001::")
+
 end
 
 @static if !Sys.iswindows()

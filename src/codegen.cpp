@@ -79,9 +79,7 @@
 
 using namespace llvm;
 
-#if JL_LLVM_VERSION >= 80000
 typedef Instruction TerminatorInst;
-#endif
 
 #if defined(_OS_WINDOWS_) && !defined(NOMINMAX)
 #define NOMINMAX
@@ -119,13 +117,13 @@ JL_DLLEXPORT void __stack_chk_fail()
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
-#if defined(_COMPILER_MINGW_)
+#if defined(_COMPILER_GCC_)
 extern void ___chkstk_ms(void);
 #else
 extern void __chkstk(void);
 #endif
 #else
-#if defined(_COMPILER_MINGW_)
+#if defined(_COMPILER_GCC_)
 #undef _alloca
 extern void _alloca(void);
 #else
@@ -322,6 +320,7 @@ Function *juliapersonality_func;
 #endif
 #endif
 static Function *diff_gc_total_bytes_func;
+static Function *sync_gc_total_bytes_func;
 static Function *jlarray_data_owner_func;
 static GlobalVariable *jlgetworld_global;
 
@@ -1750,7 +1749,7 @@ const int logdata_blocksize = 32; // target getting nearby lines in the same gen
 typedef uint64_t logdata_block[logdata_blocksize];
 typedef StringMap< std::vector<logdata_block*> > logdata_t;
 
-static void visitLine(jl_codectx_t &ctx, std::vector<logdata_block*> &vec, int line, Value *addend, const char* name)
+static uint64_t *allocLine(std::vector<logdata_block*> &vec, int line)
 {
     unsigned block = line / logdata_blocksize;
     line = line % logdata_blocksize;
@@ -1762,8 +1761,14 @@ static void visitLine(jl_codectx_t &ctx, std::vector<logdata_block*> &vec, int l
     logdata_block &data = *vec[block];
     if (data[line] == 0)
         data[line] = 1;
+    return &data[line];
+}
+
+static void visitLine(jl_codectx_t &ctx, std::vector<logdata_block*> &vec, int line, Value *addend, const char* name)
+{
+    uint64_t *ptr = allocLine(vec, line);
     Value *pv = ConstantExpr::getIntToPtr(
-        ConstantInt::get(T_size, (uintptr_t)&data[line]),
+        ConstantInt::get(T_size, (uintptr_t)ptr),
         T_pint64);
     Value *v = ctx.builder.CreateLoad(pv, true, name);
     v = ctx.builder.CreateAdd(v, addend);
@@ -1783,21 +1788,30 @@ static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
     visitLine(ctx, coverageData[filename], line, ConstantInt::get(T_int64, 1), "lcnt");
 }
 
-// Memory allocation log (malloc_log)
-
-static logdata_t mallocData;
-
-static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
+static void coverageAllocLine(StringRef filename, int line)
 {
     assert(!imaging_mode);
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
-    Value *addend = ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
+    allocLine(coverageData[filename], line);
+}
+
+// Memory allocation log (malloc_log)
+
+static logdata_t mallocData;
+
+static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, Value *sync)
+{
+    assert(!imaging_mode);
+    if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
+        return;
+    Value *addend = sync
+        ? ctx.builder.CreateCall(prepare_call(sync_gc_total_bytes_func), {sync})
+        : ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
     visitLine(ctx, mallocData[filename], line, addend, "bytecnt");
 }
 
-// Resets the malloc counts. Needed to avoid including memory usage
-// from JITting.
+// Resets the malloc counts.
 extern "C" JL_DLLEXPORT void jl_clear_malloc_data(void)
 {
     logdata_t::iterator it = mallocData.begin();
@@ -1814,7 +1828,7 @@ extern "C" JL_DLLEXPORT void jl_clear_malloc_data(void)
             }
         }
     }
-    jl_gc_sync_total_bytes();
+    jl_gc_sync_total_bytes(0);
 }
 
 extern "C" int isabspath(const char *in);
@@ -3764,11 +3778,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             Value *isboxed = ctx.builder.CreateICmpNE(
                     ctx.builder.CreateAnd(Tindex_phi, ConstantInt::get(T_int8, 0x80)),
                     ConstantInt::get(T_int8, 0));
-#if JL_LLVM_VERSION >= 70000
             ctx.builder.CreateMemCpy(phi, min_align, dest, 0, nbytes, false);
-#else
-            ctx.builder.CreateMemCpy(phi, dest, nbytes, min_align, false);
-#endif
             ctx.builder.CreateLifetimeEnd(dest);
             Value *ptr = ctx.builder.CreateSelect(isboxed,
                 maybe_bitcast(ctx, decay_derived(ptr_phi), T_pint8),
@@ -3808,14 +3818,9 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
         // here it's moved into phi in the successor (from dest)
         dest = emit_static_alloca(ctx, vtype);
         Value *phi = emit_static_alloca(ctx, vtype);
-#if JL_LLVM_VERSION >= 70000
         ctx.builder.CreateMemCpy(phi, jl_datatype_align(phiType),
              dest, 0,
              jl_datatype_size(phiType), false);
-#else
-        ctx.builder.CreateMemCpy(phi, dest, jl_datatype_size(phiType),
-             jl_datatype_align(phiType), false);
-#endif
         ctx.builder.CreateLifetimeEnd(dest);
         slot = mark_julia_slot(phi, phiType, NULL, tbaa_stack);
     }
@@ -4012,7 +4017,8 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     jl_expr_t *ex = (jl_expr_t*)expr;
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     jl_sym_t *head = ex->head;
-    if (head == meta_sym || head == inbounds_sym || head == aliasscope_sym || head == popaliasscope_sym) {
+    if (head == meta_sym || head == inbounds_sym || head == coverageeffect_sym
+            || head == aliasscope_sym || head == popaliasscope_sym) {
         // some expression types are metadata and can be ignored
         // in statement position
         return;
@@ -4293,26 +4299,10 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         I->setMetadata("julia.loopinfo", MD);
         return jl_cgval_t();
     }
-    else if (head == goto_ifnot_sym) {
-        jl_error("Expr(:goto_ifnot) in value position");
-    }
-    else if (head == leave_sym) {
-        jl_error("Expr(:leave) in value position");
-    }
-    else if (head == pop_exception_sym) {
-        jl_error("Expr(:pop_exception) in value position");
-    }
-    else if (head == enter_sym) {
-        jl_error("Expr(:enter) in value position");
-    }
-    else if (head == inbounds_sym) {
-        jl_error("Expr(:inbounds) in value position");
-    }
-    else if (head == aliasscope_sym) {
-        jl_error("Expr(:aliasscope) in value position");
-    }
-    else if (head == popaliasscope_sym) {
-        jl_error("Expr(:popaliasscope) in value position");
+    else if (head == goto_ifnot_sym || head == leave_sym || head == coverageeffect_sym
+            || head == pop_exception_sym || head == enter_sym || head == inbounds_sym
+            || head == aliasscope_sym || head == popaliasscope_sym) {
+        jl_errorf("Expr(:%s) in value position", jl_symbol_name(head));
     }
     else if (head == boundscheck_sym) {
         return mark_julia_const(bounds_check_enabled(ctx, jl_true) ? jl_true : jl_false);
@@ -5801,8 +5791,6 @@ static std::unique_ptr<Module> emit_function(
     DebugLoc noDbg, topdebugloc;
     if (ctx.debug_enabled) {
         DICompileUnit::DebugEmissionKind emissionKind = (DICompileUnit::DebugEmissionKind) ctx.params->debug_info_kind;
-
-#if JL_LLVM_VERSION >= 80000
         DICompileUnit::DebugNameTableKind tableKind;
 
         if (JL_FEAT_TEST(ctx, gnu_pubnames)) {
@@ -5811,7 +5799,6 @@ static std::unique_ptr<Module> emit_function(
         else {
             tableKind = DICompileUnit::DebugNameTableKind::None;
         }
-#endif
         topfile = dbuilder.createFile(ctx.file, ".");
         DICompileUnit *CU =
             dbuilder.createCompileUnit(llvm::dwarf::DW_LANG_Julia
@@ -5825,9 +5812,7 @@ static std::unique_ptr<Module> emit_function(
                                        ,0            // DWOId
                                        ,true         // SplitDebugInlining
                                        ,false        // DebugInfoForProfiling
-#if JL_LLVM_VERSION >= 80000
                                        ,tableKind    // NameTableKind
-#endif
                                        );
 
         DISubroutineType *subrty;
@@ -5846,21 +5831,12 @@ static std::unique_ptr<Module> emit_function(
                                      ,topfile          // File
                                      ,toplineno        // LineNo
                                      ,subrty           // Ty
-#if JL_LLVM_VERSION < 80000
-                                     ,false            // isLocalToUnit
-                                     ,true             // isDefinition
-#endif
                                      ,toplineno        // ScopeLine
                                      ,DIFlagZero       // Flags
-#if JL_LLVM_VERSION < 80000
-                                     ,true             // isOptimized
-                                     ,nullptr          // Template Parameters
-#else
                                      ,DISubprogram::SPFlagDefinition | DISubprogram::SPFlagOptimized // SPFlags
                                      ,nullptr          // Template Parameters
                                      ,nullptr          // Template Declaration
                                      ,nullptr          // ThrownTypes
-#endif
                                      );
         topdebugloc = DebugLoc::get(toplineno, 0, SP, NULL);
         f->setSubprogram(SP);
@@ -6282,21 +6258,12 @@ static std::unique_ptr<Module> emit_function(
                                                      ,difile           // File
                                                      ,0                // LineNo
                                                      ,jl_di_func_null_sig // Ty
-#if JL_LLVM_VERSION < 80000
-                                                     ,false            // isLocalToUnit
-                                                     ,true             // isDefinition
-#endif
                                                      ,0                // ScopeLine
                                                      ,DIFlagZero       // Flags
-#if JL_LLVM_VERSION < 80000
-                                                     ,true             // isOptimized
-                                                     ,nullptr          // Template Parameters
-#else
                                                      ,DISubprogram::SPFlagDefinition | DISubprogram::SPFlagOptimized // SPFlags
                                                      ,nullptr          // Template Parameters
                                                      ,nullptr          // Template Declaration
                                                      ,nullptr          // ThrownTypes
-#endif
                                                      );
                     }
                     DebugLoc inl_loc = (info.inlined_at == 0) ? DebugLoc::get(0, 0, SP, NULL) : linetable.at(info.inlined_at).loc;
@@ -6409,13 +6376,22 @@ static std::unique_ptr<Module> emit_function(
         }
         new_lineinfo.clear();
     };
-    auto mallocVisitStmt = [&] (unsigned dbg) {
-        if (!do_malloc_log(mod_is_user_mod) || dbg == 0)
+    auto mallocVisitStmt = [&] (unsigned dbg, Value *sync) {
+        if (!do_malloc_log(mod_is_user_mod) || dbg == 0) {
+            if (do_malloc_log(true) && sync)
+                ctx.builder.CreateCall(prepare_call(sync_gc_total_bytes_func), {sync});
             return;
+        }
         while (linetable.at(dbg).inlined_at)
             dbg = linetable.at(dbg).inlined_at;
-        mallocVisitLine(ctx, ctx.file, linetable.at(dbg).line);
+        mallocVisitLine(ctx, ctx.file, linetable.at(dbg).line, sync);
     };
+    if (coverage_mode != JL_LOG_NONE) {
+        // record all lines that could be covered
+        for (const auto &info : linetable)
+            if (do_coverage(info.is_user_code))
+                coverageAllocLine(info.file, info.line);
+    }
 
     come_from_bb[0] = ctx.builder.GetInsertBlock();
 
@@ -6470,10 +6446,19 @@ static std::unique_ptr<Module> emit_function(
         BB[label] = bb;
     }
 
-    if (do_coverage(mod_is_user_mod))
+    if (do_coverage(mod_is_user_mod)) {
         coverageVisitLine(ctx, ctx.file, toplineno);
-    if (do_malloc_log(mod_is_user_mod))
-        mallocVisitLine(ctx, ctx.file, toplineno);
+        if (linetable.size() >= 1) {
+            // avoid double-counting the entry line
+            const auto &info = linetable.at(1);
+            if (info.file == ctx.file && info.line == toplineno && info.is_user_code == mod_is_user_mod)
+                current_lineinfo.push_back(1);
+        }
+    }
+    Value *sync_bytes = nullptr;
+    if (do_malloc_log(true))
+        sync_bytes = ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
+
     find_next_stmt(0);
     while (cursor != -1) {
         int32_t debuginfoloc = ((int32_t*)jl_array_data(src->codelocs))[cursor];
@@ -6585,7 +6570,7 @@ static std::unique_ptr<Module> emit_function(
                 }
             }
 
-            mallocVisitStmt(debuginfoloc);
+            mallocVisitStmt(debuginfoloc, sync_bytes);
             if (toplevel)
                 ctx.builder.CreateStore(last_age, ctx.world_age_field);
             assert(type_is_ghost(retty) || returninfo.cc == jl_returninfo_t::SRet ||
@@ -6627,7 +6612,7 @@ static std::unique_ptr<Module> emit_function(
             jl_value_t *cond = args[0];
             int lname = jl_unbox_long(args[1]);
             Value *isfalse = emit_condition(ctx, cond, "if");
-            mallocVisitStmt(debuginfoloc);
+            mallocVisitStmt(debuginfoloc, nullptr);
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
             workstack.push_back(lname - 1);
             BasicBlock *ifnot = BB[lname];
@@ -6665,7 +6650,7 @@ static std::unique_ptr<Module> emit_function(
         }
         else {
             emit_stmtpos(ctx, stmt, cursor);
-            mallocVisitStmt(debuginfoloc);
+            mallocVisitStmt(debuginfoloc, nullptr);
         }
         find_next_stmt(cursor + 1);
     }
@@ -7525,7 +7510,7 @@ static void init_julia_llvm_env(Module *m)
 #endif
 #ifndef FORCE_ELF
 #if defined(_CPU_X86_64_)
-#if defined(_COMPILER_MINGW_)
+#if defined(_COMPILER_GCC_)
     Function *chkstk_func = Function::Create(FunctionType::get(T_void, false),
             Function::ExternalLinkage, "___chkstk_ms", m);
     add_named_global(chkstk_func, &___chkstk_ms, /*dllimport*/false);
@@ -7535,7 +7520,7 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(chkstk_func, &__chkstk, /*dllimport*/false);
 #endif
 #else
-#if defined(_COMPILER_MINGW_)
+#if defined(_COMPILER_GCC_)
     Function *chkstk_func = Function::Create(FunctionType::get(T_void, false),
             Function::ExternalLinkage, "_alloca", m);
     add_named_global(chkstk_func, &_alloca, /*dllimport*/false);
@@ -7705,6 +7690,13 @@ static void init_julia_llvm_env(Module *m)
                          "jl_gc_diff_total_bytes", m);
     add_named_global(diff_gc_total_bytes_func, &jl_gc_diff_total_bytes);
 
+    sync_gc_total_bytes_func =
+        Function::Create(FunctionType::get(T_int64, {T_int64}, false),
+                         Function::ExternalLinkage,
+                         "jl_gc_sync_total_bytes", m);
+    add_named_global(sync_gc_total_bytes_func, &jl_gc_sync_total_bytes);
+
+
     std::vector<Type*> array_owner_args(0);
     array_owner_args.push_back(T_prjlvalue);
     jlarray_data_owner_func =
@@ -7766,11 +7758,9 @@ extern "C" void *jl_init_llvm(void)
     const char *const argv_copyprop[] = {"", "-disable-copyprop"}; // llvm bug 21743
     cl::ParseCommandLineOptions(sizeof(argv_copyprop)/sizeof(argv_copyprop[0]), argv_copyprop, "disable-copyprop\n");
 #endif
-#if JL_LLVM_VERSION >= 70000
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
     const char *const argv_avoidsfb[] = {"", "-x86-disable-avoid-SFB"}; // llvm bug 41629, see https://gist.github.com/vtjnash/192cab72a6cfc00256ff118238163b55
     cl::ParseCommandLineOptions(sizeof(argv_avoidsfb)/sizeof(argv_avoidsfb[0]), argv_avoidsfb, "disable-avoidsfb\n");
-#endif
 #endif
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
 
@@ -7945,19 +7935,11 @@ extern "C" void jl_dump_llvm_debugloc(void *v)
 extern void jl_write_bitcode_func(void *F, char *fname) {
     std::error_code EC;
     raw_fd_ostream OS(fname, EC, sys::fs::F_None);
-#if JL_LLVM_VERSION >= 70000
     llvm::WriteBitcodeToFile(*((llvm::Function*)F)->getParent(), OS);
-#else
-    llvm::WriteBitcodeToFile(((llvm::Function*)F)->getParent(), OS);
-#endif
 }
 
 extern void jl_write_bitcode_module(void *M, char *fname) {
     std::error_code EC;
     raw_fd_ostream OS(fname, EC, sys::fs::F_None);
-#if JL_LLVM_VERSION >= 70000
     llvm::WriteBitcodeToFile(*(llvm::Module*)M, OS);
-#else
-    llvm::WriteBitcodeToFile((llvm::Module*)M, OS);
-#endif
 }

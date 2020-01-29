@@ -1241,7 +1241,10 @@
             ((#\{ )
              (disallow-space s ex t)
              (take-token s)
-             (loop (list* 'curly ex (parse-call-arglist s #\} ))))
+             (let ((args (parse-call-arglist s #\} )))
+               (if macrocall?
+                   `(call ,ex (braces ,@args))
+                   (loop (list* 'curly ex args)))))
             ((#\" #\`)
              (if (and (or (symbol? ex) (valid-modref? ex))
                       (not (operator? ex))
@@ -2264,9 +2267,12 @@
                                                   b))
                                   (loop (read-char (ts:port s))))))
                      (let ((str (tostr #f b)))
-                       (if (= (string-length str) 1)
-                           (string.char str 0)
-                           (error "invalid character literal")))))))
+                       (let ((len (string-length str)))
+                         (if (= len 1)
+                             (string.char str 0)
+                             (if (= len 0)
+                                 (error "invalid empty character literal")
+                                 (error "character literal contains multiple characters")))))))))
 
           ;; symbol/expression quote
           ((eq? t ':)
