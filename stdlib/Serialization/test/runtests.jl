@@ -427,6 +427,17 @@ create_serialization_stream() do s
     @test C[1] === C[2]
 end
 
+mutable struct MSingle end
+create_serialization_stream() do s
+    x = MSingle()
+    A = [x, x, MSingle()]
+    serialize(s, A)
+    seekstart(s)
+    C = deserialize(s)
+    @test A[1] === x === A[2] !== A[3]
+    @test x !== C[1] === C[2] !== C[3]
+end
+
 # Regex
 create_serialization_stream() do s
     r1 = r"a?b.*"

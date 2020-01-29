@@ -63,17 +63,18 @@ function arg_decl_parts(m::Method)
         for t in tv
             show_env = ImmutableDict(show_env, :unionall_env => t)
         end
-        decls = Any[argtype_decl(show_env, argnames[i], sig, i, m.nargs, m.isva)
+        decls = Tuple{String,String}[argtype_decl(show_env, argnames[i], sig, i, m.nargs, m.isva)
                     for i = 1:m.nargs]
     else
-        decls = Any[("", "") for i = 1:length(sig.parameters)]
+        decls = Tuple{String,String}[("", "") for i = 1:length(sig.parameters::SimpleVector)]
     end
     return tv, decls, file, line
 end
 
 const empty_sym = Symbol("")
 
-function kwarg_decl(m::Method)
+# NOTE: second argument is deprecated and is no longer used
+function kwarg_decl(m::Method, kwtype = nothing)
     mt = get_methodtable(m)
     if isdefined(mt, :kwsorter)
         kwtype = typeof(mt.kwsorter)
@@ -119,8 +120,25 @@ end
 # In case the line numbers in the source code have changed since the code was compiled,
 # allow packages to set a callback function that corrects them.
 # (Used by Revise and perhaps other packages.)
-default_methodloc(method::Method) = method.file, method.line
-const methodloc_callback = Ref{Function}(default_methodloc)
+const methodloc_callback = Ref{Union{Function, Nothing}}(nothing)
+
+# This function does the method location updating
+function updated_methodloc(m::Method)::Tuple{String, Int32}
+    file, line = m.file, m.line
+    if methodloc_callback[] !== nothing
+        try
+            file, line = invokelatest(methodloc_callback[], m)
+        catch
+        end
+    end
+    # The file defining Base.Sys gets included after this file is included so make sure
+    # this function is valid even in this intermediary state
+    if isdefined(@__MODULE__, :Sys) && Sys.BUILD_STDLIB_PATH != Sys.STDLIB
+        # BUILD_STDLIB_PATH gets defined in sysinfo.jl
+        file = replace(string(file), normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB))
+    end
+    return string(file), line
+end
 
 functionloc(m::Core.MethodInstance) = functionloc(m.def)
 
@@ -130,7 +148,7 @@ functionloc(m::Core.MethodInstance) = functionloc(m.def)
 Returns a tuple `(filename,line)` giving the location of a `Method` definition.
 """
 function functionloc(m::Method)
-    file, ln = invokelatest(methodloc_callback[], m)
+    file, ln = updated_methodloc(m)
     if ln <= 0
         error("could not determine location of method definition")
     end
@@ -166,9 +184,11 @@ function show(io::IO, m::Method)
     ft = unwrap_unionall(ft0)
     d1 = decls[1]
     if sig === Tuple
-        print(io, m.name)
-        decls = Any[(), ("...", "")]
-    elseif ft <: Function && isa(ft, DataType) &&
+        # Builtin
+        print(io, m.name, "(...) in ", m.module)
+        return
+    end
+    if ft <: Function && isa(ft, DataType) &&
             isdefined(ft.name.module, ft.name.mt.name) &&
                 # TODO: more accurate test? (tn.name === "#" name)
             ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
@@ -184,7 +204,7 @@ function show(io::IO, m::Method)
         print(io, "(", d1[1], "::", d1[2], ")")
     end
     print(io, "(")
-    join(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
+    join(io, String[isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
                  ", ", ", ")
     kwargs = kwarg_decl(m)
     if !isempty(kwargs)
@@ -195,10 +215,7 @@ function show(io::IO, m::Method)
     show_method_params(io, tv)
     print(io, " in ", m.module)
     if line > 0
-        try
-            file, line = invokelatest(methodloc_callback[], m)
-        catch
-        end
+        file, line = updated_methodloc(m)
         print(io, " at ", file, ":", line)
     end
 end
@@ -245,13 +262,9 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
         if max==-1 || n<max
             n += 1
             println(io)
-            print(io, "[$(n)] ")
+            print(io, "[$n] ")
             show(io, meth)
-            file, line = meth.file, meth.line
-            try
-                file, line = invokelatest(methodloc_callback[], meth)
-            catch
-            end
+            file, line = updated_methodloc(meth)
             push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
         else
             rest += 1
@@ -286,7 +299,7 @@ fileurl(file) = let f = find_source_file(file); f === nothing ? "" : "file://"*f
 
 function url(m::Method)
     M = m.module
-    (m.file == :null || m.file == :string) && return ""
+    (m.file === :null || m.file === :string) && return ""
     file = string(m.file)
     line = m.line
     line <= 0 || occursin(r"In\[[0-9]+\]", file) && return ""
@@ -330,6 +343,11 @@ function show(io::IO, ::MIME"text/html", m::Method)
     ft0 = sig.parameters[1]
     ft = unwrap_unionall(ft0)
     d1 = decls[1]
+    if sig === Tuple
+        # Builtin
+        print(io, m.name, "(...) in ", m.module)
+        return
+    end
     if ft <: Function && isa(ft, DataType) &&
             isdefined(ft.name.module, ft.name.mt.name) &&
             ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
@@ -345,7 +363,7 @@ function show(io::IO, ::MIME"text/html", m::Method)
         print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
     end
     print(io, "(")
-    join(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
+    join(io, String[isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
                       for d in decls[2:end]], ", ", ", ")
     kwargs = kwarg_decl(m)
     if !isempty(kwargs)
@@ -361,10 +379,7 @@ function show(io::IO, ::MIME"text/html", m::Method)
     end
     print(io, " in ", m.module)
     if line > 0
-        try
-            file, line = invokelatest(methodloc_callback[], m)
-        catch
-        end
+        file, line = updated_methodloc(m)
         u = url(m)
         if isempty(u)
             print(io, " at ", file, ":", line)
@@ -398,11 +413,7 @@ function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
         first = false
         print(io, "[$(i)] ")
         show(io, m)
-        file, line = m.file, m.line
-        try
-            file, line = invokelatest(methodloc_callback[], m)
-        catch
-        end
+        file, line = updated_methodloc(m)
         push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
     end
 end

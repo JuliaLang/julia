@@ -400,29 +400,29 @@ As a bonus, all period arithmetic objects work directly with ranges:
 
 ```jldoctest
 julia> dr = Date(2014,1,29):Day(1):Date(2014,2,3)
-Date(2014, 1, 29):Day(1):Date(2014, 2, 3)
+Date("2014-01-29"):Day(1):Date("2014-02-03")
 
 julia> collect(dr)
 6-element Array{Date,1}:
- Date(2014, 1, 29)
- Date(2014, 1, 30)
- Date(2014, 1, 31)
- Date(2014, 2, 1)
- Date(2014, 2, 2)
- Date(2014, 2, 3)
+ 2014-01-29
+ 2014-01-30
+ 2014-01-31
+ 2014-02-01
+ 2014-02-02
+ 2014-02-03
 
 julia> dr = Date(2014,1,29):Dates.Month(1):Date(2014,07,29)
-Date(2014, 1, 29):Month(1):Date(2014, 7, 29)
+Date("2014-01-29"):Month(1):Date("2014-07-29")
 
 julia> collect(dr)
 7-element Array{Date,1}:
- Date(2014, 1, 29)
- Date(2014, 2, 28)
- Date(2014, 3, 29)
- Date(2014, 4, 29)
- Date(2014, 5, 29)
- Date(2014, 6, 29)
- Date(2014, 7, 29)
+ 2014-01-29
+ 2014-02-28
+ 2014-03-29
+ 2014-04-29
+ 2014-05-29
+ 2014-06-29
+ 2014-07-29
 ```
 
 ## Adjuster Functions
@@ -492,15 +492,14 @@ julia> filter(dr) do x
            Dates.dayofweekofmonth(x) == 2
        end
 8-element Array{Date,1}:
- Date(2014, 4, 8)
- Date(2014, 5, 13)
- Date(2014, 6, 10)
- Date(2014, 7, 8)
- Date(2014, 8, 12)
- Date(2014, 9, 9)
- Date(2014, 10, 14)
- Date(2014, 11, 11)
-
+ 2014-04-08
+ 2014-05-13
+ 2014-06-10
+ 2014-07-08
+ 2014-08-12
+ 2014-09-09
+ 2014-10-14
+ 2014-11-11
 ```
 
 Additional examples and tests are available in [`stdlib/Dates/test/adjusters.jl`](https://github.com/JuliaLang/julia/blob/master/stdlib/Dates/test/adjusters.jl).

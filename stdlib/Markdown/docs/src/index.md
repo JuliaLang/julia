@@ -1,4 +1,4 @@
-# Markdown
+# [Markdown](@id markdown_stdlib)
 
 This section describes Julia's markdown syntax, which is enabled by the
 Markdown standard library. The following Markdown elements are supported:
@@ -21,7 +21,7 @@ A paragraph containing a **bold** word.
 Surround words with one asterisk, `*`, to display the enclosed text in italics.
 
 ```
-A paragraph containing an *emphasized* word.
+A paragraph containing an *italicized* word.
 ```
 
 ### Literals
@@ -40,7 +40,7 @@ parts of a Julia program.
     the text.
 
     ```
-    A paragraph containing a ``` `backtick` character ```.
+    A paragraph containing ``` `backtick` characters ```.
     ```
 
     By extension any odd number of backticks may be used to enclose a lesser number of backticks.
@@ -70,7 +70,7 @@ A paragraph containing some ``\LaTeX`` markup.
 
 ### Links
 
-Links to either external or internal addresses can be written using the following syntax, where
+Links to either external or internal targets can be written using the following syntax, where
 the text enclosed in square brackets, `[ ]`, is the name of the link and the text enclosed in
 parentheses, `( )`, is the URL.
 
@@ -127,7 +127,7 @@ in the [Inline elements](@ref) section above, with one or more blank lines above
 ```
 This is a paragraph.
 
-And this is *another* one containing some emphasized text.
+And this is *another* paragraph containing some emphasized text.
 A new line, but still part of the same paragraph.
 ```
 
@@ -316,7 +316,8 @@ aside from the `:` character that is appended to the footnote label.
 
 ### Horizontal rules
 
-The equivalent of an `<hr>` HTML tag can be written using the following syntax:
+The equivalent of an `<hr>` HTML tag can be achieved using three hyphens (`---`).
+For example:
 
 ```
 Text above the line.

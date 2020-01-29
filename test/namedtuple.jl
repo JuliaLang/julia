@@ -48,6 +48,7 @@
 @test (a=1,b=2) != (b=1,a=2)
 @test NamedTuple() === NamedTuple()
 @test NamedTuple() != (a=1,)
+@test !isequal(NamedTuple(), (a=1,))
 
 @test string((a=1,)) == "(a = 1,)"
 @test string((name="", day=:today)) == "(name = \"\", day = :today)"
@@ -133,7 +134,7 @@ end
 @test Meta.lower(Main, Meta.parse("(; f(x))")) == Expr(:error, "invalid named tuple element \"f(x)\"")
 @test Meta.lower(Main, Meta.parse("(;1=0)")) == Expr(:error, "invalid named tuple field name \"1\"")
 
-@test Meta.parse("(;)") == quote end
+@test eval(Expr(:tuple, Expr(:parameters))) === NamedTuple()
 @test Meta.lower(Main, Meta.parse("(1,;2)")) == Expr(:error, "unexpected semicolon in tuple")
 
 # splatting

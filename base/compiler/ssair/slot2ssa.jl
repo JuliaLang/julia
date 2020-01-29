@@ -475,7 +475,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             end
             result_stmts[inst_range[end]] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
         elseif !isa(terminator, ReturnNode)
-            if isa(terminator, Expr) && terminator.head == :enter
+            if isa(terminator, Expr) && terminator.head === :enter
                 terminator.args[1] = bb_rename[terminator.args[1]]
             end
             if bb_rename[bb + 1] != new_bb + 1
@@ -569,8 +569,9 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
     return new_typ
 end
 
-function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::DomTree, defuse, nargs::Int, sptypes::Vector{Any},
+function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, nargs::Int, sptypes::Vector{Any},
                         slottypes::Vector{Any})
+    code = ir.stmts
     cfg = ir.cfg
     left = Int[]
     catch_entry_blocks = Tuple{Int, Int}[]

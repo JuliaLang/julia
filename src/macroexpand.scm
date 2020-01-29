@@ -15,9 +15,9 @@
               (loop (cdr lst) (cons nxt out)))))))
 
 (define (julia-bq-expand- x d)
-  (cond ((or (eq? x 'true) (eq? x 'false))  x)
-        ((or (symbol? x) (ssavalue? x))     (list 'inert x))
+  (cond ((or (symbol? x) (ssavalue? x))     (list 'inert x))
         ((atom? x)  x)
+        ((memq (car x) '(true false)) x)
         ((and (= d 0) (eq? (car x) '$))
          (if (length= x 2)
              (if (vararg? (cadr x))
@@ -206,8 +206,7 @@
 
 ;; get the name from a function formal argument expression, allowing `(escape x)`
 (define (try-arg-name v)
-  (cond ((and (symbol? v) (not (eq? v 'true)) (not (eq? v 'false)))
-         (list v))
+  (cond ((symbol? v) (list v))
         ((atom? v) '())
         (else
          (case (car v)
@@ -298,10 +297,9 @@
              (append!
               pairs
               (filter (lambda (v) (not (assq (car v) env)))
-                      (append!
-                       (pair-with-gensyms v)
-                       (map (lambda (v) (cons v v))
-                            (diff (keywords-introduced-by x) globals))))
+                      (pair-with-gensyms v))
+              (map (lambda (v) (cons v v))
+                   (keywords-introduced-by x))
               env)))))))
 
 (define (resolve-expansion-vars-with-new-env x env m parent-scope inarg (outermost #f))
@@ -315,7 +313,7 @@
    m parent-scope inarg))
 
 (define (resolve-expansion-vars- e env m parent-scope inarg)
-  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal))
+  (cond ((or (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal))
          e)
         ((symbol? e)
          (let ((a (assq e env)))

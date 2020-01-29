@@ -42,7 +42,7 @@ function moduleroot(m::Module)
     while true
         is_root_module(m) && return m
         p = parentmodule(m)
-        p == m && return m
+        p === m && return m
         m = p
     end
 end
@@ -317,10 +317,11 @@ datatype_fieldtypes(x::DataType) = ccall(:jl_get_fieldtypes, Any, (Any,), x)
 
 struct DataTypeLayout
     nfields::UInt32
+    npointers::UInt32
+    firstptr::Int32
     alignment::UInt32
-    # alignment : 28;
+    # alignment : 9;
     # haspadding : 1;
-    # pointerfree : 1;
     # fielddesc_type : 2;
 end
 
@@ -380,8 +381,8 @@ Can be called on any `isconcretetype`.
 function datatype_pointerfree(dt::DataType)
     @_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
-    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
-    return (alignment >> 10) & 0xFFFFF == 0
+    npointers = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
+    return npointers == 0
 end
 
 """
@@ -397,7 +398,7 @@ function datatype_fielddesc_type(dt::DataType)
     @_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
     alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
-    return (alignment >> 30) & 3
+    return (alignment >> 10) & 3
 end
 
 """
@@ -589,7 +590,9 @@ end
 Compute a type that contains the intersection of `T` and `S`. Usually this will be the
 smallest such type or one close to it.
 """
-typeintersect(@nospecialize(a),@nospecialize(b)) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
+typeintersect(@nospecialize(a), @nospecialize(b)) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any, Any), a, b))
+
+morespecific(@nospecialize(a), @nospecialize(b)) = ccall(:jl_type_morespecific, Cint, (Any, Any), a, b) != 0
 
 """
     fieldoffset(type, i)
@@ -792,10 +795,10 @@ Note that an error will be thrown if `types` are not leaf types when `generated`
 function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=true, debuginfo::Symbol=:default)
     if @isdefined(IRShow)
         debuginfo = IRShow.debuginfo(debuginfo)
-    elseif debuginfo == :default
+    elseif debuginfo === :default
         debuginfo = :source
     end
-    if debuginfo != :source && debuginfo != :none
+    if debuginfo !== :source && debuginfo !== :none
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     return map(method_instances(f, t)) do m
@@ -809,7 +812,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
             end
         end
         code = uncompressed_ast(m.def::Method)
-        debuginfo == :none && remove_linenums!(code)
+        debuginfo === :none && remove_linenums!(code)
         return code
     end
 end
@@ -860,19 +863,29 @@ function MethodList(mt::Core.MethodTable)
 end
 
 """
-    methods(f, [types])
+    methods(f, [types], [module])
 
-Returns the method table for `f`.
+Return the method table for `f`.
 
-If `types` is specified, returns an array of methods whose types match.
+If `types` is specified, return an array of methods whose types match.
+If `module` is specified, return an array of methods defined in that module.
+A list of modules can also be specified as an array.
+
+!!! compat "Julia 1.4"
+    At least Julia 1.4 is required for specifying a module.
 """
-function methods(@nospecialize(f), @nospecialize(t))
+function methods(@nospecialize(f), @nospecialize(t),
+                 @nospecialize(mod::Union{Module,AbstractArray{Module},Nothing}=nothing))
+    if mod isa Module
+        mod = (mod,)
+    end
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
     t = to_tuple_type(t)
     world = typemax(UInt)
-    return MethodList(Method[m[3] for m in _methods(f, t, -1, world)], typeof(f).name.mt)
+    MethodList(Method[m[3] for m in _methods(f, t, -1, world) if mod === nothing || m[3].module in mod],
+               typeof(f).name.mt)
 end
 
 methods(f::Core.Builtin) = MethodList(Method[], typeof(f).name.mt)
@@ -885,9 +898,11 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     ms = ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), tt, -1, 1, world, min, max)::Array{Any,1}
     return MethodList(Method[m[3] for m in ms], typeof(f).name.mt)
 end
-function methods(@nospecialize(f))
+
+function methods(@nospecialize(f),
+                 @nospecialize(mod::Union{Module,AbstractArray{Module},Nothing}=nothing))
     # return all matches
-    return methods(f, Tuple{Vararg{Any}})
+    return methods(f, Tuple{Vararg{Any}}, mod)
 end
 
 function visit(f, mt::Core.MethodTable)
@@ -1079,10 +1094,10 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
     end
     if @isdefined(IRShow)
         debuginfo = IRShow.debuginfo(debuginfo)
-    elseif debuginfo == :default
+    elseif debuginfo === :default
         debuginfo = :source
     end
-    if debuginfo != :source && debuginfo != :none
+    if debuginfo !== :source && debuginfo !== :none
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     types = to_tuple_type(types)
@@ -1091,7 +1106,7 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
         meth = func_for_method_checked(x[3], types, x[2])
         (code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, params)
         code === nothing && error("inference not successful") # inference disabled?
-        debuginfo == :none && remove_linenums!(code)
+        debuginfo === :none && remove_linenums!(code)
         push!(asts, code => ty)
     end
     return asts

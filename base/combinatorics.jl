@@ -213,17 +213,17 @@ julia> A = ['a','b','c','d'];
 
 julia> B = A[v]
 4-element Array{Char,1}:
- 'b'
- 'd'
- 'c'
- 'a'
+ 'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
+ 'd': ASCII/Unicode U+0064 (category Ll: Letter, lowercase)
+ 'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
+ 'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 
 julia> B[invperm(v)]
 4-element Array{Char,1}:
- 'a'
- 'b'
- 'c'
- 'd'
+ 'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
+ 'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
+ 'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
+ 'd': ASCII/Unicode U+0064 (category Ll: Letter, lowercase)
 ```
 """
 function invperm(a::AbstractVector)

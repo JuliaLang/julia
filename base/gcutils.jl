@@ -12,8 +12,19 @@ Register a function `f(x)` to be called when there are no program-accessible ref
 this function is unpredictable.
 
 `f` must not cause a task switch, which excludes most I/O operations such as `println`.
-`@schedule println("message")` or `ccall(:jl_, Void, (Any,), "message")` may be helpful for
-debugging purposes.
+Using the `@async` macro (to defer context switching to outside of the finalizer) or
+`ccall` to directly invoke IO functions in C may be helpful for debugging purposes.
+
+# Examples
+```julia
+finalizer(my_mutable_struct) do x
+    @async println("Finalizing \$x.")
+end
+
+finalizer(my_mutable_struct) do x
+    ccall(:jl_safe_printf, Cvoid, (Cstring, Cstring), "Finalizing %s.", repr(x))
+end
+```
 """
 function finalizer(@nospecialize(f), @nospecialize(o))
     if isimmutable(o)
@@ -49,29 +60,24 @@ Module with garbage collection utilities.
 """
 module GC
 
-# @enum-like structure
-struct CollectionType
-    x::Int
-end
-Base.cconvert(::Type{Cint}, collection::CollectionType) = Cint(collection.x)
-
-const Auto          = CollectionType(0)
-const Full          = CollectionType(1)
-const Incremental   = CollectionType(2)
+# mirrored from julia.h
+const GC_AUTO = 0
+const GC_FULL = 1
+const GC_INCREMENTAL = 2
 
 """
-    GC.gc(full::Bool=true)
-    GC.gc(collection::CollectionType)
+    GC.gc([full=true])
 
-Perform garbage collection. The argument `full` determines whether a full, but more costly
-collection is performed. Otherwise, heuristics are used to determine which type of
-collection is needed. For exact control, pass an argument of type `CollectionType`.
+Perform garbage collection. The argument `full` determines the kind of
+collection: A full collection (default) sweeps all objects, which makes the
+next GC scan much slower, while an incremental collection may only sweep
+so-called young objects.
 
 !!! warning
     Excessive use will likely lead to poor performance.
 """
-gc(full::Bool=true) = ccall(:jl_gc_collect, Cvoid, (Cint,), full)
-gc(collection::CollectionType) = ccall(:jl_gc_collect, Cvoid, (Cint,), collection)
+gc(full::Bool=true) =
+    ccall(:jl_gc_collect, Cvoid, (Cint,), full ? GC_FULL : GC_INCREMENTAL)
 
 """
     GC.enable(on::Bool)
@@ -99,13 +105,7 @@ macro preserve(args...)
     for x in syms
         isa(x, Symbol) || error("Preserved variable must be a symbol")
     end
-    s, r = gensym(), gensym()
-    esc(quote
-        $s = $(Expr(:gc_preserve_begin, syms...))
-        $r = $(args[end])
-        $(Expr(:gc_preserve_end, s))
-        $r
-    end)
+    esc(Expr(:gc_preserve, args[end], syms...))
 end
 
 """

@@ -73,7 +73,9 @@ function quoted(@nospecialize(x))
 end
 
 function is_inlineable_constant(@nospecialize(x))
-    x isa Type && return true
+    if x isa Type || x isa Symbol
+        return true
+    end
     return isbits(x) && Core.sizeof(x) <= MAX_INLINE_CONST_SIZE
 end
 
@@ -225,8 +227,22 @@ end
 # options #
 ###########
 
+is_root_module(m::Module) = false
+
 inlining_enabled() = (JLOptions().can_inline == 1)
-coverage_enabled() = (JLOptions().code_coverage != 0)
+function coverage_enabled(m::Module)
+    ccall(:jl_generating_output, Cint, ()) == 0 || return false # don't alter caches
+    cov = JLOptions().code_coverage
+    if cov == 1
+        m = moduleroot(m)
+        m === Core && return false
+        isdefined(Main, :Base) && m === Main.Base && return false
+        return true
+    elseif cov == 2
+        return true
+    end
+    return false
+end
 function inbounds_option()
     opt_check_bounds = JLOptions().check_bounds
     opt_check_bounds == 0 && return :default

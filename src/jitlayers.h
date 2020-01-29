@@ -13,10 +13,6 @@
 #include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
 
-#if JL_LLVM_VERSION < 70000
-#include "llvm/ExecutionEngine/ObjectMemoryBuffer.h"
-#endif
-
 #include "llvm/IR/LegacyPassManager.h"
 extern legacy::PassManager *jl_globalPM;
 
@@ -90,17 +86,8 @@ typedef JITSymbol JL_JITSymbol;
 // is expected.
 typedef JITSymbol JL_SymbolInfo;
 
-#if JL_LLVM_VERSION >= 70000
 using RTDyldObjHandleT = orc::VModuleKey;
-#else
-using RTDyldObjHandleT = orc::RTDyldObjectLinkingLayerBase::ObjHandleT;
-#endif
-
-#if JL_LLVM_VERSION >= 70000
 using CompilerResultT = std::unique_ptr<llvm::MemoryBuffer>;
-#else
-using CompilerResultT = object::OwningBinary<object::ObjectFile>;
-#endif
 
 class JuliaOJIT {
     // Custom object emission notification handler for the JuliaOJIT
@@ -112,7 +99,6 @@ class JuliaOJIT {
     private:
         template <typename ObjT, typename LoadResult>
         void registerObject(RTDyldObjHandleT H, const ObjT &Obj, const LoadResult &LO);
-        std::vector<object::OwningBinary<object::ObjectFile>> SavedObjects;
         std::unique_ptr<JITEventListener> JuliaListener;
         JuliaOJIT &JIT;
     };
@@ -127,19 +113,9 @@ class JuliaOJIT {
     };
 
 public:
-#if JL_LLVM_VERSION >= 80000
     typedef orc::LegacyRTDyldObjectLinkingLayer ObjLayerT;
     typedef orc::LegacyIRCompileLayer<ObjLayerT,CompilerT> CompileLayerT;
     typedef orc::VModuleKey ModuleHandleT;
-#elif JL_LLVM_VERSION >= 70000
-    typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
-    typedef orc::IRCompileLayer<ObjLayerT,CompilerT> CompileLayerT;
-    typedef orc::VModuleKey ModuleHandleT;
-#else
-    typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
-    typedef orc::IRCompileLayer<ObjLayerT,CompilerT> CompileLayerT;
-    typedef CompileLayerT::ModuleHandleT ModuleHandleT;
-#endif
     typedef StringMap<void*> SymbolTableT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
 
@@ -179,10 +155,8 @@ private:
     std::shared_ptr<RTDyldMemoryManager> MemMgr;
     DebugObjectRegistrar registrar;
 
-#if JL_LLVM_VERSION >= 70000
     llvm::orc::ExecutionSession ES;
     std::shared_ptr<llvm::orc::SymbolResolver> SymbolResolver;
-#endif
 
     ObjLayerT ObjectLayer;
     CompileLayerT CompileLayer;

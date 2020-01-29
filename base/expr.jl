@@ -119,10 +119,11 @@ Return equivalent expression with all macros removed (expanded).
 There are differences between `@macroexpand` and [`macroexpand`](@ref).
 
 * While [`macroexpand`](@ref) takes a keyword argument `recursive`, `@macroexpand`
-is always recursive. For a non recursive macro version, see [`@macroexpand1`](@ref).
+  is always recursive. For a non recursive macro version, see [`@macroexpand1`](@ref).
 
 * While [`macroexpand`](@ref) has an explicit `module` argument, `@macroexpand` always
-expands with respect to the module in which it is called.
+  expands with respect to the module in which it is called.
+
 This is best seen in the following example:
 ```julia-repl
 julia> module M

@@ -16,10 +16,8 @@ using Base.GMP: Limb
 
 using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
 
-import Base: copymutable, copy, copy!, ==, hash, convert
-using Serialization
-import Serialization: serialize, deserialize
-import Base: rand, randn
+import Base: copymutable, copy, copy!, ==, hash, convert,
+             rand, randn
 
 export rand!, randn!,
        randexp, randexp!,
@@ -315,6 +313,9 @@ Pick a random element or array of random elements from the set of values specifi
   point numbers and to ``[0, 1)+i[0, 1)]`` for complex floating point numbers;
 
 `S` defaults to [`Float64`](@ref).
+When only one argument is passed besides the optional `rng` and is a `Tuple`, it is interpreted
+as a collection of values (`S`) and not as `dims`.
+
 
 !!! compat "Julia 1.1"
     Support for `S` as a tuple requires at least Julia 1.1.
@@ -330,6 +331,14 @@ julia> using Random
 
 julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
 1=>2
+
+julia> rand((2, 3))
+3
+
+julia> rand(Float64, (2, 3))
+2×3 Array{Float64,2}:
+ 0.999717  0.0143835  0.540787
+ 0.696556  0.783855   0.938235
 ```
 
 !!! note

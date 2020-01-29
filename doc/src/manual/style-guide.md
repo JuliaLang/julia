@@ -86,7 +86,7 @@ One issue here is that if a function inherently requires integers, it might be b
 the caller to decide how non-integers should be converted (e.g. floor or ceiling). Another issue
 is that declaring more specific types leaves more "space" for future method definitions.
 
-## Append `!` to names of functions that modify their arguments
+## [Append `!` to names of functions that modify their arguments](@id bang-convention)
 
 Instead of:
 

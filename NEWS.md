@@ -1,22 +1,36 @@
-Julia v1.4 Release Notes
+Julia v1.5 Release Notes
 ========================
 
 New language features
 ---------------------
-
-* Structs with all isbits and isbitsunion fields are now stored inline in arrays ([#32448]).
-
-* `import` now allows quoted symbols, e.g. `import Base.:+` ([#33158]).
-
-* Function composition now supports multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
-and splatting `∘(fs...)` for composing an iterable collection of functions ([#33568]).
+* Macro calls `@foo {...}` can now also be written `@foo{...}` (without the space) ([#34498]).
 
 Language changes
 ----------------
 
-* Calling `show` or `repr` on an `undef`/`UndefInitializer()` array initializer now shows valid Julia code ([#33211]).
+* The interactive REPL now uses "soft scope" for top-level expressions: an assignment inside a
+  scope block such as a `for` loop automatically assigns to a global variable if one has been
+  defined already. This matches the behavior of Julia versions 0.6 and prior, as well as
+  [IJulia](https://github.com/JuliaLang/IJulia.jl).
+  Note that this only affects expressions interactively typed or pasted directly into the
+  default REPL ([#28789], [#33864]).
 
-* Calling `show` or `repr` on a 0-dimensional `AbstractArray` now shows valid code for creating an equivalent 0-dimensional array, instead of only showing the contained value. ([#33206])
+* Outside of the REPL (e.g. in a file), assigning to a variable within a top-level scope
+  block is considered ambiguous if a global variable with the same name exists.
+  A warning is given if that happens, to alert you that the code will work differently
+  than in the REPL.
+  A new command line option `--warn-scope` controls this warning ([#33864]).
+
+* Converting arbitrary tuples to `NTuple`, e.g. `convert(NTuple, (1, ""))` now gives an error,
+  where it used to be incorrectly allowed. This is because `NTuple` refers only to homogeneous
+  tuples (this meaning has not changed) ([#34272]).
+
+* In docstrings, a level-1 markdown header "Extended help" is now
+  interpreted as a marker dividing "brief help" from "extended help."
+  The REPL help mode only shows the brief help (the content before the
+  "Extended help" header) by default; prepend the expression with '?'
+  (in addition to the one that enters the help mode) to see the full
+  docstring. ([#25930])
 
 Multi-threading changes
 -----------------------
@@ -24,52 +38,44 @@ Multi-threading changes
 
 Build system changes
 --------------------
-* Windows build installer has switched to Inno Setup. Installer command line parameters have thus changed. For example, to extract the installer to a specific directory, the command line parameter is now `/DIR=x:\dirname`. Use `julia-installer.exe /?` to list all new command line parameters.
+
 
 New library functions
 ---------------------
 
-* The `splitpath` function now accepts any `AbstractString` whereas previously it only accepted paths of type `String` ([#33012]).
-* The `tempname` function now takes an optional `parent::AbstractString` argument to give it a directory in which to attempt to produce a temporary path name ([#33090]).
-* The `tempname` function now takes a `cleanup::Bool` keyword argument defaulting to `true`, which causes the process to try to ensure that any file or directory at the path returned by `tempname` is deleted upon process exit ([#33090]).
-* The `readdir` function now takes a `join::Bool` keyword argument defaulting to `false`, which when set causes `readdir` to join its directory argument with each listed name ([#33113]).
-* `readdir` output is now guaranteed to be sorted. The `sort` keyword allows opting out of sorting to get names in OS-native order ([#33542]).
-* The new `only(x)` function returns the one-and-only element of a collection `x`, and throws an `ArgumentError` if `x` contains zero or multiple elements. ([#33129])
-* `takewhile` and `dropwhile` have been added to the Iterators submodule ([#33437]).
+* New functions `mergewith` and `mergewith!` supersede `merge` and `merge!` with `combine`
+  argument.  They don't have the restriction for `combine` to be a `Function` and also
+  provide one-argument method that returns a closure.  The old methods of `merge` and
+  `merge!` are still available for backward compatibility ([#34296]).
+* The new `isdisjoint` function indicates whether two collections are disjoint ([#34427]).
+
+New library features
+--------------------
+* Function composition now works also on one argument `∘(f) = f` (#34251)
+
+* `Ref{NTuple{N,T}}` can be passed to `Ptr{T}`/`Ref{T}` `ccall` signatures ([#34199])
 
 
 Standard library changes
 ------------------------
-
-* The methods of `mktemp` and `mktempdir` which take a function body to pass temporary paths to no longer throw errors if the path is already deleted when the function body returns ([#33091]).
-
-* `div` now accepts a rounding mode as the third argument, consistent with the corresponding argument to `rem`. Support for rounding division, by passing one of the RoundNearest modes to this function, was added. For future compatibility, library authors should now extend this function, rather than extending the two-argument `fld`/`cld`/`div` directly. ([#33040])
-
-* Verbose `display` of `Char` (`text/plain` output) now shows the codepoint value in standard-conforming `"U+XXXX"` format ([#33291]).
-
-
-#### Libdl
+* The `@timed` macro now returns a `NamedTuple` ([#34149])
 
 #### LinearAlgebra
+* The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
+* `normalize` now supports multidimensional arrays ([#34239])
+* `lq` factorizations can now be used to compute the minimum-norm solution to under-determined systems ([#34350]).
 
-* `qr` and `qr!` functions support `blocksize` keyword argument ([#33053]).
+#### Markdown
 
-* `dot` now admits a 3-argument method `dot(x, A, y)` to compute generalized dot products `dot(x, A*y)`, but without computing and storing the intermediate result `A*y` ([#32739]).
-
-* `ldlt` and non-pivoted `lu` now throw a new `ZeroPivotException` type ([#33372]).
-
-* `cond(A, p)` with `p=1` or `p=Inf` now computes the exact condition number instead of an estimate ([#33547]).
 
 #### Random
 
-* `AbstractRNG`s now behave like scalars when used in broadcasting ([#33213]).
 
-* Products involving sparse arrays now allow more general sparse `eltype`s, such as `StaticArrays` ([#33205])
+#### REPL
 
-* The performance of `rand(::Tuple)` is improved in some cases ([#32208]). As a consequence, the
-  stream of generated values produced for a given seed has changed.
 
 #### SparseArrays
+* `lu!` accepts `UmfpackLU` as an argument to make use of its symbolic factorization.
 
 #### Dates
 
@@ -81,7 +87,6 @@ Standard library changes
 
 Deprecated or removed
 ---------------------
-
 
 External dependencies
 ---------------------

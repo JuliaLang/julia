@@ -57,10 +57,6 @@ typedef struct jl_varbinding_t {
     jl_value_t *lb;
     jl_value_t *ub;
     int8_t right;       // whether this variable came from the right side of `A <: B`
-    // if another var that this one depends on is found to be concrete, store it
-    // here for reference in case that var is popped from the environment before this one.
-    // TODO: generalize this to multiple variables
-    jl_tvar_t *concretevar;
     int8_t occurs_inv;  // occurs in invariant position
     int8_t occurs_cov;  // # of occurrences in covariant position
     int8_t concrete;    // 1 if another variable has a constraint forcing this one to be concrete
@@ -79,6 +75,7 @@ typedef struct jl_varbinding_t {
     // array of typevars that our bounds depend on, whose UnionAlls need to be
     // moved outside ours.
     jl_array_t *innervars;
+    int intvalued;      // must be integer-valued; i.e. occurs as N in Vararg{_,N}
     struct jl_varbinding_t *prev;
 } jl_varbinding_t;
 
@@ -145,11 +142,11 @@ static void save_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se)
         len++;
         v = v->prev;
     }
-    *root = (jl_value_t*)jl_alloc_svec(len*3);
-    se->buf = (int8_t*)(len ? malloc(len*2) : NULL);
+    *root = (jl_value_t*)jl_alloc_svec(len * 3);
+    se->buf = (int8_t*)(len ? malloc_s(len * 2) : NULL);
 #ifdef __clang_analyzer__
     if (len)
-        memset(se->buf, 0, len*2);
+        memset(se->buf, 0, len * 2);
 #endif
     int i=0, j=0; v = e->vars;
     while (v != NULL) {
@@ -294,7 +291,7 @@ int jl_obviously_unequal(jl_value_t *a, jl_value_t *b)
     return obviously_unequal(a, b);
 }
 
-static int in_union(jl_value_t *u, jl_value_t *x)
+static int in_union(jl_value_t *u, jl_value_t *x) JL_NOTSAFEPOINT
 {
     if (u == x) return 1;
     if (!jl_is_uniontype(u)) return 0;
@@ -515,7 +512,7 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     return sub;
 }
 
-static int subtype_left_var(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
+static int subtype_left_var(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
 {
     if (x == y)
         return 1;
@@ -527,7 +524,7 @@ static int subtype_left_var(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         return 1;
     if (x == (jl_value_t*)jl_any_type && jl_is_datatype(y))
         return 0;
-    return subtype(x, y, e, 0);
+    return subtype(x, y, e, param);
 }
 
 // use the current context to record where a variable occurred, for the purpose
@@ -565,10 +562,10 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
 {
     jl_varbinding_t *bb = lookup(e, b);
     if (bb == NULL)
-        return e->ignore_free || subtype_left_var(b->ub, a, e);
+        return e->ignore_free || subtype_left_var(b->ub, a, e, param);
     record_var_occurrence(bb, e, param);
     if (!bb->right)  // check ∀b . b<:a
-        return subtype_left_var(bb->ub, a, e);
+        return subtype_left_var(bb->ub, a, e, param);
     if (bb->ub == a)
         return 1;
     if (!((bb->lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(bb->lb, a, e)))
@@ -589,7 +586,7 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
         if (aa && !aa->right && in_union(bb->lb, a) && bb->depth0 != aa->depth0 && var_outside(e, b, (jl_tvar_t*)a)) {
             // an "exists" var cannot equal a "forall" var inside it unless the forall
             // var has equal bounds.
-            return subtype_left_var(aa->ub, aa->lb, e);
+            return subtype_left_var(aa->ub, aa->lb, e, param);
         }
     }
     return 1;
@@ -600,10 +597,10 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
 {
     jl_varbinding_t *bb = lookup(e, b);
     if (bb == NULL)
-        return e->ignore_free || subtype_left_var(a, b->lb, e);
+        return e->ignore_free || subtype_left_var(a, b->lb, e, param);
     record_var_occurrence(bb, e, param);
     if (!bb->right)  // check ∀b . b>:a
-        return subtype_left_var(a, bb->lb, e);
+        return subtype_left_var(a, bb->lb, e, param);
     if (bb->lb == bb->ub) {
         if (jl_is_typevar(bb->lb) && !jl_is_type(a) && !jl_is_typevar(a))
             return var_gt((jl_tvar_t*)bb->lb, a, e, param);
@@ -617,7 +614,7 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
     if (jl_is_typevar(a)) {
         jl_varbinding_t *aa = lookup(e, (jl_tvar_t*)a);
         if (aa && !aa->right && bb->depth0 != aa->depth0 && param == 2 && var_outside(e, b, (jl_tvar_t*)a))
-            return subtype_left_var(aa->ub, aa->lb, e);
+            return subtype_left_var(aa->ub, aa->lb, e, param);
     }
     return 1;
 }
@@ -689,10 +686,15 @@ static int var_occurs_inside(jl_value_t *v, jl_tvar_t *var, int inside, int want
 
 typedef int (*tvar_callback)(void*, int8_t, jl_stenv_t *, int);
 
+static int var_occurs_invariant(jl_value_t *v, jl_tvar_t *var, int inv) JL_NOTSAFEPOINT
+{
+    return var_occurs_inside(v, var, 0, 1);
+}
+
 static int with_tvar(tvar_callback callback, void *context, jl_unionall_t *u, int8_t R, jl_stenv_t *e, int param)
 {
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, NULL, 0, 0, 0, 0,
-                           R ? e->Rinvdepth : e->invdepth, 0, NULL, e->vars };
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0,
+                           R ? e->Rinvdepth : e->invdepth, 0, NULL, 0, e->vars };
     JL_GC_PUSH4(&u, &vb.lb, &vb.ub, &vb.innervars);
     e->vars = &vb;
     int ans;
@@ -737,7 +739,7 @@ static int with_tvar(tvar_callback callback, void *context, jl_unionall_t *u, in
     //  ( Tuple{Int, Int}    <: Tuple{T, T} where T) but
     // !( Tuple{Int, String} <: Tuple{T, T} where T)
     // Then check concreteness by checking that the lower bound is not an abstract type.
-    int diagonal = !vb.occurs_inv && vb.occurs_cov > 1;
+    int diagonal = vb.occurs_cov > 1 && !var_occurs_invariant(u->body, u->var, 0);
     if (ans && (vb.concrete || (diagonal && is_leaf_typevar(u->var)))) {
         if (vb.concrete && !diagonal && !is_leaf_bound(vb.ub)) {
             // a non-diagonal var can only be a subtype of a diagonal var if its
@@ -749,23 +751,9 @@ static int with_tvar(tvar_callback callback, void *context, jl_unionall_t *u, in
             jl_varbinding_t *vlb = lookup(e, v);
             if (vlb)
                 vlb->concrete = 1;
-            //else  // TODO handle multiple variables in vb.concretevar
-            //    ans = (v == vb.concretevar);
         }
         else if (!is_leaf_bound(vb.lb)) {
             ans = 0;
-        }
-        if (ans) {
-            // if we occur as another var's lower bound, record the fact that we
-            // were concrete so that subtype can return true for that var.
-            /*
-            btemp = vb.prev;
-            while (btemp != NULL) {
-                if (btemp->lb == (jl_value_t*)u->var)
-                    btemp->concretevar = u->var;
-                btemp = btemp->prev;
-            }
-            */
         }
     }
 
@@ -800,6 +788,7 @@ static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e)
     jl_varbinding_t *btemp = e->vars;
     // if the var for this unionall (based on identity) already appears somewhere
     // in the environment, rename to get a fresh var.
+    JL_GC_PUSH1(&u);
     while (btemp != NULL) {
         if (btemp->var == u->var ||
             // outer var can only refer to inner var if bounds changed
@@ -810,6 +799,7 @@ static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e)
         }
         btemp = btemp->prev;
     }
+    JL_GC_POP();
     return u;
 }
 
@@ -819,7 +809,8 @@ struct subtype_unionall_env {
 };
 
 static int subtype_unionall_callback(struct subtype_unionall_env *env, int8_t R, jl_stenv_t *s, int param) {
-    JL_GC_PROMISE_ROOTED(env->t); JL_GC_PROMISE_ROOTED(env->ubody);
+    JL_GC_PROMISE_ROOTED(env->t);
+    JL_GC_PROMISE_ROOTED(env->ubody);
     if (R) {
         return subtype(env->t, env->ubody, s, param);
     }
@@ -833,7 +824,10 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
 {
     u = unalias_unionall(u, e);
     struct subtype_unionall_env env = {t, u->body};
-    return with_tvar((tvar_callback)subtype_unionall_callback, (void*)&env, u, R, e, param);
+    JL_GC_PUSH1(&u);
+    int res = with_tvar((tvar_callback)subtype_unionall_callback, (void*)&env, u, R, e, param);
+    JL_GC_POP();
+    return res;
 }
 
 // unwrap <=1 layers of UnionAlls, leaving the var in *p1 the body
@@ -941,7 +935,7 @@ static int subtype_tuple_varargs(struct subtype_tuple_env *env, jl_stenv_t *e, i
     // in Vararg{T1} <: Vararg{T2}, need to check subtype twice to
     // simulate the possibility of multiple arguments, which is needed
     // to implement the diagonal rule correctly.
-    if (!subtype(xp0, yp0, e, 1)) return 0;
+    if (!subtype(xp0, yp0, e, param)) return 0;
     if (!subtype(xp0, yp0, e, 1)) return 0;
 
 constrain_length:
@@ -998,7 +992,10 @@ loop: // while (i <= lx) {
                     u = unalias_unionall(u, e);
                     env->vtx = (jl_value_t*)u;
                     // goto loop, but with the tvar introduced
-                    return with_tvar((tvar_callback)subtype_tuple_tail, env, u, 0, e, param);
+                    JL_GC_PUSH1(&u);
+                    int res = with_tvar((tvar_callback)subtype_tuple_tail, env, u, 0, e, param);
+                    JL_GC_POP();
+                    return res;
                 }
                 env->vtx = xi;
             }
@@ -1018,7 +1015,10 @@ loop: // while (i <= lx) {
                         u = unalias_unionall(u, e);
                         env->vty = (jl_value_t*)u;
                         // goto loop, but with the tvar introduced
-                        return with_tvar((tvar_callback)subtype_tuple_tail, env, u, 1, e, param);
+                        JL_GC_PUSH1(&u);
+                        int res = with_tvar((tvar_callback)subtype_tuple_tail, env, u, 1, e, param);
+                        JL_GC_POP();
+                        return res;
                     }
                     env->vty = yi;
                 }
@@ -1163,7 +1163,7 @@ static int subtype_naked_vararg(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t
     // in Vararg{T1} <: Vararg{T2}, need to check subtype twice to
     // simulate the possibility of multiple arguments, which is needed
     // to implement the diagonal rule correctly.
-    if (!subtype(xp1, yp1, e, 1)) return 0;
+    if (!subtype(xp1, yp1, e, param)) return 0;
     if (!subtype(xp1, yp1, e, 1)) return 0;
     e->invdepth++;
     e->Rinvdepth++;
@@ -1333,9 +1333,36 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
     return x == y || jl_egal(x, y);
 }
 
+static int is_indefinite_length_tuple_type(jl_value_t *x)
+{
+    x = jl_unwrap_unionall(x);
+    if (!jl_is_tuple_type(x))
+        return 0;
+    size_t n = jl_nparams(x);
+    return n > 0 && jl_vararg_kind(jl_tparam(x, n-1)) == JL_VARARG_UNBOUND;
+}
+
+static int is_definite_length_tuple_type(jl_value_t *x)
+{
+    if (jl_is_typevar(x))
+        x = ((jl_tvar_t*)x)->ub;
+    x = jl_unwrap_unionall(x);
+    if (!jl_is_tuple_type(x))
+        return 0;
+    size_t n = jl_nparams(x);
+    if (n == 0)
+        return 1;
+    jl_vararg_kind_t k = jl_vararg_kind(jl_tparam(x, n-1));
+    return k == JL_VARARG_NONE || k == JL_VARARG_INT;
+}
+
 static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
     if (obviously_egal(x, y)) return 1;
+
+    if ((is_indefinite_length_tuple_type(x) && is_definite_length_tuple_type(y)) ||
+        (is_definite_length_tuple_type(x) && is_indefinite_length_tuple_type(y)))
+        return 0;
 
     jl_unionstate_t oldLunions = e->Lunions;
     memset(e->Lunions.stack, 0, sizeof(e->Lunions.stack));
@@ -1478,12 +1505,39 @@ static int concrete_min(jl_value_t *t)
     return 2; // up to infinite
 }
 
+static jl_value_t *find_var_body(jl_value_t *t, jl_tvar_t *v)
+{
+    if (jl_is_unionall(t)) {
+        if (((jl_unionall_t*)t)->var == v)
+            return ((jl_unionall_t*)t)->body;
+        jl_value_t *b = find_var_body(((jl_unionall_t*)t)->var->lb, v);
+        if (b) return b;
+        b = find_var_body(((jl_unionall_t*)t)->var->ub, v);
+        if (b) return b;
+        return find_var_body(((jl_unionall_t*)t)->body, v);
+    }
+    else if (jl_is_uniontype(t)) {
+        jl_value_t *b = find_var_body(((jl_uniontype_t*)t)->a, v);
+        if (b) return b;
+        return find_var_body(((jl_uniontype_t*)t)->b, v);
+    }
+    else if (jl_is_datatype(t)) {
+        size_t i;
+        for (i=0; i < jl_nparams(t); i++) {
+            jl_value_t *b = find_var_body(jl_tparam(t, i), v);
+            if (b)
+                return b;
+        }
+    }
+    return NULL;
+}
+
 // quickly compute if x seems like a possible subtype of y
 // especially optimized for x isa concrete type
 // returns true if it could be easily determined, with the result in subtype
 // the approximation widens typevar bounds under the assumption they are bound
 // in the immediate caller--the caller must be conservative in handling the result
-JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
+static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *subtype)
 {
     if (x == y || y == (jl_value_t*)jl_any_type) {
         *subtype = 1;
@@ -1504,14 +1558,14 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
     if (jl_is_typevar(x)) {
         if (((jl_tvar_t*)x)->lb != (jl_value_t*)jl_bottom_type)
             return 0;
-        if (jl_obvious_subtype(((jl_tvar_t*)x)->ub, y, subtype) && *subtype)
+        if (obvious_subtype(((jl_tvar_t*)x)->ub, y, y0, subtype) && *subtype)
             return 1;
         return 0;
     }
     if (jl_is_typevar(y)) {
         if (((jl_tvar_t*)y)->lb != (jl_value_t*)jl_bottom_type)
             return 0;
-        if (jl_obvious_subtype(x, ((jl_tvar_t*)y)->ub, subtype) && !*subtype)
+        if (obvious_subtype(x, ((jl_tvar_t*)y)->ub, y0, subtype) && !*subtype)
             return 1;
         return 0;
     }
@@ -1529,30 +1583,30 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
     }
     if (jl_is_uniontype(x)) {
         // TODO: consider handling more LHS unions, being wary of covariance
-        if (jl_obvious_subtype(((jl_uniontype_t*)x)->a, y, subtype) && *subtype) {
-            if (jl_obvious_subtype(((jl_uniontype_t*)x)->b, y, subtype) && *subtype)
+        if (obvious_subtype(((jl_uniontype_t*)x)->a, y, y0, subtype) && *subtype) {
+            if (obvious_subtype(((jl_uniontype_t*)x)->b, y, y0, subtype) && *subtype)
                 return 1;
         }
-        //if (jl_obvious_subtype(((jl_uniontype_t*)x)->a, y, subtype)) {
+        //if (obvious_subtype(((jl_uniontype_t*)x)->a, y, y0, subtype)) {
         //    if (!*subtype)
         //        return 1;
-        //    if (jl_obvious_subtype(((jl_uniontype_t*)x)->b, y, subtype))
+        //    if (obvious_subtype(((jl_uniontype_t*)x)->b, y, y0, subtype))
         //        return 1;
         //}
-        //else if (jl_obvious_subtype(((jl_uniontype_t*)x)->b, y, subtype)) {
+        //else if (obvious_subtype(((jl_uniontype_t*)x)->b, y, y0, subtype)) {
         //    if (!*subtype)
         //        return 1;
         //}
         return 0;
     }
     if (jl_is_uniontype(y)) {
-        if (jl_obvious_subtype(x, ((jl_uniontype_t*)y)->a, subtype)) {
+        if (obvious_subtype(x, ((jl_uniontype_t*)y)->a, y0, subtype)) {
             if (*subtype)
                 return 1;
-            if (jl_obvious_subtype(x, ((jl_uniontype_t*)y)->b, subtype))
+            if (obvious_subtype(x, ((jl_uniontype_t*)y)->b, y0, subtype))
                 return 1;
         }
-        else if (jl_obvious_subtype(x, ((jl_uniontype_t*)y)->b, subtype)) {
+        else if (obvious_subtype(x, ((jl_uniontype_t*)y)->b, y0, subtype)) {
             if (*subtype)
                 return 1;
         }
@@ -1587,13 +1641,13 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
                         return 1;
                     }
                 }
-                if (jl_obvious_subtype((jl_value_t*)temp, y, subtype) && *subtype)
+                if (obvious_subtype((jl_value_t*)temp, y, y0, subtype) && *subtype)
                     return 1;
                 return 0;
             }
             if (!iscov && !((jl_datatype_t*)x)->hasfreetypevars) {
                 // by transitivity, if `wrapper <: y`, then `x <: y` if x is a leaf type of its name
-                if (jl_obvious_subtype(((jl_datatype_t*)x)->name->wrapper, y, subtype) && *subtype)
+                if (obvious_subtype(((jl_datatype_t*)x)->name->wrapper, y, y0, subtype) && *subtype)
                     return 1;
             }
             int i, npx = jl_nparams(x), npy = jl_nparams(y);
@@ -1649,7 +1703,7 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
                 jl_value_t *a = i >= (npx - (vx == JL_VARARG_NONE ? 0 : 1)) ? vxt : jl_tparam(x, i);
                 jl_value_t *b = jl_tparam(y, i);
                 if (iscov || jl_is_typevar(b)) {
-                    if (jl_obvious_subtype(a, b, subtype)) {
+                    if (obvious_subtype(a, b, y0, subtype)) {
                         if (!*subtype)
                             return 1;
                         if (jl_has_free_typevars(b)) // b is actually more constrained that this
@@ -1661,7 +1715,7 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
                 }
                 else {
                     if (!obviously_egal(a, b)) {
-                        if (jl_obvious_subtype(a, b, subtype)) {
+                        if (obvious_subtype(a, b, y0, subtype)) {
                             if (!*subtype)
                                 return 1;
                             if (jl_has_free_typevars(b)) // b is actually more constrained that this
@@ -1670,7 +1724,7 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
                         else {
                             uncertain = 1;
                         }
-                        if (!jl_has_free_typevars(b) && jl_obvious_subtype(b, a, subtype)) {
+                        if (!jl_has_free_typevars(b) && obvious_subtype(b, a, y0, subtype)) {
                             if (!*subtype)
                                 return 1;
                             if (jl_has_free_typevars(a)) // a is actually more constrained that this
@@ -1687,8 +1741,13 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
                 assert(vy != JL_VARARG_NONE && istuple && iscov);
                 jl_value_t *a1 = (vx != JL_VARARG_NONE && i >= npx - 1) ? vxt : jl_tparam(x, i);
                 jl_value_t *b = jl_unwrap_vararg(jl_tparam(y, i));
-                if (jl_is_typevar(b) && var_occurs_inside(y, (jl_tvar_t*)b, 0, 1))
-                    return 0;
+                if (jl_is_typevar(b)) {
+                    jl_value_t *body = find_var_body(y0, (jl_tvar_t*)b);
+                    if (body == NULL)
+                        body = y0;
+                    if (var_occurs_invariant(body, (jl_tvar_t*)b, 0))
+                        return 0;
+                }
                 if (nparams_expanded_x > npy && jl_is_typevar(b) && concrete_min(a1) > 1) {
                     // diagonal rule for 2 or more elements: they must all be concrete on the LHS
                     *subtype = 0;
@@ -1707,7 +1766,7 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
                             a2 = jl_typeof(jl_tparam0(a));
                         }
                         if (!obviously_egal(a1, a2)) {
-                            if (jl_obvious_subtype(a2, a1, subtype)) {
+                            if (obvious_subtype(a2, a1, y0, subtype)) {
                                 if (!*subtype)
                                     return 1;
                                 if (jl_has_free_typevars(a1)) // a1 is actually more constrained that this
@@ -1716,7 +1775,7 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
                             else {
                                 uncertain = 1;
                             }
-                            if (jl_obvious_subtype(a1, a2, subtype)) {
+                            if (obvious_subtype(a1, a2, y0, subtype)) {
                                 if (!*subtype)
                                     return 1;
                                 if (jl_has_free_typevars(a2)) // a2 is actually more constrained that this
@@ -1727,7 +1786,7 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
                             }
                         }
                     }
-                    if (jl_obvious_subtype(a, b, subtype)) {
+                    if (obvious_subtype(a, b, y0, subtype)) {
                         if (!*subtype)
                             return 1;
                         if (jl_has_free_typevars(b)) // b is actually more constrained that this
@@ -1745,6 +1804,11 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
         }
     }
     return 0;
+}
+
+JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
+{
+    return obvious_subtype(x, y, y, subtype);
 }
 
 // `env` is NULL if no typevar information is requested, or otherwise
@@ -2096,7 +2160,7 @@ static int try_subtype_in_env(jl_value_t *a, jl_value_t *b, jl_stenv_t *e, int R
     return ret;
 }
 
-static void set_bound(jl_value_t **bound, jl_value_t *val, jl_tvar_t *v, jl_stenv_t *e)
+static void set_bound(jl_value_t **bound, jl_value_t *val, jl_tvar_t *v, jl_stenv_t *e) JL_NOTSAFEPOINT
 {
     if (in_union(val, (jl_value_t*)v))
         return;
@@ -2121,7 +2185,7 @@ static int subtype_in_env_existential(jl_value_t *x, jl_value_t *y, jl_stenv_t *
         len++;
         v = v->prev;
     }
-    int8_t *rs = (int8_t*)malloc(len);
+    int8_t *rs = (int8_t*)malloc_s(len);
     int n = 0;
     v = e->vars;
     while (n < len) {
@@ -2202,15 +2266,16 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     }
     else if (bb->concrete || bb->constraintkind == 1) {
         jl_value_t *ub = R ? intersect_aside(a, bb->ub, e, 1, d) : intersect_aside(bb->ub, a, e, 0, d);
+        if (ub == jl_bottom_type)
+            return jl_bottom_type;
         JL_GC_PUSH1(&ub);
-        if (ub == jl_bottom_type ||
+        if (!R && !subtype_bounds_in_env(bb->lb, a, e, 0, d)) {
             // this fixes issue #30122. TODO: better fix for R flag.
-            (!R && !subtype_bounds_in_env(bb->lb, a, e, 0, d))) {
             JL_GC_POP();
             return jl_bottom_type;
         }
-        set_bound(&bb->ub, ub, b, e);
         JL_GC_POP();
+        set_bound(&bb->ub, ub, b, e);
         return (jl_value_t*)b;
     }
     else if (bb->constraintkind == 2) {
@@ -2233,7 +2298,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         return (jl_value_t*)b;
     if (ub == a) {
         if (bb->lb == jl_bottom_type) {
-            set_bound(&bb->ub, ub, b, e);
+            set_bound(&bb->ub, a, b, e);
             return (jl_value_t*)b;
         }
         return ub;
@@ -2277,9 +2342,12 @@ static int var_occurs_inside(jl_value_t *v, jl_tvar_t *var, int inside, int want
     }
     else if (jl_is_datatype(v)) {
         size_t i;
-        int ins = inside || !want_inv || !jl_is_tuple_type(v);
+        int istuple = jl_is_tuple_type(v);
+        int isva = jl_is_vararg_type(v);
         for (i=0; i < jl_nparams(v); i++) {
-            if (var_occurs_inside(jl_tparam(v,i), var, ins, want_inv))
+            int invar = isva ? i == 1 : !istuple;
+            int ins_i = inside || !want_inv || invar;
+            if (var_occurs_inside(jl_tparam(v,i), var, ins_i, want_inv))
                 return 1;
         }
     }
@@ -2303,6 +2371,19 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     else if (!vb->occurs_inv && is_leaf_bound(vb->ub)) {
         // replace T<:x with x in covariant position when possible
         varval = vb->ub;
+    }
+
+    if (vb->intvalued) {
+        if ((varval && jl_is_long(varval)) ||
+            (vb->lb == jl_bottom_type && vb->ub == (jl_value_t*)jl_any_type) ||
+            (jl_is_typevar(vb->lb) && vb->ub == vb->lb)) {
+            // int-valued typevar must either be an Int, or have Bottom-Any bounds,
+            // or be set equal to another typevar.
+        }
+        else {
+            JL_GC_POP();
+            return jl_bottom_type;
+        }
     }
 
     if (!varval && (vb->lb != vb->var->lb || vb->ub != vb->var->ub))
@@ -2440,7 +2521,8 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     else {
         res = intersect(u->body, t, e, param);
     }
-    vb->concrete |= (!vb->occurs_inv && vb->occurs_cov > 1 && is_leaf_typevar(u->var));
+    vb->concrete |= (vb->occurs_cov > 1 && is_leaf_typevar(u->var) &&
+                     !var_occurs_invariant(u->body, u->var, 0));
 
     // handle the "diagonal dispatch" rule, which says that a type var occurring more
     // than once, and only in covariant position, is constrained to concrete types. E.g.
@@ -2478,8 +2560,8 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
 {
     jl_value_t *res=NULL, *res2=NULL, *save=NULL, *save2=NULL;
     jl_savedenv_t se, se2;
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, NULL, 0, 0, 0, 0,
-                           R ? e->Rinvdepth : e->invdepth, 0, NULL, e->vars };
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0,
+                           R ? e->Rinvdepth : e->invdepth, 0, NULL, 0, e->vars };
     JL_GC_PUSH6(&res, &save2, &vb.lb, &vb.ub, &save, &vb.innervars);
     save_env(e, &save, &se);
     res = intersect_unionall_(t, u, e, R, param, &vb);
@@ -2912,18 +2994,20 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                     return jl_bottom_type;
                 jl_value_t *i2=NULL, *ii = intersect(xp1, yp1, e, 1);
                 if (ii == jl_bottom_type) return jl_bottom_type;
-                if (jl_is_typevar(xp1)) {
-                    jl_varbinding_t *xb = lookup(e, (jl_tvar_t*)xp1);
-                    if (xb && is_leaf_typevar(xb->var)) xb->concrete = 1;
-                }
-                if (jl_is_typevar(yp1)) {
-                    jl_varbinding_t *yb = lookup(e, (jl_tvar_t*)yp1);
-                    if (yb && is_leaf_typevar(yb->var)) yb->concrete = 1;
-                }
                 JL_GC_PUSH2(&ii, &i2);
+                if (jl_is_typevar(xp2)) {
+                    jl_varbinding_t *xb = lookup(e, (jl_tvar_t*)xp2);
+                    if (xb) xb->intvalued = 1;
+                }
+                if (jl_is_typevar(yp2)) {
+                    jl_varbinding_t *yb = lookup(e, (jl_tvar_t*)yp2);
+                    if (yb) yb->intvalued = 1;
+                }
                 // Vararg{T,N} <: Vararg{T2,N2}; equate N and N2
                 i2 = intersect_invariant(xp2, yp2, e);
-                if (i2 == NULL || i2 == jl_bottom_type || (jl_is_long(i2) && jl_unbox_long(i2) < 0))
+                if (i2 == NULL || i2 == jl_bottom_type || (jl_is_long(i2) && jl_unbox_long(i2) < 0) ||
+                    !((jl_is_typevar(i2) && ((jl_tvar_t*)i2)->lb == jl_bottom_type &&
+                       ((jl_tvar_t*)i2)->ub == (jl_value_t*)jl_any_type) || jl_is_long(i2)))
                     ii = jl_bottom_type;
                 else
                     ii = jl_apply_type2((jl_value_t*)jl_vararg_type, ii, i2);

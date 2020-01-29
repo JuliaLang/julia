@@ -579,7 +579,7 @@ hash(x::Float32, h::UInt) = hash(Float64(x), h)
     precision(num::AbstractFloat)
 
 Get the precision of a floating point number, as defined by the effective number of bits in
-the mantissa.
+the significand.
 """
 function precision end
 

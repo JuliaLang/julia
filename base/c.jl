@@ -26,7 +26,7 @@ and will be converted automatically at the call site to the appropriate type.
 
 See [`@cfunction`](@ref).
 """
-struct CFunction <: Ref{Cvoid}
+mutable struct CFunction <: Ref{Cvoid}
     ptr::Ptr{Cvoid}
     f::Any
     _1::Ptr{Cvoid}
@@ -47,7 +47,7 @@ Note that the argument type tuple must be a literal tuple, and not a tuple-value
 (although it can include a splat expression). And that these arguments will be evaluated in global scope
 during compile-time (not deferred until runtime).
 Adding a '\\\$' in front of the function argument changes this to instead create a runtime closure
-over the local variable `callable`.
+over the local variable `callable` (this is not supported on all architectures).
 
 See [manual section on ccall and cfunction usage](@ref Calling-C-and-Fortran-Code).
 
@@ -61,12 +61,12 @@ julia> @cfunction(foo, Int, (Int, Int))
 Ptr{Cvoid} @0x000000001b82fcd0
 ```
 """
-macro cfunction(f, at, rt)
-    if !(isa(rt, Expr) && rt.head === :tuple)
+macro cfunction(f, rt, at)
+    if !(isa(at, Expr) && at.head === :tuple)
         throw(ArgumentError("@cfunction argument types must be a literal tuple"))
     end
-    rt.head = :call
-    pushfirst!(rt.args, GlobalRef(Core, :svec))
+    at.head = :call
+    pushfirst!(at.args, GlobalRef(Core, :svec))
     if isa(f, Expr) && f.head === :$
         fptr = f.args[1]
         typ = CFunction
@@ -74,7 +74,7 @@ macro cfunction(f, at, rt)
         fptr = QuoteNode(f)
         typ = Ptr{Cvoid}
     end
-    cfun = Expr(:cfunction, typ, fptr, at, rt, QuoteNode(:ccall))
+    cfun = Expr(:cfunction, typ, fptr, rt, at, QuoteNode(:ccall))
     return esc(cfun)
 end
 

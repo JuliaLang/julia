@@ -57,7 +57,7 @@ if Pkg !== nothing
 end
 
 function generate_precompile_statements()
-    start_time = time()
+    start_time = time_ns()
     debug_output = devnull # or stdout
 
     # Precompile a package
@@ -179,9 +179,9 @@ function generate_precompile_statements()
         end
 
         print(" $(length(statements)) generated in ")
-        tot_time = time() - start_time
-        Base.time_print(tot_time * 10^9)
-        print(" (overhead "); Base.time_print((tot_time - include_time) * 10^9); println(")")
+        tot_time = time_ns() - start_time
+        Base.time_print(tot_time)
+        print(" (overhead "); Base.time_print(tot_time - (include_time * 1e9)); println(")")
     end
 
     return

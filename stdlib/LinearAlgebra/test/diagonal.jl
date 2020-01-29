@@ -115,6 +115,14 @@ Random.seed!(1)
                 @test ldiv!(D, copy(U)) ≈ DM\U atol=atol_three
                 @test ldiv!(transpose(D), copy(U)) ≈ DM\U atol=atol_three
                 @test ldiv!(adjoint(conj(D)), copy(U)) ≈ DM\U atol=atol_three
+
+                @test ldiv!(zero(v), D, copy(v)) ≈ DM\v atol=atol_two
+                @test ldiv!(zero(v), transpose(D), copy(v)) ≈ DM\v atol=atol_two
+                @test ldiv!(zero(v), adjoint(conj(D)), copy(v)) ≈ DM\v atol=atol_two
+                @test ldiv!(zero(U), D, copy(U)) ≈ DM\U atol=atol_three
+                @test ldiv!(zero(U), transpose(D), copy(U)) ≈ DM\U atol=atol_three
+                @test ldiv!(zero(U), adjoint(conj(D)), copy(U)) ≈ DM\U atol=atol_three
+
                 Uc = copy(U')
                 target = rmul!(Uc, Diagonal(inv.(D.diag)))
                 @test rdiv!(Uc, D) ≈ target atol=atol_three
@@ -463,32 +471,32 @@ end
 
                 # Triangular * Diagonal
                 R = T * D
-                @test R == Array(T) * Array(D)
+                @test R ≈ Array(T) * Array(D)
                 @test isa(R, rtype)
 
                 # Diagonal * Triangular
                 R = D * T
-                @test R == Array(D) * Array(T)
+                @test R ≈ Array(D) * Array(T)
                 @test isa(R, rtype)
 
                 # Adjoint of Triangular * Diagonal
                 R = T' * D
-                @test R == Array(T)' * Array(D)
+                @test R ≈ Array(T)' * Array(D)
                 @test isa(R, adjtype)
 
                 # Diagonal * Adjoint of Triangular
                 R = D * T'
-                @test R == Array(D) * Array(T)'
+                @test R ≈ Array(D) * Array(T)'
                 @test isa(R, adjtype)
 
                 # Transpose of Triangular * Diagonal
                 R = transpose(T) * D
-                @test R == transpose(Array(T)) * Array(D)
+                @test R ≈ transpose(Array(T)) * Array(D)
                 @test isa(R, adjtype)
 
                 # Diagonal * Transpose of Triangular
                 R = D * transpose(T)
-                @test R == Array(D) * transpose(Array(T))
+                @test R ≈ Array(D) * transpose(Array(T))
                 @test isa(R, adjtype)
             end
         end

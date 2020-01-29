@@ -186,7 +186,7 @@ end
 if opt_level > 0
     @test !occursin("%gcframe", get_llvm(pointer_not_safepoint, Tuple{}))
     compare_large_struct_ir = get_llvm(compare_large_struct, Tuple{typeof(create_ref_struct())})
-    @test occursin("call i32 @memcmp", compare_large_struct_ir)
+    @test occursin("call i32 @memcmp(", compare_large_struct_ir) || occursin("call i32 @bcmp(", compare_large_struct_ir)
     @test !occursin("%gcframe", compare_large_struct_ir)
 
     @test occursin("jl_gc_pool_alloc", get_llvm(MutableStruct, Tuple{}))
@@ -392,6 +392,17 @@ end
 f_dict_hash_alloc(); g_dict_hash_alloc();
 @test (@allocated f_dict_hash_alloc()) == (@allocated g_dict_hash_alloc())
 
+# returning an argument shouldn't alloc a new box
+@noinline f33829(x) = (global called33829 = true; x)
+g33829() = @allocated Base.inferencebarrier(f33829)(1.1,)
+g33829() # warm up
+@test (@allocated g33829()) == 0
+@test called33829 # make sure there was a global side effect so it's hard for this call to simply be removed
+let src = get_llvm(f33829, Tuple{Float64}, true, true)
+    @test occursin(r"call [^(]*double @", src)
+    @test !occursin(r"call [^(]*\%jl_value_t", src)
+end
+
 let io = IOBuffer()
     # Test for the f(args...) = g(args...) generic codegen optimization
     code_llvm(io, Base.vect, Tuple{Vararg{Union{Float64, Int64}}})
@@ -407,3 +418,11 @@ function f1_30093(r)
 end
 
 @test f1_30093(Ref(0)) == nothing
+
+# issue 33590
+function f33590(b, x)
+    y = b ? nothing : (x[1] + 1,)
+    return something(ifelse(b, x, y))
+end
+@test f33590(true, (3,)) == (3,)
+@test f33590(false, (3,)) == (4,)

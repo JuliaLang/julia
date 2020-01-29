@@ -84,6 +84,10 @@ Greetings! 你好! 안녕하세요?
 ...
 ```
 
+Note that although you should have a `~/.julia` directory once you've run Julia for the
+first time, you may need to create the `~/.julia/config` folder and the
+`~/.julia/config/startup.jl` file if you use it.
+
 There are various ways to run Julia code and provide options, similar to those available for the
 `perl` and `ruby` programs:
 

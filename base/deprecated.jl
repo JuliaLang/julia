@@ -42,16 +42,16 @@ macro deprecate(old, new, ex=true)
                   depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
                   $(esc(new))(args...)
               end))
-    elseif isa(old, Expr) && (old.head == :call || old.head == :where)
+    elseif isa(old, Expr) && (old.head === :call || old.head === :where)
         remove_linenums!(new)
         oldcall = sprint(show_unquoted, old)
         newcall = sprint(show_unquoted, new)
         # if old.head is a :where, step down one level to the :call to avoid code duplication below
-        callexpr = old.head == :call ? old : old.args[1]
-        if callexpr.head == :call
+        callexpr = old.head === :call ? old : old.args[1]
+        if callexpr.head === :call
             if isa(callexpr.args[1], Symbol)
                 oldsym = callexpr.args[1]::Symbol
-            elseif isa(callexpr.args[1], Expr) && callexpr.args[1].head == :curly
+            elseif isa(callexpr.args[1], Expr) && callexpr.args[1].head === :curly
                 oldsym = callexpr.args[1].args[1]::Symbol
             else
                 error("invalid usage of @deprecate")
