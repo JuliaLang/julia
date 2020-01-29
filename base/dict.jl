@@ -103,29 +103,30 @@ First, you need to create an empty dictionary using:
 julia> Dict{Int64,Any}()  # type specified
 Dict{Int64,Any} with 0 entries
 
-julia> dict = Dict()  # type not specified
+julia> Dict()  # type not specified
 Dict{Any,Any} with 0 entries
 ```
 
 After creating an empty dictionary, you can fill it via a for loop:
 ```jldoctest dictexamples
-mydict = Dict{Any, Any}()
+julia> mydict = Dict()
 
-animals = ["cat", "fish", "elephant"]
-for (i, x) in enumerate(animals)
-   mydict[i] = [x, rand(UInt)]
+julia> animals = ["cats", "fishes", "elephants"]
+
+julia> for (i, x) in enumerate(animals)
+   mydict[x] = [i, rand(UInt8)]
 end
 ```
 
 To loop through key and value pairs use:
 ```julia
->julia for (key, value) in mydict
-    println("Animal group-$key are $(value[1]) and we have $(value[2]) number of them")
+julia> for (key, value) in mydict
+    println("$key are in group $(value[1]), and we have $(value[2]) number of them")
 end
 
-Animal group-2 are fish and we have 11185965267091429831 number of them
-Animal group-3 are elephant and we have 1312693749907478803 number of them
-Animal group-1 are cat and we have 17279817412797331777 number of them
+fishes are in group 2, and we have 136 number of them
+elephants are in group 3, and we have 135 numberof them
+cats are in group 1, and we have 52 number of them
 ```
 """
 mutable struct Dict{K,V} <: AbstractDict{K,V}
