@@ -2436,10 +2436,10 @@ end
     @test accumulate(+, [1 1; 1 1], dims = 1, init = 1) == [2 2; 3 3]
 
     @test_throws ArgumentError(
-        "acccumulate does not support the keyword arguments Symbol[:unsupported]"
+        "acccumulate does not support the keyword arguments [:unsupported]"
     ) accumulate(+, [1]; unsupported = 0)
     @test_throws ArgumentError(
-        "acccumulate! does not support the keyword arguments Symbol[:unsupported]"
+        "acccumulate! does not support the keyword arguments [:unsupported]"
     ) accumulate!(+, [1], [1]; unsupported = 0)
     @test_throws ArgumentError(
         "Keyword argument dims must be provided for multidimensional arrays"
