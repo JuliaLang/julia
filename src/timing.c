@@ -12,6 +12,10 @@ extern "C" {
 #ifdef ENABLE_TIMINGS
 #include "timing.h"
 
+#ifndef HAVE_TIMING_SUPPORT
+#error Timings are not supported on your compiler
+#endif
+
 jl_timing_block_t *jl_root_timing;
 uint64_t jl_timing_data[(int)JL_TIMING_LAST] = {0};
 const char *jl_timing_names[(int)JL_TIMING_LAST] =
@@ -29,7 +33,7 @@ void jl_print_timings(void)
     }
     for (int i = 0; i < JL_TIMING_LAST; i++) {
         if (jl_timing_data[i] != 0)
-            fprintf(stderr,"%-25s : %.2f %%   %" PRIu64 "\n", jl_timing_names[i],
+            fprintf(stderr,"%-25s : %5.2f %%   %" PRIu64 "\n", jl_timing_names[i],
                     100 * (((double)jl_timing_data[i]) / total_time), jl_timing_data[i]);
     }
 }
@@ -43,7 +47,11 @@ void jl_init_timing(void)
 
 void jl_destroy_timing(void)
 {
-    _jl_timing_block_destroy(jl_root_timing);
+    jl_timing_block_t *stack = jl_current_task ? jl_current_task->timing_stack : jl_root_timing;
+    while (stack) {
+        _jl_timing_block_destroy(stack);
+        stack = stack->prev;
+    }
     free(jl_root_timing);
 }
 
@@ -55,12 +63,12 @@ jl_timing_block_t *jl_pop_timing_block(jl_timing_block_t *cur_block)
 
 void jl_timing_block_start(jl_timing_block_t *cur_block)
 {
-    _jl_timing_block_start(cur_block, rdtscp());
+    _jl_timing_block_start(cur_block, cycleclock());
 }
 
 void jl_timing_block_stop(jl_timing_block_t *cur_block)
 {
-    _jl_timing_block_stop(cur_block, rdtscp());
+    _jl_timing_block_stop(cur_block, cycleclock());
 }
 
 #else
