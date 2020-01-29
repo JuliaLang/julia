@@ -274,7 +274,7 @@ scope rule applies and `x` is created as local to the `for` loop and therefore g
 undefined after the loop executes. Next, let's consider the body of `sum_to′` extracted into global
 scope, fixing its argument to `n = 10`
 
-```
+```julia
 s = 0
 for i = 1:10
     t = s + i
@@ -289,7 +289,7 @@ entered interactively, it behaves the same way it does in a function body. But i
 in a file, it  prints an ambiguity warning and throws an undefined variable error. Let's see it
 working in the REPL first:
 
-```
+```julia-repl
 julia> s = 0 # global
 0
 
@@ -317,7 +317,7 @@ The second fact is why execution of the loop changes the global value of `s` and
 why `t` is still undefined after the loop executes. Now, let's try evaluating this same code as
 though it were in a file instead:
 
-```
+```julia-repl
 julia> code = """
        s = 0 # global
        for i = 1:10
@@ -376,7 +376,7 @@ years were confused about this behavior and complained that it was complicated a
 explain and understand. Fair point. Second, and arguably worse, is that it's bad for programming "at
 scale." When you see a small piece of code in one place like this, it's quite clear what's going on:
 
-```
+```julia
 s = 0
 for i = 1:10
     s += i
@@ -387,7 +387,7 @@ Obviously the intention is to modify the existing global variable `s`. What else
 However, not all real world code is so short or so clear. We found that code like the following
 often occurs in the wild:
 
-```
+```julia
 x = 123
 
 # much later
@@ -420,7 +420,7 @@ scope entirely as well as removing the potential for spooky action. We uncovered
 And there was much rejoicing! Well, no, not really. Because some people were
 angry that they now had to write:
 
-```
+```julia
 s = 0
 for i = 1:10
     global s += i
