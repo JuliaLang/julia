@@ -424,6 +424,9 @@ function (:)(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float64}
     steprangelen_hp(T, start, step, 0, len, 1)
 end
 
+step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T<:AbstractFloat} = T(r.step)
+step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T} = T(r.step)
+
 function _range(a::T, st::T, ::Nothing, len::Integer) where T<:Union{Float16,Float32,Float64}
     start_n, start_d = rat(a)
     step_n, step_d = rat(st)
