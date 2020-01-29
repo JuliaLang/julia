@@ -477,21 +477,49 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
             CurrentV = EEI->getVectorOperand();
         }
         else if (auto LI = dyn_cast<LoadInst>(CurrentV)) {
-            if (auto PtrT = dyn_cast<PointerType>(LI->getType())) {
+            if (auto PtrT = dyn_cast<PointerType>(LI->getType()->getScalarType())) {
                 if (PtrT->getAddressSpace() == AddressSpace::Loaded) {
                     CurrentV = LI->getPointerOperand();
+                    fld_idx = -1;
                     if (!isSpecialPtr(CurrentV->getType())) {
-                        // Special case to bypass the check below.
                         // This could really be anything, but it's not loaded
                         // from a tracked pointer, so it doesn't matter what
-                        // it is.
-                        return std::make_pair(CurrentV, fld_idx);
+                        // it is--just pick something simple.
+                        CurrentV = ConstantPointerNull::get(Type::getInt8PtrTy(V->getContext()));
                     }
                     continue;
                 }
             }
             // In general a load terminates a walk
             break;
+        }
+        else if (auto II = dyn_cast<IntrinsicInst>(CurrentV)) {
+            // Some intrinsics behave like LoadInst followed by a SelectInst
+            // This should never happen in a derived addrspace (since those cannot be stored to memory)
+            // so we don't need to lift these operations, but we do need to check if it's loaded and continue walking the base pointer
+            if (II->getIntrinsicID() == Intrinsic::masked_load ||
+                II->getIntrinsicID() == Intrinsic::masked_gather) {
+                if (auto PtrT = dyn_cast<PointerType>(II->getType()->getVectorElementType())) {
+                    if (PtrT->getAddressSpace() == AddressSpace::Loaded) {
+                        assert(isa<UndefValue>(II->getOperand(3)) && "unimplemented");
+                        CurrentV = II->getOperand(0);
+                        if (II->getIntrinsicID() == Intrinsic::masked_load) {
+                            fld_idx = -1;
+                            if (!isSpecialPtr(CurrentV->getType())) {
+                                CurrentV = ConstantPointerNull::get(Type::getInt8PtrTy(V->getContext()));
+                            }
+                        } else {
+                            if (!isSpecialPtr(CurrentV->getType()->getVectorElementType())) {
+                                CurrentV = ConstantPointerNull::get(Type::getInt8PtrTy(V->getContext()));
+                                fld_idx = -1;
+                            }
+                        }
+                        continue;
+                    }
+                }
+                // In general a load terminates a walk
+                break;
+            }
         }
         else {
             break;
@@ -1299,6 +1327,23 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         II->getIntrinsicID() == Intrinsic::lifetime_end) {
                         continue;
                     }
+                    if (II->getIntrinsicID() == Intrinsic::masked_load ||
+                        II->getIntrinsicID() == Intrinsic::masked_gather) {
+                        if (auto PtrT = dyn_cast<PointerType>(II->getType()->getVectorElementType())) {
+                            if (isSpecialPtr(PtrT)) {
+                                // LLVM sometimes tries to materialize these operations with undefined pointers in our non-integral address space.
+                                // Hopefully LLVM didn't already propagate that information and poison our users. Set those to NULL now.
+                                Value *passthru = II->getArgOperand(3);
+                                if (isa<UndefValue>(passthru)) {
+                                    II->setArgOperand(3, Constant::getNullValue(passthru->getType()));
+                                }
+                                if (PtrT->getAddressSpace() == AddressSpace::Loaded) {
+                                    // These are not real defs
+                                    continue;
+                                }
+                            }
+                        }
+                    }
                 }
                 auto callee = CI->getCalledFunction();
                 if (callee && callee == typeof_func) {
@@ -1379,10 +1424,11 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 // of this object to uses of the object we're loading
                 // from.
                 SmallVector<int, 1> RefinedPtr{};
+                Type *Ty = LI->getType()->getScalarType();
                 if (isLoadFromImmut(LI) && isSpecialPtr(LI->getPointerOperand()->getType())) {
                     RefinedPtr.push_back(Number(S, LI->getPointerOperand()));
                 } else if (LI->getType()->isPointerTy() &&
-                        isSpecialPtr(LI->getType()) &&
+                        isSpecialPtr(Ty) &&
                         LooksLikeFrameRef(LI->getPointerOperand())) {
                     // Loads from a jlcall argument array
                     RefinedPtr.push_back(-1);
@@ -1392,8 +1438,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     // we know that the object is a constant as well and doesn't need rooting.
                     RefinedPtr.push_back(-2);
                 }
-                if (!LI->getType()->isPointerTy() ||
-                        LI->getType()->getPointerAddressSpace() != AddressSpace::Loaded) {
+                if (!Ty->isPointerTy() || Ty->getPointerAddressSpace() != AddressSpace::Loaded) {
                     MaybeNoteDef(S, BBS, LI, BBS.Safepoints, std::move(RefinedPtr));
                 }
                 NoteOperandUses(S, BBS, I);
