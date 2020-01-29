@@ -84,9 +84,11 @@ julia> d["B"] = 3
 3
 ```
 
+# Extended help
+
 You can use [Generator](https://docs.julialang.org/en/v1/manual/arrays/#Generator-Expressions-1) and [Comprehension][https://docs.julialang.org/en/v1/manual/arrays/#Comprehensions-1] syntax to create dictionaries:
 
-```jldoctest dictexamples
+```jldoctest
 julia> Dict(x => x^2 for x = 0:1:4)
 Dict{Int64,Int64} with 5 entries:
   0 => 0
@@ -96,10 +98,10 @@ Dict{Int64,Int64} with 5 entries:
   1 => 1
 ```
 
-You can also create and fill dictionaries dynamically (will be slower than the other ways).
+It is usally possible to collect the keys and values using arrays in a for loop and then create a `Dict`. However, you may want to create and fill dictionaries dynamically (slower than the other methods).
 
-First, you need to create an empty dictionary using:
-```jldoctest dictexamples
+First, create an empty dictionary using:
+```jldoctest
 julia> Dict{Int64,Any}()  # type specified
 Dict{Int64,Any} with 0 entries
 
@@ -107,20 +109,20 @@ julia> Dict()  # type not specified
 Dict{Any,Any} with 0 entries
 ```
 
-After creating an empty dictionary, you can fill it via a for loop:
+After creating an empty dictionary, fill it via a for loop:
 ```jldoctest dictexamples
-julia> mydict = Dict()
+julia> animaldict = Dict()
 
 julia> animals = ["cats", "fishes", "elephants"]
 
 julia> for (i, x) in enumerate(animals)
-   mydict[x] = [i, rand(UInt8)]
+   animaldict[x] = [i, rand(UInt8)]
 end
 ```
 
 To loop through key and value pairs use:
-```julia
-julia> for (key, value) in mydict
+```jldoctest dictexamples
+julia> for (key, value) in animaldict
     println("$key are in group $(value[1]), and we have $(value[2]) number of them")
 end
 
@@ -534,8 +536,8 @@ end
 """
     get(collection, key, default)
 
-Return the value stored for the given key, or the given default value if no mapping for the
-key is present.
+Return the value stored for the given key,
+or the given default value if no mapping for the key is present.
 
 # Examples
 ```jldoctest
@@ -548,10 +550,10 @@ julia> get(d, "c", 3)
 3
 ```
 
-Using `get()` is the same as using `d[x]` syntax when the key exists in the collection:
-```
-julia> d["a"]
-1
+Using `get()` is the same as using `d[x]` syntax when the key exists in the collection. However, when the key doesn't exist, `get` returns the default value while `d[x]` throws an error.
+```julia
+julia> d["c"]
+ERROR: KeyError: key "c" not found
 ```
 """
 get(collection, key, default)
