@@ -240,7 +240,7 @@ computers. In applications where overflow is possible, explicit checking for wra
 by overflow is essential; otherwise, the [`BigInt`](@ref) type in [Arbitrary Precision Arithmetic](@ref)
 is recommended instead.
 
-An example of overflow behavior and how to potentially resolve it is as follows:  
+An example of overflow behavior and how to potentially resolve it is as follows:
 
 ```jldoctest
 julia> 10^19
