@@ -474,13 +474,13 @@ end
 IteratorSize(::Type{<:Channel}) = SizeUnknown()
 
 """
-    threaded_foreach(f, channel::Channel; ntasks=Threads.nthreads(), async=true)
+    Threads.foreach(f, channel::Channel; ntasks=Threads.nthreads())
 
 Similar to `foreach(f, channel)`, but iteration over `channel` and calls to
 `f` are split across `ntasks` Tasks spawned by `Threads.@spawn`. This function
 will wait for all internally spawned tasks to complete before returning.
 """
-function threaded_foreach(f, channel::Channel; ntasks=Threads.nthreads())
+function Threads.foreach(f, channel::Channel; ntasks=Threads.nthreads())
     @sync for _ in 1:ntasks
         Threads.@spawn begin
             for item in channel
