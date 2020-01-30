@@ -815,6 +815,8 @@ let
     finally
         rm(load_path, recursive=true)
         rm(load_cache_path, recursive=true)
+        filter!((≠)(load_path), LOAD_PATH)
+        filter!((≠)(load_cache_path), DEPOT_PATH)
     end
 end
 
