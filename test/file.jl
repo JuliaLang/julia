@@ -1477,3 +1477,19 @@ end
         end
     end
 end
+
+@testset "mkfifo" begin
+    mktempdir() do dir
+        path = Libc.mkfifo(joinpath(dir, "fifo"))
+        @sync begin
+            cat_exec = `$(Base.julia_cmd()) --startup-file=no -e "write(stdout, read(ARGS[1]))"`
+            reader = @async read(`$cat_exec $path`, String)
+            @async write(path, "hello")
+            @test fetch(reader) == "hello"
+        end
+
+        existing_file = joinpath(dir, "existing")
+        write(existing_file, "")
+        @test_throws SystemError Libc.mkfifo(existing_file)
+    end
+end
