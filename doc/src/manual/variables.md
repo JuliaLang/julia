@@ -126,7 +126,7 @@ Greek letters, because the former are easily accessible via some input methods.
 
 ## Stylistic Conventions
 
-While Julia imposes few restrictions on valid names, it has become useful to adopt the following
+Since Julia imposes few restrictions on valid names, it has become useful to adopt the following
 conventions:
 
   * Names of variables are in lower case.
