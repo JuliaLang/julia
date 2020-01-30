@@ -326,7 +326,7 @@ Nothing() = nothing
 # This should always be inlined
 getptls() = ccall(:jl_get_ptls_states, Ptr{Cvoid}, ())
 
-include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any), m, fname)
+include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any, Ptr{Cvoid}), m, fname, Ptr{Cvoid}(0))
 
 eval(m::Module, @nospecialize(e)) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
 
