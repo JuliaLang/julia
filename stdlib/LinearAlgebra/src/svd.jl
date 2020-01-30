@@ -23,7 +23,25 @@ julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
  0.0  2.0  0.0  0.0  0.0
 
 julia> F = svd(A)
-SVD{Float64,Float64,Array{Float64,2}}([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0], [3.0, 2.23606797749979, 2.0, 0.0], [-0.0 0.0 … -0.0 0.0; 0.44721359549995787 0.0 … 0.0 0.8944271909999157; -0.0 1.0 … -0.0 0.0; 0.0 0.0 … 1.0 0.0])
+SVD{Float64,Float64,Array{Float64,2}}
+U factor:
+4×4 Array{Float64,2}:
+ 0.0  1.0  0.0   0.0
+ 1.0  0.0  0.0   0.0
+ 0.0  0.0  0.0  -1.0
+ 0.0  0.0  1.0   0.0
+singular values:
+4-element Array{Float64,1}:
+ 3.0
+ 2.23606797749979
+ 2.0
+ 0.0
+Vt factor:
+4×5 Array{Float64,2}:
+ -0.0       0.0  1.0  -0.0  0.0
+  0.447214  0.0  0.0   0.0  0.894427
+ -0.0       1.0  0.0  -0.0  0.0
+  0.0       0.0  0.0   1.0  0.0
 
 julia> F.U * Diagonal(F.S) * F.Vt
 4×5 Array{Float64,2}:
@@ -54,56 +72,46 @@ function SVD{T}(U::AbstractArray, S::AbstractVector{Tr}, Vt::AbstractArray) wher
         convert(AbstractArray{T}, Vt))
 end
 
+
 # iteration for destructuring into components
 Base.iterate(S::SVD) = (S.U, Val(:S))
 Base.iterate(S::SVD, ::Val{:S}) = (S.S, Val(:V))
 Base.iterate(S::SVD, ::Val{:V}) = (S.V, Val(:done))
 Base.iterate(S::SVD, ::Val{:done}) = nothing
 
+
+default_svd_alg(A) = DivideAndConquer()
+
+
 """
-    svd!(A; full::Bool = false) -> SVD
+    svd!(A; full::Bool = false, alg::Algorithm = default_svd_alg(A)) -> SVD
 
 `svd!` is the same as [`svd`](@ref), but saves space by
-overwriting the input `A`, instead of creating a copy.
-
-# Examples
-```jldoctest
-julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
-4×5 Array{Float64,2}:
- 1.0  0.0  0.0  0.0  2.0
- 0.0  0.0  3.0  0.0  0.0
- 0.0  0.0  0.0  0.0  0.0
- 0.0  2.0  0.0  0.0  0.0
-
-julia> F = svd!(A);
-
-julia> F.U * Diagonal(F.S) * F.Vt
-4×5 Array{Float64,2}:
- 1.0  0.0  0.0  0.0  2.0
- 0.0  0.0  3.0  0.0  0.0
- 0.0  0.0  0.0  0.0  0.0
- 0.0  2.0  0.0  0.0  0.0
-
-julia> A
-4×5 Array{Float64,2}:
- -2.23607   0.0   0.0  0.0  0.618034
-  0.0      -3.0   1.0  0.0  0.0
-  0.0       0.0   0.0  0.0  0.0
-  0.0       0.0  -2.0  0.0  0.0
+overwriting the input `A`, instead of creating a copy. See documentation of [`svd`](@ref) for details.
 ```
 """
-function svd!(A::StridedMatrix{T}; full::Bool = false) where T<:BlasFloat
+function svd!(A::StridedMatrix{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where T<:BlasFloat
     m,n = size(A)
     if m == 0 || n == 0
         u,s,vt = (Matrix{T}(I, m, full ? m : n), real(zeros(T,0)), Matrix{T}(I, n, n))
     else
-        u,s,vt = LAPACK.gesdd!(full ? 'A' : 'S', A)
+        u,s,vt = _svd!(A,full,alg)
     end
     SVD(u,s,vt)
 end
 
+
+_svd!(A::StridedMatrix{T}, full::Bool, alg::Algorithm) where T<:BlasFloat = throw(ArgumentError("Unsupported value for `alg` keyword."))
+_svd!(A::StridedMatrix{T}, full::Bool, alg::DivideAndConquer) where T<:BlasFloat = LAPACK.gesdd!(full ? 'A' : 'S', A)
+function _svd!(A::StridedMatrix{T}, full::Bool, alg::QRIteration) where T<:BlasFloat
+    c = full ? 'A' : 'S'
+    u,s,vt = LAPACK.gesvd!(c, c, A)
+end
+
+
+
 """
-    svd(A; full::Bool = false) -> SVD
+    svd(A; full::Bool = false, alg::Algorithm = default_svd_alg(A)) -> SVD
 
 Compute the singular value decomposition (SVD) of `A` and return an `SVD` object.
 
@@ -120,50 +128,52 @@ and `V` is `N \\times N`, while in the thin factorization `U` is `M
 \\times K` and `V` is `N \\times K`, where `K = \\min(M,N)` is the
 number of singular values.
 
+If `alg = DivideAndConquer()` a divide-and-conquer algorithm is used to calculate the SVD.
+Another (typically slower but more accurate) option is `alg = QRIteration()`.
+
+!!! compat "Julia 1.3"
+    The `alg` keyword argument requires Julia 1.3 or later.
+
 # Examples
 ```jldoctest
-julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
-4×5 Array{Float64,2}:
- 1.0  0.0  0.0  0.0  2.0
- 0.0  0.0  3.0  0.0  0.0
- 0.0  0.0  0.0  0.0  0.0
- 0.0  2.0  0.0  0.0  0.0
+julia> A = rand(4,3);
 
-julia> F = svd(A);
+julia> F = svd(A); # Store the Factorization Object
 
-julia> F.U * Diagonal(F.S) * F.Vt
-4×5 Array{Float64,2}:
- 1.0  0.0  0.0  0.0  2.0
- 0.0  0.0  3.0  0.0  0.0
- 0.0  0.0  0.0  0.0  0.0
- 0.0  2.0  0.0  0.0  0.0
+julia> A ≈ F.U * Diagonal(F.S) * F.Vt
+true
 
-julia> u, s, v = F; # destructuring via iteration
+julia> U, S, V = F; # destructuring via iteration
 
-julia> u == F.U && s == F.S && v == F.V
+julia> A ≈ U * Diagonal(S) * V'
+true
+
+julia> Uonly, = svd(A); # Store U only
+
+julia> Uonly == U
 true
 ```
 """
-function svd(A::StridedVecOrMat{T}; full::Bool = false) where T
-    svd!(copy_oftype(A, eigtype(T)), full = full)
+function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where T
+    svd!(copy_oftype(A, eigtype(T)), full = full, alg = alg)
 end
-function svd(x::Number; full::Bool = false)
+function svd(x::Number; full::Bool = false, alg::Algorithm = default_svd_alg(x))
     SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
 end
-function svd(x::Integer; full::Bool = false)
-    svd(float(x), full = full)
+function svd(x::Integer; full::Bool = false, alg::Algorithm = default_svd_alg(x))
+    svd(float(x), full = full, alg = alg)
 end
-function svd(A::Adjoint; full::Bool = false)
-    s = svd(A.parent, full = full)
+function svd(A::Adjoint; full::Bool = false, alg::Algorithm = default_svd_alg(A))
+    s = svd(A.parent, full = full, alg = alg)
     return SVD(s.Vt', s.S, s.U')
 end
-function svd(A::Transpose; full::Bool = false)
-    s = svd(A.parent, full = full)
+function svd(A::Transpose; full::Bool = false, alg::Algorithm = default_svd_alg(A))
+    s = svd(A.parent, full = full, alg = alg)
     return SVD(transpose(s.Vt), s.S, transpose(s.U))
 end
 
 function getproperty(F::SVD, d::Symbol)
-    if d == :V
+    if d === :V
         return getfield(F, :Vt)'
     else
         return getfield(F, d)
@@ -178,29 +188,6 @@ Base.propertynames(F::SVD, private::Bool=false) =
 
 Return the singular values of `A`, saving space by overwriting the input.
 See also [`svdvals`](@ref) and [`svd`](@ref).
-
-# Examples
-```jldoctest
-julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
-4×5 Array{Float64,2}:
- 1.0  0.0  0.0  0.0  2.0
- 0.0  0.0  3.0  0.0  0.0
- 0.0  0.0  0.0  0.0  0.0
- 0.0  2.0  0.0  0.0  0.0
-
-julia> svdvals!(A)
-4-element Array{Float64,1}:
- 3.0
- 2.23606797749979
- 2.0
- 0.0
-
-julia> A
-4×5 Array{Float64,2}:
- -2.23607   0.0   0.0  0.0  0.618034
-  0.0      -3.0   1.0  0.0  0.0
-  0.0       0.0   0.0  0.0  0.0
-  0.0       0.0  -2.0  0.0  0.0
 ```
 """
 svdvals!(A::StridedMatrix{T}) where {T<:BlasFloat} = isempty(A) ? zeros(real(T), 0) : LAPACK.gesdd!('N', A)[2]
@@ -238,8 +225,26 @@ function ldiv!(A::SVD{T}, B::StridedVecOrMat) where T
     view(A.Vt,1:k,:)' * (view(A.S,1:k) .\ (view(A.U,:,1:k)' * B))
 end
 
+function inv(F::SVD{T}) where T
+    @inbounds for i in eachindex(F.S)
+        iszero(F.S[i]) && throw(SingularException(i))
+    end
+    k = searchsortedlast(F.S, eps(T)*F.S[1], rev=true)
+    @views (F.S[1:k] .\ F.Vt[1:k, :])' * F.U[:,1:k]'
+end
+
 size(A::SVD, dim::Integer) = dim == 1 ? size(A.U, dim) : size(A.Vt, dim)
 size(A::SVD) = (size(A, 1), size(A, 2))
+
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::SVD{<:Any,<:Any,<:AbstractArray})
+    summary(io, F); println(io)
+    println(io, "U factor:")
+    show(io, mime, F.U)
+    println(io, "\nsingular values:")
+    show(io, mime, F.S)
+    println(io, "\nVt factor:")
+    show(io, mime, F.Vt)
+end
 
 # Generalized svd
 """
@@ -282,7 +287,32 @@ julia> B = [0. 1.; 1. 0.]
  0.0  1.0
  1.0  0.0
 
-julia> F = svd(A, B);
+julia> F = svd(A, B)
+GeneralizedSVD{Float64,Array{Float64,2}}
+U factor:
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 0.0  1.0
+V factor:
+2×2 Array{Float64,2}:
+ -0.0  -1.0
+  1.0   0.0
+Q factor:
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 0.0  1.0
+D1 factor:
+2×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:
+  [1, 1]  =  0.707107
+  [2, 2]  =  0.707107
+D2 factor:
+2×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:
+  [1, 1]  =  0.707107
+  [2, 2]  =  0.707107
+R0 factor:
+2×2 Array{Float64,2}:
+ 1.41421   0.0
+ 0.0      -1.41421
 
 julia> F.U*F.D1*F.R0*F.Q'
 2×2 Array{Float64,2}:
@@ -327,41 +357,7 @@ Base.iterate(S::GeneralizedSVD, ::Val{:done}) = nothing
     svd!(A, B) -> GeneralizedSVD
 
 `svd!` is the same as [`svd`](@ref), but modifies the arguments
-`A` and `B` in-place, instead of making copies.
-
-# Examples
-```jldoctest
-julia> A = [1. 0.; 0. -1.]
-2×2 Array{Float64,2}:
- 1.0   0.0
- 0.0  -1.0
-
-julia> B = [0. 1.; 1. 0.]
-2×2 Array{Float64,2}:
- 0.0  1.0
- 1.0  0.0
-
-julia> F = svd!(A, B);
-
-julia> F.U*F.D1*F.R0*F.Q'
-2×2 Array{Float64,2}:
- 1.0   0.0
- 0.0  -1.0
-
-julia> F.V*F.D2*F.R0*F.Q'
-2×2 Array{Float64,2}:
- 0.0  1.0
- 1.0  0.0
-
-julia> A
-2×2 Array{Float64,2}:
- 1.41421   0.0
- 0.0      -1.41421
-
-julia> B
-2×2 Array{Float64,2}:
- 1.0  -0.0
- 0.0  -1.0
+`A` and `B` in-place, instead of making copies. See documentation of [`svd`](@ref) for details.
 ```
 """
 function svd!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
@@ -376,12 +372,11 @@ end
 svd(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} = svd!(copy(A),copy(B))
 
 """
+
     svd(A, B) -> GeneralizedSVD
 
 Compute the generalized SVD of `A` and `B`, returning a `GeneralizedSVD` factorization
-object `F`, such that `A = F.U*F.D1*F.R0*F.Q'` and `B = F.V*F.D2*F.R0*F.Q'`.
-
-For an M-by-N matrix `A` and P-by-N matrix `B`,
+object `F` such that `[A;B] = [F.U * F.D1; F.V * F.D2] * F.R0 * F.Q'`
 
 - `U` is a M-by-M orthogonal matrix,
 - `V` is a P-by-P orthogonal matrix,
@@ -395,35 +390,36 @@ For an M-by-N matrix `A` and P-by-N matrix `B`,
 
 Iterating the decomposition produces the components `U`, `V`, `Q`, `D1`, `D2`, and `R0`.
 
-The entries of `F.D1` and `F.D2` are related, as explained in the LAPACK
-documentation for the
-[generalized SVD](http://www.netlib.org/lapack/lug/node36.html) and the
-[xGGSVD3](http://www.netlib.org/lapack/explore-html/d6/db3/dggsvd3_8f.html)
-routine which is called underneath (in LAPACK 3.6.0 and newer).
+The generalized SVD is used in applications such as when one wants to compare how much belongs
+to `A` vs. how much belongs to `B`, as in human vs yeast genome, or signal vs noise, or between
+clusters vs within clusters. (See Edelman and Wang for discussion: https://arxiv.org/abs/1901.00485)
+
+It decomposes `[A; B]` into `[UC; VS]H`, where `[UC; VS]` is a natural orthogonal basis for the
+column space of `[A; B]`, and `H = RQ'` is a natural non-orthogonal basis for the rowspace of `[A;B]`,
+where the top rows are most closely attributed to the `A` matrix, and the bottom to the `B` matrix.
+The multi-cosine/sine matrices `C` and `S` provide a multi-measure of how much `A` vs how much `B`,
+and `U` and `V` provide directions in which these are measured.
 
 # Examples
 ```jldoctest
-julia> A = [1. 0.; 0. -1.]
-2×2 Array{Float64,2}:
- 1.0   0.0
- 0.0  -1.0
-
-julia> B = [0. 1.; 1. 0.]
-2×2 Array{Float64,2}:
- 0.0  1.0
- 1.0  0.0
+julia> A = randn(3,2); B=randn(4,2);
 
 julia> F = svd(A, B);
 
-julia> F.U*F.D1*F.R0*F.Q'
-2×2 Array{Float64,2}:
- 1.0   0.0
- 0.0  -1.0
+julia> U,V,Q,C,S,R = F;
 
-julia> F.V*F.D2*F.R0*F.Q'
-2×2 Array{Float64,2}:
- 0.0  1.0
- 1.0  0.0
+julia> H = R*Q';
+
+julia> [A; B] ≈ [U*C; V*S]*H
+true
+
+julia> [A; B] ≈ [F.U*F.D1; F.V*F.D2]*F.R0*F.Q'
+true
+
+julia> Uonly, = svd(A,B);
+
+julia> U == Uonly
+true
 ```
 """
 function svd(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
@@ -444,13 +440,13 @@ svd(x::Number, y::Number) = svd(fill(x, 1, 1), fill(y, 1, 1))
     FV = getfield(F, :V)
     FQ = getfield(F, :Q)
     FR = getfield(F, :R)
-    if d == :alpha
+    if d === :alpha
         return Fa
-    elseif d == :beta
+    elseif d === :beta
         return Fb
-    elseif d == :vals || d == :S
+    elseif d === :vals || d === :S
         return Fa[1:Fk + Fl] ./ Fb[1:Fk + Fl]
-    elseif d == :D1
+    elseif d === :D1
         m = size(FU, 1)
         if m - Fk - Fl >= 0
             return [Matrix{T}(I, Fk, Fk)  zeros(T, Fk, Fl)            ;
@@ -459,7 +455,7 @@ svd(x::Number, y::Number) = svd(fill(x, 1, 1), fill(y, 1, 1))
         else
             return [Matrix{T}(I, m, Fk) [zeros(T, Fk, m - Fk); Diagonal(Fa[Fk + 1:m])] zeros(T, m, Fk + Fl - m)]
         end
-    elseif d == :D2
+    elseif d === :D2
         m = size(FU, 1)
         p = size(FV, 1)
         if m - Fk - Fl >= 0
@@ -467,7 +463,7 @@ svd(x::Number, y::Number) = svd(fill(x, 1, 1), fill(y, 1, 1))
         else
             return [zeros(T, p, Fk) [Diagonal(Fb[Fk + 1:m]); zeros(T, Fk + p - m, m - Fk)] [zeros(T, m - Fk, Fk + Fl - m); Matrix{T}(I, Fk + p - m, Fk + Fl - m)]]
         end
-    elseif d == :R0
+    elseif d === :R0
         n = size(FQ, 1)
         return [zeros(T, Fk + Fl, n - Fk - Fl) FR]
     else
@@ -478,39 +474,28 @@ end
 Base.propertynames(F::GeneralizedSVD) =
     (:alpha, :beta, :vals, :S, :D1, :D2, :R0, fieldnames(typeof(F))...)
 
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::GeneralizedSVD{<:Any,<:AbstractArray})
+    summary(io, F); println(io)
+    println(io, "U factor:")
+    show(io, mime, F.U)
+    println(io, "\nV factor:")
+    show(io, mime, F.V)
+    println(io, "\nQ factor:")
+    show(io, mime, F.Q)
+    println(io, "\nD1 factor:")
+    show(io, mime, F.D1)
+    println(io, "\nD2 factor:")
+    show(io, mime, F.D2)
+    println(io, "\nR0 factor:")
+    show(io, mime, F.R0)
+end
+
 """
     svdvals!(A, B)
 
 Return the generalized singular values from the generalized singular value
 decomposition of `A` and `B`, saving space by overwriting `A` and `B`.
 See also [`svd`](@ref) and [`svdvals`](@ref).
-
-# Examples
-```jldoctest
-julia> A = [1. 0.; 0. -1.]
-2×2 Array{Float64,2}:
- 1.0   0.0
- 0.0  -1.0
-
-julia> B = [0. 1.; 1. 0.]
-2×2 Array{Float64,2}:
- 0.0  1.0
- 1.0  0.0
-
-julia> svdvals!(A, B)
-2-element Array{Float64,1}:
- 1.0
- 1.0
-
-julia> A
-2×2 Array{Float64,2}:
- 1.41421   0.0
- 0.0      -1.41421
-
-julia> B
-2×2 Array{Float64,2}:
- 1.0  -0.0
- 0.0  -1.0
 ```
 """
 function svdvals!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat

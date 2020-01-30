@@ -1,0 +1,39 @@
+From 83d5085a7fcbb4596d964dbe037c5ebf4de02b69 Mon Sep 17 00:00:00 2001
+From: Keno Fischer <keno@alumni.harvard.edu>
+Date: Sun, 23 Jun 2019 00:29:59 +0000
+Subject: [PATCH] [Support] Fix build under Emscripten
+
+Summary:
+Emscripten's libc doesn't define MNT_LOCAL, thus causing a build
+failure in the fallback path. However, to the best of my knowledge,
+it also doesn't support remote file system mounts, so we may simply
+return `true` here (as we do for e.g. Fuchsia). With this fix, the
+core LLVM libraries build correctly under emscripten (though some
+of the tools and utils do not).
+
+Reviewers: kripken
+Differential Revision: https://reviews.llvm.org/D63688
+
+llvm-svn: 364143
+(cherry picked from commit 5f4ae7c45718618c4c571495e7d910d5722f70ad)
+---
+ llvm/lib/Support/Unix/Path.inc | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/lib/Support/Unix/Path.inc b/lib/Support/Unix/Path.inc
+index d7cc0d627d0..eb38a71fffb 100644
+--- a/lib/Support/Unix/Path.inc
++++ b/lib/Support/Unix/Path.inc
+@@ -398,6 +398,9 @@ static bool is_local_impl(struct STATVFS &Vfs) {
+ #elif defined(__Fuchsia__)
+   // Fuchsia doesn't yet support remote filesystem mounts.
+   return true;
++#elif defined(__EMSCRIPTEN__)
++  // Emscripten doesn't currently support remote filesystem mounts.
++  return true;
+ #elif defined(__HAIKU__)
+   // Haiku doesn't expose this information.
+   return false;
+-- 
+2.24.0
+

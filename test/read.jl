@@ -127,11 +127,11 @@ end
 open_streams = []
 function cleanup()
     for s_ in open_streams
-        try close(s_); catch; end
+        close(s_)
     end
     empty!(open_streams)
     for tsk in tasks
-        Base.wait(tsk)
+        wait(tsk)
     end
     empty!(tasks)
 end
@@ -574,3 +574,25 @@ end
 
 # issue #26419
 @test Base.return_types(read, (String, Type{String})) == Any[String]
+
+@testset "read! to view" begin
+    x = rand(4, 4)
+    y = rand(10)
+    z = 1:10
+    v = [1.0, 2.0, 3.0, 4.0]
+    io = IOBuffer()
+    write(io, v)
+    flush(io)
+    seekstart(io)
+    read!(io, @view x[:, 3])
+    @test x[:, 3] == v
+    x = rand(3, 3)
+    seekstart(io)
+    read!(io, @view x[1:2, 2:3])
+    @test x[1:2, 2:3][:] == v[:]
+    seekstart(io)
+    read!(io, @view y[4:7])
+    @test y[4:7] == v
+    seekstart(io)
+    @test_throws ErrorException read!(io, @view z[4:6])
+end

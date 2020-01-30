@@ -210,8 +210,9 @@ Base.keys
 Base.values
 Base.pairs
 Base.merge
-Base.merge!(::AbstractDict, ::AbstractDict...)
-Base.merge!(::Function, ::AbstractDict, ::AbstractDict...)
+Base.mergewith
+Base.merge!
+Base.mergewith!
 Base.sizehint!
 Base.keytype
 Base.valtype
@@ -251,6 +252,7 @@ Base.issubset
 Base.:⊈
 Base.:⊊
 Base.issetequal
+Base.isdisjoint
 ```
 
 Fully implemented by:

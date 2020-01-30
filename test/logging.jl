@@ -5,7 +5,7 @@ import Base.CoreLogging: BelowMinLevel, Debug, Info, Warn, Error,
     handle_message, shouldlog, min_enabled_level, catch_exceptions
 
 import Test: collect_test_logs, TestLogger
-using Base.Printf: @sprintf
+using Printf: @sprintf
 
 isdefined(Main, :MacroCalls) || @eval Main include("testhelpers/MacroCalls.jl")
 using Main.MacroCalls
@@ -178,20 +178,52 @@ end
         logger = TestLogger()
         with_logger(logger) do
             for (e, r) in (("", false),
-                           (",,,,", false),
-                           ("al", false),
-                           ("all", true),
-                           ("a,b,all,c", true),
-                           ("a,b,,c", false),
-                           ("Mainb", false),
-                           ("aMain", false),
-                           ("Main", true),
-                           ("a,b,Main,c", true),
-                           ("Base", true),
-                           ("a,b,Base,c", true),
-                           ("Filesystem", true),
-                           ("a,b,Filesystem,c", true),
-                           ("a,b,Base.Filesystem,c", false))
+                            (",,,,", false),
+                            ("al", false),
+                            ("all", true),
+                            ("a,b,all,c", true),
+                            ("a,b,,c", false),
+                            ("Mainb", false),
+                            ("aMain", false),
+                            ("Main", true),
+                            ("a,b,Main,c", true),
+                            ("Base", true),
+                            ("a,b,Base,c", true),
+                            ("Filesystem", true),
+                            ("a,b,Filesystem,c", true),
+                            ("a,b,Base.Filesystem,c", false),
+                            ("!al", true),
+                            ("all,!al", true),
+                            ("all,!al,!all", false),
+                            ("!all,Main", true),
+                            ("!all,!Main", false),
+                            ("!all,a,b,!Main,c", false),
+                            ("!all,Filesystem", true),
+                            ("!all,Base.Filesystem", false),
+                            ("a,b,all,!all,c", false),
+                            ("!Main", false),
+                            ("a,b,!Main,c", false),
+                            ("!Base", false),
+                            ("all,!Base", false),
+                            ("!all,Base", true),
+                            ("!all,!Base", false),
+                            ("a,b,!Base,c", false),
+                            ("all,a,b,!Base,c", false),
+                            ("!all,a,b,Base,c", true),
+                            ("!all,a,b,!Base,c", false),
+                            ("!Filesystem", false),
+                            ("all,!Filesystem", false),
+                            ("!all,Filesystem", true),
+                            ("!all,!Filesystem", false),
+                            ("a,b,!Filesystem,c", false),
+                            ("all,a,b,!Filesystem,c", false),
+                            ("!all,a,b,Filesystem,c", true),
+                            ("!all,a,b,!Filesystem,c", false),
+                            ("a,b,!Base.Filesystem,c", true),
+                            ("all,a,b,!Base.Filesystem,c", true),
+                            ("!all,a,b,Base.Filesystem,c", false),
+                            ("!all,a,b,!Base.Filesystem,c", false),
+                           )
                 ENV["JULIA_DEBUG"] = e
                 @test CoreLogging.env_override_minlevel(:Main, Base.Filesystem) === r
                 @test CoreLogging.current_logger_for_env(BelowMinLevel, :Main, Base.Filesystem) === (r ? logger : nothing)
@@ -350,6 +382,14 @@ end
     @test logs[1].id == logs[3].id
     @test logs[2].id == logs[4].id
     @test logs[1].id != logs[2].id
+end
+
+# Issue #34485
+@testset "`_group` must be a `Symbol`" begin
+    (record,), _ = collect_test_logs() do
+        @info "test"
+    end
+    @test record.group == :logging  # name of this file
 end
 
 end

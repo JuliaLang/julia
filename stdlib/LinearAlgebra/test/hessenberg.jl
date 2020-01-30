@@ -88,6 +88,11 @@ let n = 10
             @test det(H + shift*I) ≈ det(A + shift*I)
             @test logabsdet(H + shift*I) ≅ logabsdet(A + shift*I)
         end
+
+        HM = Matrix(h)
+        @test dot(b, h, b) ≈ dot(h'b, b) ≈ dot(b, HM, b) ≈ dot(HM'b, b)
+        c = b .+ 1
+        @test dot(b, h, c) ≈ dot(h'b, c) ≈ dot(b, HM, c) ≈ dot(HM'b, c)
     end
 end
 

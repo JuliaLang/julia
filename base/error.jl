@@ -43,10 +43,18 @@ function error(s::Vararg{Any,N}) where {N}
 end
 
 """
-    rethrow([e])
+    rethrow()
 
-Throw an object without changing the current exception backtrace. The default argument is
-the current exception (if called within a `catch` block).
+Rethrow the current exception from within a `catch` block. The rethrown
+exception will continue propagation as if it had not been caught.
+
+!!! note
+    The alternative form `rethrow(e)` allows you to associate an alternative
+    exception object `e` with the current backtrace. However this misrepresents
+    the program state at the time of the error so you're encouraged to instead
+    throw a new exception using `throw(e)`. In Julia 1.1 and above, using
+    `throw(e)` will preserve the root cause exception on the stack, as
+    described in [`catch_stack`](@ref).
 """
 rethrow() = ccall(:jl_rethrow, Bottom, ())
 rethrow(e) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
@@ -54,30 +62,56 @@ rethrow(e) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
 struct InterpreterIP
     code::Union{CodeInfo,Core.MethodInstance,Nothing}
     stmt::Csize_t
+    mod::Union{Module,Nothing}
 end
 
-# convert dual arrays (ips, interpreter_frames) to a single array of locations
+# convert dual arrays (raw bt buffer, array of GC managed values) to a single
+# array of locations
 function _reformat_bt(bt, bt2)
     ret = Vector{Union{InterpreterIP,Ptr{Cvoid}}}()
     i, j = 1, 1
     while i <= length(bt)
         ip = bt[i]::Ptr{Cvoid}
-        if ip == Ptr{Cvoid}(-1%UInt)
-            # The next one is really a CodeInfo
-            push!(ret, InterpreterIP(
-                bt2[j],
-                bt[i+2]))
-            j += 1
-            i += 3
-        else
-            push!(ret, Ptr{Cvoid}(ip))
+        if UInt(ip) != (-1 % UInt) # See also jl_bt_is_native
+            # native frame
+            push!(ret, ip)
             i += 1
+            continue
         end
+        # Extended backtrace entry
+        entry_metadata = reinterpret(UInt, bt[i+1])
+        njlvalues =  entry_metadata & 0x7
+        nuintvals = (entry_metadata >> 3) & 0x7
+        tag       = (entry_metadata >> 6) & 0xf
+        header    =  entry_metadata >> 10
+        if tag == 1 # JL_BT_INTERP_FRAME_TAG
+            code = bt2[j]
+            mod = njlvalues == 2 ? bt2[j+1] : nothing
+            push!(ret, InterpreterIP(code, header, mod))
+        else
+            # Tags we don't know about are an error
+            throw(ArgumentError("Unexpected extended backtrace entry tag $tag at bt[$i]"))
+        end
+        # See jl_bt_entry_size
+        j += njlvalues
+        i += Int(2 + njlvalues + nuintvals)
     end
     ret
 end
 
-function backtrace end
+"""
+    backtrace()
+
+Get a backtrace object for the current program point.
+"""
+function backtrace()
+    @_noinline_meta
+    # skip frame for backtrace(). Note that for this to work properly,
+    # backtrace() itself must not be interpreted nor inlined.
+    skip = 1
+    bt1, bt2 = ccall(:jl_backtrace_from_here, Ref{SimpleVector}, (Cint, Cint), false, skip)
+    return _reformat_bt(bt1::Vector{Ptr{Cvoid}}, bt2::Vector{Any})
+end
 
 """
     catch_backtrace()
@@ -85,10 +119,8 @@ function backtrace end
 Get the backtrace of the current exception, for use within `catch` blocks.
 """
 function catch_backtrace()
-    bt = Ref{Any}(nothing)
-    bt2 = Ref{Any}(nothing)
-    ccall(:jl_get_backtrace, Cvoid, (Ref{Any}, Ref{Any}), bt, bt2)
-    return _reformat_bt(bt[], bt2[])
+    bt, bt2 = ccall(:jl_get_backtrace, Ref{SimpleVector}, ())
+    return _reformat_bt(bt::Vector{Ptr{Cvoid}}, bt2::Vector{Any})
 end
 
 """
@@ -127,12 +159,13 @@ end
 
 ## system error handling ##
 """
-    systemerror(sysfunc, iftrue)
+    systemerror(sysfunc[, errno::Cint=Libc.errno()])
+    systemerror(sysfunc, iftrue::Bool)
 
 Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `iftrue` is `true`
 """
-systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), extrainfo)) : nothing
-
+systemerror(p, b::Bool; extrainfo=nothing) = b ? systemerror(p, extrainfo=extrainfo) : nothing
+systemerror(p, errno::Cint=Libc.errno(); extrainfo=nothing) = throw(Main.Base.SystemError(string(p), errno, extrainfo))
 
 ## system errors from Windows API functions
 struct WindowsErrorInfo
@@ -140,12 +173,14 @@ struct WindowsErrorInfo
     extrainfo
 end
 """
-    windowserror(sysfunc, iftrue)
+    windowserror(sysfunc[, code::UInt32=Libc.GetLastError()])
+    windowserror(sysfunc, iftrue::Bool)
 
-Like [`systemerror`](@ref), but for Windows API functions that use [`GetLastError`](@ref) instead
-of setting [`errno`](@ref).
+Like [`systemerror`](@ref), but for Windows API functions that use [`GetLastError`](@ref Base.Libc.GetLastError) to
+return an error code instead of setting [`errno`](@ref Base.Libc.errno).
 """
-windowserror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), WindowsErrorInfo(Libc.GetLastError(), extrainfo))) : nothing
+windowserror(p, b::Bool; extrainfo=nothing) = b ? windowserror(p, extrainfo=extrainfo) : nothing
+windowserror(p, code::UInt32=Libc.GetLastError(); extrainfo=nothing) = throw(Main.Base.SystemError(string(p), 0, WindowsErrorInfo(code, extrainfo)))
 
 
 ## assertion macro ##

@@ -6,7 +6,7 @@ import re, sys
 # a method `platform_key_abi()` to parse uname-like output into something standarized.
 
 if len(sys.argv) < 2:
-    print("Usage: %s <host triplet> [<gcc version>] [<cxxabi11>]")
+    print("Usage: {} <host triplet> [<gcc version>] [<cxxabi11>]".format(sys.argv[0]))
     sys.exit(1)
 
 arch_mapping = {
@@ -31,12 +31,11 @@ call_abi_mapping = {
     'blank_call_abi': "",
     'eabihf': "eabihf",
 }
-gcc_version_mapping = {
-    'blank_gcc': "",
-    'gcc4': "-gcc4",
-    'gcc7': "-gcc7",
-    'gcc8': "-gcc8",
-    'gcc9': "-gcc8",
+libgfortran_version_mapping = {
+    'blank_libgfortran': "",
+    'libgfortran3': "-libgfortran3",
+    'libgfortran4': "-libgfortran4",
+    'libgfortran5': "-libgfortran5",
 }
 cxx_abi_mapping = {
     'blank_cxx_abi': "",
@@ -53,7 +52,7 @@ mondo_regex = re.compile(
     c(platform_mapping)+
     c(libc_mapping)+
     c(call_abi_mapping)+
-    c(gcc_version_mapping)+
+    c(libgfortran_version_mapping)+
     c(cxx_abi_mapping)+
     "$"
 )
@@ -76,7 +75,7 @@ arch = get_field(m, arch_mapping)
 platform = get_field(m, platform_mapping)
 libc = get_field(m, libc_mapping)
 call_abi = get_field(m, call_abi_mapping)
-gcc_version = get_field(m, gcc_version_mapping)
+libgfortran_version = get_field(m, libgfortran_version_mapping)
 cxx_abi = get_field(m, cxx_abi_mapping)
 
 # The default libc on Linux is glibc
@@ -85,7 +84,7 @@ if platform == "linux" and libc == "blank_libc":
 
 def r(x):
     x = x.replace("blank_call_abi", "")
-    x = x.replace("blank_gcc", "")
+    x = x.replace("blank_libgfortran", "")
     x = x.replace("blank_cxx_abi", "")
     x = x.replace("blank_libc", "")
     return x
@@ -106,17 +105,17 @@ def p(x):
     return x
 
 # If the user passes in a GCC version (like 8.2.0) use that to force a
-# "-gcc8" tag at the end of the triplet, but only if it has otherwise
+# "-libgfortran5" tag at the end of the triplet, but only if it has otherwise
 # not been specified
-if gcc_version == "blank_gcc":
+if libgfortran_version == "blank_libgfortran":
     if len(sys.argv) >= 3:
-        gcc_version = {
-            "4": "gcc4",
-            "5": "gcc4",
-            "6": "gcc4",
-            "7": "gcc7",
-            "8": "gcc8",
-            "9": "gcc8",
+        libgfortran_version = {
+            "4": "libgfortran3",
+            "5": "libgfortran3",
+            "6": "libgfortran3",
+            "7": "libgfortran4",
+            "8": "libgfortran5",
+            "9": "libgfortran5",
         }[list(filter(lambda x: re.match("\d+\.\d+(\.\d+)?", x), sys.argv[2].split()))[-1][0]]
 
 if cxx_abi == "blank_cxx_abi":
@@ -127,7 +126,7 @@ if cxx_abi == "blank_cxx_abi":
             "": "",
         }[sys.argv[3]]
 
-print(arch+p(platform)+p(libc)+r(call_abi)+p(gcc_version)+p(cxx_abi))
+print(arch+p(platform)+p(libc)+r(call_abi)+p(libgfortran_version)+p(cxx_abi))
 
 # Testing suite:
 # triplets="i686-w64-mingw32 x86_64-pc-linux-musl arm-linux-musleabihf x86_64-linux-gnu arm-linux-gnueabihf x86_64-apple-darwin14 x86_64-unknown-freebsd11.1"

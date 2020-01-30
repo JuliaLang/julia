@@ -4,6 +4,10 @@ module TestUniformscaling
 
 using Test, LinearAlgebra, Random, SparseArrays
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
+
 Random.seed!(123)
 
 @testset "basic functions" begin
@@ -62,6 +66,15 @@ end
     @test UniformScaling(α)./α == UniformScaling(1.0)
     @test α * UniformScaling(1.0) == UniformScaling(1.0) * α
     @test UniformScaling(α)/α == UniformScaling(1.0)
+
+    β = rand()
+    @test (α*I)^2    == UniformScaling(α^2)
+    @test (α*I)^(-2) == UniformScaling(α^(-2))
+    @test (α*I)^(.5) == UniformScaling(α^(.5))
+    @test (α*I)^β    == UniformScaling(α^β)
+
+    @test (α * I) .^ 2 == UniformScaling(α^2)
+    @test (α * I) .^ β == UniformScaling(α^β)
 end
 
 @testset "det and logdet" begin
@@ -313,13 +326,66 @@ end
     @test lmul!(J, copyto!(C, A)) == target_mul
     @test rmul!(copyto!(C, A), J) == target_mul
     @test ldiv!(J, copyto!(C, A)) == target_div
+    @test ldiv!(C, J, A) == target_div
     @test rdiv!(copyto!(C, A), J) == target_div
+
+    A = randn(4, 3)
+    C = randn!(similar(A))
+    alpha = randn()
+    beta = randn()
+    target = J * A * alpha + C * beta
+    @test mul!(copy(C), J, A, alpha, beta) ≈ target
+    @test mul!(copy(C), A, J, alpha, beta) ≈ target
 end
 
 @testset "Construct Diagonal from UniformScaling" begin
     @test size(I(3)) === (3,3)
     @test I(3) isa Diagonal
     @test I(3) == [1 0 0; 0 1 0; 0 0 1]
+end
+
+@testset "generalized dot" begin
+    x = rand(-10:10, 3)
+    y = rand(-10:10, 3)
+    λ = rand(-10:10)
+    J = UniformScaling(λ)
+    @test dot(x, J, y) == λ*dot(x, y)
+    λ = Quaternion(0.44567, 0.755871, 0.882548, 0.423612)
+    x, y = Quaternion(rand(4)...), Quaternion(rand(4)...)
+    @test dot([x], λ*I, [y]) ≈ dot(x, λ, y) ≈ dot(x, λ*y)
+end
+
+@testset "Factorization solutions" begin
+    J = complex(randn(),randn()) * I
+    qrp = A -> qr(A, Val(true))
+
+    # thin matrices
+    X = randn(3,2)
+    Z = pinv(X)
+    for fac in (qr,qrp,svd)
+        F = fac(X)
+        @test @inferred(F \ I) ≈ Z
+        @test @inferred(F \ J) ≈ Z * J
+    end
+
+    # square matrices
+    X = randn(3,3)
+    X = X'X + rand()I # make positive definite for cholesky
+    Z = pinv(X)
+    for fac in (bunchkaufman,cholesky,lu,qr,qrp,svd)
+        F = fac(X)
+        @test @inferred(F \ I) ≈ Z
+        @test @inferred(F \ J) ≈ Z * J
+    end
+
+    # fat matrices - only rank-revealing variants
+    X = randn(2,3)
+    Z = pinv(X)
+    for fac in (qrp,svd)
+        F = fac(X)
+        @test @inferred(F \ I) ≈ Z
+        @test @inferred(F \ J) ≈ Z * J
+    end
 end
 
 end # module TestUniformscaling

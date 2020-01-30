@@ -16,7 +16,9 @@ size(F::Adjoint{<:Any,<:Factorization}) = reverse(size(parent(F)))
 size(F::Transpose{<:Any,<:Factorization}) = reverse(size(parent(F)))
 
 checkpositivedefinite(info) = info == 0 || throw(PosDefException(info))
-checknonsingular(info) = info == 0 || throw(SingularException(info))
+checknonsingular(info, pivoted::Val{true}) = info == 0 || throw(SingularException(info))
+checknonsingular(info, pivoted::Val{false}) = info == 0 || throw(ZeroPivotException(info))
+checknonsingular(info) = checknonsingular(info, Val{true}())
 
 """
     issuccess(F::Factorization)
@@ -136,15 +138,6 @@ function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)
     else
         return ldiv!(A, copyto!(Y, view(B, 1:m, :)))
     end
-end
-
-function ldiv!(Y::AbstractVecOrMat, adjA::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
-    checksquare(adjA)
-    return ldiv!(adjA, copyto!(Y, B))
-end
-function ldiv!(Y::AbstractVecOrMat, transA::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat)
-    checksquare(transA)
-    return ldiv!(transA, copyto!(Y, B))
 end
 
 # fallback methods for transposed solves

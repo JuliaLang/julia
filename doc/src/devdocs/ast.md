@@ -59,7 +59,7 @@ call. Finally, chains of comparisons have their own special expression structure
 | `a==b`      | `(call == a b)`           |
 | `1<i<=n`    | `(comparison 1 < i <= n)` |
 | `a.b`       | `(. a (quote b))`         |
-| `a.(b)`     | `(. a b)`                 |
+| `a.(b)`     | `(. a (tuple b))`         |
 
 ### Bracketed forms
 
@@ -236,7 +236,7 @@ to interpolate code from the caller.
 ## Lowered form
 
 Lowered form (IR) is more important to the compiler, since it is used for type inference,
-optimizations like inlining, and and code generation. It is also less obvious to the human,
+optimizations like inlining, and code generation. It is also less obvious to the human,
 since it results from a significant rearrangement of the input syntax.
 
 In addition to `Symbol`s and some number types, the following data
@@ -356,20 +356,20 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
       * `args[2]`
 
-        A `call` expression that creates `SimpleVector` specifying its parameters
+        A `call` expression that creates a `SimpleVector` specifying its parameters
 
       * `args[3]`
 
-        A `call` expression that creates `SimpleVector` specifying its fieldnames
+        A `call` expression that creates a `SimpleVector` specifying its fieldnames
 
       * `args[4]`
 
-        A `Symbol` or `GlobalRef` specifying the supertype (e.g., `:Integer` or
-        `GlobalRef(Core, :Any)`)
+        A `Symbol`, `GlobalRef`, or `Expr` specifying the supertype (e.g., `:Integer`,
+        `GlobalRef(Core, :Any)`, or `:(Core.apply_type(AbstractArray, T, N))`)
 
       * `args[5]`
 
-        A `call` expression that creates `SimpleVector` specifying its fieldtypes
+        A `call` expression that creates a `SimpleVector` specifying its fieldtypes
 
       * `args[6]`
 
@@ -384,7 +384,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `abstract_type`
 
     A 3-argument expression that defines a new abstract type. The
-    arguments are the same as the first three arguments of
+    arguments are the same as arguments 1, 2, and 4 of
     `struct_type` expressions.
 
   * `primitive_type`
@@ -469,8 +469,41 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
       * `:inline` and `:noinline`: Inlining hints.
 
+  * `foreigncall`
 
-### Method
+    Statically-computed container for `ccall` information. The fields are:
+
+      * `args[1]` : name
+
+        The expression that'll be parsed for the foreign function.
+
+      * `args[2]::Type` : RT
+
+        The (literal) return type, computed statically when the containing method was defined.
+
+      * `args[3]::SimpleVector` (of Types) : AT
+
+        The (literal) vector of argument types, computed statically when the containing method was defined.
+
+      * `args[4]::Int` : nreq
+
+        The number of required arguments for a varargs function definition.
+
+      * `args[5]::QuoteNode{Symbol}` : calling convention
+
+        The calling convention for the call.
+
+      * `args[6:length(args[3])]` : arguments
+
+        The values for all the arguments (with types of each given in args[3]).
+
+      * `args[(length(args[3]) + 1):end]` : gc-roots
+
+        The additional objects that may need to be gc-rooted for the duration of the call.
+        See [Working with LLVM](@ref Working-with-LLVM) for where these are derived from and how they get handled.
+
+
+### [Method](@id ast-lowered-method)
 
 A unique'd container describing the shared metadata for a single method.
 

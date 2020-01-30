@@ -112,6 +112,11 @@ let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     @test UUID(UInt128(uuid)) == uuid
     @test UUID(convert(NTuple{2, UInt64}, uuid)) == uuid
     @test UUID(convert(NTuple{4, UInt32}, uuid)) == uuid
+
+    uuidstr2 = "ba"^4 * "-" * "ba"^2 * "-" * "ba"^2 * "-" * "ba"^2 * "-" * "ba"^6
+    uuid2 = UUID(uuidstr2)
+    uuids = [uuid, uuid2]
+    @test (uuids .== uuid) == [true, false]
 end
 @test_throws ArgumentError UUID("@"^4 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^6)
 
@@ -275,6 +280,12 @@ module NotPkgModule; end
     @testset "pathof" begin
         @test pathof(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1/src/Foo.jl"))
         @test pathof(NotPkgModule) === nothing
+    end
+
+    @testset "pkgdir" begin
+        @test pkgdir(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(Foo.SubFoo) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(NotPkgModule) === nothing
     end
 
 end

@@ -20,7 +20,7 @@ row indices. The internal representation of `SparseMatrixCSC` is as follows:
 struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
-    colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
+    colptr::Vector{Ti}      # Column j is in colptr[j]:(colptr[j+1]-1)
     rowval::Vector{Ti}      # Row indices of stored values
     nzval::Vector{Tv}       # Stored values, typically nonzeros
 end
@@ -50,15 +50,17 @@ matrix. [`dropzeros`](@ref), and the in-place [`dropzeros!`](@ref), can be used 
 remove stored zeros from the sparse matrix.
 
 ```jldoctest
-julia> A = sparse([1, 2, 3], [1, 2, 3], [0, 2, 0])
-3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+julia> A = sparse([1, 1, 2, 3], [1, 3, 2, 3], [0, 1, 2, 0])
+3×3 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
   [1, 1]  =  0
   [2, 2]  =  2
+  [1, 3]  =  1
   [3, 3]  =  0
 
 julia> dropzeros(A)
-3×3 SparseMatrixCSC{Int64,Int64} with 1 stored entry:
+3×3 SparseMatrixCSC{Int64,Int64} with 2 stored entries:
   [2, 2]  =  2
+  [1, 3]  =  1
 ```
 
 ## Sparse Vector Storage
@@ -197,7 +199,7 @@ section of the standard library reference.
 | [`Array(S)`](@ref)         | [`sparse(A)`](@ref)    | Interconverts between dense and sparse formats.                                                                                                                       |
 | [`sprand(m,n,d)`](@ref)    | [`rand(m,n)`](@ref)    | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements distributed uniformly on the half-open interval ``[0, 1)``.                            |
 | [`sprandn(m,n,d)`](@ref)   | [`randn(m,n)`](@ref)   | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements distributed according to the standard normal (Gaussian) distribution.                  |
-| [`sprandn(m,n,d,X)`](@ref) | [`randn(m,n,X)`](@ref) | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements distributed according to the *X* distribution. (Requires the `Distributions` package.) |
+| [`sprandn(rng,m,n,d)`](@ref) | [`randn(rng,m,n)`](@ref) | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements generated with the `rng` random number generator                                   |
 
 # [Sparse Arrays](@id stdlib-sparse-arrays)
 

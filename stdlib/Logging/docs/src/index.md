@@ -58,17 +58,23 @@ automatically extracted. Let's examine the user-defined data first:
 * The *log level* is a broad category for the message that is used for early
   filtering. There are several standard levels of type [`LogLevel`](@ref);
   user-defined levels are also possible.
-  - Use `Debug` for verbose information that could be useful when debugging an
-    application or module. These events are disabled by default.
-  - Use `Info` to inform the user about the normal operation of the program.
-  - Use `Warn` when a potential problem is detected.
-  - Use `Error` to report errors where the code has enough context to recover
-    and continue.  (When the code doesn't have enough context, an exception or
-    early return is more appropriate.)
+  Each is distinct in purpose:
+  - `Debug` is information intended for the developer of the program.
+  These events are disabled by default.
+  - `Info` is for general information to the user.
+  Think of it as an alternative to using `println` directly.
+  - `Warn` means something is wrong and action is likely required
+  but that for now the program is still working.
+  - `Error` means something is wrong and it is unlikely to be recovered,
+  at least by this part of the code.
+  Often this log-level is unneeded as throwing an exception can convey
+  all the required information.
+
 * The *message*  is an object describing the event. By convention
   `AbstractString`s passed as messages are assumed to be in markdown format.
-  Other types will be displayed using `show(io,mime,obj)` according to the
-  display capabilities of the installed logger.
+  Other types will be displayed using `print(io, obj)` or `string(obj)` for
+  text-based output and possibly `show(io,mime,obj)` for other multimedia
+  displays used in the installed logger.
 * Optional *key--value pairs* allow arbitrary data to be attached to each event.
   Some keys have conventional meaning that can affect the way an event is
   interpreted (see [`@logmsg`](@ref)).
@@ -193,6 +199,24 @@ Similarly, the environment variable can be used to enable debug logging of
 modules, such as `Pkg`, or module roots (see [`Base.moduleroot`](@ref)). To
 enable all debug logging, use the special value `all`.
 
+To turn debug logging on from the REPL, set `ENV["JULIA_DEBUG"]` to the
+name of the module of interest. Functions defined in the REPL belong to
+module `Main`; logging for them can be enabled like this:
+```julia-repl
+julia> foo() = @debug "foo"
+foo (generic function with 1 method)
+
+julia> foo()
+
+julia> ENV["JULIA_DEBUG"] = Main
+Main
+
+julia> foo()
+┌ Debug: foo
+└ @ Main REPL[1]:1
+
+```
+
 ## Writing log events to a file
 
 Sometimes it can be useful to write log events to a file. Here is an example
@@ -285,4 +309,3 @@ Logging.NullLogger
 Logging.ConsoleLogger
 Logging.SimpleLogger
 ```
-

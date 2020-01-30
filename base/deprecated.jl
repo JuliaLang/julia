@@ -42,16 +42,16 @@ macro deprecate(old, new, ex=true)
                   depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
                   $(esc(new))(args...)
               end))
-    elseif isa(old, Expr) && (old.head == :call || old.head == :where)
+    elseif isa(old, Expr) && (old.head === :call || old.head === :where)
         remove_linenums!(new)
         oldcall = sprint(show_unquoted, old)
         newcall = sprint(show_unquoted, new)
         # if old.head is a :where, step down one level to the :call to avoid code duplication below
-        callexpr = old.head == :call ? old : old.args[1]
-        if callexpr.head == :call
+        callexpr = old.head === :call ? old : old.args[1]
+        if callexpr.head === :call
             if isa(callexpr.args[1], Symbol)
                 oldsym = callexpr.args[1]::Symbol
-            elseif isa(callexpr.args[1], Expr) && callexpr.args[1].head == :curly
+            elseif isa(callexpr.args[1], Expr) && callexpr.args[1].head === :curly
                 oldsym = callexpr.args[1].args[1]::Symbol
             else
                 error("invalid usage of @deprecate")
@@ -101,33 +101,28 @@ firstcaller(bt::Vector, funcsym::Symbol) = firstcaller(bt, (funcsym,))
 function firstcaller(bt::Vector, funcsyms)
     # Identify the calling line
     found = false
-    lkup = StackTraces.UNKNOWN
-    found_frame = Ptr{Cvoid}(0)
-    for frame in bt
-        lkups = StackTraces.lookup(frame)
-        for outer lkup in lkups
+    for ip in bt
+        lkups = StackTraces.lookup(ip)
+        for lkup in lkups
             if lkup == StackTraces.UNKNOWN || lkup.from_c
                 continue
             end
             if found
-                found_frame = frame
-                @goto found
+                return ip, lkup
             end
             found = lkup.func in funcsyms
             # look for constructor type name
             if !found && lkup.linfo isa Core.MethodInstance
                 li = lkup.linfo
                 ft = ccall(:jl_first_argument_datatype, Any, (Any,), li.def.sig)
-                if isa(ft,DataType) && ft.name === Type.body.name
+                if isa(ft, DataType) && ft.name === Type.body.name
                     ft = unwrap_unionall(ft.parameters[1])
-                    found = (isa(ft,DataType) && ft.name.name in funcsyms)
+                    found = (isa(ft, DataType) && ft.name.name in funcsyms)
                 end
             end
         end
     end
-    return found_frame, StackTraces.UNKNOWN
-    @label found
-    return found_frame, lkup
+    return C_NULL, StackTraces.UNKNOWN
 end
 
 deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Cvoid, (Any, Any, Cint), m, s, flag)
@@ -188,3 +183,12 @@ MPFR.BigFloat(x::Real, prec::Int) = BigFloat(x; precision=prec)
 MPFR.BigFloat(x::Real, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision=prec)
 
 # END 1.0 deprecations
+
+# BEGIN 1.3 deprecations
+
+@eval Threads begin
+    Base.@deprecate_binding RecursiveSpinLock ReentrantLock
+    Base.@deprecate_binding Mutex ReentrantLock
+end
+
+# END 1.3 deprecations

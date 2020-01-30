@@ -218,7 +218,7 @@ too.
 
 # [Multi-Threading (Experimental)](@id man-multithreading)
 
-In addition to tasks Julia forwards natively supports multi-threading.
+In addition to tasks Julia natively supports multi-threading.
 Note that this section is experimental and the interfaces may change in the future.
 
 ## Setup
@@ -234,13 +234,24 @@ julia> Threads.nthreads()
 The number of threads Julia starts up with is controlled by an environment variable called `JULIA_NUM_THREADS`.
 Now, let's start up Julia with 4 threads:
 
+Bash on Linux/OSX:
+
 ```bash
 export JULIA_NUM_THREADS=4
 ```
 
-(The above command works on bourne shells on Linux and OSX. Note that if you're using a C shell
-on these platforms, you should use the keyword `set` instead of `export`. If you're on Windows,
-start up the command line in the location of `julia.exe` and use `set` instead of `export`.)
+C shell on Linux/OSX, CMD on Windows:
+
+```bash
+set JULIA_NUM_THREADS=4
+```
+
+Powershell on Windows:
+
+```powershell
+$env:JULIA_NUM_THREADS=4
+```
+
 
 Let's verify there are 4 threads at our disposal.
 
@@ -383,97 +394,9 @@ julia> acc[]
 When using multi-threading we have to be careful when using functions that are not
 [pure](https://en.wikipedia.org/wiki/Pure_function) as we might get a wrong answer.
 For instance functions that have their
-[name ending with `!`](https://docs.julialang.org/en/latest/manual/style-guide/#Append-!-to-names-of-functions-that-modify-their-arguments-1)
+[name ending with `!`](@ref bang-convention)
 by convention modify their arguments and thus are not pure. However, there are
-functions that have side effects and their name does not end with `!`. For
-instance [`findfirst(regex, str)`](@ref) mutates its `regex` argument or
-[`rand()`](@ref) changes `Base.GLOBAL_RNG` :
-
-```julia-repl
-julia> using Base.Threads
-
-julia> nthreads()
-4
-
-julia> function f()
-           s = repeat(["123", "213", "231"], outer=1000)
-           x = similar(s, Int)
-           rx = r"1"
-           @threads for i in 1:3000
-               x[i] = findfirst(rx, s[i]).start
-           end
-           count(v -> v == 1, x)
-       end
-f (generic function with 1 method)
-
-julia> f() # the correct result is 1000
-1017
-
-julia> function g()
-           a = zeros(1000)
-           @threads for i in 1:1000
-               a[i] = rand()
-           end
-           length(unique(a))
-       end
-g (generic function with 1 method)
-
-julia> Random.seed!(1); g() # the result for a single thread is 1000
-781
-```
-
-In such cases one should redesign the code to avoid the possibility of a race condition or use
-[synchronization primitives](https://docs.julialang.org/en/latest/base/multi-threading/#Synchronization-Primitives-1).
-
-For example in order to fix `findfirst` example above one needs to have a
-separate copy of `rx` variable for each thread:
-
-```julia-repl
-julia> function f_fix()
-             s = repeat(["123", "213", "231"], outer=1000)
-             x = similar(s, Int)
-             rx = [Regex("1") for i in 1:nthreads()]
-             @threads for i in 1:3000
-                 x[i] = findfirst(rx[threadid()], s[i]).start
-             end
-             count(v -> v == 1, x)
-         end
-f_fix (generic function with 1 method)
-
-julia> f_fix()
-1000
-```
-
-We now use `Regex("1")` instead of `r"1"` to make sure that Julia
-creates separate instances of `Regex` object for each entry of `rx` vector.
-
-The case of `rand` is a bit more complex as we have to ensure that each thread
-uses non-overlapping pseudorandom number sequences. This can be simply ensured
-by using `Future.randjump` function:
-
-
-```julia-repl
-julia> using Random; import Future
-
-julia> function g_fix(r)
-           a = zeros(1000)
-           @threads for i in 1:1000
-               a[i] = rand(r[threadid()])
-           end
-           length(unique(a))
-       end
-g_fix (generic function with 1 method)
-
-julia>  r = let m = MersenneTwister(1)
-                [m; accumulate(Future.randjump, fill(big(10)^20, nthreads()-1), init=m)]
-            end;
-
-julia> g_fix(r)
-1000
-```
-
-We pass the `r` vector to `g_fix` as generating several RGNs is an expensive
-operation so we do not want to repeat it every time we run the function.
+functions that have side effects and their name does not end with `!`.
 
 ## @threadcall (Experimental)
 
@@ -531,11 +454,11 @@ A remote reference is an object that can be used from any process to refer to an
 on a particular process. A remote call is a request by one process to call a certain function
 on certain arguments on another (possibly the same) process.
 
-Remote references come in two flavors: [`Future`](@ref) and [`RemoteChannel`](@ref).
+Remote references come in two flavors: [`Future`](@ref Distributed.Future) and [`RemoteChannel`](@ref).
 
-A remote call returns a [`Future`](@ref) to its result. Remote calls return immediately; the process
+A remote call returns a [`Future`](@ref Distributed.Future) to its result. Remote calls return immediately; the process
 that made the call proceeds to its next operation while the remote call happens somewhere else.
-You can wait for a remote call to finish by calling [`wait`](@ref) on the returned [`Future`](@ref),
+You can wait for a remote call to finish by calling [`wait`](@ref) on the returned [`Future`](@ref Distributed.Future),
 and you can obtain the full value of the result using [`fetch`](@ref).
 
 On the other hand, [`RemoteChannel`](@ref) s are rewritable. For example, multiple processes can
@@ -590,15 +513,14 @@ julia> remotecall_fetch(getindex, 2, r, 1, 1)
 Remember that [`getindex(r,1,1)`](@ref) is [equivalent](@ref man-array-indexing) to `r[1,1]`, so this call fetches
 the first element of the future `r`.
 
-The syntax of [`remotecall`](@ref) is not especially convenient. The macro [`@spawn`](@ref)
-makes things easier. It operates on an expression rather than a function, and picks where to do
+To make things easier, the symbol `:any` can be passed to [`@spawnat`], which picks where to do
 the operation for you:
 
 ```julia-repl
-julia> r = @spawn rand(2,2)
+julia> r = @spawnat :any rand(2,2)
 Future(2, 1, 4, nothing)
 
-julia> s = @spawn 1 .+ fetch(r)
+julia> s = @spawnat :any 1 .+ fetch(r)
 Future(3, 1, 5, nothing)
 
 julia> fetch(s)
@@ -609,17 +531,17 @@ julia> fetch(s)
 
 Note that we used `1 .+ fetch(r)` instead of `1 .+ r`. This is because we do not know where the
 code will run, so in general a [`fetch`](@ref) might be required to move `r` to the process
-doing the addition. In this case, [`@spawn`](@ref) is smart enough to perform the computation
+doing the addition. In this case, [`@spawnat`](@ref) is smart enough to perform the computation
 on the process that owns `r`, so the [`fetch`](@ref) will be a no-op (no work is done).
 
-(It is worth noting that [`@spawn`](@ref) is not built-in but defined in Julia as a [macro](@ref man-macros).
+(It is worth noting that [`@spawnat`](@ref) is not built-in but defined in Julia as a [macro](@ref man-macros).
 It is possible to define your own such constructs.)
 
-An important thing to remember is that, once fetched, a [`Future`](@ref) will cache its value
-locally. Further [`fetch`](@ref) calls do not entail a network hop. Once all referencing [`Future`](@ref)s
+An important thing to remember is that, once fetched, a [`Future`](@ref Distributed.Future) will cache its value
+locally. Further [`fetch`](@ref) calls do not entail a network hop. Once all referencing [`Future`](@ref Distributed.Future)s
 have fetched, the remote stored value is deleted.
 
-[`@async`](@ref) is similar to [`@spawn`](@ref), but only runs tasks on the local process. We
+[`@async`](@ref) is similar to [`@spawnat`](@ref), but only runs tasks on the local process. We
 use it to create a "feeder" task for each process. Each task picks the next index that needs to
 be computed, then waits for its process to finish, then repeats until we run out of indices. Note
 that the feeder tasks do not begin to execute until the main task reaches the end of the [`@sync`](@ref)
@@ -653,7 +575,7 @@ julia> rand2(2,2)
  0.153756  0.368514
  1.15119   0.918912
 
-julia> fetch(@spawn rand2(2,2))
+julia> fetch(@spawnat :any rand2(2,2))
 ERROR: RemoteException(2, CapturedException(UndefVarError(Symbol("#rand2"))
 Stacktrace:
 [...]
@@ -759,7 +681,8 @@ It is automatically made available on the worker processes.
 
 Note that workers do not run a `~/.julia/config/startup.jl` startup script, nor do they synchronize
 their global state (such as global variables, new method definitions, and loaded modules) with any
-of the other running processes.
+of the other running processes. You may use `addprocs(exeflags="--project")` to initialize a worker with
+a particular environment, and then `@everywhere using <modulename>` or `@everywhere include("file.jl")`.
 
 Other types of clusters can be supported by writing your own custom `ClusterManager`, as described
 below in the [ClusterManagers](@ref) section.
@@ -772,7 +695,7 @@ To this end, it is important to understand the data movement performed by Julia'
 programming constructs.
 
 [`fetch`](@ref) can be considered an explicit data movement operation, since it directly asks
-that an object be moved to the local machine. [`@spawn`](@ref) (and a few related constructs)
+that an object be moved to the local machine. [`@spawnat`](@ref) (and a few related constructs)
 also moves data, but this is not as obvious, hence it can be called an implicit data movement
 operation. Consider these two approaches to constructing and squaring a random matrix:
 
@@ -781,7 +704,7 @@ Method 1:
 ```julia-repl
 julia> A = rand(1000,1000);
 
-julia> Bref = @spawn A^2;
+julia> Bref = @spawnat :any A^2;
 
 [...]
 
@@ -791,14 +714,14 @@ julia> fetch(Bref);
 Method 2:
 
 ```julia-repl
-julia> Bref = @spawn rand(1000,1000)^2;
+julia> Bref = @spawnat :any rand(1000,1000)^2;
 
 [...]
 
 julia> fetch(Bref);
 ```
 
-The difference seems trivial, but in fact is quite significant due to the behavior of [`@spawn`](@ref).
+The difference seems trivial, but in fact is quite significant due to the behavior of [`@spawnat`](@ref).
 In the first method, a random matrix is constructed locally, then sent to another process where
 it is squared. In the second method, a random matrix is both constructed and squared on another
 process. Therefore the second method sends much less data than the first.
@@ -807,13 +730,13 @@ In this toy example, the two methods are easy to distinguish and choose from. Ho
 program designing data movement might require more thought and likely some measurement. For example,
 if the first process needs matrix `A` then the first method might be better. Or, if computing
 `A` is expensive and only the current process has it, then moving it to another process might
-be unavoidable. Or, if the current process has very little to do between the [`@spawn`](@ref)
+be unavoidable. Or, if the current process has very little to do between the [`@spawnat`](@ref)
 and `fetch(Bref)`, it might be better to eliminate the parallelism altogether. Or imagine `rand(1000,1000)`
-is replaced with a more expensive operation. Then it might make sense to add another [`@spawn`](@ref)
+is replaced with a more expensive operation. Then it might make sense to add another [`@spawnat`](@ref)
 statement just for this step.
 
 ## Global variables
-Expressions executed remotely via `@spawn`, or closures specified for remote execution using
+Expressions executed remotely via `@spawnat`, or closures specified for remote execution using
 `remotecall` may refer to global variables. Global bindings under module `Main` are treated
 a little differently compared to global bindings in other modules. Consider the following code
 snippet:
@@ -887,7 +810,7 @@ and hence a binding for `B` does not exist on worker 2.
 
 Fortunately, many useful parallel computations do not require data movement. A common example
 is a Monte Carlo simulation, where multiple processes can handle independent simulation trials
-simultaneously. We can use [`@spawn`](@ref) to flip coins on two processes. First, write the following
+simultaneously. We can use [`@spawnat`](@ref) to flip coins on two processes. First, write the following
 function in `count_heads.jl`:
 
 ```julia
@@ -906,10 +829,10 @@ trials on two machines, and add together the results:
 ```julia-repl
 julia> @everywhere include_string(Main, $(read("count_heads.jl", String)), "count_heads.jl")
 
-julia> a = @spawn count_heads(100000000)
+julia> a = @spawnat :any count_heads(100000000)
 Future(2, 1, 6, nothing)
 
-julia> b = @spawn count_heads(100000000)
+julia> b = @spawnat :any count_heads(100000000)
 Future(3, 1, 7, nothing)
 
 julia> fetch(a)+fetch(b)
@@ -926,7 +849,7 @@ for `f` to be associative, so that it does not matter what order the operations 
 in.
 
 Notice that our use of this pattern with `count_heads` can be generalized. We used two explicit
-[`@spawn`](@ref) statements, which limits the parallelism to two processes. To run on any number
+[`@spawnat`](@ref) statements, which limits the parallelism to two processes. To run on any number
 of processes, we can use a *parallel for loop*, running in distributed memory, which can be written
 in Julia using [`@distributed`](@ref) like this:
 
@@ -981,8 +904,8 @@ Here each iteration applies `f` to a randomly-chosen sample from a vector `a` sh
 
 As you could see, the reduction operator can be omitted if it is not needed. In that case, the
 loop executes asynchronously, i.e. it spawns independent tasks on all available workers and returns
-an array of [`Future`](@ref) immediately without waiting for completion. The caller can wait for
-the [`Future`](@ref) completions at a later point by calling [`fetch`](@ref) on them, or wait
+an array of [`Future`](@ref Distributed.Future) immediately without waiting for completion. The caller can wait for
+the [`Future`](@ref Distributed.Future) completions at a later point by calling [`fetch`](@ref) on them, or wait
 for completion at the end of the loop by prefixing it with [`@sync`](@ref), like `@sync @distributed for`.
 
 In some cases no reduction operator is needed, and we merely wish to apply a function to all integers
@@ -1008,7 +931,7 @@ Remote references always refer to an implementation of an `AbstractChannel`.
 
 A concrete implementation of an `AbstractChannel` (like `Channel`), is required to implement
 [`put!`](@ref), [`take!`](@ref), [`fetch`](@ref), [`isready`](@ref) and [`wait`](@ref).
-The remote object referred to by a [`Future`](@ref) is stored in a `Channel{Any}(1)`, i.e., a
+The remote object referred to by a [`Future`](@ref Distributed.Future) is stored in a `Channel{Any}(1)`, i.e., a
 `Channel` of size 1 capable of holding objects of `Any` type.
 
 [`RemoteChannel`](@ref), which is rewritable, can point to any type and size of channels, or any
@@ -1111,9 +1034,9 @@ Objects referred to by remote references can be freed only when *all* held refer
 in the cluster are deleted.
 
 The node where the value is stored keeps track of which of the workers have a reference to it.
-Every time a [`RemoteChannel`](@ref) or a (unfetched) [`Future`](@ref) is serialized to a worker,
+Every time a [`RemoteChannel`](@ref) or a (unfetched) [`Future`](@ref Distributed.Future) is serialized to a worker,
 the node pointed to by the reference is notified. And every time a [`RemoteChannel`](@ref) or
-a (unfetched) [`Future`](@ref) is garbage collected locally, the node owning the value is again
+a (unfetched) [`Future`](@ref Distributed.Future) is garbage collected locally, the node owning the value is again
 notified. This is implemented in an internal cluster aware serializer. Remote references are only
 valid in the context of a running cluster. Serializing and deserializing references to and from
 regular `IO` objects is not supported.
@@ -1122,12 +1045,12 @@ The notifications are done via sending of "tracking" messages--an "add reference
 a reference is serialized to a different process and a "delete reference" message when a reference
 is locally garbage collected.
 
-Since [`Future`](@ref)s are write-once and cached locally, the act of [`fetch`](@ref)ing a
-[`Future`](@ref) also updates reference tracking information on the node owning the value.
+Since [`Future`](@ref Distributed.Future)s are write-once and cached locally, the act of [`fetch`](@ref)ing a
+[`Future`](@ref Distributed.Future) also updates reference tracking information on the node owning the value.
 
 The node which owns the value frees it once all references to it are cleared.
 
-With [`Future`](@ref)s, serializing an already fetched [`Future`](@ref) to a different node also
+With [`Future`](@ref Distributed.Future)s, serializing an already fetched [`Future`](@ref Distributed.Future) to a different node also
 sends the value since the original remote store may have collected the value by this time.
 
 It is important to note that *when* an object is locally garbage collected depends on the size
@@ -1136,18 +1059,18 @@ of the object and the current memory pressure in the system.
 In case of remote references, the size of the local reference object is quite small, while the
 value stored on the remote node may be quite large. Since the local object may not be collected
 immediately, it is a good practice to explicitly call [`finalize`](@ref) on local instances
-of a [`RemoteChannel`](@ref), or on unfetched [`Future`](@ref)s. Since calling [`fetch`](@ref)
-on a [`Future`](@ref) also removes its reference from the remote store, this is not required on
-fetched [`Future`](@ref)s. Explicitly calling [`finalize`](@ref) results in an immediate message
+of a [`RemoteChannel`](@ref), or on unfetched [`Future`](@ref Distributed.Future)s. Since calling [`fetch`](@ref)
+on a [`Future`](@ref Distributed.Future) also removes its reference from the remote store, this is not required on
+fetched [`Future`](@ref Distributed.Future)s. Explicitly calling [`finalize`](@ref) results in an immediate message
 sent to the remote node to go ahead and remove its reference to the value.
 
 Once finalized, a reference becomes invalid and cannot be used in any further calls.
 
 
-## Local invocations(@id man-distributed-local-invocations)
+## Local invocations
 
 Data is necessarily copied over to the remote node for execution. This is the case for both
-remotecalls and when data is stored to a[`RemoteChannel`](@ref) / [`Future`](@ref) on
+remotecalls and when data is stored to a[`RemoteChannel`](@ref) / [`Future`](@ref Distributed.Future) on
 a different node. As expected, this results in a copy of the serialized objects
 on the remote node. However, when the destination node is the local node, i.e.
 the calling process id is the same as the remote node id, it is executed
@@ -1281,7 +1204,7 @@ julia> addprocs(3)
 
 julia> @everywhere using SharedArrays
 
-julia> S = SharedArray{Int,2}((3,4), init = S -> S[localindices(S)] = myid())
+julia> S = SharedArray{Int,2}((3,4), init = S -> S[localindices(S)] = repeat([myid()], length(localindices(S))))
 3×4 SharedArray{Int64,2}:
  2  2  3  4
  2  3  3  4
@@ -1302,7 +1225,7 @@ convenient for splitting up tasks among processes. You can, of course, divide th
 you wish:
 
 ```julia-repl
-julia> S = SharedArray{Int,2}((3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = myid())
+julia> S = SharedArray{Int,2}((3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = repeat([myid()], length( indexpids(S):length(procs(S)):length(S))))
 3×4 SharedArray{Int64,2}:
  2  2  2  2
  3  3  3  3
@@ -1694,6 +1617,16 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
 
     Securing and encrypting all worker-worker traffic (via SSH) or encrypting individual messages
     can be done via a custom `ClusterManager`.
+
+  * If you specify `multiplex=true` as an option to `addprocs`, SSH multiplexing is used to create
+    a tunnel between the master and workers. If you have configured SSH multiplexing on your own and
+    the connection has already been established, SSH multiplexing is used regardless of `multiplex`
+    option. If multiplexing is enabled, forwarding is set by using the existing connection
+    (`-O forward` option in ssh). This is beneficial if your servers require password authentication;
+    you can avoid authentication in Julia by logging in to the server ahead of `addprocs`. The control
+    socket will be located at `~/.ssh/julia-%r@%h:%p` during the session unless the existing multiplexing
+    connection is used. Note that bandwidth may be limited if you create multiple processes on a node
+    and enable multiplexing, because in that case processes share a single multiplexing TCP connection.
 
 ### [Cluster Cookie](@id man-cluster-cookie)
 

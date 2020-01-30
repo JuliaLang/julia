@@ -56,19 +56,35 @@ end
 
 function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
     T = typeof(x)::DataType
-    isbitstype(T) && return x
-    if haskey(stackdict, x)
-        return stackdict[x]
-    end
-    y = ccall(:jl_new_struct_uninit, Any, (Any,), T)
+    nf = nfields(x)
     if T.mutable
-        stackdict[x] = y
-    end
-    for i in 1:nfields(x)
-        if isdefined(x,i)
-            ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), y, i-1,
-                  deepcopy_internal(getfield(x,i), stackdict))
+        if haskey(stackdict, x)
+            return stackdict[x]
         end
+        y = ccall(:jl_new_struct_uninit, Any, (Any,), T)
+        stackdict[x] = y
+        for i in 1:nf
+            if isdefined(x, i)
+                xi = getfield(x, i)
+                xi = deepcopy_internal(xi, stackdict)::typeof(xi)
+                ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), y, i-1, xi)
+            end
+        end
+    elseif nf == 0 || isbitstype(T)
+        y = x
+    else
+        flds = Vector{Any}(undef, nf)
+        for i in 1:nf
+            if isdefined(x, i)
+                xi = getfield(x, i)
+                xi = deepcopy_internal(xi, stackdict)::typeof(xi)
+                flds[i] = xi
+            else
+                nf = i - 1 # rest of tail must be undefined values
+                break
+            end
+        end
+        y = ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, flds, nf)
     end
     return y::T
 end
@@ -90,7 +106,7 @@ function _deepcopy_array_t(@nospecialize(x), T, stackdict::IdDict)
         if ccall(:jl_array_isassigned, Cint, (Any, Csize_t), x, i-1) != 0
             xi = ccall(:jl_arrayref, Any, (Any, Csize_t), x, i-1)
             if !isbits(xi)
-                xi = deepcopy_internal(xi, stackdict)
+                xi = deepcopy_internal(xi, stackdict)::typeof(xi)
             end
             ccall(:jl_arrayset, Cvoid, (Any, Any, Csize_t), dest, xi, i-1)
         end

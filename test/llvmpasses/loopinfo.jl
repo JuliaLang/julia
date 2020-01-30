@@ -73,8 +73,8 @@ end
 
 # Example from a GPU kernel where we want to unroll the outer loop
 # and the inner loop is a boundschecked single iteration loop.
-# The `@show` is used to bloat the loop and `FINAL-COUNT-10:` seems
-# not to be working so we duplicate the checks.
+# The `@show` is used to bloat the loop and `X-COUNT-10:` seems
+# not to be working so we duplicate the checks. FIXME LLVM8
 # CHECK-LABEL: @julia_loop_unroll2
 # LOWER-LABEL: @julia_loop_unroll2
 # FINAL-LABEL: @julia_loop_unroll2

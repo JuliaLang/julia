@@ -12,8 +12,8 @@ An `AbstractWorkerPool` should implement:
   - [`isready`](@ref) - return false if a `take!` on the pool would block, else true
 
 The default implementations of the above (on a `AbstractWorkerPool`) require fields
-    channel::Channel{Int}
-    workers::Set{Int}
+  - `channel::Channel{Int}`
+  - `workers::Set{Int}`
 where `channel` contains free worker pids and `workers` is the set of all workers associated with this pool.
 """
 abstract type AbstractWorkerPool end

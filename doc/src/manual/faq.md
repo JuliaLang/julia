@@ -1,5 +1,23 @@
 # Frequently Asked Questions
 
+## General
+
+### Is Julia named after someone or something?
+
+No.
+
+### Why don't you compile Matlab/Python/R/… code to Julia?
+
+Since many people are familiar with the syntax of other dynamic languages, and lots of code has already been written in those languages, it is natural to wonder why we didn't just plug a Matlab or Python front-end into a Julia back-end (or “transpile” code to Julia) in order to get all the performance benefits of Julia without requiring programmers to learn a new language.  Simple, right?
+
+The basic issue is that there is *nothing special about Julia's compiler*: we use a commonplace compiler (LLVM) with no “secret sauce” that other language developers don't know about.  Indeed, Julia's compiler is in many ways much simpler than those of other dynamic languages (e.g. PyPy or LuaJIT).   Julia's performance advantage derives almost entirely from its front-end: its language semantics allow a [well-written Julia program](@ref man-performance-tips) to *give more opportunities to the compiler* to generate efficient code and memory layouts.  If you tried to compile Matlab or Python code to Julia, our compiler would be limited by the semantics of Matlab or Python to producing code no better than that of existing compilers for those languages (and probably worse).  The key role of semantics is also why several existing Python compilers (like Numba and Pythran) only attempt to optimize a small subset of the language (e.g. operations on Numpy arrays and scalars), and for this subset they are already doing at least as well as we could for the same semantics.  The people working on those projects are incredibly smart and have accomplished amazing things, but retrofitting a compiler onto a language that was designed to be interpreted is a very difficult problem.
+
+Julia's advantage is that good performance is not limited to a small subset of “built-in” types and operations, and one can write high-level type-generic code that works on arbitrary user-defined types while remaining fast and memory-efficient.  Types in languages like Python simply don't provide enough information to the compiler for similar capabilities, so as soon as you used those languages as a Julia front-end you would be stuck.
+
+For similar reasons, automated translation to Julia would also typically generate unreadable, slow, non-idiomatic code that would not be a good starting point for a native Julia port from another language.
+
+On the other hand, language *interoperability* is extremely useful: we want to exploit existing high-quality code in other languages from Julia (and vice versa)!  The best way to enable this is not a transpiler, but rather via easy inter-language calling facilities.  We have worked hard on this, from the built-in `ccall` intrinsic (to call C and Fortran libraries) to [JuliaInterop](https://github.com/JuliaInterop) packages that connect Julia to Python, Matlab, C++, and more.
+
 ## Sessions and the REPL
 
 ### How do I delete an object in memory?
@@ -49,7 +67,7 @@ When a file is run as the main script using `julia file.jl` one might want to ac
 functionality like command line argument handling. A way to determine that a file is run in
 this fashion is to check if `abspath(PROGRAM_FILE) == @__FILE__` is `true`.
 
-### How do I catch CTRL-C in a script?
+### [How do I catch CTRL-C in a script?](@id catch-ctrl-c)
 
 Running a Julia script using `julia file.jl` does not throw
 [`InterruptException`](@ref) when you try to terminate it with CTRL-C
@@ -72,8 +90,7 @@ use `exec` to replace the process to `julia`:
 ```julia
 #!/bin/bash
 #=
-exec julia --color=yes --startup-file=no -e 'include(popfirst!(ARGS))' \
-    "${BASH_SOURCE[0]}" "$@"
+exec julia --color=yes --startup-file=no "${BASH_SOURCE[0]}" "$@"
 =#
 
 @show ARGS  # put any Julia code here
@@ -83,6 +100,19 @@ In the example above, the code between `#=` and `=#` is run as a `bash`
 script.  Julia ignores this part since it is a multi-line comment for
 Julia.  The Julia code after `=#` is ignored by `bash` since it stops
 parsing the file once it reaches to the `exec` statement.
+
+!!! note
+    In order to [catch CTRL-C](@ref catch-ctrl-c) in the script you can use
+    ```julia
+    #!/bin/bash
+    #=
+    exec julia --color=yes --startup-file=no -e 'include(popfirst!(ARGS))' \
+        "${BASH_SOURCE[0]}" "$@"
+    =#
+
+    @show ARGS  # put any Julia code here
+    ```
+    instead. Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
 
 ## Functions
 
@@ -111,9 +141,9 @@ When calling `change_value!(x)` in the above example, `y` is a newly created var
 to the value of `x`, i.e. `10`; then `y` is rebound to the constant `17`, while the variable
 `x` of the outer scope is left untouched.
 
-But here is a thing you should pay attention to: suppose `x` is bound to an object of type `Array`
+However, if `x` is bound to an object of type `Array`
 (or any other *mutable* type). From within the function, you cannot "unbind" `x` from this Array,
-but you can change its content. For example:
+but you *can* change its content. For example:
 
 ```jldoctest
 julia> x = [1,2,3]
@@ -304,8 +334,8 @@ unstable (generic function with 1 method)
 
 It returns either an `Int` or a [`Float64`](@ref) depending on the value of its argument.
 Since Julia can't predict the return type of this function at compile-time, any computation
-that uses it will have to guard against both types possibly occurring, making generation of
-fast machine code difficult.
+that uses it must be able to cope with values of both types, which makes it hard to produce
+fast machine code.
 
 ### [Why does Julia give a `DomainError` for certain seemingly-sensible operations?](@id faq-domain-errors)
 
@@ -332,6 +362,45 @@ your willingness to accept an *output type* in which the result can be represent
 ```jldoctest
 julia> sqrt(-2.0+0im)
 0.0 + 1.4142135623730951im
+```
+
+### How can I constrain or compute type parameters?
+
+The parameters of a [parametric type](@ref Parametric-Types) can hold either
+types or bits values, and the type itself chooses how it makes use of these parameters.
+For example, `Array{Float64, 2}` is parameterized by the type `Float64` to express its
+element type and the integer value `2` to express its number of dimensions.  When
+defining your own parametric type, you can use subtype constraints to declare that a
+certain parameter must be a subtype ([`<:`](@ref)) of some abstract type or a previous
+type parameter.  There is not, however, a dedicated syntax to declare that a parameter
+must be a _value_ of a given type — that is, you cannot directly declare that a
+dimensionality-like parameter [`isa`](@ref) `Int` within the `struct` definition, for
+example.  Similarly, you cannot do computations (including simple things like addition
+or subtraction) on type parameters.  Instead, these sorts of constraints and
+relationships may be expressed through additional type parameters that are computed
+and enforced within the type's [constructors](@ref man-constructors).
+
+As an example, consider
+```julia
+struct ConstrainedType{T,N,N+1} # NOTE: INVALID SYNTAX
+    A::Array{T,N}
+    B::Array{T,N+1}
+end
+```
+where the user would like to enforce that the third type parameter is always the second plus one. This can be implemented with an explicit type parameter that is checked by an [inner constructor method](@ref man-inner-constructor-methods) (where it can be combined with other checks):
+```julia
+struct ConstrainedType{T,N,M}
+    A::Array{T,N}
+    B::Array{T,M}
+    function ConstrainedType(A::Array{T,N}, B::Array{T,M}) where {T,N,M}
+        N + 1 == M || throw(ArgumentError("second argument should have one more axis" ))
+        new{T,N,M}(A, B)
+    end
+end
+```
+This check is usually *costless*, as the compiler can elide the check for valid concrete types. If the second argument is also computed, it may be advantageous to provide an [outer constructor method](@ref man-outer-constructor-methods) that performs this calculation:
+```julia
+ConstrainedType(A) = ConstrainedType(A, compute_B(A))
 ```
 
 ### [Why does Julia use native machine integer arithmetic?](@id faq-integer-arithmetic)
@@ -558,6 +627,14 @@ have, it ends up having a substantial cost due to compilers (LLVM and GCC) not g
 around the added overflow checks. If this improves in the future, we could consider defaulting
 to checked integer arithmetic in Julia, but for now, we have to live with the possibility of overflow.
 
+In the meantime, overflow-safe integer operations can be achieved through the use of external libraries
+such as [SaferIntegers.jl](https://github.com/JeffreySarnoff/SaferIntegers.jl). Note that, as stated
+previously, the use of these libraries significantly increases the execution time of code using the
+checked integer types. However, for limited usage, this is far less of an issue than if it were used
+for all integer operations. You can follow the status of the discussion
+[here](https://github.com/JuliaLang/julia/issues/855).
+
+
 ### What are the possible causes of an `UndefVarError` during remote execution?
 
 As the error states, an immediate cause of an `UndefVarError` on a remote node is that a binding
@@ -693,8 +770,9 @@ generate efficient code when working with `Union{T, Nothing}` arguments or field
 To represent missing data in the statistical sense (`NA` in R or `NULL` in SQL), use the
 [`missing`](@ref) object. See the [`Missing Values`](@ref missing) section for more details.
 
-The empty tuple (`()`) is another form of nothingness. But, it should not really be thought of
-as nothing but rather a tuple of zero values.
+In some languages, the empty tuple (`()`) is considered the canonical
+form of nothingness. However, in julia it is best thought of as just
+a regular tuple that happens to contain zero values.
 
 The empty (or "bottom") type, written as `Union{}` (an empty union type), is a type with
 no values and no subtypes (except itself). You will generally not need to use this type.
@@ -859,26 +937,30 @@ Modifying OpenBLAS settings or compiling Julia with a different BLAS library, eg
 
 ## Julia Releases
 
-### Do I want to use a release, beta, or nightly version of Julia?
+### Do I want to use the Stable, LTS, or nightly version of Julia?
 
-You may prefer the release version of Julia if you are looking for a stable code base. Releases
-generally occur every 6 months, giving you a stable platform for writing code.
+The Stable version of Julia is the latest released version of Julia, this is the version most people will want to run.
+It has the latest features, including improved performance.
+The Stable version of Julia is versioned according to [SemVer](https://semver.org/) as v1.x.y.
+A new minor release of Julia corresponding to a new Stable version is made approximately every 4-5 months after a few weeks of testing as a release candidate.
+Unlike the LTS version the a Stable version will not normally recieve bugfixes after another Stable version of Julia has been released.
+However, upgrading to the next Stable release will always be possible as each release of Julia v1.x will continue to run code written for earlier versions.
 
-You may prefer the beta version of Julia if you don't mind being slightly behind the latest bugfixes
-and changes, but find the slightly faster rate of changes more appealing. Additionally, these
-binaries are tested before they are published to ensure they are fully functional.
+You may prefer the LTS (Long Term Support) version of Julia if you are looking for a very stable code base.
+The current LTS version of Julia is versioned according to SemVer as v1.0.x;
+this branch will continue to recieve bugfixes until a new LTS branch is chosen, at which point the v1.0.x series will no longer recieved regular bug fixes and all but the most conservative users will be advised to upgrade to the new LTS version series.
+As a package developer, you may prefer to develop for the LTS version, to maximize the number of users who can use your package.
+As per SemVer, code written for v1.0 will continue to work for all future LTS and Stable versions.
+In general, even if targetting the LTS, one can develop and run code in the latest Stable version, to take advantage of the improved performance; so long as one avoids using new features (such as added library functions or new methods).
 
-You may prefer the nightly version of Julia if you want to take advantage of the latest updates
-to the language, and don't mind if the version available today occasionally doesn't actually work.
+You may prefer the nightly version of Julia if you want to take advantage of the latest updates to the language, and don't mind if the version available today occasionally doesn't actually work.
+As the name implies, releases to the nightly version are made roughly every night (depending on build infrastructure stability).
+In general nightly released are fairly safe to use—your code will not catch on fire.
+However, they may be occasional regressions and or issues that will not be found until more thorough pre-release testing.
+You may wish to test against the nightly version to ensure that such regressions that affect your use case are caught before a release is made.
 
-Finally, you may also consider building Julia from source for yourself. This option is mainly
-for those individuals who are comfortable at the command line, or interested in learning. If this
-describes you, you may also be interested in reading our [guidelines for contributing](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md).
+Finally, you may also consider building Julia from source for yourself. This option is mainly for those individuals who are comfortable at the command line, or interested in learning.
+If this describes you, you may also be interested in reading our [guidelines for contributing](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md).
 
 Links to each of these download types can be found on the download page at [https://julialang.org/downloads/](https://julialang.org/downloads/).
 Note that not all versions of Julia are available for all platforms.
-
-### When are deprecated functions removed?
-
-Deprecated functions are removed after the subsequent release. For example, functions marked as
-deprecated in the 0.1 release will not be available starting with the 0.2 release.

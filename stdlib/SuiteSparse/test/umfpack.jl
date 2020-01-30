@@ -189,4 +189,48 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
         end
     end
 
+    @testset "Reuse symbolic LU factorization" begin
+        A1 = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
+                    increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
+                    [2.,1.,3.,4.,-1.,-3.,3.,9.,2.,1.,4.,2.], 5, 5)
+        for Tv in (Float64, ComplexF64, Float16, Float32, ComplexF16, ComplexF32)
+            for Ti in Base.uniontypes(SuiteSparse.UMFPACK.UMFITypes)
+                A = convert(SparseMatrixCSC{Tv,Ti}, A0)
+                B = convert(SparseMatrixCSC{Tv,Ti}, A1)
+                b = Tv[8., 45., -3., 3., 19.]
+                F = lu(A)
+                lu!(F, B)
+                @test F\b ≈ B\b ≈ Matrix(B)\b
+
+                # singular matrix
+                C = copy(B)
+                C[4, 3] = Tv(0)
+                F = lu(A)
+                @test_throws SingularException lu!(F, C)
+
+                # change of nonzero pattern
+                D = copy(B)
+                D[5, 1] = Tv(1.0)
+                F = lu(A)
+                @test_throws ArgumentError lu!(F, D)
+            end
+        end
+    end
+
+end
+
+@testset "REPL printing of UmfpackLU" begin
+    # regular matrix
+    A = sparse([1, 2], [1, 2], Float64[1.0, 1.0])
+    F = lu(A)
+    facstring = sprint((t, s) -> show(t, "text/plain", s), F)
+    lstring = sprint((t, s) -> show(t, "text/plain", s), F.L)
+    ustring = sprint((t, s) -> show(t, "text/plain", s), F.U)
+    @test facstring == "$(summary(F))\nL factor:\n$lstring\nU factor:\n$ustring"
+
+    # singular matrix
+    B = sparse(zeros(Float64, 2, 2))
+    F = lu(B; check=false)
+    facstring = sprint((t, s) -> show(t, "text/plain", s), F)
+    @test facstring == "Failed factorization of type $(summary(F))"
 end

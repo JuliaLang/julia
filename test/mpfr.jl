@@ -487,6 +487,9 @@ end
     x = BigFloat(12)
     @test precision(x) == old_precision
     @test_throws DomainError setprecision(1)
+    @test_throws DomainError BigFloat(1, precision = 0)
+    @test_throws DomainError BigFloat(big(1.1), precision = 0)
+    @test_throws DomainError BigFloat(2.5, precision = -900)
     # issue 15659
     @test (setprecision(53) do; big(1/3); end) < 1//3
 end

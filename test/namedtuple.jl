@@ -38,6 +38,8 @@
 
 @test isempty(NamedTuple())
 @test !isempty((a=1,))
+@test empty((a=1,)) === NamedTuple()
+@test isempty(empty((a=1,)))
 
 @test (a=1,b=2) === (a=1,b=2)
 @test (a=1,b=2) !== (b=1,a=2)
@@ -46,6 +48,7 @@
 @test (a=1,b=2) != (b=1,a=2)
 @test NamedTuple() === NamedTuple()
 @test NamedTuple() != (a=1,)
+@test !isequal(NamedTuple(), (a=1,))
 
 @test string((a=1,)) == "(a = 1,)"
 @test string((name="", day=:today)) == "(name = \"\", day = :today)"
@@ -131,7 +134,7 @@ end
 @test Meta.lower(Main, Meta.parse("(; f(x))")) == Expr(:error, "invalid named tuple element \"f(x)\"")
 @test Meta.lower(Main, Meta.parse("(;1=0)")) == Expr(:error, "invalid named tuple field name \"1\"")
 
-@test Meta.parse("(;)") == quote end
+@test eval(Expr(:tuple, Expr(:parameters))) === NamedTuple()
 @test Meta.lower(Main, Meta.parse("(1,;2)")) == Expr(:error, "unexpected semicolon in tuple")
 
 # splatting
@@ -259,3 +262,17 @@ y = map(v -> (a=v.a, b=v.a + v.b), [(a=1, b=missing), (a=1, b=2)])
 @test merge((a=1, b=2), (b=3, c=4), (c=5,)) === (a=1, b=3, c=5)
 @test merge((a=1, b=2), (b=3, c=(d=1,)), (c=(d=2,),)) === (a=1, b=3, c=(d=2,))
 @test merge((a=1, b=2)) === (a=1, b=2)
+
+# issue #33270
+let n = NamedTuple{(:T,), Tuple{Type{Float64}}}((Float64,))
+    @test n isa NamedTuple{(:T,), Tuple{Type{Float64}}}
+    @test n.T === Float64
+end
+
+# setindex
+let nt0 = NamedTuple(), nt1 = (a=33,), nt2 = (a=0, b=:v)
+    @test Base.setindex(nt0, 33, :a) == nt1
+    @test Base.setindex(Base.setindex(nt1, 0, :a), :v, :b) == nt2
+    @test Base.setindex(nt1, "value", :a) == (a="value",)
+    @test Base.setindex(nt1, "value", :a) isa NamedTuple{(:a,),<:Tuple{AbstractString}}
+end

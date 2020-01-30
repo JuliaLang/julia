@@ -620,8 +620,8 @@ end
 
 function _delete!(h::Dict{K,V}, index) where {K,V}
     @inbounds h.slots[index] = 0x2
-    isbitstype(K) || isbitsunion(K) || ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.keys, index-1)
-    isbitstype(V) || isbitsunion(V) || ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.vals, index-1)
+    @inbounds _unsetindex!(h.keys, index)
+    @inbounds _unsetindex!(h.vals, index)
     h.ndel += 1
     h.count -= 1
     h.age += 1
@@ -631,7 +631,7 @@ end
 """
     delete!(collection, key)
 
-Delete the mapping for the given key in a collection, and return the collection.
+Delete the mapping for the given key in a collection, if any, and return the collection.
 
 # Examples
 ```jldoctest
@@ -641,6 +641,10 @@ Dict{String,Int64} with 2 entries:
   "a" => 1
 
 julia> delete!(d, "b")
+Dict{String,Int64} with 1 entry:
+  "a" => 1
+
+julia> delete!(d, "b") # d is left unchanged
 Dict{String,Int64} with 1 entry:
   "a" => 1
 ```
@@ -689,7 +693,15 @@ length(t::Dict) = t.count
     (@inbounds vals[i], i == typemax(Int) ? 0 : i+1)
 end
 
-filter!(f, d::Dict) = filter_in_one_pass!(f, d)
+function filter!(pred, h::Dict{K,V}) where {K,V}
+    h.count == 0 && return h
+    @inbounds for i=1:length(h.slots)
+        if h.slots[i] == 0x01 && !pred(Pair{K,V}(h.keys[i], h.vals[i]))
+            _delete!(h, i)
+        end
+    end
+    return h
+end
 
 function reduce(::typeof(merge), items::Vector{<:Dict})
     K = mapreduce(keytype, promote_type, items)
@@ -737,6 +749,7 @@ Create a new entry in the Immutable Dictionary for the key => value pair
 ImmutableDict
 ImmutableDict(KV::Pair{K,V}) where {K,V} = ImmutableDict{K,V}(KV[1], KV[2])
 ImmutableDict(t::ImmutableDict{K,V}, KV::Pair) where {K,V} = ImmutableDict{K,V}(t, KV[1], KV[2])
+ImmutableDict(KV::Pair, rest::Pair...) = ImmutableDict(ImmutableDict(rest...), KV)
 
 function in(key_value::Pair, dict::ImmutableDict, valcmp=(==))
     key, value = key_value

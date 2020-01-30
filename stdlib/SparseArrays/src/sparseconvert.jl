@@ -100,18 +100,18 @@ _sparsem(A::AbstractSparseVector) = A
 function _sparsem(A::Union{Transpose{<:Any,<:AbstractSparseVector},Adjoint{<:Any,<:AbstractSparseVector}})
     B = parent(A)
     n = length(B)
-    Ti = eltype(B.nzind)
+    Ti = eltype(nonzeroinds(B))
     fadj = A isa Transpose ? transpose : adjoint
     colptr = fill!(Vector{Ti}(undef, n + 1), 0)
     colptr[1] = 1
-    colptr[B.nzind .+ 1] .= 1
+    colptr[nonzeroinds(B) .+ 1] .= 1
     cumsum!(colptr, colptr)
-    rowval = fill!(similar(B.nzind), 1)
+    rowval = fill!(similar(nonzeroinds(B)), 1)
     nzval = fadj.(nonzeros(B))
     SparseMatrixCSC(1, n, colptr, rowval, nzval)
 end
 
-function _sparsem(A::Union{Transpose{<:Any,<:SparseMatrixCSC},Adjoint{<:Any,<:SparseMatrixCSC}})
+function _sparsem(A::Union{Transpose{<:Any,<:AbstractSparseMatrixCSC},Adjoint{<:Any,<:AbstractSparseMatrixCSC}})
     ftranspose(parent(A), A isa Transpose ? transpose : adjoint)
 end
 
@@ -121,7 +121,7 @@ _sparsem(A::SparseMatrixCSCSymmHerm) = _sparsem(A.uplo == 'U' ? nzrangeup : nzra
 _sparsem(A::UpperTriangular{T,<:AbstractSparseMatrix}) where T = triu(A.data)
 _sparsem(A::LowerTriangular{T,<:AbstractSparseMatrix}) where T = tril(A.data)
 # view of sparse matrix
-_sparsem(S::SubArray{<:Any,2,<:SparseMatrixCSC}) = getindex(S.parent,S.indices...)
+_sparsem(S::SubArray{<:Any,2,<:AbstractSparseMatrixCSC}) = getindex(S.parent,S.indices...)
 
 # 4 cases: (Symmetric|Hermitian) variants (:U|:L)
 function _sparsem(fnzrange::Function, sA::SparseMatrixCSCSymmHerm{Tv}) where {Tv}
@@ -174,7 +174,7 @@ function _sparsem(fnzrange::Function, sA::SparseMatrixCSCSymmHerm{Tv}) where {Tv
     _sparse_gen(m, n, newcolptr, newrowval, newnzval)
 end
 
-# 2 cases: Unit(Upper|Lower)Triangular{Tv,SparseMatrixCSC}
+# 2 cases: Unit(Upper|Lower)Triangular{Tv,AbstractSparseMatrixCSC}
 function _sparsem(A::AbstractTriangularSparse{Tv}) where Tv
     S = A.data
     rowval = rowvals(S)
@@ -183,9 +183,10 @@ function _sparsem(A::AbstractTriangularSparse{Tv}) where Tv
     Ti = eltype(rowval)
     fnzrange = A isa Union{UpperTriangular,UnitUpperTriangular} ? nzrangeup : nzrangelo
     unit = A isa Union{UnitUpperTriangular,UnitLowerTriangular}
+    nz = nnz(S) + n * unit
     newcolptr = Vector{Ti}(undef, n+1)
-    newrowval = Vector{Ti}(undef, nnz(S))
-    newnzval = Vector{Tv}(undef, nnz(S))
+    newrowval = Vector{Ti}(undef, nz)
+    newnzval = Vector{Tv}(undef, nz)
     newcolptr[1] = 1
     uplo = fnzrange == nzrangeup
     newk = 1
@@ -233,7 +234,7 @@ function _sparsem(taA::Union{Transpose{Tv,<:AbstractTriangularSparse},
     uplo = A isa Union{UpperTriangular,UnitUpperTriangular}
 
     newcolptr = Vector{Ti}(undef, n+1)
-    fill!(newcolptr, 1unit)
+    fill!(newcolptr, unit)
     newcolptr[1] = 1
     @inbounds for j = 1:n
         for k = fnzrange(A, j)

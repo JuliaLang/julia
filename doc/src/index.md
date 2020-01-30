@@ -61,7 +61,7 @@ and [Ruby](https://en.wikipedia.org/wiki/Ruby_(programming_language)).
 
 The most significant departures of Julia from typical dynamic languages are:
 
-  * The core language imposes very little; Julia Base and the standard library is written in Julia itself, including
+  * The core language imposes very little; Julia Base and the standard library are written in Julia itself, including
     primitive operations like integer arithmetic
   * A rich language of types for constructing and describing objects, that can also optionally be
     used to make type declarations

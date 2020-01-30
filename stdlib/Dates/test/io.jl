@@ -5,61 +5,9 @@ module IOTests
 using Test
 using Dates
 
-@testset "string/show representation of Period" begin
-    @test string(Dates.Year(2018)) == "2018 years"
-    @test sprint(show, Dates.Year(2018)) == "Dates.Year(2018)"
-    @test sprint(print, Dates.Year(2018)) == "2018 years"
-    @test repr(Dates.Year(2018)) == "Dates.Year(2018)"
-
-    @test string(Dates.Month(12)) == "12 months"
-    @test sprint(show, Dates.Month(12)) == "Dates.Month(12)"
-    @test sprint(print, Dates.Month(12)) == "12 months"
-    @test repr(Dates.Month(12)) == "Dates.Month(12)"
-
-    @test string(Dates.Week(4)) == "4 weeks"
-    @test sprint(show, Dates.Week(4)) == "Dates.Week(4)"
-    @test sprint(print, Dates.Week(4)) == "4 weeks"
-    @test repr(Dates.Week(4)) == "Dates.Week(4)"
-
-    @test string(Dates.Day(12)) == "12 days"
-    @test sprint(show, Dates.Day(12)) == "Dates.Day(12)"
-    @test sprint(print,Dates.Day(12)) == "12 days"
-    @test repr(Dates.Day(12)) == "Dates.Day(12)"
-
-    @test string(Dates.Hour(12)) == "12 hours"
-    @test sprint(show, Dates.Hour(12)) == "Dates.Hour(12)"
-    @test sprint(print,Dates.Hour(12)) == "12 hours"
-    @test repr(Dates.Hour(12)) == "Dates.Hour(12)"
-
-    @test string(Dates.Minute(12)) == "12 minutes"
-    @test sprint(show, Dates.Minute(12)) == "Dates.Minute(12)"
-    @test sprint(print,Dates.Minute(12)) == "12 minutes"
-    @test repr(Dates.Minute(12)) == "Dates.Minute(12)"
-
-    @test string(Dates.Second(12)) == "12 seconds"
-    @test sprint(show, Dates.Second(12)) == "Dates.Second(12)"
-    @test sprint(print,Dates.Second(12)) == "12 seconds"
-    @test repr(Dates.Second(12)) == "Dates.Second(12)"
-
-    @test string(Dates.Millisecond(12)) == "12 milliseconds"
-    @test sprint(show, Dates.Millisecond(12)) == "Dates.Millisecond(12)"
-    @test sprint(print,Dates.Millisecond(12)) == "12 milliseconds"
-    @test repr(Dates.Millisecond(12)) == "Dates.Millisecond(12)"
-
-    @test string(Dates.Microsecond(12)) == "12 microseconds"
-    @test sprint(show, Dates.Microsecond(12)) == "Dates.Microsecond(12)"
-    @test sprint(print,Dates.Microsecond(12)) == "12 microseconds"
-    @test repr(Dates.Microsecond(12)) == "Dates.Microsecond(12)"
-
-    @test string(Dates.Nanosecond(12)) == "12 nanoseconds"
-    @test sprint(show, Dates.Nanosecond(12)) == "Dates.Nanosecond(12)"
-    @test sprint(print,Dates.Nanosecond(12)) == "12 nanoseconds"
-    @test repr(Dates.Nanosecond(12)) == "Dates.Nanosecond(12)"
-end
-
 @testset "string/show representation of Date" begin
     @test string(Dates.Date(1, 1, 1)) == "0001-01-01" # January 1st, 1 AD/CE
-    @test sprint(show, Dates.Date(1, 1, 1)) == "Dates.Date(1, 1, 1)"
+    @test sprint(show, Dates.Date(1, 1, 1)) == "Dates.Date(\"0001-01-01\")"
     @test string(Dates.Date(0, 12, 31)) == "0000-12-31" # December 31, 1 BC/BCE
     @test Dates.Date(1, 1, 1) - Dates.Date(0, 12, 31) == Dates.Day(1)
     @test Dates.Date(Dates.UTD(-306)) == Dates.Date(0, 2, 29)
@@ -68,7 +16,7 @@ end
     @test string(Dates.Date(-1000000, 1, 1)) == "-1000000-01-01"
     @test string(Dates.Date(1000000, 1, 1)) == "1000000-01-01"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 1)) == "2000-01-01T00:00:00.001"
-    @test sprint(show, Dates.DateTime(2000, 1, 1, 0, 0, 0, 1)) == "Dates.DateTime(2000, 1, 1, 0, 0, 0, 1)"
+    @test sprint(show, Dates.DateTime(2000, 1, 1, 0, 0, 0, 1)) == "Dates.DateTime(\"2000-01-01T00:00:00.001\")"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 2)) == "2000-01-01T00:00:00.002"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 500)) == "2000-01-01T00:00:00.5"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 998)) == "2000-01-01T00:00:00.998"
@@ -564,6 +512,39 @@ end
     @test_throws ArgumentError DateTime("2018-01-01 24:01","yyyy-mm-dd HH:MM")
     @test_throws ArgumentError DateTime(2018, 1, 1, 24, 0, 1)
     @test_throws ArgumentError DateTime(2018, 1, 1, 24, 0, 0, 1)
+end
+
+@testset "AM/PM" begin
+    # get the current locale
+    LC_TIME = 2
+    time_locale = ccall(:setlocale, Cstring, (Cint, Cstring), LC_TIME, C_NULL)
+    try
+        # set the locale
+        ccall(:setlocale, Cstring, (Cint, Cstring), LC_TIME, "C")
+
+        for (t12,t24) in (("12:00am","00:00"), ("12:07am","00:07"), ("01:24AM","01:24"),
+                        ("12:00pm","12:00"), ("12:15pm","12:15"), ("11:59PM","23:59"))
+            d = DateTime("2018-01-01T$t24:00")
+            t = Time("$t24:00")
+            for HH in ("HH","II")
+                @test DateTime("2018-01-01 $t12","yyyy-mm-dd $HH:MMp") == d
+                @test Time("$t12","$HH:MMp") == t
+            end
+            tmstruct = Libc.strptime("%I:%M%p", t12)
+            @test Time(tmstruct) == t
+            @test uppercase(t12) == Dates.format(t, "II:MMp") ==
+                                    Dates.format(d, "II:MMp") ==
+                Libc.strftime("%I:%M%p", tmstruct)
+        end
+        for bad in ("00:24am", "00:24pm", "13:24pm", "2pm", "12:24p.m.", "12:24 pm", "12:24pµ")
+            @eval @test_throws ArgumentError Time($bad, "II:MMp")
+        end
+        # if am/pm is missing, defaults to 24-hour clock
+        @eval Time("13:24", "II:MMp") == Time("13:24", "HH:MM")
+    finally
+        # recover the locale
+        ccall(:setlocale, Cstring, (Cint, Cstring), LC_TIME, time_locale)
+    end
 end
 
 end

@@ -74,14 +74,25 @@ end
     end
     if isa(obj, UnionAll) || isa(obj, Union)
         # black-list of items that don't have a Core.sizeof
-        return 2 * sizeof(Int)
+        sz = 2 * sizeof(Int)
+    else
+        sz = Core.sizeof(obj)
     end
-    return Core.sizeof(obj)
+    if sz == 0
+        # 0-field mutable structs are not unique
+        return gc_alignment(0)
+    end
+    return sz
 end
 
 (::SummarySize)(obj::Symbol) = 0
 (::SummarySize)(obj::SummarySize) = 0
-(::SummarySize)(obj::String) = Core.sizeof(Int) + Core.sizeof(obj)
+
+function (ss::SummarySize)(obj::String)
+    key = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), obj)
+    haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
+    return Core.sizeof(Int) + Core.sizeof(obj)
+end
 
 function (ss::SummarySize)(obj::DataType)
     key = pointer_from_objref(obj)
@@ -108,8 +119,13 @@ function (ss::SummarySize)(obj::Array)
     datakey = unsafe_convert(Ptr{Cvoid}, obj)
     if !haskey(ss.seen, datakey)
         ss.seen[datakey] = true
-        size += Core.sizeof(obj)
-        if !isbitstype(eltype(obj)) && !isempty(obj)
+        dsize = Core.sizeof(obj)
+        if isbitsunion(eltype(obj))
+            # add 1 union selector byte for each element
+            dsize += length(obj)
+        end
+        size += dsize
+        if !isempty(obj) && !Base.allocatedinline(eltype(obj))
             push!(ss.frontier_x, obj)
             push!(ss.frontier_i, 1)
         end

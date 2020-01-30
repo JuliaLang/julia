@@ -35,11 +35,29 @@ void jl_timing_block_stop(jl_timing_block_t *cur_block);
 #define JL_TIMING(owner)
 #else
 
-static inline uint64_t rdtscp(void)
+// number of cycles since power-on
+static inline uint64_t cycleclock(void)
 {
-    uint64_t rax,rdx;
-    asm volatile ( "rdtscp\n" : "=a" (rax), "=d" (rdx) : : "rcx" );
-    return (rdx << 32) + rax;
+#if defined(_CPU_X86_64_)
+    uint64_t low, high;
+    __asm__ volatile("rdtsc" : "=a"(low), "=d"(high));
+    return (high << 32) | low;
+#elif defined(_CPU_X86_)
+    int64_t ret;
+    __asm__ volatile("rdtsc" : "=A"(ret));
+    return ret;
+#elif defined(_CPU_AARCH64_)
+    // System timer of ARMv8 runs at a different frequency than the CPU's.
+    // The frequency is fixed, typically in the range 1-50MHz.  It can be
+    // read at CNTFRQ special register.  We assume the OS has set up
+    // the virtual timer properly.
+    int64_t virtual_timer_value;
+    asm volatile("mrs %0, cntvct_el0" : "=r"(virtual_timer_value));
+    return virtual_timer_value;
+#else
+    #error No cycleclock() definition for your platform
+    // copy from https://github.com/google/benchmark/blob/v1.5.0/src/cycleclock.h
+#endif
 }
 
 #define JL_TIMING_OWNERS          \
@@ -107,7 +125,7 @@ STATIC_INLINE void _jl_timing_block_start(jl_timing_block_t *block, uint64_t t) 
 }
 
 STATIC_INLINE uint64_t _jl_timing_block_init(jl_timing_block_t *block, int owner) {
-    uint64_t t = rdtscp();
+    uint64_t t = cycleclock();
     block->owner = owner;
     block->total = 0;
 #ifdef JL_DEBUG_BUILD
@@ -127,7 +145,7 @@ STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int owner) {
 }
 
 STATIC_INLINE void _jl_timing_block_destroy(jl_timing_block_t *block) {
-    uint64_t t = rdtscp();
+    uint64_t t = cycleclock();
     _jl_timing_block_stop(block, t);
     jl_timing_data[block->owner] += block->total;
     jl_timing_block_t **pcur = jl_current_task ? &jl_current_task->timing_stack : &jl_root_timing;

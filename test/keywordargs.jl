@@ -353,3 +353,11 @@ function g32074(i::Int32; args...)
     hook(i; args...)
 end
 @test isempty(g32074(Int32(1)))
+
+# issue #33026
+using InteractiveUtils
+@test (@which kwf1(1, tens=2)).line > 0
+
+no_kw_args(x::Int) = 0
+@test_throws MethodError no_kw_args(1, k=1)
+@test_throws MethodError no_kw_args("", k=1)

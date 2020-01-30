@@ -7,10 +7,10 @@ struct DateLocale
     months_abbr::Vector{String}
     days_of_week::Vector{String}
     days_of_week_abbr::Vector{String}
-    month_value::Dict{String, Int}
-    month_abbr_value::Dict{String, Int}
-    day_of_week_value::Dict{String, Int}
-    day_of_week_abbr_value::Dict{String, Int}
+    month_value::Dict{String, Int64}
+    month_abbr_value::Dict{String, Int64}
+    day_of_week_value::Dict{String, Int64}
+    day_of_week_abbr_value::Dict{String, Int64}
 end
 
 function locale_dict(names::Vector{<:AbstractString})
@@ -152,14 +152,18 @@ dayabbr(day::Integer; locale::AbstractString="english") = dayabbr(day, LOCALES[l
 
 """
     dayname(dt::TimeType; locale="english") -> String
+    dayname(day::Integer; locale="english") -> String
 
 Return the full day name corresponding to the day of the week of the `Date` or `DateTime` in
-the given `locale`.
+the given `locale`. Also accepts `Integer`.
 
 # Examples
 ```jldoctest
 julia> Dates.dayname(Date("2000-01-01"))
 "Saturday"
+
+julia> Dates.dayname(4)
+"Thursday"
 ```
 """
 function dayname(dt::TimeType;locale::AbstractString="english")
@@ -168,14 +172,18 @@ end
 
 """
     dayabbr(dt::TimeType; locale="english") -> String
+    dayabbr(day::Integer; locale="english") -> String
 
 Return the abbreviated name corresponding to the day of the week of the `Date` or `DateTime`
-in the given `locale`.
+in the given `locale`. Also accepts `Integer`.
 
 # Examples
 ```jldoctest
 julia> Dates.dayabbr(Date("2000-01-01"))
 "Sat"
+
+julia> Dates.dayabbr(3)
+"Wed"
 ```
 """
 function dayabbr(dt::TimeType;locale::AbstractString="english")
@@ -554,13 +562,18 @@ monthabbr(month::Integer; locale::AbstractString="english") = monthabbr(month, L
 
 """
     monthname(dt::TimeType; locale="english") -> String
+    monthname(month::Integer, locale="english") -> String
 
-Return the full name of the month of the `Date` or `DateTime` in the given `locale`.
+
+Return the full name of the month of the `Date` or `DateTime` or `Integer` in the given `locale`.
 
 # Examples
 ```jldoctest
 julia> Dates.monthname(Date("2005-01-04"))
 "January"
+
+julia> Dates.monthname(2)
+"February"
 ```
 """
 function monthname(dt::TimeType; locale::AbstractString="english")
@@ -569,13 +582,17 @@ end
 
 """
     monthabbr(dt::TimeType; locale="english") -> String
+    monthabbr(month::Integer, locale="english") -> String
 
-Return the abbreviated month name of the `Date` or `DateTime` in the given `locale`.
+Return the abbreviated month name of the `Date` or `DateTime` or `Integer` in the given `locale`.
 
 # Examples
 ```jldoctest
 julia> Dates.monthabbr(Date("2005-01-04"))
 "Jan"
+
+julia> monthabbr(2)
+"Feb"
 ```
 """
 function monthabbr(dt::TimeType; locale::AbstractString="english")
