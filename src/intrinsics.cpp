@@ -341,7 +341,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         Type *dest_ty = unboxed->getType()->getPointerTo();
         if (dest->getType() != dest_ty)
             dest = emit_bitcast(ctx, dest, dest_ty);
-        tbaa_decorate(tbaa_dest, ctx.builder.CreateStore(unboxed, dest));
+        tbaa_decorate(tbaa_dest, ctx.builder.CreateAlignedStore(unboxed, dest, julia_alignment(jt)));
         return NULL;
     }
 

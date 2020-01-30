@@ -934,8 +934,8 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
     // SSA from it are live when we run the allocation again.
     // It is now safe to promote the allocation to an entry block alloca.
     size_t align = 1;
-    // TODO make codegen handling of alignment consistent and pass that as a parameter
-    // to the allocation function directly.
+    // TODO: This is overly conservative. May want to instead pass this as a
+    //       parameter to the allocation function directly.
     if (sz > 1)
         align = MinAlign(JL_SMALL_BYTE_ALIGNMENT, NextPowerOf2(sz));
     // No debug info for prolog instructions
