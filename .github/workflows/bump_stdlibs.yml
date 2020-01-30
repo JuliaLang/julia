@@ -28,4 +28,4 @@ jobs:
           BumpStdlibs.main("${{ github.repository }}",
           ["Pkg" => "https://github.com/JuliaLang/Pkg.jl",
            "Statistics" => "https://github.com/JuliaLang/Statistics.jl"];
-          cc_usernames = String["@DilumAluthge"])
+          cc_usernames = String["@DilumAluthge"])'
