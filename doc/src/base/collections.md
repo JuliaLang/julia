@@ -236,30 +236,28 @@ Partially implemented by:
   * [`Iterators.Pairs`](@ref)
 
 ## Set-Like Collections
-A [`Set`](@ref) is a collection of elements with no duplicated elements and keys/indices. So in contrast to other types of collection, in a `Set` you can have only one of each element, and the order of elements isn't important (whereas an array can have multiple copies of an element and their order is remembered).
+A [`Set`](@ref) is a collection of elements with no duplicated elements and keys/indices (unlike `Array` or `Dict`). So in a `Set` you can have only one of each element, and the order of elements isn't important.
 
 ```jldoctest set_collections
 julia> colors = Set(["yellow", "blue", "green", "red"])
 Set(["yellow", "blue", "green", "red"])
 ```
 
-You can use [`push!`](@ref) to add elements to a set:
+Use [`push!`](@ref) to add elements to a set:
 ```jldoctest set_collections
 julia> push!(colors, "black")
 Set(["yellow", "blue", "green", "black", "red"])
 ```
 
-If you try to add something to the set that's already there nothing will happen, because sets don't store repeated elements.
+Since sets don't store repeated elements, `push!` will not have any effect for pushing the elements that are already in the set. Also because `Set` doesn't have a concept of "first" (unlike `Array`), using [`pushfirst!`](@ref) to insert an item at the beginning of a set will result in an error.
 
-You can't use [`pushfirst!`](@ref), because that works only for things that have a concept of "first", like arrays.
-
-To see if something is in the set, you can use [`in`](@ref):
+To see if something is in the set, use [`in`](@ref):
 ```jldoctest set_collections
 julia> "green" in colors  # or: in("green", colors)
 true
 ```
 
-To access each element of a `Set` you can loop over the elements:
+To access each element of a `Set`, you can loop over the elements:
 ```jldoctest set_collections
 julia> for color in colors
   println(color)
@@ -269,7 +267,8 @@ blue
 green
 red
 ```
-You can also [`filter`](@ref) some of the elements:
+
+Use [`filter`](@ref) for filtering the elements based on a given function:
 ```jldoctest set_collections
 julia> filter(c -> c != "yellow", colors)
 Set(["blue", "green", "red"])
