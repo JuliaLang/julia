@@ -7,7 +7,7 @@ For example, `1` is an integer literal, while `1.0` is a floating-point literal;
 in-memory representations as objects are numeric primitives.
 
 Julia provides a broad range of primitive numeric types, and a full complement of arithmetic and
-bitwise operators as well as standard mathematical functions are defined over them. These map
+bitwise operators, as well as standard mathematical functions are defined over them. These map
 directly onto numeric types and operations that are natively supported on modern computers, thus
 allowing Julia to take full advantage of computational resources. Additionally, Julia provides
 software support for [Arbitrary Precision Arithmetic](@ref), which can handle operations on numeric
