@@ -1482,10 +1482,9 @@ end
     mktempdir() do dir
         path = Libc.mkfifo(joinpath(dir, "fifo"))
         @sync begin
-            cat_exec = `$(Base.julia_cmd()) --startup-file=no -e "write(stdout, read(ARGS[1]))"`
-            reader = @async read(`$cat_exec $path`, String)
             @async write(path, "hello")
-            @test fetch(reader) == "hello"
+            cat_exec = `$(Base.julia_cmd()) --startup-file=no -e "write(stdout, read(ARGS[1]))"`
+            @test read(`$cat_exec $path`, String) == "hello"
         end
 
         existing_file = joinpath(dir, "existing")
