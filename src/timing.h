@@ -29,8 +29,6 @@ void jl_timing_block_stop(jl_timing_block_t *cur_block);
 #define HAVE_TIMING_SUPPORT
 #elif defined(_COMPILER_GCC_)
 #define HAVE_TIMING_SUPPORT
-#elif defined(_COMPILER_MINGW_)
-#define HAVE_TIMING_SUPPORT
 #endif
 
 #ifndef HAVE_TIMING_SUPPORT
