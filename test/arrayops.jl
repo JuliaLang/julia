@@ -2344,7 +2344,6 @@ end
     @test size(a) == (2,3)
     @test (size(a, 1), size(a, 2), size(a, 3)) == (2,3,1)
     @test size(a) == size(b)
-    a = Array{Float64}(undef, unsigned(2), unsigned(3), unsigned(4))
     a = Array{Float64}(undef, 9,8,7,6,5,4,3,2,1)
     b = Array{Float64,9}(undef, 9,8,7,6,5,4,3,2,1)
     @test size(a,4) == 6
