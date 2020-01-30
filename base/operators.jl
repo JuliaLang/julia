@@ -1100,6 +1100,12 @@ true
 
 julia> missing in Set([1, 2])
 false
+
+julia> !(20 in a) #logically similar to "not in" 
+true
+
+julia> !(19 in a)
+false
 ```
 """
 in, ∋
