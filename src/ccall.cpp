@@ -418,6 +418,7 @@ static Value *llvm_type_rewrite(
         from = emit_static_alloca(ctx, from_type);
         to = emit_bitcast(ctx, from, target_type->getPointerTo());
     }
+    // XXX: deal with possible alignment issues
     ctx.builder.CreateStore(v, from);
     return ctx.builder.CreateLoad(to);
 }
@@ -514,7 +515,7 @@ static Value *julia_to_native(
         tbaa_decorate(jvinfo.tbaa, ctx.builder.CreateStore(emit_unbox(ctx, to, jvinfo, jlto), slot));
     }
     else {
-        emit_memcpy(ctx, slot, jvinfo.tbaa, jvinfo, jl_datatype_size(jlto), jl_datatype_align(jlto));
+        emit_memcpy(ctx, slot, jvinfo.tbaa, jvinfo, jl_datatype_size(jlto), julia_alignment(jlto));
     }
     return slot;
 }
@@ -1945,7 +1946,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 assert(rtsz > 0);
                 Value *strct = emit_allocobj(ctx, rtsz, runtime_bt);
                 MDNode *tbaa = jl_is_mutable(rt) ? tbaa_mutab : tbaa_immut;
-                int boxalign = jl_datatype_align(rt);
+                int boxalign = julia_alignment(rt);
                 // copy the data from the return value to the new struct
                 const DataLayout &DL = jl_data_layout;
                 auto resultTy = result->getType();
