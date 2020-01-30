@@ -24,7 +24,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: julia -e '
           include("contrib/BumpStdlibs.jl");
-          ${{ github.repository }}" == "JuliaLang/julia" &&
+          "${{ github.repository }}" == "JuliaLang/julia" &&
           BumpStdlibs.main("${{ github.repository }}",
           ["Pkg" => "https://github.com/JuliaLang/Pkg.jl",
            "Statistics" => "https://github.com/JuliaLang/Statistics.jl"];
