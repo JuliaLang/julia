@@ -1078,6 +1078,9 @@ Some collections follow a slightly different definition. For example,
 use [`haskey`](@ref) or `k in keys(dict)`. For these collections, the result
 is always a `Bool` and never `missing`.
 
+To determine whether an item is not in a given collection, see [`∉`](@ref) or [`∌`](@ref). 
+You may also negate the `in` by doing `!(a in b)` which is logically similar to "not in". 
+
 # Examples
 ```jldoctest
 julia> a = 1:3:20
@@ -1101,7 +1104,7 @@ true
 julia> missing in Set([1, 2])
 false
 
-julia> !(20 in a) #logically similar to "not in"
+julia> !(20 in a)
 true
 
 julia> !(19 in a)
