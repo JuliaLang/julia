@@ -58,7 +58,7 @@ end
 
 function generate_precompile_statements()
     start_time = time()
-    debug_output = devnull # or stdout
+    debug_output = stdout # or stdout
 
     # Precompile a package
     mktempdir() do prec_path
@@ -143,7 +143,6 @@ function generate_precompile_statements()
         success(p) || Base.pipeline_error(p)
         close(pty_master)
         write(debug_output, "\n#### FINISHED ####\n")
-
         # Extract the precompile statements from the precompile file
         statements = Set{String}()
         for statement in eachline(precompile_file_h)
@@ -159,7 +158,6 @@ function generate_precompile_statements()
                 eval(PrecompileStagingArea, :(const $(Symbol(_mod)) = $_mod))
             end
         end
-
         # Execute the collected precompile statements
         n_succeeded = 0
         include_time = @elapsed for statement in sort(collect(statements))
