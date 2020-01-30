@@ -403,12 +403,17 @@ Interface to the C `srand(seed)` function.
 """
 srand(seed=floor(Int, time()) % Cuint) = ccall(:srand, Cvoid, (Cuint,), seed)
 
-if Sys.isunix()
-    @doc """
-        mkfifo(path::AbstractString, [mode::Integer]) -> path
+"""
+    mkfifo(path::AbstractString, [mode::Integer]) -> path
 
-    Make a FIFO special file (a named pipe) at `path`.  Return `path` as-is on success.
-    """ ->
+Make a FIFO special file (a named pipe) at `path`.  Return `path` as-is on success.
+
+!!! compat "Julia 1.5"
+    `mkfifo` requires at least Julia 1.5.
+"""
+function mkfifo end
+
+if Sys.isunix()
     function mkfifo(
         path::AbstractString,
         mode::Integer = Base.S_IRUSR | Base.S_IWUSR | Base.S_IRGRP | Base.S_IWGRP |
