@@ -2351,6 +2351,17 @@ end
     @test size(a) == size(b)
 end
 
+@testset "Converting size integers to ints" begin
+    @test size(Array{Float64}(undef, unsigned(2))) == (2,)
+    @test size(Array{Float64}(undef, unsigned(2), unsigned(3))) == (2, 3)
+    @test size(Array{Float64}(undef, unsigned(2), unsigned(3), unsigned(4))) == (2, 3, 4)
+    @test size(Array{Float64}(undef, unsigned(2), unsigned(3), unsigned(4), unsigned(5))) == (2, 3, 4, 5)
+    # with number of dimensions
+    @test size(Array{Float64, 3}(undef, unsigned(2), unsigned(3), unsigned(4))) == (2, 3, 4)
+    # unsplatted
+    @test size(Array{Float64}(undef, (unsigned(2), unsigned(3), unsigned(4)))) == (2, 3, 4)
+end
+
 @testset "type constructor Array{T, N}(nothing, d...) works (especially for N>3)" for T in (Int, String),
                                                                                       U in (Nothing, Missing)
     a = Array{Union{T, U}}(U(), 10)
