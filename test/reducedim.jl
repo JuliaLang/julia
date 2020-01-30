@@ -108,6 +108,15 @@ end
 @test typeof(@inferred(mapreduce(abs, +, [1.0+1.0im], dims=1))) == Vector{Float64}
 @test typeof(mapreduce(abs, +, Complex[1+1im, 1.0+1.0im], dims=1)) == Vector{Real}
 
+# Weird axis error
+struct TestArray{T, N} <: AbstractArray{T, N} end
+struct TestRange <: AbstractUnitRange{Int} end
+import Base: axes
+axes(::TestArray{T, N}) where {T, N} = ntuple(x -> TestRange(), N)
+@test_throws ArgumentError(
+    "No method is implemented for reducing index range of type TestRange. Please implement reduced_index for this index type or report this as an issue."
+) sum(TestArray{Int, 3}(), dims = 1)
+
 @testset "heterogeneously typed arrays" begin
     for x in (sum(Union{Float32, Float64}[1.0], dims=1),
               prod(Union{Float32, Float64}[1.0], dims=1))
