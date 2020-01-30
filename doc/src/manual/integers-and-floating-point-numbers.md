@@ -99,8 +99,8 @@ julia> UInt
 UInt64
 ```
 
-Larger integer literals that cannot be represented using only 32 bits but can be represented in
-64 bits always create 64-bit integers, regardless of the system type:
+Larger integer literals that cannot be represented using only 32 bits, but can be represented in
+64 bits, always create 64-bit integers, regardless of the system type:
 
 ```jldoctest
 # 32-bit or 64-bit system:
@@ -108,7 +108,7 @@ julia> typeof(3000000000)
 Int64
 ```
 
-Unsigned integers are input and output using the `0x` prefix and hexadecimal (base 16) digits
+Unsigned integers are used as input and output using the `0x` prefix and hexadecimal (base 16) digits
 `0-9a-f` (the capitalized digits `A-F` also work for input). The size of the unsigned value is
 determined by the number of hex digits used:
 
