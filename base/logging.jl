@@ -204,7 +204,7 @@ end
 macro _sourceinfo()
     esc(quote
         (__module__,
-         __source__.file === nothing ? "?" : String(__source__.file),
+         __source__.file === nothing ? "?" : String(__source__.file::Symbol),
          __source__.line)
     end)
 end
