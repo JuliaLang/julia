@@ -484,24 +484,11 @@ function socket_reuse_port()
     end
 end
 
-# TODO: this doesn't belong here, it belongs in Sockets
-# TODO : when I try to use Sockets.bind instead, `make` hangs
-function bind(sock, host, port)
-    Sockets.iolock_begin()
-    @assert sock.status == Sockets.StatusInit
-    host_in = Ref(hton(host.host))
-    err = ccall(:jl_tcp_bind, Int32, (Ptr{Cvoid}, UInt16, Ptr{Cvoid}, Cuint, Cint),
-                sock, hton(port), host_in, 0, false)
-    Sockets.iolock_end()
-    uv_error("tcp_bind", err)
-    return true
-end
-
 function bind_client_port(sock::TCPSocket)
     host = Sockets.IPv4("0.0.0.0")
-    p = client_port[]
 
-    bind(sock, host, p)
+    Sockets.bind(sock, host, client_port[])
+    sock.status = Sockets.StatusInit
 
     _addr, port = getsockname(sock)
     client_port[] = port
