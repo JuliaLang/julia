@@ -386,8 +386,8 @@ static unsigned julia_alignment(jl_value_t *jt)
     }
     assert(jl_is_datatype(jt) && ((jl_datatype_t*)jt)->layout);
     unsigned alignment = jl_datatype_align(jt);
-    assert(alignment <= JL_HEAP_ALIGNMENT);
-    assert(JL_HEAP_ALIGNMENT % alignment == 0);
+    if (alignment > JL_HEAP_ALIGNMENT)
+        return JL_HEAP_ALIGNMENT;
     return alignment;
 }
 
@@ -594,7 +594,7 @@ static unsigned jl_field_align(jl_datatype_t *dt, size_t i)
     unsigned al = jl_field_offset(dt, i);
     al |= 16;
     al &= -al;
-    return std::min(al, jl_datatype_align(dt));
+    return std::min({al, (unsigned)jl_datatype_align(dt), (unsigned)JL_HEAP_ALIGNMENT});
 }
 
 static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isboxed, bool llvmcall)
@@ -636,7 +636,6 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
                 if (jst->layout) {
                     assert(isptr == jl_field_isptr(jst, i));
                     assert((isptr ? sizeof(void*) : fsz + jl_is_uniontype(ty)) == jl_field_size(jst, i));
-                    assert(al <= jl_field_align(jst, i));
                 }
                 Type *lty;
                 if (isptr) {
@@ -647,8 +646,15 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
                     lty = T_int8;
                 }
                 else if (jl_is_uniontype(ty)) {
-                    // pick an Integer type size such that alignment will be correct
-                    // and always end with an Int8 (selector byte)
+                    // pick an Integer type size such that alignment will generally be correct,
+                    // and always end with an Int8 (selector byte).
+                    // We may need to insert padding first to get to the right offset
+                    if (al > MAX_ALIGN) {
+                        Type *AlignmentType = ArrayType::get(VectorType::get(T_int8, al), 0);
+                        latypes.push_back(AlignmentType);
+                        al = MAX_ALIGN;
+                    }
+                    assert(al <= jl_field_align(jst, i));
                     Type *AlignmentType = IntegerType::get(jl_LLVMContext, 8 * al);
                     unsigned NumATy = fsz / al;
                     unsigned remainder = fsz % al;
@@ -1212,7 +1218,7 @@ static Value *emit_isconcrete(jl_codectx_t &ctx, Value *typ)
 {
     Value *isconcrete;
     isconcrete = ctx.builder.CreateConstInBoundsGEP1_32(T_int8, emit_bitcast(ctx, decay_derived(typ), T_pint8), offsetof(jl_datatype_t, isconcretetype));
-    isconcrete = ctx.builder.CreateLoad(isconcrete, tbaa_const);
+    isconcrete = ctx.builder.CreateLoad(T_int8, isconcrete, tbaa_const);
     isconcrete = ctx.builder.CreateTrunc(isconcrete, T_int1);
     return isconcrete;
 }
@@ -1336,7 +1342,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     //}
     //else {
         load = ctx.builder.CreateAlignedLoad(data,
-            isboxed || alignment ?  alignment : julia_alignment(jltype),
+            isboxed || alignment ? alignment : julia_alignment(jltype),
             false);
         if (aliasscope)
             load->setMetadata("alias.scope", aliasscope);
@@ -2434,7 +2440,8 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo)
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, const jl_cgval_t &src, Value *skip, bool isVolatile=false)
 {
     if (AllocaInst *ai = dyn_cast<AllocaInst>(dest))
-        ctx.builder.CreateStore(UndefValue::get(ai->getAllocatedType()), ai);
+        // TODO: make this a lifetime_end & dereferencable annotation?
+        ctx.builder.CreateAlignedStore(UndefValue::get(ai->getAllocatedType()), ai, ai->getAlignment());
     if (jl_is_concrete_type(src.typ) || src.constant) {
         jl_value_t *typ = src.constant ? jl_typeof(src.constant) : src.typ;
         Type *store_ty = julia_type_to_llvm(typ);
@@ -2694,7 +2701,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 if (jl_field_isptr(sty, i)) {
                     fval = boxed(ctx, fval_info);
                     if (!init_as_value)
-                        tbaa_decorate(tbaa_stack, ctx.builder.CreateStore(fval, dest));
+                        tbaa_decorate(tbaa_stack, ctx.builder.CreateAlignedStore(fval, dest, jl_field_align(sty, i)));
                 }
                 else if (jl_is_uniontype(jtype)) {
                     // compute tindex from rhs
