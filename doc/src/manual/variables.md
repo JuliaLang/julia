@@ -136,7 +136,7 @@ conventions:
     camel case instead of underscores.
   * Names of `function`s and `macro`s are in lower case, without underscores.
   * Functions that write to their arguments have names that end in `!`. These are sometimes called
-    "mutating" or "in-place" functions because they are intended to produce changes in their arguments
+    "mutating" or "in-place" functions because they are intended to produce changes to their arguments
     after the function is called, not just return a value.
 
 For more information about stylistic conventions, see the [Style Guide](@ref).
