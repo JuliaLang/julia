@@ -105,6 +105,8 @@ end
 @test typeof(@inferred(prod([1.0+1.0im], dims=1))) == Vector{ComplexF64}
 @test typeof(@inferred(Base.prod(abs, [1.0+1.0im], dims=1))) == Vector{Float64}
 @test typeof(@inferred(Base.prod(abs2, [1.0+1.0im], dims=1))) == Vector{Float64}
+@test typeof(@inferred(mapreduce(abs, +, [1.0+1.0im], dims=1))) == Vector{Float64}
+@test typeof(mapreduce(abs, +, Complex[1+1im, 1.0+1.0im], dims=1)) == Vector{Real}
 
 @testset "heterogeneously typed arrays" begin
     for x in (sum(Union{Float32, Float64}[1.0], dims=1),

@@ -6,12 +6,7 @@
 reduced_index(i::OneTo) = OneTo(1)
 reduced_index(i::Union{Slice, IdentityUnitRange}) = first(i):first(i)
 reduced_index(i::AbstractUnitRange) =
-    throw(ArgumentError(
-"""
-No method is implemented for reducing index range of type $typeof(i). Please implement
-reduced_index for this index type or report this as an issue.
-"""
-    ))
+    throw(ArgumentError("No method is implemented for reducing index range of type $(typeof(i)). Please implement reduced_index for this index type or report this as an issue."))
 reduced_indices(a::AbstractArray, region) = reduced_indices(axes(a), region)
 
 # for reductions that keep 0 dims as 0
@@ -226,11 +221,12 @@ end
 # We know that the axes of R and A are compatible, but R might have a different number of
 # dimensions than A, which is trickier than it seems due to offset arrays and type stability
 _firstreducedslice(::Tuple{}, a::Tuple{}) = ()
-_firstreducedslice(::Tuple, ::Tuple{}) = ()
+_firstreducedslice(::Tuple, ::Tuple{}) = throw(DimensionMismatch("Unreachable: too many axes"))
 @inline _firstreducedslice(::Tuple{}, a::Tuple) = (_firstslice(a[1]), _firstreducedslice((), tail(a))...)
 @inline _firstreducedslice(r::Tuple, a::Tuple) = (length(r[1])==1 ? _firstslice(a[1]) : r[1], _firstreducedslice(tail(r), tail(a))...)
 _firstslice(i::OneTo) = OneTo(1)
-_firstslice(i::Slice) = Slice(_firstslice(i.indices))
+# Not needed: _firstslice is always called on axes, and axes are never Slices
+# _firstslice(i::Slice) = Slice(_firstslice(i.indices))
 _firstslice(i) = i[firstindex(i):firstindex(i)]
 
 function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
