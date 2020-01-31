@@ -718,21 +718,19 @@ for new string types if necessary.
 
 # Examples
 ```jldoctest
-julia> codeunits("Julia is fast")
-13-element Base.CodeUnits{UInt8,String}:
+julia> codeunits("Julia")
+5-element Base.CodeUnits{UInt8,String}:
  0x4a
  0x75
  0x6c
  0x69
  0x61
- 0x20
- 0x69
- 0x73
- 0x20
- 0x66
- 0x61
- 0x73
- 0x74
+
+julia> codeunits("∫")
+3-element Base.CodeUnits{UInt8,String}:
+ 0xe2
+ 0x88
+ 0xab
 ```
 """
 codeunits(s::AbstractString) = CodeUnits(s)
