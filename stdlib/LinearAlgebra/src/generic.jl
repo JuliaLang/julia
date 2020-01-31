@@ -28,7 +28,7 @@ end
 MulAddMul(alpha::TA, beta::TB) where {TA, TB} =
     MulAddMul{isone(alpha), iszero(beta), TA, TB}(alpha, beta)
 
-MulAddMul() = MulAddMul(true, false)
+MulAddMul() = MulAddMul{true,true}(true, false)
 
 @inline (::MulAddMul{true})(x) = x
 @inline (p::MulAddMul{false})(x) = x * p.alpha
