@@ -52,11 +52,14 @@ code unit value when calling `codeunit(s,i)`.
 
 # Examples
 ```jldoctest
-julia> ncodeunits("Hello world")
-11
-
 julia> ncodeunits("The Julia Language")
 18
+
+julia> ncodeunits("∫")
+3
+
+julia> ncodeunits("Ä")
+2
 ```
 
 See also: [`codeunit`](@ref), [`checkbounds`](@ref), [`sizeof`](@ref),
