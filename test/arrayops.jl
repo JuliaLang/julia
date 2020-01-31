@@ -683,6 +683,12 @@ end
     y = [0, 0, 0, 0]
     copyto!(y, x)
     @test y == [1, 2, 3, 4]
+    y = [0, 0, 0, 0]
+    copyto!(x, y)
+    @test all(x .== [0 3; 0 4])
+    y = [0 0; 0 0]
+    copyto!(x, y)
+    @test all(x .== 0)
 end
 
 @testset "circshift" begin
