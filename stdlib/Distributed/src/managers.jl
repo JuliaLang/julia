@@ -461,14 +461,14 @@ end
 
 const client_port = Ref{Cushort}(0)
 
-function socket_reuse_port()
+function socket_reuse_port(iptype)
     if ccall(:jl_has_so_reuseport, Int32, ()) == 1
         sock = TCPSocket(delay = false)
 
         # Some systems (e.g. Linux) require the port to be bound before setting REUSEPORT
         bind_early = Sys.islinux()
 
-        bind_early && bind_client_port(s)
+        bind_early && bind_client_port(sock, iptype)
         rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Cvoid},), sock.handle)
         if rc < 0
             # This is an issue only on systems with lots of client connections, hence delay the warning
@@ -477,26 +477,25 @@ function socket_reuse_port()
             # provide a clean new socket
             return TCPSocket()
         end
-        bind_early || bind_client_port(sock)
+        bind_early || bind_client_port(sock, iptype)
         return sock
     else
         return TCPSocket()
     end
 end
 
-function bind_client_port(sock::TCPSocket)
-    host = Sockets.IPv4("0.0.0.0")
-
-    Sockets.bind(sock, host, client_port[])
-    sock.status = Sockets.StatusInit
-
+function bind_client_port(sock::TCPSocket, iptype)
+    bind_host = iptype == IPv4 ? IPv4(0) : IPv6(0)
+    Sockets.bind(sock, bind_host, client_port[])
     _addr, port = getsockname(sock)
     client_port[] = port
     return sock
 end
 
 function connect_to_worker(host::AbstractString, port::Integer)
-    sock = socket_reuse_port()
+    ipaddr = getaddrinfo(host)
+    iptype = typeof(ipaddr)
+    sock = socket_reuse_port(iptype)
     connect(sock, host, UInt16(port))
 
     # Avoid calling getaddrinfo if possible - involves a DNS lookup

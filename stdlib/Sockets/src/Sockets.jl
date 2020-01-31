@@ -275,7 +275,9 @@ function bind(sock::Union{TCPServer, UDPSocket, TCPSocket}, host::IPAddr, port::
             return false
         end
     end
-    sock.status = StatusOpen
+    if typeof(sock) != TCPSocket
+        sock.status = StatusOpen
+    end
     isa(sock, UDPSocket) && setopt(sock; kws...)
     iolock_end()
     return true
