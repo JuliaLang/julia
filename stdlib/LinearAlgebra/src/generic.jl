@@ -41,7 +41,7 @@ end
     end
 end
 
-MulAddMul() = MulAddMul{true,true}(true, false)
+MulAddMul() = MulAddMul{true,true,Bool,Bool}(true, false)
 
 @inline (::MulAddMul{true})(x) = x
 @inline (p::MulAddMul{false})(x) = x * p.alpha
