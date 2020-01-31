@@ -36,6 +36,7 @@ Julia includes code from the following projects, which have their own licenses:
 - [MINGW](https://sourceforge.net/p/mingw/mingw-org-wsl/ci/legacy/tree/mingwrt/mingwex/dirname.c) (for dirname implementation on Windows) [MIT]
 - [NetBSD](https://www.netbsd.org/about/redistribution.html) (for setjmp, longjmp, and strptime implementations on Windows) [BSD-3]
 - [Python](https://docs.python.org/2/license.html) (for strtod and joinpath implementation on Windows) [BSD-3, effectively]
+- [Google Benchmark](https://github.com/google/benchmark) (for cyclecount implementation) [Apache 2.0]
 
 The following components included in Julia `Base` have their own separate licenses:
 

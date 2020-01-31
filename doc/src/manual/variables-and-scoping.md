@@ -116,20 +116,19 @@ expression means based on where the assignment expression occurs and what `x` al
 that location:
 
 1. **Existing local:** If `x` is *already a local variable*, then the existing local `x` is
-assigned;
-
-2. **Hard scope:** If `x` is *not already a local variable* and assignment occurs inside of any hard
-scope construct (i.e. within a let block, function or macro body, comprehension, or generator), a new
-local named `x` is created in the scope of the assignment;
-
+   assigned;
+2. **Hard scope:** If `x` is *not already a local variable* and assignment occurs inside of any
+   hard scope construct (i.e. within a let block, function or macro body, comprehension, or
+   generator), a new local named `x` is created in the scope of the assignment;
 3. **Soft scope:** If `x` is *not already a local variable* and all of the scope constructs
-containing the assignment are soft scopes (loops, `try`/`catch` blocks, or `struct` blocks), the
-behavior depends on whether the global variable `x` is defined:
-  * if global `x` is **undefined**, a new local named `x` is created in the scope of the assignment;
-  * if global `x` is **defined**, the assignment is considered ambiguous:
-    * in non-interactive contexts (files, eval), an ambiguity warning is printed and a new local
-      is created;
-    * in interactive contexts (REPL, notebooks), the global variable `x` is assigned.
+   containing the assignment are soft scopes (loops, `try`/`catch` blocks, or `struct` blocks), the
+   behavior depends on whether the global variable `x` is defined:
+   * if global `x` is *undefined*, a new local named `x` is created in the scope of the
+     assignment;
+   * if global `x` is *defined*, the assignment is considered ambiguous:
+     * in *non-interactive* contexts (files, eval), an ambiguity warning is printed and a new
+       local is created;
+     * in *interactive* contexts (REPL, notebooks), the global variable `x` is assigned.
 
 You may note that in non-interactive contexts the hard and soft scope behaviors are identical except
 that a warning is printed when an implicitly local variable (i.e. not declared with `local x`)
@@ -274,7 +273,7 @@ scope rule applies and `x` is created as local to the `for` loop and therefore g
 undefined after the loop executes. Next, let's consider the body of `sum_to′` extracted into global
 scope, fixing its argument to `n = 10`
 
-```
+```julia
 s = 0
 for i = 1:10
     t = s + i
@@ -289,7 +288,7 @@ entered interactively, it behaves the same way it does in a function body. But i
 in a file, it  prints an ambiguity warning and throws an undefined variable error. Let's see it
 working in the REPL first:
 
-```
+```julia-repl
 julia> s = 0 # global
 0
 
@@ -317,7 +316,7 @@ The second fact is why execution of the loop changes the global value of `s` and
 why `t` is still undefined after the loop executes. Now, let's try evaluating this same code as
 though it were in a file instead:
 
-```
+```julia-repl
 julia> code = """
        s = 0 # global
        for i = 1:10
@@ -376,7 +375,7 @@ years were confused about this behavior and complained that it was complicated a
 explain and understand. Fair point. Second, and arguably worse, is that it's bad for programming "at
 scale." When you see a small piece of code in one place like this, it's quite clear what's going on:
 
-```
+```julia
 s = 0
 for i = 1:10
     s += i
@@ -387,7 +386,7 @@ Obviously the intention is to modify the existing global variable `s`. What else
 However, not all real world code is so short or so clear. We found that code like the following
 often occurs in the wild:
 
-```
+```julia
 x = 123
 
 # much later
@@ -420,7 +419,7 @@ scope entirely as well as removing the potential for spooky action. We uncovered
 And there was much rejoicing! Well, no, not really. Because some people were
 angry that they now had to write:
 
-```
+```julia
 s = 0
 for i = 1:10
     global s += i
@@ -442,7 +441,9 @@ As of Julia 1.5, this code works without the `global` annotation in interactive 
 REPL or Jupyter notebooks (just like Julia 0.6) and in files and other non-interactive contexts, it
 prints this very direct warning:
 
-> Assignment to `s` in soft scope is ambiguous because a global variable by the same name exists: `s` will be treated as a new local. Disambiguate by using `local s` to suppress this warning or `global s` to assign to the existing global variable.
+> Assignment to `s` in soft scope is ambiguous because a global variable by the same name exists:
+> `s` will be treated as a new local. Disambiguate by using `local s` to suppress this warning or
+> `global s` to assign to the existing global variable.
 
 This addresses both issues while preserving the "programming at scale" benefits of the 1.0 behavior:
 global variables have no spooky effect on the meaning of code that may be far away; in the REPL
