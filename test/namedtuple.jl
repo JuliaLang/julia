@@ -279,7 +279,7 @@ end
 
 # @NamedTuple
 @testset "@NamedTuple" begin
-    @test @NamedTuple{a::Int, b::String} === NamedTuple{(:a, :b),Tuple{Int64,String}} ===
+    @test @NamedTuple{a::Int, b::String} === NamedTuple{(:a, :b),Tuple{Int,String}} ===
         @NamedTuple begin
             a::Int
             b::String

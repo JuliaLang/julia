@@ -337,18 +337,18 @@ If the `::Type` declaration is omitted, it is taken to be `Any`.   The `begin ..
 declarations to be split across multiple lines (similar to a `struct` declaration), but is otherwise
 equivalent.
 
-For example, the tuple `(a=3, b="hello")` has a type `NamedTuple{(:a, :b),Tuple{Int64,String}}`, which
+For example, the tuple `(a=3.1, b="hello")` has a type `NamedTuple{(:a, :b),Tuple{Float64,String}}`, which
 can also be declared via `@NamedTuple` as:
 
 ```jldoctest
-julia> @NamedTuple{a::Int, b::String}
-NamedTuple{(:a, :b),Tuple{Int64,String}}
+julia> @NamedTuple{a::Float64, b::String}
+NamedTuple{(:a, :b),Tuple{Float64,String}}
 
 julia> @NamedTuple begin
-           a::Int
+           a::Float64
            b::String
        end
-NamedTuple{(:a, :b),Tuple{Int64,String}}
+NamedTuple{(:a, :b),Tuple{Float64,String}}
 ```
 """
 macro NamedTuple(ex)
