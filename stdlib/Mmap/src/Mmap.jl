@@ -24,6 +24,8 @@ for use in [`Mmap.mmap`](@ref Mmap.mmap). Used by `SharedArray` for creating sha
 
 # Examples
 ```jldoctest
+julia> using Mmap
+
 julia> anon = Mmap.Anonymous();
 
 julia> isreadable(anon)
@@ -156,6 +158,7 @@ For example, the following code
 ```julia
 # Create a file for mmapping
 # (you could alternatively use mmap to do this step, too)
+using Mmap
 A = rand(1:20, 5, 30)
 s = open("/tmp/mmap.bin", "w+")
 # We'll write the dimensions of the array as the first two Ints in the file
@@ -259,6 +262,8 @@ the byte representation is different.
 
 # Examples
 ```jldoctest
+julia> using Mmap
+
 julia> io = open("mmap.bin", "w+");
 
 julia> B = Mmap.mmap(io, BitArray, (25,30000));
