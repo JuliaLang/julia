@@ -171,7 +171,7 @@ macro test999_str(args...); args; end
 
 # blocks vs. tuples
 @test Meta.parse("()") == Expr(:tuple)
-@test_skip Meta.parse("(;)") == Expr(:tuple, Expr(:parameters))
+@test Meta.parse("(;)") == Expr(:tuple, Expr(:parameters))
 @test Meta.parse("(;;)") == Expr(:block)
 @test Meta.parse("(;;;;)") == Expr(:block)
 @test_throws ParseError Meta.parse("(,)")
@@ -1323,7 +1323,7 @@ end
 @test Meta.parse("-(x)^2")     == Expr(:call, :-, Expr(:call, :^, :x, 2))
 @test Meta.parse("-(a=1)^2")   == Expr(:call, :-, Expr(:call, :^, Expr(:(=), :a, 1), 2))
 @test Meta.parse("-(x;y)^2")   == Expr(:call, :-, Expr(:call, :^, Expr(:block, :x, LineNumberNode(1,:none), :y), 2))
-@test_skip Meta.parse("-(;)^2")     == Expr(:call, :-, Expr(:call, :^, Expr(:tuple, Expr(:parameters)), 2))
+@test Meta.parse("-(;)^2")     == Expr(:call, :^, Expr(:call, :-, Expr(:parameters)), 2)
 @test Meta.parse("-(;;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block), 2))
 @test Meta.parse("-(x;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block, :x), 2))
 @test Meta.parse("+((1,2))")   == Expr(:call, :+, Expr(:tuple, 1, 2))
