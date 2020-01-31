@@ -24,8 +24,7 @@ include("render/plain.jl")
 include("render/html.jl")
 include("render/latex.jl")
 include("render/rst.jl")
-
-include(joinpath("render", "terminal", "render.jl"))
+include("render/terminal/render.jl")
 
 export @md_str, @doc_str
 

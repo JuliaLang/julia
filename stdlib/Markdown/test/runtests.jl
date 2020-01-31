@@ -232,6 +232,13 @@ World""" |> plain == "Hello\n\n---\n\nWorld\n"
 @test sprint(term, md"[x](@ref something)") == "  x"
 @test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)"
 
+# math (LaTeX)
+@test sprint(term, md"""
+```math
+A = Q R
+```
+""") == "  A = Q R"
+
 # enumeration is normalized
 let doc = Markdown.parse(
         """
