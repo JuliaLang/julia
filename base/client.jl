@@ -425,7 +425,8 @@ baremodule MainInclude
 using ..Base
 # We inline the definition of include from loading.jl/include_relative to get one-frame stacktraces.
 # include(fname::AbstractString) = Main.Base.include(Main, fname)
-function include(fname::AbstractString; mapexpr::Function=identity)
+include(fname::AbstractString) = include(identity, fname)
+function include(mapexpr::Function, fname::AbstractString)
     mod = Main
     isa(fname, String) || (fname = Base.convert(String, fname)::String)
     path, prev = Base._include_dependency(mod, fname)
@@ -436,7 +437,11 @@ function include(fname::AbstractString; mapexpr::Function=identity)
     tls[:SOURCE_PATH] = path
     local result
     try
-        result = ccall(:jl_load_rewrite, Any, (Any, Cstring, Any), mod, path, mapexpr)
+        if mapexpr === identity
+            result = ccall(:jl_load, Any, (Any, Cstring), mod, path)
+        else
+            result = ccall(:jl_load_rewrite, Any, (Any, Cstring, Any), mod, path, mapexpr)
+        end
     finally
         if prev === nothing
             Base.delete!(tls, :SOURCE_PATH)

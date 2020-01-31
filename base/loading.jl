@@ -1077,13 +1077,19 @@ end
 
 Like [`include`](@ref), except reads code from the given string rather than from a file.
 """
-include_string(m::Module, txt::String, fname::String; mapexpr::Function=identity) =
-    ccall(:jl_load_rewrite_file_string, Any, (Ptr{UInt8}, Csize_t, Cstring, Any, Any),
-          txt, sizeof(txt), fname, m, mapexpr)
+function include_string(mapexpr::Function, m::Module, txt_::AbstractString, fname::AbstractString="string")
+    txt = String(txt_)
+    if mapexpr === identity
+        ccall(:jl_load_file_string, Any, (Ptr{UInt8}, Csize_t, Cstring, Any),
+            txt, sizeof(txt), String(fname), m)
+    else
+        ccall(:jl_load_rewrite_file_string, Any, (Ptr{UInt8}, Csize_t, Cstring, Any, Any),
+            txt, sizeof(txt), String(fname), m, mapexpr)
+    end
+end
 
-include_string(m::Module, txt::AbstractString, fname::AbstractString="string";
-               mapexpr::Function=identity) =
-    include_string(m, String(txt), String(fname); mapexpr=mapexpr)
+include_string(m::Module, txt::AbstractString, fname::AbstractString="string") =
+    include_string(identity, m, txt, fname)
 
 function source_path(default::Union{AbstractString,Nothing}="")
     s = current_task().storage
