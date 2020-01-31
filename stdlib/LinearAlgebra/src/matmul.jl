@@ -562,6 +562,17 @@ end
 @inline function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar,
                                A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
                                α::Number=true, β::Number=false) where {T<:BlasFloat}
+    if 2 == size(A, 1) == size(A, 2) == size(B, 1) == size(B, 2)
+        return matmul2x2!(C, tA, tB, A, B, MulAddMul(α, β))
+    elseif 3 == size(A, 1) == size(A, 2) == size(B, 1) == size(B, 2)
+        return matmul3x3!(C, tA, tB, A, B, MulAddMul(α, β))
+    end
+    return _gemm_wrapper!(C, tA, tB, A, B, α, β)
+end
+
+function _gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar,
+                        A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
+                        α::Number, β::Number) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
 
@@ -578,13 +589,6 @@ end
             throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
         end
         return _rmul_or_fill!(C, β)
-    end
-
-    if mA == 2 && nA == 2 && nB == 2
-        return matmul2x2!(C, tA, tB, A, B, MulAddMul(α, β))
-    end
-    if mA == 3 && nA == 3 && nB == 3
-        return matmul3x3!(C, tA, tB, A, B, MulAddMul(α, β))
     end
 
     alpha, beta = promote(α, β, zero(T))
