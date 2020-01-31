@@ -79,6 +79,7 @@ Return the code unit value in the string `s` at index `i`. Note that
 I.e. the value returned by `codeunit(s, i)` is of the type returned by
 `codeunit(s)`.
 
+# Examples
 ```jldoctest
 julia> codeunit("Hello", 1)
 0x48
