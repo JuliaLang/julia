@@ -391,7 +391,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
         if (dt->layout == ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->layout) {
             layout = 1;
         }
-        else if (dt->layout == jl_void_type->layout) {
+        else if (dt->layout == jl_nothing_type->layout) {
             layout = 2;
         }
         else if (dt->layout == ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_pointer_type))->layout) {
@@ -1474,7 +1474,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
             dt->layout = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->layout;
         }
         else if (layout == 2) {
-            dt->layout = jl_void_type->layout;
+            dt->layout = jl_nothing_type->layout;
         }
         else if (layout == 3) {
             dt->layout = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_pointer_type))->layout;
@@ -3350,7 +3350,7 @@ void jl_init_serializer(void)
 
                      jl_bool_type, jl_linenumbernode_type, jl_pinode_type,
                      jl_upsilonnode_type, jl_type_type, jl_bottom_type, jl_ref_type,
-                     jl_pointer_type, jl_vararg_type, jl_abstractarray_type, jl_void_type,
+                     jl_pointer_type, jl_vararg_type, jl_abstractarray_type, jl_nothing_type,
                      jl_densearray_type, jl_function_type, jl_typename_type,
                      jl_builtin_type, jl_task_type, jl_uniontype_type, jl_typetype_type,
                      jl_array_any_type, jl_intrinsic_type,

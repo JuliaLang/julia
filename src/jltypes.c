@@ -115,7 +115,8 @@ jl_datatype_t *jl_lineinfonode_type;
 jl_unionall_t *jl_ref_type;
 jl_unionall_t *jl_pointer_type;
 jl_typename_t *jl_pointer_typename;
-jl_datatype_t *jl_void_type;
+jl_datatype_t *jl_void_type; // deprecated
+jl_datatype_t *jl_nothing_type;
 jl_datatype_t *jl_voidpointer_type;
 jl_typename_t *jl_namedtuple_typename;
 jl_unionall_t *jl_namedtuple_type;
@@ -1831,10 +1832,11 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_precompute_memoized_dt(jl_simplevector_type);
 
     // now they can be used to create the remaining base kinds and types
-    jl_void_type = jl_new_datatype(jl_symbol("Nothing"), core, jl_any_type, jl_emptysvec,
-                                   jl_emptysvec, jl_emptysvec, 0, 0, 0);
-    jl_astaggedvalue(jl_nothing)->header = ((uintptr_t)jl_void_type) | GC_OLD_MARKED;
-    jl_void_type->instance = jl_nothing;
+    jl_nothing_type = jl_new_datatype(jl_symbol("Nothing"), core, jl_any_type, jl_emptysvec,
+                                      jl_emptysvec, jl_emptysvec, 0, 0, 0);
+    jl_void_type = jl_nothing_type; // deprecated alias
+    jl_astaggedvalue(jl_nothing)->header = ((uintptr_t)jl_nothing_type) | GC_OLD_MARKED;
+    jl_nothing_type->instance = jl_nothing;
 
     jl_datatype_t *type_type = (jl_datatype_t*)jl_type_type;
     jl_typeofbottom_type = jl_new_datatype(jl_symbol("TypeofBottom"), core, type_type, jl_emptysvec,
@@ -2286,11 +2288,11 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_any_type,
                                 jl_bool_type),
                         0, 1, 9);
-    jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_void_type);
+    jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
 
     // complete builtin type metadata
-    jl_value_t *pointer_void = jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_void_type);
+    jl_value_t *pointer_void = jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_nothing_type);
     jl_voidpointer_type = (jl_datatype_t*)pointer_void;
     jl_svecset(jl_datatype_type->types, 6, jl_voidpointer_type);
     jl_svecset(jl_datatype_type->types, 7, jl_int32_type);
