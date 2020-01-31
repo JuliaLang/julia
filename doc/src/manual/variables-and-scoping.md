@@ -288,7 +288,7 @@ entered interactively, it behaves the same way it does in a function body. But i
 in a file, it  prints an ambiguity warning and throws an undefined variable error. Let's see it
 working in the REPL first:
 
-```julia-repl
+```jldoctest
 julia> s = 0 # global
 0
 
@@ -316,7 +316,7 @@ The second fact is why execution of the loop changes the global value of `s` and
 why `t` is still undefined after the loop executes. Now, let's try evaluating this same code as
 though it were in a file instead:
 
-```julia-repl
+```jldoctest
 julia> code = """
        s = 0 # global
        for i = 1:10
