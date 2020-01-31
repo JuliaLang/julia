@@ -358,6 +358,6 @@ macro NamedTuple(ex)
     all(e -> e isa Symbol || Meta.isexpr(e, :(::)), decls) ||
         throw(ArgumentError("@NamedTuple must contain a sequence of name or name::type expressions"))
     vars = [QuoteNode(e isa Symbol ? e : e.args[1]) for e in decls]
-    types = [e isa Symbol ? :Any : e.args[2] for e in decls]
+    types = [esc(e isa Symbol ? :Any : e.args[2]) for e in decls]
     return :(NamedTuple{($(vars...),), Tuple{$(types...)}})
 end
