@@ -50,6 +50,14 @@ access this string must satisfy `1 ≤ i ≤ ncodeunits(s)`. Not all such indic
 are valid – they may not be the start of a character, but they will return a
 code unit value when calling `codeunit(s,i)`.
 
+```jldoctest
+julia> ncodeunits("Hello world")
+11
+
+julia> ncodeunits("The Julia Language")
+18
+```
+
 See also: [`codeunit`](@ref), [`checkbounds`](@ref), [`sizeof`](@ref),
 [`length`](@ref), [`lastindex`](@ref)
 """
