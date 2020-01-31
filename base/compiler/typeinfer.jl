@@ -453,8 +453,15 @@ function resolve_call_cycle!(linfo::MethodInstance, parent::InferenceState)
     return false
 end
 
+const inference_graph = IdDict{Any,IdSet{Any}}()
+const record_edges = Bool[false]
+
 # compute (and cache) an inferred AST and return the current best estimate of the result type
 function typeinf_edge(method::Method, @nospecialize(atypes), sparams::SimpleVector, caller::InferenceState)
+    if record_edges[1]
+        callees = get!(IdSet{Any}, inference_graph, caller.linfo.specTypes)
+        push!(callees, atypes)
+    end
     mi = specialize_method(method, atypes, sparams)::MethodInstance
     code = inf_for_methodinstance(mi, caller.params.world)
     if code isa CodeInstance # return existing rettype if the code is already inferred
