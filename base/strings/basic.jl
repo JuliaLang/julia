@@ -715,5 +715,23 @@ unsafe_convert(::Type{Ptr{Int8}}, s::CodeUnits{UInt8}) = unsafe_convert(Ptr{Int8
 Obtain a vector-like object containing the code units of a string.
 Returns a `CodeUnits` wrapper by default, but `codeunits` may optionally be defined
 for new string types if necessary.
+
+```jldoctest
+julia> codeunits("Julia is fast")
+13-element Base.CodeUnits{UInt8,String}:
+ 0x4a
+ 0x75
+ 0x6c
+ 0x69
+ 0x61
+ 0x20
+ 0x69
+ 0x73
+ 0x20
+ 0x66
+ 0x61
+ 0x73
+ 0x74
+```
 """
 codeunits(s::AbstractString) = CodeUnits(s)
