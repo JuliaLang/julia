@@ -81,13 +81,10 @@ I.e. the value returned by `codeunit(s, i)` is of the type returned by
 
 # Examples
 ```jldoctest
-julia> codeunit("Hello", 1)
-0x48
-
-julia> codeunit("Hello", 2)
+julia> a = codeunit("Hello", 2)
 0x65
 
-julia> typeof(codeunit("Hello", 2))
+julia> typeof(a)
 UInt8
 ```
 
