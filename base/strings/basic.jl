@@ -716,6 +716,7 @@ Obtain a vector-like object containing the code units of a string.
 Returns a `CodeUnits` wrapper by default, but `codeunits` may optionally be defined
 for new string types if necessary.
 
+# Examples
 ```jldoctest
 julia> codeunits("Julia is fast")
 13-element Base.CodeUnits{UInt8,String}:
