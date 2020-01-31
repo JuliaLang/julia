@@ -463,14 +463,6 @@ function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
     return v
 end
 
-# NOTE: this macro is trivial, and should
-#       therefore not be exported as-is: it's for internal use only.
-macro get!(h, key0, default)
-    return quote
-        get!(()->$(esc(default)), $(esc(h)), $(esc(key0)))
-    end
-end
-
 
 function getindex(h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)

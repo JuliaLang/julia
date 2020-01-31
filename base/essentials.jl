@@ -797,11 +797,6 @@ macro __LINE__()
     return __source__.line
 end
 
-# Just for bootstrapping purposes below
-macro __FILE_SYMBOL__()
-    return Expr(:quote, __source__.file)
-end
-
 # Iteration
 """
     isdone(itr, state...) -> Union{Bool, Missing}
