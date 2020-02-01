@@ -498,6 +498,11 @@ end
     cat([68,70,72],[406,408,410],[744,746,748]; dims=3)
 
 # tests @view (and replace_ref_end!)
+
+@test_throws ArgumentError(
+    "Invalid use of @view macro: argument must be a reference expression A[...]."
+) var"@view"(LineNumberNode(@__LINE__), @__MODULE__, 1)
+
 X = reshape(1:24,2,3,4)
 Y = 4:-1:1
 
@@ -562,6 +567,12 @@ end
 @test X[1:end,2,Y[2:end]] == @views X[1:end,2,Y[2:end]]
 @test X[u...,2:end] == @views X[u...,2:end]
 @test X[(1,)...,(2,)...,2:end] == @views X[(1,)...,(2,)...,2:end]
+
+# @views for zero dimensional arrays
+A = Array{Int, 0}(undef)
+A[] = 2
+@test (@views A[]) == 2
+
 # test macro hygiene
 let size=(x,y)-> error("should not happen"), Base=nothing
     @test X[1:end,2,2] == @views X[1:end,2,2]
