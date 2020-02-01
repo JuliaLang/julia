@@ -150,6 +150,15 @@ This is the default comparison used by [`sort`](@ref).
 Non-numeric types with a total order should implement this function.
 Numeric types only need to implement it if they have special values such as `NaN`.
 Types with a partial order should implement [`<`](@ref).
+
+# Examples
+```jldoctest
+julia> isless(1 , 2)
+true
+
+julia> isless(2, 1)
+false
+```
 """
 function isless end
 
