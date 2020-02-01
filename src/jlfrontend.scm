@@ -180,7 +180,8 @@
           (loc  (if (and (pair? loc) (eq? (car loc) 'line))
                     (list loc)
                     '()))
-          (x    (if (eq? name 'x) 'y 'x)))
+          (x    (if (eq? name 'x) 'y 'x))
+          (mex  (if (eq? name 'mapexpr) 'map_expr 'mapexpr)))
      `(block
        (= (call eval ,x)
           (block
@@ -189,7 +190,11 @@
        (= (call include ,x)
           (block
            ,@loc
-           (call (top include) ,name ,x)))))
+           (call (top include) ,name ,x)))
+       (= (call include (:: ,mex (top Function)) ,x)
+          (block
+           ,@loc
+           (call (top include) ,mex ,name ,x)))))
    'none 0))
 
 ; run whole frontend on a string. useful for testing.
