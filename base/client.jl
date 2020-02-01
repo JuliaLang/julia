@@ -423,10 +423,11 @@ end
 # MainInclude exists to hide Main.include and eval from `names(Main)`.
 baremodule MainInclude
 using ..Base
-# We inline the definition of include from loading.jl/include_relative to get one-frame stacktraces.
-# include(fname::AbstractString) = Main.Base.include(Main, fname)
-include(fname::AbstractString) = include(identity, fname)
-function include(mapexpr::Function, fname::AbstractString)
+include(mapexpr::Function, fname::AbstractString) = Base.include(mapexpr, Main, fname)
+# We inline the definition of include from loading.jl/include_relative to get one-frame stacktraces
+# for the common case of include(fname).  Otherwise we would use:
+#    include(fname::AbstractString) = Base.include(Main, fname)
+function include(fname::AbstractString)
     mod = Main
     isa(fname, String) || (fname = Base.convert(String, fname)::String)
     path, prev = Base._include_dependency(mod, fname)
@@ -437,11 +438,7 @@ function include(mapexpr::Function, fname::AbstractString)
     tls[:SOURCE_PATH] = path
     local result
     try
-        if mapexpr === identity
-            result = ccall(:jl_load, Any, (Any, Cstring), mod, path)
-        else
-            result = ccall(:jl_load_rewrite, Any, (Any, Cstring, Any), mod, path, mapexpr)
-        end
+        result = ccall(:jl_load, Any, (Any, Cstring), mod, path)
     finally
         if prev === nothing
             Base.delete!(tls, :SOURCE_PATH)
