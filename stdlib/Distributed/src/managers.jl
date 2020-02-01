@@ -493,20 +493,20 @@ function bind_client_port(sock::TCPSocket, iptype)
 end
 
 function connect_to_worker(host::AbstractString, port::Integer)
-    ipaddr = getaddrinfo(host)
-    iptype = typeof(ipaddr)
-    sock = socket_reuse_port(iptype)
-    connect(sock, host, UInt16(port))
-
     # Avoid calling getaddrinfo if possible - involves a DNS lookup
     # host may be a stringified ipv4 / ipv6 address or a dns name
     bind_addr = nothing
     try
-        bind_addr = string(parse(IPAddr,host))
+        bind_addr = parse(IPAddr,host)
     catch
-        bind_addr = string(getaddrinfo(host))
+        bind_addr = getaddrinfo(host)
     end
-    (sock, bind_addr)
+
+    iptype = typeof(bind_addr)
+    sock = socket_reuse_port(iptype)
+    connect(sock, host, UInt16(port))
+
+    (sock, string(bind_addr))
 end
 
 
