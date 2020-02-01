@@ -51,6 +51,8 @@ New library functions
   `merge!` are still available for backward compatibility ([#34296]).
 * The new `isdisjoint` function indicates whether two collections are disjoint ([#34427]).
 * Add function `ismutable` and deprecate `isimmutable` to check whether something is mutable.([#34652])
+* `include` now accepts an optional `mapexpr` first argument to transform the parsed
+  expressions before they are evaluated ([#34595]).
 
 New library features
 --------------------
