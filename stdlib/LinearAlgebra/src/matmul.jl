@@ -562,11 +562,22 @@ end
 @inline function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar,
                                A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
                                α::Number=true, β::Number=false) where {T<:BlasFloat}
+    mA, nA = lapack_size(tA, A)
+    mB, nB = lapack_size(tB, B)
+
+    if mA == 0 || nA == 0 || nB == 0 || iszero(α)
+        if size(C) != (mA, nB)
+            throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
+        end
+        return _rmul_or_fill!(C, β)
+    end
+
     if 2 == size(A, 1) == size(A, 2) == size(B, 1) == size(B, 2)
         return matmul2x2!(C, tA, tB, A, B, MulAddMul(α, β))
     elseif 3 == size(A, 1) == size(A, 2) == size(B, 1) == size(B, 2)
         return matmul3x3!(C, tA, tB, A, B, MulAddMul(α, β))
     end
+
     return _gemm_wrapper!(C, tA, tB, A, B, α, β)
 end
 
@@ -582,13 +593,6 @@ function _gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractCha
 
     if C === A || B === C
         throw(ArgumentError("output matrix must not be aliased with input matrix"))
-    end
-
-    if mA == 0 || nA == 0 || nB == 0 || iszero(α)
-        if size(C) != (mA, nB)
-            throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
-        end
-        return _rmul_or_fill!(C, β)
     end
 
     alpha, beta = promote(α, β, zero(T))
