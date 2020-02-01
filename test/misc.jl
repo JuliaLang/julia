@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+
 # Tests that do not really go anywhere else
 
 # test @assert macro
@@ -520,6 +522,15 @@ if stdout isa Base.TTY
     @test stdout[:color] == get(stdout, :color, nothing) == Base.have_color
     @test get(stdout, :bar, nothing) === nothing
     @test_throws KeyError stdout[:bar]
+end
+
+@testset "`displaysize` on closed TTY #34620" begin
+    FakePTYs.with_fake_pty() do rawfd, _
+        tty = Base.TTY(rawfd)
+        @test displaysize(tty) isa Tuple{Integer,Integer}
+        close(tty)
+        @test_throws ArgumentError displaysize(tty)
+    end
 end
 
 let
