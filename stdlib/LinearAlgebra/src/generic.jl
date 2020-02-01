@@ -25,10 +25,23 @@ struct MulAddMul{ais1, bis0, TA, TB}
     beta::TB
 end
 
-MulAddMul(alpha::TA, beta::TB) where {TA, TB} =
-    MulAddMul{isone(alpha), iszero(beta), TA, TB}(alpha, beta)
+@inline function MulAddMul(alpha::TA, beta::TB) where {TA,TB}
+    if isone(alpha)
+        if iszero(beta)
+            return MulAddMul{true,true,TA,TB}(alpha, beta)
+        else
+            return MulAddMul{true,false,TA,TB}(alpha, beta)
+        end
+    else
+        if iszero(beta)
+            return MulAddMul{false,true,TA,TB}(alpha, beta)
+        else
+            return MulAddMul{false,false,TA,TB}(alpha, beta)
+        end
+    end
+end
 
-MulAddMul() = MulAddMul(true, false)
+MulAddMul() = MulAddMul{true,true,Bool,Bool}(true, false)
 
 @inline (::MulAddMul{true})(x) = x
 @inline (p::MulAddMul{false})(x) = x * p.alpha
