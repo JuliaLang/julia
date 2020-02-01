@@ -517,11 +517,8 @@ get!(t::AbstractDict, key, default) = get!(() -> default, t, key)
 function get!(default::Callable, t::AbstractDict{K}, key0) where K
     key = convert(K, key0)
     if !isequal(key, key0)
-        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $(K)"))
+        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
     end
-    return get!(default, t, key)
-end
-function get!(default::Callable, t::AbstractDict{K,V}, key::K) where K where V
     haskey(t, key) && return t[key]
     val = convert(V, default())
     t[key] = val

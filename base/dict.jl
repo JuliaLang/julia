@@ -435,6 +435,14 @@ end
 """
 get!(f::Function, collection, key)
 
+function get!(default::Callable, h::Dict{K,V}, key0) where V where K
+    key = convert(K, key0)
+    if !isequal(key, key0)
+        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+    end
+    return get!(default, h, key)
+end
+
 function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
     index = ht_keyindex2!(h, key)
 
