@@ -485,7 +485,7 @@ function socket_reuse_port(iptype)
 end
 
 function bind_client_port(sock::TCPSocket, iptype)
-    bind_host = iptype == IPv4 ? IPv4(0) : IPv6(0)
+    bind_host = iptype(0)
     Sockets.bind(sock, bind_host, client_port[])
     _addr, port = getsockname(sock)
     client_port[] = port
