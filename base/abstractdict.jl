@@ -513,6 +513,21 @@ end
 getindex(t::AbstractDict, k1, k2, ks...) = getindex(t, tuple(k1,k2,ks...))
 setindex!(t::AbstractDict, v, k1, k2, ks...) = setindex!(t, v, tuple(k1,k2,ks...))
 
+get!(t::AbstractDict, key, default) = get!(() -> default, t, key)
+function get!(default::Callable, t::AbstractDict{K}, key0) where K
+    key = convert(K, key0)
+    if !isequal(key, key0)
+        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $(K)"))
+    end
+    return get!(default, t, key)
+end
+function get!(default::Callable, t::AbstractDict{K,V}, key::K) where K where V
+    haskey(t, key) && return t[key]
+    val = convert(V, default())
+    t[key] = val
+    return val
+end
+
 push!(t::AbstractDict, p::Pair) = setindex!(t, p.second, p.first)
 push!(t::AbstractDict, p::Pair, q::Pair) = push!(push!(t, p), q)
 push!(t::AbstractDict, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q), r...)
