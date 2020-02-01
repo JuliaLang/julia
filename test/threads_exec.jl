@@ -7,6 +7,12 @@ using Base.Threads: SpinLock
 # for cfunction_closure
 include("testenv.jl")
 
+@testset "@threads syntax" begin
+    @test_throws ArgumentError("wrong number of arguments in @threads") var"@threads"(LineNumberNode(@__LINE__), @__MODULE__, 1, 2)
+    @test_throws ArgumentError("need an expression argument to @threads") var"@threads"(LineNumberNode(@__LINE__), @__MODULE__, 1)
+    @test_throws ArgumentError("unrecognized argument to @threads") var"@threads"(LineNumberNode(@__LINE__), @__MODULE__, :(1 + 1))
+end
+
 # threading constructs
 
 let a = zeros(Int, 2 * nthreads())
