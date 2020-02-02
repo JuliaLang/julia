@@ -462,6 +462,10 @@ end
         @test vc == [v[1:(i-1)]; 5; v[i:end]]
     end
     @test_throws BoundsError insert!(v, 5, 5)
+
+    @test insert!([6, 5, 4, 2, 1], 4, [8, 9, 9]) === [6, 5, 4, 8, 9, 9, 2, 1]
+    @test_throws BoundsError insert!([6, 5, 4], 5, [8, 9])
+
 end
 @testset "concatenation" begin
     @test isequal([fill(1.,2,2)  fill(2.,2,1)], [1. 1 2; 1 1 2])

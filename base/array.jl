@@ -1221,6 +1221,37 @@ function insert!(a::Array{T,1}, i::Integer, item::T) where T
     @inbounds a[i] = item
     return a
 end
+
+"""
+    insert!(a::Vector, index::Integer, items::Vector)
+
+Insert all of the elements of `items` into `a` at the given `index`. `index` is the index of first element of `items` in the resulting `a`.
+
+# Examples
+```jldoctest
+julia> insert!([6, 5, 4, 2, 1], 4, [8, 9, 9])
+8-element Array{Int64,1}:
+ 6
+ 5
+ 4
+ 8
+ 9
+ 9
+ 2
+ 1
+```
+"""
+function insert!(a::Array{T,1}, i::Integer, items::Array{T,1}) where {T}
+    m = length(items)
+    if m === 0
+        return a
+    end
+    _growat!(a, i, m)  # does bound check
+    @inbounds for k = i:i+m-1
+        a[k] = items[k-i+1]
+    end
+    return a
+end
 """
     deleteat!(a::Vector, i::Integer)
 
