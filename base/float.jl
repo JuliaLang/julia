@@ -750,17 +750,30 @@ end
 end
 
 """
-    floatmin(T)
+    floatmin([T])
 
-The smallest in absolute value non-subnormal value representable by the given
-floating-point DataType `T`.
+Return the smallest positive normal number representable by the floating-point
+type `T` (`T = Float64` by default).
+
+# Examples
+```jldoctest
+julia> floatmin(Float16)
+Float16(6.104e-5)
+
+julia> floatmin(Float32)
+1.1754944f-38
+
+julia> floatmin()
+2.2250738585072014e-308
+```
 """
 floatmin(x::T) where {T<:AbstractFloat} = floatmin(T)
 
 """
-    floatmax(T)
+    floatmax([T])
 
-The highest finite value representable by the given floating-point DataType `T`.
+Return the largest finite number representable by the floating-point type `T`
+(`T = Float64` by default).
 
 # Examples
 ```jldoctest
@@ -769,6 +782,9 @@ Float16(6.55e4)
 
 julia> floatmax(Float32)
 3.4028235f38
+
+julia> floatmax()
+1.7976931348623157e308
 ```
 """
 floatmax(x::T) where {T<:AbstractFloat} = floatmax(T)
