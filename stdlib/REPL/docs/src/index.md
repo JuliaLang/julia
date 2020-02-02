@@ -135,7 +135,23 @@ julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 shell> echo hello
 hello
 ```
+* Note for Windows users: Julia Shell mode does not expose windows shell commands.Hence, this will fail: 
+```julia-repl
+julia> ; # upon typing ;, the prompt changes (in place) to: shell>
+shell> dir
+ERROR: IOError: could not spawn `dir`: no such file or directory (ENOENT)
+Stacktrace!
+.......
+```
+However, you can get access to Power Shell like this:
+```julia-repl
+julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 
+shell> powershell
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Tous droits réservés.
+PS C:\Users\elm>
+```
 ### Search modes
 
 In all of the above modes, the executed lines get saved to a history file, which can be searched.
