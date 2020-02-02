@@ -153,7 +153,7 @@ Types with a partial order should implement [`<`](@ref).
 
 # Examples
 ```jldoctest
-julia> isless(1 , 2)
+julia> isless(1, 2)
 true
 
 julia> isless(2, 1)
