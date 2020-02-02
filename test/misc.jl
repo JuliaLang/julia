@@ -529,7 +529,7 @@ end
         tty = Base.TTY(rawfd)
         @test displaysize(tty) isa Tuple{Integer,Integer}
         close(tty)
-        @test_throws ArgumentError displaysize(tty)
+        @test_throws Base.IOError displaysize(tty)
     end
 end
 
