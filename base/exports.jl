@@ -459,6 +459,7 @@ export
     startswith,
 
 # linear algebra
+    __adjoint__, # to enable syntax a' for adjoint
     adjoint,
     transpose,
     kron,

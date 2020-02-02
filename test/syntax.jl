@@ -2269,3 +2269,10 @@ _temp_33553 = begin
 end
 @test _temp_33553 == 2
 @test !@isdefined(_x_this_remains_undefined)
+
+# lowering of adjoint
+@test (1 + im)' == 1 - im
+x = let __adjoint__(x) = 2x
+    3'
+end
+@test x == 6

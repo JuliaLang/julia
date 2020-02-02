@@ -542,6 +542,8 @@ for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
     end
 end
 
+const __adjoint__ = adjoint
+
 """
     \\(x, y)
 
