@@ -408,6 +408,12 @@ end
     @test_throws DimensionMismatch minimum!(fill(0, 1, 3, 1, 1), B)
     @test_throws DimensionMismatch maximum!(fill(0, 1, 1, 2, 1), B)
     @test_throws DimensionMismatch minimum!(fill(0, 1, 1, 2, 1), B)
+
+    # method is important for disambiguation
+    # needs to be tested directly because unreachable otherwise
+    @test_throws DimensionMismatch(
+        "Unreachable: too many axes"
+    ) Base._firstreducedslice((Base.OneTo(1,),), ())
 end
 
 # issue #26709
