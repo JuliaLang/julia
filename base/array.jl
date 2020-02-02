@@ -1216,6 +1216,11 @@ function insert!(a::Array{T,1}, i::Integer, item) where T
     return a
 end
 
+function insert!(a::Array{T,1}, i::Integer, item::T) where T
+    _growat!(a, i, 1) # does bound check
+    @inbounds a[i] = item
+    return a
+end
 """
     deleteat!(a::Vector, i::Integer)
 
