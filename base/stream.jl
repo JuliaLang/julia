@@ -456,7 +456,7 @@ displaysize() = (parse(Int, get(ENV, "LINES",   "24")),
 
 function displaysize(io::TTY)
     # A workaround for #34620 and #26687 (this still has the TOCTOU problem).
-    isopen(io) || throw(ArgumentError("TTY is already closed: $io"))
+    check_open(io)
 
     local h::Int, w::Int
     default_size = displaysize()
