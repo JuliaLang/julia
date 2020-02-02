@@ -109,11 +109,26 @@ cst = map(cost, ci.code)
 
 # output
 
-5-element Array{Int64,1}:
+31-element Array{Int64,1}:
   0
   0
  20
- 20
+  4
+  1
+  1
+  1
+  0
+  0
+  0
+  ⋮
+  0
+  0
+  0
+  0
+  1
+  0
+  0
+  0
   0
 ```
 
