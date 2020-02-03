@@ -146,20 +146,6 @@ The absolute path `REPL.find_hist_file()` of the REPL's history file. If
 $(DEPOT_PATH[1])/logs/repl_history.jl
 ```
 
-### `JULIA_PKGRESOLVE_ACCURACY`
-
-A positive `Int` that determines how much time the package dependency resolver's max-sum
-subroutine `MaxSum.maxsum()` will devote to attempting to satisfy constraints before giving
-up. This value's default is `1`, with higher values corresponding to longer amounts of
-time.
-
-Suppose the value of `$JULIA_PKGRESOLVE_ACCURACY` is `n`. Then
-
-* the number of pre-decimation iterations is `20*n`,
-* the number of iterations between decimation steps is `10*n`, and
-* at decimation steps, at most one in every `20*n` packages is decimated.
-
-
 ## External applications
 
 ### `JULIA_SHELL`
