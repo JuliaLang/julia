@@ -190,3 +190,15 @@ MPFR.BigFloat(x::Real, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding
 end
 
 # END 1.3 deprecations
+
+# BEGIN 1.5 deprecations
+
+macro get!(h, key0, default)
+    f, l = __source__.file, __source__.line
+    depwarn("`@get!(dict, key, default)` at $f:$l is deprecated, use `get!(()->default, dict, key)` instead.", Symbol("@get!"))
+    return quote
+        get!(()->$(esc(default)), $(esc(h)), $(esc(key0)))
+    end
+end
+
+# END 1.5 deprecations
