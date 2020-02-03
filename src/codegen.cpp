@@ -1684,7 +1684,7 @@ void *jl_get_llvmf_decl(jl_method_instance_t *mi, size_t world, bool getwrapper,
         // internal error
         return NULL;
 
-    const jl_llvm_functions_t &decls = codeinst->functionObjectsDecls;
+    jl_llvm_functions_t decls = codeinst->functionObjectsDecls;
     if (decls.functionObject == NULL && codeinst->invoke == jl_fptr_const_return && jl_is_method(mi->def.method)) {
         // normally we don't generate native code for these functions, so need an exception here
         // This leaks a bit of memory to cache native code that we'll never actually need
@@ -1698,6 +1698,7 @@ void *jl_get_llvmf_decl(jl_method_instance_t *mi, size_t world, bool getwrapper,
             if (codeinst == NULL)
                 // internal error
                 return NULL;
+            decls = codeinst->functionObjectsDecls;
         }
         JL_UNLOCK(&codegen_lock);
     }
