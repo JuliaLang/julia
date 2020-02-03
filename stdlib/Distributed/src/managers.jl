@@ -504,7 +504,7 @@ function connect_to_worker(host::AbstractString, port::Integer)
 
     iptype = typeof(bind_addr)
     sock = socket_reuse_port(iptype)
-    connect(sock, host, UInt16(port))
+    connect(sock, bind_addr, UInt16(port))
 
     (sock, string(bind_addr))
 end
