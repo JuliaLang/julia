@@ -432,6 +432,12 @@ SparseVector{Tv}(s::SparseVector{<:Any,Ti}) where {Tv,Ti} =
     SparseVector{Tv,Ti}(length(s::SparseVector), nonzeroinds(s), convert(Vector{Tv}, nonzeros(s)))
 
 convert(T::Type{<:SparseVector}, m::AbstractVector) = m isa T ? m : T(m)
+convert(::Type{SparseVector}, s::AbstractSparseVector) = convert(SparseVector{eltype(nonzeros(s)),eltype(nonzeroinds(s))}, s)
+convert(::Type{SparseVector{Tv}}, s::AbstractSparseVector) where Tv = convert(SparseVector{Tv,eltype(nonzeroinds(s))}, s)
+function convert(T::Type{SparseVector{Tv,Ti}}, s::AbstractSparseVector) where {Tv,Ti<:Integer}
+    s isa T && return s
+    T(length(s), Vector{Ti}(nonzeroinds(s)), Vector{Tv}(nonzeros(s)))
+end
 
 convert(T::Type{<:SparseVector}, m::AbstractSparseMatrixCSC) = T(m)
 convert(T::Type{<:AbstractSparseMatrixCSC}, v::SparseVector) = T(v)
