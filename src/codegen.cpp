@@ -4131,7 +4131,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         else {
             undef_var_error_ifnot(ctx, cond, var);
         }
-        return ghostValue(jl_void_type);
+        return ghostValue(jl_nothing_type);
     }
     else if (head == invoke_sym) {
         assert(ssaval >= 0);
@@ -4164,7 +4164,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
     }
     else if (head == assign_sym) {
         emit_assignment(ctx, args[0], args[1], ssaval);
-        return ghostValue(jl_void_type);
+        return ghostValue(jl_nothing_type);
     }
     else if (head == static_parameter_sym) {
         return emit_sparam(ctx, jl_unbox_long(args[0]) - 1);
@@ -4196,7 +4196,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
                 bnd->value = e;
                 bnd->constp = 1;
                 raise_exception(ctx, literal_pointer_val(ctx, e));
-                return ghostValue(jl_void_type);
+                return ghostValue(jl_nothing_type);
             }
             bp = julia_binding_gv(ctx, bnd);
             bp_owner = literal_pointer_val(ctx, (jl_value_t*)mod);
@@ -4226,7 +4226,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
             /*module*/literal_pointer_val(ctx, (jl_value_t*)ctx.module)
         };
         ctx.builder.CreateCall(prepare_call(jlmethod_func), makeArrayRef(mdargs));
-        return ghostValue(jl_void_type);
+        return ghostValue(jl_nothing_type);
     }
     else if (head == const_sym) {
         jl_sym_t *sym = (jl_sym_t*)args[0];
@@ -4330,7 +4330,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         Value *token = vals.empty()
             ? (Value*)ConstantTokenNone::get(jl_LLVMContext)
             : ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func), vals);
-        jl_cgval_t tok(token, NULL, false, (jl_value_t*)jl_void_type, NULL);
+        jl_cgval_t tok(token, NULL, false, (jl_value_t*)jl_nothing_type, NULL);
         return tok;
     }
     else if (head == gc_preserve_end_sym) {
@@ -4338,13 +4338,13 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         // fall back to the default behavior of preserving the argument value
         // until the end of the scope, which is correct, but not optimal.
         if (!jl_is_ssavalue(args[0])) {
-            return jl_cgval_t((jl_value_t*)jl_void_type);
+            return jl_cgval_t((jl_value_t*)jl_nothing_type);
         }
         jl_cgval_t token = emit_expr(ctx, args[0]);
         assert(token.V->getType()->isTokenTy());
         if (!isa<ConstantTokenNone>(token.V))
             ctx.builder.CreateCall(prepare_call(gc_preserve_end_func), {token.V});
-        return jl_cgval_t((jl_value_t*)jl_void_type);
+        return jl_cgval_t((jl_value_t*)jl_nothing_type);
     }
     else {
         if (jl_is_toplevel_only_expr(expr) &&
@@ -4356,7 +4356,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
                 literal_pointer_val(ctx, expr)
             };
             ctx.builder.CreateCall(prepare_call(jltopeval_func), args);
-            return ghostValue(jl_void_type);
+            return ghostValue(jl_nothing_type);
         }
         if (head == abstracttype_sym || head == structtype_sym ||
             head == primtype_sym) {
