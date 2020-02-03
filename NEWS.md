@@ -32,6 +32,8 @@ Language changes
   (in addition to the one that enters the help mode) to see the full
   docstring. ([#25930])
 
+* The syntax `(;)` (which was deprecated in v1.4) now creates an empty named tuple ([#30115]).
+
 Multi-threading changes
 -----------------------
 
@@ -53,6 +55,7 @@ New library features
 --------------------
 * Function composition now works also on one argument `∘(f) = f` (#34251)
 
+* `isapprox` (or `≈`) now has a one-argument "curried" method `isapprox(x)` which returns a function, like `isequal` (or `==`)` ([#32305]).
 * `Ref{NTuple{N,T}}` can be passed to `Ptr{T}`/`Ref{T}` `ccall` signatures ([#34199])
 
 

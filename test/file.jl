@@ -520,20 +520,21 @@ end
     @test my_tempdir[end] != '\\'
 
     var =  Sys.iswindows() ? "TMP" : "TMPDIR"
-    PATH_PREFIX = Sys.iswindows() ? "C:\\" : "/tmp/"
+    PATH_PREFIX = Sys.iswindows() ? "C:\\" : "/tmp/" * "x"^255   # we want a long path on UNIX so that we test buffer resizing in `tempdir`
     # Warning: On Windows uv_os_tmpdir internally calls GetTempPathW. The max string length for
     # GetTempPathW is 261 (including the implied trailing backslash), not the typical length 259.
-    # We thus use 260 (with implied trailing slash backlash this then gives 261 chars) and
-    # subtract 9 to account for i = 0:9.
-    MAX_PATH = (Sys.iswindows() ? 260-9 : 1024) - length(PATH_PREFIX)
+    # We thus use 260 (with implied trailing slash backlash this then gives 261 chars)
+    # NOTE: not the actual max path on UNIX, but true in the Windows case for this function.
+    # NOTE: we subtract 9 to account for i = 0:9.
+    MAX_PATH = (Sys.iswindows() ? 260 - length(PATH_PREFIX) : 255)  - 9
     for i = 0:8
-        local tmp = PATH_PREFIX * "x"^MAX_PATH * "123456789"[1:i]
+        local tmp = joinpath(PATH_PREFIX, "x"^MAX_PATH * "123456789"[1:i])
         @test withenv(var => tmp) do
             tempdir()
         end == (tmp)
     end
     for i = 9
-        local tmp = PATH_PREFIX * "x"^MAX_PATH * "123456789"[1:i]
+        local tmp = joinpath(PATH_PREFIX, "x"^MAX_PATH * "123456789"[1:i])
         if Sys.iswindows()
             # libuv bug
             @test_broken withenv(var => tmp) do

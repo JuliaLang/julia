@@ -107,7 +107,7 @@ as infix operators and are available for user-defined methods (e.g. you can use 
 to define `⊗` as an infix Kronecker product).  Operators can also be suffixed with modifying marks,
 primes, and sub/superscripts, e.g. `+̂ₐ″` is parsed as an infix operator with the same precedence as `+`.
 
-The only explicitly disallowed names for variables are the names of built-in statements:
+The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref):
 
 ```julia-repl
 julia> else = false

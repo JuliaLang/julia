@@ -410,7 +410,7 @@ methods happen to exist cannot be used to determine the scopes of variables. Wit
 behavior, it's especially concerning that someone might have written the `for` loop first, had it
 working just fine, but later when someone else adds a new global far away—possibly in a different
 file—the code suddenly changes meaning and either breaks noisily or, worse still, silently does the
-wrong thing. This kind of "spooky action at a distance" is something that good programming language
+wrong thing. This kind of ["spooky action at a distance"](https://en.wikipedia.org/wiki/Action_at_a_distance_(computer_programming)) is something that good programming language
 designs should prevent.
 
 So in Julia 1.0, we simplified the rules for scope: in any local scope, assignment to a name that
