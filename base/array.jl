@@ -1229,16 +1229,13 @@ Insert all of the elements of `items` into `a` at the given `index`. `index` is 
 
 # Examples
 ```jldoctest
-julia> insert!([6, 5, 4, 2, 1], 4, [8, 9, 9])
-8-element Array{Int64,1}:
- 6
- 5
- 4
+julia> insert!([1, 2, 3], 2, [8, 9])
+5-element Array{Int64,1}:
+ 1
  8
  9
- 9
  2
- 1
+ 3
 ```
 """
 function insert!(a::Array{T,1}, i::Integer, items::Array{T,1}) where {T}
@@ -1261,14 +1258,13 @@ Insert all of the elements of `items` into `a` for the given `range` or `indices
 
 # Examples
 ```jldoctest
-julia> insert!([1, 2, 3, 4], 3:4, [8, 9])
-6-element Array{Int64,1}:
+julia> insert!([1, 2, 3], 2:3, [8, 9])
+5-element Array{Int64,1}:
  1
- 2
  8
  9
+ 2
  3
- 4
 ```
 
 Following example inserts `10, 9, and 8` at index `6 ,4, and 2` respectively
