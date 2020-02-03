@@ -1300,9 +1300,14 @@ function insert!(a::Array{T,1}, indices::AbstractVector, items::Array{T,1}) wher
     elseif itemslen === 0
         return a
     end
-    sortindices = sortperm(indices) # sorts so the final index is correct
-    indices_sorted = indices[sortindices]
-    items_sorted = items[sortindices]
+    if issorted(indices) # based on the tests overhead/advantage is low
+        indices_sorted = indices
+        items_sorted = items
+    else
+        sort_indices = sortperm(indices) # sorts so the final index is correct
+        indices_sorted = indices[sort_indices]
+        items_sorted = items[sort_indices]
+    end
     _growat!.(Ref(a), indices_sorted, 1) # does bound check
     @inbounds for (index, item) in zip(indices_sorted, items_sorted)
         a[index] = item
@@ -1319,11 +1324,16 @@ function insert!(a::Array{T,1}, indices::AbstractRange{<:Integer}, items::Array{
     elseif itemslen === 0
         return a
     end
-    indicessorted = sort(indices) # sorting them is faster than indexing into them
-    sortindices = sortperm(indices) # sorts so the final index is correct
-    items_sorted = items[sortindices]
-    _growat!.(Ref(a), indicessorted, 1) # does bound check
-    @inbounds for (index, item) in zip(indicessorted, items_sorted)
+    if issorted(indices) # based on the tests overhead/advantage is low
+        indices_sorted = indices
+        items_sorted = items
+    else
+        indices_sorted = sort(indices) # sorting them is faster than indexing into them
+        sort_indices = sortperm(indices) # sorts so the final index is correct
+        items_sorted = items[sort_indices]
+    end
+    _growat!.(Ref(a), indices_sorted, 1) # does bound check
+    @inbounds for (index, item) in zip(indices_sorted, items_sorted)
         a[index] = item
     end
     return a

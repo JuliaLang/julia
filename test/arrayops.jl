@@ -477,6 +477,13 @@ end
     @test insert!([1, 2, 3], [true, false, true, false, false], [10, 9]) == [10, 1, 9, 2, 3]
     @test_throws ArgumentError insert!([1, 2, 3], [true, false, true, false], [10, 9])
     @test_throws ArgumentError insert!([1, 2, 3], [true, false, true, false, true], [10, 9])
+
+    # sorted indices vector
+    @test insert!([1, 2, 3, 4, 5], [4, 5, 6], [10, 9, 8]) ==
+    [1, 2, 3, 10, 9, 8, 4, 5]
+    # non-sorted indices vector
+    @test insert!([1, 2, 3, 4, 5], [6, 5, 4], [10, 9, 8]) ==
+    [1, 2, 3, 8, 9, 10, 4, 5]
 end
 @testset "concatenation" begin
     @test isequal([fill(1.,2,2)  fill(2.,2,1)], [1. 1 2; 1 1 2])
