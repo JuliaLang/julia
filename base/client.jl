@@ -427,7 +427,7 @@ using ..Base
 # include(fname::AbstractString) = Main.Base.include(Main, fname)
 function include(fname::AbstractString)
     mod = Main
-    isa(fname, String) || (fname = Base.convert(String, fname))
+    isa(fname, String) || (fname = Base.convert(String, fname)::String)
     path, prev = Base._include_dependency(mod, fname)
     for callback in Base.include_callbacks # to preserve order, must come before Core.include
         Base.invokelatest(callback, mod, path)
