@@ -1292,7 +1292,7 @@ julia> insert!([1, 2, 3], [true, false, true, false, false], [10, 9])
   3
 ```
 """
-function insert!(a::Array{T1,1}, indices::T2, items::Array{T1,1}) where {T1} where {T2<:Union{Array{<:Integer,1}, OrdinalRange{<:Integer, <:Integer}}}
+function insert!(a::Array{T,1}, indices::AbstractVector, items::Array{T,1}) where {T}
     itemslen = length(items)
     indiceslen = length(indices)
     if itemslen !== indiceslen
