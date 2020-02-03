@@ -105,6 +105,8 @@ include("baseext.jl")
 include("ntuple.jl")
 
 include("abstractdict.jl")
+include("iddict.jl")
+include("idset.jl")
 
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
