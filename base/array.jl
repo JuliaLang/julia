@@ -1280,6 +1280,17 @@ julia> insert!([1, 2, 3, 4, 5], 6:-2:2, [10, 9, 8])
   4
   5
 ```
+
+It is possible to use boolean indices (each true shows insertion index):
+```jldoctest
+julia> insert!([1, 2, 3], [true, false, true, false, false], [10, 9])
+5-element Array{Int64,1}:
+ 10
+  1
+  9
+  2
+  3
+```
 """
 function insert!(a::Array{T1,1}, indices::T2, items::Array{T1,1}) where {T1} where {T2<:Union{Array{<:Integer,1}, OrdinalRange{<:Integer, <:Integer}}}
     itemslen = length(items)
@@ -1307,6 +1318,27 @@ function insert!(a::Array{T,1}, r::UnitRange{<:Integer}, items::Array{T,1}) wher
     else
         return insert!(a, first(r), items)
     end
+end
+
+function insert!(a::Array{T,1}, boolindices::AbstractVector{Bool}, items::Array{T,1}) where T
+    alen = length(a)
+    itemslen = length(items)
+    boolindiceslen = length(boolindices)
+    if alen + itemslen !== boolindiceslen
+        throw(ArgumentError("Length of the indices should be equal to length of the final vector"))
+    end
+    indices = findall(x -> x=== true, boolindices) # doesn't need sort afterwards
+    indiceslen = length(indices)
+    if itemslen !== indiceslen
+        throw(ArgumentError("Number of true indices should be the same as length of items"))
+    elseif itemslen === 0
+        return a
+    end
+    _growat!.(Ref(a), indices, 1) # does bound check
+    @inbounds for (index, item) in zip(indices, items)
+        a[index] = item
+    end
+    return a
 end
 
 """
