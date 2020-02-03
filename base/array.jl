@@ -1252,6 +1252,67 @@ function insert!(a::Array{T,1}, i::Integer, items::Array{T,1}) where {T}
     end
     return a
 end
+
+"""
+    insert!(a::Vector, range, items::Vector)
+    insert!(a::Vector, indices::Vector, items::Vector)
+
+Insert all of the elements of `items` into `a` for the given `range` or `indices`. `range` or `indices` are the resulting indices of elements of `items` in the `a`.
+
+# Examples
+```jldoctest
+julia> insert!([1, 2, 3, 4], 3:4, [8, 9])
+6-element Array{Int64,1}:
+ 1
+ 2
+ 8
+ 9
+ 3
+ 4
+```
+
+Following example inserts `10, 9, and 8` at index `6 ,4, and 2` respectively
+```jldoctest
+julia> insert!([1, 2, 3, 4, 5], 6:-2:2, [10, 9, 8])
+8-element Array{Int64,1}:
+  1
+  8
+  2
+  9
+  3
+ 10
+  4
+  5
+```
+"""
+function insert!(a::Array{T1,1}, indices::T2, items::Array{T1,1}) where {T1} where {T2<:Union{Array{<:Integer,1}, OrdinalRange{<:Integer, <:Integer}}}
+    itemslen = length(items)
+    indiceslen = length(indices)
+    if itemslen !== indiceslen
+        throw(DimensionMismatch("Length of the indices and items should be the same"))
+    elseif itemslen === 0
+        return a
+    end
+    sortindices = sortperm(indices) # sorts so the final index is correct
+    indices_sorted = indices[sortindices]
+    items_sorted = items[sortindices]
+    _growat!.(Ref(a), indices_sorted, 1) # does bound check
+    @inbounds for (index, item) in zip(indices_sorted, items_sorted)
+        a[index] = item
+    end
+    return a
+end
+
+function insert!(a::Array{T,1}, r::UnitRange{<:Integer}, items::Array{T,1}) where T
+    ilen = length(items)
+    rlen = length(r)
+    if ilen !== rlen
+        throw(DimensionMismatch("Length of the range and items should be the same"))
+    else
+        return insert!(a, first(r), items)
+    end
+end
+
 """
     deleteat!(a::Vector, i::Integer)
 
