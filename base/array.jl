@@ -1310,7 +1310,26 @@ function insert!(a::Array{T,1}, indices::AbstractVector, items::Array{T,1}) wher
     return a
 end
 
-function insert!(a::Array{T,1}, r::UnitRange{<:Integer}, items::Array{T,1}) where T
+
+function insert!(a::Array{T,1}, indices::AbstractRange{<:Integer}, items::Array{T,1}) where {T}
+    itemslen = length(items)
+    indiceslen = length(indices)
+    if itemslen !== indiceslen
+        throw(DimensionMismatch("Length of the indices and items should be the same"))
+    elseif itemslen === 0
+        return a
+    end
+    indicessorted = sort(indices) # sorting them is faster than indexing into them
+    sortindices = sortperm(indices) # sorts so the final index is correct
+    items_sorted = items[sortindices]
+    _growat!.(Ref(a), indicessorted, 1) # does bound check
+    @inbounds for (index, item) in zip(indicessorted, items_sorted)
+        a[index] = item
+    end
+    return a
+end
+
+function insert!(a::Array{T,1}, r::AbstractUnitRange{<:Integer}, items::Array{T,1}) where T
     ilen = length(items)
     rlen = length(r)
     if ilen !== rlen
