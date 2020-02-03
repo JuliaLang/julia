@@ -797,4 +797,27 @@ let
     end
 end
 
+# Issue #25971
+let
+    load_path = mktempdir()
+    load_cache_path = mktempdir()
+    try
+        pushfirst!(LOAD_PATH, load_path)
+        pushfirst!(DEPOT_PATH, load_cache_path)
+        sourcefile = joinpath(load_path, "Foo25971.jl")
+        write(sourcefile, "module Foo25971 end")
+        chmod(sourcefile, 0o666)
+        cachefile = Base.compilecache(Base.PkgId("Foo25971"))
+        @test filemode(sourcefile) == filemode(cachefile)
+        chmod(sourcefile, 0o600)
+        cachefile = Base.compilecache(Base.PkgId("Foo25971"))
+        @test filemode(sourcefile) == filemode(cachefile)
+    finally
+        rm(load_path, recursive=true)
+        rm(load_cache_path, recursive=true)
+        filter!((≠)(load_path), LOAD_PATH)
+        filter!((≠)(load_cache_path), DEPOT_PATH)
+    end
+end
+
 end # !withenv

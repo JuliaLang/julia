@@ -1264,6 +1264,8 @@ function compilecache(pkg::PkgId, path::String)
         open(cachefile, "a+") do f
             write(f, _crc32c(seekstart(f)))
         end
+        # inherit permission from the source file
+        chmod(cachefile, filemode(path) & 0o777)
     elseif p.exitcode == 125
         return PrecompilableError()
     else
