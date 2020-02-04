@@ -798,3 +798,9 @@ end
     @test Base.IteratorSize(Iterators.accumulate(max, rand(2,3))) === Base.IteratorSize(rand(2,3))
     @test Base.IteratorEltype(Iterators.accumulate(*, ())) isa Base.EltypeUnknown
 end
+
+@testset "Base.accumulate" begin
+    @test cumsum(x^2 for x in 1:3) == [1, 5, 14]
+    @test cumprod(x + 1 for x in 1:3) == [2, 6, 24]
+    @test accumulate(+, (x^2 for x in 1:3); init=100) == [101, 105, 114]
+end

@@ -443,13 +443,14 @@ reverse(f::Filter) = Filter(f.flt, reverse(f.itr))
 
 # Accumulate -- partial reductions of a function over an iterator
 
-struct Accumulate{F,I}
+struct Accumulate{F,I,T}
     f::F
     itr::I
+    init::T
 end
 
 """
-    Iterators.accumulate(f, itr)
+    Iterators.accumulate(f, itr; [init])
 
 Given a 2-argument function `f` and an iterator `itr`, return a new
 iterator that successively applies `f` to the previous value and the
@@ -459,24 +460,31 @@ This is effectively a lazy version of [`Base.accumulate`](@ref).
 
 # Examples
 ```jldoctest
-julia> f = Iterators.accumulate(+, [1,2,3,4])
-Base.Iterators.Accumulate{typeof(+),Array{Int64,1}}(+, [1, 2, 3, 4])
+julia> f = Iterators.accumulate(+, [1,2,3,4]);
 
 julia> foreach(println, f)
 1
 3
 6
 10
+
+julia> f = Iterators.accumulate(+, [1,2,3]; init = 100);
+
+julia> foreach(println, f)
+101
+103
+106
 ```
 """
-accumulate(f, itr) = Accumulate(f, itr)
+accumulate(f, itr; init = Base._InitialValue()) = Accumulate(f, itr, init)
 
 function iterate(itr::Accumulate)
     state = iterate(itr.itr)
     if state === nothing
         return nothing
     end
-    return (state[1], state)
+    val = Base.BottomRF(itr.f)(itr.init, state[1])
+    return (val, (val, state[2]))
 end
 
 function iterate(itr::Accumulate, state)
@@ -491,7 +499,7 @@ end
 length(itr::Accumulate) = length(itr.itr)
 size(itr::Accumulate) = size(itr.itr)
 
-IteratorSize(::Type{Accumulate{F,I}}) where {F,I} = IteratorSize(I)
+IteratorSize(::Type{<:Accumulate{F,I}}) where {F,I} = IteratorSize(I)
 IteratorEltype(::Type{<:Accumulate}) = EltypeUnknown()
 
 # Rest -- iterate starting at the given state
