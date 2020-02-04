@@ -421,19 +421,16 @@ SparseVector{Tv}(s::AbstractVector{Tv}) where {Tv} = SparseVector{Tv,Int}(s)
 
 SparseVector(s::AbstractVector{Tv}) where {Tv} = SparseVector{Tv,Int}(s)
 
-
-# convert between different types of SparseVector
-SparseVector{Tv}(s::SparseVector{Tv}) where {Tv} = s
-SparseVector{Tv,Ti}(s::SparseVector{Tv,Ti}) where {Tv,Ti} = s
-SparseVector{Tv,Ti}(s::SparseVector) where {Tv,Ti} =
-    SparseVector{Tv,Ti}(length(s::SparseVector), convert(Vector{Ti}, nonzeroinds(s)), convert(Vector{Tv}, nonzeros(s)))
-
-function SparseVector{Tv}(s::SparseVector{<:Any,Ti}) where {Tv,Ti}
+# copy-constructors
+SparseVector(s::SparseVector{Tv,Ti}) where {Tv,Ti} = SparseVector{Tv,Ti}(s)
+SparseVector{Tv}(s::SparseVector{<:Any,Ti}) where {Tv,Ti} = SparseVector{Tv,Ti}(s)
+function SparseVector{Tv,Ti}(s::SparseVector) where {Tv,Ti}
     copyind = Vector{Ti}(nonzeroinds(s))
     copynz = Vector{Tv}(nonzeros(s))
     SparseVector{Tv,Ti}(length(s::SparseVector), copyind, copynz)
 end
 
+# convert between different types of SparseVector
 convert(T::Type{<:SparseVector}, m::AbstractVector) = m isa T ? m : T(m)
 convert(T::Type{<:SparseVector}, m::AbstractSparseMatrixCSC) = T(m)
 convert(T::Type{<:AbstractSparseMatrixCSC}, v::SparseVector) = T(v)
