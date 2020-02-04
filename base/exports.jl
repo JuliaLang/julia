@@ -642,6 +642,7 @@ export
     isbits,
     isequal,
     isimmutable,
+    ismutable,
     isless,
     ifelse,
     objectid,

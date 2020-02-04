@@ -159,6 +159,7 @@ Base.isdispatchtuple
 
 ```@docs
 Base.isimmutable
+Base.ismutable
 Base.isabstracttype
 Base.isprimitivetype
 Base.issingletontype

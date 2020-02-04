@@ -417,7 +417,28 @@ julia> isimmutable([1,2])
 false
 ```
 """
-isimmutable(@nospecialize(x)) = (@_pure_meta; !typeof(x).mutable)
+function isimmutable(@nospecialize(x))
+    depwarn(" isimmutable is deprecated use ismutable instead ", :isimmutable)
+    return (@_pure_meta; !typeof(x).mutable)
+end
+
+"""
+    ismutable(v) -> Bool
+
+Return `true` iff value `v` is mutable.  See [Mutable Composite Types](@ref)
+for a discussion of immutability. Note that this function works on values, so if you give it
+a type, it will tell you that a value of `DataType` is mutable.
+
+# Examples
+```jldoctest
+julia> ismutable(1)
+false
+
+julia> ismutable([1,2])
+true
+```
+"""
+ismutable(@nospecialize(x)) = (@_pure_meta; typeof(x).mutable)
 
 """
     isstructtype(T) -> Bool
