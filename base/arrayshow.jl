@@ -428,7 +428,9 @@ function show(io::IO, X::AbstractArray)
     ndims(X) == 0 && return show_zero_dim(io, X)
     ndims(X) == 1 && return show_vector(io, X)
     prefix, implicit = typeinfo_prefix(io, X)
-    io = IOContext(io, :typeinfo => eltype(X), :typeinfo_implicit => implicit)
+    if !implicit
+        io = IOContext(io, :typeinfo => eltype(X))
+    end
     isempty(X) ?
         _show_empty(io, X) :
         _show_nonempty(io, X, prefix)
@@ -456,7 +458,9 @@ function show_vector(io::IO, v, opn='[', cls=']')
     prefix, implicit = typeinfo_prefix(io, v)
     print(io, prefix)
     # directly or indirectly, the context now knows about eltype(v)
-    io = IOContext(io, :typeinfo => eltype(v), :typeinfo_implicit => implicit)
+    if !implicit
+        io = IOContext(io, :typeinfo => eltype(v))
+    end
     limited = get(io, :limit, false)
 
     if limited && length(v) > 20
@@ -498,7 +502,6 @@ end
 # X not constrained, can be any iterable (cf. show_vector)
 function typeinfo_prefix(io::IO, X)
     typeinfo = get(io, :typeinfo, Any)::Type
-    implicit = get(io, :typeinfo_implicit, false)::Bool
 
     if !(X isa typeinfo)
         typeinfo = Any
@@ -509,15 +512,17 @@ function typeinfo_prefix(io::IO, X)
     eltype_X = eltype(X)
 
     if X isa AbstractDict
-        if eltype_X == eltype_ctx || (!isempty(X) && typeinfo_implicit(keytype(X)) && typeinfo_implicit(valtype(X)))
+        if eltype_X == eltype_ctx
             string(typeof(X).name), false
+        elseif !isempty(X) && typeinfo_implicit(keytype(X)) && typeinfo_implicit(valtype(X))
+            string(typeof(X).name), true
         else
             string(typeof(X)), false
         end
     else
         # Types hard-coded here are those which are created by default for a given syntax
-        if !(isempty(X) && implicit) && eltype_X == eltype_ctx
-            "", implicit
+        if eltype_X == eltype_ctx
+            "", false
         elseif !isempty(X) && typeinfo_implicit(eltype_X)
             "", true
         elseif print_without_params(eltype_X)
