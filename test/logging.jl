@@ -384,4 +384,12 @@ end
     @test logs[1].id != logs[2].id
 end
 
+# Issue #34485
+@testset "`_group` must be a `Symbol`" begin
+    (record,), _ = collect_test_logs() do
+        @info "test"
+    end
+    @test record.group == :logging  # name of this file
+end
+
 end

@@ -244,7 +244,7 @@ Date
       value: Int64 735264
 
 julia> t.instant
-Dates.UTInstant{Day}(735264 days)
+Dates.UTInstant{Day}(Day(735264))
 
 julia> Dates.value(t)
 735264
@@ -400,7 +400,7 @@ As a bonus, all period arithmetic objects work directly with ranges:
 
 ```jldoctest
 julia> dr = Date(2014,1,29):Day(1):Date(2014,2,3)
-2014-01-29:1 day:2014-02-03
+Date("2014-01-29"):Day(1):Date("2014-02-03")
 
 julia> collect(dr)
 6-element Array{Date,1}:
@@ -412,7 +412,7 @@ julia> collect(dr)
  2014-02-03
 
 julia> dr = Date(2014,1,29):Dates.Month(1):Date(2014,07,29)
-2014-01-29:1 month:2014-07-29
+Date("2014-01-29"):Month(1):Date("2014-07-29")
 
 julia> collect(dr)
 7-element Array{Date,1}:

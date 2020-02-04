@@ -72,8 +72,9 @@ automatically extracted. Let's examine the user-defined data first:
 
 * The *message*  is an object describing the event. By convention
   `AbstractString`s passed as messages are assumed to be in markdown format.
-  Other types will be displayed using `show(io,mime,obj)` according to the
-  display capabilities of the installed logger.
+  Other types will be displayed using `print(io, obj)` or `string(obj)` for
+  text-based output and possibly `show(io,mime,obj)` for other multimedia
+  displays used in the installed logger.
 * Optional *key--value pairs* allow arbitrary data to be attached to each event.
   Some keys have conventional meaning that can affect the way an event is
   interpreted (see [`@logmsg`](@ref)).
@@ -308,4 +309,3 @@ Logging.NullLogger
 Logging.ConsoleLogger
 Logging.SimpleLogger
 ```
-

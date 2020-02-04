@@ -676,6 +676,13 @@ end
 
     v = [1,2,3]
     @test permutedims(v) == [1 2 3]
+
+    x = PermutedDimsArray([1 2; 3 4], (2, 1))
+    @test size(x) == (2, 2)
+    @test copy(x) == [1 3; 2 4]
+    y = [0, 0, 0, 0]
+    copyto!(y, x)
+    @test y == [1, 2, 3, 4]
 end
 
 @testset "circshift" begin
@@ -2342,6 +2349,17 @@ end
     @test size(a,4) == 6
     @test size(a) == (9,8,7,6,5,4,3,2,1)
     @test size(a) == size(b)
+end
+
+@testset "Converting size integers to ints" begin
+    @test size(Array{Float64}(undef, unsigned(2))) == (2,)
+    @test size(Array{Float64}(undef, unsigned(2), unsigned(3))) == (2, 3)
+    @test size(Array{Float64}(undef, unsigned(2), unsigned(3), unsigned(4))) == (2, 3, 4)
+    @test size(Array{Float64}(undef, unsigned(2), unsigned(3), unsigned(4), unsigned(5))) == (2, 3, 4, 5)
+    # with number of dimensions
+    @test size(Array{Float64, 3}(undef, unsigned(2), unsigned(3), unsigned(4))) == (2, 3, 4)
+    # unsplatted
+    @test size(Array{Float64}(undef, (unsigned(2), unsigned(3), unsigned(4)))) == (2, 3, 4)
 end
 
 @testset "type constructor Array{T, N}(nothing, d...) works (especially for N>3)" for T in (Int, String),

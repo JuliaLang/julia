@@ -274,6 +274,15 @@ function isapprox(x::Number, y::Number; atol::Real=0, rtol::Real=rtoldefault(x,y
     x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= max(atol, rtol*max(abs(x), abs(y)))) || (nans && isnan(x) && isnan(y))
 end
 
+"""
+    isapprox(x; kwargs...) / ≈(x; kwargs...)
+
+Create a function that compares its argument to `x` using `≈`, i.e. a function equivalent to `y -> y ≈ x`.
+
+The keyword arguments supported here are the same as those in the 2-argument `isapprox`.
+"""
+isapprox(y; kwargs...) = x -> isapprox(x, y; kwargs...)
+
 const ≈ = isapprox
 """
     x ≉ y

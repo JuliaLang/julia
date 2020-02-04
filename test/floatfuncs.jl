@@ -100,3 +100,9 @@ end
     @test round(Float16(0.6), sigdigits=2) === Float16(0.6)
     @test round(Float16(1.1), sigdigits=70) === Float16(1.1)
 end
+
+@testset "curried approximation" begin
+
+    @test ≈(1.0; atol=1).(1.0:3.0) == [true, true, false]
+
+end

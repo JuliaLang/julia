@@ -7,7 +7,7 @@ using Dates
 
 @testset "string/show representation of Date" begin
     @test string(Dates.Date(1, 1, 1)) == "0001-01-01" # January 1st, 1 AD/CE
-    @test sprint(show, Dates.Date(1, 1, 1)) == "0001-01-01"
+    @test sprint(show, Dates.Date(1, 1, 1)) == "Dates.Date(\"0001-01-01\")"
     @test string(Dates.Date(0, 12, 31)) == "0000-12-31" # December 31, 1 BC/BCE
     @test Dates.Date(1, 1, 1) - Dates.Date(0, 12, 31) == Dates.Day(1)
     @test Dates.Date(Dates.UTD(-306)) == Dates.Date(0, 2, 29)
@@ -16,7 +16,7 @@ using Dates
     @test string(Dates.Date(-1000000, 1, 1)) == "-1000000-01-01"
     @test string(Dates.Date(1000000, 1, 1)) == "1000000-01-01"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 1)) == "2000-01-01T00:00:00.001"
-    @test sprint(show, Dates.DateTime(2000, 1, 1, 0, 0, 0, 1)) == "2000-01-01T00:00:00.001"
+    @test sprint(show, Dates.DateTime(2000, 1, 1, 0, 0, 0, 1)) == "Dates.DateTime(\"2000-01-01T00:00:00.001\")"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 2)) == "2000-01-01T00:00:00.002"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 500)) == "2000-01-01T00:00:00.5"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 998)) == "2000-01-01T00:00:00.998"

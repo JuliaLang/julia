@@ -54,10 +54,10 @@ optionally with a given step (defaults to 1, a [`UnitRange`](@ref)).
 One of `length` or `stop` is required.  If `length`, `stop`, and `step` are all specified, they must agree.
 
 If `length` and `stop` are provided and `step` is not, the step size will be computed
-automatically such that there are `length` linearly spaced elements in the range (a [`LinRange`](@ref)).
+automatically such that there are `length` linearly spaced elements in the range.
 
 If `step` and `stop` are provided and `length` is not, the overall range length will be computed
-automatically such that the elements are `step` spaced (a [`StepRange`](@ref)).
+automatically such that the elements are `step` spaced.
 
 `stop` may be specified as either a positional or keyword argument.
 

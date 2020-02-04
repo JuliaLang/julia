@@ -6,7 +6,7 @@
 #include "options.h"
 #include "locks.h"
 #include <uv.h>
-#if !defined(_MSC_VER) && !defined(__MINGW32__)
+#if !defined(_WIN32)
 #include <unistd.h>
 #else
 #define sleep(x) Sleep(1000*x)
@@ -150,8 +150,8 @@ void gc_sweep_sysimg(void);
 static const int jl_gc_sizeclasses[] = {
 #ifdef _P64
     8,
-#elif MAX_ALIGN == 8
-    // ARM and PowerPC have max alignment of 8,
+#elif MAX_ALIGN > 4
+    // ARM and PowerPC have max alignment larger than pointer,
     // make sure allocation of size 8 has that alignment.
     4, 8,
 #else
@@ -315,7 +315,7 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz);
 JL_DLLEXPORT void JL_NORETURN jl_throw_out_of_memory_error(void);
 
 JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void);
-void jl_gc_sync_total_bytes(void);
+JL_DLLEXPORT int64_t jl_gc_sync_total_bytes(int64_t offset);
 void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a) JL_NOTSAFEPOINT;
 void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT;
 void jl_gc_run_all_finalizers(jl_ptls_t ptls);
@@ -720,6 +720,7 @@ typedef struct {
 
 // Might be called from unmanaged thread
 uint64_t jl_getUnwindInfo(uint64_t dwBase);
+uint64_t jl_trygetUnwindInfo(uint64_t dwBase);
 #ifdef _OS_WINDOWS_
 #include <dbghelp.h>
 JL_DLLEXPORT EXCEPTION_DISPOSITION __julia_personality(
@@ -756,7 +757,7 @@ size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTS
 // Record backtrace from a signal handler. `ctx` is the context of the code
 // which was asynchronously interrupted.
 size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx,
-                         jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
+                         jl_gcframe_t *pgcstack, int lockless) JL_NOTSAFEPOINT;
 #ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
 #endif

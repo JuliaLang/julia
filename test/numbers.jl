@@ -63,6 +63,11 @@ end
 
     @test iszero(false) && !iszero(true)
     @test isone(true) && !isone(false)
+
+    @test typemin(Bool) == false
+    @test typemax(Bool) == true
+    @test abs(false) == false
+    @test abs(true) == true
 end
 @testset "basic arithmetic" begin
     @test 2 + 3 == 5

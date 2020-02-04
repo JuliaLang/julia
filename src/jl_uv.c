@@ -563,10 +563,10 @@ extern int vasprintf(char **str, const char *fmt, va_list ap);
 
 JL_DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
 {
-    char *str=NULL;
+    char *str = NULL;
     int c;
     va_list al;
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
     al = args;
 #else
     va_copy(al, args);
