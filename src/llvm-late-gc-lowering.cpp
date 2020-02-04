@@ -2035,21 +2035,16 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
     for (BasicBlock &BB : F) {
         for (auto it = BB.begin(); it != BB.end();) {
             Instruction *I = &*it;
-            if (isa<LoadInst>(I) || isa<StoreInst>(I)) {
-                // strip all constant alias information, as it might depend on the gc having
-                // preserved a gc root, which stops being true after this pass (#32215)
-                // we'd like to call RewriteStatepointsForGC::stripNonValidData here, but
-                // that function asserts that the GC strategy must be named either "statepoint-example" or "coreclr",
-                // while we don't give a name to our GC in the IR, and C++ scope rules prohibit us from using it,
-                // so instead we reimplement it here badly
-                if (I->getMetadata(LLVMContext::MD_invariant_load))
-                    I->setMetadata(LLVMContext::MD_invariant_load, NULL);
-                if (MDNode *TBAA = I->getMetadata(LLVMContext::MD_tbaa)) {
-                    if (TBAA->getNumOperands() == 4 && isTBAA(TBAA, {"jtbaa_const"})) {
-                        MDNode *MutableTBAA = createMutableTBAAAccessTag(TBAA);
-                        if (MutableTBAA != TBAA)
-                            I->setMetadata(LLVMContext::MD_tbaa, MutableTBAA);
-                    }
+            // strip all constant alias information, as it might depend on the gc having
+            // preserved a gc root, which stops being true after this pass (#32215)
+            // similar to RewriteStatepointsForGC::stripNonValidData, but less aggressive
+            if (I->getMetadata(LLVMContext::MD_invariant_load))
+                I->setMetadata(LLVMContext::MD_invariant_load, NULL);
+            if (MDNode *TBAA = I->getMetadata(LLVMContext::MD_tbaa)) {
+                if (TBAA->getNumOperands() == 4 && isTBAA(TBAA, {"jtbaa_const"})) {
+                    MDNode *MutableTBAA = createMutableTBAAAccessTag(TBAA);
+                    if (MutableTBAA != TBAA)
+                        I->setMetadata(LLVMContext::MD_tbaa, MutableTBAA);
                 }
             }
             auto *CI = dyn_cast<CallInst>(&*it);
