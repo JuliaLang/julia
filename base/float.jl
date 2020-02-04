@@ -753,7 +753,7 @@ end
     floatmin(T = Float64)
 
 Return the smallest positive normal number representable by the floating-point
-type `T` (`T = Float64` by default).
+type `T`.
 
 # Examples
 ```jldoctest
@@ -770,10 +770,9 @@ julia> floatmin()
 floatmin(x::T) where {T<:AbstractFloat} = floatmin(T)
 
 """
-    floatmax([T])
+    floatmax(T = Float64)
 
-Return the largest finite number representable by the floating-point type `T`
-(`T = Float64` by default).
+Return the largest finite number representable by the floating-point type `T`.
 
 # Examples
 ```jldoctest
