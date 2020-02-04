@@ -845,3 +845,26 @@ fib34666(x) =
         f(x)
     end
 @test fib34666(25) == 75025
+
+function jitter_channel(f, k, delay, ntasks)
+    x = Channel(ch -> foreach(i -> put!(ch, i), 1:k), 1)
+    y = Channel(k) do ch
+        g = i -> begin
+            iseven(i) && sleep(delay)
+            put!(ch, f(i))
+        end
+        Threads.foreach(g, x; ntasks=ntasks)
+    end
+    return y
+end
+
+@testset "Threads.foreach(f, ::Channel)" begin
+    k = 50
+    delay = 0.01
+    ordered = collect(jitter_channel(sin, k, delay, 1))
+    @test sin.(1:k) == ordered
+
+    unordered = collect(jitter_channel(sin, k, delay, 10))
+    @test sin.(1:k) != unordered
+    @test Set(sin.(1:k)) == Set(unordered)
+end
