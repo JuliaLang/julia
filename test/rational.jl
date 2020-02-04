@@ -247,10 +247,47 @@ end
 end
 
 @testset "round" begin
-    @test round(11//2) == 6//1 # rounds to closest _even_ integer
-    @test round(-11//2) == -6//1 # rounds to closest _even_ integer
-    @test round(11//3) == 4//1 # rounds to closest _even_ integer
-    @test round(-11//3) == -4//1 # rounds to closest _even_ integer
+    @test round(11//2) == round(11//2, RoundNearest) == 6//1 # rounds to closest _even_ integer
+    @test round(-11//2) == round(-11//2, RoundNearest) == -6//1 # rounds to closest _even_ integer
+    @test round(13//2) == round(13//2, RoundNearest) == 6//1 # rounds to closest _even_ integer
+    @test round(-13//2) == round(-13//2, RoundNearest) == -6//1 # rounds to closest _even_ integer
+    @test round(11//3) == round(11//3, RoundNearest) == 4//1 # rounds to closest _even_ integer
+    @test round(-11//3) == round(-11//3, RoundNearest) == -4//1 # rounds to closest _even_ integer
+
+    @test round(11//2, RoundNearestTiesAway) == 6//1
+    @test round(-11//2, RoundNearestTiesAway) == -6//1
+    @test round(13//2, RoundNearestTiesAway) == 7//1
+    @test round(-13//2, RoundNearestTiesAway) == -7//1
+    @test round(11//3, RoundNearestTiesAway) == 4//1
+    @test round(-11//3, RoundNearestTiesAway) == -4//1
+
+    @test round(11//2, RoundNearestTiesUp) == 6//1
+    @test round(-11//2, RoundNearestTiesUp) == -5//1
+    @test round(13//2, RoundNearestTiesUp) == 7//1
+    @test round(-13//2, RoundNearestTiesUp) == -6//1
+    @test round(11//3, RoundNearestTiesUp) == 4//1
+    @test round(-11//3, RoundNearestTiesUp) == -4//1
+
+    @test round(11//2, RoundToZero) == 5//1
+    @test round(-11//2, RoundToZero) == -5//1
+    @test round(13//2, RoundToZero) == 6//1
+    @test round(-13//2, RoundToZero) == -6//1
+    @test round(11//3, RoundToZero) == 3//1
+    @test round(-11//3, RoundToZero) == -3//1
+
+    @test round(11//2, RoundUp) == 6//1
+    @test round(-11//2, RoundUp) == -5//1
+    @test round(13//2, RoundUp) == 7//1
+    @test round(-13//2, RoundUp) == -6//1
+    @test round(11//3, RoundUp) == 4//1
+    @test round(-11//3, RoundUp) == -3//1
+
+    @test round(11//2, RoundDown) == 5//1
+    @test round(-11//2, RoundDown) == -6//1
+    @test round(13//2, RoundDown) == 6//1
+    @test round(-13//2, RoundDown) == -7//1
+    @test round(11//3, RoundDown) == 3//1
+    @test round(-11//3, RoundDown) == -4//1
 
     for T in (Float16, Float32, Float64)
         @test round(T, true//false) === convert(T, Inf)
