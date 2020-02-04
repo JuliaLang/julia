@@ -92,11 +92,14 @@ function cumsum(A::AbstractArray{T}; dims::Integer) where T
 end
 
 """
-    cumsum(x::AbstractVector)
+    cumsum(itr::Union{AbstractVector,Tuple})
 
-Cumulative sum a vector. See also [`cumsum!`](@ref)
+Cumulative sum an iterator. See also [`cumsum!`](@ref)
 to use a preallocated output array, both for performance and to control the precision of the
 output (e.g. to avoid overflow).
+
+!!! compat "Julia 1.5"
+    `cumsum` on a tuple requires at least Julia 1.5.
 
 # Examples
 ```jldoctest
@@ -111,9 +114,13 @@ julia> cumsum([fill(1, 2) for i in 1:3])
  [1, 1]
  [2, 2]
  [3, 3]
+
+julia> cumsum((1, 1, 1))
+(1, 2, 3)
 ```
 """
 cumsum(x::AbstractVector) = cumsum(x, dims=1)
+cumsum(itr) = accumulate(add_sum, itr)
 
 
 """
@@ -163,11 +170,14 @@ function cumprod(A::AbstractArray; dims::Integer)
 end
 
 """
-    cumprod(x::AbstractVector)
+    cumprod(itr::Union{AbstractVector,Tuple})
 
-Cumulative product of a vector. See also
+Cumulative product of an iterator. See also
 [`cumprod!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow).
+
+!!! compat "Julia 1.5"
+    `cumprod` on a tuple requires at least Julia 1.5.
 
 # Examples
 ```jldoctest
@@ -182,9 +192,13 @@ julia> cumprod([fill(1//3, 2, 2) for i in 1:3])
  [1//3 1//3; 1//3 1//3]
  [2//9 2//9; 2//9 2//9]
  [4//27 4//27; 4//27 4//27]
+
+julia> cumprod((1, 2, 1))
+(1, 2, 2)
 ```
 """
 cumprod(x::AbstractVector) = cumprod(x, dims=1)
+cumprod(itr) = accumulate(mul_prod, itr)
 
 
 """
@@ -245,6 +259,15 @@ function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
         throw(ArgumentError("acccumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
     end
     accumulate!(op, out, A; dims=dims, kw...)
+end
+
+function accumulate(op, xs::Tuple; init = _InitialValue())
+    rf = BottomRF(op)
+    ys, = foldl(xs; init = ((), init)) do (ys, acc), x
+        acc = rf(acc, x)
+        (ys..., acc), acc
+    end
+    return ys
 end
 
 """

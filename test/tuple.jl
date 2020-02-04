@@ -368,6 +368,17 @@ end
     end
 end
 
+@testset "accumulate" begin
+    @test @inferred(cumsum(())) == ()
+    @test @inferred(cumsum((1, 2, 3))) == (1, 3, 6)
+    @test @inferred(cumprod((1, 2, 3))) == (1, 2, 6)
+    @test @inferred(accumulate(+, (1, 2, 3); init=10)) == (11, 13, 16)
+    op(::Nothing, ::Any) = missing
+    op(::Missing, ::Any) = nothing
+    @test @inferred(accumulate(op, (1, 2, 3, 4); init = nothing)) ===
+          (missing, nothing, missing, nothing)
+end
+
 @testset "ntuple" begin
     nttest1(x::NTuple{n, Int}) where {n} = n
     @test nttest1(()) == 0
