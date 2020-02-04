@@ -268,37 +268,70 @@ end
     @test round(11//3, RoundNearestTiesUp) == 4//1
     @test round(-11//3, RoundNearestTiesUp) == -4//1
 
-    @test round(11//2, RoundToZero) == 5//1
-    @test round(-11//2, RoundToZero) == -5//1
-    @test round(13//2, RoundToZero) == 6//1
-    @test round(-13//2, RoundToZero) == -6//1
-    @test round(11//3, RoundToZero) == 3//1
-    @test round(-11//3, RoundToZero) == -3//1
+    @test trunc(11//2) == round(11//2, RoundToZero) == 5//1
+    @test trunc(-11//2) == round(-11//2, RoundToZero) == -5//1
+    @test trunc(13//2) == round(13//2, RoundToZero) == 6//1
+    @test trunc(-13//2) == round(-13//2, RoundToZero) == -6//1
+    @test trunc(11//3) == round(11//3, RoundToZero) == 3//1
+    @test trunc(-11//3) == round(-11//3, RoundToZero) == -3//1
 
-    @test round(11//2, RoundUp) == 6//1
-    @test round(-11//2, RoundUp) == -5//1
-    @test round(13//2, RoundUp) == 7//1
-    @test round(-13//2, RoundUp) == -6//1
-    @test round(11//3, RoundUp) == 4//1
-    @test round(-11//3, RoundUp) == -3//1
+    @test ceil(11//2) == round(11//2, RoundUp) == 6//1
+    @test ceil(-11//2) == round(-11//2, RoundUp) == -5//1
+    @test ceil(13//2) == round(13//2, RoundUp) == 7//1
+    @test ceil(-13//2) == round(-13//2, RoundUp) == -6//1
+    @test ceil(11//3) == round(11//3, RoundUp) == 4//1
+    @test ceil(-11//3) == round(-11//3, RoundUp) == -3//1
 
-    @test round(11//2, RoundDown) == 5//1
-    @test round(-11//2, RoundDown) == -6//1
-    @test round(13//2, RoundDown) == 6//1
-    @test round(-13//2, RoundDown) == -7//1
-    @test round(11//3, RoundDown) == 3//1
-    @test round(-11//3, RoundDown) == -4//1
+    @test floor(11//2) == round(11//2, RoundDown) == 5//1
+    @test floor(-11//2) == round(-11//2, RoundDown) == -6//1
+    @test floor(13//2) == round(13//2, RoundDown) == 6//1
+    @test floor(-13//2) == round(-13//2, RoundDown) == -7//1
+    @test floor(11//3) == round(11//3, RoundDown) == 3//1
+    @test floor(-11//3) == round(-11//3, RoundDown) == -4//1
 
     for T in (Float16, Float32, Float64)
         @test round(T, true//false) === convert(T, Inf)
         @test round(T, true//true) === one(T)
         @test round(T, false//true) === zero(T)
+        @test trunc(T, true//false) === convert(T, Inf)
+        @test trunc(T, true//true) === one(T)
+        @test trunc(T, false//true) === zero(T)
+        @test floor(T, true//false) === convert(T, Inf)
+        @test floor(T, true//true) === one(T)
+        @test floor(T, false//true) === zero(T)
+        @test ceil(T, true//false) === convert(T, Inf)
+        @test ceil(T, true//true) === one(T)
+        @test ceil(T, false//true) === zero(T)
     end
 
     for T in (Int8, Int16, Int32, Int64, Bool)
         @test_throws DivideError round(T, true//false)
         @test round(T, true//true) === one(T)
         @test round(T, false//true) === zero(T)
+        @test_throws DivideError trunc(T, true//false)
+        @test trunc(T, true//true) === one(T)
+        @test trunc(T, false//true) === zero(T)
+        @test_throws DivideError floor(T, true//false)
+        @test floor(T, true//true) === one(T)
+        @test floor(T, false//true) === zero(T)
+        @test_throws DivideError ceil(T, true//false)
+        @test ceil(T, true//true) === one(T)
+        @test ceil(T, false//true) === zero(T)
+    end
+
+    # issue 34657
+    @test round(1//0) === round(Rational, 1//0) === 1//0
+    @test trunc(1//0) === trunc(Rational, 1//0) === 1//0
+    @test floor(1//0) === floor(Rational, 1//0) === 1//0
+    @test ceil(1//0) === ceil(Rational, 1//0) === 1//0
+    @test round(-1//0) === round(Rational, -1//0) === -1//0
+    @test trunc(-1//0) === trunc(Rational, -1//0) === -1//0
+    @test floor(-1//0) === floor(Rational, -1//0) === -1//0
+    @test ceil(-1//0) === ceil(Rational, -1//0) === -1//0
+    for r = [RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp,
+             RoundToZero, RoundUp, RoundDown]
+        @test round(1//0, r) === 1//0
+        @test round(-1//0, r) === -1//0
     end
 end
 

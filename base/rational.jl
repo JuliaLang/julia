@@ -382,11 +382,11 @@ for (S, T) in ((Rational, Integer), (Integer, Rational), (Rational, Rational))
     end
 end
 
-trunc(::Type{T}, x::Rational) where {T} = convert(T,div(x.num,x.den))
-floor(::Type{T}, x::Rational) where {T} = convert(T,fld(x.num,x.den))
-ceil(::Type{T}, x::Rational) where {T} = convert(T,cld(x.num,x.den))
+trunc(::Type{T}, x::Rational) where {T} = round(T, x, RoundToZero)
+floor(::Type{T}, x::Rational) where {T} = round(T, x, RoundDown)
+ceil(::Type{T}, x::Rational) where {T} = round(T, x, RoundUp)
 
-round(x::Rational, r::RoundingMode) = round(typeof(x), x, r)
+round(x::Rational, r::RoundingMode=RoundNearest) = round(typeof(x), x, r)
 
 function round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {T,Tr}
     if iszero(denominator(x))
@@ -402,11 +402,6 @@ function round(::Type{T}, x::Rational{Bool}, ::RoundingMode=RoundNearest) where 
     end
     convert(T, x)
 end
-
-trunc(x::Rational{T}) where {T} = Rational(trunc(T,x))
-floor(x::Rational{T}) where {T} = Rational(floor(T,x))
-ceil(x::Rational{T}) where {T} = Rational(ceil(T,x))
-round(x::Rational{T}) where {T} = Rational(round(T,x))
 
 function ^(x::Rational, n::Integer)
     n >= 0 ? power_by_squaring(x,n) : power_by_squaring(inv(x),-n)
