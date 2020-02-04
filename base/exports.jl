@@ -467,6 +467,7 @@ export
 # dequeues
     append!,
     insert!,
+    insert_elements!,
     pop!,
     prepend!,
     push!,

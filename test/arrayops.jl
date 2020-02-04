@@ -463,26 +463,26 @@ end
     end
     @test_throws BoundsError insert!(v, 5, 5)
 
-    @test insert!([6, 5, 4, 2, 1], 4, [8, 9, 9]) == [6, 5, 4, 8, 9, 9, 2, 1]
-    @test_throws BoundsError insert!([6, 5, 4], 5, [8, 9])
+    @test insert_elements!([6, 5, 4, 2, 1], 4, [8, 9, 9]) == [6, 5, 4, 8, 9, 9, 2, 1]
+    @test_throws BoundsError insert_elements!([6, 5, 4], 5, [8, 9])
 
-    @test insert!([1, 2, 3, 4], 3:4, [8, 9]) == [1, 2, 8, 9, 3, 4]
-    @test_throws BoundsError insert!([6, 5, 4], 5:6, [8, 9])
-    @test_throws DimensionMismatch insert!([6, 5, 4], 4:6, [8, 9])
+    @test insert_elements!([1, 2, 3, 4], 3:4, [8, 9]) == [1, 2, 8, 9, 3, 4]
+    @test_throws BoundsError insert_elements!([6, 5, 4], 5:6, [8, 9])
+    @test_throws DimensionMismatch insert_elements!([6, 5, 4], 4:6, [8, 9])
 
-    @test insert!([1, 2, 3, 4, 5], 6:-2:2, [10, 9, 8]) == [1, 8, 2, 9, 3, 10, 4, 5]
-    @test_throws BoundsError insert!([6, 5, 4], 6:-1:5, [8, 9])
-    @test_throws DimensionMismatch insert!([6, 5, 4], 5:-1:4, [8, 9, 9])
+    @test insert_elements!([1, 2, 3, 4, 5], 6:-2:2, [10, 9, 8]) == [1, 8, 2, 9, 3, 10, 4, 5]
+    @test_throws BoundsError insert_elements!([6, 5, 4], 6:-1:5, [8, 9])
+    @test_throws DimensionMismatch insert_elements!([6, 5, 4], 5:-1:4, [8, 9, 9])
 
-    @test insert!([1, 2, 3], [true, false, true, false, false], [10, 9]) == [10, 1, 9, 2, 3]
-    @test_throws ArgumentError insert!([1, 2, 3], [true, false, true, false], [10, 9])
-    @test_throws ArgumentError insert!([1, 2, 3], [true, false, true, false, true], [10, 9])
+    @test insert_elements!([1, 2, 3], [true, false, true, false, false], [10, 9]) == [10, 1, 9, 2, 3]
+    @test_throws ArgumentError insert_elements!([1, 2, 3], [true, false, true, false], [10, 9])
+    @test_throws ArgumentError insert_elements!([1, 2, 3], [true, false, true, false, true], [10, 9])
 
     # sorted indices vector
-    @test insert!([1, 2, 3, 4, 5], [4, 5, 6], [10, 9, 8]) ==
+    @test insert_elements!([1, 2, 3, 4, 5], [4, 5, 6], [10, 9, 8]) ==
     [1, 2, 3, 10, 9, 8, 4, 5]
     # non-sorted indices vector
-    @test insert!([1, 2, 3, 4, 5], [6, 5, 4], [10, 9, 8]) ==
+    @test insert_elements!([1, 2, 3, 4, 5], [6, 5, 4], [10, 9, 8]) ==
     [1, 2, 3, 8, 9, 10, 4, 5]
 end
 @testset "concatenation" begin
