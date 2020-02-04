@@ -1195,7 +1195,7 @@ end
 Insert an `item` into `a` at the given `index`. `index` is the index of `item` in
 the resulting `a`.
 
-See [`insert_elements!`](@ref) for inserting the elements of a vector into another vector.
+See [`inserteach!`](@ref) for inserting the elements of a vector into another vector.
 
 # Examples
 ```jldoctest
@@ -1219,13 +1219,13 @@ function insert!(a::Array{T,1}, i::Integer, item) where T
 end
 
 """
-    insert_elements!(a::Vector, index::Integer, items::Vector)
+    inserteach!(a::Vector, index::Integer, items::Vector)
 
 Insert all of the elements of `items` into `a` at the given `index`. `index` is the index of first element of `items` in the resulting `a`.
 
 # Examples
 ```jldoctest
-julia> insert_elements!([1, 2, 3], 2, [8, 9])
+julia> inserteach!([1, 2, 3], 2, [8, 9])
 5-element Array{Int64,1}:
  1
  8
@@ -1234,7 +1234,7 @@ julia> insert_elements!([1, 2, 3], 2, [8, 9])
  3
 ```
 """
-function insert_elements!(a::Array{T,1}, i::Integer, items::Array{T,1}) where {T}
+function inserteach!(a::Array{T,1}, i::Integer, items::Array{T,1}) where {T}
     m = length(items)
     if m === 0
         return a
@@ -1247,14 +1247,14 @@ function insert_elements!(a::Array{T,1}, i::Integer, items::Array{T,1}) where {T
 end
 
 """
-    insert_elements!(a::Vector, range, items::Vector)
-    insert_elements!(a::Vector, indices::Vector, items::Vector)
+    inserteach!(a::Vector, range, items::Vector)
+    inserteach!(a::Vector, indices::Vector, items::Vector)
 
 Insert all of the elements of `items` into `a` for the given `range` or `indices`. `range` or `indices` are the resulting indices of elements of `items` in the `a`.
 
 # Examples
 ```jldoctest
-julia> insert_elements!([1, 2, 3], 2:3, [8, 9])
+julia> inserteach!([1, 2, 3], 2:3, [8, 9])
 5-element Array{Int64,1}:
  1
  8
@@ -1265,7 +1265,7 @@ julia> insert_elements!([1, 2, 3], 2:3, [8, 9])
 
 Following example inserts `10, 9, and 8` at index `6 ,4, and 2` respectively
 ```jldoctest
-julia> insert_elements!([1, 2, 3, 4, 5], 6:-2:2, [10, 9, 8])
+julia> inserteach!([1, 2, 3, 4, 5], 6:-2:2, [10, 9, 8])
 8-element Array{Int64,1}:
   1
   8
@@ -1279,7 +1279,7 @@ julia> insert_elements!([1, 2, 3, 4, 5], 6:-2:2, [10, 9, 8])
 
 It is possible to use boolean indices (each true shows insertion index):
 ```jldoctest
-julia> insert_elements!([1, 2, 3], [true, false, true, false, false], [10, 9])
+julia> inserteach!([1, 2, 3], [true, false, true, false, false], [10, 9])
 5-element Array{Int64,1}:
  10
   1
@@ -1288,7 +1288,7 @@ julia> insert_elements!([1, 2, 3], [true, false, true, false, false], [10, 9])
   3
 ```
 """
-function insert_elements!(a::Array{T,1}, indices::AbstractVector, items::Array{T,1}) where {T}
+function inserteach!(a::Array{T,1}, indices::AbstractVector, items::Array{T,1}) where {T}
     itemslen = length(items)
     indiceslen = length(indices)
     if itemslen !== indiceslen
@@ -1312,7 +1312,7 @@ function insert_elements!(a::Array{T,1}, indices::AbstractVector, items::Array{T
 end
 
 
-function insert_elements!(a::Array{T,1}, indices::AbstractRange{<:Integer}, items::Array{T,1}) where {T}
+function inserteach!(a::Array{T,1}, indices::AbstractRange{<:Integer}, items::Array{T,1}) where {T}
     itemslen = length(items)
     indiceslen = length(indices)
     if itemslen !== indiceslen
@@ -1335,17 +1335,17 @@ function insert_elements!(a::Array{T,1}, indices::AbstractRange{<:Integer}, item
     return a
 end
 
-function insert_elements!(a::Array{T,1}, r::AbstractUnitRange{<:Integer}, items::Array{T,1}) where T
+function inserteach!(a::Array{T,1}, r::AbstractUnitRange{<:Integer}, items::Array{T,1}) where T
     ilen = length(items)
     rlen = length(r)
     if ilen !== rlen
         throw(DimensionMismatch("Length of the range and items should be the same"))
     else
-        return insert_elements!(a, first(r), items)
+        return inserteach!(a, first(r), items)
     end
 end
 
-function insert_elements!(a::Array{T,1}, boolindices::AbstractVector{Bool}, items::Array{T,1}) where T
+function inserteach!(a::Array{T,1}, boolindices::AbstractVector{Bool}, items::Array{T,1}) where T
     alen = length(a)
     itemslen = length(items)
     boolindiceslen = length(boolindices)
