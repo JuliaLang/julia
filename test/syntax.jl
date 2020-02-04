@@ -2272,7 +2272,7 @@ end
 
 # lowering of adjoint
 @test (1 + im)' == 1 - im
-x = let __adjoint__(x) = 2x
+x = let var"'"(x) = 2x
     3'
 end
 @test x == 6

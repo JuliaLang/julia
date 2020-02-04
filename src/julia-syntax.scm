@@ -2338,7 +2338,7 @@
                      ,.(apply append rows)))
             `(call (top typed_vcat) ,t ,@a)))))
 
-   '|'|  (lambda (e) (expand-forms `(call __adjoint__ ,(cadr e))))
+   '|'|  (lambda (e) (expand-forms `(call |'| ,(cadr e))))
 
    'generator
    (lambda (e)

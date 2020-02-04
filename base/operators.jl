@@ -542,7 +542,7 @@ for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
     end
 end
 
-const __adjoint__ = adjoint
+const var"'" = adjoint
 
 """
     \\(x, y)
