@@ -427,7 +427,7 @@ SparseVector{Tv}(s::SparseVector{<:Any,Ti}) where {Tv,Ti} = SparseVector{Tv,Ti}(
 function SparseVector{Tv,Ti}(s::SparseVector) where {Tv,Ti}
     copyind = Vector{Ti}(nonzeroinds(s))
     copynz = Vector{Tv}(nonzeros(s))
-    SparseVector{Tv,Ti}(length(s::SparseVector), copyind, copynz)
+    SparseVector{Tv,Ti}(length(s), copyind, copynz)
 end
 
 # convert between different types of SparseVector
