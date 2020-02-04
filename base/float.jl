@@ -750,7 +750,7 @@ end
 end
 
 """
-    floatmin([T])
+    floatmin(T = Float64)
 
 Return the smallest positive normal number representable by the floating-point
 type `T` (`T = Float64` by default).
