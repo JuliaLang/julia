@@ -397,24 +397,10 @@ SparseMatrixCSC{Tv}(S::AbstractSparseMatrixCSC{Tv}) where {Tv} = copy(S)
 SparseMatrixCSC{Tv}(S::AbstractSparseMatrixCSC) where {Tv} = SparseMatrixCSC{Tv,eltype(getcolptr(S))}(S)
 SparseMatrixCSC{Tv,Ti}(S::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = copy(S)
 function SparseMatrixCSC{Tv,Ti}(S::AbstractSparseMatrixCSC) where {Tv,Ti}
-    eltypeTicolptr = convert(Vector{Ti}, getcolptr(S))
-    eltypeTirowval = convert(Vector{Ti}, rowvals(S))
-    eltypeTvnzval = convert(Vector{Tv}, nonzeros(S))
-    return SparseMatrixCSC(size(S, 1), size(S, 2), eltypeTicolptr, eltypeTirowval, eltypeTvnzval)
-end
-
-function convert(::Type{SparseMatrixCSC}, S::AbstractSparseMatrixCSC)
-    convert(SparseMatrixCSC{eltype(nonzeros(S)),eltype(rowvals(S))}, S)
-end
-function convert(::Type{SparseMatrixCSC{Tv}}, S::AbstractSparseMatrixCSC) where Tv
-    convert(SparseMatrixCSC{Tv,eltype(rowvals(S))}, S)
-end
-function convert(::Type{T}, S::AbstractSparseMatrixCSC) where {Ti,Tv,T<:SparseMatrixCSC{Tv,Ti}}
-    S isa T && return S
     eltypeTicolptr = Vector{Ti}(getcolptr(S))
     eltypeTirowval = Vector{Ti}(rowvals(S))
     eltypeTvnzval = Vector{Tv}(nonzeros(S))
-    T(size(S, 1), size(S, 2), eltypeTicolptr, eltypeTirowval, eltypeTvnzval)
+    return SparseMatrixCSC(size(S, 1), size(S, 2), eltypeTicolptr, eltypeTirowval, eltypeTvnzval)
 end
 
 # converting from other matrix types to SparseMatrixCSC (also see sparse())
