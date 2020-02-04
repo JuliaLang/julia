@@ -89,7 +89,7 @@ false
 ```
 
 As of this writing, the valid Unicode code points are `U+0000` through `U+D7FF` and `U+E000` through
-`U+10FFFF`. These have not all been assigned intelligible meanings yet, nor are they necessarily
+`U+10FFFF`. These all have not been assigned intelligible meanings yet, nor are they necessarily
 interpretable by applications, but all of these values are considered to be valid Unicode characters.
 
 You can input any Unicode character in single quotes using `\u` followed by up to four hexadecimal
@@ -376,7 +376,7 @@ y
 
 If you need to obtain valid indices for a string, you can use the [`nextind`](@ref) and
 [`prevind`](@ref) functions to increment/decrement to the next/previous valid index, as mentioned above.
-You can also use the [`eachindex`](@ref) function to iterate over the valid character indices:
+You can also use the [`eachindex`](@ref) function to iterate through the valid character indices:
 
 ```jldoctest unicodestring
 julia> collect(eachindex(s))
@@ -491,7 +491,7 @@ julia> length.([a, b, c])
  1
 ```
 
-This situation can happen only for invalid UTF-8 strings. For valid UTF-8 strings
+This situation can happen only for invalid UTF-8 strings. For valid UTF-8 strings,
 concatenation preserves all characters in strings and additivity of string lengths.
 
 Julia also provides [`*`](@ref) for string concatenation:
@@ -520,7 +520,7 @@ implies commutativity.
 
 ## [Interpolation](@id string-interpolation)
 
-Constructing strings using concatenation can become a bit cumbersome, however. To reduce the need for these
+Constructing strings using concatenation can become a bit cumbersome, however, to reduce the need for these
 verbose calls to [`string`](@ref) or repeated multiplications, Julia allows interpolation into string literals
 using `$`, as in Perl:
 
