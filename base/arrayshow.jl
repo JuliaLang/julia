@@ -427,8 +427,8 @@ _show_empty(io, X) = nothing # by default, we don't know this constructor
 function show(io::IO, X::AbstractArray)
     ndims(X) == 0 && return show_zero_dim(io, X)
     ndims(X) == 1 && return show_vector(io, X)
-    prefix = typeinfo_prefix(io, X)
-    io = IOContext(io, :typeinfo => eltype(X))
+    prefix, implicit = typeinfo_prefix(io, X)
+    io = IOContext(io, :typeinfo => eltype(X), :typeinfo_implicit => implicit)
     isempty(X) ?
         _show_empty(io, X) :
         _show_nonempty(io, X, prefix)
@@ -453,9 +453,10 @@ end
 # NOTE: v is not constrained to be a vector, as this function can work with iterables
 # in general (it's used e.g. by show(::IO, ::Set))
 function show_vector(io::IO, v, opn='[', cls=']')
-    print(io, typeinfo_prefix(io, v))
+    prefix, implicit = typeinfo_prefix(io, v)
+    print(io, prefix)
     # directly or indirectly, the context now knows about eltype(v)
-    io = IOContext(io, :typeinfo => eltype(v))
+    io = IOContext(io, :typeinfo => eltype(v), :typeinfo_implicit => implicit)
     limited = get(io, :limit, false)
 
     if limited && length(v) > 20
@@ -497,6 +498,8 @@ end
 # X not constrained, can be any iterable (cf. show_vector)
 function typeinfo_prefix(io::IO, X)
     typeinfo = get(io, :typeinfo, Any)::Type
+    implicit = get(io, :typeinfo_implicit, false)::Bool
+
     if !(X isa typeinfo)
         typeinfo = Any
     end
@@ -507,18 +510,20 @@ function typeinfo_prefix(io::IO, X)
 
     if X isa AbstractDict
         if eltype_X == eltype_ctx || (!isempty(X) && typeinfo_implicit(keytype(X)) && typeinfo_implicit(valtype(X)))
-            string(typeof(X).name)
+            string(typeof(X).name), false
         else
-            string(typeof(X))
+            string(typeof(X)), false
         end
     else
         # Types hard-coded here are those which are created by default for a given syntax
-        if eltype_X == eltype_ctx || (!isempty(X) && typeinfo_implicit(eltype_X))
-            ""
+        if !(isempty(X) && implicit) && eltype_X == eltype_ctx
+            "", implicit
+        elseif !isempty(X) && typeinfo_implicit(eltype_X)
+            "", true
         elseif print_without_params(eltype_X)
-            string(unwrap_unionall(eltype_X).name) # Print "Array" rather than "Array{T,N}"
+            string(unwrap_unionall(eltype_X).name), false # Print "Array" rather than "Array{T,N}"
         else
-            string(eltype_X)
+            string(eltype_X), false
         end
     end
 end
