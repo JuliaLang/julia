@@ -210,5 +210,6 @@ false
 ```
 """
 isimmutable(@nospecialize(x)) = !ismutable(x)
+export isimmutable
 
 # END 1.5 deprecations
