@@ -212,7 +212,7 @@ julia> symdiff(unique([1,2,1]), unique([2, 1, 2]))
 ```
 """
 symdiff(s, sets...) = symdiff!(emptymutable(s, promote_eltype(s, sets...)), s, sets...)
-symdiff(s) = copy(s)
+symdiff(s) = union(s)
 
 """
     symdiff!(s::Union{AbstractSet,AbstractVector}, itrs...)
