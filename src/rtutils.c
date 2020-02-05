@@ -465,7 +465,7 @@ JL_DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, si
         bstr = newstr;
         pend = bstr+len;
     }
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
     float out = (float)jl_strtod_c(bstr, &p);
 #else
     float out = jl_strtof_c(bstr, &p);

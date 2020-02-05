@@ -1,4 +1,4 @@
-commit 7f4a96a353c06c2fdecb0b2464800bcf8fab6fd7
+commit b16fa2e7111dc4dc1d9d987bd5dcbf89c82b9ee8
 Author: Keno Fischer <keno@juliacomputing.com>
 Date:   Sun Dec 29 15:08:13 2019 -0500
 
@@ -10,18 +10,18 @@ Date:   Sun Dec 29 15:08:13 2019 -0500
     of this function.
 
 diff --git a/exports/dllinit.c b/exports/dllinit.c
-index 02ff092e..56aafa95 100644
+index 4a05c0e1..88f9af65 100644
 --- a/exports/dllinit.c
 +++ b/exports/dllinit.c
-@@ -48,7 +48,10 @@ BOOL APIENTRY DllMain(HINSTANCE hInst, DWORD reason, LPVOID reserved) {
-   }
- 
-   if (reason == DLL_PROCESS_DETACH) {
--    gotoblas_quit();
-+    // If the process is about to exit, don't bother releasing any resources
-+    // The kernel is much better at bulk releasing then.
-+    if (!reserved)
-+      gotoblas_quit();
-   }
- 
-   return TRUE;
+@@ -50,7 +50,10 @@ BOOL APIENTRY DllMain(HINSTANCE hInst, DWORD reason, LPVOID reserved) {
+         gotoblas_init();
+         break;
+       case DLL_PROCESS_DETACH:
+-        gotoblas_quit();
++        // If the process is about to exit, don't bother releasing any resources
++        // The kernel is much better at bulk releasing then.
++        if (!reserved)
++          gotoblas_quit();
+         break;
+       case DLL_THREAD_ATTACH:
+         break;

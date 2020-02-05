@@ -24,10 +24,8 @@ third argument is `false`.
 # Examples
 ```jldoctest
 julia> @deprecate old(x) new(x)
-old (generic function with 1 method)
 
 julia> @deprecate old(x) new(x) false
-old (generic function with 1 method)
 ```
 """
 macro deprecate(old, new, ex=true)

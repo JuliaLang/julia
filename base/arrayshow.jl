@@ -101,7 +101,14 @@ function print_matrix_row(io::IO,
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
             x = X[i,j]
             a = alignment(io, x)
-            sx = sprint(show, x, context=io, sizehint=0)
+
+            # First try 3-arg show
+            sx = sprint(show, "text/plain", x, context=io, sizehint=0)
+
+            # If the output contains line breaks, try 2-arg show instead.
+            if occursin('\n', sx)
+                sx = sprint(show, x, context=io, sizehint=0)
+            end
         else
             a = undef_ref_alignment
             sx = undef_ref_str
@@ -317,6 +324,7 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     summary(io, X)
     isempty(X) && return
     print(io, ":")
+    show_circular(io, X) && return
 
     # 1) compute new IOContext
     if !haskey(io, :compact) && length(axes(X, 2)) > 1
@@ -343,7 +351,8 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     io = IOContext(io, :typeinfo => eltype(X))
 
     # 2) show actual content
-    print_array(io, X)
+    recur_io = IOContext(io, :SHOWN_SET => X)
+    print_array(recur_io, X)
 end
 
 ## printing with `show`
@@ -448,6 +457,7 @@ function show_vector(io::IO, v, opn='[', cls=']')
     # directly or indirectly, the context now knows about eltype(v)
     io = IOContext(io, :typeinfo => eltype(v))
     limited = get(io, :limit, false)
+
     if limited && length(v) > 20
         axs1 = axes1(v)
         f, l = first(axs1), last(axs1)

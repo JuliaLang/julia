@@ -2789,9 +2789,13 @@ JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void)
     return newtb - oldtb;
 }
 
-void jl_gc_sync_total_bytes(void)
+JL_DLLEXPORT int64_t jl_gc_sync_total_bytes(int64_t offset)
 {
-    jl_gc_get_total_bytes(&last_gc_total_bytes);
+    int64_t oldtb = last_gc_total_bytes;
+    int64_t newtb;
+    jl_gc_get_total_bytes(&newtb);
+    last_gc_total_bytes = newtb - offset;
+    return newtb - oldtb;
 }
 
 JL_DLLEXPORT int64_t jl_gc_live_bytes(void)

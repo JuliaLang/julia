@@ -153,11 +153,18 @@ function complete_symbol(sym, ffunc, context_module=Main)::Vector{Completion}
     else
         # Looking for a member of a type
         if t isa DataType && t != Any
-            fields = fieldnames(t)
-            for field in fields
-                s = string(field)
-                if startswith(s, name)
-                    push!(suggestions, FieldCompletion(t, field))
+            # Check for cases like Type{typeof(+)}
+            if t isa DataType && t.name === Base._TYPE_NAME
+                t = typeof(t.parameters[1])
+            end
+            # Only look for fields if this is a concrete type
+            if isconcretetype(t)
+                fields = fieldnames(t)
+                for field in fields
+                    s = string(field)
+                    if startswith(s, name)
+                        push!(suggestions, FieldCompletion(t, field))
+                    end
                 end
             end
         end
@@ -259,7 +266,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false, shell_escap
         end
     end
 
-    matchList = Completion[PathCompletion(shell_escape ? replace(s, r"\s" => s"\\\0") : s) for s in matches]
+    matchList = PathCompletion[PathCompletion(shell_escape ? replace(s, r"\s" => s"\\\0") : s) for s in matches]
     startpos = pos - lastindex(prefix) + 1 - count(isequal(' '), prefix)
     # The pos - lastindex(prefix) + 1 is correct due to `lastindex(prefix)-lastindex(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
@@ -537,7 +544,7 @@ end
 
 # This needs to be a separate non-inlined function, see #19441
 @noinline function find_dict_matches(identifier, partial_key)
-    matches = []
+    matches = String[]
     for key in keys(identifier)
         rkey = repr(key)
         startswith(rkey,partial_key) && push!(matches,rkey)

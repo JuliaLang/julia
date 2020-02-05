@@ -105,6 +105,8 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
                                            jl_fielddesc32_t desc[],
                                            uint32_t pointers[]) JL_NOTSAFEPOINT
 {
+    assert(alignment); // should have been verified by caller
+
     // compute the smallest fielddesc type that can hold the layout description
     int fielddesc_type = 0;
     if (nfields > 0) {
@@ -191,19 +193,7 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
 {
     if (!jl_is_vecelement_type(t))
         return 0;
-    // LLVM 3.7 and 3.8 either crash or generate wrong code for many
-    // SIMD vector sizes N. It seems the rule is that N can have at
-    // most 2 non-zero bits. (This is true at least for N<=100.) See
-    // also <https://llvm.org/bugs/show_bug.cgi?id=27708>.
-    size_t mask = nfields;
-    // See e.g.
-    // <https://graphics.stanford.edu/%7Eseander/bithacks.html> for an
-    // explanation of this bit-counting algorithm.
-    mask &= mask-1;             // clear least-significant 1 if present
-    mask &= mask-1;             // clear another 1
-    if (mask)
-        return 0;               // nfields has more than two 1s
-    assert(jl_datatype_nfields(t)==1);
+    assert(jl_datatype_nfields(t) == 1);
     jl_value_t *ty = jl_field_type((jl_datatype_t*)t, 0);
     if (!jl_is_primitivetype(ty))
         // LLVM requires that a vector element be a primitive type.
@@ -211,16 +201,12 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
         // motivating use case comes up for Julia, we reject pointers.
         return 0;
     size_t elsz = jl_datatype_size(ty);
-    if (elsz>8 || (1<<elsz & 0x116) == 0)
-        // Element size is not 1, 2, 4, or 8.
+    if (elsz != 1 && elsz != 2 && elsz != 4 && elsz != 8)
+        // Only handle power-of-two-sized elements (for now)
         return 0;
-    size_t size = nfields*elsz;
-    // LLVM's alignment rule for vectors seems to be to round up to
-    // a power of two, even if that's overkill for the target hardware.
-    size_t alignment=1;
-    for( ; size>alignment; alignment*=2 )
-        continue;
-    return alignment;
+    size_t size = nfields * elsz;
+    // Use natural alignment for this vector: this matches LLVM and clang.
+    return next_power_of_two(size);
 }
 
 STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
@@ -464,7 +450,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     haspadding = 1;
                 }
             }
-            assert(al <= JL_HEAP_ALIGNMENT && (JL_HEAP_ALIGNMENT % al) == 0);
             if (al != 0) {
                 size_t alsz = LLT_ALIGN(sz, al);
                 if (sz & (al - 1))
@@ -484,10 +469,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             // Some tuples become LLVM vectors with stronger alignment than what was calculated above.
             unsigned al = jl_special_vector_alignment(nfields, firstty);
             assert(al % alignm == 0);
-            // JL_HEAP_ALIGNMENT is the biggest alignment we can guarantee on the heap.
-            if (al > JL_HEAP_ALIGNMENT)
-                alignm = JL_HEAP_ALIGNMENT;
-            else if (al)
+            if (al > alignm)
                 alignm = al;
         }
         st->size = LLT_ALIGN(sz, alignm);

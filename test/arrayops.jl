@@ -676,6 +676,13 @@ end
 
     v = [1,2,3]
     @test permutedims(v) == [1 2 3]
+
+    x = PermutedDimsArray([1 2; 3 4], (2, 1))
+    @test size(x) == (2, 2)
+    @test copy(x) == [1 3; 2 4]
+    y = [0, 0, 0, 0]
+    copyto!(y, x)
+    @test y == [1, 2, 3, 4]
 end
 
 @testset "circshift" begin
@@ -2344,6 +2351,17 @@ end
     @test size(a) == size(b)
 end
 
+@testset "Converting size integers to ints" begin
+    @test size(Array{Float64}(undef, unsigned(2))) == (2,)
+    @test size(Array{Float64}(undef, unsigned(2), unsigned(3))) == (2, 3)
+    @test size(Array{Float64}(undef, unsigned(2), unsigned(3), unsigned(4))) == (2, 3, 4)
+    @test size(Array{Float64}(undef, unsigned(2), unsigned(3), unsigned(4), unsigned(5))) == (2, 3, 4, 5)
+    # with number of dimensions
+    @test size(Array{Float64, 3}(undef, unsigned(2), unsigned(3), unsigned(4))) == (2, 3, 4)
+    # unsplatted
+    @test size(Array{Float64}(undef, (unsigned(2), unsigned(3), unsigned(4)))) == (2, 3, 4)
+end
+
 @testset "type constructor Array{T, N}(nothing, d...) works (especially for N>3)" for T in (Int, String),
                                                                                       U in (Nothing, Missing)
     a = Array{Union{T, U}}(U(), 10)
@@ -2647,6 +2665,21 @@ end
 
 # Fix oneunit bug for unitful arrays
 @test oneunit([Second(1) Second(2); Second(3) Second(4)]) == [Second(1) Second(0); Second(0) Second(1)]
+
+@testset "indexing by CartesianIndices" begin
+    A = rand(10,10)
+    for (I,Rs) in ((keys(A), (1:10, 1:10)),
+                   (CartesianIndex(2,2):CartesianIndex(9,9), (2:9, 2:9)),
+                   (CartesianIndex(5,3):CartesianIndex(6,7), (5:6, 3:7)))
+        @test A[I] == A[Rs...] == @view(A[I]) == @view(A[Rs...])
+        @test @view(A[I]) isa StridedArray
+        @test !checkbounds(Bool, [], I)
+        @test !checkbounds(Bool, fill(2,1,1,1), :, I)
+        @test !checkbounds(Bool, fill(2,1,1,1), I, :)
+    end
+    @test !checkbounds(Bool, rand(3,3,3), :, CartesianIndex(0,0):CartesianIndex(1,1))
+    @test !checkbounds(Bool, rand(3,3,3), CartesianIndex(0,0):CartesianIndex(1,1), :)
+end
 
 # Throws ArgumentError for negative dimensions in Array
 @test_throws ArgumentError fill('a', -10)

@@ -13,7 +13,7 @@
 
 #include <errno.h>
 
-#if !defined(_OS_WINDOWS_) || defined(_COMPILER_MINGW_)
+#if !defined(_OS_WINDOWS_) || defined(_COMPILER_GCC_)
 #include <getopt.h>
 #endif
 
@@ -695,18 +695,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_perf_jitevents= 1;
-    }
-#endif
-
-#if defined(__linux__)
-    int ncores = jl_cpu_threads();
-    if (ncores > 1) {
-        cpu_set_t cpumask;
-        CPU_ZERO(&cpumask);
-        for(int i=0; i < ncores; i++) {
-            CPU_SET(i, &cpumask);
-        }
-        sched_setaffinity(0, sizeof(cpu_set_t), &cpumask);
     }
 #endif
 

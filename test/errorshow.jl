@@ -375,6 +375,17 @@ end
 @test repr("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 0 methods)"
 @test occursin(r"^@doc \(macro with \d+ method[s]?\)$", repr("text/plain", getfield(Base, Symbol("@doc"))))
 
+# Issue 34636
+let err_str
+    err_str = @except_str 1 + rand(5) MethodError
+    @test occursin("MethodError: no method matching +(::$Int, ::Array{Float64,1})", err_str)
+    @test occursin("For element-wise addition, use broadcasting with dot syntax: scalar .+ array", err_str)
+    err_str = @except_str rand(5) - 1//3 MethodError
+    @test occursin("MethodError: no method matching -(::Array{Float64,1}, ::Rational{$Int})", err_str)
+    @test occursin("For element-wise subtraction, use broadcasting with dot syntax: array .- scalar", err_str)
+end
+
+
 method_defs_lineno = @__LINE__() + 1
 String() = throw(ErrorException("1"))
 (::String)() = throw(ErrorException("2"))

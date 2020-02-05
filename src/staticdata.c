@@ -43,7 +43,7 @@ static void *const _tags[] = {
          &jl_pinode_type, &jl_phinode_type, &jl_phicnode_type, &jl_upsilonnode_type,
          &jl_type_type, &jl_bottom_type, &jl_ref_type, &jl_pointer_type,
          &jl_vararg_type, &jl_abstractarray_type,
-         &jl_densearray_type, &jl_void_type, &jl_function_type, &jl_typeofbottom_type,
+         &jl_densearray_type, &jl_nothing_type, &jl_function_type, &jl_typeofbottom_type,
          &jl_unionall_type, &jl_typename_type, &jl_builtin_type, &jl_code_info_type,
          &jl_task_type, &jl_uniontype_type, &jl_typetype_type, &jl_abstractstring_type,
          &jl_array_any_type, &jl_intrinsic_type, &jl_abstractslot_type,

@@ -34,6 +34,7 @@ using Test
     @test_throws InexactError rationalize(Int, NaN)
     # issue 32569
     @test_throws ArgumentError 1 // typemin(Int)
+    @test_throws ArgumentError 0 // 0
     @test -2 // typemin(Int) == -1 // (typemin(Int) >> 1)
     @test 2 // typemin(Int) == 1 // (typemin(Int) >> 1)
 
@@ -394,10 +395,13 @@ end
     @test gcdx(1//2, 1//0) == (1//0, 0, 1)
     @test gcdx(1//0, 1//0) == (1//0, 1, 1)
     @test gcdx(1//0, 0//1) == (1//0, 1, 0)
+    @test gcdx(0//1, 0//1) == (0//1, 1, 0)
 
     @test gcdx(1//3, 2) == (1//3, 1, 0)
     @test lcm(1//3, 1) == 1//1
     @test lcm(3//1, 1//0) == 3//1
     @test lcm(0//1, 1//0) == 0//1
+
+    @test gcd([5, 2, 1//2]) == 1//2
 end
 

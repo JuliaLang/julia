@@ -593,11 +593,7 @@ void Optimizer::checkInst(Instruction *I)
             if (auto II = dyn_cast<IntrinsicInst>(call)) {
                 if (auto id = II->getIntrinsicID()) {
                     if (id == Intrinsic::memset) {
-#if JL_LLVM_VERSION < 70000
-                        assert(call->getNumArgOperands() == 5);
-#else
                         assert(call->getNumArgOperands() == 4);
-#endif
                         use_info.hasmemset = true;
                         if (cur.offset == UINT32_MAX ||
                             !isa<ConstantInt>(call->getArgOperand(2)) ||
@@ -938,8 +934,8 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
     // SSA from it are live when we run the allocation again.
     // It is now safe to promote the allocation to an entry block alloca.
     size_t align = 1;
-    // TODO make codegen handling of alignment consistent and pass that as a parameter
-    // to the allocation function directly.
+    // TODO: This is overly conservative. May want to instead pass this as a
+    //       parameter to the allocation function directly.
     if (sz > 1)
         align = MinAlign(JL_SMALL_BYTE_ALIGNMENT, NextPowerOf2(sz));
     // No debug info for prolog instructions
@@ -1360,7 +1356,11 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                                                                           offset - slot.offset);
                             auto sub_size = std::min(slot.offset + slot.size, offset + size) -
                                 std::max(offset, slot.offset);
+#if JL_LLVM_VERSION >= 100000
+                            builder.CreateMemSet(ptr8, val_arg, sub_size, MaybeAlign(0));
+#else
                             builder.CreateMemSet(ptr8, val_arg, sub_size, 0);
+#endif
                         }
                         call->eraseFromParent();
                         return;

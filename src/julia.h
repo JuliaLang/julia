@@ -428,9 +428,9 @@ typedef struct {
     uint32_t nfields;
     uint32_t npointers; // number of pointers embedded inside
     int32_t first_ptr; // index of the first pointer (or -1)
-    uint32_t alignment : 9; // strictest alignment over all fields
-    uint32_t haspadding : 1; // has internal undefined bytes
-    uint32_t fielddesc_type : 2; // 0 -> 8, 1 -> 16, 2 -> 32
+    uint16_t alignment; // strictest alignment over all fields
+    uint16_t haspadding : 1; // has internal undefined bytes
+    uint16_t fielddesc_type : 2; // 0 -> 8, 1 -> 16, 2 -> 32
     // union {
     //     jl_fielddesc8_t field8[nfields];
     //     jl_fielddesc16_t field16[nfields];
@@ -640,7 +640,8 @@ extern JL_DLLEXPORT jl_datatype_t *jl_float32_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_float64_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_floatingpoint_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_number_type JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT jl_datatype_t *jl_void_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_datatype_t *jl_void_type JL_GLOBALLY_ROOTED;  // deprecated
+extern JL_DLLEXPORT jl_datatype_t *jl_nothing_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_signed_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_voidpointer_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_unionall_t *jl_pointer_type JL_GLOBALLY_ROOTED;
@@ -1615,6 +1616,8 @@ JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule);
 JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmodule,
                                             const char *file, int line);
+JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *inmodule,
+                                                 const char *file, int line);
 JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule);
 JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *inmodule,
                                                  const char *file, int line);
@@ -1783,7 +1786,7 @@ JL_DLLEXPORT size_t jl_excstack_state(void);
 JL_DLLEXPORT void jl_restore_excstack(size_t state);
 
 #if defined(_OS_WINDOWS_)
-#if defined(_COMPILER_MINGW_)
+#if defined(_COMPILER_GCC_)
 int __attribute__ ((__nothrow__,__returns_twice__)) (jl_setjmp)(jmp_buf _Buf);
 __declspec(noreturn) __attribute__ ((__nothrow__)) void (jl_longjmp)(jmp_buf _Buf, int _Value);
 #else
@@ -1934,6 +1937,7 @@ typedef struct {
     const char *output_code_coverage;
     int8_t incremental;
     int8_t image_file_specified;
+    int8_t warn_scope;
 } jl_options_t;
 
 extern JL_DLLEXPORT jl_options_t jl_options;
@@ -1989,6 +1993,9 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 
 #define JL_OPTIONS_WARN_OVERWRITE_OFF 0
 #define JL_OPTIONS_WARN_OVERWRITE_ON 1
+
+#define JL_OPTIONS_WARN_SCOPE_OFF 0
+#define JL_OPTIONS_WARN_SCOPE_ON 1
 
 #define JL_OPTIONS_POLLY_ON 1
 #define JL_OPTIONS_POLLY_OFF 0

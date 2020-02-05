@@ -519,16 +519,18 @@ end
 
 # generate a random string from random bytes
 function _rand_string()
-	nchars = 10
-	A = Vector{UInt8}(undef, nchars)
-	ccall((:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32), A, sizeof(A))
+    nchars = 10
+    A = Vector{UInt8}(undef, nchars)
+    windowserror("SystemFunction036 (RtlGenRandom)", 0 == ccall(
+        (:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
+            A, sizeof(A)))
 
-	slug = Base.StringVector(10)
-	chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	for i = 1:nchars
-	    slug[i] = chars[(A[i] % length(chars)) + 1]
-	end
-	return name = String(slug)
+    slug = Base.StringVector(10)
+    chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    for i = 1:nchars
+        slug[i] = chars[(A[i] % length(chars)) + 1]
+    end
+    return name = String(slug)
 end
 
 function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)

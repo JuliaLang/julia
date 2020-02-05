@@ -1086,8 +1086,8 @@ include_string(m::Module, txt::AbstractString, fname::AbstractString="string") =
 
 function source_path(default::Union{AbstractString,Nothing}="")
     s = current_task().storage
-    if s !== nothing && haskey(s, :SOURCE_PATH)
-        return s[:SOURCE_PATH]
+    if s !== nothing && haskey(s::IdDict{Any,Any}, :SOURCE_PATH)
+        return s[:SOURCE_PATH]::Union{Nothing,String}
     end
     return default
 end
@@ -1264,6 +1264,8 @@ function compilecache(pkg::PkgId, path::String)
         open(cachefile, "a+") do f
             write(f, _crc32c(seekstart(f)))
         end
+        # inherit permission from the source file
+        chmod(cachefile, filemode(path) & 0o777)
     elseif p.exitcode == 125
         return PrecompilableError()
     else
@@ -1485,7 +1487,7 @@ Alternatively see [`PROGRAM_FILE`](@ref).
 """
 macro __FILE__()
     __source__.file === nothing && return nothing
-    return String(__source__.file)
+    return String(__source__.file::Symbol)
 end
 
 """
@@ -1497,6 +1499,6 @@ Return the current working directory if run from a REPL or if evaluated by `juli
 """
 macro __DIR__()
     __source__.file === nothing && return nothing
-    _dirname = dirname(String(__source__.file))
+    _dirname = dirname(String(__source__.file::Symbol))
     return isempty(_dirname) ? pwd() : abspath(_dirname)
 end
