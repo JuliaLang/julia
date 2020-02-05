@@ -28,7 +28,7 @@ function _Set(itr, ::EltypeUnknown)
     return Set{T}(itr)
 end
 
-empty(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
+empty(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = emptymutable(s, U)
 
 # return an empty set with eltype T, which is mutable (can be grown)
 # by default, a Set is returned
