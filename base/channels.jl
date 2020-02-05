@@ -481,12 +481,13 @@ Similar to `foreach(f, channel)`, but iteration over `channel` and calls to
 will wait for all internally spawned tasks to complete before returning.
 """
 function Threads.foreach(f, channel::Channel; ntasks=Threads.nthreads())
-    @sync for _ in 1:ntasks
+    tasks = map(1:ntasks) do _
         Threads.@spawn begin
             for item in channel
                 wait(Threads.@spawn f(item))
             end
         end
     end
+    Base.sync_end(tasks)
     return nothing
 end
