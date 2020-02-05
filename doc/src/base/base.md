@@ -158,8 +158,8 @@ Base.isdispatchtuple
 ### Declared structure
 
 ```@docs
-Base.isimmutable
 Base.ismutable
+Base.isimmutable
 Base.isabstracttype
 Base.isprimitivetype
 Base.issingletontype
