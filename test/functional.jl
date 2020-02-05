@@ -134,6 +134,9 @@ let gen = ((x,y) for x in 1:10, y in 1:10 if x % 2 == 0 && y % 2 == 0),
     @test collect(gen) == collect(gen2)
 end
 
+# keys of a generator for find* and arg* (see #34678)
+@test keys(x^2 for x in -1:0.5:1) == 1:5
+
 # inference on vararg generator of a type (see #22907 comments)
 let f(x) = collect(Base.Generator(=>, x, x))
     @test @inferred(f((1,2))) == [1=>1, 2=>2]
