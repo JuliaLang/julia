@@ -572,6 +572,13 @@ end
     @test sum(0:0.000001:1) == 500000.5
     @test sum(0:0.1:10) == 505.
 end
+@testset "Sums of Float16 and Float32 StepRangeLen" begin
+    @test sum(0f0:0.001f0:1f0) == 500.5
+    @test sum(0f0:0.000001f0:1f0) == 500000.5
+    @test sum(0f0:0.1f0:10f0) == 505.
+    @test sum(Float16(0):Float16(0.001):Float16(1)) ≈ 500.5
+    @test sum(Float16(0):Float16(0.1):Float16(10)) == 505.
+end
 @testset "broadcasted operations with scalars" for T in (Int, UInt, Int128)
     @test broadcast(-, T(1):3, 2) === T(1)-2:1
     @test broadcast(-, T(1):3, 0.25) === T(1)-0.25:3-0.25
