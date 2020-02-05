@@ -209,6 +209,6 @@ julia> isimmutable([1,2])
 false
 ```
 """
-isimmutable(@nospecialize(x)) = (@_pure_meta; !typeof(x).mutable)
+isimmutable(@nospecialize(x)) = !ismutable(x)
 
 # END 1.5 deprecations
