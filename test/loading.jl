@@ -284,7 +284,8 @@ module NotPkgModule; end
 
     @testset "pkgdir" begin
         @test pkgdir(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
-        @test pkgdir(Foo.SubFoo) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(Foo.SubFoo1) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(Foo.SubFoo2) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
         @test pkgdir(NotPkgModule) === nothing
     end
 
