@@ -375,3 +375,21 @@ end
     @test :(@foo{bar}[baz]) == :((@foo{bar})[baz])
     @test :(@foo{bar} + baz) == :((@foo{bar}) + baz)
 end
+
+@testset "issue #34650" begin
+    for imprt in [:using, :import]
+        @test Meta.isexpr(Meta.parse("$imprt A, B"), imprt)
+        @test Meta.isexpr(Meta.parse("$imprt A: x, y, z"), imprt)
+
+        err = Expr(
+            :error,
+            "unexpected \":\" in \"$imprt\" syntax\n" *
+            "Last import needs to be a separate \"$imprt\" statement"
+        )
+        ex = Meta.parse("$imprt A, B: x, y", raise=false)
+        @test ex == err
+
+        ex = Meta.parse("$imprt A: x, B: y", raise=false)
+        @test ex == err
+    end
+end
