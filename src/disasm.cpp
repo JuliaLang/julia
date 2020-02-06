@@ -334,8 +334,8 @@ void LineNumberAnnotatedWriter::emitFunctionAnnot(
     if (FuncLoc) {
         std::vector<DILineInfo> DIvec(1);
         DILineInfo &DI = DIvec.back();
-        DI.FunctionName = FuncLoc->getName();
-        DI.FileName = FuncLoc->getFilename();
+        DI.FunctionName = FuncLoc->getName().str();
+        DI.FileName = FuncLoc->getFilename().str();
         DI.Line = FuncLoc->getLine();
         LinePrinter.emit_lineinfo(Out, DIvec);
     }
@@ -358,8 +358,8 @@ void LineNumberAnnotatedWriter::emitInstructionAnnot(
             DILineInfo &DI = DIvec.back();
             DIScope *scope = NewInstrLoc->getScope();
             if (scope)
-                DI.FunctionName = scope->getName();
-            DI.FileName = NewInstrLoc->getFilename();
+                DI.FunctionName = scope->getName().str();
+            DI.FileName = NewInstrLoc->getFilename().str();
             DI.Line = NewInstrLoc->getLine();
             NewInstrLoc = NewInstrLoc->getInlinedAt();
         } while (NewInstrLoc);
@@ -677,7 +677,7 @@ const char *SymbolTable::lookupSymbolName(uint64_t addr)
             }
         }
         else {
-            Sym->second = local_name;
+            Sym->second = local_name.str();
         }
     }
     return Sym->second.empty() ? NULL : Sym->second.c_str();

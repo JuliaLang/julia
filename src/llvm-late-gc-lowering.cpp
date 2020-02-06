@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "llvm-version.h"
+
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
@@ -24,8 +26,6 @@
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
-
-#include "llvm-version.h"
 
 #if JL_LLVM_VERSION >= 100000
 #include <llvm/InitializePasses.h>

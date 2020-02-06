@@ -5,6 +5,8 @@
 // lowering and final GC intrinsic lowering passes. See the corresponding header
 // for docs.
 
+#include "llvm-version.h"
+
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Metadata.h>
 #include <llvm/IR/Module.h>
@@ -12,7 +14,6 @@
 
 #include <iostream>
 
-#include "llvm-version.h"
 #include "codegen_shared.h"
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
