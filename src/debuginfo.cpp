@@ -74,7 +74,7 @@ struct ObjectInfo {
 // so that when we see it get emitted, we can add a link back to the linfo
 // that it came from (providing name, type signature, file info, etc.)
 static StringMap<jl_code_instance_t*> ncode_in_flight;
-static std::string mangle(const std::string &Name, const DataLayout &DL)
+static std::string mangle(StringRef Name, const DataLayout &DL)
 {
     std::string MangledName;
     {
@@ -945,7 +945,7 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTS
         if (objpath.empty()) {
             // Fall back to simple path relative to the dynamic library.
             size_t sep = fname.rfind('/');
-            debuginfopath = fname;
+            debuginfopath = fname.str();
             debuginfopath += ".dSYM/Contents/Resources/DWARF/";
             debuginfopath += fname.substr(sep + 1);
             objpath = debuginfopath;
@@ -977,12 +977,12 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTS
                 // that can be ignored.
                 ignoreError(DebugInfo);
                 if (fname.substr(sep + 1) != info.filename) {
-                    debuginfopath = fname.substr(0, sep + 1);
+                    debuginfopath = fname.substr(0, sep + 1).str();
                     debuginfopath += info.filename;
                     DebugInfo = openDebugInfo(debuginfopath, info);
                 }
                 if (!DebugInfo) {
-                    debuginfopath = fname.substr(0, sep + 1);
+                    debuginfopath = fname.substr(0, sep + 1).str();
                     debuginfopath += ".debug/";
                     debuginfopath += info.filename;
                     ignoreError(DebugInfo);
