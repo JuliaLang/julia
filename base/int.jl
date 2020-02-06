@@ -254,7 +254,7 @@ false
 (~)(x::BitInteger)             = not_int(x)
 
 """
-    &(x, y)
+    x & y
 
 Bitwise and. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 returning [`missing`](@ref) if one operand is `missing` and the other is `true`.
@@ -277,7 +277,7 @@ false
 (&)(x::T, y::T) where {T<:BitInteger} = and_int(x, y)
 
 """
-    |(x, y)
+    x | y
 
 Bitwise or. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 returning [`missing`](@ref) if one operand is `missing` and the other is `false`.
