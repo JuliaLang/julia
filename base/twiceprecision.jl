@@ -535,7 +535,7 @@ function __convertSRL(::Type{StepRangeLen{T,R,S}}, r::AbstractRange{U}) where {T
     StepRangeLen{T,R,S}(R(first(r)), S(step(r)), length(r))
 end
 
-function sum(r::StepRangeLen{T,Float64,Float64}) where {T}
+function sum(r::StepRangeLen)
     l = length(r)
     # Compute the contribution of step over all indices.
     # Indexes on opposite side of r.offset contribute with opposite sign,
@@ -543,14 +543,14 @@ function sum(r::StepRangeLen{T,Float64,Float64}) where {T}
     np, nn = l - r.offset, r.offset - 1  # positive, negative
     # To prevent overflow in sum(1:n), multiply its factors by the step
     sp, sn = sumpair(np), sumpair(nn)
-    tp = r.step * sp[1] * sp[2]
-    tn = r.step * sn[1] * sn[2]
-    s = tp - tn
+    W = widen(Int)
+    Δn = Int(W(sp[1]) * W(sp[2]) - W(sn[1]) * W(sn[2]))
+    s = r.step * Δn
     # Add in contributions of ref
     ref = r.ref * l
-    convert(T, s + ref)
+    convert(eltype(r), s + ref)
 end
-function sum(r::StepRangeLen{T,Base.TwicePrecision{T},Base.TwicePrecision{T}}) where {T}
+function sum(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision}) where {T}
     l = length(r)
     # Compute the contribution of step over all indices.
     # Indexes on opposite side of r.offset contribute with opposite sign,

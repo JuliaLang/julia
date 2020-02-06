@@ -572,13 +572,6 @@ end
     @test sum(0:0.000001:1) == 500000.5
     @test sum(0:0.1:10) == 505.
 end
-@testset "Sums of Float16 and Float32 StepRangeLen" begin
-    @test sum(0f0:0.001f0:1f0) == 500.5
-    @test sum(0f0:0.000001f0:1f0) == 500000.5
-    @test sum(0f0:0.1f0:10f0) == 505.
-    @test sum(Float16(0):Float16(0.001):Float16(1)) ≈ 500.5
-    @test sum(Float16(0):Float16(0.1):Float16(10)) == 505.
-end
 @testset "broadcasted operations with scalars" for T in (Int, UInt, Int128)
     @test broadcast(-, T(1):3, 2) === T(1)-2:1
     @test broadcast(-, T(1):3, 0.25) === T(1)-0.25:3-0.25
@@ -1331,6 +1324,15 @@ using .Main.Furlongs
     @test Vector(Furlong(2):Furlong(1):Furlong(10)) == Vector(range(Furlong(2), step=Furlong(1), length=9)) == Furlong.(2:10)
     @test Vector(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
           Vector(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)
+end
+
+@testset "sum arbitrary types" begin
+    @test sum(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong{1,Float64}(104.5)
+    @test sum(0f0:0.001f0:1f0) == 500.5
+    @test sum(0f0:0.000001f0:1f0) == 500000.5
+    @test sum(0f0:0.1f0:10f0) == 505.
+    @test sum(Float16(0):Float16(0.001):Float16(1)) ≈ 500.5
+    @test sum(Float16(0):Float16(0.1):Float16(10)) == 505.
 end
 
 @testset "issue #22270" begin
