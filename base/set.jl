@@ -21,13 +21,21 @@ for sets of arbitrary objects.
 # Examples
 ```jldoctest
 julia> animals = Set{String}(["cat","fish","dog","bird"])
-Set(["cat","fish","dog","bird"])
+Set{String} with 4 elements:
+  "fish"
+  "cat"
+  "bird"
+  "dog"
 ```
 
 If the element type is not given, it is computed by intersecting the types of the arguments:
 ```jldoctest
 julia> animals = Set(["cat","fish","dog","bird"])
-Set(["cat","fish","dog","bird"])
+Set{String} with 4 elements:
+  "fish"
+  "cat"
+  "bird"
+  "dog"
 
 julia> typeof(animals)
 Set{String}
@@ -36,16 +44,18 @@ Set{String}
 A common way of incrementally creating a `Set` is to first create an empty set with `Set()` and then add the elements using the `push!` function:
 ```jldoctest
 julia> int_container = Set{Int64}() # type specified
-Set(Int64[])
+Set{Int64} with 0 elements
 
 julia> push!(int_container, 2)
-Set([2])
+Set{Int64} with 1 element:
+  2
 
 julia> any_container = Set() # type not specified
-Set(Any[])
+Set{Any} with 0 elements
 
 julia> push!(any_container, "hi!")
-Set(Any["hi!"])
+Set{Any} with 1 element:
+  "hi!"
 ```
 """
 Set(itr) = _Set(itr, IteratorEltype(itr))

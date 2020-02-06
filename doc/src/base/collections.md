@@ -240,13 +240,22 @@ A [`Set`](@ref) is a collection of elements with no duplicated elements and keys
 
 ```jldoctest set_collections
 julia> colors = Set(["yellow", "blue", "green", "red"])
-Set(["yellow", "blue", "green", "red"])
+Set{String} with 4 elements:
+  "yellow"
+  "blue"
+  "green"
+  "red"
 ```
 
 Use [`push!`](@ref) to add elements to a set:
 ```jldoctest set_collections
 julia> push!(colors, "black")
-Set(["yellow", "blue", "green", "black", "red"])
+Set{String} with 5 elements:
+  "yellow"
+  "blue"
+  "green"
+  "black"
+  "red"
 ```
 
 Since sets don't store repeated elements, `push!` will not have any effect for pushing the elements that are already in the set. Also because `Set` doesn't have a concept of "first" (unlike `Array`), using [`pushfirst!`](@ref) to insert an item at the beginning of a set will result in an error.
@@ -260,21 +269,27 @@ true
 To access each element of a `Set`, you can loop over the elements:
 ```jldoctest set_collections
 julia> for color in colors
-  println(color)
-end
+         println(color)
+       end
 yellow
 blue
 green
+black
 red
 ```
 
 Use [`filter`](@ref) for filtering the elements based on a given function:
 ```jldoctest set_collections
 julia> filter(c -> c != "yellow", colors)
-Set(["blue", "green", "red"])
+Set{String} with 4 elements:
+  "blue"
+  "green"
+  "black"
+  "red"
 
 julia> filter(c -> in(c, ["yellow", "purple"]), colors)
-Set(["yellow"])
+Set{String} with 1 element:
+  "yellow"
 ```
 
 ```@docs

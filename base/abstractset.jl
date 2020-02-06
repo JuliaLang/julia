@@ -45,8 +45,13 @@ Set{Int64} with 3 elements:
 
 ```jldoctest
 julia> A = Set(["yellow", "orange"]); B = Set(["blue", "black", "orange"]);
+
 julia> union(A, B)
-Set(["orange", "blue", "yellow, orange", "black"])
+Set{String} with 4 elements:
+  "yellow"
+  "orange"
+  "blue"
+  "black"
 ```
 """
 function union end
@@ -106,7 +111,7 @@ end
     intersect(s, itrs...)
     ∩(s, itrs...)
 
-Construct the intersection of sets. Maintain order with arrays.
+Construct the intersection of sets/collections. Maintain order with arrays.
 
 The intersect of two set `A` and `B` is a set that contains every element that belongs to both `A` and `B`.
 
@@ -130,7 +135,8 @@ Set{Int64} with 1 element:
 julia> A = Set(["yellow", "orange"]); B = Set(["blue", "black", "orange"]);
 
 julia> intersect(A, B)
-Set(["orange"])
+Set{String} with 1 element:
+  "orange"
 ```
 """
 intersect(s::AbstractSet, itr, itrs...) = intersect!(intersect(s, itr), itrs...)
@@ -175,10 +181,13 @@ julia> setdiff([1,2,3], [3,4,5])
 julia> A = Set(["yellow", "orange"]); B = Set(["blue", "black", "orange"]);
 
 julia> setdiff(A, B)
-Set(["yellow"])
+Set{String} with 1 element:
+  "yellow"
 
 julia> setdiff(B, A)
-Set(["blue", "black"])
+Set{String} with 2 elements:
+  "blue"
+  "black"
 ```
 """
 setdiff(s::AbstractSet, itrs...) = setdiff!(copymutable(s), itrs...)

@@ -98,7 +98,8 @@ Dict{Int64,Int64} with 5 entries:
   1 => 1
 ```
 
-It is usally possible to collect the keys and values using arrays in a for loop and then create a `Dict`. However, you may want to create and fill dictionaries dynamically (slower than the other methods).
+It is usally possible to collect the keys and values using arrays in a for-loop and then create a `Dict`.
+However, you may want to create and fill dictionaries dynamically (slower than the other methods).
 
 First, create an empty dictionary using:
 ```jldoctest
@@ -111,24 +112,35 @@ Dict{Any,Any} with 0 entries
 
 After creating an empty dictionary, fill it via a for loop:
 ```jldoctest dictexamples
-julia> animaldict = Dict()
+animaldict = Dict();
+animals = ["cats", "fishes", "elephants"];
+animal_numbers = [229, 165, 65];
 
-julia> animals = ["cats", "fishes", "elephants"]
-
-julia> for (i, x) in enumerate(animals)
-   animaldict[x] = [i, rand(UInt8)]
+for (i, x) in enumerate(animals)
+   animaldict[x] = [i, animal_numbers[i]]
 end
+
+animaldict
+
+# output
+
+Dict{Any,Any} with 3 entries:
+  "fishes"    => [2, 165]
+  "elephants" => [3, 65]
+  "cats"      => [1, 229]
 ```
 
 To loop through key and value pairs use:
 ```jldoctest dictexamples
-julia> for (key, value) in animaldict
-    println("$key are in group $(value[1]), and we have $(value[2]) number of them")
+for (key, value) in animaldict
+    println("\$key are in group \$(value[1]), and we have \$(value[2]) number of them")
 end
 
-fishes are in group 2, and we have 136 number of them
-elephants are in group 3, and we have 135 numberof them
-cats are in group 1, and we have 52 number of them
+# output
+
+fishes are in group 2, and we have 165 number of them
+elephants are in group 3, and we have 65 number of them
+cats are in group 1, and we have 229 number of them
 ```
 """
 mutable struct Dict{K,V} <: AbstractDict{K,V}
