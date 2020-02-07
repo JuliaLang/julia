@@ -171,7 +171,16 @@ end
     @test y + Dates.Year(1f0) == Dates.Year(2)
     @test y * 4 == Dates.Year(4)
     @test y * 4f0 == Dates.Year(4)
-    @test_throws InexactError y * 3//4 == Dates.Year(1)
+    @test Dates.Year(2) * 0.5 == y
+    @test Dates.Year(2) * 3//2 == Dates.Year(3)
+    @test_throws InexactError y * 0.5
+    @test_throws InexactError y * 3//4
+    @test Dates.Year(4) / 2 == Dates.Year(2)
+    @test Dates.Year(4) / 2f0 == Dates.Year(2)
+    @test Dates.Year(4) / 0.5 == Dates.Year(8)
+    @test Dates.Year(4) / 2//3 == Dates.Year(6)
+    @test_throws InexactError Dates.Year(4) / 3.0
+    @test_throws InexactError Dates.Year(4) / 3//2
     @test div(y, 2) == Dates.Year(0)
     @test_throws MethodError div(2, y) == Dates.Year(2)
     @test div(y, y) == 1

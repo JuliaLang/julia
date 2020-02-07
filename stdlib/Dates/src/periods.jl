@@ -79,7 +79,7 @@ for op in (:+, :-, :lcm, :gcd)
 end
 
 /(x::P, y::P) where {P<:Period} = /(value(x), value(y))
-/(x::P, y::Real) where {P<:Period} = P(/(value(x), Int64(y)))
+/(x::P, y::Real) where {P<:Period} = P(/(value(x), y))
 div(x::P, y::P, r::RoundingMode) where {P<:Period} = div(value(x), value(y), r)
 div(x::P, y::Real, r::RoundingMode) where {P<:Period} = P(div(value(x), Int64(y), r))
 
@@ -90,7 +90,7 @@ for op in (:rem, :mod)
     end
 end
 
-(*)(x::P, y::Real) where {P<:Period} = P(value(x) * Int64(y))
+(*)(x::P, y::Real) where {P<:Period} = P(value(x) * y)
 (*)(y::Real, x::Period) = x * y
 
 # intfuncs
