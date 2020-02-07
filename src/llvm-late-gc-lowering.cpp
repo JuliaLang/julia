@@ -1408,19 +1408,23 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         callee == write_barrier_func || callee->getName() == "memcmp") {
                         continue;
                     }
-                    if (callee->hasFnAttribute(Attribute::ReadNone) ||
-                        callee->hasFnAttribute(Attribute::ReadOnly) ||
-                        callee->hasFnAttribute(Attribute::ArgMemOnly)) {
-                        continue;
+                    if (!callee->hasFnAttribute("thunk")) {
+                        if (callee->hasFnAttribute(Attribute::ReadNone) ||
+                            callee->hasFnAttribute(Attribute::ReadOnly) ||
+                            callee->hasFnAttribute(Attribute::ArgMemOnly)) {
+                            continue;
+                        }
                     }
                     if (MemTransferInst *MI = dyn_cast<MemTransferInst>(CI)) {
                         MaybeTrackDst(S, MI);
                     }
                 }
-                if (isa<IntrinsicInst>(CI) || CI->hasFnAttr(Attribute::ArgMemOnly) ||
-                    CI->hasFnAttr(Attribute::ReadNone) || CI->hasFnAttr(Attribute::ReadOnly)) {
-                    // Intrinsics are never safepoints.
-                    continue;
+                if (!CI->hasFnAttr("thunk")) {
+                    if (isa<IntrinsicInst>(CI) || CI->hasFnAttr(Attribute::ArgMemOnly) ||
+                        CI->hasFnAttr(Attribute::ReadNone) || CI->hasFnAttr(Attribute::ReadOnly)) {
+                        // Intrinsics are never safepoints.
+                        continue;
+                    }
                 }
                 int SafepointNumber = NoteSafepoint(S, BBS, CI);
                 BBS.HasSafepoint = true;

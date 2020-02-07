@@ -171,23 +171,20 @@ function optimize(opt::OptimizationState, @nospecialize(result))
 
     # compute inlining and other related optimizations
     if (isa(result, Const) || isconstType(result))
-        proven_pure = false
-        # must be proven pure to use const_api; otherwise we might skip throwing errors
-        # (issue #20704)
-        # TODO: Improve this analysis; if a function is marked @pure we should really
-        # only care about certain errors (e.g. method errors and type errors).
-        if length(ir.stmts) < 10
+        proven_pure = def isa Method && def.pure
+        # if it can be proven pure, we can use const_api; otherwise we might skip side-effects (like throwing errors)
+        if !proven_pure
             proven_pure = true
-            for i in 1:length(ir.stmts)
-                stmt = ir.stmts[i]
-                if stmt_affects_purity(stmt, ir) && !stmt_effect_free(stmt, ir.types[i], ir, ir.sptypes)
+            for fl in opt.src.slotflags
+                if (fl & SLOT_USEDUNDEF) != 0
                     proven_pure = false
                     break
                 end
             end
             if proven_pure
-                for fl in opt.src.slotflags
-                    if (fl & SLOT_USEDUNDEF) != 0
+                for i in 1:length(ir.stmts)
+                    stmt = ir.stmts[i]
+                    if stmt_affects_purity(stmt, ir) && !stmt_effect_free(stmt, ir.types[i], ir, ir.sptypes)
                         proven_pure = false
                         break
                     end

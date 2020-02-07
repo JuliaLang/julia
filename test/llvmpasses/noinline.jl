@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# RUN: julia --startup-file=no %s %t && llvm-link -S %t/* -o %t/module.ll
+# RUN: julia -g0 --startup-file=no %s %t && llvm-link -S %t/* -o %t/module.ll
 # RUN: cat %t/module.ll | FileCheck %s
 
 ## Notes:
@@ -12,10 +12,27 @@
 
 include(joinpath("..", "testhelpers", "llvmpasses.jl"))
 
-# CHECK-LABEL: @julia_simple_noinline
 @noinline function simple_noinline(A, B)
     return A + B
 end
 
-# CHECK: attributes #{{[0-9]+}} = {{{([a-z]+ )*}} noinline {{([a-z]+ )*}}}
+@noinline Base.@pure function simple_pure_helper(A, B)
+    return A + B
+end
+function simple_pure(A, B)
+    return simple_pure_helper(A, B)
+end
+
+# CHECK: define double @julia_simple_noinline_{{[0-9]+}}(double, double) #[[NOINLINE:[0-9]+]] {
 emit(simple_noinline, Float64, Float64)
+# CHECK-LABEL: @julia_simple_pure
+# CHECK: call double @julia_simple_pure_helper_{{[0-9]+}}(double %0, double %1) #[[PURE:[0-9]+]]
+# CHECK: declare double @julia_simple_pure_helper_{{[0-9]+}}(double, double) #[[PURE]]
+emit(simple_pure, Float64, Float64)
+# CHECK-LABEL @japi1_simple_pure
+# CHECK: call cc37 {{.+}} @japi1_simple_pure_helper_{{.+}} #[[PURE]]
+# CHECK: declare nonnull %jl_value_t addrspace(10)* @japi1_simple_pure_helper_{{[0-9]+}}(%jl_value_t addrspace(10)*, %jl_value_t addrspace(10)**, i32) #[[PURE:[0-9]+]]
+emit(simple_pure, BigFloat, BigFloat)
+
+# CHECK: attributes #[[NOINLINE]] = {{{([a-z]+ )*}} noinline {{([a-z]+ )*}}}
+# CHECK: attributes #[[PURE]] = { nounwind readnone "thunk" }
