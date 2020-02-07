@@ -27,7 +27,7 @@ end
 ```
 """
 function finalizer(@nospecialize(f), @nospecialize(o))
-    if isimmutable(o)
+    if !ismutable(o)
         error("objects of type ", typeof(o), " cannot be finalized")
     end
     ccall(:jl_gc_add_finalizer_th, Cvoid, (Ptr{Cvoid}, Any, Any),
@@ -37,7 +37,7 @@ end
 
 function finalizer(f::Ptr{Cvoid}, o::T) where T
     @_inline_meta
-    if isimmutable(o)
+    if !ismutable(o)
         error("objects of type ", typeof(o), " cannot be finalized")
     end
     ccall(:jl_gc_add_ptr_finalizer, Cvoid, (Ptr{Cvoid}, Any, Ptr{Cvoid}),

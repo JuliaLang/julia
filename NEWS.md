@@ -50,6 +50,7 @@ New library functions
   provide one-argument method that returns a closure.  The old methods of `merge` and
   `merge!` are still available for backward compatibility ([#34296]).
 * The new `isdisjoint` function indicates whether two collections are disjoint ([#34427]).
+* Add function `ismutable` and deprecate `isimmutable` to check whether something is mutable.([#34652])
 
 New library features
 --------------------
