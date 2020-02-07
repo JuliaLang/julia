@@ -68,11 +68,8 @@ static bool runtime_sym_gvs(const char *f_lib, const char *f_name, MT &&M,
     }
     else {
         std::string name = "ccalllib_";
-        name += f_lib;
-        // backslashes and spaces causes problems on Windows linker
-        std::replace(name.begin(), name.end(), '\\', '/');
-        std::replace(name.begin(), name.end(), ' ', '_');
-        runtime_lib = true;
+        std::string f_lib_str = std::string(f_lib);
+        name += f_lib_str.substr(f_lib_str.find_last_of("/\\") + 1);
         auto &libgv = libMapGV[f_lib];
         if (libgv.first == NULL) {
             libptrgv = new GlobalVariable(*M, T_pint8, false,
