@@ -88,6 +88,8 @@ Standard library changes
 
 #### Sockets
 
+#### Distributed
+* `launch_on_machine` now supports and parses ipv6 square-bracket notation ([#34430])
 
 Deprecated or removed
 ---------------------
