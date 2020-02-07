@@ -1480,6 +1480,10 @@ end
     a = rand(5,3)
     @test reverse(reverse(a,dims=2),dims=2) == a
     @test_throws ArgumentError reverse(a,dims=3)
+    # reversed dimension is not a singleton
+    # a lower dimension is not a singleton
+    # eltype not allocated inline
+    @test reverse(["a" "b"; "c" "d"], dims = 2) == ["b" "a"; "d" "c"]
 end
 
 @testset "isdiag, istril, istriu" begin
