@@ -1578,11 +1578,12 @@
          (rest  (if done
                     '()
                     (let ((ex (parse-comma-separated s (lambda (s)
-                           (parse-import s word)))))
+                                                         (parse-import s word)))))
                       (if (eq? (peek-token s) ':)
-                        (error (string "unexpected \":\" in \"" word "\" syntax"
-                                 "\nLast import needs to be a separate \"" word "\" statement"))
-                        ex)))))
+                          (error (string "unexpected \":\" in \"" word "\" syntax\n"
+                                         "Last import needs to be a separate \"" word
+                                         "\" statement"))
+                          ex)))))
     (if from
         `(,word (|:| ,first ,@rest))
         (list* word first rest))))
