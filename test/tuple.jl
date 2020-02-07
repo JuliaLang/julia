@@ -480,3 +480,10 @@ end
 
 # tuple_type_tail on non-normalized vararg tuple
 @test Base.tuple_type_tail(Tuple{Vararg{T, 3}} where T<:Real) == Tuple{Vararg{T, 2}} where T<:Real
+
+@testset "zip" begin
+    @test zip((1, 2, 3), (4, 5, 6), (7, 8, 9), (10, 11, 12)) ==
+        ((1, 4, 7, 10), (2, 5, 8, 11), (3, 6, 9, 12))
+    tuples = ntuple(i -> ntuple(j -> Val((i, j)), 10), 5)
+    @test collect(@inferred(zip(tuples...))) == collect(zip(collect.(tuples)...))
+end

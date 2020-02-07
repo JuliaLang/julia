@@ -390,6 +390,8 @@ _zip_iterator_eltype(::Type{Tuple{}}) = HasEltype()
 
 reverse(z::Zip) = Zip(map(reverse, z.is))
 
+zip(tuples::NTuple{N,Any}...) where {N} = ntuple(i -> map(t -> t[i], tuples), N)
+
 # filter
 
 struct Filter{F,I}
