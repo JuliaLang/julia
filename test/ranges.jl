@@ -1328,6 +1328,7 @@ end
 
 @testset "sum arbitrary types" begin
     @test sum(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong{1,Float64}(104.5)
+    @test sum(StepRangeLen(Furlong(1), Furlong(0.5), 19)) == Furlong{1,Float64}(104.5)
     @test sum(0f0:0.001f0:1f0) == 500.5
     @test sum(0f0:0.000001f0:1f0) == 500000.5
     @test sum(0f0:0.1f0:10f0) == 505.

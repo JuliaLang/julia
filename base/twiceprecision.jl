@@ -544,7 +544,7 @@ function sum(r::StepRangeLen)
     # To prevent overflow in sum(1:n), multiply its factors by the step
     sp, sn = sumpair(np), sumpair(nn)
     W = widen(Int)
-    Δn = Int(W(sp[1]) * W(sp[2]) - W(sn[1]) * W(sn[2]))
+    Δn = W(sp[1]) * W(sp[2]) - W(sn[1]) * W(sn[2])
     s = r.step * Δn
     # Add in contributions of ref
     ref = r.ref * l
