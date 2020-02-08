@@ -390,7 +390,12 @@ _zip_iterator_eltype(::Type{Tuple{}}) = HasEltype()
 
 reverse(z::Zip) = Zip(map(reverse, z.is))
 
-zip(tuples::NTuple{N,Any}...) where {N} = ntuple(i -> map(t -> t[i], tuples), N)
+# Not using `zip(tuples::NTuple{N,Any}...)` to avoid having unbound
+# type parameter.
+function zip(x::NTuple{N,Any}, xs::NTuple{N,Any}...) where {N}
+    tuples = (x, xs...)
+    return ntuple(i -> map(t -> t[i], tuples), N)
+end
 
 # filter
 
