@@ -2855,4 +2855,15 @@ end
     @test SparseArrays.getcolptr(vA) == SparseArrays.getcolptr(A[:, 1:5])
 end
 
+@testset "mapreducecols" begin
+    n = 20
+    m = 10
+    A = sprand(n, m, 0.2)
+    B = mapreduce(identity, +, A, dims=2)
+    for row in 1:n
+        @test B[row] ≈ sum(A[row, :])
+    end
+    @test B ≈ mapreduce(identity, +, Matrix(A), dims=2)
+end
+
 end # module
