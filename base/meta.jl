@@ -224,6 +224,51 @@ function parse(str::AbstractString; raise::Bool=true, depwarn::Bool=true)
 end
 
 """
+    parsefile(filename; raise=true, depwarn=true)
+
+Parse the Julia file located at `filename`.
+Returns a vector that contains all expressions in the file.
+Throws an `IOError` if the file `filename` does not exist.
+If `raise` is `true` (default),
+syntax errors will raise an error; otherwise, `parse` will return an expression that will
+raise an error upon evaluation.  If `depwarn` is `false`, deprecation warnings will be
+suppressed.
+
+```julia
+julia> Meta.parsefile("foo.jl")
+```
+"""
+function parsefile(filename::AbstractString;
+                   raise::Bool=true,
+                   depwarn::Bool=true)::Vector{Union{Expr, LineNumberNode}}
+    if !ispath(filename)
+        throw(IOError("The file \"$(filename)\" does not exist"))
+    end
+    full_file_path = realpath(filename)::String
+    file_contents = read(full_file_path, String)::String
+    block = Meta.parse("begin $(file_contents) end";
+                       raise = raise,
+                       depwarn = depwarn)::Expr
+    block_fixed = _parsefile_fix_filename(block,
+                                          full_file_path)::Expr
+    lines = convert(Vector{Union{Expr, LineNumberNode}}, block_fixed.args)::Vector{Union{Expr, LineNumberNode}}
+    return lines
+end
+
+@inline function _parsefile_fix_filename(expr::Expr,
+                                         correct_filename::String)::Expr
+    return Expr(expr.head,
+                _parsefile_fix_filename.(expr.args, correct_filename)...)
+end
+
+@inline function _parsefile_fix_filename(lnn::LineNumberNode,
+                                         correct_filename::String)::LineNumberNode
+    return LineNumberNode(lnn.line, correct_filename)
+end
+
+@inline _parsefile_fix_filename(x, correct_filename::String) = x
+
+"""
     partially_inline!(code::Vector{Any}, slot_replacements::Vector{Any},
                       type_signature::Type{<:Tuple}, static_param_values::Vector{Any},
                       slot_offset::Int, statement_offset::Int,
