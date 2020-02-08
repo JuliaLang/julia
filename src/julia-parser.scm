@@ -234,7 +234,7 @@
 
 (define (read-operator port c)
   (if (and (eqv? c #\*) (eqv? (peek-char port) #\*))
-      (error "use \"^\" instead of \"**\""))
+      (error "If you were trying to raise a number to a power, you should use \"^\" instead of \"**\".\n If you used \"**\" in some other context, you did something wrong. This is invalid syntax."))
   (if (or (eof-object? (peek-char port)) (not (op-or-sufchar? (peek-char port))))
       (symbol (string c)) ; 1-char operator
       (let ((str (let loop ((str (string c))
