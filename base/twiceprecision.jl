@@ -550,7 +550,7 @@ function sum(r::StepRangeLen)
     ref = r.ref * l
     convert(eltype(r), s + ref)
 end
-function sum(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision}) where {T}
+function sum(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision})
     l = length(r)
     # Compute the contribution of step over all indices.
     # Indexes on opposite side of r.offset contribute with opposite sign,
