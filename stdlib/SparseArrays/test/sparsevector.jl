@@ -405,6 +405,11 @@ end
         x2 = sparse([1, 2], [2, 2], [1.2, 3.4], 2, 3)
         @test_throws BoundsError copyto!(x2, x1)
     end
+    let x = 1:6
+        x2 = spzeros(length(x))
+        copyto!(x2, x) # copyto!(SparseVector, AbstractVector)
+        @test Vector(x2) == collect(x)
+    end
 end
 @testset "vec/reinterpret/float/complex" begin
     a = SparseVector(8, [2, 5, 6], Int32[12, 35, 72])
