@@ -2705,3 +2705,11 @@ let n = 12000000, k = 257000000
         v[end] == (n, 0.5)
     end
 end
+
+@testset "Issue 33143" begin
+    xvec = rand(4)
+    xmat = reshape(xvec, 2, 2)
+    push!(xvec, 1.0)
+    @test xvec[5] == 1.0
+    @test length(xmat) == 4
+end

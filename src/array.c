@@ -736,15 +736,11 @@ STATIC_INLINE void jl_array_grow_at_beg(jl_array_t *a, size_t idx, size_t inc,
                                         size_t n)
 {
     // designed to handle the case of growing and shrinking at both ends
-    if (__unlikely(a->flags.isshared)) {
-        if (a->flags.how != 3)
-            jl_error("cannot resize array with shared data");
-        if (inc == 0) {
-            // If inc > 0, it will always trigger the slow path and unshare the
-            // buffer
-            array_try_unshare(a);
-            return;
-        }
+    if (__unlikely(a->flags.isshared && inc == 0)) {
+        // If inc > 0, it will always trigger the slow path and unshare the
+        // buffer
+        array_try_unshare(a);
+        return;
     }
     size_t newnrows = n + inc;
     size_t elsz = a->elsize;
@@ -844,15 +840,11 @@ STATIC_INLINE void jl_array_grow_at_end(jl_array_t *a, size_t idx,
                                         size_t inc, size_t n)
 {
     // optimized for the case of only growing and shrinking at the end
-    if (__unlikely(a->flags.isshared)) {
-        if (a->flags.how != 3)
-            jl_error("cannot resize array with shared data");
-        if (inc == 0) {
-            // If inc > 0, it will always trigger the slow path and unshare the
-            // buffer
-            array_try_unshare(a);
-            return;
-        }
+    if (__unlikely(a->flags.isshared && inc == 0)) {
+        // If inc > 0, it will always trigger the slow path and unshare the
+        // buffer
+        array_try_unshare(a);
+        return;
     }
     size_t elsz = a->elsize;
     char *data = (char*)a->data;
