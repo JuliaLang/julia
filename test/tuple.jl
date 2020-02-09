@@ -28,11 +28,10 @@ end
     @test convert(Tuple{Int, Int, Float64}, (1, 2, 3)) === (1, 2, 3.0)
 
     @test convert(Tuple{Float64, Int, UInt8}, (1.0, 2, 0x3)) === (1.0, 2, 0x3)
-    @test convert(NTuple, (1.0, 2, 0x3)) === (1.0, 2, 0x3)
+    @test convert(Tuple{Vararg{Real}}, (1.0, 2, 0x3)) === (1.0, 2, 0x3)
+    @test convert(Tuple{Vararg{Integer}}, (1.0, 2, 0x3)) === (1, 2, 0x3)
     @test convert(Tuple{Vararg{Int}}, (1.0, 2, 0x3)) === (1, 2, 3)
     @test convert(Tuple{Int, Vararg{Int}}, (1.0, 2, 0x3)) === (1, 2, 3)
-    @test convert(Tuple{Vararg{T}} where T<:Integer, (1.0, 2, 0x3)) === (1, 2, 0x3)
-    @test convert(Tuple{T, Vararg{T}} where T<:Integer, (1.0, 2, 0x3)) === (1, 2, 0x3)
     @test convert(NTuple{3, Int}, (1.0, 2, 0x3)) === (1, 2, 3)
     @test convert(Tuple{Int, Int, Float64}, (1.0, 2, 0x3)) === (1, 2, 3.0)
 
@@ -53,6 +52,19 @@ end
     @test_throws MethodError convert(Tuple{Int, Int, Int}, (1, 2))
     # issue #26589
     @test_throws MethodError convert(NTuple{4}, (1.0,2.0,3.0,4.0,5.0))
+    # issue #31824
+    # there is no generic way to convert an arbitrary tuple to a homogeneous tuple
+    @test_throws MethodError(convert, (NTuple, (1, 1.0)), Base.get_world_counter()) convert(NTuple, (1, 1.0))
+    let T = Tuple{Vararg{T}} where T<:Integer, v = (1.0, 2, 0x3)
+        @test_throws MethodError(convert, (T, (1.0, 2, 0x3)), Base.get_world_counter()) convert(T, v)
+    end
+    let T = Tuple{T, Vararg{T}} where T<:Integer, v = (1.0, 2, 0x3)
+        @test_throws MethodError(convert, (Tuple{Vararg{T}} where T<:Integer, (2, 0x3)), Base.get_world_counter()) convert(T, v)
+    end
+    function f31824(input...)
+        b::NTuple = input
+    end
+    @test f31824(1,2,3) === (1,2,3)
 
     # PR #15516
     @test Tuple{Char,Char}("za") === ('z','a')

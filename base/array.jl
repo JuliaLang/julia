@@ -332,7 +332,6 @@ copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, leng
 # N.B: The generic definition in multidimensional.jl covers, this, this is just here
 # for bootstrapping purposes.
 function fill!(dest::Array{T}, x) where T
-    @_noinline_meta
     xT = convert(T, x)
     for i in eachindex(dest)
         @inbounds dest[i] = xT

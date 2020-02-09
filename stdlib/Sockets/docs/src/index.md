@@ -9,6 +9,7 @@ Sockets.listen(::AbstractString)
 Sockets.getaddrinfo
 Sockets.getipaddr
 Sockets.getipaddrs
+Sockets.islinklocaladdr
 Sockets.getalladdrinfo
 Sockets.DNSError
 Sockets.getnameinfo

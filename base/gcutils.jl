@@ -12,11 +12,22 @@ Register a function `f(x)` to be called when there are no program-accessible ref
 this function is unpredictable.
 
 `f` must not cause a task switch, which excludes most I/O operations such as `println`.
-`@schedule println("message")` or `ccall(:jl_, Cvoid, (Any,), "message")` may be helpful for
-debugging purposes.
+Using the `@async` macro (to defer context switching to outside of the finalizer) or
+`ccall` to directly invoke IO functions in C may be helpful for debugging purposes.
+
+# Examples
+```julia
+finalizer(my_mutable_struct) do x
+    @async println("Finalizing \$x.")
+end
+
+finalizer(my_mutable_struct) do x
+    ccall(:jl_safe_printf, Cvoid, (Cstring, Cstring), "Finalizing %s.", repr(x))
+end
+```
 """
 function finalizer(@nospecialize(f), @nospecialize(o))
-    if isimmutable(o)
+    if !ismutable(o)
         error("objects of type ", typeof(o), " cannot be finalized")
     end
     ccall(:jl_gc_add_finalizer_th, Cvoid, (Ptr{Cvoid}, Any, Any),
@@ -26,7 +37,7 @@ end
 
 function finalizer(f::Ptr{Cvoid}, o::T) where T
     @_inline_meta
-    if isimmutable(o)
+    if !ismutable(o)
         error("objects of type ", typeof(o), " cannot be finalized")
     end
     ccall(:jl_gc_add_ptr_finalizer, Cvoid, (Ptr{Cvoid}, Any, Ptr{Cvoid}),
@@ -49,20 +60,24 @@ Module with garbage collection utilities.
 """
 module GC
 
-"""
-    GC.gc()
-    GC.gc(full::Bool)
+# mirrored from julia.h
+const GC_AUTO = 0
+const GC_FULL = 1
+const GC_INCREMENTAL = 2
 
-Perform garbage collection. The argument `full` determines the kind of collection: A full
-collection scans all objects, while an incremental collection only scans so-called young
-objects and is much quicker. If called without an argument, heuristics are used to determine
-which type of collection is needed.
+"""
+    GC.gc([full=true])
+
+Perform garbage collection. The argument `full` determines the kind of
+collection: A full collection (default) sweeps all objects, which makes the
+next GC scan much slower, while an incremental collection may only sweep
+so-called young objects.
 
 !!! warning
     Excessive use will likely lead to poor performance.
 """
-gc() = ccall(:jl_gc_collect, Cvoid, (Cint,), 0)
-gc(full::Bool) = ccall(:jl_gc_collect, Cvoid, (Cint,), full ? 1 : 2)
+gc(full::Bool=true) =
+    ccall(:jl_gc_collect, Cvoid, (Cint,), full ? GC_FULL : GC_INCREMENTAL)
 
 """
     GC.enable(on::Bool)
@@ -90,13 +105,7 @@ macro preserve(args...)
     for x in syms
         isa(x, Symbol) || error("Preserved variable must be a symbol")
     end
-    s, r = gensym(), gensym()
-    esc(quote
-        $s = $(Expr(:gc_preserve_begin, syms...))
-        $r = $(args[end])
-        $(Expr(:gc_preserve_end, s))
-        $r
-    end)
+    esc(Expr(:gc_preserve, args[end], syms...))
 end
 
 """

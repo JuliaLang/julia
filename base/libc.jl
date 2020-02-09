@@ -398,6 +398,6 @@ rand(::Type{Float64}) = rand(UInt32) * 2.0^-32
 
 Interface to the C `srand(seed)` function.
 """
-srand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
+srand(seed=floor(Int, time()) % Cuint) = ccall(:srand, Cvoid, (Cuint,), seed)
 
 end # module

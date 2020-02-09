@@ -41,6 +41,7 @@ struct JLOptions
     outputji::Ptr{UInt8}
     output_code_coverage::Ptr{UInt8}
     incremental::Int8
+    warn_scope::Int8
 end
 
 # This runs early in the sysimage != is not defined yet

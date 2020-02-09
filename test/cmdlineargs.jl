@@ -232,7 +232,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
             "<FILENAME>" => realpath(inputfile))
         covfile = replace(joinpath(dir, "coverage.info"), "%" => "%%")
         @test !isfile(covfile)
-        defaultcov = readchomp(`$exename -E "Bool(Base.JLOptions().code_coverage)" -L $inputfile`)
+        defaultcov = readchomp(`$exename -E "Base.JLOptions().code_coverage != 0" -L $inputfile`)
         opts = Base.JLOptions()
         coverage_file = (opts.output_code_coverage != C_NULL) ?  unsafe_string(opts.output_code_coverage) : ""
         @test !isfile(covfile)
@@ -244,31 +244,56 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
             --code-coverage=$covfile --code-coverage`) == "1"
         @test isfile(covfile)
         got = read(covfile, String)
-        @test occursin(expected, got) || got
         rm(covfile)
+        @test occursin(expected, got) || (expected, got)
         @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=user`) == "1"
         @test isfile(covfile)
         got = read(covfile, String)
-        @test occursin(expected, got) || got
         rm(covfile)
+        @test occursin(expected, got) || (expected, got)
         @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=all`) == "2"
         @test isfile(covfile)
         got = read(covfile, String)
-        @test occursin(expected, got) || got
         rm(covfile)
+        @test occursin(expected, got) || (expected, got)
     end
 
     # --track-allocation
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"`) == "false"
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"
-        --track-allocation=none`) == "false"
+    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0"`) == "false"
+    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=none`) == "false"
 
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"
-        --track-allocation`) == "true"
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"
-        --track-allocation=user`) == "true"
+    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation`) == "true"
+    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=user`) == "true"
+    mktempdir() do dir
+        helperdir = joinpath(@__DIR__, "testhelpers")
+        inputfile = joinpath(helperdir, "allocation_file.jl")
+        pid = readchomp(`$exename -E "getpid()" -L $inputfile --track-allocation=user`)
+        memfile = "$inputfile.$pid.mem"
+        got = readlines(memfile)
+        rm(memfile)
+        @test popfirst!(got) == "        0 g(x) = x + 123456"
+        @test popfirst!(got) == "        - function f(x)"
+        @test popfirst!(got) == "       80     []"
+        if Sys.WORD_SIZE == 64
+            # P64 pools with 64 bit tags
+            @test popfirst!(got) == "       32     Base.invokelatest(g, 0)"
+            @test popfirst!(got) == "       48     Base.invokelatest(g, x)"
+        elseif 12 == (() -> @allocated ccall(:jl_gc_allocobj, Ptr{Cvoid}, (Csize_t,), 8))()
+            # See if we have a 12-byte pool with 32 bit tags (MAX_ALIGN = 4)
+            @test popfirst!(got) == "       24     Base.invokelatest(g, 0)"
+            @test popfirst!(got) == "       36     Base.invokelatest(g, x)"
+        else # MAX_ALIGN >= 8
+            @test popfirst!(got) == "       16     Base.invokelatest(g, 0)"
+            @test popfirst!(got) == "       48     Base.invokelatest(g, x)"
+        end
+        @test popfirst!(got) == "       80     []"
+        @test popfirst!(got) == "        - end"
+        @test popfirst!(got) == "        - f(1.23)"
+        @test isempty(got) || got
+    end
+
 
     # --optimize
     @test readchomp(`$exename -E "Base.JLOptions().opt_level"`) == "2"
@@ -417,6 +442,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
 
     # test the program name remains constant
     mktempdir() do dir
+        # dir can be case-incorrect sometimes
+        dir = realpath(dir)
+
         a = joinpath(dir, "a.jl")
         b = joinpath(dir, "b.jl")
         c = joinpath(dir, ".julia", "config", "startup.jl")
@@ -440,19 +468,19 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
                 [a, a,
                  b, a]
             @test readsplit(`$exename -L $b -e 'exit(0)'`) ==
-                [realpath(b), ""]
+                [b, ""]
             @test readsplit(`$exename -L $b $a`) ==
-                [realpath(b), a,
+                [b, a,
                  a, a,
                  b, a]
             @test readsplit(`$exename --startup-file=yes -e 'exit(0)'`) ==
                 [c, ""]
             @test readsplit(`$exename --startup-file=yes -L $b -e 'exit(0)'`) ==
                 [c, "",
-                 realpath(b), ""]
+                 b, ""]
             @test readsplit(`$exename --startup-file=yes -L $b $a`) ==
                 [c, a,
-                 realpath(b), a,
+                 b, a,
                  a, a,
                  b, a]
         end

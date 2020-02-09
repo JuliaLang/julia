@@ -367,9 +367,7 @@ unsigned ffs_u32(uint32_t bitvec) JL_NOTSAFEPOINT;
 #else
 STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
 {
-#if defined(_COMPILER_MINGW_)
-    return __builtin_ffs(bitvec) - 1;
-#elif defined(_COMPILER_MICROSOFT_)
+#if defined(_COMPILER_MICROSOFT_)
     unsigned long j;
     _BitScanForward(&j, bitvec);
     return j;

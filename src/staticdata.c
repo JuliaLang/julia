@@ -43,7 +43,7 @@ static void *const _tags[] = {
          &jl_pinode_type, &jl_phinode_type, &jl_phicnode_type, &jl_upsilonnode_type,
          &jl_type_type, &jl_bottom_type, &jl_ref_type, &jl_pointer_type,
          &jl_vararg_type, &jl_abstractarray_type,
-         &jl_densearray_type, &jl_void_type, &jl_function_type, &jl_typeofbottom_type,
+         &jl_densearray_type, &jl_nothing_type, &jl_function_type, &jl_typeofbottom_type,
          &jl_unionall_type, &jl_typename_type, &jl_builtin_type, &jl_code_info_type,
          &jl_task_type, &jl_uniontype_type, &jl_typetype_type, &jl_abstractstring_type,
          &jl_array_any_type, &jl_intrinsic_type, &jl_abstractslot_type,
@@ -871,7 +871,9 @@ static void jl_write_values(jl_serializer_state *s)
                     size_t np = dt->layout->npointers;
                     size_t fieldsize = jl_fielddesc_size(dt->layout->fielddesc_type);
                     char *flddesc = (char*)dt->layout;
-                    size_t fldsize = sizeof(jl_datatype_layout_t) + nf * fieldsize + (np << dt->layout->fielddesc_type);
+                    size_t fldsize = sizeof(jl_datatype_layout_t) + nf * fieldsize;
+                    if (dt->layout->first_ptr != -1)
+                        fldsize += np << dt->layout->fielddesc_type;
                     uintptr_t layout = LLT_ALIGN(ios_pos(s->const_data), sizeof(void*));
                     write_padding(s->const_data, layout - ios_pos(s->const_data)); // realign stream
                     newdt->layout = NULL; // relocation offset

@@ -804,7 +804,7 @@ end
 if Sys.iswindows()
     tmp = tempname()
     touch(tmp)
-    path = dirname(tmp)
+    path = realpath(dirname(tmp))
     file = basename(tmp)
     temp_name = basename(path)
     cd(path) do
@@ -1048,4 +1048,10 @@ let s = "prevind(\"θ\",1,"
     @test c[1] == string(first(methods(prevind, Tuple{String, Int})))
     @test r == 1:7
     @test s[r] == "prevind"
+end
+
+# Issue #32840
+let s = "typeof(+)."
+    c, r = test_complete_context(s)
+    @test length(c) == length(fieldnames(DataType))
 end

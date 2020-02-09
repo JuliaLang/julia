@@ -220,6 +220,9 @@ end
 @test repr(:((a=1,;x=2))) == ":((a = 1,; x = 2))"
 @test repr(:((a=1,3;x=2))) == ":((a = 1, 3; x = 2))"
 @test repr(:(g(a,; b))) == ":(g(a; b))"
+@test repr(:(;)) == ":((;))"
+@test repr(:(-(;x))) == ":(-(; x))"
+@test repr(:(+(1, 2;x))) == ":(+(1, 2; x))"
 for ex in [Expr(:call, :f, Expr(:(=), :x, 1)),
            Expr(:ref, :f, Expr(:(=), :x, 1)),
            Expr(:vect, 1, 2, Expr(:kw, :x, 1)),
@@ -1150,7 +1153,7 @@ let x = [], y = [], z = Base.ImmutableDict(x => y)
     push!(x, y)
     push!(y, x)
     push!(y, z)
-    @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict{Array{Any,1},Array{Any,1}}([Any[#= circular reference @-3 =#]] => [#= circular reference @-2 =#])]"
+    @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[#= circular reference @-2 =#], Base.ImmutableDict{Array{Any,1},Array{Any,1}}([#= circular reference @-3 =#] => [#= circular reference @-2 =#])]"
     @test repr(z) == "Base.ImmutableDict{Array{Any,1},Array{Any,1}}([Any[Any[#= circular reference @-2 =#], Base.ImmutableDict{Array{Any,1},Array{Any,1}}(#= circular reference @-3 =#)]] => [Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict{Array{Any,1},Array{Any,1}}(#= circular reference @-2 =#)])"
     @test sprint(dump, x) == """
         Array{Any}((1,))
@@ -1478,10 +1481,10 @@ end
         "[3.14159 3.14159; 3.14159 3.14159]"
     @test showstr([x x; x x]) == showstr([x x; x x], :compact => false) ==
         "[3.141592653589793 3.141592653589793; 3.141592653589793 3.141592653589793]"
-    @test replstr([x, x]) == replstr([x, x], :compact => false) ==
+    @test replstr([x, x], :compact => false) ==
         "2-element Array{Float64,1}:\n 3.141592653589793\n 3.141592653589793"
-    @test replstr([x, x], :compact => true) ==
-        "2-element Array{Float64,1}:\n 3.14159\n 3.14159"
+    @test replstr([x, x]) == "2-element Array{Float64,1}:\n 3.141592653589793\n 3.141592653589793"
+    @test replstr([x, x], :compact => true) == "2-element Array{Float64,1}:\n 3.14159\n 3.14159"
     @test replstr([x x; x x]) == replstr([x x; x x], :compact => true) ==
         "2×2 Array{Float64,2}:\n 3.14159  3.14159\n 3.14159  3.14159"
     @test showstr([x x; x x], :compact => false) ==
@@ -1922,7 +1925,7 @@ Z = Array{Float64}(undef,0,0)
     @test showstr(vec_undefined) == "Any[#undef, #undef]"
     @test showstr(vec_initialisers) == "[$undef, $undef]"
     @test replstr(vec_undefined) == "2-element Array{Any,1}:\n #undef\n #undef"
-    @test replstr(vec_initialisers) == "2-element Array{UndefInitializer,1}:\n $undef\n $undef"
+    @test replstr(vec_initialisers) == "2-element Array{UndefInitializer,1}:\n UndefInitializer(): array initializer with undefined values\n UndefInitializer(): array initializer with undefined values"
 end
 
 # issue #31065, do not print parentheses for nested dot expressions
@@ -1992,3 +1995,6 @@ end
 @weak_test_repr "a[begin, end, let x=1; (x+1;); end]"
 @test repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
         ":(a[begin, end, let x = 1\n          begin\n              x + 1\n          end\n      end])"
+@test_repr "a[(bla;)]"
+@test_repr "a[(;;)]"
+@weak_test_repr "a[x -> f(x)]"

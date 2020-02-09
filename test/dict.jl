@@ -9,6 +9,7 @@ using Random
     @test iterate(p)[1] == 10
     @test iterate(p, iterate(p)[2])[1] == 20
     @test iterate(p, iterate(p, iterate(p)[2])[2]) == nothing
+    @test firstindex(p) == 1
     @test lastindex(p) == length(p) == 2
     @test Base.indexed_iterate(p, 1, nothing) == (10,2)
     @test Base.indexed_iterate(p, 2, nothing) == (20,3)
@@ -29,6 +30,7 @@ using Random
     @test last(p) == 20
     @test eltype(p) == Int
     @test eltype(4 => 5.6) == Union{Int,Float64}
+    @test vcat(1 => 2.0, 1.0 => 2) == [1.0 => 2.0, 1.0 => 2.0]
 end
 
 @testset "Dict" begin
@@ -709,6 +711,11 @@ import Base.ImmutableDict
 
     @test_throws KeyError d[k1]
     @test_throws KeyError d1["key2"]
+
+    v = [k1 => v1, k2 => v2]
+    d5 = ImmutableDict(v...)
+    @test d5 == d2
+    @test collect(d5) == v
 end
 
 @testset "filtering" begin
@@ -917,14 +924,22 @@ let
     end
 end
 
+struct NonFunctionCallable end
+(::NonFunctionCallable)(args...) = +(args...)
+
 @testset "Dict merge" begin
     d1 = Dict("A" => 1, "B" => 2)
     d2 = Dict("B" => 3.0, "C" => 4.0)
     @test @inferred merge(d1, d2) == Dict("A" => 1, "B" => 3, "C" => 4)
     # merge with combiner function
+    @test @inferred mergewith(+, d1, d2) == Dict("A" => 1, "B" => 5, "C" => 4)
+    @test @inferred mergewith(*, d1, d2) == Dict("A" => 1, "B" => 6, "C" => 4)
+    @test @inferred mergewith(-, d1, d2) == Dict("A" => 1, "B" => -1, "C" => 4)
+    @test @inferred mergewith(NonFunctionCallable(), d1, d2) == Dict("A" => 1, "B" => 5, "C" => 4)
+    @test foldl(mergewith(+), [d1, d2]; init=Dict{Union{},Union{}}()) ==
+        Dict("A" => 1, "B" => 5, "C" => 4)
+    # backward compatibility
     @test @inferred merge(+, d1, d2) == Dict("A" => 1, "B" => 5, "C" => 4)
-    @test @inferred merge(*, d1, d2) == Dict("A" => 1, "B" => 6, "C" => 4)
-    @test @inferred merge(-, d1, d2) == Dict("A" => 1, "B" => -1, "C" => 4)
 end
 
 @testset "Dict merge!" begin
@@ -933,12 +948,19 @@ end
     @inferred merge!(d1, d2)
     @test d1 == Dict("A" => 1, "B" => 3, "C" => 4)
     # merge! with combiner function
-    @inferred merge!(+, d1, d2)
+    @inferred mergewith!(+, d1, d2)
     @test d1 == Dict("A" => 1, "B" => 6, "C" => 8)
-    @inferred merge!(*, d1, d2)
+    @inferred mergewith!(*, d1, d2)
     @test d1 == Dict("A" => 1, "B" => 18, "C" => 32)
-    @inferred merge!(-, d1, d2)
+    @inferred mergewith!(-, d1, d2)
     @test d1 == Dict("A" => 1, "B" => 15, "C" => 28)
+    @inferred mergewith!(NonFunctionCallable(), d1, d2)
+    @test d1 == Dict("A" => 1, "B" => 18, "C" => 32)
+    @test foldl(mergewith!(+), [d1, d2]; init=empty(d1)) ==
+        Dict("A" => 1, "B" => 21, "C" => 36)
+    # backward compatibility
+    merge!(+, d1, d2)
+    @test d1 == Dict("A" => 1, "B" => 21, "C" => 36)
 end
 
 @testset "Dict reduce merge" begin

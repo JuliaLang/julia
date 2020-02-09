@@ -76,6 +76,9 @@ julia> parse(BigInt, "42")
 
 julia> big"313"
 313
+
+julia> BigInt(10)^19
+10000000000000000000
 ```
 """
 BigInt(x)

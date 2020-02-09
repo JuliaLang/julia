@@ -82,14 +82,17 @@ end
 
 gcd(a::Union{Integer,Rational}) = a
 lcm(a::Union{Integer,Rational}) = a
-gcd(a::Union{Integer,Rational}, b::Union{Integer,Rational}) = gcd(promote(a,b)...)
-lcm(a::Union{Integer,Rational}, b::Union{Integer,Rational}) = lcm(promote(a,b)...)
-gcd(a::Union{Integer,Rational}, b::Union{Integer,Rational}...) = gcd(a, gcd(b...))
-lcm(a::Union{Integer,Rational}, b::Union{Integer,Rational}...) = lcm(a, lcm(b...))
+gcd(a::Real, b::Real) = gcd(promote(a,b)...)
+lcm(a::Real, b::Real) = lcm(promote(a,b)...)
+gcd(a::Real, b::Real, c::Real...) = gcd(a, gcd(b, c...))
+lcm(a::Real, b::Real, c::Real...) = lcm(a, lcm(b, c...))
+gcd(a::T, b::T) where T<:Real = throw(MethodError(gcd, (a,b)))
+lcm(a::T, b::T) where T<:Real = throw(MethodError(lcm, (a,b)))
 
-lcm(abc::AbstractArray{<:Union{Integer,Rational}}) = reduce(lcm, abc; init=one(eltype(abc)))
+gcd(abc::AbstractArray{<:Real}) = reduce(gcd, abc; init=zero(eltype(abc)))
+lcm(abc::AbstractArray{<:Real}) = reduce(lcm, abc; init=one(eltype(abc)))
 
-function gcd(abc::AbstractArray{<:Union{Integer,Rational}})
+function gcd(abc::AbstractArray{<:Integer})
     a = zero(eltype(abc))
     for b in abc
         a = gcd(a,b)
@@ -146,7 +149,8 @@ function gcdx(a::T, b::T) where T<:Integer
     end
     a < 0 ? (-a, -s0, -t0) : (a, s0, t0)
 end
-gcdx(a::Union{Integer,Rational}, b::Union{Integer,Rational}) = gcdx(promote(a,b)...)
+gcdx(a::Real, b::Real) = gcdx(promote(a,b)...)
+gcdx(a::T, b::T) where T<:Real = throw(MethodError(gcdx, (a,b)))
 
 # multiplicative inverse of n mod m, error if none
 

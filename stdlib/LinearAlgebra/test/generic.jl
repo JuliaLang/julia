@@ -462,4 +462,9 @@ end
     end
 end
 
+@testset "condskeel #34512" begin
+    A = rand(3, 3)
+    @test condskeel(A) ≈ condskeel(A, [8,8,8])
+end
+
 end # module TestGeneric

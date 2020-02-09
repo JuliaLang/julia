@@ -397,11 +397,12 @@ SparseMatrixCSC{Tv}(S::AbstractSparseMatrixCSC{Tv}) where {Tv} = copy(S)
 SparseMatrixCSC{Tv}(S::AbstractSparseMatrixCSC) where {Tv} = SparseMatrixCSC{Tv,eltype(getcolptr(S))}(S)
 SparseMatrixCSC{Tv,Ti}(S::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = copy(S)
 function SparseMatrixCSC{Tv,Ti}(S::AbstractSparseMatrixCSC) where {Tv,Ti}
-    eltypeTicolptr = convert(Vector{Ti}, getcolptr(S))
-    eltypeTirowval = convert(Vector{Ti}, rowvals(S))
-    eltypeTvnzval = convert(Vector{Tv}, nonzeros(S))
+    eltypeTicolptr = Vector{Ti}(getcolptr(S))
+    eltypeTirowval = Vector{Ti}(rowvals(S))
+    eltypeTvnzval = Vector{Tv}(nonzeros(S))
     return SparseMatrixCSC(size(S, 1), size(S, 2), eltypeTicolptr, eltypeTirowval, eltypeTvnzval)
 end
+
 # converting from other matrix types to SparseMatrixCSC (also see sparse())
 SparseMatrixCSC(M::Matrix) = sparse(M)
 function SparseMatrixCSC(T::Tridiagonal{Tv}) where Tv

@@ -167,7 +167,7 @@ function const_prop_profitable(@nospecialize(arg))
             isconstType(b) && return true
             const_prop_profitable(b) && return true
         end
-    elseif !isa(arg, Const) || (isa(arg.val, Symbol) || isa(arg.val, Type) || (!isa(arg.val, String) && isimmutable(arg.val)))
+    elseif !isa(arg, Const) || (isa(arg.val, Symbol) || isa(arg.val, Type) || (!isa(arg.val, String) && !ismutable(arg.val)))
         # don't consider mutable values or Strings useful constants
         return true
     end
@@ -1222,7 +1222,8 @@ function typeinf_local(frame::InferenceState)
                     if isa(fname, Slot)
                         changes = StateUpdate(fname, VarState(Any, false), changes)
                     end
-                elseif hd === :inbounds || hd === :meta || hd === :loopinfo
+                elseif hd === :inbounds || hd === :meta || hd === :loopinfo || hd == :code_coverage_effect
+                    # these do not generate code
                 else
                     t = abstract_eval(stmt, changes, frame)
                     t === Bottom && break

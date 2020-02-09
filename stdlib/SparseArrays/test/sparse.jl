@@ -62,6 +62,10 @@ end
     @test SparseArrays.indtype(sparse(Int8[1,1],Int8[1,1],[1,1])) == Int8
 end
 
+@testset "spzeros de-splatting" begin
+    @test spzeros(Float64, Int64, (2, 2)) == spzeros(Float64, Int64, 2, 2)
+end
+
 @testset "conversion to AbstractMatrix/SparseMatrix of same eltype" begin
     a = sprand(5, 5, 0.2)
     @test AbstractMatrix{eltype(a)}(a) == a
@@ -82,6 +86,9 @@ end
         SparseMatrixCSC(6, 6, big.([1,2,4,7,8,9,9]), big.([1,1,2,1,2,3,4,5]), big.([1,2,3,4,5,6,7,8])))
     @test sparse(Any[1,2,3], Any[1,2,3], Any[1,1,1]) == sparse([1,2,3], [1,2,3], [1,1,1])
     @test sparse(Any[1,2,3], Any[1,2,3], Any[1,1,1], 5, 4) == sparse([1,2,3], [1,2,3], [1,1,1], 5, 4)
+    # with combine
+    @test sparse([1, 1, 2, 2, 2], [1, 2, 1, 2, 2], 1.0, 2, 2, +) == sparse([1, 1, 2, 2], [1, 2, 1, 2], [1.0, 1.0, 1.0, 2.0], 2, 2)
+    @test sparse([1, 1, 2, 2, 2], [1, 2, 1, 2, 2], -1.0, 2, 2, *) == sparse([1, 1, 2, 2], [1, 2, 1, 2], [-1.0, -1.0, -1.0, 1.0], 2, 2)
 end
 
 @testset "SparseMatrixCSC construction from UniformScaling" begin
@@ -1135,6 +1142,18 @@ end
         S[I] .= J
         @test sum(S) == (sumS1 - sumS2 + sum(J))
     end
+
+    # setindex with a Matrix{Bool}
+    Is = fill(false, 10, 10)
+    Is[1, 1] = true
+    Is[10, 10] = true
+    A = sprand(10, 10, 0.2)
+    A[Is] = [0.1, 0.5]
+    @test A[1, 1] == 0.1
+    @test A[10, 10] == 0.5
+    A = spzeros(10, 10)
+    A[Is] = [0.1, 0.5]
+    @test nnz(A) == 2
 end
 
 @testset "dropstored!" begin
@@ -1187,6 +1206,13 @@ end
     # --> Test dropping a block of the matrix towards the upper left
     SparseArrays.dropstored!(A, 2:5, 2:5)
     @test nnz(A) == 42
+    # --> Test dropping all elements
+    SparseArrays.dropstored!(A, :)
+    @test nnz(A) == 0
+    A[1:2:9, :] .= 1
+    @test nnz(A) == 50
+    SparseArrays.dropstored!(A, :, :)
+    @test nnz(A) == 0
 end
 
 @testset "issue #7507" begin
@@ -2518,6 +2544,7 @@ end
     @test permutedims(S, (2,1)) == SP
     @test permutedims(S, (1,2)) == S
     @test permutedims(S, (1,2)) !== S
+    @test_throws ArgumentError permutedims(S, (1,3))
     MC = reshape([[(1+im) 2; 3 4], [9 10; 11 12], [(5 + 2im) 6; 7 8], [13 14; 15 16]], (2,2))
     SC = sparse(MC)
     @test isa(adjoint(SC), Adjoint)
@@ -2798,6 +2825,45 @@ end
     @test transpose(A)*transpose(B)       ≈ transpose(Array(A)) * transpose(Array(B))
     @test adjoint(B)*A                    ≈ adjoint(Array(B)) * Array(A)
     @test adjoint(B)*adjoint(complex.(A)) ≈ adjoint(Array(B)) * adjoint(Array(complex.(A)))
+end
+
+@testset "copy a ReshapedArray of SparseMatrixCSC" begin
+    A = sprand(20, 10, 0.2)
+    rA = reshape(A, 10, 20)
+    crA = copy(rA)
+    @test reshape(crA, 20, 10) == A
+end
+
+@testset "avoid aliasing of fields during constructing $T (issue #34630)" for T in
+    (SparseMatrixCSC, SparseMatrixCSC{Float64}, SparseMatrixCSC{Float64,Int16})
+
+    A = sparse([1 1; 1 0])
+    B = T(A)
+    @test A == B
+    A[2,2] = 1
+    @test A != B
+    @test getcolptr(A) !== getcolptr(B)
+    @test rowvals(A) !== rowvals(B)
+    @test nonzeros(A) !== nonzeros(B)
+end
+
+@testset "SparseMatrixCSCView" begin
+    A  = sprand(10, 10, 0.2)
+    vA = view(A, :, 1:5) # a CSCView contains all rows and a UnitRange of the columns
+    @test SparseArrays.getnzval(vA)  == SparseArrays.getnzval(A)
+    @test SparseArrays.getrowval(vA) == SparseArrays.getrowval(A)
+    @test SparseArrays.getcolptr(vA) == SparseArrays.getcolptr(A[:, 1:5])
+end
+
+@testset "mapreducecols" begin
+    n = 20
+    m = 10
+    A = sprand(n, m, 0.2)
+    B = mapreduce(identity, +, A, dims=2)
+    for row in 1:n
+        @test B[row] ≈ sum(A[row, :])
+    end
+    @test B ≈ mapreduce(identity, +, Matrix(A), dims=2)
 end
 
 end # module

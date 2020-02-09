@@ -21,6 +21,8 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
     @eval periodisless(x::$period, y::$period) = value(x) < value(y)
     # AbstractString parsing (mainly for IO code)
     @eval $period(x::AbstractString) = $period(Base.parse(Int64, x))
+    # The period type is printed when output, thus it already implies its own typeinfo
+    @eval Base.typeinfo_implicit(::Type{$period}) = true
     # Period accessors
     typs = period in (:Microsecond, :Nanosecond) ? ["Time"] :
            period in (:Hour, :Minute, :Second, :Millisecond) ? ["Time", "DateTime"] : ["Date", "DateTime"]
@@ -45,8 +47,9 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
 end
 
 #Print/show/traits
-Base.string(x::Period) = string(value(x), _units(x))
-Base.show(io::IO,x::Period) = print(io, string(x))
+Base.print(io::IO, x::Period) = print(io, value(x), _units(x))
+Base.show(io::IO, ::MIME"text/plain", x::Period) = print(io, x)
+Base.show(io::IO, p::P) where {P<:Period} = print(io, P, '(', value(p), ')')
 Base.zero(::Union{Type{P},P}) where {P<:Period} = P(0)
 Base.one(::Union{Type{P},P}) where {P<:Period} = 1  # see #16116
 Base.typemin(::Type{P}) where {P<:Period} = P(typemin(Int64))
@@ -76,7 +79,7 @@ for op in (:+, :-, :lcm, :gcd)
 end
 
 /(x::P, y::P) where {P<:Period} = /(value(x), value(y))
-/(x::P, y::Real) where {P<:Period} = P(/(value(x), Int64(y)))
+/(x::P, y::Real) where {P<:Period} = P(/(value(x), y))
 div(x::P, y::P, r::RoundingMode) where {P<:Period} = div(value(x), value(y), r)
 div(x::P, y::Real, r::RoundingMode) where {P<:Period} = P(div(value(x), Int64(y), r))
 
@@ -87,7 +90,7 @@ for op in (:rem, :mod)
     end
 end
 
-(*)(x::P, y::Real) where {P<:Period} = P(value(x) * Int64(y))
+(*)(x::P, y::Real) where {P<:Period} = P(value(x) * y)
 (*)(y::Real, x::Period) = x * y
 
 # intfuncs

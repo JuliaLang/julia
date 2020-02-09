@@ -6,6 +6,9 @@ using InteractiveUtils: code_llvm
 
 import Libdl
 
+# for cfunction_closure
+include("testenv.jl")
+
 const libccalltest = "libccalltest"
 
 const verbose = false
@@ -791,6 +794,8 @@ end
 ## cfunction roundtrip
 
 verbose && Libc.flush_cstdio()
+
+if cfunction_closure
 verbose && println("Testing cfunction closures: ")
 
 # helper Type for testing that constructors work
@@ -972,6 +977,12 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
             @test_throws TypeError ccall(cf, Any, (Ref{Any},), $v)
         end
     end
+end
+
+else
+
+@test_broken "cfunction: no support for closures on this platform"
+
 end
 
 # issue 13031
@@ -1546,3 +1557,20 @@ ERROR: could not load library "does_not_exist"
 does_not_exist.so: cannot open shared object file: No such file or directory
 """)
 @test !isfile(o_file)
+
+# pass NTuple{N,T} as Ptr{T}/Ref{T}
+let
+    dest = Ref((0,0,0))
+
+    src  = Ref((1,2,3))
+    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Int}, Ptr{Int}, Csize_t), dest, src, 3*sizeof(Int))
+    @test dest[] == (1,2,3)
+
+    src  = Ref((4,5,6))
+    ccall(:memcpy, Ptr{Cvoid}, (Ref{Int}, Ref{Int}, Csize_t), dest, src, 3*sizeof(Int))
+    @test dest[] == (4,5,6)
+
+    src  = (7,8,9)
+    ccall(:memcpy, Ptr{Cvoid}, (Ref{Int}, Ref{Int}, Csize_t), dest, src, 3*sizeof(Int))
+    @test dest[] == (7,8,9)
+end

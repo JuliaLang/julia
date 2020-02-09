@@ -14,6 +14,7 @@ export
     getnameinfo,
     getipaddr,
     getipaddrs,
+    islinklocaladdr,
     getpeername,
     getsockname,
     listen,
@@ -231,7 +232,7 @@ const UV_UDP_REUSEADDR = 4
 
 ##
 
-function _bind(sock::TCPServer, host::Union{IPv4, IPv6}, port::UInt16, flags::UInt32=UInt32(0))
+function _bind(sock::Union{TCPServer, TCPSocket}, host::Union{IPv4, IPv6}, port::UInt16, flags::UInt32=UInt32(0))
     host_in = Ref(hton(host.host))
     return ccall(:jl_tcp_bind, Int32, (Ptr{Cvoid}, UInt16, Ptr{Cvoid}, Cuint, Cint),
             sock, hton(port), host_in, flags, host isa IPv6)
@@ -252,7 +253,7 @@ Bind `socket` to the given `host:port`. Note that `0.0.0.0` will listen on all d
 * If `reuseaddr=true`, multiple threads or processes can bind to the same address without error
   if they all set `reuseaddr=true`, but only the last to bind will receive any traffic.
 """
-function bind(sock::Union{TCPServer, UDPSocket}, host::IPAddr, port::Integer; ipv6only = false, reuseaddr = false, kws...)
+function bind(sock::Union{TCPServer, UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only = false, reuseaddr = false, kws...)
     if sock.status != StatusInit
         error("$(typeof(sock)) is not in initialization state")
     end
@@ -274,7 +275,9 @@ function bind(sock::Union{TCPServer, UDPSocket}, host::IPAddr, port::Integer; ip
             return false
         end
     end
-    sock.status = StatusOpen
+    if isa(sock, TCPServer) || isa(sock, UDPSocket)
+        sock.status = StatusOpen
+    end
     isa(sock, UDPSocket) && setopt(sock; kws...)
     iolock_end()
     return true

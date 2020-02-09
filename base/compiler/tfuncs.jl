@@ -288,7 +288,7 @@ function isdefined_tfunc(@nospecialize(args...))
                 return Const(true)
             elseif isa(arg1, Const)
                 arg1v = (arg1::Const).val
-                if isimmutable(arg1v) || isdefined(arg1v, idx) || (isa(arg1v, DataType) && is_dt_const_field(idx))
+                if !ismutable(arg1v) || isdefined(arg1v, idx) || (isa(arg1v, DataType) && is_dt_const_field(idx))
                     return Const(isdefined(arg1v, idx))
                 end
             end
@@ -722,7 +722,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
             if !(isa(nv,Symbol) || isa(nv,Int))
                 return Bottom
             end
-            if (isa(sv, SimpleVector) || isimmutable(sv)) && isdefined(sv, nv)
+            if (isa(sv, SimpleVector) || !ismutable(sv)) && isdefined(sv, nv)
                 return AbstractEvalConstant(getfield(sv, nv))
             end
         end

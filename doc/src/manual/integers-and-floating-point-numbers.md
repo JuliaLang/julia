@@ -240,6 +240,16 @@ computers. In applications where overflow is possible, explicit checking for wra
 by overflow is essential; otherwise, the [`BigInt`](@ref) type in [Arbitrary Precision Arithmetic](@ref)
 is recommended instead.
 
+An example of overflow behavior and how to potentially resolve it is as follows:
+
+```jldoctest
+julia> 10^19
+-8446744073709551616
+
+julia> big(10)^19
+10000000000000000000
+```
+
 ### Division errors
 
 Integer division (the `div` function) has two exceptional cases: dividing by zero, and dividing

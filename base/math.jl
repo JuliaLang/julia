@@ -69,6 +69,22 @@ clamp(x::X, lo::L, hi::H) where {X,L,H} =
                   convert(promote_type(X,L,H), x)))
 
 """
+    clamp(x, T)::T
+
+Clamp `x` between `typemin(T)` and `typemax(T)` and convert the result to type `T`.
+
+# Examples
+```jldoctest
+julia> clamp(200, Int8)
+127
+julia> clamp(-200, Int8)
+-128
+```
+"""
+clamp(x, ::Type{T}) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
+
+
+"""
     clamp!(array::AbstractArray, lo, hi)
 
 Restrict values in `array` to the specified range, in-place.
@@ -613,6 +629,7 @@ julia> hypot(3, 4im)
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
 hypot(x::Complex, y::Complex) = hypot(abs(x), abs(y))
 hypot(x::T, y::T) where {T<:Real} = hypot(float(x), float(y))
+hypot(x::T, y::T) where {T<:Number} = (z = y/x; abs(x) * sqrt(one(z) + z*z))
 function hypot(x::T, y::T) where T<:AbstractFloat
     #Return Inf if either or both imputs is Inf (Compliance with IEEE754)
     if isinf(x) || isinf(y)

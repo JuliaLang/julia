@@ -569,8 +569,9 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
     return new_typ
 end
 
-function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::DomTree, defuse, nargs::Int, sptypes::Vector{Any},
+function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, nargs::Int, sptypes::Vector{Any},
                         slottypes::Vector{Any})
+    code = ir.stmts
     cfg = ir.cfg
     left = Int[]
     catch_entry_blocks = Tuple{Int, Int}[]

@@ -189,21 +189,6 @@ extern "C" JL_DLLEXPORT LLVMContextRef LLVMExtraGetValueContext(LLVMValueRef V)
     return wrap(&unwrap(V)->getContext());
 }
 
-
-#if JL_LLVM_VERSION < 80000
-extern ModulePass *createNVVMReflectPass();
-extern "C" JL_DLLEXPORT void LLVMExtraAddNVVMReflectPass(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createNVVMReflectPass());
-}
-#else
-FunctionPass *createNVVMReflectPass(unsigned int SmVersion);
-extern "C" JL_DLLEXPORT void LLVMExtraAddNVVMReflectFunctionPass(LLVMPassManagerRef PM, unsigned int SmVersion)
-{
-    unwrap(PM)->add(createNVVMReflectPass(SmVersion));
-}
-#endif
-
 extern "C" JL_DLLEXPORT void
 LLVMExtraAddTargetLibraryInfoByTiple(const char *T, LLVMPassManagerRef PM)
 {

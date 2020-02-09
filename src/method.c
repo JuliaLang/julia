@@ -36,7 +36,8 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             jl_toplevel_eval_flex(module, expr, 0, 1);
             expr = jl_nothing;
         }
-        if (jl_is_toplevel_only_expr(expr) || e->head == const_sym || e->head == copyast_sym ||
+        if (jl_is_toplevel_only_expr(expr) || e->head == const_sym ||
+            e->head == coverageeffect_sym || e->head == copyast_sym ||
             e->head == quote_sym || e->head == inert_sym ||
             e->head == meta_sym || e->head == inbounds_sym ||
             e->head == boundscheck_sym || e->head == loopinfo_sym ||

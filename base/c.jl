@@ -47,7 +47,7 @@ Note that the argument type tuple must be a literal tuple, and not a tuple-value
 (although it can include a splat expression). And that these arguments will be evaluated in global scope
 during compile-time (not deferred until runtime).
 Adding a '\\\$' in front of the function argument changes this to instead create a runtime closure
-over the local variable `callable`.
+over the local variable `callable` (this is not supported on all architectures).
 
 See [manual section on ccall and cfunction usage](@ref Calling-C-and-Fortran-Code).
 

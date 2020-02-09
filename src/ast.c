@@ -60,7 +60,7 @@ jl_sym_t *nospecialize_sym; jl_sym_t *macrocall_sym;
 jl_sym_t *colon_sym; jl_sym_t *hygienicscope_sym;
 jl_sym_t *throw_undef_if_not_sym; jl_sym_t *getfield_undefref_sym;
 jl_sym_t *gc_preserve_begin_sym; jl_sym_t *gc_preserve_end_sym;
-jl_sym_t *escape_sym;
+jl_sym_t *coverageeffect_sym; jl_sym_t *escape_sym;
 jl_sym_t *aliasscope_sym; jl_sym_t *popaliasscope_sym;
 
 static uint8_t flisp_system_image[] = {
@@ -131,11 +131,32 @@ static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mo
 static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v);
 static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, struct macroctx_stack *macroctx, int onelevel);
 
+value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    // tells whether a var is defined in and *by* the current module
+    argcount(fl_ctx, "defined-julia-global", nargs, 1);
+    (void)tosymbol(fl_ctx, args[0], "defined-julia-global");
+    jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
+    jl_sym_t *var = jl_symbol(symbol_name(fl_ctx, args[0]));
+    jl_binding_t *b = jl_get_module_binding(ctx->module, var);
+    return (b != NULL && b->owner == ctx->module) ? fl_ctx->T : fl_ctx->F;
+}
+
 value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     assert(ctx->module);
     return fixnum(jl_module_next_counter(ctx->module));
+}
+
+value_t fl_julia_current_file(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    return symbol(fl_ctx, jl_filename);
+}
+
+value_t fl_julia_current_line(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    return fixnum(jl_lineno);
 }
 
 // Check whether v is a scalar for purposes of inlining fused-broadcast
@@ -197,9 +218,12 @@ value_t fl_julia_logmsg(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 }
 
 static const builtinspec_t julia_flisp_ast_ext[] = {
+    { "defined-julia-global", fl_defined_julia_global },
     { "current-julia-module-counter", fl_current_module_counter },
     { "julia-scalar?", fl_julia_scalar },
     { "julia-logmsg", fl_julia_logmsg },
+    { "julia-current-file", fl_julia_current_file },
+    { "julia-current-line", fl_julia_current_line },
     { NULL, NULL }
 };
 
@@ -227,6 +251,7 @@ static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx) JL_NOTSAFEPOINT
     ctx->task = NULL;
     ctx->module = NULL;
     set(symbol(fl_ctx, "*depwarn-opt*"), fixnum(jl_options.depwarn));
+    set(symbol(fl_ctx, "*scopewarn-opt*"), fixnum(jl_options.warn_scope));
 }
 
 // There should be no GC allocation while holding this lock
@@ -365,6 +390,7 @@ void jl_init_frontend(void)
     throw_undef_if_not_sym = jl_symbol("throw_undef_if_not");
     getfield_undefref_sym = jl_symbol("##getfield##");
     do_sym = jl_symbol("do");
+    coverageeffect_sym = jl_symbol("code_coverage_effect");
     aliasscope_sym = jl_symbol("aliasscope");
     popaliasscope_sym = jl_symbol("popaliasscope");
 }
@@ -858,9 +884,10 @@ jl_value_t *jl_parse_eval_all(const char *fname,
                 }
                 // expand non-final expressions in statement position (value unused)
                 expression =
-                    fl_applyn(fl_ctx, 3,
-                              symbol_value(symbol(fl_ctx, iscons(cdr_(ast)) ? "jl-expand-to-thunk-stmt" : "jl-expand-to-thunk")),
-                              expression, symbol(fl_ctx, jl_filename), fixnum(jl_lineno));
+                    fl_applyn(fl_ctx, 4,
+                              symbol_value(symbol(fl_ctx, "jl-expand-to-thunk-warn")),
+                              expression, symbol(fl_ctx, jl_filename), fixnum(jl_lineno),
+                              iscons(cdr_(ast)) ? fl_ctx->T : fl_ctx->F);
             }
             jl_get_ptls_states()->world_age = jl_world_counter;
             form = scm_to_julia(fl_ctx, expression, inmodule);
@@ -1170,6 +1197,13 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule
     return expr;
 }
 
+// Lower an expression tree into Julia's intermediate-representation.
+JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule)
+{
+    return jl_expand_with_loc(expr, inmodule, "none", 0);
+}
+
+// Lowering, with starting program location specified
 JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmodule,
                                             const char *file, int line)
 {
@@ -1182,10 +1216,25 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmod
     return expr;
 }
 
-// Lower an expression tree into Julia's intermediate-representation.
-JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule)
+// Same as the above, but printing warnings when applicable
+JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *inmodule,
+                                                 const char *file, int line)
 {
-    return jl_expand_with_loc(expr, inmodule, "none", 0);
+    JL_TIMING(LOWERING);
+    JL_GC_PUSH1(&expr);
+    expr = jl_copy_ast(expr);
+    expr = jl_expand_macros(expr, inmodule, NULL, 0);
+    jl_ast_context_t *ctx = jl_ast_ctx_enter();
+    fl_context_t *fl_ctx = &ctx->fl;
+    JL_AST_PRESERVE_PUSH(ctx, old_roots, inmodule);
+    value_t arg = julia_to_scm(fl_ctx, expr);
+    value_t e = fl_applyn(fl_ctx, 4, symbol_value(symbol(fl_ctx, "jl-expand-to-thunk-warn")), arg,
+                          symbol(fl_ctx, file), fixnum(line), fl_ctx->F);
+    expr = scm_to_julia(fl_ctx, e, inmodule);
+    JL_AST_PRESERVE_POP(ctx, old_roots);
+    jl_ast_ctx_leave(ctx);
+    JL_GC_POP();
+    return expr;
 }
 
 // expand in a context where the expression value is unused

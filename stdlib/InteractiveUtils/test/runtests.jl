@@ -23,6 +23,12 @@ struct B20086{T,N} <: A20086{T,N} end
 @test subtypes(A20086{T,3} where T) == [B20086{T,3} where T]
 @test subtypes(A20086{Int,3}) == [B20086{Int,3}]
 
+# supertypes
+@test supertypes(B20086) == (B20086, A20086, Any)
+@test supertypes(B20086{Int}) == (B20086{Int}, A20086{Int}, Any)
+@test supertypes(B20086{Int,2}) == (B20086{Int,2}, A20086{Int,2}, Any)
+@test supertypes(Any) == (Any,)
+
 # code_warntype
 module WarnType
 using Test, Random, InteractiveUtils
@@ -272,6 +278,13 @@ let _true = Ref(true), f, g, h
     @test_throws ErrorException h()
 end
 
+# Issue #33163
+A33163(x; y) = x + y
+B33163(x) = x
+@test (@code_typed A33163(1, y=2))[1].inferred
+@test !(@code_typed optimize=false A33163(1, y=2))[1].inferred
+@test !(@code_typed optimize=false B33163(1))[1].inferred
+
 module ReflectionTest
 using Test, Random, InteractiveUtils
 
@@ -433,3 +446,9 @@ end
 # buildbot path updating
 file, ln = functionloc(versioninfo, Tuple{})
 @test isfile(file)
+
+@testset "Issue #34434" begin
+    io = IOBuffer()
+    code_native(io, eltype, Tuple{Int})
+    @test occursin("eltype", String(take!(io)))
+end

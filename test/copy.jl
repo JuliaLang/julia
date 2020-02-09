@@ -75,6 +75,13 @@ end
     @test dca !== a
     @test dca[1] !== a[1]
     @test deepcopy(q).value !== q.value
+
+    @test_throws ErrorException("deepcopy of Modules not supported") deepcopy(Base)
+
+    # deepcopy recursive dicts
+    x = Dict{Dict, Int}()
+    x[x] = 0
+    @test length(deepcopy(x)) == 1
 end
 
 @testset "issue #13124" begin
@@ -101,6 +108,8 @@ end
     @test deepcopy(Mutable(2))   !== Mutable(2)
     @inferred deepcopy(Immutable(2))
     @inferred deepcopy(Mutable(2))
+
+    @test deepcopy(Dict(0 => 0))[0] == 0
 end
 
 # issue #30911

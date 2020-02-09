@@ -71,7 +71,8 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL, // output-ji
                             NULL,    // output-code_coverage
                             0, // incremental
-                            0 // image_file_specified
+                            0, // image_file_specified
+                            JL_OPTIONS_WARN_SCOPE_ON  // ambiguous scope warning
 };
 
 static const char usage[] = "julia [switches] -- [programfile] [args...]\n";
@@ -109,7 +110,8 @@ static const char opts[]  =
 
     // error and warning options
     " --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings (\"error\" turns warnings into errors)\n"
-    " --warn-overwrite={yes|no} Enable or disable method overwrite warnings\n\n"
+    " --warn-overwrite={yes|no} Enable or disable method overwrite warnings\n"
+    " --warn-scope={yes|no}     Enable or disable warning for ambiguous top-level scope\n\n"
 
     // code generation options
     " -C, --cpu-target <target> Limit usage of CPU features up to <target>; set to \"help\" to see the available options\n"
@@ -169,6 +171,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_output_bc,
            opt_depwarn,
            opt_warn_overwrite,
+           opt_warn_scope,
            opt_inline,
            opt_polly,
            opt_trace_compile,
@@ -225,6 +228,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "output-incremental",required_argument, 0, opt_incremental },
         { "depwarn",         required_argument, 0, opt_depwarn },
         { "warn-overwrite",  required_argument, 0, opt_warn_overwrite },
+        { "warn-scope",      required_argument, 0, opt_warn_scope },
         { "inline",          required_argument, 0, opt_inline },
         { "polly",           required_argument, 0, opt_polly },
         { "trace-compile",   required_argument, 0, opt_trace_compile },
@@ -283,7 +287,7 @@ restart_switch:
                             c = o->val;
                             goto restart_switch;
                         }
-                        else if (strchr(shortopts, o->val)) {
+                        else if (o->val <= 0xff && strchr(shortopts, o->val)) {
                             jl_errorf("option `-%c/--%s` is missing an argument", o->val, o->name);
                         }
                         else {
@@ -554,7 +558,15 @@ restart_switch:
             else if (!strcmp(optarg,"no"))
                 jl_options.warn_overwrite = JL_OPTIONS_WARN_OVERWRITE_OFF;
             else
-                jl_errorf("julia: invalid argument to --warn-overwrite={yes|no|} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --warn-overwrite={yes|no} (%s)", optarg);
+            break;
+        case opt_warn_scope:
+            if (!strcmp(optarg,"yes"))
+                jl_options.warn_scope = JL_OPTIONS_WARN_SCOPE_ON;
+            else if (!strcmp(optarg,"no"))
+                jl_options.warn_scope = JL_OPTIONS_WARN_SCOPE_OFF;
+            else
+                jl_errorf("julia: invalid argument to --warn-scope={yes|no} (%s)", optarg);
             break;
         case opt_inline:
             if (!strcmp(optarg,"yes"))

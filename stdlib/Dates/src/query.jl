@@ -7,10 +7,10 @@ struct DateLocale
     months_abbr::Vector{String}
     days_of_week::Vector{String}
     days_of_week_abbr::Vector{String}
-    month_value::Dict{String, Int}
-    month_abbr_value::Dict{String, Int}
-    day_of_week_value::Dict{String, Int}
-    day_of_week_abbr_value::Dict{String, Int}
+    month_value::Dict{String, Int64}
+    month_abbr_value::Dict{String, Int64}
+    day_of_week_value::Dict{String, Int64}
+    day_of_week_abbr_value::Dict{String, Int64}
 end
 
 function locale_dict(names::Vector{<:AbstractString})

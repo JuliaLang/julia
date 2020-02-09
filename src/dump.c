@@ -391,7 +391,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
         if (dt->layout == ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->layout) {
             layout = 1;
         }
-        else if (dt->layout == jl_void_type->layout) {
+        else if (dt->layout == jl_nothing_type->layout) {
             layout = 2;
         }
         else if (dt->layout == ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_pointer_type))->layout) {
@@ -403,7 +403,10 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
             uint32_t np = dt->layout->npointers;
             size_t fieldsize = jl_fielddesc_size(dt->layout->fielddesc_type);
             ios_write(s->s, (const char*)dt->layout, sizeof(*dt->layout));
-            ios_write(s->s, (const char*)(dt->layout + 1), nf * fieldsize + (np << dt->layout->fielddesc_type));
+            size_t fldsize = nf * fieldsize;
+            if (dt->layout->first_ptr != -1)
+                fldsize += np << dt->layout->fielddesc_type;
+            ios_write(s->s, (const char*)(dt->layout + 1), fldsize);
         }
     }
 
@@ -1471,7 +1474,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
             dt->layout = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->layout;
         }
         else if (layout == 2) {
-            dt->layout = jl_void_type->layout;
+            dt->layout = jl_nothing_type->layout;
         }
         else if (layout == 3) {
             dt->layout = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_pointer_type))->layout;
@@ -1484,11 +1487,14 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
             uint32_t np = buffer.npointers;
             uint8_t fielddesc_type = buffer.fielddesc_type;
             size_t fielddesc_size = nf > 0 ? jl_fielddesc_size(fielddesc_type) : 0;
+            size_t fldsize = nf * fielddesc_size;
+            if (buffer.first_ptr != -1)
+                fldsize += np << fielddesc_type;
             jl_datatype_layout_t *layout = (jl_datatype_layout_t*)jl_gc_perm_alloc(
-                    sizeof(jl_datatype_layout_t) + nf * fielddesc_size + (np << fielddesc_type),
+                    sizeof(jl_datatype_layout_t) + fldsize,
                     0, 4, 0);
             *layout = buffer;
-            ios_read(s->s, (char*)(layout + 1), nf * fielddesc_size + (np << fielddesc_type));
+            ios_read(s->s, (char*)(layout + 1), fldsize);
             dt->layout = layout;
         }
     }
@@ -3344,7 +3350,7 @@ void jl_init_serializer(void)
 
                      jl_bool_type, jl_linenumbernode_type, jl_pinode_type,
                      jl_upsilonnode_type, jl_type_type, jl_bottom_type, jl_ref_type,
-                     jl_pointer_type, jl_vararg_type, jl_abstractarray_type, jl_void_type,
+                     jl_pointer_type, jl_vararg_type, jl_abstractarray_type, jl_nothing_type,
                      jl_densearray_type, jl_function_type, jl_typename_type,
                      jl_builtin_type, jl_task_type, jl_uniontype_type, jl_typetype_type,
                      jl_array_any_type, jl_intrinsic_type,

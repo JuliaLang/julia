@@ -1408,4 +1408,16 @@ end
     @test nnz(scv) == nnz(A[:, 1])
 end
 
+@testset "avoid aliasing of fields during constructing $T (issue #34630)" for T in
+    (SparseVector, SparseVector{Float64}, SparseVector{Float64,Int16})
+
+    A = sparse([1; 0])
+    B = T(A)
+    @test A == B
+    A[2] = 1
+    @test A != B
+    @test nonzeroinds(A) !== nonzeroinds(B)
+    @test nonzeros(A) !== nonzeros(B)
+end
+
 end # module

@@ -1539,6 +1539,15 @@ julia> hcat(c...)
  1  4
  2  5
  3  6
+
+julia> x = Matrix(undef, 3, 0)  # x = [] would have created an Array{Any, 1}, but need an Array{Any, 2}
+3×0 Array{Any,2}
+
+julia> hcat(x, [1; 2; 3])
+3×1 Array{Any,2}:
+ 1
+ 2
+ 3
 ```
 """
 hcat(X...) = cat(X...; dims=Val(2))

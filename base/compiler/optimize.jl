@@ -198,7 +198,7 @@ function optimize(opt::OptimizationState, @nospecialize(result))
             opt.src.pure = true
         end
 
-        if proven_pure && !coverage_enabled()
+        if proven_pure
             # use constant calling convention
             # Do not emit `jl_fptr_const_return` if coverage is enabled
             # so that we don't need to add coverage support
@@ -408,7 +408,9 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             ssachangemap[i] += ssachangemap[i - 1]
         end
     end
-    (labelchangemap[end] != 0 && ssachangemap[end] != 0) || return
+    if labelchangemap[end] == 0 && ssachangemap[end] == 0
+        return
+    end
     for i = 1:length(body)
         el = body[i]
         if isa(el, GotoNode)
@@ -416,6 +418,9 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
         elseif isa(el, SSAValue)
             body[i] = SSAValue(el.id + ssachangemap[el.id])
         elseif isa(el, Expr)
+            if el.head === :(=) && el.args[2] isa Expr
+                el = el.args[2]::Expr
+            end
             if el.head === :gotoifnot
                 cond = el.args[1]
                 if isa(cond, SSAValue)
@@ -427,9 +432,6 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
                 tgt = el.args[1]::Int
                 el.args[1] = tgt + labelchangemap[tgt]
             elseif !is_meta_expr_head(el.head)
-                if el.head === :(=) && el.args[2] isa Expr && !is_meta_expr_head(el.args[2].head)
-                    el = el.args[2]::Expr
-                end
                 args = el.args
                 for i = 1:length(args)
                     el = args[i]

@@ -418,6 +418,7 @@ static Value *llvm_type_rewrite(
         from = emit_static_alloca(ctx, from_type);
         to = emit_bitcast(ctx, from, target_type->getPointerTo());
     }
+    // XXX: deal with possible alignment issues
     ctx.builder.CreateStore(v, from);
     return ctx.builder.CreateLoad(to);
 }
@@ -514,7 +515,7 @@ static Value *julia_to_native(
         tbaa_decorate(jvinfo.tbaa, ctx.builder.CreateStore(emit_unbox(ctx, to, jvinfo, jlto), slot));
     }
     else {
-        emit_memcpy(ctx, slot, jvinfo.tbaa, jvinfo, jl_datatype_size(jlto), jl_datatype_align(jlto));
+        emit_memcpy(ctx, slot, jvinfo.tbaa, jvinfo, jl_datatype_size(jlto), julia_alignment(jlto));
     }
     return slot;
 }
@@ -952,14 +953,9 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         std::string ir_string = ir_stream.str();
         // Do not enable update debug info since it runs the verifier on the whole module
         // and will error on the function we are currently emitting.
-#if JL_LLVM_VERSION >= 70000
         ModuleSummaryIndex index = ModuleSummaryIndex(true);
         bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string, "llvmcall"),
                                         jl_Module, &index, Err, nullptr, /* UpdateDebugInfo */ false);
-#else
-        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string, "llvmcall"),
-                                        *jl_Module, Err, nullptr, /* UpdateDebugInfo */ false);
-#endif
         if (failed) {
             std::string message = "Failed to parse LLVM Assembly: \n";
             llvm::raw_string_ostream stream(message);
@@ -1108,7 +1104,7 @@ std::string generate_func_sig(const char *fname)
 
     if (type_is_ghost(lrt)) {
         prt = lrt = T_void;
-        abi->use_sret(jl_void_type);
+        abi->use_sret(jl_nothing_type);
     }
     else {
         if (!jl_is_datatype(rt) || ((jl_datatype_t*)rt)->layout == NULL || jl_is_cpointer_type(rt) || jl_is_array_type(rt) || retboxed) {
@@ -1513,16 +1509,16 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                                                "~{memory}", true);
         ctx.builder.CreateCall(pauseinst);
         JL_GC_POP();
-        return ghostValue(jl_void_type);
+        return ghostValue(jl_nothing_type);
 #elif defined(_CPU_AARCH64_) || (defined(_CPU_ARM_) && __ARM_ARCH >= 7)
         static auto wfeinst = InlineAsm::get(FunctionType::get(T_void, false), "wfe",
                                              "~{memory}", true);
         ctx.builder.CreateCall(wfeinst);
         JL_GC_POP();
-        return ghostValue(jl_void_type);
+        return ghostValue(jl_nothing_type);
 #else
         JL_GC_POP();
-        return ghostValue(jl_void_type);
+        return ghostValue(jl_nothing_type);
 #endif
     }
     else if (is_libjulia_func(jl_cpu_wake)) {
@@ -1531,13 +1527,13 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(!isVa && !llvmcall && nccallargs == 0);
 #if JL_CPU_WAKE_NOOP == 1
         JL_GC_POP();
-        return ghostValue(jl_void_type);
+        return ghostValue(jl_nothing_type);
 #elif defined(_CPU_AARCH64_) || (defined(_CPU_ARM_) && __ARM_ARCH >= 7)
         static auto sevinst = InlineAsm::get(FunctionType::get(T_void, false), "sev",
                                              "~{memory}", true);
         ctx.builder.CreateCall(sevinst);
         JL_GC_POP();
-        return ghostValue(jl_void_type);
+        return ghostValue(jl_nothing_type);
 #endif
     }
     else if (is_libjulia_func(jl_gc_safepoint)) {
@@ -1548,7 +1544,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         emit_signal_fence(ctx);
         ctx.builder.CreateLoad(ctx.signalPage, true);
         emit_signal_fence(ctx);
-        return ghostValue(jl_void_type);
+        return ghostValue(jl_nothing_type);
     }
     else if (_is_libjulia_func((uintptr_t)ptls_getter, "jl_get_ptls_states")) {
         assert(lrt == T_size);
@@ -1580,7 +1576,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                                       ConstantInt::get(T_sigatomic, 1));
         ctx.builder.CreateStore(defer_sig, pdefer_sig);
         emit_signal_fence(ctx);
-        return ghostValue(jl_void_type);
+        return ghostValue(jl_nothing_type);
     }
     else if (is_libjulia_func(jl_sigatomic_end)) {
         assert(lrt == T_void);
@@ -1610,7 +1606,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         ctx.builder.CreateBr(contBB);
         ctx.f->getBasicBlockList().push_back(contBB);
         ctx.builder.SetInsertPoint(contBB);
-        return ghostValue(jl_void_type);
+        return ghostValue(jl_nothing_type);
     }
     else if (is_libjulia_func(jl_array_isassigned) &&
              argv[1].typ == (jl_value_t*)jl_ulong_type) {
@@ -1654,13 +1650,12 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, strp, retboxed, rt, unionall, static_rt);
     }
-    else if (is_libjulia_func(memcpy) && (rt == (jl_value_t*)jl_void_type || jl_is_cpointer_type(rt))) {
+    else if (is_libjulia_func(memcpy) && (rt == (jl_value_t*)jl_nothing_type || jl_is_cpointer_type(rt))) {
         const jl_cgval_t &dst = argv[0];
         const jl_cgval_t &src = argv[1];
         const jl_cgval_t &n = argv[2];
         Value *destp = emit_unbox(ctx, T_size, dst, (jl_value_t*)jl_voidpointer_type);
 
-#if JL_LLVM_VERSION >= 70000
         ctx.builder.CreateMemCpy(
                 ctx.builder.CreateIntToPtr(destp, T_pint8),
                 1,
@@ -1669,16 +1664,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 0,
                 emit_unbox(ctx, T_size, n, (jl_value_t*)jl_ulong_type),
                 false);
-#else
-        ctx.builder.CreateMemCpy(
-                ctx.builder.CreateIntToPtr(destp, T_pint8),
-                ctx.builder.CreateIntToPtr(
-                    emit_unbox(ctx, T_size, src, (jl_value_t*)jl_voidpointer_type), T_pint8),
-                emit_unbox(ctx, T_size, n, (jl_value_t*)jl_ulong_type), 1,
-                false);
-#endif
         JL_GC_POP();
-        return rt == (jl_value_t*)jl_void_type ? ghostValue(jl_void_type) :
+        return rt == (jl_value_t*)jl_nothing_type ? ghostValue(jl_nothing_type) :
             mark_or_box_ccall_result(ctx, destp, retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_object_id) && nccallargs == 1 &&
@@ -1945,7 +1932,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 assert(rtsz > 0);
                 Value *strct = emit_allocobj(ctx, rtsz, runtime_bt);
                 MDNode *tbaa = jl_is_mutable(rt) ? tbaa_mutab : tbaa_immut;
-                int boxalign = jl_datatype_align(rt);
+                int boxalign = julia_alignment(rt);
                 // copy the data from the return value to the new struct
                 const DataLayout &DL = jl_data_layout;
                 auto resultTy = result->getType();
