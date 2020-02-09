@@ -543,6 +543,21 @@ function sum(r::StepRangeLen)
     np, nn = l - r.offset, r.offset - 1  # positive, negative
     # To prevent overflow in sum(1:n), multiply its factors by the step
     sp, sn = sumpair(np), sumpair(nn)
+    W = widen(Int)
+    Δn = W(sp[1]) * W(sp[2]) - W(sn[1]) * W(sn[2])
+    s = r.step * Δn
+    # Add in contributions of ref
+    ref = r.ref * l
+    convert(eltype(r), s + ref)
+end
+function sum(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision})
+    l = length(r)
+    # Compute the contribution of step over all indices.
+    # Indexes on opposite side of r.offset contribute with opposite sign,
+    #    r.step * (sum(1:np) - sum(1:nn))
+    np, nn = l - r.offset, r.offset - 1  # positive, negative
+    # To prevent overflow in sum(1:n), multiply its factors by the step
+    sp, sn = sumpair(np), sumpair(nn)
     tp = _tp_prod(r.step, sp[1], sp[2])
     tn = _tp_prod(r.step, sn[1], sn[2])
     s_hi, s_lo = add12(tp.hi, -tn.hi)
