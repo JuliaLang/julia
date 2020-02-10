@@ -50,6 +50,34 @@ function supertype(T::UnionAll)
     UnionAll(T.var, supertype(T.body))
 end
 
+"""
+    typetrace(T::DataType; reeturnarray=false)
+
+Return the recursive supertypes of DataType `T` until Any.
+
+# Examples
+```jldoctest
+julia> typetrace(Int32)
+"Int32 <: Signed <: Integer <: Real <: Number <: Any"
+
+julia> typetrace(Int32, returnarray=true)
+6-element Array{Type,1}:
+ Any
+ Number
+ Real
+ Integer
+ Signed
+ Int32
+```
+"""
+function typetrace(t::DataType; returnarray=false)
+    if returnarray
+        push!(t == Any ? DataType[] : typetrace(supertype(t), returnarray=true)::Vector{DataType}, t)
+    else
+        "$t$(t == Any ? "" : " <: $(typetrace(supertype(t)))")"
+    end
+end
+
 ## generic comparison ##
 
 """
