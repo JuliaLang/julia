@@ -637,7 +637,6 @@ JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i)
 static int NOINLINE array_resize_buffer(jl_array_t *a, size_t newlen)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    assert(!a->flags.isshared || a->flags.how == 3);
     size_t elsz = a->elsize;
     size_t nbytes = newlen * elsz;
     size_t oldnbytes = a->maxsize * elsz;
@@ -701,10 +700,8 @@ static int NOINLINE array_resize_buffer(jl_array_t *a, size_t newlen)
 static void NOINLINE array_try_unshare(jl_array_t *a)
 {
     if (a->flags.isshared) {
-        if (a->flags.how != 3)
-            jl_error("cannot resize array with shared data");
         // allow resizing when data is shared with a String
-        if (jl_is_string(jl_array_data_owner(a)))
+        if (jl_array_data_owner(a) && jl_is_string(jl_array_data_owner(a)))
             return;
         assert(a->offset == 0);
         size_t len = a->maxsize;

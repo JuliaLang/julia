@@ -4292,20 +4292,15 @@ using Test
 # not modify the original data
 function test_shared_array_resize(::Type{T}) where T
     len = 100
-    a = Vector{T}(undef, len)
     function test_unshare(f)
+        a = Vector{T}(undef, len)
         a′ = reshape(reshape(a, (len ÷ 2, 2)), len)
-        a[:] = 1:length(a)
-        # The operation should fail on the owner shared array
-        # and has no side effect.
-        @test_throws ErrorException f(a)
-        @test a == [1:len;]
+        a[:] = 1:length(a); @info a; @info a′
+        # The operation should pass both shared arrays and should unshare the
+        # arrays with no effect on the other one.
+        f(a)
         @test a′ == [1:len;]
-        @test pointer(a) == pointer(a′)
-        # The operation should pass on the non-owner shared array
-        # and should unshare the arrays with no effect on the original one.
         f(a′)
-        @test a == [1:len;]
         @test pointer(a) != pointer(a′)
     end
 
