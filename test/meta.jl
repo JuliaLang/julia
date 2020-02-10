@@ -210,3 +210,75 @@ let a = 1
     @test !macroexpand(@__MODULE__, :(@is_dollar_expr $a))
     @test @macroexpand @is_dollar_expr $a
 end
+
+@testset "Meta.parsefile" begin
+    @testset "successful parsing, with correct filename in the LineNumberNodes" begin
+        code = """
+            a = 3
+            b = 4
+            c = sqrt(a^2 + b^2)
+        """
+        filename, expr = mktemp() do fn, io
+            println(io, code)
+            flush(io)
+            return fn, Meta.parsefile(fn)
+        end
+        @test expr isa Expr
+        @test expr.head == :toplevel
+        @test length(expr.args) == 6
+        @test expr.args[1] == LineNumberNode(1, Symbol(filename))
+        @test expr.args[2] == :(a = 3)
+        @test expr.args[3] == LineNumberNode(2, Symbol(filename))
+        @test expr.args[4] == :(b = 4)
+        @test expr.args[5] == LineNumberNode(3, Symbol(filename))
+        @test expr.args[6] == :(c = sqrt(a ^ 2 + b ^ 2))
+    end
+    @testset "syntax error" begin
+        code = """
+            a = 1
+            b = 2.2.2
+            c = 3
+        """
+        filename, expr = mktemp() do fn, io
+            println(io, code)
+            flush(io)
+            return fn, Meta.parsefile(fn)
+        end
+        @test expr isa Expr
+        @test expr.head == :error
+        @test length(expr.args) == 1
+        @test expr == :($(Expr(:error, "invalid numeric constant \"2.2.\"")))
+    end
+end
+
+@testset "Meta.parseall" begin
+    @testset "successful parsing" begin
+        code = """
+            a = 3
+            b = 4
+            c = sqrt(a^2 + b^2)
+        """
+        expr = Meta.parseall(code)
+        @test expr isa Expr
+        @test expr.head == :toplevel
+        @test length(expr.args) == 6
+        @test expr.args[1] == LineNumberNode(1, :none)
+        @test expr.args[2] == :(a = 3)
+        @test expr.args[3] == LineNumberNode(2, :none)
+        @test expr.args[4] == :(b = 4)
+        @test expr.args[5] == LineNumberNode(3, :none)
+        @test expr.args[6] == :(c = sqrt(a ^ 2 + b ^ 2))
+    end
+    @testset "syntax errors" begin
+        code = """
+            a = 1
+            b = 2.2.2
+            c = 3
+        """
+        expr = Meta.parseall(code)
+        @test expr isa Expr
+        @test expr.head == :error
+        @test length(expr.args) == 1
+        @test expr == :($(Expr(:error, "invalid numeric constant \"2.2.\"")))
+    end
+end

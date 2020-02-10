@@ -224,6 +224,47 @@ function parse(str::AbstractString; raise::Bool=true, depwarn::Bool=true)
 end
 
 """
+    parsefile(filename::AbstractString)
+
+Parse the Julia source file located at `filename` and return a `:toplevel`
+expression that contains all expressions in the file. If the source code
+contains one or more syntax errors, `parsefile` will return an expression
+that will raise an error upon evaluation.
+
+# Examples
+```julia-repl
+julia> expr = Meta.parsefile("hello.jl")
+```
+
+!!! compat "Julia 1.5"
+    This function is available as of Julia 1.5.
+"""
+function parsefile(filename::AbstractString)
+    return Base.parse_input_line(read(filename, String);
+                                 filename = String(filename))
+end
+
+"""
+    parseall(str::AbstractString)
+
+Parse the Julia source code contained in `str` and return a `:toplevel`
+expression that contains all expressions in the input string. If the source code
+contains one or more syntax errors, `parseall` will return an expression
+that will raise an error upon evaluation.
+
+# Examples
+```julia-repl
+julia> expr = Meta.parsefile("a = 3\nb = 4\nc = sqrt(a^2 + b^2)\n")
+```
+
+!!! compat "Julia 1.5"
+    This function is available as of Julia 1.5.
+"""
+function parseall(str::AbstractString)
+    return Base.parse_input_line(String(str))
+end
+
+"""
     partially_inline!(code::Vector{Any}, slot_replacements::Vector{Any},
                       type_signature::Type{<:Tuple}, static_param_values::Vector{Any},
                       slot_offset::Int, statement_offset::Int,

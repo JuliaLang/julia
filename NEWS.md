@@ -57,6 +57,8 @@ New library functions
   expressions before they are evaluated ([#34595]).
 * New function `bitreverse` for reversing the order of bits in a fixed-width integer ([#34791]).
 * New function `bitrotate(x, k)` for rotating the bits in a fixed-width integer ([#33937]).
+* The new `Meta.parsefile` function parses an entire Julia source file ([#34715]).
+* The new `Meta.parseall` function parses all of the code in the input string at the top-level ([#34715]).
 
 New library features
 --------------------
