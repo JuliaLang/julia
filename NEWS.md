@@ -64,6 +64,11 @@ Standard library changes
 ------------------------
 * The `@timed` macro now returns a `NamedTuple` ([#34149])
 * New `supertypes(T)` function returns a tuple of all supertypes of `T` ([#34419]).
+* Sorting-related functions such as `sort` that take the keyword arguments `lt`, `rev`, `order`
+  and `by` now do not discard `order` if `by` or `lt` are passed. In the former case, the
+  order from `order` is used to compare the values of `by(element)`. In the latter case,
+  any order different from `Forward` or `Reverse` will raise an error about the
+  ambiguity.
 
 #### LinearAlgebra
 * The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
