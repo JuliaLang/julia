@@ -100,6 +100,7 @@ Standard library changes
 [#32448]: https://github.com/JuliaLang/julia/issues/32448
 [#32739]: https://github.com/JuliaLang/julia/issues/32739
 [#32753]: https://github.com/JuliaLang/julia/issues/32753
+[#33128]: https://github.com/JuliaLang/julia/issues/33128
 [#32968]: https://github.com/JuliaLang/julia/issues/32968
 [#33012]: https://github.com/JuliaLang/julia/issues/33012
 [#33040]: https://github.com/JuliaLang/julia/issues/33040
