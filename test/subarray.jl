@@ -95,12 +95,17 @@ single_stride_dim(@nospecialize(A)) = single_stride_dim(copy_to_array(A))
 # Testing equality of AbstractArrays, using several different methods to access values
 function test_cartesian(@nospecialize(A), @nospecialize(B))
     isgood = true
-    for (IA, IB) in zip(eachindex(A), eachindex(B))
+    for (IA, IB) in zip(CartesianIndices(A), CartesianIndices(B))
         if A[IA] != B[IB]
             @show IA IB A[IA] B[IB]
             isgood = false
             break
         end
+        if A isa StridedArray
+            v1 = GC.@preserve A unsafe_load(pointer(A.parent, sum((0,(strides(A) .* (IA.I .- 1))...))+Base.first_index(A)))
+            isgood = (v1 == B[IB])
+        end
+
     end
     if !isgood
         @show A
@@ -116,6 +121,11 @@ function test_linear(@nospecialize(A), @nospecialize(B))
         if A[iA] != B[iB]
             isgood = false
             break
+        end
+        if A isa StridedArray
+            v1 = GC.@preserve A unsafe_load(pointer(A, iA))
+            v2 = Ref(A, iA)[]
+            isgood = (v1 == v2 == B[iB])
         end
     end
     if !isgood
@@ -298,12 +308,12 @@ end
 
 # "outer" indices create snips that have at least size 5 along each dimension,
 # with the exception of Int-slicing
-oindex = (:, 6, 3:7, reshape([12]), [8,4,6,12,5,7], [3:7 1:5 2:6 4:8 5:9])
+oindex = (:, 6, 3:7, reshape([12]), [8,4,6,12,5,7], [3:7 1:5 2:6 4:8 5:9], reshape(2:11, 2, 5))
 
 _ndims(::AbstractArray{T,N}) where {T,N} = N
 _ndims(x) = 1
 
-if testfull
+@time if testfull
     let B = copy(reshape(1:13^3, 13, 13, 13))
         for o3 in oindex, o2 in oindex, o1 in oindex
             viewB = view(B, o1, o2, o3)
@@ -312,7 +322,7 @@ if testfull
     end
 end
 
-if !testfull
+@time if true # !testfull
     let B = copy(reshape(1:13^3, 13, 13, 13))
         for oind in ((:,:,:),
                      (:,:,6),
@@ -328,6 +338,10 @@ if !testfull
                      (6,CartesianIndex.(6,[8,4,6,12,5,7])),
                      (CartesianIndex(13,6),[8,4,6,12,5,7]),
                      (1,:,view(1:13,[9,12,4,13,1])),
+                     (2,:,reshape(2:11,2,5)),
+                     (2,:,reshape(2:2:13,2,3)),
+                     (3,reshape(2:11,5,2),4),
+                     (3,reshape(2:2:13,3,2),4),
                      (view(1:13,[9,12,4,13,1]),2:6,4),
                      ([1:5 2:6 3:7 4:8 5:9], :, 3))
             runsubarraytests(B, oind...)
@@ -626,3 +640,13 @@ _test_27632(view(ones(Int64, (1, 1, 1)), 1, 1, 1))
 
 # issue #29608 - views of single values can be considered contiguous
 @test Base.iscontiguous(view(ones(1), 1))
+
+import InteractiveUtils
+@testset "blas-enabled reshaped indices" begin
+    p = rand(30)
+    M = view(p, reshape(2:25, 6, 4))
+    v = rand(4)
+    @test M isa StridedArray
+    @test M*v == copy(M)*v
+    @test (InteractiveUtils.@which M*v) == (InteractiveUtils.@which copy(M)*v)
+end
