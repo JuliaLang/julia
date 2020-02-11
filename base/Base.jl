@@ -94,6 +94,9 @@ include("refpointer.jl")
 include("checked.jl")
 using .Checked
 
+# Lazy strings
+include("strings/lazy.jl")
+
 # array structures
 include("indices.jl")
 include("array.jl")
@@ -156,6 +159,7 @@ include("dict.jl")
 include("abstractset.jl")
 include("set.jl")
 
+# Strings
 include("char.jl")
 include("strings/basic.jl")
 include("strings/string.jl")
