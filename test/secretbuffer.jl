@@ -80,4 +80,10 @@ using Test
         @test read(sb, String) == "\xff\xff\xff"
         shred!(sb)
     end
+    @testset "seekend" begin
+        sb = SecretBuffer("hello")
+        seekend(sb)
+        @test read(sb,String) == ""
+        shred!(sb)
+    end
 end
