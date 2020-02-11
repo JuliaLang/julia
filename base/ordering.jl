@@ -16,7 +16,7 @@ export # not exported by Base
     By, Lt, Perm,
     ReverseOrdering, ForwardOrdering,
     DirectOrdering,
-    lt, ord
+    lt, ord, ordtype
 
 abstract type Ordering end
 
@@ -84,5 +84,14 @@ function ord(lt, by, rev::Bool, order::Ordering=Forward)
     o = _ord(lt, by, order)
     return rev ? ReverseOrdering(o) : o
 end
+
+
+# this function is not in use anywhere in Base but we observed
+# use in sorting-related packages (#34719).
+ordtype(o::ReverseOrdering, vs::AbstractArray) = ordtype(o.fwd, vs)
+ordtype(o::Perm,            vs::AbstractArray) = ordtype(o.order, o.data)
+# TODO: here, we really want the return type of o.by, without calling it
+ordtype(o::By,              vs::AbstractArray) = try typeof(o.by(vs[1])) catch; Any end
+ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
 
 end
