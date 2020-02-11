@@ -288,6 +288,6 @@ compute_stride1(s, inds, I::Tuple{ReshapedRange, Vararg{Any}}) = s*step(I[1].par
 compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{ReshapedRange}) =
     (@_inline_meta; first(I[1]) - first(axes1(I[1]))*stride1)
 substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where N =
-    (size_to_strides(strds, size(I[1]))..., substrides(tail(strds), tail(I))...)
-unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange,CartesianIndex}}}}) where {T,N,P} =
+    (size_to_strides(strds[1], size(I[1])...)..., substrides(tail(strds), tail(I))...)
+unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P} =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
