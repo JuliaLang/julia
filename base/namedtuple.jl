@@ -85,18 +85,17 @@ end
 NamedTuple{names, T}(itr) where {names, T <: Tuple} = NamedTuple{names, T}(T(itr))
 NamedTuple{names}(itr) where {names} = NamedTuple{names}(Tuple(itr))
 
-function NamedTuple(args::Pair{Symbol,<:Any}...)
+end # if Base
+
+function namedtuple(args::Pair{Symbol,<:Any}...)
     if @generated
         types = Tuple{(arg.types[2] for arg in args)...}
         names = Expr(:tuple, Any[ :(args[$i][1]) for i in eachindex(args) ]...)
         Expr(:new, :(NamedTuple{$names, $types}), Any[ :(args[$i][2]) for i in eachindex(args) ]...)
     else
-        names = Tuple(n for (n, v) in args)
-        NamedTuple{names}(Tuple(v for (n, v) in args))
+        (; args...)
     end
 end
-
-end # if Base
 
 length(t::NamedTuple) = nfields(t)
 iterate(t::NamedTuple, iter=1) = iter > nfields(t) ? nothing : (getfield(t, iter), iter + 1)
