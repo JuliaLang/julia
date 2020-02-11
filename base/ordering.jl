@@ -39,6 +39,9 @@ struct By{T, O} <: Ordering
     order::O
 end
 
+# backwards compatibility with VERSION < v"1.5-"
+By(by) = By(by, Forward)
+
 struct Lt{T} <: Ordering
     lt::T
 end
