@@ -1635,8 +1635,21 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
             //}
             int uncertain = 0;
             if (((jl_datatype_t*)x)->name != ((jl_datatype_t*)y)->name) {
-                if (jl_is_type_type(x) || jl_is_type_type(y))
-                    return 0;
+                if (jl_is_type_type(x) && jl_is_kind(y)) {
+                    jl_value_t *t0 = jl_tparam0(x);
+                    if (jl_is_typevar(t0))
+                        return 0;
+                    *subtype = jl_typeof(t0) == y;
+                    return 1;
+                }
+                if (jl_is_type_type(y)) {
+                    jl_value_t *t0 = jl_tparam0(y);
+                    assert(!jl_is_type_type(x));
+                    if (jl_is_kind(x) && jl_is_typevar(t0))
+                        return 0;
+                    *subtype = 0;
+                    return 1;
+                }
                 jl_datatype_t *temp = (jl_datatype_t*)x;
                 while (temp->name != ((jl_datatype_t*)y)->name) {
                     temp = temp->super;
