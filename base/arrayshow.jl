@@ -320,6 +320,13 @@ print_array(io::IO, X::AbstractArray) = show_nd(io, X, print_matrix, true)
 # typeinfo aware
 # implements: show(io::IO, ::MIME"text/plain", X::AbstractArray)
 function show(io::IO, ::MIME"text/plain", X::AbstractArray)
+    # -1) handle arrays-in-array (recursive call)
+    if get(io, :compact, false) === true
+        # Using `show` of method with the most abstract type to avoid infinite recursion.
+        invoke(show, Tuple{IO,AbstractArray}, io, X)
+        return
+    end
+
     # 0) show summary before setting :compact
     summary(io, X)
     isempty(X) && return
