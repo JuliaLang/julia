@@ -98,7 +98,13 @@ using Dates
     @test Array(a) !== a
     @test Array{eltype(a)}(a) !== a
     @test Vector(a) !== a
+
+    # missing
+    a = [missing]
+    @test ismissing(a == [missing])
+    @test a == a
 end
+
 @testset "reshaping SubArrays" begin
     a = Array(reshape(1:5, 1, 5))
     @testset "linearfast" begin

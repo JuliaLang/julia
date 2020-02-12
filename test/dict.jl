@@ -275,6 +275,8 @@ end
     @test Dict(NaN=>1) == Dict(NaN=>1)
     @test isequal(Dict(NaN=>1), Dict(NaN=>1))
 
+    d = Dict(1=>missing)
+    @test d == d
     @test ismissing(Dict(1=>missing) == Dict(1=>missing))
     @test isequal(Dict(1=>missing), Dict(1=>missing))
 

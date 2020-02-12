@@ -70,6 +70,7 @@ in which case `missing` is returned
 ([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic)).
 For collections, `missing` is returned if at least one of the operands contains
 a `missing` value and all non-missing values are equal.
+An exception is when both operands are the same object.
 Use [`isequal`](@ref) or [`===`](@ref) to always get a `Bool` result.
 
 # Implementation

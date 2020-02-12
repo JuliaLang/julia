@@ -1776,6 +1776,7 @@ end
 isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
 
 function (==)(A::AbstractArray, B::AbstractArray)
+    A === B && return true
     if axes(A) != axes(B)
         return false
     end
