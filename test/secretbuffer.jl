@@ -86,4 +86,9 @@ using Test
         @test read(sb,String) == ""
         shred!(sb)
     end
+    @testset "hashing secret buffers" begin
+        sb1 = SecretBuffer("hello")
+        sb2 = SecretBuffer("juliaisawesome")
+        @test hash(sb1,convert(UInt,5)) == hash(sb2,convert(UInt,5))
+    end
 end
