@@ -304,11 +304,13 @@ static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
         return 0;
     if (specificity && a == (jl_value_t*)jl_typeofbottom_type)
         return 0;
-    if (jl_is_concrete_type(a) && jl_is_concrete_type(b) &&
-        // TODO: remove these 2 lines if and when Tuple{Union{}} === Union{}
-        (((jl_datatype_t*)a)->name != jl_tuple_typename ||
-         ((jl_datatype_t*)b)->name != jl_tuple_typename))
-        return 1;
+    // TODO: this would be a nice fast-path to have, unfortuanately,
+    //       datatype allocation fails to correctly hash-cons them
+    //       and the subtyping tests include tests for this case
+    //if (jl_is_concrete_type(a) && jl_is_concrete_type(b) &&
+    //    (((jl_datatype_t*)a)->name != jl_tuple_typename ||
+    //     ((jl_datatype_t*)b)->name != jl_tuple_typename))
+    //    return 1;
     if (jl_is_unionall(a)) a = jl_unwrap_unionall(a);
     if (jl_is_unionall(b)) b = jl_unwrap_unionall(b);
     if (jl_is_datatype(a) && jl_is_datatype(b)) {
@@ -355,11 +357,11 @@ static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
             np = jl_nparams(ad);
         }
         size_t i;
-        for(i=0; i < np; i++) {
-            jl_value_t *ai = jl_tparam(ad,i);
-            jl_value_t *bi = jl_tparam(bd,i);
+        for (i = 0; i < np; i++) {
+            jl_value_t *ai = jl_tparam(ad, i);
+            jl_value_t *bi = jl_tparam(bd, i);
             if (jl_is_typevar(ai) || jl_is_typevar(bi))
-                continue;
+                continue; // it's possible that Union{} is in this intersection
             if (jl_is_type(ai)) {
                 if (jl_is_type(bi)) {
                     if (istuple && (ai == jl_bottom_type || bi == jl_bottom_type))
@@ -367,13 +369,12 @@ static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
                     else if (obviously_disjoint(ai, bi, specificity))
                         return 1;
                 }
-                else if (!specificity) {
-                    // Tuple{1} is more specific than Tuple{Any}
+                else if (ai != (jl_value_t*)jl_any_type) {
                     return 1;
                 }
             }
             else if (jl_is_type(bi)) {
-                if (!specificity)
+                if (bi != (jl_value_t*)jl_any_type)
                     return 1;
             }
             else if (!jl_egal(ai, bi)) {
@@ -1620,13 +1621,18 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
         int istuple = (((jl_datatype_t*)y)->name == jl_tuple_typename);
         int iscov = istuple || (((jl_datatype_t*)y)->name == jl_vararg_typename);
         // TODO: this would be a nice fast-path to have, unfortuanately,
-        //       datatype allocation fails to correctly cons them
+        //       datatype allocation fails to correctly hash-cons them
         //       and the subtyping tests include tests for this case
         //if (!iscov && ((jl_datatype_t*)y)->isconcretetype && !jl_is_type_type(x)) {
         //    *subtype = 0;
         //    return 1;
         //}
         if (jl_is_datatype(x)) {
+            // Weaker version of above, but runs into the same problem
+            //if (((jl_datatype_t*)x)->isconcretetype && ((jl_datatype_t*)y)->isconcretetype && (!istuple || !istuple_x)) {
+            //    *subtype = 0;
+            //    return 1;
+            //}
             int uncertain = 0;
             if (((jl_datatype_t*)x)->name != ((jl_datatype_t*)y)->name) {
                 if (jl_is_type_type(x) || jl_is_type_type(y))
