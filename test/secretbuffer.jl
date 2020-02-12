@@ -90,5 +90,17 @@ using Test
         sb1 = SecretBuffer("hello")
         sb2 = SecretBuffer("juliaisawesome")
         @test hash(sb1,convert(UInt,5)) == hash(sb2,convert(UInt,5))
+        shred!(sb1)
+        shred!(sb2)
+    end
+    @testset "position" begin
+        sb = SecretBuffer("Julia")
+        println("testing position")
+        initial_pos = (position(sb))
+        seek(sb,2)
+        mid_pos = position(sb)
+        seekend(sb)
+        @test initial_pos == 0 && mid_pos == 2 && position(sb)==sb.size
+        shred!(sb)
     end
 end
