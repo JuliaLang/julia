@@ -1837,13 +1837,22 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
 JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, int envsz)
 {
     jl_stenv_t e;
-    if (envsz == 0) {
-        if (y == (jl_value_t*)jl_any_type || x == jl_bottom_type || x == y)
-            return 1;
-        if (jl_typeof(x) == jl_typeof(y) &&
-            (jl_is_unionall(y) || jl_is_uniontype(y)) &&
-            jl_egal(x, y))
-            return 1;
+    if (y == (jl_value_t*)jl_any_type || x == jl_bottom_type)
+        return 1;
+    if (x == y ||
+        (jl_typeof(x) == jl_typeof(y) &&
+         (jl_is_unionall(y) || jl_is_uniontype(y)) &&
+         jl_egal(x, y))) {
+        if (envsz != 0) { // quickly copy env from x
+            jl_unionall_t *ua = (jl_unionall_t*)x;
+            int i;
+            for (i = 0; i < envsz; i++) {
+                assert(jl_is_unionall(ua));
+                env[i] = (jl_value_t*)ua->var;
+                ua = (jl_unionall_t*)ua->body;
+            }
+        }
+        return 1;
     }
     int obvious_subtype = 2;
     if (jl_obvious_subtype(x, y, &obvious_subtype)) {
