@@ -80,19 +80,6 @@ using Test
         @test read(sb, String) == "\xff\xff\xff"
         shred!(sb)
     end
-    @testset "seekend" begin
-        sb = SecretBuffer("hello")
-        seekend(sb)
-        @test read(sb,String) == ""
-        shred!(sb)
-    end
-    @testset "hashing secret buffers" begin
-        sb1 = SecretBuffer("hello")
-        sb2 = SecretBuffer("juliaisawesome")
-        @test hash(sb1,convert(UInt,5)) == hash(sb2,convert(UInt,5))
-        shred!(sb1)
-        shred!(sb2)
-    end
     @testset "position" begin
         sb = SecretBuffer("Julia")
         println("testing position")
