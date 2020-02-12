@@ -1580,9 +1580,9 @@
                     (let ((ex (parse-comma-separated s (lambda (s)
                                                          (parse-import s word)))))
                       (if (eq? (peek-token s) ':)
-                          (error (string "unexpected \":\" in \"" word "\" syntax\n"
-                                         "Last import needs to be a separate \"" word
-                                         "\" statement"))
+                          (error (string "\":\" in \"" word "\" syntax can only be used "
+                                         "when importing a single module. "
+                                         "Split imports into multiple lines."))
                           ex)))))
     (if from
         `(,word (|:| ,first ,@rest))

@@ -383,8 +383,8 @@ end
 
         err = Expr(
             :error,
-            "unexpected \":\" in \"$imprt\" syntax\n" *
-            "Last import needs to be a separate \"$imprt\" statement"
+            "\":\" in \"$imprt\" syntax can only be used when importing a single module. " *
+            "Split imports into multiple lines."
         )
         ex = Meta.parse("$imprt A, B: x, y", raise=false)
         @test ex == err
