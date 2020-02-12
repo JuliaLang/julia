@@ -1073,16 +1073,27 @@ end
 # relative-path load
 
 """
-    include_string(m::Module, code::AbstractString, filename::AbstractString="string")
+    include_string([mapexpr::Function,] m::Module, code::AbstractString, filename::AbstractString="string")
 
 Like [`include`](@ref), except reads code from the given string rather than from a file.
+
+The optional first argument `mapexpr` can be used to transform the included code before
+it is evaluated: for each parsed expression `expr` in `code`, the `include_string` function
+actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
 """
-include_string(m::Module, txt::String, fname::String) =
-    ccall(:jl_load_file_string, Any, (Ptr{UInt8}, Csize_t, Cstring, Any),
-          txt, sizeof(txt), fname, m)
+function include_string(mapexpr::Function, m::Module, txt_::AbstractString, fname::AbstractString="string")
+    txt = String(txt_)
+    if mapexpr === identity
+        ccall(:jl_load_file_string, Any, (Ptr{UInt8}, Csize_t, Cstring, Any),
+            txt, sizeof(txt), String(fname), m)
+    else
+        ccall(:jl_load_rewrite_file_string, Any, (Ptr{UInt8}, Csize_t, Cstring, Any, Any),
+            txt, sizeof(txt), String(fname), m, mapexpr)
+    end
+end
 
 include_string(m::Module, txt::AbstractString, fname::AbstractString="string") =
-    include_string(m, String(txt), String(fname))
+    include_string(identity, m, txt, fname)
 
 function source_path(default::Union{AbstractString,Nothing}="")
     s = current_task().storage
@@ -1098,15 +1109,19 @@ function source_dir()
 end
 
 """
-    Base.include([m::Module,] path::AbstractString)
+    Base.include([mapexpr::Function,] [m::Module,] path::AbstractString)
 
 Evaluate the contents of the input source file in the global scope of module `m`.
-Every module (except those defined with [`baremodule`](@ref)) has its own 1-argument
-definition of `include`, which evaluates the file in that module.
+Every module (except those defined with [`baremodule`](@ref)) has its own
+definition of `include` omitting the `m` argument, which evaluates the file in that module.
 Returns the result of the last evaluated expression of the input file. During including,
 a task-local include path is set to the directory containing the file. Nested calls to
 `include` will search relative to that path. This function is typically used to load source
 interactively, or to combine files in packages that are broken into multiple source files.
+
+The optional first argument `mapexpr` can be used to transform the included code before
+it is evaluated: for each parsed expression `expr` in `path`, the `include` function
+actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
 """
 Base.include # defined in sysimg.jl
 
@@ -1122,6 +1137,7 @@ function evalfile(path::AbstractString, args::Vector{String}=String[])
              :(const ARGS = $args),
              :(eval(x) = $(Expr(:core, :eval))(__anon__, x)),
              :(include(x) = $(Expr(:top, :include))(__anon__, x)),
+             :(include(mapexpr::Function, x) = $(Expr(:top, :include))(mapexpr, __anon__, x)),
              :(include($path))))
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
