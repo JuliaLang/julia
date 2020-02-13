@@ -86,12 +86,18 @@ function ord(lt, by, rev::Bool, order::Ordering=Forward)
 end
 
 
-# this function is not in use anywhere in Base but we observed
-# use in sorting-related packages (#34719).
-ordtype(o::ReverseOrdering, vs::AbstractArray) = ordtype(o.fwd, vs)
-ordtype(o::Perm,            vs::AbstractArray) = ordtype(o.order, o.data)
-# TODO: here, we really want the return type of o.by, without calling it
-ordtype(o::By,              vs::AbstractArray) = try typeof(o.by(vs[1])) catch; Any end
-ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
+# This function is not in use anywhere in Base but we observed
+# use in sorting-related packages (#34719). It's probably best to move
+# this functionality to those packages in the future; let's remind/force
+# ourselves to deprecate this in v2.0.
+# The following clause means `if VERSION < v"2.0-"` but it also works during
+# bootstrap. For the same reason, we need to write `Int32` instead of `Cint`.
+if ccall(:jl_ver_major, Int32, ()) < 2
+    ordtype(o::ReverseOrdering, vs::AbstractArray) = ordtype(o.fwd, vs)
+    ordtype(o::Perm,            vs::AbstractArray) = ordtype(o.order, o.data)
+    # TODO: here, we really want the return type of o.by, without calling it
+    ordtype(o::By,              vs::AbstractArray) = try typeof(o.by(vs[1])) catch; Any end
+    ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
+end
 
 end
