@@ -374,7 +374,7 @@ STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
     _BitScanForward(&j, bitvec);
     return j;
 #else
-    return ffs(bitvec) - 1;
+    return __builtin_ffs(bitvec) - 1;
 #endif
 }
 #endif
