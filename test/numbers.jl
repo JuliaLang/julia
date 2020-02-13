@@ -1078,6 +1078,12 @@ end
 
     @test sqrt(2) == 1.4142135623730951
 end
+@testset "Irrational printing" begin
+    @test sprint(show, "text/plain", π) == "π = 3.1415926535897..."
+    @test sprint(show, "text/plain", π, context=:compact => true) == "π"
+    @test sprint(show, π) == "π"
+
+end
 @testset "issue #6365" begin
     for T in (Float32, Float64)
         for i = 9007199254740992:9007199254740996
