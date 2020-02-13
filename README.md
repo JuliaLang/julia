@@ -29,6 +29,7 @@ and installing Julia, below.
 ## Resources
 
 - **Homepage:** <https://julialang.org>
+- **Learning Julia:** <https://juliaacademy.com>
 - **Binaries:** <https://julialang.org/downloads/>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Documentation:** <https://docs.julialang.org/>
