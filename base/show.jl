@@ -357,13 +357,13 @@ Write an informative text representation of a value to the current output stream
 should overload `show(io::IO, x)` where the first argument is a stream. The representation used
 by `show` generally includes Julia-specific formatting and type information.
 
-[`repr`](@ref) returns the output of `show` as a string.
+[`repr`](@ref) returns the output of `show` as a string.  Therefore, `show(::IO, ::T)` is
+expected to print parseable Julia code.
 
-To customize how an object of type `T` is shown in text-based outputs, it is highly recommended
-to overload `show(::IO, ::MIME"text/plain", ::T)` rather than `show(::IO, ::T)` as the latter
-is generally expected to print a valid Julia code.  To customize how objects of type `T` stored
-in containers are shown, check `:compact` [`IOContext`](@ref) rather than implementing the
-method `show(::IO, ::T)`.
+To customize human-readable text output for objects of type `T`, it is highly recommended
+to overload `show(::IO, ::MIME"text/plain", ::T)` rather than `show(::IO, ::T)`.  To customize
+how objects of type `T` stored in containers are shown, check `:compact` [`IOContext`](@ref)
+rather than implementing the method `show(::IO, ::T)`.
 
 See also [`print`](@ref), which writes un-decorated representations.
 

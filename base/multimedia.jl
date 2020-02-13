@@ -94,10 +94,12 @@ your images to be displayed on any PNG-capable `AbstractDisplay` (such as IJulia
 to `import Base.show` in order to add new methods to the built-in Julia function
 `show`.
 
-To customize how an object of type `T` is shown in text-based outputs, it is highly recommended
-to overload `show(::IO, ::MIME"text/plain", ::T)` rather than [`show(::IO, ::T)`](@ref show).
-Container types should call `show(io, MIME"text/plain"(), x)` for elements `x`
-instead of `show(io, x)` with [`IOContext`](@ref) of `:compact => true`.
+To customize human-readable text output for objects of type `T`, it is highly recommended
+to overload `show(::IO, ::MIME"text/plain", ::T)` rather than [`show(::IO, ::T)`](@ref show)
+which is primarily used for parseable text output.  When implementing the method
+`show(::IO, ::MIME"text/plain", ::T)` for container types, it should call
+`show(io, MIME"text/plain"(), x)` for elements `x` instead of `show(io, x)` with
+[`IOContext`](@ref) of `:compact => true` from its implementation
 
 Technically, the `MIME"mime"` macro defines a singleton type for the given `mime` string,
 which allows us to exploit Julia's dispatch mechanisms in determining how to display objects
