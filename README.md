@@ -47,7 +47,7 @@ helpful to start contributing to the Julia codebase.
 - [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
 - [**Twitter**](https://twitter.com/JuliaLanguage)
 - [**Meetup**](https://julia.meetup.com/)
-- [**Learn Julia on JuliaAcademy**](https://juliaacademy.com)
+- [**Learning resources**](https://julialang.org/learning/)
 
 ## Binary Installation
 
