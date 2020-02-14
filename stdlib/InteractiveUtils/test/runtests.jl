@@ -452,3 +452,16 @@ file, ln = functionloc(versioninfo, Tuple{})
     code_native(io, eltype, Tuple{Int})
     @test occursin("eltype", String(take!(io)))
 end
+
+using InteractiveUtils: dumptype
+@testset "dumptype" begin
+	io = IOBuffer()
+	n = 1
+	indent = ""
+	dumptype(io, UInt8, n, indent)
+	# should only be UInt8 because it is a concrete type.
+	@test String(take!(io)) == "UInt8"
+	dumptype(io, Exception, n, indent)
+	# will print many because Exception is abstract, but should have TypeError.
+	@test occursin("TypeError", String(take!(io)))
+end
