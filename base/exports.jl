@@ -518,6 +518,7 @@ export
     mergewith!,
     merge,
     mergewith,
+    namedtuple,
     pairs,
     reduce,
     setdiff!,
