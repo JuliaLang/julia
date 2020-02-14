@@ -115,7 +115,7 @@
 (define syntactic-operators
   (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻=))
            '(:= --> $= && |\|\|| |.| ... ->)))
-(define syntactic-unary-operators '($ & |::|))
+(define syntactic-unary-operators '($ |::|))
 
 (define syntactic-op? (Set syntactic-operators))
 (define syntactic-unary-op? (Set syntactic-unary-operators))
