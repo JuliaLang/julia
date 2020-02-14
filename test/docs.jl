@@ -982,8 +982,6 @@ let x = Binding(Main, :⊕)
     @test Meta.parse(string(x)) == :(⊕)
 end
 
-doc_util_path = Symbol(joinpath("docs", "utils.jl"))
-
 @test sprint(repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
 @test sprint(repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
 
