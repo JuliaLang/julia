@@ -81,14 +81,14 @@ using Test
         shred!(sb)
     end
     @testset "testing the skip function" begin
-    sb = SecretBuffer("computer")
-    skip(sb, 2)
-    a = position(sb)
-    seek(sb,0)
-    b = position(sb)
-    skip(sb,sb.size)
-    c = position(sb)
-    @test a == 2 && b == 0 && c == sb.size
-    shred!(sb)
+        sb = SecretBuffer("computer")
+        skip(sb, 2)
+        a = position(sb)
+        seek(sb, 0)
+        b = position(sb)
+        skip(sb, sb.size)
+        c = position(sb)
+        @test a == 2 && b == 0 && c == sb.size
+        shred!(sb)
     end
 end
