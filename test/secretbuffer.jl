@@ -81,13 +81,13 @@ using Test
         shred!(sb)
     end
     @testset "bytes available" begin
-    sb = SecretBuffer("secret")
-    a = bytesavailable(sb)
-    seek(sb,3)
-    b = bytesavailable(sb)
-    seekend(sb)
-    c = bytesavailable(sb)
-    @test a==sb.size && b==(sb.size-3) && c==0
-    shred!(sb)
+        sb = SecretBuffer("secret")
+        a = bytesavailable(sb)
+        seek(sb, 3)
+        b = bytesavailable(sb)
+        seekend(sb)
+        c = bytesavailable(sb)
+        @test a==sb.size && b==(sb.size-3) && c==0
+        shred!(sb)
     end
 end
