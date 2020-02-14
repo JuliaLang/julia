@@ -80,4 +80,14 @@ using Test
         @test read(sb, String) == "\xff\xff\xff"
         shred!(sb)
     end
+    @testset "position" begin
+        sb = SecretBuffer("Julia")
+        println("testing position")
+        initial_pos = (position(sb))
+        seek(sb,2)
+        mid_pos = position(sb)
+        seekend(sb)
+        @test initial_pos == 0 && mid_pos == 2 && position(sb)==sb.size
+        shred!(sb)
+    end
 end
