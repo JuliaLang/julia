@@ -644,8 +644,10 @@ extern JL_DLLEXPORT jl_datatype_t *jl_void_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_signed_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_voidpointer_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_unionall_t *jl_pointer_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_unionall_t *jl_addrspace_pointer_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_unionall_t *jl_ref_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_typename_t *jl_pointer_typename JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_typename_t *jl_addrspace_pointer_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_typename_t *jl_namedtuple_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_unionall_t *jl_namedtuple_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_task_type JL_GLOBALLY_ROOTED;
@@ -1157,6 +1159,12 @@ STATIC_INLINE int jl_is_cpointer_type(jl_value_t *t) JL_NOTSAFEPOINT
 {
     return (jl_is_datatype(t) &&
             ((jl_datatype_t*)(t))->name == ((jl_datatype_t*)jl_pointer_type->body)->name);
+}
+
+STATIC_INLINE int jl_is_addrspace_ptr_type(jl_value_t *t) JL_NOTSAFEPOINT
+{
+    return (jl_is_datatype(t) &&
+            ((jl_datatype_t*)(t))->name == jl_addrspace_pointer_typename);
 }
 
 STATIC_INLINE int jl_is_abstract_ref_type(jl_value_t *t) JL_NOTSAFEPOINT

@@ -571,6 +571,19 @@ static Type *bitstype_to_llvm(jl_value_t *bt, bool llvmcall = false)
         return T_float32;
     if (bt == (jl_value_t*)jl_float64_type)
         return T_float64;
+    if (jl_is_addrspace_ptr_type(bt)) {
+        int as = 0;
+
+        jl_datatype_t *typ = (jl_datatype_t*)bt;
+        jl_value_t *as_param = jl_svecref(typ->parameters, 1);
+
+        if (jl_is_int32(as_param))
+            as = jl_unbox_int32(as_param);
+        else if (jl_is_int64(as_param))
+            as = jl_unbox_int64(as_param);
+
+        return PointerType::get(T_int8, as);
+    }
     int nb = jl_datatype_size(bt);
     return Type::getIntNTy(jl_LLVMContext, nb * 8);
 }

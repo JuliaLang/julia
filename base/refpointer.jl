@@ -132,3 +132,11 @@ getindex(b::RefArray) = b.x[b.i]
 setindex!(b::RefArray, x) = (b.x[b.i] = x; b)
 
 ###
+
+"""
+    AddrSpacePtr{T, AS}
+
+When passed as a `ccall` argument with the `llvmcall` calling convention, an `AddrSpacePtr` will be converted to an LLVM pointer type with the correct address space.
+This type is mainly used to ensure Julia's codegen uses the correct address space when calling LLVM intrinsics.
+"""
+Core.AddrSpacePtr
