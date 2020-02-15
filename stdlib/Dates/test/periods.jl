@@ -175,6 +175,15 @@ end
     @test Dates.Year(2) * 3//2 == Dates.Year(3)
     @test_throws InexactError y * 0.5
     @test_throws InexactError y * 3//4
+    @test (1:1:5)*Second(5) == Second(5)*(1:1:5) == collect(1:1:5)*Second(5) == Second(5)*collect(1:1:5)
+    @test (Second(2):Second(2):Second(10))/Second(2) == 1:1:5
+    @test collect(Second(2):Second(2):Second(10))/Second(2) == 1:1:5
+    @test (Second(2):Second(2):Second(10)) / 2 == Second(1):Second(1):Second(5)
+    @test collect(Second(2):Second(2):Second(10)) / 2 == Second(1):Second(1):Second(5)
+    @test (1:1:5)*Second(5) isa AbstractRange
+    @test Second(5)*(1:1:5) isa AbstractRange
+    @test (Second(2):Second(2):Second(10))/Second(2) isa AbstractRange
+    @test (Second(2):Second(2):Second(10))/2 isa AbstractRange
     @test Dates.Year(4) / 2 == Dates.Year(2)
     @test Dates.Year(4) / 2f0 == Dates.Year(2)
     @test Dates.Year(4) / 0.5 == Dates.Year(8)

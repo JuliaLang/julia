@@ -93,6 +93,9 @@ end
 (*)(x::P, y::Real) where {P<:Period} = P(value(x) * y)
 (*)(y::Real, x::Period) = x * y
 
+(*)(A::Period, B::AbstractArray) = Broadcast.broadcast_preserving_zero_d(*, A, B)
+(*)(A::AbstractArray, B::Period) = Broadcast.broadcast_preserving_zero_d(*, A, B)
+
 # intfuncs
 Base.gcdx(a::T, b::T) where {T<:Period} = ((g, x, y) = gcdx(value(a), value(b)); return T(g), x, y)
 Base.abs(a::T) where {T<:Period} = T(abs(value(a)))
