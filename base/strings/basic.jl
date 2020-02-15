@@ -55,11 +55,11 @@ code unit value when calling `codeunit(s,i)`.
 julia> ncodeunits("The Julia Language")
 18
 
-julia> ncodeunits("∫")
-3
+julia> ncodeunits("∫eˣ")
+6
 
-julia> ncodeunits("Ä")
-2
+julia> ncodeunits('∫'), ncodeunits('e'), ncodeunits('ˣ')
+(3, 1, 2)
 ```
 
 See also: [`codeunit`](@ref), [`checkbounds`](@ref), [`sizeof`](@ref),
