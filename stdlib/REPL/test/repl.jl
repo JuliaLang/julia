@@ -1027,9 +1027,11 @@ for (line, expr) in Pair[
     "while       " => :while, # keyword, trailing spaces should be stripped.
     "0"            => 0,
     "\"...\""      => "...",
-    "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "...")
+    "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "..."),
+    "using Foo"    => :using,
+    "import Foo"   => :import,
     ]
-    #@test REPL._helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(119, doc_util_path), stdout, expr)
+    @test REPL._helpmode(line).args[4] == expr
     buf = IOBuffer()
     @test Base.eval(REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
 end
