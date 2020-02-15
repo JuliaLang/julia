@@ -4,7 +4,7 @@
 
 # for reductions that expand 0 dims to 1
 reduced_index(i::OneTo) = OneTo(1)
-reduced_index(i::Union{Slice, IdentityUnitRange}) = first(i):first(i)
+reduced_index(i::Union{Slice, IdentityUnitRange}) = oftype(i, first(i):first(i))
 reduced_index(i::AbstractUnitRange) =
     throw(ArgumentError(
 """
