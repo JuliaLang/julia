@@ -156,7 +156,7 @@ Types with a partial order should implement [`<`](@ref).
 julia> isless(1, 2)
 true
 
-julia> isless(2, 1)
+julia> isless("Red", "Blue")
 false
 ```
 """
