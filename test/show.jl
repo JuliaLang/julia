@@ -34,9 +34,6 @@ end
 
 @test replstr(Meta.parse("mutable struct X end")) == ":(mutable struct X\n      #= none:1 =#\n  end)"
 @test replstr(Meta.parse("struct X end")) == ":(struct X\n      #= none:1 =#\n  end)"
-let s = "ccall(:f, Int, (Ptr{Cvoid},), &x)"
-    @test replstr(Meta.parse(s)) == ":($s)"
-end
 
 # recursive array printing
 # issue #10353

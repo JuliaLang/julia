@@ -159,7 +159,6 @@ macro test999_str(args...); args; end
 
 @test parseall("a = &\nb") == Expr(:block, Expr(:(=), :a, :&), :b)
 @test parseall("a = \$\nb") == Expr(:block, Expr(:(=), :a, :$), :b)
-@test parseall(":(a = &\nb)") == Expr(:quote, Expr(:(=), :a, Expr(:&, :b)))
 @test parseall(":(a = \$\nb)") == Expr(:quote, Expr(:(=), :a, Expr(:$, :b)))
 
 # issue 11970
@@ -1084,9 +1083,6 @@ end
 @test_throws ParseError Meta.parse("x@time 2")
 @test_throws ParseError Meta.parse("@ time")
 
-# issue #7479
-@test Meta.lower(Main, Meta.parse("(true &&& false)")) == Expr(:error, "invalid syntax &false")
-
 # if an indexing expression becomes a cat expression, `end` is not special
 @test_throws ParseError Meta.parse("a[end end]")
 @test_throws ParseError Meta.parse("a[end;end]")
@@ -1656,9 +1652,6 @@ for i = 1:10
 end
 end
 @test M22314.i == 0
-
-# #6080
-@test Meta.lower(@__MODULE__, :(ccall(:a, Cvoid, (Cint,), &x))) == Expr(:error, "invalid syntax &x")
 
 @test_throws ParseError Meta.parse("x.'")
 @test_throws ParseError Meta.parse("0.+1")
