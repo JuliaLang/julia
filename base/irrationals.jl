@@ -165,8 +165,8 @@ round(x::Irrational, r::RoundingMode) = round(float(x), r)
 
 Rational(x::AbstractIrrational) = rationalize(x)
 rationalize(x::Irrational{T}) where T = throw(ArgumentError("Type must be specified. Use rationalize(Int, $T) to obtain a Rational{Int} approximation to the irrational constant $T."))
-Math.mod2pi(x::AbstractIrrational) = Float64(mod2pi(big(x)))
-Math.rem2pi(x::AbstractIrrational, m) = Float64(rem2pi(big(x), m))
+@generated Math.mod2pi(x::AbstractIrrational) = Float64(mod2pi(big(x())))
+@generated Math.rem2pi(x::AbstractIrrational, r::RoundingMode) = Float64(rem2pi(big(x()), r()))
 
 # sin(float(pi)) is computed from the difference between accurate pi and float(pi),
 # but sin(pi) should return zero. (The same applies to tan(pi).)
