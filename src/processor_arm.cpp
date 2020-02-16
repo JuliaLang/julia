@@ -10,7 +10,7 @@
 #include <fstream>
 #include <algorithm>
 
-#if defined(_CPU_AARCH64_) || __GLIBC_PREREQ(2, 16)
+#if defined(_CPU_AARCH64_) || defined(__GLIBC_PREREQ) && __GLIBC_PREREQ(2, 16)
 #  include <sys/auxv.h>
 #else
 #  define DYN_GETAUXVAL
