@@ -1035,6 +1035,15 @@ end
     @test !(1 > NaN)
 end
 
+@testset "Irrational zero, one and oneunit" begin
+	@test one(pi) === true
+	@test zero(pi) === false
+	@test one(typeof(pi)) === true
+	@test zero(typeof(pi)) === false
+	@test_throws ArgumentError oneunit(pi)
+	@test_throws ArgumentError oneunit(typeof(pi))
+end
+
 @testset "Irrationals compared with Irrationals" begin
     for i in (π, ℯ, γ, catalan)
         for j in (π, ℯ, γ, catalan)

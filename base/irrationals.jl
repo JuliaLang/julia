@@ -136,6 +136,15 @@ hash(x::Irrational, h::UInt) = 3*objectid(x) - h
 
 widen(::Type{T}) where {T<:Irrational} = T
 
+zero(::AbstractIrrational) = false
+zero(::Type{<:AbstractIrrational}) = false
+
+one(::AbstractIrrational) = true
+one(::Type{<:AbstractIrrational}) = true
+
+oneunit(T::Type{<:AbstractIrrational}) = throw(ArgumentError("The number one cannot be of type $T"))
+oneunit(x::T) where {T <: AbstractIrrational} = oneunit(T)
+
 -(x::AbstractIrrational) = -Float64(x)
 for op in Symbol[:+, :-, :*, :/, :^]
     @eval $op(x::AbstractIrrational, y::AbstractIrrational) = $op(Float64(x),Float64(y))
