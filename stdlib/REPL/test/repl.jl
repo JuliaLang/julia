@@ -1135,3 +1135,18 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "\x15\x04")
     Base.wait(repltask)
 end
+
+# AST transformations (softscope, Revise, OhMyREPL, etc.)
+repl_channel = Channel(1)
+response_channel = Channel(1)
+backend = REPL.start_repl_backend(repl_channel, response_channel)
+put!(repl_channel, (:(1+1), false))
+reply = take!(response_channel)
+@test reply == (2, false)
+twice(ex) = Expr(:tuple, ex, ex)
+push!(backend.ast_transforms, twice)
+put!(repl_channel, (:(1+1), false))
+reply = take!(response_channel)
+@test reply == ((2, 2), false)
+put!(repl_channel, (nothing, -1))
+Base.wait(backend.backend_task)
