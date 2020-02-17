@@ -1648,7 +1648,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         else
             print(io, head)
             a1 = args[1]
-            parens = (isa(a1,Expr) && (a1.head !== :tuple && a1.head !== :$)) ||
+            parens = (isa(a1,Expr) && !in(a1.head, (:tuple, :$, :vect, :braces))) ||
                      (isa(a1,Symbol) && isoperator(a1))
             parens && print(io, "(")
             show_unquoted(io, a1, 0, 0, quote_level)
