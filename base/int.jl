@@ -860,3 +860,37 @@ for op in (:+, :-, :*, :&, :|, :xor)
         return $op(aT, bT)
     end
 end
+
+const _mask1_uint128 = (UInt128(0x5555555555555555) << 64) | UInt128(0x5555555555555555)
+const _mask2_uint128 = (UInt128(0x3333333333333333) << 64) | UInt128(0x3333333333333333)
+const _mask4_uint128 = (UInt128(0x0f0f0f0f0f0f0f0f) << 64) | UInt128(0x0f0f0f0f0f0f0f0f)
+
+"""
+    bitreverse(x)
+
+Reverse the order of bits in integer `x`. `x` must have a fixed bit width,
+e.g. be an `Int16` or `Int32`.
+
+!!! compat "Julia 1.5"
+    This function requires Julia 1.5 or later.
+
+# Examples
+```jldoctest
+julia> bitreverse(0x8080808080808080)
+0x0101010101010101
+
+julia> reverse(bitstring(0xa06e)) == bitstring(bitreverse(0xa06e))
+true
+```
+"""
+function bitreverse(x::BitInteger)
+    # TODO: consider using llvm.bitreverse intrinsic
+    z = unsigned(x)
+    mask1 = _mask1_uint128 % typeof(z)
+    mask2 = _mask2_uint128 % typeof(z)
+    mask4 = _mask4_uint128 % typeof(z)
+    z = ((z & mask1) << 1) | ((z >> 1) & mask1)
+    z = ((z & mask2) << 2) | ((z >> 2) & mask2)
+    z = ((z & mask4) << 4) | ((z >> 4) & mask4)
+    return bswap(z) % typeof(x)
+end

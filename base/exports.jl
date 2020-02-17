@@ -220,6 +220,7 @@ export
     atanh,
     big,
     binomial,
+    bitreverse,
     bswap,
     cbrt,
     ceil,
