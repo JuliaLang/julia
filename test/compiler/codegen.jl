@@ -426,3 +426,10 @@ function f33590(b, x)
 end
 @test f33590(true, (3,)) == (3,)
 @test f33590(false, (3,)) == (4,)
+
+# issue 29864
+const c29864 = VecElement{Union{Int,Nothing}}(2)
+@noinline f29864() = c29864
+@noinline g29864() = VecElement{Union{Int,Nothing}}(3)
+@test f29864().value === 2
+@test g29864().value === 3
