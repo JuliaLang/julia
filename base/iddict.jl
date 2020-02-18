@@ -81,36 +81,46 @@ function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where
     return d
 end
 
-function get(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
-    val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, default)
-    val === default ? default : val::V
+function get(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
+    found = RefValue{Cint}(0)
+    val = ccall(:jl_eqtable_get1, Any, (Any, Any, Ptr{Cint}), d.ht, key, found)
+    if found[] == 1
+        return Some{V}(val::V)
+    end
+    return nothing
 end
 function getindex(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
-    val = get(d, key, secret_table_token)
-    val === secret_table_token && throw(KeyError(key))
-    return val::V
+    val = get(d, key)
+    val === nothing && throw(KeyError(key))
+    return something(val::Some{V})
 end
 
-function pop!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
+function _iddict_pop!(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
     found = RefValue{Cint}(0)
-    val = ccall(:jl_eqtable_pop, Any, (Any, Any, Any, Ptr{Cint}), d.ht, key, default, found)
+    val = ccall(:jl_eqtable_pop, Any, (Any, Any, Any, Ptr{Cint}), d.ht, key, nothing, found)
     if found[] === Cint(0)
-        return default
+        return nothing
     else
         d.count -= 1
         d.ndel += 1
-        return val::V
+        return Some{V}(val::V)
     end
 end
 
+function pop!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
+    val = _iddict_pop!(d, key)
+    val === nothing && return default
+    return something(val::Some{V})
+end
+
 function pop!(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
-    val = pop!(d, key, secret_table_token)
-    val === secret_table_token && throw(KeyError(key))
-    return val::V
+    val = _iddict_pop!(d, key)
+    val === nothing && throw(KeyError(key))
+    return something(val::Some{V})
 end
 
 function delete!(d::IdDict{K}, @nospecialize(key)) where K
-    pop!(d, key, secret_table_token)
+    _iddict_pop!(d, key)
     d
 end
 
@@ -136,24 +146,17 @@ copy(d::IdDict) = typeof(d)(d)
 
 get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V} = (d[key] = get(d, key, default))::V
 
-function get(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
-    val = get(d, key, secret_table_token)
-    if val === secret_table_token
-        val = default()
-    end
-    return val
-end
-
 function get!(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
-    val = get(d, key, secret_table_token)
-    if val === secret_table_token
+    val = get(d, key)
+    if val === nothing
         val = default()
         setindex!(d, val, key)
+        return val
     end
-    return val
+    return something(val::Some{V})
 end
 
-in(@nospecialize(k), v::KeySet{<:Any,<:IdDict}) = get(v.dict, k, secret_table_token) !== secret_table_token
+in(@nospecialize(k), v::KeySet{<:Any,<:IdDict}) = get(v.dict, k) !== nothing
 
 # For some AbstractDict types, it is safe to implement filter!
 # by deleting keys during iteration.
