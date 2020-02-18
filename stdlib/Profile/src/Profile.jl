@@ -543,7 +543,9 @@ function indent(depth::Int)
     depth < 1 && return ""
     depth <= length(indent_z) && return indent_s[1:indent_z[depth]]
     div, rem = divrem(depth, length(indent_z))
-    return (indent_s^div) * SubString(indent_s, 1, indent_z[rem])
+    indent = indent_s^div;
+    rem != 0 && (indent *= SubString(indent_s, 1, indent_z[rem]))
+    return indent
 end
 
 function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, maxes, filenamemap::Dict{Symbol,String}, showpointer::Bool)
