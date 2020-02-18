@@ -536,7 +536,7 @@ g_vararg(x::Vararg{Int, N}) where {N} = tuple(x...)
 
 This will also specialize, and is useful when the arguments are not all of the same type:
 ```julia
-h_vararg(x::Vararg{<:Any, N}) where {N} = tuple(x...)
+h_vararg(x::Vararg{Any, N}) where {N} = tuple(x...)
 ```
 
 Note that [`@code_typed`](@ref) and friends will always show you specialized code, even if Julia
