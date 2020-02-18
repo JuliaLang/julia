@@ -31,7 +31,7 @@ function idle_callback(handle)
             # the thread to go to sleep, which only happens
             # after some default amount of time (DEFAULT_THREAD_SLEEP_THRESHOLD)
             # so spend that amount of time here.
-            ccall(:usleep, Cint, (Csize_t,), 4000)
+            Libc.systemsleep(0.004)
         elseif idle.count >= 10
             lock(idle.cond)
             try
@@ -111,14 +111,16 @@ function Base.wait(idle::UvTestIdle)
     end
 end
 
-# Spawn another process as a watchdog. If this test fails, it'll uncrecoverably
+# Spawn another process as a watchdog. If this test fails, it'll unrecoverably
 # hang in the event loop. Another process needs to kill it
 cmd = """
+    @async (Base.wait_close(stdin); exit())
     sleep(100)
+    isopen(stdin) || exit()
     println(stderr, "ERROR: Killing threads test due to watchdog expiry")
     ccall(:uv_kill, Cint, (Cint, Cint), $(getpid()), Base.SIGTERM)
 """
-proc = run(pipeline(`$(Base.julia_cmd()) -e $cmd`; stderr=stderr); wait=false)
+proc = open(pipeline(`$(Base.julia_cmd()) -e $cmd`; stderr=stderr); write=true)
 
 let idle=UvTestIdle()
     wait(idle)
@@ -134,4 +136,4 @@ end
 @test process_running(proc)
 
 # We don't need the watchdog anymore
-kill(proc, Base.SIGKILL)
+close(proc.in)
