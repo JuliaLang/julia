@@ -534,7 +534,7 @@ but this will:
 g_vararg(x::Vararg{Int, N}) where {N} = tuple(x...)
 ```
 
-This will also specialize, and is useful when the arguments are not all of the same type:
+One only needs to introduce a single type parameter to force specialization, even if the other types are unconstrained. For example, this will also specialize, and is useful when the arguments are not all of the same type:
 ```julia
 h_vararg(x::Vararg{Any, N}) where {N} = tuple(x...)
 ```
