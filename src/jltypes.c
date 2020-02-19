@@ -2023,10 +2023,11 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_perm_symsvec(2, "name", "parent"),
                         jl_svec(2, jl_symbol_type, jl_any_type), 0, 1, 2);
 
+    jl_value_t *symornothing[2] = { (jl_value_t*)jl_symbol_type, (jl_value_t*)jl_void_type };
     jl_linenumbernode_type =
         jl_new_datatype(jl_symbol("LineNumberNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(2, "line", "file"),
-                        jl_svec(2, jl_long_type, jl_any_type), 0, 0, 2);
+                        jl_svec(2, jl_long_type, jl_type_union(symornothing, 2)), 0, 0, 2);
 
     jl_lineinfonode_type =
         jl_new_datatype(jl_symbol("LineInfoNode"), core, jl_any_type, jl_emptysvec,

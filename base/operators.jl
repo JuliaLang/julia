@@ -27,7 +27,7 @@ false
 
 Supertype operator, equivalent to `T2 <: T1`.
 """
-const (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
+(>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 
 """
     supertype(T::DataType)
@@ -1078,6 +1078,9 @@ Some collections follow a slightly different definition. For example,
 use [`haskey`](@ref) or `k in keys(dict)`. For these collections, the result
 is always a `Bool` and never `missing`.
 
+To determine whether an item is not in a given collection, see [`:∉`](@ref).
+You may also negate the `in` by doing `!(a in b)` which is logically similar to "not in".
+
 # Examples
 ```jldoctest
 julia> a = 1:3:20
@@ -1099,6 +1102,12 @@ julia> 1 in [1, missing]
 true
 
 julia> missing in Set([1, 2])
+false
+
+julia> !(21 in a)
+true
+
+julia> !(19 in a)
 false
 ```
 """

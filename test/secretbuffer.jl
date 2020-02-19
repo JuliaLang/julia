@@ -88,6 +88,14 @@ using Test
         seekend(sb)
         c = bytesavailable(sb)
         @test a==sb.size && b==(sb.size-3) && c==0
+    @testset "position" begin
+        sb = SecretBuffer("Julia")
+        println("testing position")
+        initial_pos = (position(sb))
+        seek(sb,2)
+        mid_pos = position(sb)
+        seekend(sb)
+        @test initial_pos == 0 && mid_pos == 2 && position(sb)==sb.size
         shred!(sb)
     end
 end
