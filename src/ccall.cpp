@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 // --- the ccall, cglobal, and llvm intrinsics ---
+#include "llvm/Support/Path.h" // for llvm::sys::path
 
 // Map from symbol name (in a certain library) to its GV in sysimg and the
 // DL handle address in the current session.
@@ -68,7 +69,8 @@ static bool runtime_sym_gvs(const char *f_lib, const char *f_name, MT &&M,
     }
     else {
         std::string name = "ccalllib_";
-        name += f_lib;
+        name += llvm::sys::path::filename(f_lib);
+        name += std::to_string(globalUnique++);
         runtime_lib = true;
         auto &libgv = libMapGV[f_lib];
         if (libgv.first == NULL) {

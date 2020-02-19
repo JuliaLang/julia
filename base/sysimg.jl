@@ -49,7 +49,7 @@ let
             :Statistics,
         ]
 
-    maxlen = maximum(textwidth.(string.(stdlibs)))
+    maxlen = reduce(max, textwidth.(string.(stdlibs)); init=0)
 
     print_time = (mod, t) -> (print(rpad(string(mod) * "  ", maxlen + 3, "─")); Base.time_print(t * 10^9); println())
     print_time(Base, (Base.end_base_include - Base.start_base_include) * 10^(-9))

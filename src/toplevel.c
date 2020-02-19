@@ -863,13 +863,18 @@ JL_DLLEXPORT jl_value_t *jl_infer_thunk(jl_code_info_t *thk, jl_module_t *m)
     return (jl_value_t*)jl_any_type;
 }
 
-JL_DLLEXPORT jl_value_t *jl_load(jl_module_t *module, const char *fname)
+JL_DLLEXPORT jl_value_t *jl_load_rewrite(jl_module_t *module, const char *fname, jl_value_t *mapexpr)
 {
     uv_stat_t stbuf;
     if (jl_stat(fname, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
         jl_errorf("could not open file %s", fname);
     }
-    return jl_parse_eval_all(fname, NULL, 0, module);
+    return jl_parse_eval_all(fname, NULL, 0, module, mapexpr);
+}
+
+JL_DLLEXPORT jl_value_t *jl_load(jl_module_t *module, const char *fname)
+{
+    return jl_load_rewrite(module, fname, NULL);
 }
 
 // load from filename given as a String object

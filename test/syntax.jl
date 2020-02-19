@@ -1087,6 +1087,9 @@ end
 # issue #7479
 @test Meta.lower(Main, Meta.parse("(true &&& false)")) == Expr(:error, "invalid syntax &false")
 
+# issue #34748
+@test Meta.lower(Main, :(&(1, 2))) == Expr(:error, "invalid syntax &(1, 2)")
+
 # if an indexing expression becomes a cat expression, `end` is not special
 @test_throws ParseError Meta.parse("a[end end]")
 @test_throws ParseError Meta.parse("a[end;end]")

@@ -423,8 +423,10 @@ end
 # MainInclude exists to hide Main.include and eval from `names(Main)`.
 baremodule MainInclude
 using ..Base
-# We inline the definition of include from loading.jl/include_relative to get one-frame stacktraces.
-# include(fname::AbstractString) = Main.Base.include(Main, fname)
+include(mapexpr::Function, fname::AbstractString) = Base.include(mapexpr, Main, fname)
+# We inline the definition of include from loading.jl/include_relative to get one-frame stacktraces
+# for the common case of include(fname).  Otherwise we would use:
+#    include(fname::AbstractString) = Base.include(Main, fname)
 function include(fname::AbstractString)
     mod = Main
     isa(fname, String) || (fname = Base.convert(String, fname)::String)
@@ -436,7 +438,7 @@ function include(fname::AbstractString)
     tls[:SOURCE_PATH] = path
     local result
     try
-        result = ccall(:jl_load_, Any, (Any, Any), mod, path)
+        result = ccall(:jl_load, Any, (Any, Cstring), mod, path)
     finally
         if prev === nothing
             Base.delete!(tls, :SOURCE_PATH)
@@ -459,15 +461,19 @@ definition of `eval`, which evaluates expressions in that module.
 MainInclude.eval
 
 """
-    include(path::AbstractString)
+    include([mapexpr::Function,] path::AbstractString)
 
 Evaluate the contents of the input source file in the global scope of the containing module.
-Every module (except those defined with `baremodule`) has its own 1-argument
+Every module (except those defined with `baremodule`) has its own
 definition of `include`, which evaluates the file in that module.
 Returns the result of the last evaluated expression of the input file. During including,
 a task-local include path is set to the directory containing the file. Nested calls to
 `include` will search relative to that path. This function is typically used to load source
 interactively, or to combine files in packages that are broken into multiple source files.
+
+The optional first argument `mapexpr` can be used to transform the included code before
+it is evaluated: for each parsed expression `expr` in `path`, the `include` function
+actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
 
 Use [`Base.include`](@ref) to evaluate a file into another module.
 """

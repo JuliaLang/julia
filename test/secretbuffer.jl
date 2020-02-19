@@ -84,6 +84,14 @@ using Test
         sb = SecretBuffer("hello")
         seekend(sb)
         @test read(sb,String) == ""
+    @testset "position" begin
+        sb = SecretBuffer("Julia")
+        println("testing position")
+        initial_pos = (position(sb))
+        seek(sb,2)
+        mid_pos = position(sb)
+        seekend(sb)
+        @test initial_pos == 0 && mid_pos == 2 && position(sb)==sb.size
         shred!(sb)
     end
 end

@@ -51,6 +51,8 @@ New library functions
   `merge!` are still available for backward compatibility ([#34296]).
 * The new `isdisjoint` function indicates whether two collections are disjoint ([#34427]).
 * Add function `ismutable` and deprecate `isimmutable` to check whether something is mutable.([#34652])
+* `include` now accepts an optional `mapexpr` first argument to transform the parsed
+  expressions before they are evaluated ([#34595]).
 
 New library features
 --------------------
@@ -64,6 +66,11 @@ Standard library changes
 ------------------------
 * The `@timed` macro now returns a `NamedTuple` ([#34149])
 * New `supertypes(T)` function returns a tuple of all supertypes of `T` ([#34419]).
+* Sorting-related functions such as `sort` that take the keyword arguments `lt`, `rev`, `order`
+  and `by` now do not discard `order` if `by` or `lt` are passed. In the former case, the
+  order from `order` is used to compare the values of `by(element)`. In the latter case,
+  any order different from `Forward` or `Reverse` will raise an error about the
+  ambiguity.
 
 #### LinearAlgebra
 * The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).

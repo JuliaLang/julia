@@ -89,7 +89,7 @@
 
 #struct LineNumberNode
 #    line::Int
-#    file::Any # nominally Union{Symbol,Nothing}
+#    file::Union{Symbol,Nothing}
 #end
 
 #struct LineInfoNode

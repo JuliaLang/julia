@@ -113,7 +113,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
             else
                 backend.in_eval = true
                 for xf in backend.ast_transforms
-                    ast = xf(ast)
+                    ast = Base.invokelatest(xf, ast)
                 end
                 value = Core.eval(Main, ast)
                 backend.in_eval = false

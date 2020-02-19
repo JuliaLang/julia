@@ -151,6 +151,9 @@ end
     s = Set([1])
     @test isequal(sizehint!(s, 10), Set([1]))
     @test isequal(empty!(s), Set())
+    s2 = GenericSet(s)
+    sizehint!(s2, 10)
+    @test s2 == GenericSet(s)
 end
 @testset "rehash!" begin
     # Use a pointer type to have defined behavior for uninitialized
@@ -213,6 +216,9 @@ end
     # union must uniquify
     @test union([1, 2, 1]) == union!([1, 2, 1]) == [1, 2]
     @test union([1, 2, 1], [2, 2]) == union!([1, 2, 1], [2, 2]) == [1, 2]
+    s2 = Set([nothing])
+    union!(s2, [nothing])
+    @test s2 == Set([nothing])
 end
 
 @testset "intersect" begin
@@ -369,6 +375,11 @@ end
     @test !issubset(d3, d2)
     @test issubset(d1, d3)
     @test issubset(d2, d3)
+
+    # no fast in, long enough container
+    @test issubset(Set(Bool[]), rand(Bool, 100)) == true
+    # neither has a fast in, right doesn't have a length
+    @test isdisjoint([1, 3, 5, 7, 9], Iterators.filter(iseven, 1:10))
 end
 
 @testset "unique" begin
@@ -653,6 +664,10 @@ end
             @test B >  A
         end
     end
+    # first doesn't have length
+    @test issetequal(Iterators.filter(iseven, 1:10), [2, 4, 6, 8, 10])
+    # both don't have length
+    @test issetequal(Iterators.filter(iseven, 1:10), Iterators.filter(iseven, 1:10))
 end
 
 @testset "optimized union! with max_values" begin

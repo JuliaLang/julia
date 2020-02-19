@@ -2188,6 +2188,8 @@
    '&&     (lambda (e) (expand-forms (expand-and e)))
    '|\|\|| (lambda (e) (expand-forms (expand-or  e)))
 
+   '&      (lambda (e) (error (string "invalid syntax " (deparse e))))
+
    '+=     lower-update-op
    '-=     lower-update-op
    '*=     lower-update-op
