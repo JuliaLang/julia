@@ -722,7 +722,7 @@ static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isbox
     if (type_is_ghost(T)) {
         return ghostValue(typ);
     }
-    if (v && !isboxed && v->getType()->isAggregateType() && CountTrackedPointers(v->getType()).count == 0) {
+    if (v && !isboxed && v->getType()->isAggregateType() && !jl_is_vecelement_type(typ) && CountTrackedPointers(v->getType()).count == 0) {
         // eagerly put this back onto the stack
         // llvm mem2reg pass will remove this if unneeded
         return value_to_pointer(ctx, v, typ, NULL);
@@ -6569,16 +6569,17 @@ static std::unique_ptr<Module> emit_function(
                     }
                 }
                 else {
-                    Type *store_ty = julia_type_to_llvm(retvalinfo.typ);
+                    Type *store_ty = retvalinfo.V->getType();
                     Type *dest_ty = store_ty->getPointerTo();
-                    Value *Val = emit_unbox(ctx, store_ty, retvalinfo, retvalinfo.typ);
+                    Value *Val = retvalinfo.V;
                     if (returninfo.return_roots) {
-                        assert(store_ty == Val->getType());
+                        assert(julia_type_to_llvm(retvalinfo.typ) == store_ty);
                         emit_sret_roots(ctx, false, Val, store_ty, f->arg_begin() + 1, returninfo.return_roots);
                     }
                     if (dest_ty != sret->getType())
                         sret = emit_bitcast(ctx, sret, dest_ty);
-                    ctx.builder.CreateStore(Val, sret);
+                    ctx.builder.CreateAlignedStore(Val, sret, julia_alignment(retvalinfo.typ));
+                    assert(retvalinfo.TIndex == NULL && "unreachable"); // unimplemented representation
                 }
             }
 

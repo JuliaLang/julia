@@ -694,8 +694,8 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
                 assert(jst->layout == NULL); // otherwise should have been caught above
                 decl = T_void;
             }
-            else if (jl_is_vecelement_type(jt)) {
-                // VecElement type is unwrapped in LLVM
+            else if (jl_is_vecelement_type(jt) && !jl_is_uniontype(jl_svecref(ftypes, 0))) {
+                // VecElement type is unwrapped in LLVM (when possible)
                 decl = latypes[0];
             }
             else if (isarray && !type_is_ghost(lasttype)) {
@@ -2747,6 +2747,8 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                         }
                         llvm_idx = ptindex;
                         fval = tindex;
+                        if (jl_is_vecelement_type(ty))
+                            fval = ctx.builder.CreateInsertValue(strct, fval, makeArrayRef(llvm_idx));
                     }
                     else {
                         Value *ptindex = emit_struct_gep(ctx, lt, strct, offs + fsz);
