@@ -23,12 +23,12 @@ using Dates
 end
 @testset "Basic rounding" begin
     dt = Dates.Date(2016, 2, 28)    # Sunday
-    @test floor(dt, Dates.Year) == Dates.Date(2016)
-    @test floor(dt, Dates.Year(5)) == Dates.Date(2015)
-    @test floor(dt, Dates.Year(10)) == Dates.Date(2010)
-    @test floor(dt, Dates.Month) == Dates.Date(2016, 2)
-    @test floor(dt, Dates.Month(6)) == Dates.Date(2016, 1)
-    @test floor(dt, Dates.Week) == Dates.toprev(dt, Dates.Monday)
+    @test floor(Dates.Year, dt) == Dates.Date(2016)
+    @test floor(Dates.Year(5), dt) == Dates.Date(2015)
+    @test floor(Dates.Year(10), dt) == Dates.Date(2010)
+    @test floor(Dates.Month, dt) == Dates.Date(2016, 2)
+    @test floor(Dates.Month(6), dt) == Dates.Date(2016, 1)
+    @test floor(Dates.Week, dt) == Dates.toprev(dt, Dates.Monday)
     @test ceil(dt, Dates.Year) == Dates.Date(2017)
     @test ceil(dt, Dates.Year(5)) == Dates.Date(2020)
     @test ceil(dt, Dates.Month) == Dates.Date(2016, 3)
@@ -39,14 +39,14 @@ end
     @test round(dt, Dates.Week) == Dates.Date(2016, 2, 29)
 
     dt = Dates.DateTime(2016, 2, 28, 15, 10, 50, 500)
-    @test floor(dt, Dates.Day) == Dates.DateTime(2016, 2, 28)
-    @test floor(dt, Dates.Hour) == Dates.DateTime(2016, 2, 28, 15)
-    @test floor(dt, Dates.Hour(2)) == Dates.DateTime(2016, 2, 28, 14)
-    @test floor(dt, Dates.Hour(12)) == Dates.DateTime(2016, 2, 28, 12)
-    @test floor(dt, Dates.Minute) == Dates.DateTime(2016, 2, 28, 15, 10)
-    @test floor(dt, Dates.Minute(15)) == Dates.DateTime(2016, 2, 28, 15, 0)
-    @test floor(dt, Dates.Second) == Dates.DateTime(2016, 2, 28, 15, 10, 50)
-    @test floor(dt, Dates.Second(30)) == Dates.DateTime(2016, 2, 28, 15, 10, 30)
+    @test floor(Dates.Day, dt) == Dates.DateTime(2016, 2, 28)
+    @test floor(Dates.Hour, dt) == Dates.DateTime(2016, 2, 28, 15)
+    @test floor(Dates.Hour(2), dt) == Dates.DateTime(2016, 2, 28, 14)
+    @test floor(Dates.Hour(12), dt) == Dates.DateTime(2016, 2, 28, 12)
+    @test floor(Dates.Minute, dt) == Dates.DateTime(2016, 2, 28, 15, 10)
+    @test floor(Dates.Minute(15), dt) == Dates.DateTime(2016, 2, 28, 15, 0)
+    @test floor(Dates.Second, dt) == Dates.DateTime(2016, 2, 28, 15, 10, 50)
+    @test floor(Dates.Second(30), dt) == Dates.DateTime(2016, 2, 28, 15, 10, 30)
     @test ceil(dt, Dates.Day) == Dates.DateTime(2016, 2, 29)
     @test ceil(dt, Dates.Hour) == Dates.DateTime(2016, 2, 28, 16)
     @test ceil(dt, Dates.Hour(2)) == Dates.DateTime(2016, 2, 28, 16)
@@ -66,14 +66,14 @@ end
 end
 @testset "Rounding for dates at the rounding epoch (year 0000)" begin
     dt = Dates.DateTime(0)
-    @test floor(dt, Dates.Year) == dt
-    @test floor(dt, Dates.Month) == dt
-    @test floor(dt, Dates.Week) == Dates.Date(-1, 12, 27)   # Monday prior to 0000-01-01
-    @test floor(Dates.Date(-1, 12, 27), Dates.Week) == Dates.Date(-1, 12, 27)
-    @test floor(dt, Dates.Day) == dt
-    @test floor(dt, Dates.Hour) == dt
-    @test floor(dt, Dates.Minute) == dt
-    @test floor(dt, Dates.Second) == dt
+    @test floor(Dates.Year, dt) == dt
+    @test floor(Dates.Month, dt) == dt
+    @test floor(Dates.Week, dt) == Dates.Date(-1, 12, 27)   # Monday prior to 0000-01-01
+    @test floor(Dates.Week, Dates.Date(-1, 12, 27)) == Dates.Date(-1, 12, 27)
+    @test floor(Dates.Day, dt) == dt
+    @test floor(Dates.Hour, dt) == dt
+    @test floor(Dates.Minute, dt) == dt
+    @test floor(Dates.Second, dt) == dt
     @test ceil(dt, Dates.Year) == dt
     @test ceil(dt, Dates.Month) == dt
     @test ceil(dt, Dates.Week) == Dates.Date(0, 1, 3)       # Monday following 0000-01-01
@@ -86,13 +86,13 @@ end
 @testset "Rounding for multiples of a period" begin
     # easiest to test close to rounding epoch
     dt = Dates.DateTime(0, 1, 19, 19, 19, 19, 19)
-    @test floor(dt, Dates.Year(2)) == DateTime(0)
-    @test floor(dt, Dates.Month(2)) == DateTime(0, 1)       # Odd number; months are 1-indexed
-    @test floor(dt, Dates.Week(2)) == DateTime(0, 1, 17)    # Third Monday of 0000
-    @test floor(dt, Dates.Day(2)) == DateTime(0, 1, 19)     # Odd number; days are 1-indexed
-    @test floor(dt, Dates.Hour(2)) == DateTime(0, 1, 19, 18)
-    @test floor(dt, Dates.Minute(2)) == DateTime(0, 1, 19, 19, 18)
-    @test floor(dt, Dates.Second(2)) == DateTime(0, 1, 19, 19, 19, 18)
+    @test floor(Dates.Year(2), dt) == DateTime(0)
+    @test floor(Dates.Month(2), dt) == DateTime(0, 1)       # Odd number; months are 1-indexed
+    @test floor(Dates.Week(2), dt) == DateTime(0, 1, 17)    # Third Monday of 0000
+    @test floor(Dates.Day(2), dt) == DateTime(0, 1, 19)     # Odd number; days are 1-indexed
+    @test floor(Dates.Hour(2), dt) == DateTime(0, 1, 19, 18)
+    @test floor(Dates.Minute(2), dt) == DateTime(0, 1, 19, 19, 18)
+    @test floor(Dates.Second(2), dt) == DateTime(0, 1, 19, 19, 19, 18)
     @test ceil(dt, Dates.Year(2)) == DateTime(2)
     @test ceil(dt, Dates.Month(2)) == DateTime(0, 3)        # Odd number; months are 1-indexed
     @test ceil(dt, Dates.Week(2)) == DateTime(0, 1, 31)     # Fifth Monday of 0000
@@ -103,13 +103,13 @@ end
 end
 @testset "Rounding for dates with negative years" begin
     dt = Dates.DateTime(-1, 12, 29, 19, 19, 19, 19)
-    @test floor(dt, Dates.Year(2)) == DateTime(-2)
-    @test floor(dt, Dates.Month(2)) == DateTime(-1, 11)     # Odd number; months are 1-indexed
-    @test floor(dt, Dates.Week(2)) == DateTime(-1, 12, 20)  # 2 weeks prior to 0000-01-03
-    @test floor(dt, Dates.Day(2)) == DateTime(-1, 12, 28)   # Even; 4 days prior to 0000-01-01
-    @test floor(dt, Dates.Hour(2)) == DateTime(-1, 12, 29, 18)
-    @test floor(dt, Dates.Minute(2)) == DateTime(-1, 12, 29, 19, 18)
-    @test floor(dt, Dates.Second(2)) == DateTime(-1, 12, 29, 19, 19, 18)
+    @test floor(Dates.Year(2), dt) == DateTime(-2)
+    @test floor(Dates.Month(2), dt) == DateTime(-1, 11)     # Odd number; months are 1-indexed
+    @test floor(Dates.Week(2), dt) == DateTime(-1, 12, 20)  # 2 weeks prior to 0000-01-03
+    @test floor(Dates.Day(2), dt) == DateTime(-1, 12, 28)   # Even; 4 days prior to 0000-01-01
+    @test floor(Dates.Hour(2), dt) == DateTime(-1, 12, 29, 18)
+    @test floor(Dates.Minute(2), dt) == DateTime(-1, 12, 29, 19, 18)
+    @test floor(Dates.Second(2), dt) == DateTime(-1, 12, 29, 19, 19, 18)
     @test ceil(dt, Dates.Year(2)) == DateTime(0)
     @test ceil(dt, Dates.Month(2)) == DateTime(0, 1)        # Odd number; months are 1-indexed
     @test ceil(dt, Dates.Week(2)) == DateTime(0, 1, 3)      # First Monday of 0000
@@ -123,7 +123,7 @@ end
         local dt
         for p in [Dates.Year, Dates.Month, Dates.Day, Dates.Hour, Dates.Minute, Dates.Second]
             local p
-            @test floor(dt, p) == dt
+            @test floor(p, dt) == dt
             @test ceil(dt, p) == dt
         end
     end
@@ -143,7 +143,7 @@ end
     for p in [Dates.Year, Dates.Month, Dates.Week, Dates.Day, Dates.Hour]
         local p
         for v in [-1, 0]
-            @test_throws DomainError floor(dt, p(v))
+            @test_throws DomainError floor(p(v), dt)
             @test_throws DomainError ceil(dt, p(v))
             @test_throws DomainError round(dt, p(v))
         end
@@ -151,12 +151,12 @@ end
 end
 @testset "Rounding for periods" begin
     x = Dates.Second(172799)
-    @test floor(x, Dates.Week) == Dates.Week(0)
-    @test floor(x, Dates.Day) == Dates.Day(1)
-    @test floor(x, Dates.Hour) == Dates.Hour(47)
-    @test floor(x, Dates.Minute) == Dates.Minute(2879)
-    @test floor(x, Dates.Second) == Dates.Second(172799)
-    @test floor(x, Dates.Millisecond) == Dates.Millisecond(172799000)
+    @test floor(Dates.Week, x) == Dates.Week(0)
+    @test floor(Dates.Day, x) == Dates.Day(1)
+    @test floor(Dates.Hour, x) == Dates.Hour(47)
+    @test floor(Dates.Minute, x) == Dates.Minute(2879)
+    @test floor(Dates.Second, x) == Dates.Second(172799)
+    @test floor(Dates.Millisecond, x) == Dates.Millisecond(172799000)
     @test ceil(x, Dates.Week) == Dates.Week(1)
     @test ceil(x, Dates.Day) == Dates.Day(2)
     @test ceil(x, Dates.Hour) == Dates.Hour(48)
@@ -171,10 +171,10 @@ end
     @test round(x, Dates.Millisecond) == Dates.Millisecond(172799000)
 
     x = Dates.Nanosecond(2000999999)
-    @test floor(x, Dates.Second) == Dates.Second(2)
-    @test floor(x, Dates.Millisecond) == Dates.Millisecond(2000)
-    @test floor(x, Dates.Microsecond) == Dates.Microsecond(2000999)
-    @test floor(x, Dates.Nanosecond) == x
+    @test floor(Dates.Second, x) == Dates.Second(2)
+    @test floor(Dates.Millisecond, x) == Dates.Millisecond(2000)
+    @test floor(Dates.Microsecond, x) == Dates.Microsecond(2000999)
+    @test floor(Dates.Nanosecond, x) == x
     @test ceil(x, Dates.Second) == Dates.Second(3)
     @test ceil(x, Dates.Millisecond) == Dates.Millisecond(2001)
     @test ceil(x, Dates.Microsecond) == Dates.Microsecond(2001000)
@@ -189,7 +189,7 @@ end
         local x
         for p in [Dates.Week, Dates.Day, Dates.Hour, Dates.Second, Dates.Millisecond, Dates.Microsecond, Dates.Nanosecond]
             local p
-            @test floor(x, p) == p(x)
+            @test floor(p, x) == p(x)
             @test ceil(x, p) == p(x)
         end
     end
@@ -209,7 +209,7 @@ end
     for p in [Dates.Week, Dates.Day, Dates.Hour, Dates.Second, Dates.Millisecond, Dates.Microsecond, Dates.Nanosecond]
         local p
         for v in [-1, 0]
-            @test_throws DomainError floor(x, p(v))
+            @test_throws DomainError floor(p(v), x)
             @test_throws DomainError ceil(x, p(v))
             @test_throws DomainError round(x, p(v))
         end
@@ -217,7 +217,7 @@ end
     for p in [Dates.Year, Dates.Month]
         local p
         for v in [-1, 0, 1]
-            @test_throws MethodError floor(x, p(v))
+            @test_throws MethodError floor(p(v), x)
             @test_throws MethodError ceil(x, p(v))
             @test_throws DomainError round(x, p(v))
         end
