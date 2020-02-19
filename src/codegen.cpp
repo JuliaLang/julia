@@ -294,7 +294,7 @@ static Function *jlsubtype_func;
 static Function *jlapplytype_func;
 static Function *jl_object_id__func;
 static Function *setjmp_func;
-static Function *memcmp_derived_func;
+static Function *memcmp_func;
 static Function *box_int8_func;
 static Function *box_uint8_func;
 static Function *box_int16_func;
@@ -2394,13 +2394,24 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
         Value *varg1 = arg1.ispointer() ? maybe_decay_tracked(data_pointer(ctx, arg1)) : arg1.V;
         Value *varg2 = arg2.ispointer() ? maybe_decay_tracked(data_pointer(ctx, arg2)) : arg2.V;
         if (sz > 512 && !sty->layout->haspadding) {
-            varg1 = decay_derived(arg1.ispointer() ? varg1 : value_to_pointer(ctx, arg1).V);
-            varg2 = decay_derived(arg2.ispointer() ? varg2 : value_to_pointer(ctx, arg2).V);
-            Value *answer = ctx.builder.CreateCall(prepare_call(memcmp_derived_func), {
-                        maybe_bitcast(ctx, varg1, T_pint8),
-                        maybe_bitcast(ctx, varg2, T_pint8),
-                        ConstantInt::get(T_size, sz)
-                    });
+            if (!arg1.ispointer())
+                varg1 = value_to_pointer(ctx, arg1).V;
+            if (!arg2.ispointer())
+                varg2 = value_to_pointer(ctx, arg2).V;
+            varg1 = emit_pointer_from_objref(ctx, varg1);
+            varg2 = emit_pointer_from_objref(ctx, varg2);
+            Value *gc_uses[2];
+            int nroots = 0;
+            if ((gc_uses[nroots] = get_gc_root_for(arg1)))
+                nroots++;
+            if ((gc_uses[nroots] = get_gc_root_for(arg2)))
+                nroots++;
+            OperandBundleDef OpBundle("jl_roots", gc_uses);
+            Value *answer = ctx.builder.CreateCall(prepare_call(memcmp_func), {
+                        ctx.builder.CreateBitCast(varg1, T_pint8),
+                        ctx.builder.CreateBitCast(varg2, T_pint8),
+                        ConstantInt::get(T_size, sz) },
+                    ArrayRef<OperandBundleDef>(&OpBundle, nroots ? 1 : 0));
             return ctx.builder.CreateICmpEQ(answer, ConstantInt::get(T_int32, 0));
         }
         else {
@@ -7329,16 +7340,17 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(setjmp_func, &jl_setjmp_f);
 
     std::vector<Type*> args_memcmp(0);
-    args_memcmp.push_back(T_pint8_derived);
-    args_memcmp.push_back(T_pint8_derived);
+    args_memcmp.push_back(T_pint8);
+    args_memcmp.push_back(T_pint8);
     args_memcmp.push_back(T_size);
-    memcmp_derived_func =
+    memcmp_func =
         Function::Create(FunctionType::get(T_int32, args_memcmp, false),
                          Function::ExternalLinkage, "memcmp", m);
-    memcmp_derived_func->addFnAttr(Attribute::ReadOnly);
-    memcmp_derived_func->addFnAttr(Attribute::NoUnwind);
-    memcmp_derived_func->addFnAttr(Attribute::ArgMemOnly);
-    add_named_global(memcmp_derived_func, &memcmp);
+    memcmp_func->addFnAttr(Attribute::ReadOnly);
+    memcmp_func->addFnAttr(Attribute::NoUnwind);
+    memcmp_func->addFnAttr(Attribute::ArgMemOnly);
+    add_named_global(memcmp_func, &memcmp);
+    // TODO: inferLibFuncAttributes(*memcmp_func, TLI);
 
     std::vector<Type*> te_args(0);
     te_args.push_back(T_pint8);
