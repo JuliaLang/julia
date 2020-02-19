@@ -654,7 +654,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         // unsafe_store to Ptr{Any} is allowed to implicitly drop GC roots.
         thePtr = emit_unbox(ctx, T_psize, e, e.typ);
         Instruction *store = ctx.builder.CreateAlignedStore(
-          emit_pointer_from_objref(ctx, boxed(ctx, x)),
+          ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, boxed(ctx, x)), T_size),
             ctx.builder.CreateGEP(T_size, thePtr, im1), align_nb);
         tbaa_decorate(tbaa_data, store);
     }
