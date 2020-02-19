@@ -114,7 +114,7 @@ end
 # Spawn another process as a watchdog. If this test fails, it'll unrecoverably
 # hang in the event loop. Another process needs to kill it
 cmd = """
-    @async (Base.wait_close(stdin); exit())
+    @async (Base.wait_readnb(stdin, 1); exit())
     sleep(100)
     isopen(stdin) || exit()
     println(stderr, "ERROR: Killing threads test due to watchdog expiry")
