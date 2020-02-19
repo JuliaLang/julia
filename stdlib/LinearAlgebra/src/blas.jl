@@ -333,7 +333,7 @@ function dot(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T}
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
-    GC.@preserve DX DY dot(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
+    return dot(n, DX, stride(DX, 1), DY, stride(DY, 1))
 end
 function dotc(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasComplex
     require_one_based_indexing(DX, DY)
@@ -341,7 +341,7 @@ function dotc(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
-    GC.@preserve DX DY dotc(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
+    return dotc(n, DX, stride(DX, 1), DY, stride(DY, 1))
 end
 function dotu(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasComplex
     require_one_based_indexing(DX, DY)
@@ -349,7 +349,7 @@ function dotu(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
-    GC.@preserve DX DY dotu(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
+    return dotu(n, DX, stride(DX, 1), DY, stride(DY, 1))
 end
 
 ## nrm2
@@ -383,7 +383,7 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
         end
     end
 end
-nrm2(x::Union{AbstractVector,DenseArray}) = GC.@preserve x nrm2(length(x), pointer(x), stride1(x))
+nrm2(x::Union{AbstractVector,DenseArray}) = nrm2(length(x), x, stride1(x))
 
 ## asum
 
@@ -416,7 +416,7 @@ for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
         end
     end
 end
-asum(x::Union{AbstractVector,DenseArray}) = GC.@preserve x asum(length(x), pointer(x), stride1(x))
+asum(x::Union{AbstractVector,DenseArray}) = asum(length(x), x, stride1(x))
 
 ## axpy
 
@@ -464,8 +464,7 @@ function axpy!(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, y::Union
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
-    GC.@preserve x y axpy!(length(x), convert(T,alpha), pointer(x), stride(x, 1), pointer(y), stride(y, 1))
-    y
+    return axpy!(length(x), convert(T,alpha), x, stride(x, 1), y, stride(y, 1))
 end
 
 function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},AbstractRange{Ti}},
@@ -479,8 +478,15 @@ function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},AbstractRange
     if minimum(ry) < 1 || maximum(ry) > length(y)
         throw(ArgumentError("range out of bounds for y, of length $(length(y))"))
     end
-    GC.@preserve x y axpy!(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
-    y
+    GC.@preserve x y axpy!(
+        length(rx),
+        convert(T, alpha),
+        pointer(x) + (first(rx) - 1)*sizeof(T),
+        step(rx),
+        pointer(y) + (first(ry) - 1)*sizeof(T),
+        step(ry))
+
+    return y
 end
 
 """
@@ -529,8 +535,7 @@ function axpby!(alpha::Number, x::Union{DenseArray{T},AbstractVector{T}}, beta::
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
-    GC.@preserve x y axpby!(length(x), convert(T,alpha), pointer(x), stride(x, 1), convert(T,beta), pointer(y), stride(y, 1))
-    y
+    return axpby!(length(x), convert(T, alpha), x, stride(x, 1), convert(T, beta), y, stride(y, 1))
 end
 
 ## iamax
@@ -546,7 +551,7 @@ for (fname, elty) in ((:idamax_,:Float64),
         end
     end
 end
-iamax(dx::Union{AbstractVector,DenseArray}) = GC.@preserve dx iamax(length(dx), pointer(dx), stride1(dx))
+iamax(dx::Union{AbstractVector,DenseArray}) = iamax(length(dx), dx, stride1(dx))
 
 """
     iamax(n, dx, incx)
@@ -865,6 +870,7 @@ for (fname, elty) in ((:zhpmv_, :ComplexF64),
                   β,
                   y,
                   incy)
+            return y
         end
     end
 end
@@ -880,8 +886,7 @@ function hpmv!(uplo::AbstractChar,
     if length(AP) < Int64(N*(N+1)/2)
         throw(DimensionMismatch("Packed Hermitian matrix A has size smaller than length(x) =  $(N)."))
     end
-    hpmv!(uplo, N, convert(T, α), AP, x, stride(x, 1), convert(T, β), y, stride(y, 1))
-    y
+    return hpmv!(uplo, N, convert(T, α), AP, x, stride(x, 1), convert(T, β), y, stride(y, 1))
 end
 
 """
@@ -1808,10 +1813,12 @@ function copyto!(dest::Array{T}, rdest::Union{UnitRange{Ti},AbstractRange{Ti}},
     if length(rdest) != length(rsrc)
         throw(DimensionMismatch("ranges must be of the same length"))
     end
-    GC.@preserve src dest BLAS.blascopy!(length(rsrc),
-                                              pointer(src) + (first(rsrc) - 1) * sizeof(T),
-                                              step(rsrc),
-                                              pointer(dest) + (first(rdest) - 1) * sizeof(T),
-                                              step(rdest))
-    dest
+    GC.@preserve src dest BLAS.blascopy!(
+        length(rsrc),
+        pointer(src) + (first(rsrc) - 1) * sizeof(T),
+        step(rsrc),
+        pointer(dest) + (first(rdest) - 1) * sizeof(T),
+        step(rdest))
+
+    return dest
 end

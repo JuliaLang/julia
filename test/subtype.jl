@@ -1043,6 +1043,13 @@ function test_intersection()
     @testintersect(Tuple{Type{Tuple{Vararg{Union{Int,Symbol}}}}, Tuple},
                    Tuple{Type{Tuple{Vararg{V}}}, Tuple{Vararg{V}}} where {V},
                    Tuple{Type{Tuple{Vararg{Union{Int,Symbol},N} where N}},Tuple{Vararg{Union{Int,Symbol},N} where N}})
+
+    # non types
+    @testintersect(Tuple{1}, Tuple{Any}, Tuple{1})
+
+    # tests for robustness after incorrect datatype allocation normalization
+    @test typeintersect(Vector{Tuple{T, T} where Number<:T<:Number}, Vector{Tuple{Number, Number}}) === Vector{Tuple{T, T} where Number<:T<:Number}
+    @test typeintersect(Vector{Tuple{Number, Number}}, Vector{Tuple{T, T} where Number<:T<:Number}) === Vector{Tuple{Number, Number}}
 end
 
 function test_intersection_properties()
