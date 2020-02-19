@@ -1044,11 +1044,6 @@ $(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
 
 
 
-# Use the Assertions build
-BINARYBUILDER_LLVM_ASSERTS ?= 0
-
-
-
 # OS specific stuff
 
 # install_name_tool
