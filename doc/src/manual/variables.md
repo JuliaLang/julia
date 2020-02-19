@@ -104,7 +104,7 @@ Operators like `+` are also valid identifiers, but are parsed specially. In some
 can be used just like variables; for example `(+)` refers to the addition function, and `(+) = f`
 will reassign it. Most of the Unicode infix operators (in category Sm), such as `⊕`, are parsed
 as infix operators and are available for user-defined methods (e.g. you can use `const ⊗ = kron`
-to define `⊗` as an infix Kronecker product).  Operators can also be suffixed with modifying marks,
+to define `⊗` as an infix [Kronecker product](https://en.wikipedia.org/wiki/Kronecker_product)).  Operators can also be suffixed with modifying marks,
 primes, and sub/superscripts, e.g. `+̂ₐ″` is parsed as an infix operator with the same precedence as `+`.
 
 The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref):
@@ -136,7 +136,7 @@ conventions:
     camel case instead of underscores.
   * Names of `function`s and `macro`s are in lower case, without underscores.
   * Functions that write to their arguments have names that end in `!`. These are sometimes called
-    "mutating" or "in-place" functions because they are intended to produce changes in their arguments
+    "[mutating](https://discourse.julialang.org/t/understanding-mutating-functions-correctly/30651)" or "in-place" functions because they are intended to produce changes in their arguments
     after the function is called, not just return a value.
 
 For more information about stylistic conventions, see the [Style Guide](@ref).
