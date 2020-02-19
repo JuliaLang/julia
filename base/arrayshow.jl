@@ -334,7 +334,7 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     show_circular(io, X) && return
 
     # 1) compute new IOContext
-    if !haskey(io, :compact)
+    if !haskey(io, :compact) && length(axes(X, 2)) > 1
         io = IOContext(io, :compact => true)
     end
     if get(io, :limit, false) && eltype(X) === Method
