@@ -204,83 +204,83 @@ function floorceil(precision::ConvertiblePeriod, x::ConvertiblePeriod)
 end
 
 """
-    round(dt::TimeType, p::Period, [r::RoundingMode]) -> TimeType
+    round(p::Period, dt::TimeType, [r::RoundingMode]) -> TimeType
 
 Return the `Date` or `DateTime` nearest to `dt` at resolution `p`. By default
 (`RoundNearestTiesUp`), ties (e.g., rounding 9:30 to the nearest hour) will be rounded up.
 
-For convenience, `p` may be a type instead of a value: `round(dt, Dates.Hour)` is a shortcut
-for `round(dt, Dates.Hour(1))`.
+For convenience, `p` may be a type instead of a value: `round(Dates.Hour, dt)` is a shortcut
+for `round(Dates.Hour(1), dt)`.
 
 ```jldoctest
-julia> round(Date(1985, 8, 16), Dates.Month)
+julia> round(Dates.Month, Date(1985, 8, 16))
 1985-08-01
 
-julia> round(DateTime(2013, 2, 13, 0, 31, 20), Dates.Minute(15))
+julia> round(Dates.Minute(15), DateTime(2013, 2, 13, 0, 31, 20))
 2013-02-13T00:30:00
 
-julia> round(DateTime(2016, 8, 6, 12, 0, 0), Dates.Day)
+julia> round(Dates.Day, DateTime(2016, 8, 6, 12, 0, 0))
 2016-08-07T00:00:00
 ```
 
-Valid rounding modes for `round(::TimeType, ::Period, ::RoundingMode)` are
+Valid rounding modes for `round(::Period, ::TimeType, ::RoundingMode)` are
 `RoundNearestTiesUp` (default), `RoundDown` (`floor`), and `RoundUp` (`ceil`).
 """
-function Base.round(dt::TimeType, p::Period, r::RoundingMode{:NearestTiesUp})
+function Base.round(p::Period, dt::TimeType, r::RoundingMode{:NearestTiesUp})
     f, c = floorceil(p, dt)
     return (dt - f) < (c - dt) ? f : c
 end
 
 """
-    round(x::Period, precision::T, [r::RoundingMode]) where T <: Union{TimePeriod, Week, Day} -> T
+    round(precision::T, x::Period, [r::RoundingMode]) where T <: Union{TimePeriod, Week, Day} -> T
 
 Round `x` to the nearest multiple of `precision`. If `x` and `precision` are different
 subtypes of `Period`, the return value will have the same type as `precision`. By default
 (`RoundNearestTiesUp`), ties (e.g., rounding 90 minutes to the nearest hour) will be rounded
 up.
 
-For convenience, `precision` may be a type instead of a value: `round(x, Dates.Hour)` is a
-shortcut for `round(x, Dates.Hour(1))`.
+For convenience, `precision` may be a type instead of a value: `round(Dates.Hour, x)` is a
+shortcut for `round(Dates.Hour(1), x)`.
 
 ```jldoctest
-julia> round(Dates.Day(16), Dates.Week)
+julia> round(Dates.Week, Dates.Day(16))
 2 weeks
 
-julia> round(Dates.Minute(44), Dates.Minute(15))
+julia> round(Dates.Minute(15), Dates.Minute(44))
 45 minutes
 
-julia> round(Dates.Hour(36), Dates.Day)
+julia> round(Dates.Day, Dates.Hour(36))
 2 days
 ```
 
-Valid rounding modes for `round(::Period, ::T, ::RoundingMode)` are `RoundNearestTiesUp`
+Valid rounding modes for `round(::T, ::Period, ::RoundingMode)` are `RoundNearestTiesUp`
 (default), `RoundDown` (`floor`), and `RoundUp` (`ceil`).
 
 Rounding to a `precision` of `Month`s or `Year`s is not supported, as these `Period`s are of
 inconsistent length.
 """
-function Base.round(x::ConvertiblePeriod, precision::ConvertiblePeriod, r::RoundingMode{:NearestTiesUp})
+function Base.round(precision::ConvertiblePeriod, x::ConvertiblePeriod, r::RoundingMode{:NearestTiesUp})
     f, c = floorceil(precision, x)
     _x, _f, _c = promote(x, f, c)
     return (_x - _f) < (_c - _x) ? f : c
 end
 
-Base.round(x::TimeTypeOrPeriod, p::Period, r::RoundingMode{:Down}) = Base.floor(p, x)
-Base.round(x::TimeTypeOrPeriod, p::Period, r::RoundingMode{:Up}) = Base.ceil(p, x)
+Base.round(p::Period, x::TimeTypeOrPeriod, r::RoundingMode{:Down}) = Base.floor(p, x)
+Base.round(p::Period, x::TimeTypeOrPeriod, r::RoundingMode{:Up}) = Base.ceil(p, x)
 
 # No implementation of other `RoundingMode`s: rounding to nearest "even" is skipped because
 # "even" is not defined for Period; rounding toward/away from zero is skipped because ISO
 # 8601's year 0000 is not really "zero".
-Base.round(::TimeTypeOrPeriod, p::Period, ::RoundingMode) = throw(DomainError(p))
+Base.round(p::Period, ::TimeTypeOrPeriod, ::RoundingMode) = throw(DomainError(p))
 
 # Default to RoundNearestTiesUp.
-Base.round(x::TimeTypeOrPeriod, p::Period) = Base.round(x, p, RoundNearestTiesUp)
+Base.round(p::Period, x::TimeTypeOrPeriod) = Base.round(p, x, RoundNearestTiesUp)
 
 # Make rounding functions callable using Period types in addition to values.
 Base.floor(::Type{P}, x::TimeTypeOrPeriod) where P <: Period = Base.floor(oneunit(P), x)
 
 Base.ceil(::Type{P}, x::TimeTypeOrPeriod) where P <: Period = Base.ceil(oneunit(P), x)
 
-function Base.round(x::TimeTypeOrPeriod, ::Type{P}, r::RoundingMode=RoundNearestTiesUp) where P <: Period
-    return Base.round(x, oneunit(P), r)
+function Base.round(::Type{P}, x::TimeTypeOrPeriod, r::RoundingMode=RoundNearestTiesUp) where P <: Period
+    return Base.round(oneunit(P), x, r)
 end

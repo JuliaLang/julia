@@ -34,9 +34,9 @@ end
     @test ceil(Dates.Month, dt) == Dates.Date(2016, 3)
     @test ceil(Dates.Month(6), dt) == Dates.Date(2016, 7)
     @test ceil(Dates.Week, dt) == Dates.tonext(dt, Dates.Monday)
-    @test round(dt, Dates.Year) == Dates.Date(2016)
-    @test round(dt, Dates.Month) == Dates.Date(2016, 3)
-    @test round(dt, Dates.Week) == Dates.Date(2016, 2, 29)
+    @test round(Dates.Year, dt) == Dates.Date(2016)
+    @test round(Dates.Month, dt) == Dates.Date(2016, 3)
+    @test round(Dates.Week, dt) == Dates.Date(2016, 2, 29)
 
     dt = Dates.DateTime(2016, 2, 28, 15, 10, 50, 500)
     @test floor(Dates.Day, dt) == Dates.DateTime(2016, 2, 28)
@@ -55,14 +55,14 @@ end
     @test ceil(Dates.Minute(15), dt) == Dates.DateTime(2016, 2, 28, 15, 15)
     @test ceil(Dates.Second, dt) == Dates.DateTime(2016, 2, 28, 15, 10, 51)
     @test ceil(Dates.Second(30), dt) == Dates.DateTime(2016, 2, 28, 15, 11, 0)
-    @test round(dt, Dates.Day) == Dates.DateTime(2016, 2, 29)
-    @test round(dt, Dates.Hour) == Dates.DateTime(2016, 2, 28, 15)
-    @test round(dt, Dates.Hour(2)) == Dates.DateTime(2016, 2, 28, 16)
-    @test round(dt, Dates.Hour(12)) == Dates.DateTime(2016, 2, 28, 12)
-    @test round(dt, Dates.Minute) == Dates.DateTime(2016, 2, 28, 15, 11)
-    @test round(dt, Dates.Minute(15)) == Dates.DateTime(2016, 2, 28, 15, 15)
-    @test round(dt, Dates.Second) == Dates.DateTime(2016, 2, 28, 15, 10, 51)
-    @test round(dt, Dates.Second(30)) == Dates.DateTime(2016, 2, 28, 15, 11, 0)
+    @test round(Dates.Day, dt) == Dates.DateTime(2016, 2, 29)
+    @test round(Dates.Hour, dt) == Dates.DateTime(2016, 2, 28, 15)
+    @test round(Dates.Hour(2), dt) == Dates.DateTime(2016, 2, 28, 16)
+    @test round(Dates.Hour(12), dt) == Dates.DateTime(2016, 2, 28, 12)
+    @test round(Dates.Minute, dt) == Dates.DateTime(2016, 2, 28, 15, 11)
+    @test round(Dates.Minute(15), dt) == Dates.DateTime(2016, 2, 28, 15, 15)
+    @test round(Dates.Second, dt) == Dates.DateTime(2016, 2, 28, 15, 10, 51)
+    @test round(Dates.Second(30), dt) == Dates.DateTime(2016, 2, 28, 15, 11, 0)
 end
 @testset "Rounding for dates at the rounding epoch (year 0000)" begin
     dt = Dates.DateTime(0)
@@ -130,13 +130,13 @@ end
 end
 @testset "Various available RoundingModes" begin
     dt = Dates.DateTime(2016, 2, 28, 12)
-    @test round(dt, Dates.Day, RoundNearestTiesUp) == Dates.DateTime(2016, 2, 29)
-    @test round(dt, Dates.Day, RoundUp) == Dates.DateTime(2016, 2, 29)
-    @test round(dt, Dates.Day, RoundDown) == Dates.DateTime(2016, 2, 28)
-    @test_throws DomainError round(dt, Dates.Day, RoundNearest)
-    @test_throws DomainError round(dt, Dates.Day, RoundNearestTiesAway)
-    @test_throws DomainError round(dt, Dates.Day, RoundToZero)
-    @test round(dt, Dates.Day) == round(dt, Dates.Day, RoundNearestTiesUp)
+    @test round(Dates.Day, dt, RoundNearestTiesUp) == Dates.DateTime(2016, 2, 29)
+    @test round(Dates.Day, dt, RoundUp) == Dates.DateTime(2016, 2, 29)
+    @test round(Dates.Day, dt, RoundDown) == Dates.DateTime(2016, 2, 28)
+    @test_throws DomainError round(Dates.Day, dt, RoundNearest)
+    @test_throws DomainError round(Dates.Day, dt, RoundNearestTiesAway)
+    @test_throws DomainError round(Dates.Day, dt, RoundToZero)
+    @test round(Dates.Day, dt) == round(Dates.Day, dt, RoundNearestTiesUp)
 end
 @testset "Rounding datetimes to invalid resolutions" begin
     dt = Dates.DateTime(2016, 2, 28, 12, 15)
@@ -145,7 +145,7 @@ end
         for v in [-1, 0]
             @test_throws DomainError floor(p(v), dt)
             @test_throws DomainError ceil(p(v), dt)
-            @test_throws DomainError round(dt, p(v))
+            @test_throws DomainError round(p(v), dt)
         end
     end
 end
@@ -163,12 +163,12 @@ end
     @test ceil(Dates.Minute, x) == Dates.Minute(2880)
     @test ceil(Dates.Second, x) == Dates.Second(172799)
     @test ceil(Dates.Millisecond, x) == Dates.Millisecond(172799000)
-    @test round(x, Dates.Week) == Dates.Week(0)
-    @test round(x, Dates.Day) == Dates.Day(2)
-    @test round(x, Dates.Hour) == Dates.Hour(48)
-    @test round(x, Dates.Minute) == Dates.Minute(2880)
-    @test round(x, Dates.Second) == Dates.Second(172799)
-    @test round(x, Dates.Millisecond) == Dates.Millisecond(172799000)
+    @test round(Dates.Week, x) == Dates.Week(0)
+    @test round(Dates.Day, x) == Dates.Day(2)
+    @test round(Dates.Hour, x) == Dates.Hour(48)
+    @test round(Dates.Minute, x) == Dates.Minute(2880)
+    @test round(Dates.Second, x) == Dates.Second(172799)
+    @test round(Dates.Millisecond, x) == Dates.Millisecond(172799000)
 
     x = Dates.Nanosecond(2000999999)
     @test floor(Dates.Second, x) == Dates.Second(2)
@@ -179,10 +179,10 @@ end
     @test ceil(Dates.Millisecond, x) == Dates.Millisecond(2001)
     @test ceil(Dates.Microsecond, x) == Dates.Microsecond(2001000)
     @test ceil(Dates.Nanosecond, x) == x
-    @test round(x, Dates.Second) == Dates.Second(2)
-    @test round(x, Dates.Millisecond) == Dates.Millisecond(2001)
-    @test round(x, Dates.Microsecond) == Dates.Microsecond(2001000)
-    @test round(x, Dates.Nanosecond) == x
+    @test round(Dates.Second, x) == Dates.Second(2)
+    @test round(Dates.Millisecond, x) == Dates.Millisecond(2001)
+    @test round(Dates.Microsecond, x) == Dates.Microsecond(2001000)
+    @test round(Dates.Nanosecond, x) == x
 end
 @testset "Rounding for periods that should not need rounding" begin
     for x in [Dates.Week(3), Dates.Day(14), Dates.Second(604800)]
@@ -196,13 +196,13 @@ end
 end
 @testset "Various available RoundingModes for periods" begin
     x = Dates.Hour(36)
-    @test round(x, Dates.Day, RoundNearestTiesUp) == Dates.Day(2)
-    @test round(x, Dates.Day, RoundUp) == Dates.Day(2)
-    @test round(x, Dates.Day, RoundDown) == Dates.Day(1)
-    @test_throws DomainError round(x, Dates.Day, RoundNearest)
-    @test_throws DomainError round(x, Dates.Day, RoundNearestTiesAway)
-    @test_throws DomainError round(x, Dates.Day, RoundToZero)
-    @test round(x, Dates.Day) == round(x, Dates.Day, RoundNearestTiesUp)
+    @test round(Dates.Day, x, RoundNearestTiesUp) == Dates.Day(2)
+    @test round(Dates.Day, x, RoundUp) == Dates.Day(2)
+    @test round(Dates.Day, x, RoundDown) == Dates.Day(1)
+    @test_throws DomainError round(Dates.Day, x, RoundNearest)
+    @test_throws DomainError round(Dates.Day, x, RoundNearestTiesAway)
+    @test_throws DomainError round(Dates.Day, x, RoundToZero)
+    @test round(Dates.Day, x) == round(Dates.Day, x, RoundNearestTiesUp)
 end
 @testset "Rounding periods to invalid resolutions" begin
     x = Dates.Hour(86399)
@@ -211,7 +211,7 @@ end
         for v in [-1, 0]
             @test_throws DomainError floor(p(v), x)
             @test_throws DomainError ceil(p(v), x)
-            @test_throws DomainError round(x, p(v))
+            @test_throws DomainError round(p(v), x)
         end
     end
     for p in [Dates.Year, Dates.Month]
@@ -219,7 +219,7 @@ end
         for v in [-1, 0, 1]
             @test_throws MethodError floor(p(v), x)
             @test_throws MethodError ceil(p(v), x)
-            @test_throws DomainError round(x, p(v))
+            @test_throws DomainError round(p(v), x)
         end
     end
 end
