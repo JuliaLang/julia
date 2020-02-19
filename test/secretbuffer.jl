@@ -89,6 +89,14 @@ using Test
         skip(sb, sb.size)
         c = position(sb)
         @test a == 2 && b == 0 && c == sb.size
+    @testset "position" begin
+        sb = SecretBuffer("Julia")
+        println("testing position")
+        initial_pos = (position(sb))
+        seek(sb,2)
+        mid_pos = position(sb)
+        seekend(sb)
+        @test initial_pos == 0 && mid_pos == 2 && position(sb)==sb.size
         shred!(sb)
     end
 end

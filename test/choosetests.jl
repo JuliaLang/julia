@@ -40,7 +40,7 @@ function choosetests(choices = [])
         "arrayops", "tuple", "reduce", "reducedim", "abstractarray",
         "intfuncs", "simdloop", "vecelement", "rational",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
-        "operators", "path", "ccall", "parse", "loading", "gmp",
+        "operators", "ordering", "path", "ccall", "parse", "loading", "gmp",
         "sorting", "spawn", "backtrace", "exceptions",
         "file", "read", "version", "namedtuple",
         "mpfr", "broadcast", "complex",
