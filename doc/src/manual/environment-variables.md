@@ -11,8 +11,8 @@ determined by evaluating `ENV["JULIA_EDITOR"]`.
 
 The environment variables that Julia uses generally start with `JULIA`. If
 [`InteractiveUtils.versioninfo`](@ref) is called with the keyword `verbose=true`, then the
-output will list defined environment variables relevant for Julia, including
-those for which `JULIA` appears in the name.
+output will list any defined environment variables relevant for Julia,
+including those which include `JULIA` in their names.
 
 !!! note
 
@@ -20,7 +20,7 @@ those for which `JULIA` appears in the name.
     starts, therefore adding these to `~/.julia/config/startup.jl` is too late in the startup process.
     In Bash, environment variables can either be set manually by running, e.g.,
     `export JULIA_NUM_THREADS=4` before starting Julia, or by adding the same command to
-    `-/.bashrc` or `~/.bash_profile` to set the variable each time Bash is started.
+    `~/.bashrc` or `~/.bash_profile` to set the variable each time Bash is started.
 
 ## File locations
 
@@ -116,8 +116,8 @@ environment variable or if it must have a value, set it to the string `:`.
 The `JULIA_DEPOT_PATH` environment variable is used to populate the global Julia
 [`DEPOT_PATH`](@ref) variable, which controls where the package manager, as well
 as Julia's code loading mechanisms, look for package registries, installed
-packages, named environments, repo clones, cached compiled package images, and
-configuration files.
+packages, named environments, repo clones, cached compiled package images,
+configuration files, and the default location of the REPL's history file.
 
 Unlike the shell `PATH` variable but similar to `JULIA_LOAD_PATH`, empty entries in
 `JULIA_DEPOT_PATH` are expanded to the default value of `DEPOT_PATH`. This allows
@@ -143,22 +143,8 @@ The absolute path `REPL.find_hist_file()` of the REPL's history file. If
 `$JULIA_HISTORY` is not set, then `REPL.find_hist_file()` defaults to
 
 ```
-$HOME/.julia/logs/repl_history.jl
+$(DEPOT_PATH[1])/logs/repl_history.jl
 ```
-
-### `JULIA_PKGRESOLVE_ACCURACY`
-
-A positive `Int` that determines how much time the max-sum subroutine
-`MaxSum.maxsum()` of the package dependency resolver
-will devote to attempting satisfying constraints before giving up: this value is
-by default `1`, and larger values correspond to larger amounts of time.
-
-Suppose the value of `$JULIA_PKGRESOLVE_ACCURACY` is `n`. Then
-
-* the number of pre-decimation iterations is `20*n`,
-* the number of iterations between decimation steps is `10*n`, and
-* at decimation steps, at most one in every `20*n` packages is decimated.
-
 
 ## External applications
 
@@ -334,8 +320,4 @@ event listener for just-in-time (JIT) profiling.
 
 Arguments to be passed to the LLVM backend.
 
-### `JULIA_DEBUG_LOADING`
-
-If set, then Julia prints detailed information about the cache in the loading
-process of [`Base.require`](@ref).
 

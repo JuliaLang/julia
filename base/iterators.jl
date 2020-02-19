@@ -12,7 +12,7 @@ using .Base:
     @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
     tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
     IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange,
-    LinearIndices, (:), |, +, -, !==, !, <=, <, missing, map, any
+    LinearIndices, (:), |, +, -, !==, !, <=, <, missing, map, any, @boundscheck, @inbounds
 
 import .Base:
     first, last,
@@ -22,7 +22,7 @@ import .Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek
 
-export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition
 
 tail_if_any(::Tuple{}) = ()
 tail_if_any(x::Tuple) = tail(x)
@@ -270,8 +270,9 @@ end
 Run multiple iterators at the same time, until any of them is exhausted. The value type of
 the `zip` iterator is a tuple of values of its subiterators.
 
-Note: `zip` orders the calls to its subiterators in such a way that stateful iterators will
-not advance when another iterator finishes in the current iteration.
+!!! note
+    `zip` orders the calls to its subiterators in such a way that stateful iterators will
+    not advance when another iterator finishes in the current iteration.
 
 # Examples
 ```jldoctest
@@ -440,6 +441,59 @@ IteratorSize(::Type{<:Filter}) = SizeUnknown()
 
 reverse(f::Filter) = Filter(f.flt, reverse(f.itr))
 
+# Accumulate -- partial reductions of a function over an iterator
+
+struct Accumulate{F,I}
+    f::F
+    itr::I
+end
+
+"""
+    Iterators.accumulate(f, itr)
+
+Given a 2-argument function `f` and an iterator `itr`, return a new
+iterator that successively applies `f` to the previous value and the
+next element of `itr`.
+
+This is effectively a lazy version of [`Base.accumulate`](@ref).
+
+# Examples
+```jldoctest
+julia> f = Iterators.accumulate(+, [1,2,3,4])
+Base.Iterators.Accumulate{typeof(+),Array{Int64,1}}(+, [1, 2, 3, 4])
+
+julia> foreach(println, f)
+1
+3
+6
+10
+```
+"""
+accumulate(f, itr) = Accumulate(f, itr)
+
+function iterate(itr::Accumulate)
+    state = iterate(itr.itr)
+    if state === nothing
+        return nothing
+    end
+    return (state[1], state)
+end
+
+function iterate(itr::Accumulate, state)
+    nxt = iterate(itr.itr, state[2])
+    if nxt === nothing
+        return nothing
+    end
+    val = itr.f(state[1], nxt[1])
+    return (val, (val, nxt[2]))
+end
+
+length(itr::Accumulate) = length(itr.itr)
+size(itr::Accumulate) = size(itr.itr)
+
+IteratorSize(::Type{Accumulate{F,I}}) where {F,I} = IteratorSize(I)
+IteratorEltype(::Type{<:Accumulate}) = EltypeUnknown()
+
 # Rest -- iterate starting at the given state
 
 struct Rest{I,S}
@@ -479,8 +533,8 @@ julia> a
 
 julia> collect(rest)
 2-element Array{Char,1}:
- 'b'
- 'c'
+ 'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
+ 'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
 ```
 """
 function peel(itr)
@@ -647,6 +701,105 @@ function iterate(it::Drop)
 end
 iterate(it::Drop, state) = iterate(it.xs, state)
 isdone(it::Drop, state) = isdone(it.xs, state)
+
+
+# takewhile
+
+struct TakeWhile{I,P<:Function}
+    pred::P
+    xs::I
+end
+
+"""
+    takewhile(pred, iter)
+
+An iterator that generates element from `iter` as long as predicate `pred` is true,
+afterwards, drops every element.
+
+!!! compat "Julia 1.4"
+    This function requires at least Julia 1.4.
+
+# Examples
+
+```jldoctest
+julia> s = collect(1:5)
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> collect(Iterators.takewhile(<(3),s))
+2-element Array{Int64,1}:
+ 1
+ 2
+```
+"""
+takewhile(pred,xs) = TakeWhile(pred,xs)
+
+function iterate(ibl::TakeWhile, itr...)
+    y = iterate(ibl.xs,itr...)
+    y === nothing && return nothing
+    ibl.pred(y[1]) || return nothing
+    y
+end
+
+IteratorSize(::Type{<:TakeWhile}) = SizeUnknown()
+eltype(::Type{TakeWhile{I,P}}) where {I,P} = eltype(I)
+IteratorEltype(::Type{TakeWhile{I,P}}) where {I,P} = IteratorEltype(I)
+
+
+# dropwhile
+
+struct DropWhile{I,P<:Function}
+    pred::P
+    xs::I
+end
+
+"""
+    dropwhile(pred, iter)
+
+An iterator that drops element from `iter` as long as predicate `pred` is true,
+afterwards, returns every element.
+
+!!! compat "Julia 1.4"
+    This function requires at least Julia 1.4.
+
+# Examples
+
+```jldoctest
+julia> s = collect(1:5)
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> collect(Iterators.dropwhile(<(3),s))
+3-element Array{Int64,1}:
+ 3
+ 4
+ 5
+```
+"""
+dropwhile(pred,itr) = DropWhile(pred,itr)
+
+iterate(ibl::DropWhile,itr) = iterate(ibl.xs, itr)
+function iterate(ibl::DropWhile)
+    y = iterate(ibl.xs)
+    while y !== nothing
+        ibl.pred(y[1]) || break
+        y = iterate(ibl.xs,y[2])
+    end
+    y
+end
+
+IteratorSize(::Type{<:DropWhile}) = SizeUnknown()
+eltype(::Type{DropWhile{I,P}}) where {I,P} = eltype(I)
+IteratorEltype(::Type{DropWhile{I,P}}) where {I,P} = IteratorEltype(I)
+
 
 # Cycle an iterator forever
 
@@ -921,38 +1074,56 @@ Iterate over a collection `n` elements at a time.
 # Examples
 ```jldoctest
 julia> collect(Iterators.partition([1,2,3,4,5], 2))
-3-element Array{Array{Int64,1},1}:
+3-element Array{SubArray{Int64,1,Array{Int64,1},Tuple{UnitRange{Int64}},true},1}:
  [1, 2]
  [3, 4]
  [5]
 ```
 """
-partition(c::T, n::Integer) where {T} = PartitionIterator{T}(c, Int(n))
-
+function partition(c, n::Integer)
+    n < 1 && throw(ArgumentError("cannot create partitions of length $n"))
+    return PartitionIterator(c, Int(n))
+end
 
 struct PartitionIterator{T}
     c::T
     n::Int
 end
+# Partitions are explicitly a linear indexing operation, so reshape to 1-d immediately
+PartitionIterator(A::AbstractArray, n::Int) = PartitionIterator(vec(A), n)
+PartitionIterator(v::AbstractVector, n::Int) = PartitionIterator{typeof(v)}(v, n)
 
 eltype(::Type{PartitionIterator{T}}) where {T} = Vector{eltype(T)}
+# Arrays use a generic `view`-of-a-`vec`, so we cannot exactly predict what we'll get back
+eltype(::Type{PartitionIterator{T}}) where {T<:AbstractArray} = AbstractVector{eltype(T)}
+# But for some common implementations in Base we know the answer exactly
+eltype(::Type{PartitionIterator{T}}) where {T<:Vector} = SubArray{eltype(T), 1, T, Tuple{UnitRange{Int}}, true}
+
+IteratorEltype(::Type{<:PartitionIterator{T}}) where {T} = IteratorEltype(T)
+IteratorEltype(::Type{<:PartitionIterator{T}}) where {T<:AbstractArray} = EltypeUnknown()
+IteratorEltype(::Type{<:PartitionIterator{T}}) where {T<:Vector} = IteratorEltype(T)
+
 partition_iteratorsize(::HasShape) = HasLength()
 partition_iteratorsize(isz) = isz
 function IteratorSize(::Type{PartitionIterator{T}}) where {T}
     partition_iteratorsize(IteratorSize(T))
 end
 
-IteratorEltype(::Type{<:PartitionIterator{T}}) where {T} = IteratorEltype(T)
-
 function length(itr::PartitionIterator)
     l = length(itr.c)
     return div(l, itr.n) + ((mod(l, itr.n) > 0) ? 1 : 0)
 end
 
-function iterate(itr::PartitionIterator{<:Vector}, state=1)
+function iterate(itr::PartitionIterator{<:AbstractRange}, state=1)
     state > length(itr.c) && return nothing
     r = min(state + itr.n - 1, length(itr.c))
-    return view(itr.c, state:r), r + 1
+    return @inbounds itr.c[state:r], r + 1
+end
+
+function iterate(itr::PartitionIterator{<:AbstractArray}, state=1)
+    state > length(itr.c) && return nothing
+    r = min(state + itr.n - 1, length(itr.c))
+    return @inbounds view(itr.c, state:r), r + 1
 end
 
 struct IterationCutShort; end
@@ -990,7 +1161,7 @@ There are several different ways to think about this iterator wrapper:
    whenever an item is produced.
 
 `Stateful` provides the regular iterator interface. Like other mutable iterators
-(e.g. [`Channel`](@ref)), if iteration is stopped early (e.g. by a `break` in a `for` loop),
+(e.g. [`Channel`](@ref)), if iteration is stopped early (e.g. by a [`break`](@ref) in a [`for`](@ref) loop),
 iteration can be resumed from the same spot by continuing to iterate over the
 same iterator object (in contrast, an immutable iterator would restart from the
 beginning).
@@ -1007,14 +1178,14 @@ julia> popfirst!(a)
 
 julia> collect(Iterators.take(a, 3))
 3-element Array{Char,1}:
- 'b'
- 'c'
- 'd'
+ 'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
+ 'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
+ 'd': ASCII/Unicode U+0064 (category Ll: Letter, lowercase)
 
 julia> collect(a)
 2-element Array{Char,1}:
- 'e'
- 'f'
+ 'e': ASCII/Unicode U+0065 (category Ll: Letter, lowercase)
+ 'f': ASCII/Unicode U+0066 (category Ll: Letter, lowercase)
 ```
 
 ```jldoctest
@@ -1094,5 +1265,42 @@ IteratorSize(::Type{Stateful{T,VS}}) where {T,VS} = IteratorSize(T) isa HasShape
 eltype(::Type{Stateful{T, VS}} where VS) where {T} = eltype(T)
 IteratorEltype(::Type{Stateful{T,VS}}) where {T,VS} = IteratorEltype(T)
 length(s::Stateful) = length(s.itr) - s.taken
+
+"""
+    only(x)
+
+Returns the one and only element of collection `x`, and throws an `ArgumentError` if the
+collection has zero or multiple elements.
+
+See also: [`first`](@ref), [`last`](@ref).
+
+!!! compat "Julia 1.4"
+    This method requires at least Julia 1.4.
+"""
+@propagate_inbounds function only(x)
+    i = iterate(x)
+    @boundscheck if i === nothing
+        throw(ArgumentError("Collection is empty, must contain exactly 1 element"))
+    end
+    (ret, state) = i
+    @boundscheck if iterate(x, state) !== nothing
+        throw(ArgumentError("Collection has multiple elements, must contain exactly 1 element"))
+    end
+    return ret
+end
+
+# Collections of known size
+only(x::Ref) = x[]
+only(x::Number) = x
+only(x::Char) = x
+only(x::Tuple{Any}) = x[1]
+only(x::Tuple) = throw(
+    ArgumentError("Tuple contains $(length(x)) elements, must contain exactly 1 element")
+)
+only(a::AbstractArray{<:Any, 0}) = @inbounds return a[]
+only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
+only(x::NamedTuple) = throw(
+    ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
+)
 
 end

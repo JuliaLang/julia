@@ -6,10 +6,43 @@ using InteractiveUtils: code_llvm
 
 import Libdl
 
+# for cfunction_closure
+include("testenv.jl")
+
 const libccalltest = "libccalltest"
 
 const verbose = false
 ccall((:set_verbose, libccalltest), Cvoid, (Int32,), verbose)
+
+@eval function cvarargs()
+    strp = Ref{Ptr{Cchar}}(0)
+    fmt = "%3.1f"
+    len = ccall(:asprintf, Cint, (Ptr{Ptr{Cchar}}, Cstring, Cfloat...), strp, fmt, 0.1)
+    str = unsafe_string(strp[], len)
+    Libc.free(strp[])
+    return str
+end
+@test cvarargs() == "0.1"
+
+
+# test multiple-type vararg handling (there's no syntax for this currently)
+@eval function foreign_varargs()
+    strp = Ref{Ptr{Cchar}}(0)
+    fmt = "hi+%hhd-%hhd-%hhd-%hhd-%hhd-%hhd-%hhd-%hhd-%hhd-%hhd-%hhd-%hhd-%hhd-%hhd-%hhd-%.1f-%.1f-%.1f-%.1f-%.1f-%.1f-%.1f-%.1f-%.1f\n"
+    len = $(Expr(:foreigncall, :(:asprintf), Cint,
+        Core.svec(Ptr{Ptr{Cchar}}, Cstring,
+            UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+            Cfloat, Cfloat, Cfloat, Cfloat, Cfloat, Cfloat, Cfloat, Cfloat, Cfloat),
+            2, :(:cdecl),
+            :(Base.unsafe_convert(Ptr{Ptr{Cchar}}, strp)), :(Base.unsafe_convert(Cstring, fmt)),
+            0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
+            Cfloat(1.1), Cfloat(2.2), Cfloat(3.3), Cfloat(4.4), Cfloat(5.5), Cfloat(6.6), Cfloat(7.7), Cfloat(8.8), Cfloat(9.9),
+            :strp, :fmt))
+    str = unsafe_string(strp[], len)
+    Libc.free(strp[])
+    return str
+end
+@test foreign_varargs() == "hi+1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-1.1-2.2-3.3-4.4-5.5-6.6-7.7-8.8-9.9\n"
 
 
 # Test for proper argument register truncation
@@ -761,6 +794,8 @@ end
 ## cfunction roundtrip
 
 verbose && Libc.flush_cstdio()
+
+if cfunction_closure
 verbose && println("Testing cfunction closures: ")
 
 # helper Type for testing that constructors work
@@ -944,6 +979,12 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
     end
 end
 
+else
+
+@test_broken "cfunction: no support for closures on this platform"
+
+end
+
 # issue 13031
 foo13031(x) = Cint(1)
 foo13031p = @cfunction(foo13031, Cint, (Ref{Tuple{}},))
@@ -986,6 +1027,20 @@ let n=3
 end
 
 @test ccall(:jl_getpagesize, Clong, ()) == @threadcall(:jl_getpagesize, Clong, ())
+
+# make sure our malloc/realloc/free adapters are thread-safe and repeatable
+for i = 1:8
+    ptr = @threadcall(:jl_malloc, Ptr{Cint}, (Csize_t,), sizeof(Cint))
+    @test ptr != C_NULL
+    unsafe_store!(ptr, 3)
+    @test unsafe_load(ptr) == 3
+    ptr = @threadcall(:jl_realloc, Ptr{Cint}, (Ptr{Cint}, Csize_t,), ptr, 2 * sizeof(Cint))
+    @test ptr != C_NULL
+    unsafe_store!(ptr, 4, 2)
+    @test unsafe_load(ptr, 1) == 3
+    @test unsafe_load(ptr, 2) == 4
+    @threadcall(:jl_free, Cvoid, (Ptr{Cint},), ptr)
+end
 
 # Pointer finalizer (issue #15408)
 let A = [1]
@@ -1370,8 +1425,9 @@ end
 @test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,),)))
 @test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B, C), )))
 @test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B..., C...), )))
-@test Expr(:error, "only the trailing ccall argument type should have \"...\"") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B..., C...), x)))
-@test Expr(:error, "only the trailing ccall argument type should have \"...\"") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B..., C...), x, y, z)))
+@test Expr(:error, "C ABI prohibits vararg without one required argument") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B...,), x)))
+@test Expr(:error, "only the trailing ccall argument type should have \"...\"") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (A, B..., C...), a, x)))
+@test Expr(:error, "only the trailing ccall argument type should have \"...\"") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (A, B..., C...), a, x, y, z)))
 @test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B, C...), )))
 
 # cfunction on non-function singleton
@@ -1477,3 +1533,44 @@ test27477() = ccall((:ctest, Pkg27477.libccalltest), Complex{Int}, (Complex{Int}
 end
 
 @test Test27477.test27477() == 2 + 0im
+
+# issue #31073
+let
+    a = ['0']
+    arr = Vector{Char}(undef, 2)
+    ptr = pointer(arr)
+    elsz = sizeof(Char)
+    na = length(a)
+    nba = na * elsz
+    ptr = eval(:(ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt), $(arr), $(a), $(nba))))
+    @test isa(ptr, Ptr{Cvoid})
+    @test arr[1] == '0'
+end
+
+# issue #34061
+o_file = tempname()
+output = read(Cmd(`$(Base.julia_cmd()) --output-o=$o_file -e 'Base.reinit_stdio();
+    f() = ccall((:dne, :does_not_exist), Cvoid, ());
+    f()'`; ignorestatus=true), String)
+@test occursin(output, """
+ERROR: could not load library "does_not_exist"
+does_not_exist.so: cannot open shared object file: No such file or directory
+""")
+@test !isfile(o_file)
+
+# pass NTuple{N,T} as Ptr{T}/Ref{T}
+let
+    dest = Ref((0,0,0))
+
+    src  = Ref((1,2,3))
+    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Int}, Ptr{Int}, Csize_t), dest, src, 3*sizeof(Int))
+    @test dest[] == (1,2,3)
+
+    src  = Ref((4,5,6))
+    ccall(:memcpy, Ptr{Cvoid}, (Ref{Int}, Ref{Int}, Csize_t), dest, src, 3*sizeof(Int))
+    @test dest[] == (4,5,6)
+
+    src  = (7,8,9)
+    ccall(:memcpy, Ptr{Cvoid}, (Ref{Int}, Ref{Int}, Csize_t), dest, src, 3*sizeof(Int))
+    @test dest[] == (7,8,9)
+end

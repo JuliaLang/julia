@@ -1,5 +1,6 @@
 ## UNWIND ##
 
+ifneq ($(USE_BINARYBUILDER_LIBUNWIND),1)
 LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC)
 LIBUNWIND_CPPFLAGS :=
 
@@ -23,7 +24,7 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-static-arm.patch-applied: $(SRCCAC
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-static-arm.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" --disable-shared --disable-minidebuginfo
+	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" --disable-shared --disable-minidebuginfo --disable-tests
 	echo 1 > $@
 
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured
@@ -100,3 +101,17 @@ compile-osxunwind: $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/build-compiled
 fastcheck-osxunwind: check-osxunwind
 check-osxunwind: compile-osxunwind
 install-osxunwind: $(build_prefix)/manifest/osxunwind
+
+else # USE_BINARYBUILDER_LIBUNWIND
+
+UNWIND_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LibUnwind-v$(UNWIND_VER)+$(UNWIND_BB_REL)
+UNWIND_BB_NAME := LibUnwind.v$(UNWIND_VER)
+
+$(eval $(call bb-install,unwind,UNWIND,false))
+
+OSXUNWIND_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LibOSXUnwind-$(OSXUNWIND_VER)-$(OSXUNWIND_BB_REL)
+OSXUNWIND_BB_NAME := LibOSXUnwind.v$(OSXUNWIND_VER)
+
+$(eval $(call bb-install,osxunwind,OSXUNWIND,false))
+
+endif

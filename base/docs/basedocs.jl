@@ -24,7 +24,7 @@ For help on a specific function or macro, type `?` followed
 by its name, e.g. `?cos`, or `?@time`, and press enter.
 Type `;` to enter shell mode, `]` to enter package mode.
 """
-kw"help", kw"?", kw"julia", kw""
+kw"help", kw"?", kw"Julia", kw"julia", kw""
 
 """
     using
@@ -101,6 +101,29 @@ end
 kw"module"
 
 """
+    __init__
+
+`__init__()` function in your module would executes immediately *after* the module is loaded at
+runtime for the first time (i.e., it is only called once and only after all statements in the
+module have been executed). Because it is called *after* fully importing the module, `__init__`
+functions of submodules will be executed *first*. Two typical uses of __init__ are calling
+runtime initialization functions of external C libraries and initializing global constants
+that involve pointers returned by external libraries.
+See the [manual section about modules](@ref modules) for more details.
+
+# Examples
+```julia
+const foo_data_ptr = Ref{Ptr{Cvoid}}(0)
+function __init__()
+    ccall((:foo_init, :libfoo), Cvoid, ())
+    foo_data_ptr[] = ccall((:foo_data, :libfoo), Ptr{Cvoid}, ())
+    nothing
+end
+```
+"""
+kw"__init__"
+
+"""
     baremodule
 
 `baremodule` declares a module that does not contain `using Base`
@@ -135,7 +158,8 @@ resulting expression is substituted directly into the program at the point where
 the macro is invoked.
 Macros are a way to run generated code without calling [`eval`](@ref Base.eval), since the generated
 code instead simply becomes part of the surrounding program.
-Macro arguments may include expressions, literal values, and symbols.
+Macro arguments may include expressions, literal values, and symbols. Macros can be defined for
+variable number of arguments (varargs), but do not accept keyword arguments.
 
 # Examples
 ```jldoctest
@@ -146,6 +170,14 @@ julia> macro sayhello(name)
 
 julia> @sayhello "Charlie"
 Hello, Charlie!
+
+julia> macro saylots(x...)
+           return :( println("Say: ", \$(x...)) )
+       end
+@saylots (macro with 1 method)
+
+julia> @saylots "hey " "there " "friend"
+Say: hey there friend
 ```
 """
 kw"macro"
@@ -326,6 +358,57 @@ For other purposes, `:( ... )` and `quote .. end` blocks are treated identically
 kw"quote"
 
 """
+    {}
+
+Curly braces are used to specify [type parameters](@ref man-parametric-types).
+
+Type parameters allow a single type declaration to introduce a whole family of
+new types — one for each possible combination of parameter values. For example,
+the [`Set`](@ref) type describes many possible types of sets; it uses one type
+parameter to describe the type of the elements it contains. The specific _parameterized_
+types `Set{Float64}` and `Set{Int64}` describe two _concrete_ types: both are
+subtypes ([`<:`](@ref)) of `Set`, but the former has `Float64` elements and the latter
+has `Int64` elements.
+"""
+kw"{", kw"{}", kw"}"
+
+"""
+    []
+
+Square braces are used for [indexing](@ref man-array-indexing), [indexed assignment](@ref man-indexed-assignment),
+[array literals](@ref man-array-literals), and [array comprehensions](@ref man-comprehensions).
+"""
+kw"[", kw"[]", kw"]"
+
+"""
+    ()
+
+Parentheses are used to group expressions, call functions, and construct [tuples](@ref Tuple) and [named tuples](@ref NamedTuple).
+"""
+kw"(", kw"()", kw")"
+
+"""
+    #
+
+The number sign (or hash) character is used to begin a single-line comment.
+"""
+kw"#"
+
+"""
+    #= =#
+
+A multi-line comment begins with `#=` and ends with `=#`, and may be nested.
+"""
+kw"#=", kw"=#"
+
+"""
+    ;
+
+Semicolons are used as statement separators and mark the beginning of keyword arguments in function declarations or calls.
+"""
+kw";"
+
+"""
     Expr(head::Symbol, args...)
 
 A type representing compound expressions in parsed julia code (ASTs).
@@ -372,6 +455,23 @@ julia> A'
 ```
 """
 kw"'"
+
+"""
+    \$
+
+Interpolation operator for interpolating into e.g. [strings](@ref string-interpolation)
+and [expressions](@ref man-expression-interpolation).
+
+# Examples
+```jldoctest
+julia> name = "Joe"
+"Joe"
+
+julia> "My name is \$name."
+"My name is Joe."
+```
+"""
+kw"$"
 
 """
     const
@@ -575,6 +675,18 @@ try
     end
 catch
     @warn "Could not write file."
+end
+```
+
+or, when the file cannot be read into a variable:
+
+```julia
+lines = try
+    open("/danger", "r") do f
+        readlines(f)
+    end
+catch
+    @warn "File not found."
 end
 ```
 
@@ -821,10 +933,10 @@ end
 Fields can have type restrictions, which may be parameterized:
 
 ```julia
-    struct Point{X}
-        x::X
-        y::Float64
-    end
+struct Point{X}
+    x::X
+    y::Float64
+end
 ```
 
 A struct can also declare an abstract super type via `<:` syntax:
@@ -859,7 +971,8 @@ kw"mutable struct"
 
 Special function available to inner constructors which created a new object
 of the type.
-See the manual section on [Inner Constructor Methods](@ref) for more information.
+See the manual section on [Inner Constructor Methods](@ref man-inner-constructor-methods)
+for more information.
 """
 kw"new"
 
@@ -898,6 +1011,29 @@ order in which variables are substituted when a type is "applied" to parameter v
 using the syntax `T{p1, p2, ...}`.
 """
 kw"where"
+
+"""
+    var
+
+The syntax `var"#example#"` refers to a variable named `Symbol("#example#")`,
+even though `#example#` is not a valid Julia identifier name.
+
+This can be useful for interoperability with programming languages which have
+different rules for the construction of valid identifiers. For example, to
+refer to the `R` variable `draw.segments`, you can use `var"draw.segments"` in
+your Julia code.
+
+It is also used to `show` julia source code which has gone through macro
+hygiene or otherwise contains variable names which can't be parsed normally.
+
+Note that this syntax requires parser support so it is expanded directly by the
+parser rather than being implemented as a normal string macro `@var_str`.
+
+!!! compat "Julia 1.3"
+    This syntax requires at least Julia 1.3.
+
+"""
+kw"var\"name\"", kw"@var_str"
 
 """
     ans
@@ -1272,6 +1408,13 @@ This method allows invoking a method other than the most specific matching metho
 when the behavior of a more general definition is explicitly needed (often as part of the
 implementation of a more specific method of the same function).
 
+Be careful when using `invoke` for functions that you don't write.  What definition is used
+for given `argtypes` is an implementation detail unless the function is explicitly states
+that calling with certain `argtypes` is a part of public API.  For example, the change
+between `f1` and `f2` in the example below is usually considered compatible because the
+change is invisible by the caller with a normal (non-`invoke`) call.  However, the change is
+visible if you use `invoke`.
+
 # Examples
 ```jldoctest
 julia> f(x::Real) = x^2;
@@ -1280,6 +1423,25 @@ julia> f(x::Integer) = 1 + invoke(f, Tuple{Real}, x);
 
 julia> f(2)
 5
+
+julia> f1(::Integer) = Integer
+       f1(::Real) = Real;
+
+julia> f2(x::Real) = _f2(x)
+       _f2(::Integer) = Integer
+       _f2(_) = Real;
+
+julia> f1(1)
+Integer
+
+julia> f2(1)
+Integer
+
+julia> invoke(f1, Tuple{Real}, 1)
+Real
+
+julia> invoke(f2, Tuple{Real}, 1)
+Integer
 ```
 """
 invoke
@@ -1374,6 +1536,24 @@ Unsigned
     Bool <: Integer
 
 Boolean type, containing the values `true` and `false`.
+
+`Bool` is a kind of number: `false` is numerically
+equal to `0` and `true` is numerically equal to `1`.
+Moreover, `false` acts as a multiplicative "strong zero":
+
+```jldoctest
+julia> false == 0
+true
+
+julia> true == 1
+true
+
+julia> 0 * NaN
+NaN
+
+julia> false * NaN
+0.0
+```
 """
 Bool
 
@@ -1468,9 +1648,10 @@ tuple
 
 """
     getfield(value, name::Symbol)
+    getfield(value, i::Int)
 
-Extract a named field from a `value` of composite type.
-See also [`getproperty`](@ref Base.getproperty).
+Extract a field from a composite `value` by name or position.
+See also [`getproperty`](@ref Base.getproperty) and [`fieldnames`](@ref).
 
 # Examples
 ```jldoctest
@@ -1481,6 +1662,9 @@ julia> getfield(a, :num)
 1
 
 julia> a.num
+1
+
+julia> getfield(a, 1)
 1
 ```
 """
@@ -2053,6 +2237,29 @@ See the manual section on [Tuple Types](@ref).
 Tuple
 
 """
+    NamedTuple{names}(args::Tuple)
+
+Construct a named tuple with the given `names` (a tuple of Symbols) from a tuple of values.
+"""
+NamedTuple{names}(args::Tuple)
+
+"""
+    NamedTuple{names,T}(args::Tuple)
+
+Construct a named tuple with the given `names` (a tuple of Symbols) and field types `T`
+(a `Tuple` type) from a tuple of values.
+"""
+NamedTuple{names,T}(args::Tuple)
+
+"""
+    NamedTuple{names}(nt::NamedTuple)
+
+Construct a named tuple by selecting fields in `names` (a tuple of Symbols) from
+another named tuple.
+"""
+NamedTuple{names}(nt::NamedTuple)
+
+"""
     typeassert(x, type)
 
 Throw a [`TypeError`](@ref) unless `x isa type`.
@@ -2177,5 +2384,12 @@ Main.Main
 The base library of Julia. `Base` is a module that contains basic functionality (the contents of `base/`). All modules implicitly contain `using Base`, since this is needed in the vast majority of cases.
 """
 Base.Base
+
+"""
+    QuoteNode
+
+A quoted piece of code, that does not support interpolation. See the [manual section about QuoteNodes](@ref man-quote-node) for details.
+"""
+QuoteNode
 
 end

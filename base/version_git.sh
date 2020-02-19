@@ -39,7 +39,7 @@ if [ -n "$(git status --porcelain)" ]; then
     # append dirty mark '*' if the repository has uncommitted changes
     commit_short="$commit_short"*
 fi
-branch=$(git branch | sed -n '/\* /s///p')
+branch=$(git rev-parse --abbrev-ref HEAD)
 
 topdir=$(git rev-parse --show-toplevel)
 verchanged=$(git blame -L ,1 -sl -- "$topdir/VERSION" | cut -f 1 -d " ")

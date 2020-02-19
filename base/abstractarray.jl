@@ -101,6 +101,51 @@ unsafe_indices(r::AbstractRange) = (OneTo(unsafe_length(r)),) # Ranges use check
 keys(a::AbstractArray) = CartesianIndices(axes(a))
 keys(a::AbstractVector) = LinearIndices(a)
 
+"""
+    keytype(T::Type{<:AbstractArray})
+    keytype(A::AbstractArray)
+
+Return the key type of an array. This is equal to the
+`eltype` of the result of `keys(...)`, and is provided
+mainly for compatibility with the dictionary interface.
+
+# Examples
+```jldoctest
+julia> keytype([1, 2, 3]) == Int
+true
+
+julia> keytype([1 2; 3 4])
+CartesianIndex{2}
+```
+
+!!! compat "Julia 1.2"
+     For arrays, this function requires at least Julia 1.2.
+"""
+keytype(a::AbstractArray) = keytype(typeof(a))
+
+keytype(A::Type{<:AbstractArray}) = CartesianIndex{ndims(A)}
+keytype(A::Type{<:AbstractVector}) = Int
+
+valtype(a::AbstractArray) = valtype(typeof(a))
+
+"""
+    valtype(T::Type{<:AbstractArray})
+    valtype(A::AbstractArray)
+
+Return the value type of an array. This is identical to `eltype` and is
+provided mainly for compatibility with the dictionary interface.
+
+# Examples
+```jldoctest
+julia> valtype(["one", "two", "three"])
+String
+```
+
+!!! compat "Julia 1.2"
+     For arrays, this function requires at least Julia 1.2.
+"""
+valtype(A::Type{<:AbstractArray}) = eltype(A)
+
 prevind(::AbstractArray, i::Integer) = Int(i)-1
 nextind(::AbstractArray, i::Integer) = Int(i)+1
 
@@ -167,7 +212,7 @@ eachindex(itrs...) = keys(itrs...)
 eachindex(A::AbstractVector) = (@_inline_meta(); axes1(A))
 
 @noinline function throw_eachindex_mismatch(::IndexLinear, A...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(LinearIndices.(A), ", ", " and "))"))
+    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(eachindex.(A), ", ", " and "))"))
 end
 @noinline function throw_eachindex_mismatch(::IndexCartesian, A...)
     throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(axes.(A), ", ", " and "))"))
@@ -187,9 +232,8 @@ If you supply more than one `AbstractArray` argument, `eachindex` will create an
 iterable object that is fast for all arguments (a [`UnitRange`](@ref)
 if all inputs have fast linear indexing, a [`CartesianIndices`](@ref)
 otherwise).
-If the arrays have different sizes and/or dimensionalities, `eachindex` will return an
-iterable that spans the largest range along each dimension.
-
+If the arrays have different sizes and/or dimensionalities, a DimensionMismatch exception
+will be thrown.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4];
@@ -710,7 +754,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer)
                                    "expected at least ",sstart,", got ",sstart-1)))
     end
     i = Int(dstart)
-    while y != nothing
+    while y !== nothing
         val, st = y
         dest[i] = val
         i += 1
@@ -1145,13 +1189,13 @@ mightalias(A::AbstractArray, B::AbstractArray) = !isbits(A) && !isbits(B) && !_i
 mightalias(x, y) = false
 
 _isdisjoint(as::Tuple{}, bs::Tuple{}) = true
-_isdisjoint(as::Tuple{}, bs::Tuple{Any}) = true
+_isdisjoint(as::Tuple{}, bs::Tuple{UInt}) = true
 _isdisjoint(as::Tuple{}, bs::Tuple) = true
-_isdisjoint(as::Tuple{Any}, bs::Tuple{}) = true
-_isdisjoint(as::Tuple{Any}, bs::Tuple{Any}) = as[1] != bs[1]
-_isdisjoint(as::Tuple{Any}, bs::Tuple) = !(as[1] in bs)
+_isdisjoint(as::Tuple{UInt}, bs::Tuple{}) = true
+_isdisjoint(as::Tuple{UInt}, bs::Tuple{UInt}) = as[1] != bs[1]
+_isdisjoint(as::Tuple{UInt}, bs::Tuple) = !(as[1] in bs)
 _isdisjoint(as::Tuple, bs::Tuple{}) = true
-_isdisjoint(as::Tuple, bs::Tuple{Any}) = !(bs[1] in as)
+_isdisjoint(as::Tuple, bs::Tuple{UInt}) = !(bs[1] in as)
 _isdisjoint(as::Tuple, bs::Tuple) = !(as[1] in bs) && _isdisjoint(tail(as), bs)
 
 """
@@ -1495,6 +1539,15 @@ julia> hcat(c...)
  1  4
  2  5
  3  6
+
+julia> x = Matrix(undef, 3, 0)  # x = [] would have created an Array{Any, 1}, but need an Array{Any, 2}
+3×0 Array{Any,2}
+
+julia> hcat(x, [1; 2; 3])
+3×1 Array{Any,2}:
+ 1
+ 2
+ 3
 ```
 """
 hcat(X...) = cat(X...; dims=Val(2))

@@ -50,6 +50,16 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
     end
 end
 
+similar(A::Union{Adjoint{Ti,Tv}, Transpose{Ti,Tv}}, ::Type{T}) where {T,Ti,Tv<:LowerTriangular} =
+    UpperTriangular(similar(parent(parent(A)), T))
+similar(A::Union{Adjoint{Ti,Tv}, Transpose{Ti,Tv}}, ::Type{T}) where {T,Ti,Tv<:UnitLowerTriangular} =
+    UnitUpperTriangular(similar(parent(parent(A)), T))
+similar(A::Union{Adjoint{Ti,Tv}, Transpose{Ti,Tv}}, ::Type{T}) where {T,Ti,Tv<:UpperTriangular} =
+    LowerTriangular(similar(parent(parent(A)), T))
+similar(A::Union{Adjoint{Ti,Tv}, Transpose{Ti,Tv}}, ::Type{T}) where {T,Ti,Tv<:UnitUpperTriangular} =
+    UnitLowerTriangular(similar(parent(parent(A)), T))
+
+
 LowerTriangular(U::UpperTriangular) = throw(ArgumentError(
     "cannot create a LowerTriangular matrix from an UpperTriangular input"))
 UpperTriangular(U::LowerTriangular) = throw(ArgumentError(
@@ -444,78 +454,99 @@ function copyto!(A::T, B::T) where T<:Union{LowerTriangular,UnitLowerTriangular}
     return A
 end
 
-function mul!(A::UpperTriangular, B::UpperTriangular, c::Number)
+# Define `mul!` for (Unit){Upper,Lower}Triangular matrices times a
+# number.
+for (Trig, UnitTrig) in [(UpperTriangular, UnitUpperTriangular),
+                         (LowerTriangular, UnitLowerTriangular)]
+    for (TB, TC) in [(Trig, Number),
+                     (Number, Trig),
+                     (UnitTrig, Number),
+                     (Number, UnitTrig)]
+        @eval @inline mul!(A::$Trig, B::$TB, C::$TC, alpha::Number, beta::Number) =
+            _mul!(A, B, C, MulAddMul(alpha, beta))
+    end
+end
+
+@inline function _mul!(A::UpperTriangular, B::UpperTriangular, c::Number, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = 1:j
-            @inbounds A[i,j] = B[i,j] * c
+            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
         end
     end
     return A
 end
-function mul!(A::UpperTriangular, c::Number, B::UpperTriangular)
+@inline function _mul!(A::UpperTriangular, c::Number, B::UpperTriangular, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = 1:j
-            @inbounds A[i,j] = c * B[i,j]
+            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
         end
     end
     return A
 end
-function mul!(A::UpperTriangular, B::UnitUpperTriangular, c::Number)
+@inline function _mul!(A::UpperTriangular, B::UnitUpperTriangular, c::Number, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
-        @inbounds A[j,j] = c
+        @inbounds _modify!(_add, c, A, (j,j))
         for i = 1:(j - 1)
-            @inbounds A[i,j] = B[i,j] * c
+            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
         end
     end
     return A
 end
-function mul!(A::UpperTriangular, c::Number, B::UnitUpperTriangular)
+@inline function _mul!(A::UpperTriangular, c::Number, B::UnitUpperTriangular, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
-        @inbounds A[j,j] = c
+        @inbounds _modify!(_add, c, A, (j,j))
         for i = 1:(j - 1)
-            @inbounds A[i,j] = c * B[i,j]
+            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
         end
     end
     return A
 end
-function mul!(A::LowerTriangular, B::LowerTriangular, c::Number)
+@inline function _mul!(A::LowerTriangular, B::LowerTriangular, c::Number, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = j:n
-            @inbounds A[i,j] = B[i,j] * c
+            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
         end
     end
     return A
 end
-function mul!(A::LowerTriangular, c::Number, B::LowerTriangular)
+@inline function _mul!(A::LowerTriangular, c::Number, B::LowerTriangular, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = j:n
-            @inbounds A[i,j] = c * B[i,j]
+            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
         end
     end
     return A
 end
-function mul!(A::LowerTriangular, B::UnitLowerTriangular, c::Number)
+@inline function _mul!(A::LowerTriangular, B::UnitLowerTriangular, c::Number, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
-            @inbounds A[j,j] = c
+        @inbounds _modify!(_add, c, A, (j,j))
         for i = (j + 1):n
-            @inbounds A[i,j] = B[i,j] * c
+            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
         end
     end
     return A
 end
-function mul!(A::LowerTriangular, c::Number, B::UnitLowerTriangular)
+@inline function _mul!(A::LowerTriangular, c::Number, B::UnitLowerTriangular, _add::MulAddMul)
     n = checksquare(B)
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
-            @inbounds A[j,j] = c
+        @inbounds _modify!(_add, c, A, (j,j))
         for i = (j + 1):n
-            @inbounds A[i,j] = c * B[i,j]
+            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
         end
     end
     return A
@@ -523,6 +554,90 @@ end
 
 rmul!(A::Union{UpperTriangular,LowerTriangular}, c::Number) = mul!(A, A, c)
 lmul!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = mul!(A, c, A)
+
+function dot(x::AbstractVector, A::UpperTriangular, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    m = size(A, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    x₁ = x[1]
+    r = dot(x₁, A[1,1], y[1])
+    @inbounds for j in 2:m
+        yj = y[j]
+        if !iszero(yj)
+            temp = adjoint(A[1,j]) * x₁
+            @simd for i in 2:j
+                temp += adjoint(A[i,j]) * x[i]
+            end
+            r += dot(temp, yj)
+        end
+    end
+    return r
+end
+function dot(x::AbstractVector, A::UnitUpperTriangular, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    m = size(A, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    x₁ = first(x)
+    r = dot(x₁, y[1])
+    @inbounds for j in 2:m
+        yj = y[j]
+        if !iszero(yj)
+            temp = adjoint(A[1,j]) * x₁
+            @simd for i in 2:j-1
+                temp += adjoint(A[i,j]) * x[i]
+            end
+            r += dot(temp, yj)
+            r += dot(x[j], yj)
+        end
+    end
+    return r
+end
+function dot(x::AbstractVector, A::LowerTriangular, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    m = size(A, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    r = zero(typeof(dot(first(x), first(A), first(y))))
+    @inbounds for j in 1:m
+        yj = y[j]
+        if !iszero(yj)
+            temp = adjoint(A[j,j]) * x[j]
+            @simd for i in j+1:m
+                temp += adjoint(A[i,j]) * x[i]
+            end
+            r += dot(temp, yj)
+        end
+    end
+    return r
+end
+function dot(x::AbstractVector, A::UnitLowerTriangular, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    m = size(A, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    r = zero(typeof(dot(first(x), first(y))))
+    @inbounds for j in 1:m
+        yj = y[j]
+        if !iszero(yj)
+            temp = x[j]
+            @simd for i in j+1:m
+                temp += adjoint(A[i,j]) * x[i]
+            end
+            r += dot(temp, yj)
+        end
+    end
+    return r
+end
 
 fillstored!(A::LowerTriangular, x)     = (fillband!(A.data, x, 1-size(A,1), 0); A)
 fillstored!(A::UnitLowerTriangular, x) = (fillband!(A.data, x, 1-size(A,1), -1); A)
@@ -556,8 +671,10 @@ fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); 
 
 lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B) # is this necessary?
 
-mul!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal) = mul!(C, copyto!(similar(parent(A)), A), B)
-mul!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular) = mul!(C, A, copyto!(similar(parent(B)), B))
+@inline mul!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal, alpha::Number, beta::Number) =
+    mul!(C, copyto!(similar(parent(A)), A), B, alpha, beta)
+@inline mul!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular, alpha::Number, beta::Number) =
+    mul!(C, A, copyto!(similar(parent(B)), B), alpha, beta)
 mul!(C::AbstractVector, A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractVecOrMat}) =
     (B = transB.parent; lmul!(A, transpose!(C, B)))
 mul!(C::AbstractMatrix, A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractVecOrMat}) =
@@ -583,10 +700,14 @@ mul!(C::AbstractMatrix  , transA::Transpose{<:Any,<:AbstractTriangular}, B::Abst
     (A = transA.parent; lmul!(transpose(A), copyto!(C, B)))
 mul!(C::AbstractVecOrMat, transA::Transpose{<:Any,<:AbstractTriangular}, B::AbstractVecOrMat) =
     (A = transA.parent; lmul!(transpose(A), copyto!(C, B)))
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
+@inline mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
+    mul!(C, A, copy(B), alpha, beta)
+@inline mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
+    mul!(C, A, copy(B), alpha, beta)
+@inline mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
+    mul!(C, A, copy(B), alpha, beta)
+@inline mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
+    mul!(C, A, copy(B), alpha, beta)
 mul!(C::AbstractVector, A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
 mul!(C::AbstractVector, A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
 
@@ -2183,32 +2304,14 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
     end
 
     # Compute accurate superdiagonal of T
-    p = 1 / 2^s
-    for k = 1:n-1
-        Ak = A0[k,k]
-        Akp1 = A0[k+1,k+1]
-        Akp = Ak^p
-        Akp1p = Akp1^p
-        A[k,k] = Akp
-        A[k+1,k+1] = Akp1p
-        if Ak == Akp1
-            A[k,k+1] = p * A0[k,k+1] * Ak^(p-1)
-        elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak)
-            A[k,k+1] = A0[k,k+1] * (Akp1p - Akp) / (Akp1 - Ak)
-        else
-            logAk = log(Ak)
-            logAkp1 = log(Akp1)
-            w = atanh((Akp1 - Ak)/(Akp1 + Ak)) + im*pi*ceil((imag(logAkp1-logAk)-pi)/(2*pi))
-            dd = 2 * exp(p*(logAk+logAkp1)/2) * sinh(p*w) / (Akp1 - Ak)
-            A[k,k+1] = A0[k,k+1] * dd
-        end
-    end
+    blockpower!(A, A0, 0.5^s)
 
     # Compute accurate diagonal of T
     for i = 1:n
         a = A0[i,i]
         if s == 0
-            r = a - 1
+            A[i,i] = a - 1
+            continue
         end
         s0 = s
         if angle(a) >= pi / 2
@@ -2245,7 +2348,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
     end
 
     # Scale back
-    lmul!(2^s, Y)
+    lmul!(2.0^s, Y)
 
     # Compute accurate diagonal and superdiagonal of log(T)
     for k = 1:n-1
@@ -2257,11 +2360,16 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
         Y[k+1,k+1] = logAkp1
         if Ak == Akp1
             Y[k,k+1] = A0[k,k+1] / Ak
-        elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak)
+        elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak) || iszero(Akp1 + Ak)
             Y[k,k+1] = A0[k,k+1] * (logAkp1 - logAk) / (Akp1 - Ak)
         else
-            w = atanh((Akp1 - Ak)/(Akp1 + Ak) + im*pi*(ceil((imag(logAkp1-logAk) - pi)/(2*pi))))
-            Y[k,k+1] = 2 * A0[k,k+1] * w / (Akp1 - Ak)
+            z = (Akp1 - Ak)/(Akp1 + Ak)
+            if abs(z) > 1
+                Y[k,k+1] = A0[k,k+1] * (logAkp1 - logAk) / (Akp1 - Ak)
+            else
+                w = atanh(z) + im * pi * (unw(logAkp1-logAk) - unw(log1p(z)-log1p(-z)))
+                Y[k,k+1] = 2 * A0[k,k+1] * w / (Akp1 - Ak)
+            end
         end
     end
 
@@ -2408,14 +2516,19 @@ function blockpower!(A::UpperTriangular, A0::UpperTriangular, p)
 
         if Ak == Akp1
             A[k,k+1] = p * A0[k,k+1] * Ak^(p-1)
-        elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak)
+        elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak) || iszero(Akp1 + Ak)
             A[k,k+1] = A0[k,k+1] * (Akp1p - Akp) / (Akp1 - Ak)
         else
             logAk = log(Ak)
             logAkp1 = log(Akp1)
-            w = atanh((Akp1 - Ak)/(Akp1 + Ak)) + im * pi * unw(logAkp1-logAk)
-            dd = 2 * exp(p*(logAk+logAkp1)/2) * sinh(p*w) / (Akp1 - Ak);
-            A[k,k+1] = A0[k,k+1] * dd
+            z = (Akp1 - Ak)/(Akp1 + Ak)
+            if abs(z) > 1
+                A[k,k+1] = A0[k,k+1] * (Akp1p - Akp) / (Akp1 - Ak)
+            else
+                w = atanh(z) + im * pi * (unw(logAkp1-logAk) - unw(log1p(z)-log1p(-z)))
+                dd = 2 * exp(p*(logAk+logAkp1)/2) * sinh(p*w) / (Akp1 - Ak);
+                A[k,k+1] = A0[k,k+1] * dd
+            end
         end
     end
 end
@@ -2513,7 +2626,7 @@ eigen(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
 # Generic singular systems
 for func in (:svd, :svd!, :svdvals)
     @eval begin
-        ($func)(A::AbstractTriangular) = ($func)(copyto!(similar(parent(A)), A))
+        ($func)(A::AbstractTriangular; kwargs...) = ($func)(copyto!(similar(parent(A)), A); kwargs...)
     end
 end
 

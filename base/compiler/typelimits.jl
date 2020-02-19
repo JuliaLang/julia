@@ -57,18 +57,6 @@ function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
         for p in cP
             is_derived_type(t, p, mindepth) && return true
         end
-        if isconcretetype(c) && isbitstype(c)
-            # see if it was extracted from a fieldtype
-            # however, only look through types that can be inlined
-            # to ensure monotonicity of derivation
-            # since we know that for immutable, concrete, bits types,
-            # the field types must have been constructed prior to the type,
-            # it cannot have a reference cycle in the type graph
-            cF = c.types
-            for f in cF
-                is_derived_type(t, f, mindepth) && return true
-            end
-        end
     end
     return false
 end
@@ -89,10 +77,13 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
         return t # easy case
     elseif isa(t, DataType) && isempty(t.parameters)
         return t # fast path: unparameterized are always simple
-    elseif isa(unwrap_unionall(t), DataType) && isa(c, Type) && c !== Union{} && c <: t
-        return t # t is already wider than the comparison in the type lattice
-    elseif is_derived_type_from_any(unwrap_unionall(t), sources, depth)
-        return t # t isn't something new
+    else
+        ut = unwrap_unionall(t)
+        if isa(ut, DataType) && ut.name !== _va_typename && isa(c, Type) && c !== Union{} && c <: t
+            return t # t is already wider than the comparison in the type lattice
+        elseif is_derived_type_from_any(ut, sources, depth)
+            return t # t isn't something new
+        end
     end
     # peel off (and ignore) wrappers - they contribute no useful information, so we don't need to consider their size
     # first attempt to turn `c` into a type that contributes meaningful information

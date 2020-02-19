@@ -475,7 +475,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             end
             result_stmts[inst_range[end]] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
         elseif !isa(terminator, ReturnNode)
-            if isa(terminator, Expr) && terminator.head == :enter
+            if isa(terminator, Expr) && terminator.head === :enter
                 terminator.args[1] = bb_rename[terminator.args[1]]
             end
             if bb_rename[bb + 1] != new_bb + 1
@@ -569,8 +569,9 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
     return new_typ
 end
 
-function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::DomTree, defuse, nargs::Int, sptypes::Vector{Any},
+function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, nargs::Int, sptypes::Vector{Any},
                         slottypes::Vector{Any})
+    code = ir.stmts
     cfg = ir.cfg
     left = Int[]
     catch_entry_blocks = Tuple{Int, Int}[]
@@ -653,7 +654,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
         elseif !defuse[x].any_newvar
             undef_token
         else
-            SSAValue(-1)
+            SSAValue(-2)
         end for x in 1:length(ci.slotflags)
     ]
     worklist = Tuple{Int, Int, Vector{Any}}[(1, 0, initial_incoming_vals)]
@@ -717,9 +718,10 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
         eidx = findfirst(x->x[1] == item, catch_entry_blocks)
         if eidx !== nothing
             for (slot, _, node) in phicnodes[catch_entry_blocks[eidx][2]]
-                ivalundef = incoming_vals[slot_id(slot)] === undef_token
-                unode = ivalundef ? UpsilonNode() : UpsilonNode(incoming_vals[slot_id(slot)])
-                typ = ivalundef ? MaybeUndef(Union{}) : slottypes[slot_id(slot)]
+                ival = incoming_vals[slot_id(slot)]
+                ivalundef = ival === undef_token
+                unode = ivalundef ? UpsilonNode() : UpsilonNode(ival)
+                typ = ivalundef ? MaybeUndef(Union{}) : typ_for_val(ival, ci, sptypes, -1, slottypes)
                 push!(node.values,
                     NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, item),
                                  typ, unode, true).id - length(ir.stmts)))

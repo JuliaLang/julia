@@ -5,9 +5,10 @@
 end
 
 @testset "nonmissingtype" begin
-    @test Base.nonmissingtype(Union{Int, Missing}) == Int
-    @test Base.nonmissingtype(Any) == Any
-    @test Base.nonmissingtype(Missing) == Union{}
+    @test nonmissingtype(Union{Int, Missing}) == Int
+    @test nonmissingtype(Union{Rational, Missing}) == Rational
+    @test nonmissingtype(Any) == Any
+    @test nonmissingtype(Missing) == Union{}
 end
 
 @testset "convert" begin
@@ -15,6 +16,7 @@ end
     @test convert(Union{Int, Missing}, 1.0) === 1
     @test convert(Union{Nothing, Missing}, missing) === missing
     @test convert(Union{Nothing, Missing}, nothing) === nothing
+    @test convert(Union{Missing, Nothing, Float64}, 1) === 1.0
 
     @test_throws MethodError convert(Missing, 1)
     @test_throws MethodError convert(Union{Nothing, Missing}, 1)
@@ -163,6 +165,8 @@ Base.one(::Type{Unit}) = 1
         @test ismissing(f(missing))
     end
 
+    @test ismissing(clamp(missing, 1, 2))
+
     for T in (Int, Float64)
         @test zero(Union{T, Missing}) === T(0)
         @test one(Union{T, Missing}) === T(1)
@@ -217,7 +221,7 @@ end
 @testset "printing" begin
     @test sprint(show, missing) == "missing"
     @test sprint(show, missing, context=:compact => true) == "missing"
-    @test sprint(show, [missing]) == "$Missing[missing]"
+    @test sprint(show, [missing]) == "[missing]"
     @test sprint(show, [1 missing]) == "$(Union{Int, Missing})[1 missing]"
     b = IOBuffer()
     display(TextDisplay(b), [missing])
@@ -238,6 +242,14 @@ end
     @test isa(x, Vector{Union{Int, Missing}})
     @test isequal(x, [missing])
     @test eltype(adjoint([1, missing])) == Union{Int, Missing}
+    # issue #32777
+    let a = [0, nothing, 0.0, missing]
+        @test a[1] === 0.0
+        @test a[2] === nothing
+        @test a[3] === 0.0
+        @test a[4] === missing
+        @test a isa Vector{Union{Missing, Nothing, Float64}}
+    end
 end
 
 @testset "== and != on arrays" begin

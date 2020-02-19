@@ -185,7 +185,7 @@ bool LowerExcHandlers::runOnFunction(Function &F) {
         auto *buff = new AllocaInst(Type::getInt8Ty(F.getContext()),
                                        0,
                                        handler_sz, "", firstInst);
-        buff->setAlignment(16);
+        buff->setAlignment(Align(16));
         buffs.push_back(buff);
     }
 

@@ -120,6 +120,12 @@ signature(@nospecialize other) = signature!([], other)
 function argtype(expr::Expr)
     isexpr(expr, :(::))  && return expr.args[end]
     isexpr(expr, :(...)) && return :(Vararg{$(argtype(expr.args[1]))})
+    if isexpr(expr, :meta) && length(expr.args) == 2
+        a1 = expr.args[1]
+        if a1 === :nospecialize || a1 === :specialize
+            return argtype(expr.args[2])
+        end
+    end
     return argtype(expr.args[1])
 end
 argtype(@nospecialize other) = :Any
@@ -366,13 +372,15 @@ end
 
 function calldoc(__source__, __module__, str, def::Expr)
     @nospecialize str
-    args = def.args[2:end]
+    args = callargs(def)
     if isempty(args) || all(validcall, args)
         objectdoc(__source__, __module__, str, nothing, def, signature(def))
     else
         docerror(def)
     end
 end
+callargs(ex::Expr) = isexpr(ex, :where) ? callargs(ex.args[1]) :
+    isexpr(ex, :call) ? ex.args[2:end] : error("Invalid expression to callargs: $ex")
 validcall(x) = isa(x, Symbol) || isexpr(x, (:(::), :..., :kw, :parameters))
 
 function moduledoc(__source__, __module__, meta, def, def′::Expr)
@@ -502,6 +510,12 @@ function docm(source::LineNumberNode, mod::Module, ex)
     end
 end
 
+# iscallexpr checks if an expression is a :call expression. The call expression may be
+# also part of a :where expression, so it unwraps the :where layers until it reaches the
+# "actual" expression
+iscallexpr(ex::Expr) = isexpr(ex, :where) ? iscallexpr(ex.args[1]) : isexpr(ex, :call)
+iscallexpr(ex) = false
+
 function docm(source::LineNumberNode, mod::Module, meta, ex, define::Bool = true)
     @nospecialize meta ex
     # Some documented expressions may be decorated with macro calls which obscure the actual
@@ -530,9 +544,14 @@ function docm(source::LineNumberNode, mod::Module, meta, ex, define::Bool = true
     #   function f end
     #   f(...)
     #
-    isexpr(x, FUNC_HEADS) && is_signature(x.args[1])   ? objectdoc(source, mod, meta, def, x, signature(x)) :
+    # Including if the "call" expression is wrapped in "where" expression(s) (#32960), i.e.
+    #
+    #   f(::T) where T
+    #   f(::T, ::U) where T where U
+    #
+    isexpr(x, FUNC_HEADS) && is_signature(x.args[1]) ? objectdoc(source, mod, meta, def, x, signature(x)) :
     isexpr(x, [:function, :macro])  && !isexpr(x.args[1], :call) ? objectdoc(source, mod, meta, def, x) :
-    isexpr(x, :call)                                   ? calldoc(source, mod, meta, x) :
+    iscallexpr(x) ? calldoc(source, mod, meta, x) :
 
     # Type definitions.
     #

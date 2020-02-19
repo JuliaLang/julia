@@ -10,6 +10,7 @@ using Test
 using SparseArrays
 using LinearAlgebra
 using Random
+include("forbidproperties.jl")
 
 @testset "map[!] implementation specialized for a single (input) sparse vector/matrix" begin
     N, M = 10, 12
@@ -44,11 +45,11 @@ end
         # --> test map! entry point
         fX = map(+, fA, fB); X = sparse(fX)
         map!(+, X, A, B); X = sparse(fX) # warmup for @allocated
-        @test (@allocated map!(+, X, A, B)) == 0
+        @test (@allocated map!(+, X, A, B)) < 300
         @test map!(+, X, A, B) == sparse(map!(+, fX, fA, fB))
         fX = map(*, fA, fB); X = sparse(fX)
         map!(*, X, A, B); X = sparse(fX) # warmup for @allocated
-        @test (@allocated map!(*, X, A, B)) == 0
+        @test (@allocated map!(*, X, A, B)) < 300
         @test map!(*, X, A, B) == sparse(map!(*, fX, fA, fB))
         @test map!(f, X, A, B) == sparse(map!(f, fX, fA, fB))
         @test_throws DimensionMismatch map!(f, X, A, spzeros((shapeA .- 1)...))
@@ -71,11 +72,11 @@ end
         # --> test map! entry point
         fX = map(+, fA, fB, fC); X = sparse(fX)
         map!(+, X, A, B, C); X = sparse(fX) # warmup for @allocated
-        @test (@allocated map!(+, X, A, B, C)) == 0
+        @test (@allocated map!(+, X, A, B, C)) < 300
         @test map!(+, X, A, B, C) == sparse(map!(+, fX, fA, fB, fC))
         fX = map(*, fA, fB, fC); X = sparse(fX)
         map!(*, X, A, B, C); X = sparse(fX) # warmup for @allocated
-        @test (@allocated map!(*, X, A, B, C)) == 0
+        @test (@allocated map!(*, X, A, B, C)) < 300
         @test map!(*, X, A, B, C) == sparse(map!(*, fX, fA, fB, fC))
         @test map!(f, X, A, B, C) == sparse(map!(f, fX, fA, fB, fC))
         @test_throws DimensionMismatch map!(f, X, A, B, spzeros((shapeA .- 1)...))
@@ -101,6 +102,8 @@ end
     fa, fA = Array(a), Array(A)
     @test broadcast(sin, a) == sparse(broadcast(sin, fa))
     @test broadcast(sin, A) == sparse(broadcast(sin, fA))
+    # also test the typed broadcast
+    @test broadcast(convert, Float32, A) == sparse(broadcast(convert, Float32, fA))
 end
 
 @testset "broadcast! implementation specialized for a single (input) sparse vector/matrix" begin
@@ -116,12 +119,12 @@ end
         # --> test broadcast! entry point / zero-preserving op
         broadcast!(sin, fZ, fX); Z = sparse(fZ)
         broadcast!(sin, Z, X); Z = sparse(fZ) # warmup for @allocated
-        @test (@allocated broadcast!(sin, Z, X)) == 0
+        @test (@allocated broadcast!(sin, Z, X)) < 300
         @test broadcast!(sin, Z, X) == sparse(broadcast!(sin, fZ, fX))
         # --> test broadcast! entry point / not-zero-preserving op
         broadcast!(cos, fZ, fX); Z = sparse(fZ)
         broadcast!(cos, Z, X); Z = sparse(fZ) # warmup for @allocated
-        @test (@allocated broadcast!(cos, Z, X)) == 0
+        @test (@allocated broadcast!(cos, Z, X)) < 300
         @test broadcast!(cos, Z, X) == sparse(broadcast!(cos, fZ, fX))
         # --> test shape checks for broadcast! entry point
         # TODO strengthen this test, avoiding dependence on checking whether
@@ -140,12 +143,12 @@ end
         # --> test broadcast! entry point / zero-preserving op
         broadcast!(sin, fV, fX); V = sparse(fV)
         broadcast!(sin, V, X); V = sparse(fV) # warmup for @allocated
-        @test (@allocated broadcast!(sin, V, X)) == 0
+        @test (@allocated broadcast!(sin, V, X)) < 300
         @test broadcast!(sin, V, X) == sparse(broadcast!(sin, fV, fX))
         # --> test broadcast! entry point / not-zero-preserving
         broadcast!(cos, fV, fX); V = sparse(fV)
         broadcast!(cos, V, X); V = sparse(fV) # warmup for @allocated
-        @test (@allocated broadcast!(cos, V, X)) == 0
+        @test (@allocated broadcast!(cos, V, X)) < 300
         @test broadcast!(cos, V, X) == sparse(broadcast!(cos, fV, fX))
         # --> test shape checks for broadcast! entry point
         # TODO strengthen this test, avoiding dependence on checking whether
@@ -193,17 +196,17 @@ end
             # --> test broadcast! entry point / +-like zero-preserving op
             broadcast!(+, fZ, fX, fY); Z = sparse(fZ)
             broadcast!(+, Z, X, Y); Z = sparse(fZ) # warmup for @allocated
-            @test (@allocated broadcast!(+, Z, X, Y)) == 0
+            @test (@allocated broadcast!(+, Z, X, Y)) < 300
             @test broadcast!(+, Z, X, Y) == sparse(broadcast!(+, fZ, fX, fY))
             # --> test broadcast! entry point / *-like zero-preserving op
             broadcast!(*, fZ, fX, fY); Z = sparse(fZ)
             broadcast!(*, Z, X, Y); Z = sparse(fZ) # warmup for @allocated
-            @test (@allocated broadcast!(*, Z, X, Y)) == 0
+            @test (@allocated broadcast!(*, Z, X, Y)) < 300
             @test broadcast!(*, Z, X, Y) == sparse(broadcast!(*, fZ, fX, fY))
             # --> test broadcast! entry point / not zero-preserving op
             broadcast!(f, fZ, fX, fY); Z = sparse(fZ)
             broadcast!(f, Z, X, Y); Z = sparse(fZ) # warmup for @allocated
-            @test (@allocated broadcast!(f, Z, X, Y)) == 0
+            @test (@allocated broadcast!(f, Z, X, Y)) < 300
             @test broadcast!(f, Z, X, Y) == sparse(broadcast!(f, fZ, fX, fY))
             # --> test shape checks for both broadcast and broadcast! entry points
             # TODO strengthen this test, avoiding dependence on checking whether
@@ -256,17 +259,17 @@ end
             # --> test broadcast! entry point / +-like zero-preserving op
             fQ = broadcast(+, fX, fY, fZ); Q = sparse(fQ)
             broadcast!(+, Q, X, Y, Z); Q = sparse(fQ) # warmup for @allocated
-            @test (@allocated broadcast!(+, Q, X, Y, Z)) == 0
+            @test (@allocated broadcast!(+, Q, X, Y, Z)) < 300
             @test broadcast!(+, Q, X, Y, Z) == sparse(broadcast!(+, fQ, fX, fY, fZ))
             # --> test broadcast! entry point / *-like zero-preserving op
             fQ = broadcast(*, fX, fY, fZ); Q = sparse(fQ)
             broadcast!(*, Q, X, Y, Z); Q = sparse(fQ) # warmup for @allocated
-            @test (@allocated broadcast!(*, Q, X, Y, Z)) == 0
+            @test (@allocated broadcast!(*, Q, X, Y, Z)) < 300
             @test broadcast!(*, Q, X, Y, Z) == sparse(broadcast!(*, fQ, fX, fY, fZ))
             # --> test broadcast! entry point / not zero-preserving op
             fQ = broadcast(f, fX, fY, fZ); Q = sparse(fQ)
             broadcast!(f, Q, X, Y, Z); Q = sparse(fQ) # warmup for @allocated
-            @test (@allocated broadcast!(f, Q, X, Y, Z)) == 0
+            @test (@allocated broadcast!(f, Q, X, Y, Z)) < 300
             @test broadcast!(f, Q, X, Y, Z) == sparse(broadcast!(f, fQ, fX, fY, fZ))
             # --> test shape checks for both broadcast and broadcast! entry points
             # TODO strengthen this test, avoiding dependence on checking whether
@@ -285,17 +288,14 @@ end
     A, fA = sparse(1.0I, N, N), Matrix(1.0I, N, N)
     B, fB = spzeros(1, N), zeros(1, N)
     intorfloat_zeropres(xs...) = all(iszero, xs) ? zero(Float64) : Int(1)
-    stringorfloat_zeropres(xs...) = all(iszero, xs) ? zero(Float64) : "hello"
     intorfloat_notzeropres(xs...) = all(iszero, xs) ? Int(1) : zero(Float64)
-    stringorfloat_notzeropres(xs...) = all(iszero, xs) ? "hello" : zero(Float64)
-    for fn in (intorfloat_zeropres, intorfloat_notzeropres,
-                stringorfloat_zeropres, stringorfloat_notzeropres)
+    for fn in (intorfloat_zeropres, intorfloat_notzeropres)
         @test map(fn, A) == sparse(map(fn, fA))
         @test broadcast(fn, A) == sparse(broadcast(fn, fA))
         @test broadcast(fn, A, B) == sparse(broadcast(fn, fA, fB))
         @test broadcast(fn, B, A) == sparse(broadcast(fn, fB, fA))
     end
-    for fn in (intorfloat_zeropres, stringorfloat_zeropres)
+    for fn in (intorfloat_zeropres,)
         @test broadcast(fn, A, B, A) == sparse(broadcast(fn, fA, fB, fA))
     end
 end
@@ -343,11 +343,8 @@ end
             @test broadcast!(*, X, sparseargs...) == sparse(broadcast!(*, fX, denseargs...))
             @test isa(@inferred(broadcast!(*, X, sparseargs...)), SparseMatrixCSC{elT})
             X = sparse(fX) # reset / warmup for @allocated test
-            # It'd be nice for this to be zero, but there's currently some constant overhead
-            @test_broken (@allocated broadcast!(*, X, sparseargs...)) == 0
-            X = sparse(fX) # reset / warmup for @allocated test
             # And broadcasting over Transposes currently requires making a CSC copy, so we must account for that in the bounds
-            @test (@allocated broadcast!(*, X, sparseargs...)) <= (sum(x->isa(x, Transpose) ? @allocated(SparseMatrixCSC(x))+128 : 0, sparseargs) + 128)
+            @test (@allocated broadcast!(*, X, sparseargs...)) <= (sum(x->isa(x, Transpose) ? @allocated(SparseMatrixCSC(x)) + 128 : 0, sparseargs) + 128 + 900) # about zero to 3k bytes
         end
     end
     # test combinations at the limit of inference (eight arguments net)
@@ -367,9 +364,7 @@ end
         @test broadcast!(*, X, sparseargs...) == sparse(broadcast!(*, fX, denseargs...))
         @test isa(@inferred(broadcast!(*, X, sparseargs...)), SparseMatrixCSC{elT})
         X = sparse(fX) # reset / warmup for @allocated test
-        @test_broken (@allocated broadcast!(*, X, sparseargs...)) == 0
-        X = sparse(fX) # reset / warmup for @allocated test
-        @test (@allocated broadcast!(*, X, sparseargs...)) <= 128
+        @test (@allocated broadcast!(*, X, sparseargs...)) <= 900
     end
 end
 
@@ -639,7 +634,7 @@ end
     @test_broken ((_, _, _, _, x) -> x).(Int, Int, Int, Int, spzeros(3)) == spzeros(3)
 end
 
-using SparseArrays.HigherOrderFns: SparseVecStyle
+using SparseArrays.HigherOrderFns: SparseVecStyle, SparseMatStyle
 
 @testset "Issue #30120: method ambiguity" begin
     # HigherOrderFns._copy(f) was ambiguous.  It may be impossible to
@@ -669,6 +664,27 @@ end
     @test issparse(w)
     @test v == av .* op(bv)
     @test w == bv .* op(av)
+end
+
+@testset "issue #31758: out of bounds write in _map_zeropres!" begin
+    y = sparsevec([2,7], [1., 2.], 10)
+    x1 = sparsevec(fill(1.0, 10))
+    x2 = sparsevec([2,7], [1., 2.], 10)
+    x3 = sparsevec(fill(1.0, 10))
+    f(x, y, z) = x == y == z == 0 ? 0.0 : NaN
+    y .= f.(x1, x2, x3)
+    @test all(isnan, y)
+end
+
+@testset "Vec/Mat Style" begin
+    @test SparseVecStyle(Val(0)) == SparseVecStyle()
+    @test SparseVecStyle(Val(1)) == SparseVecStyle()
+    @test SparseVecStyle(Val(2)) == SparseMatStyle()
+    @test SparseVecStyle(Val(3)) == Broadcast.DefaultArrayStyle{3}()
+    @test SparseMatStyle(Val(0)) == SparseMatStyle()
+    @test SparseMatStyle(Val(1)) == SparseMatStyle()
+    @test SparseMatStyle(Val(2)) == SparseMatStyle()
+    @test SparseMatStyle(Val(3)) == Broadcast.DefaultArrayStyle{3}()
 end
 
 end # module

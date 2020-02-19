@@ -30,6 +30,14 @@ using .Main.OffsetArrays
 
 @test Base.mapfoldr(abs2, -, 2:5) == -14
 @test Base.mapfoldr(abs2, -, 2:5; init=10) == -4
+@test @inferred(mapfoldr(x -> x + 1, (x, y) -> (x, y...), (1, 2.0, '3');
+                         init = ())) == (2, 3.0, '4')
+
+@test foldr((x, y) -> ('⟨' * x * '|' * y * '⟩'), "λ 🐨.α") == "⟨λ|⟨ |⟨🐨|⟨.|α⟩⟩⟩⟩" # issue #31780
+let x = rand(10)
+    @test 0 == @allocated(sum(Iterators.reverse(x)))
+    @test 0 == @allocated(foldr(-, x))
+end
 
 # reduce
 @test reduce(+, Int64[]) === Int64(0) # In reference to issue #20144 (PR #20160)
@@ -42,6 +50,27 @@ using .Main.OffsetArrays
 # mapreduce
 @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
 @test mapreduce((x)->x[1:3], (x,y)->"($x+$y)", ["abcd", "efgh", "01234"]) == "((abc+efg)+012)"
+
+# mapreduce with multiple iterators
+@test mapreduce(*, +, (i for i in 2:3), (i for i in 4:5)) == 23
+@test mapreduce(*, +, (i for i in 2:3), (i for i in 4:5); init = 2) == 25
+@test mapreduce(*, (x,y)->"($x+$y)", ["a", "b", "c"], ["d", "e", "f"]) == "((ad+be)+cf)"
+@test mapreduce(*, (x,y)->"($x+$y)", ["a", "b", "c"], ["d", "e", "f"]; init = "gh") ==
+    "(((gh+ad)+be)+cf)"
+
+@test mapreduce(*, +, [2, 3], [4, 5]) == 23
+@test mapreduce(*, +, [2, 3], [4, 5]; init = 2) == 25
+@test mapreduce(*, +, [2, 3], [4, 5]; dims = 1) == [23]
+@test mapreduce(*, +, [2, 3], [4, 5]; dims = 1, init = 2) == [25]
+@test mapreduce(*, +, [2, 3], [4, 5]; dims = 2) == [8, 15]
+@test mapreduce(*, +, [2, 3], [4, 5]; dims = 2, init = 2) == [10, 17]
+
+@test mapreduce(*, +, [2 3; 4 5], [6 7; 8 9]) == 110
+@test mapreduce(*, +, [2 3; 4 5], [6 7; 8 9]; init = 2) == 112
+@test mapreduce(*, +, [2 3; 4 5], [6 7; 8 9]; dims = 1) == [44 66]
+@test mapreduce(*, +, [2 3; 4 5], [6 7; 8 9]; dims = 1, init = 2) == [46 68]
+@test mapreduce(*, +, [2 3; 4 5], [6 7; 8 9]; dims = 2) == reshape([33, 77], :, 1)
+@test mapreduce(*, +, [2 3; 4 5], [6 7; 8 9]; dims = 2, init = 2) == reshape([35, 79], :, 1)
 
 # mapreduce() for 1- 2- and n-sized blocks (PR #19325)
 @test mapreduce(-, +, [-10]) == 10
@@ -416,6 +445,11 @@ struct SomeFunctor end
 @test count(x->x>0, Int[]) == count(Bool[]) == 0
 @test count(x->x>0, -3:5) == count((-3:5) .> 0) == 5
 @test count([true, true, false, true]) == count(BitVector([true, true, false, true])) == 3
+let x = repeat([false, true, false, true, true, false], 7)
+    @test count(x) == 21
+    GC.@preserve x (unsafe_store!(Ptr{UInt8}(pointer(x)), 0xfe, 3))
+    @test count(x) == 21
+end
 @test_throws TypeError count(sqrt, [1])
 @test_throws TypeError count([1])
 let itr = (x for x in 1:10 if x < 7)
@@ -506,3 +540,11 @@ x = [j^2 for j in i]
 i = Base.Slice(0:0)
 x = [j+7 for j in i]
 @test sum(x) == 7
+
+@testset "initial value handling with flatten" begin
+    @test mapfoldl(
+        x -> (x, x),
+        ((a, b), (c, d)) -> (min(a, c), max(b, d)),
+        Iterators.flatten((1:2, 3:4)),
+    ) == (1, 4)
+end

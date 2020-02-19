@@ -32,6 +32,11 @@ using Test
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
     # issue 26823
     @test_throws InexactError rationalize(Int, NaN)
+    # issue 32569
+    @test_throws ArgumentError 1 // typemin(Int)
+    @test_throws ArgumentError 0 // 0
+    @test -2 // typemin(Int) == -1 // (typemin(Int) >> 1)
+    @test 2 // typemin(Int) == 1 // (typemin(Int) >> 1)
 
     for a = -5:5, b = -5:5
         if a == b == 0; continue; end
@@ -370,3 +375,33 @@ end
 
 # issue #31396
 @test round(1//2, RoundNearestTiesUp) === 1//1
+
+@testset "Unary plus on Rational (issue #30749)" begin
+   @test +Rational(true) == 1//1
+   @test +Rational(false) == 0//1
+   @test -Rational(true) == -1//1
+   @test -Rational(false) == 0//1
+end
+
+# issue #27039
+@testset "gcd, lcm, gcdx for Rational" begin
+    a = 6 // 35
+    b = 10 // 21
+    @test gcd(a, b) == 2//105
+    @test lcm(a, b) == 30//7
+    @test gcdx(a, b) == (2//105, -11, 4)
+
+    @test gcdx(1//0, 1//2) == (1//0, 1, 0)
+    @test gcdx(1//2, 1//0) == (1//0, 0, 1)
+    @test gcdx(1//0, 1//0) == (1//0, 1, 1)
+    @test gcdx(1//0, 0//1) == (1//0, 1, 0)
+    @test gcdx(0//1, 0//1) == (0//1, 1, 0)
+
+    @test gcdx(1//3, 2) == (1//3, 1, 0)
+    @test lcm(1//3, 1) == 1//1
+    @test lcm(3//1, 1//0) == 3//1
+    @test lcm(0//1, 1//0) == 0//1
+
+    @test gcd([5, 2, 1//2]) == 1//2
+end
+

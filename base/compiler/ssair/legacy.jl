@@ -35,7 +35,7 @@ function inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
             code[i] = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
         elseif isa(stmt, PhiNode)
             code[i] = PhiNode(Any[block_for_inst(cfg, edge) for edge in stmt.edges], stmt.values)
-        elseif isa(stmt, Expr) && stmt.head == :enter
+        elseif isa(stmt, Expr) && stmt.head === :enter
             stmt.args[1] = block_for_inst(cfg, stmt.args[1])
             code[i] = stmt
         else
@@ -57,6 +57,12 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
     ci.linetable = ir.linetable
     ci.ssavaluetypes = ir.types
     ci.ssaflags = ir.flags
+    for metanode in ir.meta
+        push!(ci.code, metanode)
+        push!(ci.codelocs, 1)
+        push!(ci.ssavaluetypes, Any)
+        push!(ci.ssaflags, 0x00)
+    end
     # Translate BB Edges to statement edges
     # (and undo normalization for now)
     for i = 1:length(ci.code)
@@ -81,7 +87,7 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
             else
                 ci.code[i] = Expr(:unreachable)
             end
-        elseif isa(stmt, Expr) && stmt.head == :enter
+        elseif isa(stmt, Expr) && stmt.head === :enter
             stmt.args[1] = first(ir.cfg.blocks[stmt.args[1]].stmts)
             ci.code[i] = stmt
         else

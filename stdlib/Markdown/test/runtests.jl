@@ -232,6 +232,13 @@ World""" |> plain == "Hello\n\n---\n\nWorld\n"
 @test sprint(term, md"[x](@ref something)") == "  x"
 @test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)"
 
+# math (LaTeX)
+@test sprint(term, md"""
+```math
+A = Q R
+```
+""") == "  A = Q R"
+
 # enumeration is normalized
 let doc = Markdown.parse(
         """
@@ -243,6 +250,21 @@ let doc = Markdown.parse(
     @test occursin("2. ", sprint(term, doc))
     @test !occursin("3. ", sprint(term, doc))
 end
+
+# Testing margin when printing Tables to the terminal.
+@test sprint(term, md"""
+| R |
+|---|
+| L |
+""") == "  R\n  –\n  L"
+
+@test sprint(term, md"""
+!!! note "Tables in admonitions"
+
+    | R |
+    |---|
+    | L |
+""") == "  │ Tables in admonitions\n  │\n  │  R\n  │  –\n  │  L"
 
 # HTML output
 @test md"foo *bar* baz" |> html == "<p>foo <em>bar</em> baz</p>\n"
@@ -495,6 +517,7 @@ let text =
     """,
     table = Markdown.parse(text)
     @test text == Markdown.plain(table)
+    @test Markdown.html(table) == """<table><tr><th align="left">Markdown</th><th align="center">Table</th><th align="right">Test</th></tr><tr><td align="left">foo</td><td align="center"><code>bar</code></td><td align="right"><em>baz</em></td></tr><tr><td align="left"><code>bar</code></td><td align="center">baz</td><td align="right"><em>foo</em></td></tr></table>\n"""
 end
 let text =
     """
@@ -504,6 +527,7 @@ let text =
     """,
     table = Markdown.parse(text)
     @test text == Markdown.plain(table)
+    @test Markdown.html(table) == """<table><tr><th align="left">a</th><th align="right">b</th></tr><tr><td align="left"><code>x | y</code></td><td align="right">2</td></tr></table>\n"""
 end
 
 # LaTeX extension
@@ -1085,7 +1109,7 @@ t = """
     a   |   b
     :-- | --:
     1   |   2"""
-@test sprint(Markdown.term, Markdown.parse(t), 0) == "a b\n– –\n1 2"
+@test sprint(Markdown.term, Markdown.parse(t), 0) == "  a b\n  – –\n  1 2"
 
 # test Base.copy
 let

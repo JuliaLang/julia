@@ -112,6 +112,11 @@ let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     @test UUID(UInt128(uuid)) == uuid
     @test UUID(convert(NTuple{2, UInt64}, uuid)) == uuid
     @test UUID(convert(NTuple{4, UInt32}, uuid)) == uuid
+
+    uuidstr2 = "ba"^4 * "-" * "ba"^2 * "-" * "ba"^2 * "-" * "ba"^2 * "-" * "ba"^6
+    uuid2 = UUID(uuidstr2)
+    uuids = [uuid, uuid2]
+    @test (uuids .== uuid) == [true, false]
 end
 @test_throws ArgumentError UUID("@"^4 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^6)
 
@@ -163,10 +168,10 @@ end
                 this = Base.explicit_project_deps_get(project_file, "This")
                 that = Base.explicit_project_deps_get(project_file, "That")
                 # test that the correct answers are given
-                @test root == (something(n, N+1) ≥ something(d, N+1) ? false :
+                @test root == (something(n, N+1) ≥ something(d, N+1) ? nothing :
                                something(u, N+1) < something(d, N+1) ? root_uuid : proj_uuid)
-                @test this == (something(d, N+1) < something(t, N+1) ≤ N ? this_uuid : false)
-                @test that == false
+                @test this == (something(d, N+1) < something(t, N+1) ≤ N ? this_uuid : nothing)
+                @test that == nothing
             end
         end
     end
@@ -275,6 +280,13 @@ module NotPkgModule; end
     @testset "pathof" begin
         @test pathof(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1/src/Foo.jl"))
         @test pathof(NotPkgModule) === nothing
+    end
+
+    @testset "pkgdir" begin
+        @test pkgdir(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(Foo.SubFoo1) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(Foo.SubFoo2) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(NotPkgModule) === nothing
     end
 
 end
@@ -502,7 +514,7 @@ function test_find(
     for name in NAMES
         id = identify_package(name)
         @test id == get(roots, name, nothing)
-        path = locate_package(id)
+        path = id === nothing ? nothing : locate_package(id)
         @test path == get(paths, id, nothing)
     end
     # check indirect dependencies
@@ -512,7 +524,7 @@ function test_find(
         for name in NAMES
             id = identify_package(where, name)
             @test id == get(deps, name, nothing)
-            path = locate_package(id)
+            path = id === nothing ? nothing : locate_package(id)
             @test path == get(paths, id, nothing)
         end
     end
@@ -648,3 +660,25 @@ Base.ACTIVE_PROJECT[] = saved_active_project
 module Foo; import Libdl; end
 import .Foo.Libdl; import Libdl
 @test Foo.Libdl === Libdl
+
+@testset "include with mapexpr" begin
+    let exprs = Any[]
+        @test 13 === include_string(@__MODULE__, "1+1\n3*4") do ex
+            ex isa LineNumberNode || push!(exprs, ex)
+            Meta.isexpr(ex, :call) ? :(1 + $ex) : ex
+        end
+        @test exprs == [:(1 + 1), :(3 * 4)]
+    end
+    # test using test_exec.jl, just because that is the shortest handy file
+    for incl in (include, (mapexpr,path) -> Base.include(mapexpr, @__MODULE__, path))
+        let exprs = Any[]
+            incl("test_exec.jl") do ex
+                ex isa LineNumberNode || push!(exprs, ex)
+                Meta.isexpr(ex, :macrocall) ? :nothing : ex
+            end
+            @test length(exprs) == 2 && exprs[1] == :(using Test)
+            @test Meta.isexpr(exprs[2], :macrocall) &&
+                  exprs[2].args[[1,3]] == [Symbol("@test"), :(1 == 2)]
+        end
+    end
+end

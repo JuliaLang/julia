@@ -27,7 +27,7 @@ static volatile uint32_t num_stack_mappings = 0;
 
 #ifdef _OS_WINDOWS_
 #define MAP_FAILED NULL
-static void *malloc_stack(size_t bufsz)
+static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 {
     void *stk = VirtualAlloc(NULL, bufsz, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     if (stk == NULL)
@@ -50,7 +50,7 @@ static void free_stack(void *stkbuf, size_t bufsz)
 
 #else
 
-static void *malloc_stack(size_t bufsz)
+static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 {
     void* stk = mmap(0, bufsz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (stk == MAP_FAILED)
@@ -95,7 +95,7 @@ const unsigned pool_sizes[] = {
 
 static_assert(sizeof(pool_sizes) == JL_N_STACK_POOLS * sizeof(pool_sizes[0]), "JL_N_STACK_POOLS size mismatch");
 
-static unsigned select_pool(size_t nb)
+static unsigned select_pool(size_t nb) JL_NOTSAFEPOINT
 {
     unsigned pool_id = 0;
     while (pool_sizes[pool_id] < nb)
@@ -125,6 +125,9 @@ JL_DLLEXPORT void jl_free_stack(void *stkbuf, size_t bufsz)
 
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task)
 {
+    // avoid adding an original thread stack to the free list
+    if (task == ptls->root_task && !task->copy_stack)
+        return;
     void *stkbuf = task->stkbuf;
     size_t bufsz = task->bufsz;
     if (bufsz <= pool_sizes[JL_N_STACK_POOLS - 1]) {
@@ -137,7 +140,7 @@ void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task)
 }
 
 
-JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner)
+JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     size_t ssize = *bufsz;

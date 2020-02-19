@@ -155,7 +155,7 @@ end
 
 function simple_walk_constraint(compact::IncrementalCompact, @nospecialize(defidx), @nospecialize(typeconstraint) = types(compact)[defidx])
     callback = function (@nospecialize(pi), @nospecialize(idx))
-        isa(pi, PiNode) && (typeconstraint = typeintersect(typeconstraint, pi.typ))
+        isa(pi, PiNode) && (typeconstraint = typeintersect(typeconstraint, widenconst(pi.typ)))
         return false
     end
     def = simple_walk(compact, defidx, callback)
@@ -178,7 +178,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
     found_def = false
     ## Track which PhiNodes, SSAValue intermediaries
     ## we forwarded through.
-    visited = IdSet{Any}()
+    visited = IdDict{Any, Any}()
     worklist_defs = Any[]
     worklist_constraints = Any[]
     leaves = Any[]
@@ -187,7 +187,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
     while !isempty(worklist_defs)
         defssa = pop!(worklist_defs)
         typeconstraint = pop!(worklist_constraints)
-        push!(visited, defssa)
+        visited[defssa] = typeconstraint
         def = compact[defssa]
         if isa(def, PhiNode)
             push!(visited_phinodes, defssa)
@@ -211,9 +211,15 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                 if isa(val, AnySSAValue)
                     new_def, new_constraint = simple_walk_constraint(compact, val, typeconstraint)
                     if isa(new_def, AnySSAValue)
-                        if !(new_def in visited)
+                        if !haskey(visited, new_def)
                             push!(worklist_defs, new_def)
                             push!(worklist_constraints, new_constraint)
+                        elseif !(new_constraint <: visited[new_def])
+                            # We have reached the same definition via a different
+                            # path, with a different type constraint. We may have
+                            # to redo some work here with the wider typeconstraint
+                            push!(worklist_defs, new_def)
+                            push!(worklist_constraints, tmerge(new_constraint, visited[new_def]))
                         end
                         continue
                     end
@@ -364,10 +370,17 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
             end
         elseif isa(leaf, QuoteNode)
             leaf = leaf.value
+        elseif isa(leaf, GlobalRef)
+            mod, name = leaf.mod, leaf.name
+            if isdefined(mod, name) && isconst(mod, name)
+                leaf = getfield(mod, name)
+            else
+                return nothing
+            end
         elseif isa(leaf, Union{Argument, Expr})
             return nothing
         end
-        isimmutable(leaf) || return nothing
+        !ismutable(leaf) || return nothing
         isdefined(leaf, field) || return nothing
         val = getfield(leaf, field)
         is_inlineable_constant(val) || return nothing
@@ -565,11 +578,11 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
             (isa(c1, Const) && isa(c2, Const)) && continue
             lift_comparison!(compact, idx, c1, c2, stmt, lifting_cache)
             continue
-        elseif isexpr(stmt, :call) && stmt.args[1] == :unchecked_getfield
+        elseif isexpr(stmt, :call) && stmt.args[1] === :unchecked_getfield
             is_getfield = true
             is_unchecked = true
         elseif isexpr(stmt, :foreigncall)
-            nccallargs = stmt.args[5]
+            nccallargs = length(stmt.args[3]::SimpleVector)
             new_preserves = Any[]
             old_preserves = stmt.args[(6+nccallargs):end]
             for (pidx, preserved_arg) in enumerate(old_preserves)
@@ -811,7 +824,7 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
         # Insert the new preserves
         for (use, new_preserves) in preserve_uses
             useexpr = ir[SSAValue(use)]
-            nccallargs = useexpr.args[5]
+            nccallargs = length(useexpr.args[3]::SimpleVector)
             old_preserves = filter(ssa->!isa(ssa, SSAValue) || !(ssa.id in intermediaries), useexpr.args[(6+nccallargs):end])
             new_expr = Expr(:foreigncall, useexpr.args[1:(6+nccallargs-1)]...,
                 old_preserves..., new_preserves...)
@@ -1011,4 +1024,132 @@ function type_lift_pass!(ir::IRCode)
         end
     end
     ir
+end
+
+function cfg_simplify!(ir::IRCode)
+    bbs = ir.cfg.blocks
+    merge_into = zeros(Int, length(bbs))
+    merged_succ = zeros(Int, length(bbs))
+
+    # Walk the CFG at from the entry block and aggressively combine blocks
+    for (idx, bb) in enumerate(bbs)
+        if length(bb.succs) == 1
+            succ = bb.succs[1]
+            if length(bbs[succ].preds) == 1
+                merge_into[succ] = idx
+                merged_succ[idx] = succ
+            end
+        end
+    end
+    max_bb_num = 1
+    bb_rename_succ = zeros(Int, length(bbs))
+    # Lay out the basic blocks
+    for i = 1:length(bbs)
+        if merge_into[i] != 0
+            bb_rename_succ[i] = -1
+            continue
+        end
+        # Drop unreachable blocks
+        if i != 1 && length(ir.cfg.blocks[i].preds) == 0
+            bb_rename_succ[i] = -1
+        end
+        bb_rename_succ[i] != 0 && continue
+        curr = i
+        while true
+            bb_rename_succ[curr] = max_bb_num
+            max_bb_num += 1
+            # Now walk the chain of blocks we merged.
+            # If we end in something that may fall through,
+            # we have to schedule that block next
+            while merged_succ[curr] != 0
+                curr = merged_succ[curr]
+            end
+            terminator = ir.stmts[ir.cfg.blocks[curr].stmts[end]]
+            if isa(terminator, GotoNode) || isa(terminator, ReturnNode)
+                break
+            end
+            curr += 1
+        end
+    end
+    bb_rename_pred = zeros(Int, length(bbs))
+    for i = 1:length(bbs)
+        if merged_succ[i] != 0
+            bb_rename_pred[i] = -1
+            continue
+        end
+        bbnum = i
+        while merge_into[bbnum] != 0
+            bbnum = merge_into[bbnum]
+        end
+        bb_rename_pred[i] = bb_rename_succ[bbnum]
+    end
+    result_bbs = Int[findfirst(j->i==j, bb_rename_succ) for i = 1:max_bb_num-1]
+    result_bbs_lengths = zeros(Int, max_bb_num-1)
+    for (idx, orig_bb) in enumerate(result_bbs)
+        ms = orig_bb
+        while ms != 0
+            result_bbs_lengths[idx] += length(bbs[ms].stmts)
+            ms = merged_succ[ms]
+        end
+    end
+    bb_starts = Vector{Int}(undef, 1+length(result_bbs_lengths))
+    bb_starts[1] = 1
+    for i = 1:length(result_bbs_lengths)
+        bb_starts[i+1] = bb_starts[i] + result_bbs_lengths[i]
+    end
+    # Look at the original successor
+    function compute_succs(i)
+        orig_bb = result_bbs[i]
+        while merged_succ[orig_bb] != 0
+            orig_bb = merged_succ[orig_bb]
+        end
+        map(i->bb_rename_succ[i], bbs[orig_bb].succs)
+    end
+
+    function compute_preds(i)
+        orig_bb = result_bbs[i]
+        preds = bbs[orig_bb].preds
+        map(preds) do pred
+            while merge_into[pred] != 0
+                pred = merge_into[pred]
+            end
+            bb_rename_succ[pred]
+        end
+    end
+    cresult_bbs = BasicBlock[BasicBlock(
+        StmtRange(bb_starts[i], i+1 > length(bb_starts) ? length(compact.result) : bb_starts[i+1]-1),
+        compute_preds(i), compute_succs(i)) for i = 1:length(result_bbs)]
+    compact = IncrementalCompact(ir, true)
+    # We're messing with the CFG. We don't want compaction to do
+    # so independently
+    compact.fold_constant_branches = false
+    compact.bb_rename_succ = bb_rename_succ
+    compact.bb_rename_pred = bb_rename_pred
+    compact.result_bbs = cresult_bbs
+    result_idx = 1
+    for (idx, orig_bb) in enumerate(result_bbs)
+        ms = orig_bb
+        while ms != 0
+            for i in bbs[ms].stmts
+                stmt = ir.stmts[i]
+                compact.result[compact.result_idx] = nothing
+                compact.result_types[compact.result_idx] = ir.types[i]
+                compact.result_lines[compact.result_idx] = ir.lines[i]
+                compact.result_flags[compact.result_idx] = ir.flags[i]
+                # If we merged a basic block, we need remove the trailing GotoNode (if any)
+                if isa(stmt, GotoNode) && merged_succ[ms] != 0
+                    # Do nothing
+                else
+                    process_node!(compact, compact.result_idx, stmt, i, i, ms, true)
+                end
+                # We always increase the result index to ensure a predicatable
+                # placement of the resulting nodes.
+                compact.result_idx += 1
+            end
+            ms = merged_succ[ms]
+        end
+    end
+
+    compact.active_result_bb = length(bb_starts)
+    return finish(compact)
 end

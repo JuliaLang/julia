@@ -4,6 +4,65 @@
 ## LD for BunchKaufman, UL for CholeskyDense, LU for LUDense and
 ## define size methods for Factorization types using it.
 
+"""
+    BunchKaufman <: Factorization
+
+Matrix factorization type of the Bunch-Kaufman factorization of a symmetric or
+Hermitian matrix `A` as `P'UDU'P` or `P'LDL'P`, depending on whether the upper
+(the default) or the lower triangle is stored in `A`. If `A` is complex symmetric
+then `U'` and `L'` denote the unconjugated transposes, i.e. `transpose(U)` and
+`transpose(L)`, respectively. This is the return type of [`bunchkaufman`](@ref),
+the corresponding matrix factorization function.
+
+If `S::BunchKaufman` is the factorization object, the components can be obtained
+via `S.D`, `S.U` or `S.L` as appropriate given `S.uplo`, and `S.p`.
+
+Iterating the decomposition produces the components `S.D`, `S.U` or `S.L`
+as appropriate given `S.uplo`, and `S.p`.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 2 3]
+2×2 Array{Int64,2}:
+ 1  2
+ 2  3
+
+julia> S = bunchkaufman(A) # A gets wrapped internally by Symmetric(A)
+BunchKaufman{Float64,Array{Float64,2}}
+D factor:
+2×2 Tridiagonal{Float64,Array{Float64,1}}:
+ -0.333333  0.0
+  0.0       3.0
+U factor:
+2×2 UnitUpperTriangular{Float64,Array{Float64,2}}:
+ 1.0  0.666667
+  ⋅   1.0
+permutation:
+2-element Array{Int64,1}:
+ 1
+ 2
+
+julia> d, u, p = S; # destructuring via iteration
+
+julia> d == S.D && u == S.U && p == S.p
+true
+
+julia> S = bunchkaufman(Symmetric(A, :L))
+BunchKaufman{Float64,Array{Float64,2}}
+D factor:
+2×2 Tridiagonal{Float64,Array{Float64,1}}:
+ 3.0   0.0
+ 0.0  -0.333333
+L factor:
+2×2 UnitLowerTriangular{Float64,Array{Float64,2}}:
+ 1.0        ⋅
+ 0.666667  1.0
+permutation:
+2-element Array{Int64,1}:
+ 2
+ 1
+```
+"""
 struct BunchKaufman{T,S<:AbstractMatrix} <: Factorization{T}
     LD::S
     ipiv::Vector{BlasInt}
@@ -59,9 +118,9 @@ end
 """
     bunchkaufman(A, rook::Bool=false; check = true) -> S::BunchKaufman
 
-Compute the Bunch-Kaufman [^Bunch1977] factorization of a `Symmetric` or
-`Hermitian` matrix `A` as ``P'*U*D*U'*P`` or ``P'*L*D*L'*P``, depending on
-which triangle is stored in `A`, and return a `BunchKaufman` object.
+Compute the Bunch-Kaufman [^Bunch1977] factorization of a symmetric or
+Hermitian matrix `A` as `P'*U*D*U'*P` or `P'*L*D*L'*P`, depending on
+which triangle is stored in `A`, and return a [`BunchKaufman`](@ref) object.
 Note that if `A` is complex symmetric then `U'` and `L'` denote
 the unconjugated transposes, i.e. `transpose(U)` and `transpose(L)`.
 
@@ -79,9 +138,7 @@ The following functions are available for `BunchKaufman` objects:
 [`size`](@ref), `\\`, [`inv`](@ref), [`issymmetric`](@ref),
 [`ishermitian`](@ref), [`getindex`](@ref).
 
-[^Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia
-and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179.
-[url](http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0/).
+[^Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. [url](http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0/).
 
 # Examples
 ```jldoctest
@@ -90,7 +147,7 @@ julia> A = [1 2; 2 3]
  1  2
  2  3
 
-julia> S = bunchkaufman(A)
+julia> S = bunchkaufman(A) # A gets wrapped internally by Symmetric(A)
 BunchKaufman{Float64,Array{Float64,2}}
 D factor:
 2×2 Tridiagonal{Float64,Array{Float64,1}}:
@@ -109,6 +166,21 @@ julia> d, u, p = S; # destructuring via iteration
 
 julia> d == S.D && u == S.U && p == S.p
 true
+
+julia> S = bunchkaufman(Symmetric(A, :L))
+BunchKaufman{Float64,Array{Float64,2}}
+D factor:
+2×2 Tridiagonal{Float64,Array{Float64,1}}:
+ 3.0   0.0
+ 0.0  -0.333333
+L factor:
+2×2 UnitLowerTriangular{Float64,Array{Float64,2}}:
+ 1.0        ⋅
+ 0.666667  1.0
+permutation:
+2-element Array{Int64,1}:
+ 2
+ 1
 ```
 """
 bunchkaufman(A::AbstractMatrix{T}, rook::Bool=false; check::Bool = true) where {T} =
@@ -125,7 +197,7 @@ size(B::BunchKaufman, d::Integer) = size(getfield(B, :LD), d)
 issymmetric(B::BunchKaufman) = B.symmetric
 ishermitian(B::BunchKaufman) = !B.symmetric
 
-function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::AbstractChar) where T
+function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::AbstractChar, rook::Bool) where T
     require_one_based_indexing(v)
     p = T[1:maxi;]
     uploL = uplo == 'L'
@@ -137,11 +209,16 @@ function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::AbstractChar) 
             p[i], p[vi] = p[vi], p[i]
             i += uploL ? 1 : -1
         else # the 2x2 blocks
+            if rook
+                p[i], p[-vi] = p[-vi], p[i]
+            end
             if uploL
-                p[i + 1], p[-vi] = p[-vi], p[i + 1]
+                vp = rook ? -v[i+1] : -vi
+                p[i + 1], p[vp] = p[vp], p[i + 1]
                 i += 2
             else # 'U'
-                p[i - 1], p[-vi] = p[-vi], p[i - 1]
+                vp = rook ? -v[i-1] : -vi
+                p[i - 1], p[vp] = p[vp], p[i - 1]
                 i -= 2
             end
         end
@@ -207,17 +284,17 @@ julia> F.U*F.D*F.U' - F.P*A*F.P'
 """
 function getproperty(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
     n = size(B, 1)
-    if d == :p
-        return _ipiv2perm_bk(getfield(B, :ipiv), n, getfield(B, :uplo))
-    elseif d == :P
+    if d === :p
+        return _ipiv2perm_bk(getfield(B, :ipiv), n, getfield(B, :uplo), B.rook)
+    elseif d === :P
         return Matrix{T}(I, n, n)[:,invperm(B.p)]
-    elseif d == :L || d == :U || d == :D
+    elseif d === :L || d === :U || d === :D
         if getfield(B, :rook)
             LUD, od = LAPACK.syconvf_rook!(getfield(B, :uplo), 'C', copy(getfield(B, :LD)), getfield(B, :ipiv))
         else
             LUD, od = LAPACK.syconv!(getfield(B, :uplo), copy(getfield(B, :LD)), getfield(B, :ipiv))
         end
-        if d == :D
+        if d === :D
             if getfield(B, :uplo) == 'L'
                 odl = od[1:n - 1]
                 return Tridiagonal(odl, diag(LUD), getfield(B, :symmetric) ? odl : conj.(odl))
@@ -225,7 +302,7 @@ function getproperty(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
                 odu = od[2:n]
                 return Tridiagonal(getfield(B, :symmetric) ? odu : conj.(odu), diag(LUD), odu)
             end
-        elseif d == :L
+        elseif d === :L
             if getfield(B, :uplo) == 'L'
                 return UnitLowerTriangular(LUD)
             else

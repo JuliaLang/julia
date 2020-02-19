@@ -85,12 +85,10 @@ void GCInvariantVerifier::visitStoreInst(StoreInst &SI) {
     if (VTy->isPointerTy()) {
         /* We currently don't obey this for arguments. That's ok - they're
            externally rooted. */
-        if (!isa<Argument>(SI.getValueOperand())) {
-            unsigned AS = cast<PointerType>(VTy)->getAddressSpace();
-            Check(AS != AddressSpace::CalleeRooted &&
-                  AS != AddressSpace::Derived,
-                  "Illegal store of decayed value", &SI);
-        }
+        unsigned AS = cast<PointerType>(VTy)->getAddressSpace();
+        Check(AS != AddressSpace::CalleeRooted &&
+              AS != AddressSpace::Derived,
+              "Illegal store of decayed value", &SI);
     }
     VTy = SI.getPointerOperand()->getType();
     if (VTy->isPointerTy()) {
@@ -155,7 +153,7 @@ void GCInvariantVerifier::visitGetElementPtrInst(GetElementPtrInst &GEP) {
 
 void GCInvariantVerifier::visitCallInst(CallInst &CI) {
     CallingConv::ID CC = CI.getCallingConv();
-    if (CC == JLCALL_CC || CC == JLCALL_F_CC) {
+    if (CC == JLCALL_F_CC || CC == JLCALL_F2_CC) {
         for (Value *Arg : CI.arg_operands()) {
             Type *Ty = Arg->getType();
             Check(Ty->isPointerTy() && cast<PointerType>(Ty)->getAddressSpace() == AddressSpace::Tracked,
@@ -191,7 +189,7 @@ Pass *createGCInvariantVerifierPass(bool Strong) {
     return new GCInvariantVerifier(Strong);
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass(LLVMPassManagerRef PM, bool Strong)
+extern "C" JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass(LLVMPassManagerRef PM, LLVMBool Strong)
 {
     unwrap(PM)->add(createGCInvariantVerifierPass(Strong));
 }

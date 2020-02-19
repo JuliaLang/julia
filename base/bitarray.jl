@@ -51,14 +51,14 @@ Behaves identically to the [`Array`](@ref) constructor. See [`undef`](@ref).
 ```julia-repl
 julia> BitArray(undef, 2, 2)
 2×2 BitArray{2}:
- false  false
- false  true
+ 0  0
+ 0  0
 
 julia> BitArray(undef, (3, 1))
 3×1 BitArray{2}:
- false
- true
- false
+ 0
+ 0
+ 0
 ```
 """
 BitArray(::UndefInitializer, dims::Integer...) = BitArray(undef, map(Int,dims))
@@ -70,6 +70,28 @@ const BitVector = BitArray{1}
 const BitMatrix = BitArray{2}
 
 BitVector() = BitArray{1}(undef, 0)
+
+"""
+    BitVector(nt::Tuple{Vararg{Bool}})
+
+Construct a `BitVector` from a tuple of `Bool`.
+# Examples
+```julia-repl
+julia> nt = (true, false, true, false)
+(true, false, true, false)
+
+julia> BitVector(nt)
+4-element BitArray{1}:
+ 1
+ 0
+ 1
+ 0
+```
+"""
+function BitVector(nt::Tuple{Vararg{Bool}})
+    bv = BitVector(undef, length(nt))
+    bv .= nt
+end
 
 ## utility functions ##
 

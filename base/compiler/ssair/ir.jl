@@ -80,7 +80,7 @@ function basic_blocks_starts(stmts::Vector{Any})
             if stmt.head === :leave
                 # :leave terminates a BB
                 push!(jump_dests, idx+1)
-            elseif stmt.head == :enter
+            elseif stmt.head === :enter
                 # :enter starts/ends a BB
                 push!(jump_dests, idx)
                 push!(jump_dests, idx+1)
@@ -106,7 +106,7 @@ function basic_blocks_starts(stmts::Vector{Any})
     end
     # and add add one more basic block start after the last statement
     for i = length(stmts):-1:1
-        if stmts[i] != nothing
+        if stmts[i] !== nothing
             push!(jump_dests, i+1)
             break
         end
@@ -151,7 +151,7 @@ function compute_basic_blocks(stmts::Vector{Any})
                 push!(b.succs, block′)
             end
         elseif isa(terminator, Expr)
-            if terminator.head == :enter
+            if terminator.head === :enter
                 # :enter gets a virtual edge to the exception handler and
                 # the exception handler gets a virtual edge from outside
                 # the function.
@@ -162,7 +162,7 @@ function compute_basic_blocks(stmts::Vector{Any})
                 push!(blocks[block′].preds, num)
                 push!(blocks[block′].preds, 0)
                 push!(b.succs, block′)
-            elseif terminator.head == :gotoifnot
+            elseif terminator.head === :gotoifnot
                 block′ = block_for_inst(basic_block_index, terminator.args[2]::Int)
                 if block′ == num + 1
                     # This GotoIfNot acts like a noop - treat it as such.
@@ -465,7 +465,8 @@ mutable struct IncrementalCompact
     result_flags::Vector{UInt8}
     result_bbs::Vector{BasicBlock}
     ssa_rename::Vector{Any}
-    bb_rename::Vector{Int}
+    bb_rename_pred::Vector{Int}
+    bb_rename_succ::Vector{Int}
     used_ssas::Vector{Int}
     late_fixup::Vector{Int}
     # This could be Stateful, but bootstrapping doesn't like that
@@ -481,7 +482,8 @@ mutable struct IncrementalCompact
     result_idx::Int
     active_result_bb::Int
     renamed_new_nodes::Bool
-    allow_cfg_transforms::Bool
+    cfg_transforms_enabled::Bool
+    fold_constant_branches::Bool
     function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false)
         # Sort by position with attach after nodes affter regular ones
         perm = my_sortperm(Int[(code.new_nodes[i].pos*2 + Int(code.new_nodes[i].attach_after)) for i in 1:length(code.new_nodes)])
@@ -497,24 +499,28 @@ mutable struct IncrementalCompact
             cur_bb = 1
             for i = 1:length(bb_rename)
                 if i != 1 && length(blocks[i].preds) == 0
-                    bb_rename[i] = 0
+                    bb_rename[i] = -1
                 else
                     bb_rename[i] = cur_bb
                     cur_bb += 1
                 end
             end
             for i = 1:length(bb_rename)
-                bb_rename[i] == 0 && continue
+                bb_rename[i] == -1 && continue
                 preds, succs = blocks[i].preds, blocks[i].succs
                 # Rename preds
-                for j = 1:length(preds); preds[j] = bb_rename[preds[j]]; end
+                for j = 1:length(preds)
+                    if preds[j] != 0
+                        preds[j] = bb_rename[preds[j]]
+                    end
+                end
                 # Dead blocks get removed from the predecessor list
-                filter!(x->x !== 0, preds)
+                filter!(x->x !== -1, preds)
                 # Rename succs
                 for j = 1:length(succs); succs[j] = bb_rename[succs[j]]; end
             end
             let blocks=blocks
-                result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != 0]
+                result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
             end
         else
             bb_rename = Vector{Int}()
@@ -525,9 +531,9 @@ mutable struct IncrementalCompact
         new_new_nodes = NewNode[]
         pending_nodes = NewNode[]
         pending_perm = Int[]
-        return new(code, result, result_types, result_lines, result_flags, result_bbs, ssa_rename, bb_rename, used_ssas, late_fixup, perm, 1,
+        return new(code, result, result_types, result_lines, result_flags, result_bbs, ssa_rename, bb_rename, bb_rename, used_ssas, late_fixup, perm, 1,
             new_new_nodes, pending_nodes, pending_perm,
-            1, 1, 1, false, allow_cfg_transforms)
+            1, 1, 1, false, allow_cfg_transforms, allow_cfg_transforms)
     end
 
     # For inlining
@@ -542,10 +548,10 @@ mutable struct IncrementalCompact
         pending_nodes = NewNode[]
         pending_perm = Int[]
         return new(code, parent.result, parent.result_types, parent.result_lines, parent.result_flags,
-            parent.result_bbs, ssa_rename, bb_rename, parent.used_ssas,
+            parent.result_bbs, ssa_rename, bb_rename, bb_rename, parent.used_ssas,
             late_fixup, perm, 1,
             new_new_nodes, pending_nodes, pending_perm,
-            1, result_offset, parent.active_result_bb, false, false)
+            1, result_offset, parent.active_result_bb, false, false, false)
     end
 end
 
@@ -602,7 +608,7 @@ function count_added_node!(compact::IncrementalCompact, @nospecialize(v))
 end
 
 function resort_pending!(compact)
-    sort!(compact.pending_perm, DEFAULT_STABLE, Order.By(x->compact.pending_nodes[x].pos))
+    sort!(compact.pending_perm, DEFAULT_STABLE, Order.By(x->compact.pending_nodes[x].pos, Order.Forward))
 end
 
 function insert_node!(compact::IncrementalCompact, before, @nospecialize(typ), @nospecialize(val), attach_after::Bool=false)
@@ -644,6 +650,18 @@ function insert_node!(compact::IncrementalCompact, before, @nospecialize(typ), @
     else
         error("Unsupported")
     end
+end
+
+function append_node!(ir, @nospecialize(typ), @nospecialize(node), line)
+    push!(ir.stmts, node)
+    push!(ir.types, typ)
+    push!(ir.lines, line)
+    push!(ir.flags, 0)
+    last_bb = ir.cfg.blocks[end]
+    ir.cfg.blocks[end] = BasicBlock(first(last_bb.stmts):length(ir.stmts),
+        last_bb.preds,
+        last_bb.succs)
+    return SSAValue(length(ir.stmts))
 end
 
 function insert_node_here!(compact::IncrementalCompact, @nospecialize(val), @nospecialize(typ), ltable_idx::Int32, reverse_affinity::Bool=false)
@@ -823,17 +841,17 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
     # Note: We recursively kill as many edges as are obviously dead. However, this
     # may leave dead loops in the IR. We kill these later in a CFG cleanup pass (or
     # worstcase during codegen).
-    preds, succs = compact.result_bbs[compact.bb_rename[to]].preds, compact.result_bbs[compact.bb_rename[from]].succs
-    deleteat!(preds, findfirst(x->x === compact.bb_rename[from], preds)::Int)
-    deleteat!(succs, findfirst(x->x === compact.bb_rename[to], succs)::Int)
+    preds, succs = compact.result_bbs[compact.bb_rename_succ[to]].preds, compact.result_bbs[compact.bb_rename_pred[from]].succs
+    deleteat!(preds, findfirst(x->x === compact.bb_rename_pred[from], preds)::Int)
+    deleteat!(succs, findfirst(x->x === compact.bb_rename_succ[to], succs)::Int)
     # Check if the block is now dead
     if length(preds) == 0
-        for succ in copy(compact.result_bbs[compact.bb_rename[to]].succs)
-            kill_edge!(compact, active_bb, to, findfirst(x->x === succ, compact.bb_rename))
+        for succ in copy(compact.result_bbs[compact.bb_rename_succ[to]].succs)
+            kill_edge!(compact, active_bb, to, findfirst(x->x === succ, compact.bb_rename_pred))
         end
         if to < active_bb
             # Kill all statements in the block
-            stmts = compact.result_bbs[compact.bb_rename[to]].stmts
+            stmts = compact.result_bbs[compact.bb_rename_succ[to]].stmts
             for stmt in stmts
                 compact.result[stmt] = nothing
             end
@@ -842,12 +860,12 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
     else
         # We need to remove this edge from any phi nodes
         if to < active_bb
-            idx = first(compact.result_bbs[compact.bb_rename[to]].stmts)
+            idx = first(compact.result_bbs[compact.bb_rename_succ[to]].stmts)
             while idx < length(compact.result)
                 stmt = compact.result[idx]
                 stmt === nothing && continue
                 isa(stmt, PhiNode) || break
-                i = findfirst(x-> x === compact.bb_rename[from], stmt.edges)
+                i = findfirst(x-> x === compact.bb_rename_pred[from], stmt.edges)
                 if i !== nothing
                     deleteat!(stmt.edges, i)
                     deleteat!(stmt.values, i)
@@ -879,34 +897,34 @@ function process_node!(compact::IncrementalCompact, result::Vector{Any},
         ssa_rename[idx] = stmt
     elseif isa(stmt, OldSSAValue)
         ssa_rename[idx] = ssa_rename[stmt.id]
-    elseif isa(stmt, GotoNode) && compact.allow_cfg_transforms
-        result[result_idx] = GotoNode(compact.bb_rename[stmt.label])
+    elseif isa(stmt, GotoNode) && compact.cfg_transforms_enabled
+        result[result_idx] = GotoNode(compact.bb_rename_succ[stmt.label])
         result_idx += 1
     elseif isa(stmt, GlobalRef) || isa(stmt, GotoNode)
         result[result_idx] = stmt
         result_idx += 1
-    elseif isa(stmt, GotoIfNot) && compact.allow_cfg_transforms
+    elseif isa(stmt, GotoIfNot) && compact.cfg_transforms_enabled
         stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)::GotoIfNot
         result[result_idx] = stmt
         cond = stmt.cond
-        if isa(cond, Bool)
+        if isa(cond, Bool) && compact.fold_constant_branches
             if cond
                 result[result_idx] = nothing
                 kill_edge!(compact, active_bb, active_bb, stmt.dest)
                 # Don't increment result_idx => Drop this statement
             else
-                result[result_idx] = GotoNode(compact.bb_rename[stmt.dest])
+                result[result_idx] = GotoNode(compact.bb_rename_succ[stmt.dest])
                 kill_edge!(compact, active_bb, active_bb, active_bb+1)
                 result_idx += 1
             end
         else
-            result[result_idx] = GotoIfNot(cond, compact.bb_rename[stmt.dest])
+            result[result_idx] = GotoIfNot(cond, compact.bb_rename_succ[stmt.dest])
             result_idx += 1
         end
     elseif isa(stmt, Expr)
         stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)::Expr
-        if compact.allow_cfg_transforms && isexpr(stmt, :enter)
-            stmt.args[1] = compact.bb_rename[stmt.args[1]::Int]
+        if compact.cfg_transforms_enabled && isexpr(stmt, :enter)
+            stmt.args[1] = compact.bb_rename_succ[stmt.args[1]::Int]
         end
         result[result_idx] = stmt
         result_idx += 1
@@ -936,13 +954,13 @@ function process_node!(compact::IncrementalCompact, result::Vector{Any},
     elseif isa(stmt, PhiNode)
         values = process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, do_rename_ssa)
         if length(stmt.edges) == 1 && isassigned(values, 1) &&
-                length(compact.allow_cfg_transforms ?
-                    compact.result_bbs[compact.bb_rename[active_bb]].preds :
+                length(compact.cfg_transforms_enabled ?
+                    compact.result_bbs[compact.bb_rename_succ[active_bb]].preds :
                     compact.ir.cfg.blocks[active_bb].preds) == 1
             # There's only one predecessor left - just replace it
             ssa_rename[idx] = values[1]
         else
-            edges = compact.allow_cfg_transforms ? map!(i->compact.bb_rename[i], stmt.edges, stmt.edges) : stmt.edges
+            edges = compact.cfg_transforms_enabled ? map!(i->compact.bb_rename_pred[i], stmt.edges, stmt.edges) : stmt.edges
             result[result_idx] = PhiNode(edges, values)
             result_idx += 1
         end
@@ -983,14 +1001,14 @@ end
 
 function finish_current_bb!(compact, active_bb, old_result_idx=compact.result_idx, unreachable=false)
     if compact.active_result_bb > length(compact.result_bbs)
-        @assert compact.bb_rename[active_bb] == 0
+        #@assert compact.bb_rename[active_bb] == -1
         return true
     end
     bb = compact.result_bbs[compact.active_result_bb]
     # If this was the last statement in the BB and we decided to skip it, insert a
     # dummy `nothing` node, to prevent changing the structure of the CFG
     skipped = false
-    if !compact.allow_cfg_transforms || active_bb == 0 || active_bb > length(compact.bb_rename) || compact.bb_rename[active_bb] != 0
+    if !compact.cfg_transforms_enabled || active_bb == 0 || active_bb > length(compact.bb_rename_succ) || compact.bb_rename_succ[active_bb] != -1
         if compact.result_idx == first(bb.stmts)
             length(compact.result) < old_result_idx && resize!(compact, old_result_idx)
             if unreachable
@@ -1003,7 +1021,7 @@ function finish_current_bb!(compact, active_bb, old_result_idx=compact.result_id
             compact.result_lines[old_result_idx] = 0
             compact.result_flags[old_result_idx] = 0x00
             compact.result_idx = old_result_idx + 1
-        elseif compact.allow_cfg_transforms && compact.result_idx - 1 == first(bb.stmts)
+        elseif compact.cfg_transforms_enabled && compact.result_idx - 1 == first(bb.stmts)
             # Optimization: If this BB consists of only a branch, eliminate this bb
         end
         compact.result_bbs[compact.active_result_bb] = BasicBlock(bb, StmtRange(first(bb.stmts), compact.result_idx-1))
@@ -1083,7 +1101,7 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         resize!(compact, old_result_idx)
     end
     bb = compact.ir.cfg.blocks[active_bb]
-    if compact.allow_cfg_transforms && active_bb > 1 && active_bb <= length(compact.bb_rename) && length(bb.preds) == 0
+    if compact.cfg_transforms_enabled && active_bb > 1 && active_bb <= length(compact.bb_rename_succ) && length(bb.preds) == 0
         # No predecessors, kill the entire block.
         compact.idx = last(bb.stmts)
         # Pop any remaining insertion nodes
@@ -1274,8 +1292,8 @@ function complete(compact::IncrementalCompact)
     return IRCode(compact.ir, compact.result, compact.result_types, compact.result_lines, compact.result_flags, cfg, compact.new_new_nodes)
 end
 
-function compact!(code::IRCode)
-    compact = IncrementalCompact(code)
+function compact!(code::IRCode, allow_cfg_transforms=false)
+    compact = IncrementalCompact(code, allow_cfg_transforms)
     # Just run through the iterator without any processing
     foreach(x -> nothing, compact) # x isa Pair{Int, Any}
     return finish(compact)

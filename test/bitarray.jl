@@ -32,12 +32,12 @@ macro check_bit_operation(ex)
     Expr(:call, :check_bitop_call, nothing, map(esc, ex.args)...)
 end
 
-let t0 = time()
+let t0 = time_ns()
     global timesofar
     function timesofar(str)
         return # no-op, comment to see timings
-        t1 = time()
-        println(str, ": ", t1-t0, " seconds")
+        t1 = time_ns()
+        println(str, ": ", (t1-t0)/1e9, " seconds")
         t0 = t1
     end
 end
@@ -197,6 +197,12 @@ timesofar("utils")
                   ((x+y+z+t)%5==2 for x = 1:s2, y = 1:s2, z = 1:s3, t = 1:s4),
                   ((x+y)%5==2 for x = 1:n1 for y = 1:n2))
             @test BitArray(g) == BitArray(collect(g))
+        end
+    end
+
+    @testset "constructor from NTuple" begin
+        for nt in ((true, false, false), NTuple{0,Bool}(), (false,), (true,))
+            @test BitVector(nt) == BitVector(collect(nt))
         end
     end
 
@@ -553,8 +559,17 @@ timesofar("indexing")
         b2 = bitrand(m2)
         i1 = Array(b1)
         i2 = Array(b2)
+        # Append from array
         @test isequal(Array(append!(b1, b2)), append!(i1, i2))
         @test isequal(Array(append!(b1, i2)), append!(i1, b2))
+        @test bitcheck(b1)
+        # Append from HasLength iterator
+        @test isequal(Array(append!(b1, (v for v in b2))), append!(i1, i2))
+        @test isequal(Array(append!(b1, (v for v in i2))), append!(i1, b2))
+        @test bitcheck(b1)
+        # Append from SizeUnknown iterator
+        @test isequal(Array(append!(b1, (v for v in b2 if true))), append!(i1, i2))
+        @test isequal(Array(append!(b1, (v for v in i2 if true))), append!(i1, b2))
         @test bitcheck(b1)
     end
 

@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module BLAS
-@doc """
+"""
 Interface to BLAS subroutines.
-""" BLAS
+"""
+module BLAS
 
 import ..axpy!, ..axpby!
 import Base: copyto!
@@ -15,7 +15,6 @@ export
     axpy!,
     axpby!,
     blascopy!,
-    dot,
     dotc,
     dotu,
     scal!,
@@ -29,6 +28,7 @@ export
     gemv,
     hemv!,
     hemv,
+    hpmv!,
     sbmv!,
     sbmv,
     symv!,
@@ -73,7 +73,7 @@ import Libdl
 let lib = C_NULL
 global function determine_vendor()
     if lib == C_NULL
-        lib = something(Libdl.dlopen(Base.libblas_name; throw_error=false), C_NULL)
+        lib = something(Libdl.dlopen(libblas; throw_error=false), C_NULL)
     end
     vend = :unknown
     if lib != C_NULL
@@ -92,7 +92,7 @@ end
 const _vendor = determine_vendor()
 vendor() = _vendor
 
-if vendor() == :openblas64
+if vendor() === :openblas64
     macro blasfunc(x)
         return Expr(:quote, Symbol(x, "64_"))
     end
@@ -102,7 +102,7 @@ else
     end
 end
 
-openblas_get_config() = strip(unsafe_string(ccall((@blasfunc(openblas_get_config), Base.libblas_name), Ptr{UInt8}, () )))
+openblas_get_config() = strip(unsafe_string(ccall((@blasfunc(openblas_get_config), libblas), Ptr{UInt8}, () )))
 
 """
     set_num_threads(n)
@@ -111,13 +111,13 @@ Set the number of threads the BLAS library should use.
 """
 function set_num_threads(n::Integer)
     blas = vendor()
-    if blas == :openblas
-        return ccall((:openblas_set_num_threads, Base.libblas_name), Cvoid, (Int32,), n)
-    elseif blas == :openblas64
-        return ccall((:openblas_set_num_threads64_, Base.libblas_name), Cvoid, (Int32,), n)
-    elseif blas == :mkl
+    if blas === :openblas
+        return ccall((:openblas_set_num_threads, libblas), Cvoid, (Int32,), n)
+    elseif blas === :openblas64
+        return ccall((:openblas_set_num_threads64_, libblas), Cvoid, (Int32,), n)
+    elseif blas === :mkl
         # MKL may let us set the number of threads in several ways
-        return ccall((:MKL_Set_Num_Threads, Base.libblas_name), Cvoid, (Cint,), n)
+        return ccall((:MKL_Set_Num_Threads, libblas), Cvoid, (Cint,), n)
     end
 
     # OSX BLAS looks at an environment variable
@@ -131,7 +131,7 @@ end
 const _testmat = [1.0 0.0; 0.0 -1.0]
 function check()
     blas = vendor()
-    if blas == :openblas || blas == :openblas64
+    if blas === :openblas || blas === :openblas64
         openblas_config = openblas_get_config()
         openblas64 = occursin(r".*USE64BITINT.*", openblas_config)
         if Base.USE_BLAS64 != openblas64
@@ -149,7 +149,7 @@ function check()
             println("Quitting.")
             exit()
         end
-    elseif blas == :mkl
+    elseif blas === :mkl
         if Base.USE_BLAS64
             ENV["MKL_INTERFACE_LAYER"] = "ILP64"
         end
@@ -239,7 +239,7 @@ Dot product of two vectors consisting of `n` elements of array `X` with stride `
 
 # Examples
 ```jldoctest
-julia> dot(10, fill(1.0, 10), 1, fill(1.0, 20), 2)
+julia> BLAS.dot(10, fill(1.0, 10), 1, fill(1.0, 20), 2)
 10.0
 ```
 """
@@ -423,7 +423,7 @@ asum(x::Union{AbstractVector,DenseArray}) = GC.@preserve x asum(length(x), point
 """
     axpy!(a, X, Y)
 
-Overwrite `Y` with `a*X + Y`, where `a` is a scalar. Return `Y`.
+Overwrite `Y` with `X*a + Y`, where `a` is a scalar. Return `Y`.
 
 # Examples
 ```jldoctest
@@ -496,9 +496,9 @@ julia> y = [4., 5, 6];
 
 julia> BLAS.axpby!(2., x, 3., y)
 3-element Array{Float64,1}:
-14.0
-19.0
-24.0
+ 14.0
+ 19.0
+ 24.0
 ```
 """
 function axpby! end
@@ -572,7 +572,9 @@ for (fname, elty) in ((:dgemv_,:Float64),
              #      CHARACTER TRANS
              #*     .. Array Arguments ..
              #      DOUBLE PRECISION A(LDA,*),X(*),Y(*)
-        function gemv!(trans::AbstractChar, alpha::($elty), A::AbstractVecOrMat{$elty}, X::AbstractVector{$elty}, beta::($elty), Y::AbstractVector{$elty})
+        function gemv!(trans::AbstractChar, alpha::Union{($elty), Bool},
+                       A::AbstractVecOrMat{$elty}, X::AbstractVector{$elty},
+                       beta::Union{($elty), Bool}, Y::AbstractVector{$elty})
             require_one_based_indexing(A, X, Y)
             m,n = size(A,1),size(A,2)
             if trans == 'N' && (length(X) != n || length(Y) != m)
@@ -657,7 +659,10 @@ for (fname, elty) in ((:dgbmv_,:Float64),
              #       CHARACTER TRANS
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
-        function gbmv!(trans::AbstractChar, m::Integer, kl::Integer, ku::Integer, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, beta::($elty), y::AbstractVector{$elty})
+        function gbmv!(trans::AbstractChar, m::Integer, kl::Integer, ku::Integer,
+                       alpha::Union{($elty), Bool}, A::AbstractMatrix{$elty},
+                       x::AbstractVector{$elty}, beta::Union{($elty), Bool},
+                       y::AbstractVector{$elty})
             require_one_based_indexing(A, x, y)
             chkstride1(A)
             ccall((@blasfunc($fname), libblas), Cvoid,
@@ -705,7 +710,9 @@ for (fname, elty, lib) in ((:dsymv_,:Float64,libblas),
              #      CHARACTER UPLO
              #     .. Array Arguments ..
              #      DOUBLE PRECISION A(LDA,*),X(*),Y(*)
-        function symv!(uplo::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, beta::($elty), y::AbstractVector{$elty})
+        function symv!(uplo::AbstractChar, alpha::Union{($elty), Bool},
+                       A::AbstractMatrix{$elty}, x::AbstractVector{$elty},
+                       beta::Union{($elty), Bool}, y::AbstractVector{$elty})
             require_one_based_indexing(A, x, y)
             m, n = size(A)
             if m != n
@@ -754,10 +761,19 @@ Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 symv(ul, A, x)
 
 ### hemv
+"""
+    hemv!(ul, alpha, A, x, beta, y)
+
+Update the vector `y` as `alpha*A*x + beta*y`. `A` is assumed to be Hermitian.
+Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+`alpha` and `beta` are scalars. Return the updated `y`.
+"""
+function hemv! end
+
 for (fname, elty) in ((:zhemv_,:ComplexF64),
                       (:chemv_,:ComplexF32))
     @eval begin
-        function hemv!(uplo::AbstractChar, α::$elty, A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, β::$elty, y::AbstractVector{$elty})
+        function hemv!(uplo::AbstractChar, α::Union{$elty, Bool}, A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, β::Union{$elty, Bool}, y::AbstractVector{$elty})
             require_one_based_indexing(A, x, y)
             m, n = size(A)
             if m != n
@@ -790,6 +806,99 @@ for (fname, elty) in ((:zhemv_,:ComplexF64),
         end
     end
 end
+
+"""
+    hemv(ul, alpha, A, x)
+
+Return `alpha*A*x`. `A` is assumed to be Hermitian.
+Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+`alpha` is a scalar.
+"""
+hemv(ul, alpha, A, x)
+
+"""
+    hemv(ul, A, x)
+
+Return `A*x`. `A` is assumed to be Hermitian.
+Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+"""
+hemv(ul, A, x)
+
+### hpmv!, (HP) Hermitian packed matrix-vector operation defined as y := alpha*A*x + beta*y.
+for (fname, elty) in ((:zhpmv_, :ComplexF64),
+                      (:chpmv_, :ComplexF32))
+    @eval begin
+        # SUBROUTINE ZHPMV(UPLO,N,ALPHA,AP,X,INCX,BETA,Y,INCY)
+        # Y <- ALPHA*AP*X + BETA*Y
+        # *     .. Scalar Arguments ..
+        #       DOUBLE PRECISION ALPHA,BETA
+        #       INTEGER INCX,INCY,N
+        #       CHARACTER UPLO
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION A(N,N),X(N),Y(N)
+        function hpmv!(uplo::AbstractChar,
+                       n::BlasInt,
+                       α::$elty,
+                       AP::Union{Ptr{$elty}, AbstractArray{$elty}},
+                       x::Union{Ptr{$elty}, AbstractArray{$elty}},
+                       incx::Integer,
+                       β::$elty,
+                       y::Union{Ptr{$elty}, AbstractArray{$elty}},
+                       incy::Integer)
+
+            ccall((@blasfunc($fname), libblas), Cvoid,
+                  (Ref{UInt8},     # uplo,
+                   Ref{BlasInt},   # n,
+                   Ref{$elty},     # α,
+                   Ptr{$elty},     # AP,
+                   Ptr{$elty},     # x,
+                   Ref{BlasInt},   # incx,
+                   Ref{$elty},     # β,
+                   Ptr{$elty},     # y, output
+                   Ref{BlasInt}),  # incy
+                  uplo,
+                  n,
+                  α,
+                  AP,
+                  x,
+                  incx,
+                  β,
+                  y,
+                  incy)
+        end
+    end
+end
+
+function hpmv!(uplo::AbstractChar,
+               α::Number, AP::Union{DenseArray{T}, AbstractVector{T}}, x::Union{DenseArray{T}, AbstractVector{T}},
+               β::Number, y::Union{DenseArray{T}, AbstractVector{T}}) where {T <: BlasComplex}
+    require_one_based_indexing(AP, x, y)
+    N = length(x)
+    if N != length(y)
+        throw(DimensionMismatch("x has length $(N), but y has length $(length(y))"))
+    end
+    if length(AP) < Int64(N*(N+1)/2)
+        throw(DimensionMismatch("Packed Hermitian matrix A has size smaller than length(x) =  $(N)."))
+    end
+    GC.@preserve x y AP hpmv!(uplo, BlasInt(N), convert(T, α), AP, pointer(x), BlasInt(stride(x, 1)), convert(T, β), pointer(y), BlasInt(stride(y, 1)))
+    y
+end
+
+"""
+    hpmv!(uplo, α, AP, x, β, y)
+
+Update vector `y` as `α*AP*x + β*y` where `AP` is a packed Hermitian matrix.
+The storage layout for `AP` is described in the reference BLAS module, level-2 BLAS at
+<http://www.netlib.org/lapack/explore-html/>.
+
+The scalar inputs `α` and `β` shall be numbers.
+
+The array inputs `x`, `y` and `AP` must be complex one-dimensional julia arrays of the
+same type that is either `ComplexF32` or `ComplexF64`.
+
+Return the updated `y`.
+"""
+hpmv!
 
 ### sbmv, (SB) symmetric banded matrix-vector multiplication
 for (fname, elty) in ((:dsbmv_,:Float64),
@@ -1113,7 +1222,11 @@ for (gemm, elty) in
              #       CHARACTER TRANSA,TRANSB
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
-        function gemm!(transA::AbstractChar, transB::AbstractChar, alpha::($elty), A::AbstractVecOrMat{$elty}, B::AbstractVecOrMat{$elty}, beta::($elty), C::AbstractVecOrMat{$elty})
+        function gemm!(transA::AbstractChar, transB::AbstractChar,
+                       alpha::Union{($elty), Bool},
+                       A::AbstractVecOrMat{$elty}, B::AbstractVecOrMat{$elty},
+                       beta::Union{($elty), Bool},
+                       C::AbstractVecOrMat{$elty})
 #           if any([stride(A,1), stride(B,1), stride(C,1)] .!= 1)
 #               error("gemm!: BLAS module requires contiguous matrix columns")
 #           end  # should this be checked on every call?
@@ -1176,7 +1289,9 @@ for (mfname, elty) in ((:dsymm_,:Float64),
              #     CHARACTER SIDE,UPLO
              #     .. Array Arguments ..
              #     DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
-        function symm!(side::AbstractChar, uplo::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty}, beta::($elty), C::AbstractMatrix{$elty})
+        function symm!(side::AbstractChar, uplo::AbstractChar, alpha::Union{($elty), Bool},
+                       A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty},
+                       beta::Union{($elty), Bool}, C::AbstractMatrix{$elty})
             require_one_based_indexing(A, B, C)
             m, n = size(C)
             j = checksquare(A)
@@ -1245,7 +1360,9 @@ for (mfname, elty) in ((:zhemm_,:ComplexF64),
              #     CHARACTER SIDE,UPLO
              #     .. Array Arguments ..
              #     DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
-        function hemm!(side::AbstractChar, uplo::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty}, beta::($elty), C::AbstractMatrix{$elty})
+        function hemm!(side::AbstractChar, uplo::AbstractChar, alpha::Union{($elty), Bool},
+                       A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty},
+                       beta::Union{($elty), Bool}, C::AbstractMatrix{$elty})
             require_one_based_indexing(A, B, C)
             m, n = size(C)
             j = checksquare(A)
@@ -1276,13 +1393,39 @@ for (mfname, elty) in ((:zhemm_,:ComplexF64),
     end
 end
 
+"""
+    hemm(side, ul, alpha, A, B)
+
+Return `alpha*A*B` or `alpha*B*A` according to [`side`](@ref stdlib-blas-side).
+`A` is assumed to be Hermitian. Only the [`ul`](@ref stdlib-blas-uplo) triangle
+of `A` is used.
+"""
+hemm(side, ul, alpha, A, B)
+
+"""
+    hemm(side, ul, A, B)
+
+Return `A*B` or `B*A` according to [`side`](@ref stdlib-blas-side). `A` is assumed
+to be Hermitian. Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+"""
+hemm(side, ul, A, B)
+
+"""
+    hemm!(side, ul, alpha, A, B, beta, C)
+
+Update `C` as `alpha*A*B + beta*C` or `alpha*B*A + beta*C` according to
+[`side`](@ref stdlib-blas-side). `A` is assumed to be Hermitian. Only the
+[`ul`](@ref stdlib-blas-uplo) triangle of `A` is used. Return the updated `C`.
+"""
+hemm!
+
 ## syrk
 
 """
     syrk!(uplo, trans, alpha, A, beta, C)
 
-Rank-k update of the symmetric matrix `C` as `alpha*A*transpose(A) + beta*C` or `alpha*transpose(A)*A +
-beta*C` according to [`trans`](@ref stdlib-blas-trans).
+Rank-k update of the symmetric matrix `C` as `alpha*A*transpose(A) + beta*C` or
+`alpha*transpose(A)*A + beta*C` according to [`trans`](@ref stdlib-blas-trans).
 Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is used. Returns `C`.
 """
 function syrk! end
@@ -1310,8 +1453,8 @@ for (fname, elty) in ((:dsyrk_,:Float64),
        # *     .. Array Arguments ..
        #       REAL A(LDA,*),C(LDC,*)
        function syrk!(uplo::AbstractChar, trans::AbstractChar,
-                      alpha::($elty), A::AbstractVecOrMat{$elty},
-                      beta::($elty), C::AbstractMatrix{$elty})
+                      alpha::Union{($elty), Bool}, A::AbstractVecOrMat{$elty},
+                      beta::Union{($elty), Bool}, C::AbstractMatrix{$elty})
            require_one_based_indexing(A, C)
            n = checksquare(C)
            nn = size(A, trans == 'N' ? 1 : 2)
@@ -1340,19 +1483,17 @@ syrk(uplo::AbstractChar, trans::AbstractChar, A::AbstractVecOrMat) = syrk(uplo, 
 """
     herk!(uplo, trans, alpha, A, beta, C)
 
-Methods for complex arrays only. Rank-k update of the Hermitian matrix `C` as `alpha*A*A' +
-beta*C` or `alpha*A'*A + beta*C` according to [`trans`](@ref stdlib-blas-trans).
-Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is updated.
-Returns `C`.
+Methods for complex arrays only. Rank-k update of the Hermitian matrix `C` as
+`alpha*A*A' + beta*C` or `alpha*A'*A + beta*C` according to [`trans`](@ref stdlib-blas-trans).
+Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is updated. Returns `C`.
 """
 function herk! end
 
 """
     herk(uplo, trans, alpha, A)
 
-Methods for complex arrays only.
-Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of `alpha*A*A'` or `alpha*A'*A`,
-according to [`trans`](@ref stdlib-blas-trans).
+Methods for complex arrays only. Returns the [`uplo`](@ref stdlib-blas-uplo)
+triangle of `alpha*A*A'` or `alpha*A'*A`, according to [`trans`](@ref stdlib-blas-trans).
 """
 function herk end
 
@@ -1367,8 +1508,9 @@ for (fname, elty, relty) in ((:zherk_, :ComplexF64, :Float64),
        # *     ..
        # *     .. Array Arguments ..
        #       COMPLEX A(LDA,*),C(LDC,*)
-       function herk!(uplo::AbstractChar, trans::AbstractChar, α::$relty, A::AbstractVecOrMat{$elty},
-                      β::$relty, C::AbstractMatrix{$elty})
+       function herk!(uplo::AbstractChar, trans::AbstractChar,
+                      α::Union{$relty, Bool}, A::AbstractVecOrMat{$elty},
+                      β::Union{$relty, Bool}, C::AbstractMatrix{$elty})
            require_one_based_indexing(A, C)
            n = checksquare(C)
            nn = size(A, trans == 'N' ? 1 : 2)
@@ -1432,11 +1574,37 @@ for (fname, elty) in ((:dsyr2k_,:Float64),
         end
     end
 end
+
+"""
+    syr2k!(uplo, trans, alpha, A, B, beta, C)
+
+Rank-2k update of the symmetric matrix `C` as
+`alpha*A*transpose(B) + alpha*B*transpose(A) + beta*C` or
+`alpha*transpose(A)*B + alpha*transpose(B)*A + beta*C`
+according to [`trans`](@ref stdlib-blas-trans).
+Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is used. Returns `C`.
+"""
+function syr2k! end
+
+"""
+    syr2k(uplo, trans, alpha, A, B)
+
+Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of
+`alpha*A*transpose(B) + alpha*B*transpose(A)` or
+`alpha*transpose(A)*B + alpha*transpose(B)*A`,
+according to [`trans`](@ref stdlib-blas-trans).
+"""
 function syr2k(uplo::AbstractChar, trans::AbstractChar, alpha::Number, A::AbstractVecOrMat, B::AbstractVecOrMat)
     T = eltype(A)
     n = size(A, trans == 'N' ? 1 : 2)
     syr2k!(uplo, trans, convert(T,alpha), A, B, zero(T), similar(A, T, (n, n)))
 end
+"""
+    syr2k(uplo, trans, A, B)
+
+Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of `A*transpose(B) + B*transpose(A)`
+or `transpose(A)*B + transpose(B)*A`, according to [`trans`](@ref stdlib-blas-trans).
+"""
 syr2k(uplo::AbstractChar, trans::AbstractChar, A::AbstractVecOrMat, B::AbstractVecOrMat) = syr2k(uplo, trans, one(eltype(A)), A, B)
 
 for (fname, elty1, elty2) in ((:zher2k_,:ComplexF64,:Float64), (:cher2k_,:ComplexF32,:Float32))
@@ -1478,6 +1646,32 @@ for (fname, elty1, elty2) in ((:zher2k_,:ComplexF64,:Float64), (:cher2k_,:Comple
        her2k(uplo::AbstractChar, trans::AbstractChar, A::AbstractVecOrMat{$elty1}, B::AbstractVecOrMat{$elty1}) = her2k(uplo, trans, one($elty1), A, B)
    end
 end
+
+"""
+    her2k!(uplo, trans, alpha, A, B, beta, C)
+
+Rank-2k update of the Hermitian matrix `C` as
+`alpha*A*B' + alpha*B*A' + beta*C` or `alpha*A'*B + alpha*B'*A + beta*C`
+according to [`trans`](@ref stdlib-blas-trans). The scalar `beta` has to be real.
+Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is used. Returns `C`.
+"""
+function her2k! end
+
+"""
+    her2k(uplo, trans, alpha, A, B)
+
+Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of `alpha*A*B' + alpha*B*A'`
+or `alpha*A'*B + alpha*B'*A`, according to [`trans`](@ref stdlib-blas-trans).
+"""
+her2k(uplo, trans, alpha, A, B)
+
+"""
+    her2k(uplo, trans, A, B)
+
+Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of `A*B' + B*A'`
+or `A'*B + B'*A`, according to [`trans`](@ref stdlib-blas-trans).
+"""
+her2k(uplo, trans, A, B)
 
 ## (TR) Triangular matrix and vector multiplication and solution
 

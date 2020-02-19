@@ -8,27 +8,26 @@ and available by default.
 """
 module Logging
 
-# For now, simply import most names from Base - we don't want to fully
-# stabilize this API for 1.0 so it should officially live here in a stdlib
-# package.
-#
-# See #24490
-
-import Base.CoreLogging:
-    LogLevel, BelowMinLevel, Debug, Info, Warn, Error, AboveMaxLevel,
-    AbstractLogger,
-    NullLogger,
-    handle_message, shouldlog, min_enabled_level, catch_exceptions,
-    @debug,
-    @info,
-    @warn,
-    @error,
-    @logmsg,
-    with_logger,
-    current_logger,
-    global_logger,
-    disable_logging,
-    SimpleLogger
+# Import the CoreLogging implementation into Logging as new const bindings.
+# Doing it this way (rather than with import) makes these symbols accessible to
+# tab completion.
+for sym in [
+    :LogLevel, :BelowMinLevel, :Debug, :Info, :Warn, :Error, :AboveMaxLevel,
+    :AbstractLogger,
+    :NullLogger,
+    :handle_message, :shouldlog, :min_enabled_level, :catch_exceptions,
+    Symbol("@debug"),
+    Symbol("@info"),
+    Symbol("@warn"),
+    Symbol("@error"),
+    Symbol("@logmsg"),
+    :with_logger,
+    :current_logger,
+    :global_logger,
+    :disable_logging,
+    :SimpleLogger]
+    @eval const $sym = Base.CoreLogging.$sym
+end
 
 export
     AbstractLogger,

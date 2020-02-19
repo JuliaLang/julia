@@ -2,9 +2,9 @@
 
 # tests for accurate updating of method tables
 
+using Base: get_world_counter
 tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
-world_counter() = ccall(:jl_get_world_counter, UInt, ())
-@test typemax(UInt) > world_counter() == tls_world_age() > 0
+@test typemax(UInt) > get_world_counter() == tls_world_age() > 0
 
 # test simple method replacement
 begin
@@ -106,17 +106,17 @@ function put_n_take!(v...)
 end
 
 g265() = [f265(x) for x in 1:3.]
-wc265 = world_counter()
+wc265 = get_world_counter()
 f265(::Any) = 1.0
-@test wc265 + 1 == world_counter()
+@test wc265 + 1 == get_world_counter()
 chnls, tasks = Base.channeled_tasks(2, wfunc)
 t265 = tasks[1]
 
-wc265 = world_counter()
-@test put_n_take!(world_counter, ()) == wc265
+wc265 = get_world_counter()
+@test put_n_take!(get_world_counter, ()) == wc265
 @test put_n_take!(tls_world_age, ()) == wc265
 f265(::Int) = 1
-@test put_n_take!(world_counter, ()) == wc265 + 1 == world_counter() == tls_world_age()
+@test put_n_take!(get_world_counter, ()) == wc265 + 1 == get_world_counter() == tls_world_age()
 @test put_n_take!(tls_world_age, ()) == wc265
 
 @test g265() == Int[1, 1, 1]
@@ -139,14 +139,15 @@ h265() = true
 loc_h265 = "$(@__FILE__):$(@__LINE__() - 1)"
 @test h265()
 @test_throws MethodError put_n_take!(h265, ())
-@test_throws MethodError fetch(t265)
+@test_throws TaskFailedException(t265) fetch(t265)
 @test istaskdone(t265)
 let ex = t265.exception
+    @test ex isa MethodError
     @test ex.f == h265
     @test ex.args == ()
     @test ex.world == wc265
     str = sprint(showerror, ex)
-    wc = world_counter()
+    wc = get_world_counter()
     cmps = """
         MethodError: no method matching h265()
         The applicable method may be too new: running in world age $wc265, while current world is $wc."""
@@ -177,9 +178,10 @@ z = Any["ABC"]
 f26506(x::Int) = 2
 g26506(z) # Places an entry for f26506(::String) in mt.name.cache
 f26506(x::String) = 3
-cache = typeof(f26506).name.mt.cache
-# The entry we created above should have been truncated
-@test cache.min_world == cache.max_world
+let cache = typeof(f26506).name.mt.cache
+    # The entry we created above should have been truncated
+    @test cache.min_world == cache.max_world
+end
 c26506_1, c26506_2 = Condition(), Condition()
 # Captures the world age
 result26506 = Any[]
@@ -190,7 +192,10 @@ t = Task(()->begin
 end)
 yield(t)
 f26506(x::Float64) = 4
-cache = typeof(f26506).name.mt.cache
-@test cache.min_world == cache.max_world
-notify(c26506_1); wait(c26506_2);
+let cache = typeof(f26506).name.mt.cache
+    # The entry we created above should have been truncated
+    @test cache.min_world == cache.max_world
+end
+notify(c26506_1)
+wait(c26506_2)
 @test result26506[1] == 3

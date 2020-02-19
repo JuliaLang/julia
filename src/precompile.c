@@ -119,8 +119,9 @@ static void _compile_all_tvar_union(jl_value_t *methsig)
 
     int tvarslen = jl_subtype_env_size(methsig);
     jl_value_t *sigbody = methsig;
-    jl_value_t **env;
-    JL_GC_PUSHARGS(env, 2 * tvarslen);
+    jl_value_t **roots;
+    JL_GC_PUSHARGS(roots, 1 + 2 * tvarslen);
+    jl_value_t **env = roots + 1;
     int *idx = (int*)alloca(sizeof(int) * tvarslen);
     int i;
     for (i = 0; i < tvarslen; i++) {
@@ -132,20 +133,19 @@ static void _compile_all_tvar_union(jl_value_t *methsig)
     }
 
     for (i = 0; i < tvarslen; /* incremented by inner loop */) {
-        jl_value_t *sig;
+        jl_value_t **sig = &roots[0];
         JL_TRY {
             // TODO: wrap in UnionAll for each tvar in env[2*i + 1] ?
             // currently doesn't matter much, since jl_compile_hint doesn't work on abstract types
-            sig = (jl_value_t*)jl_instantiate_type_with(sigbody, env, tvarslen);
+            *sig = (jl_value_t*)jl_instantiate_type_with(sigbody, env, tvarslen);
         }
         JL_CATCH {
             goto getnext; // sigh, we found an invalid type signature. should we warn the user?
         }
-        if (!jl_has_concrete_subtype(sig))
+        if (!jl_has_concrete_subtype(*sig))
             goto getnext; // signature wouldn't be callable / is invalid -- skip it
-        if (jl_is_concrete_type(sig)) {
-            JL_GC_PROMISE_ROOTED(sig); // `sig` is rooted because it's a leaftype (JL_ALWAYS_LEAFTYPE)
-            if (jl_compile_hint((jl_tupletype_t*)sig))
+        if (jl_is_concrete_type(*sig)) {
+            if (jl_compile_hint((jl_tupletype_t *)*sig))
                 goto getnext; // success
         }
 
@@ -247,39 +247,32 @@ static void _compile_all_deq(jl_array_t *found)
 {
     int found_i, found_l = jl_array_len(found);
     jl_printf(JL_STDERR, "found %d uncompiled methods for compile-all\n", (int)found_l);
-    jl_method_instance_t *linfo = NULL;
+    jl_method_instance_t *mi = NULL;
     jl_value_t *src = NULL;
-    JL_GC_PUSH2(&linfo, &src);
+    JL_GC_PUSH2(&mi, &src);
     for (found_i = 0; found_i < found_l; found_i++) {
         if (found_i % (1 + found_l / 300) == 0 || found_i == found_l - 1) // show 300 progress steps, to show progress without overwhelming log files
             jl_printf(JL_STDERR, " %d / %d\r", found_i + 1, found_l);
         jl_typemap_entry_t *ml = (jl_typemap_entry_t*)jl_array_ptr_ref(found, found_i);
         jl_method_t *m = ml->func.method;
-        if (m->source == NULL)  // TODO: generic implementations of generated functions
+        if (m->source == NULL) // TODO: generic implementations of generated functions
             continue;
-        linfo = m->unspecialized;
-        if (!linfo) {
-            linfo = jl_get_specialized(m, (jl_value_t*)m->sig, jl_emptysvec);
-            m->unspecialized = linfo;
-            jl_gc_wb(m, linfo);
-        }
-
-        if (linfo->invoke != jl_fptr_trampoline)
+        mi = jl_get_unspecialized(mi);
+        assert(mi == m->unspecialized); // make sure we didn't get tricked by a generated function, since we can't handle those
+        jl_code_instance_t *ucache = jl_get_method_inferred(mi, (jl_value_t*)jl_any_type, 1, ~(size_t)0);
+        if (ucache->invoke != NULL)
             continue;
         src = m->source;
-        // TODO: the `unspecialized` field is not yet world-aware, so we can't store
-        // an inference result there.
-        //src = jl_type_infer(&linfo, jl_world_counter, 1);
-        //m->unspecialized = linfo;
-        //jl_gc_wb(m, linfo);
-        //if (linfo->trampoline != jl_fptr_trampoline)
+        // TODO: we could now enable storing inferred function pointers in the `unspecialized` cache
+        //src = jl_type_infer(mi, jl_world_counter, 1);
+        //if (ucache->invoke != NULL)
         //    continue;
 
         // first try to create leaf signatures from the signature declaration and compile those
         _compile_all_union((jl_value_t*)ml->sig);
         // then also compile the generic fallback
-        jl_compile_linfo(&linfo, (jl_code_info_t*)src, jl_world_counter, &jl_default_cgparams);
-        assert(linfo->functionObjectsDecls.functionObject != NULL);
+        jl_compile_linfo(mi, (jl_code_info_t*)src, 1, &jl_default_cgparams);
+        assert(ucache->functionObjectsDecls.functionObject != NULL);
     }
     JL_GC_POP();
     jl_printf(JL_STDERR, "\n");
@@ -292,8 +285,9 @@ static int compile_all_enq__(jl_typemap_entry_t *ml, void *env)
     jl_method_t *m = ml->func.method;
     if (m->source &&
         (!m->unspecialized ||
-         (m->unspecialized->functionObjectsDecls.functionObject == NULL &&
-          m->unspecialized->invoke == jl_fptr_trampoline))) {
+         !m->unspecialized->cache ||
+         (m->unspecialized->cache->functionObjectsDecls.functionObject == NULL &&
+          m->unspecialized->cache->invoke == NULL))) {
         // found a lambda that still needs to be compiled
         jl_array_ptr_1d_push(found, (jl_value_t*)ml);
     }
@@ -327,20 +321,33 @@ static void jl_compile_all_defs(void)
 
 static int precompile_enq_all_cache__(jl_typemap_entry_t *l, void *closure)
 {
-    jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)l->sig);
+    jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)l->func.linfo);
     return 1;
 }
 
 static int precompile_enq_specialization_(jl_typemap_entry_t *l, void *closure)
 {
-    if (jl_is_method_instance(l->func.value) &&
-            l->func.linfo->functionObjectsDecls.functionObject == NULL &&
-            l->func.linfo->invoke != jl_fptr_const_return &&
-            (l->func.linfo->inferred &&
-             l->func.linfo->inferred != jl_nothing &&
-             jl_ast_flag_inferred((jl_array_t*)l->func.linfo->inferred) &&
-             !jl_ast_flag_inlineable((jl_array_t*)l->func.linfo->inferred)))
-        jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)l->sig);
+    jl_method_instance_t *mi = l->func.linfo;
+    assert(jl_is_method_instance(mi));
+    jl_code_instance_t *codeinst = mi->cache;
+    while (codeinst) {
+        int do_compile = 0;
+        if (codeinst->functionObjectsDecls.functionObject == NULL && codeinst->invoke != jl_fptr_const_return) {
+            if (codeinst->inferred && codeinst->inferred != jl_nothing &&
+                jl_ast_flag_inferred((jl_array_t*)codeinst->inferred) &&
+                !jl_ast_flag_inlineable((jl_array_t*)codeinst->inferred)) {
+                do_compile = 1;
+            }
+            else if (codeinst->invoke != NULL) {
+                do_compile = 1;
+            }
+        }
+        if (do_compile) {
+            jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)mi);
+            return 1;
+        }
+        codeinst = codeinst->next;
+    }
     return 1;
 }
 
@@ -349,8 +356,8 @@ static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *c
     jl_method_t *m = def->func.method;
     if (m->name == jl_symbol("__init__") && jl_is_dispatch_tupletype(m->sig)) {
         // ensure `__init__()` gets strongly-hinted, specialized, and compiled
-        jl_specializations_get_linfo(m, m->sig, jl_emptysvec, jl_world_counter);
-        jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)m->sig);
+        jl_method_instance_t *mi = jl_specializations_get_linfo(m, m->sig, jl_emptysvec);
+        jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)mi);
     }
     else {
         jl_typemap_visitor(def->func.method->specializations, precompile_enq_specialization_, closure);
@@ -364,6 +371,8 @@ static void precompile_enq_all_specializations_(jl_methtable_t *mt, void *env)
     jl_typemap_visitor(mt->cache, precompile_enq_all_cache__, env);
 }
 
+void jl_compile_now(jl_method_instance_t *mi);
+
 static void jl_compile_specializations(void)
 {
     // this "found" array will contain function
@@ -371,11 +380,12 @@ static void jl_compile_specializations(void)
     jl_array_t *m = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&m);
     jl_foreach_reachable_mtable(precompile_enq_all_specializations_, m);
-    // Ensure stable ordering to make inference problems more reproducible (#29923)
-    jl_sort_types((jl_value_t**)jl_array_data(m), jl_array_len(m));
-    size_t i, l;
-    for (i = 0, l = jl_array_len(m); i < l; i++) {
-        jl_compile_hint((jl_tupletype_t*)jl_array_ptr_ref(m, i));
+    // TODO: Ensure stable ordering to make inference problems more reproducible (#29923)
+    //jl_sort_types((jl_value_t**)jl_array_data(m), jl_array_len(m));
+    size_t i, l = jl_array_len(m);
+    for (i = 0; i < l; i++) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(m, i);
+        jl_compile_now(mi);
     }
     JL_GC_POP();
 }

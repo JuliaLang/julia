@@ -80,6 +80,7 @@ enum {
     GC_MARK_L_scan_only,
     GC_MARK_L_finlist,
     GC_MARK_L_objarray,
+    GC_MARK_L_array8,
     GC_MARK_L_obj8,
     GC_MARK_L_obj16,
     GC_MARK_L_obj32,
@@ -113,32 +114,40 @@ typedef struct {
     jl_value_t *parent; // The parent object to trigger write barrier on.
     jl_value_t **begin; // The first slot to be scanned.
     jl_value_t **end; // The end address (after the last slot to be scanned)
+    uint32_t step; // Number of pointers to jump between marks
     uintptr_t nptr; // See notes about `nptr` above.
 } gc_mark_objarray_t;
 
 // A normal object with 8bits field descriptors
 typedef struct {
     jl_value_t *parent; // The parent object to trigger write barrier on.
-    jl_fielddesc8_t *begin; // Current field descriptor.
-    jl_fielddesc8_t *end; // End of field descriptor.
+    uint8_t *begin; // Current field descriptor.
+    uint8_t *end; // End of field descriptor.
     uintptr_t nptr; // See notes about `nptr` above.
 } gc_mark_obj8_t;
 
 // A normal object with 16bits field descriptors
 typedef struct {
     jl_value_t *parent; // The parent object to trigger write barrier on.
-    jl_fielddesc16_t *begin; // Current field descriptor.
-    jl_fielddesc16_t *end; // End of field descriptor.
+    uint16_t *begin; // Current field descriptor.
+    uint16_t *end; // End of field descriptor.
     uintptr_t nptr; // See notes about `nptr` above.
 } gc_mark_obj16_t;
 
 // A normal object with 32bits field descriptors
 typedef struct {
     jl_value_t *parent; // The parent object to trigger write barrier on.
-    jl_fielddesc32_t *begin; // Current field descriptor.
-    jl_fielddesc32_t *end; // End of field descriptor.
+    uint32_t *begin; // Current field descriptor.
+    uint32_t *end; // End of field descriptor.
     uintptr_t nptr; // See notes about `nptr` above.
 } gc_mark_obj32_t;
+
+typedef struct {
+    jl_value_t **begin; // The first slot to be scanned.
+    jl_value_t **end; // The end address (after the last slot to be scanned)
+    uint8_t *rebegin;
+    gc_mark_obj8_t elem;
+} gc_mark_array8_t;
 
 // Stack frame
 typedef struct {
@@ -153,9 +162,10 @@ typedef struct {
 
 // Exception stack data
 typedef struct {
-    jl_excstack_t *s;  // Stack of exceptions
-    size_t itr;        // Iterator into exception stack
-    size_t i;          // Iterator into backtrace data for exception
+    jl_excstack_t *s;   // Stack of exceptions
+    size_t itr;         // Iterator into exception stack
+    size_t bt_index;    // Current backtrace buffer entry index
+    size_t jlval_index; // Index into GC managed values for current bt entry
 } gc_mark_excstack_t;
 
 // Module bindings. This is also the beginning of module scanning.
@@ -181,6 +191,7 @@ typedef struct {
 union _jl_gc_mark_data {
     gc_mark_marked_obj_t marked;
     gc_mark_objarray_t objarray;
+    gc_mark_array8_t array8;
     gc_mark_obj8_t obj8;
     gc_mark_obj16_t obj16;
     gc_mark_obj32_t obj32;
@@ -204,7 +215,7 @@ STATIC_INLINE void *gc_pop_markdata_(jl_gc_mark_sp_t *sp, size_t size)
 // Re-push a frame to the mark stack (both data and pc)
 // The data and pc are expected to be on the stack (or updated in place) already.
 // Mainly useful to pause the current scanning in order to scan an new object.
-STATIC_INLINE void *gc_repush_markdata_(jl_gc_mark_sp_t *sp, size_t size)
+STATIC_INLINE void *gc_repush_markdata_(jl_gc_mark_sp_t *sp, size_t size) JL_NOTSAFEPOINT
 {
     jl_gc_mark_data_t *data = sp->data;
     sp->pc++;
@@ -356,14 +367,12 @@ unsigned ffs_u32(uint32_t bitvec) JL_NOTSAFEPOINT;
 #else
 STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
 {
-#if defined(_COMPILER_MINGW_)
-    return __builtin_ffs(bitvec) - 1;
-#elif defined(_COMPILER_MICROSOFT_)
+#if defined(_COMPILER_MICROSOFT_)
     unsigned long j;
     _BitScanForward(&j, bitvec);
     return j;
 #else
-    return ffs(bitvec) - 1;
+    return __builtin_ffs(bitvec) - 1;
 #endif
 }
 #endif
@@ -381,17 +390,17 @@ STATIC_INLINE bigval_t *bigval_header(jl_taggedvalue_t *o) JL_NOTSAFEPOINT
 }
 
 // round an address inside a gcpage's data to its beginning
-STATIC_INLINE char *gc_page_data(void *x)
+STATIC_INLINE char *gc_page_data(void *x) JL_NOTSAFEPOINT
 {
     return (char*)(((uintptr_t)x >> GC_PAGE_LG2) << GC_PAGE_LG2);
 }
 
-STATIC_INLINE jl_taggedvalue_t *page_pfl_beg(jl_gc_pagemeta_t *p)
+STATIC_INLINE jl_taggedvalue_t *page_pfl_beg(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT
 {
     return (jl_taggedvalue_t*)(p->data + p->fl_begin_offset);
 }
 
-STATIC_INLINE jl_taggedvalue_t *page_pfl_end(jl_gc_pagemeta_t *p)
+STATIC_INLINE jl_taggedvalue_t *page_pfl_end(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT
 {
     return (jl_taggedvalue_t*)(p->data + p->fl_end_offset);
 }
@@ -506,8 +515,8 @@ extern void *gc_mark_label_addrs[_GC_MARK_L_MAX];
 // GC pages
 
 void jl_gc_init_page(void);
-NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void);
-void jl_gc_free_page(void *p);
+NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT;
+void jl_gc_free_page(void *p) JL_NOTSAFEPOINT;
 
 // GC debug
 

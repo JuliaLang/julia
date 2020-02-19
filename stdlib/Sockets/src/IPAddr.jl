@@ -10,6 +10,9 @@ abstract type IPAddr end
 Base.isless(a::T, b::T) where {T<:IPAddr} = isless(a.host, b.host)
 (dt::Type{<:Integer})(ip::IPAddr) = dt(ip.host)::dt
 
+# Allow IP addresses to broadcast as unwrapped scalars
+Base.Broadcast.broadcastable(ip::IPAddr) = Ref(ip)
+
 struct IPv4 <: IPAddr
     host::UInt32
     IPv4(host::UInt32) = new(host)
@@ -235,7 +238,7 @@ function parse(::Type{IPv6}, str::AbstractString)
 end
 
 #
-# This support IPv4 addresses in the common dot (IPv4) or colon (IPv6)
+# This supports IP addresses in the common dot (IPv4) or colon (IPv6)
 # separated formats. Most other common formats use a standard integer encoding
 # of the appropriate size and should use the appropriate constructor
 #
@@ -271,7 +274,36 @@ struct InetAddr{T<:IPAddr}
     port::UInt16
 end
 
+"""
+    InetAddr(ip::IPAddr, port) -> InetAddr
+
+Return an `InetAddr` object from ip address `ip` and port number `port`.
+
+# Examples
+```jldoctest
+julia> Sockets.InetAddr(ip"127.0.0.1", 8000)
+Sockets.InetAddr{IPv4}(ip"127.0.0.1", 8000)
+```
+"""
 InetAddr(ip::IPAddr, port) = InetAddr{typeof(ip)}(ip, port)
+
+"""
+    InetAddr(str::AbstractString, port) -> InetAddr
+
+Return an `InetAddr` object from ip address `str` formatted as [`AbstractString`](@ref)
+and port number `port`.
+
+!!! compat "Julia 1.3"
+    This constructor requires at least Julia 1.3.
+
+# Examples
+```jldoctest
+julia> Sockets.InetAddr("127.0.0.1", 8000)
+Sockets.InetAddr{IPv4}(ip"127.0.0.1", 8000)
+```
+"""
+InetAddr(str::AbstractString, port) = InetAddr(parse(IPAddr, str), port)
+
 function show(io::IO, addr::InetAddr)
     show(io, typeof(addr))
     print(io, "(")

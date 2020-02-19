@@ -1,0 +1,24 @@
+From 9bd3774db73533c8df475639805ff1516aea274c Mon Sep 17 00:00:00 2001
+From: Valentin Churavy <v.churavy@gmail.com>
+Date: Wed, 24 Jul 2019 21:45:33 -0400
+Subject: [PATCH] add missing components to TestPlugin
+
+---
+ llvm/unittests/Passes/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/unittests/Passes/CMakeLists.txt b/unittests/Passes/CMakeLists.txt
+index 3e83b527958..4b09f47c234 100644
+--- a/unittests/Passes/CMakeLists.txt
++++ b/unittests/Passes/CMakeLists.txt
+@@ -14,7 +14,7 @@ add_llvm_unittest(PluginsTests
+ export_executable_symbols(PluginsTests)
+ target_link_libraries(PluginsTests PRIVATE LLVMTestingSupport)
+ 
+-set(LLVM_LINK_COMPONENTS)
++set(LLVM_LINK_COMPONENTS Support Passes Core)
+ add_llvm_library(TestPlugin MODULE BUILDTREE_ONLY
+   TestPlugin.cpp
+   )
+-- 
+2.22.0

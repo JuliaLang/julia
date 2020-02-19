@@ -59,7 +59,7 @@ call. Finally, chains of comparisons have their own special expression structure
 | `a==b`      | `(call == a b)`           |
 | `1<i<=n`    | `(comparison 1 < i <= n)` |
 | `a.b`       | `(. a (quote b))`         |
-| `a.(b)`     | `(. a b)`                 |
+| `a.(b)`     | `(. a (tuple b))`         |
 
 ### Bracketed forms
 
@@ -236,7 +236,7 @@ to interpolate code from the caller.
 ## Lowered form
 
 Lowered form (IR) is more important to the compiler, since it is used for type inference,
-optimizations like inlining, and and code generation. It is also less obvious to the human,
+optimizations like inlining, and code generation. It is also less obvious to the human,
 since it results from a significant rearrangement of the input syntax.
 
 In addition to `Symbol`s and some number types, the following data
@@ -260,7 +260,7 @@ types exist in lowered form:
 
   * `CodeInfo`
 
-    Wraps the IR of a method. Its `code` field is an array of expressions to execute.
+    Wraps the IR of a group of statements. Its `code` field is an array of expressions to execute.
 
   * `GotoNode`
 
@@ -356,20 +356,20 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
       * `args[2]`
 
-        A `call` expression that creates `SimpleVector` specifying its parameters
+        A `call` expression that creates a `SimpleVector` specifying its parameters
 
       * `args[3]`
 
-        A `call` expression that creates `SimpleVector` specifying its fieldnames
+        A `call` expression that creates a `SimpleVector` specifying its fieldnames
 
       * `args[4]`
 
-        A `Symbol` or `GlobalRef` specifying the supertype (e.g., `:Integer` or
-        `GlobalRef(Core, :Any)`)
+        A `Symbol`, `GlobalRef`, or `Expr` specifying the supertype (e.g., `:Integer`,
+        `GlobalRef(Core, :Any)`, or `:(Core.apply_type(AbstractArray, T, N))`)
 
       * `args[5]`
 
-        A `call` expression that creates `SimpleVector` specifying its fieldtypes
+        A `call` expression that creates a `SimpleVector` specifying its fieldtypes
 
       * `args[6]`
 
@@ -384,7 +384,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `abstract_type`
 
     A 3-argument expression that defines a new abstract type. The
-    arguments are the same as the first three arguments of
+    arguments are the same as arguments 1, 2, and 4 of
     `struct_type` expressions.
 
   * `primitive_type`
@@ -469,8 +469,41 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
       * `:inline` and `:noinline`: Inlining hints.
 
+  * `foreigncall`
 
-### Method
+    Statically-computed container for `ccall` information. The fields are:
+
+      * `args[1]` : name
+
+        The expression that'll be parsed for the foreign function.
+
+      * `args[2]::Type` : RT
+
+        The (literal) return type, computed statically when the containing method was defined.
+
+      * `args[3]::SimpleVector` (of Types) : AT
+
+        The (literal) vector of argument types, computed statically when the containing method was defined.
+
+      * `args[4]::Int` : nreq
+
+        The number of required arguments for a varargs function definition.
+
+      * `args[5]::QuoteNode{Symbol}` : calling convention
+
+        The calling convention for the call.
+
+      * `args[6:length(args[3])]` : arguments
+
+        The values for all the arguments (with types of each given in args[3]).
+
+      * `args[(length(args[3]) + 1):end]` : gc-roots
+
+        The additional objects that may need to be gc-rooted for the duration of the call.
+        See [Working with LLVM](@ref Working-with-LLVM) for where these are derived from and how they get handled.
+
+
+### [Method](@id ast-lowered-method)
 
 A unique'd container describing the shared metadata for a single method.
 
@@ -490,7 +523,11 @@ A unique'd container describing the shared metadata for a single method.
 
   * `source`
 
-    The original source code (usually compressed).
+    The original source code (if available, usually compressed).
+
+  * `generator`
+
+    A callable object which can be executed to get specialized source for a specific method signature.
 
   * `roots`
 
@@ -501,9 +538,9 @@ A unique'd container describing the shared metadata for a single method.
 
     Descriptive bit-fields for the source code of this Method.
 
-  * `min_world` / `max_world`
+  * `primary_world`
 
-    The range of world ages for which this method is visible to dispatch.
+    The world age that "owns" this Method.
 
 
 ### MethodInstance
@@ -528,16 +565,38 @@ for important details on how to modify these fields safely.
     runtime `MethodInstance` from the `MethodTable` cache, this will always be defined and
     indexable.
 
-  * `rettype`
+  * `uninferred`
+
+    The uncompressed source code for a toplevel thunk. Additionally, for a generated function,
+    this is one of many places that the source code might be found.
+
+  * `backedges`
+
+    We store the reverse-list of cache dependencies for efficient tracking of incremental reanalysis/recompilation work that may be needed after a new method definitions.
+    This works by keeping a list of the other `MethodInstance` that have been inferred or optimized to contain a possible call to this `MethodInstance`.
+    Those optimization results might be stored somewhere in the `cache`, or it might have been the result of something we didn't want to cache, such as constant propagation.
+    Thus we merge all of those backedges to various cache entries here (there's almost always only the one applicable cache entry with a sentinal value for max_world anyways).
+
+  * `cache`
+
+    Cache of `CodeInstance` objects that share this template instantiation.
+
+### CodeInstance
+
+  * `def`
+
+    The `MethodInstance` that this cache entry is derived from.
+
+
+  * `rettype`/`rettype_const`
 
     The inferred return type for the `specFunctionObject` field, which (in most cases) is
     also the computed return type for the function in general.
 
   * `inferred`
 
-    May contain a cache of the inferred source for this function, or other information about
-    the inference result such as a constant return value may be put here (if `jlcall_api ==
-    2`), or it could be set to `nothing` to just indicate `rettype` is inferred.
+    May contain a cache of the inferred source for this function,
+    or it could be set to `nothing` to just indicate `rettype` is inferred.
 
   * `ftpr`
 
@@ -549,18 +608,20 @@ for important details on how to modify these fields safely.
 
       * 0 - Not compiled yet
       * 1 - JL_CALLABLE `jl_value_t *(*)(jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
-      * 2 - Constant (value stored in `inferred`)
+      * 2 - Constant (value stored in `rettype_const`)
       * 3 - With Static-parameters forwarded `jl_value_t *(*)(jl_svec_t *sparams, jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
       * 4 - Run in interpreter `jl_value_t *(*)(jl_method_instance_t *meth, jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
 
   * `min_world` / `max_world`
 
     The range of world ages for which this method instance is valid to be called.
+    If max_world is the special token value `-1`, the value is not yet known.
+    It may continue to be used until we encounter a backedge that requires us to reconsider.
 
 
 ### CodeInfo
 
-A temporary container for holding lowered source code.
+A (usually temporary) container for holding lowered source code.
 
   * `code`
 
@@ -568,11 +629,7 @@ A temporary container for holding lowered source code.
 
   * `slotnames`
 
-    An array of symbols giving the name of each slot (argument or local variable).
-
-  * `slottypes`
-
-    An array of types for the slots.
+    An array of symbols giving names for each slot (argument or local variable).
 
   * `slotflags`
 
@@ -588,7 +645,17 @@ A temporary container for holding lowered source code.
     Either an array or an `Int`.
 
     If an `Int`, it gives the number of compiler-inserted temporary locations in the
-    function. If an array, specifies a type for each location.
+    function (the length of `code` array). If an array, specifies a type for each location.
+
+  * `ssaflags`
+
+    Statement-level flags for each expression in the function. Many of these are reserved, but not yet implemented:
+
+    * 0 = inbounds
+    * 1,2 = <reserved> inlinehint,always-inline,noinline
+    * 3 = <reserved> strict-ieee (strictfp)
+    * 4-6 = <unused>
+    * 7 = <reserved> has out-of-band info
 
   * `linetable`
 
@@ -599,6 +666,30 @@ A temporary container for holding lowered source code.
     An array of integer indices into the `linetable`, giving the location associated
     with each statement.
 
+Optional Fields:
+
+  * `slottypes`
+
+    An array of types for the slots.
+
+  * `rettype`
+
+    The inferred return type of the lowered form (IR). Default value is `Any`.
+
+  * `method_for_inference_limit_heuristics`
+
+    The `method_for_inference_heuristics` will expand the given method's generator if
+    necessary during inference.
+
+  * `parent`
+
+    The `MethodInstance` that "owns" this object (if applicable).
+
+  * `min_world`/`max_world`
+
+    The range of world ages for which this code was valid at the time when it had been inferred.
+
+
 Boolean properties:
 
   * `inferred`
@@ -607,11 +698,11 @@ Boolean properties:
 
   * `inlineable`
 
-    Whether this should be inlined.
+    Whether this should be eligible for inlining.
 
   * `propagate_inbounds`
 
-    Whether this should should propagate `@inbounds` when inlined for the purpose of eliding
+    Whether this should propagate `@inbounds` when inlined for the purpose of eliding
     `@boundscheck` blocks.
 
   * `pure`

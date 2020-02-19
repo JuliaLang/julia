@@ -1021,7 +1021,7 @@ for (typ, owntyp, sup, cname) in [
                 return obj
             end
         end
-        if isa(owntyp, Expr) && owntyp.args[1] == :Union && owntyp.args[3] == :Nothing
+        if isa(owntyp, Expr) && owntyp.args[1] === :Union && owntyp.args[3] === :Nothing
             @eval begin
                 $typ(ptr::Ptr{Cvoid}, fin::Bool=true) = $typ(nothing, ptr, fin)
             end
@@ -1205,7 +1205,7 @@ mutable struct UserPasswordCredential <: AbstractCredential
 end
 
 function Base.setproperty!(cred::UserPasswordCredential, name::Symbol, value)
-    if name == :pass
+    if name === :pass
         field = getfield(cred, name)
         Base.shred!(field)
     end
@@ -1240,7 +1240,7 @@ mutable struct SSHCredential <: AbstractCredential
 end
 
 function Base.setproperty!(cred::SSHCredential, name::Symbol, value)
-    if name == :pass
+    if name === :pass
         field = getfield(cred, name)
         Base.shred!(field)
     end

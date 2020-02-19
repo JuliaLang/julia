@@ -35,7 +35,10 @@ using Random
         @test lcm(-typemax(T), T(1)) === typemax(T)
         @test_throws OverflowError lcm(typemin(T), T(1))
         @test_throws OverflowError lcm(typemin(T), typemin(T))
+        @test_throws OverflowError lcm(typemax(T), T(2))
     end
+    @test lcm(0x5, 3) == 15
+    @test gcd(0xf, 20) == 5
 end
 @testset "gcd/lcm for arrays" begin
     for T in (Int32, Int64)
@@ -66,6 +69,17 @@ end
     @test gcdx(5, 12) == (1, 5, -2)
     @test gcdx(5, -12) == (1, 5, 2)
     @test gcdx(-25, -4) == (1, -1, 6)
+end
+@testset "gcd/lcm/gcdx for custom types" begin
+    struct MyRational <: Real
+        val::Rational{Int}
+    end
+    Base.promote_rule(::Type{MyRational}, T::Type{<:Real}) = promote_type(Rational{Int}, T)
+    (T::Type{<:Real})(x::MyRational) = T(x.val)
+
+    @test gcd(MyRational(2//3), 3) == gcd(2//3, 3) == gcd(Real[MyRational(2//3), 3])
+    @test lcm(MyRational(2//3), 3) == lcm(2//3, 3) == lcm(Real[MyRational(2//3), 3])
+    @test gcdx(MyRational(2//3), 3) == gcdx(2//3, 3)
 end
 @testset "invmod" begin
     @test invmod(6, 31) === 26
@@ -116,6 +130,14 @@ end
         @test ndigits(unsigned(17), base=-10) == 3
 
         @test ndigits(146, base=-3) == 5
+    end
+    @testset "ndigits with base power of 2" begin
+        @test ndigits(17, base = 2) == 5
+        @test ndigits(123, base = 4) == 4
+        @test ndigits(64, base = 8) == 3
+        @test ndigits(8436, base = 16) == 4
+        @test ndigits(159753, base = 32) == 4
+        @test ndigits(3578951, base = 64) == 4
     end
     let (n, b) = rand(Int, 2)
         -1 <= b <= 1 && (b = 2) # invalid bases
@@ -181,11 +203,22 @@ end
     @test bitstring(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
 end
 @testset "digits/base" begin
-    @test digits(4, base = 2) == [0, 0, 1]
     @test digits(5, base = 3) == [2, 1]
-    @test digits(5, base = Int32(2), pad=Int32(3)) == [1, 0, 1]
     @test digits(5, pad = 3) == [5, 0, 0]
     @test digits(5, pad = Int32(3)) == [5, 0, 0]
+    # The following have bases powers of 2, but don't enter the fast path
+    @test digits(-3, base = 2) == -[1, 1]
+    @test digits(-42, base = 4) == -[2, 2, 2]
+
+    @testset "digits/base with bases powers of 2" begin
+        @test digits(4, base = 2) == [0, 0, 1]
+        @test digits(5, base = Int32(2), pad=Int32(3)) == [1, 0, 1]
+        @test digits(42, base = 4) == [2, 2, 2]
+        @test digits(321, base = 8) == [1, 0, 5]
+        @test digits(0x123456789abcdef, base = 16) == 15:-1:1
+        @test digits(0x2b1a210a750, base = 64) == [16, 29, 10, 4, 34, 6, 43]
+        @test digits(0x02a01407, base = Int128(1024)) == [7, 5, 42]
+    end
 
     @testset "digits/base with negative bases" begin
         @testset "digits(n::$T, base = b)" for T in (Int, UInt, BigInt, Int32, UInt32)

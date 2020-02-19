@@ -30,8 +30,8 @@ Serializer(io::IO) = Serializer{typeof(io)}(io)
 ## serializing values ##
 
 const n_int_literals = 33
-const n_reserved_slots = 25
-const n_reserved_tags = 12
+const n_reserved_slots = 24
+const n_reserved_tags = 11
 
 const TAGS = Any[
     Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128,
@@ -56,6 +56,7 @@ const TAGS = Any[
     Symbol, # REF_OBJECT_TAG
     Symbol, # FULL_GLOBALREF_TAG
     Symbol, # HEADER_TAG
+    Symbol, # IDDICT_TAG
     fill(Symbol, n_reserved_tags)...,
 
     (), Bool, Any, Bottom, Core.TypeofBottom, Type, svec(), Tuple{}, false, true, nothing,
@@ -65,7 +66,7 @@ const TAGS = Any[
     :sub_int, :mul_int, :add_float, :sub_float, :new, :mul_float, :bitcast, :start, :done, :next,
     :indexed_iterate, :getfield, :meta, :eq_int, :slt_int, :sle_int, :ne_int, :push_loc, :pop_loc,
     :pop, :arrayset, :arrayref, :apply_type, :inbounds, :getindex, :setindex!, :Core, :!, :+,
-    :Base, :static_parameter, :convert, :colon, Symbol("#self#"), Symbol(""), :tuple,
+    :Base, :static_parameter, :convert, :colon, Symbol("#self#"), Symbol("#temp#"), :tuple, Symbol(""),
 
     fill(:_reserved_, n_reserved_slots)...,
 
@@ -75,7 +76,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 7 # do not make changes without bumping the version #!
+const ser_version = 9 # do not make changes without bumping the version #!
 
 const NTAGS = length(TAGS)
 
@@ -103,7 +104,7 @@ const TUPLE_TAG = sertag(Tuple)
 const SIMPLEVECTOR_TAG = sertag(SimpleVector)
 const SYMBOL_TAG = sertag(Symbol)
 const INT8_TAG = sertag(Int8)
-const ARRAY_TAG = sertag(Array)
+const ARRAY_TAG = findfirst(==(Array), TAGS)%Int32
 const EXPR_TAG = sertag(Expr)
 const MODULE_TAG = sertag(Module)
 const METHODINSTANCE_TAG = sertag(Core.MethodInstance)
@@ -133,6 +134,7 @@ const OBJECT_TAG           = Int32(o0+12)
 const REF_OBJECT_TAG       = Int32(o0+13)
 const FULL_GLOBALREF_TAG   = Int32(o0+14)
 const HEADER_TAG           = Int32(o0+15)
+const IDDICT_TAG           = Int32(o0+16)
 
 writetag(s::IO, tag) = (write(s, UInt8(tag)); nothing)
 
@@ -327,13 +329,24 @@ function serialize(s::AbstractSerializer, ex::Expr)
     end
 end
 
-function serialize(s::AbstractSerializer, d::Dict)
-    serialize_cycle_header(s, d) && return
+function serialize_dict_data(s::AbstractSerializer, d::AbstractDict)
     write(s.io, Int32(length(d)))
     for (k,v) in d
         serialize(s, k)
         serialize(s, v)
     end
+end
+
+function serialize(s::AbstractSerializer, d::Dict)
+    serialize_cycle_header(s, d) && return
+    serialize_dict_data(s, d)
+end
+
+function serialize(s::AbstractSerializer, d::IdDict)
+    serialize_cycle(s, d) && return
+    writetag(s.io, IDDICT_TAG)
+    serialize_type_data(s, typeof(d))
+    serialize_dict_data(s, d)
 end
 
 function serialize_mod_names(s::AbstractSerializer, m::Module)
@@ -391,16 +404,15 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.line)
     serialize(s, meth.sig)
     serialize(s, meth.slot_syms)
-    serialize(s, meth.ambig)
     serialize(s, meth.nargs)
     serialize(s, meth.isva)
     if isdefined(meth, :source)
-        serialize(s, uncompressed_ast(meth, meth.source))
+        serialize(s, Base._uncompressed_ast(meth, meth.source))
     else
         serialize(s, nothing)
     end
     if isdefined(meth, :generator)
-        serialize(s, uncompressed_ast(meth, meth.generator.inferred))
+        serialize(s, Base._uncompressed_ast(meth, meth.generator.inferred)) # XXX: what was this supposed to do?
     else
         serialize(s, nothing)
     end
@@ -411,14 +423,10 @@ function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize_cycle(s, linfo) && return
     isa(linfo.def, Module) || error("can only serialize toplevel MethodInstance objects")
     writetag(s.io, METHODINSTANCE_TAG)
-    serialize(s, linfo.inferred)
-    if isdefined(linfo, :inferred_const)
-        serialize(s, linfo.inferred_const)
-    else
-        writetag(s.io, UNDEFREF_TAG)
-    end
+    serialize(s, linfo.uninferred)
+    serialize(s, nothing)  # for backwards compat
     serialize(s, linfo.sparam_vals)
-    serialize(s, linfo.rettype)
+    serialize(s, Any)  # for backwards compat
     serialize(s, linfo.specTypes)
     serialize(s, linfo.def)
     nothing
@@ -473,7 +481,7 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, primary.abstract)
     serialize(s, primary.mutable)
     serialize(s, primary.ninitialized)
-    if isdefined(t, :mt)
+    if isdefined(t, :mt) && t.mt !== Symbol.name.mt
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))
         serialize(s, t.mt.max_args)
@@ -623,7 +631,7 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
         serialize_type(s, t)
         write(s.io, x)
     else
-        if t.mutable && nf > 0
+        if t.mutable
             serialize_cycle(s, x) && return
             serialize_type(s, t, true)
         else
@@ -744,6 +752,19 @@ function resolve_ref_immediately(s::AbstractSerializer, @nospecialize(x))
     nothing
 end
 
+function gettable(s::AbstractSerializer, id::Int)
+    get(s.table, id) do
+        errmsg = """Inconsistent Serializer state when deserializing.
+            Attempt to access internal table with key $id failed.
+
+            This might occur if the Serializer contexts when serializing and deserializing are inconsistent.
+            In particular, if multiple serialize calls use the same Serializer object then
+            the corresponding deserialize calls should also use the same Serializer object.
+        """
+        error(errmsg)
+    end
+end
+
 # deserialize_ is an internal function to dispatch on the tag
 # describing the serialized representation. the number of
 # representations is fixed, so deserialize_ does not get extended.
@@ -757,10 +778,10 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_tuple(s, Int(read(s.io, UInt8)::UInt8))
     elseif b == SHORTBACKREF_TAG
         id = read(s.io, UInt16)::UInt16
-        return s.table[Int(id)]
+        return gettable(s, Int(id))
     elseif b == BACKREF_TAG
         id = read(s.io, Int32)::Int32
-        return s.table[Int(id)]
+        return gettable(s, Int(id))
     elseif b == ARRAY_TAG
         return deserialize_array(s)
     elseif b == DATATYPE_TAG
@@ -807,7 +828,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_expr(s, Int(read(s.io, Int32)::Int32))
     elseif b == LONGBACKREF_TAG
         id = read(s.io, Int64)::Int64
-        return s.table[Int(id)]
+        return gettable(s, Int(id))
     elseif b == LONGSYMBOL_TAG
         return deserialize_symbol(s, Int(read(s.io, Int32)::Int32))
     elseif b == HEADER_TAG
@@ -843,6 +864,11 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return read(s.io, Float64)
     elseif b == INT8_TAG+13
         return read(s.io, Char)
+    elseif b == IDDICT_TAG
+        slot = s.counter; s.counter += 1
+        push!(s.pending_refs, slot)
+        t = deserialize(s)
+        return deserialize_dict(s, t)
     end
     t = desertag(b)::DataType
     if t.mutable && length(t.types) > 0  # manual specialization of fieldcount
@@ -909,8 +935,13 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     file = deserialize(s)::Symbol
     line = deserialize(s)::Int32
     sig = deserialize(s)::Type
-    slot_syms = deserialize(s)::String
-    ambig = deserialize(s)::Union{Array{Any,1}, Nothing}
+    syms = deserialize(s)
+    if syms isa SimpleVector
+        # < v1.2
+        _ambig = deserialize(s)
+    else
+        slot_syms = syms::String
+    end
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
     template = deserialize(s)
@@ -921,15 +952,17 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.file = file
         meth.line = line
         meth.sig = sig
-        meth.slot_syms = slot_syms
-        meth.ambig = ambig
         meth.nargs = nargs
         meth.isva = isva
-        # TODO: compress template
         if template !== nothing
-            meth.source = template
+            # TODO: compress template
+            meth.source = template::CodeInfo
             meth.pure = template.pure
+            if !@isdefined(slot_syms)
+                slot_syms = ccall(:jl_compress_argnames, Ref{String}, (Any,), meth.source.slotnames)
+            end
         end
+        meth.slot_syms = slot_syms
         if generator !== nothing
             linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ())
             linfo.specTypes = Tuple
@@ -937,9 +970,9 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
             linfo.def = meth
             meth.generator = linfo
         end
-        ftype = ccall(:jl_first_argument_datatype, Any, (Any,), sig)::DataType
-        if isdefined(ftype.name, :mt) && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), ftype.name.mt, sig, typemax(UInt))
-            ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), ftype.name.mt, meth, C_NULL)
+        mt = ccall(:jl_method_table_for, Any, (Any,), sig)
+        if mt !== nothing && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), mt, sig, typemax(UInt))
+            ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, meth, C_NULL)
         end
         remember_object(s, meth, lnumber)
     end
@@ -949,16 +982,78 @@ end
 function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Cvoid},), C_NULL)
     deserialize_cycle(s, linfo)
-    linfo.inferred = deserialize(s)::CodeInfo
+    linfo.uninferred = deserialize(s)::CodeInfo
     tag = Int32(read(s.io, UInt8)::UInt8)
     if tag != UNDEFREF_TAG
-        linfo.inferred_const = handle_deserialize(s, tag)
+        # for reading files prior to v1.2
+        handle_deserialize(s, tag)
     end
     linfo.sparam_vals = deserialize(s)::SimpleVector
-    linfo.rettype = deserialize(s)
+    _rettype = deserialize(s)  # for backwards compat
     linfo.specTypes = deserialize(s)
     linfo.def = deserialize(s)::Module
     return linfo
+end
+
+function deserialize(s::AbstractSerializer, ::Type{Core.LineInfoNode})
+    _meth = deserialize(s)
+    if _meth isa Module
+        # pre v1.2, skip
+        _meth = deserialize(s)
+    end
+    return Core.LineInfoNode(_meth::Symbol, deserialize(s)::Symbol, deserialize(s)::Int, deserialize(s)::Int)
+end
+
+function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
+    ci = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
+    deserialize_cycle(s, ci)
+    ci.code = deserialize(s)::Vector{Any}
+    ci.codelocs = deserialize(s)::Vector{Int32}
+    _x = deserialize(s)
+    if _x isa Array || _x isa Int
+        pre_12 = false
+        ci.ssavaluetypes = _x
+    else
+        pre_12 = true
+        # < v1.2
+        ci.method_for_inference_limit_heuristics = _x
+        ci.ssavaluetypes = deserialize(s)
+        ci.linetable = deserialize(s)
+    end
+    ci.ssaflags = deserialize(s)
+    if pre_12
+        ci.slotflags = deserialize(s)
+    else
+        ci.method_for_inference_limit_heuristics = deserialize(s)
+        ci.linetable = deserialize(s)
+    end
+    ci.slotnames = deserialize(s)
+    if !pre_12
+        ci.slotflags = deserialize(s)
+        ci.slottypes = deserialize(s)
+        ci.rettype = deserialize(s)
+        ci.parent = deserialize(s)
+        world_or_edges = deserialize(s)
+        pre_13 = isa(world_or_edges, Integer)
+        if pre_13
+            ci.min_world = world_or_edges
+        else
+            ci.edges = world_or_edges
+            ci.min_world = reinterpret(UInt, deserialize(s))
+            ci.max_world = reinterpret(UInt, deserialize(s))
+        end
+    end
+    ci.inferred = deserialize(s)
+    ci.inlineable = deserialize(s)
+    ci.propagate_inbounds = deserialize(s)
+    ci.pure = deserialize(s)
+    return ci
+end
+
+if Int === Int64
+const OtherInt = Int32
+else
+const OtherInt = Int64
 end
 
 function deserialize_array(s::AbstractSerializer)
@@ -970,15 +1065,17 @@ function deserialize_array(s::AbstractSerializer)
     else
         elty = UInt8
     end
-    if isa(d1, Int)
+    if isa(d1, Int32) || isa(d1, Int64)
         if elty !== Bool && isbitstype(elty)
             a = Vector{elty}(undef, d1)
             s.table[slot] = a
             return read!(s.io, a)
         end
-        dims = (d1,)
-    else
+        dims = (Int(d1),)
+    elseif d1 isa Dims
         dims = d1::Dims
+    else
+        dims = convert(Dims, d1::Tuple{Vararg{OtherInt}})::Dims
     end
     if isbitstype(elty)
         n = prod(dims)::Int
@@ -1191,29 +1288,9 @@ function deserialize(s::AbstractSerializer, t::DataType)
     if nf == 0 && t.size > 0
         # bits type
         return read(s.io, t)
-    end
-    if nf == 0
-        return ccall(:jl_new_struct, Any, (Any,Any...), t)
-    elseif isbitstype(t)
-        if nf == 1
-            f1 = deserialize(s)
-            return ccall(:jl_new_struct, Any, (Any,Any...), t, f1)
-        elseif nf == 2
-            f1 = deserialize(s)
-            f2 = deserialize(s)
-            return ccall(:jl_new_struct, Any, (Any,Any...), t, f1, f2)
-        elseif nf == 3
-            f1 = deserialize(s)
-            f2 = deserialize(s)
-            f3 = deserialize(s)
-            return ccall(:jl_new_struct, Any, (Any,Any...), t, f1, f2, f3)
-        else
-            flds = Any[ deserialize(s) for i = 1:nf ]
-            return ccall(:jl_new_structv, Any, (Any,Ptr{Cvoid},UInt32), t, flds, nf)
-        end
-    else
+    elseif t.mutable
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
-        t.mutable && deserialize_cycle(s, x)
+        deserialize_cycle(s, x)
         for i in 1:nf
             tag = Int32(read(s.io, UInt8)::UInt8)
             if tag != UNDEFREF_TAG
@@ -1221,10 +1298,25 @@ function deserialize(s::AbstractSerializer, t::DataType)
             end
         end
         return x
+    elseif nf == 0
+        return ccall(:jl_new_struct_uninit, Any, (Any,), t)
+    else
+        na = nf
+        vflds = Vector{Any}(undef, nf)
+        for i in 1:nf
+            tag = Int32(read(s.io, UInt8)::UInt8)
+            if tag != UNDEFREF_TAG
+                f = handle_deserialize(s, tag)
+                na >= i && (vflds[i] = f)
+            else
+                na >= i && (na = i - 1) # rest of tail must be undefined values
+            end
+        end
+        return ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), t, vflds, na)
     end
 end
 
-function deserialize(s::AbstractSerializer, T::Type{Dict{K,V}}) where {K,V}
+function deserialize_dict(s::AbstractSerializer, T::Type{<:AbstractDict})
     n = read(s.io, Int32)
     t = T(); sizehint!(t, n)
     deserialize_cycle(s, t)
@@ -1234,6 +1326,10 @@ function deserialize(s::AbstractSerializer, T::Type{Dict{K,V}}) where {K,V}
         t[k] = v
     end
     return t
+end
+
+function deserialize(s::AbstractSerializer, T::Type{Dict{K,V}}) where {K,V}
+    return deserialize_dict(s, T)
 end
 
 deserialize(s::AbstractSerializer, ::Type{BigInt}) = parse(BigInt, deserialize(s), base = 62)
@@ -1270,7 +1366,5 @@ function deserialize(s::AbstractSerializer, ::Type{Base.StackTraces.StackFrame})
     pointer = read(s.io, UInt64)
     return Base.StackTraces.StackFrame(func, file, line, nothing, from_c, inlined, pointer)
 end
-
-include("precompile.jl")
 
 end

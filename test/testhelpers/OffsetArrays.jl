@@ -121,6 +121,14 @@ end
     @inbounds deleteat!(parent(A), first_idx:last_idx)
 end
 
+function Base.push!(a::OffsetArray{T,1}, item) where T
+    # convert first so we don't grow the array if the assignment won't work
+    itemT = convert(T, item)
+    resize!(a, length(a)+1)
+    a[end] = itemT
+    return a
+end
+
 # Computing a shifted index (subtracting the offset)
 offset(offsets::NTuple{N,Int}, inds::NTuple{N,Int}) where {N} = _offset((), offsets, inds)
 _offset(out, ::Tuple{}, ::Tuple{}) = out

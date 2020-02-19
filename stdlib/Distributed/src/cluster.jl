@@ -28,6 +28,8 @@ The `userdata` field is used to store information for each worker by external ma
 
 Some fields are used by `SSHManager` and similar managers:
   * `tunnel` -- `true` (use tunneling), `false` (do not use tunneling), or [`nothing`](@ref) (use default for the manager)
+  * `multiplex` -- `true` (use SSH multiplexing for tunneling) or `false`
+  * `forward` -- the forwarding option used for `-L` option of ssh
   * `bind_addr` -- the address on the remote host to bind to
   * `sshflags` -- flags to use in establishing the SSH connection
   * `max_parallel` -- the maximum number of workers to connect to in parallel on the host
@@ -58,6 +60,8 @@ mutable struct WorkerConfig
 
     # SSHManager / SSH tunnel connections to workers
     tunnel::Union{Bool, Nothing}
+    multiplex::Union{Bool, Nothing}
+    forward::Union{AbstractString, Nothing}
     bind_addr::Union{AbstractString, Nothing}
     sshflags::Union{Cmd, Nothing}
     max_parallel::Union{Int, Nothing}
@@ -146,7 +150,7 @@ end
 function check_worker_state(w::Worker)
     if w.state == W_CREATED
         if !isclusterlazy()
-            if PGRP.topology == :all_to_all
+            if PGRP.topology === :all_to_all
                 # Since higher pids connect with lower pids, the remote worker
                 # may not have connected to us yet. Wait for some time.
                 wait_for_conn(w)
@@ -248,7 +252,8 @@ function start_worker(out::IO, cookie::AbstractString=readline(stdin); close_std
     print(out, '\n')
     flush(out)
 
-    disable_nagle(sock)
+    Sockets.nagle(sock, false)
+    Sockets.quickack(sock, true)
 
     if ccall(:jl_running_on_valgrind,Cint,()) != 0
         println(out, "PID = $(getpid())")
@@ -292,12 +297,11 @@ Base.showerror(io::IO, e::LaunchWorkerError) = print(io, e.msg)
 # The master process uses this to connect to the worker and subsequently
 # setup a all-to-all network.
 function read_worker_host_port(io::IO)
-    t0 = time()
+    t0 = time_ns()
 
     # Wait at most for JULIA_WORKER_TIMEOUT seconds to read host:port
     # info from the worker
-    timeout = worker_timeout()
-
+    timeout = worker_timeout() * 1e9
     # We expect the first line to contain the host:port string. However, as
     # the worker may be launched via ssh or a cluster manager like SLURM,
     # ignore any informational / warning lines printed by the launch command.
@@ -310,7 +314,7 @@ function read_worker_host_port(io::IO)
         while ntries > 0
             readtask = @async readline(io)
             yield()
-            while !istaskdone(readtask) && ((time() - t0) < timeout)
+            while !istaskdone(readtask) && ((time_ns() - t0) < timeout)
                 sleep(0.05)
             end
             !istaskdone(readtask) && break
@@ -360,6 +364,8 @@ process as a worker using TCP/IP sockets for transport.
 `cookie` is a [`cluster_cookie`](@ref).
 """
 function init_worker(cookie::AbstractString, manager::ClusterManager=DefaultClusterManager())
+    myrole!(:worker)
+
     # On workers, the default cluster manager connects via TCP sockets. Custom
     # transports will need to call this function with their own manager.
     global cluster_manager
@@ -442,10 +448,10 @@ function addprocs(manager::ClusterManager; kwargs...)
 end
 
 function addprocs_locked(manager::ClusterManager; kwargs...)
-    params = merge(default_addprocs_params(), AnyDict(kwargs))
+    params = merge(default_addprocs_params(), Dict{Symbol,Any}(kwargs))
     topology(Symbol(params[:topology]))
 
-    if PGRP.topology != :all_to_all
+    if PGRP.topology !== :all_to_all
         params[:lazy] = false
     end
 
@@ -507,7 +513,7 @@ function set_valid_processes(plist::Array{Int})
     end
 end
 
-default_addprocs_params() = AnyDict(
+default_addprocs_params() = Dict{Symbol,Any}(
     :topology => :all_to_all,
     :dir      => pwd(),
     :exename  => joinpath(Sys.BINDIR, julia_exename()),
@@ -546,7 +552,7 @@ function launch_n_additional_processes(manager, frompid, fromconfig, cnt, launch
             (bind_addr, port) = address
 
             wconfig = WorkerConfig()
-            for x in [:host, :tunnel, :sshflags, :exeflags, :exename, :enable_threaded_blas]
+            for x in [:host, :tunnel, :multiplex, :sshflags, :exeflags, :exename, :enable_threaded_blas]
                 Base.setproperty!(wconfig, x, Base.getproperty(fromconfig, x))
             end
             wconfig.bind_addr = bind_addr
@@ -566,6 +572,7 @@ end
 function create_worker(manager, wconfig)
     # only node 1 can add new nodes, since nobody else has the full list of address:port
     @assert LPROC.id == 1
+    timeout = worker_timeout()
 
     # initiate a connect. Does not wait for connection completion in case of TCP.
     w = Worker()
@@ -613,7 +620,7 @@ function create_worker(manager, wconfig)
     # - On master, receiving a JoinCompleteMsg triggers rr_ntfy_join (signifies that worker setup is complete)
 
     join_list = []
-    if PGRP.topology == :all_to_all
+    if PGRP.topology === :all_to_all
         # need to wait for lower worker pids to have completed connecting, since the numerical value
         # of pids is relevant to the connection process, i.e., higher pids connect to lower pids and they
         # require the value of config.connect_at which is set only upon connection completion
@@ -624,15 +631,20 @@ function create_worker(manager, wconfig)
             end
         end
 
-    elseif PGRP.topology == :custom
+    elseif PGRP.topology === :custom
         # wait for requested workers to be up before connecting to them.
         filterfunc(x) = (x.id != 1) && isdefined(x, :config) &&
             (notnothing(x.config.ident) in something(wconfig.connect_idents, []))
 
         wlist = filter(filterfunc, PGRP.workers)
+        waittime = 0
         while wconfig.connect_idents !== nothing &&
               length(wlist) < length(wconfig.connect_idents)
+            if waittime >= timeout
+                error("peer workers did not connect within $timeout seconds")
+            end
             sleep(1.0)
+            waittime += 1
             wlist = filter(filterfunc, PGRP.workers)
         end
 
@@ -652,7 +664,13 @@ function create_worker(manager, wconfig)
     send_msg_now(w, MsgHeader(RRID(0,0), ntfy_oid), join_message)
 
     @async manage(w.manager, w.id, w.config, :register)
+    # wait for rr_ntfy_join with timeout
+    timedout = false
+    @async (sleep($timeout); timedout = true; put!(rr_ntfy_join, 1))
     wait(rr_ntfy_join)
+    if timedout
+        error("worker did not connect within $timeout seconds")
+    end
     lock(client_refs) do
         delete!(PGRP.refs, ntfy_oid)
     end
@@ -692,20 +710,20 @@ function redirect_output_from_additional_worker(pid, port)
 end
 
 function check_master_connect()
-    timeout = worker_timeout()
+    timeout = worker_timeout() * 1e9
     # If we do not have at least process 1 connect to us within timeout
     # we log an error and exit, unless we're running on valgrind
     if ccall(:jl_running_on_valgrind,Cint,()) != 0
         return
     end
     @async begin
-        start = time()
-        while !haskey(map_pid_wrkr, 1) && (time() - start) < timeout
+        start = time_ns()
+        while !haskey(map_pid_wrkr, 1) && (time_ns() - start) < timeout
             sleep(1.0)
         end
 
         if !haskey(map_pid_wrkr, 1)
-            print(stderr, "Master process (id 1) could not connect within $timeout seconds.\nexiting.\n")
+            print(stderr, "Master process (id 1) could not connect within $(timeout/1e9) seconds.\nexiting.\n")
             exit(1)
         end
     end
@@ -782,11 +800,18 @@ end
 
 # globals
 const LPROC = LocalProcess()
+const LPROCROLE = Ref{Symbol}(:master)
 const HDR_VERSION_LEN=16
 const HDR_COOKIE_LEN=16
 const map_pid_wrkr = Dict{Int, Union{Worker, LocalProcess}}()
 const map_sock_wrkr = IdDict()
 const map_del_wrkr = Set{Int}()
+
+# whether process is a master or worker in a distributed setup
+myrole() = LPROCROLE[]
+function myrole!(proctype::Symbol)
+    LPROCROLE[] = proctype
+end
 
 # cluster management related API
 """
@@ -822,7 +847,7 @@ julia> workers()
 ```
 """
 function nprocs()
-    if myid() == 1 || (PGRP.topology == :all_to_all && !isclusterlazy())
+    if myid() == 1 || (PGRP.topology === :all_to_all && !isclusterlazy())
         n = length(PGRP.workers)
         # filter out workers in the process of being setup/shutdown.
         for jw in PGRP.workers
@@ -875,7 +900,7 @@ julia> procs()
 ```
 """
 function procs()
-    if myid() == 1 || (PGRP.topology == :all_to_all  && !isclusterlazy())
+    if myid() == 1 || (PGRP.topology === :all_to_all  && !isclusterlazy())
         # filter out workers in the process of being setup/shutdown.
         return Int[x.id for x in PGRP.workers if isa(x, LocalProcess) || (x.state == W_CONNECTED)]
     else
@@ -884,7 +909,7 @@ function procs()
 end
 
 function id_in_procs(id)  # faster version of `id in procs()`
-    if myid() == 1 || (PGRP.topology == :all_to_all  && !isclusterlazy())
+    if myid() == 1 || (PGRP.topology === :all_to_all  && !isclusterlazy())
         for x in PGRP.workers
             if (x.id::Int) == id && (isa(x, LocalProcess) || (x::Worker).state == W_CONNECTED)
                 return true
@@ -1013,10 +1038,10 @@ function _rmprocs(pids, waitfor)
             end
         end
 
-        start = time()
-        while (time() - start) < waitfor
+        start = time_ns()
+        while (time_ns() - start) < waitfor*1e9
             all(w -> w.state == W_TERMINATED, rmprocset) && break
-            sleep(min(0.1, waitfor - (time() - start)))
+            sleep(min(0.1, waitfor - (time_ns() - start)/1e9))
         end
 
         unremoved = [wrkr.id for wrkr in filter(w -> w.state != W_TERMINATED, rmprocset)]
@@ -1030,20 +1055,23 @@ function _rmprocs(pids, waitfor)
 end
 
 
-struct ProcessExitedException <: Exception end
-
 """
-    ProcessExitedException()
+    ProcessExitedException(worker_id::Int)
 
 After a client Julia process has exited, further attempts to reference the dead child will
 throw this exception.
 """
-ProcessExitedException()
+struct ProcessExitedException <: Exception
+    worker_id::Int
+end
+
+# No-arg constructor added for compatibility with Julia 1.0 & 1.1, should be deprecated in the future
+ProcessExitedException() = ProcessExitedException(-1)
 
 worker_from_id(i) = worker_from_id(PGRP, i)
 function worker_from_id(pg::ProcessGroup, i)
     if !isempty(map_del_wrkr) && in(i, map_del_wrkr)
-        throw(ProcessExitedException())
+        throw(ProcessExitedException(i))
     end
     w = get(map_pid_wrkr, i, nothing)
     if w === nothing
@@ -1104,10 +1132,10 @@ function deregister_worker(pg, pid)
             end
         end
 
-        if myid() == 1 && isdefined(w, :config)
+        if myid() == 1 && (myrole() === :master) && isdefined(w, :config)
             # Notify the cluster manager of this workers death
             manage(w.manager, w.id, w.config, :deregister)
-            if PGRP.topology != :all_to_all || isclusterlazy()
+            if PGRP.topology !== :all_to_all || isclusterlazy()
                 for rpid in workers()
                     try
                         remote_do(deregister_worker, rpid, pid)
@@ -1137,7 +1165,7 @@ function deregister_worker(pg, pid)
 
         # throw exception to tasks waiting for this pid
         for (id, rv) in tonotify
-            close(rv.c, ProcessExitedException())
+            close(rv.c, ProcessExitedException(pid))
             delete!(pg.refs, id)
         end
     end
@@ -1173,18 +1201,6 @@ function interrupt(pids::AbstractVector=workers())
     @sync begin
         for pid in pids
             @async interrupt(pid)
-        end
-    end
-end
-
-
-function disable_nagle(sock)
-    # disable nagle on all OSes
-    ccall(:uv_tcp_nodelay, Cint, (Ptr{Cvoid}, Cint), sock.handle, 1)
-    @static if Sys.islinux()
-        # tcp_quickack is a linux only option
-        if ccall(:jl_tcp_quickack, Cint, (Ptr{Cvoid}, Cint), sock.handle, 1) < 0
-            @warn "Networking unoptimized ( Error enabling TCP_QUICKACK : $(Libc.strerror(Libc.errno())) )" maxlog=1
         end
     end
 end

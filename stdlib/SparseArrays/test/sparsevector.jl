@@ -4,8 +4,10 @@ module SparseVectorTests
 
 using Test
 using SparseArrays
+using SparseArrays: nonzeroinds, getcolptr
 using LinearAlgebra
 using Random
+include("forbidproperties.jl")
 
 ### Data
 
@@ -315,8 +317,8 @@ end
     let x = spv_x1
         xc = copy(x)
         @test isa(xc, SparseVector{Float64,Int})
-        @test x.nzind !== xc.nzval
-        @test x.nzval !== xc.nzval
+        @test nonzeroinds(x) !== nonzeros(xc)
+        @test nonzeros(x) !== nonzeros(xc)
         @test exact_equal(x, xc)
     end
 
@@ -402,6 +404,11 @@ end
         @test x2[10] == 0
         x2 = sparse([1, 2], [2, 2], [1.2, 3.4], 2, 3)
         @test_throws BoundsError copyto!(x2, x1)
+    end
+    let x = 1:6
+        x2 = spzeros(length(x))
+        copyto!(x2, x) # copyto!(SparseVector, AbstractVector)
+        @test Vector(x2) == collect(x)
     end
 end
 @testset "vec/reinterpret/float/complex" begin
@@ -707,7 +714,7 @@ end
         for op in operations
             spresvec = op.(spvec)
             @test spresvec == op.(densevec)
-            @test all(!iszero, spresvec.nzval)
+            @test all(!iszero, nonzeros(spresvec))
             resvaltype = typeof(op(zero(eltype(spvec))))
             resindtype = SparseArrays.indtype(spvec)
             @test isa(spresvec, SparseVector{resvaltype,resindtype})
@@ -794,7 +801,7 @@ end
         end
         @testset "scale" begin
             α = 2.5
-            sx = SparseVector(x.n, x.nzind, x.nzval * α)
+            sx = SparseVector(length(x::SparseVector), nonzeroinds(x), nonzeros(x) * α)
             @test exact_equal(x * α, sx)
             @test exact_equal(x * (α + 0.0*im), complex(sx))
             @test exact_equal(α * x, sx)
@@ -803,7 +810,7 @@ end
             @test exact_equal(α * x, sx)
             @test exact_equal(x .* α, sx)
             @test exact_equal(α .* x, sx)
-            @test exact_equal(x / α, SparseVector(x.n, x.nzind, x.nzval / α))
+            @test exact_equal(x / α, SparseVector(length(x::SparseVector), nonzeroinds(x), nonzeros(x) / α))
 
             xc = copy(x)
             @test rmul!(xc, α) === xc
@@ -841,30 +848,46 @@ end
 
 @testset "BLAS Level-2" begin
     @testset "dense A * sparse x -> dense y" begin
-        let A = randn(9, 16), x = sprand(16, 0.7)
-            xf = Array(x)
-            for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
-                y = rand(9)
-                rr = α*A*xf + β*y
-                @test mul!(y, A, x, α, β) === y
-                @test y ≈ rr
+        for TA in (Float64, ComplexF64), Tx in (Float64, ComplexF64)
+            T = Base.promote_op(LinearAlgebra.matprod, TA, Tx)
+            let A = randn(TA, 9, 16), x = sprand(Tx, 16, 0.7)
+                xf = Array(x)
+                for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
+                    y = rand(T, 9)
+                    rr = α*A*xf + β*y
+                    @test mul!(y, A, x, α, β) === y
+                    @test y ≈ rr
+                end
+                y = A*x
+                @test isa(y, Vector{T})
+                @test A*x ≈ A*xf
             end
-            y = A*x
-            @test isa(y, Vector{Float64})
-            @test A*x ≈ A*xf
-        end
 
-        let A = randn(16, 9), x = sprand(16, 0.7)
-            xf = Array(x)
-            for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
-                y = rand(9)
-                rr = α*A'xf + β*y
-                @test mul!(y, transpose(A), x, α, β) === y
-                @test y ≈ rr
+            let A = randn(TA, 16, 9), x = sprand(Tx, 16, 0.7)
+                xf = Array(x)
+                for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
+                    y = rand(T, 9)
+                    rr = α*transpose(A)*xf + β*y
+                    @test mul!(y, transpose(A), x, α, β) === y
+                    @test y ≈ rr
+                end
+                y = *(transpose(A), x)
+                @test isa(y, Vector{T})
+                @test y ≈ *(transpose(A), xf)
             end
-            y = *(transpose(A), x)
-            @test isa(y, Vector{Float64})
-            @test y ≈ *(transpose(A), xf)
+
+            let A = randn(TA, 16, 9), x = sprand(Tx, 16, 0.7)
+                xf = Array(x)
+                for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
+                    y = rand(T, 9)
+                    rr = α*A'xf + β*y
+                    @test mul!(y, adjoint(A), x, α, β) === y
+                    @test y ≈ rr
+                end
+                y = *(adjoint(A), x)
+                @test isa(y, Vector{T})
+                @test y ≈ *(adjoint(A), xf)
+            end
         end
     end
     @testset "sparse A * sparse x -> dense y" begin
@@ -907,6 +930,14 @@ end
             @test SparseArrays.densemv(A, x2; trans='C') ≈ Af'x2f
             @test_throws ArgumentError SparseArrays.densemv(A, x; trans='D')
         end
+
+        let A = sparse(bitrand(9, 16)), x = sparse(bitrand(16))
+            Af = Array(A)
+            xf = Array(x)
+            y = SparseArrays.densemv(A, x)
+            @test isa(y, Vector{Int})
+            @test y == Af*xf
+        end
     end
     @testset "sparse A * sparse x -> sparse y" begin
         let A = sprandn(9, 16, 0.5), x = sprand(16, 0.7), x2 = sprand(9, 0.7)
@@ -944,17 +975,46 @@ end
             @test isa(y, SparseVector{ComplexF64,Int})
             @test Array(y) ≈ Af'x2f
         end
+
+        let A = sparse(bitrand(9, 16)), x = sparse(bitrand(16)), x2 = sparse(bitrand(9))
+            Af = Array(A)
+            xf = Array(x)
+            x2f = Array(x2)
+
+            y = A*x
+            @test isa(y, SparseVector{Int, Int})
+            @test Array(y) == Af*xf
+
+            y = A'*x2
+            @test isa(y, SparseVector{Int, Int})
+            @test Array(y) == Af'x2f
+        end
+    end
+    @testset "sparse A * dense x -> dense y" begin
+        let A = sparse(bitrand(9, 16)), x = Vector(bitrand(16)), x2 = Vector(bitrand(9))
+            Af = Array(A)
+            xf = Array(x)
+            x2f = Array(x2)
+
+            y = A*x
+            @test isa(y, Vector{Int})
+            @test y == Af*xf
+
+            y = A'*x2
+            @test isa(y, Vector{Int})
+            @test y == Af'x2f
+        end
     end
     @testset "ldiv ops with triangular matrices and sparse vecs (#14005)" begin
         m = 10
         sparsefloatvecs = SparseVector[sprand(m, 0.4) for k in 1:3]
-        sparseintvecs = SparseVector[SparseVector(m, sprvec.nzind, round.(Int, sprvec.nzval*10)) for sprvec in sparsefloatvecs]
-        sparsecomplexvecs = SparseVector[SparseVector(m, sprvec.nzind, complex.(sprvec.nzval, sprvec.nzval)) for sprvec in sparsefloatvecs]
+        sparseintvecs = SparseVector[SparseVector(m, nonzeroinds(sprvec), round.(Int, nonzeros(sprvec)*10)) for sprvec in sparsefloatvecs]
+        sparsecomplexvecs = SparseVector[SparseVector(m, nonzeroinds(sprvec), complex.(nonzeros(sprvec), nonzeros(sprvec))) for sprvec in sparsefloatvecs]
 
         sprmat = sprand(m, m, 0.2)
         sparsefloatmat = I + sprmat/(2m)
-        sparsecomplexmat = I + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, complex.(sprmat.nzval, sprmat.nzval)/(4m))
-        sparseintmat = 10m*I + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, round.(Int, sprmat.nzval*10))
+        sparsecomplexmat = I + SparseMatrixCSC(m, m, getcolptr(sprmat), rowvals(sprmat), complex.(nonzeros(sprmat), nonzeros(sprmat))/(4m))
+        sparseintmat = 10m*I + SparseMatrixCSC(m, m, getcolptr(sprmat), rowvals(sprmat), round.(Int, nonzeros(sprmat)*10))
 
         denseintmat = I*10m + rand(1:m, m, m)
         densefloatmat = I + randn(m, m)/(2m)
@@ -980,7 +1040,7 @@ end
                 spvecs = eltypevec in inttypes ? sparseintvecs :
                          eltypevec in floattypes ? sparsefloatvecs :
                          eltypevec in complextypes && sparsecomplexvecs
-                spvecs = SparseVector[SparseVector(m, spvec.nzind, convert(Vector{eltypevec}, spvec.nzval)) for spvec in spvecs]
+                spvecs = SparseVector[SparseVector(m, nonzeroinds(spvec), convert(Vector{eltypevec}, nonzeros(spvec))) for spvec in spvecs]
 
                 for spvec in spvecs
                     fspvec = convert(Array, spvec)
@@ -1031,6 +1091,45 @@ end
             @test isequal(ldiv!(transpose(mat), copy(zerospvec)), zerospvec)
         end
     end
+    @testset "Triangular and SparseVector multiplications" begin
+        n = 10
+        types = (Int, Float64, ComplexF64)
+        tritypes = (LowerTriangular, UnitUpperTriangular)
+        for ta in types
+            for tri in tritypes
+                if ta == Int
+                    T = tri(rand(1:9, n, n))
+                else
+                    T = tri(randn(ta, n, n))
+                end
+                for tb in types
+                    if tb == Int
+                        x = sparse(rand(0:4, n))
+                    else
+                        x = sprandn(tb, n, 0.6)
+                    end
+                    @test T * x ≈ Array(T) * Array(x)
+                    @test T' * x ≈ Array(T)' * Array(x)
+                    @test transpose(T) * x ≈ transpose(Array(T)) * Array(x)
+                    @test x' * T ≈ Array(x)' * Array(T)
+                    @test x' * T' ≈ Array(x)' * Array(T)'
+                    @test x' * transpose(T) ≈ Array(x)' * transpose(Array(T))
+                end
+            end
+        end
+
+        # 0-dimensional case
+        x = sparse(zeros(0))
+        for tri in tritypes
+            T = tri(zeros(0, 0))
+            @test T*x == Array(T) * Array(x)
+            @test T' * x == Array(T)' * Array(x)
+            @test transpose(T) * x == transpose(Array(T)) * Array(x)
+            @test x' * T == Array(x)' * Array(T)
+            @test x' * T' == Array(x)' * Array(T)'
+            @test x' * transpose(T) == Array(x)' * transpose(Array(T))
+        end
+    end
 end
 
 @testset "fkeep!" begin
@@ -1063,9 +1162,9 @@ end
     vnegzeros[negzerosinds] .= -2
     vbothsigns = copy(vposzeros)
     vbothsigns[negzerosinds] .= -2
-    map!(x -> x == 2 ? 0.0 : x, vposzeros.nzval, vposzeros.nzval)
-    map!(x -> x == -2 ? -0.0 : x, vnegzeros.nzval, vnegzeros.nzval)
-    map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, vbothsigns.nzval, vbothsigns.nzval)
+    map!(x -> x == 2 ? 0.0 : x, nonzeros(vposzeros), nonzeros(vposzeros))
+    map!(x -> x == -2 ? -0.0 : x, nonzeros(vnegzeros), nonzeros(vnegzeros))
+    map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, nonzeros(vbothsigns), nonzeros(vbothsigns))
     for vwithzeros in (vposzeros, vnegzeros, vbothsigns)
         # Basic functionality / dropzeros!
         @test dropzeros!(copy(vwithzeros)) == v
@@ -1074,16 +1173,16 @@ end
         @test dropzeros(vwithzeros) == v
         @test dropzeros(vwithzeros, trim = false) == v
         # Check trimming works as expected
-        @test length(dropzeros!(copy(vwithzeros)).nzval) == length(v.nzval)
-        @test length(dropzeros!(copy(vwithzeros)).nzind) == length(v.nzind)
-        @test length(dropzeros!(copy(vwithzeros), trim = false).nzval) == length(vwithzeros.nzval)
-        @test length(dropzeros!(copy(vwithzeros), trim = false).nzind) == length(vwithzeros.nzind)
+        @test length(nonzeros(dropzeros!(copy(vwithzeros)))) == length(nonzeros(v))
+        @test length(nonzeroinds(dropzeros!(copy(vwithzeros)))) == length(nonzeroinds(v))
+        @test length(nonzeros(dropzeros!(copy(vwithzeros), trim = false))) == length(nonzeros(vwithzeros))
+        @test length(nonzeroinds(dropzeros!(copy(vwithzeros), trim = false))) == length(nonzeroinds(vwithzeros))
     end
 end
 
 @testset "original dropzeros! test" begin
     xdrop = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
-    xdrop.nzval[[2, 4, 6]] .= 0.0
+    nonzeros(xdrop)[[2, 4, 6]] .= 0.0
     SparseArrays.dropzeros!(xdrop)
     @test exact_equal(xdrop, SparseVector(7, [1, 3, 5, 7], [3, -1., -2., 3.]))
 end
@@ -1208,62 +1307,62 @@ end
     simA = similar(A)
     @test typeof(simA) == typeof(A)
     @test size(simA) == size(A)
-    @test simA.nzind == A.nzind
-    @test length(simA.nzval) == length(A.nzval)
+    @test nonzeroinds(simA) == nonzeroinds(A)
+    @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with entry type specification (preserves stored-entry structure)
     simA = similar(A, Float32)
-    @test typeof(simA) == SparseVector{Float32,eltype(A.nzind)}
+    @test typeof(simA) == SparseVector{Float32,eltype(nonzeroinds(A))}
     @test size(simA) == size(A)
-    @test simA.nzind == A.nzind
-    @test length(simA.nzval) == length(A.nzval)
+    @test nonzeroinds(simA) == nonzeroinds(A)
+    @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with entry and index type specification (preserves stored-entry structure)
     simA = similar(A, Float32, Int8)
     @test typeof(simA) == SparseVector{Float32,Int8}
     @test size(simA) == size(A)
-    @test simA.nzind == A.nzind
-    @test length(simA.nzval) == length(A.nzval)
+    @test nonzeroinds(simA) == nonzeroinds(A)
+    @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with Dims{1} specification (preserves nothing)
     simA = similar(A, (6,))
     @test typeof(simA) == typeof(A)
     @test size(simA) == (6,)
-    @test length(simA.nzind) == 0
-    @test length(simA.nzval) == 0
+    @test length(nonzeroinds(simA)) == 0
+    @test length(nonzeros(simA)) == 0
     # test similar with entry type and Dims{1} specification (preserves nothing)
     simA = similar(A, Float32, (6,))
-    @test typeof(simA) == SparseVector{Float32,eltype(A.nzind)}
+    @test typeof(simA) == SparseVector{Float32,eltype(nonzeroinds(A))}
     @test size(simA) == (6,)
-    @test length(simA.nzind) == 0
-    @test length(simA.nzval) == 0
+    @test length(nonzeroinds(simA)) == 0
+    @test length(nonzeros(simA)) == 0
     # test similar with entry type, index type, and Dims{1} specification (preserves nothing)
     simA = similar(A, Float32, Int8, (6,))
     @test typeof(simA) == SparseVector{Float32,Int8}
     @test size(simA) == (6,)
-    @test length(simA.nzind) == 0
-    @test length(simA.nzval) == 0
+    @test length(nonzeroinds(simA)) == 0
+    @test length(nonzeros(simA)) == 0
     # test entry points to similar with entry type, index type, and non-Dims shape specification
     @test similar(A, Float32, Int8, 6, 6) == similar(A, Float32, Int8, (6, 6))
     @test similar(A, Float32, Int8, 6) == similar(A, Float32, Int8, (6,))
     # test similar with Dims{2} specification (preserves storage space only, not stored-entry structure)
     simA = similar(A, (6,6))
-    @test typeof(simA) == SparseMatrixCSC{eltype(A.nzval),eltype(A.nzind)}
+    @test typeof(simA) == SparseMatrixCSC{eltype(nonzeros(A)),eltype(nonzeroinds(A))}
     @test size(simA) == (6,6)
-    @test simA.colptr == fill(1, 6+1)
-    @test length(simA.rowval) == length(A.nzind)
-    @test length(simA.nzval) == length(A.nzval)
+    @test getcolptr(simA) == fill(1, 6+1)
+    @test length(rowvals(simA)) == length(nonzeroinds(A))
+    @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with entry type and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, (6,6))
-    @test typeof(simA) == SparseMatrixCSC{Float32,eltype(A.nzind)}
+    @test typeof(simA) == SparseMatrixCSC{Float32,eltype(nonzeroinds(A))}
     @test size(simA) == (6,6)
-    @test simA.colptr == fill(1, 6+1)
-    @test length(simA.rowval) == length(A.nzind)
-    @test length(simA.nzval) == length(A.nzval)
+    @test getcolptr(simA) == fill(1, 6+1)
+    @test length(rowvals(simA)) == length(nonzeroinds(A))
+    @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with entry type, index type, and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, Int8, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32, Int8}
     @test size(simA) == (6,6)
-    @test simA.colptr == fill(1, 6+1)
-    @test length(simA.rowval) == length(A.nzind)
-    @test length(simA.nzval) == length(A.nzval)
+    @test getcolptr(simA) == fill(1, 6+1)
+    @test length(rowvals(simA)) == length(nonzeroinds(A))
+    @test length(nonzeros(simA)) == length(nonzeros(A))
 end
 
 @testset "Fast operations on full column views" begin
@@ -1304,6 +1403,26 @@ end
         circshift!(y2, Vector(v2), shift)
         @test y1 == y2
     end
+end
+
+@testset "SparseColumnView properties" begin
+    n = 10
+    A = sprand(n, n, 0.5)
+    scv = view(A, :, 1)
+    @test SparseArrays.indtype(scv) == SparseArrays.indtype(A)
+    @test nnz(scv) == nnz(A[:, 1])
+end
+
+@testset "avoid aliasing of fields during constructing $T (issue #34630)" for T in
+    (SparseVector, SparseVector{Float64}, SparseVector{Float64,Int16})
+
+    A = sparse([1; 0])
+    B = T(A)
+    @test A == B
+    A[2] = 1
+    @test A != B
+    @test nonzeroinds(A) !== nonzeroinds(B)
+    @test nonzeros(A) !== nonzeros(B)
 end
 
 end # module

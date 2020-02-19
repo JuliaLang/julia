@@ -1,113 +1,112 @@
-Julia v1.2 Release Notes
+Julia v1.5 Release Notes
 ========================
 
 New language features
 ---------------------
+* Macro calls `@foo {...}` can now also be written `@foo{...}` (without the space) ([#34498]).
 
-  * Argument splatting (`x...`) can now be used in calls to the `new` pseudo-function in
-    constructors ([#30577]).
+Language changes
+----------------
 
-  * Objects created by calling `skipmissing` on an array can now be indexed using indices
-    from the parent at non-missing positions. This allows functions such as
-    `findall`, `findfirst`, `argmin`/`argmax` and `findmin`/`findmax` to work with these
-    objects, returning the index of matching non-missing elements in the parent ([#31008]).
+* The interactive REPL now uses "soft scope" for top-level expressions: an assignment inside a
+  scope block such as a `for` loop automatically assigns to a global variable if one has been
+  defined already. This matches the behavior of Julia versions 0.6 and prior, as well as
+  [IJulia](https://github.com/JuliaLang/IJulia.jl).
+  Note that this only affects expressions interactively typed or pasted directly into the
+  default REPL ([#28789], [#33864]).
 
-  * `inv(::Missing)` has now been added and returns `missing` ([#31408]).
+* Outside of the REPL (e.g. in a file), assigning to a variable within a top-level scope
+  block is considered ambiguous if a global variable with the same name exists.
+  A warning is given if that happens, to alert you that the code will work differently
+  than in the REPL.
+  A new command line option `--warn-scope` controls this warning ([#33864]).
+
+* Converting arbitrary tuples to `NTuple`, e.g. `convert(NTuple, (1, ""))` now gives an error,
+  where it used to be incorrectly allowed. This is because `NTuple` refers only to homogeneous
+  tuples (this meaning has not changed) ([#34272]).
+
+* In docstrings, a level-1 markdown header "Extended help" is now
+  interpreted as a marker dividing "brief help" from "extended help."
+  The REPL help mode only shows the brief help (the content before the
+  "Extended help" header) by default; prepend the expression with '?'
+  (in addition to the one that enters the help mode) to see the full
+  docstring. ([#25930])
+
+* The syntax `(;)` (which was deprecated in v1.4) now creates an empty named tuple ([#30115]).
 
 Multi-threading changes
 -----------------------
 
-  * The `Condition` type now has a thread-safe replacement, accessed as `Threads.Condition`.
-    With that addition, task scheduling primitives such as `ReentrantLock` are now thread-safe ([#30061]).
 
-Language changes
-----------------
-* Empty entries in `JULIA_DEPOT_PATH` are now expanded to default depot entries ([#31009]).
-* `Enum` now behaves like a scalar when used in broadcasting ([#30670]).
-
-Command-line option changes
----------------------------
+Build system changes
+--------------------
 
 
 New library functions
 ---------------------
 
-* `getipaddrs()` function returns all the IP addresses of the local machine ([#30349])
-* Added `Base.hasproperty` and `Base.hasfield` ([#28850]).
-* One argument `!=(x)`, `>(x)`, `>=(x)`, `<(x)`, `<=(x)` has been added for currying,
-  similar to the existing `==(x)` and `isequal(x)` methods ([#30915]).
+* New functions `mergewith` and `mergewith!` supersede `merge` and `merge!` with `combine`
+  argument.  They don't have the restriction for `combine` to be a `Function` and also
+  provide one-argument method that returns a closure.  The old methods of `merge` and
+  `merge!` are still available for backward compatibility ([#34296]).
+* The new `isdisjoint` function indicates whether two collections are disjoint ([#34427]).
+* Add function `ismutable` and deprecate `isimmutable` to check whether something is mutable.([#34652])
+* `include` now accepts an optional `mapexpr` first argument to transform the parsed
+  expressions before they are evaluated ([#34595]).
+
+New library features
+--------------------
+* Function composition now works also on one argument `∘(f) = f` (#34251)
+
+* `isapprox` (or `≈`) now has a one-argument "curried" method `isapprox(x)` which returns a function, like `isequal` (or `==`)` ([#32305]).
+* `Ref{NTuple{N,T}}` can be passed to `Ptr{T}`/`Ref{T}` `ccall` signatures ([#34199])
+
 
 Standard library changes
 ------------------------
-
-* The `extrema` function now accepts a function argument in the same manner as `minimum` and
-  `maximum` ([#30323]).
-* `hasmethod` can now check for matching keyword argument names ([#30712]).
-* `startswith` and `endswith` now accept a `Regex` for the second argument ([#29790]).
-* `retry` supports arbitrary callable objects ([#30382]).
-* `filter` now supports `SkipMissing`-wrapped arrays ([#31235]).
-* A no-argument construct to `Ptr{T}` has been added which constructs a null pointer ([#30919])
-* `strip` now accepts a function argument in the same manner as `lstrip` and `rstrip` ([#31211])
-* `mktempdir` now accepts a `prefix` keyword argument to customize the file name ([#31230], [#22922])
+* The `@timed` macro now returns a `NamedTuple` ([#34149])
+* New `supertypes(T)` function returns a tuple of all supertypes of `T` ([#34419]).
+* Sorting-related functions such as `sort` that take the keyword arguments `lt`, `rev`, `order`
+  and `by` now do not discard `order` if `by` or `lt` are passed. In the former case, the
+  order from `order` is used to compare the values of `by(element)`. In the latter case,
+  any order different from `Forward` or `Reverse` will raise an error about the
+  ambiguity.
 
 #### LinearAlgebra
+* The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
+* `normalize` now supports multidimensional arrays ([#34239])
+* `lq` factorizations can now be used to compute the minimum-norm solution to under-determined systems ([#34350]).
 
-* Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
-* `UniformScaling` instances are now callable such that e.g. `I(3)` will produce a `Diagonal` matrix ([#30298]).
-* Eigenvalues λ of general matrices are now sorted lexicographically by (Re λ, Im λ) ([#21598]).
-* `one` for structured matrices (`Diagonal`, `Bidiagonal`, `Tridiagonal`, `Symtridiagonal`) now preserves
-  structure and type. ([#29777])
-* `diagm(v)` is now a shorthand for `diagm(0 => v)`. ([#31125]).
+#### Markdown
+
+
+#### Random
+
+
+#### REPL
+
 
 #### SparseArrays
-
-* performance improvements for sparse matrix-matrix multiplication ([#30372]).
-* Sparse vector outer products are more performant and maintain sparsity in products of the
-  form `kron(u, v')`, `u * v'`, and `u .* v'` where `u` and `v` are sparse vectors or column
-  views. ([#24980])
+* `lu!` accepts `UmfpackLU` as an argument to make use of its symbolic factorization.
 
 #### Dates
 
-* Fixed `repr` such that it displays `DateTime` as it would be entered in Julia ([#30200]).
+#### Statistics
 
-#### Miscellaneous
 
-* Since environment variables on Windows are case-insensitive, `ENV` now converts its keys
-  to uppercase for display, iteration, and copying ([#30593]).
+#### Sockets
 
-External dependencies
----------------------
-
-* libgit2 has been updated to v0.27.7 ([#30584]).
-* OpenBLAS has been updated to v0.3.5 ([#30583]).
-* MbedTLS has been updated to v2.16.0 ([#30618]).
-* libunwind has been updated to v1.3.1 ([#30724]).
+#### Distributed
+* `launch_on_machine` now supports and parses ipv6 square-bracket notation ([#34430])
 
 Deprecated or removed
 ---------------------
 
+External dependencies
+---------------------
+
+Tooling Improvements
+---------------------
+
 
 <!--- generated by NEWS-update.jl: -->
-[#21598]: https://github.com/JuliaLang/julia/issues/21598
-[#24980]: https://github.com/JuliaLang/julia/issues/24980
-[#28850]: https://github.com/JuliaLang/julia/issues/28850
-[#29777]: https://github.com/JuliaLang/julia/issues/29777
-[#29790]: https://github.com/JuliaLang/julia/issues/29790
-[#29998]: https://github.com/JuliaLang/julia/issues/29998
-[#30061]: https://github.com/JuliaLang/julia/issues/30061
-[#30200]: https://github.com/JuliaLang/julia/issues/30200
-[#30298]: https://github.com/JuliaLang/julia/issues/30298
-[#30323]: https://github.com/JuliaLang/julia/issues/30323
-[#30349]: https://github.com/JuliaLang/julia/issues/30349
-[#30372]: https://github.com/JuliaLang/julia/issues/30372
-[#30382]: https://github.com/JuliaLang/julia/issues/30382
-[#30577]: https://github.com/JuliaLang/julia/issues/30577
-[#30583]: https://github.com/JuliaLang/julia/issues/30583
-[#30584]: https://github.com/JuliaLang/julia/issues/30584
-[#30593]: https://github.com/JuliaLang/julia/issues/30593
-[#30618]: https://github.com/JuliaLang/julia/issues/30618
-[#30670]: https://github.com/JuliaLang/julia/issues/30670
-[#30712]: https://github.com/JuliaLang/julia/issues/30712
-[#30724]: https://github.com/JuliaLang/julia/issues/30724
-[#30915]: https://github.com/JuliaLang/julia/issues/30915
-[#30919]: https://github.com/JuliaLang/julia/issues/30919

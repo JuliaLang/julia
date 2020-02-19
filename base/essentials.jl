@@ -19,6 +19,7 @@ abstract type AbstractSet{T} end
 
 Supertype for dictionary-like types with keys of type `K` and values of type `V`.
 [`Dict`](@ref), [`IdDict`](@ref) and other types are subtypes of this.
+An `AbstractDict{K, V}` should be an iterator of `Pair{K, V}`.
 """
 abstract type AbstractDict{K,V} end
 
@@ -113,6 +114,8 @@ macro _propagate_inbounds_meta()
     return Expr(:meta, :inline, :propagate_inbounds)
 end
 
+function iterate end
+
 """
     convert(T, x)
 
@@ -163,7 +166,8 @@ true
 """
 function convert end
 
-convert(::Type{Any}, @nospecialize(x)) = x
+convert(::Type{Union{}}, x) = throw(MethodError(convert, (Union{}, x)))
+convert(::Type{Any}, x) = x
 convert(::Type{T}, x::T) where {T} = x
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled
@@ -212,7 +216,9 @@ function tuple_type_tail(T::Type)
     else
         T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
         if isvatuple(T) && length(T.parameters) == 1
-            return T
+            va = T.parameters[1]
+            (isa(va, DataType) && isa(va.parameters[2], Int)) || return T
+            return Tuple{Vararg{va.parameters[1], va.parameters[2]-1}}
         end
         return Tuple{argtail(T.parameters...)...}
     end
@@ -309,13 +315,6 @@ convert(::Type{Tuple{Vararg{V}}}, x::Tuple{Vararg{V}}) where {V} = x
 convert(T::Type{Tuple{Vararg{V}}}, x::Tuple) where {V} =
     (convert(tuple_type_head(T), x[1]), convert(T, tail(x))...)
 
-# used for splatting in `new`
-convert_prefix(::Type{Tuple{}}, x::Tuple) = x
-convert_prefix(::Type{<:AtLeast1}, x::Tuple{}) = x
-convert_prefix(::Type{T}, x::T) where {T<:AtLeast1} = x
-convert_prefix(::Type{T}, x::AtLeast1) where {T<:AtLeast1} =
-    (convert(tuple_type_head(T), x[1]), convert_prefix(tuple_type_tail(T), tail(x))...)
-
 # TODO: the following definitions are equivalent (behaviorally) to the above method
 # I think they may be faster / more efficient for inference,
 # if we could enable them, but are they?
@@ -334,9 +333,7 @@ convert_prefix(::Type{T}, x::AtLeast1) where {T<:AtLeast1} =
 #convert(_::Type{Tuple{Vararg{S, N}}},
 #        x::Tuple{Vararg{Any, N}}) where
 #       {S, N} = cnvt_all(S, x...)
-# TODO: These currently can't be used since
-#   Type{NTuple} <: (Type{Tuple{Vararg{S}}} where S) is true
-#   even though the value S doesn't exist
+# TODO: These are similar to the methods we currently use but cnvt_all might work better:
 #convert(_::Type{Tuple{Vararg{S}}},
 #        x::Tuple{Any, Vararg{Any}}) where
 #       {S} = cnvt_all(S, x...)
@@ -411,7 +408,7 @@ julia> reinterpret(Float32, UInt32(7))
 
 julia> reinterpret(Float32, UInt32[1 2 3 4 5])
 1×5 reinterpret(Float32, ::Array{UInt32,2}):
- 1.4013e-45  2.8026e-45  4.2039e-45  5.60519e-45  7.00649e-45
+ 1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
 ```
 """
 reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
@@ -657,83 +654,6 @@ function isassigned(v::SimpleVector, i::Int)
 end
 
 
-# used by ... syntax to access the `iterate` function from inside the Core._apply implementation
-# must be a separate function from append(), since Core._apply needs this exact function
-function append_any(xs...)
-    @nospecialize
-    lx = length(xs)
-    l = 4
-    i = 1
-    out = Vector{Any}(undef, l)
-    for xi in 1:lx
-        x = @inbounds xs[xi]
-        # handle some common cases, where we know the length
-        # and can inline the iterator because the runtime
-        # has an optimized version of the iterator
-        if x isa SimpleVector
-            lx = length(x)
-            if i + lx - 1 > l
-                ladd = lx > 16 ? lx : 16
-                _growend!(out, ladd)
-                l += ladd
-            end
-            for j in 1:lx
-                y = @inbounds x[j]
-                arrayset(false, out, y, i)
-                i += 1
-            end
-        elseif x isa Tuple
-            lx = nfields(x)
-            if i + lx - 1 > l
-                ladd = lx > 16 ? lx : 16
-                _growend!(out, ladd)
-                l += ladd
-            end
-            for j in 1:lx
-                y = getfield(x, j, false)
-                arrayset(false, out, y, i)
-                i += 1
-            end
-        elseif x isa NamedTuple
-            lx = nfields(x)
-            if i + lx - 1 > l
-                ladd = lx > 16 ? lx : 16
-                _growend!(out, ladd)
-                l += ladd
-            end
-            for j in 1:lx
-                y = getfield(x, j, false)
-                arrayset(false, out, y, i)
-                i += 1
-            end
-        elseif x isa Array
-            lx = length(x)
-            if i + lx - 1 > l
-                ladd = lx > 16 ? lx : 16
-                _growend!(out, ladd)
-                l += ladd
-            end
-            for j in 1:lx
-                y = arrayref(false, x, j)
-                arrayset(false, out, y, i)
-                i += 1
-            end
-        else
-            for y in x
-                if i > l
-                    _growend!(out, 16)
-                    l += 16
-                end
-                arrayset(false, out, y, i)
-                i += 1
-            end
-        end
-    end
-    _deleteend!(out, l - i + 1)
-    return out
-end
-
-
 """
     Colon()
 
@@ -793,6 +713,9 @@ function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
     inner() = f(args...; kwargs...)
     Core._apply_latest(inner)
 end
+
+# TODO: possibly make this an intrinsic
+inferencebarrier(@nospecialize(x)) = Ref{Any}(x)[]
 
 """
     isempty(collection) -> Bool
@@ -872,11 +795,6 @@ Return `0` if the line number could not be determined.
 """
 macro __LINE__()
     return __source__.line
-end
-
-# Just for bootstrapping purposes below
-macro __FILE_SYMBOL__()
-    return Expr(:quote, __source__.file)
 end
 
 # Iteration

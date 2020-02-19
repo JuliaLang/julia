@@ -448,50 +448,37 @@ jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_modul
 
 static void jl_dump_asm_internal(
         uintptr_t Fptr, size_t Fsize, int64_t slide,
-        const object::ObjectFile *object,
+        object::SectionRef Section,
         DIContext *di_ctx,
         raw_ostream &rstream,
         const char* asm_variant,
         const char* debuginfo);
 
 // This isn't particularly fast, but neither is printing assembly, and they're only used for interactive mode
-static uint64_t compute_obj_symsize(const object::ObjectFile *obj, uint64_t offset)
+static uint64_t compute_obj_symsize(object::SectionRef Section, uint64_t offset)
 {
-    // Scan the object file for the closest symbols above and below offset in the .text section
+    // Scan the object file for the closest symbols above and below offset in the given section
     uint64_t lo = 0;
     uint64_t hi = 0;
     bool setlo = false;
-    for (const object::SectionRef &Section : obj->sections()) {
-        uint64_t SAddr, SSize;
-        if (!Section.isText()) continue;
-        SAddr = Section.getAddress();
-        SSize = Section.getSize();
-        if (offset < SAddr || offset >= SAddr + SSize) continue;
-        assert(hi == 0);
-
-        // test for lower and upper symbol bounds relative to other symbols
-        hi = SAddr + SSize;
-        object::section_iterator ESection = obj->section_end();
-        for (const object::SymbolRef &Sym : obj->symbols()) {
-            uint64_t Addr;
-            object::section_iterator Sect = ESection;
-            auto SectOrError = Sym.getSection();
-            assert(SectOrError);
-            Sect = SectOrError.get();
-            if (Sect == ESection) continue;
-            if (Sect != Section) continue;
-            auto AddrOrError = Sym.getAddress();
-            assert(AddrOrError);
-            Addr = AddrOrError.get();
-            if (Addr <= offset && Addr >= lo) {
-                // test for lower bound on symbol
-                lo = Addr;
-                setlo = true;
-            }
-            if (Addr > offset && Addr < hi) {
-                // test for upper bound on symbol
-                hi = Addr;
-            }
+    uint64_t SAddr = Section.getAddress();
+    uint64_t SSize = Section.getSize();
+    if (offset < SAddr || offset >= SAddr + SSize)
+        return 0;
+    // test for lower and upper symbol bounds relative to other symbols
+    hi = SAddr + SSize;
+    for (const object::SymbolRef &Sym : Section.getObject()->symbols()) {
+        if (!Section.containsSymbol(Sym))
+            continue;
+        uint64_t Addr = cantFail(Sym.getAddress());
+        if (Addr <= offset && Addr >= lo) {
+            // test for lower bound on symbol
+            lo = Addr;
+            setlo = true;
+        }
+        if (Addr > offset && Addr < hi) {
+            // test for upper bound on symbol
+            hi = Addr;
         }
     }
     if (setlo)
@@ -509,19 +496,19 @@ jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant,
     llvm::raw_string_ostream stream(code);
 
     // Find debug info (line numbers) to print alongside
+    object::SectionRef Section;
+    int64_t slide = 0;
     uint64_t symsize = 0;
-    int64_t slide = 0, section_slide = 0;
     llvm::DIContext *context = NULL;
-    const object::ObjectFile *object = NULL;
-    if (!jl_DI_for_fptr(fptr, &symsize, &slide, &section_slide, &object, &context)) {
-        if (!jl_dylib_DI_for_fptr(fptr, &object, &context, &slide, &section_slide, false,
-            NULL, NULL, NULL, NULL)) {
-                jl_printf(JL_STDERR, "WARNING: Unable to find function pointer\n");
-                return jl_pchar_to_string("", 0);
+    if (!jl_DI_for_fptr(fptr, &symsize, &slide, &Section, &context)) {
+        if (!jl_dylib_DI_for_fptr(fptr, &Section, &slide, &context,
+                    false, NULL, NULL, NULL, NULL)) {
+            jl_printf(JL_STDERR, "WARNING: Unable to find function pointer\n");
+            return jl_pchar_to_string("", 0);
         }
     }
-    if (symsize == 0 && object != NULL)
-        symsize = compute_obj_symsize(object, fptr + slide + section_slide);
+    if (symsize == 0 && Section.getObject())
+        symsize = compute_obj_symsize(Section, fptr + slide);
     if (symsize == 0) {
         jl_printf(JL_STDERR, "WARNING: Could not determine size of symbol\n");
         return jl_pchar_to_string("", 0);
@@ -535,7 +522,7 @@ jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant,
     int8_t gc_state = jl_gc_safe_enter(ptls);
     jl_dump_asm_internal(
             fptr, symsize, slide,
-            object, context,
+            Section, context,
             stream,
             asm_variant,
             debuginfo);
@@ -602,20 +589,16 @@ const char *SymbolTable::lookupLocalPC(size_t addr) {
 
 StringRef SymbolTable::getSymbolNameAt(uint64_t offset) const
 {
-    if (object == NULL) return StringRef();
+    if (object == NULL)
+        return StringRef();
     object::section_iterator ESection = object->section_end();
     for (const object::SymbolRef &Sym : object->symbols()) {
-        uint64_t Addr, SAddr;
-        object::section_iterator Sect = ESection;
-        auto SectOrError = Sym.getSection();
-        assert(SectOrError);
-        Sect = SectOrError.get();
-        if (Sect == ESection) continue;
-        SAddr = Sect->getAddress();
-        if (SAddr == 0) continue;
-        auto AddrOrError = Sym.getAddress();
-        assert(AddrOrError);
-        Addr = AddrOrError.get();
+        auto Sect = cantFail(Sym.getSection());
+        if (Sect == ESection)
+            continue;
+        if (Sect->getAddress() == 0)
+            continue;
+        uint64_t Addr = cantFail(Sym.getAddress());
         if (Addr == offset) {
             auto sNameOrError = Sym.getName();
             if (sNameOrError)
@@ -737,9 +720,10 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Si
 }
 } // namespace
 
+
 static void jl_dump_asm_internal(
         uintptr_t Fptr, size_t Fsize, int64_t slide,
-        const object::ObjectFile *object,
+        object::SectionRef Section,
         DIContext *di_ctx,
         raw_ostream &rstream,
         const char* asm_variant,
@@ -760,7 +744,12 @@ static void jl_dump_asm_internal(
     std::unique_ptr<MCStreamer> Streamer;
     SourceMgr SrcMgr;
 
-    std::unique_ptr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TheTriple.str()), TheTriple.str()));
+    MCTargetOptions Options;
+    std::unique_ptr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TheTriple.str()), TheTriple.str()
+#if JL_LLVM_VERSION >= 100000
+            , Options
+#endif
+        ));
     assert(MAI && "Unable to create target asm info!");
 
     std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TheTriple.str()));
@@ -791,31 +780,30 @@ static void jl_dump_asm_internal(
     MCInstPrinter *IP =
         TheTarget->createMCInstPrinter(TheTriple, OutputAsmVariant, *MAI, *MCII, *MRI);
     //IP->setPrintImmHex(true); // prefer hex or decimal immediates
-    MCCodeEmitter *CE = 0;
-    MCAsmBackend *MAB = 0;
+    std::unique_ptr<MCCodeEmitter> CE = 0;
+    std::unique_ptr<MCAsmBackend> MAB = 0;
     if (ShowEncoding) {
-        CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx);
-        MCTargetOptions Options;
-        MAB = TheTarget->createMCAsmBackend(*STI, *MRI, Options);
+        CE = std::unique_ptr<MCCodeEmitter>(TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx));
+        MAB = std::unique_ptr<MCAsmBackend>(TheTarget->createMCAsmBackend(*STI, *MRI, Options));
     }
 
     // createAsmStreamer expects a unique_ptr to a formatted stream, which means
     // it will destruct the stream when it is done. We cannot have this, so we
     // start out with a raw stream, and create formatted stream from it here.
-    // LLVM will desctruct the formatted stream, and we keep the raw stream.
-    auto ustream = llvm::make_unique<formatted_raw_ostream>(rstream);
+    // LLVM will destroy the formatted stream, and we keep the raw stream.
+    std::unique_ptr<formatted_raw_ostream> ustream(new formatted_raw_ostream(rstream));
     Streamer.reset(TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
                                                 /*useDwarfDirectory*/ true,
-                                                IP, CE, MAB, /*ShowInst*/ false));
+                                                IP, std::move(CE), std::move(MAB), /*ShowInst*/ false));
     Streamer->InitSections(true);
 
     // Make the MemoryObject wrapper
     ArrayRef<uint8_t> memoryObject(const_cast<uint8_t*>((const uint8_t*)Fptr),Fsize);
-    SymbolTable DisInfo(Ctx, object, slide, memoryObject);
+    SymbolTable DisInfo(Ctx, Section.getObject(), slide, memoryObject);
 
     DILineInfoTable di_lineinfo;
     if (di_ctx)
-        di_lineinfo = di_ctx->getLineInfoForAddressRange(Fptr+slide, Fsize);
+        di_lineinfo = di_ctx->getLineInfoForAddressRange(makeAddress(Section, Fptr + slide), Fsize);
     if (!di_lineinfo.empty()) {
         auto cur_addr = di_lineinfo[0].first;
         auto nlineinfo = di_lineinfo.size();
@@ -885,7 +873,7 @@ static void jl_dump_asm_internal(
                     std::string buf;
                     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::Default,
                                                  DILineInfoSpecifier::FunctionNameKind::ShortName);
-                    DIInliningInfo dbg = di_ctx->getInliningInfoForAddress(Index + Fptr + slide, infoSpec);
+                    DIInliningInfo dbg = di_ctx->getInliningInfoForAddress(makeAddress(Section, Index + Fptr + slide), infoSpec);
                     if (dbg.getNumberOfFrames()) {
                         dbgctx.emit_lineinfo(buf, dbg);
                     }
@@ -911,7 +899,9 @@ static void jl_dump_asm_internal(
             MCDisassembler::DecodeStatus S;
             FuncMCView view = memoryObject.slice(Index);
             S = DisAsm->getInstruction(Inst, insSize, view, 0,
+#if JL_LLVM_VERSION < 100000
                                       /*VStream*/ nulls(),
+#endif
                                       /*CStream*/ pass != 0 ? Streamer->GetCommentOS() : nulls());
             if (pass != 0 && Streamer->GetCommentOS().tell() > 0)
                 Streamer->GetCommentOS() << '\n';

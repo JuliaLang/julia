@@ -248,6 +248,8 @@ function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
     return cs, sn, r
 end
 
+givensAlgorithm(f, g) = givensAlgorithm(promote(float(f), float(g))...)
+
 """
 
     givens(f::T, g::T, i1::Integer, i2::Integer) where {T} -> (G::Givens, r::T)

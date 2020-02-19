@@ -93,6 +93,7 @@ end
 if opt_level > 0
     # Make sure `jl_string_ptr` is inlined
     @test !occursin(" call ", get_llvm(jl_string_ptr, Tuple{String}))
+    # Make sure `Core.sizeof` call is inlined
     s = "aaa"
     @test jl_string_ptr(s) == pointer_from_objref(s) + sizeof(Int)
     # String
@@ -105,6 +106,8 @@ if opt_level > 0
     test_loads_no_call(get_llvm(core_sizeof, Tuple{Array{Any}}), [Iptr])
     # Check that we load the elsize
     test_loads_no_call(get_llvm(core_sizeof, Tuple{Vector}), [Iptr, "i16"])
+    # Primitive Type size should be folded to a constant
+    test_loads_no_call(get_llvm(core_sizeof, Tuple{Ptr}), String[])
 
     test_jl_dump_compiles()
     test_jl_dump_compiles_toplevel_thunks()
@@ -183,7 +186,7 @@ end
 if opt_level > 0
     @test !occursin("%gcframe", get_llvm(pointer_not_safepoint, Tuple{}))
     compare_large_struct_ir = get_llvm(compare_large_struct, Tuple{typeof(create_ref_struct())})
-    @test occursin("call i32 @memcmp", compare_large_struct_ir)
+    @test occursin("call i32 @memcmp(", compare_large_struct_ir) || occursin("call i32 @bcmp(", compare_large_struct_ir)
     @test !occursin("%gcframe", compare_large_struct_ir)
 
     @test occursin("jl_gc_pool_alloc", get_llvm(MutableStruct, Tuple{}))
@@ -364,3 +367,62 @@ str = String(take!(io))
 @test occursin("alias.scope", str)
 @test occursin("aliasscope", str)
 @test occursin("noalias", str)
+
+# Issue #10208 - Unnecessary boxing for calling objectid
+struct FooDictHash{T}
+    x::T
+end
+
+function f_dict_hash_alloc()
+    d = Dict{FooDictHash{Int},Int}()
+    for i in 1:10000
+        d[FooDictHash(i)] = i+1
+    end
+    d
+end
+
+function g_dict_hash_alloc()
+    d = Dict{Int,Int}()
+    for i in 1:10000
+        d[i] = i+1
+    end
+    d
+end
+# Warm up
+f_dict_hash_alloc(); g_dict_hash_alloc();
+@test (@allocated f_dict_hash_alloc()) == (@allocated g_dict_hash_alloc())
+
+# returning an argument shouldn't alloc a new box
+@noinline f33829(x) = (global called33829 = true; x)
+g33829() = @allocated Base.inferencebarrier(f33829)(1.1,)
+g33829() # warm up
+@test (@allocated g33829()) == 0
+@test called33829 # make sure there was a global side effect so it's hard for this call to simply be removed
+let src = get_llvm(f33829, Tuple{Float64}, true, true)
+    @test occursin(r"call [^(]*double @", src)
+    @test !occursin(r"call [^(]*\%jl_value_t", src)
+end
+
+let io = IOBuffer()
+    # Test for the f(args...) = g(args...) generic codegen optimization
+    code_llvm(io, Base.vect, Tuple{Vararg{Union{Float64, Int64}}})
+    @test !occursin("__apply", String(take!(io)))
+end
+
+function f1_30093(r)
+    while r[]>0
+        try
+        finally
+        end
+    end
+end
+
+@test f1_30093(Ref(0)) == nothing
+
+# issue 33590
+function f33590(b, x)
+    y = b ? nothing : (x[1] + 1,)
+    return something(ifelse(b, x, y))
+end
+@test f33590(true, (3,)) == (3,)
+@test f33590(false, (3,)) == (4,)

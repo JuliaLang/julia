@@ -72,6 +72,21 @@ bimg  = randn(n,2)/2
                 @test_throws ErrorException bc1.Z
                 @test_throws ArgumentError uplo == :L ? bc1.U : bc1.L
             end
+            # test Base.iterate
+            ref_objs = (bc1.D, uplo == :L ? bc1.L : bc1.U, bc1.p)
+            for (bki, bkobj) in enumerate(bc1)
+                @test bkobj == ref_objs[bki]
+            end
+            if eltya <: BlasFloat
+                @test convert(LinearAlgebra.BunchKaufman{eltya}, bc1) === bc1
+                @test convert(LinearAlgebra.Factorization{eltya}, bc1) === bc1
+                if eltya <: BlasReal
+                    @test convert(LinearAlgebra.Factorization{Float16}, bc1) == convert(LinearAlgebra.BunchKaufman{Float16}, bc1)
+                elseif eltya <: BlasComplex
+                    @test convert(LinearAlgebra.Factorization{ComplexF16}, bc1) == convert(LinearAlgebra.BunchKaufman{ComplexF16}, bc1)
+                end
+            end
+            @test Base.propertynames(bc1) == (:p, :P, :L, :U, :D)
         end
 
         @testset "$eltyb argument B" for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
@@ -130,8 +145,30 @@ end
     @test F\v5 == F\v6[1:5]
 end
 
+@testset "issue #32080" begin
+    A = Symmetric([-5 -9 9; -9 4 1; 9 1 2])
+    B = bunchkaufman(A, true)
+    @test B.U * B.D * B.U' ≈ A[B.p, B.p]
+end
+
 @test_throws DomainError logdet(bunchkaufman([-1 -1; -1 1]))
 @test logabsdet(bunchkaufman([8 4; 4 2]; check = false))[1] == -Inf
-@test isa(bunchkaufman(Symmetric(ones(0,0))), BunchKaufman) # 0x0 matrix
+
+@testset "0x0 matrix" begin
+    for ul in (:U, :L)
+        B = bunchkaufman(Symmetric(ones(0, 0), ul))
+        @test isa(B, BunchKaufman)
+        @test B.D == Tridiagonal([], [], [])
+        @test B.P == ones(0, 0)
+        @test B.p == []
+        if ul == :U
+            @test B.U == UnitUpperTriangular(ones(0, 0))
+            @test_throws ArgumentError B.L
+        else
+            @test B.L == UnitLowerTriangular(ones(0, 0))
+            @test_throws ArgumentError B.U
+        end
+    end
+end
 
 end # module TestBunchKaufman

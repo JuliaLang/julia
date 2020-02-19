@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+abstract type AbstractRemoteRef end
+
 """
     client_refs
 
@@ -8,15 +10,15 @@ Tracks whether a particular `AbstractRemoteRef`
 
 The `client_refs` lock is also used to synchronize access to `.refs` and associated `clientset` state.
 """
-const client_refs = WeakKeyDict{Any, Nothing}() # used as a WeakKeySet
-
-abstract type AbstractRemoteRef end
+const client_refs = WeakKeyDict{AbstractRemoteRef, Nothing}() # used as a WeakKeySet
 
 """
-    Future(pid::Integer=myid())
+    Future(w::Int, rrid::RRID, v::Union{Some, Nothing}=nothing)
 
-Create a `Future` on process `pid`.
-The default `pid` is the current process.
+A `Future` is a placeholder for a single computation
+of unknown termination status and time.
+For multiple potential computations, see `RemoteChannel`.
+See `remoteref_id` for identifying an `AbstractRemoteRef`.
 """
 mutable struct Future <: AbstractRemoteRef
     where::Int
@@ -98,9 +100,15 @@ function finalize_ref(r::AbstractRemoteRef)
     nothing
 end
 
+"""
+    Future(pid::Integer=myid())
+
+Create a `Future` on process `pid`.
+The default `pid` is the current process.
+"""
+Future(pid::Integer=myid()) = Future(pid, RRID())
 Future(w::LocalProcess) = Future(w.id)
 Future(w::Worker) = Future(w.id)
-Future(pid::Integer=myid()) = Future(pid, RRID())
 
 RemoteChannel(pid::Integer=myid()) = RemoteChannel{Channel{Any}}(pid, RRID())
 
@@ -177,9 +185,12 @@ If the argument `Future` is owned by a different node, this call will block to w
 It is recommended to wait for `rr` in a separate task instead
 or to use a local [`Channel`](@ref) as a proxy:
 
-    c = Channel(1)
-    @async put!(c, remotecall_fetch(long_computation, p))
-    isready(c)  # will not block
+```julia
+p = 1
+f = Future(p)
+@async put!(f, remotecall_fetch(long_computation, p))
+isready(f)  # will not block
+```
 """
 function isready(rr::Future)
     rr.v === nothing || return true
@@ -232,7 +243,7 @@ function del_clients(pairs::Vector)
     end
 end
 
-any_gc_flag = Condition()
+const any_gc_flag = Condition()
 function start_gc_msgs_task()
     @async while true
         wait(any_gc_flag)
@@ -527,7 +538,7 @@ fetch_ref(rid, args...) = fetch(lookup_ref(rid).c, args...)
     fetch(c::RemoteChannel)
 
 Wait for and get a value from a [`RemoteChannel`](@ref). Exceptions raised are the
-same as for a `Future`. Does not remove the item fetched.
+same as for a [`Future`](@ref). Does not remove the item fetched.
 """
 fetch(r::RemoteChannel, args...) = call_on_owner(fetch_ref, r, args...)
 

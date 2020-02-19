@@ -19,14 +19,26 @@ using InteractiveUtils: subtypes
 helpmode(io::IO, line::AbstractString) = :($REPL.insert_hlines($io, $(REPL._helpmode(io, line))))
 helpmode(line::AbstractString) = helpmode(stdout, line)
 
+const extended_help_on = Ref{Any}(nothing)
+
 function _helpmode(io::IO, line::AbstractString)
     line = strip(line)
+    if startswith(line, '?')
+        line = line[2:end]
+        extended_help_on[] = line
+        brief = false
+    else
+        extended_help_on[] = nothing
+        brief = true
+    end
     x = Meta.parse(line, raise = false, depwarn = false)
     expr =
         if haskey(keywords, Symbol(line)) || isexpr(x, :error) || isexpr(x, :invalid)
             # Docs for keywords must be treated separately since trying to parse a single
             # keyword such as `function` would throw a parse error due to the missing `end`.
             Symbol(line)
+        elseif isexpr(x, (:using, :import))
+            x.head
         else
             # Retrieving docs for macros requires us to make a distinction between the text
             # `@macroname` and `@macroname()`. These both parse the same, but are used by
@@ -37,7 +49,7 @@ function _helpmode(io::IO, line::AbstractString)
         end
     # the following must call repl(io, expr) via the @repl macro
     # so that the resulting expressions are evaluated in the Base.Docs namespace
-    :($REPL.@repl $io $expr)
+    :($REPL.@repl $io $expr $brief)
 end
 _helpmode(line::AbstractString) = _helpmode(stdout, line)
 
@@ -72,6 +84,48 @@ function parsedoc(d::DocStr)
     end
     d.object
 end
+
+## Trimming long help ("# Extended help")
+
+struct Message  # For direct messages to the terminal
+    msg    # AbstractString
+    fmt    # keywords to `printstyled`
+end
+Message(msg) = Message(msg, ())
+
+function Markdown.term(io::IO, msg::Message, columns)
+    printstyled(io, msg.msg; msg.fmt...)
+end
+
+function trimdocs(md::Markdown.MD, brief::Bool)
+    brief || return md
+    md, trimmed = _trimdocs(md, brief)
+    if trimmed
+        line = extended_help_on[]
+        line = isa(line, AbstractString) ? line : ""
+        push!(md.content, Message("Extended help is available with `??$line`", (color=Base.info_color(), bold=true)))
+    end
+    return md
+end
+
+function _trimdocs(md::Markdown.MD, brief::Bool)
+    content, trimmed = [], false
+    for c in md.content
+        if isa(c, Markdown.Header{1}) && isa(c.text, AbstractArray) &&
+                                         lowercase(c.text[1]) ∈ ("extended help",
+                                                                 "extended documentation",
+                                                                 "extended docs")
+            trimmed = true
+            break
+        end
+        c, trm = _trimdocs(c, brief)
+        trimmed |= trm
+        push!(content, c)
+    end
+    return Markdown.MD(content, md.meta), trimmed
+end
+
+_trimdocs(md, brief::Bool) = md, false
 
 """
     Docs.doc(binding, sig)
@@ -133,6 +187,8 @@ doc(object, sig...)              = doc(object, Tuple{sig...})
 function lookup_doc(ex)
     if haskey(keywords, ex)
         parsedoc(keywords[ex])
+    elseif Meta.isexpr(ex, :incomplete)
+        return :($(Markdown.md"No documentation found."))
     elseif isa(ex, Union{Expr, Symbol})
         binding = esc(bindingexpr(namify(ex)))
         if isexpr(ex, :call) || isexpr(ex, :macrocall)
@@ -271,10 +327,10 @@ function repl_latex(io::IO, s::String)
 end
 repl_latex(s::String) = repl_latex(stdout, s)
 
-macro repl(ex) repl(ex) end
-macro repl(io, ex) repl(io, ex) end
+macro repl(ex, brief=false) repl(ex; brief=brief) end
+macro repl(io, ex, brief) repl(io, ex; brief=brief) end
 
-function repl(io::IO, s::Symbol)
+function repl(io::IO, s::Symbol; brief::Bool=true)
     str = string(s)
     quote
         repl_latex($io, $str)
@@ -282,18 +338,18 @@ function repl(io::IO, s::Symbol)
         $(if !isdefined(Main, s) && !haskey(keywords, s)
                :(repl_corrections($io, $str))
           end)
-        $(_repl(s))
+        $(_repl(s, brief))
     end
 end
 isregex(x) = isexpr(x, :macrocall, 3) && x.args[1] === Symbol("@r_str") && !isempty(x.args[3])
-repl(io::IO, ex::Expr) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex)
-repl(io::IO, str::AbstractString) = :(apropos($io, $str))
-repl(io::IO, other) = esc(:(@doc $other))
+repl(io::IO, ex::Expr; brief::Bool=true) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex, brief)
+repl(io::IO, str::AbstractString; brief::Bool=true) = :(apropos($io, $str))
+repl(io::IO, other; brief::Bool=true) = esc(:(@doc $other))
 #repl(io::IO, other) = lookup_doc(other) # TODO
 
-repl(x) = repl(stdout, x)
+repl(x; brief=true) = repl(stdout, x; brief=brief)
 
-function _repl(x)
+function _repl(x, brief=true)
     if isexpr(x, :call)
         # determine the types of the values
         kwargs = nothing
@@ -317,7 +373,7 @@ function _repl(x)
                     kwarg
                 end
             elseif isexpr(arg, :kw)
-                if kwargs == nothing
+                if kwargs === nothing
                     kwargs = Any[]
                 end
                 lhs = arg.args[1]
@@ -339,7 +395,7 @@ function _repl(x)
                 push!(pargs, arg)
             end
         end
-        if kwargs == nothing
+        if kwargs === nothing
             x.args = Any[x.args[1], pargs...]
         else
             x.args = Any[x.args[1], Expr(:parameters, kwargs...), pargs...]
@@ -347,7 +403,7 @@ function _repl(x)
     end
     #docs = lookup_doc(x) # TODO
     docs = esc(:(@doc $x))
-    if isfield(x)
+    docs = if isfield(x)
         quote
             if isa($(esc(x.args[1])), DataType)
                 fielddoc($(esc(x.args[1])), $(esc(x.args[2])))
@@ -358,6 +414,7 @@ function _repl(x)
     else
         docs
     end
+    :(REPL.trimdocs($docs, $brief))
 end
 
 """

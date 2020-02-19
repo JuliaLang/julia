@@ -340,10 +340,13 @@ filter!(f, s::BitSet) = unsafe_filter!(f, s)
 @inline in(n::Int, s::BitSet) = _bits_getindex(s.bits, n, s.offset)
 @inline in(n::Integer, s::BitSet) = _is_convertible_Int(n) ? in(Int(n), s) : false
 
-function iterate(s::BitSet, idx=0)
-   idx = _bits_findnext(s.bits, idx)
-   idx == -1 && return nothing
-   (idx + intoffset(s), idx+1)
+function iterate(s::BitSet, (word, idx) = (CHK0, 0))
+    while word == 0
+        idx == length(s.bits) && return nothing
+        idx += 1
+        word = @inbounds s.bits[idx]
+    end
+    trailing_zeros(word) + (idx - 1 + s.offset) << 6, (_blsr(word), idx)
 end
 
 @noinline _throw_bitset_notempty_error() =

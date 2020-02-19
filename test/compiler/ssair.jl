@@ -87,3 +87,79 @@ for compile in ("min", "yes")
         error("Interpreter test failed, cmd : $cmd")
     end
 end
+
+# Issue #27104
+# Test whether meta nodes are still present after code optimization.
+let
+    @noinline f(x, y) = x + y
+    @test any(code_typed(f)[1][1].code) do ex
+        Meta.isexpr(ex, :meta)
+    end
+end
+
+# PR #32145
+# Make sure IncrementalCompact can handle blocks with predecessors of index 0
+# while removing blocks with no predecessors.
+let cfg = CFG(BasicBlock[
+    make_bb([]        , [2, 4]),
+    make_bb([1]       , [4, 5]),
+    make_bb([]        , [4]   ), # should be removed
+    make_bb([0, 1, 2] , [5]   ), # 0 predecessor should be preserved
+    make_bb([2, 3]    , []    ),
+], Int[])
+    code = Compiler.IRCode(
+        [], [], Int32[], UInt8[], cfg, LineInfoNode[], [], [], [])
+    compact = Compiler.IncrementalCompact(code, true)
+    @test length(compact.result_bbs) == 4 && 0 in compact.result_bbs[3].preds
+end
+
+# Issue #32579 - Optimizer bug involving type constraints
+function f32579(x::Int, b::Bool)
+    if b
+        x = nothing
+    end
+    if isa(x, Int)
+        y = x
+    else
+        y = x
+    end
+    if isa(y, Nothing)
+        z = y
+    else
+        z = y
+    end
+    return z === nothing
+end
+@test f32579(0, true) === true
+@test f32579(0, false) === false
+
+# Test for bug caused by renaming blocks improperly, related to PR #32145
+using Base.Meta
+let ci = (Meta.@lower 1 + 1).args[1]
+    ci.code = [
+        # block 1
+        Core.Compiler.GotoIfNot(Expr(:boundscheck), 6),
+        # block 2
+        Expr(:call, GlobalRef(Base, :size), Core.Compiler.Argument(3)),
+        Core.Compiler.ReturnNode(),
+        # block 3
+        Core.PhiNode(),
+        Core.Compiler.ReturnNode(),
+        # block 4
+        Expr(:call,
+             GlobalRef(Main, :something),
+             GlobalRef(Main, :somethingelse)),
+        Core.Compiler.GotoIfNot(Core.SSAValue(6), 9),
+        # block 5
+        Core.Compiler.ReturnNode(Core.SSAValue(6)),
+        # block 6
+        Core.Compiler.ReturnNode(Core.SSAValue(6))
+    ]
+    nstmts = length(ci.code)
+    ci.ssavaluetypes = nstmts
+    ci.codelocs = fill(Int32(1), nstmts)
+    ci.ssaflags = fill(Int32(0), nstmts)
+    ir = Core.Compiler.inflate_ir(ci)
+    ir = Core.Compiler.compact!(ir, true)
+    @test Core.Compiler.verify_ir(ir) == nothing
+end

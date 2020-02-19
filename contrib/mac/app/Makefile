@@ -17,7 +17,7 @@ APP_NAME:=Julia-$(JULIA_VERSION_MAJOR_MINOR).app
 VOL_NAME:=Julia-$(JULIA_VERSION_OPT_COMMIT)
 
 APP_ID:=org.julialang.launcherapp
-APP_COPYRIGHT:=© 2016 The Julia Project
+APP_COPYRIGHT:=© $(shell date '+%Y') The Julia Project
 
 
 all: clean $(DMG_NAME)
@@ -49,15 +49,46 @@ dmg/$(APP_NAME): startup.applescript julia.icns
 	-mkdir -p $@/Contents/Resources/julia
 	make -C $(JULIAHOME) binary-dist
 	tar zxf $(JULIAHOME)/$(JULIA_BINARYDIST_FILENAME).tar.gz -C $@/Contents/Resources/julia --strip-components 1
-	-codesign -s "AFB379C0B4CBD9DB9A762797FC2AB5460A2B0DBE" --deep $@
+	if [ -n "$$MACOS_CODESIGN_IDENTITY" ]; then \
+	    echo "Codesigning with identity $$MACOS_CODESIGN_IDENTITY"; \
+		codesign -s "$$MACOS_CODESIGN_IDENTITY" --option=runtime --entitlements Entitlements.plist -v --deep $@; \
+	else \
+		true; \
+	fi
 
 ROOTFILES := $(shell ls -ld dmg/*.app *.dmg 2> /dev/null | awk '{print $$3}')
 clean:
 ifneq ($(filter root,$(ROOTFILES)),)
 	@echo "We have to use sudo here to clean out folders owned by root.  You may be asked for your password"
-	sudo rm -rf dmg *.dmg
+	sudo rm -rf dmg *.dmg notarize-*.xml
 else
 	rm -rf dmg *.dmg
 endif
 
-.PHONY: clean all
+notarize-upload-$(DMG_NAME).xml: $(DMG_NAME)
+	@# Upload the `.dmg` for notarization
+	xcrun altool --notarize-app --primary-bundle-id org.julialang.launcherapp --username "$$APPLEID" --password "$$APPLEID_PASSWORD" -itc_provider A427R7F42H --file "$(DMG_NAME)" --output-format xml > "$@"
+	@# Sleep for a few seconds so that we don't immediately error out when we request the UUID from Apple
+	@sleep 5
+
+
+notarize-check: notarize-upload-$(DMG_NAME).xml
+	@# We wait in a while loop for notarization to complete
+	./notarize_check.sh "$<"
+
+# This is the top-level notarization target.  Note that this is still a somewhat manual
+# process; things can go wrong, and so if it fails, you may need to inspect the `.xml`
+# files to see what went wrong, but in general you can just run `make notarize` and it
+# should upload, notarize, staple, and re-package the .dmg for you.
+# Note that for this to work, you need to have exported `APPLEID`, `APPLEID_PASSWORD`
+# and `MACOS_CODESIGN_IDENTITY` to have signed the `.app` in the first place.
+notarize: notarize-check
+	@# Delete old .dmg file
+	rm -f $(DMG_NAME)
+	@# Staple the .app
+	xcrun stapler staple dmg/$(APP_NAME)
+	@# re-build the .dmg
+	$(MAKE) $(DMG_NAME)
+
+
+.PHONY: clean all notarize-upload notarize-check

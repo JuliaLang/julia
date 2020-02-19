@@ -1,6 +1,52 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Schur decomposition
+"""
+    Schur <: Factorization
+
+Matrix factorization type of the Schur factorization of a matrix `A`. This is the
+return type of [`schur(_)`](@ref), the corresponding matrix factorization function.
+
+If `F::Schur` is the factorization object, the (quasi) triangular Schur factor can
+be obtained via either `F.Schur` or `F.T` and the orthogonal/unitary Schur vectors
+via `F.vectors` or `F.Z` such that `A = F.vectors * F.Schur * F.vectors'`. The
+eigenvalues of `A` can be obtained with `F.values`.
+
+Iterating the decomposition produces the components `F.T`, `F.Z`, and `F.values`.
+
+# Examples
+```jldoctest
+julia> A = [5. 7.; -2. -4.]
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
+
+julia> F = schur(A)
+Schur{Float64,Array{Float64,2}}
+T factor:
+2×2 Array{Float64,2}:
+ 3.0   9.0
+ 0.0  -2.0
+Z factor:
+2×2 Array{Float64,2}:
+  0.961524  0.274721
+ -0.274721  0.961524
+eigenvalues:
+2-element Array{Float64,1}:
+  3.0
+ -2.0
+
+julia> F.vectors * F.Schur * F.vectors'
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
+
+julia> t, z, vals = F; # destructuring via iteration
+
+julia> t == F.T && z == F.Z && vals == F.values
+true
+```
+"""
 struct Schur{Ty,S<:AbstractMatrix} <: Factorization{Ty}
     T::S
     Z::S
@@ -103,9 +149,9 @@ schur(A::LowerTriangular) = schur(copyto!(similar(parent(A)), A))
 schur(A::Tridiagonal) = schur(Matrix(A))
 
 function getproperty(F::Schur, d::Symbol)
-    if d == :Schur
+    if d === :Schur
         return getfield(F, :T)
-    elseif d == :vectors
+    elseif d === :vectors
         return getfield(F, :Z)
     else
         getfield(F, d)
@@ -155,6 +201,23 @@ included or both excluded via `select`.
 ordschur(schur::Schur, select::Union{Vector{Bool},BitVector}) =
     Schur(_ordschur(schur.T, schur.Z, select)...)
 
+"""
+    GeneralizedSchur <: Factorization
+
+Matrix factorization type of the generalized Schur factorization of two matrices
+`A` and `B`. This is the return type of [`schur(_, _)`](@ref), the corresponding
+matrix factorization function.
+
+If `F::GeneralizedSchur` is the factorization object, the (quasi) triangular Schur
+factors can be obtained via `F.S` and `F.T`, the left unitary/orthogonal Schur
+vectors via `F.left` or `F.Q`, and the right unitary/orthogonal Schur vectors can
+be obtained with `F.right` or `F.Z` such that `A=F.left*F.S*F.right'` and
+`B=F.left*F.T*F.right'`. The generalized eigenvalues of `A` and `B` can be obtained
+with `F.α./F.β`.
+
+Iterating the decomposition produces the components `F.S`, `F.T`, `F.Q`, `F.Z`,
+`F.α`, and `F.β`.
+"""
 struct GeneralizedSchur{Ty,M<:AbstractMatrix} <: Factorization{Ty}
     S::M
     T::M
@@ -242,15 +305,15 @@ ordschur(gschur::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) =
     GeneralizedSchur(_ordschur(gschur.S, gschur.T, gschur.Q, gschur.Z, select)...)
 
 function getproperty(F::GeneralizedSchur, d::Symbol)
-    if d == :values
+    if d === :values
         return getfield(F, :α) ./ getfield(F, :β)
-    elseif d == :alpha
+    elseif d === :alpha
         return getfield(F, :α)
-    elseif d == :beta
+    elseif d === :beta
         return getfield(F, :β)
-    elseif d == :left
+    elseif d === :left
         return getfield(F, :Q)
-    elseif d == :right
+    elseif d === :right
         return getfield(F, :Z)
     else
         getfield(F, d)

@@ -73,7 +73,9 @@ function quoted(@nospecialize(x))
 end
 
 function is_inlineable_constant(@nospecialize(x))
-    x isa Type && return true
+    if x isa Type || x isa Symbol
+        return true
+    end
     return isbits(x) && Core.sizeof(x) <= MAX_INLINE_CONST_SIZE
 end
 
@@ -81,11 +83,12 @@ end
 # MethodInstance/CodeInfo #
 ###########################
 
-function invoke_api(li::MethodInstance)
+function invoke_api(li::CodeInstance)
     return ccall(:jl_invoke_api, Cint, (Any,), li)
 end
 
 function get_staged(li::MethodInstance)
+    may_invoke_generator(li) || return nothing
     try
         # user code might throw errors – ignore them
         return ccall(:jl_code_for_staged, Any, (Any,), li)::CodeInfo
@@ -104,7 +107,7 @@ function retrieve_code_info(linfo::MethodInstance)
     if c === nothing && isdefined(m, :source)
         src = m.source
         if isa(src, Array{UInt8,1})
-            c = ccall(:jl_uncompress_ast, Any, (Any, Any), m, src)
+            c = ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, src)
         else
             c = copy(src::CodeInfo)
         end
@@ -115,28 +118,28 @@ function retrieve_code_info(linfo::MethodInstance)
     end
 end
 
-function code_for_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, world::UInt, preexisting::Bool=false)
-    if world < min_world(method) || world > max_world(method)
-        return nothing
-    end
-    if isdefined(method, :generator) && !may_invoke_generator(method, atypes, sparams)
-        return nothing
-    end
+function inf_for_methodinstance(mi::MethodInstance, min_world::UInt, max_world::UInt=min_world)
+    return ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt), mi, min_world, max_world)::Union{Nothing, CodeInstance}
+end
+
+
+# get a handle to the unique specialization object representing a particular instantiation of a call
+function specialize_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, preexisting::Bool=false)
     if preexisting
         if method.specializations !== nothing
             # check cached specializations
             # for an existing result stored there
-            return ccall(:jl_specializations_lookup, Any, (Any, Any, UInt), method, atypes, world)
+            return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)
         end
         return nothing
     end
-    return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any, UInt), method, atypes, sparams, world)
+    return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atypes, sparams)
 end
 
 # This function is used for computing alternate limit heuristics
-function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector, world::UInt)
-    if isdefined(method, :generator) && method.generator.expand_early
-        method_instance = code_for_method(method, sig, sparams, world, false)
+function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector)
+    if isdefined(method, :generator) && method.generator.expand_early && may_invoke_generator(method, sig, sparams)
+        method_instance = specialize_method(method, sig, sparams, false)
         if isa(method_instance, MethodInstance)
             cinfo = get_staged(method_instance)
             if isa(cinfo, CodeInfo)
@@ -224,8 +227,22 @@ end
 # options #
 ###########
 
+is_root_module(m::Module) = false
+
 inlining_enabled() = (JLOptions().can_inline == 1)
-coverage_enabled() = (JLOptions().code_coverage != 0)
+function coverage_enabled(m::Module)
+    ccall(:jl_generating_output, Cint, ()) == 0 || return false # don't alter caches
+    cov = JLOptions().code_coverage
+    if cov == 1
+        m = moduleroot(m)
+        m === Core && return false
+        isdefined(Main, :Base) && m === Main.Base && return false
+        return true
+    elseif cov == 2
+        return true
+    end
+    return false
+end
 function inbounds_option()
     opt_check_bounds = JLOptions().check_bounds
     opt_check_bounds == 0 && return :default

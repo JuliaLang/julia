@@ -143,6 +143,10 @@
         @test "\x01" == unescape_string("\\x01")
         @test "\x0f" == unescape_string("\\x0f")
         @test "\x0F" == unescape_string("\\x0F")
+
+        str= "aaa \\g \\n"
+        @test "aaa \\g \n" == unescape_string(str, ['g'])
+        @test "aaa \\g \\n" == unescape_string(str, ['g', 'n'])
     end
 end
 @testset "join()" begin

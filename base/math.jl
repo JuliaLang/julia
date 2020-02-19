@@ -6,14 +6,14 @@ export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot,
        sech, csch, coth, asech, acsch, acoth,
        sinpi, cospi, sinc, cosc,
-       cosd, cotd, cscd, secd, sind, tand,
+       cosd, cotd, cscd, secd, sind, tand, sincosd,
        acosd, acotd, acscd, asecd, asind, atand,
        rad2deg, deg2rad,
        log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
        cbrt, sqrt, significand,
        hypot, max, min, minmax, ldexp, frexp,
        clamp, clamp!, modf, ^, mod2pi, rem2pi,
-       @evalpoly
+       @evalpoly, evalpoly
 
 import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
@@ -21,7 +21,9 @@ import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              exp10, expm1, log1p
 
 using .Base: sign_mask, exponent_mask, exponent_one,
-            exponent_half, uinttype, significand_mask
+            exponent_half, uinttype, significand_mask,
+            significand_bits, exponent_bits, exponent_bias,
+            exponent_max, exponent_raw_max
 
 using Core.Intrinsics: sqrt_llvm
 
@@ -35,16 +37,6 @@ end
     throw(DomainError(x, string("Exponentiation yielding a complex result requires a ",
                                 "complex argument.\nReplace x^y with (x+0im)^y, ",
                                 "Complex(x)^y, or similar.")))
-end
-
-for T in (Float16, Float32, Float64)
-    @eval significand_bits(::Type{$T}) = $(trailing_ones(significand_mask(T)))
-    @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - significand_bits(T) - 1)
-    @eval exponent_bias(::Type{$T}) = $(Int(exponent_one(T) >> significand_bits(T)))
-    # maximum float exponent
-    @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T))
-    # maximum float exponent without bias
-    @eval exponent_raw_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)))
 end
 
 # non-type specific math functions
@@ -77,6 +69,22 @@ clamp(x::X, lo::L, hi::H) where {X,L,H} =
                   convert(promote_type(X,L,H), x)))
 
 """
+    clamp(x, T)::T
+
+Clamp `x` between `typemin(T)` and `typemax(T)` and convert the result to type `T`.
+
+# Examples
+```jldoctest
+julia> clamp(200, Int8)
+127
+julia> clamp(-200, Int8)
+-128
+```
+"""
+clamp(x, ::Type{T}) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
+
+
+"""
     clamp!(array::AbstractArray, lo, hi)
 
 Restrict values in `array` to the specified range, in-place.
@@ -89,17 +97,109 @@ function clamp!(x::AbstractArray, lo, hi)
     x
 end
 
+
+"""
+    evalpoly(x, p)
+
+Evaluate the polynomial ``\\sum_k p[k] x^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
+that is, the coefficients are given in ascending order by power of `x`.
+Loops are unrolled at compile time if the number of coefficients is statically known, i.e.
+when `p` is a `Tuple`.
+This function generates efficient code using Horner's method if `x` is real, or using
+a Goertzel-like [^DK62] algorithm if `x` is complex.
+
+[^DK62]: Donald Knuth, Art of Computer Programming, Volume 2: Seminumerical Algorithms, Sec. 4.6.4.
+
+!!! compat "Julia 1.4"
+    This function requires Julia 1.4 or later.
+
+# Example
+```jldoctest
+julia> evalpoly(2, (1, 2, 3))
+17
+```
+"""
+function evalpoly(x, p::Tuple)
+    if @generated
+        N = length(p.parameters)
+        ex = :(p[end])
+        for i in N-1:-1:1
+            ex = :(muladd(x, $ex, p[$i]))
+        end
+        ex
+    else
+        _evalpoly(x, p)
+    end
+end
+
+evalpoly(x, p::AbstractVector) = _evalpoly(x, p)
+
+function _evalpoly(x, p)
+    N = length(p)
+    ex = p[end]
+    for i in N-1:-1:1
+        ex = muladd(x, ex, p[i])
+    end
+    ex
+end
+
+function evalpoly(z::Complex, p::Tuple)
+    if @generated
+        N = length(p.parameters)
+        a = :(p[end])
+        b = :(p[end-1])
+        as = []
+        for i in N-2:-1:1
+            ai = Symbol("a", i)
+            push!(as, :($ai = $a))
+            a = :(muladd(r, $ai, $b))
+            b = :(p[$i] - s * $ai)
+        end
+        ai = :a0
+        push!(as, :($ai = $a))
+        C = Expr(:block,
+                 :(x = real(z)),
+                 :(y = imag(z)),
+                 :(r = x + x),
+                 :(s = muladd(x, x, y*y)),
+                 as...,
+                 :(muladd($ai, z, $b)))
+    else
+        _evalpoly(z, p)
+    end
+end
+evalpoly(z::Complex, p::Tuple{<:Any}) = p[1]
+
+
+evalpoly(z::Complex, p::AbstractVector) = _evalpoly(z, p)
+
+function _evalpoly(z::Complex, p)
+    length(p) == 1 && return p[1]
+    N = length(p)
+    a = p[end]
+    b = p[end-1]
+
+    x = real(z)
+    y = imag(z)
+    r = 2x
+    s = muladd(x, x, y*y)
+    for i in N-2:-1:1
+        ai = a
+        a = muladd(r, ai, b)
+        b = p[i] - s * ai
+    end
+    ai = a
+    muladd(ai, z, b)
+end
+
 """
     @horner(x, p...)
-    Evaluate p[1] + x * (p[2] + x * (....)), i.e. a polynomial via Horner's rule
+
+Evaluate `p[1] + x * (p[2] + x * (....))`, i.e. a polynomial via Horner's rule.
 """
 macro horner(x, p...)
-    ex = esc(p[end])
-    for i = length(p)-1:-1:1
-        ex = :(muladd(t, $ex, $(esc(p[i]))))
-    end
-    ex = quote local r = $ex end # structure this to add exactly one line number node for the macro
-    return Expr(:block, :(local t = $(esc(x))), ex, :r)
+     xesc, pesc = esc(x), esc.(p)
+    :(invoke(evalpoly, Tuple{Any, Tuple}, $xesc, ($(pesc...),)))
 end
 
 # Evaluate p[1] + z*p[2] + z^2*p[3] + ... + z^(n-1)*p[n].  This uses
@@ -128,28 +228,8 @@ julia> @evalpoly(2, 1, 1, 1)
 ```
 """
 macro evalpoly(z, p...)
-    a = :($(esc(p[end])))
-    b = :($(esc(p[end-1])))
-    as = []
-    for i = length(p)-2:-1:1
-        ai = Symbol("a", i)
-        push!(as, :($ai = $a))
-        a = :(muladd(r, $ai, $b))
-        b = :($(esc(p[i])) - s * $ai) # see issue #15985 on fused mul-subtract
-    end
-    ai = :a0
-    push!(as, :($ai = $a))
-    C = Expr(:block,
-             :(x = real(tt)),
-             :(y = imag(tt)),
-             :(r = x + x),
-             :(s = muladd(x, x, y*y)),
-             as...,
-             :(muladd($ai, tt, $b)))
-    R = Expr(:macrocall, Symbol("@horner"), (), :tt, map(esc, p)...)
-    :(let tt = $(esc(z))
-          isa(tt, Complex) ? $C : $R
-      end)
+    zesc, pesc = esc(z), esc.(p)
+    :(evalpoly($zesc, ($(pesc...),)))
 end
 
 """
@@ -521,11 +601,17 @@ sqrt(x::Real) = sqrt(float(x))
 """
     hypot(x, y)
 
-Compute the hypotenuse ``\\sqrt{x^2+y^2}`` avoiding overflow and underflow.
+Compute the hypotenuse ``\\sqrt{|x|^2+|y|^2}`` avoiding overflow and underflow.
+
+This code is an implementation of the algorithm described in:
+An Improved Algorithm for `hypot(a,b)`
+by Carlos F. Borges
+The article is available online at ArXiv at the link
+  https://arxiv.org/abs/1904.09481
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
-julia> a = 10^10;
+julia> a = Int64(10)^10;
 
 julia> hypot(a, a)
 1.4142135623730951e10
@@ -535,38 +621,76 @@ ERROR: DomainError with -2.914184810805068e18:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
 [...]
+
+julia> hypot(3, 4im)
+5.0
 ```
 """
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
-function hypot(x::T, y::T) where T<:Number
-    ax = abs(x)
-    ay = abs(y)
-    if ax < ay
-        ax, ay = ay, ax
-    end
-    if iszero(ax)
-        r = ay / oneunit(ax)
-    else
-        r = ay / ax
+hypot(x::Complex, y::Complex) = hypot(abs(x), abs(y))
+hypot(x::T, y::T) where {T<:Real} = hypot(float(x), float(y))
+hypot(x::T, y::T) where {T<:Number} = (z = y/x; abs(x) * sqrt(one(z) + z*z))
+function hypot(x::T, y::T) where T<:AbstractFloat
+    #Return Inf if either or both imputs is Inf (Compliance with IEEE754)
+    if isinf(x) || isinf(y)
+        return T(Inf)
     end
 
-    rr = ax * sqrt(1 + r * r)
-
-    # Use type of rr to make sure that return type is the same for
-    # all branches
-    if isnan(r)
-        isinf(ax) && return oftype(rr, Inf)
-        isinf(ay) && return oftype(rr, Inf)
-        return oftype(rr, r)
-    else
-        return rr
+    # Order the operands
+    ax,ay = abs(x), abs(y)
+    if ay > ax
+        ax,ay = ay,ax
     end
+
+    # Widely varying operands
+    if ay <= ax*sqrt(eps(T)/2)  #Note: This also gets ay == 0
+        return ax
+    end
+
+    # Operands do not vary widely
+    scale = eps(sqrt(floatmin(T)))  #Rescaling constant
+    if ax > sqrt(floatmax(T)/2)
+        ax = ax*scale
+        ay = ay*scale
+        scale = inv(scale)
+    elseif ay < sqrt(floatmin(T))
+        ax = ax/scale
+        ay = ay/scale
+    else
+        scale = one(scale)
+    end
+    h = sqrt(muladd(ax,ax,ay*ay))
+    # This branch is correctly rounded but requires a native hardware fma.
+    if Base.Math.FMA_NATIVE
+        hsquared = h*h
+        axsquared = ax*ax
+        h -= (fma(-ay,ay,hsquared-axsquared) + fma(h,h,-hsquared) - fma(ax,ax,-axsquared))/(2*h)
+    # This branch is within one ulp of correctly rounded.
+    else
+        if h <= 2*ay
+            delta = h-ay
+            h -= muladd(delta,delta-2*(ax-ay),ax*(2*delta - ax))/(2*h)
+        else
+            delta = h-ax
+            h -= muladd(delta,delta,muladd(ay,(4*delta-ay),2*delta*(ax-2*ay)))/(2*h)
+        end
+    end
+    return h*scale
 end
 
 """
     hypot(x...)
 
-Compute the hypotenuse ``\\sqrt{\\sum x_i^2}`` avoiding overflow and underflow.
+Compute the hypotenuse ``\\sqrt{\\sum |x_i|^2}`` avoiding overflow and underflow.
+
+# Examples
+```jldoctest
+julia> hypot(-5.7)
+5.7
+
+julia> hypot(3, 4im, 12.0)
+13.0
+```
 """
 hypot(x::Number...) = sqrt(sum(abs2(y) for y in x))
 
@@ -711,35 +835,6 @@ function frexp(x::T) where T<:IEEEFloat
     xu = (xu & ~exponent_mask(T)) | exponent_half(T)
     return reinterpret(T, xu), k
 end
-
-"""
-    rem(x, y, r::RoundingMode)
-
-Compute the remainder of `x` after integer division by `y`, with the quotient rounded
-according to the rounding mode `r`. In other words, the quantity
-
-    x - y*round(x/y,r)
-
-without any intermediate rounding.
-
-- if `r == RoundNearest`, then the result is exact, and in the interval
-  ``[-|y|/2, |y|/2]``. See also [`RoundNearest`](@ref).
-
-- if `r == RoundToZero` (default), then the result is exact, and in the interval
-  ``[0, |y|)`` if `x` is positive, or ``(-|y|, 0]`` otherwise. See also [`RoundToZero`](@ref).
-
-- if `r == RoundDown`, then the result is in the interval ``[0, y)`` if `y` is positive, or
-  ``(y, 0]`` otherwise. The result may not be exact if `x` and `y` have different signs, and
-  `abs(x) < abs(y)`. See also[`RoundDown`](@ref).
-
-- if `r == RoundUp`, then the result is in the interval `(-y,0]` if `y` is positive, or
-  `[0,-y)` otherwise. The result may not be exact if `x` and `y` have the same sign, and
-  `abs(x) < abs(y)`. See also [`RoundUp`](@ref).
-
-"""
-rem(x, y, ::RoundingMode{:ToZero}) = rem(x,y)
-rem(x, y, ::RoundingMode{:Down}) = mod(x,y)
-rem(x, y, ::RoundingMode{:Up}) = mod(x,-y)
 
 rem(x::Float64, y::Float64, ::RoundingMode{:Nearest}) =
     ccall((:remainder, libm),Float64,(Float64,Float64),x,y)
@@ -979,6 +1074,12 @@ This function computes a floating point representation of the modulus after divi
 numerically exact `2π`, and is therefore not exactly the same as `mod(x,2π)`, which would
 compute the modulus of `x` relative to division by the floating-point number `2π`.
 
+!!! note
+    Depending on the format of the input value, the closest representable value to 2π may
+    be less than 2π. For example, the expression `mod2pi(2π)` will not return `0`, because
+    the intermediate value of `2*π` is a `Float64` and `2*Float64(π) < 2*big(π)`. See
+    [`rem2pi`](@ref) for more refined control of this behavior.
+
 # Examples
 ```jldoctest
 julia> mod2pi(9*pi/4)
@@ -1071,5 +1172,6 @@ for f in (:(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
           :(log2), :(exponent), :(sqrt))
     @eval $(f)(::Missing) = missing
 end
+clamp(::Missing, lo, hi) = missing
 
 end # module

@@ -28,11 +28,10 @@ end
     @test convert(Tuple{Int, Int, Float64}, (1, 2, 3)) === (1, 2, 3.0)
 
     @test convert(Tuple{Float64, Int, UInt8}, (1.0, 2, 0x3)) === (1.0, 2, 0x3)
-    @test convert(NTuple, (1.0, 2, 0x3)) === (1.0, 2, 0x3)
+    @test convert(Tuple{Vararg{Real}}, (1.0, 2, 0x3)) === (1.0, 2, 0x3)
+    @test convert(Tuple{Vararg{Integer}}, (1.0, 2, 0x3)) === (1, 2, 0x3)
     @test convert(Tuple{Vararg{Int}}, (1.0, 2, 0x3)) === (1, 2, 3)
     @test convert(Tuple{Int, Vararg{Int}}, (1.0, 2, 0x3)) === (1, 2, 3)
-    @test convert(Tuple{Vararg{T}} where T<:Integer, (1.0, 2, 0x3)) === (1, 2, 0x3)
-    @test convert(Tuple{T, Vararg{T}} where T<:Integer, (1.0, 2, 0x3)) === (1, 2, 0x3)
     @test convert(NTuple{3, Int}, (1.0, 2, 0x3)) === (1, 2, 3)
     @test convert(Tuple{Int, Int, Float64}, (1.0, 2, 0x3)) === (1, 2, 3.0)
 
@@ -53,6 +52,19 @@ end
     @test_throws MethodError convert(Tuple{Int, Int, Int}, (1, 2))
     # issue #26589
     @test_throws MethodError convert(NTuple{4}, (1.0,2.0,3.0,4.0,5.0))
+    # issue #31824
+    # there is no generic way to convert an arbitrary tuple to a homogeneous tuple
+    @test_throws MethodError(convert, (NTuple, (1, 1.0)), Base.get_world_counter()) convert(NTuple, (1, 1.0))
+    let T = Tuple{Vararg{T}} where T<:Integer, v = (1.0, 2, 0x3)
+        @test_throws MethodError(convert, (T, (1.0, 2, 0x3)), Base.get_world_counter()) convert(T, v)
+    end
+    let T = Tuple{T, Vararg{T}} where T<:Integer, v = (1.0, 2, 0x3)
+        @test_throws MethodError(convert, (Tuple{Vararg{T}} where T<:Integer, (2, 0x3)), Base.get_world_counter()) convert(T, v)
+    end
+    function f31824(input...)
+        b::NTuple = input
+    end
+    @test f31824(1,2,3) === (1,2,3)
 
     # PR #15516
     @test Tuple{Char,Char}("za") === ('z','a')
@@ -89,6 +101,13 @@ end
 
     # issue #28915
     @test convert(Union{Tuple{}, Tuple{Int}}, (1,)) === (1,)
+
+    @testset "one-element containers" begin
+        r = Ref(3)
+        @test (3,) === @inferred Tuple(r)
+        z = Array{Float64,0}(undef); z[] = 3.0
+        @test (3.0,) === @inferred Tuple(z)
+    end
 end
 
 @testset "size" begin
@@ -245,6 +264,16 @@ end
     @test mapfoldl(abs, =>, (), init=-10) == -10
     @test mapfoldl(abs, Pair{Any,Any}, (-30:-1...,)) == mapfoldl(abs, Pair{Any,Any}, [-30:-1...,])
     @test_throws ArgumentError mapfoldl(abs, =>, ())
+end
+
+@testset "filter" begin
+    @test filter(isodd, (1,2,3)) == (1, 3)
+    @test filter(isequal(2), (true, 2.0, 3)) === (2.0,)
+    @test filter(i -> true, ()) == ()
+    @test filter(identity, (true,)) === (true,)
+    longtuple = ntuple(identity, 20)
+    @test filter(iseven, longtuple) == ntuple(i->2i, 10)
+    @test filter(x -> x<2, (longtuple..., 1.5)) === (1, 1.5)
 end
 
 @testset "comparison and hash" begin
@@ -448,3 +477,6 @@ end
     @test map(p->getproperty(ttest, p), propertynames(ttest)) == ttest
     @test_throws ErrorException setproperty!(ttest, 1, :d)
 end
+
+# tuple_type_tail on non-normalized vararg tuple
+@test Base.tuple_type_tail(Tuple{Vararg{T, 3}} where T<:Real) == Tuple{Vararg{T, 2}} where T<:Real

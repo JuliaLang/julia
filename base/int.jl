@@ -137,9 +137,6 @@ abs(x::Signed) = flipsign(x,x)
 
 ~(n::Integer) = -n-1
 
-unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
-unsigned(x::Bool) = convert(Unsigned, x)
-
 """
     unsigned(x) -> Unsigned
 
@@ -158,8 +155,8 @@ julia> signed(unsigned(-2))
 -2
 ```
 """
-unsigned(x) = convert(Unsigned, x)
-signed(x::Unsigned) = reinterpret(typeof(convert(Signed, zero(x))), x)
+unsigned(x) = x % typeof(convert(Unsigned, zero(x)))
+unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 
 """
     signed(x)
@@ -167,7 +164,8 @@ signed(x::Unsigned) = reinterpret(typeof(convert(Signed, zero(x))), x)
 Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as
 signed without checking for overflow.
 """
-signed(x) = convert(Signed, x)
+signed(x) = x % typeof(convert(Signed, zero(x)))
+signed(x::BitUnsigned) = reinterpret(typeof(convert(Signed, zero(x))), x)
 
 div(x::BitSigned, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)), y)), x)
 div(x::Unsigned, y::BitSigned) = unsigned(flipsign(signed(div(x, unsigned(abs(y)))), y))
@@ -175,8 +173,15 @@ div(x::Unsigned, y::BitSigned) = unsigned(flipsign(signed(div(x, unsigned(abs(y)
 rem(x::BitSigned, y::Unsigned) = flipsign(signed(rem(unsigned(abs(x)), y)), x)
 rem(x::Unsigned, y::BitSigned) = rem(x, unsigned(abs(y)))
 
-fld(x::Signed, y::Unsigned) = div(x, y) - (signbit(x) & (rem(x, y) != 0))
-fld(x::Unsigned, y::Signed) = div(x, y) - (signbit(y) & (rem(x, y) != 0))
+function divrem(x::BitSigned, y::Unsigned)
+    q, r = divrem(unsigned(abs(x)), y)
+    flipsign(signed(q), x), flipsign(signed(r), x)
+end
+
+function divrem(x::Unsigned, y::BitSigned)
+    q, r = divrem(x, unsigned(abs(y)))
+    unsigned(flipsign(signed(q), y)), r
+end
 
 
 """
@@ -220,33 +225,12 @@ mod(x::BitSigned, y::Unsigned) = rem(y + unsigned(rem(x, y)), y)
 mod(x::Unsigned, y::Signed) = rem(y + signed(rem(x, y)), y)
 mod(x::T, y::T) where {T<:Unsigned} = rem(x, y)
 
-cld(x::Signed, y::Unsigned) = div(x, y) + (!signbit(x) & (rem(x, y) != 0))
-cld(x::Unsigned, y::Signed) = div(x, y) + (!signbit(y) & (rem(x, y) != 0))
-
 # Don't promote integers for div/rem/mod since there is no danger of overflow,
 # while there is a substantial performance penalty to 64-bit promotion.
 div(x::T, y::T) where {T<:BitSigned64} = checked_sdiv_int(x, y)
 rem(x::T, y::T) where {T<:BitSigned64} = checked_srem_int(x, y)
 div(x::T, y::T) where {T<:BitUnsigned64} = checked_udiv_int(x, y)
 rem(x::T, y::T) where {T<:BitUnsigned64} = checked_urem_int(x, y)
-
-
-# fld(x,y) == div(x,y) - ((x>=0) != (y>=0) && rem(x,y) != 0 ? 1 : 0)
-fld(x::T, y::T) where {T<:Unsigned} = div(x,y)
-function fld(x::T, y::T) where T<:Integer
-    d = div(x, y)
-    return d - (signbit(x ⊻ y) & (d * y != x))
-end
-
-# cld(x,y) = div(x,y) + ((x>0) == (y>0) && rem(x,y) != 0 ? 1 : 0)
-function cld(x::T, y::T) where T<:Unsigned
-    d = div(x, y)
-    return d + (d * y != x)
-end
-function cld(x::T, y::T) where T<:Integer
-    d = div(x, y)
-    return d + (((x > 0) == (y > 0)) & (d * y != x))
-end
 
 ## integer bitwise operations ##
 
@@ -270,7 +254,7 @@ false
 (~)(x::BitInteger)             = not_int(x)
 
 """
-    &(x, y)
+    x & y
 
 Bitwise and. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 returning [`missing`](@ref) if one operand is `missing` and the other is `true`.
@@ -293,7 +277,7 @@ false
 (&)(x::T, y::T) where {T<:BitInteger} = and_int(x, y)
 
 """
-    |(x, y)
+    x | y
 
 Bitwise or. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 returning [`missing`](@ref) if one operand is `missing` and the other is `false`.
@@ -320,6 +304,8 @@ xor(x::T, y::T) where {T<:BitInteger} = xor_int(x, y)
     bswap(n)
 
 Reverse the byte order of `n`.
+
+(See also [`ntoh`](@ref) and [`hton`](@ref) to convert between the current native byte order and big-endian order.)
 
 # Examples
 ```jldoctest
@@ -351,7 +337,7 @@ julia> count_ones(7)
 3
 ```
 """
-count_ones(x::BitInteger) = Int(ctpop_int(x))
+count_ones(x::BitInteger) = ctpop_int(x) % Int
 
 """
     leading_zeros(x::Integer) -> Integer
@@ -364,7 +350,7 @@ julia> leading_zeros(Int32(1))
 31
 ```
 """
-leading_zeros(x::BitInteger) = Int(ctlz_int(x))
+leading_zeros(x::BitInteger) = ctlz_int(x) % Int
 
 """
     trailing_zeros(x::Integer) -> Integer
@@ -377,7 +363,7 @@ julia> trailing_zeros(2)
 1
 ```
 """
-trailing_zeros(x::BitInteger) = Int(cttz_int(x))
+trailing_zeros(x::BitInteger) = cttz_int(x) % Int
 
 """
     count_zeros(x::Integer) -> Integer

@@ -23,6 +23,12 @@ struct B20086{T,N} <: A20086{T,N} end
 @test subtypes(A20086{T,3} where T) == [B20086{T,3} where T]
 @test subtypes(A20086{Int,3}) == [B20086{Int,3}]
 
+# supertypes
+@test supertypes(B20086) == (B20086, A20086, Any)
+@test supertypes(B20086{Int}) == (B20086{Int}, A20086{Int}, Any)
+@test supertypes(B20086{Int,2}) == (B20086{Int,2}, A20086{Int,2}, Any)
+@test supertypes(Any) == (Any,)
+
 # code_warntype
 module WarnType
 using Test, Random, InteractiveUtils
@@ -251,13 +257,33 @@ end
 @which get_A18434()(1, y=2)
 @test counter18434 == 2
 
-let _true = Ref(true), f, g, h
-    @noinline f() = ccall((:time, "error_library_doesnt_exist\0"), Cvoid, ()) # some expression that throws an error in codegen
+@eval function f_invalid(x)
+    Base.@_noinline_meta
+    $(Expr(:loopinfo, 1.0f0)) # some expression that throws an error in codegen
+    x
+end
+
+let _true = Ref(true), g, h
     @noinline g() = _true[] ? 0 : h()
-    @noinline h() = (g(); f())
+    @noinline h() = (g(); f_invalid(_true[]))
     @test_throws ErrorException @code_native h() # due to a failure to compile f()
     @test g() == 0
 end
+
+let _true = Ref(true), f, g, h
+    @noinline f() = ccall((:time, "error_library_doesnt_exist\0"), Cvoid, ()) # should throw error during runtime
+    @noinline g() = _true[] ? 0 : h()
+    @noinline h() = (g(); f())
+    @test g() == 0
+    @test_throws ErrorException h()
+end
+
+# Issue #33163
+A33163(x; y) = x + y
+B33163(x) = x
+@test (@code_typed A33163(1, y=2))[1].inferred
+@test !(@code_typed optimize=false A33163(1, y=2))[1].inferred
+@test !(@code_typed optimize=false B33163(1))[1].inferred
 
 module ReflectionTest
 using Test, Random, InteractiveUtils
@@ -346,7 +372,7 @@ using InteractiveUtils: editor
 # Issue #13032
 withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
     # Make sure editor doesn't error when no ENV editor is set.
-    @test isa(editor(), Array)
+    @test isa(editor(), Cmd)
 
     # Invalid editor
     ENV["JULIA_EDITOR"] = ""
@@ -357,35 +383,72 @@ withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
 
     # Editor on the path.
     ENV["JULIA_EDITOR"] = "vim"
-    @test editor() == ["vim"]
+    @test editor() == `vim`
 
     # Absolute path to editor.
     ENV["JULIA_EDITOR"] = "/usr/bin/vim"
-    @test editor() == ["/usr/bin/vim"]
+    @test editor() == `/usr/bin/vim`
 
     # Editor on the path using arguments.
     ENV["JULIA_EDITOR"] = "subl -w"
-    @test editor() == ["subl", "-w"]
+    @test editor() == `subl -w`
 
     # Absolute path to editor with spaces.
     ENV["JULIA_EDITOR"] = "/Applications/Sublime\\ Text.app/Contents/SharedSupport/bin/subl"
-    @test editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl"]
+    @test editor() == `'/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl'`
 
     # Paths with spaces and arguments (#13032).
     ENV["JULIA_EDITOR"] = "/Applications/Sublime\\ Text.app/Contents/SharedSupport/bin/subl -w"
-    @test editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
+    @test editor() == `'/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl' -w`
 
     ENV["JULIA_EDITOR"] = "'/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl' -w"
-    @test editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
+    @test editor() == `'/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl' -w`
 
     ENV["JULIA_EDITOR"] = "\"/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl\" -w"
-    @test editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
+    @test editor() == `'/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl' -w`
 end
 
 # clipboard functionality
+if Sys.isapple()
+    let str = "abc\0def"
+        clipboard(str)
+        @test clipboard() == str
+    end
+end
 if Sys.iswindows() || Sys.isapple()
     for str in ("Hello, world.", "∀ x ∃ y", "")
         clipboard(str)
         @test clipboard() == str
     end
+end
+@static if Sys.iswindows()
+    @test_broken false # CI has trouble with this test
+    ## concurrent access error
+    #hDesktop = ccall((:GetDesktopWindow, "user32"), stdcall, Ptr{Cvoid}, ())
+    #ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), hDesktop) == 0 && Base.windowserror("OpenClipboard")
+    #try
+    #    @test_throws Base.SystemError("OpenClipboard", 0, Base.WindowsErrorInfo(0x00000005, nothing)) clipboard() # ACCESS_DENIED
+    #finally
+    #    ccall((:CloseClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror("CloseClipboard")
+    #end
+    # empty clipboard failure
+    ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), C_NULL) == 0 && Base.windowserror("OpenClipboard")
+    try
+        ccall((:EmptyClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror("EmptyClipboard")
+    finally
+        ccall((:CloseClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror("CloseClipboard")
+    end
+    @test clipboard() == ""
+    # nul error (unsupported data)
+    @test_throws ArgumentError("Windows clipboard strings cannot contain NUL character") clipboard("abc\0")
+end
+
+# buildbot path updating
+file, ln = functionloc(versioninfo, Tuple{})
+@test isfile(file)
+
+@testset "Issue #34434" begin
+    io = IOBuffer()
+    code_native(io, eltype, Tuple{Int})
+    @test occursin("eltype", String(take!(io)))
 end

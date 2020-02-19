@@ -5,6 +5,50 @@ using Random, LinearAlgebra
 # For curmod_*
 include("testenv.jl")
 
+
+@testset "SystemError" begin
+    err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, "SystemError: reason: ")
+
+    err = try; systemerror("reason", Cint(0), extrainfo="addend"); false; catch ex; ex; end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, "SystemError (with addend): reason: ")
+
+    err = try
+            Libc.errno(0xc0ffee)
+            systemerror("reason", true)
+            false
+        catch ex
+            ex
+        end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, "SystemError: reason: ")
+
+    err = try; Base.windowserror("reason", UInt32(0)); false; catch ex; ex; end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, Sys.iswindows() ? "SystemError: reason: " :
+        "SystemError (with Base.WindowsErrorInfo(0x00000000, nothing)): reason: ")
+
+    err = try; Base.windowserror("reason", UInt32(0); extrainfo="addend"); false; catch ex; ex; end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, Sys.iswindows() ? "SystemError (with addend): reason: " :
+        "SystemError (with Base.WindowsErrorInfo(0x00000000, \"addend\")): reason: ")
+
+    @static if Sys.iswindows()
+        err = try
+                ccall(:SetLastError, stdcall, Cvoid, (UInt32,), 0x00000000)
+                Base.windowserror("reason", true)
+                false
+            catch ex
+                ex
+            end::SystemError
+        errs = sprint(Base.showerror, err)
+        @test startswith(errs, "SystemError: reason: ")
+    end
+end
+
+
 cfile = " at $(@__FILE__):"
 c1line = @__LINE__() + 1
 method_c1(x::Float64, s::AbstractString...) = true
@@ -42,7 +86,7 @@ method_c2(x::Int32, y::Int32, z::Int32) = true
 method_c2(x::T, y::T, z::T) where {T<:Real} = true
 
 Base.show_method_candidates(buf, Base.MethodError(method_c2,(1., 1., 2)))
-@test String(take!(buf)) ==  "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(!Matched::Int32, ::Any...)$cfile$(c2line+1)\n  method_c2(::T<:Real, ::T<:Real, !Matched::T<:Real) where T<:Real$cfile$(c2line+5)\n  ..."
+@test String(take!(buf)) ==  "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(!Matched::Int32, ::Any...)$cfile$(c2line+1)\n  method_c2(::T, ::T, !Matched::T) where T<:Real$cfile$(c2line+5)\n  ..."
 
 c3line = @__LINE__() + 1
 method_c3(x::Float64, y::Float64) = true
@@ -156,16 +200,15 @@ end
 macro except_strbt(expr, err_type)
     errmsg = "expected failure, but no exception thrown for $expr"
     return quote
-        let err = nothing, bt = nothing
+        let err = nothing
             try
                 $(esc(expr))
             catch err
-                bt = catch_backtrace()
             end
             err === nothing && error($errmsg)
             @test typeof(err) === $(esc(err_type))
             buf = IOBuffer()
-            showerror(buf, err, bt)
+            showerror(buf, err, catch_backtrace())
             String(take!(buf))
         end
     end
@@ -207,7 +250,7 @@ import ..@except_str
 global +
 +() = nothing
 err_str = @except_str 1 + 2 MethodError
-@test occursin("import Base.+", err_str)
+@test occursin("import Base.:+", err_str)
 
 err_str = @except_str Float64[](1) MethodError
 @test !occursin("import Base.Array", err_str)
@@ -226,6 +269,11 @@ let
 end
 
 struct TypeWithIntParam{T <: Integer} end
+struct Bounded  # not an AbstractArray
+    bound::Int
+end
+Base.getindex(b::Bounded, i) = checkindex(Bool, 1:b.bound, i) || throw(BoundsError(b, i))
+Base.summary(io::IO, b::Bounded) = print(io, "$(b.bound)-size Bounded")
 let undefvar
     err_str = @except_strbt sqrt(-1) DomainError
     @test occursin("Try sqrt(Complex(x)).", err_str)
@@ -246,6 +294,9 @@ let undefvar
     @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [-2, 1]"
     err_str = @except_str [5, 4, 3][1:5] BoundsError
     @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [1:5]"
+
+    err_str = @except_str Bounded(2)[3] BoundsError
+    @test err_str == "BoundsError: attempt to access 2-size Bounded\n  at index [3]"
 
     err_str = @except_str 0::Bool TypeError
     @test err_str == "TypeError: non-boolean ($Int) used in boolean context"
@@ -323,6 +374,17 @@ let err_str,
 end
 @test repr("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 0 methods)"
 @test occursin(r"^@doc \(macro with \d+ method[s]?\)$", repr("text/plain", getfield(Base, Symbol("@doc"))))
+
+# Issue 34636
+let err_str
+    err_str = @except_str 1 + rand(5) MethodError
+    @test occursin("MethodError: no method matching +(::$Int, ::Array{Float64,1})", err_str)
+    @test occursin("For element-wise addition, use broadcasting with dot syntax: scalar .+ array", err_str)
+    err_str = @except_str rand(5) - 1//3 MethodError
+    @test occursin("MethodError: no method matching -(::Array{Float64,1}, ::Rational{$Int})", err_str)
+    @test occursin("For element-wise subtraction, use broadcasting with dot syntax: array .- scalar", err_str)
+end
+
 
 method_defs_lineno = @__LINE__() + 1
 String() = throw(ErrorException("1"))
@@ -545,6 +607,26 @@ end
     end
 end
 
+@testset "Line number correction" begin
+    getbt() = backtrace()
+    bt = getbt()
+    Base.update_stackframes_callback[] = function(list)
+        modify((sf, n)) = sf.func == :getbt ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
+        map!(modify, list, list)
+    end
+    io = IOBuffer()
+    Base.show_backtrace(io, bt)
+    outputc = split(String(take!(io)), '\n')
+    Base.update_stackframes_callback[] = identity
+    Base.show_backtrace(io, bt)
+    output0 = split(String(take!(io)), '\n')
+    function getline(output)
+        idx = findfirst(str->occursin("getbt", str), output)
+        return parse(Int, match(r":(\d*)$", output[idx]).captures[1])
+    end
+    @test getline(outputc) == getline(output0) + 2
+end
+
 # issue #30633
 @test_throws ArgumentError("invalid index: \"foo\" of type String") [1]["foo"]
 @test_throws ArgumentError("invalid index: nothing of type Nothing") [1][nothing]
@@ -556,11 +638,34 @@ let buf = IOBuffer()
     @test length(take!(buf)) !== 0
 end
 
-@testset "Nested errors" begin
-    # LoadError and InitError used to print the nested exception.
-    # This is now dealt with via the exception stack so these print very simply:
-    @test sprint(Base.showerror, LoadError("somefile.jl", 10, ErrorException("retained for backward compat"))) ==
-          "Error while loading expression starting at somefile.jl:10"
-    @test sprint(Base.showerror, InitError(:some_module, ErrorException("retained for backward compat"))) ==
-          "InitError during initialization of module some_module"
+# pr #32814
+let t1 = @async(error(1)),
+    t2 = @async(wait(t1))
+    local e
+    try
+        wait(t2)
+    catch e_
+        e = e_
+    end
+    buf = IOBuffer()
+    showerror(buf, e)
+    s = String(take!(buf))
+    @test length(findall("Stacktrace:", s)) == 2
+    @test occursin("[1] error(::Int", s)
+end
+
+module TestMethodShadow
+    struct Foo; x; end
+    +(a::Foo, b::Foo) = Foo(a.x + b.x)
+    ==(a::Foo, b::Foo) = Foo(a.x == b.x)
+    div(a::Foo, b::Foo) = Foo(div(a.x, b.x))
+end
+for (func,str) in ((TestMethodShadow.:+,":+"), (TestMethodShadow.:(==),":(==)"), (TestMethodShadow.:div,"div"))
+    ex = try
+        foo = TestMethodShadow.Foo(3)
+        func(foo,foo)
+    catch e
+       e
+    end::MethodError
+    @test occursin("You may have intended to import Base.$str", sprint(Base.showerror, ex))
 end

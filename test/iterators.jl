@@ -3,6 +3,8 @@
 using Base.Iterators
 using Random
 
+@test Base.IteratorSize(Any) isa Base.SizeUnknown
+
 # zip and filter iterators
 # issue #4718
 @test collect(Iterators.filter(x->x[1], zip([true, false, true, false],"abcd"))) == [(true,'a'),(true,'c')]
@@ -149,6 +151,29 @@ for xs in Any["abc", [1, 2, 3]]
     @test take(drop(take(xs, 3), 1), 1) === take(drop(xs, 1), 1)
 end
 
+# takewhile
+# --------
+@testset begin
+    @test collect(takewhile(<(4),1:10)) == [1,2,3]
+    @test collect(takewhile(<(4),Iterators.countfrom(1))) == [1,2,3]
+    @test collect(takewhile(<(4),5:10)) == []
+    @test collect(takewhile(_->true,5:10)) == 5:10
+    @test collect(takewhile(isodd,[1,1,2,3])) == [1,1]
+    @test collect(takewhile(<(2), takewhile(<(3), [1,1,2,3]))) == [1,1]
+end
+
+# dropwhile
+# --------
+@testset begin
+    @test collect(dropwhile(<(4), 1:10)) == 4:10
+    @test collect(dropwhile(<(4), 1:10)) isa Vector{Int}
+    @test isempty(dropwhile(<(4), []))
+    @test collect(dropwhile(_->false,1:3)) == 1:3
+    @test isempty(dropwhile(_->true, 1:3))
+    @test collect(dropwhile(isodd,[1,1,2,3])) == [2,3]
+    @test collect(dropwhile(iseven,dropwhile(isodd,[1,1,2,3]))) == [3]
+end
+
 # cycle
 # -----
 let i = 0
@@ -182,7 +207,6 @@ end
 @test Base.IteratorEltype(repeated(0))    == Base.HasEltype()
 @test Base.IteratorEltype(repeated(0, 5)) == Base.HasEltype()
 @test Base.IteratorSize(zip(repeated(0), repeated(0))) == Base.IsInfinite()
-
 
 # product
 # -------
@@ -411,6 +435,84 @@ for n in [5,6]
           [(1,1),(2,2),(3,3),(4,4),(5,5)]
 end
 
+function iterate_length(iter)
+    n=0
+    for i in iter
+        n += 1
+    end
+    return n
+end
+function simd_iterate_length(iter)
+    n=0
+    @simd for i in iter
+        n += 1
+    end
+    return n
+end
+function simd_trip_count(iter)
+    return sum(Base.SimdLoop.simd_inner_length(iter, i) for i in Base.SimdLoop.simd_outer_range(iter))
+end
+function iterate_elements(iter)
+    vals = Vector{eltype(iter)}(undef, length(iter))
+    i = 1
+    for v in iter
+        @inbounds vals[i] = v
+        i += 1
+    end
+    return vals
+end
+function simd_iterate_elements(iter)
+    vals = Vector{eltype(iter)}(undef, length(iter))
+    i = 1
+    @simd for v in iter
+        @inbounds vals[i] = v
+        i += 1
+    end
+    return vals
+end
+function index_elements(iter)
+    vals = Vector{eltype(iter)}(undef, length(iter))
+    i = 1
+    for j in eachindex(iter)
+        @inbounds vals[i] = iter[j]
+        i += 1
+    end
+    return vals
+end
+
+@testset "CartesianPartition optimizations" for dims in ((1,), (64,), (101,),
+                                                         (1,1), (8,8), (11, 13),
+                                                         (1,1,1), (8, 4, 2), (11, 13, 17)),
+                                                part in (1, 7, 8, 11, 63, 64, 65, 142, 143, 144)
+    P = partition(CartesianIndices(dims), part)
+    for I in P
+        @test length(I) == iterate_length(I) == simd_iterate_length(I) == simd_trip_count(I)
+        @test collect(I) == iterate_elements(I) == simd_iterate_elements(I) == index_elements(I)
+    end
+    @test all(Base.splat(==), zip(Iterators.flatten(map(collect, P)), CartesianIndices(dims)))
+end
+@testset "empty/invalid partitions" begin
+    @test_throws ArgumentError partition(1:10, 0)
+    @test_throws ArgumentError partition(1:10, -1)
+    @test_throws ArgumentError partition(1:0, 0)
+    @test_throws ArgumentError partition(1:0, -1)
+    @test isempty(partition(1:0, 1))
+    @test isempty(partition(CartesianIndices((0,1)), 1))
+end
+@testset "exact partition eltypes" for a in (Base.OneTo(24), 1:24, 1:1:24, LinRange(1,10,24), .1:.1:2.4, Vector(1:24),
+                                             CartesianIndices((4, 6)), Dict((1:24) .=> (1:24)))
+    P = partition(a, 2)
+    @test eltype(P) === typeof(first(P))
+    @test Iterators.IteratorEltype(P) == Iterators.HasEltype()
+    if a isa AbstractArray
+        P = partition(vec(a), 2)
+        @test eltype(P) === typeof(first(P))
+        P = partition(reshape(a, 6, 4), 2)
+        @test eltype(P) === typeof(first(P))
+        P = partition(reshape(a, 2, 3, 4), 2)
+        @test eltype(P) === typeof(first(P))
+    end
+end
 
 @test join(map(x->string(x...), partition("Hello World!", 5)), "|") ==
       "Hello| Worl|d!"
@@ -646,4 +748,53 @@ end
     @test length(collect(Iterators.take(d,3))) == 3
     @test length(collect(d)) == 2
     @test length(collect(d)) == 0
+end
+
+@testset "only" begin
+    @test only([3]) === 3
+    @test_throws ArgumentError only([])
+    @test_throws ArgumentError only([3, 2])
+
+    @test @inferred(only((3,))) === 3
+    @test_throws ArgumentError only(())
+    @test_throws ArgumentError only((3, 2))
+
+    @test only(Dict(1=>3)) === (1=>3)
+    @test_throws ArgumentError only(Dict{Int,Int}())
+    @test_throws ArgumentError only(Dict(1=>3, 2=>2))
+
+    @test only(Set([3])) === 3
+    @test_throws ArgumentError only(Set(Int[]))
+    @test_throws ArgumentError only(Set([3,2]))
+
+    @test @inferred(only((;a=1))) === 1
+    @test_throws ArgumentError only(NamedTuple())
+    @test_throws ArgumentError only((a=3, b=2.0))
+
+    @test @inferred(only(1)) === 1
+    @test @inferred(only('a')) === 'a'
+    @test @inferred(only(Ref([1, 2]))) == [1, 2]
+    @test_throws ArgumentError only(Pair(10, 20))
+
+    @test only(1 for ii in 1:1) === 1
+    @test only(1 for ii in 1:10 if ii < 2) === 1
+    @test_throws ArgumentError only(1 for ii in 1:10)
+    @test_throws ArgumentError only(1 for ii in 1:10 if ii > 2)
+    @test_throws ArgumentError only(1 for ii in 1:10 if ii > 200)
+end
+
+@testset "flatten empty tuple" begin
+    @test isempty(collect(Iterators.flatten(())))
+end
+
+@testset "Iterators.accumulate" begin
+    @test collect(Iterators.accumulate(+, [])) == []
+    @test collect(Iterators.accumulate(+, [1])) == [1]
+    @test collect(Iterators.accumulate(+, [1,2])) == [1,3]
+    @test collect(Iterators.accumulate(+, [1,2,3])) == [1,3,6]
+    @test collect(Iterators.accumulate(=>, [:a,:b,:c])) == [:a, :a => :b, (:a => :b) => :c]
+    @test length(Iterators.accumulate(+, [10,20,30])) == 3
+    @test size(Iterators.accumulate(max, rand(2,3))) == (2,3)
+    @test Base.IteratorSize(Iterators.accumulate(max, rand(2,3))) === Base.IteratorSize(rand(2,3))
+    @test Base.IteratorEltype(Iterators.accumulate(*, ())) isa Base.EltypeUnknown
 end

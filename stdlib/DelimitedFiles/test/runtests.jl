@@ -288,6 +288,12 @@ let data = "\"1\",\"灣\"\"灣灣灣灣\",\"3\""
     @test readdlm(IOBuffer(data), ',') == Any[1 "灣\"灣灣灣灣" 3]
 end
 
+# reading from a byte array (#16731)
+let data = Vector{UInt8}("1,2,3\n4,5,6"), origdata = copy(data)
+    @test readdlm(data, ',') == [1 2 3; 4 5 6]
+    @test data == origdata
+end
+
 # issue #11484: useful error message for invalid readdlm filepath arguments
 @test_throws ArgumentError readdlm(tempdir())
 

@@ -1,7 +1,8 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "llvm-version.h"
+
 #define DEBUG_TYPE "lower_simd_loop"
-#undef DEBUG
 
 // This file defines a LLVM pass that:
 // 1. Set's loop information in form of metadata
@@ -13,7 +14,6 @@
 // The pass hinges on a call to a marker function that has metadata attached to it.
 // To construct the pass call `createLowerSimdLoopPass`.
 
-#include "llvm-version.h"
 #include "support/dtypes.h"
 
 #include <llvm-c/Core.h>
@@ -31,6 +31,7 @@
 #include "julia_assert.h"
 
 namespace llvm {
+
 
 /// This pass should run after reduction variables have been converted to phi nodes,
 /// otherwise floating-point reductions might not be recognized as such and
@@ -94,14 +95,14 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
             Instruction *U = cast<Instruction>(UI);
             if (L->contains(U)) {
                 if (J) {
-                    DEBUG(dbgs() << "LSL: not a reduction var because op has two internal uses: " << *I << "\n");
+                    LLVM_DEBUG(dbgs() << "LSL: not a reduction var because op has two internal uses: " << *I << "\n");
                     return;
                 }
                 J = U;
             }
         }
         if (!J) {
-            DEBUG(dbgs() << "LSL: chain prematurely terminated at " << *I << "\n");
+            LLVM_DEBUG(dbgs() << "LSL: chain prematurely terminated at " << *I << "\n");
             return;
         }
         if (J == Phi) {
@@ -111,7 +112,7 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
         if (opcode) {
             // Check that arithmetic op matches prior arithmetic ops in the chain.
             if (getReduceOpcode(J, I) != opcode) {
-                DEBUG(dbgs() << "LSL: chain broke at " << *J << " because of wrong opcode\n");
+                LLVM_DEBUG(dbgs() << "LSL: chain broke at " << *J << " because of wrong opcode\n");
                 return;
             }
         }
@@ -119,14 +120,14 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
             // First arithmetic op in the chain.
             opcode = getReduceOpcode(J, I);
             if (!opcode) {
-                DEBUG(dbgs() << "LSL: first arithmetic op in chain is uninteresting" << *J << "\n");
+                LLVM_DEBUG(dbgs() << "LSL: first arithmetic op in chain is uninteresting" << *J << "\n");
                 return;
             }
         }
         chain.push_back(J);
     }
     for (chainVector::const_iterator K=chain.begin(); K!=chain.end(); ++K) {
-        DEBUG(dbgs() << "LSL: marking " << **K << "\n");
+        LLVM_DEBUG(dbgs() << "LSL: marking " << **K << "\n");
         (*K)->setFast(true);
     }
 }
@@ -156,13 +157,13 @@ bool LowerSIMDLoop::markLoopInfo(Module &M, Function *marker)
         if (!L)
             continue;
 
-        DEBUG(dbgs() << "LSL: loopinfo marker found\n");
+        LLVM_DEBUG(dbgs() << "LSL: loopinfo marker found\n");
         bool simd = false;
         bool ivdep = false;
         SmallVector<Metadata *, 8> MDs;
 
         BasicBlock *Lh = L->getHeader();
-        DEBUG(dbgs() << "LSL: loop header: " << *Lh << "\n");
+        LLVM_DEBUG(dbgs() << "LSL: loop header: " << *Lh << "\n");
 
         // Reserve first location for self reference to the LoopID metadata node.
         TempMDTuple TempNode = MDNode::getTemporary(Lh->getContext(), None);
@@ -172,12 +173,12 @@ bool LowerSIMDLoop::markLoopInfo(Module &M, Function *marker)
         if (I->hasMetadataOtherThanDebugLoc()) {
             MDNode *JLMD= I->getMetadata("julia.loopinfo");
             if (JLMD) {
-                DEBUG(dbgs() << "LSL: has julia.loopinfo metadata with " << JLMD->getNumOperands() <<" operands\n");
+                LLVM_DEBUG(dbgs() << "LSL: has julia.loopinfo metadata with " << JLMD->getNumOperands() <<" operands\n");
                 for (unsigned i = 0, ie = JLMD->getNumOperands(); i < ie; ++i) {
                     Metadata *Op = JLMD->getOperand(i);
                     const MDString *S = dyn_cast<MDString>(Op);
                     if (S) {
-                        DEBUG(dbgs() << "LSL: found " << S->getString() << "\n");
+                        LLVM_DEBUG(dbgs() << "LSL: found " << S->getString() << "\n");
                         if (S->getString().startswith("julia")) {
                             if (S->getString().equals("julia.simdloop"))
                                 simd = true;
@@ -190,7 +191,8 @@ bool LowerSIMDLoop::markLoopInfo(Module &M, Function *marker)
                 }
             }
         }
-        DEBUG(dbgs() << "LSL: simd: " << simd << " ivdep: " << ivdep << "\n");
+
+        LLVM_DEBUG(dbgs() << "LSL: simd: " << simd << " ivdep: " << ivdep << "\n");
 
         MDNode *n = L->getLoopID();
         if (n) {

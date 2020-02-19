@@ -11,6 +11,7 @@ Base.fetch(t::Task)
 Base.current_task
 Base.istaskdone
 Base.istaskstarted
+Base.istaskfailed
 Base.task_local_storage(::Any)
 Base.task_local_storage(::Any, ::Any)
 Base.task_local_storage(::Function, ::Any, ::Any)
@@ -30,7 +31,7 @@ Base.Threads.Condition
 Base.notify
 Base.schedule
 
-Base.Event
+Base.Threads.Event
 
 Base.Semaphore
 Base.acquire
@@ -44,6 +45,7 @@ Base.islocked
 Base.ReentrantLock
 
 Base.Channel
+Base.Channel(::Function)
 Base.put!(::Channel, ::Any)
 Base.take!(::Channel)
 Base.isready(::Channel)

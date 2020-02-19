@@ -164,7 +164,67 @@ end
                     lpapd = cholesky(apdhL, Val(true))
                     @test norm(apd * (lpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
                     @test norm(apd * (lpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
+                end
+            end
+        end
 
+        for eltyb in (Float64, ComplexF64)
+            Breal = convert(Matrix{BigFloat}, randn(n,n)/2)
+            Bimg  = convert(Matrix{BigFloat}, randn(n,n)/2)
+            B = (eltya <: Complex || eltyb <: Complex) ? complex.(Breal, Bimg) : Breal
+            εb = eps(abs(float(one(eltyb))))
+            ε = max(εa,εb)
+
+            for B in (B, view(B, 1:n, 1:n)) # Array and SubArray
+
+                # Test error bound on linear solver: LAWNS 14, Theorem 2.1
+                # This is a surprisingly loose bound
+                BB = copy(B)
+                ldiv!(capd, BB)
+                @test norm(apd \ B - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                @test norm(apd * BB - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                if eltya != BigFloat
+                    cpapd = cholesky(apdh, Val(true))
+                    BB = copy(B)
+                    ldiv!(cpapd, BB)
+                    @test norm(apd \ B - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                    @test norm(apd * BB - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                end
+            end
+        end
+
+        @testset "solve with generic Cholesky" begin
+            Breal = convert(Matrix{BigFloat}, randn(n,n)/2)
+            Bimg  = convert(Matrix{BigFloat}, randn(n,n)/2)
+            B = eltya <: Complex ? complex.(Breal, Bimg) : Breal
+            εb = eps(abs(float(one(eltype(B)))))
+            ε = max(εa,εb)
+
+            for B in (B, view(B, 1:n, 1:n)) # Array and SubArray
+
+                # Test error bound on linear solver: LAWNS 14, Theorem 2.1
+                # This is a surprisingly loose bound
+                cpapd = cholesky(eltya <: Complex ? apdh : apds)
+                BB = copy(B)
+                rdiv!(BB, cpapd)
+                @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                cpapd = cholesky(eltya <: Complex ? apdhL : apdsL)
+                BB = copy(B)
+                rdiv!(BB, cpapd)
+                @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                if eltya != BigFloat
+                    cpapd = cholesky(eltya <: Complex ? apdh : apds, Val(true))
+                    BB = copy(B)
+                    rdiv!(BB, cpapd)
+                    @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                    @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                    cpapd = cholesky(eltya <: Complex ? apdhL : apdsL, Val(true))
+                    BB = copy(B)
+                    rdiv!(BB, cpapd)
+                    @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                    @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
                 end
             end
         end
@@ -276,9 +336,10 @@ end
     d = abs.(randn(3)) .+ 0.1
     D = Diagonal(d)
     CD = cholesky(D)
+    CM = cholesky(Matrix(D))
     @test CD isa Cholesky{Float64}
-    @test CD.U isa UpperTriangular{Float64}
-    @test CD.U == Diagonal(.√d)
+    @test CD.U == Diagonal(.√d) == CM.U
+    @test D ≈ CD.L * CD.U
     @test CD.info == 0
 
     # real, failing
@@ -287,13 +348,12 @@ end
     @test Dnpd.info == 2
 
     # complex
-    d = cis.(rand(3) .* 2*π)
-    d .*= abs.(randn(3) .+ 0.1)
-    D = Diagonal(d)
+    D = complex(D)
     CD = cholesky(D)
+    CM = cholesky(Matrix(D))
     @test CD isa Cholesky{Complex{Float64}}
-    @test CD.U isa UpperTriangular{Complex{Float64}}
-    @test CD.U == Diagonal(.√d)
+    @test CD.U == Diagonal(.√d) == CM.U
+    @test D ≈ CD.L * CD.U
     @test CD.info == 0
 
     # complex, failing
@@ -330,6 +390,13 @@ end
     @test CholeskyPivoted(factors, uplo, piv, rank, tol, Int32(info)) == cholp
     @test CholeskyPivoted(factors, uplo, piv, rank, tol, Int64(info)) == cholp
 
+end
+
+@testset "issue #33704, casting low-rank CholeskyPivoted to Matrix" begin
+    A = randn(1,8)
+    B = A'A
+    C = cholesky(B, Val(true), check=false)
+    @test B ≈ Matrix(C)
 end
 
 end # module TestCholesky

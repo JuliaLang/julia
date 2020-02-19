@@ -15,7 +15,7 @@ if Sys.iswindows()
             if proc.exitcode % Int32 == -393216
                 # appears to be "wrong version" exit code, based on
                 # https://docs.microsoft.com/en-us/azure/cloud-services/cloud-services-startup-tasks-common
-                error("Downloading files requires Windows Management Framework 3.0 or later.")
+                @error "Downloading files requires Windows Management Framework 3.0 or later."
             end
             pipeline_error(proc)
         end
@@ -28,7 +28,7 @@ function find_curl()
         "/usr/bin/curl"
     elseif Sys.iswindows() && Sys.isexecutable(joinpath(get(ENV, "SYSTEMROOT", "C:\\Windows"), "System32\\curl.exe"))
         joinpath(get(ENV, "SYSTEMROOT", "C:\\Windows"), "System32\\curl.exe")
-    elseif Sys.which("curl") !== nothing
+    elseif !Sys.iswindows() && Sys.which("curl") !== nothing
         "curl"
     else
         nothing
@@ -39,13 +39,24 @@ function download_curl(curl_exe::AbstractString, url::AbstractString, filename::
     err = PipeBuffer()
     process = run(pipeline(`$curl_exe -s -S -g -L -f -o $filename $url`, stderr=err), wait=false)
     if !success(process)
-        stderr = readline(err)
-        error(stderr)
+        error_msg = readline(err)
+        @error "Download failed: $error_msg"
+        pipeline_error(process)
     end
     return filename
 end
 
+const DOWNLOAD_HOOKS = Callable[]
+
+function download_url(url::AbstractString)
+    for hook in DOWNLOAD_HOOKS
+        url = String(hook(url)::AbstractString)
+    end
+    return url
+end
+
 function download(url::AbstractString, filename::AbstractString)
+    url = download_url(url)
     curl_exe = find_curl()
     if curl_exe !== nothing
         return download_curl(curl_exe, url, filename)

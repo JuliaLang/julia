@@ -1,5 +1,6 @@
 ## mbedtls
 
+ifneq ($(USE_BINARYBUILDER_MBEDTLS), 1)
 ifeq ($(USE_GPL_LIBS), 1)
 MBEDTLS_SRC = mbedtls-$(MBEDTLS_VER)-gpl
 else
@@ -86,3 +87,12 @@ compile-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-compiled
 # tests disabled since they are known to fail
 fastcheck-mbedtls: #check-mbedtls
 check-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-checked
+
+else # USE_BINARYBUILDER_MBEDTLS
+
+MBEDTLS_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/MbedTLS_jll.jl/releases/download/MbedTLS-v$(MBEDTLS_VER)+$(MBEDTLS_BB_REL)
+MBEDTLS_BB_NAME := MbedTLS.v$(MBEDTLS_VER)
+
+$(eval $(call bb-install,mbedtls,MBEDTLS,false))
+
+endif

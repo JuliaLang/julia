@@ -25,6 +25,7 @@ DOCUMENTER_OPTIONS := linkcheck=$(linkcheck) doctest=$(doctest) buildroot=$(call
     texplatform=$(texplatform)
 
 $(SRCCACHE)/UnicodeData.txt:
+	@mkdir -p "$(SRCCACHE)"
 	$(JLDOWNLOAD) "$@" http://www.unicode.org/Public/9.0.0/ucd/UnicodeData.txt
 
 deps: $(SRCCACHE)/UnicodeData.txt

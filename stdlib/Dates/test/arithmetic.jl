@@ -305,6 +305,7 @@ end
         @test dt + Dates.Time(1, 0, 0) == Dates.DateTime(1999, 12, 27, 1, 0, 0)
         @test dt + Dates.Time(0, 1, 0) == Dates.DateTime(1999, 12, 27, 0, 1, 0)
         @test dt + Dates.Time(0, 0, 1) == Dates.DateTime(1999, 12, 27, 0, 0, 1)
+        @test Dates.Time(0, 0, 1) + dt == Dates.DateTime(1999, 12, 27, 0, 0, 1)
 
         t = Dates.Time(0, 0, 0) + Dates.Hour(24)
         @test dt + t == Dates.DateTime(1999, 12, 27, 0, 0, 0)
@@ -324,6 +325,15 @@ end
     @test t + Dates.Millisecond(1) == Dates.Time(0, 0, 0, 1)
     @test t + Dates.Microsecond(1) == Dates.Time(0, 0, 0, 0, 1)
     @test_throws MethodError t + Dates.Day(1)
+    @testset "Time-TimePeriod arithmetic inequalities" begin
+        t = Dates.Time(4, 20)
+        @test t - Dates.Nanosecond(1) < t
+        @test t + Dates.Nanosecond(1) > t
+        @test t + Dates.Hour(24) < typemax(Dates.Time)
+        @test t - Dates.Hour(24) > typemin(Dates.Time)
+        @test t + Dates.Hour(23) < t
+        @test t + Dates.Hour(25) > t
+    end
 end
 @testset "Month arithmetic and non-associativity" begin
     # Month arithmetic minimizes "edit distance", or number of changes

@@ -134,7 +134,7 @@ import Base: lowerbound, upperbound
 
 # advanced comparison & manipulation
 import Base: thispatch, thisminor, thismajor,
-             nextpatch, nextminor, nextmajor, check_new_version
+             nextpatch, nextminor, nextmajor
 @test v"1.2.3" == thispatch(v"1.2.3-")
 @test v"1.2.3" == thispatch(v"1.2.3-pre")
 @test v"1.2.3" == thispatch(v"1.2.3")
@@ -205,32 +205,6 @@ for major=0:3, minor=0:3, patch=0:3
         @test x < thisminor(x) ? nextminor(x) == thisminor(x) : thisminor(x) < nextminor(x)
         @test x < thismajor(x) ? nextmajor(x) == thismajor(x) : thismajor(x) < nextmajor(x)
     end
-end
-
-# check_new_version
-import Base.check_new_version
-@test check_new_version([v"1", v"2"], v"3") === nothing
-@test check_new_version([v"2", v"1"], v"3") === nothing
-@test_throws ErrorException check_new_version([v"1", v"2"], v"2")
-@test_throws ErrorException check_new_version(VersionNumber[], v"0")
-@test check_new_version(VersionNumber[], v"0.0.1") === nothing
-@test_throws ErrorException check_new_version(VersionNumber[], v"0.0.2")
-@test check_new_version(VersionNumber[], v"0.1") === nothing
-@test_throws ErrorException check_new_version(VersionNumber[], v"0.2")
-@test check_new_version(VersionNumber[], v"1") === nothing
-@test_throws ErrorException check_new_version(VersionNumber[], v"2")
-@test_throws ErrorException check_new_version(VersionNumber[v"1", v"2", v"3"], v"2")
-@test_throws ErrorException check_new_version([v"1", v"2"], v"4")
-@test_throws ErrorException check_new_version([v"1", v"2"], v"2-rc")
-@test_throws ErrorException check_new_version([v"1", v"2"], v"0")
-@test_throws ErrorException check_new_version([v"1", v"2"], v"0.9")
-@test check_new_version([v"1", v"2"], v"2.0.1") === nothing
-@test check_new_version([v"1", v"2"], v"2.1") === nothing
-@test check_new_version([v"1", v"2"], v"3") === nothing
-
-let vers = [v"2", v"1"]
-    @test check_new_version(vers, v"3") == nothing
-    @test vers == [v"2", v"1"] # no mutation
 end
 
 # banner

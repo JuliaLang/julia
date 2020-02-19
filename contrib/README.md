@@ -19,7 +19,6 @@ Installation
 |[ repackage_system_suitesparse4.make ](https://github.com/JuliaLang/julia/blob/master/contrib/repackage_system_suitesparse4.make) | Links shared    libraries from static-library for suitesparse4 |
 |[ stringreplace.c ](https://github.com/JuliaLang/julia/blob/master/contrib/stringreplace.c) | Replace strings to hardcoded paths in binaries during `make install` |
 |[ travis_fastfail.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/travis_fastfail.sh ) |  Checks for queued build tests in Travis |
-|[ vagrant/ ](https://github.com/JuliaLang/julia/blob/master/contrib/vagrant/) | Portable development environment Vagrant install files |
 |[ windows/ ](https://github.com/JuliaLang/julia/blob/master/contrib/windows/) | Windows install files |
 
 Editors  + Debuggers
@@ -32,7 +31,5 @@ If your favorite IDE, is not listed there, [open an issue in the JuliaEditorSupp
 
 | Name                           |  Description                                                |
 | ------------------------------ | ----------------------------------------------------------- |
-|[ ackrc ](https://github.com/JuliaLang/julia/blob/master/contrib/ackrc ) |  Config for Ack search tool |
 |[ debug_bootstrap.gdb ](https://github.com/JuliaLang/julia/blob/master/contrib/debug_bootstrap.gdb) | Bootstrap process using the debug build |
-|[ README.ackrc.txt ](https://github.com/JuliaLang/julia/blob/master/contrib/README.ackrc.txt) | README for ackrc  config file |
 |[ valgrind-julia.supp ](https://github.com/JuliaLang/julia/blob/master/contrib/valgrind-julia.supp) | Suppressions  for Valgrind debugging tool |

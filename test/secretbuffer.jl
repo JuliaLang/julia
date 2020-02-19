@@ -28,7 +28,15 @@ using Test
         @test !isshredded(secret_b)
 
         # TODO: ideally we'd test that the finalizer warns from GC.gc(), but that is harder
-        @test_logs (:warn, r".*SecretBuffer was `shred!`ed by the GC.*") finalize(secret_b)
+        @test_logs (:warn, r".*SecretBuffer was `shred!`ed by the GC.*") begin
+            finalize(secret_b)
+            # Allow the async task which produces the SecretBuffer warning to run.
+            # This is a hack, but we don't have a way to get a handle to that
+            # task in order to `wait` on it.
+            for i=1:1000
+                yield()
+            end
+        end
         @test isshredded(secret_b)
         secret_b = nothing
         GC.gc()
@@ -70,6 +78,16 @@ using Test
         write(sb, bits)
         seek(sb, 0)
         @test read(sb, String) == "\xff\xff\xff"
+        shred!(sb)
+    end
+    @testset "position" begin
+        sb = SecretBuffer("Julia")
+        println("testing position")
+        initial_pos = (position(sb))
+        seek(sb,2)
+        mid_pos = position(sb)
+        seekend(sb)
+        @test initial_pos == 0 && mid_pos == 2 && position(sb)==sb.size
         shred!(sb)
     end
 end

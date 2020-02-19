@@ -33,7 +33,7 @@ void jl_gc_init_page(void)
 
 // Try to allocate a memory block for multiple pages
 // Return `NULL` if allocation failed. Result is aligned to `GC_PAGE_SZ`.
-static char *jl_gc_try_alloc_pages(int pg_cnt)
+static char *jl_gc_try_alloc_pages(int pg_cnt) JL_NOTSAFEPOINT
 {
     size_t pages_sz = GC_PAGE_SZ * pg_cnt;
 #ifdef _OS_WINDOWS_
@@ -63,7 +63,7 @@ static char *jl_gc_try_alloc_pages(int pg_cnt)
 // smaller `MIN_BLOCK_PG_ALLOC` a `jl_memory_exception` is thrown.
 // Assumes `gc_perm_lock` is acquired, the lock is released before the
 // exception is thrown.
-static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void)
+static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void) JL_NOTSAFEPOINT
 {
     // try to allocate a large block of memory (or a small one)
     unsigned pg, pg_cnt = block_pg_cnt;
@@ -168,11 +168,15 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void)
 
 // get a new page, either from the freemap
 // or from the kernel if none are available
-NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void)
+NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
 {
     struct jl_gc_metadata_ext info;
     JL_LOCK_NOGC(&gc_perm_lock);
 
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
     // scan over memory_map page-table for existing allocated but unused pages
     for (info.pagetable_i32 = memory_map.lb; info.pagetable_i32 < (REGION2_PG_COUNT + 31) / 32; info.pagetable_i32++) {
         uint32_t freemap1 = memory_map.freemap1[info.pagetable_i32];
@@ -245,6 +249,10 @@ have_free_page:
 #ifdef _OS_WINDOWS_
     VirtualAlloc(info.meta->data, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE);
 #endif
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
     current_pg_count++;
     gc_final_count_page(current_pg_count);
     JL_UNLOCK_NOGC(&gc_perm_lock);
@@ -252,7 +260,7 @@ have_free_page:
 }
 
 // return a page to the freemap allocator
-void jl_gc_free_page(void *p)
+void jl_gc_free_page(void *p) JL_NOTSAFEPOINT
 {
     // update the allocmap and freemap to indicate this contains a free entry
     struct jl_gc_metadata_ext info = page_metadata_ext(p);

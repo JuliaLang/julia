@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 nested_error_expr = quote
     try
         __not_a_binding__

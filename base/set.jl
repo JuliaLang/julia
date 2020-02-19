@@ -373,7 +373,7 @@ function allunique(C)
     true
 end
 
-allunique(::Set) = true
+allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
 allunique(r::StepRange{T,S}) where {T,S} = (step(r) != zero(S)) || (length(r) <= 1)
@@ -439,7 +439,10 @@ julia> replace!([1, 2, 1, 3], 1=>0, 2=>4, count=2)
  3
 
 julia> replace!(Set([1, 2, 3]), 1=>0)
-Set([0, 2, 3])
+Set{Int64} with 3 elements:
+  0
+  2
+  3
 ```
 """
 replace!(A, old_new::Pair...; count::Integer=typemax(Int)) =
@@ -479,7 +482,9 @@ Dict{Int64,Int64} with 2 entries:
   1 => 3
 
 julia> replace!(x->2x, Set([3, 6]))
-Set([6, 12])
+Set{Int64} with 2 elements:
+  6
+  12
 ```
 """
 replace!(new::Callable, A; count::Integer=typemax(Int)) =
@@ -533,8 +538,6 @@ promote_valuetype(x::Pair{K, V}, y::Pair...) where {K, V} =
     promote_type(V, promote_valuetype(y...))
 
 # Subtract singleton types which are going to be replaced
-@pure issingletontype(T::DataType) = isdefined(T, :instance)
-issingletontype(::Type) = false
 function subtract_singletontype(::Type{T}, x::Pair{K}) where {T, K}
     if issingletontype(K)
         Core.Compiler.typesubtract(T, K)

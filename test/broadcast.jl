@@ -663,6 +663,25 @@ end
     @test_throws DimensionMismatch (1, 2) .+ (1, 2, 3)
 end
 
+@testset "broadcasted assignment from tuples and tuple styles (#33020)" begin
+    a = zeros(3)
+    @test_throws DimensionMismatch a .= (1,2)
+    @test_throws DimensionMismatch a .= sqrt.((1,2))
+    a .= (1,)
+    @test all(==(1), a)
+    a .= sqrt.((2,))
+    @test all(==(√2), a)
+    a = zeros(3, 2)
+    @test_throws DimensionMismatch a .= (1,2)
+    @test_throws DimensionMismatch a .= sqrt.((1,2))
+    a .= (1,)
+    @test all(==(1), a)
+    a .= sqrt.((2,))
+    @test all(==(√2), a)
+    a .= (1,2,3)
+    @test a == [1 1; 2 2; 3 3]
+end
+
 @testset "scalar .=" begin
     A = [[1,2,3],4:5,6]
     A[1] .= 0
@@ -682,6 +701,15 @@ end
 let n = 1
     @test ceil.(Int, n ./ (1,)) == (1,)
     @test ceil.(Int, 1 ./ (1,)) == (1,)
+end
+
+# Issue #29266
+@testset "deprecated scalar-fill .=" begin
+    a = fill(1, 10)
+    @test_throws ArgumentError a[1:5] = 0
+
+    x = randn(10)
+    @test_throws ArgumentError x[x .> 0.0] = 0.0
 end
 
 
@@ -817,4 +845,15 @@ end
 let a = rand(5), b = rand(5), c = copy(a)
     view(identity(a), 1:3) .+= view(b, 1:3)
     @test a == [(c+b)[1:3]; c[4:5]]
+
+    x = [1]
+    x[[1,1]] .+= 1
+    @test x == [2]
 end
+
+# treat Pair as scalar:
+@test replace.(split("The quick brown fox jumps over the lazy dog"), r"[aeiou]"i => "_") ==
+      ["Th_", "q__ck", "br_wn", "f_x", "j_mps", "_v_r", "th_", "l_zy", "d_g"]
+
+# 28680
+@test 1 .+ 1 .+  (1, 2) == (3, 4)

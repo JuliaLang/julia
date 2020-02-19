@@ -312,4 +312,3 @@ julia> frame = StackTraces.lookup(pointer)
 julia> println("The top frame is from $(frame[1].func)!")
 The top frame is from jl_apply_generic!
 ```
-

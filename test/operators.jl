@@ -105,10 +105,36 @@ Base.convert(::Type{T19714}, ::Int) = T19714()
 Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
 @test T19714()/1 === 1/T19714() === T19714()
 
-# pr #17155
+# pr #17155 and #33568
 @testset "function composition" begin
     @test (uppercase∘(x->string(x,base=16)))(239487) == "3A77F"
+    @test ∘(x -> x-2, x -> x-3, x -> x+5)(7) == 7
+    fs = [x -> x[1:2], uppercase, lowercase]
+    @test ∘(fs...)("ABC") == "AB"
+
+    # Like +() and *() we leave ∘() undefined.
+    # While `∘() = identity` is a reasonable definition for functions, this
+    # would cause headaches for composition of user defined morphisms.
+    # See also #34251
+    @test_throws(MethodError, ∘())
+
+    @test ∘(x -> (x, 1))(0) === (0, 1)
+    @test ∘(x -> (x, 2), x -> (x, 1))(0) === ((0, 1), 2)
+    @test ∘(x -> (x, 3), x -> (x, 2), x->(x,1))(0) === (((0, 1), 2), 3)
+    @test ∘(x -> (x, 4), x -> (x, 3), x->(x,2), x-> (x, 1))(0) === ((((0, 1), 2), 3), 4)
+
+    # test that user defined functors only need to overload the two arg version
+    struct FreeMagma
+        word
+    end
+    Base.:(∘)(a::FreeMagma, b::FreeMagma) = FreeMagma((a.word, b.word))
+
+    @test ∘(FreeMagma(1)) === FreeMagma(1)
+    @test ∘(FreeMagma(1), FreeMagma(2)) === FreeMagma((1,2))
+    @test ∘(FreeMagma(1), FreeMagma(2), FreeMagma(3)) === FreeMagma(((1,2), 3))
+    @test ∘(FreeMagma(1), FreeMagma(2), FreeMagma(3), FreeMagma(4)) === FreeMagma((((1,2), 3), 4))
 end
+
 @testset "function negation" begin
     str = randstring(20)
     @test filter(!isuppercase, str) == replace(str, r"[A-Z]" => "")
@@ -196,7 +222,6 @@ end
     @test fx(y) == x / y
     @test fy(x) == x / y
 end
-
 
 @testset "curried comparisons" begin
     eql5 = (==)(5)
