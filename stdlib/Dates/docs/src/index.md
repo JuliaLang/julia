@@ -549,13 +549,13 @@ julia> Dates.value(Dates.Millisecond(10))
 month or 15 minutes) with [`floor`](@ref), [`ceil`](@ref), or [`round`](@ref):
 
 ```jldoctest
-julia> floor(Date(1985, 8, 16), Dates.Month)
+julia> floor(Dates.Month, Date(1985, 8, 16))
 1985-08-01
 
-julia> ceil(DateTime(2013, 2, 13, 0, 31, 20), Dates.Minute(15))
+julia> ceil(Dates.Minute(15), DateTime(2013, 2, 13, 0, 31, 20))
 2013-02-13T00:45:00
 
-julia> round(DateTime(2016, 8, 6, 20, 15), Dates.Day)
+julia> round(Dates.Day, DateTime(2016, 8, 6, 20, 15))
 2016-08-07T00:00:00
 ```
 
@@ -575,7 +575,7 @@ in which this is not true may lead to confusion. What is the expected result of 
 to the nearest 10 hours?
 
 ```jldoctest
-julia> round(DateTime(2016, 7, 17, 11, 55), Dates.Hour(10))
+julia> round(Dates.Hour(10), DateTime(2016, 7, 17, 11, 55))
 2016-07-17T12:00:00
 ```
 
@@ -600,10 +600,10 @@ when we round to the nearest `P(2)`, where `P` is a [`Period`](@ref) type? In so
 when `P <: Dates.TimePeriod`) the answer is clear:
 
 ```jldoctest
-julia> round(DateTime(2016, 7, 17, 8, 55, 30), Dates.Hour(2))
+julia> round(Dates.Hour(2), DateTime(2016, 7, 17, 8, 55, 30))
 2016-07-17T08:00:00
 
-julia> round(DateTime(2016, 7, 17, 8, 55, 30), Dates.Minute(2))
+julia> round(Dates.Minute(2), DateTime(2016, 7, 17, 8, 55, 30))
 2016-07-17T08:56:00
 ```
 
@@ -612,7 +612,7 @@ order period. But in the case of two months (which still divides evenly into one
 may be surprising:
 
 ```jldoctest
-julia> round(DateTime(2016, 7, 17, 8, 55, 30), Dates.Month(2))
+julia> round(Dates.Month(2), DateTime(2016, 7, 17, 8, 55, 30))
 2016-07-01T00:00:00
 ```
 
@@ -754,15 +754,15 @@ Dates.default
 with `floor`, `ceil`, or `round`.
 
 ```@docs
-Base.floor(::Dates.TimeType, ::Dates.Period)
-Base.ceil(::Dates.TimeType, ::Dates.Period)
-Base.round(::Dates.TimeType, ::Dates.Period, ::RoundingMode{:NearestTiesUp})
+Base.floor(::Dates.Period, ::Dates.TimeType)
+Base.ceil(::Dates.Period, ::Dates.TimeType)
+Base.round(::Dates.Period, ::Dates.TimeType, ::RoundingMode{:NearestTiesUp})
 ```
 
 Most `Period` values can also be rounded to a specified resolution:
 
 ```@docs
-Base.floor(::Dates.ConvertiblePeriod, ::T) where T <: Dates.ConvertiblePeriod
+Base.floor( ::T, ::Dates.ConvertiblePeriod) where T <: Dates.ConvertiblePeriod
 Base.ceil(::Dates.ConvertiblePeriod, ::Dates.ConvertiblePeriod)
 Base.round(::Dates.ConvertiblePeriod, ::Dates.ConvertiblePeriod, ::RoundingMode{:NearestTiesUp})
 ```
