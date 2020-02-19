@@ -214,7 +214,7 @@ Random.seed!(100)
                 β = rand(elty)
                 y = rand(elty, n)
 
-                y_result_julia_lower = α*AL*x+β*y
+                y_result_julia_lower = α*AL*x + β*y
 
                 # Create lower triangular packing of AL
                 AP = typeof(AL[1,1])[]
@@ -226,9 +226,9 @@ Random.seed!(100)
 
                 y_result_blas_lower = copy(y)
                 BLAS.hpmv!('L', α, AP, x, β, y_result_blas_lower)
-                @test y_result_julia_lower≈y_result_blas_lower
+                @test y_result_julia_lower ≈ y_result_blas_lower
 
-                y_result_julia_upper = α*AU*x+β*y
+                y_result_julia_upper = α*AU*x + β*y
 
                 # Create upper triangular packing of AU
                 AP = typeof(AU[1,1])[]
@@ -240,7 +240,7 @@ Random.seed!(100)
 
                 y_result_blas_upper = copy(y)
                 BLAS.hpmv!('U', α, AP, x, β, y_result_blas_upper)
-                @test y_result_julia_upper≈y_result_blas_upper
+                @test y_result_julia_upper ≈ y_result_blas_upper
             end
         end
 
