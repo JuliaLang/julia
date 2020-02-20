@@ -352,3 +352,14 @@ end
         end
     end
 end
+
+@testset "bitreverse" begin
+    for T in Base.BitInteger_types
+        x = rand(T)::T
+        @test bitreverse(x) isa T
+        @test reverse(bitstring(x)) == bitstring(bitreverse(x))
+    end
+    @test bitreverse(0x80) === 0x01
+    @test bitreverse(Int64(456618293)) === Int64(-6012608040035942400)
+    @test bitreverse(Int32(456618293)) === Int32(-1399919400)
+end

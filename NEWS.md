@@ -53,6 +53,7 @@ New library functions
 * Add function `ismutable` and deprecate `isimmutable` to check whether something is mutable.([#34652])
 * `include` now accepts an optional `mapexpr` first argument to transform the parsed
   expressions before they are evaluated ([#34595]).
+* New function `bitreverse` for reversing the order of bits in a fixed-width integer ([#34791]).
 
 New library features
 --------------------
