@@ -174,6 +174,7 @@ end
             @test sprand(r1, 100, .9) == sprand(r2, 100, .9)
             @test sprandn(r1, 100, .9) == sprandn(r2, 100, .9)
             @test sprand(r1, Bool, 100, .9) == sprand(r2,  Bool, 100, .9)
+            @test sprandn(r1, Float16, 100, .9) == sprandn(r2,  Float16, 100, .9)
         end
 
         # test sprand with function inputs
@@ -249,6 +250,14 @@ end
             @test isa(r, SparseVector{Float64,Int})
             @test all(!iszero, nonzeros(r))
             @test Array(r) == Array(x)[bI]
+            bI = falses(length(x), 1) # AbstractArray rather than AbstractVector
+            bI[I, 1] .= true
+            r = x[bI]
+            @test isa(r, SparseVector{Float64,Int})
+            @test all(!iszero, nonzeros(r))
+            bIv = falses(length(x))
+            bIv[I] .= true
+            @test Array(r) == Array(x)[bIv]
         end
     end
 end

@@ -813,7 +813,7 @@ function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractUnitRange) where {T
 end
 
 getindex(x::AbstractSparseVector, I::AbstractVector{Bool}) = x[findall(I)]
-getindex(x::AbstractSparseVector, I::AbstractArray{Bool}) = x[findall(I)]
+getindex(x::AbstractSparseVector, I::AbstractArray{Bool}) = x[LinearIndices(I)[findall(I)]]
 @inline function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
     # SparseMatrixCSC has a nicely optimized routine for this; punt
     S = SparseMatrixCSC(length(x::SparseVector), 1, Ti[1,length(nonzeroinds(x))+1], nonzeroinds(x), nonzeros(x))
