@@ -870,6 +870,7 @@ for (fname, elty) in ((:zhpmv_, :ComplexF64),
                   β,
                   y,
                   incy)
+            return y
         end
     end
 end
@@ -882,7 +883,7 @@ function hpmv!(uplo::AbstractChar,
     if N != length(y)
         throw(DimensionMismatch("x has length $(N), but y has length $(length(y))"))
     end
-    if length(AP) < Int64(N*(N+1)/2)
+    if 2*length(AP) < N*(N + 1)
         throw(DimensionMismatch("Packed Hermitian matrix A has size smaller than length(x) =  $(N)."))
     end
     return hpmv!(uplo, N, convert(T, α), AP, x, stride(x, 1), convert(T, β), y, stride(y, 1))
@@ -891,14 +892,22 @@ end
 """
     hpmv!(uplo, α, AP, x, β, y)
 
-Update vector `y` as `α*AP*x + β*y` where `AP` is a packed Hermitian matrix.
-The storage layout for `AP` is described in the reference BLAS module, level-2 BLAS at
-<http://www.netlib.org/lapack/explore-html/>.
+Update vector `y` as `α*A*x + β*y`, where `A` is a Hermitian matrix provided
+in packed format `AP`.
 
-The scalar inputs `α` and `β` shall be numbers.
+With `uplo = 'U'`, the array AP must contain the upper triangular part of the
+Hermitian matrix packed sequentially, column by column, so that `AP[1]`
+contains `A[1, 1]`, `AP[2]` and `AP[3]` contain `A[1, 2]` and `A[2, 2]`
+respectively, and so on.
 
-The array inputs `x`, `y` and `AP` must be complex one-dimensional julia arrays of the
-same type that is either `ComplexF32` or `ComplexF64`.
+With `uplo = 'L'`, the array AP must contain the lower triangular part of the
+Hermitian matrix packed sequentially, column by column, so that `AP[1]`
+contains `A[1, 1]`, `AP[2]` and `AP[3]` contain `A[2, 1]` and `A[3, 1]`
+respectively, and so on.
+
+The scalar inputs `α` and `β` must be complex or real numbers.
+
+The array inputs `x`, `y` and `AP` must all be of `ComplexF32` or `ComplexF64` type.
 
 Return the updated `y`.
 """
