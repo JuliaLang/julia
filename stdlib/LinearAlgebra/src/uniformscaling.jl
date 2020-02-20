@@ -108,14 +108,10 @@ issymmetric(::UniformScaling) = true
 ishermitian(J::UniformScaling) = isreal(J.λ)
 isposdef(J::UniformScaling) = isposdef(J.λ)
 
-isposdef(J::UniformScaling) = isposdef(J.λ)
-
 (+)(J::UniformScaling, x::Number) = J.λ + x
 (+)(x::Number, J::UniformScaling) = x + J.λ
 (-)(J::UniformScaling, x::Number) = J.λ - x
 (-)(x::Number, J::UniformScaling) = x - J.λ
-
-(^)(J::UniformScaling, x::Number) = UniformScaling(J.λ ^ x)
 
 (+)(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ+J2.λ)
 (+)(B::BitArray{2}, J::UniformScaling)      = Array(B) + J
@@ -263,8 +259,6 @@ Broadcast.broadcasted(::typeof(*), J::UniformScaling,x::Number) = UniformScaling
 Broadcast.broadcasted(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
 
 Broadcast.broadcasted(::typeof(\), x::Number,J::UniformScaling) = UniformScaling(x\J.λ)
-
-Broadcast.broadcasted(::typeof(^), J::UniformScaling,x::Number) = UniformScaling(J.λ^x)
 
 (^)(J::UniformScaling, x::Number) = UniformScaling((J.λ)^x)
 Base.literal_pow(::typeof(^), J::UniformScaling, x::Val) = UniformScaling(Base.literal_pow(^, J.λ, x))
