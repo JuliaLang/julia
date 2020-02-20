@@ -333,6 +333,11 @@ end
         @test round(1//0, r) === 1//0
         @test round(-1//0, r) === -1//0
     end
+
+    @test @inferred(round(1//0, digits=1)) === Inf
+    @test @inferred(trunc(1//0, digits=2)) === Inf
+    @test @inferred(floor(-1//0, sigdigits=1)) === -Inf
+    @test @inferred(ceil(-1//0, sigdigits=2)) === -Inf
 end
 
 @testset "issue 1552" begin

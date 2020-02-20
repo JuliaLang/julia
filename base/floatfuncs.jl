@@ -126,7 +126,6 @@ round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} = trunc(T
 # NOTE: this relies on the current keyword dispatch behaviour (#9498).
 function round(x::Real, r::RoundingMode=RoundNearest;
                digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base::Union{Nothing,Integer}=nothing)
-    isfinite(x) || return x
     if digits === nothing
         if sigdigits === nothing
             if base === nothing
@@ -137,10 +136,12 @@ function round(x::Real, r::RoundingMode=RoundNearest;
                 # or throw(ArgumentError("`round` cannot use `base` argument without `digits` or `sigdigits` arguments."))
             end
         else
+            isfinite(x) || return float(x)
             _round_sigdigits(x, r, sigdigits, base === nothing ? 10 : base)
         end
     else
         if sigdigits === nothing
+            isfinite(x) || return float(x)
             _round_digits(x, r, digits, base === nothing ? 10 : base)
         else
             throw(ArgumentError("`round` cannot use both `digits` and `sigdigits` arguments."))
