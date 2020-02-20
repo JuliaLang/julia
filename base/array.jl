@@ -1234,7 +1234,7 @@ julia> inserteach!([1, 2, 3], 2, [8, 9])
  3
 ```
 """
-function inserteach!(a::Array{T,1}, i::Integer, items::Array{T,1}) where {T}
+function inserteach!(a::Vector, i::Integer, items::AbstractVector)
     m = length(items)
     if m === 0
         return a
@@ -1288,7 +1288,7 @@ julia> inserteach!([1, 2, 3], [true, false, true, false, false], [10, 9])
   3
 ```
 """
-function inserteach!(a::Array{T,1}, indices::Union{AbstractVector, AbstractRange{<:Integer}}, items::Array{T,1}) where {T}
+function inserteach!(a::Vector, indices::Union{AbstractVector, AbstractRange{<:Integer}}, items::AbstractVector)
     itemslen = length(items)
     indiceslen = length(indices)
     if itemslen !== indiceslen
@@ -1324,7 +1324,7 @@ function sort_indices_items(indices::AbstractRange{<:Integer}, items)
     return indices_sorted, items_sorted
 end
 
-function inserteach!(a::Array{T,1}, r::AbstractUnitRange{<:Integer}, items::Array{T,1}) where T
+function inserteach!(a::Vector, r::AbstractUnitRange{<:Integer}, items::AbstractVector)
     ilen = length(items)
     rlen = length(r)
     if ilen !== rlen
@@ -1334,7 +1334,7 @@ function inserteach!(a::Array{T,1}, r::AbstractUnitRange{<:Integer}, items::Arra
     end
 end
 
-function inserteach!(a::Array{T,1}, boolindices::AbstractVector{Bool}, items::Array{T,1}) where T
+function inserteach!(a::Vector, boolindices::AbstractVector{Bool}, items::AbstractVector)
     alen = length(a)
     itemslen = length(items)
     boolindiceslen = length(boolindices)
