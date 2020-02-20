@@ -484,6 +484,17 @@ end
     # non-sorted indices vector
     @test inserteach!([1, 2, 3, 4, 5], [6, 5, 4], [10, 9, 8]) ==
     [1, 2, 3, 8, 9, 10, 4, 5]
+
+    # items of 0 length
+    @test Base.inserteach!([6, 5, 4, 2, 1], 4, []) == [6, 5, 4, 2, 1]
+    # items and indices of 0 length
+    @test Base.inserteach!([6, 5, 4, 2, 1], 4:3, []) == [6, 5, 4, 2, 1]
+    # items of 0 length and indices of any other length
+    @test_throws DimensionMismatch Base.inserteach!([6, 5, 4, 2, 1], 4:5, [])
+    # 0 index
+    @test_throws BoundsError Base.inserteach!([6, 5, 4, 2, 1], 0, [1, 2])
+    @test_throws BoundsError Base.inserteach!([6, 5, 4, 2, 1], 0:1, [1, 2])
+
 end
 @testset "concatenation" begin
     @test isequal([fill(1.,2,2)  fill(2.,2,1)], [1. 1 2; 1 1 2])
