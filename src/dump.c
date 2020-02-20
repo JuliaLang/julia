@@ -453,30 +453,22 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     for (i = 1; i < m->bindings.size; i += 2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->owner == m || m != jl_main_module) {
-                jl_serialize_value(s, b->name);
-                jl_value_t *e = b->value;
-                if (!b->constp && e && jl_is_cpointer(e) && jl_unbox_voidpointer(e) != (void*)-1 && jl_unbox_voidpointer(e) != NULL)
-                    // reset Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
-                    jl_serialize_cnull(s, jl_typeof(e));
-                else
-                    jl_serialize_value(s, e);
-                jl_serialize_value(s, b->globalref);
-                jl_serialize_value(s, b->owner);
-                write_int8(s->s, (b->deprecated<<3) | (b->constp<<2) | (b->exportp<<1) | (b->imported));
-            }
+            jl_serialize_value(s, b->name);
+            jl_value_t *e = b->value;
+            if (!b->constp && e && jl_is_cpointer(e) && jl_unbox_voidpointer(e) != (void*)-1 && jl_unbox_voidpointer(e) != NULL)
+                // reset Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
+                jl_serialize_cnull(s, jl_typeof(e));
+            else
+                jl_serialize_value(s, e);
+            jl_serialize_value(s, b->globalref);
+            jl_serialize_value(s, b->owner);
+            write_int8(s->s, (b->deprecated<<3) | (b->constp<<2) | (b->exportp<<1) | (b->imported));
         }
     }
     jl_serialize_value(s, NULL);
-    if (m == jl_main_module) {
-        write_int32(s->s, 1);
-        jl_serialize_value(s, (jl_value_t*)jl_core_module);
-    }
-    else {
-        write_int32(s->s, m->usings.len);
-        for(i=0; i < m->usings.len; i++) {
-            jl_serialize_value(s, (jl_value_t*)m->usings.items[i]);
-        }
+    write_int32(s->s, m->usings.len);
+    for(i=0; i < m->usings.len; i++) {
+        jl_serialize_value(s, (jl_value_t*)m->usings.items[i]);
     }
     write_uint8(s->s, m->istopmod);
     write_uint64(s->s, m->uuid.hi);

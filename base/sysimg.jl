@@ -100,3 +100,6 @@ end
 
 empty!(LOAD_PATH)
 empty!(DEPOT_PATH)
+
+# Set up Main module
+import Base.MainInclude: eval, include
