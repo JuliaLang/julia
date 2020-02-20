@@ -56,6 +56,7 @@ New library functions
 * `include` now accepts an optional `mapexpr` first argument to transform the parsed
   expressions before they are evaluated ([#34595]).
 * New function `bitreverse` for reversing the order of bits in a fixed-width integer ([#34791]).
+* New function `bitrotate(x, k)` for rotating the bits in a fixed-width integer ([#33937]).
 
 New library features
 --------------------

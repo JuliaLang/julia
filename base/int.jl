@@ -452,6 +452,35 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
     end
 end
 
+## integer bitwise rotations ##
+
+"""
+    bitrotate(x::Base.BitInteger, k::Integer)
+
+`bitrotate(x, k)` implements bitwise rotation.
+It returns the value of `x` with its bits rotated left `k` times.
+A negative value of `k` will rotate to the right instead.
+
+!!! compat "Julia 1.5"
+    This function requires Julia 1.5 or later.
+
+```jldoctest
+julia> bitrotate(UInt8(114), 2)
+0xc9
+
+julia> bitstring(bitrotate(0b01110010, 2))
+"11001001"
+
+julia> bitstring(bitrotate(0b01110010, -2))
+"10011100"
+
+julia> bitstring(bitrotate(0b01110010, 8))
+"01110010"
+```
+"""
+bitrotate(x::T, k::Integer) where {T <: BitInteger} =
+    (x << ((sizeof(T) << 3 - 1) & k)) | (x >>> ((sizeof(T) << 3 - 1) & -k))
+
 # @doc isn't available when running in Core at this point.
 # Tuple syntax for documentation two function signatures at the same time
 # doesn't work either at this point.
