@@ -1288,7 +1288,7 @@ julia> inserteach!([1, 2, 3], [true, false, true, false, false], [10, 9])
   3
 ```
 """
-function inserteach!(a::Array{T,1}, indices::AbstractVector, items::Array{T,1}) where {T}
+function inserteach!(a::Array{T,1}, indices::Union{AbstractVector, AbstractRange{<:Integer}}, items::Array{T,1}) where {T}
     itemslen = length(items)
     indiceslen = length(indices)
     if itemslen !== indiceslen
@@ -1300,9 +1300,8 @@ function inserteach!(a::Array{T,1}, indices::AbstractVector, items::Array{T,1}) 
         indices_sorted = indices
         items_sorted = items
     else
-        sort_indices = sortperm(indices) # sorts so the final index is correct
-        indices_sorted = indices[sort_indices]
-        items_sorted = items[sort_indices]
+        # sorts so the final index is correct
+        indices_sorted, items_sorted = sort_indices_items(indices, items)
     end
     _growat!.(Ref(a), indices_sorted, 1) # does bound check
     @inbounds for (index, item) in zip(indices_sorted, items_sorted)
@@ -1311,28 +1310,18 @@ function inserteach!(a::Array{T,1}, indices::AbstractVector, items::Array{T,1}) 
     return a
 end
 
+function sort_indices_items(indices::AbstractVector, items)
+    sort_indices = sortperm(indices)
+    indices_sorted = indices[sort_indices]
+    items_sorted = items[sort_indices]
+    return indices_sorted, items_sorted
+end
 
-function inserteach!(a::Array{T,1}, indices::AbstractRange{<:Integer}, items::Array{T,1}) where {T}
-    itemslen = length(items)
-    indiceslen = length(indices)
-    if itemslen !== indiceslen
-        throw(DimensionMismatch("Length of the indices and items should be the same"))
-    elseif itemslen === 0
-        return a
-    end
-    if issorted(indices) # based on the tests overhead/advantage is low
-        indices_sorted = indices
-        items_sorted = items
-    else
-        indices_sorted = sort(indices) # sorting them is faster than indexing into them
-        sort_indices = sortperm(indices) # sorts so the final index is correct
-        items_sorted = items[sort_indices]
-    end
-    _growat!.(Ref(a), indices_sorted, 1) # does bound check
-    @inbounds for (index, item) in zip(indices_sorted, items_sorted)
-        a[index] = item
-    end
-    return a
+function sort_indices_items(indices::AbstractRange{<:Integer}, items)
+    indices_sorted = sort(indices) # sorting them is faster than indexing into them
+    sort_indices = sortperm(indices)
+    items_sorted = items[sort_indices]
+    return indices_sorted, items_sorted
 end
 
 function inserteach!(a::Array{T,1}, r::AbstractUnitRange{<:Integer}, items::Array{T,1}) where T
