@@ -4,6 +4,8 @@ Julia v1.5 Release Notes
 New language features
 ---------------------
 * Macro calls `@foo {...}` can now also be written `@foo{...}` (without the space) ([#34498]).
+* `⨟` is now parsed as a binary operator with times precedence. It can be entered in the REPL
+  with `\bbsemi` followed by <kbd>TAB</kbd> ([#34722]).
 
 Language changes
 ----------------
