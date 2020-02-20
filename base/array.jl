@@ -1234,14 +1234,14 @@ julia> inserteach!([1, 2, 3], 2, [8, 9])
  3
 ```
 """
-function inserteach!(a::Vector, i::Integer, items::AbstractVector)
+function inserteach!(a::Vector, index::Integer, items::AbstractVector)
     m = length(items)
     if m === 0
         return a
     end
-    _growat!(a, i, m)  # does bound check
-    @inbounds for k = i:i+m-1
-        a[k] = items[k-i+1]
+    _growat!(a, index, m)  # does bound check
+    @inbounds for k = index:index+m-1
+        a[k] = items[k-index+1]
     end
     return a
 end
@@ -1263,7 +1263,7 @@ julia> inserteach!([1, 2, 3], 2:3, [8, 9])
  3
 ```
 
-Following example inserts `10, 9, and 8` at index `6 ,4, and 2` respectively
+Following example inserts `10, 9, and 8` at index `6, 4, and 2` respectively
 ```jldoctest
 julia> inserteach!([1, 2, 3, 4, 5], 6:-2:2, [10, 9, 8])
 8-element Array{Int64,1}:
