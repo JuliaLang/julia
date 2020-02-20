@@ -389,8 +389,7 @@ ceil(::Type{T}, x::Rational) where {T} = round(T, x, RoundUp)
 round(x::Rational, r::RoundingMode=RoundNearest) = round(typeof(x), x, r)
 
 function round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {T,Tr}
-    if iszero(denominator(x))
-        T <: Integer && throw(DivideError())
+    if iszero(denominator(x)) && !(T <: Integer)
         return convert(T, copysign(one(Tr)//zero(Tr), numerator(x)))
     end
     convert(T, div(numerator(x), denominator(x), r))
