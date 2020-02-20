@@ -885,8 +885,6 @@ JL_CALLABLE(jl_f_fieldtype)
     }
     JL_NARGS(fieldtype, 2, 2);
     jl_datatype_t *st = (jl_datatype_t*)args[0];
-    if (st == jl_module_type)
-        jl_error("cannot assign variables in other modules");
     return get_fieldtype(args[0], args[1], 1);
 }
 
