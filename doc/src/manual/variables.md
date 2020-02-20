@@ -56,7 +56,7 @@ In the Julia REPL and several other Julia editing environments, you can type man
 symbols by typing the backslash LaTeX symbol name followed by tab. For example, the variable
 name `δ` can be entered by typing `\delta`-*tab*, or even `α̂₂` by `\alpha`-*tab*-`\hat`-
 *tab*-`\_2`-*tab*. (If you find a symbol somewhere, e.g. in someone else's code,
-that you don't know how to type, the REPL help will tell you: just type `?` and
+that you don't know how to type, the [REPL](https://docs.julialang.org/en/v1/stdlib/REPL/) help will tell you: just type `?` and
 then paste the symbol.)
 
 Julia will even let you redefine built-in constants and functions if needed (although
