@@ -221,6 +221,7 @@ export
     big,
     binomial,
     bitreverse,
+    bitrotate,
     bswap,
     cbrt,
     ceil,

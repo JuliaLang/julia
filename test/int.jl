@@ -190,6 +190,22 @@ end
         end
     end
 end
+
+@testset "bit rotations" begin
+    val1 = 0b01100011
+    @test 0b00011011 === bitrotate(val1, 3)
+    @test 0b01101100 === bitrotate(val1, -3)
+    @test val1 === bitrotate(val1, 0)
+
+    for T in Base.BitInteger_types
+        @test val1 === bitrotate(val1, sizeof(T) * 8) === bitrotate(val1, sizeof(T) * -8)
+    end
+
+    val2 = 0xabcd
+    @test 0x5e6d == bitrotate(val2, 3)
+    @test 0xb579 == bitrotate(val2, -3)
+end
+
 @testset "widen/widemul" begin
     @test widen(UInt8(3)) === UInt16(3)
     @test widen(UInt16(3)) === UInt32(3)
