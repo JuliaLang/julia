@@ -487,26 +487,6 @@ Expr
 Expr
 
 """
-    '
-
-The conjugate transposition operator, see [`adjoint`](@ref).
-
-# Examples
-```jldoctest
-julia> A = [1.0 -2.0im; 4.0im 2.0]
-2×2 Array{Complex{Float64},2}:
- 1.0+0.0im  -0.0-2.0im
- 0.0+4.0im   2.0+0.0im
-
-julia> A'
-2×2 Array{Complex{Float64},2}:
-  1.0-0.0im  0.0-4.0im
- -0.0+2.0im  2.0-0.0im
-```
-"""
-kw"'"
-
-"""
     \$
 
 Interpolation operator for interpolating into e.g. [strings](@ref string-interpolation)
