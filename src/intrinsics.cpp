@@ -158,6 +158,9 @@ static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
 
     Type *lt = julia_struct_to_llvm((jl_value_t*)bt, NULL, NULL);
 
+    if (jl_is_vecelement_type((jl_value_t*)bt) && !jl_is_uniontype(jl_tparam0(bt)))
+        bt = (jl_datatype_t*)jl_tparam0(bt);
+
     if (type_is_ghost(lt))
         return UndefValue::get(lt);
 
