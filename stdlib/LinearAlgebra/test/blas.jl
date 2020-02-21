@@ -244,6 +244,50 @@ Random.seed!(100)
             end
         end
 
+        # spmv!
+        if elty in (Float32, Float64)
+            @testset "spmv!" begin
+                # Both matrix dimensions n coincide, as we have symmetric matrices.
+                # Define the inputs and outputs of spmv!, y = α*A*x+β*y
+                α = rand(elty)
+                M = rand(elty, n, n)
+                AL = Symmetric(M, :L)
+                AU = Symmetric(M, :U)
+                x = rand(elty, n)
+                β = rand(elty)
+                y = rand(elty, n)
+
+                y_result_julia_lower = α*AL*x + β*y
+
+                # Create lower triangular packing of AL
+                AP = typeof(M[1,1])[]
+                for j in 1:n
+                    for i in j:n
+                        push!(AP, AL[i,j])
+                    end
+                end
+
+                y_result_blas_lower = copy(y)
+                BLAS.spmv!('L', α, AP, x, β, y_result_blas_lower)
+                @test y_result_julia_lower ≈ y_result_blas_lower
+
+
+                y_result_julia_upper = α*AU*x + β*y
+
+                # Create upper triangular packing of AU
+                AP = typeof(M[1,1])[]
+                for j in 1:n
+                    for i in 1:j
+                        push!(AP, AU[i,j])
+                    end
+                end
+
+                y_result_blas_upper = copy(y)
+                BLAS.spmv!('U', α, AP, x, β, y_result_blas_upper)
+                @test y_result_julia_upper ≈ y_result_blas_upper
+            end
+        end
+
         #trsm
         A = triu(rand(elty,n,n))
         B = rand(elty,(n,n))

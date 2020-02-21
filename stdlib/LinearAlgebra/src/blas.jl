@@ -31,6 +31,7 @@ export
     hpmv!,
     sbmv!,
     sbmv,
+    spmv!,
     symv!,
     symv,
     trsv!,
@@ -976,6 +977,90 @@ Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `A` is used.
 Return the updated `y`.
 """
 sbmv!
+
+### spmv!, (SP) symmetric packed matrix-vector operation defined as y := alpha*A*x + beta*y.
+for (fname, elty) in ((:dspmv_, :Float64),
+                      (:sspmv_, :Float32))
+    @eval begin
+        # SUBROUTINE DSPMV(UPLO,N,ALPHA,AP,X,INCX,BETA,Y,INCY)
+        # Y <- ALPHA*AP*X + BETA*Y
+        # *     .. Scalar Arguments ..
+        #       DOUBLE PRECISION ALPHA,BETA
+        #       INTEGER INCX,INCY,N
+        #       CHARACTER UPLO
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION A(N,N),X(N),Y(N)
+        function spmv!(uplo::AbstractChar,
+                       n::Integer,
+                       α::$elty,
+                       AP::Union{Ptr{$elty}, AbstractArray{$elty}},
+                       x::Union{Ptr{$elty}, AbstractArray{$elty}},
+                       incx::Integer,
+                       β::$elty,
+                       y::Union{Ptr{$elty}, AbstractArray{$elty}},
+                       incy::Integer)
+
+            ccall((@blasfunc($fname), libblas), Cvoid,
+                  (Ref{UInt8},     # uplo,
+                   Ref{BlasInt},   # n,
+                   Ref{$elty},     # α,
+                   Ptr{$elty},     # AP,
+                   Ptr{$elty},     # x,
+                   Ref{BlasInt},   # incx,
+                   Ref{$elty},     # β,
+                   Ptr{$elty},     # y, out
+                   Ref{BlasInt}),  # incy
+                  uplo,
+                  n,
+                  α,
+                  AP,
+                  x,
+                  incx,
+                  β,
+                  y,
+                  incy)
+            return y
+        end
+    end
+end
+
+function spmv!(uplo::AbstractChar,
+               α::Real, AP::Union{DenseArray{T}, AbstractVector{T}}, x::Union{DenseArray{T}, AbstractVector{T}},
+               β::Real, y::Union{DenseArray{T}, AbstractVector{T}}) where {T <: BlasReal}
+    require_one_based_indexing(AP, x, y)
+    N = length(x)
+    if N != length(y)
+        throw(DimensionMismatch("x has length $(N), but y has length $(length(y))"))
+    end
+    if 2*length(AP) < N*(N + 1)
+        throw(DimensionMismatch("Packed symmetric matrix A has size smaller than length(x) = $(N)."))
+    end
+    return spmv!(uplo, N, convert(T, α), AP, x, stride(x, 1), convert(T, β), y, stride(y, 1))
+end
+
+"""
+    spmv!(uplo, α, AP, x, β, y)
+
+Update vector `y` as `α*A*x + β*y`, where `A` is a symmetric matrix provided
+in packed format `AP`.
+
+With `uplo = 'U'`, the array AP must contain the upper triangular part of the
+symmetric matrix packed sequentially, column by column, so that `AP[1]`
+contains `A[1, 1]`, `AP[2]` and `AP[3]` contain `A[1, 2]` and `A[2, 2]`
+respectively, and so on.
+
+With `uplo = 'L'`, the array AP must contain the lower triangular part of the
+symmetric matrix packed sequentially, column by column, so that `AP[1]`
+contains `A[1, 1]`, `AP[2]` and `AP[3]` contain `A[2, 1]` and `A[3, 1]`
+respectively, and so on.
+
+The scalar inputs `α` and `β` must be real.
+
+The array inputs `x`, `y` and `AP` must all be of `Float32` or `Float64` type.
+
+Return the updated `y`.
+"""
+spmv!
 
 ### hbmv, (HB) Hermitian banded matrix-vector multiplication
 for (fname, elty) in ((:zhbmv_,:ComplexF64),
