@@ -233,6 +233,7 @@ Base.invokelatest
 new
 Base.:(|>)
 Base.:(∘)
+Base.:(⨟)
 ```
 
 ## Syntax
