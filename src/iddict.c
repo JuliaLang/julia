@@ -159,6 +159,17 @@ jl_value_t *jl_eqtable_get(jl_array_t *h, jl_value_t *key, jl_value_t *deflt)
 }
 
 JL_DLLEXPORT
+jl_value_t *jl_eqtable_get1(jl_array_t *h, jl_value_t *key, int *found)
+{
+    void **bp = jl_table_peek_bp(h, key);
+    if (found)
+        *found = (bp != NULL);
+    if (bp == NULL)
+        return jl_nothing;
+    return (jl_value_t *)*bp;
+}
+
+JL_DLLEXPORT
 jl_value_t *jl_eqtable_pop(jl_array_t *h, jl_value_t *key, jl_value_t *deflt, int *found)
 {
     void **bp = jl_table_peek_bp(h, key);

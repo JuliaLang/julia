@@ -66,6 +66,7 @@ include("array.jl")
 include("abstractarray.jl")
 
 # core structures
+include("some.jl")
 include("bitarray.jl")
 include("bitset.jl")
 include("abstractdict.jl")

@@ -86,14 +86,22 @@ end
 
 function getkey(wkh::WeakKeyDict{K}, kk, default) where K
     return lock(wkh) do
-        k = getkey(wkh.ht, kk, secret_table_token)
-        k === secret_table_token && return default
-        return k.value::K
+        k = getkey(wkh.ht, kk)
+        k === nothing && return default
+        return something(k).value::K
+    end
+end
+
+function getkey(wkh::WeakKeyDict{K}, kk) where K
+    return lock(wkh) do
+        k = getkey(wkh.ht, kk)
+        k === nothing && return nothing
+        return Some(something(k).value::K)
     end
 end
 
 map!(f,iter::ValueIterator{<:WeakKeyDict})= map!(f, values(iter.dict.ht))
-get(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> get(wkh.ht, key, default), wkh)
+get(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get(wkh.ht, key), wkh)
 get(default::Callable, wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get(default, wkh.ht, key), wkh)
 function get!(wkh::WeakKeyDict{K}, key, default) where {K}
     !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))

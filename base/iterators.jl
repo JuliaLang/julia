@@ -249,8 +249,7 @@ keys(v::Pairs) = v.itr
 values(v::Pairs) = v.data
 getindex(v::Pairs, key) = v.data[key]
 setindex!(v::Pairs, value, key) = (v.data[key] = value; v)
-get(v::Pairs, key, default) = get(v.data, key, default)
-get(f::Base.Callable, v::Pairs, key) = get(f, v.data, key)
+get(v::Pairs, key) = get(v.data, key)
 
 # zip
 

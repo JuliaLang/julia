@@ -78,6 +78,7 @@ const ENV = EnvDict()
 
 getindex(::EnvDict, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
 get(::EnvDict, k::AbstractString, def) = access_env(k->def, k)
+get(::EnvDict, k::AbstractString) = (v = get(ENV, k, nothing); v === nothing ? v : Some(v))
 get(f::Callable, ::EnvDict, k::AbstractString) = access_env(k->f(), k)
 in(k::AbstractString, ::KeySet{String, EnvDict}) = _hasenv(k)
 pop!(::EnvDict, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)

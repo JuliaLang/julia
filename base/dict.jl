@@ -488,9 +488,9 @@ julia> get(d, "c", 3)
 """
 get(collection, key, default)
 
-function get(h::Dict{K,V}, key, default) where V where K
+function get(h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
-    @inbounds return (index < 0) ? default : h.vals[index]::V
+    @inbounds return (index < 0) ? nothing : Some{V}(h.vals[index]::V)
 end
 
 """
@@ -509,11 +509,6 @@ end
 ```
 """
 get(::Function, collection, key)
-
-function get(default::Callable, h::Dict{K,V}, key) where V where K
-    index = ht_keyindex(h, key)
-    @inbounds return (index < 0) ? default() : h.vals[index]::V
-end
 
 """
     haskey(collection, key) -> Bool
@@ -559,6 +554,11 @@ julia> getkey(D, 'd', 'a')
 function getkey(h::Dict{K,V}, key, default) where V where K
     index = ht_keyindex(h, key)
     @inbounds return (index<0) ? default : h.keys[index]::K
+end
+
+function getkey(h::Dict{K,V}, key) where V where K
+    index = ht_keyindex(h, key)
+    @inbounds return (index<0) ? nothing : Some{K}(h.keys[index]::K)
 end
 
 function _pop!(h::Dict, index)
@@ -769,12 +769,12 @@ function getindex(dict::ImmutableDict, key)
     end
     throw(KeyError(key))
 end
-function get(dict::ImmutableDict, key, default)
+function get(dict::ImmutableDict{K,V}, key) where {K,V}
     while isdefined(dict, :parent)
-        dict.key == key && return dict.value
+        dict.key == key && return Some{V}(dict.value)
         dict = dict.parent
     end
-    return default
+    return nothing
 end
 
 # this actually defines reverse iteration (e.g. it should not be used for merge/copy/filter type operations)

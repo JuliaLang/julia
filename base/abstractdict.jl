@@ -500,6 +500,16 @@ function hash(a::AbstractDict, h::UInt)
     hash(hv, h)
 end
 
+function get(default::Callable, d::AbstractDict, key)
+    val = get(d, key)
+    val === nothing ? default() : something(val)
+end
+
+function get(d::AbstractDict, key, default)
+    val = get(d, key)
+    val === nothing ? default : something(val)
+end
+
 function getindex(t::AbstractDict, key)
     v = get(t, key, secret_table_token)
     if v === secret_table_token
