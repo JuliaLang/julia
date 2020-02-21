@@ -91,6 +91,37 @@ void JL_UV_LOCK(void);
 extern "C" {
 #endif
 
+//--------------------------------------------------
+// timers
+// Returns time in nanosec
+JL_DLLEXPORT uint64_t jl_hrtime(void);
+
+// number of cycles since power-on
+static inline uint64_t cycleclock(void)
+{
+#if defined(_CPU_X86_64_)
+    uint64_t low, high;
+    __asm__ volatile("rdtsc" : "=a"(low), "=d"(high));
+    return (high << 32) | low;
+#elif defined(_CPU_X86_)
+    int64_t ret;
+    __asm__ volatile("rdtsc" : "=A"(ret));
+    return ret;
+#elif defined(_CPU_AARCH64_)
+    // System timer of ARMv8 runs at a different frequency than the CPU's.
+    // The frequency is fixed, typically in the range 1-50MHz.  It can be
+    // read at CNTFRQ special register.  We assume the OS has set up
+    // the virtual timer properly.
+    int64_t virtual_timer_value;
+    __asm__ volatile("mrs %0, cntvct_el0" : "=r"(virtual_timer_value));
+    return virtual_timer_value;
+#else
+    #warning No cycleclock() definition for your platform
+    // copy from https://github.com/google/benchmark/blob/v1.5.0/src/cycleclock.h
+    return 0;
+#endif
+}
+
 #include "timing.h"
 
 #ifdef _COMPILER_MICROSOFT_
@@ -828,11 +859,6 @@ void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_AR
                       jl_value_t *exception JL_ROOTED_ARGUMENT,
                       jl_bt_element_t *bt_data, size_t bt_size);
 void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT;
-
-//--------------------------------------------------
-// timers
-// Returns time in nanosec
-JL_DLLEXPORT uint64_t jl_hrtime(void);
 
 // congruential random number generator
 // for a small amount of thread-local randomness

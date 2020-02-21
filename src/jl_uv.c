@@ -209,7 +209,7 @@ JL_DLLEXPORT int jl_process_events(void)
     uv_loop_t *loop = jl_io_loop;
     if (loop && (_threadedregion || ptls->tid == 0)) {
         jl_gc_safepoint_(ptls);
-        if (jl_mutex_trylock(&jl_uv_mutex)) {
+        if (jl_atomic_load(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
             loop->stop_flag = 0;
             int r = uv_run(loop, UV_RUN_NOWAIT);
             JL_UV_UNLOCK();
