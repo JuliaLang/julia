@@ -1920,7 +1920,7 @@ function sort(x::SparseVector{Tv,Ti}; kws...) where {Tv,Ti}
     SparseVector(n,newnzind,newnzvals)
 end
 
-function fkeep!(x::SparseVector, f, trim::Bool = true)
+function fkeep!(x::SparseVector, f)
     n = length(x::SparseVector)
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
@@ -1939,43 +1939,35 @@ function fkeep!(x::SparseVector, f, trim::Bool = true)
         end
     end
 
-    # Trim x's storage if necessary and desired
-    if trim
-        x_nnz = x_writepos - 1
-        if length(nzind) != x_nnz
-            resize!(nzval, x_nnz)
-            resize!(nzind, x_nnz)
-        end
-    end
+    # Trim x's storage if necessary
+    x_nnz = x_writepos - 1
+    resize!(nzval, x_nnz)
+    resize!(nzind, x_nnz)
 
-    x
+    return x
 end
 
 """
-    droptol!(x::SparseVector, tol; trim::Bool = true)
+    droptol!(x::SparseVector, tol)
 
-Removes stored values from `x` whose absolute value is less than or equal to `tol`,
-optionally trimming resulting excess space from `nonzeroinds(x)` and `nonzeros(x)` when `trim`
-is `true`.
+Removes stored values from `x` whose absolute value is less than or equal to `tol`.
 """
-droptol!(x::SparseVector, tol; trim::Bool = true) = fkeep!(x, (i, x) -> abs(x) > tol, trim)
+droptol!(x::SparseVector, tol) = fkeep!(x, (i, x) -> abs(x) > tol)
 
 """
-    dropzeros!(x::SparseVector; trim::Bool = true)
+    dropzeros!(x::SparseVector)
 
-Removes stored numerical zeros from `x`, optionally trimming resulting excess space from
-`nonzeroinds(x)` and `nonzeros(x)` when `trim` is `true`.
+Removes stored numerical zeros from `x`.
 
 For an out-of-place version, see [`dropzeros`](@ref). For
 algorithmic information, see `fkeep!`.
 """
-dropzeros!(x::SparseVector; trim::Bool = true) = fkeep!(x, (i, x) -> !iszero(x), trim)
+dropzeros!(x::SparseVector) = fkeep!(x, (i, x) -> !iszero(x))
 
 """
-    dropzeros(x::SparseVector; trim::Bool = true)
+    dropzeros(x::SparseVector)
 
-Generates a copy of `x` and removes numerical zeros from that copy, optionally trimming
-excess space from the result's `nzind` and `nzval` arrays when `trim` is `true`.
+Generates a copy of `x` and removes numerical zeros from that copy.
 
 For an in-place version and algorithmic information, see [`dropzeros!`](@ref).
 
@@ -1993,7 +1985,7 @@ julia> dropzeros(A)
   [3]  =  1.0
 ```
 """
-dropzeros(x::SparseVector; trim::Bool = true) = dropzeros!(copy(x), trim = trim)
+dropzeros(x::SparseVector) = dropzeros!(copy(x))
 
 function copy!(dst::SparseVector, src::SparseVector)
     length(dst::SparseVector) == length(src::SparseVector) || throw(ArgumentError("Sparse vectors should have the same length for copy!"))

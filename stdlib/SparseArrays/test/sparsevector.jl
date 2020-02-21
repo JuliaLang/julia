@@ -1168,15 +1168,11 @@ end
     for vwithzeros in (vposzeros, vnegzeros, vbothsigns)
         # Basic functionality / dropzeros!
         @test dropzeros!(copy(vwithzeros)) == v
-        @test dropzeros!(copy(vwithzeros), trim = false) == v
         # Basic functionality / dropzeros
         @test dropzeros(vwithzeros) == v
-        @test dropzeros(vwithzeros, trim = false) == v
         # Check trimming works as expected
         @test length(nonzeros(dropzeros!(copy(vwithzeros)))) == length(nonzeros(v))
         @test length(nonzeroinds(dropzeros!(copy(vwithzeros)))) == length(nonzeroinds(v))
-        @test length(nonzeros(dropzeros!(copy(vwithzeros), trim = false))) == length(nonzeros(vwithzeros))
-        @test length(nonzeroinds(dropzeros!(copy(vwithzeros), trim = false))) == length(nonzeroinds(vwithzeros))
     end
 end
 

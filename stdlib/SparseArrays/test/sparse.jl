@@ -1679,15 +1679,11 @@ end
         for Awithzeros in (Aposzeros, Anegzeros, Abothsigns)
             # Basic functionality / dropzeros!
             @test dropzeros!(copy(Awithzeros)) == A
-            @test dropzeros!(copy(Awithzeros), trim = false) == A
             # Basic functionality / dropzeros
             @test dropzeros(Awithzeros) == A
-            @test dropzeros(Awithzeros, trim = false) == A
             # Check trimming works as expected
             @test length(nonzeros(dropzeros!(copy(Awithzeros)))) == length(nonzeros(A))
             @test length(rowvals(dropzeros!(copy(Awithzeros)))) == length(rowvals(A))
-            @test length(nonzeros(dropzeros!(copy(Awithzeros), trim = false))) == length(nonzeros(Awithzeros))
-            @test length(rowvals(dropzeros!(copy(Awithzeros), trim = false))) == length(rowvals(Awithzeros))
         end
     end
     # original lone dropzeros test
