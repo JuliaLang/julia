@@ -208,6 +208,7 @@ Union{}
 Core.UnionAll
 Core.Tuple
 Core.NamedTuple
+Base.@NamedTuple
 Base.Val
 Core.Vararg
 Core.Nothing

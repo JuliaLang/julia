@@ -944,6 +944,7 @@ export
     @s_str,    # regex substitution string
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
+    @NamedTuple,
 
     # documentation
     @text_str,
