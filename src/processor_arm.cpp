@@ -10,10 +10,16 @@
 #include <fstream>
 #include <algorithm>
 
-#if defined(_CPU_AARCH64_) || defined(__GLIBC_PREREQ) && __GLIBC_PREREQ(2, 16)
+// This nesting is required to allow compilation on musl
+#define DYN_GETAUXVAL
+#if defined(_CPU_AARCH64_)
+#  undef DYN_GETAUXVAL
 #  include <sys/auxv.h>
-#else
-#  define DYN_GETAUXVAL
+#elif defined(__GLIBC_PREREQ)
+#  if __GLIBC_PREREQ(2, 16)
+#    undef DYN_GETAUXVAL
+#    include <sys/auxv.h>
+#  endif
 #endif
 
 namespace ARM {
