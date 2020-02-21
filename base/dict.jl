@@ -69,7 +69,7 @@ Dict{String,Int64} with 2 entries:
 Alternatively, a sequence of pair arguments may be passed.
 
 ```jldoctest dictexamples
-julia> d = Dict("A"=>1, "B"=>2)
+julia> d = Dict("A" => 1, "B" => 2)
 Dict{String,Int64} with 2 entries:
   "B" => 2
   "A" => 1
@@ -117,7 +117,7 @@ animals = ["cats", "fishes", "elephants"];
 animal_numbers = [229, 165, 65];
 
 for (i, x) in enumerate(animals)
-   animaldict[x] = [i, animal_numbers[i]]
+    animaldict[x] = [i, animal_numbers[i]]
 end
 
 animaldict

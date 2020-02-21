@@ -20,7 +20,7 @@ for sets of arbitrary objects.
 
 # Examples
 ```jldoctest
-julia> animals = Set{String}(["cat","fish","dog","bird"])
+julia> animals = Set{String}(["cat", "fish", "dog", "bird"])
 Set{String} with 4 elements:
   "fish"
   "cat"
@@ -30,7 +30,7 @@ Set{String} with 4 elements:
 
 If the element type is not given, it is computed by intersecting the types of the arguments:
 ```jldoctest
-julia> animals = Set(["cat","fish","dog","bird"])
+julia> animals = Set(["cat", "fish", "dog", "bird"])
 Set{String} with 4 elements:
   "fish"
   "cat"

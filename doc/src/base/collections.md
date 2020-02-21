@@ -187,10 +187,7 @@ use the syntax `Dict{KeyType,ValueType}(...)`. For example, `Dict{String,Int32}(
 
 Dictionaries may also be created with generators. For example, `Dict(i => f(i) for i = 1:10)`.
 
-Given a dictionary `D`, the syntax `D[x]` returns the value of key `x` (if it exists) or throws
-an error, and `D[x] = y` stores the key-value pair `x => y` in `D` (replacing any existing value
-for the key `x`).
-
+Given a dictionary `D`, the syntax `D[x]` returns the value of key `x` (if it exists) or throws an error, and `D[x] = y` stores the key-value pair `x => y` in `D` (replacing any existing value for the key `x`).
 Multiple arguments to `D[...]` are converted to tuples; for example, the syntax `D[x,y]`  is equivalent to `D[(x,y)]`, i.e. it refers to the value keyed by the tuple `(x,y)`.
 
 ```@docs
@@ -236,7 +233,7 @@ Partially implemented by:
   * [`Iterators.Pairs`](@ref)
 
 ## Set-Like Collections
-A [`Set`](@ref) is a collection of elements with no duplicated elements and keys/indices (unlike `Array` or `Dict`). So in a `Set` you can have only one of each element, and the order of elements isn't important.
+A [`Set`](@ref) is an unordered collection of distinct elements (unlike e.g. `Array` which is ordered and can have multiple equal elements). A `Set` doesn't have indices or keys.
 
 ```jldoctest set_collections
 julia> colors = Set(["yellow", "blue", "green", "red"])

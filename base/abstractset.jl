@@ -13,7 +13,7 @@ copy!(dst::AbstractSet, src::AbstractSet) = union!(empty!(dst), src)
 
 Construct the union of sets/collections. Maintain order with arrays.
 
-The union of two set `A` and `B` is a set that contains of the elements that are in `A` or `B`.
+The union of two sets `A` and `B` is a set that contains the elements that are in `A` or `B`.
 
 # Examples
 ```jldoctest
@@ -113,7 +113,7 @@ end
 
 Construct the intersection of sets/collections. Maintain order with arrays.
 
-The intersect of two set `A` and `B` is a set that contains every element that belongs to both `A` and `B`.
+The intersection of two sets `A` and `B` is a set that contains every element that belongs to both `A` and `B`.
 
 # Examples
 ```jldoctest
@@ -167,7 +167,7 @@ intersect!(s::AbstractSet, itr) =
 Construct the set of elements in `s` but not in any of the iterables in `itrs`.
 Maintain order with arrays.
 
-For two sets `A` and `B`, setdiff gives the their difference which is a set that contains the elements that are in `A`, but not in `B`.
+For two sets `A` and `B`, `setdiff` gives their difference which is a set that contains the elements that are in `A`, but not in `B`.
 
 # Examples
 ```jldoctest
