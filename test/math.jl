@@ -1035,10 +1035,15 @@ end
     end
 end
 
-isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
-using .Main.Furlongs
-@test hypot(Furlong(0), Furlong(0)) == Furlong(0.0)
-@test hypot(Furlong(3), Furlong(4)) == Furlong(5.0)
-@test hypot(Furlong(NaN), Furlong(Inf)) == Furlong(Inf)
-@test hypot(Furlong(Inf), Furlong(NaN)) == Furlong(Inf)
-@test hypot(Furlong(Inf), Furlong(Inf)) == Furlong(Inf)
+@testset "hypot" begin
+    @test hypot(0, 0) == 0.0
+    @test hypot(3, 4) == 5.0
+    @test hypot(NaN, Inf) == Inf
+    @test hypot(Inf, NaN) == Inf
+    @test hypot(Inf, Inf) == Inf
+
+    isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
+    using .Main.Furlongs
+    @test hypot(Furlong(0), Furlong(0)) == Furlong(0.0)
+    @test hypot(Furlong(3), Furlong(4)) == Furlong(5.0)
+end
