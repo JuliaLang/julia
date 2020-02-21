@@ -193,6 +193,7 @@ export
     :,
     =>,
     ∘,
+    ⨟,
 
 # scalar math
     @evalpoly,

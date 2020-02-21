@@ -133,6 +133,11 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
     @test ∘(FreeMagma(1), FreeMagma(2)) === FreeMagma((1,2))
     @test ∘(FreeMagma(1), FreeMagma(2), FreeMagma(3)) === FreeMagma(((1,2), 3))
     @test ∘(FreeMagma(1), FreeMagma(2), FreeMagma(3), FreeMagma(4)) === FreeMagma((((1,2), 3), 4))
+
+    @test ⨟(FreeMagma(1)) === FreeMagma(1)
+    @test ⨟(FreeMagma(1), FreeMagma(2)) === FreeMagma((2,1))
+    @test ⨟(FreeMagma(1), FreeMagma(2), FreeMagma(3)) === FreeMagma(((3,2), 1))
+    @test ⨟(FreeMagma(1), FreeMagma(2), FreeMagma(3), FreeMagma(4)) === FreeMagma((((4,3), 2), 1))
 end
 
 @testset "function negation" begin

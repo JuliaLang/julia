@@ -833,6 +833,7 @@ entered in the Julia REPL (and most editors, appropriately configured) by typing
 Function composition also works in prefix form: `∘(f, g)` is the same as `f ∘ g`.
 The prefix form supports composition of multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
 and splatting `∘(fs...)` for composing an iterable collection of functions.
+See also [`⨟`](@ref) for composition in the reversed order.
 
 !!! compat "Julia 1.4"
     Multiple function composition requires at least Julia 1.4.
@@ -863,6 +864,24 @@ function ∘ end
 ∘(f) = f
 ∘(f, g) = (x...)->f(g(x...))
 ∘(f, g, h...) = ∘(f ∘ g, h...)
+
+"""
+    g ⨟ f
+
+Compose functions in the "opposite order": i.e. `(g ⨟ f)(args...)` means `f(g(args...))`.
+Composition `g ⨟ f` is defined as [`f ∘ g`](@ref ∘).
+
+!!! compat "Julia 1.5"
+    Opposite composition `⨟` requires at least Julia 1.5.
+
+# Examples
+```jldoctest
+julia> 1 |> (x -> 2x) ⨟ string
+"2"
+```
+"""
+function ⨟ end
+⨟(fs...) = ∘(reverse(fs)...)
 
 """
     !f::Function
