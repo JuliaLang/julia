@@ -493,7 +493,7 @@ function _start()
         invokelatest(display_error, catch_stack())
         exit(1)
     end
-    if is_interactive && have_color
+    if is_interactive && have_color === true
         print(color_normal)
     end
 end
