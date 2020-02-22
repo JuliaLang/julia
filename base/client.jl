@@ -112,7 +112,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     have_color = get(stdout, :color, false)
     while true
         try
-            if have_color
+            if have_color === true
                 print(color_normal)
             end
             if lasterr !== nothing
@@ -124,7 +124,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 value = Core.eval(Main, ast)
                 ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :ans, value)
                 if !(value === nothing) && show_value
-                    if have_color
+                    if have_color === true
                         print(answer_color())
                     end
                     try
@@ -493,7 +493,7 @@ function _start()
         invokelatest(display_error, catch_stack())
         exit(1)
     end
-    if is_interactive && have_color
+    if is_interactive && have_color === true
         print(color_normal)
     end
 end

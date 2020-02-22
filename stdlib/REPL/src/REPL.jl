@@ -1168,17 +1168,17 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     dopushdisplay = !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
     while !eof(repl.stream)
-        if have_color
+        if have_color === true
             print(repl.stream,repl.prompt_color)
         end
         print(repl.stream, "julia> ")
-        if have_color
+        if have_color === true
             print(repl.stream, input_color(repl))
         end
         line = readline(repl.stream, keep=true)
         if !isempty(line)
             ast = Base.parse_input_line(line)
-            if have_color
+            if have_color === true
                 print(repl.stream, Base.color_normal)
             end
             response = eval_with_backend(ast, backend)
