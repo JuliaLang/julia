@@ -1162,7 +1162,7 @@ function ends_with_semicolon(line::AbstractString)
 end
 
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
-    have_color = Base.have_color
+    have_color = get(repl.stream, :color, false)
     Base.banner(repl.stream)
     d = REPLDisplay(repl)
     dopushdisplay = !in(d,Base.Multimedia.displays)

@@ -109,6 +109,7 @@ display_error(er, bt=nothing) = display_error(stderr, er, bt)
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
     lasterr = nothing
+    have_color = get(stdout, :color, false)
     while true
         try
             if have_color
@@ -210,19 +211,7 @@ end
 
 # call include() on a file, ignoring if not found
 include_ifexists(mod::Module, path::AbstractString) = isfile(path) && include(mod, path)
-function ttyhascolor()
-    term_type = get(ENV, "TERM","")
-    startswith(term_type, "xterm") && return true
-    try
-        @static if Sys.KERNEL === :FreeBSD
-            return success("tput AF 0")
-        else
-            return success("tput setaf 0")
-        end
-    catch
-        return false
-    end
-end
+
 function exec_options(opts)
     if !isempty(ARGS)
         idxs = findall(x -> x == "--", ARGS)
@@ -232,13 +221,8 @@ function exec_options(opts)
     startup               = (opts.startupfile != 2)
     history_file          = (opts.historyfile != 0)
     color_set             = (opts.color != 0) # --color!=auto
-    global have_color     = (opts.color == 1) # --color=on
+    global have_color     = color_set ? (opts.color == 1) : nothing # --color=on
     global is_interactive = (opts.isinteractive != 0)
-
-    #check if stdout is TTY and color is not set manually
-    if !color_set && isa(stdout, TTY) && isa(stderr, TTY) && ttyhascolor()
-        global have_color = true
-    end
 
     # pre-process command line argument list
     arg_is_program = !isempty(ARGS)
