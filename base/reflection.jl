@@ -319,8 +319,8 @@ struct DataTypeLayout
     nfields::UInt32
     npointers::UInt32
     firstptr::Int32
-    alignment::UInt32
-    # alignment : 9;
+    alignment::UInt16
+    flags::UInt16
     # haspadding : 1;
     # fielddesc_type : 2;
 end
@@ -335,7 +335,7 @@ function datatype_alignment(dt::DataType)
     @_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
     alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
-    return Int(alignment & 0x1FF)
+    return Int(alignment)
 end
 
 # amount of total space taken by T when stored in a container
@@ -368,8 +368,8 @@ Can be called on any `isconcretetype`.
 function datatype_haspadding(dt::DataType)
     @_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
-    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
-    return (alignment >> 9) & 1 == 1
+    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
+    return flags & 1 == 1
 end
 
 """
@@ -397,8 +397,8 @@ See also [`fieldoffset`](@ref).
 function datatype_fielddesc_type(dt::DataType)
     @_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
-    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
-    return (alignment >> 10) & 3
+    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
+    return (flags >> 1) & 3
 end
 
 """

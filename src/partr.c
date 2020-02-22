@@ -461,6 +461,9 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
                     // TODO: this relinquishes responsibility for all event
                     //       to the last thread to do an explicit operation,
                     //       which may starve other threads of critical work
+                    if (jl_atomic_load(&jl_uv_n_waiters) == 0) {
+                        continue;
+                    }
                 }
                 if (!_threadedregion && active && ptls->tid == 0) {
                     // thread 0 is the only thread permitted to run the event loop

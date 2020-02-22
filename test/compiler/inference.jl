@@ -2492,3 +2492,14 @@ struct X33954
 end
 f33954(x) = rand(Bool) ? f33954((x,)) : x
 @test Base.return_types(f33954, Tuple{X33954})[1] >: X33954
+
+# issue #34752
+struct a34752{T} end
+function a34752(c, d...)
+    length(d) > 1 || error()
+end
+function h34752()
+    g = Tuple[(42, Any[42][1], 42)][1]
+    a34752(g...)
+end
+@test h34752() === true

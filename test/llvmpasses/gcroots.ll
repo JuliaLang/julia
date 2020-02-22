@@ -618,6 +618,67 @@ top:
     ret i8 %add
 }
 
+define i8 @vector_arrayptrs() {
+; CHECK-LABEL: @vector_arrayptrs
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
+; CHECK: [[GEP0:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 2
+; CHECK: store %jl_value_t addrspace(10)* %obj1, %jl_value_t addrspace(10)** [[GEP0]]
+;
+top:
+   %ptls = call %jl_value_t*** @julia.ptls_states()
+   %obj1 = call %jl_value_t addrspace(10) *@alloc()
+   %decayed = addrspacecast %jl_value_t addrspace(10) *%obj1 to %jl_value_t addrspace(11) *
+   %arrayptrptr = bitcast %jl_value_t addrspace(11) *%decayed to <2 x i8 addrspace(13)*> addrspace(11)*
+   %arrayptrs = load <2 x i8 addrspace(13)*>, <2 x i8 addrspace(13)*> addrspace(11)* %arrayptrptr, align 16
+   %arrayptr = extractelement <2 x i8 addrspace(13)*> %arrayptrs, i32 0
+   call void @jl_safepoint()
+   %val = load i8, i8 addrspace(13)* %arrayptr
+   ret i8 %val
+}
+
+declare <2 x i8 addrspace(13)*> @llvm.masked.load.v2p13i8.p11v2p13i8 (<2 x i8 addrspace(13)*> addrspace(11)*, i32, <2 x i1>, <2 x i8 addrspace(13)*>)
+
+define i8 @masked_arrayptrs() {
+; CHECK-LABEL: @masked_arrayptrs
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
+; CHECK: %arrayptrs = call <2 x i8 addrspace(13)*> @llvm.masked.load.v2p13i8.p11v2p13i8(<2 x i8 addrspace(13)*> addrspace(11)* %arrayptrptr, i32 16, <2 x i1> <i1 true, i1 false>, <2 x i8 addrspace(13)*> zeroinitializer)
+; CHECK: [[GEP0:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 2
+; CHECK: store %jl_value_t addrspace(10)* %obj1, %jl_value_t addrspace(10)** [[GEP0]]
+;
+top:
+   %ptls = call %jl_value_t*** @julia.ptls_states()
+   %obj1 = call %jl_value_t addrspace(10) *@alloc()
+   %decayed = addrspacecast %jl_value_t addrspace(10) *%obj1 to %jl_value_t addrspace(11) *
+   %arrayptrptr = bitcast %jl_value_t addrspace(11) *%decayed to <2 x i8 addrspace(13)*> addrspace(11)*
+   %arrayptrs = call <2 x i8 addrspace(13)*> @llvm.masked.load.v2p13i8.p11v2p13i8(<2 x i8 addrspace(13)*> addrspace(11)* %arrayptrptr, i32 16, <2 x i1> <i1 true, i1 false>, <2 x i8 addrspace(13)*> undef)
+   %arrayptr = extractelement <2 x i8 addrspace(13)*> %arrayptrs, i32 0
+   call void @jl_safepoint()
+   %val = load i8, i8 addrspace(13)* %arrayptr
+   ret i8 %val
+}
+
+declare <2 x i8 addrspace(13)*> @llvm.masked.gather.v2p13i8.v2p11p13i8 (<2 x i8 addrspace(13)* addrspace(11)*>, i32, <2 x i1>, <2 x i8 addrspace(13)*>)
+
+define i8 @gather_arrayptrs() {
+; CHECK-LABEL: @gather_arrayptrs
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
+; CHECK: %arrayptrs = call <2 x i8 addrspace(13)*> @llvm.masked.gather.v2p13i8.v2p11p13i8(<2 x i8 addrspace(13)* addrspace(11)*> %arrayptrptrs, i32 16, <2 x i1> <i1 true, i1 false>, <2 x i8 addrspace(13)*> zeroinitializer)
+; CHECK: [[GEP0:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 2
+; CHECK: store %jl_value_t addrspace(10)* %obj1, %jl_value_t addrspace(10)** [[GEP0]]
+;
+top:
+   %ptls = call %jl_value_t*** @julia.ptls_states()
+   %obj1 = call %jl_value_t addrspace(10) *@alloc()
+   %decayed = addrspacecast %jl_value_t addrspace(10) *%obj1 to %jl_value_t addrspace(11)*
+   %arrayptrptr = bitcast %jl_value_t addrspace(11) *%decayed to i8 addrspace(13)* addrspace(11)*
+   %arrayptrptrs = insertelement <2 x i8 addrspace(13)* addrspace(11)*> zeroinitializer, i8 addrspace(13)* addrspace(11)* %arrayptrptr, i32 0
+   %arrayptrs = call <2 x i8 addrspace(13)*> @llvm.masked.gather.v2p13i8.v2p11p13i8(<2 x i8 addrspace(13)* addrspace(11)*> %arrayptrptrs, i32 16, <2 x i1> <i1 true, i1 false>, <2 x i8 addrspace(13)*> undef)
+   %arrayptr = extractelement <2 x i8 addrspace(13)*> %arrayptrs, i32 0
+   call void @jl_safepoint()
+   %val = load i8, i8 addrspace(13)* %arrayptr
+   ret i8 %val
+}
+
 !0 = !{!"jtbaa"}
 !1 = !{!"jtbaa_const", !0, i64 0}
 !2 = !{!1, !1, i64 0, i64 1}

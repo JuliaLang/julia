@@ -1445,6 +1445,11 @@ end
         "2-element Array{Any,1}:\n Pair{Integer,Int64}(1, 2)\n Pair{Integer,Int64}(33, 4)"
 end
 
+@testset "alignment for complex arrays" begin # (#34763)
+    @test replstr([ 1e-7 + 2.0e-11im, 2.0e-5 + 4e0im]) == "2-element Array{Complex{Float64},1}:\n 1.0e-7 + 2.0e-11im\n 2.0e-5 + 4.0im"
+    @test replstr([ 1f-7 + 2.0f-11im, 2.0f-5 + 4f0im]) == "2-element Array{Complex{Float32},1}:\n 1.0f-7 + 2.0f-11im\n 2.0f-5 + 4.0f0im"
+end
+
 @testset "display arrays non-compactly when size(⋅, 2) == 1" begin
     # 0-dim
     @test replstr(zeros(Complex{Int})) == "0-dimensional Array{Complex{$Int},0}:\n0 + 0im"
@@ -1992,3 +1997,5 @@ end
 @weak_test_repr "a[begin, end, let x=1; (x+1;); end]"
 @test repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
         ":(a[begin, end, let x = 1\n          begin\n              x + 1\n          end\n      end])"
+@test_repr "a[(bla;)]"
+@weak_test_repr "a[x -> f(x)]"

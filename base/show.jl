@@ -1580,11 +1580,17 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             print(io, '(')
             ind = indent + indent_width
             for i = 1:length(ex.args)
-                i > 1 && print(io, ";\n", ' '^ind)
+                if i > 1
+                    # if there was only a comment before the first semicolon, the expression would get parsed as a NamedTuple
+                    if !(i == 2 && ex.args[1] isa LineNumberNode)
+                        print(io, ';')
+                    end
+                    print(io, "\n", ' '^ind)
+                end
                 show_unquoted(io, ex.args[i], ind, -1, quote_level)
             end
             if length(ex.args) < 2
-                print(isempty(ex.args) ? "nothing;)" : ";)")
+                print(io, isempty(ex.args) ? "nothing;)" : ";)")
             else
                 print(io, ')')
             end
@@ -2055,13 +2061,13 @@ alignment(io::IO, x::Number) = (length(sprint(show, x, context=io, sizehint=0)),
 alignment(io::IO, x::Integer) = (length(sprint(show, x, context=io, sizehint=0)), 0)
 "`alignment(4.23)` yields (1,3) for `4` and `.23`"
 function alignment(io::IO, x::Real)
-    m = match(r"^(.*?)((?:[\.eE].*)?)$", sprint(show, x, context=io, sizehint=0))
+    m = match(r"^(.*?)((?:[\.eEfF].*)?)$", sprint(show, x, context=io, sizehint=0))
     m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
 "`alignment(1 + 10im)` yields (3,5) for `1 +` and `_10im` (plus sign on left, space on right)"
 function alignment(io::IO, x::Complex)
-    m = match(r"^(.*[^e][\+\-])(.*)$", sprint(show, x, context=io, sizehint=0))
+    m = match(r"^(.*[^ef][\+\-])(.*)$", sprint(show, x, context=io, sizehint=0))
     m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end

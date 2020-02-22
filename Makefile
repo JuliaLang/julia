@@ -571,8 +571,6 @@ distcleanall: cleanall
 test: check-whitespace $(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test default JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
-JULIA_SYSIMG=$(build_private_libdir)/sys$(JULIA_LIBSUFFIX).$(SHLIB_EXT)
-
 testall: check-whitespace $(JULIA_BUILD_MODE)
 	cp $(JULIA_SYSIMG) $(BUILDROOT)/local.$(SHLIB_EXT)
 	$(call spawn,$(JULIA_EXECUTABLE) -J $(call cygpath_w,$(BUILDROOT)/local.$(SHLIB_EXT)) -e 'true')

@@ -98,7 +98,6 @@ reverse(G::Generator) = Generator(G.f, reverse(G.iter))
 reverse(r::Reverse) = r.itr
 reverse(x::Union{Number,AbstractChar}) = x
 reverse(p::Pair) = Base.reverse(p) # copying pairs is cheap
-reverse(xs::Tuple) = Base.reverse(xs) # allows inference in mapfoldr and similar
 
 iterate(r::Reverse{<:Tuple}, i::Int = length(r.itr)) = i < 1 ? nothing : (r.itr[i], i-1)
 
