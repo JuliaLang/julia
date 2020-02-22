@@ -41,7 +41,7 @@ static void *const _tags[] = {
          &jl_linenumbernode_type, &jl_lineinfonode_type,
          &jl_gotonode_type, &jl_quotenode_type,
          &jl_pinode_type, &jl_phinode_type, &jl_phicnode_type, &jl_upsilonnode_type,
-         &jl_type_type, &jl_bottom_type, &jl_ref_type, &jl_pointer_type,
+         &jl_type_type, &jl_bottom_type, &jl_ref_type, &jl_pointer_type, &jl_addrspace_pointer_type,
          &jl_vararg_type, &jl_abstractarray_type,
          &jl_densearray_type, &jl_nothing_type, &jl_function_type, &jl_typeofbottom_type,
          &jl_unionall_type, &jl_typename_type, &jl_builtin_type, &jl_code_info_type,
@@ -57,7 +57,7 @@ static void *const _tags[] = {
          &jl_float16_type, &jl_float32_type, &jl_float64_type, &jl_floatingpoint_type,
          &jl_number_type, &jl_signed_type,
          // special typenames
-         &jl_tuple_typename, &jl_pointer_typename, &jl_array_typename, &jl_type_typename,
+         &jl_tuple_typename, &jl_pointer_typename, &jl_addrspace_pointer_typename, &jl_array_typename, &jl_type_typename,
          &jl_vararg_typename, &jl_namedtuple_typename,
          &jl_vecelement_typename,
          // special exceptions
