@@ -21,14 +21,15 @@ mktempdir() do dir
 
   # test filesystem futime
   file = Base.Filesystem.open(filename, Base.Filesystem.JL_O_RDWR)
-  Base.Filesystem.futime(file, 1.0, 1.0)
+  Base.Filesystem.futime(file, 1.0, 2.0)
+  @test Base.Filesystem.stat(file).mtime == 2.0
   close(file)
 
   # test filesystem readbytes!
   file = Base.Filesystem.open(filename, Base.Filesystem.JL_O_RDWR)
-  res = zeros(UInt8,20*4)
+  res = ones(UInt8, 80)
   Base.Filesystem.readbytes!(file, res)
-  res[1] == 0x31
+  @test res == UInt8[text..., (i > 20 for i in (length(text) + 1):length(res))...]
   close(file)
 
 end
