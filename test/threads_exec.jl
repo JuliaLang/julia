@@ -874,3 +874,28 @@ end
     end
     @test sort!(collect(ys)) == 1:3
 end
+
+# reproducible multi-threaded rand()
+
+using Random
+
+function reproducible_rand(r, i)
+    if i == 0
+        return UInt64(0)
+    end
+    r1 = rand(r, UInt64)*hash(i)
+    t1 = Threads.@spawn reproducible_rand(r, i-1)
+    t2 = Threads.@spawn reproducible_rand(r, i-1)
+    r2 = rand(r, UInt64)
+    return r1 + r2 + fetch(t1) + fetch(t2)
+end
+
+@testset "Task-local random" begin
+    r = Random.TaskLocalRNG()
+    Random.seed!(r, 23)
+    val = reproducible_rand(r, 10)
+    for i = 1:4
+        Random.seed!(r, 23)
+        @test reproducible_rand(r, 10) == val
+    end
+end
