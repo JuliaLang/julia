@@ -1799,6 +1799,11 @@ typedef struct _jl_task_t {
     jl_value_t *logstate;
     jl_function_t *start;
     uint8_t sticky; // record whether this Task can be migrated to a new thread
+    uint64_t rngState0; // really rngState[4], but more convenient to split
+    uint64_t rngState1;
+    uint64_t rngState2;
+    uint64_t rngState3;
+
 
 // hidden state:
     // id of owning thread - does not need to be defined until the task runs

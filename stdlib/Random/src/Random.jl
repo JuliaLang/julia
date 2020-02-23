@@ -27,7 +27,7 @@ export rand!, randn!,
        shuffle, shuffle!,
        randperm, randperm!,
        randcycle, randcycle!,
-       AbstractRNG, MersenneTwister, RandomDevice
+       AbstractRNG, MersenneTwister, RandomDevice, TaskLocal
 
 ## general definitions
 
@@ -296,6 +296,7 @@ include("RNGs.jl")
 include("generation.jl")
 include("normal.jl")
 include("misc.jl")
+include("XoshiroSimd.jl")
 
 ## rand & rand! & seed! docstrings
 

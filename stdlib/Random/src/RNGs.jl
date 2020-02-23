@@ -172,6 +172,149 @@ function fillcache_zeros!(r::MersenneTwister)
     r
 end
 
+## Xoshiro RNG. Unless this becomes the new default, consider excising to external library
+#Lots of implementation is shared with TaskLocal
+"""
+    Xoshiro
+
+Xoshiro256++ is a fast pseudorandom number generator originally developed by Sebastian Vigna. Reference implementation is available on on http://prng.di.unimi.it
+
+Apart from the high speed, Xoshiro has a small memory footprint, making it suitable for applications where many different random states need to be held for long time.
+
+Julia's Xoshiro implementation has a bulk-generation mode; this seeds new virtual PRNGs from the parent, and uses SIMD to generate in parallel (i.e. the bulk stream consists of multiple interleaved xoshiro instances). The virtual PRNGs are discarded once the bulk request has been serviced (and should cause no heap allocations).
+"""
+mutable struct Xoshiro <: AbstractRNG
+    s0::UInt64
+    s1::UInt64
+    s2::UInt64
+    s3::UInt64
+end
+
+Xoshiro(::Nothing) = Xoshiro()
+
+function Xoshiro(parent::AbstractRNG = RandomDevice())
+    # Constants have nothing up their sleeve, cf task.c
+    # 0x02011ce34bce797f == hash(UInt(1))|0x01
+    # 0x5a94851fb48a6e05 == hash(UInt(2))|0x01
+    # 0x3688cf5d48899fa7 == hash(UInt(3))|0x01
+    # 0x867b4bb4c42e5661 == hash(UInt(4))|0x01
+
+    Xoshiro(0x02011ce34bce797f * rand(parent, UInt64),
+            0x5a94851fb48a6e05 * rand(parent, UInt64),
+            0x3688cf5d48899fa7 * rand(parent, UInt64),
+            0x867b4bb4c42e5661 * rand(parent, UInt64))
+end
+
+rng_native_52(::Xoshiro) = UInt64
+
+function seed!(rng::Xoshiro, s0::UInt64, s1::UInt64, s2::UInt64, s3::UInt64)
+    #cf task.c
+    s = Base.hash_uint64(s0)
+    rng.s0 = s
+    s += Base.hash_uint64(s1)
+    rng.s1 = s
+    s += Base.hash_uint64(s2)
+    rng.s2 = s
+    s += Base.hash_uint64(s3)
+    rng.s3 = s
+end
+
+
+@inline function rand(rng::Xoshiro, ::Type{UInt64})
+    s0, s1, s2, s3 = rng.s0, rng.s1, rng.s2, rng.s3
+    tmp = s0 + s3
+    res = tmp << 23 | tmp >> 41
+    t = s1 << 17
+    s2 = xor(s2, s0)
+    s3 = xor(s3, s1)
+    s1 = xor(s1, s2)
+    s0 = xor(s0, s3)
+    s2 = xor(s2, t)
+    s3 = s3 << 45 | s3 >> 19
+    rng.s0, rng.s1, rng.s2, rng.s3 = s0, s1, s2, s3 
+    res 
+end
+
+
+## Task local RNG
+"""
+    TaskLocal
+
+The TaskLocal RNG has state that is local to its task, not its thread. It is seeded upon task creation, from the state of its parent task. Therefore, task creation is an event that changes the parent's RNG state.
+
+As an upside, the TaskLocal RNG is pretty fast, and permits reproducible multithreaded simulations (barring race conditions), independent of scheduler decisions. As long as the number of threads is not used to make decisions on task creation, simulation results are also independent of the number of available threads / CPUs. The random stream should not depend on hardware specifics, up to endianness and possibly word size.
+
+Using or seeding the RNG of any other task than the one returned by `current_task()` is undefined behavior: it will work most of the time, and may sometimes fail silently.
+"""
+struct TaskLocal <: AbstractRNG end
+TaskLocal(::Nothing) = TaskLocal()
+rng_native_52(::TaskLocal) = UInt64
+
+function seed!(::TaskLocal, s0::UInt64, s1::UInt64, s2::UInt64, s3::UInt64)
+    task = current_task()
+    ccall(:jl_tasklocal_seedrandom, Nothing, (Ref{Task}, UInt64, UInt64, UInt64, UInt64), task, s0,s1,s2,s3)
+    TaskLocal()
+end
+
+
+@inline function rand(::TaskLocal, ::Type{UInt64})
+    task = current_task()
+    s0, s1, s2, s3 = task.rngState0, task.rngState1, task.rngState2, task.rngState3
+    tmp = s0 + s3
+    res = tmp << 23 | tmp >> 41
+    t = s1 << 17
+    s2 = xor(s2, s0)
+    s3 = xor(s3, s1)
+    s1 = xor(s1, s2)
+    s0 = xor(s0, s3)
+    s2 = xor(s2, t)
+    s3 = s3 << 45 | s3 >> 19
+    task.rngState0, task.rngState1, task.rngState2, task.rngState3 =  s0, s1, s2, s3
+    res 
+end
+
+#Shared implementation between Xoshiro and TaskLocal -- seeding
+function seed!(rng::Union{TaskLocal, Xoshiro}, seed::Union{Int128, UInt128, BigInt}) 
+    seed0 = seed % UInt64
+    seed1 = (seed>>64) % UInt64
+    seed!(rng, seed0, seed1, zero(UInt64), zero(UInt64))
+end
+seed!(rng::Union{TaskLocal, Xoshiro}, seed::Integer) = seed!(rng, seed%UInt64, zero(UInt64), zero(UInt64), zero(UInt64))
+seed!(rng::Union{TaskLocal, Xoshiro}, ::Nothing) = seed!(rng)
+
+seed!(rng::Union{TaskLocal, Xoshiro}) = seed!(rng,
+                           rand(RandomDevice(), UInt64),
+                           rand(RandomDevice(), UInt64),
+                           rand(RandomDevice(), UInt64),
+                           rand(RandomDevice(), UInt64))
+
+function seed!(rng::Union{TaskLocal, Xoshiro}, seed::AbstractVector{UInt64}) 
+    seed0 = length(seed)>0 ? seed[1] : UInt64(0)
+    seed1 = length(seed)>1 ? seed[2] : UInt64(0)
+    seed2 = length(seed)>2 ? seed[3] : UInt64(0)
+    seed3 = length(seed)>3 ? seed[4] : UInt64(0)
+    seed!(rng, seed0, seed1, seed2, seed3)
+end
+
+function seed!(rng::Union{TaskLocal, Xoshiro}, seed::AbstractVector{UInt32}) 
+    #can only process an even length
+    len = min(length(seed), 8) & ~1
+    seed!(rng, reinterpret(UInt64, view(seed, 1:len)))
+end
+
+@inline function rand(rng::Union{TaskLocal, Xoshiro}, ::Type{UInt128})
+    first = rand(rng, UInt64)
+    second = rand(rng,UInt64)
+    second + UInt128(first)<<64
+end
+@inline rand(rng::Union{TaskLocal, Xoshiro}, ::SamplerType{UInt128}) = rand(rng, UInt128)
+@inline rand(rng::Union{TaskLocal, Xoshiro}, ::Type{Int128}) = rand(rng, UInt128) % Int128
+@inline rand(rng::Union{TaskLocal, Xoshiro}, ::SamplerType{Int128}) = rand(rng, UInt128) % Int128
+
+@inline rand(rng::Union{TaskLocal, Xoshiro}, ::Type{T}) where {T<:Union{Bool, UInt8, Int8, UInt16, Int16, UInt32, Int32, Int64}} = rand(rng, UInt64) % T
+@inline rand(rng::Union{TaskLocal, Xoshiro}, ::SamplerType{T}) where {T<:Union{Bool, UInt8, Int8, UInt16, Int16, UInt32, Int32, Int64, UInt64}} = rand(rng, UInt64) % T
+
+Sampler(rng::Union{TaskLocal, Xoshiro}, ::Type{T}) where T<:Union{Float64, Float32} = SamplerType{T}()
 
 ### low level API
 
@@ -310,6 +453,7 @@ end
 
 function __init__()
     resize!(empty!(THREAD_RNGs), Threads.nthreads()) # ensures that we didn't save a bad object
+     seed!(TaskLocal()) 
 end
 
 

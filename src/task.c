@@ -35,6 +35,7 @@
 #include "julia_internal.h"
 #include "threading.h"
 #include "julia_assert.h"
+#include "support/hashing.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -608,6 +609,83 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
     throw_internal(NULL);
 }
 
+/* This is xoshiro256++ 1.0, used for tasklocal random number generation in julia.
+   This implementation is intended for embedders and internal use by the runtime, and is 
+   based on the reference implementation on http://prng.di.unimi.it
+   
+   Credits go to Sebastiano Vigna for coming up with this PRNG.
+
+   There is a pure julia implementation in stdlib that tends to be faster when used from
+   within julia, due to inlining and more agressive architecture-specific optimizations.
+*/
+JL_DLLEXPORT uint64_t jl_tasklocal_genrandom(jl_task_t *task) {
+  uint64_t s0 = task->rngState0;
+  uint64_t s1 = task->rngState1;
+  uint64_t s2 = task->rngState2;
+  uint64_t s3 = task->rngState3;
+  
+  uint64_t t = s0 << 17;
+  uint64_t tmp = s0 + s3;
+  uint64_t res = ((tmp << 23) | (tmp >> 41)) + s0;
+  s2 ^=s0;
+  s3 ^=s1;
+  s1 ^= s2;
+  s0 ^= s3;
+  s2 ^= t;
+  s3 = (s3 << 45) | (s3 >> 19);
+  
+  task->rngState0 = s0;
+  task->rngState1 = s1;
+  task->rngState2 = s2;
+  task->rngState3 = s3; 
+  return res;
+};
+
+JL_DLLEXPORT void jl_tasklocal_seedrandom(jl_task_t *task,
+                                          uint64_t seed0,
+                                          uint64_t seed1,
+                                          uint64_t seed2,
+                                          uint64_t seed3) {
+  // Fixme: Consider a less ad-hoc construction
+  // We can afford burning a handful of cycles here, and we don't want any
+  // surprises with respect to bad seeds / bad interactions
+  uint64_t s = int64hash(seed0);
+  task->rngState0 = s;
+  s += int64hash(seed1);
+  task->rngState1 = s;
+  s += int64hash(seed2);
+  task->rngState2 = s;
+  s += int64hash(seed3);
+  task->rngState3 = s;
+  jl_tasklocal_genrandom(task);
+  jl_tasklocal_genrandom(task);
+  jl_tasklocal_genrandom(task);
+  jl_tasklocal_genrandom(task);
+};
+
+void rng_split(jl_task_t *from, jl_task_t *to) {
+  /* Fixme: consider a less ad-hoc construction
+  Ideally we could just use the output of the random stream to seed the initial
+  state of the child. Out of an overabundance of caution we multiply with 
+  effectively random coefficients, to break possible self-interactions.
+  
+  It is not the goal to mix bits -- we work under the assumption that the
+  source is well-seeded, and its output looks effectively random.
+  However, xoshiro has never been studied in the mode where we seed the
+  initial state with the output of another xoshiro instance. 
+
+  Constants have nothing up their sleeve:
+  0x02011ce34bce797f == hash(UInt(1))|0x01
+  0x5a94851fb48a6e05 == hash(UInt(2))|0x01
+  0x3688cf5d48899fa7 == hash(UInt(3))|0x01
+  0x867b4bb4c42e5661 == hash(UInt(4))|0x01
+  */
+  to -> rngState0 = 0x02011ce34bce797f * jl_tasklocal_genrandom(from);
+  to -> rngState1 = 0x5a94851fb48a6e05 * jl_tasklocal_genrandom(from);
+  to -> rngState2 = 0x3688cf5d48899fa7 * jl_tasklocal_genrandom(from);
+  to -> rngState3 = 0x867b4bb4c42e5661 * jl_tasklocal_genrandom(from);
+}
+
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion_future, size_t ssize)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -643,6 +721,8 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->backtrace = jl_nothing;
     // Inherit logger state from parent task
     t->logstate = ptls->current_task->logstate;
+    // Fork task-local random state from parent
+    rng_split(ptls->current_task, t);
     // there is no active exception handler available on this stack yet
     t->eh = NULL;
     t->sticky = 1;
