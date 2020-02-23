@@ -382,6 +382,7 @@ end
 
 function __init__()
     resize!(empty!(THREAD_RNGs), Threads.nthreads()) # ensures that we didn't save a bad object
+    seed!(TaskLocalRNG())
 end
 
 

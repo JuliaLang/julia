@@ -27,7 +27,7 @@ export rand!, randn!,
        shuffle, shuffle!,
        randperm, randperm!,
        randcycle, randcycle!,
-       AbstractRNG, MersenneTwister, RandomDevice
+       AbstractRNG, MersenneTwister, RandomDevice, TaskLocalRNG, Xoshiro
 
 ## general definitions
 
@@ -292,10 +292,12 @@ rand(r::AbstractRNG, ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(r
 rand(                ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(X, Dims((d, dims...)))
 
 
+include("Xoshiro.jl")
 include("RNGs.jl")
 include("generation.jl")
 include("normal.jl")
 include("misc.jl")
+include("XoshiroSimd.jl")
 
 ## rand & rand! & seed! docstrings
 
