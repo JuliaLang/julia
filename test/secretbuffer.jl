@@ -83,7 +83,7 @@ using Test
     @testset "seekend" begin
         sb = SecretBuffer("hello")
         seekend(sb)
-        @test read(sb,String) == ""
+        @test read(sb, String) == ""
     end
     @testset "position" begin
         sb = SecretBuffer("Julia")
