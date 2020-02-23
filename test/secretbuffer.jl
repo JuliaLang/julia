@@ -84,6 +84,7 @@ using Test
         sb = SecretBuffer("hello")
         seekend(sb)
         @test read(sb,String) == ""
+    end
     @testset "position" begin
         sb = SecretBuffer("Julia")
         println("testing position")
