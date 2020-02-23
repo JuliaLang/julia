@@ -83,11 +83,11 @@ using Test
     @testset "testing the skip function" begin
         sb = SecretBuffer("computer")
         skip(sb, 2)
-        before = position(sb)
+        @test position(sb) == 2
         seek(sb, 0)
-        after = position(sb)
+        @test position(sb) == 0
         skip(sb, sb.size)
-        @test a == 2 && b == 0 && position(sb) == sb.size
+        @test position(sb) == sb.size
     end
     @testset "position" begin
         sb = SecretBuffer("Julia")
