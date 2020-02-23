@@ -290,12 +290,15 @@ copyto!(a, -2, (1,2,3), 1, 2)
 
 b = 1:2    # copy between AbstractArrays
 bo = OffsetArray(1:2, (-3,))
-@test_throws BoundsError copyto!(a, b)
+copyto!(a, b)    # no BoundsError, see #34049
+@test a[-3] == 1
+@test a[-2] == 2
+@test a[-1] == 2
 fill!(a, -1)
 copyto!(a, bo)
-@test a[-3] == -1
-@test a[-2] == 1
-@test a[-1] == 2
+@test a[-3] == 1
+@test a[-2] == 2
+@test a[-1] == -1
 fill!(a, -1)
 copyto!(a, -2, bo)
 @test a[-3] == -1

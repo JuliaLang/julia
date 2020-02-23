@@ -212,3 +212,18 @@ end
     # Test that edges are not shared
     @test ci2.edges !== ci.edges
 end
+
+@testset "issue #34025" begin
+    s = [2 0; 0 3]
+    r = ones(Int, 3, 3)
+    @test copyto!(copy(r), s') == [2 3 1; 0 1 1; 0 1 1]
+    @test copyto!(copy(r), s) == copyto!(copy(r), s') ==
+          copyto!(copy(r)', s) == copyto!(copy(r)', s')
+    r = ones(Int, 3, 3)
+    s = [1 2 3 4]'
+    @test copyto!(r, s) == [1 4 1; 2 1 1; 3 1 1]
+    a = fill(1, 5)
+    r = Base.IdentityUnitRange(-1:1)
+    copyto!(a, r)
+    @test a[1:3] == [-1, 0, 1]
+end
