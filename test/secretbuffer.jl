@@ -82,12 +82,13 @@ using Test
     end
     @testset "bytes available" begin
         sb = SecretBuffer("secret")
-        a = bytesavailable(sb)
+        @test bytesavailable(sb) == sb.size
         seek(sb, 3)
-        b = bytesavailable(sb)
+        @test bytesavailable(sb) == sb.size - 3
         seekend(sb)
-        c = bytesavailable(sb)
-        @test a==sb.size && b==(sb.size-3) && c==0
+        @test bytesavailable(sb) == 0
+        shred!(sb)
+    end
     @testset "position" begin
         sb = SecretBuffer("Julia")
         println("testing position")
