@@ -399,4 +399,17 @@ end
     @test B ≈ Matrix(C)
 end
 
+@testset "covering _chol!(A::StridedMatrix)" begin
+    # Taking a hermitian, symmetric positive definite Matrix
+    b = [4 12 -16; 12 37 -43; -16 -43 98]
+    res_b = LinearAlgebra._chol!(b)
+    @test res_b[1] == [2 6 -8; 0 1 5; 0 0 3;]
+    @test res_b[2] != -1 # as b is hermitian
+    c = [2. 2+im 4.; 2-im 3 im; 4 -im 1.]
+    res_c = LinearAlgebra._chol!(c)
+    @test res_c[1] == Complex{Float64}[1.4142135623730951 + 0.0im 1.414213562373095 + 0.7071067811865475im 2.82842712474619 + 0.0im; 0.0 + 0.0im 0.7071067811865478 + 0.0im -5.656854249492377 + 4.242640687119283im; 0.0 + 0.0im 0.0 + 0.0im -56.99999999999994 + 0.0im]
+    @test res_c[2] != -1
+    non_hermit = [1 2 3; 4 5 6; 7 8 9;]
+    @test LinearAlgebra._chol!(non_hermit)[2] == -1 # Since it is not hermitian
+end
 end # module TestCholesky
