@@ -2,10 +2,6 @@
 
 ## RandomDevice
 
-# SamplerUnion(X, Y, ...}) == Union{SamplerType{X}, SamplerType{Y}, ...}
-SamplerUnion(U...) = Union{Any[SamplerType{T} for T in U]...}
-const SamplerBoolBitInteger = SamplerUnion(Bool, BitInteger_types...)
-
 if Sys.iswindows()
     struct RandomDevice <: AbstractRNG
         buffer::Vector{UInt128}
@@ -382,6 +378,7 @@ end
 
 function __init__()
     resize!(empty!(THREAD_RNGs), Threads.nthreads()) # ensures that we didn't save a bad object
+    seed!(TaskLocalRNG())
 end
 
 
