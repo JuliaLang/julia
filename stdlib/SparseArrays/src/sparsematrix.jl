@@ -363,15 +363,14 @@ function _sparse_copyto!(dest::AbstractMatrix, src::AbstractSparseMatrixCSC)
     z = convert(eltype(dest), zero(eltype(src))) # should throw if not possible
     isempty(src) && return dest
     isrc = LinearIndices(src)
-    checkbounds(dest, first(isrc))
-    checkbounds(dest, last(isrc))
+    checkbounds(dest, isrc)
     # If src is not dense, zero out the portion of dest spanned by isrc
     if length(src) > nnz(src)
         for i in isrc
             @inbounds dest[i] = z
         end
     end
-    @inbounds for col in 1:size(src, 2), ptr in nzrange(src, col)
+    @inbounds for col in axes(src, 2), ptr in nzrange(src, col)
         row = rowvals(src)[ptr]
         val = nonzeros(src)[ptr]
         dest[isrc[row, col]] = val
@@ -385,10 +384,8 @@ function copyto!(dest::AbstractMatrix, Rdest::CartesianIndices{2},
     if size(Rdest) != size(Rsrc)
         throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
     end
-    checkbounds(dest, first(Rdest))
-    checkbounds(dest, last(Rdest))
-    checkbounds(src, first(Rsrc))
-    checkbounds(src, last(Rsrc))
+    checkbounds(dest, Rdest)
+    checkbounds(src, Rsrc)
     src′ = Base.unalias(dest, src)
     for I in Rdest
         @inbounds dest[I] = zero(T) # implicitly convert to eltype(dest), throw if not possible
