@@ -884,7 +884,6 @@ JL_CALLABLE(jl_f_fieldtype)
         nargs -= 1;
     }
     JL_NARGS(fieldtype, 2, 2);
-    jl_datatype_t *st = (jl_datatype_t*)args[0];
     return get_fieldtype(args[0], args[1], 1);
 }
 

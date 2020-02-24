@@ -2016,7 +2016,7 @@ static Value *emit_array_nd_index(
     for (size_t k = 0; k < nidxs; k++) {
         idxs[k] = emit_unbox(ctx, T_size, argv[k], (jl_value_t*)jl_long_type); // type asserted by caller
     }
-    Value *ii;
+    Value *ii = NULL;
     for (size_t k = 0; k < nidxs; k++) {
         ii = ctx.builder.CreateSub(idxs[k], ConstantInt::get(T_size, 1));
         i = ctx.builder.CreateAdd(i, ctx.builder.CreateMul(ii, stride));

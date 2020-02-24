@@ -3538,7 +3538,7 @@ static jl_cgval_t emit_global(jl_codectx_t &ctx, jl_sym_t *sym)
 
 static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
 {
-    Value *isnull;
+    Value *isnull = NULL;
     if (jl_is_slot(sym)) {
         size_t sl = jl_slot_number(sym) - 1;
         jl_varinfo_t &vi = ctx.slots[sl];
@@ -3655,7 +3655,7 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
     }
     if (vi.boxroot != NULL) {
         Instruction *boxed = ctx.builder.CreateLoad(T_prjlvalue, vi.boxroot, vi.isVolatile);
-        Value *box_isnull;
+        Value *box_isnull = NULL;
         if (vi.usedUndef)
             box_isnull = ctx.builder.CreateICmpNE(boxed, maybe_decay_untracked(V_null));
         maybe_mark_load_dereferenceable(boxed, vi.usedUndef || vi.pTIndex, typ);
@@ -5298,7 +5298,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     size_t nfargs = ftype->getNumParams();
     Value **args = (Value**) alloca(nfargs * sizeof(Value*));
     unsigned idx = 0;
-    AllocaInst *result;
+    AllocaInst *result = NULL;
     switch (f.cc) {
     case jl_returninfo_t::Boxed:
     case jl_returninfo_t::Register:
@@ -6499,7 +6499,7 @@ static std::unique_ptr<Module> emit_function(
             }
 
             Value *isboxed_union = NULL;
-            Value *retval;
+            Value *retval = NULL;
             Value *sret = has_sret ? f->arg_begin() : NULL;
             Type *retty = f->getReturnType();
             switch (returninfo.cc) {
