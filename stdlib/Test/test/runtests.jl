@@ -916,3 +916,6 @@ end
     end
 end
 
+@testset "Smoke test detect_unbound_args(...; recursive=true)" begin
+    @test detect_unbound_args(Test; recursive=true) == []
+end
