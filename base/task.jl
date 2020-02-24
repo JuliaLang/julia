@@ -708,7 +708,7 @@ function wait()
     W = Workqueues[Threads.threadid()]
     reftask = poptaskref(W)
     result = try_yieldto(ensure_rescheduled, reftask)
-    Sys.isjsvm() || process_events()
+    process_events()
     # return when we come out of the queue
     return result
 end

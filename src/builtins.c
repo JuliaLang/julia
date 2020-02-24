@@ -884,9 +884,6 @@ JL_CALLABLE(jl_f_fieldtype)
         nargs -= 1;
     }
     JL_NARGS(fieldtype, 2, 2);
-    jl_datatype_t *st = (jl_datatype_t*)args[0];
-    if (st == jl_module_type)
-        jl_error("cannot assign variables in other modules");
     return get_fieldtype(args[0], args[1], 1);
 }
 
@@ -1373,6 +1370,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("CodeInfo", (jl_value_t*)jl_code_info_type);
     add_builtin("Ref", (jl_value_t*)jl_ref_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
+    add_builtin("AddrSpacePtr", (jl_value_t*)jl_addrspace_pointer_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
 
     add_builtin("AbstractArray", (jl_value_t*)jl_abstractarray_type);

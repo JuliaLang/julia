@@ -294,7 +294,7 @@ static Function *jlsubtype_func;
 static Function *jlapplytype_func;
 static Function *jl_object_id__func;
 static Function *setjmp_func;
-static Function *memcmp_derived_func;
+static Function *memcmp_func;
 static Function *box_int8_func;
 static Function *box_uint8_func;
 static Function *box_int16_func;
@@ -722,7 +722,7 @@ static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isbox
     if (type_is_ghost(T)) {
         return ghostValue(typ);
     }
-    if (v && !isboxed && v->getType()->isAggregateType() && CountTrackedPointers(v->getType()).count == 0) {
+    if (v && !isboxed && v->getType()->isAggregateType() && !jl_is_vecelement_type(typ) && CountTrackedPointers(v->getType()).count == 0) {
         // eagerly put this back onto the stack
         // llvm mem2reg pass will remove this if unneeded
         return value_to_pointer(ctx, v, typ, NULL);
@@ -2394,13 +2394,24 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
         Value *varg1 = arg1.ispointer() ? maybe_decay_tracked(data_pointer(ctx, arg1)) : arg1.V;
         Value *varg2 = arg2.ispointer() ? maybe_decay_tracked(data_pointer(ctx, arg2)) : arg2.V;
         if (sz > 512 && !sty->layout->haspadding) {
-            varg1 = decay_derived(arg1.ispointer() ? varg1 : value_to_pointer(ctx, arg1).V);
-            varg2 = decay_derived(arg2.ispointer() ? varg2 : value_to_pointer(ctx, arg2).V);
-            Value *answer = ctx.builder.CreateCall(prepare_call(memcmp_derived_func), {
-                        maybe_bitcast(ctx, varg1, T_pint8),
-                        maybe_bitcast(ctx, varg2, T_pint8),
-                        ConstantInt::get(T_size, sz)
-                    });
+            if (!arg1.ispointer())
+                varg1 = value_to_pointer(ctx, arg1).V;
+            if (!arg2.ispointer())
+                varg2 = value_to_pointer(ctx, arg2).V;
+            varg1 = emit_pointer_from_objref(ctx, varg1);
+            varg2 = emit_pointer_from_objref(ctx, varg2);
+            Value *gc_uses[2];
+            int nroots = 0;
+            if ((gc_uses[nroots] = get_gc_root_for(arg1)))
+                nroots++;
+            if ((gc_uses[nroots] = get_gc_root_for(arg2)))
+                nroots++;
+            OperandBundleDef OpBundle("jl_roots", gc_uses);
+            Value *answer = ctx.builder.CreateCall(prepare_call(memcmp_func), {
+                        ctx.builder.CreateBitCast(varg1, T_pint8),
+                        ctx.builder.CreateBitCast(varg2, T_pint8),
+                        ConstantInt::get(T_size, sz) },
+                    ArrayRef<OperandBundleDef>(&OpBundle, nroots ? 1 : 0));
             return ctx.builder.CreateICmpEQ(answer, ConstantInt::get(T_int32, 0));
         }
         else {
@@ -3527,7 +3538,7 @@ static jl_cgval_t emit_global(jl_codectx_t &ctx, jl_sym_t *sym)
 
 static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
 {
-    Value *isnull;
+    Value *isnull = NULL;
     if (jl_is_slot(sym)) {
         size_t sl = jl_slot_number(sym) - 1;
         jl_varinfo_t &vi = ctx.slots[sl];
@@ -3644,7 +3655,7 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
     }
     if (vi.boxroot != NULL) {
         Instruction *boxed = ctx.builder.CreateLoad(T_prjlvalue, vi.boxroot, vi.isVolatile);
-        Value *box_isnull;
+        Value *box_isnull = NULL;
         if (vi.usedUndef)
             box_isnull = ctx.builder.CreateICmpNE(boxed, maybe_decay_untracked(V_null));
         maybe_mark_load_dereferenceable(boxed, vi.usedUndef || vi.pTIndex, typ);
@@ -5287,7 +5298,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     size_t nfargs = ftype->getNumParams();
     Value **args = (Value**) alloca(nfargs * sizeof(Value*));
     unsigned idx = 0;
-    AllocaInst *result;
+    AllocaInst *result = NULL;
     switch (f.cc) {
     case jl_returninfo_t::Boxed:
     case jl_returninfo_t::Register:
@@ -6488,7 +6499,7 @@ static std::unique_ptr<Module> emit_function(
             }
 
             Value *isboxed_union = NULL;
-            Value *retval;
+            Value *retval = NULL;
             Value *sret = has_sret ? f->arg_begin() : NULL;
             Type *retty = f->getReturnType();
             switch (returninfo.cc) {
@@ -6558,16 +6569,17 @@ static std::unique_ptr<Module> emit_function(
                     }
                 }
                 else {
-                    Type *store_ty = julia_type_to_llvm(retvalinfo.typ);
+                    Type *store_ty = retvalinfo.V->getType();
                     Type *dest_ty = store_ty->getPointerTo();
-                    Value *Val = emit_unbox(ctx, store_ty, retvalinfo, retvalinfo.typ);
+                    Value *Val = retvalinfo.V;
                     if (returninfo.return_roots) {
-                        assert(store_ty == Val->getType());
+                        assert(julia_type_to_llvm(retvalinfo.typ) == store_ty);
                         emit_sret_roots(ctx, false, Val, store_ty, f->arg_begin() + 1, returninfo.return_roots);
                     }
                     if (dest_ty != sret->getType())
                         sret = emit_bitcast(ctx, sret, dest_ty);
-                    ctx.builder.CreateStore(Val, sret);
+                    ctx.builder.CreateAlignedStore(Val, sret, julia_alignment(retvalinfo.typ));
+                    assert(retvalinfo.TIndex == NULL && "unreachable"); // unimplemented representation
                 }
             }
 
@@ -7329,16 +7341,17 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(setjmp_func, &jl_setjmp_f);
 
     std::vector<Type*> args_memcmp(0);
-    args_memcmp.push_back(T_pint8_derived);
-    args_memcmp.push_back(T_pint8_derived);
+    args_memcmp.push_back(T_pint8);
+    args_memcmp.push_back(T_pint8);
     args_memcmp.push_back(T_size);
-    memcmp_derived_func =
+    memcmp_func =
         Function::Create(FunctionType::get(T_int32, args_memcmp, false),
                          Function::ExternalLinkage, "memcmp", m);
-    memcmp_derived_func->addFnAttr(Attribute::ReadOnly);
-    memcmp_derived_func->addFnAttr(Attribute::NoUnwind);
-    memcmp_derived_func->addFnAttr(Attribute::ArgMemOnly);
-    add_named_global(memcmp_derived_func, &memcmp);
+    memcmp_func->addFnAttr(Attribute::ReadOnly);
+    memcmp_func->addFnAttr(Attribute::NoUnwind);
+    memcmp_func->addFnAttr(Attribute::ArgMemOnly);
+    add_named_global(memcmp_func, &memcmp);
+    // TODO: inferLibFuncAttributes(*memcmp_func, TLI);
 
     std::vector<Type*> te_args(0);
     te_args.push_back(T_pint8);

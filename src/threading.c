@@ -507,14 +507,10 @@ JL_DLLEXPORT void jl_threading_run(jl_value_t *func)
         args2[0] = schd_func;
         args2[1] = (jl_value_t*)t;
         jl_apply(args2, 2);
-        if (i == 1) {
-            // let threads know work is coming (optimistic)
+        if (i == 1 && nthreads > 2) {
+            // hint to threads that work is coming soon
             jl_wakeup_thread(-1);
         }
-    }
-    if (nthreads > 2) {
-        // let threads know work is ready (guaranteed)
-        jl_wakeup_thread(-1);
     }
     // join with all tasks
     JL_TRY {

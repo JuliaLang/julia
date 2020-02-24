@@ -804,3 +804,7 @@ end
 
     GC.safepoint()
 end
+
+@testset "fieldtypes Module" begin
+    @test fieldtypes(Module) isa Tuple
+end

@@ -253,24 +253,34 @@ static DIType *julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxe
     return (llvm::DIType*)jdt->ditype;
 }
 
-static Value *emit_pointer_from_objref_internal(jl_codectx_t &ctx, Value *V)
-{
-    CallInst *Call = ctx.builder.CreateCall(prepare_call(pointer_from_objref_func), V);
-    Call->addAttribute(AttributeList::FunctionIndex, Attribute::ReadNone);
-    return Call;
-}
-
 static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
 {
     unsigned AS = cast<PointerType>(V->getType())->getAddressSpace();
     if (AS != AddressSpace::Tracked && AS != AddressSpace::Derived)
-        return ctx.builder.CreatePtrToInt(V, T_size);
-    V = ctx.builder.CreateBitCast(decay_derived(V),
-            PointerType::get(T_jlvalue, AddressSpace::Derived));
+        return V;
+    V = decay_derived(V);
+    Type *T = PointerType::get(T_jlvalue, AddressSpace::Derived);
+    if (V->getType() != T)
+        V = ctx.builder.CreateBitCast(V, T);
+    CallInst *Call = ctx.builder.CreateCall(prepare_call(pointer_from_objref_func), V);
+    Call->setAttributes(pointer_from_objref_func->getAttributes());
+    return Call;
+}
 
-    return ctx.builder.CreatePtrToInt(
-        emit_pointer_from_objref_internal(ctx, V),
-        T_size);
+static Value *get_gc_root_for(const jl_cgval_t &x)
+{
+    if (x.Vboxed)
+        return x.Vboxed;
+    if (x.ispointer() && !x.constant) {
+        assert(x.V);
+        if (PointerType *T = dyn_cast<PointerType>(x.V->getType())) {
+            if (T->getAddressSpace() == AddressSpace::Tracked ||
+                T->getAddressSpace() == AddressSpace::Derived) {
+                return x.V;
+            }
+        }
+    }
+    return nullptr;
 }
 
 // --- emitting pointers directly into code ---
@@ -561,6 +571,19 @@ static Type *bitstype_to_llvm(jl_value_t *bt, bool llvmcall = false)
         return T_float32;
     if (bt == (jl_value_t*)jl_float64_type)
         return T_float64;
+    if (jl_is_addrspace_ptr_type(bt)) {
+        int as = 0;
+
+        jl_datatype_t *typ = (jl_datatype_t*)bt;
+        jl_value_t *as_param = jl_svecref(typ->parameters, 1);
+
+        if (jl_is_int32(as_param))
+            as = jl_unbox_int32(as_param);
+        else if (jl_is_int64(as_param))
+            as = jl_unbox_int64(as_param);
+
+        return PointerType::get(T_int8, as);
+    }
     int nb = jl_datatype_size(bt);
     return Type::getIntNTy(jl_LLVMContext, nb * 8);
 }
@@ -684,8 +707,8 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
                 assert(jst->layout == NULL); // otherwise should have been caught above
                 decl = T_void;
             }
-            else if (jl_is_vecelement_type(jt)) {
-                // VecElement type is unwrapped in LLVM
+            else if (jl_is_vecelement_type(jt) && !jl_is_uniontype(jl_svecref(ftypes, 0))) {
+                // VecElement type is unwrapped in LLVM (when possible)
                 decl = latypes[0];
             }
             else if (isarray && !type_is_ghost(lasttype)) {
@@ -1896,7 +1919,7 @@ static Value *emit_arrayptr(jl_codectx_t &ctx, const jl_cgval_t &tinfo, bool isb
 static Value *emit_unsafe_arrayptr(jl_codectx_t &ctx, const jl_cgval_t &tinfo, bool isboxed = false)
 {
     Value *t = boxed(ctx, tinfo);
-    t = emit_pointer_from_objref_internal(ctx, decay_derived(t));
+    t = emit_pointer_from_objref(ctx, decay_derived(t));
     return emit_arrayptr_internal(ctx, tinfo, t, 0, isboxed);
 }
 
@@ -1993,7 +2016,7 @@ static Value *emit_array_nd_index(
     for (size_t k = 0; k < nidxs; k++) {
         idxs[k] = emit_unbox(ctx, T_size, argv[k], (jl_value_t*)jl_long_type); // type asserted by caller
     }
-    Value *ii;
+    Value *ii = NULL;
     for (size_t k = 0; k < nidxs; k++) {
         ii = ctx.builder.CreateSub(idxs[k], ConstantInt::get(T_size, 1));
         i = ctx.builder.CreateAdd(i, ctx.builder.CreateMul(ii, stride));
@@ -2737,6 +2760,8 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                         }
                         llvm_idx = ptindex;
                         fval = tindex;
+                        if (jl_is_vecelement_type(ty))
+                            fval = ctx.builder.CreateInsertValue(strct, fval, makeArrayRef(llvm_idx));
                     }
                     else {
                         Value *ptindex = emit_struct_gep(ctx, lt, strct, offs + fsz);

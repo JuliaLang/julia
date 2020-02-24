@@ -51,22 +51,27 @@ let
 
     maxlen = reduce(max, textwidth.(string.(stdlibs)); init=0)
 
-    print_time = (mod, t) -> (print(rpad(string(mod) * "  ", maxlen + 3, "─")); Base.time_print(t * 10^9); println())
-    print_time(Base, (Base.end_base_include - Base.start_base_include) * 10^(-9))
+    # use a temp module to avoid leaving the type of this closure in Main
+    m = Module()
+    GC.@preserve m begin
+        print_time = @eval m (mod, t) -> (print(rpad(string(mod) * "  ", $maxlen + 3, "─"));
+                                          Base.time_print(t * 10^9); println())
+        print_time(Base, (Base.end_base_include - Base.start_base_include) * 10^(-9))
 
-    Base._track_dependencies[] = true
-    Base.tot_time_stdlib[] = @elapsed for stdlib in stdlibs
-        tt = @elapsed Base.require(Base, stdlib)
-        print_time(stdlib, tt)
-    end
-    for dep in Base._require_dependencies
-        dep[3] == 0.0 && continue
-        push!(Base._included_files, dep[1:2])
-    end
-    empty!(Base._require_dependencies)
-    Base._track_dependencies[] = false
+        Base._track_dependencies[] = true
+        Base.tot_time_stdlib[] = @elapsed for stdlib in stdlibs
+            tt = @elapsed Base.require(Base, stdlib)
+            print_time(stdlib, tt)
+        end
+        for dep in Base._require_dependencies
+            dep[3] == 0.0 && continue
+            push!(Base._included_files, dep[1:2])
+        end
+        empty!(Base._require_dependencies)
+        Base._track_dependencies[] = false
 
-    print_time("Stdlibs total", Base.tot_time_stdlib[])
+        print_time("Stdlibs total", Base.tot_time_stdlib[])
+    end
 end
 end
 

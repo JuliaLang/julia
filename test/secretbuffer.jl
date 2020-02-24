@@ -80,6 +80,15 @@ using Test
         @test read(sb, String) == "\xff\xff\xff"
         shred!(sb)
     end
+    @testset "bytes available" begin
+        sb = SecretBuffer("secret")
+        @test bytesavailable(sb) == sb.size
+        seek(sb, 3)
+        @test bytesavailable(sb) == sb.size - 3
+        seekend(sb)
+        @test bytesavailable(sb) == 0
+        shred!(sb)
+    end
     @testset "testing the skip function" begin
         sb = SecretBuffer("computer")
         skip(sb, 2)
