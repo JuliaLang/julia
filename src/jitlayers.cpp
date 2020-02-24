@@ -370,6 +370,7 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
             cantFail(std::move(Err), "resolveSymbol failed");
           })),
     ObjectLayer(
+        AcknowledgeORCv1Deprecation,
         ES,
         [this](RTDyldObjHandleT) {
                       ObjLayerT::Resources result;
@@ -380,6 +381,7 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
         std::ref(registrar)
         ),
     CompileLayer(
+            AcknowledgeORCv1Deprecation,
             ObjectLayer,
             CompilerT(this)
         )
