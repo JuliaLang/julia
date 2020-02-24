@@ -354,6 +354,55 @@ function copyto!(A::AbstractSparseMatrixCSC, B::AbstractSparseMatrixCSC)
     return A
 end
 
+copyto!(A::AbstractMatrix, B::AbstractSparseMatrixCSC) = _sparse_copyto!(A, B)
+# Ambiguity resolution
+copyto!(A::PermutedDimsArray, B::AbstractSparseMatrixCSC) = _sparse_copyto!(A, B)
+
+function _sparse_copyto!(dest::AbstractMatrix, src::AbstractSparseMatrixCSC)
+    dest === src && return dest
+    z = convert(eltype(dest), zero(eltype(src))) # should throw if not possible
+    isempty(src) && return dest
+    isrc = LinearIndices(src)
+    checkbounds(dest, isrc)
+    # If src is not dense, zero out the portion of dest spanned by isrc
+    if length(src) > nnz(src)
+        for i in isrc
+            @inbounds dest[i] = z
+        end
+    end
+    @inbounds for col in axes(src, 2), ptr in nzrange(src, col)
+        row = rowvals(src)[ptr]
+        val = nonzeros(src)[ptr]
+        dest[isrc[row, col]] = val
+    end
+    return dest
+end
+
+function copyto!(dest::AbstractMatrix, Rdest::CartesianIndices{2},
+                 src::AbstractSparseMatrixCSC{T}, Rsrc::CartesianIndices{2}) where {T}
+    isempty(Rdest) && return dest
+    if size(Rdest) != size(Rsrc)
+        throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
+    end
+    checkbounds(dest, Rdest)
+    checkbounds(src, Rsrc)
+    src′ = Base.unalias(dest, src)
+    for I in Rdest
+        @inbounds dest[I] = zero(T) # implicitly convert to eltype(dest), throw if not possible
+    end
+    rows, cols = Rsrc.indices
+    lin = LinearIndices(Base.IdentityUnitRange.(Rsrc.indices))
+    @inbounds for col in cols, ptr in nzrange(src′, col)
+        row = rowvals(src′)[ptr]
+        if row in rows
+            val = nonzeros(src′)[ptr]
+            I = Rdest[lin[row, col]]
+            dest[I] = val
+        end
+    end
+    return dest
+end
+
 ## similar
 #
 # parent method for similar that preserves stored-entry structure (for when new and old dims match)
@@ -546,15 +595,8 @@ SparseMatrixCSC{Tv,Ti}(M::Transpose{<:Any,<:AbstractSparseMatrixCSC}) where {Tv,
 
 # converting from SparseMatrixCSC to other matrix types
 function Matrix(S::AbstractSparseMatrixCSC{Tv}) where Tv
-    # Handle cases where zero(Tv) is not defined but the array is dense.
-    A = length(S) == nnz(S) ? Matrix{Tv}(undef, size(S, 1), size(S, 2)) : zeros(Tv, size(S, 1), size(S, 2))
-    for Sj in 1:size(S, 2)
-        for Sk in nzrange(S, Sj)
-            Si = rowvals(S)[Sk]
-            Sv = nonzeros(S)[Sk]
-            A[Si, Sj] = Sv
-        end
-    end
+    A = Matrix{Tv}(undef, size(S, 1), size(S, 2))
+    copyto!(A, S)
     return A
 end
 Array(S::AbstractSparseMatrixCSC) = Matrix(S)
