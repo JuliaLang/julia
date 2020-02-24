@@ -1719,36 +1719,28 @@ function rdiv!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitLowerTriangular})
 end
 
 function lmul!(adjA::Adjoint{<:Any,<:Union{LowerTriangular,UnitLowerTriangular}}, B::UpperTriangular)
-    A = adjA.parent
-    return UpperTriangular(lmul!(adjoint(A), triu!(B.data)))
+    return UpperTriangular(lmul!(adjA, triu!(B.data)))
 end
 function lmul!(adjA::Adjoint{<:Any,<:Union{UpperTriangular,UnitUpperTriangular}}, B::LowerTriangular)
-    A = adjA.parent
-    return LowerTriangular(lmul!(adjoint(A), tril!(B.data)))
+    return LowerTriangular(lmul!(adjA, tril!(B.data)))
 end
 function lmul!(transA::Transpose{<:Any,<:Union{LowerTriangular,UnitLowerTriangular}}, B::UpperTriangular)
-    A = transA.parent
-    return UpperTriangular(lmul!(transpose(A), triu!(B.data)))
+    return UpperTriangular(lmul!(transA, triu!(B.data)))
 end
 function lmul!(transA::Transpose{<:Any,<:Union{UpperTriangular,UnitUpperTriangular}}, B::LowerTriangular)
-    A = transA.parent
-    return LowerTriangular(lmul!(transpose(A), tril!(B.data)))
+    return LowerTriangular(lmul!(transA, tril!(B.data)))
 end
 function ldiv!(adjA::Adjoint{<:Any,<:Union{LowerTriangular,UnitLowerTriangular}}, B::UpperTriangular)
-    A = adjA.parent
-    return UpperTriangular(ldiv!(adjoint(A), triu!(B.data)))
+    return UpperTriangular(ldiv!(adjA, triu!(B.data)))
 end
 function ldiv!(adjA::Adjoint{<:Any,<:Union{UpperTriangular,UnitUpperTriangular}}, B::LowerTriangular)
-    A = adjA.parent
-    return LowerTriangular(ldiv!(adjoint(A), tril!(B.data)))
+    return LowerTriangular(ldiv!(adjA, tril!(B.data)))
 end
 function ldiv!(transA::Transpose{<:Any,<:Union{LowerTriangular,UnitLowerTriangular}}, B::UpperTriangular)
-    A = transA.parent
-    return UpperTriangular(ldiv!(transpose(A), triu!(B.data)))
+    return UpperTriangular(ldiv!(transA, triu!(B.data)))
 end
 function ldiv!(transA::Transpose{<:Any,<:Union{UpperTriangular,UnitUpperTriangular}}, B::LowerTriangular)
-    A = transA.parent
-    return LowerTriangular(ldiv!(transpose(A), tril!(B.data)))
+    return LowerTriangular(ldiv!(transA, tril!(B.data)))
 end
 
 function rdiv!(A::UpperTriangular, B::Union{UpperTriangular,UnitUpperTriangular})
@@ -1759,36 +1751,28 @@ function rdiv!(A::LowerTriangular, B::Union{LowerTriangular,UnitLowerTriangular}
 end
 
 function rmul!(A::UpperTriangular, adjB::Adjoint{<:Any,<:Union{LowerTriangular,UnitLowerTriangular}})
-    B = adjB.parent
-    return UpperTriangular(rmul!(triu!(A.data), adjoint(B)))
+    return UpperTriangular(rmul!(triu!(A.data), adjB))
 end
 function rmul!(A::LowerTriangular, adjB::Adjoint{<:Any,<:Union{UpperTriangular,UnitUpperTriangular}})
-    B = adjB.parent
-    return LowerTriangular(rmul!(tril!(A.data), adjoint(B)))
+    return LowerTriangular(rmul!(tril!(A.data), adjB))
 end
 function rmul!(A::UpperTriangular, transB::Transpose{<:Any,<:Union{LowerTriangular,UnitLowerTriangular}})
-    B = transB.parent
-    return UpperTriangular(rmul!(triu!(A.data), transpose(B)))
+    return UpperTriangular(rmul!(triu!(A.data), transB))
 end
 function rmul!(A::LowerTriangular, transB::Transpose{<:Any,<:Union{UpperTriangular,UnitUpperTriangular}})
-    B = transB.parent
-    return LowerTriangular(rmul!(tril!(A.data), transpose(B)))
+    return LowerTriangular(rmul!(tril!(A.data), transB))
 end
 function rdiv!(A::UpperTriangular, adjB::Adjoint{<:Any,<:Union{LowerTriangular,UnitLowerTriangular}})
-    B = adjB.parent
-    return UpperTriangular(rdiv!(triu!(A.data), adjoint(B)))
+    return UpperTriangular(rdiv!(triu!(A.data), adjB))
 end
 function rdiv!(A::LowerTriangular, adjB::Adjoint{<:Any,<:Union{UpperTriangular,UnitUpperTriangular}})
-    B = adjB.parent
-    return LowerTriangular(rdiv!(tril!(A.data), adjoint(B)))
+    return LowerTriangular(rdiv!(tril!(A.data), adjB))
 end
 function rdiv!(A::UpperTriangular, transB::Transpose{<:Any,<:Union{LowerTriangular,UnitLowerTriangular}})
-    B = transB.parent
-    return UpperTriangular(rdiv!(triu!(A.data), transpose(B)))
+    return UpperTriangular(rdiv!(triu!(A.data), transB))
 end
 function rdiv!(A::LowerTriangular, transB::Transpose{<:Any,<:Union{UpperTriangular,UnitUpperTriangular}})
-    B = transB.parent
-    return LowerTriangular(rdiv!(tril!(A.data), transpose(B)))
+    return LowerTriangular(rdiv!(tril!(A.data), transB))
 end
 
 # Promotion
