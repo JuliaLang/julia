@@ -1247,7 +1247,7 @@ static void jl_reinit_item(jl_value_t *v, int how)
                 nbindings -= 1;
             }
             if (mod->usings.items != &mod->usings._space[0]) {
-                void **newitems = (void**)malloc(mod->usings.max * sizeof(void*));
+                void **newitems = (void**)malloc_s(mod->usings.max * sizeof(void*));
                 memcpy(newitems, mod->usings.items, mod->usings.len * sizeof(void*));
                 mod->usings.items = newitems;
             }
