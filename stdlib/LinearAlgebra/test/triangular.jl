@@ -342,20 +342,20 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 @test_throws DimensionMismatch transpose(A2) * offsizeA
                 @test_throws DimensionMismatch A2'  * offsizeA
                 @test_throws DimensionMismatch A2   * offsizeA
-                if( uplo1 == uplo2 && elty1 == elty2 != Int && t1 != UnitLowerTriangular && t1 != UnitUpperTriangular )
+                if (uplo1 == uplo2 && elty1 == elty2 != Int && t1 != UnitLowerTriangular && t1 != UnitUpperTriangular)
                     @test rdiv!(copy(A1), copy(A2)) ≈ A1/A2 ≈ Matrix(A1)/Matrix(A2)
                 end
-                if( uplo1 != uplo2 && elty1 == elty2 != Int && t2 != UnitLowerTriangular && t2 != UnitUpperTriangular )
-                    @test lmul!(adjoint(copy(A1)), copy(A2)) ≈ A1'*A2
-                    @test lmul!(transpose(copy(A1)), copy(A2)) ≈ transpose(A1)*A2
-                    @test ldiv!(adjoint(copy(A1)), copy(A2)) ≈ A1'\A2
-                    @test ldiv!(transpose(copy(A1)), copy(A2)) ≈ transpose(A1)\A2
+                if (uplo1 != uplo2 && elty1 == elty2 != Int && t2 != UnitLowerTriangular && t2 != UnitUpperTriangular)
+                    @test lmul!(adjoint(copy(A1)), copy(A2)) ≈ A1'*A2 ≈ Matrix(A1)'*Matrix(A2)
+                    @test lmul!(transpose(copy(A1)), copy(A2)) ≈ transpose(A1)*A2 ≈ transpose(Matrix(A1))*Matrix(A2)
+                    @test ldiv!(adjoint(copy(A1)), copy(A2)) ≈ A1'\A2 ≈ Matrix(A1)'\Matrix(A2)
+                    @test ldiv!(transpose(copy(A1)), copy(A2)) ≈ transpose(A1)\A2 ≈ transpose(Matrix(A1))\Matrix(A2)
                 end
-                if( uplo1 != uplo2 && elty1 == elty2 != Int && t1 != UnitLowerTriangular && t1 != UnitUpperTriangular )
-                    @test rmul!(copy(A1), adjoint(copy(A2))) ≈ A1*A2'
-                    @test rmul!(copy(A1), transpose(copy(A2))) ≈ A1*transpose(A2)
-                    @test rdiv!(copy(A1), adjoint(copy(A2))) ≈ A1/A2'
-                    @test rdiv!(copy(A1), transpose(copy(A2))) ≈ A1/transpose(A2)
+                if (uplo1 != uplo2 && elty1 == elty2 != Int && t1 != UnitLowerTriangular && t1 != UnitUpperTriangular)
+                    @test rmul!(copy(A1), adjoint(copy(A2))) ≈ A1*A2' ≈ Matrix(A1)*Matrix(A2)'
+                    @test rmul!(copy(A1), transpose(copy(A2))) ≈ A1*transpose(A2) ≈ Matrix(A1)*transpose(Matrix(A2))
+                    @test rdiv!(copy(A1), adjoint(copy(A2))) ≈ A1/A2' ≈ Matrix(A1)/Matrix(A2)'
+                    @test rdiv!(copy(A1), transpose(copy(A2))) ≈ A1/transpose(A2) ≈ Matrix(A1)/transpose(Matrix(A2))
                 end
             end
         end
@@ -403,20 +403,20 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test B'A1' ≈ B'Matrix(A1)'
 
             if eltyB == elty1
-                @test mul!(similar(B),A1,B)  ≈ A1*B
-                @test mul!(similar(B), A1, adjoint(B)) ≈ A1*B'
-                @test mul!(similar(B), A1, transpose(B)) ≈ A1*transpose(B)
-                @test mul!(similar(B), adjoint(A1), adjoint(B)) ≈ A1'*B'
-                @test mul!(similar(B), transpose(A1), transpose(B)) ≈ transpose(A1)*transpose(B)
-                @test mul!(similar(B), transpose(A1), adjoint(B)) ≈ transpose(A1)*B'
-                @test mul!(similar(B), adjoint(A1), transpose(B)) ≈ A1'*transpose(B)
-                @test mul!(similar(B), adjoint(A1), B) ≈ A1'*B
-                @test mul!(similar(B), transpose(A1), B) ≈ transpose(A1)*B
+                @test mul!(similar(B), A1, B) ≈ Matrix(A1)*B
+                @test mul!(similar(B), A1, adjoint(B)) ≈ Matrix(A1)*B'
+                @test mul!(similar(B), A1, transpose(B)) ≈ Matrix(A1)*transpose(B)
+                @test mul!(similar(B), adjoint(A1), adjoint(B)) ≈ Matrix(A1)'*B'
+                @test mul!(similar(B), transpose(A1), transpose(B)) ≈ transpose(Matrix(A1))*transpose(B)
+                @test mul!(similar(B), transpose(A1), adjoint(B)) ≈ transpose(Matrix(A1))*B'
+                @test mul!(similar(B), adjoint(A1), transpose(B)) ≈ Matrix(A1)'*transpose(B)
+                @test mul!(similar(B), adjoint(A1), B) ≈ Matrix(A1)'*B
+                @test mul!(similar(B), transpose(A1), B) ≈ transpose(Matrix(A1))*B
                 # test also vector methods
                 B1 = vec(B[1,:])
-                @test mul!(similar(B1),A1,B1)  ≈ A1*B1
-                @test mul!(similar(B1), adjoint(A1), B1) ≈ A1'*B1
-                @test mul!(similar(B1), transpose(A1), B1) ≈ transpose(A1)*B1
+                @test mul!(similar(B1), A1, B1)  ≈ Matrix(A1)*B1
+                @test mul!(similar(B1), adjoint(A1), B1) ≈ Matrix(A1)'*B1
+                @test mul!(similar(B1), transpose(A1), B1) ≈ transpose(Matrix(A1))*B1
             end
             #error handling
             Ann, Bmm, bm = A1, Matrix{eltyB}(undef, n+1, n+1), Vector{eltyB}(undef, n+1)
