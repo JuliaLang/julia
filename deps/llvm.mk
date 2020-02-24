@@ -414,6 +414,7 @@ $(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm7-revert-D44485))
 $(eval $(call LLVM_PATCH,llvm-8.0-D66657-codegen-degenerate)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm-8.0-D71495-vectorize-freduce)) # remove for 10.0
+$(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
 endif # LLVM_VER 9.0
 
 
