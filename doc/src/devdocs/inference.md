@@ -28,8 +28,8 @@ m = first(mths)
 
 # Create variables needed to call `typeinf_code`
 params = Core.Compiler.Params(typemax(UInt))  # parameter is the world age,
-                                                        #   typemax(UInt) -> most recent
-sparams = Core.svec()      # this particular method doesn't have type-parameters
+params = Core.Compiler.Params(Base.get_world_counter())
+sparams = Core.svec(Int64)      # this particular method has a type-parameter
 optimize = true            # run all inference optimizations
 Core.Compiler.typeinf_code(m, atypes, sparams, optimize, params)
 ```
