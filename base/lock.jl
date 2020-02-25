@@ -210,6 +210,23 @@ function lock(f, l::Lockable)
     end
 end
 
+function trylock(f, l::Lockable)
+    if trylock(l.lock)
+        try
+            return f(l.value)
+        finally
+            unlock(l.lock)
+        end
+    end
+    return false
+end
+
+# implement the rest of the Lock interface on Lockable
+islocked(l::Lockable) = islocked(l.lock)
+lock(l::Lockable) = lock(l.lock)
+trylock(l::Lockable) = trylock(l.lock)
+unlock(l::Lockable) = unlock(l.lock)
+
 function trylock(f, l::AbstractLock)
     if trylock(l)
         try
