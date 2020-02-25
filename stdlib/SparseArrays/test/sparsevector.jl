@@ -174,6 +174,7 @@ end
             @test sprand(r1, 100, .9) == sprand(r2, 100, .9)
             @test sprandn(r1, 100, .9) == sprandn(r2, 100, .9)
             @test sprand(r1, Bool, 100, .9) == sprand(r2,  Bool, 100, .9)
+            @test sprandn(r1, Float16, 100, .9) == sprandn(r2,  Float16, 100, .9)
         end
 
         # test sprand with function inputs
@@ -249,6 +250,14 @@ end
             @test isa(r, SparseVector{Float64,Int})
             @test all(!iszero, nonzeros(r))
             @test Array(r) == Array(x)[bI]
+            bI = falses(length(x), 1) # AbstractArray rather than AbstractVector
+            bI[I, 1] .= true
+            r = x[bI]
+            @test isa(r, SparseVector{Float64,Int})
+            @test all(!iszero, nonzeros(r))
+            bIv = falses(length(x))
+            bIv[I] .= true
+            @test Array(r) == Array(x)[bIv]
         end
     end
 end
@@ -1168,15 +1177,11 @@ end
     for vwithzeros in (vposzeros, vnegzeros, vbothsigns)
         # Basic functionality / dropzeros!
         @test dropzeros!(copy(vwithzeros)) == v
-        @test dropzeros!(copy(vwithzeros), trim = false) == v
         # Basic functionality / dropzeros
         @test dropzeros(vwithzeros) == v
-        @test dropzeros(vwithzeros, trim = false) == v
         # Check trimming works as expected
         @test length(nonzeros(dropzeros!(copy(vwithzeros)))) == length(nonzeros(v))
         @test length(nonzeroinds(dropzeros!(copy(vwithzeros)))) == length(nonzeroinds(v))
-        @test length(nonzeros(dropzeros!(copy(vwithzeros), trim = false))) == length(nonzeros(vwithzeros))
-        @test length(nonzeroinds(dropzeros!(copy(vwithzeros), trim = false))) == length(nonzeroinds(vwithzeros))
     end
 end
 

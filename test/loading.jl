@@ -660,3 +660,25 @@ Base.ACTIVE_PROJECT[] = saved_active_project
 module Foo; import Libdl; end
 import .Foo.Libdl; import Libdl
 @test Foo.Libdl === Libdl
+
+@testset "include with mapexpr" begin
+    let exprs = Any[]
+        @test 13 === include_string(@__MODULE__, "1+1\n3*4") do ex
+            ex isa LineNumberNode || push!(exprs, ex)
+            Meta.isexpr(ex, :call) ? :(1 + $ex) : ex
+        end
+        @test exprs == [:(1 + 1), :(3 * 4)]
+    end
+    # test using test_exec.jl, just because that is the shortest handy file
+    for incl in (include, (mapexpr,path) -> Base.include(mapexpr, @__MODULE__, path))
+        let exprs = Any[]
+            incl("test_exec.jl") do ex
+                ex isa LineNumberNode || push!(exprs, ex)
+                Meta.isexpr(ex, :macrocall) ? :nothing : ex
+            end
+            @test length(exprs) == 2 && exprs[1] == :(using Test)
+            @test Meta.isexpr(exprs[2], :macrocall) &&
+                  exprs[2].args[[1,3]] == [Symbol("@test"), :(1 == 2)]
+        end
+    end
+end

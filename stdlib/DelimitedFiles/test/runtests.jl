@@ -250,6 +250,7 @@ end
 
 @testset "show with MIME types" begin
     @test sprint(show, "text/csv", [1 2; 3 4]) == "1,2\n3,4\n"
+    @test sprint(show, "text/tab-separated-values", [1 2; 3 4]) == "1\t2\n3\t4\n"
 
     for writefunc in ((io,x) -> show(io, "text/csv", x),
                       (io,x) -> invoke(writedlm, Tuple{IO,Any,Any}, io, x, ","))
@@ -266,6 +267,23 @@ end
             @test vec(readdlm(io, ',')) == x
         end
     end
+
+    for writefunc in ((io,x) -> show(io, "text/tab-separated-values", x),
+                      (io,x) -> invoke(writedlm, Tuple{IO,Any,Any}, io, x, "\t"))
+        # iterable collections of iterable rows:
+        let x = [(1,2), (3,4)], io = IOBuffer()
+            writefunc(io, x)
+            seek(io, 0)
+            @test readdlm(io, '\t') == [1 2; 3 4]
+        end
+        # vectors of strings:
+        let x = ["foo", "bar"], io = IOBuffer()
+            writefunc(io, x)
+            seek(io, 0)
+            @test vec(readdlm(io, '\t')) == x
+        end
+    end
+
 end
 
 # Test that we can read a write protected file

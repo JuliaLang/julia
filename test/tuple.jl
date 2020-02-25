@@ -480,3 +480,18 @@ end
 
 # tuple_type_tail on non-normalized vararg tuple
 @test Base.tuple_type_tail(Tuple{Vararg{T, 3}} where T<:Real) == Tuple{Vararg{T, 2}} where T<:Real
+
+@testset "setindex" begin
+    @test Base.setindex((1, ), 2, 1) === (2, )
+    @test Base.setindex((1, 2), 3, 1) === (3, 2)
+    @test_throws BoundsError Base.setindex((), 1, 1)
+    @test_throws BoundsError Base.setindex((1, ), 2, 2)
+    @test_throws BoundsError Base.setindex((1, 2), 2, 0)
+    @test_throws BoundsError Base.setindex((1, 2, 3), 2, -1)
+
+    @test_throws BoundsError Base.setindex((1, 2), 2, 3)
+    @test_throws BoundsError Base.setindex((1, 2), 2, 4)
+
+    @test Base.setindex((1, 2, 4), 4, true) === (4, 2, 4)
+    @test_throws BoundsError Base.setindex((1, 2), 2, false)
+end

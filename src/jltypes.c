@@ -115,6 +115,8 @@ jl_datatype_t *jl_lineinfonode_type;
 jl_unionall_t *jl_ref_type;
 jl_unionall_t *jl_pointer_type;
 jl_typename_t *jl_pointer_typename;
+jl_unionall_t *jl_addrspace_pointer_type;
+jl_typename_t *jl_addrspace_pointer_typename;
 jl_datatype_t *jl_void_type; // deprecated
 jl_datatype_t *jl_nothing_type;
 jl_datatype_t *jl_voidpointer_type;
@@ -2023,10 +2025,11 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_perm_symsvec(2, "name", "parent"),
                         jl_svec(2, jl_symbol_type, jl_any_type), 0, 1, 2);
 
+    jl_value_t *symornothing[2] = { (jl_value_t*)jl_symbol_type, (jl_value_t*)jl_void_type };
     jl_linenumbernode_type =
         jl_new_datatype(jl_symbol("LineNumberNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(2, "line", "file"),
-                        jl_svec(2, jl_long_type, jl_any_type), 0, 0, 2);
+                        jl_svec(2, jl_long_type, jl_type_union(symornothing, 2)), 0, 0, 2);
 
     jl_lineinfonode_type =
         jl_new_datatype(jl_symbol("LineInfoNode"), core, jl_any_type, jl_emptysvec,
@@ -2235,6 +2238,15 @@ void jl_init_types(void) JL_GC_DISABLED
                              (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_ref_type, jl_svec_data(tv), 1), tv,
                              sizeof(void*)*8)->name->wrapper;
     jl_pointer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_pointer_type))->name;
+
+    // AddrSpacePtr{T, AS} where {T, AS}
+    tv = jl_svec2(tvar("T"), tvar("AS"));
+    jl_svec_t *tv_base = jl_svec1(tvar("T"));
+    jl_addrspace_pointer_type = (jl_unionall_t*)
+        jl_new_primitivetype((jl_value_t*)jl_symbol("AddrSpacePtr"), core,
+                             (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_ref_type, jl_svec_data(tv_base), 1), tv,
+                             sizeof(void*)*8)->name->wrapper;
+    jl_addrspace_pointer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_addrspace_pointer_type))->name;
 
     // Type{T} where T<:Tuple
     tttvar = jl_new_typevar(jl_symbol("T"),

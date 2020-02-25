@@ -91,6 +91,37 @@ void JL_UV_LOCK(void);
 extern "C" {
 #endif
 
+//--------------------------------------------------
+// timers
+// Returns time in nanosec
+JL_DLLEXPORT uint64_t jl_hrtime(void);
+
+// number of cycles since power-on
+static inline uint64_t cycleclock(void)
+{
+#if defined(_CPU_X86_64_)
+    uint64_t low, high;
+    __asm__ volatile("rdtsc" : "=a"(low), "=d"(high));
+    return (high << 32) | low;
+#elif defined(_CPU_X86_)
+    int64_t ret;
+    __asm__ volatile("rdtsc" : "=A"(ret));
+    return ret;
+#elif defined(_CPU_AARCH64_)
+    // System timer of ARMv8 runs at a different frequency than the CPU's.
+    // The frequency is fixed, typically in the range 1-50MHz.  It can be
+    // read at CNTFRQ special register.  We assume the OS has set up
+    // the virtual timer properly.
+    int64_t virtual_timer_value;
+    __asm__ volatile("mrs %0, cntvct_el0" : "=r"(virtual_timer_value));
+    return virtual_timer_value;
+#else
+    #warning No cycleclock() definition for your platform
+    // copy from https://github.com/google/benchmark/blob/v1.5.0/src/cycleclock.h
+    return 0;
+#endif
+}
+
 #include "timing.h"
 
 #ifdef _COMPILER_MICROSOFT_
@@ -452,7 +483,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
 jl_value_t *jl_eval_global_var(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *e);
 jl_value_t *jl_parse_eval_all(const char *fname,
                               const char *content, size_t contentlen,
-                              jl_module_t *inmodule);
+                              jl_module_t *inmodule,
+                              jl_value_t *mapexpr);
 jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src);
 jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_code_info_t *src,
@@ -828,11 +860,6 @@ void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_AR
                       jl_bt_element_t *bt_data, size_t bt_size);
 void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT;
 
-//--------------------------------------------------
-// timers
-// Returns time in nanosec
-JL_DLLEXPORT uint64_t jl_hrtime(void);
-
 // congruential random number generator
 // for a small amount of thread-local randomness
 // we could just use libc:`rand()`, but we want to ensure this is fast
@@ -1007,10 +1034,22 @@ jl_typemap_entry_t *jl_typemap_insert(jl_typemap_t **cache,
                                       const struct jl_typemap_info *tparams,
                                       size_t min_world, size_t max_world);
 
+struct jl_typemap_assoc {
+    // inputs
+    jl_value_t *const types;
+    size_t const world;
+    size_t const max_world_mask;
+    // outputs
+    jl_svec_t *env; // subtype env (initialize to null to perform intersection without an environment)
+    size_t min_valid;
+    size_t max_valid;
+};
+
 jl_typemap_entry_t *jl_typemap_assoc_by_type(
         jl_typemap_t *ml_or_cache JL_PROPAGATES_ROOT,
-        jl_value_t *types, jl_svec_t **penv,
-        int8_t subtype, int8_t offs, size_t world, size_t max_world_mask);
+        struct jl_typemap_assoc *search,
+        int8_t offs, uint8_t subtype);
+
 jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_value_t *arg1, jl_value_t **args, size_t n, int8_t offs, size_t world);
 jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *mn, jl_value_t *arg1, jl_value_t **args, size_t n, size_t world);
 STATIC_INLINE jl_typemap_entry_t *jl_typemap_assoc_exact(
@@ -1035,9 +1074,9 @@ struct typemap_intersection_env;
 typedef int (*jl_typemap_intersection_visitor_fptr)(jl_typemap_entry_t *l, struct typemap_intersection_env *closure);
 struct typemap_intersection_env {
     // input values
-    jl_typemap_intersection_visitor_fptr fptr; // fptr to call on a match
-    jl_value_t *type; // type to match
-    jl_value_t *va; // the tparam0 for the vararg in type, if applicable (or NULL)
+    jl_typemap_intersection_visitor_fptr const fptr; // fptr to call on a match
+    jl_value_t *const type; // type to match
+    jl_value_t *const va; // the tparam0 for the vararg in type, if applicable (or NULL)
     // output values
     jl_value_t *ti; // intersection type
     jl_svec_t *env; // intersection env (initialize to null to perform intersection without an environment)
