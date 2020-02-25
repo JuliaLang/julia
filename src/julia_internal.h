@@ -1034,10 +1034,22 @@ jl_typemap_entry_t *jl_typemap_insert(jl_typemap_t **cache,
                                       const struct jl_typemap_info *tparams,
                                       size_t min_world, size_t max_world);
 
+struct jl_typemap_assoc {
+    // inputs
+    jl_value_t *const types;
+    size_t const world;
+    size_t const max_world_mask;
+    // outputs
+    jl_svec_t *env; // subtype env (initialize to null to perform intersection without an environment)
+    size_t min_valid;
+    size_t max_valid;
+};
+
 jl_typemap_entry_t *jl_typemap_assoc_by_type(
         jl_typemap_t *ml_or_cache JL_PROPAGATES_ROOT,
-        jl_value_t *types, jl_svec_t **penv,
-        int8_t subtype, int8_t offs, size_t world, size_t max_world_mask);
+        struct jl_typemap_assoc *search,
+        int8_t offs, uint8_t subtype);
+
 jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_value_t *arg1, jl_value_t **args, size_t n, int8_t offs, size_t world);
 jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *mn, jl_value_t *arg1, jl_value_t **args, size_t n, size_t world);
 STATIC_INLINE jl_typemap_entry_t *jl_typemap_assoc_exact(
@@ -1062,9 +1074,9 @@ struct typemap_intersection_env;
 typedef int (*jl_typemap_intersection_visitor_fptr)(jl_typemap_entry_t *l, struct typemap_intersection_env *closure);
 struct typemap_intersection_env {
     // input values
-    jl_typemap_intersection_visitor_fptr fptr; // fptr to call on a match
-    jl_value_t *type; // type to match
-    jl_value_t *va; // the tparam0 for the vararg in type, if applicable (or NULL)
+    jl_typemap_intersection_visitor_fptr const fptr; // fptr to call on a match
+    jl_value_t *const type; // type to match
+    jl_value_t *const va; // the tparam0 for the vararg in type, if applicable (or NULL)
     // output values
     jl_value_t *ti; // intersection type
     jl_svec_t *env; // intersection env (initialize to null to perform intersection without an environment)
