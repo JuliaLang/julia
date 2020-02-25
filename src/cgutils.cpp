@@ -944,9 +944,11 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
             ctx.builder.SetInsertPoint(boxBB);
             auto boxTy = emit_typeof(ctx, p.Vboxed);
             ctx.builder.CreateBr(mergeBB);
+            boxBB = ctx.builder.GetInsertBlock(); // could have changed
             ctx.builder.SetInsertPoint(unboxBB);
             auto unboxTy = emit_unboxty();
             ctx.builder.CreateBr(mergeBB);
+            unboxBB = ctx.builder.GetInsertBlock(); // could have changed
             ctx.builder.SetInsertPoint(mergeBB);
             auto phi = ctx.builder.CreatePHI(T_prjlvalue, 2);
             phi->addIncoming(boxTy, boxBB);
@@ -1012,6 +1014,7 @@ static Value *emit_sizeof(jl_codectx_t &ctx, const jl_cgval_t &p)
             Value *datatype = emit_typeof(p.V);
             Value *dyn_size = emit_datatype_size(ctx, datatype);
             ctx.builder.CreateBr(postBB);
+            dynloadBB = ctx.builder.GetInsertBlock(); // could have changed
             ctx.builder.SetInsertPoint(postBB);
             PHINode *sizeof_merge = ctx.builder.CreatePHI(T_int32, 2);
             sizeof_merge->addIncoming(dyn_size, dynloadBB);
@@ -1207,6 +1210,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                 Value *istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, x.Vboxed),
                     maybe_decay_untracked(literal_pointer_val(ctx, intersected_type)));
                 ctx.builder.CreateBr(postBB);
+                isaBB = ctx.builder.GetInsertBlock(); // could have changed
                 ctx.builder.SetInsertPoint(postBB);
                 PHINode *istype = ctx.builder.CreatePHI(T_int1, 2);
                 istype->addIncoming(ConstantInt::get(T_int1, 0), currBB);
@@ -2405,7 +2409,9 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
                         init_bits_cgval(ctx, box, vinfo_r, jl_is_mutable(jt) ? tbaa_mutab : tbaa_immut);
                     }
                 }
-                box_merge->addIncoming(maybe_decay_untracked(box), tempBB);
+                box = maybe_decay_untracked(box);
+                tempBB = ctx.builder.GetInsertBlock(); // could have changed
+                box_merge->addIncoming(box, tempBB);
                 ctx.builder.CreateBr(postBB);
             },
             vinfo.typ,
@@ -2413,7 +2419,8 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
     ctx.builder.SetInsertPoint(defaultBB);
     if (skip.size() > 0) {
         assert(skip[0]);
-        box_merge->addIncoming(maybe_decay_untracked(V_null), defaultBB);
+        Value *box = maybe_decay_untracked(V_null);
+        box_merge->addIncoming(box, defaultBB);
         ctx.builder.CreateBr(postBB);
     }
     else if (!vinfo.Vboxed) {

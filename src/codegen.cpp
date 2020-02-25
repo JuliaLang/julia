@@ -1739,7 +1739,9 @@ static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, 
             switchInst->addCase(ConstantInt::get(T_int8, idx), tempBB);
             jl_cgval_t sel_arg1(arg1, (jl_value_t*)jt, NULL);
             jl_cgval_t sel_arg2(arg2, (jl_value_t*)jt, NULL);
-            phi->addIncoming(emit_bits_compare(ctx, sel_arg1, sel_arg2), tempBB);
+            Value *cmp = emit_bits_compare(ctx, sel_arg1, sel_arg2);
+            tempBB = ctx.builder.GetInsertBlock(); // could have changed
+            phi->addIncoming(cmp, tempBB);
             ctx.builder.CreateBr(postBB);
         },
         arg1.typ,
@@ -1928,6 +1930,7 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
         Value *bitcmp = emit_bits_compare(ctx,
                 jl_cgval_t(arg1, typ, NULL),
                 jl_cgval_t(arg2, typ, NULL));
+        isaBB = ctx.builder.GetInsertBlock(); // might have changed
         ctx.builder.CreateBr(postBB);
         ctx.builder.SetInsertPoint(postBB);
         PHINode *cmp = ctx.builder.CreatePHI(T_int1, 2);
@@ -2085,6 +2088,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     ctx.builder.SetInsertPoint(inBB);
                     Value *v_sz = emit_arraysize(ctx, ary, idx_dyn);
                     ctx.builder.CreateBr(ansBB);
+                    inBB = ctx.builder.GetInsertBlock(); // could have changed
                     ctx.f->getBasicBlockList().push_back(ansBB);
                     ctx.builder.SetInsertPoint(ansBB);
                     PHINode *result = ctx.builder.CreatePHI(T_size, 2);
@@ -4198,6 +4202,7 @@ static Function* gen_cfun_wrapper(
                 ctx.builder.CreateBr(afterBB);
                 ctx.builder.SetInsertPoint(unboxedBB);
                 Value *p3 = emit_new_bits(ctx, runtime_dt, val);
+                unboxedBB = ctx.builder.GetInsertBlock(); // could have changed
                 ctx.builder.CreateBr(afterBB);
                 ctx.builder.SetInsertPoint(afterBB);
                 PHINode *p = ctx.builder.CreatePHI(T_prjlvalue, 3);
