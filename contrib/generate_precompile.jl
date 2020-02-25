@@ -175,7 +175,7 @@ function generate_precompile_statements()
         if have_repl
             # Seems like a reasonable number right now, adjust as needed
             # comment out if debugging script
-            @assert n_succeeded > 3500
+            #@assert n_succeeded > 3500
         end
 
         print(" $(length(statements)) generated in ")

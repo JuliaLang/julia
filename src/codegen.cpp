@@ -3337,7 +3337,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
 
     bool handled = false;
     jl_cgval_t result;
-    if (lival.constant) {
+    if (0 && lival.constant) {
         jl_method_instance_t *mi = (jl_method_instance_t*)lival.constant;
         assert(jl_is_method_instance(mi));
         jl_code_instance_t *codeinst = jl_compile_linfo(mi, NULL, ctx.world, ctx.params);

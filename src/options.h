@@ -78,7 +78,7 @@
 // #define OBJPROFILE
 
 // Automatic Instrumenting Profiler
-//#define ENABLE_TIMINGS
+#define ENABLE_TIMINGS
 
 
 // method dispatch profiling --------------------------------------------------

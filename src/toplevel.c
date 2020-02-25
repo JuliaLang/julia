@@ -380,6 +380,15 @@ static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs
     }
 }
 
+int jl_code_has_loops(jl_code_info_t *src)
+{
+    jl_array_t *body = src->code;
+    assert(jl_typeis(body, jl_array_any_type));
+    int has_intrinsics = 0, has_defs = 0, has_loops = 0;
+    body_attributes(body, &has_intrinsics, &has_defs, &has_loops);
+    return has_loops;
+}
+
 static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_ROOTED
 {
     static jl_value_t *require_func = NULL;

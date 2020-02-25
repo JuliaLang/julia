@@ -844,6 +844,26 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi)
             JL_GC_PUSH1(&src);
             src = jl_uncompress_ast(mi->def.method, NULL, (jl_array_t*)src);
             mi->uninferred = (jl_value_t*)src;
+            jl_array_t *code = src->code;
+            size_t i, l = jl_array_len(code);
+            for (i=0; i < l; i++) {
+                jl_value_t *ex = jl_array_ptr_ref(code, i);
+                if (jl_is_expr(ex)) {
+                    size_t j, na = jl_expr_nargs(ex);
+                    for (j=0; j < na; j++) {
+                        jl_value_t *exj = jl_exprarg(ex, j);
+                        if (jl_is_globalref(exj)) {
+                            jl_module_t *m = jl_globalref_mod(exj);
+                            jl_sym_t *n = jl_globalref_name(exj);
+                            if (jl_binding_resolved_p(m, n) && jl_is_const(m, n)) {
+                                jl_value_t *val = jl_get_global(m, n);
+                                if (val)
+                                    jl_exprargset(ex, j, jl_new_struct(jl_quotenode_type, val));
+                            }
+                        }
+                    }
+                }
+            }
             jl_gc_wb(mi, src);
             JL_GC_POP();
         }
