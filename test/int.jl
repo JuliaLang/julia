@@ -266,7 +266,7 @@ end
     U in [Base.BitInteger_types..., BigInt]
     @test typeof(rand(U(0):U(127)) % T) === T
 end
-@testset "x % Unsigned returns a T, T = $T" for T in [Base.BitSigned_types...],
+@testset "x % Unsigned returns a T, T = $T" for T in [Base.BitSigned_types...]
     @test typeof(rand(T) % Unsigned) <: Unsigned
     @test sizeof(rand(T) % Unsigned) == sizeof(T)
 end
