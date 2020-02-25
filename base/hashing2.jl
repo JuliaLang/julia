@@ -13,6 +13,8 @@ function hash_integer(n::Integer, h::UInt)
     return h
 end
 
+# this condition is true most (all?) of the time, and in this case we can define
+# an optimized version of the above hash_integer(::Integer, ::UInt) method for BigInt
 if GMP.Limb === UInt
     # used e.g. for Rational{BigInt}
     function hash_integer(n::BigInt, h::UInt)
