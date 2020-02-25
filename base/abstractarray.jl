@@ -346,7 +346,7 @@ end
 """
     first(v::AbstractVector, n::Integer)
 
-Get the first n elements of the vector, without going out-of-bounds.
+Get the first `n` elements of vector `v`, or fewer elements if `v` is not long enough.
 
 # Examples
 ```jldoctest
@@ -385,7 +385,7 @@ last(a) = a[end]
 """
     last(v::AbstractVector, n::Integer)
 
-Get the last n elements of the vector, without going out-of-bounds.
+Get the last `n` elements of vector `v`, or fewer elements if `v` is not long enough.
 
 # Examples
 ```jldoctest
