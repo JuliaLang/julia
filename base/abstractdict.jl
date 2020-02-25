@@ -17,9 +17,9 @@ const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 haskey(d::AbstractDict, k) = in(k, keys(d))
 
 function in(p::Pair, a::AbstractDict, valcmp=(==))
-    v = get(a,p[1],secret_table_token)
+    v = get(a, p.first, secret_table_token)
     if v !== secret_table_token
-        return valcmp(v, p[2])
+        return valcmp(v, p.second)
     end
     return false
 end
@@ -474,14 +474,13 @@ function isequal(l::AbstractDict, r::AbstractDict)
 end
 
 function ==(l::AbstractDict, r::AbstractDict)
-    l === r && return true
     if isa(l,IdDict) != isa(r,IdDict)
         return false
     end
     length(l) != length(r) && return false
     anymissing = false
     for pair in l
-        isin = in(pair, r, ==)
+        isin = in(pair, r)
         if ismissing(isin)
             anymissing = true
         elseif !isin

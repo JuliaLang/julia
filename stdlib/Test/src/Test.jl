@@ -1491,7 +1491,7 @@ function detect_unbound_args(mods...;
                 continue
             end
             f = Base.unwrap_unionall(getfield(mod, n))
-            if recursive && isa(f, Module) && parentmodule(f) === mod && nameof(f) === n
+            if recursive && isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
                 subambs = detect_unbound_args(f, imported=imported, recursive=recursive)
                 union!(ambs, subambs)
             elseif isa(f, DataType) && isdefined(f.name, :mt)

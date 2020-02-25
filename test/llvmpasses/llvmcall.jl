@@ -17,5 +17,8 @@ emit(foo, NTuple{2, Float16})
 # CHECK: call <2 x half> @foo(<2 x half> %{{[0-9]+}})
 emit(foo, NTuple{2, VecElement{Float16}})
 
+# CHECK: call i8 addrspace(3)* @foo(i8 addrspace(3)* %{{[0-9]+}})
+emit(foo, Core.AddrSpacePtr{Float32, 3})
+
 # CHECK: define <2 x i16> @julia_bar_{{[0-9]+}}([2 x i16]
 emit(bar, NTuple{2, Float16})

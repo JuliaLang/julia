@@ -49,7 +49,6 @@ void jl_init_main_module(void)
 
     jl_main_module = jl_new_module(jl_symbol("Main"));
     jl_main_module->parent = jl_main_module;
-    jl_core_module->parent = jl_main_module;
     jl_set_const(jl_main_module, jl_symbol("Core"),
                  (jl_value_t*)jl_core_module);
     jl_set_global(jl_core_module, jl_symbol("Main"),

@@ -46,8 +46,8 @@ for f in (:real,:imag,:complex,:+,:-)
     @eval Base.$f(x::Furlong{p}) where {p} = Furlong{p}($f(x.val))
 end
 
-import Base: +, -, ==, !=, <, <=, isless, isequal, *, /, //, div, rem, mod, ^, hypot
-for op in (:+, :-, :hypot)
+import Base: +, -, ==, !=, <, <=, isless, isequal, *, /, //, div, rem, mod, ^
+for op in (:+, :-)
     @eval function $op(x::Furlong{p}, y::Furlong{p}) where {p}
         v = $op(x.val, y.val)
         Furlong{p}(v)

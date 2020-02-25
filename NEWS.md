@@ -4,6 +4,8 @@ Julia v1.5 Release Notes
 New language features
 ---------------------
 * Macro calls `@foo {...}` can now also be written `@foo{...}` (without the space) ([#34498]).
+* `⨟` is now parsed as a binary operator with times precedence. It can be entered in the REPL
+  with `\bbsemi` followed by <kbd>TAB</kbd> ([#34722]).
 
 Language changes
 ----------------
@@ -53,10 +55,13 @@ New library functions
 * Add function `ismutable` and deprecate `isimmutable` to check whether something is mutable.([#34652])
 * `include` now accepts an optional `mapexpr` first argument to transform the parsed
   expressions before they are evaluated ([#34595]).
+* New function `bitreverse` for reversing the order of bits in a fixed-width integer ([#34791]).
+* New function `bitrotate(x, k)` for rotating the bits in a fixed-width integer ([#33937]).
 
 New library features
 --------------------
 * Function composition now works also on one argument `∘(f) = f` (#34251)
+* `@NamedTuple{key1::Type1, ...}` macro for convenient `NamedTuple` declarations ([#34548]).
 
 * `isapprox` (or `≈`) now has a one-argument "curried" method `isapprox(x)` which returns a function, like `isequal` (or `==`)` ([#32305]).
 * `Ref{NTuple{N,T}}` can be passed to `Ptr{T}`/`Ref{T}` `ccall` signatures ([#34199])
@@ -76,6 +81,7 @@ Standard library changes
 * The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
 * `normalize` now supports multidimensional arrays ([#34239])
 * `lq` factorizations can now be used to compute the minimum-norm solution to under-determined systems ([#34350]).
+* The BLAS submodule now supports the level-2 BLAS subroutine `spmv!` ([#34320]).
 
 #### Markdown
 
@@ -88,6 +94,10 @@ Standard library changes
 
 #### SparseArrays
 * `lu!` accepts `UmfpackLU` as an argument to make use of its symbolic factorization.
+* The `trim` keyword argument for the functions `fkeep!`, `tril!`, `triu!`,
+  `droptol!`,`dropzeros!` and `dropzeros` has been removed in favour of always
+  trimming. Calling these with `trim=false` could result in invalid sparse
+  arrays.
 
 #### Dates
 

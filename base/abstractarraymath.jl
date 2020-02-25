@@ -411,12 +411,31 @@ end
     eachrow(A::AbstractVecOrMat)
 
 Create a generator that iterates over the first dimension of vector or matrix `A`,
-returning the rows as views.
+returning the rows as `AbstractVector` views.
 
 See also [`eachcol`](@ref) and [`eachslice`](@ref).
 
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
+
+# Example
+
+```jldoctest
+julia> a = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> first(eachrow(a))
+2-element view(::Array{Int64,2}, 1, :) with eltype Int64:
+ 1
+ 2
+
+julia> collect(eachrow(a))
+2-element Array{SubArray{Int64,1,Array{Int64,2},Tuple{Int64,Base.Slice{Base.OneTo{Int64}}},true},1}:
+ [1, 2]
+ [3, 4]
+```
 """
 eachrow(A::AbstractVecOrMat) = (view(A, i, :) for i in axes(A, 1))
 
@@ -425,12 +444,31 @@ eachrow(A::AbstractVecOrMat) = (view(A, i, :) for i in axes(A, 1))
     eachcol(A::AbstractVecOrMat)
 
 Create a generator that iterates over the second dimension of matrix `A`, returning the
-columns as views.
+columns as `AbstractVector` views.
 
 See also [`eachrow`](@ref) and [`eachslice`](@ref).
 
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
+
+# Example
+
+```jldoctest
+julia> a = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> first(eachcol(a))
+2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
+ 1
+ 3
+
+julia> collect(eachcol(a))
+2-element Array{SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true},1}:
+ [1, 3]
+ [2, 4]
+```
 """
 eachcol(A::AbstractVecOrMat) = (view(A, :, i) for i in axes(A, 2))
 

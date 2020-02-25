@@ -190,6 +190,22 @@ end
         end
     end
 end
+
+@testset "bit rotations" begin
+    val1 = 0b01100011
+    @test 0b00011011 === bitrotate(val1, 3)
+    @test 0b01101100 === bitrotate(val1, -3)
+    @test val1 === bitrotate(val1, 0)
+
+    for T in Base.BitInteger_types
+        @test val1 === bitrotate(val1, sizeof(T) * 8) === bitrotate(val1, sizeof(T) * -8)
+    end
+
+    val2 = 0xabcd
+    @test 0x5e6d == bitrotate(val2, 3)
+    @test 0xb579 == bitrotate(val2, -3)
+end
+
 @testset "widen/widemul" begin
     @test widen(UInt8(3)) === UInt16(3)
     @test widen(UInt16(3)) === UInt32(3)
@@ -351,4 +367,15 @@ end
             end
         end
     end
+end
+
+@testset "bitreverse" begin
+    for T in Base.BitInteger_types
+        x = rand(T)::T
+        @test bitreverse(x) isa T
+        @test reverse(bitstring(x)) == bitstring(bitreverse(x))
+    end
+    @test bitreverse(0x80) === 0x01
+    @test bitreverse(Int64(456618293)) === Int64(-6012608040035942400)
+    @test bitreverse(Int32(456618293)) === Int32(-1399919400)
 end
