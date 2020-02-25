@@ -589,7 +589,6 @@ end
 function create_worker(manager, wconfig)
     # only node 1 can add new nodes, since nobody else has the full list of address:port
     @assert LPROC.id == 1
-    timeout = worker_timeout()
 
     # initiate a connect. Does not wait for connection completion in case of TCP.
     w = Worker()
@@ -661,6 +660,7 @@ function create_worker(manager, wconfig)
     #   - Workers with incoming connection requests write back their Version and an IdentifySocketAckMsg message
     # - On master, receiving a JoinCompleteMsg triggers rr_ntfy_join (signifies that worker setup is complete)
 
+    maxwait = worker_timeout()
     join_list = []
     if PGRP.topology === :all_to_all
         # need to wait for lower worker pids to have completed connecting, since the numerical value
@@ -682,8 +682,8 @@ function create_worker(manager, wconfig)
         waittime = 0
         while wconfig.connect_idents !== nothing &&
               length(wlist) < length(wconfig.connect_idents)
-            if waittime >= timeout
-                error("peer workers did not connect within $timeout seconds")
+            if waittime >= maxwait
+                error("peer workers did not connect within $maxwait seconds")
             end
             sleep(1.0)
             waittime += 1
@@ -708,10 +708,10 @@ function create_worker(manager, wconfig)
     @async manage(w.manager, w.id, w.config, :register)
     # wait for rr_ntfy_join with timeout
     timedout = false
-    @async (sleep($timeout); timedout = true; put!(rr_ntfy_join, 1))
+    @async (sleep(maxwait); timedout = true; put!(rr_ntfy_join, 1))
     wait(rr_ntfy_join)
     if timedout
-        error("worker did not connect within $timeout seconds")
+        @error("worker did not connect within $maxwait seconds")
     end
     lock(client_refs) do
         delete!(PGRP.refs, ntfy_oid)
