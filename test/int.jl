@@ -260,19 +260,25 @@ end
     @test unsafe_trunc(Int8, 128) === Int8(-128)
     @test unsafe_trunc(Int8, -127) === Int8(-127)
     @test unsafe_trunc(Int8, -128) === Int8(-128)
-    @test unsafe_trunc(Int8, -129) === Int8(127)
+    @test unsafe_trunc(I, -129) === Int8(127)
 end
 @testset "x % T returns a T, T = $T" for T in [Base.BitInteger_types..., BigInt],
     U in [Base.BitInteger_types..., BigInt]
     @test typeof(rand(U(0):U(127)) % T) === T
 end
-@testset "x::Signed % Unsigned returns a T, T = $T" for T in [Base.BitSigned_types...]
-    @test typeof(rand(T) % Unsigned) <: Unsigned
-    @test sizeof(rand(T) % Unsigned) == sizeof(T)
+
+@testset "signed(<:Unsigned), unsigned(<:Signed) for bitstypes" for S in Base.BitSigned_types,
+    U in Base.BitUnsigned_types
+    @test signed(U) === S
+    @test unsigned(S) === U
 end
-@testset "x::Unsigned % Signed returns a T, T = $T" for T in [Base.BitUnsigned_types...]
-    @test typeof(rand(T) % Signed) <: Signed
-    @test sizeof(rand(T) % Signed) == sizeof(T)
+@testset "s::Signed % Unsigned returns u::T, T = $T" for T in Base.BitSigned_types
+    @test (typemin(T) % Unsigned) % Signed === typemin(T)
+    @test typeof(typemin(T) % Unsigned) <: Unsigned
+end
+@testset "u::Unsigned % Signed returns s::T, T = $T" for T in Base.BitUnsigned_types
+    @test (typemax(T) % Signed) % Unsigned === typemax(T)
+    @test typeof(typemax(T) % Signed) <: Signed
 end
 
 @testset "issue #15489" begin
