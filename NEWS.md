@@ -66,7 +66,7 @@ New library features
 * `isapprox` (or `≈`) now has a one-argument "curried" method `isapprox(x)` which returns a function, like `isequal` (or `==`)` ([#32305]).
 * `Ref{NTuple{N,T}}` can be passed to `Ptr{T}`/`Ref{T}` `ccall` signatures ([#34199])
 * `x::Signed % Unsigned` and `x::Unsigned % Signed` are supported for integer bitstypes.
-* `unsigned(signed_type)` and `signed(unsigned_type)` are supported for integer bitstypes.  
+* `unsigned(signed_type)` and `signed(unsigned_type)` are supported for integer bitstypes.
 
 Standard library changes
 ------------------------
