@@ -266,6 +266,10 @@ end
     U in [Base.BitInteger_types..., BigInt]
     @test typeof(rand(U(0):U(127)) % T) === T
 end
+@testset "x % Unsigned returns a T, T = $T" for T in [Base.BitSigned_types...],
+    @test typeof(rand(T) % Unsigned) <: Unsigned
+    @test sizeof(rand(T) % Unsigned) == sizeof(T)
+end
 
 @testset "issue #15489" begin
     @test 0x00007ffea27edaa0 + (-40) === (-40) + 0x00007ffea27edaa0 === 0x00007ffea27eda78
