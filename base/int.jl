@@ -44,6 +44,22 @@ const BitUnsigned64T   = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UIn
 
 const BitIntegerType = Union{map(T->Type{T}, BitInteger_types)...}
 
+# interconvert equilength BitInteger types
+
+unsigned(::Type{Int8}) = UInt8
+unsigned(::Type{Int16}) = UInt16
+unsigned(::Type{Int32}) = UInt32
+unsigned(::Type{Int64}) = UInt64
+unsigned(::Type{Int128}) = UInt128
+unsigned(::Type{T}) where {T<:Unsigned} = T
+
+signed(::Type{UInt8}) = Int8
+signed(::Type{UInt16}) = Int16
+signed(::Type{UInt32}) = Int32
+signed(::Type{UInt64}) = Int64
+signed(::Type{UInt128}) = Int128
+signed(::Type{T}) where {T<:Signed} = T
+
 ## integer comparisons ##
 
 (<)(x::T, y::T) where {T<:BitSigned}  = slt_int(x, y)
