@@ -33,6 +33,28 @@ let ref = Tuple{T, Val{T}} where T<:(Val{T} where T<:(Val{T} where T<:(Val{T} wh
 end
 
 
+@test Core.Compiler.unionlen(Union{}) == 1
+@test Core.Compiler.unionlen(Int8) == 1
+@test Core.Compiler.unionlen(Union{Int8, Int16}) == 2
+@test Core.Compiler.unionlen(Union{Int8, Int16, Int32, Int64}) == 4
+@test Core.Compiler.unionlen(Tuple{Union{Int8, Int16, Int32, Int64}}) == 1
+@test Core.Compiler.unionlen(Union{Int8, Int16, Int32, T} where T) == 1
+
+@test Core.Compiler.unioncomplexity(Union{}) == 0
+@test Core.Compiler.unioncomplexity(Int8) == 0
+@test Core.Compiler.unioncomplexity(Val{Union{Int8, Int16, Int32, Int64}}) == 0
+@test Core.Compiler.unioncomplexity(Union{Int8, Int16}) == 1
+@test Core.Compiler.unioncomplexity(Union{Int8, Int16, Int32, Int64}) == 3
+@test Core.Compiler.unioncomplexity(Tuple{Union{Int8, Int16, Int32, Int64}}) == 3
+@test Core.Compiler.unioncomplexity(Union{Int8, Int16, Int32, T} where T) == 3
+@test Core.Compiler.unioncomplexity(Tuple{Val{T}, Union{Int8, Int16}, Int8} where T<:Union{Int8, Int16, Int32, Int64}) == 3
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Tuple{Union{Int8, Int16}}}}) == 1
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Symbol}}) == 0
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}) == 1
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}) == 2
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}}}}) == 3
+
+
 # PR 22120
 function tmerge_test(a, b, r, commutative=true)
     @test r == Core.Compiler.tuplemerge(a, b)
@@ -1931,7 +1953,7 @@ function h27316()
     end
     return x
 end
-@test Tuple{Tuple{Vector{Int}}} <: Base.return_types(h27316, Tuple{})[1] == Union{Vector{Int}, Tuple{Any}} # we may be able to improve this bound in the future
+@test Tuple{Tuple{Vector{Int}}} <: only(Base.return_types(h27316, Tuple{})) == Any # we may be able to improve this bound in the future
 
 # PR 27434, inference when splatting iterators with type-based state
 splat27434(x) = (x...,)
@@ -2503,3 +2525,17 @@ function h34752()
     a34752(g...)
 end
 @test h34752() === true
+
+# issue 34834
+pickvarnames(x::Symbol) = x
+function pickvarnames(x::Vector{Any})
+    varnames = ()
+    for a in x
+        varnames = (varnames..., pickvarnames(a) )
+    end
+    return varnames
+end
+@test pickvarnames(:a) === :a
+@test pickvarnames(Any[:a, :b]) === (:a, :b)
+@test only(Base.return_types(pickvarnames, (Vector{Any},))) == Tuple
+@test only(Base.code_typed(pickvarnames, (Vector{Any},), optimize=false))[2] == Tuple{Vararg{Union{Symbol, Tuple}}}
