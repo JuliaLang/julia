@@ -89,6 +89,15 @@ using Test
         @test bytesavailable(sb) == 0
         shred!(sb)
     end
+    @testset "testing the skip function" begin
+        sb = SecretBuffer("computer")
+        skip(sb, 2)
+        @test position(sb) == 2
+        seek(sb, 0)
+        @test position(sb) == 0
+        skip(sb, sb.size)
+        @test position(sb) == sb.size
+    end
     @testset "position" begin
         sb = SecretBuffer("Julia")
         println("testing position")
