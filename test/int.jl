@@ -260,7 +260,7 @@ end
     @test unsafe_trunc(Int8, 128) === Int8(-128)
     @test unsafe_trunc(Int8, -127) === Int8(-127)
     @test unsafe_trunc(Int8, -128) === Int8(-128)
-    @test unsafe_trunc(I, -129) === Int8(127)
+    @test unsafe_trunc(Int8, -129) === Int8(127)
 end
 @testset "x % T returns a T, T = $T" for T in [Base.BitInteger_types..., BigInt],
     U in [Base.BitInteger_types..., BigInt]
