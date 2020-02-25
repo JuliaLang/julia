@@ -375,6 +375,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
                 tj = types[j]
                 if ti <: tj
                     types[i] = Union{}
+                    typenames[i] = Any.name
                     break
                 elseif tj <: ti
                     types[j] = Union{}
@@ -390,6 +391,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
                         widen = typenames[i].wrapper
                     end
                     types[i] = Union{}
+                    typenames[i] = Any.name
                     types[j] = widen
                     break
                 end
@@ -400,6 +402,23 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
     # don't let type unions get too big, if the above didn't reduce it enough
     if issimpleenoughtype(u)
         return u
+    end
+    # don't let the slow widening of Tuple cause the whole type to grow too fast
+    for i in 1:length(types)
+        if typenames[i] === Tuple.name
+            widen = unwrap_unionall(types[i])
+            if isa(widen, DataType) && !isvatuple(widen)
+                widen = NTuple{length(widen.parameters), Any}
+            else
+                widen = Tuple
+            end
+            types[i] = widen
+            u = Union{types...}
+            if issimpleenoughtype(u)
+                return u
+            end
+            break
+        end
     end
     # finally, just return the widest possible type
     return Any
