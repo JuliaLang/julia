@@ -8,7 +8,10 @@ STDLIBDIR := $(build_datarootdir)/julia/stdlib/$(VERSDIR)
 
 TESTGROUPS = unicode strings compiler
 TESTS = all stdlib $(TESTGROUPS) \
-		$(patsubst $(STDLIBDIR)/%/,%,$(dir $(wildcard $(STDLIBDIR)/*/.))) \
+		$(patsubst $(STDLIBDIR)/%/src/%.jl,%, \
+			$(foreach lib, \
+				$(patsubst $(STDLIBDIR)/%,%,$(wildcard $(STDLIBDIR/*))), \
+				$(wildcard $(STDLIBDIR)/$(lib)/src/$(lib).jl))) \
 		$(filter-out runtests testdefs, \
 			$(patsubst $(SRCDIR)/%.jl,%,$(wildcard $(SRCDIR)/*.jl))) \
 		$(foreach group,$(TESTGROUPS), \
