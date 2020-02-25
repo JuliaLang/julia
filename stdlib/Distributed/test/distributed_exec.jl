@@ -803,6 +803,7 @@ fetch(v15406)
 remotecall_wait(fetch, id_other, v15406)
 
 # Test various forms of remotecall* invocations
+print("\nTest various forms of remotecall invocations\n")
 
 @everywhere f_args(v1, v2=0; kw1=0, kw2=0) = v1+v2+kw1+kw2
 
@@ -824,6 +825,7 @@ for tid in [id_other, id_me, default_worker_pool()]
 end
 
 # Test remote_do
+print("\nTest remote_do\n")
 f=Future(id_me)
 remote_do(fut->put!(fut, myid()), id_me, f)
 @test fetch(f) == id_me
@@ -917,6 +919,7 @@ end
 @test retval > 0.0 && retval < 10.0
 
 # serialization tests
+print("\nserialization tests\n")
 wrkr1 = workers()[1]
 wrkr2 = workers()[end]
 
@@ -1004,6 +1007,7 @@ let (p, p2) = filter!(p -> p != myid(), procs())
 end
 
 # Test addprocs enable_threaded_blas parameter
+print("\nTest addprocs enable_threaded_blas parameter\n")
 
 function get_remote_num_threads(processes_added)
     return [remotecall_fetch(BLAS.get_num_threads, proc_id) for proc_id in processes_added]
@@ -1084,6 +1088,7 @@ end
 
 # Test that an exception is thrown if workers are unable to be removed within requested time.
 if DoFullTest
+    print("\nTest that an exception is thrown if workers are unable to be removed within requested time.\n")
     pids=addprocs_with_testenv(4);
     @test_throws ErrorException rmprocs(pids; waitfor=0.001);
     # wait for workers to be removed
@@ -1094,6 +1099,7 @@ end
 end
 
 # Test addprocs/rmprocs from master node only
+print("\nTest addprocs/rmprocs from master node only\n")
 for f in [ ()->addprocs(1; exeflags=test_exeflags), ()->rmprocs(workers()) ]
     local f
     try
@@ -1141,7 +1147,7 @@ end
 testruns = Any[]
 
 if DoFullTest
-    append!(testruns, [(()->addprocs_with_testenv(["errorhost20372"]), "Timed out connecting to worker.", ())])
+    append!(testruns, [(()->addprocs_with_testenv(["errorhost20372"]), ["Unable to read host:port string from worker. Launch command exited with error?", "Timed out connecting to worker."], ())])
 end
 
 append!(testruns, [
@@ -1151,6 +1157,7 @@ append!(testruns, [
 ])
 
 for (addp_testf, expected_errstr, env) in testruns
+    print("\nRunning addprocs error simulation expected_errstr - \"$expected_errstr\"\n")
     old_stdout = stdout
     stdout_out, stdout_in = redirect_stdout()
     stdout_txt = @async filter!(readlines(stdout_out)) do s
@@ -1166,12 +1173,17 @@ for (addp_testf, expected_errstr, env) in testruns
         close(stdout_in)
         @test isempty(fetch(stdout_txt))
         @test isa(ex, CompositeException)
-        @test ex.exceptions[1].task.exception.msg == expected_errstr
+        if isa(expected_errstr, String)
+            @test ex.exceptions[1].test.exception.msg == expected_errstr
+        else
+            @test ex.exceptions[1].test.exception.msg in expected_errstr
+        end
     end
 end
 
 
 # Auto serialization of globals from Main.
+println("\nAuto serialization of globals from Main.\n")
 # bitstypes
 global v1 = 1
 @test remotecall_fetch(()->v1, id_other) == v1
@@ -1490,6 +1502,8 @@ let
         #rm(tmp_dir, force=true)
     end
 end
+
+println("\nTest worker arguments.\n")
 # cookie and command line option `--worker` tests. remove workers, set cookie and test
 struct WorkerArgTester <: ClusterManager
     worker_opt
@@ -1530,6 +1544,7 @@ cluster_cookie("foobar") # custom cookie
 npids = addprocs_with_testenv(WorkerArgTester(`--worker=foobar`, false))
 @test remotecall_fetch(myid, npids[1]) == npids[1]
 
+println("\nTest connect timeout.\n")
 # tests for connect timeout to worker
 struct ConnectTimeoutTester <: ClusterManager
     block::Channel
@@ -1576,14 +1591,18 @@ end
 nprocs()>1 && rmprocs(workers())
 cluster_cookie("")
 npids, t, bytes, gctime, memallocs = @timed try
-    addprocs_with_testenv(ConnectTimeoutTester())
+    withenv("JULIA_WORKER_TIMEOUT"=>5) do
+        addprocs_with_testenv(ConnectTimeoutTester())
+    end
 catch ex
     []
 end
 @test length(npids) == 0
 @test nprocs() == 1
-@test Distributed.worker_timeout() < t < 360.0
+@test abs(t - 10.0) <= 5.0
+println("\nconnect timeout test done in $t seconds\n")
 
+println("\nTest retain stdout.\n")
 # tests for start_worker options to retain stdio (issue #31035)
 struct RetainStdioTester <: ClusterManager
     close_stdin::Bool
@@ -1662,6 +1681,7 @@ function reuseport_tests()
 end
 
 # Test failure during worker setup
+println("\nTest failure during worker setup\n")
 old_stderr = stderr
 old_stdout = stdout
 stderr_out, stderr_in = redirect_stderr()
@@ -1702,6 +1722,7 @@ finally
     close(stdout_in)
 end
 
+println("\nTest client port is reused\n")
 # Test that the client port is reused. SO_REUSEPORT may not be supported on
 # all UNIX platforms, Linux kernels prior to 3.9 and older versions of OSX
 if ccall(:jl_has_so_reuseport, Int32, ()) == 1
