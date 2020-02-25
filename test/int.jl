@@ -273,13 +273,17 @@ end
         @test unsigned(S) === U
     end
 end
-@testset "s::Signed % Unsigned returns u::T, T = $T" for T in Base.BitSigned_types
-    @test (typemin(T) % Unsigned) % Signed === typemin(T)
-    @test typeof(typemin(T) % Unsigned) <: Unsigned
+@testset "x::[Un]Signed % [Un]Signed returns x" begin
+    for (S,U) in zip(Base.BitSigned_types, Base.BitUnsigned_types)
+        @test typemin(S) % Signed === typemin(S)
+        @test typemax(U) % Unsigned === typemax(U)
+    end
 end
-@testset "u::Unsigned % Signed returns s::T, T = $T" for T in Base.BitUnsigned_types
-    @test (typemax(T) % Signed) % Unsigned === typemax(T)
-    @test typeof(typemax(T) % Signed) <: Signed
+@testset "x::[Un]Signed % Un[Signed] % [Un]Signed returns x for bitstypes" begin
+    for (S,U) in zip(Base.BitSigned_types, Base.BitUnsigned_types)
+        @test -one(S) % Unsigned % Signed === -one(S)
+        @test ~one(U) % Signed % Unsigned === ~one(U)
+    end
 end
 
 @testset "issue #15489" begin
