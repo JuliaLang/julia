@@ -269,8 +269,9 @@ end
 
 @testset "signed(<:Unsigned), unsigned(<:Signed) for bitstypes" begin
     for (S,U) in zip(Base.BitSigned_types, Base.BitUnsigned_types)
-    @test signed(U) === S
-    @test unsigned(S) === U
+        @test signed(U) === S
+        @test unsigned(S) === U
+    end
 end
 @testset "s::Signed % Unsigned returns u::T, T = $T" for T in Base.BitSigned_types
     @test (typemin(T) % Unsigned) % Signed === typemin(T)
