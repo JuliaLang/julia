@@ -507,6 +507,7 @@ end
 
 rem(x::T, ::Type{T}) where {T<:Integer} = x
 rem(x::Signed, ::Type{Unsigned}) = x % unsigned(typeof(x)) 
+rem(x::Unsigned, ::Type{Signed}) = x % signed(typeof(x)) 
 rem(x::Integer, T::Type{<:Integer}) = convert(T, x)  # `x % T` falls back to `convert`
 rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
 mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
