@@ -344,6 +344,27 @@ function first(itr)
 end
 
 """
+    first(v::AbstractVector, n::Integer)
+
+Get the first n elements of the vector, without going out-of-bounds.
+
+# Examples
+```jldoctest
+julia> first(["foo", "bar", "qux"], 2)
+2-element Array{String,1}:
+ "foo"
+ "bar"
+
+julia> first(1:6, 10)
+1:6
+
+julia> first(Bool[], 1)
+0-element Array{Bool,1}
+```
+"""
+first(v::AbstractVector, n::Integer) = @inbounds v[firstindex(v):min(firstindex(v) - 1 + n, end)]
+
+"""
     last(coll)
 
 Get the last element of an ordered collection, if it can be computed in O(1) time. This is
@@ -360,6 +381,27 @@ julia> last([1; 2; 3; 4])
 ```
 """
 last(a) = a[end]
+
+"""
+    last(v::AbstractVector, n::Integer)
+
+Get the last n elements of the vector, without going out-of-bounds.
+
+# Examples
+```jldoctest
+julia> last(["foo", "bar", "qux"], 2)
+2-element Array{String,1}:
+ "bar"
+ "qux"
+
+julia> last(1:6, 10)
+1:6
+
+julia> last(Float64[], 1)
+0-element Array{Float64,1}
+```
+"""
+last(v::AbstractArray, n::Integer) = @inbounds v[max(firstindex(v), end + 1 - n):end]
 
 """
     strides(A)

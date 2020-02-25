@@ -1126,3 +1126,15 @@ end
         end
     end
 end
+
+@testset "first/last n elements of vector" begin
+    v = [1, 13, 42]
+    @test first(v, -2) == []
+    @test first(v, 2) == v[1:2]
+    @test first(v, 100) == v
+    @test first(v, 1) != v[1]
+    @test last(v, -2) == []
+    @test last(v, 2) == v[end-1:end]
+    @test last(v, 100) == v
+    @test last(v, 1) != v[end]
+end
