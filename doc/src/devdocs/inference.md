@@ -27,10 +27,9 @@ mths = methods(convert, atypes)  # worth checking that there is only one
 m = first(mths)
 
 # Create variables needed to call `typeinf_code`
-params = Core.Compiler.Params(typemax(UInt))  # parameter is the world age,
-params = Core.Compiler.Params(Base.get_world_counter())
-sparams = Core.svec(Int64)      # this particular method has a type-parameter
-optimize = true            # run all inference optimizations
+params = Core.Compiler.Params(Base.get_world_counter()) # parameter is the world age,
+sparams = Core.svec(Int64)                              # this particular method has a type-parameter
+optimize = true                                         # run all inference optimizations
 Core.Compiler.typeinf_code(m, atypes, sparams, optimize, params)
 ```
 
@@ -108,11 +107,37 @@ cst = map(cost, ci.code)
 
 # output
 
-5-element Array{Int64,1}:
+31-element Array{Int64,1}:
   0
   0
  20
+  4
+  1
+  1
+  1
+  0
+  0
+  0
+  0
+  0
+  0
+  1
+  0
+  0
+  0
  20
+  1
+  0
+  0
+  1
+  0
+  0
+  0
+  0
+  1
+  0
+  0
+  0
   0
 ```
 
