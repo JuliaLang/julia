@@ -267,7 +267,7 @@ end
     @test typeof(rand(U(0):U(127)) % T) === T
 end
 
-@testset "signed(<:Unsigned), unsigned(<:Signed) for bitstypes"
+@testset "signed(<:Unsigned), unsigned(<:Signed) for bitstypes" begin
     for (S,U) in zip(Base.BitSigned_types, Base.BitUnsigned_types)
     @test signed(U) === S
     @test unsigned(S) === U
