@@ -263,7 +263,7 @@ end
 
 function accumulate(op, xs::Tuple; init = _InitialValue())
     rf = BottomRF(op)
-    ys, = foldl(xs; init = ((), init)) do (ys, acc), x
+    ys, = afoldl(((), init), xs...) do (ys, acc), x
         acc = rf(acc, x)
         (ys..., acc), acc
     end
