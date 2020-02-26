@@ -2274,7 +2274,7 @@ static size_t lowerbound_dependent_world_set(size_t world, arraylist_t *dependen
 }
 
 extern int JL_DEBUG_METHOD_INVALIDATION;
-extern jl_value_t *jl_matching_methods_including_deleted(jl_tupletype_t *types, size_t world);
+extern jl_value_t *jl_matching_methods_or_deleted(jl_tupletype_t *types, size_t world, size_t *min_valid);
 
 static void jl_insert_backedges(jl_array_t *list, arraylist_t *dependent_worlds)
 {
@@ -2300,11 +2300,18 @@ static void jl_insert_backedges(jl_array_t *list, arraylist_t *dependent_worlds)
                 sig = callee;
             }
             // verify that this backedge doesn't intersect with any new methods
-            jl_value_t *matches = jl_matching_methods_including_deleted((jl_tupletype_t*)sig, jl_world_counter);
-            if (matches == jl_false)
+            size_t min_valid = 0;
+            jl_value_t *matches = jl_matching_methods_or_deleted((jl_tupletype_t*)sig, jl_world_counter, &min_valid);
+            if (matches == jl_false) {
                 valid = 0;
+            }
+            else {
+                assert(!jl_is_method_instance(callee) || (jl_array_len(matches) > 0 && min_valid > 0));
+                // quick check that this method wasn't selected because of a method deletion
+                // or method addition
+                valid = (lowerbound_dependent_world_set(min_valid, dependent_worlds) == min_valid);
+            }
             size_t k;
-            assert(!jl_is_method_instance(callee) || jl_array_len(matches) > 0);
             for (k = 0; valid && k < jl_array_len(matches); k++) {
                 jl_method_t *m = (jl_method_t*)jl_svecref(jl_array_ptr_ref(matches, k), 2);
                 int wasactive = (lowerbound_dependent_world_set(m->primary_world, dependent_worlds) == m->primary_world);
