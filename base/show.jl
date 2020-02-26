@@ -1820,16 +1820,16 @@ function show(io::IO, tv::TypeVar)
     lb, ub = tv.lb, tv.ub
     if !in_env && lb !== Bottom
         if ub === Any
-            write(io, tv.name)
+            show_unquoted(io, tv.name)
             print(io, ">:")
             show_bound(io, lb)
         else
             show_bound(io, lb)
             print(io, "<:")
-            write(io, tv.name)
+            show_unquoted(io, tv.name)
         end
     else
-        write(io, tv.name)
+        show_unquoted(io, tv.name)
     end
     if !in_env && ub !== Any
         print(io, "<:")
