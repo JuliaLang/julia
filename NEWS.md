@@ -65,6 +65,7 @@ New library features
 
 * `isapprox` (or `≈`) now has a one-argument "curried" method `isapprox(x)` which returns a function, like `isequal` (or `==`)` ([#32305]).
 * `Ref{NTuple{N,T}}` can be passed to `Ptr{T}`/`Ref{T}` `ccall` signatures ([#34199])
+* `accumulate`, `cumsum`, and `cumprod` now support `Tuple` ([#34654]).
 
 
 Standard library changes
