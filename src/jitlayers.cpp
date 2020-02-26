@@ -171,7 +171,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createSROAPass());                 // Break up aggregate allocas
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
     PM->add(createJumpThreadingPass());        // Thread jumps.
-    PM->add(createInstructionCombiningPass()); // Combine silly seq's
+    //PM->add(createInstructionCombiningPass()); // Combine silly seq's
 
     //PM->add(createCFGSimplificationPass());    // Merge & remove BBs
     PM->add(createReassociatePass());          // Reassociate expressions
@@ -332,11 +332,47 @@ void JuliaOJIT::DebugObjectRegistrar::operator()(RTDyldObjHandleT H,
                    static_cast<const RuntimeDyld::LoadedObjectInfo*>(&LOS));
 }
 
+jl_code_instance_t *jl_get_code_in_flight(StringRef name);
 
 CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
 {
     JL_TIMING(LLVM_OPT);
-    jit.PM.run(M);
+    bool optimize = true;
+    jl_method_t *meth = NULL;
+    jl_method_instance_t *mi = NULL;
+    Module::iterator fs = M.begin();
+    for ( ; fs != M.end(); ) {
+        Function &F = *fs;
+        if (!F.getBasicBlockList().empty()) {
+            jl_code_instance_t *codeinst = jl_get_code_in_flight(F.getName());
+            if (codeinst) {
+                mi = codeinst->def;
+                if (jl_is_method(mi->def.value)) {
+                    meth = mi->def.method;
+                    if (!strcmp(jl_symbol_name(meth->module->name), "Plots")) {
+                        optimize = false;
+                        break;
+                    }
+                }
+                else {
+                    mi = NULL;
+                }
+            }
+        }
+        ++fs;
+    }
+    uint64_t t0 = jl_hrtime();
+    if (optimize) {
+        jit.PM.run(M);
+    }
+    else {
+        jit.fastPM.run(M);
+    }
+    if (false) {
+        jl_printf((JL_STREAM*)STDOUT_FILENO, "%.3f ", (float)((jl_hrtime() - t0)/1e9));
+        jl_static_show((JL_STREAM*)STDOUT_FILENO, (jl_value_t*)mi->specTypes);
+        jl_printf((JL_STREAM*)STDOUT_FILENO, "\n");
+    }
     std::unique_ptr<MemoryBuffer> ObjBuffer(
         new SmallVectorMemoryBuffer(std::move(jit.ObjBufferSV)));
     auto Obj = object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef());
@@ -389,6 +425,11 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
     addTargetPasses(&PM, &TM);
     addOptimizationPasses(&PM, jl_generating_output() ? 0 : jl_options.opt_level);
     if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
+        llvm_unreachable("Target does not support MC emission.");
+
+    addTargetPasses(&fastPM, &TM);
+    addOptimizationPasses(&fastPM, 0);
+    if (TM.addPassesToEmitMC(fastPM, Ctx, ObjStream))
         llvm_unreachable("Target does not support MC emission.");
 
     // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve

@@ -87,7 +87,13 @@ void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const D
 {
     ncode_in_flight[mangle(name, DL)] = codeinst;
 }
-
+jl_code_instance_t *jl_get_code_in_flight(StringRef name)
+{
+    StringMap<jl_code_instance_t*>::iterator linfo_it = ncode_in_flight.find(name);
+    if (linfo_it != ncode_in_flight.end())
+        return linfo_it->second;
+    return NULL;
+}
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)

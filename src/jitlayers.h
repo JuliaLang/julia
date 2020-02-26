@@ -151,6 +151,7 @@ private:
     SmallVector<char, 4096> ObjBufferSV;
     raw_svector_ostream ObjStream;
     legacy::PassManager PM;
+    legacy::PassManager fastPM;
     MCContext *Ctx;
     std::shared_ptr<RTDyldMemoryManager> MemMgr;
     DebugObjectRegistrar registrar;
