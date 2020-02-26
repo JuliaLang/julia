@@ -66,10 +66,7 @@
                            ;; for error, get most recent line number (#16720)
                            (lineno (if iserr (input-port-line io) lineno))
                            (next   (list* expr
-                                          ;; include filename in first line node
-                                          (if (null? exprs)
-                                              `(line ,lineno ,(symbol filename))
-                                              `(line ,lineno))
+                                          `(line ,lineno ,current-filename)
                                           exprs)))
                       (if iserr
                           (cons 'toplevel (reverse! next))
