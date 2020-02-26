@@ -627,11 +627,15 @@ function _replace!(new::Callable, res::AbstractArray, A::AbstractArray, count::I
     if count >= length(A) # simpler loop allows for SIMD
         if res === A # for optimization only
             for i in eachindex(A)
-                @inbounds A[i] = new(A[i])
+                @inbounds Ai = A[i]
+                y = new(Ai)
+                @inbounds A[i] = y
             end
         else
             for i in eachindex(A)
-                @inbounds res[i] = new(A[i])
+                @inbounds Ai = A[i]
+                y = new(Ai)
+                @inbounds res[i] = y
             end
         end
     else
