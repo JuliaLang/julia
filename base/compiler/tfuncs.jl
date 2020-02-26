@@ -1418,11 +1418,13 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
     if f === Intrinsics.checked_udiv_int || f === Intrinsics.checked_urem_int || f === Intrinsics.checked_srem_int || f === Intrinsics.checked_sdiv_int
         # Nothrow as long as the second argument is guaranteed not to be zero
         isa(argtypes[2], Const) || return false
+        if !isprimitivetype(widenconst(argtypes[1])) ||
+           !isprimitivetype(widenconst(argtypes[2]))
+            return false
+        end
         den_val = argtypes[2].val
         den_val !== zero(typeof(den_val)) || return false
-        return true
-    end
-    if f === Intrinsics.checked_sdiv_int
+        f !== Intrinsics.checked_sdiv_int && return true
         # Nothrow as long as we additionally don't do typemin(T)/-1
         return den_val !== -1 || (isa(argtypes[1], Const) &&
             argtypes[1].val !== typemin(typeof(den_val)))
@@ -1450,9 +1452,11 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
     if f in (Intrinsics.sext_int, Intrinsics.zext_int, Intrinsics.trunc_int,
              Intrinsics.fptoui, Intrinsics.fptosi, Intrinsics.uitofp,
              Intrinsics.sitofp, Intrinsics.fptrunc, Intrinsics.fpext)
-        ty = instanceof_tfunc(argtypes[1])[1]
+        # If !isexact, `ty` may be Union{} at runtime even if we have
+        # isprimitivetype(ty).
+        ty, isexact = instanceof_tfunc(argtypes[1])
         xty = widenconst(argtypes[2])
-        return isprimitivetype(ty) && isprimitivetype(xty)
+        return isexact && isprimitivetype(ty) && isprimitivetype(xty)
     end
     # The remaining intrinsics are math/bits/comparison intrinsics. They work on all
     # primitive types.
