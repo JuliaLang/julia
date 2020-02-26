@@ -1419,7 +1419,7 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
         # Nothrow as long as the second argument is guaranteed not to be zero
         isa(argtypes[2], Const) || return false
         if !isprimitivetype(widenconst(argtypes[1])) ||
-           !isprimitivetype(widenconst(argtypes[2]))
+           (widenconst(argtypes[1]) !== widenconst(argtypes[2]))
             return false
         end
         den_val = argtypes[2].val
@@ -1459,10 +1459,13 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
         return isexact && isprimitivetype(ty) && isprimitivetype(xty)
     end
     # The remaining intrinsics are math/bits/comparison intrinsics. They work on all
-    # primitive types.
-    for i = 1:length(argtypes)
-        # Intrinsics are defined only on primitive types
-        if !isprimitivetype(widenconst(argtypes[i]))
+    # primitive types of the same type.
+    isshift = f == shl_int || f == lshr_int || f == ashr_int
+    argtype1 = widenconst(argtypes[1])
+    isprimitivetype(argtype1) || return false
+    for i = 2:length(argtypes)
+        argtype = widenconst(argtypes[i])
+        if isshift ? !isprimitivetype(argtype) : argtype !== argtype1
             return false
         end
     end
