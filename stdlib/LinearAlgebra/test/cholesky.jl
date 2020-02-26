@@ -338,7 +338,7 @@ end
     CD = cholesky(D)
     CM = cholesky(Matrix(D))
     @test CD isa Cholesky{Float64}
-    @test CD.U == Diagonal(.√d) == CM.U
+    @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
 
@@ -352,7 +352,7 @@ end
     CD = cholesky(D)
     CM = cholesky(Matrix(D))
     @test CD isa Cholesky{Complex{Float64}}
-    @test CD.U == Diagonal(.√d) == CM.U
+    @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
 
