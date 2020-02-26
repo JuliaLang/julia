@@ -98,6 +98,12 @@ using Test
         skip(sb, sb.size)
         @test position(sb) == sb.size
     end
+    @testset "seekend" begin
+        sb = SecretBuffer("hello")
+        seekend(sb)
+        @test read(sb, String) == ""
+        shred!(sb)
+    end
     @testset "position" begin
         sb = SecretBuffer("Julia")
         println("testing position")
