@@ -2684,6 +2684,24 @@ end
     end
     @test !checkbounds(Bool, rand(3,3,3), :, CartesianIndex(0,0):CartesianIndex(1,1))
     @test !checkbounds(Bool, rand(3,3,3), CartesianIndex(0,0):CartesianIndex(1,1), :)
+
+    CI0 = CartesianIndices(())
+    # 0-dimensional
+    @test setindex!(fill(0.0), fill(1.0), CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), CI0, CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), :, CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), CI0, :) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), :, CI0, CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), CI0, :, CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), CI0, CI0, :) == fill(1.0)
+    @test setindex!(fill(fill(0.0)), fill(fill(1.0)), CI0) == fill(fill(1.0))
+    # 1-dimensional
+    @test setindex!(zeros(2), ones(2), :, CI0) == ones(2)
+    @test setindex!(zeros(2), ones(2), CI0, :) == ones(2)
+    @test setindex!(zeros(2), ones(2), :, CI0, CI0) == ones(2)
+    @test setindex!(zeros(2), ones(2), CI0, :, CI0) == ones(2)
+    @test setindex!(zeros(2), ones(2), CI0, CI0, :) == ones(2)
+    @test setindex!([fill(0.0)], fill(1.0), 1) == [fill(1.0)]
 end
 
 # Throws ArgumentError for negative dimensions in Array
