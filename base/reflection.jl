@@ -157,6 +157,7 @@ end
 fieldname(t::UnionAll, i::Integer) = fieldname(unwrap_unionall(t), i)
 fieldname(t::Type{<:Tuple}, i::Integer) =
     i < 1 || i > fieldcount(t) ? throw(BoundsError(t, i)) : Int(i)
+fieldname(x, i::Integer) = (@_inline_meta; fieldname(typeof(x), i) )
 
 """
     fieldnames(x::DataType)
@@ -175,6 +176,7 @@ fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
 fieldnames(::Core.TypeofBottom) =
     throw(ArgumentError("The empty type does not have field names since it does not have instances."))
 fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
+fieldnames(x) = (@_inline_meta; fieldnames(typeof(x)) )
 
 """
     hasfield(T::Type, name::Symbol)
