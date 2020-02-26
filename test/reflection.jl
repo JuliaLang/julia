@@ -104,8 +104,8 @@ not_const = 1
 @test isconst(@__MODULE__, :not_const) == false
 @test isconst(@__MODULE__, :is_not_defined) == false
 
-@test isimmutable(1) == true
-@test isimmutable([]) == false
+@test ismutable(1) == false
+@test ismutable([]) == true
 
 ## find bindings tests
 @test ccall(:jl_get_module_of_binding, Any, (Any, Any), Base, :sin)==Base

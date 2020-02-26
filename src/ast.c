@@ -828,7 +828,8 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
 // parse and eval a whole file, possibly reading from a string (`content`)
 jl_value_t *jl_parse_eval_all(const char *fname,
                               const char *content, size_t contentlen,
-                              jl_module_t *inmodule)
+                              jl_module_t *inmodule,
+                              jl_value_t *mapexpr)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (ptls->in_pure_callback)
@@ -879,7 +880,14 @@ jl_value_t *jl_parse_eval_all(const char *fname,
                 JL_TIMING(LOWERING);
                 if (fl_ctx->T == fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "contains-macrocall")), expression)) {
                     form = scm_to_julia(fl_ctx, expression, inmodule);
+                    if (mapexpr)
+                        form = jl_call1(mapexpr, form);
                     form = jl_expand_macros(form, inmodule, NULL, 0);
+                    expression = julia_to_scm(fl_ctx, form);
+                }
+                else if (mapexpr) {
+                    form = scm_to_julia(fl_ctx, expression, inmodule);
+                    form = jl_call1(mapexpr, form);
                     expression = julia_to_scm(fl_ctx, form);
                 }
                 // expand non-final expressions in statement position (value unused)
@@ -925,10 +933,17 @@ finally:
     return result;
 }
 
+JL_DLLEXPORT jl_value_t *jl_load_rewrite_file_string(const char *text, size_t len,
+                                                     char *filename, jl_module_t *inmodule,
+                                                     jl_value_t *mapexpr)
+{
+    return jl_parse_eval_all(filename, text, len, inmodule, mapexpr);
+}
+
 JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
                                              char *filename, jl_module_t *inmodule)
 {
-    return jl_parse_eval_all(filename, text, len, inmodule);
+    return jl_parse_eval_all(filename, text, len, inmodule, NULL);
 }
 
 // returns either an expression or a thunk

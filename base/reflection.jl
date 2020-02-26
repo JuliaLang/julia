@@ -402,22 +402,22 @@ function datatype_fielddesc_type(dt::DataType)
 end
 
 """
-    isimmutable(v) -> Bool
+    ismutable(v) -> Bool
 
-Return `true` iff value `v` is immutable.  See [Mutable Composite Types](@ref)
+Return `true` iff value `v` is mutable.  See [Mutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you give it
 a type, it will tell you that a value of `DataType` is mutable.
 
 # Examples
 ```jldoctest
-julia> isimmutable(1)
-true
-
-julia> isimmutable([1,2])
+julia> ismutable(1)
 false
+
+julia> ismutable([1,2])
+true
 ```
 """
-isimmutable(@nospecialize(x)) = (@_pure_meta; !typeof(x).mutable)
+ismutable(@nospecialize(x)) = (@_pure_meta; typeof(x).mutable)
 
 """
     isstructtype(T) -> Bool

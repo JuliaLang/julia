@@ -2188,6 +2188,8 @@
    '&&     (lambda (e) (expand-forms (expand-and e)))
    '|\|\|| (lambda (e) (expand-forms (expand-or  e)))
 
+   '&      (lambda (e) (error (string "invalid syntax " (deparse e))))
+
    '+=     lower-update-op
    '-=     lower-update-op
    '*=     lower-update-op
@@ -4062,8 +4064,9 @@ f(x) = yt(x)
                      (value temp)
                      (else  (emit temp)))))
 
-            ;; top level expressions returning values
-            ((abstract_type primitive_type struct_type thunk toplevel module)
+            ;; top level expressions that return nothing, or `module` which
+            ;; cannot be nested inside other forms.
+            ((abstract_type primitive_type struct_type thunk module)
              (check-top-level e)
              (with-bindings
               ((*very-linear-mode* #f))  ;; type defs use nonstandard evaluation order
@@ -4089,6 +4092,13 @@ f(x) = yt(x)
                  (emit e))))
              (if tail (emit-return '(null)))
              '(null))
+
+            ((toplevel)
+             (check-top-level e)
+             (let ((val (make-ssavalue)))
+               (emit `(= ,val ,e))
+               (if tail (emit-return val))
+               val))
 
             ;; other top level expressions
             ((import using export)

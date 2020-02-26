@@ -1035,6 +1035,13 @@ end
     @test !(1 > NaN)
 end
 
+@testset "Irrational zero and one" begin
+    @test one(pi) === true
+    @test zero(pi) === false
+    @test one(typeof(pi)) === true
+    @test zero(typeof(pi)) === false
+end
+
 @testset "Irrationals compared with Irrationals" begin
     for i in (π, ℯ, γ, catalan)
         for j in (π, ℯ, γ, catalan)
@@ -1077,6 +1084,12 @@ end
     @test 2646693125139304345//842468587426513207 != pi
 
     @test sqrt(2) == 1.4142135623730951
+end
+@testset "Irrational printing" begin
+    @test sprint(show, "text/plain", π) == "π = 3.1415926535897..."
+    @test sprint(show, "text/plain", π, context=:compact => true) == "π"
+    @test sprint(show, π) == "π"
+
 end
 @testset "issue #6365" begin
     for T in (Float32, Float64)

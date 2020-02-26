@@ -50,6 +50,18 @@ access this string must satisfy `1 ≤ i ≤ ncodeunits(s)`. Not all such indic
 are valid – they may not be the start of a character, but they will return a
 code unit value when calling `codeunit(s,i)`.
 
+# Examples
+```jldoctest
+julia> ncodeunits("The Julia Language")
+18
+
+julia> ncodeunits("∫eˣ")
+6
+
+julia> ncodeunits('∫'), ncodeunits('e'), ncodeunits('ˣ')
+(3, 1, 2)
+```
+
 See also: [`codeunit`](@ref), [`checkbounds`](@ref), [`sizeof`](@ref),
 [`length`](@ref), [`lastindex`](@ref)
 """
@@ -99,7 +111,6 @@ See also: [`getindex`](@ref), [`iterate`](@ref), [`thisind`](@ref),
 [`nextind`](@ref), [`prevind`](@ref), [`length`](@ref)
 
 # Examples
-
 ```jldoctest
 julia> str = "αβγdef";
 
@@ -598,6 +609,7 @@ end
 
 Get a string consisting of the first `n` characters of `s`.
 
+# Examples
 ```jldoctest
 julia> first("∀ϵ≠0: ϵ²>0", 0)
 ""
@@ -616,6 +628,7 @@ first(s::AbstractString, n::Integer) = @inbounds s[1:min(end, nextind(s, 0, n))]
 
 Get a string consisting of the last `n` characters of `s`.
 
+# Examples
 ```jldoctest
 julia> last("∀ϵ≠0: ϵ²>0", 0)
 ""
@@ -715,5 +728,17 @@ unsafe_convert(::Type{Ptr{Int8}}, s::CodeUnits{UInt8}) = unsafe_convert(Ptr{Int8
 Obtain a vector-like object containing the code units of a string.
 Returns a `CodeUnits` wrapper by default, but `codeunits` may optionally be defined
 for new string types if necessary.
+
+# Examples
+```jldoctest
+julia> codeunits("Juλia")
+6-element Base.CodeUnits{UInt8,String}:
+ 0x4a
+ 0x75
+ 0xce
+ 0xbb
+ 0x69
+ 0x61
+```
 """
 codeunits(s::AbstractString) = CodeUnits(s)

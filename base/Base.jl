@@ -105,6 +105,8 @@ include("baseext.jl")
 include("ntuple.jl")
 
 include("abstractdict.jl")
+include("iddict.jl")
+include("idset.jl")
 
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
@@ -363,8 +365,8 @@ for m in methods(include)
 end
 # These functions are duplicated in client.jl/include(::String) for
 # nicer stacktraces. Modifications here have to be backported there
-include(mod::Module, path::AbstractString) = include(mod, convert(String, path))
-function include(mod::Module, _path::String)
+include(mod::Module, _path::AbstractString) = include(identity, mod, _path)
+function include(mapexpr::Function, mod::Module, _path::AbstractString)
     path, prev = _include_dependency(mod, _path)
     for callback in include_callbacks # to preserve order, must come before Core.include
         invokelatest(callback, mod, path)
@@ -374,7 +376,11 @@ function include(mod::Module, _path::String)
     local result
     try
         # result = Core.include(mod, path)
-        result = ccall(:jl_load_, Any, (Any, Any), mod, path)
+        if mapexpr === identity
+            result = ccall(:jl_load, Any, (Any, Cstring), mod, path)
+        else
+            result = ccall(:jl_load_rewrite, Any, (Any, Cstring, Any), mod, path, mapexpr)
+        end
     finally
         if prev === nothing
             delete!(tls, :SOURCE_PATH)

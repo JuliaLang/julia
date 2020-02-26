@@ -457,7 +457,7 @@ M
 end
 ```
 
-Adds docstring `"..."` to the `Module``M`. Adding the docstring above the `Module` is the preferred
+Adds docstring `"..."` to the `Module` `M`. Adding the docstring above the `Module` is the preferred
 syntax, however both are equivalent.
 
 ```julia

@@ -147,7 +147,44 @@ end
 show(io::IO, manager::SSHManager) = println(io, "SSHManager(machines=", manager.machines, ")")
 
 
-function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, launch_ntfy::Condition)
+function parse_machine(machine::AbstractString)
+    hoststr = ""
+    portnum = nothing
+
+    if machine[begin] == '['  # ipv6 bracket notation (RFC 2732)
+        ipv6_end = findlast(']', machine)
+        if ipv6_end == nothing
+            throw(ArgumentError("invalid machine definition format string: invalid port format \"$machine_def\""))
+        end
+        hoststr = machine[begin+1 : prevind(machine,ipv6_end)]
+        machine_def = split(machine[ipv6_end : end] , ':')
+    else    # ipv4
+        machine_def = split(machine, ':')
+        hoststr = machine_def[1]
+    end
+
+    if length(machine_def) > 2
+        throw(ArgumentError("invalid machine definition format string: invalid port format \"$machine_def\""))
+    end
+
+    if length(machine_def) == 2
+        portstr = machine_def[2]
+
+        portnum = tryparse(Int, portstr)
+        if portnum == nothing
+            msg = "invalid machine definition format string: invalid port format \"$machine_def\""
+            throw(ArgumentError(msg))
+        end
+
+        if portnum < 1 || portnum > 65535
+            msg = "invalid machine definition format string: invalid port number \"$machine_def\""
+            throw(ArgumentError(msg))
+        end
+    end
+    (hoststr, portnum)
+end
+
+function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, params::Dict, launched::Array, launch_ntfy::Condition)
     dir = params[:dir]
     exename = params[:exename]
     exeflags = params[:exeflags]
@@ -165,21 +202,8 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     end
     exeflags = `$exeflags --worker`
 
-    machine_def = split(machine_bind[1], ':')
-    # if this machine def has a port number, add the port information to the ssh flags
-    if length(machine_def) > 2
-        throw(ArgumentError("invalid machine definition format string: invalid port format \"$machine_def\""))
-    end
-    host = machine_def[1]
-    portopt = ``
-    if length(machine_def) == 2
-        portstr = machine_def[2]
-        if !all(isdigit, portstr) || (p = parse(Int,portstr); p < 1 || p > 65535)
-            msg = "invalid machine definition format string: invalid port format \"$machine_def\""
-            throw(ArgumentError(msg))
-        end
-        portopt = ` -p $(machine_def[2]) `
-    end
+    host, portnum = parse_machine(machine_bind[1])
+    portopt = portnum === nothing ? `` : `-p $portnum`
     sshflags = `$(params[:sshflags]) $portopt`
 
     if tunnel
@@ -489,15 +513,15 @@ end
 
 const client_port = Ref{Cushort}(0)
 
-function socket_reuse_port()
+function socket_reuse_port(iptype)
     if ccall(:jl_has_so_reuseport, Int32, ()) == 1
-        s = TCPSocket(delay = false)
+        sock = TCPSocket(delay = false)
 
         # Some systems (e.g. Linux) require the port to be bound before setting REUSEPORT
         bind_early = Sys.islinux()
 
-        bind_early && bind_client_port(s)
-        rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Cvoid},), s.handle)
+        bind_early && bind_client_port(sock, iptype)
+        rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Cvoid},), sock.handle)
         if rc < 0
             # This is an issue only on systems with lots of client connections, hence delay the warning
             nworkers() > 128 && @warn "Error trying to reuse client port number, falling back to regular socket" maxlog=1
@@ -505,41 +529,36 @@ function socket_reuse_port()
             # provide a clean new socket
             return TCPSocket()
         end
-        bind_early || bind_client_port(s)
-        return s
+        bind_early || bind_client_port(sock, iptype)
+        return sock
     else
         return TCPSocket()
     end
 end
 
-# TODO: this doesn't belong here, it belongs in Sockets
-function bind_client_port(s::TCPSocket)
-    Sockets.iolock_begin()
-    @assert s.status == Sockets.StatusInit
-    host_in = Ref(hton(UInt32(0))) # IPv4 0.0.0.0
-    err = ccall(:jl_tcp_bind, Int32, (Ptr{Cvoid}, UInt16, Ptr{Cvoid}, Cuint, Cint),
-                s, hton(client_port[]), host_in, 0, false)
-    Sockets.iolock_end()
-    uv_error("tcp_bind", err)
-
-    _addr, port = getsockname(s)
+function bind_client_port(sock::TCPSocket, iptype)
+    bind_host = iptype(0)
+    Sockets.bind(sock, bind_host, client_port[])
+    _addr, port = getsockname(sock)
     client_port[] = port
-    return s
+    return sock
 end
 
 function connect_to_worker(host::AbstractString, port::Integer)
-    s = socket_reuse_port()
-    connect(s, host, UInt16(port))
-
     # Avoid calling getaddrinfo if possible - involves a DNS lookup
     # host may be a stringified ipv4 / ipv6 address or a dns name
     bind_addr = nothing
     try
-        bind_addr = string(parse(IPAddr,host))
+        bind_addr = parse(IPAddr,host)
     catch
-        bind_addr = string(getaddrinfo(host))
+        bind_addr = getaddrinfo(host)
     end
-    (s, bind_addr)
+
+    iptype = typeof(bind_addr)
+    sock = socket_reuse_port(iptype)
+    connect(sock, bind_addr, UInt16(port))
+
+    (sock, string(bind_addr))
 end
 
 

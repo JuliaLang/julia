@@ -142,7 +142,6 @@ endif
 
 	# cleanup unnecessary install outputs
 	rm $(DESTDIR)$(datarootdir)/julia/startup.jl
-	-rm $(DESTDIR)$(datarootdir)/julia/build_sysimg.jl
 	rm -rf $(DESTDIR)$(datarootdir)/icons $(DESTDIR)$(datarootdir)/applications $(DESTDIR)$(datarootdir)/appdata
 	find $(DESTDIR)$(prefix)/$(framework_directory) \( -name '.DS_Store' -o -name '.gitignore' -o -name Makefile -o -name .travis.yml -o -name .codecov.yml \) -delete
 

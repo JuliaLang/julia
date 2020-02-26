@@ -37,6 +37,8 @@ function _helpmode(io::IO, line::AbstractString)
             # Docs for keywords must be treated separately since trying to parse a single
             # keyword such as `function` would throw a parse error due to the missing `end`.
             Symbol(line)
+        elseif isexpr(x, (:using, :import))
+            x.head
         else
             # Retrieving docs for macros requires us to make a distinction between the text
             # `@macroname` and `@macroname()`. These both parse the same, but are used by

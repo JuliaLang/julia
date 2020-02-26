@@ -738,6 +738,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     if (!jl_options.image_file) {
         jl_core_module = jl_new_module(jl_symbol("Core"));
+        jl_core_module->parent = jl_core_module;
         jl_type_typename->mt->module = jl_core_module;
         jl_top_module = jl_core_module;
         jl_init_intrinsic_functions();
@@ -747,16 +748,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         post_boot_hooks();
     }
 
-    // the Main module is the one which is always open, and set as the
-    // current module for bare (non-module-wrapped) toplevel expressions.
-    // it does "using Base" if Base is available.
     if (jl_base_module != NULL) {
-        jl_add_standard_imports(jl_main_module);
-        jl_value_t *maininclude = jl_get_global(jl_base_module, jl_symbol("MainInclude"));
-        if (maininclude && jl_is_module(maininclude)) {
-            jl_module_import(jl_main_module, (jl_module_t*)maininclude, jl_symbol("include"));
-            jl_module_import(jl_main_module, (jl_module_t*)maininclude, jl_symbol("eval"));
-        }
         // Do initialization needed before starting child threads
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("__preinit_threads__"));
         if (f) {

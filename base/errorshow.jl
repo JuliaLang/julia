@@ -265,6 +265,21 @@ function showerror(io::IO, ex::MethodError)
         end
         print(io, ")")
     end
+    # catch the two common cases of element-wise addition and subtraction
+    if f in (Base.:+, Base.:-) && length(arg_types_param) == 2
+        # we need one array of numbers and one number, in any order
+        if any(x -> x <: AbstractArray{<:Number}, arg_types_param) &&
+            any(x -> x <: Number, arg_types_param)
+
+            nouns = Dict(
+                Base.:+ => "addition",
+                Base.:- => "subtraction",
+            )
+            varnames = ("scalar", "array")
+            first, second = arg_types_param[1] <: Number ? varnames : reverse(varnames)
+            print(io, "\nFor element-wise $(nouns[f]), use broadcasting with dot syntax: $first .$f $second")
+        end
+    end
     if ft <: AbstractArray
         print(io, "\nUse square brackets [] for indexing an Array.")
     end

@@ -254,7 +254,7 @@ false
 (~)(x::BitInteger)             = not_int(x)
 
 """
-    &(x, y)
+    x & y
 
 Bitwise and. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 returning [`missing`](@ref) if one operand is `missing` and the other is `true`.
@@ -277,7 +277,7 @@ false
 (&)(x::T, y::T) where {T<:BitInteger} = and_int(x, y)
 
 """
-    |(x, y)
+    x | y
 
 Bitwise or. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 returning [`missing`](@ref) if one operand is `missing` and the other is `false`.
@@ -451,6 +451,35 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
         end
     end
 end
+
+## integer bitwise rotations ##
+
+"""
+    bitrotate(x::Base.BitInteger, k::Integer)
+
+`bitrotate(x, k)` implements bitwise rotation.
+It returns the value of `x` with its bits rotated left `k` times.
+A negative value of `k` will rotate to the right instead.
+
+!!! compat "Julia 1.5"
+    This function requires Julia 1.5 or later.
+
+```jldoctest
+julia> bitrotate(UInt8(114), 2)
+0xc9
+
+julia> bitstring(bitrotate(0b01110010, 2))
+"11001001"
+
+julia> bitstring(bitrotate(0b01110010, -2))
+"10011100"
+
+julia> bitstring(bitrotate(0b01110010, 8))
+"01110010"
+```
+"""
+bitrotate(x::T, k::Integer) where {T <: BitInteger} =
+    (x << ((sizeof(T) << 3 - 1) & k)) | (x >>> ((sizeof(T) << 3 - 1) & -k))
 
 # @doc isn't available when running in Core at this point.
 # Tuple syntax for documentation two function signatures at the same time
@@ -859,4 +888,38 @@ for op in (:+, :-, :*, :&, :|, :xor)
         not_sametype((a, b), (aT, bT))
         return $op(aT, bT)
     end
+end
+
+const _mask1_uint128 = (UInt128(0x5555555555555555) << 64) | UInt128(0x5555555555555555)
+const _mask2_uint128 = (UInt128(0x3333333333333333) << 64) | UInt128(0x3333333333333333)
+const _mask4_uint128 = (UInt128(0x0f0f0f0f0f0f0f0f) << 64) | UInt128(0x0f0f0f0f0f0f0f0f)
+
+"""
+    bitreverse(x)
+
+Reverse the order of bits in integer `x`. `x` must have a fixed bit width,
+e.g. be an `Int16` or `Int32`.
+
+!!! compat "Julia 1.5"
+    This function requires Julia 1.5 or later.
+
+# Examples
+```jldoctest
+julia> bitreverse(0x8080808080808080)
+0x0101010101010101
+
+julia> reverse(bitstring(0xa06e)) == bitstring(bitreverse(0xa06e))
+true
+```
+"""
+function bitreverse(x::BitInteger)
+    # TODO: consider using llvm.bitreverse intrinsic
+    z = unsigned(x)
+    mask1 = _mask1_uint128 % typeof(z)
+    mask2 = _mask2_uint128 % typeof(z)
+    mask4 = _mask4_uint128 % typeof(z)
+    z = ((z & mask1) << 1) | ((z >> 1) & mask1)
+    z = ((z & mask2) << 2) | ((z >> 2) & mask2)
+    z = ((z & mask4) << 4) | ((z >> 4) & mask4)
+    return bswap(z) % typeof(x)
 end

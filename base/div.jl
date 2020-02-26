@@ -103,7 +103,7 @@ cld(a, b) = div(a, b, RoundUp)
     divrem(x, y, r::RoundingMode=RoundToZero)
 
 The quotient and remainder from Euclidean division.
-Equivalent to `(div(x,y,r), rem(x,y,r))`. Equivalently, with the the default
+Equivalent to `(div(x,y,r), rem(x,y,r))`. Equivalently, with the default
 value of `r`, this call is equivalent to `(x÷y, x%y)`.
 
 # Examples

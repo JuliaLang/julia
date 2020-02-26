@@ -204,8 +204,8 @@ julia> function mycompare(a, b)::Cint
 mycompare (generic function with 1 method)
 ```
 
-``qsort`` expects a comparison function that return a C ``int``, so we annotate the return type
-to be ``Cint``.
+`qsort` expects a comparison function that return a C `int`, so we annotate the return type
+to be `Cint`.
 
 In order to pass this function to C, we obtain its address using the macro `@cfunction`:
 

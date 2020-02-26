@@ -158,6 +158,7 @@ Base.isdispatchtuple
 ### Declared structure
 
 ```@docs
+Base.ismutable
 Base.isimmutable
 Base.isabstracttype
 Base.isprimitivetype
@@ -207,6 +208,7 @@ Union{}
 Core.UnionAll
 Core.Tuple
 Core.NamedTuple
+Base.@NamedTuple
 Base.Val
 Core.Vararg
 Core.Nothing

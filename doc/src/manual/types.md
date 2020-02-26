@@ -923,12 +923,26 @@ julia> typeof((a=1,b="hello"))
 NamedTuple{(:a, :b),Tuple{Int64,String}}
 ```
 
+The [`@NamedTuple`](@ref) macro provides a more convenient `struct`-like syntax for declaring
+`NamedTuple` types via `key::Type` declarations, where an omitted `::Type` corresponds to `::Any`.
+
+```jldoctest
+julia> @NamedTuple{a::Int, b::String}
+NamedTuple{(:a, :b),Tuple{Int64,String}}
+
+julia> @NamedTuple begin
+           a::Int
+           b::String
+       end
+NamedTuple{(:a, :b),Tuple{Int64,String}}
+```
+
 A `NamedTuple` type can be used as a constructor, accepting a single tuple argument.
 The constructed `NamedTuple` type can be either a concrete type, with both parameters specified,
 or a type that specifies only field names:
 
 ```jldoctest
-julia> NamedTuple{(:a, :b),Tuple{Float32, String}}((1,""))
+julia> @NamedTuple{a::Float32,b::String}((1,""))
 (a = 1.0f0, b = "")
 
 julia> NamedTuple{(:a, :b)}((1,""))
