@@ -148,13 +148,6 @@ function _chol!(A::StridedMatrix{<:BlasFloat}, ::Type{LowerTriangular})
     C, info = LAPACK.potrf!('L', A)
     return LowerTriangular(C), info
 end
-function _chol!(A::StridedMatrix)
-    if !ishermitian(A) # return with info = -1 if not Hermitian
-        return UpperTriangular(A), convert(BlasInt, -1)
-    else
-        return _chol!(A, UpperTriangular)
-    end
-end
 
 ## Non BLAS/LAPACK element types (generic)
 function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
