@@ -1342,6 +1342,7 @@ end
             @test a == [acopy[1:(first(idx)-1)]; repl; acopy[(last(idx)+1):end]]
         end
     end
+    @test splice!([4,3,2,1], [2, 4]) == [3, 1]
 end
 
 @testset "filter!" begin
