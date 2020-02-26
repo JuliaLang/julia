@@ -108,4 +108,9 @@ using Test
         @test initial_pos == 0 && mid_pos == 2 && position(sb)==sb.size
         shred!(sb)
     end
+    @testset "hashing secret buffers" begin
+        sb1 = SecretBuffer("hello")
+        sb2 = SecretBuffer("juliaisawesome")
+        @test hash(sb1, UInt(5)) === hash(sb2, UInt(5))
+    end
 end
