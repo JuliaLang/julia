@@ -260,9 +260,27 @@ function splitrange(N::Int, np::Int)
     return chunks
 end
 
+# Statically split range [firstIndex,lastIndex] into equal sized chunks for np processors
+function splitrange(firstIndex::Int, lastIndex::Int, np::Int)
+    each = div(lastIndex-firstIndex+1,np)
+    extras = rem(lastIndex-firstIndex+1,np)
+    nchunks = each > 0 ? np : extras
+    chunks = Vector{UnitRange{Int}}(undef, nchunks)
+    lo = firstIndex
+    for i in 1:nchunks
+        hi = lo + each - 1
+        if extras > 0
+            hi += 1
+            extras -= 1
+        end
+        chunks[i] = lo:hi
+        lo = hi+1
+    end
+    return chunks
+end
+
 function preduce(reducer, f, R)
-    N = length(R)
-    chunks = splitrange(Int(N), nworkers())
+    chunks = splitrange(firstindex(R),lastindex(R), nworkers())
     all_w = workers()[1:length(chunks)]
 
     w_exec = Task[]
@@ -275,7 +293,7 @@ function preduce(reducer, f, R)
 end
 
 function pfor(f, R)
-    @async @sync for c in splitrange(length(R), nworkers())
+    @async @sync for c in splitrange(firstindex(R),lastindex(R), nworkers())
         @spawnat :any f(R, first(c), last(c))
     end
 end
