@@ -608,6 +608,9 @@ end
     A = sprand(3, 3, 1.0); B = ones(4, 4)
     copyto!(B, A)
     @test B[4, :] != B[:, 4] == ones(4)
+    # Allow no-op copyto! with empty source even for incompatible eltypes
+    A = sparse(fill("", 0, 0))
+    @test copyto!(B, A) == B
 end
 
 @testset "conj" begin
