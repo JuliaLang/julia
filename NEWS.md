@@ -22,6 +22,10 @@ New language features
 
 * Support for Unicode 13.0.0 (via utf8proc 2.5) ([#35282]).
 
+* The compiler optimization level can now be set per-module using the experimental macro
+  `Base.Experimental.@optlevel n`. For code that is not performance-critical, setting
+  this to 0 or 1 can provide significant latency improvements ([#34896]).
+
 Language changes
 ----------------
 
