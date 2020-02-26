@@ -257,3 +257,15 @@ Add the following to the `Make.user` file:
     USE_INTEL_MKL = 1
 
 It is highly recommended to start with a fresh clone of the Julia repository.
+
+## Source distributions of releases
+
+Each pre-release and release of Julia has a "full" source distribution and a "light" source
+distribution.
+
+The full source distribution contains the source code for Julia and all dependencies so
+that it can be built from source without an internet connection. The light source
+distribution does not include the source code of dependencies.
+
+For example, `julia-1.0.0.tar.gz` is the light source distribution for the `v1.0.0` release
+of Julia, while `julia-1.0.0-full.tar.gz` is the full source distribution.

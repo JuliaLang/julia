@@ -72,7 +72,8 @@ vals = Any[
     # Overflow with Int8
     Any[Int8(127), Int8(-128), -383], 127:-255:-383,
     # Loss of precision with Float64
-    Any[-2^53-1, 0.0, 2^53+1], [-2^53-1, 0, 2^53+1], (-2^53-1):2^53+1:(2^53+1),
+    Any[-Int64(2)^53-1, 0.0, Int64(2)^53+1], [-Int64(2)^53-1, 0, Int64(2)^53+1],
+        (-Int64(2)^53-1):Int64(2)^53+1:(Int64(2)^53+1),
     # Some combinations of elements support -, others do not
     [1, 2, "a"], [1, "a", 2], [1, 2, "a", 2], [1, 'a', 2],
     Set([1,2,3,4]),

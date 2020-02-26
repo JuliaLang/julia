@@ -1,25 +1,44 @@
-Julia v1.3 Release Notes
+Julia v1.5 Release Notes
 ========================
 
 New language features
 ---------------------
-
-* Support for Unicode 12.1.0 ([#32002]).
-* Methods can now be added to an abstract type ([#31916]).
+* Macro calls `@foo {...}` can now also be written `@foo{...}` (without the space) ([#34498]).
+* `⨟` is now parsed as a binary operator with times precedence. It can be entered in the REPL
+  with `\bbsemi` followed by <kbd>TAB</kbd> ([#34722]).
 
 Language changes
 ----------------
 
+* The interactive REPL now uses "soft scope" for top-level expressions: an assignment inside a
+  scope block such as a `for` loop automatically assigns to a global variable if one has been
+  defined already. This matches the behavior of Julia versions 0.6 and prior, as well as
+  [IJulia](https://github.com/JuliaLang/IJulia.jl).
+  Note that this only affects expressions interactively typed or pasted directly into the
+  default REPL ([#28789], [#33864]).
+
+* Outside of the REPL (e.g. in a file), assigning to a variable within a top-level scope
+  block is considered ambiguous if a global variable with the same name exists.
+  A warning is given if that happens, to alert you that the code will work differently
+  than in the REPL.
+  A new command line option `--warn-scope` controls this warning ([#33864]).
+
+* Converting arbitrary tuples to `NTuple`, e.g. `convert(NTuple, (1, ""))` now gives an error,
+  where it used to be incorrectly allowed. This is because `NTuple` refers only to homogeneous
+  tuples (this meaning has not changed) ([#34272]).
+
+* In docstrings, a level-1 markdown header "Extended help" is now
+  interpreted as a marker dividing "brief help" from "extended help."
+  The REPL help mode only shows the brief help (the content before the
+  "Extended help" header) by default; prepend the expression with '?'
+  (in addition to the one that enters the help mode) to see the full
+  docstring. ([#25930])
+
+* The syntax `(;)` (which was deprecated in v1.4) now creates an empty named tuple ([#30115]).
 
 Multi-threading changes
 -----------------------
 
-* All system-level I/O operations (e.g. files and sockets) are now thread-safe.
-  This does not include subtypes of `IO` that are entirely in-memory, such as `IOBuffer`,
-  although it specifically does include `BufferStream`.
-  ([#32309], [#32174], [#31981], [#32421]).
-* The global random number generator (`GLOBAL_RNG`) is now thread-safe (and thread-local) ([#32407]).
-* New experimental `Threads.@spawn` macro that runs a task on any available thread ([#32600]).
 
 Build system changes
 --------------------
@@ -27,69 +46,71 @@ Build system changes
 
 New library functions
 ---------------------
+* The `@ccall` macro has been added added to Base. It is a near drop-in replacement for `ccall` with more Julia-like syntax. It also wraps the new `foreigncall` API for varargs of different types, though it lacks the the capability to specify an LLVM calling convention. ([#32748])
+* New functions `mergewith` and `mergewith!` supersede `merge` and `merge!` with `combine`
+  argument.  They don't have the restriction for `combine` to be a `Function` and also
+  provide one-argument method that returns a closure.  The old methods of `merge` and
+  `merge!` are still available for backward compatibility ([#34296]).
+* The new `isdisjoint` function indicates whether two collections are disjoint ([#34427]).
+* Add function `ismutable` and deprecate `isimmutable` to check whether something is mutable.([#34652])
+* `include` now accepts an optional `mapexpr` first argument to transform the parsed
+  expressions before they are evaluated ([#34595]).
+* New function `bitreverse` for reversing the order of bits in a fixed-width integer ([#34791]).
+* New function `bitrotate(x, k)` for rotating the bits in a fixed-width integer ([#33937]).
 
-* `findfirst`, `findlast`, `findnext` and `findprev` now accept a character as first argument
-  to search for that character in a string passed as the second argument ([#31664]).
-* New `findall(pattern, string)` method where `pattern` is a string or regex ([#31834]).
-* `istaskfailed` is now documented and exported, like its siblings `istaskdone` and `istaskstarted` ([#32300]).
-* `RefArray` and `RefValue` objects now accept index `CartesianIndex()` in  `getindex` and `setindex!` ([#32653])
+New library features
+--------------------
+* Function composition now works also on one argument `∘(f) = f` (#34251)
+* `@NamedTuple{key1::Type1, ...}` macro for convenient `NamedTuple` declarations ([#34548]).
+
+* `isapprox` (or `≈`) now has a one-argument "curried" method `isapprox(x)` which returns a function, like `isequal` (or `==`)` ([#32305]).
+* `Ref{NTuple{N,T}}` can be passed to `Ptr{T}`/`Ref{T}` `ccall` signatures ([#34199])
+
 
 Standard library changes
 ------------------------
-
-* `Regex` can now be multiplied (`*`) and exponentiated (`^`), like strings ([#23422]).
-* `Cmd` interpolation (``` `$(x::Cmd) a b c` ``` where) now propagates `x`'s process flags
-  (environment, flags, working directory, etc) if `x` is the first interpolant and errors
-  otherwise ([#24353]).
-* Zero-dimensional arrays are now consistently preserved in the return values of mathematical
-  functions that operate on the array(s) as a whole (and are not explicitly broadcasted across their elements).
-  Previously, the functions  `+`, `-`, `*`, `/`, `conj`, `real` and `imag` returned the unwrapped element
-  when operating over zero-dimensional arrays ([#32122]).
-* `IPAddr` subtypes now behave like scalars when used in broadcasting ([#32133]).
-* `clamp` can now handle missing values ([#31066]).
-* `empty` now accepts a `NamedTuple` ([#32534]).
-* `mod` now accepts a unit range as the second argument to easily perform offset modular arithmetic to ensure the result is inside the range ([#32628]).
-
-#### Libdl
-
-* `dlopen()` can now be invoked in `do`-block syntax, similar to `open()`.
+* The `@timed` macro now returns a `NamedTuple` ([#34149])
+* New `supertypes(T)` function returns a tuple of all supertypes of `T` ([#34419]).
+* Sorting-related functions such as `sort` that take the keyword arguments `lt`, `rev`, `order`
+  and `by` now do not discard `order` if `by` or `lt` are passed. In the former case, the
+  order from `order` is used to compare the values of `by(element)`. In the latter case,
+  any order different from `Forward` or `Reverse` will raise an error about the
+  ambiguity.
 
 #### LinearAlgebra
+* The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
+* `normalize` now supports multidimensional arrays ([#34239])
+* `lq` factorizations can now be used to compute the minimum-norm solution to under-determined systems ([#34350]).
+* The BLAS submodule now supports the level-2 BLAS subroutine `spmv!` ([#34320]).
 
-* The BLAS submodule no longer exports `dot`, which conflicts with that in LinearAlgebra ([#31838]).
-* `diagm` and `spdiagm` now accept optional `m,n` initial arguments to specify a size ([#31654]).
-* `Hessenberg` factorizations `H` now support efficient shifted solves `(H+µI) \ b` and determinants, and use a specialized tridiagonal factorization for Hermitian matrices. There is also a new `UpperHessenberg` matrix type ([#31853]).
+#### Markdown
+
+
+#### Random
+
+
+#### REPL
+
 
 #### SparseArrays
-
-* `SparseMatrixCSC(m,n,colptr,rowval,nzval)` perform consistency checks for arguments:
-  `colptr` must be properly populated and lengths of `colptr`, `rowval`, and `nzval`
-  must be compatible with `m`, `n`, and `eltype(colptr)`.
-* `sparse(I, J, V, m, n)` verifies lengths of `I`, `J`, `V` are equal and compatible with
-  `eltype(I)` and `m`, `n`.
+* `lu!` accepts `UmfpackLU` as an argument to make use of its symbolic factorization.
+* The `trim` keyword argument for the functions `fkeep!`, `tril!`, `triu!`,
+  `droptol!`,`dropzeros!` and `dropzeros` has been removed in favour of always
+  trimming. Calling these with `trim=false` could result in invalid sparse
+  arrays.
 
 #### Dates
 
-* `DateTime` and `Time` formatting/parsing now supports 12-hour clocks with AM/PM via `I` and `p` codes, similar to `strftime` ([#32308]).
-* Fixed `repr` such that it displays `Time` as it would be entered in Julia ([#32103]).
-
 #### Statistics
 
-* `mean` now accepts both a function argument and a `dims` keyword ([#31576]).
 
 #### Sockets
 
-* Added `InetAddr` constructor from `AbstractString`, representing IP address, and `Integer`,
-  representing port number ([#31459]).
-
-#### Miscellaneous
-
-* `foldr` and `mapfoldr` now work on any iterator that supports `Iterators.reverse`, not just arrays ([#31781]).
+#### Distributed
+* `launch_on_machine` now supports and parses ipv6 square-bracket notation ([#34430])
 
 Deprecated or removed
 ---------------------
-
-* `@spawn expr` from the `Distributed` standard library should be replaced with `@spawnat :any expr` ([#32600]).
 
 External dependencies
 ---------------------
@@ -97,33 +118,5 @@ External dependencies
 Tooling Improvements
 ---------------------
 
-* The `ClangSA.jl` static analysis package has been imported, which makes use of
-  the clang static analyzer to validate GC invariants in Julia's C code. The analysis
-  may be run using `make -C src analyzegc`.
 
 <!--- generated by NEWS-update.jl: -->
-[#23422]: https://github.com/JuliaLang/julia/issues/23422
-[#24353]: https://github.com/JuliaLang/julia/issues/24353
-[#31066]: https://github.com/JuliaLang/julia/issues/31066
-[#31459]: https://github.com/JuliaLang/julia/issues/31459
-[#31576]: https://github.com/JuliaLang/julia/issues/31576
-[#31654]: https://github.com/JuliaLang/julia/issues/31654
-[#31664]: https://github.com/JuliaLang/julia/issues/31664
-[#31781]: https://github.com/JuliaLang/julia/issues/31781
-[#31834]: https://github.com/JuliaLang/julia/issues/31834
-[#31838]: https://github.com/JuliaLang/julia/issues/31838
-[#31853]: https://github.com/JuliaLang/julia/issues/31853
-[#31916]: https://github.com/JuliaLang/julia/issues/31916
-[#31981]: https://github.com/JuliaLang/julia/issues/31981
-[#32002]: https://github.com/JuliaLang/julia/issues/32002
-[#32103]: https://github.com/JuliaLang/julia/issues/32103
-[#32122]: https://github.com/JuliaLang/julia/issues/32122
-[#32133]: https://github.com/JuliaLang/julia/issues/32133
-[#32174]: https://github.com/JuliaLang/julia/issues/32174
-[#32300]: https://github.com/JuliaLang/julia/issues/32300
-[#32308]: https://github.com/JuliaLang/julia/issues/32308
-[#32309]: https://github.com/JuliaLang/julia/issues/32309
-[#32407]: https://github.com/JuliaLang/julia/issues/32407
-[#32421]: https://github.com/JuliaLang/julia/issues/32421
-[#32534]: https://github.com/JuliaLang/julia/issues/32534
-[#32600]: https://github.com/JuliaLang/julia/issues/32600

@@ -40,6 +40,17 @@ Broadcast.BroadcastStyle(::StructuredMatrixStyle{<:UnitLowerTriangular}, ::Struc
 Broadcast.BroadcastStyle(::StructuredMatrixStyle{<:UnitUpperTriangular}, ::StructuredMatrixStyle{<:Union{Diagonal,UpperTriangular,UnitUpperTriangular}}) =
     StructuredMatrixStyle{UpperTriangular}()
 
+Broadcast.BroadcastStyle(::StructuredMatrixStyle{<:Union{LowerTriangular,UnitLowerTriangular}}, ::StructuredMatrixStyle{<:Union{UpperTriangular,UnitUpperTriangular}}) =
+    StructuredMatrixStyle{Matrix}()
+Broadcast.BroadcastStyle(::StructuredMatrixStyle{<:Union{UpperTriangular,UnitUpperTriangular}}, ::StructuredMatrixStyle{<:Union{LowerTriangular,UnitLowerTriangular}}) =
+    StructuredMatrixStyle{Matrix}()
+
+# Make sure that `StructuredMatrixStyle{<:Matrix}` doesn't ever end up falling
+# through and give back `DefaultArrayStyle{2}`
+Broadcast.BroadcastStyle(T::StructuredMatrixStyle{<:Matrix}, ::StructuredMatrixStyle) = T
+Broadcast.BroadcastStyle(::StructuredMatrixStyle, T::StructuredMatrixStyle{<:Matrix}) = T
+Broadcast.BroadcastStyle(T::StructuredMatrixStyle{<:Matrix}, ::StructuredMatrixStyle{<:Matrix}) = T
+
 # All other combinations fall back to the default style
 Broadcast.BroadcastStyle(::StructuredMatrixStyle, ::StructuredMatrixStyle) = DefaultArrayStyle{2}()
 
@@ -69,6 +80,8 @@ structured_broadcast_alloc(bc, ::Type{<:UnitLowerTriangular}, ::Type{ElType}, n)
     UnitLowerTriangular(Array{ElType}(undef, n, n))
 structured_broadcast_alloc(bc, ::Type{<:UnitUpperTriangular}, ::Type{ElType}, n) where {ElType} =
     UnitUpperTriangular(Array{ElType}(undef, n, n))
+structured_broadcast_alloc(bc, ::Type{<:Matrix}, ::Type{ElType}, n) where {ElType} =
+    Matrix(Array{ElType}(undef, n, n))
 
 # A _very_ limited list of structure-preserving functions known at compile-time. This list is
 # derived from the formerly-implemented `broadcast` methods in 0.6. Note that this must

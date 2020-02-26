@@ -23,7 +23,7 @@ DECLARE_BUILTIN(throw);      DECLARE_BUILTIN(is);
 DECLARE_BUILTIN(typeof);     DECLARE_BUILTIN(sizeof);
 DECLARE_BUILTIN(issubtype);  DECLARE_BUILTIN(isa);
 DECLARE_BUILTIN(_apply);     DECLARE_BUILTIN(_apply_pure);
-DECLARE_BUILTIN(_apply_latest);
+DECLARE_BUILTIN(_apply_latest); DECLARE_BUILTIN(_apply_iterate);
 DECLARE_BUILTIN(isdefined);  DECLARE_BUILTIN(nfields);
 DECLARE_BUILTIN(tuple);      DECLARE_BUILTIN(svec);
 DECLARE_BUILTIN(getfield);   DECLARE_BUILTIN(setfield);

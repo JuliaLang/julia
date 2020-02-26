@@ -158,7 +158,7 @@ else
     function hascolor(t::TTYTerminal)
         startswith(t.term_type, "xterm") && return true
         try
-            @static if Sys.KERNEL == :FreeBSD
+            @static if Sys.KERNEL === :FreeBSD
                 return success(`tput AF 0`)
             else
                 return success(`tput setaf 0`)

@@ -36,6 +36,5 @@ Base.@threadcall
 These building blocks are used to create the regular synchronization objects.
 
 ```@docs
-Base.Threads.Mutex
 Base.Threads.SpinLock
 ```

@@ -84,7 +84,7 @@ const SpawnIOs = Vector{Any} # convenience name for readability
         for io in stdio]
     handle = Libc.malloc(_sizeof_uv_process)
     disassociate_julia_struct(handle) # ensure that data field is set to C_NULL
-    error = ccall(:jl_spawn, Int32,
+    err = ccall(:jl_spawn, Int32,
               (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
                Ptr{Tuple{Cint, UInt}}, Int,
                UInt32, Ptr{Cstring}, Cstring, Ptr{Cvoid}),
@@ -94,9 +94,9 @@ const SpawnIOs = Vector{Any} # convenience name for readability
         cmd.env === nothing ? C_NULL : cmd.env,
         isempty(cmd.dir) ? C_NULL : cmd.dir,
         uv_jl_return_spawn::Ptr{Cvoid})
-    if error != 0
+    if err != 0
         ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually
-        throw(_UVError("could not spawn " * repr(cmd), error))
+        throw(_UVError("could not spawn " * repr(cmd), err))
     end
     pp = Process(cmd, handle)
     associate_julia_struct(handle, pp)
@@ -381,14 +381,14 @@ function open(cmds::AbstractCmd, stdio::Redirectable=devnull; write::Bool=false,
 end
 
 """
-    open(f::Function, command, mode::AbstractString="r", stdio=devnull)
+    open(f::Function, command, args...; kwargs...)
 
-Similar to `open(command, mode, stdio)`, but calls `f(stream)` on the resulting process
+Similar to `open(command, args...; kwargs...)`, but calls `f(stream)` on the resulting process
 stream, then closes the input stream and waits for the process to complete.
 Returns the value returned by `f`.
 """
-function open(f::Function, cmds::AbstractCmd, args...)
-    P = open(cmds, args...)
+function open(f::Function, cmds::AbstractCmd, args...; kwargs...)
+    P = open(cmds, args...; kwargs...)
     ret = try
         f(P)
     catch
@@ -539,7 +539,7 @@ function pipeline_error(procs::ProcessChain)
 end
 
 """
-    kill(p::Process, signum=SIGTERM)
+    kill(p::Process, signum=Base.SIGTERM)
 
 Send a signal to a process. The default is to terminate the process.
 Returns successfully if the process has already exited, but throws an

@@ -52,7 +52,7 @@ first component is always the empty string.
 splitdrive(path::AbstractString)
 
 """
-    homedir() -> AbstractString
+    homedir() -> String
 
 Return the current user's home directory.
 
@@ -79,9 +79,9 @@ end
 
 
 if Sys.iswindows()
-    isabspath(path::String) = occursin(path_absolute_re, path)
+    isabspath(path::AbstractString) = occursin(path_absolute_re, path)
 else
-    isabspath(path::String) = startswith(path, '/')
+    isabspath(path::AbstractString) = startswith(path, '/')
 end
 
 """
@@ -198,13 +198,8 @@ function splitext(path::String)
     a*m.captures[1], String(m.captures[2])
 end
 
-function pathsep(paths::AbstractString...)
-    for path in paths
-        m = match(path_separator_re, String(path))
-        m !== nothing && return m.match[1:1]
-    end
-    return path_separator
-end
+# NOTE: deprecated in 1.4
+pathsep() = path_separator
 
 """
     splitpath(path::AbstractString) -> Vector{String}
@@ -226,6 +221,8 @@ julia> splitpath("/home/myuser/example.jl")
  "example.jl"
 ```
 """
+splitpath(p::AbstractString) = splitpath(String(p))
+
 function splitpath(p::String)
     drive, p = splitdrive(p)
     out = String[]
@@ -244,14 +241,77 @@ function splitpath(p::String)
     return out
 end
 
-joinpath(a::AbstractString) = a
+joinpath(path::AbstractString)::String = path
+
+if Sys.iswindows()
+
+function joinpath(path::AbstractString, paths::AbstractString...)::String
+    result_drive, result_path = splitdrive(path)
+
+    local p_drive, p_path
+    for p in paths
+        p_drive, p_path = splitdrive(p)
+
+        if startswith(p_path, ('\\', '/'))
+            # second path is absolute
+            if !isempty(p_drive) || !isempty(result_drive)
+                result_drive = p_drive
+            end
+            result_path = p_path
+            continue
+        elseif !isempty(p_drive) && p_drive != result_drive
+            if lowercase(p_drive) != lowercase(result_drive)
+                # different drives, ignore the first path entirely
+                result_drive = p_drive
+                result_path = p_path
+                continue
+            end
+        end
+
+        # second path is relative to the first
+        if !isempty(result_path) && result_path[end] ∉ ('\\', '/')
+            result_path *= "\\"
+        end
+
+        result_path = result_path * p_path
+    end
+
+    # add separator between UNC and non-absolute path
+    if !isempty(p_path) && result_path[1] ∉ ('\\', '/') && !isempty(result_drive) && result_drive[end] != ':'
+        return result_drive * "\\" * result_path
+    end
+
+    return result_drive * result_path
+end
+
+else
+
+function joinpath(path::AbstractString, paths::AbstractString...)::String
+    for p in paths
+        if isabspath(p)
+            path = p
+        elseif isempty(path) || path[end] == '/'
+            path *= p
+        else
+            path *= "/" * p
+        end
+    end
+    return path
+end
+
+end # os-test
 
 """
-    joinpath(parts...) -> AbstractString
+    joinpath(parts::AbstractString...) -> String
 
 Join path components into a full path. If some argument is an absolute path or
 (on Windows) has a drive specification that doesn't match the drive computed for
 the join of the preceding paths, then prior components are dropped.
+
+Note on Windows since there is a current directory for each drive, `joinpath("c:", "foo")`
+represents a path relative to the current directory on drive "c:" so this is equal to "c:foo",
+not "c:\\foo". Furthermore, `joinpath` treats this as a non-absolute path and ignores the drive
+letter casing, hence `joinpath("C:\\A","c:b") = "C:\\A\\b"`.
 
 # Examples
 ```jldoctest
@@ -259,22 +319,10 @@ julia> joinpath("/home/myuser", "example.jl")
 "/home/myuser/example.jl"
 ```
 """
-joinpath(a::AbstractString, b::AbstractString, c::AbstractString...) = joinpath(joinpath(a,b), c...)
-
-function joinpath(a::String, b::String)
-    isabspath(b) && return b
-    A, a = splitdrive(a)
-    B, b = splitdrive(b)
-    !isempty(B) && A != B && return string(B,b)
-    C = isempty(B) ? A : B
-    isempty(a)                              ? string(C,b) :
-    occursin(path_separator_re, a[end:end]) ? string(C,a,b) :
-                                              string(C,a,pathsep(a,b),b)
-end
-joinpath(a::AbstractString, b::AbstractString) = joinpath(String(a), String(b))
+joinpath
 
 """
-    normpath(path::AbstractString) -> AbstractString
+    normpath(path::AbstractString) -> String
 
 Normalize a path, removing "." and ".." entries.
 
@@ -317,10 +365,17 @@ function normpath(path::String)
     end
     string(drive,path)
 end
+
+"""
+    normpath(path::AbstractString, paths::AbstractString...) -> String
+
+Convert a set of paths to a normalized path by joining them together and removing
+"." and ".." entries. Equivalent to `normpath(joinpath(path, paths...))`.
+"""
 normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 
 """
-    abspath(path::AbstractString) -> AbstractString
+    abspath(path::AbstractString) -> String
 
 Convert a path to an absolute path by adding the current directory if necessary.
 Also normalizes the path as in [`normpath`](@ref).
@@ -328,7 +383,7 @@ Also normalizes the path as in [`normpath`](@ref).
 abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
 
 """
-    abspath(path::AbstractString, paths::AbstractString...) -> AbstractString
+    abspath(path::AbstractString, paths::AbstractString...) -> String
 
 Convert a set of paths to an absolute path by joining them together and adding the
 current directory if necessary. Equivalent to `abspath(joinpath(path, paths...))`.
@@ -336,28 +391,6 @@ current directory if necessary. Equivalent to `abspath(joinpath(path, paths...))
 abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 
 if Sys.iswindows()
-
-function realpath(path::AbstractString)
-    h = ccall(:CreateFileW, stdcall, Int, (Cwstring, UInt32, UInt32, Ptr{Cvoid}, UInt32, UInt32, Int),
-                path, 0, 0x03, C_NULL, 3, 0x02000000, 0)
-    windowserror(:realpath, h == -1)
-    try
-        buf = Vector{UInt16}(undef, 256)
-        oldlen = len = length(buf)
-        while len >= oldlen
-            len = ccall(:GetFinalPathNameByHandleW, stdcall, UInt32, (Int, Ptr{UInt16}, UInt32, UInt32),
-                            h, buf, (oldlen=len)-1, 0x0)
-            windowserror(:realpath, iszero(len))
-            resize!(buf, len) # strips NUL terminator on last call
-        end
-        if 4 < len < 264 && 0x005c == buf[1] == buf[2] == buf[4] && 0x003f == buf[3]
-            Base._deletebeg!(buf, 4) # omit \\?\ prefix for paths < MAXPATH in length
-        end
-        return transcode(String, buf)
-    finally
-        windowserror(:realpath, iszero(ccall(:CloseHandle, stdcall, Cint, (Int,), h)))
-    end
-end
 
 function longpath(path::AbstractString)
     p = cwstring(path)
@@ -373,19 +406,11 @@ function longpath(path::AbstractString)
     end
 end
 
-else # !windows
-function realpath(path::AbstractString)
-    p = ccall(:realpath, Ptr{UInt8}, (Cstring, Ptr{UInt8}), path, C_NULL)
-    systemerror(:realpath, p == C_NULL)
-    str = unsafe_string(p)
-    Libc.free(p)
-    return str
-end
 end # os-test
 
 
 """
-    realpath(path::AbstractString) -> AbstractString
+    realpath(path::AbstractString) -> String
 
 Canonicalize a path by expanding symbolic links and removing "." and ".." entries.
 On case-insensitive case-preserving filesystems (typically Mac and Windows), the
@@ -393,8 +418,23 @@ filesystem's stored case for the path is returned.
 
 (This function throws an exception if `path` does not exist in the filesystem.)
 """
-realpath(path::AbstractString)
-
+function realpath(path::AbstractString)
+    req = Libc.malloc(_sizeof_uv_fs)
+    try
+        ret = ccall(:uv_fs_realpath, Cint,
+                    (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
+                    C_NULL, req, path, C_NULL)
+        if ret < 0
+            ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+            uv_error("realpath", ret)
+        end
+        path = unsafe_string(ccall(:jl_uv_fs_t_ptr, Cstring, (Ptr{Cvoid},), req))
+        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+        return path
+    finally
+        Libc.free(req)
+    end
+end
 
 if Sys.iswindows()
 # on windows, ~ means "temporary file"
@@ -477,6 +517,6 @@ end
 relpath(path::AbstractString, startpath::AbstractString) =
     relpath(String(path), String(startpath))
 
-for f in (:isabspath, :isdirpath, :splitdir, :splitdrive, :splitext, :normpath, :abspath)
+for f in (:isdirpath, :splitdir, :splitdrive, :splitext, :normpath, :abspath)
     @eval $f(path::AbstractString) = $f(String(path))
 end

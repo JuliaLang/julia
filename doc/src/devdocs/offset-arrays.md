@@ -150,13 +150,13 @@ axes(A::AbstractArray{T,N}, d) where {T,N} = d <= N ? axes(A)[d] : OneTo(1)
 ```
 
 may not be what you want: you may need to specialize it to return something other than `OneTo(1)`
-when `d > ndims(A)`.  Likewise, in `Base` there is a dedicated function `indices1` which is equivalent
+when `d > ndims(A)`.  Likewise, in `Base` there is a dedicated function `axes1` which is equivalent
 to `axes(A, 1)` but which avoids checking (at runtime) whether `ndims(A) > 0`. (This is purely
 a performance optimization.)  It is defined as:
 
 ```julia
-indices1(A::AbstractArray{T,0}) where {T} = OneTo(1)
-indices1(A::AbstractArray) = axes(A)[1]
+axes1(A::AbstractArray{T,0}) where {T} = OneTo(1)
+axes1(A::AbstractArray) = axes(A)[1]
 ```
 
 If the first of these (the zero-dimensional case) is problematic for your custom array type, be

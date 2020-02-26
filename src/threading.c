@@ -49,8 +49,7 @@ extern "C" {
 // as the fallback in the shared object. For better efficiency, we also
 // create a `__thread` variable in the main executable using a static TLS
 // model.
-#ifdef JULIA_ENABLE_THREADING
-#  if defined(_OS_DARWIN_)
+#if defined(_OS_DARWIN_)
 // Mac doesn't seem to have static TLS model so the runtime TLS getter
 // registration will only add overhead to TLS access. The `__thread` variables
 // are emulated with `pthread_key_t` so it is actually faster to use it directly.
@@ -61,7 +60,7 @@ __attribute__((constructor)) void jl_mac_init_tls(void)
     pthread_key_create(&jl_tls_key, NULL);
 }
 
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void)
+JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
 {
     void *ptls = pthread_getspecific(jl_tls_key);
     if (__unlikely(!ptls)) {
@@ -72,7 +71,7 @@ JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void)
 }
 
 // This is only used after the tls is already initialized on the thread
-static JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_fast(void)
+static JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_fast(void) JL_NOTSAFEPOINT
 {
     return (jl_ptls_t)pthread_getspecific(jl_tls_key);
 }
@@ -82,7 +81,7 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
     // for codegen
     return &jl_get_ptls_states_fast;
 }
-#  elif defined(_OS_WINDOWS_)
+#elif defined(_OS_WINDOWS_)
 // Apparently windows doesn't have a static TLS model (or one that can be
 // reliably used from a shared library) either..... Use `TLSAlloc` instead.
 
@@ -112,9 +111,26 @@ BOOLEAN WINAPI DllMain(IN HINSTANCE hDllHandle, IN DWORD nReason,
     return 1; // success
 }
 
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void)
+JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
 {
-    return (jl_ptls_t)TlsGetValue(jl_tls_key);
+#if defined(_CPU_X86_64_)
+    DWORD *plast_error = (DWORD*)(__readgsqword(0x30) + 0x68);
+    DWORD last_error = *plast_error;
+#elif defined(_CPU_X86_)
+    DWORD *plast_error = (DWORD*)(__readfsdword(0x18) + 0x34);
+    DWORD last_error = *plast_error;
+#else
+    DWORD last_error = GetLastError();
+#endif
+    jl_ptls_t state = (jl_ptls_t)TlsGetValue(jl_tls_key);
+#if defined(_CPU_X86_64_)
+    *plast_error = last_error;
+#elif defined(_CPU_X86_)
+    *plast_error = last_error;
+#else
+    SetLastError(last_error);
+#endif
+    return state;
 }
 
 jl_get_ptls_states_func jl_get_ptls_states_getter(void)
@@ -122,7 +138,7 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
     // for codegen
     return &jl_get_ptls_states;
 }
-#  else
+#else
 // We use the faster static version in the main executable to replace
 // the slower version in the shared object. The code in different libraries
 // or executables, however, have to agree on which version to use.
@@ -143,10 +159,10 @@ static JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_fallback(void)
     static __thread jl_tls_states_t tls_states;
     return &tls_states;
 }
-#if JL_USE_IFUNC
+#  if JL_USE_IFUNC
 JL_DLLEXPORT JL_CONST_FUNC __attribute__((weak))
 jl_ptls_t jl_get_ptls_states_static(void);
-#endif
+#  endif
 static jl_ptls_t jl_get_ptls_states_init(void);
 static jl_get_ptls_states_func jl_tls_states_cb = jl_get_ptls_states_init;
 static jl_ptls_t jl_get_ptls_states_init(void)
@@ -160,17 +176,19 @@ static jl_ptls_t jl_get_ptls_states_init(void)
     // make sure the tls states callback is finalized before adding
     // multiple threads
     jl_get_ptls_states_func cb = jl_get_ptls_states_fallback;
-#if JL_USE_IFUNC
+#  if JL_USE_IFUNC
     if (jl_get_ptls_states_static)
         cb = jl_get_ptls_states_static;
-#endif
+#  endif
     jl_tls_states_cb = cb;
     return cb();
 }
 
-static JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_wrapper(void)
+static JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_wrapper(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
 {
+#ifndef __clang_analyzer__
     return (*jl_tls_states_cb)();
+#endif
 }
 
 JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
@@ -187,7 +205,7 @@ JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
     }
 }
 
-#if JL_USE_IFUNC
+#  if JL_USE_IFUNC
 static jl_get_ptls_states_func jl_get_ptls_states_resolve(void)
 {
     if (jl_tls_states_cb != jl_get_ptls_states_init)
@@ -202,14 +220,14 @@ static jl_get_ptls_states_func jl_get_ptls_states_resolve(void)
     return jl_tls_states_cb;
 }
 
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void)
+JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
     __attribute__((ifunc ("jl_get_ptls_states_resolve")));
-#else // JL_TLS_USE_IFUNC
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void)
+#  else // JL_TLS_USE_IFUNC
+JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
 {
     return jl_get_ptls_states_wrapper();
 }
-#endif // JL_TLS_USE_IFUNC
+#  endif // JL_TLS_USE_IFUNC
 jl_get_ptls_states_func jl_get_ptls_states_getter(void)
 {
     if (jl_tls_states_cb == jl_get_ptls_states_init)
@@ -217,17 +235,10 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
     // for codegen
     return jl_tls_states_cb;
 }
-#  endif
-#else
-JL_DLLEXPORT jl_tls_states_t jl_tls_states;
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void)
-{
-    return &jl_tls_states;
-}
 #endif
 
 JL_DLLEXPORT int jl_n_threads;
-jl_ptls_t *jl_all_tls_states;
+jl_ptls_t *jl_all_tls_states JL_GLOBALLY_ROOTED;
 
 // return calling thread's ID
 // Also update the suspended_threads list in signals-mach when changing the
@@ -268,14 +279,10 @@ void jl_init_threadtls(int16_t tid)
                                     sizeof(size_t));
     }
     ptls->defer_signal = 0;
-    void *bt_data = malloc(sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
-    if (bt_data == NULL) {
-        jl_printf(JL_STDERR, "could not allocate backtrace buffer\n");
-        gc_debug_critical_error();
-        abort();
-    }
-    memset(bt_data, 0, sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
-    ptls->bt_data = (uintptr_t*)bt_data;
+    jl_bt_element_t *bt_data = (jl_bt_element_t*)
+        malloc_s(sizeof(jl_bt_element_t) * (JL_MAX_BT_SIZE + 1));
+    memset(bt_data, 0, sizeof(jl_bt_element_t) * (JL_MAX_BT_SIZE + 1));
+    ptls->bt_data = bt_data;
     ptls->sig_exception = NULL;
     ptls->previous_exception = NULL;
 #ifdef _OS_WINDOWS_
@@ -290,8 +297,6 @@ void jl_init_threadtls(int16_t tid)
 // lock for code generation
 jl_mutex_t codegen_lock;
 jl_mutex_t typecache_lock;
-
-#ifdef JULIA_ENABLE_THREADING
 
 ssize_t jl_tls_offset = -1;
 
@@ -409,9 +414,9 @@ void jl_init_threading(void)
         jl_n_threads = max_threads;
     if (jl_n_threads <= 0)
         jl_n_threads = 1;
-
+#ifndef __clang_analyzer__
     jl_all_tls_states = (jl_ptls_t*)calloc(jl_n_threads, sizeof(void*));
-
+#endif
     // initialize this thread (set tid, create heap, etc.)
     jl_init_threadtls(0);
 
@@ -455,7 +460,7 @@ void jl_start_threads(void)
     uv_barrier_init(&thread_init_done, nthreads);
 
     for (i = 1; i < nthreads; ++i) {
-        jl_threadarg_t *t = (jl_threadarg_t*)malloc(sizeof(jl_threadarg_t)); // ownership will be passed to the thread
+        jl_threadarg_t *t = (jl_threadarg_t*)malloc_s(sizeof(jl_threadarg_t)); // ownership will be passed to the thread
         t->tid = i;
         t->barrier = &thread_init_done;
         uv_thread_create(&uvtid, jl_threadfun, t);
@@ -469,8 +474,6 @@ void jl_start_threads(void)
 
     uv_barrier_wait(&thread_init_done);
 }
-
-#endif
 
 unsigned volatile _threadedregion; // HACK: keep track of whether it is safe to do IO
 
@@ -504,19 +507,11 @@ JL_DLLEXPORT void jl_threading_run(jl_value_t *func)
         args2[0] = schd_func;
         args2[1] = (jl_value_t*)t;
         jl_apply(args2, 2);
-#ifdef JULIA_ENABLE_THREADING
-        if (i == 1) {
-            // let threads know work is coming (optimistic)
+        if (i == 1 && nthreads > 2) {
+            // hint to threads that work is coming soon
             jl_wakeup_thread(-1);
         }
-#endif
     }
-#ifdef JULIA_ENABLE_THREADING
-    if (nthreads > 2) {
-        // let threads know work is ready (guaranteed)
-        jl_wakeup_thread(-1);
-    }
-#endif
     // join with all tasks
     JL_TRY {
         for (int i = 0; i < nthreads; i++) {
@@ -543,20 +538,6 @@ JL_DLLEXPORT void jl_threading_run(jl_value_t *func)
     jl_gc_unsafe_leave(ptls, gc_state);
 }
 
-
-#ifndef JULIA_ENABLE_THREADING
-
-void jl_init_threading(void)
-{
-    static jl_ptls_t _jl_all_tls_states;
-    jl_all_tls_states = &_jl_all_tls_states;
-    jl_n_threads = 1;
-    jl_init_threadtls(0);
-}
-
-void jl_start_threads(void) { }
-
-#endif // !JULIA_ENABLE_THREADING
 
 // Make gc alignment available for threading
 // see threads.jl alignment

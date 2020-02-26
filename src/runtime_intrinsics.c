@@ -80,7 +80,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
     JL_TYPECHK(cglobal, type, ty);
     JL_GC_PUSH1(&v);
     jl_value_t *rt =
-        ty == (jl_value_t*)jl_void_type ? (jl_value_t*)jl_voidpointer_type : // a common case
+        ty == (jl_value_t*)jl_nothing_type ? (jl_value_t*)jl_voidpointer_type : // a common case
             (jl_value_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, ty);
     JL_GC_PROMISE_ROOTED(rt); // (JL_ALWAYS_LEAFTYPE)
 
@@ -131,7 +131,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 }
 
 JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v) {
-    return jl_cglobal(v, (jl_value_t*)jl_void_type);
+    return jl_cglobal(v, (jl_value_t*)jl_nothing_type);
 }
 
 static inline char signbitbyte(void *a, unsigned bytes) JL_NOTSAFEPOINT
@@ -914,6 +914,7 @@ un_fintrinsic(floor_float,floor_llvm)
 un_fintrinsic(trunc_float,trunc_llvm)
 un_fintrinsic(rint_float,rint_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm)
+un_fintrinsic(sqrt_float,sqrt_llvm_fast)
 
 JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a)
 {

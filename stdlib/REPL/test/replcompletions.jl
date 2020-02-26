@@ -138,6 +138,21 @@ let s = "Main.CompletionFoo.f"
     @test !("foobar" in c)
 end
 
+# test method completions when `!` operator precedes
+let
+    s = "!is"
+    c, r = test_complete(s)
+    @test "isa" in c
+    @test s[r] == "is"
+    @test !("!" in c)
+
+    s = "!!is"
+    c, r = test_complete(s)
+    @test "isa" in c
+    @test s[r] == "is"
+    @test !("!" in c)
+end
+
 # issue #6424
 let s = "Main.CompletionFoo.@f"
     c, r = test_complete(s)
@@ -300,6 +315,27 @@ let s = "max("
     end
     @test r == 1:3
     @test s[r] == "max"
+end
+
+# test method completions when `!` operator precedes
+let
+    s = "!("
+    c, r, res = test_complete(s)
+    @test !res
+    @test all(m -> string(m) in c, methods(!))
+    @test s[r] == s[1:end-1]
+
+    s = "!isnothing("
+    c, r, res = test_complete(s)
+    @test !res
+    @test all(m -> string(m) in c, methods(isnothing))
+    @test s[r] == s[1:end-1]
+
+    s = "!!isnothing("
+    c, r, res = test_complete(s)
+    @test !res
+    @test all(m -> string(m) in c, methods(isnothing))
+    @test s[r] == s[1:end-1]
 end
 
 # Test completion of methods with input concrete args and args where typeinference determine their type
@@ -717,7 +753,7 @@ mktempdir() do path
             s = Sys.iswindows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
             c, r = test_complete(s)
             @test r == lastindex(s)-4:lastindex(s)
-            @test "space\\ .file\"" in c
+            @test "space .file\"" in c
         end
         # Test for issue #10324
         s = "cd(\"$dir_space"
@@ -768,7 +804,7 @@ end
 if Sys.iswindows()
     tmp = tempname()
     touch(tmp)
-    path = dirname(tmp)
+    path = realpath(dirname(tmp))
     file = basename(tmp)
     temp_name = basename(path)
     cd(path) do
@@ -1012,4 +1048,10 @@ let s = "prevind(\"θ\",1,"
     @test c[1] == string(first(methods(prevind, Tuple{String, Int})))
     @test r == 1:7
     @test s[r] == "prevind"
+end
+
+# Issue #32840
+let s = "typeof(+)."
+    c, r = test_complete_context(s)
+    @test length(c) == length(fieldnames(DataType))
 end

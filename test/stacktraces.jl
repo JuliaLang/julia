@@ -48,7 +48,7 @@ let (default, with_c, without_c) = (stacktrace(), stacktrace(true), stacktrace(f
     @test isempty(filter(frame -> frame.from_c, without_c))
 end
 
-@test StackTraces.lookup(C_NULL) == [StackTraces.UNKNOWN]
+@test StackTraces.lookup(C_NULL) == [StackTraces.UNKNOWN] == StackTraces.lookup(C_NULL + 1) == StackTraces.lookup(C_NULL - 1)
 
 let ct = current_task()
     # After a task switch, there should be nothing in catch_backtrace
@@ -118,7 +118,7 @@ let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
 end
 
 let ctestptr = cglobal((:ctest, "libccalltest")),
-    ctest = StackTraces.lookup(ctestptr + 1)
+    ctest = StackTraces.lookup(ctestptr)
 
     @test length(ctest) == 1
     @test ctest[1].func === :ctest
@@ -167,4 +167,27 @@ catch
 end
 @test bt[2].line == 42
 @test bt[2].file === :foo
+end
+
+@noinline f33065(x; b=1.0, a="") = error()
+@noinline f33065(x, y; b=1.0, a="", c...) = error()
+let bt
+    try
+        f33065(0.0f0)
+    catch
+        bt = stacktrace(catch_backtrace())
+    end
+    @test any(s->startswith(string(s), "f33065(::Float32; b::Float64, a::String)"), bt)
+    try
+        f33065(0.0f0, b=:x)
+    catch
+        bt = stacktrace(catch_backtrace())
+    end
+    @test any(s->startswith(string(s), "f33065(::Float32; b::Symbol, a::String)"), bt)
+    try
+        f33065(0.0f0, 0.0f0, z=0)
+    catch
+        bt = stacktrace(catch_backtrace())
+    end
+    @test any(s->startswith(string(s), "f33065(::Float32, ::Float32; b::Float64, a::String, c::"), bt)
 end

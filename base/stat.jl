@@ -66,7 +66,7 @@ macro stat_call(sym, arg1type, arg)
         stat_buf = zeros(UInt8, ccall(:jl_sizeof_stat, Int32, ()))
         r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), stat_buf)
         if !(r in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL))
-            throw(_UVError("stat", r))
+            throw(_UVError("stat", r, "for file ", repr($(esc(arg)))))
         end
         st = StatStruct(stat_buf)
         if ispath(st) != (r == 0)

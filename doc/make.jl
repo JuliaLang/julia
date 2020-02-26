@@ -147,7 +147,15 @@ const PAGES = [
 
 for stdlib in STDLIB_DOCS
     @eval using $(stdlib.stdlib)
+    # All standard library modules get `using $STDLIB` as their global
+    DocMeta.setdocmeta!(Base.root_module(Base, stdlib.stdlib), :DocTestSetup, :(using $(stdlib.stdlib)), recursive=true)
 end
+# A few standard libraries need more than just the module itself in the DocTestSetup.
+# This overwrites the existing ones from above though, hence the warn=false.
+DocMeta.setdocmeta!(SparseArrays, :DocTestSetup, :(using SparseArrays, LinearAlgebra), recursive=true, warn=false)
+DocMeta.setdocmeta!(UUIDs, :DocTestSetup, :(using UUIDs, Random), recursive=true, warn=false)
+DocMeta.setdocmeta!(Pkg, :DocTestSetup, :(using Pkg, Pkg.Artifacts), recursive=true, warn=false)
+DocMeta.setdocmeta!(Pkg.BinaryPlatforms, :DocTestSetup, :(using Pkg, Pkg.BinaryPlatforms), recursive=true, warn=false)
 
 const render_pdf = "pdf" in ARGS
 let r = r"buildroot=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
@@ -164,6 +172,8 @@ else
         canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/v1/" : nothing,
         assets = ["assets/julia-manual.css", ],
         analytics = "UA-28835595-6",
+        collapselevel = 1,
+        sidebar_sitename = false,
     )
 end
 
@@ -171,7 +181,7 @@ makedocs(
     build     = joinpath(buildroot, "doc", "_build", (render_pdf ? "pdf" : "html"), "en"),
     modules   = [Base, Core, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
     clean     = true,
-    doctest   = ("doctest=fix" in ARGS) ? (:fix) : ("doctest=true" in ARGS) ? true : false,
+    doctest   = ("doctest=fix" in ARGS) ? (:fix) : ("doctest=only" in ARGS) ? (:only) : ("doctest=true" in ARGS) ? true : false,
     linkcheck = "linkcheck=true" in ARGS,
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
     strict    = true,
@@ -182,17 +192,25 @@ makedocs(
     pages     = PAGES,
 )
 
-# Only deploy docs from 64bit Linux to avoid committing multiple versions of the same
-# docs from different workers.
-if "deploy" in ARGS && Sys.ARCH === :x86_64 && Sys.KERNEL === :Linux
-# Override TRAVIS_REPO_SLUG since we deploy to a different repo
-withenv("TRAVIS_REPO_SLUG" => "JuliaLang/docs.julialang.org") do
-    deploydocs(
-        repo = "github.com/JuliaLang/docs.julialang.org.git",
-        target = joinpath(buildroot, "doc", "_build", "html", "en"),
-        dirname = "en",
-        devurl = "v1.3-dev",
-        versions = ["v#.#", "v1.3-dev" => "v1.3-dev"]
-    )
+# Define our own DeployConfig
+struct BuildBotConfig <: Documenter.DeployConfig end
+function Documenter.deploy_folder(::BuildBotConfig; devurl, kwargs...)
+    haskey(ENV, "DOCUMENTER_KEY") || return nothing
+    if Base.GIT_VERSION_INFO.tagged_commit
+        return "v$(Base.VERSION)"
+    elseif Base.GIT_VERSION_INFO.branch == "master"
+        return devurl
+    end
+    return nothing
 end
-end
+
+const devurl = "v$(VERSION.major).$(VERSION.minor)-dev"
+
+deploydocs(
+    repo = "github.com/JuliaLang/docs.julialang.org.git",
+    deploy_config = BuildBotConfig(),
+    target = joinpath(buildroot, "doc", "_build", "html", "en"),
+    dirname = "en",
+    devurl = devurl,
+    versions = ["v#.#", devurl => devurl]
+)

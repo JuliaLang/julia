@@ -80,7 +80,7 @@ function basic_blocks_starts(stmts::Vector{Any})
             if stmt.head === :leave
                 # :leave terminates a BB
                 push!(jump_dests, idx+1)
-            elseif stmt.head == :enter
+            elseif stmt.head === :enter
                 # :enter starts/ends a BB
                 push!(jump_dests, idx)
                 push!(jump_dests, idx+1)
@@ -151,7 +151,7 @@ function compute_basic_blocks(stmts::Vector{Any})
                 push!(b.succs, block′)
             end
         elseif isa(terminator, Expr)
-            if terminator.head == :enter
+            if terminator.head === :enter
                 # :enter gets a virtual edge to the exception handler and
                 # the exception handler gets a virtual edge from outside
                 # the function.
@@ -162,7 +162,7 @@ function compute_basic_blocks(stmts::Vector{Any})
                 push!(blocks[block′].preds, num)
                 push!(blocks[block′].preds, 0)
                 push!(b.succs, block′)
-            elseif terminator.head == :gotoifnot
+            elseif terminator.head === :gotoifnot
                 block′ = block_for_inst(basic_block_index, terminator.args[2]::Int)
                 if block′ == num + 1
                     # This GotoIfNot acts like a noop - treat it as such.
@@ -608,7 +608,7 @@ function count_added_node!(compact::IncrementalCompact, @nospecialize(v))
 end
 
 function resort_pending!(compact)
-    sort!(compact.pending_perm, DEFAULT_STABLE, Order.By(x->compact.pending_nodes[x].pos))
+    sort!(compact.pending_perm, DEFAULT_STABLE, Order.By(x->compact.pending_nodes[x].pos, Order.Forward))
 end
 
 function insert_node!(compact::IncrementalCompact, before, @nospecialize(typ), @nospecialize(val), attach_after::Bool=false)
@@ -1001,14 +1001,14 @@ end
 
 function finish_current_bb!(compact, active_bb, old_result_idx=compact.result_idx, unreachable=false)
     if compact.active_result_bb > length(compact.result_bbs)
-        #@assert compact.bb_rename[active_bb] == 0
+        #@assert compact.bb_rename[active_bb] == -1
         return true
     end
     bb = compact.result_bbs[compact.active_result_bb]
     # If this was the last statement in the BB and we decided to skip it, insert a
     # dummy `nothing` node, to prevent changing the structure of the CFG
     skipped = false
-    if !compact.cfg_transforms_enabled || active_bb == 0 || active_bb > length(compact.bb_rename_succ) || compact.bb_rename_succ[active_bb] != 0
+    if !compact.cfg_transforms_enabled || active_bb == 0 || active_bb > length(compact.bb_rename_succ) || compact.bb_rename_succ[active_bb] != -1
         if compact.result_idx == first(bb.stmts)
             length(compact.result) < old_result_idx && resize!(compact, old_result_idx)
             if unreachable

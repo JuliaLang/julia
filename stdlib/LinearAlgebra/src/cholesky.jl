@@ -302,8 +302,8 @@ end
     cholesky(A, Val(false); check = true) -> Cholesky
 
 Compute the Cholesky factorization of a dense symmetric positive definite matrix `A`
-and return a `Cholesky` factorization. The matrix `A` can either be a [`Symmetric`](@ref) or [`Hermitian`](@ref)
-`StridedMatrix` or a *perfectly* symmetric or Hermitian `StridedMatrix`.
+and return a [`Cholesky`](@ref) factorization. The matrix `A` can either be a [`Symmetric`](@ref) or [`Hermitian`](@ref)
+[`StridedMatrix`](@ref) or a *perfectly* symmetric or Hermitian `StridedMatrix`.
 The triangular Cholesky factor can be obtained from the factorization `F` with: `F.L` and `F.U`.
 The following functions are available for `Cholesky` objects: [`size`](@ref), [`\\`](@ref),
 [`inv`](@ref), [`det`](@ref), [`logdet`](@ref) and [`isposdef`](@ref).
@@ -353,8 +353,8 @@ cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
     cholesky(A, Val(true); tol = 0.0, check = true) -> CholeskyPivoted
 
 Compute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix `A`
-and return a `CholeskyPivoted` factorization. The matrix `A` can either be a [`Symmetric`](@ref)
-or [`Hermitian`](@ref) `StridedMatrix` or a *perfectly* symmetric or Hermitian `StridedMatrix`.
+and return a [`CholeskyPivoted`](@ref) factorization. The matrix `A` can either be a [`Symmetric`](@ref)
+or [`Hermitian`](@ref) [`StridedMatrix`](@ref) or a *perfectly* symmetric or Hermitian `StridedMatrix`.
 The triangular Cholesky factor can be obtained from the factorization `F` with: `F.L` and `F.U`.
 The following functions are available for `CholeskyPivoted` objects:
 [`size`](@ref), [`\\`](@ref), [`inv`](@ref), [`det`](@ref), and [`rank`](@ref).
@@ -396,7 +396,8 @@ Array(C::Cholesky) = Matrix(C)
 
 function AbstractMatrix(F::CholeskyPivoted)
     ip = invperm(F.p)
-    (F.L * F.U)[ip,ip]
+    U = F.U[1:F.rank,ip]
+    U'U
 end
 AbstractArray(F::CholeskyPivoted) = AbstractMatrix(F)
 Matrix(F::CholeskyPivoted) = Array(AbstractArray(F))
@@ -411,12 +412,11 @@ size(C::Union{Cholesky, CholeskyPivoted}, d::Integer) = size(C.factors, d)
 function getproperty(C::Cholesky, d::Symbol)
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
-    info     = getfield(C, :info)
-    if d == :U
+    if d === :U
         return UpperTriangular(Cuplo === char_uplo(d) ? Cfactors : copy(Cfactors'))
-    elseif d == :L
+    elseif d === :L
         return LowerTriangular(Cuplo === char_uplo(d) ? Cfactors : copy(Cfactors'))
-    elseif d == :UL
+    elseif d === :UL
         return (Cuplo === 'U' ? UpperTriangular(Cfactors) : LowerTriangular(Cfactors))
     else
         return getfield(C, d)
@@ -428,13 +428,13 @@ Base.propertynames(F::Cholesky, private::Bool=false) =
 function getproperty(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
-    if d == :U
+    if d === :U
         return UpperTriangular(sym_uplo(Cuplo) == d ? Cfactors : copy(Cfactors'))
-    elseif d == :L
+    elseif d === :L
         return LowerTriangular(sym_uplo(Cuplo) == d ? Cfactors : copy(Cfactors'))
-    elseif d == :p
+    elseif d === :p
         return getfield(C, :piv)
-    elseif d == :P
+    elseif d === :P
         n = size(C, 1)
         P = zeros(T, n, n)
         for i = 1:n

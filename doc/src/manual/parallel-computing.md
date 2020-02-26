@@ -218,7 +218,7 @@ too.
 
 # [Multi-Threading (Experimental)](@id man-multithreading)
 
-In addition to tasks Julia forwards natively supports multi-threading.
+In addition to tasks Julia natively supports multi-threading.
 Note that this section is experimental and the interfaces may change in the future.
 
 ## Setup
@@ -234,13 +234,24 @@ julia> Threads.nthreads()
 The number of threads Julia starts up with is controlled by an environment variable called `JULIA_NUM_THREADS`.
 Now, let's start up Julia with 4 threads:
 
+Bash on Linux/OSX:
+
 ```bash
 export JULIA_NUM_THREADS=4
 ```
 
-(The above command works on bourne shells on Linux and OSX. Note that if you're using a C shell
-on these platforms, you should use the keyword `set` instead of `export`. If you're on Windows,
-start up the command line in the location of `julia.exe` and use `set` instead of `export`.)
+C shell on Linux/OSX, CMD on Windows:
+
+```bash
+set JULIA_NUM_THREADS=4
+```
+
+Powershell on Windows:
+
+```powershell
+$env:JULIA_NUM_THREADS=4
+```
+
 
 Let's verify there are 4 threads at our disposal.
 
@@ -383,97 +394,9 @@ julia> acc[]
 When using multi-threading we have to be careful when using functions that are not
 [pure](https://en.wikipedia.org/wiki/Pure_function) as we might get a wrong answer.
 For instance functions that have their
-[name ending with `!`](https://docs.julialang.org/en/latest/manual/style-guide/#Append-!-to-names-of-functions-that-modify-their-arguments-1)
+[name ending with `!`](@ref bang-convention)
 by convention modify their arguments and thus are not pure. However, there are
-functions that have side effects and their name does not end with `!`. For
-instance [`findfirst(regex, str)`](@ref) mutates its `regex` argument or
-[`rand()`](@ref) changes `Base.GLOBAL_RNG` :
-
-```julia-repl
-julia> using Base.Threads
-
-julia> nthreads()
-4
-
-julia> function f()
-           s = repeat(["123", "213", "231"], outer=1000)
-           x = similar(s, Int)
-           rx = r"1"
-           @threads for i in 1:3000
-               x[i] = findfirst(rx, s[i]).start
-           end
-           count(v -> v == 1, x)
-       end
-f (generic function with 1 method)
-
-julia> f() # the correct result is 1000
-1017
-
-julia> function g()
-           a = zeros(1000)
-           @threads for i in 1:1000
-               a[i] = rand()
-           end
-           length(unique(a))
-       end
-g (generic function with 1 method)
-
-julia> Random.seed!(1); g() # the result for a single thread is 1000
-781
-```
-
-In such cases one should redesign the code to avoid the possibility of a race condition or use
-[synchronization primitives](https://docs.julialang.org/en/latest/base/multi-threading/#Synchronization-Primitives-1).
-
-For example in order to fix `findfirst` example above one needs to have a
-separate copy of `rx` variable for each thread:
-
-```julia-repl
-julia> function f_fix()
-             s = repeat(["123", "213", "231"], outer=1000)
-             x = similar(s, Int)
-             rx = [Regex("1") for i in 1:nthreads()]
-             @threads for i in 1:3000
-                 x[i] = findfirst(rx[threadid()], s[i]).start
-             end
-             count(v -> v == 1, x)
-         end
-f_fix (generic function with 1 method)
-
-julia> f_fix()
-1000
-```
-
-We now use `Regex("1")` instead of `r"1"` to make sure that Julia
-creates separate instances of `Regex` object for each entry of `rx` vector.
-
-The case of `rand` is a bit more complex as we have to ensure that each thread
-uses non-overlapping pseudorandom number sequences. This can be simply ensured
-by using `Future.randjump` function:
-
-
-```julia-repl
-julia> using Random; import Future
-
-julia> function g_fix(r)
-           a = zeros(1000)
-           @threads for i in 1:1000
-               a[i] = rand(r[threadid()])
-           end
-           length(unique(a))
-       end
-g_fix (generic function with 1 method)
-
-julia>  r = let m = MersenneTwister(1)
-                [m; accumulate(Future.randjump, fill(big(10)^20, nthreads()-1), init=m)]
-            end;
-
-julia> g_fix(r)
-1000
-```
-
-We pass the `r` vector to `g_fix` as generating several RGNs is an expensive
-operation so we do not want to repeat it every time we run the function.
+functions that have side effects and their name does not end with `!`.
 
 ## @threadcall (Experimental)
 
@@ -758,7 +681,8 @@ It is automatically made available on the worker processes.
 
 Note that workers do not run a `~/.julia/config/startup.jl` startup script, nor do they synchronize
 their global state (such as global variables, new method definitions, and loaded modules) with any
-of the other running processes.
+of the other running processes. You may use `addprocs(exeflags="--project")` to initialize a worker with
+a particular environment, and then `@everywhere using <modulename>` or `@everywhere include("file.jl")`.
 
 Other types of clusters can be supported by writing your own custom `ClusterManager`, as described
 below in the [ClusterManagers](@ref) section.
@@ -1143,7 +1067,7 @@ sent to the remote node to go ahead and remove its reference to the value.
 Once finalized, a reference becomes invalid and cannot be used in any further calls.
 
 
-## Local invocations(@id man-distributed-local-invocations)
+## Local invocations
 
 Data is necessarily copied over to the remote node for execution. This is the case for both
 remotecalls and when data is stored to a[`RemoteChannel`](@ref) / [`Future`](@ref Distributed.Future) on
@@ -1280,7 +1204,7 @@ julia> addprocs(3)
 
 julia> @everywhere using SharedArrays
 
-julia> S = SharedArray{Int,2}((3,4), init = S -> S[localindices(S)] = myid())
+julia> S = SharedArray{Int,2}((3,4), init = S -> S[localindices(S)] = repeat([myid()], length(localindices(S))))
 3×4 SharedArray{Int64,2}:
  2  2  3  4
  2  3  3  4
@@ -1301,7 +1225,7 @@ convenient for splitting up tasks among processes. You can, of course, divide th
 you wish:
 
 ```julia-repl
-julia> S = SharedArray{Int,2}((3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = myid())
+julia> S = SharedArray{Int,2}((3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = repeat([myid()], length( indexpids(S):length(procs(S)):length(S))))
 3×4 SharedArray{Int64,2}:
  2  2  2  2
  3  3  3  3
@@ -1693,6 +1617,16 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
 
     Securing and encrypting all worker-worker traffic (via SSH) or encrypting individual messages
     can be done via a custom `ClusterManager`.
+
+  * If you specify `multiplex=true` as an option to `addprocs`, SSH multiplexing is used to create
+    a tunnel between the master and workers. If you have configured SSH multiplexing on your own and
+    the connection has already been established, SSH multiplexing is used regardless of `multiplex`
+    option. If multiplexing is enabled, forwarding is set by using the existing connection
+    (`-O forward` option in ssh). This is beneficial if your servers require password authentication;
+    you can avoid authentication in Julia by logging in to the server ahead of `addprocs`. The control
+    socket will be located at `~/.ssh/julia-%r@%h:%p` during the session unless the existing multiplexing
+    connection is used. Note that bandwidth may be limited if you create multiple processes on a node
+    and enable multiplexing, because in that case processes share a single multiplexing TCP connection.
 
 ### [Cluster Cookie](@id man-cluster-cookie)
 

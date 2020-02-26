@@ -173,6 +173,10 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
     struct jl_gc_metadata_ext info;
     JL_LOCK_NOGC(&gc_perm_lock);
 
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
     // scan over memory_map page-table for existing allocated but unused pages
     for (info.pagetable_i32 = memory_map.lb; info.pagetable_i32 < (REGION2_PG_COUNT + 31) / 32; info.pagetable_i32++) {
         uint32_t freemap1 = memory_map.freemap1[info.pagetable_i32];
@@ -245,6 +249,10 @@ have_free_page:
 #ifdef _OS_WINDOWS_
     VirtualAlloc(info.meta->data, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE);
 #endif
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
     current_pg_count++;
     gc_final_count_page(current_pg_count);
     JL_UNLOCK_NOGC(&gc_perm_lock);

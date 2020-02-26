@@ -70,6 +70,7 @@ static void jl_init_intrinsic_functions_codegen(Module *m)
     float_func[trunc_llvm] = true;
     float_func[rint_llvm] = true;
     float_func[sqrt_llvm] = true;
+    float_func[sqrt_llvm_fast] = true;
 }
 
 extern "C"
@@ -148,32 +149,32 @@ static Value *uint_cnvt(jl_codectx_t &ctx, Type *to, Value *x)
 
 static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
 {
-    // assumes `jl_justbits(bt)`.
+    // assumes `jl_is_pointerfree(bt)`.
     // `ptr` can point to a inline field, do not read the tag from it.
     // make sure to return exactly the type specified by
     // julia_type_to_llvm as this will be assumed by the callee.
     if (bt == jl_bool_type)
         return ConstantInt::get(T_int8, (*(const uint8_t*)ptr) ? 1 : 0);
 
-    if (jl_is_vecelement_type((jl_value_t*)bt))
-        bt = (jl_datatype_t*)jl_tparam0(bt);
-
     Type *lt = julia_struct_to_llvm((jl_value_t*)bt, NULL, NULL);
+
+    if (jl_is_vecelement_type((jl_value_t*)bt) && !jl_is_uniontype(jl_tparam0(bt)))
+        bt = (jl_datatype_t*)jl_tparam0(bt);
 
     if (type_is_ghost(lt))
         return UndefValue::get(lt);
 
-    if (jl_is_primitivetype(bt)) {
-        if (lt->isFloatTy()) {
-            uint32_t data32 = *(const uint32_t*)ptr;
-            return ConstantFP::get(jl_LLVMContext,
-                    APFloat(lt->getFltSemantics(), APInt(32, data32)));
-        }
-        if (lt->isDoubleTy()) {
-            uint64_t data64 = *(const uint64_t*)ptr;
-            return ConstantFP::get(jl_LLVMContext,
-                    APFloat(lt->getFltSemantics(), APInt(64, data64)));
-        }
+    if (lt->isFloatTy()) {
+        uint32_t data32 = *(const uint32_t*)ptr;
+        return ConstantFP::get(jl_LLVMContext,
+                APFloat(lt->getFltSemantics(), APInt(32, data32)));
+    }
+    if (lt->isDoubleTy()) {
+        uint64_t data64 = *(const uint64_t*)ptr;
+        return ConstantFP::get(jl_LLVMContext,
+                APFloat(lt->getFltSemantics(), APInt(64, data64)));
+    }
+    if (lt->isFloatingPointTy() || lt->isIntegerTy()) {
         int nb = jl_datatype_size(bt);
         APInt val(8 * nb, 0);
         void *bits = const_cast<uint64_t*>(val.getRawData());
@@ -192,11 +193,11 @@ static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
     std::vector<Constant*> fields(0);
     for (size_t i = 0; i < nf; i++) {
         size_t offs = jl_field_offset(bt, i);
-        assert(!jl_field_isptr(bt, i));
         jl_value_t *ft = jl_field_type(bt, i);
         Type *lft = julia_type_to_llvm(ft);
         if (type_is_ghost(lft))
             continue;
+        assert(!jl_field_isptr(bt, i));
         unsigned llvm_idx = isa<StructType>(lt) ? convert_struct_offset(lt, offs) : i;
         while (fields.size() < llvm_idx)
             fields.push_back(UndefValue::get(lct->getTypeAtIndex(fields.size())));
@@ -269,7 +270,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
     if (e == jl_false)
         return ConstantInt::get(T_int8, 0);
     jl_value_t *bt = jl_typeof(e);
-    if (!jl_justbits(bt))
+    if (!jl_is_pointerfree(bt))
         return NULL;
     return julia_const_to_llvm(e, (jl_datatype_t*)bt);
 }
@@ -334,13 +335,13 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
 
     Constant *c = x.constant ? julia_const_to_llvm(x.constant) : NULL;
     if (!x.ispointer() || c) { // already unboxed, but sometimes need conversion
-        Value *unboxed = emit_unboxed_coercion(ctx, to, c ? c : x.V);
+        Value *unboxed = c ? c : x.V;
         if (!dest)
-            return unboxed;
+            return emit_unboxed_coercion(ctx, to, unboxed);
         Type *dest_ty = unboxed->getType()->getPointerTo();
         if (dest->getType() != dest_ty)
             dest = emit_bitcast(ctx, dest, dest_ty);
-        tbaa_decorate(tbaa_dest, ctx.builder.CreateStore(unboxed, dest));
+        tbaa_decorate(tbaa_dest, ctx.builder.CreateAlignedStore(unboxed, dest, julia_alignment(jt)));
         return NULL;
     }
 
@@ -653,7 +654,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         // unsafe_store to Ptr{Any} is allowed to implicitly drop GC roots.
         thePtr = emit_unbox(ctx, T_psize, e, e.typ);
         Instruction *store = ctx.builder.CreateAlignedStore(
-          emit_pointer_from_objref(ctx, boxed(ctx, x)),
+          ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, boxed(ctx, x)), T_size),
             ctx.builder.CreateGEP(T_size, thePtr, im1), align_nb);
         tbaa_decorate(tbaa_data, store);
     }
@@ -764,10 +765,8 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
     }
 
     Value *ifelse_result;
-    bool isboxed;
-    Type *llt1 = julia_type_to_llvm(t1, &isboxed);
-    if (t1 != t2)
-        isboxed = true;
+    bool isboxed = t1 != t2 || !deserves_stack(t1);
+    Type *llt1 = isboxed ? T_prjlvalue : julia_type_to_llvm(t1);
     if (!isboxed) {
         if (type_is_ghost(llt1))
             return x;
@@ -1263,6 +1262,10 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     case sqrt_llvm: {
         Value *sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
         return ctx.builder.CreateCall(sqrtintr, x);
+    }
+    case sqrt_llvm_fast: {
+        Value *sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
+        return math_builder(ctx, true)().CreateCall(sqrtintr, x);
     }
 
     default:

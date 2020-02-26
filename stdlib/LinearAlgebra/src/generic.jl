@@ -2,29 +2,129 @@
 
 ## linalg.jl: Some generic Linear Algebra definitions
 
-function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number)
+"""
+    MulAddMul(alpha, beta)
+
+A callable for operating short-circuiting version of `x * alpha + y * beta`.
+
+# Examples
+```jldoctest
+julia> using LinearAlgebra: MulAddMul
+
+julia> _add = MulAddMul(1, 0);
+
+julia> _add(123, nothing)
+123
+
+julia> MulAddMul(12, 34)(56, 78) == 56 * 12 + 78 * 34
+true
+```
+"""
+struct MulAddMul{ais1, bis0, TA, TB}
+    alpha::TA
+    beta::TB
+end
+
+@inline function MulAddMul(alpha::TA, beta::TB) where {TA,TB}
+    if isone(alpha)
+        if iszero(beta)
+            return MulAddMul{true,true,TA,TB}(alpha, beta)
+        else
+            return MulAddMul{true,false,TA,TB}(alpha, beta)
+        end
+    else
+        if iszero(beta)
+            return MulAddMul{false,true,TA,TB}(alpha, beta)
+        else
+            return MulAddMul{false,false,TA,TB}(alpha, beta)
+        end
+    end
+end
+
+MulAddMul() = MulAddMul{true,true,Bool,Bool}(true, false)
+
+@inline (::MulAddMul{true})(x) = x
+@inline (p::MulAddMul{false})(x) = x * p.alpha
+@inline (::MulAddMul{true, true})(x, _) = x
+@inline (p::MulAddMul{false, true})(x, _) = x * p.alpha
+@inline (p::MulAddMul{true, false})(x, y) = x + y * p.beta
+@inline (p::MulAddMul{false, false})(x, y) = x * p.alpha + y * p.beta
+
+"""
+    _modify!(_add::MulAddMul, x, C, idx)
+
+Short-circuiting version of `C[idx] = _add(x, C[idx])`.
+
+Short-circuiting the indexing `C[idx]` is necessary for avoiding `UndefRefError`
+when mutating an array of non-primitive numbers such as `BigFloat`.
+
+# Examples
+```jldoctest
+julia> using LinearAlgebra: MulAddMul, _modify!
+
+julia> _add = MulAddMul(1, 0);
+       C = Vector{BigFloat}(undef, 1);
+
+julia> _modify!(_add, 123, C, 1)
+
+julia> C
+1-element Array{BigFloat,1}:
+ 123.0
+```
+"""
+@inline @propagate_inbounds function _modify!(p::MulAddMul{ais1, bis0},
+                                              x, C, idx′) where {ais1, bis0}
+    # `idx′` may be an integer, a tuple of integer, or a `CartesianIndex`.
+    #  Let `CartesianIndex` constructor normalize them so that it can be
+    # used uniformly.  It also acts as a workaround for performance penalty
+    # of splatting a number (#29114):
+    idx = CartesianIndex(idx′)
+    if bis0
+        C[idx] = p(x)
+    else
+        C[idx] = p(x, C[idx])
+    end
+    return
+end
+
+@inline function _rmul_or_fill!(C::AbstractArray, beta::Number)
+    if isempty(C)
+        return C
+    end
+    if iszero(beta)
+        fill!(C, zero(eltype(C)))
+    else
+        rmul!(C, beta)
+    end
+    return C
+end
+
+
+function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number, _add::MulAddMul)
     if length(C) != length(X)
         throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
-        @inbounds C[IC] = X[IX]*s
+        @inbounds _modify!(_add, X[IX] * s, C, IC)
     end
     C
 end
 
-function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray)
+function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray, _add::MulAddMul)
     if length(C) != length(X)
         throw(DimensionMismatch("first array has length $(length(C)) which does not
 match the length of the second, $(length(X))."))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
-        @inbounds C[IC] = s*X[IX]
+        @inbounds _modify!(_add, s * X[IX], C, IC)
     end
     C
 end
 
-mul!(C::AbstractArray, s::Number, X::AbstractArray) = generic_mul!(C, X, s)
-mul!(C::AbstractArray, X::AbstractArray, s::Number) = generic_mul!(C, s, X)
+@inline mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number) =
+    generic_mul!(C, s, X, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number) =
+    generic_mul!(C, X, s, MulAddMul(alpha, beta))
 
 # For better performance when input and output are the same array
 # See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
@@ -154,6 +254,11 @@ function ldiv!(s::Number, X::AbstractArray)
     end
     X
 end
+ldiv!(Y::AbstractArray, s::Number, X::AbstractArray) = Y .= s .\ X
+
+# Generic fallback. This assumes that B and Y have the same sizes.
+ldiv!(Y::AbstractArray, A::AbstractMatrix, B::AbstractArray) = ldiv!(A, copyto!(Y, B))
+
 
 """
     cross(x, y)
@@ -793,6 +898,51 @@ function dot(x::AbstractArray, y::AbstractArray)
     s
 end
 
+"""
+    dot(x, A, y)
+
+Compute the generalized dot product `dot(x, A*y)` between two vectors `x` and `y`,
+without storing the intermediate result of `A*y`. As for the two-argument
+[`dot(_,_)`](@ref), this acts recursively. Moreover, for complex vectors, the
+first vector is conjugated.
+
+!!! compat "Julia 1.4"
+    Three-argument `dot` requires at least Julia 1.4.
+
+# Examples
+```jldoctest
+julia> dot([1; 1], [1 2; 3 4], [2; 3])
+26
+
+julia> dot(1:5, reshape(1:25, 5, 5), 2:6)
+4850
+
+julia> ⋅(1:5, reshape(1:25, 5, 5), 2:6) == dot(1:5, reshape(1:25, 5, 5), 2:6)
+true
+```
+"""
+dot(x, A, y) = dot(x, A*y) # generic fallback for cases that are not covered by specialized methods
+
+function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
+    (axes(x)..., axes(y)...) == axes(A) || throw(DimensionMismatch())
+    T = typeof(dot(first(x), first(A), first(y)))
+    s = zero(T)
+    i₁ = first(eachindex(x))
+    x₁ = first(x)
+    @inbounds for j in eachindex(y)
+        yj = y[j]
+        if !iszero(yj)
+            temp = zero(adjoint(A[i₁,j]) * x₁)
+            @simd for i in eachindex(x)
+                temp += adjoint(A[i,j]) * x[i]
+            end
+            s += dot(temp, yj)
+        end
+    end
+    return s
+end
+dot(x::AbstractVector, adjA::Adjoint, y::AbstractVector) = adjoint(dot(y, adjA.parent, x))
+dot(x::AbstractVector, transA::Transpose{<:Real}, y::AbstractVector) = adjoint(dot(y, transA.parent, x))
 
 ###########################################################################################
 
@@ -988,7 +1138,7 @@ condskeel(A::AbstractMatrix, p::Real=Inf) = opnorm(abs.(inv(A))*abs.(A), p)
 
 ```math
 \\kappa_S(M, p) = \\left\\Vert \\left\\vert M \\right\\vert \\left\\vert M^{-1} \\right\\vert \\right\\Vert_p \\\\
-\\kappa_S(M, x, p) = \\left\\Vert \\left\\vert M \\right\\vert \\left\\vert M^{-1} \\right\\vert \\left\\vert x \\right\\vert \\right\\Vert_p
+\\kappa_S(M, x, p) = \\frac{\\left\\Vert \\left\\vert M \\right\\vert \\left\\vert M^{-1} \\right\\vert \\left\\vert x \\right\\vert \\right\\Vert_p}{\\left \\Vert x \\right \\Vert_p}
 ```
 
 Skeel condition number ``\\kappa_S`` of the matrix `M`, optionally with respect to the
@@ -1000,7 +1150,9 @@ Valid values for `p` are `1`, `2` and `Inf` (default).
 This quantity is also known in the literature as the Bauer condition number, relative
 condition number, or componentwise relative condition number.
 """
-condskeel(A::AbstractMatrix, x::AbstractVector, p::Real=Inf) = norm(abs.(inv(A))*(abs.(A)*abs.(x)), p)
+function condskeel(A::AbstractMatrix, x::AbstractVector, p::Real=Inf)
+    norm(abs.(inv(A))*(abs.(A)*abs.(x)), p) / norm(x, p)
+end
 
 issymmetric(A::AbstractMatrix{<:Real}) = ishermitian(A)
 
@@ -1415,9 +1567,9 @@ Currently supports only numeric leaf elements.
 ```jldoctest
 julia> a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
 3-element Array{Any,1}:
-  Any[1,2,[3,4]]
+  Any[1, 2, [3, 4]]
  5.0
-  Any[0+6im,[7.0,8.0]]
+  Any[0 + 6im, [7.0, 8.0]]
 
 julia> LinearAlgebra.promote_leaf_eltypes(a)
 Complex{Float64}
@@ -1445,39 +1597,39 @@ function isapprox(x::AbstractArray, y::AbstractArray;
 end
 
 """
-    normalize!(v::AbstractVector, p::Real=2)
+    normalize!(a::AbstractArray, p::Real=2)
 
-Normalize the vector `v` in-place so that its `p`-norm equals unity,
-i.e. `norm(v, p) == 1`.
+Normalize the array `a` in-place so that its `p`-norm equals unity,
+i.e. `norm(a, p) == 1`.
 See also [`normalize`](@ref) and [`norm`](@ref).
 """
-function normalize!(v::AbstractVector, p::Real=2)
-    nrm = norm(v, p)
-    __normalize!(v, nrm)
+function normalize!(a::AbstractArray, p::Real=2)
+    nrm = norm(a, p)
+    __normalize!(a, nrm)
 end
 
-@inline function __normalize!(v::AbstractVector, nrm::AbstractFloat)
+@inline function __normalize!(a::AbstractArray, nrm::AbstractFloat)
     # The largest positive floating point number whose inverse is less than infinity
     δ = inv(prevfloat(typemax(nrm)))
 
     if nrm ≥ δ # Safe to multiply with inverse
         invnrm = inv(nrm)
-        rmul!(v, invnrm)
+        rmul!(a, invnrm)
 
     else # scale elements to avoid overflow
         εδ = eps(one(nrm))/δ
-        rmul!(v, εδ)
-        rmul!(v, inv(nrm*εδ))
+        rmul!(a, εδ)
+        rmul!(a, inv(nrm*εδ))
     end
 
-    v
+    a
 end
 
 """
-    normalize(v::AbstractVector, p::Real=2)
+    normalize(a::AbstractArray, p::Real=2)
 
-Normalize the vector `v` so that its `p`-norm equals unity,
-i.e. `norm(v, p) == 1`.
+Normalize the array `a` so that its `p`-norm equals unity,
+i.e. `norm(a, p) == 1`.
 See also [`normalize!`](@ref) and [`norm`](@ref).
 
 # Examples
@@ -1501,15 +1653,29 @@ julia> c = normalize(a, 1)
 
 julia> norm(c, 1)
 1.0
+
+julia> a = [1 2 4 ; 1 2 4]
+2×3 Array{Int64,2}:
+ 1  2  4
+ 1  2  4
+
+julia> norm(a)
+6.48074069840786
+
+julia> normalize(a)
+2×3 Array{Float64,2}:
+ 0.154303  0.308607  0.617213
+ 0.154303  0.308607  0.617213
+
 ```
 """
-function normalize(v::AbstractVector, p::Real = 2)
-    nrm = norm(v, p)
-    if !isempty(v)
-        vv = copy_oftype(v, typeof(v[1]/nrm))
-        return __normalize!(vv, nrm)
+function normalize(a::AbstractArray, p::Real = 2)
+    nrm = norm(a, p)
+    if !isempty(a)
+        aa = copy_oftype(a, typeof(first(a)/nrm))
+        return __normalize!(aa, nrm)
     else
-        T = typeof(zero(eltype(v))/nrm)
+        T = typeof(zero(eltype(a))/nrm)
         return T[]
     end
 end

@@ -449,4 +449,53 @@ end
     @test sum(Bidiagonal([1,2,3], [1,2], :L)) == 9
 end
 
+@testset "empty sub-diagonal" begin
+    # `mul!` must use non-specialized method when sub-diagonal is empty
+    A = [1 2 3 4]'
+    @test A * Tridiagonal(ones(1, 1)) == A
+end
+
+@testset "generalized dot" begin
+    for elty in (Float64, ComplexF64)
+        dv = randn(elty, 5)
+        ev = randn(elty, 4)
+        x = randn(elty, 5)
+        y = randn(elty, 5)
+        for uplo in (:U, :L)
+            B = Bidiagonal(dv, ev, uplo)
+            @test dot(x, B, y) ≈ dot(B'x, y) ≈ dot(x, Matrix(B), y)
+        end
+    end
+end
+
+@testset "multiplication of bidiagonal and triangular matrix" begin
+    n = 5
+    for eltyB in (Int, ComplexF64)
+        if eltyB == Int
+            BU = Bidiagonal(rand(1:7, n), rand(1:7, n - 1), :U)
+            BL = Bidiagonal(rand(1:7, n), rand(1:7, n - 1), :L)
+        else
+            BU = Bidiagonal(randn(eltyB, n), randn(eltyB, n - 1), :U)
+            BL = Bidiagonal(randn(eltyB, n), randn(eltyB, n - 1), :L)
+        end
+        for eltyT in (Int, ComplexF64)
+            for TriT in (LowerTriangular, UnitLowerTriangular, UpperTriangular, UnitUpperTriangular)
+                if eltyT == Int
+                    T = TriT(rand(1:7, n, n))
+                else
+                    T = TriT(randn(eltyT, n, n))
+                end
+                for B in (BU, BL)
+                    MB = Matrix(B)
+                    MT = Matrix(T)
+                    for transB in (identity, adjoint, transpose), transT in (identity, adjoint, transpose)
+                        @test transB(B) * transT(T) ≈ transB(MB) * transT(MT)
+                        @test transT(T) * transB(B) ≈ transT(MT) * transB(MB)
+                    end
+                end
+            end
+        end
+    end
+end
+
 end # module TestBidiagonal

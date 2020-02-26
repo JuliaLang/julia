@@ -66,6 +66,7 @@ struct ObjectInfo {
     const object::ObjectFile *object;
     size_t SectionSize;
     ptrdiff_t slide;
+    object::SectionRef Section;
     DIContext *context;
 };
 
@@ -101,7 +102,7 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
     // GC safe
     DWORD mod_size = 0;
 #if defined(_CPU_X86_64_)
-    PRUNTIME_FUNCTION tbl = (PRUNTIME_FUNCTION)malloc(sizeof(RUNTIME_FUNCTION));
+    PRUNTIME_FUNCTION tbl = (PRUNTIME_FUNCTION)malloc_s(sizeof(RUNTIME_FUNCTION));
     tbl->BeginAddress = (DWORD)(Code - Section);
     tbl->EndAddress = (DWORD)(Code - Section + Size);
     tbl->UnwindData = (DWORD)(UnwindData - Section);
@@ -166,23 +167,24 @@ public:
     JuliaJITEventListener(){}
     virtual ~JuliaJITEventListener() {}
 
-    jl_method_instance_t *lookupLinfo(size_t pointer)
+    jl_method_instance_t *lookupLinfo(size_t pointer) JL_NOTSAFEPOINT
     {
-        auto linfo = linfomap.lower_bound(pointer);
-        if (linfo != linfomap.end() && pointer < linfo->first + linfo->second.first)
-            return linfo->second.second;
-        else
-            return NULL;
+        uv_rwlock_rdlock(&threadsafe);
+        auto region = linfomap.lower_bound(pointer);
+        jl_method_instance_t *linfo = NULL;
+        if (region != linfomap.end() && pointer < region->first + region->second.first)
+            linfo = region->second.second;
+        uv_rwlock_rdunlock(&threadsafe);
+        return linfo;
     }
 
-    virtual void NotifyObjectEmitted(const object::ObjectFile &obj,
+    virtual void NotifyObjectEmitted(const object::ObjectFile &Object,
                                      const RuntimeDyld::LoadedObjectInfo &L)
     {
-        return _NotifyObjectEmitted(obj,obj,L,nullptr);
+        return _NotifyObjectEmitted(Object, L, nullptr);
     }
 
-    virtual void _NotifyObjectEmitted(const object::ObjectFile &obj,
-                                      const object::ObjectFile &debugObj,
+    virtual void _NotifyObjectEmitted(const object::ObjectFile &Object,
                                       const RuntimeDyld::LoadedObjectInfo &L,
                                       RTDyldMemoryManager *memmgr)
     {
@@ -190,16 +192,36 @@ public:
         // This function modify codeinst->fptr in GC safe region.
         // This should be fine since the GC won't scan this field.
         int8_t gc_state = jl_gc_safe_enter(ptls);
-        uv_rwlock_wrlock(&threadsafe);
+
+        auto SavedObject = L.getObjectForDebug(Object).takeBinary();
+        // If the debug object is unavailable, save (a copy of) the original object
+        // for our backtraces
+        if (!SavedObject.first) {
+            // This is unfortunate, but there doesn't seem to be a way to take
+            // ownership of the original buffer
+            auto NewBuffer = MemoryBuffer::getMemBufferCopy(
+                    Object.getData(), Object.getFileName());
+            auto NewObj = object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
+            assert(NewObj);
+            SavedObject = std::make_pair(std::move(*NewObj), std::move(NewBuffer));
+        }
+        const object::ObjectFile &debugObj = *SavedObject.first.release();
+        SavedObject.second.release();
+
         object::section_iterator Section = debugObj.section_begin();
         object::section_iterator EndSection = debugObj.section_end();
 
-        std::map<StringRef,object::SectionRef,strrefcomp> loadedSections;
-        for (const object::SectionRef &lSection: obj.sections()) {
+        std::map<StringRef, object::SectionRef, strrefcomp> loadedSections;
+        for (const object::SectionRef &lSection: Object.sections()) {
+#if JL_LLVM_VERSION >= 100000
+            auto sName = lSection.getName();
+            if (sName)
+                loadedSections[*sName] = lSection;
+#else
             StringRef sName;
-            if (!lSection.getName(sName)) {
+            if (!lSection.getName(sName))
                 loadedSections[sName] = lSection;
-            }
+#endif
         }
         auto getLoadAddress = [&] (const StringRef &sName) -> uint64_t {
             auto search = loadedSections.find(sName);
@@ -214,15 +236,21 @@ public:
         size_t arm_exidx_len = 0;
         uint64_t arm_text_addr = 0;
         size_t arm_text_len = 0;
-        for (auto &section: obj.sections()) {
+        for (auto &section: Object.sections()) {
             bool istext = false;
             if (section.isText()) {
                 istext = true;
             }
             else {
+#if JL_LLVM_VERSION >= 100000
+                auto sName = section.getName();
+                if (!sName)
+                    continue;
+#else
                 StringRef sName;
                 if (section.getName(sName))
                     continue;
+#endif
                 if (sName != ".ARM.exidx") {
                     continue;
                 }
@@ -284,8 +312,14 @@ public:
                 Section = SectionOrError.get();
                 assert(Section != EndSection && Section->isText());
                 SectionAddr = Section->getAddress();
+#if JL_LLVM_VERSION >= 100000
+                auto secName = Section->getName();
+                assert(secName);
+                SectionLoadAddr = getLoadAddress(*secName);
+#else
                 Section->getName(sName);
                 SectionLoadAddr = getLoadAddress(sName);
+#endif
                 Addr -= SectionAddr - SectionLoadAddr;
                 *pAddr = (uint8_t*)Addr;
                 if (SectionAddrCheck)
@@ -324,8 +358,6 @@ public:
 #endif // defined(_OS_X86_64_)
 #endif // defined(_OS_WINDOWS_)
 
-        std::vector<std::pair<jl_code_instance_t*, uintptr_t>> def_spec;
-        std::vector<std::pair<jl_code_instance_t*, uintptr_t>> def_invoke;
         auto symbols = object::computeSymbolSizes(debugObj);
         bool first = true;
         for (const auto &sym_size : symbols) {
@@ -343,9 +375,15 @@ public:
             if (Section == EndSection) continue;
             if (!Section->isText()) continue;
             uint64_t SectionAddr = Section->getAddress();
+#if JL_LLVM_VERSION >= 100000
+            Expected<StringRef> secName = Section->getName();
+            assert(secName);
+            uint64_t SectionLoadAddr = getLoadAddress(*secName);
+#else
             StringRef secName;
             Section->getName(secName);
             uint64_t SectionLoadAddr = getLoadAddress(secName);
+#endif
             Addr -= SectionAddr - SectionLoadAddr;
             auto sNameOrError = sym_iter.getName();
             assert(sNameOrError);
@@ -366,67 +404,53 @@ public:
             if (linfo_it != ncode_in_flight.end()) {
                 codeinst = linfo_it->second;
                 ncode_in_flight.erase(linfo_it);
-                const char *F = codeinst->functionObjectsDecls.functionObject;
-                const char *specF = codeinst->functionObjectsDecls.specFunctionObject;
-                if (codeinst->invoke == NULL) {
-                    if (specF && sName.equals(specF)) {
-                        def_spec.push_back({codeinst, Addr});
-                        if (!strcmp(F, "jl_fptr_args"))
-                            def_invoke.push_back({codeinst, (uintptr_t)&jl_fptr_args});
-                        else if (!strcmp(F, "jl_fptr_sparam"))
-                            def_invoke.push_back({codeinst, (uintptr_t)&jl_fptr_sparam});
-                    }
-                    else if (sName.equals(F)) {
-                        def_invoke.push_back({codeinst, Addr});
-                    }
-                }
             }
+            uv_rwlock_wrlock(&threadsafe);
             if (codeinst)
                 linfomap[Addr] = std::make_pair(Size, codeinst->def);
             if (first) {
                 ObjectInfo tmp = {&debugObj,
                     (size_t)SectionSize,
                     (ptrdiff_t)(SectionAddr - SectionLoadAddr),
-                    DWARFContext::create(debugObj, &L).release(),
+                    *Section,
+                    nullptr,
                     };
                 objectmap[SectionLoadAddr] = tmp;
                 first = false;
-           }
-       }
-       // now process these in order, so we ensure the closure values are updated before enabling the invoke pointer
-       // TODO: this sets these pointers a bit too early, allowing other threads to see
-       // the addresses before the code has been filled in.
-       /*
-       for (auto &def : def_spec)
-           def.first->specptr.fptr = (void*)def.second;
-       for (auto &def : def_invoke)
-           def.first->invoke = (jl_callptr_t)def.second;
-       */
-        uv_rwlock_wrunlock(&threadsafe);
+            }
+            uv_rwlock_wrunlock(&threadsafe);
+        }
         jl_gc_safe_leave(ptls, gc_state);
     }
 
     // must implement if we ever start freeing code
-    // virtual void NotifyFreeingObject(const ObjectImage &obj) {}
+    // virtual void NotifyFreeingObject(const ObjectImage &Object) {}
     // virtual void NotifyFreeingObject(const object::ObjectFile &Obj) {}
 
-    std::map<size_t, ObjectInfo, revcomp>& getObjectMap()
+    std::map<size_t, ObjectInfo, revcomp>& getObjectMap() JL_NOTSAFEPOINT
     {
         uv_rwlock_rdlock(&threadsafe);
         return objectmap;
     }
+
+    Optional<std::map<size_t, ObjectInfo, revcomp>*> trygetObjectMap()
+    {
+        if (0 == uv_rwlock_tryrdlock(&threadsafe)) {
+            return &objectmap;
+        }
+        return {};
+    }
 };
 
 JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
-                                         const object::ObjectFile &obj,
-                                         const object::ObjectFile &debugObj,
+                                         const object::ObjectFile &Object,
                                          const RuntimeDyld::LoadedObjectInfo &L,
                                          RTDyldMemoryManager *memmgr)
 {
-    ((JuliaJITEventListener*)Listener)->_NotifyObjectEmitted(obj,debugObj,L,memmgr);
+    ((JuliaJITEventListener*)Listener)->_NotifyObjectEmitted(Object, L, memmgr);
 }
 
-static std::pair<char *, bool> jl_demangle(const char *name)
+static std::pair<char *, bool> jl_demangle(const char *name) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables since
     // it can be called from an unmanaged thread on OSX.
@@ -450,7 +474,7 @@ static std::pair<char *, bool> jl_demangle(const char *name)
     }
     if (end <= start)
         goto done;
-    ret = (char*)malloc(end - start + 1);
+    ret = (char*)malloc_s(end - start + 1);
     memcpy(ret, start, end - start);
     ret[end - start] = '\0';
     return std::make_pair(ret, true);
@@ -468,12 +492,14 @@ JITEventListener *CreateJuliaJITEventListener()
 // *frames is a one element array containing whatever we could come up
 // with for the current frame. here we'll try to expand it using debug info
 // func_name and file_name are either NULL or malloc'd pointers
-static int lookup_pointer(DIContext *context, jl_frame_t **frames,
-                          size_t pointer, int demangle, int noInline)
+static int lookup_pointer(
+        object::SectionRef Section, DIContext *context,
+        jl_frame_t **frames, size_t pointer, int64_t slide,
+        bool demangle, bool noInline) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables
     // since it can be called from an unmanaged thread on OSX.
-    if (!context) {
+    if (!context || !Section.getObject()) {
         if (demangle) {
             char *oldname = (*frames)[0].func_name;
             if (oldname != NULL) {
@@ -492,18 +518,16 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
         }
         return 1;
     }
-    jl_mutex_lock_maybe_nogc(&codegen_lock);
     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath,
                                  DILineInfoSpecifier::FunctionNameKind::ShortName);
 
-    auto inlineInfo = context->getInliningInfoForAddress(makeAddress(pointer), infoSpec);
+    auto inlineInfo = context->getInliningInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
 
     int fromC = (*frames)[0].fromC;
     int n_frames = inlineInfo.getNumberOfFrames();
     if (n_frames == 0) {
-        jl_mutex_unlock_maybe_nogc(&codegen_lock);
         // no line number info available in the context, return without the context
-        return lookup_pointer(NULL, frames, pointer, demangle, noInline);
+        return lookup_pointer(object::SectionRef(), NULL, frames, pointer, slide, demangle, noInline);
     }
     if (noInline)
         n_frames = 1;
@@ -520,7 +544,7 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
             info = inlineInfo.getFrame(i);
         }
         else {
-            info = context->getLineInfoForAddress(makeAddress(pointer), infoSpec);
+            info = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
         }
 
         jl_frame_t *frame = &(*frames)[i];
@@ -553,7 +577,6 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
         else
             jl_copy_str(&frame->file_name, file_name.c_str());
     }
-    jl_mutex_unlock_maybe_nogc(&codegen_lock);
     return n_frames;
 }
 
@@ -569,12 +592,11 @@ typedef struct {
     const llvm::object::ObjectFile *obj;
     DIContext *ctx;
     int64_t slide;
-    int64_t section_slide;
 } objfileentry_t;
 typedef std::map<uint64_t, objfileentry_t, revcomp> obfiletype;
 static obfiletype objfilemap;
 
-static bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16])
+static bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16]) JL_NOTSAFEPOINT
 {
     for (auto Load : obj->load_commands())
     {
@@ -590,14 +612,27 @@ struct debug_link_info {
     StringRef filename;
     uint32_t crc32;
 };
-static debug_link_info getDebuglink(const object::ObjectFile &Obj)
+static debug_link_info getDebuglink(const object::ObjectFile &Obj) JL_NOTSAFEPOINT
 {
     debug_link_info info = {};
     for (const object::SectionRef &Section: Obj.sections()) {
+#if JL_LLVM_VERSION >= 100000
+        Expected<StringRef> sName = Section.getName();
+        if (sName && *sName == ".gnu_debuglink")
+#else
         StringRef sName;
-        if (!Section.getName(sName) && sName == ".gnu_debuglink") {
+        if (!Section.getName(sName) && sName == ".gnu_debuglink")
+#endif
+        {
             StringRef Contents;
-            if (!Section.getContents(Contents)) {
+#if JL_LLVM_VERSION >= 90000
+            auto found = Section.getContents();
+            if (found)
+                Contents = *found;
+#else
+            bool found = !Section.getContents(Contents);
+#endif
+            if (found) {
                 size_t length = Contents.find('\0');
                 info.filename = Contents.substr(0, length);
                 info.crc32 = *(const uint32_t*)Contents.substr(LLT_ALIGN(length + 1, 4), 4).data();
@@ -713,7 +748,7 @@ void jl_register_fptrs(uint64_t sysimage_base, const jl_sysimg_fptrs_t *fptrs,
 }
 
 template<typename T>
-static inline void ignoreError(T &err)
+static inline void ignoreError(T &err) JL_NOTSAFEPOINT
 {
 #if !defined(NDEBUG)
     // Needed only with LLVM assertion build
@@ -721,9 +756,8 @@ static inline void ignoreError(T &err)
 #endif
 }
 
-static void get_function_name_and_base(const object::ObjectFile *object, bool insysimage,
-                                       void **saddr, char **name, size_t pointer,
-                                       int64_t slide, bool untrusted_dladdr)
+static void get_function_name_and_base(llvm::object::SectionRef Section, size_t pointer, int64_t slide, bool insysimage,
+                                       void **saddr, char **name, bool untrusted_dladdr) JL_NOTSAFEPOINT
 {
     // Assume we only need base address for sysimg for now
     if (!insysimage || !sysimg_fptrs.base)
@@ -750,10 +784,12 @@ static void get_function_name_and_base(const object::ObjectFile *object, bool in
         }
 #endif
     }
-    if (object && (needs_saddr || needs_name)) {
+    if (Section.getObject() && (needs_saddr || needs_name)) {
         size_t distance = (size_t)-1;
         SymRef sym_found;
-        for (auto sym: object->symbols()) {
+        for (auto sym : Section.getObject()->symbols()) {
+            if (!Section.containsSymbol(sym))
+                continue;
             auto addr = sym.getAddress();
             if (!addr)
                 continue;
@@ -777,7 +813,7 @@ static void get_function_name_and_base(const object::ObjectFile *object, bool in
                 if (auto name_or_err = sym_found.getName()) {
                     auto nameref = name_or_err.get();
                     size_t len = nameref.size();
-                    *name = (char*)realloc(*name, len + 1);
+                    *name = (char*)realloc_s(*name, len + 1);
                     (*name)[len] = 0;
                     memcpy(*name, nameref.data(), len);
                     needs_name = false;
@@ -806,7 +842,7 @@ static void get_function_name_and_base(const object::ObjectFile *object, bool in
 #endif
 }
 
-static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname)
+static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTSAFEPOINT
 {
     int isdarwin = 0, islinux = 0, iswindows = 0;
 #if defined(_OS_DARWIN_)
@@ -857,7 +893,7 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname)
         // the DebugSymbols framework is moved or removed, an alternative would
         // be to directly query Spotlight for the dSYM bundle.
 
-        typedef CFURLRef (*DBGCopyFullDSYMURLForUUIDfn)(CFUUIDRef, CFURLRef);
+        typedef CFURLRef (*DBGCopyFullDSYMURLForUUIDfn)(CFUUIDRef, CFURLRef) JL_NOTSAFEPOINT;
         DBGCopyFullDSYMURLForUUIDfn DBGCopyFullDSYMURLForUUID = NULL;
 
         // First, try to load the private DebugSymbols framework.
@@ -980,11 +1016,9 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname)
         }
 
         int64_t slide = 0;
-        int64_t section_slide = 0;
         if (auto *OF = dyn_cast<const object::COFFObjectFile>(debugobj)) {
             assert(iswindows);
             slide = OF->getImageBase() - fbase;
-            section_slide = 0; // Since LLVM 3.8+ addresses are adjusted correctly
         }
         else {
             slide = -(int64_t)fbase;
@@ -995,7 +1029,7 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname)
         binary.first.release();
         binary.second.release();
         // update cache
-        entry = {debugobj, context, slide, section_slide};
+        entry = {debugobj, context, slide};
     }
     else {
         // TODO: report the error instead of silently consuming it?
@@ -1005,14 +1039,25 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname)
     return entry;
 }
 
-extern "C" void jl_refresh_dbg_module_list(void);
-bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, llvm::DIContext **context, int64_t *slide, int64_t *section_slide,
-    bool onlySysImg, bool *isSysImg, void **saddr, char **name, char **filename)
+// from llvm::SymbolizableObjectFile
+static object::SectionRef getModuleSectionForAddress(const object::ObjectFile *obj, uint64_t Address) JL_NOTSAFEPOINT
 {
-    *obj = NULL;
+  for (object::SectionRef Sec : obj->sections()) {
+      if (!Sec.isText() || Sec.isVirtual())
+          continue;
+      if (Address >= Sec.getAddress() && Address < Sec.getAddress() + Sec.getSize())
+          return Sec;
+  }
+  return object::SectionRef();
+}
+
+
+extern "C" void jl_refresh_dbg_module_list(void);
+bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *slide, llvm::DIContext **context,
+    bool onlySysImg, bool *isSysImg, void **saddr, char **name, char **filename) JL_NOTSAFEPOINT
+{
+    *Section = object::SectionRef();
     *context = NULL;
-    *slide = 0;
-    *section_slide = 0;
     // On Windows and FreeBSD, `dladdr` (or its equivalent) returns the closest exported symbol
     // without checking the size.
     // This causes the lookup to return incorrect non-NULL result for local functions
@@ -1090,17 +1135,16 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
     fname = dlinfo.dli_fname;
 #endif // ifdef _OS_WINDOWS_
     auto &entry = find_object_file(fbase, fname);
-    *obj = entry.obj;
-    *context = entry.ctx;
     *slide = entry.slide;
-    *section_slide = entry.section_slide;
-    get_function_name_and_base(entry.obj, insysimage, saddr, name, pointer, entry.slide,
-                               untrusted_dladdr);
+    *context = entry.ctx;
+    if (entry.obj)
+        *Section = getModuleSectionForAddress(entry.obj, pointer + entry.slide);
+    get_function_name_and_base(*Section, pointer, entry.slide, insysimage, saddr, name, untrusted_dladdr);
     return true;
 }
 
 // *name and *filename should be either NULL or malloc'd pointer
-static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skipC, int noInline)
+static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables if noInline
     // since it can be called from an unmanaged thread on OSX.
@@ -1124,12 +1168,12 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
     }
     jl_in_stackwalk = 0;
 #endif
-    const object::ObjectFile *object;
+    object::SectionRef Section;
     llvm::DIContext *context = NULL;
+    int64_t slide;
     bool isSysImg;
     void *saddr;
-    int64_t slide, section_slide;
-    if (!jl_dylib_DI_for_fptr(pointer, &object, &context, &slide, &section_slide, skipC, &isSysImg, &saddr, &frame0->func_name, &frame0->file_name)) {
+    if (!jl_dylib_DI_for_fptr(pointer, &Section, &slide, &context, skipC, &isSysImg, &saddr, &frame0->func_name, &frame0->file_name)) {
         frame0->fromC = 1;
         return 1;
     }
@@ -1151,80 +1195,30 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
             }
         }
     }
-    return lookup_pointer(context, frames, pointer + slide, isSysImg, noInline);
+    return lookup_pointer(Section, context, frames, pointer, slide, isSysImg, noInline);
 }
 
-int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int64_t *section_slide,
-                      const object::ObjectFile **object,
-                      llvm::DIContext **context
-                      )
+int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
+        object::SectionRef *Section, llvm::DIContext **context) JL_NOTSAFEPOINT
 {
     int found = 0;
-    *slide = 0;
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.lower_bound(fptr);
 
+    if (symsize)
+        *symsize = 0;
     if (fit != objmap.end() && fptr < fit->first + fit->second.SectionSize) {
-        if (symsize)
-            *symsize = 0;
-        if (section_slide)
-            *section_slide = fit->second.slide;
-        *object = fit->second.object;
+        *slide = fit->second.slide;
+        *Section = fit->second.Section;
         if (context) {
+            if (fit->second.context == nullptr)
+                fit->second.context = DWARFContext::create(*fit->second.object).release();
             *context = fit->second.context;
         }
         found = 1;
     }
     uv_rwlock_rdunlock(&threadsafe);
     return found;
-}
-
-extern "C"
-JL_DLLEXPORT jl_value_t *jl_get_dobj_data(uint64_t fptr)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    // Used by Gallium.jl
-    const object::ObjectFile *object = NULL;
-    DIContext *context;
-    int64_t slide, section_slide;
-    int8_t gc_state = jl_gc_safe_enter(ptls);
-    if (!jl_DI_for_fptr(fptr, NULL, &slide, NULL, &object, NULL))
-        if (!jl_dylib_DI_for_fptr(fptr, &object, &context, &slide, &section_slide, false, NULL, NULL, NULL, NULL)) {
-            jl_gc_safe_leave(ptls, gc_state);
-            return jl_nothing;
-        }
-    jl_gc_safe_leave(ptls, gc_state);
-    if (object == NULL)
-        return jl_nothing;
-    return (jl_value_t*)jl_ptr_to_array_1d((jl_value_t*)jl_array_uint8_type,
-        const_cast<char*>(object->getData().data()),
-        object->getData().size(), false);
-}
-
-extern "C"
-JL_DLLEXPORT uint64_t jl_get_section_start(uint64_t fptr)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    // Used by Gallium.jl
-    int8_t gc_state = jl_gc_safe_enter(ptls);
-    std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
-    std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.lower_bound(fptr);
-
-    uint64_t ret = 0;
-    if (fit != objmap.end() && fptr < fit->first + fit->second.SectionSize) {
-        ret = fit->first;
-    }
-    else {
-       obfiletype::iterator objit = objfilemap.lower_bound(fptr);
-       // Ideally we'd have a containment check here, but we can't really
-       // get the shared library size easily.
-       if (objit != objfilemap.end()) {
-           ret = objit->first;
-       }
-    }
-    uv_rwlock_rdunlock(&threadsafe);
-    jl_gc_safe_leave(ptls, gc_state);
-    return ret;
 }
 
 // Set *name and *filename to either NULL or malloc'd string
@@ -1238,12 +1232,12 @@ int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int n
     *frames_out = frames;
 
     llvm::DIContext *context;
-    const llvm::object::ObjectFile *object;
+    object::SectionRef Section;
+    int64_t slide;
     uint64_t symsize;
-    int64_t slide = 0;
-    if (jl_DI_for_fptr(pointer, &symsize, &slide, NULL, &object, &context)) {
+    if (jl_DI_for_fptr(pointer, &symsize, &slide, &Section, &context)) {
         frames[0].linfo = jl_jit_events->lookupLinfo(pointer);
-        int nf = lookup_pointer(context, frames_out, pointer+slide, 1, noInline);
+        int nf = lookup_pointer(Section, context, frames_out, pointer, slide, true, noInline);
         return nf;
     }
     return jl_getDylibFunctionInfo(frames_out, pointer, skipC, noInline);
@@ -1676,3 +1670,22 @@ uint64_t jl_getUnwindInfo(uint64_t dwAddr)
     uv_rwlock_rdunlock(&threadsafe);
     return ipstart;
 }
+
+extern "C"
+uint64_t jl_trygetUnwindInfo(uint64_t dwAddr)
+{
+    // Might be called from unmanaged thread
+    Optional<std::map<size_t, ObjectInfo, revcomp>*> maybeobjmap = jl_jit_events->trygetObjectMap();
+    if (maybeobjmap) {
+        std::map<size_t, ObjectInfo, revcomp> &objmap = **maybeobjmap;
+        std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(dwAddr);
+        uint64_t ipstart = 0; // ip of the start of the section (if found)
+        if (it != objmap.end() && dwAddr < it->first + it->second.SectionSize) {
+            ipstart = (uint64_t)(uintptr_t)(*it).first;
+        }
+        uv_rwlock_rdunlock(&threadsafe);
+        return ipstart;
+    }
+    return 0;
+}
+

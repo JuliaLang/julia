@@ -2,7 +2,30 @@
 
 using Test
 using Base.Threads
-using Base.Threads: SpinLock, Mutex
+using Base.Threads: SpinLock
+
+# for cfunction_closure
+include("testenv.jl")
+
+function killjob(d)
+    Core.print(Core.stderr, d)
+    if Sys.islinux()
+        SIGINFO = 10
+    elseif Sys.isbsd()
+        SIGINFO = 29
+    end
+    if @isdefined(SIGINFO)
+        ccall(:uv_kill, Cint, (Cint, Cint), getpid(), SIGINFO)
+        sleep(1)
+    end
+    ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
+    nothing
+end
+
+# set up a watchdog alarm for 20 minutes
+# so that we can attempt to get a "friendly" backtrace if something gets stuck
+# (expected test duration is about 18-180 seconds)
+Timer(t -> killjob("KILLING BY THREAD TEST WATCHDOG\n"), 1200)
 
 # threading constructs
 
@@ -27,26 +50,30 @@ end
 # parallel loop with parallel atomic addition
 function threaded_loop(a, r, x)
     @threads for i in r
-        a[i] = 1 + atomic_add!(x, 1)
+        j = i - firstindex(r) + 1
+        a[j] = 1 + atomic_add!(x, 1)
     end
 end
 
 function test_threaded_loop_and_atomic_add()
-    x = Atomic()
-    a = zeros(Int,10000)
-    threaded_loop(a,1:10000,x)
-    found = zeros(Bool,10000)
-    was_inorder = true
-    for i=1:length(a)
-        was_inorder &= a[i]==i
-        found[a[i]] = true
-    end
-    @test x[] == 10000
-    # Next test checks that all loop iterations ran,
-    # and were unique (via pigeon-hole principle).
-    @test !(false in found)
-    if was_inorder && nthreads() > 1
-        println(stderr, "Warning: threaded loop executed in order")
+    for r in [1:10000, collect(1:10000), Base.IdentityUnitRange(-500:500), (1,2,3,4,5,6,7,8,9,10)]
+        n = length(r)
+        x = Atomic()
+        a = zeros(Int, n)
+        threaded_loop(a,r,x)
+        found = zeros(Bool,n)
+        was_inorder = true
+        for i=1:length(a)
+            was_inorder &= a[i]==i
+            found[a[i]] = true
+        end
+        @test x[] == n
+        # Next test checks that all loop iterations ran,
+        # and were unique (via pigeon-hole principle).
+        @test !(false in found)
+        if was_inorder && nthreads() > 1
+            println(stderr, "Warning: threaded loop executed in order")
+        end
     end
 end
 
@@ -110,7 +137,6 @@ end
 
 @test threaded_add_locked(SpinLock, 0, 10000) == 10000
 @test threaded_add_locked(ReentrantLock, 0, 10000) == 10000
-@test threaded_add_locked(Mutex, 0, 10000) == 10000
 
 # Check if the recursive lock can be locked and unlocked correctly.
 let critical = ReentrantLock()
@@ -151,7 +177,21 @@ end
 
 threaded_gc_locked(SpinLock)
 threaded_gc_locked(Threads.ReentrantLock)
-threaded_gc_locked(Mutex)
+
+# Issue 33159
+# Make sure that a Threads.Condition can't be used without being locked, on any thread.
+@testset "Threads.Conditions must be locked" begin
+    c = Threads.Condition()
+    @test_throws Exception notify(c)
+    @test_throws Exception wait(c)
+
+    # If it's locked, but on the wrong thread, it should still throw an exception
+    lock(c)
+    @test_throws Exception fetch(@async notify(c))
+    @test_throws Exception fetch(@async notify(c, all=false))
+    @test_throws Exception fetch(@async wait(c))
+    unlock(c)
+end
 
 # Issue 14726
 # Make sure that eval'ing in a different module doesn't mess up other threads
@@ -422,16 +462,7 @@ end
 function test_thread_cfunction()
     # ensure a runtime call to `get_trampoline` will be created
     # TODO: get_trampoline is not thread-safe (as this test shows)
-    function complex_cfunction(a)
-        s = zero(eltype(a))
-        @inbounds @simd for i in a
-            s += muladd(a[i], a[i], -2)
-        end
-        return s
-    end
-    fs = [ let a = zeros(10)
-            () -> complex_cfunction(a)
-        end for i in 1:1000 ]
+    fs = [ Core.Box() for i in 1:1000 ]
     @noinline cf(f) = @cfunction $f Float64 ()
     cfs = Vector{Base.CFunction}(undef, length(fs))
     cf1 = cf(fs[1])
@@ -452,10 +483,12 @@ function test_thread_cfunction()
     end
     @test sum(ok) == 10000
 end
-if nthreads() == 1
-    test_thread_cfunction()
-else
-    @test_broken "cfunction trampoline code not thread-safe"
+if cfunction_closure
+    if nthreads() == 1
+        test_thread_cfunction()
+    else
+        @test_broken "cfunction trampoline code not thread-safe"
+    end
 end
 
 # Compare the two ways of checking if threading is enabled.
@@ -654,14 +687,11 @@ end
 
 
 # scheduling wake/sleep test (#32511)
-let timeout = 300 # this test should take about 1-10 seconds
-    t = Timer(timeout) do t
-        ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
-    end # set up a watchdog alarm
+let t = Timer(t -> killjob("KILLING BY QUICK KILL WATCHDOG\n"), 600) # this test should take about 1-10 seconds
     for _ = 1:10^5
         @threads for idx in 1:1024; #=nothing=# end
     end
-    close(t) # stop the watchdog
+    close(t) # stop the fast watchdog
 end
 
 # issue #32575
@@ -671,4 +701,113 @@ let ch = Channel{Char}(0), t
     bind(ch, t)
     schedule(t)
     @test String(collect(ch)) == "hello"
+end
+
+# errors inside @threads
+function _atthreads_with_error(a, err)
+    Threads.@threads for i in eachindex(a)
+        if err
+            error("failed")
+        end
+        a[i] = Threads.threadid()
+    end
+    a
+end
+@test_throws TaskFailedException _atthreads_with_error(zeros(nthreads()), true)
+let a = zeros(nthreads())
+    _atthreads_with_error(a, false)
+    @test a == [1:nthreads();]
+end
+
+try
+    @macroexpand @threads(for i = 1:10, j = 1:10; end)
+catch ex
+    @test ex isa LoadError
+    @test ex.error isa ArgumentError
+end
+
+@testset "@spawn interpolation" begin
+    # Issue #30896: evaluating arguments immediately
+    begin
+        outs = zeros(5)
+        # Use interpolation to fill outs with the values of `i`
+        @sync begin
+            local i = 1
+            while i <= 5
+                Threads.@spawn setindex!(outs, $i, $i)
+                i += 1
+            end
+        end
+        @test outs == 1:5
+    end
+
+    # Test macro parsing for interpolating into Args
+    @test fetch(Threads.@spawn 2+$2) == 4
+    @test fetch(Threads.@spawn Int($(2.0))) == 2
+    a = 2
+    @test fetch(Threads.@spawn *($a,$a)) == a^2
+    # Test macro parsing for interpolating into kwargs
+    @test fetch(Threads.@spawn sort($([3 2; 1 0]), dims=2)) == [2 3; 0 1]
+    @test fetch(Threads.@spawn sort([3 $2; 1 $0]; dims=$2)) == [2 3; 0 1]
+
+    # Test macro parsing supports multiple levels of interpolation
+    @testset "spawn macro multiple levels of interpolation" begin
+        # Use `ch` to synchronize within the tests to run after the local variables are
+        # updated, showcasing the problem and the solution.
+        ch = Channel()   # (This synchronization fixes test failure reported in #34141.)
+
+        @test fetch(Threads.@spawn "$($a)") == "$a"
+        let a = 1
+            # Interpolate the current value of `a` vs the value of `a` in the closure
+            t = Threads.@spawn (take!(ch); :(+($$a, $a, a)))
+            a = 2  # update `a` after spawning, before `t` runs
+            put!(ch, nothing)  # now run t
+            @test fetch(t) == Expr(:call, :+, 1, 2, :a)
+        end
+
+        # Test the difference between different levels of interpolation
+        # Without interpolation, each spawned task sees the last value of `i` (6);
+        # with interpolation, each spawned task has the value of `i` at time of `@spawn`.
+        let
+            oneinterp  = Vector{Any}(undef, 5)
+            twointerps = Vector{Any}(undef, 5)
+            @sync begin
+               local i = 1
+               while i <= 5
+                   Threads.@spawn (take!(ch); setindex!(oneinterp, :($i), $i))
+                   Threads.@spawn (take!(ch); setindex!(twointerps, :($($i)), $i))
+                   i += 1
+               end
+               for _ in 1:10; put!(ch, nothing); end # Now run all the tasks.
+            end
+            # The first definition _didn't_ interpolate i
+            @test oneinterp == fill(6, 5)
+            # The second definition _did_ interpolate i
+            @test twointerps == 1:5
+        end
+    end
+end
+
+@testset "@async interpolation" begin
+    # Args
+    @test fetch(@async 2+$2) == 4
+    @test fetch(@async Int($(2.0))) == 2
+    a = 2
+    @test fetch(@async *($a,$a)) == a^2
+    # kwargs
+    @test fetch(@async sort($([3 2; 1 0]), dims=2)) == [2 3; 0 1]
+    @test fetch(@async sort([3 $2; 1 $0]; dims=$2)) == [2 3; 0 1]
+
+    # Supports multiple levels of interpolation
+    @test fetch(@async :($a)) == a
+    @test fetch(@async :($($a))) == a
+    @test fetch(@async "$($a)") == "$a"
+end
+
+# Issue #34138
+@testset "spawn interpolation: macrocalls" begin
+    x = [reshape(1:4, 2, 2);]
+    @test fetch(Threads.@spawn @. $exp(x)) == @. $exp(x)
+    x = 2
+    @test @eval(fetch(@async 2+$x)) == 4
 end

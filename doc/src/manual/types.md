@@ -125,7 +125,7 @@ end
 Returning from this function behaves just like an assignment to a variable with a declared type:
 the value is always converted to `Float64`.
 
-## Abstract Types
+## [Abstract Types](@id man-abstract-types)
 
 Abstract types cannot be instantiated, and serve only as nodes in the type graph, thereby describing
 sets of related concrete types: those concrete types which are their descendants. We begin with
@@ -232,7 +232,7 @@ has full control over whether the default or more specific method is used.
 An important point to note is that there is no loss in performance if the programmer relies on
 a function whose arguments are abstract types, because it is recompiled for each tuple of argument
 concrete types with which it is invoked. (There may be a performance issue, however, in the case
-of function arguments that are containers of abstract types; see [Performance Tips](@ref man-performance-tips).)
+of function arguments that are containers of abstract types; see [Performance Tips](@ref man-performance-abstract-container).)
 
 ## Primitive Types
 
@@ -923,12 +923,26 @@ julia> typeof((a=1,b="hello"))
 NamedTuple{(:a, :b),Tuple{Int64,String}}
 ```
 
+The [`@NamedTuple`](@ref) macro provides a more convenient `struct`-like syntax for declaring
+`NamedTuple` types via `key::Type` declarations, where an omitted `::Type` corresponds to `::Any`.
+
+```jldoctest
+julia> @NamedTuple{a::Int, b::String}
+NamedTuple{(:a, :b),Tuple{Int64,String}}
+
+julia> @NamedTuple begin
+           a::Int
+           b::String
+       end
+NamedTuple{(:a, :b),Tuple{Int64,String}}
+```
+
 A `NamedTuple` type can be used as a constructor, accepting a single tuple argument.
 The constructed `NamedTuple` type can be either a concrete type, with both parameters specified,
 or a type that specifies only field names:
 
 ```jldoctest
-julia> NamedTuple{(:a, :b),Tuple{Float32, String}}((1,""))
+julia> @NamedTuple{a::Float32,b::String}((1,""))
 (a = 1.0f0, b = "")
 
 julia> NamedTuple{(:a, :b)}((1,""))
@@ -1408,6 +1422,6 @@ a *type*, i.e., use `foo(Val(:bar))` rather than `foo(Val{:bar})`.
 It's worth noting that it's extremely easy to mis-use parametric "value" types, including `Val`;
 in unfavorable cases, you can easily end up making the performance of your code much *worse*.
  In particular, you would never want to write actual code as illustrated above.  For more information
-about the proper (and improper) uses of `Val`, please read the more extensive discussion in [the performance tips](@ref man-performance-tips).
+about the proper (and improper) uses of `Val`, please read [the more extensive discussion in the performance tips](@ref man-performance-value-type).
 
 [^1]: "Small" is defined by the `MAX_UNION_SPLITTING` constant, which is currently set to 4.

@@ -12,11 +12,22 @@ Register a function `f(x)` to be called when there are no program-accessible ref
 this function is unpredictable.
 
 `f` must not cause a task switch, which excludes most I/O operations such as `println`.
-`@schedule println("message")` or `ccall(:jl_, Void, (Any,), "message")` may be helpful for
-debugging purposes.
+Using the `@async` macro (to defer context switching to outside of the finalizer) or
+`ccall` to directly invoke IO functions in C may be helpful for debugging purposes.
+
+# Examples
+```julia
+finalizer(my_mutable_struct) do x
+    @async println("Finalizing \$x.")
+end
+
+finalizer(my_mutable_struct) do x
+    ccall(:jl_safe_printf, Cvoid, (Cstring, Cstring), "Finalizing %s.", repr(x))
+end
+```
 """
 function finalizer(@nospecialize(f), @nospecialize(o))
-    if isimmutable(o)
+    if !ismutable(o)
         error("objects of type ", typeof(o), " cannot be finalized")
     end
     ccall(:jl_gc_add_finalizer_th, Cvoid, (Ptr{Cvoid}, Any, Any),
@@ -26,8 +37,8 @@ end
 
 function finalizer(f::Ptr{Cvoid}, o::T) where T
     @_inline_meta
-    if isimmutable(T)
-        error("objects of type ", T, " cannot be finalized")
+    if !ismutable(o)
+        error("objects of type ", typeof(o), " cannot be finalized")
     end
     ccall(:jl_gc_add_ptr_finalizer, Cvoid, (Ptr{Cvoid}, Any, Ptr{Cvoid}),
           Core.getptls(), o, f)
@@ -49,15 +60,24 @@ Module with garbage collection utilities.
 """
 module GC
 
-"""
-    GC.gc()
+# mirrored from julia.h
+const GC_AUTO = 0
+const GC_FULL = 1
+const GC_INCREMENTAL = 2
 
-Perform garbage collection.
+"""
+    GC.gc([full=true])
+
+Perform garbage collection. The argument `full` determines the kind of
+collection: A full collection (default) sweeps all objects, which makes the
+next GC scan much slower, while an incremental collection may only sweep
+so-called young objects.
 
 !!! warning
     Excessive use will likely lead to poor performance.
 """
-gc(full::Bool=true) = ccall(:jl_gc_collect, Cvoid, (Int32,), full)
+gc(full::Bool=true) =
+    ccall(:jl_gc_collect, Cvoid, (Cint,), full ? GC_FULL : GC_INCREMENTAL)
 
 """
     GC.enable(on::Bool)
@@ -85,13 +105,22 @@ macro preserve(args...)
     for x in syms
         isa(x, Symbol) || error("Preserved variable must be a symbol")
     end
-    s, r = gensym(), gensym()
-    esc(quote
-        $s = $(Expr(:gc_preserve_begin, syms...))
-        $r = $(args[end])
-        $(Expr(:gc_preserve_end, s))
-        $r
-    end)
+    esc(Expr(:gc_preserve, args[end], syms...))
 end
+
+"""
+    GC.safepoint()
+
+Inserts a point in the program where garbage collection may run.
+This can be useful in rare cases in multi-threaded programs where some threads
+are allocating memory (and hence may need to run GC) but other threads are doing
+only simple operations (no allocation, task switches, or I/O).
+Calling this function periodically in non-allocating threads allows garbage
+collection to run.
+
+!!! compat "Julia 1.4"
+    This function is available as of Julia 1.4.
+"""
+safepoint() = ccall(:jl_gc_safepoint, Cvoid, ())
 
 end # module GC

@@ -600,6 +600,7 @@ end
 end
 
 mktempdir() do dir
+    dir = realpath(dir)
     # test parameters
     repo_url = "https://github.com/JuliaLang/Example.jl"
     cache_repo = joinpath(dir, "Example")

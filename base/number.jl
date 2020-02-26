@@ -88,30 +88,6 @@ last(x::Number) = x
 copy(x::Number) = x # some code treats numbers as collection-like
 
 """
-    divrem(x, y)
-
-The quotient and remainder from Euclidean division. Equivalent to `(div(x,y), rem(x,y))` or
-`(x÷y, x%y)`.
-
-# Examples
-```jldoctest
-julia> divrem(3,7)
-(0, 3)
-
-julia> divrem(7,3)
-(2, 1)
-```
-"""
-divrem(x,y) = (div(x,y),rem(x,y))
-
-"""
-    fldmod(x, y)
-
-The floored quotient and modulus after division. Equivalent to `(fld(x,y), mod(x,y))`.
-"""
-fldmod(x,y) = (fld(x,y),mod(x,y))
-
-"""
     signbit(x)
 
 Returns `true` if the value of the sign of `x` is negative, otherwise `false`.

@@ -66,12 +66,41 @@ mutable struct REPLBackend
     response_channel::Channel
     "flag indicating the state of this backend"
     in_eval::Bool
+    "transformation functions to apply before evaluating expressions"
+    ast_transforms::Vector{Any}
     "current backend task"
     backend_task::Task
 
-    REPLBackend(repl_channel, response_channel, in_eval) =
-        new(repl_channel, response_channel, in_eval)
+    REPLBackend(repl_channel, response_channel, in_eval, ast_transforms=copy(repl_ast_transforms)) =
+        new(repl_channel, response_channel, in_eval, ast_transforms)
 end
+
+"""
+    softscope(ex)
+
+Return a modified version of the parsed expression `ex` that uses
+the REPL's "soft" scoping rules for global syntax blocks.
+"""
+function softscope(@nospecialize ex)
+    if ex isa Expr
+        h = ex.head
+        if h === :toplevel
+            ex′ = Expr(h)
+            map!(softscope, resize!(ex′.args, length(ex.args)), ex.args)
+            return ex′
+        elseif h in (:meta, :import, :using, :export, :module, :error, :incomplete, :thunk)
+            return ex
+        else
+            return Expr(:block, Expr(:softscope, true), ex)
+        end
+    end
+    return ex
+end
+
+# Temporary alias until Documenter updates
+const softscope! = softscope
+
+const repl_ast_transforms = Any[softscope] # defaults for new REPL backends
 
 function eval_user_input(@nospecialize(ast), backend::REPLBackend)
     lasterr = nothing
@@ -83,6 +112,9 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
                 put!(backend.response_channel, (lasterr,true))
             else
                 backend.in_eval = true
+                for xf in backend.ast_transforms
+                    ast = Base.invokelatest(xf, ast)
+                end
                 value = Core.eval(Main, ast)
                 backend.in_eval = false
                 # note: use jl_set_global to make sure value isn't passed through `expand`
@@ -129,7 +161,12 @@ end
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     io = outstream(d.repl)
     get(io, :color, false) && write(io, answer_color(d.repl))
-    show(IOContext(io, :limit => true, :module => Main), mime, x)
+    if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
+        # this can override the :limit property set initially
+        io = foldl(IOContext, d.repl.options.iocontext,
+                   init=IOContext(io, :limit => true, :module => Main))
+    end
+    show(io, mime, x)
     println(io)
     nothing
 end
@@ -243,7 +280,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
                 end
             end
             ast = Base.parse_input_line(line)
-            (isa(ast,Expr) && ast.head == :incomplete) || break
+            (isa(ast,Expr) && ast.head === :incomplete) || break
         end
         if !isempty(line)
             response = eval_with_backend(ast, backend)
@@ -283,6 +320,8 @@ mutable struct Options
     auto_indent_bracketed_paste::Bool # set to true if terminal knows paste mode
     # cancel auto-indent when next character is entered within this time frame :
     auto_indent_time_threshold::Float64
+    # default IOContext settings at the REPL
+    iocontext::Dict{Symbol,Any}
 end
 
 Options(;
@@ -299,13 +338,16 @@ Options(;
         auto_indent = true,
         auto_indent_tmp_off = false,
         auto_indent_bracketed_paste = false,
-        auto_indent_time_threshold = 0.005) =
+        auto_indent_time_threshold = 0.005,
+        iocontext = Dict{Symbol,Any}()) =
             Options(hascolor, extra_keymap, tabwidth,
                     kill_ring_max, region_animation_duration,
                     beep_duration, beep_blink, beep_maxduration,
                     beep_colors, beep_use_current,
                     backspace_align, backspace_adjust, confirm_exit,
-                    auto_indent, auto_indent_tmp_off, auto_indent_bracketed_paste, auto_indent_time_threshold)
+                    auto_indent, auto_indent_tmp_off, auto_indent_bracketed_paste,
+                    auto_indent_time_threshold,
+                    iocontext)
 
 # for use by REPLs not having an options field
 const GlobalOptions = Options()
@@ -765,15 +807,21 @@ setup_interface(
     repl::LineEditREPL;
     # those keyword arguments may be deprecated eventually in favor of the Options mechanism
     hascolor::Bool = repl.options.hascolor,
-    extra_repl_keymap::Union{Dict,Vector{<:Dict}} = repl.options.extra_keymap
+    extra_repl_keymap::Any = repl.options.extra_keymap
 ) = setup_interface(repl, hascolor, extra_repl_keymap)
 
 # This non keyword method can be precompiled which is important
 function setup_interface(
     repl::LineEditREPL,
     hascolor::Bool,
-    extra_repl_keymap::Union{Dict,Vector{<:Dict}},
+    extra_repl_keymap::Any, # Union{Dict,Vector{<:Dict}},
 )
+    # The precompile statement emitter has problem outputting valid syntax for the
+    # type of `Union{Dict,Vector{<:Dict}}` (see #28808).
+    # This function is however important to precompile for REPL startup time, therefore,
+    # make the type Any and just assert that we have the correct type below.
+    @assert extra_repl_keymap isa Union{Dict,Vector{<:Dict}}
+
     ###
     #
     # This function returns the main interface that describes the REPL
@@ -949,7 +997,7 @@ function setup_interface(
                     end
                 end
                 ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
-                if (isa(ast, Expr) && (ast.head == :error || ast.head == :incomplete)) ||
+                if (isa(ast, Expr) && (ast.head === :error || ast.head === :incomplete)) ||
                         (pos > ncodeunits(input) && !endswith(input, '\n'))
                     # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
                     # Insert all the remaining text as one line (might be empty)

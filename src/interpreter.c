@@ -25,7 +25,48 @@ typedef struct {
     int continue_at; // statement index to jump to after leaving exception handler (0 if none)
 } interpreter_state;
 
-#include "interpreter-stacktrace.c"
+
+// general alloca rules are incompatible on C and C++, so define a macro that deals with the difference
+#ifdef __cplusplus
+#define JL_CPPALLOCA(var,n)                                                         \
+  var = (decltype(var))alloca((n))
+#else
+#define JL_CPPALLOCA(var,n)                                                         \
+  JL_GCC_IGNORE_START("-Wc++-compat")                                               \
+  var = alloca((n));                                                                \
+  JL_GCC_IGNORE_STOP
+#endif
+
+#ifdef __clang_analyzer__
+
+extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
+
+// This is necessary, because otherwise the analyzer considers this undefined
+// behavior and terminates the exploration
+#define JL_GC_PUSHFRAME(frame,n)     \
+  JL_CPPALLOCA(frame, sizeof(*frame)+((n) * sizeof(jl_value_t*)));                  \
+  memset(&frame[1], 0, sizeof(void*) * n); \
+  _JL_GC_PUSHARGS((jl_value_t**)&frame[1], n);
+
+#else
+
+#define JL_GC_ENCODE_PUSHFRAME(n)  ((((size_t)(n))<<2)|2)
+
+#define JL_GC_PUSHFRAME(frame,n)                                                    \
+  JL_CPPALLOCA(frame, sizeof(*frame)+(((n)+3)*sizeof(jl_value_t*)));                \
+  ((void**)&frame[1])[0] = NULL;                                                    \
+  ((void**)&frame[1])[1] = (void*)JL_GC_ENCODE_PUSHFRAME(n);                        \
+  ((void**)&frame[1])[2] = jl_pgcstack;                                             \
+  memset(&((void**)&frame[1])[3], 0, (n)*sizeof(jl_value_t*));                      \
+  jl_pgcstack = (jl_gcframe_t*)&(((void**)&frame[1])[1])
+
+// we define this separately so that we can populate the frame before we add it to the backtrace
+// it's recommended to mark the containing function with NOINLINE, though not essential
+#define JL_GC_ENABLEFRAME(frame) \
+  ((void**)&frame[1])[0] = __builtin_frame_address(0);
+
+#endif
+
 
 static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s);
 static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel);
@@ -37,7 +78,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e);
 extern int inside_typedef;
 
 // this is a heuristic for allowing "redefining" a type to something identical
-SECT_INTERP static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
+static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
 {
     if (!(jl_typeof(dta) == jl_typeof(dtb) &&
           dta->name->name == dtb->name->name &&
@@ -99,7 +140,7 @@ SECT_INTERP static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
     return 0;
 }
 
-SECT_INTERP static void check_can_assign_type(jl_binding_t *b, jl_value_t *rhs)
+static void check_can_assign_type(jl_binding_t *b, jl_value_t *rhs)
 {
     if (b->constp && b->value != NULL && jl_typeof(b->value) != jl_typeof(rhs))
         jl_errorf("invalid redefinition of constant %s",
@@ -109,7 +150,7 @@ SECT_INTERP static void check_can_assign_type(jl_binding_t *b, jl_value_t *rhs)
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
 void jl_reset_instantiate_inner_types(jl_datatype_t *t);
 
-SECT_INTERP void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
+void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
     if (!jl_is_datatype(super) || !jl_is_abstracttype(super) ||
         tt->name == ((jl_datatype_t*)super)->name ||
@@ -317,7 +358,7 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
 
 // expression evaluator
 
-SECT_INTERP static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s)
+static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s)
 {
     jl_value_t **argv;
     assert(nargs >= 1);
@@ -330,7 +371,7 @@ SECT_INTERP static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpre
     return result;
 }
 
-SECT_INTERP static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state *s)
+static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state *s)
 {
     jl_value_t **argv;
     assert(nargs >= 2);
@@ -345,7 +386,7 @@ SECT_INTERP static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interp
     return result;
 }
 
-SECT_INTERP jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
+jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
 {
     jl_value_t *v = jl_get_global(m, e);
     if (v == NULL)
@@ -353,23 +394,23 @@ SECT_INTERP jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
     return v;
 }
 
-SECT_INTERP static int jl_source_nslots(jl_code_info_t *src) JL_NOTSAFEPOINT
+static int jl_source_nslots(jl_code_info_t *src) JL_NOTSAFEPOINT
 {
     return jl_array_len(src->slotflags);
 }
 
-SECT_INTERP static int jl_source_nssavalues(jl_code_info_t *src) JL_NOTSAFEPOINT
+static int jl_source_nssavalues(jl_code_info_t *src) JL_NOTSAFEPOINT
 {
     return jl_is_long(src->ssavaluetypes) ? jl_unbox_long(src->ssavaluetypes) : jl_array_len(src->ssavaluetypes);
 }
 
-SECT_INTERP static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s)
+static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s)
 {
     jl_value_t *res = eval_value(stmt, s);
     s->locals[jl_source_nslots(s->src) + s->ip] = res;
 }
 
-SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
+static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 {
     jl_code_info_t *src = s->src;
     if (jl_is_ssavalue(e)) {
@@ -468,7 +509,6 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         JL_GC_PUSHARGS(argv, nargs);
         for (size_t i = 0; i < nargs; i++)
             argv[i] = eval_value(args[i], s);
-        assert(jl_is_structtype(argv[0]));
         jl_value_t *v = jl_new_structv((jl_datatype_t*)argv[0], &argv[1], nargs - 1);
         JL_GC_POP();
         return v;
@@ -478,7 +518,6 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         JL_GC_PUSHARGS(argv, 2);
         argv[0] = eval_value(args[0], s);
         argv[1] = eval_value(args[1], s);
-        assert(jl_is_structtype(argv[0]));
         jl_value_t *v = jl_new_structt((jl_datatype_t*)argv[0], argv[1]);
         JL_GC_POP();
         return v;
@@ -504,7 +543,7 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == boundscheck_sym) {
         return jl_true;
     }
-    else if (head == meta_sym || head == inbounds_sym || head == loopinfo_sym) {
+    else if (head == meta_sym || head == coverageeffect_sym || head == inbounds_sym || head == loopinfo_sym) {
         return jl_nothing;
     }
     else if (head == gc_preserve_begin_sym || head == gc_preserve_end_sym) {
@@ -521,7 +560,7 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 }
 
 // phi nodes don't behave like proper instructions, so we require a special interpreter to handle them
-SECT_INTERP static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_t to)
+static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_t to)
 {
     size_t from = s->ip;
     size_t ip = to;
@@ -602,7 +641,7 @@ SECT_INTERP static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size
     return ip;
 }
 
-SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel)
+static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel)
 {
     jl_handler_t __eh;
     size_t ns = jl_array_len(stmts);
@@ -745,6 +784,10 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                 else if (head == structtype_sym) {
                     eval_structtype((jl_expr_t*)stmt, s);
                 }
+                else if (head == toplevel_sym) {
+                    jl_value_t *res = jl_toplevel_eval(s->module, stmt);
+                    s->locals[jl_source_nslots(s->src) + s->ip] = res;
+                }
                 else if (jl_is_toplevel_only_expr(stmt)) {
                     jl_toplevel_eval(s->module, stmt);
                 }
@@ -813,123 +856,110 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi)
 
 // interpreter entry points
 
-struct jl_interpret_call_args {
-    jl_method_instance_t *mi;
-    jl_value_t *f;
-    jl_value_t **args;
-    uint32_t nargs;
-};
-
-SECT_INTERP CALLBACK_ABI void *jl_interpret_call_callback(interpreter_state *s, void *vargs)
+jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
 {
-    struct jl_interpret_call_args *args =
-        (struct jl_interpret_call_args *)vargs;
-    JL_GC_PROMISE_ROOTED(args);
-    jl_code_info_t *src = jl_code_for_interpreter(args->mi);
-
+    interpreter_state *s;
+    jl_method_instance_t *mi = codeinst->def;
+    jl_code_info_t *src = jl_code_for_interpreter(mi);
     jl_array_t *stmts = src->code;
     assert(jl_typeis(stmts, jl_array_any_type));
-    jl_value_t **locals;
-    JL_GC_PUSHARGS(locals, jl_source_nslots(src) + jl_source_nssavalues(src) + 2);
+    unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src) + 2;
+    JL_GC_PUSHFRAME(s, nroots);
+    jl_value_t **locals = (jl_value_t**)&s[1] + 3;
     locals[0] = (jl_value_t*)src;
     locals[1] = (jl_value_t*)stmts;
     s->locals = locals + 2;
     s->src = src;
-    if (jl_is_module(args->mi->def.value)) {
-        s->module = args->mi->def.module;
+    if (jl_is_module(mi->def.value)) {
+        s->module = mi->def.module;
     }
     else {
-        s->module = args->mi->def.method->module;
-        size_t nargs = args->mi->def.method->nargs;
-        int isva = args->mi->def.method->isva ? 1 : 0;
+        s->module = mi->def.method->module;
+        size_t defargs = mi->def.method->nargs;
+        int isva = mi->def.method->isva ? 1 : 0;
         size_t i;
-        s->locals[0] = args->f;
-        for (i = 1; i < nargs - isva; i++)
-            s->locals[i] = args->args[i - 1];
+        s->locals[0] = f;
+        assert(isva ? nargs + 2 >= defargs : nargs + 1 == defargs);
+        for (i = 1; i < defargs - isva; i++)
+            s->locals[i] = args[i - 1];
         if (isva) {
-            assert(nargs >= 2);
-            s->locals[nargs - 1] = jl_f_tuple(NULL, &args->args[nargs - 2], args->nargs + 2 - nargs);
+            assert(defargs >= 2);
+            s->locals[defargs - 1] = jl_f_tuple(NULL, &args[defargs - 2], nargs + 2 - defargs);
         }
     }
-    s->sparam_vals = args->mi->sparam_vals;
+    s->sparam_vals = mi->sparam_vals;
     s->preevaluation = 0;
     s->continue_at = 0;
-    s->mi = args->mi;
+    s->mi = mi;
+    JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(stmts, s, 0, 0);
     JL_GC_POP();
-    return (void*)r;
+    return r;
 }
 
-SECT_INTERP jl_value_t *jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
+jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src)
 {
-    struct jl_interpret_call_args callback_args = { codeinst->def, f, args, nargs };
-    return (jl_value_t*)enter_interpreter_frame(jl_interpret_call_callback, (void *)&callback_args);
-}
-
-struct jl_interpret_toplevel_thunk_args {
-    jl_module_t *m;
-    jl_code_info_t *src;
-};
-SECT_INTERP CALLBACK_ABI void *jl_interpret_toplevel_thunk_callback(interpreter_state *s, void *vargs) {
-    struct jl_interpret_toplevel_thunk_args *args =
-        (struct jl_interpret_toplevel_thunk_args*)vargs;
-    JL_GC_PROMISE_ROOTED(args);
-    jl_array_t *stmts = args->src->code;
+    interpreter_state *s;
+    unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src);
+    JL_GC_PUSHFRAME(s, nroots);
+    jl_array_t *stmts = src->code;
     assert(jl_typeis(stmts, jl_array_any_type));
-    jl_value_t **locals;
-    JL_GC_PUSHARGS(locals, jl_source_nslots(args->src) + jl_source_nssavalues(args->src));
-    s->src = args->src;
-    s->locals = locals;
-    s->module = args->m;
+    s->src = src;
+    s->locals = (jl_value_t**)&s[1] + 3;
+    s->module = m;
     s->sparam_vals = jl_emptysvec;
     s->continue_at = 0;
     s->mi = NULL;
+    JL_GC_ENABLEFRAME(s);
     size_t last_age = jl_get_ptls_states()->world_age;
     jl_value_t *r = eval_body(stmts, s, 0, 1);
     jl_get_ptls_states()->world_age = last_age;
     JL_GC_POP();
-    return (void*)r;
-}
-
-SECT_INTERP jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src)
-{
-    struct jl_interpret_toplevel_thunk_args args = { m, src };
-    return (jl_value_t *)enter_interpreter_frame(jl_interpret_toplevel_thunk_callback, (void*)&args);
+    return r;
 }
 
 // deprecated: do not use this method in new code
 // it uses special scoping / evaluation / error rules
 // which should instead be handled in lowering
-struct interpret_toplevel_expr_in_args {
-    jl_module_t *m;
-    jl_value_t *e;
-    jl_code_info_t *src;
-    jl_svec_t *sparam_vals;
-};
-
-SECT_INTERP CALLBACK_ABI void *jl_interpret_toplevel_expr_in_callback(interpreter_state *s, void *vargs)
+jl_value_t *NOINLINE jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e, jl_code_info_t *src, jl_svec_t *sparam_vals)
 {
-    struct interpret_toplevel_expr_in_args *args =
-        (struct interpret_toplevel_expr_in_args*)vargs;
-    JL_GC_PROMISE_ROOTED(args);
-    s->src = args->src;
-    s->module = args->m;
-    s->sparam_vals = args->sparam_vals;
-    s->preevaluation = (s->sparam_vals != NULL);
+    interpreter_state *s;
+    JL_GC_PUSHFRAME(s, 0);
+    s->src = src;
+    s->module = m;
+    s->sparam_vals = sparam_vals;
+    s->preevaluation = (sparam_vals != NULL);
     s->continue_at = 0;
     s->mi = NULL;
-    jl_value_t *v = eval_value(args->e, s);
+    JL_GC_ENABLEFRAME(s);
+    jl_value_t *v = eval_value(e, s);
     assert(v);
-    return (void*)v;
+    JL_GC_POP();
+    return v;
 }
 
-SECT_INTERP jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e, jl_code_info_t *src, jl_svec_t *sparam_vals)
+JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_entry,
+        void *stateend, size_t space_remaining)
 {
-    struct interpret_toplevel_expr_in_args args = {
-        m, e, src, sparam_vals
-    };
-    return (jl_value_t *)enter_interpreter_frame(jl_interpret_toplevel_expr_in_callback, (void*)&args);
+    interpreter_state *s = &((interpreter_state*)stateend)[-1];
+    int need_module = !s->mi;
+    int required_space = need_module ? 4 : 3;
+    if (space_remaining < required_space)
+        return 0; // Should not happen
+    size_t njlvalues = need_module ? 2 : 1;
+    uintptr_t entry_tags = jl_bt_entry_descriptor(njlvalues, 0, JL_BT_INTERP_FRAME_TAG, s->ip);
+    bt_entry[0].uintptr = JL_BT_NON_PTR_ENTRY;
+    bt_entry[1].uintptr = entry_tags;
+    bt_entry[2].jlvalue = s->mi  ? (jl_value_t*)s->mi  :
+                          s->src ? (jl_value_t*)s->src : (jl_value_t*)jl_nothing;
+    if (need_module) {
+        // If we only have a CodeInfo (s->src), we are in a top level thunk and
+        // need to record the module separately.
+        bt_entry[3].jlvalue = (jl_value_t*)s->module;
+    }
+    return required_space;
 }
+
 
 #ifdef __cplusplus
 }

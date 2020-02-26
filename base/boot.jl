@@ -89,7 +89,7 @@
 
 #struct LineNumberNode
 #    line::Int
-#    file::Any # nominally Union{Symbol,Nothing}
+#    file::Union{Symbol,Nothing}
 #end
 
 #struct LineInfoNode
@@ -210,6 +210,7 @@ else
     const UInt = UInt32
 end
 
+function iterate end
 function Typeof end
 ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       Core, quote
@@ -431,11 +432,12 @@ Array{T}(A::AbstractArray{S,N}) where {T,N,S} = Array{T,N}(A)
 AbstractArray{T}(A::AbstractArray{S,N}) where {T,S,N} = AbstractArray{T,N}(A)
 
 # primitive Symbol constructors
-function Symbol(s::String)
+eval(Core, :(function Symbol(s::String)
+    $(Expr(:meta, :pure))
     return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
                  ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s),
                  sizeof(s))
-end
+end))
 function Symbol(a::Array{UInt8,1})
     return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
                  ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
@@ -541,11 +543,6 @@ end
 
 NamedTuple() = NamedTuple{(),Tuple{}}(())
 
-"""
-    NamedTuple{names}(args::Tuple)
-
-Construct a named tuple with the given `names` (a tuple of Symbols) from a tuple of values.
-"""
 NamedTuple{names}(args::Tuple) where {names} = NamedTuple{names,typeof(args)}(args)
 
 using .Intrinsics: sle_int, add_int
@@ -569,9 +566,9 @@ function is_top_bit_set(x::Union{Int8,UInt8})
     eq_int(lshr_int(x, 7), trunc_int(typeof(x), 1))
 end
 
-function check_top_bit(x)
+function check_top_bit(::Type{To}, x) where {To}
     @_inline_meta
-    is_top_bit_set(x) && throw_inexacterror(:check_top_bit, typeof(x), x)
+    is_top_bit_set(x) && throw_inexacterror(:check_top_bit, To, x)
     x
 end
 
@@ -596,11 +593,11 @@ toInt8(x::Int16)      = checked_trunc_sint(Int8, x)
 toInt8(x::Int32)      = checked_trunc_sint(Int8, x)
 toInt8(x::Int64)      = checked_trunc_sint(Int8, x)
 toInt8(x::Int128)     = checked_trunc_sint(Int8, x)
-toInt8(x::UInt8)      = bitcast(Int8, check_top_bit(x))
-toInt8(x::UInt16)     = checked_trunc_sint(Int8, check_top_bit(x))
-toInt8(x::UInt32)     = checked_trunc_sint(Int8, check_top_bit(x))
-toInt8(x::UInt64)     = checked_trunc_sint(Int8, check_top_bit(x))
-toInt8(x::UInt128)    = checked_trunc_sint(Int8, check_top_bit(x))
+toInt8(x::UInt8)      = bitcast(Int8, check_top_bit(Int8, x))
+toInt8(x::UInt16)     = checked_trunc_sint(Int8, check_top_bit(Int8, x))
+toInt8(x::UInt32)     = checked_trunc_sint(Int8, check_top_bit(Int8, x))
+toInt8(x::UInt64)     = checked_trunc_sint(Int8, check_top_bit(Int8, x))
+toInt8(x::UInt128)    = checked_trunc_sint(Int8, check_top_bit(Int8, x))
 toInt8(x::Bool)       = and_int(bitcast(Int8, x), Int8(1))
 toInt16(x::Int8)      = sext_int(Int16, x)
 toInt16(x::Int16)     = x
@@ -608,10 +605,10 @@ toInt16(x::Int32)     = checked_trunc_sint(Int16, x)
 toInt16(x::Int64)     = checked_trunc_sint(Int16, x)
 toInt16(x::Int128)    = checked_trunc_sint(Int16, x)
 toInt16(x::UInt8)     = zext_int(Int16, x)
-toInt16(x::UInt16)    = bitcast(Int16, check_top_bit(x))
-toInt16(x::UInt32)    = checked_trunc_sint(Int16, check_top_bit(x))
-toInt16(x::UInt64)    = checked_trunc_sint(Int16, check_top_bit(x))
-toInt16(x::UInt128)   = checked_trunc_sint(Int16, check_top_bit(x))
+toInt16(x::UInt16)    = bitcast(Int16, check_top_bit(Int16, x))
+toInt16(x::UInt32)    = checked_trunc_sint(Int16, check_top_bit(Int16, x))
+toInt16(x::UInt64)    = checked_trunc_sint(Int16, check_top_bit(Int16, x))
+toInt16(x::UInt128)   = checked_trunc_sint(Int16, check_top_bit(Int16, x))
 toInt16(x::Bool)      = and_int(zext_int(Int16, x), Int16(1))
 toInt32(x::Int8)      = sext_int(Int32, x)
 toInt32(x::Int16)     = sext_int(Int32, x)
@@ -620,9 +617,9 @@ toInt32(x::Int64)     = checked_trunc_sint(Int32, x)
 toInt32(x::Int128)    = checked_trunc_sint(Int32, x)
 toInt32(x::UInt8)     = zext_int(Int32, x)
 toInt32(x::UInt16)    = zext_int(Int32, x)
-toInt32(x::UInt32)    = bitcast(Int32, check_top_bit(x))
-toInt32(x::UInt64)    = checked_trunc_sint(Int32, check_top_bit(x))
-toInt32(x::UInt128)   = checked_trunc_sint(Int32, check_top_bit(x))
+toInt32(x::UInt32)    = bitcast(Int32, check_top_bit(Int32, x))
+toInt32(x::UInt64)    = checked_trunc_sint(Int32, check_top_bit(Int32, x))
+toInt32(x::UInt128)   = checked_trunc_sint(Int32, check_top_bit(Int32, x))
 toInt32(x::Bool)      = and_int(zext_int(Int32, x), Int32(1))
 toInt64(x::Int8)      = sext_int(Int64, x)
 toInt64(x::Int16)     = sext_int(Int64, x)
@@ -632,8 +629,8 @@ toInt64(x::Int128)    = checked_trunc_sint(Int64, x)
 toInt64(x::UInt8)     = zext_int(Int64, x)
 toInt64(x::UInt16)    = zext_int(Int64, x)
 toInt64(x::UInt32)    = zext_int(Int64, x)
-toInt64(x::UInt64)    = bitcast(Int64, check_top_bit(x))
-toInt64(x::UInt128)   = checked_trunc_sint(Int64, check_top_bit(x))
+toInt64(x::UInt64)    = bitcast(Int64, check_top_bit(Int64, x))
+toInt64(x::UInt128)   = checked_trunc_sint(Int64, check_top_bit(Int64, x))
 toInt64(x::Bool)      = and_int(zext_int(Int64, x), Int64(1))
 toInt128(x::Int8)     = sext_int(Int128, x)
 toInt128(x::Int16)    = sext_int(Int128, x)
@@ -644,9 +641,9 @@ toInt128(x::UInt8)    = zext_int(Int128, x)
 toInt128(x::UInt16)   = zext_int(Int128, x)
 toInt128(x::UInt32)   = zext_int(Int128, x)
 toInt128(x::UInt64)   = zext_int(Int128, x)
-toInt128(x::UInt128)  = bitcast(Int128, check_top_bit(x))
+toInt128(x::UInt128)  = bitcast(Int128, check_top_bit(Int128, x))
 toInt128(x::Bool)     = and_int(zext_int(Int128, x), Int128(1))
-toUInt8(x::Int8)      = bitcast(UInt8, check_top_bit(x))
+toUInt8(x::Int8)      = bitcast(UInt8, check_top_bit(UInt8, x))
 toUInt8(x::Int16)     = checked_trunc_uint(UInt8, x)
 toUInt8(x::Int32)     = checked_trunc_uint(UInt8, x)
 toUInt8(x::Int64)     = checked_trunc_uint(UInt8, x)
@@ -657,8 +654,8 @@ toUInt8(x::UInt32)    = checked_trunc_uint(UInt8, x)
 toUInt8(x::UInt64)    = checked_trunc_uint(UInt8, x)
 toUInt8(x::UInt128)   = checked_trunc_uint(UInt8, x)
 toUInt8(x::Bool)      = and_int(bitcast(UInt8, x), UInt8(1))
-toUInt16(x::Int8)     = sext_int(UInt16, check_top_bit(x))
-toUInt16(x::Int16)    = bitcast(UInt16, check_top_bit(x))
+toUInt16(x::Int8)     = sext_int(UInt16, check_top_bit(UInt16, x))
+toUInt16(x::Int16)    = bitcast(UInt16, check_top_bit(UInt16, x))
 toUInt16(x::Int32)    = checked_trunc_uint(UInt16, x)
 toUInt16(x::Int64)    = checked_trunc_uint(UInt16, x)
 toUInt16(x::Int128)   = checked_trunc_uint(UInt16, x)
@@ -668,9 +665,9 @@ toUInt16(x::UInt32)   = checked_trunc_uint(UInt16, x)
 toUInt16(x::UInt64)   = checked_trunc_uint(UInt16, x)
 toUInt16(x::UInt128)  = checked_trunc_uint(UInt16, x)
 toUInt16(x::Bool)     = and_int(zext_int(UInt16, x), UInt16(1))
-toUInt32(x::Int8)     = sext_int(UInt32, check_top_bit(x))
-toUInt32(x::Int16)    = sext_int(UInt32, check_top_bit(x))
-toUInt32(x::Int32)    = bitcast(UInt32, check_top_bit(x))
+toUInt32(x::Int8)     = sext_int(UInt32, check_top_bit(UInt32, x))
+toUInt32(x::Int16)    = sext_int(UInt32, check_top_bit(UInt32, x))
+toUInt32(x::Int32)    = bitcast(UInt32, check_top_bit(UInt32, x))
 toUInt32(x::Int64)    = checked_trunc_uint(UInt32, x)
 toUInt32(x::Int128)   = checked_trunc_uint(UInt32, x)
 toUInt32(x::UInt8)    = zext_int(UInt32, x)
@@ -679,10 +676,10 @@ toUInt32(x::UInt32)   = x
 toUInt32(x::UInt64)   = checked_trunc_uint(UInt32, x)
 toUInt32(x::UInt128)  = checked_trunc_uint(UInt32, x)
 toUInt32(x::Bool)     = and_int(zext_int(UInt32, x), UInt32(1))
-toUInt64(x::Int8)     = sext_int(UInt64, check_top_bit(x))
-toUInt64(x::Int16)    = sext_int(UInt64, check_top_bit(x))
-toUInt64(x::Int32)    = sext_int(UInt64, check_top_bit(x))
-toUInt64(x::Int64)    = bitcast(UInt64, check_top_bit(x))
+toUInt64(x::Int8)     = sext_int(UInt64, check_top_bit(UInt64, x))
+toUInt64(x::Int16)    = sext_int(UInt64, check_top_bit(UInt64, x))
+toUInt64(x::Int32)    = sext_int(UInt64, check_top_bit(UInt64, x))
+toUInt64(x::Int64)    = bitcast(UInt64, check_top_bit(UInt64, x))
 toUInt64(x::Int128)   = checked_trunc_uint(UInt64, x)
 toUInt64(x::UInt8)    = zext_int(UInt64, x)
 toUInt64(x::UInt16)   = zext_int(UInt64, x)
@@ -690,11 +687,11 @@ toUInt64(x::UInt32)   = zext_int(UInt64, x)
 toUInt64(x::UInt64)   = x
 toUInt64(x::UInt128)  = checked_trunc_uint(UInt64, x)
 toUInt64(x::Bool)     = and_int(zext_int(UInt64, x), UInt64(1))
-toUInt128(x::Int8)    = sext_int(UInt128, check_top_bit(x))
-toUInt128(x::Int16)   = sext_int(UInt128, check_top_bit(x))
-toUInt128(x::Int32)   = sext_int(UInt128, check_top_bit(x))
-toUInt128(x::Int64)   = sext_int(UInt128, check_top_bit(x))
-toUInt128(x::Int128)  = bitcast(UInt128, check_top_bit(x))
+toUInt128(x::Int8)    = sext_int(UInt128, check_top_bit(UInt128, x))
+toUInt128(x::Int16)   = sext_int(UInt128, check_top_bit(UInt128, x))
+toUInt128(x::Int32)   = sext_int(UInt128, check_top_bit(UInt128, x))
+toUInt128(x::Int64)   = sext_int(UInt128, check_top_bit(UInt128, x))
+toUInt128(x::Int128)  = bitcast(UInt128, check_top_bit(UInt128, x))
 toUInt128(x::UInt8)   = zext_int(UInt128, x)
 toUInt128(x::UInt16)  = zext_int(UInt128, x)
 toUInt128(x::UInt32)  = zext_int(UInt128, x)

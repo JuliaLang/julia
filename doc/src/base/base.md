@@ -158,6 +158,7 @@ Base.isdispatchtuple
 ### Declared structure
 
 ```@docs
+Base.ismutable
 Base.isimmutable
 Base.isabstracttype
 Base.isprimitivetype
@@ -207,6 +208,7 @@ Union{}
 Core.UnionAll
 Core.Tuple
 Core.NamedTuple
+Base.@NamedTuple
 Base.Val
 Core.Vararg
 Core.Nothing
@@ -251,6 +253,7 @@ Base.@nospecialize
 Base.@specialize
 Base.gensym
 Base.@gensym
+var"name"
 Base.@goto
 Base.@label
 Base.@simd
@@ -267,6 +270,7 @@ Base.missing
 Base.coalesce
 Base.ismissing
 Base.skipmissing
+Base.nonmissingtype
 ```
 
 ## System
@@ -393,6 +397,7 @@ Base.functionloc(::Method)
 Base.GC.gc
 Base.GC.enable
 Base.GC.@preserve
+Base.GC.safepoint
 Meta.lower
 Meta.@lower
 Meta.parse(::AbstractString, ::Int)

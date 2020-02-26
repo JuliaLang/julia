@@ -54,10 +54,10 @@ optionally with a given step (defaults to 1, a [`UnitRange`](@ref)).
 One of `length` or `stop` is required.  If `length`, `stop`, and `step` are all specified, they must agree.
 
 If `length` and `stop` are provided and `step` is not, the step size will be computed
-automatically such that there are `length` linearly spaced elements in the range (a [`LinRange`](@ref)).
+automatically such that there are `length` linearly spaced elements in the range.
 
 If `step` and `stop` are provided and `length` is not, the overall range length will be computed
-automatically such that the elements are `step` spaced (a [`StepRange`](@ref)).
+automatically such that the elements are `step` spaced.
 
 `stop` may be specified as either a positional or keyword argument.
 
@@ -500,7 +500,8 @@ julia> step(range(2.5, stop=10.9, length=85))
 """
 step(r::StepRange) = r.step
 step(r::AbstractUnitRange{T}) where{T} = oneunit(T) - zero(T)
-step(r::StepRangeLen{T}) where {T} = T(r.step)
+step(r::StepRangeLen) = r.step
+step(r::StepRangeLen{T}) where {T<:AbstractFloat} = T(r.step)
 step(r::LinRange) = (last(r)-first(r))/r.lendiv
 
 step_hp(r::StepRangeLen) = r.step
@@ -777,9 +778,9 @@ end
 function intersect(r::StepRange, s::StepRange)
     if isempty(r) || isempty(s)
         return range(first(r), step=step(r), length=0)
-    elseif step(s) < 0
+    elseif step(s) < zero(step(s))
         return intersect(r, reverse(s))
-    elseif step(r) < 0
+    elseif step(r) < zero(step(r))
         return reverse(intersect(reverse(r), s))
     end
 
@@ -804,7 +805,7 @@ function intersect(r::StepRange, s::StepRange)
 
     g, x, y = gcdx(step1, step2)
 
-    if rem(start1 - start2, g) != 0
+    if !iszero(rem(start1 - start2, g))
         # Unaligned, no overlap possible.
         return range(start1, step=a, length=0)
     end
@@ -1010,14 +1011,14 @@ function _define_range_op(@nospecialize f)
         function $f(r1::OrdinalRange, r2::OrdinalRange)
             r1l = length(r1)
             (r1l == length(r2) ||
-             throw(DimensionMismatch("argument dimensions must match")))
+             throw(DimensionMismatch("argument dimensions must match: length of r1 is $r1l, length of r2 is $(length(r2))")))
             range($f(first(r1), first(r2)), step=$f(step(r1), step(r2)), length=r1l)
         end
 
         function $f(r1::LinRange{T}, r2::LinRange{T}) where T
             len = r1.len
             (len == r2.len ||
-             throw(DimensionMismatch("argument dimensions must match")))
+             throw(DimensionMismatch("argument dimensions must match: length of r1 is $len, length of r2 is $(r2.len)")))
             LinRange{T}(convert(T, $f(first(r1), first(r2))),
                         convert(T, $f(last(r1), last(r2))), len)
         end
@@ -1033,7 +1034,7 @@ _define_range_op(:-)
 function +(r1::StepRangeLen{T,S}, r2::StepRangeLen{T,S}) where {T,S}
     len = length(r1)
     (len == length(r2) ||
-        throw(DimensionMismatch("argument dimensions must match")))
+     throw(DimensionMismatch("argument dimensions must match: length of r1 is $len, length of r2 is $(length(r2))")))
     StepRangeLen(first(r1)+first(r2), step(r1)+step(r2), len)
 end
 

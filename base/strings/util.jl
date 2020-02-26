@@ -104,7 +104,7 @@ end
 # chop(s::AbstractString) = SubString(s, firstindex(s), prevind(s, lastindex(s)))
 
 """
-    chomp(s::AbstractString)
+    chomp(s::AbstractString) -> SubString
 
 Remove a single trailing newline from a string.
 
@@ -133,8 +133,8 @@ function chomp(s::String)
 end
 
 """
-    lstrip([pred=isspace,] str::AbstractString)
-    lstrip(str::AbstractString, chars)
+    lstrip([pred=isspace,] str::AbstractString) -> SubString
+    lstrip(str::AbstractString, chars) -> SubString
 
 Remove leading characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
@@ -165,8 +165,8 @@ lstrip(s::AbstractString) = lstrip(isspace, s)
 lstrip(s::AbstractString, chars::Chars) = lstrip(in(chars), s)
 
 """
-    rstrip([pred=isspace,] str::AbstractString)
-    rstrip(str::AbstractString, chars)
+    rstrip([pred=isspace,] str::AbstractString) -> SubString
+    rstrip(str::AbstractString, chars) -> SubString
 
 Remove trailing characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
@@ -196,8 +196,8 @@ rstrip(s::AbstractString) = rstrip(isspace, s)
 rstrip(s::AbstractString, chars::Chars) = rstrip(in(chars), s)
 
 """
-    strip([pred=isspace,] str::AbstractString)
-    strip(str::AbstractString, chars)
+    strip([pred=isspace,] str::AbstractString) -> SubString
+    strip(str::AbstractString, chars) -> SubString
 
 Remove leading and trailing characters from `str`, either those specified by `chars` or
 those for which the function `pred` returns `true`.
@@ -442,7 +442,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
     while j != 0
         if i == a || i <= k
-            unsafe_write(out, pointer(str, i), UInt(j-i))
+            GC.@preserve str unsafe_write(out, pointer(str, i), UInt(j-i))
             _replace(out, repl, str, r, pattern)
         end
         if k < j
@@ -470,7 +470,7 @@ If `count` is provided, replace at most `count` occurrences.
 `pat` may be a single character, a vector or a set of characters, a string,
 or a regular expression.
 If `r` is a function, each occurrence is replaced with `r(s)`
-where `s` is the matched substring (when `pat`is a `Regex` or `AbstractString`) or
+where `s` is the matched substring (when `pat` is a `Regex` or `AbstractString`) or
 character (when `pat` is an `AbstractChar` or a collection of `AbstractChar`).
 If `pat` is a regular expression and `r` is a [`SubstitutionString`](@ref), then capture group
 references in `r` are replaced with the corresponding matched text.

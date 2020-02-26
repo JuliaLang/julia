@@ -116,6 +116,12 @@ end
 @test A[OffsetArray([true true;  false true], A.offsets)] == [1,3,4]
 @test_throws BoundsError A[[true true;  false true]]
 
+# begin, end
+a0 = rand(2,3,4,2)
+a = OffsetArray(a0, (-2,-3,4,5))
+@test a[begin,end,end,begin] == a0[begin,end,end,begin] ==
+      a0[1,3,4,1] == a0[end-1,begin+2,begin+3,end-1]
+
 # view
 S = view(A, :, 3)
 @test S == OffsetArray([1,2], (A.offsets[1],))
@@ -210,7 +216,7 @@ targets1 = ["0-dimensional $OAs_name.OffsetArray{Float64,0,Array{Float64,0}}:\n1
             "1×1 $OAs_name.OffsetArray{Float64,2,Array{Float64,2}} with indices 2:2×3:3:\n 1.0",
             "1×1×1 $OAs_name.OffsetArray{Float64,3,Array{Float64,3}} with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
             "1×1×1×1 $OAs_name.OffsetArray{Float64,4,Array{Float64,4}} with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
-targets2 = ["(1.0, 1.0)",
+targets2 = ["(fill(1.0), fill(1.0))",
             "([1.0], [1.0])",
             "([1.0], [1.0])",
             "([1.0], [1.0])",
@@ -284,12 +290,15 @@ copyto!(a, -2, (1,2,3), 1, 2)
 
 b = 1:2    # copy between AbstractArrays
 bo = OffsetArray(1:2, (-3,))
-@test_throws BoundsError copyto!(a, b)
+copyto!(a, b)    # no BoundsError, see #34049
+@test a[-3] == 1
+@test a[-2] == 2
+@test a[-1] == 2
 fill!(a, -1)
 copyto!(a, bo)
-@test a[-3] == -1
-@test a[-2] == 1
-@test a[-1] == 2
+@test a[-3] == 1
+@test a[-2] == 2
+@test a[-1] == -1
 fill!(a, -1)
 copyto!(a, -2, bo)
 @test a[-3] == -1
@@ -344,6 +353,7 @@ v2 = copy(v)
 @test push!(v2, 1) === v2
 @test v2[axes(v, 1)] == v
 @test v2[end] == 1
+@test v2[begin] == v[begin] == v[-2]
 v2 = copy(v)
 @test push!(v2, 2, 1) === v2
 @test v2[axes(v, 1)] == v
@@ -433,6 +443,14 @@ I = findall(!iszero, z)
 @test std(A_3_3, dims=2) == OffsetArray(reshape([3,3,3], (3,1)), A_3_3.offsets)
 @test sum(OffsetArray(fill(1,3000), -1000)) == 3000
 
+# https://github.com/JuliaArrays/OffsetArrays.jl/issues/92
+A92 = OffsetArray(reshape(1:27, 3, 3, 3), -2, -2, -2)
+B92 = view(A92, :, :, -1:0)
+@test axes(B92) == (-1:1, -1:1, 1:2)
+@test sum(B92, dims=(2,3)) == OffsetArray(reshape([51,57,63], Val(3)), -2, -2, 0)
+B92 = view(A92, :, :, Base.IdentityUnitRange(-1:0))
+@test sum(B92, dims=(2,3)) == OffsetArray(reshape([51,57,63], Val(3)), -2, -2, -2)
+
 @test norm(v) ≈ norm(parent(v))
 @test norm(A) ≈ norm(parent(A))
 @test dot(v, v) ≈ dot(v0, v0)
@@ -468,6 +486,19 @@ v = OffsetArray(rand(8), (-2,))
 @test sortslices(A, dims=2) == OffsetArray(sortslices(parent(A), dims=2), A.offsets)
 @test sort(A, dims=1) == OffsetArray(sort(parent(A), dims=1), A.offsets)
 @test sort(A, dims=2) == OffsetArray(sort(parent(A), dims=2), A.offsets)
+# Issue #33977
+soa = OffsetArray([2,2,3], -2)
+@test searchsorted(soa, 1) == -1:-2
+@test searchsortedfirst(soa, 1) == -1
+@test searchsortedlast(soa, 1) == -2
+@test first(sort!(soa; alg=QuickSort)) == 2
+@test first(sort!(soa; alg=MergeSort)) == 2
+soa = OffsetArray([2,2,3], typemax(Int)-4)
+@test searchsorted(soa, 1) == typemax(Int)-3:typemax(Int)-4
+@test searchsortedfirst(soa, 2) == typemax(Int) - 3
+@test searchsortedlast(soa, 2) == typemax(Int) - 2
+@test first(sort!(soa; alg=QuickSort)) == 2
+@test first(sort!(soa; alg=MergeSort)) == 2
 
 @test mapslices(sort, A, dims=1) == OffsetArray(mapslices(sort, parent(A), dims=1), A.offsets)
 @test mapslices(sort, A, dims=2) == OffsetArray(mapslices(sort, parent(A), dims=2), A.offsets)
@@ -495,6 +526,19 @@ A = OffsetArray(rand(4,4), (-3,5))
 @test vec(A) == reshape(A, :) == reshape(A, 16) == reshape(A, Val(1)) == A[:] == vec(A.parent)
 A = OffsetArray(view(rand(4,4), 1:4, 4:-1:1), (-3,5))
 @test vec(A) == reshape(A, :) == reshape(A, 16) == reshape(A, Val(1)) == A[:] == vec(A.parent)
+# issue #33614
+A = OffsetArray(-1:0, (-2,))
+@test reshape(A, :) === A
+Arsc = reshape(A, :, 1)
+Arss = reshape(A, 2, 1)
+@test Arsc[1,1] == Arss[1,1] == -1
+@test Arsc[2,1] == Arss[2,1] == 0
+@test_throws BoundsError Arsc[0,1]
+@test_throws BoundsError Arss[0,1]
+A = OffsetArray([-1,0], (-2,))
+Arsc = reshape(A, :, 1)
+Arsc[1,1] = 5
+@test first(A) == 5
 
 # broadcast
 a = [1]
@@ -533,15 +577,15 @@ end
     B = OffsetArray(reshape(1:24, 4, 3, 2), -5, 6, -7)
     for R in (fill(0, -4:-1), fill(0, -4:-1, 7:7), fill(0, -4:-1, 7:7, -6:-6))
         @test @inferred(maximum!(R, B)) == reshape(maximum(B, dims=(2,3)), axes(R)) == reshape(21:24, axes(R))
-        @test @allocated(maximum!(R, B)) <= 400
+        @test @allocated(maximum!(R, B)) <= 800
         @test @inferred(minimum!(R, B)) == reshape(minimum(B, dims=(2,3)), axes(R)) == reshape(1:4, axes(R))
-        @test @allocated(minimum!(R, B)) <= 400
+        @test @allocated(minimum!(R, B)) <= 800
     end
     for R in (fill(0, -4:-4, 7:9), fill(0, -4:-4, 7:9, -6:-6))
         @test @inferred(maximum!(R, B)) == reshape(maximum(B, dims=(1,3)), axes(R)) == reshape(16:4:24, axes(R))
-        @test @allocated(maximum!(R, B)) <= 400
+        @test @allocated(maximum!(R, B)) <= 800
         @test @inferred(minimum!(R, B)) == reshape(minimum(B, dims=(1,3)), axes(R)) == reshape(1:4:9, axes(R))
-        @test @allocated(minimum!(R, B)) <= 400
+        @test @allocated(minimum!(R, B)) <= 800
     end
     @test_throws DimensionMismatch maximum!(fill(0, -4:-1, 7:7, -6:-6, 1:1), B)
     @test_throws DimensionMismatch minimum!(fill(0, -4:-1, 7:7, -6:-6, 1:1), B)

@@ -130,16 +130,19 @@ JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len)
     char gs_name[14];
     if (memchr(str, 0, len))
         jl_exceptionf(jl_argumenterror_type, "Symbol name may not contain \\0");
-    char *name = (char*) (len >= 256 ? malloc(sizeof(gs_name)+len+3) :
-                          alloca(sizeof(gs_name)+len+3));
+    char *name = (char*) (len >= 256 ? malloc_s(sizeof(gs_name) + len + 3) :
+                                         alloca(sizeof(gs_name) + len + 3));
     char *n;
-    name[0] = '#'; name[1] = '#'; name[2+len] = '#';
-    memcpy(name+2, str, len);
+    name[0] = '#';
+    name[1] = '#';
+    name[2 + len] = '#';
+    memcpy(name + 2, str, len);
     uint32_t ctr = jl_atomic_fetch_add(&gs_ctr, 1);
     n = uint2str(gs_name, sizeof(gs_name), ctr, 10);
-    memcpy(name+3+len, n, sizeof(gs_name)-(n-gs_name));
-    jl_sym_t *sym = _jl_symbol(name, len+3+sizeof(gs_name)-(n-gs_name)-1);
-    if (len >= 256) free(name);
+    memcpy(name + 3 + len, n, sizeof(gs_name) - (n - gs_name));
+    jl_sym_t *sym = _jl_symbol(name, len + 3 + sizeof(gs_name) - (n - gs_name)- 1);
+    if (len >= 256)
+        free(name);
     return sym;
 }
 

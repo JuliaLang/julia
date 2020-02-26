@@ -12,19 +12,36 @@
 #include "clang/StaticAnalyzer/Core/BugReporter/CommonBugCategories.h"
 #include "clang/StaticAnalyzer/Frontend/AnalysisConsumer.h"
 #include "clang/StaticAnalyzer/Checkers/SValExplainer.h"
-#if LLVM_VERSION_MAJOR >= 9
+#if LLVM_VERSION_MAJOR >= 8
 #include "clang/StaticAnalyzer/Frontend/CheckerRegistry.h"
 #else
 #include "clang/StaticAnalyzer/Core/CheckerRegistry.h"
 #endif
+
 #include <iostream>
+#include <memory>
+
+#if defined(__GNUC__)
+#  define USED_FUNC __attribute__((used))
+#elif defined(_COMPILER_MICROSOFT_)
+// Does MSVC have this?
+#  define USED_FUNC
+#else
+#  define USED_FUNC
+#endif
+
+#if LLVM_VERSION_MAJOR >= 10
+using std::make_unique;
+#else
+using llvm::make_unique;
+#endif
 
 namespace {
     using namespace clang;
     using namespace ento;
 
     #define PDP std::shared_ptr<PathDiagnosticPiece>
-    #define MakePDP llvm::make_unique<PathDiagnosticEventPiece>
+    #define MakePDP make_unique<PathDiagnosticEventPiece>
 
     class GCChecker : public Checker<eval::Call,
                                             check::BeginFunction,
@@ -164,7 +181,6 @@ namespace {
 
         static bool isGCTrackedType(QualType Type);
         bool isGloballyRootedType(QualType Type) const;
-        bool isBundleOfGCValues(QualType QT) const;
         static void dumpState(const ProgramStateRef &State);
         static bool declHasAnnotation(const clang::Decl *D, const char *which);
         static bool isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD);
@@ -186,7 +202,11 @@ namespace {
 #else
         void checkEndFunction(CheckerContext &Ctx) const;
 #endif
+#if LLVM_VERSION_MAJOR >= 9
+        bool evalCall(const CallEvent &Call, CheckerContext &C) const;
+#else
         bool evalCall(const CallExpr *CE, CheckerContext &C) const;
+#endif
         void checkPreCall(const CallEvent &Call, CheckerContext &C) const;
         void checkPostCall(const CallEvent &Call, CheckerContext &C) const;
         void checkPostStmt(const CStyleCastExpr *CE, CheckerContext &C) const;
@@ -211,7 +231,7 @@ namespace {
           }
 
           PDP VisitNode(const ExplodedNode *N,
-#if LLVM_VERSION_MAJOR <= 8
+#if LLVM_VERSION_MAJOR < 8
                         const ExplodedNode *PrevN,
 #endif
                         BugReporterContext &BRC,
@@ -242,7 +262,7 @@ namespace {
               const ExplodedNode *N, PathDiagnosticLocation Pos, BugReporterContext &BRC, BugReport &BR);
 
           PDP VisitNode(const ExplodedNode *N,
-#if LLVM_VERSION_MAJOR <= 8
+#if LLVM_VERSION_MAJOR < 8
                                                          const ExplodedNode *PrevN,
 #endif
                                                          BugReporterContext &BRC,
@@ -287,12 +307,6 @@ SymbolRef GCChecker::walkToRoot(callback f, const ProgramStateRef &State, const 
 
 
 namespace Helpers {
-  static SymbolRef trySuperRegion(SValExplainer &Ex, ProgramStateRef State, SVal Val) {
-      const MemRegion *R = Val.getAsRegion();
-      const SubRegion *SR = R->getAs<SubRegion>();
-      return SR ? State->getSVal(SR->getSuperRegion()).getAsSymbol() : nullptr;
-  }
-
   static const VarRegion *walk_back_to_global_VR(const MemRegion *Region) {
     if (!Region)
         return nullptr;
@@ -326,7 +340,7 @@ namespace Helpers {
 
 PDP GCChecker::GCBugVisitor::VisitNode(
   const ExplodedNode *N,
-#if LLVM_VERSION_MAJOR <= 8
+#if LLVM_VERSION_MAJOR < 8
   const ExplodedNode *,
 #endif
   BugReporterContext &BRC, BugReport &BR) {
@@ -385,13 +399,13 @@ PDP GCChecker::GCValueBugVisitor::ExplainNoPropagationFromExpr(const clang::Expr
     const ValueState *ValS = N->getState()->get<GCValueMap>(Parent);
     assert(ValS);
     if (ValS->isPotentiallyFreed()) {
-        BR.addVisitor(llvm::make_unique<GCValueBugVisitor>(Parent));
+        BR.addVisitor(make_unique<GCValueBugVisitor>(Parent));
         return MakePDP(Pos, "Root not propagated because it may have been freed. Tracking.");
     } else if (ValS->isRooted()) {
-        BR.addVisitor(llvm::make_unique<GCValueBugVisitor>(Parent));
+        BR.addVisitor(make_unique<GCValueBugVisitor>(Parent));
         return MakePDP(Pos, "Root was not propagated due to a bug. Tracking base value.");
     } else {
-        BR.addVisitor(llvm::make_unique<GCValueBugVisitor>(Parent));
+        BR.addVisitor(make_unique<GCValueBugVisitor>(Parent));
         return MakePDP(Pos, "No Root to propagate. Tracking.");
     }
 }
@@ -425,7 +439,7 @@ PDP GCChecker::GCValueBugVisitor::ExplainNoPropagation(
 
 PDP GCChecker::GCValueBugVisitor::VisitNode(
   const ExplodedNode *N,
-#if LLVM_VERSION_MAJOR <= 8
+#if LLVM_VERSION_MAJOR < 8
   const ExplodedNode *,
 #endif
   BugReporterContext &BRC, BugReport &BR) {
@@ -451,7 +465,7 @@ PDP GCChecker::GCValueBugVisitor::VisitNode(
             if (NewValueState->FD) {
                 bool isFunctionSafepoint = !isFDAnnotatedNotSafepoint(NewValueState->FD);
                 bool maybeUnrooted = declHasAnnotation(NewValueState->PVD, "julia_maybe_unrooted");
-                assert(isFunctionSafepoint || maybeUnrooted);
+                assert(isFunctionSafepoint || maybeUnrooted); (void)maybeUnrooted;
                 Pos = PathDiagnosticLocation{NewValueState->PVD,
                                              BRC.getSourceManager()};
                 if (!isFunctionSafepoint)
@@ -504,8 +518,8 @@ void GCChecker::report_error(callback f, CheckerContext &C, const char *message)
     if (!BT)
         BT.reset(new BugType(this, "Invalid GC thingy",
                            categories::LogicError));
-    auto Report = llvm::make_unique<BugReport>(*BT, message, N);
-    Report->addVisitor(llvm::make_unique<GCBugVisitor>());
+    auto Report = make_unique<BugReport>(*BT, message, N);
+    Report->addVisitor(make_unique<GCBugVisitor>());
     f(Report.get());
     C.emitReport(std::move(Report));
 }
@@ -520,10 +534,10 @@ void GCChecker::report_value_error(CheckerContext &C, SymbolRef Sym, const char 
     if (!BT)
         BT.reset(new BugType(this, "Invalid GC thingy",
                            categories::LogicError));
-    auto Report = llvm::make_unique<BugReport>(*BT, message, N);
-    Report->addVisitor(llvm::make_unique<GCValueBugVisitor>(Sym));
-    Report->addVisitor(llvm::make_unique<GCBugVisitor>());
-    Report->addVisitor(llvm::make_unique<ConditionBRVisitor>());
+    auto Report = make_unique<BugReport>(*BT, message, N);
+    Report->addVisitor(make_unique<GCValueBugVisitor>(Sym));
+    Report->addVisitor(make_unique<GCBugVisitor>());
+    Report->addVisitor(make_unique<ConditionBRVisitor>());
     if (!range.isInvalid()) {
         Report->addRange(range);
     }
@@ -684,14 +698,6 @@ bool GCChecker::isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD) {
     return declHasAnnotation(FD, "julia_not_safepoint");
 }
 
-bool GCChecker::isBundleOfGCValues(QualType QT) const {
-    return isJuliaType([](StringRef Name) {
-      if (Name.endswith_lower("typemap_intersection_env"))
-          return true;
-      return false;
-    }, QT);
-}
-
 bool GCChecker::isGCTrackedType(QualType QT) {
     return isValueCollection(QT) || isJuliaType([](StringRef Name) {
         if (Name.endswith_lower("jl_value_t") ||
@@ -749,23 +755,8 @@ bool GCChecker::isGloballyRootedType(QualType QT) const {
 bool GCChecker::isSafepoint(const CallEvent &Call) const
 {
   bool isCalleeSafepoint = true;
-  if (Call.isGlobalCFunction("malloc") ||
-      Call.isGlobalCFunction("memcpy") ||
-      Call.isGlobalCFunction("memset") ||
-      Call.isGlobalCFunction("memcmp") ||
-      Call.isGlobalCFunction("mmap") ||
-      Call.isGlobalCFunction("munmap") ||
-      Call.isGlobalCFunction("mprotect") ||
-      Call.isGlobalCFunction("madvise") ||
-      Call.isGlobalCFunction("write") ||
-      Call.isGlobalCFunction("vasprintf") ||
-      Call.isGlobalCFunction("strrchr") ||
-      Call.isGlobalCFunction("free") ||
-      Call.isGlobalCFunction("__assert_fail") ||
-      Call.isGlobalCFunction("fflush") ||
-      Call.isGlobalCFunction("__isnan") ||
-      Call.isGlobalCFunction("__isnanf"))
-  {
+  if (Call.isInSystemHeader()) {
+      // defined by -isystem per https://clang.llvm.org/docs/UsersManual.html#controlling-diagnostics-in-system-headers
       isCalleeSafepoint = false;
   } else {
     auto *Decl = Call.getDecl();
@@ -783,14 +774,22 @@ bool GCChecker::isSafepoint(const CallEvent &Call) const
       if (const TypedefType *TDT = dyn_cast<TypedefType>(Callee->getType())) {
         isCalleeSafepoint = !declHasAnnotation(TDT->getDecl(), "julia_not_safepoint");
       }
-    } else if (FD) {
-      if (FD->getBuiltinID() != 0)
+      else if (const CXXPseudoDestructorExpr *PDE = dyn_cast<CXXPseudoDestructorExpr>(Callee)) {
+        // A pseudo-destructor is an expression that looks like a member
+        // access to a destructor of a scalar type. A pseudo-destructor
+        // expression has no run-time semantics beyond evaluating the base
+        // expression (which would have it's own CallEvent, if applicable).
         isCalleeSafepoint = false;
-      else if ((FD->getName().startswith_lower("uv_") ||
+      }
+    } else if (FD) {
+      if (FD->getBuiltinID() != 0 || FD->isTrivial())
+        isCalleeSafepoint = false;
+      else if (FD->getDeclName().isIdentifier() &&
+               (FD->getName().startswith_lower("uv_") ||
                 FD->getName().startswith_lower("unw_") ||
                 FD->getName().startswith("_U")) &&
                FD->getName() != "uv_run")
-          isCalleeSafepoint = false;
+        isCalleeSafepoint = false;
       else
         isCalleeSafepoint = !isFDAnnotatedNotSafepoint(FD);
     }
@@ -1149,7 +1148,7 @@ void GCChecker::checkPostStmt(const UnaryOperator *UO, CheckerContext &C) const
     }
 }
 
-void GCChecker::dumpState(const ProgramStateRef &State) {
+USED_FUNC void GCChecker::dumpState(const ProgramStateRef &State) {
     GCValueMapTy AMap = State->get<GCValueMap>();
     llvm::raw_ostream &Out = llvm::outs();
     Out << "State: " << "\n";
@@ -1221,10 +1220,17 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
     }
 }
 
+#if LLVM_VERSION_MAJOR >= 9
+bool GCChecker::evalCall(const CallEvent &Call,
+#else
 bool GCChecker::evalCall(const CallExpr *CE,
+#endif
                                        CheckerContext &C) const {
     // These checks should have no effect on the surrounding environment
     // (globals should not be invalidated, etc), hence the use of evalCall.
+#if LLVM_VERSION_MAJOR >= 9
+    const CallExpr *CE = dyn_cast<CallExpr>(Call.getOriginExpr());
+#endif
     unsigned CurrentDepth = C.getState()->get<GCDepth>();
     auto name = C.getCalleeName(CE);
     SValExplainer Ex(C.getASTContext());

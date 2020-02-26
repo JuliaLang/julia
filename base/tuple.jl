@@ -28,7 +28,25 @@ getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex
 getindex(t::Tuple, c::Colon) = t
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
-setindex(x::Tuple, v, i::Integer) = (@_inline_meta; _setindex(v, i, x...))
+
+"""
+    setindex(c::Tuple, v, i::Integer)
+
+Creates a new tuple similar to `x` with the value at index `i` set to `v`.
+Throws a `BoundsError` when out of bounds.
+
+# Examples
+```jldoctest
+julia> Base.setindex((1, 2, 6), 2, 3) == (1, 2, 2)
+true
+```
+"""
+function setindex(x::Tuple, v, i::Integer)
+    @boundscheck 1 <= i <= length(x) || throw(BoundsError(x, i))
+    @_inline_meta
+    _setindex(v, i, x...)
+end
+
 function _setindex(v, i::Integer, first, tail...)
     @_inline_meta
     return (ifelse(i == 1, v, first), _setindex(v, i - 1, tail...)...)
@@ -186,18 +204,7 @@ function map(f, t1::Any16, t2::Any16, ts::Any16...)
     (A...,)
 end
 
-# mapafoldl, based on afold in operators.jl
-mapafoldl(F,op,a) = a
-mapafoldl(F,op,a,b) = op(a,F(b))
-mapafoldl(F,op,a,b,c...) = mapafoldl(F, op, op(a,F(b)), c...)
-function mapafoldl(F,op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
-    y = op(op(op(op(op(op(op(op(op(op(op(op(op(op(op(a,F(b)),F(c)),F(d)),F(e)),F(f)),F(g)),F(h)),F(i)),F(j)),F(k)),F(l)),F(m)),F(n)),F(o)),F(p))
-    for x in qs; y = op(y,F(x)); end
-    y
-end
-mapfoldl_impl(f, op, nt::NamedTuple{(:init,)}, t::Tuple) = mapafoldl(f, op, nt.init, t...)
-mapfoldl_impl(f, op, nt::NamedTuple{()}, t::Tuple) = mapafoldl(f, op, f(t[1]), tail(t)...)
-mapfoldl_impl(f, op, nt::NamedTuple{()}, t::Tuple{}) = mapreduce_empty_iter(f, op, t, IteratorEltype(t))
+_foldl_impl(op, init, itr::Tuple) = afoldl(op, init, itr...)
 
 # type-stable padding
 fill_to_length(t::NTuple{N,Any}, val, ::Val{N}) where {N} = t
@@ -216,6 +223,9 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 if nameof(@__MODULE__) === :Base
 
 (::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
+
+Tuple(x::Ref) = tuple(getindex(x))  # faster than iterator for one element
+Tuple(x::Array{T,0}) where {T} = tuple(getindex(x))
 
 (::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr)
 
@@ -248,6 +258,13 @@ _totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = (collect(E, Iterators.
 _totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
 
 end
+
+## filter ##
+
+filter(f, xs::Tuple) = afoldl((ys, x) -> f(x) ? (ys..., x) : ys, (), xs...)
+
+# use Array for long tuples
+filter(f, t::Any16) = Tuple(filter(f, collect(t)))
 
 ## comparison ##
 

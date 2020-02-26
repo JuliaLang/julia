@@ -2,6 +2,26 @@
 
 using Sockets, Random, Test
 
+# set up a watchdog alarm for 10 minutes
+# so that we can attempt to get a "friendly" backtrace if something gets stuck
+# (although this'll also terminate any attempted debugging session)
+# expected test duration is about 5-10 seconds
+function killjob(d)
+    Core.print(Core.stderr, d)
+    if Sys.islinux()
+        SIGINFO = 10
+    elseif Sys.isbsd()
+        SIGINFO = 29
+    end
+    if @isdefined(SIGINFO)
+        ccall(:uv_kill, Cint, (Cint, Cint), getpid(), SIGINFO)
+        sleep(1)
+    end
+    ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
+    nothing
+end
+Timer(t -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"), 600)
+
 @testset "parsing" begin
     @test ip"127.0.0.1" == IPv4(127,0,0,1)
     @test ip"192.0" == IPv4(192,0,0,0)
@@ -284,8 +304,8 @@ end
             @test fetch(tsk) == msg
         end
         let tsk = @async send(b, ip"127.0.0.1", randport, "WORLD HELLO")
-            (addr, data) = recvfrom(a)
-            @test addr == ip"127.0.0.1" && String(data) == "WORLD HELLO"
+            (inetaddr, data) = recvfrom(a)
+            @test inetaddr.host == ip"127.0.0.1" && String(data) == "WORLD HELLO"
             wait(tsk)
         end
         close(a)
@@ -302,8 +322,8 @@ end
 
         for i = 1:3
             tsk = @async begin
-                let (addr, data) = recvfrom(a)
-                    @test addr == ip"::1"
+                let (inetaddr, data) = recvfrom(a)
+                    @test inetaddr.host == ip"::1"
                     @test String(data) == "Hello World"
                 end
             end
@@ -359,11 +379,11 @@ end
         end
 
         function wait_with_timeout(recvs)
-            TIMEOUT_VAL = 3  # seconds
-            t0 = time()
+            TIMEOUT_VAL = 3*1e9 # nanoseconds
+            t0 = time_ns()
             recvs_check = copy(recvs)
             while ((length(filter!(t->!istaskdone(t), recvs_check)) > 0)
-                  && (time() - t0 < TIMEOUT_VAL))
+                  && (time_ns() - t0 < TIMEOUT_VAL))
                 sleep(0.05)
             end
             length(recvs_check) > 0 && error("timeout")
@@ -485,6 +505,16 @@ end
         @test issubset(getipaddrs(), getipaddrs(loopback=true))
         @test issubset(getipaddrs(IPv6), getipaddrs(IPv6, loopback=true))
     end
+end
+
+@testset "address scope" begin
+    @test islinklocaladdr(ip"169.254.1.0")
+    @test islinklocaladdr(ip"169.254.254.255")
+    @test islinklocaladdr(ip"fe80::")
+    @test islinklocaladdr(ip"febf::")
+    @test !islinklocaladdr(ip"127.0.0.1")
+    @test !islinklocaladdr(ip"2001::")
+
 end
 
 @static if !Sys.iswindows()

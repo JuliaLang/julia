@@ -24,7 +24,7 @@ module FastMath
 
 export @fastmath
 
-import Core.Intrinsics: sqrt_llvm, neg_float_fast,
+import Core.Intrinsics: sqrt_llvm_fast, neg_float_fast,
     add_float_fast, sub_float_fast, mul_float_fast, div_float_fast, rem_float_fast,
     eq_float_fast, ne_float_fast, lt_float_fast, le_float_fast
 
@@ -91,7 +91,7 @@ const rewrite_op =
 function make_fastmath(expr::Expr)
     if expr.head === :quote
         return expr
-    elseif expr.head == :call && expr.args[1] == :^ && expr.args[3] isa Integer
+    elseif expr.head === :call && expr.args[1] === :^ && expr.args[3] isa Integer
         # mimic Julia's literal_pow lowering of literal integer powers
         return Expr(:call, :(Base.FastMath.pow_fast), make_fastmath(expr.args[2]), Val{expr.args[3]}())
     end
@@ -277,7 +277,7 @@ pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64", llvmcall, Float64, (Fl
 pow_fast(x::FloatTypes, ::Val{p}) where {p} = pow_fast(x, p) # inlines already via llvm.powi
 @inline pow_fast(x, v::Val) = Base.literal_pow(^, x, v)
 
-sqrt_fast(x::FloatTypes) = sqrt_llvm(x)
+sqrt_fast(x::FloatTypes) = sqrt_llvm_fast(x)
 
 # libm
 

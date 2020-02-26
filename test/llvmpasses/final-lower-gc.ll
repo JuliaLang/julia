@@ -24,15 +24,15 @@ top:
   %gcframe = call %jl_value_t addrspace(10)** @julia.new_gc_frame(i32 2)
 ; CHECK: %ptls = call %jl_value_t*** @julia.ptls_states()
   %ptls = call %jl_value_t*** @julia.ptls_states()
-; CHECK-NEXT: [[GCFRAME_SIZE_PTR:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 0
-; CHECK-NEXT: [[GCFRAME_SIZE_PTR2:%.*]] = bitcast %jl_value_t addrspace(10)** [[GCFRAME_SIZE_PTR]] to i64*
-; CHECK-NEXT: store i64 4, i64* [[GCFRAME_SIZE_PTR2]], !tbaa !0
-; CHECK-NEXT: [[GCFRAME_SLOT:%.*]] = getelementptr %jl_value_t**, %jl_value_t*** %ptls, i32 0
-; CHECK-NEXT: [[PREV_GCFRAME_PTR:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 1
-; CHECK-NEXT: [[PREV_GCFRAME_PTR2:%.*]] = bitcast %jl_value_t addrspace(10)** [[PREV_GCFRAME_PTR]] to %jl_value_t***
-; CHECK-NEXT: [[PREV_GCFRAME:%.*]] = load %jl_value_t**, %jl_value_t*** [[GCFRAME_SLOT]]
-; CHECK-NEXT: store %jl_value_t** [[PREV_GCFRAME]], %jl_value_t*** [[PREV_GCFRAME_PTR2]], !tbaa !0
-; CHECK-NEXT: [[GCFRAME_SLOT2:%.*]] = bitcast %jl_value_t*** [[GCFRAME_SLOT]] to %jl_value_t addrspace(10)***
+; CHECK-DAG: [[GCFRAME_SIZE_PTR:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 0
+; CHECK-DAG: [[GCFRAME_SIZE_PTR2:%.*]] = bitcast %jl_value_t addrspace(10)** [[GCFRAME_SIZE_PTR]] to i64*
+; CHECK-DAG: store i64 8, i64* [[GCFRAME_SIZE_PTR2]], !tbaa !0
+; CHECK-DAG: [[GCFRAME_SLOT:%.*]] = getelementptr %jl_value_t**, %jl_value_t*** %ptls, i32 0
+; CHECK-DAG: [[PREV_GCFRAME_PTR:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 1
+; CHECK-DAG: [[PREV_GCFRAME_PTR2:%.*]] = bitcast %jl_value_t addrspace(10)** [[PREV_GCFRAME_PTR]] to %jl_value_t***
+; CHECK-DAG: [[PREV_GCFRAME:%.*]] = load %jl_value_t**, %jl_value_t*** [[GCFRAME_SLOT]]
+; CHECK-DAG: store %jl_value_t** [[PREV_GCFRAME]], %jl_value_t*** [[PREV_GCFRAME_PTR2]], !tbaa !0
+; CHECK-DAG: [[GCFRAME_SLOT2:%.*]] = bitcast %jl_value_t*** [[GCFRAME_SLOT]] to %jl_value_t addrspace(10)***
 ; CHECK-NEXT: store %jl_value_t addrspace(10)** %gcframe, %jl_value_t addrspace(10)*** [[GCFRAME_SLOT2]]
   call void @julia.push_gc_frame(%jl_value_t addrspace(10)** %gcframe, i32 2)
   %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)

@@ -8,6 +8,7 @@ using LinearAlgebra: BlasReal, BlasComplex
 Random.seed!(100)
 ## BLAS tests - testing the interface code to BLAS routines
 @testset for elty in [Float32, Float64, ComplexF32, ComplexF64]
+
     @testset "syr2k!" begin
         U = randn(5,2)
         V = randn(5,2)
@@ -198,6 +199,93 @@ Random.seed!(100)
             Cnn, Cmn, Cnm = Matrix{elty}.(undef,((n,n), (n+1,n), (n,n+1)))
             @test_throws DimensionMismatch BLAS.trmm('L','U','N','N',one(elty),triu(Cnn),Cmn)
             @test_throws DimensionMismatch BLAS.trmm('R','U','N','N',one(elty),triu(Cnn),Cnm)
+        end
+
+        # hpmv!
+        if elty in (ComplexF32, ComplexF64)
+            @testset "hpmv!" begin
+                # Both matrix dimensions n coincide, as we have Hermitian matrices.
+                # Define the inputs and outputs of hpmv!, y = α*A*x+β*y
+                α = rand(elty)
+                M = rand(elty, n, n)
+                AL = Hermitian(M, :L)
+                AU = Hermitian(M, :U)
+                x = rand(elty, n)
+                β = rand(elty)
+                y = rand(elty, n)
+
+                y_result_julia_lower = α*AL*x + β*y
+
+                # Create lower triangular packing of AL
+                AP = typeof(AL[1,1])[]
+                for j in 1:n
+                    for i in j:n
+                        push!(AP, AL[i,j])
+                    end
+                end
+
+                y_result_blas_lower = copy(y)
+                BLAS.hpmv!('L', α, AP, x, β, y_result_blas_lower)
+                @test y_result_julia_lower ≈ y_result_blas_lower
+
+                y_result_julia_upper = α*AU*x + β*y
+
+                # Create upper triangular packing of AU
+                AP = typeof(AU[1,1])[]
+                for j in 1:n
+                    for i in 1:j
+                        push!(AP, AU[i,j])
+                    end
+                end
+
+                y_result_blas_upper = copy(y)
+                BLAS.hpmv!('U', α, AP, x, β, y_result_blas_upper)
+                @test y_result_julia_upper ≈ y_result_blas_upper
+            end
+        end
+
+        # spmv!
+        if elty in (Float32, Float64)
+            @testset "spmv!" begin
+                # Both matrix dimensions n coincide, as we have symmetric matrices.
+                # Define the inputs and outputs of spmv!, y = α*A*x+β*y
+                α = rand(elty)
+                M = rand(elty, n, n)
+                AL = Symmetric(M, :L)
+                AU = Symmetric(M, :U)
+                x = rand(elty, n)
+                β = rand(elty)
+                y = rand(elty, n)
+
+                y_result_julia_lower = α*AL*x + β*y
+
+                # Create lower triangular packing of AL
+                AP = typeof(M[1,1])[]
+                for j in 1:n
+                    for i in j:n
+                        push!(AP, AL[i,j])
+                    end
+                end
+
+                y_result_blas_lower = copy(y)
+                BLAS.spmv!('L', α, AP, x, β, y_result_blas_lower)
+                @test y_result_julia_lower ≈ y_result_blas_lower
+
+
+                y_result_julia_upper = α*AU*x + β*y
+
+                # Create upper triangular packing of AU
+                AP = typeof(M[1,1])[]
+                for j in 1:n
+                    for i in 1:j
+                        push!(AP, AU[i,j])
+                    end
+                end
+
+                y_result_blas_upper = copy(y)
+                BLAS.spmv!('U', α, AP, x, β, y_result_blas_upper)
+                @test y_result_julia_upper ≈ y_result_blas_upper
+            end
         end
 
         #trsm

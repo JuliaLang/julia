@@ -6,6 +6,10 @@
     gcd(x,y)
 
 Greatest common (positive) divisor (or zero if `x` and `y` are both zero).
+The arguments may be integer and rational numbers.
+
+!!! compat "Julia 1.4"
+    Rational arguments require Julia 1.4 or later.
 
 # Examples
 ```jldoctest
@@ -53,6 +57,10 @@ end
     lcm(x,y)
 
 Least common (non-negative) multiple.
+The arguments may be integer and rational numbers.
+
+!!! compat "Julia 1.4"
+    Rational arguments require Julia 1.4 or later.
 
 # Examples
 ```jldoctest
@@ -68,18 +76,21 @@ function lcm(a::T, b::T) where T<:Integer
     if a == 0
         return a
     else
-        return checked_abs(a * div(b, gcd(b,a)))
+        return checked_abs(checked_mul(a, div(b, gcd(b,a))))
     end
 end
 
-gcd(a::Integer) = a
-lcm(a::Integer) = a
-gcd(a::Integer, b::Integer) = gcd(promote(a,b)...)
-lcm(a::Integer, b::Integer) = lcm(promote(a,b)...)
-gcd(a::Integer, b::Integer...) = gcd(a, gcd(b...))
-lcm(a::Integer, b::Integer...) = lcm(a, lcm(b...))
+gcd(a::Union{Integer,Rational}) = a
+lcm(a::Union{Integer,Rational}) = a
+gcd(a::Real, b::Real) = gcd(promote(a,b)...)
+lcm(a::Real, b::Real) = lcm(promote(a,b)...)
+gcd(a::Real, b::Real, c::Real...) = gcd(a, gcd(b, c...))
+lcm(a::Real, b::Real, c::Real...) = lcm(a, lcm(b, c...))
+gcd(a::T, b::T) where T<:Real = throw(MethodError(gcd, (a,b)))
+lcm(a::T, b::T) where T<:Real = throw(MethodError(lcm, (a,b)))
 
-lcm(abc::AbstractArray{<:Integer}) = reduce(lcm, abc; init=one(eltype(abc)))
+gcd(abc::AbstractArray{<:Real}) = reduce(gcd, abc; init=zero(eltype(abc)))
+lcm(abc::AbstractArray{<:Real}) = reduce(lcm, abc; init=one(eltype(abc)))
 
 function gcd(abc::AbstractArray{<:Integer})
     a = zero(eltype(abc))
@@ -99,6 +110,11 @@ end
 Computes the greatest common (positive) divisor of `x` and `y` and their Bézout
 coefficients, i.e. the integer coefficients `u` and `v` that satisfy
 ``ux+vy = d = gcd(x,y)``. ``gcdx(x,y)`` returns ``(d,u,v)``.
+
+The arguments may be integer and rational numbers.
+
+!!! compat "Julia 1.4"
+    Rational arguments require Julia 1.4 or later.
 
 # Examples
 ```jldoctest
@@ -133,7 +149,8 @@ function gcdx(a::T, b::T) where T<:Integer
     end
     a < 0 ? (-a, -s0, -t0) : (a, s0, t0)
 end
-gcdx(a::Integer, b::Integer) = gcdx(promote(a,b)...)
+gcdx(a::Real, b::Real) = gcdx(promote(a,b)...)
+gcdx(a::T, b::T) where T<:Real = throw(MethodError(gcdx, (a,b)))
 
 # multiplicative inverse of n mod m, error if none
 

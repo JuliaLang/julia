@@ -49,17 +49,9 @@ function repl_cmd(cmd, out)
                 if !haskey(ENV, "OLDPWD")
                     error("cd: OLDPWD not set")
                 end
-                cd(ENV["OLDPWD"])
-            else
-                @static if !Sys.iswindows()
-                    # TODO: this is a rather expensive way to copy a string, remove?
-                    # If it's intended to simulate `cd`, it should instead be doing
-                    # more nearly `cd $dir && printf %s \$PWD` (with appropriate quoting),
-                    # since shell `cd` does more than just `echo` the result.
-                    dir = read(`$shell -c "printf '%s' $(shell_escape_posixly(dir))"`, String)
-                end
-                cd(dir)
+                dir = ENV["OLDPWD"]
             end
+            cd(dir)
         else
             cd()
         end
@@ -79,6 +71,7 @@ function repl_cmd(cmd, out)
     nothing
 end
 
+# deprecated function--preserved for DocTests.jl
 function ip_matches_func(ip, func::Symbol)
     for fr in StackTraces.lookup(ip)
         if fr === StackTraces.UNKNOWN || fr.from_c
@@ -90,28 +83,28 @@ function ip_matches_func(ip, func::Symbol)
 end
 
 function scrub_repl_backtrace(bt)
-    if bt !== nothing
+    if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
+        bt = stacktrace(bt)
         # remove REPL-related frames from interactive printing
-        eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
-        if eval_ind !== nothing
-            return bt[1:eval_ind-1]
-        end
+        eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
+        eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
     end
     return bt
 end
 
 function display_error(io::IO, er, bt)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    showerror(IOContext(io, :limit => true), er, scrub_repl_backtrace(bt))
+    bt = scrub_repl_backtrace(bt)
+    showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
     println(io)
 end
 function display_error(io::IO, stack::Vector)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    show_exception_stack(IOContext(io, :limit => true), Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ])
+    bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
+    show_exception_stack(IOContext(io, :limit => true), bt)
 end
 display_error(stack::Vector) = display_error(stderr, stack)
-display_error(er, bt) = display_error(stderr, er, bt)
-display_error(er) = display_error(er, [])
+display_error(er, bt=nothing) = display_error(stderr, er, bt)
 
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
@@ -429,7 +422,32 @@ end
 
 # MainInclude exists to hide Main.include and eval from `names(Main)`.
 baremodule MainInclude
-include(fname::AbstractString) = Main.Base.include(Main, fname)
+using ..Base
+include(mapexpr::Function, fname::AbstractString) = Base.include(mapexpr, Main, fname)
+# We inline the definition of include from loading.jl/include_relative to get one-frame stacktraces
+# for the common case of include(fname).  Otherwise we would use:
+#    include(fname::AbstractString) = Base.include(Main, fname)
+function include(fname::AbstractString)
+    mod = Main
+    isa(fname, String) || (fname = Base.convert(String, fname)::String)
+    path, prev = Base._include_dependency(mod, fname)
+    for callback in Base.include_callbacks # to preserve order, must come before Core.include
+        Base.invokelatest(callback, mod, path)
+    end
+    tls = Base.task_local_storage()
+    tls[:SOURCE_PATH] = path
+    local result
+    try
+        result = ccall(:jl_load, Any, (Any, Cstring), mod, path)
+    finally
+        if prev === nothing
+            Base.delete!(tls, :SOURCE_PATH)
+        else
+            tls[:SOURCE_PATH] = prev
+        end
+    end
+    return result
+end
 eval(x) = Core.eval(Main, x)
 end
 
@@ -443,15 +461,19 @@ definition of `eval`, which evaluates expressions in that module.
 MainInclude.eval
 
 """
-    include(path::AbstractString)
+    include([mapexpr::Function,] path::AbstractString)
 
 Evaluate the contents of the input source file in the global scope of the containing module.
-Every module (except those defined with `baremodule`) has its own 1-argument
+Every module (except those defined with `baremodule`) has its own
 definition of `include`, which evaluates the file in that module.
 Returns the result of the last evaluated expression of the input file. During including,
 a task-local include path is set to the directory containing the file. Nested calls to
 `include` will search relative to that path. This function is typically used to load source
 interactively, or to combine files in packages that are broken into multiple source files.
+
+The optional first argument `mapexpr` can be used to transform the included code before
+it is evaluated: for each parsed expression `expr` in `path`, the `include` function
+actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
 
 Use [`Base.include`](@ref) to evaluate a file into another module.
 """

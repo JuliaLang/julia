@@ -42,7 +42,7 @@ function moduleroot(m::Module)
     while true
         is_root_module(m) && return m
         p = parentmodule(m)
-        p == m && return m
+        p === m && return m
         m = p
     end
 end
@@ -147,7 +147,7 @@ function fieldname(t::DataType, i::Integer)
         throw(ArgumentError("type does not have definite field names"))
     end
     names = _fieldnames(t)
-    n_fields = length(names)
+    n_fields = length(names)::Int
     field_label = n_fields == 1 ? "field" : "fields"
     i > n_fields && throw(ArgumentError("Cannot access field $i since type $t only has $n_fields $field_label."))
     i < 1 && throw(ArgumentError("Field numbers must be positive integers. $i is invalid."))
@@ -317,10 +317,11 @@ datatype_fieldtypes(x::DataType) = ccall(:jl_get_fieldtypes, Any, (Any,), x)
 
 struct DataTypeLayout
     nfields::UInt32
-    alignment::UInt32
-    # alignment : 28;
+    npointers::UInt32
+    firstptr::Int32
+    alignment::UInt16
+    flags::UInt16
     # haspadding : 1;
-    # pointerfree : 1;
     # fielddesc_type : 2;
 end
 
@@ -334,8 +335,28 @@ function datatype_alignment(dt::DataType)
     @_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
     alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
-    return Int(alignment & 0x1FF)
+    return Int(alignment)
 end
+
+# amount of total space taken by T when stored in a container
+function aligned_sizeof(T)
+    @_pure_meta
+    if isbitsunion(T)
+        sz = Ref{Csize_t}(0)
+        algn = Ref{Csize_t}(0)
+        ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), T, sz, algn)
+        al = algn[]
+        return (sz[] + al - 1) & -al
+    elseif allocatedinline(T)
+        al = datatype_alignment(T)
+        return (Core.sizeof(T) + al - 1) & -al
+    else
+        return Core.sizeof(Ptr{Cvoid})
+    end
+end
+
+gc_alignment(sz::Integer) = Int(ccall(:jl_alignment, Cint, (Csize_t,), sz))
+gc_alignment(T::Type) = gc_alignment(Core.sizeof(T))
 
 """
     Base.datatype_haspadding(dt::DataType) -> Bool
@@ -347,8 +368,8 @@ Can be called on any `isconcretetype`.
 function datatype_haspadding(dt::DataType)
     @_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
-    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
-    return (alignment >> 9) & 1 == 1
+    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
+    return flags & 1 == 1
 end
 
 """
@@ -360,8 +381,8 @@ Can be called on any `isconcretetype`.
 function datatype_pointerfree(dt::DataType)
     @_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
-    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
-    return (alignment >> 10) & 0xFFFFF == 0
+    npointers = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
+    return npointers == 0
 end
 
 """
@@ -376,27 +397,27 @@ See also [`fieldoffset`](@ref).
 function datatype_fielddesc_type(dt::DataType)
     @_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
-    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
-    return (alignment >> 30) & 3
+    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
+    return (flags >> 1) & 3
 end
 
 """
-    isimmutable(v) -> Bool
+    ismutable(v) -> Bool
 
-Return `true` iff value `v` is immutable.  See [Mutable Composite Types](@ref)
+Return `true` iff value `v` is mutable.  See [Mutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you give it
 a type, it will tell you that a value of `DataType` is mutable.
 
 # Examples
 ```jldoctest
-julia> isimmutable(1)
-true
-
-julia> isimmutable([1,2])
+julia> ismutable(1)
 false
+
+julia> ismutable([1,2])
+true
 ```
 """
-isimmutable(@nospecialize(x)) = (@_pure_meta; !typeof(x).mutable)
+ismutable(@nospecialize(x)) = (@_pure_meta; typeof(x).mutable)
 
 """
     isstructtype(T) -> Bool
@@ -569,7 +590,9 @@ end
 Compute a type that contains the intersection of `T` and `S`. Usually this will be the
 smallest such type or one close to it.
 """
-typeintersect(@nospecialize(a),@nospecialize(b)) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
+typeintersect(@nospecialize(a), @nospecialize(b)) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any, Any), a, b))
+
+morespecific(@nospecialize(a), @nospecialize(b)) = ccall(:jl_type_morespecific, Cint, (Any, Any), a, b) != 0
 
 """
     fieldoffset(type, i)
@@ -772,10 +795,10 @@ Note that an error will be thrown if `types` are not leaf types when `generated`
 function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=true, debuginfo::Symbol=:default)
     if @isdefined(IRShow)
         debuginfo = IRShow.debuginfo(debuginfo)
-    elseif debuginfo == :default
+    elseif debuginfo === :default
         debuginfo = :source
     end
-    if debuginfo != :source && debuginfo != :none
+    if debuginfo !== :source && debuginfo !== :none
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     return map(method_instances(f, t)) do m
@@ -789,7 +812,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
             end
         end
         code = uncompressed_ast(m.def::Method)
-        debuginfo == :none && remove_linenums!(code)
+        debuginfo === :none && remove_linenums!(code)
         return code
     end
 end
@@ -840,19 +863,29 @@ function MethodList(mt::Core.MethodTable)
 end
 
 """
-    methods(f, [types])
+    methods(f, [types], [module])
 
-Returns the method table for `f`.
+Return the method table for `f`.
 
-If `types` is specified, returns an array of methods whose types match.
+If `types` is specified, return an array of methods whose types match.
+If `module` is specified, return an array of methods defined in that module.
+A list of modules can also be specified as an array.
+
+!!! compat "Julia 1.4"
+    At least Julia 1.4 is required for specifying a module.
 """
-function methods(@nospecialize(f), @nospecialize(t))
+function methods(@nospecialize(f), @nospecialize(t),
+                 @nospecialize(mod::Union{Module,AbstractArray{Module},Nothing}=nothing))
+    if mod isa Module
+        mod = (mod,)
+    end
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
     t = to_tuple_type(t)
     world = typemax(UInt)
-    return MethodList(Method[m[3] for m in _methods(f, t, -1, world)], typeof(f).name.mt)
+    MethodList(Method[m[3] for m in _methods(f, t, -1, world) if mod === nothing || m[3].module in mod],
+               typeof(f).name.mt)
 end
 
 methods(f::Core.Builtin) = MethodList(Method[], typeof(f).name.mt)
@@ -865,9 +898,11 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     ms = ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), tt, -1, 1, world, min, max)::Array{Any,1}
     return MethodList(Method[m[3] for m in ms], typeof(f).name.mt)
 end
-function methods(@nospecialize(f))
+
+function methods(@nospecialize(f),
+                 @nospecialize(mod::Union{Module,AbstractArray{Module},Nothing}=nothing))
     # return all matches
-    return methods(f, Tuple{Vararg{Any}})
+    return methods(f, Tuple{Vararg{Any}}, mod)
 end
 
 function visit(f, mt::Core.MethodTable)
@@ -1059,10 +1094,10 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
     end
     if @isdefined(IRShow)
         debuginfo = IRShow.debuginfo(debuginfo)
-    elseif debuginfo == :default
+    elseif debuginfo === :default
         debuginfo = :source
     end
-    if debuginfo != :source && debuginfo != :none
+    if debuginfo !== :source && debuginfo !== :none
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     types = to_tuple_type(types)
@@ -1071,7 +1106,7 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
         meth = func_for_method_checked(x[3], types, x[2])
         (code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, params)
         code === nothing && error("inference not successful") # inference disabled?
-        debuginfo == :none && remove_linenums!(code)
+        debuginfo === :none && remove_linenums!(code)
         push!(asts, code => ty)
     end
     return asts
@@ -1146,6 +1181,11 @@ function nameof(f::Function)
     return mt.name
 end
 
+function nameof(f::Core.IntrinsicFunction)
+    name = ccall(:jl_intrinsic_name, Ptr{UInt8}, (Core.IntrinsicFunction,), f)
+    return ccall(:jl_symbol, Ref{Symbol}, (Ptr{UInt8},), name)
+end
+
 """
     parentmodule(f::Function) -> Module
 
@@ -1212,7 +1252,7 @@ function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Sym
     hasmethod(f, t, world=world) || return false
     isempty(kwnames) && return true
     m = which(f, t)
-    kws = kwarg_decl(m, Core.kwftype(typeof(f)))
+    kws = kwarg_decl(m)
     for kw in kws
         endswith(String(kw), "...") && return true
     end
@@ -1286,16 +1326,16 @@ end
 
 Determine whether `t` is a Type for which one or more of its parameters is `Union{}`.
 """
-function has_bottom_parameter(t::Type)
-    ret = false
+function has_bottom_parameter(t::DataType)
     for p in t.parameters
-        ret |= (p == Bottom) || has_bottom_parameter(p)
+        has_bottom_parameter(p) && return true
     end
-    ret
+    return false
 end
+has_bottom_parameter(t::typeof(Bottom)) = true
 has_bottom_parameter(t::UnionAll) = has_bottom_parameter(unwrap_unionall(t))
 has_bottom_parameter(t::Union) = has_bottom_parameter(t.a) & has_bottom_parameter(t.b)
-has_bottom_parameter(t::TypeVar) = t.ub == Bottom || has_bottom_parameter(t.ub)
+has_bottom_parameter(t::TypeVar) = has_bottom_parameter(t.ub)
 has_bottom_parameter(::Any) = false
 
 min_world(m::Core.CodeInstance) = m.min_world

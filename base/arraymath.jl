@@ -48,10 +48,10 @@ function +(A::Array, Bs::Array...)
 end
 
 for f in (:/, :\, :*)
-    if f != :/
+    if f !== :/
         @eval ($f)(A::Number, B::AbstractArray) = broadcast_preserving_zero_d($f, A, B)
     end
-    if f != :\
+    if f !== :\
         @eval ($f)(A::AbstractArray, B::Number) = broadcast_preserving_zero_d($f, A, B)
     end
 end
@@ -94,7 +94,7 @@ function reverse(A::Array{T}; dims::Integer) where T
             end
         end
     else
-        if isbitstype(T) && M>200
+        if allocatedinline(T) && M>200
             for i = 1:sd
                 ri = sd+1-i
                 for j=0:stride:(N-stride)

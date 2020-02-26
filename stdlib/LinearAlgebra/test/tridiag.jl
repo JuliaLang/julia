@@ -390,9 +390,24 @@ end
                 end
             end
         end
+        @testset "generalized dot" begin
+            x = fill(convert(elty, 1), n)
+            y = fill(convert(elty, 1), n)
+            @test dot(x, A, y) ≈ dot(A'x, y)
+        end
     end
 end
 
+@testset "SymTridiagonal block matrix" begin
+    M = [1 2; 2 4]
+    A = SymTridiagonal(fill(M, 3), fill(M, 2))
+    @test @inferred A[1,1] == Symmetric(M)
+    @test @inferred A[1,2] == M
+    @test @inferred A[2,1] == transpose(M)
+    @test @inferred diag(A, 1) == fill(M, 2)
+    @test @inferred diag(A, 0) == fill(Symmetric(M), 3)
+    @test @inferred diag(A, -1) == fill(transpose(M), 2)
+end
 
 @testset "Issue 12068" begin
     @test SymTridiagonal([1, 2], [0])^3 == [1 0; 0 8]

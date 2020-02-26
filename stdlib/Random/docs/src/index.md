@@ -26,6 +26,9 @@ unbounded integers, the interval must be specified (e.g. `rand(big.(1:6))`).
 Additionally, normal and exponential distributions are implemented for some `AbstractFloat` and
 `Complex` types, see [`randn`](@ref) and [`randexp`](@ref) for details.
 
+!!! warn
+    Because the precise way in which random numbers are generated is considered an implementation detail, bug fixes and speed improvements may change the stream of numbers that are generated after a version change. Relying on a specific seed or generated stream of numbers during unit testing is thus discouraged - consider testing properties of the methods in question instead.
+
 ## Random numbers module
 ```@docs
 Random.Random
@@ -285,7 +288,10 @@ The API is not clearly defined yet, but as a rule of thumb:
    should be defined for this specific RNG, if they are needed;
 2) other documented `rand` methods accepting an `AbstractRNG` should work out of the box,
    (provided the methods from 1) what are relied on are implemented),
-   but can of course be specialized for this RNG if there is room for optimization.
+   but can of course be specialized for this RNG if there is room for optimization;
+3) `copy` for pseudo-RNGs should return an independent copy that generates the exact same random sequence as the
+   original from that point when called in the same way. When this is not feasible (e.g. hardware-based RNGs),
+   `copy` must not be implemented.
 
 Concerning 1), a `rand` method may happen to work automatically, but it's not officially
 supported and may break without warnings in a subsequent release.
@@ -323,3 +329,14 @@ The non-mutating array method of `rand` will automatically call this specializat
 ```@meta
 DocTestSetup = nothing
 ```
+
+# Reproducibility
+
+By using an RNG parameter initialized with a given seed, you can reproduce the same pseudorandom number sequence when running your program multiple times.  However, a minor release of Julia (e.g. 1.3 to 1.4) *may change* the sequence of pseudorandom numbers generated from a specific seed.  (Even if the sequence produced by a low-level function like [`rand`](@ref) does not change, the output of higher-level functions like [`randsubseq`](@ref) may change due to algorithm updates.)   Rationale: guaranteeing that pseudorandom streams never change prohibits many algorithmic improvements.
+
+If you need to guarantee exact reproducibility of random data, it is advisable to simply *save the data* (e.g. as a supplementary attachment in a scientific publication).  (You can also, of course, specify a
+particular Julia version and package manifest, especially if you require bit reproducibility.)
+
+Software tests that rely on *specific* "random" data should also generally save the data or embed it into the test code.  On the other hand, tests that should pass for *most* random data (e.g. testing `A \ (A*x) ≈ x` for a random matrix `A = randn(n,n)`) can use an RNG with a fixed seed to ensure that simply running the test many times does not encounter a failure due to very improbable data (e.g. an extremely ill-conditioned matrix).
+
+The statistical *distribution* from which random samples are drawn *is* guaranteed to be the same across any minor Julia releases.

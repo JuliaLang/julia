@@ -102,6 +102,8 @@ shell_escape(cmd::Cmd; special::AbstractString="") =
     shell_escape(cmd.exec..., special=special)
 shell_escape_posixly(cmd::Cmd) =
     shell_escape_posixly(cmd.exec...)
+shell_escape_winsomely(cmd::Cmd) =
+    shell_escape_winsomely(cmd.exec...)
 
 function show(io::IO, cmd::Cmd)
     print_env = cmd.env !== nothing
@@ -314,6 +316,10 @@ pipeline(a, b, c, d...) = pipeline(pipeline(a, b), c, d...)
 
 ## implementation of `cmd` syntax ##
 
+cmd_interpolate(xs...) = cstr(string(map(cmd_interpolate1, xs)...))
+cmd_interpolate1(x) = x
+cmd_interpolate1(::Nothing) = throw(ArgumentError("`nothing` can not be interpolated into commands (`Cmd`)"))
+
 arg_gen() = String[]
 arg_gen(x::AbstractString) = String[cstr(x)]
 function arg_gen(cmd::Cmd)
@@ -327,11 +333,11 @@ function arg_gen(head)
     if isiterable(typeof(head))
         vals = String[]
         for x in head
-            push!(vals, cstr(string(x)))
+            push!(vals, cmd_interpolate(x))
         end
         return vals
     else
-        return String[cstr(string(head))]
+        return String[cmd_interpolate(head)]
     end
 end
 
@@ -340,7 +346,7 @@ function arg_gen(head, tail...)
     tail = arg_gen(tail...)
     vals = String[]
     for h = head, t = tail
-        push!(vals, cstr(string(h,t)))
+        push!(vals, cmd_interpolate(h,t))
     end
     return vals
 end

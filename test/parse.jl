@@ -352,3 +352,26 @@ end
         @test isequal(parse(Float64, s), sign(v))
     end
 end
+
+@testset "operator precedence correctness" begin
+    ops = map(Symbol, split("= => || && --> < <| |> : + * // << ^ :: ."))
+    for f in ops, g in ops
+        f == g && continue
+        pf = Base.operator_precedence(f)
+        pg = Base.operator_precedence(g)
+        @test pf != pg
+        expr = Meta.parse("x$(f)y$(g)z")
+        @test expr == Meta.parse(pf > pg ? "(x$(f)y)$(g)z" : "x$(f)(y$(g)z)")
+    end
+end
+
+# issue 34498
+@testset "macro calls @foo{...}" begin
+    @test :(@foo{}) == :(@foo {})
+    @test :(@foo{bar}) == :(@foo {bar})
+    @test :(@foo{bar,baz}) == :(@foo {bar,baz})
+    @test :(@foo{bar}(baz)) == :((@foo{bar})(baz))
+    @test :(@foo{bar}{baz}) == :((@foo{bar}){baz})
+    @test :(@foo{bar}[baz]) == :((@foo{bar})[baz])
+    @test :(@foo{bar} + baz) == :((@foo{bar}) + baz)
+end

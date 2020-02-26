@@ -14,6 +14,7 @@ export
     getnameinfo,
     getipaddr,
     getipaddrs,
+    islinklocaladdr,
     getpeername,
     getsockname,
     listen,
@@ -231,7 +232,7 @@ const UV_UDP_REUSEADDR = 4
 
 ##
 
-function _bind(sock::TCPServer, host::Union{IPv4, IPv6}, port::UInt16, flags::UInt32=UInt32(0))
+function _bind(sock::Union{TCPServer, TCPSocket}, host::Union{IPv4, IPv6}, port::UInt16, flags::UInt32=UInt32(0))
     host_in = Ref(hton(host.host))
     return ccall(:jl_tcp_bind, Int32, (Ptr{Cvoid}, UInt16, Ptr{Cvoid}, Cuint, Cint),
             sock, hton(port), host_in, flags, host isa IPv6)
@@ -252,7 +253,7 @@ Bind `socket` to the given `host:port`. Note that `0.0.0.0` will listen on all d
 * If `reuseaddr=true`, multiple threads or processes can bind to the same address without error
   if they all set `reuseaddr=true`, but only the last to bind will receive any traffic.
 """
-function bind(sock::Union{TCPServer, UDPSocket}, host::IPAddr, port::Integer; ipv6only = false, reuseaddr = false, kws...)
+function bind(sock::Union{TCPServer, UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only = false, reuseaddr = false, kws...)
     if sock.status != StatusInit
         error("$(typeof(sock)) is not in initialization state")
     end
@@ -274,7 +275,9 @@ function bind(sock::Union{TCPServer, UDPSocket}, host::IPAddr, port::Integer; ip
             return false
         end
     end
-    sock.status = StatusOpen
+    if isa(sock, TCPServer) || isa(sock, UDPSocket)
+        sock.status = StatusOpen
+    end
     isa(sock, UDPSocket) && setopt(sock; kws...)
     iolock_end()
     return true
@@ -325,10 +328,14 @@ function recv(sock::UDPSocket)
 end
 
 """
-    recvfrom(socket::UDPSocket) -> (address, data)
+    recvfrom(socket::UDPSocket) -> (host_port, data)
 
-Read a UDP packet from the specified socket, returning a tuple of `(address, data)`, where
-`address` will be either IPv4 or IPv6 as appropriate.
+Read a UDP packet from the specified socket, returning a tuple of `(host_port, data)`, where
+`host_port` will be an InetAddr{IPv4} or InetAddr{IPv6}, as appropriate.
+
+!!! compat "Julia 1.3"
+    Prior to Julia version 1.3, the first returned value was an address (`IPAddr`).
+    In version 1.3 it was changed to an `InetAddr`.
 """
 function recvfrom(sock::UDPSocket)
     iolock_begin()
@@ -348,7 +355,7 @@ function recvfrom(sock::UDPSocket)
         From = Union{InetAddr{IPv4}, InetAddr{IPv6}}
         Data = Vector{UInt8}
         from, data = wait(sock.recvnotify)::Tuple{From, Data}
-        return (from.host, data)
+        return (from, data)
     finally
         unlock(sock.recvnotify)
     end
@@ -430,12 +437,16 @@ function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg)
     uvw = _send_async(sock, ipaddr, UInt16(port), msg)
     ct = current_task()
     preserve_handle(ct)
+    Base.sigatomic_begin()
     uv_req_set_data(uvw, ct)
     iolock_end()
     status = try
+        Base.sigatomic_end()
         wait()::Cint
     finally
+        Base.sigatomic_end()
         iolock_begin()
+        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
         if uv_req_data(uvw) != C_NULL
             # uvw is still alive,
             # so make sure we won't get spurious notifications later

@@ -78,7 +78,13 @@ function instanceof_tfunc(@nospecialize(t))
     elseif isa(t, UnionAll)
         t′ = unwrap_unionall(t)
         t′′, isexact = instanceof_tfunc(t′)
-        return rewrap_unionall(t′′, t), isexact
+        tr = rewrap_unionall(t′′, t)
+        if t′′ isa DataType && !has_free_typevars(tr)
+            # a real instance must be within the declared bounds of the type,
+            # so we can intersect with the original wrapper.
+            tr = typeintersect(tr, t′′.name.wrapper)
+        end
+        return tr, isexact
     elseif isa(t, Union)
         ta, isexact_a = instanceof_tfunc(t.a)
         tb, isexact_b = instanceof_tfunc(t.b)
@@ -158,6 +164,7 @@ add_tfunc(floor_llvm, 1, 1, math_tfunc, 10)
 add_tfunc(trunc_llvm, 1, 1, math_tfunc, 10)
 add_tfunc(rint_llvm, 1, 1, math_tfunc, 10)
 add_tfunc(sqrt_llvm, 1, 1, math_tfunc, 20)
+add_tfunc(sqrt_llvm_fast, 1, 1, math_tfunc, 20)
     ## same-type comparisons ##
 cmp_tfunc(@nospecialize(x), @nospecialize(y)) = Bool
 add_tfunc(eq_int, 2, 2, cmp_tfunc, 1)
@@ -281,7 +288,7 @@ function isdefined_tfunc(@nospecialize(args...))
                 return Const(true)
             elseif isa(arg1, Const)
                 arg1v = (arg1::Const).val
-                if isimmutable(arg1v) || isdefined(arg1v, idx) || (isa(arg1v, DataType) && is_dt_const_field(idx))
+                if !ismutable(arg1v) || isdefined(arg1v, idx) || (isa(arg1v, DataType) && is_dt_const_field(idx))
                     return Const(isdefined(arg1v, idx))
                 end
             end
@@ -715,7 +722,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
             if !(isa(nv,Symbol) || isa(nv,Int))
                 return Bottom
             end
-            if (isa(sv, SimpleVector) || isimmutable(sv)) && isdefined(sv, nv)
+            if (isa(sv, SimpleVector) || !ismutable(sv)) && isdefined(sv, nv)
                 return AbstractEvalConstant(getfield(sv, nv))
             end
         end
@@ -745,8 +752,24 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         return Any
     end
     if s.name === _NAMEDTUPLE_NAME && !isconcretetype(s)
-        # TODO: better approximate inference
-        return Any
+        if isa(name, Const) && isa(name.val, Symbol)
+            if isa(s.parameters[1], Tuple)
+                name = Const(Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), s, name.val, false)+1))
+            else
+                name = Int
+            end
+        elseif Symbol ⊑ name
+            name = Int
+        end
+        _ts = s.parameters[2]
+        while isa(_ts, TypeVar)
+            _ts = _ts.ub
+        end
+        _ts = rewrap_unionall(_ts, s00)
+        if !(_ts <: Tuple)
+            return Any
+        end
+        return getfield_tfunc(_ts, name)
     end
     ftypes = datatype_fieldtypes(s)
     if isempty(ftypes)
@@ -975,7 +998,7 @@ function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
     for i = 2:length(argtypes)
         isa(u, UnionAll) || return false
         ai = widenconditional(argtypes[i])
-        if ai === TypeVar
+        if ai ⊑ TypeVar
             # We don't know anything about the bounds of this typevar, but as
             # long as the UnionAll is not constrained, that's ok.
             if !(u.var.lb === Union{} && u.var.ub === Any)
@@ -1418,14 +1441,7 @@ function return_type_tfunc(argtypes::Vector{Any}, vtypes::VarTable, sv::Inferenc
                     if contains_is(argtypes_vec, Union{})
                         return Const(Union{})
                     end
-                    astype = argtypes_to_type(argtypes_vec)
-                    if isa(aft, Const)
-                        rt = abstract_call(aft.val, nothing, argtypes_vec, vtypes, sv, -1)
-                    elseif isconstType(aft)
-                        rt = abstract_call(aft.parameters[1], nothing, argtypes_vec, vtypes, sv, -1)
-                    else
-                        rt = abstract_call_gf_by_type(nothing, argtypes_vec, astype, sv, -1)
-                    end
+                    rt = abstract_call(nothing, argtypes_vec, vtypes, sv, -1)
                     if isa(rt, Const)
                         # output was computed to be constant
                         return Const(typeof(rt.val))

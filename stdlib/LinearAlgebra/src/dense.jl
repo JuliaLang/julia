@@ -341,6 +341,12 @@ end
 
 Kronecker tensor product of two vectors or two matrices.
 
+For vectors v and w, the Kronecker product is related to the outer product by
+`kron(v,w) == vec(w*transpose(v))` or
+`w*transpose(v) == reshape(kron(v,w), (length(w), length(v)))`.
+Note how the ordering of `v` and `w` differs on the left and right
+of these expressions (due to column-major storage).
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -359,6 +365,20 @@ julia> kron(A, B)
  1+0im  0-1im  2+0im  0-2im
  0+3im  3+0im  0+4im  4+0im
  3+0im  0-3im  4+0im  0-4im
+
+julia> v = [1, 2]; w = [3, 4, 5];
+
+julia> w*transpose(v)
+3×2 Array{Int64,2}:
+ 3   6
+ 4   8
+ 5  10
+
+julia> reshape(kron(v,w), (length(w), length(v)))
+3×2 Array{Int64,2}:
+ 3   6
+ 4   8
+ 5  10
 ```
 """
 function kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
@@ -1339,12 +1359,12 @@ end
 ## Basis for null space
 
 """
-    nullspace(M; atol::Real=0, rtol::Rea=atol>0 ? 0 : n*ϵ)
+    nullspace(M; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ)
     nullspace(M, rtol::Real) = nullspace(M; rtol=rtol) # to be deprecated in Julia 2.0
 
 Computes a basis for the nullspace of `M` by including the singular
-vectors of A whose singular have magnitude are greater than `max(atol, rtol*σ₁)`,
-where `σ₁` is `M`'s largest singularvalue.
+vectors of `M` whose singular values have magnitudes greater than `max(atol, rtol*σ₁)`,
+where `σ₁` is `M`'s largest singular value.
 
 By default, the relative tolerance `rtol` is `n*ϵ`, where `n`
 is the size of the smallest dimension of `M`, and `ϵ` is the [`eps`](@ref) of
@@ -1398,15 +1418,22 @@ function cond(A::AbstractMatrix, p::Real=2)
     if p == 2
         v = svdvals(A)
         maxv = maximum(v)
-        return maxv == 0.0 ? oftype(real(A[1,1]),Inf) : maxv / minimum(v)
+        return iszero(maxv) ? oftype(real(maxv), Inf) : maxv / minimum(v)
     elseif p == 1 || p == Inf
         checksquare(A)
-        return _cond1Inf(A, p)
+        try
+            Ainv = inv(A)
+            return opnorm(A, p)*opnorm(Ainv, p)
+        catch e
+            if isa(e, LAPACKException) || isa(e, SingularException)
+                return convert(float(real(eltype(A))), Inf)
+            else
+                rethrow()
+            end
+        end
     end
     throw(ArgumentError("p-norm must be 1, 2 or Inf, got $p"))
 end
-_cond1Inf(A::StridedMatrix{<:BlasFloat}, p::Real) = _cond1Inf(lu(A), p, opnorm(A, p))
-_cond1Inf(A::AbstractMatrix, p::Real)             = opnorm(A, p)*opnorm(inv(A), p)
 
 ## Lyapunov and Sylvester equation
 

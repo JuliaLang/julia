@@ -484,7 +484,7 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test lastindex(B, 2) == lastindex(A, 2) == last(axes(B, 2))
 
     # first(a)
-    @test first(B) == B[firstindex(B)] == B[1] == A[1] # TODO: use B[begin] once parser transforms it
+    @test first(B) == B[firstindex(B)] == B[begin] == B[1] == A[1] == A[begin]
     @test firstindex(B) == firstindex(A) == first(LinearIndices(B))
     @test firstindex(B, 1) == firstindex(A, 1) == first(axes(B, 1))
     @test firstindex(B, 2) == firstindex(A, 2) == first(axes(B, 2))
@@ -994,4 +994,8 @@ end
         x[CartesianIndex()] = 10
         @test getindex(x) == getindex(x, CartesianIndex()) == 10
     end
+end
+
+@testset "vcat with mixed elements" begin
+    @test vcat(Nothing[], [missing], [1.0], [Int8(1)]) isa Vector{Union{Missing, Nothing, Float64}}
 end

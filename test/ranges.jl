@@ -305,6 +305,8 @@ end
         @test findfirst(==(7), 1:2:10) == 4
         @test findfirst(==(10), 1:2:10) == nothing
         @test findfirst(==(11), 1:2:10) == nothing
+        @test findfirst(==(-7), 1:-1:-10) == 9
+        @test findfirst(==(2),1:-1:2) == nothing
     end
     @testset "reverse" begin
         @test reverse(reverse(1:10)) == 1:10
@@ -361,6 +363,16 @@ end
 
         @test intersect(1:3, 2) === intersect(2, 1:3) === 2:2
         @test intersect(1.0:3.0, 2) == intersect(2, 1.0:3.0) == [2.0]
+
+        @testset "Support StepRange with a non-numeric step" begin
+            start = Date(1914, 7, 28)
+            stop = Date(1918, 11, 11)
+
+            @test intersect(start:Day(1):stop, start:Day(1):stop) == start:Day(1):stop
+            @test intersect(start:Day(1):stop, start:Day(5):stop) == start:Day(5):stop
+            @test intersect(start-Day(10):Day(1):stop-Day(10), start:Day(5):stop) ==
+                start:Day(5):stop-Day(10)-mod(stop-start, Day(5))
+        end
     end
     @testset "issubset" begin
         @test issubset(1:3, 1:typemax(Int)) #32461
@@ -560,24 +572,40 @@ end
     @test sum(0:0.000001:1) == 500000.5
     @test sum(0:0.1:10) == 505.
 end
-@testset "broadcasted operations with scalars" begin
-    @test broadcast(-, 1:3) === -1:-1:-3
-    @test broadcast(-, 1:3, 2) === -1:1
-    @test broadcast(-, 1:3, 0.25) === 1-0.25:3-0.25
-    @test broadcast(+, 1:3) === 1:3
-    @test broadcast(+, 1:3, 2) === 3:5
-    @test broadcast(+, 1:3, 0.25) === 1+0.25:3+0.25
-    @test broadcast(+, 1:2:6, 1) === 2:2:6
-    @test broadcast(+, 1:2:6, 0.3) === 1+0.3:2:5+0.3
-    @test broadcast(-, 1:2:6, 1) === 0:2:4
-    @test broadcast(-, 1:2:6, 0.3) === 1-0.3:2:5-0.3
-    @test broadcast(-, 2, 1:3) === 1:-1:-1
+@testset "broadcasted operations with scalars" for T in (Int, UInt, Int128)
+    @test broadcast(-, T(1):3, 2) === T(1)-2:1
+    @test broadcast(-, T(1):3, 0.25) === T(1)-0.25:3-0.25
+    @test broadcast(+, T(1):3) === T(1):3
+    @test broadcast(+, T(1):3, 2) === T(3):5
+    @test broadcast(+, T(1):3, 0.25) === T(1)+0.25:3+0.25
+    @test broadcast(+, T(1):2:6, 1) === T(2):2:6
+    @test broadcast(+, T(1):2:6, 0.3) === T(1)+0.3:2:5+0.3
+    @test broadcast(-, T(1):2:6, 1) === T(0):2:4
+    @test broadcast(-, T(1):2:6, 0.3) === T(1)-0.3:2:5-0.3
+    if T <: Unsigned
+        @test_broken broadcast(-, T(1):3) == -T(1):-1:-T(3)
+        @test_broken broadcast(-, 2, T(1):3) == T(1):-1:-T(1)
+    else
+        @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2)
+        @test broadcast(-, T(1):3) == -T(1):-1:-T(3)
+        @test broadcast(-, 2, T(1):3) == T(1):-1:-T(1)
+    end
 end
-@testset "operations between ranges and arrays" begin
-    @test all(([1:5;] + (5:-1:1)) .== 6)
-    @test all(((5:-1:1) + [1:5;]) .== 6)
-    @test all(([1:5;] - (1:5)) .== 0)
-    @test all(((1:5) - [1:5;]) .== 0)
+@testset "operations between ranges and arrays" for T in (Int, UInt, Int128)
+    @test all(([T(1):5;] + (T(5):-1:1)) .=== T(6))
+    @test all(((T(5):-1:1) + [T(1):5;]) .=== T(6))
+    @test all(([T(1):5;] - (T(1):5)) .=== T(0))
+    @test all(((T(1):5) - [T(1):5;]) .=== T(0))
+end
+@testset "issue #32442: Broadcasting over views with non-`Int` indices" begin
+    a=rand(UInt32,20)
+    c=rand(UInt64,5)
+    @test reinterpret(UInt64,view(a,UInt64.(11:20))) .- c ==
+          reinterpret(UInt64,view(a,(11:20))) .- c ==
+          reinterpret(UInt64,view(a,(UInt64(11):UInt64(20)))) .- c ==
+          copy(reinterpret(UInt64,view(a,(UInt64(11):UInt64(20))))) .- c
+
+    @test view(a,(Int32(11):Int32(20))) .+ [1] == a[11:20] .+ 1
 end
 @testset "tricky floating-point ranges" begin
     for (start, step, stop, len) in ((1, 1, 3, 3), (0, 1, 3, 4),
@@ -1298,6 +1326,16 @@ using .Main.Furlongs
           Vector(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)
 end
 
+@testset "sum arbitrary types" begin
+    @test sum(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong{1,Float64}(104.5)
+    @test sum(StepRangeLen(Furlong(1), Furlong(0.5), 19)) == Furlong{1,Float64}(104.5)
+    @test sum(0f0:0.001f0:1f0) == 500.5
+    @test sum(0f0:0.000001f0:1f0) == 500000.5
+    @test sum(0f0:0.1f0:10f0) == 505.
+    @test sum(Float16(0):Float16(0.001):Float16(1)) ≈ 500.5
+    @test sum(Float16(0):Float16(0.1):Float16(10)) == 505.
+end
+
 @testset "issue #22270" begin
     linsp = range(1.0, stop=2.0, length=10)
     @test typeof(linsp.ref) == Base.TwicePrecision{Float64}
@@ -1480,8 +1518,6 @@ end
 end
 
 @testset "allocation of TwicePrecision call" begin
-    0:286.493442:360
-    0:286:360
     @test @allocated(0:286.493442:360) == 0
     @test @allocated(0:286:360) == 0
 end
@@ -1533,4 +1569,10 @@ end
     @test_throws MethodError mod(3, UnitRange(1.0,5.0))
     @test_throws MethodError mod(3, 1:2:7)
     @test_throws DivideError mod(3, 1:0)
+end
+
+@testset "issue #33882" begin
+    r = StepRangeLen('a',2,4)
+    @test step(r) === 2
+    @test collect(r) == ['a','c','e','g']
 end

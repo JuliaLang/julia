@@ -171,7 +171,8 @@ macro test999_str(args...); args; end
 
 # blocks vs. tuples
 @test Meta.parse("()") == Expr(:tuple)
-@test Meta.parse("(;)") == Expr(:block)
+@test Meta.parse("(;)") == Expr(:tuple, Expr(:parameters))
+@test Meta.parse("(;;)") == Expr(:block)
 @test Meta.parse("(;;;;)") == Expr(:block)
 @test_throws ParseError Meta.parse("(,)")
 @test_throws ParseError Meta.parse("(;,)")
@@ -1086,6 +1087,9 @@ end
 # issue #7479
 @test Meta.lower(Main, Meta.parse("(true &&& false)")) == Expr(:error, "invalid syntax &false")
 
+# issue #34748
+@test Meta.lower(Main, :(&(1, 2))) == Expr(:error, "invalid syntax &(1, 2)")
+
 # if an indexing expression becomes a cat expression, `end` is not special
 @test_throws ParseError Meta.parse("a[end end]")
 @test_throws ParseError Meta.parse("a[end;end]")
@@ -1322,14 +1326,23 @@ end
 @test Meta.parse("-(x)^2")     == Expr(:call, :-, Expr(:call, :^, :x, 2))
 @test Meta.parse("-(a=1)^2")   == Expr(:call, :-, Expr(:call, :^, Expr(:(=), :a, 1), 2))
 @test Meta.parse("-(x;y)^2")   == Expr(:call, :-, Expr(:call, :^, Expr(:block, :x, LineNumberNode(1,:none), :y), 2))
-@test Meta.parse("-(;)^2")     == Expr(:call, :-, Expr(:call, :^, Expr(:block), 2))
+@test Meta.parse("-(;)^2")     == Expr(:call, :^, Expr(:call, :-, Expr(:parameters)), 2)
 @test Meta.parse("-(;;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block), 2))
 @test Meta.parse("-(x;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block, :x), 2))
 @test Meta.parse("+((1,2))")   == Expr(:call, :+, Expr(:tuple, 1, 2))
 
-@test_throws ParseError("space before \"(\" not allowed in \"+ (\"") Meta.parse("1 -+ (a=1, b=2)")
+@test_throws ParseError("space before \"(\" not allowed in \"+ (\" at none:1") Meta.parse("1 -+ (a=1, b=2)")
 # issue #29781
-@test_throws ParseError("space before \"(\" not allowed in \"sin. (\"") Meta.parse("sin. (1)")
+@test_throws ParseError("space before \"(\" not allowed in \"sin. (\" at none:1") Meta.parse("sin. (1)")
+# Parser errors for disallowed space contain line numbers
+@test_throws ParseError("space before \"[\" not allowed in \"f() [\" at none:2") Meta.parse("\nf() [i]")
+@test_throws ParseError("space before \"(\" not allowed in \"f() (\" at none:2") Meta.parse("\nf() (i)")
+@test_throws ParseError("space before \".\" not allowed in \"f() .\" at none:2") Meta.parse("\nf() .i")
+@test_throws ParseError("space before \"{\" not allowed in \"f() {\" at none:2") Meta.parse("\nf() {i}")
+@test_throws ParseError("space before \"m\" not allowed in \"@ m\" at none:2") Meta.parse("\n@ m")
+@test_throws ParseError("space before \".\" not allowed in \"a .\" at none:2") Meta.parse("\nusing a .b")
+@test_throws ParseError("space before \".\" not allowed in \"a .\" at none:2") Meta.parse("\nusing a .b")
+@test_throws ParseError("space before \"(\" not allowed in \"+ (\" at none:2") Meta.parse("\n+ (x, y)")
 
 @test Meta.parse("1 -+(a=1, b=2)") == Expr(:call, :-, 1,
                                            Expr(:call, :+, Expr(:kw, :a, 1), Expr(:kw, :b, 2)))
@@ -1380,7 +1393,7 @@ end
 # Module name cannot be a reserved word.
 @test_throws ParseError Meta.parse("module module end")
 
-@test Meta.lower(@__MODULE__, :(global true)) == Expr(:error, "invalid identifier name \"true\"")
+@test Meta.lower(@__MODULE__, :(global true)) == Expr(:error, "invalid syntax in \"global\" declaration")
 @test Meta.lower(@__MODULE__, :(let ccall end)) == Expr(:error, "invalid identifier name \"ccall\"")
 @test Meta.lower(@__MODULE__, :(cglobal = 0)) == Expr(:error, "invalid assignment location \"cglobal\"")
 
@@ -1845,8 +1858,7 @@ end
 @testset "closure conversion in testsets" begin
     p = (2, 3, 4)
     @test p == (2, 3, 4)
-    identity(p)
-    allocs = @allocated identity(p)
+    allocs = (() -> @allocated identity(p))()
     @test allocs == 0
 end
 
@@ -1910,3 +1922,179 @@ end
 # issue #32626
 @test Meta.parse("'a'..'b'") == Expr(:call, :(..), 'a', 'b')
 @test Meta.parse(":a..:b") == Expr(:call, :(..), QuoteNode(:a), QuoteNode(:b))
+
+# Non-standard identifiers (PR #32408)
+@test Meta.parse("var\"#\"") === Symbol("#")
+@test Meta.parse("var\"true\"") === Symbol("true")
+@test Meta.parse("var\"false\"") === Symbol("false")
+@test_throws ParseError Meta.parse("var\"#\"x") # Reject string macro-like suffix
+@test_throws ParseError Meta.parse("var \"#\"")
+@test_throws ParseError Meta.parse("var\"for\" i = 1:10; end")
+# A few cases which would be ugly to deal with if var"#" were a string macro:
+@test Meta.parse("var\"#\".var\"a-b\"") == Expr(:., Symbol("#"), QuoteNode(Symbol("a-b")))
+@test Meta.parse("export var\"#\"") == Expr(:export, Symbol("#"))
+@test Base.remove_linenums!(Meta.parse("try a catch var\"#\" b end")) ==
+      Expr(:try, Expr(:block, :a), Symbol("#"), Expr(:block, :b))
+@test Meta.parse("(var\"function\" = 1,)") == Expr(:tuple, Expr(:(=), Symbol("function"), 1))
+# Non-standard identifiers require parens for string interpolation
+@test Meta.parse("\"\$var\\\"#\\\"\"") == Expr(:string, :var, "\"#\"")
+@test Meta.parse("\"\$(var\"#\")\"") == Expr(:string, Symbol("#"))
+# Stream positioning after parsing var
+@test Meta.parse("var'", 1, greedy=false) == (:var, 4)
+
+# quoted names in import (#33158)
+@test Meta.parse("import Base.:+") == :(import Base.+)
+@test Meta.parse("import Base.Foo.:(==).bar") == :(import Base.Foo.==.bar)
+
+# issue #33135
+function f33135(x::T) where {C1, T}
+    let C1 = 1, C2 = 2
+        C1
+    end
+end
+@test f33135(0) == 1
+
+# issue #33227
+@test Meta.isexpr(Meta.lower(Main, :((@label a; @goto a))), :thunk)
+
+# issue #33250
+@test Meta.lower(Main, :(f(b=b...))) == Expr(:error, "\"...\" expression cannot be used as keyword argument value")
+@test Meta.lower(Main, :(f(;a=a,b=b...))) == Expr(:error, "\"...\" expression cannot be used as keyword argument value")
+@test Meta.lower(Main, :((a=a,b=b...))) == Expr(:error, "\"...\" expression cannot be used as named tuple field value")
+@test Meta.lower(Main, :(f(;a...,b...)=0)) == Expr(:error, "invalid \"...\" on non-final keyword argument")
+@test Meta.lower(Main, :(f(;a...,b=0)=0)) == Expr(:error, "invalid \"...\" on non-final keyword argument")
+
+# issue #31547
+@test Meta.lower(Main, :(a := 1)) == Expr(:error, "unsupported assignment operator \":=\"")
+
+# issue #33841
+let a(; b) = b
+    @test a(b=3) == 3
+end
+
+# issue #33987
+f33987(args::(Vararg{Any, N} where N); kwargs...) = args
+@test f33987(1,2,3) === (1,2,3)
+
+macro id_for_kwarg(x); x; end
+Xo65KdlD = @id_for_kwarg let x = 1
+    function f(; x)
+        x
+    end
+end
+@test_throws UndefKeywordError(:x) Xo65KdlD()
+i0xb23hG = @id_for_kwarg let x = 1
+    function f(; x=2)
+        x
+    end
+end
+@test i0xb23hG() == 2
+@test i0xb23hG(x=10) == 10
+
+@test @eval let
+    (z,)->begin
+        $(Expr(:inbounds, true))
+        $(Expr(:inbounds, :pop))
+    end
+    pop = 1
+end == 1
+
+# issue #29982
+@test Meta.parse("'a'") == 'a'
+@test Meta.parse("'\U0061'") == 'a'
+test_parseerror("''", "invalid empty character literal")
+test_parseerror("'abc'", "character literal contains multiple characters")
+
+# optional soft scope: #28789, #33864
+
+@test @eval begin
+    $(Expr(:softscope, true))
+    x28789 = 0   # new global included in same expression
+    for i = 1:2
+        x28789 += i
+    end
+    x28789
+end == 3
+
+y28789 = 1  # new global defined in separate top-level input
+@eval begin
+    $(Expr(:softscope, true))
+    for i = 1:10
+        y28789 += i
+    end
+end
+@test y28789 == 56
+
+@eval begin
+    $(Expr(:softscope, true))
+    for i = 10:10
+        z28789 = i
+    end
+    @test z28789 == 10
+    z28789 = 0  # new global assigned after loop but in same soft scope
+end
+
+@eval begin
+    $(Expr(:softscope, true))
+    let y28789 = 0  # shadowing with let
+        y28789 = 1
+    end
+end
+@test y28789 == 56
+
+@eval begin
+    $(Expr(:softscope, true))
+    let
+        y28789 = -8  # let is always a hard scope
+    end
+end
+@test y28789 == 56
+
+@eval begin
+    $(Expr(:softscope, true))
+    for y28789 in 0:0
+        for x in 2:2
+            for y in 3:3
+                z28789 = 42  # assign to global despite several loops
+            end
+        end
+    end
+end
+@test z28789 == 42
+
+@eval begin
+    $(Expr(:softscope, true))
+    let x = 0
+        ww28789 = 88  # not global
+        let y = 3
+            ww28789 = 89
+        end
+        @test ww28789 == 89
+    end
+end
+@test !@isdefined(ww28789)
+
+@eval begin
+    $(Expr(:softscope, true))
+    for x = 0
+        ww28789 = 88  # not global
+        for y = 3
+            ww28789 = 89
+        end
+        @test ww28789 == 89
+    end
+end
+@test !@isdefined(ww28789)
+
+@eval begin
+    $(Expr(:softscope, true))
+    function f28789()
+        z28789 = 43
+    end
+    f28789()
+end
+@test z28789 == 42
+
+# issue #34673
+# check that :toplevel still returns a value when nested inside something else
+@test eval(Expr(:block, 0, Expr(:toplevel, 43))) == 43

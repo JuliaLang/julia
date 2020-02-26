@@ -11,8 +11,8 @@ determined by evaluating `ENV["JULIA_EDITOR"]`.
 
 The environment variables that Julia uses generally start with `JULIA`. If
 [`InteractiveUtils.versioninfo`](@ref) is called with the keyword `verbose=true`, then the
-output will list defined environment variables relevant for Julia, including
-those for which `JULIA` appears in the name.
+output will list any defined environment variables relevant for Julia,
+including those which include `JULIA` in their names.
 
 !!! note
 
@@ -145,20 +145,6 @@ The absolute path `REPL.find_hist_file()` of the REPL's history file. If
 ```
 $(DEPOT_PATH[1])/logs/repl_history.jl
 ```
-
-### `JULIA_PKGRESOLVE_ACCURACY`
-
-A positive `Int` that determines how much time the max-sum subroutine
-`MaxSum.maxsum()` of the package dependency resolver
-will devote to attempting satisfying constraints before giving up: this value is
-by default `1`, and larger values correspond to larger amounts of time.
-
-Suppose the value of `$JULIA_PKGRESOLVE_ACCURACY` is `n`. Then
-
-* the number of pre-decimation iterations is `20*n`,
-* the number of iterations between decimation steps is `10*n`, and
-* at decimation steps, at most one in every `20*n` packages is decimated.
-
 
 ## External applications
 
@@ -334,8 +320,4 @@ event listener for just-in-time (JIT) profiling.
 
 Arguments to be passed to the LLVM backend.
 
-### `JULIA_DEBUG_LOADING`
-
-If set, then Julia prints detailed information about the cache in the loading
-process of [`Base.require`](@ref).
 

@@ -370,10 +370,17 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
             end
         elseif isa(leaf, QuoteNode)
             leaf = leaf.value
+        elseif isa(leaf, GlobalRef)
+            mod, name = leaf.mod, leaf.name
+            if isdefined(mod, name) && isconst(mod, name)
+                leaf = getfield(mod, name)
+            else
+                return nothing
+            end
         elseif isa(leaf, Union{Argument, Expr})
             return nothing
         end
-        isimmutable(leaf) || return nothing
+        !ismutable(leaf) || return nothing
         isdefined(leaf, field) || return nothing
         val = getfield(leaf, field)
         is_inlineable_constant(val) || return nothing
@@ -571,11 +578,11 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
             (isa(c1, Const) && isa(c2, Const)) && continue
             lift_comparison!(compact, idx, c1, c2, stmt, lifting_cache)
             continue
-        elseif isexpr(stmt, :call) && stmt.args[1] == :unchecked_getfield
+        elseif isexpr(stmt, :call) && stmt.args[1] === :unchecked_getfield
             is_getfield = true
             is_unchecked = true
         elseif isexpr(stmt, :foreigncall)
-            nccallargs = stmt.args[5]
+            nccallargs = length(stmt.args[3]::SimpleVector)
             new_preserves = Any[]
             old_preserves = stmt.args[(6+nccallargs):end]
             for (pidx, preserved_arg) in enumerate(old_preserves)
@@ -817,7 +824,7 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
         # Insert the new preserves
         for (use, new_preserves) in preserve_uses
             useexpr = ir[SSAValue(use)]
-            nccallargs = useexpr.args[5]
+            nccallargs = length(useexpr.args[3]::SimpleVector)
             old_preserves = filter(ssa->!isa(ssa, SSAValue) || !(ssa.id in intermediaries), useexpr.args[(6+nccallargs):end])
             new_expr = Expr(:foreigncall, useexpr.args[1:(6+nccallargs-1)]...,
                 old_preserves..., new_preserves...)

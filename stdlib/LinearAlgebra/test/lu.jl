@@ -207,10 +207,10 @@ end
     @test_throws SingularException lu!(copy(A); check = true)
     @test !issuccess(lu(A; check = false))
     @test !issuccess(lu!(copy(A); check = false))
-    @test_throws SingularException lu(A, Val(false))
-    @test_throws SingularException lu!(copy(A), Val(false))
-    @test_throws SingularException lu(A, Val(false); check = true)
-    @test_throws SingularException lu!(copy(A), Val(false); check = true)
+    @test_throws ZeroPivotException lu(A, Val(false))
+    @test_throws ZeroPivotException lu!(copy(A), Val(false))
+    @test_throws ZeroPivotException lu(A, Val(false); check = true)
+    @test_throws ZeroPivotException lu!(copy(A), Val(false); check = true)
     @test !issuccess(lu(A, Val(false); check = false))
     @test !issuccess(lu!(copy(A), Val(false); check = false))
     F = lu(A; check = false)
@@ -265,10 +265,6 @@ end
     @test_throws DomainError logdet([1 1; 1 -1])
 end
 
-@testset "Issue 21453" begin
-    @test_throws ArgumentError LinearAlgebra._cond1Inf(lu(randn(5,5)), 2, 2.0)
-end
-
 @testset "REPL printing" begin
         bf = IOBuffer()
         show(bf, "text/plain", lu(Matrix(I, 4, 4)))
@@ -301,10 +297,44 @@ include("trickyarithmetic.jl")
 @testset "lu with type whose sum is another type" begin
     A = TrickyArithmetic.A[1 2; 3 4]
     ElT = TrickyArithmetic.D{TrickyArithmetic.C,TrickyArithmetic.C}
-    B = lu(A)
+    B = lu(A, Val(false))
     @test B isa LinearAlgebra.LU{ElT,Matrix{ElT}}
-    C = lu(A, Val(false))
-    @test C isa LinearAlgebra.LU{ElT,Matrix{ElT}}
+end
+
+@testset "Issue #30917. Determinant of integer matrix" begin
+    @test det([1 1 0 0 1 0 0 0
+               1 0 1 0 0 1 0 0
+               1 0 0 1 0 0 1 0
+               0 1 1 1 0 0 0 0
+               0 1 0 0 0 0 1 1
+               0 0 1 0 1 0 0 1
+               0 0 0 1 1 1 0 0
+               0 0 0 0 1 1 0 1]) ≈ 6
+end
+
+@testset "Issue #33177. No ldiv!(LU, Adjoint)" begin
+    A = [1 0; 1 1]
+    B = [1 2; 2 8]
+    F = lu(B)
+    @test (A  / F') * B == A
+    @test (A' / F') * B == A'
+
+    a = complex.(randn(2), randn(2))
+    @test (a' / F') * B ≈ a'
+    @test (transpose(a) / F') * B ≈ transpose(a)
+
+    A = complex.(randn(2, 2), randn(2, 2))
+    @test (A' / F') * B ≈ A'
+    @test (transpose(A) / F') * B ≈ transpose(A)
+end
+
+@testset "0x0 matrix" begin
+    A = ones(0, 0)
+    F = lu(A)
+    @test F.U == ones(0, 0)
+    @test F.L == ones(0, 0)
+    @test F.P == ones(0, 0)
+    @test F.p == []
 end
 
 end # module TestLU

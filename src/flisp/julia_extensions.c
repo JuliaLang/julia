@@ -106,7 +106,10 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
 
             // Other_ID_Start
             wc == 0x2118 || wc == 0x212E || // ℘, ℮
-            (wc >= 0x309B && wc <= 0x309C)); // katakana-hiragana sound marks
+            (wc >= 0x309B && wc <= 0x309C) || // katakana-hiragana sound marks
+
+            // bold-digits and double-struck digits
+            (wc >= 0x1D7CE && wc <= 0x1D7E1)); // 𝟎 through 𝟗 (inclusive), 𝟘 through 𝟡 (inclusive)
 }
 
 JL_DLLEXPORT int jl_id_start_char(uint32_t wc)
@@ -238,6 +241,7 @@ value_t fl_julia_strip_op_suffix(fl_context_t *fl_ctx, value_t *args, uint32_t n
     if (!op[i]) return args[0]; // no suffix to strip
     if (!i) return args[0]; // only suffix chars --- might still be a valid identifier
     char *opnew = strncpy((char*)malloc(i+1), op, i);
+    // TODO: if argument to opnew == NULL
     opnew[i] = 0;
     value_t opnew_symbol = symbol(fl_ctx, opnew);
     free(opnew);

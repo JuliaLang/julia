@@ -16,9 +16,6 @@
 #include "llvm-pass-helpers.h"
 
 #define DEBUG_TYPE "final_gc_lowering"
-#if JL_LLVM_VERSION < 70000
-#define LLVM_DEBUG DEBUG
-#endif
 
 using namespace llvm;
 
@@ -76,6 +73,7 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
         T_prjlvalue,
         0,
         ConstantInt::get(T_int32, nRoots + 2));
+    gcframe->setAlignment(Align(16));
     gcframe->insertAfter(target);
     gcframe->takeName(target);
 
@@ -84,21 +82,13 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     tempSlot_i8->insertAfter(gcframe);
     Type *argsT[2] = {tempSlot_i8->getType(), T_int32};
     Function *memset = Intrinsic::getDeclaration(F.getParent(), Intrinsic::memset, makeArrayRef(argsT));
-#if JL_LLVM_VERSION >= 70000
-        Value *args[4] = {
-            tempSlot_i8, // dest
-            ConstantInt::get(Type::getInt8Ty(F.getContext()), 0), // val
-            ConstantInt::get(T_int32, sizeof(jl_value_t*)*(nRoots+2)), // len
-            ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
-#else
-        Value *args[5] = {
-            tempSlot_i8, // dest
-            ConstantInt::get(Type::getInt8Ty(F.getContext()), 0), // val
-            ConstantInt::get(T_int32, sizeof(jl_value_t*)*(nRoots+2)), // len
-            ConstantInt::get(T_int32, 0), // align
-            ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
-#endif
+    Value *args[4] = {
+        tempSlot_i8, // dest
+        ConstantInt::get(Type::getInt8Ty(F.getContext()), 0), // val
+        ConstantInt::get(T_int32, sizeof(jl_value_t*) * (nRoots + 2)), // len
+        ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
     CallInst *zeroing = CallInst::Create(memset, makeArrayRef(args));
+    cast<MemSetInst>(zeroing)->setDestAlignment(16);
     zeroing->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     zeroing->insertAfter(tempSlot_i8);
 
@@ -115,7 +105,7 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
     builder.SetInsertPoint(&*(++BasicBlock::iterator(target)));
     Instruction *inst =
         builder.CreateStore(
-            ConstantInt::get(T_size, nRoots << 1),
+            ConstantInt::get(T_size, JL_GC_ENCODE_PUSHARGS(nRoots)),
             builder.CreateBitCast(
                 builder.CreateConstGEP1_32(gcframe, 0),
                 T_size->getPointerTo()));

@@ -48,7 +48,7 @@ macro spawn(expr)
     var = esc(Base.sync_varname)
     quote
         local ref = spawn_somewhere($thunk)
-        if $(Expr(:isdefined, var))
+        if $(Expr(:islocal, var))
             push!($var, ref)
         end
         ref
@@ -93,7 +93,7 @@ macro spawnat(p, expr)
     end
     quote
         local ref = $spawncall
-        if $(Expr(:isdefined, var))
+        if $(Expr(:islocal, var))
             push!($var, ref)
         end
         ref
@@ -171,7 +171,7 @@ extract_imports(x) = extract_imports!(Any[], x)
 
 Execute an expression under `Main` on all `procs`.
 Errors on any of the processes are collected into a
-`CompositeException` and thrown. For example:
+[`CompositeException`](@ref) and thrown. For example:
 
     @everywhere bar = 1
 
@@ -209,9 +209,9 @@ end
 Execute an expression under module `m` on the processes
 specified in `procs`.
 Errors on any of the processes are collected into a
-`CompositeException` and thrown.
+[`CompositeException`](@ref) and thrown.
 
-See also `@everywhere`.
+See also [`@everywhere`](@ref).
 """
 function remotecall_eval(m::Module, procs, ex)
     @sync begin
@@ -220,7 +220,7 @@ function remotecall_eval(m::Module, procs, ex)
             if pid == myid()
                 run_locally += 1
             else
-                @async remotecall_wait(Core.eval, pid, m, ex)
+                @sync_add remotecall(Core.eval, pid, m, ex)
             end
         end
         yield() # ensure that the remotecall_fetch have had a chance to start
@@ -346,7 +346,7 @@ macro distributed(args...)
         syncvar = esc(Base.sync_varname)
         return quote
             local ref = pfor($(make_pfor_body(var, body)), $(esc(r)))
-            if $(Expr(:isdefined, syncvar))
+            if $(Expr(:islocal, syncvar))
                 push!($syncvar, ref)
             end
             ref

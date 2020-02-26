@@ -63,6 +63,11 @@ end
 
     @test iszero(false) && !iszero(true)
     @test isone(true) && !isone(false)
+
+    @test typemin(Bool) == false
+    @test typemax(Bool) == true
+    @test abs(false) == false
+    @test abs(true) == true
 end
 @testset "basic arithmetic" begin
     @test 2 + 3 == 5
@@ -415,11 +420,11 @@ end
     @test repr(-NaN) == "NaN"
     @test repr(Float64(pi)) == "3.141592653589793"
     # issue 6608
-    @test sprint(show, 666666.6, context=:compact => true) == "6.66667e5"
+    @test sprint(show, 666666.6, context=:compact => true) == "666667.0"
     @test sprint(show, 666666.049, context=:compact => true) == "666666.0"
     @test sprint(show, 666665.951, context=:compact => true) == "666666.0"
     @test sprint(show, 66.66666, context=:compact => true) == "66.6667"
-    @test sprint(show, -666666.6, context=:compact => true) == "-6.66667e5"
+    @test sprint(show, -666666.6, context=:compact => true) == "-666667.0"
     @test sprint(show, -666666.049, context=:compact => true) == "-666666.0"
     @test sprint(show, -666665.951, context=:compact => true) == "-666666.0"
     @test sprint(show, -66.66666, context=:compact => true) == "-66.6667"
@@ -1030,6 +1035,13 @@ end
     @test !(1 > NaN)
 end
 
+@testset "Irrational zero and one" begin
+    @test one(pi) === true
+    @test zero(pi) === false
+    @test one(typeof(pi)) === true
+    @test zero(typeof(pi)) === false
+end
+
 @testset "Irrationals compared with Irrationals" begin
     for i in (π, ℯ, γ, catalan)
         for j in (π, ℯ, γ, catalan)
@@ -1072,6 +1084,12 @@ end
     @test 2646693125139304345//842468587426513207 != pi
 
     @test sqrt(2) == 1.4142135623730951
+end
+@testset "Irrational printing" begin
+    @test sprint(show, "text/plain", π) == "π = 3.1415926535897..."
+    @test sprint(show, "text/plain", π, context=:compact => true) == "π"
+    @test sprint(show, π) == "π"
+
 end
 @testset "issue #6365" begin
     for T in (Float32, Float64)
@@ -2342,6 +2360,15 @@ for (d,B) in ((4//2+1im,Rational{BigInt}),(3.0+1im,BigFloat),(2+1im,BigInt))
     @test big.([d]) == [d]
 end
 
+# big fallback
+import Base: zero, big
+struct TestNumber{Inner} <: Number
+    inner::Inner
+end
+zero(::Type{TestNumber{Inner}}) where {Inner} = TestNumber(zero(Inner))
+big(test_number::TestNumber) = TestNumber(big(test_number.inner))
+@test big(TestNumber{Int}) == TestNumber{BigInt}
+
 @testset "multiplicative inverses" begin
     function testmi(numrange, denrange)
         for d in denrange
@@ -2371,6 +2398,7 @@ end
     @test !isinteger(π)
     @test size(1) == ()
     @test length(1) == 1
+    @test firstindex(1) == 1
     @test lastindex(1) == 1
     @test eltype(Integer) == Integer
 end

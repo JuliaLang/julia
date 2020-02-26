@@ -46,7 +46,17 @@ function download_curl(curl_exe::AbstractString, url::AbstractString, filename::
     return filename
 end
 
+const DOWNLOAD_HOOKS = Callable[]
+
+function download_url(url::AbstractString)
+    for hook in DOWNLOAD_HOOKS
+        url = String(hook(url)::AbstractString)
+    end
+    return url
+end
+
 function download(url::AbstractString, filename::AbstractString)
+    url = download_url(url)
     curl_exe = find_curl()
     if curl_exe !== nothing
         return download_curl(curl_exe, url, filename)

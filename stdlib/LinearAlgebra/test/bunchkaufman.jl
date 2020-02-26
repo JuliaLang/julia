@@ -153,6 +153,22 @@ end
 
 @test_throws DomainError logdet(bunchkaufman([-1 -1; -1 1]))
 @test logabsdet(bunchkaufman([8 4; 4 2]; check = false))[1] == -Inf
-@test isa(bunchkaufman(Symmetric(ones(0,0))), BunchKaufman) # 0x0 matrix
+
+@testset "0x0 matrix" begin
+    for ul in (:U, :L)
+        B = bunchkaufman(Symmetric(ones(0, 0), ul))
+        @test isa(B, BunchKaufman)
+        @test B.D == Tridiagonal([], [], [])
+        @test B.P == ones(0, 0)
+        @test B.p == []
+        if ul == :U
+            @test B.U == UnitUpperTriangular(ones(0, 0))
+            @test_throws ArgumentError B.L
+        else
+            @test B.L == UnitLowerTriangular(ones(0, 0))
+            @test_throws ArgumentError B.U
+        end
+    end
+end
 
 end # module TestBunchKaufman

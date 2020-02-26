@@ -361,12 +361,12 @@ end
 struct MyErrorTypeTest <: Exception end
 create_serialization_stream() do s # user-defined type array
     t = Task(()->throw(MyErrorTypeTest()))
-    @test_throws MyErrorTypeTest Base.wait(schedule(t))
+    @test_throws TaskFailedException(t) Base.wait(schedule(t))
+    @test isa(t.exception, MyErrorTypeTest)
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
     @test r.state == :failed
-    @test isa(t.exception, MyErrorTypeTest)
 end
 
 # corner case: undefined inside immutable struct
@@ -425,6 +425,17 @@ create_serialization_stream() do s
     C = deserialize(s)
     @test C == B
     @test C[1] === C[2]
+end
+
+mutable struct MSingle end
+create_serialization_stream() do s
+    x = MSingle()
+    A = [x, x, MSingle()]
+    serialize(s, A)
+    seekstart(s)
+    C = deserialize(s)
+    @test A[1] === x === A[2] !== A[3]
+    @test x !== C[1] === C[2] !== C[3]
 end
 
 # Regex
@@ -561,4 +572,13 @@ let f_data
     end
     f = deserialize(IOBuffer(base64decode(f_data)))
     @test f(10,3) == 23
+end
+
+# issue #33466, IdDict
+let d = IdDict([1] => 2, [3] => 4), io = IOBuffer()
+    serialize(io, d)
+    seekstart(io)
+    ds = deserialize(io)
+    @test Dict(d) == Dict(ds)
+    @test all([k in keys(ds) for k in keys(ds)])
 end

@@ -137,9 +137,6 @@ abs(x::Signed) = flipsign(x,x)
 
 ~(n::Integer) = -n-1
 
-unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
-unsigned(x::Bool) = convert(Unsigned, x)
-
 """
     unsigned(x) -> Unsigned
 
@@ -158,8 +155,8 @@ julia> signed(unsigned(-2))
 -2
 ```
 """
-unsigned(x) = convert(Unsigned, x)
-signed(x::Unsigned) = reinterpret(typeof(convert(Signed, zero(x))), x)
+unsigned(x) = x % typeof(convert(Unsigned, zero(x)))
+unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 
 """
     signed(x)
@@ -167,7 +164,8 @@ signed(x::Unsigned) = reinterpret(typeof(convert(Signed, zero(x))), x)
 Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as
 signed without checking for overflow.
 """
-signed(x) = convert(Signed, x)
+signed(x) = x % typeof(convert(Signed, zero(x)))
+signed(x::BitUnsigned) = reinterpret(typeof(convert(Signed, zero(x))), x)
 
 div(x::BitSigned, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)), y)), x)
 div(x::Unsigned, y::BitSigned) = unsigned(flipsign(signed(div(x, unsigned(abs(y)))), y))
@@ -175,8 +173,15 @@ div(x::Unsigned, y::BitSigned) = unsigned(flipsign(signed(div(x, unsigned(abs(y)
 rem(x::BitSigned, y::Unsigned) = flipsign(signed(rem(unsigned(abs(x)), y)), x)
 rem(x::Unsigned, y::BitSigned) = rem(x, unsigned(abs(y)))
 
-fld(x::Signed, y::Unsigned) = div(x, y) - (signbit(x) & (rem(x, y) != 0))
-fld(x::Unsigned, y::Signed) = div(x, y) - (signbit(y) & (rem(x, y) != 0))
+function divrem(x::BitSigned, y::Unsigned)
+    q, r = divrem(unsigned(abs(x)), y)
+    flipsign(signed(q), x), flipsign(signed(r), x)
+end
+
+function divrem(x::Unsigned, y::BitSigned)
+    q, r = divrem(x, unsigned(abs(y)))
+    unsigned(flipsign(signed(q), y)), r
+end
 
 
 """
@@ -220,33 +225,12 @@ mod(x::BitSigned, y::Unsigned) = rem(y + unsigned(rem(x, y)), y)
 mod(x::Unsigned, y::Signed) = rem(y + signed(rem(x, y)), y)
 mod(x::T, y::T) where {T<:Unsigned} = rem(x, y)
 
-cld(x::Signed, y::Unsigned) = div(x, y) + (!signbit(x) & (rem(x, y) != 0))
-cld(x::Unsigned, y::Signed) = div(x, y) + (!signbit(y) & (rem(x, y) != 0))
-
 # Don't promote integers for div/rem/mod since there is no danger of overflow,
 # while there is a substantial performance penalty to 64-bit promotion.
 div(x::T, y::T) where {T<:BitSigned64} = checked_sdiv_int(x, y)
 rem(x::T, y::T) where {T<:BitSigned64} = checked_srem_int(x, y)
 div(x::T, y::T) where {T<:BitUnsigned64} = checked_udiv_int(x, y)
 rem(x::T, y::T) where {T<:BitUnsigned64} = checked_urem_int(x, y)
-
-
-# fld(x,y) == div(x,y) - ((x>=0) != (y>=0) && rem(x,y) != 0 ? 1 : 0)
-fld(x::T, y::T) where {T<:Unsigned} = div(x,y)
-function fld(x::T, y::T) where T<:Integer
-    d = div(x, y)
-    return d - (signbit(x ⊻ y) & (d * y != x))
-end
-
-# cld(x,y) = div(x,y) + ((x>0) == (y>0) && rem(x,y) != 0 ? 1 : 0)
-function cld(x::T, y::T) where T<:Unsigned
-    d = div(x, y)
-    return d + (d * y != x)
-end
-function cld(x::T, y::T) where T<:Integer
-    d = div(x, y)
-    return d + (((x > 0) == (y > 0)) & (d * y != x))
-end
 
 ## integer bitwise operations ##
 
@@ -270,7 +254,7 @@ false
 (~)(x::BitInteger)             = not_int(x)
 
 """
-    &(x, y)
+    x & y
 
 Bitwise and. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 returning [`missing`](@ref) if one operand is `missing` and the other is `true`.
@@ -293,7 +277,7 @@ false
 (&)(x::T, y::T) where {T<:BitInteger} = and_int(x, y)
 
 """
-    |(x, y)
+    x | y
 
 Bitwise or. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 returning [`missing`](@ref) if one operand is `missing` and the other is `false`.
@@ -320,6 +304,8 @@ xor(x::T, y::T) where {T<:BitInteger} = xor_int(x, y)
     bswap(n)
 
 Reverse the byte order of `n`.
+
+(See also [`ntoh`](@ref) and [`hton`](@ref) to convert between the current native byte order and big-endian order.)
 
 # Examples
 ```jldoctest
@@ -351,7 +337,7 @@ julia> count_ones(7)
 3
 ```
 """
-count_ones(x::BitInteger) = Int(ctpop_int(x))
+count_ones(x::BitInteger) = ctpop_int(x) % Int
 
 """
     leading_zeros(x::Integer) -> Integer
@@ -364,7 +350,7 @@ julia> leading_zeros(Int32(1))
 31
 ```
 """
-leading_zeros(x::BitInteger) = Int(ctlz_int(x))
+leading_zeros(x::BitInteger) = ctlz_int(x) % Int
 
 """
     trailing_zeros(x::Integer) -> Integer
@@ -377,7 +363,7 @@ julia> trailing_zeros(2)
 1
 ```
 """
-trailing_zeros(x::BitInteger) = Int(cttz_int(x))
+trailing_zeros(x::BitInteger) = cttz_int(x) % Int
 
 """
     count_zeros(x::Integer) -> Integer
@@ -465,6 +451,35 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
         end
     end
 end
+
+## integer bitwise rotations ##
+
+"""
+    bitrotate(x::Base.BitInteger, k::Integer)
+
+`bitrotate(x, k)` implements bitwise rotation.
+It returns the value of `x` with its bits rotated left `k` times.
+A negative value of `k` will rotate to the right instead.
+
+!!! compat "Julia 1.5"
+    This function requires Julia 1.5 or later.
+
+```jldoctest
+julia> bitrotate(UInt8(114), 2)
+0xc9
+
+julia> bitstring(bitrotate(0b01110010, 2))
+"11001001"
+
+julia> bitstring(bitrotate(0b01110010, -2))
+"10011100"
+
+julia> bitstring(bitrotate(0b01110010, 8))
+"01110010"
+```
+"""
+bitrotate(x::T, k::Integer) where {T <: BitInteger} =
+    (x << ((sizeof(T) << 3 - 1) & k)) | (x >>> ((sizeof(T) << 3 - 1) & -k))
 
 # @doc isn't available when running in Core at this point.
 # Tuple syntax for documentation two function signatures at the same time
@@ -873,4 +888,38 @@ for op in (:+, :-, :*, :&, :|, :xor)
         not_sametype((a, b), (aT, bT))
         return $op(aT, bT)
     end
+end
+
+const _mask1_uint128 = (UInt128(0x5555555555555555) << 64) | UInt128(0x5555555555555555)
+const _mask2_uint128 = (UInt128(0x3333333333333333) << 64) | UInt128(0x3333333333333333)
+const _mask4_uint128 = (UInt128(0x0f0f0f0f0f0f0f0f) << 64) | UInt128(0x0f0f0f0f0f0f0f0f)
+
+"""
+    bitreverse(x)
+
+Reverse the order of bits in integer `x`. `x` must have a fixed bit width,
+e.g. be an `Int16` or `Int32`.
+
+!!! compat "Julia 1.5"
+    This function requires Julia 1.5 or later.
+
+# Examples
+```jldoctest
+julia> bitreverse(0x8080808080808080)
+0x0101010101010101
+
+julia> reverse(bitstring(0xa06e)) == bitstring(bitreverse(0xa06e))
+true
+```
+"""
+function bitreverse(x::BitInteger)
+    # TODO: consider using llvm.bitreverse intrinsic
+    z = unsigned(x)
+    mask1 = _mask1_uint128 % typeof(z)
+    mask2 = _mask2_uint128 % typeof(z)
+    mask4 = _mask4_uint128 % typeof(z)
+    z = ((z & mask1) << 1) | ((z >> 1) & mask1)
+    z = ((z & mask2) << 2) | ((z >> 2) & mask2)
+    z = ((z & mask4) << 4) | ((z >> 4) & mask4)
+    return bswap(z) % typeof(x)
 end

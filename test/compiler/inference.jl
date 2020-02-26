@@ -1460,6 +1460,21 @@ f_pure_add() = (1 + 1 == 2) ? true : "FAIL"
 @test Core.Compiler.getfield_tfunc(Const(Vector{Int}), Const(:mutable)) == Const(true)
 @test Core.Compiler.getfield_tfunc(DataType, Const(:mutable)) == Bool
 
+# getfield on abstract named tuples. issue #32698
+import Core.Compiler.getfield_tfunc
+@test getfield_tfunc(NamedTuple{(:id, :y), T} where {T <: Tuple{Int, Union{Float64, Missing}}},
+                     Const(:y)) == Union{Missing, Float64}
+@test getfield_tfunc(NamedTuple{(:id, :y), T} where {T <: Tuple{Int, Union{Float64, Missing}}},
+                     Const(2)) == Union{Missing, Float64}
+@test getfield_tfunc(NamedTuple{(:id, :y), T} where {T <: Tuple{Int, Union{Float64, Missing}}},
+                     Symbol) == Union{Missing, Float64, Int}
+@test getfield_tfunc(NamedTuple{<:Any, T} where {T <: Tuple{Int, Union{Float64, Missing}}},
+                     Symbol) == Union{Missing, Float64, Int}
+@test getfield_tfunc(NamedTuple{<:Any, T} where {T <: Tuple{Int, Union{Float64, Missing}}},
+                     Int) == Union{Missing, Float64, Int}
+@test getfield_tfunc(NamedTuple{<:Any, T} where {T <: Tuple{Int, Union{Float64, Missing}}},
+                     Const(:x)) == Union{Missing, Float64, Int}
+
 struct Foo_22708
     x::Ptr{Foo_22708}
 end
@@ -1696,19 +1711,18 @@ g26826(x) = getfield26826(x, :a, :b)
 # If this test is broken (especially if inference is getting a correct, but loose result,
 # like a Union) then it's potentially an indication that the optimizer isn't hitting the
 # InferenceResult cache properly for varargs methods.
-typed_code = Core.Compiler.code_typed(f26826, (Float64,))[1].first
-found_well_typed_getfield_call = false
-let i
+let ct = Core.Compiler.code_typed(f26826, (Float64,))[1]
+    typed_code, retty = ct.first, ct.second
+    found_poorly_typed_getfield_call = false
     for i = 1:length(typed_code.code)
         stmt = typed_code.code[i]
         rhs = Meta.isexpr(stmt, :(=)) ? stmt.args[2] : stmt
-        if Meta.isexpr(rhs, :call) && rhs.args[1] == GlobalRef(Base, :getfield) && typed_code.ssavaluetypes[i] === Float64
-            global found_well_typed_getfield_call = true
+        if Meta.isexpr(rhs, :call) && rhs.args[1] == GlobalRef(Base, :getfield) && typed_code.ssavaluetypes[i] !== Float64
+            found_poorly_typed_getfield_call = true
         end
     end
+    @test !found_poorly_typed_getfield_call && retty === Float64
 end
-
-@test found_well_typed_getfield_call
 
 # 27059 fix fieldtype vararg and union handling
 
@@ -2427,3 +2441,65 @@ f31974(n::Int) = f31974(1:n)
 # This query hangs if type inference improperly attempts to const prop
 # call cycles.
 @test code_typed(f31974, Tuple{Int}) !== nothing
+
+f_overly_abstract_complex() = Complex(Ref{Number}(1)[])
+@test Base.return_types(f_overly_abstract_complex, Tuple{}) == [Complex]
+
+# Issue 26724
+const IntRange = AbstractUnitRange{<:Integer}
+const DenseIdx = Union{IntRange,Integer}
+@inline foo_26724(result) =
+    (result...,)
+@inline foo_26724(result, i::Integer, I::DenseIdx...) =
+    foo_26724(result, I...)
+@inline foo_26724(result, r::IntRange, I::DenseIdx...) =
+    foo_26724((result..., length(r)), I...)
+@test @inferred(foo_26724((), 1:4, 1:5, 1:6)) === (4, 5, 6)
+
+# Non uniformity in expresions with PartialTypeVar
+@test Core.Compiler.:⊑(Core.Compiler.PartialTypeVar(TypeVar(:N), true, true), TypeVar)
+let N = TypeVar(:N)
+    @test Core.Compiler.apply_type_nothrow([Core.Compiler.Const(NTuple),
+        Core.Compiler.PartialTypeVar(N, true, true),
+        Core.Compiler.Const(Any)], Type{Tuple{Vararg{Any,N}}})
+end
+
+# issue #33768
+function f33768()
+    Core._apply()
+end
+function g33768()
+    a = Any[iterate, tuple, (1,)]
+    Core._apply_iterate(a...)
+end
+function h33768()
+    Core._apply_iterate()
+end
+@test_throws ArgumentError f33768()
+@test Base.return_types(f33768, ()) == Any[Union{}]
+@test g33768() === (1,)
+@test Base.return_types(g33768, ()) == Any[Any]
+@test_throws ArgumentError h33768()
+@test Base.return_types(h33768, ()) == Any[Union{}]
+
+# constant prop of `Symbol("")`
+f_getf_computed_symbol(p) = getfield(p, Symbol("first"))
+@test Base.return_types(f_getf_computed_symbol, Tuple{Pair{Int8,String}}) == [Int8]
+
+# issue #33954
+struct X33954
+    x::Ptr{X33954}
+end
+f33954(x) = rand(Bool) ? f33954((x,)) : x
+@test Base.return_types(f33954, Tuple{X33954})[1] >: X33954
+
+# issue #34752
+struct a34752{T} end
+function a34752(c, d...)
+    length(d) > 1 || error()
+end
+function h34752()
+    g = Tuple[(42, Any[42][1], 42)][1]
+    a34752(g...)
+end
+@test h34752() === true

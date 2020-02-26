@@ -190,6 +190,22 @@ end
         end
     end
 end
+
+@testset "bit rotations" begin
+    val1 = 0b01100011
+    @test 0b00011011 === bitrotate(val1, 3)
+    @test 0b01101100 === bitrotate(val1, -3)
+    @test val1 === bitrotate(val1, 0)
+
+    for T in Base.BitInteger_types
+        @test val1 === bitrotate(val1, sizeof(T) * 8) === bitrotate(val1, sizeof(T) * -8)
+    end
+
+    val2 = 0xabcd
+    @test 0x5e6d == bitrotate(val2, 3)
+    @test 0xb579 == bitrotate(val2, -3)
+end
+
 @testset "widen/widemul" begin
     @test widen(UInt8(3)) === UInt16(3)
     @test widen(UInt16(3)) === UInt32(3)
@@ -304,4 +320,62 @@ let i = MyInt26779(1)
     @test_throws MethodError i >> 1
     @test_throws MethodError i << 1
     @test_throws MethodError i >>> 1
+end
+
+@testset "rounding division" begin
+    for x = -100:100
+        for y = 1:100
+            for rnd in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp)
+                @test div(x,y,rnd) == round(x/y,rnd)
+                @test div(x,-y,rnd) == round(x/-y,rnd)
+            end
+        end
+    end
+    for (a, b, nearest, away, up) in (
+            (3, 2, 2, 2, 2),
+            (5, 3, 2, 2, 2),
+            (-3, 2, -2, -2, -1),
+            (5, 2, 2, 3, 3),
+            (-5, 2, -2, -3, -2),
+            (-5, 3, -2, -2, -2),
+            (5, -3, -2, -2, -2))
+        for sign in (+1, -1)
+            (a, b) = (a*sign, b*sign)
+            @test div(a, b, RoundNearest) == nearest
+            @test div(a, b, RoundNearestTiesAway) == away
+            @test div(a, b, RoundNearestTiesUp) == up
+        end
+    end
+
+    @test div(typemax(Int64), typemax(Int64)-1, RoundNearest) == 1
+    @test div(-typemax(Int64), typemax(Int64)-1, RoundNearest) == -1
+    @test div(typemax(Int64), 2, RoundNearest) == 4611686018427387904
+    @test div(-typemax(Int64), 2, RoundNearestTiesUp) == -4611686018427387903
+    @test div(typemax(Int)-2, typemax(Int), RoundNearest) == 1
+
+    # Exhaustively test (U)Int8 to catch any overflow-style issues
+    for r in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp)
+        for T in (UInt8, Int8)
+            for x in typemin(T):typemax(T)
+                for y in typemin(T):typemax(T)
+                    if y == 0 || (T <: Signed && x == typemin(T) && y == -1)
+                        @test_throws DivideError div(x, y, r)
+                    else
+                        @test div(x, y, r) == T(div(widen(T)(x), widen(T)(y), r))
+                    end
+                end
+            end
+        end
+    end
+end
+
+@testset "bitreverse" begin
+    for T in Base.BitInteger_types
+        x = rand(T)::T
+        @test bitreverse(x) isa T
+        @test reverse(bitstring(x)) == bitstring(bitreverse(x))
+    end
+    @test bitreverse(0x80) === 0x01
+    @test bitreverse(Int64(456618293)) === Int64(-6012608040035942400)
+    @test bitreverse(Int32(456618293)) === Int32(-1399919400)
 end

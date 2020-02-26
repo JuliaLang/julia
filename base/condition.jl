@@ -22,7 +22,6 @@ function trylock end
 function islocked end
 unlockall(l::AbstractLock) = unlock(l) # internal function for implementing `wait`
 relockall(l::AbstractLock, token::Nothing) = lock(l) # internal function for implementing `wait`
-assert_havelock(l::AbstractLock) = assert_havelock(l, Threads.threadid())
 assert_havelock(l::AbstractLock, tid::Integer) =
     (islocked(l) && tid == Threads.threadid()) ? nothing : concurrency_violation()
 assert_havelock(l::AbstractLock, tid::Task) =
@@ -88,8 +87,8 @@ Block the current task until some event occurs, depending on the type of the arg
 * [`Condition`](@ref): Wait for [`notify`](@ref) on a condition.
 * `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process
   can be used to determine success or failure.
-* [`Task`](@ref): Wait for a `Task` to finish. If the task fails with an exception, the
-  exception is propagated (re-thrown in the task that called `wait`).
+* [`Task`](@ref): Wait for a `Task` to finish. If the task fails with an exception, a
+  `TaskFailedException` (which wraps the failed task) is thrown.
 * [`RawFD`](@ref): Wait for changes on a file descriptor (see the `FileWatching` package).
 
 If no argument is passed, the task blocks for an undefined period. A task can only be
@@ -106,7 +105,7 @@ function wait(c::GenericCondition)
     try
         return wait()
     catch
-        list_deletefirst!(c.waitq, ct)
+        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
         rethrow()
     finally
         relockall(c.lock, token)
@@ -162,3 +161,8 @@ this, and can be used for level-triggered events.
 This object is NOT thread-safe. See [`Threads.Condition`](@ref) for a thread-safe version.
 """
 const Condition = GenericCondition{AlwaysLockedST}
+
+lock(c::GenericCondition{AlwaysLockedST}) =
+    throw(ArgumentError("`Condition` is not thread-safe. Please use `Threads.Condition` instead for multi-threaded code."))
+unlock(c::GenericCondition{AlwaysLockedST}) =
+    throw(ArgumentError("`Condition` is not thread-safe. Please use `Threads.Condition` instead for multi-threaded code."))

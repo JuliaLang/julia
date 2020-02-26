@@ -19,6 +19,7 @@ Base.unsafe_pointer_to_objref
 Base.disable_sigint
 Base.reenable_sigint
 Base.systemerror
+Base.windowserror
 Core.Ptr
 Core.Ref
 Base.Cchar
