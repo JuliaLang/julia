@@ -20,7 +20,10 @@ let n = 10
         A = Areal
         H = UpperHessenberg(A)
         AH = triu(A,-1)
-        @test Matrix(H) == H == AH
+        @test UpperHessenberg(H) == H
+        @test parent(H) == A
+        @test Matrix(H) == Array(H) == H == AH
+        @test real(H) == real(AH)
         for x in (2,2+3im)
             @test x*H == H*x == x*AH
             for op in (+,-)
@@ -37,6 +40,15 @@ let n = 10
         H2[5,3]=0
         @test H2 == triu(A2,-1)
         @test_throws ArgumentError H[5,3]=1
+        Hc = UpperHessenberg(Areal + im .* Aimg)
+        AHc = triu(Areal + im .* Aimg,-1)
+        @test real(Hc) == real(AHc)
+        @test imag(Hc) == imag(AHc)
+        @test Array(copy(adjoint(Hc))) == adjoint(Array(Hc))
+        @test Array(copy(transpose(Hc))) == transpose(Array(Hc))
+        H = UpperHessenberg(Areal)
+        @test Array(Hc + H) == Array(Hc) + Array(H)
+        @test Array(Hc - H) == Array(Hc) - Array(H)
     end
 
     @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int), herm in (false, true)
@@ -48,10 +60,12 @@ let n = 10
         A = herm ? Hermitian(A_ + A_') : A_
 
         H = hessenberg(A)
+        @test Hessenberg(H) === H
         eltyh = eltype(H)
         @test size(H.Q, 1) == size(A, 1)
         @test size(H.Q, 2) == size(A, 2)
         @test size(H.Q) == size(A)
+        @test size(H) == size(A)
         @test_throws ErrorException H.Z
         @test convert(Array, H) ≈ A
         @test (H.Q * H.H) * H.Q' ≈ A ≈ (Matrix(H.Q) * Matrix(H.H)) * Matrix(H.Q)'
