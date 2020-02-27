@@ -498,4 +498,22 @@ end
     end
 end
 
+struct MyNotANumberType
+    n::Float64
+end
+Base.zero(n::MyNotANumberType)      = MyNotANumberType(zero(Float64))
+Base.zero(T::Type{MyNotANumberType}) = MyNotANumberType(zero(Float64))
+Base.copy(n::MyNotANumberType)      = MyNotANumberType(copy(n.n))
+Base.transpose(n::MyNotANumberType) = n
+
+@testset "transpose for a non-numeric eltype" begin
+    @test !(MyNotANumberType(1.0) isa Number)
+    a = [MyNotANumberType(1.0), MyNotANumberType(2.0), MyNotANumberType(3.0)]
+    b = [MyNotANumberType(5.0), MyNotANumberType(6.0)]
+    B = Bidiagonal(a, b, :U)
+    tB = transpose(B)
+    @test tB == Bidiagonal(a, b, :L)
+    @test transpose(copy(tB)) == B
+end
+
 end # module TestBidiagonal
