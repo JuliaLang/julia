@@ -375,11 +375,6 @@ void gc_debug_print_status(void);
 void gc_debug_critical_error(void);
 void jl_print_gc_stats(JL_STREAM *s);
 void jl_gc_reset_alloc_count(void);
-int jl_assign_type_uid(void);
-jl_value_t *jl_cache_type_(jl_datatype_t *type);
-void jl_sort_types(jl_value_t **types, size_t length);
-int  jl_get_t_uid_ctr(void);
-void jl_set_t_uid_ctr(int i);
 uint32_t jl_get_gs_ctr(void);
 void jl_set_gs_ctr(uint32_t ctr);
 
@@ -1024,6 +1019,22 @@ extern jl_mutex_t safepoint_lock;
 #if defined(__APPLE__)
 void jl_mach_gc_end(void);
 #endif
+
+// -- typeset.c -- //
+
+extern jl_value_t **const jl_notfound;
+
+struct jl_typeset_t {
+    jl_svec_t **cache;
+    jl_value_t *parent;
+    uint_t (*hash)(struct jl_typeset_t const *set, jl_value_t *val);
+    int (*eq)(struct jl_typeset_t const *set, jl_value_t *val, jl_value_t *ty);
+};
+
+jl_value_t **jl_typeset_lookup_bp(struct jl_typeset_t const *set, jl_value_t *ty, uint_t hv);
+jl_value_t *jl_typeset_lookup(struct jl_typeset_t *const set, jl_value_t *ty, uint_t hv);
+void jl_typeset_insert(struct jl_typeset_t const *set, jl_value_t *val);
+
 
 // -- typemap.c -- //
 

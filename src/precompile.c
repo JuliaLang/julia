@@ -317,9 +317,8 @@ static int precompile_enq_all_cache__(jl_typemap_entry_t *l, void *closure)
     return 1;
 }
 
-static int precompile_enq_specialization_(jl_typemap_entry_t *l, void *closure)
+static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closure)
 {
-    jl_method_instance_t *mi = l->func.linfo;
     assert(jl_is_method_instance(mi));
     jl_code_instance_t *codeinst = mi->cache;
     while (codeinst) {
@@ -352,7 +351,13 @@ static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *c
         jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)mi);
     }
     else {
-        jl_typemap_visitor(def->func.method->specializations, precompile_enq_specialization_, closure);
+        jl_svec_t *specializations = def->func.method->specializations;
+        size_t i, l = jl_svec_len(specializations);
+        for (i = 0; i < l; i++) {
+            jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, i);
+            if (mi != NULL)
+                precompile_enq_specialization_(mi, closure);
+        }
     }
     return 1;
 }
@@ -376,8 +381,6 @@ void *jl_precompile(int all)
     jl_method_instance_t *mi = NULL;
     JL_GC_PUSH3(&m, &m2, &mi);
     jl_foreach_reachable_mtable(precompile_enq_all_specializations_, m);
-    // TODO: Try for a stable ordering to make inference problems more reproducible (#29923)
-    //jl_sort_types((jl_value_t**)jl_array_data(m), jl_array_len(m));
     m2 = jl_alloc_vec_any(0);
     for (size_t i = 0; i < jl_array_len(m); i++) {
         mi = (jl_method_instance_t*)jl_array_ptr_ref(m, i);

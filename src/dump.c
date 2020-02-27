@@ -307,18 +307,18 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
     }
     else if (internal) {
         if (jl_unwrap_unionall(dt->name->wrapper) == (jl_value_t*)dt) // comes up often since functions create types
-            tag = 5; // internal, and not in the typename cache (just needs uid reassigned)
+            tag = 5; // internal, and not in the typename cache
         else
-            tag = 10; // anything else that's internal (just needs uid reassigned and possibly recaching)
+            tag = 10; // anything else that's internal (just may need recaching)
     }
     else if (type_recursively_external(dt)) {
         tag = 7; // external type that can be immediately recreated (with apply_type)
     }
     else if (type_in_worklist(dt)) {
-        tag = 11; // external, but definitely new (still needs uid and caching, but not full unique-ing)
+        tag = 11; // external, but definitely new (still needs caching, but not full unique-ing)
     }
     else {
-        // this'll need a uid and unique-ing later
+        // this'll need unique-ing later
         // flag this in the backref table as special
         uintptr_t *bp = (uintptr_t*)ptrhash_bp(&backref_table, dt);
         assert(*bp != (uintptr_t)HT_NOTFOUND);
@@ -387,6 +387,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
     if (!dt->abstract) {
         write_uint16(s->s, dt->ninitialized);
     }
+    write_int32(s->s, dt->hash);
 
     if (has_layout) {
         uint8_t layout = 0;
@@ -613,10 +614,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         if (jl_is_mtable(v)) {
             arraylist_push(&reinit_list, (void*)pos);
             arraylist_push(&reinit_list, (void*)3);
-        }
-        if (jl_is_method(v) && jl_typeof(((jl_method_t*)v)->specializations) == (jl_value_t*)jl_typemap_level_type) {
-            arraylist_push(&reinit_list, (void*)pos);
-            arraylist_push(&reinit_list, (void*)4);
         }
         pos <<= 1;
         ptrhash_put(&backref_table, v, (char*)HT_NOTFOUND + pos + 1);
@@ -1063,18 +1060,14 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             jl_typemap_level_t *node = (jl_typemap_level_t*)v;
             assert( // make sure this type has the expected ordering and layout
                 offsetof(jl_typemap_level_t, arg1) == 0 * sizeof(jl_value_t*) &&
-                offsetof(jl_typemap_level_t, targ) == 2 * sizeof(jl_value_t*) &&
-                offsetof(jl_typemap_level_t, linear) == 4 * sizeof(jl_value_t*) &&
-                offsetof(jl_typemap_level_t, any) == 5 * sizeof(jl_value_t*) &&
-                offsetof(jl_typemap_level_t, key) == 6 * sizeof(jl_value_t*) &&
-                sizeof(jl_typemap_level_t) == 7 * sizeof(jl_value_t*));
-            jl_serialize_value(s, jl_nothing);
-            jl_serialize_value(s, node->arg1.values);
-            jl_serialize_value(s, jl_nothing);
-            jl_serialize_value(s, node->targ.values);
+                offsetof(jl_typemap_level_t, targ) == 1 * sizeof(jl_value_t*) &&
+                offsetof(jl_typemap_level_t, linear) == 2 * sizeof(jl_value_t*) &&
+                offsetof(jl_typemap_level_t, any) == 3 * sizeof(jl_value_t*) &&
+                sizeof(jl_typemap_level_t) == 4 * sizeof(jl_value_t*));
+            jl_serialize_value(s, node->arg1);
+            jl_serialize_value(s, node->targ);
             jl_serialize_value(s, node->linear);
             jl_serialize_value(s, node->any);
-            jl_serialize_value(s, node->key);
             return;
         }
 
@@ -1156,14 +1149,6 @@ static void collect_backedges(jl_method_instance_t *callee) JL_GC_DISABLED
 }
 
 
-static int jl_collect_backedges_to_mod(jl_typemap_entry_t *ml, void *closure) JL_GC_DISABLED
-{
-    (void)(jl_array_t*)closure;
-    jl_method_instance_t *callee = ml->func.linfo;
-    collect_backedges(callee);
-    return 1;
-}
-
 static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) JL_GC_DISABLED
 {
     jl_array_t *s = (jl_array_t*)closure;
@@ -1173,7 +1158,13 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) 
         jl_array_ptr_1d_push(s, (jl_value_t*)ml->simplesig);
     }
     else {
-        jl_typemap_visitor(m->specializations, jl_collect_backedges_to_mod, closure);
+        jl_svec_t *specializations = m->specializations;
+        size_t i, l = jl_svec_len(specializations);
+        for (i = 0; i < l; i++) {
+            jl_method_instance_t *callee = (jl_method_instance_t*)jl_svecref(specializations, i);
+            if (callee != NULL)
+                collect_backedges(callee);
+        }
     }
     return 1;
 }
@@ -1455,7 +1446,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
         dt->ninitialized = read_uint16(s->s);
     else
         dt->ninitialized = 0;
-    dt->uid = 0;
+    dt->hash = read_int32(s->s);
 
     if (has_layout) {
         uint8_t layout = read_uint8(s->s);
@@ -1488,14 +1479,10 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
         }
     }
 
-    if (tag == 5) {
-        dt->uid = jl_assign_type_uid();
-    }
-    else if (tag == 10 || tag == 11 || tag == 12) {
+    if (tag == 10 || tag == 11 || tag == 12) {
         assert(pos > 0);
         arraylist_push(&flagref_list, loc == HT_NOTFOUND ? NULL : loc);
         arraylist_push(&flagref_list, (void*)(uintptr_t)pos);
-        dt->uid = -1; // mark that this type needs a new uid
         ptrhash_put(&uniquing_table, dt, NULL);
     }
 
@@ -1730,7 +1717,7 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
         arraylist_push(&flagref_list, (void*)pos);
         return (jl_value_t*)m;
     }
-    m->specializations = jl_deserialize_value(s, (jl_value_t**)&m->specializations);
+    m->specializations = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&m->specializations);
     jl_gc_wb(m, m->specializations);
     m->name = (jl_sym_t*)jl_deserialize_value(s, NULL);
     jl_gc_wb(m, m->name);
@@ -1997,7 +1984,6 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
                     s->ptls, sizeof(jl_typename_t), jl_typename_type);
             memset(tn, 0, sizeof(jl_typename_t));
             tn->cache = jl_emptysvec; // the cache is refilled later (tag 5)
-            tn->linearcache = jl_emptysvec; // the cache is refilled later (tag 5)
             if (usetable)
                 backref_list.items[pos] = tn;
         }
@@ -2427,7 +2413,6 @@ static void jl_finalize_serializer(jl_serializer_state *s)
     write_int32(s->s, -1);
 }
 
-void jl_typemap_rehash(jl_typemap_t *ml, int8_t offs);
 static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
 {
     JL_TRY {
@@ -2461,16 +2446,8 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
             }
             case 3: { // rehash MethodTable
                 jl_methtable_t *mt = (jl_methtable_t*)v;
-                jl_typemap_rehash(mt->defs, 0);
-                // TODO: consider reverting this when we can split on Type{...} better
-                jl_typemap_rehash(mt->cache, mt->offs);
                 if (tracee_list)
                     arraylist_push(tracee_list, mt);
-                break;
-            }
-            case 4: { // rehash specializations tfunc
-                jl_method_t *m = (jl_method_t*)v;
-                jl_typemap_rehash(m->specializations, 0);
                 break;
             }
             default:
@@ -2937,12 +2914,31 @@ static int jl_invalid_types_equal(jl_datatype_t *a, jl_datatype_t *b)
 {
     return jl_subtype((jl_value_t*)a, (jl_value_t*)b) && jl_subtype((jl_value_t*)b, (jl_value_t*)a);
 }
+
 STATIC_INLINE jl_value_t *verify_type(jl_value_t *v) JL_NOTSAFEPOINT
 {
     assert(v && jl_typeof(v) && jl_typeof(jl_typeof(v)) == (jl_value_t*)jl_datatype_type);
     return v;
 }
+
+static int is_cacheable(jl_datatype_t *type)
+{
+    // only cache types whose behavior will not depend on the identities
+    // of contained TypeVars
+    assert(jl_is_datatype(type));
+    jl_svec_t *t = type->parameters;
+    if (jl_svec_len(t) == 0)
+        return 1;
+    // cache abstract types with no free type vars
+    if (jl_is_abstracttype(type))
+        return !jl_has_free_typevars((jl_value_t*)type);
+    // ... or concrete types
+    return jl_is_concrete_type((jl_value_t*)type);
+}
 #endif
+
+jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type);
+void jl_cache_type_(jl_datatype_t *type);
 
 static jl_datatype_t *jl_recache_type(jl_datatype_t *dt) JL_GC_DISABLED
 {
@@ -2980,14 +2976,16 @@ static jl_datatype_t *jl_recache_type(jl_datatype_t *dt) JL_GC_DISABLED
     }
 
     // then recache the type itself
-    assert(dt->uid == -1);
+    assert(is_cacheable(dt));
     if (jl_svec_len(tt) == 0) { // jl_cache_type doesn't work if length(parameters) == 0
-        dt->uid = jl_assign_type_uid();
         t = dt;
     }
     else {
-        dt->uid = 0;
-        t = (jl_datatype_t*)jl_cache_type_(dt);
+        t = jl_lookup_cache_type_(dt);
+        if (t == NULL) {
+            jl_cache_type_(dt);
+            t = dt;
+        }
         assert(jl_invalid_types_equal(t, dt));
     }
     ptrhash_put(&uniquing_table, dt, t);
@@ -3297,7 +3295,7 @@ void jl_init_serializer(void)
 
     void *vals[] = { jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
                      call_sym, invoke_sym, goto_ifnot_sym, return_sym, jl_symbol("tuple"),
-                     unreachable_sym, jl_an_empty_string,
+                     unreachable_sym, jl_an_empty_string, jl_an_empty_vec_any,
 
                      // empirical list of very common symbols
                      #include "common_symbols1.inc"
