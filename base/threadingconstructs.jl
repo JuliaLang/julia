@@ -10,13 +10,15 @@ Get the ID number of the current thread of execution. The master thread has ID `
 threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
 # Inclusive upper bound on threadid()
+
+const NUM_THREADS = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 """
     Threads.nthreads()
 
 Get the number of threads available to the Julia process. This is the inclusive upper bound
 on [`threadid()`](@ref).
 """
-nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
+nthreads() = NUM_THREADS
 
 function _threadsfor(iter,lbody)
     lidx = iter.args[1]         # index
