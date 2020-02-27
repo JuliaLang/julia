@@ -2924,6 +2924,9 @@ STATIC_INLINE jl_value_t *verify_type(jl_value_t *v) JL_NOTSAFEPOINT
 }
 #endif
 
+jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type);
+void jl_cache_type_(jl_datatype_t *type);
+
 static jl_datatype_t *jl_recache_type(jl_datatype_t *dt) JL_GC_DISABLED
 {
     jl_datatype_t *t; // the type after unique'ing
@@ -2964,7 +2967,12 @@ static jl_datatype_t *jl_recache_type(jl_datatype_t *dt) JL_GC_DISABLED
         t = dt;
     }
     else {
-        t = (jl_datatype_t*)jl_cache_type_(dt);
+        t = jl_lookup_cache_type_(dt);
+        if (t == NULL) {
+            jl_cache_type_(dt);
+            t = dt;
+        }
+        assert(t->hash == dt->hash);
         assert(jl_invalid_types_equal(t, dt));
     }
     ptrhash_put(&uniquing_table, dt, t);
