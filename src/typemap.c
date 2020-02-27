@@ -194,7 +194,9 @@ static jl_typemap_t **mtcache_hash_lookup_bp(jl_array_t *cache JL_PROPAGATES_ROO
 {
     if (cache == (jl_array_t*)jl_an_empty_vec_any)
         return NULL;
-    return (jl_typemap_t**)jl_table_peek_bp(cache, ty);
+    jl_typemap_t **pml = jl_table_peek_bp(cache, ty);
+    JL_GC_PROMISE_ROOTED(pml); // clang-sa doesn't trust our JL_PROPAGATES_ROOT claim
+    return pml;
 }
 
 static void mtcache_hash_insert(jl_array_t **cache, jl_value_t *parent, jl_value_t *key, jl_typemap_t *val)
@@ -218,7 +220,9 @@ static jl_typemap_t *mtcache_hash_lookup(jl_array_t *cache JL_PROPAGATES_ROOT, j
 {
     if (cache == (jl_array_t*)jl_an_empty_vec_any)
         return NULL;
-    return (jl_typemap_t*)jl_eqtable_get(cache, ty, jl_nothing);
+    jl_typemap_t *ml = (jl_typemap_t*)jl_eqtable_get(cache, ty, jl_nothing);
+    JL_GC_PROMISE_ROOTED(ml); // clang-sa doesn't trust our JL_PROPAGATES_ROOT claim
+    return ml;
 }
 
 // ----- Sorted Type Signature Lookup Matching ----- //
