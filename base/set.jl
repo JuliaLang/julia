@@ -551,7 +551,7 @@ subtract_singletontype(::Type{T}, x::Pair{K}, y::Pair...) where {T, K} =
 """
     replace(new::Function, A; [count::Integer])
 
-Return a copy of `A` where each value `x` in `A` is replaced by `new(x)`
+Return a copy of `A` where each value `x` in `A` is replaced by `new(x)`.
 If `count` is specified, then replace at most `count` values in total
 (replacements being defined as `new(x) !== x`).
 
