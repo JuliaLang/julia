@@ -309,11 +309,23 @@ Random.seed!(1)
             @test Array(TriSym*T) ≈ Array(TriSym)*Array(T)
             # test pass-through of mul! for AbstractTriangular*Bidiagonal
             Tri = UpperTriangular(diagm(1 => T.ev))
-            @test Array(Tri*T) ≈ Array(Tri)*Array(T)
-            # test mul! for Diagonal*Bidiagonal
-            C = Matrix{elty}(undef, n, n)
             Dia = Diagonal(T.dv)
-            @test mul!(C, Dia, T) ≈ Array(Dia)*Array(T)
+            @test Array(Tri*T) ≈ Array(Tri)*Array(T)
+            # test mul! itself for these types
+            for AA in (Tri, Dia)
+                for f in (identity, transpose, adjoint)
+                    C = rand(elty, n, n)
+                    D = copy(C) + 2.0 * Array(f(AA) * T)
+                    mul!(C, f(AA), T, 2.0, 1.0) ≈ D
+                end
+            end
+            # test mul! for BiTrySym * adjoint/transpose AbstractMat
+            for f in (identity, transpose, adjoint)
+                C = relty == Int ? rand(float(elty), n, n) : rand(elty, n, n)
+                B = rand(elty, n, n)
+                D = copy(C) + 2.0 * Array(T*f(B))
+                mul!(C, T, f(B), 2.0, 1.0) ≈ D
+            end
 
             # Issue #31870
             # Bi/Tri/Sym times Diagonal
