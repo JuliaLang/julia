@@ -895,8 +895,13 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     // return emit_runtime_call(ctx, f, argv, nargs);
 
     switch (f) {
-    case arraylen:
-        return mark_julia_type(ctx, emit_arraylen(ctx, argv[0]), false, jl_long_type);
+    case arraylen: {
+        const jl_cgval_t &x = argv[0];
+        jl_value_t *typ = jl_unwrap_unionall(x.typ);
+        if (!jl_is_datatype(typ) || ((jl_datatype_t*)typ)->name != jl_array_typename)
+            return emit_runtime_call(ctx, f, argv, nargs);
+        return mark_julia_type(ctx, emit_arraylen(ctx, x), false, jl_long_type);
+    }
     case pointerref:
         return emit_pointerref(ctx, argv);
     case pointerset:
