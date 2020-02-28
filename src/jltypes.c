@@ -649,14 +649,19 @@ static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
         // dispatch from changing the type of something.
         // this should work because `Type`s don't have uids, and aren't the
         // direct tags of values so we don't rely on pointer equality.
-        jl_value_t *kj = key[0], *tj = jl_tparam0(tt);
+        jl_value_t *kj = key[0];
+        jl_value_t *tj = jl_tparam0(tt);
         return (kj == tj || (jl_typeof(tj) == jl_typeof(kj) && jl_types_equal(tj, kj)));
     }
-    for(j=0; j < n; j++) {
-        jl_value_t *kj = key[j], *tj = jl_svecref(tt->parameters,j);
+    for (j = 0; j < n; j++) {
+        jl_value_t *kj = key[j];
+        jl_value_t *tj = jl_svecref(tt->parameters, j);
         if (tj != kj) {
             // require exact same Type{T}. see e.g. issue #22842
             if (jl_is_type_type(tj) || jl_is_type_type(kj))
+                return 0;
+            if ((jl_is_datatype(tj) && ((jl_datatype_t*)tj)->uid) ||
+                (jl_is_datatype(kj) && ((jl_datatype_t*)kj)->uid))
                 return 0;
             if (!jl_types_equal(tj, kj))
                 return 0;
