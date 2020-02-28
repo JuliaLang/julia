@@ -148,6 +148,7 @@ See also: [`getindex`](@ref), [`checkbounds`](@ref)
 
 ## basic generic definitions ##
 
+IteratorSize(::Type{<:AbstractString}) = SizeUnknown() # length is not O(1)
 eltype(::Type{<:AbstractString}) = Char # some string types may use another AbstractChar
 
 """
@@ -545,6 +546,7 @@ struct EachStringIndex{T<:AbstractString}
 end
 keys(s::AbstractString) = EachStringIndex(s)
 
+IteratorSize(::Type{<:EachStringIndex}) = SizeUnknown()
 length(e::EachStringIndex) = length(e.s)
 first(::EachStringIndex) = 1
 last(e::EachStringIndex) = lastindex(e.s)
@@ -715,6 +717,7 @@ size(s::CodeUnits) = (length(s),)
 elsize(s::CodeUnits{T}) where {T} = sizeof(T)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
+IteratorSize(::Type{<:CodeUnits}) = SizeUnknown()
 iterate(s::CodeUnits, i=1) = (@_propagate_inbounds_meta; i == length(s)+1 ? nothing : (s[i], i+1))
 
 write(io::IO, s::CodeUnits) = write(io, s.s)
