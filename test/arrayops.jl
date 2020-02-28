@@ -2702,6 +2702,12 @@ end
     @test setindex!(zeros(2), ones(2), CI0, :, CI0) == ones(2)
     @test setindex!(zeros(2), ones(2), CI0, CI0, :) == ones(2)
     @test setindex!([fill(0.0)], fill(1.0), 1) == [fill(1.0)]
+    # 0-dimensional assigment into ≥1-dimensional arrays
+    @test setindex!(zeros(2), fill(1.0), 1, CI0) == [1.0, 0.0]
+    @test setindex!(zeros(2), fill(1.0), CI0, 1) == [1.0, 0.0]
+    @test setindex!(zeros(2,2), fill(1.0), 1, 1, CI0) == [1.0 0.0; 0.0 0.0]
+    @test setindex!(zeros(2,2), fill(1.0), 1, CI0, 1) == [1.0 0.0; 0.0 0.0]
+    @test setindex!(zeros(2,2), fill(1.0), CI0, 1, 1) == [1.0 0.0; 0.0 0.0]
 end
 
 # Throws ArgumentError for negative dimensions in Array

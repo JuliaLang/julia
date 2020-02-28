@@ -381,12 +381,12 @@ module IteratorsMD
     first(iter::CartesianIndices) = CartesianIndex(map(first, iter.indices))
     last(iter::CartesianIndices)  = CartesianIndex(map(last, iter.indices))
 
-    # Collapse trailing CartesianIndices{0} elements to a single instance. (Also
-    # maintains at least one for 0-dimensional indexed assignment.)
-    @inline to_indices(A, inds, I::Tuple{CartesianIndices{0},Vararg{CartesianIndices{0}}}) = (first(I),)
     # When used as indices themselves, CartesianIndices can simply become its tuple of ranges
     @inline to_indices(A, inds, I::Tuple{CartesianIndices, Vararg{Any}}) =
         to_indices(A, inds, (I[1].indices..., tail(I)...))
+    # but preserve CartesianIndices{0} as they consume a dimension.
+    @inline to_indices(A, inds, I::Tuple{CartesianIndices{0},Vararg{Any}}) =
+        (first(I), to_indices(A, inds, tail(I))...)
 
     @inline function in(i::CartesianIndex{N}, r::CartesianIndices{N}) where {N}
         _in(true, i.I, first(r).I, last(r).I)
