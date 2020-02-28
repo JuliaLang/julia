@@ -731,7 +731,7 @@ static uint32_t sysimg_init_cb(const void *id)
         jl_error("Your CPU does not support the CX16 instruction, which is required "
                  "by this version of Julia!  This is often due to running inside of a "
                  "virtualized environment.  Please read "
-                 "https://docs.julialang.org/en/stable/devdocs/sysimg/ for more.");
+                 "https://docs.julialang.org/en/v1/devdocs/sysimg/ for more.");
     }
     auto match = match_sysimg_targets(sysimg, target, max_vector_size);
     // Now we've decided on which sysimg version to use.

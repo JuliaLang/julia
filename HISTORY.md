@@ -1168,7 +1168,7 @@ This section lists changes that do not have deprecation warnings.
     to evaluate the wrapper. Consequently, package authors generally need to specialize
     `copy` and `copyto!` methods rather than `broadcast` and `broadcast!`. This also allows
     for more customization and control of fused broadcasts. See the
-    [Interfaces chapter](https://docs.julialang.org/en/latest/manual/interfaces/#man-interfaces-broadcasting-1)
+    [Interfaces chapter](https://docs.julialang.org/en/v1/manual/interfaces/#man-interfaces-broadcasting-1)
     for more information.
 
   * `find` has been renamed to `findall`. `findall`, `findfirst`, `findlast`, `findnext`
@@ -2756,7 +2756,7 @@ Library improvements
     `JULIA_INPUT_COLOR` and `JULIA_ANSWER_COLOR` to `"bold"`.
     For example, one way of doing this is adding `ENV["JULIA_INPUT_COLOR"] = :bold`
     and `ENV["JULIA_ANSWER_COLOR"] = :bold` to the `.juliarc.jl` file. See the
-    [manual section on customizing colors](https://docs.julialang.org/en/latest/manual/interacting-with-julia#Customizing-Colors-1)
+    [manual section on customizing colors](https://docs.julialang.org/en/v1/stdlib/REPL/#Customizing-Colors-1)
     for more information.
 
   * The default color for info messages has been changed from blue to cyan
@@ -3119,7 +3119,7 @@ Experimental language features
 ------------------------------
 
   * Support for
-    [multi-threading](https://docs.julialang.org/en/latest/manual/parallel-computing/#multi-threading-experimental).
+    [multi-threading](https://docs.julialang.org/en/v1/manual/parallel-computing/#man-multithreading-1).
     Loops with independent iterations can be easily parallelized with the
     `Threads.@threads` macro.
 
@@ -3521,7 +3521,7 @@ Deprecated or removed
     * `@unix_only` is deprecated in favor of `if is_unix()`
     * `@osx_only` is deprecated in favor of `if is_apple()`
     * `@linux_only` is deprecated in favor of `if is_linux()`
-    * NOTE: Using `@static` could be useful/necessary when used in a function's local scope. See details at the section entitled [Handling Operating System Variation](https://docs.julialang.org/en/latest/manual/handling-operating-system-variation/#man-handling-operating-system-variation) in the manual.
+    * NOTE: Using `@static` could be useful/necessary when used in a function's local scope. See details at the section entitled [Handling Operating System Variation](https://docs.julialang.org/en/v1/manual/handling-operating-system-variation/) in the manual.
 
 Command-line option changes
 ---------------------------
@@ -3578,7 +3578,7 @@ New language features
     types instead of to their values. The function then returns an expression forming the
     body of the function to be called at run time ([#7311]).
 
-  * [Documentation system](https://docs.julialang.org/en/latest/manual/documentation/)
+  * [Documentation system](https://docs.julialang.org/en/v1/manual/documentation/)
     for functions, methods, types and macros in packages and user code ([#8791]).
 
   * The syntax `function foo end` can be used to introduce a generic function without
@@ -3608,11 +3608,11 @@ New language features
   * `++` is now parsed as an infix operator, but does not yet have a default definition ([#11030], [#11686]).
 
   * Support for inter-task communication using `Channels` ([#12264]).
-    See https://docs.julialang.org/en/latest/manual/parallel-computing/#channels for details.
+    See https://docs.julialang.org/en/v1/manual/parallel-computing/#Channels-1 for details.
 
   * `RemoteRef`s now point to remote channels. The remote channels can be of length greater than 1.
     Default continues to be of length 1 ([#12385]).
-    See https://docs.julialang.org/en/latest/manual/parallel-computing/#remoterefs-and-abstractchannels for details.
+    See https://docs.julialang.org/en/v1/manual/parallel-computing/#Remote-References-and-AbstractChannels-1 for details.
 
   * `@__LINE__` special macro now available to reflect invocation source line number ([#12727]).
 
@@ -4813,8 +4813,8 @@ Bugfixes and performance updates
 
 Too numerous to mention.
 
-[packages chapter]: https://docs.julialang.org/en/latest/manual/packages/
-[sorting functions]: https://docs.julialang.org/en/latest/stdlib/sort/
+[packages chapter]: https://docs.julialang.org/en/v1/stdlib/Pkg/
+[sorting functions]: https://docs.julialang.org/en/v1/base/sort/
 [pairwise summation]: https://en.wikipedia.org/wiki/Pairwise_summation
 [a448e080]: https://github.com/JuliaLang/julia/commit/a448e080dc736c7fb326426dfcb2528be36973d3
 [5e3f074b]: https://github.com/JuliaLang/julia/commit/5e3f074b9173044a0a4219f9b285879ff7cec041
