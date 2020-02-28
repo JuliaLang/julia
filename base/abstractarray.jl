@@ -362,7 +362,7 @@ julia> first(Bool[], 1)
 0-element Array{Bool,1}
 ```
 """
-first(v::AbstractVector, n::Integer) = @inbounds v[firstindex(v):min(firstindex(v) + n - 1, end)]
+first(v::AbstractVector, n::Integer) = @inbounds v[begin:min(begin + n - 1, end)]
 
 """
     last(coll)
@@ -401,7 +401,7 @@ julia> last(Float64[], 1)
 0-element Array{Float64,1}
 ```
 """
-last(v::AbstractArray, n::Integer) = @inbounds v[max(firstindex(v), end - n + 1):end]
+last(v::AbstractArray, n::Integer) = @inbounds v[max(begin, end - n + 1):end]
 
 """
     strides(A)
