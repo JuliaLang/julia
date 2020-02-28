@@ -62,21 +62,17 @@ Julia has a built-in [package manager](https://julialang.github.io/Pkg.jl/v1/) b
 
 For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
 
-### Package Compatibility Across Releases
+### Semantic Versioning
 
-Sometimes, you might find that while your package works
-on the current release, it might not work on the upcoming release or nightly.
-This is due to the fact that some Julia functions (after some discussion)
-could be deprecated or removed altogether. This may cause your package to break or
-throw a number of deprecation warnings on usage. Therefore it is highly recommended
-to port your package to latest Julia release.
+When tagging a new release of your package you should follow [Semantic Versioning (SemVar)](https://semver.org/). Given a version number of the form MAJOR.MINOR.PATCH, increment the:
 
-However, porting a package to the latest release may cause the package to break on
-earlier Julia releases. To maintain compatibility across releases, use
-[`Compat.jl`](https://github.com/JuliaLang/Compat.jl). Find the fix for your package
-from the README, and specify the minimum version of Compat that provides the fix
-in your REQUIRE file. To find the correct minimum version, refer to
-[this guide](https://github.com/JuliaLang/Compat.jl/#tagging-the-correct-minimum-version-of-compat).
+* MAJOR version when you make incompatible API changes,
+* MINOR version when you add functionality in a backwards compatible manner, and
+* PATCH version when you make backwards compatible bug fixes.
+
+Semantic Versioning is a great way to indicate to users of your package whether they should expect API breaking changes when switching to a new version.
+
+Note that Julia itself respects Semantic Versioning as well. This means that your package will be compatible with all newer Julia releases with the same MAJOR version.
 
 ### Writing tests
 
