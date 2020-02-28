@@ -62,7 +62,7 @@ Julia has a built-in [package manager](https://julialang.github.io/Pkg.jl/v1/) b
 
 For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
 
-### Semantic Versioning
+### Semantic Versioning and Package Compatibility Across Releases
 
 When tagging a new release of your package you should follow [Semantic Versioning (SemVar)](https://semver.org/). Given a version number of the form MAJOR.MINOR.PATCH, increment the:
 
@@ -70,9 +70,9 @@ When tagging a new release of your package you should follow [Semantic Versionin
 * MINOR version when you add functionality in a backwards compatible manner, and
 * PATCH version when you make backwards compatible bug fixes.
 
-Semantic Versioning is a great way to indicate to users of your package whether they should expect API breaking changes when switching to a new version.
+Semantic Versioning is a great way to indicate to users of your package whether they should expect API breaking changes when switching to a new version. Note that Julia itself respects Semantic Versioning as well. This means that your package will be compatible with all newer Julia releases with the same MAJOR version.
 
-Note that Julia itself respects Semantic Versioning as well. This means that your package will be compatible with all newer Julia releases with the same MAJOR version.
+However, sometimes you might want to maintain compatibility across breaking Julia releases or use features from a certain MINOR version in a different, older MINOR version of Julia. To that end, use [`Compat.jl`](https://github.com/JuliaLang/Compat.jl). For more information see [this guide](https://github.com/JuliaLang/Compat.jl/#tagging-the-correct-minimum-version-of-compat).
 
 ### Writing tests
 
