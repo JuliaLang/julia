@@ -1557,12 +1557,22 @@ julia> false * NaN
 """
 Bool
 
+# IEEE 754 standard
+binary = Dict(
+    16 => Dict(:sign => 1, :exp => 5, :frac => 10),
+    32 => Dict(:sign => 1, :exp => 8, :frac => 23),
+    64 => Dict(:sign => 1, :exp => 11, :frac => 52),
+)
+
 for bit in (16, 32, 64)
+    b = binary[bit]
     @eval begin
         """
             Float$($bit) <: AbstractFloat
 
-        $($bit)-bit floating point number type.
+        $($bit)-bit floating point number type (IEEE 754 standard).
+
+        Binary format: $($b[:sign]) sign, $($b[:exp]) exponent, $($b[:frac]) fraction bits.
         """
         $(Symbol("Float", bit))
     end
