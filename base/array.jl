@@ -1303,9 +1303,9 @@ function inserteach!(a::Vector, indices::Union{AbstractVector, AbstractRange{<:I
         # sorts so the final index is correct
         indices_sorted, items_sorted = sort_indices_items(indices, items)
     end
-    _growat!.(Ref(a), indices_sorted, 1) # does bound check
-    @inbounds for (index, item) in zip(indices_sorted, items_sorted)
-        a[index] = item
+    for (index, item) in zip(indices_sorted, items_sorted)
+        _growat!(a, index, 1) # TODO write a batch growat in C for speed-up
+        @inbounds a[index] = item
     end
     return a
 end
@@ -1348,9 +1348,9 @@ function inserteach!(a::Vector, boolindices::AbstractVector{Bool}, items::Abstra
     elseif itemslen === 0
         return a
     end
-    _growat!.(Ref(a), indices, 1) # does bound check
-    @inbounds for (index, item) in zip(indices, items)
-        a[index] = item
+    for (index, item) in zip(indices, items)
+        _growat!(a, index, 1) # TODO write a batch growat in C for speed-up
+        @inbounds a[index] = item
     end
     return a
 end
