@@ -20,7 +20,7 @@ let n = 10
         A = Areal
         H = UpperHessenberg(A)
         AH = triu(A,-1)
-        @test UpperHessenberg(H) == H
+        @test UpperHessenberg(H) === H
         @test parent(H) == A
         @test Matrix(H) == Array(H) == H == AH
         @test real(H) == real(AH)
