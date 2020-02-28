@@ -241,25 +241,6 @@ function remotecall_eval(m::Module, pid::Int, ex)
 end
 
 
-# Statically split range [1,N] into equal sized chunks for np processors
-function splitrange(N::Int, np::Int)
-    each = div(N,np)
-    extras = rem(N,np)
-    nchunks = each > 0 ? np : extras
-    chunks = Vector{UnitRange{Int}}(undef, nchunks)
-    lo = 1
-    for i in 1:nchunks
-        hi = lo + each - 1
-        if extras > 0
-            hi += 1
-            extras -= 1
-        end
-        chunks[i] = lo:hi
-        lo = hi+1
-    end
-    return chunks
-end
-
 # Statically split range [firstIndex,lastIndex] into equal sized chunks for np processors
 function splitrange(firstIndex::Int, lastIndex::Int, np::Int)
     each, extras = divrem(lastIndex-firstIndex+1, np)
