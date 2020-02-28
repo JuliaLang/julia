@@ -22,6 +22,15 @@ using Distributed: splitrange
 @test splitrange(-1, 1, 3) == Array{UnitRange{Int64},1}([-1:-1,0:0,1:1])
 @test splitrange(-1, 1, 4) == Array{UnitRange{Int64},1}([-1:-1,0:0,1:1])
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
+oa=OffsetArray([-1,0], (-2,))
+@distributed for i in eachindex(oa)
+	@test i <= 0
+end
+
 # testing macros.jl:...
 # ... yet to be implemented
 
