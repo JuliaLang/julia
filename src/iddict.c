@@ -94,10 +94,10 @@ static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
         /* it's important to grow the table really fast; otherwise we waste */
         /* lots of time rehashing all the keys over and over. */
         sz = jl_array_len(a);
-        if (sz >= (1 << 19) || (sz <= (1 << 8)))
-            newsz = sz << 1;
-        else if (sz <= HT_N_INLINE)
+        if (sz < HT_N_INLINE)
             newsz = HT_N_INLINE;
+        else if (sz >= (1 << 19) || (sz <= (1 << 8)))
+            newsz = sz << 1;
         else
             newsz = sz << 2;
         *pa = jl_idtable_rehash(*pa, newsz);
