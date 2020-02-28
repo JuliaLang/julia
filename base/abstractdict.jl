@@ -514,10 +514,9 @@ getindex(t::AbstractDict, k1, k2, ks...) = getindex(t, tuple(k1,k2,ks...))
 setindex!(t::AbstractDict, v, k1, k2, ks...) = setindex!(t, v, tuple(k1,k2,ks...))
 
 get!(t::AbstractDict, key, default) = get!(() -> default, t, key)
-function get!(default::Callable, t::AbstractDict{K,V}, key0) where K where V
-    key = convert(K, key0)
+function get!(default::Callable, t::AbstractDict{K,V}, key) where K where V
     haskey(t, key) && return t[key]
-    val = convert(V, default())
+    val = default()
     t[key] = val
     return val
 end
