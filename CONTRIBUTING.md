@@ -64,11 +64,21 @@ For developers who need to wrap C libraries so that they can be called from Juli
 
 ### Semantic Versioning and Package Compatibility Across Releases
 
-When tagging a new release of your package you should follow [Semantic Versioning (SemVar)](https://semver.org/). Given a version number of the form MAJOR.MINOR.PATCH, increment the:
+When tagging a new release of your package you should follow [Semantic Versioning (SemVar)](https://semver.org/). Given a version number of the form MAJOR.MINOR.PATCH with MAJOR >= 1, increment the:
 
 * MAJOR version when you make incompatible API changes,
 * MINOR version when you add functionality in a backwards compatible manner, and
 * PATCH version when you make backwards compatible bug fixes.
+
+For packages in an early stage with version numbers 0.MINOR.PATCH, for example 0.6.2, MINOR takes over the role of MAJOR and should therefore only be increased when introducing incompatible API changes.
+
+Examples:
+
+* 0.4.2 -> 0.4.3 (non-breaking)
+* 0.4.2 -> 0.5.0 (breaking)
+* 1.2.3 -> 1.3.0 (non-breaking)
+* 1.3.0 -> 1.3.1 (non breaking)
+* 1.9.2 -> 2.0.0 (breaking)
 
 Semantic Versioning is a great way to indicate to users of your package whether they should expect API breaking changes when switching to a new version. Note that Julia itself respects Semantic Versioning as well. This means that your package will be compatible with all newer Julia releases with the same MAJOR version.
 
