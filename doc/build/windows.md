@@ -4,7 +4,7 @@ This file describes how to install, or build, and use Julia on Windows.
 
 For more general information about Julia, please see the
 [main README](https://github.com/JuliaLang/julia/blob/master/README.md)
-or the [documentation](https://docs.julialang.org/).
+or the [documentation](https://docs.julialang.org).
 
 
 ## General Information for Windows

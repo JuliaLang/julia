@@ -14,7 +14,7 @@ end
 """
 **Welcome to Julia $(string(VERSION)).** The full manual is available at
 
-    https://docs.julialang.org/
+    https://docs.julialang.org
 
 as well as many great tutorials and learning resources:
 

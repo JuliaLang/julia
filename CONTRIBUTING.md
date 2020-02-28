@@ -317,7 +317,7 @@ runtest harness).
   - **Homepage:** <https://julialang.org>
   - **Community:** <https://julialang.org/community/>
   - **Source code:** <https://github.com/JuliaLang/julia>
-  - **Documentation:** <https://docs.julialang.org/>
+  - **Documentation:** <https://docs.julialang.org>
   - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 * Design of Julia
