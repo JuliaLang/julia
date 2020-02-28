@@ -21,7 +21,7 @@ let n = 10
         H = UpperHessenberg(A)
         AH = triu(A,-1)
         @test UpperHessenberg(H) === H
-        @test parent(H) == A
+        @test parent(H) === A
         @test Matrix(H) == Array(H) == H == AH
         @test real(H) == real(AH)
         for x in (2,2+3im)
