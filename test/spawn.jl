@@ -760,3 +760,12 @@ end
     # output: "A\ B\\" C "D K"
     @test Base.shell_escape_winsomely("A\\ B\\", "C", "D K") == "\"A\\ B\\\\\" C \"D K\""
 end
+
+@testset "readline" begin
+    @test readline(echocmd) == ""
+    @test readline(`$(echocmd) foo`) == "foo"
+    @test readline(`$(echocmd) -e 'foo\nbar'`) == "foo"
+    @test readline(yescmd) == "y"
+    @test readline(pipeline(`$(echocmd) -e 'foo\nbar'`, sortcmd)) == "bar"
+    @test_throws ArgumentError("collection must be non-empty") readline(`$(echocmd) -n`)
+end
