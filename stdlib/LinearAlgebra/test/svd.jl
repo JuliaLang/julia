@@ -174,5 +174,19 @@ end
     @test svdstring == "$(summary(svdd))\nU factor:\n$ustring\nsingular values:\n$sstring\nVt factor:\n$vtstring"
 end
 
+@testset "REPL printing of Generalized SVD" begin
+    a = randn(3, 3)
+    b = randn(3, 3)
+    svdd = svd(a, b)
+    svdstring = sprint((t, s) -> show(t, "text/plain", s), svdd)
+    ustring = sprint((t, s) -> show(t, "text/plain", s), svdd.U)
+    qstring = sprint((t, s) -> show(t, "text/plain", s), svdd.Q)
+    vstring = sprint((t, s) -> show(t, "text/plain", s), svdd.V)
+    d1string = sprint((t, s) -> show(t, "text/plain", s), svdd.D1)
+    d2string = sprint((t, s) -> show(t, "text/plain", s), svdd.D2)
+    r0string = sprint((t, s) -> show(t, "text/plain", s), svdd.R0)
+    @test svdstring == "$(summary(svdd))\nU factor:\n$ustring\nV factor:\n$vstring\nQ factor:\n$qstring\nD1 factor:\n$d1string\nD2 factor:\n$d2string\nR0 factor:\n$r0string"
+end
+
 
 end # module TestSVD
