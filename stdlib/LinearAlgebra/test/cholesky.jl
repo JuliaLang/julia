@@ -398,5 +398,4 @@ end
     C = cholesky(B, Val(true), check=false)
     @test B ≈ Matrix(C)
 end
-
 end # module TestCholesky
