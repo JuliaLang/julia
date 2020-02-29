@@ -481,6 +481,9 @@ end
         W[1,1] = 4
         @test W == T([4 -1; -1 1])
         @test_throws ArgumentError (W[1,2] = 2)
+        if T == Hermitian
+            @test_throws ArgumentError (W[2,2] = 3+4im)
+        end
 
         @test Y + I == T([2 -1; -1 2])
         @test Y - I == T([0 -1; -1 0])
