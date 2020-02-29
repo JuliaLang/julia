@@ -65,7 +65,7 @@ For developers who need to wrap C libraries so that they can be called from Juli
 ### Semantic Versioning and Package Compatibility Across Releases
 
 When tagging a new release of your package you should follow
-[Semantic Versioning (SemVar)](https://semver.org/). Given a version number
+[Semantic Versioning (SemVer)](https://semver.org/). Given a version number
 of the form MAJOR.MINOR.PATCH with MAJOR >= 1, increment the:
 
 * MAJOR version when you make incompatible API changes,
