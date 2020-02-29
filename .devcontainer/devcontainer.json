@@ -1,0 +1,7 @@
+{
+    "extensions": [
+      "julialang.language-julia"
+    ],
+  
+    "dockerFile": "Dockerfile"
+}
