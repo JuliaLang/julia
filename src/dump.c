@@ -2274,6 +2274,7 @@ static size_t lowerbound_dependent_world_set(size_t world, arraylist_t *dependen
 }
 
 extern int JL_DEBUG_METHOD_INVALIDATION;
+extern jl_value_t *jl_matching_methods_including_deleted(jl_tupletype_t *types, size_t world);
 
 static void jl_insert_backedges(jl_array_t *list, arraylist_t *dependent_worlds)
 {
@@ -2299,12 +2300,11 @@ static void jl_insert_backedges(jl_array_t *list, arraylist_t *dependent_worlds)
                 sig = callee;
             }
             // verify that this backedge doesn't intersect with any new methods
-            size_t min_valid = 0;
-            size_t max_valid = ~(size_t)0;
-            jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, -1, 1, 0, &min_valid, &max_valid);
+            jl_value_t *matches = jl_matching_methods_including_deleted((jl_tupletype_t*)sig, jl_world_counter);
             if (matches == jl_false)
                 valid = 0;
             size_t k;
+            assert(!jl_is_method_instance(callee) || jl_array_len(matches) > 0);
             for (k = 0; valid && k < jl_array_len(matches); k++) {
                 jl_method_t *m = (jl_method_t*)jl_svecref(jl_array_ptr_ref(matches, k), 2);
                 int wasactive = (lowerbound_dependent_world_set(m->primary_world, dependent_worlds) == m->primary_world);
@@ -3115,8 +3115,8 @@ static jl_method_t *jl_lookup_method_worldset(jl_methtable_t *mt, jl_datatype_t 
     size_t world = jl_world_counter;
     jl_typemap_entry_t *entry;
     while (1) {
-        entry = jl_typemap_assoc_by_type(
-            mt->defs, (jl_value_t*)sig, NULL, /*subtype*/0, /*offs*/0, world, /*max_world_mask*/(~(size_t)0) >> 1);
+        struct jl_typemap_assoc search = {(jl_value_t*)sig, world, /*max_world_mask*/(~(size_t)0) >> 1, NULL, 0, ~(size_t)0};
+        entry = jl_typemap_assoc_by_type(mt->defs, &search, /*offs*/0, /*subtype*/0);
         assert(entry);
         jl_method_t *_new = (jl_method_t*)entry->func.value;
         world = lowerbound_dependent_world_set(_new->primary_world, dependent_worlds);

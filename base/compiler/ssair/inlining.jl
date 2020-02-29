@@ -682,7 +682,7 @@ function analyze_method!(idx::Int, sig::Signature, @nospecialize(metharg), meths
     # Check if we intersect any of this method's ambiguities
     # TODO: We could split out the ambiguous case as another "union split" case.
     # For now, we just reject the method
-    if method.ambig !== nothing
+    if method.ambig !== nothing && invoke_data === nothing
         for entry::Core.TypeMapEntry in method.ambig
             if typeintersect(sig.atype, entry.sig) !== Bottom
                 return nothing
@@ -1169,8 +1169,7 @@ function early_inline_special_case(ir::IRCode, s::Signature, e::Expr, params::Pa
             val = etype.val
             is_inlineable_constant(val) || return nothing
             if isa(f, IntrinsicFunction)
-                if is_pure_intrinsic_infer(f) &&
-                    (intrinsic_nothrow(f) || intrinsic_nothrow(f, atypes[2:end]))
+                if is_pure_intrinsic_infer(f) && intrinsic_nothrow(f, atypes[2:end])
                     return quoted(val)
                 end
             elseif ispuretopfunction(f) || contains_is(_PURE_BUILTINS, f)

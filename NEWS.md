@@ -46,7 +46,7 @@ Build system changes
 
 New library functions
 ---------------------
-
+* The `@ccall` macro has been added added to Base. It is a near drop-in replacement for `ccall` with more Julia-like syntax. It also wraps the new `foreigncall` API for varargs of different types, though it lacks the the capability to specify an LLVM calling convention. ([#32748])
 * New functions `mergewith` and `mergewith!` supersede `merge` and `merge!` with `combine`
   argument.  They don't have the restriction for `combine` to be a `Function` and also
   provide one-argument method that returns a closure.  The old methods of `merge` and
@@ -66,8 +66,6 @@ New library features
 * `isapprox` (or `≈`) now has a one-argument "curried" method `isapprox(x)` which returns a function, like `isequal` (or `==`)` ([#32305]).
 * `Ref{NTuple{N,T}}` can be passed to `Ptr{T}`/`Ref{T}` `ccall` signatures ([#34199])
 * `accumulate`, `cumsum`, and `cumprod` now support `Tuple` ([#34654]).
-* `x::Signed % Unsigned` and `x::Unsigned % Signed` are supported for integer bitstypes.
-* `signed(unsigned_type)` is supported for integer bitstypes, `unsigned(signed_type)` has been supported.
 
 Standard library changes
 ------------------------

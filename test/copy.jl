@@ -227,3 +227,10 @@ end
     copyto!(a, r)
     @test a[1:3] == [-1, 0, 1]
 end
+
+@testset "issue #34889" begin
+    s = [1, 2]
+    @test copyto!(s, view(Int[],Int[])) == [1, 2]
+    @test copyto!(s, Float64[]) == [1, 2]
+    @test copyto!(s, String[]) == [1, 2] # No error
+end
