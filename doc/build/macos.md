@@ -5,7 +5,7 @@ You need to have the current Xcode command line utilities installed: run `xcode-
 You will need to rerun this terminal command after each macOS update, otherwise you may run into errors involving missing libraries or headers.
 
 You will also need a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 (and newer) compilers in Homebrew work for building Julia.
-```bash 
+```bash
 brew cask install gfortran
 ```
 
