@@ -172,7 +172,7 @@ ERROR: ArgumentError: invalid @static macro
 """
 macro macroexpand1(code, load = true)
     if load
-        :(macroexpand1($__module__, $(QuoteNode(code))))
+        :(macroexpand($__module__, $(QuoteNode(code)), recursive = false))
     else
         code.head == :macrocall ||
             ArgumentError("`@macroexpand code true` requires a macro call")
