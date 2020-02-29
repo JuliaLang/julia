@@ -33,6 +33,11 @@ end
 @test length(randn(ComplexF64, 4, 5)) == 20
 @test length(bitrand(4, 5)) == 20
 
+@test typeof(RandomDevice()) == RandomDevice
+@test Random.typeof_rng(RandomDevice()) == RandomDevice
+@test typeof(MersenneTwister(0)) == MersenneTwister
+@test Random.typeof_rng(MersenneTwister(0)) == MersenneTwister
+
 @test rand(MersenneTwister(0)) == 0.8236475079774124
 @test rand(MersenneTwister(42)) == 0.5331830160438613
 # Try a seed larger than 2^32
