@@ -398,4 +398,16 @@ end
     C = cholesky(B, Val(true), check=false)
     @test B ≈ Matrix(C)
 end
+
+@testset "REPL printing of CholeskyPivoted" begin
+    A = randn(8,8)
+    B = A'A
+    C = cholesky(B, Val(true), check=false)
+    cholstring = sprint((t, s) -> show(t, "text/plain", s), C)
+    rankstring = "$(C.uplo) factor with rank $(rank(C)):"
+    factorstring = sprint((t, s) -> show(t, "text/plain", s), C.uplo == 'U' ? C.U : C.L)
+    permstring   = sprint((t, s) -> show(t, "text/plain", s), C.p)
+    @test cholstring == "$(summary(C))\n$rankstring\n$factorstring\npermutation:\n$permstring"
+end
+
 end # module TestCholesky
