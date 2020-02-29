@@ -412,7 +412,7 @@ end
     @test CholeskyPivoted{eltype(C)}(C) === C
     @test Factorization{eltype(C)}(C) === C
     @test Array(CholeskyPivoted{complex(eltype(C))}(C)) ≈ Array(cholesky(complex(B), Val(true), check=false))
-    @test Factorization{complex(eltype(C))}(C) ≈ cholesky(complex(B), Val(true), check=false)
+    @test Array(Factorization{complex(eltype(C))}(C)) ≈ Array(cholesky(complex(B), Val(true), check=false))
     @test eltype(Factorization{complex(eltype(C))}(C)) == complex(eltype(C))
 end
 
