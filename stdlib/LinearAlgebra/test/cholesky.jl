@@ -62,7 +62,13 @@ end
         κ     = cond(apd, 1) #condition number
 
         unary_ops_tests(apd, capd, ε*κ*n)
-
+        if eltya != Int
+            @test Factorization{eltya}(capd) === capd
+            if eltya <: Real
+                @test Array(Factorization{complex(eltya)}(capd)) ≈ Array(factorize(complex(apd)))
+                @test eltype(Factorization{complex(eltya)}(capd)) == complex(eltya)
+            end
+        end
         @testset "throw for non-square input" begin
             A = rand(eltya, 2, 3)
             @test_throws DimensionMismatch cholesky(A)
@@ -397,6 +403,17 @@ end
     B = A'A
     C = cholesky(B, Val(true), check=false)
     @test B ≈ Matrix(C)
+end
+
+@testset "CholeskyPivoted and Factorization" begin
+    A = randn(8,8)
+    B = A'A
+    C = cholesky(B, Val(true), check=false)
+    @test CholeskyPivoted{eltype(C)}(C) === C
+    @test Factorization{eltype(C)}(C) === C
+    @test Array(CholeskyPivoted{complex(eltype(C))}(C)) ≈ Array(cholesky(complex(B), Val(true), check=false))
+    @test Factorization{complex(eltype(C))}(C) ≈ cholesky(complex(B), Val(true), check=false)
+    @test eltype(Factorization{complex(eltype(C))}(C)) == complex(eltype(C))
 end
 
 @testset "REPL printing of CholeskyPivoted" begin
