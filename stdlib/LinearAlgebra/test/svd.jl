@@ -98,7 +98,7 @@ aimg  = randn(n,n)/2
             @test d2 ≈ gsvd.D2
             @test q ≈ gsvd.Q
             @test gsvd.a.^2 + gsvd.b.^2 ≈ fill(1, length(gsvd.a))
-
+            @test gsvd.alpha.^2 + gsvd.beta.^2 ≈ ones(eltya, length(gsvd.a))
             #testing the other layout for D1 & D2
             b = rand(eltya,n,2*n)
             c = rand(eltya,n,2*n)
@@ -172,6 +172,20 @@ end
     sstring = sprint((t, s) -> show(t, "text/plain", s), svdd.S)
     vtstring = sprint((t, s) -> show(t, "text/plain", s), svdd.Vt)
     @test svdstring == "$(summary(svdd))\nU factor:\n$ustring\nsingular values:\n$sstring\nVt factor:\n$vtstring"
+end
+
+@testset "REPL printing of Generalized SVD" begin
+    a = randn(3, 3)
+    b = randn(3, 3)
+    svdd = svd(a, b)
+    svdstring = sprint((t, s) -> show(t, "text/plain", s), svdd)
+    ustring = sprint((t, s) -> show(t, "text/plain", s), svdd.U)
+    qstring = sprint((t, s) -> show(t, "text/plain", s), svdd.Q)
+    vstring = sprint((t, s) -> show(t, "text/plain", s), svdd.V)
+    d1string = sprint((t, s) -> show(t, "text/plain", s), svdd.D1)
+    d2string = sprint((t, s) -> show(t, "text/plain", s), svdd.D2)
+    r0string = sprint((t, s) -> show(t, "text/plain", s), svdd.R0)
+    @test svdstring == "$(summary(svdd))\nU factor:\n$ustring\nV factor:\n$vstring\nQ factor:\n$qstring\nD1 factor:\n$d1string\nD2 factor:\n$d2string\nR0 factor:\n$r0string"
 end
 
 
