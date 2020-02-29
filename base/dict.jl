@@ -417,8 +417,6 @@ Dict{String,Int64} with 4 entries:
 """
 get!(collection, key, default)
 
-get!(h::Dict{K,V}, key0, default) where {K,V} = get!(()->default, h, key0)
-
 """
     get!(f::Function, collection, key)
 
