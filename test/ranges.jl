@@ -251,7 +251,7 @@ end
     x0 = Base.TwicePrecision{Float64}(0)
     @test eltype(x1) == Float64
     @test eltype(typeof(x1)) == Float64
-    @test zero(typeof(x1)) == x0
+    @test zero(typeof(x1)) === x0
     xinf = Base.TwicePrecision{Float64}(Inf)
     @test Float64(x1+x0)  == 1
     @test Float64(x1+0)   == 1
