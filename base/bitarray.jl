@@ -1730,7 +1730,7 @@ function hcat(B::BitVector...)
     height = length(B[1])
     for j = 2:length(B)
         length(B[j]) == height ||
-            throw(DimensionMismatch("dimensions must match: $j-th element has length $(length(B[j])), should have $height"))
+            throw(DimensionMismatch("dimensions must match: $j-th argument has length $(length(B[j])), should have $height"))
     end
     M = BitMatrix(undef, height, length(B))
     for j = 1:length(B)
