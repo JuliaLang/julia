@@ -3,7 +3,7 @@
 module TestLU
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: ldiv!, BlasInt, BlasFloat, rdiv!
+using LinearAlgebra: ldiv!, BlasReal, BlasInt, BlasFloat, rdiv!
 
 n = 10
 
@@ -72,6 +72,12 @@ dimg  = randn(n)/2
             bft = eltya <: Real ? LinearAlgebra.LU{BigFloat} : LinearAlgebra.LU{Complex{BigFloat}}
             bflua = convert(bft, lua)
             @test bflua.L*bflua.U ≈ big.(a)[p,:] rtol=ε
+            @test Factorization{eltya}(lua) === lua
+            # test Factorization with different eltype
+            if eltya <: BlasReal
+                @test Array(Factorization{Float16}(lua)) ≈ Array(lu(convert(Matrix{Float16}, a)))
+                @test eltype(Factorization{Float16}(lua)) == Float16
+            end
         end
         # compact printing
         lstring = sprint(show,l)
