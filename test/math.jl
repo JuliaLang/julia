@@ -439,6 +439,9 @@ end
             T == Rational{Int} && @test sinpi(5//6) == 0.5
         end
     end
+    scdm = sincosd(missing)
+    @test ismissing(scdm[1])
+    @test ismissing(scdm[2])
 end
 
 @testset "Integer args to sinpi/cospi/sinc/cosc" begin
