@@ -366,7 +366,7 @@ function addprocs(np::Integer; restrict=true, kwargs...)
     addprocs(LocalManager(np, restrict); kwargs...)
 end
 
-Base.show(io::IO, manager::LocalManager) = println(io, "LocalManager()")
+Base.show(io::IO, manager::LocalManager) = print(io, "LocalManager()")
 
 function launch(manager::LocalManager, params::Dict, launched::Array, c::Condition)
     dir = params[:dir]
