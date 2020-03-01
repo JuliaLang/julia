@@ -78,6 +78,16 @@ end
         @test rem(BigInt(i), BigInt(j)) == rem(i,j)
     end
 end
+@testset "copysign / sign" begin
+    x = BigInt(1)
+    y = BigInt(-1)
+    @test copysign(x, y) == y
+    @test copysign(y, x) == x
+
+    @test sign(BigInt(-3)) == -1
+    @test sign(BigInt( 0)) == 0
+    @test sign(BigInt( 3)) == 1
+end
 
 @testset "Signed addition" begin
     @test a+Int8(1) == b
