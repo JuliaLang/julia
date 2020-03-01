@@ -2504,10 +2504,6 @@ end
             @test_throws MethodError fname(T, [1.]) # issue #19265
             @test_throws MethodError fname(T, [1, 1]) # issue #19265
         end
-
-        for T in (AbstractFloat, Integer, Real, Number)
-            @test eltype(fname(T)) === typeof(felt(T))
-        end
     end
 end
 
