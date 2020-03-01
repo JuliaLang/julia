@@ -435,5 +435,4 @@ end
     k = Cholesky{Rational}(C)
     @test Matrix{Rational}(k.factors) == C.factors
 end
-                             
 end # module TestCholesky
