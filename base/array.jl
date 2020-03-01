@@ -1247,44 +1247,51 @@ function inserteach!(a::Vector, index::Integer, items::AbstractVector)
 end
 
 """
-    inserteach!(a::Vector, range, items::Vector)
-    inserteach!(a::Vector, indices::Vector, items::Vector)
+    inserteach!(a::Vector, indices, items::Vector)
 
-Insert all of the elements of `items` into `a` for the given `range` or `indices`. `range` or `indices` are the resulting indices of elements of `items` in the `a`.
+Insert all of the elements of `items` into `a` for the given `indices`.
+
+`indices` shows the indices in the original `a`, and it can be a Vector, UnitRange, StepRange, or Vector{Bool}.
 
 # Examples
+Inserts `0` between each two elements:
 ```jldoctest
-julia> inserteach!([1, 2, 3], 2:3, [8, 9])
-5-element Array{Int64,1}:
- 1
- 8
- 9
- 2
- 3
-```
-
-Following example inserts `10, 9, and 8` at index `6, 4, and 2` respectively
-```jldoctest
-julia> inserteach!([1, 2, 3, 4, 5], 6:-2:2, [10, 9, 8])
-8-element Array{Int64,1}:
+julia> inserteach!([1, 2, 3, 4, 5, 6], 1:2:5, [0, 0, 0])
+9-element Array{Int64,1}:
+  0
   1
-  8
   2
-  9
+  0
   3
- 10
   4
+  0
   5
+  6
 ```
 
-It is possible to use boolean indices (each true shows insertion index):
+Inserts `10, 9, and 8` at
 ```jldoctest
-julia> inserteach!([1, 2, 3], [true, false, true, false, false], [10, 9])
+julia> inserteach!([1, 2, 3, 4, 5, 6], 1:2:5, [0, 0, 0])
+9-element Array{Int64,1}:
+  0
+  1
+  2
+  0
+  3
+  4
+  0
+  5
+  6
+```
+
+For `Bool` indices, each `true` shows insertion index for each item:
+```jldoctest
+julia> inserteach!([1, 2, 3], [false, false, true, true], [10, 9])
 5-element Array{Int64,1}:
  10
   1
-  9
   2
+  9
   3
 ```
 """
@@ -1303,10 +1310,7 @@ function inserteach!(a::Vector, indices::Union{AbstractVector, AbstractRange{<:I
         # sorts so the final index is correct
         indices_sorted, items_sorted = sort_indices_items(indices, items)
     end
-    for (index, item) in zip(indices_sorted, items_sorted)
-        _growat!(a, index, 1) # TODO write a batch growat in C for speed-up
-        @inbounds a[index] = item
-    end
+    _inserteach!(a, indices_sorted, items_sorted)
     return a
 end
 
@@ -1324,6 +1328,23 @@ function sort_indices_items(indices::AbstractRange{<:Integer}, items)
     return indices_sorted, items_sorted
 end
 
+function _inserteach!(a, indices, items)
+    # Insert items into `a` such that `items[j]` is placed between the elements
+    # `a[indices[j-1]:indices[j]]`.
+    read_idx = lastindex(a)
+    resize!(a, length(a) + length(items))
+    insert_idx = lastindex(a)
+    for (new_idx,newitem) in zip(Iterators.reverse(indices), Iterators.reverse(items))
+        while read_idx >= new_idx
+            a[insert_idx] = a[read_idx]
+            read_idx -= 1
+            insert_idx -= 1
+        end
+        a[insert_idx] = newitem
+        insert_idx -= 1
+    end
+end
+
 function inserteach!(a::Vector, r::AbstractUnitRange{<:Integer}, items::AbstractVector)
     ilen = length(items)
     rlen = length(r)
@@ -1338,20 +1359,14 @@ function inserteach!(a::Vector, boolindices::AbstractVector{Bool}, items::Abstra
     alen = length(a)
     itemslen = length(items)
     boolindiceslen = length(boolindices)
-    if alen + itemslen !== boolindiceslen
-        throw(ArgumentError("Length of the indices should be equal to length of the final vector"))
-    end
-    indices = findall(x -> x=== true, boolindices) # doesn't need sort afterwards
+    indices = findall(x -> x=== true, boolindices) # no sort needed afterwards
     indiceslen = length(indices)
     if itemslen !== indiceslen
         throw(ArgumentError("Number of true indices should be the same as length of items"))
     elseif itemslen === 0
         return a
     end
-    for (index, item) in zip(indices, items)
-        _growat!(a, index, 1) # TODO write a batch growat in C for speed-up
-        @inbounds a[index] = item
-    end
+    _inserteach!(a, indices, items)
     return a
 end
 
