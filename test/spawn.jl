@@ -762,10 +762,10 @@ end
 end
 
 @testset "readline" begin
-    @test readline(echocmd) == ""
-    @test readline(`$(echocmd) foo`) == "foo"
-    @test readline(`$(echocmd) -e 'foo\nbar'`) == "foo"
+    @test readline(`$(printfcmd) '\n'`) == ""
+    @test readline(`$(printfcmd) 'foo\n'`) == "foo"
+    @test readline(`$(printfcmd) 'foo\nbar\n'`) == "foo"
     @test readline(yescmd) == "y"
-    @test readline(pipeline(`$(echocmd) -e 'foo\nbar'`, sortcmd)) == "bar"
-    @test_throws ArgumentError("collection must be non-empty") readline(`$(echocmd) -n`)
+    @test readline(pipeline(`$(printfcmd) 'foo\nbar\n'`, sortcmd)) == "bar"
+    @test_throws ArgumentError("collection must be non-empty") readline(`$(printfcmd) ''`)
 end
