@@ -743,7 +743,7 @@ function eval_with_backend(ast, backend::REPLBackendRef)
     take!(backend.response_channel) # (val, iserr)
 end
 
-function respond(f, repl, main; pass_empty = false, supress_on_semicolon = true)
+function respond(f, repl, main; pass_empty = false, suppress_on_semicolon = true)
     return function do_respond(s, buf, ok)
         if !ok
             return transition(s, :abort)
