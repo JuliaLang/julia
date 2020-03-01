@@ -670,6 +670,14 @@ end
 @test repr(Base.CmdRedirect(``, devnull, 1, true)) == "pipeline(``, stdout<Base.DevNull())"
 @test repr(Base.CmdRedirect(``, devnull, 11, true)) == "pipeline(``, 11<Base.DevNull())"
 
+@testset "readline" begin
+    @test readline(`$(printfcmd) '\n'`) == ""
+    @test readline(`$(printfcmd) 'foo\n'`) == "foo"
+    @test readline(`$(printfcmd) 'foo\nbar\n'`) == "foo"
+    @test readline(yescmd) == "y"
+    @test readline(pipeline(`$(printfcmd) 'foo\nbar\n'`, sortcmd)) == "bar"
+    @test_throws ArgumentError("collection must be non-empty") readline(`$(printfcmd) ''`)
+end
 
 # clean up busybox download
 if Sys.iswindows()
@@ -759,13 +767,4 @@ end
     # input : [A\ B\, C, D K]
     # output: "A\ B\\" C "D K"
     @test Base.shell_escape_winsomely("A\\ B\\", "C", "D K") == "\"A\\ B\\\\\" C \"D K\""
-end
-
-@testset "readline" begin
-    @test readline(`$(printfcmd) '\n'`) == ""
-    @test readline(`$(printfcmd) 'foo\n'`) == "foo"
-    @test readline(`$(printfcmd) 'foo\nbar\n'`) == "foo"
-    @test readline(yescmd) == "y"
-    @test readline(pipeline(`$(printfcmd) 'foo\nbar\n'`, sortcmd)) == "bar"
-    @test_throws ArgumentError("collection must be non-empty") readline(`$(printfcmd) ''`)
 end
