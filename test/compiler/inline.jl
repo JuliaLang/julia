@@ -51,6 +51,12 @@ function test_outer(a)
 end
 test_inlined_symbols(test_outer, Tuple{Int64})
 
+# Test case 1 for anonymous functions (issue #34939)
+function test_outer2(x)
+    @inline x -> x^2 + 2x - 1
+end
+test_inlined_symbols(test_outer2, Tuple{Int64})
+
 # Test case 2:
 # Make sure that an error is thrown for the undeclared
 # y in the else branch.
