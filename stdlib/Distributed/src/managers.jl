@@ -144,7 +144,7 @@ function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy:
 end
 
 
-Base.show(io::IO, manager::SSHManager) = println(io, "SSHManager(machines=", manager.machines, ")")
+Base.show(io::IO, manager::SSHManager) = print(io, "SSHManager(machines=", manager.machines, ")")
 
 
 function parse_machine(machine::AbstractString)
