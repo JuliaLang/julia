@@ -300,7 +300,7 @@ end
 ## generic project & manifest API ##
 
 const project_names = ("JuliaProject.toml", "Project.toml")
-const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
+const manifest_names = ["JuliaManifest.toml", "Manifest.toml"]
 
 # classify the LOAD_PATH entry to be one of:
 #  - `false`: nonexistant / nothing to see here
