@@ -427,4 +427,13 @@ end
     @test cholstring == "$(summary(C))\n$rankstring\n$factorstring\npermutation:\n$permstring"
 end
 
+@testset "Cholesky{T} conversion" begin
+    A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+    C = cholesky(A)
+    k = Cholesky{Int64}(C)
+    @test Matrix{Float64}(k.factors) == C.factors
+    k = Cholesky{Rational}(C)
+    @test Matrix{Rational}(k.factors) == C.factors
+end
+                             
 end # module TestCholesky
