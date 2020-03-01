@@ -501,13 +501,15 @@ for (fname, felt) in ((:zeros, :zero), (:ones, :one))
         $fname(dims::Tuple{Vararg{DimOrInd}}) = $fname(Float64, dims)
         $fname(::Type{T}, dims::NTuple{N, Union{Integer, OneTo}}) where {T,N} = $fname(T, map(to_dim, dims))
         function $fname(::Type{T}, dims::NTuple{N, Integer}) where {T,N}
-            a = Array{T,N}(undef, dims)
-            fill!(a, $felt(T))
+            init = $felt(T)
+            a = Array{typeof(init),N}(undef, dims)
+            fill!(a, init)
             return a
         end
         function $fname(::Type{T}, dims::Tuple{}) where {T}
-            a = Array{T}(undef)
-            fill!(a, $felt(T))
+            init = $felt(T)
+            a = Array{typeof(init)}(undef)
+            fill!(a, init)
             return a
         end
     end

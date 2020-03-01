@@ -2477,27 +2477,38 @@ Float64(x::F21666) = Float64(x.x)
 end
 
 @testset "zeros and ones" begin
-    @test ones(2) == ones(Int, 2) ==  [1,1]
-    @test isa(ones(2), Vector{Float64})
-    @test isa(ones(Int, 2), Vector{Int})
+    for (fname, felt) in ((zeros, zero), (ones, one))
+        for T in (Bool, Int, Float64, ComplexF64)
+            A0 = fname(T)
+            @test A0 == fname(Int) == fill(felt(T))
+            @test typeof(A0) === Array{T, 0}
+            @test size(A0) === ()
+            @test isempty(fname(T, 0))
 
-    function test_zeros(arr, T, s)
-        @test all(arr .== 0)
-        @test isa(arr, T)
-        @test size(arr) == s
+            A1 = fname(T, 2)
+            @test A1 == fname(Int, 2) == [felt(Int), felt(Int)]
+            @test A1 == fname(T, Base.OneTo(2))
+            @test A1 == fname(T, (Base.OneTo(2), ))
+            @test typeof(A1) === Array{T, 1}
+            @test size(A1) === (2, )
+
+            A2 = fname(T, 2, 3)
+            @test A2 == fname(T, (2, 3))
+            @test A2 == fname(T, Base.OneTo(2), Base.OneTo(3))
+            @test A2 == fname(T, (Base.OneTo(2), Base.OneTo(3)))
+            @test typeof(A2) === Array{T, 2}
+            @test size(A2) === (2, 3)
+
+            @test isempty(fname(T, 0, 0))
+            @test_throws MethodError fname(T, 1.)
+            @test_throws MethodError fname(T, [1.]) # issue #19265
+            @test_throws MethodError fname(T, [1, 1]) # issue #19265
+        end
+
+        for T in (AbstractFloat, Integer, Real, Number)
+            @test eltype(fname(T)) === typeof(felt(T))
+        end
     end
-    test_zeros(zeros(),      Array{Float64, 0}, ())
-    test_zeros(zeros(2),     Vector{Float64},   (2,))
-    test_zeros(zeros(2,3),   Matrix{Float64},   (2,3))
-    test_zeros(zeros((2,3)), Matrix{Float64},   (2,3))
-
-    test_zeros(zeros(Int, 6),      Vector{Int}, (6,))
-    test_zeros(zeros(Int, 2, 3),   Matrix{Int}, (2,3))
-    test_zeros(zeros(Int, (2, 3)), Matrix{Int}, (2,3))
-
-    # #19265"
-    @test_throws MethodError zeros(Float64, [1.])
-    @test_throws MethodError ones(Float64, [0, 0])
 end
 
 # issue #11053
