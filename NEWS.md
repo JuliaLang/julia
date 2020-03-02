@@ -36,7 +36,7 @@ Language changes
 
 * The syntax `(;)` (which was deprecated in v1.4) now creates an empty named tuple ([#30115]).
 
-* `@inline` macro can now be applied to anonymous functions ([#34953]).
+* `@inline` macro can now be applied to short-form anonymous functions ([#34953]).
 
 Multi-threading changes
 -----------------------
