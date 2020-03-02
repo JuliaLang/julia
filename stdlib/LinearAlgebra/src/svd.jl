@@ -229,7 +229,7 @@ function inv(F::SVD{T}) where T
     @inbounds for i in eachindex(F.S)
         iszero(F.S[i]) && throw(SingularException(i))
     end
-    k = searchsortedlast(F.S, eps(T)*F.S[1], rev=true)
+    k = searchsortedlast(F.S, eps(real(T))*F.S[1], rev=true)
     @views (F.S[1:k] .\ F.Vt[1:k, :])' * F.U[:,1:k]'
 end
 
