@@ -1393,16 +1393,19 @@ function splice!(a::Vector, i::Integer, ins=_default_splice)
 end
 
 """
-    splice!(a::Vector, range, [replacement]) -> items
+    splice!(a::Vector, indices, [replacement]) -> items
 
-Remove items in the specified index range, and return a collection containing
+Remove items at specified indices, and return a collection containing
 the removed items.
-Subsequent items are shifted left to fill the resulting gap.
+Subsequent items are shifted left to fill the resulting gaps.
 If specified, replacement values from an ordered collection will be spliced in
-place of the removed items.
+place of the removed items; in this case, `indices` must be a `UnitRange`.
 
 To insert `replacement` before an index `n` without removing any items, use
 `splice!(collection, n:n-1, replacement)`.
+
+!!! compat "Julia 1.5"
+    Prior to Julia 1.5, `indices` must always be a `UnitRange`.
 
 # Examples
 ```jldoctest
