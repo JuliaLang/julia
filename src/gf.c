@@ -2724,6 +2724,14 @@ static void _jl_timing_emit(struct jl_timing_params *timing)
     jl_printf(JL_STDOUT, "\n");
 }
 
+#define STDERR_TIMING(obj_) \
+    __attribute__((cleanup(_jl_timing_emit))) \
+    struct jl_timing_params __timing_obj; \
+    __timing_obj.start = uv_hrtime(); \
+    __timing_obj.obj = (jl_value_t*)(obj_);
+//#undef STDERR_TIMING
+//#define STDERR_TIMING(obj_)
+
 // This is the collect form of calling jl_typemap_intersection_visitor
 // with optimizations to skip fully shadowed methods.
 //
@@ -2733,8 +2741,15 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_tupletype_t *type,
                               int lim, int include_ambiguous, int stop_if_deleted, int insert_cache,
                               size_t world, size_t *min_valid, size_t *max_valid)
 {
+    //STDERR_TIMING(type);
+
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)type);
     assert(jl_is_datatype(unw));
+    if (jl_nparams(unw) == 2 && jl_tparam1(unw) == jl_char_type &&
+        jl_is_type_type(jl_tparam0(unw)) && jl_tparam0(jl_tparam0(unw)) == jl_int64_type) {
+        jl_static_show(JL_STDOUT, unw);
+    }
+
     if (insert_cache && ((jl_datatype_t*)unw)->isdispatchtuple) { // scope block
         jl_typemap_t *cache = mt->cache;
         struct jl_typemap_assoc search = {(jl_value_t*)type, world, 0, NULL, 0, ~(size_t)0};
