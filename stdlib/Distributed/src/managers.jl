@@ -144,7 +144,7 @@ function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy:
 end
 
 
-show(io::IO, manager::SSHManager) = println(io, "SSHManager(machines=", manager.machines, ")")
+Base.show(io::IO, manager::SSHManager) = print(io, "SSHManager(machines=", manager.machines, ")")
 
 
 function parse_machine(machine::AbstractString)
@@ -366,7 +366,7 @@ function addprocs(np::Integer; restrict=true, kwargs...)
     addprocs(LocalManager(np, restrict); kwargs...)
 end
 
-show(io::IO, manager::LocalManager) = println(io, "LocalManager()")
+Base.show(io::IO, manager::LocalManager) = print(io, "LocalManager()")
 
 function launch(manager::LocalManager, params::Dict, launched::Array, c::Condition)
     dir = params[:dir]
