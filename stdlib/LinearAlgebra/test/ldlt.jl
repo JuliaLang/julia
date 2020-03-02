@@ -15,4 +15,9 @@ Random.seed!(123)
     @test ldltstring == "$(summary(F))\nL factor:\n$lstring\nD factor:\n$dstring"
 end
 
+@testset "Factorization of LDLT" begin
+    S = SymTridiagonal([3., 4., 5.], [1., 2.])
+    F = ldlt(S)
+    @test Factorization{eltype(F)}(F) == F
+end
 end # module TestLDLT
