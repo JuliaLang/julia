@@ -743,7 +743,7 @@ function eval_with_backend(ast, backend::REPLBackendRef)
     take!(backend.response_channel) # (val, iserr)
 end
 
-function respond(f, repl, main; pass_empty = false)
+function respond(f, repl, main; pass_empty = false, suppress_on_semicolon = true)
     return function do_respond(s, buf, ok)
         if !ok
             return transition(s, :abort)
@@ -758,7 +758,8 @@ function respond(f, repl, main; pass_empty = false)
             catch
                 response = (catch_stack(), true)
             end
-            print_response(repl, response, !ends_with_semicolon(line), Base.have_color)
+            hide_output = suppress_on_semicolon && ends_with_semicolon(line)
+            print_response(repl, response, !hide_output, Base.have_color)
         end
         prepare_next(repl)
         reset_state(s)
@@ -869,7 +870,7 @@ function setup_interface(
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to help("$line")
-        on_done = respond(helpmode, repl, julia_prompt, pass_empty=true))
+        on_done = respond(helpmode, repl, julia_prompt, pass_empty=true, suppress_on_semicolon=false))
 
     # Set up shell mode
     shell_mode = Prompt("shell> ";
