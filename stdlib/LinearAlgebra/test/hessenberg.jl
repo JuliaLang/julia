@@ -24,6 +24,11 @@ let n = 10
         @test parent(H) === A
         @test Matrix(H) == Array(H) == H == AH
         @test real(H) == real(AH)
+        @test real(UpperHessenberg{ComplexF64}(A)) == H
+        @test real(UpperHessenberg{ComplexF64}(H)) == H
+        sim = similar(H, ComplexF64)
+        @test sim isa UpperHessenberg{ComplexF64}
+        @test size(sim) == size(H)
         for x in (2,2+3im)
             @test x*H == H*x == x*AH
             for op in (+,-)
@@ -46,6 +51,7 @@ let n = 10
         @test imag(Hc) == imag(AHc)
         @test Array(copy(adjoint(Hc))) == adjoint(Array(Hc))
         @test Array(copy(transpose(Hc))) == transpose(Array(Hc))
+        @test rmul!(copy(Hc), 2.0) == lmul!(2.0, copy(Hc))
         H = UpperHessenberg(Areal)
         @test Array(Hc + H) == Array(Hc) + Array(H)
         @test Array(Hc - H) == Array(Hc) - Array(H)
@@ -72,6 +78,12 @@ let n = 10
         @test (H.Q' *A) * H.Q ≈ H.H
         #getindex for HessenbergQ
         @test H.Q[1,1] ≈ Array(H.Q)[1,1]
+
+        # REPL show
+        hessstring = sprint((t, s) -> show(t, "text/plain", s), H)
+        qstring = sprint((t, s) -> show(t, "text/plain", s), H.Q)
+        hstring = sprint((t, s) -> show(t, "text/plain", s), H.H)
+        @test hessstring == "$(summary(H))\nQ factor:\n$qstring\nH factor:\n$hstring"
 
         #iterate
         q,h = H
