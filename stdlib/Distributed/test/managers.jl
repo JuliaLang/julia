@@ -17,7 +17,7 @@ using Distributed: parse_machine, bind_client_port
 @test_throws ArgumentError parse_machine("127.0.0.1:65536")
 @test_throws ArgumentError parse_machine("[2001:db8::1]:443:888")
 @test_throws ArgumentError parse_machine("[2001:db8::1")
-@test parse_machine("[2001:db8::1]:aaa")
+@test_throws ArgumentError parse_machine("[2001:db8::1]:aaa")
 
 sock = bind_client_port(TCPSocket(), typeof(IPv4(0)))
 addr, port = getsockname(sock)
