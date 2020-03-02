@@ -42,7 +42,7 @@ The default version of LLVM is specified in `deps/Versions.make`. You can overri
 a file called `Make.user` in the top-level directory and adding a line to it such as:
 
 ```
-LLVM_VER = 6.0.1
+LLVM_VER = 10.0.0
 ```
 
 Besides the LLVM release numerals, you can also use `LLVM_VER = svn` to build against the latest
