@@ -58,17 +58,6 @@ end
 test_inlined_symbols(test_outer2, Tuple{Int64})
 
 
-@testset "check jl_ast_flag_inlineable for inline macro" begin
-    ret = ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(@inline x -> x)).source)
-    @test ret == true
-    ret = ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods( x -> x)).source)
-    @test ret == false
-
-    ret = ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(@inline function f(x) x end)).source)
-    @test ret == true
-    ret = ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(function f(x) x end)).source)
-    @test ret == false
-end
 
 # Test case 2:
 # Make sure that an error is thrown for the undeclared
@@ -293,4 +282,16 @@ f34900(x::Int, y::Int) = invoke(f34900, Tuple{Int, Any}, x, y)
 let ci = code_typed(f34900, Tuple{Int, Int})[1].first
     @test length(ci.code) == 1 && isexpr(ci.code[1], :return) &&
         ci.code[1].args[1].id == 2
+end
+
+@testset "check jl_ast_flag_inlineable for inline macro" begin
+    ret = ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(@inline x -> x)).source)
+    @test ret == true
+    ret = ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods( x -> x)).source)
+    @test ret == false
+
+    ret = ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(@inline function f(x) x end)).source)
+    @test ret == true
+    ret = ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(function f(x) x end)).source)
+    @test ret == false
 end
