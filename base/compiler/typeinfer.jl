@@ -84,10 +84,6 @@ end
 function cache_result(result::InferenceResult, min_valid::UInt, max_valid::UInt)
     def = result.linfo.def
     toplevel = !isa(result.linfo.def, Method)
-    if toplevel
-        min_valid = UInt(0)
-        max_valid = UInt(0)
-    end
 
     # check if the existing linfo metadata is also sufficient to describe the current inference result
     # to decide if it is worth caching this
@@ -546,7 +542,7 @@ function typeinf_ext(mi::MethodInstance, params::Params)
                 tree.pure = true
                 tree.inlineable = true
                 tree.parent = mi
-                tree.rettype = typeof(code.rettype_const)
+                tree.rettype = Core.Typeof(code.rettype_const)
                 tree.min_world = code.min_world
                 tree.max_world = code.max_world
                 return tree
