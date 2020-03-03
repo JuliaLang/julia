@@ -1014,9 +1014,11 @@ endif
 # about version, generally, so just find something that works:
 PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)"
 PYTHON_SYSTEM := $(shell $(PYTHON) -c 'from __future__ import print_function; import platform; print(platform.system())')
-ifneq ($(filter $(PYTHON_SYSTEM),Windows),)
+
+# If we're running on Cygwin, but using a native-windows Python, we need to use cygpath -w
+ifneq ($(and $(filter $(PYTHON_SYSTEM),Windows),$(findstring CYGWIN,$(BUILD_OS))),)
 define invoke_python
-$(PYTHON) "$(call cygpath_w,$(1))"
+$(PYTHON) "$(shell cygpath -w "$(1)")"
 endef
 else
 define invoke_python
