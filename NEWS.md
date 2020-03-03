@@ -69,7 +69,6 @@ New library features
 * `x::Signed % Unsigned` and `x::Unsigned % Signed` are supported for integer bitstypes.
 * `signed(unsigned_type)` is supported for integer bitstypes, `unsigned(signed_type)` has been supported.
 
->>>>>>> master
 
 Standard library changes
 ------------------------
