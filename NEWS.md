@@ -33,7 +33,7 @@ New library functions
 * `takewhile` and `dropwhile` have been added to the Iterators submodule ([#33437]).
 * `accumulate` has been added to the Iterators submodule ([#34033]).
 * There is a now an `evalpoly` function meant to take the role of the `@evalpoly` macro. The function is just as efficient as the macro while giving added flexibility, so it should be preferred over `@evalpoly`. `evalpoly` takes a list of coefficients as a tuple, so where one might write `@evalpoly(x, p1, p2, p3)` one would instead write `evalpoly(x, (p1, p2, p3))` ([#32753]).
-* `pkgdir(ModuleName)` now provides a simpler way to return the package root directory of a module (or submodule) than the typically used `dirname(dirname(pathof(ModuleName)))` ([#33128]). 
+* `pkgdir(ModuleName)` now provides a simpler way to return the package root directory of a module (or submodule) than the typically used `dirname(dirname(pathof(ModuleName)))` ([#33128]).
 
 New library features
 --------------------
