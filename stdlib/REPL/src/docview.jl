@@ -574,12 +574,7 @@ print_correction(word) = print_correction(stdout, word)
 
 # Completion data
 
-const builtins = ["abstract type", "baremodule", "begin", "break",
-                  "catch", "ccall", "const", "continue", "do", "else",
-                  "elseif", "end", "export", "finally", "for", "function",
-                  "global", "if", "import", "let",
-                  "local", "macro", "module", "mutable struct", "primitive type",
-                  "quote", "return", "struct", "try", "using", "while"]
+const builtins = collect(keys(Base.Docs.keywords))
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
