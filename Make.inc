@@ -1016,11 +1016,11 @@ PYTHON := $(shell which python 2>/dev/null || which python3 2>/dev/null || which
 PYTHON_SYSTEM := $(PYTHON) -c 'from __future__ import print_function; import platform; print(platform.system())'
 ifneq ($(filter $(call lowercase,$(PYTHON_SYSTEM)),cygwin),)
 define invoke_python
-$(PYTHON) $(call cygpath_w,$(1))
+"$(PYTHON)" "$(call cygpath_w,$(1))"
 endef
 else
 define invoke_python
-$(PYTHON) $(1)
+"$(PYTHON)" "$(1)"
 endef
 endif
 
