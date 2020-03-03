@@ -46,10 +46,7 @@ ntuple(f, ::Val{3}) = (@_inline_meta; (f(1), f(2), f(3)))
     N::Int
     (N >= 0) || throw(ArgumentError(string("tuple length should be ≥ 0, got ", N)))
     if @generated
-        quote
-            @nexprs $N i -> t_i = f(i)
-            @ncall $N tuple t
-        end
+        :(@ntuple $N i -> f(i))
     else
         Tuple(f(i) for i = 1:N)
     end
