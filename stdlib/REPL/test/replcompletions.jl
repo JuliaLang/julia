@@ -3,7 +3,8 @@
 using REPL.REPLCompletions
 using Test
 using Random
-
+using REPL
+    @test isequal(REPL.builtins,collect(keys(Base.Docs.keywords)))
 let ex = quote
     module CompletionFoo
         using Random
