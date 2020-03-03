@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Environment variables that must be set before julia launches
+const sessionineffectives = ["JULIA_NUM_THREADS", "JULIA_PROJECT"]
+
 if Sys.iswindows()
     const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
 
@@ -21,6 +24,7 @@ if Sys.iswindows()
     end
 
     function _setenv(svar::AbstractString, sval::AbstractString, overwrite::Bool=true)
+        in(svar, sessionineffectives) && @warn "To take effect, $svar must be set before launching a julia session"
         var = cwstring(svar)
         val = cwstring(sval)
         if overwrite || !_hasenv(var)
@@ -44,6 +48,7 @@ else # !windows
     end
 
     function _setenv(var::AbstractString, val::AbstractString, overwrite::Bool=true)
+        in(svar, sessionineffectives) && @warn "To take effect, $svar must be set before launching a julia session"
         ret = ccall(:setenv, Int32, (Cstring,Cstring,Int32), var, val, overwrite)
         systemerror(:setenv, ret != 0)
     end
