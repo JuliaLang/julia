@@ -2098,3 +2098,86 @@ end
 # issue #34673
 # check that :toplevel still returns a value when nested inside something else
 @test eval(Expr(:block, 0, Expr(:toplevel, 43))) == 43
+
+# issue #16594
+@test Meta.parse("@x a + \nb") == Meta.parse("@x a +\nb")
+@test [1 +
+       1] == [2]
+@test [1 +1] == [1 1]
+
+@testset "issue #16594" begin
+    # note for the macro tests, order is important
+    # because the line number is included as part of the expression
+    # (i.e. both macros must start on the same line)
+    @test :(@test((1+1) == 2)) == :(@test 1 +
+                                          1 == 2)
+    @test :(@x 1 +1 -1) == :(@x(1, +1, -1))
+    @test :(@x 1 + 1 -1) == :(@x(1+1, -1))
+    @test :(@x 1 + 1 - 1) == :(@x(1 + 1 - 1))
+    @test :(@x(1 + 1 - 1)) == :(@x 1 +
+                                   1 -
+                                   1)
+    @test :(@x(1 + 1 + 1)) == :(@x 1 +
+                                   1 +
+                                   1)
+    @test :([x .+
+              y]) == :([x .+ y])
+end
+
+# line break in : expression disallowed
+@test_throws Meta.ParseError Meta.parse("[1 :\n2] == [1:2]")
+
+# added ⟂ to operator precedence (#24404)
+@test Meta.parse("a ⟂ b ⟂ c") == Expr(:comparison, :a, :⟂, :b, :⟂, :c)
+@test Meta.parse("a ⟂ b ∥ c") == Expr(:comparison, :a, :⟂, :b, :∥, :c)
+
+# only allow certain characters after interpolated vars (#25231)
+@test Meta.parse("\"\$x෴  \"",raise=false) == Expr(:error, "interpolated variable \$x ends with invalid character \"෴\"; use \"\$(x)\" instead.")
+@test Base.incomplete_tag(Meta.parse("\"\$foo", raise=false)) == :string
+
+@testset "issue #30341" begin
+    @test Meta.parse("x .~ y") == Expr(:call, :.~, :x, :y)
+    # Ensure dotting binary doesn't break dotting unary
+    @test Meta.parse(".~[1,2]") == Expr(:call, :.~, Expr(:vect, 1, 2))
+end
+
+@testset "operator precedence correctness" begin
+    ops = map(Symbol, split("= => || && --> < <| |> : + * // << ^ :: ."))
+    for f in ops, g in ops
+        f == g && continue
+        pf = Base.operator_precedence(f)
+        pg = Base.operator_precedence(g)
+        @test pf != pg
+        expr = Meta.parse("x$(f)y$(g)z")
+        @test expr == Meta.parse(pf > pg ? "(x$(f)y)$(g)z" : "x$(f)(y$(g)z)")
+    end
+end
+
+# issue 34498
+@testset "macro calls @foo{...}" begin
+    @test :(@foo{}) == :(@foo {})
+    @test :(@foo{bar}) == :(@foo {bar})
+    @test :(@foo{bar,baz}) == :(@foo {bar,baz})
+    @test :(@foo{bar}(baz)) == :((@foo{bar})(baz))
+    @test :(@foo{bar}{baz}) == :((@foo{bar}){baz})
+    @test :(@foo{bar}[baz]) == :((@foo{bar})[baz])
+    @test :(@foo{bar} + baz) == :((@foo{bar}) + baz)
+end
+
+@testset "issue #34650" begin
+    for imprt in [:using, :import]
+        @test Meta.isexpr(Meta.parse("$imprt A, B"), imprt)
+        @test Meta.isexpr(Meta.parse("$imprt A: x, y, z"), imprt)
+
+        err = Expr(
+            :error,
+            "\":\" in \"$imprt\" syntax can only be used when importing a single module. " *
+            "Split imports into multiple lines."
+        )
+        ex = Meta.parse("$imprt A, B: x, y", raise=false)
+        @test ex == err
+
+        ex = Meta.parse("$imprt A: x, B: y", raise=false)
+        @test ex == err
+    end
+end
