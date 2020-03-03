@@ -115,6 +115,9 @@ Random.seed!(1)
                 @test ldiv!(D, copy(U)) ≈ DM\U atol=atol_three
                 @test ldiv!(transpose(D), copy(U)) ≈ DM\U atol=atol_three
                 @test ldiv!(adjoint(conj(D)), copy(U)) ≈ DM\U atol=atol_three
+                # this method tests AbstractMatrix/AbstractVec for second arg
+                Usym_bad = Symmetric(ones(elty, n+1, n+1))
+                @test_throws DimensionMismatch ldiv!(D, copy(Usym_bad))
 
                 @test ldiv!(zero(v), D, copy(v)) ≈ DM\v atol=atol_two
                 @test ldiv!(zero(v), transpose(D), copy(v)) ≈ DM\v atol=atol_two
