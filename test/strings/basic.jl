@@ -162,8 +162,8 @@ end
     @test string(sym) == string(Char(0xdcdb))
     @test String(sym) == string(Char(0xdcdb))
     @test Meta.lower(Main, sym) === sym
-    res = string(Meta.parse(string(Char(0xdcdb)," = 1"),1,raise=false)[1])
-    @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\" near column 1\"))"""
+    @test Meta.parse(string(Char(0xe0080)," = 1"), 1, raise=false)[1] ==
+        Expr(:error, "invalid character \"\Ue0080\" near column 1")
 end
 
 @testset "Symbol and gensym" begin
