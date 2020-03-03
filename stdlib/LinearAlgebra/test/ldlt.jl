@@ -18,6 +18,8 @@ end
 @testset "Factorization of LDLT" begin
     S = SymTridiagonal([3., 4., 5.], [1., 2.])
     F = ldlt(S)
-    @test Factorization{eltype(F)}(F) == F
+    @test Factorization{eltype(F)}(F) === F
+    @test Array(Factorization{complex(eltype(F))}(F)) ≈ Array(ldlt(complex(S)))
+    @test eltype(Factorization{complex(eltype(F))}(F)) == complex(eltype(S))
 end
 end # module TestLDLT
