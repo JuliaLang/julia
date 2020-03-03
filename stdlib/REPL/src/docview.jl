@@ -574,7 +574,6 @@ print_correction(word) = print_correction(stdout, word)
 
 # Completion data
 
-const builtins = collect(keys(Base.Docs.keywords))
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
