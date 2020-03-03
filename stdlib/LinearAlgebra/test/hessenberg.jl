@@ -127,4 +127,10 @@ let A = [0.5 0.1 0.9 0.4; 0.9 0.7 0.5 0.4; 0.3 0.4 0.9 0.0; 0.4 0.0 0.0 0.5]
     @test logdet(hessenberg(A)) ≈ logdet(A) ≈ -3.5065578973199822
 end
 
+@testset "Base.propertynames" begin
+    F =  hessenberg([4. 9. 7.; 4. 4. 1.; 4. 3. 2.])
+    @test Base.propertynames(F) == (:Q, :H, :μ)
+    @test Base.propertynames(F, true) == (:Q, :H, :μ, :τ, :factors, :uplo)
+end
+
 end # module TestHessenberg
