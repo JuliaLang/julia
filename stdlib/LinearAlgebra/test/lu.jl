@@ -343,4 +343,10 @@ end
     @test F.p == []
 end
 
+@testset "testing Array(F::LU{T,Tridiagonal{T,V})" begin
+    C = randn(Float16, 5, 5)
+    lu_matrix = lu(Tridiagonal(C))
+    @test Array(lu_matrix) == Tridiagonal(lu_matrix)
+end
+
 end # module TestLU
