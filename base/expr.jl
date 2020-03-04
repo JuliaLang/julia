@@ -156,12 +156,32 @@ end
 
 
 """
-    @macroexpand1
+    @macroexpand1 code [load = true]
 
-Non recursive version of [`@macroexpand`](@ref).
+Non recursive version of [`@macroexpand`](@ref). If `load` is set to false, will
+not load code, but instead, call the macro as a function.
+
+```jldoctest
+julia> @macroexpand1 @static "hello world"
+ERROR: LoadError: ArgumentError: invalid @static macro
+[...]
+
+julia> @macroexpand1 (@static "hello world") false
+ERROR: ArgumentError: invalid @static macro
+[...]
+```
 """
-macro macroexpand1(code)
-    return :(macroexpand($__module__, $(QuoteNode(code)), recursive=false))
+macro macroexpand1(code, load = true)
+    if load
+        return :(macroexpand($__module__, $(QuoteNode(code)), recursive=false))
+    else
+        code.head == :macrocall ||
+            ArgumentError("`@macroexpand code false` requires a macro call")
+        esc(Expr(:call, code.args[1],
+            # :quote to make sure the linenumbernode won't be scrubbed away
+            Expr(:quote, code.args[2]), __module__, code.args[3:end]...
+        ))
+    end
 end
 
 ## misc syntax ##
