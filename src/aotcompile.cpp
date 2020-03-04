@@ -27,6 +27,7 @@
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
+#include <llvm/Transforms/Scalar/InstSimplifyPass.h>
 #if defined(USE_POLLY)
 #include <polly/RegisterPasses.h>
 #include <polly/LinkAllPasses.h>
@@ -587,13 +588,15 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(llvm::createMemorySanitizerPass(true));
 #endif
     if (opt_level < 2) {
-        PM->add(createCFGSimplificationPass()); // Clean up disgusting code
+        PM->add(createCFGSimplificationPass());
         if (opt_level == 1) {
-            PM->add(createSROAPass());                 // Break up aggregate allocas
-            PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
+            PM->add(createSROAPass());
+            PM->add(createInstructionCombiningPass());
             PM->add(createEarlyCSEPass());
+            // maybe add GVN?
+            // also try GVNHoist and GVNSink
         }
-        PM->add(createMemCpyOptPass()); // Remove memcpy / form memset
+        PM->add(createMemCpyOptPass());
         PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
         if (lower_intrinsics) {
             PM->add(createBarrierNoopPass());
@@ -603,7 +606,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             PM->add(createFinalLowerGCPass());
             PM->add(createLowerPTLSPass(dump_native));
         }
-        PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "loopinfo" as LLVM parallel loop
+        PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native)
             PM->add(createMultiVersioningPass());
         return;
@@ -614,12 +617,12 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     if (opt_level >= 3) {
         PM->add(createBasicAAWrapperPass());
     }
-    // list of passes from vmkit
-    PM->add(createCFGSimplificationPass()); // Clean up disgusting code
-    PM->add(createDeadCodeEliminationPass());
-    PM->add(createSROAPass()); // Kill useless allocas
 
-    PM->add(createMemCpyOptPass());
+    PM->add(createCFGSimplificationPass());
+    PM->add(createDeadCodeEliminationPass());
+    PM->add(createSROAPass());
+
+    //PM->add(createMemCpyOptPass());
 
     PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
 
@@ -627,30 +630,25 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // merging the `alloca` for the unboxed data and the `alloca` created by the `alloc_opt`
     // pass.
     PM->add(createAllocOptPass());
-    PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
-    // Now that SROA has cleaned up for front-end mess, a lot of control flow should
-    // be more evident - try to clean it up.
-    PM->add(createCFGSimplificationPass());    // Merge & remove BBs
+    // consider AggressiveInstCombinePass at optlevel > 2
+    PM->add(createInstructionCombiningPass());
+    PM->add(createCFGSimplificationPass());
     if (dump_native)
         PM->add(createMultiVersioningPass());
-    PM->add(createSROAPass());                 // Break up aggregate allocas
-    PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
-    PM->add(createJumpThreadingPass());        // Thread jumps.
-    PM->add(createInstructionCombiningPass()); // Combine silly seq's
+    PM->add(createSROAPass());
+    PM->add(createInstSimplifyLegacyPass());
+    PM->add(createJumpThreadingPass());
 
-    //PM->add(createCFGSimplificationPass());    // Merge & remove BBs
-    PM->add(createReassociatePass());          // Reassociate expressions
+    PM->add(createReassociatePass());
 
-    // this has the potential to make some things a bit slower
-    //PM->add(createBBVectorizePass());
-
-    PM->add(createEarlyCSEPass()); //// ****
+    PM->add(createEarlyCSEPass());
 
     // Load forwarding above can expose allocations that aren't actually used
     // remove those before optimizing loops.
     PM->add(createAllocOptPass());
-    PM->add(createLoopIdiomPass()); //// ****
-    PM->add(createLoopRotatePass());           // Rotate loops.
+    PM->add(createLoopRotatePass());
+    // moving IndVarSimplify here prevented removing the loop in perf_sumcartesian(10:-1:1)
+    PM->add(createLoopIdiomPass());
 #ifdef USE_POLLY
     // LCSSA (which has already run at this point due to the dependencies of the
     // above passes) introduces redundant phis that hinder Polly. Therefore we
@@ -661,47 +659,52 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(polly::createCodegenCleanupPass());
 #endif
     // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
-    PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "loopinfo" as LLVM parallel loop
-    PM->add(createLICMPass());                 // Hoist loop invariants
-    PM->add(createLoopUnswitchPass());         // Unswitch loops.
+    PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
+    PM->add(createLICMPass());
+    PM->add(createLoopUnswitchPass());
     // Subsequent passes not stripping metadata from terminator
-    PM->add(createInstructionCombiningPass());
-    PM->add(createIndVarSimplifyPass());       // Canonicalize indvars
-    PM->add(createLoopDeletionPass());         // Delete dead loops
-    PM->add(createSimpleLoopUnrollPass());     // Unroll small loops
-    //PM->add(createLoopStrengthReducePass());   // (jwb added)
+    PM->add(createInstSimplifyLegacyPass());
+    PM->add(createIndVarSimplifyPass());
+    PM->add(createLoopDeletionPass());
+    PM->add(createSimpleLoopUnrollPass());
 
     // Run our own SROA on heap objects before LLVM's
     PM->add(createAllocOptPass());
     // Re-run SROA after loop-unrolling (useful for small loops that operate,
     // over the structure of an aggregate)
-    PM->add(createSROAPass());                 // Break up aggregate allocas
-    PM->add(createInstructionCombiningPass()); // Clean up after the unroller
-    PM->add(createGVNPass());                  // Remove redundancies
-    PM->add(createMemCpyOptPass());            // Remove memcpy / form memset
-    PM->add(createSCCPPass());                 // Constant prop with SCCP
+    PM->add(createSROAPass());
+    // might not be necessary:
+    PM->add(createInstSimplifyLegacyPass());
+
+    PM->add(createGVNPass());
+    PM->add(createMemCpyOptPass());
+    PM->add(createSCCPPass());
 
     // Run instcombine after redundancy elimination to exploit opportunities
     // opened up by them.
+    // This needs to be InstCombine instead of InstSimplify to allow
+    // loops over Union-typed arrays to vectorize.
     PM->add(createInstructionCombiningPass());
-    PM->add(createJumpThreadingPass());         // Thread jumps
-    PM->add(createDeadStoreEliminationPass());  // Delete dead stores
+    PM->add(createJumpThreadingPass());
+    PM->add(createDeadStoreEliminationPass());
 
     // More dead allocation (store) deletion before loop optimization
+    // consider removing this:
     PM->add(createAllocOptPass());
     // see if all of the constant folding has exposed more loops
     // to simplification and deletion
     // this helps significantly with cleaning up iteration
-    PM->add(createCFGSimplificationPass());     // Merge & remove BBs
-    PM->add(createLoopIdiomPass());
-    PM->add(createLoopDeletionPass());          // Delete dead loops
-    PM->add(createJumpThreadingPass());         // Thread jumps
+    PM->add(createCFGSimplificationPass());
+    PM->add(createLoopDeletionPass());
+    PM->add(createInstructionCombiningPass());
+    PM->add(createLoopVectorizePass());
+    PM->add(createLoopLoadEliminationPass());
+    PM->add(createCFGSimplificationPass());
+    PM->add(createSLPVectorizerPass());
+    // might need this after LLVM 11:
+    //PM->add(createVectorCombinePass());
 
-    PM->add(createSLPVectorizerPass());         // Vectorize straight-line code
-    PM->add(createAggressiveDCEPass());         // Delete dead instructions
-    PM->add(createInstructionCombiningPass());  // Clean up after SLP loop vectorizer
-    PM->add(createLoopVectorizePass());         // Vectorize loops
-    PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
+    PM->add(createAggressiveDCEPass());
 
     if (lower_intrinsics) {
         // LowerPTLS removes an indirect call. As a result, it is likely to trigger
@@ -719,6 +722,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createCFGSimplificationPass());
     }
     PM->add(createCombineMulAddPass());
+    PM->add(createDivRemPairsPass());
 }
 
 // An LLVM module pass that just runs all julia passes in order. Useful for
