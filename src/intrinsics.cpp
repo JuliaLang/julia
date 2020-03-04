@@ -847,8 +847,9 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                     tindex = compute_tindex_unboxed(ctx, x, rt_hint);
                 }
                 tindex = ctx.builder.CreateOr(tindex, ConstantInt::get(T_int8, 0x80));
-                ret->addIncoming(tindex, compute);
+                compute = ctx.builder.GetInsertBlock(); // could have changed
                 ctx.builder.CreateBr(post);
+                ret->addIncoming(tindex, compute);
                 ctx.builder.SetInsertPoint(post);
                 ctx.builder.Insert(ret);
                 tindex = ret;
