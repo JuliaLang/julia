@@ -343,4 +343,19 @@ end
     @test F.p == []
 end
 
+@testset "more rdiv! methods" begin
+    B = randn(Float16, 5, 5)
+    A = transpose(lu(B))
+    @test rdiv!(transpose(B), A)== transpose(ldiv!(A.parent, transpose(transpose(B))))
+    B = [1. 2.; 3. 4.]
+    A = transpose(lu(B))
+    @test rdiv!(transpose(B), A) == [1. 0.; 0. 1.]
+    B = randn(Float16, 5, 5)
+    A = adjoint(lu(B))
+    @test rdiv!(adjoint(B), A) == adjoint(ldiv!(A.parent, adjoint(adjoint(B))))
+    B = [1.0+1im 2.0-1im; 3. 4.0-2im]
+    A = adjoint(lu(B))
+    @test rdiv!(adjoint(B), A) == [1.0-0im 0.0-0im;0.0-0im 1.0-0im]
+end
+
 end # module TestLU
