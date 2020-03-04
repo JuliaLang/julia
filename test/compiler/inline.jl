@@ -51,14 +51,6 @@ function test_outer(a)
 end
 test_inlined_symbols(test_outer, Tuple{Int64})
 
-# Test case 1 for anonymous functions (issue #34939)
-function test_outer2(x)
-    @inline x -> x^2 + 2x - 1
-end
-test_inlined_symbols(test_outer2, Tuple{Int64})
-
-
-
 # Test case 2:
 # Make sure that an error is thrown for the undeclared
 # y in the else branch.
@@ -285,13 +277,8 @@ let ci = code_typed(f34900, Tuple{Int, Int})[1].first
 end
 
 @testset "check jl_ast_flag_inlineable for inline macro" begin
-    ret = ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(@inline x -> x)).source)
-    @test ret == true
-    ret = ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods( x -> x)).source)
-    @test ret == false
-
-    ret = ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(@inline function f(x) x end)).source)
-    @test ret == true
-    ret = ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(function f(x) x end)).source)
-    @test ret == false
+    @test ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(@inline x -> x)).source)
+    @test !ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods( x -> x)).source)
+    @test ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(@inline function f(x) x end)).source)
+    @test !ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(function f(x) x end)).source)
 end
