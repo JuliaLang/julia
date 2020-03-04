@@ -1022,18 +1022,11 @@ void jl_mach_gc_end(void);
 
 // -- typeset.c -- //
 
-extern jl_value_t **const jl_notfound;
-
-struct jl_typeset_t {
-    jl_svec_t **cache;
-    jl_value_t *parent;
-    uint_t (*hash)(struct jl_typeset_t const *set, jl_value_t *val);
-    int (*eq)(struct jl_typeset_t const *set, jl_value_t *val, jl_value_t *ty);
-};
-
-jl_value_t **jl_typeset_lookup_bp(struct jl_typeset_t const *set, jl_value_t *ty, uint_t hv);
-jl_value_t *jl_typeset_lookup(struct jl_typeset_t *const set, jl_value_t *ty, uint_t hv);
-void jl_typeset_insert(struct jl_typeset_t const *set, jl_value_t *val);
+typedef uint_t (*typeset_hash)(jl_value_t *val);
+typedef int (*typeset_eq)(jl_value_t *val, const void *key, uint_t hv);
+jl_value_t **jl_typeset_lookup_bp(jl_svec_t **cache, typeset_eq eq, const void *key, uint_t hv, jl_value_t **notfound);
+jl_value_t *jl_typeset_lookup(jl_svec_t **cache, typeset_eq eq, const void *key, uint_t hv, jl_value_t *notfound);
+void jl_typeset_insert(jl_svec_t **cache, jl_value_t *parent, typeset_hash hash, jl_value_t *val);
 
 
 // -- typemap.c -- //

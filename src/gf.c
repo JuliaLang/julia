@@ -86,7 +86,7 @@ static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 
 /// ----- Insertion logic for special entries ----- ///
 
-static uint_t speccache_hash(struct jl_typeset_t const *set, jl_value_t *ml)
+static uint_t speccache_hash(jl_value_t *ml)
 {
     jl_value_t *sig = ((jl_method_instance_t*)ml)->specTypes;
     if (jl_is_unionall(sig))
@@ -94,27 +94,31 @@ static uint_t speccache_hash(struct jl_typeset_t const *set, jl_value_t *ml)
     return ((jl_datatype_t*)sig)->hash;
 }
 
-static int speccache_eq(struct jl_typeset_t const *set, jl_value_t *ml, jl_value_t *ty)
+static int speccache_eq(jl_value_t *ml, const void *ty, uint_t hv)
 {
     jl_value_t *sig = ((jl_method_instance_t*)ml)->specTypes;
-    return jl_types_equal(sig, ty);
+    if (ty == sig)
+        return 1;
+    uint_t h2 = ((jl_datatype_t*)(jl_is_unionall(sig) ? jl_unwrap_unionall(sig) : sig))->hash;
+    if (h2 != hv)
+        return 0;
+    return jl_types_equal(sig, (jl_value_t*)ty);
 }
 
 // get or create the MethodInstance for a specialization
 JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m JL_PROPAGATES_ROOT, jl_value_t *type, jl_svec_t *sparams)
 {
-    struct jl_typeset_t set = {&m->specializations, (jl_value_t*)m, speccache_hash, speccache_eq};
-    uint_t hash = ((jl_datatype_t*)(jl_is_unionall(type) ? jl_unwrap_unionall(type) : type))->hash;
-    jl_method_instance_t *mi = (jl_method_instance_t*)jl_typeset_lookup(&set, type, hash);
+    uint_t hv = ((jl_datatype_t*)(jl_is_unionall(type) ? jl_unwrap_unionall(type) : type))->hash;
+    jl_method_instance_t *mi = (jl_method_instance_t*)jl_typeset_lookup(&m->specializations, speccache_eq, type, hv, jl_nothing);
     if (jl_is_method_instance(mi))
         return mi;
     JL_LOCK(&m->writelock);
-    mi = (jl_method_instance_t*)jl_typeset_lookup(&set, type, hash);
+    mi = (jl_method_instance_t*)jl_typeset_lookup(&m->specializations, speccache_eq, type, hv, jl_nothing);
     if (!jl_is_method_instance(mi)) {
         mi = jl_get_specialized(m, type, sparams);
         JL_GC_PUSH1(&mi);
         // TODO: fuse lookup and insert steps?
-        jl_typeset_insert(&set, (jl_value_t*)mi);
+        jl_typeset_insert(&m->specializations, (jl_value_t*)m, speccache_hash, (jl_value_t*)mi);
         JL_GC_POP();
     }
     JL_UNLOCK(&m->writelock);
@@ -123,9 +127,8 @@ JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m J
 
 JL_DLLEXPORT jl_value_t *jl_specializations_lookup(jl_method_t *m, jl_value_t *type)
 {
-    struct jl_typeset_t set = {&m->specializations, (jl_value_t*)m, speccache_hash, speccache_eq};
-    uint_t hash = ((jl_datatype_t*)(jl_is_unionall(type) ? jl_unwrap_unionall(type) : type))->hash;
-    return jl_typeset_lookup(&set, type, hash);
+    uint_t hv = ((jl_datatype_t*)(jl_is_unionall(type) ? jl_unwrap_unionall(type) : type))->hash;
+    return jl_typeset_lookup(&m->specializations, speccache_eq, type, hv, jl_nothing);
 }
 
 JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_value_t *type, size_t world)
