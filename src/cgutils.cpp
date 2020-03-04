@@ -733,7 +733,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
         else if (isarray && !type_is_ghost(lasttype)) {
             if (isTuple && isvector && jl_special_vector_alignment(ntypes, jlasttype) != 0)
                 struct_decl = VectorType::get(lasttype, ntypes);
-            else if (isTuple)
+            else if (isTuple || !llvmcall)
                 struct_decl = ArrayType::get(lasttype, ntypes);
             else
                 struct_decl = StructType::get(jl_LLVMContext, latypes);
