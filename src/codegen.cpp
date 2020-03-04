@@ -147,7 +147,7 @@ extern JITEventListener *CreateJuliaJITEventListener();
 bool imaging_mode = false;
 
 // shared llvm state
-static LLVMContext &jl_LLVMContext = *(new LLVMContext());
+JL_DLLEXPORT LLVMContext &jl_LLVMContext = *(new LLVMContext());
 TargetMachine *jl_TargetMachine;
 Module *shadow_output;
 static DataLayout &jl_data_layout = *(new DataLayout(""));
