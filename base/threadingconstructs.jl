@@ -21,9 +21,7 @@ nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 function _threadsfor(iter_stmt, lbody)
     loopvar   = iter_stmt.args[1]
     iter      = iter_stmt.args[2]
-
     rng = gensym(:rng)
-    
     out = quote
         @sync for $rng in $(Iterators.partition)($iter, $(length)($iter) ÷ $(nthreads)())
             Base.Threads.@spawn begin
@@ -39,8 +37,8 @@ end
 """
     Threads.@threads
 
-A macro to parallelize a for-loop to run with multiple threads. This spawns [`nthreads()`](@ref)
-number of threads, splits the iteration space amongst them, and iterates in parallel.
+A macro to parallelize a for-loop to run with multiple threads. This spawns up to [`nthreads() + 1`](@ref)
+threads, splits the iteration space amongst them, and iterates in parallel.
 A barrier is placed at the end of the loop which waits for all the threads to finish
 execution, and the loop returns.
 """
