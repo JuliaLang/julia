@@ -51,6 +51,7 @@ static arraylist_t backref_list;
 // type-rewriting of some sort
 // (not used in MODE_IR)
 static arraylist_t flagref_list;
+static htable_t uniquing_table;
 
 // list of (size_t pos, (void *f)(jl_value_t*)) entries
 // for the serializer to mark values in need of rework by function f
@@ -247,6 +248,7 @@ static int type_in_worklist(jl_datatype_t *dt) JL_NOTSAFEPOINT
     int i, l = jl_svec_len(dt->parameters);
     for (i = 0; i < l; i++) {
         jl_value_t *p = jl_unwrap_unionall(jl_tparam(dt, i));
+        // XXX: what about Union and TypeVar??
         if (type_in_worklist((jl_datatype_t*)(jl_is_datatype(p) ? p : jl_typeof(p))))
             return 1;
     }
@@ -257,16 +259,16 @@ static int type_recursively_external(jl_datatype_t *dt);
 
 static int type_parameter_recursively_external(jl_value_t *p0) JL_NOTSAFEPOINT
 {
-    jl_datatype_t *p = (jl_datatype_t*)p0;
-    while (jl_is_unionall(p)) {
-        if (!type_parameter_recursively_external(((jl_unionall_t*)p)->var->lb))
-            return 0;
-        if (!type_parameter_recursively_external(((jl_unionall_t*)p)->var->ub))
-            return 0;
-        p = (jl_datatype_t*)((jl_unionall_t*)p)->body;
-    }
-    if (!jl_is_datatype(p) || p->uid == 0)
+    if (!jl_is_concrete_type(p0))
         return 0;
+    jl_datatype_t *p = (jl_datatype_t*)p0;
+    //while (jl_is_unionall(p)) {
+    //    if (!type_parameter_recursively_external(((jl_unionall_t*)p)->var->lb))
+    //        return 0;
+    //    if (!type_parameter_recursively_external(((jl_unionall_t*)p)->var->ub))
+    //        return 0;
+    //    p = (jl_datatype_t*)((jl_unionall_t*)p)->body;
+    //}
     if (module_in_worklist(p->name->module))
         return 0;
     if (p->name->wrapper != (jl_value_t*)p0) {
@@ -279,7 +281,7 @@ static int type_parameter_recursively_external(jl_value_t *p0) JL_NOTSAFEPOINT
 // returns true if all of the parameters are tag 6 or 7
 static int type_recursively_external(jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
-    if (dt->uid == 0)
+    if (!dt->isconcretetype)
         return 0;
     if (jl_svec_len(dt->parameters) == 0)
         return 1;
@@ -300,7 +302,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
     if (!internal && jl_unwrap_unionall(dt->name->wrapper) == (jl_value_t*)dt) {
         tag = 6; // external primary type
     }
-    else if (dt->uid == 0) {
+    else if (!dt->isconcretetype) {
         tag = 0; // normal struct
     }
     else if (internal) {
@@ -313,7 +315,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
         tag = 7; // external type that can be immediately recreated (with apply_type)
     }
     else if (type_in_worklist(dt)) {
-        tag = 10; // external, but definitely new (still needs uid and caching, but not full unique-ing)
+        tag = 11; // external, but definitely new (still needs uid and caching, but not full unique-ing)
     }
     else {
         // this'll need a uid and unique-ing later
@@ -321,7 +323,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
         uintptr_t *bp = (uintptr_t*)ptrhash_bp(&backref_table, dt);
         assert(*bp != (uintptr_t)HT_NOTFOUND);
         *bp |= 1;
-        tag = 10;
+        tag = 12;
     }
 
     char *dtname = jl_symbol_name(dt->name->name);
@@ -1422,7 +1424,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     uint8_t flags = read_uint8(s->s);
     uint8_t memflags = read_uint8(s->s);
     jl_datatype_t *dt = NULL;
-    if (tag == 0 || tag == 5 || tag == 10)
+    if (tag == 0 || tag == 5 || tag == 10 || tag == 11 || tag == 12)
         dt = jl_new_uninitialized_datatype();
     else {
         assert(0 && "corrupt deserialization state");
@@ -1449,14 +1451,11 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     dt->name = NULL;
     dt->super = NULL;
     dt->layout = NULL;
-    if (!dt->abstract) {
+    if (!dt->abstract)
         dt->ninitialized = read_uint16(s->s);
-        dt->uid = 0;
-    }
-    else {
+    else
         dt->ninitialized = 0;
-        dt->uid = 0;
-    }
+    dt->uid = 0;
 
     if (has_layout) {
         uint8_t layout = read_uint8(s->s);
@@ -1492,15 +1491,16 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     if (tag == 5) {
         dt->uid = jl_assign_type_uid();
     }
-    else if (tag == 10) {
+    else if (tag == 10 || tag == 11 || tag == 12) {
         assert(pos > 0);
         arraylist_push(&flagref_list, loc == HT_NOTFOUND ? NULL : loc);
         arraylist_push(&flagref_list, (void*)(uintptr_t)pos);
         dt->uid = -1; // mark that this type needs a new uid
+        ptrhash_put(&uniquing_table, dt, NULL);
     }
 
     if (has_instance) {
-        assert(dt->uid != 0 && "there shouldn't be an instance on a type with uid = 0");
+        assert(dt->isconcretetype && "there shouldn't be an instance on an abstract type");
         dt->instance = jl_deserialize_value(s, &dt->instance);
         jl_gc_wb(dt, dt->instance);
     }
@@ -1938,7 +1938,9 @@ static jl_value_t *jl_deserialize_value_singleton(jl_serializer_state *s, jl_val
     }
     jl_datatype_t *dt = (jl_datatype_t*)jl_deserialize_value(s, (jl_value_t**)HT_NOTFOUND); // no loc, since if dt is replaced, then dt->instance would be also
     jl_set_typeof(v, dt);
-    return v;
+    if (dt->instance == NULL)
+        return v;
+    return dt->instance;
 }
 
 static void jl_deserialize_struct(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABLED
@@ -2935,100 +2937,111 @@ static int jl_invalid_types_equal(jl_datatype_t *a, jl_datatype_t *b)
 {
     return jl_subtype((jl_value_t*)a, (jl_value_t*)b) && jl_subtype((jl_value_t*)b, (jl_value_t*)a);
 }
+STATIC_INLINE jl_value_t *verify_type(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    assert(v && jl_typeof(v) && jl_typeof(jl_typeof(v)) == (jl_value_t*)jl_datatype_type);
+    return v;
+}
 #endif
 
-static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start, jl_value_t *v) JL_GC_DISABLED
+static jl_datatype_t *jl_recache_type(jl_datatype_t *dt) JL_GC_DISABLED
 {
-    if (v == NULL)
-        v = dt->instance; // the instance before unique'ing
+    jl_datatype_t *t; // the type after unique'ing
+    assert(verify_type((jl_value_t*)dt));
+    t = (jl_datatype_t*)ptrhash_get(&uniquing_table, dt);
+    if (t == HT_NOTFOUND)
+        return dt;
+    if (t != NULL)
+        return t;
+
     jl_svec_t *tt = dt->parameters;
-    if (dt->uid == 0 || dt->uid == -1) {
-        // recache all type parameters
-        size_t i, l = jl_svec_len(tt);
-        for (i = 0; i < l; i++) {
-            jl_datatype_t *p = (jl_datatype_t*)jl_svecref(tt, i);
-            if (jl_is_datatype(p)) {
-                if (p->uid == -1 || p->uid == 0) {
-                    jl_datatype_t *cachep = jl_recache_type(p, start, NULL);
-                    if (p != cachep) {
-                        assert(jl_invalid_types_equal(p, cachep));
-                        jl_svecset(tt, i, cachep);
-                    }
-                }
-            }
-            else {
-                jl_datatype_t *tp = (jl_datatype_t*)jl_typeof(p);
-                assert(tp->uid != 0);
-                if (tp->uid == -1) {
-                    tp = jl_recache_type(tp, start, NULL);
-                }
-                if (tp->instance && (jl_value_t*)p != tp->instance)
-                    jl_svecset(tt, i, tp->instance);
+    // recache all type parameters
+    size_t i, l = jl_svec_len(tt);
+    for (i = 0; i < l; i++) {
+        jl_datatype_t *p = (jl_datatype_t*)jl_svecref(tt, i);
+        if (jl_is_datatype(p)) {
+            jl_datatype_t *cachep = jl_recache_type(p);
+            if (p != cachep)
+                jl_svecset(tt, i, cachep);
+        }
+        // XXX: else if (jl_is_typevar(p))
+        // XXX: else if (jl_is_uniontype(p))
+        // XXX: else if (jl_is_unionall(p))
+        else {
+            p = (jl_datatype_t*)jl_typeof(p);
+            jl_datatype_t *cachep = jl_recache_type(p);
+            if (p != cachep) {
+                if (cachep->instance)
+                    jl_svecset(tt, i, cachep->instance);
+                else
+                    jl_set_typeof(jl_svecref(tt, i), cachep);
             }
         }
     }
 
-    jl_datatype_t *t; // the type after unique'ing
-    if (dt->uid == 0) {
-        return dt;
-    }
-    else if (dt->uid == -1) {
-        if (jl_svec_len(tt) == 0) { // jl_cache_type doesn't work if length(parameters) == 0
-            dt->uid = jl_assign_type_uid();
-            t = dt;
-        }
-        else {
-            dt->uid = 0;
-            t = (jl_datatype_t*)jl_cache_type_(dt);
-            assert(jl_invalid_types_equal(t, dt));
-        }
-    }
-    else {
+    // then recache the type itself
+    assert(dt->uid == -1);
+    if (jl_svec_len(tt) == 0) { // jl_cache_type doesn't work if length(parameters) == 0
+        dt->uid = jl_assign_type_uid();
         t = dt;
     }
-    assert(t->uid != 0);
-    if (t == dt && v == NULL)
-        return t;
-    // delete / replace any other usages of this type in the backref list
-    // with the newly constructed object
-    size_t i = start;
-    while (i < flagref_list.len) {
+    else {
+        dt->uid = 0;
+        t = (jl_datatype_t*)jl_cache_type_(dt);
+        assert(jl_invalid_types_equal(t, dt));
+    }
+    ptrhash_put(&uniquing_table, dt, t);
+    return t;
+}
+
+static void jl_recache_types(void) JL_GC_DISABLED
+{
+    size_t i;
+    // first rewrite all the unique'd objects
+    for (i = 0; i < flagref_list.len; i += 2) {
         jl_value_t **loc = (jl_value_t**)flagref_list.items[i + 0];
         int offs = (int)(intptr_t)flagref_list.items[i + 1];
         jl_value_t *o = loc ? *loc : (jl_value_t*)backref_list.items[offs];
-        if ((jl_value_t*)dt == o) {
-            if (t != dt) {
+        if (!jl_is_method(o) && !jl_is_method_instance(o)) {
+            jl_datatype_t *dt;
+            jl_value_t *v;
+            if (jl_is_datatype(o)) {
+                dt = (jl_datatype_t*)o;
+                v = dt->instance;
+            }
+            else {
+                dt = (jl_datatype_t*)jl_typeof(o);
+                v = o;
+            }
+            jl_datatype_t *t = jl_recache_type(dt);
+            if ((jl_value_t*)dt == o && t != dt) {
+                assert(!type_in_worklist(dt));
                 if (loc)
                     *loc = (jl_value_t*)t;
                 if (offs > 0)
                     backref_list.items[offs] = t;
             }
-        }
-        else if (v == o) {
-            if (t->instance != v) {
+            if (v == o && t->instance != v) {
+                assert(t->instance);
                 assert(loc);
                 *loc = t->instance;
                 if (offs > 0)
                     backref_list.items[offs] = t->instance;
             }
         }
-        else {
-            i += 2;
-            continue;
-        }
-        // delete this item from the flagref list, so it won't be re-encountered later
-        flagref_list.len -= 2;
-        if (i >= flagref_list.len)
-            break;
-        flagref_list.items[i + 0] = flagref_list.items[flagref_list.len + 0];
-        flagref_list.items[i + 1] = flagref_list.items[flagref_list.len + 1];
     }
-    return t;
-}
-
-static void jl_recache_types(void) JL_GC_DISABLED
-{
-    size_t i = 0;
+    for (i = 0; i < uniquing_table.size; i += 2) {
+        jl_value_t *o = (jl_value_t*)uniquing_table.table[i];
+        if (o != (jl_value_t*)uniquing_table.table[i + 1]) {
+            assert(uniquing_table.table[i + 1]);
+            if (jl_is_datatype(o))
+                jl_set_typeof(o, (void*)(intptr_t)0x10); // invalidate the old datatype to help catch errors
+            else
+                jl_set_typeof(o, (void*)(intptr_t)0x20); // invalidate the old datatype to help catch errors
+        }
+    }
+    // then do a cleanup pass to drop these from future iterations of flagref_list
+    i = 0;
     while (i < flagref_list.len) {
         jl_value_t **loc = (jl_value_t**)flagref_list.items[i + 0];
         int offs = (int)(intptr_t)flagref_list.items[i + 1];
@@ -3037,39 +3050,6 @@ static void jl_recache_types(void) JL_GC_DISABLED
             i += 2;
         }
         else {
-            jl_value_t *v;
-            jl_datatype_t *dt, *t;
-            if (jl_is_datatype(o)) {
-                dt = (jl_datatype_t*)o;
-                v = dt->instance;
-                t = dt->uid == -1 ? jl_recache_type(dt, i + 2, NULL) : dt;
-            }
-            else {
-                dt = (jl_datatype_t*)jl_typeof(o);
-                v = o;
-                assert(dt->instance);
-                t = jl_recache_type(dt, i + 2, v);
-            }
-            assert(dt);
-            if (t != dt) {
-                assert(!type_in_worklist(t));
-                jl_set_typeof(dt, (void*)(intptr_t)0x10); // invalidate the old datatype to help catch errors
-                if ((jl_value_t*)dt == o) {
-                    if (loc)
-                        *loc = (jl_value_t*)t;
-                    if (offs > 0)
-                        backref_list.items[offs] = t;
-                }
-            }
-            if (t->instance != v) {
-                jl_set_typeof(v, (void*)(intptr_t)0x20); // invalidate the old value to help catch errors
-                if (v == o) {
-                    assert(loc);
-                    *loc = t->instance;
-                    if (offs > 0)
-                        backref_list.items[offs] = t->instance;
-                }
-            }
             // delete this item from the flagref list, so it won't be re-encountered later
             flagref_list.len -= 2;
             if (i >= flagref_list.len)
@@ -3232,6 +3212,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     arraylist_new(&backref_list, 4000);
     arraylist_push(&backref_list, jl_main_module);
     arraylist_new(&flagref_list, 0);
+    htable_new(&uniquing_table, 0);
     arraylist_push(&dependent_worlds, (void*)jl_world_counter);
     arraylist_push(&dependent_worlds, (void*)jl_main_module->primary_world);
     qsort(dependent_worlds.items, dependent_worlds.len, sizeof(size_t), size_isgreater);
@@ -3269,6 +3250,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     arraylist_free(&flagref_list);
     arraylist_free(&backref_list);
     arraylist_free(&dependent_worlds);
+    htable_free(&uniquing_table);
     ios_close(f);
 
     jl_gc_enable_finalizers(ptls, 1); // make sure we don't run any Julia code concurrently before this point
