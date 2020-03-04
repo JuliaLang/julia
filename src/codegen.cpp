@@ -5899,7 +5899,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
 
     if (do_coverage(mod_is_user_mod)) {
         coverageVisitLine(ctx, ctx.file, toplineno);
-        if (linetable.size() >= 1) {
+        if (linetable.size() >= 2) {
             // avoid double-counting the entry line
             const auto &info = linetable.at(1);
             if (info.file == ctx.file && info.line == toplineno && info.is_user_code == mod_is_user_mod)
