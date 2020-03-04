@@ -12,8 +12,6 @@ static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
 
 JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
 {
-    // Assume *pa don't need a write barrier
-    // pa doesn't have to be a GC slot but *pa needs to be rooted
     size_t sz = jl_array_len(a);
     size_t i;
     jl_value_t **ol = (jl_value_t **)a->data;
@@ -28,10 +26,6 @@ JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
             // can (and will) occur in a recursive call inside table_lookup_bp
         }
     }
-    // we do not check the write barrier here
-    // because pa always points to a C stack location
-    // (see jl_eqtable_put and jl_finalize_deserializer)
-    // it should be changed if this assumption no longer holds
     JL_GC_POP();
     return newa;
 }
@@ -56,14 +50,15 @@ static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
         empty_slot = -1;
 
         do {
-            if (tab[index] == NULL) {
+            jl_value_t *k2 = (jl_value_t*)tab[index];
+            if (k2 == NULL) {
                 if (empty_slot == -1)
                     empty_slot = index;
                 break;
             }
-            if (jl_egal(key, (jl_value_t *)tab[index])) {
+            if (jl_egal(key, k2)) {
                 if (tab[index + 1] != NULL) {
-                    tab[index + 1] = val;
+                    jl_atomic_store_release(&tab[index + 1], val);
                     jl_gc_wb(a, val);
                     return 0;
                 }
@@ -110,7 +105,7 @@ static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
 }
 
 /* returns bp if key is in hash, otherwise NULL */
-static void **jl_table_peek_bp(jl_array_t *a, jl_value_t *key)
+jl_value_t **jl_table_peek_bp(jl_array_t *a, jl_value_t *key)
 {
     size_t sz = hash_size(a);
     assert(sz >= 1);
@@ -123,13 +118,15 @@ static void **jl_table_peek_bp(jl_array_t *a, jl_value_t *key)
     size_t iter = 0;
 
     do {
-        if (tab[index] == NULL)
+        jl_value_t *k2 = (jl_value_t*)jl_atomic_load_relaxed(&tab[index]); // just to ensure the load doesn't get duplicated
+        if (k2 == NULL)
             return NULL;
-        if (jl_egal(key, (jl_value_t *)tab[index])) {
+        if (jl_egal(key, k2)) {
             if (tab[index + 1] != NULL)
-                return &tab[index + 1];
+                return (jl_value_t**)&tab[index + 1];
             // `nothing` is our sentinel value for deletion, so need to keep searching if it's also our search key
-            assert(key == jl_nothing);
+            if (key != jl_nothing)
+                return NULL; // concurrent insertion hasn't completed yet
         }
 
         index = (index + 2) & (sz - 1);
@@ -151,22 +148,24 @@ jl_array_t *jl_eqtable_put(jl_array_t *h, jl_value_t *key, jl_value_t *val, int 
     return h;
 }
 
+// Note: lookup in the IdDict is permitted concurrently, if you avoid deletions,
+// and assuming you do use an external lock around all insertions
 JL_DLLEXPORT
 jl_value_t *jl_eqtable_get(jl_array_t *h, jl_value_t *key, jl_value_t *deflt)
 {
-    void **bp = jl_table_peek_bp(h, key);
-    return (bp == NULL) ? deflt : (jl_value_t *)*bp;
+    jl_value_t **bp = jl_table_peek_bp(h, key);
+    return (bp == NULL) ? deflt : *bp;
 }
 
 JL_DLLEXPORT
 jl_value_t *jl_eqtable_pop(jl_array_t *h, jl_value_t *key, jl_value_t *deflt, int *found)
 {
-    void **bp = jl_table_peek_bp(h, key);
+    jl_value_t **bp = jl_table_peek_bp(h, key);
     if (found)
         *found = (bp != NULL);
     if (bp == NULL)
         return deflt;
-    jl_value_t *val = (jl_value_t *)*bp;
+    jl_value_t *val = *bp;
     *(bp - 1) = jl_nothing; // clear the key
     *bp = NULL;
     return val;
