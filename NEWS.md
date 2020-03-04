@@ -36,6 +36,16 @@ Language changes
 
 * The syntax `(;)` (which was deprecated in v1.4) now creates an empty named tuple ([#30115]).
 
+* In triple-quoted string literals, whitespace stripping is now done before processing
+  escape sequences instead of after. For example, the syntax
+  ```
+  """
+    a\n b"""
+  ```
+  used to yield the string " a\nb", since the single space before `b` set the indent level.
+  Now the result is "a\n b", since the space before `b` is no longer considered to occur
+  at the start of a line. The old behavior is considered a bug ([#35001]).
+
 Multi-threading changes
 -----------------------
 
