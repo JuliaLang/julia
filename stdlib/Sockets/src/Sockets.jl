@@ -607,32 +607,28 @@ function _sockname(sock, self=true)
                 sock.handle, rport, raddress, rfamily)
     end
     uv_error("cannot obtain socket name", r)
-    if r == 0
-        port = ntoh(rport[])
-        af_inet6 = @static if Sys.iswindows() # AF_INET6 in <sys/socket.h>
-            23
-        elseif Sys.isapple()
-            30
-        elseif Sys.KERNEL ∈ (:FreeBSD, :DragonFly)
-            28
-        elseif Sys.KERNEL ∈ (:NetBSD, :OpenBSD)
-            24
-        else
-            10
-        end
-
-        if rfamily[] == 2 # AF_INET
-            addrv4 = raddress[1:4]
-            naddr = ntoh(unsafe_load(Ptr{Cuint}(pointer(addrv4)), 1))
-            addr = IPv4(naddr)
-        elseif rfamily[] == af_inet6
-            naddr = ntoh(unsafe_load(Ptr{UInt128}(pointer(raddress)), 1))
-            addr = IPv6(naddr)
-        else
-            error(string("unsupported address family: ", getindex(rfamily)))
-        end
+    port = ntoh(rport[])
+    af_inet6 = @static if Sys.iswindows() # AF_INET6 in <sys/socket.h>
+        23
+    elseif Sys.isapple()
+        30
+    elseif Sys.KERNEL ∈ (:FreeBSD, :DragonFly)
+        28
+    elseif Sys.KERNEL ∈ (:NetBSD, :OpenBSD)
+        24
     else
-        error("cannot obtain socket name")
+        10
+    end
+
+    if rfamily[] == 2 # AF_INET
+        addrv4 = raddress[1:4]
+        naddr = ntoh(unsafe_load(Ptr{Cuint}(pointer(addrv4)), 1))
+        addr = IPv4(naddr)
+    elseif rfamily[] == af_inet6
+        naddr = ntoh(unsafe_load(Ptr{UInt128}(pointer(raddress)), 1))
+        addr = IPv6(naddr)
+    else
+        error(string("unsupported address family: ", rfamily[]))
     end
     return addr, port
 end

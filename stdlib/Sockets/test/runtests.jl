@@ -150,6 +150,18 @@ defaultport = rand(2000:4000)
     end
 end
 
+@testset "getsockname errors" begin
+    sock = TCPSocket()
+    serv = Sockets.TCPServer()
+    @test_throws MethodError getpeername(serv)
+    @test_throws Base._UVError("cannot obtain socket name", Base.UV_EBADF) getpeername(sock)
+    @test_throws Base._UVError("cannot obtain socket name", Base.UV_EBADF) getsockname(serv)
+    @test_throws Base._UVError("cannot obtain socket name", Base.UV_EBADF) getsockname(sock)
+    close(sock)
+    close(serv)
+end
+
+
 @testset "getnameinfo on some unroutable IP addresses (RFC 5737)" begin
     @test getnameinfo(ip"192.0.2.1") == "192.0.2.1"
     @test getnameinfo(ip"198.51.100.1") == "198.51.100.1"
@@ -291,8 +303,6 @@ end
 
         @test addr == gsn_addr
         @test port == gsn_port
-
-        @test_throws MethodError getpeername(listen_sock)
 
         # connect to it
         client_sock = connect(addr, port)
