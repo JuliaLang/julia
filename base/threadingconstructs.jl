@@ -23,9 +23,9 @@ function _threadsfor(iter_stmt, lbody)
     iter      = iter_stmt.args[2]
     rng = gensym(:rng)
     out = quote
-        @sync for $rng in $(Iterators.partition)($iter, $(length)($iter) ÷ $(nthreads)())
+        Base.@sync for $rng in $(Iterators.partition)($iter, $(length)($iter) ÷ $(nthreads)())
             Base.Threads.@spawn begin
-                for $loopvar in $rng
+                Base.@sync for $loopvar in $rng
                     $lbody
                 end
             end
