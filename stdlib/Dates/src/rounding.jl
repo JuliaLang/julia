@@ -129,6 +129,15 @@ julia> floor(Dates.Day, DateTime(2016, 8, 6, 12, 0, 0))
 """
 Base.floor(::Dates.Period, ::Dates.TimeType)
 
+
+"""
+    floor(dt::TimeType, p::Period) -> TimeType
+Calls floor(p::Period, dt::TimeType)
+"""
+function Base.floor(dt::TimeType, p::Period)
+    return Base.floor(p, dt)
+end
+
 """
     ceil(p::Period, dt::TimeType) -> TimeType
 
@@ -151,6 +160,14 @@ julia> ceil(Dates.Day, DateTime(2016, 8, 6, 12, 0, 0))
 function Base.ceil(p::Period, dt::TimeType)
     f = floor(p, dt)
     return (dt == f) ? f : f + p
+end
+
+"""
+     ceil(dt::TimeType, p::Period) -> TimeType
+Calls ceil(p::Period, dt::TimeType)
+"""
+function Base.ceil(dt::TimeType, p::Period)
+    return Base.ceil(p, dt)
 end
 
 """
@@ -192,6 +209,10 @@ function floorceil(p::Period, dt::TimeType)
     return f, (dt == f) ? f : f + p
 end
 
+function floorceil(dt::TimeType, p::Period)
+    return floorceil(p, dt)
+end
+
 """
     floorceil(x::Period, precision::T) where T <: Union{TimePeriod, Week, Day} -> (T, T)
 
@@ -229,6 +250,13 @@ Valid rounding modes for `round(::Period, ::TimeType, ::RoundingMode)` are
 function Base.round(p::Period, dt::TimeType, r::RoundingMode{:NearestTiesUp})
     f, c = floorceil(p, dt)
     return (dt - f) < (c - dt) ? f : c
+end
+
+"""
+    round(dt::TimeType, p::Period, [r::RoundingMode]) -> TimeType
+"""
+function Base.round(dt::TimeType, p::Period, r::RoundingMode{:NearestTiesUp})
+    return Base.round(p, dt, r)
 end
 
 """
