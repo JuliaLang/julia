@@ -728,14 +728,13 @@ end
 # sort! for vectors of few unique integers
 function sort_int_range!(x::AbstractVector{<:Integer}, rangelen, minval, maybereverse)
     offs = 1 - minval
-    n = length(x)
 
     where = fill(0, rangelen)
-    @inbounds for i = 1:n
+    @inbounds for i = eachindex(x)
         where[x[i] + offs] += 1
     end
 
-    idx = 1
+    idx = firstindex(x)
     @inbounds for i = maybereverse(1:rangelen)
         lastidx = idx + where[i] - 1
         val = i-offs

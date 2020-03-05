@@ -6,6 +6,9 @@ using Base.Order
 using Random
 using Test
 
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
 @testset "Order" begin
     @test Forward == ForwardOrdering()
     @test ReverseOrdering(Forward) == ReverseOrdering() == Reverse
@@ -508,6 +511,10 @@ end
 
     a = view([9:-1:0;], :)::SubArray
     Base.Sort.sort_int_range!(a, 10, 0, identity)  # test it supports non-Vector
+    @test issorted(a)
+
+    a = OffsetArray([9:-1:0;], -5)
+    Base.Sort.sort_int_range!(a, 10, 0, identity)
     @test issorted(a)
 end
 
