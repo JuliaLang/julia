@@ -238,7 +238,7 @@ julia> MyType{Float32, 5}
 MyType{Float32,5}
 
 julia> MyType.body.body.name.cache
-svec(MyType{Int64,2}, MyType{Float32,5}, #undef, #undef, #undef, #undef, #undef, #undef)
+svec(MyType{Float32,5}, MyType{Int64,2}, #undef, #undef, #undef, #undef, #undef, #undef)
 ```
 
 (The cache is pre-allocated to have length 8, but only the first two entries are populated.) Consequently,

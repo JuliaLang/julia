@@ -534,23 +534,12 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
 
 // --- type instantiation and cache ---
 
-static int contains_unions(jl_value_t *type)
-{
-    if (jl_is_uniontype(type) || jl_is_unionall(type)) return 1;
-    if (!jl_is_datatype(type)) return 0;
-    int i;
-    for(i=0; i < jl_nparams(type); i++) {
-        if (contains_unions(jl_tparam(type,i)))
-            return 1;
-    }
-    return 0;
-}
-
 static intptr_t wrapper_id(jl_value_t *t) JL_NOTSAFEPOINT
 {
     // DataType wrappers occur often, e.g. when called as constructors.
     // make sure any type equal to a wrapper gets a consistent, ordered ID.
-    if (!jl_is_unionall(t)) return 0;
+    if (!jl_is_unionall(t))
+        return 0;
     jl_value_t *u = jl_unwrap_unionall(t);
     if (jl_is_datatype(u) && ((jl_datatype_t*)u)->name->wrapper == t)
         return ((jl_datatype_t*)u)->name->hash;
@@ -558,7 +547,7 @@ static intptr_t wrapper_id(jl_value_t *t) JL_NOTSAFEPOINT
 }
 
 // this function determines whether a type is simple enough to form
-// a total order based on UIDs and object_id.
+// a total order based on object_id.
 static int is_typekey_ordered(jl_value_t **key, size_t n)
 {
     size_t i;
@@ -567,8 +556,7 @@ static int is_typekey_ordered(jl_value_t **key, size_t n)
         if (jl_is_typevar(k))
             return 0;
         if (jl_is_type(k) && k != jl_bottom_type && !wrapper_id(k) &&
-            !(jl_is_datatype(k) && (((jl_datatype_t*)k)->uid ||
-                                    (!jl_has_free_typevars(k) && !contains_unions(k)))))
+            !(jl_is_datatype(k) && ((jl_datatype_t*)k)->hash))
             return 0;
     }
     return 1;
@@ -603,11 +591,8 @@ static int typekey_compare(jl_datatype_t *tt, jl_value_t **key, size_t n) JL_NOT
             assert(dtk && jl_is_datatype(tj));
             jl_datatype_t *dt = (jl_datatype_t*)tj;
             jl_datatype_t *dk = (jl_datatype_t*)kj;
-            if (dk->uid != dt->uid) {
-                return dk->uid < dt->uid ? -1 : 1;
-            }
-            else if (dk->uid != 0) {
-                assert(0);
+            if (dk->hash != dt->hash) {
+                return dk->hash < dt->hash ? -1 : 1;
             }
             else if (dk->name->hash != dt->name->hash) {
                 return dk->name->hash < dt->name->hash ? -1 : 1;
@@ -643,7 +628,8 @@ static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
     // TOOD: This shouldn't be necessary
     JL_GC_PROMISE_ROOTED(tt);
     size_t tnp = jl_nparams(tt);
-    if (n != tnp) return 0;
+    if (n != tnp)
+        return 0;
     if (tt->name == jl_type_typename) {
         // for Type{T}, require `typeof(T)` to match also, to avoid incorrect
         // dispatch from changing the type of something.
@@ -660,8 +646,7 @@ static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
             // require exact same Type{T}. see e.g. issue #22842
             if (jl_is_type_type(tj) || jl_is_type_type(kj))
                 return 0;
-            if ((jl_is_datatype(tj) && ((jl_datatype_t*)tj)->uid) ||
-                (jl_is_datatype(kj) && ((jl_datatype_t*)kj)->uid))
+            if (jl_is_concrete_type(tj) || jl_is_concrete_type(kj))
                 return 0;
             if (!jl_types_equal(tj, kj))
                 return 0;
@@ -692,8 +677,8 @@ static ssize_t lookup_type_idx(jl_typename_t *tn, jl_value_t **key, size_t n, in
         }
         /*
           When a module is replaced, the new versions of its types are different but
-          cannot be distinguished by typekey_compare, since the TypeNames can only
-          be distinguished by addresses, which don't have a reliable order. So we
+          cannot be distinguished by typekey_compare, since the TypeNames have
+          the same hash and can only be distinguished by addresses. So we
           need to allow sequences of typekey_compare-equal types in the ordered cache.
         */
         while (hi < cl && typekey_compare(data[hi], key, n) == 0) {
@@ -728,37 +713,26 @@ static jl_value_t *lookup_type(jl_typename_t *tn, jl_value_t **key, size_t n)
     return t;
 }
 
-static volatile int t_uid_ctr = 1;
-
-int  jl_get_t_uid_ctr(void) { return t_uid_ctr; }
-void jl_set_t_uid_ctr(int i) { t_uid_ctr=i; }
-
-int jl_assign_type_uid(void)
-{
-    assert(t_uid_ctr != 0);
-    return jl_atomic_fetch_add(&t_uid_ctr, 1);
-}
-
+#ifndef NDEBUG
 static int is_cacheable(jl_datatype_t *type)
 {
     // only cache types whose behavior will not depend on the identities
     // of contained TypeVars
     assert(jl_is_datatype(type));
     jl_svec_t *t = type->parameters;
-    if (jl_svec_len(t) == 0) return 0;
+    if (jl_svec_len(t) == 0 && jl_emptytuple_type != NULL) // Tuple{} is the only type eligible for this that doesn't have parameters
+        return 0;
     // cache abstract types with no free type vars
     if (jl_is_abstracttype(type))
         return !jl_has_free_typevars((jl_value_t*)type);
     // ... or concrete types
     return jl_is_concrete_type((jl_value_t*)type);
 }
+#endif
 
 static void cache_insert_type(jl_value_t *type, ssize_t insert_at, int ordered)
 {
     assert(jl_is_datatype(type));
-    // assign uid if it hasn't been done already
-    if (!jl_is_abstracttype(type) && ((jl_datatype_t*)type)->uid==0)
-        ((jl_datatype_t*)type)->uid = jl_assign_type_uid();
     jl_svec_t *cache;
     if (ordered)
         cache = ((jl_datatype_t*)type)->name->cache;
@@ -792,16 +766,15 @@ static void cache_insert_type(jl_value_t *type, ssize_t insert_at, int ordered)
 
 jl_value_t *jl_cache_type_(jl_datatype_t *type)
 {
-    if (is_cacheable(type)) {
-        JL_TIMING(TYPE_CACHE_INSERT);
-        int ord = is_typekey_ordered(jl_svec_data(type->parameters), jl_svec_len(type->parameters));
-        ssize_t idx = lookup_type_idx(type->name, jl_svec_data(type->parameters),
-                                      jl_svec_len(type->parameters), ord);
-        if (idx >= 0)
-            type = (jl_datatype_t*)jl_svecref(ord ? type->name->cache : type->name->linearcache, idx);
-        else
-            cache_insert_type((jl_value_t*)type, ~idx, ord);
-    }
+    JL_TIMING(TYPE_CACHE_INSERT);
+    assert(is_cacheable(type));
+    int ord = is_typekey_ordered(jl_svec_data(type->parameters), jl_svec_len(type->parameters));
+    ssize_t idx = lookup_type_idx(type->name, jl_svec_data(type->parameters),
+                                  jl_svec_len(type->parameters), ord);
+    if (idx >= 0)
+        type = (jl_datatype_t*)jl_svecref(ord ? type->name->cache : type->name->linearcache, idx);
+    else
+        cache_insert_type((jl_value_t*)type, ~idx, ord);
     return (jl_value_t*)type;
 }
 
@@ -994,12 +967,71 @@ static jl_value_t *lookup_type_stack(jl_typestack_t *stack, jl_datatype_t *tt, s
     return NULL;
 }
 
-void jl_precompute_memoized_dt(jl_datatype_t *dt)
+static unsigned typekey_hash(jl_typename_t *tn, jl_value_t **key, size_t n, int nofail) JL_NOTSAFEPOINT;
+
+// stable numbering for types--starts with name->hash, then falls back to objectid
+// sets failed if the hash value isn't stable (if not set on entry)
+static unsigned type_hash(jl_value_t *kj, int *failed) JL_NOTSAFEPOINT
+{
+    jl_value_t *uw = jl_is_unionall(kj) ? jl_unwrap_unionall(kj) : kj;
+    if (jl_is_datatype(uw)) {
+        jl_datatype_t *dt = (jl_datatype_t*)uw;
+        unsigned hash = dt->hash;
+        if (!hash) {
+            if (!*failed) {
+                *failed = 1;
+                return 0;
+            }
+            hash = typekey_hash(dt->name, jl_svec_data(dt->parameters), jl_svec_len(dt->parameters), *failed);
+        }
+        return hash;
+    }
+    else if (jl_is_typevar(uw)) {
+        if (!*failed) {
+            *failed = 1;
+            return 0;
+        }
+        // ignore var and lb, since those might get normalized out in equality testing
+        return type_hash(((jl_tvar_t*)uw)->ub, failed);
+    }
+    else if (jl_is_uniontype(uw)) {
+        if (!*failed) {
+            *failed = 1;
+            return 0;
+        }
+        unsigned hasha = type_hash(((jl_uniontype_t*)uw)->a, failed);
+        unsigned hashb = type_hash(((jl_uniontype_t*)uw)->b, failed);
+        // use a associative mixing function, with well-defined overflow
+        // since Union is associative
+        return hasha + hashb;
+    }
+    else {
+        return jl_object_id(uw);
+    }
+}
+
+static unsigned typekey_hash(jl_typename_t *tn, jl_value_t **key, size_t n, int nofail) JL_NOTSAFEPOINT
+{
+    size_t j;
+    unsigned hash = 3;
+    int failed = nofail;
+    for (j = 0; j < n; j++) {
+        hash = bitmix(type_hash(key[j], &failed), hash);
+        if (failed && !nofail)
+            return 0;
+    }
+    hash = bitmix(~tn->hash, hash);
+    return hash ? hash : 1;
+}
+
+void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
 {
     int istuple = (dt->name == jl_tuple_typename);
     dt->hasfreetypevars = 0;
     dt->isconcretetype = !dt->abstract;
     dt->isdispatchtuple = istuple;
+    if (dt->name == jl_vararg_typename)
+        dt->isconcretetype = 0;
     size_t i, l = jl_nparams(dt);
     for (i = 0; i < l; i++) {
         jl_value_t *p = jl_tparam(dt, i);
@@ -1016,6 +1048,7 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt)
                  (((jl_datatype_t*)p)->name == jl_type_typename && !((jl_datatype_t*)p)->hasfreetypevars));
         }
     }
+    dt->hash = typekey_hash(dt->name, jl_svec_data(dt->parameters), l, cacheable);
 }
 
 static void check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, size_t np)
@@ -1280,9 +1313,8 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     ndt->mutabl = dt->mutabl;
     ndt->abstract = dt->abstract;
     ndt->instance = NULL;
-    ndt->uid = 0;
     ndt->size = 0;
-    jl_precompute_memoized_dt(ndt);
+    jl_precompute_memoized_dt(ndt, cacheable);
     if (istuple)
         ndt->ninitialized = ntp - isvatuple;
     else if (isnamedtuple)
@@ -1290,9 +1322,11 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     else
         ndt->ninitialized = dt->ninitialized;
 
-    // assign uid as early as possible
-    if (cacheable && !ndt->abstract)
-        ndt->uid = jl_assign_type_uid();
+    if (jl_is_primitivetype(dt)) {
+        ndt->size = dt->size;
+        ndt->layout = dt->layout;
+        ndt->isbitstype = ndt->isinlinealloc = ndt->isconcretetype;
+    }
 
     jl_datatype_t *primarydt = ((jl_datatype_t*)jl_unwrap_unionall(tn->wrapper));
     if (istuple || isnamedtuple) {
@@ -1323,19 +1357,14 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         else if (cacheable) {
             // recursively instantiate the types of the fields
             if (dt->types == NULL)
-                ndt->types = jl_compute_fieldtypes(ndt);
+                ndt->types = jl_compute_fieldtypes(ndt, stack);
             else
                 ndt->types = inst_ftypes(ftypes, env, stack);
             jl_gc_wb(ndt, ndt->types);
         }
     }
 
-    if (jl_is_primitivetype(dt)) {
-        ndt->size = dt->size;
-        ndt->layout = dt->layout;
-        ndt->isbitstype = ndt->isinlinealloc = ndt->isconcretetype;
-    }
-    else if (cacheable && ndt->types != NULL && !ndt->abstract) {
+    if (cacheable && !jl_is_primitivetype(dt) && ndt->types != NULL && !ndt->abstract) {
         jl_compute_field_offsets(ndt);
     }
 
@@ -1596,7 +1625,7 @@ jl_value_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
     return vn;
 }
 
-JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT)
+JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack)
 {
     assert(st->name != jl_namedtuple_typename && st->name != jl_tuple_typename);
     jl_datatype_t *wt = (jl_datatype_t*)jl_unwrap_unionall(st->name->wrapper);
@@ -1612,7 +1641,7 @@ JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_RO
     }
     jl_typestack_t top;
     top.tt = st;
-    top.prev = NULL;
+    top.prev = (jl_typestack_t*)stack;
     st->types = inst_ftypes(wt->types, &env[n - 1], &top);
     jl_gc_wb(st, st->types);
     return st->types;
@@ -1657,7 +1686,7 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
             assert(ndt->types == NULL);
             ndt->types = inst_ftypes(t->types, env, &top);
             jl_gc_wb(ndt, ndt->types);
-            if (ndt->uid) { // cacheable
+            if (ndt->isconcretetype) { // cacheable
                 jl_compute_field_offsets(ndt);
             }
         }
@@ -1727,7 +1756,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                                     "layout",
                                                     "size",
                                                     "ninitialized",
-                                                    "uid",
+                                                    "hash",
                                                     "abstract",
                                                     "mutable",
                                                     "hasfreetypevars",
@@ -1748,13 +1777,11 @@ void jl_init_types(void) JL_GC_DISABLED
                                       jl_any_type, jl_any_type, jl_any_type, jl_any_type,
                                       jl_any_type);
     jl_datatype_type->instance = NULL;
-    jl_datatype_type->uid = jl_assign_type_uid();
     jl_datatype_type->abstract = 0;
     // NOTE: types are not actually mutable, but we want to ensure they are heap-allocated with stable addresses
-    // also, the `uid` field gets reset after loading a .ji precompile file
     jl_datatype_type->mutabl = 1;
     jl_datatype_type->ninitialized = 3;
-    jl_precompute_memoized_dt(jl_datatype_type);
+    jl_precompute_memoized_dt(jl_datatype_type, 1);
 
     jl_typename_type->name = jl_new_typename_in(jl_symbol("TypeName"), core);
     jl_typename_type->name->wrapper = (jl_value_t*)jl_typename_type;
@@ -1768,12 +1795,11 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_typename_type->types = jl_svec(8, jl_symbol_type, jl_any_type, jl_simplevector_type,
                                       jl_type_type, jl_simplevector_type, jl_simplevector_type,
                                       jl_any_type, jl_any_type);
-    jl_typename_type->uid = jl_assign_type_uid();
     jl_typename_type->instance = NULL;
     jl_typename_type->abstract = 0;
     jl_typename_type->mutabl = 1;
     jl_typename_type->ninitialized = 2;
-    jl_precompute_memoized_dt(jl_typename_type);
+    jl_precompute_memoized_dt(jl_typename_type, 1);
 
     jl_methtable_type->name = jl_new_typename_in(jl_symbol("MethodTable"), core);
     jl_methtable_type->name->wrapper = (jl_value_t*)jl_methtable_type;
@@ -1788,12 +1814,11 @@ void jl_init_types(void) JL_GC_DISABLED
                                        jl_any_type, jl_any_type/*module*/,
                                        jl_any_type/*any vector*/, jl_any_type/*long*/, jl_any_type/*int32*/,
                                        jl_any_type/*uint8*/, jl_any_type/*uint8*/);
-    jl_methtable_type->uid = jl_assign_type_uid();
     jl_methtable_type->instance = NULL;
     jl_methtable_type->abstract = 0;
     jl_methtable_type->mutabl = 1;
     jl_methtable_type->ninitialized = 4;
-    jl_precompute_memoized_dt(jl_methtable_type);
+    jl_precompute_memoized_dt(jl_methtable_type, 1);
 
     jl_symbol_type->name = jl_new_typename_in(jl_symbol("Symbol"), core);
     jl_symbol_type->name->wrapper = (jl_value_t*)jl_symbol_type;
@@ -1803,12 +1828,11 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_symbol_type->name->names = jl_emptysvec;
     jl_symbol_type->types = jl_emptysvec;
     jl_symbol_type->instance = NULL;
-    jl_symbol_type->uid = jl_assign_type_uid();
     jl_symbol_type->size = 0;
     jl_symbol_type->abstract = 0;
     jl_symbol_type->mutabl = 1;
     jl_symbol_type->ninitialized = 0;
-    jl_precompute_memoized_dt(jl_symbol_type);
+    jl_precompute_memoized_dt(jl_symbol_type, 1);
 
     jl_simplevector_type->name = jl_new_typename_in(jl_symbol("SimpleVector"), core);
     jl_simplevector_type->name->wrapper = (jl_value_t*)jl_simplevector_type;
@@ -1817,12 +1841,11 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_simplevector_type->parameters = jl_emptysvec;
     jl_simplevector_type->name->names = jl_emptysvec;
     jl_simplevector_type->types = jl_emptysvec;
-    jl_simplevector_type->uid = jl_assign_type_uid();
     jl_simplevector_type->instance = NULL;
     jl_simplevector_type->abstract = 0;
     jl_simplevector_type->mutabl = 1;
     jl_simplevector_type->ninitialized = 0;
-    jl_precompute_memoized_dt(jl_simplevector_type);
+    jl_precompute_memoized_dt(jl_simplevector_type, 1);
 
     // now they can be used to create the remaining base kinds and types
     jl_nothing_type = jl_new_datatype(jl_symbol("Nothing"), core, jl_any_type, jl_emptysvec,
@@ -1857,19 +1880,15 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_vararg_type = (jl_unionall_t*)jl_new_abstracttype((jl_value_t*)jl_symbol("Vararg"), core, jl_any_type, tv)->name->wrapper;
     jl_vararg_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_vararg_type))->name;
 
-    jl_anytuple_type = jl_new_datatype(jl_symbol("Tuple"), core, jl_any_type, jl_emptysvec,
-                                       jl_emptysvec, jl_emptysvec, 0, 0, 0);
+    jl_svec_t *anytuple_params = jl_svec(1, jl_wrap_vararg((jl_value_t*)jl_any_type, (jl_value_t*)NULL));
+    jl_anytuple_type = jl_new_datatype(jl_symbol("Tuple"), core, jl_any_type, anytuple_params,
+                                       jl_emptysvec, anytuple_params, 0, 0, 0);
     jl_tuple_typename = jl_anytuple_type->name;
-    jl_anytuple_type->uid = 0;
-    jl_anytuple_type->parameters = jl_svec(1, jl_wrap_vararg((jl_value_t*)jl_any_type, (jl_value_t*)NULL));
-    jl_anytuple_type->types = jl_anytuple_type->parameters;
-    jl_anytuple_type->layout = NULL;
-    jl_anytuple_type->instance = NULL;
-    jl_anytuple_type->hasfreetypevars = 0;
+    // fix some miscomputed values, since we didn't know this was going to be a Tuple in jl_precompute_memoized_dt
+    jl_tuple_typename->wrapper = (jl_value_t*)jl_anytuple_type; // remove UnionAll wrappers
     jl_anytuple_type->isconcretetype = 0;
-    jl_anytuple_type->isdispatchtuple = 0;
-    jl_anytuple_type->isbitstype = 0;
-    jl_anytuple_type->isinlinealloc = 0;
+    jl_anytuple_type->layout = NULL;
+    jl_anytuple_type->size = 0;
 
     jl_tvar_t *tttvar = tvar("T");
     ((jl_datatype_t*)jl_type_type)->parameters = jl_svec(1, tttvar);
@@ -1880,7 +1899,6 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_typeofbottom_type->super = jl_wrap_Type(jl_bottom_type);
 
     jl_emptytuple_type = jl_apply_tuple_type(jl_emptysvec);
-    jl_emptytuple_type->uid = jl_assign_type_uid();
     jl_emptytuple = jl_gc_permobj(0, jl_emptytuple_type);
     jl_emptytuple_type->instance = jl_emptytuple;
 
@@ -1929,23 +1947,17 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_typemap_level_type =
         jl_new_datatype(jl_symbol("TypeMapLevel"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(7,
-                            "index_arg1",
+                        jl_perm_symsvec(4,
                             "arg1",
-                            "index_targ",
                             "targ",
                             "list",
-                            "any",
-                            "key"),
-                        jl_svec(7,
-                            jl_any_type,
-                            jl_any_type,
-                            jl_any_type,
+                            "any"),
+                        jl_svec(4,
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,
                             jl_any_type),
-                        0, 1, 6);
+                        0, 1, 4);
 
     jl_typemap_entry_type =
         jl_new_datatype(jl_symbol("TypeMapEntry"), core, jl_any_type, jl_emptysvec,
