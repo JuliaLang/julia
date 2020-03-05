@@ -1109,6 +1109,16 @@ true
 
 julia> !(19 in a)
 false
+
+julia> [1, 2] .∈ [2, 3]
+2-element BitArray{1}:
+ 0
+ 0
+
+julia> [1, 2] .∈ ([2, 3],)
+2-element BitArray{1}:
+ 0
+ 1
 ```
 """
 in, ∋
@@ -1126,6 +1136,16 @@ true
 
 julia> 1 ∉ 1:3
 false
+
+julia> [1, 2] .∉ [2, 3]
+2-element BitArray{1}:
+ 1
+ 1
+
+julia> [1, 2] .∉ ([2, 3],)
+2-element BitArray{1}:
+ 1
+ 0
 ```
 """
 ∉, ∌
