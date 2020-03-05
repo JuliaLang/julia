@@ -142,20 +142,18 @@ end
         push!(mats, SymTridiagonal(Vector{T}(diag), Vector{T}(offdiag)))
     end
 
-    for op in (+,*,-) # to do: fix when operation is - and the matrix has a range as the underlying representation and we get a step size of 0.
-        if(op) in (+,*)
-            for A in mats
-                for B in mats
-                    @test (op)(A, B) ≈ (op)(Matrix(A), Matrix(B)) ≈ Matrix((op)(A, B))
-                end
+    for op in (+,*) # to do: fix when operation is - and the matrix has a range as the underlying representation and we get a step size of 0.
+        for A in mats
+            for B in mats
+                @test (op)(A, B) ≈ (op)(Matrix(A), Matrix(B)) ≈ Matrix((op)(A, B))
             end
         end
-        if(op) in (+,-)
-            for A in mats
-                for B in uniformscalingmats
-                    @test (op)(A, B) ≈ (op)(Matrix(A), B) ≈ Matrix((op)(A, B))
-                    @test (op)(B, A) ≈ (op)(B,Matrix(A)) ≈ Matrix((op)(B, A))
-                end
+    end
+    for op in (+,-)
+        for A in mats
+            for B in uniformscalingmats
+                @test (op)(A, B) ≈ (op)(Matrix(A), B) ≈ Matrix((op)(A, B))
+                @test (op)(B, A) ≈ (op)(B, Matrix(A)) ≈ Matrix((op)(B, A))
             end
         end
     end
