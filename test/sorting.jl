@@ -507,7 +507,7 @@ end
     @test issorted(a)
 
     a = view([9:-1:0;], :)::SubArray
-    Base.Sort.sort_int_range!(a, 10, 0)  # test it supports non-Vector
+    Base.Sort.sort_int_range!(a, 10, 0, identity)  # test it supports non-Vector
     @test issorted(a)
 end
 
