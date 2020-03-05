@@ -1459,7 +1459,10 @@ end
 @test c27964(8) == (8, 2)
 
 # issue #26739
-@test_throws ErrorException("syntax: invalid syntax \"sin.[1]\"") Core.eval(@__MODULE__, :(sin.[1]))
+let exc = try Core.eval(@__MODULE__, :(sin.[1])) catch exc ; exc end
+    @test exc isa ErrorException
+    @test startswith(exc.msg, "syntax: invalid syntax \"sin.[1]\"")
+end
 
 # issue #26873
 f26873 = 0
@@ -2181,6 +2184,10 @@ end
         @test ex == err
     end
 end
+
+# Syntax desugaring pass errors contain line numbers
+@test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(101, :some_file), :(f(x,x)=1))) ==
+    Expr(:error, "function argument names not unique around some_file:101")
 
 # issue #34967
 @test_throws LoadError("string", 2, ErrorException("syntax: invalid UTF-8 sequence")) include_string(@__MODULE__,
