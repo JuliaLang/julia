@@ -166,6 +166,30 @@ end
 function optimize(opt::OptimizationState, @nospecialize(result))
     def = opt.linfo.def
     nargs = Int(opt.nargs) - 1
+    # Execute external passes
+    modified = true
+    while modified
+        modified = false
+        for i = 1:length(opt.src.code)
+            stmt = opt.src.code[i]
+            if isexpr(stmt, :meta)
+                for j = 1:length(stmt.args)
+                    a = stmt.args[j]
+                    if isexpr(a, :external_pass)
+                        f = a.args[1]
+                        if f === :start
+                            f = a.args[2]
+                        end
+                        if isa(f, Function)
+                            Core._apply_latest(f, (opt, i))
+                            modified = true
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end
     @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 

@@ -295,3 +295,20 @@ end
 const _some_coeffs = (1,[2],3,4)
 splat_from_globalref(x) = (x, _some_coeffs...,)
 @test splat_from_globalref(0) == (0, 1, [2], 3, 4)
+
+# External passes
+const _opt = Ref{Any}(nothing)
+avx_pass(opt) = (_opt[] = opt; opt)
+macro avx(ex)
+    esc(Expr(:block, Expr(:meta, Expr(:external_pass, :start, avx_pass)), ex, Expr(:meta, Expr(:external_pass, :stop))))
+end
+function myselfdot(a)
+    s = zero(eltype(a))
+    @avx for item in a
+        s += item^2
+    end
+    return s
+end
+a = [0.1, 0.2, 0.3]
+@test myselfdot(a) ≈ 0.14
+@test isa(_opt[], Core.Compiler.OptimizationState)
