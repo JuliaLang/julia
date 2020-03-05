@@ -73,7 +73,7 @@ struct ObjectInfo {
 // Maintain a mapping of unrealized function names -> linfo objects
 // so that when we see it get emitted, we can add a link back to the linfo
 // that it came from (providing name, type signature, file info, etc.)
-static StringMap<jl_code_instance_t*> ncode_in_flight;
+static StringMap<jl_code_instance_t*> codeinst_in_flight;
 static std::string mangle(const std::string &Name, const DataLayout &DL)
 {
     std::string MangledName;
@@ -85,7 +85,7 @@ static std::string mangle(const std::string &Name, const DataLayout &DL)
 }
 void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL)
 {
-    ncode_in_flight[mangle(name, DL)] = codeinst;
+    codeinst_in_flight[mangle(name, DL)] = codeinst;
 }
 
 
@@ -195,10 +195,10 @@ public:
 
         auto SavedObject = L.getObjectForDebug(Object).takeBinary();
         // If the debug object is unavailable, save (a copy of) the original object
-        // for our backtraces
+        // for our backtraces.
+        // This copy seems unfortunate, but there doesn't seem to be a way to take
+        // ownership of the original buffer.
         if (!SavedObject.first) {
-            // This is unfortunate, but there doesn't seem to be a way to take
-            // ownership of the original buffer
             auto NewBuffer = MemoryBuffer::getMemBufferCopy(
                     Object.getData(), Object.getFileName());
             auto NewObj = object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
@@ -399,11 +399,11 @@ public:
                    (uint8_t*)(uintptr_t)Addr, (size_t)Size, sName,
                    (uint8_t*)(uintptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
 #endif
-            StringMap<jl_code_instance_t*>::iterator linfo_it = ncode_in_flight.find(sName);
+            StringMap<jl_code_instance_t*>::iterator codeinst_it = codeinst_in_flight.find(sName);
             jl_code_instance_t *codeinst = NULL;
-            if (linfo_it != ncode_in_flight.end()) {
-                codeinst = linfo_it->second;
-                ncode_in_flight.erase(linfo_it);
+            if (codeinst_it != codeinst_in_flight.end()) {
+                codeinst = codeinst_it->second;
+                codeinst_in_flight.erase(codeinst_it);
             }
             uv_rwlock_wrlock(&threadsafe);
             if (codeinst)

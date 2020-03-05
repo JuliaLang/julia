@@ -68,7 +68,8 @@ New library features
 * `accumulate`, `cumsum`, and `cumprod` now support `Tuple` ([#34654]).
 * `x::Signed % Unsigned` and `x::Unsigned % Signed` are supported for integer bitstypes.
 * `signed(unsigned_type)` is supported for integer bitstypes, `unsigned(signed_type)` has been supported.
-
+* In `splice!` with no replacement, values to be removed can now be specified with an
+  arbitrary iterable (instead of a `UnitRange`) ([#34524]).
 
 Standard library changes
 ------------------------

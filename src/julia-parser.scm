@@ -1577,8 +1577,13 @@
                       (else #t)))
          (rest  (if done
                     '()
-                    (parse-comma-separated s (lambda (s)
-                                               (parse-import s word))))))
+                    (let ((ex (parse-comma-separated s (lambda (s)
+                                                         (parse-import s word)))))
+                      (if (eq? (peek-token s) ':)
+                          (error (string "\":\" in \"" word "\" syntax can only be used "
+                                         "when importing a single module. "
+                                         "Split imports into multiple lines."))
+                          ex)))))
     (if from
         `(,word (|:| ,first ,@rest))
         (list* word first rest))))
