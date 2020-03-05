@@ -501,4 +501,14 @@ end
     @test isequal(a, [8,6,7,NaN,5,3,0,9])
 end
 
+@testset "sort!(::AbstractVector{<:Integer}) with short int range" begin
+    a = view([9:-1:0;], :)::SubArray
+    sort!(a)
+    @test issorted(a)
+
+    a = view([9:-1:0;], :)::SubArray
+    Base.Sort.sort_int_range!(a, 10, 0)  # test it supports non-Vector
+    @test issorted(a)
+end
+
 end
