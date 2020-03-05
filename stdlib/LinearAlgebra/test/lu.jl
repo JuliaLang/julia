@@ -92,6 +92,7 @@ dimg  = randn(n)/2
         @test lud.L*lud.U ≈ lud.P*Array(d)
         @test lud.L*lud.U ≈ Array(d)[lud.p,:]
         @test AbstractArray(lud) ≈ d
+        @test Array(lud) ≈ d
     end
     @testset for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
         b  = eltyb == Int ? rand(1:5, n, 2) :
@@ -231,6 +232,7 @@ end
     falu = lu(fa)
     alu = lu(a)
     falu = convert(typeof(falu),alu)
+    @test Array(alu) == fa
     @test AbstractArray(alu) == fa
 end
 
