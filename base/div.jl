@@ -80,9 +80,9 @@ See also: [`div`](@ref)
 julia> fld(7.3,5.5)
 1.0
 ```
-Because of floating-point rounding `fld(x,y)` can lead to an *alleged* violation of the fld(x,y) == x/y condition:
+Because of floating-point rounding `fld(x,y)` can lead to an *alleged* violation of the `fld(x,y) == x/y` condition:
 ```jldoctest
-julia> fld(6.0/0.1)
+julia> fld(6.0,0.1)
 59.0
 julia> 6.0/0.1
 60.0
