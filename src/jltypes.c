@@ -607,28 +607,35 @@ static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
     return 1;
 }
 
-struct typecache_key {
-    jl_value_t **key;
-    size_t n;
-};
-
-static uint_t typecache_hash(jl_value_t *key) {
-    return ((jl_datatype_t*)key)->hash;
-}
-
-static int typecache_eq(jl_value_t *val, const void *key, uint_t hv) {
-    if (((jl_datatype_t*)val)->hash != hv)
-        return 0;
-    return typekey_eq((jl_datatype_t*)val, ((const struct typecache_key*)key)->key, ((const struct typecache_key*)key)->n);
-}
-
 /* returns val if key is in hash, otherwise NULL */
+static jl_datatype_t *lookup_type_set(jl_svec_t *cache, jl_value_t **key, size_t n, uint_t hv)
+{
+    size_t sz = jl_svec_len(cache);
+    if (sz == 0)
+        return NULL;
+    size_t maxprobe = max_probe(sz);
+    jl_datatype_t **tab = (jl_datatype_t**)jl_svec_data(cache);
+    size_t index = h2index(hv, sz);
+    size_t orig = index;
+    size_t iter = 0;
+    do {
+        jl_datatype_t *val = tab[index];
+        if (val == NULL)
+            return NULL;
+        if (val->hash == hv && typekey_eq(val, key, n))
+            return val;
+        index = (index + 1) & (sz - 1);
+        iter++;
+    } while (iter <= maxprobe && index != orig);
+    return NULL;
+}
+
 static jl_datatype_t *lookup_type(jl_typename_t *tn, jl_value_t **key, size_t n)
 {
     JL_TIMING(TYPE_CACHE_LOOKUP);
     uint_t hv = typekey_hash(key, n);
-    struct typecache_key setkey = {key, n};
-    return (jl_datatype_t*)jl_typeset_lookup(&tn->cache, typecache_eq,  &setkey, hv, NULL);
+    jl_svec_t *cache = jl_atomic_load_relaxed(&tn->cache);
+    return lookup_type_set(cache, key, n, hv);
 }
 
 jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type)
@@ -636,14 +643,89 @@ jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type)
     jl_value_t **key = jl_svec_data(type->parameters);
     int n = jl_svec_len(type->parameters);
     uint_t hv = type->hash;
-    struct typecache_key setkey = {key, n};
-    return (jl_datatype_t*)jl_typeset_lookup(&type->name->cache, typecache_eq,  &setkey, hv, NULL);
+    jl_svec_t *cache = jl_atomic_load_relaxed(&type->name->cache);
+    return lookup_type_set(cache, key, n, hv);
 }
 
-void jl_cache_type_(jl_datatype_t *val)
+static int cache_insert_type_(jl_svec_t *a, jl_datatype_t *val, uint_t hv)
+{
+    jl_datatype_t **tab = (jl_datatype_t**)jl_svec_data(a);
+    size_t sz = jl_svec_len(a);
+    if (sz <= 1)
+        return 0;
+    size_t orig, index, iter;
+    iter = 0;
+    index = h2index(hv, sz);
+    orig = index;
+    size_t maxprobe = max_probe(sz);
+    do {
+        if (tab[index] == NULL) {
+            tab[index] = val;
+            jl_gc_wb(a, val);
+            return 1;
+        }
+        index = (index + 1) & (sz - 1);
+        iter++;
+    } while (iter <= maxprobe && index != orig);
+
+    return 0;
+}
+
+static jl_svec_t *cache_rehash(jl_svec_t *a, size_t newsz);
+
+static void cache_insert_type(jl_datatype_t *val, uint_t hv)
+{
+    jl_svec_t *a = val->name->cache;
+    while (1) {
+        if (cache_insert_type_(a, val, hv))
+            return;
+
+        /* table full */
+        /* rehash to grow and retry the insert */
+        /* it's important to grow the table really fast; otherwise we waste */
+        /* lots of time rehashing all the keys over and over. */
+        size_t newsz;
+        size_t sz = jl_svec_len(a);
+        if (sz < HT_N_INLINE)
+            newsz = HT_N_INLINE;
+        else if (sz >= (1 << 19) || (sz <= (1 << 8)))
+            newsz = sz << 1;
+        else
+            newsz = sz << 2;
+        a = cache_rehash(a, newsz);
+        val->name->cache = a;
+        jl_gc_wb(val->name, a);
+    }
+}
+
+static jl_svec_t *cache_rehash(jl_svec_t *a, size_t newsz)
+{
+    jl_datatype_t **ol = (jl_datatype_t**)jl_svec_data(a);
+    size_t sz = jl_svec_len(a);
+    while (1) {
+        size_t i;
+        jl_svec_t *newa = jl_alloc_svec(newsz);
+        JL_GC_PUSH1(&newa);
+        for (i = 0; i < sz; i += 1) {
+            jl_datatype_t *val = ol[i];
+            if (val != NULL) {
+                uint_t hv = val->hash;
+                if (!cache_insert_type_(newa, val, hv)) {
+                    break;
+                }
+            }
+        }
+        JL_GC_POP();
+        if (i == sz)
+            return newa;
+        newsz <<= 1;
+    }
+}
+
+void jl_cache_type_(jl_datatype_t *type)
 {
     JL_TIMING(TYPE_CACHE_INSERT);
-    jl_typeset_insert(&val->name->cache, (jl_value_t*)val->name, typecache_hash, (jl_value_t*)val);
+    cache_insert_type(type, type->hash);
 }
 
 // type instantiation
