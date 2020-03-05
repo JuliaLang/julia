@@ -711,7 +711,7 @@ function sort!(v::AbstractVector;
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
-    if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
+    if ordr === Forward && eltype(v)<:Integer
         n = length(v)
         if n > 1
             min, max = extrema(v)
@@ -726,7 +726,7 @@ function sort!(v::AbstractVector;
 end
 
 # sort! for vectors of few unique integers
-function sort_int_range!(x::Vector{<:Integer}, rangelen, minval)
+function sort_int_range!(x::AbstractVector{<:Integer}, rangelen, minval)
     offs = 1 - minval
     n = length(x)
 
