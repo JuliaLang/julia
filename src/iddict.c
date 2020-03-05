@@ -105,7 +105,7 @@ static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
 }
 
 /* returns bp if key is in hash, otherwise NULL */
-jl_value_t **jl_table_peek_bp(jl_array_t *a, jl_value_t *key)
+jl_value_t **jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT
 {
     size_t sz = hash_size(a);
     assert(sz >= 1);
@@ -151,7 +151,7 @@ jl_array_t *jl_eqtable_put(jl_array_t *h, jl_value_t *key, jl_value_t *val, int 
 // Note: lookup in the IdDict is permitted concurrently, if you avoid deletions,
 // and assuming you do use an external lock around all insertions
 JL_DLLEXPORT
-jl_value_t *jl_eqtable_get(jl_array_t *h, jl_value_t *key, jl_value_t *deflt)
+jl_value_t *jl_eqtable_get(jl_array_t *h, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT
 {
     jl_value_t **bp = jl_table_peek_bp(h, key);
     return (bp == NULL) ? deflt : *bp;
