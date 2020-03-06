@@ -702,7 +702,7 @@ end
 function map!(f, iter::ValueIterator{<:Dict})
     dict = iter.dict
     vals = dict.vals
-    # @inbounds is here so the it gets propigated to isslotfiled
+    # @inbounds is here so the it gets propagated to isslotfiled
     @inbounds for i = dict.idxfloor:lastindex(vals)
         if isslotfilled(dict, i)
             vals[i] = f(vals[i])
