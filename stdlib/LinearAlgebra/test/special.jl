@@ -148,14 +148,17 @@ end
                 @test (op)(A, B) ≈ (op)(Matrix(A), Matrix(B)) ≈ Matrix((op)(A, B))
             end
         end
-
+    end
+    for op in (+,-)
         for A in mats
             for B in uniformscalingmats
                 @test (op)(A, B) ≈ (op)(Matrix(A), B) ≈ Matrix((op)(A, B))
+                @test (op)(B, A) ≈ (op)(B, Matrix(A)) ≈ Matrix((op)(B, A))
             end
         end
     end
 end
+
 
 @testset "Triangular Types and QR" begin
     for typ in [UpperTriangular,LowerTriangular,LinearAlgebra.UnitUpperTriangular,LinearAlgebra.UnitLowerTriangular]
