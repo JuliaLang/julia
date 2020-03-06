@@ -71,6 +71,11 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 rstring  = sprint((t, s) -> show(t, "text/plain", s), r)
                 qstring  = sprint((t, s) -> show(t, "text/plain", s), q)
                 @test qrstring == "$(summary(qra))\nQ factor:\n$qstring\nR factor:\n$rstring"
+                # iterate
+                q, r = qra
+                @test q*r ≈ a
+                # property names
+                @test Base.propertynames(qra)       == (:R, :Q)
             end
             @testset "Thin QR decomposition (without pivoting)" begin
                 qra   = @inferred qr(a[:, 1:n1], Val(false))
@@ -82,6 +87,9 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test q*r ≈ a[:, 1:n1]
                 @test q*b[1:n1] ≈ rectangularQ(q)*b[1:n1] atol=100ε
                 @test q*b ≈ squareQ(q)*b atol=100ε
+                if eltya != Int
+                    @test Array{eltya}(q) ≈ Matrix(q)
+                end
                 @test_throws DimensionMismatch q*b[1:n1 + 1]
                 @test_throws DimensionMismatch b[1:n1 + 1]*q'
                 sq = size(q.factors, 2)
@@ -89,6 +97,11 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 if eltya != Int
                     @test Matrix{eltyb}(I, a_1, a_1)*q ≈ convert(AbstractMatrix{tab},q)
                 end
+                # iterate
+                q, r = qra
+                @test q*r ≈ a[:, 1:n1]
+                # property names
+                @test Base.propertynames(qra)       == (:R, :Q)
             end
             @testset "(Automatic) Fat (pivoted) QR decomposition" begin
                 @inferred qr(a, Val(true))
@@ -106,11 +119,19 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test q*r*transpose(qrpa.P) ≈ a[1:n1,:]
                 @test a[1:n1,:]*(qrpa\b[1:n1]) ≈ b[1:n1] atol=5000ε
                 @test Array(qrpa) ≈ a[1:5,:]
+                if eltya != Int
+                    @test Array{eltya}(q) ≈ Matrix(q)
+                end
                 @test_throws DimensionMismatch q*b[1:n1+1]
                 @test_throws DimensionMismatch b[1:n1+1]*q'
                 if eltya != Int
                     @test Matrix{eltyb}(I, n1, n1)*q ≈ convert(AbstractMatrix{tab},q)
                 end
+                # iterate
+                q, r, p = qrpa
+                @test q*r[:,invperm(p)] ≈ a[1:n1,:]
+                # property names
+                @test Base.propertynames(qrpa)       == (:R, :Q, :p, :P)
             end
             @testset "(Automatic) Thin (pivoted) QR decomposition" begin
                 qrpa  = factorize(a[:,1:n1])
@@ -122,6 +143,9 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test q*r ≈ a[:,p]
                 @test q*r[:,invperm(p)] ≈ a[:,1:n1]
                 @test Array(qrpa) ≈ a[:,1:5]
+                if eltya != Int
+                    @test Array{eltya}(q) ≈ Matrix(q)
+                end
                 @test_throws DimensionMismatch q*b[1:n1+1]
                 @test_throws DimensionMismatch b[1:n1+1]*q'
                 sq = size(q.factors, 2)
@@ -134,6 +158,11 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 qstring  = sprint((t, s) -> show(t, "text/plain", s), q)
                 pstring  = sprint((t, s) -> show(t, "text/plain", s), p)
                 @test qrstring == "$(summary(qrpa))\nQ factor:\n$qstring\nR factor:\n$rstring\npermutation:\n$pstring"
+                # iterate
+                q, r, p = qrpa
+                @test q*r[:,invperm(p)] ≈ a[:,1:n1]
+                # property names
+                @test Base.propertynames(qrpa)       == (:R, :Q, :p, :P)
             end
         end
         if eltya != Int
