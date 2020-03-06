@@ -63,6 +63,13 @@ move_to_node1("stress")
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
+# Shuffle LinearAlgebra tests to the front, because they take a while, so we might
+# as well get them all started early.
+linalg_test_ids = findall(x->occursin("LinearAlgebra", x), tests)
+linalg_tests = tests[linalg_test_ids]
+deleteat!(tests, linalg_test_ids)
+prepend!(tests, linalg_tests)
+
 import LinearAlgebra
 cd(@__DIR__) do
     n = 1
