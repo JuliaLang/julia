@@ -593,9 +593,9 @@ static int typekey_compare(jl_datatype_t *tt, jl_value_t **key, size_t n) JL_NOT
                     return kid < tid ? -1 : 1;
                 if (tid)
                     continue;
-                if (jl_egal(tj, kj))
-                    continue;
-                return (jl_object_id(kj) < jl_object_id(tj) ? -1 : 1);
+                uintptr_t tj_id = jl_object_id(tj);
+                uintptr_t kj_id = jl_object_id(kj);
+                return (kj_id == tj_id ? 0 : (kj_id < tj_id ? -1 : 1));
             }
             else if (!dtk) {
                 return -1;
