@@ -261,7 +261,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         try
             @static if Sys.iswindows()
                 # is writable on windows actually means "is deletable"
-                if (filemode(path) & 0o222) == 0
+                if (filemode(lstat(path)) & 0o222) == 0
                     chmod(path, 0o777)
                 end
             end
@@ -853,10 +853,13 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
     dirs = Vector{eltype(content)}()
     files = Vector{eltype(content)}()
     for name in content
-        if isdir(joinpath(root, name))
-            push!(dirs, name)
-        else
+        path = joinpath(root, name)
+
+        # If we're not following symlinks, then treat all symlinks as files
+        if (!follow_symlinks && islink(path)) || !isdir(path)
             push!(files, name)
+        else
+            push!(dirs, name)
         end
     end
 
