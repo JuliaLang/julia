@@ -344,18 +344,12 @@ end
 end
 
 @testset "more rdiv! methods" begin
-    B = randn(Float16, 5, 5)
-    A = transpose(lu(B))
-    @test rdiv!(transpose(B), A)== transpose(ldiv!(A.parent, transpose(transpose(B))))
-    B = [1. 2.; 3. 4.]
-    A = transpose(lu(B))
-    @test rdiv!(transpose(B), A) == [1. 0.; 0. 1.]
-    B = randn(Float16, 5, 5)
-    A = adjoint(lu(B))
-    @test rdiv!(adjoint(B), A) == adjoint(ldiv!(A.parent, adjoint(adjoint(B))))
-    B = [1.0+1im 2.0-1im; 3. 4.0-2im]
-    A = adjoint(lu(B))
-    @test rdiv!(adjoint(B), A) == [1.0-0im 0.0-0im;0.0-0im 1.0-0im]
+    for elty in (Float16, Float64, ComplexF64), transform in (transpose, adjoint)
+        A = randn(elty, 5, 5)
+        C = copy(A)
+        B = randn(elty, 5, 5)
+        @test rdiv!(transform(A), transform(lu(B))) ≈ transform(C) / transform(B)
+    end
 end
 
 end # module TestLU
