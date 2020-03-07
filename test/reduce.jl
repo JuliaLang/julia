@@ -548,3 +548,33 @@ x = [j+7 for j in i]
         Iterators.flatten((1:2, 3:4)),
     ) == (1, 4)
 end
+
+struct MinimalIterator
+    itr
+end
+
+Base.iterate(itr::MinimalIterator) = iterate(itr.itr)
+Base.iterate(itr::MinimalIterator, s) = iterate(itr.itr, s)
+
+@testset "foldl-iterate consistency" begin
+    @testset "$label" for (label, itr) in [
+        ("CartesianIndices((1:2, 3:4))", CartesianIndices((1:2, 3:4))),
+        ("product(1:3)", Iterators.product(1:3)),
+        ("product(1:3, 4:5)", Iterators.product(1:3, 4:5)),
+        ("product(1:3, 4:5, 6:9)", Iterators.product(1:3, 4:5, 6:9)),
+        ("zip(0:9, 10:19)", zip(0:9, 10:19)),
+        (
+            "zip(matrix, transpose(matrix′))",
+            zip(reshape([1:6;], 2, 3), transpose(reshape([1:6;], 3, 2))),
+        ),
+        ("vector", [0:9;]),
+        ("matrix", reshape([1:6;], 2, 3)),
+        ("transpose(matrix)", transpose(reshape([1:6;], 2, 3))),
+    ]
+        # With init:
+        @test foldl(push!, itr; init = []) == foldl(push!, MinimalIterator(itr); init = [])
+        # Without init:
+        right(_, x) = x
+        @test foldl(right, itr) == foldl(right, MinimalIterator(itr))
+    end
+end

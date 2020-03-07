@@ -36,6 +36,8 @@ mul_prod(x::Real, y::Real)::Real = x * y
 
 ## foldl && mapfoldl
 
+struct _InitialValue end
+
 function mapfoldl_impl(f::F, op::OP, nt, itr) where {F,OP}
     op′, itr′ = _xfadjoint(BottomRF(op), Generator(f, itr))
     return foldl_impl(op′, nt, itr′)
@@ -47,7 +49,7 @@ function foldl_impl(op::OP, nt, itr) where {OP}
     return v
 end
 
-function _foldl_impl(op::OP, init, itr) where {OP}
+@inline function _foldl_impl(op::OP, init, itr) where {OP}
     # Unroll the while loop once; if init is known, the call to op may
     # be evaluated at compile time
     y = iterate(itr)
@@ -61,7 +63,75 @@ function _foldl_impl(op::OP, init, itr) where {OP}
     return v
 end
 
-struct _InitialValue end
+@inline function _foldl_impl(op::OP, init, array::AbstractArray) where {OP}
+    if IndexStyle(array) isa IndexLinear
+        return invoke(_foldl_impl, Tuple{Any,Any,Any}, op, init, array)
+    else
+        return _foldl_impl(init, CartesianIndices(array)) do acc, I
+            @_inline_meta
+            op(acc, @inbounds array[I])
+        end
+    end
+end
+# `_foldl_impl(_, _, ::CartesianIndices)` is implemented in multidimensional.jl
+
+@inline _foldl_impl(
+    op::OP,
+    init,
+    zipped::Iterators.Zip{<:Tuple{AbstractArray{<:Any,N},Vararg{AbstractArray{<:Any,N}}}},
+) where {OP,N} =
+    _foldl_impl(init, eachindex(zipped.is...)) do acc, I
+        @_inline_meta
+        op(acc, map(a -> (@inbounds a[I]), zipped.is))
+    end
+
+@inline _foldl_impl(op::OP, init, product::Iterators.ProductIterator) where {OP} =
+    _foldl_product(init, product.iterators) do acc, args...
+        @_inline_meta
+        op(acc, args)
+    end
+
+const Any2{N} = Tuple{Any,Any,Vararg{Any,N}}
+
+# WARNING: The reducing function `op0` of `_foldl_product` takes the
+# "input" as splatted arguments.  So, the _callers_ of `_foldl_product`
+# are responsible for transforming the arity of the reducing function.
+# It is done this way because using
+#     op1(acc_, args) = op0(acc_, (args..., x))
+# below instead invoked unnecessary boxing.
+@inline function _foldl_product(op0::OP, init, itrs::Any2) where {OP}
+    acc = init
+    @inbounds for x in last(itrs)
+        @inline op1(acc_, args...) = op0(acc_, args..., x)
+        acc = _foldl_product(op1, acc, front(itrs))
+    end
+    return acc
+end
+
+@inline _foldl_product(op::OP, init, (itr,)::Tuple{Any}) where {OP} =
+    _foldl_impl(op, init, itr)
+
+# Unrolling the first iteration for type stability.  This is rather
+# harsh to the compiler (2^length(itrs) specializations).  So, let's
+# do this only when we are sure that `init` is not given:
+@inline function _foldl_product(op0::OP, init::_InitialValue, itrs::Any2) where {OP}
+    itr = last(itrs)
+    y = iterate(itr)
+    y === nothing && return init
+    acc = let x = y[1]
+        @inline op1(acc, args...) = op0(acc, args..., x)
+        _foldl_product(op1, init, front(itrs))
+    end
+    while true
+        y = iterate(itr, y[2])
+        y === nothing && break
+        acc = let x = y[1]
+            @inline op1(acc, args...) = op0(acc, args..., x)
+            _foldl_product(op1, acc, front(itrs))
+        end
+    end
+    return acc
+end
 
 """
     BottomRF(rf) -> rf′
@@ -217,6 +287,25 @@ julia> foldr(=>, 1:4; init=0)
 ```
 """
 foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
+
+## foreach
+
+# Since `itr` may have an optimized `_foldl_impl` implementation
+# (e.g., tuple, zip(arrays...), product), let's use it instead of a
+# raw for loop:
+foreach(f::F, itr) where {F} =
+    _foldl_impl(nothing, itr) do _, x
+        @_inline_meta
+        f(x)
+        nothing
+    end
+
+foreach(f::F, itr, itrs...) where {F} =
+    _foldl_impl(nothing, zip(itr, itrs...)) do _, args
+        @_inline_meta
+        f(args...)
+        nothing
+    end
 
 ## reduce & mapreduce
 

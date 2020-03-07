@@ -381,6 +381,16 @@ module IteratorsMD
     first(iter::CartesianIndices) = CartesianIndex(map(first, iter.indices))
     last(iter::CartesianIndices)  = CartesianIndex(map(last, iter.indices))
 
+    # Use nested for-loop in `foldl` as it is much faster than `iterate`:
+    @inline Base._foldl_impl(op::OP, init, CI::CartesianIndices) where {OP} =
+        Base._foldl_product(init, CI.indices) do acc, args...
+            Base.@_inline_meta
+            op(acc, CartesianIndex(args))
+        end
+
+    @inline Base._foldl_impl(op::OP, init, ::CartesianIndices{0}) where {OP} =
+        Base._foldl_impl(op, init, (CartesianIndex(),))
+
     # When used as indices themselves, CartesianIndices can simply become its tuple of ranges
     @inline to_indices(A, inds, I::Tuple{CartesianIndices, Vararg{Any}}) =
         to_indices(A, inds, (I[1].indices..., tail(I)...))

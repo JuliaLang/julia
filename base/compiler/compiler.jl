@@ -64,6 +64,7 @@ add_with_overflow(x::Bool, y::Bool) = (x+y, false)
 include("indices.jl")
 include("array.jl")
 include("abstractarray.jl")
+foreach(f, itr) = (for x in itr; f(x); end; nothing)
 
 # core structures
 include("bitarray.jl")
