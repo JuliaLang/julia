@@ -82,6 +82,8 @@ static bool runtime_sym_gvs(const char *f_lib, const char *f_name, MT &&M,
         std::string name = "ccalllib_";
         name += llvm::sys::path::filename(f_lib);
         name += std::to_string(globalUnique++);
+        std::replace(name.begin(), name.end(), '.', '_');
+        std::replace(name.begin(), name.end(), '-', '_');
         runtime_lib = true;
         auto &libgv = libMapGV[f_lib];
         if (libgv.first == NULL) {
