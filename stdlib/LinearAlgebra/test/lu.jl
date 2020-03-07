@@ -345,4 +345,13 @@ end
     @test F.p == []
 end
 
+@testset "more rdiv! methods" begin
+    for elty in (Float16, Float64, ComplexF64), transform in (transpose, adjoint)
+        A = randn(elty, 5, 5)
+        C = copy(A)
+        B = randn(elty, 5, 5)
+        @test rdiv!(transform(A), transform(lu(B))) ≈ transform(C) / transform(B)
+    end
+end
+
 end # module TestLU
