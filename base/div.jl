@@ -68,6 +68,7 @@ rem(x, y, ::RoundingMode{:ToZero}) = rem(x,y)
 rem(x, y, ::RoundingMode{:Down}) = mod(x,y)
 rem(x, y, ::RoundingMode{:Up}) = mod(x,-y)
 rem(x, y, r::RoundingMode{:Nearest}) = x - y*round(x/y, r)
+
 """
     fld(x, y)
 
