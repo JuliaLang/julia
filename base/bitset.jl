@@ -406,8 +406,11 @@ function ==(s1::BitSet, s2::BitSet)
 
     # compare overlap values
     if overlap > 0
-        GC.@preserve a1 a2 _memcmp(pointer(a1, b2-b1+1), pointer(a2), overlap<<3) == 0 ||
-            return false
+        t1 = @_gc_preserve_begin a1
+        t2 = @_gc_preserve_begin a2
+        _memcmp(pointer(a1, b2-b1+1), pointer(a2), overlap<<3) == 0 || return false
+        @_gc_preserve_end t2
+        @_gc_preserve_end t1
     end
 
     return true

@@ -238,8 +238,6 @@ const memhash_seed = UInt === UInt64 ? 0x71e729fd56419c81 : 0x56419c81
 
 function hash(s::Union{String,SubString{String}}, h::UInt)
     h += memhash_seed
-    # note: use pointer(s) here (see #6058).
-    GC.@preserve s ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32),
-                         pointer(s), sizeof(s), h % UInt32) + h
+    ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), s, sizeof(s), h % UInt32) + h
 end
 hash(s::AbstractString, h::UInt) = hash(String(s), h)
