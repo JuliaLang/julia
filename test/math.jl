@@ -1049,5 +1049,6 @@ end
     using .Main.Furlongs
     @test hypot(Furlong(0), Furlong(0)) == Furlong(0.0)
     @test hypot(Furlong(3), Furlong(4)) == Furlong(5.0)
-    @test hypot(Complex(3), Complex(4)) == 5.0
+    @test hypot(Complex(3), Complex(4)) === 5.0
+    @test hypot(Complex(6 + 8im), Complex(8 + 6im)) === 10.0*sqrt(2)
 end
