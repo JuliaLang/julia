@@ -350,6 +350,9 @@ julia> @NamedTuple begin
        end
 NamedTuple{(:a, :b),Tuple{Float64,String}}
 ```
+
+!!! compat "Julia 1.5"
+    This macro is available as of Julia 1.5.
 """
 macro NamedTuple(ex)
     Meta.isexpr(ex, :braces) || Meta.isexpr(ex, :block) ||
