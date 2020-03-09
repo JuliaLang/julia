@@ -6,11 +6,6 @@ using LinearAlgebra
 
 const ≣ = isequal # convenient for comparing NaNs
 
-# remove these tests and re-enable the same ones in the
-# testset "issue #4156" later in this file when #23866 is resolved
-@test fld(0.3,0.01) == 29.0
-@test div(0.3,0.01) == 29.0
-
 @testset "basic booleans" begin
     @test true
     @test !false
@@ -1608,10 +1603,10 @@ end
         end
     end
     @testset "issue #4156" begin
-        @test fld(1.4,0.35667494393873234) == 3.0
-        @test div(1.4,0.35667494393873234) == 3.0
-        # @test fld(0.3,0.01) == 29.0 # uncomment when #23866 is resolved
-        # @test div(0.3,0.01) == 29.0 # uncomment when #23866 is resolved
+        @test fld(1.4, 0.35667494393873234) == 3.0
+        @test div(1.4, 0.35667494393873234) == 3.0
+        @test fld(0.3, 0.01) == 29.0
+        @test div(0.3, 0.01) == 29.0
         # see https://github.com/JuliaLang/julia/issues/3127
     end
     @testset "issue #8831" begin
