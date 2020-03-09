@@ -136,22 +136,26 @@ end
 
 function start_repl_backend(repl_channel::Channel, response_channel::Channel)
     backend = REPLBackend(repl_channel, response_channel, false)
-    backend.backend_task = @async begin
-        # include looks at this to determine the relative include path
-        # nothing means cwd
-        while true
-            tls = task_local_storage()
-            tls[:SOURCE_PATH] = nothing
-            ast, show_value = take!(backend.repl_channel)
-            if show_value == -1
-                # exit flag
-                break
-            end
-            eval_user_input(ast, backend)
-        end
-    end
+    backend.backend_task = @async repl_backend_loop(backend)
     return backend
 end
+
+function repl_backend_loop(backend::REPLBackend)
+    # include looks at this to determine the relative include path
+    # nothing means cwd
+    while true
+        tls = task_local_storage()
+        tls[:SOURCE_PATH] = nothing
+        ast, show_value = take!(backend.repl_channel)
+        if show_value == -1
+            # exit flag
+            break
+        end
+        eval_user_input(ast, backend)
+    end
+    nothing
+end
+
 struct REPLDisplay{R<:AbstractREPL} <: AbstractDisplay
     repl::R
 end
@@ -230,12 +234,20 @@ struct REPLBackendRef
     response_channel::Channel
 end
 
-function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing))
+function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task = false)
     repl_channel = Channel(1)
     response_channel = Channel(1)
-    backend = start_repl_backend(repl_channel, response_channel)
-    consumer(backend)
-    run_frontend(repl, REPLBackendRef(repl_channel, response_channel))
+    if backend_on_current_task
+        backend = REPLBackend(repl_channel, response_channel, false)
+        backend.backend_task = Base.current_task()
+        consumer(backend)
+        frontend_task = @async run_frontend(repl, REPLBackendRef(repl_channel, response_channel))
+        repl_backend_loop(backend)
+    else
+        backend = start_repl_backend(repl_channel, response_channel)
+        consumer(backend)
+        run_frontend(repl, REPLBackendRef(repl_channel, response_channel))
+    end
     return backend
 end
 

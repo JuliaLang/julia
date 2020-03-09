@@ -380,7 +380,8 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
             # REPLDisplay
             pushdisplay(REPL.REPLDisplay(active_repl))
             _atreplinit(active_repl)
-            REPL.run_repl(active_repl, backend->(global active_repl_backend = backend))
+            backend_on_root_task = get(ENV,"JULIA_ROOT_REPL","") in ("1","yes")
+            REPL.run_repl(active_repl, backend->(global active_repl_backend = backend), backend_on_current_task=backend_on_root_task)
         end
     else
         # otherwise provide a simple fallback
