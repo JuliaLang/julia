@@ -994,7 +994,7 @@ end
 
 for func in (:log, :sqrt)
     @eval begin
-        function ($func)(A::HermOrSym{T<:Real}; rtol::Real = eps(real(float(one(T))))*min(size(A)...)) where T
+        function ($func)(A::HermOrSym{T}; rtol::Real = eps(real(float(one(T))))*min(size(A)...)) where {T<:Real}
             F = eigen(A)
             λ₀ = -maximum(abs, F.values) * rtol # treat λ ≥ λ₀ as "zero" eigenvalues up to roundoff
             if all(λ -> λ ≥ λ₀, F.values)
@@ -1005,7 +1005,7 @@ for func in (:log, :sqrt)
             return Symmetric(retmat)
         end
 
-        function ($func)(A::Hermitian{<:Complex}; rtol::Real = eps(real(float(one(T))))*min(size(A)...)) where T
+        function ($func)(A::Hermitian{T}; rtol::Real = eps(real(float(one(T))))*min(size(A)...)) where {T<:Complex}
             n = checksquare(A)
             F = eigen(A)
             λ₀ = -maximum(abs, F.values) * rtol # treat λ ≥ λ₀ as "zero" eigenvalues up to roundoff
