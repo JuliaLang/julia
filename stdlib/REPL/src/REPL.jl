@@ -241,7 +241,11 @@ function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); ba
         backend = REPLBackend(repl_channel, response_channel, false)
         backend.backend_task = Base.current_task()
         consumer(backend)
-        frontend_task = @async run_frontend(repl, REPLBackendRef(repl_channel, response_channel))
+        frontend_task = @async begin
+            run_frontend(repl, REPLBackendRef(repl_channel, response_channel))
+            # Explicitly stop the backend REPL
+            put!(repl_channel,(nothing,-1))
+        end
         repl_backend_loop(backend)
     else
         backend = start_repl_backend(repl_channel, response_channel)
