@@ -49,7 +49,10 @@ function foldl_impl(op::OP, nt, itr) where {OP}
     return v
 end
 
-@inline function _foldl_impl(op::OP, init, itr) where {OP}
+@inline _foldl_impl(op::OP, init, itr) where {OP} =
+    _foldl_default(op, init, itr)
+
+@inline function _foldl_default(op::OP, init, itr) where {OP}
     # Unroll the while loop once; if init is known, the call to op may
     # be evaluated at compile time
     y = iterate(itr)
@@ -65,7 +68,7 @@ end
 
 @inline function _foldl_impl(op::OP, init, array::AbstractArray) where {OP}
     if IndexStyle(array) isa IndexLinear
-        return invoke(_foldl_impl, Tuple{Any,Any,Any}, op, init, array)
+        return _foldl_default(op, init, array)
     else
         return _foldl_impl(init, CartesianIndices(array)) do acc, I
             @_inline_meta
