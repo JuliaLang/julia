@@ -45,6 +45,10 @@ aimg  = randn(n,n)/2
         @test vecs*sch*vecs' ≈ a + transpose(a)
         sch, vecs, vals = schur(Tridiagonal(a + transpose(a)))
         @test vecs*sch*vecs' ≈ Tridiagonal(a + transpose(a))
+        sch, vecs, vals = schur(Bidiagonal(a, :U))
+        @test vecs*sch*vecs' ≈ Bidiagonal(a, :U)
+        sch, vecs, vals = schur(Bidiagonal(a, :L))
+        @test vecs*sch*vecs' ≈ Bidiagonal(a, :L)
 
         tstring = sprint((t, s) -> show(t, "text/plain", s), f.T)
         zstring = sprint((t, s) -> show(t, "text/plain", s), f.Z)
