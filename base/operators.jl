@@ -1083,11 +1083,10 @@ You may also negate the `in` by doing `!(a in b)` which is logically similar to 
 
 When broadcasting with `in.(items, collection)` or `items .∈ collection`, both
 `item` and `collection` are broadcasted over, which is often not what is intended.
-For example, if both arguments are vectors, the result is a vector indicating whether
-each value in collection `items` is `in` the value at the corresponding position
-in `collection`.
-To get a vector indicating whether each value in `items` is in `collection`,
-wrap `collection` in a tuple or a `Ref` like this:
+For example, if both arguments are vectors (and the dimensions match), the result is
+a vector indicating whether each value in collection `items` is `in` the value at the
+corresponding position in `collection`. To get a vector indicating whether each value
+in `items` is in `collection`, wrap `collection` in a tuple or a `Ref` like this:
 `in.(items, Ref(collection))` or `items .∈ Ref(collection)`.
 
 # Examples
@@ -1138,8 +1137,13 @@ in, ∋
 
 Negation of `∈` and `∋`, i.e. checks that `item` is not in `collection`.
 
-When broadcasting with `∉`, the collection will be broadcasted over unless the
-collection is wrapped in a tuple or a `Ref`.
+When broadcasting with `items .∉ collection`, both `item` and `collection` are
+broadcasted over, which is often not what is intended. For example, if both arguments
+are vectors (and the dimensions match), the result is a vector indicating whether
+each value in collection `items` is not in the value at the corresponding position
+in `collection`. To get a vector indicating whether each value in `items` is not in
+`collection`, wrap `collection` in a tuple or a `Ref` like this:
+`items .∉ Ref(collection)`.
 
 # Examples
 ```jldoctest
