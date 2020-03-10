@@ -381,7 +381,8 @@ module IteratorsMD
     first(iter::CartesianIndices) = CartesianIndex(map(first, iter.indices))
     last(iter::CartesianIndices)  = CartesianIndex(map(last, iter.indices))
 
-    # Use nested for-loop in `foldl` as it is much faster than `iterate`:
+    # Use nested for-loop in `foldl` to generate code that can be
+    # easily vectorized by LLVM:
     @inline Base._foldl_impl(op::OP, init, CI::CartesianIndices) where {OP} =
         Base._foldl_product(init, CI.indices) do acc, args...
             Base.@_inline_meta
