@@ -374,7 +374,7 @@ julia> LinRange(1.5, 5.5, 9)
 Compared to [`range`](@ref), `LinRange` should have less overhead but won't try to correct
 for floating point errors:
 ```julia
-julia> collect(-0.1:0.1:0.3)
+julia> collect(range(-0.1, 0.3, length=5))
 5-element Array{Float64,1}:
  -0.1
   0.0
