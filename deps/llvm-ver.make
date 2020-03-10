@@ -10,3 +10,10 @@ LLVM_VER_PATCH:=$(word 3, $(subst ., ,$(LLVM_VER)))
 ifeq ($(LLVM_VER_PATCH),)
 LLVM_VER_PATCH := 0
 endif
+
+#See #611 in Yggdrasil
+ifeq ($(USE_BINARYBUILDER_LLVM),1)
+LLVM_LIB_SUFFIX:=${LLVM_VER_MAJ}
+else
+LLVM_LIB_SUFFIX:=${LLVM_VER_MAJ}jl
+endif
