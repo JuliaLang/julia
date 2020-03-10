@@ -59,7 +59,8 @@ automatically such that there are `length` linearly spaced elements in the range
 If `step` and `stop` are provided and `length` is not, the overall range length will be computed
 automatically such that the elements are `step` spaced.
 
-Special care is taken to ensure intermediate values are computed rationally.  For a simpler linearly spaced range-like object with less overhead, see [`LinRange`](@ref).
+Special care is taken to ensure intermediate values are computed rationally.
+For a simpler linearly spaced range-like object with less overhead, see [`LinRange`](@ref).
 
 `stop` may be specified as either a positional or keyword argument.
 
