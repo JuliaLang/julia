@@ -327,8 +327,8 @@ The test added will be `@test foo(missing) === missing`.
 
 The conditions on if it is reasonable for such a overload to be added:
  - In typical use the function must not have any side-effects. (e.g. not `mkdir` or `Distributed.addprocs`).
- - The argument having missing propagation added must in typical use be a: `Number`, `AbstractString`, or `Symbol`.
- - In typical use the function must return a `Number`, `AbstractString`, or `Symbol`.
+ - The argument having missing propagation added must in typical use be a: `Number`, `AbstractString`, `Symbol`, `Dates.DatePeriod`, or `Dates.TimeType`.
+ - In typical use the function must return a `Number`, `AbstractString`, `Symbol`, `Dates.DatePeriod`, or `Dates.TimeType`.
  - The argument having pissing propagation added must not typically be being used for indexing, e.g. into a `Dict` or `Array`.
 
 If some practical reality does not align to the guidelines given in this section, rather than debate them in some PR where someone is proposing a new overload make another PR to update this section and link to it in the PR proposing the change.
