@@ -706,8 +706,15 @@ If `A` has no negative real eigenvalues, compute the principal matrix square roo
 that is the unique matrix ``X`` with eigenvalues having positive real part such that
 ``X^2 = A``. Otherwise, a nonprincipal square root is returned.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is
-used to compute the square root. Otherwise, the square root is determined by means of the
+If `A` is real-symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is
+used to compute the square root.   For such matrices, eigenvalues λ that
+appear to be slightly negative due to roundoff errors are treated as if they were zero
+More precisely, matrices with all eigenvalues `≥ -rtol*(max |λ|)` are treated as semidefinite
+(yielding a Hermitian square root), with negative eigenvalues taken to be zero.
+`rtol` is a keyword argument to `sqrt` (in the Hermitian/real-symmetric case only) that
+defaults to machine precision scaled by `size(A,1)`.
+
+Otherwise, the square root is determined by means of the
 Björck-Hammarling method [^BH83], which computes the complex Schur form ([`schur`](@ref))
 and then the complex square root of the triangular factor.
 
