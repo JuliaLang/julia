@@ -902,7 +902,6 @@ operator_precedence(s::Symbol) = Int(ccall(:jl_operator_precedence, Cint, (Cstri
 operator_precedence(x::Any) = 0 # fallback for generic expression nodes
 const prec_assignment = operator_precedence(:(=))
 const prec_pair = operator_precedence(:(=>))
-const prec_control_flow = operator_precedence(:(&&))
 const prec_arrow = operator_precedence(:(-->))
 const prec_comparison = operator_precedence(:(>))
 const prec_power = operator_precedence(:(^))
@@ -925,8 +924,8 @@ julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Bas
 ```
 """
 function operator_associativity(s::Symbol)
-    if operator_precedence(s) in (prec_arrow, prec_assignment, prec_control_flow, prec_pair, prec_power) ||
-        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) || s === :<|
+    if operator_precedence(s) in (prec_arrow, prec_assignment, prec_pair, prec_power) ||
+        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) || s === :<| || s === :||
         return :right
     elseif operator_precedence(s) in (0, prec_comparison) || s in (:+, :++, :*)
         return :none
