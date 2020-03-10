@@ -179,7 +179,7 @@ else
 JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += libz
 endif
 ifeq ($(USE_LLVM_SHLIB),1)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM libLLVM-9
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM $(basename $(shell $(LLVM_CONFIG_HOST) --libnames))
 endif
 
 ifeq ($(USE_SYSTEM_LIBM),0)
