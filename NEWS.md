@@ -7,6 +7,10 @@ New language features
 * `⨟` is now parsed as a binary operator with times precedence. It can be entered in the REPL
   with `\bbsemi` followed by <kbd>TAB</kbd> ([#34722]).
 
+* `±` and `∓` are now unary operators as well, like `+` or `-`. Attention has to be paid in
+  macros and matrix constructors, which are whitespace sensitive, because expressions like
+  `[a ±b]` now get parsed as `[a ±(b)]` instead of `[±(a, b)]`. ([#34200])
+
 Language changes
 ----------------
 
