@@ -310,3 +310,8 @@ end
         @test isequal(parse(Float64, s), sign(v))
     end
 end
+
+@testset "unary ± and ∓" begin
+    @test Meta.parse("±x") == Expr(:call, :±, :x)
+    @test Meta.parse("∓x") == Expr(:call, :∓, :x)
+end
