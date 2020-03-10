@@ -311,7 +311,31 @@ runtest harness).
    - To remove whitespace relative to the `master` branch, run
      `git rebase --whitespace=fix master`.
 
-## Resources
+# Notes for Code-Reviewers
+All people reviewing PRs to the Julia repository should be very familar with the above documentation for contributors.
+This section contains some additional notes for code-reviewers.
+Its also helpful for contibutors to read, though less important.
+
+## On reviewing PRs that add overloads to propagate missing values.
+There is often some confusion as to which overloads to functions to add missing value propagation are acceptable.
+Sometimes this leads to unproductive slippy-slope arguments: "If we add it to this function, we will have to add it to 200 more."
+Don't make slippy-slope arguments, instead refer to this section of this document.
+
+PRs to add functions must be good PRs, they must be correct and have tests like usual.
+Consider a function: `foo(x)`, where the PR is adding `foo(::Missing) = missing`.
+The test added will be `@test foo(missing) === missing`.
+
+The conditions on if it is reasonable for such a overload to be added:
+ - In typical use the function must not have any side-effects. (e.g. not `mkdir` or `Distributed.addprocs`).
+ - The argument having missing propagation added must in typical use be a: `Number`, `AbstractString`, or `Symbol`.
+ - In typical use the function must return a `Number`, `AbstractString`, or `Symbol`.
+ - The argument having pissing propagation added must not typically be being used for indexing, e.g. into a `Dict` or `Array`.
+
+If some practical reality does not align to the guidelines given in this section, rather than debate them in some PR where someone is proposing a new overload make another PR to update this section and link to it in the PR proposing the change.
+That way we can find the discussion again later.
+
+
+# Resources
 
 * Julia
   - **Homepage:** <https://julialang.org>
