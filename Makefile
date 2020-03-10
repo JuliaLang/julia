@@ -471,8 +471,8 @@ endif
 	cd $(BUILDROOT) && $(TAR) zcvf $(JULIA_BINARYDIST_FILENAME).tar.gz julia-$(JULIA_COMMIT)
 
 exe:
-	# run Inno Setup to compile installer; /O flag specifies where to place installer and /F flag the installer name
-	$(call spawn,$(JULIAHOME)/dist-extras/inno/iscc.exe /DAppVersion=$(JULIA_VERSION) /DAppSourceFiles="$(call cygpath_w,$(BUILDROOT)/julia-$(JULIA_COMMIT))" /DAppHomeFiles="$(call cygpath_w,$(JULIAHOME))" /F"$(JULIA_BINARYDIST_FILENAME)" /O"$(call cygpath_w,$(BUILDROOT))"  $(call cygpath_w,$(JULIAHOME)/contrib/windows/build-installer.iss))
+	# run Inno Setup to compile installer
+	$(call spawn,$(JULIAHOME)/dist-extras/inno/iscc.exe /DAppVersion=$(JULIA_VERSION) /DSourceDir="$(call cygpath_w,$(BUILDROOT)/julia-$(JULIA_COMMIT))" /DRepoDir="$(call cygpath_w,$(JULIAHOME))" /F"$(JULIA_BINARYDIST_FILENAME)" /O"$(call cygpath_w,$(BUILDROOT))" $(call cygpath_w,$(JULIAHOME)/contrib/windows/build-installer.iss))
 	chmod a+x "$(BUILDROOT)/$(JULIA_BINARYDIST_FILENAME).exe"
 
 app:

@@ -1,10 +1,8 @@
-; preprocessor will fill in the commented out constants below
-; #define AppVersion "x.y.z"; Julia version
-; #define AppSourceFiles "C:\ex" ; Julia build root directory
-; #define AppHomeFiles "C:\ex" ; Julia home directory
 #define AppName "Julia"
-#define AppMainExe "bin\julia.exe"
+#define AppNameLong AppName + " " + AppVersion
+#define AppMainExeName "bin\julia.exe"
 #define CurrentYear GetDateTimeString('yyyy', '', '')
+#define DirName AppName + " " + AppVersion
 
 
 [LangOptions]
@@ -16,20 +14,20 @@ TitleFontName=Segoe UI
 
 [Messages]
 SetupAppTitle={#AppName} Installer
-SetupWindowTitle=Installer - {#AppName} {#AppVersion}
+SetupWindowTitle=Installer - {#AppNameLong}
 UninstallAppTitle={#AppName} Uninstaller
-UninstallAppFullTitle=Uninstaller - {#AppName} {#AppVersion}
+UninstallAppFullTitle=Uninstaller - {#AppNameLong}
 WizardSelectDir=Select Installation Directory
 SelectDirDesc=
 SelectDirLabel3=
-SelectDirBrowseLabel=Please run installer as Administrator to install {#AppName} system wide.%n%nTo install into a different folder click Browse.
+SelectDirBrowseLabel=Restart installer as Administrator to install {#AppName} system wide.%n%n%nInstallation directory:
 WizardPreparing=Installing
 PreparingDesc=
 InstallingLabel=
 ClickFinish=
-FinishedHeadingLabel=Installation complete
+FinishedHeadingLabel=Installation Successfull
 FinishedLabelNoIcons=[name] has been successfully installed.
-FinishedLabel=
+FinishedLabel=[name] has been successfully installed.
 StatusExtractFiles=Extracting...
 StatusUninstalling=Removing...
 ConfirmUninstall=Are you sure you want to completely remove {#AppName}?
@@ -39,41 +37,14 @@ ExitSetupMessage=Installation is not complete.%n%nExit {#AppName} Installer?
 WizardUninstalling=Uninstalling
 ButtonBrowse=&Browse
 ButtonWizardBrowse=B&rowse
-DirExists=The folder%n%n%1%n%nalready exists. Install to that folder anyway?
+DirExists=The selected folder already exists: %n%n%1%n%nInstall anyways?
 DirDoesntExist=The folder%n%n%1%n%ndoes not exist. Create the folder?
-
-
-[Code]
-procedure InitializeWizard();
-begin
-  WizardForm.Bevel.Visible := False;
-  WizardForm.Bevel1.Visible := False;
-  WizardForm.Color := clWhite;
-  WizardForm.SelectDirBitmapImage.Visible := False;
-end;
-procedure InitializeUninstallProgressForm();
-begin
-  UninstallProgressForm.Bevel.Visible := False;
-  UninstallProgressForm.Bevel1.Visible := False;
-  UninstallProgressForm.Color := clWhite;
-end;
-// see https://stackoverflow.com/questions/35104265/the-official-inno-setup-code-to-change-next-button-to-install-with-disablereadyp
-// we disable DisableProgramGroupPage and DisableDirPage
-// this code ensures the button's have the correct caption
-procedure CurPageChanged(CurPageID: Integer);
-begin
-  if CurPageID = wpSelectDir then
-    WizardForm.NextButton.Caption := SetupMessage(msgButtonInstall)
-  else if (CurPageID = wpFinished) then
-    WizardForm.NextButton.Caption := SetupMessage(msgButtonFinish)
-  else
-    WizardForm.NextButton.Caption := SetupMessage(msgButtonNext);
-end;
+SelectTasksLabel2=Select additional tasks to perform:
+WizardSelectTasks=Select Additional Tasks
+SelectTasksDesc=
 
 
 [Setup]
-; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
-; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 AppId={{054B4BC6-BD30-45C8-A623-8F5BA6EBD55D}
 AppName={#AppName}
 AppVersion={#AppVersion}
@@ -81,15 +52,14 @@ AppPublisher=Julia Language
 AppPublisherURL=https://julialang.org
 AppCopyright=Copyright 2009-{#CurrentYear}; Julia Langage
 VersionInfoDescription=Julia Installer
-UsePreviousPrivileges=no
-PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=commandline
 WizardStyle=modern
 Compression=lzma2/ultra
 SolidCompression=yes
-SetupIconFile={#AppHomeFiles}\contrib\windows\julia.ico
-DefaultDirName={autopf}\{#AppName}\{#AppName}-{#AppVersion}
-DefaultGroupName="{#AppName} {#AppVersion}"
+DefaultDirName={autopf}\{#DirName}
+UsePreviousPrivileges=no
+PrivilegesRequired=lowest
+DefaultGroupName="{#AppNameLong}"
 UsePreviousGroup=no
 UsePreviousAppDir=no
 DisableDirPage=no
@@ -97,29 +67,66 @@ WizardSizePercent=100
 WizardResizable=yes
 DisableProgramGroupPage=yes
 DisableReadyPage=yes
-WizardImageFile={#AppHomeFiles}\contrib\windows\julia-banner.bmp
-WizardSmallImageFile={#AppHomeFiles}\contrib\windows\julia-dots.bmp
-UninstallDisplayName={#AppName} {#AppVersion}
-UninstallDisplayIcon={app}\{#AppMainExe}
+WizardImageFile={#RepoDir}\contrib\windows\julia-banner.bmp
+WizardSmallImageFile={#RepoDir}\contrib\windows\julia-dots.bmp
+SetupIconFile={#RepoDir}\contrib\windows\julia.ico
+UninstallDisplayName={#AppNameLong}
+UninstallDisplayIcon={app}\{#AppMainExeName}
+UninstallFilesDir={app}\uninstall
 
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 
+[Tasks]
+Name: "desktopicon"; Description: "Create a Desktop shortcut"
+Name: "startmenu"; Description: "Create a Start Menu entry"
+
+
 [Files]
-Source: "{#AppSourceFiles}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 
 [Icons]
-; create the start menu shortcuts
-Name: "{group}\{#AppName} {#AppVersion}"; Filename: "{app}\{#AppMainExe}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppMainExe}"
-Name: "{group}\Uninstall {#AppName} {#AppVersion}"; Filename: "{uninstallexe}"
-; create a shortcut in the main installation folder
-Name: "{app}\{#AppName}"; Filename: "{app}\{#AppMainExe}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppMainExe}"
+Name: "{autostartmenu}\{#AppNameLong}"; Filename: "{app}\{#AppMainExeName}"; WorkingDir: "{%USERPROFILE}"; Tasks: startmenu
+Name: "{autodesktop}\{#AppNameLong}"; Filename: "{app}\{#AppMainExeName}"; WorkingDir: "{%USERPROFILE}"; Tasks: desktopicon
 
 
 [Run]
-Filename: "{app}\{#AppName}"; Description: "Run {#AppName}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent unchecked shellexec
-Filename: "{app}"; Description: "Open {#AppName} installation directory"; Flags: nowait postinstall skipifsilent unchecked shellexec
+Filename: "{app}\{#AppMainExeName}"; Description: "Run {#AppName}"; WorkingDir: "{%USERPROFILE}"; Flags: nowait postinstall skipifsilent unchecked shellexec
+Filename: "{app}"; Description: "Open {#AppName} directory"; Flags: nowait postinstall skipifsilent unchecked shellexec
 Filename: "https://docs.julialang.org"; Description: "Open documentation"; Flags: nowait postinstall skipifsilent unchecked shellexec
+
+
+[Code]
+
+procedure InitializeWizard;
+begin
+  WizardForm.Bevel.Visible := False;
+  WizardForm.Bevel1.Visible := False;
+  WizardForm.SelectDirBitmapImage.Visible := False;
+
+  WizardForm.Color := clWhite;
+  WizardForm.MainPanel.Color := WizardForm.Color;
+  WizardForm.InnerPage.Color := WizardForm.Color;
+  WizardForm.TasksList.Color := WizardForm.Color;
+  WizardForm.ReadyMemo.Color := WizardForm.Color;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  case CurPageID of
+    wpWelcome: WizardForm.Color := WizardForm.WelcomePage.Color;
+    wpFinished: WizardForm.Color := WizardForm.FinishedPage.Color;
+  else
+    WizardForm.Color := WizardForm.InnerPage.Color;
+  end;
+end;
+
+procedure InitializeUninstallProgressForm();
+begin
+  UninstallProgressForm.Color := clWhite;
+  UninstallProgressForm.Bevel.Visible := False;
+  UninstallProgressForm.Bevel1.Visible := False;
+end;
