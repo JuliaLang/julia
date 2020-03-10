@@ -34,9 +34,9 @@ mul_prod(x::SmallSigned, y::SmallSigned) = Int(x) * Int(y)
 mul_prod(x::SmallUnsigned, y::SmallUnsigned) = UInt(x) * UInt(y)
 mul_prod(x::Real, y::Real)::Real = x * y
 
-## foldl && mapfoldl
-
 struct _InitialValue end
+
+## foldl && mapfoldl
 
 function mapfoldl_impl(f::F, op::OP, nt, itr) where {F,OP}
     op′, itr′ = _xfadjoint(BottomRF(op), Generator(f, itr))
