@@ -143,7 +143,12 @@ schur(A::StridedMatrix{<:BlasFloat}) = schur!(copy(A))
 schur(A::StridedMatrix{T}) where T = schur!(copy_oftype(A, eigtype(T)))
 
 schur(A::Symmetric) = schur(copyto!(similar(parent(A)), A))
-schur(A::Hermitian) = schur(copyto!(similar(parent(A)), A))
+schur(A::Symmetric{<:Real}) = _schur(A)
+schur(A::Hermitian) = _schur(A)
+function _schur(A::RealHermSymComplexHerm)
+    F = eigen(A; sortby=nothing)
+    return Schur(typeof(F.vectors)(Diagonal(F.values)), F.vectors, F.values)
+end
 schur(A::UpperTriangular) = schur(copyto!(similar(parent(A)), A))
 schur(A::LowerTriangular) = schur(copyto!(similar(parent(A)), A))
 schur(A::Tridiagonal) = schur(Matrix(A))
