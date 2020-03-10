@@ -171,7 +171,13 @@ end
 function optimize(opt::OptimizationState, @nospecialize(result))
     def = opt.linfo.def
     nargs = Int(opt.nargs) - 1
-    @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
+    src = opt.src
+    # Pre-IRCode optimizations
+    expand_cartesian_loops!(src, opt.max_valid)
+    for i = length(opt.slottypes)+1:length(src.slottypes)
+        push!(opt.slottypes, src.slottypes[i])
+    end
+    @timeit "optimizer" ir = run_passes(src, nargs, opt)
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
     # compute inlining and other related optimizations
@@ -405,17 +411,29 @@ function renumber_ir_elements!(body::Vector{Any}, changemap::Vector{Int})
 end
 
 function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, labelchangemap::Vector{Int})
+    delta = abs(labelchangemap[1])
     for i = 2:length(labelchangemap)
+        delta += abs(labelchangemap[i])
         labelchangemap[i] += labelchangemap[i - 1]
     end
     if ssachangemap !== labelchangemap
+        delta += abs(ssachangemap[1])
         for i = 2:length(ssachangemap)
+            delta += abs(ssachangemap[i])
             ssachangemap[i] += ssachangemap[i - 1]
         end
     end
-    if labelchangemap[end] == 0 && ssachangemap[end] == 0
+    if delta == 0
         return
     end
+    return remap_ir_elements!(body, ssachangemap, labelchangemap)
+end
+
+function remap_ir_elements!(body::Vector{Any}, changemap::Vector{Int})
+    return remap_ir_elements!(body, changemap, changemap)
+end
+
+function remap_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, labelchangemap::Vector{Int})
     for i = 1:length(body)
         el = body[i]
         if isa(el, GotoNode)
@@ -438,10 +456,10 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
                 el.args[1] = tgt + labelchangemap[tgt]
             elseif !is_meta_expr_head(el.head)
                 args = el.args
-                for i = 1:length(args)
-                    el = args[i]
+                for j = 1:length(args)
+                    el = args[j]
                     if isa(el, SSAValue)
-                        args[i] = SSAValue(el.id + ssachangemap[el.id])
+                        args[j] = SSAValue(el.id + ssachangemap[el.id])
                     end
                 end
             end

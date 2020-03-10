@@ -108,6 +108,7 @@ include("compiler/tfuncs.jl")
 
 include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")
+include("compiler/loops.jl")
 include("compiler/optimize.jl") # TODO: break this up further + extract utilities
 
 include("compiler/bootstrap.jl")
