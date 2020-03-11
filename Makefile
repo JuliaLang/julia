@@ -475,7 +475,6 @@ ifeq ($(OS), WINNT)
 else
 	cd $(BUILDROOT) && $(TAR) zcvf $(JULIA_BINARYDIST_FILENAME).tar.gz julia-$(JULIA_COMMIT)
 endif
-	rm -fr $(BUILDROOT)/julia-$(JULIA_COMMIT)
 
 app:
 	$(MAKE) -C contrib/mac/app
