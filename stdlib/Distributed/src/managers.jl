@@ -540,11 +540,14 @@ end
 
 function bind_client_port(sock::TCPSocket, iptype)
     bind_host = iptype(0)
-    if Sockets.bind(sock, bind_host, client_port[])
-        _addr, port = getsockname(sock)
-        client_port[] = port
+    while true
+        if Sockets.bind(sock, bind_host, client_port[])
+            _addr, port = getsockname(sock)
+            client_port[] = port
+            return sock
+        end
+        client_port[] = 0
     end
-    return sock
 end
 
 function connect_to_worker(host::AbstractString, port::Integer)
