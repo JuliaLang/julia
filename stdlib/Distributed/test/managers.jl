@@ -1,7 +1,7 @@
 using Test
 using Distributed
 using Sockets
-using Distributed: parse_machine, bind_client_port, SSHManager, LocalManager
+using Distributed: parse_machine, SSHManager, LocalManager
 
 @test parse_machine("127.0.0.1") == ("127.0.0.1", nothing)
 @test parse_machine("127.0.0.1:80") == ("127.0.0.1", 80)
@@ -14,14 +14,6 @@ using Distributed: parse_machine, bind_client_port, SSHManager, LocalManager
 @test_throws ArgumentError parse_machine("127.0.0.1:-1")
 @test_throws ArgumentError parse_machine("127.0.0.1:0")
 @test_throws ArgumentError parse_machine("127.0.0.1:65536")
-
-for ip in (IPv4(0), IPv6(0))
-    sock = TCPSocket()
-    @test bind_client_port(sock, typeof(ip)) === sock
-    addr, port = getsockname(sock)
-    @test addr === ip
-    @test port::UInt16 === Distributed.client_port[] != 0
-end
 
 @test occursin(r"^SSHManager\(machines=.*\)$",
                sprint((t,x) -> show(t, "text/plain", x), SSHManager("127.0.0.1")))
