@@ -154,6 +154,8 @@ Standard library changes
 
 #### Random
 
+* `randn!(::MersenneTwister, ::Array{Float64})` is faster, and as a result, for a given state of the RNG,
+  the corresponding generated numbers have changed ([#35078]).
 
 #### REPL
 
