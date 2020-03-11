@@ -78,6 +78,10 @@ a function equivalent to `y -> endswith(y, suffix)`.
 
 The returned function is of type `Base.Fix2{typeof(endswith)}`, which can be
 used to implement specialized methods.
+
+!!! compat "Julia 1.5"
+    The single argument `endswith(suffix)` requires at least Julia 1.5.
+
 """
 endswith(s) = Base.Fix2(endswith, s)
 
@@ -89,6 +93,10 @@ a function equivalent to `y -> startswith(y, prefix)`.
 
 The returned function is of type `Base.Fix2{typeof(startswith)}`, which can be
 used to implement specialized methods.
+
+!!! compat "Julia 1.5"
+    The single argument `startswith(prefix)` requires at least Julia 1.5.
+
 """
 startswith(s) = Base.Fix2(startswith, s)
 
