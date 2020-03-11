@@ -669,7 +669,7 @@ end
         C = Symmetric(A*B*A'), # semidefinite up to roundoff
         Csqrt = sqrt(C)
         @test Csqrt isa Symmetric{Float64}
-        @test Csqrt*Csqrt ≈ C rtol=1e-15
+        @test Csqrt*Csqrt ≈ C rtol=1e-14
     end
     let D = Symmetric(Matrix(Diagonal([1 0; 0 -1e-14])))
         @test sqrt(D) ≈ [1 0; 0 1e-7im] rtol=1e-14
