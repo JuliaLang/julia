@@ -163,7 +163,7 @@ function schur(A::Union{UnitLowerTriangular{T},LowerTriangular{T}}) where {T}
     n = size(A, 1)
     J = zeros(t, n, n)
     for i in axes(J, 2)
-       J[n+1-i, i] = one(t)
+       J[n+1-i, i] = oneunit(t)
     end
     return Schur(Z, J, convert(Vector{t}, diag(A)))
 end
@@ -176,7 +176,7 @@ function schur(A::Bidiagonal{T}) where {T}
         n = size(A, 1)
         J = zeros(t, n, n)
         for i in axes(J, 2)
-            J[n+1-i, i] = one(t)
+            J[n+1-i, i] = oneunit(t)
         end
         dv = reverse!(Vector{t}(A.dv))
         ev = reverse!(Vector{t}(A.ev))
