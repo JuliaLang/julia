@@ -62,7 +62,7 @@ MIN_EXP(::Type{Float32}) = -103.97207708f0            # log 2^-150
 """
     exp(x)
 
-Compute the natural base exponential of `x`, in other words ``e^x``.
+Compute the natural base exponential of `x`, in other words ``ℯ^x``.
 
 # Examples
 ```jldoctest
