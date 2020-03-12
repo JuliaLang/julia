@@ -234,7 +234,7 @@ struct REPLBackendRef
     response_channel::Channel
 end
 
-function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task = false)
+function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task = true)
     repl_channel = Channel(1)
     response_channel = Channel(1)
     if backend_on_current_task
