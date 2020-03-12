@@ -1464,7 +1464,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
         else {
             assert(layout == 0);
             jl_datatype_layout_t buffer;
-            ios_read(s->s, (char*)&buffer, sizeof(buffer));
+            ios_readall(s->s, (char*)&buffer, sizeof(buffer));
             uint32_t nf = buffer.nfields;
             uint32_t np = buffer.npointers;
             uint8_t fielddesc_type = buffer.fielddesc_type;
@@ -1476,7 +1476,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
                     sizeof(jl_datatype_layout_t) + fldsize,
                     0, 4, 0);
             *layout = buffer;
-            ios_read(s->s, (char*)(layout + 1), fldsize);
+            ios_readall(s->s, (char*)(layout + 1), fldsize);
             dt->layout = layout;
         }
     }
@@ -1534,7 +1534,7 @@ static jl_value_t *jl_deserialize_value_symbol(jl_serializer_state *s, uint8_t t
     else
         len = read_int32(s->s);
     char *name = (char*)(len >= 256 ? malloc_s(len + 1) : alloca(len + 1));
-    ios_read(s->s, name, len);
+    ios_readall(s->s, name, len);
     name[len] = '\0';
     jl_value_t *sym = (jl_value_t*)jl_symbol(name);
     if (len >= 256)
@@ -1600,7 +1600,7 @@ static jl_value_t *jl_deserialize_value_array(jl_serializer_state *s, uint8_t ta
                 uint32_t ptr = jl_ptr_offset(et, j);
                 jl_value_t **fld = &((jl_value_t**)data)[ptr];
                 if ((char*)fld != start)
-                    ios_read(s->s, start, (const char*)fld - start);
+                    ios_readall(s->s, start, (const char*)fld - start);
                 *fld = jl_deserialize_value(s, fld);
                 //if (*fld) // not needed because `a` is new (gc is disabled)
                 //    jl_gc_wb(a, *fld);
@@ -1608,14 +1608,14 @@ static jl_value_t *jl_deserialize_value_array(jl_serializer_state *s, uint8_t ta
             }
             data += elsz;
             if (data != start)
-                ios_read(s->s, start, data - start);
+                ios_readall(s->s, start, data - start);
         }
         assert(jl_astaggedvalue(a)->bits.gc == GC_CLEAN); // gc is disabled
     }
     else {
         size_t extra = jl_array_isbitsunion(a) ? jl_array_len(a) : 0;
         size_t tot = jl_array_len(a) * a->elsize + extra;
-        ios_read(s->s, (char*)jl_array_data(a), tot);
+        ios_readall(s->s, (char*)jl_array_data(a), tot);
     }
     return (jl_value_t*)a;
 }
@@ -1942,7 +1942,7 @@ static void jl_deserialize_struct(jl_serializer_state *s, jl_value_t *v) JL_GC_D
         uint32_t ptr = jl_ptr_offset(dt, i);
         jl_value_t **fld = &((jl_value_t**)data)[ptr];
         if ((char*)fld != start)
-            ios_read(s->s, start, (const char*)fld - start);
+            ios_readall(s->s, start, (const char*)fld - start);
         *fld = jl_deserialize_value(s, fld);
         //if (*fld)// a is new (gc is disabled)
         //    jl_gc_wb(a, *fld);
@@ -1950,7 +1950,7 @@ static void jl_deserialize_struct(jl_serializer_state *s, jl_value_t *v) JL_GC_D
     }
     data += jl_datatype_size(dt);
     if (data != start)
-        ios_read(s->s, start, data - start);
+        ios_readall(s->s, start, data - start);
     if (dt == jl_typemap_entry_type) {
         jl_typemap_entry_t *entry = (jl_typemap_entry_t*)v;
         if (entry->max_world == ~(size_t)0) {
@@ -2021,7 +2021,7 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
         void *buf = jl_gc_counted_malloc(nb);
         if (buf == NULL)
             jl_throw(jl_memory_exception);
-        ios_read(s->s, (char*)buf, nb);
+        ios_readall(s->s, (char*)buf, nb);
         jl_set_nth_field(v, 0, jl_box_int32(nw));
         jl_set_nth_field(v, 1, sizefield);
         jl_set_nth_field(v, 2, jl_box_voidpointer(buf));
@@ -2214,7 +2214,7 @@ static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc
         v = jl_alloc_string(n);
         if (usetable)
             arraylist_push(&backref_list, v);
-        ios_read(s->s, jl_string_data(v), n);
+        ios_readall(s->s, jl_string_data(v), n);
         return v;
     case TAG_LINEINFO:
         v = jl_new_struct_uninit(jl_lineinfonode_type);
@@ -2354,7 +2354,7 @@ static jl_value_t *read_verify_mod_list(ios_t *s, arraylist_t *dependent_worlds,
         if (len == 0 || i == l)
             return jl_get_exceptionf(jl_errorexception_type, "Wrong number of entries in module list.");
         char *name = (char*)alloca(len + 1);
-        ios_read(s, name, len);
+        ios_readall(s, name, len);
         name[len] = '\0';
         jl_uuid_t uuid;
         uuid.hi = read_uint64(s);
@@ -2616,7 +2616,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_code_instance_
 
     size_t nslots = read_int32(&src);
     code->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
-    ios_read(s.s, (char*)jl_array_data(code->slotflags), nslots);
+    ios_readall(s.s, (char*)jl_array_data(code->slotflags), nslots);
 
     for (i = 0; i < 6; i++) {
         if (i == 1)  // skip codelocs
@@ -2644,7 +2644,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_code_instance_
         }
     }
     else {
-        ios_read(s.s, (char*)jl_array_data(code->codelocs), nstmt * sizeof(int32_t));
+        ios_readall(s.s, (char*)jl_array_data(code->codelocs), nstmt * sizeof(int32_t));
     }
 
     assert(ios_getc(s.s) == -1);
