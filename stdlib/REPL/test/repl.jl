@@ -1170,10 +1170,6 @@ backend = REPL.REPLBackend()
 frontend_task = @async begin
     try
         @testset "AST Transformations Async" begin
-            put!(backend.repl_channel,
-                 (:(Base.roottask === Base.current_task()),false))
-            reply = take!(backend.response_channel)
-            @test reply == (true, false)
             put!(backend.repl_channel, (:(1+1), false))
             reply = take!(backend.response_channel)
             @test reply == (2, false)
