@@ -74,6 +74,7 @@ mutable struct REPLBackend
     REPLBackend(repl_channel, response_channel, in_eval, ast_transforms=copy(repl_ast_transforms)) =
         new(repl_channel, response_channel, in_eval, ast_transforms)
 end
+REPLBackend() = REPLBackend(Channel(1),Channel(1),false)
 
 """
     softscope(ex)
@@ -135,8 +136,15 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
 end
 
 function start_repl_backend(repl_channel::Channel, response_channel::Channel)
+    # Maintain legacy behavior of asynchronous backend
     backend = REPLBackend(repl_channel, response_channel, false)
-    backend.backend_task = @async repl_backend_loop(backend)
+    @async start_repl_backend(backend)
+    return backend
+end
+function start_repl_backend(backend::REPLBackend,  @nospecialize(consumer = x -> nothing))
+    backend.backend_task = Base.current_task()
+    consumer(backend)
+    repl_backend_loop(backend)
     return backend
 end
 
@@ -233,24 +241,17 @@ struct REPLBackendRef
     repl_channel::Channel
     response_channel::Channel
 end
+REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel,backend.response_channel)
 
 function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task = true)
-    repl_channel = Channel(1)
-    response_channel = Channel(1)
+    backend = REPLBackend()
+    backend_ref = REPLBackendRef(backend)
     if backend_on_current_task
-        backend = REPLBackend(repl_channel, response_channel, false)
-        backend.backend_task = Base.current_task()
-        consumer(backend)
-        frontend_task = @async begin
-            run_frontend(repl, REPLBackendRef(repl_channel, response_channel))
-            # Explicitly stop the backend REPL
-            put!(repl_channel,(nothing,-1))
-        end
-        repl_backend_loop(backend)
+        frontend_task = @async run_frontend(repl, backend_ref)
+        backend = start_repl_backend(backend,consumer)
     else
-        backend = start_repl_backend(repl_channel, response_channel)
-        consumer(backend)
-        run_frontend(repl, REPLBackendRef(repl_channel, response_channel))
+        @async start_repl_backend(backend,consumer)
+        run_frontend(repl, backend_ref)
     end
     return backend
 end
@@ -1102,6 +1103,8 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     repl.backendref = backend
     repl.mistate = LineEdit.init_state(terminal(repl), interface)
     run_interface(terminal(repl), interface, repl.mistate)
+    # Terminate Backend
+    put!(backend.repl_channel, (nothing, -1))
     dopushdisplay && popdisplay(d)
     nothing
 end
