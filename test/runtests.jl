@@ -5,6 +5,7 @@ using Distributed
 using Dates
 import REPL
 using Printf: @sprintf
+using Base: Experimental
 
 include("choosetests.jl")
 include("testenv.jl")
@@ -189,7 +190,7 @@ cd(@__DIR__) do
                 end
             end
         end
-        @syncany begin
+        @Experimental.sync begin
             for p in workers()
                 @async begin
                     push!(all_tasks, current_task())

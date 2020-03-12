@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, FileWatching
-using Base: uv_error
+using Base: uv_error, Experimental
 
 # This script does the following
 # Sets up N unix pipes (or WSA sockets)
@@ -64,7 +64,7 @@ end
 
 # Odd numbers trigger reads, even numbers timeout
 for (i, intvl) in enumerate(intvls)
-    @syncany begin
+    @Experimental.sync begin
         global ready = 0
         global ready_c = Condition()
         for idx in 1:n

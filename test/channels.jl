@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Random
+using Base: Experimental
 
 @testset "single-threaded Condition usage" begin
     a = Condition()
@@ -253,7 +254,7 @@ end
 
 using Dates
 @testset "timedwait on multiple channels" begin
-    @syncany begin
+    @Experimental.sync begin
         rr1 = Channel(1)
         rr2 = Channel(1)
         rr3 = Channel(1)

@@ -964,7 +964,6 @@ export
 
     # tasks
     @sync,
-    @syncany,
     @async,
     @task,
     @threadcall,

@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Sockets, Random, Test
+using Base: Experimental
 
 # set up a watchdog alarm for 10 minutes
 # so that we can attempt to get a "friendly" backtrace if something gets stuck
@@ -135,7 +136,7 @@ defaultport = rand(2000:4000)
                 write(sock, "Hello World\n")
 
                 # test "locked" println to a socket
-                @syncany begin
+                @Experimental.sync begin
                     for i in 1:100
                         @async println(sock, "a", 1)
                     end
@@ -279,7 +280,7 @@ end
         bind(a, ip"127.0.0.1", randport)
         bind(b, ip"127.0.0.1", randport + 1)
 
-        @syncany begin
+        @Experimental.sync begin
             let i = 0
                 for _ = 1:30
                     @async let msg = String(recv(a))
@@ -359,7 +360,7 @@ end
         # connect to it
         client_sock = connect(addr, port)
         test_done = false
-        @syncany begin
+        @Experimental.sync begin
             @async begin
                 Base.wait_readnb(client_sock, 1)
                 test_done || error("Client disconnected prematurely.")
