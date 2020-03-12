@@ -7451,7 +7451,9 @@ extern "C" void jl_init_llvm(void)
 #ifdef DISABLE_OPT
         CodeGenOpt::None;
 #else
-        (jl_options.opt_level == 0 ? CodeGenOpt::None : CodeGenOpt::Aggressive);
+        (jl_options.opt_level < 2 ? CodeGenOpt::None :
+         jl_options.opt_level == 2 ? CodeGenOpt::Default :
+         CodeGenOpt::Aggressive);
 #endif
     jl_TargetMachine = TheTarget->createTargetMachine(
             TheTriple.getTriple(), TheCPU, FeaturesStr,
