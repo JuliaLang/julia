@@ -40,7 +40,7 @@ FLAGS += -I$(LOCALBASE)/include
 endif
 
 RUNTIME_SRCS := \
-	jltypes gf typemap ast builtins module interpreter symbol \
+	jltypes gf typemap smallintset ast builtins module interpreter symbol \
 	dlload sys init task array dump staticdata toplevel jl_uv datatype \
 	simplevector runtime_intrinsics precompile \
 	threading partr stackwalk gc gc-debug gc-pages gc-stacks method \

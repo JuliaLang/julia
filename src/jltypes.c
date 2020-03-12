@@ -2123,7 +2123,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(22,
+                        jl_perm_symsvec(23,
                             "name",
                             "module",
                             "file",
@@ -2134,6 +2134,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "ambig",
                             "resorted",
                             "specializations",
+                            "speckeyset",
                             "slot_syms",
                             "source",
                             "unspecialized",
@@ -2146,7 +2147,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "nkw",
                             "isva",
                             "pure"),
-                        jl_svec(22,
+                        jl_svec(23,
                             jl_symbol_type,
                             jl_module_type,
                             jl_symbol_type,
@@ -2156,7 +2157,8 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_type_type,
                             jl_any_type, // Union{Vector, Nothing}
                             jl_any_type, // Union{Vector, Nothing}
-                            jl_any_type, // TypeMap
+                            jl_simplevector_type,
+                            jl_array_type,
                             jl_string_type,
                             jl_any_type,
                             jl_any_type, // jl_method_instance_type
@@ -2169,7 +2171,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_int32_type,
                             jl_bool_type,
                             jl_bool_type),
-                        0, 1, 11);
+                        0, 1, 12);
 
     jl_method_instance_type =
         jl_new_datatype(jl_symbol("MethodInstance"), core,
@@ -2334,7 +2336,7 @@ void jl_init_types(void) JL_GC_DISABLED
 #endif
     jl_svecset(jl_methtable_type->types, 9, jl_uint8_type);
     jl_svecset(jl_methtable_type->types, 10, jl_uint8_type);
-    jl_svecset(jl_method_type->types, 12, jl_method_instance_type);
+    jl_svecset(jl_method_type->types, 13, jl_method_instance_type);
     jl_svecset(jl_method_instance_type->types, 5, jl_code_instance_type);
     jl_svecset(jl_code_instance_type->types, 8, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 9, jl_voidpointer_type);

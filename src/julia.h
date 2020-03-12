@@ -290,7 +290,8 @@ typedef struct _jl_method_t {
     jl_value_t *resorted;
 
     // table of all jl_method_instance_t specializations we have
-    jl_typemap_t *specializations;
+    jl_svec_t *specializations; // allocated as [hashable, ..., NULL, linear, ....]
+    jl_array_t *speckeyset; // index lookup by hash into specializations
 
     jl_value_t *slot_syms; // compacted list of slot names (String)
     jl_value_t *source;  // original code template (jl_code_info_t, but may be compressed), null for builtins
