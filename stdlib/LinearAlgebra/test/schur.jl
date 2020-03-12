@@ -37,8 +37,12 @@ aimg  = randn(n,n)/2
 
         sch, vecs, vals = schur(UpperTriangular(triu(a)))
         @test vecs*sch*vecs' ≈ triu(a)
+        sch, vecs, vals = schur(UnitUpperTriangular(triu(a)))
+        @test vecs*sch*vecs' ≈ UnitUpperTriangular(triu(a))
         sch, vecs, vals = schur(LowerTriangular(tril(a)))
         @test vecs*sch*vecs' ≈ tril(a)
+        sch, vecs, vals = schur(UnitLowerTriangular(tril(a)))
+        @test vecs*sch*vecs' ≈ UnitLowerTriangular(tril(a))
         sch, vecs, vals = schur(Hermitian(asym))
         @test vecs*sch*vecs' ≈ asym
         sch, vecs, vals = schur(Symmetric(a + transpose(a)))

@@ -147,26 +147,37 @@ function schur(A::RealHermSymComplexHerm)
     F = eigen(A; sortby=nothing)
     return Schur(typeof(F.vectors)(Diagonal(F.values)), F.vectors, F.values)
 end
-function schur(A::UpperTriangular{T}) where {T}
+function schur(A::Union{UnitUpperTriangular{T},UpperTriangular{T}}) where {T}
     t = eigtype(T)
     Z = Matrix{t}(undef, size(A)...)
     copyto!(Z, A)
     return Schur(Z, Matrix{t}(I, size(A)), convert(Vector{t}, diag(A)))
 end
-function schur(A::LowerTriangular{T}) where {T}
+function schur(A::Union{UnitLowerTriangular{T},LowerTriangular{T}}) where {T}
     t = eigtype(T)
-    Z = [t(A[i, j]) for i in reverse(axes(A, 1)), j in reverse(axes(A, 2))]
+    # double flip the matrix A
+    Z = Matrix{t}(undef, size(A)...)
+    copyto!(Z, A)
+    reverse!(reshape(Z, :))
+    # construct "reverse" identity
     n = size(A, 1)
-    J = [t(i + j == n + 1) for i in axes(A, 1), j in axes(A, 2)]
+    J = zeros(t, n, n)
+    for i in axes(J, 2)
+       J[n+1-i, i] = one(t)
+    end
     return Schur(Z, J, convert(Vector{t}, diag(A)))
 end
 function schur(A::Bidiagonal{T}) where {T}
     t = eigtype(T)
     if A.uplo == 'U'
         return Schur(Matrix{t}(A), Matrix{t}(I, size(A)), Vector{t}(A.dv))
-    else
+    else # A.uplo == 'L'
+        # construct "reverse" identity
         n = size(A, 1)
-        J = [t(i + j == n + 1) for i in axes(A, 1), j in axes(A, 2)]
+        J = zeros(t, n, n)
+        for i in axes(J, 2)
+            J[n+1-i, i] = one(t)
+        end
         dv = reverse!(Vector{t}(A.dv))
         ev = reverse!(Vector{t}(A.ev))
         return Schur(Matrix{t}(Bidiagonal(dv, ev, 'U')), J, dv)
