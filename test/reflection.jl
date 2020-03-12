@@ -506,11 +506,11 @@ f18888() = nothing
 let
     world = Core.Compiler.get_world_counter()
     m = first(methods(f18888, Tuple{}))
-    @test m.specializations === nothing
+    @test isempty(m.specializations)
     ft = typeof(f18888)
 
     code_typed(f18888, Tuple{}; optimize=false)
-    @test m.specializations isa Core.TypeMapEntry  # uncached, but creates the specializations entry
+    @test !isempty(m.specializations) # uncached, but creates the specializations entry
     mi = Core.Compiler.specialize_method(m, Tuple{ft}, Core.svec())
     @test Core.Compiler.inf_for_methodinstance(mi, world) === nothing
     @test !isdefined(mi, :cache)

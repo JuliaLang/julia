@@ -126,12 +126,9 @@ end
 # get a handle to the unique specialization object representing a particular instantiation of a call
 function specialize_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, preexisting::Bool=false)
     if preexisting
-        if method.specializations !== nothing
-            # check cached specializations
-            # for an existing result stored there
-            return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)
-        end
-        return nothing
+        # check cached specializations
+        # for an existing result stored there
+        return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)
     end
     return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atypes, sparams)
 end

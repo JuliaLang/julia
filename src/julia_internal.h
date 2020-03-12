@@ -1021,6 +1021,13 @@ extern jl_mutex_t safepoint_lock;
 void jl_mach_gc_end(void);
 #endif
 
+// -- smallintset.c -- //
+
+typedef uint_t (*smallintset_hash)(size_t val, jl_svec_t *data);
+typedef int (*smallintset_eq)(size_t val, const void *key, jl_svec_t *data, uint_t hv);
+ssize_t jl_smallintset_lookup(jl_array_t *cache JL_PROPAGATES_ROOT, smallintset_eq eq, const void *key, jl_svec_t *data, uint_t hv);
+void jl_smallintset_insert(jl_array_t **pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_svec_t *data);
+
 // -- typemap.c -- //
 
 // a descriptor of a jl_typemap_t that gets
