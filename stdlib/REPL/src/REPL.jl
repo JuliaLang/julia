@@ -243,7 +243,7 @@ struct REPLBackendRef
 end
 REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel,backend.response_channel)
 
-function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task = true)
+function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task::Bool = true)
     backend = REPLBackend()
     backend_ref = REPLBackendRef(backend)
     if backend_on_current_task
