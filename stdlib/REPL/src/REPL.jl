@@ -870,7 +870,9 @@ function setup_interface(
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to help("$line")
-        on_done = respond(helpmode, repl, julia_prompt, pass_empty=true, suppress_on_semicolon=false))
+        on_done = respond(repl, julia_prompt, pass_empty=true, suppress_on_semicolon=false)) do line
+            helpmode(outstream(repl), line)
+        end
 
     # Set up shell mode
     shell_mode = Prompt("shell> ";
