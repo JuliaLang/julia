@@ -208,6 +208,24 @@ function show_convert_error(io::IO, ex::MethodError, @nospecialize(arg_types_par
     end
 end
 
+"""
+    methoderror_hints
+
+Packages can provide hints about appropriate corrective actions for
+specific `MethodError`s with `push!(Base.methoderror_hints, hintmessage)`, where
+`hintmessage` should be a function like
+
+    function hintmessage(f, arg_types, kwargs)
+        # Test to see whether the call matches the specific pattern for this message
+        if f === myfunc && length(arg_types) == 1 && arg_types[1] <: SomeType
+            return "`myfunc(::SomeType)` is not defined, did you mean to call `otherfunc`?"
+        end
+        return nothing    # use `nothing` to indicate that f, arg_types, kwargs didn't match
+    end
+"""
+const methoderror_hints = []
+# Note: Base should not use `methoderror_hints`, it should inline
+# custom hints below to avoid the slight performance hit from `invokelatest`.
 function showerror(io::IO, ex::MethodError)
     # ex.args is a tuple type if it was thrown from `invoke` and is
     # a tuple of the arguments otherwise.
@@ -309,6 +327,12 @@ function showerror(io::IO, ex::MethodError)
             print(io, "\n\nYou might have used a 2d row vector where a 1d column vector was required.",
                       "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].",
                       "\nYou can convert to a column vector with the vec() function.")
+        end
+    end
+    for predicate in methoderror_hints
+        msg = Base.invokelatest(predicate, f, arg_types_param, kwargs)
+        if msg !== nothing
+            print(io, '\n', msg)
         end
     end
     try
@@ -731,4 +755,3 @@ function show(io::IO, ip::InterpreterIP)
         print(io, " in $(ip.code) at statement $(Int(ip.stmt))")
     end
 end
-

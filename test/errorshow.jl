@@ -586,6 +586,28 @@ end
     end
 end
 
+# Custom hints
+struct HasNoOne end
+function recommend_oneunit(f, arg_types, kwargs)
+    if f === Base.one && length(arg_types) == 1 && arg_types[1] === HasNoOne
+        if isempty(kwargs)
+            return "HasNoOne does not support `one`; did you mean `oneunit`?"
+        else
+            return "`one` doesn't take keyword arguments, that would be silly"
+        end
+    end
+end
+push!(Base.methoderror_hints, recommend_oneunit)
+let err_str
+    err_str = @except_str one(HasNoOne()) MethodError
+    @test occursin(r"MethodError: no method matching one\(::.*HasNoOne\)", err_str)
+    @test occursin("HasNoOne does not support `one`; did you mean `oneunit`?", err_str)
+    err_str = @except_str one(HasNoOne(); value=2) MethodError
+    @test occursin(r"MethodError: no method matching one\(::.*HasNoOne; value=2\)", err_str)
+    @test occursin("`one` doesn't take keyword arguments, that would be silly", err_str)
+end
+pop!(Base.methoderror_hints)
+
 # issue #28442
 @testset "Long stacktrace printing" begin
     f28442(c) = g28442(c + 1)
