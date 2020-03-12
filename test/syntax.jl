@@ -2189,6 +2189,12 @@ end
 @test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(101, :some_file), :(f(x,x)=1))) ==
     Expr(:error, "function argument names not unique around some_file:101")
 
+# Ensure file names don't leak between `eval`s
+eval(LineNumberNode(11, :incorrect_file))
+let exc = try eval(:(f(x,x)=1)) catch e ; e ; end
+    @test !occursin("incorrect_file", exc.msg)
+end
+
 # issue #34967
 @test_throws LoadError("string", 2, ErrorException("syntax: invalid UTF-8 sequence")) include_string(@__MODULE__,
                                       "x34967 = 1\n# Halloa\xf5b\nx34967 = 2")
