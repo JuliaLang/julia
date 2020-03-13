@@ -426,8 +426,8 @@ function Base.Timer(delay::Period; interval::Period=Second(0))
     Timer(toms(delay) / 1000, interval=toms(interval) / 1000)
 end
 
-function Base.timedwait(testcb::Function, timeout::Period)
-    timedwait(testcb, toms(timeout) / 1000)
+function Base.timedwait(testcb::Function, timeout::Period; pollint::Period=Millisecond(100))
+    timedwait(testcb, toms(timeout) / 1000, pollint=toms(pollint) / 1000)
 end
 
 Base.OrderStyle(::Type{<:AbstractTime}) = Base.Ordered()
