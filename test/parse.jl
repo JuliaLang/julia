@@ -315,3 +315,5 @@ end
     @test Meta.parse("±x") == Expr(:call, :±, :x)
     @test Meta.parse("∓x") == Expr(:call, :∓, :x)
 end
+
+@test [Int, Float64, String, Bool] .<: Union{Int, String} == Bool[1, 0, 1, 0]
