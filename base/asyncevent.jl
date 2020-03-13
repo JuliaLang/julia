@@ -255,14 +255,14 @@ function Timer(cb::Function, timeout::Real; interval::Real=0.0)
 end
 
 """
-    timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+    timedwait(testcb::Function, secs::Real; pollint::Real=0.1)
 
 Waits until `testcb` returns `true` or for `secs` seconds, whichever is earlier.
 `testcb` is polled every `pollint` seconds.
 
 Returns :ok, :timed_out, or :error
 """
-function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+function timedwait(testcb::Function, secs::Real; pollint::Real=0.1)
     pollint > 0 || throw(ArgumentError("cannot set pollint to $pollint seconds"))
     start = time_ns()
     nsecs = 1e9 * secs
