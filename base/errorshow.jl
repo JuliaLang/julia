@@ -223,6 +223,9 @@ specific `MethodError`s with `push!(Base.methoderror_hints, hintmessage)`, where
         return nothing    # use `nothing` to indicate that f, arg_types, kwargs didn't match
     end
 
+Packages should perform the `push!` onto `Base.methoderror_hints` from
+their `__init__` function.
+
 !!! compat "Julia 1.5"
     Custom MethodError hints are available as of Julia 1.5.
 """

@@ -14,7 +14,8 @@ New language features
 * Packages can now provide custom hints for specific `MethodError`s to
   help guide users. `push!` a pattern-matching function `hint(f,
   argtypes, kwargs)`, returning a message string in case of a match
-  and `nothing` otherwise, to `Base.methoderror_hints`. ([#35094])
+  and `nothing` otherwise, to `Base.methoderror_hints`.
+  See `?Base.methoderror_hints` for more information. ([#35094])
 
 Language changes
 ----------------
