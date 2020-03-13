@@ -138,7 +138,8 @@ end
 function start_repl_backend(repl_channel::Channel, response_channel::Channel)
     # Maintain legacy behavior of asynchronous backend
     backend = REPLBackend(repl_channel, response_channel, false)
-    @async start_repl_backend(backend)
+    # Assignment will be made twice, but will be immediately available
+    backend.backend_task = @async start_repl_backend(backend)
     return backend
 end
 function start_repl_backend(backend::REPLBackend,  @nospecialize(consumer = x -> nothing))
@@ -247,8 +248,8 @@ function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); ba
     backend = REPLBackend()
     backend_ref = REPLBackendRef(backend)
     if backend_on_current_task
-        frontend_task = @async run_frontend(repl, backend_ref)
-        backend = start_repl_backend(backend,consumer)
+        @async run_frontend(repl, backend_ref)
+        start_repl_backend(backend,consumer)
     else
         @async start_repl_backend(backend,consumer)
         run_frontend(repl, backend_ref)
