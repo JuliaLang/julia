@@ -857,3 +857,6 @@ end
 
 # 28680
 @test 1 .+ 1 .+  (1, 2) == (3, 4)
+
+ret =  @macroexpand @.([Int, Number] <: Real)
+@test ret == :($(Expr(:.<:, :([Int, Number]), :Real)))
