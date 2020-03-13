@@ -222,6 +222,9 @@ specific `MethodError`s with `push!(Base.methoderror_hints, hintmessage)`, where
         end
         return nothing    # use `nothing` to indicate that f, arg_types, kwargs didn't match
     end
+
+!!! compat "Julia 1.5"
+    Custom MethodError hints are available as of Julia 1.5.
 """
 const methoderror_hints = []
 # Note: Base should not use `methoderror_hints`, it should inline
