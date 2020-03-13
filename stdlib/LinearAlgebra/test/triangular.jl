@@ -642,4 +642,11 @@ end
     end
 end
 
+@testset "Error condition for powm" begin
+    A = UpperTriangular(rand(ComplexF64, 10, 10))
+    @test_throws ArgumentError powm!(A, 2.2)
+    A = LowerTriangular(rand(ComplexF64, 10, 10))
+    @test_throws ArgumentError powm(A, 2.2)
+end
+
 end # module TestTriangular
