@@ -252,7 +252,6 @@ using Distributed
     end
 end
 
-using Dates
 @testset "timedwait on multiple channels" begin
     @Experimental.sync begin
         rr1 = Channel(1)
@@ -262,13 +261,13 @@ using Dates
         callback() = all(map(isready, [rr1, rr2, rr3]))
         # precompile functions which will be tested for execution time
         @test !callback()
-        @test timedwait(callback, 0.0) === :timed_out
+        @test timedwait(callback, 0) === :timed_out
 
         @async begin sleep(0.5); put!(rr1, :ok) end
         @async begin sleep(1.0); put!(rr2, :ok) end
         @async begin sleep(2.0); put!(rr3, :ok) end
 
-        et = @elapsed timedwait(callback, Dates.Second(1))
+        et = @elapsed timedwait(callback, 1)
 
         # assuming that 0.5 seconds is a good enough buffer on a typical modern CPU
         try
