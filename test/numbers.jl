@@ -2470,6 +2470,12 @@ end
     @test rem(T(-1.5), T(2), RoundUp)      == -1.5
 end
 
+@testset "rem for $T RoundNearest" for T in (Int8, Int16, Int32, Int64, Int128)
+    for (n, r) in zip(3:7, -2:2)
+        @test rem(T(n), T(5), RoundNearest) == rem(float(n), 5.0, RoundNearest) == r
+    end
+end
+
 @testset "rem2pi $T" for T in (Float16, Float32, Float64, BigFloat)
     @test rem2pi(T(1), RoundToZero)  == 1
     @test rem2pi(T(1), RoundNearest) == 1
