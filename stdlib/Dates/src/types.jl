@@ -420,11 +420,15 @@ Base.hash(x::Time, h::UInt) =
     hash(hour(x), hash(minute(x), hash(second(x),
         hash(millisecond(x), hash(microsecond(x), hash(nanosecond(x), h))))))
 
-import Base: sleep, Timer, timedwait
-sleep(time::Period) = sleep(toms(time) / 1000)
-Timer(time::Period; interval::Period = Second(0)) =
-    Timer(toms(time) / 1000, interval = toms(interval) / 1000)
-timedwait(testcb::Function, time::Period) = timedwait(testcb, toms(time) / 1000)
+Base.sleep(duration::Period) = sleep(toms(duration) / 1000)
+
+function Base.Timer(delay::Period; interval::Period=Second(0))
+    Timer(toms(delay) / 1000, interval=toms(interval) / 1000)
+end
+
+function Base.timedwait(testcb::Function, timeout::Period)
+    timedwait(testcb, toms(timeout) / 1000)
+end
 
 Base.OrderStyle(::Type{<:AbstractTime}) = Base.Ordered()
 Base.ArithmeticStyle(::Type{<:AbstractTime}) = Base.ArithmeticWraps()
