@@ -1,5 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+Run Evaluate Print Loop (REPL)
+
+    Example minimal code
+    ```
+    import REPL
+    term = REPL.Terminals.TTYTerminal("dumb", stdin, stdout, stderr)
+    repl = REPL.LineEditREPL(term, true)
+    REPL.run_repl(repl)
+    ```
+"""
 module REPL
 
 using Base.Meta, Sockets
@@ -135,6 +146,14 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
     nothing
 end
 
+"""
+    start_repl_backend(repl_channel::Channel,response_channel::Channel)
+
+    Starts loop for REPL backend
+    Returns a REPLBackend with backend_task assigned
+
+    Deprecated since sync / async behavior cannot be selected
+"""
 function start_repl_backend(repl_channel::Channel, response_channel::Channel)
     # Maintain legacy behavior of asynchronous backend
     backend = REPLBackend(repl_channel, response_channel, false)
@@ -142,6 +161,15 @@ function start_repl_backend(repl_channel::Channel, response_channel::Channel)
     backend.backend_task = @async start_repl_backend(backend)
     return backend
 end
+
+"""
+    start_repl_backend(backend::REPLBackend)
+
+    Call directly to run backend loop on current Task.
+    Use @async for run backend on new Task.
+
+    Does not return backend until loop is finished.
+"""
 function start_repl_backend(backend::REPLBackend,  @nospecialize(consumer = x -> nothing))
     backend.backend_task = Base.current_task()
     consumer(backend)
@@ -237,13 +265,21 @@ function print_response(errio::IO, @nospecialize(response), show_value::Bool, ha
     nothing
 end
 
-# A reference to a backend
+# A reference to a backend that is not mutable
 struct REPLBackendRef
     repl_channel::Channel
     response_channel::Channel
 end
 REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel,backend.response_channel)
 
+"""
+    run_repl(repl::AbstractREPL)
+    run_repl(repl, consumer = backend->nothing; backend_on_current_task = true)
+
+    Main function to start the REPL
+
+    consumer is an optional function that takes a REPLBackend as an argument
+"""
 function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task::Bool = true)
     backend = REPLBackend()
     backend_ref = REPLBackendRef(backend)
@@ -845,15 +881,10 @@ function setup_interface(
     #
     # This function returns the main interface that describes the REPL
     # functionality, it is called internally by functions that setup a
-    # Terminal-based REPL frontend, but if you want to customize your REPL
-    # or embed the REPL in another interface, you may call this function
-    # directly and append it to your interface.
+    # Terminal-based REPL frontend.
     #
-    # Usage:
-    #
-    # repl_channel,response_channel = Channel(),Channel()
-    # start_repl_backend(repl_channel, response_channel)
-    # setup_interface(REPLDisplay(t),repl_channel,response_channel)
+    # See run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
+    # for usage
     #
     ###
 
