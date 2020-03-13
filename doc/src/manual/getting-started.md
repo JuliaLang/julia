@@ -99,7 +99,7 @@ julia [switches] -- [programfile] [args...]
 |:---                                   |:---|
 |`-v`, `--version`                      |Display version information|
 |`-h`, `--help`                         |Print command-line options (this message).|
-|`--project[={<dir>\|@.}]`              |Set <dir> as the home project/environment. The default @. option will search through parent directories until a Project.toml or JuliaProject.toml file is found.|
+|`-P`, `--project[={<dir>\|@.}]`        |Set <dir> as the home project/environment. The default @. option will search through parent directories until a Project.toml or JuliaProject.toml file is found.|
 |`-J`, `--sysimage <file>`              |Start up with the given system image file|
 |`-H`, `--home <dir>`                   |Set location of `julia` executable|
 |`--startup-file={yes\|no}`             |Load `~/.julia/config/startup.jl`|

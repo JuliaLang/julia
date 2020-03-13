@@ -80,7 +80,8 @@ static const char opts[]  =
     " -h, --help                Print this message (--help-hidden for more)\n\n"
 
     // startup options
-    " --project[={<dir>|@.}]    Set <dir> as the home project/environment\n"
+    " -P, --project[={<dir>|@.}]\n"
+    "                           Set <dir> as the home project/environment\n"
     " -J, --sysimage <file>     Start up with the given system image file\n"
     " -H, --home <dir>          Set location of `julia` executable\n"
     " --startup-file={yes|no}   Load `~/.julia/config/startup.jl`\n"
@@ -187,9 +188,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_sysimage_native_code,
            opt_compiled_modules,
            opt_machine_file,
-           opt_project,
     };
-    static const char* const shortopts = "+vhqH:e:E:L:J:C:ip:O:g:";
+    static const char* const shortopts = "+vhqH:e:E:L:J:C:ip:O:g:P:";
     static const struct option longopts[] = {
         // exposed command line options
         // NOTE: This set of required arguments need to be kept in sync
@@ -209,7 +209,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "cpu-target",      required_argument, 0, 'C' },
         { "procs",           required_argument, 0, 'p' },
         { "machine-file",    required_argument, 0, opt_machine_file },
-        { "project",         optional_argument, 0, opt_project },
+        { "project",         optional_argument, 0, 'P' },
         { "color",           required_argument, 0, opt_color },
         { "history-file",    required_argument, 0, opt_history_file },
         { "startup-file",    required_argument, 0, opt_startup_file },
@@ -404,7 +404,7 @@ restart_switch:
             if (!jl_options.machine_file)
                 jl_error("julia: failed to allocate memory");
             break;
-        case opt_project:
+        case 'P': // project
             jl_options.project = optarg ? strdup(optarg) : "@.";
             break;
         case opt_color:

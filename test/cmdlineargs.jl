@@ -107,6 +107,18 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         @test startswith(read(`$exename --help`, String), header)
     end
 
+    # -P, --project
+    mktempdir() do dir; withenv("JULIA_LOAD_PATH"=>nothing, "JULIA_PROJECT"=>nothing) do
+        project = joinpath(dir, "Project.toml"); touch(project)
+        code = "print(Base.active_project())"
+        @test read(`$exename --project=$(project) -e $code`, String) ==
+              read(`$exename -P$(project) -e $code`, String) ==
+              read(`$exename -P $(project) -e $code`, String) ==
+              read(Cmd(`$exename --project=@. -e $code`; dir=dir), String) ==
+              read(Cmd(`$exename --project -e $code`; dir=dir), String) ==
+              read(Cmd(`$exename -P@. -e $code`; dir=dir), String)
+    end end
+
     # ~ expansion in --project and JULIA_PROJECT
     if !Sys.iswindows()
         expanded = abspath(expanduser("~/foo"))
