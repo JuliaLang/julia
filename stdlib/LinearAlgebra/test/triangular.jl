@@ -33,7 +33,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         symm = Symmetric(rand(Int8, n, n))
         t1s = t1{elty1}(symm)
         @test typeof(t1s) == t1{elty1, Symmetric{elty1, Matrix{elty1}}}
-        t1t = t1{elty1}(t1(rand(Int8, n,n)))
+        t1t = t1{elty1}(t1(rand(Int8, n, n)))
         @test typeof(t1t) == t1{elty1, Matrix{elty1}}
 
         debug && println("elty1: $elty1, A1: $t1")
