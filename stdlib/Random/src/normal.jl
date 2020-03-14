@@ -215,6 +215,9 @@ end
 
 function rand(rng::AbstractRNG, s::GMPRandState)
     z = BigFloat()
+    if !ismutable(rng)
+        rng = MutableRNG(rng)
+    end
     GC.@preserve rng begin
         s.seed = MPZ_t(zero(Cint), zero(Cint), pointer_from_objref(rng))
         if s.alg == 1
@@ -235,6 +238,19 @@ randexp(rng::AbstractRNG, ::Type{BigFloat}) = rand(rng, Exponential{BigFloat}())
 
 randn!(  rng::AbstractRNG, A::AbstractArray{BigFloat}) = rand!(rng, A, Normal{BigFloat}())
 randexp!(rng::AbstractRNG, A::AbstractArray{BigFloat}) = rand!(rng, A, Exponential{BigFloat}())
+
+# mutable RNG wrapper to allow passing to C
+mutable struct MutableRNG{RNG<:AbstractRNG} <: AbstractRNG
+    rng::RNG
+end
+
+Sampler(::Type{MutableRNG{RNG}}, x, n::Repetition) where {RNG <: AbstractRNG} =
+    Sampler(RNG, x, n)
+
+Sampler(::Type{MutableRNG{RNG}}, ::Type{X}, n::Repetition) where {RNG <: AbstractRNG, X} =
+    Sampler(RNG, X, n)
+
+rand(rng::MutableRNG, x::Sampler) = rand(rng.rng, x)
 
 
 ## arrays & other scalar methods
