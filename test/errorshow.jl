@@ -608,6 +608,19 @@ let err_str
 end
 pop!(Base._hint_handlers[MethodError])  # order is undefined, don't copy this
 
+function busted_hint(io, exc, notarg)  # wrong number of args
+    print(io, "\nI don't have a hint for you, sorry")
+end
+@test register_error_hint(busted_hint, DomainError) === nothing
+try
+    sqrt(-2)
+catch ex
+    io = IOBuffer()
+    @test_logs (:error, "Hint-handler busted_hint for DomainError in $(@__MODULE__) caused an error") showerror(io, ex)
+end
+pop!(Base._hint_handlers[DomainError])  # order is undefined, don't copy this
+
+
 # issue #28442
 @testset "Long stacktrace printing" begin
     f28442(c) = g28442(c + 1)
