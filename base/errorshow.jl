@@ -60,12 +60,8 @@ julia> module Hinter
        function __init__()
            register_error_hint(MethodError) do io, exc, argtypes, kwargs
                if exc.f == only_int
-                   if get(io, :color, false)
-                       print(io, "\nDid you mean to call ")
-                       printstyled(io, "`any_number`?", color=:light_magenta)
-                   else
-                       print(io, "\nDid you mean to call `any_number`?")
-                   end
+                    print(io, "\nDid you mean to call ")
+                    printstyled(io, "`any_number`?", color=:light_magenta)
                end
            end
        end
