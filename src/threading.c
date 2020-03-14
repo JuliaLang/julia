@@ -407,8 +407,9 @@ void jl_init_threading(void)
     // how many threads available, usable
     int max_threads = jl_cpu_threads();
     jl_n_threads = JULIA_NUM_THREADS;
-    cp = getenv(NUM_THREADS_NAME);
-    if (cp)
+    if (jl_options.nthreads != 0)
+        jl_n_threads = jl_options.nthreads;
+    else if ((cp = getenv(NUM_THREADS_NAME)))
         jl_n_threads = (uint64_t)strtol(cp, NULL, 10);
     if (jl_n_threads > max_threads)
         jl_n_threads = max_threads;

@@ -50,6 +50,14 @@ Language changes
   Now the result is "a\n b", since the space before `b` is no longer considered to occur
   at the start of a line. The old behavior is considered a bug ([#35001]).
 
+Command-line option changes
+---------------------------
+
+  * `-t N`, `--threads N` starts Julia with `N` threads. This option takes precedence over
+    `JULIA_NUM_THREADS`. The specified number of threads only applies to the main Julia
+    process and it does not propagate to worker processes spawned using the `-p`/`--procs`
+    or `--machine-file` command line arguments ([#TBD]).
+
 Multi-threading changes
 -----------------------
 

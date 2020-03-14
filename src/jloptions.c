@@ -35,6 +35,7 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL, // cmds
                             NULL, // image_file (will be filled in below)
                             NULL, // cpu_target ("native", "core2", etc...)
+                            0,    // nthreads
                             0,    // nprocs
                             NULL, // machine_file
                             NULL, // project
@@ -96,6 +97,7 @@ static const char opts[]  =
     " -L, --load <file>         Load <file> immediately on all processors\n\n"
 
     // parallel options
+    " -t, --threads {N|auto}    Enable N threads. \"auto\" sets N to the number of local CPU threads.\n"
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
     "                           \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
     " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
@@ -189,7 +191,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_machine_file,
            opt_project,
     };
-    static const char* const shortopts = "+vhqH:e:E:L:J:C:ip:O:g:";
+    static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
         // exposed command line options
         // NOTE: This set of required arguments need to be kept in sync
@@ -208,6 +210,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "compiled-modules",    required_argument, 0, opt_compiled_modules },
         { "cpu-target",      required_argument, 0, 'C' },
         { "procs",           required_argument, 0, 'p' },
+        { "threads",         required_argument, 0, 't' },
         { "machine-file",    required_argument, 0, opt_machine_file },
         { "project",         optional_argument, 0, opt_project },
         { "color",           required_argument, 0, opt_color },
@@ -386,6 +389,18 @@ restart_switch:
             jl_options.cpu_target = strdup(optarg);
             if (!jl_options.cpu_target)
                 jl_error("julia: failed to allocate memory");
+            break;
+        case 't': // threads
+            errno = 0;
+            if (!strcmp(optarg,"auto")) {
+                jl_options.nthreads = jl_cpu_threads();
+            }
+            else {
+                long nthreads = strtol(optarg, &endptr, 10);
+                if (errno != 0 || optarg == endptr || *endptr != 0 || nthreads < 1 || nthreads >= INT_MAX)
+                    jl_errorf("julia: -t,--threads=<n> must be an integer >= 1");
+                jl_options.nthreads = (int)nthreads;
+            }
             break;
         case 'p': // procs
             errno = 0;
