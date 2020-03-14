@@ -29,6 +29,80 @@ ERROR: MyException: test exception
 """
 showerror(io::IO, ex) = show(io, ex)
 
+"""
+    register_error_hint(handler, exceptiontype)
+
+Register a "hinting" function `handler(io, exception)` that can
+suggest potential ways for users to circumvent errors.  `handler`
+should examine `exception` to see whether the conditions appropriate
+for a hint are met, and then generate output to `io`.
+Packages should call `register_error_hint` from within their
+[`__init__`](@ref) function.
+
+For specific exception types, `handler` is required to accept additional arguments:
+
+- `MethodError`: provide `handler(io, exc::MethodError, argtypes, kwargs)`,
+  which splits the combined arguments into positional and keyword arguments.
+
+When issuing a hint, the output should typically start with `\n`.
+
+If you define custom exception types, your `showerror` method can
+support hints by calling [`show_error_hints`](@ref).
+
+# Example
+
+```jldoctest
+julia> module Hinter
+
+       only_int(x::Int)      = 1
+       any_number(x::Number) = 2
+
+       function __init__()
+           register_error_hint(MethodError) do io, exc, argtypes, kwargs
+               if exc.f == only_int
+                   if get(io, :color, false)
+                       print(io, "\nDid you mean to call ")
+                       printstyled(io, "`any_number`?", color=:light_magenta)
+                   else
+                       print(io, "\nDid you mean to call `any_number`?")
+                   end
+               end
+           end
+       end
+
+       end
+Main.Hinter
+
+julia> Hinter.only_int(1.0)
+ERROR: MethodError: no method matching only_int(::Float64)
+Did you mean to call `any_number`?
+Closest candidates are:
+[...]
+```
+
+!!! compat "Julia 1.5"
+    Custom error hints are available as of Julia 1.5.
+"""
+function register_error_hint(handler, exct::Type)
+    list = get!(()->[], _hint_handlers, exct)
+    push!(list, handler)
+    return nothing
+end
+
+const _hint_handlers = IdDict{Type,Vector{Any}}()
+
+function show_error_hints(io, ex, args...)
+    hinters = get!(()->[], _hint_handlers, typeof(ex))
+    for handler in hinters
+        try
+            Base.invokelatest(handler, io, ex, args...)
+        catch err
+            tn = typeof(handler).name
+            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error"
+        end
+    end
+end
+
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
@@ -45,6 +119,7 @@ function showerror(io::IO, ex::BoundsError)
             print(io, ']')
         end
     end
+    show_error_hints(io, ex)
 end
 
 function showerror(io::IO, ex::TypeError)
@@ -68,6 +143,7 @@ function showerror(io::IO, ex::TypeError)
         end
         print(io, ctx, ", expected ", ex.expected, ", got ", targs...)
     end
+    show_error_hints(io, ex)
 end
 
 function showerror(io::IO, ex, bt; backtrace=true)
@@ -106,6 +182,7 @@ function showerror(io::IO, ex::DomainError)
     if isdefined(ex, :msg)
         print(io, ":\n", ex.msg)
     end
+    show_error_hints(io, ex)
     nothing
 end
 
@@ -161,6 +238,7 @@ function showerror(io::IO, ex::InexactError)
     print(io, "InexactError: ", ex.func, '(')
     nameof(ex.T) === ex.func || print(io, ex.T, ", ")
     print(io, ex.val, ')')
+    show_error_hints(io, ex)
 end
 
 typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
@@ -208,32 +286,6 @@ function show_convert_error(io::IO, ex::MethodError, @nospecialize(arg_types_par
     end
 end
 
-"""
-    methoderror_hints
-
-Packages can provide hints about appropriate corrective actions for
-specific `MethodError`s with `push!(Base.methoderror_hints, hintmessage)`, where
-`hintmessage` should be a function like
-
-```julia
-function hintmessage(f, arg_types, kwargs)
-    # Test to see whether the call matches the specific pattern for this message
-    if f === myfunc && length(arg_types) == 1 && arg_types[1] <: SomeType
-        return "`myfunc(::SomeType)` is not defined, did you mean to call `otherfunc`?"
-    end
-    return nothing    # use `nothing` to indicate that f, arg_types, kwargs didn't match
-end
-```
-
-Packages should perform the `push!` onto `Base.methoderror_hints` from
-their `__init__` function.
-
-!!! compat "Julia 1.5"
-    Custom MethodError hints are available as of Julia 1.5.
-"""
-const methoderror_hints = []
-# Note: Base should not use `methoderror_hints`, it should inline
-# custom hints below to avoid the slight performance hit from `invokelatest`.
 function showerror(io::IO, ex::MethodError)
     # ex.args is a tuple type if it was thrown from `invoke` and is
     # a tuple of the arguments otherwise.
@@ -337,12 +389,7 @@ function showerror(io::IO, ex::MethodError)
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
-    for predicate in methoderror_hints
-        msg = Base.invokelatest(predicate, f, arg_types_param, kwargs)
-        if msg !== nothing
-            print(io, '\n', msg)
-        end
-    end
+    show_error_hints(io, ex, arg_types_param, kwargs)
     try
         show_method_candidates(io, ex, kwargs)
     catch ex

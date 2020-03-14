@@ -11,11 +11,9 @@ New language features
   macros and matrix constructors, which are whitespace sensitive, because expressions like
   `[a ±b]` now get parsed as `[a ±(b)]` instead of `[±(a, b)]`. ([#34200])
 
-* Packages can now provide custom hints for specific `MethodError`s to
-  help guide users. `push!` a pattern-matching function `hint(f,
-  argtypes, kwargs)`, returning a message string in case of a match
-  and `nothing` otherwise, to `Base.methoderror_hints`.
-  See `?Base.methoderror_hints` for more information. ([#35094])
+* Packages can now provide custom hints to help users resolve errors by using the
+  `register_error_hint` function. Packages that define custom exception types
+  can support hints by calling `show_error_hints` from their `showerror` method. ([#35094])
 
 Language changes
 ----------------

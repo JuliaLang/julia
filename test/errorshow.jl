@@ -588,16 +588,16 @@ end
 
 # Custom hints
 struct HasNoOne end
-function recommend_oneunit(f, arg_types, kwargs)
-    if f === Base.one && length(arg_types) == 1 && arg_types[1] === HasNoOne
+function recommend_oneunit(io, ex, arg_types, kwargs)
+    if ex.f === Base.one && length(arg_types) == 1 && arg_types[1] === HasNoOne
         if isempty(kwargs)
-            return "HasNoOne does not support `one`; did you mean `oneunit`?"
+            print(io, "\nHasNoOne does not support `one`; did you mean `oneunit`?")
         else
-            return "`one` doesn't take keyword arguments, that would be silly"
+            print(io, "\n`one` doesn't take keyword arguments, that would be silly")
         end
     end
 end
-push!(Base.methoderror_hints, recommend_oneunit)
+@test register_error_hint(recommend_oneunit, MethodError) === nothing
 let err_str
     err_str = @except_str one(HasNoOne()) MethodError
     @test occursin(r"MethodError: no method matching one\(::.*HasNoOne\)", err_str)
@@ -606,7 +606,7 @@ let err_str
     @test occursin(r"MethodError: no method matching one\(::.*HasNoOne; value=2\)", err_str)
     @test occursin("`one` doesn't take keyword arguments, that would be silly", err_str)
 end
-pop!(Base.methoderror_hints)
+pop!(Base._hint_handlers[MethodError])  # order is undefined, don't copy this
 
 # issue #28442
 @testset "Long stacktrace printing" begin
