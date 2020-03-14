@@ -2473,6 +2473,7 @@ end
 @testset "rem for $T RoundNearest" for T in (Int8, Int16, Int32, Int64, Int128)
     for (n, r) in zip(3:7, -2:2)
         @test rem(T(n), T(5), RoundNearest) == rem(float(n), 5.0, RoundNearest) == r
+        @test rem(T(n), T(5), RoundNearest) == rem(T(n)//1, T(5)//1, RoundNearest)
     end
 end
 
