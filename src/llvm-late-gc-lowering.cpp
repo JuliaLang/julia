@@ -1525,7 +1525,11 @@ State LateLowerGCFrame::LocalScan(Function &F) {
     return S;
 }
 
+#if JL_LLVM_VERSION >= 110000
+static Value *ExtractScalar(Value *V, Type *VTy, bool isptr, ArrayRef<unsigned> Idxs, IRBuilder<> &irbuilder) {
+#else
 static Value *ExtractScalar(Value *V, Type *VTy, bool isptr, ArrayRef<unsigned> Idxs, IRBuilder<> irbuilder) {
+#endif
     Type *T_int32 = Type::getInt32Ty(V->getContext());
     if (isptr) {
         std::vector<Value*> IdxList{Idxs.size() + 1};
@@ -1551,7 +1555,11 @@ static Value *ExtractScalar(Value *V, Type *VTy, bool isptr, ArrayRef<unsigned> 
     return V;
 }
 
+#if JL_LLVM_VERSION >= 110000
+std::vector<Value*> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, IRBuilder<> &irbuilder) {
+#else
 std::vector<Value*> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, IRBuilder<> irbuilder) {
+#endif
     auto Tracked = TrackCompositeType(STy);
     std::vector<Value*> Ptrs;
     for (unsigned i = 0; i < Tracked.size(); ++i) {
@@ -1562,7 +1570,11 @@ std::vector<Value*> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, IRBu
     return Ptrs;
 }
 
+#if JL_LLVM_VERSION >= 110000
+unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilder<> &irbuilder) {
+#else
 unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilder<> irbuilder) {
+#endif
     auto Ptrs = ExtractTrackedValues(Src, STy, isptr, irbuilder);
     for (unsigned i = 0; i < Ptrs.size(); ++i) {
         Value *Elem = Ptrs[i];

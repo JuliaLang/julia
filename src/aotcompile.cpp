@@ -309,7 +309,11 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
     JL_GC_POP();
 
     // process the globals array, before jl_merge_module destroys them
+#if JL_LLVM_VERSION >= 110000
+    std::vector<StringRef> gvars;
+#else
     std::vector<std::string> gvars;
+#endif
     for (auto &global : params.globals) {
         gvars.push_back(global.second->getName());
         data->jl_value_to_llvm[global.first] = gvars.size();
@@ -847,13 +851,23 @@ addPassesToGenerateCode(LLVMTargetMachine *TM, PassManagerBase &PM) {
     TargetPassConfig *PassConfig = TM->createPassConfig(PM);
     PassConfig->setDisableVerify(false);
     PM.add(PassConfig);
+#if JL_LLVM_VERSION >= 110000
+    MachineModuleInfoWrapperPass *MMIWP =
+        new MachineModuleInfoWrapperPass(TM);
+    PM.add(MMIWP);
+#else
     MachineModuleInfo *MMI = new MachineModuleInfo(TM);
     PM.add(MMI);
+#endif
     if (PassConfig->addISelPasses())
         return NULL;
     PassConfig->addMachinePasses();
     PassConfig->setInitialized();
+#if JL_LLVM_VERSION >= 110000
+    return &MMIWP->getMMI().getContext();
+#else
     return &MMI->getContext();
+#endif
 }
 
 void jl_strip_llvm_debug(Module *m);
@@ -894,7 +908,11 @@ jl_value_t *jl_dump_llvm_asm(void *F, const char* asm_variant, const char *debug
              std::unique_ptr<MCAsmBackend> MAB(TM->getTarget().createMCAsmBackend(
                 STI, MRI, TM->Options.MCOptions));
             std::unique_ptr<MCCodeEmitter> MCE;
+#if JL_LLVM_VERSION >= 110000
+            auto FOut = std::make_unique<formatted_raw_ostream>(asmfile);
+#else
             auto FOut = llvm::make_unique<formatted_raw_ostream>(asmfile);
+#endif
             std::unique_ptr<MCStreamer> S(TM->getTarget().createAsmStreamer(
                 *Context, std::move(FOut), true,
                 true, InstPrinter,
