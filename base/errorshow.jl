@@ -215,13 +215,15 @@ Packages can provide hints about appropriate corrective actions for
 specific `MethodError`s with `push!(Base.methoderror_hints, hintmessage)`, where
 `hintmessage` should be a function like
 
-    function hintmessage(f, arg_types, kwargs)
-        # Test to see whether the call matches the specific pattern for this message
-        if f === myfunc && length(arg_types) == 1 && arg_types[1] <: SomeType
-            return "`myfunc(::SomeType)` is not defined, did you mean to call `otherfunc`?"
-        end
-        return nothing    # use `nothing` to indicate that f, arg_types, kwargs didn't match
+```julia
+function hintmessage(f, arg_types, kwargs)
+    # Test to see whether the call matches the specific pattern for this message
+    if f === myfunc && length(arg_types) == 1 && arg_types[1] <: SomeType
+        return "`myfunc(::SomeType)` is not defined, did you mean to call `otherfunc`?"
     end
+    return nothing    # use `nothing` to indicate that f, arg_types, kwargs didn't match
+end
+```
 
 Packages should perform the `push!` onto `Base.methoderror_hints` from
 their `__init__` function.
