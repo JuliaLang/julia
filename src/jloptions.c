@@ -393,7 +393,7 @@ restart_switch:
         case 't': // threads
             errno = 0;
             if (!strcmp(optarg,"auto")) {
-                jl_options.nthreads = jl_cpu_threads();
+                jl_options.nthreads = -1;
             }
             else {
                 long nthreads = strtol(optarg, &endptr, 10);

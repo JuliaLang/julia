@@ -272,10 +272,11 @@ julia> Threads.threadid()
     Note that this must be done *before* starting Julia.
 
 !!! note
-    The number of threads specified with `-t`/`--threads` only applies to the main process,
-    and, thus, it does not propagate to processes spawned using the `-p`/`--procs` or
-    `--machine-file` command line options. To spawn workers with multiple threads enabled,
-    use [`addprocs`](@ref) and pass `-t`/`--threads` as `exeflags`.
+    The number of threads specified with `-t`/`--threads` is propagated to worker processes
+    that are spawned using the `-p`/`--procs` or `--machine-file` command line options.
+    For example, `julia -p2 -t2` spawns 1 main process with 2 worker processes, and all
+    three processes has 2 threads enabled. For more fine grained control over worker
+    threads use [`addprocs`](@ref) and pass `-t`/`--threads` as `exeflags`.
 
 ## The `@threads` Macro
 

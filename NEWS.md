@@ -54,9 +54,8 @@ Command-line option changes
 ---------------------------
 
   * `-t N`, `--threads N` starts Julia with `N` threads. This option takes precedence over
-    `JULIA_NUM_THREADS`. The specified number of threads only applies to the main Julia
-    process and it does not propagate to worker processes spawned using the `-p`/`--procs`
-    or `--machine-file` command line arguments ([#TBD]).
+    `JULIA_NUM_THREADS`. The specified number of threads also propagates to worker processes
+    spawned using the `-p`/`--procs` or `--machine-file` command line arguments ([#TBD]).
 
 Multi-threading changes
 -----------------------
