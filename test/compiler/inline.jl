@@ -275,3 +275,10 @@ let ci = code_typed(f34900, Tuple{Int, Int})[1].first
     @test length(ci.code) == 1 && isexpr(ci.code[1], :return) &&
         ci.code[1].args[1].id == 2
 end
+
+@testset "check jl_ast_flag_inlineable for inline macro" begin
+    @test ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(@inline x -> x)).source)
+    @test !ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods( x -> x)).source)
+    @test ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(@inline function f(x) x end)).source)
+    @test !ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(function f(x) x end)).source)
+end
