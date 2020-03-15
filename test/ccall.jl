@@ -994,6 +994,12 @@ foo13031(x,y,z) = z
 foo13031p = @cfunction(foo13031, Cint, (Ref{Tuple{}}, Ref{Tuple{}}, Cint))
 ccall(foo13031p, Cint, (Ref{Tuple{}},Ref{Tuple{}},Cint), (), (), 8)
 
+# issue 26078
+
+unstable26078(x) = x > 0 ? x : "foo"
+handle26078 = @cfunction(unstable26078, Int32, (Int32,))
+@test ccall(handle26078, Int32, (Int32,), 1) == 1
+
 # issue 17219
 function ccall_reassigned_ptr(ptr::Ptr{Cvoid})
     ptr = Libdl.dlsym(Libdl.dlopen(libccalltest), "test_echo_p")
