@@ -35,23 +35,23 @@ showerror(io::IO, ex) = show(io, ex)
 Register a "hinting" function `handler(io, exception)` that can
 suggest potential ways for users to circumvent errors.  `handler`
 should examine `exception` to see whether the conditions appropriate
-for a hint are met, and then generate output to `io`.
+for a hint are met, and if so generate output to `io`.
 Packages should call `register_error_hint` from within their
-[`__init__`](@ref) function.
+`__init__` function.
 
 For specific exception types, `handler` is required to accept additional arguments:
 
 - `MethodError`: provide `handler(io, exc::MethodError, argtypes, kwargs)`,
   which splits the combined arguments into positional and keyword arguments.
 
-When issuing a hint, the output should typically start with `\n`.
+When issuing a hint, the output should typically start with `\\n`.
 
 If you define custom exception types, your `showerror` method can
 support hints by calling [`show_error_hints`](@ref).
 
 # Example
 
-```jldoctest
+```
 julia> module Hinter
 
        only_int(x::Int)      = 1
@@ -60,20 +60,24 @@ julia> module Hinter
        function __init__()
            register_error_hint(MethodError) do io, exc, argtypes, kwargs
                if exc.f == only_int
-                    print(io, "\nDid you mean to call ")
-                    printstyled(io, "`any_number`?", color=:light_magenta)
+                    # Color is not necessary, this is just to show it's possible.
+                    print(io, "\\nDid you mean to call ")
+                    printstyled(io, "`any_number`?", color=:cyan)
                end
            end
        end
 
        end
-Main.Hinter
+```
 
+Then if you call `Hinter.only_int` on something that isn't an `Int` (thereby triggering a `MethodError`), it issues the hint:
+
+```
 julia> Hinter.only_int(1.0)
 ERROR: MethodError: no method matching only_int(::Float64)
 Did you mean to call `any_number`?
 Closest candidates are:
-[...]
+    ...
 ```
 
 !!! compat "Julia 1.5"
@@ -87,6 +91,13 @@ end
 
 const _hint_handlers = IdDict{Type,Vector{Any}}()
 
+"""
+    show_error_hints(io, ex, args...)
+
+Invoke all handlers from [`register_error_hint`](@ref) for the particular
+exception type `typeof(ex)`. `args` must contain any other arguments expected by
+the handler for that type.
+"""
 function show_error_hints(io, ex, args...)
     hinters = get!(()->[], _hint_handlers, typeof(ex))
     for handler in hinters
