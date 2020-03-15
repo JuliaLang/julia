@@ -1175,6 +1175,8 @@ function __dot__(x::Expr)
         Expr(x.head, x.args[1], dotargs[2])
     elseif x.head === :(<:)
         Expr(:(.<:), dotargs...)
+    elseif x.head === :(>:)
+        Expr(:(.>:), dotargs...)
     else
         if x.head === :&& || x.head === :||
             error("""

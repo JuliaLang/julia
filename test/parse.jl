@@ -316,7 +316,10 @@ end
     @test Meta.parse("∓x") == Expr(:call, :∓, :x)
 end
 
-@testset "test .<:" begin
+@testset "test .<: and .>:" begin
     tmp = [Int, Float64, String, Bool] .<: Union{Int, String}
     @test tmp == Bool[1, 0, 1, 0]
+
+    tmp = [Int, Float64, String, Bool] .>: [Int, Float64, String, Bool]
+    @test tmp == Bool[1, 1, 1, 1]
 end

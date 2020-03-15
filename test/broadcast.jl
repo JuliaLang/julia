@@ -860,3 +860,6 @@ end
 
 ret =  @macroexpand @.([Int, Number] <: Real)
 @test ret == :($(Expr(:.<:, :([Int, Number]), :Real)))
+
+ret =  @macroexpand @.([Int, Number] >: Real)
+@test ret == :($(Expr(:.>:, :([Int, Number]), :Real)))
