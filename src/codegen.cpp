@@ -3856,6 +3856,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
             GlobalVariable::PrivateLinkage,
             name.str(), M);
     jl_init_function(f);
+    f->addFnAttr(Thunk);
     //f->setAlwaysInline();
     ctx.f = f; // for jl_Module
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
@@ -3878,7 +3879,8 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     }
     theFarg = maybe_decay_untracked(theFarg);
     auto args = f->arg_begin();
-    Value *r = ctx.builder.CreateCall(theFptr, { &*args, &*++args, &*++args, theFarg });
+    CallInst *r = ctx.builder.CreateCall(theFptr, { &*args, &*++args, &*++args, theFarg });
+    r->setAttributes(cast<Function>(theFptr)->getAttributes());
     ctx.builder.CreateRet(r);
     return f;
 }
