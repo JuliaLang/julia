@@ -273,12 +273,11 @@ function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
         inner = inner.args[end]::Expr
     end
 
-    idx, exargs = findmeta(inner)
-    if idx != 0
-        push!(exargs[idx].args, tag)
+    found, metaargs = findmeta(inner)
+    if found
+        push!(metaargs, tag)
     else
-        body::Expr = inner.args[2]
-        pushfirst!(body.args, Expr(:meta, tag))
+        pushfirst!(metaargs, Expr(:meta, tag))
     end
     ex
 end
@@ -335,12 +334,17 @@ function findmeta(ex::Expr)
     if ex.head === :function || is_short_function_def(ex) || ex.head === :->
         body::Expr = ex.args[2]
         body.head === :block || error(body, " is not a block expression")
-        return findmeta_block(ex.args)
+        idx, exargs = findmeta_block(ex.args)
+        if idx != 0
+            return true, exargs[idx].args
+        else
+            return false, ex.args[2].args
+        end
+    elseif ex.head === :do
+        return findmeta(ex.args[2])
     end
     error(ex, " is not a function expression")
 end
-
-findmeta(ex::Array{Any,1}) = findmeta_block(ex)
 
 function findmeta_block(exargs, argsmatch=args->true)
     for i = 1:length(exargs)

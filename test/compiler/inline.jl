@@ -281,4 +281,6 @@ end
     @test !ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods( x -> x)).source)
     @test ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(@inline function f(x) x end)).source)
     @test !ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(function f(x) x end)).source)
+    @test ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(@inline identity() do x; x end)).source)
+    @test !ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(identity() do x; x end)).source)
 end
