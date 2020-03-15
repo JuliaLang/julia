@@ -2476,10 +2476,10 @@ end
         @test rem(T(n), T(-5), RoundNearest) == rem(float(n), -5.0, RoundNearest) == r
         @test rem(T(-n), T(-5), RoundNearest) == rem(float(-n), -5.0, RoundNearest) == -r
         @test rem(T(-n), T(5), RoundNearest) == rem(float(-n), 5.0, RoundNearest) == -r
-        @test rem(T(n), T(5), RoundNearest) == rem(T(n)//1, T(5)//1, RoundNearest)
-        @test rem(T(-n), T(5), RoundNearest) == rem(T(-n)//1, T(5)//1, RoundNearest)
-        @test rem(T(n), T(-5), RoundNearest) == rem(T(n)//1, T(-5)//1, RoundNearest)
-        @test rem(T(-n), T(-5), RoundNearest) == rem(T(-n)//1, T(-5)//1, RoundNearest)
+        @test rem(T(n), T(5), RoundNearest) == rem(T(n)//T(1), T(5)//T(1), RoundNearest)
+        @test rem(T(-n), T(5), RoundNearest) == rem(T(-n)//T(1), T(5)//T(1), RoundNearest)
+        @test rem(T(n), T(-5), RoundNearest) == rem(T(n)//T(1), T(-5)//T(1), RoundNearest)
+        @test rem(T(-n), T(-5), RoundNearest) == rem(T(-n)//T(1), T(-5)//T(1), RoundNearest)
     end
 end
 
