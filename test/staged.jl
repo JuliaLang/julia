@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Random
+using InteractiveUtils: code_llvm, code_native
 
 @generated function staged_t1(a,b)
     if a == Int
@@ -153,6 +154,7 @@ module TestGeneratedThrow
         @cfunction(foo, Cvoid, ())
         global inited = true
     end
+    inited = false
 end
 @test TestGeneratedThrow.inited
 
@@ -168,7 +170,7 @@ end
 @test _g_f_with_inner2(1)(2) == 2
 
 # @generated functions errors
-global gf_err_ref = Ref{Int}()
+const gf_err_ref = Ref{Int}()
 
 gf_err_ref[] = 0
 let gf_err, tsk = @async nothing # create a Task for yield to try to run
@@ -177,8 +179,9 @@ let gf_err, tsk = @async nothing # create a Task for yield to try to run
         yield()
         gf_err_ref[] += 1000
     end
-    @test_throws ErrorException gf_err()
-    @test_throws ErrorException gf_err()
+    Expected = ErrorException("task switch not allowed from inside staged nor pure functions")
+    @test_throws Expected gf_err()
+    @test_throws Expected gf_err()
     @test gf_err_ref[] == 4
 end
 
@@ -187,14 +190,18 @@ let gf_err2
     @generated function gf_err2(::f) where {f}
         gf_err_ref[] += 1
         reflect = f.instance
-        gf_err_ref[] += 1
-        reflect(+, (Int,Int))
+        gf_err_ref[] += 10
+        reflect(+, (Int, Int))
         gf_err_ref[] += 1000
         return nothing
     end
-    @test_throws ErrorException gf_err2(code_typed)
-    @test gf_err_ref[] == 4
+    Expected = ErrorException("code reflection cannot be used from generated functions")
+    @test_throws Expected gf_err2(code_typed)
+    @test_throws Expected gf_err2(code_llvm)
+    @test_throws Expected gf_err2(code_native)
+    @test gf_err_ref[] == 66
     @test gf_err2(code_lowered) === nothing
+    @test gf_err_ref[] == 1077
 end
 
 # issue #15043

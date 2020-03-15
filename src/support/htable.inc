@@ -47,10 +47,10 @@ static void **HTNAME##_lookup_bp_r(htable_t *h, void *key, void *ctx)   \
     /* lots of time rehashing all the keys over and over. */            \
     sz = h->size;                                                       \
     ol = h->table;                                                      \
-    if (sz >= (1<<19) || (sz <= (1<<8)))                                \
-        newsz = sz<<1;                                                  \
-    else if (sz <= HT_N_INLINE)                                         \
+    if (sz < HT_N_INLINE)                                              \
         newsz = HT_N_INLINE;                                            \
+    else if (sz >= (1<<19) || (sz <= (1<<8)))                           \
+        newsz = sz<<1;                                                  \
     else                                                                \
         newsz = sz<<2;                                                  \
     /*printf("trying to allocate %d words.\n", newsz); fflush(stdout);*/ \

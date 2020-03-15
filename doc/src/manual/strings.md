@@ -642,7 +642,7 @@ julia> """
 
 Trailing whitespace is left unaltered.
 
-Triple-quoted string literals can contain `"` symbols without escaping.
+Triple-quoted string literals can contain `"` characters without escaping.
 
 Note that line breaks in literal strings, whether single- or triple-quoted, result in a newline
 (LF) character `\n` in the string, even if your editor uses a carriage return `\r` (CR) or CRLF

@@ -1557,12 +1557,14 @@ julia> false * NaN
 """
 Bool
 
-for bit in (16, 32, 64)
+for (bit, sign, exp, frac) in ((16, 1, 5, 10), (32, 1, 8, 23), (64, 1, 11, 52))
     @eval begin
         """
             Float$($bit) <: AbstractFloat
 
-        $($bit)-bit floating point number type.
+        $($bit)-bit floating point number type (IEEE 754 standard).
+
+        Binary format: $($sign) sign, $($exp) exponent, $($frac) fraction bits.
         """
         $(Symbol("Float", bit))
     end

@@ -1218,8 +1218,18 @@ cd(dirwalk) do
 
         root, dirs, files = take!(chnl)
         @test root == joinpath(".", "sub_dir1")
-        @test dirs == (has_symlinks ? ["link", "subsub_dir1", "subsub_dir2"] : ["subsub_dir1", "subsub_dir2"])
-        @test files == ["file1", "file2"]
+        if has_symlinks
+            if follow_symlinks
+                @test dirs ==  ["link", "subsub_dir1", "subsub_dir2"]
+                @test files == ["file1", "file2"]
+            else
+                @test dirs ==  ["subsub_dir1", "subsub_dir2"]
+                @test files == ["file1", "file2", "link"]
+            end
+        else
+            @test dirs ==  ["subsub_dir1", "subsub_dir2"]
+            @test files == ["file1", "file2"]
+        end
 
         root, dirs, files = take!(chnl)
         if follow_symlinks
@@ -1256,8 +1266,18 @@ cd(dirwalk) do
             root, dirs, files = take!(chnl)
         end
         @test root == joinpath(".", "sub_dir1")
-        @test dirs ==  (has_symlinks ? ["link", "subsub_dir1", "subsub_dir2"] : ["subsub_dir1", "subsub_dir2"])
-        @test files == ["file1", "file2"]
+        if has_symlinks
+            if follow_symlinks
+                @test dirs ==  ["link", "subsub_dir1", "subsub_dir2"]
+                @test files == ["file1", "file2"]
+            else
+                @test dirs ==  ["subsub_dir1", "subsub_dir2"]
+                @test files == ["file1", "file2", "link"]
+            end
+        else
+            @test dirs ==  ["subsub_dir1", "subsub_dir2"]
+            @test files == ["file1", "file2"]
+        end
 
         root, dirs, files = take!(chnl)
         @test root == joinpath(".", "sub_dir2")
@@ -1289,6 +1309,18 @@ cd(dirwalk) do
     @test root == joinpath(".", "sub_dir2")
     @test dirs == []
     @test files == ["file_dir2"]
+
+    # Test that symlink loops don't cause errors
+    if has_symlinks
+        mkdir(joinpath(".", "sub_dir3"))
+        symlink("foo", joinpath(".", "sub_dir3", "foo"))
+
+        @test_throws Base.IOError walkdir(joinpath(".", "sub_dir3"); follow_symlinks=true)
+        root, dirs, files = take!(walkdir(joinpath(".", "sub_dir3"); follow_symlinks=false))
+        @test root == joinpath(".", "sub_dir3")
+        @test dirs == []
+        @test files == ["foo"]
+    end
 end
 rm(dirwalk, recursive=true)
 

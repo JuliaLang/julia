@@ -320,8 +320,6 @@ function eachline(cmd::AbstractCmd; keep::Bool=false)
     return EachLine(out, keep=keep, ondone=ondone)::EachLine
 end
 
-readline(cmd::AbstractCmd; keep::Bool=false) = first(eachline(cmd, keep=keep))
-
 """
     open(command, mode::AbstractString, stdio=devnull)
 

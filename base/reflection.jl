@@ -912,13 +912,13 @@ end
 function visit(f, mc::Core.TypeMapLevel)
     if mc.targ !== nothing
         e = mc.targ::Vector{Any}
-        for i in 1:length(e)
+        for i in 2:2:length(e)
             isassigned(e, i) && visit(f, e[i])
         end
     end
     if mc.arg1 !== nothing
         e = mc.arg1::Vector{Any}
-        for i in 1:length(e)
+        for i in 2:2:length(e)
             isassigned(e, i) && visit(f, e[i])
         end
     end
@@ -965,8 +965,6 @@ default_debug_info_kind() = unsafe_load(cglobal(:jl_default_debug_info_kind, Cin
 
 # this type mirrors jl_cgparams_t (documented in julia.h)
 struct CodegenParams
-    cached::Cint
-
     track_allocations::Cint
     code_coverage::Cint
     static_alloc::Cint
@@ -980,18 +978,18 @@ struct CodegenParams
     emit_function::Any
     emitted_function::Any
 
-    CodegenParams(;cached::Bool=true,
-                   track_allocations::Bool=true, code_coverage::Bool=true,
+    function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    static_alloc::Bool=true, prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
                    module_setup=nothing, module_activation=nothing, raise_exception=nothing,
-                   emit_function=nothing, emitted_function=nothing) =
-        new(Cint(cached),
+                   emit_function=nothing, emitted_function=nothing)
+        return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(static_alloc), Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             module_setup, module_activation, raise_exception,
             emit_function, emitted_function)
+    end
 end
 
 const SLOT_USED = 0x8
