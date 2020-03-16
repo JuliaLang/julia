@@ -78,6 +78,22 @@ Random.seed!(100)
                 @test BLAS.iamax(z) == argmax(map(x -> abs(real(x)) + abs(imag(x)), z))
             end
         end
+        @testset "rot" begin
+            if elty <: Real
+                sub_type = elty
+            elseif elty == ComplexF32
+                sub_type = Float32
+            elseif elty == ComplexF64
+                sub_type = Float64
+            end
+            x = randn(elty, n)
+            y = randn(elty, n)
+            c = rand(sub_type)
+            s = rand(sub_type)
+            x2, y2 = BLAS.rot(n,copy(x),1,copy(y),1,c,s)
+            @test x2 ≈ c*x + s*y
+            @test y2 ≈ -s*x + c*y
+        end
         @testset "axp(b)y" begin
             if elty <: Real
                 x1 = convert(Vector{elty}, randn(n))
