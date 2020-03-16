@@ -205,20 +205,22 @@ end
 """
     rot(n, X, incx, Y, incy, c, s)
 
-Overwrite `X` with `c*X + s*Y` and `Y` with `-s*X + c*Y` for the first `n` elements of array `X` with stride `incx` and
+Overwrite `X` with `c*X + s*Y` and `Y` with `-conj(s)*X + c*Y` for the first `n` elements of array `X` with stride `incx` and
 first `n` elements of array `Y` with stride `incy`. Returns `X` and `Y`.
 """
 function rot end
 
-for (fname, elty, sub_type) in ((:drot_,:Float64,:Float64),
-                                (:srot_,:Float32,:Float32),
-                                (:zdrot_,:ComplexF64,:Float64),
-                                (:csrot_,:ComplexF32,:Float32))
+for (fname, elty, cty, sty, lib) in ((:drot_, :Float64, :Float64, :Float64, libblas),
+                                     (:srot_, :Float32, :Float32, :Float32, libblas),
+                                     (:zdrot_, :ComplexF64, :Float64, :Float64, libblas),
+                                     (:csrot_, :ComplexF32, :Float32, :Float32, libblas),
+                                     (:zrot_, :ComplexF64, :Float64, :ComplexF64, liblapack),
+                                     (:crot_, :ComplexF32, :Float32, :ComplexF32, liblapack))
     @eval begin
         # SUBROUTINE DROT(N,DX,INCX,DY,INCY,C,S)
-        function rot(n::Integer, DX::Union{Ptr{$elty},AbstractArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},AbstractArray{$elty}}, incy::Integer, C::$sub_type, S::$sub_type)
-            ccall((@blasfunc($fname), libblas), Cvoid,
-                (Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{$sub_type}, Ref{$sub_type}),
+        function rot(n::Integer, DX::Union{Ptr{$elty},AbstractArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},AbstractArray{$elty}}, incy::Integer, C::$cty, S::$sty)
+            ccall((@blasfunc($fname), $lib), Cvoid,
+                (Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{$cty}, Ref{$sty}),
                  n, DX, incx, DY, incy, C, S)
             DX, DY
         end

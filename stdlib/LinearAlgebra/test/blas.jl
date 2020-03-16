@@ -80,19 +80,25 @@ Random.seed!(100)
         end
         @testset "rot" begin
             if elty <: Real
-                sub_type = elty
-            elseif elty == ComplexF32
-                sub_type = Float32
-            elseif elty == ComplexF64
-                sub_type = Float64
+                x = convert(Vector{elty}, randn(n))
+                y = convert(Vector{elty}, randn(n))
+                c = rand(elty)
+                s = rand(elty)
+                x2, y2 = BLAS.rot(n,copy(x),1,copy(y),1,c,s)
+                @test x2 ≈ c*x + s*y
+                @test y2 ≈ -s*x + c*y
+            else
+                x = convert(Vector{elty}, complex.(randn(n),rand(n)))
+                y = convert(Vector{elty}, complex.(randn(n),rand(n)))
+                cty = (elty == ComplexF32) ? Float32 : Float64
+                c = rand(cty)
+                for sty in [cty, elty]
+                    s = rand(sty)
+                    x2, y2 = BLAS.rot(n,copy(x),1,copy(y),1,c,s)
+                    @test x2 ≈ c*x + s*y
+                    @test y2 ≈ -conj(s)*x + c*y
+                end
             end
-            x = randn(elty, n)
-            y = randn(elty, n)
-            c = rand(sub_type)
-            s = rand(sub_type)
-            x2, y2 = BLAS.rot(n,copy(x),1,copy(y),1,c,s)
-            @test x2 ≈ c*x + s*y
-            @test y2 ≈ -s*x + c*y
         end
         @testset "axp(b)y" begin
             if elty <: Real
