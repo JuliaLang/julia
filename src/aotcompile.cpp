@@ -309,13 +309,10 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
     JL_GC_POP();
 
     // process the globals array, before jl_merge_module destroys them
-#if JL_LLVM_VERSION >= 110000
-    std::vector<StringRef> gvars;
-#else
     std::vector<std::string> gvars;
-#endif
+
     for (auto &global : params.globals) {
-        gvars.push_back(global.second->getName());
+        gvars.push_back(std::string(global.second->getName()));
         data->jl_value_to_llvm[global.first] = gvars.size();
     }
 
