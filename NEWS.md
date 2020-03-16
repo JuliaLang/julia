@@ -75,6 +75,7 @@ New library functions
 * New function `bitreverse` for reversing the order of bits in a fixed-width integer ([#34791]).
 * New function `bitrotate(x, k)` for rotating the bits in a fixed-width integer ([#33937]).
 * One argument methods `startswith(x)` and `endswith(x)` have been added, returning partially-applied versions of the functions, similar to existing methods like `isequal(x)` ([#33193]).
+* New function `contains(haystack, needle)` and its one argument partially applied form have been added, it acts like `occursin(needle, haystack)`([#35132]).
 
 New library features
 --------------------
