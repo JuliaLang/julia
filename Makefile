@@ -592,7 +592,7 @@ win-extras:
 	@$(MAKE) -C $(BUILDROOT)/deps install-p7zip
 	mkdir -p $(JULIAHOME)/dist-extras
 	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) http://www.jrsoftware.org/download.php/is.exe && \
+	$(JLDOWNLOAD) https://www.jrsoftware.org/download.php/is.exe && \
 	chmod a+x is.exe && \
 	$(call spawn, $(JULIAHOME)/dist-extras/is.exe /DIR="$(call cygpath_w,$(JULIAHOME)/dist-extras/inno)" /PORTABLE=1 /CURRENTUSER /VERYSILENT)
 
