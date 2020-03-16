@@ -11,8 +11,8 @@ using Base: require_one_based_indexing
 
 export
 # Level 1
-    rot,
     asum,
+    rot!,
     axpy!,
     axpby!,
     blascopy!,
@@ -203,10 +203,13 @@ end
 ## rot
 
 """
-    rot(n, X, incx, Y, incy, c, s)
+    rot!(n, X, incx, Y, incy, c, s)
 
 Overwrite `X` with `c*X + s*Y` and `Y` with `-conj(s)*X + c*Y` for the first `n` elements of array `X` with stride `incx` and
 first `n` elements of array `Y` with stride `incy`. Returns `X` and `Y`.
+
+!!! compat "Julia 1.5"
+    `rot!` requires at least Julia 1.5.
 """
 function rot end
 
@@ -218,7 +221,7 @@ for (fname, elty, cty, sty, lib) in ((:drot_, :Float64, :Float64, :Float64, libb
                                      (:crot_, :ComplexF32, :Float32, :ComplexF32, liblapack))
     @eval begin
         # SUBROUTINE DROT(N,DX,INCX,DY,INCY,C,S)
-        function rot(n::Integer, DX::Union{Ptr{$elty},AbstractArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},AbstractArray{$elty}}, incy::Integer, C::$cty, S::$sty)
+        function rot!(n::Integer, DX::Union{Ptr{$elty},AbstractArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},AbstractArray{$elty}}, incy::Integer, C::$cty, S::$sty)
             ccall((@blasfunc($fname), $lib), Cvoid,
                 (Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{$cty}, Ref{$sty}),
                  n, DX, incx, DY, incy, C, S)
