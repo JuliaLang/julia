@@ -381,4 +381,11 @@ s_18109 = "fooα🐨βcd3"
     @test findall("αβ", "blαh blαβ blαββy") == findall("αβ", "blαh blαβ blαββy", overlap=true) == [9:11, 16:18]
     @test findall("aa", "aaaaaa") == [1:2, 3:4, 5:6]
     @test findall("aa", "aaaaaa", overlap=true) == [1:2, 2:3, 3:4, 4:5, 5:6]
+
+    @test findall('z', "language") == Int[]
+    @test findall('l', "language") == [1]
+    @test findall('a', "language") == [2, 6]
+    @test count('z', "language") == 0
+    @test count('l', "language") == 1
+    @test count('a', "language") == 2
 end

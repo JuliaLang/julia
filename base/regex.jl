@@ -372,6 +372,8 @@ function findall(t::Union{AbstractString,Regex}, s::AbstractString; overlap::Boo
     return found
 end
 
+findall(ch::AbstractChar, s::AbstractString) = findall(==(ch), s)
+
 """
     count(
         pattern::Union{AbstractString,Regex},
@@ -398,6 +400,8 @@ function count(t::Union{AbstractString,Regex}, s::AbstractString; overlap::Bool=
     end
     return n
 end
+
+count(ch::AbstractChar, s::AbstractString) = count(==(ch), s)
 
 """
     SubstitutionString(substr)
