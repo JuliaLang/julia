@@ -2541,3 +2541,5 @@ end
 @test pickvarnames(Any[:a, :b]) === (:a, :b)
 @test only(Base.return_types(pickvarnames, (Vector{Any},))) == Tuple{Vararg{Union{Symbol, Tuple}}}
 @test only(Base.code_typed(pickvarnames, (Vector{Any},), optimize=false))[2] == Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple}}}}}}
+
+@test map(>:, [Int], [Int]) == [true]
