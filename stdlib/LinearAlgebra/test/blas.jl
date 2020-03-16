@@ -78,7 +78,7 @@ Random.seed!(100)
                 @test BLAS.iamax(z) == argmax(map(x -> abs(real(x)) + abs(imag(x)), z))
             end
         end
-        @testset "rot" begin
+        @testset "rot!" begin
             if elty <: Real
                 x = convert(Vector{elty}, randn(n))
                 y = convert(Vector{elty}, randn(n))

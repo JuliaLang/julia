@@ -112,6 +112,7 @@ Standard library changes
 * `lq` factorizations can now be used to compute the minimum-norm solution to under-determined systems ([#34350]).
 * The BLAS submodule now supports the level-2 BLAS subroutine `spmv!` ([#34320]).
 * The BLAS submodule now supports the level-1 BLAS subroutine `rot!` ([#35124]).
+
 #### Markdown
 
 
