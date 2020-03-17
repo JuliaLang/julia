@@ -405,7 +405,6 @@ $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
 $(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
 $(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX -- warning: this fails check-llvm-codegen-nvptx
 $(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
-$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
 $(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
 $(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
 $(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
