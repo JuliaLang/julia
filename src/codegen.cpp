@@ -4320,6 +4320,7 @@ static Function* gen_cfun_wrapper(
         FunctionType *cft = returninfo.decl->getFunctionType();
         jlfunc_sret = (returninfo.cc == jl_returninfo_t::SRet);
 
+        // TODO: Can use use emit_call_specfun_other here?
         std::vector<Value*> args;
         Value *result;
         if (jlfunc_sret || returninfo.cc == jl_returninfo_t::Union) {
@@ -4391,14 +4392,22 @@ static Function* gen_cfun_wrapper(
             case jl_returninfo_t::SRet:
                 retval = mark_julia_slot(result, astrt, NULL, tbaa_stack);
                 break;
-            case jl_returninfo_t::Union:
-                retval = mark_julia_slot(ctx.builder.CreateExtractValue(call, 0),
+            case jl_returninfo_t::Union: {
+                Value *box = ctx.builder.CreateExtractValue(call, 0);
+                Value *tindex = ctx.builder.CreateExtractValue(call, 1);
+                Value *derived = ctx.builder.CreateSelect(
+                    ctx.builder.CreateICmpEQ(
+                            ctx.builder.CreateAnd(tindex, ConstantInt::get(T_int8, 0x80)),
+                            ConstantInt::get(T_int8, 0)),
+                    decay_derived(ctx.builder.CreateBitCast(result, T_pjlvalue)),
+                    decay_derived(box));
+                retval = mark_julia_slot(derived,
                                          astrt,
-                                         ctx.builder.CreateExtractValue(call, 1),
+                                         tindex,
                                          tbaa_stack);
-                // note that the value may not be rooted here (on the return path)
-                // XXX: should have a root if we need to emit a typeassert abort
+                retval.Vboxed = box;
                 break;
+            }
             case jl_returninfo_t::Ghosts:
                 retval = mark_julia_slot(NULL, astrt, call, tbaa_stack);
                 break;
