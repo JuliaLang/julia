@@ -27,7 +27,7 @@ function show(io::IO, t::AbstractDict{K,V}) where V where K
 
     limit::Bool = get(io, :limit, false)
     # show in a Julia-syntax-like form: Dict(k=>v, ...)
-    print(io, typeinfo_prefix(io, t))
+    print(io, typeinfo_prefix(io, t)[1])
     print(io, '(')
     if !isempty(t) && !show_circular(io, t)
         first = true
