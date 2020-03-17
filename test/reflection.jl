@@ -288,6 +288,7 @@ let rts = return_types(TLayout)
 end
 
 # issue #15447
+f15447_line = @__LINE__() + 1
 @noinline function f15447(s, a)
     if s
         return a
@@ -296,7 +297,7 @@ end
         return nb
     end
 end
-@test functionloc(f15447)[2] > 0
+@test functionloc(f15447)[2] == f15447_line
 
 # issue #14346
 @noinline function f14346(id, mask, limit)
@@ -304,7 +305,7 @@ end
         return true
     end
 end
-@test functionloc(f14346)[2] == @__LINE__() - 4
+@test functionloc(f14346)[2] == @__LINE__() - 5
 
 # issue #15714
 # show variable names for slots and suppress spurious type warnings

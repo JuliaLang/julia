@@ -63,6 +63,8 @@ Language changes
   Now the result is "a\n b", since the space before `b` is no longer considered to occur
   at the start of a line. The old behavior is considered a bug ([#35001]).
 
+* The line number of function definitions is now added by the parser as an
+  additional `LineNumberNode` at the start of each function body ([#35138]).
 
 Multi-threading changes
 -----------------------
