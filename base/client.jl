@@ -112,7 +112,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     have_color = get(stdout, :color, false)
     while true
         try
-            if have_color === true
+            if have_color
                 print(color_normal)
             end
             if lasterr !== nothing
@@ -124,7 +124,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 value = Core.eval(Main, ast)
                 ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :ans, value)
                 if !(value === nothing) && show_value
-                    if have_color === true
+                    if have_color
                         print(answer_color())
                     end
                     try
