@@ -84,9 +84,11 @@ Random.seed!(100)
                 y = convert(Vector{elty}, randn(n))
                 c = rand(elty)
                 s = rand(elty)
-                x2, y2 = BLAS.rot!(n,copy(x),1,copy(y),1,c,s)
-                @test x2 ≈ c*x + s*y
-                @test y2 ≈ -s*x + c*y
+                x2 = copy(x)
+                y2 = copy(y)
+                BLAS.rot!(n, x, 1, y, 1, c, s)
+                @test x ≈ c*x2 + s*y2
+                @test y ≈ -s*x2 + c*y2
             else
                 x = convert(Vector{elty}, complex.(randn(n),rand(n)))
                 y = convert(Vector{elty}, complex.(randn(n),rand(n)))
@@ -94,9 +96,11 @@ Random.seed!(100)
                 c = rand(cty)
                 for sty in [cty, elty]
                     s = rand(sty)
-                    x2, y2 = BLAS.rot!(n,copy(x),1,copy(y),1,c,s)
-                    @test x2 ≈ c*x + s*y
-                    @test y2 ≈ -conj(s)*x + c*y
+                    x2 = copy(x)
+                    y2 = copy(y)
+                    BLAS.rot!(n, x, 1, y, 1, c, s)
+                    @test x ≈ c*x2 + s*y2
+                    @test y ≈ -conj(s)*x2 + c*y2
                 end
             end
         end
