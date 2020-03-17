@@ -94,7 +94,7 @@
   (let ((ex0 (julia-expand-macroscope e)))
     (if (toplevel-only-expr? ex0)
         ex0
-        (let* ((ex (julia-expand0 ex0))
+        (let* ((ex (julia-expand0 ex0 file line))
                (th (julia-expand1
                     `(lambda () ()
                              (scope-block
