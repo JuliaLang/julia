@@ -1809,32 +1809,28 @@ for (f, f2!) in ((:*, :lmul!), (:\, :ldiv!))
         function ($f)(A::LowerTriangular, B::LowerTriangular)
             TAB = typeof(($f)(zero(eltype(A)), zero(eltype(B))) +
                          ($f)(zero(eltype(A)), zero(eltype(B))))
-            BB = similar(B, TAB, size(B))
-            copyto!(BB, B)
+            BB = copy_similar(B, TAB)
             return LowerTriangular($f2!(convert(AbstractMatrix{TAB}, A), BB))
         end
 
         function $(f)(A::UnitLowerTriangular, B::LowerTriangular)
             TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                          (*)(zero(eltype(A)), zero(eltype(B))))
-            BB = similar(B, TAB, size(B))
-            copyto!(BB, B)
+             BB = copy_similar(B, TAB)
             return LowerTriangular($f2!(convert(AbstractMatrix{TAB}, A), BB))
         end
 
         function ($f)(A::UpperTriangular, B::UpperTriangular)
             TAB = typeof(($f)(zero(eltype(A)), zero(eltype(B))) +
                          ($f)(zero(eltype(A)), zero(eltype(B))))
-            BB = similar(B, TAB, size(B))
-            copyto!(BB, B)
+            BB = copy_similar(B, TAB)
             return UpperTriangular($f2!(convert(AbstractMatrix{TAB}, A), BB))
         end
 
         function ($f)(A::UnitUpperTriangular, B::UpperTriangular)
             TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                          (*)(zero(eltype(A)), zero(eltype(B))))
-            BB = similar(B, TAB, size(B))
-            copyto!(BB, B)
+            BB = copy_similar(B, TAB)
             return UpperTriangular($f2!(convert(AbstractMatrix{TAB}, A), BB))
         end
     end
@@ -1850,8 +1846,7 @@ for (ipop, op, xformtype, xformop) in (
             A = xformA.parent
             TAB = typeof(($op)($xformop(zero(eltype(A))), zero(eltype(B))) +
                          ($op)($xformop(zero(eltype(A))), zero(eltype(B))))
-            BB = similar(B, TAB, size(B))
-            copyto!(BB, B)
+            BB = copy_similar(B, TAB)
             return LowerTriangular(($ipop)($xformop(convert(AbstractMatrix{TAB}, A)), BB))
         end
 
@@ -1859,8 +1854,7 @@ for (ipop, op, xformtype, xformop) in (
             A = xformA.parent
             TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                          (*)(zero(eltype(A)), zero(eltype(B))))
-            BB = similar(B, TAB, size(B))
-            copyto!(BB, B)
+            BB = copy_similar(B, TAB)
             return LowerTriangular($ipop($xformop(convert(AbstractMatrix{TAB}, A)), BB))
         end
 
@@ -1868,8 +1862,7 @@ for (ipop, op, xformtype, xformop) in (
             A = xformA.parent
             TAB = typeof(($op)($xformop(zero(eltype(A))), zero(eltype(B))) +
                          ($op)($xformop(zero(eltype(A))), zero(eltype(B))))
-            BB = similar(B, TAB, size(B))
-            copyto!(BB, B)
+            BB = copy_similar(B, TAB)
             return UpperTriangular($ipop($xformop(convert(AbstractMatrix{TAB}, A)), BB))
         end
 
@@ -1877,8 +1870,7 @@ for (ipop, op, xformtype, xformop) in (
             A = xformA.parent
             TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                          (*)(zero(eltype(A)), zero(eltype(B))))
-            BB = similar(B, TAB, size(B))
-            copyto!(BB, B)
+            BB = copy_similar(B, TAB)
             return UpperTriangular($ipop($xformop(convert(AbstractMatrix{TAB}, A)), BB))
         end
     end
@@ -1887,29 +1879,25 @@ end
 function (/)(A::LowerTriangular, B::LowerTriangular)
     TAB = typeof((/)(zero(eltype(A)), zero(eltype(B))) +
                  (/)(zero(eltype(A)), zero(eltype(B))))
-    AA = similar(A, TAB, size(A))
-    copyto!(AA, A)
+    AA = copy_similar(A, TAB)
     return LowerTriangular(rdiv!(AA, convert(AbstractMatrix{TAB}, B)))
 end
 function (/)(A::LowerTriangular, B::UnitLowerTriangular)
     TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                  (*)(zero(eltype(A)), zero(eltype(B))))
-    AA = similar(A, TAB, size(A))
-    copyto!(AA, A)
+    AA = copy_similar(A, TAB)
     return LowerTriangular(rdiv!(AA, convert(AbstractMatrix{TAB}, B)))
 end
 function (/)(A::UpperTriangular, B::UpperTriangular)
     TAB = typeof((/)(zero(eltype(A)), zero(eltype(B))) +
                  (/)(zero(eltype(A)), zero(eltype(B))))
-    AA = similar(A, TAB, size(A))
-    copyto!(AA, A)
+    AA = copy_similar(A, TAB)
     return UpperTriangular(rdiv!(AA, convert(AbstractMatrix{TAB}, B)))
 end
 function (/)(A::UpperTriangular, B::UnitUpperTriangular)
     TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                  (*)(zero(eltype(A)), zero(eltype(B))))
-    AA = similar(A, TAB, size(A))
-    copyto!(AA, A)
+    AA = copy_similar(A, TAB)
     return UpperTriangular(rdiv!(AA, convert(AbstractMatrix{TAB}, B)))
 end
 
@@ -1923,8 +1911,7 @@ for (ipop, op, xformtype, xformop) in (
             B = xformB.parent
             TAB = typeof(($op)(zero(eltype(A)), $xformop(zero(eltype(B)))) +
                          ($op)(zero(eltype(A)), $xformop(zero(eltype(B)))))
-            AA = similar(A, TAB, size(A))
-            copyto!(AA, A)
+            AA = copy_similar(A, TAB)
             return LowerTriangular($ipop(AA, $xformop(convert(AbstractMatrix{TAB}, B))))
         end
 
@@ -1932,8 +1919,7 @@ for (ipop, op, xformtype, xformop) in (
             B = xformB.parent
             TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                          (*)(zero(eltype(A)), zero(eltype(B))))
-            AA = similar(A, TAB, size(A))
-            copyto!(AA, A)
+            AA = copy_similar(A, TAB)
             return LowerTriangular($ipop(AA, $xformop(convert(AbstractMatrix{TAB}, B))))
         end
 
@@ -1941,8 +1927,7 @@ for (ipop, op, xformtype, xformop) in (
             B = xformB.parent
             TAB = typeof(($op)(zero(eltype(A)), $xformop(zero(eltype(B)))) +
                          ($op)(zero(eltype(A)), $xformop(zero(eltype(B)))))
-            AA = similar(A, TAB, size(A))
-            copyto!(AA, A)
+            AA = copy_similar(A, TAB)
             return UpperTriangular($ipop(AA, $xformop(convert(AbstractMatrix{TAB}, B))))
         end
 
@@ -1950,8 +1935,7 @@ for (ipop, op, xformtype, xformop) in (
             B = xformB.parent
             TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                          (*)(zero(eltype(A)), zero(eltype(B))))
-            AA = similar(A, TAB, size(A))
-            copyto!(AA, A)
+            AA = copy_similar(A, TAB)
             return UpperTriangular($ipop(AA, $xformop(convert(AbstractMatrix{TAB}, B))))
         end
     end
@@ -1960,37 +1944,32 @@ end
 ## The general promotion methods
 function *(A::AbstractTriangular, B::AbstractTriangular)
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-    BB = similar(B, TAB, size(B))
-    copyto!(BB, B)
+    BB = copy_similar(B, TAB)
     lmul!(convert(AbstractArray{TAB}, A), BB)
 end
 function *(adjA::Adjoint{<:Any,<:AbstractTriangular}, B::AbstractTriangular)
     A = adjA.parent
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-    BB = similar(B, TAB, size(B))
-    copyto!(BB, B)
+    BB = copy_similar(B, TAB)
     lmul!(adjoint(convert(AbstractArray{TAB}, A)), BB)
 end
 function *(transA::Transpose{<:Any,<:AbstractTriangular}, B::AbstractTriangular)
     A = transA.parent
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-    BB = similar(B, TAB, size(B))
-    copyto!(BB, B)
+    BB = copy_similar(B, TAB)
     lmul!(transpose(convert(AbstractArray{TAB}, A)), BB)
 end
 
 function *(A::AbstractTriangular, adjB::Adjoint{<:Any,<:AbstractTriangular})
     B = adjB.parent
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-    AA = similar(A, TAB, size(A))
-    copyto!(AA, A)
+    AA = copy_similar(A, TAB)
     rmul!(AA, adjoint(convert(AbstractArray{TAB}, B)))
 end
 function *(A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractTriangular})
     B = transB.parent
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-    AA = similar(A, TAB, size(A))
-    copyto!(AA, A)
+    AA = copy_similar(A, TAB)
     rmul!(AA, transpose(convert(AbstractArray{TAB}, B)))
 end
 
@@ -2000,24 +1979,21 @@ for mat in (:AbstractVector, :AbstractMatrix)
         function *(A::AbstractTriangular, B::$mat)
             require_one_based_indexing(B)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-            BB = similar(B, TAB, size(B))
-            copyto!(BB, B)
+            BB = copy_similar(B, TAB)
             lmul!(convert(AbstractArray{TAB}, A), BB)
         end
         function *(adjA::Adjoint{<:Any,<:AbstractTriangular}, B::$mat)
             require_one_based_indexing(B)
             A = adjA.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-            BB = similar(B, TAB, size(B))
-            copyto!(BB, B)
+            BB = copy_similar(B, TAB)
             lmul!(adjoint(convert(AbstractArray{TAB}, A)), BB)
         end
         function *(transA::Transpose{<:Any,<:AbstractTriangular}, B::$mat)
             require_one_based_indexing(B)
             A = transA.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-            BB = similar(B, TAB, size(B))
-            copyto!(BB, B)
+            BB = copy_similar(B, TAB)
             lmul!(transpose(convert(AbstractArray{TAB}, A)), BB)
         end
     end
@@ -2026,24 +2002,21 @@ for mat in (:AbstractVector, :AbstractMatrix)
         function \(A::Union{UnitUpperTriangular,UnitLowerTriangular}, B::$mat)
             require_one_based_indexing(B)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-            BB = similar(B, TAB, size(B))
-            copyto!(BB, B)
+            BB = copy_similar(B, TAB)
             ldiv!(convert(AbstractArray{TAB}, A), BB)
         end
         function \(adjA::Adjoint{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}, B::$mat)
             require_one_based_indexing(B)
             A = adjA.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-            BB = similar(B, TAB, size(B))
-            copyto!(BB, B)
+            BB = copy_similar(B, TAB)
             ldiv!(adjoint(convert(AbstractArray{TAB}, A)), BB)
         end
         function \(transA::Transpose{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}, B::$mat)
             require_one_based_indexing(B)
             A = transA.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-            BB = similar(B, TAB, size(B))
-            copyto!(BB, B)
+            BB = copy_similar(B, TAB)
             ldiv!(transpose(convert(AbstractArray{TAB}, A)), BB)
         end
     end
@@ -2052,24 +2025,21 @@ for mat in (:AbstractVector, :AbstractMatrix)
         function \(A::Union{UpperTriangular,LowerTriangular}, B::$mat)
             require_one_based_indexing(B)
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
-            BB = similar(B, TAB, size(B))
-            copyto!(BB, B)
+            BB = copy_similar(B, TAB)
             ldiv!(convert(AbstractArray{TAB}, A), BB)
         end
         function \(adjA::Adjoint{<:Any,<:Union{UpperTriangular,LowerTriangular}}, B::$mat)
             require_one_based_indexing(B)
             A = adjA.parent
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
-            BB = similar(B, TAB, size(B))
-            copyto!(BB, B)
+            BB = copy_similar(B, TAB)
             ldiv!(adjoint(convert(AbstractArray{TAB}, A)), BB)
         end
         function \(transA::Transpose{<:Any,<:Union{UpperTriangular,LowerTriangular}}, B::$mat)
             require_one_based_indexing(B)
             A = transA.parent
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
-            BB = similar(B, TAB, size(B))
-            copyto!(BB, B)
+            BB = copy_similar(B, TAB)
             ldiv!(transpose(convert(AbstractArray{TAB}, A)), BB)
         end
     end
@@ -2078,24 +2048,21 @@ for mat in (:AbstractVector, :AbstractMatrix)
         function /(A::$mat, B::Union{UnitUpperTriangular, UnitLowerTriangular})
             require_one_based_indexing(A)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-            AA = similar(A, TAB, size(A))
-            copyto!(AA, A)
+            AA = copy_similar(A, TAB)
             rdiv!(AA, convert(AbstractArray{TAB}, B))
         end
         function /(A::$mat, adjB::Adjoint{<:Any,<:Union{UnitUpperTriangular, UnitLowerTriangular}})
             require_one_based_indexing(A)
             B = adjB.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-            AA = similar(A, TAB, size(A))
-            copyto!(AA, A)
+            AA = copy_similar(A, TAB)
             rdiv!(AA, adjoint(convert(AbstractArray{TAB}, B)))
         end
         function /(A::$mat, transB::Transpose{<:Any,<:Union{UnitUpperTriangular, UnitLowerTriangular}})
             require_one_based_indexing(A)
             B = transB.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-            AA = similar(A, TAB, size(A))
-            copyto!(AA, A)
+            AA = copy_similar(A, TAB)
             rdiv!(AA, transpose(convert(AbstractArray{TAB}, B)))
         end
     end
@@ -2104,24 +2071,21 @@ for mat in (:AbstractVector, :AbstractMatrix)
         function /(A::$mat, B::Union{UpperTriangular,LowerTriangular})
             require_one_based_indexing(A)
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
-            AA = similar(A, TAB, size(A))
-            copyto!(AA, A)
+            AA = copy_similar(A, TAB)
             rdiv!(AA, convert(AbstractArray{TAB}, B))
         end
         function /(A::$mat, adjB::Adjoint{<:Any,<:Union{UpperTriangular,LowerTriangular}})
             require_one_based_indexing(A)
             B = adjB.parent
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
-            AA = similar(A, TAB, size(A))
-            copyto!(AA, A)
+            AA = copy_similar(A, TAB)
             rdiv!(AA, adjoint(convert(AbstractArray{TAB}, B)))
         end
         function /(A::$mat, transB::Transpose{<:Any,<:Union{UpperTriangular,LowerTriangular}})
             require_one_based_indexing(A)
             B = transB.parent
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
-            AA = similar(A, TAB, size(A))
-            copyto!(AA, A)
+            AA = copy_similar(A, TAB)
             rdiv!(AA, transpose(convert(AbstractArray{TAB}, B)))
         end
     end
@@ -2131,24 +2095,21 @@ end
 function *(A::AbstractMatrix, B::AbstractTriangular)
     require_one_based_indexing(A)
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-    AA = similar(A, TAB, size(A))
-    copyto!(AA, A)
+    AA = copy_similar(A, TAB)
     rmul!(AA, convert(AbstractArray{TAB}, B))
 end
 function *(A::AbstractMatrix, adjB::Adjoint{<:Any,<:AbstractTriangular})
     require_one_based_indexing(A)
     B = adjB.parent
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-    AA = similar(A, TAB, size(A))
-    copyto!(AA, A)
+    AA = copy_similar(A, TAB)
     rmul!(AA, adjoint(convert(AbstractArray{TAB}, B)))
 end
 function *(A::AbstractMatrix, transB::Transpose{<:Any,<:AbstractTriangular})
     require_one_based_indexing(A)
     B = transB.parent
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-    AA = similar(A, TAB, size(A))
-    copyto!(AA, A)
+    AA = copy_similar(A, TAB)
     rmul!(AA, transpose(convert(AbstractArray{TAB}, B)))
 end
 # ambiguity resolution with definitions in linalg/rowvector.jl

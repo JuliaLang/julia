@@ -178,14 +178,14 @@ end
 (*)(D::Diagonal, V::AbstractVector) = D.diag .* V
 
 (*)(A::AbstractTriangular, D::Diagonal) =
-    rmul!(copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A), D)
+    rmul!(copy_oftype(A, promote_op(*, eltype(A), eltype(D.diag))), D)
 (*)(D::Diagonal, B::AbstractTriangular) =
-    lmul!(D, copyto!(similar(B, promote_op(*, eltype(B), eltype(D.diag))), B))
+    lmul!(D, copy_oftype(B, promote_op(*, eltype(B), eltype(D.diag))))
 
 (*)(A::AbstractMatrix, D::Diagonal) =
-    rmul!(copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A), D)
+    rmul!(copy_similar(A, promote_op(*, eltype(A), eltype(D.diag))), D)
 (*)(D::Diagonal, A::AbstractMatrix) =
-    lmul!(D, copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A))
+    lmul!(D, copy_similar(A, promote_op(*, eltype(A), eltype(D.diag))))
 
 function rmul!(A::AbstractMatrix, D::Diagonal)
     require_one_based_indexing(A)
@@ -232,7 +232,7 @@ end
 
 *(D::Adjoint{<:Any,<:Diagonal}, B::Diagonal) = Diagonal(adjoint.(D.parent.diag) .* B.diag)
 *(A::Adjoint{<:Any,<:AbstractTriangular}, D::Diagonal) =
-    rmul!(copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A), D)
+    rmul!(copy_oftype(A, promote_op(*, eltype(A), eltype(D.diag))), D)
 function *(adjA::Adjoint{<:Any,<:AbstractMatrix}, D::Diagonal)
     A = adjA.parent
     Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
@@ -242,7 +242,7 @@ end
 
 *(D::Transpose{<:Any,<:Diagonal}, B::Diagonal) = Diagonal(transpose.(D.parent.diag) .* B.diag)
 *(A::Transpose{<:Any,<:AbstractTriangular}, D::Diagonal) =
-    rmul!(copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A), D)
+    rmul!(copy_oftype(A, promote_op(*, eltype(A), eltype(D.diag))), D)
 function *(transA::Transpose{<:Any,<:AbstractMatrix}, D::Diagonal)
     A = transA.parent
     At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
@@ -252,7 +252,7 @@ end
 
 *(D::Diagonal, B::Adjoint{<:Any,<:Diagonal}) = Diagonal(D.diag .* adjoint.(B.parent.diag))
 *(D::Diagonal, B::Adjoint{<:Any,<:AbstractTriangular}) =
-    lmul!(D, copyto!(similar(B, promote_op(*, eltype(B), eltype(D.diag))), B))
+    lmul!(D, copy_oftype(B, promote_op(*, eltype(B), eltype(D.diag))))
 *(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) = (Q = adjQ.parent; rmul!(Array(D), adjoint(Q)))
 function *(D::Diagonal, adjA::Adjoint{<:Any,<:AbstractMatrix})
     A = adjA.parent
@@ -263,7 +263,7 @@ end
 
 *(D::Diagonal, B::Transpose{<:Any,<:Diagonal}) = Diagonal(D.diag .* transpose.(B.parent.diag))
 *(D::Diagonal, B::Transpose{<:Any,<:AbstractTriangular}) =
-    lmul!(D, copyto!(similar(B, promote_op(*, eltype(B), eltype(D.diag))), B))
+    lmul!(D, copy_oftype(B, promote_op(*, eltype(B), eltype(D.diag))))
 function *(D::Diagonal, transA::Transpose{<:Any,<:AbstractMatrix})
     A = transA.parent
     At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))

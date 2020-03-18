@@ -346,8 +346,22 @@ control over the factorization of `B`.
 """
 rdiv!(A, B)
 
+"""
+Copy array `A` and make sure the result has element type `T`.
+
+This method often preserves the structure of `A`. It does so if both `copy(A)`
+and the two-argument function `similar(A, T)` do.
+"""
 copy_oftype(A::AbstractArray{T}, ::Type{T}) where {T} = copy(A)
 copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = copyto!(similar(A, S), A)
+
+"""
+Copy array `A` and make sure the result has element type `T`.
+
+This method typically discards the structure of `A`. It does so if the
+three-argument function `similar(A, T, size(A))` does.
+"""
+copy_similar(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = copyto!(similar(A, S, size(A)), A)
 
 include("adjtrans.jl")
 include("transpose.jl")

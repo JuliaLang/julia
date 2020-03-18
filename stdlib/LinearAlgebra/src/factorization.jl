@@ -96,32 +96,28 @@ end
 function \(F::Factorization, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
-    BB = similar(B, TFB, size(B))
-    copyto!(BB, B)
+    BB = copy_similar(B, TFB)
     ldiv!(F, BB)
 end
 function \(adjF::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     F = adjF.parent
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
-    BB = similar(B, TFB, size(B))
-    copyto!(BB, B)
+    BB = copy_similar(B, TFB)
     ldiv!(adjoint(F), BB)
 end
 
 function /(B::AbstractMatrix, F::Factorization)
     require_one_based_indexing(B)
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
-    BB = similar(B, TFB, size(B))
-    copyto!(BB, B)
+    BB = copy_similar(B, TFB)
     rdiv!(BB, F)
 end
 function /(B::AbstractMatrix, adjF::Adjoint{<:Any,<:Factorization})
     require_one_based_indexing(B)
     F = adjF.parent
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
-    BB = similar(B, TFB, size(B))
-    copyto!(BB, B)
+    BB = copy_similar(B, TFB)
     rdiv!(BB, adjoint(F))
 end
 /(adjB::AdjointAbsVec, adjF::Adjoint{<:Any,<:Factorization}) = adjoint(adjF.parent \ adjB.parent)
