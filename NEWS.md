@@ -145,6 +145,8 @@ Standard library changes
 * The BLAS submodule now supports the level-2 BLAS subroutine `spmv!` ([#34320]).
 * The BLAS submodule now supports the level-1 BLAS subroutine `rot!` ([#35124]).
 * New generic `rotate!(x, y, c, s)` and `reflect!(x, y, c, s)` functions ([#35124]).
+* `hadamard` or `⊙` (`\odotTAB`) can be used as an elementwise multiplication operator,
+  and `tensor` or `⊗` (`\otimesTAB`) as the tensor product operator ([#35150]).
 
 #### Markdown
 

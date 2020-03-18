@@ -321,6 +321,7 @@ LinearAlgebra.PosDefException
 LinearAlgebra.ZeroPivotException
 LinearAlgebra.dot
 LinearAlgebra.cross
+LinearAlgebra.tensor
 LinearAlgebra.factorize
 LinearAlgebra.Diagonal
 LinearAlgebra.Bidiagonal
@@ -474,6 +475,7 @@ LinearAlgebra.lmul!
 LinearAlgebra.rmul!
 LinearAlgebra.ldiv!
 LinearAlgebra.rdiv!
+LinearAlgebra.tensor!
 ```
 
 ## BLAS functions
