@@ -159,6 +159,8 @@ similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T
 # The method below is moved to SparseArrays for now
 # similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
+copyto!(dest::SymTridiagonal, src::SymTridiagonal) = (copyto!(dest.dv, src.dv); copyto!(dest.ev, src.ev); dest)
+
 #Elementary operations
 for func in (:conj, :copy, :real, :imag)
     @eval ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))

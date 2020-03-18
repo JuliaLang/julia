@@ -674,7 +674,7 @@ eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Func
 function eigen(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothing)
     T = eltype(A)
     S = eigtype(T)
-    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), sortby=sortby)
+    eigen!(copy_oftype(A, S), sortby=sortby)
 end
 
 eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) = Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.data, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
@@ -699,7 +699,7 @@ The [`UnitRange`](@ref) `irange` specifies indices of the sorted eigenvalues to 
 function eigen(A::RealHermSymComplexHerm, irange::UnitRange)
     T = eltype(A)
     S = eigtype(T)
-    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange)
+    eigen!(copy_oftype(A, S), irange)
 end
 
 eigen!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where {T<:BlasReal} =
@@ -725,7 +725,7 @@ The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`
 function eigen(A::RealHermSymComplexHerm, vl::Real, vh::Real)
     T = eltype(A)
     S = eigtype(T)
-    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
+    eigen!(copy_oftype(A, S), vl, vh)
 end
 
 eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}) =
@@ -734,7 +734,7 @@ eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}) =
 function eigvals(A::RealHermSymComplexHerm)
     T = eltype(A)
     S = eigtype(T)
-    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A))
+    eigvals!(copy_oftype(A, S))
 end
 
 """
@@ -775,7 +775,7 @@ julia> eigvals(A)
 function eigvals(A::RealHermSymComplexHerm, irange::UnitRange)
     T = eltype(A)
     S = eigtype(T)
-    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange)
+    eigvals!(copy_oftype(A, S), irange)
 end
 
 """
@@ -815,7 +815,7 @@ julia> eigvals(A)
 function eigvals(A::RealHermSymComplexHerm, vl::Real, vh::Real)
     T = eltype(A)
     S = eigtype(T)
-    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
+    eigvals!(copy_oftype(A, S), vl, vh)
 end
 
 eigmax(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, size(A, 1):size(A, 1))[1]

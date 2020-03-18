@@ -31,6 +31,8 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
             Anew = convert(AbstractMatrix{T}, A.data)
             $t(Anew)
         end
+        AbstractMatrix{T}(A::$t) where {T} = $t{T}(A)
+
         Matrix(A::$t{T}) where {T} = Matrix{T}(A)
 
         size(A::$t, d) = size(A.data, d)

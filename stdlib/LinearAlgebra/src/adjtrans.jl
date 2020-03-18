@@ -196,6 +196,10 @@ similar(A::AdjOrTrans) = similar(A.parent, eltype(A), axes(A))
 similar(A::AdjOrTrans, ::Type{T}) where {T} = similar(A.parent, T, axes(A))
 similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent, T, dims)
 
+# mimick the style of similar for the AbstractMatrix{T} constructor:
+# for vectors we maintain the parent and wrapper type here, matrices use the default
+AbstractMatrix{T}(A::AdjOrTransAbsVec) where {T} = wrapperop(A)(AbstractVector{T}(A.parent))
+
 # sundry basic definitions
 parent(A::AdjOrTrans) = A.parent
 vec(v::TransposeAbsVec) = parent(v)
