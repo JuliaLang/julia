@@ -33,6 +33,7 @@ struct InliningTodo
     # If the function being inlined is a single basic block we can use a
     # simpler inlining algorithm. This flag determines whether that's allowed
     linear_inline_eligible::Bool
+    cost::UInt8
 end
 isinvoke(inl::InliningTodo) = inl.isinvoke
 
@@ -66,7 +67,7 @@ end
 isinvoke(inl::UnionSplit) = false
 
 function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
-    # Go through the function, performing simple ininlingin (e.g. replacing call by constants
+    # Go through the function, performing simple inlining (e.g. replacing call by constants
     # and analyzing legality of inlining).
     @timeit "analysis" todo = assemble_inline_todo!(ir, sv)
     isempty(todo) && return ir
@@ -493,7 +494,33 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
     nothing
 end
 
+# given the costs of a set of function bodies to inline, compute the
+# threshold to use so that the sum of inlined sizes will not exceed max_total
+function adaptive_inlining_threshold(todo::Vector{Any}, max_total::Int)
+    bins = zeros(Int, 255)
+    done = true
+    for item in todo
+        item isa InliningTodo || continue
+        c = item.cost
+        c == 0 && continue
+        bins[min(c,255)] += c
+        done = false
+    end
+    done && return 255
+    for i = 2:length(bins)
+        bins[i] += bins[i-1]
+    end
+    i = searchsortedfirst(bins, max_total)
+    i > 255 && return 255
+    bins[i] > max_total ? i-1 : i
+end
+
 function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{LineInfoNode}, propagate_inbounds::Bool)
+    max_size = 250 + 3*length(ir.stmts)
+    threshold = adaptive_inlining_threshold(todo, max_size)
+    filter!(item->(!isa(item,InliningTodo) || item.cost <= threshold), todo)
+    isempty(todo) && return ir
+
     # Compute the new CFG first (modulo statement ranges, which will be computed below)
     state = CFGInliningState(ir)
     for item in todo
@@ -743,7 +770,7 @@ function analyze_method!(idx::Int, sig::Signature, @nospecialize(metharg), meths
         na > 0 && method.isva,
         isinvoke, na,
         method, Any[methsp...], metharg,
-        inline_linetable, ir2, linear_inline_eligible(ir2))
+        inline_linetable, ir2, linear_inline_eligible(ir2), src.cost)
 end
 
 # Neither the product iterator not CartesianIndices are available

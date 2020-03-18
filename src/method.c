@@ -324,6 +324,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->propagate_inbounds = 0;
     src->pure = 0;
     src->edges = jl_nothing;
+    src->cost = 0;
     return src;
 }
 

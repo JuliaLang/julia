@@ -144,10 +144,13 @@ function isinlineable(m::Method, me::OptimizationState, bonus::Int=0)
             cost_threshold *= 4
         end
     end
-    if !inlineable
-        inlineable = inline_worthy(me.src.code, me.src, me.sptypes, me.slottypes, me.params, cost_threshold + bonus)
+    if inlineable
+        cost = 0
+    else
+        cost = inlining_cost(me.src.code, me.src, me.sptypes, me.slottypes, me.params, cost_threshold + bonus)
+        inlineable = cost <= cost_threshold + bonus
     end
-    return inlineable
+    return inlineable, cost
 end
 
 # These affect control flow within the function (so may not be removed
@@ -253,7 +256,9 @@ function optimize(opt::OptimizationState, @nospecialize(result))
                 # For functions declared @inline, increase the cost threshold 20x
                 bonus += opt.params.inline_cost_threshold*19
             end
-            opt.src.inlineable = isinlineable(def, opt, bonus)
+            inl, cost = isinlineable(def, opt, bonus)
+            opt.src.inlineable = inl
+            opt.src.cost = UInt8(min(cost, 255))
         end
     end
     nothing
@@ -371,7 +376,7 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}
     return 0
 end
 
-function inline_worthy(body::Array{Any,1}, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any},
+function inlining_cost(body::Array{Any,1}, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any},
                        params::Params, cost_threshold::Integer=params.inline_cost_threshold)
     bodycost::Int = 0
     for line = 1:length(body)
@@ -387,9 +392,9 @@ function inline_worthy(body::Array{Any,1}, src::CodeInfo, sptypes::Vector{Any}, 
             continue
         end
         bodycost = plus_saturate(bodycost, thiscost)
-        bodycost > cost_threshold && return false
+        bodycost > cost_threshold && break
     end
-    return true
+    return bodycost
 end
 
 function is_known_call(e::Expr, @nospecialize(func), src, sptypes::Vector{Any}, slottypes::Vector{Any} = empty_slottypes)

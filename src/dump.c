@@ -2528,6 +2528,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
                   | (code->propagate_inbounds << 1)
                   | (code->pure << 0);
     write_uint8(s.s, flags);
+    write_uint8(s.s, code->cost);
 
     size_t nslots = jl_array_len(code->slotflags);
     assert(nslots >= m->nargs && nslots < INT32_MAX); // required by generated functions
@@ -2535,7 +2536,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
     ios_write(s.s, (char*)jl_array_data(code->slotflags), nslots);
 
     // N.B.: The layout of everything before this point is explicitly referenced
-    // by the various jl_ast_ accessors. Make sure to adjust those if you change
+    // by the various jl_ir_ accessors. Make sure to adjust those if you change
     // the data layout.
 
     for (i = 0; i < 6; i++) {
@@ -2613,6 +2614,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_code_instance_
     code->inlineable = !!(flags & (1 << 2));
     code->propagate_inbounds = !!(flags & (1 << 1));
     code->pure = !!(flags & (1 << 0));
+    code->cost = read_uint8(s.s);
 
     size_t nslots = read_int32(&src);
     code->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
@@ -2680,6 +2682,14 @@ JL_DLLEXPORT uint8_t jl_ast_flag_inlineable(jl_array_t *data)
     return !!(flags & (1 << 2));
 }
 
+JL_DLLEXPORT uint8_t jl_ast_cost(jl_array_t *data)
+{
+    if (jl_is_code_info(data))
+        return ((jl_code_info_t*)data)->cost;
+    assert(jl_typeis(data, jl_array_uint8_type));
+    return ((uint8_t*)data->data)[1];
+}
+
 JL_DLLEXPORT uint8_t jl_ast_flag_pure(jl_array_t *data)
 {
     if (jl_is_code_info(data))
@@ -2723,7 +2733,7 @@ JL_DLLEXPORT ssize_t jl_ast_nslots(jl_array_t *data)
     }
     else {
         assert(jl_typeis(data, jl_array_uint8_type));
-        int nslots = jl_load_unaligned_i32((char*)data->data + 1);
+        int nslots = jl_load_unaligned_i32((char*)data->data + 2);
         return nslots;
     }
 }
@@ -2734,7 +2744,7 @@ JL_DLLEXPORT uint8_t jl_ast_slotflag(jl_array_t *data, size_t i)
     if (jl_is_code_info(data))
         return ((uint8_t*)((jl_code_info_t*)data)->slotflags->data)[i];
     assert(jl_typeis(data, jl_array_uint8_type));
-    return ((uint8_t*)data->data)[1 + sizeof(int32_t) + i];
+    return ((uint8_t*)data->data)[2 + sizeof(int32_t) + i];
 }
 
 JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms)
