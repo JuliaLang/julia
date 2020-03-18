@@ -732,7 +732,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 #ifdef ENABLE_TIMINGS
     jl_root_task->timing_stack = jl_root_timing;
 #endif
-    jl_init_frontend();
+    jl_init_common_symbols();
+    jl_init_flisp();
+    jl_set_frontend(jl_flisp_frontend());
     jl_init_serializer();
 
     if (!jl_options.image_file) {

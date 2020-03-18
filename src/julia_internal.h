@@ -523,7 +523,8 @@ extern size_t jl_arr_xtralloc_limit;
 
 void jl_init_types(void) JL_GC_DISABLED;
 void jl_init_box_caches(void);
-void jl_init_frontend(void);
+void jl_init_flisp(void);
+void jl_init_common_symbols(void);
 void jl_init_primitives(void) JL_GC_DISABLED;
 void jl_init_llvm(void);
 void jl_init_codegen(void);
@@ -743,6 +744,9 @@ STATIC_INLINE size_t jl_bt_entry_size(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
         1 : 2 + jl_bt_num_jlvals(bt_entry) + jl_bt_num_uintvals(bt_entry);
 }
 
+//------------------------------
+// Stack walking and debug info lookup
+
 // Function metadata arising from debug info lookup of instruction pointer
 typedef struct {
     char *func_name;
@@ -820,6 +824,9 @@ STATIC_INLINE char *jl_copy_str(char **to, const char *from) JL_NOTSAFEPOINT
 JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_data,
         void *frameend, size_t space_remaining) JL_NOTSAFEPOINT;
 
+//--------------------------------------------------
+// Exception stack access and manipulation
+
 // Exception stack: a stack of pairs of (exception,raw_backtrace).
 // The stack may be traversed and accessed with the functions below.
 struct _jl_excstack_t { // typedef in julia.h
@@ -863,6 +870,7 @@ void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_AR
                       jl_bt_element_t *bt_data, size_t bt_size);
 void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT;
 
+//--------------------------------------------------
 // congruential random number generator
 // for a small amount of thread-local randomness
 // we could just use libc:`rand()`, but we want to ensure this is fast
@@ -1169,6 +1177,54 @@ extern arraylist_t partial_inst;
 #  define jl_unreachable() ((void)jl_assume(0))
 #endif
 
+//--------------------------------------------------
+// Frontend interface
+typedef struct _jl_frontend_t {
+    // Some simple syntactic queries used by the runtime
+    int (*is_operator)(char *sym);
+    int (*is_unary_operator)(char *sym);
+    int (*is_unary_and_binary_operator)(char *sym);
+    int (*operator_precedence)(char *sym);
+
+    // Parsing
+    // Parse an entire string like a file, reading multiple expressions
+    jl_value_t *(*parse_all)(const char *str, size_t len,
+                             const char *filename, size_t filename_len);
+    // Parse one expression out of a string, keeping track of the current
+    // position.
+    jl_value_t *(*parse_string)(const char *str, size_t len, int pos0, int greedy);
+
+    // Macro expansion
+    jl_value_t *(*macroexpand)(jl_value_t *expr, jl_module_t *inmodule);
+    jl_value_t *(*macroexpand1)(jl_value_t *expr, jl_module_t *inmodule);
+
+    // Lowering of expression trees into Julia's intermediate-representation
+    jl_value_t *(*expand_with_loc)(jl_value_t *expr, jl_module_t *inmodule,
+                                   const char *file, int line);
+    // Expand in a context where the expression value is unused
+    jl_value_t *(*expand_stmt_with_loc)(jl_value_t *expr, jl_module_t *inmodule,
+                                        const char *file, int line);
+    // As above, but with warnings enabled
+    jl_value_t *(*expand_with_loc_warn)(jl_value_t *expr, jl_module_t *inmodule,
+                                        const char *file, int line);
+
+    // Combined parsing, lowering and evaluation.
+    // TODO: This combined entry point isn't as modular as one might like; it
+    // would be best to replace this with calls to the functions above.
+    jl_value_t *(*parse_eval_all)(const char *fname,
+                                  const char *content, size_t contentlen,
+                                  jl_module_t *inmodule,
+                                  jl_value_t *mapexpr);
+} jl_frontend_t;
+
+// Set the julia frontend
+JL_DLLEXPORT void jl_set_frontend(jl_frontend_t frontend);
+
+// Return flisp frontend. jl_init_flisp() must be called separately.
+JL_DLLEXPORT jl_frontend_t jl_flisp_frontend(void);
+
+
+//--------------------------------------------------
 // Tools for locally disabling spurious compiler warnings
 //
 // Particular calls which are used elsewhere in the code include:

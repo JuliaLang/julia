@@ -1597,8 +1597,6 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t
 
 // front end interface
 JL_DLLEXPORT jl_value_t *jl_parse_all(const char *str, size_t len, const char *filename, size_t filename_len);
-JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len,
-                                             const char *filename, size_t filename_len);
 JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
                                          int pos0, int greedy);
 JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
@@ -1611,7 +1609,10 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *
 JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule);
 JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *inmodule,
                                                  const char *file, int line);
-JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str);
+JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str); // embedding interface
+// deprecated; use jl_parse_all
+JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len,
+                                             const char *filename, size_t filename_len);
 
 // external libraries
 enum JL_RTLD_CONSTANT {

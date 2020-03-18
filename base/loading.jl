@@ -1123,7 +1123,7 @@ The optional first argument `mapexpr` can be used to transform the included code
 it is evaluated: for each parsed expression `expr` in `path`, the `include` function
 actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
 """
-Base.include # defined in sysimg.jl
+Base.include # defined in Base.jl
 
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])
