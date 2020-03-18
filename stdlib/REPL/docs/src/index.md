@@ -564,4 +564,5 @@ Set([4, 2])
 
 ```@docs
 Base.atreplinit
+Base.afterreplinit
 ```

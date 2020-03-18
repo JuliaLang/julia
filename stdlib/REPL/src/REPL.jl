@@ -234,6 +234,9 @@ function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing))
     repl_channel = Channel(1)
     response_channel = Channel(1)
     backend = start_repl_backend(repl_channel, response_channel)
+    # Setup interface here so that `consumer` (and in turn,
+    # `afterreplinit` hooks) can access the interface:
+    ensure_interface!(repl)
     consumer(backend)
     run_frontend(repl, REPLBackendRef(repl_channel, response_channel))
     return backend
@@ -1074,15 +1077,20 @@ function setup_interface(
     return ModalInterface(allprompts)
 end
 
+ensure_interface!(::Any) = nothing
+
+function ensure_interface!(repl::LineEditREPL)
+    if !isdefined(repl, :interface)
+        repl.interface = setup_interface(repl)
+    end
+    return repl.interface
+end
+
 function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     d = REPLDisplay(repl)
     dopushdisplay = repl.specialdisplay === nothing && !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
-    if !isdefined(repl,:interface)
-        interface = repl.interface = setup_interface(repl)
-    else
-        interface = repl.interface
-    end
+    interface = ensure_interface!(repl)
     repl.backendref = backend
     repl.mistate = LineEdit.init_state(terminal(repl), interface)
     run_interface(terminal(repl), interface, repl.mistate)
