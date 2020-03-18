@@ -220,5 +220,5 @@ let (:)(a,b) = (i for i in Base.:(:)(1,10) if i%2==0)
     @test Int8[ i for i = 1:2 ] == [2,4,6,8,10]
 end
 
-@test keys((sin(x) for x in 0.0:0.5:9.9) == 1:20
+@test keys(sin(x) for x in 0.0:0.5:9.9) == 1:20
 
