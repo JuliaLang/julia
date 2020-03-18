@@ -576,12 +576,6 @@ print_correction(word) = print_correction(stdout, word)
 
 # Completion data
 
-const builtins = ["abstract type", "baremodule", "begin", "break",
-                  "catch", "ccall", "const", "continue", "do", "else",
-                  "elseif", "end", "export", "finally", "for", "function",
-                  "global", "if", "import", "let",
-                  "local", "macro", "module", "mutable struct", "primitive type",
-                  "quote", "return", "struct", "try", "using", "while"]
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
@@ -590,7 +584,7 @@ filtervalid(names) = filter(x->!occursin(r"#", x), map(string, names))
 accessible(mod::Module) =
     [filter!(s -> !Base.isdeprecated(mod, s), names(mod, all = true, imported = true));
      map(names, moduleusings(mod))...;
-     builtins] |> unique |> filtervalid
+     collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
 
 doc_completions(name) = fuzzysort(name, accessible(Main))
 doc_completions(name::Symbol) = doc_completions(string(name))
