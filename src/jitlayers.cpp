@@ -393,7 +393,7 @@ void JuliaOJIT::DebugObjectRegistrar::registerObject(RTDyldObjHandleT H, const O
         auto NameOrError = Symbol.getName();
         assert(NameOrError);
         auto Name = NameOrError.get();
-        auto Sym = JIT.CompileLayer.findSymbolIn(H, Name, true);
+        auto Sym = JIT.CompileLayer.findSymbolIn(H, Name.str(), true);
         assert(Sym);
         // note: calling getAddress here eagerly finalizes H
         // as an alternative, we could store the JITSymbol instead
@@ -429,7 +429,7 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
                                  "The module's content was printed above. Please file a bug report");
     }
 
-    return ObjBuffer;
+    return CompilerResultT(std::move(ObjBuffer));
 }
 
 JuliaOJIT::JuliaOJIT(TargetMachine &TM)
@@ -441,7 +441,7 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
     ES(),
     SymbolResolver(llvm::orc::createLegacyLookupResolver(
           ES,
-          [this](const std::string& name) -> llvm::JITSymbol {
+          [this](StringRef name) -> llvm::JITSymbol {
             return this->resolveSymbol(name);
           },
           [](llvm::Error Err) {
@@ -553,7 +553,7 @@ void JuliaOJIT::removeModule(ModuleHandleT H)
     (void)CompileLayer.removeModule(H);
 }
 
-JL_JITSymbol JuliaOJIT::findSymbol(const std::string &Name, bool ExportedSymbolsOnly)
+JL_JITSymbol JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
 {
     void *Addr = nullptr;
     if (ExportedSymbolsOnly) {
@@ -569,12 +569,12 @@ JL_JITSymbol JuliaOJIT::findSymbol(const std::string &Name, bool ExportedSymbols
     return JL_JITSymbol((uintptr_t)Addr, JITSymbolFlags::Exported);
 }
 
-JL_JITSymbol JuliaOJIT::findUnmangledSymbol(const std::string Name)
+JL_JITSymbol JuliaOJIT::findUnmangledSymbol(StringRef Name)
 {
     return findSymbol(getMangledName(Name), true);
 }
 
-JL_JITSymbol JuliaOJIT::resolveSymbol(const std::string& Name)
+JL_JITSymbol JuliaOJIT::resolveSymbol(StringRef Name)
 {
     // Step 0: ObjectLinkingLayer has checked whether it is in the current module
     // Step 1: See if it's something known to the ExecutionEngine
@@ -584,23 +584,23 @@ JL_JITSymbol JuliaOJIT::resolveSymbol(const std::string& Name)
         return Sym;
     }
     // Step 2: Search the program symbols
-    if (uint64_t addr = SectionMemoryManager::getSymbolAddressInProcess(Name))
+    if (uint64_t addr = SectionMemoryManager::getSymbolAddressInProcess(Name.str()))
         return JL_SymbolInfo(addr, JITSymbolFlags::Exported);
 #if defined(_OS_LINUX_) || defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
-    if (uint64_t addr = resolve_atomic(Name.c_str()))
+    if (uint64_t addr = resolve_atomic(Name.str().c_str()))
         return JL_SymbolInfo(addr, JITSymbolFlags::Exported);
 #endif
     // Return failure code
     return JL_SymbolInfo(nullptr);
 }
 
-uint64_t JuliaOJIT::getGlobalValueAddress(const std::string &Name)
+uint64_t JuliaOJIT::getGlobalValueAddress(StringRef Name)
 {
     auto addr = findSymbol(getMangledName(Name), false).getAddress();
     return addr ? addr.get() : 0;
 }
 
-uint64_t JuliaOJIT::getFunctionAddress(const std::string &Name)
+uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
 {
     auto addr = findSymbol(getMangledName(Name), false).getAddress();
     return addr ? addr.get() : 0;
@@ -663,7 +663,7 @@ std::string JuliaOJIT::getMangledName(StringRef Name)
 {
     SmallString<128> FullName;
     Mangler::getNameWithPrefix(FullName, Name, DL);
-    return FullName.str();
+    return FullName.str().str();
 }
 
 std::string JuliaOJIT::getMangledName(const GlobalValue *GV)

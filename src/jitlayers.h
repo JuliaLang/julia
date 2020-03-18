@@ -145,7 +145,11 @@ typedef JITSymbol JL_JITSymbol;
 typedef JITSymbol JL_SymbolInfo;
 
 using RTDyldObjHandleT = orc::VModuleKey;
+#if JL_LLVM_VERSION >= 110000
+using CompilerResultT = Expected<orc::LegacyRTDyldObjectLinkingLayerBase::ObjectPtr>;
+#else
 using CompilerResultT = std::unique_ptr<llvm::MemoryBuffer>;
+#endif
 
 class JuliaOJIT {
     // Custom object emission notification handler for the JuliaOJIT
@@ -190,11 +194,11 @@ public:
     void *getPointerToGlobalIfAvailable(const GlobalValue *GV);
     void addModule(std::unique_ptr<Module> M);
     void removeModule(ModuleHandleT H);
-    JL_JITSymbol findSymbol(const std::string &Name, bool ExportedSymbolsOnly);
-    JL_JITSymbol findUnmangledSymbol(const std::string Name);
-    JL_JITSymbol resolveSymbol(const std::string& Name);
-    uint64_t getGlobalValueAddress(const std::string &Name);
-    uint64_t getFunctionAddress(const std::string &Name);
+    JL_JITSymbol findSymbol(StringRef Name, bool ExportedSymbolsOnly);
+    JL_JITSymbol findUnmangledSymbol(StringRef Name);
+    JL_JITSymbol resolveSymbol(StringRef Name);
+    uint64_t getGlobalValueAddress(StringRef Name);
+    uint64_t getFunctionAddress(StringRef Name);
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst);
     const DataLayout& getDataLayout() const;
     const Triple& getTargetTriple() const;

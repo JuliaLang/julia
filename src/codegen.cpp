@@ -1240,7 +1240,7 @@ static void write_log_data(logdata_t &logData, const char *extension)
     base = base + "/../share/julia/base/";
     logdata_t::iterator it = logData.begin();
     for (; it != logData.end(); it++) {
-        std::string filename = it->first();
+        std::string filename(it->first());
         std::vector<logdata_block*> &values = it->second;
         if (!values.empty()) {
             if (!isabspath(filename.c_str()))
@@ -1298,12 +1298,10 @@ static void write_lcov_data(logdata_t &logData, const std::string &outfile)
     //base = base + "/../share/julia/base/";
     logdata_t::iterator it = logData.begin();
     for (; it != logData.end(); it++) {
-        const std::string &filename = it->first();
+        StringRef filename = it->first();
         const std::vector<logdata_block*> &values = it->second;
         if (!values.empty()) {
-            //if (!isabspath(filename.c_str()))
-            //    filename = base + filename;
-            outf << "SF:" << filename << '\n';
+            outf << "SF:" << filename.str() << '\n';
             size_t n_covered = 0;
             size_t n_instrumented = 0;
             size_t lno = 0;
