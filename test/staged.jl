@@ -248,7 +248,7 @@ f22440kernel(::Type{T}) where {T<:AbstractFloat} = zero(T)
 
 @generated function f22440(y)
     sig, spvals, method = Base._methods_by_ftype(Tuple{typeof(f22440kernel),y}, -1, typemax(UInt))[1]
-    code_info = Base.uncompressed_ast(method)
+    code_info = Base.uncompressed_ir(method)
     Meta.partially_inline!(code_info.code, Any[], sig, Any[spvals...], 0, 0, :propagate)
     return code_info
 end
@@ -283,7 +283,7 @@ let a = Any[]
     @test f23168(a, 3) == (6, Int)
     @test a == [1, 6, 3]
     @test occursin(" + ", string(code_lowered(f23168, (Vector{Any},Int))))
-    @test occursin("2 * ", string(Base.uncompressed_ast(first(methods(f23168)))))
+    @test occursin("2 * ", string(Base.uncompressed_ir(first(methods(f23168)))))
     @test occursin("2 * ", string(code_lowered(f23168, (Vector{Any},Int), generated=false)))
     @test occursin("Base.add_int", string(code_typed(f23168, (Vector{Any},Int))))
 end

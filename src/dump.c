@@ -481,7 +481,7 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     write_int32(s->s, m->nospecialize);
 }
 
-static int is_ast_node(jl_value_t *v)
+static int is_ir_node(jl_value_t *v)
 {
     // TODO: this accidentally copies QuoteNode(Expr(...)) and QuoteNode(svec(...))
     return jl_is_slot(v) || jl_is_ssavalue(v) ||
@@ -563,7 +563,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             jl_serialize_value(s, jl_tparam0(v));
             return;
         }
-        else if (!as_literal && !is_ast_node(v)) {
+        else if (!as_literal && !is_ir_node(v)) {
             int id = literal_val_id(s, v);
             assert(id >= 0);
             if (id < 256) {
@@ -2501,7 +2501,7 @@ JL_DLLEXPORT void jl_init_restored_modules(jl_array_t *init_order)
 
 // --- entry points ---
 
-JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
+JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
 {
     JL_TIMING(AST_COMPRESS);
     JL_LOCK(&m->writelock); // protect the roots array (Might GC)
@@ -2535,7 +2535,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
     ios_write(s.s, (char*)jl_array_data(code->slotflags), nslots);
 
     // N.B.: The layout of everything before this point is explicitly referenced
-    // by the various jl_ast_ accessors. Make sure to adjust those if you change
+    // by the various jl_ir_ accessors. Make sure to adjust those if you change
     // the data layout.
 
     for (i = 0; i < 6; i++) {
@@ -2586,7 +2586,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
     return v;
 }
 
-JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data)
+JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data)
 {
     if (jl_is_code_info(data))
         return (jl_code_info_t*)data;
@@ -2662,7 +2662,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_code_instance_
     return code;
 }
 
-JL_DLLEXPORT uint8_t jl_ast_flag_inferred(jl_array_t *data)
+JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_array_t *data)
 {
     if (jl_is_code_info(data))
         return ((jl_code_info_t*)data)->inferred;
@@ -2671,7 +2671,7 @@ JL_DLLEXPORT uint8_t jl_ast_flag_inferred(jl_array_t *data)
     return !!(flags & (1 << 3));
 }
 
-JL_DLLEXPORT uint8_t jl_ast_flag_inlineable(jl_array_t *data)
+JL_DLLEXPORT uint8_t jl_ir_flag_inlineable(jl_array_t *data)
 {
     if (jl_is_code_info(data))
         return ((jl_code_info_t*)data)->inlineable;
@@ -2680,7 +2680,7 @@ JL_DLLEXPORT uint8_t jl_ast_flag_inlineable(jl_array_t *data)
     return !!(flags & (1 << 2));
 }
 
-JL_DLLEXPORT uint8_t jl_ast_flag_pure(jl_array_t *data)
+JL_DLLEXPORT uint8_t jl_ir_flag_pure(jl_array_t *data)
 {
     if (jl_is_code_info(data))
         return ((jl_code_info_t*)data)->pure;
@@ -2715,7 +2715,7 @@ JL_DLLEXPORT jl_value_t *jl_compress_argnames(jl_array_t *syms)
     return str;
 }
 
-JL_DLLEXPORT ssize_t jl_ast_nslots(jl_array_t *data)
+JL_DLLEXPORT ssize_t jl_ir_nslots(jl_array_t *data)
 {
     if (jl_is_code_info(data)) {
         jl_code_info_t *func = (jl_code_info_t*)data;
@@ -2728,9 +2728,9 @@ JL_DLLEXPORT ssize_t jl_ast_nslots(jl_array_t *data)
     }
 }
 
-JL_DLLEXPORT uint8_t jl_ast_slotflag(jl_array_t *data, size_t i)
+JL_DLLEXPORT uint8_t jl_ir_slotflag(jl_array_t *data, size_t i)
 {
-    assert(i < jl_ast_nslots(data));
+    assert(i < jl_ir_nslots(data));
     if (jl_is_code_info(data))
         return ((uint8_t*)((jl_code_info_t*)data)->slotflags->data)[i];
     assert(jl_typeis(data, jl_array_uint8_type));

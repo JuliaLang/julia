@@ -6484,7 +6484,7 @@ jl_compile_result_t jl_emit_codeinst(
         src = (jl_code_info_t*)codeinst->inferred;
         jl_method_t *def = codeinst->def->def.method;
         if (src && (jl_value_t*)src != jl_nothing && jl_is_method(def))
-            src = jl_uncompress_ast(def, codeinst, (jl_array_t*)src);
+            src = jl_uncompress_ir(def, codeinst, (jl_array_t*)src);
         if (!src || !jl_is_code_info(src)) {
             JL_GC_POP();
             return jl_compile_result_t(); // failed
@@ -6526,17 +6526,17 @@ jl_compile_result_t jl_emit_codeinst(
                 // update the stored code
                 if (codeinst->inferred != (jl_value_t*)src) {
                     if (jl_is_method(def))
-                        src = (jl_code_info_t*)jl_compress_ast(def, src);
+                        src = (jl_code_info_t*)jl_compress_ir(def, src);
                     codeinst->inferred = (jl_value_t*)src;
                     jl_gc_wb(codeinst, src);
                 }
             }
             else if (// don't delete toplevel code
                      jl_is_method(def) &&
-                     // and there is something to delete (test this before calling jl_ast_flag_inlineable)
+                     // and there is something to delete (test this before calling jl_ir_flag_inlineable)
                      codeinst->inferred != jl_nothing &&
                      // don't delete inlineable code, unless it is constant
-                     (codeinst->invoke == jl_fptr_const_return || !jl_ast_flag_inlineable((jl_array_t*)codeinst->inferred)) &&
+                     (codeinst->invoke == jl_fptr_const_return || !jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred)) &&
                      // don't delete code when generating a precompile file
                      !imaging_mode) {
                 // if not inlineable, code won't be needed again

@@ -222,7 +222,7 @@ jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT
         if ((jl_value_t*)src == jl_nothing)
             src = NULL;
         else if (jl_is_method(mi->def.method))
-            src = jl_uncompress_ast(mi->def.method, codeinst, (jl_array_t*)src);
+            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
     }
     if (src == NULL && jl_is_method(mi->def.method) &&
              jl_symbol_name(mi->def.method->name)[0] != '@') {
@@ -272,7 +272,7 @@ void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
                 src = jl_code_for_staged(unspec->def);
             }
             if (src && (jl_value_t*)src != jl_nothing)
-                src = jl_uncompress_ast(def, NULL, (jl_array_t*)src);
+                src = jl_uncompress_ir(def, NULL, (jl_array_t*)src);
         }
         else {
             src = (jl_code_info_t*)unspec->def->uninferred;
@@ -315,7 +315,7 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
                         src = def->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)def->source;
                     }
                     if (src && (jl_value_t*)src != jl_nothing)
-                        src = jl_uncompress_ast(mi->def.method, codeinst, (jl_array_t*)src);
+                        src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
                 }
                 fptr = (uintptr_t)codeinst->invoke;
                 specfptr = (uintptr_t)codeinst->specptr.fptr;

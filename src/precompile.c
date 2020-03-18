@@ -326,8 +326,8 @@ static int precompile_enq_specialization_(jl_typemap_entry_t *l, void *closure)
         int do_compile = 0;
         if (codeinst->invoke != jl_fptr_const_return) {
             if (codeinst->inferred && codeinst->inferred != jl_nothing &&
-                jl_ast_flag_inferred((jl_array_t*)codeinst->inferred) &&
-                !jl_ast_flag_inlineable((jl_array_t*)codeinst->inferred)) {
+                jl_ir_flag_inferred((jl_array_t*)codeinst->inferred) &&
+                !jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred)) {
                 do_compile = 1;
             }
             else if (codeinst->invoke != NULL) {

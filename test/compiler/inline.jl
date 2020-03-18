@@ -276,9 +276,9 @@ let ci = code_typed(f34900, Tuple{Int, Int})[1].first
         ci.code[1].args[1].id == 2
 end
 
-@testset "check jl_ast_flag_inlineable for inline macro" begin
-    @test ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(@inline x -> x)).source)
-    @test !ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods( x -> x)).source)
-    @test ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(@inline function f(x) x end)).source)
-    @test !ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(function f(x) x end)).source)
+@testset "check jl_ir_flag_inlineable for inline macro" begin
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(@inline x -> x)).source)
+    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods( x -> x)).source)
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(@inline function f(x) x end)).source)
+    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(function f(x) x end)).source)
 end

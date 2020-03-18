@@ -206,12 +206,12 @@ void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *spar
 
 // copy a :lambda Expr into its CodeInfo representation,
 // including popping of known meta nodes
-static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
+static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
 {
-    assert(jl_is_expr(ast));
-    jl_expr_t *bodyex = (jl_expr_t*)jl_exprarg(ast, 2);
-    jl_value_t *codelocs = jl_exprarg(ast, 3);
-    li->linetable = jl_exprarg(ast, 4);
+    assert(jl_is_expr(ir));
+    jl_expr_t *bodyex = (jl_expr_t*)jl_exprarg(ir, 2);
+    jl_value_t *codelocs = jl_exprarg(ir, 3);
+    li->linetable = jl_exprarg(ir, 4);
     size_t nlocs = jl_array_len(codelocs);
     li->codelocs = (jl_value_t*)jl_alloc_array_1d(jl_array_int32_type, nlocs);
     size_t j;
@@ -247,7 +247,7 @@ static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
                 jl_array_del_end(meta, na - ins);
         }
     }
-    jl_array_t *vinfo = (jl_array_t*)jl_exprarg(ast, 1);
+    jl_array_t *vinfo = (jl_array_t*)jl_exprarg(ir, 1);
     jl_array_t *vis = (jl_array_t*)jl_array_ptr_ref(vinfo, 0);
     size_t nslots = jl_array_len(vis);
     jl_value_t *ssavalue_types = jl_array_ptr_ref(vinfo, 2);
@@ -327,12 +327,12 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     return src;
 }
 
-jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast)
+jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
 {
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     src = jl_new_code_info_uninit();
-    jl_code_info_set_ast(src, ast);
+    jl_code_info_set_ir(src, ir);
     JL_GC_POP();
     return src;
 }
@@ -581,7 +581,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     if (gen_only)
         m->source = NULL;
     else
-        m->source = (jl_value_t*)jl_compress_ast(m, src);
+        m->source = (jl_value_t*)jl_compress_ir(m, src);
     jl_gc_wb(m, m->source);
     JL_GC_POP();
 }
@@ -745,8 +745,8 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     if (!jl_is_code_info(f)) {
         // this occurs when there is a closure being added to an out-of-scope function
         // the user should only do this at the toplevel
-        // the result is that the closure variables get interpolated directly into the AST
-        f = jl_new_code_info_from_ast((jl_expr_t*)f);
+        // the result is that the closure variables get interpolated directly into the IR
+        f = jl_new_code_info_from_ir((jl_expr_t*)f);
     }
     m = jl_new_method_uninit(module);
     m->sig = argtype;
