@@ -582,3 +582,11 @@ let d = IdDict([1] => 2, [3] => 4), io = IOBuffer()
     @test Dict(d) == Dict(ds)
     @test all([k in keys(ds) for k in keys(ds)])
 end
+
+# issue #35030, shared references to Strings
+let s = join(rand('a':'z', 1024)), io = IOBuffer()
+    serialize(io, (s, s))
+    seekstart(io)
+    s2 = deserialize(io)
+    @test Base.summarysize(s2) < 2*sizeof(s)
+end
