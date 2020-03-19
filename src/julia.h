@@ -1900,6 +1900,7 @@ typedef struct {
     const char **cmds;
     const char *image_file;
     const char *cpu_target;
+    int32_t nthreads;
     int32_t nprocs;
     const char *machine_file;
     const char *project;

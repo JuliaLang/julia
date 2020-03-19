@@ -231,27 +231,20 @@ julia> Threads.nthreads()
 1
 ```
 
-The number of threads Julia starts up with is controlled by an environment variable called `JULIA_NUM_THREADS`.
-Now, let's start up Julia with 4 threads:
+The number of threads Julia starts up with is controlled either by using the
+`-t`/`--threads` command line argument or by using the
+[`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) environment variable. When both are
+specified, then `-t`/`--threads` takes precedence.
 
-Bash on Linux/OSX:
+!!! compat "Julia 1.5"
+    The `-t`/`--threads` command line argument requires at least Julia 1.5.
+    In older versions you must use the environment variable instead.
+
+Lets start Julia with 4 threads:
 
 ```bash
-export JULIA_NUM_THREADS=4
+$ julia --threads 4
 ```
-
-C shell on Linux/OSX, CMD on Windows:
-
-```bash
-set JULIA_NUM_THREADS=4
-```
-
-Powershell on Windows:
-
-```powershell
-$env:JULIA_NUM_THREADS=4
-```
-
 
 Let's verify there are 4 threads at our disposal.
 
@@ -266,6 +259,29 @@ But we are currently on the master thread. To check, we use the function [`Threa
 julia> Threads.threadid()
 1
 ```
+
+!!! note
+    If you prefer to use the environment variable you can set it as follows in
+    Bash (Linux/macOS):
+    ```bash
+    export JULIA_NUM_THREADS=4
+    ```
+    C shell on Linux/macOS, CMD on Windows:
+    ```bash
+    set JULIA_NUM_THREADS=4
+    ```
+    Powershell on Windows:
+    ```powershell
+    $env:JULIA_NUM_THREADS=4
+    ```
+    Note that this must be done *before* starting Julia.
+
+!!! note
+    The number of threads specified with `-t`/`--threads` is propagated to worker processes
+    that are spawned using the `-p`/`--procs` or `--machine-file` command line options.
+    For example, `julia -p2 -t2` spawns 1 main process with 2 worker processes, and all
+    three processes have 2 threads enabled. For more fine grained control over worker
+    threads use [`addprocs`](@ref) and pass `-t`/`--threads` as `exeflags`.
 
 ## The `@threads` Macro
 
