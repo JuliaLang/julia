@@ -103,30 +103,27 @@ The "builtin" functions, defined in the `Core` module, are:
 
 ```@eval
 
-lines(words) = begin
-    io = IOBuffer()
-    linelen = 0
-    for word in words
-        if linelen+length(word) > 80
-            print(io, '\n', word)
-            linelen = length(word)
-        elseif linelen == 0
-            print(io, word);
-            linelen += length(word)
-        else
-            print(io, ' ', word);
-            linelen += length(word)+1
-        end
+ws = [string(n) for n in names(Core;all=true) if getfield(Core,n) isa Core.Builtin]
+io = IOBuffer()
+
+print(io, "```\n")
+n = 0
+for w in ws
+    if n+length(w) > 80
+        print(io, '\n', w)
+        n = length(w)
+    elseif n == 0
+        print(io, w);
+        n += length(w)
+    else
+        print(io, ' ', w);
+        n += length(w)+1
     end
-    String(take!(io))
 end
-
-
+print(io, "\n```")
 
 import Markdown
-fs = [string(n) for n in names(Core;all=true) if getfield(Core,n) isa Core.Builtin]
-x = Markdown.parse("```\n$(lines(fs))\n```")
-
+x = Markdown.parse(String(take!(io)))
 
 ```
 
