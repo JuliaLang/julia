@@ -29,6 +29,12 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> cholesky(t't).U |> t -> uplo1 == :U ? t : copy(t')))
         @test t1(A1) === A1
         @test t1{elty1}(A1) === A1
+        # test the ctor works for AbstractMatrix
+        symm = Symmetric(rand(Int8, n, n))
+        t1s = t1{elty1}(symm)
+        @test typeof(t1s) == t1{elty1, Symmetric{elty1, Matrix{elty1}}}
+        t1t = t1{elty1}(t1(rand(Int8, n, n)))
+        @test typeof(t1t) == t1{elty1, Matrix{elty1}}
 
         debug && println("elty1: $elty1, A1: $t1")
 

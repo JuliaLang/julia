@@ -669,15 +669,16 @@ end
 
 # isassigned, issue #11167
 mutable struct Type11167{T,N} end
-Type11167{Int,2}
-let tname = Type11167.body.body.name
-    @test !isassigned(tname.cache, 0)
-    @test isassigned(tname.cache, 1)
-    @test !isassigned(tname.cache, 2)
-    Type11167{Float32,5}
-    @test isassigned(tname.cache, 2)
-    @test !isassigned(tname.cache, 3)
+function count11167()
+    let cache = Type11167.body.body.name.cache
+        return sum(i -> isassigned(cache, i), 0:length(cache))
+    end
 end
+@test count11167() == 0
+Type11167{Int,2}
+@test count11167() == 1
+Type11167{Float32,5}
+@test count11167() == 2
 
 # dispatch
 let

@@ -863,6 +863,7 @@ jl_value_t *jl_parse_eval_all(const char *fname,
     int last_lineno = jl_lineno;
     const char *last_filename = jl_filename;
     size_t last_age = jl_get_ptls_states()->world_age;
+    int lineno = 0;
     jl_lineno = 0;
     jl_filename = fname;
     jl_module_t *old_module = ctx->module;
@@ -894,17 +895,20 @@ jl_value_t *jl_parse_eval_all(const char *fname,
                 expression =
                     fl_applyn(fl_ctx, 4,
                               symbol_value(symbol(fl_ctx, "jl-expand-to-thunk-warn")),
-                              expression, symbol(fl_ctx, jl_filename), fixnum(jl_lineno),
+                              expression, symbol(fl_ctx, fname), fixnum(lineno),
                               iscons(cdr_(ast)) ? fl_ctx->T : fl_ctx->F);
             }
             jl_get_ptls_states()->world_age = jl_world_counter;
             form = scm_to_julia(fl_ctx, expression, inmodule);
             JL_SIGATOMIC_END();
             jl_get_ptls_states()->world_age = jl_world_counter;
-            if (jl_is_linenode(form))
-                jl_lineno = jl_linenode_line(form);
-            else
+            if (jl_is_linenode(form)) {
+                lineno = jl_linenode_line(form);
+                jl_lineno = lineno;
+            }
+            else {
                 result = jl_toplevel_eval_flex(inmodule, form, 1, 1);
+            }
             JL_SIGATOMIC_BEGIN();
             ast = cdr_(ast);
         }

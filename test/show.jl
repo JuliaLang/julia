@@ -1672,6 +1672,10 @@ end
     @test replstr(Vector[Any[1]]) == "1-element Array{Array{T,1} where T,1}:\n Any[1]"
     @test replstr(AbstractDict{Integer,Integer}[Dict{Integer,Integer}(1=>2)]) ==
         "1-element Array{AbstractDict{Integer,Integer},1}:\n Dict(1 => 2)"
+
+    # issue #34343
+    @test showstr([[1], Int[]]) == "[[1], $Int[]]"
+    @test showstr([Dict(1=>1), Dict{Int,Int}()]) == "[Dict(1 => 1), Dict{$Int,$Int}()]"
 end
 
 @testset "#14684: `display` should print associative types in full" begin

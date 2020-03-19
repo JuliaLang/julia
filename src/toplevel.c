@@ -829,6 +829,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
         jl_error("eval cannot be used in a generated function");
     jl_value_t *v = NULL;
     int last_lineno = jl_lineno;
+    const char *last_filename = jl_filename;
     if (jl_options.incremental && jl_generating_output()) {
         if (!ptrhash_has(&jl_current_modules, (void*)m)) {
             if (m != jl_main_module) { // TODO: this was grand-fathered in
@@ -843,9 +844,11 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     }
     JL_CATCH {
         jl_lineno = last_lineno;
+        jl_filename = last_filename;
         jl_rethrow();
     }
     jl_lineno = last_lineno;
+    jl_filename = last_filename;
     assert(v);
     return v;
 }

@@ -912,13 +912,13 @@ end
 function visit(f, mc::Core.TypeMapLevel)
     if mc.targ !== nothing
         e = mc.targ::Vector{Any}
-        for i in 1:length(e)
+        for i in 2:2:length(e)
             isassigned(e, i) && visit(f, e[i])
         end
     end
     if mc.arg1 !== nothing
         e = mc.arg1::Vector{Any}
-        for i in 1:length(e)
+        for i in 2:2:length(e)
             isassigned(e, i) && visit(f, e[i])
         end
     end

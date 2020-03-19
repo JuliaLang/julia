@@ -13,14 +13,14 @@
 (define (error-wrap thk)
   (with-exception-catcher
    (lambda (e)
-     (if (and (pair? e) (eq? (car e) 'error))
+     (if (and (pair? e) (memq (car e) '(error io-error)))
          (let ((msg (cadr e))
                (pfx "incomplete:"))
            (if (and (string? msg) (>= (string-length msg) (string-length pfx))
                     (equal? pfx
                             (substring msg 0 (string-length pfx))))
                `(incomplete ,msg)
-               e))
+               (cons 'error (cdr e))))
          (begin
            ;;(newline)
            ;;(display "unexpected error: ")
@@ -53,10 +53,13 @@
       (let loop ((exprs '()))
         (let ((lineno (error-wrap
                        (lambda ()
-                         (skip-ws-and-comments (ts:port stream))
-                         (input-port-line (ts:port stream))))))
+                         (skip-ws-and-comments io)
+                         (input-port-line io)))))
           (if (pair? lineno)
-              (cons 'toplevel (reverse! (cons lineno exprs)))
+              (cons 'toplevel
+                    (reverse! (list* lineno
+                                     `(line ,(input-port-line io) ,current-filename)
+                                     exprs)))
               (let ((expr (error-wrap
                            (lambda ()
                              (julia-parse stream)))))
@@ -91,7 +94,7 @@
   (let ((ex0 (julia-expand-macroscope e)))
     (if (toplevel-only-expr? ex0)
         ex0
-        (let* ((ex (julia-expand0 ex0))
+        (let* ((ex (julia-expand0 ex0 file line))
                (th (julia-expand1
                     `(lambda () ()
                              (scope-block

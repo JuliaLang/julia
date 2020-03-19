@@ -203,7 +203,7 @@ static DIType *_julia_type_to_di(jl_codegen_params_t *ctx, jl_value_t *jt, DIBui
     jl_datatype_t *jdt = (jl_datatype_t*)jt;
     if (isboxed || !jl_is_datatype(jt) || !jdt->isconcretetype)
         return jl_pvalue_dillvmt;
-    assert(jdt->uid && jdt->layout);
+    assert(jdt->layout);
     DIType* _ditype = NULL;
     DIType* &ditype = (ctx ? ctx->ditypes[jdt] : _ditype);
     if (ditype)
@@ -227,7 +227,7 @@ static DIType *_julia_type_to_di(jl_codegen_params_t *ctx, jl_value_t *jt, DIBui
         }
         DINodeArray ElemArray = dbuilder->getOrCreateArray(Elements);
         std::stringstream unique_name;
-        unique_name << jdt->uid;
+        unique_name << (uintptr_t)jdt;
         ditype = dbuilder->createStructType(
                 NULL,                       // Scope
                 tname,                      // Name
