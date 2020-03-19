@@ -281,7 +281,7 @@ function close_chnl_on_taskdone(t::Task, c::Channel)
         if istaskfailed(t)
             excp = task_result(t)
             if excp isa Exception
-                close(c, excp)
+                close(c, TaskFailedException(t))
                 return
             end
         end

@@ -1298,7 +1298,7 @@ cd(dirwalk) do
     @test files == ["file1", "file2"]
 
     rm(joinpath("sub_dir1"), recursive=true)
-    @test_throws SystemError take!(chnl_error) # throws an error because sub_dir1 do not exist
+    @test_throws TaskFailedException take!(chnl_error) # throws an error because sub_dir1 do not exist
 
     root, dirs, files = take!(chnl_noerror)
     @test root == "."
