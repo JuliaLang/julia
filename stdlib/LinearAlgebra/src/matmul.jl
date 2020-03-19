@@ -683,7 +683,7 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
         end
         for k = 1:mB
             aoffs = (k-1)*Astride
-            b = _add(B[k], 0)
+            b = _add(B[k], zero(R))
             for i = 1:mA
                 C[i] += A[aoffs + i] * b
             end
