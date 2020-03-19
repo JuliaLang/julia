@@ -1150,16 +1150,40 @@ fake_repl() do stdin_write, stdout_read, repl
 end
 
 # AST transformations (softscope, Revise, OhMyREPL, etc.)
-repl_channel = Channel(1)
-response_channel = Channel(1)
-backend = REPL.start_repl_backend(repl_channel, response_channel)
-put!(repl_channel, (:(1+1), false))
-reply = take!(response_channel)
-@test reply == (2, false)
-twice(ex) = Expr(:tuple, ex, ex)
-push!(backend.ast_transforms, twice)
-put!(repl_channel, (:(1+1), false))
-reply = take!(response_channel)
-@test reply == ((2, 2), false)
-put!(repl_channel, (nothing, -1))
-Base.wait(backend.backend_task)
+@testset "AST Transformation" begin
+    backend = REPL.REPLBackend()
+    @async REPL.start_repl_backend(backend)
+    put!(backend.repl_channel, (:(1+1), false))
+    reply = take!(backend.response_channel)
+    @test reply == (2, false)
+    twice(ex) = Expr(:tuple, ex, ex)
+    push!(backend.ast_transforms, twice)
+    put!(backend.repl_channel, (:(1+1), false))
+    reply = take!(backend.response_channel)
+    @test reply == ((2, 2), false)
+    put!(backend.repl_channel, (nothing, -1))
+    Base.wait(backend.backend_task)
+end
+
+
+backend = REPL.REPLBackend()
+frontend_task = @async begin
+    try
+        @testset "AST Transformations Async" begin
+            put!(backend.repl_channel, (:(1+1), false))
+            reply = take!(backend.response_channel)
+            @test reply == (2, false)
+            twice(ex) = Expr(:tuple, ex, ex)
+            push!(backend.ast_transforms, twice)
+            put!(backend.repl_channel, (:(1+1), false))
+            reply = take!(backend.response_channel)
+            @test reply == ((2, 2), false)
+        end
+    catch e
+        Base.rethrow(e)
+    finally
+        put!(backend.repl_channel, (nothing, -1))
+    end
+end
+REPL.start_repl_backend(backend)
+Base.wait(frontend_task)
