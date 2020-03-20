@@ -318,6 +318,56 @@ julia> filter!(x -> x > 1, a) # in-place & thus more efficient than a = a[a .> 1
 kw"="
 
 """
+    .=
+
+Perform broadcasted assignment. The right-side argument is expanded as in
+[`broadcast`](@ref) and then assigned into the left-side argument in-place.
+Fuses with other dotted operators in the same expression; i.e. the whole
+assignment expression is converted into a single loop.
+
+`A .= B` is similar to `broadcast!(identity, A, B)`.
+
+# Examples
+```jldoctest
+julia> A = zeros(4, 4); B = [1, 2, 3, 4];
+
+julia> A .= B
+4×4 Array{Float64,2}:
+ 1.0  1.0  1.0  1.0
+ 2.0  2.0  2.0  2.0
+ 3.0  3.0  3.0  3.0
+ 4.0  4.0  4.0  4.0
+
+julia> A
+4×4 Array{Float64,2}:
+ 1.0  1.0  1.0  1.0
+ 2.0  2.0  2.0  2.0
+ 3.0  3.0  3.0  3.0
+ 4.0  4.0  4.0  4.0
+```
+"""
+kw".="
+
+"""
+    .
+
+The dot operator is used to access fields or properties of objects and access
+variables defined inside modules.
+
+In general, `a.b` calls `getproperty(a, :b)` (see [`getproperty`](@ref Base.getproperty)).
+
+# Examples
+```jldoctest
+julia> z = 1 + 2im; z.im
+2
+
+julia> Iterators.product
+product (generic function with 1 method)
+```
+"""
+kw"."
+
+"""
     let
 
 `let` statements allocate new variable bindings each time they run. Whereas an

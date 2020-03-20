@@ -1013,6 +1013,8 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
+help_result(line) = Base.eval(REPL._helpmode(IOBuffer(), line))
+
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
 # rather than complete integration with Julia's REPL mode system.
 for (line, expr) in Pair[
@@ -1032,15 +1034,17 @@ for (line, expr) in Pair[
     "import Foo"   => :import,
     ]
     @test REPL._helpmode(line).args[4] == expr
-    buf = IOBuffer()
-    @test Base.eval(REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
+    @test help_result(line) isa Union{Markdown.MD,Nothing}
 end
 
 # PR 30754, Issues #22013, #24871, #26933, #29282, #29361, #30348
-for line in ["′", "abstract", "type", "|=", ".="]
+for line in ["′", "abstract", "type"]
     @test occursin("No documentation found.",
-        sprint(show, Base.eval(REPL._helpmode(IOBuffer(), line))::Union{Markdown.MD,Nothing}))
+        sprint(show, help_result(line)::Union{Markdown.MD,Nothing}))
 end
+
+@test occursin("|=", sprint(show, help_result("|=")))
+@test occursin("broadcast", sprint(show, help_result(".=")))
 
 # Issue #25930
 
