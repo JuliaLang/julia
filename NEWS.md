@@ -11,6 +11,10 @@ New language features
   macros and matrix constructors, which are whitespace sensitive, because expressions like
   `[a ±b]` now get parsed as `[a ±(b)]` instead of `[±(a, b)]`. ([#34200])
 
+* Packages can now provide custom hints to help users resolve errors by using the
+  `register_error_hint` function. Packages that define custom exception types
+  can support hints by calling `show_error_hints` from their `showerror` method. ([#35094])
+
 Language changes
 ----------------
 
