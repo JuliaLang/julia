@@ -489,6 +489,9 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true
     dl = A.dl
     d = A.d
     du = A.du
+    if dl === du
+        throw(ArgumentError("off-diagonals of `A` must not alias"))
+    end
     du2 = fill!(similar(d, n-2), 0)::V
 
     @inbounds begin
