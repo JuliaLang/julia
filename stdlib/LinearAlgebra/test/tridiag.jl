@@ -481,4 +481,14 @@ end
     @test sum(SymTridiagonal([1,2,3], [1,2])) == 12
 end
 
+@testset "Issue #28994 (sum of Tridigonal and UniformScaling)" begin
+    dl = [1., 1.]
+    d = [-2., -2., -2.]
+    T = Tridiagonal(dl, d, dl)
+    S = SymTridiagonal(T)
+
+    @test diag(T + 2I) == zero(d)
+    @test diag(S + 2I) == zero(d)
+end
+
 end # module TestTridiagonal
