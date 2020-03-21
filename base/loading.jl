@@ -593,7 +593,13 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
         hash === nothing && return nothing
         # Keep the 4 since it used to be the default
         for slug in (version_slug(uuid, hash, 4), version_slug(uuid, hash))
-            for depot in DEPOT_PATH
+            _project = active_project()
+            if _project === nothing || isempty(_project)
+                _project_depot = String[]
+            else
+                _project_depot = String[abspath(dirname(_project))]
+            end
+            for depot in vcat(DEPOT_PATH, _project_depot)
                 path = abspath(depot, "packages", name, slug)
                 ispath(path) && return path
             end
