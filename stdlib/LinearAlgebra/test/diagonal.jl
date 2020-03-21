@@ -648,7 +648,13 @@ end
 end
 
 @testset "sum" begin
-    @test sum(Diagonal([1,2,3])) == 6
+    D = Diagonal([1,2,3])
+    Ddense = Matrix(D)
+    @test sum(D) == 6
+    @test_throws ArgumentError sum(D, dims=0)
+    @test sum(D, dims=1) == sum(Ddense, dims=1)
+    @test sum(D, dims=2) == sum(Ddense, dims=2)
+    @test sum(D, dims=3) == sum(Ddense, dims=3)
 end
 
 @testset "logabsdet for generic eltype" begin

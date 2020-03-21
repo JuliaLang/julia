@@ -457,8 +457,20 @@ end
 end
 
 @testset "sum" begin
-    @test sum(Bidiagonal([1,2,3], [1,2], :U)) == 9
-    @test sum(Bidiagonal([1,2,3], [1,2], :L)) == 9
+    Bu = Bidiagonal([1,2,3], [1,2], :U)
+    Budense = Matrix(Bu)
+    Bl = Bidiagonal([1,2,3], [1,2], :L)
+    Bldense = Matrix(Bl)
+    @test sum(Bu) == 9
+    @test sum(Bl) == 9
+    @test_throws ArgumentError sum(Bu, dims=0)
+    @test sum(Bu, dims=1) == sum(Budense, dims=1)
+    @test sum(Bu, dims=2) == sum(Budense, dims=2)
+    @test sum(Bu, dims=3) == sum(Budense, dims=3)
+    @test_throws ArgumentError sum(Bl, dims=0)
+    @test sum(Bl, dims=1) == sum(Bldense, dims=1)
+    @test sum(Bl, dims=2) == sum(Bldense, dims=2)
+    @test sum(Bl, dims=3) == sum(Bldense, dims=3)
 end
 
 @testset "empty sub-diagonal" begin

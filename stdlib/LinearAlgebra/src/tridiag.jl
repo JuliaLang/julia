@@ -727,6 +727,62 @@ end
 Base._sum(A::Tridiagonal, ::Colon) = sum(A.d) + sum(A.dl) + sum(A.du)
 Base._sum(A::SymTridiagonal, ::Colon) = sum(A.dv) + 2sum(A.ev)
 
+function Base._sum(A::Tridiagonal, dims::Integer)
+    res = Base.reducedim_initarray(A, dims, zero(eltype(A)))
+    n = length(A.d)
+    @inbounds begin
+        if dims == 1
+            res[1] = A.dl[1] + A.d[1]
+            for i = 2:n-1
+                res[i] = A.dl[i] + A.d[i] + A.du[i-1]
+            end
+            res[n] = A.d[n] + A.du[n-1]
+        elseif dims == 2
+            res[1] = A.d[1] + A.du[1]
+            for i = 2:n-1
+                res[i] = A.dl[i-1] + A.d[i] + A.du[i]
+            end
+            res[n] = A.dl[n-1] + A.d[n]
+        elseif dims >= 3
+            for i = 1:n-1
+                res[i,i+1] = A.du[i]
+                res[i,i]   = A.d[i]
+                res[i+1,i] = A.dl[i]
+            end
+            res[n,n] = A.d[n]
+        end
+    end
+    res
+end
+
+function Base._sum(A::SymTridiagonal, dims::Integer)
+    res = Base.reducedim_initarray(A, dims, zero(eltype(A)))
+    n = length(A.dv)
+    @inbounds begin
+        if dims == 1
+            res[1] = A.ev[1] + A.dv[1]
+            for i = 2:n-1
+                res[i] = A.ev[i] + A.dv[i] + A.ev[i-1]
+            end
+            res[n] = A.dv[n] + A.ev[n-1]
+        elseif dims == 2
+            res[1] = A.dv[1] + A.ev[1]
+            for i = 2:n-1
+                res[i] = A.ev[i-1] + A.dv[i] + A.ev[i]
+            end
+            res[n] = A.ev[n-1] + A.dv[n]
+        elseif dims >= 3
+            for i = 1:n-1
+                res[i,i+1] = A.ev[i]
+                res[i,i]   = A.dv[i]
+                res[i+1,i] = A.ev[i]
+            end
+            res[n,n] = A.dv[n]
+        end
+    end
+    res
+end
+
 function dot(x::AbstractVector, A::Tridiagonal, y::AbstractVector)
     require_one_based_indexing(x, y)
     nx, ny = length(x), length(y)
