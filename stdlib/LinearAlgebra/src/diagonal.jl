@@ -70,6 +70,10 @@ similar(D::Diagonal, ::Type{T}) where {T} = Diagonal(similar(D.diag, T))
 # The method below is moved to SparseArrays for now
 # similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
+# Usually, reducedim_initarray calls similar, which yields a sparse matrix for a
+# Diagonal matrix. However, reducedim should yield a dense vector to increase performance.
+Base.reducedim_initarray(A::Diagonal, region, init) = fill(init, Base.reduced_indices(A,region))
+
 copyto!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
 
 size(D::Diagonal) = (length(D.diag),length(D.diag))
