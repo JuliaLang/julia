@@ -52,10 +52,11 @@ files. By default it includes:
 1. `~/.julia` where `~` is the user home as appropriate on the system;
 2. an architecture-specific shared system directory, e.g. `/usr/local/share/julia`;
 3. an architecture-independent shared system directory, e.g. `/usr/share/julia`.
+4. `"@"`, which expands to `abspath(dirname(Base.active_project()), "julia_depot")`
 
 So `DEPOT_PATH` might be:
 ```julia
-[joinpath(homedir(), ".julia"), "/usr/local/share/julia", "/usr/share/julia"]
+[joinpath(homedir(), ".julia"), "/usr/local/share/julia", "/usr/share/julia", "@"]
 ```
 The first entry is the "user depot" and should be writable by and owned by the
 current user. The user depot is where: registries are cloned, new package versions
@@ -71,6 +72,9 @@ environment variable if set.
 See also:
 [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
 [Code Loading](@ref Code-Loading).
+
+!!! compat "Julia 1.5"
+    The `"@"` entry does not exist prior to Julia 1.5.
 """
 const DEPOT_PATH = String[]
 
@@ -80,6 +84,8 @@ function append_default_depot_path!(DEPOT_PATH)
     path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
     path = abspath(Sys.BINDIR, "..", "share", "julia")
+    path in DEPOT_PATH || push!(DEPOT_PATH, path)
+    path = "@"
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
 end
 
@@ -261,6 +267,22 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
 end
 load_path_expand(::Nothing) = nothing
 
+## depot path expansion: turn DEPOT_PATH entries into concrete paths ##
+
+function depot_path_expand(depot::AbstractString)::Union{String, Nothing}
+    if depot == "@"
+        project = active_project()
+        if project === nothing || isempty(project)
+            return nothing
+        else
+            return abspath(dirname(project), "julia_depot")
+        end
+    else
+        return depot
+    end
+end
+depot_path_expand(::Nothing) = nothing
+
 function active_project(search_load_path::Bool=true)
     for project in (ACTIVE_PROJECT[], HOME_PROJECT[])
         project == "@" && continue
@@ -286,6 +308,15 @@ function load_path()
     paths = String[]
     for env in LOAD_PATH
         path = load_path_expand(env)
+        path !== nothing && path ∉ paths && push!(paths, path)
+    end
+    return paths
+end
+
+function depot_path()
+    paths = String[]
+    for depot in DEPOT_PATH
+        path = depot_path_expand(depot)
         path !== nothing && path ∉ paths && push!(paths, path)
     end
     return paths
