@@ -591,7 +591,7 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
             return path
         end
         hash === nothing && return nothing
-        # Look for vendored packages in `$project/packages`
+        # Look for bundled packages in `$project/packages`
         depot_path = DEPOT_PATH
         project = active_project()
         if project !== nothing
