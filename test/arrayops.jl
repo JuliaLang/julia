@@ -661,9 +661,9 @@ end
     cp = PermutedDimsArray(c, (3,2,1))
     @test pointer(cp) == pointer(c)
     @test_throws ArgumentError pointer(cp, 2)
-    @test strides(cp) == (9,3,1)
+    @test strides(cp) == (1, 2, 6)
     ap = PermutedDimsArray(Array(a), (2,1,3))
-    @test strides(ap) == (3,1,12)
+    @test strides(ap) == (1, 4, 12)
 
     for A in [rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)]
         perm = randperm(4)
