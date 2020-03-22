@@ -58,9 +58,17 @@ Base.unsafe_convert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.un
 # or a linear index?
 Base.pointer(A::PermutedDimsArray, i::Integer) = throw(ArgumentError("pointer(A, i) is deliberately unsupported for PermutedDimsArray"))
 
+@inline function c_strides(t::NTuple{N,Int}) where {N}
+    (1,t[1].*c_strides(Base.tail(t))...)
+end
+
+@inline function c_strides(t::NTuple{0,Int})
+    1
+end
+
 function Base.strides(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}
-    s = strides(parent(A))
-    ntuple(d->s[perm[d]], Val(N))
+    strides_trail=c_strides(size(A))
+    ntuple(i->strides_trail[i],Val(N))
 end
 
 @inline function Base.getindex(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}
