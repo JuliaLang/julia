@@ -1013,6 +1013,8 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
+help_result(line) = Base.eval(REPL._helpmode(IOBuffer(), line))
+
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
 # rather than complete integration with Julia's REPL mode system.
 for (line, expr) in Pair[
@@ -1032,15 +1034,17 @@ for (line, expr) in Pair[
     "import Foo"   => :import,
     ]
     @test REPL._helpmode(line).args[4] == expr
-    buf = IOBuffer()
-    @test Base.eval(REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
+    @test help_result(line) isa Union{Markdown.MD,Nothing}
 end
 
 # PR 30754, Issues #22013, #24871, #26933, #29282, #29361, #30348
-for line in ["′", "abstract", "type", "|=", ".="]
+for line in ["′", "abstract", "type"]
     @test occursin("No documentation found.",
-        sprint(show, Base.eval(REPL._helpmode(IOBuffer(), line))::Union{Markdown.MD,Nothing}))
+        sprint(show, help_result(line)::Union{Markdown.MD,Nothing}))
 end
+
+@test occursin("|=", sprint(show, help_result("|=")))
+@test occursin("broadcast", sprint(show, help_result(".=")))
 
 # Issue #25930
 
@@ -1150,16 +1154,40 @@ fake_repl() do stdin_write, stdout_read, repl
 end
 
 # AST transformations (softscope, Revise, OhMyREPL, etc.)
-repl_channel = Channel(1)
-response_channel = Channel(1)
-backend = REPL.start_repl_backend(repl_channel, response_channel)
-put!(repl_channel, (:(1+1), false))
-reply = take!(response_channel)
-@test reply == (2, false)
-twice(ex) = Expr(:tuple, ex, ex)
-push!(backend.ast_transforms, twice)
-put!(repl_channel, (:(1+1), false))
-reply = take!(response_channel)
-@test reply == ((2, 2), false)
-put!(repl_channel, (nothing, -1))
-Base.wait(backend.backend_task)
+@testset "AST Transformation" begin
+    backend = REPL.REPLBackend()
+    @async REPL.start_repl_backend(backend)
+    put!(backend.repl_channel, (:(1+1), false))
+    reply = take!(backend.response_channel)
+    @test reply == (2, false)
+    twice(ex) = Expr(:tuple, ex, ex)
+    push!(backend.ast_transforms, twice)
+    put!(backend.repl_channel, (:(1+1), false))
+    reply = take!(backend.response_channel)
+    @test reply == ((2, 2), false)
+    put!(backend.repl_channel, (nothing, -1))
+    Base.wait(backend.backend_task)
+end
+
+
+backend = REPL.REPLBackend()
+frontend_task = @async begin
+    try
+        @testset "AST Transformations Async" begin
+            put!(backend.repl_channel, (:(1+1), false))
+            reply = take!(backend.response_channel)
+            @test reply == (2, false)
+            twice(ex) = Expr(:tuple, ex, ex)
+            push!(backend.ast_transforms, twice)
+            put!(backend.repl_channel, (:(1+1), false))
+            reply = take!(backend.response_channel)
+            @test reply == ((2, 2), false)
+        end
+    catch e
+        Base.rethrow(e)
+    finally
+        put!(backend.repl_channel, (nothing, -1))
+    end
+end
+REPL.start_repl_backend(backend)
+Base.wait(frontend_task)
