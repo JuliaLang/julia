@@ -62,13 +62,16 @@ Base.pointer(A::PermutedDimsArray, i::Integer) = throw(ArgumentError("pointer(A,
     (1,t[1].*c_strides(Base.tail(t))...)
 end
 
+@inline function c_strides(t::NTuple{1,Int})
+    1
+end
+
 @inline function c_strides(t::NTuple{0,Int})
     1
 end
 
 function Base.strides(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}
-    strides_trail=c_strides(size(A))
-    ntuple(i->strides_trail[i],Val(N))
+    c_strides(size(A))
 end
 
 @inline function Base.getindex(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}
