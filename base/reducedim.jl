@@ -8,7 +8,7 @@ reduced_index(i::Union{Slice, IdentityUnitRange}) = oftype(i, first(i):first(i))
 reduced_index(i::AbstractUnitRange) =
     throw(ArgumentError(
 """
-No method is implemented for reducing index range of type $typeof(i). Please implement
+No method is implemented for reducing index range of type $(typeof(i)). Please implement
 reduced_index for this index type or report this as an issue.
 """
     ))

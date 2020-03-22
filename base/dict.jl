@@ -27,7 +27,7 @@ function show(io::IO, t::AbstractDict{K,V}) where V where K
 
     limit::Bool = get(io, :limit, false)
     # show in a Julia-syntax-like form: Dict(k=>v, ...)
-    print(io, typeinfo_prefix(io, t))
+    print(io, typeinfo_prefix(io, t)[1])
     print(io, '(')
     if !isempty(t) && !show_circular(io, t)
         first = true
@@ -417,8 +417,6 @@ Dict{String,Int64} with 4 entries:
 """
 get!(collection, key, default)
 
-get!(h::Dict{K,V}, key0, default) where {K,V} = get!(()->default, h, key0)
-
 """
     get!(f::Function, collection, key)
 
@@ -704,7 +702,7 @@ end
 function map!(f, iter::ValueIterator{<:Dict})
     dict = iter.dict
     vals = dict.vals
-    # @inbounds is here so the it gets propigated to isslotfiled
+    # @inbounds is here so the it gets propagated to isslotfiled
     @inbounds for i = dict.idxfloor:lastindex(vals)
         if isslotfilled(dict, i)
             vals[i] = f(vals[i])

@@ -7,6 +7,14 @@ New language features
 * `⨟` is now parsed as a binary operator with times precedence. It can be entered in the REPL
   with `\bbsemi` followed by <kbd>TAB</kbd> ([#34722]).
 
+* `±` and `∓` are now unary operators as well, like `+` or `-`. Attention has to be paid in
+  macros and matrix constructors, which are whitespace sensitive, because expressions like
+  `[a ±b]` now get parsed as `[a ±(b)]` instead of `[±(a, b)]`. ([#34200])
+
+* Packages can now provide custom hints to help users resolve errors by using the
+  `register_error_hint` function. Packages that define custom exception types
+  can support hints by calling `show_error_hints` from their `showerror` method. ([#35094])
+
 Language changes
 ----------------
 
@@ -36,6 +44,19 @@ Language changes
 
 * The syntax `(;)` (which was deprecated in v1.4) now creates an empty named tuple ([#30115]).
 
+* `@inline` macro can now be applied to short-form anonymous functions ([#34953]).
+
+* In triple-quoted string literals, whitespace stripping is now done before processing
+  escape sequences instead of after. For example, the syntax
+  ```
+  """
+    a\n b"""
+  ```
+  used to yield the string " a\nb", since the single space before `b` set the indent level.
+  Now the result is "a\n b", since the space before `b` is no longer considered to occur
+  at the start of a line. The old behavior is considered a bug ([#35001]).
+
+
 Multi-threading changes
 -----------------------
 
@@ -46,7 +67,7 @@ Build system changes
 
 New library functions
 ---------------------
-
+* The `@ccall` macro has been added added to Base. It is a near drop-in replacement for `ccall` with more Julia-like syntax. It also wraps the new `foreigncall` API for varargs of different types, though it lacks the the capability to specify an LLVM calling convention. ([#32748])
 * New functions `mergewith` and `mergewith!` supersede `merge` and `merge!` with `combine`
   argument.  They don't have the restriction for `combine` to be a `Function` and also
   provide one-argument method that returns a closure.  The old methods of `merge` and
@@ -57,6 +78,7 @@ New library functions
   expressions before they are evaluated ([#34595]).
 * New function `bitreverse` for reversing the order of bits in a fixed-width integer ([#34791]).
 * New function `bitrotate(x, k)` for rotating the bits in a fixed-width integer ([#33937]).
+* One argument methods `startswith(x)` and `endswith(x)` have been added, returning partially-applied versions of the functions, similar to existing methods like `isequal(x)` ([#33193]).
 
 New library features
 --------------------
@@ -66,7 +88,8 @@ New library features
 * `isapprox` (or `≈`) now has a one-argument "curried" method `isapprox(x)` which returns a function, like `isequal` (or `==`)` ([#32305]).
 * `Ref{NTuple{N,T}}` can be passed to `Ptr{T}`/`Ref{T}` `ccall` signatures ([#34199])
 * `accumulate`, `cumsum`, and `cumprod` now support `Tuple` ([#34654]) and arbitrary iterators ([#34656]).
-
+* In `splice!` with no replacement, values to be removed can now be specified with an
+  arbitrary iterable (instead of a `UnitRange`) ([#34524]).
 
 Standard library changes
 ------------------------

@@ -384,6 +384,9 @@ module IteratorsMD
     # When used as indices themselves, CartesianIndices can simply become its tuple of ranges
     @inline to_indices(A, inds, I::Tuple{CartesianIndices, Vararg{Any}}) =
         to_indices(A, inds, (I[1].indices..., tail(I)...))
+    # but preserve CartesianIndices{0} as they consume a dimension.
+    @inline to_indices(A, inds, I::Tuple{CartesianIndices{0},Vararg{Any}}) =
+        (first(I), to_indices(A, inds, tail(I))...)
 
     @inline function in(i::CartesianIndex{N}, r::CartesianIndices{N}) where {N}
         _in(true, i.I, first(r).I, last(r).I)
@@ -961,6 +964,7 @@ julia> y
 copyto!(dest, src)
 
 function copyto!(dest::AbstractArray{T1,N}, src::AbstractArray{T2,N}) where {T1,T2,N}
+    isempty(src) && return dest
     src′ = unalias(dest, src)
     # fastpath for equal axes (#34025)
     if axes(dest) == axes(src)

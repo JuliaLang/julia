@@ -144,7 +144,7 @@ function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy:
 end
 
 
-show(io::IO, manager::SSHManager) = println(io, "SSHManager(machines=", manager.machines, ")")
+Base.show(io::IO, manager::SSHManager) = print(io, "SSHManager(machines=", manager.machines, ")")
 
 
 function parse_machine(machine::AbstractString)
@@ -366,7 +366,7 @@ function addprocs(np::Integer; restrict=true, kwargs...)
     addprocs(LocalManager(np, restrict); kwargs...)
 end
 
-show(io::IO, manager::LocalManager) = println(io, "LocalManager()")
+Base.show(io::IO, manager::LocalManager) = print(io, "LocalManager()")
 
 function launch(manager::LocalManager, params::Dict, launched::Array, c::Condition)
     dir = params[:dir]
@@ -511,7 +511,7 @@ function connect_w2w(pid::Int, config::WorkerConfig)
     (s,s)
 end
 
-const client_port = Ref{Cushort}(0)
+const client_port = Ref{UInt16}(0)
 
 function socket_reuse_port(iptype)
     if ccall(:jl_has_so_reuseport, Int32, ()) == 1
@@ -523,6 +523,8 @@ function socket_reuse_port(iptype)
         bind_early && bind_client_port(sock, iptype)
         rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Cvoid},), sock.handle)
         if rc < 0
+            close(sock)
+
             # This is an issue only on systems with lots of client connections, hence delay the warning
             nworkers() > 128 && @warn "Error trying to reuse client port number, falling back to regular socket" maxlog=1
 
@@ -538,9 +540,10 @@ end
 
 function bind_client_port(sock::TCPSocket, iptype)
     bind_host = iptype(0)
-    Sockets.bind(sock, bind_host, client_port[])
-    _addr, port = getsockname(sock)
-    client_port[] = port
+    if Sockets.bind(sock, bind_host, client_port[])
+        _addr, port = getsockname(sock)
+        client_port[] = port
+    end
     return sock
 end
 

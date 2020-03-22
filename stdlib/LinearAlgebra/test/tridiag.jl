@@ -400,13 +400,18 @@ end
 
 @testset "SymTridiagonal block matrix" begin
     M = [1 2; 2 4]
-    A = SymTridiagonal(fill(M, 3), fill(M, 2))
+    n = 5
+    A = SymTridiagonal(fill(M, n), fill(M, n-1))
     @test @inferred A[1,1] == Symmetric(M)
     @test @inferred A[1,2] == M
     @test @inferred A[2,1] == transpose(M)
-    @test @inferred diag(A, 1) == fill(M, 2)
-    @test @inferred diag(A, 0) == fill(Symmetric(M), 3)
-    @test @inferred diag(A, -1) == fill(transpose(M), 2)
+    @test @inferred diag(A, 1) == fill(M, n-1)
+    @test @inferred diag(A, 0) == fill(Symmetric(M), n)
+    @test @inferred diag(A, -1) == fill(transpose(M), n-1)
+    @test_throws ArgumentError diag(A, -2)
+    @test_throws ArgumentError diag(A, 2)
+    @test_throws ArgumentError diag(A, n+1)
+    @test_throws ArgumentError diag(A, -n-1)
 end
 
 @testset "Issue 12068" begin
@@ -474,6 +479,16 @@ end
 @testset "sum" begin
     @test sum(Tridiagonal([1,2], [1,2,3], [7,8])) == 24
     @test sum(SymTridiagonal([1,2,3], [1,2])) == 12
+end
+
+@testset "Issue #28994 (sum of Tridigonal and UniformScaling)" begin
+    dl = [1., 1.]
+    d = [-2., -2., -2.]
+    T = Tridiagonal(dl, d, dl)
+    S = SymTridiagonal(T)
+
+    @test diag(T + 2I) == zero(d)
+    @test diag(S + 2I) == zero(d)
 end
 
 end # module TestTridiagonal

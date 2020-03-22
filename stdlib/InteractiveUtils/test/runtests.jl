@@ -257,25 +257,54 @@ end
 @which get_A18434()(1, y=2)
 @test counter18434 == 2
 
-@eval function f_invalid(x)
-    Base.@_noinline_meta
-    $(Expr(:loopinfo, 1.0f0)) # some expression that throws an error in codegen
-    x
-end
-
-let _true = Ref(true), g, h
-    @noinline g() = _true[] ? 0 : h()
-    @noinline h() = (g(); f_invalid(_true[]))
-    @test_throws ErrorException @code_native h() # due to a failure to compile f()
-    @test g() == 0
-end
-
 let _true = Ref(true), f, g, h
     @noinline f() = ccall((:time, "error_library_doesnt_exist\0"), Cvoid, ()) # should throw error during runtime
     @noinline g() = _true[] ? 0 : h()
     @noinline h() = (g(); f())
     @test g() == 0
     @test_throws ErrorException h()
+end
+
+# manually generate a broken function, which will break codegen
+# and make sure Julia doesn't crash
+@eval @noinline f_broken_code() = 0
+let m = which(f_broken_code, ())
+   let src = Base.uncompressed_ast(m)
+       src.code = Any[
+           Expr(:meta, :noinline)
+           Expr(:return, Expr(:invalid))
+       ]
+       m.source = src
+   end
+end
+_true = true
+# and show that we can still work around it
+@noinline g_broken_code() = _true ? 0 : h_broken_code()
+@noinline h_broken_code() = (g_broken_code(); f_broken_code())
+let err = tempname(),
+    old_stderr = stderr,
+    new_stderr = open(err, "w")
+    try
+        redirect_stderr(new_stderr)
+        println(new_stderr, "start")
+        flush(new_stderr)
+        @eval @test occursin("h_broken_code", sprint(code_native, h_broken_code, ()))
+        Libc.flush_cstdio()
+        println(new_stderr, "end")
+        flush(new_stderr)
+        @eval @test g_broken_code() == 0
+    finally
+        redirect_stderr(old_stderr)
+        close(new_stderr)
+        let errstr = read(err, String)
+            @test startswith(errstr, """start
+                Internal error: encountered unexpected error during compilation of f_broken_code:
+                ErrorException(\"unsupported or misplaced expression \"invalid\" in function f_broken_code\")
+                """) || errstr
+            @test endswith(errstr, "\nend\n") || errstr
+        end
+        rm(err)
+    end
 end
 
 # Issue #33163
@@ -335,27 +364,26 @@ ix86 = r"i[356]86"
 
 if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
     function linear_foo()
-        x = 4
-        y = 5
+        return 5
     end
 
     rgx = r"%"
     buf = IOBuffer()
-    output=""
+    output = ""
     #test that the string output is at&t syntax by checking for occurrences of '%'s
-    code_native(buf,linear_foo,(), syntax = :att)
-    output=String(take!(buf))
+    code_native(buf, linear_foo, (), syntax = :att, debuginfo = :none)
+    output = String(take!(buf))
 
     @test occursin(rgx, output)
 
     #test that the code output is intel syntax by checking it has no occurrences of '%'
-    code_native(buf,linear_foo,(), syntax = :intel)
-    output=String(take!(buf))
+    code_native(buf, linear_foo, (), syntax = :intel, debuginfo = :none)
+    output = String(take!(buf))
 
     @test !occursin(rgx, output)
 
-    code_native(buf,linear_foo,())
-    output=String(take!(buf))
+    code_native(buf, linear_foo, ())
+    output = String(take!(buf))
 
     @test occursin(rgx, output)
 end

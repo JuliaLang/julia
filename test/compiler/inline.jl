@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+using Base.Meta
 
 """
 Helper to walk the AST and call a function on every node.
@@ -265,3 +266,19 @@ b30118(x...) = c30118(x)
 
 @test_throws MethodError c30118((Base.RefValue{Type{Int64}}(), Ref(Int64)))
 @test_throws MethodError b30118(Base.RefValue{Type{Int64}}(), Ref(Int64))
+
+# Issue #34900
+f34900(x::Int, y) = x
+f34900(x, y::Int) = y
+f34900(x::Int, y::Int) = invoke(f34900, Tuple{Int, Any}, x, y)
+let ci = code_typed(f34900, Tuple{Int, Int})[1].first
+    @test length(ci.code) == 1 && isexpr(ci.code[1], :return) &&
+        ci.code[1].args[1].id == 2
+end
+
+@testset "check jl_ast_flag_inlineable for inline macro" begin
+    @test ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(@inline x -> x)).source)
+    @test !ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods( x -> x)).source)
+    @test ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(@inline function f(x) x end)).source)
+    @test !ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(function f(x) x end)).source)
+end

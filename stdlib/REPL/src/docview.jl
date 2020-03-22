@@ -31,12 +31,21 @@ function _helpmode(io::IO, line::AbstractString)
         extended_help_on[] = nothing
         brief = true
     end
+    # interpret anything starting with # or #= as asking for help on comments
+    if startswith(line, "#")
+        if startswith(line, "#=")
+            line = "#="
+        else
+            line = "#"
+        end
+    end
     x = Meta.parse(line, raise = false, depwarn = false)
+    assym = Symbol(line)
     expr =
-        if haskey(keywords, Symbol(line)) || isexpr(x, :error) || isexpr(x, :invalid)
+        if haskey(keywords, assym) || Base.isoperator(assym) || isexpr(x, :error) || isexpr(x, :invalid)
             # Docs for keywords must be treated separately since trying to parse a single
             # keyword such as `function` would throw a parse error due to the missing `end`.
-            Symbol(line)
+            assym
         elseif isexpr(x, (:using, :import))
             x.head
         else
@@ -185,20 +194,33 @@ doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
 doc(object, sig...)              = doc(object, Tuple{sig...})
 
 function lookup_doc(ex)
+    if isa(ex, Expr) && ex.head !== :(.) && Base.isoperator(ex.head)
+        # handle syntactic operators, e.g. +=, ::, .=
+        ex = ex.head
+    end
     if haskey(keywords, ex)
-        parsedoc(keywords[ex])
+        return parsedoc(keywords[ex])
     elseif Meta.isexpr(ex, :incomplete)
         return :($(Markdown.md"No documentation found."))
-    elseif isa(ex, Union{Expr, Symbol})
-        binding = esc(bindingexpr(namify(ex)))
-        if isexpr(ex, :call) || isexpr(ex, :macrocall)
-            sig = esc(signature(ex))
-            :($(doc)($binding, $sig))
-        else
-            :($(doc)($binding))
+    elseif !isa(ex, Expr) && !isa(ex, Symbol)
+        return :($(doc)($(typeof)($(esc(ex)))))
+    end
+    if isa(ex, Symbol) && Base.isoperator(ex)
+        str = string(ex)
+        if endswith(str, "=")
+            op = str[1:end-1]
+            return Markdown.parse("`x $op= y` is a synonym for `x = x $op y`")
+        elseif startswith(str, ".")
+            op = str[2:end]
+            return Markdown.parse("`x $ex y` is equivalent to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
         end
+    end
+    binding = esc(bindingexpr(namify(ex)))
+    if isexpr(ex, :call) || isexpr(ex, :macrocall)
+        sig = esc(signature(ex))
+        :($(doc)($binding, $sig))
     else
-        :($(doc)($(typeof)($(esc(ex)))))
+        :($(doc)($binding))
     end
 end
 
@@ -335,7 +357,7 @@ function repl(io::IO, s::Symbol; brief::Bool=true)
     quote
         repl_latex($io, $str)
         repl_search($io, $str)
-        $(if !isdefined(Main, s) && !haskey(keywords, s)
+        $(if !isdefined(Main, s) && !haskey(keywords, s) && !Base.isoperator(s)
                :(repl_corrections($io, $str))
           end)
         $(_repl(s, brief))
@@ -576,12 +598,6 @@ print_correction(word) = print_correction(stdout, word)
 
 # Completion data
 
-const builtins = ["abstract type", "baremodule", "begin", "break",
-                  "catch", "ccall", "const", "continue", "do", "else",
-                  "elseif", "end", "export", "finally", "for", "function",
-                  "global", "if", "import", "let",
-                  "local", "macro", "module", "mutable struct", "primitive type",
-                  "quote", "return", "struct", "try", "using", "while"]
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
@@ -590,7 +606,7 @@ filtervalid(names) = filter(x->!occursin(r"#", x), map(string, names))
 accessible(mod::Module) =
     [filter!(s -> !Base.isdeprecated(mod, s), names(mod, all = true, imported = true));
      map(names, moduleusings(mod))...;
-     builtins] |> unique |> filtervalid
+     collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
 
 doc_completions(name) = fuzzysort(name, accessible(Main))
 doc_completions(name::Symbol) = doc_completions(string(name))

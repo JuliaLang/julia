@@ -377,6 +377,7 @@ allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
 allunique(r::StepRange{T,S}) where {T,S} = (step(r) != zero(S)) || (length(r) <= 1)
+allunique(r::StepRangeLen{T,R,S}) where {T,R,S} = (step(r) != zero(S)) || (length(r) <= 1)
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 
@@ -551,7 +552,7 @@ subtract_singletontype(::Type{T}, x::Pair{K}, y::Pair...) where {T, K} =
 """
     replace(new::Function, A; [count::Integer])
 
-Return a copy of `A` where each value `x` in `A` is replaced by `new(x)`
+Return a copy of `A` where each value `x` in `A` is replaced by `new(x)`.
 If `count` is specified, then replace at most `count` values in total
 (replacements being defined as `new(x) !== x`).
 

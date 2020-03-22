@@ -3,7 +3,7 @@
 module TestLU
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: ldiv!, BlasInt, BlasFloat, rdiv!
+using LinearAlgebra: ldiv!, BlasReal, BlasInt, BlasFloat, rdiv!
 
 n = 10
 
@@ -72,6 +72,12 @@ dimg  = randn(n)/2
             bft = eltya <: Real ? LinearAlgebra.LU{BigFloat} : LinearAlgebra.LU{Complex{BigFloat}}
             bflua = convert(bft, lua)
             @test bflua.L*bflua.U ≈ big.(a)[p,:] rtol=ε
+            @test Factorization{eltya}(lua) === lua
+            # test Factorization with different eltype
+            if eltya <: BlasReal
+                @test Array(Factorization{Float16}(lua)) ≈ Array(lu(convert(Matrix{Float16}, a)))
+                @test eltype(Factorization{Float16}(lua)) == Float16
+            end
         end
         # compact printing
         lstring = sprint(show,l)
@@ -86,6 +92,7 @@ dimg  = randn(n)/2
         @test lud.L*lud.U ≈ lud.P*Array(d)
         @test lud.L*lud.U ≈ Array(d)[lud.p,:]
         @test AbstractArray(lud) ≈ d
+        @test Array(lud) ≈ d
     end
     @testset for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
         b  = eltyb == Int ? rand(1:5, n, 2) :
@@ -225,6 +232,7 @@ end
     falu = lu(fa)
     alu = lu(a)
     falu = convert(typeof(falu),alu)
+    @test Array(alu) == fa
     @test AbstractArray(alu) == fa
 end
 
@@ -335,6 +343,15 @@ end
     @test F.L == ones(0, 0)
     @test F.P == ones(0, 0)
     @test F.p == []
+end
+
+@testset "more rdiv! methods" begin
+    for elty in (Float16, Float64, ComplexF64), transform in (transpose, adjoint)
+        A = randn(elty, 5, 5)
+        C = copy(A)
+        B = randn(elty, 5, 5)
+        @test rdiv!(transform(A), transform(lu(B))) ≈ transform(C) / transform(B)
+    end
 end
 
 end # module TestLU

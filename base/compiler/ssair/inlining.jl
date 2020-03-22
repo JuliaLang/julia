@@ -682,7 +682,7 @@ function analyze_method!(idx::Int, sig::Signature, @nospecialize(metharg), meths
     # Check if we intersect any of this method's ambiguities
     # TODO: We could split out the ambiguous case as another "union split" case.
     # For now, we just reject the method
-    if method.ambig !== nothing
+    if method.ambig !== nothing && invoke_data === nothing
         for entry::Core.TypeMapEntry in method.ambig
             if typeintersect(sig.atype, entry.sig) !== Bottom
                 return nothing
@@ -1005,15 +1005,24 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
             continue
         end
 
-        # Regular case: Perform method matching
-        min_valid = UInt[typemin(UInt)]
-        max_valid = UInt[typemax(UInt)]
-        meth = _methods_by_ftype(sig.atype, sv.params.MAX_METHODS, sv.params.world, min_valid, max_valid)
+        # Regular case: Retrieve matching methods from cache (or compute them)
+        (meth, min_valid, max_valid) = get(sv.matching_methods_cache, sig.atype) do
+            # World age does not need to be taken into account in the cache
+            # because it is forwarded from type inference through `sv.params`
+            # in the case that the cache is nonempty, so it should be unchanged
+            # The max number of methods should be the same as in inference most
+            # of the time, and should not affect correctness otherwise.
+            min_val = UInt[typemin(UInt)]
+            max_val = UInt[typemax(UInt)]
+            ms = _methods_by_ftype(sig.atype, sv.params.MAX_METHODS,
+                                   sv.params.world, min_val, max_val)
+            return (ms, min_val[1], max_val[1])
+        end
         if meth === false || length(meth) == 0
             # No applicable method, or too many applicable methods
             continue
         end
-        update_valid_age!(min_valid[1], max_valid[1], sv)
+        update_valid_age!(min_valid, max_valid, sv)
 
         cases = Pair{Any, Any}[]
         # TODO: This could be better
@@ -1169,8 +1178,7 @@ function early_inline_special_case(ir::IRCode, s::Signature, e::Expr, params::Pa
             val = etype.val
             is_inlineable_constant(val) || return nothing
             if isa(f, IntrinsicFunction)
-                if is_pure_intrinsic_infer(f) &&
-                    (intrinsic_nothrow(f) || intrinsic_nothrow(f, atypes[2:end]))
+                if is_pure_intrinsic_infer(f) && intrinsic_nothrow(f, atypes[2:end])
                     return quoted(val)
                 end
             elseif ispuretopfunction(f) || contains_is(_PURE_BUILTINS, f)
