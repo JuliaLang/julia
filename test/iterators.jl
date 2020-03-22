@@ -793,6 +793,9 @@ end
     @test collect(Iterators.accumulate(+, [1,2])) == [1,3]
     @test collect(Iterators.accumulate(+, [1,2,3])) == [1,3,6]
     @test collect(Iterators.accumulate(=>, [:a,:b,:c])) == [:a, :a => :b, (:a => :b) => :c]
+    @test collect(Iterators.accumulate(+, (x for x in [true])))::Vector{Int} == [1]
+    @test collect(Iterators.accumulate(+, (x for x in [true, true, false])))::Vector{Int} == [1, 2, 2]
+    @test collect(Iterators.accumulate(+, (x for x in [true]), init=10.0))::Vector{Float64} == [11.0]
     @test length(Iterators.accumulate(+, [10,20,30])) == 3
     @test size(Iterators.accumulate(max, rand(2,3))) == (2,3)
     @test Base.IteratorSize(Iterators.accumulate(max, rand(2,3))) === Base.IteratorSize(rand(2,3))
