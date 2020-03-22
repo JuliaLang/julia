@@ -13,10 +13,6 @@ independent object. For example, deep-copying an array produces a new array whos
 are deep copies of the original elements. Calling `deepcopy` on an object should generally
 have the same effect as serializing and then deserializing it.
 
-As a special case, functions can only be actually deep-copied if they are anonymous,
-otherwise they are just copied. The difference is only relevant in the case of closures,
-i.e. functions which may contain hidden internal references.
-
 While it isn't normally necessary, user-defined types can override the default `deepcopy`
 behavior by defining a specialized version of the function
 `deepcopy_internal(x::T, dict::IdDict)` (which shouldn't otherwise be used),
