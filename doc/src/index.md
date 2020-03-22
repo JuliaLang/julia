@@ -20,18 +20,6 @@ Markdown.parse(String(take!(io)))
 ```
 Please read the [release notes](NEWS.md) to see what has changed since the last release.
 
-```@eval
-release = isempty(VERSION.prerelease)
-file = release ? "julia-$(VERSION).pdf" :
-       "julia-$(VERSION.major).$(VERSION.minor).$(VERSION.patch)-$(first(VERSION.prerelease)).pdf"
-url = "https://raw.githubusercontent.com/JuliaLang/docs.julialang.org/assets/$(file)"
-import Markdown
-Markdown.parse("""
-!!! note
-    The documentation is also available in PDF format: [$file]($url).
-""")
-```
-
 ### [Introduction](@id man-introduction)
 
 Scientific computing has traditionally required the highest performance, yet domain experts have
