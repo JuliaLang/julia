@@ -11,6 +11,11 @@ New language features
   macros and matrix constructors, which are whitespace sensitive, because expressions like
   `[a ±b]` now get parsed as `[a ±(b)]` instead of `[±(a, b)]`. ([#34200])
 
+* Passing an identifier `x` by itself as a keyword argument or named tuple element
+  is equivalent to `x=x`, implicitly using the name of the variable as the keyword
+  or named tuple field name.
+  Similarly, passing an `a.b` expression uses `b` as the keyword or field name ([#29333]).
+
 * Packages can now provide custom hints to help users resolve errors by using the
   `register_error_hint` function. Packages that define custom exception types
   can support hints by calling `show_error_hints` from their `showerror` method. ([#35094])

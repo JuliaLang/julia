@@ -288,3 +288,14 @@ end
     @test_throws LoadError include_string(Main, "@NamedTuple{a::Int, b, 3}")
     @test_throws LoadError include_string(Main, "@NamedTuple(a::Int, b)")
 end
+
+# issue #29333, implicit names
+let x = 1, y = 2
+    @test (;y) === (y = 2,)
+    a = (; x, y)
+    @test a === (x=1, y=2)
+    @test (; a.y, a.x) === (y=2, x=1)
+    y = 3
+    @test Meta.lower(Main, Meta.parse("(; a.y, y)")) == Expr(:error, "field name \"y\" repeated in named tuple")
+    @test (; a.y, x) === (y=2, x=1)
+end
