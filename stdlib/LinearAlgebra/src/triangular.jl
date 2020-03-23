@@ -2169,7 +2169,7 @@ end
 #     34(3), (2013) 1341–1360.
 function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
     if abs(p) >= 1
-        ArgumentError("p must be a real number in (-1,1), got $p")
+        throw(ArgumentError("p must be a real number in (-1,1), got $p"))
     end
 
     normA0 = opnorm(A0, 1)
@@ -2228,7 +2228,7 @@ function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
     rmul!(S, normA0^p)
     return S
 end
-powm(A::LowerTriangular, p::Real) = copy(transpose(powm(copy(transpose(A)), p::Real)))
+powm(A::LowerTriangular, p::Real) = copy(transpose(powm!(copy(transpose(A)), p::Real)))
 
 # Complex matrix logarithm for the upper triangular factor, see:
 #   Al-Mohy and Higham, "Improved inverse  scaling and squaring algorithms for
