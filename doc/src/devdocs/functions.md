@@ -103,7 +103,6 @@ The "builtin" functions, defined in the `Core` module, are:
 
 ```@eval
 
-
 function lines(words)
     io = IOBuffer()
     n = 0
@@ -121,7 +120,6 @@ function lines(words)
     end
     String(take!(io))
 end
-
 
 import Markdown
 
