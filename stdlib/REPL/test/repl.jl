@@ -1070,6 +1070,13 @@ let text =
     @test occursin("??", mdbrief.content[3].msg)
 end
 
+# issue #35216: empty and non-strings in H1 headers
+let emptyH1 = Markdown.parse("# "),
+    codeH1 = Markdown.parse("# `hello`")
+    @test emptyH1 == REPL.trimdocs(emptyH1, false) == REPL.trimdocs(emptyH1, true)
+    @test codeH1 == REPL.trimdocs(codeH1, false) == REPL.trimdocs(codeH1, true)
+end
+
 module BriefExtended
 """
     f()
