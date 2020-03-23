@@ -809,7 +809,7 @@ julia> Pointy{Real}
 Pointy{Real}
 
 julia> Pointy{AbstractString}
-ERROR: TypeError: in Pointy, in T, expected T<:Real, got a Type{AbstractString} value
+ERROR: TypeError: in Pointy, in T, expected T<:Real, got Type{AbstractString}
 
 julia> Pointy{1}
 ERROR: TypeError: in Pointy, in T, expected T<:Real, got a Int64 value
