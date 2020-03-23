@@ -121,9 +121,10 @@ function _trimdocs(md::Markdown.MD, brief::Bool)
     content, trimmed = [], false
     for c in md.content
         if isa(c, Markdown.Header{1}) && isa(c.text, AbstractArray) &&
-                                         lowercase(c.text[1]) ∈ ("extended help",
-                                                                 "extended documentation",
-                                                                 "extended docs")
+            !isempty(c.text) && isa(c.text[1], AbstractString) &&
+            lowercase(c.text[1]) ∈ ("extended help",
+                                    "extended documentation",
+                                    "extended docs")
             trimmed = true
             break
         end
