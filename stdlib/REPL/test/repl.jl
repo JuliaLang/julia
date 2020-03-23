@@ -51,7 +51,10 @@ function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_
     repl.options = options
 
     hard_kill = kill_timer(900) # Your debugging session starts now. You have 15 minutes. Go.
+    @eval Base old_have_color = have_color
+    @eval Base have_color = false
     f(input.in, output.out, repl)
+    @eval Base have_color = old_have_color
     t = @async begin
         close(input.in)
         close(output.in)
