@@ -242,7 +242,16 @@ function invperm(p::Union{Tuple{},Tuple{Int},Tuple{Int,Int}})
     isperm(p) || throw(ArgumentError("argument is not a permutation"))
     p  # in dimensions 0-2, every permutation is its own inverse
 end
-invperm(a::Tuple) = (invperm([a...])...,)
+
+function invperm(P::NTuple{N,T}) where {N,T}
+    isperm(p) || throw(ArgumentError("argument is not a permutation"))
+    ntuple(Val(N)) do i
+        for j in P
+            @inbounds P[j]==i && return j
+        end
+        return zero(T) #
+    end
+end
 
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
 """
