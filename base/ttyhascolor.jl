@@ -14,7 +14,7 @@ end
 function get_have_color()
     global have_color
     have_color === nothing && (have_color = ttyhascolor())
-    return have_color
+    return have_color::Bool
 end
 in(key_value::Pair{Symbol,Bool}, ::TTY) = key_value.first === :color && key_value.second === get_have_color()
 haskey(::TTY, key::Symbol) = key === :color
