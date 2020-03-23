@@ -93,17 +93,17 @@ function choosetests(choices = [])
     end
 
     patchlib!(tests, "unicode", ["unicode/utf8"])
-    patchlib!(tests, "strings", ["strings/basic", "strings/search", "strings/util", 
+    patchlib!(tests, "strings", ["strings/basic", "strings/search", "strings/util",
                    "strings/io", "strings/types"])
     # do subarray before sparse but after linalg
     patchlib!(tests, "subarray")
-    patchlib!(tests, "compiler", ["compiler/inference", "compiler/validation", 
-        "compiler/ssair", "compiler/irpasses", "compiler/codegen", 
+    patchlib!(tests, "compiler", ["compiler/inference", "compiler/validation",
+        "compiler/ssair", "compiler/irpasses", "compiler/codegen",
         "compiler/inline", "compiler/contextual"])
     patchlib!(tests, "stdlib", STDLIBS; stdlib=true)
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
     patchlib!(tests, "ambiguous")
- 
+
     if startswith(string(Sys.ARCH), "arm")
         # Remove profile from default tests on ARM since it currently segfaults
         # Allow explicitly adding it for testing
