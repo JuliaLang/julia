@@ -244,11 +244,11 @@ function invperm(p::Union{Tuple{},Tuple{Int},Tuple{Int,Int}})
 end
 
 function invperm(P::NTuple{N,T}) where {N,T}
-    isperm(P) || throw(ArgumentError("argument is not a permutation"))
     ntuple(Val(N)) do i
         for j in P
             @inbounds P[j]==i && return j
         end
+        throw(ArgumentError("argument is not a permutation"))
         return first(P) # DO NOT REMOVE: necessary for type stable code_gen
     end
 end
