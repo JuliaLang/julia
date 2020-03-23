@@ -139,7 +139,7 @@ function showerror(io::IO, ex::TypeError)
         elseif isa(ex.got, Type)
             targs = ("Type{", ex.got, "}")
         else
-            targs = ("$(ex.got) with type $(typeof(ex.got))",)
+            targs = ("a $(typeof(ex.got)) value",)
         end
         if ex.context == ""
             ctx = "in $(ex.func)"
