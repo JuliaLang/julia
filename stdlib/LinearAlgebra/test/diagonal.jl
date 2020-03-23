@@ -655,12 +655,15 @@ end
     @test sum(D, dims=1) == sum(Ddense, dims=1)
     @test sum(D, dims=2) == sum(Ddense, dims=2)
     @test sum(D, dims=3) == sum(Ddense, dims=3)
+    @test typeof(sum(D, dims=1)) == typeof(sum(Ddense, dims=1))
     @test mapreduce(one, min, D, dims=1) == mapreduce(one, min, Ddense, dims=1)
     @test mapreduce(one, min, D, dims=2) == mapreduce(one, min, Ddense, dims=2)
     @test mapreduce(one, min, D, dims=3) == mapreduce(one, min, Ddense, dims=3)
+    @test typeof(mapreduce(one, min, D, dims=1)) == typeof(mapreduce(one, min, Ddense, dims=1))
     @test mapreduce(zero, max, D, dims=1) == mapreduce(zero, max, Ddense, dims=1)
     @test mapreduce(zero, max, D, dims=2) == mapreduce(zero, max, Ddense, dims=2)
     @test mapreduce(zero, max, D, dims=3) == mapreduce(zero, max, Ddense, dims=3)
+    @test typeof(mapreduce(zero, max, D, dims=1)) == typeof(mapreduce(zero, max, Ddense, dims=1))
 end
 
 @testset "logabsdet for generic eltype" begin

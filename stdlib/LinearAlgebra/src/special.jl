@@ -6,7 +6,7 @@
 # Usually, reducedim_initarray calls similar, which yields a sparse matrix for a
 # Diagonal/Bidiagonal/Tridiagonal/SymTridiagonal matrix. However, reducedim should
 # yield a dense vector to increase performance.
-Base.reducedim_initarray(A::Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}, region, init) = fill(init, Base.reduced_indices(A,region))
+Base.reducedim_initarray(A::Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}, region, init, ::Type{R}) where {R} = fill(convert(R, init), Base.reduced_indices(A,region))
 
 
 # Interconversion between special matrix types
