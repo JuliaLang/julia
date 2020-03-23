@@ -531,6 +531,5 @@ end
 @testset "hasmissing" begin
     @test hasmissing([1, 2, 3, 4]) == false
     @test hasmissing([1, 2, 3, missing, 5]) == true
-    @test hasmissing(skipmissing(skipmissing([1, 2, 3, 4]))) == false
     @test hasmissing(skipmissing([1, 2, missing, 4])) == false
 end
