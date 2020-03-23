@@ -685,6 +685,7 @@ export
     something,
     isnothing,
     nonmissingtype,
+    hasmissing
 
 # time
     sleep,

@@ -259,6 +259,13 @@ keys(itr::SkipMissing) =
     v
 end
 
+"""
+    hasmissing(itr)
+
+Checks if itr has missing values.
+"""
+hasmissing(itr) = ~(collect(skipmissing(itr)) == collect(itr))
+
 # Optimized mapreduce implementation
 # The generic method is faster when !(eltype(A) >: Missing) since it does not need
 # additional loops to identify the two first non-missing values of each block
