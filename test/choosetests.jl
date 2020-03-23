@@ -82,28 +82,27 @@ function choosetests(choices = [])
         tests = testnames
     end
 
-    function patchlib!(skip_tests,tests,name,files=[name]; stdlib::Bool=false)
+    function patchlib!(tests, name, files=[name]; stdlib::Bool=false)
        flt = x -> (x != name && !(x in files))
-       testsflt = stdlib ? flt : !=(name)
-
        if name in skip_tests
            filter!(flt, tests)
        elseif name in tests
-           filter!(testsflt, tests)
+           filter!(stdlib ? flt : !=(name), tests)
            prepend!(tests, files)
        end
-   end
+    end
 
-   patchlib!(skip_tests,tests,"unicode", ["unicode/utf8"])
-   patchlib!(skip_tests,tests,"strings", ["strings/basic", "strings/search", "strings/util",
-                  "strings/io", "strings/types"])
-   patchlib!(skip_tests,tests,"subarray")
-   patchlib!(skip_tests,tests,"compiler", ["compiler/inference", "compiler/validation",
-       "compiler/ssair", "compiler/irpasses", "compiler/codegen",
-       "compiler/inline", "compiler/contextual"])
-   patchlib!(skip_tests,tests,"stdlib", STDLIBS; stdlib=true)
-   patchlib!(skip_tests,tests,"ambiguous")
- 
+    patchlib!(tests, "unicode", ["unicode/utf8"])
+    patchlib!(tests, "strings", ["strings/basic", "strings/search", "strings/util", 
+                   "strings/io", "strings/types"])
+    # do subarray before sparse but after linalg
+    patchlib!(tests, "subarray")
+    patchlib!(tests, "compiler", ["compiler/inference", "compiler/validation", 
+        "compiler/ssair", "compiler/irpasses", "compiler/codegen", 
+        "compiler/inline", "compiler/contextual"])
+    patchlib!(tests, "stdlib", STDLIBS; stdlib=true)
+    # do ambiguous first to avoid failing if ambiguities are introduced by other tests
+    patchlib!(tests, "ambiguous")
  
     if startswith(string(Sys.ARCH), "arm")
         # Remove profile from default tests on ARM since it currently segfaults
