@@ -578,10 +578,6 @@ similar(M::Tridiagonal, ::Type{T}) where {T} = Tridiagonal(similar(M.dl, T), sim
 # The method below is moved to SparseArrays for now
 # similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
-# Usually, reducedim_initarray calls similar, which yields a sparse matrix for a
-# Tridiagonal matrix. However, reducedim should yield a dense vector to increase performance.
-Base.reducedim_initarray(A::Union{Tridiagonal,SymTridiagonal}, region, init) = fill(init, Base.reduced_indices(A,region))
-
 # Operations on Tridiagonal matrices
 copyto!(dest::Tridiagonal, src::Tridiagonal) = (copyto!(dest.dl, src.dl); copyto!(dest.d, src.d); copyto!(dest.du, src.du); dest)
 

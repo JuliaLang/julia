@@ -189,10 +189,6 @@ similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal(similar(B.dv, T), simil
 # The method below is moved to SparseArrays for now
 # similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
-# Usually, reducedim_initarray calls similar, which yields a sparse matrix for a
-# Bidiagonal matrix. However, reducedim should yield a dense vector to increase performance.
-Base.reducedim_initarray(A::Bidiagonal, region, init) = fill(init, Base.reduced_indices(A,region))
-
 
 ###################
 # LAPACK routines #

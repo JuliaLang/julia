@@ -3,6 +3,12 @@
 # Methods operating on different special matrix types
 
 
+# Usually, reducedim_initarray calls similar, which yields a sparse matrix for a
+# Diagonal/Bidiagonal/Tridiagonal/SymTridiagonal matrix. However, reducedim should
+# yield a dense vector to increase performance.
+Base.reducedim_initarray(A::Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}, region, init) = fill(init, Base.reduced_indices(A,region))
+
+
 # Interconversion between special matrix types
 
 # conversions from Diagonal to other special matrix types
