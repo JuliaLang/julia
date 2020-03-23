@@ -70,7 +70,7 @@ an exception is thrown, otherwise, the left-hand value is returned:
 
 ```jldoctest
 julia> (1+2)::AbstractFloat
-ERROR: TypeError: in typeassert, expected AbstractFloat, got Int64
+ERROR: TypeError: in typeassert, expected AbstractFloat, got a Int64 value
 
 julia> (1+2)::Int
 3
@@ -493,7 +493,7 @@ julia> "Hello!" :: IntOrString
 "Hello!"
 
 julia> 1.0 :: IntOrString
-ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got Float64
+ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got a Float64 value
 ```
 
 The compilers for many languages have an internal union construct for reasoning about types; Julia
@@ -809,10 +809,10 @@ julia> Pointy{Real}
 Pointy{Real}
 
 julia> Pointy{AbstractString}
-ERROR: TypeError: in Pointy, in T, expected T<:Real, got Type{AbstractString}
+ERROR: TypeError: in Pointy, in T, expected T<:Real, got a Type{AbstractString} value
 
 julia> Pointy{1}
-ERROR: TypeError: in Pointy, in T, expected T<:Real, got Int64
+ERROR: TypeError: in Pointy, in T, expected T<:Real, got a Int64 value
 ```
 
 Type parameters for parametric composite types can be restricted in the same manner:
