@@ -313,18 +313,20 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}
             # The efficiency of operations like a[i] and s.b
             # depend strongly on whether the result can be
             # inferred, so check the type of ex
-            if f === Main.Core.getfield || f === Main.Core.tuple
+            if f === Core.getfield || f === Core.tuple
                 # we might like to penalize non-inferrability, but
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                 return 0
-            elseif (f === Main.Core.arrayref || f === Main.Core.const_arrayref) && length(ex.args) >= 3
+            elseif (f === Core.arrayref || f === Core.const_arrayref || f === Core.arrayset) && length(ex.args) >= 3
                 atyp = argextype(ex.args[3], src, sptypes, slottypes)
                 return isknowntype(atyp) ? 4 : params.inline_nonleaf_penalty
+            elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes, slottypes)))
+                return 1
             end
             fidx = find_tfunc(f)
             if fidx === nothing
-                # unknown/unhandled builtin or anonymous function
+                # unknown/unhandled builtin
                 # Use the generic cost of a direct function call
                 return 20
             end

@@ -342,7 +342,7 @@ function sizeof_tfunc(@nospecialize(x),)
     isprimitivetype(x) && return _const_sizeof(x)
     return Int
 end
-add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 0)
+add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 1)
 function nfields_tfunc(@nospecialize(x))
     isa(x, Const) && return Const(nfields(x.val))
     isa(x, Conditional) && return Const(0)
@@ -354,7 +354,7 @@ function nfields_tfunc(@nospecialize(x))
     end
     return Int
 end
-add_tfunc(nfields, 1, 1, nfields_tfunc, 0)
+add_tfunc(nfields, 1, 1, nfields_tfunc, 1)
 add_tfunc(Core._expr, 1, INT_INF, (@nospecialize args...)->Expr, 100)
 function typevar_tfunc(@nospecialize(n), @nospecialize(lb_arg), @nospecialize(ub_arg))
     lb = Union{}
@@ -482,7 +482,7 @@ function typeof_tfunc(@nospecialize(t))
     end
     return DataType # typeof(anything)::DataType
 end
-add_tfunc(typeof, 1, 1, typeof_tfunc, 0)
+add_tfunc(typeof, 1, 1, typeof_tfunc, 1)
 
 function typeassert_tfunc(@nospecialize(v), @nospecialize(t))
     t = instanceof_tfunc(t)[1]
@@ -537,7 +537,7 @@ function isa_tfunc(@nospecialize(v), @nospecialize(tt))
     # TODO: handle non-leaftype(t) by testing against lower and upper bounds
     return Bool
 end
-add_tfunc(isa, 2, 2, isa_tfunc, 0)
+add_tfunc(isa, 2, 2, isa_tfunc, 1)
 
 function subtype_tfunc(@nospecialize(a), @nospecialize(b))
     a, isexact_a = instanceof_tfunc(a)
@@ -555,7 +555,7 @@ function subtype_tfunc(@nospecialize(a), @nospecialize(b))
     end
     return Bool
 end
-add_tfunc(<:, 2, 2, subtype_tfunc, 0)
+add_tfunc(<:, 2, 2, subtype_tfunc, 1)
 
 is_dt_const_field(fld::Int) = (
      fld == DATATYPE_NAME_FIELDINDEX ||

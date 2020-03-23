@@ -86,7 +86,7 @@ function get(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {
     val === default ? default : val::V
 end
 function getindex(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
-    val = get(d, key, secret_table_token)
+    val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, secret_table_token)
     val === secret_table_token && throw(KeyError(key))
     return val::V
 end
@@ -137,7 +137,7 @@ copy(d::IdDict) = typeof(d)(d)
 get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V} = (d[key] = get(d, key, default))::V
 
 function get(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
-    val = get(d, key, secret_table_token)
+    val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, secret_table_token)
     if val === secret_table_token
         val = default()
     end
@@ -145,7 +145,7 @@ function get(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
 end
 
 function get!(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
-    val = get(d, key, secret_table_token)
+    val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, secret_table_token)
     if val === secret_table_token
         val = default()
         setindex!(d, val, key)
