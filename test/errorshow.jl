@@ -301,15 +301,15 @@ let undefvar
     err_str = @except_str 0::Bool TypeError
     @test err_str == "TypeError: non-boolean ($Int) used in boolean context"
     err_str = @except_str 0::AbstractFloat TypeError
-    @test err_str == "TypeError: in typeassert, expected AbstractFloat, got $Int"
+    @test err_str == "TypeError: in typeassert, expected AbstractFloat, got a $Int value"
     err_str = @except_str 0::7 TypeError
-    @test err_str == "TypeError: in typeassert, expected Type, got $Int"
+    @test err_str == "TypeError: in typeassert, expected Type, got a $Int value"
     err_str = @except_str "" <: AbstractString TypeError
-    @test err_str == "TypeError: in <:, expected Type, got String"
+    @test err_str == "TypeError: in <:, expected Type, got a String value"
     err_str = @except_str AbstractString <: "" TypeError
-    @test err_str == "TypeError: in <:, expected Type, got String"
+    @test err_str == "TypeError: in <:, expected Type, got a String value"
     err_str = @except_str Type{""} TypeError
-    @test err_str == "TypeError: in Type, in parameter, expected Type, got String"
+    @test err_str == "TypeError: in Type, in parameter, expected Type, got a String value"
     err_str = @except_str TypeWithIntParam{Any} TypeError
     @test err_str == "TypeError: in TypeWithIntParam, in T, expected T<:Integer, got Type{Any}"
     err_str = @except_str Type{Vararg} TypeError
