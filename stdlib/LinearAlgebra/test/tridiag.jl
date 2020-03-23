@@ -476,7 +476,7 @@ end
     @test cond(SymTridiagonal([1,2,3], [0,0])) ≈ 3
 end
 
-@testset "sum" begin
+@testset "sum, mapreduce" begin
     T = Tridiagonal([1,2], [1,2,3], [7,8])
     Tdense = Matrix(T)
     S = SymTridiagonal([1,2,3], [1,2])
@@ -487,10 +487,22 @@ end
     @test sum(T, dims=1) == sum(Tdense, dims=1)
     @test sum(T, dims=2) == sum(Tdense, dims=2)
     @test sum(T, dims=3) == sum(Tdense, dims=3)
+    @test mapreduce(one, min, T, dims=1) == mapreduce(one, min, Tdense, dims=1)
+    @test mapreduce(one, min, T, dims=2) == mapreduce(one, min, Tdense, dims=2)
+    @test mapreduce(one, min, T, dims=3) == mapreduce(one, min, Tdense, dims=3)
+    @test mapreduce(zero, max, T, dims=1) == mapreduce(zero, max, Tdense, dims=1)
+    @test mapreduce(zero, max, T, dims=2) == mapreduce(zero, max, Tdense, dims=2)
+    @test mapreduce(zero, max, T, dims=3) == mapreduce(zero, max, Tdense, dims=3)
     @test_throws ArgumentError sum(S, dims=0)
     @test sum(S, dims=1) == sum(Sdense, dims=1)
     @test sum(S, dims=2) == sum(Sdense, dims=2)
     @test sum(S, dims=3) == sum(Sdense, dims=3)
+    @test mapreduce(one, min, S, dims=1) == mapreduce(one, min, Sdense, dims=1)
+    @test mapreduce(one, min, S, dims=2) == mapreduce(one, min, Sdense, dims=2)
+    @test mapreduce(one, min, S, dims=3) == mapreduce(one, min, Sdense, dims=3)
+    @test mapreduce(zero, max, S, dims=1) == mapreduce(zero, max, Sdense, dims=1)
+    @test mapreduce(zero, max, S, dims=2) == mapreduce(zero, max, Sdense, dims=2)
+    @test mapreduce(zero, max, S, dims=3) == mapreduce(zero, max, Sdense, dims=3)
 end
 
 end # module TestTridiagonal

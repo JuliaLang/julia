@@ -456,7 +456,7 @@ end
     @test vcat((Aub\bb)...) ≈ UpperTriangular(A)\b
 end
 
-@testset "sum" begin
+@testset "sum, mapreduce" begin
     Bu = Bidiagonal([1,2,3], [1,2], :U)
     Budense = Matrix(Bu)
     Bl = Bidiagonal([1,2,3], [1,2], :L)
@@ -467,10 +467,22 @@ end
     @test sum(Bu, dims=1) == sum(Budense, dims=1)
     @test sum(Bu, dims=2) == sum(Budense, dims=2)
     @test sum(Bu, dims=3) == sum(Budense, dims=3)
+    @test mapreduce(one, min, Bu, dims=1) == mapreduce(one, min, Budense, dims=1)
+    @test mapreduce(one, min, Bu, dims=2) == mapreduce(one, min, Budense, dims=2)
+    @test mapreduce(one, min, Bu, dims=3) == mapreduce(one, min, Budense, dims=3)
+    @test mapreduce(zero, max, Bu, dims=1) == mapreduce(zero, max, Budense, dims=1)
+    @test mapreduce(zero, max, Bu, dims=2) == mapreduce(zero, max, Budense, dims=2)
+    @test mapreduce(zero, max, Bu, dims=3) == mapreduce(zero, max, Budense, dims=3)
     @test_throws ArgumentError sum(Bl, dims=0)
     @test sum(Bl, dims=1) == sum(Bldense, dims=1)
     @test sum(Bl, dims=2) == sum(Bldense, dims=2)
     @test sum(Bl, dims=3) == sum(Bldense, dims=3)
+    @test mapreduce(one, min, Bl, dims=1) == mapreduce(one, min, Bldense, dims=1)
+    @test mapreduce(one, min, Bl, dims=2) == mapreduce(one, min, Bldense, dims=2)
+    @test mapreduce(one, min, Bl, dims=3) == mapreduce(one, min, Bldense, dims=3)
+    @test mapreduce(zero, max, Bl, dims=1) == mapreduce(zero, max, Bldense, dims=1)
+    @test mapreduce(zero, max, Bl, dims=2) == mapreduce(zero, max, Bldense, dims=2)
+    @test mapreduce(zero, max, Bl, dims=3) == mapreduce(zero, max, Bldense, dims=3)
 end
 
 @testset "empty sub-diagonal" begin
