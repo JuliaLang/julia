@@ -973,6 +973,8 @@ end
     @test_throws ArgumentError StepRange(1, 1//2, 2)
     @test eltype(StepRangeLen{Int}(1, 1//1, 2)) <: Integer
     @test_throws ArgumentError StepRangeLen{Int}(1, 1//2, 2)
+    @test eltype(LinRange{Int}(1, 5, 3)) <: Integer
+    @test_throws ArgumentError LinRange{Int}(1, 5, 4)
 end
 
 @testset "LinRange ops" begin

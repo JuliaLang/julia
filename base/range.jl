@@ -386,7 +386,11 @@ struct LinRange{T} <: AbstractRange{T}
             start == stop || throw(ArgumentError("range($start, stop=$stop, length=$len): endpoints differ"))
             return new(start, stop, 1, 1)
         end
-        new(start,stop,len,max(len-1,1))
+        lendiv = max(len-1, 1)
+        if T <: Integer && !iszero(mod(stop-start, lendiv))
+            throw(ArgumentError("LinRange{<:Integer} cannot have non-integer step"))
+        end
+        new(start,stop,len,lendiv)
     end
 end
 

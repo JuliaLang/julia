@@ -18,7 +18,7 @@ Language changes
 
 * Calling `show` or `repr` on a 0-dimensional `AbstractArray` now shows valid code for creating an equivalent 0-dimensional array, instead of only showing the contained value. ([#33206])
 
-* It is no longer possible to create a `StepRange{<:Integer}` or `StepRangeLen{<:Integer}` with non-integer step ([#32439]).
+* It is no longer possible to create a `LinRange{<:Integer}`, `StepRange{<:Integer}`, or `StepRangeLen{<:Integer}` with non-integer step ([#32439]).
 
 Multi-threading changes
 -----------------------
