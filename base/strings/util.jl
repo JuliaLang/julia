@@ -90,6 +90,10 @@ true
 
 julia> contains("abba", r"a.a")
 false
+```
+
+!!! compat "Julia 1.5"
+    The `contains` function requires at least Julia 1.5.
 """
 contains(haystack::AbstractString, needle) = occursin(needle, haystack)
 
@@ -131,10 +135,6 @@ a function equivalent to `haystack -> contains(haystack, needle)`.
 
 The returned function is of type `Base.Fix2{typeof(contains)}`, which can be
 used to implement specialized methods.
-
-!!! compat "Julia 1.5"
-    The single argument `contains(needle)` requires at least Julia 1.5.
-
 """
 contains(needle) = Base.Fix2(contains, needle)
 
