@@ -31,8 +31,7 @@ params = Core.Compiler.Params(typemax(UInt))  # parameter is the world age,
                                                         #   typemax(UInt) -> most recent
 sparams = Core.svec()      # this particular method doesn't have type-parameters
 optimize = true            # run all inference optimizations
-cached = false             # force inference to happen (do not use cached results)
-Core.Compiler.typeinf_code(m, atypes, sparams, optimize, cached, params)
+Core.Compiler.typeinf_code(m, atypes, sparams, optimize, params)
 ```
 
 If your debugging adventures require a `MethodInstance`, you can look it up by
