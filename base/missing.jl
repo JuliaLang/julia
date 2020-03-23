@@ -264,6 +264,7 @@ end
 
 Checks if itr has missing values.
 """
+hasmissing(x::Base.SkipMissing) = false
 hasmissing(itr) = ~(collect(skipmissing(itr)) == collect(itr))
 
 # Optimized mapreduce implementation
