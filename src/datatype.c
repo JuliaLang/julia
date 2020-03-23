@@ -743,6 +743,7 @@ UNBOX_FUNC(bool,   int8_t)
 UNBOX_FUNC(float32, float)
 UNBOX_FUNC(float64, double)
 UNBOX_FUNC(voidpointer, void*)
+UNBOX_FUNC(uint8pointer, uint8_t*)
 
 #define BOX_FUNC(typ,c_type,pfx,nw)                             \
     JL_DLLEXPORT jl_value_t *pfx##_##typ(c_type x)              \
@@ -755,6 +756,7 @@ UNBOX_FUNC(voidpointer, void*)
     }
 BOX_FUNC(float32, float,  jl_box, 1)
 BOX_FUNC(voidpointer, void*,  jl_box, 1)
+BOX_FUNC(uint8pointer, uint8_t*,  jl_box, 1)
 #ifdef _P64
 BOX_FUNC(float64, double, jl_box, 1)
 #else

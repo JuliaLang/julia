@@ -905,26 +905,138 @@ JL_DLLEXPORT jl_value_t *jl_infer_thunk(jl_code_info_t *thk, jl_module_t *m)
     return (jl_value_t*)jl_any_type;
 }
 
-JL_DLLEXPORT jl_value_t *jl_load_rewrite(jl_module_t *module, const char *fname, jl_value_t *mapexpr)
+
+//------------------------------------------------------------------------------
+// Code loading: combined parse+eval for include()
+
+// Parse julia code from the string `text` at top level, attributing it to
+// `filename`. This is used during bootstrap, but the real Base.include() is
+// implemented in Julia code.
+jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
+                              jl_value_t *filename)
 {
-    uv_stat_t stbuf;
-    if (jl_stat(fname, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
-        jl_errorf("could not open file %s", fname);
+    if (!jl_is_string(text) || !jl_is_string(filename)) {
+        jl_errorf("Expected `String`s for `text` and `filename`");
     }
-    return jl_parse_eval_all(fname, NULL, 0, module, mapexpr);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (ptls->in_pure_callback)
+        jl_error("cannot use include inside a generated function");
+    jl_check_open_for(module, "include");
+
+    jl_value_t *result = jl_nothing;
+    jl_value_t *ast = NULL;
+    jl_value_t *expression = NULL;
+    JL_GC_PUSH3(&ast, &result, &expression);
+
+    ast = jl_svecref(jl_parse(jl_string_data(text), jl_string_len(text),
+                              filename, 0, (jl_value_t*)all_sym), 0);
+    if (!jl_is_expr(ast) || ((jl_expr_t*)ast)->head != toplevel_sym) {
+        jl_errorf("jl_parse_all() must generate a top level expression");
+    }
+
+    int last_lineno = jl_lineno;
+    const char *last_filename = jl_filename;
+    size_t last_age = jl_get_ptls_states()->world_age;
+    int lineno = 0;
+    jl_lineno = 0;
+    jl_filename = jl_string_data(filename);
+    int err = 0;
+
+    JL_TRY {
+        for (size_t i = 0; i < jl_expr_nargs(ast); i++) {
+            expression = jl_exprarg(ast, i);
+            if (jl_is_linenode(expression)) {
+                // filename is already set above.
+                lineno = jl_linenode_line(expression);
+                jl_lineno = lineno;
+                continue;
+            }
+            expression = jl_expand_with_loc_warn(expression, module,
+                                                 jl_string_data(filename), lineno);
+            jl_get_ptls_states()->world_age = jl_world_counter;
+            result = jl_toplevel_eval_flex(module, expression, 1, 1);
+        }
+    }
+    JL_CATCH {
+        result = jl_box_long(jl_lineno); // (ab)use result to root error line
+        err = 1;
+        goto finally; // skip jl_restore_excstack
+    }
+finally:
+    jl_get_ptls_states()->world_age = last_age;
+    jl_lineno = last_lineno;
+    jl_filename = last_filename;
+    if (err) {
+        if (jl_loaderror_type == NULL)
+            jl_rethrow();
+        else
+            jl_rethrow_other(jl_new_struct(jl_loaderror_type, filename, result,
+                                           jl_current_exception()));
+    }
+    JL_GC_POP();
+    return result;
 }
 
-JL_DLLEXPORT jl_value_t *jl_load(jl_module_t *module, const char *fname)
+// Synchronously read content of entire file into a julia String
+static jl_value_t *jl_file_content_as_string(jl_value_t *filename)
 {
-    return jl_load_rewrite(module, fname, NULL);
+    const char *fname = jl_string_data(filename);
+    ios_t f;
+    if (ios_file(&f, fname, 1, 0, 0, 0) == NULL)
+        jl_errorf("File \"%s\" not found", fname);
+    ios_bufmode(&f, bm_none);
+    ios_seek_end(&f);
+    size_t len = ios_pos(&f);
+    jl_value_t *text = jl_alloc_string(len);
+    ios_seek(&f, 0);
+    if (ios_readall(&f, jl_string_data(text), len) != len)
+        jl_errorf("Error reading file \"%s\"", fname);
+    ios_close(&f);
+    return text;
 }
 
-// load from filename given as a String object
-JL_DLLEXPORT jl_value_t *jl_load_(jl_module_t *module, jl_value_t *str)
+// Load and parse julia code from the file `filename`. Eval the resulting
+// statements into `module` after applying `mapexpr` to each one.
+JL_DLLEXPORT jl_value_t *jl_load_(jl_module_t *module, jl_value_t *filename)
 {
-    // assume String has a hidden '\0' at the end
-    return jl_load(module, (const char*)jl_string_data(str));
+    jl_value_t *text = jl_file_content_as_string(filename);
+    JL_GC_PUSH1(&text);
+    jl_value_t *result = jl_parse_eval_all(module, text, filename);
+    JL_GC_POP();
+    return result;
 }
+
+// Code loading - julia.h C API with native C types
+
+// Parse julia code from `filename` and eval into `module`.
+JL_DLLEXPORT jl_value_t *jl_load(jl_module_t *module, const char *filename)
+{
+    jl_value_t *filename_ = NULL;
+    JL_GC_PUSH1(&filename_);
+    filename_ = jl_cstr_to_string(filename);
+    jl_value_t *result = jl_load_(module, filename_);
+    JL_GC_POP();
+    return result;
+}
+
+// Parse julia code from the string `text` of length `len`, attributing it to
+// `filename`. Eval the resulting statements into `module`.
+JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
+                                             char *filename, jl_module_t *module)
+{
+    jl_value_t *text_ = NULL;
+    jl_value_t *filename_ = NULL;
+    JL_GC_PUSH2(&text_, &filename_);
+    text_ = jl_pchar_to_string(text, len);
+    filename_ = jl_cstr_to_string(filename);
+    jl_value_t *result = jl_parse_eval_all(module, text_, filename_);
+    JL_GC_POP();
+    return result;
+}
+
+
+//--------------------------------------------------
+// Code loading helpers for bootstrap
 
 JL_DLLEXPORT jl_value_t *jl_prepend_cwd(jl_value_t *str)
 {
