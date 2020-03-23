@@ -111,7 +111,7 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
     nothing
 end
 
-const LIBGIT2_MIN_VER = v"0.23.0"
+const LIBGIT2_MIN_VER = v"1.0.0"
 const LIBGIT2_HELPER_PATH = joinpath(@__DIR__, "libgit2-helpers.jl")
 
 const KEY_DIR = joinpath(@__DIR__, "keys")

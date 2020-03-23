@@ -197,7 +197,7 @@ end
     LibGit2.TransferProgress
 
 Transfer progress information used by the `transfer_progress` remote callback.
-Matches the [`git_transfer_progress`](https://libgit2.org/libgit2/#HEAD/type/git_transfer_progress) struct.
+Matches the [`git_indexer_progress`](https://libgit2.org/libgit2/#HEAD/type/git_indexer_progress) struct.
 """
 @kwdef struct TransferProgress
     total_objects::Cuint    = Cuint(0)
@@ -328,12 +328,8 @@ end
     prune::Cint                        = Consts.FETCH_PRUNE_UNSPECIFIED
     update_fetchhead::Cint             = Cint(1)
     download_tags::Cint                = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
-    @static if LibGit2.VERSION >= v"0.25.0"
-        proxy_opts::ProxyOptions       = ProxyOptions()
-    end
-    @static if LibGit2.VERSION >= v"0.24.0"
-        custom_headers::StrArrayStruct = StrArrayStruct()
-    end
+    proxy_opts::ProxyOptions           = ProxyOptions()
+    custom_headers::StrArrayStruct     = StrArrayStruct()
 end
 
 """

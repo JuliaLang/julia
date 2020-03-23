@@ -77,7 +77,7 @@ end
 function Base.sort!(w::GitRevWalker; by::Cint = Consts.SORT_NONE, rev::Bool=false)
     ensure_initialized()
     rev && (by |= Consts.SORT_REVERSE)
-    ccall((:git_revwalk_sorting, :libgit2), Cvoid, (Ptr{Cvoid}, Cint), w.ptr, by)
+    @check ccall((:git_revwalk_sorting, :libgit2), Cint, (Ptr{Cvoid}, Cint), w.ptr, by)
     return w
 end
 
