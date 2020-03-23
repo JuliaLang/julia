@@ -266,7 +266,6 @@ Checks if itr has missing values.
 """
 hasmissing(itr) = any(ismissing, itr)
 hasmissing(x::Base.SkipMissing) = false
-hasmissing(::AbstractArray{<:Number}) = false
 
 # Optimized mapreduce implementation
 # The generic method is faster when !(eltype(A) >: Missing) since it does not need
