@@ -595,7 +595,7 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
         depot_path = DEPOT_PATH
         project = active_project()
         if project !== nothing
-            depot_path = [abspath(dirname(project)); depot_path]
+            depot_path = [abspath(dirname(project), ".julia"); depot_path]
         end
         # Keep the 4 since it used to be the default
         for slug in (version_slug(uuid, hash, 4), version_slug(uuid, hash))
