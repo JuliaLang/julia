@@ -968,7 +968,7 @@ end
     @test eltype(['a':'z', 1:2]) == (StepRange{T,Int} where T)
 end
 
-@testset "StepRange{<:Integer} and StepRangeLen{<:Integer} with non-integer step (issue #32419)" begin
+@testset "Ranges with <:Integer eltype but non-integer step (issue #32419)" begin
     @test eltype(StepRange(1, 1//1, 2)) <: Integer
     @test_throws ArgumentError StepRange(1, 1//2, 2)
     @test eltype(StepRangeLen{Int}(1, 1//1, 2)) <: Integer
