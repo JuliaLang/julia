@@ -50,7 +50,8 @@ julia> isperm([1; 3])
 false
 ```
 """
-function isperm(A)
+
+function _isperm(A)
     n = length(A)
     used = falses(n)
     for a in A
@@ -59,7 +60,12 @@ function isperm(A)
     true
 end
 
+isperm(A) = _isperm(A)
+
 function isperm(P::NTuple{N,T}) where {N,T}
+    if N>21 # if N above 21 other algorithm is faster
+        return _isperm(P)
+    end
     for i in eachindex(P)
         flag=true
         for j in eachindex(P)
