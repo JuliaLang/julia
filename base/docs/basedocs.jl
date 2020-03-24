@@ -2203,7 +2203,7 @@ julia> "Hello!" :: IntOrString
 "Hello!"
 
 julia> 1.0 :: IntOrString
-ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got a Float64 value
+ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got a value of type Float64
 ```
 """
 Union
@@ -2237,7 +2237,7 @@ Outside of declarations `::` is used to assert that expressions and variables in
 # Examples
 ```jldoctest
 julia> (1+2)::AbstractFloat
-ERROR: TypeError: typeassert: expected AbstractFloat, got a Int64 value
+ERROR: TypeError: typeassert: expected AbstractFloat, got a value of type Int64
 
 julia> (1+2)::Int
 3
@@ -2320,7 +2320,7 @@ The syntax `x::type` calls this function.
 # Examples
 ```jldoctest
 julia> typeassert(2.5, Int)
-ERROR: TypeError: in typeassert, expected Int64, got a Float64 value
+ERROR: TypeError: in typeassert, expected Int64, got a value of type Float64
 Stacktrace:
 [...]
 ```
