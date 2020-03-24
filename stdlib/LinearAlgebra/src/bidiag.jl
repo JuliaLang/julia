@@ -248,8 +248,44 @@ end
 
 iszero(M::Bidiagonal) = iszero(M.dv) && iszero(M.ev)
 isone(M::Bidiagonal) = all(isone, M.dv) && iszero(M.ev)
-istriu(M::Bidiagonal) = M.uplo == 'U' || iszero(M.ev)
-istril(M::Bidiagonal) = M.uplo == 'L' || iszero(M.ev)
+function istriu(M::Bidiagonal, k::Integer=0)
+    if M.uplo == 'U'
+        if k <= 0
+            return true
+        elseif k == 1
+            return iszero(M.dv)
+        else # k >= 2
+            return iszero(M.dv) && iszero(M.ev)
+        end
+    else # M.uplo == 'L'
+        if k <= -1
+            return true
+        elseif k == 0
+            return iszero(M.ev)
+        else # k >= 1
+            return iszero(M.ev) && iszero(M.dv)
+        end
+    end
+end
+function istril(M::Bidiagonal, k::Integer=0)
+    if M.uplo == 'U'
+        if k >= 1
+            return true
+        elseif k == 0
+            return iszero(M.ev)
+        else # k <= -1
+            return iszero(M.ev) && iszero(M.dv)
+        end
+    else # M.uplo == 'L'
+        if k >= 0
+            return true
+        elseif k == -1
+            return iszero(M.dv)
+        else # k <= -2
+            return iszero(M.dv) && iszero(M.ev)
+        end
+    end
+end
 isdiag(M::Bidiagonal) = iszero(M.ev)
 
 function tril!(M::Bidiagonal, k::Integer=0)

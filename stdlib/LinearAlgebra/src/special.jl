@@ -12,9 +12,7 @@ Tridiagonal(A::Diagonal) = Tridiagonal(fill!(similar(A.diag, length(A.diag)-1), 
                                        fill!(similar(A.diag, length(A.diag)-1), 0))
 
 # conversions from Bidiagonal to other special matrix types
-Diagonal(A::Bidiagonal) =
-    iszero(A.ev) ? Diagonal(A.dv) :
-        throw(ArgumentError("matrix cannot be represented as Diagonal"))
+Diagonal(A::Bidiagonal) = Diagonal(A.dv)
 SymTridiagonal(A::Bidiagonal) =
     iszero(A.ev) ? SymTridiagonal(A.dv, A.ev) :
         throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
@@ -23,9 +21,7 @@ Tridiagonal(A::Bidiagonal) =
                 A.uplo == 'U' ? A.ev : fill!(similar(A.ev), 0))
 
 # conversions from SymTridiagonal to other special matrix types
-Diagonal(A::SymTridiagonal) =
-    iszero(A.ev) ? Diagonal(A.dv) :
-        throw(ArgumentError("matrix cannot be represented as Diagonal"))
+Diagonal(A::SymTridiagonal) = Diagonal(A.dv)
 Bidiagonal(A::SymTridiagonal) =
     iszero(A.ev) ? Bidiagonal(A.dv, A.ev, :U) :
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
@@ -33,48 +29,35 @@ Tridiagonal(A::SymTridiagonal) =
     Tridiagonal(copy(A.ev), A.dv, A.ev)
 
 # conversions from Tridiagonal to other special matrix types
-Diagonal(A::Tridiagonal) =
-    iszero(A.dl) && iszero(A.du) ? Diagonal(A.d) :
-        throw(ArgumentError("matrix cannot be represented as Diagonal"))
+Diagonal(A::Tridiagonal) = Diagonal(A.d)
 Bidiagonal(A::Tridiagonal) =
     iszero(A.dl) ? Bidiagonal(A.d, A.du, :U) :
     iszero(A.du) ? Bidiagonal(A.d, A.dl, :L) :
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
-SymTridiagonal(A::Tridiagonal) =
-    A.dl == A.du ? SymTridiagonal(A.d, A.dl) :
-        throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
 
 # conversions from AbstractTriangular to special matrix types
-Diagonal(A::AbstractTriangular) =
-    isdiag(A) ? Diagonal(diag(A)) :
-        throw(ArgumentError("matrix cannot be represented as Diagonal"))
 Bidiagonal(A::AbstractTriangular) =
     isbanded(A, 0, 1) ? Bidiagonal(diag(A, 0), diag(A,  1), :U) : # is upper bidiagonal
     isbanded(A, -1, 0) ? Bidiagonal(diag(A, 0), diag(A, -1), :L) : # is lower bidiagonal
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
-SymTridiagonal(A::AbstractTriangular) = SymTridiagonal(Tridiagonal(A))
-Tridiagonal(A::AbstractTriangular) =
-    isbanded(A, -1, 1) ? Tridiagonal(diag(A, -1), diag(A, 0), diag(A, 1)) : # is tridiagonal
-        throw(ArgumentError("matrix cannot be represented as Tridiagonal"))
-UpperTriangular(A::Bidiagonal) =
-    A.uplo == 'U' ? UpperTriangular{eltype(A), typeof(A)}(A) :
-        throw(ArgumentError("matrix cannot be represented as UpperTriangular"))
-LowerTriangular(A::Bidiagonal) =
-    A.uplo == 'L' ? LowerTriangular{eltype(A), typeof(A)}(A) :
-        throw(ArgumentError("matrix cannot be represented as LowerTriangular"))
 
 const ConvertibleSpecialMatrix = Union{Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,AbstractTriangular}
 const PossibleTriangularMatrix = Union{Diagonal, Bidiagonal, AbstractTriangular}
 
-convert(T::Type{<:Diagonal},       m::ConvertibleSpecialMatrix) = m isa T ? m : T(m)
-convert(T::Type{<:SymTridiagonal}, m::ConvertibleSpecialMatrix) = m isa T ? m : T(m)
-convert(T::Type{<:Tridiagonal},    m::ConvertibleSpecialMatrix) = m isa T ? m : T(m)
+convert(T::Type{<:Diagonal},       m::ConvertibleSpecialMatrix) = m isa T ? m :
+    isdiag(m) ? T(m) : throw(ArgumentError("matrix cannot be represented as Diagonal"))
+convert(T::Type{<:SymTridiagonal}, m::ConvertibleSpecialMatrix) = m isa T ? m :
+    issymmetric(m) && isbanded(m, -1, 1) ? T(m) : throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
+convert(T::Type{<:Tridiagonal},    m::ConvertibleSpecialMatrix) = m isa T ? m :
+    isbanded(m, -1, 1) ? T(m) : throw(ArgumentError("matrix cannot be represented as Tridiagonal"))
 
 convert(T::Type{<:LowerTriangular}, m::Union{LowerTriangular,UnitLowerTriangular}) = m isa T ? m : T(m)
 convert(T::Type{<:UpperTriangular}, m::Union{UpperTriangular,UnitUpperTriangular}) = m isa T ? m : T(m)
 
-convert(T::Type{<:LowerTriangular}, m::PossibleTriangularMatrix) = m isa T ? m : T(m)
-convert(T::Type{<:UpperTriangular}, m::PossibleTriangularMatrix) = m isa T ? m : T(m)
+convert(T::Type{<:LowerTriangular}, m::PossibleTriangularMatrix) = m isa T ? m :
+    istril(m) ? T(m) : throw(ArgumentError("matrix cannot be represented as LowerTriangular"))
+convert(T::Type{<:UpperTriangular}, m::PossibleTriangularMatrix) = m isa T ? m :
+    istriu(m) ? T(m) : throw(ArgumentError("matrix cannot be represented as UpperTriangular"))
 
 # Constructs two method definitions taking into account (assumed) commutativity
 # e.g. @commutative f(x::S, y::T) where {S,T} = x+y is the same is defining

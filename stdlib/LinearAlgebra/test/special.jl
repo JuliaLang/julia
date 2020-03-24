@@ -77,6 +77,33 @@ Random.seed!(1)
     for newtype in [Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal]
         @test_throws ArgumentError convert(newtype,A)
     end
+
+
+    # test operations/constructors (not conversions) permitted in the docs
+    dl = [1., 1.]
+    d = [-2., -2., -2.]
+    T = Tridiagonal(dl, d, -dl)
+    S = SymTridiagonal(d, dl)
+    Bu = Bidiagonal(d, dl, :U)
+    Bl = Bidiagonal(d, dl, :L)
+    D = Diagonal(d)
+    M = [-2. 0. 0.; 1. -2. 0.; -1. 1. -2.]
+    U = UpperTriangular(M)
+    L = LowerTriangular(Matrix(M'))
+
+    for A in (T, S, Bu, Bl, D, U, L, M)
+        Adense = Matrix(A)
+        B = Symmetric(A)
+        Bdense = Matrix(B)
+        for (C,Cdense) in ((A,Adense), (B,Bdense))
+            @test Diagonal(C) == Diagonal(Cdense)
+            @test Bidiagonal(C, :U) == Bidiagonal(Cdense, :U)
+            @test Bidiagonal(C, :L) == Bidiagonal(Cdense, :L)
+            @test Tridiagonal(C) == Tridiagonal(Cdense)
+            @test UpperTriangular(C) == UpperTriangular(Cdense)
+            @test LowerTriangular(C) == LowerTriangular(Cdense)
+        end
+    end
 end
 
 @testset "Binary ops among special types" begin

@@ -127,8 +127,8 @@ iszero(D::Diagonal) = all(iszero, D.diag)
 isone(D::Diagonal) = all(isone, D.diag)
 isdiag(D::Diagonal) = all(isdiag, D.diag)
 isdiag(D::Diagonal{<:Number}) = true
-istriu(D::Diagonal) = true
-istril(D::Diagonal) = true
+istriu(D::Diagonal, k::Integer=0) = k <= 0 || iszero(D.diag) ? true : false
+istril(D::Diagonal, k::Integer=0) = k >= 0 || iszero(D.diag) ? true : false
 function triu!(D::Diagonal,k::Integer=0)
     n = size(D,1)
     if !(-n + 1 <= k <= n + 1)

@@ -55,7 +55,13 @@ Random.seed!(1)
         @test isdiag(Diagonal([[1 0; 0 1], [1 0; 0 1]]))
         @test !isdiag(Diagonal([[1 0; 0 1], [1 0; 1 1]]))
         @test istriu(D)
+        @test istriu(D, -1)
+        @test !istriu(D, 1)
+        @test istriu(Diagonal(zero(diag(D))), 1)
         @test istril(D)
+        @test !istril(D, -1)
+        @test istril(D, 1)
+        @test istril(Diagonal(zero(diag(D))), -1)
         if elty <: Real
             @test ishermitian(D)
         end
