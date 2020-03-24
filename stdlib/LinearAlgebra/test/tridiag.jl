@@ -509,6 +509,40 @@ end
     @test mapreduce(zero, max, S, dims=2) == mapreduce(zero, max, Sdense, dims=2)
     @test mapreduce(zero, max, S, dims=3) == mapreduce(zero, max, Sdense, dims=3)
     @test typeof(mapreduce(zero, max, S, dims=1)) == typeof(mapreduce(zero, max, Sdense, dims=1))
+
+    T = Tridiagonal(Int[], Int[], Int[])
+    Tdense = Matrix(T)
+    S = SymTridiagonal(Int[], Int[])
+    Sdense = Matrix(S)
+    @test sum(T) == 0
+    @test sum(S) == 0
+    @test_throws ArgumentError sum(T, dims=0)
+    @test sum(T, dims=1) == sum(Tdense, dims=1)
+    @test sum(T, dims=2) == sum(Tdense, dims=2)
+    @test sum(T, dims=3) == sum(Tdense, dims=3)
+    @test typeof(sum(T, dims=1)) == typeof(sum(Tdense, dims=1))
+    @test_throws ArgumentError sum(S, dims=0)
+    @test sum(S, dims=1) == sum(Sdense, dims=1)
+    @test sum(S, dims=2) == sum(Sdense, dims=2)
+    @test sum(S, dims=3) == sum(Sdense, dims=3)
+    @test typeof(sum(S, dims=1)) == typeof(sum(Sdense, dims=1))
+
+    T = Tridiagonal(Int[], Int[2], Int[])
+    Tdense = Matrix(T)
+    S = SymTridiagonal(Int[2], Int[])
+    Sdense = Matrix(S)
+    @test sum(T) == 2
+    @test sum(S) == 2
+    @test_throws ArgumentError sum(T, dims=0)
+    @test sum(T, dims=1) == sum(Tdense, dims=1)
+    @test sum(T, dims=2) == sum(Tdense, dims=2)
+    @test sum(T, dims=3) == sum(Tdense, dims=3)
+    @test typeof(sum(T, dims=1)) == typeof(sum(Tdense, dims=1))
+    @test_throws ArgumentError sum(S, dims=0)
+    @test sum(S, dims=1) == sum(Sdense, dims=1)
+    @test sum(S, dims=2) == sum(Sdense, dims=2)
+    @test sum(S, dims=3) == sum(Sdense, dims=3)
+    @test typeof(sum(S, dims=1)) == typeof(sum(Sdense, dims=1))
 end
 
 end # module TestTridiagonal

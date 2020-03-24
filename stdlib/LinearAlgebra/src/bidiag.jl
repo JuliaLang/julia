@@ -874,6 +874,15 @@ eigen(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
 Base._sum(A::Bidiagonal, ::Colon) = sum(A.dv) + sum(A.ev)
 function Base._sum(A::Bidiagonal, dims::Integer)
     res = Base.reducedim_initarray(A, dims, zero(eltype(A)))
+    n = length(A.dv)
+    if n == 0
+        # Just to be sure. This shouldn't happen since there is a check whether
+        # length(A.dv) == length(A.ev) + 1 in the constructor.
+        return res
+    elseif n == 1
+        res[1] = A.dv[1]
+        return res
+    end
     @inbounds begin
         if (dims == 1 && A.uplo == 'U') || (dims == 2 && A.uplo == 'L')
             res[1] = A.dv[1]

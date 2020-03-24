@@ -726,6 +726,12 @@ Base._sum(A::SymTridiagonal, ::Colon) = sum(A.dv) + 2sum(A.ev)
 function Base._sum(A::Tridiagonal, dims::Integer)
     res = Base.reducedim_initarray(A, dims, zero(eltype(A)))
     n = length(A.d)
+    if n == 0
+        return res
+    elseif n == 1
+        res[1] = A.d[1]
+        return res
+    end
     @inbounds begin
         if dims == 1
             res[1] = A.dl[1] + A.d[1]
@@ -754,6 +760,12 @@ end
 function Base._sum(A::SymTridiagonal, dims::Integer)
     res = Base.reducedim_initarray(A, dims, zero(eltype(A)))
     n = length(A.dv)
+    if n == 0
+        return res
+    elseif n == 1
+        res[1] = A.dv[1]
+        return res
+    end
     @inbounds begin
         if dims == 1
             res[1] = A.ev[1] + A.dv[1]

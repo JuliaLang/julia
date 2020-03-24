@@ -489,6 +489,18 @@ end
     @test mapreduce(zero, max, Bl, dims=2) == mapreduce(zero, max, Bldense, dims=2)
     @test mapreduce(zero, max, Bl, dims=3) == mapreduce(zero, max, Bldense, dims=3)
     @test typeof(mapreduce(zero, max, Bl, dims=1)) == typeof(mapreduce(zero, max, Bldense, dims=1))
+
+    Bu = Bidiagonal([2], Int[], :U)
+    Budense = Matrix(Bu)
+    Bl = Bidiagonal([2], Int[], :L)
+    Bldense = Matrix(Bl)
+    @test sum(Bu) == 2
+    @test sum(Bl) == 2
+    @test_throws ArgumentError sum(Bu, dims=0)
+    @test sum(Bu, dims=1) == sum(Budense, dims=1)
+    @test sum(Bu, dims=2) == sum(Budense, dims=2)
+    @test sum(Bu, dims=3) == sum(Budense, dims=3)
+    @test typeof(sum(Bu, dims=1)) == typeof(sum(Budense, dims=1))
 end
 
 @testset "empty sub-diagonal" begin

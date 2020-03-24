@@ -664,6 +664,24 @@ end
     @test mapreduce(zero, max, D, dims=2) == mapreduce(zero, max, Ddense, dims=2)
     @test mapreduce(zero, max, D, dims=3) == mapreduce(zero, max, Ddense, dims=3)
     @test typeof(mapreduce(zero, max, D, dims=1)) == typeof(mapreduce(zero, max, Ddense, dims=1))
+
+    D = Diagonal(Int[])
+    Ddense = Matrix(D)
+    @test sum(D) == 0
+    @test_throws ArgumentError sum(D, dims=0)
+    @test sum(D, dims=1) == sum(Ddense, dims=1)
+    @test sum(D, dims=2) == sum(Ddense, dims=2)
+    @test sum(D, dims=3) == sum(Ddense, dims=3)
+    @test typeof(sum(D, dims=1)) == typeof(sum(Ddense, dims=1))
+
+    D = Diagonal(Int[2])
+    Ddense = Matrix(D)
+    @test sum(D) == 2
+    @test_throws ArgumentError sum(D, dims=0)
+    @test sum(D, dims=1) == sum(Ddense, dims=1)
+    @test sum(D, dims=2) == sum(Ddense, dims=2)
+    @test sum(D, dims=3) == sum(Ddense, dims=3)
+    @test typeof(sum(D, dims=1)) == typeof(sum(Ddense, dims=1))
 end
 
 @testset "logabsdet for generic eltype" begin
