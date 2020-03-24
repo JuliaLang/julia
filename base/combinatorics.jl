@@ -72,7 +72,7 @@ function isperm(P::NTuple{N,T}) where {N,T}
             if P[j]==i
                 flag=false
                 break
-            end 
+            end
         end
         flag && return false
     end
