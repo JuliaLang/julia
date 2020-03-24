@@ -62,7 +62,7 @@ end
 function isperm(P::NTuple{N,T}) where {N,T}
     all(ntuple(Val(N)) do i
         for j in eachindex(P)
-            @inbounds P[j]==i && return true
+            P[j]==i && return true
         end
         return false
     end)
@@ -255,7 +255,7 @@ end
 function invperm(P::NTuple{N,T}) where {N,T}
     ntuple(Val(N)) do i
         for j in eachindex(P)
-            @inbounds P[j]==i && return T(j)
+            P[j]==i && return T(j)
         end
         throw(ArgumentError("argument is not a permutation"))
     end
