@@ -394,6 +394,13 @@ end
     end
 end
 
+@testset "#35163" begin
+    # typemax(Int32) * Int32(1) + Int32(1) * Int32(1) should wrap around
+    # not promote to Int64, convert to Int32 and throw inexacterror
+    val = mul!(Int32[1], fill(typemax(Int32), 1, 1), Int32[1], Int32(1), Int32(1))
+    @test val[1] == typemin(Int32)
+end
+
 # Number types that lack conversion to the destination type
 struct RootInt
     i::Int
