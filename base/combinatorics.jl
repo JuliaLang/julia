@@ -60,12 +60,17 @@ function isperm(A)
 end
 
 function isperm(P::NTuple{N,T}) where {N,T}
-    all(ntuple(Val(N)) do i
+    for i in eachindex(P)
+        flag=true
         for j in eachindex(P)
-            P[j]==i && return true
+            if P[j]==i
+                flag=false
+                break
+            end 
         end
-        return false
-    end)
+        flag && return false
+    end
+    return true
 end
 
 isperm(p::Tuple{}) = true
