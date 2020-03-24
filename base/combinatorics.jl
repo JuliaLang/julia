@@ -59,6 +59,15 @@ function isperm(A)
     true
 end
 
+function isperm(P::NTuple{N,T}) where {N,T}
+    all(ntuple(Val(N)) do i
+        for j in eachindex(P)
+            @inbounds P[j]==i && return true
+        end
+        return false
+    end)
+end
+
 isperm(p::Tuple{}) = true
 isperm(p::Tuple{Int}) = p[1] == 1
 isperm(p::Tuple{Int,Int}) = ((p[1] == 1) & (p[2] == 2)) | ((p[1] == 2) & (p[2] == 1))
@@ -245,8 +254,8 @@ end
 
 function invperm(P::NTuple{N,T}) where {N,T}
     ntuple(Val(N)) do i
-        for j in P
-            @inbounds P[j]==i && return j
+        for j in eachindex(P)
+            @inbounds P[j]==i && return T(j)
         end
         throw(ArgumentError("argument is not a permutation"))
     end
