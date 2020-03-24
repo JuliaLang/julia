@@ -62,7 +62,7 @@ end
 
 isperm(A) = _isperm(A)
 
-function isperm(P::NTuple{N,T}) where {N,T}
+function isperm(P::NTuple{N,Int}) where N
     if N>21 # if N above 21 other algorithm is faster
         return _isperm(P)
     end
@@ -263,10 +263,10 @@ function invperm(p::Union{Tuple{},Tuple{Int},Tuple{Int,Int}})
     p  # in dimensions 0-2, every permutation is its own inverse
 end
 
-function invperm(P::NTuple{N,T}) where {N,T}
+function invperm(P::NTuple{N,Int}) where N
     ntuple(Val(N)) do i
         for j in eachindex(P)
-            P[j]==i && return T(j)
+            P[j]==i && return Int(j)
         end
         throw(ArgumentError("argument is not a permutation"))
     end
