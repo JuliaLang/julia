@@ -387,6 +387,11 @@ end
         @test !issubset(Base.OneTo(10), Base.OneTo(5))
         @test issubset(1:3:10, 1:10)
         @test !issubset(1:10, 1:3:10)
+        # with empty ranges
+        @test issubset(2:1, 3:4) #35225
+        @test issubset(2:1, 3:2)
+        @test issubset(Base.OneTo(0), Base.OneTo(3))
+        @test issubset(Base.OneTo(0), Base.OneTo(-3))
     end
     @testset "sort/sort!/partialsort" begin
         @test sort(UnitRange(1,2)) == UnitRange(1,2)
