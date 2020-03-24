@@ -211,10 +211,14 @@ function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecial
             # don't propagate constant index into indexing of non-constant array
             if arrty isa Type && arrty <: AbstractArray && !issingletontype(arrty)
                 return Any
+            elseif arrty ⊑ Array
+                return Any
             end
         elseif istopfunction(f, :iterate)
             itrty = argtypes[2]
             if itrty isa Type && !issingletontype(itrty)
+                return Any
+            elseif itrty ⊑ Array
                 return Any
             end
         end
