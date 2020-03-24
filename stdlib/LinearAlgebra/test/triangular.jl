@@ -646,6 +646,9 @@ end
     A = UpperTriangular(rand(ComplexF64, 10, 10))
     @test_throws ArgumentError LinearAlgebra.powm!(A, 2.2)
     A = LowerTriangular(rand(ComplexF64, 10, 10))
+    At = copy(transpose(A))
+    p = rand()
+    @test LinearAlgebra.powm(A, p) == transpose(LinearAlgebra.powm!(At, p))
     @test_throws ArgumentError LinearAlgebra.powm(A, 2.2)
 end
 
