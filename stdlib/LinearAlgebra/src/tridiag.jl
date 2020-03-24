@@ -351,8 +351,16 @@ end
 
 #tril and triu
 
-istriu(M::SymTridiagonal) = iszero(M.ev)
-istril(M::SymTridiagonal) = iszero(M.ev)
+function istriu(M::SymTridiagonal, k::Integer=0)
+    if k <= -1
+        return true
+    elseif k == 0
+        return iszero(M.ev)
+    else # k >= 1
+        return iszero(M.ev) && iszero(M.dv)
+    end
+end
+istril(M::SymTridiagonal, k::Integer) = istriu(M, -k)
 iszero(M::SymTridiagonal) = iszero(M.ev) && iszero(M.dv)
 isone(M::SymTridiagonal) = iszero(M.ev) && all(isone, M.dv)
 isdiag(M::SymTridiagonal) = iszero(M.ev)
@@ -654,8 +662,28 @@ end
 
 iszero(M::Tridiagonal) = iszero(M.dl) && iszero(M.d) && iszero(M.du)
 isone(M::Tridiagonal) = iszero(M.dl) && all(isone, M.d) && iszero(M.du)
-istriu(M::Tridiagonal) = iszero(M.dl)
-istril(M::Tridiagonal) = iszero(M.du)
+function istriu(M::Tridiagonal, k::Integer=0)
+    if k <= -1
+        return true
+    elseif k == 0
+        return iszero(M.dl)
+    elseif k == 1
+        return iszero(M.dl) && iszero(M.d)
+    else # k >= 2
+        return iszero(M.dl) && iszero(M.d) && iszero(M.du)
+    end
+end
+function istril(M::Tridiagonal, k::Integer=0)
+    if k >= 1
+        return true
+    elseif k == 0
+        return iszero(M.du)
+    elseif k == -1
+        return iszero(M.du) && iszero(M.d)
+    else # k <= -2
+        return iszero(M.du) && iszero(M.d) && iszero(M.dl)
+    end
+end
 isdiag(M::Tridiagonal) = iszero(M.dl) && iszero(M.du)
 
 function tril!(M::Tridiagonal, k::Integer=0)

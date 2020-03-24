@@ -577,9 +577,8 @@ let n = 5
     @test_throws DimensionMismatch rdiv!(A, transpose(UnitUpperTriangular(B)))
 end
 
-# Test that UpperTriangular(LowerTriangular) throws. See #16201
-@test_throws ArgumentError LowerTriangular(UpperTriangular(randn(3,3)))
-@test_throws ArgumentError UpperTriangular(LowerTriangular(randn(3,3)))
+@test isdiag(LowerTriangular(UpperTriangular(randn(3,3))))
+@test isdiag(UpperTriangular(LowerTriangular(randn(3,3))))
 
 # Issue 16196
 @test UpperTriangular(Matrix(1.0I, 3, 3)) \ view(fill(1., 3), [1,2,3]) == fill(1., 3)
