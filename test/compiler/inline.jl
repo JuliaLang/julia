@@ -282,3 +282,9 @@ end
     @test ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(@inline function f(x) x end)).source)
     @test !ccall(:jl_ast_flag_inlineable, Bool, (Any,), first(methods(function f(x) x end)).source)
 end
+
+const _a_global_array = [1]
+f_inline_global_getindex() = _a_global_array[1]
+let ci = code_typed(f_inline_global_getindex, Tuple{})[1].first
+    @test any(x->(isexpr(x, :call) && x.args[1] === GlobalRef(Base, :arrayref)), ci.code)
+end
