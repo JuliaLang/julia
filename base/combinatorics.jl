@@ -263,12 +263,16 @@ function invperm(p::Union{Tuple{},Tuple{Int},Tuple{Int,Int}})
     p  # in dimensions 0-2, every permutation is its own inverse
 end
 
-function invperm(P::NTuple{N,Int}) where N
-    ntuple(Val(N)) do i
-        for j in eachindex(P)
-            P[j]==i && return Int(j)
+function invperm(P::NTuple{N}) where N
+    valn = Val(N)
+    ntuple(valn) do i
+        s = Base.afoldl(nothing, ntuple(identity, valn)...) do s, j
+            s !== nothing && return s
+            P[j]==i && return j
+            nothing
         end
-        throw(ArgumentError("argument is not a permutation"))
+        s === nothing && throw(ArgumentError("argument is not a permutation"))
+        s
     end
 end
 
