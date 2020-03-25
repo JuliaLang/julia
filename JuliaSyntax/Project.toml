@@ -1,6 +1,6 @@
 name = "Tokenize"
 uuid = "0796e94c-ce3b-5d07-9a54-7f471281c624"
-version = "0.5.7"
+version = "0.5.8"
 
 [compat]
 julia = "1"
