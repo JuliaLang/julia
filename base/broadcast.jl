@@ -471,7 +471,8 @@ julia> Broadcast.combine_axes(1, 1, 1)
 ```
 """
 @inline combine_axes(A, B...) = broadcast_shape(axes(A), combine_axes(B...))
-combine_axes(A) = axes(A)
+@inline combine_axes(A, B) = broadcast_shape(broadcast_axes(A), broadcast_axes(B))
+@inline combine_axes(A) = axes(A)
 
 # shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
