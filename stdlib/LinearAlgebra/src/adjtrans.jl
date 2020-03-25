@@ -242,9 +242,9 @@ Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) 
 ## multiplication *
 
 # Adjoint/Transpose-vector * vector
-*(u::AdjointAbsVec, v::AbstractVector) = dot(u.parent, v)
+*(u::AdjointAbsVec{T}, v::AbstractVector{T}) where {T<:Number} = dot(u.parent, v)
 *(u::TransposeAbsVec{T}, v::AbstractVector{T}) where {T<:Real} = dot(u.parent, v)
-function *(u::TransposeAbsVec, v::AbstractVector)
+function *(u::AdjOrTransAbsVec, v::AbstractVector)
     require_one_based_indexing(u, v)
     @boundscheck length(u) == length(v) || throw(DimensionMismatch())
     return sum(@inbounds(u[k]*v[k]) for k in 1:length(u))
