@@ -540,6 +540,22 @@ end
     end
 end
 
+@testset "Conversion to AbstractArray" begin
+    # tests corresponding to #34995
+    using LinearAlgebra: ImmutableArray
+    immutablemat = ImmutableArray([1 2 3; 4 5 6; 7 8 9])
+    for SymType in (Symmetric, Hermitian)
+        S = Float64
+        symmat = SymType(immutablemat)
+        @test convert(AbstractArray{S}, symmat).data isa ImmutableArray{S}
+        @test convert(AbstractMatrix{S}, symmat).data isa ImmutableArray{S}
+        @test AbstractArray{S}(symmat).data isa ImmutableArray{S}
+        @test AbstractMatrix{S}(symmat).data isa ImmutableArray{S}
+        @test convert(AbstractArray{S}, symmat) == symmat
+        @test convert(AbstractMatrix{S}, symmat) == symmat
+    end
+end
+
 @testset "#24572: eltype(A::HermOrSym) === eltype(parent(A))" begin
     A = rand(Float32, 3, 3)
     @test_throws TypeError Symmetric{Float64,Matrix{Float32}}(A, 'U')

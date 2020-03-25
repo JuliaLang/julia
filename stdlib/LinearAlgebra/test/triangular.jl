@@ -605,6 +605,23 @@ end
     end
 end
 
+@testset "AbstractArray constructor should preserve underlying storage type" begin
+    # tests corresponding to #34995
+    using LinearAlgebra: ImmutableArray
+    local m = 4
+    local T, S = Float32, Float64
+    immutablemat = ImmutableArray(randn(T,m,m))
+    for TriType in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+        trimat = TriType(immutablemat)
+        @test convert(AbstractArray{S}, trimat).data isa ImmutableArray{S}
+        @test convert(AbstractMatrix{S}, trimat).data isa ImmutableArray{S}
+        @test AbstractArray{S}(trimat).data isa ImmutableArray{S}
+        @test AbstractMatrix{S}(trimat).data isa ImmutableArray{S}
+        @test convert(AbstractArray{S}, trimat) == trimat
+        @test convert(AbstractMatrix{S}, trimat) == trimat
+    end
+end
+
 @testset "special printing of Lower/UpperTriangular" begin
     @test occursin(r"3×3 (LinearAlgebra\.)?LowerTriangular{Int64,Array{Int64,2}}:\n 2  ⋅  ⋅\n 2  2  ⋅\n 2  2  2",
                    sprint(show, MIME"text/plain"(), LowerTriangular(2ones(Int64,3,3))))

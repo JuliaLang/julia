@@ -717,4 +717,14 @@ end
     @test dot(zeros(Int32, 0), Diagonal(zeros(Int, 0)), zeros(Int16, 0)) === 0
 end
 
+@testset "Conversion to AbstractArray" begin
+    # tests corresponding to #34995
+    using LinearAlgebra: ImmutableArray
+    d = ImmutableArray([1, 2, 3, 4])
+    D = Diagonal(d)
+
+    @test convert(AbstractArray{Float64}, D)::Diagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == D
+    @test convert(AbstractMatrix{Float64}, D)::Diagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == D
+end
+
 end # module TestDiagonal

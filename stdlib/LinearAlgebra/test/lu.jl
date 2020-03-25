@@ -340,6 +340,17 @@ end
     A = complex.(randn(2, 2), randn(2, 2))
     @test (A' / F') * B ≈ A'
     @test (transpose(A) / F') * B ≈ transpose(A)
+
+    # Issue #35071, check that the input is not overwritten for real input vector
+    at = transpose(randn(2))
+    atcopy = copy(at)
+    @test (at / F') * B ≈ at
+    @test at == atcopy
+
+    At = transpose(randn(2, 2))
+    Atcopy = copy(At)
+    @test (At / F') * B ≈ At
+    @test At == Atcopy
 end
 
 @testset "0x0 matrix" begin
