@@ -125,6 +125,9 @@ AbstractMatrix{T}(S::SymTridiagonal) where {T} =
 function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
     Mf = zeros(T, n, n)
+    if n == 0
+        return Mf
+    end
     @inbounds begin
         @simd for i = 1:n-1
             Mf[i,i] = M.dv[i]
