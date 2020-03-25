@@ -7385,6 +7385,14 @@ extern "C" void jl_init_llvm(void)
 #endif
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
 
+    // if the patch adding this option has been applied, lower its limit to provide
+    // better DAGCombiner performance.
+    auto &clOptions = cl::getRegisteredOptions();
+    if (clOptions.find("combiner-store-merge-dependence-limit") != clOptions.end()) {
+        const char *const argv_smdl[] = {"", "-combiner-store-merge-dependence-limit=4"};
+        cl::ParseCommandLineOptions(sizeof(argv_smdl)/sizeof(argv_smdl[0]), argv_smdl);
+    }
+
     jl_page_size = jl_getpagesize();
     imaging_mode = jl_generating_output() && !jl_options.incremental;
     jl_default_cgparams.module_setup = jl_nothing;
