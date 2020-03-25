@@ -110,36 +110,12 @@ end
 
 function is_identifier_char(c::Char)
     c == EOF_CHAR && return false
-    if ((c >= 'A' && c <= 'Z') ||
-        (c >= 'a' && c <= 'z') || c == '_' ||
-        (c >= '0' && c <= '9') || c == '!')
-        return true
-    elseif (UInt32(c) < 0xA1 || UInt32(c) > 0x10ffff)
-        return false
-    end
-    cat = Unicode.category_code(c)
-    is_cat_id_start(c, cat) && return true
-    if cat == Unicode.UTF8PROC_CATEGORY_MN || cat == Unicode.UTF8PROC_CATEGORY_MC ||
-        cat == Unicode.UTF8PROC_CATEGORY_ND || cat == Unicode.UTF8PROC_CATEGORY_PC ||
-        cat == Unicode.UTF8PROC_CATEGORY_SK || cat == Unicode.UTF8PROC_CATEGORY_ME ||
-        cat == Unicode.UTF8PROC_CATEGORY_NO ||
-        (0x2032 <= UInt32(c) <= 0x2034) || # primes
-        UInt32(c) == 0x0387 || UInt32(c) == 0x19da ||
-        (0x1369 <= UInt32(c) <= 0x1371)
-       return true
-    end
-    return false
+    return Base.is_id_char(c)
 end
 
 function is_identifier_start_char(c::Char)
     c == EOF_CHAR && return false
-    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_')
-        return true
-    elseif (UInt32(c) < 0xA1 || UInt32(c) > 0x10ffff)
-        return false
-    end
-    cat = Unicode.category_code(c)
-    return is_cat_id_start(c, cat)
+    return Base.is_id_start_char(c)
 end
 
 
