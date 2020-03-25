@@ -203,6 +203,9 @@ For users coming to Julia from R, these are some noteworthy differences:
     in Python.
   * Julia does not support negative indices. In particular, the last element of a list or array is
     indexed with `end` in Julia, not `-1` as in Python.
+  * Julia requires end for indexing until the last element. x[1:] in Python is equivalent with x[2:end] in Julia.
+  * Julia’s range indexing has the format of x[start:step:stop], whereas Python’s format is x[start:stop:step]. Hence, x[0:10:2] in Python is equivalent to x[1:2:10] in Julia. Similarly, x[::-1] in Python, which refers to the reversed array, is equivalent to x[end:-1:1] in Julia.
+  * In Julia, indexing a matrix with arrays like X[[1,2], [1,3]] refers to a sub-matrix that contains the intersections of the first and second rows with the first and third columns. In Python, X[[1,2], [1,3]] refers to a vector that contains the values of cell [1,1] and [2,3] in the matrix. X[[1,2], [1,3]] in Julia is equivalent with X[np.ix_([0,1],[0,2])] in Python. X[[0,1], [0,2]] in Python is equivalent with X[[CartesianIndex(1,1), CartesianIndex(2,3)]] in Julia.
   * Julia's `for`, `if`, `while`, etc. blocks are terminated by the `end` keyword. Indentation level
     is not significant as it is in Python.
   * Julia has no line continuation syntax: if, at the end of a line, the input so far is a complete
@@ -224,6 +227,11 @@ For users coming to Julia from R, these are some noteworthy differences:
   * The commonly used `Int` type corresponds to the machine integer type (`Int32` or `Int64`).
     This means it will overflow, such that `2^64 == 0`. If you need larger values use another appropriate type,
     such as `Int128`, [`BigInt`](@ref) or a floating point type like `Float64`.
+  * The imaginary unit sqrt(-1) is represented in Julia as im, not j as in Python.
+  * In Julia, the exponentiation operator is ^, not ** as in Python.
+  * In Julia, we use nothing of type Nothing to represent null value, whereas Python uses None of type NoneType.
+  * In Julia, the standard operators over a matrix type are matrix operations, whereas, in Python, the standard operators are element-wise operations. When both A and B are matrices, A * B in Julia performs matrix multiplication, not element-wise multiplication as in Python. A * B in Julia is equivalent with A @ B in Python, whereas A * B in Python is equivalent with A .* B in Julia.
+  * The transpose operator ' in Julia returns an adjoint of a vector (a lazy representation of row vector), whereas the transpose operator .T over a vector in Python returns the original vector (non-op).
 
 ## Noteworthy differences from C/C++
 
