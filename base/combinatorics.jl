@@ -36,6 +36,15 @@ end
 
 # Basic functions for working with permutations
 
+function _isperm(A)
+    n = length(A)
+    used = falses(n)
+    for a in A
+        (0 < a <= n) && (used[a] ⊻= true) || return false
+    end
+    true
+end
+
 """
     isperm(v) -> Bool
 
@@ -50,16 +59,6 @@ julia> isperm([1; 3])
 false
 ```
 """
-
-function _isperm(A)
-    n = length(A)
-    used = falses(n)
-    for a in A
-        (0 < a <= n) && (used[a] ⊻= true) || return false
-    end
-    true
-end
-
 isperm(A) = _isperm(A)
 
 function isperm(P::NTuple{N,Int}) where N
