@@ -197,7 +197,10 @@ For users coming to Julia from R, these are some noteworthy differences:
 
 ## Noteworthy differences from Python
 
-  * Julia requires `end` to end a block. Unlike Python, Julia has no `pass` keyword.
+  * Julia's `for`, `if`, `while`, etc. blocks are terminated by the `end` keyword. Indentation level
+    is not significant as it is in Python. Unlike Python, Julia has no `pass` keyword.
+  * Strings are denoted by double quotation marks (`"text"`) in Julia (with three double quotation marks for multi-line strings), whereas in Python they can be denoted either by single (`'text'`) or double quotation marks (`"text"`). Single quotation marks are used for characters in Julia (`'c'`).
+  * Python Lists correspond to Julia Arrays of type Any (flexible, but slow). Numpy Arrays correspond to typed Julia Arrays.
   * In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
   * Julia's slice indexing includes the last element, unlike in Python. `a[2:3]` in Julia is `a[1:3]`
     in Python.
@@ -206,8 +209,6 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Julia requires end for indexing until the last element. `x[1:]` in Python is equivalent with x[2:end] in Julia.
   * Julia’s range indexing has the format of `x[start:step:stop]`, whereas Python’s format is `x[start:stop:step]`. Hence, `x[0:10:2]` in Python is equivalent to `x[1:2:10]` in Julia. Similarly, `x[::-1]` in Python, which refers to the reversed array, is equivalent to `x[end:-1:1]` in Julia.
   * In Julia, indexing a matrix with arrays like `X[[1,2], [1,3]]` refers to a sub-matrix that contains the intersections of the first and second rows with the first and third columns. In Python, `X[[1,2], [1,3]]` refers to a vector that contains the values of cell `[1,1]` and `[2,3]` in the matrix. `X[[1,2], [1,3]]` in Julia is equivalent with `X[np.ix_([0,1],[0,2])]` in Python. `X[[0,1], [0,2]]` in Python is equivalent with `X[[CartesianIndex(1,1), CartesianIndex(2,3)]]` in Julia.
-  * Julia's `for`, `if`, `while`, etc. blocks are terminated by the `end` keyword. Indentation level
-    is not significant as it is in Python.
   * Julia has no line continuation syntax: if, at the end of a line, the input so far is a complete
     expression, it is considered done; otherwise the input continues. One way to force an expression
     to continue is to wrap it in parentheses.
@@ -232,6 +233,16 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, we use `nothing` of type `Nothing` to represent null value, whereas Python uses `None` of type `NoneType`.
   * In Julia, the standard operators over a matrix type are matrix operations, whereas, in Python, the standard operators are element-wise operations. When both `A` and `B` are matrices, `A * B` in Julia performs matrix multiplication, not element-wise multiplication as in Python. `A * B` in Julia is equivalent with `A @ B` in Python, whereas A * B in Python is equivalent with `A .* B` in Julia.
   * The transpose operator `'` in Julia returns an adjoint of a vector (a lazy representation of row vector), whereas the transpose operator `.T` over a vector in Python returns the original vector (non-op).
+  * Functions in Python have one implementation (no polymorphism), whereas in Julia a function may contain multiple concrete implementations (called *Methods*), selected via multiple dispatch.
+  * There are no classes in Julia. Instead they are structures (mutable or immutable), containing data but no methods. 
+  * Calling a method of a class in Python (`a = MyClass(x), x.func(y)`) corresponds to a function call in Julia, e.g. `a = MyStruct(x), func(x::MyStruct, y)`. In general, multiple dispatch is more flexible and powerful than the Python class system.
+  * Python classes can inherit from one or more superclasses. Julia structures may have exactly one abstract supertype. 
+  * The Python code structure is defined by directories (Packages) and files (Modules), whereas the logical Julia program structure (Packages and Modules) is independent of the file strucutre (`include` for additional files).
+  * Conditional assignment in Python `x = 1 if y>0 else -1` corresponds to the Ternary operator `x = y>0 ? 1 : -1` in Julia.
+  * Macros in Julia can do what decorators in Python do, and much more.
+  * Exception handling in Julia is done using `try` - `catch` - `finally`, instead of `try` - `except` - `finally`. In contrast to Python, it is not recommended to use exception handling as part of the normal workflow in Julia due to performance reasons.
+  * In Julia loops are fast, there is no need to write "vectorized" code for performance reasons.
+  
 
 ## Noteworthy differences from C/C++
 
