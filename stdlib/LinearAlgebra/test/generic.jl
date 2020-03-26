@@ -217,6 +217,25 @@ end
     @test norm(x, 3) ≈ cbrt(5^3  +sqrt(5)^3)
 end
 
+@testset "rot! and ref!" begin
+    x = rand(1000)
+    y = rand(1000)
+    c = rand()
+    s = rand(ComplexF64)
+
+    x2 = copy(x)
+    y2 = copy(y)
+    rot!(n, x, y, c, s)
+    @test x ≈ c*x2 + s*y2
+    @test y ≈ -conj(s)*x2 + c*y2
+
+    x3 = copy(x)
+    y3 = copy(y)
+    ref!(n, x, y, c, s)
+    @test x ≈ c*x3 + s*y3
+    @test y ≈ conj(s)*x3 - c*y3
+end
+
 @testset "LinearAlgebra.axp(b)y! for element type without commutative multiplication" begin
     α = [1 2; 3 4]
     β = [5 6; 7 8]
