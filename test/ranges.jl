@@ -1581,3 +1581,9 @@ end
     @test step(r) === 2
     @test collect(r) == ['a','c','e','g']
 end
+
+@testset "Return type of indexing with ranges" begin
+    for T = (Base.OneTo{Int}, UnitRange{Int}, StepRange{Int,Int}, StepRangeLen{Int}, LinRange{Int})
+        @test eltype(T(1:5)) === eltype(T(1:5)[1:2])
+    end
+end
