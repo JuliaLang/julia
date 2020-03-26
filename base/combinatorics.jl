@@ -66,7 +66,9 @@ julia> isperm([1; 3])
 false
 ```
 """
-function isperm(A)
+isperm(A) = _isperm(A)
+
+function _isperm(A)
     n = length(A)
     used = falses(n)
     for a in A
@@ -88,6 +90,8 @@ function isperm(P::NTuple{N,Integer}) where {N}
         b&s
     end
 end
+
+isperm(P::Any16) = _isperm(P)
 
 # swap columns i and j of a, in-place
 function swapcols!(a::AbstractMatrix, i, j)
@@ -281,6 +285,8 @@ function invperm(P::NTuple{N,Integer}) where {N}
         s
     end
 end
+
+invperm(P::Any16) = Tuple(invperm(collect(P)))
 
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
 """
