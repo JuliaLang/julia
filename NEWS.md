@@ -92,7 +92,7 @@ New library features
 
 * `isapprox` (or `≈`) now has a one-argument "curried" method `isapprox(x)` which returns a function, like `isequal` (or `==`)` ([#32305]).
 * `Ref{NTuple{N,T}}` can be passed to `Ptr{T}`/`Ref{T}` `ccall` signatures ([#34199])
-* `accumulate`, `cumsum`, and `cumprod` now support `Tuple` ([#34654]).
+* `accumulate`, `cumsum`, and `cumprod` now support `Tuple` ([#34654]) and arbitrary iterators ([#34656]).
 * In `splice!` with no replacement, values to be removed can now be specified with an
   arbitrary iterable (instead of a `UnitRange`) ([#34524]).
 
