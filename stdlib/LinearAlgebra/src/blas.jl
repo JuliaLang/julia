@@ -12,12 +12,12 @@ using Base: require_one_based_indexing
 export
 # Level 1
     asum,
-    rot!,
     axpy!,
     axpby!,
     blascopy!,
     dotc,
     dotu,
+    rot!,
     scal!,
     scal,
     nrm2,
