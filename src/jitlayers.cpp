@@ -41,7 +41,7 @@ static void jl_add_to_ee();
 static void jl_add_to_ee(std::unique_ptr<Module> &M, StringMap<std::unique_ptr<Module>*> &NewExports);
 static uint64_t getAddressForFunction(StringRef fname);
 
-void jl_link_global(GlobalVariable *GV, void* addr)
+void jl_link_global(GlobalVariable *GV, void *addr)
 {
     Constant *P = literal_static_pointer_val(addr, GV->getValueType());
     GV->setInitializer(P);
