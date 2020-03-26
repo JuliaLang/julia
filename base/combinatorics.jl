@@ -83,9 +83,7 @@ function isperm(P::NTuple{N,Integer}) where {N}
     valn = Val(N)
     _foldoneto(true, valn) do b,i
         s = _foldoneto(false, valn) do s, j
-            s && return s
-            P[j]==i && return true
-            false
+            s || P[j]==i
         end
         b&s
     end
