@@ -81,6 +81,7 @@ Julia. However, most users should use the most recent stable version
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
+    cd julia
     git checkout v1.3.0
 
 Now run `make` to build the `julia` executable.
