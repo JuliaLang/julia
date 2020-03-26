@@ -211,7 +211,7 @@ first `n` elements of array `Y` with stride `incy`. Returns `X` and `Y`.
 !!! compat "Julia 1.5"
     `rot!` requires at least Julia 1.5.
 """
-function rot end
+function rot! end
 
 for (fname, elty, cty, sty, lib) in ((:drot_, :Float64, :Float64, :Float64, libblas),
                                      (:srot_, :Float32, :Float32, :Float32, libblas),
