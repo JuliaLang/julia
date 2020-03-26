@@ -1004,6 +1004,8 @@ static unsigned type_hash(jl_value_t *kj, int *failed) JL_NOTSAFEPOINT
 
 static unsigned typekey_hash(jl_typename_t *tn, jl_value_t **key, size_t n, int nofail) JL_NOTSAFEPOINT
 {
+    if (tn == jl_type_typename && key[0] == jl_bottom_type)
+        return jl_typeofbottom_type->hash;
     size_t j;
     unsigned hash = 3;
     int failed = nofail;
