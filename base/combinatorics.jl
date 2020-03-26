@@ -36,13 +36,20 @@ end
 
 # Basic functions for working with permutations
 
-function _isperm(A)
-    n = length(A)
-    used = falses(n)
-    for a in A
-        (0 < a <= n) && (used[a] ⊻= true) || return false
+@inline function _foldoneto(op, acc, ::Val{N}) where N
+    @assert N::Integer > 0
+    if @generated
+        quote
+            acc_0 = acc
+            Base.Cartesian.@nexprs $N i -> acc_{i} = op(acc_{i-1}, i)
+            return $(Symbol(:acc_, N))
+        end
+    else
+        for i in 1:N
+            acc = op(acc, i)
+        end
+        return acc
     end
-    true
 end
 
 """
@@ -59,28 +66,30 @@ julia> isperm([1; 3])
 false
 ```
 """
-isperm(A) = _isperm(A)
-
-function isperm(P::NTuple{N,Int}) where N
-    if N>21 # if N above 21 other algorithm is faster
-        return _isperm(P)
+function isperm(A)
+    n = length(A)
+    used = falses(n)
+    for a in A
+        (0 < a <= n) && (used[a] ⊻= true) || return false
     end
-    for i in eachindex(P)
-        flag=true
-        for j in eachindex(P)
-            if P[j]==i
-                flag=false
-                break
-            end
-        end
-        flag && return false
-    end
-    return true
+    true
 end
 
 isperm(p::Tuple{}) = true
 isperm(p::Tuple{Int}) = p[1] == 1
 isperm(p::Tuple{Int,Int}) = ((p[1] == 1) & (p[2] == 2)) | ((p[1] == 2) & (p[2] == 1))
+
+function isperm(P::NTuple{N,Integer}) where {N}
+    valn = Val(N)
+    _foldoneto(true, valn) do b,i
+        s = _foldoneto(false, valn) do s, j
+            s && return s
+            P[j]==i && return true
+            false
+        end
+        b&s
+    end
+end
 
 # swap columns i and j of a, in-place
 function swapcols!(a::AbstractMatrix, i, j)
@@ -262,10 +271,10 @@ function invperm(p::Union{Tuple{},Tuple{Int},Tuple{Int,Int}})
     p  # in dimensions 0-2, every permutation is its own inverse
 end
 
-function invperm(P::NTuple{N}) where N
+function invperm(P::NTuple{N,Integer}) where {N}
     valn = Val(N)
     ntuple(valn) do i
-        s = Base.afoldl(nothing, ntuple(identity, valn)...) do s, j
+        s = _foldoneto(nothing, valn) do s, j
             s !== nothing && return s
             P[j]==i && return j
             nothing
