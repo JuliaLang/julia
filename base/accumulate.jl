@@ -222,6 +222,9 @@ also [`accumulate!`](@ref) to use a preallocated output array, both for performa
 to control the precision of the output (e.g. to avoid overflow). For common operations
 there are specialized variants of `accumulate`, see: [`cumsum`](@ref), [`cumprod`](@ref)
 
+!!! compat "Julia 1.5"
+    `accumulate` on a non-array iterator requires at least Julia 1.5.
+
 # Examples
 ```jldoctest
 julia> accumulate(+, [1,2,3])

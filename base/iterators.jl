@@ -458,6 +458,9 @@ next element of `itr`.
 
 This is effectively a lazy version of [`Base.accumulate`](@ref).
 
+!!! compat "Julia 1.5"
+    Keyword argument `init` is added in Julia 1.5.
+
 # Examples
 ```jldoctest
 julia> f = Iterators.accumulate(+, [1,2,3,4]);
