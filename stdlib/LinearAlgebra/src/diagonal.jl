@@ -680,6 +680,19 @@ function getproperty(C::Cholesky{<:Any,<:Diagonal}, d::Symbol)
 end
 
 Base._sum(A::Diagonal, ::Colon) = sum(A.diag)
+function Base._sum(A::Diagonal, dims::Integer)
+    res = Base.reducedim_initarray(A, dims, zero(eltype(A)))
+    if dims <= 2
+        for i = 1:length(A.diag)
+            @inbounds res[i] = A.diag[i]
+        end
+    else
+        for i = 1:length(A.diag)
+            @inbounds res[i,i] = A.diag[i]
+        end
+    end
+    res
+end
 
 function logabsdet(A::Diagonal)
      mapreduce(x -> (log(abs(x)), sign(x)), ((d1, s1), (d2, s2)) -> (d1 + d2, s1 * s2),
