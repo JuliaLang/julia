@@ -1,14 +1,17 @@
-function ttyhascolor()
-    term_type = get(ENV, "TERM","")
-    startswith(term_type, "xterm") && return true
-    try
-        @static if Sys.KERNEL === :FreeBSD
-            return success(`tput AF 0`)
-        else
-            return success(`tput setaf 0`)
+if Sys.iswindows()
+    ttyhascolor(term_type = nothing) = true
+else
+    function ttyhascolor(term_type = get(ENV, "TERM", ""))
+        startswith(term_type, "xterm") && return true
+        try
+            @static if Sys.KERNEL === :FreeBSD
+                return success(`tput AF 0`)
+            else
+                return success(`tput setaf 0`)
+            end
+        catch e
+            return false
         end
-    catch e
-        return false
     end
 end
 function get_have_color()
@@ -20,5 +23,8 @@ in(key_value::Pair{Symbol,Bool}, ::TTY) = key_value.first === :color && key_valu
 haskey(::TTY, key::Symbol) = key === :color
 getindex(::TTY, key::Symbol) = key === :color ? get_have_color() : throw(KeyError(key))
 get(::TTY, key::Symbol, default) = key === :color ? get_have_color() : default
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> 59586ded0da55b383c01b5d6e3538cd9680d79a3
