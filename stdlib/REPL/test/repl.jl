@@ -47,14 +47,11 @@ function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_
     Base.link_pipe!(output, reader_supports_async=true, writer_supports_async=true)
     Base.link_pipe!(err, reader_supports_async=true, writer_supports_async=true)
 
-    repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in), true)
+    repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in, options.hascolor), options.hascolor)
     repl.options = options
 
     hard_kill = kill_timer(900) # Your debugging session starts now. You have 15 minutes. Go.
-    @eval Base old_have_color = have_color
-    @eval Base have_color = false
     f(input.in, output.out, repl)
-    @eval Base have_color = old_have_color
     t = @async begin
         close(input.in)
         close(output.in)
@@ -93,7 +90,7 @@ end
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-fake_repl() do stdin_write, stdout_read, repl
+fake_repl(options = REPL.Options(confirm_exit=false,hascolor=false)) do stdin_write, stdout_read, repl
     repl.specialdisplay = REPL.REPLDisplay(repl)
     repl.history_file = false
 
