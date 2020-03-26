@@ -242,7 +242,9 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Macros in Julia can do what decorators in Python do, and much more.
   * Exception handling in Julia is done using `try` - `catch` - `finally`, instead of `try` - `except` - `finally`. In contrast to Python, it is not recommended to use exception handling as part of the normal workflow in Julia due to performance reasons.
   * In Julia loops are fast, there is no need to write "vectorized" code for performance reasons.
-  * Non-constant global variables impose a significant performance loss in Julia and should therefore be avoided (see [Performance Tips](@ref man-performance-tips)). For Python, global variables are not associated with a performance penalty.
+  * Non-constant global variables impose a significant performance loss in Julia and should therefore be avoided (see [Performance Tips](@ref man-performance-tips)). For Python, global variables are not associated with a performance penalty.  
+  * In Python `0`, `None`, empty list are evaluated to logical `False`. In Julia, you need explicit conversion to Bool.
+  * In Julia, a new local scope is introduced by most code blocks, including loops, `try`-`catch`-`finally` and comprehensions.
   
 
 ## Noteworthy differences from C/C++
