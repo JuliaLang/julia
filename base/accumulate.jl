@@ -92,14 +92,14 @@ function cumsum(A::AbstractArray{T}; dims::Integer) where T
 end
 
 """
-    cumsum(itr::Union{AbstractVector,Tuple})
+    cumsum(itr)
 
 Cumulative sum an iterator. See also [`cumsum!`](@ref)
 to use a preallocated output array, both for performance and to control the precision of the
 output (e.g. to avoid overflow).
 
 !!! compat "Julia 1.5"
-    `cumsum` on a tuple requires at least Julia 1.5.
+    `cumsum` on a non-array iterator requires at least Julia 1.5.
 
 # Examples
 ```jldoctest
@@ -117,6 +117,12 @@ julia> cumsum([fill(1, 2) for i in 1:3])
 
 julia> cumsum((1, 1, 1))
 (1, 2, 3)
+
+julia> cumsum(x^2 for x in 1:3)
+3-element Array{Int64,1}:
+  1
+  5
+ 14
 ```
 """
 cumsum(x::AbstractVector) = cumsum(x, dims=1)
@@ -170,14 +176,14 @@ function cumprod(A::AbstractArray; dims::Integer)
 end
 
 """
-    cumprod(itr::Union{AbstractVector,Tuple})
+    cumprod(itr)
 
 Cumulative product of an iterator. See also
 [`cumprod!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow).
 
 !!! compat "Julia 1.5"
-    `cumprod` on a tuple requires at least Julia 1.5.
+    `cumprod` on a non-array iterator requires at least Julia 1.5.
 
 # Examples
 ```jldoctest
@@ -195,6 +201,12 @@ julia> cumprod([fill(1//3, 2, 2) for i in 1:3])
 
 julia> cumprod((1, 2, 1))
 (1, 2, 2)
+
+julia> cumprod(x^2 for x in 1:3)
+3-element Array{Int64,1}:
+  1
+  4
+ 36
 ```
 """
 cumprod(x::AbstractVector) = cumprod(x, dims=1)
@@ -209,6 +221,9 @@ for vectors). An initial value `init` may optionally be provided by a keyword ar
 also [`accumulate!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow). For common operations
 there are specialized variants of `accumulate`, see: [`cumsum`](@ref), [`cumprod`](@ref)
+
+!!! compat "Julia 1.5"
+    `accumulate` on a non-array iterator requires at least Julia 1.5.
 
 # Examples
 ```jldoctest
@@ -250,6 +265,10 @@ julia> accumulate(+, fill(1, 3, 3), dims=2)
 ```
 """
 function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
+    if dims === nothing && !(A isa AbstractVector)
+        # This branch takes care of the cases not handled by `_accumulate!`.
+        return collect(Iterators.accumulate(op, A; kw...))
+    end
     nt = kw.data
     if nt isa NamedTuple{()}
         out = similar(A, promote_op(op, eltype(A), eltype(A)))
