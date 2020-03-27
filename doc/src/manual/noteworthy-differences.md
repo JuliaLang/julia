@@ -207,7 +207,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     in Python.
   * Julia does not support negative indices. In particular, the last element of a list or array is
     indexed with `end` in Julia, not `-1` as in Python.
-  * Julia requires end for indexing until the last element. `x[1:]` in Python is equivalent with x[2:end] in Julia.
+  * Julia requires `end` for indexing until the last element. `x[1:]` in Python is equivalent with x[2:end] in Julia.
   * Julia’s range indexing has the format of `x[start:step:stop]`, whereas Python’s format is `x[start:stop:step]`. Hence, `x[0:10:2]` in Python is equivalent to `x[1:2:10]` in Julia. Similarly, `x[::-1]` in Python, which refers to the reversed array, is equivalent to `x[end:-1:1]` in Julia.
   * In Julia, indexing a matrix with arrays like `X[[1,2], [1,3]]` refers to a sub-matrix that contains the intersections of the first and second rows with the first and third columns. In Python, `X[[1,2], [1,3]]` refers to a vector that contains the values of cell `[1,1]` and `[2,3]` in the matrix. `X[[1,2], [1,3]]` in Julia is equivalent with `X[np.ix_([0,1],[0,2])]` in Python. `X[[0,1], [0,2]]` in Python is equivalent with `X[[CartesianIndex(1,1), CartesianIndex(2,3)]]` in Julia.
   * Julia has no line continuation syntax: if, at the end of a line, the input so far is a complete
