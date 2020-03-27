@@ -451,6 +451,15 @@ end
     @test big(Int128(-170141183460469231731687303715884105728)) == big"-170141183460469231731687303715884105728"
 end
 
+@testset "type conversion with Signed, Unsigned" begin
+    x = BigInt(typemin(Int128)) - 1
+    @test x % Signed === x
+    @test_throws MethodError x % Unsigned
+    y = BigInt(1)
+    @test y % Signed === y
+    @test_throws MethodError y % Unsigned
+end
+
 @testset "conversion to Float" begin
     x = big"2"^256 + big"2"^(256-53) + 1
     @test Float64(x) == reinterpret(Float64, 0x4ff0000000000001)
