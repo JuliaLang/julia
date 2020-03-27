@@ -34,7 +34,7 @@ end
     @test invperm((1,2)) == (1,2)
     @test invperm((2,1)) == (2,1)
     @test_throws ArgumentError invperm((1,3))
-    
+
     push!(p, 1)
     @test !isperm(p)
 
@@ -45,7 +45,7 @@ end
     let ai = 2:-1:1
         @test invpermute!(permute!([1, 2], ai), ai) == [1, 2]
     end
-    
+
     # PR 35234
     for N in 3:1:20
         A=randcycle(N)
