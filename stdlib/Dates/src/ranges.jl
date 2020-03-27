@@ -65,3 +65,11 @@ Base.iterate(r::StepRange{<:TimeType}, (l, i)) = l <= i ? nothing : (r.start + r
 # Combinations of types and periods for which the range step is regular
 Base.RangeStepStyle(::Type{<:OrdinalRange{<:TimeType, <:FixedPeriod}}) =
     Base.RangeStepRegular()
+
+# Avoid special method added in https://github.com/JuliaLang/julia/pull/30778
+function findfirst(testf::Union{Fix2{typeof(isequal)},Fix2{typeof(==)}}, A::StepRange{<:TimeType, <:OtherPeriod})
+    for (i, a) in pairs(A)
+        testf(a) && return i
+    end
+    return nothing
+end
