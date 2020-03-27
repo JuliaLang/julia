@@ -2581,6 +2581,7 @@ let r = Ptr{Cvoid}(20):-UInt(2):Ptr{Cvoid}(10)
     @test last(r) === Ptr{Cvoid}(10)
 end
 
+<<<<<<< HEAD
 # test behavior of wrap-around and promotion of empty ranges (#35711)
 @test length(range(0, length=UInt(0))) === UInt(0)
 @test isempty(range(0, length=UInt(0)))
@@ -2859,4 +2860,13 @@ const EXAMPLE_RANGES = AbstractRange[
     for a in EXAMPLE_RANGES, b in EXAMPLE_RANGES
         @test try cmp(a, b) catch e; e end == try cmp(collect(a), collect(b)) catch e; e end
     end
+end
+
+@testset "Char ranges are regular" begin
+    r = 'a':'z'
+    r2 = 'α':2:'ω'
+    r3 = StepRangeLen('a',3,10)
+    @test Base.RangeStepStyle(r) === RangeStepRegular()
+    @test Base.RangeStepStyle(r2) === RangeStepRegular()
+    @test Base.RangeStepStyle(r3) === RangeStepRegular()
 end
