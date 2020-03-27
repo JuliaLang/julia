@@ -11,6 +11,11 @@ New language features
   macros and matrix constructors, which are whitespace sensitive, because expressions like
   `[a ±b]` now get parsed as `[a ±(b)]` instead of `[±(a, b)]`. ([#34200])
 
+* Passing an identifier `x` by itself as a keyword argument or named tuple element
+  is equivalent to `x=x`, implicitly using the name of the variable as the keyword
+  or named tuple field name.
+  Similarly, passing an `a.b` expression uses `b` as the keyword or field name ([#29333]).
+
 * Packages can now provide custom hints to help users resolve errors by using the
   `register_error_hint` function. Packages that define custom exception types
   can support hints by calling `show_error_hints` from their `showerror` method. ([#35094])
@@ -58,6 +63,9 @@ Language changes
 
 * `<:` and `>:` can now be applied element wise on an array with `.<:` and `.>:`  ([#35085])
 
+* Color now defaults to on when stdout and stderr are TTYs ([#34347])
+
+
 Multi-threading changes
 -----------------------
 
@@ -88,7 +96,9 @@ New library features
 
 * `isapprox` (or `≈`) now has a one-argument "curried" method `isapprox(x)` which returns a function, like `isequal` (or `==`)` ([#32305]).
 * `Ref{NTuple{N,T}}` can be passed to `Ptr{T}`/`Ref{T}` `ccall` signatures ([#34199])
-* `accumulate`, `cumsum`, and `cumprod` now support `Tuple` ([#34654]).
+* `x::Signed % Unsigned` and `x::Unsigned % Signed` are supported for integer bitstypes.
+* `signed(unsigned_type)` is supported for integer bitstypes, `unsigned(signed_type)` has been supported.
+* `accumulate`, `cumsum`, and `cumprod` now support `Tuple` ([#34654]) and arbitrary iterators ([#34656]).
 * In `splice!` with no replacement, values to be removed can now be specified with an
   arbitrary iterable (instead of a `UnitRange`) ([#34524]).
 

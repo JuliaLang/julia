@@ -858,6 +858,17 @@ end
 # 28680
 @test 1 .+ 1 .+  (1, 2) == (3, 4)
 
+
+# PR #35260 no allocations in simple broadcasts
+u = rand(100)
+k1 = similar(u)
+k2 = similar(u)
+k3 = similar(u)
+k4 = similar(u)
+f(a,b,c,d,e) = @. a = a + 1*(b+c+d+e)
+@allocated f(u,k1,k2,k3,k4)
+@test (@allocated f(u,k1,k2,k3,k4)) == 0
+
 ret =  @macroexpand @.([Int, Number] <: Real)
 @test ret == :([Int, Number] .<: Real)
 

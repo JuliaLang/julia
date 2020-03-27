@@ -60,6 +60,22 @@ julia> keys = (:a, :b, :c); values = (1, 2, 3);
 julia> (; zip(keys, values)...)
 (a = 1, b = 2, c = 3)
 ```
+
+As in keyword arguments, identifiers and dot expressions imply names:
+
+```jldoctest
+julia> x = 0
+0
+
+julia> t = (; x)
+(x = 0,)
+
+julia> (; t.x)
+(x = 0,)
+```
+
+!!! compat "Julia 1.5"
+    Implicit names from identifiers and dot expressions are available as of Julia 1.5.
 """
 Core.NamedTuple
 

@@ -125,6 +125,9 @@ AbstractMatrix{T}(S::SymTridiagonal) where {T} =
 function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
     Mf = zeros(T, n, n)
+    if n == 0
+        return Mf
+    end
     @inbounds begin
         @simd for i = 1:n-1
             Mf[i,i] = M.dv[i]
@@ -351,8 +354,16 @@ end
 
 #tril and triu
 
-istriu(M::SymTridiagonal) = iszero(M.ev)
-istril(M::SymTridiagonal) = iszero(M.ev)
+function istriu(M::SymTridiagonal, k::Integer=0)
+    if k <= -1
+        return true
+    elseif k == 0
+        return iszero(M.ev)
+    else # k >= 1
+        return iszero(M.ev) && iszero(M.dv)
+    end
+end
+istril(M::SymTridiagonal, k::Integer) = istriu(M, -k)
 iszero(M::SymTridiagonal) = iszero(M.ev) && iszero(M.dv)
 isone(M::SymTridiagonal) = iszero(M.ev) && all(isone, M.dv)
 isdiag(M::SymTridiagonal) = iszero(M.ev)
@@ -654,8 +665,28 @@ end
 
 iszero(M::Tridiagonal) = iszero(M.dl) && iszero(M.d) && iszero(M.du)
 isone(M::Tridiagonal) = iszero(M.dl) && all(isone, M.d) && iszero(M.du)
-istriu(M::Tridiagonal) = iszero(M.dl)
-istril(M::Tridiagonal) = iszero(M.du)
+function istriu(M::Tridiagonal, k::Integer=0)
+    if k <= -1
+        return true
+    elseif k == 0
+        return iszero(M.dl)
+    elseif k == 1
+        return iszero(M.dl) && iszero(M.d)
+    else # k >= 2
+        return iszero(M.dl) && iszero(M.d) && iszero(M.du)
+    end
+end
+function istril(M::Tridiagonal, k::Integer=0)
+    if k >= 1
+        return true
+    elseif k == 0
+        return iszero(M.du)
+    elseif k == -1
+        return iszero(M.du) && iszero(M.d)
+    else # k <= -2
+        return iszero(M.du) && iszero(M.d) && iszero(M.dl)
+    end
+end
 isdiag(M::Tridiagonal) = iszero(M.dl) && iszero(M.du)
 
 function tril!(M::Tridiagonal, k::Integer=0)
@@ -722,6 +753,74 @@ end
 
 Base._sum(A::Tridiagonal, ::Colon) = sum(A.d) + sum(A.dl) + sum(A.du)
 Base._sum(A::SymTridiagonal, ::Colon) = sum(A.dv) + 2sum(A.ev)
+
+function Base._sum(A::Tridiagonal, dims::Integer)
+    res = Base.reducedim_initarray(A, dims, zero(eltype(A)))
+    n = length(A.d)
+    if n == 0
+        return res
+    elseif n == 1
+        res[1] = A.d[1]
+        return res
+    end
+    @inbounds begin
+        if dims == 1
+            res[1] = A.dl[1] + A.d[1]
+            for i = 2:n-1
+                res[i] = A.dl[i] + A.d[i] + A.du[i-1]
+            end
+            res[n] = A.d[n] + A.du[n-1]
+        elseif dims == 2
+            res[1] = A.d[1] + A.du[1]
+            for i = 2:n-1
+                res[i] = A.dl[i-1] + A.d[i] + A.du[i]
+            end
+            res[n] = A.dl[n-1] + A.d[n]
+        elseif dims >= 3
+            for i = 1:n-1
+                res[i,i+1] = A.du[i]
+                res[i,i]   = A.d[i]
+                res[i+1,i] = A.dl[i]
+            end
+            res[n,n] = A.d[n]
+        end
+    end
+    res
+end
+
+function Base._sum(A::SymTridiagonal, dims::Integer)
+    res = Base.reducedim_initarray(A, dims, zero(eltype(A)))
+    n = length(A.dv)
+    if n == 0
+        return res
+    elseif n == 1
+        res[1] = A.dv[1]
+        return res
+    end
+    @inbounds begin
+        if dims == 1
+            res[1] = A.ev[1] + A.dv[1]
+            for i = 2:n-1
+                res[i] = A.ev[i] + A.dv[i] + A.ev[i-1]
+            end
+            res[n] = A.dv[n] + A.ev[n-1]
+        elseif dims == 2
+            res[1] = A.dv[1] + A.ev[1]
+            for i = 2:n-1
+                res[i] = A.ev[i-1] + A.dv[i] + A.ev[i]
+            end
+            res[n] = A.ev[n-1] + A.dv[n]
+        elseif dims >= 3
+            for i = 1:n-1
+                res[i,i+1] = A.ev[i]
+                res[i,i]   = A.dv[i]
+                res[i+1,i] = A.ev[i]
+            end
+            res[n,n] = A.dv[n]
+        end
+    end
+    res
+end
 
 function dot(x::AbstractVector, A::Tridiagonal, y::AbstractVector)
     require_one_based_indexing(x, y)

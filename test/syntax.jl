@@ -1994,6 +1994,9 @@ end
 @test i0xb23hG() == 2
 @test i0xb23hG(x=10) == 10
 
+accepts__kwarg(;z1) = z1
+@test (@id_for_kwarg let z1 = 41; accepts__kwarg(; z1); end) == 41
+
 @test @eval let
     (z,)->begin
         $(Expr(:inbounds, true))
@@ -2213,3 +2216,8 @@ end
     Expr(:error, "invisible character \\u200b near column 3")
 @test Meta.parse("aa\UE0080", raise=false) ==
     Expr(:error, "invalid character \"\Ue0080\" near column 3")
+
+# issue #35201
+h35201(x; k=1) = (x, k)
+f35201(c) = h35201((;c...), k=true)
+@test f35201(Dict(:a=>1,:b=>3)) === ((a=1,b=3), true)

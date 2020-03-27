@@ -93,6 +93,12 @@ dimg  = randn(n)/2
         @test lud.L*lud.U ≈ Array(d)[lud.p,:]
         @test AbstractArray(lud) ≈ d
         @test Array(lud) ≈ d
+        if eltya != Int
+            dlu = convert.(eltya, [1, 1])
+            dia = convert.(eltya, [-2, -2, -2])
+            tri = Tridiagonal(dlu, dia, dlu)
+            @test_throws ArgumentError lu!(tri)
+        end
     end
     @testset for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
         b  = eltyb == Int ? rand(1:5, n, 2) :
