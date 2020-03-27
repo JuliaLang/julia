@@ -44,7 +44,20 @@ const BitUnsigned64T   = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UIn
 
 const BitIntegerType = Union{map(T->Type{T}, BitInteger_types)...}
 
-# the partner functions `unsigned(::Type{IntNN})` exist
+# >> this use of `unsigned` is defined somewhere else << the docstring should migrate there
+"""
+    unsigned(T::Integer)
+
+Convert an integer bitstype to the unsigned type of the same size.
+# Examples
+```jldoctest
+julia> unsigned(Int16)
+UInt16
+julia> unsigned(UInt64)
+UInt64
+```
+""" unsigned
+
 """
     signed(T::Integer)
 
@@ -159,6 +172,7 @@ abs(x::Signed) = flipsign(x,x)
 
 """
     unsigned(x)
+
 Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as
 unsigned without checking for negative values.
 # Examples
@@ -175,19 +189,8 @@ unsigned(x) = x % typeof(convert(Unsigned, zero(x)))
 unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 
 """
-    unsigned(T::Integer)
-Convert an integer bitstype to the unsigned type of the same size.
-# Examples
-```jldoctest
-julia> unsigned(Int16)
-UInt16
-julia> unsigned(UInt64)
-UInt64
-```
-""" unsigned
-
-"""
     signed(x)
+
 Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as
 signed without checking for overflow.
 """
