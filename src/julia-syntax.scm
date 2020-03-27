@@ -1418,6 +1418,8 @@
                  `(,(car x) ,(arg-to-temp (cadr x))))
                 ((or (eq? (car x) 'kw) (and tup (eq? (car x) '=)))
                  `(,(car x) ,(cadr x) ,(arg-to-temp (caddr x))))
+                ((eq? (car x) 'parameters)
+                 `(parameters ,@(map arg-to-temp (cdr x))))
                 ((eq? (car x) 'tuple)
                  (let ((tmp (remove-argument-side-effects x #t)))
                    (set! a (revappend (cdr tmp) a))
@@ -1758,10 +1760,10 @@
                            (syntax-str   "named tuple element"))
   (let* ((names (apply append
                        (map (lambda (x)
-                              (cond #;((symbol? x) (list x))
+                              (cond ((symbol? x) (list x))
                                     ((and (or (assignment? x) (kwarg? x)) (symbol? (cadr x)))
                                      (list (cadr x)))
-                                    #;((and (length= x 3) (eq? (car x) '|.|))
+                                    ((and (length= x 3) (eq? (car x) '|.|))
                                      (list (cadr (caddr x))))
                                     (else '())))
                             lst)))
@@ -1799,18 +1801,17 @@
                        (cons (cadr el) current-names)
                        (cons (caddr el) current-vals)
                        expr))
-#|
                 ((symbol? el)  ;; x  =>  x = x
                  (loop (cdr L)
                        (cons el current-names)
                        (cons el current-vals)
                        expr))
-                ((and (length= el 3) (eq? (car el) '|.|))  ;; a.x  =>  x = a.x
+                ((and (length= el 3) (eq? (car el) '|.|)   ;; a.x  =>  x = a.x
+                      (quoted-sym? (caddr el)))
                  (loop (cdr L)
                        (cons (cadr (caddr el)) current-names)
                        (cons el current-vals)
                        expr))
-|#
                 ((and (length= el 4) (eq? (car el) 'call) (eq? (cadr el) '=>))
                  (loop (cdr L)
                        '()
@@ -1837,7 +1838,7 @@
       `(= ,lhs ,rhs)))
 
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref line module toplevel ssavalue null true false meta using import export)))
+  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref module toplevel ssavalue null true false meta using import export)))
       e
       (let ((ex (get expand-table (car e) #f)))
         (if ex
@@ -2334,6 +2335,11 @@
           (= ,r ,(expand-forms (cadr e)))
           (gc_preserve_end ,s)
           ,r)))
+
+    'line
+    (lambda (e)
+      (set! *current-desugar-loc* e)
+      e)
     ))
 
 (define (has-return? e)
@@ -4368,9 +4374,22 @@ f(x) = yt(x)
      (analyze-variables!
       (resolve-scopes ex)))) file line))
 
-(define julia-expand0 expand-forms)
+(define *current-desugar-loc* #f)
+
+(define (julia-expand0 ex file line)
+  (with-bindings ((*current-desugar-loc* `(line ,line ,file)))
+   (trycatch (expand-forms ex)
+             (lambda (e)
+               (if (and (pair? e) (eq? (car e) 'error))
+                   ; Add location for desugaring errors. This is approximate:
+                   ; - Line number nodes are sparse in the AST
+                   ; - Line number nodes apply to the next statement, so
+                   ;   tracking by `set!`ing *current-desugar-loc* relies on
+                   ;   AST traversal being in program order.
+                   (error (string (cadr e) (format-loc *current-desugar-loc*))))
+                   (raise e)))))
 
 (define (julia-expand ex (file 'none) (line 0))
   (julia-expand1
    (julia-expand0
-    (julia-expand-macroscope ex)) file line))
+    (julia-expand-macroscope ex) file line) file line))

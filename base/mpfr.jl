@@ -13,7 +13,7 @@ import
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
         sum, sqrt, string, print, trunc, precision, exp10, expm1,
         log1p,
-        eps, signbit, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
+        eps, signbit, sign, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh,
         cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
@@ -786,6 +786,11 @@ cmp(x::CdoubleMax, y::BigFloat) = -cmp(y,x)
 <=(x::CdoubleMax, y::BigFloat) = !isnan(x) && !isnan(y) && cmp(y,x) >= 0
 
 signbit(x::BigFloat) = ccall((:mpfr_signbit, :libmpfr), Int32, (Ref{BigFloat},), x) != 0
+function sign(x::BigFloat)
+    c = cmp(x, 0)
+    (c == 0 || isnan(x)) && return x
+    return c < 0 ? -one(x) : one(x)
+end
 
 function precision(x::BigFloat)  # precision of an object of type BigFloat
     return ccall((:mpfr_get_prec, :libmpfr), Clong, (Ref{BigFloat},), x)

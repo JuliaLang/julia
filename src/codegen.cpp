@@ -147,7 +147,7 @@ extern JITEventListener *CreateJuliaJITEventListener();
 bool imaging_mode = false;
 
 // shared llvm state
-static LLVMContext &jl_LLVMContext = *(new LLVMContext());
+JL_DLLEXPORT LLVMContext &jl_LLVMContext = *(new LLVMContext());
 TargetMachine *jl_TargetMachine;
 Module *shadow_output;
 static DataLayout &jl_data_layout = *(new DataLayout(""));
@@ -1240,7 +1240,7 @@ static void write_log_data(logdata_t &logData, const char *extension)
     base = base + "/../share/julia/base/";
     logdata_t::iterator it = logData.begin();
     for (; it != logData.end(); it++) {
-        std::string filename = it->first();
+        std::string filename(it->first());
         std::vector<logdata_block*> &values = it->second;
         if (!values.empty()) {
             if (!isabspath(filename.c_str()))
@@ -1298,12 +1298,10 @@ static void write_lcov_data(logdata_t &logData, const std::string &outfile)
     //base = base + "/../share/julia/base/";
     logdata_t::iterator it = logData.begin();
     for (; it != logData.end(); it++) {
-        const std::string &filename = it->first();
+        StringRef filename = it->first();
         const std::vector<logdata_block*> &values = it->second;
         if (!values.empty()) {
-            //if (!isabspath(filename.c_str()))
-            //    filename = base + filename;
-            outf << "SF:" << filename << '\n';
+            outf << "SF:" << filename.str() << '\n';
             size_t n_covered = 0;
             size_t n_instrumented = 0;
             size_t lno = 0;
@@ -3856,6 +3854,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
             GlobalVariable::PrivateLinkage,
             name.str(), M);
     jl_init_function(f);
+    f->addFnAttr(Thunk);
     //f->setAlwaysInline();
     ctx.f = f; // for jl_Module
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
@@ -3878,7 +3877,8 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     }
     theFarg = maybe_decay_untracked(theFarg);
     auto args = f->arg_begin();
-    Value *r = ctx.builder.CreateCall(theFptr, { &*args, &*++args, &*++args, theFarg });
+    CallInst *r = ctx.builder.CreateCall(theFptr, { &*args, &*++args, &*++args, theFarg });
+    r->setAttributes(cast<Function>(theFptr)->getAttributes());
     ctx.builder.CreateRet(r);
     return f;
 }
@@ -4318,6 +4318,7 @@ static Function* gen_cfun_wrapper(
         FunctionType *cft = returninfo.decl->getFunctionType();
         jlfunc_sret = (returninfo.cc == jl_returninfo_t::SRet);
 
+        // TODO: Can use use emit_call_specfun_other here?
         std::vector<Value*> args;
         Value *result;
         if (jlfunc_sret || returninfo.cc == jl_returninfo_t::Union) {
@@ -4389,14 +4390,22 @@ static Function* gen_cfun_wrapper(
             case jl_returninfo_t::SRet:
                 retval = mark_julia_slot(result, astrt, NULL, tbaa_stack);
                 break;
-            case jl_returninfo_t::Union:
-                retval = mark_julia_slot(ctx.builder.CreateExtractValue(call, 0),
+            case jl_returninfo_t::Union: {
+                Value *box = ctx.builder.CreateExtractValue(call, 0);
+                Value *tindex = ctx.builder.CreateExtractValue(call, 1);
+                Value *derived = ctx.builder.CreateSelect(
+                    ctx.builder.CreateICmpEQ(
+                            ctx.builder.CreateAnd(tindex, ConstantInt::get(T_int8, 0x80)),
+                            ConstantInt::get(T_int8, 0)),
+                    decay_derived(ctx.builder.CreateBitCast(result, T_pjlvalue)),
+                    decay_derived(box));
+                retval = mark_julia_slot(derived,
                                          astrt,
-                                         ctx.builder.CreateExtractValue(call, 1),
+                                         tindex,
                                          tbaa_stack);
-                // note that the value may not be rooted here (on the return path)
-                // XXX: should have a root if we need to emit a typeassert abort
+                retval.Vboxed = box;
                 break;
+            }
             case jl_returninfo_t::Ghosts:
                 retval = mark_julia_slot(NULL, astrt, call, tbaa_stack);
                 break;
@@ -7451,7 +7460,9 @@ extern "C" void jl_init_llvm(void)
 #ifdef DISABLE_OPT
         CodeGenOpt::None;
 #else
-        (jl_options.opt_level == 0 ? CodeGenOpt::None : CodeGenOpt::Aggressive);
+        (jl_options.opt_level < 2 ? CodeGenOpt::None :
+         jl_options.opt_level == 2 ? CodeGenOpt::Default :
+         CodeGenOpt::Aggressive);
 #endif
     jl_TargetMachine = TheTarget->createTargetMachine(
             TheTriple.getTriple(), TheCPU, FeaturesStr,

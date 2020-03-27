@@ -649,7 +649,7 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
         for k = 1:mA
             aoffs = (k-1)*Astride
             if mB == 0
-                s = zero(R)
+                s = false
             else
                 s = zero(A[aoffs + 1]*B[1] + A[aoffs + 1]*B[1])
             end
@@ -662,7 +662,7 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
         for k = 1:mA
             aoffs = (k-1)*Astride
             if mB == 0
-                s = zero(R)
+                s = false
             else
                 s = zero(A[aoffs + 1]*B[1] + A[aoffs + 1]*B[1])
             end
@@ -676,14 +676,14 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
             if !iszero(_add.beta)
                 C[i] *= _add.beta
             elseif mB == 0
-                C[i] = zero(R)
+                C[i] = false
             else
                 C[i] = zero(A[i]*B[1] + A[i]*B[1])
             end
         end
         for k = 1:mB
             aoffs = (k-1)*Astride
-            b = _add(B[k], 0)
+            b = _add(B[k], false)
             for i = 1:mA
                 C[i] += A[aoffs + i] * b
             end

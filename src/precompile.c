@@ -376,8 +376,6 @@ void *jl_precompile(int all)
     jl_method_instance_t *mi = NULL;
     JL_GC_PUSH3(&m, &m2, &mi);
     jl_foreach_reachable_mtable(precompile_enq_all_specializations_, m);
-    // TODO: Try for a stable ordering to make inference problems more reproducible (#29923)
-    //jl_sort_types((jl_value_t**)jl_array_data(m), jl_array_len(m));
     m2 = jl_alloc_vec_any(0);
     for (size_t i = 0; i < jl_array_len(m); i++) {
         mi = (jl_method_instance_t*)jl_array_ptr_ref(m, i);

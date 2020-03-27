@@ -203,7 +203,7 @@ static DIType *_julia_type_to_di(jl_codegen_params_t *ctx, jl_value_t *jt, DIBui
     jl_datatype_t *jdt = (jl_datatype_t*)jt;
     if (isboxed || !jl_is_datatype(jt) || !jdt->isconcretetype)
         return jl_pvalue_dillvmt;
-    assert(jdt->uid && jdt->layout);
+    assert(jdt->layout);
     DIType* _ditype = NULL;
     DIType* &ditype = (ctx ? ctx->ditypes[jdt] : _ditype);
     if (ditype)
@@ -227,7 +227,7 @@ static DIType *_julia_type_to_di(jl_codegen_params_t *ctx, jl_value_t *jt, DIBui
         }
         DINodeArray ElemArray = dbuilder->getOrCreateArray(Elements);
         std::stringstream unique_name;
-        unique_name << jdt->uid;
+        unique_name << (uintptr_t)jdt;
         ditype = dbuilder->createStructType(
                 NULL,                       // Scope
                 tname,                      // Name
@@ -733,8 +733,10 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
         else if (isarray && !type_is_ghost(lasttype)) {
             if (isTuple && isvector && jl_special_vector_alignment(ntypes, jlasttype) != 0)
                 struct_decl = VectorType::get(lasttype, ntypes);
-            else
+            else if (isTuple || !llvmcall)
                 struct_decl = ArrayType::get(lasttype, ntypes);
+            else
+                struct_decl = StructType::get(jl_LLVMContext, latypes);
         }
         else {
 #if 0 // stress-test code that tries to assume julia-index == llvm-index

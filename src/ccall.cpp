@@ -881,7 +881,6 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     }
     if (at == NULL)
         at = try_eval(ctx, args[3], "error statically evaluating llvmcall argument tuple");
-    int i = 1;
     if (jl_is_tuple(ir)) {
         // if the IR is a tuple, we expect (declarations, ir)
         if (jl_nfields(ir) != 2)
@@ -940,7 +939,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         std::string ir_name;
         while (true) {
             std::stringstream name;
-            name << (ctx.f->getName().str()) << "u" << i++;
+            name << (ctx.f->getName().str()) << "u" << globalUnique++;
             ir_name = name.str();
             if (jl_Module->getFunction(ir_name) == NULL)
                 break;
@@ -1605,6 +1604,17 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         Value *ptid = ctx.builder.CreateGEP(ptls_i16, ConstantInt::get(T_size, tid_offset / 2));
         return mark_or_box_ccall_result(ctx,
             tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(ptid)),
+            retboxed, rt, unionall, static_rt);
+    }
+    else if (is_libjulia_func(jl_get_current_task)) {
+        assert(lrt == T_prjlvalue);
+        assert(!isVa && !llvmcall && nccallargs == 0);
+        JL_GC_POP();
+        Value *ptls_pv = emit_bitcast(ctx, ctx.ptlsStates, T_pprjlvalue);
+        const int ct_offset = offsetof(jl_tls_states_t, current_task);
+        Value *pct = ctx.builder.CreateGEP(ptls_pv, ConstantInt::get(T_size, ct_offset / sizeof(void*)));
+        return mark_or_box_ccall_result(ctx,
+            tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(pct)),
             retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_sigatomic_begin)) {

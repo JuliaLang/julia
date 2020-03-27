@@ -60,11 +60,6 @@ similar(A::Union{Adjoint{Ti,Tv}, Transpose{Ti,Tv}}, ::Type{T}) where {T,Ti,Tv<:U
     UnitLowerTriangular(similar(parent(parent(A)), T))
 
 
-LowerTriangular(U::UpperTriangular) = throw(ArgumentError(
-    "cannot create a LowerTriangular matrix from an UpperTriangular input"))
-UpperTriangular(U::LowerTriangular) = throw(ArgumentError(
-    "cannot create an UpperTriangular matrix from a LowerTriangular input"))
-
 """
     LowerTriangular(A::AbstractMatrix)
 
@@ -288,10 +283,26 @@ function Base.replace_in_print_matrix(A::Union{LowerTriangular,UnitLowerTriangul
     return i >= j ? s : Base.replace_with_centered_mark(s)
 end
 
-istril(A::LowerTriangular) = true
-istril(A::UnitLowerTriangular) = true
-istriu(A::UpperTriangular) = true
-istriu(A::UnitUpperTriangular) = true
+function istril(A::Union{LowerTriangular,UnitLowerTriangular}, k::Integer=0)
+    k >= 0 && return true
+    m, n = size(A)
+    for j in max(1, k + 2):n
+        for i in 1:min(j - k - 1, m)
+            iszero(A[i, j]) || return false
+        end
+    end
+    return true
+end
+function istriu(A::Union{UpperTriangular,UnitUpperTriangular}, k::Integer=0)
+    k <= 0 && return true
+    m, n = size(A)
+    for j in 1:min(n, m + k - 1)
+        for i in max(1, j - k + 1):m
+            iszero(A[i, j]) || return false
+        end
+    end
+    return true
+end
 istril(A::Adjoint) = istriu(A.parent)
 istril(A::Transpose) = istriu(A.parent)
 istriu(A::Adjoint) = istril(A.parent)
@@ -2169,7 +2180,7 @@ end
 #     34(3), (2013) 1341–1360.
 function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
     if abs(p) >= 1
-        ArgumentError("p must be a real number in (-1,1), got $p")
+        throw(ArgumentError("p must be a real number in (-1,1), got $p"))
     end
 
     normA0 = opnorm(A0, 1)
@@ -2228,7 +2239,7 @@ function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
     rmul!(S, normA0^p)
     return S
 end
-powm(A::LowerTriangular, p::Real) = copy(transpose(powm(copy(transpose(A)), p::Real)))
+powm(A::LowerTriangular, p::Real) = copy(transpose(powm!(copy(transpose(A)), p::Real)))
 
 # Complex matrix logarithm for the upper triangular factor, see:
 #   Al-Mohy and Higham, "Improved inverse  scaling and squaring algorithms for

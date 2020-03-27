@@ -447,7 +447,7 @@ typedef struct _jl_datatype_t {
     const jl_datatype_layout_t *layout;
     int32_t size; // TODO: move to _jl_datatype_layout_t
     int32_t ninitialized;
-    uint32_t uid;
+    uint32_t hash;
     uint8_t abstract;
     uint8_t mutabl;
     // memoized properties
@@ -520,17 +520,12 @@ typedef struct _jl_typemap_entry_t {
 
 // one level in a TypeMap tree
 // indexed by key if it is a sublevel in an array
-struct jl_ordereddict_t {
-    jl_array_t *indices; // Array{Int{8,16,32}}
-    jl_array_t *values; // Array{jl_typemap_t*}
-};
 typedef struct _jl_typemap_level_t {
     JL_DATA_TYPE
-    struct jl_ordereddict_t arg1;
-    struct jl_ordereddict_t targ;
+    jl_array_t *arg1;
+    jl_array_t *targ;
     jl_typemap_entry_t *linear; // jl_typemap_t * (but no more levels)
     jl_typemap_t *any; // type at offs is Any
-    jl_value_t *key; // [nullable]
 } jl_typemap_level_t;
 
 // contains the TypeMap for one Type
@@ -936,8 +931,8 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x) JL_NOTSAFEPO
 #define jl_gf_name(f)   (jl_gf_mtable(f)->name)
 
 // struct type info
-JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT);
-#define jl_get_fieldtypes(st) ((st)->types ? (st)->types : jl_compute_fieldtypes((st)))
+JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack);
+#define jl_get_fieldtypes(st) ((st)->types ? (st)->types : jl_compute_fieldtypes((st), NULL))
 STATIC_INLINE jl_svec_t *jl_field_names(jl_datatype_t *st) JL_NOTSAFEPOINT
 {
     jl_svec_t *names = st->names;
@@ -1222,12 +1217,6 @@ STATIC_INLINE int jl_is_concrete_type(jl_value_t *v) JL_NOTSAFEPOINT
     return jl_is_datatype(v) && ((jl_datatype_t*)v)->isconcretetype;
 }
 
-STATIC_INLINE jl_value_t *jl_typemap_entry_sig(jl_typemap_t *tmap JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
-{
-    assert(jl_typeof(tmap) == (jl_value_t*)jl_typemap_entry_type);
-    return (jl_value_t*)((jl_typemap_entry_t*)tmap)->sig;
-}
-
 JL_DLLEXPORT int jl_isa_compileable_sig(jl_tupletype_t *type, jl_method_t *definition);
 
 // type constructors
@@ -1501,8 +1490,8 @@ int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT;
 
 // eq hash tables
 JL_DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h, jl_value_t *key, jl_value_t *val, int *inserted);
-JL_DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, jl_value_t *key,
-                                        jl_value_t *deflt);
+JL_DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT;
+jl_value_t **jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT;
 
 // system information
 JL_DLLEXPORT int jl_errno(void);

@@ -115,7 +115,7 @@
                                    (cons (decl-var (cadar binds)) vars)))
                             ((eventually-call? (cadar binds))
                              ;; f()=c
-                             (let ((asgn (cadr (julia-expand0 (car binds)))))
+                             (let ((asgn (cadr (julia-expand0 (car binds) 'none 0))))
                                (loop (cdr binds)
                                      (cons (cadr asgn) vars))))
                             ((and (pair? (cadar binds))
@@ -360,7 +360,11 @@
            ((parameters)
             (cons 'parameters
                   (map (lambda (x)
-                         (resolve-expansion-vars- x env m parent-scope #f))
+                         ;; `x` by itself after ; means `x=x`
+                         (let ((x (if (and (not inarg) (symbol? x))
+                                      `(kw ,x ,x)
+                                      x)))
+                           (resolve-expansion-vars- x env m parent-scope #f)))
                        (cdr e))))
 
            ((= function)

@@ -377,6 +377,7 @@ allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
 allunique(r::StepRange{T,S}) where {T,S} = (step(r) != zero(S)) || (length(r) <= 1)
+allunique(r::StepRangeLen{T,R,S}) where {T,R,S} = (step(r) != zero(S)) || (length(r) <= 1)
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 

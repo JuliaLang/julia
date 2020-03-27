@@ -1111,17 +1111,22 @@ int ios_getutf8(ios_t *s, uint32_t *pwc)
             s->u_colno += utf8proc_charwidth(*pwc);
         return 1;
     }
-    sz = u8_seqlen(&c0);
     if (ios_ungetc(c, s) == IOS_EOF)
         return IOS_EOF;
+    sz = u8_seqlen(&c0);
+    if (!isutf(c0) || sz > 4)
+        return 0;
     if (ios_readprep(s, sz) < sz)
         // NOTE: this can return EOF even if some bytes are available
         return IOS_EOF;
-    size_t i = s->bpos;
-    *pwc = u8_nextchar(s->buf, &i);
-    s->u_colno += utf8proc_charwidth(*pwc);
-    ios_read(s, buf, sz);
-    return 1;
+    int valid = u8_isvalid(&s->buf[s->bpos], sz);
+    if (valid) {
+        size_t i = s->bpos;
+        *pwc = u8_nextchar(s->buf, &i);
+        s->u_colno += utf8proc_charwidth(*pwc);
+        ios_read(s, buf, sz);
+    }
+    return valid;
 }
 
 int ios_peekutf8(ios_t *s, uint32_t *pwc)
@@ -1139,11 +1144,16 @@ int ios_peekutf8(ios_t *s, uint32_t *pwc)
         return 1;
     }
     sz = u8_seqlen(&c0);
+    if (!isutf(c0) || sz > 4)
+        return 0;
     if (ios_readprep(s, sz) < sz)
         return IOS_EOF;
-    size_t i = s->bpos;
-    *pwc = u8_nextchar(s->buf, &i);
-    return 1;
+    int valid = u8_isvalid(&s->buf[s->bpos], sz);
+    if (valid) {
+        size_t i = s->bpos;
+        *pwc = u8_nextchar(s->buf, &i);
+    }
+    return valid;
 }
 
 int ios_pututf8(ios_t *s, uint32_t wc)

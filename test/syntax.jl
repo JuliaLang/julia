@@ -1459,7 +1459,10 @@ end
 @test c27964(8) == (8, 2)
 
 # issue #26739
-@test_throws ErrorException("syntax: invalid syntax \"sin.[1]\"") Core.eval(@__MODULE__, :(sin.[1]))
+let exc = try Core.eval(@__MODULE__, :(sin.[1])) catch exc ; exc end
+    @test exc isa ErrorException
+    @test startswith(exc.msg, "syntax: invalid syntax \"sin.[1]\"")
+end
 
 # issue #26873
 f26873 = 0
@@ -1991,6 +1994,9 @@ end
 @test i0xb23hG() == 2
 @test i0xb23hG(x=10) == 10
 
+accepts__kwarg(;z1) = z1
+@test (@id_for_kwarg let z1 = 41; accepts__kwarg(; z1); end) == 41
+
 @test @eval let
     (z,)->begin
         $(Expr(:inbounds, true))
@@ -2181,3 +2187,37 @@ end
         @test ex == err
     end
 end
+
+# Syntax desugaring pass errors contain line numbers
+@test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(101, :some_file), :(f(x,x)=1))) ==
+    Expr(:error, "function argument names not unique around some_file:101")
+
+# Ensure file names don't leak between `eval`s
+eval(LineNumberNode(11, :incorrect_file))
+let exc = try eval(:(f(x,x)=1)) catch e ; e ; end
+    @test !occursin("incorrect_file", exc.msg)
+end
+
+# issue #34967
+@test_throws LoadError("string", 2, ErrorException("syntax: invalid UTF-8 sequence")) include_string(@__MODULE__,
+                                      "x34967 = 1\n# Halloa\xf5b\nx34967 = 2")
+@test x34967 == 1
+@test_throws LoadError("string", 1, ErrorException("syntax: invalid UTF-8 sequence")) include_string(@__MODULE__,
+                                      "x\xf5 = 3\n# Halloa\xf5b\nx34967 = 4")
+@test_throws LoadError("string", 3, ErrorException("syntax: invalid UTF-8 sequence")) include_string(@__MODULE__,
+                                      """
+                                      # line 1
+                                      # line 2
+                                      # Hello\xf5b
+                                      x34967 = 6
+                                      """)
+
+@test Meta.parse("aa\u200b_", raise=false) ==
+    Expr(:error, "invisible character \\u200b near column 3")
+@test Meta.parse("aa\UE0080", raise=false) ==
+    Expr(:error, "invalid character \"\Ue0080\" near column 3")
+
+# issue #35201
+h35201(x; k=1) = (x, k)
+f35201(c) = h35201((;c...), k=true)
+@test f35201(Dict(:a=>1,:b=>3)) === ((a=1,b=3), true)

@@ -3,7 +3,13 @@
 using REPL.REPLCompletions
 using Test
 using Random
-
+using REPL
+    @testset "Check symbols previously not shown by REPL.doc_completions()" begin
+    symbols = ["?","=","[]","[","]","{}","{","}",";","","'","&&","||","julia","Julia","new","@var_str"]
+        for i in symbols
+            @test REPL.doc_completions(i)[1]==i
+        end
+    end
 let ex = quote
     module CompletionFoo
         using Random

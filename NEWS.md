@@ -7,6 +7,19 @@ New language features
 * `⨟` is now parsed as a binary operator with times precedence. It can be entered in the REPL
   with `\bbsemi` followed by <kbd>TAB</kbd> ([#34722]).
 
+* `±` and `∓` are now unary operators as well, like `+` or `-`. Attention has to be paid in
+  macros and matrix constructors, which are whitespace sensitive, because expressions like
+  `[a ±b]` now get parsed as `[a ±(b)]` instead of `[±(a, b)]`. ([#34200])
+
+* Passing an identifier `x` by itself as a keyword argument or named tuple element
+  is equivalent to `x=x`, implicitly using the name of the variable as the keyword
+  or named tuple field name.
+  Similarly, passing an `a.b` expression uses `b` as the keyword or field name ([#29333]).
+
+* Packages can now provide custom hints to help users resolve errors by using the
+  `register_error_hint` function. Packages that define custom exception types
+  can support hints by calling `show_error_hints` from their `showerror` method. ([#35094])
+
 Language changes
 ----------------
 
@@ -36,6 +49,19 @@ Language changes
 
 * The syntax `(;)` (which was deprecated in v1.4) now creates an empty named tuple ([#30115]).
 
+* `@inline` macro can now be applied to short-form anonymous functions ([#34953]).
+
+* In triple-quoted string literals, whitespace stripping is now done before processing
+  escape sequences instead of after. For example, the syntax
+  ```
+  """
+    a\n b"""
+  ```
+  used to yield the string " a\nb", since the single space before `b` set the indent level.
+  Now the result is "a\n b", since the space before `b` is no longer considered to occur
+  at the start of a line. The old behavior is considered a bug ([#35001]).
+
+
 Multi-threading changes
 -----------------------
 
@@ -57,6 +83,7 @@ New library functions
   expressions before they are evaluated ([#34595]).
 * New function `bitreverse` for reversing the order of bits in a fixed-width integer ([#34791]).
 * New function `bitrotate(x, k)` for rotating the bits in a fixed-width integer ([#33937]).
+* One argument methods `startswith(x)` and `endswith(x)` have been added, returning partially-applied versions of the functions, similar to existing methods like `isequal(x)` ([#33193]).
 
 New library features
 --------------------
@@ -68,6 +95,7 @@ New library features
 * `accumulate`, `cumsum`, and `cumprod` now support `Tuple` ([#34654]).
 * `x::Signed % Unsigned` and `x::Unsigned % Signed` are supported for integer bitstypes.
 * `signed(unsigned_type)` is supported for integer bitstypes, `unsigned(signed_type)` has been supported.
+* `accumulate`, `cumsum`, and `cumprod` now support `Tuple` ([#34654]) and arbitrary iterators ([#34656]).
 * In `splice!` with no replacement, values to be removed can now be specified with an
   arbitrary iterable (instead of a `UnitRange`) ([#34524]).
 

@@ -29,6 +29,12 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> cholesky(t't).U |> t -> uplo1 == :U ? t : copy(t')))
         @test t1(A1) === A1
         @test t1{elty1}(A1) === A1
+        # test the ctor works for AbstractMatrix
+        symm = Symmetric(rand(Int8, n, n))
+        t1s = t1{elty1}(symm)
+        @test typeof(t1s) == t1{elty1, Symmetric{elty1, Matrix{elty1}}}
+        t1t = t1{elty1}(t1(rand(Int8, n, n)))
+        @test typeof(t1t) == t1{elty1, Matrix{elty1}}
 
         debug && println("elty1: $elty1, A1: $t1")
 
@@ -571,9 +577,8 @@ let n = 5
     @test_throws DimensionMismatch rdiv!(A, transpose(UnitUpperTriangular(B)))
 end
 
-# Test that UpperTriangular(LowerTriangular) throws. See #16201
-@test_throws ArgumentError LowerTriangular(UpperTriangular(randn(3,3)))
-@test_throws ArgumentError UpperTriangular(LowerTriangular(randn(3,3)))
+@test isdiag(LowerTriangular(UpperTriangular(randn(3,3))))
+@test isdiag(UpperTriangular(LowerTriangular(randn(3,3))))
 
 # Issue 16196
 @test UpperTriangular(Matrix(1.0I, 3, 3)) \ view(fill(1., 3), [1,2,3]) == fill(1., 3)
@@ -634,6 +639,16 @@ end
         @test transpose(b1) * A1' ≈ transpose(b1) * Matrix(A1')
         @test transpose(b4) * A4' ≈ transpose(b4) * Matrix(A4')
     end
+end
+
+@testset "Error condition for powm" begin
+    A = UpperTriangular(rand(ComplexF64, 10, 10))
+    @test_throws ArgumentError LinearAlgebra.powm!(A, 2.2)
+    A = LowerTriangular(rand(ComplexF64, 10, 10))
+    At = copy(transpose(A))
+    p = rand()
+    @test LinearAlgebra.powm(A, p) == transpose(LinearAlgebra.powm!(At, p))
+    @test_throws ArgumentError LinearAlgebra.powm(A, 2.2)
 end
 
 end # module TestTriangular

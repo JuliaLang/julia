@@ -383,6 +383,14 @@ const envs = Dict{String,Any}()
 
 append!(empty!(DEPOT_PATH), depots)
 
+@testset "load code uniqueness" begin
+    @show UUIDS
+    @show depots
+    @test allunique(UUIDS)
+    @test allunique(depots)
+    @test allunique(DEPOT_PATH)
+end
+
 for (flat, root, roots, graph) in graphs
     if flat
         all(KIND[i] == 2 for i in values(roots)) || continue

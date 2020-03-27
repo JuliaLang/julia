@@ -11,5 +11,4 @@ if !success(pipeline(cmd; stdout=stdout, stderr=stderr)) && ccall(:jl_running_on
     error("Distributed test failed, cmd : $cmd")
 end
 
-include("macros.jl")
 include("managers.jl")

@@ -127,8 +127,8 @@ iszero(D::Diagonal) = all(iszero, D.diag)
 isone(D::Diagonal) = all(isone, D.diag)
 isdiag(D::Diagonal) = all(isdiag, D.diag)
 isdiag(D::Diagonal{<:Number}) = true
-istriu(D::Diagonal) = true
-istril(D::Diagonal) = true
+istriu(D::Diagonal, k::Integer=0) = k <= 0 || iszero(D.diag) ? true : false
+istril(D::Diagonal, k::Integer=0) = k >= 0 || iszero(D.diag) ? true : false
 function triu!(D::Diagonal,k::Integer=0)
     n = size(D,1)
     if !(-n + 1 <= k <= n + 1)
@@ -680,6 +680,19 @@ function getproperty(C::Cholesky{<:Any,<:Diagonal}, d::Symbol)
 end
 
 Base._sum(A::Diagonal, ::Colon) = sum(A.diag)
+function Base._sum(A::Diagonal, dims::Integer)
+    res = Base.reducedim_initarray(A, dims, zero(eltype(A)))
+    if dims <= 2
+        for i = 1:length(A.diag)
+            @inbounds res[i] = A.diag[i]
+        end
+    else
+        for i = 1:length(A.diag)
+            @inbounds res[i,i] = A.diag[i]
+        end
+    end
+    res
+end
 
 function logabsdet(A::Diagonal)
      mapreduce(x -> (log(abs(x)), sign(x)), ((d1, s1), (d2, s2)) -> (d1 + d2, s1 * s2),
