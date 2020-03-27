@@ -182,13 +182,7 @@ endif
 
 ifneq ($(LLVM_VER),svn)
 ifeq (,$(findstring rc,$(LLVM_VER)))
-ifeq ($(shell [ x"$(LLVM_VER)" = x"8.0.1" ]; echo $$?),0)
 LLVM_SRC_URL := https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVM_VER)
-else ifeq ($(shell [ x"$(LLVM_VER)" = x"9.0.1" ]; echo $$?),0)
-LLVM_SRC_URL := https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVM_VER)
-else
-LLVM_SRC_URL := http://releases.llvm.org/$(LLVM_VER)
-endif
 else
 LLVM_VER_SPLIT := $(subst rc, ,$(LLVM_VER))
 LLVM_SRC_URL := https://prereleases.llvm.org/$(word 1,$(LLVM_VER_SPLIT))/rc$(word 2,$(LLVM_VER_SPLIT))
@@ -415,6 +409,18 @@ $(eval $(call LLVM_PATCH,llvm-8.0-D71495-vectorize-freduce)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
 endif # LLVM_VER 9.0
 
+ifeq ($(LLVM_VER_SHORT),10.0)
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
+$(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
+$(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX -- warning: this fails check-llvm-codegen-nvptx
+$(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
+$(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
+$(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
+$(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
+$(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
+$(eval $(call LLVM_PATCH,llvm7-revert-D44485))
+$(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
+endif # LLVM_VER 10.0
 
 # Add a JL prefix to the version map. DO NOT REMOVE
 ifneq ($(LLVM_VER), svn)
