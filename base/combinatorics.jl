@@ -286,7 +286,7 @@ function invperm(P::Tuple)
     end
 end
 
-invperm(P::Any16) = Tuple(invperm(collect(P)))
+invperm(P::Any16) = Tuple(invperm(collect(P)))::typeof(P)
 
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
 """
