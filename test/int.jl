@@ -267,6 +267,17 @@ end
     @test typeof(rand(U(0):U(127)) % T) === T
 end
 
+@testset "Signed, Unsigned, signed, unsigned for bitstypes" begin
+    for (S,U) in zip(Base.BitSigned_types, Base.BitUnsigned_types)
+        @test signed(U) === S
+        @test unsigned(S) === U
+        @test typemin(S) % Signed === typemin(S)
+        @test typemax(U) % Unsigned === typemax(U)
+        @test -one(S) % Unsigned % Signed === -one(S)
+        @test ~one(U) % Signed % Unsigned === ~one(U)
+    end
+end
+
 @testset "issue #15489" begin
     @test 0x00007ffea27edaa0 + (-40) === (-40) + 0x00007ffea27edaa0 === 0x00007ffea27eda78
     @test UInt64(1) * Int64(-1) === typemax(UInt64)
