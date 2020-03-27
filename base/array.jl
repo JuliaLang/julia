@@ -2463,6 +2463,9 @@ Return `nothing` if there is no such element.
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
+A faster method is used for `findfirst(isequal(x), A)` when
+`RangeStepStyle(A) === RangeStepRegular()`.
+
 # Examples
 ```jldoctest
 julia> A = [1, 4, 2, 2]
@@ -2513,6 +2516,9 @@ function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::Abst
 end
 
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
+    if RangeStepStyle(r) !== RangeStepRegular()
+        return invoke(findfirst, Tuple{Function,Any}, p, r)
+    end
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
     d = p.x - first(r)
