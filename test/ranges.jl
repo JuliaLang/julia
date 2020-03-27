@@ -301,6 +301,12 @@ end
         end
     end
     @testset "findfirst" begin
+        @test findfirst(isequal(3), Base.OneTo(10)) == 3
+        @test findfirst(==(0), Base.OneTo(10)) == nothing
+        @test findfirst(==(11), Base.OneTo(10)) == nothing
+        @test findfirst(==(4), Int16(3):Int16(7)) === Int(2)
+        @test findfirst(==(2), Int16(3):Int16(7)) == nothing
+        @test findfirst(isequal(8), 3:7) == nothing
         @test findfirst(isequal(7), 1:2:10) == 4
         @test findfirst(==(7), 1:2:10) == 4
         @test findfirst(==(10), 1:2:10) == nothing
