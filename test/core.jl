@@ -7191,3 +7191,10 @@ end
 @test_throws ErrorException f34482()
 @test_throws TypeError g34482()
 @test_throws TypeError h34482()
+
+struct NFANode34126
+    edges::Vector{Tuple{Nothing,NFANode34126}}
+    NFANode34126() = new(Tuple{Nothing,NFANode34126}[])
+end
+
+@test repr(NFANode34126()) == "$NFANode34126(Tuple{Nothing,$NFANode34126}[])"
