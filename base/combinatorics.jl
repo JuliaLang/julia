@@ -81,8 +81,8 @@ isperm(p::Tuple{}) = true
 isperm(p::Tuple{Int}) = p[1] == 1
 isperm(p::Tuple{Int,Int}) = ((p[1] == 1) & (p[2] == 2)) | ((p[1] == 2) & (p[2] == 1))
 
-function isperm(P::NTuple{N,Integer}) where {N}
-    valn = Val(N)
+function isperm(P::Tuple)
+    valn = Val(length(P))
     _foldoneto(true, valn) do b,i
         s = _foldoneto(false, valn) do s, j
             s || P[j]==i
@@ -273,8 +273,8 @@ function invperm(p::Union{Tuple{},Tuple{Int},Tuple{Int,Int}})
     p  # in dimensions 0-2, every permutation is its own inverse
 end
 
-function invperm(P::NTuple{N,Integer}) where {N}
-    valn = Val(N)
+function invperm(P::Tuple)
+    valn = Val(length(P))
     ntuple(valn) do i
         s = _foldoneto(nothing, valn) do s, j
             s !== nothing && return s
