@@ -267,20 +267,12 @@ end
     @test typeof(rand(U(0):U(127)) % T) === T
 end
 
-@testset "signed(<:Unsigned), unsigned(<:Signed) for bitstypes" begin
+@testset "Signed, Unsigned, signed, unsigned for bitstypes" begin
     for (S,U) in zip(Base.BitSigned_types, Base.BitUnsigned_types)
         @test signed(U) === S
         @test unsigned(S) === U
-    end
-end
-@testset "x::[Un]Signed % [Un]Signed returns x" begin
-    for (S,U) in zip(Base.BitSigned_types, Base.BitUnsigned_types)
         @test typemin(S) % Signed === typemin(S)
         @test typemax(U) % Unsigned === typemax(U)
-    end
-end
-@testset "x::[Un]Signed % Un[Signed] % [Un]Signed returns x for bitstypes" begin
-    for (S,U) in zip(Base.BitSigned_types, Base.BitUnsigned_types)
         @test -one(S) % Unsigned % Signed === -one(S)
         @test ~one(U) % Signed % Unsigned === ~one(U)
     end
