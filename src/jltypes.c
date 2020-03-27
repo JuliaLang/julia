@@ -1042,6 +1042,8 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
                  (((jl_datatype_t*)p)->name == jl_type_typename && !((jl_datatype_t*)p)->hasfreetypevars));
         }
     }
+    if (dt->name == jl_type_typename)
+        cacheable = 0; // the cache for Type ignores parameter normalization, so it can't be used as a regular hash
     dt->hash = typekey_hash(dt->name, jl_svec_data(dt->parameters), l, cacheable);
 }
 
