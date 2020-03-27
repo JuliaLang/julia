@@ -146,4 +146,13 @@ end
     @test L .+ UnitL .+ UnitU .+ U .+ D == L + UnitL + UnitU + U + D
     @test L .+ U .+ D .+ D .+ D .+ D == L + U + D + D + D + D
 end
+@testset "Broadcast Returned Types" begin
+    # Issue 35245
+    Bu = Bidiagonal(ones(4), ones(3), :U)
+    Bl = Bidiagonal(ones(4), ones(3), :L)
+    @test typeof(Bu .+ Bl) == Tridiagonal{Float64,Array{Float64,1}}
+    @test typeof(Bl .+ Bu) == Tridiagonal{Float64,Array{Float64,1}}
+    @test typeof(Bu .+ Bu) == Bidiagonal{Float64,Array{Float64,1}}
+    @test typeof(Bl .+ Bl) == Bidiagonal{Float64,Array{Float64,1}}
+end
 end
