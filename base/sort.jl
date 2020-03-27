@@ -262,7 +262,11 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
     elseif h < 0 && x <= last(a)
         lastindex(a)
     else
-        fld(floor(Integer, x) - first(a), h) + 1
+        if o isa ForwardOrdering
+            fld(floor(Integer, x) - first(a), h) + 1
+        else
+            fld(ceil(Integer, x) - first(a), h) + 1
+        end
     end
 end
 
@@ -280,7 +284,11 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
     elseif h < 0 && x < last(a)
         lastindex(a) + 1
     else
-        -fld(floor(Integer, -x) + first(a), h) + 1
+        if o isa ForwardOrdering
+            -fld(floor(Integer, -x) + first(a), h) + 1
+        else
+            -fld(ceil(Integer, -x) + first(a), h) + 1
+        end
     end
 end
 

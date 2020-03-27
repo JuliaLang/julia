@@ -177,6 +177,17 @@ end
             end
         end
     end
+    @testset "issue #35272" begin
+        for v0 = (3:-1:1, 3.0:-1.0:1.0), v = (v0, collect(v0))
+            @test searchsorted(v, 3, rev=true) == 1:1
+            @test searchsorted(v, 3.0, rev=true) == 1:1
+            @test searchsorted(v, 2.5, rev=true) == 2:1
+            @test searchsorted(v, 2, rev=true) == 2:2
+            @test searchsorted(v, 1.2, rev=true) == 3:2
+            @test searchsorted(v, 1, rev=true) == 3:3
+            @test searchsorted(v, 0.1, rev=true) == 4:3
+        end
+    end
 end
 # exercise the codepath in searchsorted* methods for ranges that check for zero step range
 struct ConstantRange{T} <: AbstractRange{T}
