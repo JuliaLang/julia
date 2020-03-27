@@ -200,7 +200,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Julia's `for`, `if`, `while`, etc. blocks are terminated by the `end` keyword. Indentation level
     is not significant as it is in Python. Unlike Python, Julia has no `pass` keyword.
   * Strings are denoted by double quotation marks (`"text"`) in Julia (with three double quotation marks for multi-line strings), whereas in Python they can be denoted either by single (`'text'`) or double quotation marks (`"text"`). Single quotation marks are used for characters in Julia (`'c'`).
-  * String concatination is done with `*` in Julia, not `+` like in Python. Analogously, string repetition is done with `^`, not `*`.
+  * String concatenation is done with `*` in Julia, not `+` like in Python. Analogously, string repetition is done with `^`, not `*`.
   * Python Lists correspond to Julia Arrays of type Any (flexible, but slow). Numpy Arrays correspond to typed Julia Arrays.
   * In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
   * Julia's slice indexing includes the last element, unlike in Python. `a[2:3]` in Julia is `a[1:3]`
