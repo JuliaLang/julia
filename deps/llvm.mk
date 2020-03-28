@@ -398,6 +398,7 @@ $(eval $(call LLVM_PATCH,llvm-8.0-D59389-refactor-wmma)) # remove for 9.0
 $(eval $(call LLVM_PATCH,llvm-8.0-D59393-mma-ptx63-fix)) # remove for 9.0
 $(eval $(call LLVM_PATCH,llvm-8.0-D66657-codegen-degenerate)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm-8.0-D71495-vectorize-freduce)) # remove for 10.0
+# $(eval $(call LLVM_PATCH,llvm-8.0-D65174-limit-merge-stores)) # remove for 10.0
 endif # LLVM_VER 8.0
 
 ifeq ($(LLVM_VER_SHORT),9.0)
@@ -413,6 +414,7 @@ $(eval $(call LLVM_PATCH,llvm7-revert-D44485))
 $(eval $(call LLVM_PATCH,llvm-8.0-D66657-codegen-degenerate)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm-8.0-D71495-vectorize-freduce)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
+$(eval $(call LLVM_PATCH,llvm-9.0-D65174-limit-merge-stores)) # remove for 10.0
 endif # LLVM_VER 9.0
 
 
@@ -494,11 +496,11 @@ update-llvm:
 		git pull --ff-only
 endif
 else # USE_BINARYBUILDER_LLVM
-LLVM_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LLVM_jll.jl/releases/download/LLVM-v$(LLVM_VER)+$(LLVM_BB_REL)
+LLVM_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LLVM_full_jll.jl/releases/download/LLVM_full-v$(LLVM_VER)+$(LLVM_BB_REL)
 ifneq ($(BINARYBUILDER_LLVM_ASSERTS), 1)
-LLVM_BB_NAME := LLVM.v$(LLVM_VER)
+LLVM_BB_NAME := LLVM_full.v$(LLVM_VER)
 else
-LLVM_BB_NAME := LLVM.asserts.v$(LLVM_VER)
+LLVM_BB_NAME := LLVM_full.asserts.v$(LLVM_VER)
 endif
 
 $(eval $(call bb-install,llvm,LLVM,false,true))
