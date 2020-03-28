@@ -2866,7 +2866,7 @@ end
     r = 'a':'z'
     r2 = 'α':2:'ω'
     r3 = StepRangeLen('a',3,10)
-    @test Base.RangeStepStyle(r) === RangeStepRegular()
-    @test Base.RangeStepStyle(r2) === RangeStepRegular()
-    @test Base.RangeStepStyle(r3) === RangeStepRegular()
+    @test Base.RangeStepStyle(r) === Base.RangeStepRegular()
+    @test Base.RangeStepStyle(r2) === Base.RangeStepRegular()
+    @test Base.RangeStepStyle(r3) === Base.RangeStepRegular()
 end
