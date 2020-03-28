@@ -258,6 +258,22 @@ rand(rng::AbstractRNG=default_rng(), ::Type{X}=Float64) where {X} = rand(rng, Sa
 rand(X)                   = rand(default_rng(), X)
 rand(::Type{X}) where {X} = rand(default_rng(), X)
 
+
+struct IterableRNG{X,R}
+    rng :: AbstractRNG
+end
+
+Base.iterate(ibl::IterableRNG{X,R}, itr=ibl.rng) where {X,R} = (rand(itr,R), itr)
+Base.IteratorSize(::Type{<:IterableRNG{X,R}}) where {X,R} = Base.SizeUnknown()
+Base.IteratorEltype(::Type{IterableRNG{X,R}}) where {X,R} = Base.HasEltype()
+Base.eltype(::Type{IterableRNG{X,R}}) where {X,R} = X
+
+eachrand(rng::AbstractRNG=default_rng(), ::Type{X}=Float64) where {X} = IterableRNG{X,X}(rng)
+eachrand(::Type{X}) where {X} = IterableRNG{X,X}(default_rng())
+eachrand(rng::AbstractRNG, xs::AbstractRange{X}) where {X} = IterableRNG{X,xs}(rng)
+eachrand(xs::AbstractRange{X}) where {X} = IterableRNG{X,xs}(default_rng())
+
+
 #### arrays
 
 rand!(A::AbstractArray{T}, X) where {T}             = rand!(default_rng(), A, X)
