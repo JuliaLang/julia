@@ -149,8 +149,8 @@ end
 @testset "Broadcast Returned Types" begin
     # Issue 35245
     N = 3
-    dV = ones(N)
-    ev = ones(N-1)
+    dV = rand(N)
+    ev = rand(N-1)
 
     Bu = Bidiagonal(dV, ev, :U)
     Bl = Bidiagonal(dV, ev, :L)
