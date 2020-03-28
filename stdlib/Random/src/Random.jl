@@ -264,7 +264,7 @@ struct IterableRNG{X,R}
 end
 
 Base.iterate(ibl::IterableRNG{X,R}, itr=ibl.rng) where {X,R} = (rand(itr,R), itr)
-Base.IteratorSize(::Type{<:IterableRNG{X,R}}) where {X,R} = Base.SizeUnknown()
+Base.IteratorSize(::Type{<:IterableRNG{X,R}}) where {X,R} = Base.IsInfinite()
 Base.IteratorEltype(::Type{IterableRNG{X,R}}) where {X,R} = Base.HasEltype()
 Base.eltype(::Type{IterableRNG{X,R}}) where {X,R} = X
 
