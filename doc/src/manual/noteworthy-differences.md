@@ -231,7 +231,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     such as `Int128`, [`BigInt`](@ref) or a floating point type like `Float64`.
   * The imaginary unit `sqrt(-1)` is represented in Julia as `im`, not `j` as in Python.
   * In Julia, the exponentiation operator is `^`, not `**` as in Python.
-  * In Julia uses `nothing` of type `Nothing` to represent null value, whereas Python uses `None` of type `NoneType`.
+  * Julia uses `nothing` of type `Nothing` to represent a null value, whereas Python uses `None` of type `NoneType`.
   * In Julia, the standard operators over a matrix type are matrix operations, whereas, in Python, the standard operators are element-wise operations. When both `A` and `B` are matrices, `A * B` in Julia performs matrix multiplication, not element-wise multiplication as in Python. `A * B` in Julia is equivalent with `A @ B` in Python, whereas `A * B` in Python is equivalent with `A .* B` in Julia.
   * The adjoint operator `'` in Julia returns an adjoint of a vector (a lazy representation of row vector), whereas the transpose operator `.T` over a vector in Python returns the original vector (non-op).
   * Functions in Python have one implementation (no polymorphism), whereas in Julia a function may contain multiple concrete implementations (called *Methods*), selected via multiple dispatch.
