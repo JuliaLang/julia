@@ -778,3 +778,13 @@ end
 @testset "RNGs broadcast as scalars: T" for T in (MersenneTwister, RandomDevice)
     @test length.(rand.(T(), 1:3)) == 1:3
 end
+
+@testset "eachrand" begin
+    s = (mt = MersenneTwister(1234); [rand(mt, 0:255) for _ in 1:3])
+    @test collect(take(eachrand(MersenneTwister(1234), UInt8),3)) == s
+    @test collect(take(eachrand(MersenneTwister(1234), 0:255),3)) == s
+    @test collect(take(eachrand(MersenneTwister(1234), 0:255),3)) == s
+    @test (seed!(1234); collect(take(eachrand(UInt8), 3))) == s
+    @test (seed!(1234); collect(take(eachrand(0:255), 3))) == s
+    @test (seed!(1234); collect(take(eachrand(), 3))) ≈ (seed!(1234); [rand() for _ in 1:3])
+end
