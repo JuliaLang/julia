@@ -240,7 +240,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Python classes can inherit from one or more superclasses. Julia structures may have exactly one abstract supertype. 
   * The Python code structure is defined by directories (Packages) and files (Modules), whereas the logical Julia program structure (Packages and Modules) is independent of the file strucutre (`include` for additional files).
   * Conditional expression in Python `1 if x > 0 else -1` corresponds to the Ternary operator `x > 0 ? 1 : -1` in Julia.
-  * Macros in Julia can do what decorators in Python do, and much more.
+  * In Python, the `@` symbol refers to a decorator, whereas in Julia it refers to a macro.
   * Exception handling in Julia is done using `try` - `catch` - `finally`, instead of `try` - `except` - `finally`. In contrast to Python, it is not recommended to use exception handling as part of the normal workflow in Julia due to performance reasons.
   * In Julia loops are fast, there is no need to write "vectorized" code for performance reasons.
   * Non-constant global variables impose a significant performance loss in Julia and should therefore be avoided (see [Performance Tips](@ref man-performance-tips)). For Python, global variables are not associated with a performance penalty.  
