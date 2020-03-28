@@ -65,8 +65,10 @@ find_bidiagonal(a::Bidiagonal, rest...) = a
 find_bidiagonal(bc::Broadcast.Broadcasted, rest...) = find_bidiagonal(find_bidiagonal(bc.args...), rest...)
 find_bidiagonal(x, rest...) = find_bidiagonal(rest...)
 function structured_broadcast_alloc(bc, ::Type{<:Bidiagonal}, ::Type{ElType}, n) where {ElType}
-    if  length(bc.args) == 2 && typeof(bc.args[begin]) <: Bidiagonal && typeof(bc.args[begin+1]) <: Bidiagonal && bc.args[begin].uplo != bc.args[begin+1].uplo
+    if length(bc.args) == 2
+        if typeof(bc.args[begin]) <: Bidiagonal && typeof(bc.args[begin+1]) <: Bidiagonal && bc.args[begin].uplo != bc.args[begin+1].uplo
             return Tridiagonal(Array{ElType}(undef, n-1), Array{ElType}(undef, n), Array{ElType}(undef, n-1))
+        end
     end
     ex = find_bidiagonal(bc)
     return Bidiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n-1), ex.uplo)
