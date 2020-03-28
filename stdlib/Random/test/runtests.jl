@@ -784,7 +784,7 @@ end
     @test collect(take(eachrand(MersenneTwister(1234), UInt8),3)) == s
     @test collect(take(eachrand(MersenneTwister(1234), 0:255),3)) == s
     @test collect(take(eachrand(MersenneTwister(1234), 0:255),3)) == s
-    @test (seed!(1234); collect(take(eachrand(UInt8), 3))) == s
-    @test (seed!(1234); collect(take(eachrand(0:255), 3))) == s
-    @test (seed!(1234); collect(take(eachrand(), 3))) ≈ (seed!(1234); [rand() for _ in 1:3])
+    @test (Random.seed!(1234); collect(take(eachrand(UInt8), 3))) == s
+    @test (Random.seed!(1234); collect(take(eachrand(0:255), 3))) == s
+    @test (Random.seed!(1234); collect(take(eachrand(), 3))) ≈ (Random.seed!(1234); [rand() for _ in 1:3])
 end
