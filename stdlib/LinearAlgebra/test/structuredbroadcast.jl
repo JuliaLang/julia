@@ -148,11 +148,32 @@ end
 end
 @testset "Broadcast Returned Types" begin
     # Issue 35245
-    Bu = Bidiagonal(ones(4), ones(3), :U)
-    Bl = Bidiagonal(ones(4), ones(3), :L)
-    @test typeof(Bu .+ Bl) == Tridiagonal{Float64,Array{Float64,1}}
-    @test typeof(Bl .+ Bu) == Tridiagonal{Float64,Array{Float64,1}}
-    @test typeof(Bu .+ Bu) == Bidiagonal{Float64,Array{Float64,1}}
-    @test typeof(Bl .+ Bl) == Bidiagonal{Float64,Array{Float64,1}}
+    N = 3
+    dV = ones(N)
+    ev = ones(N-1)
+
+    Bu = Bidiagonal(dV, ev, :U)
+    Bl = Bidiagonal(dV, ev, :L)
+    T = Tridiagonal(ev, dV * 2, ev)
+
+    @test typeof(Bu .+ Bl) <: Tridiagonal
+    @test typeof(Bl .+ Bu) <: Tridiagonal
+    @test typeof(Bu .+ Bu) <: Bidiagonal
+    @test typeof(Bl .+ Bl) <: Bidiagonal
+    @test Bu .+ Bl == T
+    @test Bl .+ Bu == T
+    @test Bu .+ Bu == Bidiagonal(dV * 2, ev * 2, :U)
+    @test Bl .+ Bl == Bidiagonal(dV * 2, ev * 2, :L)
+
+
+    @test typeof(Bu .* Bl) <: Tridiagonal
+    @test typeof(Bl .* Bu) <: Tridiagonal
+    @test typeof(Bu .* Bu) <: Bidiagonal
+    @test typeof(Bl .* Bl) <: Bidiagonal
+
+    @test Bu .* Bl == Tridiagonal(zeros(N-1), dV .* dV, zeros(N-1))
+    @test Bl .* Bu == Tridiagonal(zeros(N-1), dV .* dV, zeros(N-1))
+    @test Bu .* Bu == Bidiagonal(dV .* dV, ev .* ev, :U)
+    @test Bl .* Bl == Bidiagonal(dV .* dV, ev .* ev, :L)
 end
 end
