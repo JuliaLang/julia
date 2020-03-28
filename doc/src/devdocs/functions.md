@@ -120,7 +120,8 @@ function lines(words)
     String(take!(io))
 end
 import Markdown
-[string(n) for n in names(Core;all=true) if getfield(Core,n) isa Core.Builtin] |>
+[string(n) for n in names(Core;all=true)
+    if getfield(Core,n) isa Core.Builtin && nameof(getfield(Core,n)) === n] |>
     lines |>
     s ->  "```\n$s\n```" |>
     Markdown.parse
