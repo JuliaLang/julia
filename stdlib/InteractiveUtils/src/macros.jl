@@ -51,11 +51,6 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                 return Expr(:call, fcn, f,
                             Expr(:call, typesof, map(esc, ex0.args)...))
             end
-        elseif ex0.head === :do && Meta.isexpr(get(ex0.args, 1, nothing), :call)
-            f = ex0.args[1].args[1]
-            args = [[ex0.args[2]]; ex0.args[1].args[2:end]]
-            return Expr(:call, fcn, esc(f), Expr(:call, typesof, map(esc, args)...),
-                        kws...)
         else
             for (head, f) in (:ref => Base.getindex, :hcat => Base.hcat, :(.) => Base.getproperty, :vect => Base.vect, Symbol("'") => Base.adjoint, :typed_hcat => Base.typed_hcat, :string => string)
                 if ex0.head === head
