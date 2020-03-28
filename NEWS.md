@@ -20,6 +20,8 @@ New language features
   `register_error_hint` function. Packages that define custom exception types
   can support hints by calling `show_error_hints` from their `showerror` method. ([#35094])
 
+* Support for Unicode 13.0.0 ([#35282]).
+
 Language changes
 ----------------
 
