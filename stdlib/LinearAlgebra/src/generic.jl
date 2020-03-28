@@ -1417,15 +1417,16 @@ function axpby!(α, x::AbstractArray, β, y::AbstractArray)
 end
 
 """
-    rot!(x, y, c, s)
+    rotate!(x, y, c, s)
 
 Overwrite `x` with `c*x + s*y` and `y` with `-conj(s)*x + c*y`.
 Returns `x` and `y`.
 
 !!! compat "Julia 1.5"
-    `rot!` requires at least Julia 1.5.
+    `rotate!` requires at least Julia 1.5.
 """
-function rot!(x::AbstractVector, y::AbstractVector, c, s)
+function rotate!(x::AbstractVector, y::AbstractVector, c, s)
+    require_one_based_indexing(x, y)
     n = length(x)
     if n != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
@@ -1439,15 +1440,16 @@ function rot!(x::AbstractVector, y::AbstractVector, c, s)
 end
 
 """
-    ref!(x, y, c, s)
+    reflect!(x, y, c, s)
 
 Overwrite `x` with `c*x + s*y` and `y` with `conj(s)*x - c*y`.
 Returns `x` and `y`.
 
 !!! compat "Julia 1.5"
-    `rot!` requires at least Julia 1.5.
+    `reflect!` requires at least Julia 1.5.
 """
-function ref!(x::AbstractVector, y::AbstractVector, c, s)
+function reflect!(x::AbstractVector, y::AbstractVector, c, s)
+    require_one_based_indexing(x, y)
     n = length(x)
     if n != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))

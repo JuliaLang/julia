@@ -217,7 +217,7 @@ end
     @test norm(x, 3) ≈ cbrt(5^3  +sqrt(5)^3)
 end
 
-@testset "rot! and ref!" begin
+@testset "rotate! and reflect!" begin
     x = rand(1000)
     y = rand(1000)
     c = rand()
@@ -225,13 +225,13 @@ end
 
     x2 = copy(x)
     y2 = copy(y)
-    rot!(n, x, y, c, s)
+    rotate!(x, y, c, s)
     @test x ≈ c*x2 + s*y2
     @test y ≈ -conj(s)*x2 + c*y2
 
     x3 = copy(x)
     y3 = copy(y)
-    ref!(n, x, y, c, s)
+    reflect!(x, y, c, s)
     @test x ≈ c*x3 + s*y3
     @test y ≈ conj(s)*x3 - c*y3
 end
