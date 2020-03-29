@@ -218,9 +218,9 @@ end
 end
 
 @testset "rotate! and reflect!" begin
-    x = rand(1000)
-    y = rand(1000)
-    c = rand()
+    x = rand(ComplexF64, 10)
+    y = rand(ComplexF64, 10)
+    c = rand(Float64)
     s = rand(ComplexF64)
 
     x2 = copy(x)
