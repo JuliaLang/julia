@@ -98,6 +98,7 @@ New library features
 * `accumulate`, `cumsum`, and `cumprod` now support `Tuple` ([#34654]) and arbitrary iterators ([#34656]).
 * In `splice!` with no replacement, values to be removed can now be specified with an
   arbitrary iterable (instead of a `UnitRange`) ([#34524]).
+* The `@view` and `@views` macros now support the `a[begin]` syntax that was introduced in Julia 1.4 ([#35289]).
 
 Standard library changes
 ------------------------

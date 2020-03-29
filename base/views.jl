@@ -82,6 +82,10 @@ reference expression (e.g. `@view A[1,2:end]`), and should *not* be used as the 
 an assignment (e.g. `@view(A[1,2:end]) = ...`).  See also [`@views`](@ref)
 to switch an entire block of code to use views for slicing.
 
+!!! compat "Julia 1.5"
+    Using `begin` in an indexing expression to refer to the first index requires at least
+    Julia 1.5.
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -198,6 +202,10 @@ unaffected.
     The `@views` macro only affects `array[...]` expressions
     that appear explicitly in the given `expression`, not array slicing that
     occurs in functions called by that code.
+
+!!! compat "Julia 1.5"
+    Using `begin` in an indexing expression to refer to the first index requires at least
+    Julia 1.5.
 
 # Examples
 ```jldoctest
