@@ -61,7 +61,6 @@ Language changes
   Now the result is "a\n b", since the space before `b` is no longer considered to occur
   at the start of a line. The old behavior is considered a bug ([#35001]).
 
-* Color now defaults to on when stdout and stderr are TTYs ([#34347])
 
 Multi-threading changes
 -----------------------
