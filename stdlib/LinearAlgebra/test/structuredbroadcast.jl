@@ -150,11 +150,12 @@ end
     # Issue 35245
     N = 3
     dV = rand(N)
-    ev = rand(N-1)
+    evu = rand(N-1)
+    evl = rand(N-1)
 
-    Bu = Bidiagonal(dV, ev, :U)
-    Bl = Bidiagonal(dV, ev, :L)
-    T = Tridiagonal(ev, dV * 2, ev)
+    Bu = Bidiagonal(dV, evu, :U)
+    Bl = Bidiagonal(dV, evl, :L)
+    T = Tridiagonal(evl, dV * 2, evu)
 
     @test typeof(Bu .+ Bl) <: Tridiagonal
     @test typeof(Bl .+ Bu) <: Tridiagonal
@@ -162,8 +163,8 @@ end
     @test typeof(Bl .+ Bl) <: Bidiagonal
     @test Bu .+ Bl == T
     @test Bl .+ Bu == T
-    @test Bu .+ Bu == Bidiagonal(dV * 2, ev * 2, :U)
-    @test Bl .+ Bl == Bidiagonal(dV * 2, ev * 2, :L)
+    @test Bu .+ Bu == Bidiagonal(dV * 2, evu * 2, :U)
+    @test Bl .+ Bl == Bidiagonal(dV * 2, evl * 2, :L)
 
 
     @test typeof(Bu .* Bl) <: Tridiagonal
@@ -173,7 +174,7 @@ end
 
     @test Bu .* Bl == Tridiagonal(zeros(N-1), dV .* dV, zeros(N-1))
     @test Bl .* Bu == Tridiagonal(zeros(N-1), dV .* dV, zeros(N-1))
-    @test Bu .* Bu == Bidiagonal(dV .* dV, ev .* ev, :U)
-    @test Bl .* Bl == Bidiagonal(dV .* dV, ev .* ev, :L)
+    @test Bu .* Bu == Bidiagonal(dV .* dV, evu .* evu, :U)
+    @test Bl .* Bl == Bidiagonal(dV .* dV, evl .* evl, :L)
 end
 end
