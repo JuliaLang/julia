@@ -13,6 +13,7 @@ using Random.DSFMT
 using Random: Sampler, SamplerRangeFast, SamplerRangeInt, MT_CACHE_F, MT_CACHE_I
 
 import Future # randjump
+import Base.Iterators # take
 
 @testset "Issue #6573" begin
     Random.seed!(0)
@@ -781,10 +782,10 @@ end
 
 @testset "eachrand" begin
     s = (mt = MersenneTwister(1234); [rand(mt, 0:255) for _ in 1:3])
-    @test collect(take(eachrand(MersenneTwister(1234), UInt8),3)) == s
-    @test collect(take(eachrand(MersenneTwister(1234), 0:255),3)) == s
-    @test collect(take(eachrand(MersenneTwister(1234), 0:255),3)) == s
-    @test (Random.seed!(1234); collect(take(eachrand(UInt8), 3))) == s
-    @test (Random.seed!(1234); collect(take(eachrand(0:255), 3))) == s
-    @test (Random.seed!(1234); collect(take(eachrand(), 3))) ≈ (Random.seed!(1234); [rand() for _ in 1:3])
+    @test collect(Iterators.take(eachrand(MersenneTwister(1234), UInt8),3)) == s
+    @test collect(Iterators.take(eachrand(MersenneTwister(1234), 0:255),3)) == s
+    @test collect(Iterators.take(eachrand(MersenneTwister(1234), 0:255),3)) == s
+    @test (Random.seed!(1234); collect(Iterators.take(eachrand(UInt8), 3))) == s
+    @test (Random.seed!(1234); collect(Iterators.take(eachrand(0:255), 3))) == s
+    @test (Random.seed!(1234); collect(Iterators.take(eachrand(), 3))) ≈ (Random.seed!(1234); [rand() for _ in 1:3])
 end
