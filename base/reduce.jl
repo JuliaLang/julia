@@ -762,6 +762,202 @@ Inf
 """
 minimum(a; kw...) = mapreduce(identity, min, a; kw...)
 
+## findmax, findmin, argmax & argmin
+
+"""
+    findmax(f, domain) -> (f(x), x)
+    findmax(f)
+
+Returns a pair of a value in the codomain (outputs of `f`) and the corresponding
+value in the `domain` (inputs to `f`) such that `f(x)` is maximised. If there
+are multiple maximal points, then the first one will be returned.
+
+When `domain` is provided it may be any iterable and must not be empty.
+
+When `domain` is omitted, `f` must have an implicit domain. In particular, if
+`f` is an indexable collection, it is interpreted as a function mapping keys
+(domain) to values (codomain), i.e. `findmax(itr)` returns the maximal element
+of the collection `itr` and its index.
+
+Values are compared with `isless`.
+
+# Examples
+
+```jldoctest
+julia> findmax(identity, 5:9)
+(9, 9)
+
+julia> findmax(-, 1:10)
+(-1, 1)
+
+julia> findmax(cos, 0:π/2:2π)
+(1.0, 0.0)
+
+julia> findmax([8,0.1,-9,pi])
+(8.0, 1)
+
+julia> findmax([1,7,7,6])
+(7, 2)
+
+julia> findmax([1,7,7,NaN])
+(NaN, 4)
+```
+
+"""
+findmax(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmax, domain)
+_rf_findmax((fm, m), (fx, x)) = isless(fm, fx) ? (fx, x) : (fm, m)
+
+"""
+    findmin(f, domain) -> (f(x), x)
+    findmin(f)
+
+Returns a pair of a value in the codomain (outputs of `f`) and the corresponding
+value in the `domain` (inputs to `f`) such that `f(x)` is minimised. If there
+are multiple minimal points, then the first one will be returned.
+
+When `domain` is provided it may be any iterable and must not be empty.
+
+When `domain` is omitted, `f` must have an implicit domain. In particular, if
+`f` is an indexable collection, it is interpreted as a function mapping keys
+(domain) to values (codomain), i.e. `findmin(itr)` returns the minimal element
+of the collection `itr` and its index.
+
+Values are compared with `isgreater`.
+
+# Examples
+
+```jldoctest
+julia> findmin(identity, 5:9)
+(5, 5)
+
+julia> findmin(-, 1:10)
+(-10, 10)
+
+julia> findmin(cos, 0:π/2:2π)
+(-1.0, 3.141592653589793)
+
+julia> findmin([8,0.1,-9,pi])
+(-9, 3)
+
+julia> findmin([1,7,7,6])
+(1, 1)
+
+julia> findmin([1,7,7,NaN])
+(NaN, 4)
+```
+
+"""
+findmin(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmin, domain)
+_rf_findmin((fm, m), (fx, x)) = isgreater(fm, fx) ? (fx, x) : (fm, m)
+
+findmax(a) = _findmax(a, :)
+
+function _findmax(a, ::Colon)
+    p = pairs(a)
+    y = iterate(p)
+    if y === nothing
+        throw(ArgumentError("collection must be non-empty"))
+    end
+    (mi, m), s = y
+    i = mi
+    while true
+        y = iterate(p, s)
+        y === nothing && break
+        m != m && break
+        (i, ai), s = y
+        if ai != ai || isless(m, ai)
+            m = ai
+            mi = i
+        end
+    end
+    return (m, mi)
+end
+
+findmin(a) = _findmin(a, :)
+
+function _findmin(a, ::Colon)
+    p = pairs(a)
+    y = iterate(p)
+    if y === nothing
+        throw(ArgumentError("collection must be non-empty"))
+    end
+    (mi, m), s = y
+    i = mi
+    while true
+        y = iterate(p, s)
+        y === nothing && break
+        m != m && break
+        (i, ai), s = y
+        if ai != ai || isless(ai, m)
+            m = ai
+            mi = i
+        end
+    end
+    return (m, mi)
+end
+
+"""
+    argmax(f, domain)
+    argmax(f)
+
+Return a value `x` in the domain of `f` for which `f(x)` is maximised.
+If there are multiple maximal values for `f(x)` then the first one will be found.
+
+When `domain` is provided it may be any iterable and must not be empty.
+
+When `domain` is omitted, `f` must have an implicit domain. In particular, if
+`f` is an indexable collection, it is interpreted as a function mapping keys
+(domain) to values (codomain), i.e. `argmax(itr)` returns the index of the
+maximal element in `itr`.
+
+Values are compared with `isless`.
+
+# Examples
+```jldoctest
+julia> argmax([8,0.1,-9,pi])
+1
+
+julia> argmax([1,7,7,6])
+2
+
+julia> argmax([1,7,7,NaN])
+4
+```
+"""
+argmax(f, domain) = findmax(f, domain)[2]
+argmax(f) = findmax(f)[2]
+
+"""
+    argmin(f, domain)
+    argmin(f)
+
+Return a value `x` in the domain of `f` for which `f(x)` is minimised.
+If there are multiple minimal values for `f(x)` then the first one will be found.
+
+When `domain` is provided it may be any iterable and must not be empty.
+
+When `domain` is omitted, `f` must have an implicit domain. In particular, if
+`f` is an indexable collection, it is interpreted as a function mapping keys
+(domain) to values (codomain), i.e. `argmin(itr)` returns the index of the
+minimal element in `itr`.
+
+Values are compared with `isgreater`.
+
+# Examples
+```jldoctest
+julia> argmin([8,0.1,-9,pi])
+3
+
+julia> argmin([7,1,1,6])
+2
+
+julia> argmin([7,1,1,NaN])
+4
+```
+"""
+argmin(f, domain) = findmin(f, domain)[2]
+argmin(f) = findmin(f)[2]
+
 ## all & any
 
 """
