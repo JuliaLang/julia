@@ -7,7 +7,7 @@
 
 The goals of this package is to be
 
-* Fast, it currently lexes all of Julia source files in ~0.3 seconds (295 files, 1.16 million Tokens)
+* Fast, it currently lexes all of Julia source files in ~0.25 seconds (580 files, 2 million Tokens)
 * Round trippable, that is, from a stream of tokens the original string should be recoverable exactly.
 * Non error throwing. Instead of throwing errors a certain error token is returned.
 
