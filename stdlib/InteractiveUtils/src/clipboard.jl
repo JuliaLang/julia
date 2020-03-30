@@ -34,7 +34,7 @@ elseif Sys.islinux() || Sys.KERNEL === :FreeBSD
     _clipboardcmd = nothing
     const _clipboard_copy = Dict(
             :xsel  => Sys.islinux() ?
-                `xsel --nodetach --input --clipboard` :
+                `xsel --input --clipboard` :
                 `xsel -c`,
             :xclip => `xclip -silent -in -selection clipboard`,
         )
