@@ -54,8 +54,8 @@ for triplet in ${TRIPLETS}; do
     for proj in ${BB_CXX_EXPANDED_PROJECTS}; do
 		PROJ="$(echo ${proj} | tr [a-z] [A-Z])"
         for cxx in cxx03 cxx11; do
-		    make -C "${CONTRIB_DIR}/../deps" BINARYBUILDER_LLVM_ASSERTS=1 USE_BINARYBUILDER_${PROJ}=1 ${PROJ}_BB_TRIPLET=${triplet}-${cxx} BB_TRIPLET_CXXABI=${triplet} distclean-${proj}
-		    make -C "${CONTRIB_DIR}/../deps" BINARYBUILDER_LLVM_ASSERTS=1 USE_BINARYBUILDER_${PROJ}=1 ${PROJ}_BB_TRIPLET=${triplet}-${cxx} BB_TRIPLET_CXXABI=${triplet} install-${proj}
+		    make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=1 ${PROJ}_BB_TRIPLET=${triplet}-${cxx} BB_TRIPLET_CXXABI=${triplet} distclean-${proj}
+		    make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=1 ${PROJ}_BB_TRIPLET=${triplet}-${cxx} BB_TRIPLET_CXXABI=${triplet} install-${proj}
         done
     done
 done
