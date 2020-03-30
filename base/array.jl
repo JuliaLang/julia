@@ -2492,7 +2492,9 @@ julia> findfirst(iseven, A)
 CartesianIndex(2, 1)
 ```
 """
-function findfirst(testf::Function, A)
+findfirst(testf::Function, A) = _findfirst(testf, A)
+
+function _findfirst(testf::Function, A)
     for (i, a) in pairs(A)
         testf(a) && return i
     end
@@ -2515,10 +2517,12 @@ function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::Abst
     return i1 + oftype(i1, p.x - first(r))
 end
 
-function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
-    if RangeStepStyle(r) !== RangeStepRegular()
-        return invoke(findfirst, Tuple{Function,Any}, p, r)
-    end
+findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S} =
+    _findfirst(p, RangeStepStyle(r), r)
+
+_findfirst(p, ::RangeStepStyle, r) = _findfirst(p, r)
+
+function _findfirst(p::Union{Fix2{typeof(isequal)},Fix2{typeof(==)}}, ::RangeStepRegular, r::StepRange{T,S}) where {T,S}
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
     d = p.x - first(r)
