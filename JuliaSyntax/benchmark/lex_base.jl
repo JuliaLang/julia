@@ -6,19 +6,21 @@ function speed_test(::Type{T}=Tokenize.Tokens.Token) where T <: Tokenize.Tokens.
     tot_files = 0
     tot_tokens = 0
     tot_errors = 0
-    dir = dirname(Base.find_source_file("int.jl"))
-    for (root, dirs, files) in walkdir(dir)
-        for file in files
-            if endswith(file, ".jl")
-                tot_files += 1
-                file = joinpath(root, file)
-                str = read(file, String)::String
-                l = tokenize(str, T)
-                while !Tokenize.Lexers.eof(l)
-                    t = Tokenize.Lexers.next_token(l)
-                    tot_tokens += 1
-                    if t.kind == Tokens.ERROR
-                        tot_errors += 1
+    basedir = dirname(Base.find_source_file("int.jl"))
+    for dir in (basedir, Sys.STDLIB)
+        for (root, dirs, files) in walkdir(dir)
+            for file in files
+                if endswith(file, ".jl")
+                    tot_files += 1
+                    file = joinpath(root, file)
+                    str = read(file, String)::String
+                    l = tokenize(str, T)
+                    while !Tokenize.Lexers.eof(l)
+                        t = Tokenize.Lexers.next_token(l)
+                        tot_tokens += 1
+                        if t.kind == Tokens.ERROR
+                            tot_errors += 1
+                        end
                     end
                 end
             end
