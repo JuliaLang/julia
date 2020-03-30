@@ -1001,7 +1001,7 @@ function _findmin(A, region)
     end
 end
 
-isgreater(a, b) = isless(b,a)
+_isgreater(a, b) = isless(b,a)
 
 """
     findmax!(rval, rind, A) -> (maxval, index)
@@ -1012,7 +1012,7 @@ dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 """
 function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(isgreater, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
+    findminmax!(_isgreater, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
 end
 
 """
@@ -1045,7 +1045,7 @@ function _findmax(A, region)
         end
         similar(A, ri), zeros(eltype(keys(A)), ri)
     else
-        findminmax!(isgreater, fill!(similar(A, ri), first(A)),
+        findminmax!(_isgreater, fill!(similar(A, ri), first(A)),
                     zeros(eltype(keys(A)), ri), A)
     end
 end
