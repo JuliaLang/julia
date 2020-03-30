@@ -657,6 +657,7 @@ export
     isequal,
     ismutable,
     isless,
+    isgreater,
     ifelse,
     objectid,
     sizeof,

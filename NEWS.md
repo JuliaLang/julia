@@ -28,6 +28,7 @@ Build system changes
 New library functions
 ---------------------
 
+* New function `isgreater(a, b)` defines a descending total order where unorderable values and missing are ordered smaller than any regular value.
 
 New library features
 --------------------
