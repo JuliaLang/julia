@@ -296,6 +296,7 @@ function open(f::Function, args...; kwargs...)
     io = open(args...; kwargs...)
     try
         f(io)
+        flush(io)
     finally
         close(io)
     end
