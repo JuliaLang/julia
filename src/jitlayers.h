@@ -145,7 +145,7 @@ typedef JITSymbol JL_JITSymbol;
 typedef JITSymbol JL_SymbolInfo;
 
 using RTDyldObjHandleT = orc::VModuleKey;
-#if JL_LLVM_VERSION >= 110000
+#if JL_LLVM_VERSION >= 100000
 using CompilerResultT = Expected<orc::LegacyRTDyldObjectLinkingLayerBase::ObjectPtr>;
 #else
 using CompilerResultT = std::unique_ptr<llvm::MemoryBuffer>;
