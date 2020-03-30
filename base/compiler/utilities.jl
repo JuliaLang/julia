@@ -107,7 +107,7 @@ function retrieve_code_info(linfo::MethodInstance)
     if c === nothing && isdefined(m, :source)
         src = m.source
         if isa(src, Array{UInt8,1})
-            c = ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, src)
+            c = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, src)
         else
             c = copy(src::CodeInfo)
         end

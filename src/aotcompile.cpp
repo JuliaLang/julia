@@ -286,7 +286,7 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
                     if ((jl_value_t*)src == jl_nothing)
                         src = NULL;
                     if (src && jl_is_method(def))
-                        src = jl_uncompress_ast(def, codeinst, (jl_array_t*)src);
+                        src = jl_uncompress_ir(def, codeinst, (jl_array_t*)src);
                 }
                 if (src == NULL || !jl_is_code_info(src)) {
                     src = jl_type_infer(mi, params.world, 0);
@@ -792,7 +792,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
         src = (jl_code_info_t*)codeinst->inferred;
         if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-            src = jl_uncompress_ast(mi->def.method, codeinst, (jl_array_t*)src);
+            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
         jlrettype = codeinst->rettype;
     }
     if (!src || (jl_value_t*)src == jl_nothing) {
@@ -802,7 +802,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         else if (jl_is_method(mi->def.method)) {
             src = mi->def.method->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)mi->def.method->source;
             if (src && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-                src = jl_uncompress_ast(mi->def.method, NULL, (jl_array_t*)src);
+                src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
         }
         // TODO: use mi->uninferred
     }

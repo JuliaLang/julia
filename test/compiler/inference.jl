@@ -1525,7 +1525,7 @@ function f24852_kernel_cinfo(fsig::Type)
     world = typemax(UInt) # FIXME
     sig, spvals, method = Base._methods_by_ftype(fsig, -1, world)[1]
     isdefined(method, :source) || return (nothing, :(f(x, y)))
-    code_info = Base.uncompressed_ast(method)
+    code_info = Base.uncompressed_ir(method)
     Meta.partially_inline!(code_info.code, Any[], sig, Any[spvals...], 1, 0, :propagate)
     if startswith(String(method.name), "f24852")
         for a in code_info.code
