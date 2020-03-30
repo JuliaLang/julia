@@ -851,6 +851,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         assert((jl_value_t*)mt != jl_nothing);
         external_mt = !module_in_worklist(mt->module);
         jl_serialize_value(s, m->specializations);
+        jl_serialize_value(s, m->speckeyset);
         jl_serialize_value(s, (jl_value_t*)m->name);
         jl_serialize_value(s, (jl_value_t*)m->file);
         write_int32(s->s, m->line);
@@ -1149,14 +1150,6 @@ static void collect_backedges(jl_method_instance_t *callee) JL_GC_DISABLED
 }
 
 
-static int jl_collect_backedges_to_mod(jl_typemap_entry_t *ml, void *closure) JL_GC_DISABLED
-{
-    (void)(jl_array_t*)closure;
-    jl_method_instance_t *callee = ml->func.linfo;
-    collect_backedges(callee);
-    return 1;
-}
-
 static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) JL_GC_DISABLED
 {
     jl_array_t *s = (jl_array_t*)closure;
@@ -1166,7 +1159,13 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) 
         jl_array_ptr_1d_push(s, (jl_value_t*)ml->simplesig);
     }
     else {
-        jl_typemap_visitor(m->specializations, jl_collect_backedges_to_mod, closure);
+        jl_svec_t *specializations = m->specializations;
+        size_t i, l = jl_svec_len(specializations);
+        for (i = 0; i < l; i++) {
+            jl_method_instance_t *callee = (jl_method_instance_t*)jl_svecref(specializations, i);
+            if (callee != NULL)
+                collect_backedges(callee);
+        }
     }
     return 1;
 }
@@ -1719,8 +1718,10 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
         arraylist_push(&flagref_list, (void*)pos);
         return (jl_value_t*)m;
     }
-    m->specializations = jl_deserialize_value(s, (jl_value_t**)&m->specializations);
+    m->specializations = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&m->specializations);
     jl_gc_wb(m, m->specializations);
+    m->speckeyset = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->speckeyset);
+    jl_gc_wb(m, m->speckeyset);
     m->name = (jl_sym_t*)jl_deserialize_value(s, NULL);
     jl_gc_wb(m, m->name);
     m->file = (jl_sym_t*)jl_deserialize_value(s, NULL);

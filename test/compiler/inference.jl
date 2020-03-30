@@ -1001,7 +1001,11 @@ end
 # but which also means we should still be storing the inference result from inferring the cycle
 f21653() = f21653()
 @test code_typed(f21653, Tuple{}, optimize=false)[1] isa Pair{CodeInfo, typeof(Union{})}
-@test which(f21653, ()).specializations.func.cache.rettype === Union{}
+let meth = which(f21653, ())
+    tt = Tuple{typeof(f21653)}
+    mi = ccall(:jl_specializations_lookup, Any, (Any, Any), meth, tt)::Core.MethodInstance
+    @test mi.cache.rettype === Union{}
+end
 
 # issue #22290
 f22290() = return 3
@@ -1083,11 +1087,9 @@ code_typed(f21933, (Val{1},))
 Base.return_types(f21933, (Val{1},))
 
 function count_specializations(method::Method)
-    n = 0
-    Base.visit(method.specializations) do m
-        n += 1
-    end
-    return n::Int
+    specs = method.specializations
+    n = count(i -> isassigned(specs, i), 1:length(specs))
+    return n
 end
 
 # demonstrate that inference can complete without waiting for MAX_TYPE_DEPTH
