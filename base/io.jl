@@ -295,8 +295,9 @@ julia> rm("myfile.txt")
 function open(f::Function, args...; kwargs...)
     io = open(args...; kwargs...)
     try
-        f(io)
+        v = f(io)
         flush(io)
+        return v
     finally
         close(io)
     end
