@@ -527,3 +527,8 @@ mutable struct Obj; x; end
     @test ismissing(wref[1] == missing)
     @test ismissing(missing == wref[1])
 end
+
+@testset "showerror missing function" begin
+    me = try missing(1) catch e e end
+    @test sprint(showerror, e) == "MethodError: objects of type Missing are not callable"
+end
