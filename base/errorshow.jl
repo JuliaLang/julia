@@ -331,7 +331,7 @@ function showerror(io::IO, ex::MethodError)
             f_is_function = true
             print(io, "no method matching ", name)
         elseif isa(f, Type)
-            print(io, "no method matching ", f)
+            print(IOContext(io, :unionall_parens => true), "no method matching ", f)
         else
             print(io, "no method matching (::", ft, ")")
         end
@@ -423,7 +423,7 @@ function showerror_ambiguous(io::IO, meth, f, args)
     if isa(unwrap_unionall(sigfix), DataType) && sigfix <: Tuple
         if all(m->morespecific(sigfix, m.sig), meth)
             print(io, "\nPossible fix, define\n  ")
-            Base.show_tuple_as_call(io, :function,  sigfix)
+            Base.show_tuple_as_call(IOContext(io, :unionall_parens => true), :function,  sigfix)
         else
             println(io)
             print(io, "To resolve the ambiguity, try making one of the methods more specific, or ")
@@ -486,7 +486,11 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
             else
                 # TODO: use the methodshow logic here
                 use_constructor_syntax = isa(func, Type)
-                print(iob, use_constructor_syntax ? func : typeof(func).name.mt.name)
+                if use_constructor_syntax
+                    print(IOContext(iob, :unionall_parens => true), func)
+                else
+                    print(iob, typeof(func).name.mt.name)
+                end
             end
             print(iob, "(")
             t_i = copy(arg_types_param)

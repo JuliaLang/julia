@@ -508,9 +508,12 @@ function show(io::IO, @nospecialize(x::Type))
         end
     end
 
-    show(IOContext(io, :unionall_env => x.var), x.body)
+    unionall_parens = get(io, :unionall_parens, false)
+    unionall_parens && print(io, '(')
+    show(IOContext(io, :unionall_env => x.var, :unionall_parens => false), x.body)
     print(io, " where ")
     show(io, x.var)
+    unionall_parens && print(io, ')')
 end
 
 # Check whether 'sym' (defined in module 'parent') is visible from module 'from'
