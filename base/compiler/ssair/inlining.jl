@@ -711,8 +711,8 @@ function analyze_method!(idx::Int, sig::Signature, @nospecialize(metharg), meths
         return spec_lambda(atype_unlimited, sv, invoke_data)
     end
 
-    src_inferred = ccall(:jl_ast_flag_inferred, Bool, (Any,), src)
-    src_inlineable = ccall(:jl_ast_flag_inlineable, Bool, (Any,), src)
+    src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
+    src_inlineable = ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
 
     if !(src_inferred && src_inlineable)
         return spec_lambda(atype_unlimited, sv, invoke_data)
@@ -722,7 +722,7 @@ function analyze_method!(idx::Int, sig::Signature, @nospecialize(metharg), meths
     add_backedge!(mi, sv)
 
     if !isa(src, CodeInfo)
-        src = ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any), method, C_NULL, src::Vector{UInt8})::CodeInfo
+        src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), method, C_NULL, src::Vector{UInt8})::CodeInfo
     end
 
     @timeit "inline IR inflation" begin

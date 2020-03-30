@@ -241,13 +241,13 @@ function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecial
     # decide if it's likely to be worthwhile
     if !force_inference
         code = inf_for_methodinstance(mi, sv.params.world)
-        declared_inline = isdefined(method, :source) && ccall(:jl_ast_flag_inlineable, Bool, (Any,), method.source)
+        declared_inline = isdefined(method, :source) && ccall(:jl_ir_flag_inlineable, Bool, (Any,), method.source)
         cache_inlineable = declared_inline
         if isdefined(code, :inferred) && !cache_inlineable
             cache_inf = code.inferred
             if !(cache_inf === nothing)
-                cache_src_inferred = ccall(:jl_ast_flag_inferred, Bool, (Any,), cache_inf)
-                cache_src_inlineable = ccall(:jl_ast_flag_inlineable, Bool, (Any,), cache_inf)
+                cache_src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), cache_inf)
+                cache_src_inlineable = ccall(:jl_ir_flag_inlineable, Bool, (Any,), cache_inf)
                 cache_inlineable = cache_src_inferred && cache_src_inlineable
             end
         end

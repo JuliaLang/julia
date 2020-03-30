@@ -1509,7 +1509,7 @@ end
 # issue #27129
 f27129(x = 1) = (@Base._inline_meta; x)
 for meth in methods(f27129)
-    @test ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source).inlineable
+    @test ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source).inlineable
 end
 
 # issue #27710

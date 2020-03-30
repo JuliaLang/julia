@@ -447,7 +447,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 #endif
         return val;
     }
-    assert(!jl_is_phinode(e) && !jl_is_phicnode(e) && !jl_is_upsilonnode(e) && "malformed AST");
+    assert(!jl_is_phinode(e) && !jl_is_phicnode(e) && !jl_is_upsilonnode(e) && "malformed IR");
     if (!jl_is_expr(e))
         return e;
     jl_expr_t *ex = (jl_expr_t*)e;
@@ -655,7 +655,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         jl_value_t *stmt = jl_array_ptr_ref(stmts, ip);
         assert(!jl_is_phinode(stmt));
         size_t next_ip = ip + 1;
-        assert(!jl_is_phinode(stmt) && !jl_is_phicnode(stmt) && "malformed AST");
+        assert(!jl_is_phinode(stmt) && !jl_is_phicnode(stmt) && "malformed IR");
         if (jl_is_gotonode(stmt)) {
             next_ip = jl_gotonode_label(stmt) - 1;
         }
@@ -842,7 +842,7 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi)
         }
         if (src && (jl_value_t*)src != jl_nothing) {
             JL_GC_PUSH1(&src);
-            src = jl_uncompress_ast(mi->def.method, NULL, (jl_array_t*)src);
+            src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
             mi->uninferred = (jl_value_t*)src;
             jl_gc_wb(mi, src);
             JL_GC_POP();
