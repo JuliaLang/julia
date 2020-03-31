@@ -688,6 +688,7 @@ test_ind2sub(TestAbstractArray)
 
 include("generic_map_tests.jl")
 generic_map_tests(map, map!)
+@test_throws ArgumentError map!(-, [1])
 
 test_UInt_indexing(TestAbstractArray)
 test_13315(TestAbstractArray)
