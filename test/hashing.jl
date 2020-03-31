@@ -243,3 +243,25 @@ let p1 = Ptr{Int8}(1), p2 = Ptr{Int32}(1), p3 = Ptr{Int8}(2)
     @test isless(p1, p3)
     @test_throws MethodError isless(p1, p2)
 end
+
+# test hashing 64 bits to 32 bits
+let x = UInt64(872), y = UInt64(1217), z = UInt64(12871)
+    @test Base.hash_64_32(x) == 2908373537
+    @test Base.hash_64_32(y) == 1744935429
+    @test Base.hash_64_32(z) == 3478815276
+
+    @test Base.hash_64_32(x) != Base.hash_64_32(y)
+    @test Base.hash_64_32(x) != Base.hash_64_32(z)
+    @test Base.hash_64_32(y) != Base.hash_64_32(z)
+end
+
+# test hashing 32 bits to 32 bits
+let x = UInt32(872), y = UInt32(1217), z = UInt32(12871)
+    @test Base.hash_32_32(x) == 265341030
+    @test Base.hash_32_32(y) == 403047268
+    @test Base.hash_32_32(z) == 4095432080
+
+    @test Base.hash_32_32(x) != Base.hash_32_32(y)
+    @test Base.hash_32_32(x) != Base.hash_32_32(z)
+    @test Base.hash_32_32(y) != Base.hash_32_32(z)
+end
