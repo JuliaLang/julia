@@ -183,8 +183,10 @@ smallest.
 # Implementation
 Types should not usually implement this function. Instead, implement `isless`.
 """
-isgreater(a, b) = _is_unorderable(a) || _is_unorderable(b) ? isless(a, b) : isless(b, a)
-_is_unorderable(x) = !isa(x == x, Bool) || x != x
+isgreater(x, y) = _is_reflexive(x) && _is_reflexive(y) ? isless(y, x) : isless(x, y)
+_is_reflexive(x) = let eq = x == x
+    isa(eq, Bool) && eq
+end
 
 
 
