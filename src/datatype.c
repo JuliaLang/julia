@@ -887,19 +887,10 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
 
 static void init_struct_tail(jl_datatype_t *type, jl_value_t *jv, size_t na)
 {
-    size_t nf = jl_datatype_nfields(type);
-    char *data = (char*)jl_data_ptr(jv);
-    for (size_t i = na; i < nf; i++) {
-        if (jl_field_isptr(type, i)) {
-            *(jl_value_t**)(data + jl_field_offset(type, i)) = NULL;
-        }
-        else {
-            jl_value_t *ft = jl_field_type(type, i);
-            if (jl_is_uniontype(ft)) {
-                uint8_t *psel = &((uint8_t *)data)[jl_field_offset(type, i) + jl_field_size(type, i) - 1];
-                *psel = 0;
-            }
-        }
+    if (na < jl_datatype_nfields(type)) {
+        char *data = (char*)jl_data_ptr(jv);
+        size_t offs = jl_field_offset(type, na);
+        memset(data + offs, 0, jl_datatype_size(type) - offs);
     }
 }
 
