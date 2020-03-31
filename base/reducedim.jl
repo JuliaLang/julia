@@ -146,15 +146,18 @@ for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min
             T = _realtype(f, promote_union(eltype(A)))
             Tr = v0 isa T ? T : typeof(v0)
 
-            # but NaNs and missing need to be avoided as initial values
+            # but NaNs, missing and unordered values need to be avoided as initial values
             if v0 isa Number && isnan(v0)
                 # v0 is NaN
                 v0 = oftype(v0, $initval)
-            elseif isunordered(v0)
-                # v0 is missing or a third-party unordered value
+            elseif ismissing(v0)
+                if !all(ismissing, A)
+                    v0 = mapreduce(f, $f2, skipmissing(A))
+                end
+            elseif isunordered(v0) # v0 is a third-party unordered value
                 Tnm = nonmissingtype(Tr)
                 # TODO: Some types, like BigInt, don't support typemin/typemax.
-                # So a Matrix{Union{BigInt, Missing}} can still error here.
+                # So a Matrix{Union{BigInt, T}} can still error here.
                 v0 = $typeextreme(Tnm)
             end
             # v0 may have changed type.

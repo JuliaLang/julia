@@ -377,6 +377,16 @@ end
 @test maximum(Vector(Int16(1):Int16(100))) === Int16(100)
 @test maximum(Int32[1,2]) === Int32(2)
 
+@testset "minimum/maximum over dims with missing (#35308)" begin
+    for T in (Int, Float64, BigInt, BigFloat)
+        x = Union{T, Missing}[1 missing; 2 missing]
+        @test isequal(minimum(x, dims=1), reshape([1, missing], 1, :))
+        @test isequal(maximum(x, dims=1), reshape([2, missing], 1, :))
+        @test isequal(minimum(x, dims=2), reshape([missing, missing], :, 1))
+        @test isequal(maximum(x, dims=2), reshape([missing, missing], :, 1))
+    end
+end
+
 A = circshift(reshape(1:24,2,3,4), (0,1,1))
 @test extrema(A,dims=1) == reshape([(23,24),(19,20),(21,22),(5,6),(1,2),(3,4),(11,12),(7,8),(9,10),(17,18),(13,14),(15,16)],1,3,4)
 @test extrema(A,dims=2) == reshape([(19,23),(20,24),(1,5),(2,6),(7,11),(8,12),(13,17),(14,18)],2,1,4)
