@@ -64,11 +64,23 @@ find_bidiagonal() = throw(ArgumentError("could not find Bidiagonal within broadc
 find_bidiagonal(a::Bidiagonal, rest...) = a
 find_bidiagonal(bc::Broadcast.Broadcasted, rest...) = find_bidiagonal(find_bidiagonal(bc.args...), rest...)
 find_bidiagonal(x, rest...) = find_bidiagonal(rest...)
+
+find_uplo(a::Char) = a
+find_uplo(a::Missing) = a
+function find_uplo(a::Bidiagonal, rest...)
+    if length(rest) > 0
+        return a.uplo == rest[1].uplo ? a.uplo : missing
+    end
+    return a.uplo
+end
+
+find_uplo(bc::Broadcast.Broadcasted, rest...) = find_uplo(find_uplo(bc.args...), rest...)
+find_uplo(x, rest...) = find_uplo(rest...)
+
 function structured_broadcast_alloc(bc, ::Type{<:Bidiagonal}, ::Type{ElType}, n) where {ElType}
-    if length(bc.args) == 2
-        if typeof(bc.args[begin]) <: Bidiagonal && typeof(bc.args[begin+1]) <: Bidiagonal && bc.args[begin].uplo != bc.args[begin+1].uplo
-            return Tridiagonal(Array{ElType}(undef, n-1), Array{ElType}(undef, n), Array{ElType}(undef, n-1))
-        end
+    uplo = find_uplo(bc)
+    if typeof(uplo) <: Missing
+        return Tridiagonal(Array{ElType}(undef, n-1), Array{ElType}(undef, n), Array{ElType}(undef, n-1))
     end
     ex = find_bidiagonal(bc)
     return Bidiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n-1), ex.uplo)
