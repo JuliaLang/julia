@@ -174,17 +174,14 @@ isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x
 Test whether `x` is greater than `y`, according to a fixed total order.
 `isgreater` is defined in terms of `isless`, but is not the opposite of that function.
 
-`isless` defines a fixed total order that ascends with unorderable values (such as `NaN`) and
-[`missing`](@ref) ordered last (biggest).
-`isgreater` defines a fixed total order that descends with unorderable values
-and `missing` ordered last (smallest).
-
-Values that are normally unordered, such as `NaN`,
-are ordered after regular values.
-[`missing`](@ref) values are ordered last.
+`isless` defines a fixed total order that ascends, while `isgreater` defines a
+fixed total order that descends. Both order values that are normally unordered,
+such as `NaN`, after all regular values and [`missing`](@ref) last. So for
+`isless` these values are biggest and for `isgreater` these values are
+smallest.
 
 # Implementation
-Types should usually not implement this function. Instead, implement `isless`.
+Types should not usually implement this function. Instead, implement `isless`.
 """
 isgreater(a, b) = _is_unorderable(a) || _is_unorderable(b) ? isless(a, b) : isless(b, a)
 _is_unorderable(x) = !isa(x == x, Bool) || x != x
