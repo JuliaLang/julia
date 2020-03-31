@@ -2906,4 +2906,16 @@ end
     @test B ≈ mapreduce(identity, +, Matrix(A), dims=2)
 end
 
+@testset "Symmetric and Hermitian" begin
+    A = sprandn(10, 10, 0.1)
+    B = sprandn(10, 10, 0.1)
+    @test Hermitian(A + A') + B isa SparseMatrixCSC
+    @test A + Hermitian(B + B') isa SparseMatrixCSC
+    @test Hermitian(A + A') + Hermitian(B + B') isa Hermitian{Float64, <:SparseMatrixCSC}
+
+    @test Symmetric(A + A') + B isa SparseMatrixCSC
+    @test A + Symmetric(B + B') isa SparseMatrixCSC
+    @test Symmetric(A + A') + Symmetric(B + B') isa Symmetric{Float64, <:SparseMatrixCSC}
+end
+
 end # module

@@ -7,6 +7,18 @@ using Random: rand!
 const StridedOrTriangularMatrix{T} = Union{StridedMatrix{T}, LowerTriangular{T}, UnitLowerTriangular{T}, UpperTriangular{T}, UnitUpperTriangular{T}}
 const AdjOrTransStridedOrTriangularMatrix{T} = Union{StridedOrTriangularMatrix{T},Adjoint{<:Any,<:StridedOrTriangularMatrix{T}},Transpose{<:Any,<:StridedOrTriangularMatrix{T}}}
 
++(A::Hermitian, B::SparseMatrixCSC) = parent(A) + B
++(A::SparseMatrixCSC, B::Hermitian) = A + parent(B)
+function +(A::Hermitian{<:Any, <:SparseMatrixCSC}, B::Hermitian{<:Any, <:SparseMatrixCSC})
+    Hermitian(parent(A) + parent(B))
+end
+
++(A::Symmetric, B::SparseMatrixCSC) = parent(A) + B
++(A::SparseMatrixCSC, B::Symmetric) = A + parent(B)
+function +(A::Symmetric{<:Any, <:SparseMatrixCSC}, B::Symmetric{<:Any, <:SparseMatrixCSC})
+    Symmetric(parent(A) + parent(B))
+end
+
 function mul!(C::StridedVecOrMat, A::AbstractSparseMatrixCSC, B::Union{StridedVector,AdjOrTransStridedOrTriangularMatrix}, α::Number, β::Number)
     size(A, 2) == size(B, 1) || throw(DimensionMismatch())
     size(A, 1) == size(C, 1) || throw(DimensionMismatch())
