@@ -42,15 +42,23 @@ to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
 fd(s::IOStream) = Int(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
 
 stat(s::IOStream) = stat(fd(s))
-close(s::IOStream) = @lock_nofail s.lock ccall(:ios_close, Cvoid, (Ptr{Cvoid},), s.ios)
+
 isopen(s::IOStream) = ccall(:ios_isopen, Cint, (Ptr{Cvoid},), s.ios) != 0
+
+function close(s::IOStream)
+    bad = @lock_nofail s.lock ccall(:ios_close, Cint, (Ptr{Cvoid},), s.ios) != 0
+    systemerror("close", bad)
+end
+
 function flush(s::IOStream)
     sigatomic_begin()
     bad = @lock_nofail s.lock ccall(:ios_flush, Cint, (Ptr{Cvoid},), s.ios) != 0
     sigatomic_end()
     systemerror("flush", bad)
 end
+
 iswritable(s::IOStream) = ccall(:ios_get_writable, Cint, (Ptr{Cvoid},), s.ios)!=0
+
 isreadable(s::IOStream) = ccall(:ios_get_readable, Cint, (Ptr{Cvoid},), s.ios)!=0
 
 """
