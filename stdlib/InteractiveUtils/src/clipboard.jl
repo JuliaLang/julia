@@ -67,7 +67,7 @@ elseif Sys.islinux() || Sys.KERNEL === :FreeBSD
     end
     function clipboard()
         c = clipboardcmd()
-        cmd = _clipboardcmds_paste[c]
+        cmd = _clipboard_paste[c]
         return read(pipeline(cmd, stderr=stderr), String)
     end
 
