@@ -124,6 +124,8 @@ export
     opnorm,
     rank,
     rdiv!,
+    reflect!,
+    rotate!,
     schur,
     schur!,
     svd,

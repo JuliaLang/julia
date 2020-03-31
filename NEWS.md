@@ -115,6 +115,8 @@ Standard library changes
 * `normalize` now supports multidimensional arrays ([#34239])
 * `lq` factorizations can now be used to compute the minimum-norm solution to under-determined systems ([#34350]).
 * The BLAS submodule now supports the level-2 BLAS subroutine `spmv!` ([#34320]).
+* The BLAS submodule now supports the level-1 BLAS subroutine `rot!` ([#35124]).
+* New generic `rotate!(x, y, c, s)` and `reflect!(x, y, c, s)` functions ([#35124]).
 
 #### Markdown
 
