@@ -258,12 +258,13 @@ end
     timedwait(testcb::Function, secs::Real; pollint::Real=0.1)
 
 Waits until `testcb` returns `true` or for `secs` seconds, whichever is earlier.
-`testcb` is polled every `pollint` seconds.
+`testcb` is polled every `pollint` seconds. The minimum duration for `secs` and `pollint` is
+1 millisecond or `0.001`.
 
 Returns :ok, :timed_out, or :error
 """
 function timedwait(testcb::Function, secs::Real; pollint::Real=0.1)
-    pollint > 0 || throw(ArgumentError("cannot set pollint to $pollint seconds"))
+    pollint >= 1e-3 || throw(ArgumentError("pollint must be ≥ 1 millisecond"))
     start = time_ns()
     nsecs = 1e9 * secs
     done = Channel(1)

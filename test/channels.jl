@@ -258,6 +258,9 @@ end
     @test_broken timedwait(() -> error("callback failed"), 0) === :error
     @test_throws ArgumentError timedwait(() -> true, 0; pollint=0)
 
+    # Allowing a smaller positive `pollint` results in `timewait` hanging
+    @test_throws ArgumentError timedwait(() -> true, 0, pollint=1e-4)
+
     duration = @elapsed timedwait(() -> false, 1)  # Using default pollint of 0.1
     @test duration ≈ 1 atol=0.4
 
