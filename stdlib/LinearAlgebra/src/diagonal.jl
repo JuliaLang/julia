@@ -155,6 +155,32 @@ end
 (-)(A::Diagonal) = Diagonal(-A.diag)
 (+)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag + Db.diag)
 (-)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag - Db.diag)
+for f in (:+, :-)
+    @eval function $f(D::Diagonal, S::Symmetric)
+        SD = copy_oftype(S.data, promote_op($f, eltype(D), eltype(S)))
+        di = diagind(SD)
+        SD[di] .= ($f).(D.diag, SD[di])
+        return Symmetric(SD, sym_uplo(S.uplo))
+    end
+    @eval function $f(S::Symmetric, D::Diagonal)
+        SD = copy_oftype(S.data, promote_op($f, eltype(D), eltype(S)))
+        di = diagind(SD)
+        SD[di] .= ($f).(SD[di], D.diag)
+        return Symmetric(SD, sym_uplo(S.uplo))
+    end
+    @eval function $f(D::Diagonal{<:Real}, H::Hermitian)
+        HD = copy_oftype(H.data, promote_op($f, eltype(D), eltype(H)))
+        di = diagind(HD)
+        HD[di] .= ($f).(D.diag, HD[di])
+        return Hermitian(HD, sym_uplo(H.uplo))
+    end
+    @eval function $f(H::Hermitian, D::Diagonal{<:Real})
+        HD = copy_oftype(H.data, promote_op($f, eltype(D), eltype(H)))
+        di = diagind(HD)
+        HD[di] .= ($f).(HD[di], D.diag)
+        return Hermitian(HD, sym_uplo(H.uplo))
+    end
+end
 
 (*)(x::Number, D::Diagonal) = Diagonal(x * D.diag)
 (*)(D::Diagonal, x::Number) = Diagonal(D.diag * x)

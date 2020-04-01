@@ -200,6 +200,19 @@ Random.seed!(1)
         A     = rand(elty, n, n)
         Asym  = Symmetric(A + transpose(A), :U)
         Aherm = Hermitian(A + adjoint(A), :U)
+        for op in (+, -)
+            @test op(Asym, D) isa Symmetric
+            @test Array(op(Asym, D)) ≈ Array(Symmetric(op(Array(Asym), Array(D))))
+            @test op(D, Asym) isa Symmetric
+            @test Array(op(D, Asym)) ≈ Array(Symmetric(op(Array(D), Array(Asym))))
+            if !(elty <: Real)
+                Dr = real(D)
+                @test op(Aherm, Dr) isa Hermitian
+                @test Array(op(Aherm, Dr)) ≈ Array(Hermitian(op(Array(Aherm), Array(Dr))))
+                @test op(Dr, Asym) isa Hermitian
+                @test Array(op(Dr, Asym)) ≈ Array(Hermitian(op(Array(Dr), Array(Aherm))))
+            end
+        end
         @test Array(D*Transpose(Asym)) ≈ Array(D) * Array(transpose(Asym))
         @test Array(D*Adjoint(Asym)) ≈ Array(D) * Array(adjoint(Asym))
         @test Array(D*Transpose(Aherm)) ≈ Array(D) * Array(transpose(Aherm))
