@@ -566,6 +566,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
             }
             else if (nargs == 2 && jl_exprarg(st, 0) == (jl_value_t*)jl_symbol("nkw")) {
                 m->nkw = jl_unbox_long(jl_exprarg(st, 1));
+                st = jl_nothing;
             }
         }
         else {
