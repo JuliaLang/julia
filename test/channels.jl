@@ -252,6 +252,19 @@ using Distributed
     end
 end
 
+@testset "timedwait" begin
+    @test timedwait(() -> true, 0) === :ok
+    @test timedwait(() -> false, 0) === :timed_out
+    @test_broken timedwait(() -> error("callback failed"), 0) === :error
+    @test_throws ArgumentError timedwait(() -> true, 0; pollint=0)
+
+    duration = @elapsed timedwait(() -> false, 1)  # Using default pollint of 0.1
+    @test duration ≈ 1 atol=0.4
+
+    duration = @elapsed timedwait(() -> false, 0; pollint=1)
+    @test duration ≈ 1 atol=0.4
+end
+
 @testset "timedwait on multiple channels" begin
     @Experimental.sync begin
         rr1 = Channel(1)
