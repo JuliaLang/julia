@@ -129,6 +129,13 @@ Base.show_method_candidates(buf, MethodError(PR16155,(1.0, 2.0, Int64(3))))
 Base.show_method_candidates(buf, MethodError(PR16155,(Int64(3), 2.0, Int64(3))))
 @test String(take!(buf)) == "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  (::Type{T})(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2"
 
+struct PR35311a end
+struct PR35311b end
+PR35311line = @__LINE__() + 1
+(::Union{PR35311a,PR35311b})(::Nothing) = nothing
+Base.show_method_candidates(buf, MethodError(PR35311a(),(1,)))
+@test String(take!(buf)) == "\nClosest candidates are:\n  (::Union{$(curmod_prefix)PR35311a, $(curmod_prefix)PR35311b})(!Matched::Nothing)$cfile$PR35311line"
+
 c6line = @__LINE__
 method_c6(; x=1) = x
 method_c6(a; y=1) = y
