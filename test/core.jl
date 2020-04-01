@@ -7198,3 +7198,6 @@ struct NFANode34126
 end
 
 @test repr(NFANode34126()) == "$NFANode34126(Tuple{Nothing,$NFANode34126}[])"
+
+# Issue #34544
+@test_throws ErrorException eval(Expr(:module, true, :bar, Expr(:foo)))

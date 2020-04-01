@@ -112,7 +112,8 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     assert(ex->head == module_sym);
-    if (jl_array_len(ex->args) != 3 || !jl_is_expr(jl_exprarg(ex, 2))) {
+    if (jl_array_len(ex->args) != 3 || !jl_is_expr(jl_exprarg(ex, 2)) ||
+        !jl_array_len(((jl_expr_t *)(jl_exprarg(ex, 2)))->args)) {
         jl_error("syntax: malformed module expression");
     }
     int std_imports = (jl_exprarg(ex, 0) == jl_true);
