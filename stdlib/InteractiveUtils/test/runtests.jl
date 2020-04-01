@@ -90,6 +90,10 @@ Base.getproperty(t::T1234321, ::Symbol) = "foo"
 Base.setproperty!(t::T1234321, ::Symbol, ::Symbol) = "foo"
 @test (@code_typed T1234321(1).f = :foo).second == String
 
+# Make sure `do` block works with `@code_...` macros
+@test (@code_typed map(1:1) do x; x; end).second == Vector{Int}
+@test (@code_typed open(`cat`; read=true) do _; 1; end).second == Int
+
 module ImportIntrinsics15819
 # Make sure changing the lookup path of an intrinsic doesn't break
 # the heuristic for type instability warning.
