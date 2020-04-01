@@ -2221,3 +2221,9 @@ end
 h35201(x; k=1) = (x, k)
 f35201(c) = h35201((;c...), k=true)
 @test f35201(Dict(:a=>1,:b=>3)) === ((a=1,b=3), true)
+
+# Line contination: issues #18612 and #27533
+@test Meta.parse("[1 \\#\n 2]") == Expr(:hcat, 1, 2)
+@test Meta.parse("@f \\#\n a") == Expr(:macrocall, Symbol("@f"), LineNumberNode(1, :none), :a)
+@test Meta.isexpr(Meta.parse("@f \\#"), :incomplete)
+@test_throws ParseError("Cannot start block comment after \\#") Meta.parse("x \\#=")
