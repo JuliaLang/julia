@@ -522,6 +522,21 @@
 
 (define (scolno port) (string " near column " (input-port-column port)))
 
+(define (line-continuation port s)
+  (if (eqv? (skip-to-eol port) #\newline)
+      (read-char port)) ;; Consume newline
+  (if (eof-object? (peek-char port))
+      (error "incomplete: expression ends in line continuation"))
+  (let ((tok (next-token port s)))
+    (aset! s 2 #t)
+    tok))
+
+(define (line-continuation-comment port s)
+  (read-char port) ;; Consume #
+  (if (eqv? (peek-char port) #\= )
+      (error "Cannot start block comment after \\#"))
+  (line-continuation port s))
+
 (define (next-token port s)
   (aset! s 2 (eq? (skip-ws port whitespace-newline) #t))
   (let ((c (peek-char port)))
@@ -534,6 +549,12 @@
           ((string.find "0123456789" c)   (read-number port #f #f))
 
           ((eqv? c #\#)                   (skip-comment port) (next-token port s))
+
+          ((eqv? c #\\)
+            (let ((c (read-char port)))
+              (if (eqv? (peek-char port) #\#)
+                  (line-continuation-comment port s)
+                  (read-operator port c))))
 
           ;; . is difficult to handle; it could start a number or operator
           ((and (eqv? c #\.)
