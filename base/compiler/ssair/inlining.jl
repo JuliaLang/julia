@@ -704,8 +704,12 @@ function analyze_method!(idx::Int, sig::Signature, @nospecialize(metharg), meths
 
     isconst, src = find_inferred(mi, atypes, sv, stmttyp)
     if isconst
-        add_backedge!(mi, sv)
-        return ConstantCase(src, method, Any[methsp...], metharg)
+        if sv.params.inlining
+            add_backedge!(mi, sv)
+            return ConstantCase(src, method, Any[methsp...], metharg)
+        else
+            return spec_lambda(atype_unlimited, sv, invoke_data)
+        end
     end
     if src === nothing
         return spec_lambda(atype_unlimited, sv, invoke_data)
@@ -714,7 +718,7 @@ function analyze_method!(idx::Int, sig::Signature, @nospecialize(metharg), meths
     src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
     src_inlineable = ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
 
-    if !(src_inferred && src_inlineable)
+    if !(src_inferred && src_inlineable && sv.params.inlining)
         return spec_lambda(atype_unlimited, sv, invoke_data)
     end
 
@@ -961,9 +965,6 @@ function process_simple!(ir::IRCode, idx::Int, params::Params)
         return nothing
     end
 
-    # Bail out here if inlining is disabled
-    params.inlining || return nothing
-
     # Handle invoke
     invoke_data = nothing
     if sig.f === Core.invoke && length(sig.atypes) >= 3
@@ -982,7 +983,7 @@ function process_simple!(ir::IRCode, idx::Int, params::Params)
     (invoke_data === nothing || sig.atype <: invoke_data.types0) || return nothing
 
     # Special case inliners for regular functions
-    if late_inline_special_case!(ir, sig, idx, stmt) || is_return_type(sig.f)
+    if late_inline_special_case!(ir, sig, idx, stmt, params) || is_return_type(sig.f)
         return nothing
     end
     return (sig, invoke_data)
@@ -1194,10 +1195,10 @@ function early_inline_special_case(ir::IRCode, s::Signature, e::Expr, params::Pa
     return nothing
 end
 
-function late_inline_special_case!(ir::IRCode, sig::Signature, idx::Int, stmt::Expr)
+function late_inline_special_case!(ir::IRCode, sig::Signature, idx::Int, stmt::Expr, params::Params)
     typ = ir.types[idx]
     f, ft, atypes = sig.f, sig.ft, sig.atypes
-    if length(atypes) == 3 && istopfunction(f, :!==)
+    if params.inlining && length(atypes) == 3 && istopfunction(f, :!==)
         # special-case inliner for !== that precedes _methods_by_ftype union splitting
         # and that works, even though inference generally avoids inferring the `!==` Method
         if isa(typ, Const)
@@ -1209,7 +1210,7 @@ function late_inline_special_case!(ir::IRCode, sig::Signature, idx::Int, stmt::E
         not_call = Expr(:call, GlobalRef(Core.Intrinsics, :not_int), cmp_call_ssa)
         ir[SSAValue(idx)] = not_call
         return true
-    elseif length(atypes) == 3 && istopfunction(f, :(>:))
+    elseif params.inlining && length(atypes) == 3 && istopfunction(f, :(>:))
         # special-case inliner for issupertype
         # that works, even though inference generally avoids inferring the `>:` Method
         if isa(typ, Const)
