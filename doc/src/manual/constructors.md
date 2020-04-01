@@ -373,7 +373,7 @@ However, other similar calls still don't work:
 julia> Point(1.5,2)
 ERROR: MethodError: no method matching Point(::Float64, ::Int64)
 Closest candidates are:
-  Point(::T, !Matched::T) where T<:Real at none:1
+  (::Type{Point})(::T, !Matched::T) where T<:Real at none:1
 ```
 
 For a more general way to make all such calls work sensibly, see [Conversion and Promotion](@ref conversion-and-promotion).
@@ -550,7 +550,7 @@ julia> struct SummedArray{T<:Number,S<:Number}
 julia> SummedArray(Int32[1; 2; 3], Int32(6))
 ERROR: MethodError: no method matching SummedArray(::Array{Int32,1}, ::Int32)
 Closest candidates are:
-  SummedArray(::Array{T,1}) where T at none:5
+  (::Type{SummedArray})(::Array{T,1}) where T at none:5
 ```
 
 This constructor will be invoked by the syntax `SummedArray(a)`. The syntax `new{T,S}` allows

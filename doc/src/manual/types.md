@@ -694,7 +694,7 @@ to `Point` have the same type. When this isn't the case, the constructor will fa
 julia> Point(1,2.5)
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
 Closest candidates are:
-  Point(::T, !Matched::T) where T at none:2
+  (::Type{Point})(::T, !Matched::T) where T at none:2
 ```
 
 Constructor methods to appropriately handle such mixed cases can be defined, but that will not
