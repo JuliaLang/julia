@@ -255,11 +255,36 @@ end
 @testset "timedwait" begin
     @test timedwait(() -> true, 0) === :ok
     @test timedwait(() -> false, 0) === :timed_out
-    @test_broken timedwait(() -> error("callback failed"), 0) === :error
     @test_throws ArgumentError timedwait(() -> true, 0; pollint=0)
 
     # Allowing a smaller positive `pollint` results in `timewait` hanging
     @test_throws ArgumentError timedwait(() -> true, 0, pollint=1e-4)
+
+    # Callback passed in raises an exception
+    failure_cb = function (fail_on_call=1)
+        i = 0
+        function ()
+            i += 1
+            i >= fail_on_call && error("callback failed")
+            return false
+        end
+    end
+
+    try
+        timedwait(failure_cb(1), 0)
+        @test false
+    catch e
+        @test e isa CapturedException
+        @test e.ex isa ErrorException
+    end
+
+    try
+        timedwait(failure_cb(2), 0)
+        @test false
+    catch e
+        @test e isa CapturedException
+        @test e.ex isa ErrorException
+    end
 
     duration = @elapsed timedwait(() -> false, 1)  # Using default pollint of 0.1
     @test duration ≈ 1 atol=0.4
