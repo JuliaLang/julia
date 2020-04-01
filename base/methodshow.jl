@@ -180,29 +180,12 @@ end
 function show(io::IO, m::Method)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
-    ft0 = sig.parameters[1]
-    ft = unwrap_unionall(ft0)
-    d1 = decls[1]
     if sig === Tuple
         # Builtin
         print(io, m.name, "(...) in ", m.module)
         return
     end
-    if ft <: Function && isa(ft, DataType) &&
-            isdefined(ft.name.module, ft.name.mt.name) &&
-                # TODO: more accurate test? (tn.name === "#" name)
-            ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
-        print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.body.name
-        f = ft.parameters[1]
-        if isa(f, DataType) && isempty(f.parameters)
-            print(io, f)
-        else
-            print(io, "(", d1[1], "::", d1[2], ")")
-        end
-    else
-        print(io, "(", d1[1], "::", d1[2], ")")
-    end
+    show_method_name(io, sig, decls)
     print(io, "(")
     join(io, String[isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
                  ", ", ", ")
@@ -217,6 +200,27 @@ function show(io::IO, m::Method)
     if line > 0
         file, line = updated_methodloc(m)
         print(io, " at ", file, ":", line)
+    end
+end
+
+function show_method_name(io::IO, sig, decls)
+    ft0 = sig.parameters[1]
+    ft = unwrap_unionall(ft0)
+    d1 = decls[1]
+    if ft <: Function && isa(ft, DataType) &&
+            isdefined(ft.name.module, ft.name.mt.name) &&
+                # TODO: more accurate test? (tn.name === "#" name)
+            ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
+        print(io, ft.name.mt.name)
+    elseif isa(ft, DataType) && ft.name === Type.body.name
+        f = ft.parameters[1]
+        if isa(f, DataType) && isempty(f.parameters)
+            print(io, f)
+        else
+            print(io, "(", d1[1], "::", d1[2], ")")
+        end
+    else
+        print(io, "(", d1[1], "::", d1[2], ")")
     end
 end
 

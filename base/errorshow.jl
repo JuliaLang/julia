@@ -468,13 +468,12 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
 
     for (func, arg_types_param) in funcs
         for method in methods(func)
+            tv, decls, file, line = arg_decl_parts(method)
             buf = IOBuffer()
             iob0 = iob = IOContext(buf, io)
-            tv = Any[]
             sig0 = method.sig
-            while isa(sig0, UnionAll)
-                push!(tv, sig0.var)
-                iob = IOContext(iob, :unionall_env => sig0.var)
+            for var in tv
+                iob = IOContext(iob, :unionall_env => var)
                 sig0 = sig0.body
             end
             s1 = sig0.parameters[1]
@@ -484,13 +483,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # function itself doesn't match
                 continue
             else
-                # TODO: use the methodshow logic here
-                use_constructor_syntax = isa(func, Type)
-                if use_constructor_syntax
-                    print(IOContext(iob, :unionall_parens => true), func)
-                else
-                    print(iob, typeof(func).name.mt.name)
-                end
+                show_method_name(iob, sig0, decls)
             end
             print(iob, "(")
             t_i = copy(arg_types_param)
@@ -571,7 +564,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 end
                 print(iob, ")")
                 show_method_params(iob0, tv)
-                print(iob, " at ", method.file, ":", method.line)
+                print(iob, " at ", file, ":", line)
                 if !isempty(kwargs)
                     unexpected = Symbol[]
                     if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
