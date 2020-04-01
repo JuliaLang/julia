@@ -547,7 +547,9 @@ else # !windows
 # Obtain a temporary filename.
 function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
     isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
-    p = ccall(:tempnam, Cstring, (Cstring, Cstring), parent, temp_prefix)
+    p = withenv("TMPDIR" => nothing) do
+        ccall(:tempnam, Cstring, (Cstring, Cstring), parent, temp_prefix)
+    end
     systemerror(:tempnam, p == C_NULL)
     s = unsafe_string(p)
     Libc.free(p)

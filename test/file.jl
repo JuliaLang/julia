@@ -72,6 +72,15 @@ end
     @test_throws ArgumentError tempname(randstring())
 end
 
+@testset "tempname with parent and TMPDIR" begin
+    withenv("TMPDIR" => tempdir()) do
+        mktempdir() do d
+            t = tempname(d)
+            @test dirname(t) == d
+        end
+    end
+end
+
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
 
 @testset "mktemp/dir basic cleanup" begin
