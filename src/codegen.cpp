@@ -4683,7 +4683,7 @@ Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_tupletyp
     else {
         cache_l2 = jl_eqtable_get(jl_cfunction_list, ft, NULL);
         if (cache_l2) {
-            struct jl_typemap_assoc search = {(jl_value_t*)argt, 1, 0, NULL, 0, ~(size_t)0};
+            struct jl_typemap_assoc search = {(jl_value_t*)argt, 1, NULL, 0, ~(size_t)0};
             cache_l3 = jl_typemap_assoc_by_type(cache_l2, &search, /*offs*/0, /*subtype*/0);
             if (cache_l3) {
                 jl_svec_t *sf = (jl_svec_t*)cache_l3->func.value;
