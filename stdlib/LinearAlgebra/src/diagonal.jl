@@ -157,19 +157,6 @@ end
 (-)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag - Db.diag)
 
 for f in (:+, :-)
-    @eval function $f(A::AbstractMatrix, D::Diagonal)
-        d = D.diag
-        DA = copy_oftype(A, promote_op($f, eltype(A), eltype(D)))
-        dinds = diagind(DA)
-        for (di, ai) in enumerate(dinds)
-            DA[ai] = $f(DA[ai], d[di])
-        end
-        return DA
-    end
-end
-(+)(D::Diagonal, A::AbstractMatrix) = +(A, D)
-
-for f in (:+, :-)
     @eval function $f(D::Diagonal, S::Symmetric)
         return Symmetric($f(D, S.data), sym_uplo(S.uplo))
     end
