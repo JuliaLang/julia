@@ -209,8 +209,8 @@ Random.seed!(1)
                 Dr = real(D)
                 @test op(Aherm, Dr) isa Hermitian
                 @test Array(op(Aherm, Dr)) ≈ Array(Hermitian(op(Array(Aherm), Array(Dr))))
-                @test op(Dr, Asym) isa Hermitian
-                @test Array(op(Dr, Asym)) ≈ Array(Hermitian(op(Array(Dr), Array(Aherm))))
+                @test op(Dr, Aherm) isa Hermitian
+                @test Array(op(Dr, Aherm)) ≈ Array(Hermitian(op(Array(Dr), Array(Aherm))))
             end
         end
         @test Array(D*Transpose(Asym)) ≈ Array(D) * Array(transpose(Asym))
