@@ -408,7 +408,9 @@ striptype(::Type{T}) where {T} = T
 striptype(::Any) = nothing
 
 function showerror_ambiguous(io::IO, meth, f, args)
-    print(io, "MethodError: ", f, "(")
+    print(io, "MethodError: ")
+    print(IOContext(io, :unionall_parens => true), f)
+    print(io, "(")
     p = args.parameters
     for (i,a) in enumerate(p)
         print(io, "::", a)
