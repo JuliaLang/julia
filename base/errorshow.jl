@@ -423,7 +423,7 @@ function showerror_ambiguous(io::IO, meth, f, args)
     if isa(unwrap_unionall(sigfix), DataType) && sigfix <: Tuple
         if all(m->morespecific(sigfix, m.sig), meth)
             print(io, "\nPossible fix, define\n  ")
-            Base.show_tuple_as_call(IOContext(io, :unionall_parens => true), :function,  sigfix)
+            Base.show_tuple_as_call(io, :function,  sigfix)
         else
             println(io)
             print(io, "To resolve the ambiguity, try making one of the methods more specific, or ")

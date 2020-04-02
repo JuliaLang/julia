@@ -1750,7 +1750,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
             print(io, (demangle ? demangle_function_name : identity)(uw.name.mt.name))
         elseif isa(ft, DataType) && ft.name === Type.body.name && !Core.Compiler.has_free_typevars(ft)
             f = ft.parameters[1]
-            print(io, f)
+            print(IOContext(io, :unionall_parens => true), f)
         else
             print(io, "(::", ft, ")")
         end
