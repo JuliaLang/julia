@@ -1248,19 +1248,16 @@ static void jl_collect_backedges(jl_array_t *s, jl_array_t *t)
             callees = jl_alloc_array_1d(jl_array_int32_type, 0);
             void **pc = all_callees.table;
             size_t j;
-            int valid = 0;
+            int valid = 1;
             for (j = 0; valid && j < all_callees.size; j += 2) {
                 if (pc[j + 1] != HT_NOTFOUND) {
                     jl_value_t *callee = (jl_value_t*)pc[j];
                     void *target = ptrhash_get(&all_targets, (void*)callee);
                     if (target == HT_NOTFOUND) {
                         jl_method_instance_t *callee_mi = (jl_method_instance_t*)callee;
-                        //jl_method_t *callee_m = NULL;
                         jl_value_t *sig;
                         if (jl_is_method_instance(callee)) {
                             sig = callee_mi->specTypes;
-                            //callee_m = callee_mi->def.method;
-                            //assert(jl_is_method(callee_m) && !module_in_worklist(callee_m->module));
                         }
                         else {
                             sig = callee;
@@ -1318,7 +1315,7 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
 }
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 10;
+static const int JI_FORMAT_VERSION = 11;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 static void write_header(ios_t *s)
@@ -2297,12 +2294,9 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
     for (i = 0; i < l; i++) {
         jl_value_t *callee = jl_array_ptr_ref(targets, i * 2);
         jl_method_instance_t *callee_mi = (jl_method_instance_t*)callee;
-        jl_method_t *callee_m = NULL;
         jl_value_t *sig;
         if (jl_is_method_instance(callee)) {
             sig = callee_mi->specTypes;
-            //callee_m = callee_mi->def.method;
-            //assert(jl_is_method(callee_m) && !module_in_worklist(callee_m->module));
         }
         else {
             sig = callee;
@@ -2313,17 +2307,21 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
         size_t min_valid = 0;
         size_t max_valid = ~(size_t)0;
         jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, -1, 0, jl_world_counter, &min_valid, &max_valid);
-        if (matches == jl_false || jl_array_len(matches) != jl_array_len(expected) + !!callee_m) {
+        if (matches == jl_false || jl_array_len(matches) != jl_array_len(expected)) {
             valid = 0;
         }
         else {
-            size_t j, k;
-            for (j = 0, k = 0; k < jl_array_len(matches); k++) {
+            size_t j, k, l = jl_array_len(expected);
+            for (k = 0; k < jl_array_len(matches); k++) {
                 jl_method_t *m = (jl_method_t*)jl_svecref(jl_array_ptr_ref(matches, k), 2);
-                if (m != callee_m && m != (jl_method_t*)jl_array_ptr_ref(expected, j++)) {
+                for (j = 0; j < l; j++) {
+                    if (m == (jl_method_t*)jl_array_ptr_ref(expected, j))
+                        break;
+                }
+                if (j == l) {
                     // intersection has a new method or a method was
                     // deleted--this is now probably no good, just invalidate
-                    // everything now
+                    // everything about it now
                     valid = 0;
                     break;
                 }
