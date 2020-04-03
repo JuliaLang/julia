@@ -201,9 +201,9 @@ Base.@hide_in_stacktrace function bt_hidden_frame()
 end
 
 let bt = bt_hidden_frame()
-    st = stacktrace(bt, true)
+    st = stacktrace(bt, min_importance=-2)
     hidden_frame = st[findfirst(s->s.func == :bt_hidden_frame, st)]
-    @test StackTraces.is_hidden_frame(hidden_frame)
+    @test StackTraces.frame_importance(hidden_frame) == -1
     not_hidden_frame = st[findfirst(s->s.func == :bt_not_hidden_frame, st)]
-    @test !StackTraces.is_hidden_frame(not_hidden_frame)
+    @test StackTraces.frame_importance(not_hidden_frame) >= 0
 end

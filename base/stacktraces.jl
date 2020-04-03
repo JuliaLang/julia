@@ -54,6 +54,8 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     line::Int
     "the MethodInstance or CodeInfo containing the execution context (if it could be found)"
     linfo::Union{MethodInstance, CodeInfo, Nothing}
+    "Module of the code"
+    module_::Union{Module,Nothing}
     "true if the code is from C"
     from_c::Bool
     "true if the code is from an inlined frame"
@@ -63,7 +65,7 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
 end
 
 StackFrame(func, file, line) = StackFrame(Symbol(func), Symbol(file), line,
-                                          nothing, false, false, 0)
+                                          nothing, nothing, false, false, 0)
 
 """
     StackTrace
@@ -73,8 +75,10 @@ An alias for `Vector{StackFrame}` provided for convenience; returned by calls to
 """
 const StackTrace = Vector{StackFrame}
 
+const InstructionPointers = Vector{<:Union{Base.InterpreterIP,Ptr{Cvoid}}}
+
 const empty_sym = Symbol("")
-const UNKNOWN = StackFrame(empty_sym, empty_sym, -1, nothing, true, false, 0) # === lookup(C_NULL)
+const UNKNOWN = StackFrame(empty_sym, empty_sym, -1, nothing, nothing, true, false, 0) # === lookup(C_NULL)
 
 
 #=
@@ -95,6 +99,43 @@ function hash(frame::StackFrame, h::UInt)
     return h
 end
 
+"""
+Classify stack frame according to heuristic importance level
+
+Importance level 0 is intended to be the default minimum which will be shown to
+users in stack traces.
+"""
+function frame_importance(frame::StackFrame)
+    if frame.from_c
+        return -2
+    end
+    if frame.linfo isa Core.MethodInstance
+        def = frame.linfo.def
+        if def isa Method
+            is_hidden = ccall(:jl_ir_flag_hide_in_stacktrace, Bool, (Any,), def.source)
+            if is_hidden
+                # This overrides the module heuristic information
+                return -1
+            end
+        end
+    end
+    if frame.module_ !== nothing
+        modroot = Base.moduleroot(frame.module_)
+        # TODO: Should Core be negative by default ?
+        if modroot == Base || modroot == Core
+            return 0
+        elseif modroot == Main
+            return 3
+        # elseif ???
+            # TODO: How can users customize this? For example can we return 2
+            # for dev'd or unregistered modules?
+            # return 2
+        else
+            return 1
+        end
+    end
+    return 0
+end
 
 """
     lookup(pointer::Ptr{Cvoid}) -> Vector{StackFrame}
@@ -111,7 +152,16 @@ function lookup(pointer::Ptr{Cvoid})
     for i in 1:length(infos)
         info = infos[i]
         @assert(length(info) == 6)
-        res[i] = StackFrame(info[1], info[2], info[3], info[4], info[5], info[6], pointer)
+        module_ = nothing
+        mi = info[4]
+        if mi isa MethodInstance
+            module_ = mi.def isa Module ? mi.def : mi.def.module
+        else
+            # We can't look up the MethodInstance of inlined functions
+            # directly. TODO: Figure out how to infer this from the parent
+            # linfo + debug info (see also lookup_pointer in debuginfo.cpp)
+        end
+        res[i] = StackFrame(info[1], info[2], info[3], info[4], module_, info[5], info[6], pointer)
     end
     return res
 end
@@ -124,44 +174,47 @@ function lookup(ip::Base.InterpreterIP)
         func = ip.code.def.name
         file = ip.code.def.file
         line = ip.code.def.line
+        module_ = ip.code.def.module
     elseif ip.code === nothing
         # interpreted top-level expression with no CodeInfo
-        return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
+        return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, nothing, false, false, 0)]
     else
         @assert ip.code isa CodeInfo
         codeinfo = ip.code
+        module_ = ip.mod
         func = top_level_scope_sym
         file = empty_sym
         line = 0
     end
     i = max(ip.stmt+1, 1)  # ip.stmt is 0-indexed
     if i > length(codeinfo.codelocs) || codeinfo.codelocs[i] == 0
-        return [StackFrame(func, file, line, ip.code, false, false, 0)]
+        return [StackFrame(func, file, line, ip.code, module_, false, false, 0)]
     end
     lineinfo = codeinfo.linetable[codeinfo.codelocs[i]]
     scopes = StackFrame[]
     while true
-        push!(scopes, StackFrame(lineinfo.method, lineinfo.file, lineinfo.line, ip.code, false, false, 0))
+        push!(scopes, StackFrame(lineinfo.method, lineinfo.file, lineinfo.line, ip.code, module_, false, false, 0))
         if lineinfo.inlined_at == 0
             break
         end
         lineinfo = codeinfo.linetable[lineinfo.inlined_at]
+        module_ = nothing # Can we get this information from somewhere?
     end
     return scopes
 end
 
 """
-    stacktrace([trace::Vector{Ptr{Cvoid}},] [c_funcs::Bool=false]) -> StackTrace
+    stacktrace([trace::Vector]; min_importance=0) -> StackTrace
 
 Returns a stack trace in the form of a vector of `StackFrame`s. (By default stacktrace
 doesn't return C functions, but this can be enabled.) When called without specifying a
 trace, `stacktrace` first calls `backtrace`.
 """
-function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Ptr{Cvoid}}}, c_funcs::Bool=false)
+function stacktrace(trace::InstructionPointers; min_importance=0)
     stack = StackTrace()
     for ip in trace
         for frame in lookup(ip)
-            if c_funcs || (!frame.from_c && !is_hidden_frame(frame))
+            if frame_importance(frame) >= min_importance
                 push!(stack, frame)
             end
         end
@@ -169,13 +222,13 @@ function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Ptr{Cvoid}}}, c_fun
     return stack
 end
 
-function stacktrace(c_funcs::Bool=false)
-    stack = stacktrace(backtrace(), c_funcs)
-    # Remove frame for this function (and any functions called by this function).
-    remove_frames!(stack, :stacktrace)
-    # also remove all of the non-Julia functions that led up to this point (if that list is non-empty)
-    c_funcs && deleteat!(stack, 1:(something(findfirst(frame -> !frame.from_c, stack), 1) - 1))
-    return stack
+Base.@hide_in_stacktrace stacktrace(; min_importance=0) = stacktrace(backtrace(), min_importance=min_importance)
+
+# The following two functions are deprecated because c_funcs is now handled via
+# the min_importance level instead.
+Base.@hide_in_stacktrace stacktrace(c_funcs::Bool) = stacktrace(backtrace(), c_funcs)
+function stacktrace(trace::InstructionPointers, c_funcs::Bool)
+    stacktrace(trace, min_importance=c_funcs ? -2 : 0)
 end
 
 """

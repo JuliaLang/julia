@@ -745,7 +745,7 @@ function show_backtrace(io::IO, t::Vector{Any})
     end
 end
 
-function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
+function process_backtrace(t::Vector, limit::Int=typemax(Int); min_importance=0)
     n = 0
     last_frame = StackTraces.UNKNOWN
     count = 0
@@ -762,7 +762,7 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
                 continue
             end
 
-            if (frame.from_c && skipC) || is_hidden_frame(frame.func)
+            if StackTraces.frame_importance(frame) < min_importance
                 continue
             end
             count += 1
