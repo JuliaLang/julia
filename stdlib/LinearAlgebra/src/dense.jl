@@ -545,6 +545,22 @@ Base.:^(b::Number, A::AbstractMatrix) = exp!(log(b)*A)
 # method for ℯ to explicitly elide the log(b) multiplication
 Base.:^(::Irrational{:ℯ}, A::AbstractMatrix) = exp(A)
 
+function Base.:^(A::AbstractMatrix, B::AbstractMatrix)
+    nA1, nA2 = size(A)
+    nB1, nB2 = size(B)
+    if nA1!=nA2 || nB1!=nB2
+        throw(DimensionMismatch("matrices must be square"))
+    elseif nA1==1
+        return A[1,1]^B
+    elseif nB1==1
+        return A^B[1,1]
+    elseif nA1!=nB2
+        throw(DimensionMismatch("matrices must have same dimensionality"))
+    else
+        return exp(B*log(A))
+    end
+end
+
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
 function exp!(A::StridedMatrix{T}) where T<:BlasFloat

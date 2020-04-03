@@ -928,4 +928,13 @@ end
     @test exp(log(A2)) ≈ A2
 end
 
+@testset "Matrix^Matrix" begin
+    A = [ℯ 0; 0 ℯ]
+    B = [3 0; 0 3]
+    @test A^B ≈ A^3 ≈ ℯ^B
+    C = 2*ones(1,1)
+    @test C^B ≈ 2^B
+    @test A^C ≈ A^2
+end
+
 end # module TestDense
