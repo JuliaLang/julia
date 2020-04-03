@@ -424,30 +424,14 @@ end
 baremodule MainInclude
 using ..Base
 include(mapexpr::Function, fname::AbstractString) = Base.include(mapexpr, Main, fname)
-# We inline the definition of include from loading.jl/include_relative to get one-frame stacktraces
-# for the common case of include(fname).  Otherwise we would use:
-#    include(fname::AbstractString) = Base.include(Main, fname)
+
+# We redefine include here rather than calling Base.include to get one-frame
+# stacktraces for the common case of include(fname).
 function include(fname::AbstractString)
-    mod = Main
     isa(fname, String) || (fname = Base.convert(String, fname)::String)
-    path, prev = Base._include_dependency(mod, fname)
-    for callback in Base.include_callbacks # to preserve order, must come before Core.include
-        Base.invokelatest(callback, mod, path)
-    end
-    tls = Base.task_local_storage()
-    tls[:SOURCE_PATH] = path
-    local result
-    try
-        result = ccall(:jl_load, Any, (Any, Cstring), mod, path)
-    finally
-        if prev === nothing
-            Base.delete!(tls, :SOURCE_PATH)
-        else
-            tls[:SOURCE_PATH] = prev
-        end
-    end
-    return result
+    Base.@_code_for_include(identity, Main, fname)
 end
+
 eval(x) = Core.eval(Main, x)
 end
 

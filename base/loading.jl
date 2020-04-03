@@ -1125,6 +1125,42 @@ actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`i
 """
 Base.include # defined in sysimg.jl
 
+# The include() definition needs to happen at a particular part of bootstrap
+# (see Base.jl) so the code is only defined as a macro here.
+#
+# Also, the definition of include() is duplicated in Main for nicer stacktraces
+# (see client.jl) and this macro ensures both definitions are the same.
+macro _code_for_include(mapexpr, mod, _path)
+    quote
+        mapexpr = $(esc(mapexpr))
+        mod = $(esc(mod))
+        _path = $(esc(_path))
+
+        path, prev = _include_dependency(mod, _path)
+        for callback in include_callbacks # to preserve order, must come before Core.include
+            invokelatest(callback, mod, path)
+        end
+        tls = task_local_storage()
+        tls[:SOURCE_PATH] = path
+        local result
+        try
+            # result = Core.include(mod, path)
+            if mapexpr === identity
+                result = ccall(:jl_load, Any, (Any, Cstring), mod, path)
+            else
+                result = ccall(:jl_load_rewrite, Any, (Any, Cstring, Any), mod, path, mapexpr)
+            end
+        finally
+            if prev === nothing
+                delete!(tls, :SOURCE_PATH)
+            else
+                tls[:SOURCE_PATH] = prev
+            end
+        end
+        return result
+    end
+end
+
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])
 

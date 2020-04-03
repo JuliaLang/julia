@@ -363,32 +363,9 @@ end
 for m in methods(include)
     delete_method(m)
 end
-# These functions are duplicated in client.jl/include(::String) for
-# nicer stacktraces. Modifications here have to be backported there
 include(mod::Module, _path::AbstractString) = include(identity, mod, _path)
-function include(mapexpr::Function, mod::Module, _path::AbstractString)
-    path, prev = _include_dependency(mod, _path)
-    for callback in include_callbacks # to preserve order, must come before Core.include
-        invokelatest(callback, mod, path)
-    end
-    tls = task_local_storage()
-    tls[:SOURCE_PATH] = path
-    local result
-    try
-        # result = Core.include(mod, path)
-        if mapexpr === identity
-            result = ccall(:jl_load, Any, (Any, Cstring), mod, path)
-        else
-            result = ccall(:jl_load_rewrite, Any, (Any, Cstring, Any), mod, path, mapexpr)
-        end
-    finally
-        if prev === nothing
-            delete!(tls, :SOURCE_PATH)
-        else
-            tls[:SOURCE_PATH] = prev
-        end
-    end
-    return result
+function include(mapexpr::Function, mod::Module, path::AbstractString)
+    @_code_for_include(mapexpr, mod, path)
 end
 
 end_base_include = time_ns()
