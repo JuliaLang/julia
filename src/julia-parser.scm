@@ -1419,7 +1419,8 @@
               `(const ,assgn))))
 
        ((function macro)
-        (let* ((paren (eqv? (require-token s) #\())
+        (let* ((loc   (line-number-node s))
+               (paren (eqv? (require-token s) #\())
                (sig   (parse-def s (eq? word 'function) paren)))
           (if (and (not paren) (symbol-or-interpolate? sig))
               (begin (if (not (eq? (require-token s) 'end))
@@ -1440,7 +1441,7 @@
                                    sig)))
                      (body (parse-block s)))
                 (expect-end s word)
-                (list word def body)))))
+                (list word def (add-line-number body loc))))))
 
        ((abstract)
         (if (not (eq? (peek-token s) 'type))

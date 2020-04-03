@@ -162,11 +162,12 @@ macro test999_str(args...); args; end
 @test parseall(":(a = &\nb)") == Expr(:quote, Expr(:(=), :a, Expr(:&, :b)))
 @test parseall(":(a = \$\nb)") == Expr(:quote, Expr(:(=), :a, Expr(:$, :b)))
 
-# issue 11970
+# issue 12027 - short macro name parsing vs _str suffix
 @test parseall("""
     macro f(args...) end; @f "macro argument"
 """) == Expr(:toplevel,
-             Expr(:macro, Expr(:call, :f, Expr(:..., :args)), Expr(:block, LineNumberNode(1, :none))),
+             Expr(:macro, Expr(:call, :f, Expr(:..., :args)),
+                  Expr(:block, LineNumberNode(1, :none), LineNumberNode(1, :none))),
              Expr(:macrocall, Symbol("@f"), LineNumberNode(1, :none), "macro argument"))
 
 # blocks vs. tuples
@@ -1423,6 +1424,7 @@ let ex = Meta.lower(@__MODULE__, Meta.parse("
     @test isa(ex, Expr) && ex.head === :error
     @test ex.args[1] == """
 invalid assignment location "function (s, o...)
+    # none, line 2
     # none, line 3
     f(a, b) do
         # none, line 4

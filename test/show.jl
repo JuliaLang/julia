@@ -922,6 +922,7 @@ end"""
 end""")) ==
 """
 :(macro m(a, b)
+      #= none:1 =#
       #= none:2 =#
       quote
           #= none:3 =#
@@ -944,7 +945,7 @@ end"""))) ==
 """macro m(a, b)
     :(\$a + \$b)
 end""")) ==
-":(macro m(a, b)\n      #= none:2 =#\n      :(\$a + \$b)\n  end)"
+":(macro m(a, b)\n      #= none:1 =#\n      #= none:2 =#\n      :(\$a + \$b)\n  end)"
 @test repr(Expr(:macro, Expr(:call, :m, :x), Expr(:quote, Expr(:call, :+, Expr(:($), :x), 1)))) ==
 ":(macro m(x)\n      :(\$x + 1)\n  end)"
 
