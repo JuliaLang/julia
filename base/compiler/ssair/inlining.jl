@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+@nospecialize
+
 struct InvokeData
     entry::Core.TypeMapEntry
     types0
@@ -41,7 +43,7 @@ struct ConstantCase
     method::Method
     sparams::Vector{Any}
     metharg::Any
-    ConstantCase(@nospecialize(val), method::Method, sparams::Vector{Any}, @nospecialize(metharg)) =
+    ConstantCase(val, method::Method, sparams::Vector{Any}, metharg) =
         new(val, method, sparams, metharg)
 end
 
@@ -49,7 +51,7 @@ struct DynamicCase
     method::Method
     sparams::Vector{Any}
     metharg::Any
-    DynamicCase(method::Method, sparams::Vector{Any}, @nospecialize(metharg)) =
+    DynamicCase(method::Method, sparams::Vector{Any}, metharg) =
         new(method, sparams, metharg)
 end
 
@@ -59,11 +61,12 @@ struct UnionSplit
     atype # ::Type
     cases::Vector{Pair{Any, Any}}
     bbs::Vector{Int}
-    UnionSplit(idx::Int, fully_covered::Bool, @nospecialize(atype),
-               cases::Vector{Pair{Any, Any}}) =
+    UnionSplit(idx::Int, fully_covered::Bool, atype, cases::Vector{Pair{Any, Any}}) =
         new(idx, fully_covered, atype, cases, Int[])
 end
 isinvoke(inl::UnionSplit) = false
+
+@specialize
 
 function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
     # Go through the function, performing simple ininlingin (e.g. replacing call by constants
