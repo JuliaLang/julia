@@ -137,6 +137,7 @@ Standard library changes
   arrays.
 
 #### Dates
+* The `eps` function now accepts `TimeType` types ([#31487]).
 
 #### Statistics
 
