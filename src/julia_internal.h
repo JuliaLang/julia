@@ -403,7 +403,7 @@ jl_method_instance_t *jl_get_unspecialized(jl_method_instance_t *method JL_PROPA
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
 jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT);
 int jl_code_requires_compiler(jl_code_info_t *src);
-jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast);
+jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ast);
 JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void);
 
 jl_value_t *jl_argtype_with_function(jl_function_t *f, jl_value_t *types);
@@ -1021,6 +1021,13 @@ extern jl_mutex_t safepoint_lock;
 void jl_mach_gc_end(void);
 #endif
 
+// -- smallintset.c -- //
+
+typedef uint_t (*smallintset_hash)(size_t val, jl_svec_t *data);
+typedef int (*smallintset_eq)(size_t val, const void *key, jl_svec_t *data, uint_t hv);
+ssize_t jl_smallintset_lookup(jl_array_t *cache JL_PROPAGATES_ROOT, smallintset_eq eq, const void *key, jl_svec_t *data, uint_t hv);
+void jl_smallintset_insert(jl_array_t **pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_svec_t *data);
+
 // -- typemap.c -- //
 
 // a descriptor of a jl_typemap_t that gets
@@ -1042,7 +1049,6 @@ struct jl_typemap_assoc {
     // inputs
     jl_value_t *const types;
     size_t const world;
-    size_t const max_world_mask;
     // outputs
     jl_svec_t *env; // subtype env (initialize to null to perform intersection without an environment)
     size_t min_valid;

@@ -16,8 +16,6 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/ADT/StringMap.h>
-#include <llvm/ADT/StringSet.h>
-#include <llvm/ADT/SmallSet.h>
 
 using namespace llvm;
 
@@ -40,16 +38,22 @@ void jl_dump_compiles(void *s)
 }
 
 static void jl_add_to_ee();
+static void jl_add_to_ee(std::unique_ptr<Module> &M, StringMap<std::unique_ptr<Module>*> &NewExports);
 static uint64_t getAddressForFunction(StringRef fname);
+
+void jl_link_global(GlobalVariable *GV, void *addr)
+{
+    Constant *P = literal_static_pointer_val(addr, GV->getValueType());
+    GV->setInitializer(P);
+    GV->setConstant(true);
+    GV->setLinkage(GlobalValue::PrivateLinkage);
+    GV->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+}
 
 void jl_jit_globals(std::map<void *, GlobalVariable*> &globals)
 {
     for (auto &global : globals) {
-        Constant *P = literal_static_pointer_val(global.first, global.second->getValueType());
-        global.second->setInitializer(P);
-        global.second->setConstant(true);
-        global.second->setLinkage(GlobalValue::PrivateLinkage);
-        global.second->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+        jl_link_global(global.second, global.first);
     }
 }
 
@@ -89,12 +93,34 @@ static jl_callptr_t _jl_compile_codeinst(
         emitted[codeinst] = std::move(result);
     jl_compile_workqueue(emitted, params);
 
-    jl_jit_globals(params.globals);
+    jl_add_to_ee();
+    StringMap<std::unique_ptr<Module>*> NewExports;
+    StringMap<void*> NewGlobals;
+    for (auto &global : params.globals) {
+        NewGlobals[global.second->getName()] = global.first;
+    }
+    for (auto &def : emitted) {
+        std::unique_ptr<Module> &M = std::get<0>(def.second);
+        for (auto &F : M->global_objects()) {
+            if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
+                NewExports[F.getName()] = &M;
+            }
+        }
+        // Let's link all globals here also (for now)
+        for (auto &GV : M->globals()) {
+            auto InitValue = NewGlobals.find(GV.getName());
+            if (InitValue != NewGlobals.end()) {
+                jl_link_global(&GV, InitValue->second);
+            }
+        }
+    }
     for (auto &def : emitted) {
         // Add the results to the execution engine now
-        jl_finalize_module(std::move(std::get<0>(def.second)));
+        std::unique_ptr<Module> &M = std::get<0>(def.second);
+        jl_add_to_ee(M, NewExports);
     }
-    jl_add_to_ee();
+    JL_TIMING(LLVM_MODULE_FINISH);
+
     for (auto &def : emitted) {
         jl_code_instance_t *this_code = def.first;
         jl_llvm_functions_t decls = std::get<1>(def.second);
@@ -222,7 +248,7 @@ jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT
         if ((jl_value_t*)src == jl_nothing)
             src = NULL;
         else if (jl_is_method(mi->def.method))
-            src = jl_uncompress_ast(mi->def.method, codeinst, (jl_array_t*)src);
+            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
     }
     if (src == NULL && jl_is_method(mi->def.method) &&
              jl_symbol_name(mi->def.method->name)[0] != '@') {
@@ -272,7 +298,7 @@ void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
                 src = jl_code_for_staged(unspec->def);
             }
             if (src && (jl_value_t*)src != jl_nothing)
-                src = jl_uncompress_ast(def, NULL, (jl_array_t*)src);
+                src = jl_uncompress_ir(def, NULL, (jl_array_t*)src);
         }
         else {
             src = (jl_code_info_t*)unspec->def->uninferred;
@@ -315,7 +341,7 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
                         src = def->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)def->source;
                     }
                     if (src && (jl_value_t*)src != jl_nothing)
-                        src = jl_uncompress_ast(mi->def.method, codeinst, (jl_array_t*)src);
+                        src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
                 }
                 fptr = (uintptr_t)codeinst->invoke;
                 specfptr = (uintptr_t)codeinst->specptr.fptr;
@@ -764,29 +790,34 @@ void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
 // since it also owned by jl_LLVMContext
 static Module *ready_to_emit;
 
-static void jl_add_to_ee()
+static void jl_add_to_ee(std::unique_ptr<Module> m)
 {
     JL_TIMING(LLVM_EMIT);
+#if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_)
+    // Add special values used by debuginfo to build the UnwindData table registration for Win64
+    Type *T_uint32 = Type::getInt32Ty(m->getContext());
+    ArrayType *atype = ArrayType::get(T_uint32, 3); // want 4-byte alignment of 12-bytes of data
+    (new GlobalVariable(*m, atype,
+        false, GlobalVariable::InternalLinkage,
+        ConstantAggregateZero::get(atype), "__UnwindData"))->setSection(".text");
+    (new GlobalVariable(*m, atype,
+        false, GlobalVariable::InternalLinkage,
+        ConstantAggregateZero::get(atype), "__catchjmp"))->setSection(".text");
+#endif
+    assert(jl_ExecutionEngine);
+    jl_ExecutionEngine->addModule(std::move(m));
+}
+
+static void jl_add_to_ee()
+{
     std::unique_ptr<Module> m(ready_to_emit);
     ready_to_emit = NULL;
-    if (m) {
-#if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_)
-        // Add special values used by debuginfo to build the UnwindData table registration for Win64
-        Type *T_uint32 = Type::getInt32Ty(m->getContext());
-        ArrayType *atype = ArrayType::get(T_uint32, 3); // want 4-byte alignment of 12-bytes of data
-        (new GlobalVariable(*m, atype,
-            false, GlobalVariable::InternalLinkage,
-            ConstantAggregateZero::get(atype), "__UnwindData"))->setSection(".text");
-        (new GlobalVariable(*m, atype,
-            false, GlobalVariable::InternalLinkage,
-            ConstantAggregateZero::get(atype), "__catchjmp"))->setSection(".text");
-#endif
-        assert(jl_ExecutionEngine);
-        jl_ExecutionEngine->addModule(std::move(m));
-    }
+    if (m)
+        jl_add_to_ee(std::move(m));
 }
 
 // this passes ownership of a module to the JIT after code emission is complete
+// TODO: this should be deprecated
 void jl_finalize_module(std::unique_ptr<Module> m)
 {
     if (ready_to_emit)
@@ -794,6 +825,74 @@ void jl_finalize_module(std::unique_ptr<Module> m)
     else
         ready_to_emit = m.release();
 }
+
+static int jl_add_to_ee(
+        std::unique_ptr<Module> &M,
+        StringMap<std::unique_ptr<Module>*> &NewExports,
+        DenseMap<Module*, int> &Queued,
+        std::vector<std::vector<std::unique_ptr<Module>*>> &ToMerge,
+        int depth)
+{
+    // DAG-sort (post-dominator) the compile to compute the minimum
+    // merge-module sets for linkage
+    if (!M)
+        return 0;
+    // First check and record if it's on the stack somewhere
+    {
+        auto &Cycle = Queued[M.get()];
+        if (Cycle)
+            return Cycle;
+        ToMerge.push_back({});
+        Cycle = depth;
+    }
+    int MergeUp = depth;
+    // Compute the cycle-id
+    for (auto &F : M->global_objects()) {
+        if (F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
+            auto Callee = NewExports.find(F.getName());
+            if (Callee != NewExports.end()) {
+                auto &CM = Callee->second;
+                int Down = jl_add_to_ee(*CM, NewExports, Queued, ToMerge, depth + 1);
+                assert(Down <= depth);
+                if (Down && Down < MergeUp)
+                    MergeUp = Down;
+            }
+        }
+    }
+    if (MergeUp == depth) {
+        // Not in a cycle (or at the top of it)
+        Queued.erase(M.get());
+        for (auto &CM : ToMerge.at(depth - 1)) {
+            assert(Queued.find(CM->get())->second == depth);
+            Queued.erase(CM->get());
+            jl_merge_module(M.get(), std::move(*CM));
+        }
+        jl_add_to_ee(std::move(M));
+        MergeUp = 0;
+    }
+    else {
+        // Add our frame(s) to the top of the cycle
+        Queued[M.get()] = MergeUp;
+        auto &Top = ToMerge.at(MergeUp - 1);
+        Top.push_back(&M);
+        for (auto &CM : ToMerge.at(depth - 1)) {
+            assert(Queued.find(CM->get())->second == depth);
+            Queued[CM->get()] = MergeUp;
+            Top.push_back(CM);
+        }
+    }
+    ToMerge.pop_back();
+    return MergeUp;
+}
+
+static void jl_add_to_ee(std::unique_ptr<Module> &M, StringMap<std::unique_ptr<Module>*> &NewExports)
+{
+    DenseMap<Module*, int> Queued;
+    std::vector<std::vector<std::unique_ptr<Module>*>> ToMerge;
+    jl_add_to_ee(M, NewExports, Queued, ToMerge, 1);
+    assert(!M);
+}
+
 
 static uint64_t getAddressForFunction(StringRef fname)
 {

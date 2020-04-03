@@ -598,7 +598,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             e = cdr_(e);
         }
         if (sym == lambda_sym)
-            ex = (jl_value_t*)jl_new_code_info_from_ast((jl_expr_t*)ex);
+            ex = (jl_value_t*)jl_new_code_info_from_ir((jl_expr_t*)ex);
         JL_GC_POP();
         if (sym == list_sym)
             return (jl_value_t*)((jl_expr_t*)ex)->args;

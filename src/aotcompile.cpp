@@ -286,7 +286,7 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
                     if ((jl_value_t*)src == jl_nothing)
                         src = NULL;
                     if (src && jl_is_method(def))
-                        src = jl_uncompress_ast(def, codeinst, (jl_array_t*)src);
+                        src = jl_uncompress_ir(def, codeinst, (jl_array_t*)src);
                 }
                 if (src == NULL || !jl_is_code_info(src)) {
                     src = jl_type_infer(mi, params.world, 0);
@@ -792,7 +792,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
         src = (jl_code_info_t*)codeinst->inferred;
         if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-            src = jl_uncompress_ast(mi->def.method, codeinst, (jl_array_t*)src);
+            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
         jlrettype = codeinst->rettype;
     }
     if (!src || (jl_value_t*)src == jl_nothing) {
@@ -802,7 +802,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         else if (jl_is_method(mi->def.method)) {
             src = mi->def.method->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)mi->def.method->source;
             if (src && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-                src = jl_uncompress_ast(mi->def.method, NULL, (jl_array_t*)src);
+                src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
         }
         // TODO: use mi->uninferred
     }
@@ -848,7 +848,7 @@ addPassesToGenerateCode(LLVMTargetMachine *TM, PassManagerBase &PM) {
     TargetPassConfig *PassConfig = TM->createPassConfig(PM);
     PassConfig->setDisableVerify(false);
     PM.add(PassConfig);
-#if JL_LLVM_VERSION >= 110000
+#if JL_LLVM_VERSION >= 100000
     MachineModuleInfoWrapperPass *MMIWP =
         new MachineModuleInfoWrapperPass(TM);
     PM.add(MMIWP);
@@ -860,7 +860,7 @@ addPassesToGenerateCode(LLVMTargetMachine *TM, PassManagerBase &PM) {
         return NULL;
     PassConfig->addMachinePasses();
     PassConfig->setInitialized();
-#if JL_LLVM_VERSION >= 110000
+#if JL_LLVM_VERSION >= 100000
     return &MMIWP->getMMI().getContext();
 #else
     return &MMI->getContext();
@@ -905,7 +905,7 @@ jl_value_t *jl_dump_llvm_asm(void *F, const char* asm_variant, const char *debug
              std::unique_ptr<MCAsmBackend> MAB(TM->getTarget().createMCAsmBackend(
                 STI, MRI, TM->Options.MCOptions));
             std::unique_ptr<MCCodeEmitter> MCE;
-#if JL_LLVM_VERSION >= 110000
+#if JL_LLVM_VERSION >= 100000
             auto FOut = std::make_unique<formatted_raw_ostream>(asmfile);
 #else
             auto FOut = llvm::make_unique<formatted_raw_ostream>(asmfile);

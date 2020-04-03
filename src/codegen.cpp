@@ -4683,7 +4683,7 @@ Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_tupletyp
     else {
         cache_l2 = jl_eqtable_get(jl_cfunction_list, ft, NULL);
         if (cache_l2) {
-            struct jl_typemap_assoc search = {(jl_value_t*)argt, 1, 0, NULL, 0, ~(size_t)0};
+            struct jl_typemap_assoc search = {(jl_value_t*)argt, 1, NULL, 0, ~(size_t)0};
             cache_l3 = jl_typemap_assoc_by_type(cache_l2, &search, /*offs*/0, /*subtype*/0);
             if (cache_l3) {
                 jl_svec_t *sf = (jl_svec_t*)cache_l3->func.value;
@@ -5820,10 +5820,13 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     auto coverageVisitStmt = [&] (size_t dbg) {
         if (dbg == 0)
             return;
+        // Compute inlining stack for current line, inner frame first
         while (dbg) {
             new_lineinfo.push_back(dbg);
             dbg = linetable.at(dbg).inlined_at;
         }
+        // Visit frames which differ from previous statement as tracked in
+        // current_lineinfo (tracked outer frame first).
         current_lineinfo.resize(new_lineinfo.size(), 0);
         for (dbg = 0; dbg < new_lineinfo.size(); dbg++) {
             unsigned newdbg = new_lineinfo[new_lineinfo.size() - dbg - 1];
@@ -5906,15 +5909,6 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         BB[label] = bb;
     }
 
-    if (do_coverage(mod_is_user_mod)) {
-        coverageVisitLine(ctx, ctx.file, toplineno);
-        if (linetable.size() >= 2) {
-            // avoid double-counting the entry line
-            const auto &info = linetable.at(1);
-            if (info.file == ctx.file && info.line == toplineno && info.is_user_code == mod_is_user_mod)
-                current_lineinfo.push_back(1);
-        }
-    }
     Value *sync_bytes = nullptr;
     if (do_malloc_log(true))
         sync_bytes = ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
@@ -6484,7 +6478,7 @@ jl_compile_result_t jl_emit_codeinst(
         src = (jl_code_info_t*)codeinst->inferred;
         jl_method_t *def = codeinst->def->def.method;
         if (src && (jl_value_t*)src != jl_nothing && jl_is_method(def))
-            src = jl_uncompress_ast(def, codeinst, (jl_array_t*)src);
+            src = jl_uncompress_ir(def, codeinst, (jl_array_t*)src);
         if (!src || !jl_is_code_info(src)) {
             JL_GC_POP();
             return jl_compile_result_t(); // failed
@@ -6526,17 +6520,17 @@ jl_compile_result_t jl_emit_codeinst(
                 // update the stored code
                 if (codeinst->inferred != (jl_value_t*)src) {
                     if (jl_is_method(def))
-                        src = (jl_code_info_t*)jl_compress_ast(def, src);
+                        src = (jl_code_info_t*)jl_compress_ir(def, src);
                     codeinst->inferred = (jl_value_t*)src;
                     jl_gc_wb(codeinst, src);
                 }
             }
             else if (// don't delete toplevel code
                      jl_is_method(def) &&
-                     // and there is something to delete (test this before calling jl_ast_flag_inlineable)
+                     // and there is something to delete (test this before calling jl_ir_flag_inlineable)
                      codeinst->inferred != jl_nothing &&
                      // don't delete inlineable code, unless it is constant
-                     (codeinst->invoke == jl_fptr_const_return || !jl_ast_flag_inlineable((jl_array_t*)codeinst->inferred)) &&
+                     (codeinst->invoke == jl_fptr_const_return || !jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred)) &&
                      // don't delete code when generating a precompile file
                      !imaging_mode) {
                 // if not inlineable, code won't be needed again

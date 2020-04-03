@@ -20,6 +20,8 @@ New language features
   `register_error_hint` function. Packages that define custom exception types
   can support hints by calling `show_error_hints` from their `showerror` method. ([#35094])
 
+* Support for Unicode 13.0.0 (via utf8proc 2.5) ([#35282]).
+
 Language changes
 ----------------
 
@@ -61,7 +63,8 @@ Language changes
   Now the result is "a\n b", since the space before `b` is no longer considered to occur
   at the start of a line. The old behavior is considered a bug ([#35001]).
 
-* Color now defaults to on when stdout and stderr are TTYs ([#34347])
+* The line number of function definitions is now added by the parser as an
+  additional `LineNumberNode` at the start of each function body ([#35138]).
 
 Multi-threading changes
 -----------------------
@@ -91,7 +94,7 @@ New library features
 * Function composition now works also on one argument `∘(f) = f` (#34251)
 * `@NamedTuple{key1::Type1, ...}` macro for convenient `NamedTuple` declarations ([#34548]).
 
-* `isapprox` (or `≈`) now has a one-argument "curried" method `isapprox(x)` which returns a function, like `isequal` (or `==`)` ([#32305]).
+* `isapprox` (or `≈`) now has a one-argument "curried" method `isapprox(x)` which returns a function, like `isequal` (or `==`) ([#32305]).
 * `Ref{NTuple{N,T}}` can be passed to `Ptr{T}`/`Ref{T}` `ccall` signatures ([#34199])
 * `x::Signed % Unsigned` and `x::Unsigned % Signed` are supported for integer bitstypes.
 * `signed(unsigned_type)` is supported for integer bitstypes, `unsigned(signed_type)` has been supported.
@@ -114,6 +117,8 @@ Standard library changes
 * `normalize` now supports multidimensional arrays ([#34239])
 * `lq` factorizations can now be used to compute the minimum-norm solution to under-determined systems ([#34350]).
 * The BLAS submodule now supports the level-2 BLAS subroutine `spmv!` ([#34320]).
+* The BLAS submodule now supports the level-1 BLAS subroutine `rot!` ([#35124]).
+* New generic `rotate!(x, y, c, s)` and `reflect!(x, y, c, s)` functions ([#35124]).
 
 #### Markdown
 
