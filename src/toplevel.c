@@ -830,6 +830,8 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     jl_value_t *v = NULL;
     int last_lineno = jl_lineno;
     const char *last_filename = jl_filename;
+    jl_lineno = 1;
+    jl_filename = "none";
     if (jl_options.incremental && jl_generating_output()) {
         if (!ptrhash_has(&jl_current_modules, (void*)m)) {
             if (m != jl_main_module) { // TODO: this was grand-fathered in
