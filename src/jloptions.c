@@ -52,7 +52,7 @@ jl_options_t jl_options = { 0,    // quiet
                             1,    // debug_level [release build]
 #endif
                             JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
-                            JL_OPTIONS_DEPWARN_ON,    // deprecation warning
+                            JL_OPTIONS_DEPWARN_OFF,    // deprecation warning
                             0,    // method overwrite warning
                             1,    // can_inline
                             JL_OPTIONS_POLLY_ON, // polly
