@@ -4,11 +4,9 @@
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
-using SparseArrays
+isdefined(Main, :TSlow) || @eval Main include("testhelpers/arrayindexingtypes.jl")
 
-if !isdefined(@__MODULE__, :T24Linear)
-     include("testhelpers/arrayindexingtypes.jl")
- end
+using SparseArrays
 
 using Random, LinearAlgebra
 using Dates
