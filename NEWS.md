@@ -28,7 +28,7 @@ New library features
 
 Standard library changes
 ------------------------
-* A 1-d `Zip` iterator (where `Base.IteratorSize` is `Base.HasShape{1}()`) with defined length of `n` has now also size of `(n,)` (instead of throwing an error) ([#29927]).
+* A 1-d `Zip` iterator (where `Base.IteratorSize` is `Base.HasShape{1}()`) with defined length of `n` has now also size of `(n,)` (instead of throwing an error with truncated iterators) ([#29927]).
 * The `@timed` macro now returns a `NamedTuple` ([#34149])
 
 #### LinearAlgebra
