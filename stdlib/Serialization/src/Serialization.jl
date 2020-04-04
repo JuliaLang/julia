@@ -685,6 +685,36 @@ function writeheader(s::AbstractSerializer)
     nothing
 end
 
+function readheader(s::AbstractSerializer)
+    # Tag already read
+    io = s.io
+    m1 = read(io, UInt8)
+    m2 = read(io, UInt8)
+    if m1 != UInt8('J') || m2 != UInt8('L')
+        error("Unsupported serialization format (got header magic bytes $m1 $m2)")
+    end
+    version    = read(io, UInt8)
+    flags      = read(io, UInt8)
+    reserved1  = read(io, UInt8)
+    reserved2  = read(io, UInt8)
+    reserved3  = read(io, UInt8)
+    endianflag = flags & 0x3
+    wordflag   = (flags >> 2) & 0x3
+    wordsize = wordflag == 0 ? 4 :
+               wordflag == 1 ? 8 :
+               error("Unknown word size flag in header")
+    endian_bom = endianflag == 0 ? 0x04030201 :
+                 endianflag == 1 ? 0x01020304 :
+                 error("Unknown endianness flag in header")
+    # Check protocol compatibility.
+    endian_bom == ENDIAN_BOM  || error("Serialized byte order mismatch ($(repr(endian_bom)))")
+    wordsize   == sizeof(Int) || error("Serialized word size mismatch ($wordsize)")
+    if version > ser_version
+        error("""Cannot read stream serialized with a newer version of Julia.
+                 Got data version $version > current version $ser_version""")
+    end
+end
+
 """
     serialize(stream::IO, value)
 
@@ -843,9 +873,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
     elseif b == LONGSYMBOL_TAG
         return deserialize_symbol(s, Int(read(s.io, Int32)::Int32))
     elseif b == HEADER_TAG
-        for _ = 1:7
-            read(s.io, UInt8)
-        end
+        readheader(s)
         return deserialize(s)
     elseif b == INT8_TAG
         return read(s.io, Int8)

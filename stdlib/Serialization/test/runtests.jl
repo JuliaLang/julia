@@ -529,8 +529,8 @@ let x = T20324[T20324(1) for i = 1:2]
     @test y == x
 end
 
-# serializer header
-let io = IOBuffer()
+@testset "serializer header" begin
+    io = IOBuffer()
     serialize(io, ())
     seekstart(io)
     b = read(io)
@@ -541,6 +541,27 @@ let io = IOBuffer()
     @test ((b[5] & 0xc)>>2) == (sizeof(Int) == 8)
     @test (b[5] & 0xf0) == 0
     @test all(b[6:8] .== 0)
+
+    # Detection of incompatible binary serializations
+    function corrupt_header(bytes, offset, val)
+        b = copy(bytes)
+        b[offset] = val
+        IOBuffer(b)
+    end
+    @test_throws(
+        ErrorException("""Cannot read stream serialized with a newer version of Julia.
+                          Got data version 255 > current version $(Serialization.ser_version)"""),
+        deserialize(corrupt_header(b, 4, 0xff)))
+    @test_throws(ErrorException("Unknown word size flag in header"),
+                 deserialize(corrupt_header(b, 5, 2<<2)))
+    @test_throws(ErrorException("Unknown endianness flag in header"),
+                 deserialize(corrupt_header(b, 5, 2)))
+    other_wordsize = sizeof(Int) == 8 ? 4 : 8
+    @test_throws(ErrorException("Serialized word size mismatch ($other_wordsize)"),
+                 deserialize(corrupt_header(b, 5, UInt8((sizeof(Int) != 8)<<2))))
+    other_endianness = bswap(ENDIAN_BOM)
+    @test_throws(ErrorException("Serialized byte order mismatch ($(repr(other_endianness)))"),
+                 deserialize(corrupt_header(b, 5, UInt8(ENDIAN_BOM != 0x01020304))))
 end
 
 # issue #26979
