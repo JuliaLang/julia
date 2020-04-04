@@ -10,13 +10,25 @@ const AdjOrTransStridedOrTriangularMatrix{T} = Union{StridedOrTriangularMatrix{T
 +(A::Hermitian, B::SparseMatrixCSC) = parent(A) + B
 +(A::SparseMatrixCSC, B::Hermitian) = A + parent(B)
 function +(A::Hermitian{<:Any, <:SparseMatrixCSC}, B::Hermitian{<:Any, <:SparseMatrixCSC})
-    Hermitian(parent(A) + parent(B))
+    if A.uplo == B.uplo
+        Hermitian(parent(A) + parent(B), sym_uplo(A.uplo))
+    elseif A.uplo == 'U'
+        Hermitian(parent(A) + permutedims(parent(B)), :U)
+    else
+        Hermitian(permutedims(parent(A)) + parent(B), :U)
+    end
 end
 
 +(A::Symmetric, B::SparseMatrixCSC) = parent(A) + B
 +(A::SparseMatrixCSC, B::Symmetric) = A + parent(B)
 function +(A::Symmetric{<:Any, <:SparseMatrixCSC}, B::Symmetric{<:Any, <:SparseMatrixCSC})
-    Symmetric(parent(A) + parent(B))
+    if A.uplo == B.uplo
+        Symmetric(parent(A) + parent(B), sym_uplo(A.uplo))
+    elseif A.uplo == 'U'
+        Symmetric(parent(A) + permutedims(parent(B)), :U)
+    else
+        Symmetric(permutedims(parent(A)) + parent(B), :U)
+    end
 end
 
 function mul!(C::StridedVecOrMat, A::AbstractSparseMatrixCSC, B::Union{StridedVector,AdjOrTransStridedOrTriangularMatrix}, α::Number, β::Number)
