@@ -4,7 +4,7 @@
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
-isdefined(Main, :TSlow) || @eval Main include("testhelpers/arrayindexingtypes.jl")
+isdefined(@__MODULE__, :T24Linear) || include("testhelpers/arrayindexingtypes.jl")
 
 using SparseArrays
 
