@@ -5,6 +5,7 @@ ex = Base.Cartesian.exprresolve(:(if 5 > 4; :x; else :y; end))
 @test ex.args[2] == QuoteNode(:x)
 
 @test Base.Cartesian.lreplace!("val_col", Base.Cartesian.LReplace{String}(:col, "col", 1)) == "val_1"
+@test Base.setindex(CartesianIndex(1,5,4),3,2) == CartesianIndex(1, 3, 4)
 
 # test conversions for CartesianIndex
 
@@ -12,6 +13,7 @@ ex = Base.Cartesian.exprresolve(:(if 5 > 4; :x; else :y; end))
     @test convert(Int, CartesianIndex(42)) === 42
     @test convert(Float64, CartesianIndex(42)) === 42.0
     @test convert(Tuple, CartesianIndex(42, 1)) === (42, 1)
+
     # can't convert higher-dimensional indices to Int
     @test_throws MethodError convert(Int, CartesianIndex(42, 1))
 end
@@ -64,3 +66,5 @@ end
     @test iterate(I, CartesianIndex(3, typemax(Int)))[1] == CartesianIndex(4,typemax(Int))
     @test iterate(I, CartesianIndex(4, typemax(Int)))    === nothing
 end
+
+
