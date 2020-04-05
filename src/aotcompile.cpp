@@ -22,7 +22,7 @@
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Vectorize.h>
 #if defined(JL_ASAN_ENABLED)
-#include <llvm/Transforms/Instrumentation.h>
+#include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
 #endif
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
