@@ -386,10 +386,11 @@ try
     write(FooBar2_file,
           """
           module FooBar2
-          error("break me")
+          some_error() = error("break me")
+          some_error()
           end
           """)
-    @test_warn "ERROR: LoadError: break me\nStacktrace:\n [1] error" try
+    @test_warn "ERROR: LoadError: break me\nStacktrace:\n [1] some_error" try
             Base.require(Main, :FooBar2)
             error("the \"break me\" test failed")
         catch exc
