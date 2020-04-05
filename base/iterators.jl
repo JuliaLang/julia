@@ -313,10 +313,11 @@ function _zip_min_length(is)
     end
 end
 _zip_min_length(is::Tuple{}) = nothing
-size(z::Zip) = _promote_shape(map(size, z.is)...)
-axes(z::Zip) = _promote_shape(map(axes, z.is)...)
-_promote_shape(a, b...) = promote_shape(a, _promote_shape(b...))
-_promote_shape(a) = a
+size(z::Zip) = mapreduce(size, _zip_promote_shape, z.is)
+axes(z::Zip) = mapreduce(axes, _zip_promote_shape, z.is)
+_zip_promote_shape((a,)::Tuple{OneTo}, (b,)::Tuple{OneTo}) = (intersect(a, b),)
+_zip_promote_shape((m,)::Tuple{Integer},(n,)::Tuple{Integer}) = (min(m,n),)
+_zip_promote_shape(a, b) = promote_shape(a, b)
 eltype(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_eltype(Is)
 _zip_eltype(::Type{Is}) where {Is<:Tuple} =
     tuple_type_cons(eltype(tuple_type_head(Is)), _zip_eltype(tuple_type_tail(Is)))
