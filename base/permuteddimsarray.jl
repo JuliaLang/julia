@@ -46,8 +46,10 @@ function PermutedDimsArray(data::AbstractArray{T,N}, perm) where {T,N}
 end
 
 Base.parent(A::PermutedDimsArray) = A.parent
-Base.size(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}    = genperm(size(parent(A)),    perm)
+Base.size(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(size(parent(A)), perm)
 Base.axes(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(axes(parent(A)), perm)
+
+Base.similar(A::PermutedDimsArray, T::Type, dims::Base.Dims) = similar(parent(A), T, dims)
 
 Base.unsafe_convert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.unsafe_convert(Ptr{T}, parent(A))
 
