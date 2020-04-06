@@ -7198,3 +7198,7 @@ struct NFANode34126
 end
 
 @test repr(NFANode34126()) == "$NFANode34126(Tuple{Nothing,$NFANode34126}[])"
+
+# Issue #34544
+@test eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar, Expr(:block)))))
+@test eval(Expr(:module, true, :bar, Expr(:block)))
