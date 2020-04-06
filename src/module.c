@@ -35,6 +35,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     m->primary_world = 0;
     m->counter = 1;
     m->nospecialize = 0;
+    m->optlevel = -1;
     JL_MUTEX_INIT(&m->lock);
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
@@ -70,6 +71,21 @@ JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports)
 JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on)
 {
     self->nospecialize = (on ? -1 : 0);
+}
+
+JL_DLLEXPORT void jl_set_module_optlevel(jl_module_t *self, int lvl)
+{
+    self->optlevel = lvl;
+}
+
+JL_DLLEXPORT int jl_get_module_optlevel(jl_module_t *m)
+{
+    int lvl = m->optlevel;
+    while (lvl == -1 && m->parent != m && m != jl_base_module) {
+        m = m->parent;
+        lvl = m->optlevel;
+    }
+    return lvl;
 }
 
 JL_DLLEXPORT void jl_set_istopmod(jl_module_t *self, uint8_t isprimary)
