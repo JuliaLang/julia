@@ -116,6 +116,8 @@ Standard library changes
   order from `order` is used to compare the values of `by(element)`. In the latter case,
   any order different from `Forward` or `Reverse` will raise an error about the
   ambiguity.
+* `close` on a file (`IOStream`) can now throw an exception if an error occurs when trying
+  to flush buffered data to disk ([#35303]).
 
 #### LinearAlgebra
 * The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
