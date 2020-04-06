@@ -112,13 +112,16 @@ printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
 Return a julia command similar to the one of the running process.
 Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
 `--compiled-modules`, `--inline`, `--check-bounds`, `--optimize`, `-g`,
-`--code-coverage`, and `--depwarn`
+`--code-coverage`, `--track-allocation`, `--color`, `--startup-file`, and `--depwarn`
 command line arguments that are not at their default values.
 
 Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notably not propagated currently.
 
 !!! compat "Julia 1.1"
     Only the `--cpu-target`, `--sysimage`, `--depwarn`, `--compile` and `--check-bounds` flags were propagated before Julia 1.1.
+
+!!! compat "Julia 1.5"
+    The flags `--color` and `--startup-file` were added in Julia 1.5.
 """
 function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
     opts = JLOptions()
@@ -170,12 +173,18 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
             isempty(coverage_file) || push!(addflags, "--code-coverage=$coverage_file")
         end
     end
-    if opts.malloc_log != 0
-        if opts.malloc_log == 1
-            push!(addflags, "--track-allocation=user")
-        elseif opts.malloc_log == 2
-            push!(addflags, "--track-allocation=all")
-        end
+    if opts.malloc_log == 1
+        push!(addflags, "--track-allocation=user")
+    elseif opts.malloc_log == 2
+        push!(addflags, "--track-allocation=all")
+    end
+    if opts.color == 1
+        push!(addflags, "--color=yes")
+    elseif opts.color == 2
+        push!(addflags, "--color=no")
+    end
+    if opts.startupfile == 2
+        push!(addflags, "--startup-file=no")
     end
     return `$julia -C$cpu_target -J$image_file $addflags`
 end
