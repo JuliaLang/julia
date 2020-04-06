@@ -2,6 +2,8 @@
 
 module InteractiveUtils
 
+Base.Experimental.@optlevel 1
+
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,
     versioninfo, subtypes, supertypes, @which, @edit, @less, @functionloc, @code_warntype,
     @code_typed, @code_lowered, @code_llvm, @code_native, clipboard

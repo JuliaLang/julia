@@ -926,7 +926,7 @@ julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Bas
 """
 function operator_associativity(s::Symbol)
     if operator_precedence(s) in (prec_arrow, prec_assignment, prec_control_flow, prec_pair, prec_power) ||
-        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) || s === :<|
+        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) || s === :<| || s === :||
         return :right
     elseif operator_precedence(s) in (0, prec_comparison) || s in (:+, :++, :*)
         return :none
@@ -1500,11 +1500,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
                is_core_macro(args[1], "@big_str")
             print(io, args[3])
         # x"y" and x"y"z
-        elseif isa(args[1], Symbol) &&
+        elseif isa(args[1], Symbol) && nargs >= 3 && isa(args[3], String) &&
                startswith(string(args[1]::Symbol), "@") &&
                endswith(string(args[1]::Symbol), "_str")
             s = string(args[1]::Symbol)
-            print(io, s[2:prevind(s,end,4)], "\"", args[3], "\"")
+            print(io, s[2:prevind(s,end,4)], "\"")
+            escape_raw_string(io, args[3])
+            print(io, "\"")
             if nargs == 4
                 print(io, args[4])
             end
@@ -1817,16 +1819,16 @@ function show(io::IO, tv::TypeVar)
     lb, ub = tv.lb, tv.ub
     if !in_env && lb !== Bottom
         if ub === Any
-            write(io, tv.name)
+            show_unquoted(io, tv.name)
             print(io, ">:")
             show_bound(io, lb)
         else
             show_bound(io, lb)
             print(io, "<:")
-            write(io, tv.name)
+            show_unquoted(io, tv.name)
         end
     else
-        write(io, tv.name)
+        show_unquoted(io, tv.name)
     end
     if !in_env && ub !== Any
         print(io, "<:")

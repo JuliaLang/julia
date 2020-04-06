@@ -8,6 +8,7 @@
 // They are not to be considered a stable API, and will be removed
 // when better package build systems are available
 
+#include "llvm-version.h"
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
@@ -25,7 +26,6 @@
 #include <llvm/Transforms/IPO.h>
 
 #include "julia.h"
-#include "llvm-version.h"
 
 using namespace llvm::legacy;
 

@@ -283,7 +283,6 @@ end
             @test vec(readdlm(io, '\t')) == x
         end
     end
-
 end
 
 # Test that we can read a write protected file
@@ -293,6 +292,13 @@ let fn = tempname()
     end
     chmod(fn, 0o444)
     readdlm(fn)[] == "Julia"
+    rm(fn)
+end
+
+# test writedlm with a filename instead of io input
+let fn = tempname(), x = ["a" "b"; "d" ""]
+    writedlm(fn, x, ',')
+    @test readdlm(fn, ',') == x
     rm(fn)
 end
 

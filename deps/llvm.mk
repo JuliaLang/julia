@@ -182,13 +182,7 @@ endif
 
 ifneq ($(LLVM_VER),svn)
 ifeq (,$(findstring rc,$(LLVM_VER)))
-ifeq ($(shell [ x"$(LLVM_VER)" = x"8.0.1" ]; echo $$?),0)
 LLVM_SRC_URL := https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVM_VER)
-else ifeq ($(shell [ x"$(LLVM_VER)" = x"9.0.1" ]; echo $$?),0)
-LLVM_SRC_URL := https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVM_VER)
-else
-LLVM_SRC_URL := http://releases.llvm.org/$(LLVM_VER)
-endif
 else
 LLVM_VER_SPLIT := $(subst rc, ,$(LLVM_VER))
 LLVM_SRC_URL := https://prereleases.llvm.org/$(word 1,$(LLVM_VER_SPLIT))/rc$(word 2,$(LLVM_VER_SPLIT))
@@ -398,6 +392,8 @@ $(eval $(call LLVM_PATCH,llvm-8.0-D59389-refactor-wmma)) # remove for 9.0
 $(eval $(call LLVM_PATCH,llvm-8.0-D59393-mma-ptx63-fix)) # remove for 9.0
 $(eval $(call LLVM_PATCH,llvm-8.0-D66657-codegen-degenerate)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm-8.0-D71495-vectorize-freduce)) # remove for 10.0
+$(eval $(call LLVM_PATCH,llvm-8.0-D75072-SCEV-add-type))
+$(eval $(call LLVM_PATCH,llvm-8.0-D65174-limit-merge-stores)) # remove for 10.0
 endif # LLVM_VER 8.0
 
 ifeq ($(LLVM_VER_SHORT),9.0)
@@ -405,17 +401,29 @@ $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
 $(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
 $(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX -- warning: this fails check-llvm-codegen-nvptx
 $(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
-$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
-#$(eval $(call LLVM_PATCH,llvm7-D50010-VNCoercion-ni)) # TODO
-#$(eval $(call LLVM_PATCH,llvm7-windows-race)) # TODO
+$(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
 $(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
 $(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm7-revert-D44485))
 $(eval $(call LLVM_PATCH,llvm-8.0-D66657-codegen-degenerate)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm-8.0-D71495-vectorize-freduce)) # remove for 10.0
+$(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
+$(eval $(call LLVM_PATCH,llvm-9.0-D65174-limit-merge-stores)) # remove for 10.0
 endif # LLVM_VER 9.0
 
+ifeq ($(LLVM_VER_SHORT),10.0)
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
+$(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
+$(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX -- warning: this fails check-llvm-codegen-nvptx
+$(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
+$(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
+$(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
+$(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
+$(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
+$(eval $(call LLVM_PATCH,llvm7-revert-D44485))
+$(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
+endif # LLVM_VER 10.0
 
 # Add a JL prefix to the version map. DO NOT REMOVE
 ifneq ($(LLVM_VER), svn)
@@ -495,12 +503,14 @@ update-llvm:
 		git pull --ff-only
 endif
 else # USE_BINARYBUILDER_LLVM
-LLVM_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LLVM_jll.jl/releases/download/LLVM-v$(LLVM_VER)+$(LLVM_BB_REL)
 ifneq ($(BINARYBUILDER_LLVM_ASSERTS), 1)
-LLVM_BB_NAME := LLVM.v$(LLVM_VER)
+LLVM_BB_REPO_NAME := LLVM_full
 else
+LLVM_BB_REPO_NAME := LLVM_full_assert
 LLVM_BB_NAME := LLVM.asserts.v$(LLVM_VER)
 endif
+LLVM_BB_NAME := $(LLVM_BB_REPO_NAME).v$(LLVM_VER)
+LLVM_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/$(LLVM_BB_REPO_NAME)_jll.jl/releases/download/$(LLVM_BB_REPO_NAME)-v$(LLVM_VER)+$(LLVM_BB_REL)
 
 $(eval $(call bb-install,llvm,LLVM,false,true))
 

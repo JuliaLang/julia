@@ -66,7 +66,6 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL, // bind-to
                             NULL, // output-bc
                             NULL, // output-unopt-bc
-                            NULL, // output-jit-bc
                             NULL, // output-o
                             NULL, // output-ji
                             NULL,    // output-code_coverage
@@ -78,7 +77,8 @@ jl_options_t jl_options = { 0,    // quiet
 static const char usage[] = "julia [switches] -- [programfile] [args...]\n";
 static const char opts[]  =
     " -v, --version             Display version information\n"
-    " -h, --help                Print this message (--help-hidden for more)\n\n"
+    " -h, --help                Print this message (--help-hidden for more)\n"
+    " --help-hidden             Uncommon options not shown by `-h`\n\n"
 
     // startup options
     " --project[={<dir>|@.}]    Set <dir> as the home project/environment\n"
@@ -166,7 +166,6 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_code_coverage,
            opt_track_allocation,
            opt_check_bounds,
-           opt_output_jit_bc,
            opt_output_unopt_bc,
            opt_output_bc,
            opt_depwarn,
@@ -222,7 +221,6 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "check-bounds",    required_argument, 0, opt_check_bounds },
         { "output-bc",       required_argument, 0, opt_output_bc },
         { "output-unopt-bc", required_argument, 0, opt_output_unopt_bc },
-        { "output-jit-bc",   required_argument, 0, opt_output_jit_bc },
         { "output-o",        required_argument, 0, opt_output_o },
         { "output-ji",       required_argument, 0, opt_output_ji },
         { "output-incremental",required_argument, 0, opt_incremental },
@@ -518,9 +516,6 @@ restart_switch:
         case opt_output_bc:
             jl_options.outputbc = optarg;
             if (!jl_options.image_file_specified) jl_options.image_file = NULL;
-            break;
-        case opt_output_jit_bc:
-            jl_options.outputjitbc = optarg;
             break;
         case opt_output_unopt_bc:
             jl_options.outputunoptbc = optarg;

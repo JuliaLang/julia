@@ -6,11 +6,6 @@ using LinearAlgebra
 
 const ≣ = isequal # convenient for comparing NaNs
 
-# remove these tests and re-enable the same ones in the
-# testset "issue #4156" later in this file when #23866 is resolved
-@test fld(0.3,0.01) == 29.0
-@test div(0.3,0.01) == 29.0
-
 @testset "basic booleans" begin
     @test true
     @test !false
@@ -468,6 +463,12 @@ end
     @test isa(sign(2//3 + 2//3im), Complex{Float64})
     @test sign(one(UInt)) == 1
     @test sign(zero(UInt)) == 0
+
+    isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
+    using .Main.Furlongs
+    x = Furlong(3.0)
+    @test sign(x) * x == x
+    @test sign(-x) * -x == x
 
     @test signbit(1) == 0
     @test signbit(0) == 0
@@ -1608,10 +1609,10 @@ end
         end
     end
     @testset "issue #4156" begin
-        @test fld(1.4,0.35667494393873234) == 3.0
-        @test div(1.4,0.35667494393873234) == 3.0
-        # @test fld(0.3,0.01) == 29.0 # uncomment when #23866 is resolved
-        # @test div(0.3,0.01) == 29.0 # uncomment when #23866 is resolved
+        @test fld(1.4, 0.35667494393873234) == 3.0
+        @test div(1.4, 0.35667494393873234) == 3.0
+        @test fld(0.3, 0.01) == 29.0
+        @test div(0.3, 0.01) == 29.0
         # see https://github.com/JuliaLang/julia/issues/3127
     end
     @testset "issue #8831" begin
@@ -2473,6 +2474,19 @@ end
     @test rem(T(-1.5), T(2), RoundNearest) == 0.5
     @test rem(T(-1.5), T(2), RoundDown)    == 0.5
     @test rem(T(-1.5), T(2), RoundUp)      == -1.5
+end
+
+@testset "rem for $T RoundNearest" for T in (Int8, Int16, Int32, Int64, Int128)
+    for (n, r) in zip(3:7, -2:2)
+        @test rem(T(n), T(5), RoundNearest) == rem(float(n), 5.0, RoundNearest) == r
+        @test rem(T(n), T(-5), RoundNearest) == rem(float(n), -5.0, RoundNearest) == r
+        @test rem(T(-n), T(-5), RoundNearest) == rem(float(-n), -5.0, RoundNearest) == -r
+        @test rem(T(-n), T(5), RoundNearest) == rem(float(-n), 5.0, RoundNearest) == -r
+        @test rem(T(n), T(5), RoundNearest) == rem(T(n)//T(1), T(5)//T(1), RoundNearest)
+        @test rem(T(-n), T(5), RoundNearest) == rem(T(-n)//T(1), T(5)//T(1), RoundNearest)
+        @test rem(T(n), T(-5), RoundNearest) == rem(T(n)//T(1), T(-5)//T(1), RoundNearest)
+        @test rem(T(-n), T(-5), RoundNearest) == rem(T(-n)//T(1), T(-5)//T(1), RoundNearest)
+    end
 end
 
 @testset "rem2pi $T" for T in (Float16, Float32, Float64, BigFloat)

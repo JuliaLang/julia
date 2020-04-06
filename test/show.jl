@@ -922,6 +922,7 @@ end"""
 end""")) ==
 """
 :(macro m(a, b)
+      #= none:1 =#
       #= none:2 =#
       quote
           #= none:3 =#
@@ -944,7 +945,7 @@ end"""))) ==
 """macro m(a, b)
     :(\$a + \$b)
 end""")) ==
-":(macro m(a, b)\n      #= none:2 =#\n      :(\$a + \$b)\n  end)"
+":(macro m(a, b)\n      #= none:1 =#\n      #= none:2 =#\n      :(\$a + \$b)\n  end)"
 @test repr(Expr(:macro, Expr(:call, :m, :x), Expr(:quote, Expr(:call, :+, Expr(:($), :x), 1)))) ==
 ":(macro m(x)\n      :(\$x + 1)\n  end)"
 
@@ -1133,6 +1134,9 @@ z856739 = [:a, :b]
 @test sprint(show, Meta.parse("a\"b\"c")) == ":(a\"b\"c)"
 @test sprint(show, Meta.parse("aa\"b\"")) == ":(aa\"b\")"
 @test sprint(show, Meta.parse("a\"b\"cc")) == ":(a\"b\"cc)"
+@test sprint(show, Meta.parse("a\"\"\"issue \"35305\" \"\"\"")) == ":(a\"issue \\\"35305\\\" \")"
+@test sprint(show, Meta.parse("a\"\$\"")) == ":(a\"\$\")"
+@test sprint(show, Meta.parse("a\"\\b\"")) == ":(a\"\\b\")"
 # 11111111111111111111, 0xfffffffffffffffff, 1111...many digits...
 @test sprint(show, Meta.parse("11111111111111111111")) == ":(11111111111111111111)"
 # @test_repr "Base.@int128_str \"11111111111111111111\""
@@ -1672,6 +1676,10 @@ end
     @test replstr(Vector[Any[1]]) == "1-element Array{Array{T,1} where T,1}:\n Any[1]"
     @test replstr(AbstractDict{Integer,Integer}[Dict{Integer,Integer}(1=>2)]) ==
         "1-element Array{AbstractDict{Integer,Integer},1}:\n Dict(1 => 2)"
+
+    # issue #34343
+    @test showstr([[1], Int[]]) == "[[1], $Int[]]"
+    @test showstr([Dict(1=>1), Dict{Int,Int}()]) == "[Dict(1 => 1), Dict{$Int,$Int}()]"
 end
 
 @testset "#14684: `display` should print associative types in full" begin

@@ -55,7 +55,13 @@ Random.seed!(1)
         @test isdiag(Diagonal([[1 0; 0 1], [1 0; 0 1]]))
         @test !isdiag(Diagonal([[1 0; 0 1], [1 0; 1 1]]))
         @test istriu(D)
+        @test istriu(D, -1)
+        @test !istriu(D, 1)
+        @test istriu(Diagonal(zero(diag(D))), 1)
         @test istril(D)
+        @test !istril(D, -1)
+        @test istril(D, 1)
+        @test istril(Diagonal(zero(diag(D))), -1)
         if elty <: Real
             @test ishermitian(D)
         end
@@ -115,6 +121,9 @@ Random.seed!(1)
                 @test ldiv!(D, copy(U)) ≈ DM\U atol=atol_three
                 @test ldiv!(transpose(D), copy(U)) ≈ DM\U atol=atol_three
                 @test ldiv!(adjoint(conj(D)), copy(U)) ≈ DM\U atol=atol_three
+                # this method tests AbstractMatrix/AbstractVec for second arg
+                Usym_bad = Symmetric(ones(elty, n+1, n+1))
+                @test_throws DimensionMismatch ldiv!(D, copy(Usym_bad))
 
                 @test ldiv!(zero(v), D, copy(v)) ≈ DM\v atol=atol_two
                 @test ldiv!(zero(v), transpose(D), copy(v)) ≈ DM\v atol=atol_two
@@ -191,6 +200,19 @@ Random.seed!(1)
         A     = rand(elty, n, n)
         Asym  = Symmetric(A + transpose(A), :U)
         Aherm = Hermitian(A + adjoint(A), :U)
+        for op in (+, -)
+            @test op(Asym, D) isa Symmetric
+            @test Array(op(Asym, D)) ≈ Array(Symmetric(op(Array(Asym), Array(D))))
+            @test op(D, Asym) isa Symmetric
+            @test Array(op(D, Asym)) ≈ Array(Symmetric(op(Array(D), Array(Asym))))
+            if !(elty <: Real)
+                Dr = real(D)
+                @test op(Aherm, Dr) isa Hermitian
+                @test Array(op(Aherm, Dr)) ≈ Array(Hermitian(op(Array(Aherm), Array(Dr))))
+                @test op(Dr, Aherm) isa Hermitian
+                @test Array(op(Dr, Aherm)) ≈ Array(Hermitian(op(Array(Dr), Array(Aherm))))
+            end
+        end
         @test Array(D*Transpose(Asym)) ≈ Array(D) * Array(transpose(Asym))
         @test Array(D*Adjoint(Asym)) ≈ Array(D) * Array(adjoint(Asym))
         @test Array(D*Transpose(Aherm)) ≈ Array(D) * Array(transpose(Aherm))
@@ -644,8 +666,41 @@ end
     @test E.vectors == [0 1 0; 1 0 0; 0 0 1]
 end
 
-@testset "sum" begin
-    @test sum(Diagonal([1,2,3])) == 6
+@testset "sum, mapreduce" begin
+    D = Diagonal([1,2,3])
+    Ddense = Matrix(D)
+    @test sum(D) == 6
+    @test_throws ArgumentError sum(D, dims=0)
+    @test sum(D, dims=1) == sum(Ddense, dims=1)
+    @test sum(D, dims=2) == sum(Ddense, dims=2)
+    @test sum(D, dims=3) == sum(Ddense, dims=3)
+    @test typeof(sum(D, dims=1)) == typeof(sum(Ddense, dims=1))
+    @test mapreduce(one, min, D, dims=1) == mapreduce(one, min, Ddense, dims=1)
+    @test mapreduce(one, min, D, dims=2) == mapreduce(one, min, Ddense, dims=2)
+    @test mapreduce(one, min, D, dims=3) == mapreduce(one, min, Ddense, dims=3)
+    @test typeof(mapreduce(one, min, D, dims=1)) == typeof(mapreduce(one, min, Ddense, dims=1))
+    @test mapreduce(zero, max, D, dims=1) == mapreduce(zero, max, Ddense, dims=1)
+    @test mapreduce(zero, max, D, dims=2) == mapreduce(zero, max, Ddense, dims=2)
+    @test mapreduce(zero, max, D, dims=3) == mapreduce(zero, max, Ddense, dims=3)
+    @test typeof(mapreduce(zero, max, D, dims=1)) == typeof(mapreduce(zero, max, Ddense, dims=1))
+
+    D = Diagonal(Int[])
+    Ddense = Matrix(D)
+    @test sum(D) == 0
+    @test_throws ArgumentError sum(D, dims=0)
+    @test sum(D, dims=1) == sum(Ddense, dims=1)
+    @test sum(D, dims=2) == sum(Ddense, dims=2)
+    @test sum(D, dims=3) == sum(Ddense, dims=3)
+    @test typeof(sum(D, dims=1)) == typeof(sum(Ddense, dims=1))
+
+    D = Diagonal(Int[2])
+    Ddense = Matrix(D)
+    @test sum(D) == 2
+    @test_throws ArgumentError sum(D, dims=0)
+    @test sum(D, dims=1) == sum(Ddense, dims=1)
+    @test sum(D, dims=2) == sum(Ddense, dims=2)
+    @test sum(D, dims=3) == sum(Ddense, dims=3)
+    @test typeof(sum(D, dims=1)) == typeof(sum(Ddense, dims=1))
 end
 
 @testset "logabsdet for generic eltype" begin

@@ -706,6 +706,16 @@ end
     @test A\view(Matrix(1.0I, 5, 5), :, :) ≈ Matrix(Diagonal(x))
 end
 
+@testset "Test \\ for Factor and SparseVecOrMat" begin
+    sparseI = sparse(1.0I, 100, 100)
+    sparseb = sprandn(100, 0.5)
+    sparseB = sprandn(100, 100, 0.5)
+    chI = cholesky(sparseI)
+    @test chI \ sparseb ≈ sparseb
+    @test chI \ sparseB ≈ sparseB
+    @test chI \ sparseI ≈ sparseI
+end
+
 @testset "Real factorization and complex rhs" begin
     A = sprandn(5, 5, 0.4) |> t -> t't + I
     B = complex.(randn(5, 2), randn(5, 2))

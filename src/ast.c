@@ -62,6 +62,7 @@ jl_sym_t *throw_undef_if_not_sym; jl_sym_t *getfield_undefref_sym;
 jl_sym_t *gc_preserve_begin_sym; jl_sym_t *gc_preserve_end_sym;
 jl_sym_t *coverageeffect_sym; jl_sym_t *escape_sym;
 jl_sym_t *aliasscope_sym; jl_sym_t *popaliasscope_sym;
+jl_sym_t *optlevel_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -380,6 +381,7 @@ void jl_init_frontend(void)
     isdefined_sym = jl_symbol("isdefined");
     nospecialize_sym = jl_symbol("nospecialize");
     specialize_sym = jl_symbol("specialize");
+    optlevel_sym = jl_symbol("optlevel");
     macrocall_sym = jl_symbol("macrocall");
     escape_sym = jl_symbol("escape");
     hygienicscope_sym = jl_symbol("hygienic-scope");
@@ -598,7 +600,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             e = cdr_(e);
         }
         if (sym == lambda_sym)
-            ex = (jl_value_t*)jl_new_code_info_from_ast((jl_expr_t*)ex);
+            ex = (jl_value_t*)jl_new_code_info_from_ir((jl_expr_t*)ex);
         JL_GC_POP();
         if (sym == list_sym)
             return (jl_value_t*)((jl_expr_t*)ex)->args;
@@ -863,6 +865,7 @@ jl_value_t *jl_parse_eval_all(const char *fname,
     int last_lineno = jl_lineno;
     const char *last_filename = jl_filename;
     size_t last_age = jl_get_ptls_states()->world_age;
+    int lineno = 0;
     jl_lineno = 0;
     jl_filename = fname;
     jl_module_t *old_module = ctx->module;
@@ -894,17 +897,20 @@ jl_value_t *jl_parse_eval_all(const char *fname,
                 expression =
                     fl_applyn(fl_ctx, 4,
                               symbol_value(symbol(fl_ctx, "jl-expand-to-thunk-warn")),
-                              expression, symbol(fl_ctx, jl_filename), fixnum(jl_lineno),
+                              expression, symbol(fl_ctx, fname), fixnum(lineno),
                               iscons(cdr_(ast)) ? fl_ctx->T : fl_ctx->F);
             }
             jl_get_ptls_states()->world_age = jl_world_counter;
             form = scm_to_julia(fl_ctx, expression, inmodule);
             JL_SIGATOMIC_END();
             jl_get_ptls_states()->world_age = jl_world_counter;
-            if (jl_is_linenode(form))
-                jl_lineno = jl_linenode_line(form);
-            else
+            if (jl_is_linenode(form)) {
+                lineno = jl_linenode_line(form);
+                jl_lineno = lineno;
+            }
+            else {
                 result = jl_toplevel_eval_flex(inmodule, form, 1, 1);
+            }
             JL_SIGATOMIC_BEGIN();
             ast = cdr_(ast);
         }

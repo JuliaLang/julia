@@ -1,6 +1,19 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+Run Evaluate Print Loop (REPL)
+
+    Example minimal code
+    ```
+    import REPL
+    term = REPL.Terminals.TTYTerminal("dumb", stdin, stdout, stderr)
+    repl = REPL.LineEditREPL(term, true)
+    REPL.run_repl(repl)
+    ```
+"""
 module REPL
+
+Base.Experimental.@optlevel 1
 
 using Base.Meta, Sockets
 import InteractiveUtils
@@ -74,6 +87,7 @@ mutable struct REPLBackend
     REPLBackend(repl_channel, response_channel, in_eval, ast_transforms=copy(repl_ast_transforms)) =
         new(repl_channel, response_channel, in_eval, ast_transforms)
 end
+REPLBackend() = REPLBackend(Channel(1),Channel(1),false)
 
 """
     softscope(ex)
@@ -134,24 +148,53 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
     nothing
 end
 
+"""
+    start_repl_backend(repl_channel::Channel,response_channel::Channel)
+
+    Starts loop for REPL backend
+    Returns a REPLBackend with backend_task assigned
+
+    Deprecated since sync / async behavior cannot be selected
+"""
 function start_repl_backend(repl_channel::Channel, response_channel::Channel)
+    # Maintain legacy behavior of asynchronous backend
     backend = REPLBackend(repl_channel, response_channel, false)
-    backend.backend_task = @async begin
-        # include looks at this to determine the relative include path
-        # nothing means cwd
-        while true
-            tls = task_local_storage()
-            tls[:SOURCE_PATH] = nothing
-            ast, show_value = take!(backend.repl_channel)
-            if show_value == -1
-                # exit flag
-                break
-            end
-            eval_user_input(ast, backend)
-        end
-    end
+    # Assignment will be made twice, but will be immediately available
+    backend.backend_task = @async start_repl_backend(backend)
     return backend
 end
+
+"""
+    start_repl_backend(backend::REPLBackend)
+
+    Call directly to run backend loop on current Task.
+    Use @async for run backend on new Task.
+
+    Does not return backend until loop is finished.
+"""
+function start_repl_backend(backend::REPLBackend,  @nospecialize(consumer = x -> nothing))
+    backend.backend_task = Base.current_task()
+    consumer(backend)
+    repl_backend_loop(backend)
+    return backend
+end
+
+function repl_backend_loop(backend::REPLBackend)
+    # include looks at this to determine the relative include path
+    # nothing means cwd
+    while true
+        tls = task_local_storage()
+        tls[:SOURCE_PATH] = nothing
+        ast, show_value = take!(backend.repl_channel)
+        if show_value == -1
+            # exit flag
+            break
+        end
+        eval_user_input(ast, backend)
+    end
+    nothing
+end
+
 struct REPLDisplay{R<:AbstractREPL} <: AbstractDisplay
     repl::R
 end
@@ -224,18 +267,31 @@ function print_response(errio::IO, @nospecialize(response), show_value::Bool, ha
     nothing
 end
 
-# A reference to a backend
+# A reference to a backend that is not mutable
 struct REPLBackendRef
     repl_channel::Channel
     response_channel::Channel
 end
+REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel,backend.response_channel)
 
-function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing))
-    repl_channel = Channel(1)
-    response_channel = Channel(1)
-    backend = start_repl_backend(repl_channel, response_channel)
-    consumer(backend)
-    run_frontend(repl, REPLBackendRef(repl_channel, response_channel))
+"""
+    run_repl(repl::AbstractREPL)
+    run_repl(repl, consumer = backend->nothing; backend_on_current_task = true)
+
+    Main function to start the REPL
+
+    consumer is an optional function that takes a REPLBackend as an argument
+"""
+function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task::Bool = true)
+    backend = REPLBackend()
+    backend_ref = REPLBackendRef(backend)
+    if backend_on_current_task
+        @async run_frontend(repl, backend_ref)
+        start_repl_backend(backend,consumer)
+    else
+        @async start_repl_backend(backend,consumer)
+        run_frontend(repl, backend_ref)
+    end
     return backend
 end
 
@@ -743,7 +799,7 @@ function eval_with_backend(ast, backend::REPLBackendRef)
     take!(backend.response_channel) # (val, iserr)
 end
 
-function respond(f, repl, main; pass_empty = false)
+function respond(f, repl, main; pass_empty = false, suppress_on_semicolon = true)
     return function do_respond(s, buf, ok)
         if !ok
             return transition(s, :abort)
@@ -758,7 +814,8 @@ function respond(f, repl, main; pass_empty = false)
             catch
                 response = (catch_stack(), true)
             end
-            print_response(repl, response, !ends_with_semicolon(line), Base.have_color)
+            hide_output = suppress_on_semicolon && ends_with_semicolon(line)
+            print_response(repl, response, !hide_output, Base.have_color)
         end
         prepare_next(repl)
         reset_state(s)
@@ -826,15 +883,10 @@ function setup_interface(
     #
     # This function returns the main interface that describes the REPL
     # functionality, it is called internally by functions that setup a
-    # Terminal-based REPL frontend, but if you want to customize your REPL
-    # or embed the REPL in another interface, you may call this function
-    # directly and append it to your interface.
+    # Terminal-based REPL frontend.
     #
-    # Usage:
-    #
-    # repl_channel,response_channel = Channel(),Channel()
-    # start_repl_backend(repl_channel, response_channel)
-    # setup_interface(REPLDisplay(t),repl_channel,response_channel)
+    # See run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
+    # for usage
     #
     ###
 
@@ -869,7 +921,7 @@ function setup_interface(
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to help("$line")
-        on_done = respond(helpmode, repl, julia_prompt, pass_empty=true))
+        on_done = respond(helpmode, repl, julia_prompt, pass_empty=true, suppress_on_semicolon=false))
 
     # Set up shell mode
     shell_mode = Prompt("shell> ";
@@ -1085,6 +1137,8 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     repl.backendref = backend
     repl.mistate = LineEdit.init_state(terminal(repl), interface)
     run_interface(terminal(repl), interface, repl.mistate)
+    # Terminate Backend
+    put!(backend.repl_channel, (nothing, -1))
     dopushdisplay && popdisplay(d)
     nothing
 end

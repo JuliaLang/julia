@@ -70,7 +70,7 @@ an exception is thrown, otherwise, the left-hand value is returned:
 
 ```jldoctest
 julia> (1+2)::AbstractFloat
-ERROR: TypeError: in typeassert, expected AbstractFloat, got Int64
+ERROR: TypeError: in typeassert, expected AbstractFloat, got a value of type Int64
 
 julia> (1+2)::Int
 3
@@ -493,7 +493,7 @@ julia> "Hello!" :: IntOrString
 "Hello!"
 
 julia> 1.0 :: IntOrString
-ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got Float64
+ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got a value of type Float64
 ```
 
 The compilers for many languages have an internal union construct for reasoning about types; Julia
@@ -812,7 +812,7 @@ julia> Pointy{AbstractString}
 ERROR: TypeError: in Pointy, in T, expected T<:Real, got Type{AbstractString}
 
 julia> Pointy{1}
-ERROR: TypeError: in Pointy, in T, expected T<:Real, got Int64
+ERROR: TypeError: in Pointy, in T, expected T<:Real, got a value of type Int64
 ```
 
 Type parameters for parametric composite types can be restricted in the same manner:
@@ -1207,8 +1207,7 @@ is raised:
 julia> supertype(Union{Float64,Int64})
 ERROR: MethodError: no method matching supertype(::Type{Union{Float64, Int64}})
 Closest candidates are:
-  supertype(!Matched::DataType) at operators.jl:42
-  supertype(!Matched::UnionAll) at operators.jl:47
+[...]
 ```
 
 ## [Custom pretty-printing](@id man-custom-pretty-printing)

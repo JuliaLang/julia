@@ -24,7 +24,7 @@ Other constructors:
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
 
 !!! compat "Julia 1.3"
-  The default constructor `Channel()` and default `size=0` were added in Julia 1.3.
+    The default constructor `Channel()` and default `size=0` were added in Julia 1.3.
 """
 mutable struct Channel{T} <: AbstractChannel{T}
     cond_take::Threads.Condition                 # waiting for data to become available
@@ -108,9 +108,9 @@ true
 ```
 
 !!! compat "Julia 1.3"
-  The `spawn=` parameter was added in Julia 1.3. This constructor was added in Julia 1.3.
-  In earlier versions of Julia, Channel used keyword arguments to set `size` and `T`, but
-  those constructors are deprecated.
+    The `spawn=` parameter was added in Julia 1.3. This constructor was added in Julia 1.3.
+    In earlier versions of Julia, Channel used keyword arguments to set `size` and `T`, but
+    those constructors are deprecated.
 
 ```jldoctest
 julia> chnl = Channel{Char}(1, spawn=true) do ch
