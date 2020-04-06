@@ -1028,3 +1028,68 @@ function complex(A::AbstractArray{T}) where T
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)
 end
+
+function div(a::Complex{T}, b::Complex{V}, r::RoundingMode=RoundNearest) where {T<:Integer, V<:Integer}
+    R = promote_type(T, V)
+    a, b = Complex{R}(a), Complex{R}(b)
+    b̅ = conj(b)
+    # TODO: Handle overflow when calculating a*b̅
+    t = a*b̅
+    # TODO: Create checked_abs2(::Complex{<:Integer})
+    # TODO: Handle overflow when calculating the norm of complex numbers
+    abs2_b = abs2(b)
+    abs2_b < 0 && __throw_gcd_overflow(a, b)
+    Complex(div(real(t), abs2_b, r), div(imag(t), abs2_b, r))
+end
+
+function rem(a::Complex{T}, b::Complex{V}, r::RoundingMode=RoundNearest) where {T<:Integer, V<:Integer}
+    R = promote_type(T, V)
+    a, b = Complex{R}(a), Complex{R}(b)
+    a - b * div(a, b, r)
+end
+
+function _first_quadrant(a::Complex)
+    ar, ai = reim(a)
+    if iszero(ar)
+        Complex(abs(ai), zero(ar))
+    elseif iszero(ai)
+        Complex(abs(ar), zero(ai))
+    elseif ar>0 && ai>0     # The complex number is already in the first quadrant
+        a
+    elseif ar<0 && ai>0     # In the second quadrant
+        Complex(ai, -ar)
+    elseif ar<0 && ai<0     # In the third quadrant
+        -a
+    else                    # In the fourth quadrant
+        Complex(-ai, ar)
+    end
+end
+
+"""
+    gcd(z1, z2)
+
+Greatest common divisor (or zero if `x` and `y` are both zero).
+The phase angle of GCD will be in [0, π/2) (i.e. in first quadrant).
+The arguments may be Gaussian integers (complex numbers with both real and imaginary parts integer).
+
+# Examples
+```jldoctest
+julia> gcd(1 + 1im, 2 + 2im)
+1 + 1im
+
+julia> gcd(1 + 1im, -2 + 2im)
+1 + 1im
+```
+"""
+function gcd(z1::Complex{T}, z2::Complex{V}) where {T<:Integer, V<:Integer}
+    R = promote_type(T, V)
+    a, b = Complex{R}(z1), Complex{R}(z2)
+    while b != 0
+        r = rem(a, b)
+        a = b
+        b = r
+    end
+    _first_quadrant(a)
+end
+
+gcd(a::Complex{<:Integer}, b::Complex{<:Integer}, c::Complex{<:Integer}...) = gcd(a, gcd(b, c...))

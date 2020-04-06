@@ -1187,3 +1187,66 @@ end
 
 # complex with non-concrete eltype
 @test_throws ErrorException complex(Union{Complex{Int}, Nothing}[])
+
+@testset "GCD for Gaussian Integers" begin
+    for T in (Int32, Int64)
+        @test gcd(complex(T(3), T(1)), complex(T(1), T(-1))) === complex(T(1), T(1))
+        @test gcd(complex(T(5), T(3)), complex(T(2), T(-8))) === complex(T(1), T(1))
+        @test gcd(complex(T(3), T(13)), complex(T(4), T(3))) === complex(T(1), T(0))
+        @test gcd(complex(T(11), T(7)), complex(T(18), T(-1))) === complex(T(1), T(0))
+        @test gcd(complex(T(5), T(1)), complex(T(3), T(5))) === complex(T(1), T(1))
+        @test gcd(complex(T(5), T(3)), complex(T(2), T(8))) === complex(T(5), T(3))
+        @test gcd(complex(T(135), T(-14)), complex(T(155), T(34))) === complex(T(5), T(12))
+        @test gcd(complex(T(4), T(22)), complex(T(17), T(1))) === complex(T(1), T(3))
+        @test gcd(complex(T(7), T(1)), complex(T(5), T(3))) === complex(T(1), T(1))
+        @test gcd(complex(T(2), T(2)), complex(T(-1), T(1))) === complex(T(1), T(1))
+
+        @test gcd(complex(T(85), T(0)), complex(T(1), T(13))) === complex(T(7), T(6))
+        @test gcd(complex(T(0), T(0)), complex(T(1), T(13))) === complex(T(1), T(13))
+        @test gcd(complex(T(1), T(13)), complex(T(0), T(0))) === complex(T(1), T(13))
+        @test gcd(complex(T(1), T(3)), complex(T(3), T(9))) === complex(T(1), T(3))
+        @test gcd(complex(T(1), T(3)), complex(T(-9), T(3))) === complex(T(1), T(3))
+        @test gcd(complex(T(1), T(3)), complex(T(-3), T(-9))) === complex(T(1), T(3))
+        @test gcd(complex(T(1), T(3)), complex(T(9), T(-3))) === complex(T(1), T(3))
+        @test gcd(complex(T(-3), T(-9)), complex(T(1), T(3))) === complex(T(1), T(3))
+        @test gcd(complex(T(0), T(0)), complex(T(0), T(0))) === complex(T(0), T(0))
+
+        @test gcd(complex(T(3), T(0)), complex(T(5), T(0))) === complex(T(1), T(0))
+        @test gcd(complex(T(0), T(3)), complex(T(0), T(5))) === complex(T(1), T(0))
+        @test gcd(complex(T(-3), T(0)), complex(T(5), T(0))) === complex(T(1), T(0))
+        @test gcd(complex(T(0), T(-3)), complex(T(0), T(-5))) === complex(T(1), T(0))
+
+        let x = typemax(T)
+            @test gcd(complex(x, x), complex(T(1), T(0))) === complex(T(1), T(0))
+            @test gcd(complex(x, x), complex(T(-1), T(0))) === complex(T(1), T(0))
+            @test gcd(complex(x, x), complex(T(0), T(1))) === complex(T(1), T(0))
+            @test gcd(complex(x, x), complex(T(0), T(-1))) === complex(T(1), T(0))
+
+            @test gcd(complex(-x, -x), complex(T(1), T(0))) === complex(T(1), T(0))
+            @test gcd(complex(-x, -x), complex(T(-1), T(0))) === complex(T(1), T(0))
+            @test gcd(complex(-x, -x), complex(T(0), T(1))) === complex(T(1), T(0))
+            @test gcd(complex(-x, -x), complex(T(0), T(-1))) === complex(T(1), T(0))
+
+            @test_broken gcd(complex(x, T(0)), complex(T(2), T(0))) === complex(T(1), T(0))
+            @test_broken gcd(complex(x, x), complex(T(2), T(0))) === complex(T(1), T(1))
+        end
+        let x = typemin(T)
+            @test gcd(complex(x, x), complex(T(1), T(0))) === complex(T(1), T(0))
+            @test gcd(complex(x, x), complex(T(-1), T(0))) === complex(T(1), T(0))
+            @test gcd(complex(x, x), complex(T(0), T(1))) === complex(T(1), T(0))
+            @test gcd(complex(x, x), complex(T(0), T(-1))) === complex(T(1), T(0))
+        end
+
+        @test gcd(complex(T(2), T(0)), complex(T(4), T(0)), complex(T(6), T(0))) === complex(T(2), T(0))
+        @test gcd(complex(T(6), T(0)), complex(T(4), T(0)), complex(T(2), T(0))) === complex(T(2), T(0))
+        @test gcd(complex(T(1), T(0)), complex(T(4), T(0)), complex(T(6), T(0))) === complex(T(1), T(0))
+        @test gcd(complex(T(1), T(0)), complex(T(0), T(1)), complex(T(0), T(-1))) === complex(T(1), T(0))
+        @test gcd(complex(T(0), T(-1)), complex(T(-1), T(0)), complex(T(0), T(-1))) === complex(T(1), T(0))
+    end
+
+    @test_broken gcd(complex(Int32(10)^5, Int32(10)^5), complex(-Int32(10)^5, -Int32(10)^5)) === complex(Int32(10)^5, Int32(10)^5)
+    @test gcd(complex(Int32(10)^5, Int32(0)), complex(Int32(10)^5, Int32(0))) === complex(Int32(10)^5, Int32(0))
+
+    @test_broken gcd(complex(Int64(10)^10, Int64(10)^10), complex(-Int64(10)^10, -Int64(10)^10)) === complex(Int64(10)^10, Int64(10)^10)
+    @test gcd(complex(Int64(10)^10, Int64(0)), complex(Int64(10)^10, Int64(0))) === complex(Int64(10)^10, Int64(0))
+end
