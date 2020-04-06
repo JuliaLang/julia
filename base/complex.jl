@@ -1056,7 +1056,7 @@ function _first_quadrant(a::Complex)
         Complex(abs(ar), zero(ai))
     elseif ar>0 && ai>0     # The complex number is already in the first quadrant
         a
-    elseif ar<0 && ai>0     # In the second quadrant
+    elseif ar < 0 && ai > 0     # In the second quadrant
         Complex(ai, -ar)
     elseif ar < 0 && ai < 0     # In the third quadrant
         -a
