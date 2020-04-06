@@ -50,15 +50,6 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 // list of modules being deserialized with __init__ methods
 jl_array_t *jl_module_init_order;
 
-#ifdef JL_ASAN_ENABLED
-JL_DLLEXPORT const char* __asan_default_options() {
-    return "allow_user_segv_handler=1:detect_leaks=0";
-    // FIXME: enable LSAN after fixing leaks & defining __lsan_default_suppressions(),
-    //        or defining __lsan_default_options = exitcode=0 once publicly available
-    //        (here and in flisp/flmain.c)
-}
-#endif
-
 size_t jl_page_size;
 
 void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
