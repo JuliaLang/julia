@@ -30,7 +30,11 @@ throw
 
 Raise an `ErrorException` with the given message.
 """
-error(s::AbstractString) = throw(ErrorException(s))
+function error(s::AbstractString)
+    @_noinline_meta
+    @_hide_in_stacktrace_meta
+    throw(ErrorException(s))
+end
 
 """
     error(msg...)
@@ -39,6 +43,7 @@ Raise an `ErrorException` with the given message.
 """
 function error(s::Vararg{Any,N}) where {N}
     @_noinline_meta
+    @_hide_in_stacktrace_meta
     throw(ErrorException(Main.Base.string(s...)))
 end
 
@@ -106,8 +111,10 @@ Get a backtrace object for the current program point.
 """
 function backtrace()
     @_noinline_meta
-    # skip frame for backtrace(). Note that for this to work properly,
-    # backtrace() itself must not be interpreted nor inlined.
+    @_hide_in_stacktrace_meta
+    # skip frame for backtrace(). Note that with `skip > 0` backtrace() must
+    # not be inlined to avoid loosing parent frames.
+    # We also tag it as hidden in case it gets interpreted.
     skip = 1
     bt1, bt2 = ccall(:jl_backtrace_from_here, Ref{SimpleVector}, (Cint, Cint), false, skip)
     return _reformat_bt(bt1::Vector{Ptr{Cvoid}}, bt2::Vector{Any})

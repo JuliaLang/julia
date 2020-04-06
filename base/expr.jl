@@ -238,6 +238,18 @@ macro pure(ex)
 end
 
 """
+    @hide_in_stacktrace
+
+Mark a function to be hidden from the user in stacktraces. `@hide_in_stacktrace`
+currently implies `@noinline`, though this may be relaxed in the future.
+
+See also [`stacktrace`](@ref).
+"""
+macro hide_in_stacktrace(ex)
+    esc(ex isa Expr ? pushmeta!(pushmeta!(ex, :hide_in_stacktrace), :noinline) : ex)
+end
+
+"""
     @propagate_inbounds
 
 Tells the compiler to inline a function while retaining the caller's inbounds context.

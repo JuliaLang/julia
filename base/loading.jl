@@ -1123,7 +1123,34 @@ The optional first argument `mapexpr` can be used to transform the included code
 it is evaluated: for each parsed expression `expr` in `path`, the `include` function
 actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
 """
-Base.include # defined in sysimg.jl
+Base.include # defined in Base.jl
+
+# Full include() implementation which is used after bootstrap
+# Hidden for nicer backtraces in include()
+@hide_in_stacktrace function _include(mapexpr::Function, mod::Module, _path::AbstractString)
+    path, prev = _include_dependency(mod, _path)
+    for callback in include_callbacks # to preserve order, must come before Core.include
+        invokelatest(callback, mod, path)
+    end
+    tls = task_local_storage()
+    tls[:SOURCE_PATH] = path
+    local result
+    try
+        # result = Core.include(mod, path)
+        if mapexpr === identity
+            result = ccall(:jl_load, Any, (Any, Cstring), mod, path)
+        else
+            result = ccall(:jl_load_rewrite, Any, (Any, Cstring, Any), mod, path, mapexpr)
+        end
+    finally
+        if prev === nothing
+            delete!(tls, :SOURCE_PATH)
+        else
+            tls[:SOURCE_PATH] = prev
+        end
+    end
+    return result
+end
 
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])

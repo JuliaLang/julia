@@ -95,6 +95,20 @@ function hash(frame::StackFrame, h::UInt)
     return h
 end
 
+# Determine whether frame should be hidden from the user by default
+function is_hidden(frame::StackFrame)
+    if frame.from_c
+        return true
+    end
+    if frame.linfo isa Core.MethodInstance
+        # NB: MethodInstance currently only available for non-inlined frames.
+        def = frame.linfo.def
+        if def isa Method
+            return ccall(:jl_ir_flag_hide_in_stacktrace, Bool, (Any,), def.source)
+        end
+    end
+    return false
+end
 
 """
     lookup(pointer::Ptr{Cvoid}) -> Vector{StackFrame}
@@ -151,18 +165,21 @@ function lookup(ip::Base.InterpreterIP)
 end
 
 """
-    stacktrace([trace::Vector{Ptr{Cvoid}},] [c_funcs::Bool=false]) -> StackTrace
+    stacktrace([rawtrace,] internal_funcs=false)
 
-Returns a stack trace in the form of a vector of `StackFrame`s. (By default stacktrace
-doesn't return C functions, but this can be enabled.) When called without specifying a
-trace, `stacktrace` first calls `backtrace`.
+Returns a stack trace in the form of a vector of `StackFrame`s from the current
+call stack, or from a raw call stack `rawtrace` which must have been previously
+collected using `backtrace()`.
+
+By default `stacktrace` filters out internal functions, including C functions
+and any Julia functions marked with `Base.@hide_in_stacktrace`. These can be
+included by setting `internal_funcs` to `true`.
 """
-function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Ptr{Cvoid}}}, c_funcs::Bool=false)
+function stacktrace(rawtrace::AbstractVector, internal_funcs::Bool=false)
     stack = StackTrace()
-    for ip in trace
+    for ip in rawtrace
         for frame in lookup(ip)
-            # Skip frames that come from C calls.
-            if c_funcs || !frame.from_c
+            if internal_funcs || !is_hidden(frame)
                 push!(stack, frame)
             end
         end
@@ -170,13 +187,8 @@ function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Ptr{Cvoid}}}, c_fun
     return stack
 end
 
-function stacktrace(c_funcs::Bool=false)
-    stack = stacktrace(backtrace(), c_funcs)
-    # Remove frame for this function (and any functions called by this function).
-    remove_frames!(stack, :stacktrace)
-    # also remove all of the non-Julia functions that led up to this point (if that list is non-empty)
-    c_funcs && deleteat!(stack, 1:(something(findfirst(frame -> !frame.from_c, stack), 1) - 1))
-    return stack
+@noinline Base.@hide_in_stacktrace function stacktrace(internal_funcs::Bool=false)
+    stacktrace(backtrace(), internal_funcs)
 end
 
 """

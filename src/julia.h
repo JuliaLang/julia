@@ -264,6 +264,7 @@ typedef struct _jl_code_info_t {
     size_t min_world;
     size_t max_world;
     // various boolean properties:
+    uint8_t hide_in_stacktrace;
     uint8_t inferred;
     uint8_t inlineable;
     uint8_t propagate_inbounds;
@@ -1651,6 +1652,7 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr JL_MAYBE_UNROOTED);
 // IR representation
 JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code);
 JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data);
+JL_DLLEXPORT uint8_t jl_ir_flag_hide_in_stacktrace(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_flag_inlineable(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_flag_pure(jl_array_t *data) JL_NOTSAFEPOINT;

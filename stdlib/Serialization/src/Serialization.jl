@@ -77,7 +77,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 10 # do not make changes without bumping the version #!
+const ser_version = 11 # do not make changes without bumping the version #!
 
 const NTAGS = length(TAGS)
 
@@ -109,6 +109,7 @@ const ARRAY_TAG = findfirst(==(Array), TAGS)%Int32
 const EXPR_TAG = sertag(Expr)
 const MODULE_TAG = sertag(Module)
 const METHODINSTANCE_TAG = sertag(Core.MethodInstance)
+const CODEINFO_TAG = sertag(Core.CodeInfo)
 const METHOD_TAG = sertag(Method)
 const TASK_TAG = sertag(Task)
 const DATATYPE_TAG = sertag(DataType)
@@ -435,6 +436,41 @@ function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize(s, Any)  # for backwards compat
     serialize(s, linfo.specTypes)
     serialize(s, linfo.def)
+    nothing
+end
+
+# For future compatibility detection, add a version specifically for CodeInfo.
+# Bump this each time CodeInfo changes, and add a deserializer for the old
+# version.
+#   1 - julia 1.0/1.1  - not stored; must be inferred
+#   2 - julia 1.2      - not stored; must be inferred
+#   3 - julia 1.3/1.4  - not stored; must be inferred
+#   4 - julia 1.5
+const _current_codeinfo_ver = Int32(4)
+
+function serialize(s::AbstractSerializer, ci::Core.CodeInfo)
+    serialize_cycle(s, ci) && return
+    writetag(s.io, CODEINFO_TAG)
+    serialize(s, _current_codeinfo_ver) # for backwards compat
+    serialize(s, ci.code)
+    serialize(s, ci.codelocs)
+    serialize(s, ci.ssavaluetypes)
+    serialize(s, ci.ssaflags)
+    serialize(s, ci.method_for_inference_limit_heuristics)
+    serialize(s, ci.linetable)
+    serialize(s, ci.slotnames)
+    serialize(s, ci.slotflags)
+    serialize(s, ci.slottypes)
+    serialize(s, ci.rettype)
+    serialize(s, ci.parent)
+    serialize(s, ci.edges)
+    serialize(s, ci.min_world)
+    serialize(s, ci.max_world)
+    serialize(s, ci.hide_in_stacktrace)
+    serialize(s, ci.inferred)
+    serialize(s, ci.inlineable)
+    serialize(s, ci.propagate_inbounds)
+    serialize(s, ci.pure)
     nothing
 end
 
@@ -1018,7 +1054,37 @@ end
 function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     ci = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
     deserialize_cycle(s, ci)
-    ci.code = deserialize(s)::Vector{Any}
+    code_or_codeinfo_ver = deserialize(s)
+    if code_or_codeinfo_ver isa Vector{Any}
+        ci.code = code_or_codeinfo_ver
+        _deserialize_old_codeinfo!(s, ci)
+        return ci
+    end
+    codeinfo_ver = code_or_codeinfo_ver::Int32
+    @assert codeinfo_ver == _current_codeinfo_ver
+    ci.code          = deserialize(s)
+    ci.codelocs      = deserialize(s)
+    ci.ssavaluetypes = deserialize(s)
+    ci.ssaflags      = deserialize(s)
+    ci.method_for_inference_limit_heuristics = deserialize(s)
+    ci.linetable     = deserialize(s)
+    ci.slotnames     = deserialize(s)
+    ci.slotflags     = deserialize(s)
+    ci.slottypes     = deserialize(s)
+    ci.rettype       = deserialize(s)
+    ci.parent        = deserialize(s)
+    ci.edges         = deserialize(s)
+    ci.min_world     = deserialize(s)
+    ci.max_world     = deserialize(s)
+    ci.hide_in_stacktrace = deserialize(s)
+    ci.inferred      = deserialize(s)
+    ci.inlineable    = deserialize(s)
+    ci.propagate_inbounds = deserialize(s)
+    ci.pure          = deserialize(s)
+    return ci
+end
+
+function _deserialize_old_codeinfo!(s, ci)
     ci.codelocs = deserialize(s)::Vector{Int32}
     _x = deserialize(s)
     if _x isa Array || _x isa Int
