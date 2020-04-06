@@ -654,7 +654,8 @@ end
 
 include("testenv.jl")
 
-let flags = Cmd(filter(a->!occursin("depwarn", a), collect(test_exeflags)))
+
+let flags = Cmd(replace.(test_exeflags, r"^--depwarn=.*" => "--depwarn=yes"))
     local cmd = `$test_exename $flags deprecation_exec.jl`
 
     if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
