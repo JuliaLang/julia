@@ -279,9 +279,7 @@ Use [`dirname`](@ref) to get the directory part and [`basename`](@ref)
 to get the file name part of the path.
 """
 function pathof(m::Module)
-    pkgid = get(Base.module_keys, m, nothing)
-    pkgid === nothing && return nothing
-    return Base.locate_package(pkgid)
+    return string(first(methods(m.eval)).file)
 end
 
 """
