@@ -1058,7 +1058,7 @@ function _first_quadrant(a::Complex)
         a
     elseif ar<0 && ai>0     # In the second quadrant
         Complex(ai, -ar)
-    elseif ar<0 && ai<0     # In the third quadrant
+    elseif ar < 0 && ai < 0     # In the third quadrant
         -a
     else                    # In the fourth quadrant
         Complex(-ai, ar)
