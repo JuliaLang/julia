@@ -798,6 +798,12 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     if (jl_expr_nargs(stmt) == 1 && jl_exprarg(stmt, 0) == (jl_value_t*)specialize_sym) {
                         jl_set_module_nospecialize(s->module, 0);
                     }
+                    if (jl_expr_nargs(stmt) == 2 && jl_exprarg(stmt, 0) == (jl_value_t*)optlevel_sym) {
+                        if (jl_is_long(jl_exprarg(stmt, 1))) {
+                            int n = jl_unbox_long(jl_exprarg(stmt, 1));
+                            jl_set_module_optlevel(s->module, n);
+                        }
+                    }
                 }
                 else {
                     eval_stmt_value(stmt, s);

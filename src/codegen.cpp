@@ -5242,6 +5242,14 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
 #ifdef JL_DEBUG_BUILD
     f->addFnAttr(Attribute::StackProtectStrong);
 #endif
+
+    // add the optimization level specified for this module, if any
+    int optlevel = jl_get_module_optlevel(ctx.module);
+    if (optlevel >= 0 && optlevel <= 3) {
+        static const char* const optLevelStrings[] = { "0", "1", "2", "3" };
+        f->addFnAttr("julia-optimization-level", optLevelStrings[optlevel]);
+    }
+
     ctx.f = f;
 
     // Step 4b. determine debug info signature and other type info for locals
@@ -7458,14 +7466,7 @@ extern "C" void jl_init_llvm(void)
 #else
         None;
 #endif
-    auto optlevel =
-#ifdef DISABLE_OPT
-        CodeGenOpt::None;
-#else
-        (jl_options.opt_level < 2 ? CodeGenOpt::None :
-         jl_options.opt_level == 2 ? CodeGenOpt::Default :
-         CodeGenOpt::Aggressive);
-#endif
+    auto optlevel = CodeGenOptLevelFor(jl_options.opt_level);
     jl_TargetMachine = TheTarget->createTargetMachine(
             TheTriple.getTriple(), TheCPU, FeaturesStr,
             options,
