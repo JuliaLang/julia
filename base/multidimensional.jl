@@ -1060,7 +1060,7 @@ circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt
 #       _circshift!(dest, src, ("second half of dim1", "second half of dim2")) --> copyto!
 @inline function _circshift!(dest, rdest, src, rsrc,
                              inds::Tuple{AbstractUnitRange,Vararg{Any}},
-                             shiftamt::Tuple{Integer,Vararg{Any}})
+                             shiftamt::Tuple{Integer,Vararg{Any}})::typeof(dest)
     ind1, d = inds[1], shiftamt[1]
     s = mod(d, length(ind1))
     sf, sl = first(ind1)+s, last(ind1)-s
@@ -1120,7 +1120,7 @@ end
 
 # This uses the same strategy described above for _circshift!
 @inline function _circcopy!(dest, rdest, indsdest::Tuple{AbstractUnitRange,Vararg{Any}},
-                            src,  rsrc,  indssrc::Tuple{AbstractUnitRange,Vararg{Any}})
+                            src,  rsrc,  indssrc::Tuple{AbstractUnitRange,Vararg{Any}})::typeof(dest)
     indd1, inds1 = indsdest[1], indssrc[1]
     l = length(indd1)
     s = mod(first(inds1)-first(indd1), l)
