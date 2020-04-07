@@ -255,39 +255,45 @@ function Timer(cb::Function, timeout::Real; interval::Real=0.0)
 end
 
 """
-    timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+    timedwait(testcb::Function, timeout::Real; pollint::Real=0.1)
 
-Waits until `testcb` returns `true` or for `secs` seconds, whichever is earlier.
-`testcb` is polled every `pollint` seconds.
+Waits until `testcb` returns `true` or for `timeout` seconds, whichever is earlier.
+`testcb` is polled every `pollint` seconds. The minimum duration for `timeout` and `pollint`
+is 1 millisecond or `0.001`.
 
-Returns :ok, :timed_out, or :error
+Returns :ok or :timed_out
 """
-function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
-    pollint > 0 || throw(ArgumentError("cannot set pollint to $pollint seconds"))
+function timedwait(testcb::Function, timeout::Real; pollint::Real=0.1)
+    pollint >= 1e-3 || throw(ArgumentError("pollint must be ≥ 1 millisecond"))
     start = time_ns()
-    nsecs = 1e9 * secs
+    ns_timeout = 1e9 * timeout
     done = Channel(1)
     function timercb(aw)
         try
             if testcb()
-                put!(done, :ok)
-            elseif (time_ns() - start) > nsecs
-                put!(done, :timed_out)
+                put!(done, (:ok, nothing))
+            elseif (time_ns() - start) > ns_timeout
+                put!(done, (:timed_out, nothing))
             end
         catch e
-            put!(done, :error)
+            put!(done, (:error, CapturedException(e, catch_backtrace())))
         finally
             isready(done) && close(aw)
         end
         nothing
     end
 
-    if !testcb()
-        t = Timer(timercb, pollint, interval = pollint)
-        ret = fetch(done)::Symbol
-        close(t)
-    else
-        ret = :ok
+    try
+        testcb() && return :ok
+    catch e
+        throw(CapturedException(e, catch_backtrace()))
     end
+
+    t = Timer(timercb, pollint, interval = pollint)
+    ret, e = fetch(done)
+    close(t)
+
+    ret === :error && throw(e)
+
     return ret
 end
