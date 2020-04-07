@@ -13,6 +13,8 @@ Run Evaluate Print Loop (REPL)
 """
 module REPL
 
+Base.Experimental.@optlevel 1
+
 using Base.Meta, Sockets
 import InteractiveUtils
 

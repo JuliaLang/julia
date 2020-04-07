@@ -1049,7 +1049,6 @@ struct jl_typemap_assoc {
     // inputs
     jl_value_t *const types;
     size_t const world;
-    size_t const max_world_mask;
     // outputs
     jl_svec_t *env; // subtype env (initialize to null to perform intersection without an environment)
     size_t min_valid;
@@ -1162,6 +1161,7 @@ extern jl_sym_t *throw_undef_if_not_sym; extern jl_sym_t *getfield_undefref_sym;
 extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
 extern jl_sym_t *failed_sym; extern jl_sym_t *done_sym; extern jl_sym_t *runnable_sym;
 extern jl_sym_t *coverageeffect_sym; extern jl_sym_t *escape_sym;
+extern jl_sym_t *optlevel_sym;
 
 struct _jl_sysimg_fptrs_t;
 

@@ -436,11 +436,61 @@ void JuliaOJIT::DebugObjectRegistrar::operator()(RTDyldObjHandleT H,
                    static_cast<const RuntimeDyld::LoadedObjectInfo*>(&LOS));
 }
 
+CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
+{
+#ifdef DISABLE_OPT
+    return CodeGenOpt::None;
+#else
+    return optlevel < 2 ? CodeGenOpt::None :
+        optlevel == 2 ? CodeGenOpt::Default :
+        CodeGenOpt::Aggressive;
+#endif
+}
+
+static void addPassesForOptLevel(legacy::PassManager &PM, TargetMachine &TM, raw_svector_ostream &ObjStream, MCContext *Ctx, int optlevel)
+{
+    auto oldlevel = TM.getOptLevel();
+    TM.setOptLevel(CodeGenOptLevelFor(optlevel));
+    addTargetPasses(&PM, &TM);
+    addOptimizationPasses(&PM, optlevel);
+    if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
+        llvm_unreachable("Target does not support MC emission.");
+    TM.setOptLevel(oldlevel);
+}
 
 CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
 {
     JL_TIMING(LLVM_OPT);
-    jit.PM.run(M);
+    int optlevel;
+    if (jl_generating_output()) {
+        optlevel = 0;
+    }
+    else {
+        optlevel = jl_options.opt_level;
+        for (auto &F : M.functions()) {
+            if (!F.getBasicBlockList().empty()) {
+                Attribute attr = F.getFnAttribute("julia-optimization-level");
+                StringRef val = attr.getValueAsString();
+                if (val != "") {
+                    int ol = (int)val[0] - '0';
+                    if (ol >= 0 && ol < optlevel)
+                        optlevel = ol;
+                }
+            }
+        }
+    }
+    auto oldlevel = jit.TM.getOptLevel();
+    jit.TM.setOptLevel(CodeGenOptLevelFor(optlevel));
+    if (optlevel == 0)
+        jit.PM0.run(M);
+    else if (optlevel == 1)
+        jit.PM1.run(M);
+    else if (optlevel == 2)
+        jit.PM2.run(M);
+    else if (optlevel >= 3)
+        jit.PM3.run(M);
+    jit.TM.setOptLevel(oldlevel);
+
     std::unique_ptr<MemoryBuffer> ObjBuffer(
         new SmallVectorMemoryBuffer(std::move(jit.ObjBufferSV)));
     auto Obj = object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef());
@@ -490,10 +540,10 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
             CompilerT(this)
         )
 {
-    addTargetPasses(&PM, &TM);
-    addOptimizationPasses(&PM, jl_generating_output() ? 0 : jl_options.opt_level);
-    if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
-        llvm_unreachable("Target does not support MC emission.");
+    addPassesForOptLevel(PM0, TM, ObjStream, Ctx, 0);
+    addPassesForOptLevel(PM1, TM, ObjStream, Ctx, 1);
+    addPassesForOptLevel(PM2, TM, ObjStream, Ctx, 2);
+    addPassesForOptLevel(PM3, TM, ObjStream, Ctx, 3);
 
     // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
     // symbols in the program as well. The nullptr argument to the function

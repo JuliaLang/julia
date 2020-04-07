@@ -7,7 +7,7 @@ module IteratorsMD
                  ndims, IteratorSize, convert, show, iterate, promote_rule, to_indices
 
     import .Base: +, -, *, (:)
-    import .Base: simd_outer_range, simd_inner_length, simd_index
+    import .Base: simd_outer_range, simd_inner_length, simd_index, setindex
     using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail,
         ReshapedArray, ReshapedArrayLF, OneTo
     using .Base.Iterators: Reverse, PartitionIterator
@@ -95,6 +95,8 @@ module IteratorsMD
 
     # access to index tuple
     Tuple(index::CartesianIndex) = index.I
+
+    Base.setindex(x::CartesianIndex,i,j) = CartesianIndex(Base.setindex(Tuple(x),i,j))
 
     # equality
     Base.:(==)(a::CartesianIndex{N}, b::CartesianIndex{N}) where N = a.I == b.I

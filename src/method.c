@@ -504,12 +504,6 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     jl_array_t *stmts = (jl_array_t*)src->code;
     size_t i, n = jl_array_len(stmts);
     copy = jl_alloc_vec_any(n);
-    // set location from first LineInfoNode
-    if (jl_array_len(src->linetable) > 0) {
-        jl_value_t *ln = jl_array_ptr_ref(src->linetable, 0);
-        m->file = (jl_sym_t*)jl_fieldref(ln, 1);
-        m->line = jl_unbox_long(jl_fieldref(ln, 2));
-    }
     for (i = 0; i < n; i++) {
         jl_value_t *st = jl_array_ptr_ref(stmts, i);
         if (jl_is_expr(st) && ((jl_expr_t*)st)->head == meta_sym) {
@@ -566,6 +560,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
             }
             else if (nargs == 2 && jl_exprarg(st, 0) == (jl_value_t*)jl_symbol("nkw")) {
                 m->nkw = jl_unbox_long(jl_exprarg(st, 1));
+                st = jl_nothing;
             }
         }
         else {
@@ -697,9 +692,10 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                                 jl_code_info_t *f,
                                 jl_module_t *module)
 {
-    // argdata is svec(svec(types...), svec(typevars...))
+    // argdata is svec(svec(types...), svec(typevars...), functionloc)
     jl_svec_t *atypes = (jl_svec_t*)jl_svecref(argdata, 0);
     jl_svec_t *tvars = (jl_svec_t*)jl_svecref(argdata, 1);
+    jl_value_t *functionloc = jl_svecref(argdata, 2);
     size_t nargs = jl_svec_len(atypes);
     int isva = jl_is_vararg_type(jl_svecref(atypes, nargs - 1));
     assert(jl_is_svec(atypes));
@@ -754,6 +750,10 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     m->name = name;
     m->isva = isva;
     m->nargs = nargs;
+    assert(jl_is_linenode(functionloc));
+    jl_value_t *file = jl_linenode_file(functionloc);
+    m->file = jl_is_symbol(file) ? (jl_sym_t*)file : empty_sym;
+    m->line = jl_linenode_line(functionloc);
     jl_method_set_source(m, f);
 
     if (jl_has_free_typevars(argtype)) {

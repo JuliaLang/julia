@@ -433,3 +433,14 @@ const c29864 = VecElement{Union{Int,Nothing}}(2)
 @noinline g29864() = VecElement{Union{Int,Nothing}}(3)
 @test f29864().value === 2
 @test g29864().value === 3
+
+# test sret pointing into a struct containing a tracked pointer
+# reduced from TerminalLoggers/ProgressLogging
+const _PROGRESS_LOGGING_UUID_NS_test = Base.UUID("1e962757-ea70-431a-b9f6-aadf988dcb7f")
+_asuuid_test(id) = Base.uuid5(_PROGRESS_LOGGING_UUID_NS_test, repr(id))
+@noinline _handle_progress_test(progress) = progress
+function _handle_message_test()
+    progress = (_asuuid_test(:id), "name")
+    return _handle_progress_test(progress)
+end
+@test _handle_message_test() isa Tuple{Base.UUID, String}

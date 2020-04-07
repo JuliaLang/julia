@@ -77,7 +77,8 @@ jl_options_t jl_options = { 0,    // quiet
 static const char usage[] = "julia [switches] -- [programfile] [args...]\n";
 static const char opts[]  =
     " -v, --version             Display version information\n"
-    " -h, --help                Print this message (--help-hidden for more)\n\n"
+    " -h, --help                Print this message (--help-hidden for more)\n"
+    " --help-hidden             Uncommon options not shown by `-h`\n\n"
 
     // startup options
     " --project[={<dir>|@.}]    Set <dir> as the home project/environment\n"

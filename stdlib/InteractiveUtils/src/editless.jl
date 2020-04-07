@@ -127,7 +127,7 @@ function define_default_editors()
     define_editor([r"\bsubl", r"\batom", "pycharm"]) do cmd, path, line
         `$cmd $path:$line`
     end
-    define_editor("code") do cmd, path, line
+    define_editor(["code", "code-insiders"]) do cmd, path, line
         `$cmd -g $path:$line`
     end
     define_editor(r"\bnotepad++") do cmd, path, line

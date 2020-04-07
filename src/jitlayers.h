@@ -212,7 +212,10 @@ private:
     // object fits in its entirety
     SmallVector<char, 4096> ObjBufferSV;
     raw_svector_ostream ObjStream;
-    legacy::PassManager PM;
+    legacy::PassManager PM0;  // per-optlevel pass managers
+    legacy::PassManager PM1;
+    legacy::PassManager PM2;
+    legacy::PassManager PM3;
     MCContext *Ctx;
     std::shared_ptr<RTDyldMemoryManager> MemMgr;
     DebugObjectRegistrar registrar;
@@ -243,3 +246,5 @@ static inline bool isIntrinsicFunction(Function *F)
 {
     return F->isIntrinsic() || F->getName().startswith("julia.");
 }
+
+CodeGenOpt::Level CodeGenOptLevelFor(int optlevel);
