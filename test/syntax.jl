@@ -2219,6 +2219,15 @@ end
 @test Meta.parse("aa\UE0080", raise=false) ==
     Expr(:error, "invalid character \"\Ue0080\" near column 3")
 
+# issue #31238
+a31238, b31238 = let x
+    return 1
+end
+@test !@isdefined(a31238) && !@isdefined(b31238)
+@test @eval((a31238, b31238) = let x
+    return 1
+end) === 1
+
 # issue #35201
 h35201(x; k=1) = (x, k)
 f35201(c) = h35201((;c...), k=true)
