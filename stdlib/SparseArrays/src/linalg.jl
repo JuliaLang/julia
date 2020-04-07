@@ -1,14 +1,23 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import LinearAlgebra: checksquare
+import LinearAlgebra: checksquare, sym_uplo
 using Random: rand!
 
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 const StridedOrTriangularMatrix{T} = Union{StridedMatrix{T}, LowerTriangular{T}, UnitLowerTriangular{T}, UpperTriangular{T}, UnitUpperTriangular{T}}
 const AdjOrTransStridedOrTriangularMatrix{T} = Union{StridedOrTriangularMatrix{T},Adjoint{<:Any,<:StridedOrTriangularMatrix{T}},Transpose{<:Any,<:StridedOrTriangularMatrix{T}}}
 
-+(A::Hermitian, B::SparseMatrixCSC) = parent(A) + B
-+(A::SparseMatrixCSC, B::Hermitian) = A + parent(B)
+function (+)(A::SparseMatrixCSC, B::Hermitian{<:Any,<:AbstractSparseMatrix})
+    C  = sparse(B)
+    C .= A .+ C
+end
+function (+)(A::SparseMatrixCSC, B::Hermitian)
+    C  = collect(B)
+    C .= A .+ C
+end
+(+)(A::Hermitian{<:Any,<:AbstractSparseMatrix}, B::SparseMatrixCSC) = B + A
+(+)(A::Hermitian, B::SparseMatrixCSC) = B + A
+
 function +(A::Hermitian{<:Any, <:SparseMatrixCSC}, B::Hermitian{<:Any, <:SparseMatrixCSC})
     if A.uplo == B.uplo
         Hermitian(parent(A) + parent(B), sym_uplo(A.uplo))
@@ -19,8 +28,17 @@ function +(A::Hermitian{<:Any, <:SparseMatrixCSC}, B::Hermitian{<:Any, <:SparseM
     end
 end
 
-+(A::Symmetric, B::SparseMatrixCSC) = parent(A) + B
-+(A::SparseMatrixCSC, B::Symmetric) = A + parent(B)
+function (+)(A::SparseMatrixCSC, B::Symmetric{<:Any,<:AbstractSparseMatrix})
+    C  = sparse(B)
+    C .= A .+ C
+end
+function (+)(A::SparseMatrixCSC, B::Symmetric)
+    C  = collect(B)
+    C .= A .+ C
+end
+(+)(A::Symmetric{<:Any,<:AbstractSparseMatrix}, B::SparseMatrixCSC) = B + A
+(+)(A::Symmetric, B::SparseMatrixCSC) = B + A
+
 function +(A::Symmetric{<:Any, <:SparseMatrixCSC}, B::Symmetric{<:Any, <:SparseMatrixCSC})
     if A.uplo == B.uplo
         Symmetric(parent(A) + parent(B), sym_uplo(A.uplo))
