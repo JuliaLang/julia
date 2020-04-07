@@ -288,7 +288,7 @@ julia> b = ["e","d","b","c","a"]
  "a"
 
 julia> c = zip(a,b)
-Base.Iterators.Zip{Tuple{UnitRange{Int64},Array{String,1}}}((1:5, ["e", "d", "b", "c", "a"]))
+zip(1:5, ["e", "d", "b", "c", "a"])
 
 julia> length(c)
 5
