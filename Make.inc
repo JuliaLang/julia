@@ -641,7 +641,7 @@ else
 SANITIZE_OPTS := -fsanitize=address -mllvm -asan-stack=0
 SANITIZE_LDFLAGS := -fsanitize=address
 endif
-JCXXFLAGS += $(SANITIZE_OPTS) -DNDEBUG
+JCXXFLAGS += $(SANITIZE_OPTS)
 JCFLAGS += $(SANITIZE_OPTS)
 JLDFLAGS += $(SANITIZE_LDFLAGS)
 endif
