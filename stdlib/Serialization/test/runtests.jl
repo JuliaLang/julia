@@ -557,8 +557,6 @@ end
     @test_throws(ErrorException("Unknown endianness flag in header"),
                  deserialize(corrupt_header(b, 5, 2)))
     other_wordsize = sizeof(Int) == 8 ? 4 : 8
-    @test_throws(ErrorException("Serialized word size mismatch ($other_wordsize)"),
-                 deserialize(corrupt_header(b, 5, UInt8((sizeof(Int) != 8)<<2))))
     other_endianness = bswap(ENDIAN_BOM)
     @test_throws(ErrorException("Serialized byte order mismatch ($(repr(other_endianness)))"),
                  deserialize(corrupt_header(b, 5, UInt8(ENDIAN_BOM != 0x01020304))))

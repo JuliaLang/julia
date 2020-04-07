@@ -708,7 +708,9 @@ function readheader(s::AbstractSerializer)
                  error("Unknown endianness flag in header")
     # Check protocol compatibility.
     endian_bom == ENDIAN_BOM  || error("Serialized byte order mismatch ($(repr(endian_bom)))")
-    wordsize   == sizeof(Int) || error("Serialized word size mismatch ($wordsize)")
+    # We don't check wordsize == sizeof(Int) here, as Int is encoded concretely
+    # as Int32 or Int64, which should be enough to correctly deserialize a range
+    # of data structures between Julia versions.
     if version > ser_version
         error("""Cannot read stream serialized with a newer version of Julia.
                  Got data version $version > current version $ser_version""")
