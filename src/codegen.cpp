@@ -40,6 +40,8 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Object/SymbolSize.h>
 
+#include <llvm/InitializePasses.h>
+
 // IR building
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/Object/ObjectFile.h>
@@ -7418,6 +7420,37 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_llvm(void)
 {
+    jl_page_size = jl_getpagesize();
+    imaging_mode = jl_generating_output() && !jl_options.incremental;
+    jl_default_cgparams.module_setup = jl_nothing;
+    jl_default_cgparams.module_activation = jl_nothing;
+    jl_default_cgparams.raise_exception = jl_nothing;
+    jl_default_cgparams.emit_function = jl_nothing;
+    jl_default_cgparams.emitted_function = jl_nothing;
+    jl_init_debuginfo();
+
+    InitializeNativeTarget();
+    InitializeNativeTargetAsmPrinter();
+    InitializeNativeTargetAsmParser();
+    InitializeNativeTargetDisassembler();
+
+    // Initialize passes
+    PassRegistry &Registry = *PassRegistry::getPassRegistry();
+    initializeCore(Registry);
+    initializeCoroutines(Registry);
+    initializeScalarOpts(Registry);
+    initializeVectorization(Registry);
+    initializeAnalysis(Registry);
+    initializeTransformUtils(Registry);
+    initializeInstCombine(Registry);
+    initializeAggressiveInstCombine(Registry);
+    initializeInstrumentation(Registry);
+    initializeTarget(Registry);
+#ifdef USE_POLLY
+    polly::initializePollyPasses(Registry);
+#endif
+
+    // Parse command line flags after initialization
     const char *const argv_tailmerge[] = {"", "-enable-tail-merge=0"}; // NOO TOUCHIE; NO TOUCH! See #922
     cl::ParseCommandLineOptions(sizeof(argv_tailmerge)/sizeof(argv_tailmerge[0]), argv_tailmerge, "disable-tail-merge\n");
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
@@ -7437,26 +7470,6 @@ extern "C" void jl_init_llvm(void)
         const char *const argv_smdl[] = {"", "-combiner-store-merge-dependence-limit=4"};
         cl::ParseCommandLineOptions(sizeof(argv_smdl)/sizeof(argv_smdl[0]), argv_smdl);
     }
-
-    jl_page_size = jl_getpagesize();
-    imaging_mode = jl_generating_output() && !jl_options.incremental;
-    jl_default_cgparams.module_setup = jl_nothing;
-    jl_default_cgparams.module_activation = jl_nothing;
-    jl_default_cgparams.raise_exception = jl_nothing;
-    jl_default_cgparams.emit_function = jl_nothing;
-    jl_default_cgparams.emitted_function = jl_nothing;
-    jl_init_debuginfo();
-
-#ifdef USE_POLLY
-    PassRegistry &Registry = *PassRegistry::getPassRegistry();
-    polly::initializePollyPasses(Registry);
-    initializeAnalysis(Registry);
-#endif
-
-    InitializeNativeTarget();
-    InitializeNativeTargetAsmPrinter();
-    InitializeNativeTargetAsmParser();
-    InitializeNativeTargetDisassembler();
 
     TargetOptions options = TargetOptions();
     //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
