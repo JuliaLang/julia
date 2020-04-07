@@ -66,16 +66,15 @@ Language changes
   used to yield the string " a\nb", since the single space before `b` set the indent level.
   Now the result is "a\n b", since the space before `b` is no longer considered to occur
   at the start of a line. The old behavior is considered a bug ([#35001]).
-
+  
 * The line number of function definitions is now added by the parser as an
   additional `LineNumberNode` at the start of each function body ([#35138]).
-  
+
 Command-line option changes
 ---------------------------
 
 * Deprecation warnings are no longer shown by default. i.e. if the `--depwarn=...` flag is
   not passed it defaults to `--depwarn=no`. ([#35362]).
-   
 
 * Color now defaults to on when stdout and stderr are TTYs ([#34347])
 
