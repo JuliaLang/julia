@@ -15,6 +15,7 @@ end
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
 haskey(d::AbstractDict, k) = in(k, keys(d))
+haskey(d::AbstractDict, k, ks...) = haskey(d, k) && haskey(d[k], ks...)
 
 function in(p::Pair, a::AbstractDict, valcmp=(==))
     v = get(a, p.first, secret_table_token)
