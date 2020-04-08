@@ -72,7 +72,6 @@ static jl_callptr_t _jl_compile_codeinst(
 
     // caller must hold codegen_lock
     // and have disabled finalizers
-    JL_TIMING(CODEGEN);
     uint64_t start_time = 0;
     if (dump_compiles_stream != NULL)
         start_time = jl_hrtime();
@@ -88,36 +87,39 @@ static jl_callptr_t _jl_compile_codeinst(
     params.cache = true;
     params.world = world;
     std::map<jl_code_instance_t*, jl_compile_result_t> emitted;
-    jl_compile_result_t result = jl_emit_codeinst(codeinst, src, params);
-    if (std::get<0>(result))
-        emitted[codeinst] = std::move(result);
-    jl_compile_workqueue(emitted, params);
+    {
+        JL_TIMING(CODEGEN);
+        jl_compile_result_t result = jl_emit_codeinst(codeinst, src, params);
+        if (std::get<0>(result))
+            emitted[codeinst] = std::move(result);
+        jl_compile_workqueue(emitted, params);
 
-    jl_add_to_ee();
-    StringMap<std::unique_ptr<Module>*> NewExports;
-    StringMap<void*> NewGlobals;
-    for (auto &global : params.globals) {
-        NewGlobals[global.second->getName()] = global.first;
-    }
-    for (auto &def : emitted) {
-        std::unique_ptr<Module> &M = std::get<0>(def.second);
-        for (auto &F : M->global_objects()) {
-            if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
-                NewExports[F.getName()] = &M;
+        jl_add_to_ee();
+        StringMap<std::unique_ptr<Module>*> NewExports;
+        StringMap<void*> NewGlobals;
+        for (auto &global : params.globals) {
+            NewGlobals[global.second->getName()] = global.first;
+        }
+        for (auto &def : emitted) {
+            std::unique_ptr<Module> &M = std::get<0>(def.second);
+            for (auto &F : M->global_objects()) {
+                if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
+                    NewExports[F.getName()] = &M;
+                }
+            }
+            // Let's link all globals here also (for now)
+            for (auto &GV : M->globals()) {
+                auto InitValue = NewGlobals.find(GV.getName());
+                if (InitValue != NewGlobals.end()) {
+                    jl_link_global(&GV, InitValue->second);
+                }
             }
         }
-        // Let's link all globals here also (for now)
-        for (auto &GV : M->globals()) {
-            auto InitValue = NewGlobals.find(GV.getName());
-            if (InitValue != NewGlobals.end()) {
-                jl_link_global(&GV, InitValue->second);
-            }
+        for (auto &def : emitted) {
+            // Add the results to the execution engine now
+            std::unique_ptr<Module> &M = std::get<0>(def.second);
+            jl_add_to_ee(M, NewExports);
         }
-    }
-    for (auto &def : emitted) {
-        // Add the results to the execution engine now
-        std::unique_ptr<Module> &M = std::get<0>(def.second);
-        jl_add_to_ee(M, NewExports);
     }
     JL_TIMING(LLVM_MODULE_FINISH);
 
