@@ -7198,13 +7198,3 @@ struct NFANode34126
 end
 
 @test repr(NFANode34126()) == "$NFANode34126(Tuple{Nothing,$NFANode34126}[])"
-
-@testset "issue #34544/35367" begin
-    # Test these evals shouldnt segfault
-    eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar, Expr(:block)))))
-    eval(Expr(:module, true, :bar, Expr(:block)))
-    eval(Expr(:quote, Expr(:module, true, :bar, Expr(:quote))))
-    @test_throws ErrorException eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar, Expr(:quote)))))
-    @test_throws ErrorException eval(Expr(:module, true, :bar, Expr(:foo)))
-    @test_throws ErrorException eval(Expr(:module, true, :bar, Expr(:quote)))
-end
