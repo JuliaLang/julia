@@ -702,8 +702,8 @@ void jl_rec_backtrace(jl_task_t *t)
     }
     if (t->copy_stack || !t->started || t->stkbuf == NULL)
         return;
-    int old = jl_atomic_compare_exchange(&t->tid, -1, ptls->tid);
-    if (old != -1 && old != ptls->tid)
+    int16_t old = -1;
+    if (!jl_atomic_cmpswap(&t->tid, &old, ptls->tid) && old != ptls->tid)
         return;
     bt_context_t *context = NULL;
 #if defined(_OS_WINDOWS_)

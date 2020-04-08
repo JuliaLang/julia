@@ -634,8 +634,10 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
     if (bp->value == NULL) {
-        if (jl_atomic_bool_compare_exchange(&bp->constp, 0, 1)) {
-            if (jl_atomic_bool_compare_exchange(&bp->value, NULL, val)) {
+        uint8_t constp = 0;
+        if (jl_atomic_cmpswap(&bp->constp, &constp, 1)) {
+            jl_value_t *old = NULL;
+            if (jl_atomic_cmpswap(&bp->value, &old, val)) {
                 jl_gc_wb_binding(bp, val);
                 return;
             }
@@ -759,8 +761,8 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs) JL_NOTSAFEPOINT
 {
     if (b->constp) {
-        jl_value_t *old = jl_atomic_compare_exchange(&b->value, NULL, rhs);
-        if (old == NULL) {
+        jl_value_t *old = NULL;
+        if (jl_atomic_cmpswap(&b->value, &old, rhs)) {
             jl_gc_wb_binding(b, rhs);
             return;
         }

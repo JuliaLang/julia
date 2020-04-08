@@ -38,6 +38,13 @@
 #  define MAX_ALIGN 8
 #endif
 
+// Define the largest size (bytes) of a properly aligned object that the
+// processor family and compiler typically supports without a lock
+// (assumed to be at least a pointer size). Since C is bad at handling 16-byte
+// types, we currently use 8 here as the default.
+#define MAX_ATOMIC_SIZE 8
+#define MAX_POINTERATOMIC_SIZE 8
+
 #ifdef _P64
 #define NWORDS(sz) (((sz)+7)>>3)
 #else
@@ -423,6 +430,8 @@ typedef struct {
     jl_sym_t *name;
     struct _jl_module_t *module;
     jl_svec_t *names;  // field names
+    const uint32_t *atomicfields; // if any fields are atomic, we record them here
+    //const uint32_t *constfields; // if any fields are const, we record them here
     // `wrapper` is either the only instantiation of the type (if no parameters)
     // or a UnionAll accepting parameters to make an instantiation.
     jl_value_t *wrapper;
@@ -677,6 +686,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_initerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_typeerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_methoderror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_undefvarerror_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_datatype_t *jl_atomicerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_lineinfonode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_stackovf_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memory_exception JL_GLOBALLY_ROOTED;
@@ -855,10 +865,10 @@ JL_DLLEXPORT void jl_gc_use(jl_value_t *a);
 JL_DLLEXPORT void jl_clear_malloc_data(void);
 
 // GC write barriers
-JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *root) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_gc_queue_multiroot(jl_value_t *root, jl_value_t *stored) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *root) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_queue_multiroot(const jl_value_t *root, const jl_value_t *stored) JL_NOTSAFEPOINT;
 
-STATIC_INLINE void jl_gc_wb(void *parent, void *ptr) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 {
     // parent and ptr isa jl_value_t*
     if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 && // parent is old and not in remset
@@ -866,7 +876,7 @@ STATIC_INLINE void jl_gc_wb(void *parent, void *ptr) JL_NOTSAFEPOINT
         jl_gc_queue_root((jl_value_t*)parent);
 }
 
-STATIC_INLINE void jl_gc_wb_back(void *ptr) JL_NOTSAFEPOINT // ptr isa jl_value_t*
+STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_value_t*
 {
     // if ptr is old
     if (__unlikely(jl_astaggedvalue(ptr)->bits.gc == 3)) {
@@ -874,7 +884,7 @@ STATIC_INLINE void jl_gc_wb_back(void *ptr) JL_NOTSAFEPOINT // ptr isa jl_value_
     }
 }
 
-STATIC_INLINE void jl_gc_multi_wb(void *parent, jl_value_t *ptr) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
 {
     // ptr is an immutable object
     if (__likely(jl_astaggedvalue(parent)->bits.gc != 3))
@@ -1124,6 +1134,17 @@ static inline uint32_t jl_ptr_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
     }
 }
 
+static inline int jl_field_isatomic(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
+{
+    // if (!st->mutable) return 0; // TODO: is this fast-path helpful?
+    const uint32_t *atomicfields = st->name->atomicfields;
+    if (atomicfields != NULL) {
+        if (atomicfields[i / 32] & (1 << (i % 32)))
+            return 1;
+    }
+    return 0;
+}
+
 static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEPOINT
 {
     return l->nfields == 0 && l->npointers > 0;
@@ -1303,12 +1324,12 @@ STATIC_INLINE int jl_is_array_zeroinit(jl_array_t *a) JL_NOTSAFEPOINT
 }
 
 // object identity
-JL_DLLEXPORT int jl_egal(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_egal__bits(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_egal__special(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_egal(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_egal__bits(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_egal__special(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT;
 
-STATIC_INLINE int jl_egal_(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
+STATIC_INLINE int jl_egal_(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
     if (a == b)
         return 1;
@@ -1367,7 +1388,9 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name,
                                             jl_module_t *module,
                                             jl_datatype_t *super,
                                             jl_svec_t *parameters,
-                                            jl_svec_t *fnames, jl_svec_t *ftypes,
+                                            jl_svec_t *fnames,
+                                            jl_svec_t *ftypes,
+                                            jl_svec_t *fattrs,
                                             int abstract, int mutabl,
                                             int ninitialized);
 JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name,
@@ -1376,7 +1399,12 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name,
                                                  jl_svec_t *parameters, size_t nbits);
 
 // constructors
-JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *bt, void *data);
+JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *bt, const void *src);
+JL_DLLEXPORT jl_value_t *jl_atomic_new_bits(jl_value_t *dt, const char *src);
+JL_DLLEXPORT void jl_atomic_store_bits(char *dst, const jl_value_t *src, int nb);
+JL_DLLEXPORT jl_value_t *jl_atomic_swap_bits(jl_value_t *dt, char *dst, const jl_value_t *src, int nb);
+JL_DLLEXPORT int jl_atomic_bool_cmpswap_bits(char *dst, const jl_value_t *expected, const jl_value_t *src, int nb);
+JL_DLLEXPORT jl_value_t *jl_atomic_cmpswap_bits(jl_datatype_t *dt, char *dst, const jl_value_t *expected, const jl_value_t *src, int nb);
 JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...);
 JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na);
 JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup);
@@ -1463,8 +1491,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i);
 // Like jl_get_nth_field above, but asserts if it needs to allocate
 JL_DLLEXPORT jl_value_t *jl_get_nth_field_noalloc(jl_value_t *v JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i);
-JL_DLLEXPORT void        jl_set_nth_field(jl_value_t *v, size_t i,
-                                          jl_value_t *rhs) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void        jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int         jl_field_isdefined(jl_value_t *v, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld);
 JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a);
@@ -1593,6 +1620,7 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname,
                                                jl_value_t *ty JL_MAYBE_UNROOTED,
                                                jl_value_t *got JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var);
+JL_DLLEXPORT void JL_NORETURN jl_atomic_error(char *str);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error(jl_value_t *v JL_MAYBE_UNROOTED,
                                               jl_value_t *t JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_v(jl_value_t *v JL_MAYBE_UNROOTED,
@@ -2120,7 +2148,7 @@ typedef struct {
     float value;
 } jl_nullable_float32_t;
 
-#define jl_root_task (jl_get_ptls_states()->root_task)
+#define jl_root_task (jl_current_task->ptls->root_task)
 
 JL_DLLEXPORT jl_task_t *jl_get_current_task(void) JL_NOTSAFEPOINT;
 

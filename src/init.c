@@ -835,6 +835,7 @@ static void post_boot_hooks(void)
     jl_diverror_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
     jl_undefref_exception  = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
     jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
+    jl_atomicerror_type    = (jl_datatype_t*)core("ConcurrencyViolationError");
     jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
     jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");
     jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));

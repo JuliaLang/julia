@@ -560,14 +560,24 @@ function getfield_elim_pass!(ir::IRCode)
         #ndone += 1
         result_t = compact_exprtype(compact, SSAValue(idx))
         is_getfield = is_setfield = false
+        field_ordering = :unspecified
         is_ccall = false
         # Step 1: Check whether the statement we're looking at is a getfield/setfield!
         if is_known_call(stmt, setfield!, compact)
             is_setfield = true
             4 <= length(stmt.args) <= 5 || continue
+            if length(stmt.args) == 5
+                field_ordering = compact_exprtype(compact, stmt.args[5])
+            end
         elseif is_known_call(stmt, getfield, compact)
             is_getfield = true
-            3 <= length(stmt.args) <= 4 || continue
+            3 <= length(stmt.args) <= 5 || continue
+            if length(stmt.args) == 5
+                field_ordering = compact_exprtype(compact, stmt.args[5])
+            elseif length(stmt.args) == 4
+                field_ordering = compact_exprtype(compact, stmt.args[4])
+                widenconst(field_ordering) === Bool && (field_ordering = :unspecified)
+            end
         elseif is_known_call(stmt, isa, compact)
             # TODO
             continue
@@ -659,6 +669,11 @@ function getfield_elim_pass!(ir::IRCode)
             struct_typ = unswitchtupleunion(struct_typ)
         end
         isa(struct_typ, DataType) || continue
+
+        struct_typ.name.atomicfields == C_NULL || continue # TODO: handle more
+        if !(field_ordering === :unspecified || (field_ordering isa Const && field_ordering.val === :not_atomic))
+            continue
+        end
 
         def, typeconstraint = stmt.args[2], struct_typ
 

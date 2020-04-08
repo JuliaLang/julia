@@ -30,7 +30,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    147
+#define NUM_TAGS    150
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -153,6 +153,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_memory_exception);
         INSERT_TAG(jl_undefref_exception);
         INSERT_TAG(jl_readonlymemory_exception);
+        INSERT_TAG(jl_atomicerror_type);
 
         // other special values
         INSERT_TAG(jl_emptysvec);
@@ -185,6 +186,9 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin_svec);
         INSERT_TAG(jl_builtin_getfield);
         INSERT_TAG(jl_builtin_setfield);
+        INSERT_TAG(jl_builtin_swapfield);
+        INSERT_TAG(jl_builtin_modifyfield);
+        INSERT_TAG(jl_builtin_replacefield);
         INSERT_TAG(jl_builtin_fieldtype);
         INSERT_TAG(jl_builtin_arrayref);
         INSERT_TAG(jl_builtin_const_arrayref);
@@ -240,7 +244,8 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_typeassert, &jl_f__apply_iterate, &jl_f__apply_pure,
     &jl_f__call_latest, &jl_f__call_in_world, &jl_f_isdefined,
     &jl_f_tuple, &jl_f_svec, &jl_f_intrinsic_call, &jl_f_invoke_kwsorter,
-    &jl_f_getfield, &jl_f_setfield, &jl_f_fieldtype, &jl_f_nfields,
+    &jl_f_getfield, &jl_f_setfield, &jl_f_swapfield, &jl_f_modifyfield,
+    &jl_f_replacefield, &jl_f_fieldtype, &jl_f_nfields,
     &jl_f_arrayref, &jl_f_const_arrayref, &jl_f_arrayset, &jl_f_arraysize, &jl_f_apply_type,
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
     &jl_f_ifelse, &jl_f__structtype, &jl_f__abstracttype, &jl_f__primitivetype,
@@ -1016,6 +1021,20 @@ static void jl_write_values(jl_serializer_state *s)
                     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_datatype_t, layout))); // relocation location
                     arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + layout)); // relocation target
                     ios_write(s->const_data, flddesc, fldsize);
+                }
+            }
+            else if (jl_is_typename(v)) {
+                jl_typename_t *tn = (jl_typename_t*)v;
+                jl_typename_t *newtn = (jl_typename_t*)&s->s->buf[reloc_offset];
+                if (tn->atomicfields != NULL) {
+                    size_t nf = jl_svec_len(tn->names);
+                    uintptr_t layout = LLT_ALIGN(ios_pos(s->const_data), sizeof(void*));
+                    write_padding(s->const_data, layout - ios_pos(s->const_data)); // realign stream
+                    newtn->atomicfields = NULL; // relocation offset
+                    layout /= sizeof(void*);
+                    arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_typename_t, atomicfields))); // relocation location
+                    arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + layout)); // relocation target
+                    ios_write(s->const_data, (char*)tn->atomicfields, nf);
                 }
             }
             else if (((jl_datatype_t*)(jl_typeof(v)))->name == jl_idtable_typename) {
