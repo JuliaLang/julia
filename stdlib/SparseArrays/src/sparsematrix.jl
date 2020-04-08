@@ -359,9 +359,8 @@ copyto!(A::AbstractMatrix, B::AbstractSparseMatrixCSC) = _sparse_copyto!(A, B)
 copyto!(A::PermutedDimsArray, B::AbstractSparseMatrixCSC) = _sparse_copyto!(A, B)
 
 function _sparse_copyto!(dest::AbstractMatrix, src::AbstractSparseMatrixCSC)
-    dest === src && return dest
+    (dest === src || isempty(src)) && return dest
     z = convert(eltype(dest), zero(eltype(src))) # should throw if not possible
-    isempty(src) && return dest
     isrc = LinearIndices(src)
     checkbounds(dest, isrc)
     # If src is not dense, zero out the portion of dest spanned by isrc

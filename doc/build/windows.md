@@ -196,6 +196,7 @@ make -j4 win-extras julia-ui-release
 export WINEDEBUG=-all # suppress wine fixme's
 # this last step may need to be run interactively
 make -j4 binary-dist
+make -j4 exe
 SCRIPT
 
 Vagrant.configure("2") do |config|
@@ -235,7 +236,7 @@ Then run the build:
  2. `echo override XC_HOST = i686-w64-mingw32 >> Make.user`
  3. `make`
  4. `make win-extras` (Necessary before running `make binary-dist`)
- 5. `make binary-dist`
+ 5. `make binary-dist` then `make exe` to create the Windows installer.
  6. move the `julia-*.exe` installer to the target machine
 
 If you are building for 64-bit windows, the steps are essentially the same.
@@ -267,8 +268,7 @@ just run `vagrant up` from that folder.
 Compiling using one of the options above creates a basic Julia build, but not some
 extra components that are included if you run the full Julia binary installer.
 If you need these components, the easiest way to get them is to build the installer
-yourself using ```make win-extras``` followed by ```make binary-dist```, and then
-running the resulting installer.
+yourself using ```make win-extras``` followed by ```make binary-dist``` and ```make exe```. Then running the resulting installer.
 
 
 ## Windows Build Debugging

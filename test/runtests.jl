@@ -5,6 +5,7 @@ using Distributed
 using Dates
 import REPL
 using Printf: @sprintf
+using Base: Experimental
 
 include("choosetests.jl")
 include("testenv.jl")
@@ -62,6 +63,13 @@ move_to_node1("stress")
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
+
+# Shuffle LinearAlgebra tests to the front, because they take a while, so we might
+# as well get them all started early.
+linalg_test_ids = findall(x->occursin("LinearAlgebra", x), tests)
+linalg_tests = tests[linalg_test_ids]
+deleteat!(tests, linalg_test_ids)
+prepend!(tests, linalg_tests)
 
 import LinearAlgebra
 cd(@__DIR__) do
@@ -182,7 +190,7 @@ cd(@__DIR__) do
                 end
             end
         end
-        @sync begin
+        @Experimental.sync begin
             for p in workers()
                 @async begin
                     push!(all_tasks, current_task())

@@ -7,7 +7,7 @@ module IteratorsMD
                  ndims, IteratorSize, convert, show, iterate, promote_rule, to_indices
 
     import .Base: +, -, *, (:)
-    import .Base: simd_outer_range, simd_inner_length, simd_index
+    import .Base: simd_outer_range, simd_inner_length, simd_index, setindex
     using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail,
         ReshapedArray, ReshapedArrayLF, OneTo
     using .Base.Iterators: Reverse, PartitionIterator
@@ -95,6 +95,8 @@ module IteratorsMD
 
     # access to index tuple
     Tuple(index::CartesianIndex) = index.I
+
+    Base.setindex(x::CartesianIndex,i,j) = CartesianIndex(Base.setindex(Tuple(x),i,j))
 
     # equality
     Base.:(==)(a::CartesianIndex{N}, b::CartesianIndex{N}) where N = a.I == b.I
@@ -384,6 +386,9 @@ module IteratorsMD
     # When used as indices themselves, CartesianIndices can simply become its tuple of ranges
     @inline to_indices(A, inds, I::Tuple{CartesianIndices, Vararg{Any}}) =
         to_indices(A, inds, (I[1].indices..., tail(I)...))
+    # but preserve CartesianIndices{0} as they consume a dimension.
+    @inline to_indices(A, inds, I::Tuple{CartesianIndices{0},Vararg{Any}}) =
+        (first(I), to_indices(A, inds, tail(I))...)
 
     @inline function in(i::CartesianIndex{N}, r::CartesianIndices{N}) where {N}
         _in(true, i.I, first(r).I, last(r).I)
@@ -631,7 +636,8 @@ LogicalIndex(mask::AbstractArray{Bool, N}) where {N} = LogicalIndex{CartesianInd
 size(L::LogicalIndex) = (L.sum,)
 length(L::LogicalIndex) = L.sum
 collect(L::LogicalIndex) = [i for i in L]
-show(io::IO, r::LogicalIndex) = print(io, "Base.LogicalIndex(", r.mask, ")")
+show(io::IO, r::LogicalIndex) = print(io,collect(r))
+print_array(io::IO, X::LogicalIndex) = print_array(io, collect(X))
 # Iteration over LogicalIndex is very performance-critical, but it also must
 # support arbitrary AbstractArray{Bool}s with both Int and CartesianIndex.
 # Thus the iteration state contains an index iterator and its state. We also
@@ -961,6 +967,7 @@ julia> y
 copyto!(dest, src)
 
 function copyto!(dest::AbstractArray{T1,N}, src::AbstractArray{T2,N}) where {T1,T2,N}
+    isempty(src) && return dest
     src′ = unalias(dest, src)
     # fastpath for equal axes (#34025)
     if axes(dest) == axes(src)

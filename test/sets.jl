@@ -452,6 +452,7 @@ end
     @test allunique(7:-1:1)       # negative step
     @test allunique(Date(2018, 8, 7):Day(1):Date(2018, 8, 11))  # JuliaCon 2018
     @test allunique(DateTime(2018, 8, 7):Hour(1):DateTime(2018, 8, 11))
+    @test allunique(('a':1:'c')[1:2]) == true
 end
 @testset "filter(f, ::$S)" for S = (Set, BitSet)
     s = S([1,2,3,4])

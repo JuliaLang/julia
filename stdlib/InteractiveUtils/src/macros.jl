@@ -8,6 +8,15 @@ separate_kwargs(args...; kwargs...) = (args, kwargs.data)
 
 function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
     if isa(ex0, Expr)
+        if ex0.head === :do && Meta.isexpr(get(ex0.args, 1, nothing), :call)
+            if length(ex0.args) != 2
+                return Expr(:call, :error, "ill-formed do call")
+            end
+            i = findlast(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args[1].args)
+            args = copy(ex0.args[1].args)
+            insert!(args, (isnothing(i) ? 2 : i+1), ex0.args[2])
+            ex0 = Expr(:call, args...)
+        end
         if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
             return quote
                 local arg1 = $(esc(ex0.args[1]))

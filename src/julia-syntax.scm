@@ -231,7 +231,7 @@
   (let ((type-ex (caddr m)))
     (if (eq? (car type-ex) 'block)
         ;; extract ssavalue labels of sparams from the svec-of-sparams argument to `method`
-        (let ((sp-ssavals (cddr (last (last type-ex)))))
+        (let ((sp-ssavals (cddr (cadddr (last type-ex)))))
           (map (lambda (a)  ;; extract T from (= v (call (core TypeVar) (quote T) ...))
                  (cadr (caddr (caddr a))))
                (filter (lambda (e)
@@ -293,6 +293,24 @@
 (define (non-generated-version body)
   (generated-part- body #f))
 
+;; Remove and return the line number for the start of the function definition
+(define (maybe-remove-functionloc! body)
+  (let* ((prologue (extract-method-prologue body))
+         (prologue-lnos (filter linenum? prologue))
+         (functionloc (if (pair? prologue-lnos)
+                          (car prologue-lnos)
+                          ; Fallback - take first line anywhere in body
+                          (let ((lnos (filter linenum? body)))
+                            (if (null? lnos) '(line 0 none) (car lnos))))))
+    (if (length> prologue-lnos 1)
+        ; First of two line numbers in prologue is function definition location
+        ; which should be removed from the body.
+        (let loop ((stmts body))
+          (if (eq? functionloc (cadr stmts))
+              (set-cdr! stmts (cddr stmts))
+              (loop (cdr body)))))
+    functionloc))
+
 ;; construct the (method ...) expression for one primitive method definition,
 ;; assuming optional and keyword args are already handled
 (define (method-def-expr- name sparams argl body (rett '(core Any)))
@@ -328,12 +346,12 @@
          (error "function argument and static parameter names must be distinct"))
      (if (or (and name (not (sym-ref? name))) (not (valid-name? name)))
          (error (string "invalid function name \"" (deparse name) "\"")))
-     (let* ((generator (if (expr-contains-p if-generated? body (lambda (x) (not (function-def? x))))
+     (let* ((loc (maybe-remove-functionloc! body))
+            (generator (if (expr-contains-p if-generated? body (lambda (x) (not (function-def? x))))
                            (let* ((gen    (generated-version body))
                                   (nongen (non-generated-version body))
                                   (gname  (symbol (string (gensy) "#" (current-julia-module-counter))))
-                                  (gf     (make-generator-function gname names anames gen))
-                                  (loc    (function-body-lineno body)))
+                                  (gf     (make-generator-function gname names anames gen)))
                              (set! body (insert-after-meta
                                          nongen
                                          `((meta generated
@@ -343,8 +361,8 @@
                                                       ,(if (null? sparams)
                                                            'nothing
                                                            (cons 'list (map car sparams)))
-                                                      ,(if (null? loc) 0 (cadr loc))
-                                                      (inert ,(if (null? loc) 'none (caddr loc)))
+                                                      ,(cadr loc)
+                                                      (inert ,(caddr loc))
                                                       (false))))))
                              (list gf))
                            '()))
@@ -356,7 +374,11 @@
             (renames (map cons names temps))
             (mdef
              (if (null? sparams)
-                 `(method ,name (call (core svec) (call (core svec) ,@(dots->vararg types)) (call (core svec)))
+                 `(method ,name
+                          (call (core svec)
+                                (call (core svec) ,@(dots->vararg types))
+                                (call (core svec))
+                                (inert ,loc))
                           ,body)
                  `(method ,name
                           (block
@@ -377,7 +399,8 @@
                                                       (map (lambda (ty)
                                                              (replace-vars ty renames))
                                                            types)))
-                                 (call (core svec) ,@temps)))
+                                 (call (core svec) ,@temps)
+                                 (inert ,loc)))
                           ,body))))
        (if (or (symbol? name) (globalref? name))
            `(block ,@generator (method ,name) ,mdef (unnecessary ,name))  ;; return the function
@@ -792,10 +815,6 @@
                                            ,@sig)
                                     wheres)
                       ,(ctor-body body curlyargs sparams))))))
-
-(define (function-body-lineno body)
-  (let ((lnos (filter linenum? body)))
-    (if (null? lnos) '() (car lnos))))
 
 ;; rewrite calls to `new( ... )` to `new` expressions on the appropriate
 ;; type, determined by the containing constructor definition.
@@ -1418,6 +1437,8 @@
                  `(,(car x) ,(arg-to-temp (cadr x))))
                 ((or (eq? (car x) 'kw) (and tup (eq? (car x) '=)))
                  `(,(car x) ,(cadr x) ,(arg-to-temp (caddr x))))
+                ((eq? (car x) 'parameters)
+                 `(parameters ,@(map arg-to-temp (cdr x))))
                 ((eq? (car x) 'tuple)
                  (let ((tmp (remove-argument-side-effects x #t)))
                    (set! a (revappend (cdr tmp) a))
@@ -1758,10 +1779,10 @@
                            (syntax-str   "named tuple element"))
   (let* ((names (apply append
                        (map (lambda (x)
-                              (cond #;((symbol? x) (list x))
+                              (cond ((symbol? x) (list x))
                                     ((and (or (assignment? x) (kwarg? x)) (symbol? (cadr x)))
                                      (list (cadr x)))
-                                    #;((and (length= x 3) (eq? (car x) '|.|))
+                                    ((and (length= x 3) (eq? (car x) '|.|))
                                      (list (cadr (caddr x))))
                                     (else '())))
                             lst)))
@@ -1799,18 +1820,17 @@
                        (cons (cadr el) current-names)
                        (cons (caddr el) current-vals)
                        expr))
-#|
                 ((symbol? el)  ;; x  =>  x = x
                  (loop (cdr L)
                        (cons el current-names)
                        (cons el current-vals)
                        expr))
-                ((and (length= el 3) (eq? (car el) '|.|))  ;; a.x  =>  x = a.x
+                ((and (length= el 3) (eq? (car el) '|.|)   ;; a.x  =>  x = a.x
+                      (quoted-sym? (caddr el)))
                  (loop (cdr L)
                        (cons (cadr (caddr el)) current-names)
                        (cons el current-vals)
                        expr))
-|#
                 ((and (length= el 4) (eq? (car el) 'call) (eq? (cadr el) '=>))
                  (loop (cdr L)
                        '()
@@ -1837,7 +1857,7 @@
       `(= ,lhs ,rhs)))
 
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref line module toplevel ssavalue null true false meta using import export)))
+  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref module toplevel ssavalue null true false meta using import export)))
       e
       (let ((ex (get expand-table (car e) #f)))
         (if ex
@@ -2334,6 +2354,11 @@
           (= ,r ,(expand-forms (cadr e)))
           (gc_preserve_end ,s)
           ,r)))
+
+    'line
+    (lambda (e)
+      (set! *current-desugar-loc* e)
+      e)
     ))
 
 (define (has-return? e)
@@ -3015,9 +3040,12 @@ f(x) = yt(x)
          (newtypes
           (if iskw
               `(,(car types) ,(cadr types) ,closure-type ,@(cdddr types))
-              `(,closure-type ,@(cdr types)))))
-    `(call (core svec) (call (core svec) ,@newtypes)
-           (call (core svec) ,@(append (cddr (cadddr te)) type-sp)))))
+              `(,closure-type ,@(cdr types))))
+         (loc (caddddr te)))
+    `(call (core svec)
+           (call (core svec) ,@newtypes)
+           (call (core svec) ,@(append (cddr (cadddr te)) type-sp))
+           ,loc)))
 
 ;; collect all toplevel-butfirst expressions inside `e`, and return
 ;; (ex . stmts), where `ex` is the expression to evaluated and
@@ -4368,9 +4396,22 @@ f(x) = yt(x)
      (analyze-variables!
       (resolve-scopes ex)))) file line))
 
-(define julia-expand0 expand-forms)
+(define *current-desugar-loc* #f)
+
+(define (julia-expand0 ex file line)
+  (with-bindings ((*current-desugar-loc* `(line ,line ,file)))
+   (trycatch (expand-forms ex)
+             (lambda (e)
+               (if (and (pair? e) (eq? (car e) 'error))
+                   ; Add location for desugaring errors. This is approximate:
+                   ; - Line number nodes are sparse in the AST
+                   ; - Line number nodes apply to the next statement, so
+                   ;   tracking by `set!`ing *current-desugar-loc* relies on
+                   ;   AST traversal being in program order.
+                   (error (string (cadr e) (format-loc *current-desugar-loc*))))
+                   (raise e)))))
 
 (define (julia-expand ex (file 'none) (line 0))
   (julia-expand1
    (julia-expand0
-    (julia-expand-macroscope ex)) file line))
+    (julia-expand-macroscope ex) file line) file line))

@@ -340,6 +340,7 @@ New library functions
 * Added `Base.hasproperty` and `Base.hasfield` ([#28850]).
 * One argument `!=(x)`, `>(x)`, `>=(x)`, `<(x)`, `<=(x)` have been added, returning partially-applied
   versions of the functions, similar to the existing `==(x)` and `isequal(x)` methods ([#30915]).
+* The new `map!(f, values(::AbstractDict))` method allows to modify in-place values of a dictionary ([#31223]).
 
 Standard library changes
 ------------------------

@@ -59,6 +59,9 @@ automatically such that there are `length` linearly spaced elements in the range
 If `step` and `stop` are provided and `length` is not, the overall range length will be computed
 automatically such that the elements are `step` spaced.
 
+Special care is taken to ensure intermediate values are computed rationally.
+To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
+
 `stop` may be specified as either a positional or keyword argument.
 
 !!! compat "Julia 1.1"
@@ -366,6 +369,26 @@ be an `Int`.
 julia> LinRange(1.5, 5.5, 9)
 9-element LinRange{Float64}:
  1.5,2.0,2.5,3.0,3.5,4.0,4.5,5.0,5.5
+```
+
+Compared to using [`range`](@ref), directly constructing a `LinRange` should
+have less overhead but won't try to correct for floating point errors:
+```julia
+julia> collect(range(-0.1, 0.3, length=5))
+5-element Array{Float64,1}:
+ -0.1
+  0.0
+  0.1
+  0.2
+  0.3
+
+julia> collect(LinRange(-0.1, 0.3, 5))
+5-element Array{Float64,1}:
+ -0.1
+ -1.3877787807814457e-17
+  0.09999999999999999
+  0.19999999999999998
+  0.3
 ```
 """
 struct LinRange{T} <: AbstractRange{T}
@@ -704,12 +727,12 @@ function getindex(r::StepRangeLen{T}, s::OrdinalRange{<:Integer}) where {T}
     return StepRangeLen{T}(ref, r.step*step(s), length(s), offset)
 end
 
-function getindex(r::LinRange, s::OrdinalRange{<:Integer})
+function getindex(r::LinRange{T}, s::OrdinalRange{<:Integer}) where {T}
     @_inline_meta
     @boundscheck checkbounds(r, s)
     vfirst = unsafe_getindex(r, first(s))
     vlast  = unsafe_getindex(r, last(s))
-    return LinRange(vfirst, vlast, length(s))
+    return LinRange{T}(vfirst, vlast, length(s))
 end
 
 show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
@@ -853,7 +876,7 @@ end
 issubset(r::OneTo, s::OneTo) = r.stop <= s.stop
 
 issubset(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) =
-    first(r) >= first(s) && last(r) <= last(s)
+    isempty(r) || first(r) >= first(s) && last(r) <= last(s)
 
 ## linear operations on ranges ##
 

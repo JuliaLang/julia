@@ -73,8 +73,8 @@ struct ObjectInfo {
 // Maintain a mapping of unrealized function names -> linfo objects
 // so that when we see it get emitted, we can add a link back to the linfo
 // that it came from (providing name, type signature, file info, etc.)
-static StringMap<jl_code_instance_t*> ncode_in_flight;
-static std::string mangle(const std::string &Name, const DataLayout &DL)
+static StringMap<jl_code_instance_t*> codeinst_in_flight;
+static std::string mangle(StringRef Name, const DataLayout &DL)
 {
     std::string MangledName;
     {
@@ -85,7 +85,7 @@ static std::string mangle(const std::string &Name, const DataLayout &DL)
 }
 void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL)
 {
-    ncode_in_flight[mangle(name, DL)] = codeinst;
+    codeinst_in_flight[mangle(name, DL)] = codeinst;
 }
 
 
@@ -195,10 +195,10 @@ public:
 
         auto SavedObject = L.getObjectForDebug(Object).takeBinary();
         // If the debug object is unavailable, save (a copy of) the original object
-        // for our backtraces
+        // for our backtraces.
+        // This copy seems unfortunate, but there doesn't seem to be a way to take
+        // ownership of the original buffer.
         if (!SavedObject.first) {
-            // This is unfortunate, but there doesn't seem to be a way to take
-            // ownership of the original buffer
             auto NewBuffer = MemoryBuffer::getMemBufferCopy(
                     Object.getData(), Object.getFileName());
             auto NewObj = object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
@@ -399,11 +399,11 @@ public:
                    (uint8_t*)(uintptr_t)Addr, (size_t)Size, sName,
                    (uint8_t*)(uintptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
 #endif
-            StringMap<jl_code_instance_t*>::iterator linfo_it = ncode_in_flight.find(sName);
+            StringMap<jl_code_instance_t*>::iterator codeinst_it = codeinst_in_flight.find(sName);
             jl_code_instance_t *codeinst = NULL;
-            if (linfo_it != ncode_in_flight.end()) {
-                codeinst = linfo_it->second;
-                ncode_in_flight.erase(linfo_it);
+            if (codeinst_it != codeinst_in_flight.end()) {
+                codeinst = codeinst_it->second;
+                codeinst_in_flight.erase(codeinst_it);
             }
             uv_rwlock_wrlock(&threadsafe);
             if (codeinst)
@@ -945,7 +945,7 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTS
         if (objpath.empty()) {
             // Fall back to simple path relative to the dynamic library.
             size_t sep = fname.rfind('/');
-            debuginfopath = fname;
+            debuginfopath = fname.str();
             debuginfopath += ".dSYM/Contents/Resources/DWARF/";
             debuginfopath += fname.substr(sep + 1);
             objpath = debuginfopath;
@@ -977,12 +977,12 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTS
                 // that can be ignored.
                 ignoreError(DebugInfo);
                 if (fname.substr(sep + 1) != info.filename) {
-                    debuginfopath = fname.substr(0, sep + 1);
+                    debuginfopath = fname.substr(0, sep + 1).str();
                     debuginfopath += info.filename;
                     DebugInfo = openDebugInfo(debuginfopath, info);
                 }
                 if (!DebugInfo) {
-                    debuginfopath = fname.substr(0, sep + 1);
+                    debuginfopath = fname.substr(0, sep + 1).str();
                     debuginfopath += ".debug/";
                     debuginfopath += info.filename;
                     ignoreError(DebugInfo);

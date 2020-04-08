@@ -62,7 +62,13 @@ end
         κ     = cond(apd, 1) #condition number
 
         unary_ops_tests(apd, capd, ε*κ*n)
-
+        if eltya != Int
+            @test Factorization{eltya}(capd) === capd
+            if eltya <: Real
+                @test Array(Factorization{complex(eltya)}(capd)) ≈ Array(factorize(complex(apd)))
+                @test eltype(Factorization{complex(eltya)}(capd)) == complex(eltya)
+            end
+        end
         @testset "throw for non-square input" begin
             A = rand(eltya, 2, 3)
             @test_throws DimensionMismatch cholesky(A)
@@ -338,7 +344,7 @@ end
     CD = cholesky(D)
     CM = cholesky(Matrix(D))
     @test CD isa Cholesky{Float64}
-    @test CD.U == Diagonal(.√d) == CM.U
+    @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
 
@@ -352,7 +358,7 @@ end
     CD = cholesky(D)
     CM = cholesky(Matrix(D))
     @test CD isa Cholesky{Complex{Float64}}
-    @test CD.U == Diagonal(.√d) == CM.U
+    @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
 
@@ -397,6 +403,28 @@ end
     B = A'A
     C = cholesky(B, Val(true), check=false)
     @test B ≈ Matrix(C)
+end
+
+@testset "CholeskyPivoted and Factorization" begin
+    A = randn(8,8)
+    B = A'A
+    C = cholesky(B, Val(true), check=false)
+    @test CholeskyPivoted{eltype(C)}(C) === C
+    @test Factorization{eltype(C)}(C) === C
+    @test Array(CholeskyPivoted{complex(eltype(C))}(C)) ≈ Array(cholesky(complex(B), Val(true), check=false))
+    @test Array(Factorization{complex(eltype(C))}(C)) ≈ Array(cholesky(complex(B), Val(true), check=false))
+    @test eltype(Factorization{complex(eltype(C))}(C)) == complex(eltype(C))
+end
+
+@testset "REPL printing of CholeskyPivoted" begin
+    A = randn(8,8)
+    B = A'A
+    C = cholesky(B, Val(true), check=false)
+    cholstring = sprint((t, s) -> show(t, "text/plain", s), C)
+    rankstring = "$(C.uplo) factor with rank $(rank(C)):"
+    factorstring = sprint((t, s) -> show(t, "text/plain", s), C.uplo == 'U' ? C.U : C.L)
+    permstring   = sprint((t, s) -> show(t, "text/plain", s), C.p)
+    @test cholstring == "$(summary(C))\n$rankstring\n$factorstring\npermutation:\n$permstring"
 end
 
 end # module TestCholesky

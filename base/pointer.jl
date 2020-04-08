@@ -159,3 +159,6 @@ isless(x::Ptr{T}, y::Ptr{T}) where {T} = x < y
 +(x::Ptr, y::Integer) = oftype(x, add_ptr(UInt(x), (y % UInt) % UInt))
 -(x::Ptr, y::Integer) = oftype(x, sub_ptr(UInt(x), (y % UInt) % UInt))
 +(x::Integer, y::Ptr) = y + x
+
+unsigned(x::Ptr) = UInt(x)
+signed(x::Ptr) = Int(x)
