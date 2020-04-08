@@ -17,6 +17,11 @@
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/ADT/StringMap.h>
 
+#include <llvm/Support/TargetRegistry.h>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/Analysis/TargetTransformInfo.h>
+#include <llvm/Analysis/TargetLibraryInfo.h>
+
 using namespace llvm;
 
 #include "julia.h"
@@ -449,13 +454,10 @@ CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
 
 static void addPassesForOptLevel(legacy::PassManager &PM, TargetMachine &TM, raw_svector_ostream &ObjStream, MCContext *Ctx, int optlevel)
 {
-    auto oldlevel = TM.getOptLevel();
-    TM.setOptLevel(CodeGenOptLevelFor(optlevel));
     addTargetPasses(&PM, &TM);
     addOptimizationPasses(&PM, optlevel);
     if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
         llvm_unreachable("Target does not support MC emission.");
-    TM.setOptLevel(oldlevel);
 }
 
 CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
@@ -479,8 +481,6 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
             }
         }
     }
-    auto oldlevel = jit.TM.getOptLevel();
-    jit.TM.setOptLevel(CodeGenOptLevelFor(optlevel));
     if (optlevel == 0)
         jit.PM0.run(M);
     else if (optlevel == 1)
@@ -489,7 +489,6 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
         jit.PM2.run(M);
     else if (optlevel >= 3)
         jit.PM3.run(M);
-    jit.TM.setOptLevel(oldlevel);
 
     std::unique_ptr<MemoryBuffer> ObjBuffer(
         new SmallVectorMemoryBuffer(std::move(jit.ObjBufferSV)));
@@ -540,10 +539,15 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
             CompilerT(this)
         )
 {
-    addPassesForOptLevel(PM0, TM, ObjStream, Ctx, 0);
-    addPassesForOptLevel(PM1, TM, ObjStream, Ctx, 1);
-    addPassesForOptLevel(PM2, TM, ObjStream, Ctx, 2);
-    addPassesForOptLevel(PM3, TM, ObjStream, Ctx, 3);
+    for (int i = 0; i < 4; i++) {
+        TMs[i] = TM.getTarget().createTargetMachine(TM.getTargetTriple().getTriple(), TM.getTargetCPU(),
+                TM.getTargetFeatureString(), TM.Options, Reloc::Static, TM.getCodeModel(),
+                CodeGenOptLevelFor(i), true);
+    }
+    addPassesForOptLevel(PM0, *TMs[0], ObjStream, Ctx, 0);
+    addPassesForOptLevel(PM1, *TMs[1], ObjStream, Ctx, 1);
+    addPassesForOptLevel(PM2, *TMs[2], ObjStream, Ctx, 2);
+    addPassesForOptLevel(PM3, *TMs[3], ObjStream, Ctx, 3);
 
     // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
     // symbols in the program as well. The nullptr argument to the function
