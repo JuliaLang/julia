@@ -816,6 +816,10 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 jl_serialize_value(s, tn->mt);
                 ios_write(s->s, (char*)&tn->hash, sizeof(tn->hash));
                 write_uint8(s->s, tn->abstract | (tn->mutabl << 1) | (tn->references_self << 2) | (tn->mayinlinealloc << 3));
+                size_t nb = tn->atomicfields ? (jl_svec_len(tn->names) + 31) / 32 * sizeof(uint32_t) : 0;
+                write_int32(s->s, nb);
+                if (nb)
+                    ios_write(s->s, (char*)tn->atomicfields, nb);
             }
             return;
         }
@@ -1717,7 +1721,6 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
             memset(tn, 0, sizeof(jl_typename_t));
             tn->cache = jl_emptysvec; // the cache is refilled later (tag 5)
             tn->linearcache = jl_emptysvec; // the cache is refilled later (tag 5)
-            tn->partial = NULL;
             backref_list.items[pos] = tn;
         }
         jl_module_t *m = (jl_module_t*)jl_deserialize_value(s, NULL);
@@ -1737,6 +1740,11 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
             tn->mutabl = (flags>>1) & 1;
             tn->references_self = (flags>>2) & 1;
             tn->mayinlinealloc = (flags>>3) & 1;
+            size_t nfields = read_int32(s->s);
+            if (nfields) {
+                tn->atomicfields = (uint32_t*)malloc(nfields);
+                ios_read(s->s, (char*)tn->atomicfields, nfields);
+            }
         }
         else {
             jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(jl_get_global(m, sym));

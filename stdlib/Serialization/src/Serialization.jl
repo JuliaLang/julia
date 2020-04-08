@@ -1264,6 +1264,7 @@ function deserialize_typename(s::AbstractSerializer, number)
     super = deserialize(s)::Type
     parameters = deserialize(s)::SimpleVector
     types = deserialize(s)::SimpleVector
+    attrs = Core.svec()
     has_instance = deserialize(s)::Bool
     abstr = deserialize(s)::Bool
     mutabl = deserialize(s)::Bool
@@ -1274,8 +1275,8 @@ function deserialize_typename(s::AbstractSerializer, number)
         # TODO: there's an unhanded cycle in the dependency graph at this point:
         # while deserializing super and/or types, we may have encountered
         # tn.wrapper and throw UndefRefException before we get to this point
-        ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Any, Cint, Cint, Cint),
-                    tn, tn.module, super, parameters, names, types,
+        ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Any, Any, Cint, Cint, Cint),
+                    tn, tn.module, super, parameters, names, types, attrs,
                     abstr, mutabl, ninitialized)
         tn.wrapper = ndt.name.wrapper
         ccall(:jl_set_const, Cvoid, (Any, Any, Any), tn.module, tn.name, tn.wrapper)

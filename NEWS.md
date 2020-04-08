@@ -42,10 +42,15 @@ Command-line option changes
 Multi-threading changes
 -----------------------
 
-* If the `JULIA_NUM_THREADS` environment variable is set to `auto`, then the number of threads will be set to the number of CPU threads ([#38952])
-* Every `Task` object has a local random number generator state, providing reproducible (schedule-independent) execution
-  of parallel simulation code by default. The default generator is also significantly faster in parallel than in
-  previous versions.
+* Intrinsics for atomic pointer operations are now defined for certain byte sizes. ([#37847])
+* Support for declaring and using individual fields of a mutable struct as
+  atomic now available. ([#37847])
+* If the `JULIA_NUM_THREADS` environment variable is set to `auto`, then the
+  number of threads will be set to the number of CPU threads ([#38952])
+* Every `Task` object has a local random number generator state, providing
+  reproducible (schedule-independent) execution of parallel simulation code by
+  default. The default generator is also significantly faster in parallel than
+  in previous versions.
 
 
 Build system changes

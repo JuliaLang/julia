@@ -187,11 +187,12 @@ export
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
     OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
-    UndefKeywordError,
+    UndefKeywordError, ConcurrencyViolationError,
     # AST representation
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
-    fieldtype, getfield, setfield!, nfields, throw, tuple, ===, isdefined, eval, ifelse,
+    fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!,
+    nfields, throw, tuple, ===, isdefined, eval, ifelse,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
     <:, typeof, isa, typeassert,
@@ -289,6 +290,9 @@ struct StackOverflowError  <: Exception end
 struct UndefRefError       <: Exception end
 struct UndefVarError <: Exception
     var::Symbol
+end
+struct ConcurrencyViolationError <: Exception
+    msg::AbstractString
 end
 struct InterruptException <: Exception end
 struct DomainError <: Exception

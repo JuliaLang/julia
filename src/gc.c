@@ -331,7 +331,7 @@ static void finalize_object(arraylist_t *list, jl_value_t *o,
         // The `memset` (like any other content mutation) has to be done
         // **before** the `cmpxchg` which publishes the length.
         memset(&items[len], 0, (oldlen - len) * sizeof(void*));
-        jl_atomic_compare_exchange(&list->len, oldlen, len);
+        jl_atomic_cmpswap(&list->len, &oldlen, len);
     }
     else {
         list->len = len;
@@ -1549,7 +1549,7 @@ static void gc_sweep_perm_alloc(void)
 
 // mark phase
 
-JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *ptr)
+JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_taggedvalue_t *o = jl_astaggedvalue(ptr);
@@ -1558,11 +1558,11 @@ JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *ptr)
     // write GC_OLD to the GC bits outside GC. This could cause
     // duplicated objects in the remset but that shouldn't be a problem.
     o->bits.gc = GC_MARKED;
-    arraylist_push(ptls->heap.remset, ptr);
+    arraylist_push(ptls->heap.remset, (jl_value_t*)ptr);
     ptls->heap.remset_nptr++; // conservative
 }
 
-void jl_gc_queue_multiroot(jl_value_t *parent, jl_value_t *ptr) JL_NOTSAFEPOINT
+void jl_gc_queue_multiroot(const jl_value_t *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
 {
     // first check if this is really necessary
     // TODO: should we store this info in one of the extra gc bits?

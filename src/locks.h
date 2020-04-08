@@ -28,8 +28,7 @@ static inline void jl_mutex_wait(jl_mutex_t *lock, int safepoint)
         return;
     }
     while (1) {
-        if (owner == 0 &&
-            jl_atomic_compare_exchange(&lock->owner, 0, self) == 0) {
+        if (owner == 0 && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
             lock->count = 1;
             return;
         }
@@ -97,8 +96,7 @@ static inline int jl_mutex_trylock_nogc(jl_mutex_t *lock)
         lock->count++;
         return 1;
     }
-    if (owner == 0 &&
-        jl_atomic_compare_exchange(&lock->owner, 0, self) == 0) {
+    if (owner == 0 && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
         lock->count = 1;
         return 1;
     }

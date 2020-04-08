@@ -121,7 +121,8 @@ int jl_safepoint_start_gc(void)
     // one of them to actually run the collection. We can't just let the
     // master thread do the GC since it might be running unmanaged code
     // and can take arbitrarily long time before hitting a safe point.
-    if (jl_atomic_compare_exchange(&jl_gc_running, 0, 1) != 0) {
+    uint32_t running = 0;
+    if (!jl_atomic_cmpswap(&jl_gc_running, &running, 1)) {
         jl_mutex_unlock_nogc(&safepoint_lock);
         jl_safepoint_wait_gc();
         return 0;

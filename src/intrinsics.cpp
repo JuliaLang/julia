@@ -12,6 +12,7 @@ FunctionType *get_intr_args1(LLVMContext &C) { return FunctionType::get(T_prjlva
 FunctionType *get_intr_args2(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue, T_prjlvalue}, false); }
 FunctionType *get_intr_args3(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue, T_prjlvalue, T_prjlvalue}, false); }
 FunctionType *get_intr_args4(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue, T_prjlvalue, T_prjlvalue, T_prjlvalue}, false); }
+FunctionType *get_intr_args5(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue, T_prjlvalue, T_prjlvalue, T_prjlvalue, T_prjlvalue}, false); }
 
 static JuliaFunction *runtime_func[num_intrinsics] = {
 #define ADD_I(name, nargs) new JuliaFunction{"jl_"#name, get_intr_args##nargs, nullptr},
@@ -281,6 +282,9 @@ static jl_cgval_t ghostValue(jl_value_t *ty);
 static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
 {
     Type *ty = unboxed->getType();
+    if (ty == to)
+        return unboxed;
+    assert(to->isIntOrPtrTy() || to->isFloatingPointTy());
     bool frompointer = ty->isPointerTy();
     bool topointer = to->isPointerTy();
     const DataLayout &DL = jl_data_layout;
@@ -300,6 +304,14 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
     if (frompointer && topointer) {
         unboxed = emit_bitcast(ctx, unboxed, to);
     }
+    else if (!ty->isIntOrPtrTy() && !ty->isFloatingPointTy()) {
+        const DataLayout &DL = jl_data_layout;
+        unsigned nb = DL.getTypeSizeInBits(ty);
+        assert(nb == DL.getTypeSizeInBits(to));
+        AllocaInst *cast = ctx.builder.CreateAlloca(ty);
+        ctx.builder.CreateStore(unboxed, cast);
+        unboxed = ctx.builder.CreateLoad(to, ctx.builder.CreateBitCast(cast, to->getPointerTo()));
+    }
     else if (frompointer) {
         Type *INTT_to = INTT(to);
         unboxed = ctx.builder.CreatePtrToInt(unboxed, INTT_to);
@@ -312,7 +324,7 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
             unboxed = ctx.builder.CreateBitCast(unboxed, INTT_to);
         unboxed = emit_inttoptr(ctx, unboxed, to);
     }
-    else if (ty != to) {
+    else {
         unboxed = ctx.builder.CreateBitCast(unboxed, to);
     }
     return unboxed;
@@ -610,7 +622,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
             Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-            return typed_load(ctx, thePtr, im1, ety, tbaa_data, nullptr, true, align_nb);
+            return typed_load(ctx, thePtr, im1, ety, tbaa_data, nullptr, isboxed, AtomicOrdering::NotAtomic, true, align_nb);
         }
         else {
             return ghostValue(ety);
@@ -678,7 +690,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
             thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-            typed_store(ctx, thePtr, im1, x, ety, tbaa_data, nullptr, nullptr, align_nb);
+            typed_store(ctx, thePtr, im1, x, ety, tbaa_data, nullptr, nullptr, isboxed, AtomicOrdering::NotAtomic, align_nb);
         }
     }
     return e;
@@ -911,6 +923,13 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         return emit_pointerref(ctx, argv);
     case pointerset:
         return emit_pointerset(ctx, argv);
+    case atomic_fence:
+    case atomic_pointerref:
+    case atomic_pointerset:
+    case atomic_pointerswap:
+    case atomic_pointermodify:
+    case atomic_pointerreplace:
+        return emit_runtime_call(ctx, f, argv, nargs);
     case bitcast:
         return generic_bitcast(ctx, argv);
     case trunc_int:

@@ -44,7 +44,7 @@ JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int tid) JL_NOTSAFEPOINT
     if (was == tid)
         return 1;
     if (was == -1)
-        return jl_atomic_bool_compare_exchange(&task->tid, -1, tid);
+        return jl_atomic_cmpswap(&task->tid, &was, tid);
     return 0;
 }
 
@@ -329,7 +329,9 @@ static int sleep_check_after_threshold(uint64_t *start_cycles)
 static void wake_thread(int16_t tid)
 {
     jl_ptls_t other = jl_all_tls_states[tid];
-    if (jl_atomic_bool_compare_exchange(&other->sleep_check_state, sleeping, not_sleeping)) {
+    uint8_t state = sleeping;
+    jl_atomic_cmpswap(&other->sleep_check_state, &state, not_sleeping);
+    if (state == sleeping) {
         uv_mutex_lock(&other->sleep_lock);
         uv_cond_signal(&other->wake_signal);
         uv_mutex_unlock(&other->sleep_lock);

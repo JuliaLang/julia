@@ -65,7 +65,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             intptr_t label = jl_gotoifnot_label(expr);
             JL_GC_PUSH1(&cond);
             expr = jl_new_struct_uninit(jl_gotoifnot_type);
-            set_nth_field(jl_gotoifnot_type, expr, 0, cond);
+            set_nth_field(jl_gotoifnot_type, expr, 0, cond, 0);
             jl_gotoifnot_label(expr) = label;
             JL_GC_POP();
         }

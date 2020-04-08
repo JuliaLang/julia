@@ -132,6 +132,14 @@ JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var)
     jl_throw(jl_new_struct(jl_undefvarerror_type, var));
 }
 
+JL_DLLEXPORT void JL_NORETURN jl_atomic_error(char *str) // == jl_exceptionf(jl_atomicerror_type, "%s", str)
+{
+    jl_value_t *msg = jl_pchar_to_string((char*)str, strlen(str));
+    JL_GC_PUSH1(&msg);
+    jl_throw(jl_new_struct(jl_atomicerror_type, msg));
+}
+
+
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error(jl_value_t *v, jl_value_t *t)
 {
     JL_GC_PUSH2(&v, &t); // root arguments so the caller doesn't need to
@@ -354,14 +362,16 @@ JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t idx0, jl_value_t *rhs)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     if (!st->name->mutabl)
-        jl_errorf("setfield! immutable struct of type %s cannot be changed", jl_symbol_name(st->name->name));
+        jl_errorf("setfield!: immutable struct of type %s cannot be changed", jl_symbol_name(st->name->name));
     if (idx0 >= jl_datatype_nfields(st))
         jl_bounds_error_int(v, idx0 + 1);
     //jl_value_t *ft = jl_field_type(st, idx0);
     //if (!jl_isa(rhs, ft)) {
     //    jl_type_error("setfield!", ft, rhs);
     //}
-    set_nth_field(st, (void*)v, idx0, rhs);
+    //int isatomic = jl_field_isatomic(st, idx0);
+    //if (isatomic) ...
+    set_nth_field(st, v, idx0, rhs, 0);
 }
 
 
