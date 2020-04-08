@@ -7199,6 +7199,10 @@ end
 
 @test repr(NFANode34126()) == "$NFANode34126(Tuple{Nothing,$NFANode34126}[])"
 
-# Issue #34544
-@test eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar, Expr(:block)))))
-@test eval(Expr(:module, true, :bar, Expr(:block)))
+@testset "issue #34544/35367" begin
+    # Test these evals dont throw an error
+    eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar, Expr(:block)))))
+    eval(Expr(:module, true, :bar, Expr(:block)))
+    eval(Expr(:quote, Expr(:module, true, :bar, Expr(:quote))))
+    eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar, Expr(:quote)))))
+end
