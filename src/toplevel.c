@@ -107,6 +107,12 @@ jl_array_t *jl_get_loaded_modules(void)
     return NULL;
 }
 
+static int jl_is__toplevel__mod(jl_module_t *mod)
+{
+    return jl_base_module &&
+        (jl_value_t*)mod == jl_get_global(jl_base_module, jl_symbol("__toplevel__"));
+}
+
 // TODO: add locks around global state mutation operations
 jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
 {
@@ -128,8 +134,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
 
     // copy parent environment info into submodule
     newm->uuid = parent_module->uuid;
-    if (jl_base_module &&
-            (jl_value_t*)parent_module == jl_get_global(jl_base_module, jl_symbol("__toplevel__"))) {
+    if (jl_is__toplevel__mod(parent_module)) {
         newm->parent = newm;
         jl_register_root_module(newm);
     }
@@ -822,25 +827,33 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v)
     return jl_toplevel_eval_flex(m, v, 1, 0);
 }
 
+// Check module `m` is open for `eval/include`, or throw an error.
+void jl_check_open_for(jl_module_t *m, const char* funcname)
+{
+    if (jl_options.incremental && jl_generating_output()) {
+        if (!ptrhash_has(&jl_current_modules, (void*)m) && !jl_is__toplevel__mod(m)) {
+            if (m != jl_main_module) { // TODO: this was grand-fathered in
+                const char* name = jl_symbol_name(m->name);
+                jl_errorf("Evaluation into the closed module `%s` breaks incremental compilation "
+                          "because the side effects will not be permanent. "
+                          "This is likely due to some other module mutating `%s` with `%s` during "
+                          "precompilation - don't do this.", name, name, funcname);
+            }
+        }
+    }
+}
+
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (ptls->in_pure_callback)
         jl_error("eval cannot be used in a generated function");
+    jl_check_open_for(m, "eval");
     jl_value_t *v = NULL;
     int last_lineno = jl_lineno;
     const char *last_filename = jl_filename;
     jl_lineno = 1;
     jl_filename = "none";
-    if (jl_options.incremental && jl_generating_output()) {
-        if (!ptrhash_has(&jl_current_modules, (void*)m)) {
-            if (m != jl_main_module) { // TODO: this was grand-fathered in
-                jl_printf(JL_STDERR, "WARNING: eval into closed module %s:\n", jl_symbol_name(m->name));
-                jl_static_show(JL_STDERR, ex);
-                jl_printf(JL_STDERR, "\n  ** incremental compilation may be fatally broken for this module **\n\n");
-            }
-        }
-    }
     JL_TRY {
         v = jl_toplevel_eval(m, ex);
     }
