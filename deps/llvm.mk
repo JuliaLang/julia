@@ -128,7 +128,9 @@ endif # LLDB_DISABLE_PYTHON
 endif # BUILD_LLDB
 
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
+ifeq (${USECLANG},0)
 LLVM_CXXFLAGS += -mminimal-toc
+endif
 endif
 
 ifeq ($(LLVM_SANITIZE),1)
