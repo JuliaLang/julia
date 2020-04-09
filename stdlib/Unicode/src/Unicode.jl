@@ -16,7 +16,7 @@ they convert characters that are abstractly similar but visually distinct into a
 canonical choice (e.g. they expand ligatures into the individual characters), with form KC
 being more compact.
 
-Alternatively, finer control and additional transformations may be be obtained by calling
+Alternatively, finer control and additional transformations may be obtained by calling
 `Unicode.normalize(s; keywords...)`, where any number of the following boolean keywords
 options (which all default to `false` except for `compose`) are specified:
 

@@ -1574,7 +1574,7 @@ When using custom transports:
     the worker represented by the `IO` objects.
   * `init_worker(cookie, manager::FooManager)` *must* be called as part of worker process initialization.
   * Field `connect_at::Any` in `WorkerConfig` can be set by the cluster manager when [`launch`](@ref)
-    is called. The value of this field is passed in in all [`connect`](@ref) callbacks. Typically,
+    is called. The value of this field is passed in all [`connect`](@ref) callbacks. Typically,
     it carries information on *how to connect* to a worker. For example, the TCP/IP socket transport
     uses this field to specify the `(host, port)` tuple at which to connect to a worker.
 
