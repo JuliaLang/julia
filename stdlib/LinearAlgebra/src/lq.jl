@@ -107,7 +107,7 @@ julia> l == S.L &&  q == S.Q
 true
 ```
 """
-lq(A::StridedMatrix{<:BlasFloat})  = lq!(copy(A))
+lq(A::AbstractMatrix)  = lq!(copy(A))
 lq(x::Number) = lq(fill(x,1,1))
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
@@ -176,19 +176,19 @@ end
 
 
 ## Multiplication by LQ
-function lmul!(A::LQ, B::StridedVecOrMat)
+function lmul!(A::LQ, B::AbstractVecOrMat)
     lmul!(LowerTriangular(A.L), view(lmul!(A.Q, B), 1:size(A,1), axes(B,2)))
     return B
 end
-function *(A::LQ{TA}, B::StridedVecOrMat{TB}) where {TA,TB}
+function *(A::LQ{TA}, B::AbstractVecOrMat{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
     _cut_B(lmul!(Factorization{TAB}(A), copy_oftype(B, TAB)), 1:size(A,1))
 end
 
 ## Multiplication by Q
 ### QB
-lmul!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
-function (*)(A::LQPackedQ, B::StridedVecOrMat)
+lmul!(A::LQPackedQ{T}, B::AbstractVecOrMat{T}) where {T<:BlasFloat} = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
+function (*)(A::LQPackedQ, B::AbstractVecOrMat)
     TAB = promote_type(eltype(A), eltype(B))
     lmul!(AbstractMatrix{TAB}(A), copy_oftype(B, TAB))
 end
@@ -199,7 +199,7 @@ lmul!(adjA::Adjoint{<:Any,<:LQPackedQ{T}}, B::StridedVecOrMat{T}) where {T<:Blas
 lmul!(adjA::Adjoint{<:Any,<:LQPackedQ{T}}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
     (A = adjA.parent; LAPACK.ormlq!('L','C',A.factors,A.τ,B))
 
-function *(adjA::Adjoint{<:Any,<:LQPackedQ}, B::StridedVecOrMat)
+function *(adjA::Adjoint{<:Any,<:LQPackedQ}, B::AbstractVecOrMat)
     A = adjA.parent
     TAB = promote_type(eltype(A), eltype(B))
     if size(B,1) == size(A.factors,2)
@@ -212,14 +212,14 @@ function *(adjA::Adjoint{<:Any,<:LQPackedQ}, B::StridedVecOrMat)
 end
 
 ### QBc/QcBc
-function *(A::LQPackedQ, adjB::Adjoint{<:Any,<:StridedVecOrMat})
+function *(A::LQPackedQ, adjB::Adjoint{<:Any,<:AbstractVecOrMat})
     B = adjB.parent
     TAB = promote_type(eltype(A), eltype(B))
     BB = similar(B, TAB, (size(B, 2), size(B, 1)))
     adjoint!(BB, B)
     return lmul!(A, BB)
 end
-function *(adjA::Adjoint{<:Any,<:LQPackedQ}, adjB::Adjoint{<:Any,<:StridedVecOrMat})
+function *(adjA::Adjoint{<:Any,<:LQPackedQ}, adjB::Adjoint{<:Any,<:AbstractVecOrMat})
     A, B = adjA.parent, adjB.parent
     TAB = promote_type(eltype(A), eltype(B))
     BB = similar(B, TAB, (size(B, 2), size(B, 1)))
@@ -251,12 +251,12 @@ rmul!(A::StridedMatrix{T}, adjB::Adjoint{<:Any,<:LQPackedQ{T}}) where {T<:BlasCo
 # (1) the inner dimension in the multiplication is the LQPackedQ's second dimension.
 # in this case, the LQPackedQ behaves like its square form.
 #
-function *(A::StridedVecOrMat, adjQ::Adjoint{<:Any,<:LQPackedQ})
+function *(A::AbstractVecOrMat, adjQ::Adjoint{<:Any,<:LQPackedQ})
     Q = adjQ.parent
     TR = promote_type(eltype(A), eltype(Q))
     return rmul!(copy_oftype(A, TR), adjoint(AbstractMatrix{TR}(Q)))
 end
-function *(adjA::Adjoint{<:Any,<:StridedMatrix}, adjQ::Adjoint{<:Any,<:LQPackedQ})
+function *(adjA::Adjoint{<:Any,<:AbstractMatrix}, adjQ::Adjoint{<:Any,<:LQPackedQ})
     A, Q = adjA.parent, adjQ.parent
     TR = promote_type(eltype(A), eltype(Q))
     C = adjoint!(similar(A, TR, reverse(size(A))), A)
@@ -275,7 +275,7 @@ end
 # size(Q.factors, 1)), and if so implicitly apply Q's truncated form to A by zero extending
 # A as necessary for check (1) to pass (if possible) and then applying Q's square form
 #
-function *(A::StridedVecOrMat, Q::LQPackedQ)
+function *(A::AbstractVecOrMat, Q::LQPackedQ)
     TR = promote_type(eltype(A), eltype(Q))
     if size(A, 2) == size(Q.factors, 2)
         C = copy_oftype(A, TR)
@@ -287,7 +287,7 @@ function *(A::StridedVecOrMat, Q::LQPackedQ)
     end
     return rmul!(C, AbstractMatrix{TR}(Q))
 end
-function *(adjA::Adjoint{<:Any,<:StridedMatrix}, Q::LQPackedQ)
+function *(adjA::Adjoint{<:Any,<:AbstractMatrix}, Q::LQPackedQ)
     A = adjA.parent
     TR = promote_type(eltype(A), eltype(Q))
     if size(A, 1) == size(Q.factors, 2)
@@ -307,7 +307,7 @@ _rightappdimmismatch(rowsorcols) =
         "(the factorization's originating matrix's number of rows)")))
 
 
-function (\)(A::LQ{TA},B::StridedVecOrMat{TB}) where {TA,TB}
+function (\)(A::LQ{TA},B::AbstractVecOrMat{TB}) where {TA,TB}
     S = promote_type(TA,TB)
     m, n = size(A)
     m ≤ n || throw(DimensionMismatch("LQ solver does not support overdetermined systems (more rows than columns)"))
@@ -330,7 +330,7 @@ function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
 end
 
 
-function ldiv!(A::LQ{T}, B::StridedVecOrMat{T}) where T
+function ldiv!(A::LQ{T}, B::AbstractVecOrMat{T}) where T
     require_one_based_indexing(B)
     ldiv!(LowerTriangular(A.L), view(B, 1:size(A,1), axes(B,2)))
     return lmul!(adjoint(A.Q), B)

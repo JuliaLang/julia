@@ -62,7 +62,7 @@ Base.iterate(S::Schur, ::Val{:values}) = (S.values, Val(:done))
 Base.iterate(S::Schur, ::Val{:done}) = nothing
 
 """
-    schur!(A::StridedMatrix) -> F::Schur
+    schur!(A) -> F::Schur
 
 Same as [`schur`](@ref) but uses the input argument `A` as workspace.
 
@@ -97,7 +97,7 @@ julia> A
 schur!(A::StridedMatrix{<:BlasFloat}) = Schur(LinearAlgebra.LAPACK.gees!('V', A)...)
 
 """
-    schur(A::StridedMatrix) -> F::Schur
+    schur(A) -> F::Schur
 
 Computes the Schur factorization of the matrix `A`. The (quasi) triangular Schur factor can
 be obtained from the `Schur` object `F` with either `F.Schur` or `F.T` and the
@@ -139,8 +139,8 @@ julia> t == F.T && z == F.Z && vals == F.values
 true
 ```
 """
-schur(A::StridedMatrix{<:BlasFloat}) = schur!(copy(A))
-schur(A::StridedMatrix{T}) where T = schur!(copy_oftype(A, eigtype(T)))
+schur(A::AbstractMatrix{<:BlasFloat}) = schur!(copy(A))
+schur(A::AbstractMatrix{T}) where T = schur!(copy_oftype(A, eigtype(T)))
 
 schur(A::AbstractMatrix{T}) where {T} = schur!(copyto!(Matrix{eigtype(T)}(undef, size(A)...), A))
 function schur(A::RealHermSymComplexHerm)
@@ -289,7 +289,7 @@ schur!(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} =
     GeneralizedSchur(LinearAlgebra.LAPACK.gges!('V', 'V', A, B)...)
 
 """
-    schur(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur
+    schur(A, B) -> F::GeneralizedSchur
 
 Computes the Generalized Schur (or QZ) factorization of the matrices `A` and `B`. The
 (quasi) triangular Schur factors can be obtained from the `Schur` object `F` with `F.S`
@@ -301,8 +301,8 @@ generalized eigenvalues of `A` and `B` can be obtained with `F.α./F.β`.
 Iterating the decomposition produces the components `F.S`, `F.T`, `F.Q`, `F.Z`,
 `F.α`, and `F.β`.
 """
-schur(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat} = schur!(copy(A),copy(B))
-function schur(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
+schur(A::AbstractMatrix{T},B::AbstractMatrix{T}) where {T<:BlasFloat} = schur!(copy(A),copy(B))
+function schur(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
     return schur!(copy_oftype(A, S), copy_oftype(B, S))
 end

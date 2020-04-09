@@ -13,7 +13,7 @@ const NRM2_CUTOFF = 32
 # This constant should ideally be determined by the actual CPU cache size
 const ISONE_CUTOFF = 2^21 # 2M
 
-function isone(A::StridedMatrix)
+function isone(A::AbstractMatrix)
     m, n = size(A)
     m != n && return false # only square matrices can satisfy x == one(x)
     if sizeof(A) < ISONE_CUTOFF
@@ -23,7 +23,7 @@ function isone(A::StridedMatrix)
     end
 end
 
-@inline function _isone_triacheck(A::StridedMatrix, m::Int)
+@inline function _isone_triacheck(A::AbstractMatrix, m::Int)
     @inbounds for i in 1:m, j in i:m
         if i == j
             isone(A[i,i]) || return false
@@ -35,7 +35,7 @@ end
 end
 
 # Inner loop over rows to be friendly to the CPU cache
-@inline function _isone_cachefriendly(A::StridedMatrix, m::Int)
+@inline function _isone_cachefriendly(A::AbstractMatrix, m::Int)
     @inbounds for i in 1:m, j in 1:m
         if i == j
             isone(A[i,i]) || return false
@@ -516,8 +516,8 @@ julia> exp(A)
  0.0      2.71828
 ```
 """
-exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
-exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
+exp(A::AbstractMatrix) = exp!(copy(A))
+exp(A::AbstractMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
 
 """
     ^(b::Number, A::AbstractMatrix)
@@ -631,7 +631,7 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
 end
 
 ## Swap rows i and j and columns i and j in X
-function rcswap!(i::Integer, j::Integer, X::StridedMatrix{<:Number})
+function rcswap!(i::Integer, j::Integer, X::AbstractMatrix)
     for k = 1:size(X,1)
         X[k,i], X[k,j] = X[k,j], X[k,i]
     end
@@ -641,7 +641,7 @@ function rcswap!(i::Integer, j::Integer, X::StridedMatrix{<:Number})
 end
 
 """
-    log(A{T}::StridedMatrix{T})
+    log(A{T}::AbstractMatrix{T})
 
 If `A` has no negative real eigenvalue, compute the principal matrix logarithm of `A`, i.e.
 the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`` for all
@@ -671,7 +671,7 @@ julia> log(A)
  0.0  1.0
 ```
 """
-function log(A::StridedMatrix)
+function log(A::AbstractMatrix)
     # If possible, use diagonalization
     if ishermitian(A)
         logHermA = log(Hermitian(A))
@@ -730,7 +730,7 @@ julia> sqrt(A)
  0.0  2.0
 ```
 """
-function sqrt(A::StridedMatrix{<:Real})
+function sqrt(A::AbstractMatrix{<:Real})
     if issymmetric(A)
         return copytri!(parent(sqrt(Symmetric(A))), 'U')
     end
@@ -743,7 +743,7 @@ function sqrt(A::StridedMatrix{<:Real})
         return SchurF.vectors * R * SchurF.vectors'
     end
 end
-function sqrt(A::StridedMatrix{<:Complex})
+function sqrt(A::AbstractMatrix{<:Complex})
     if ishermitian(A)
         sqrtHermA = sqrt(Hermitian(A))
         return isa(sqrtHermA, Hermitian) ? copytri!(parent(sqrtHermA), 'U', true) : parent(sqrtHermA)
@@ -758,7 +758,7 @@ function sqrt(A::StridedMatrix{<:Complex})
     end
 end
 
-function inv(A::StridedMatrix{T}) where T
+function inv(A::AbstractMatrix{T}) where T
     checksquare(A)
     S = typeof((one(T)*zero(T) + one(T)*zero(T))/one(T))
     AA = convert(AbstractArray{S}, A)
@@ -1193,7 +1193,7 @@ julia> factorize(A) # factorize will check to see that A is already factorized
 This returns a `5×5 Bidiagonal{Float64}`, which can now be passed to other linear algebra functions
 (e.g. eigensolvers) which will use specialized methods for `Bidiagonal` types.
 """
-function factorize(A::StridedMatrix{T}) where T
+function factorize(A::AbstractMatrix{T}) where T
     m, n = size(A)
     if m == n
         if m == 1 return A[1] end
@@ -1481,7 +1481,7 @@ function sylvester(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) 
     Y, scale = LAPACK.trsyl!('N','N', RA, RB, D)
     rmul!(QA*(Y * adjoint(QB)), inv(scale))
 end
-sylvester(A::StridedMatrix{T}, B::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = sylvester(float(A), float(B), float(C))
+sylvester(A::AbstractMatrix{T}, B::AbstractMatrix{T}, C::AbstractMatrix{T}) where {T<:Integer} = sylvester(float(A), float(B), float(C))
 
 sylvester(a::Union{Real,Complex}, b::Union{Real,Complex}, c::Union{Real,Complex}) = -c / (a + b)
 
@@ -1524,5 +1524,5 @@ function lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:BlasFloat}
     Y, scale = LAPACK.trsyl!('N', T <: Complex ? 'C' : 'T', R, R, D)
     rmul!(Q*(Y * adjoint(Q)), inv(scale))
 end
-lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = lyap(float(A), float(C))
+lyap(A::AbstractMatrix{T}, C::AbstractMatrix{T}) where {T<:Integer} = lyap(float(A), float(C))
 lyap(a::T, c::T) where {T<:Number} = -c/(2a)

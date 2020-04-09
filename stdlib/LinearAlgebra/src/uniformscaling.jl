@@ -279,7 +279,7 @@ function ==(A::AbstractMatrix, J::UniformScaling)
     isone(J.λ) && return isone(A)
     return A == J.λ*one(A)
 end
-function ==(A::StridedMatrix, J::UniformScaling)
+function ==(A::AbstractMatrix, J::UniformScaling)
     size(A, 1) == size(A, 2) || return false
     iszero(J.λ) && return iszero(A)
     isone(J.λ) && return isone(A)

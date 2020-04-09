@@ -631,10 +631,10 @@ det(A::RealHermSymComplexHerm) = real(det(_factorize(A; check=false)))
 det(A::Symmetric{<:Real}) = det(_factorize(A; check=false))
 det(A::Symmetric) = det(_factorize(A; check=false))
 
-\(A::HermOrSym{<:Any,<:StridedMatrix}, B::AbstractVector) = \(factorize(A), B)
+\(A::HermOrSym{<:Any,<:AbstractMatrix}, B::AbstractVector) = \(factorize(A), B)
 # Bunch-Kaufman solves can not utilize BLAS-3 for multiple right hand sides
 # so using LU is faster for AbstractMatrix right hand side
-\(A::HermOrSym{<:Any,<:StridedMatrix}, B::AbstractMatrix) = \(lu(A), B)
+\(A::HermOrSym{<:Any,<:AbstractMatrix}, B::AbstractMatrix) = \(lu(A), B)
 
 function _inv(A::HermOrSym)
     n = checksquare(A)
@@ -652,8 +652,8 @@ function _inv(A::HermOrSym)
     end
     B
 end
-inv(A::Hermitian{<:Any,<:StridedMatrix}) = Hermitian(_inv(A), sym_uplo(A.uplo))
-inv(A::Symmetric{<:Any,<:StridedMatrix}) = Symmetric(_inv(A), sym_uplo(A.uplo))
+inv(A::Hermitian{<:Any,<:AbstractMatrix}) = Hermitian(_inv(A), sym_uplo(A.uplo))
+inv(A::Symmetric{<:Any,<:AbstractMatrix}) = Symmetric(_inv(A), sym_uplo(A.uplo))
 
 eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) = Eigen(sorteig!(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)..., sortby)...)
 
@@ -804,8 +804,8 @@ function eigvals(A::RealHermSymComplexHerm, vl::Real, vh::Real)
     eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
 end
 
-eigmax(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, size(A, 1):size(A, 1))[1]
-eigmin(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, 1:1)[1]
+eigmax(A::RealHermSymComplexHerm{<:Real,<:AbstractMatrix}) = eigvals(A, size(A, 1):size(A, 1))[1]
+eigmin(A::RealHermSymComplexHerm{<:Real,<:AbstractMatrix}) = eigvals(A, 1:1)[1]
 
 function eigen!(A::HermOrSym{T,S}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal,S<:StridedMatrix}
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))

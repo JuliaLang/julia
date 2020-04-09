@@ -75,8 +75,8 @@ Base.iterate(S::LU, ::Val{:done}) = nothing
 adjoint(F::LU) = Adjoint(F)
 transpose(F::LU) = Transpose(F)
 
-# StridedMatrix
-function lu!(A::StridedMatrix{T}, pivot::Union{Val{false}, Val{true}} = Val(true);
+# AbstractMatrix
+function lu!(A::AbstractMatrix{T}, pivot::Union{Val{false}, Val{true}} = Val(true);
              check::Bool = true) where T<:BlasFloat
     if pivot === Val(false)
         return generic_lufact!(A, pivot; check = check)
@@ -127,9 +127,9 @@ Stacktrace:
 [...]
 ```
 """
-lu!(A::StridedMatrix, pivot::Union{Val{false}, Val{true}} = Val(true); check::Bool = true) =
+lu!(A::AbstractMatrix, pivot::Union{Val{false}, Val{true}} = Val(true); check::Bool = true) =
     generic_lufact!(A, pivot; check = check)
-function generic_lufact!(A::StridedMatrix{T}, ::Val{Pivot} = Val(true);
+function generic_lufact!(A::AbstractMatrix{T}, ::Val{Pivot} = Val(true);
                          check::Bool = true) where {T,Pivot}
     m, n = size(A)
     minmn = min(m,n)
@@ -302,7 +302,7 @@ function ipiv2perm(v::AbstractVector{T}, maxi::Integer) where T
     return p
 end
 
-function getproperty(F::LU{T,<:StridedMatrix}, d::Symbol) where T
+function getproperty(F::LU{T}, d::Symbol) where T
     m, n = size(F)
     if d === :L
         L = tril!(getfield(F, :factors)[1:m, 1:min(m,n)])
@@ -336,10 +336,10 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, F::LU)
     end
 end
 
-_apply_ipiv_rows!(A::LU, B::StridedVecOrMat) = _ipiv_rows!(A, 1 : length(A.ipiv), B)
-_apply_inverse_ipiv_rows!(A::LU, B::StridedVecOrMat) = _ipiv_rows!(A, length(A.ipiv) : -1 : 1, B)
+_apply_ipiv_rows!(A::LU, B::AbstractVecOrMat) = _ipiv_rows!(A, 1 : length(A.ipiv), B)
+_apply_inverse_ipiv_rows!(A::LU, B::AbstractVecOrMat) = _ipiv_rows!(A, length(A.ipiv) : -1 : 1, B)
 
-function _ipiv_rows!(A::LU, order::OrdinalRange, B::StridedVecOrMat)
+function _ipiv_rows!(A::LU, order::OrdinalRange, B::AbstractVecOrMat)
     for i = order
         if i != A.ipiv[i]
             _swap_rows!(B, i, A.ipiv[i])
@@ -348,22 +348,22 @@ function _ipiv_rows!(A::LU, order::OrdinalRange, B::StridedVecOrMat)
     B
 end
 
-function _swap_rows!(B::StridedVector, i::Integer, j::Integer)
+function _swap_rows!(B::AbstractVector, i::Integer, j::Integer)
     B[i], B[j] = B[j], B[i]
     B
 end
 
-function _swap_rows!(B::StridedMatrix, i::Integer, j::Integer)
+function _swap_rows!(B::AbstractMatrix, i::Integer, j::Integer)
     for col = 1 : size(B, 2)
         B[i,col], B[j,col] = B[j,col], B[i,col]
     end
     B
 end
 
-_apply_ipiv_cols!(A::LU, B::StridedVecOrMat) = _ipiv_cols!(A, 1 : length(A.ipiv), B)
-_apply_inverse_ipiv_cols!(A::LU, B::StridedVecOrMat) = _ipiv_cols!(A, length(A.ipiv) : -1 : 1, B)
+_apply_ipiv_cols!(A::LU, B::AbstractVecOrMat) = _ipiv_cols!(A, 1 : length(A.ipiv), B)
+_apply_inverse_ipiv_cols!(A::LU, B::AbstractVecOrMat) = _ipiv_cols!(A, length(A.ipiv) : -1 : 1, B)
 
-function _ipiv_cols!(A::LU, order::OrdinalRange, B::StridedVecOrMat)
+function _ipiv_cols!(A::LU, order::OrdinalRange, B::AbstractVecOrMat)
     for i = order
         if i != A.ipiv[i]
             _swap_cols!(B, i, A.ipiv[i])
@@ -372,18 +372,18 @@ function _ipiv_cols!(A::LU, order::OrdinalRange, B::StridedVecOrMat)
     B
 end
 
-function _swap_cols!(B::StridedVector, i::Integer, j::Integer)
+function _swap_cols!(B::AbstractVector, i::Integer, j::Integer)
     _swap_rows!(B, i, j)
 end
 
-function _swap_cols!(B::StridedMatrix, i::Integer, j::Integer)
+function _swap_cols!(B::AbstractMatrix, i::Integer, j::Integer)
     for row = 1 : size(B, 1)
         B[row,i], B[row,j] = B[row,j], B[row,i]
     end
     B
 end
 
-function rdiv!(A::StridedVecOrMat, B::LU{<:Any,<:StridedMatrix})
+function rdiv!(A::AbstractVecOrMat, B::LU{<:Any,<:AbstractMatrix})
     rdiv!(rdiv!(A, UpperTriangular(B.factors)), UnitLowerTriangular(B.factors))
     _apply_inverse_ipiv_cols!(B, A)
 end
@@ -391,7 +391,7 @@ end
 ldiv!(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     LAPACK.getrs!('N', A.factors, A.ipiv, B)
 
-function ldiv!(A::LU{<:Any,<:StridedMatrix}, B::StridedVecOrMat)
+function ldiv!(A::LU{<:Any,<:AbstractMatrix}, B::AbstractVecOrMat)
     _apply_ipiv_rows!(A, B)
     ldiv!(UpperTriangular(A.factors), ldiv!(UnitLowerTriangular(A.factors), B))
 end
@@ -410,14 +410,14 @@ ldiv!(adjF::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<
 ldiv!(adjA::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
     (A = adjA.parent; LAPACK.getrs!('C', A.factors, A.ipiv, B))
 
-function ldiv!(adjA::Adjoint{<:Any,<:LU{<:Any,<:StridedMatrix}}, B::StridedVecOrMat)
+function ldiv!(adjA::Adjoint{<:Any,<:LU{<:Any,<:AbstractMatrix}}, B::AbstractVecOrMat)
     A = adjA.parent
     ldiv!(adjoint(UnitLowerTriangular(A.factors)), ldiv!(adjoint(UpperTriangular(A.factors)), B))
     _apply_inverse_ipiv_rows!(A, B)
 end
 
-(\)(A::Adjoint{<:Any,<:LU}, B::Adjoint{<:Any,<:StridedVecOrMat}) = A \ copy(B)
-(\)(A::Transpose{<:Any,<:LU}, B::Transpose{<:Any,<:StridedVecOrMat}) = A \ copy(B)
+(\)(A::Adjoint{<:Any,<:LU}, B::Adjoint) = A \ copy(B)
+(\)(A::Transpose{<:Any,<:LU}, B::Transpose) = A \ copy(B)
 (\)(A::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::Adjoint{T,<:StridedVecOrMat{T}}) where {T<:BlasComplex} =
     LAPACK.getrs!('C', A.parent.factors, A.parent.ipiv, copy(B))
 (\)(A::Transpose{T,<:LU{T,<:StridedMatrix}}, B::Transpose{T,<:StridedVecOrMat{T}}) where {T<:BlasFloat} =
@@ -474,9 +474,9 @@ end
 
 inv!(A::LU{<:BlasFloat,<:StridedMatrix}) =
     LAPACK.getri!(A.factors, A.ipiv)
-inv!(A::LU{T,<:StridedMatrix}) where {T} =
+inv!(A::LU{T,<:AbstractMatrix}) where {T} =
     ldiv!(A.factors, copy(A), Matrix{T}(I, size(A, 1), size(A, 1)))
-inv(A::LU{<:BlasFloat,<:StridedMatrix}) = inv!(copy(A))
+inv(A::LU) = inv!(copy(A))
 
 # Tridiagonal
 

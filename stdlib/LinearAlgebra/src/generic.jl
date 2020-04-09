@@ -1488,7 +1488,7 @@ end
 end
 
 # apply reflector from left
-@inline function reflectorApply!(x::AbstractVector, τ::Number, A::StridedMatrix)
+@inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractMatrix)
     require_one_based_indexing(x)
     m, n = size(A)
     if length(x) != m

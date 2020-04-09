@@ -316,63 +316,63 @@ Broadcast.broadcasted(::typeof(*ₛ), out, beta) =
              alpha::Number, beta::Number) =
     out .= (transpose.(A.parent.diag) .* in) .*ₛ alpha .+ out .*ₛ beta
 
-@inline mul!(out::AbstractMatrix, A::Diagonal, in::StridedMatrix,
+@inline mul!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix,
              alpha::Number, beta::Number) =
     out .= (A.diag .* in) .*ₛ alpha .+ out .*ₛ beta
-@inline mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::StridedMatrix,
+@inline mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::AbstractMatrix,
              alpha::Number, beta::Number) =
     out .= (adjoint.(A.parent.diag) .* in) .*ₛ alpha .+ out .*ₛ beta
-@inline mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix,
+@inline mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::AbstractMatrix,
              alpha::Number, beta::Number) =
     out .= (transpose.(A.parent.diag) .* in) .*ₛ alpha .+ out .*ₛ beta
 
-@inline mul!(out::AbstractMatrix, A::Diagonal, in::Adjoint{<:Any,<:StridedMatrix},
+@inline mul!(out::AbstractMatrix, A::Diagonal, in::Adjoint{<:Any,<:AbstractMatrix},
              alpha::Number, beta::Number) =
     out .= (A.diag .* in) .*ₛ alpha .+ out .*ₛ beta
-@inline mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::Adjoint{<:Any,<:StridedMatrix},
+@inline mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::Adjoint{<:Any,<:AbstractMatrix},
              alpha::Number, beta::Number) =
     out .= (adjoint.(A.parent.diag) .* in) .*ₛ alpha .+ out .*ₛ beta
-@inline mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::Adjoint{<:Any,<:StridedMatrix},
+@inline mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::Adjoint{<:Any,<:AbstractMatrix},
              alpha::Number, beta::Number) =
     out .= (transpose.(A.parent.diag) .* in) .*ₛ alpha .+ out .*ₛ beta
 
-@inline mul!(out::AbstractMatrix, A::Diagonal, in::Transpose{<:Any,<:StridedMatrix},
+@inline mul!(out::AbstractMatrix, A::Diagonal, in::Transpose{<:Any,<:AbstractMatrix},
              alpha::Number, beta::Number) =
     out .= (A.diag .* in) .*ₛ alpha .+ out .*ₛ beta
-@inline mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::Transpose{<:Any,<:StridedMatrix},
+@inline mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::Transpose{<:Any,<:AbstractMatrix},
              alpha::Number, beta::Number) =
     out .= (adjoint.(A.parent.diag) .* in) .*ₛ alpha .+ out .*ₛ beta
-@inline mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::Transpose{<:Any,<:StridedMatrix},
+@inline mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::Transpose{<:Any,<:AbstractMatrix},
              alpha::Number, beta::Number) =
     out .= (transpose.(A.parent.diag) .* in) .*ₛ alpha .+ out .*ₛ beta
 
-@inline mul!(out::AbstractMatrix, in::StridedMatrix, A::Diagonal,
+@inline mul!(out::AbstractMatrix, in::AbstractMatrix, A::Diagonal,
              alpha::Number, beta::Number) =
     out .= (in .* permutedims(A.diag)) .*ₛ alpha .+ out .*ₛ beta
-@inline mul!(out::AbstractMatrix, in::StridedMatrix, A::Adjoint{<:Any,<:Diagonal},
+@inline mul!(out::AbstractMatrix, in::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal},
              alpha::Number, beta::Number) =
     out .= (in .* adjoint(A.parent.diag)) .*ₛ alpha .+ out .*ₛ beta
-@inline mul!(out::AbstractMatrix, in::StridedMatrix, A::Transpose{<:Any,<:Diagonal},
+@inline mul!(out::AbstractMatrix, in::AbstractMatrix, A::Transpose{<:Any,<:Diagonal},
              alpha::Number, beta::Number) =
     out .= (in .* transpose(A.parent.diag)) .*ₛ alpha .+ out .*ₛ beta
 
-@inline mul!(out::AbstractMatrix, in::Adjoint{<:Any,<:StridedMatrix}, A::Diagonal,
+@inline mul!(out::AbstractMatrix, in::Adjoint{<:Any,<:AbstractMatrix}, A::Diagonal,
              alpha::Number, beta::Number) =
     out .= (in .* permutedims(A.diag)) .*ₛ alpha .+ out .*ₛ beta
-@inline mul!(out::AbstractMatrix, in::Adjoint{<:Any,<:StridedMatrix}, A::Adjoint{<:Any,<:Diagonal},
+@inline mul!(out::AbstractMatrix, in::Adjoint{<:Any,<:AbstractMatrix}, A::Adjoint{<:Any,<:Diagonal},
              alpha::Number, beta::Number) =
     out .= (in .* adjoint(A.parent.diag)) .*ₛ alpha .+ out .*ₛ beta
-@inline mul!(out::AbstractMatrix, in::Adjoint{<:Any,<:StridedMatrix}, A::Transpose{<:Any,<:Diagonal},
+@inline mul!(out::AbstractMatrix, in::Adjoint{<:Any,<:AbstractMatrix}, A::Transpose{<:Any,<:Diagonal},
              alpha::Number, beta::Number) =
     out .= (in .* transpose(A.parent.diag)) .*ₛ alpha .+ out .*ₛ beta
 
-@inline mul!(out::AbstractMatrix, in::Transpose{<:Any,<:StridedMatrix}, A::Diagonal,
+@inline mul!(out::AbstractMatrix, in::Transpose{<:Any,<:AbstractMatrix}, A::Diagonal,
              alpha::Number, beta::Number) =
     out .= (in .* permutedims(A.diag)) .*ₛ alpha .+ out .*ₛ beta
-@inline mul!(out::AbstractMatrix, in::Transpose{<:Any,<:StridedMatrix}, A::Adjoint{<:Any,<:Diagonal},
+@inline mul!(out::AbstractMatrix, in::Transpose{<:Any,<:AbstractMatrix}, A::Adjoint{<:Any,<:Diagonal},
              alpha::Number, beta::Number) =
     out .= (in .* adjoint(A.parent.diag)) .*ₛ alpha .+ out .*ₛ beta
-@inline mul!(out::AbstractMatrix, in::Transpose{<:Any,<:StridedMatrix}, A::Transpose{<:Any,<:Diagonal},
+@inline mul!(out::AbstractMatrix, in::Transpose{<:Any,<:AbstractMatrix}, A::Transpose{<:Any,<:Diagonal},
              alpha::Number, beta::Number) =
     out .= (in .* transpose(A.parent.diag)) .*ₛ alpha .+ out .*ₛ beta
 
@@ -483,7 +483,7 @@ rdiv!(A::AbstractMatrix{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
 rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     (D = transD.parent; rdiv!(A, D))
 
-(/)(A::Union{StridedMatrix, AbstractTriangular}, D::Diagonal) =
+(/)(A::Union{AbstractMatrix, AbstractTriangular}, D::Diagonal) =
     rdiv!((typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A), D)
 
 (\)(F::Factorization, D::Diagonal) =
@@ -577,7 +577,7 @@ for f in (:exp, :log, :sqrt,
 end
 
 #Linear solver
-function ldiv!(D::Diagonal, B::StridedVecOrMat)
+function ldiv!(D::Diagonal, B::AbstractVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $m rows"))
