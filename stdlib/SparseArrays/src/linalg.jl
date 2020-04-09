@@ -7,47 +7,31 @@ using Random: rand!
 const StridedOrTriangularMatrix{T} = Union{StridedMatrix{T}, LowerTriangular{T}, UnitLowerTriangular{T}, UpperTriangular{T}, UnitUpperTriangular{T}}
 const AdjOrTransStridedOrTriangularMatrix{T} = Union{StridedOrTriangularMatrix{T},Adjoint{<:Any,<:StridedOrTriangularMatrix{T}},Transpose{<:Any,<:StridedOrTriangularMatrix{T}}}
 
-function (+)(A::SparseMatrixCSC, B::Hermitian{<:Any,<:AbstractSparseMatrix})
-    C  = sparse(B)
-    C .= A .+ C
-end
-function (+)(A::SparseMatrixCSC, B::Hermitian)
-    C  = collect(B)
-    C .= A .+ C
-end
-(+)(A::Hermitian{<:Any,<:AbstractSparseMatrix}, B::SparseMatrixCSC) = B + A
-(+)(A::Hermitian, B::SparseMatrixCSC) = B + A
+for HermSym ∈ [:Hermitian, :Symmetric]
+    @eval begin
+        function (+)(A::SparseMatrixCSC, B::$HermSym{<:Any,<:AbstractSparseMatrix})
+            C  = sparse(B)
+            C .= A .+ C
+        end
+        function (+)(A::SparseMatrixCSC, B::$HermSym)
+            C  = collect(B)
+            C .= A .+ C
+        end
+        (+)(A::$HermSym{<:Any,<:AbstractSparseMatrix}, B::SparseMatrixCSC) = B + A
+        (+)(A::$HermSym, B::SparseMatrixCSC) = B + A
 
-function +(A::Hermitian{<:Any, <:SparseMatrixCSC}, B::Hermitian{<:Any, <:SparseMatrixCSC})
-    if A.uplo == B.uplo
-        Hermitian(parent(A) + parent(B), sym_uplo(A.uplo))
-    elseif A.uplo == 'U'
-        Hermitian(parent(A) + permutedims(parent(B)), :U)
-    else
-        Hermitian(permutedims(parent(A)) + parent(B), :U)
+        function +(A::$HermSym{<:Any, <:SparseMatrixCSC}, B::$HermSym{<:Any, <:SparseMatrixCSC})
+            if A.uplo == B.uplo
+                $HermSym(parent(A) + parent(B), sym_uplo(A.uplo))
+            elseif A.uplo == 'U'
+                $HermSym(parent(A) + permutedims(parent(B)), :U)
+            else
+                $HermSym(permutedims(parent(A)) + parent(B), :U)
+            end
+        end
     end
 end
 
-function (+)(A::SparseMatrixCSC, B::Symmetric{<:Any,<:AbstractSparseMatrix})
-    C  = sparse(B)
-    C .= A .+ C
-end
-function (+)(A::SparseMatrixCSC, B::Symmetric)
-    C  = collect(B)
-    C .= A .+ C
-end
-(+)(A::Symmetric{<:Any,<:AbstractSparseMatrix}, B::SparseMatrixCSC) = B + A
-(+)(A::Symmetric, B::SparseMatrixCSC) = B + A
-
-function +(A::Symmetric{<:Any, <:SparseMatrixCSC}, B::Symmetric{<:Any, <:SparseMatrixCSC})
-    if A.uplo == B.uplo
-        Symmetric(parent(A) + parent(B), sym_uplo(A.uplo))
-    elseif A.uplo == 'U'
-        Symmetric(parent(A) + permutedims(parent(B)), :U)
-    else
-        Symmetric(permutedims(parent(A)) + parent(B), :U)
-    end
-end
 
 function mul!(C::StridedVecOrMat, A::AbstractSparseMatrixCSC, B::Union{StridedVector,AdjOrTransStridedOrTriangularMatrix}, α::Number, β::Number)
     size(A, 2) == size(B, 1) || throw(DimensionMismatch())
