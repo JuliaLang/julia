@@ -196,7 +196,7 @@ of the input.
 # Examples
 ```jldoctest
 julia> x = skipmissing([1, missing, 2])
-Base.SkipMissing{Array{Union{Missing, Int64},1}}(Union{Missing, Int64}[1, missing, 2])
+skipmissing(Union{Missing, Int64}[1, missing, 2])
 
 julia> sum(x)
 3

@@ -301,7 +301,7 @@ This convenience function returns an iterator which filters out `missing` values
 efficiently. It can therefore be used with any function which supports iterators
 ```jldoctest skipmissing; setup = :(using Statistics)
 julia> x = skipmissing([3, missing, 2, 1])
-Base.SkipMissing{Array{Union{Missing, Int64},1}}(Union{Missing, Int64}[3, missing, 2, 1])
+skipmissing(Union{Missing, Int64}[3, missing, 2, 1])
 
 julia> maximum(x)
 3
