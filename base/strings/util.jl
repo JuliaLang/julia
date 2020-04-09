@@ -526,6 +526,24 @@ replace(s::AbstractString, pat_f::Pair; count=typemax(Int)) =
 
 # TODO: allow transform as the first argument to replace?
 
+function tuple_replace(str::String,count::Int, subs::Pair...)
+    count > 0 && for (s,r) in subs
+        R=findfirst(s,str)
+        isnothing(R) && continue
+        count -= 1
+        H=tuple_replace(str[begin:(first(R)-1)],count,subs...)
+        M=String(str[R]*"")
+        length(H)>1 && (count -= 1)
+        T=tuple_replace(str[(last(R)+1):end],count,subs...)
+        return (H...,replace(M,s=>r),T...)
+    end
+    (str,)
+end
+
+function replace(str::String, subs::Pair...; count::Int=typemax(Int))
+    *(tuple_replace(str, count, subs...)...)
+end
+
 # hex <-> bytes conversion
 
 """
