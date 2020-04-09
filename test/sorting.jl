@@ -188,6 +188,16 @@ end
             @test searchsorted(v, 0.1, rev=true) == 4:3
         end
     end
+
+    @testset "issue #9429" begin
+        @test_throws ArgumentError searchsortedfirst(1:10, 24, by=i->i^2, arrayby=i->i)
+        @test searchsortedfirst(1:10, 24, by=i->i^2) == 11
+        @test searchsortedfirst(1:10, 24, arrayby=i->i^2) == 5
+        @test searchsortedlast(1:10, 24, by=i->i^2) == 10
+        @test searchsortedlast(1:10, 24, arrayby=i->i^2) == 4
+        @test searchsorted(1:10, 25, by=i->i^2) == 11:10
+        @test searchsorted(1:10, 25, arrayby=i->i^2) == 5:5
+    end
 end
 # exercise the codepath in searchsorted* methods for ranges that check for zero step range
 struct ConstantRange{T} <: AbstractRange{T}

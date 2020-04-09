@@ -174,13 +174,13 @@ midpoint(lo::Integer, hi::Integer) = midpoint(promote(lo, hi)...)
 
 # index of the first value of vector a that is greater than or equal to x;
 # returns length(v)+1 if x is greater than all values in v.
-function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering) where T<:Integer
+function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering, aby=identity) where T<:Integer
     u = T(1)
     lo = lo - u
     hi = hi + u
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if lt(o, v[m], x)
+        if lt(o, aby(v[m]), x)
             lo = m
         else
             hi = m
@@ -191,13 +191,13 @@ end
 
 # index of the last value of vector a that is less than or equal to x;
 # returns 0 if x is less than all values of v.
-function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering) where T<:Integer
+function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering, aby=identity) where T<:Integer
     u = T(1)
     lo = lo - u
     hi = hi + u
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if lt(o, x, v[m])
+        if lt(o, x, aby(v[m]))
             hi = m
         else
             lo = m
@@ -209,26 +209,27 @@ end
 # returns the range of indices of v equal to x
 # if v does not contain x, returns a 0-length range
 # indicating the insertion point of x
-function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering) where T<:Integer
+function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering, aby=identity) where T<:Integer
     u = T(1)
     lo = ilo - u
     hi = ihi + u
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if lt(o, v[m], x)
+        vm = aby(v[m])
+        if lt(o, vm, x)
             lo = m
-        elseif lt(o, x, v[m])
+        elseif lt(o, x, vm)
             hi = m
         else
-            a = searchsortedfirst(v, x, max(lo,ilo), m, o)
-            b = searchsortedlast(v, x, m, min(hi,ihi), o)
+            a = searchsortedfirst(v, x, max(lo,ilo), m, o, aby)
+            b = searchsortedlast(v, x, m, min(hi,ihi), o, aby)
             return a : b
         end
     end
     return (lo + 1) : (hi - 1)
 end
 
-function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
+function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering, ::typeof(identity))
     require_one_based_indexing(a)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
@@ -238,7 +239,7 @@ function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
+function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering, ::typeof(identity))
     require_one_based_indexing(a)
     if step(a) == 0
         lt(o, first(a), x) ? length(a) + 1 : 1
@@ -248,7 +249,7 @@ function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
+function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering, ::typeof(identity))
     require_one_based_indexing(a)
     h = step(a)
     if h == 0
@@ -270,7 +271,7 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
+function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering, ::typeof(identity))
     require_one_based_indexing(a)
     h = step(a)
     if h == 0
@@ -292,7 +293,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
+function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering, ::typeof(identity))
     require_one_based_indexing(a)
     if lt(o, first(a), x)
         if step(a) == 0
@@ -305,7 +306,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOr
     end
 end
 
-function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
+function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering, ::typeof(identity))
     require_one_based_indexing(a)
     if lt(o, x, first(a))
         0
@@ -316,25 +317,32 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrd
     end
 end
 
-searchsorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering) =
-    searchsortedfirst(a, x, o) : searchsortedlast(a, x, o)
+searchsorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering, aby) =
+    searchsortedfirst(a, x, o, aby) : searchsortedlast(a, x, o, aby)
 
 for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
     @eval begin
-        $s(v::AbstractVector, x, o::Ordering) = (inds = axes(v, 1); $s(v,x,first(inds),last(inds),o))
-        $s(v::AbstractVector, x;
-           lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
-            $s(v,x,ord(lt,by,rev,order))
+        $s(v::AbstractVector, x, o::Ordering, xform=identity) = (inds = axes(v, 1); $s(v,x,first(inds),last(inds),o, xform))
+        function $s(v::AbstractVector, x;
+           lt=isless, by=identity, arrayby=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward)
+            if by !== identity && arrayby !== identity
+                throw(ArgumentError("only one of keyword arguments 'by' and 'arrayby' allowed"))
+            end
+            $s(v,x,ord(lt,by,rev,order), arrayby)
+        end
     end
 end
 
 """
-    searchsorted(a, x; by=<transform>, lt=<comparison>, rev=false)
+    searchsorted(a, x; {by|arrayby}=<transform>, lt=<comparison>, rev=false)
 
 Return the range of indices of `a` which compare as equal to `x` (using binary search)
-according to the order specified by the `by`, `lt` and `rev` keywords, assuming that `a`
-is already sorted in that order. Return an empty range located at the insertion point
-if `a` does not contain values equal to `x`.
+according to the order specified by the `by`, `arrayby`, `lt` and `rev` keywords,
+assuming that `a` is already sorted in that order. Only one of `by` and `arrayby` may
+be in use in one call.
+
+Return an empty range located at the insertion point
+if `arrayby.(by.(a))` does not contain values equal to `by(x)`.
 
 # Examples
 ```jldoctest
@@ -356,11 +364,14 @@ julia> searchsorted([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 """ searchsorted
 
 """
-    searchsortedfirst(a, x; by=<transform>, lt=<comparison>, rev=false)
+    searchsortedfirst(a, x; {by|arrayby}=<transform>, lt=<comparison>, rev=false)
 
-Return the index of the first value in `a` greater than or equal to `x`, according to the
-specified order. Return `length(a) + 1` if `x` is greater than all values in `a`.
-`a` is assumed to be sorted.
+Return the index of the first value in `a` greater than or equal to `x`,
+according to the order specified by the `by`, `lt` and `rev` keywords,
+assuming that `arrayby.(a)` is already sorted in that order. Only one of
+`by` and `arrayby` may be in use in one call.
+
+Return `length(a) + 1` if `x` is greater than all values in `arrayby.(a)`.
 
 # Examples
 ```jldoctest
@@ -382,11 +393,14 @@ julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 """ searchsortedfirst
 
 """
-    searchsortedlast(a, x; by=<transform>, lt=<comparison>, rev=false)
+    searchsortedlast(a, x; {by|arrayby}=<transform>, lt=<comparison>, rev=false)
 
-Return the index of the last value in `a` less than or equal to `x`, according to the
-specified order. Return `0` if `x` is less than all values in `a`. `a` is assumed to
-be sorted.
+Return the index of the last value in `a` less than or equal to `x`,
+according to the order specified by the `by`, `lt` and `rev` keywords,
+assuming that `arrayby.(a)` is already sorted in that order. Only one of
+`by` and `arrayby` may be in use in one call.
+
+Return `0` if `x` is less than all values in `arrayby.(a)`.
 
 # Examples
 ```jldoctest
