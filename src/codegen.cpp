@@ -239,6 +239,36 @@ static bool type_is_ghost(Type *ty)
     return (ty == T_void || ty->isEmptyTy());
 }
 
+// should agree with `Core.Compiler.hasuniquerep`
+static bool type_has_unique_rep(jl_value_t *t)
+{
+    if (t == (jl_value_t*)jl_typeofbottom_type)
+        return false;
+    if (t == jl_bottom_type)
+        return true;
+    if (jl_is_typevar(t))
+        return false;
+    if (!jl_is_kind(jl_typeof(t)))
+        return true;
+    if (jl_is_concrete_type(t))
+        return true;
+    if (jl_is_datatype(t)) {
+        jl_datatype_t *dt = (jl_datatype_t*)t;
+        if (dt->name != jl_tuple_typename && !jl_is_vararg_type(t)) {
+            for (size_t i = 0; i < jl_nparams(dt); i++)
+                if (!type_has_unique_rep(jl_tparam(dt, i)))
+                    return false;
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool is_uniquerep_Type(jl_value_t *t)
+{
+    return jl_is_type_type(t) && type_has_unique_rep(jl_tparam0(t));
+}
+
 // global vars
 static GlobalVariable *jlRTLD_DEFAULT_var;
 #ifdef _OS_WINDOWS_
@@ -2633,6 +2663,8 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
 
     for (size_t i = 0; i < nargs; i++) {
         jl_value_t *jt = jl_nth_slot_type(mi->specTypes, i);
+        if (is_uniquerep_Type(jt))
+            continue;
         bool isboxed = deserves_argbox(jt);
         Type *et = isboxed ?  T_prjlvalue : julia_type_to_llvm(ctx, jt);
         if (type_is_ghost(et))
@@ -3909,7 +3941,10 @@ static void emit_cfunc_invalidate(
         jl_value_t *jt = jl_nth_slot_type(calltype, i);
         bool isboxed = deserves_argbox(jt);
         Type *et = isboxed ?  T_prjlvalue : julia_type_to_llvm(ctx, jt);
-        if (type_is_ghost(et)) {
+        if (is_uniquerep_Type(jt)) {
+            myargs[i] = mark_julia_const(jl_tparam0(jt));
+        }
+        else if (type_is_ghost(et)) {
             assert(jl_is_datatype(jt) && ((jl_datatype_t*)jt)->instance);
             myargs[i] = mark_julia_const(((jl_datatype_t*)jt)->instance);
         }
@@ -4343,7 +4378,10 @@ static Function* gen_cfun_wrapper(
             jl_value_t *spect = jl_nth_slot_type(lam->specTypes, i);
             bool isboxed = deserves_argbox(spect);
             Type *T = isboxed ? T_prjlvalue : julia_type_to_llvm(ctx, spect);
-            if (isboxed) {
+            if (is_uniquerep_Type(spect)) {
+                continue;
+            }
+            else if (isboxed) {
                 arg = boxed(ctx, inputarg);
             }
             else if (type_is_ghost(T)) {
@@ -4826,7 +4864,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
         jl_value_t *ty = jl_nth_slot_type(lam->specTypes, i);
         bool isboxed = deserves_argbox(ty);
         Type *lty = isboxed ?  T_prjlvalue : julia_type_to_llvm(ctx, ty);
-        if (type_is_ghost(lty))
+        if (type_is_ghost(lty) || is_uniquerep_Type(ty))
             continue;
         Value *theArg;
         if (i == 0) {
@@ -4957,6 +4995,8 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
 
     for (size_t i = 0; i < jl_nparams(sig); i++) {
         jl_value_t *jt = jl_tparam(sig, i);
+        if (is_uniquerep_Type(jt))
+            continue;
         Type *ty = deserves_argbox(jt) ? T_prjlvalue : julia_type_to_llvm(ctx, jt);
         if (type_is_ghost(ty))
             continue;
@@ -5242,6 +5282,14 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
 #ifdef JL_DEBUG_BUILD
     f->addFnAttr(Attribute::StackProtectStrong);
 #endif
+
+    // add the optimization level specified for this module, if any
+    int optlevel = jl_get_module_optlevel(ctx.module);
+    if (optlevel >= 0 && optlevel <= 3) {
+        static const char* const optLevelStrings[] = { "0", "1", "2", "3" };
+        f->addFnAttr("julia-optimization-level", optLevelStrings[optlevel]);
+    }
+
     ctx.f = f;
 
     // Step 4b. determine debug info signature and other type info for locals
@@ -5520,6 +5568,9 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         if (type_is_ghost(llvmArgType)) { // this argument is not actually passed
             theArg = ghostValue(argType);
         }
+        else if (is_uniquerep_Type(argType)) {
+            theArg = mark_julia_const(jl_tparam0(argType));
+        }
         else if (llvmArgType->isAggregateType()) {
             Argument *Arg = &*AI; ++AI;
             maybe_mark_argument_dereferenceable(Arg, argType);
@@ -5544,7 +5595,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         bool isboxed = deserves_argbox(argType);
         Type *llvmArgType = isboxed ? T_prjlvalue : julia_type_to_llvm(ctx, argType);
         if (s == unused_sym) {
-            if (specsig && !type_is_ghost(llvmArgType))
+            if (specsig && !type_is_ghost(llvmArgType) && !is_uniquerep_Type(argType))
                 ++AI;
             continue;
         }
@@ -5552,7 +5603,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         jl_cgval_t theArg;
         if (s == unused_sym || vi.value.constant) {
             assert(vi.boxroot == NULL);
-            if (specsig && !type_is_ghost(llvmArgType))
+            if (specsig && !type_is_ghost(llvmArgType) && !is_uniquerep_Type(argType))
                 ++AI;
         }
         else {
@@ -7458,14 +7509,7 @@ extern "C" void jl_init_llvm(void)
 #else
         None;
 #endif
-    auto optlevel =
-#ifdef DISABLE_OPT
-        CodeGenOpt::None;
-#else
-        (jl_options.opt_level < 2 ? CodeGenOpt::None :
-         jl_options.opt_level == 2 ? CodeGenOpt::Default :
-         CodeGenOpt::Aggressive);
-#endif
+    auto optlevel = CodeGenOptLevelFor(jl_options.opt_level);
     jl_TargetMachine = TheTarget->createTargetMachine(
             TheTriple.getTriple(), TheCPU, FeaturesStr,
             options,

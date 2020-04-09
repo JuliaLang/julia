@@ -329,7 +329,7 @@ For example with `OProfile` you can try a simple recording :
 >opreport -l `which ./julia`
 ```
 
-Or similary with with `perf` :
+Or similary with `perf` :
 
 ```
 $ ENABLE_JITPROFILING=1 perf record -o /tmp/perf.data --call-graph dwarf ./julia /test/fastmath.jl

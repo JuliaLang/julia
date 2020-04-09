@@ -266,4 +266,8 @@ end
 
 end
 
+@testset "timedwait" begin
+    @test timedwait(() -> false, Second(0); pollint=Millisecond(1)) === :timed_out
+end
+
 end

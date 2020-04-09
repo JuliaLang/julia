@@ -17,6 +17,11 @@
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/ADT/StringMap.h>
 
+#include <llvm/Support/TargetRegistry.h>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/Analysis/TargetTransformInfo.h>
+#include <llvm/Analysis/TargetLibraryInfo.h>
+
 using namespace llvm;
 
 #include "julia.h"
@@ -72,7 +77,6 @@ static jl_callptr_t _jl_compile_codeinst(
 
     // caller must hold codegen_lock
     // and have disabled finalizers
-    JL_TIMING(CODEGEN);
     uint64_t start_time = 0;
     if (dump_compiles_stream != NULL)
         start_time = jl_hrtime();
@@ -88,36 +92,39 @@ static jl_callptr_t _jl_compile_codeinst(
     params.cache = true;
     params.world = world;
     std::map<jl_code_instance_t*, jl_compile_result_t> emitted;
-    jl_compile_result_t result = jl_emit_codeinst(codeinst, src, params);
-    if (std::get<0>(result))
-        emitted[codeinst] = std::move(result);
-    jl_compile_workqueue(emitted, params);
+    {
+        JL_TIMING(CODEGEN);
+        jl_compile_result_t result = jl_emit_codeinst(codeinst, src, params);
+        if (std::get<0>(result))
+            emitted[codeinst] = std::move(result);
+        jl_compile_workqueue(emitted, params);
 
-    jl_add_to_ee();
-    StringMap<std::unique_ptr<Module>*> NewExports;
-    StringMap<void*> NewGlobals;
-    for (auto &global : params.globals) {
-        NewGlobals[global.second->getName()] = global.first;
-    }
-    for (auto &def : emitted) {
-        std::unique_ptr<Module> &M = std::get<0>(def.second);
-        for (auto &F : M->global_objects()) {
-            if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
-                NewExports[F.getName()] = &M;
+        jl_add_to_ee();
+        StringMap<std::unique_ptr<Module>*> NewExports;
+        StringMap<void*> NewGlobals;
+        for (auto &global : params.globals) {
+            NewGlobals[global.second->getName()] = global.first;
+        }
+        for (auto &def : emitted) {
+            std::unique_ptr<Module> &M = std::get<0>(def.second);
+            for (auto &F : M->global_objects()) {
+                if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
+                    NewExports[F.getName()] = &M;
+                }
+            }
+            // Let's link all globals here also (for now)
+            for (auto &GV : M->globals()) {
+                auto InitValue = NewGlobals.find(GV.getName());
+                if (InitValue != NewGlobals.end()) {
+                    jl_link_global(&GV, InitValue->second);
+                }
             }
         }
-        // Let's link all globals here also (for now)
-        for (auto &GV : M->globals()) {
-            auto InitValue = NewGlobals.find(GV.getName());
-            if (InitValue != NewGlobals.end()) {
-                jl_link_global(&GV, InitValue->second);
-            }
+        for (auto &def : emitted) {
+            // Add the results to the execution engine now
+            std::unique_ptr<Module> &M = std::get<0>(def.second);
+            jl_add_to_ee(M, NewExports);
         }
-    }
-    for (auto &def : emitted) {
-        // Add the results to the execution engine now
-        std::unique_ptr<Module> &M = std::get<0>(def.second);
-        jl_add_to_ee(M, NewExports);
     }
     JL_TIMING(LLVM_MODULE_FINISH);
 
@@ -436,11 +443,55 @@ void JuliaOJIT::DebugObjectRegistrar::operator()(RTDyldObjHandleT H,
                    static_cast<const RuntimeDyld::LoadedObjectInfo*>(&LOS));
 }
 
+CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
+{
+#ifdef DISABLE_OPT
+    return CodeGenOpt::None;
+#else
+    return optlevel < 2 ? CodeGenOpt::None :
+        optlevel == 2 ? CodeGenOpt::Default :
+        CodeGenOpt::Aggressive;
+#endif
+}
+
+static void addPassesForOptLevel(legacy::PassManager &PM, TargetMachine &TM, raw_svector_ostream &ObjStream, MCContext *Ctx, int optlevel)
+{
+    addTargetPasses(&PM, &TM);
+    addOptimizationPasses(&PM, optlevel);
+    if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
+        llvm_unreachable("Target does not support MC emission.");
+}
 
 CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
 {
     JL_TIMING(LLVM_OPT);
-    jit.PM.run(M);
+    int optlevel;
+    if (jl_generating_output()) {
+        optlevel = 0;
+    }
+    else {
+        optlevel = jl_options.opt_level;
+        for (auto &F : M.functions()) {
+            if (!F.getBasicBlockList().empty()) {
+                Attribute attr = F.getFnAttribute("julia-optimization-level");
+                StringRef val = attr.getValueAsString();
+                if (val != "") {
+                    int ol = (int)val[0] - '0';
+                    if (ol >= 0 && ol < optlevel)
+                        optlevel = ol;
+                }
+            }
+        }
+    }
+    if (optlevel == 0)
+        jit.PM0.run(M);
+    else if (optlevel == 1)
+        jit.PM1.run(M);
+    else if (optlevel == 2)
+        jit.PM2.run(M);
+    else if (optlevel >= 3)
+        jit.PM3.run(M);
+
     std::unique_ptr<MemoryBuffer> ObjBuffer(
         new SmallVectorMemoryBuffer(std::move(jit.ObjBufferSV)));
     auto Obj = object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef());
@@ -490,10 +541,15 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
             CompilerT(this)
         )
 {
-    addTargetPasses(&PM, &TM);
-    addOptimizationPasses(&PM, jl_generating_output() ? 0 : jl_options.opt_level);
-    if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
-        llvm_unreachable("Target does not support MC emission.");
+    for (int i = 0; i < 4; i++) {
+        TMs[i] = TM.getTarget().createTargetMachine(TM.getTargetTriple().getTriple(), TM.getTargetCPU(),
+                TM.getTargetFeatureString(), TM.Options, Reloc::Static, TM.getCodeModel(),
+                CodeGenOptLevelFor(i), true);
+    }
+    addPassesForOptLevel(PM0, *TMs[0], ObjStream, Ctx, 0);
+    addPassesForOptLevel(PM1, *TMs[1], ObjStream, Ctx, 1);
+    addPassesForOptLevel(PM2, *TMs[2], ObjStream, Ctx, 2);
+    addPassesForOptLevel(PM3, *TMs[3], ObjStream, Ctx, 3);
 
     // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
     // symbols in the program as well. The nullptr argument to the function

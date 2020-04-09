@@ -13,6 +13,8 @@ Run Evaluate Print Loop (REPL)
 """
 module REPL
 
+Base.Experimental.@optlevel 1
+
 using Base.Meta, Sockets
 import InteractiveUtils
 
@@ -302,6 +304,7 @@ mutable struct BasicREPL <: AbstractREPL
 end
 
 outstream(r::BasicREPL) = r.terminal
+hascolor(r::BasicREPL) = hascolor(r.terminal)
 
 function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     d = REPLDisplay(repl)
@@ -428,13 +431,14 @@ mutable struct LineEditREPL <: AbstractREPL
     interface::ModalInterface
     backendref::REPLBackendRef
     LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors) =
-        new(t,true,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
+        new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
             in_help,envcolors,false,nothing, Options(), nothing)
 end
 outstream(r::LineEditREPL) = r.t
 specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t
+hascolor(r::LineEditREPL) = r.hascolor
 
 LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
     LineEditREPL(t, hascolor,
@@ -813,7 +817,7 @@ function respond(f, repl, main; pass_empty = false, suppress_on_semicolon = true
                 response = (catch_stack(), true)
             end
             hide_output = suppress_on_semicolon && ends_with_semicolon(line)
-            print_response(repl, response, !hide_output, Base.have_color)
+            print_response(repl, response, !hide_output, hascolor(repl))
         end
         prepare_next(repl)
         reset_state(s)
@@ -955,7 +959,7 @@ function setup_interface(
             end
             hist_from_file(hp, f, hist_path)
         catch
-            print_response(repl, (catch_stack(),true), true, Base.have_color)
+            print_response(repl, (catch_stack(),true), true, hascolor(repl))
             println(outstream(repl))
             @info "Disabling history file for this session"
             repl.history_file = false
@@ -1155,6 +1159,7 @@ StreamREPL(stream::IO) = StreamREPL(stream, Base.text_colors[:green], Base.input
 run_repl(stream::IO) = run_repl(StreamREPL(stream))
 
 outstream(s::StreamREPL) = s.stream
+hascolor(s::StreamREPL) = get(s.stream, :color, false)
 
 answer_color(r::LineEditREPL) = r.envcolors ? Base.answer_color() : r.answer_color
 answer_color(r::StreamREPL) = r.answer_color
@@ -1213,7 +1218,7 @@ function ends_with_semicolon(line::AbstractString)
 end
 
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
-    have_color = Base.have_color
+    have_color = hascolor(repl)
     Base.banner(repl.stream)
     d = REPLDisplay(repl)
     dopushdisplay = !in(d,Base.Multimedia.displays)
