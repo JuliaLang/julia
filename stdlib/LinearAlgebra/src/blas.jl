@@ -1000,7 +1000,7 @@ sbmv(uplo, k, A, x)
 """
     sbmv!(uplo, k, alpha, A, x, beta, y)
 
-Update vector `y` as `alpha*A*x + beta*y` where `A` is a a symmetric band matrix of order
+Update vector `y` as `alpha*A*x + beta*y` where `A` is a symmetric band matrix of order
 `size(A,2)` with `k` super-diagonals stored in the argument `A`. The storage layout for `A`
 is described the reference BLAS module, level-2 BLAS at
 <http://www.netlib.org/lapack/explore-html/>.
