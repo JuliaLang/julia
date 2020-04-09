@@ -537,7 +537,7 @@ function tuple_replace(str::String,count::Int, subs::Pair...)
         T=tuple_replace(str[(last(R)+1):end],count,subs...)
         return (H...,replace(M,s=>r),T...)
     end
-    (str,)
+    (str,) #test
 end
 
 function replace(str::String, subs::Pair...; count::Int=typemax(Int))
