@@ -70,6 +70,8 @@ Language changes
 * The line number of function definitions is now added by the parser as an
   additional `LineNumberNode` at the start of each function body ([#35138]).
 
+* Color now defaults to on when stdout and stderr are TTYs ([#34347])
+
 Multi-threading changes
 -----------------------
 
