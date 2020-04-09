@@ -297,6 +297,11 @@ end
     @test replace("a", in("a") => typeof) == "Char"
     @test replace("a", ['a'] => typeof) == "Char"
 
+    # PR 35414
+    @test replace("foobarbaz","oo"=>"zz","ar"=>"zz","z"=>"m") == "fzzbzzbam"
+    @test replace("foobarbaz","z"=>"m","oo"=>"zz","ar"=>"zz") == "fzzbzzbam"
+    @test replace("foobarbaz","z"=>"m","oo"=>"zz","ar"=>"zz",count=2) == "fzzbarbam"
+    @test replace("foobarbaz","z"=>"m",r"a.*a"=>uppercase) == "foobARBAm"
 end
 
 @testset "chomp/chop" begin
