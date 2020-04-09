@@ -1411,7 +1411,7 @@ To insert `replacement` before an index `n` without removing any items, use
 # Examples
 ```jldoctest
 julia> A = [-1, -2, -3, 5, 4, 3, -1]; splice!(A, 4:3, 2)
-0-element Array{Int64,1}
+Int64[]
 
 julia> A
 8-element Array{Int64,1}:
@@ -2073,7 +2073,7 @@ julia> findall(A)
  CartesianIndex(2, 2)
 
 julia> findall(falses(3))
-0-element Array{Int64,1}
+Int64[]
 ```
 """
 function findall(A)

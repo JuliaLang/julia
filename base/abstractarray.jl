@@ -679,10 +679,10 @@ Create an empty vector similar to `v`, optionally changing the `eltype`.
 
 ```jldoctest
 julia> empty([1.0, 2.0, 3.0])
-0-element Array{Float64,1}
+Float64[]
 
 julia> empty([1.0, 2.0, 3.0], String)
-0-element Array{String,1}
+String[]
 ```
 """
 empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()

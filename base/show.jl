@@ -1,7 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function show(io::IO, ::MIME"text/plain", u::UndefInitializer)
-    print(io, u, ": array initializer with undefined values")
+    show(io, u)
+    get(io, :compact, false) && return
+    print(io, ": array initializer with undefined values")
 end
 
 # first a few multiline show functions for types defined before the MIME type:
@@ -9,18 +11,18 @@ end
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
 
 function show(io::IO, ::MIME"text/plain", r::LinRange)
+    isempty(r) && return show(io, r)
     # show for LinRange, e.g.
     # range(1, stop=3, length=7)
     # 7-element LinRange{Float64}:
     #   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
     summary(io, r)
-    if !isempty(r)
-        println(io, ":")
-        print_range(io, r)
-    end
+    println(io, ":")
+    print_range(io, r)
 end
 
 function show(io::IO, ::MIME"text/plain", f::Function)
+    get(io, :compact, false) && return show(io, f)
     ft = typeof(f)
     mt = ft.name.mt
     if isa(f, Core.IntrinsicFunction)
@@ -43,6 +45,7 @@ function show(io::IO, ::MIME"text/plain", f::Function)
 end
 
 function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
+    isempty(iter) && get(io, :compact, false) && return show(io, iter)
     summary(io, iter)
     isempty(iter) && return
     print(io, ". ", isa(iter,KeySet) ? "Keys" : "Values", ":")
@@ -73,6 +76,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
 end
 
 function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
+    isempty(t) && return show(io, t)
     # show more descriptively, with one line per key/value pair
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)
@@ -142,6 +146,7 @@ function summary(io::IO, t::AbstractSet)
 end
 
 function show(io::IO, ::MIME"text/plain", t::AbstractSet{T}) where T
+    isempty(t) && return show(io, t)
     # show more descriptively, with one line per value
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)
