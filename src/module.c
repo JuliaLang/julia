@@ -784,6 +784,25 @@ int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT
     }
 }
 
+// Remove implicitly imported identifiers, effectively resetting all the binding
+// resolution decisions for a module. This is dangerous, and should only be
+// done for modules that are essentially empty anyway. The only use case for this
+// is to leave `Main` as empty as possible in the default system image.
+JL_DLLEXPORT void jl_clear_implicit_imports(jl_module_t *m)
+{
+    size_t i;
+    JL_LOCK(&m->lock);
+    void **table = m->bindings.table;
+    for (i = 1; i < m->bindings.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            if (b->owner != m && !b->imported)
+                table[i] = HT_NOTFOUND;
+        }
+    }
+    JL_UNLOCK(&m->lock);
+}
+
 #ifdef __cplusplus
 }
 #endif
