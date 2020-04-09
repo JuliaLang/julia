@@ -538,7 +538,7 @@ end
     c
 end
 
-function replace(str::ST, subs::Pair...; count::Int=typemax(Int)) where ST<:AbstractString
+function replace(str::String, subs::Pair...; count::Integer=typemax(Int))
     @inbounds(count > 0 && for si in eachindex(subs)
         s,r=subs[si]
         R=rangify(findfirst(s,str))
