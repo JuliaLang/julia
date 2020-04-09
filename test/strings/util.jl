@@ -302,6 +302,7 @@ end
     @test replace("foobarbaz","z"=>"m","oo"=>"zz","ar"=>"zz") == "fzzbzzbam"
     @test replace("foobarbaz","z"=>"m","oo"=>"zz","ar"=>"zz",count=2) == "fzzbarbam"
     @test replace("foobarbaz","z"=>"m",r"a.*a"=>uppercase) == "foobARBAm"
+    @test replace("foobarbaz",'o'=>'z','a'=>'q','z'=>'m') == "fzzbqrbqm"
 end
 
 @testset "chomp/chop" begin

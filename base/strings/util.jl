@@ -553,6 +553,18 @@ function replace(str::String, subs::Pair...; count::Integer=typemax(Int))
     str
 end
 
+function replace(s::String,mapping::Pair{Char,Char}...)
+    d=Dict{Char,Char}()
+    for (from,to) in mapping
+        d[from]=to
+    end
+    @inline function transform(input)
+        haskey(d,input) && return @inbounds d[input]
+        input
+    end
+    String(transform.(c for c in s))
+end
+
 # hex <-> bytes conversion
 
 """
