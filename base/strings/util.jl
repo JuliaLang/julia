@@ -554,10 +554,7 @@ function replace(str::String, subs::Pair...; count::Integer=typemax(Int))
 end
 
 function replace(s::String,mapping::Pair{Char,Char}...)
-    d=Dict{Char,Char}()
-    for (from,to) in mapping
-        d[from]=to
-    end
+    d=Dict(mapping...)
     @inline function transform(input)
         haskey(d,input) && return @inbounds d[input]
         input
