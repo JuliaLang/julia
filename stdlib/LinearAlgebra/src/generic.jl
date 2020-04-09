@@ -1046,6 +1046,7 @@ function inv(A::AbstractMatrix{T}) where T
     dest = Matrix{S0}(I, n, n)
     ldiv!(factorize(convert(AbstractMatrix{S}, A)), dest)
 end
+
 inv(A::Adjoint) = adjoint(inv(parent(A)))
 inv(A::Transpose) = transpose(inv(parent(A)))
 

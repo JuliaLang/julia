@@ -758,7 +758,7 @@ function sqrt(A::AbstractMatrix{<:Complex})
     end
 end
 
-function inv(A::AbstractMatrix{T}) where T
+function inv(A::StridedMatrix{T}) where T
     checksquare(A)
     S = typeof((one(T)*zero(T) + one(T)*zero(T))/one(T))
     AA = convert(AbstractArray{S}, A)

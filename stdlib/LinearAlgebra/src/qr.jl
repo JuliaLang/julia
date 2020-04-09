@@ -754,9 +754,9 @@ mul!(C::AbstractVecOrMat{T}, A::AbstractVecOrMat{T}, Q::AbstractQ{T}) where {T} 
 mul!(C::AbstractVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}, B::AbstractVecOrMat{T}) where {T} = lmul!(adjQ, copyto!(C, B))
 mul!(C::AbstractVecOrMat{T}, A::AbstractVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}) where {T} = rmul!(copyto!(C, A), adjQ)
 
-ldiv!(A::QRCompactWY{T}, b::AbstractVector) =
+ldiv!(A::QRCompactWY, b::AbstractVector) =
     (ldiv!(UpperTriangular(A.R), view(lmul!(adjoint(A.Q), b), 1:size(A, 2))); b)
-ldiv!(A::QRCompactWY{T}, B::AbstractMatrix) =
+ldiv!(A::QRCompactWY, B::AbstractMatrix) =
     (ldiv!(UpperTriangular(A.R), view(lmul!(adjoint(A.Q), B), 1:size(A, 2), 1:size(B, 2))); B)
 
 # Julia implementation similar to xgelsy
@@ -795,9 +795,9 @@ function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasF
     B[1:nA,:] = view(B, 1:nA, :)[invperm(A.p),:]
     return B, rnk
 end
-ldiv!(A::QRPivoted{T}, B::AbstractVector) =
+ldiv!(A::QRPivoted{T}, B::StridedVector{T}) where {T<:BlasFloat} =
     vec(ldiv!(A,reshape(B,length(B),1)))
-ldiv!(A::QRPivoted{T}, B::AbstractVecOrMat) =
+ldiv!(A::QRPivoted{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     ldiv!(A, B, min(size(A)...)*eps(real(float(one(eltype(B))))))[1]
 function ldiv!(A::QR{T}, B::AbstractMatrix{T}) where T
     m, n = size(A)

@@ -139,8 +139,8 @@ julia> t == F.T && z == F.Z && vals == F.values
 true
 ```
 """
-schur(A::AbstractMatrix{<:BlasFloat}) = schur!(copy(A))
-schur(A::AbstractMatrix{T}) where T = schur!(copy_oftype(A, eigtype(T)))
+schur(A::StridedMatrix{<:BlasFloat}) = schur!(copy(A))
+schur(A::StridedMatrix{T}) where T = schur!(copy_oftype(A, eigtype(T)))
 
 schur(A::AbstractMatrix{T}) where {T} = schur!(copyto!(Matrix{eigtype(T)}(undef, size(A)...), A))
 function schur(A::RealHermSymComplexHerm)
