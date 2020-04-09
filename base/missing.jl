@@ -259,6 +259,12 @@ keys(itr::SkipMissing) =
     v
 end
 
+function show(io::IO, s::SkipMissing)
+    print(io, "skipmissing(")
+    show(io, s.x)
+    print(io, ')')
+end
+
 # Optimized mapreduce implementation
 # The generic method is faster when !(eltype(A) >: Missing) since it does not need
 # additional loops to identify the two first non-missing values of each block

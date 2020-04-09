@@ -2022,3 +2022,10 @@ end
     @test sprint(show, zip(1:3, ('a','b','c'))) == "zip(1:3, ('a', 'b', 'c'))"
     @test sprint(show, zip(1:3, ('a','b','c'), "abc")) == "zip(1:3, ('a', 'b', 'c'), \"abc\")"
 end
+
+@testset "skipmissing" begin
+    @test sprint(show, skipmissing("test")) == "skipmissing(\"test\")"
+    @test sprint(show, skipmissing(1:5)) == "skipmissing(1:5)"
+    @test sprint(show, skipmissing([1,2,missing])) == "skipmissing(Union{Missing, Int64}[1, 2, missing])"
+    @test sprint(show, skipmissing((missing,1.0,'a'))) == "skipmissing((missing, 1.0, 'a'))"
+end
