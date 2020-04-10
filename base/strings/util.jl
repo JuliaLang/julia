@@ -538,19 +538,35 @@ end
     c
 end
 
-function replace(str::String, subs::Pair...; count::Integer=typemax(Int))
-    @inbounds(count > 0 && for si in eachindex(subs)
+function multi_replace(str::String,count::Integer,subs::NTuple{N,Pair}) where N
+    sh=floor(Int,1.2sizeof(str))
+    @inbounds(count > 0 && for si in 1:N
         s,r=subs[si]
         R=rangify(findfirst(s,str))
         isnothing(R) && continue
+        buf=IOBuffer(sizehint=sh)
         i,j=first(R),last(R)
-        count -= 1
-        H=replace(str[begin:(i-1)], subs[(si+1):end]..., count=count)
-        length(H)>1 && (count -= 1)
-        T=replace(str[(j+1):end], subs..., count=count)
-        return H*replace(str[R],s=>r)*T
+        H,n=multi_replace(str[begin:(i-1)],count, subs[(si+1):end])
+        count-=n
+        totrepl=n
+        print(buf,H)
+        if count>0
+            print(buf,replace(str[R],s=>r))
+            count-=1
+            totrepl+=1
+        else
+            print(buf,str[R])
+        end
+        T,n=multi_replace(str[(j+1):end],count, subs)
+        totrepl+=n
+        print(buf,T)
+        return String(take!(buf)),totrepl
     end)
-    str
+    str,0
+end
+
+function replace(str::String, subs::Pair...; count::Integer=typemax(Int))
+    multi_replace(str,count,subs)[1]
 end
 
 const _ReplaceCharToTS=Pair{Char,B} where {B<:Union{AbstractChar,AbstractString,Number}}
