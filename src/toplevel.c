@@ -115,6 +115,11 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     if (jl_array_len(ex->args) != 3 || !jl_is_expr(jl_exprarg(ex, 2))) {
         jl_error("syntax: malformed module expression");
     }
+
+    if (((jl_expr_t *)(jl_exprarg(ex, 2)))->head != jl_symbol("block")) {
+        jl_error("syntax: module expression third argument must be a block");
+    }
+
     int std_imports = (jl_exprarg(ex, 0) == jl_true);
     jl_sym_t *name = (jl_sym_t*)jl_exprarg(ex, 1);
     if (!jl_is_symbol(name)) {
