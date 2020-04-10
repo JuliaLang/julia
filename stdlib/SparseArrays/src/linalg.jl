@@ -32,11 +32,11 @@ for HermSym ∈ [:Hermitian, :Symmetric]
     end
 end
 
-function (+)(A::Symmetric{<:Any, <:SparseMatrixCSC}, B::Hermitian{<:Any, <:SparseMatricCSC})
+function (+)(A::Symmetric{<:Any, <:SparseMatrixCSC}, B::Hermitian{<:Any, <:SparseMatrixCSC})
     C = sparse(A)
     C .= C + B
 end
-(+)(A::Hermitian{<:Any, <:SparseMatrixCSC}, B::Symmetric{<:Any, <:SparseMatricCSC}) = B + A
+(+)(A::Hermitian{<:Any, <:SparseMatrixCSC}, B::Symmetric{<:Any, <:SparseMatrixCSC}) = B + A
 
 
 function mul!(C::StridedVecOrMat, A::AbstractSparseMatrixCSC, B::Union{StridedVector,AdjOrTransStridedOrTriangularMatrix}, α::Number, β::Number)
