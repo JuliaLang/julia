@@ -139,12 +139,12 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
                   end
         isempty(compile) || push!(addflags, "--compile=$compile")
     end
-    let depwarn = if opts.depwarn == 0
-                      "no"
+    let depwarn = if opts.depwarn == 1
+                      "yes"
                   elseif opts.depwarn == 2
                       "error"
                   else
-                      "" # default = "yes"
+                      "" # default = "no"
                   end
         isempty(depwarn) || push!(addflags, "--depwarn=$depwarn")
     end
