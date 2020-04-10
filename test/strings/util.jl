@@ -297,6 +297,16 @@ end
     @test replace("a", in("a") => typeof) == "Char"
     @test replace("a", ['a'] => typeof) == "Char"
 
+    # PR 35414
+    @test replace("foobarbaz","oo"=>"zz","ar"=>"zz","z"=>"m") == "fzzbzzbam"
+    substmp=["z"=>"m","oo"=>"zz","ar"=>"zz"]
+    for perm in [[1,2,3],[2,1,3],[3,2,1],[2,3,1],[1,3,2],[3,1,2]]
+        @test replace("foobarbaz",substmp[perm]...) == "fzzbzzbam"
+        @test replace("foobarbaz",substmp[perm]...,count=2) == "fzzbzzbaz"
+        @test replace("foobarbaz",substmp[perm]...,count=1) == "fzzbarbaz"
+    end
+    @test replace("foobarbaz","z"=>"m",r"a.*a"=>uppercase) == "foobARBAm"
+    @test replace("foobarbaz",'o'=>'z','a'=>'q','z'=>'m') == "fzzbqrbqm"
 end
 
 @testset "chomp/chop" begin
