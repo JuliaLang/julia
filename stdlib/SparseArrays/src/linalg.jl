@@ -32,7 +32,7 @@ for HermSym ∈ [:Hermitian, :Symmetric]
     end
 end
 
-function (+)(A::Symmetric{<:Any, <:SparseMatrixCSC}, B::Hermitian{<:Any, <:SparseMatricCSC})
+function (+)(A::Symmetric{<:Any, <:SparseMatrixCSC}, B::Hermitian{<:Any, <:SparseMatrixCSC})
     C = sparse(A)
     C .= C + B
 end
