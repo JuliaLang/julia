@@ -791,6 +791,10 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     thk = (jl_code_info_t*)jl_exprarg(ex, 0);
     assert(jl_is_code_info(thk));
     assert(jl_typeis(thk->code, jl_array_any_type));
+    if (!(jl_array_t*)thk->code || !jl_array_ptr_ref((jl_array_t*)thk->code,0)) {
+        jl_eval_errorf(m, "syntax: malformed \"thunk\" statement");
+    }
+
     body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops);
 
     jl_value_t *result;
