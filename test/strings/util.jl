@@ -299,8 +299,12 @@ end
 
     # PR 35414
     @test replace("foobarbaz","oo"=>"zz","ar"=>"zz","z"=>"m") == "fzzbzzbam"
-    @test replace("foobarbaz","z"=>"m","oo"=>"zz","ar"=>"zz") == "fzzbzzbam"
-    @test replace("foobarbaz","z"=>"m","oo"=>"zz","ar"=>"zz",count=2) == "fzzbarbam"
+    substmp=["z"=>"m","oo"=>"zz","ar"=>"zz"]
+    for perm in [[1,2,3],[2,1,3],[3,2,1],[2,3,1]]
+        @test replace("foobarbaz",substmp[perm]...) == "fzzbzzbam"
+        @test replace("foobarbaz",substmp[perm]...,count=2) == "fzzbzzbaz"
+        @test replace("foobarbaz",substmp[perm]...,count=1) == "fzzbarbaz"
+    end
     @test replace("foobarbaz","z"=>"m",r"a.*a"=>uppercase) == "foobARBAm"
     @test replace("foobarbaz",'o'=>'z','a'=>'q','z'=>'m') == "fzzbqrbqm"
 end
