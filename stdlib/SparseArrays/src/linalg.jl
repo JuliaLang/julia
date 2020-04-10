@@ -36,7 +36,7 @@ function (+)(A::Symmetric{<:Any, <:SparseMatrixCSC}, B::Hermitian{<:Any, <:Spars
     C = sparse(A)
     C .= C + B
 end
-(+)(A::Hermitian{<:Any, <:SparseMatrixCSC}, B::Symmetric{<:Any, <:SparseMatricCSC}) = B + A
+(+)(A::Hermitian{<:Any, <:SparseMatrixCSC}, B::Symmetric{<:Any, <:SparseMatrixCSC}) = B + A
 
 
 function mul!(C::StridedVecOrMat, A::AbstractSparseMatrixCSC, B::Union{StridedVector,AdjOrTransStridedOrTriangularMatrix}, α::Number, β::Number)
