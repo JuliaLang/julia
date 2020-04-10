@@ -526,57 +526,49 @@ replace(s::AbstractString, pat_f::Pair; count=typemax(Int)) =
 
 # TODO: allow transform as the first argument to replace?
 
-@inline function rangify(c::T) where T<:AbstractRange
-    c
-end
-
-@inline function rangify(c::T) where T<:Integer
-    c:c
-end
-
-@inline function rangify(c::Nothing)
-    c
-end
+@inline rangify(c::T) where T<:AbstractRange = c
+@inline rangify(c::T) where T<:Integer = c:c
+@inline rangify(c::Nothing) = c
 
 function multi_replace(str::String,count::Integer,subs::NTuple{N,Pair}) where N
     sh=floor(Int,1.2sizeof(str))
     @inbounds(count > 0 && for si in 1:N
-        s,r=subs[si]
+        s,r = subs[si]
         R=rangify(findfirst(s,str))
         isnothing(R) && continue
-        buf=IOBuffer(sizehint=sh)
-        i,j=first(R),last(R)
-        H,n=multi_replace(str[begin:(i-1)],count, subs[(si+1):end])
-        count-=n
-        totrepl=n
+        buf = IOBuffer(sizehint = sh)
+        i,j = first(R),last(R)
+        H,n = multi_replace(str[begin:(i - 1)], count, subs[(si + 1):end])
+        count -= n
+        totrepl = n
         print(buf,H)
-        if count>0
+        if count > 0
             print(buf,replace(str[R],s=>r))
-            count-=1
-            totrepl+=1
+            count -= 1
+            totrepl += 1
         else
             print(buf,str[R])
         end
-        T,n=multi_replace(str[(j+1):end],count, subs)
-        totrepl+=n
+        T,n=multi_replace(str[(j + 1):end], count, subs)
+        totrepl += n
         print(buf,T)
-        return String(take!(buf)),totrepl
+        return String(take!(buf)), totrepl
     end)
-    str,0
+    str, 0
 end
 
 function replace(str::String, subs::Pair...; count::Integer=typemax(Int))
-    multi_replace(str,count,subs)[1]
+    multi_replace(str, count, subs)[1]
 end
 
 const _ReplaceCharToTS=Pair{Char,B} where {B<:Union{AbstractChar,AbstractString,Number}}
 function replace(str::String,mapping::_ReplaceCharToTS...;count::Integer = typemax(Int))
     d=Dict(mapping...)
-    sizestr=sizeof(str)
+    sizestr = sizeof(str)
     buf = IOBuffer(sizehint=sizestr+sizestr>>1)
     for c in str
-        if count>0 && haskey(d,c)
-            count-=1
+        if count > 0 && haskey(d,c)
+            count -= 1
             print(buf,@inbounds d[c])
         else
             print(buf, c)
