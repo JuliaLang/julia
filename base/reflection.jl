@@ -665,6 +665,7 @@ julia> Base.fieldindex(Foo, :z, false)
 ```
 """
 function fieldindex(T::DataType, name::Symbol, err::Bool=true)
+    @_pure_meta
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
 end
 

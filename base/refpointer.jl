@@ -3,9 +3,10 @@
 """
     Ref{T}
 
-An object that safely references data of type `T`. This type is guaranteed to point to
-valid, Julia-allocated memory of the correct type. The underlying data is protected from
-freeing by the garbage collector as long as the `Ref` itself is referenced.
+An object that safely references data of type `T`. When constructed, it is
+therefore known to point to valid, Julia-allocated memory of the correct type.
+The underlying data is protected from freeing by the garbage collector as long
+as the `Ref` itself is referenced.
 
 In Julia, `Ref` objects are dereferenced (loaded or stored) with `[]`.
 
@@ -16,8 +17,8 @@ it can be written `Ref(a, i)` for creating a reference to the `i`-th element of 
 When passed as a `ccall` argument (either as a `Ptr` or `Ref` type), a `Ref` object will be
 converted to a native pointer to the data it references.
 
-There is no invalid (NULL) `Ref` in Julia, but a `C_NULL` instance of `Ptr` can be passed to
-a `ccall` Ref argument.
+There is no invalid (NULL) `Ref` in Julia, but a `C_NULL` instance of `Ptr` can
+be passed in C to a `ccall` Ref argument.
 
 # Use in broadcasting
 
@@ -74,7 +75,7 @@ RefArray(x::AbstractArray{T}, i::Int=1, roots::Nothing=nothing) where {T} = RefA
 convert(::Type{Ref{T}}, x::AbstractArray{T}) where {T} = RefArray(x, 1)
 
 function unsafe_convert(P::Type{Ptr{T}}, b::RefArray{T}) where T
-    if allocatedinline(T)
+    if allocatedinline(T) || T === Any
         p = pointer(b.x, b.i)
     elseif isconcretetype(T) && T.mutable
         p = pointer_from_objref(b.x[b.i])
@@ -84,10 +85,12 @@ function unsafe_convert(P::Type{Ptr{T}}, b::RefArray{T}) where T
     end
     return convert(P, p)
 end
-function unsafe_convert(P::Type{Ptr{Any}}, b::RefArray{Any})
-    return convert(P, pointer(b.x, b.i))
-end
 unsafe_convert(::Type{Ptr{Cvoid}}, b::RefArray{T}) where {T} = convert(Ptr{Cvoid}, unsafe_convert(Ptr{T}, b))
+
+getindex(b::RefArray) = b.x[b.i]
+setindex!(b::RefArray, x) = (b.x[b.i] = x; b)
+isassigned(b::RefArray) = isassigned(b.x, b.i)
+
 
 ###
 if is_primary_base_module
@@ -121,6 +124,8 @@ if is_primary_base_module
     Ref(x::AbstractArray, i::Integer) = RefArray(x, i)
 end
 
+###
+
 cconvert(::Type{Ptr{P}}, a::Array{<:Ptr}) where {P<:Ptr} = a
 cconvert(::Type{Ref{P}}, a::Array{<:Ptr}) where {P<:Ptr} = a
 cconvert(::Type{Ptr{P}}, a::Array) where {P<:Union{Ptr,Cwstring,Cstring}} = Ref{P}(a)
@@ -136,12 +141,41 @@ unsafe_convert(::Type{Ptr{T}}, r::Ref{NTuple{N,T}}) where {N,T} =
 unsafe_convert(::Type{Ptr{T}}, r::Ptr{NTuple{N,T}}) where {N,T} =
     convert(Ptr{T}, r)
 
-###
+### Methods for a Ref object that is backed by a object field
+"""
+    RefField <: Ref{T}
 
-getindex(b::RefArray) = b.x[b.i]
-setindex!(b::RefArray, x) = (b.x[b.i] = x; b)
+Create an object reflection adaptor that represents the properties of a specific object field.
+"""
+struct RefField{f,T,S} <: Ref{T}
+    x::RefValue{S}
+    RefField{f,T,S}(x::S) where {f,T,S} = new{f::Int,T,S}(RefValue(x))
+end
+RefField(x, f::Int) = RefField{f, fieldtype(typeof(x), f), typeof(x)}(x)
+RefField(x, f::Symbol) = RefField(x, fieldindex(typeof(x), f))
 
-###
+function unsafe_convert(P::Type{Ptr{T}}, b::RefField{f,T,S}) where {f,T,S}
+    if allocatedinline(T) || T === Any
+        p = unsafe_convert(Ptr{S}, b.x)
+        p += fieldoffset(S, f)
+    elseif isconcretetype(T) && T.mutable
+        p = pointer_from_objref(b[])
+    else
+        # see comment on equivalent branch for RefValue
+        p = unsafe_convert(Ptr{S}, b.x)
+        p += fieldoffset(S, f)
+        p = pointerref(Ptr{Ptr{Cvoid}}(p), 1, Core.sizeof(Ptr{Cvoid}))
+    end
+    return convert(P, p)
+end
+unsafe_convert(::Type{Ptr{Cvoid}}, b::RefField{f,T}) where {f,T} = convert(Ptr{Cvoid}, unsafe_convert(Ptr{T}, b))
+
+getindex(b::RefField{f}) where {f} = getfield(b.x[], f)
+setindex!(b::RefField{f,T}, x) where {f,T} = (setfield!(b.x[], f, convert(T, x)); b)
+isassigned(b::RefField{f}) where {f} = isdefined(b.x[], f)
+
+
+
 
 """
     AddrSpacePtr{T, AS}
