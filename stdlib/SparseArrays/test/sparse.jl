@@ -2911,11 +2911,11 @@ end
     B = sprandn(ComplexF64, 10, 10, 0.1)
     @test Hermitian(A + A') + B isa SparseMatrixCSC
     @test A + Hermitian(B + B') isa SparseMatrixCSC
-    @test Hermitian(A + A') + Hermitian(B + B') isa Hermitian{Float64, <:SparseMatrixCSC}
+    @test Hermitian(A + A') + Hermitian(B + B') isa Hermitian{ComplexF64, <:SparseMatrixCSC}
 
     @test Symmetric(A + A') + B isa SparseMatrixCSC
     @test A + Symmetric(B + B') isa SparseMatrixCSC
-    @test Symmetric(A + A') + Symmetric(B + B') isa Symmetric{Float64, <:SparseMatrixCSC}
+    @test Symmetric(A + A') + Symmetric(B + B') isa Symmetric{ComplexF64, <:SparseMatrixCSC}
 
     @test Symmetric(A + transpose(A)) + Hermitian(A + B') isa SparseMatrixCSC
 end
