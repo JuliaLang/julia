@@ -1356,7 +1356,8 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
 
     // ok: record that this method definition is being partially replaced
     // (either with a real definition, or an ambiguity error)
-    if (shadowed) {
+    // be careful not to try to scan something from the current dump-reload though
+    if (shadowed && oldentry->min_world != closure->newentry->min_world) {
         if (closure->shadowed == NULL) {
             closure->shadowed = (jl_value_t*)oldentry;
         }
