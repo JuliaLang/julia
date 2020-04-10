@@ -553,13 +553,18 @@ function replace(str::String, subs::Pair...; count::Integer=typemax(Int))
     str
 end
 
-function replace(s::String,mapping::Pair{Char,Char}...)
+function replace(str::String, mapping::Pair{Char,Char}...; count::Integer=typemax(Int))
     d=Dict(mapping...)
-    @inline function transform(input)
-        haskey(d,input) && return @inbounds d[input]
-        input
+    buf = IOBuffer()
+    for c in str
+        if count>0 && haskey(d,c)
+            count-=1
+            print(buf,@inbounds d[c])
+        else
+            print(buf, c)
+        end
     end
-    String(transform.(c for c in s))
+    String(take!(buf))
 end
 
 # hex <-> bytes conversion
