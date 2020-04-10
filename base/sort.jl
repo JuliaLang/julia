@@ -336,10 +336,11 @@ end
 """
     searchsorted(a, x; {by|arrayby}=<transform>, lt=<comparison>, rev=false)
 
-Return the range of indices of `a` which compare as equal to `x` (using binary search)
-according to the order specified by the `by`, `arrayby`, `lt` and `rev` keywords,
-assuming that `a` is already sorted in that order. Only one of `by` and `arrayby` may
-be in use in one call.
+Return the range of indices of `a` which yield `x <= arrayby(a[i]) <= x`
+(using binary search)
+according to the order specified by the `by`, `lt` and `rev` keywords,
+assuming that `arrayby.(a)` is already sorted in that order.
+Only one of `by` and `arrayby` may be different from the default value `identity`.
 
 Return an empty range located at the insertion point
 if `arrayby.(by.(a))` does not contain values equal to `by(x)`.
@@ -368,8 +369,8 @@ julia> searchsorted([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 
 Return the index of the first value in `a` greater than or equal to `x`,
 according to the order specified by the `by`, `lt` and `rev` keywords,
-assuming that `arrayby.(a)` is already sorted in that order. Only one of
-`by` and `arrayby` may be in use in one call.
+assuming that `arrayby.(a)` is already sorted in that order.
+Only one of `by` and `arrayby` may be different from the default value `identity`.
 
 Return `length(a) + 1` if `x` is greater than all values in `arrayby.(a)`.
 
@@ -397,8 +398,8 @@ julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 
 Return the index of the last value in `a` less than or equal to `x`,
 according to the order specified by the `by`, `lt` and `rev` keywords,
-assuming that `arrayby.(a)` is already sorted in that order. Only one of
-`by` and `arrayby` may be in use in one call.
+assuming that `arrayby.(a)` is already sorted in that order.
+Only one of `by` and `arrayby` may be different from the default value `identity`.
 
 Return `0` if `x` is less than all values in `arrayby.(a)`.
 

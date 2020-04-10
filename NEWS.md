@@ -4,7 +4,7 @@ Julia v1.5 Release Notes
 New language features
 ---------------------
 * Functions `searchsorted*` have a new keyword argument `arrayby`, which is applied
-  to the array, but not to the comparison argument (in constrat ot `by`) ([#9429])
+  to the array, but not to the comparison argument (in constrast to `by`) ([#9429])
 * Macro calls `@foo {...}` can now also be written `@foo{...}` (without the space) ([#34498]).
 * `⨟` is now parsed as a binary operator with times precedence. It can be entered in the REPL
   with `\bbsemi` followed by <kbd>TAB</kbd> ([#34722]).
