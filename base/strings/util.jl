@@ -553,9 +553,11 @@ function replace(str::String, subs::Pair...; count::Integer=typemax(Int))
     str
 end
 
-function replace(str::String, mapping::Pair{Char}...; count::Integer=typemax(Int))
+const _ReplaceCharToTS=Pair{Char,B} where {B<:Union{AbstractChar,AbstractString,Number}}
+function replace(str::String,mapping::_ReplaceCharToTS...;count::Integer = typemax(Int))
     d=Dict(mapping...)
-    buf = IOBuffer()
+    sizestr=sizeof(str)
+    buf = IOBuffer(sizehint=sizestr+sizestr>>1)
     for c in str
         if count>0 && haskey(d,c)
             count-=1
