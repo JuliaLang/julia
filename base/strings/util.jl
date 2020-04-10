@@ -553,7 +553,7 @@ function replace(str::String, subs::Pair...; count::Integer=typemax(Int))
     str
 end
 
-function replace(str::String, mapping::Pair{Char,Char}...; count::Integer=typemax(Int))
+function replace(str::String, mapping::Pair{Char}...; count::Integer=typemax(Int))
     d=Dict(mapping...)
     buf = IOBuffer()
     for c in str
