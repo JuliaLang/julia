@@ -1,0 +1,12 @@
+diff --git a/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp b/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp
+index c85b08a..d55ec62 100644
+--- a/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp
++++ b/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp
+@@ -208,7 +208,7 @@ public:
+ 
+   void finish() override {
+     for (auto *Sym : UpdateOther)
+-      if (Sym->isVariable())
++      if (Sym && Sym->isVariable())
+         copyLocalEntry(Sym, Sym->getVariableValue());
+   }
