@@ -1239,7 +1239,7 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
     // we can also relax non-dominating (invalid) refinements to the refinements of those values
     // If all of those values dominate the phi node then the phi node can be refined to
     // those values instead.
-    // While we recursively relax the refinement, we need to keep track of the the values we've
+    // While we recursively relax the refinement, we need to keep track of the values we've
     // visited in order to not scan them again.
     BitVector visited(S.MaxPtrNumber + 1, false);
     for (auto Num: PHINumbers) {

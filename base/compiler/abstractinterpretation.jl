@@ -464,7 +464,7 @@ function precise_container_type(@nospecialize(itft), @nospecialize(typ), vtypes:
     tti0 = widenconst(typ)
     tti = unwrap_unionall(tti0)
     if isa(tti, DataType) && tti.name === NamedTuple_typename
-        # A NamedTuple iteration is the the same as the iteration of its Tuple parameter:
+        # A NamedTuple iteration is the same as the iteration of its Tuple parameter:
         # compute a new `tti == unwrap_unionall(tti0)` based on that Tuple type
         tti = tti.parameters[2]
         while isa(tti, TypeVar)

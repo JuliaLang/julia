@@ -2877,7 +2877,7 @@ mktempdir() do dir
             Base.shred!(valid_cred)
         end
 
-        # A hypothetical scenario where the the allowed authentication can either be
+        # A hypothetical scenario where the allowed authentication can either be
         # SSH or username/password.
         @testset "SSH & HTTPS authentication" begin
             allowed_types = Cuint(LibGit2.Consts.CREDTYPE_SSH_KEY) |

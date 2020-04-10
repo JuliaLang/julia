@@ -893,7 +893,7 @@ julia> binomial(-5, 3)
 * [`factorial`](@ref)
 
 # External links
-* [Binomial coeffient](https://en.wikipedia.org/wiki/Binomial_coefficient) on Wikipedia.
+* [Binomial coefficient](https://en.wikipedia.org/wiki/Binomial_coefficient) on Wikipedia.
 """
 function binomial(n::T, k::T) where T<:Integer
     n0, k0 = n, k

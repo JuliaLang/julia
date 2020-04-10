@@ -72,6 +72,15 @@ Language changes
 
 * Color now defaults to on when stdout and stderr are TTYs ([#34347])
 
+Command-line option changes
+---------------------------
+
+  * `-t N`, `--threads N` starts Julia with `N` threads. This option takes precedence over
+    `JULIA_NUM_THREADS`. The specified number of threads also propagates to worker
+    processes spawned using the `-p`/`--procs` or `--machine-file` command line arguments.
+    In order to set number of threads for worker processes spawned with `addprocs` use the
+    `exeflags` keyword argument, e.g. `` addprocs(...; exeflags=`--threads 4`) `` ([#35108]).
+
 Multi-threading changes
 -----------------------
 
@@ -82,7 +91,7 @@ Build system changes
 
 New library functions
 ---------------------
-* The `@ccall` macro has been added added to Base. It is a near drop-in replacement for `ccall` with more Julia-like syntax. It also wraps the new `foreigncall` API for varargs of different types, though it lacks the the capability to specify an LLVM calling convention. ([#32748])
+* The `@ccall` macro has been added added to Base. It is a near drop-in replacement for `ccall` with more Julia-like syntax. It also wraps the new `foreigncall` API for varargs of different types, though it lacks the capability to specify an LLVM calling convention. ([#32748])
 * New functions `mergewith` and `mergewith!` supersede `merge` and `merge!` with `combine`
   argument.  They don't have the restriction for `combine` to be a `Function` and also
   provide one-argument method that returns a closure.  The old methods of `merge` and

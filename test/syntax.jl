@@ -2224,6 +2224,17 @@ h35201(x; k=1) = (x, k)
 f35201(c) = h35201((;c...), k=true)
 @test f35201(Dict(:a=>1,:b=>3)) === ((a=1,b=3), true)
 
+
+@testset "issue #34544/35367" begin
+    # Test these evals shouldnt segfault
+    eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar1, Expr(:block)))))
+    eval(Expr(:module, true, :bar2, Expr(:block)))
+    eval(Expr(:quote, Expr(:module, true, :bar3, Expr(:quote))))
+    @test_throws ErrorException eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar4, Expr(:quote)))))
+    @test_throws ErrorException eval(Expr(:module, true, :bar5, Expr(:foo)))
+    @test_throws ErrorException eval(Expr(:module, true, :bar6, Expr(:quote)))
+end
+
 # issue #35391
 macro a35391(b)
     :(GC.@preserve ($(esc(b)),) )

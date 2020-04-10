@@ -182,7 +182,7 @@ A [`Float64`](@ref) that sets the value of `Distributed.worker_timeout()` (defau
 This function gives the number of seconds a worker process will wait for
 a master process to establish a connection before dying.
 
-### `JULIA_NUM_THREADS`
+### [`JULIA_NUM_THREADS`](@id JULIA_NUM_THREADS)
 
 An unsigned 64-bit integer (`uint64_t`) that sets the maximum number of threads
 available to Julia. If `$JULIA_NUM_THREADS` exceeds the number of available
@@ -194,6 +194,10 @@ set to `1`.
 !!! note
 
     `JULIA_NUM_THREADS` must be defined before starting julia; defining it in `startup.jl` is too late in the startup process.
+
+!!! compat "Julia 1.5"
+    In Julia 1.5 and above the number of threads can also be specified on startup
+    using the `-t`/`--threads` command line argument.
 
 ### `JULIA_THREAD_SLEEP_THRESHOLD`
 

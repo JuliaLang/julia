@@ -216,6 +216,7 @@ private:
     legacy::PassManager PM1;
     legacy::PassManager PM2;
     legacy::PassManager PM3;
+    TargetMachine *TMs[4];
     MCContext *Ctx;
     std::shared_ptr<RTDyldMemoryManager> MemMgr;
     DebugObjectRegistrar registrar;
