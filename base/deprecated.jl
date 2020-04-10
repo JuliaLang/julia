@@ -23,7 +23,8 @@ third argument is `false`.
 
 !!! compat "Julia 1.5"
     As of Julia 1.5, functions defined by `@deprecate` do not print warning inside normal
-    `julia` program as the defualt value of `--depwarn` option is `no`.
+    `julia` program as the defualt value of `--depwarn` option is `no`.  The warnings
+    are printed from tests run by `Pkg.test()`.
 
 # Examples
 ```jldoctest

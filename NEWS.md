@@ -74,7 +74,8 @@ Command-line option changes
 ---------------------------
 
 * Deprecation warnings are no longer shown by default. i.e. if the `--depwarn=...` flag is
-  not passed it defaults to `--depwarn=no`. ([#35362]).
+  not passed it defaults to `--depwarn=no`. The warnings are printed from tests run by
+  `Pkg.test()`. ([#35362]).
 
 * Color now defaults to on when stdout and stderr are TTYs ([#34347])
 
