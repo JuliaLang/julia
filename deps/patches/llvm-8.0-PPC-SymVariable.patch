@@ -1,12 +1,26 @@
-diff --git a/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp b/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp
-index c85b08a..d55ec62 100644
---- a/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp
-+++ b/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp
-@@ -208,7 +208,7 @@ public:
+From 1cca5f32bf810ee8e00f7244b6530f56f3e972c2 Mon Sep 17 00:00:00 2001
+From: Valentin Churavy <v.churavy@gmail.com>
+Date: Fri, 10 Apr 2020 08:01:30 -0400
+Subject: [PATCH] [PPC] check if variable exists, before finalizing
+
+---
+ llvm/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git llvm/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp llvm/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp
+index 78609ef3d4e..4358294b0a2 100644
+--- llvm/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp
++++ llvm/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp
+@@ -194,7 +194,8 @@ public:
  
    void finish() override {
      for (auto *Sym : UpdateOther)
--      if (Sym->isVariable())
-+      if (Sym && Sym->isVariable())
-         copyLocalEntry(Sym, Sym->getVariableValue());
+-      copyLocalEntry(Sym, Sym->getVariableValue());
++      if (Sym->isVariable())
++        copyLocalEntry(Sym, Sym->getVariableValue());
    }
+ 
+ private:
+-- 
+2.26.0
+
