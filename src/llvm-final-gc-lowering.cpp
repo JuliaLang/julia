@@ -61,6 +61,9 @@ private:
     // Lowers a `julia.queue_gc_root` intrinsic.
     Value *lowerQueueGCRoot(CallInst *target, Function &F);
 
+    // Strips jl_roots from operand bundle
+    Value *stripJLRoots(CallInst *target);
+
     Instruction *getPgcstack(Instruction *ptlsStates);
 };
 
@@ -203,6 +206,27 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     return newI;
 }
 
+Value *FinalLowerGC::stripJLRoots(CallInst *target)
+{
+    // Strip operand bundles
+    SmallVector<OperandBundleDef,2> bundles;
+    for (unsigned I = 0, E = target->getNumOperandBundles(); I != E; ++I) {
+        auto bundle = target->getOperandBundleAt(I);
+
+        if (bundle.getTagName() == "jl_roots") {
+            LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Removed jl_roots from OperandBundle " << target << "\n");
+            continue;
+        }
+        bundles.emplace_back(bundle);
+    }
+    if (target->getNumOperandBundles() > bundles.size()) {
+        auto new_call = CallInst::Create(target, bundles, target);
+        new_call->takeName(target);
+        return new_call;
+    }
+    return target;
+}
+
 bool FinalLowerGC::doInitialization(Module &M) {
     // Initialize platform-agnostic references.
     initAll(M);
@@ -324,8 +348,9 @@ bool FinalLowerGC::runOnFunction(Function &F)
             }
             else if (callee == queueGCRootFunc) {
                 replaceInstruction(CI, lowerQueueGCRoot(CI, F), it);
-            }
-            else {
+            } else if (CI->getNumOperandBundles() > 0) {
+                replaceInstruction(CI, stripJLRoots(CI), it);
+            } else {
                 ++it;
             }
         }

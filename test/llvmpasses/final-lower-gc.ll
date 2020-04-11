@@ -14,6 +14,7 @@ declare void @julia.push_gc_frame(%jl_value_t addrspace(10)**, i32)
 declare %jl_value_t addrspace(10)** @julia.get_gc_frame_slot(%jl_value_t addrspace(10)**, i32)
 declare void @julia.pop_gc_frame(%jl_value_t addrspace(10)**)
 declare noalias nonnull %jl_value_t addrspace(10)* @julia.gc_alloc_bytes(i8*, i64) #0
+declare %jl_value_t* @julia.pointer_from_objref(%jl_value_t addrspace(11)*)
 
 attributes #0 = { allocsize(1) }
 
@@ -66,6 +67,20 @@ top:
   %1 = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)* addrspace(10)* %0, i64 -1
   store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* %1, !tbaa !0
   ret %jl_value_t addrspace(10)* %v
+}
+
+define void @bundle(i8* %fptr) {
+; CHECK-LABEL: @bundle
+  %ptls = call %jl_value_t*** @julia.ptls_states()
+  %ptls_i8 = bitcast %jl_value_t*** %ptls to i8*
+  %v = call %jl_value_t addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, i64 8)
+  %va = addrspacecast %jl_value_t addrspace(10)* %v to %jl_value_t addrspace(11)*
+  %ptrj = call %jl_value_t* @julia.pointer_from_objref(%jl_value_t addrspace(11)* %va)
+  %ptr = bitcast %jl_value_t* %ptrj to i8*
+  %f = bitcast i8* %fptr to void (i8*)*
+; CHECK: call void %f(i8* %ptr) [ "unknown_bundle"(i8* %ptr) ]
+  call void %f(i8* %ptr) [ "jl_roots"(%jl_value_t addrspace(10)* %v), "unknown_bundle"(i8* %ptr) ]
+  ret void
 }
 
 !0 = !{!1, !1, i64 0}
