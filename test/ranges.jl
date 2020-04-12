@@ -1034,7 +1034,7 @@ end
     @test repr("text/plain", range(1, stop=5, length=7)) == "1.0:0.6666666666666666:5.0"
     @test repr("text/plain", LinRange{Float64}(1,5,7)) == "7-element LinRange{Float64}:\n 1.0,1.66667,2.33333,3.0,3.66667,4.33333,5.0"
     @test repr(range(1, stop=5, length=7)) == "1.0:0.6666666666666666:5.0"
-    @test repr(LinRange{Float64}(1,5,7)) == "range(1.0, stop=5.0, length=7)"
+    @test repr(LinRange{Float64}(1,5,7)) == "LinRange{Float64}(1.0, 5.0, 7)"
     @test replrepr(0:100.) == "0.0:1.0:100.0"
     # next is to test a very large range, which should be fast because print_range
     # only examines spacing of the left and right edges of the range, sufficient

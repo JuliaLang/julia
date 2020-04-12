@@ -424,12 +424,14 @@ _range(start::T, ::Nothing, stop::T, len::Integer) where {T<:Integer} =
 # for all other types we fall back to a plain old LinRange
 _linspace(::Type{T}, start::Integer, stop::Integer, len::Integer) where T = LinRange{T}(start, stop, len)
 
-function show(io::IO, r::LinRange)
-    print(io, "range(")
+function show(io::IO, r::LinRange{T}) where {T}
+    print(io, "LinRange{")
+    show(io, T)
+    print(io, "}(")
     show(io, first(r))
-    print(io, ", stop=")
+    print(io, ", ")
     show(io, last(r))
-    print(io, ", length=")
+    print(io, ", ")
     show(io, length(r))
     print(io, ')')
 end
