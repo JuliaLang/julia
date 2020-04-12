@@ -202,7 +202,7 @@ Julia creates precompiled caches of the module to reduce this time.
 
 The incremental precompiled module file are created and used automatically when using `import`
 or `using` to load a module.  This will cause it to be automatically compiled the first time
-it is imported. Alternatively, you can manually call [`Base.compilecache(modulename)`](@ref). The resulting
+it is imported. Alternatively, you can manually call [`Base.compilecache(Base.PkgId("modulename"))`](@ref). The resulting
 cache files will be stored in `DEPOT_PATH[1]/compiled/`. Subsequently, the module is automatically
 recompiled upon `using` or `import` whenever any of its dependencies change; dependencies are modules it
 imports, the Julia build, files it includes, or explicit dependencies declared by [`include_dependency(path)`](@ref)
