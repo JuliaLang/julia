@@ -263,6 +263,14 @@ for (op,chop) in ((:+,:checked_add), (:-,:checked_sub),
             xd, yd = divgcd(x.den, y.den)
             Rational(($chop)(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
         end
+
+        function ($op)(x::Rational, y::Integer)
+            Rational(($chop)(x.num, checked_mul(x.den, y)), x.den)
+        end
+
+        function ($op)(y::Integer, x::Rational)
+            Rational(($chop)(checked_mul(x.den, y), x.num), x.den)
+        end
     end
 end
 
@@ -479,4 +487,3 @@ function gcdx(x::Rational, y::Rational)
     end
     c, a, b
 end
-
