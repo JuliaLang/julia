@@ -2223,15 +2223,6 @@ function showarg(io::IO, r::ReinterpretArray{T}, toplevel) where {T}
     print(io, ')')
 end
 
-# printing iterators from Base.Iterators
-
-function show(io::IO, e::Iterators.Enumerate)
-    print(io, "enumerate(")
-    show(io, e.itr)
-    print(io, ')')
-end
-show(io::IO, z::Iterators.Zip) = show_delim_array(io, z.is, "zip(", ',', ')', false)
-
 # pretty printing for Iterators.Pairs
 function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, T}, toplevel) where T<:AbstractArray
     print(io, "pairs(IndexLinear(), ::", T, ")")
