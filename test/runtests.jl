@@ -87,6 +87,11 @@ cd(@__DIR__) do
         @everywhere begin
             Revise.track(Core.Compiler)
             Revise.track(Base)
+            for (id, mod) in Base.loaded_modules
+                if id.name in STDLIBS
+                    Revise.track(mod)
+                end
+            end
             Revise.revise()
         end
     end
