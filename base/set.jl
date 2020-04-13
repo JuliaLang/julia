@@ -728,3 +728,73 @@ function _replace!(new::Callable, t::Set{T}, ::AbstractSet, count::Int) where {T
     end
     t
 end
+
+### replace for tuples
+
+@inline replace(f::Callable, t::Tuple{}, count::Int) = ()
+@inline replace(f::Callable, t::Tuple{Any}, count::Int) =
+    count == 0 ? t : (f(t[1]),)
+
+@inline replace(f::Callable, t::Tuple{Any,Any}, count::Int) =
+    if count >= 2
+        (f(t[1]), f(t[2]))
+    elseif count == 0
+        t
+    elseif count == 1
+        x = f(t[1])
+        x === t[1] ?
+            (x, f(t[2])) :
+            (x, t[2])
+    end
+
+@inline replace(f::Callable, t::Tuple{Any,Any,Any}, count::Int) =
+    if count >= 3
+        (f(t[1]), f(t[2]), f(t[3]))
+    elseif count == 0
+        t
+    else
+        x = f(t[1])
+        if x === t[1]
+            if count == 1
+                y = f(t[2])
+                y === t[2] ?
+                    (x, y, f(t[3])) :
+                    (x, y, t[3])
+            else # count == 2
+                (x, f(t[2]), f(t[3]))
+            end
+        elseif count == 1
+            (x, t[2], t[3])
+        else
+            y = f(t[2])
+            y === t[2] ?
+                (x, y, f(t[3])) :
+                (x, y, t[3])
+        end
+    end
+
+@inline replace(f::Callable, t::Tuple, count::Int) =
+    if count >= length(t)
+        map(f, t)
+    elseif count == 0
+        t
+    else
+        x = f(t[1])
+        (x, _replace(f, tail(t), count - !==(x, t[1]))...)
+    end
+
+@inline replace(f::Callable, t::Tuple; count::Integer=typemax(Int)) =
+    replace(f, t, check_count(count))
+
+function replace(t::Tuple, count::Int, old_new::Tuple{Vararg{Pair}})
+    @inline function new(x)
+        for o_n in old_new
+            isequal(first(o_n), x) && return last(o_n)
+        end
+        return x
+    end
+    replace(new, t, count)
+end
+
+replace(t::Tuple, old_new::Pair...; count::Integer=typemax(Int)) =
+    replace(t, check_count(count), old_new)
