@@ -263,32 +263,32 @@ end
 peel(obj::GitObject) = peel(GitObject, obj)
 
 """
-    LibGit2.GitDescribeResult(commitish::GitObject; kwarg...)
+    LibGit2.GitDescribeResult(committish::GitObject; kwarg...)
 
-Produce a `GitDescribeResult` of the `commitish` `GitObject`, which
+Produce a `GitDescribeResult` of the `committish` `GitObject`, which
 contains detailed information about it based on the keyword argument:
 
   * `options::DescribeOptions=DescribeOptions()`
 
-A git description of a `commitish` object looks for the tag (by default, annotated,
-although a search of all tags can be performed) which can be reached from `commitish`
-which is most recent. If the tag is pointing to `commitish`, then only the tag is
+A git description of a `committish` object looks for the tag (by default, annotated,
+although a search of all tags can be performed) which can be reached from `committish`
+which is most recent. If the tag is pointing to `committish`, then only the tag is
 included in the description. Otherwise, a suffix is included which contains the
-number of commits between `commitish` and the most recent tag. If there is no such
+number of commits between `committish` and the most recent tag. If there is no such
 tag, the default behavior is for the description to fail, although this can be
 changed through `options`.
 
-Equivalent to `git describe <commitish>`. See [`DescribeOptions`](@ref) for more
+Equivalent to `git describe <committish>`. See [`DescribeOptions`](@ref) for more
 information.
 """
-function GitDescribeResult(commitish::GitObject;
+function GitDescribeResult(committish::GitObject;
                            options::DescribeOptions=DescribeOptions())
     ensure_initialized()
     result_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_describe_commit, :libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{DescribeOptions}),
-                 result_ptr_ptr, commitish.ptr, Ref(options))
-    return GitDescribeResult(commitish.owner, result_ptr_ptr[])
+                 result_ptr_ptr, committish.ptr, Ref(options))
+    return GitDescribeResult(committish.owner, result_ptr_ptr[])
 end
 
 """
