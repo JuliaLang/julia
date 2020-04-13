@@ -400,6 +400,52 @@ kron(a::AbstractVector, b::AbstractVector) = vec(kron(reshape(a ,length(a), 1), 
 kron(a::AbstractMatrix, b::AbstractVector) = kron(a, reshape(b, length(b), 1))
 kron(a::AbstractVector, b::AbstractMatrix) = kron(reshape(a, length(a), 1), b)
 
+_size_prod(x::Tuple{Integer,Integer},y::Tuple{Integer,Integer}) = x .* y
+_cum_prod(x) = begin
+        out = Array{Tuple}(undef,length(x))
+        out[1] = x[1]
+        for i in 2:length(x)
+                out[i] = _size_prod(out[i-1],x[i])
+        end
+        out
+end
+_getsize(a::Integer) = (1,1)
+_getsize(a::Vector) = (length(a),1)
+_getsize(a::Matrix) = size(a)
+
+function kron(A::Vararg{Union{AbstractVecOrMat,Number}})
+        size_src = _getsize.(A)
+        in_r  = _cum_prod(reverse(size_src))
+        out_r = _cum_prod(size_src)
+        dest = repeat(A[1],inner=in_r[end-1])
+        _kron!(dest,A,in_r,out_r)
+end
+
+function _kron!(dest,srcs,in_r,out_r)
+        for i in 2:length(srcs)
+                ir = i == length(srcs) ? (1,1) : in_r[end-i]
+                _kron_step!(dest,srcs[i],ir,out_r[i-1])
+        end
+        return dest
+end
+
+function _kron_step!(dest,B,in_r,out_r)
+        m=0
+        for _ in 1:out_r[2], l in 1:size(B,2)
+                for _ in 1:out_r[1], k in 1:size(B,1)
+                        f = dest[m+=1] *= B[k,l]
+                        for _ in 2:in_r[1]
+                                dest[m+=1]=f
+                        end
+                end
+
+                for _ in 2:in_r[2]
+                        copyto!(dest,m+1,dest,m+1-size(dest,1),size(dest,1))
+                        m+= size(dest,1)
+                end
+        end
+end
+
 # Matrix power
 (^)(A::AbstractMatrix, p::Integer) = p < 0 ? power_by_squaring(inv(A), -p) : power_by_squaring(A, p)
 function (^)(A::AbstractMatrix{T}, p::Integer) where T<:Integer
