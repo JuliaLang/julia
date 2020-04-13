@@ -38,6 +38,7 @@ struct JLOptions
     outputbc::Ptr{UInt8}
     outputunoptbc::Ptr{UInt8}
     outputo::Ptr{UInt8}
+    outputasm::Ptr{UInt8}
     outputji::Ptr{UInt8}
     output_code_coverage::Ptr{UInt8}
     incremental::Int8
