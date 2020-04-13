@@ -27,6 +27,7 @@ using Test
     @test mod.([t, t, t, t, t], Dates.Year(2)) == ([t, t, t, t, t])
     @test [t, t, t] / t2 == [0.5, 0.5, 0.5]
     @test abs(-t) == t
+    @test abs2(-t2) == Dates.Year(4)
     @test sign(t) == sign(t2) == 1
     @test sign(-t) == sign(-t2) == -1
     @test sign(Dates.Year(0)) == 0

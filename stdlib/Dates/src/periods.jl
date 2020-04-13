@@ -99,6 +99,7 @@ end
 # intfuncs
 Base.gcdx(a::T, b::T) where {T<:Period} = ((g, x, y) = gcdx(value(a), value(b)); return T(g), x, y)
 Base.abs(a::T) where {T<:Period} = T(abs(value(a)))
+Base.abs2(a::T) where {T<:Period} = T(abs2(value(a)))
 Base.sign(x::Period) = sign(value(x))
 
 periodisless(::Period,::Year)        = true
