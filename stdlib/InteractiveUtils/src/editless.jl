@@ -70,6 +70,7 @@ already work:
 - Visual Studio Code
 - open
 - pycharm
+- bbedit
 
 # Example:
 
@@ -124,7 +125,7 @@ function define_default_editors()
     define_editor(["textmate", "mate", "kate"]) do cmd, path, line
         `$cmd $path -l $line`
     end
-    define_editor([r"\bsubl", r"\batom", "pycharm"]) do cmd, path, line
+    define_editor([r"\bsubl", r"\batom", "pycharm", "bbedit"]) do cmd, path, line
         `$cmd $path:$line`
     end
     define_editor(["code", "code-insiders"]) do cmd, path, line
