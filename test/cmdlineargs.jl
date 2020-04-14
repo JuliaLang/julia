@@ -141,6 +141,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     # --eval --interactive (replaced --post-boot)
     @test  success(`$exename -i -e "exit(0)"`)
     @test !success(`$exename -i -e "exit(1)"`)
+    # issue #34924
+    @test  success(`$exename -e 'const LOAD_PATH=1'`)
 
     # --print
     @test read(`$exename -E "1+1"`, String) == "2\n"
