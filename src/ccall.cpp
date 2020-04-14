@@ -849,7 +849,6 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     }
     if (at == NULL)
         at = try_eval(ctx, args[3], "error statically evaluating llvmcall argument tuple");
-    int i = 1;
     if (jl_is_tuple(ir)) {
         // if the IR is a tuple, we expect (declarations, ir)
         if (jl_nfields(ir) != 2)
@@ -908,7 +907,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         std::string ir_name;
         while(true) {
             std::stringstream name;
-            name << (ctx.f->getName().str()) << "u" << i++;
+            name << (ctx.f->getName().str()) << "u" << globalUnique++;
             ir_name = name.str();
             if (jl_Module->getFunction(ir_name) == NULL)
                 break;
@@ -1144,6 +1143,11 @@ std::string generate_func_sig(const char *fname)
         if (jl_is_abstract_ref_type(tti)) {
             tti = (jl_value_t*)jl_voidpointer_type;
             t = T_pint8;
+            isboxed = false;
+        }
+        else if (llvmcall && jl_is_addrspace_ptr_type(tti)) {
+            t = bitstype_to_llvm(tti, true);
+            tti = (jl_value_t*)jl_voidpointer_type;
             isboxed = false;
         }
         else {

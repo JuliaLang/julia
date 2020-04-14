@@ -841,7 +841,7 @@ function abstract_call_known(@nospecialize(f), fargs::Union{Nothing,Vector{Any}}
     elseif la == 3 && istopfunction(f, :(>:))
         # mark issupertype as a exact alias for issubtype
         # swap T1 and T2 arguments and call <:
-        if length(fargs) == 3
+        if fargs !== nothing && length(fargs) == 3
             fargs = Any[<:, fargs[3], fargs[2]]
         else
             fargs = nothing

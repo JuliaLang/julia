@@ -1416,6 +1416,8 @@
                  `(,(car x) ,(arg-to-temp (cadr x))))
                 ((or (eq? (car x) 'kw) (and tup (eq? (car x) '=)))
                  `(,(car x) ,(cadr x) ,(arg-to-temp (caddr x))))
+                ((eq? (car x) 'parameters)
+                 `(parameters ,@(map arg-to-temp (cdr x))))
                 ((eq? (car x) 'tuple)
                  (let ((tmp (remove-argument-side-effects x #t)))
                    (set! a (revappend (cdr tmp) a))

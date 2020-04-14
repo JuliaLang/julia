@@ -1130,6 +1130,9 @@ z856739 = [:a, :b]
 @test sprint(show, Meta.parse("a\"b\"c")) == ":(a\"b\"c)"
 @test sprint(show, Meta.parse("aa\"b\"")) == ":(aa\"b\")"
 @test sprint(show, Meta.parse("a\"b\"cc")) == ":(a\"b\"cc)"
+@test sprint(show, Meta.parse("a\"\"\"issue \"35305\" \"\"\"")) == ":(a\"issue \\\"35305\\\" \")"
+@test sprint(show, Meta.parse("a\"\$\"")) == ":(a\"\$\")"
+@test sprint(show, Meta.parse("a\"\\b\"")) == ":(a\"\\b\")"
 # 11111111111111111111, 0xfffffffffffffffff, 1111...many digits...
 @test sprint(show, Meta.parse("11111111111111111111")) == ":(11111111111111111111)"
 # @test_repr "Base.@int128_str \"11111111111111111111\""

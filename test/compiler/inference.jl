@@ -2503,3 +2503,5 @@ function h34752()
     a34752(g...)
 end
 @test h34752() === true
+
+@test map(>:, [Int], [Int]) == [true]
