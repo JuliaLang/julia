@@ -82,12 +82,12 @@ function choosetests(choices = [])
         tests = testnames
     end
 
-    function patchlib!(tests, name, files=[name]; stdlib::Bool=false)
+    function patchlib!(tests, name, files=[name])
        flt = x -> (x != name && !(x in files))
        if name in skip_tests
            filter!(flt, tests)
        elseif name in tests
-           filter!(stdlib ? flt : !=(name), tests)
+           filter!(flt, tests)
            prepend!(tests, files)
        end
     end
@@ -100,7 +100,7 @@ function choosetests(choices = [])
     patchlib!(tests, "compiler", ["compiler/inference", "compiler/validation",
         "compiler/ssair", "compiler/irpasses", "compiler/codegen",
         "compiler/inline", "compiler/contextual"])
-    patchlib!(tests, "stdlib", STDLIBS; stdlib=true)
+    patchlib!(tests, "stdlib", STDLIBS)
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
     patchlib!(tests, "ambiguous")
 
