@@ -340,7 +340,7 @@
                                    ,(resolve-expansion-vars-with-new-env (caddr arg) env m parent-scope inarg))))
                              (else
                               `(global ,(resolve-expansion-vars-with-new-env arg env m parent-scope inarg))))))
-           ((using import export meta line inbounds boundscheck loopinfo gc_preserve gc_preserve_end) (map unescape e))
+           ((using import export meta line inbounds boundscheck loopinfo) (map unescape e))
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)
            ((symbolicgoto) e)
@@ -360,7 +360,11 @@
            ((parameters)
             (cons 'parameters
                   (map (lambda (x)
-                         (resolve-expansion-vars- x env m parent-scope #f))
+                         ;; `x` by itself after ; means `x=x`
+                         (let ((x (if (and (not inarg) (symbol? x))
+                                      `(kw ,x ,x)
+                                      x)))
+                           (resolve-expansion-vars- x env m parent-scope #f)))
                        (cdr e))))
 
            ((= function)

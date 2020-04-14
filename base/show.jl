@@ -1500,11 +1500,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
                is_core_macro(args[1], "@big_str")
             print(io, args[3])
         # x"y" and x"y"z
-        elseif isa(args[1], Symbol) &&
+        elseif isa(args[1], Symbol) && nargs >= 3 && isa(args[3], String) &&
                startswith(string(args[1]::Symbol), "@") &&
                endswith(string(args[1]::Symbol), "_str")
             s = string(args[1]::Symbol)
-            print(io, s[2:prevind(s,end,4)], "\"", args[3], "\"")
+            print(io, s[2:prevind(s,end,4)], "\"")
+            escape_raw_string(io, args[3])
+            print(io, "\"")
             if nargs == 4
                 print(io, args[4])
             end
@@ -2220,6 +2222,15 @@ function showarg(io::IO, r::ReinterpretArray{T}, toplevel) where {T}
     showarg(io, parent(r), false)
     print(io, ')')
 end
+
+# printing iterators from Base.Iterators
+
+function show(io::IO, e::Iterators.Enumerate)
+    print(io, "enumerate(")
+    show(io, e.itr)
+    print(io, ')')
+end
+show(io::IO, z::Iterators.Zip) = show_delim_array(io, z.is, "zip(", ',', ')', false)
 
 # pretty printing for Iterators.Pairs
 function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, T}, toplevel) where T<:AbstractArray

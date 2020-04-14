@@ -132,7 +132,16 @@ Random.seed!(1)
             bidiagcopy(dv, ev, uplo) = Bidiagonal(copy(dv), copy(ev), uplo)
 
             @test istril(Bidiagonal(dv,ev,:L))
+            @test istril(Bidiagonal(dv,ev,:L), 1)
+            @test !istril(Bidiagonal(dv,ev,:L), -1)
+            @test istril(Bidiagonal(zerosdv,ev,:L), -1)
+            @test !istril(Bidiagonal(zerosdv,ev,:L), -2)
+            @test istril(Bidiagonal(zerosdv,zerosev,:L), -2)
             @test !istril(Bidiagonal(dv,ev,:U))
+            @test istril(Bidiagonal(dv,ev,:U), 1)
+            @test !istril(Bidiagonal(dv,ev,:U), -1)
+            @test !istril(Bidiagonal(zerosdv,ev,:U), -1)
+            @test istril(Bidiagonal(zerosdv,zerosev,:U), -1)
             @test tril!(bidiagcopy(dv,ev,:U),-1) == Bidiagonal(zerosdv,zerosev,:U)
             @test tril!(bidiagcopy(dv,ev,:L),-1) == Bidiagonal(zerosdv,ev,:L)
             @test tril!(bidiagcopy(dv,ev,:U),-2) == Bidiagonal(zerosdv,zerosev,:U)
@@ -145,7 +154,16 @@ Random.seed!(1)
             @test_throws ArgumentError tril!(bidiagcopy(dv, ev, :U), n)
 
             @test istriu(Bidiagonal(dv,ev,:U))
+            @test istriu(Bidiagonal(dv,ev,:U), -1)
+            @test !istriu(Bidiagonal(dv,ev,:U), 1)
+            @test istriu(Bidiagonal(zerosdv,ev,:U), 1)
+            @test !istriu(Bidiagonal(zerosdv,ev,:U), 2)
+            @test istriu(Bidiagonal(zerosdv,zerosev,:U), 2)
             @test !istriu(Bidiagonal(dv,ev,:L))
+            @test istriu(Bidiagonal(dv,ev,:L), -1)
+            @test !istriu(Bidiagonal(dv,ev,:L), 1)
+            @test !istriu(Bidiagonal(zerosdv,ev,:L), 1)
+            @test istriu(Bidiagonal(zerosdv,zerosev,:L), 1)
             @test triu!(bidiagcopy(dv,ev,:L),1)  == Bidiagonal(zerosdv,zerosev,:L)
             @test triu!(bidiagcopy(dv,ev,:U),1)  == Bidiagonal(zerosdv,ev,:U)
             @test triu!(bidiagcopy(dv,ev,:U),2)  == Bidiagonal(zerosdv,zerosev,:U)
@@ -456,9 +474,51 @@ end
     @test vcat((Aub\bb)...) ≈ UpperTriangular(A)\b
 end
 
-@testset "sum" begin
-    @test sum(Bidiagonal([1,2,3], [1,2], :U)) == 9
-    @test sum(Bidiagonal([1,2,3], [1,2], :L)) == 9
+@testset "sum, mapreduce" begin
+    Bu = Bidiagonal([1,2,3], [1,2], :U)
+    Budense = Matrix(Bu)
+    Bl = Bidiagonal([1,2,3], [1,2], :L)
+    Bldense = Matrix(Bl)
+    @test sum(Bu) == 9
+    @test sum(Bl) == 9
+    @test_throws ArgumentError sum(Bu, dims=0)
+    @test sum(Bu, dims=1) == sum(Budense, dims=1)
+    @test sum(Bu, dims=2) == sum(Budense, dims=2)
+    @test sum(Bu, dims=3) == sum(Budense, dims=3)
+    @test typeof(sum(Bu, dims=1)) == typeof(sum(Budense, dims=1))
+    @test mapreduce(one, min, Bu, dims=1) == mapreduce(one, min, Budense, dims=1)
+    @test mapreduce(one, min, Bu, dims=2) == mapreduce(one, min, Budense, dims=2)
+    @test mapreduce(one, min, Bu, dims=3) == mapreduce(one, min, Budense, dims=3)
+    @test typeof(mapreduce(one, min, Bu, dims=1)) == typeof(mapreduce(one, min, Budense, dims=1))
+    @test mapreduce(zero, max, Bu, dims=1) == mapreduce(zero, max, Budense, dims=1)
+    @test mapreduce(zero, max, Bu, dims=2) == mapreduce(zero, max, Budense, dims=2)
+    @test mapreduce(zero, max, Bu, dims=3) == mapreduce(zero, max, Budense, dims=3)
+    @test typeof(mapreduce(zero, max, Bu, dims=1)) == typeof(mapreduce(zero, max, Budense, dims=1))
+    @test_throws ArgumentError sum(Bl, dims=0)
+    @test sum(Bl, dims=1) == sum(Bldense, dims=1)
+    @test sum(Bl, dims=2) == sum(Bldense, dims=2)
+    @test sum(Bl, dims=3) == sum(Bldense, dims=3)
+    @test typeof(sum(Bl, dims=1)) == typeof(sum(Bldense, dims=1))
+    @test mapreduce(one, min, Bl, dims=1) == mapreduce(one, min, Bldense, dims=1)
+    @test mapreduce(one, min, Bl, dims=2) == mapreduce(one, min, Bldense, dims=2)
+    @test mapreduce(one, min, Bl, dims=3) == mapreduce(one, min, Bldense, dims=3)
+    @test typeof(mapreduce(one, min, Bl, dims=1)) == typeof(mapreduce(one, min, Bldense, dims=1))
+    @test mapreduce(zero, max, Bl, dims=1) == mapreduce(zero, max, Bldense, dims=1)
+    @test mapreduce(zero, max, Bl, dims=2) == mapreduce(zero, max, Bldense, dims=2)
+    @test mapreduce(zero, max, Bl, dims=3) == mapreduce(zero, max, Bldense, dims=3)
+    @test typeof(mapreduce(zero, max, Bl, dims=1)) == typeof(mapreduce(zero, max, Bldense, dims=1))
+
+    Bu = Bidiagonal([2], Int[], :U)
+    Budense = Matrix(Bu)
+    Bl = Bidiagonal([2], Int[], :L)
+    Bldense = Matrix(Bl)
+    @test sum(Bu) == 2
+    @test sum(Bl) == 2
+    @test_throws ArgumentError sum(Bu, dims=0)
+    @test sum(Bu, dims=1) == sum(Budense, dims=1)
+    @test sum(Bu, dims=2) == sum(Budense, dims=2)
+    @test sum(Bu, dims=3) == sum(Budense, dims=3)
+    @test typeof(sum(Bu, dims=1)) == typeof(sum(Budense, dims=1))
 end
 
 @testset "empty sub-diagonal" begin

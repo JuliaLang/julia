@@ -922,6 +922,7 @@ end"""
 end""")) ==
 """
 :(macro m(a, b)
+      #= none:1 =#
       #= none:2 =#
       quote
           #= none:3 =#
@@ -944,7 +945,7 @@ end"""))) ==
 """macro m(a, b)
     :(\$a + \$b)
 end""")) ==
-":(macro m(a, b)\n      #= none:2 =#\n      :(\$a + \$b)\n  end)"
+":(macro m(a, b)\n      #= none:1 =#\n      #= none:2 =#\n      :(\$a + \$b)\n  end)"
 @test repr(Expr(:macro, Expr(:call, :m, :x), Expr(:quote, Expr(:call, :+, Expr(:($), :x), 1)))) ==
 ":(macro m(x)\n      :(\$x + 1)\n  end)"
 
@@ -1133,6 +1134,9 @@ z856739 = [:a, :b]
 @test sprint(show, Meta.parse("a\"b\"c")) == ":(a\"b\"c)"
 @test sprint(show, Meta.parse("aa\"b\"")) == ":(aa\"b\")"
 @test sprint(show, Meta.parse("a\"b\"cc")) == ":(a\"b\"cc)"
+@test sprint(show, Meta.parse("a\"\"\"issue \"35305\" \"\"\"")) == ":(a\"issue \\\"35305\\\" \")"
+@test sprint(show, Meta.parse("a\"\$\"")) == ":(a\"\$\")"
+@test sprint(show, Meta.parse("a\"\\b\"")) == ":(a\"\\b\")"
 # 11111111111111111111, 0xfffffffffffffffff, 1111...many digits...
 @test sprint(show, Meta.parse("11111111111111111111")) == ":(11111111111111111111)"
 # @test_repr "Base.@int128_str \"11111111111111111111\""
@@ -2007,3 +2011,21 @@ end
 @test_repr "a[(bla;)]"
 @test_repr "a[(;;)]"
 @weak_test_repr "a[x -> f(x)]"
+
+@testset "Base.Iterators" begin
+    @test sprint(show, enumerate("test")) == "enumerate(\"test\")"
+    @test sprint(show, enumerate(1:5)) == "enumerate(1:5)"
+    @test sprint(show, enumerate([1,2,3])) == "enumerate([1, 2, 3])"
+    @test sprint(show, enumerate((1,1.0,'a'))) == "enumerate((1, 1.0, 'a'))"
+    @test sprint(show, zip()) == "zip()"
+    @test sprint(show, zip([1,2,3])) == "zip([1, 2, 3])"
+    @test sprint(show, zip(1:3, ('a','b','c'))) == "zip(1:3, ('a', 'b', 'c'))"
+    @test sprint(show, zip(1:3, ('a','b','c'), "abc")) == "zip(1:3, ('a', 'b', 'c'), \"abc\")"
+end
+
+@testset "skipmissing" begin
+    @test sprint(show, skipmissing("test")) == "skipmissing(\"test\")"
+    @test sprint(show, skipmissing(1:5)) == "skipmissing(1:5)"
+    @test sprint(show, skipmissing([1,2,missing])) == "skipmissing(Union{Missing, $Int}[1, 2, missing])"
+    @test sprint(show, skipmissing((missing,1.0,'a'))) == "skipmissing((missing, 1.0, 'a'))"
+end

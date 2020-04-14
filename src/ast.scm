@@ -283,6 +283,10 @@
       (cadr e)
       e))
 
+(define (quoted-sym? e)
+  (and (length= e 2) (memq (car e) '(quote inert))
+       (symbol? (cadr e))))
+
 (define (lam:args x) (cadr x))
 (define (lam:vars x) (llist-vars (lam:args x)))
 (define (lam:vinfo x) (caddr x))

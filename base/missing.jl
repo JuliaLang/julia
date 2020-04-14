@@ -196,7 +196,7 @@ of the input.
 # Examples
 ```jldoctest
 julia> x = skipmissing([1, missing, 2])
-Base.SkipMissing{Array{Union{Missing, Int64},1}}(Union{Missing, Int64}[1, missing, 2])
+skipmissing(Union{Missing, Int64}[1, missing, 2])
 
 julia> sum(x)
 3
@@ -257,6 +257,12 @@ keys(itr::SkipMissing) =
     v = itr.x[I...]
     v === missing && throw(MissingException("the value at index $I is missing"))
     v
+end
+
+function show(io::IO, s::SkipMissing)
+    print(io, "skipmissing(")
+    show(io, s.x)
+    print(io, ')')
 end
 
 # Optimized mapreduce implementation

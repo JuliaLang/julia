@@ -22,7 +22,7 @@
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Vectorize.h>
 #if defined(JL_ASAN_ENABLED)
-#include <llvm/Transforms/Instrumentation.h>
+#include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
 #endif
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
@@ -66,6 +66,7 @@ namespace llvm {
 
 #if JL_LLVM_VERSION < 100000
 static const TargetMachine::CodeGenFileType CGFT_ObjectFile = TargetMachine::CGFT_ObjectFile;
+static const TargetMachine::CodeGenFileType CGFT_AssemblyFile = TargetMachine::CGFT_AssemblyFile;
 #endif
 
 
@@ -286,7 +287,7 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
                     if ((jl_value_t*)src == jl_nothing)
                         src = NULL;
                     if (src && jl_is_method(def))
-                        src = jl_uncompress_ast(def, codeinst, (jl_array_t*)src);
+                        src = jl_uncompress_ir(def, codeinst, (jl_array_t*)src);
                 }
                 if (src == NULL || !jl_is_code_info(src)) {
                     src = jl_type_infer(mi, params.world, 0);
@@ -414,6 +415,7 @@ static void reportWriterError(const ErrorInfoBase &E)
 extern "C"
 void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname,
+        const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len)
 {
     JL_TIMING(NATIVE_DUMP);
@@ -457,23 +459,29 @@ void jl_dump_native(void *native_code,
     // set up optimization passes
     SmallVector<char, 128> bc_Buffer;
     SmallVector<char, 128> obj_Buffer;
+    SmallVector<char, 128> asm_Buffer;
     SmallVector<char, 128> unopt_bc_Buffer;
     raw_svector_ostream bc_OS(bc_Buffer);
     raw_svector_ostream obj_OS(obj_Buffer);
+    raw_svector_ostream asm_OS(asm_Buffer);
     raw_svector_ostream unopt_bc_OS(unopt_bc_Buffer);
     std::vector<NewArchiveMember> bc_Archive;
     std::vector<NewArchiveMember> obj_Archive;
+    std::vector<NewArchiveMember> asm_Archive;
     std::vector<NewArchiveMember> unopt_bc_Archive;
     std::vector<std::string> outputs;
 
     if (unopt_bc_fname)
         PM.add(createBitcodeWriterPass(unopt_bc_OS));
-    if (bc_fname || obj_fname)
+    if (bc_fname || obj_fname || asm_fname)
         addOptimizationPasses(&PM, jl_options.opt_level, true, true);
     if (bc_fname)
         PM.add(createBitcodeWriterPass(bc_OS));
     if (obj_fname)
         if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false))
+            jl_safe_printf("ERROR: target does not support generation of object files\n");
+    if (asm_fname)
+        if (TM->addPassesToEmitFile(PM, asm_OS, nullptr, CGFT_AssemblyFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
 
     // Reset the target triple to make sure it matches the new target machine
@@ -505,7 +513,7 @@ void jl_dump_native(void *native_code,
     }
 
     // do the actual work
-    auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name) {
+    auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {
         PM.run(M);
         if (unopt_bc_fname)
             emit_result(unopt_bc_Archive, unopt_bc_Buffer, unopt_bc_Name, outputs);
@@ -513,9 +521,11 @@ void jl_dump_native(void *native_code,
             emit_result(bc_Archive, bc_Buffer, bc_Name, outputs);
         if (obj_fname)
             emit_result(obj_Archive, obj_Buffer, obj_Name, outputs);
+        if (asm_fname)
+            emit_result(asm_Archive, asm_Buffer, asm_Name, outputs);
     };
 
-    add_output(*data->M, "unopt.bc", "text.bc", "text.o");
+    add_output(*data->M, "unopt.bc", "text.bc", "text.o", "text.s");
 
     std::unique_ptr<Module> sysimage(new Module("sysimage", Context));
     sysimage->setTargetTriple(data->M->getTargetTriple());
@@ -540,7 +550,7 @@ void jl_dump_native(void *native_code,
                                      GlobalVariable::ExternalLinkage,
                                      len, "jl_system_image_size"));
     }
-    add_output(*sysimage, "data.bc", "data.bc", "data.o");
+    add_output(*sysimage, "data.bc", "data.bc", "data.o", "data.s");
 
     object::Archive::Kind Kind = getDefaultForHost(TheTriple);
     if (unopt_bc_fname)
@@ -551,6 +561,9 @@ void jl_dump_native(void *native_code,
                     Kind, true, false), reportWriterError);
     if (obj_fname)
         handleAllErrors(writeArchive(obj_fname, obj_Archive, true,
+                    Kind, true, false), reportWriterError);
+    if (asm_fname)
+        handleAllErrors(writeArchive(asm_fname, asm_Archive, true,
                     Kind, true, false), reportWriterError);
 
     delete data;
@@ -792,7 +805,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
         src = (jl_code_info_t*)codeinst->inferred;
         if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-            src = jl_uncompress_ast(mi->def.method, codeinst, (jl_array_t*)src);
+            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
         jlrettype = codeinst->rettype;
     }
     if (!src || (jl_value_t*)src == jl_nothing) {
@@ -802,7 +815,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         else if (jl_is_method(mi->def.method)) {
             src = mi->def.method->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)mi->def.method->source;
             if (src && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-                src = jl_uncompress_ast(mi->def.method, NULL, (jl_array_t*)src);
+                src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
         }
         // TODO: use mi->uninferred
     }
@@ -848,7 +861,7 @@ addPassesToGenerateCode(LLVMTargetMachine *TM, PassManagerBase &PM) {
     TargetPassConfig *PassConfig = TM->createPassConfig(PM);
     PassConfig->setDisableVerify(false);
     PM.add(PassConfig);
-#if JL_LLVM_VERSION >= 110000
+#if JL_LLVM_VERSION >= 100000
     MachineModuleInfoWrapperPass *MMIWP =
         new MachineModuleInfoWrapperPass(TM);
     PM.add(MMIWP);
@@ -860,7 +873,7 @@ addPassesToGenerateCode(LLVMTargetMachine *TM, PassManagerBase &PM) {
         return NULL;
     PassConfig->addMachinePasses();
     PassConfig->setInitialized();
-#if JL_LLVM_VERSION >= 110000
+#if JL_LLVM_VERSION >= 100000
     return &MMIWP->getMMI().getContext();
 #else
     return &MMI->getContext();
@@ -905,7 +918,7 @@ jl_value_t *jl_dump_llvm_asm(void *F, const char* asm_variant, const char *debug
              std::unique_ptr<MCAsmBackend> MAB(TM->getTarget().createMCAsmBackend(
                 STI, MRI, TM->Options.MCOptions));
             std::unique_ptr<MCCodeEmitter> MCE;
-#if JL_LLVM_VERSION >= 110000
+#if JL_LLVM_VERSION >= 100000
             auto FOut = std::make_unique<formatted_raw_ostream>(asmfile);
 #else
             auto FOut = llvm::make_unique<formatted_raw_ostream>(asmfile);

@@ -577,9 +577,8 @@ let n = 5
     @test_throws DimensionMismatch rdiv!(A, transpose(UnitUpperTriangular(B)))
 end
 
-# Test that UpperTriangular(LowerTriangular) throws. See #16201
-@test_throws ArgumentError LowerTriangular(UpperTriangular(randn(3,3)))
-@test_throws ArgumentError UpperTriangular(LowerTriangular(randn(3,3)))
+@test isdiag(LowerTriangular(UpperTriangular(randn(3,3))))
+@test isdiag(UpperTriangular(LowerTriangular(randn(3,3))))
 
 # Issue 16196
 @test UpperTriangular(Matrix(1.0I, 3, 3)) \ view(fill(1., 3), [1,2,3]) == fill(1., 3)
@@ -640,6 +639,16 @@ end
         @test transpose(b1) * A1' ≈ transpose(b1) * Matrix(A1')
         @test transpose(b4) * A4' ≈ transpose(b4) * Matrix(A4')
     end
+end
+
+@testset "Error condition for powm" begin
+    A = UpperTriangular(rand(ComplexF64, 10, 10))
+    @test_throws ArgumentError LinearAlgebra.powm!(A, 2.2)
+    A = LowerTriangular(rand(ComplexF64, 10, 10))
+    At = copy(transpose(A))
+    p = rand()
+    @test LinearAlgebra.powm(A, p) == transpose(LinearAlgebra.powm!(At, p))
+    @test_throws ArgumentError LinearAlgebra.powm(A, 2.2)
 end
 
 end # module TestTriangular

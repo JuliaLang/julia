@@ -1298,6 +1298,7 @@ end
 
 write_cookie(io::IO) = print(io.in, string(cluster_cookie(), "\n"))
 
+# Starts workers specified by (-n|--procs) and --machine-file command line options
 function process_opts(opts)
     # startup worker.
     # opts.startupfile, opts.load, etc should should not be processed for workers.
@@ -1310,14 +1311,17 @@ function process_opts(opts)
         end
     end
 
+    # Propagate --threads to workers
+    exeflags = opts.nthreads > 0 ? `--threads=$(opts.nthreads)` : ``
+
     # add processors
     if opts.nprocs > 0
-        addprocs(opts.nprocs)
+        addprocs(opts.nprocs; exeflags=exeflags)
     end
 
     # load processes from machine file
     if opts.machine_file != C_NULL
-        addprocs(load_machine_file(unsafe_string(opts.machine_file)))
+        addprocs(load_machine_file(unsafe_string(opts.machine_file)); exeflags=exeflags)
     end
     return nothing
 end

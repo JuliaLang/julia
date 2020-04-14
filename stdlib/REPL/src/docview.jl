@@ -121,9 +121,10 @@ function _trimdocs(md::Markdown.MD, brief::Bool)
     content, trimmed = [], false
     for c in md.content
         if isa(c, Markdown.Header{1}) && isa(c.text, AbstractArray) &&
-                                         lowercase(c.text[1]) ∈ ("extended help",
-                                                                 "extended documentation",
-                                                                 "extended docs")
+            !isempty(c.text) && isa(c.text[1], AbstractString) &&
+            lowercase(c.text[1]) ∈ ("extended help",
+                                    "extended documentation",
+                                    "extended docs")
             trimmed = true
             break
         end
@@ -207,7 +208,7 @@ function lookup_doc(ex)
     end
     if isa(ex, Symbol) && Base.isoperator(ex)
         str = string(ex)
-        if endswith(str, "=")
+        if endswith(str, "=") && Base.operator_precedence(ex) == Base.prec_assignment
             op = str[1:end-1]
             return Markdown.parse("`x $op= y` is a synonym for `x = x $op y`")
         elseif startswith(str, ".")

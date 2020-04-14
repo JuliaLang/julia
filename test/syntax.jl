@@ -162,11 +162,12 @@ macro test999_str(args...); args; end
 @test parseall(":(a = &\nb)") == Expr(:quote, Expr(:(=), :a, Expr(:&, :b)))
 @test parseall(":(a = \$\nb)") == Expr(:quote, Expr(:(=), :a, Expr(:$, :b)))
 
-# issue 11970
+# issue 12027 - short macro name parsing vs _str suffix
 @test parseall("""
     macro f(args...) end; @f "macro argument"
 """) == Expr(:toplevel,
-             Expr(:macro, Expr(:call, :f, Expr(:..., :args)), Expr(:block, LineNumberNode(1, :none))),
+             Expr(:macro, Expr(:call, :f, Expr(:..., :args)),
+                  Expr(:block, LineNumberNode(1, :none), LineNumberNode(1, :none))),
              Expr(:macrocall, Symbol("@f"), LineNumberNode(1, :none), "macro argument"))
 
 # blocks vs. tuples
@@ -1423,6 +1424,7 @@ let ex = Meta.lower(@__MODULE__, Meta.parse("
     @test isa(ex, Expr) && ex.head === :error
     @test ex.args[1] == """
 invalid assignment location "function (s, o...)
+    # none, line 2
     # none, line 3
     f(a, b) do
         # none, line 4
@@ -1509,7 +1511,7 @@ end
 # issue #27129
 f27129(x = 1) = (@Base._inline_meta; x)
 for meth in methods(f27129)
-    @test ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source).inlineable
+    @test ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source).inlineable
 end
 
 # issue #27710
@@ -1994,6 +1996,9 @@ end
 @test i0xb23hG() == 2
 @test i0xb23hG(x=10) == 10
 
+accepts__kwarg(;z1) = z1
+@test (@id_for_kwarg let z1 = 41; accepts__kwarg(; z1); end) == 41
+
 @test @eval let
     (z,)->begin
         $(Expr(:inbounds, true))
@@ -2213,3 +2218,34 @@ end
     Expr(:error, "invisible character \\u200b near column 3")
 @test Meta.parse("aa\UE0080", raise=false) ==
     Expr(:error, "invalid character \"\Ue0080\" near column 3")
+
+# issue #31238
+a31238, b31238 = let x
+    return 1
+end
+@test !@isdefined(a31238) && !@isdefined(b31238)
+@test @eval((a31238, b31238) = let x
+    return 1
+end) === 1
+
+# issue #35201
+h35201(x; k=1) = (x, k)
+f35201(c) = h35201((;c...), k=true)
+@test f35201(Dict(:a=>1,:b=>3)) === ((a=1,b=3), true)
+
+
+@testset "issue #34544/35367" begin
+    # Test these evals shouldnt segfault
+    eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar1, Expr(:block)))))
+    eval(Expr(:module, true, :bar2, Expr(:block)))
+    eval(Expr(:quote, Expr(:module, true, :bar3, Expr(:quote))))
+    @test_throws ErrorException eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar4, Expr(:quote)))))
+    @test_throws ErrorException eval(Expr(:module, true, :bar5, Expr(:foo)))
+    @test_throws ErrorException eval(Expr(:module, true, :bar6, Expr(:quote)))
+end
+
+# issue #35391
+macro a35391(b)
+    :(GC.@preserve ($(esc(b)),) )
+end
+@test @a35391(0) === (0,)

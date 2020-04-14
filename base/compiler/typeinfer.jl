@@ -119,7 +119,7 @@ function cache_result(result::InferenceResult, min_valid::UInt, max_valid::UInt)
                     nslots = length(inferred_result.slotflags)
                     resize!(inferred_result.slottypes, nslots)
                     resize!(inferred_result.slotnames, nslots)
-                    inferred_result = ccall(:jl_compress_ast, Any, (Any, Any), def, inferred_result)
+                    inferred_result = ccall(:jl_compress_ir, Any, (Any, Any), def, inferred_result)
                 else
                     inferred_result = nothing
                 end
@@ -559,7 +559,7 @@ function typeinf_ext(mi::MethodInstance, params::Params)
                 return inf
             elseif isa(inf, Vector{UInt8})
                 i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
-                inf = _uncompressed_ast(code, inf)
+                inf = _uncompressed_ir(code, inf)
                 return inf
             end
         end

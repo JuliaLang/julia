@@ -3,7 +3,7 @@
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
 
-have_color = false
+have_color = nothing
 default_color_warn = :yellow
 default_color_error = :light_red
 default_color_info = :cyan
@@ -109,6 +109,7 @@ display_error(er, bt=nothing) = display_error(stderr, er, bt)
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
     lasterr = nothing
+    have_color = get(stdout, :color, false)
     while true
         try
             if have_color
@@ -220,7 +221,7 @@ function exec_options(opts)
     startup               = (opts.startupfile != 2)
     history_file          = (opts.historyfile != 0)
     color_set             = (opts.color != 0) # --color!=auto
-    global have_color     = (opts.color == 1) # --color=on
+    global have_color     = color_set ? (opts.color == 1) : nothing # --color=on
     global is_interactive = (opts.isinteractive != 0)
 
     # pre-process command line argument list
@@ -492,7 +493,7 @@ function _start()
         invokelatest(display_error, catch_stack())
         exit(1)
     end
-    if is_interactive && have_color
+    if is_interactive && have_color === true
         print(color_normal)
     end
 end

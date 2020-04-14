@@ -139,7 +139,7 @@ function showerror(io::IO, ex::TypeError)
         elseif isa(ex.got, Type)
             targs = ("Type{", ex.got, "}")
         else
-            targs = (typeof(ex.got),)
+            targs = ("a value of type $(typeof(ex.got))",)
         end
         if ex.context == ""
             ctx = "in $(ex.func)"
@@ -317,7 +317,7 @@ function showerror(io::IO, ex::MethodError)
         kwargs = pairs(ex.args[1])
         ex = MethodError(f, ex.args[3:end])
     end
-    if f == Base.convert && length(arg_types_param) == 2 && !is_arg_types
+    if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         show_convert_error(io, ex, arg_types_param)
     elseif isempty(methods(f)) && isa(f, DataType) && f.abstract
@@ -351,7 +351,7 @@ function showerror(io::IO, ex::MethodError)
         print(io, ")")
     end
     # catch the two common cases of element-wise addition and subtraction
-    if f in (Base.:+, Base.:-) && length(arg_types_param) == 2
+    if (f === Base.:+ || f === Base.:-) && length(arg_types_param) == 2
         # we need one array of numbers and one number, in any order
         if any(x -> x <: AbstractArray{<:Number}, arg_types_param) &&
             any(x -> x <: Number, arg_types_param)

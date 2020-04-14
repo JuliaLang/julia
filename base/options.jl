@@ -9,6 +9,7 @@ struct JLOptions
     commands::Ptr{Ptr{UInt8}} # (e)eval, (E)print, (L)load
     image_file::Ptr{UInt8}
     cpu_target::Ptr{UInt8}
+    nthreads::Int32
     nprocs::Int32
     machine_file::Ptr{UInt8}
     project::Ptr{UInt8}
@@ -37,6 +38,7 @@ struct JLOptions
     outputbc::Ptr{UInt8}
     outputunoptbc::Ptr{UInt8}
     outputo::Ptr{UInt8}
+    outputasm::Ptr{UInt8}
     outputji::Ptr{UInt8}
     output_code_coverage::Ptr{UInt8}
     incremental::Int8

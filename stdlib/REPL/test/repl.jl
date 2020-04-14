@@ -47,7 +47,7 @@ function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_
     Base.link_pipe!(output, reader_supports_async=true, writer_supports_async=true)
     Base.link_pipe!(err, reader_supports_async=true, writer_supports_async=true)
 
-    repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in), true)
+    repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in, options.hascolor), options.hascolor)
     repl.options = options
 
     hard_kill = kill_timer(900) # Your debugging session starts now. You have 15 minutes. Go.
@@ -90,7 +90,7 @@ end
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-fake_repl() do stdin_write, stdout_read, repl
+fake_repl(options = REPL.Options(confirm_exit=false,hascolor=false)) do stdin_write, stdout_read, repl
     repl.specialdisplay = REPL.REPLDisplay(repl)
     repl.history_file = false
 
@@ -1043,8 +1043,13 @@ for line in ["′", "abstract", "type"]
         sprint(show, help_result(line)::Union{Markdown.MD,Nothing}))
 end
 
+# PR 35154
 @test occursin("|=", sprint(show, help_result("|=")))
 @test occursin("broadcast", sprint(show, help_result(".=")))
+
+# PR 35277
+@test occursin("identical", sprint(show, help_result("===")))
+@test occursin("broadcast", sprint(show, help_result(".<=")))
 
 # Issue #25930
 
@@ -1068,6 +1073,13 @@ let text =
     @test isa(mdbrief.content[2], Markdown.Paragraph)
     @test isa(mdbrief.content[3], REPL.Message)
     @test occursin("??", mdbrief.content[3].msg)
+end
+
+# issue #35216: empty and non-strings in H1 headers
+let emptyH1 = Markdown.parse("# "),
+    codeH1 = Markdown.parse("# `hello`")
+    @test emptyH1 == REPL.trimdocs(emptyH1, false) == REPL.trimdocs(emptyH1, true)
+    @test codeH1 == REPL.trimdocs(codeH1, false) == REPL.trimdocs(codeH1, true)
 end
 
 module BriefExtended
