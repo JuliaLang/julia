@@ -413,6 +413,7 @@ $(eval $(call LLVM_PATCH,llvm-8.0-D71495-vectorize-freduce)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
 $(eval $(call LLVM_PATCH,llvm-9.0-D65174-limit-merge-stores)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm9-D71443-PPC-MC-redef-symbol)) # remove for 10.0
+$(eval $(call LLVM_PATCH,llvm-9.0-D78196)) # remove for 11.0
 endif # LLVM_VER 9.0
 
 ifeq ($(LLVM_VER_SHORT),10.0)
