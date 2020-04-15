@@ -111,7 +111,7 @@ function term(io::IO, md::Code, columns)
 end
 
 function term(io::IO, tex::LaTeX, columns)
-    printstyled(io, ' '^margin, tex.formula, color=:magenta)
+    printstyled(io, ' '^margin, tex.formula, color=:light_magenta)
 end
 
 term(io::IO, br::LineBreak, columns) = nothing # line breaks already printed between subsequent elements
@@ -163,7 +163,7 @@ function terminline(io::IO, md::Link)
 end
 
 function terminline(io::IO, code::Code)
-    printstyled(io, code.code, color=:cyan)
+    printstyled(io, code.code, color=:light_cyan)
 end
 
 function terminline(io::IO, tex::LaTeX)
