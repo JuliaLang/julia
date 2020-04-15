@@ -82,59 +82,27 @@ function choosetests(choices = [])
         tests = testnames
     end
 
-
-    unicodetests = ["unicode/utf8"]
-    if "unicode" in skip_tests
-        filter!(x -> (x != "unicode" && !(x in unicodetests)), tests)
-    elseif "unicode" in tests
-        # specifically selected case
-        filter!(x -> x != "unicode", tests)
-        prepend!(tests, unicodetests)
+    function filtertests!(tests, name, files=[name])
+       flt = x -> (x != name && !(x in files))
+       if name in skip_tests
+           filter!(flt, tests)
+       elseif name in tests
+           filter!(flt, tests)
+           prepend!(tests, files)
+       end
     end
 
-    stringtests = ["strings/basic", "strings/search", "strings/util",
-                   "strings/io", "strings/types"]
-    if "strings" in skip_tests
-        filter!(x -> (x != "strings" && !(x in stringtests)), tests)
-    elseif "strings" in tests
-        # specifically selected case
-        filter!(x -> x != "strings", tests)
-        prepend!(tests, stringtests)
-    end
-
+    filtertests!(tests, "unicode", ["unicode/utf8"])
+    filtertests!(tests, "strings", ["strings/basic", "strings/search", "strings/util",
+                   "strings/io", "strings/types"])
     # do subarray before sparse but after linalg
-    if "subarray" in skip_tests
-        filter!(x -> x != "subarray", tests)
-    elseif "subarray" in tests
-        filter!(x -> x != "subarray", tests)
-        prepend!(tests, ["subarray"])
-    end
-
-    compilertests = ["compiler/inference", "compiler/validation", "compiler/ssair", "compiler/irpasses",
-                     "compiler/codegen", "compiler/inline", "compiler/contextual"]
-
-    if "compiler" in skip_tests
-        filter!(x -> (x != "compiler" && !(x in compilertests)), tests)
-    elseif "compiler" in tests
-        # specifically selected case
-        filter!(x -> x != "compiler", tests)
-        prepend!(tests, compilertests)
-    end
-
-    if "stdlib" in skip_tests
-        filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
-    elseif "stdlib" in tests
-        filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
-        prepend!(tests, STDLIBS)
-    end
-
+    filtertests!(tests, "subarray")
+    filtertests!(tests, "compiler", ["compiler/inference", "compiler/validation",
+        "compiler/ssair", "compiler/irpasses", "compiler/codegen",
+        "compiler/inline", "compiler/contextual"])
+    filtertests!(tests, "stdlib", STDLIBS)
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
-    if "ambiguous" in skip_tests
-        filter!(x -> x != "ambiguous", tests)
-    elseif "ambiguous" in tests
-        filter!(x -> x != "ambiguous", tests)
-        prepend!(tests, ["ambiguous"])
-    end
+    filtertests!(tests, "ambiguous")
 
     if startswith(string(Sys.ARCH), "arm")
         # Remove profile from default tests on ARM since it currently segfaults
