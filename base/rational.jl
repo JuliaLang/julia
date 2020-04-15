@@ -281,7 +281,7 @@ function *(x::Rational, y::Rational)
 end
 function *(x::Rational, y::Integer)
     xd, yn = divgcd(x.den, y)
-    checked_mul(x.num,yn) // xd
+    checked_mul(x.num, yn) // xd
 end
 *(x::Integer, y::Rational) = *(y, x)
 /(x::Rational, y::Rational) = x//y
