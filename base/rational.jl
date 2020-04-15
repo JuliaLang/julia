@@ -280,7 +280,7 @@ function *(x::Rational, y::Rational)
     checked_mul(xn,yn) // checked_mul(xd,yd)
 end
 function *(x::Rational, y::Integer)
-    xd,yn = divgcd(x.den,y)
+    xd, yn = divgcd(x.den, y)
     checked_mul(x.num,yn) // xd
 end
 *(x::Integer, y::Rational) = *(y, x)
