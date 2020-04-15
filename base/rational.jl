@@ -279,6 +279,11 @@ function *(x::Rational, y::Rational)
     xd,yn = divgcd(x.den,y.num)
     checked_mul(xn,yn) // checked_mul(xd,yd)
 end
+function *(x::Rational, y::Integer)
+    xd, yn = divgcd(x.den, y)
+    checked_mul(x.num, yn) // xd
+end
+*(x::Integer, y::Rational) = *(y, x)
 /(x::Rational, y::Rational) = x//y
 /(x::Rational, y::Complex{<:Union{Integer,Rational}}) = x//y
 inv(x::Rational) = Rational(x.den, x.num)
