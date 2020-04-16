@@ -33,9 +33,6 @@ The following are definitely leaf locks (level 1), and must not try to acquire a
 The following is a leaf lock (level 2), and only acquires level 1 locks (safepoint) internally:
 
 >   * typecache
-
-The following is a level 2 lock:
-
 >   * Module->lock
 
 The following is a level 3 lock, which can only acquire level 1 or level 2 locks internally:
@@ -48,9 +45,10 @@ The following is a level 4 lock, which can only recurse to acquire level 1, 2, o
 
 No Julia code may be called while holding a lock above this point.
 
-The following is a level 6 lock, which can only recurse to acquire locks at lower levels:
+The following are a level 6 lock, which can only recurse to acquire locks at lower levels:
 
 >   * codegen
+>   * jl_modules_mutex
 
 The following is an almost root lock (level end-1), meaning only the root look may be held when
 trying to acquire it:
@@ -93,6 +91,19 @@ The following locks are broken:
     > doesn't exist right now
     >
     > fix: create it
+
+  * Module->lock
+
+    > This is vulnerable to deadlocks since it can't be certain it is acquired in sequence.
+    > Some operations (such as `import_module`) are missing a lock.
+    >
+    > fix: replace with `jl_modules_mutex`?
+
+  * loading.jl: `require` and `register_root_module`
+
+    > This file potentially has numerous problems.
+    >
+    > fix: needs locks
 
 ## Shared Global Data Structures
 

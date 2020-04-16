@@ -62,6 +62,51 @@ julia> Threads.threadid()
     three processes have 2 threads enabled. For more fine grained control over worker
     threads use [`addprocs`](@ref) and pass `-t`/`--threads` as `exeflags`.
 
+## Data-race freedom
+
+You are entirely responsible for ensuring that your program is data-race free,
+and nothing promised here can be assumed if you do not observe that
+requirement. The observed results may be highly unintuitive.
+
+The best way to ensure this is to acquire a lock around any access to data that
+can be observed from multiple threads. For example, in most cases you should
+use the following code pattern:
+
+```julia-repl
+julia> lock(a) do
+           use(a)
+       end
+
+julia> begin
+           lock(a)
+           try
+               use(a)
+           finally
+               unlock(a)
+           end
+       end
+```
+
+Additionally, Julia is not memory safe in the presence of a data race. Be very
+careful about reading a global variable (or closure variable) if another thread
+might write to it! Instead, always use the lock pattern above when changing any
+data (such as assigning to a global) visible to multiple threads.
+
+```julia
+Thread 1:
+global b = false
+global a = rand()
+global b = true
+
+Thread 2:
+while !b; end
+bad(a) # it is NOT safe to access `a` here!
+
+Thread 3:
+while !@isdefined(a); end
+use(a) # it is NOT safe to access `a` here
+```
+
 ## The `@threads` Macro
 
 Let's work a simple example using our native threads. Let us create an array of zeros:
