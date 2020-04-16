@@ -71,6 +71,33 @@ function endswith(a::Union{String, SubString{String}},
 end
 
 """
+    contains(haystack::AbstractString, needle)
+
+Return `true` if `haystack` contains `needle`.
+This is the same as `occursin(needle, haystack)`, but is provided for consistency with
+`startswith(haystack, needle)` and `endswith(haystack, needle)`.
+
+# Examples
+```jldoctest
+julia> contains("JuliaLang is pretty cool!", "Julia")
+true
+
+julia> contains("JuliaLang is pretty cool!", 'a')
+true
+
+julia> contains("aba", r"a.a")
+true
+
+julia> contains("abba", r"a.a")
+false
+```
+
+!!! compat "Julia 1.5"
+    The `contains` function requires at least Julia 1.5.
+"""
+contains(haystack::AbstractString, needle) = occursin(needle, haystack)
+
+"""
     endswith(suffix)
 
 Create a function that checks whether its argument ends with `suffix`, i.e.
@@ -99,6 +126,17 @@ used to implement specialized methods.
 
 """
 startswith(s) = Base.Fix2(startswith, s)
+
+"""
+    contains(needle)
+
+Create a function that checks whether its argument contains `needle`, i.e.
+a function equivalent to `haystack -> contains(haystack, needle)`.
+
+The returned function is of type `Base.Fix2{typeof(contains)}`, which can be
+used to implement specialized methods.
+"""
+contains(needle) = Base.Fix2(contains, needle)
 
 """
     chop(s::AbstractString; head::Integer = 0, tail::Integer = 1)
