@@ -57,7 +57,7 @@ julia> module Hinter
        only_int(x::Int)      = 1
        any_number(x::Number) = 2
 
-       function __init__()
+       function register_hints()
            register_error_hint(MethodError) do io, exc, argtypes, kwargs
                if exc.f == only_int
                     # Color is not necessary, this is just to show it's possible.
@@ -66,6 +66,7 @@ julia> module Hinter
                end
            end
        end
+       __init__() = register_hints()
 
        end
 ```
