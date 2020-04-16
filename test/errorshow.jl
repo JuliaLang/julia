@@ -704,3 +704,14 @@ for (func,str) in ((TestMethodShadow.:+,":+"), (TestMethodShadow.:(==),":(==)"),
     end::MethodError
     @test occursin("You may have intended to import Base.$str", sprint(Base.showerror, ex))
 end
+
+# Test that implementation detail of include() is hidden from the user by default
+let bt = try
+        include("testhelpers/include_error.jl")
+    catch
+        catch_backtrace()
+    end
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin(" include(", bt_str)
+    @test !occursin(" _include(", bt_str)
+end
