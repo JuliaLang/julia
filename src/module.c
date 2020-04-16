@@ -714,7 +714,7 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
         jl_printf(JL_STDERR, "WARNING: redefinition of constant %s. This may fail, cause incorrect answers, or produce other errors.\n",
                   jl_symbol_name(b->name));
     }
-    jl_atomic_store_relaxed(&b->value, rhs);
+    jl_atomic_store_release(&b->value, rhs);
     jl_gc_wb_binding(b, rhs);
 }
 

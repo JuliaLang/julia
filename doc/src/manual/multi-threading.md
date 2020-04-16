@@ -88,10 +88,15 @@ julia> begin
 ```
 where `lk` is a lock (e.g. `ReentrantLock()`) and `a` data.
 
-Additionally, Julia is not memory safe in the presence of a data race. Be very
-careful about reading a global variable (or closure variable) if another thread
-might write to it! Instead, always use the lock pattern above when changing any
-data (such as assigning to a global) visible to multiple threads.
+Additionally, Julia automatically will ensure memory safety in the presence of
+some types of data-races. The results may not be what you expect however!
+
+In particular, when publishing a boxed constant value to a global address, the
+value and type of that can be read on another thread without additional
+synchronization.  However, do not assume that observing one value is set
+transitively implies anything about other values, even other globals! And
+observe that we need a `GC.safepoint()` barrier here to ensure that the loop
+eventually observes the store and terminates.
 
 ```julia
 Thread 1:
@@ -100,12 +105,12 @@ global a = rand()
 global b = true
 
 Thread 2:
-while !b; end
+while !b; GC.safepoint(); end
 bad(a) # it is NOT safe to access `a` here!
 
 Thread 3:
-while !@isdefined(a); end
-use(a) # it is NOT safe to access `a` here
+while !@isdefined(a); GC.safepoint(); end
+use(a) # it IS safe to access `a` here
 ```
 
 ## The `@threads` Macro
