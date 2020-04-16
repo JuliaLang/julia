@@ -13,9 +13,15 @@ export
     atomic_and!, atomic_nand!, atomic_or!, atomic_xor!,
     atomic_max!, atomic_min!,
     atomic_fence
-
-# 128-bit atomics do not exist on AArch32.
-if startswith(string(ARCH), "arm")
+##
+# Filter out unsupported atomic types on platforms
+# - 128-bit atomics do not exist on AArch32.
+# - Omitting 128-bit types on 32bit x86 and ppc64
+# - LLVM doesn't currently support atomics on floats for ppc64
+#   C++20 is adding limited support for atomics on float, but as of
+#   now Clang does not support that yet.
+if Sys.ARCH == :i686 || startswith(string(Sys.ARCH), "arm") ||
+   Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
     const inttypes = (Int8, Int16, Int32, Int64,
                       UInt8, UInt16, UInt32, UInt64)
 else
@@ -25,7 +31,12 @@ end
 const floattypes = (Float16, Float32, Float64)
 const arithmetictypes = (inttypes..., floattypes...)
 # TODO: Support Ptr
-const atomictypes = (arithmetictypes..., Bool)
+if Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
+    const atomictypes = (inttypes..., Bool)
+else
+    const atomictypes = (arithmetictypes..., Bool)
+end
+
 const IntTypes = Union{inttypes...}
 const FloatTypes = Union{floattypes...}
 const ArithmeticTypes = Union{arithmetictypes...}
