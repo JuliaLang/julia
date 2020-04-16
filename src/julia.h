@@ -1929,6 +1929,7 @@ typedef struct {
     const char *outputbc;
     const char *outputunoptbc;
     const char *outputo;
+    const char *outputasm;
     const char *outputji;
     const char *output_code_coverage;
     int8_t incremental;

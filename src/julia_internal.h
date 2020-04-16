@@ -470,6 +470,7 @@ void jl_init_main_module(void);
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
 jl_array_t *jl_get_loaded_modules(void);
 
+void jl_check_open_for(jl_module_t *m, const char* funcname);
 jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded);
 
 jl_value_t *jl_eval_global_var(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *e);
@@ -614,7 +615,7 @@ JL_DLLEXPORT jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, ch
 
 void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams);
 void jl_dump_native(void *native_code,
-        const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname,
+        const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(void *native_code, jl_value_t *p) JL_NOTSAFEPOINT;
 void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,

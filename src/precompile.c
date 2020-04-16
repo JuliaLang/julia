@@ -17,7 +17,7 @@ extern "C" {
 
 JL_DLLEXPORT int jl_generating_output(void)
 {
-    return jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputji;
+    return jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputji || jl_options.outputasm;
 }
 
 void *jl_precompile(int all);
@@ -64,10 +64,12 @@ void jl_write_compiler_output(void)
             jl_printf(JL_STDERR, "WARNING: incremental output to a .bc file is not implemented\n");
         if (jl_options.outputo)
             jl_printf(JL_STDERR, "WARNING: incremental output to a .o file is not implemented\n");
+        if (jl_options.outputasm)
+            jl_printf(JL_STDERR, "WARNING: incremental output to a .s file is not implemented\n");
     }
     else {
         ios_t *s = NULL;
-        if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc)
+        if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm)
             s = jl_create_system_image(native_code);
 
         if (jl_options.outputji) {
@@ -83,12 +85,13 @@ void jl_write_compiler_output(void)
             }
         }
 
-        if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc) {
+        if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm) {
             assert(s);
             jl_dump_native(native_code,
                            jl_options.outputbc,
                            jl_options.outputunoptbc,
                            jl_options.outputo,
+                           jl_options.outputasm,
                            (const char*)s->buf, (size_t)s->size);
         }
     }
