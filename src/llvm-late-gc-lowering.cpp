@@ -388,22 +388,29 @@ CountTrackedPointers::CountTrackedPointers(Type *T) {
             if (T->getPointerAddressSpace() != AddressSpace::Tracked)
                 derived = true;
         }
-    } else if (isa<CompositeType>(T)) {
+    } else if (isa<StructType>(T) || isa<ArrayType>(T) || isa<VectorType>(T)) {
         for (Type *ElT : T->subtypes()) {
             auto sub = CountTrackedPointers(ElT);
             count += sub.count;
             all &= sub.all;
             derived |= sub.derived;
         }
-        if (isa<SequentialType>(T))
-            count *= cast<SequentialType>(T)->getNumElements();
+        if (isa<ArrayType>(T))
+            count *= cast<ArrayType>(T)->getNumElements();
+        else if (isa<VectorType>(T))
+            count *= cast<VectorType>(T)->getNumElements();
     }
     if (count == 0)
         all = false;
 }
 
 unsigned getCompositeNumElements(Type *T) {
-    return isa<StructType>(T) ? T->getStructNumElements() : cast<SequentialType>(T)->getNumElements();
+    if (auto *ST = dyn_cast<StructType>(T))
+        return ST->getNumElements();
+    else if (auto *AT = dyn_cast<ArrayType>(T))
+        return AT->getNumElements();
+    else
+        return cast<VectorType>(T)->getNumElements();
 }
 
 // Walk through a Type, and record the element path to every tracked value inside
@@ -412,11 +419,15 @@ void TrackCompositeType(Type *T, std::vector<unsigned> &Idxs, std::vector<std::v
         if (T->getPointerAddressSpace() == AddressSpace::Tracked)
             Numberings.push_back(Idxs);
     }
-    else if (isa<CompositeType>(T)) {
+    else if (isa<StructType>(T) || isa<ArrayType>(T) || isa<VectorType>(T)) {
         unsigned Idx, NumEl = getCompositeNumElements(T);
         for (Idx = 0; Idx < NumEl; Idx++) {
             Idxs.push_back(Idx);
-            Type *ElT  = cast<CompositeType>(T)->getTypeAtIndex(Idx);
+#if JL_LLVM_VERSION >= 110000
+            Type *ElT = GetElementPtrInst::getTypeAtIndex(T, Idx);
+#else
+            Type *ElT = cast<CompositeType>(T)->getTypeAtIndex(Idx);
+#endif
             TrackCompositeType(ElT, Idxs, Numberings);
             Idxs.pop_back();
         }
@@ -551,7 +562,12 @@ Value *LateLowerGCFrame::MaybeExtractScalar(State &S, std::pair<Value*,int> ValE
         auto IdxsNotVec = Idxs.slice(0, Idxs.size() - 1);
         Type *FinalT = ExtractValueInst::getIndexedType(V->getType(), IdxsNotVec);
         bool IsVector = isa<VectorType>(FinalT);
-        PointerType *T = cast<PointerType>(cast<CompositeType>(FinalT)->getTypeAtIndex(Idxs.back()));
+        PointerType *T = cast<PointerType>(
+#if JL_LLVM_VERSION >= 110000
+            GetElementPtrInst::getTypeAtIndex(FinalT, Idxs.back()));
+#else
+            cast<CompositeType>(FinalT)->getTypeAtIndex(Idxs.back()));
+#endif
         if (T->getAddressSpace() != AddressSpace::Tracked) {
             // if V isn't tracked, get the shadow def
             auto Numbers = NumberAllBase(S, V);
@@ -2139,7 +2155,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 else // CC == JLCALL_F2_CC // jl_invoke
                     FTy = FunctionType::get(T_prjlvalue, {T_prjlvalue, T_pprjlvalue, T_int32, T_prjlvalue}, false);
                 Value *newFptr = Builder.CreateBitCast(callee, FTy->getPointerTo());
-                CallInst *NewCall = CallInst::Create(newFptr, ReplacementArgs, "", CI);
+                CallInst *NewCall = CallInst::Create(FTy, newFptr, ReplacementArgs, "", CI);
                 NewCall->setTailCallKind(CI->getTailCallKind());
                 auto old_attrs = CI->getAttributes();
                 NewCall->setAttributes(AttributeList::get(CI->getContext(),
