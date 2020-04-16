@@ -7,26 +7,21 @@ using Random: rand!
 const StridedOrTriangularMatrix{T} = Union{StridedMatrix{T}, LowerTriangular{T}, UnitLowerTriangular{T}, UpperTriangular{T}, UnitUpperTriangular{T}}
 const AdjOrTransStridedOrTriangularMatrix{T} = Union{StridedOrTriangularMatrix{T},Adjoint{<:Any,<:StridedOrTriangularMatrix{T}},Transpose{<:Any,<:StridedOrTriangularMatrix{T}}}
 
-for HermSym ∈ [:Hermitian, :Symmetric]
+for (Wrapper, operation) ∈ [(:Hermitian, :adjoint), (:Symmetric, :transpose)]
     @eval begin
-        function (+)(A::SparseMatrixCSC, B::$HermSym{<:Any,<:AbstractSparseMatrix})
-            C  = sparse(B)
-            C .= A .+ C
-        end
-        function (+)(A::SparseMatrixCSC, B::$HermSym)
-            C  = collect(B)
-            C .= A .+ C
-        end
-        (+)(A::$HermSym{<:Any,<:AbstractSparseMatrix}, B::SparseMatrixCSC) = B + A
-        (+)(A::$HermSym, B::SparseMatrixCSC) = B + A
+        (+)(A::SparseMatrixCSC, B::$Wrapper{<:Any,<:AbstractSparseMatrix}) = A + sparse(B)
+        (+)(A::$Wrapper{<:Any,<:AbstractSparseMatrix}, B::SparseMatrixCSC) = B + A
 
-        function +(A::$HermSym{<:Any, <:SparseMatrixCSC}, B::$HermSym{<:Any, <:SparseMatrixCSC})
+        (+)(A::SparseMatrixCSC, B::$Wrapper) = A + collect(B)
+        (+)(A::$Wrapper, B::SparseMatrixCSC) = B + A
+
+        function +(A::$Wrapper{<:Any, <:SparseMatrixCSC}, B::$Wrapper{<:Any, <:SparseMatrixCSC})
             if A.uplo == B.uplo
-                $HermSym(parent(A) + parent(B), sym_uplo(A.uplo))
+                $Wrapper(parent(A) + parent(B), sym_uplo(A.uplo))
             elseif A.uplo == 'U'
-                $HermSym(parent(A) + permutedims(parent(B)), :U)
+                $Wrapper(parent(A) + $operation(parent(B)), :U)
             else
-                $HermSym(permutedims(parent(A)) + parent(B), :U)
+                $Wrapper($operation(parent(A)) + parent(B), :U)
             end
         end
     end
