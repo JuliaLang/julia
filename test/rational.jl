@@ -17,6 +17,7 @@ using Test
     @test 5//0 == 1//0
     @test -1//0 == -1//0
     @test -7//0 == -1//0
+    @test  (-1//2) // (-2//5) == 5//4
 
     @test_throws OverflowError -(0x01//0x0f)
     @test_throws OverflowError -(typemin(Int)//1)
@@ -26,9 +27,12 @@ using Test
     @test (typemax(Int)//1) / (typemax(Int)//1) == 1
     @test (1//typemax(Int)) / (1//typemax(Int)) == 1
     @test_throws OverflowError (1//2)^63
+    @test inv((1+typemin(Int))//typemax(Int)) == -1
+    @test_throws ArgumentError inv(typemin(Int)//typemax(Int))
 
     @test @inferred(rationalize(Int, 3.0, 0.0)) === 3//1
     @test @inferred(rationalize(Int, 3.0, 0)) === 3//1
+    @test_throws OverflowError rationalize(UInt, -2.0)
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
     # issue 26823
     @test_throws InexactError rationalize(Int, NaN)
@@ -119,6 +123,8 @@ end
         @test typemax(Rational{T}) == one(T)//zero(T)
         @test widen(Rational{T}) == Rational{widen(T)}
     end
+
+    @test iszero(typemin(Rational{UInt}))
 
     @test Rational(Float32(rand_int)) == Rational(rand_int)
 
@@ -548,6 +554,8 @@ end
     end
     @test 1//2 * 3 == 3//2
     @test -3 * (1//2) == -3//2
+    @test (6//5) // -3 == -2//5
+    @test -4 // (-6//5) == 10//3
 
     @test_throws OverflowError UInt(1)//2 - 1
     @test_throws OverflowError 1 - UInt(5)//2
