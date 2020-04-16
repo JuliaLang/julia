@@ -26,11 +26,7 @@ for (Wrapper, operation) ∈ [(:Hermitian, :adjoint), (:Symmetric, :transpose)]
         end
     end
 end
-
-function (+)(A::Symmetric{<:Any, <:SparseMatrixCSC}, B::Hermitian{<:Any, <:SparseMatrixCSC})
-    C = sparse(A)
-    C .= C + B
-end
+(+)(A::Symmetric{<:Any, <:SparseMatrixCSC}, B::Hermitian{<:Any, <:SparseMatrixCSC}) = sparse(A) + B
 (+)(A::Hermitian{<:Any, <:SparseMatrixCSC}, B::Symmetric{<:Any, <:SparseMatrixCSC}) = B + A
 
 
