@@ -194,6 +194,12 @@ end
         @test round(Tf, -almost_half, RoundNearestTiesUp) == 0.0
         @test round(Tf,  almost_half, RoundNearestTiesAway) == 0.0
         @test round(Tf, -almost_half, RoundNearestTiesAway) == 0.0
+        @test round(Tf,  almost_half, RoundUp) == 1.0
+        @test round(Tf, -almost_half, RoundUp) == 0.0
+        @test round(Tf,  almost_half, RoundDown) == 0.0
+        @test round(Tf, -almost_half, RoundDown) == -1.0
+        @test round(Tf,  almost_half, RoundToZero) == 0.0
+        @test round(Tf, -almost_half, RoundToZero) == 0.0
 
         @test round( exactly_half) == 0//1 # rounds to closest _even_ integer
         @test round(-exactly_half) == 0//1 # rounds to closest _even_ integer
@@ -201,6 +207,12 @@ end
         @test round(Tf, -exactly_half, RoundNearestTiesUp) == 0.0
         @test round(Tf,  exactly_half, RoundNearestTiesAway) == 1.0
         @test round(Tf, -exactly_half, RoundNearestTiesAway) == -1.0
+        @test round(Tf,  exactly_half, RoundUp) == 1.0
+        @test round(Tf, -exactly_half, RoundUp) == 0.0
+        @test round(Tf,  exactly_half, RoundDown) == 0.0
+        @test round(Tf, -exactly_half, RoundDown) == -1.0
+        @test round(Tf,  exactly_half, RoundToZero) == 0.0
+        @test round(Tf, -exactly_half, RoundToZero) == 0.0
 
 
         @test round(over_half) == 1//1
@@ -209,11 +221,23 @@ end
         @test round(Tf,  over_half, RoundNearestTiesAway) == 1.0
         @test round(Tf, -over_half, RoundNearestTiesUp) == -1.0
         @test round(Tf, -over_half, RoundNearestTiesAway) == -1.0
+        @test round(Tf,  over_half, RoundUp) == 1.0
+        @test round(Tf, -over_half, RoundUp) == 0.0
+        @test round(Tf,  over_half, RoundDown) == 0.0
+        @test round(Tf, -over_half, RoundDown) == -1.0
+        @test round(Tf,  over_half, RoundToZero) == 0.0
+        @test round(Tf, -over_half, RoundToZero) == 0.0
 
         @test round(Tf, 11//2, RoundNearestTiesUp) == 6.0
         @test round(Tf, -11//2, RoundNearestTiesUp) == -5.0
         @test round(Tf, 11//2, RoundNearestTiesAway) == 6.0
         @test round(Tf, -11//2, RoundNearestTiesAway) == -6.0
+        @test round(Tf, 11//2, RoundUp) == 6.0
+        @test round(Tf, -11//2, RoundUp) == -5.0
+        @test round(Tf, 11//2, RoundDown) == 5.0
+        @test round(Tf, -11//2, RoundDown) == -6.0
+        @test round(Tf, 11//2, RoundToZero) == 5.0
+        @test round(Tf, -11//2, RoundToZero) == -5.0
 
         @test round(Tf, Ti(-1)//zero(Ti)) == -Inf
         @test round(Tf, one(1)//zero(Ti)) == Inf
@@ -221,10 +245,19 @@ end
         @test round(Tf, one(1)//zero(Ti), RoundNearestTiesUp) == Inf
         @test round(Tf, Ti(-1)//zero(Ti), RoundNearestTiesAway) == -Inf
         @test round(Tf, one(1)//zero(Ti), RoundNearestTiesAway) == Inf
+        @test round(Tf, Ti(-1)//zero(Ti), RoundUp) == -Inf
+        @test round(Tf, one(1)//zero(Ti), RoundUp) == Inf
+        @test round(Tf, Ti(-1)//zero(Ti), RoundDown) == -Inf
+        @test round(Tf, one(1)//zero(Ti), RoundDown) == Inf
+        @test round(Tf, Ti(-1)//zero(Ti), RoundToZero) == -Inf
+        @test round(Tf, one(1)//zero(Ti), RoundToZero) == Inf
 
         @test round(Tf, zero(Ti)//one(Ti)) == 0
         @test round(Tf, zero(Ti)//one(Ti), RoundNearestTiesUp) == 0
         @test round(Tf, zero(Ti)//one(Ti), RoundNearestTiesAway) == 0
+        @test round(Tf, zero(Ti)//one(Ti), RoundUp) == 0
+        @test round(Tf, zero(Ti)//one(Ti), RoundDown) == 0
+        @test round(Tf, zero(Ti)//one(Ti), RoundToZero) == 0
     end
 end
 @testset "show and Rationals" begin
