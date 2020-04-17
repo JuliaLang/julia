@@ -834,7 +834,9 @@ STATIC_INLINE jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NO
 {
     assert(jl_typeis(t,jl_simplevector_type));
     assert(i < jl_svec_len(t));
-    return jl_svec_data(t)[i];
+    // while svec is supposedly immutable, in practice we sometimes publish it first
+    // and set the values lazily
+    return jl_atomic_load_relaxed(jl_svec_data(t) + i);
 }
 STATIC_INLINE jl_value_t *jl_svecset(
     void *t JL_ROOTING_ARGUMENT JL_PROPAGATES_ROOT,
@@ -842,6 +844,8 @@ STATIC_INLINE jl_value_t *jl_svecset(
 {
     assert(jl_typeis(t,jl_simplevector_type));
     assert(i < jl_svec_len(t));
+    // TODO: while svec is supposedly immutable, in practice we sometimes publish it first
+    // and set the values lazily. Those users should be using jl_atomic_store_release here.
     jl_svec_data(t)[i] = (jl_value_t*)x;
     if (x) jl_gc_wb(t, x);
     return (jl_value_t*)x;
@@ -876,7 +880,7 @@ STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i)
 {
     assert(((jl_array_t*)a)->flags.ptrarray);
     assert(i < jl_array_len(a));
-    return ((jl_value_t**)(jl_array_data(a)))[i];
+    return jl_atomic_load_relaxed(((jl_value_t**)(jl_array_data(a))) + i);
 }
 STATIC_INLINE jl_value_t *jl_array_ptr_set(
     void *a JL_ROOTING_ARGUMENT, size_t i,
@@ -884,7 +888,7 @@ STATIC_INLINE jl_value_t *jl_array_ptr_set(
 {
     assert(((jl_array_t*)a)->flags.ptrarray);
     assert(i < jl_array_len(a));
-    ((jl_value_t**)(jl_array_data(a)))[i] = (jl_value_t*)x;
+    jl_atomic_store_relaxed(((jl_value_t**)(jl_array_data(a))) + i, (jl_value_t*)x);
     if (x) {
         if (((jl_array_t*)a)->flags.how == 3) {
             a = jl_array_data_owner(a);

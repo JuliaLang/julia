@@ -1923,7 +1923,7 @@ static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
             while (codeinst) {
                 if (codeinst->min_world > 0)
                     codeinst->max_world = ~(size_t)0;
-                codeinst = codeinst->next;
+                codeinst = jl_atomic_load_relaxed(&codeinst->next);
             }
         }
         else {

@@ -1379,26 +1379,32 @@ static void typed_store(jl_codectx_t &ctx,
     if (type_is_ghost(elty))
         return;
     Value *r;
-    if (!isboxed) {
+    if (!isboxed)
         r = emit_unbox(ctx, elty, rhs, jltype);
-        if (parent != NULL)
-            emit_write_multibarrier(ctx, parent, r);
-    }
-    else {
+    else
         r = maybe_decay_untracked(boxed(ctx, rhs));
-        if (parent != NULL)
-            emit_write_barrier(ctx, parent, r);
-    }
     Type *ptrty = PointerType::get(elty, ptr->getType()->getPointerAddressSpace());
     if (ptr->getType() != ptrty)
         ptr = ctx.builder.CreateBitCast(ptr, ptrty);
     if (idx_0based)
         ptr = ctx.builder.CreateInBoundsGEP(r->getType(), ptr, idx_0based);
-    Instruction *store = ctx.builder.CreateAlignedStore(r, ptr, isboxed || alignment ? alignment : julia_alignment(jltype));
+    if (isboxed)
+        alignment = sizeof(void*);
+    else if (!alignment)
+        alignment = julia_alignment(jltype);
+    StoreInst *store = ctx.builder.CreateAlignedStore(r, ptr, alignment);
+    if (isboxed) // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
+        store->setOrdering(AtomicOrdering::Unordered);
     if (aliasscope)
         store->setMetadata("noalias", aliasscope);
     if (tbaa)
         tbaa_decorate(tbaa, store);
+    if (parent != NULL) {
+        if (!isboxed)
+            emit_write_multibarrier(ctx, parent, r);
+        else
+            emit_write_barrier(ctx, parent, r);
+    }
 }
 
 // --- convert boolean value to julia ---
@@ -2611,8 +2617,10 @@ static void emit_setfield(jl_codectx_t &ctx,
         jl_value_t *jfty = jl_svecref(sty->types, idx0);
         if (jl_field_isptr(sty, idx0)) {
             Value *r = maybe_decay_untracked(boxed(ctx, rhs)); // don't need a temporary gcroot since it'll be rooted by strct
-            tbaa_decorate(strct.tbaa, ctx.builder.CreateStore(r,
-                emit_bitcast(ctx, addr, T_pprjlvalue)));
+            cast<StoreInst>(tbaa_decorate(strct.tbaa, ctx.builder.CreateAlignedStore(r,
+                        emit_bitcast(ctx, addr, T_pprjlvalue),
+                        sizeof(jl_value_t*))))
+                    ->setOrdering(AtomicOrdering::Unordered);
             if (wb && strct.isboxed)
                 emit_write_barrier(ctx, boxed(ctx, strct), r);
         }
@@ -2706,7 +2714,9 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 if (jl_field_isptr(sty, i)) {
                     fval = boxed(ctx, fval_info);
                     if (!init_as_value)
-                        tbaa_decorate(tbaa_stack, ctx.builder.CreateAlignedStore(fval, dest, jl_field_align(sty, i)));
+                        cast<StoreInst>(tbaa_decorate(tbaa_stack,
+                                    ctx.builder.CreateAlignedStore(fval, dest, jl_field_align(sty, i))))
+                                ->setOrdering(AtomicOrdering::Unordered);
                 }
                 else if (jl_is_uniontype(jtype)) {
                     // compute tindex from rhs

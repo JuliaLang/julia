@@ -344,7 +344,7 @@ JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_method_instance_t *mi, size_t mi
             if (code && (code == jl_nothing || jl_ir_flag_inferred((jl_array_t*)code)))
                 return (jl_value_t*)codeinst;
         }
-        codeinst = codeinst->next;
+        codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
     return (jl_value_t*)jl_nothing;
 }
@@ -361,7 +361,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
             jl_egal(codeinst->rettype, rettype)) {
             return codeinst;
         }
-        codeinst = codeinst->next;
+        codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
     codeinst = jl_new_codeinst(
         mi, rettype, NULL, NULL,
@@ -410,7 +410,7 @@ JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMEN
     if (jl_is_method(mi->def.method))
         JL_LOCK(&mi->def.method->writelock);
     ci->next = mi->cache;
-    mi->cache = ci;
+    jl_atomic_store_release(&mi->cache, ci);
     jl_gc_wb(mi, ci);
     if (jl_is_method(mi->def.method))
         JL_UNLOCK(&mi->def.method->writelock);
@@ -1584,7 +1584,7 @@ static void invalidate_method_instance(jl_method_instance_t *replaced, size_t ma
             codeinst->max_world = max_world;
         }
         assert(codeinst->max_world <= max_world);
-        codeinst = codeinst->next;
+        codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
     // recurse to all backedges to update their valid range also
     jl_array_t *backedges = replaced->backedges;
@@ -2026,7 +2026,7 @@ jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
         if (codeinst->min_world <= world && world <= codeinst->max_world && codeinst->invoke != NULL) {
             return codeinst;
         }
-        codeinst = codeinst->next;
+        codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
     return NULL;
 }
@@ -2334,7 +2334,7 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
             jl_value_t *res = codeinst->invoke(F, args, nargs, codeinst);
             return verify_type(res);
         }
-        codeinst = codeinst->next;
+        codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
     int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
     int last_errno = errno;

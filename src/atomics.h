@@ -44,6 +44,8 @@
  *        specified.
  */
 #if defined(__GNUC__)
+#  define jl_fence() __atomic_thread_fence(__ATOMIC_SEQ_CST)
+#  define jl_fence_release() __atomic_thread_fence(__ATOMIC_RELEASE)
 #  define jl_signal_fence() __atomic_signal_fence(__ATOMIC_SEQ_CST)
 #  define jl_atomic_fetch_add_relaxed(obj, arg)         \
     __atomic_fetch_add(obj, arg, __ATOMIC_RELAXED)
@@ -96,6 +98,9 @@
 #  define jl_atomic_load_relaxed(obj)           \
     __atomic_load_n(obj, __ATOMIC_RELAXED)
 #elif defined(_COMPILER_MICROSOFT_)
+// TODO: these only define compiler barriers, and aren't correct outside of x86
+#  define jl_fence() _ReadWriteBarrier()
+#  define jl_fence_release() _WriteBarrier()
 #  define jl_signal_fence() _ReadWriteBarrier()
 
 // add
