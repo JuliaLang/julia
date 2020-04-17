@@ -401,9 +401,32 @@ ceil(::Type{T}, x::Rational) where {T} = _round_rational(T, x, RoundUp)
 round(::Type{T}, x::Rational, r::RoundingMode=RoundNearest) where {T} = _round_rational(T, x, r)
 round(x::Rational, r::RoundingMode) = round(Rational, x, r)
 
-_round_rational(::Type{T}, x::Rational, ::RoundingMode{:ToZero}) where {T} = convert(T,div(x.num,x.den))
-_round_rational(::Type{T}, x::Rational, ::RoundingMode{:Down}) where {T} = convert(T,fld(x.num,x.den))
-_round_rational(::Type{T}, x::Rational, ::RoundingMode{:Up}) where {T} = convert(T,cld(x.num,x.den))
+function _round_rational(::Type{T}, x::Rational{Tr}, ::RoundingMode{:ToZero}) where {T,Tr}
+    if denominator(x) == zero(Tr) && T <: Integer
+        throw(DivideError())
+    elseif denominator(x) == zero(Tr)
+        return convert(T, copysign(one(Tr)//zero(Tr), numerator(x)))
+    end
+    convert(T,div(x.num,x.den))
+end
+
+function _round_rational(::Type{T}, x::Rational{Tr}, ::RoundingMode{:Down}) where {T,Tr}
+    if denominator(x) == zero(Tr) && T <: Integer
+        throw(DivideError())
+    elseif denominator(x) == zero(Tr)
+        return convert(T, copysign(one(Tr)//zero(Tr), numerator(x)))
+    end
+    convert(T,fld(x.num,x.den))
+end
+
+function _round_rational(::Type{T}, x::Rational{Tr}, ::RoundingMode{:Up}) where {T,Tr}
+    if denominator(x) == zero(Tr) && T <: Integer
+        throw(DivideError())
+    elseif denominator(x) == zero(Tr)
+        return convert(T, copysign(one(Tr)//zero(Tr), numerator(x)))
+    end
+    convert(T,cld(x.num,x.den))
+end
 
 function _round_rational(::Type{T}, x::Rational{Tr}, ::RoundingMode{:Nearest}) where {T,Tr}
     if denominator(x) == zero(Tr) && T <: Integer
