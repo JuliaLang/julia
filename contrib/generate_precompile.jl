@@ -14,7 +14,12 @@ UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
 
 hardcoded_precompile_statements = """
-precompile(Tuple{typeof(Base.stale_cachefile), String, String})"""
+precompile(Tuple{typeof(Base.stale_cachefile), String, String})
+precompile(Tuple{typeof(push!), Set{Module}, Module})
+precompile(Tuple{typeof(push!), Set{Method}, Method})
+precompile(Tuple{typeof(push!), Set{Base.PkgId}, Base.PkgId})
+precompile(Tuple{typeof(setindex!), Dict{String,Base.PkgId}, Base.PkgId, String})
+"""
 
 precompile_script = """
 2+2
