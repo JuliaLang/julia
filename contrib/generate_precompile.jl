@@ -13,6 +13,9 @@ CTRL_C = '\x03'
 UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
 
+hardcoded_precompile_statements = """
+precompile(Tuple{typeof(Base.stale_cachefile), String, String})"""
+
 precompile_script = """
 2+2
 print("")
@@ -149,6 +152,10 @@ function generate_precompile_statements()
         for statement in eachline(precompile_file_h)
             # Main should be completely clean
             occursin("Main.", statement) && continue
+            push!(statements, statement)
+        end
+
+        for statement in split(hardcoded_precompile_statements, '\n')
             push!(statements, statement)
         end
 
