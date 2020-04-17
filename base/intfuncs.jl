@@ -31,7 +31,7 @@ end
 
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
-function gcd(a::T, b::T) where T<:Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128}
+function gcd(a::T, b::T) where T<:BitInteger
     a == 0 && return abs(b)
     b == 0 && return abs(a)
     za = trailing_zeros(a)
@@ -82,6 +82,8 @@ end
 
 gcd(a::Union{Integer,Rational}) = a
 lcm(a::Union{Integer,Rational}) = a
+gcd(a::Unsigned, b::Signed) = gcd(promote(a, abs(b))...)
+gcd(a::Signed, b::Unsigned) = gcd(promote(abs(a), b)...)
 gcd(a::Real, b::Real) = gcd(promote(a,b)...)
 lcm(a::Real, b::Real) = lcm(promote(a,b)...)
 gcd(a::Real, b::Real, c::Real...) = gcd(a, gcd(b, c...))
@@ -136,18 +138,21 @@ julia> gcdx(240, 46)
     their `typemax`, and the identity then holds only via the unsigned
     integers' modulo arithmetic.
 """
-function gcdx(a::T, b::T) where T<:Integer
+function gcdx(a::U, b::V) where {U<:Integer, V<:Integer}
+    T = promote_type(U, V)
     # a0, b0 = a, b
     s0, s1 = oneunit(T), zero(T)
     t0, t1 = s1, s0
     # The loop invariant is: s0*a0 + t0*b0 == a
-    while b != 0
-        q = div(a, b)
-        a, b = b, rem(a, b)
+    x = a % T
+    y = b % T
+    while y != 0
+        q = div(x, y)
+        x, y = y, rem(x, y)
         s0, s1 = s1, s0 - q*s1
         t0, t1 = t1, t0 - q*t1
     end
-    a < 0 ? (-a, -s0, -t0) : (a, s0, t0)
+    x < 0 ? (-x, -s0, -t0) : (x, s0, t0)
 end
 gcdx(a::Real, b::Real) = gcdx(promote(a,b)...)
 gcdx(a::T, b::T) where T<:Real = throw(MethodError(gcdx, (a,b)))
@@ -173,7 +178,7 @@ julia> invmod(5,6)
 5
 ```
 """
-function invmod(n::T, m::T) where T<:Integer
+function invmod(n::Integer, m::Integer)
     g, x, y = gcdx(n, m)
     g != 1 && throw(DomainError((n, m), "Greatest common divisor is $g."))
     m == 0 && throw(DomainError(m, "`m` must not be 0."))
@@ -183,7 +188,6 @@ function invmod(n::T, m::T) where T<:Integer
     # The postcondition is: mod(r * n, m) == mod(T(1), m) && div(r, m) == 0
     r
 end
-invmod(n::Integer, m::Integer) = invmod(promote(n,m)...)
 
 # ^ for any x supporting *
 to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)

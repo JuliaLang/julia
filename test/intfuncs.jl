@@ -39,6 +39,8 @@ using Random
     end
     @test lcm(0x5, 3) == 15
     @test gcd(0xf, 20) == 5
+    @test gcd(UInt32(6), Int8(-50)) == 2
+    @test gcd(typemax(UInt), -16) == 1
 end
 @testset "gcd/lcm for arrays" begin
     for T in (Int32, Int64)
@@ -69,6 +71,9 @@ end
     @test gcdx(5, 12) == (1, 5, -2)
     @test gcdx(5, -12) == (1, 5, 2)
     @test gcdx(-25, -4) == (1, -1, 6)
+    x, y = Int8(-12), UInt(100)
+    d, u, v = gcdx(x, y)
+    @test x*u + y*v == d
 end
 @testset "gcd/lcm/gcdx for custom types" begin
     struct MyRational <: Real
@@ -82,12 +87,13 @@ end
     @test gcdx(MyRational(2//3), 3) == gcdx(2//3, 3)
 end
 @testset "invmod" begin
-    @test invmod(6, 31) === 26
-    @test invmod(-1, 3) === 2
-    @test invmod(1, -3) === -2
-    @test invmod(-1, -3) === -1
-    @test invmod(0x2, 0x3) === 0x2
-    @test invmod(2, 0x3) === 2
+    @test invmod(6, 31) == 26
+    @test invmod(-1, 3) == 2
+    @test invmod(1, -3) == -2
+    @test invmod(-1, -3) == -1
+    @test invmod(0x2, 0x3) == 2
+    @test invmod(2, 0x3) == 2
+    @test invmod(0x8, -3) == -1
     @test_throws DomainError invmod(0, 3)
 end
 @testset "powermod" begin
