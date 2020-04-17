@@ -1011,7 +1011,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
     assert(i < jl_datatype_nfields(st));
     size_t offs = jl_field_offset(st, i);
     if (jl_field_isptr(st, i)) {
-        return *(jl_value_t**)((char*)v + offs);
+        return jl_atomic_load_relaxed((jl_value_t**)((char*)v + offs));
     }
     jl_value_t *ty = jl_field_type(st, i);
     if (jl_is_uniontype(ty)) {
@@ -1029,7 +1029,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field_noalloc(jl_value_t *v JL_PROPAGATES_RO
     assert(i < jl_datatype_nfields(st));
     size_t offs = jl_field_offset(st,i);
     assert(jl_field_isptr(st,i));
-    return *(jl_value_t**)((char*)v + offs);
+    return jl_atomic_load_relaxed((jl_value_t**)((char*)v + offs));
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
@@ -1039,7 +1039,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
         jl_bounds_error_int(v, i + 1);
     size_t offs = jl_field_offset(st, i);
     if (jl_field_isptr(st, i)) {
-        jl_value_t *fval = *(jl_value_t**)((char*)v + offs);
+        jl_value_t *fval = jl_atomic_load_relaxed((jl_value_t**)((char*)v + offs));
         if (__unlikely(fval == NULL))
             jl_throw(jl_undefref_exception);
         return fval;
@@ -1057,11 +1057,11 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
 
 void set_nth_field(jl_datatype_t *st, void *v, size_t i, jl_value_t *rhs) JL_NOTSAFEPOINT
 {
+    assert(rhs != NULL);
     size_t offs = jl_field_offset(st, i);
     if (jl_field_isptr(st, i)) {
-        *(jl_value_t**)((char*)v + offs) = rhs;
-        if (rhs != NULL)
-            jl_gc_wb(v, rhs);
+        jl_atomic_store_release((jl_value_t**)((char*)v + offs), rhs);
+        jl_gc_wb(v, rhs);
     }
     else {
         jl_value_t *ty = jl_field_type_concrete(st, i);
@@ -1085,7 +1085,8 @@ JL_DLLEXPORT int jl_field_isdefined(jl_value_t *v, size_t i)
     size_t offs = jl_field_offset(st, i);
     char *fld = (char*)v + offs;
     if (jl_field_isptr(st, i)) {
-        return *(jl_value_t**)fld != NULL;
+        jl_value_t *fval = jl_atomic_load_relaxed((jl_value_t**)fld);
+        return fval != NULL;
     }
     jl_datatype_t *ft = (jl_datatype_t*)jl_field_type(st, i);
     if (jl_is_datatype(ft) && ft->layout->first_ptr >= 0) {
