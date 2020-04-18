@@ -7,27 +7,29 @@ using Random: rand!
 const StridedOrTriangularMatrix{T} = Union{StridedMatrix{T}, LowerTriangular{T}, UnitLowerTriangular{T}, UpperTriangular{T}, UnitUpperTriangular{T}}
 const AdjOrTransStridedOrTriangularMatrix{T} = Union{StridedOrTriangularMatrix{T},Adjoint{<:Any,<:StridedOrTriangularMatrix{T}},Transpose{<:Any,<:StridedOrTriangularMatrix{T}}}
 
-for (Wrapper, operation) ∈ [(:Hermitian, :adjoint), (:Symmetric, :transpose)]
-    @eval begin
-        (+)(A::SparseMatrixCSC, B::$Wrapper{<:Any,<:AbstractSparseMatrix}) = A + sparse(B)
-        (+)(A::$Wrapper{<:Any,<:AbstractSparseMatrix}, B::SparseMatrixCSC) = B + A
+for (Wrapper, conjugation) ∈ [(:Hermitian, :adjoint), (:Symmetric, :transpose)]
+    for op ∈ [:+, :-]
+        @eval begin
+            $op(A::AbstractSparseMatrix, B::$Wrapper{<:Any,<:AbstractSparseMatrix}) = $op(A, sparse(B))
+            $op(A::$Wrapper{<:Any,<:AbstractSparseMatrix}, B::AbstractSparseMatrix) = $op(sparse(A), B)
 
-        (+)(A::SparseMatrixCSC, B::$Wrapper) = A + collect(B)
-        (+)(A::$Wrapper, B::SparseMatrixCSC) = B + A
-
-        function +(A::$Wrapper{<:Any, <:SparseMatrixCSC}, B::$Wrapper{<:Any, <:SparseMatrixCSC})
-            if A.uplo == B.uplo
-                $Wrapper(parent(A) + parent(B), sym_uplo(A.uplo))
-            elseif A.uplo == 'U'
-                $Wrapper(parent(A) + $operation(parent(B)), :U)
-            else
-                $Wrapper($operation(parent(A)) + parent(B), :U)
-            end
+            $op(A::AbstractSparseMatrix, B::$Wrapper) = $op(A, collect(B))
+            $op(A::$Wrapper, B::AbstractSparseMatrix) = $op(collect(A), B)
         end
     end
 end
-(+)(A::Symmetric{<:Any, <:SparseMatrixCSC}, B::Hermitian{<:Any, <:SparseMatrixCSC}) = sparse(A) + B
-(+)(A::Hermitian{<:Any, <:SparseMatrixCSC}, B::Symmetric{<:Any, <:SparseMatrixCSC}) = B + A
+for op ∈ (:+, :-)
+    @eval begin
+        $op(A::Symmetric{<:Any, <:AbstractSparseMatrix}, B::Hermitian{<:Any, <:AbstractSparseMatrix}) =
+            $op(sparse(A), sparse(B))
+        $op(A::Hermitian{<:Any, <:AbstractSparseMatrix}, B::Symmetric{<:Any, <:AbstractSparseMatrix}) =
+            $op(sparse(A), sparse(B))
+        $op(A::Symmetric{<:Real, <:AbstractSparseMatrix}, B::Hermitian{<:Any, <:AbstractSparseMatrix}) =
+            $op(Hermitian(parent(A), sym_uplo(A.uplo)), B)
+        $op(A::Hermitian{<:Any, <:AbstractSparseMatrix}, B::Symmetric{<:Real, <:AbstractSparseMatrix}) =
+            $op(A, Hermitian(parent(B), sym_uplo(B.uplo)))
+    end
+end
 
 
 function mul!(C::StridedVecOrMat, A::AbstractSparseMatrixCSC, B::Union{StridedVector,AdjOrTransStridedOrTriangularMatrix}, α::Number, β::Number)

@@ -2906,18 +2906,50 @@ end
     @test B ≈ mapreduce(identity, +, Matrix(A), dims=2)
 end
 
-@testset "Symmetric and Hermitian" begin
+@testset "Symmetric and Hermitian #35325" begin
     A = sprandn(ComplexF64, 10, 10, 0.1)
     B = sprandn(ComplexF64, 10, 10, 0.1)
-    @test Hermitian(A + A') + B isa SparseMatrixCSC
-    @test A + Hermitian(B + B') isa SparseMatrixCSC
-    @test Hermitian(A + A') + Hermitian(B + B') isa Hermitian{ComplexF64, <:SparseMatrixCSC}
 
-    @test Symmetric(A + A') + B isa SparseMatrixCSC
-    @test A + Symmetric(B + B') isa SparseMatrixCSC
-    @test Symmetric(A + A') + Symmetric(B + B') isa Symmetric{ComplexF64, <:SparseMatrixCSC}
+    @test Symmetric(real(A)) + Hermitian(B) isa Hermitian
+    @test Hermitian(A) + Symmetric(real(B)) isa Hermitian
+    
+    @testset "$Wrapper $op" for op ∈ (+, -), (Wrapper, conjugation) ∈ ((Hermitian, adjoint), (Symmetric, transpose))
+        AWU = Wrapper(A, :U)
+        AWL = Wrapper(A, :L)
+        BWU = Wrapper(B, :U)
+        BWL = Wrapper(B, :L)
+        
+        @test op(AWU, B) isa SparseMatrixCSC
+        @test op(A, BWL) isa SparseMatrixCSC
+        
+        @test op(AWU, B) ≈ op(collect(AWU), B)
+        @test op(AWL, B) ≈ op(collect(AWL), B) 
+        @test op(A, Wrapper(B, :U)) ≈ op(A, collect(BWU))
+        @test op(A, Wrapper(B, :L)) ≈ op(A, collect(BWL))
 
-    @test Symmetric(A + transpose(A)) + Hermitian(A + B') isa SparseMatrixCSC
+        @test op(Wrapper(A), Wrapper(B)) isa Wrapper{ComplexF64, <:SparseMatrixCSC}
+
+        @test op(AWU, Wrapper(B, :U)) ≈ op(collect(AWU), collect(BWU))
+        @test op(AWU, Wrapper(B, :L)) ≈ op(collect(AWU), collect(BWL))
+        @test op(AWL, Wrapper(B, :U)) ≈ op(collect(AWL), collect(BWU))
+        @test op(AWL, Wrapper(B, :L)) ≈ op(collect(AWL), collect(BWL))
+    end
 end
 
 end # module
+
+# A = sprandn(ComplexF64, 10, 10, 0.1)
+# B = sprandn(ComplexF64, 10, 10, 0.1)
+
+# @test Symmetric(real(A)) + Hermitian(B) isa Hermitian
+# @test Hermitian(A) + Symmetric(real(B)) isa Hermitian
+
+# let op = (+), Wrapper = Hermitian, conjugation = adjoint
+#     symu(A) = triu(A) + conjugation(triu(A, +1))
+#     syml(A) = tril(A) + conjugation(tril(A, -1))
+#     @test op(Wrapper(A, :U), B) ≈ collect(op(Wrapper(A, :U), B))
+#     @test op(symu(A), B) ≈ collect(op(symu(A), B))
+#     op(collect(Wrapper(A, :U)), B) ≈ collect(op(symu(A), B))
+#     symu(A)[8, 8]
+#     #(Wrapper(A, :U))[8, 8]
+# end
