@@ -411,7 +411,7 @@ function test_atomic_float(varadd::Atomic{T}, varmax::Atomic{T}, varmin::Atomic{
     atomic_max!(varmax, T(i))
     atomic_min!(varmin, T(i))
 end
-for T in (Int32, Int64, Float32, Float64)
+for T in (Int32, Int64, Float16, Float32, Float64)
     varadd = Atomic{T}()
     varmax = Atomic{T}()
     varmin = Atomic{T}()
@@ -422,6 +422,10 @@ for T in (Int32, Int64, Float32, Float64)
     @test varadd[] === T(sum(1:nloops))
     @test varmax[] === T(maximum(1:nloops))
     @test varmin[] === T(0)
+    @test atomic_add!(Atomic{T}(1), T(2)) == 1
+    @test atomic_sub!(Atomic{T}(2), T(3)) == 2
+    @test atomic_min!(Atomic{T}(4), T(3)) == 4
+    @test atomic_max!(Atomic{T}(5), T(6)) == 5
 end
 
 using Dates
