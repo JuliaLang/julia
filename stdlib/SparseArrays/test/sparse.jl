@@ -2912,18 +2912,17 @@ end
 
     @test Symmetric(real(A)) + Hermitian(B) isa Hermitian
     @test Hermitian(A) + Symmetric(real(B)) isa Hermitian
-    
     @testset "$Wrapper $op" for op ∈ (+, -), (Wrapper, conjugation) ∈ ((Hermitian, adjoint), (Symmetric, transpose))
         AWU = Wrapper(A, :U)
         AWL = Wrapper(A, :L)
         BWU = Wrapper(B, :U)
         BWL = Wrapper(B, :L)
-        
+
         @test op(AWU, B) isa SparseMatrixCSC
         @test op(A, BWL) isa SparseMatrixCSC
-        
+
         @test op(AWU, B) ≈ op(collect(AWU), B)
-        @test op(AWL, B) ≈ op(collect(AWL), B) 
+        @test op(AWL, B) ≈ op(collect(AWL), B)
         @test op(A, Wrapper(B, :U)) ≈ op(A, collect(BWU))
         @test op(A, Wrapper(B, :L)) ≈ op(A, collect(BWL))
 
@@ -2937,19 +2936,3 @@ end
 end
 
 end # module
-
-# A = sprandn(ComplexF64, 10, 10, 0.1)
-# B = sprandn(ComplexF64, 10, 10, 0.1)
-
-# @test Symmetric(real(A)) + Hermitian(B) isa Hermitian
-# @test Hermitian(A) + Symmetric(real(B)) isa Hermitian
-
-# let op = (+), Wrapper = Hermitian, conjugation = adjoint
-#     symu(A) = triu(A) + conjugation(triu(A, +1))
-#     syml(A) = tril(A) + conjugation(tril(A, -1))
-#     @test op(Wrapper(A, :U), B) ≈ collect(op(Wrapper(A, :U), B))
-#     @test op(symu(A), B) ≈ collect(op(symu(A), B))
-#     op(collect(Wrapper(A, :U)), B) ≈ collect(op(symu(A), B))
-#     symu(A)[8, 8]
-#     #(Wrapper(A, :U))[8, 8]
-# end
