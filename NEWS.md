@@ -167,7 +167,7 @@ Standard library changes
 
 #### Dates
 * The `eps` function now accepts `TimeType` types ([#31487]).
-
+* `Quarter` period is defined.
 #### Statistics
 
 

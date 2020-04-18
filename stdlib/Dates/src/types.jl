@@ -5,6 +5,7 @@ abstract type AbstractTime end
 """
     Period
     Year
+    Quarter
     Month
     Week
     Day
@@ -21,7 +22,7 @@ abstract type Period     <: AbstractTime end
 abstract type DatePeriod <: Period end
 abstract type TimePeriod <: Period end
 
-for T in (:Year, :Month, :Week, :Day)
+for T in (:Year, :Quarter, :Month, :Week, :Day)
     @eval struct $T <: DatePeriod
         value::Int64
         $T(v::Number) = new(v)
@@ -36,6 +37,7 @@ end
 
 """
     Year(v)
+    Quarter(v)
     Month(v)
     Week(v)
     Day(v)

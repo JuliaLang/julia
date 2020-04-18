@@ -12,7 +12,7 @@ value(x::Period) = x.value
 # The default constructors for Periods work well in almost all cases
 # P(x) = new((convert(Int64,x))
 # The following definitions are for Period-specific safety
-for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond, :Microsecond, :Nanosecond)
+for period in (:Year, :Quarter, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond, :Microsecond, :Nanosecond)
     period_str = string(period)
     accessor_str = lowercase(period_str)
     # Convenience method for show()
@@ -102,13 +102,18 @@ Base.abs(a::T) where {T<:Period} = T(abs(value(a)))
 Base.sign(x::Period) = sign(value(x))
 
 periodisless(::Period,::Year)        = true
+periodisless(::Period,::Quarter)     = true
+periodisless(::Year,::Quarter)       = false
 periodisless(::Period,::Month)       = true
 periodisless(::Year,::Month)         = false
+periodisless(::Quarter,::Month)      = false
 periodisless(::Period,::Week)        = true
 periodisless(::Year,::Week)          = false
+periodisless(::Quarter,::Week)       = false
 periodisless(::Month,::Week)         = false
 periodisless(::Period,::Day)         = true
 periodisless(::Year,::Day)           = false
+periodisless(::Quarter,::Day)        = false
 periodisless(::Month,::Day)          = false
 periodisless(::Week,::Day)           = false
 periodisless(::Period,::Hour)        = false
@@ -422,7 +427,7 @@ for i = 1:length(fixedperiod_conversions)
 end
 
 # other periods with fixed conversions but which aren't fixed time periods
-const OtherPeriod = Union{Month, Year}
+const OtherPeriod = Union{Month, Quarter, Year}
 let vmax = typemax(Int64) ÷ 12, vmin = typemin(Int64) ÷ 12
     @eval function Base.convert(::Type{Month}, x::Year)
         $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, Month, x))
@@ -431,6 +436,25 @@ let vmax = typemax(Int64) ÷ 12, vmin = typemin(Int64) ÷ 12
 end
 Base.convert(::Type{Year}, x::Month) = Year(divexact(value(x), 12))
 Base.promote_rule(::Type{Year}, ::Type{Month}) = Month
+
+let vmax = typemax(Int64) ÷ 4, vmin = typemin(Int64) ÷ 4
+    @eval function Base.convert(::Type{Quarter}, x::Year)
+        $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, Quarter, x))
+        Quarter(value(x) * 4)
+    end
+end
+Base.convert(::Type{Year}, x::Quarter) = Year(divexact(value(x), 4))
+Base.promote_rule(::Type{Year}, ::Type{Quarter}) = Quarter
+
+let vmax = typemax(Int64) ÷ 3, vmin = typemin(Int64) ÷ 3
+    @eval function Base.convert(::Type{Month}, x::Quarter)
+        $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, Month, x))
+        Month(value(x) * 3)
+    end
+end
+Base.convert(::Type{Quarter}, x::Month) = Quarter(divexact(value(x), 3))
+Base.promote_rule(::Type{Quarter}, ::Type{Month}) = Month
+
 
 # fixed is not comparable to other periods, as per discussion in issue #21378
 (==)(x::FixedPeriod, y::OtherPeriod) = false
@@ -443,6 +467,7 @@ const otherperiod_seed = UInt === UInt64 ? 0xe1837356ff2d2ac9 : 0x170d1b00
 Base.hash(x::FixedPeriod, h::UInt) = hash(tons(x), h + fixedperiod_seed)
 # Overflow can also happen here for really long periods (~8e17 years)
 Base.hash(x::Year, h::UInt) = hash(12 * value(x), h + otherperiod_seed)
+Base.hash(x::Quarter, h::UInt) = hash(4 * value(x), h + otherperiod_seed)
 Base.hash(x::Month, h::UInt) = hash(value(x), h + otherperiod_seed)
 
 Base.isless(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(isless, (x, y)))
@@ -459,6 +484,7 @@ toms(c::Hour)        = 3600000 * value(c)
 toms(c::Day)         = 86400000 * value(c)
 toms(c::Week)        = 604800000 * value(c)
 toms(c::Month)       = 86400000.0 * 30.436875 * value(c)
+toms(c::Quarter)     = 86400000.0 * 121.7475 * value(c)
 toms(c::Year)        = 86400000.0 * 365.2425 * value(c)
 toms(c::CompoundPeriod) = isempty(c.periods) ? 0.0 : Float64(sum(toms, c.periods))
 tons(x)              = toms(x) * 1000000
@@ -472,5 +498,6 @@ days(c::Hour)        = div(value(c), 24)
 days(c::Day)         = value(c)
 days(c::Week)        = 7 * value(c)
 days(c::Year)        = 365.2425 * value(c)
+days(c::Quarter)        = 121.7475 * value(c)
 days(c::Month)       = 30.436875 * value(c)
 days(c::CompoundPeriod) = isempty(c.periods) ? 0.0 : Float64(sum(days, c.periods))
