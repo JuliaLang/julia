@@ -467,7 +467,7 @@ const otherperiod_seed = UInt === UInt64 ? 0xe1837356ff2d2ac9 : 0x170d1b00
 Base.hash(x::FixedPeriod, h::UInt) = hash(tons(x), h + fixedperiod_seed)
 # Overflow can also happen here for really long periods (~8e17 years)
 Base.hash(x::Year, h::UInt) = hash(12 * value(x), h + otherperiod_seed)
-Base.hash(x::Quarter, h::UInt) = hash(4 * value(x), h + otherperiod_seed)
+Base.hash(x::Quarter, h::UInt) = hash(3 * value(x), h + otherperiod_seed)
 Base.hash(x::Month, h::UInt) = hash(value(x), h + otherperiod_seed)
 
 Base.isless(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(isless, (x, y)))
