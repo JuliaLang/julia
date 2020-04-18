@@ -933,7 +933,18 @@ deserialize_tuple(s::AbstractSerializer, len) = ntuple(i->deserialize(s), len)
 
 function deserialize_svec(s::AbstractSerializer)
     n = read(s.io, Int32)
-    svec(Any[ deserialize(s) for i=1:n ]...)
+    n == 0 && return svec()
+    n == 1 && return svec(deserialize(s))
+    n == 2 && return svec(deserialize(s),deserialize(s))
+    n == 3 && return svec(deserialize(s),deserialize(s),deserialize(s))
+    n == 4 && return svec(deserialize(s),deserialize(s),deserialize(s),deserialize(s))
+    n == 5 && return svec(deserialize(s),deserialize(s),deserialize(s),deserialize(s),deserialize(s))
+    n == 6 && return svec(deserialize(s),deserialize(s),deserialize(s),deserialize(s),deserialize(s),deserialize(s))
+    a = Vector{Any}(undef,n)
+    for i in 1:n
+        a[i] = deserialize(s)
+    end
+    svec(a...)
 end
 
 function deserialize_module(s::AbstractSerializer)
