@@ -20,14 +20,10 @@ for (Wrapper, conjugation) ∈ [(:Hermitian, :adjoint), (:Symmetric, :transpose)
 end
 for op ∈ (:+, :-)
     @eval begin
-        $op(A::Symmetric{<:Any, <:AbstractSparseMatrix}, B::Hermitian{<:Any, <:AbstractSparseMatrix}) =
-            $op(sparse(A), sparse(B))
-        $op(A::Hermitian{<:Any, <:AbstractSparseMatrix}, B::Symmetric{<:Any, <:AbstractSparseMatrix}) =
-            $op(sparse(A), sparse(B))
-        $op(A::Symmetric{<:Real, <:AbstractSparseMatrix}, B::Hermitian{<:Any, <:AbstractSparseMatrix}) =
-            $op(Hermitian(parent(A), sym_uplo(A.uplo)), B)
-        $op(A::Hermitian{<:Any, <:AbstractSparseMatrix}, B::Symmetric{<:Real, <:AbstractSparseMatrix}) =
-            $op(A, Hermitian(parent(B), sym_uplo(B.uplo)))
+        $op(A::Symmetric{<:Any, <:AbstractSparseMatrix}, B::Hermitian{<:Any, <:AbstractSparseMatrix}) = $op(sparse(A), sparse(B))
+        $op(A::Hermitian{<:Any, <:AbstractSparseMatrix}, B::Symmetric{<:Any, <:AbstractSparseMatrix}) = $op(sparse(A), sparse(B))
+        $op(A::Symmetric{<:Real, <:AbstractSparseMatrix}, B::Hermitian{<:Any, <:AbstractSparseMatrix}) = $op(Hermitian(parent(A), sym_uplo(A.uplo)), B)
+        $op(A::Hermitian{<:Any, <:AbstractSparseMatrix}, B::Symmetric{<:Real, <:AbstractSparseMatrix}) = $op(A, Hermitian(parent(B), sym_uplo(B.uplo)))
     end
 end
 
