@@ -124,6 +124,9 @@ New library features
 * `accumulate`, `cumsum`, and `cumprod` now support `Tuple` ([#34654]) and arbitrary iterators ([#34656]).
 * In `splice!` with no replacement, values to be removed can now be specified with an
   arbitrary iterable (instead of a `UnitRange`) ([#34524]).
+* `open` for files now accepts a keyword argument `lock` controlling whether file operations
+  will acquire locks for safe multi-threaded access. Setting it to `false` provides better
+  performance when only one thread will access the file.
 
 Standard library changes
 ------------------------
