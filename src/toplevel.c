@@ -368,9 +368,6 @@ static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs
     *has_loops = 0;
     for(i=0; i < jl_array_len(body); i++) {
         jl_value_t *stmt = jl_array_ptr_ref(body,i);
-        if (!stmt) {
-            jl_error("null stmt in body_attributes");
-        }
         if (!*has_loops) {
             if (jl_is_gotonode(stmt)) {
                 if (jl_gotonode_label(stmt) <= i)
@@ -792,14 +789,10 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     int has_intrinsics = 0, has_defs = 0, has_loops = 0;
     assert(head == thunk_sym);
     thk = (jl_code_info_t*)jl_exprarg(ex, 0);
-    assert(jl_is_code_info(thk));
-    assert(jl_typeis(thk->code, jl_array_any_type));
-    jl_array_t *body = (jl_array_t*)thk->code;
-    if (!body){
-        jl_eval_errorf(m, "syntax: malformed \"thunk\" statement");
+    if (!jl_is_code_info(thk) || !jl_typeis(thk->code, jl_array_any_type)) {
+        jl_eval_errorf(m, "malformed \"thunk\" statement");
     }
-    body_attributes(body, &has_intrinsics, &has_defs, &has_loops);
-
+    body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops);
     jl_value_t *result;
     if (has_intrinsics || (!has_defs && fast && has_loops &&
                            jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF &&
