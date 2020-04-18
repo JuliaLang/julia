@@ -4997,7 +4997,8 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
         jl_value_t *jt = jl_tparam(sig, i);
         if (is_uniquerep_Type(jt))
             continue;
-        Type *ty = deserves_argbox(jt) ? T_prjlvalue : julia_type_to_llvm(ctx, jt);
+        bool isboxed = deserves_argbox(jt);
+        Type *ty = isboxed ? T_prjlvalue : julia_type_to_llvm(ctx, jt);
         if (type_is_ghost(ty))
             continue;
         unsigned argno = fsig.size();
@@ -5005,6 +5006,9 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
             attributes = attributes.addParamAttribute(jl_LLVMContext, argno, Attribute::NoCapture);
             attributes = attributes.addParamAttribute(jl_LLVMContext, argno, Attribute::ReadOnly);
             ty = PointerType::get(ty, AddressSpace::Derived);
+        }
+        else if (isboxed && jl_is_immutable_datatype(jt)) {
+            attributes = attributes.addParamAttribute(jl_LLVMContext, argno, Attribute::ReadOnly);
         }
         fsig.push_back(ty);
     }
@@ -5581,6 +5585,8 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             if (isboxed) // e.g. is-pointer
                 maybe_mark_argument_dereferenceable(Arg, argType);
             theArg = mark_julia_type(ctx, Arg, isboxed, argType);
+            if (theArg.tbaa == tbaa_immut)
+                theArg.tbaa = tbaa_const;
         }
         return theArg;
     };
