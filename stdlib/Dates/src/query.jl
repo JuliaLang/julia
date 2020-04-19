@@ -650,10 +650,8 @@ daysinyear(dt::TimeType) = 365 + isleapyear(dt)
 
 Return the quarter that `dt` resides in. Range of value is 1:4.
 """
-function quarterofyear(dt::TimeType)
-    m = month(dt)
-    return m < 4 ? 1 : m < 7 ? 2 : m < 10 ? 3 : 4
-end
+quarterofyear(dt::TimeType) = quarter(dt)
+
 const QUARTERDAYS = (0, 90, 181, 273)
 
 """
