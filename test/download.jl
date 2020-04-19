@@ -53,4 +53,9 @@ mktempdir() do temp_dir
     invalid_host_file = joinpath(temp_dir, "invalid_host")
     @test_throws ProcessFailedException download("http://192.0.2.1", invalid_host_file)
     @test !isfile(invalid_host_file)
+
+    curl_exe = Base.find_curl()
+    if curl_exe !== nothing
+        @test_throws ProcessFailedException Base.download_curl(curl_exe, "http://192.0.2.1", "")
+    end
 end
