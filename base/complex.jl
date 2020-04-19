@@ -1029,6 +1029,42 @@ function complex(A::AbstractArray{T}) where T
     convert(AbstractArray{typeof(complex(zero(T)))}, A)
 end
 
+"""
+    div(z1, z2, r::RoundingMode=RoundNearest)
+
+The quotient from Euclidean division of two Gaussian integers. 
+Computes z1/z2, rounded to a Gaussian integer according to the rounding mode `r`. 
+In other words, the quantity
+
+    round(z1/z2,r,r)
+
+without any intermediate rounding.
+I.e. quotient with the same rounding mode `r` applied to real and imaginary parts.
+
+# Examples:
+```jldoctest
+julia> div(4 + 4im, 3 + 1im, RoundDown)
+1 + 0im
+
+julia> div(4 + 4im, 3 + 1im, RoundUp)
+2 + 1im
+
+julia> div(5 + 1im, 2 + 1im, RoundNearest)
+2 - 1im
+
+julia> div(5 + 1im, 2 + 1im, RoundNearestTiesAway)
+2 - 1im
+
+julia> div(-5 + 5im, 2 + 2im, RoundNearest)
+0 + 2im
+
+julia> div(-5 + 5im, 2 + 2im, RoundNearestTiesAway)
+0 + 3im
+
+julia> div(-5 + 5im, 2 + 2im, RoundNearestTiesUp)
+0 + 3im
+```
+"""
 function div(a::Complex{T}, b::Complex{V}, r::RoundingMode=RoundNearest) where {T<:Integer, V<:Integer}
     R = promote_type(T, V)
     a, b = Complex{R}(a), Complex{R}(b)
@@ -1042,6 +1078,16 @@ function div(a::Complex{T}, b::Complex{V}, r::RoundingMode=RoundNearest) where {
     Complex(div(real(t), abs2_b, r), div(imag(t), abs2_b, r))
 end
 
+"""
+    rem(z1, z2, r::RoundingMode=RoundNearest)
+
+Compute the remainder of `z1` after Euclidean division by `z2`, with the quotient 
+rounded according to the rounding mode `r`. In other words, the quantity
+
+    z1 - z2*round(z1/z2,r,r)
+
+without any intermediate rounding.
+"""
 function rem(a::Complex{T}, b::Complex{V}, r::RoundingMode=RoundNearest) where {T<:Integer, V<:Integer}
     R = promote_type(T, V)
     a, b = Complex{R}(a), Complex{R}(b)
