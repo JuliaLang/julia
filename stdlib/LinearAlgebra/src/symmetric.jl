@@ -465,11 +465,11 @@ for f ∈ (:+, :-), (Wrapper, conjugation) ∈ ((:Hermitian, :adjoint), (:Symmet
     @eval begin
         function $f(A::$Wrapper, B::$Wrapper)
             if A.uplo == B.uplo
-                $Wrapper($f(parent(A), parent(B)), sym_uplo(A.uplo))
+                return $Wrapper($f(parent(A), parent(B)), sym_uplo(A.uplo))
             elseif A.uplo == 'U'
-                $Wrapper($f(parent(A), $conjugation(parent(B))), :U)
+                return $Wrapper($f(parent(A), $conjugation(parent(B))), :U)
             else
-                $Wrapper($f($conjugation(parent(A)), parent(B)), :U)
+                return $Wrapper($f($conjugation(parent(A)), parent(B)), :U)
             end
         end
     end
