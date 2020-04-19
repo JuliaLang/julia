@@ -368,7 +368,7 @@ See also [`rsplit`](@ref).
 julia> a = "Ma.rch"
 "Ma.rch"
 
-julia> split(a,".")
+julia> split(a, ".")
 2-element Array{SubString{String},1}:
  "Ma"
  "rch"
@@ -430,7 +430,7 @@ Similar to [`split`](@ref), but starting from the end of the string.
 julia> a = "M.a.r.c.h"
 "M.a.r.c.h"
 
-julia> rsplit(a,".")
+julia> rsplit(a, ".")
 5-element Array{SubString{String},1}:
  "M"
  "a"
@@ -438,11 +438,11 @@ julia> rsplit(a,".")
  "c"
  "h"
 
-julia> rsplit(a,".";limit=1)
+julia> rsplit(a, "."; limit=1)
 1-element Array{SubString{String},1}:
  "M.a.r.c.h"
 
-julia> rsplit(a,".";limit=2)
+julia> rsplit(a, "."; limit=2)
 2-element Array{SubString{String},1}:
  "M.a.r.c"
  "h"
