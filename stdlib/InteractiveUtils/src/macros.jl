@@ -15,8 +15,13 @@ function recursive_dotcalls!(ex, args, i=1)
     if !(ex isa Expr) || ((ex.head !== :. || !(ex.args[2] isa Expr)) &&
                           (ex.head !== :call || string(ex.args[1])[1] != '.'))
         newarg = Symbol('x', i)
-        push!(args, ex)
-        return newarg, i+1
+        if ex.head === :...
+            push!(args, only(ex.args))
+            return Expr(:..., newarg), i+1
+        else
+            push!(args, ex)
+            return newarg, i+1
+        end
     end
     (start, branches) = ex.head === :. ? (1, ex.args[2].args) : (2, ex.args)
     for j in start:length(branches)

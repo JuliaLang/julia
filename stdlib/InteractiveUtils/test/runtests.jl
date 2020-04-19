@@ -330,6 +330,7 @@ B33163(x) = x
 @test (@code_typed optimize=true max.([1,7], UInt.([4])))[2] == Vector{UInt}
 @test (@code_typed Ref.([1,2])[1].x)[2] == Int
 @test (@code_typed max.(Ref(true).x))[2] == Bool
+@test !isempty(@code_typed optimize=false max.(Ref.([5, 6])...))
 
 module ReflectionTest
 using Test, Random, InteractiveUtils
