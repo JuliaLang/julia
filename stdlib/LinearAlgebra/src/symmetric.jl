@@ -477,8 +477,8 @@ end
 
 for f in (:+, :-)
     @eval begin
-        $f(A::Hermitian, B::Symmetric{<:Real}) = $f(A, Hermitian(B, sym_uplo(B.uplo)))
-        $f(A::Symmetric{<:Real}, B::Hermitian) = $f(Hermitian(A, sym_uplo(A.uplo)), B)
+        $f(A::Hermitian, B::Symmetric{<:Real}) = $f(A, Hermitian(parent(B), sym_uplo(B.uplo)))
+        $f(A::Symmetric{<:Real}, B::Hermitian) = $f(Hermitian(parent(A), sym_uplo(A.uplo)), B)
     end
 end
 

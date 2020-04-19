@@ -2910,9 +2910,10 @@ end
     A = sprandn(ComplexF64, 10, 10, 0.1)
     B = sprandn(ComplexF64, 10, 10, 0.1)
 
-    @test Symmetric(real(A)) + Hermitian(B) isa Hermitian
-    @test Hermitian(A) + Symmetric(real(B)) isa Hermitian
-    @testset "$Wrapper $op" for op ∈ (+, -), (Wrapper, conjugation) ∈ ((Hermitian, adjoint), (Symmetric, transpose))
+    @test Symmetric(real(A)) + Hermitian(B) isa Hermitian{ComplexF64, <:SparseMatrixCSC}
+    @test Hermitian(A) + Symmetric(real(B)) isa Hermitian{ComplexF64, <:SparseMatrixCSC}
+    @test Hermitian(A) + Symmetric(B) isa SparseMatrixCSC
+    @testset "$Wrapper $op" for op ∈ (+, -), Wrapper ∈ (Hermitian, Symmetric)
         AWU = Wrapper(A, :U)
         AWL = Wrapper(A, :L)
         BWU = Wrapper(B, :U)
