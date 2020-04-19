@@ -208,6 +208,8 @@ Standard library changes
 
 
 #### Sockets
+* Joining and leaving UDP multicast groups on a `UDPSocket` is now supported
+  through `join_multicast_group()` and `leave_multicast_group()` ([#35521]).
 
 #### Distributed
 * `launch_on_machine` now supports and parses ipv6 square-bracket notation ([#34430])
