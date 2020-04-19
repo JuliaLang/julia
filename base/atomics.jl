@@ -433,7 +433,7 @@ for op in [:+, :-, :max, :min]
             new = $op(old, val)
             cmp = old
             old = atomic_cas!(var, cmp, new)
-            reinterpret(IT, old) == reinterpret(IT, cmp) && return new
+            reinterpret(IT, old) == reinterpret(IT, cmp) && return old
             # Temporary solution before we have gc transition support in codegen.
             ccall(:jl_gc_safepoint, Cvoid, ())
         end
