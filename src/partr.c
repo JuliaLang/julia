@@ -275,10 +275,45 @@ JL_DLLEXPORT int jl_enqueue_task(jl_task_t *task)
 }
 
 
+static int running_under_rr(void)
+{
+#ifdef _OS_LINUX_
+#define RR_CALL_BASE 1000
+#define SYS_rrcall_check_presence (RR_CALL_BASE + 8)
+    static int checked_running_under_rr = 0;
+    static int is_running_under_rr = 0;
+    if (!checked_running_under_rr) {
+        int ret = syscall(SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0);
+        if (ret == -1) {
+            // Should always be ENOSYS, but who knows what people do for
+            // unknown syscalls with their seccomp filters, so just say
+            // that we don't have rr.
+            is_running_under_rr = 0;
+        }
+        else {
+            is_running_under_rr = 1;
+        }
+        checked_running_under_rr = 1;
+    }
+    return is_running_under_rr;
+#else
+    return 0;
+#endif
+}
+
+
 //  sleep_check_after_threshold() -- if sleep_threshold ns have passed, return 1
 static int sleep_check_after_threshold(uint64_t *start_cycles)
 {
     JULIA_DEBUG_SLEEPWAKE( return 1 ); // hammer on the sleep/wake logic much harder
+    /**
+     * This wait loop is a bit of a worst case for rr - it needs timer access,
+     * which are slow and it busy loops in user space, which prevents the
+     * scheduling logic from switching to other threads. Just don't bother
+     * trying to wait here
+     */
+    if (running_under_rr())
+        return 1;
     if (!(*start_cycles)) {
         *start_cycles = jl_hrtime();
         return 0;
