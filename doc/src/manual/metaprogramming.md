@@ -126,6 +126,9 @@ julia> Symbol(:var,'_',"sym")
 :var_sym
 ```
 
+Note that to use `:` syntax, the symbol's name must be a valid identifier.
+Otherwise the `Symbol(str)` constructor must be used.
+
 In the context of an expression, symbols are used to indicate access to variables; when an expression
 is evaluated, a symbol is replaced with the value bound to that symbol in the appropriate [scope](@ref scope-of-variables).
 
@@ -196,7 +199,7 @@ julia> typeof(ex)
 Expr
 ```
 
-### Interpolation
+### [Interpolation](@id man-expression-interpolation)
 
 Direct construction of [`Expr`](@ref) objects with value arguments is powerful, but `Expr` constructors
 can be tedious compared to "normal" Julia syntax. As an alternative, Julia allows *interpolation* of
@@ -265,7 +268,7 @@ end))
 end
 ```
 
-Notice that the result contains `Expr(:$, :x)`, which means that `x` has not been
+Notice that the result contains `$x`, which means that `x` has not been
 evaluated yet.
 In other words, the `$` expression "belongs to" the inner quote expression, and
 so its argument is only evaluated when the inner quote expression is:
@@ -293,7 +296,7 @@ end))
 end
 ```
 
-Notice that `:(1 + 2)` now appears in the result instead of the symbol `:x`.
+Notice that `(1 + 2)` now appears in the result instead of the symbol `x`.
 Evaluating this expression yields an interpolated `3`:
 
 ```jldoctest interp1
@@ -345,7 +348,7 @@ QuoteNode
 
 `QuoteNode` can also be used for certain advanced metaprogramming tasks.
 
-### [`eval`](@ref) and effects
+### Evaluating expressions
 
 Given an expression object, one can cause Julia to evaluate (execute) it at global scope using
 [`eval`](@ref):
@@ -550,7 +553,7 @@ julia> macro twostep(arg)
 @twostep (macro with 1 method)
 
 julia> ex = macroexpand(Main, :(@twostep :(1, 2, 3)) );
-I execute at parse time. The argument is: $(Expr(:quote, :((1, 2, 3))))
+I execute at parse time. The argument is: :((1, 2, 3))
 ```
 
 The first call to [`println`](@ref) is executed when [`macroexpand`](@ref) is called. The
@@ -768,10 +771,10 @@ final value. The macro might look like this:
 ```julia
 macro time(ex)
     return quote
-        local t0 = time()
+        local t0 = time_ns()
         local val = $ex
-        local t1 = time()
-        println("elapsed time: ", t1-t0, " seconds")
+        local t1 = time_ns()
+        println("elapsed time: ", (t1-t0)/1e9, " seconds")
         val
     end
 end
@@ -854,10 +857,10 @@ macro time(expr)
     return :(timeit(() -> $(esc(expr))))
 end
 function timeit(f)
-    t0 = time()
+    t0 = time_ns()
     val = f()
-    t1 = time()
-    println("elapsed time: ", t1-t0, " seconds")
+    t1 = time_ns()
+    println("elapsed time: ", (t1-t0)/1e9, " seconds")
     return val
 end
 ```
@@ -1292,7 +1295,7 @@ to build some more advanced (and valid) functionality...
 
 ### An advanced example
 
-Julia's base library has a an internal `sub2ind` function to calculate a linear index into an n-dimensional
+Julia's base library has an internal `sub2ind` function to calculate a linear index into an n-dimensional
 array, based on a set of n multilinear indices - in other words, to calculate the index `i` that
 can be used to index into an array `A` using `A[i]`, instead of `A[x,y,z,...]`. One possible implementation
 is the following:

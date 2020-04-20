@@ -61,9 +61,7 @@ Close an I/O stream. Performs a [`flush`](@ref) first.
 """
 function close end
 function flush end
-function wait_connected end
 function wait_readnb end
-function wait_readbyte end
 function wait_close end
 function bytesavailable end
 
@@ -71,7 +69,7 @@ function bytesavailable end
     readavailable(stream)
 
 Read all available data on the stream, blocking the task only if no data is available. The
-result is a `Vector{UInt8,1}`.
+result is a `Vector{UInt8}`.
 """
 function readavailable end
 
@@ -137,7 +135,7 @@ Read the entirety of `io`, as a `String`.
 julia> io = IOBuffer("JuliaLang is a GitHub organization");
 
 julia> read(io, Char)
-'J': ASCII/Unicode U+004a (category Lu: Letter, uppercase)
+'J': ASCII/Unicode U+004A (category Lu: Letter, uppercase)
 
 julia> io = IOBuffer("JuliaLang is a GitHub organization");
 
@@ -228,6 +226,80 @@ function unsafe_read(s::IO, p::Ptr{UInt8}, n::UInt)
     nothing
 end
 
+function peek(s::IO)
+    mark(s)
+    try read(s, UInt8)
+    finally
+        reset(s)
+    end
+end
+
+# Generic `open` methods
+
+"""
+    open_flags(; keywords...) -> NamedTuple
+
+Compute the `read`, `write`, `create`, `truncate`, `append` flag value for
+a given set of keyword arguments to [`open`](@ref) a [`NamedTuple`](@ref).
+"""
+function open_flags(;
+    read     :: Union{Bool,Nothing} = nothing,
+    write    :: Union{Bool,Nothing} = nothing,
+    create   :: Union{Bool,Nothing} = nothing,
+    truncate :: Union{Bool,Nothing} = nothing,
+    append   :: Union{Bool,Nothing} = nothing,
+)
+    if write === true && read !== true && append !== true
+        create   === nothing && (create   = true)
+        truncate === nothing && (truncate = true)
+    end
+
+    if truncate === true || append === true
+        write  === nothing && (write  = true)
+        create === nothing && (create = true)
+    end
+
+    write    === nothing && (write    = false)
+    read     === nothing && (read     = !write)
+    create   === nothing && (create   = false)
+    truncate === nothing && (truncate = false)
+    append   === nothing && (append   = false)
+
+    return (
+        read = read,
+        write = write,
+        create = create,
+        truncate = truncate,
+        append = append,
+    )
+end
+
+"""
+    open(f::Function, args...; kwargs....)
+
+Apply the function `f` to the result of `open(args...; kwargs...)` and close the resulting file
+descriptor upon completion.
+
+# Examples
+```jldoctest
+julia> open("myfile.txt", "w") do io
+           write(io, "Hello world!")
+       end;
+
+julia> open(f->read(f, String), "myfile.txt")
+"Hello world!"
+
+julia> rm("myfile.txt")
+```
+"""
+function open(f::Function, args...; kwargs...)
+    io = open(args...; kwargs...)
+    try
+        f(io)
+    finally
+        close(io)
+    end
+end
 
 # Generic wrappers around other IO objects
 abstract type AbstractPipe <: IO end
@@ -260,7 +332,6 @@ iswritable(io::AbstractPipe) = iswritable(pipe_writer(io))
 isopen(io::AbstractPipe) = isopen(pipe_writer(io)) || isopen(pipe_reader(io))
 close(io::AbstractPipe) = (close(pipe_writer(io)); close(pipe_reader(io)))
 wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io), nb)
-wait_readbyte(io::AbstractPipe, byte::UInt8) = wait_readbyte(pipe_reader(io), byte)
 wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)); wait_close(pipe_reader(io)))
 
 """
@@ -310,8 +381,8 @@ read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
 read(filename::AbstractString, ::Type{T}) where {T} = open(io->read(io, T), filename)
 
 """
-    read!(stream::IO, array::Union{Array, BitArray})
-    read!(filename::AbstractString, array::Union{Array, BitArray})
+    read!(stream::IO, array::AbstractArray)
+    read!(filename::AbstractString, array::AbstractArray)
 
 Read binary data from an I/O stream or file, filling in `array`.
 """
@@ -611,8 +682,8 @@ function read!(s::IO, a::Array{UInt8})
     return a
 end
 
-function read!(s::IO, a::Array{T}) where T
-    if isbitstype(T)
+function read!(s::IO, a::AbstractArray{T}) where T
+    if isbitstype(T) && (a isa Array || a isa FastContiguousSubArray{T,<:Any,<:Array{T}})
         GC.@preserve a unsafe_read(s, pointer(a), sizeof(a))
     else
         for i in eachindex(a)

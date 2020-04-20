@@ -17,10 +17,11 @@ spawnat(p, thunk) = remotecall(thunk, p)
 spawn_somewhere(thunk) = spawnat(nextproc(),thunk)
 
 """
-    @spawn
+    @spawn expr
 
 Create a closure around an expression and run it on an automatically-chosen process,
 returning a [`Future`](@ref) to the result.
+This macro is deprecated; `@spawnat :any expr` should be used instead.
 
 # Examples
 ```julia-repl
@@ -38,13 +39,16 @@ Future(3, 1, 7, nothing)
 julia> fetch(f)
 3
 ```
+
+!!! compat "Julia 1.3"
+    As of Julia 1.3 this macro is deprecated. Use `@spawnat :any` instead.
 """
 macro spawn(expr)
     thunk = esc(:(()->($expr)))
     var = esc(Base.sync_varname)
     quote
         local ref = spawn_somewhere($thunk)
-        if $(Expr(:isdefined, var))
+        if $(Expr(:islocal, var))
             push!($var, ref)
         end
         ref
@@ -52,29 +56,44 @@ macro spawn(expr)
 end
 
 """
-    @spawnat
+    @spawnat p expr
 
 Create a closure around an expression and run the closure
 asynchronously on process `p`. Return a [`Future`](@ref) to the result.
-Accepts two arguments, `p` and an expression.
+If `p` is the quoted literal symbol `:any`, then the system will pick a
+processor to use automatically.
 
 # Examples
 ```julia-repl
-julia> addprocs(1);
+julia> addprocs(3);
 
 julia> f = @spawnat 2 myid()
 Future(2, 1, 3, nothing)
 
 julia> fetch(f)
 2
+
+julia> f = @spawnat :any myid()
+Future(3, 1, 7, nothing)
+
+julia> fetch(f)
+3
 ```
+
+!!! compat "Julia 1.3"
+    The `:any` argument is available as of Julia 1.3.
 """
 macro spawnat(p, expr)
     thunk = esc(:(()->($expr)))
     var = esc(Base.sync_varname)
+    if p === QuoteNode(:any)
+        spawncall = :(spawn_somewhere($thunk))
+    else
+        spawncall = :(spawnat($(esc(p)), $thunk))
+    end
     quote
-        local ref = spawnat($(esc(p)), $thunk)
-        if $(Expr(:isdefined, var))
+        local ref = $spawncall
+        if $(Expr(:islocal, var))
             push!($var, ref)
         end
         ref
@@ -82,10 +101,10 @@ macro spawnat(p, expr)
 end
 
 """
-    @fetch
+    @fetch expr
 
-Equivalent to `fetch(@spawn expr)`.
-See [`fetch`](@ref) and [`@spawn`](@ref).
+Equivalent to `fetch(@spawnat :any expr)`.
+See [`fetch`](@ref) and [`@spawnat`](@ref).
 
 # Examples
 ```julia-repl
@@ -152,14 +171,13 @@ extract_imports(x) = extract_imports!(Any[], x)
 
 Execute an expression under `Main` on all `procs`.
 Errors on any of the processes are collected into a
-`CompositeException` and thrown. For example:
+[`CompositeException`](@ref) and thrown. For example:
 
     @everywhere bar = 1
 
 will define `Main.bar` on all processes.
 
-Unlike [`@spawn`](@ref) and [`@spawnat`](@ref),
-`@everywhere` does not capture any local variables.
+Unlike [`@spawnat`](@ref), `@everywhere` does not capture any local variables.
 Instead, local variables can be broadcast using interpolation:
 
     foo = 1
@@ -191,9 +209,9 @@ end
 Execute an expression under module `m` on the processes
 specified in `procs`.
 Errors on any of the processes are collected into a
-`CompositeException` and thrown.
+[`CompositeException`](@ref) and thrown.
 
-See also `@everywhere`.
+See also [`@everywhere`](@ref).
 """
 function remotecall_eval(m::Module, procs, ex)
     @sync begin
@@ -202,7 +220,7 @@ function remotecall_eval(m::Module, procs, ex)
             if pid == myid()
                 run_locally += 1
             else
-                @async remotecall_wait(Core.eval, pid, m, ex)
+                @sync_add remotecall(Core.eval, pid, m, ex)
             end
         end
         yield() # ensure that the remotecall_fetch have had a chance to start
@@ -223,13 +241,12 @@ function remotecall_eval(m::Module, pid::Int, ex)
 end
 
 
-# Statically split range [1,N] into equal sized chunks for np processors
-function splitrange(N::Int, np::Int)
-    each = div(N,np)
-    extras = rem(N,np)
+# Statically split range [firstIndex,lastIndex] into equal sized chunks for np processors
+function splitrange(firstIndex::Int, lastIndex::Int, np::Int)
+    each, extras = divrem(lastIndex-firstIndex+1, np)
     nchunks = each > 0 ? np : extras
     chunks = Vector{UnitRange{Int}}(undef, nchunks)
-    lo = 1
+    lo = firstIndex
     for i in 1:nchunks
         hi = lo + each - 1
         if extras > 0
@@ -243,8 +260,7 @@ function splitrange(N::Int, np::Int)
 end
 
 function preduce(reducer, f, R)
-    N = length(R)
-    chunks = splitrange(Int(N), nworkers())
+    chunks = splitrange(Int(firstindex(R)), Int(lastindex(R)), nworkers())
     all_w = workers()[1:length(chunks)]
 
     w_exec = Task[]
@@ -257,8 +273,8 @@ function preduce(reducer, f, R)
 end
 
 function pfor(f, R)
-    @async @sync for c in splitrange(length(R), nworkers())
-        @spawn f(R, first(c), last(c))
+    @async @sync for c in splitrange(Int(firstindex(R)), Int(lastindex(R)), nworkers())
+        @spawnat :any f(R, first(c), last(c))
     end
 end
 
@@ -328,7 +344,7 @@ macro distributed(args...)
         syncvar = esc(Base.sync_varname)
         return quote
             local ref = pfor($(make_pfor_body(var, body)), $(esc(r)))
-            if $(Expr(:isdefined, syncvar))
+            if $(Expr(:islocal, syncvar))
                 push!($syncvar, ref)
             end
             ref

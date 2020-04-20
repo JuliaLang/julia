@@ -46,11 +46,23 @@
     @test_throws ArgumentError match(r"test", GenericString("this is a test"))
     @test_throws ArgumentError findfirst(r"test", GenericString("this is a test"))
 
-    # findall:
+    # Issue 27125
+    msg = "#Hello# from Julia"
+    re = r"#(.+)# from (?<name>\w+)"
+    subst = s"FROM: \g<name>\n MESSAGE: \1"
+    @test replace(msg, re => subst) == "FROM: Julia\n MESSAGE: Hello"
+
+    # findall
     @test findall(r"\w+", "foo bar") == [1:3, 5:7]
     @test findall(r"\w+", "foo bar", overlap=true) == [1:3, 2:3, 3:3, 5:7, 6:7, 7:7]
     @test all(findall(r"\w*", "foo bar") .=== [1:3, 4:3, 5:7, 8:7]) # use === to compare empty ranges
     @test all(findall(r"\b", "foo bar") .=== [1:0, 4:3, 5:4, 8:7])  # use === to compare empty ranges
+
+    # count
+    @test count(r"\w+", "foo bar") == 2
+    @test count(r"\w+", "foo bar", overlap=true) == 6
+    @test count(r"\w*", "foo bar") == 4
+    @test count(r"\b", "foo bar") == 4
 
     # Named subpatterns
     let m = match(r"(?<a>.)(.)(?<b>.)", "xyz")

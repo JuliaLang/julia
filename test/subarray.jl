@@ -351,7 +351,6 @@ sA = view(A, 2:2, 1:5, :)
 @test @inferred(strides(sA)) == (1, 3, 15)
 @test parent(sA) == A
 @test parentindices(sA) == (2:2, 1:5, Base.Slice(1:8))
-@test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (1, 5, 8)
 @test axes(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(8))
 @test sA[1, 2, 1:8][:] == [5:15:120;]
@@ -363,7 +362,6 @@ sA[2:5:end] .= -1
 @test stride(sA,4) == 120
 test_bounds(sA)
 sA = view(A, 1:3, 1:5, 5)
-@test Base.parentdims(sA) == [1:2;]
 sA[1:3,1:5] .= -2
 @test all(A[:,:,5] .== -2)
 fill!(sA, -3)
@@ -373,14 +371,12 @@ sA[:] .= 4
 @test @inferred(strides(sA)) == (1,3)
 test_bounds(sA)
 sA = view(A, 1:3, 3:3, 2:5)
-@test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (3,1,4)
 @test axes(sA) === (Base.OneTo(3), Base.OneTo(1), Base.OneTo(4))
 @test sA == A[1:3,3:3,2:5]
 @test sA[:] == A[1:3,3,2:5][:]
 test_bounds(sA)
 sA = view(A, 1:2:3, 1:3:5, 1:2:8)
-@test Base.parentdims(sA) == [1:3;]
 @test @inferred(strides(sA)) == (2,9,30)
 @test sA[:] == A[1:2:3, 1:3:5, 1:2:8][:]
 # issue #8807
@@ -409,7 +405,6 @@ A = copy(reshape(1:120, 3, 5, 8))
 sA = view(A, 2, :, 1:8)
 @test parent(sA) == A
 @test parentindices(sA) == (2, Base.Slice(1:5), 1:8)
-@test Base.parentdims(sA) == [2:3;]
 @test size(sA) == (5, 8)
 @test axes(sA) === (Base.OneTo(5), Base.OneTo(8))
 @test @inferred(strides(sA)) == (3,15)
@@ -421,13 +416,11 @@ sA[2:5:end] .= -1
 @test all(A[5:15:120] .== -1)
 test_bounds(sA)
 sA = view(A, 1:3, 1:5, 5)
-@test Base.parentdims(sA) == [1:2;]
 @test size(sA) == (3,5)
 @test axes(sA) === (Base.OneTo(3),Base.OneTo(5))
 @test @inferred(strides(sA)) == (1,3)
 test_bounds(sA)
 sA = view(A, 1:2:3, 3, 1:2:8)
-@test Base.parentdims(sA) == [1,3]
 @test size(sA) == (2,4)
 @test axes(sA) === (Base.OneTo(2), Base.OneTo(4))
 @test @inferred(strides(sA)) == (2,30)
@@ -498,6 +491,11 @@ end
     cat([68,70,72],[406,408,410],[744,746,748]; dims=3)
 
 # tests @view (and replace_ref_end!)
+
+@test_throws ArgumentError(
+    "Invalid use of @view macro: argument must be a reference expression A[...]."
+) var"@view"(LineNumberNode(@__LINE__), @__MODULE__, 1)
+
 X = reshape(1:24,2,3,4)
 Y = 4:-1:1
 
@@ -562,6 +560,12 @@ end
 @test X[1:end,2,Y[2:end]] == @views X[1:end,2,Y[2:end]]
 @test X[u...,2:end] == @views X[u...,2:end]
 @test X[(1,)...,(2,)...,2:end] == @views X[(1,)...,(2,)...,2:end]
+
+# @views for zero dimensional arrays
+A = Array{Int, 0}(undef)
+A[] = 2
+@test (@views A[]) == 2
+
 # test macro hygiene
 let size=(x,y)-> error("should not happen"), Base=nothing
     @test X[1:end,2,2] == @views X[1:end,2,2]

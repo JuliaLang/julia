@@ -83,7 +83,7 @@ julia> convert(Array{Float64}, a)
  4.0  5.0  6.0
 ```
 
-Conversion isn't always possible, in which case a no method error is thrown indicating that `convert`
+Conversion isn't always possible, in which case a [`MethodError`](@ref) is thrown indicating that `convert`
 doesn't know how to perform the requested conversion:
 
 ```jldoctest
@@ -93,8 +93,8 @@ ERROR: MethodError: Cannot `convert` an object of type String to an object of ty
 ```
 
 Some languages consider parsing strings as numbers or formatting numbers as strings to be conversions
-(many dynamic languages will even perform conversion for you automatically), however Julia does
-not: even though some strings can be parsed as numbers, most strings are not valid representations
+(many dynamic languages will even perform conversion for you automatically). This is not the case in Julia.
+Even though some strings can be parsed as numbers, most strings are not valid representations
 of numbers, and only a very limited subset of them are. Therefore in Julia the dedicated [`parse`](@ref)
 function must be used to perform this operation, making it more explicit.
 

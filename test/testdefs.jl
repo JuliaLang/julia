@@ -15,7 +15,9 @@ function runtests(name, path, isolate=true; seed=nothing)
             m = Main
         end
         @eval(m, using Test, Random)
-        println("running testset ", name, "...")
+        let id = myid()
+            wait(@spawnat 1 print_testworker_started(name, id))
+        end
         ex = quote
             @timed @testset $"$name" begin
                 # Random.seed!(nothing) will fail

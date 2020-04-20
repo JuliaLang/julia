@@ -16,6 +16,9 @@ mutable struct OptimizationState
     sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
     const_api::Bool
+    # cached results of calling `_methods_by_ftype` from inference, including
+    # `min_valid` and `max_valid`
+    matching_methods_cache::IdDict{Any, Tuple{Any, UInt, UInt}}
     function OptimizationState(frame::InferenceState)
         s_edges = frame.stmt_edges[1]
         if s_edges === nothing
@@ -27,7 +30,8 @@ mutable struct OptimizationState
                    s_edges::Vector{Any},
                    src, frame.mod, frame.nargs,
                    frame.min_valid, frame.max_valid,
-                   frame.params, frame.sptypes, frame.slottypes, false)
+                   frame.params, frame.sptypes, frame.slottypes, false,
+                   frame.matching_methods_cache)
     end
     function OptimizationState(linfo::MethodInstance, src::CodeInfo,
                                params::Params)
@@ -57,7 +61,8 @@ mutable struct OptimizationState
                    s_edges::Vector{Any},
                    src, inmodule, nargs,
                    UInt(1), get_world_counter(),
-                   params, sptypes_from_meth_instance(linfo), slottypes, false)
+                   params, sptypes_from_meth_instance(linfo), slottypes, false,
+                   IdDict{Any, Tuple{Any, UInt, UInt}}())
         end
 end
 
@@ -157,7 +162,7 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
         return !(t ⊑ Bool)
     end
     if isa(stmt, Expr)
-        return stmt.head != :loopinfo && stmt.head != :enter
+        return stmt.head !== :loopinfo && stmt.head !== :enter
     end
     return true
 end
@@ -167,7 +172,7 @@ function optimize(opt::OptimizationState, @nospecialize(result))
     def = opt.linfo.def
     nargs = Int(opt.nargs) - 1
     @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
-    force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] == :noinline, ir.meta)
+    force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
     # compute inlining and other related optimizations
     if (isa(result, Const) || isconstType(result))
@@ -198,7 +203,7 @@ function optimize(opt::OptimizationState, @nospecialize(result))
             opt.src.pure = true
         end
 
-        if proven_pure && !coverage_enabled()
+        if proven_pure
             # use constant calling convention
             # Do not emit `jl_fptr_const_return` if coverage is enabled
             # so that we don't need to add coverage support
@@ -262,6 +267,7 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction)
              f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.arraylen ||   # this one is volatile
              f === Intrinsics.sqrt_llvm ||  # this one may differ at runtime (by a few ulps)
+             f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
              f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
 end
 
@@ -274,7 +280,7 @@ intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref || is_pure_int
 plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 
 # known return type
-isknowntype(@nospecialize T) = (T === Union{}) || isconcretetype(T)
+isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetype(widenconst(T))
 
 function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any}, params::Params)
     head = ex.head
@@ -407,7 +413,9 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             ssachangemap[i] += ssachangemap[i - 1]
         end
     end
-    (labelchangemap[end] != 0 && ssachangemap[end] != 0) || return
+    if labelchangemap[end] == 0 && ssachangemap[end] == 0
+        return
+    end
     for i = 1:length(body)
         el = body[i]
         if isa(el, GotoNode)
@@ -415,6 +423,9 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
         elseif isa(el, SSAValue)
             body[i] = SSAValue(el.id + ssachangemap[el.id])
         elseif isa(el, Expr)
+            if el.head === :(=) && el.args[2] isa Expr
+                el = el.args[2]::Expr
+            end
             if el.head === :gotoifnot
                 cond = el.args[1]
                 if isa(cond, SSAValue)
@@ -426,9 +437,6 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
                 tgt = el.args[1]::Int
                 el.args[1] = tgt + labelchangemap[tgt]
             elseif !is_meta_expr_head(el.head)
-                if el.head === :(=) && el.args[2] isa Expr && !is_meta_expr_head(el.args[2].head)
-                    el = el.args[2]::Expr
-                end
                 args = el.args
                 for i = 1:length(args)
                     el = args[i]

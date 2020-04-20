@@ -87,9 +87,9 @@ try
               (::Task)(::UInt8, ::UInt16, ::UInt32) = 2
 
               # issue 16471 (capturing references to a kwfunc)
-              Test.@test_throws ErrorException Core.kwfunc(Base.nothing)
-              Base.nothing(::UInt8, ::UInt16, ::UInt32; x = 52) = x
-              const nothingkw = Core.kwfunc(Base.nothing)
+              Test.@test !isdefined(typeof(sin).name.mt, :kwsorter)
+              Base.sin(::UInt8, ::UInt16, ::UInt32; x = 52) = x
+              const sinkw = Core.kwfunc(Base.sin)
 
               # issue 16908 (some complicated types and external method definitions)
               abstract type CategoricalPool{T, R <: Integer, V} end
@@ -144,11 +144,11 @@ try
                               missing, missing, missing,
                               missing, missing, 6]
 
-              let some_method = which(Base.include, (String,))
+              let some_method = which(Base.include, (Module, String,))
                     # global const some_method // FIXME: support for serializing a direct reference to an external Method not implemented
                   global const some_linfo =
                       ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
-                          some_method, Tuple{typeof(Base.include), String}, Core.svec(), typemax(UInt))
+                          some_method, Tuple{typeof(Base.include), Module, String}, Core.svec(), typemax(UInt))
               end
 
               g() = override(1.0)
@@ -163,9 +163,17 @@ try
               _v31488 = Base.StringVector(2)
               resize!(_v31488, 0)
               const a31488 = fill(String(_v31488), 100)
+
+              const ptr1 = Ptr{UInt8}(1)
+              ptr2 = Ptr{UInt8}(1)
+              const ptr3 = Ptr{UInt8}(-1)
+              const layout1 = Ptr{Int8}[Ptr{Int8}(0), Ptr{Int8}(1), Ptr{Int8}(-1)]
+              const layout2 = Any[Ptr{Int8}(0), Ptr{Int16}(1), Ptr{Int32}(-1)]
+              const layout3 = collect(x.match for x in eachmatch(r"..", "abcdefghijk"))::Vector{SubString{String}}
           end
           """)
-    @test_throws ErrorException Core.kwfunc(Base.nothing) # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
+    # make sure `sin` didn't have a kwfunc (which would invalidate the attempted test)
+    @test !isdefined(typeof(sin).name.mt, :kwsorter)
 
     # Issue #12623
     @test __precompile__(false) === nothing
@@ -200,6 +208,14 @@ try
         @test Foo.x28998[end] == 6
 
         @test Foo.a31488 == fill("", 100)
+
+        @test Foo.ptr1 === Ptr{UInt8}(1)
+        @test Foo.ptr2 === Ptr{UInt8}(0)
+        @test Foo.ptr3 === Ptr{UInt8}(-1)
+        @test Foo.layout1::Vector{Ptr{Int8}} == Ptr{Int8}[Ptr{Int8}(0), Ptr{Int8}(0), Ptr{Int8}(-1)]
+        @test Foo.layout2 == Any[Ptr{Int8}(0), Ptr{Int16}(0), Ptr{Int32}(-1)]
+        @test typeof.(Foo.layout2) == [Ptr{Int8}, Ptr{Int16}, Ptr{Int32}]
+        @test Foo.layout3 == ["ab", "cd", "ef", "gh", "ij"]
     end
 
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")
@@ -265,9 +281,9 @@ try
         @test discard_module.(deps) == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
-        @test nothing(0x01, 0x4000, 0x30031234) == 52
-        @test nothing(0x01, 0x4000, 0x30031234; x = 9142) == 9142
-        @test Foo.nothingkw === Core.kwfunc(Base.nothing)
+        @test sin(0x01, 0x4000, 0x30031234) == 52
+        @test sin(0x01, 0x4000, 0x30031234; x = 9142) == 9142
+        @test Foo.sinkw === Core.kwfunc(Base.sin)
 
         @test Foo.NominalValue() == 1
         @test Foo.OrdinalValue() == 1
@@ -287,10 +303,10 @@ try
                 Val{3},
                 Val{nothing}},
             0:25)
-        some_method = which(Base.include, (String,))
+        some_method = which(Base.include, (Module, String,))
         some_linfo =
                 ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
-                    some_method, Tuple{typeof(Base.include), String}, Core.svec(), typemax(UInt))
+                    some_method, Tuple{typeof(Base.include), Module, String}, Core.svec(), typemax(UInt))
         @test Foo.some_linfo::Core.MethodInstance === some_linfo
 
         ft = Base.datatype_fieldtypes
@@ -332,7 +348,8 @@ try
           end
           """)
 
-    Base.compilecache(Base.PkgId("FooBar"))
+    cachefile = Base.compilecache(Base.PkgId("FooBar"))
+    @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"))
     @test isfile(joinpath(cachedir, "FooBar.ji"))
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Vector
     @test !isdefined(Main, :FooBar)
@@ -373,11 +390,24 @@ try
           end
           """)
     @test_warn "ERROR: LoadError: break me\nStacktrace:\n [1] error" try
-        Base.require(Main, :FooBar2)
-        error("\"LoadError: break me\" test failed")
-    catch exc
-        isa(exc, ErrorException) || rethrow()
-        occursin("ERROR: LoadError: break me", exc.msg) && rethrow()
+            Base.require(Main, :FooBar2)
+            error("the \"break me\" test failed")
+        catch exc
+            isa(exc, ErrorException) || rethrow()
+            occursin("ERROR: LoadError: break me", exc.msg) && rethrow()
+        end
+
+    # Test that trying to eval into closed modules during precompilation is an error
+    FooBar3_file = joinpath(dir, "FooBar3.jl")
+    FooBar3_inc = joinpath(dir, "FooBar3_inc.jl")
+    write(FooBar3_inc, "x=1\n")
+    for code in ["Core.eval(Base, :(x=1))", "Base.include(Base, \"FooBar3_inc.jl\")"]
+        write(FooBar3_file, code)
+        @test_warn "Evaluation into the closed module `Base` breaks incremental compilation" try
+                Base.require(Main, :FooBar3)
+            catch exc
+                isa(exc, ErrorException) || rethrow()
+            end
     end
 
     # Test transitive dependency for #21266
@@ -777,6 +807,29 @@ let
     finally
         rm(load_path, recursive=true)
         rm(load_cache_path, recursive=true)
+    end
+end
+
+# Issue #25971
+let
+    load_path = mktempdir()
+    load_cache_path = mktempdir()
+    try
+        pushfirst!(LOAD_PATH, load_path)
+        pushfirst!(DEPOT_PATH, load_cache_path)
+        sourcefile = joinpath(load_path, "Foo25971.jl")
+        write(sourcefile, "module Foo25971 end")
+        chmod(sourcefile, 0o666)
+        cachefile = Base.compilecache(Base.PkgId("Foo25971"))
+        @test filemode(sourcefile) == filemode(cachefile)
+        chmod(sourcefile, 0o600)
+        cachefile = Base.compilecache(Base.PkgId("Foo25971"))
+        @test filemode(sourcefile) == filemode(cachefile)
+    finally
+        rm(load_path, recursive=true)
+        rm(load_cache_path, recursive=true)
+        filter!((≠)(load_path), LOAD_PATH)
+        filter!((≠)(load_cache_path), DEPOT_PATH)
     end
 end
 

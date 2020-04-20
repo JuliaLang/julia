@@ -52,6 +52,8 @@ USE_SYSTEM_LIBSSH2:=0
 USE_SYSTEM_CURL:=0
 USE_SYSTEM_LIBGIT2:=0
 USE_SYSTEM_PATCHELF:=0
+USE_SYSTEM_ZLIB:=0
+USE_SYSTEM_P7ZIP:=0
 
 # Link to the LLVM shared library
 USE_LLVM_SHLIB := 1
@@ -126,11 +128,19 @@ endif
 
 # we include twice to pickup user definitions better
 # include from JULIAHOME first so that BUILDROOT can override
-ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
-include $(JULIAHOME)/Make.user
+MAYBE_HOST :=
+ifneq ($(BUILDING_HOST_TOOLS),1)
+MAKE_USER_FNAME = Make.user
+else
+MAYBE_HOST := /host
+MAKE_USER_FNAME = Make.host.user
 endif
-ifeq (exists, $(shell [ -e $(BUILDROOT)/Make.user ] && echo exists ))
-include $(BUILDROOT)/Make.user
+
+ifeq (exists, $(shell [ -e $(JULIAHOME)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(JULIAHOME)/$(MAKE_USER_FNAME)
+endif
+ifeq (exists, $(shell [ -e $(BUILDROOT)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(BUILDROOT)/$(MAKE_USER_FNAME)
 endif
 
 # disable automatic Makefile rules
@@ -236,8 +246,12 @@ sysconfdir := $(prefix)/etc
 endif
 
 # Directories where things get built into
-build_prefix := $(BUILDROOT)/usr
+build_prefix := $(BUILDROOT)/usr$(MAYBE_HOST)
+ifeq ($(BUILDING_HOST_TOOLS), 1)
+build_staging := $(BUILDROOT)/usr-host-staging
+else
 build_staging := $(build_prefix)-staging
+endif
 build_bindir := $(build_prefix)/bin
 build_depsbindir := $(build_prefix)/tools
 build_libdir := $(build_prefix)/lib
@@ -269,6 +283,7 @@ libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libdir))
 build_private_libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_private_libdir))
 private_libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(private_libdir))
 datarootdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(datarootdir))
+libexecdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libexecdir))
 docdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(docdir))
 sysconfdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(sysconfdir))
 includedir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(includedir))
@@ -323,6 +338,9 @@ OPENBLAS_DYNAMIC_ARCH := 1
 override CROSS_COMPILE:=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
+else ifneq (,$(findstring emscripten,$(XC_HOST)))
+override OS := emscripten
+override CROSS_COMPILE:=
 else
 ifeq (,$(OS))
 $(error "unknown XC_HOST variable set, please set OS")
@@ -457,7 +475,7 @@ endif
 ifeq ($(USECLANG),1)
 CC := $(CROSS_COMPILE)clang
 CXX := $(CROSS_COMPILE)clang++
-JCFLAGS := -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
 JCPPFLAGS := -fasynchronous-unwind-tables
 JCXXFLAGS := -pipe $(fPIC) -fno-rtti -pedantic
@@ -571,11 +589,11 @@ else
 LOCALBASE ?= /usr
 endif
 
-ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
-include $(JULIAHOME)/Make.user
+ifeq (exists, $(shell [ -e $(JULIAHOME)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(JULIAHOME)/$(MAKE_USER_FNAME)
 endif
-ifeq (exists, $(shell [ -e $(BUILDROOT)/Make.user ] && echo exists ))
-include $(BUILDROOT)/Make.user
+ifeq (exists, $(shell [ -e $(BUILDROOT)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(BUILDROOT)/$(MAKE_USER_FNAME)
 endif
 
 # A bit of a kludge to work around libraries linking to FreeBSD's outdated system libgcc_s
@@ -789,7 +807,6 @@ JCFLAGS += -fsigned-char
 USE_BLAS64:=0
 OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV7
-USE_SYSTEM_LIBM:=1
 endif
 
 # If we are running on aarch64 (e.g. ARMv8 or ARM64), set certain options automatically
@@ -912,6 +929,20 @@ else
 PCRE_CONFIG := $(build_depsbindir)/pcre2-config
 endif
 
+ifeq ($(USE_SYSTEM_PATCHELF), 1)
+PATCHELF := patchelf
+else
+PATCHELF := $(build_depsbindir)/patchelf
+endif
+
+# On aarch64 and powerpc64le, we assume the page size is 64K.  Our binutils linkers
+# and such already assume this, but `patchelf` seems to be behind the times.  We
+# explicitly tell it to use this large page size so that when we rewrite rpaths and
+# such, we don't accidentally create incorrectly-aligned sections in our ELF files.
+ifneq (,$(filter $(ARCH),aarch64 powerpc64le))
+PATCHELF += --page-size 65536
+endif
+
 # Use ILP64 BLAS interface when building openblas from source on 64-bit architectures
 ifeq ($(BINARY), 64)
 ifeq ($(USE_SYSTEM_BLAS), 1)
@@ -979,19 +1010,35 @@ else
   UTF8PROC_INC := $(build_includedir)
 endif
 
+# We need python for things like BB triplet recognition.  We don't really care
+# about version, generally, so just find something that works:
+PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)"
+PYTHON_SYSTEM := $(shell $(PYTHON) -c 'from __future__ import print_function; import platform; print(platform.system())')
+
+# If we're running on Cygwin, but using a native-windows Python, we need to use cygpath -w
+ifneq ($(and $(filter $(PYTHON_SYSTEM),Windows),$(findstring CYGWIN,$(BUILD_OS))),)
+define invoke_python
+$(PYTHON) "$$(cygpath -w "$(1)")"
+endef
+else
+define invoke_python
+$(PYTHON) "$(1)"
+endef
+endif
+
 # BinaryBuilder options.  We default to "on" for all the projects listed in BB_PROJECTS,
 # but only if contrib/normalize_triplet.py works for our requested triplet.
-ifeq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) >/dev/null 2>/dev/null; echo $$?),0)
+ifeq ($(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) >/dev/null 2>/dev/null; echo $$?),0)
 USE_BINARYBUILDER ?= 1
 else
-ifneq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py x86_64-linux-gnu),x86_64-linux-gnu)
-$(warning python normalize_triplet.py appears to be non-functional, so BinaryBuilder disabled)
+ifneq ($(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) x86_64-linux-gnu),x86_64-linux-gnu)
+$(warning normalize_triplet.py appears to be non-functional (used python interpreter "$(PYTHON)"), so BinaryBuilder disabled)
 endif
 USE_BINARYBUILDER ?= 0
 endif
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
-BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV
+BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1037,7 +1084,7 @@ else
 endif
 
 # shared library runtime paths
-ifeq ($(OS), WINNT)
+ifneq (,$(filter $(OS),WINNT emscripten))
   RPATH :=
   RPATH_ORIGIN :=
   RPATH_ESCAPED_ORIGIN :=
@@ -1064,7 +1111,7 @@ else ifneq ($(USEMSVC), 1)
 endif
 
 ifeq ($(OS), Linux)
-OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -Wl,--export-dynamic,--as-needed,--no-whole-archive $(LIBUNWIND)
+OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -Wl,--export-dynamic,--as-needed,--no-whole-archive
 # Detect if ifunc is supported
 IFUNC_DETECT_SRC := 'void (*f0(void))(void) { return (void(*)(void))0L; }; void f(void) __attribute__((ifunc("f0")));'
 ifeq (supported, $(shell echo $(IFUNC_DETECT_SRC) | $(CC) -Werror -x c - -S -o /dev/null > /dev/null 2>&1 && echo supported))
@@ -1103,8 +1150,6 @@ OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expma
 endif
 
 ifeq ($(OS), Darwin)
-INSTALL_NAME_CMD := install_name_tool -id $(INSTALL_NAME_ID_DIR)
-INSTALL_NAME_CHANGE_CMD := install_name_tool -change
 SHLIB_EXT := dylib
 OSLIBS += -framework CoreFoundation $(LIBUNWIND)
 WHOLE_ARCHIVE := -Xlinker -all_load
@@ -1133,7 +1178,7 @@ endif
 
 # Threads
 ifneq ($(JULIA_THREADS), 0)
-JCPPFLAGS += -DJULIA_ENABLE_THREADING -DJULIA_NUM_THREADS=$(JULIA_THREADS)
+JCPPFLAGS += -DJULIA_NUM_THREADS=$(JULIA_THREADS)
 endif
 
 # Intel VTune Amplifier
@@ -1232,7 +1277,7 @@ ifeq ($(USECLANG),1)
 CXXLDFLAGS += -stdlib=libc++
 else
 ifeq ($(USEGCC),1)
-$(error BUILD_CUSTOM_LIBCXX is currently only supported with Clang. Try setting BUILD_CUSTOM_LIBCXX=0)
+$(error BUILD_CUSTOM_LIBCXX is currently only supported with Clang. Try setting BUILD_CUSTOM_LIBCXX=0 or USECLANG=1)
 endif
 endif # Clang
 CUSTOM_LD_LIBRARY_PATH := LD_LIBRARY_PATH="$(build_libdir)"
@@ -1311,17 +1356,19 @@ endif
 exec = $(shell $(call spawn,$(1)))
 
 JULIA_BUILD_MODE := release
-JULIA_LIBSUFFIX:=
 ifeq (,$(findstring release,$(MAKECMDGOALS)))
 ifneq (,$(findstring debug,$(MAKECMDGOALS)))
 JULIA_BUILD_MODE := debug
-JULIA_LIBSUFFIX:=-debug
 endif
 endif
 
 JULIA_EXECUTABLE_debug := $(build_bindir)/julia-debug$(EXE)
 JULIA_EXECUTABLE_release := $(build_bindir)/julia$(EXE)
 JULIA_EXECUTABLE := $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
+
+JULIA_SYSIMG_debug := $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
+JULIA_SYSIMG_release := $(build_private_libdir)/sys.$(SHLIB_EXT)
+JULIA_SYSIMG := $(JULIA_SYSIMG_$(JULIA_BUILD_MODE))
 
 # Colors for make
 ifndef VERBOSE

@@ -6,7 +6,7 @@
 
 // Copied from MINGW_FLOAT_H which may not be found due to a collision with the builtin gcc float.h
 // eventually we can probably integrate this into OpenLibm.
-#if defined(_COMPILER_MINGW_)
+#if defined(_COMPILER_GCC_)
 void __cdecl __MINGW_NOTHROW _fpreset (void);
 void __cdecl __MINGW_NOTHROW fpreset (void);
 #else
@@ -104,7 +104,7 @@ static void JL_NORETURN start_backtrace_fiber(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     // collect the backtrace
-    ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, error_ctx);
+    ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, error_ctx, ptls->pgcstack, 0);
     // switch back to the execution fiber
     jl_setcontext(&error_return_fiber);
     abort();
@@ -130,7 +130,7 @@ void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
         assert(excpt != NULL);
         ptls->bt_size = 0;
         if (excpt != jl_stackovf_exception) {
-            ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread);
+            ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread, ptls->pgcstack, 0);
         }
         else if (have_backtrace_fiber) {
             error_ctx = ctxThread;
@@ -225,12 +225,10 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
                 return EXCEPTION_CONTINUE_EXECUTION;
             case EXCEPTION_ACCESS_VIOLATION:
                 if (jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1])) {
-#ifdef JULIA_ENABLE_THREADING
                     jl_set_gc_and_wait();
                     // Do not raise sigint on worker thread
                     if (ptls->tid != 0)
                         return EXCEPTION_CONTINUE_EXECUTION;
-#endif
                     if (ptls->defer_signal) {
                         jl_safepoint_defer_sigint();
                     }
@@ -299,7 +297,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
                 jl_safe_printf("UNKNOWN"); break;
         }
         jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-        jl_gdblookup((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+        jl_print_native_codeloc((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
 
         jl_critical_error(0, ExceptionInfo->ContextRecord,
                           ptls->bt_data, &ptls->bt_size);
@@ -323,35 +321,37 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     // Note: illegal to use jl_* functions from this thread
 
     TIMECAPS tc;
-    if (MMSYSERR_NOERROR!=timeGetDevCaps(&tc, sizeof(tc))) {
-        fputs("failed to get timer resolution",stderr);
+    if (MMSYSERR_NOERROR != timeGetDevCaps(&tc, sizeof(tc))) {
+        fputs("failed to get timer resolution", stderr);
         hBtThread = 0;
         return 0;
     }
     while (1) {
-        if (running && bt_size_cur < bt_size_max) {
+        if (bt_size_cur < bt_size_max) {
             DWORD timeout = nsecprof/GIGA;
-            timeout = min(max(timeout,tc.wPeriodMin*2),tc.wPeriodMax/2);
+            timeout = min(max(timeout, tc.wPeriodMin*2), tc.wPeriodMax/2);
             Sleep(timeout);
             if ((DWORD)-1 == SuspendThread(hMainThread)) {
-                fputs("failed to suspend main thread. aborting profiling.",stderr);
+                fputs("failed to suspend main thread. aborting profiling.", stderr);
                 break;
             }
-            CONTEXT ctxThread;
-            memset(&ctxThread, 0, sizeof(CONTEXT));
-            ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-            if (!GetThreadContext(hMainThread, &ctxThread)) {
-                fputs("failed to get context from main thread. aborting profiling.",stderr);
-                break;
+            if (running) {
+                CONTEXT ctxThread;
+                memset(&ctxThread, 0, sizeof(CONTEXT));
+                ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+                if (!GetThreadContext(hMainThread, &ctxThread)) {
+                    fputs("failed to get context from main thread. aborting profiling.", stderr);
+                    break;
+                }
+                // Get backtrace data
+                bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
+                    bt_size_max - bt_size_cur - 1, &ctxThread, NULL, 1);
+                // Mark the end of this block with 0
+                bt_data_prof[bt_size_cur].uintptr = 0;
+                bt_size_cur++;
             }
-            // Get backtrace data
-            bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
-                bt_size_max - bt_size_cur - 1, &ctxThread);
-            // Mark the end of this block with 0
-            bt_data_prof[bt_size_cur] = 0;
-            bt_size_cur++;
             if ((DWORD)-1 == ResumeThread(hMainThread)) {
-                fputs("failed to resume main thread! aborting.",stderr);
+                fputs("failed to resume main thread! aborting.", stderr);
                 gc_debug_critical_error();
                 abort();
             }
@@ -371,11 +371,11 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
         hBtThread = CreateThread(
             NULL,                   // default security attributes
             0,                      // use default stack size
-            profile_bt,            // thread function name
+            profile_bt,             // thread function name
             0,                      // argument to thread function
             0,                      // use default creation flags
             0);                     // returns the thread identifier
-        (void)SetThreadPriority(hBtThread,THREAD_PRIORITY_ABOVE_NORMAL);
+        (void)SetThreadPriority(hBtThread, THREAD_PRIORITY_ABOVE_NORMAL);
     }
     else {
         if ((DWORD)-1 == ResumeThread(hBtThread)) {

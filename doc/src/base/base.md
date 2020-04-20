@@ -49,7 +49,7 @@ The following two-word sequences are reserved:
 However, you can create variables with names:
 `abstract`, `mutable`, `primitive` and `type`.
 
-Finally,`where` is parsed as an infix operator for writing parametric method
+Finally, `where` is parsed as an infix operator for writing parametric method
 and type definitions. Also `in` and `isa` are parsed as infix operators.
 Creation of a variable named `where`, `in` or `isa` is allowed though.
 
@@ -158,6 +158,7 @@ Base.isdispatchtuple
 ### Declared structure
 
 ```@docs
+Base.ismutable
 Base.isimmutable
 Base.isabstracttype
 Base.isprimitivetype
@@ -207,6 +208,7 @@ Union{}
 Core.UnionAll
 Core.Tuple
 Core.NamedTuple
+Base.@NamedTuple
 Base.Val
 Core.Vararg
 Core.Nothing
@@ -251,6 +253,7 @@ Base.@nospecialize
 Base.@specialize
 Base.gensym
 Base.@gensym
+var"name"
 Base.@goto
 Base.@label
 Base.@simd
@@ -267,6 +270,7 @@ Base.missing
 Base.coalesce
 Base.ismissing
 Base.skipmissing
+Base.nonmissingtype
 ```
 
 ## System
@@ -330,6 +334,8 @@ Base.backtrace
 Base.catch_backtrace
 Base.catch_stack
 Base.@assert
+Base.register_error_hint
+Base.show_error_hints
 Base.ArgumentError
 Base.AssertionError
 Core.BoundsError
@@ -393,6 +399,7 @@ Base.functionloc(::Method)
 Base.GC.gc
 Base.GC.enable
 Base.GC.@preserve
+Base.GC.safepoint
 Meta.lower
 Meta.@lower
 Meta.parse(::AbstractString, ::Int)

@@ -10,8 +10,6 @@ if `io` is not given) a canonical (un-decorated) text representation.
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
 
-Printing `nothing` is not allowed and throws an error.
-
 `print` falls back to calling `show`, so most types should just define
 `show`. Define `print` if your type has a separate "plain" representation.
 For example, `show` displays strings with quotes, and `print` displays strings
@@ -109,11 +107,19 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     String(resize!(s.data, s.size))
 end
 
-tostr_sizehint(x) = 8
-tostr_sizehint(x::AbstractString) = lastindex(x)
-tostr_sizehint(x::Union{String,SubString{String}}) = sizeof(x)
-tostr_sizehint(x::Float64) = 20
-tostr_sizehint(x::Float32) = 12
+function _str_sizehint(x)
+    if x isa Float64
+        return 20
+    elseif x isa Float32
+        return 12
+    elseif x isa String || x isa SubString{String}
+        return sizeof(x)
+    elseif x isa Char
+        return ncodeunits(x)
+    else
+        return 8
+    end
+end
 
 function print_to_string(xs...)
     if isempty(xs)
@@ -121,7 +127,7 @@ function print_to_string(xs...)
     end
     siz::Int = 0
     for x in xs
-        siz += tostr_sizehint(x)
+        siz += _str_sizehint(x)
     end
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
@@ -137,7 +143,7 @@ function string_with_env(env, xs...)
     end
     siz::Int = 0
     for x in xs
-        siz += tostr_sizehint(x)
+        siz += _str_sizehint(x)
     end
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
@@ -372,17 +378,20 @@ end
 
 # TODO: handle unescaping invalid UTF-8 sequences
 """
-    unescape_string(str::AbstractString)::AbstractString
-    unescape_string(io, str::AbstractString)::Nothing
+    unescape_string(str::AbstractString, keep = ())::AbstractString
+    unescape_string(io, s::AbstractString, keep = ())::Nothing
 
 General unescaping of traditional C and Unicode escape sequences. The first form returns
 the escaped string, the second prints the result to `io`.
+The argument `keep` specifies a collection of characters which (along with backlashes) are
+to be kept as they are.
 
 The following escape sequences are recognised:
  - Escaped backslash (`\\\\`)
  - Escaped double-quote (`\\\"`)
  - Standard C escape sequences (`\\a`, `\\b`, `\\t`, `\\n`, `\\v`, `\\f`, `\\r`, `\\e`)
- - Unicode code points (`\\u` or `\\U` prefixes with 1-4 trailing hex digits)
+ - Unicode BMP code points (`\\u` with 1-4 trailing hex digits)
+ - All Unicode code points (`\\U` with 1-8 trailing hex digits; max value = 0010ffff)
  - Hex bytes (`\\x` with 1-2 trailing hex digits)
  - Octal bytes (`\\` with 1-3 trailing octal digits)
 
@@ -396,17 +405,22 @@ julia> unescape_string("\\\\u03c0") # unicode
 
 julia> unescape_string("\\\\101") # octal
 "A"
+
+julia> unescape_string("aaa \\\\g \\\\n", ['g']) # using `keep` argument
+"aaa \\\\g \\n"
 ```
 
 ## See also
 [`escape_string`](@ref).
 """
-function unescape_string(io, s::AbstractString)
+function unescape_string(io::IO, s::AbstractString, keep = ())
     a = Iterators.Stateful(s)
     for c in a
         if !isempty(a) && c == '\\'
             c = popfirst!(a)
-            if c == 'x' || c == 'u' || c == 'U'
+            if c in keep
+                print(io, '\\', c)
+            elseif c == 'x' || c == 'u' || c == 'U'
                 n = k = 0
                 m = c == 'x' ? 2 :
                     c == 'u' ? 4 : 8
@@ -456,7 +470,8 @@ function unescape_string(io, s::AbstractString)
         end
     end
 end
-unescape_string(s::AbstractString) = sprint(unescape_string, s, sizehint=lastindex(s))
+unescape_string(s::AbstractString, keep = ()) =
+    sprint(unescape_string, s, keep; sizehint=lastindex(s))
 
 """
     @b_str
@@ -507,6 +522,55 @@ julia> println(raw"\\\\x \\\\\\"")
 ```
 """
 macro raw_str(s); s; end
+
+"""
+    escape_raw_string(s::AbstractString)
+    escape_raw_string(io, s::AbstractString)
+
+Escape a string in the manner used for parsing raw string literals.
+For each double-quote (`"`) character in input string `s`, this
+function counts the number _n_ of preceeding backslash (`\\`) characters,
+and then increases there the number of backslashes from _n_ to 2_n_+1
+(even for _n_ = 0). It also doubles a sequence of backslashes at the end
+of the string.
+
+This escaping convention is used in raw strings and other non-standard
+string literals. (It also happens to be the escaping convention
+expected by the Microsoft C/C++ compiler runtime when it parses a
+command-line string into the argv[] array.)
+
+See also: [`escape_string`](@ref)
+"""
+function escape_raw_string(io, str::AbstractString)
+    escapes = 0
+    for c in str
+        if c == '\\'
+            escapes += 1
+        else
+            if c == '"'
+                # if one or more backslashes are followed by
+                # a double quote then escape all backslashes
+                # and the double quote
+                escapes = escapes * 2 + 1
+            end
+            while escapes > 0
+                write(io, '\\')
+                escapes -= 1
+            end
+            escapes = 0
+            write(io, c)
+        end
+    end
+    # also escape any trailing backslashes,
+    # so they do not affect the closing quote
+    while escapes > 0
+        write(io, '\\')
+        write(io, '\\')
+        escapes -= 1
+    end
+end
+escape_raw_string(str::AbstractString) = sprint(escape_raw_string, str;
+                                                sizehint = lastindex(str) + 2)
 
 ## multiline strings ##
 

@@ -112,6 +112,11 @@ let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     @test UUID(UInt128(uuid)) == uuid
     @test UUID(convert(NTuple{2, UInt64}, uuid)) == uuid
     @test UUID(convert(NTuple{4, UInt32}, uuid)) == uuid
+
+    uuidstr2 = "ba"^4 * "-" * "ba"^2 * "-" * "ba"^2 * "-" * "ba"^2 * "-" * "ba"^6
+    uuid2 = UUID(uuidstr2)
+    uuids = [uuid, uuid2]
+    @test (uuids .== uuid) == [true, false]
 end
 @test_throws ArgumentError UUID("@"^4 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^6)
 
@@ -277,6 +282,13 @@ module NotPkgModule; end
         @test pathof(NotPkgModule) === nothing
     end
 
+    @testset "pkgdir" begin
+        @test pkgdir(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(Foo.SubFoo1) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(Foo.SubFoo2) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(NotPkgModule) === nothing
+    end
+
 end
 
 ## systematic generation of test environments ##
@@ -370,6 +382,14 @@ const depots = [mktempdir() for _ = 1:3]
 const envs = Dict{String,Any}()
 
 append!(empty!(DEPOT_PATH), depots)
+
+@testset "load code uniqueness" begin
+    @show UUIDS
+    @show depots
+    @test allunique(UUIDS)
+    @test allunique(depots)
+    @test allunique(DEPOT_PATH)
+end
 
 for (flat, root, roots, graph) in graphs
     if flat
@@ -648,3 +668,25 @@ Base.ACTIVE_PROJECT[] = saved_active_project
 module Foo; import Libdl; end
 import .Foo.Libdl; import Libdl
 @test Foo.Libdl === Libdl
+
+@testset "include with mapexpr" begin
+    let exprs = Any[]
+        @test 13 === include_string(@__MODULE__, "1+1\n3*4") do ex
+            ex isa LineNumberNode || push!(exprs, ex)
+            Meta.isexpr(ex, :call) ? :(1 + $ex) : ex
+        end
+        @test exprs == [:(1 + 1), :(3 * 4)]
+    end
+    # test using test_exec.jl, just because that is the shortest handy file
+    for incl in (include, (mapexpr,path) -> Base.include(mapexpr, @__MODULE__, path))
+        let exprs = Any[]
+            incl("test_exec.jl") do ex
+                ex isa LineNumberNode || push!(exprs, ex)
+                Meta.isexpr(ex, :macrocall) ? :nothing : ex
+            end
+            @test length(exprs) == 2 && exprs[1] == :(using Test)
+            @test Meta.isexpr(exprs[2], :macrocall) &&
+                  exprs[2].args[[1,3]] == [Symbol("@test"), :(1 == 2)]
+        end
+    end
+end

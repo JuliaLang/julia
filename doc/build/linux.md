@@ -8,11 +8,11 @@
 
 ### Architecture Customization
 
-Julia can be built for a non-generic architecture by configuring the `ARCH` Makefile variable. See the appropriate section of `Make.inc` for additional customization options, such as `MARCH` and `JULIA_CPU_TARGET`.
+Julia can be built for a non-generic architecture by configuring the `ARCH` Makefile variable in a `Make.user` file. See the appropriate section of `Make.inc` for additional customization options, such as `MARCH` and `JULIA_CPU_TARGET`.
 
 For example, to build for Pentium 4, set `MARCH=pentium4` and install the necessary system libraries for linking. On Ubuntu, these may include lib32gfortran-6-dev, lib32gcc1, and lib32stdc++6, among others.
 
-You can also set `MARCH=native` for a maximum-performance build customized for the current machine CPU.
+You can also set `MARCH=native` in `Make.user` for a maximum-performance build customized for the current machine CPU.
 
 ### Linux Build Troubleshooting
 

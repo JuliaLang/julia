@@ -592,17 +592,28 @@ Returns `A` and `tau` modified in-place.
 geqlf!(A::AbstractMatrix, tau::AbstractVector)
 
 """
-    geqp3!(A, jpvt, tau)
+    geqp3!(A, [jpvt, tau]) -> (A, tau, jpvt)
 
 Compute the pivoted `QR` factorization of `A`, `AP = QR` using BLAS level 3.
 `P` is a pivoting matrix, represented by `jpvt`. `tau` stores the elementary
-reflectors. `jpvt` must have length length greater than or equal to `n` if `A`
-is an `(m x n)` matrix. `tau` must have length greater than or equal to the
-smallest dimension of `A`.
+reflectors. The arguments `jpvt` and `tau` are optional and allow
+for passing preallocated arrays. When passed, `jpvt` must have length greater
+than or equal to `n` if `A` is an `(m x n)` matrix and `tau` must have length
+greater than or equal to the smallest dimension of `A`.
 
 `A`, `jpvt`, and `tau` are modified in-place.
 """
 geqp3!(A::AbstractMatrix, jpvt::AbstractVector{BlasInt}, tau::AbstractVector)
+
+function geqp3!(A::AbstractMatrix{<:BlasFloat}, jpvt::AbstractVector{BlasInt})
+    m, n = size(A)
+    geqp3!(A, jpvt, similar(A, min(m, n)))
+end
+
+function geqp3!(A::AbstractMatrix{<:BlasFloat})
+    m, n = size(A)
+    geqp3!(A, zeros(BlasInt, n), similar(A, min(m, n)))
+end
 
 """
     geqrt!(A, T)
@@ -725,32 +736,69 @@ which parameterize the elementary reflectors of the factorization.
 """
 gerqf!(A::AbstractMatrix{<:BlasFloat}) = ((m,n) = size(A); gerqf!(A, similar(A, min(m, n))))
 
-"""
-    geqp3!(A, jpvt) -> (A, jpvt, tau)
-
-Compute the pivoted `QR` factorization of `A`, `AP = QR` using BLAS level 3.
-`P` is a pivoting matrix, represented by `jpvt`. `jpvt` must have length
-greater than or equal to `n` if `A` is an `(m x n)` matrix.
-
-Returns `A` and `jpvt`, modified in-place, and `tau`, which stores the elementary
-reflectors.
-"""
-function geqp3!(A::AbstractMatrix{<:BlasFloat}, jpvt::AbstractVector{BlasInt})
-    m, n = size(A)
-    geqp3!(A, jpvt, similar(A, min(m, n)))
+## Tools to compute and apply elementary reflectors
+for (larfg, elty) in
+    ((:dlarfg_, Float64),
+     (:slarfg_, Float32),
+     (:zlarfg_, ComplexF64),
+     (:clarfg_, ComplexF32))
+    @eval begin
+        #        .. Scalar Arguments ..
+        #        INTEGER            incx, n
+        #        DOUBLE PRECISION   alpha, tau
+        #        ..
+        #        .. Array Arguments ..
+        #        DOUBLE PRECISION   x( * )
+        function larfg!(x::AbstractVector{$elty})
+            N    = BlasInt(length(x))
+            α    = Ref{$elty}(x[1])
+            incx = BlasInt(1)
+            τ    = Ref{$elty}(0)
+            ccall((@blasfunc($larfg), liblapack), Cvoid,
+                (Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ref{$elty}),
+                N, α, pointer(x, 2), incx, τ)
+            @inbounds x[1] = one($elty)
+            return τ[]
+        end
+    end
 end
 
-"""
-    geqp3!(A) -> (A, jpvt, tau)
+for (larf, elty) in
+    ((:dlarf_, Float64),
+     (:slarf_, Float32),
+     (:zlarf_, ComplexF64),
+     (:clarf_, ComplexF32))
+    @eval begin
+        #        .. Scalar Arguments ..
+        #        CHARACTER          side
+        #        INTEGER            incv, ldc, m, n
+        #        DOUBLE PRECISION   tau
+        #        ..
+        #        .. Array Arguments ..
+        #        DOUBLE PRECISION   c( ldc, * ), v( * ), work( * )
+        function larf!(side::AbstractChar, v::AbstractVector{$elty},
+                       τ::$elty, C::AbstractMatrix{$elty}, work::AbstractVector{$elty})
+            m, n = size(C)
+            chkside(side)
+            ldc = max(1, stride(C, 2))
+            l = side == 'L' ? n : m
+            incv  = BlasInt(1)
+            ccall((@blasfunc($larf), liblapack), Cvoid,
+                (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
+                 Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Clong),
+                side, m, n, v, incv,
+                τ, C, ldc, work, 1)
+            return C
+        end
 
-Compute the pivoted `QR` factorization of `A`, `AP = QR` using BLAS level 3.
-
-Returns `A`, modified in-place, `jpvt`, which represents the pivoting matrix `P`,
-and `tau`, which stores the elementary reflectors.
-"""
-function geqp3!(A::AbstractMatrix{<:BlasFloat})
-    m, n = size(A)
-    geqp3!(A, zeros(BlasInt, n), similar(A, min(m, n)))
+        function larf!(side::AbstractChar, v::AbstractVector{$elty},
+                       τ::$elty, C::AbstractMatrix{$elty})
+            m, n = size(C)
+            chkside(side)
+            lwork = side == 'L' ? n : m
+            return larf!(side, v, τ, C, Vector{$elty}(undef,lwork))
+        end
+    end
 end
 
 ## Complete orthogonaliztion tools

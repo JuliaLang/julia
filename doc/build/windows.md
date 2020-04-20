@@ -196,6 +196,7 @@ make -j4 win-extras julia-ui-release
 export WINEDEBUG=-all # suppress wine fixme's
 # this last step may need to be run interactively
 make -j4 binary-dist
+make -j4 exe
 SCRIPT
 
 Vagrant.configure("2") do |config|
@@ -211,16 +212,17 @@ end
 
 ### Cross-building Julia without Vagrant
 
-If you don't care that the build is potentially incompatible with the WinRPM
-ecosystem (or happen to be on opensuse), use the following steps to
-cross-compile julia:
+Alternatively, if you want to build it on the local system,
+use the following steps to cross-compile julia:
 
 First, you will need to ensure your system has the required dependencies.  We
 need wine (>=1.7.5), a system compiler, and some downloaders.
 
 **On Ubuntu** (on other linux systems, the dependency names are likely to be similar):
 ```sh
-apt-get install wine subversion cvs gcc wget p7zip-full winbind mingw-w64
+apt-get install wine-stable gcc wget p7zip-full winbind mingw-w64 gfortran-mingw-w64
+# switch all of the following to their "-posix" variants (interactively):
+for pkg in i686-w64-mingw32-g++ i686-w64-mingw32-gcc i686-w64-mingw32-gfortran x86_64-w64-mingw32-g++ x86_64-w64-mingw32-gcc x86_64-w64-mingw32-gfortran; do sudo update-alternatives --config $pkg; done
 ```
 
 **On Mac**: Install XCode, XCode command line tools, X11 (now [XQuartz](
@@ -234,7 +236,7 @@ Then run the build:
  2. `echo override XC_HOST = i686-w64-mingw32 >> Make.user`
  3. `make`
  4. `make win-extras` (Necessary before running `make binary-dist`)
- 5. `make binary-dist`
+ 5. `make binary-dist` then `make exe` to create the Windows installer.
  6. move the `julia-*.exe` installer to the target machine
 
 If you are building for 64-bit windows, the steps are essentially the same.
@@ -266,8 +268,7 @@ just run `vagrant up` from that folder.
 Compiling using one of the options above creates a basic Julia build, but not some
 extra components that are included if you run the full Julia binary installer.
 If you need these components, the easiest way to get them is to build the installer
-yourself using ```make win-extras``` followed by ```make binary-dist```, and then
-running the resulting installer.
+yourself using ```make win-extras``` followed by ```make binary-dist``` and ```make exe```. Then running the resulting installer.
 
 
 ## Windows Build Debugging

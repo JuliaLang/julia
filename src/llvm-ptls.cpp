@@ -21,10 +21,8 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/MDBuilder.h>
 
-#if defined(JULIA_ENABLE_THREADING)
-#  include <llvm/IR/InlineAsm.h>
-#  include <llvm/Transforms/Utils/BasicBlockUtils.h>
-#endif
+#include <llvm/IR/InlineAsm.h>
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -33,9 +31,7 @@
 
 using namespace llvm;
 
-#if JL_LLVM_VERSION >= 80000
 typedef Instruction TerminatorInst;
-#endif
 
 std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr,
                                            bool isConstant=false);
@@ -61,21 +57,16 @@ private:
     Type *T_int8;
     Type *T_size;
     PointerType *T_pint8;
-#ifdef JULIA_ENABLE_THREADING
     GlobalVariable *ptls_slot{nullptr};
     GlobalVariable *ptls_offset{nullptr};
     void set_ptls_attrs(CallInst *ptlsStates) const;
     Instruction *emit_ptls_tp(Value *offset, Instruction *insertBefore) const;
     template<typename T> T *add_comdat(T *G) const;
     GlobalVariable *create_aliased_global(Type *T, StringRef name) const;
-#else
-    GlobalVariable *static_tls;
-#endif
     void fix_ptls_use(CallInst *ptlsStates);
     bool runOnModule(Module &M) override;
 };
 
-#ifdef JULIA_ENABLE_THREADING
 void LowerPTLS::set_ptls_attrs(CallInst *ptlsStates) const
 {
     ptlsStates->addAttribute(AttributeList::FunctionIndex, Attribute::ReadNone);
@@ -182,7 +173,6 @@ inline T *LowerPTLS::add_comdat(T *G) const
 #endif
     return G;
 }
-#endif
 
 void LowerPTLS::fix_ptls_use(CallInst *ptlsStates)
 {
@@ -191,7 +181,6 @@ void LowerPTLS::fix_ptls_use(CallInst *ptlsStates)
         return;
     }
 
-#ifdef JULIA_ENABLE_THREADING
     if (imaging_mode) {
         if (jl_tls_elf_support) {
             // if (offset != 0)
@@ -245,10 +234,6 @@ void LowerPTLS::fix_ptls_use(CallInst *ptlsStates)
         ptlsStates->setCalledFunction(ptlsStates->getFunctionType(), ConstantExpr::getIntToPtr(val, T_ptls_getter));
         set_ptls_attrs(ptlsStates);
     }
-#else
-    ptlsStates->replaceAllUsesWith(static_tls);
-    ptlsStates->eraseFromParent();
-#endif
 }
 
 bool LowerPTLS::runOnModule(Module &_M)
@@ -268,15 +253,10 @@ bool LowerPTLS::runOnModule(Module &_M)
     T_int8 = Type::getInt8Ty(*ctx);
     T_size = sizeof(size_t) == 8 ? Type::getInt64Ty(*ctx) : Type::getInt32Ty(*ctx);
     T_pint8 = T_int8->getPointerTo();
-#ifdef JULIA_ENABLE_THREADING
     if (imaging_mode) {
         ptls_slot = create_aliased_global(T_ptls_getter, "jl_get_ptls_states_slot");
         ptls_offset = create_aliased_global(T_size, "jl_tls_offset");
     }
-#else
-    static_tls = new GlobalVariable(*M, T_ppjlvalue, false, GlobalVariable::ExternalLinkage,
-                                    NULL, "jl_tls_states");
-#endif
 
     for (auto it = ptls_getter->user_begin(); it != ptls_getter->user_end();) {
         auto call = cast<CallInst>(*it);

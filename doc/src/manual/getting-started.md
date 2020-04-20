@@ -84,6 +84,10 @@ Greetings! 你好! 안녕하세요?
 ...
 ```
 
+Note that although you should have a `~/.julia` directory once you've run Julia for the
+first time, you may need to create the `~/.julia/config` folder and the
+`~/.julia/config/startup.jl` file if you use it.
+
 There are various ways to run Julia code and provide options, similar to those available for the
 `perl` and `ruby` programs:
 
@@ -94,7 +98,7 @@ julia [switches] -- [programfile] [args...]
 |Switch                                 |Description|
 |:---                                   |:---|
 |`-v`, `--version`                      |Display version information|
-|`-h`, `--help`                         |Print this message|
+|`-h`, `--help`                         |Print command-line options (this message).|
 |`--project[={<dir>\|@.}]`              |Set <dir> as the home project/environment. The default @. option will search through parent directories until a Project.toml or JuliaProject.toml file is found.|
 |`-J`, `--sysimage <file>`              |Start up with the given system image file|
 |`-H`, `--home <dir>`                   |Set location of `julia` executable|
@@ -105,6 +109,7 @@ julia [switches] -- [programfile] [args...]
 |`-e`, `--eval <expr>`                  |Evaluate `<expr>`|
 |`-E`, `--print <expr>`                 |Evaluate `<expr>` and display the result|
 |`-L`, `--load <file>`                  |Load `<file>` immediately on all processors|
+|`-t`, `--threads {N\|auto`}            |Enable N threads; `auto` currently sets N to the number of local CPU threads but this might change in the future|
 |`-p`, `--procs {N\|auto`}              |Integer value N launches N additional local worker processes; `auto` launches as many workers as the number of local CPU threads (logical cores)|
 |`--machine-file <file>`                |Run processes on hosts listed in `<file>`|
 |`-i`                                   |Interactive mode; REPL runs and `isinteractive()` is true|

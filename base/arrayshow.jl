@@ -101,13 +101,20 @@ function print_matrix_row(io::IO,
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
             x = X[i,j]
             a = alignment(io, x)
-            sx = sprint(show, x, context=io, sizehint=0)
+
+            # First try 3-arg show
+            sx = sprint(show, "text/plain", x, context=io, sizehint=0)
+
+            # If the output contains line breaks, try 2-arg show instead.
+            if occursin('\n', sx)
+                sx = sprint(show, x, context=io, sizehint=0)
+            end
         else
             a = undef_ref_alignment
             sx = undef_ref_str
         end
         l = repeat(" ", A[k][1]-a[1]) # pad on left and right as needed
-        r = repeat(" ", A[k][2]-a[2])
+        r = j == axes(X, 2)[end] ? "" : repeat(" ", A[k][2]-a[2])
         prettysx = replace_in_print_matrix(X,i,j,sx)
         print(io, l, prettysx, r)
         if k < length(A); print(io, sep); end
@@ -121,15 +128,18 @@ of a bunch of rows for long matrices. Not only is the string vdots shown
 but it also repeated every M elements if desired.
 """
 function print_matrix_vdots(io::IO, vdots::AbstractString,
-        A::Vector, sep::AbstractString, M::Integer, m::Integer)
+                            A::Vector, sep::AbstractString, M::Integer, m::Integer,
+                            pad_right::Bool = true)
     for k = 1:length(A)
         w = A[k][1] + A[k][2]
         if k % M == m
             l = repeat(" ", max(0, A[k][1]-length(vdots)))
-            r = repeat(" ", max(0, w-length(vdots)-length(l)))
+            r = k == length(A) && !pad_right ?
+                "" :
+                repeat(" ", max(0, w-length(vdots)-length(l)))
             print(io, l, vdots, r)
         else
-            print(io, repeat(" ", w))
+            (k != length(A) || pad_right) && print(io, repeat(" ", w))
         end
         if k < length(A); print(io, sep); end
     end
@@ -216,7 +226,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 if i != rowsA[end] || i == rowsA[halfheight]; println(io); end
                 if i == rowsA[halfheight]
                     print(io, i == first(rowsA) ? pre : presp)
-                    print_matrix_vdots(io, vdots,A,sep,vmod,1)
+                    print_matrix_vdots(io, vdots, A, sep, vmod, 1, false)
                     print(io, i == last(rowsA) ? post : postsp * '\n')
                 end
             end
@@ -235,9 +245,9 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 if i != rowsA[end] || i == rowsA[halfheight]; println(io); end
                 if i == rowsA[halfheight]
                     print(io, i == first(rowsA) ? pre : presp)
-                    print_matrix_vdots(io, vdots,Lalign,sep,vmod,1)
+                    print_matrix_vdots(io, vdots, Lalign, sep, vmod, 1, true)
                     print(io, ddots)
-                    print_matrix_vdots(io, vdots,Ralign,sep,vmod,r)
+                    print_matrix_vdots(io, vdots, Ralign, sep, vmod, r, false)
                     print(io, i == last(rowsA) ? post : postsp * '\n')
                 end
             end
@@ -299,14 +309,12 @@ end
 
 # print_array: main helper functions for show(io, text/plain, array)
 # typeinfo agnostic
-
-# 0-dimensional arrays
-print_array(io::IO, X::AbstractArray{T,0} where T) =
-    isassigned(X) ? show(io, X[]) :
-                    print(io, undef_ref_str)
-
+# Note that this is for showing the content inside the array, and for `MIME"text/plain".
+# There are `show(::IO, ::A) where A<:AbstractArray` methods that don't use this
+# e.g. show_vector, show_zero_dim
+print_array(io::IO, X::AbstractArray{<:Any, 0}) =
+    isassigned(X) ? show(io, X[]) : print(io, undef_ref_str)
 print_array(io::IO, X::AbstractVecOrMat) = print_matrix(io, X)
-
 print_array(io::IO, X::AbstractArray) = show_nd(io, X, print_matrix, true)
 
 # typeinfo aware
@@ -316,6 +324,7 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     summary(io, X)
     isempty(X) && return
     print(io, ":")
+    show_circular(io, X) && return
 
     # 1) compute new IOContext
     if !haskey(io, :compact) && length(axes(X, 2)) > 1
@@ -342,7 +351,8 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     io = IOContext(io, :typeinfo => eltype(X))
 
     # 2) show actual content
-    print_array(io, X)
+    recur_io = IOContext(io, :SHOWN_SET => X)
+    print_array(recur_io, X)
 end
 
 ## printing with `show`
@@ -415,12 +425,28 @@ _show_empty(io, X) = nothing # by default, we don't know this constructor
 
 # typeinfo aware (necessarily)
 function show(io::IO, X::AbstractArray)
+    ndims(X) == 0 && return show_zero_dim(io, X)
     ndims(X) == 1 && return show_vector(io, X)
-    prefix = typeinfo_prefix(io, X)
-    io = IOContext(io, :typeinfo => eltype(X))
+    prefix, implicit = typeinfo_prefix(io, X)
+    if !implicit
+        io = IOContext(io, :typeinfo => eltype(X))
+    end
     isempty(X) ?
         _show_empty(io, X) :
         _show_nonempty(io, X, prefix)
+end
+
+### 0-dimensional arrays (#31481)
+show_zero_dim(io::IO, X::BitArray{0}) = print(io, "BitArray(", Int(X[]), ")")
+function show_zero_dim(io::IO, X::AbstractArray{T, 0}) where T
+    if isassigned(X)
+        print(io, "fill(")
+        show(io, X[])
+    else
+        print(io, "Array{$T,0}(")
+        show(io, undef)
+    end
+    print(io, ")")
 end
 
 ### Vector arrays
@@ -429,10 +455,14 @@ end
 # NOTE: v is not constrained to be a vector, as this function can work with iterables
 # in general (it's used e.g. by show(::IO, ::Set))
 function show_vector(io::IO, v, opn='[', cls=']')
-    print(io, typeinfo_prefix(io, v))
+    prefix, implicit = typeinfo_prefix(io, v)
+    print(io, prefix)
     # directly or indirectly, the context now knows about eltype(v)
-    io = IOContext(io, :typeinfo => eltype(v))
+    if !implicit
+        io = IOContext(io, :typeinfo => eltype(v))
+    end
     limited = get(io, :limit, false)
+
     if limited && length(v) > 20
         axs1 = axes1(v)
         f, l = first(axs1), last(axs1)
@@ -457,10 +487,22 @@ typeinfo_eltype(typeinfo::Type{<:AbstractArray{T}}) where {T} = eltype(typeinfo)
 typeinfo_eltype(typeinfo::Type{<:AbstractDict{K,V}}) where {K,V} = eltype(typeinfo)
 typeinfo_eltype(typeinfo::Type{<:AbstractSet{T}}) where {T} = eltype(typeinfo)
 
+# types that can be parsed back accurately from their un-decorated representations
+function typeinfo_implicit(@nospecialize(T))
+    if T === Float64 || T === Int || T === Char || T === String || T === Symbol ||
+        issingletontype(T)
+        return true
+    end
+    return isconcretetype(T) &&
+        ((T <: Array && typeinfo_implicit(eltype(T))) ||
+         ((T <: Tuple || T <: Pair) && all(typeinfo_implicit, fieldtypes(T))) ||
+         (T <: AbstractDict && typeinfo_implicit(keytype(T)) && typeinfo_implicit(valtype(T))))
+end
 
 # X not constrained, can be any iterable (cf. show_vector)
 function typeinfo_prefix(io::IO, X)
     typeinfo = get(io, :typeinfo, Any)::Type
+
     if !(X isa typeinfo)
         typeinfo = Any
     end
@@ -470,19 +512,23 @@ function typeinfo_prefix(io::IO, X)
     eltype_X = eltype(X)
 
     if X isa AbstractDict
-        if eltype_X == eltype_ctx || !isempty(X) && isconcretetype(keytype(X)) && isconcretetype(valtype(X))
-            string(typeof(X).name)
+        if eltype_X == eltype_ctx
+            string(typeof(X).name), false
+        elseif !isempty(X) && typeinfo_implicit(keytype(X)) && typeinfo_implicit(valtype(X))
+            string(typeof(X).name), true
         else
-            string(typeof(X))
+            string(typeof(X)), false
         end
     else
         # Types hard-coded here are those which are created by default for a given syntax
-        if eltype_X == eltype_ctx || !isempty(X) && eltype_X in (Float64, Int, Char, String)
-            ""
+        if eltype_X == eltype_ctx
+            "", false
+        elseif !isempty(X) && typeinfo_implicit(eltype_X)
+            "", true
         elseif print_without_params(eltype_X)
-            string(unwrap_unionall(eltype_X).name) # Print "Array" rather than "Array{T,N}"
+            string(unwrap_unionall(eltype_X).name), false # Print "Array" rather than "Array{T,N}"
         else
-            string(eltype_X)
+            string(eltype_X), false
         end
     end
 end

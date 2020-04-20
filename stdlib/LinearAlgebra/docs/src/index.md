@@ -284,7 +284,7 @@ compute the factorization of a matrix into a product of matrices, and are one of
 in linear algebra.
 
 The following table summarizes the types of matrix factorizations that have been implemented in
-Julia. Details of their associated methods can be found in the [Standard Functions](@ref) section
+Julia. Details of their associated methods can be found in the [Standard functions](@ref) section
 of the Linear Algebra documentation.
 
 | Type               | Description                                                                                                    |
@@ -308,7 +308,7 @@ of the Linear Algebra documentation.
 
 
 
-## Standard Functions
+## Standard functions
 
 Linear algebra functions in Julia are largely implemented by calling functions from [LAPACK](http://www.netlib.org/lapack/).
  Sparse factorizations call functions from [SuiteSparse](http://faculty.cse.tamu.edu/davis/suitesparse.html).
@@ -318,6 +318,7 @@ Base.:*(::AbstractMatrix, ::AbstractMatrix)
 Base.:\(::AbstractMatrix, ::AbstractVecOrMat)
 LinearAlgebra.SingularException
 LinearAlgebra.PosDefException
+LinearAlgebra.ZeroPivotException
 LinearAlgebra.dot
 LinearAlgebra.cross
 LinearAlgebra.factorize
@@ -333,6 +334,7 @@ LinearAlgebra.UnitLowerTriangular
 LinearAlgebra.UnitUpperTriangular
 LinearAlgebra.UpperHessenberg
 LinearAlgebra.UniformScaling
+LinearAlgebra.I
 LinearAlgebra.Factorization
 LinearAlgebra.LU
 LinearAlgebra.lu
@@ -474,7 +476,7 @@ LinearAlgebra.ldiv!
 LinearAlgebra.rdiv!
 ```
 
-## BLAS Functions
+## BLAS functions
 
 In Julia (as in much of scientific computation), dense linear-algebra operations are based on
 the [LAPACK library](http://www.netlib.org/lapack/), which in turn is built on top of basic linear-algebra
@@ -486,33 +488,33 @@ linear algebra routines it is useful to call the BLAS functions directly.
 that overwrite one of the input arrays have names ending in `'!'`.  Usually, a BLAS function has
 four methods defined, for [`Float64`](@ref), [`Float32`](@ref), `ComplexF64`, and `ComplexF32` arrays.
 
-### [BLAS Character Arguments](@id stdlib-blas-chars)
+### [BLAS character arguments](@id stdlib-blas-chars)
 Many BLAS functions accept arguments that determine whether to transpose an argument (`trans`),
 which triangle of a matrix to reference (`uplo` or `ul`),
 whether the diagonal of a triangular matrix can be assumed to
 be all ones (`dA`) or which side of a matrix multiplication
 the input argument belongs on (`side`). The possibilities are:
 
-#### [Multplication Order](@id stdlib-blas-side)
+#### [Multiplication order](@id stdlib-blas-side)
 | `side` | Meaning                                                             |
 |:-------|:--------------------------------------------------------------------|
 | `'L'`  | The argument goes on the *left* side of a matrix-matrix operation.  |
 | `'R'`  | The argument goes on the *right* side of a matrix-matrix operation. |
 
-#### [Triangle Referencing](@id stdlib-blas-uplo)
+#### [Triangle referencing](@id stdlib-blas-uplo)
 | `uplo`/`ul` | Meaning                                               |
 |:------------|:------------------------------------------------------|
 | `'U'`       | Only the *upper* triangle of the matrix will be used. |
 | `'L'`       | Only the *lower* triangle of the matrix will be used. |
 
-#### [Transposition Operation](@id stdlib-blas-trans)
+#### [Transposition operation](@id stdlib-blas-trans)
 | `trans`/`tX` | Meaning                                                 |
 |:-------------|:--------------------------------------------------------|
 | `'N'`        | The input matrix `X` is not transposed or conjugated.   |
 | `'T'`        | The input matrix `X` will be transposed.                |
 | `'C'`        | The input matrix `X` will be conjugated and transposed. |
 
-#### [Unit Diagonal](@id stdlib-blas-diag)
+#### [Unit diagonal](@id stdlib-blas-diag)
 | `diag`/`dX` | Meaning                                                   |
 |:------------|:----------------------------------------------------------|
 | `'N'`       | The diagonal values of the matrix `X` will be read.       |
@@ -520,12 +522,14 @@ the input argument belongs on (`side`). The possibilities are:
 
 ```@docs
 LinearAlgebra.BLAS
+LinearAlgebra.BLAS.dot
 LinearAlgebra.BLAS.dotu
 LinearAlgebra.BLAS.dotc
 LinearAlgebra.BLAS.blascopy!
 LinearAlgebra.BLAS.nrm2
 LinearAlgebra.BLAS.asum
 LinearAlgebra.axpy!
+LinearAlgebra.axpby!
 LinearAlgebra.BLAS.scal!
 LinearAlgebra.BLAS.scal
 LinearAlgebra.BLAS.iamax
@@ -533,9 +537,13 @@ LinearAlgebra.BLAS.ger!
 LinearAlgebra.BLAS.syr!
 LinearAlgebra.BLAS.syrk!
 LinearAlgebra.BLAS.syrk
+LinearAlgebra.BLAS.syr2k!
+LinearAlgebra.BLAS.syr2k
 LinearAlgebra.BLAS.her!
 LinearAlgebra.BLAS.herk!
 LinearAlgebra.BLAS.herk
+LinearAlgebra.BLAS.her2k!
+LinearAlgebra.BLAS.her2k
 LinearAlgebra.BLAS.gbmv!
 LinearAlgebra.BLAS.gbmv
 LinearAlgebra.BLAS.sbmv!
@@ -553,6 +561,12 @@ LinearAlgebra.BLAS.symm(::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.symv!
 LinearAlgebra.BLAS.symv(::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.symv(::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.hemm!
+LinearAlgebra.BLAS.hemm(::Any, ::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.hemm(::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.hemv!
+LinearAlgebra.BLAS.hemv(::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.hemv(::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.trmm!
 LinearAlgebra.BLAS.trmm
 LinearAlgebra.BLAS.trsm!
@@ -562,10 +576,9 @@ LinearAlgebra.BLAS.trmv
 LinearAlgebra.BLAS.trsv!
 LinearAlgebra.BLAS.trsv
 LinearAlgebra.BLAS.set_num_threads
-LinearAlgebra.I
 ```
 
-## LAPACK Functions
+## LAPACK functions
 
 `LinearAlgebra.LAPACK` provides wrappers for some of the LAPACK functions for linear algebra.
  Those functions that overwrite one of the input arrays have names ending in `'!'`.

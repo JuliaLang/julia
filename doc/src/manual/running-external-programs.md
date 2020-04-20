@@ -315,7 +315,7 @@ Another common solution is to separate the reader and writer of the pipeline int
 ```julia
 writer = @async write(process, "data")
 reader = @async do_compute(read(process, String))
-wait(process)
+wait(writer)
 fetch(reader)
 ```
 

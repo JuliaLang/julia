@@ -398,3 +398,21 @@ end
     @test_throws DimensionMismatch maximum!(fill(0, 1, 1, 2, 1), B)
     @test_throws DimensionMismatch minimum!(fill(0, 1, 1, 2, 1), B)
 end
+
+# issue #26709
+@testset "dimensional reduce with custom non-bitstype types" begin
+    struct Variable
+        name::Symbol
+    end
+    struct AffExpr
+        vars::Vector{Variable}
+    end
+    Base.zero(::Union{Variable, Type{Variable}, AffExpr}) = AffExpr(Variable[])
+    Base.:+(v::Variable, w::Variable) = AffExpr([v, w])
+    Base.:+(aff::AffExpr, v::Variable) = AffExpr([aff.vars; v])
+    Base.:+(aff1::AffExpr, aff2::AffExpr) = AffExpr([aff1.vars; aff2.vars])
+    Base.:(==)(a::Variable, b::Variable) = a.name == b.name
+    Base.:(==)(a::AffExpr, b::AffExpr) = a.vars == b.vars
+
+    @test sum([Variable(:x), Variable(:y)], dims=1) == [AffExpr([Variable(:x), Variable(:y)])]
+end

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module MiniCassette
     # A minimal demonstration of the cassette mechanism. Doesn't support all the
     # fancy features, but sufficient to exercise this code path in the compiler.
@@ -62,7 +64,7 @@ module MiniCassette
     end
 
     function overdub_generator(self, c, f, args)
-        if f <: Core.Builtin || !isdefined(f, :instance)
+        if !isdefined(f, :instance)
             return :(return f(args...))
         end
 
@@ -81,6 +83,10 @@ module MiniCassette
         end
         transform!(code_info, length(args), msp)
         code_info
+    end
+
+    @inline function overdub(c::Ctx, f::Union{Core.Builtin, Core.IntrinsicFunction}, args...)
+        f(args...)
     end
 
     @eval function overdub(c::Ctx, f, args...)
@@ -108,3 +114,24 @@ f() = 2
 
 # Test that MiniCassette is at least somewhat capable by overdubbing gcd
 @test overdub(Ctx(), gcd, 10, 20) === gcd(10, 20)
+
+# Test that pure propagates for Cassette
+Base.@pure isbitstype(T) = T.isbitstype
+f31012(T) = Val(isbitstype(T))
+@test @inferred(overdub(Ctx(), f31012, Int64)) == Val(true)
+
+@generated bar(::Val{align}) where {align} = :(42)
+foo(i) = i+bar(Val(1))
+
+@test @inferred(overdub(Ctx(), foo, 1)) == 43
+
+# Check that misbehaving pure functions propagate their error
+Base.@pure func1() = 42
+Base.@pure func2() = (this_is_an_exception; func1())
+
+let method = which(func2, ())
+    mi = Core.Compiler.specialize_method(method, Tuple{typeof(func2)}, Core.svec())
+    mi.inInference = true
+end
+func3() = func2()
+@test_throws UndefVarError func3()

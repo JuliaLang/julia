@@ -3,7 +3,7 @@
 module TestDiagonal
 
 using Test, LinearAlgebra, SparseArrays, Random
-using LinearAlgebra: mul!, rmul!, lmul!, ldiv!, rdiv!, BlasFloat, BlasComplex, SingularException
+using LinearAlgebra: mul!, mul!, rmul!, lmul!, ldiv!, rdiv!, BlasFloat, BlasComplex, SingularException
 
 n=12 #Size of matrix problem to test
 Random.seed!(1)
@@ -55,7 +55,13 @@ Random.seed!(1)
         @test isdiag(Diagonal([[1 0; 0 1], [1 0; 0 1]]))
         @test !isdiag(Diagonal([[1 0; 0 1], [1 0; 1 1]]))
         @test istriu(D)
+        @test istriu(D, -1)
+        @test !istriu(D, 1)
+        @test istriu(Diagonal(zero(diag(D))), 1)
         @test istril(D)
+        @test !istril(D, -1)
+        @test istril(D, 1)
+        @test istril(Diagonal(zero(diag(D))), -1)
         if elty <: Real
             @test ishermitian(D)
         end
@@ -115,6 +121,17 @@ Random.seed!(1)
                 @test ldiv!(D, copy(U)) ≈ DM\U atol=atol_three
                 @test ldiv!(transpose(D), copy(U)) ≈ DM\U atol=atol_three
                 @test ldiv!(adjoint(conj(D)), copy(U)) ≈ DM\U atol=atol_three
+                # this method tests AbstractMatrix/AbstractVec for second arg
+                Usym_bad = Symmetric(ones(elty, n+1, n+1))
+                @test_throws DimensionMismatch ldiv!(D, copy(Usym_bad))
+
+                @test ldiv!(zero(v), D, copy(v)) ≈ DM\v atol=atol_two
+                @test ldiv!(zero(v), transpose(D), copy(v)) ≈ DM\v atol=atol_two
+                @test ldiv!(zero(v), adjoint(conj(D)), copy(v)) ≈ DM\v atol=atol_two
+                @test ldiv!(zero(U), D, copy(U)) ≈ DM\U atol=atol_three
+                @test ldiv!(zero(U), transpose(D), copy(U)) ≈ DM\U atol=atol_three
+                @test ldiv!(zero(U), adjoint(conj(D)), copy(U)) ≈ DM\U atol=atol_three
+
                 Uc = copy(U')
                 target = rmul!(Uc, Diagonal(inv.(D.diag)))
                 @test rdiv!(Uc, D) ≈ target atol=atol_three
@@ -183,6 +200,19 @@ Random.seed!(1)
         A     = rand(elty, n, n)
         Asym  = Symmetric(A + transpose(A), :U)
         Aherm = Hermitian(A + adjoint(A), :U)
+        for op in (+, -)
+            @test op(Asym, D) isa Symmetric
+            @test Array(op(Asym, D)) ≈ Array(Symmetric(op(Array(Asym), Array(D))))
+            @test op(D, Asym) isa Symmetric
+            @test Array(op(D, Asym)) ≈ Array(Symmetric(op(Array(D), Array(Asym))))
+            if !(elty <: Real)
+                Dr = real(D)
+                @test op(Aherm, Dr) isa Hermitian
+                @test Array(op(Aherm, Dr)) ≈ Array(Hermitian(op(Array(Aherm), Array(Dr))))
+                @test op(Dr, Aherm) isa Hermitian
+                @test Array(op(Dr, Aherm)) ≈ Array(Hermitian(op(Array(Dr), Array(Aherm))))
+            end
+        end
         @test Array(D*Transpose(Asym)) ≈ Array(D) * Array(transpose(Asym))
         @test Array(D*Adjoint(Asym)) ≈ Array(D) * Array(adjoint(Asym))
         @test Array(D*Transpose(Aherm)) ≈ Array(D) * Array(transpose(Aherm))
@@ -199,9 +229,52 @@ Random.seed!(1)
         @test (r = transpose(Matrix(D)) * vv ; mul!(vvv, transpose(D), vv) ≈ r ≈ vvv)
 
         UUU = similar(UU)
-        @test (r = Matrix(D) * UU   ; mul!(UUU, D, UU) ≈ r ≈ UUU)
-        @test (r = Matrix(D)' * UU  ; mul!(UUU, adjoint(D), UU) ≈ r ≈ UUU)
-        @test (r = transpose(Matrix(D)) * UU ; mul!(UUU, transpose(D), UU) ≈ r ≈ UUU)
+        for transformA in (identity, adjoint, transpose)
+            for transformD in (identity, Adjoint, Transpose, adjoint, transpose)
+                @test mul!(UUU, transformA(UU), transformD(D)) ≈  transformA(UU) * Matrix(transformD(D))
+                @test mul!(UUU, transformD(D), transformA(UU)) ≈  Matrix(transformD(D)) * transformA(UU)
+            end
+        end
+
+        alpha = elty(randn())  # randn(elty) does not work with BigFloat
+        beta = elty(randn())
+        @test begin
+            vvv = similar(vv)
+            vvv .= randn(size(vvv))  # randn!(vvv) does not work with BigFloat
+            r = alpha * Matrix(D) * vv + beta * vvv
+            mul!(vvv, D, vv, alpha, beta)  ≈ r ≈ vvv
+        end
+        @test begin
+            vvv = similar(vv)
+            vvv .= randn(size(vvv))  # randn!(vvv) does not work with BigFloat
+            r = alpha * Matrix(D)' * vv + beta * vvv
+            mul!(vvv, adjoint(D), vv, alpha, beta) ≈ r ≈ vvv
+        end
+        @test begin
+            vvv = similar(vv)
+            vvv .= randn(size(vvv))  # randn!(vvv) does not work with BigFloat
+            r = alpha * transpose(Matrix(D)) * vv + beta * vvv
+            mul!(vvv, transpose(D), vv, alpha, beta) ≈ r ≈ vvv
+        end
+
+        @test begin
+            UUU = similar(UU)
+            UUU .= randn(size(UUU))  # randn!(UUU) does not work with BigFloat
+            r = alpha * Matrix(D) * UU + beta * UUU
+            mul!(UUU, D, UU, alpha, beta) ≈ r ≈ UUU
+        end
+        @test begin
+            UUU = similar(UU)
+            UUU .= randn(size(UUU))  # randn!(UUU) does not work with BigFloat
+            r = alpha * Matrix(D)' * UU + beta * UUU
+            mul!(UUU, adjoint(D), UU, alpha, beta) ≈ r ≈ UUU
+        end
+        @test begin
+            UUU = similar(UU)
+            UUU .= randn(size(UUU))  # randn!(UUU) does not work with BigFloat
+            r = alpha * transpose(Matrix(D)) * UU + beta * UUU
+            mul!(UUU, transpose(D), UU, alpha, beta) ≈ r ≈ UUU
+        end
 
         # make sure that mul!(A, {Adj|Trans}(B)) works with B as a Diagonal
         VV = Array(D)
@@ -279,10 +352,15 @@ Random.seed!(1)
         @test(transpose(D) * vv == D * vv)
     end
 
-    #logdet
+    # logdet and logabsdet
     if relty <: Real
-        ld=convert(Vector{relty},rand(n))
-        @test logdet(Diagonal(ld)) ≈ logdet(Matrix(Diagonal(ld)))
+        lD = Diagonal(convert(Vector{relty}, rand(n)))
+        lM = Matrix(lD)
+        @test logdet(lD) ≈ logdet(lM)
+        d1, s1 = @inferred logabsdet(lD)
+        d2, s2 = logabsdet(lM)
+        @test d1 ≈ d2
+        @test s1 == s2
     end
 
     @testset "similar" begin
@@ -396,14 +474,54 @@ end
 @test Matrix(1.0I, 5, 5) \ Diagonal(fill(1.,5)) == Matrix(I, 5, 5)
 
 @testset "Triangular and Diagonal" begin
-    for T in (LowerTriangular(randn(5,5)), LinearAlgebra.UnitLowerTriangular(randn(5,5)))
-        D = Diagonal(randn(5))
-        @test T*D   == Array(T)*Array(D)
-        @test T'D   == Array(T)'*Array(D)
-        @test transpose(T)*D  == transpose(Array(T))*Array(D)
-        @test D*T'  == Array(D)*Array(T)'
-        @test D*transpose(T) == Array(D)*transpose(Array(T))
-        @test D*T   == Array(D)*Array(T)
+    function _test_matrix(type)
+        if type == Int
+            return rand(1:9, 5, 5)
+        else
+            return randn(type, 5, 5)
+        end
+    end
+    types = (Float64, Int, ComplexF64)
+    for ta in types
+        D = Diagonal(_test_matrix(ta))
+        for tb in types
+            B = _test_matrix(tb)
+            Tmats = (LowerTriangular(B), UnitLowerTriangular(B), UpperTriangular(B), UnitUpperTriangular(B))
+            restypes = (LowerTriangular, LowerTriangular, UpperTriangular, UpperTriangular)
+            for (T, rtype) in zip(Tmats, restypes)
+                adjtype = (rtype == LowerTriangular) ? UpperTriangular : LowerTriangular
+
+                # Triangular * Diagonal
+                R = T * D
+                @test R ≈ Array(T) * Array(D)
+                @test isa(R, rtype)
+
+                # Diagonal * Triangular
+                R = D * T
+                @test R ≈ Array(D) * Array(T)
+                @test isa(R, rtype)
+
+                # Adjoint of Triangular * Diagonal
+                R = T' * D
+                @test R ≈ Array(T)' * Array(D)
+                @test isa(R, adjtype)
+
+                # Diagonal * Adjoint of Triangular
+                R = D * T'
+                @test R ≈ Array(D) * Array(T)'
+                @test isa(R, adjtype)
+
+                # Transpose of Triangular * Diagonal
+                R = transpose(T) * D
+                @test R ≈ transpose(Array(T)) * Array(D)
+                @test isa(R, adjtype)
+
+                # Diagonal * Transpose of Triangular
+                R = D * transpose(T)
+                @test R ≈ Array(D) * transpose(Array(T))
+                @test isa(R, adjtype)
+            end
+        end
     end
 end
 
@@ -453,6 +571,15 @@ end
 
     @test tr(D) == 10
     @test det(D) == 4
+end
+
+@testset "linear solve for block diagonal matrices" begin
+    D = Diagonal([rand(2,2) for _ in 1:5])
+    b = [rand(2,2) for _ in 1:5]
+    B = [rand(2,2) for _ in 1:5, _ in 1:5]
+    @test ldiv!(D, copy(b)) ≈ Diagonal(inv.(D.diag)) * b
+    @test ldiv!(D, copy(B)) ≈ Diagonal(inv.(D.diag)) * B
+    @test rdiv!(copy(B), D) ≈ B * Diagonal(inv.(D.diag))
 end
 
 @testset "multiplication with Symmetric/Hermitian" begin
@@ -537,6 +664,51 @@ end
     E = eigen(D, sortby=abs) # sortby keyword supported for eigen(::Diagonal)
     @test E.values == [0.2, 0.4, -1.3]
     @test E.vectors == [0 1 0; 1 0 0; 0 0 1]
+end
+
+@testset "sum, mapreduce" begin
+    D = Diagonal([1,2,3])
+    Ddense = Matrix(D)
+    @test sum(D) == 6
+    @test_throws ArgumentError sum(D, dims=0)
+    @test sum(D, dims=1) == sum(Ddense, dims=1)
+    @test sum(D, dims=2) == sum(Ddense, dims=2)
+    @test sum(D, dims=3) == sum(Ddense, dims=3)
+    @test typeof(sum(D, dims=1)) == typeof(sum(Ddense, dims=1))
+    @test mapreduce(one, min, D, dims=1) == mapreduce(one, min, Ddense, dims=1)
+    @test mapreduce(one, min, D, dims=2) == mapreduce(one, min, Ddense, dims=2)
+    @test mapreduce(one, min, D, dims=3) == mapreduce(one, min, Ddense, dims=3)
+    @test typeof(mapreduce(one, min, D, dims=1)) == typeof(mapreduce(one, min, Ddense, dims=1))
+    @test mapreduce(zero, max, D, dims=1) == mapreduce(zero, max, Ddense, dims=1)
+    @test mapreduce(zero, max, D, dims=2) == mapreduce(zero, max, Ddense, dims=2)
+    @test mapreduce(zero, max, D, dims=3) == mapreduce(zero, max, Ddense, dims=3)
+    @test typeof(mapreduce(zero, max, D, dims=1)) == typeof(mapreduce(zero, max, Ddense, dims=1))
+
+    D = Diagonal(Int[])
+    Ddense = Matrix(D)
+    @test sum(D) == 0
+    @test_throws ArgumentError sum(D, dims=0)
+    @test sum(D, dims=1) == sum(Ddense, dims=1)
+    @test sum(D, dims=2) == sum(Ddense, dims=2)
+    @test sum(D, dims=3) == sum(Ddense, dims=3)
+    @test typeof(sum(D, dims=1)) == typeof(sum(Ddense, dims=1))
+
+    D = Diagonal(Int[2])
+    Ddense = Matrix(D)
+    @test sum(D) == 2
+    @test_throws ArgumentError sum(D, dims=0)
+    @test sum(D, dims=1) == sum(Ddense, dims=1)
+    @test sum(D, dims=2) == sum(Ddense, dims=2)
+    @test sum(D, dims=3) == sum(Ddense, dims=3)
+    @test typeof(sum(D, dims=1)) == typeof(sum(Ddense, dims=1))
+end
+
+@testset "logabsdet for generic eltype" begin
+    d = Any[1, -2.0, -3.0]
+    D = Diagonal(d)
+    d1, s1 = logabsdet(D)
+    @test d1 ≈ sum(log ∘ abs, d)
+    @test s1 == prod(sign, d)
 end
 
 end # module TestDiagonal

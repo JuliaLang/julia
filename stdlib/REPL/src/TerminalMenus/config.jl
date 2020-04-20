@@ -29,26 +29,26 @@ function config(;charset::Symbol = :na,
                 supress_output::Union{Nothing, Bool}=nothing,
                 ctrl_c_interrupt::Union{Nothing, Bool}=nothing)
 
-    if charset == :ascii
+    if charset === :ascii
         cursor     = '>'
         up_arrow   = '^'
         down_arrow = 'v'
         checked    = "[X]"
         unchecked  = "[ ]"
-    elseif charset == :unicode
+    elseif charset === :unicode
         cursor     = '→'
         up_arrow   = '↑'
         down_arrow = '↓'
         checked    = "✓"
         unchecked  = "⬚"
-    elseif charset == :na
+    elseif charset === :na
     else
         throw(ArgumentError("charset should be :ascii or :unicode, received $charset"))
     end
 
     scroll ∉ [:na, :wrap, :nowrap] && throw(ArgumentError("scroll must be :wrap or :nowrap, received $scroll"))
-    scroll == :wrap   && (CONFIG[:scroll_wrap] = true)
-    scroll == :nowrap && (CONFIG[:scroll_wrap] = false)
+    scroll === :wrap   && (CONFIG[:scroll_wrap] = true)
+    scroll === :nowrap && (CONFIG[:scroll_wrap] = false)
 
     cursor     != '\0' && (CONFIG[:cursor]     = cursor)
     up_arrow   != '\0' && (CONFIG[:up_arrow]   = up_arrow)

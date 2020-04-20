@@ -52,6 +52,38 @@ If it is enabled, you can try it out by pasting the code block above this paragr
 the REPL. This feature does not work on the standard Windows command prompt due to its limitation
 at detecting when a paste occurs.
 
+Objects are printed at the REPL using the [`show`](@ref) function with a specific [`IOContext`](@ref).
+In particular, the `:limit` attribute is set to `true`.
+Other attributes can receive in certain `show` methods a default value if it's not already set,
+like `:compact`.
+It's possible, as an experimental feature, to specify the attributes used by the REPL via the
+`Base.active_repl.options.iocontext` dictionary (associating values to attributes). For example:
+
+```julia-repl
+julia> rand(2, 2)
+2×2 Array{Float64,2}:
+ 0.8833    0.329197
+ 0.719708  0.59114
+
+julia> show(IOContext(stdout, :compact => false), "text/plain", rand(2, 2))
+ 0.43540323669187075  0.15759787870609387
+ 0.2540832269192739   0.4597637838786053
+julia> Base.active_repl.options.iocontext[:compact] = false;
+
+julia> rand(2, 2)
+2×2 Array{Float64,2}:
+ 0.2083967319174056  0.13330606013126012
+ 0.6244375177790158  0.9777957560761545
+```
+
+In order to define automatically the values of this dictionary at startup time, one can use the
+[`atreplinit`](@ref) function in the `~/.julia/config/startup.jl` file, for example:
+```julia
+atreplinit() do repl
+    repl.options.iocontext[:compact] = false
+end
+```
+
 ### Help mode
 
 When the cursor is at the beginning of the line, the prompt can be changed to a help mode by typing
@@ -123,7 +155,7 @@ The Julia REPL makes great use of key bindings. Several control-key bindings wer
 above (`^D` to exit, `^R` and `^S` for searching), but there are many more. In addition to the
 control-key, there are also meta-key bindings. These vary more by platform, but most terminals
 default to using alt- or option- held down with a key to send the meta-key (or can be configured
-to do so).
+to do so), or pressing Esc and then the key.
 
 | Keybinding          | Description                                                                                                |
 |:------------------- |:---------------------------------------------------------------------------------------------------------- |
@@ -174,15 +206,18 @@ to do so).
 | `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method                 |
 | `meta-Left Arrow`   | indent the current line on the left                                                                        |
 | `meta-Right Arrow`  | indent the current line on the right                                                                       |
-
+| `meta-.`            | insert last word from previous history entry                                                               |
 
 ### Customizing keybindings
 
 Julia's REPL keybindings may be fully customized to a user's preferences by passing a dictionary
 to `REPL.setup_interface`. The keys of this dictionary may be characters or strings. The key
 `'*'` refers to the default action. Control plus character `x` bindings are indicated with `"^x"`.
-Meta plus `x` can be written `"\\Mx"`. The values of the custom keymap must be `nothing` (indicating
-that the input should be ignored) or functions that accept the signature `(PromptState, AbstractREPL, Char)`.
+Meta plus `x` can be written `"\\M-x"` or `"\ex"`, and Control plus `x` can be written
+`"\\C-x"` or `"^x"`.
+The values of the custom keymap must be `nothing` (indicating
+that the input should be ignored) or functions that accept the signature
+`(PromptState, AbstractREPL, Char)`.
 The `REPL.setup_interface` function must be called before the REPL is initialized, by registering
 the operation with [`atreplinit`](@ref) . For example, to bind the up and down arrow keys to move through
 history without prefix search, one could put the following code in `~/.julia/config/startup.jl`:

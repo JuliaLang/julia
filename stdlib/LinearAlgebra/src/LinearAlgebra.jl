@@ -17,7 +17,7 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
 using Base: hvcat_fill, IndexLinear, promote_op, promote_typeof,
     @propagate_inbounds, @pure, reduce, typed_vcat, require_one_based_indexing
-using Base.Broadcast: Broadcasted
+using Base.Broadcast: Broadcasted, broadcasted
 
 export
 # Modules
@@ -124,6 +124,8 @@ export
     opnorm,
     rank,
     rdiv!,
+    reflect!,
+    rotate!,
     schur,
     schur!,
     svd,
@@ -155,6 +157,12 @@ if USE_BLAS64
 else
     const BlasInt = Int32
 end
+
+
+abstract type Algorithm end
+struct DivideAndConquer <: Algorithm end
+struct QRIteration <: Algorithm end
+
 
 # Check that stride of matrix/vector is 1
 # Writing like this to avoid splatting penalty when called with multiple arguments,
@@ -226,9 +234,9 @@ function checksquare(A...)
 end
 
 function char_uplo(uplo::Symbol)
-    if uplo == :U
+    if uplo === :U
         return 'U'
-    elseif uplo == :L
+    elseif uplo === :L
         return 'L'
     else
         throw_uplo()
@@ -416,7 +424,7 @@ end
 
 
 function versioninfo(io::IO=stdout)
-    if Base.libblas_name == "libopenblas" || BLAS.vendor() == :openblas || BLAS.vendor() == :openblas64
+    if Base.libblas_name == "libopenblas" || BLAS.vendor() === :openblas || BLAS.vendor() === :openblas64
         openblas_config = BLAS.openblas_get_config()
         println(io, "BLAS: libopenblas (", openblas_config, ")")
     else
@@ -428,7 +436,7 @@ end
 function __init__()
     try
         BLAS.check()
-        if BLAS.vendor() == :mkl
+        if BLAS.vendor() === :mkl
             ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Cvoid, (Cint,), USE_BLAS64 ? 1 : 0)
         end
         Threads.resize_nthreads!(Abuf)

@@ -84,10 +84,6 @@ end
 function cache_result(result::InferenceResult, min_valid::UInt, max_valid::UInt)
     def = result.linfo.def
     toplevel = !isa(result.linfo.def, Method)
-    if toplevel
-        min_valid = UInt(0)
-        max_valid = UInt(0)
-    end
 
     # check if the existing linfo metadata is also sufficient to describe the current inference result
     # to decide if it is worth caching this
@@ -123,7 +119,7 @@ function cache_result(result::InferenceResult, min_valid::UInt, max_valid::UInt)
                     nslots = length(inferred_result.slotflags)
                     resize!(inferred_result.slottypes, nslots)
                     resize!(inferred_result.slotnames, nslots)
-                    inferred_result = ccall(:jl_compress_ast, Any, (Any, Any), def, inferred_result)
+                    inferred_result = ccall(:jl_compress_ir, Any, (Any, Any), def, inferred_result)
                 else
                     inferred_result = nothing
                 end
@@ -176,29 +172,26 @@ function store_backedges(frame::InferenceState)
     if !toplevel && (frame.cached || frame.parent !== nothing)
         caller = frame.result.linfo
         for edges in frame.stmt_edges
-            edges === nothing && continue
-            i = 1
-            while i <= length(edges)
-                to = edges[i]
-                if isa(to, MethodInstance)
-                    ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), to, caller)
-                    i += 1
-                else
-                    typeassert(to, Core.MethodTable)
-                    typ = edges[i + 1]
-                    ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
-                    i += 2
-                end
-            end
+            store_backedges(caller, edges)
         end
-        edges = frame.src.edges
-        if edges !== nothing
-            edges = edges::Vector{MethodInstance}
-            for edge in edges
-                @assert isa(edge, MethodInstance)
-                ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), edge, caller)
-            end
-            frame.src.edges = nothing
+        store_backedges(caller, frame.src.edges)
+        frame.src.edges = nothing
+    end
+end
+
+store_backedges(caller, edges::Nothing) = nothing
+function store_backedges(caller, edges::Vector)
+    i = 1
+    while i <= length(edges)
+        to = edges[i]
+        if isa(to, MethodInstance)
+            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), to, caller)
+            i += 1
+        else
+            typeassert(to, Core.MethodTable)
+            typ = edges[i + 1]
+            ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
+            i += 2
         end
     end
 end
@@ -549,7 +542,7 @@ function typeinf_ext(mi::MethodInstance, params::Params)
                 tree.pure = true
                 tree.inlineable = true
                 tree.parent = mi
-                tree.rettype = typeof(code.rettype_const)
+                tree.rettype = Core.Typeof(code.rettype_const)
                 tree.min_world = code.min_world
                 tree.max_world = code.max_world
                 return tree
@@ -566,7 +559,7 @@ function typeinf_ext(mi::MethodInstance, params::Params)
                 return inf
             elseif isa(inf, Vector{UInt8})
                 i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
-                inf = _uncompressed_ast(code, inf)
+                inf = _uncompressed_ir(code, inf)
                 return inf
             end
         end

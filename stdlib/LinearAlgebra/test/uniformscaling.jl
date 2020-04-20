@@ -4,6 +4,10 @@ module TestUniformscaling
 
 using Test, LinearAlgebra, Random, SparseArrays
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
+
 Random.seed!(123)
 
 @testset "basic functions" begin
@@ -23,6 +27,53 @@ Random.seed!(123)
     @test opnorm(UniformScaling(1+im)) ≈ sqrt(2)
 end
 
+@testset "sqrt, exp, log, and trigonometric functions" begin
+    # convert to a dense matrix with random size
+    M(J) = (N = rand(1:10); Matrix(J, N, N))
+
+    # on complex plane
+    J = UniformScaling(randn(ComplexF64))
+    for f in ( exp,   log,
+               sqrt,
+               sin,   cos,   tan,
+               asin,  acos,  atan,
+               csc,   sec,   cot,
+               acsc,  asec,  acot,
+               sinh,  cosh,  tanh,
+               asinh, acosh, atanh,
+               csch,  sech,  coth,
+               acsch, asech, acoth )
+        @test f(J) ≈ f(M(J))
+    end
+
+    # on real axis
+    for (λ, fs) in (
+        # functions defined for x ∈ ℝ
+        (()->randn(),           (exp,
+                                 sin,   cos,   tan,
+                                 csc,   sec,   cot,
+                                 atan,  acot,
+                                 sinh,  cosh,  tanh,
+                                 csch,  sech,  coth,
+                                 asinh, acsch)),
+        # functions defined for x ≥ 0
+        (()->abs(randn()),      (log,   sqrt)),
+        # functions defined for -1 ≤ x ≤ 1
+        (()->2rand()-1,         (asin,  acos,  atanh)),
+        # functions defined for x ≤ -1 or x ≥ 1
+        (()->1/(2rand()-1),     (acsc,  asec,  acoth)),
+        # functions defined for 0 ≤ x ≤ 1
+        (()->rand(),            (asech,)),
+        # functions defined for x ≥ 1
+        (()->1/rand(),          (acosh,))
+    )
+        for f in fs
+            J = UniformScaling(λ())
+            @test f(J) ≈ f(M(J))
+        end
+    end
+end
+
 @testset "conjugation of UniformScaling" begin
     @test conj(UniformScaling(1))::UniformScaling{Int} == UniformScaling(1)
     @test conj(UniformScaling(1.0))::UniformScaling{Float64} == UniformScaling(1.0)
@@ -38,6 +89,10 @@ end
     @test issymmetric(UniformScaling(complex(1.0,1.0)))
     @test ishermitian(I)
     @test !ishermitian(UniformScaling(complex(1.0,1.0)))
+    @test isposdef(UniformScaling(rand()))
+    @test !isposdef(UniformScaling(-rand()))
+    @test !isposdef(UniformScaling(randn(ComplexF64)))
+    @test !isposdef(UniformScaling(NaN))
     @test isposdef(I)
     @test !isposdef(-I)
     @test isposdef(UniformScaling(complex(1.0, 0.0)))
@@ -60,11 +115,26 @@ end
     @test I - α == 1 - α
     @test α .* UniformScaling(1.0) == UniformScaling(1.0) .* α
     @test UniformScaling(α)./α == UniformScaling(1.0)
+    @test α.\UniformScaling(α) == UniformScaling(1.0)
     @test α * UniformScaling(1.0) == UniformScaling(1.0) * α
     @test UniformScaling(α)/α == UniformScaling(1.0)
+    @test (2I)^α == (2I).^α == (2^α)I
+
+    β = rand()
+    @test (α*I)^2    == UniformScaling(α^2)
+    @test (α*I)^(-2) == UniformScaling(α^(-2))
+    @test (α*I)^(.5) == UniformScaling(α^(.5))
+    @test (α*I)^β    == UniformScaling(α^β)
+
+    @test (α * I) .^ 2 == UniformScaling(α^2)
+    @test (α * I) .^ β == UniformScaling(α^β)
 end
 
-@testset "det and logdet" begin
+@testset "tr, det and logdet" begin
+    for T in (Int, Float64, ComplexF64, Bool)
+        @test tr(UniformScaling(zero(T))) === zero(T)
+    end
+    @test_throws ArgumentError tr(UniformScaling(1))
     @test det(I) === true
     @test det(1.0I) === 1.0
     @test det(0I) === 0
@@ -82,15 +152,26 @@ end
 let
     λ = complex(randn(),randn())
     J = UniformScaling(λ)
-    @testset "transpose, conj, inv" begin
+    @testset "transpose, conj, inv, pinv, cond" begin
         @test ndims(J) == 2
         @test transpose(J) == J
         @test J * [1 0; 0 1] == conj(*(adjoint(J), [1 0; 0 1])) # ctranpose (and A(c)_mul_B)
         @test I + I === UniformScaling(2) # +
         @test inv(I) == I
         @test inv(J) == UniformScaling(inv(λ))
+        @test pinv(J) == UniformScaling(inv(λ))
+        @test @inferred(pinv(0.0I)) == 0.0I
+        @test @inferred(pinv(0I)) == 0.0I
+        @test @inferred(pinv(false*I)) == 0.0I
+        @test @inferred(pinv(0im*I)) == 0im*I
         @test cond(I) == 1
         @test cond(J) == (λ ≠ zero(λ) ? one(real(λ)) : oftype(real(λ), Inf))
+    end
+
+    @testset "real, imag, reim" begin
+        @test real(J) == UniformScaling(real(λ))
+        @test imag(J) == UniformScaling(imag(λ))
+        @test reim(J) == (UniformScaling(real(λ)), UniformScaling(imag(λ)))
     end
 
     @testset "copyto!" begin
@@ -98,6 +179,19 @@ let
         @test copyto!(A, I) == one(A)
         B = Matrix{ComplexF64}(undef, (1,2))
         @test copyto!(B, J) == [λ zero(λ)]
+    end
+
+    @testset "binary ops with vectors" begin
+        v = complex.(randn(3), randn(3))
+        # As shown in #20423@GitHub, vector acts like x1 matrix when participating in linear algebra
+        @test v  * J ≈ v  * λ
+        @test v' * J ≈ v' * λ
+        @test J * v  ≈ λ * v
+        @test J * v' ≈ λ * v'
+        @test v  / J ≈ v  / λ
+        @test v' / J ≈ v' / λ
+        @test J \ v  ≈ λ \ v
+        @test J \ v' ≈ λ \ v'
     end
 
     @testset "binary ops with matrices" begin
@@ -313,13 +407,66 @@ end
     @test lmul!(J, copyto!(C, A)) == target_mul
     @test rmul!(copyto!(C, A), J) == target_mul
     @test ldiv!(J, copyto!(C, A)) == target_div
+    @test ldiv!(C, J, A) == target_div
     @test rdiv!(copyto!(C, A), J) == target_div
+
+    A = randn(4, 3)
+    C = randn!(similar(A))
+    alpha = randn()
+    beta = randn()
+    target = J * A * alpha + C * beta
+    @test mul!(copy(C), J, A, alpha, beta) ≈ target
+    @test mul!(copy(C), A, J, alpha, beta) ≈ target
 end
 
 @testset "Construct Diagonal from UniformScaling" begin
     @test size(I(3)) === (3,3)
     @test I(3) isa Diagonal
     @test I(3) == [1 0 0; 0 1 0; 0 0 1]
+end
+
+@testset "generalized dot" begin
+    x = rand(-10:10, 3)
+    y = rand(-10:10, 3)
+    λ = rand(-10:10)
+    J = UniformScaling(λ)
+    @test dot(x, J, y) == λ*dot(x, y)
+    λ = Quaternion(0.44567, 0.755871, 0.882548, 0.423612)
+    x, y = Quaternion(rand(4)...), Quaternion(rand(4)...)
+    @test dot([x], λ*I, [y]) ≈ dot(x, λ, y) ≈ dot(x, λ*y)
+end
+
+@testset "Factorization solutions" begin
+    J = complex(randn(),randn()) * I
+    qrp = A -> qr(A, Val(true))
+
+    # thin matrices
+    X = randn(3,2)
+    Z = pinv(X)
+    for fac in (qr,qrp,svd)
+        F = fac(X)
+        @test @inferred(F \ I) ≈ Z
+        @test @inferred(F \ J) ≈ Z * J
+    end
+
+    # square matrices
+    X = randn(3,3)
+    X = X'X + rand()I # make positive definite for cholesky
+    Z = pinv(X)
+    for fac in (bunchkaufman,cholesky,lu,qr,qrp,svd)
+        F = fac(X)
+        @test @inferred(F \ I) ≈ Z
+        @test @inferred(F \ J) ≈ Z * J
+    end
+
+    # fat matrices - only rank-revealing variants
+    X = randn(2,3)
+    Z = pinv(X)
+    for fac in (qrp,svd)
+        F = fac(X)
+        @test @inferred(F \ I) ≈ Z
+        @test @inferred(F \ J) ≈ Z * J
+    end
 end
 
 end # module TestUniformscaling

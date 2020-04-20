@@ -16,10 +16,10 @@ end
 which generates the following code:
 
 ```julia
-for i_3 = 1:size(A,3)
-    for i_2 = 1:size(A,2)
-        for i_1 = 1:size(A,1)
-            s += A[i_1,i_2,i_3]
+for i_3 = axes(A, 3)
+    for i_2 = axes(A, 2)
+        for i_1 = axes(A, 1)
+            s += A[i_1, i_2, i_3]
         end
     end
 end
@@ -38,7 +38,7 @@ The (basic) syntax of `@nloops` is as follows:
   * The second argument is the symbol-prefix used for the iterator variable. Here we used `i`, and
     variables `i_1, i_2, i_3` were generated.
   * The third argument specifies the range for each iterator variable. If you use a variable (symbol)
-    here, it's taken as `1:size(A,dim)`. More flexibly, you can use the anonymous-function expression
+    here, it's taken as `axes(A, dim)`. More flexibly, you can use the anonymous-function expression
     syntax described below.
   * The last argument is the body of the loop. Here, that's what appears between the `begin...end`.
 
@@ -46,7 +46,7 @@ There are some additional features of `@nloops` described in the [reference sect
 
 `@nref` follows a similar pattern, generating `A[i_1,i_2,i_3]` from `@nref 3 A i`. The general
 practice is to read from left to right, which is why `@nloops` is `@nloops 3 i A expr` (as in
-`for i_2 = 1:size(A,2)`, where `i_2` is to the left and the range is to the right) whereas `@nref`
+`for i_2 = axes(A, 2)`, where `i_2` is to the left and the range is to the right) whereas `@nref`
 is `@nref 3 A i` (as in `A[i_1,i_2,i_3]`, where the array comes first).
 
 If you're developing code with Cartesian, you may find that debugging is easier when you examine

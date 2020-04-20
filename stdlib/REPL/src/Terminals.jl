@@ -152,22 +152,7 @@ beep(t::UnixTerminal) = write(t.err_stream,"\x7")
 
 Base.displaysize(t::UnixTerminal) = displaysize(t.out_stream)
 
-if Sys.iswindows()
-    hascolor(t::TTYTerminal) = true
-else
-    function hascolor(t::TTYTerminal)
-        startswith(t.term_type, "xterm") && return true
-        try
-            @static if Sys.KERNEL == :FreeBSD
-                return success(`tput AF 0`)
-            else
-                return success(`tput setaf 0`)
-            end
-        catch
-            return false
-        end
-    end
-end
+hascolor(t::TTYTerminal) = Base.ttyhascolor(t.term_type)
 
 # use cached value of have_color
 Base.in(key_value::Pair, t::TTYTerminal) = in(key_value, pipe_writer(t))

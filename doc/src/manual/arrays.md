@@ -66,18 +66,14 @@ omitted it will default to [`Float64`](@ref).
 | [`reinterpret(T, A)`](@ref)                    | an array with the same binary data as `A`, but with element type `T`                                                                                                                                                                         |
 | [`rand(T, dims...)`](@ref)                     | an `Array` with random, iid [^1] and uniformly distributed values in the half-open interval ``[0, 1)``                                                                                                                                       |
 | [`randn(T, dims...)`](@ref)                    | an `Array` with random, iid and standard normally distributed values                                                                                                                                                                         |
-| [`Matrix{T}(I, m, n)`](@ref)                   | `m`-by-`n` identity matrix                                                                                                                                                                                                                   |
+| [`Matrix{T}(I, m, n)`](@ref)                   | `m`-by-`n` identity matrix (requires `using LinearAlgebra`)                                                                                                                                                                                                                   |
 | [`range(start, stop=stop, length=n)`](@ref)    | range of `n` linearly spaced elements from `start` to `stop`                                                                                                                                                                                 |
 | [`fill!(A, x)`](@ref)                          | fill the array `A` with the value `x`                                                                                                                                                                                                        |
 | [`fill(x, dims...)`](@ref)                     | an `Array` filled with the value `x`                                                                                                                                                                                                         |
 
 [^1]: *iid*, independently and identically distributed.
 
-The syntax `[A, B, C, ...]` constructs a 1-d array (i.e., a vector) of its arguments. If all
-arguments have a common [promotion type](@ref conversion-and-promotion) then they get
-converted to that type using [`convert`](@ref).
-
-To see the various ways we can pass dimensions to these constructors, consider the following examples:
+To see the various ways we can pass dimensions to these functions, consider the following examples:
 ```jldoctest
 julia> zeros(Int8, 2, 3)
 2×3 Array{Int8,2}:
@@ -94,60 +90,118 @@ julia> zeros((2, 3))
  0.0  0.0  0.0
  0.0  0.0  0.0
 ```
-Here, `(2, 3)` is a [`Tuple`](@ref).
+Here, `(2, 3)` is a [`Tuple`](@ref) and the first argument — the element type — is optional, defaulting to `Float64`.
 
-## Concatenation
+## [Array literals](@id man-array-literals)
 
-Arrays can be constructed and also concatenated using the following functions:
+Arrays can also be directly constructed with square braces; the syntax `[A, B, C, ...]`
+creates a one dimensional array (i.e., a vector) containing the comma-separated arguments as
+its elements. The element type ([`eltype`](@ref)) of the resulting array is automatically
+determined by the types of the arguments inside the braces. If all the arguments are the
+same type, then that is its `eltype`. If they all have a common
+[promotion type](@ref conversion-and-promotion) then they get converted to that type using
+[`convert`](@ref) and that type is the array's `eltype`. Otherwise, a heterogeneous array
+that can hold anything — a `Vector{Any}` — is constructed; this includes the literal `[]`
+where no arguments are given.
 
-| Function                    | Description                                     |
-|:--------------------------- |:----------------------------------------------- |
-| [`cat(A...; dims=k)`](@ref) | concatenate input arrays along dimension(s) `k` |
-| [`vcat(A...)`](@ref)        | shorthand for `cat(A...; dims=1)`               |
-| [`hcat(A...)`](@ref)        | shorthand for `cat(A...; dims=2)`               |
-
-Scalar values passed to these functions are treated as 1-element arrays. For example,
 ```jldoctest
-julia> vcat([1, 2], 3)
+julia> [1,2,3] # An array of `Int`s
 3-element Array{Int64,1}:
  1
  2
  3
 
-julia> hcat([1 2], 3)
+julia> promote(1, 2.3, 4//5) # This combination of Int, Float64 and Rational promotes to Float64
+(1.0, 2.3, 0.8)
+
+julia> [1, 2.3, 4//5] # Thus that's the element type of this Array
+3-element Array{Float64,1}:
+ 1.0
+ 2.3
+ 0.8
+
+julia> []
+0-element Array{Any,1}
+```
+
+### [Concatenation](@id man-array-concatenation)
+
+If the arguments inside the square brackets are separated by semicolons (`;`) or newlines
+instead of commas, then their contents are _vertically concatenated_ together instead of
+the arguments being used as elements themselves.
+
+```jldoctest
+julia> [1:2, 4:5] # Has a comma, so no concatenation occurs. The ranges are themselves the elements
+2-element Array{UnitRange{Int64},1}:
+ 1:2
+ 4:5
+
+julia> [1:2; 4:5]
+4-element Array{Int64,1}:
+ 1
+ 2
+ 4
+ 5
+
+julia> [1:2
+        4:5
+        6]
+5-element Array{Int64,1}:
+ 1
+ 2
+ 4
+ 5
+ 6
+```
+
+Similarly, if the arguments are separated by tabs or spaces, then their contents are
+_horizontally concatenated_ together.
+
+```jldoctest
+julia> [1:2  4:5  7:8]
+2×3 Array{Int64,2}:
+ 1  4  7
+ 2  5  8
+
+julia> [[1,2]  [4,5]  [7,8]]
+2×3 Array{Int64,2}:
+ 1  4  7
+ 2  5  8
+
+julia> [1 2 3] # Numbers can also be horizontally concatenated
 1×3 Array{Int64,2}:
  1  2  3
 ```
 
-The concatenation functions are used so often that they have special syntax:
+Using semicolons (or newlines) and spaces (or tabs) can be combined to concatenate
+both horizontally and vertically at the same time.
 
-| Expression        | Calls             |
-|:----------------- |:----------------- |
-| `[A; B; C; ...]`  | [`vcat`](@ref)  |
-| `[A B C ...]`     | [`hcat`](@ref)  |
-| `[A B; C D; ...]` | [`hvcat`](@ref) |
-
-[`hvcat`](@ref) concatenates in both dimension 1 (with semicolons) and dimension 2 (with spaces).
-Consider these examples of this syntax:
 ```jldoctest
-julia> [[1; 2]; [3, 4]]
-4-element Array{Int64,1}:
- 1
- 2
- 3
- 4
-
-julia> [[1 2] [3 4]]
-1×4 Array{Int64,2}:
- 1  2  3  4
-
-julia> [[1 2]; [3 4]]
+julia> [1 2
+        3 4]
 2×2 Array{Int64,2}:
  1  2
  3  4
+
+julia> [zeros(Int, 2, 2) [1; 2]
+        [3 4]            5]
+3×3 Array{Int64,2}:
+ 0  0  1
+ 0  0  2
+ 3  4  5
 ```
 
-## Typed array initializers
+More generally, concatenation can be accomplished through the [`cat`](@ref) function.
+These syntaxes are shorthands for function calls that themselves are convenience functions:
+
+| Syntax            | Function        | Description                                        |
+|:----------------- |:--------------- |:-------------------------------------------------- |
+|                   | [`cat`](@ref)   | concatenate input arrays along dimension(s) `k`    |
+| `[A; B; C; ...]`  | [`vcat`](@ref)  | shorthand for `cat(A...; dims=1)                   |
+| `[A B C ...]`     | [`hcat`](@ref)  | shorthand for `cat(A...; dims=2)                   |
+| `[A B; C D; ...]` | [`hvcat`](@ref) | simultaneous vertical and horizontal concatenation |
+
+### Typed array literals
 
 An array with a specific element type can be constructed using the syntax `T[A, B, C, ...]`. This
 will construct a 1-d array with element type `T`, initialized to contain elements `A`, `B`, `C`,
@@ -166,7 +220,7 @@ julia> Int8[[1 2] [3 4]]
  1  2  3  4
 ```
 
-## Comprehensions
+## [Comprehensions](@id man-comprehensions)
 
 Comprehensions provide a general and powerful way to construct arrays. Comprehension syntax is
 similar to set construction notation in mathematics:
@@ -206,7 +260,7 @@ julia> [ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
  0.656511
 ```
 
-The resulting array type depends on the types of the computed elements. In order to control the
+The resulting array type depends on the types of the computed elements just like [array literals](@ref man-array-literals) do. In order to control the
 type explicitly, a type can be prepended to the comprehension. For example, we could have requested
 the result in single precision by writing:
 
@@ -249,7 +303,7 @@ inner functions used elsewhere in the language, variables from the enclosing sco
 "captured" in the inner function.  For example, `sum(p[i] - q[i] for i=1:n)`
 captures the three variables `p`, `q` and `n` from the enclosing scope.
 Captured variables can present performance challenges; see
-[performance tips](@ref man-performance-tips).
+[performance tips](@ref man-performance-captured).
 
 
 Ranges in generators and comprehensions can depend on previous ranges by writing multiple `for`
@@ -397,7 +451,7 @@ julia> x[1, [2 3; 4 1]]
  13  1
 ```
 
-## Assignment
+## [Indexed Assignment](@id man-indexed-assignment)
 
 The general syntax for assigning values in an n-dimensional array `A` is:
 
@@ -867,9 +921,11 @@ is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broad
 ([dot syntax](@ref man-vectorized)). Nested "dot calls" `f.(...)` (including calls to `.+` etcetera)
 [automatically fuse](@ref man-dot-operators) into a single `broadcast` call.
 
-Additionally, [`broadcast`](@ref) is not limited to arrays (see the function documentation),
-it also handles tuples and treats any argument that is not an array, tuple or [`Ref`](@ref)
-(except for [`Ptr`](@ref)) as a "scalar".
+Additionally, [`broadcast`](@ref) is not limited to arrays (see the function documentation);
+it also handles scalars, tuples and other collections.  By default, only some argument types are
+considered scalars, including (but not limited to) `Number`s, `String`s, `Symbol`s, `Type`s, `Function`s
+and some common singletons like `missing` and `nothing`. All other arguments are
+iterated over or indexed into elementwise.
 
 ```jldoctest
 julia> convert.(Float32, [1, 2])
@@ -911,8 +967,8 @@ the length of the tuple returned by [`size`](@ref). For more details on defining
 `AbstractArray` implementations, see the [array interface guide in the interfaces chapter](@ref man-interface-array).
 
 `DenseArray` is an abstract subtype of `AbstractArray` intended to include all arrays where
-elements are stored contiguously in column-major order (see additional notes in
-[Performance Tips](@ref man-performance-tips)). The [`Array`](@ref) type is a specific instance
+elements are stored contiguously in column-major order (see [additional notes in
+Performance Tips](@ref man-performance-column-major)). The [`Array`](@ref) type is a specific instance
 of `DenseArray`;  [`Vector`](@ref) and [`Matrix`](@ref) are aliases for the 1-d and 2-d cases.
 Very few operations are implemented specifically for `Array` beyond those that are required
 for all `AbstractArray`s; much of the array library is implemented in a generic

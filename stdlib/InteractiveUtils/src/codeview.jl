@@ -81,40 +81,46 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
     meth = Base.func_for_method_checked(meth, ti, env)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, ti, env, world)
     # get the code for it
-    return _dump_function_linfo(linfo, world, native, wrapper, strip_ir_metadata, dump_module, syntax, optimize, debuginfo, params)
-end
-
-function _dump_function_linfo(linfo::Core.MethodInstance, world::UInt, native::Bool, wrapper::Bool,
-                              strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol,
-                              optimize::Bool, debuginfo::Symbol,
-                              params::CodegenParams=CodegenParams())
-    if syntax != :att && syntax != :intel
-        throw(ArgumentError("'syntax' must be either :intel or :att"))
-    end
-    if debuginfo == :default
-        debuginfo = :source
-    elseif debuginfo != :source && debuginfo != :none
-        throw(ArgumentError("'debuginfo' must be either :source or :none"))
-    end
     if native
-        llvmf = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, CodegenParams), linfo, world, wrapper, params)
+        str = _dump_function_linfo_native(linfo, world, wrapper, syntax, debuginfo)
     else
-        llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, optimize, params)
+        str = _dump_function_linfo_llvm(linfo, world, wrapper, strip_ir_metadata, dump_module, optimize, debuginfo, params)
     end
-    if llvmf == C_NULL
-        error("could not compile the specified method")
-    end
-
-    if native
-        str = ccall(:jl_dump_function_asm, Ref{String},
-                    (Ptr{Cvoid}, Cint, Ptr{UInt8}, Ptr{UInt8}), llvmf, 0, syntax, debuginfo)
-    else
-        str = ccall(:jl_dump_function_ir, Ref{String},
-                    (Ptr{Cvoid}, Bool, Bool, Ptr{UInt8}), llvmf, strip_ir_metadata, dump_module, debuginfo)
-    end
-
     # TODO: use jl_is_cacheable_sig instead of isdispatchtuple
     isdispatchtuple(linfo.specTypes) || (str = "; WARNING: This code may not match what actually runs.\n" * str)
+    return str
+end
+
+function _dump_function_linfo_native(linfo::Core.MethodInstance, world::UInt, wrapper::Bool, syntax::Symbol, debuginfo::Symbol)
+    if syntax !== :att && syntax !== :intel
+        throw(ArgumentError("'syntax' must be either :intel or :att"))
+    end
+    if debuginfo === :default
+        debuginfo = :source
+    elseif debuginfo !== :source && debuginfo !== :none
+        throw(ArgumentError("'debuginfo' must be either :source or :none"))
+    end
+    str = ccall(:jl_dump_method_asm, Ref{String},
+                (Any, UInt, Cint, Bool, Ptr{UInt8}, Ptr{UInt8}),
+                linfo, world, 0, wrapper, syntax, debuginfo)
+    return str
+end
+
+function _dump_function_linfo_llvm(
+        linfo::Core.MethodInstance, world::UInt, wrapper::Bool,
+        strip_ir_metadata::Bool, dump_module::Bool,
+        optimize::Bool, debuginfo::Symbol,
+        params::CodegenParams)
+    if debuginfo === :default
+        debuginfo = :source
+    elseif debuginfo !== :source && debuginfo !== :none
+        throw(ArgumentError("'debuginfo' must be either :source or :none"))
+    end
+    llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, optimize, params)
+    llvmf == C_NULL && error("could not compile the specified method")
+    str = ccall(:jl_dump_function_ir, Ref{String},
+                (Ptr{Cvoid}, Bool, Bool, Ptr{UInt8}),
+                llvmf, strip_ir_metadata, dump_module, debuginfo)
     return str
 end
 

@@ -2,14 +2,20 @@
 
 using Test
 using Distributed
+using Dates
 import REPL
-using Base.Printf: @sprintf
+using Printf: @sprintf
+using Base: Experimental
 
 include("choosetests.jl")
 include("testenv.jl")
 
-tests, net_on, exit_on_error, seed = choosetests(ARGS)
+tests, net_on, exit_on_error, use_revise, seed = choosetests(ARGS)
 tests = unique(tests)
+
+if use_revise
+    using Revise
+end
 
 const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
     parse(Int, ENV["JULIA_TEST_MAXRSS_MB"]) * 2^20
@@ -50,12 +56,20 @@ end
 # Base.compilecache only works from node 1, so precompile test is handled specially
 move_to_node1("precompile")
 move_to_node1("SharedArrays")
+move_to_node1("threads")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
 
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
+
+# Shuffle LinearAlgebra tests to the front, because they take a while, so we might
+# as well get them all started early.
+linalg_test_ids = findall(x->occursin("LinearAlgebra", x), tests)
+linalg_tests = tests[linalg_test_ids]
+deleteat!(tests, linalg_test_ids)
+prepend!(tests, linalg_tests)
 
 import LinearAlgebra
 cd(@__DIR__) do
@@ -69,26 +83,43 @@ cd(@__DIR__) do
 
     @everywhere include("testdefs.jl")
 
+    if use_revise
+        @everywhere begin
+            Revise.track(Core.Compiler)
+            Revise.track(Base)
+            for (id, mod) in Base.loaded_modules
+                if id.name in STDLIBS
+                    Revise.track(mod)
+                end
+            end
+            Revise.revise()
+        end
+    end
+
     #pretty print the information about gc and mem usage
     testgroupheader = "Test"
     workerheader = "(Worker)"
-    name_align    = maximum([length(testgroupheader) + length(" ") + length(workerheader); map(x -> length(x) + 3 + ndigits(nworkers()), tests)])
-    elapsed_align = length("Time (s)")
-    gc_align      = length("GC (s)")
-    percent_align = length("GC %")
-    alloc_align   = length("Alloc (MB)")
-    rss_align     = length("RSS (MB)")
+    name_align    = maximum([textwidth(testgroupheader) + textwidth(" ") + textwidth(workerheader); map(x -> textwidth(x) + 3 + ndigits(nworkers()), tests)])
+    elapsed_align = textwidth("Time (s)")
+    gc_align      = textwidth("GC (s)")
+    percent_align = textwidth("GC %")
+    alloc_align   = textwidth("Alloc (MB)")
+    rss_align     = textwidth("RSS (MB)")
     printstyled(testgroupheader, color=:white)
-    printstyled(lpad(workerheader, name_align - length(testgroupheader) + 1), " | ", color=:white)
+    printstyled(lpad(workerheader, name_align - textwidth(testgroupheader) + 1), " | ", color=:white)
     printstyled("Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)\n", color=:white)
-    results=[]
-    print_lock = ReentrantLock()
+    results = []
+    print_lock = stdout isa Base.LibuvStream ? stdout.lock : ReentrantLock()
+    if stderr isa Base.LibuvStream
+        stderr.lock = print_lock
+    end
 
     function print_testworker_stats(test, wrkr, resp)
+        @nospecialize resp
         lock(print_lock)
         try
             printstyled(test, color=:white)
-            printstyled(lpad("($wrkr)", name_align - length(test) + 1, " "), " | ", color=:white)
+            printstyled(lpad("($wrkr)", name_align - textwidth(test) + 1, " "), " | ", color=:white)
             time_str = @sprintf("%7.2f",resp[2])
             printstyled(lpad(time_str, elapsed_align, " "), " | ", color=:white)
             gc_str = @sprintf("%5.2f", resp[5].total_time / 10^9)
@@ -107,6 +138,29 @@ cd(@__DIR__) do
         end
     end
 
+    global print_testworker_started = (name, wrkr)->begin
+        lock(print_lock)
+        try
+            printstyled(name, color=:white)
+            printstyled(lpad("($wrkr)", name_align - textwidth(name) + 1, " "), " |",
+                " "^elapsed_align, "started at $(now())\n", color=:white)
+        finally
+            unlock(print_lock)
+        end
+    end
+
+    function print_testworker_errored(name, wrkr)
+        lock(print_lock)
+        try
+            printstyled(name, color=:red)
+            printstyled(lpad("($wrkr)", name_align - textwidth(name) + 1, " "), " |",
+                " "^elapsed_align, " failed at $(now())\n", color=:red)
+        finally
+            unlock(print_lock)
+        end
+    end
+
+
     all_tests = [tests; node1_tests]
 
     local stdin_monitor
@@ -114,6 +168,7 @@ cd(@__DIR__) do
     try
         # Monitor stdin and kill this task on ^C
         # but don't do this on Windows, because it may deadlock in the kernel
+        running_tests = Dict{String, DateTime}()
         if !Sys.iswindows() && isa(stdin, Base.TTY)
             t = current_task()
             stdin_monitor = @async begin
@@ -121,9 +176,16 @@ cd(@__DIR__) do
                 try
                     REPL.Terminals.raw!(term, true)
                     while true
-                        if read(term, Char) == '\x3'
+                        c = read(term, Char)
+                        if c == '\x3'
                             Base.throwto(t, InterruptException())
                             break
+                        elseif c == '?'
+                            println("Currently running: ")
+                            tests = sort(collect(running_tests), by=x->x[2])
+                            foreach(tests) do (test, date)
+                                println(test, " (running for ", round(now()-date, Minute), ")")
+                            end
                         end
                     end
                 catch e
@@ -133,37 +195,49 @@ cd(@__DIR__) do
                 end
             end
         end
-        @sync begin
+        @Experimental.sync begin
             for p in workers()
                 @async begin
                     push!(all_tasks, current_task())
                     while length(tests) > 0
                         test = popfirst!(tests)
+                        running_tests[test] = now()
                         local resp
                         wrkr = p
                         try
                             resp = remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
                         catch e
                             isa(e, InterruptException) && return
-                            resp = [e]
+                            resp = Any[e]
                         end
+                        delete!(running_tests, test)
                         push!(results, (test, resp))
                         if resp[1] isa Exception
+                            print_testworker_errored(test, wrkr)
                             if exit_on_error
                                 skipped = length(tests)
                                 empty!(tests)
-                            end
-                        elseif resp[end] > max_worker_rss
-                            if n > 1
+                            elseif n > 1
+                                # the worker encountered some failure, recycle it
+                                # so future tests get a fresh environment
                                 rmprocs(wrkr, waitfor=30)
                                 p = addprocs_with_testenv(1)[1]
                                 remotecall_fetch(include, p, "testdefs.jl")
-                            else # single process testing
-                                error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
                             end
-                        end
-
-                        !isa(resp[1], Exception) && print_testworker_stats(test, wrkr, resp)
+                        else
+                            print_testworker_stats(test, wrkr, resp)
+                            if resp[end] > max_worker_rss
+                                # the worker has reached the max-rss limit, recycle it
+                                # so future tests start with a smaller working set
+                                if n > 1
+                                    rmprocs(wrkr, waitfor=30)
+                                    p = addprocs_with_testenv(1)[1]
+                                    remotecall_fetch(include, p, "testdefs.jl")
+                                else # single process testing
+                                    error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
+                                end
+                            end
+                       end
                     end
                     if p != 1
                         # Free up memory =)
@@ -187,7 +261,7 @@ cd(@__DIR__) do
                 resp = eval(Expr(:call, () -> runtests(t, test_path(t), isolate, seed=seed))) # runtests is defined by the include above
                 print_testworker_stats(t, 1, resp)
             catch e
-                resp = [e]
+                resp = Any[e]
             end
             push!(results, (t, resp))
         end
@@ -236,63 +310,65 @@ cd(@__DIR__) do
     o_ts = Test.DefaultTestSet("Overall")
     Test.push_testset(o_ts)
     completed_tests = Set{String}()
-    for res in results
-        push!(completed_tests, res[1])
-        if isa(res[2][1], Test.DefaultTestSet)
-            Test.push_testset(res[2][1])
-            Test.record(o_ts, res[2][1])
+    for (testname, (resp,)) in results
+        push!(completed_tests, testname)
+        if isa(resp, Test.DefaultTestSet)
+            Test.push_testset(resp)
+            Test.record(o_ts, resp)
             Test.pop_testset()
-        elseif isa(res[2][1], Tuple{Int,Int})
-            fake = Test.DefaultTestSet(res[1])
-            for i in 1:res[2][1][1]
+        elseif isa(resp, Tuple{Int,Int})
+            fake = Test.DefaultTestSet(testname)
+            for i in 1:resp[1]
                 Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))
             end
-            for i in 1:res[2][1][2]
+            for i in 1:resp[2]
                 Test.record(fake, Test.Broken(:test, nothing))
             end
             Test.push_testset(fake)
             Test.record(o_ts, fake)
             Test.pop_testset()
-        elseif isa(res[2][1], RemoteException) && isa(res[2][1].captured.ex, Test.TestSetException)
-            println("Worker $(res[2][1].pid) failed running test $(res[1]):")
-            Base.showerror(stdout,res[2][1].captured)
-            fake = Test.DefaultTestSet(res[1])
-            for i in 1:res[2][1].captured.ex.pass
+        elseif isa(resp, RemoteException) && isa(resp.captured.ex, Test.TestSetException)
+            println("Worker $(resp.pid) failed running test $(testname):")
+            Base.showerror(stdout, resp.captured)
+            println()
+            fake = Test.DefaultTestSet(testname)
+            for i in 1:resp.captured.ex.pass
                 Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))
             end
-            for i in 1:res[2][1].captured.ex.broken
+            for i in 1:resp.captured.ex.broken
                 Test.record(fake, Test.Broken(:test, nothing))
             end
-            for t in res[2][1].captured.ex.errors_and_fails
+            for t in resp.captured.ex.errors_and_fails
                 Test.record(fake, t)
             end
             Test.push_testset(fake)
             Test.record(o_ts, fake)
             Test.pop_testset()
-        elseif isa(res[2][1], Exception)
+        else
+            if !isa(resp, Exception)
+                resp = ErrorException(string("Unknown result type : ", typeof(resp)))
+            end
             # If this test raised an exception that is not a remote testset exception,
             # i.e. not a RemoteException capturing a TestSetException that means
             # the test runner itself had some problem, so we may have hit a segfault,
             # deserialization errors or something similar.  Record this testset as Errored.
-            fake = Test.DefaultTestSet(res[1])
-            Test.record(fake, Test.Error(:test_error, res[1], res[2][1], [], LineNumberNode(1)))
+            fake = Test.DefaultTestSet(testname)
+            Test.record(fake, Test.Error(:test_error, testname, nothing, Any[(resp, [])], LineNumberNode(1)))
             Test.push_testset(fake)
             Test.record(o_ts, fake)
             Test.pop_testset()
-        else
-            error(string("Unknown result type : ", typeof(res)))
         end
     end
     for test in all_tests
         (test in completed_tests) && continue
         fake = Test.DefaultTestSet(test)
-        Test.record(fake, Test.Error(:test_interrupted, test, InterruptException(), [], LineNumberNode(1)))
+        Test.record(fake, Test.Error(:test_interrupted, test, nothing, [("skipped", [])], LineNumberNode(1)))
         Test.push_testset(fake)
         Test.record(o_ts, fake)
         Test.pop_testset()
     end
     println()
-    Test.print_test_results(o_ts,1)
+    Test.print_test_results(o_ts, 1)
     if !o_ts.anynonpass
         println("    \033[32;1mSUCCESS\033[0m")
     else

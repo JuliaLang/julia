@@ -178,7 +178,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
     found_def = false
     ## Track which PhiNodes, SSAValue intermediaries
     ## we forwarded through.
-    visited = IdSet{Any}()
+    visited = IdDict{Any, Any}()
     worklist_defs = Any[]
     worklist_constraints = Any[]
     leaves = Any[]
@@ -187,7 +187,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
     while !isempty(worklist_defs)
         defssa = pop!(worklist_defs)
         typeconstraint = pop!(worklist_constraints)
-        push!(visited, defssa)
+        visited[defssa] = typeconstraint
         def = compact[defssa]
         if isa(def, PhiNode)
             push!(visited_phinodes, defssa)
@@ -211,9 +211,15 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                 if isa(val, AnySSAValue)
                     new_def, new_constraint = simple_walk_constraint(compact, val, typeconstraint)
                     if isa(new_def, AnySSAValue)
-                        if !(new_def in visited)
+                        if !haskey(visited, new_def)
                             push!(worklist_defs, new_def)
                             push!(worklist_constraints, new_constraint)
+                        elseif !(new_constraint <: visited[new_def])
+                            # We have reached the same definition via a different
+                            # path, with a different type constraint. We may have
+                            # to redo some work here with the wider typeconstraint
+                            push!(worklist_defs, new_def)
+                            push!(worklist_constraints, tmerge(new_constraint, visited[new_def]))
                         end
                         continue
                     end
@@ -364,10 +370,17 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
             end
         elseif isa(leaf, QuoteNode)
             leaf = leaf.value
+        elseif isa(leaf, GlobalRef)
+            mod, name = leaf.mod, leaf.name
+            if isdefined(mod, name) && isconst(mod, name)
+                leaf = getfield(mod, name)
+            else
+                return nothing
+            end
         elseif isa(leaf, Union{Argument, Expr})
             return nothing
         end
-        isimmutable(leaf) || return nothing
+        !ismutable(leaf) || return nothing
         isdefined(leaf, field) || return nothing
         val = getfield(leaf, field)
         is_inlineable_constant(val) || return nothing
@@ -565,11 +578,11 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
             (isa(c1, Const) && isa(c2, Const)) && continue
             lift_comparison!(compact, idx, c1, c2, stmt, lifting_cache)
             continue
-        elseif isexpr(stmt, :call) && stmt.args[1] == :unchecked_getfield
+        elseif isexpr(stmt, :call) && stmt.args[1] === :unchecked_getfield
             is_getfield = true
             is_unchecked = true
         elseif isexpr(stmt, :foreigncall)
-            nccallargs = stmt.args[5]
+            nccallargs = length(stmt.args[3]::SimpleVector)
             new_preserves = Any[]
             old_preserves = stmt.args[(6+nccallargs):end]
             for (pidx, preserved_arg) in enumerate(old_preserves)
@@ -811,7 +824,7 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
         # Insert the new preserves
         for (use, new_preserves) in preserve_uses
             useexpr = ir[SSAValue(use)]
-            nccallargs = useexpr.args[5]
+            nccallargs = length(useexpr.args[3]::SimpleVector)
             old_preserves = filter(ssa->!isa(ssa, SSAValue) || !(ssa.id in intermediaries), useexpr.args[(6+nccallargs):end])
             new_expr = Expr(:foreigncall, useexpr.args[1:(6+nccallargs-1)]...,
                 old_preserves..., new_preserves...)

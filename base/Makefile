@@ -61,6 +61,7 @@ ifeq ($(OS),WINNT)
 	@printf 'const DATAROOTDIR = "%s"\n' '$(subst /,\\,$(datarootdir_rel))' >> $@
 	@printf 'const DOCDIR = "%s"\n' '$(subst /,\\,$(docdir_rel))' >> $@
 	@printf 'const LIBDIR = "%s"\n' '$(subst /,\\,$(libdir_rel))' >> $@
+	@printf 'const LIBEXECDIR = "%s"\n' '$(subst /,\\,$(libexecdir_rel))' >> $@
 	@printf 'const PRIVATE_LIBDIR = "%s"\n' '$(subst /,\\,$(private_libdir_rel))' >> $@
 	@printf 'const INCLUDEDIR = "%s"\n' '$(subst /,\\,$(includedir_rel))' >> $@
 else
@@ -68,6 +69,7 @@ else
 	@echo "const DATAROOTDIR = \"$(datarootdir_rel)\"" >> $@
 	@echo "const DOCDIR = \"$(docdir_rel)\"" >> $@
 	@echo "const LIBDIR = \"$(libdir_rel)\"" >> $@
+	@echo "const LIBEXECDIR = \"$(libexecdir_rel)\"" >> $@
 	@echo "const PRIVATE_LIBDIR = \"$(private_libdir_rel)\"" >> $@
 	@echo "const INCLUDEDIR = \"$(includedir_rel)\"" >> $@
 endif
@@ -110,7 +112,7 @@ else
 endif
 endif
 
-ifneq ($(OS), WINNT)
+ifeq (,$(filter $(OS), WINNT emscripten))
 # For any USE_SYSTEM_* libraries that will be dynamically loaded by libjulia,
 # put a symlink in the private libdir.
 # System package managers may want to install these links manually,

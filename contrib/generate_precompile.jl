@@ -1,9 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-if !isempty(ARGS)
-    ARGS[1] == "0" && exit(0)
-end
-
+if isempty(ARGS) || ARGS[1] !== "0"
 # Prevent this from being put into the Main namespace
 @eval Module() begin
 if !isdefined(Base, :uv_eventloop)
@@ -38,6 +35,19 @@ julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
 
 have_repl =  haskey(Base.loaded_modules,
                     Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
+
+Distributed = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
+          nothing)
+if Distributed !== nothing
+    precompile_script *= """
+    using Distributed
+    addprocs(2)
+    pmap(x->iseven(x) ? 1 : 0, 1:4)
+    @distributed (+) for i = 1:100 Int(rand(Bool)) end
+    """
+end
+
 Pkg = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"),
           nothing)
@@ -47,7 +57,7 @@ if Pkg !== nothing
 end
 
 function generate_precompile_statements()
-    start_time = time()
+    start_time = time_ns()
     debug_output = devnull # or stdout
 
     # Precompile a package
@@ -134,17 +144,12 @@ function generate_precompile_statements()
         close(pty_master)
         write(debug_output, "\n#### FINISHED ####\n")
 
-        # Extract the precompile statements from stderr
+        # Extract the precompile statements from the precompile file
         statements = Set{String}()
         for statement in eachline(precompile_file_h)
+            # Main should be completely clean
             occursin("Main.", statement) && continue
             push!(statements, statement)
-        end
-
-        if have_repl
-            # Seems like a reasonable number right now, adjust as needed
-            # comment out if debugging script
-            @assert length(statements) > 700
         end
 
         # Create a staging area where all the loaded packages are available
@@ -156,22 +161,27 @@ function generate_precompile_statements()
         end
 
         # Execute the collected precompile statements
+        n_succeeded = 0
         include_time = @elapsed for statement in sort(collect(statements))
             # println(statement)
-            # Work around #28808
-            occursin("\"YYYY-mm-dd\\THH:MM:SS\"", statement) && continue
-            statement == "precompile(Tuple{typeof(Base.show), Base.IOContext{Base.TTY}, Type{Vararg{Any, N} where N}})" && continue
             try
                 Base.include_string(PrecompileStagingArea, statement)
+                n_succeeded += 1
             catch
-                @error "Failed to precompile $statement"
-                rethrow()
+                # See #28808
+                # @error "Failed to precompile $statement"
             end
         end
+        if have_repl
+            # Seems like a reasonable number right now, adjust as needed
+            # comment out if debugging script
+            @assert n_succeeded > 1500
+        end
+
         print(" $(length(statements)) generated in ")
-        tot_time = time() - start_time
-        Base.time_print(tot_time * 10^9)
-        print(" (overhead "); Base.time_print((tot_time - include_time) * 10^9); println(")")
+        tot_time = time_ns() - start_time
+        Base.time_print(tot_time)
+        print(" (overhead "); Base.time_print(tot_time - (include_time * 1e9)); println(")")
     end
 
     return
@@ -180,3 +190,4 @@ end
 generate_precompile_statements()
 
 end # @eval
+end

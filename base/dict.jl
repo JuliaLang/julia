@@ -27,7 +27,7 @@ function show(io::IO, t::AbstractDict{K,V}) where V where K
 
     limit::Bool = get(io, :limit, false)
     # show in a Julia-syntax-like form: Dict(k=>v, ...)
-    print(io, typeinfo_prefix(io, t))
+    print(io, typeinfo_prefix(io, t)[1])
     print(io, '(')
     if !isempty(t) && !show_circular(io, t)
         first = true
@@ -417,8 +417,6 @@ Dict{String,Int64} with 4 entries:
 """
 get!(collection, key, default)
 
-get!(h::Dict{K,V}, key0, default) where {K,V} = get!(()->default, h, key0)
-
 """
     get!(f::Function, collection, key)
 
@@ -461,14 +459,6 @@ function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
         @inbounds _setindex!(h, v, key, -index)
     end
     return v
-end
-
-# NOTE: this macro is trivial, and should
-#       therefore not be exported as-is: it's for internal use only.
-macro get!(h, key0, default)
-    return quote
-        get!(()->$(esc(default)), $(esc(h)), $(esc(key0)))
-    end
 end
 
 
@@ -620,8 +610,8 @@ end
 
 function _delete!(h::Dict{K,V}, index) where {K,V}
     @inbounds h.slots[index] = 0x2
-    isbitstype(K) || isbitsunion(K) || ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.keys, index-1)
-    isbitstype(V) || isbitsunion(V) || ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.vals, index-1)
+    @inbounds _unsetindex!(h.keys, index)
+    @inbounds _unsetindex!(h.vals, index)
     h.ndel += 1
     h.count -= 1
     h.age += 1
@@ -631,7 +621,7 @@ end
 """
     delete!(collection, key)
 
-Delete the mapping for the given key in a collection, and return the collection.
+Delete the mapping for the given key in a collection, if any, and return the collection.
 
 # Examples
 ```jldoctest
@@ -641,6 +631,10 @@ Dict{String,Int64} with 2 entries:
   "a" => 1
 
 julia> delete!(d, "b")
+Dict{String,Int64} with 1 entry:
+  "a" => 1
+
+julia> delete!(d, "b") # d is left unchanged
 Dict{String,Int64} with 1 entry:
   "a" => 1
 ```
@@ -689,7 +683,15 @@ length(t::Dict) = t.count
     (@inbounds vals[i], i == typemax(Int) ? 0 : i+1)
 end
 
-filter!(f, d::Dict) = filter_in_one_pass!(f, d)
+function filter!(pred, h::Dict{K,V}) where {K,V}
+    h.count == 0 && return h
+    @inbounds for i=1:length(h.slots)
+        if h.slots[i] == 0x01 && !pred(Pair{K,V}(h.keys[i], h.vals[i]))
+            _delete!(h, i)
+        end
+    end
+    return h
+end
 
 function reduce(::typeof(merge), items::Vector{<:Dict})
     K = mapreduce(keytype, promote_type, items)
@@ -700,7 +702,7 @@ end
 function map!(f, iter::ValueIterator{<:Dict})
     dict = iter.dict
     vals = dict.vals
-    # @inbounds is here so the it gets propigated to isslotfiled
+    # @inbounds is here so the it gets propagated to isslotfiled
     @inbounds for i = dict.idxfloor:lastindex(vals)
         if isslotfilled(dict, i)
             vals[i] = f(vals[i])
@@ -721,14 +723,14 @@ end
 """
     ImmutableDict
 
-ImmutableDict is a Dictionary implemented as an immutable linked list,
-which is optimal for small dictionaries that are constructed over many individual insertions
+`ImmutableDict` is a dictionary implemented as an immutable linked list,
+which is optimal for small dictionaries that are constructed over many individual insertions.
 Note that it is not possible to remove a value, although it can be partially overridden and hidden
-by inserting a new value with the same key
+by inserting a new value with the same key.
 
     ImmutableDict(KV::Pair)
 
-Create a new entry in the Immutable Dictionary for the key => value pair
+Create a new entry in the `ImmutableDict` for a `key => value` pair
 
  - use `(key => value) in dict` to see if this particular combination is in the properties set
  - use `get(dict, key, default)` to retrieve the most recent value for a particular key
@@ -737,11 +739,12 @@ Create a new entry in the Immutable Dictionary for the key => value pair
 ImmutableDict
 ImmutableDict(KV::Pair{K,V}) where {K,V} = ImmutableDict{K,V}(KV[1], KV[2])
 ImmutableDict(t::ImmutableDict{K,V}, KV::Pair) where {K,V} = ImmutableDict{K,V}(t, KV[1], KV[2])
+ImmutableDict(KV::Pair, rest::Pair...) = ImmutableDict(ImmutableDict(rest...), KV)
 
 function in(key_value::Pair, dict::ImmutableDict, valcmp=(==))
     key, value = key_value
     while isdefined(dict, :parent)
-        if dict.key == key
+        if isequal(dict.key, key)
             valcmp(value, dict.value) && return true
         end
         dict = dict.parent
@@ -751,7 +754,7 @@ end
 
 function haskey(dict::ImmutableDict, key)
     while isdefined(dict, :parent)
-        dict.key == key && return true
+        isequal(dict.key, key) && return true
         dict = dict.parent
     end
     return false
@@ -759,14 +762,14 @@ end
 
 function getindex(dict::ImmutableDict, key)
     while isdefined(dict, :parent)
-        dict.key == key && return dict.value
+        isequal(dict.key, key) && return dict.value
         dict = dict.parent
     end
     throw(KeyError(key))
 end
 function get(dict::ImmutableDict, key, default)
     while isdefined(dict, :parent)
-        dict.key == key && return dict.value
+        isequal(dict.key, key) && return dict.value
         dict = dict.parent
     end
     return default

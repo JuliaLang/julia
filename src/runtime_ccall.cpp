@@ -4,6 +4,7 @@
 #include <map>
 #include <string>
 #include <cstdio>
+#include <llvm/ADT/StringMap.h>
 #include <llvm/Support/Host.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -27,7 +28,7 @@ using namespace llvm;
 static std::map<std::string, void*> libMap;
 static jl_mutex_t libmap_lock;
 extern "C"
-void *jl_get_library(const char *f_lib)
+void *jl_get_library_(const char *f_lib, int throw_err)
 {
     void *hnd;
 #ifdef _OS_WINDOWS_
@@ -47,7 +48,7 @@ void *jl_get_library(const char *f_lib)
     if (hnd != NULL)
         return hnd;
     // We might run this concurrently on two threads but it doesn't matter.
-    hnd = jl_load_dynamic_library(f_lib, JL_RTLD_DEFAULT, 1);
+    hnd = jl_load_dynamic_library(f_lib, JL_RTLD_DEFAULT, throw_err);
     if (hnd != NULL)
         jl_atomic_store_release(map_slot, hnd);
     return hnd;
@@ -136,18 +137,21 @@ std::string jl_format_filename(StringRef output_pattern)
     for (auto c : output_pattern) {
         if (special) {
             if (!got_pwd && (c == 'i' || c == 'd' || c == 'u')) {
-                uv_os_get_passwd(&pwd);
-                got_pwd = true;
+                int r = uv_os_get_passwd(&pwd);
+                if (r == 0)
+                    got_pwd = true;
             }
             switch (c) {
             case 'p':
                 outfile << jl_getpid();
                 break;
             case 'd':
-                outfile << pwd.homedir;
+                if (got_pwd)
+                    outfile << pwd.homedir;
                 break;
             case 'i':
-                outfile << pwd.uid;
+                if (got_pwd)
+                    outfile << pwd.uid;
                 break;
             case 'l':
             case 'L':
@@ -163,7 +167,8 @@ std::string jl_format_filename(StringRef output_pattern)
 #endif
                 break;
             case 'u':
-                outfile << pwd.username;
+                if (got_pwd)
+                    outfile << pwd.username;
                 break;
             default:
                 outfile << c;
@@ -195,13 +200,22 @@ static void *trampoline_alloc()
 {
     const int sz = 64; // oversized for most platforms. todo: use precise value?
     if (!trampoline_freelist) {
+        int last_errno = errno;
 #ifdef _OS_WINDOWS_
+        DWORD last_error = GetLastError();
         void *mem = VirtualAlloc(NULL, jl_page_size,
                 MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+        if (mem == NULL)
+            jl_throw(jl_memory_exception);
+        SetLastError(last_error);
 #else
         void *mem = mmap(0, jl_page_size, PROT_READ | PROT_WRITE | PROT_EXEC,
                 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        errno = last_errno;
+        if (mem == MAP_FAILED)
+            jl_throw(jl_memory_exception);
 #endif
+        errno = last_errno;
         void *next = NULL;
         for (size_t i = 0; i + sz <= jl_page_size; i += sz) {
             void **curr = (void**)((char*)mem + i);
@@ -260,7 +274,7 @@ jl_value_t *jl_get_cfunction_trampoline(
         htable_t **cache2 = (htable_t**)ptrhash_bp(cache, (void*)vals);
         cache = *cache2;
         if (cache == HT_NOTFOUND) {
-            cache = htable_new((htable_t*)malloc(sizeof(htable_t)), 1);
+            cache = htable_new((htable_t*)malloc_s(sizeof(htable_t)), 1);
             *cache2 = cache;
         }
     }
@@ -272,7 +286,7 @@ jl_value_t *jl_get_cfunction_trampoline(
 
     // not found, allocate a new one
     size_t n = jl_svec_len(fill);
-    void **nval = (void**)malloc(sizeof(void*) * (n + 1));
+    void **nval = (void**)malloc_s(sizeof(void*) * (n + 1));
     nval[0] = (void*)fobj;
     jl_value_t *result;
     JL_TRY {

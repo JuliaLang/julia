@@ -313,14 +313,15 @@ function FormatMessage end
 if Sys.iswindows()
     GetLastError() = ccall(:GetLastError, stdcall, UInt32, ())
 
-    function FormatMessage(e=GetLastError())
+    FormatMessage(e) = FormatMessage(UInt32(e))
+    function FormatMessage(e::UInt32=GetLastError())
         FORMAT_MESSAGE_ALLOCATE_BUFFER = UInt32(0x100)
         FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
         FORMAT_MESSAGE_IGNORE_INSERTS = UInt32(0x200)
         FORMAT_MESSAGE_MAX_WIDTH_MASK = UInt32(0xFF)
         lpMsgBuf = Ref{Ptr{UInt16}}()
         lpMsgBuf[] = 0
-        len = ccall(:FormatMessageW, stdcall, UInt32, (Cint, Ptr{Cvoid}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Cvoid}),
+        len = ccall(:FormatMessageW, stdcall, UInt32, (UInt32, Ptr{Cvoid}, UInt32, UInt32, Ptr{Ptr{UInt16}}, UInt32, Ptr{Cvoid}),
                     FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
                     C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
         p = lpMsgBuf[]
@@ -337,8 +338,8 @@ end
 """
     free(addr::Ptr)
 
-Call `free` from the C standard library. Only use this on memory obtained from `malloc`, not
-on pointers retrieved from other C libraries. `Ptr` objects obtained from C libraries should
+Call `free` from the C standard library. Only use this on memory obtained from [`malloc`](@ref), not
+on pointers retrieved from other C libraries. [`Ptr`](@ref) objects obtained from C libraries should
 be freed by the free functions defined in that library, to avoid assertion failures if
 multiple `libc` libraries exist on the system.
 """
@@ -356,8 +357,8 @@ malloc(size::Integer) = ccall(:malloc, Ptr{Cvoid}, (Csize_t,), size)
 
 Call `realloc` from the C standard library.
 
-See warning in the documentation for `free` regarding only using this on memory originally
-obtained from `malloc`.
+See warning in the documentation for [`free`](@ref) regarding only using this on memory originally
+obtained from [`malloc`](@ref).
 """
 realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), p, size)
 
@@ -382,15 +383,21 @@ Interface to the C `rand()` function. If `T` is provided, generate a value of ty
 by composing two calls to `rand()`. `T` can be `UInt32` or `Float64`.
 """
 rand() = ccall(:rand, Cint, ())
-# RAND_MAX at least 2^15-1 in theory, but we assume 2^16-1 (in practice, it's 2^31-1)
-rand(::Type{UInt32}) = ((rand() % UInt32) << 16) ⊻ (rand() % UInt32)
-rand(::Type{Float64}) = rand(UInt32) / 2^32
+@static if Sys.iswindows()
+    # Windows RAND_MAX is 2^15-1
+    rand(::Type{UInt32}) = ((rand() % UInt32) << 17) ⊻ ((rand() % UInt32) << 8) ⊻ (rand() % UInt32)
+else
+    # RAND_MAX is at least 2^15-1 in theory, but we assume 2^16-1
+    # on non-Windows systems (in practice, it's 2^31-1)
+    rand(::Type{UInt32}) = ((rand() % UInt32) << 16) ⊻ (rand() % UInt32)
+end
+rand(::Type{Float64}) = rand(UInt32) * 2.0^-32
 
 """
     srand([seed])
 
 Interface to the C `srand(seed)` function.
 """
-srand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
+srand(seed=floor(Int, time()) % Cuint) = ccall(:srand, Cvoid, (Cuint,), seed)
 
 end # module

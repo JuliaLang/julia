@@ -34,7 +34,13 @@ end
 let
     fn = format_filename("a%d %p %i %L %l %u z")
     hd = withenv("HOME" => nothing) do
-        homedir()
+        # get the homedir, as reported by uv_os_get_passwd, as used by jl_format_filename
+        try
+            homedir()
+        catch ex
+            (ex isa Base.IOError && ex.code == Base.UV_ENOENT) || rethrow(ex)
+            ""
+        end
     end
     @test startswith(fn, "a$hd ")
     @test endswith(fn, " z")
@@ -48,13 +54,17 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     # tests for handling of ENV errors
     let v = writereadpipeline("println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
                 setenv(`$exename -i -E 'empty!(LOAD_PATH); @isdefined InteractiveUtils'`,
-                    "JULIA_LOAD_PATH"=>"", "JULIA_DEPOT_PATH"=>""))
+                    "JULIA_LOAD_PATH" => "",
+                    "JULIA_DEPOT_PATH" => "",
+                    "HOME" => homedir()))
         @test v[1] == "false\nREPL: InteractiveUtilstrue\n"
         @test v[2]
     end
     let v = writereadpipeline("println(\"REPL: \", InteractiveUtils)",
                 setenv(`$exename -i -e 'const InteractiveUtils = 3'`,
-                    "JULIA_LOAD_PATH"=>";;;:::", "JULIA_DEPOT_PATH"=>";;;:::"))
+                    "JULIA_LOAD_PATH" => ";;;:::",
+                    "JULIA_DEPOT_PATH" => ";;;:::",
+                    "HOME" => homedir()))
         # TODO: ideally, `@which`, etc. would still work, but Julia can't handle `using $InterativeUtils`
         @test v[1] == "REPL: 3\n"
         @test v[2]
@@ -71,13 +81,13 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     end
     real_threads = string(ccall(:jl_cpu_threads, Int32, ()))
     for nc in ("0", "-2", "x", "2x", " ", "")
-        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc))
+        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc, "HOME" => homedir()))
         @test v[1]
         @test v[2] == real_threads
         @test v[3] == "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $real_threads."
     end
     for nc in ("1", " 1 ", " +1 ", " 0x1 ")
-        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc))
+        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc, "HOME" => homedir()))
         @test v[1]
         @test v[2] == "1"
         @test isempty(v[3])
@@ -101,7 +111,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     if !Sys.iswindows()
         expanded = abspath(expanduser("~/foo"))
         @test occursin(expanded, readchomp(`$exename --project='~/foo' -E 'Base.active_project()'`))
-        @test occursin(expanded, readchomp(setenv(`$exename -E 'Base.active_project()'`, "JULIA_PROJECT"=>"~/foo")))
+        @test occursin(expanded, readchomp(setenv(`$exename -E 'Base.active_project()'`, "JULIA_PROJECT" => "~/foo", "HOME" => homedir())))
     end
 
     # --quiet, --banner
@@ -131,6 +141,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     # --eval --interactive (replaced --post-boot)
     @test  success(`$exename -i -e "exit(0)"`)
     @test !success(`$exename -i -e "exit(1)"`)
+    # issue #34924
+    @test  success(`$exename -e 'const LOAD_PATH=1'`)
 
     # --print
     @test read(`$exename -E "1+1"`, String) == "2\n"
@@ -175,6 +187,32 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     # --cpu-target (requires LLVM enabled)
     @test !success(`$exename -C invalidtarget`)
     @test !success(`$exename --cpu-target=invalidtarget`)
+
+    # -t, --threads
+    code = "print(Threads.nthreads())"
+    cpu_threads = ccall(:jl_cpu_threads, Int32, ())
+    @test string(cpu_threads) ==
+          read(`$exename --threads auto -e $code`, String) ==
+          read(`$exename --threads=auto -e $code`, String) ==
+          read(`$exename -tauto -e $code`, String) ==
+          read(`$exename -t auto -e $code`, String) ==
+          read(`$exename -t $(cpu_threads+1) -e $code`, String)
+    if cpu_threads > 1
+        for nt in (nothing, "1"); withenv("JULIA_NUM_THREADS"=>nt) do
+            @test read(`$exename --threads 2 -e $code`, String) ==
+                  read(`$exename --threads=2 -e $code`, String) ==
+                  read(`$exename -t2 -e $code`, String) ==
+                  read(`$exename -t 2 -e $code`, String) == "2"
+        end end
+    end
+    @test !success(`$exename -t 0`)
+    @test !success(`$exename -t -1`)
+
+    # Combining --threads and --procs: --threads does propagate
+    if cpu_threads > 1; withenv("JULIA_NUM_THREADS"=>nothing) do
+        code = "print(sum(remotecall_fetch(Threads.nthreads, x) for x in procs()))"
+        @test read(`$exename -p2 -t2 -e $code`, String) == "6"
+    end end
 
     # --procs
     @test readchomp(`$exename -q -p 2 -e "println(nworkers())"`) == "2"
@@ -222,7 +260,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
             "<FILENAME>" => realpath(inputfile))
         covfile = replace(joinpath(dir, "coverage.info"), "%" => "%%")
         @test !isfile(covfile)
-        defaultcov = readchomp(`$exename -E "Bool(Base.JLOptions().code_coverage)" -L $inputfile`)
+        defaultcov = readchomp(`$exename -E "Base.JLOptions().code_coverage != 0" -L $inputfile`)
         opts = Base.JLOptions()
         coverage_file = (opts.output_code_coverage != C_NULL) ?  unsafe_string(opts.output_code_coverage) : ""
         @test !isfile(covfile)
@@ -234,31 +272,56 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
             --code-coverage=$covfile --code-coverage`) == "1"
         @test isfile(covfile)
         got = read(covfile, String)
-        @test occursin(expected, got) || got
         rm(covfile)
+        @test occursin(expected, got) || (expected, got)
         @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=user`) == "1"
         @test isfile(covfile)
         got = read(covfile, String)
-        @test occursin(expected, got) || got
         rm(covfile)
+        @test occursin(expected, got) || (expected, got)
         @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=all`) == "2"
         @test isfile(covfile)
         got = read(covfile, String)
-        @test occursin(expected, got) || got
         rm(covfile)
+        @test occursin(expected, got) || (expected, got)
     end
 
     # --track-allocation
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"`) == "false"
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"
-        --track-allocation=none`) == "false"
+    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0"`) == "false"
+    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=none`) == "false"
 
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"
-        --track-allocation`) == "true"
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"
-        --track-allocation=user`) == "true"
+    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation`) == "true"
+    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=user`) == "true"
+    mktempdir() do dir
+        helperdir = joinpath(@__DIR__, "testhelpers")
+        inputfile = joinpath(helperdir, "allocation_file.jl")
+        pid = readchomp(`$exename -E "getpid()" -L $inputfile --track-allocation=user`)
+        memfile = "$inputfile.$pid.mem"
+        got = readlines(memfile)
+        rm(memfile)
+        @test popfirst!(got) == "        0 g(x) = x + 123456"
+        @test popfirst!(got) == "        - function f(x)"
+        @test popfirst!(got) == "       80     []"
+        if Sys.WORD_SIZE == 64
+            # P64 pools with 64 bit tags
+            @test popfirst!(got) == "       32     Base.invokelatest(g, 0)"
+            @test popfirst!(got) == "       48     Base.invokelatest(g, x)"
+        elseif 12 == (() -> @allocated ccall(:jl_gc_allocobj, Ptr{Cvoid}, (Csize_t,), 8))()
+            # See if we have a 12-byte pool with 32 bit tags (MAX_ALIGN = 4)
+            @test popfirst!(got) == "       24     Base.invokelatest(g, 0)"
+            @test popfirst!(got) == "       36     Base.invokelatest(g, x)"
+        else # MAX_ALIGN >= 8
+            @test popfirst!(got) == "       16     Base.invokelatest(g, 0)"
+            @test popfirst!(got) == "       48     Base.invokelatest(g, x)"
+        end
+        @test popfirst!(got) == "       80     []"
+        @test popfirst!(got) == "        - end"
+        @test popfirst!(got) == "        - f(1.23)"
+        @test isempty(got) || got
+    end
+
 
     # --optimize
     @test readchomp(`$exename -E "Base.JLOptions().opt_level"`) == "2"
@@ -407,6 +470,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
 
     # test the program name remains constant
     mktempdir() do dir
+        # dir can be case-incorrect sometimes
+        dir = realpath(dir)
+
         a = joinpath(dir, "a.jl")
         b = joinpath(dir, "b.jl")
         c = joinpath(dir, ".julia", "config", "startup.jl")
@@ -430,19 +496,19 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
                 [a, a,
                  b, a]
             @test readsplit(`$exename -L $b -e 'exit(0)'`) ==
-                [realpath(b), ""]
+                [b, ""]
             @test readsplit(`$exename -L $b $a`) ==
-                [realpath(b), a,
+                [b, a,
                  a, a,
                  b, a]
             @test readsplit(`$exename --startup-file=yes -e 'exit(0)'`) ==
                 [c, ""]
             @test readsplit(`$exename --startup-file=yes -L $b -e 'exit(0)'`) ==
                 [c, "",
-                 realpath(b), ""]
+                 b, ""]
             @test readsplit(`$exename --startup-file=yes -L $b $a`) ==
                 [c, a,
-                 realpath(b), a,
+                 b, a,
                  a, a,
                  b, a]
         end
@@ -561,15 +627,12 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         "Bool(Base.JLOptions().use_sysimage_native_code)"`) == "false"
 end
 
-# backtrace contains type and line number info (esp. on windows #17179)
+# backtrace contains line number info (esp. on windows #17179)
 for precomp in ("yes", "no")
-    succ, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=$precomp -E 'include("____nonexistent_file")'`)
+    succ, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=$precomp -E 'sqrt(-2)'`)
     @test !succ
     @test out == ""
-    @test occursin("include_relative(::Module, ::String) at $(joinpath(".", "loading.jl"))", bt)
-    lno = match(r"at \.[\/\\]loading\.jl:(\d+)", bt)
-    @test length(lno.captures) == 1
-    @test parse(Int, lno.captures[1]) > 0
+    @test occursin(r"\.jl:(\d+)", bt)
 end
 
 # PR #23002

@@ -243,7 +243,7 @@ An exception is raised if a global constant is requested to be cleared.
 """
 function clear!(syms, pids=workers(); mod=Main)
     @sync for p in pids
-        @async remotecall_wait(clear_impl!, p, syms, mod)
+        @sync_add remotecall(clear_impl!, p, syms, mod)
     end
 end
 clear!(sym::Symbol, pid::Int; mod=Main) = clear!([sym], [pid]; mod=mod)

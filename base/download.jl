@@ -28,7 +28,7 @@ function find_curl()
         "/usr/bin/curl"
     elseif Sys.iswindows() && Sys.isexecutable(joinpath(get(ENV, "SYSTEMROOT", "C:\\Windows"), "System32\\curl.exe"))
         joinpath(get(ENV, "SYSTEMROOT", "C:\\Windows"), "System32\\curl.exe")
-    elseif Sys.which("curl") !== nothing
+    elseif !Sys.iswindows() && Sys.which("curl") !== nothing
         "curl"
     else
         nothing
@@ -46,7 +46,17 @@ function download_curl(curl_exe::AbstractString, url::AbstractString, filename::
     return filename
 end
 
+const DOWNLOAD_HOOKS = Callable[]
+
+function download_url(url::AbstractString)
+    for hook in DOWNLOAD_HOOKS
+        url = String(hook(url)::AbstractString)
+    end
+    return url
+end
+
 function download(url::AbstractString, filename::AbstractString)
+    url = download_url(url)
     curl_exe = find_curl()
     if curl_exe !== nothing
         return download_curl(curl_exe, url, filename)
@@ -59,10 +69,17 @@ function download(url::AbstractString, filename::AbstractString)
             rm(filename, force=true)  # wget always creates a file
             rethrow()
         end
+    elseif Sys.which("busybox") !== nothing
+        try
+            run(`busybox wget -O $filename $url`)
+        catch
+            rm(filename, force=true)  # wget always creates a file
+            rethrow()
+        end
     elseif Sys.which("fetch") !== nothing
         run(`fetch -f $filename $url`)
     else
-        error("No download agent available; install curl, wget, or fetch.")
+        error("No download agent available; install curl, wget, busybox or fetch.")
     end
     return filename
 end

@@ -13,7 +13,7 @@
 
 #include <errno.h>
 
-#if !defined(_OS_WINDOWS_) || defined(_COMPILER_MINGW_)
+#if !defined(_OS_WINDOWS_) || defined(_COMPILER_GCC_)
 #include <getopt.h>
 #endif
 
@@ -40,9 +40,6 @@ JL_DLLEXPORT char *dirname(char *);
 #endif
 
 #ifdef _OS_WINDOWS_
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <io.h>
 extern int needsSymRefreshModuleList;
 extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 #else
@@ -69,20 +66,19 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
 #ifdef _OS_WINDOWS_
     (void)ismaster;
     // https://en.wikipedia.org/wiki/Win32_Thread_Information_Block
-#ifdef _P64
+#  ifdef _P64
     *stack_hi = (void**)__readgsqword(0x08); // Stack Base / Bottom of stack (high address)
     *stack_lo = (void**)__readgsqword(0x10); // Stack Limit / Ceiling of stack (low address)
-#else
+#  else // !_P64
     *stack_hi = (void**)__readfsdword(0x04); // Stack Base / Bottom of stack (high address)
     *stack_lo = (void**)__readfsdword(0x08); // Stack Limit / Ceiling of stack (low address)
-#endif
-#else
-#  ifdef JULIA_ENABLE_THREADING
+#  endif // _P64
+#else // !_OS_WINDOWS_
     // Only use pthread_*_np functions to get stack address for non-master
     // threads since it seems to return bogus values for master thread on Linux
     // and possibly OSX.
     if (!ismaster) {
-#    if defined(_OS_LINUX_)
+#  if defined(_OS_LINUX_)
         pthread_attr_t attr;
         pthread_getattr_np(pthread_self(), &attr);
         void *stackaddr;
@@ -90,18 +86,18 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
         pthread_attr_getstack(&attr, &stackaddr, &stacksize);
         pthread_attr_destroy(&attr);
         *stack_lo = (void*)stackaddr;
-        *stack_hi = (void*)((char*)stackaddr + stacksize);
+        *stack_hi = (void*)&stacksize;
         return;
-#    elif defined(_OS_DARWIN_)
+#  elif defined(_OS_DARWIN_)
         extern void *pthread_get_stackaddr_np(pthread_t thread);
         extern size_t pthread_get_stacksize_np(pthread_t thread);
         pthread_t thread = pthread_self();
         void *stackaddr = pthread_get_stackaddr_np(thread);
         size_t stacksize = pthread_get_stacksize_np(thread);
-        *stack_lo = (char*)stackaddr;
-        *stack_hi = (void*)((char*)stackaddr + stacksize);
+        *stack_lo = (void*)stackaddr;
+        *stack_hi = (void*)&stacksize;
         return;
-#    elif defined(_OS_FREEBSD_)
+#  elif defined(_OS_FREEBSD_)
         pthread_attr_t attr;
         pthread_attr_init(&attr);
         pthread_attr_get_np(pthread_self(), &attr);
@@ -109,21 +105,18 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
         size_t stacksize;
         pthread_attr_getstack(&attr, &stackaddr, &stacksize);
         pthread_attr_destroy(&attr);
-        *stack_lo = (char*)stackaddr;
-        *stack_hi = (void*)((char*)stackaddr + stacksize);
+        *stack_lo = (void*)stackaddr;
+        *stack_hi = (void*)&stacksize;
         return;
-#    else
-#      warning "Getting precise stack size for thread is not supported."
-#    endif
-    }
 #  else
-    (void)ismaster;
+#      warning "Getting precise stack size for thread is not supported."
 #  endif
+    }
     struct rlimit rl;
     getrlimit(RLIMIT_STACK, &rl);
-    size_t stack_size = rl.rlim_cur;
-    *stack_hi = (void*)&stack_size;
-    *stack_lo = (void*)((char*)*stack_hi - stack_size);
+    size_t stacksize = rl.rlim_cur;
+    *stack_hi = (void*)&stacksize;
+    *stack_lo = (void*)((char*)*stack_hi - stacksize);
 #endif
 }
 
@@ -157,7 +150,7 @@ struct uv_shutdown_queue { struct uv_shutdown_queue_item *first; struct uv_shutd
 
 static void jl_uv_exitcleanup_add(uv_handle_t *handle, struct uv_shutdown_queue *queue)
 {
-    struct uv_shutdown_queue_item *item = (struct uv_shutdown_queue_item*)malloc(sizeof(struct uv_shutdown_queue_item));
+    struct uv_shutdown_queue_item *item = (struct uv_shutdown_queue_item*)malloc_s(sizeof(struct uv_shutdown_queue_item));
     item->h = handle;
     item->next = NULL;
     if (queue->last)
@@ -375,7 +368,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         jl_errorf("error initializing %s in uv_dup: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
     switch(uv_guess_handle(fd)) {
     case UV_TTY:
-        handle = malloc(sizeof(uv_tty_t));
+        handle = malloc_s(sizeof(uv_tty_t));
         if ((err = uv_tty_init(jl_io_loop, (uv_tty_t*)handle, fd, 0))) {
             jl_errorf("error initializing %s in uv_tty_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
@@ -405,7 +398,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         // ...and continue on as in the UV_FILE case
         JL_FALLTHROUGH;
     case UV_FILE:
-        handle = malloc(sizeof(jl_uv_file_t));
+        handle = malloc_s(sizeof(jl_uv_file_t));
         {
             jl_uv_file_t *file = (jl_uv_file_t*)handle;
             file->loop = jl_io_loop;
@@ -415,7 +408,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         }
         break;
     case UV_NAMED_PIPE:
-        handle = malloc(sizeof(uv_pipe_t));
+        handle = malloc_s(sizeof(uv_pipe_t));
         if ((err = uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle, 0))) {
             jl_errorf("error initializing %s in uv_pipe_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
@@ -425,7 +418,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         ((uv_pipe_t*)handle)->data = NULL;
         break;
     case UV_TCP:
-        handle = malloc(sizeof(uv_tcp_t));
+        handle = malloc_s(sizeof(uv_tcp_t));
         if ((err = uv_tcp_init(jl_io_loop, (uv_tcp_t*)handle))) {
             jl_errorf("error initializing %s in uv_tcp_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
@@ -483,9 +476,7 @@ static char *abspath(const char *in, int nprefix)
     if (out) {
         if (nprefix > 0) {
             size_t sz = strlen(out) + 1;
-            char *cpy = (char*)malloc(sz + nprefix);
-            if (!cpy)
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            char *cpy = (char*)malloc_s(sz + nprefix);
             memcpy(cpy, in, nprefix);
             memcpy(cpy + nprefix, out, sz);
             free(out);
@@ -495,22 +486,16 @@ static char *abspath(const char *in, int nprefix)
     else {
         size_t sz = strlen(in + nprefix) + 1;
         if (in[nprefix] == PATHSEPSTRING[0]) {
-            out = (char*)malloc(sz + nprefix);
-            if (!out)
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            out = (char*)malloc_s(sz + nprefix);
             memcpy(out, in, sz + nprefix);
         }
         else {
             size_t path_size = PATH_MAX;
-            char *path = (char*)malloc(PATH_MAX);
-            if (!path)
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            char *path = (char*)malloc_s(PATH_MAX);
             if (uv_cwd(path, &path_size)) {
                 jl_error("fatal error: unexpected error while retrieving current working directory");
             }
-            out = (char*)malloc(path_size + 1 + sz + nprefix);
-            if (!out)
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            out = (char*)malloc_s(path_size + 1 + sz + nprefix);
             memcpy(out, in, nprefix);
             memcpy(out + nprefix, path, path_size);
             out[nprefix + path_size] = PATHSEPSTRING[0];
@@ -523,9 +508,7 @@ static char *abspath(const char *in, int nprefix)
     if (n <= 0) {
         jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
     }
-    char *out = (char*)malloc(n + nprefix);
-    if (!out)
-        jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+    char *out = (char*)malloc_s(n + nprefix);
     DWORD m = GetFullPathName(in + nprefix, n, out + nprefix, NULL);
     if (n != m + 1) {
         jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
@@ -552,9 +535,7 @@ static const char *absformat(const char *in)
     size_t i, fmt_size = 0;
     for (i = 0; i < path_size; i++)
         fmt_size += (path[i] == '%' ? 2 : 1);
-    char *out = (char*)malloc(fmt_size + 1 + sz);
-    if (!out)
-        jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+    char *out = (char*)malloc_s(fmt_size + 1 + sz);
     fmt_size = 0;
     for (i = 0; i < path_size; i++) { // copy-replace pwd portion
         char c = path[i];
@@ -575,19 +556,15 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     // note: if you care about lost memory, you should call the appropriate `free()` function
     // on the original pointer for each `char*` you've inserted into `jl_options`, after
     // calling `julia_init()`
-    char *free_path = (char*)malloc(PATH_MAX);
+    char *free_path = (char*)malloc_s(PATH_MAX);
     size_t path_size = PATH_MAX;
-    if (!free_path)
-        jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
     if (uv_exepath(free_path, &path_size)) {
         jl_error("fatal error: unexpected error while retrieving exepath");
     }
     if (path_size >= PATH_MAX) {
         jl_error("fatal error: jl_options.julia_bin path too long");
     }
-    jl_options.julia_bin = (char*)malloc(path_size+1);
-    if (!jl_options.julia_bin)
-        jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+    jl_options.julia_bin = (char*)malloc_s(path_size + 1);
     memcpy((char*)jl_options.julia_bin, free_path, path_size);
     ((char*)jl_options.julia_bin)[path_size] = '\0';
     if (!jl_options.julia_bindir) {
@@ -603,9 +580,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     if (jl_options.image_file) {
         if (rel == JL_IMAGE_JULIA_HOME && !isabspath(jl_options.image_file)) {
             // build time path, relative to JULIA_BINDIR
-            free_path = (char*)malloc(PATH_MAX);
-            if (!free_path)
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            free_path = (char*)malloc_s(PATH_MAX);
             int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
                              jl_options.julia_bindir, jl_options.image_file);
             if (n >= PATH_MAX || n < 0) {
@@ -626,6 +601,8 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_options.outputji = abspath(jl_options.outputji, 0);
     if (jl_options.outputbc)
         jl_options.outputbc = abspath(jl_options.outputbc, 0);
+    if (jl_options.outputasm)
+        jl_options.outputasm = abspath(jl_options.outputasm, 0);
     if (jl_options.machine_file)
         jl_options.machine_file = abspath(jl_options.machine_file, 0);
     if (jl_options.output_code_coverage)
@@ -651,10 +628,8 @@ static void jl_set_io_wait(int v)
 void _julia_init(JL_IMAGE_SEARCH rel)
 {
     jl_init_timing();
-#ifdef JULIA_ENABLE_THREADING
     // Make sure we finalize the tls callback before starting any threads.
     jl_get_ptls_states_getter();
-#endif
     jl_ptls_t ptls = jl_get_ptls_states();
     (void)ptls; assert(ptls); // make sure early that we have initialized ptls
     jl_safepoint_init();
@@ -725,21 +700,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     }
 #endif
 
-#if defined(__linux__)
-    int ncores = jl_cpu_threads();
-    if (ncores > 1) {
-        cpu_set_t cpumask;
-        CPU_ZERO(&cpumask);
-        for(int i=0; i < ncores; i++) {
-            CPU_SET(i, &cpumask);
-        }
-        sched_setaffinity(0, sizeof(cpu_set_t), &cpumask);
-    }
-#endif
-
-    if ((jl_options.outputo || jl_options.outputbc) &&
+    if ((jl_options.outputo || jl_options.outputbc || jl_options.outputasm) &&
         (jl_options.code_coverage || jl_options.malloc_log)) {
-        jl_error("cannot generate code-coverage or track allocation information while generating a .o or .bc output file");
+        jl_error("cannot generate code-coverage or track allocation information while generating a .o, .bc, or .s output file");
     }
 
     jl_gc_init();
@@ -763,6 +726,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     else {
         jl_init_types();
         jl_init_codegen();
+        jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0); // used internally
     }
 
     jl_init_tasks();
@@ -771,12 +735,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_root_task->timing_stack = jl_root_timing;
 #endif
     jl_init_frontend();
-
-    jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0); // used by ml_matches
     jl_init_serializer();
 
     if (!jl_options.image_file) {
         jl_core_module = jl_new_module(jl_symbol("Core"));
+        jl_core_module->parent = jl_core_module;
         jl_type_typename->mt->module = jl_core_module;
         jl_top_module = jl_core_module;
         jl_init_intrinsic_functions();
@@ -786,16 +749,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         post_boot_hooks();
     }
 
-    // the Main module is the one which is always open, and set as the
-    // current module for bare (non-module-wrapped) toplevel expressions.
-    // it does "using Base" if Base is available.
     if (jl_base_module != NULL) {
-        jl_add_standard_imports(jl_main_module);
-        jl_value_t *maininclude = jl_get_global(jl_base_module, jl_symbol("MainInclude"));
-        if (maininclude && jl_is_module(maininclude)) {
-            jl_module_import(jl_main_module, (jl_module_t*)maininclude, jl_symbol("include"));
-            jl_module_import(jl_main_module, (jl_module_t*)maininclude, jl_symbol("eval"));
-        }
         // Do initialization needed before starting child threads
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("__preinit_threads__"));
         if (f) {
