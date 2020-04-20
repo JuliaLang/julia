@@ -405,3 +405,27 @@ end
     @test gcd([5, 2, 1//2]) == 1//2
 end
 
+@testset "Binary operations with Integer" begin
+    @test 1//2 - 1 == -1//2
+    @test -1//2 + 1 == 1//2
+    @test 1 - 1//2 == 1//2
+    @test 1 + 1//2 == 3//2
+    for q in (19//3, -4//5), i in (6, -7)
+        @test rem(q, i) == q - i*div(q, i)
+        @test mod(q, i) == q - i*fld(q, i)
+    end
+    @test 1//2 * 3 == 3//2
+    @test -3 * (1//2) == -3//2
+
+    @test_throws OverflowError UInt(1)//2 - 1
+    @test_throws OverflowError 1 - UInt(5)//2
+    @test_throws OverflowError 1//typemax(Int64) + 1
+    @test_throws OverflowError Int8(1) + Int8(5)//(Int8(127)-Int8(1))
+    @test_throws InexactError UInt(1)//2 * -1
+    @test_throws OverflowError typemax(Int64)//1 * 2
+    @test_throws OverflowError -1//1 * typemin(Int64)
+
+    @test Int8(1) + Int8(4)//(Int8(127)-Int8(1)) == Int8(65) // Int8(63)
+    @test -Int32(1) // typemax(Int32) - Int32(1) == typemin(Int32) // typemax(Int32)
+    @test 1 // (typemax(Int128) + BigInt(1)) - 2 == (1 + BigInt(2)*typemin(Int128)) // (BigInt(1) + typemax(Int128))
+end

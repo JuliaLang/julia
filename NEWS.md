@@ -20,6 +20,12 @@ New language features
   `register_error_hint` function. Packages that define custom exception types
   can support hints by calling `show_error_hints` from their `showerror` method. ([#35094])
 
+* Support for Unicode 13.0.0 (via utf8proc 2.5) ([#35282]).
+
+* The compiler optimization level can now be set per-module using the experimental macro
+  `Base.Experimental.@optlevel n`. For code that is not performance-critical, setting
+  this to 0 or 1 can provide significant latency improvements ([#34896]).
+
 Language changes
 ----------------
 
@@ -61,7 +67,26 @@ Language changes
   Now the result is "a\n b", since the space before `b` is no longer considered to occur
   at the start of a line. The old behavior is considered a bug ([#35001]).
 
+* The line number of function definitions is now added by the parser as an
+  additional `LineNumberNode` at the start of each function body ([#35138]).
+
+Command-line option changes
+---------------------------
+
+* Deprecation warnings are no longer shown by default. i.e. if the `--depwarn=...` flag is
+  not passed it defaults to `--depwarn=no`. The warnings are printed from tests run by
+  `Pkg.test()`. ([#35362]).
+
 * Color now defaults to on when stdout and stderr are TTYs ([#34347])
+
+Command-line option changes
+---------------------------
+
+  * `-t N`, `--threads N` starts Julia with `N` threads. This option takes precedence over
+    `JULIA_NUM_THREADS`. The specified number of threads also propagates to worker
+    processes spawned using the `-p`/`--procs` or `--machine-file` command line arguments.
+    In order to set number of threads for worker processes spawned with `addprocs` use the
+    `exeflags` keyword argument, e.g. `` addprocs(...; exeflags=`--threads 4`) `` ([#35108]).
 
 Multi-threading changes
 -----------------------
@@ -73,7 +98,7 @@ Build system changes
 
 New library functions
 ---------------------
-* The `@ccall` macro has been added added to Base. It is a near drop-in replacement for `ccall` with more Julia-like syntax. It also wraps the new `foreigncall` API for varargs of different types, though it lacks the the capability to specify an LLVM calling convention. ([#32748])
+* The `@ccall` macro has been added added to Base. It is a near drop-in replacement for `ccall` with more Julia-like syntax. It also wraps the new `foreigncall` API for varargs of different types, though it lacks the capability to specify an LLVM calling convention. ([#32748])
 * New functions `mergewith` and `mergewith!` supersede `merge` and `merge!` with `combine`
   argument.  They don't have the restriction for `combine` to be a `Function` and also
   provide one-argument method that returns a closure.  The old methods of `merge` and
@@ -85,13 +110,14 @@ New library functions
 * New function `bitreverse` for reversing the order of bits in a fixed-width integer ([#34791]).
 * New function `bitrotate(x, k)` for rotating the bits in a fixed-width integer ([#33937]).
 * One argument methods `startswith(x)` and `endswith(x)` have been added, returning partially-applied versions of the functions, similar to existing methods like `isequal(x)` ([#33193]).
+* New function `contains(haystack, needle)` and its one argument partially applied form have been added, it acts like `occursin(needle, haystack)`([#35132]).
 
 New library features
 --------------------
 * Function composition now works also on one argument `∘(f) = f` (#34251)
 * `@NamedTuple{key1::Type1, ...}` macro for convenient `NamedTuple` declarations ([#34548]).
 
-* `isapprox` (or `≈`) now has a one-argument "curried" method `isapprox(x)` which returns a function, like `isequal` (or `==`)` ([#32305]).
+* `isapprox` (or `≈`) now has a one-argument "curried" method `isapprox(x)` which returns a function, like `isequal` (or `==`) ([#32305]).
 * `Ref{NTuple{N,T}}` can be passed to `Ptr{T}`/`Ref{T}` `ccall` signatures ([#34199])
 * `x::Signed % Unsigned` and `x::Unsigned % Signed` are supported for integer bitstypes.
 * `signed(unsigned_type)` is supported for integer bitstypes, `unsigned(signed_type)` has been supported.
@@ -99,9 +125,13 @@ New library features
 * In `splice!` with no replacement, values to be removed can now be specified with an
   arbitrary iterable (instead of a `UnitRange`) ([#34524]).
 * The `@view` and `@views` macros now support the `a[begin]` syntax that was introduced in Julia 1.4 ([#35289]).
+* `open` for files now accepts a keyword argument `lock` controlling whether file operations
+  will acquire locks for safe multi-threaded access. Setting it to `false` provides better
+  performance when only one thread will access the file.
 
 Standard library changes
 ------------------------
+* A 1-d `Zip` iterator (where `Base.IteratorSize` is `Base.HasShape{1}()`) with defined length of `n` has now also size of `(n,)` (instead of throwing an error with truncated iterators) ([#29927]).
 * The `@timed` macro now returns a `NamedTuple` ([#34149])
 * New `supertypes(T)` function returns a tuple of all supertypes of `T` ([#34419]).
 * Sorting-related functions such as `sort` that take the keyword arguments `lt`, `rev`, `order`
@@ -109,12 +139,16 @@ Standard library changes
   order from `order` is used to compare the values of `by(element)`. In the latter case,
   any order different from `Forward` or `Reverse` will raise an error about the
   ambiguity.
+* `close` on a file (`IOStream`) can now throw an exception if an error occurs when trying
+  to flush buffered data to disk ([#35303]).
 
 #### LinearAlgebra
 * The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
 * `normalize` now supports multidimensional arrays ([#34239])
 * `lq` factorizations can now be used to compute the minimum-norm solution to under-determined systems ([#34350]).
 * The BLAS submodule now supports the level-2 BLAS subroutine `spmv!` ([#34320]).
+* The BLAS submodule now supports the level-1 BLAS subroutine `rot!` ([#35124]).
+* New generic `rotate!(x, y, c, s)` and `reflect!(x, y, c, s)` functions ([#35124]).
 
 #### Markdown
 
@@ -133,6 +167,7 @@ Standard library changes
   arrays.
 
 #### Dates
+* The `eps` function now accepts `TimeType` types ([#31487]).
 
 #### Statistics
 
@@ -150,6 +185,7 @@ External dependencies
 
 Tooling Improvements
 ---------------------
+
 
 
 <!--- generated by NEWS-update.jl: -->

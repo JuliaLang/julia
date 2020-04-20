@@ -590,6 +590,7 @@ askey(k, ::AbstractSet) = k
 
 function _replace!(new::Callable, res::T, A::T,
                    count::Int) where T<:Union{AbstractDict,AbstractSet}
+    count == 0 && return res
     c = 0
     if res === A # cannot replace elements while iterating over A
         repl = Pair{eltype(A),eltype(A)}[]
@@ -598,8 +599,8 @@ function _replace!(new::Callable, res::T, A::T,
             if x !== y
                 push!(repl, x => y)
                 c += 1
+                c == count && break
             end
-            c == count && break
         end
         for oldnew in repl
             pop!(res, askey(first(oldnew), res))
@@ -614,8 +615,8 @@ function _replace!(new::Callable, res::T, A::T,
                 pop!(res, askey(x, res))
                 push!(res, y)
                 c += 1
+                c == count && break
             end
-            c == count && break
         end
     end
     res

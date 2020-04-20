@@ -403,7 +403,7 @@ jl_method_instance_t *jl_get_unspecialized(jl_method_instance_t *method JL_PROPA
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
 jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT);
 int jl_code_requires_compiler(jl_code_info_t *src);
-jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast);
+jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ast);
 JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void);
 
 jl_value_t *jl_argtype_with_function(jl_function_t *f, jl_value_t *types);
@@ -470,6 +470,7 @@ void jl_init_main_module(void);
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
 jl_array_t *jl_get_loaded_modules(void);
 
+void jl_check_open_for(jl_module_t *m, const char* funcname);
 jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded);
 
 jl_value_t *jl_eval_global_var(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *e);
@@ -614,7 +615,7 @@ JL_DLLEXPORT jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, ch
 
 void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams);
 void jl_dump_native(void *native_code,
-        const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname,
+        const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(void *native_code, jl_value_t *p) JL_NOTSAFEPOINT;
 void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
@@ -1021,6 +1022,13 @@ extern jl_mutex_t safepoint_lock;
 void jl_mach_gc_end(void);
 #endif
 
+// -- smallintset.c -- //
+
+typedef uint_t (*smallintset_hash)(size_t val, jl_svec_t *data);
+typedef int (*smallintset_eq)(size_t val, const void *key, jl_svec_t *data, uint_t hv);
+ssize_t jl_smallintset_lookup(jl_array_t *cache JL_PROPAGATES_ROOT, smallintset_eq eq, const void *key, jl_svec_t *data, uint_t hv);
+void jl_smallintset_insert(jl_array_t **pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_svec_t *data);
+
 // -- typemap.c -- //
 
 // a descriptor of a jl_typemap_t that gets
@@ -1042,7 +1050,6 @@ struct jl_typemap_assoc {
     // inputs
     jl_value_t *const types;
     size_t const world;
-    size_t const max_world_mask;
     // outputs
     jl_svec_t *env; // subtype env (initialize to null to perform intersection without an environment)
     size_t min_valid;
@@ -1155,6 +1162,7 @@ extern jl_sym_t *throw_undef_if_not_sym; extern jl_sym_t *getfield_undefref_sym;
 extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
 extern jl_sym_t *failed_sym; extern jl_sym_t *done_sym; extern jl_sym_t *runnable_sym;
 extern jl_sym_t *coverageeffect_sym; extern jl_sym_t *escape_sym;
+extern jl_sym_t *optlevel_sym;
 
 struct _jl_sysimg_fptrs_t;
 

@@ -3,6 +3,9 @@
 # Array test
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
+
+isdefined(@__MODULE__, :T24Linear) || include("testhelpers/arrayindexingtypes.jl")
+
 using SparseArrays
 
 using Random, LinearAlgebra
@@ -683,6 +686,13 @@ end
     y = [0, 0, 0, 0]
     copyto!(y, x)
     @test y == [1, 2, 3, 4]
+
+    # similar, https://github.com/JuliaLang/julia/pull/35304
+    x = PermutedDimsArray([1 2; 3 4], (2, 1))
+    @test similar(x, 3,3) isa Array
+    z = TSlow([1 2; 3 4])
+    x_slow = PermutedDimsArray(z, (2, 1))
+    @test similar(x_slow, 3,3) isa TSlow
 end
 
 @testset "circshift" begin

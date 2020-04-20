@@ -338,6 +338,7 @@ include("uuid.jl")
 include("loading.jl")
 
 # misc useful functions & macros
+include("timing.jl")
 include("util.jl")
 
 include("asyncmap.jl")

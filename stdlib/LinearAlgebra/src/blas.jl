@@ -17,6 +17,7 @@ export
     blascopy!,
     dotc,
     dotu,
+    rot!,
     scal!,
     scal,
     nrm2,
@@ -194,6 +195,37 @@ for (fname, elty) in ((:dcopy_,:Float64),
                 (Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
                  n, DX, incx, DY, incy)
             DY
+        end
+    end
+end
+
+
+## rot
+
+"""
+    rot!(n, X, incx, Y, incy, c, s)
+
+Overwrite `X` with `c*X + s*Y` and `Y` with `-conj(s)*X + c*Y` for the first `n` elements of array `X` with stride `incx` and
+first `n` elements of array `Y` with stride `incy`. Returns `X` and `Y`.
+
+!!! compat "Julia 1.5"
+    `rot!` requires at least Julia 1.5.
+"""
+function rot! end
+
+for (fname, elty, cty, sty, lib) in ((:drot_, :Float64, :Float64, :Float64, libblas),
+                                     (:srot_, :Float32, :Float32, :Float32, libblas),
+                                     (:zdrot_, :ComplexF64, :Float64, :Float64, libblas),
+                                     (:csrot_, :ComplexF32, :Float32, :Float32, libblas),
+                                     (:zrot_, :ComplexF64, :Float64, :ComplexF64, liblapack),
+                                     (:crot_, :ComplexF32, :Float32, :ComplexF32, liblapack))
+    @eval begin
+        # SUBROUTINE DROT(N,DX,INCX,DY,INCY,C,S)
+        function rot!(n::Integer, DX::Union{Ptr{$elty},AbstractArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},AbstractArray{$elty}}, incy::Integer, C::$cty, S::$sty)
+            ccall((@blasfunc($fname), $lib), Cvoid,
+                (Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{$cty}, Ref{$sty}),
+                 n, DX, incx, DY, incy, C, S)
+            DX, DY
         end
     end
 end
@@ -968,7 +1000,7 @@ sbmv(uplo, k, A, x)
 """
     sbmv!(uplo, k, alpha, A, x, beta, y)
 
-Update vector `y` as `alpha*A*x + beta*y` where `A` is a a symmetric band matrix of order
+Update vector `y` as `alpha*A*x + beta*y` where `A` is a symmetric band matrix of order
 `size(A,2)` with `k` super-diagonals stored in the argument `A`. The storage layout for `A`
 is described the reference BLAS module, level-2 BLAS at
 <http://www.netlib.org/lapack/explore-html/>.

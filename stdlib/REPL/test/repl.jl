@@ -1043,8 +1043,13 @@ for line in ["′", "abstract", "type"]
         sprint(show, help_result(line)::Union{Markdown.MD,Nothing}))
 end
 
+# PR 35154
 @test occursin("|=", sprint(show, help_result("|=")))
 @test occursin("broadcast", sprint(show, help_result(".=")))
+
+# PR 35277
+@test occursin("identical", sprint(show, help_result("===")))
+@test occursin("broadcast", sprint(show, help_result(".<=")))
 
 # Issue #25930
 

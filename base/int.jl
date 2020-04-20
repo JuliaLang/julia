@@ -110,7 +110,7 @@ isodd(n::Integer) = rem(n, 2) != 0
 """
     iseven(x::Integer) -> Bool
 
-Return `true` is `x` is even (that is, divisible by 2), and `false` otherwise.
+Return `true` if `x` is even (that is, divisible by 2), and `false` otherwise.
 
 # Examples
 ```jldoctest

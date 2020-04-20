@@ -654,8 +654,9 @@ end
 
 include("testenv.jl")
 
+
 let flags = Cmd(filter(a->!occursin("depwarn", a), collect(test_exeflags)))
-    local cmd = `$test_exename $flags deprecation_exec.jl`
+    local cmd = `$test_exename $flags --depwarn=yes deprecation_exec.jl`
 
     if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
         error("Deprecation test failed, cmd : $cmd")

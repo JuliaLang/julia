@@ -9,7 +9,7 @@ using Test
 module ReflectionTest
 using Test, Random
 
-function test_ast_reflection(freflect, f, types)
+function test_ir_reflection(freflect, f, types)
     @test !isempty(freflect(f, types))
     nothing
 end
@@ -39,8 +39,8 @@ function test_code_reflections(tester, freflect)
     test_code_reflection(freflect, muladd, Tuple{Float64, Float64, Float64}, tester)
 end
 
-test_code_reflections(test_ast_reflection, code_lowered)
-test_code_reflections(test_ast_reflection, code_typed)
+test_code_reflections(test_ir_reflection, code_lowered)
+test_code_reflections(test_ir_reflection, code_typed)
 
 end # module ReflectionTest
 
@@ -288,6 +288,7 @@ let rts = return_types(TLayout)
 end
 
 # issue #15447
+f15447_line = @__LINE__() + 1
 @noinline function f15447(s, a)
     if s
         return a
@@ -296,7 +297,7 @@ end
         return nb
     end
 end
-@test functionloc(f15447)[2] > 0
+@test functionloc(f15447)[2] == f15447_line
 
 # issue #14346
 @noinline function f14346(id, mask, limit)
@@ -304,7 +305,7 @@ end
         return true
     end
 end
-@test functionloc(f14346)[2] == @__LINE__() - 4
+@test functionloc(f14346)[2] == @__LINE__() - 5
 
 # issue #15714
 # show variable names for slots and suppress spurious type warnings
@@ -336,7 +337,7 @@ import InteractiveUtils.code_warntype
 
 used_dup_var_tested15714 = false
 used_unique_var_tested15714 = false
-function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types), must_used_vars)
+function test_typed_ir_printing(Base.@nospecialize(f), Base.@nospecialize(types), must_used_vars)
     src, rettype = code_typed(f, types, optimize=false)[1]
     dupnames = Set()
     slotnames = Set()
@@ -396,10 +397,10 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
         @test must_used_checked[sym]
     end
 end
-test_typed_ast_printing(f15714, Tuple{Vector{Float32}},
-                        [:array_var15714,  :index_var15714])
-test_typed_ast_printing(g15714, Tuple{Vector{Float32}},
-                        [:array_var15714,  :index_var15714])
+test_typed_ir_printing(f15714, Tuple{Vector{Float32}},
+                       [:array_var15714,  :index_var15714])
+test_typed_ir_printing(g15714, Tuple{Vector{Float32}},
+                       [:array_var15714,  :index_var15714])
 #This test doesn't work with the new optimizer because we drop slotnames
 #We may want to test it against debug info eventually
 #@test used_dup_var_tested15715
@@ -506,11 +507,11 @@ f18888() = nothing
 let
     world = Core.Compiler.get_world_counter()
     m = first(methods(f18888, Tuple{}))
-    @test m.specializations === nothing
+    @test isempty(m.specializations)
     ft = typeof(f18888)
 
     code_typed(f18888, Tuple{}; optimize=false)
-    @test m.specializations isa Core.TypeMapEntry  # uncached, but creates the specializations entry
+    @test !isempty(m.specializations) # uncached, but creates the specializations entry
     mi = Core.Compiler.specialize_method(m, Tuple{ft}, Core.svec())
     @test Core.Compiler.inf_for_methodinstance(mi, world) === nothing
     @test !isdefined(mi, :cache)
@@ -626,7 +627,7 @@ let
     mtypes, msp, m = Base._methods_by_ftype(T22979, -1, world)[1]
     instance = Core.Compiler.specialize_method(m, mtypes, msp)
     cinfo_generated = Core.Compiler.get_staged(instance)
-    @test_throws ErrorException Base.uncompressed_ast(m)
+    @test_throws ErrorException Base.uncompressed_ir(m)
 
     test_similar_codeinfo(code_lowered(f22979, typeof(x22979))[1], cinfo_generated)
 

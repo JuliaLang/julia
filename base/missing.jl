@@ -196,7 +196,7 @@ of the input.
 # Examples
 ```jldoctest
 julia> x = skipmissing([1, missing, 2])
-Base.SkipMissing{Array{Union{Missing, Int64},1}}(Union{Missing, Int64}[1, missing, 2])
+skipmissing(Union{Missing, Int64}[1, missing, 2])
 
 julia> sum(x)
 3
@@ -259,6 +259,12 @@ keys(itr::SkipMissing) =
     v
 end
 
+function show(io::IO, s::SkipMissing)
+    print(io, "skipmissing(")
+    show(io, s.x)
+    print(io, ')')
+end
+
 # Optimized mapreduce implementation
 # The generic method is faster when !(eltype(A) >: Missing) since it does not need
 # additional loops to identify the two first non-missing values of each block
@@ -277,7 +283,7 @@ function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
         i += 1
     end
     i > ilast && return mapreduce_empty(f, op, eltype(itr))
-    a1 = ai
+    a1::eltype(itr) = ai
     i += 1
     while i <= ilast
         @inbounds ai = A[i]

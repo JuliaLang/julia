@@ -550,7 +550,7 @@ julia> struct SummedArray{T<:Number,S<:Number}
 julia> SummedArray(Int32[1; 2; 3], Int32(6))
 ERROR: MethodError: no method matching SummedArray(::Array{Int32,1}, ::Int32)
 Closest candidates are:
-  SummedArray(::Array{T,1}) where T at none:5
+  SummedArray(::Array{T,1}) where T at none:4
 ```
 
 This constructor will be invoked by the syntax `SummedArray(a)`. The syntax `new{T,S}` allows
