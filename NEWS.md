@@ -88,8 +88,6 @@ Command-line option changes
     In order to set number of threads for worker processes spawned with `addprocs` use the
     `exeflags` keyword argument, e.g. `` addprocs(...; exeflags=`--threads 4`) `` ([#35108]).
 
-* It is no longer possible to create a `LinRange{<:Integer}`, `StepRange{<:Integer}`, or `StepRangeLen{<:Integer}` with non-integer step ([#32439]).
-
 Multi-threading changes
 -----------------------
 
@@ -133,6 +131,8 @@ New library features
 Standard library changes
 ------------------------
 * A 1-d `Zip` iterator (where `Base.IteratorSize` is `Base.HasShape{1}()`) with defined length of `n` has now also size of `(n,)` (instead of throwing an error with truncated iterators) ([#29927]).
+* It is no longer possible to create a `LinRange`, `StepRange`, or `StepRangeLen` with a
+  `<: Integer` eltype but non-integer step ([#32439]).
 * The `@timed` macro now returns a `NamedTuple` ([#34149])
 * New `supertypes(T)` function returns a tuple of all supertypes of `T` ([#34419]).
 * Sorting-related functions such as `sort` that take the keyword arguments `lt`, `rev`, `order`
@@ -142,6 +142,7 @@ Standard library changes
   ambiguity.
 * `close` on a file (`IOStream`) can now throw an exception if an error occurs when trying
   to flush buffered data to disk ([#35303]).
+
 
 #### LinearAlgebra
 * The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
