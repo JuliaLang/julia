@@ -24,7 +24,7 @@
 extern "C" {
 #endif
 
-JL_DLLEXPORT size_t jl_world_counter = 1;
+JL_DLLEXPORT size_t jl_world_counter = 1; // TODO: should this be atomic release/consume?
 JL_DLLEXPORT size_t jl_get_world_counter(void)
 {
     return jl_world_counter;

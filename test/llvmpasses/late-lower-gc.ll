@@ -41,7 +41,7 @@ top:
 ; CHECK: %v = call {} addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, [[SIZE_T:i.[0-9]+]] 8)
 ; CHECK-NEXT: [[V2:%.*]] = bitcast {} addrspace(10)* %v to {} addrspace(10)* addrspace(10)*
 ; CHECK-NEXT: [[V_HEADROOM:%.*]] = getelementptr {} addrspace(10)*, {} addrspace(10)* addrspace(10)* [[V2]], i64 -1
-; CHECK-NEXT: store {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* [[V_HEADROOM]], !tbaa !0
+; CHECK-NEXT: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* [[V_HEADROOM]] unordered, align 8, !tbaa !0
     %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, i64 8, {} addrspace(10)* @tag)
 ; CHECK-NEXT: ret {} addrspace(10)* %v
     ret {} addrspace(10)* %v
@@ -60,7 +60,7 @@ top:
 ; CHECK: %v = call {} addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, [[SIZE_T:i.[0-9]+]] 8)
 ; CHECK-NEXT: [[V2:%.*]] = bitcast {} addrspace(10)* %v to {} addrspace(10)* addrspace(10)*
 ; CHECK-NEXT: [[V_HEADROOM:%.*]] = getelementptr {} addrspace(10)*, {} addrspace(10)* addrspace(10)* [[V2]], i64 -1
-; CHECK-NEXT: store {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* [[V_HEADROOM]], !tbaa !0
+; CHECK-NEXT: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* [[V_HEADROOM]] unordered, align 8, !tbaa !0
     %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, i64 8, {} addrspace(10)* @tag)
 ; CHECK-NEXT: %v64 = bitcast {} addrspace(10)* %v to i64 addrspace(10)*
     %v64 = bitcast {} addrspace(10)* %v to i64 addrspace(10)*
