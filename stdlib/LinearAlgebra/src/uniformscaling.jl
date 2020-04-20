@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base: copy, adjoint, getindex, show, transpose, one, zero, inv,
-             hcat, vcat, hvcat
+             hcat, vcat, hvcat, ^
 
 """
     UniformScaling{T<:Number}
@@ -88,6 +88,8 @@ end
 copy(J::UniformScaling) = UniformScaling(J.λ)
 
 conj(J::UniformScaling) = UniformScaling(conj(J.λ))
+real(J::UniformScaling) = UniformScaling(real(J.λ))
+imag(J::UniformScaling) = UniformScaling(imag(J.λ))
 
 transpose(J::UniformScaling) = J
 adjoint(J::UniformScaling) = UniformScaling(conj(J.λ))
@@ -121,6 +123,21 @@ isposdef(J::UniformScaling) = isposdef(J.λ)
 (-)(B::BitArray{2}, J::UniformScaling)      = Array(B) - J
 (-)(J::UniformScaling, B::BitArray{2})      = J - Array(B)
 (-)(A::AbstractMatrix, J::UniformScaling)   = A + (-J)
+
+# matrix functions
+for f in ( :exp,   :log,
+           :expm1, :log1p,
+           :sqrt,  :cbrt,
+           :sin,   :cos,   :tan,
+           :asin,  :acos,  :atan,
+           :csc,   :sec,   :cot,
+           :acsc,  :asec,  :acot,
+           :sinh,  :cosh,  :tanh,
+           :asinh, :acosh, :atanh,
+           :csch,  :sech,  :coth,
+           :acsch, :asech, :acoth )
+    @eval Base.$f(J::UniformScaling) = UniformScaling($f(J.λ))
+end
 
 # Unit{Lower/Upper}Triangular matrices become {Lower/Upper}Triangular under
 # addition with a UniformScaling
@@ -181,6 +198,10 @@ end
 inv(J::UniformScaling) = UniformScaling(inv(J.λ))
 opnorm(J::UniformScaling, p::Real=2) = opnorm(J.λ, p)
 
+pinv(J::UniformScaling) = ifelse(iszero(J.λ),
+                          UniformScaling(zero(inv(J.λ))),  # type stability
+                          UniformScaling(inv(J.λ)))
+
 function det(J::UniformScaling{T}) where T
     if isone(J.λ)
         one(T)
@@ -191,10 +212,19 @@ function det(J::UniformScaling{T}) where T
     end
 end
 
+function tr(J::UniformScaling{T}) where T
+    if iszero(J.λ)
+        zero(T)
+    else
+        throw(ArgumentError("Trace of UniformScaling is only well-defined when λ = 0"))
+    end
+end
+
 *(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ*J2.λ)
 *(B::BitArray{2}, J::UniformScaling) = *(Array(B), J::UniformScaling)
 *(J::UniformScaling, B::BitArray{2}) = *(J::UniformScaling, Array(B))
 *(A::AbstractMatrix, J::UniformScaling) = A*J.λ
+*(v::AbstractVector, J::UniformScaling) = reshape(v, length(v), 1) * J
 *(J::UniformScaling, A::AbstractVecOrMat) = J.λ*A
 *(x::Number, J::UniformScaling) = UniformScaling(x*J.λ)
 *(J::UniformScaling, x::Number) = UniformScaling(J.λ*x)
@@ -202,14 +232,14 @@ end
 /(J1::UniformScaling, J2::UniformScaling) = J2.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ/J2.λ)
 /(J::UniformScaling, A::AbstractMatrix) = lmul!(J.λ, inv(A))
 /(A::AbstractMatrix, J::UniformScaling) = J.λ == 0 ? throw(SingularException(1)) : A/J.λ
+/(v::AbstractVector, J::UniformScaling) = reshape(v, length(v), 1) / J
 
 /(J::UniformScaling, x::Number) = UniformScaling(J.λ/x)
 
 \(J1::UniformScaling, J2::UniformScaling) = J1.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ\J2.λ)
-\(A::Union{Bidiagonal{T},AbstractTriangular{T}}, J::UniformScaling) where {T<:Number} =
-    rmul!(inv(A), J.λ)
 \(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 0 ? throw(SingularException(1)) : J.λ\A
 \(A::AbstractMatrix, J::UniformScaling) = rmul!(inv(A), J.λ)
+\(F::Factorization, J::UniformScaling) = F \ J(size(F,1))
 
 \(x::Number, J::UniformScaling) = UniformScaling(x\J.λ)
 
@@ -221,11 +251,22 @@ rmul!(A::AbstractMatrix, J::UniformScaling) = rmul!(A, J.λ)
 lmul!(J::UniformScaling, B::AbstractVecOrMat) = lmul!(J.λ, B)
 rdiv!(A::AbstractMatrix, J::UniformScaling) = rdiv!(A, J.λ)
 ldiv!(J::UniformScaling, B::AbstractVecOrMat) = ldiv!(J.λ, B)
+ldiv!(Y::AbstractVecOrMat, J::UniformScaling, B::AbstractVecOrMat) = (Y .= J.λ .\ B)
 
 Broadcast.broadcasted(::typeof(*), x::Number,J::UniformScaling) = UniformScaling(x*J.λ)
 Broadcast.broadcasted(::typeof(*), J::UniformScaling,x::Number) = UniformScaling(J.λ*x)
 
 Broadcast.broadcasted(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
+
+Broadcast.broadcasted(::typeof(\), x::Number,J::UniformScaling) = UniformScaling(x\J.λ)
+
+(^)(J::UniformScaling, x::Number) = UniformScaling((J.λ)^x)
+Base.literal_pow(::typeof(^), J::UniformScaling, x::Val) = UniformScaling(Base.literal_pow(^, J.λ, x))
+
+Broadcast.broadcasted(::typeof(^), J::UniformScaling, x::Number) = UniformScaling(J.λ^x)
+function Broadcast.broadcasted(::typeof(Base.literal_pow), ::typeof(^), J::UniformScaling, x::Val)
+    UniformScaling(Base.literal_pow(^, J.λ, x))
+end
 
 ==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
 

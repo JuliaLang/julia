@@ -176,7 +176,7 @@ static void jl_throw_in_ctx(jl_ptls_t ptls, jl_value_t *e, int sig, void *sigctx
 {
     if (!ptls->safe_restore)
         ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
-                                          jl_to_bt_context(sigctx), 1);
+                                          jl_to_bt_context(sigctx), ptls->pgcstack, 0);
     ptls->sig_exception = e;
     jl_call_in_ctx(ptls, &jl_sig_throw, sig, sigctx);
 }
@@ -527,7 +527,9 @@ static void jl_sigsetset(sigset_t *sset)
 #else
     sigaddset(sset, SIGUSR1);
 #endif
-#ifdef HAVE_ITIMER
+#if defined(HAVE_TIMER)
+    sigaddset(sset, SIGUSR1);
+#elif defined(HAVE_ITIMER)
     sigaddset(sset, SIGPROF);
 #endif
 }
@@ -572,7 +574,9 @@ static void *signal_listener(void *arg)
 #else
         kqueue_signal(&sigqueue, &ev, SIGUSR1);
 #endif
-#ifdef HAVE_ITIMER
+#if defined(HAVE_TIMER)
+        kqueue_signal(&sigqueue, &ev, SIGUSR1);
+#elif defined(HAVE_ITIMER)
         kqueue_signal(&sigqueue, &ev, SIGPROF);
 #endif
     }
@@ -597,27 +601,29 @@ static void *signal_listener(void *arg)
         }
         else
 #endif
-        if (sigwait(&sset, &sig)) {
+#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
+        siginfo_t info;
+        sig = sigwaitinfo(&sset, &info);
+#else
+        if (sigwait(&sset, &sig))
+            sig = -1;
+#endif
+        if (sig == -1) {
+            if (errno == EINTR)
+                continue;
             sig = SIGABRT; // this branch can't occur, unless we had stack memory corruption of sset
         }
-        else if (!sig || errno == EINTR) {
-            // This should never happen, but it has been observed to occur
-            // when this thread gets used to handle run a signal handler (without SA_RESTART).
-            // It would be nice to prohibit the kernel from doing that, by blocking signals on this thread,
-            // (so that we aren't temporarily unable to handle the signals that this thread exists to handle)
-            // but that sometimes results in the signals never getting delivered at all.
-            // Apparently the only consistent way to handle signals with sigwait is all-or-nothing :(
-            // And while sigwait handles per-process signals more sanely,
-            // it can't really handle thread-targeted signals at all.
-            // So signals really do seem to always just be lose-lose.
-            continue;
-        }
 #ifndef HAVE_MACH
-#  ifdef HAVE_ITIMER
-        profile = (sig == SIGPROF);
-#  else
+#if defined(HAVE_TIMER)
         profile = (sig == SIGUSR1);
-#  endif
+#if _POSIX_C_SOURCE >= 199309L
+        if (profile && !(info.si_code == SI_TIMER &&
+	            info.si_value.sival_ptr == &timerprof))
+            profile = 0;
+#endif
+#elif defined(HAVE_ITIMER)
+        profile = (sig == SIGPROF);
+#endif
 #endif
 
         if (sig == SIGINT) {
@@ -668,7 +674,7 @@ static void *signal_listener(void *arg)
             if (critical) {
                 bt_size += rec_backtrace_ctx(bt_data + bt_size,
                         JL_MAX_BT_SIZE / jl_n_threads - 1,
-                        signal_context, 0);
+                        signal_context, NULL, 1);
                 bt_data[bt_size++].uintptr = 0;
             }
 
@@ -687,7 +693,7 @@ static void *signal_listener(void *arg)
                     } else {
                         // Get backtrace data
                         bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
-                                bt_size_max - bt_size_cur - 1, signal_context, 0);
+                                bt_size_max - bt_size_cur - 1, signal_context, NULL, 1);
                     }
                     ptls->safe_restore = old_buf;
 

@@ -23,19 +23,14 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 # additionally all targets should be listed in the getall target for easier off-line compilation
 # if you are adding a new target, it can help to copy an similar, existing target
 #
-# autoconf configure-driven scripts: llvm pcre unwind gmp mpfr patchelf libuv curl
+# autoconf configure-driven scripts: pcre unwind gmp mpfr patchelf libuv curl
 # custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv osxunwind libwhich
-# CMake libs: libgit2 libssh2 mbedtls
+# CMake libs: llvm libgit2 libssh2 mbedtls
 #
-# downloaded from git: llvm-svn, libuv, libopenlibm, utf8proc, libgit2, libssh2
-#
-# there are rules in this file with the . replaced by a %
-# this is some magic Makefile trick that tells make
-# that all targets with a % in them on that line will
-# be rebuilt in a single invocation
+# downloadable via git: llvm-svn, libuv, libopenlibm, utf8proc, libgit2, libssh2
 #
 # to debug 'define' rules, replace eval at the usage site with info or error
-#
+
 
 ## Overall configuration of which rules exist and should be run by default ##
 
@@ -162,7 +157,7 @@ ifneq ($(OS), WINNT)
 DEP_LIBS += libwhich
 endif
 
-DEP_LIBS_STAGED := $(filter-out suitesparse suitesparse-wrapper osxunwind,$(DEP_LIBS)) # unlist targets that have not been converted to use the staged-install
+DEP_LIBS_STAGED := $(filter-out suitesparse-wrapper osxunwind,$(DEP_LIBS)) # unlist targets that have not been converted to use the staged-install
 
 
 ## Common build target prefixes
@@ -176,7 +171,6 @@ check: $(addprefix check-, $(DEP_LIBS))
 fastcheck: $(addprefix fastcheck-, $(DEP_LIBS))
 stage: $(addprefix stage-, $(DEP_LIBS_STAGED))
 install: $(addprefix install-, $(DEP_LIBS))
-uninstall: $(addprefix uninstall-, $(DEP_LIBS_STAGED))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
@@ -202,3 +196,5 @@ include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/libwhich.mk
 include $(SRCDIR)/zlib.mk
 include $(SRCDIR)/p7zip.mk
+
+include $(SRCDIR)/tools/uninstallers.mk

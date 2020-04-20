@@ -2,8 +2,10 @@
 
 module InteractiveUtils
 
+Base.Experimental.@optlevel 1
+
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,
-    versioninfo, subtypes, @which, @edit, @less, @functionloc, @code_warntype,
+    versioninfo, subtypes, supertypes, @which, @edit, @less, @functionloc, @code_warntype,
     @code_typed, @code_lowered, @code_llvm, @code_native, clipboard
 
 import Base.Docs.apropos
@@ -238,6 +240,26 @@ julia> subtypes(Integer)
 ```
 """
 subtypes(x::Type) = _subtypes_in(Base.loaded_modules_array(), x)
+
+"""
+    supertypes(T::Type)
+
+Return a tuple `(T, ..., Any)` of `T` and all its supertypes, as determined by
+successive calls to the [`supertype`](@ref) function, listed in order of `<:`
+and terminated by `Any`.
+
+# Examples
+```jldoctest
+julia> supertypes(Int)
+(Int64, Signed, Integer, Real, Number, Any)
+```
+"""
+function supertypes(T::Type)
+    S = supertype(T)
+    # note: we return a tuple here, not an Array as for subtypes, because in
+    #       the future we could evaluate this function statically if desired.
+    return S === T ? (T,) : (T, supertypes(S)...)
+end
 
 # dumptype is for displaying abstract type hierarchies,
 # based on Jameson Nash's typetree.jl in https://github.com/JuliaArchive/Examples

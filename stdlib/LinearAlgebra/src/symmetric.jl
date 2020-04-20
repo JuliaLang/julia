@@ -239,7 +239,7 @@ end
 # For A<:Union{Symmetric,Hermitian}, similar(A[, neweltype]) should yield a matrix with the same
 # symmetry type, uplo flag, and underlying storage type as A. The following methods cover these cases.
 similar(A::Symmetric, ::Type{T}) where {T} = Symmetric(similar(parent(A), T), ifelse(A.uplo == 'U', :U, :L))
-# If the the Hermitian constructor's check ascertaining that the wrapped matrix's
+# If the Hermitian constructor's check ascertaining that the wrapped matrix's
 # diagonal is strictly real is removed, the following method can be simplified.
 function similar(A::Hermitian, ::Type{T}) where T
     B = similar(parent(A), T)
@@ -469,34 +469,88 @@ for f in (:+, :-)
 end
 
 ## Matvec
-@inline mul!(y::StridedVector{T}, A::Symmetric{T,<:StridedMatrix}, x::StridedVector{T},
-             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
-    BLAS.symv!(A.uplo, alpha, A.data, x, beta, y)
-@inline mul!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T},
-             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasReal} =
-    BLAS.symv!(A.uplo, alpha, A.data, x, beta, y)
-@inline mul!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T},
-             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasComplex} =
-    BLAS.hemv!(A.uplo, alpha, A.data, x, beta, y)
+@inline function mul!(y::StridedVector{T}, A::Symmetric{T,<:StridedMatrix}, x::StridedVector{T},
+             α::Number, β::Number) where {T<:BlasFloat}
+    alpha, beta = promote(α, β, zero(T))
+    if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
+        return BLAS.symv!(A.uplo, alpha, A.data, x, beta, y)
+    else
+        return generic_matvecmul!(y, 'N', A, x, MulAddMul(α, β))
+    end
+end
+@inline function mul!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T},
+             α::Number, β::Number) where {T<:BlasReal}
+    alpha, beta = promote(α, β, zero(T))
+    if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
+        return BLAS.symv!(A.uplo, alpha, A.data, x, beta, y)
+    else
+        return generic_matvecmul!(y, 'N', A, x, MulAddMul(α, β))
+    end
+end
+@inline function mul!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T},
+             α::Number, β::Number) where {T<:BlasComplex}
+    alpha, beta = promote(α, β, zero(T))
+    if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
+        return BLAS.hemv!(A.uplo, alpha, A.data, x, beta, y)
+    else
+        return generic_matvecmul!(y, 'N', A, x, MulAddMul(α, β))
+    end
+end
 ## Matmat
-@inline mul!(C::StridedMatrix{T}, A::Symmetric{T,<:StridedMatrix}, B::StridedMatrix{T},
-             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
-    BLAS.symm!('L', A.uplo, alpha, A.data, B, beta, C)
-@inline mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Symmetric{T,<:StridedMatrix},
-             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
-    BLAS.symm!('R', B.uplo, alpha, B.data, A, beta, C)
-@inline mul!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T},
-             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasReal} =
-    BLAS.symm!('L', A.uplo, alpha, A.data, B, beta, C)
-@inline mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix},
-             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasReal} =
-    BLAS.symm!('R', B.uplo, alpha, B.data, A, beta, C)
-@inline mul!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T},
-             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasComplex} =
-    BLAS.hemm!('L', A.uplo, alpha, A.data, B, beta, C)
-@inline mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix},
-             alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasComplex} =
-    BLAS.hemm!('R', B.uplo, alpha, B.data, A, beta, C)
+@inline function mul!(C::StridedMatrix{T}, A::Symmetric{T,<:StridedMatrix}, B::StridedMatrix{T},
+             α::Number, β::Number) where {T<:BlasFloat}
+    alpha, beta = promote(α, β, zero(T))
+    if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
+        return BLAS.symm!('L', A.uplo, alpha, A.data, B, beta, C)
+    else
+        return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+    end
+end
+@inline function mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Symmetric{T,<:StridedMatrix},
+             α::Number, β::Number) where {T<:BlasFloat}
+    alpha, beta = promote(α, β, zero(T))
+    if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
+        return BLAS.symm!('R', B.uplo, alpha, B.data, A, beta, C)
+    else
+        return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+    end
+end
+@inline function mul!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T},
+             α::Number, β::Number) where {T<:BlasReal}
+    alpha, beta = promote(α, β, zero(T))
+    if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
+        return BLAS.symm!('L', A.uplo, alpha, A.data, B, beta, C)
+    else
+        return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+    end
+end
+@inline function mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix},
+             α::Number, β::Number) where {T<:BlasReal}
+    alpha, beta = promote(α, β, zero(T))
+    if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
+        return BLAS.symm!('R', B.uplo, alpha, B.data, A, beta, C)
+    else
+        return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+    end
+end
+@inline function mul!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T},
+             α::Number, β::Number) where {T<:BlasComplex}
+    alpha, beta = promote(α, β, zero(T))
+    if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
+        return BLAS.hemm!('L', A.uplo, alpha, A.data, B, beta, C)
+    else
+        return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+    end
+end
+@inline function mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix},
+             α::Number, β::Number) where {T<:BlasComplex}
+    alpha, beta = promote(α, β, zero(T))
+    if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
+        return BLAS.hemm!('R', B.uplo, alpha, B.data, A, beta, C)
+    else
+        return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+    end
+end
 
 *(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
 
@@ -614,7 +668,7 @@ eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange)
 """
     eigen(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> Eigen
 
-Computes the eigenvalue decomposition of `A`, returning an `Eigen` factorization object `F`
+Computes the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
 matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
@@ -622,7 +676,7 @@ Iterating the decomposition produces the components `F.values` and `F.vectors`.
 
 The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
 
-The `UnitRange` `irange` specifies indices of the sorted eigenvalues to search for.
+The [`UnitRange`](@ref) `irange` specifies indices of the sorted eigenvalues to search for.
 
 !!! note
     If `irange` is not `1:n`, where `n` is the dimension of `A`, then the returned factorization
@@ -640,7 +694,7 @@ eigen!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where {
 """
     eigen(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> Eigen
 
-Computes the eigenvalue decomposition of `A`, returning an `Eigen` factorization object `F`
+Computes the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
 matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
@@ -682,9 +736,10 @@ eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRang
     eigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> values
 
 Returns the eigenvalues of `A`. It is possible to calculate only a subset of the
-eigenvalues by specifying a `UnitRange` `irange` covering indices of the sorted eigenvalues,
+eigenvalues by specifying a [`UnitRange`](@ref) `irange` covering indices of the sorted eigenvalues,
 e.g. the 2nd to 8th eigenvalues.
 
+# Examples
 ```jldoctest
 julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
 3×3 SymTridiagonal{Float64,Array{Float64,1}}:
@@ -724,6 +779,7 @@ eigvals!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where
 Returns the eigenvalues of `A`. It is possible to calculate only a subset of the eigenvalues
 by specifying a pair `vl` and `vu` for the lower and upper boundaries of the eigenvalues.
 
+# Examples
 ```jldoctest
 julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
 3×3 SymTridiagonal{Float64,Array{Float64,1}}:

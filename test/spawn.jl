@@ -20,7 +20,7 @@ sleepcmd = `sleep`
 lscmd = `ls`
 havebb = false
 if Sys.iswindows()
-    busybox = download("https://frippery.org/files/busybox/busybox.exe", joinpath(tempdir(), "busybox.exe"))
+    busybox = download("https://cache.julialang.org/https://frippery.org/files/busybox/busybox.exe", joinpath(tempdir(), "busybox.exe"))
     havebb = try # use busybox-w32 on windows, if available
         success(`$busybox`)
         true
@@ -301,6 +301,7 @@ end
 # issue #12829
 let out = Pipe(), echo = `$exename --startup-file=no -e 'print(stdout, " 1\t", read(stdin, String))'`, ready = Condition(), t, infd, outfd
     @test_throws ArgumentError write(out, "not open error")
+    inread = false
     t = @async begin # spawn writer task
         open(echo, "w", out) do in1
             open(echo, "w", out) do in2
@@ -313,6 +314,7 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(stdout, " 1\t", r
         end
         infd = Base._fd(out.in)
         outfd = Base._fd(out.out)
+        inread || wait(ready)
         show(out, out)
         @test isreadable(out)
         @test iswritable(out)
@@ -347,6 +349,8 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(stdout, " 1\t", r
     @test bytesavailable(out) > 0
     ln1 = readline(out)
     ln2 = readline(out)
+    inread = true
+    notify(ready)
     desc = read(out, String)
     @test !isreadable(out)
     @test !iswritable(out)

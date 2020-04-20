@@ -62,7 +62,13 @@ end
         κ     = cond(apd, 1) #condition number
 
         unary_ops_tests(apd, capd, ε*κ*n)
-
+        if eltya != Int
+            @test Factorization{eltya}(capd) === capd
+            if eltya <: Real
+                @test Array(Factorization{complex(eltya)}(capd)) ≈ Array(factorize(complex(apd)))
+                @test eltype(Factorization{complex(eltya)}(capd)) == complex(eltya)
+            end
+        end
         @testset "throw for non-square input" begin
             A = rand(eltya, 2, 3)
             @test_throws DimensionMismatch cholesky(A)
@@ -336,9 +342,10 @@ end
     d = abs.(randn(3)) .+ 0.1
     D = Diagonal(d)
     CD = cholesky(D)
+    CM = cholesky(Matrix(D))
     @test CD isa Cholesky{Float64}
-    @test CD.U isa UpperTriangular{Float64}
-    @test CD.U == Diagonal(.√d)
+    @test CD.U ≈ Diagonal(.√d) ≈ CM.U
+    @test D ≈ CD.L * CD.U
     @test CD.info == 0
 
     # real, failing
@@ -347,13 +354,12 @@ end
     @test Dnpd.info == 2
 
     # complex
-    d = cis.(rand(3) .* 2*π)
-    d .*= abs.(randn(3) .+ 0.1)
-    D = Diagonal(d)
+    D = complex(D)
     CD = cholesky(D)
+    CM = cholesky(Matrix(D))
     @test CD isa Cholesky{Complex{Float64}}
-    @test CD.U isa UpperTriangular{Complex{Float64}}
-    @test CD.U == Diagonal(.√d)
+    @test CD.U ≈ Diagonal(.√d) ≈ CM.U
+    @test D ≈ CD.L * CD.U
     @test CD.info == 0
 
     # complex, failing
@@ -390,6 +396,35 @@ end
     @test CholeskyPivoted(factors, uplo, piv, rank, tol, Int32(info)) == cholp
     @test CholeskyPivoted(factors, uplo, piv, rank, tol, Int64(info)) == cholp
 
+end
+
+@testset "issue #33704, casting low-rank CholeskyPivoted to Matrix" begin
+    A = randn(1,8)
+    B = A'A
+    C = cholesky(B, Val(true), check=false)
+    @test B ≈ Matrix(C)
+end
+
+@testset "CholeskyPivoted and Factorization" begin
+    A = randn(8,8)
+    B = A'A
+    C = cholesky(B, Val(true), check=false)
+    @test CholeskyPivoted{eltype(C)}(C) === C
+    @test Factorization{eltype(C)}(C) === C
+    @test Array(CholeskyPivoted{complex(eltype(C))}(C)) ≈ Array(cholesky(complex(B), Val(true), check=false))
+    @test Array(Factorization{complex(eltype(C))}(C)) ≈ Array(cholesky(complex(B), Val(true), check=false))
+    @test eltype(Factorization{complex(eltype(C))}(C)) == complex(eltype(C))
+end
+
+@testset "REPL printing of CholeskyPivoted" begin
+    A = randn(8,8)
+    B = A'A
+    C = cholesky(B, Val(true), check=false)
+    cholstring = sprint((t, s) -> show(t, "text/plain", s), C)
+    rankstring = "$(C.uplo) factor with rank $(rank(C)):"
+    factorstring = sprint((t, s) -> show(t, "text/plain", s), C.uplo == 'U' ? C.U : C.L)
+    permstring   = sprint((t, s) -> show(t, "text/plain", s), C.p)
+    @test cholstring == "$(summary(C))\n$rankstring\n$factorstring\npermutation:\n$permstring"
 end
 
 end # module TestCholesky

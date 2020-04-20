@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+@nospecialize
+
 struct InvokeData
     entry::Core.TypeMapEntry
     types0
@@ -41,7 +43,7 @@ struct ConstantCase
     method::Method
     sparams::Vector{Any}
     metharg::Any
-    ConstantCase(@nospecialize(val), method::Method, sparams::Vector{Any}, @nospecialize(metharg)) =
+    ConstantCase(val, method::Method, sparams::Vector{Any}, metharg) =
         new(val, method, sparams, metharg)
 end
 
@@ -49,7 +51,7 @@ struct DynamicCase
     method::Method
     sparams::Vector{Any}
     metharg::Any
-    DynamicCase(method::Method, sparams::Vector{Any}, @nospecialize(metharg)) =
+    DynamicCase(method::Method, sparams::Vector{Any}, metharg) =
         new(method, sparams, metharg)
 end
 
@@ -59,11 +61,12 @@ struct UnionSplit
     atype # ::Type
     cases::Vector{Pair{Any, Any}}
     bbs::Vector{Int}
-    UnionSplit(idx::Int, fully_covered::Bool, @nospecialize(atype),
-               cases::Vector{Pair{Any, Any}}) =
+    UnionSplit(idx::Int, fully_covered::Bool, atype, cases::Vector{Pair{Any, Any}}) =
         new(idx, fully_covered, atype, cases, Int[])
 end
 isinvoke(inl::UnionSplit) = false
+
+@specialize
 
 function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
     # Go through the function, performing simple ininlingin (e.g. replacing call by constants
@@ -383,7 +386,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 end
             elseif isa(stmt′, GotoNode)
                 stmt′ = GotoNode(stmt′.label + bb_offset)
-            elseif isa(stmt′, Expr) && stmt′.head == :enter
+            elseif isa(stmt′, Expr) && stmt′.head === :enter
                 stmt′ = Expr(:enter, stmt′.args[1] + bb_offset)
             elseif isa(stmt′, GotoIfNot)
                 stmt′ = GotoIfNot(stmt′.cond, stmt′.dest + bb_offset)
@@ -560,7 +563,7 @@ function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{LineInfo
                 end
             elseif isa(stmt, GotoNode)
                 compact[idx] = GotoNode(state.bb_rename[stmt.label])
-            elseif isa(stmt, Expr) && stmt.head == :enter
+            elseif isa(stmt, Expr) && stmt.head === :enter
                 compact[idx] = Expr(:enter, state.bb_rename[stmt.args[1]])
             elseif isa(stmt, GotoIfNot)
                 compact[idx] = GotoIfNot(stmt.cond, state.bb_rename[stmt.dest])
@@ -682,7 +685,7 @@ function analyze_method!(idx::Int, sig::Signature, @nospecialize(metharg), meths
     # Check if we intersect any of this method's ambiguities
     # TODO: We could split out the ambiguous case as another "union split" case.
     # For now, we just reject the method
-    if method.ambig !== nothing
+    if method.ambig !== nothing && invoke_data === nothing
         for entry::Core.TypeMapEntry in method.ambig
             if typeintersect(sig.atype, entry.sig) !== Bottom
                 return nothing
@@ -704,17 +707,21 @@ function analyze_method!(idx::Int, sig::Signature, @nospecialize(metharg), meths
 
     isconst, src = find_inferred(mi, atypes, sv, stmttyp)
     if isconst
-        add_backedge!(mi, sv)
-        return ConstantCase(src, method, Any[methsp...], metharg)
+        if sv.params.inlining
+            add_backedge!(mi, sv)
+            return ConstantCase(src, method, Any[methsp...], metharg)
+        else
+            return spec_lambda(atype_unlimited, sv, invoke_data)
+        end
     end
     if src === nothing
         return spec_lambda(atype_unlimited, sv, invoke_data)
     end
 
-    src_inferred = ccall(:jl_ast_flag_inferred, Bool, (Any,), src)
-    src_inlineable = ccall(:jl_ast_flag_inlineable, Bool, (Any,), src)
+    src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
+    src_inlineable = ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
 
-    if !(src_inferred && src_inlineable)
+    if !(src_inferred && src_inlineable && sv.params.inlining)
         return spec_lambda(atype_unlimited, sv, invoke_data)
     end
 
@@ -722,7 +729,7 @@ function analyze_method!(idx::Int, sig::Signature, @nospecialize(metharg), meths
     add_backedge!(mi, sv)
 
     if !isa(src, CodeInfo)
-        src = ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any), method, C_NULL, src::Vector{UInt8})::CodeInfo
+        src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), method, C_NULL, src::Vector{UInt8})::CodeInfo
     end
 
     @timeit "inline IR inflation" begin
@@ -885,6 +892,9 @@ function inline_apply!(ir::IRCode, idx::Int, sig::Signature, params::Params)
     while sig.f === Core._apply || sig.f === Core._apply_iterate
         arg_start = sig.f === Core._apply ? 2 : 3
         atypes = sig.atypes
+        if arg_start > length(atypes)
+            return nothing
+        end
         # Try to figure out the signature of the function being called
         # and if rewrite_apply_exprargs can deal with this form
         for i = (arg_start + 1):length(atypes)
@@ -958,9 +968,6 @@ function process_simple!(ir::IRCode, idx::Int, params::Params)
         return nothing
     end
 
-    # Bail out here if inlining is disabled
-    params.inlining || return nothing
-
     # Handle invoke
     invoke_data = nothing
     if sig.f === Core.invoke && length(sig.atypes) >= 3
@@ -979,7 +986,7 @@ function process_simple!(ir::IRCode, idx::Int, params::Params)
     (invoke_data === nothing || sig.atype <: invoke_data.types0) || return nothing
 
     # Special case inliners for regular functions
-    if late_inline_special_case!(ir, sig, idx, stmt) || is_return_type(sig.f)
+    if late_inline_special_case!(ir, sig, idx, stmt, params) || is_return_type(sig.f)
         return nothing
     end
     return (sig, invoke_data)
@@ -1002,15 +1009,24 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
             continue
         end
 
-        # Regular case: Perform method matching
-        min_valid = UInt[typemin(UInt)]
-        max_valid = UInt[typemax(UInt)]
-        meth = _methods_by_ftype(sig.atype, sv.params.MAX_METHODS, sv.params.world, min_valid, max_valid)
+        # Regular case: Retrieve matching methods from cache (or compute them)
+        (meth, min_valid, max_valid) = get(sv.matching_methods_cache, sig.atype) do
+            # World age does not need to be taken into account in the cache
+            # because it is forwarded from type inference through `sv.params`
+            # in the case that the cache is nonempty, so it should be unchanged
+            # The max number of methods should be the same as in inference most
+            # of the time, and should not affect correctness otherwise.
+            min_val = UInt[typemin(UInt)]
+            max_val = UInt[typemax(UInt)]
+            ms = _methods_by_ftype(sig.atype, sv.params.MAX_METHODS,
+                                   sv.params.world, min_val, max_val)
+            return (ms, min_val[1], max_val[1])
+        end
         if meth === false || length(meth) == 0
             # No applicable method, or too many applicable methods
             continue
         end
-        update_valid_age!(min_valid[1], max_valid[1], sv)
+        update_valid_age!(min_valid, max_valid, sv)
 
         cases = Pair{Any, Any}[]
         # TODO: This could be better
@@ -1166,8 +1182,7 @@ function early_inline_special_case(ir::IRCode, s::Signature, e::Expr, params::Pa
             val = etype.val
             is_inlineable_constant(val) || return nothing
             if isa(f, IntrinsicFunction)
-                if is_pure_intrinsic_infer(f) &&
-                    (intrinsic_nothrow(f) || intrinsic_nothrow(f, atypes[2:end]))
+                if is_pure_intrinsic_infer(f) && intrinsic_nothrow(f, atypes[2:end])
                     return quoted(val)
                 end
             elseif ispuretopfunction(f) || contains_is(_PURE_BUILTINS, f)
@@ -1183,10 +1198,10 @@ function early_inline_special_case(ir::IRCode, s::Signature, e::Expr, params::Pa
     return nothing
 end
 
-function late_inline_special_case!(ir::IRCode, sig::Signature, idx::Int, stmt::Expr)
+function late_inline_special_case!(ir::IRCode, sig::Signature, idx::Int, stmt::Expr, params::Params)
     typ = ir.types[idx]
     f, ft, atypes = sig.f, sig.ft, sig.atypes
-    if length(atypes) == 3 && istopfunction(f, :!==)
+    if params.inlining && length(atypes) == 3 && istopfunction(f, :!==)
         # special-case inliner for !== that precedes _methods_by_ftype union splitting
         # and that works, even though inference generally avoids inferring the `!==` Method
         if isa(typ, Const)
@@ -1198,7 +1213,7 @@ function late_inline_special_case!(ir::IRCode, sig::Signature, idx::Int, stmt::E
         not_call = Expr(:call, GlobalRef(Core.Intrinsics, :not_int), cmp_call_ssa)
         ir[SSAValue(idx)] = not_call
         return true
-    elseif length(atypes) == 3 && istopfunction(f, :(>:))
+    elseif params.inlining && length(atypes) == 3 && istopfunction(f, :(>:))
         # special-case inliner for issupertype
         # that works, even though inference generally avoids inferring the `>:` Method
         if isa(typ, Const)

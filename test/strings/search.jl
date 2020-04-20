@@ -356,6 +356,13 @@ end
 @test occursin("o", "foo")
 @test occursin('o', "foo")
 
+# contains
+@test contains("foo", "o")
+@test contains("foo", 'o')
+# contains in curried form
+@test contains("o")("foo")
+@test contains('o')("foo")
+
 @test_throws ErrorException "ab" ∈ "abc"
 
 # issue #15723

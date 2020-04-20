@@ -19,23 +19,23 @@ if Sys.iswindows()
     end
 else # !windows
     struct RandomDevice <: AbstractRNG
-        file::IOStream
         unlimited::Bool
 
-        RandomDevice(; unlimited::Bool=true) =
-            new(open(unlimited ? "/dev/urandom" : "/dev/random"), unlimited)
+        RandomDevice(; unlimited::Bool=true) = new(unlimited)
     end
 
-    rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read( rd.file, sp[])
+    rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read(getfile(rd), sp[])
 
-    function serialize(s::AbstractSerializer, rd::RandomDevice)
-        Serialization.serialize_type(s, typeof(rd))
-        serialize(s, rd.unlimited)
+    function getfile(rd::RandomDevice)
+        devrandom = rd.unlimited ? DEV_URANDOM : DEV_RANDOM
+        # TODO: there is a data-race, this can leak up to nthreads() copies of the file descriptors,
+        # so use a "thread-once" utility once available
+        isassigned(devrandom) || (devrandom[] = open(rd.unlimited ? "/dev/urandom" : "/dev/random"))
+        devrandom[]
     end
-    function deserialize(s::AbstractSerializer, t::Type{RandomDevice})
-        unlimited = deserialize(s)
-        return RandomDevice(unlimited=unlimited)
-    end
+
+    const DEV_RANDOM  = Ref{IOStream}()
+    const DEV_URANDOM = Ref{IOStream}()
 
 end # os-test
 
@@ -43,12 +43,13 @@ end # os-test
 for T in (Bool, BitInteger_types...)
     if Sys.iswindows()
         @eval function rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T})
-            ccall((:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
-                  A, sizeof(A))
+            Base.windowserror("SystemFunction036 (RtlGenRandom)", 0 == ccall(
+                (:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
+                  A, sizeof(A)))
             A
         end
     else
-        @eval rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T}) = read!(rd.file, A)
+        @eval rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T}) = read!(getfile(rd), A)
     end
 end
 
@@ -295,7 +296,7 @@ seed!(seed::Union{Integer,Vector{UInt32}}) = seed!(default_rng(), seed)
 const THREAD_RNGs = MersenneTwister[]
 @inline default_rng() = default_rng(Threads.threadid())
 @noinline function default_rng(tid::Int)
-    @assert 0 < tid <= length(THREAD_RNGs)
+    0 < tid <= length(THREAD_RNGs) || _rng_length_assert()
     if @inbounds isassigned(THREAD_RNGs, tid)
         @inbounds MT = THREAD_RNGs[tid]
     else
@@ -304,6 +305,8 @@ const THREAD_RNGs = MersenneTwister[]
     end
     return MT
 end
+@noinline _rng_length_assert() =  @assert false "0 < tid <= length(THREAD_RNGs)"
+
 function __init__()
     resize!(empty!(THREAD_RNGs), Threads.nthreads()) # ensures that we didn't save a bad object
 end

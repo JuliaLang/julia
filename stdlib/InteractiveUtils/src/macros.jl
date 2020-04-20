@@ -6,18 +6,29 @@ import Base: typesof, insert!
 
 separate_kwargs(args...; kwargs...) = (args, kwargs.data)
 
-function gen_call_with_extracted_types(__module__, fcn, ex0)
+function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
     if isa(ex0, Expr)
+        if ex0.head === :do && Meta.isexpr(get(ex0.args, 1, nothing), :call)
+            if length(ex0.args) != 2
+                return Expr(:call, :error, "ill-formed do call")
+            end
+            i = findlast(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args[1].args)
+            args = copy(ex0.args[1].args)
+            insert!(args, (isnothing(i) ? 2 : i+1), ex0.args[2])
+            ex0 = Expr(:call, args...)
+        end
         if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
             return quote
                 local arg1 = $(esc(ex0.args[1]))
                 local args, kwargs = $separate_kwargs($(map(esc, ex0.args[2:end])...))
                 $(fcn)(Core.kwfunc(arg1),
-                       Tuple{typeof(kwargs), Core.Typeof(arg1), map(Core.Typeof, args)...})
+                       Tuple{typeof(kwargs), Core.Typeof(arg1), map(Core.Typeof, args)...};
+                       $(kws...))
             end
         elseif ex0.head === :call
             return Expr(:call, fcn, esc(ex0.args[1]),
-                        Expr(:call, typesof, map(esc, ex0.args[2:end])...))
+                        Expr(:call, typesof, map(esc, ex0.args[2:end])...),
+                        kws...)
         elseif ex0.head === :(=) && length(ex0.args) == 2
             lhs, rhs = ex0.args
             if isa(lhs, Expr)
@@ -95,25 +106,20 @@ of the form "foo=bar" are passed on to the called function as well.
 The keyword arguments must be given before the mandatory argument.
 """
 function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0)
-    kwargs = Vector{Any}[]
+    kws = Expr[]
     arg = ex0[end] # Mandatory argument
     for i in 1:length(ex0)-1
         x = ex0[i]
-        if x isa Expr && x.head == :(=) # Keyword given of the form "foo=bar"
-            push!(kwargs, x.args)
+        if x isa Expr && x.head === :(=) # Keyword given of the form "foo=bar"
+            if length(x.args) != 2
+                return Expr(:call, :error, "Invalid keyword argument: $x")
+            end
+            push!(kws, Expr(:kw, x.args[1], x.args[2]))
         else
             return Expr(:call, :error, "@$fcn expects only one non-keyword argument")
         end
     end
-    thecall = gen_call_with_extracted_types(__module__, fcn, arg)
-    for kwarg in kwargs
-        if length(kwarg) != 2
-            x = string(Expr(:(=), kwarg...))
-            return Expr(:call, :error, "Invalid keyword argument: $x")
-        end
-        push!(thecall.args, Expr(:kw, kwarg[1], kwarg[2]))
-    end
-    return thecall
+    return gen_call_with_extracted_types(__module__, fcn, arg, kws)
 end
 
 for fname in [:which, :less, :edit, :functionloc]

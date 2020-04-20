@@ -268,7 +268,7 @@ end))
 end
 ```
 
-Notice that the result contains `Expr(:$, :x)`, which means that `x` has not been
+Notice that the result contains `$x`, which means that `x` has not been
 evaluated yet.
 In other words, the `$` expression "belongs to" the inner quote expression, and
 so its argument is only evaluated when the inner quote expression is:
@@ -296,7 +296,7 @@ end))
 end
 ```
 
-Notice that `:(1 + 2)` now appears in the result instead of the symbol `:x`.
+Notice that `(1 + 2)` now appears in the result instead of the symbol `x`.
 Evaluating this expression yields an interpolated `3`:
 
 ```jldoctest interp1
@@ -553,7 +553,7 @@ julia> macro twostep(arg)
 @twostep (macro with 1 method)
 
 julia> ex = macroexpand(Main, :(@twostep :(1, 2, 3)) );
-I execute at parse time. The argument is: $(Expr(:quote, :((1, 2, 3))))
+I execute at parse time. The argument is: :((1, 2, 3))
 ```
 
 The first call to [`println`](@ref) is executed when [`macroexpand`](@ref) is called. The
@@ -771,10 +771,10 @@ final value. The macro might look like this:
 ```julia
 macro time(ex)
     return quote
-        local t0 = time()
+        local t0 = time_ns()
         local val = $ex
-        local t1 = time()
-        println("elapsed time: ", t1-t0, " seconds")
+        local t1 = time_ns()
+        println("elapsed time: ", (t1-t0)/1e9, " seconds")
         val
     end
 end
@@ -857,10 +857,10 @@ macro time(expr)
     return :(timeit(() -> $(esc(expr))))
 end
 function timeit(f)
-    t0 = time()
+    t0 = time_ns()
     val = f()
-    t1 = time()
-    println("elapsed time: ", t1-t0, " seconds")
+    t1 = time_ns()
+    println("elapsed time: ", (t1-t0)/1e9, " seconds")
     return val
 end
 ```

@@ -398,7 +398,7 @@ for typ in atomictypes
                          ret $lt %rv
                          """, $typ, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
         else
-            rmwop == :xchg || continue
+            rmwop === :xchg || continue
             @eval $fn(x::Atomic{$typ}, v::$typ) =
                 llvmcall($"""
                          %iptr = inttoptr i$WORD_SIZE %0 to $ilt*
@@ -422,7 +422,7 @@ for op in [:+, :-, :max, :min]
             new = $op(old, val)
             cmp = old
             old = atomic_cas!(var, cmp, new)
-            reinterpret(IT, old) == reinterpret(IT, cmp) && return new
+            reinterpret(IT, old) == reinterpret(IT, cmp) && return old
             # Temporary solution before we have gc transition support in codegen.
             ccall(:jl_gc_safepoint, Cvoid, ())
         end

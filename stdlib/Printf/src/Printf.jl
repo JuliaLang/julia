@@ -1183,7 +1183,7 @@ end
 ### external printf interface ###
 
 is_str_expr(ex) =
-    isa(ex,Expr) && (ex.head == :string || (ex.head == :macrocall && isa(ex.args[1],Symbol) &&
+    isa(ex,Expr) && (ex.head === :string || (ex.head === :macrocall && isa(ex.args[1],Symbol) &&
     endswith(string(ex.args[1]),"str")))
 
 function _printf(macroname, io, fmt, args)
@@ -1192,7 +1192,7 @@ function _printf(macroname, io, fmt, args)
 
     has_splatting = false
     for arg in args
-       if isa(arg, Expr) && arg.head == :...
+       if isa(arg, Expr) && arg.head === :...
           has_splatting = true
           break
        end

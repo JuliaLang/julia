@@ -194,10 +194,7 @@ JL_DLLEXPORT void JL_NORETURN jl_eof_error(void)
 // get kwsorter field, with appropriate error check and message
 JL_DLLEXPORT jl_value_t *jl_get_keyword_sorter(jl_value_t *f)
 {
-    jl_methtable_t *mt = jl_gf_mtable(f);
-    if (mt->kwsorter == NULL)
-        jl_errorf("function %s does not accept keyword arguments", jl_symbol_name(mt->name));
-    return mt->kwsorter;
+    return jl_get_kwsorter(jl_typeof(f));
 }
 
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t)
@@ -346,6 +343,22 @@ JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a)
     return a;
 }
 
+// optimization of setfield which bypasses boxing of the idx (and checking field type validity)
+JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t idx0, jl_value_t *rhs)
+{
+    jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
+    if (!st->mutabl)
+        jl_errorf("setfield! immutable struct of type %s cannot be changed", jl_symbol_name(st->name->name));
+    if (idx0 >= jl_datatype_nfields(st))
+        jl_bounds_error_int(v, idx0 + 1);
+    //jl_value_t *ft = jl_field_type(st, idx0);
+    //if (!jl_isa(rhs, ft)) {
+    //    jl_type_error("setfield!", ft, rhs);
+    //}
+    set_nth_field(st, (void*)v, idx0, rhs);
+}
+
+
 // parsing --------------------------------------------------------------------
 
 int substr_isspace(char *p, char *pend)
@@ -386,7 +399,7 @@ JL_DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, si
             newstr = (char*)alloca(len + 1);
         }
         else {
-            newstr = tofree = (char*)malloc(len + 1);
+            newstr = tofree = (char*)malloc_s(len + 1);
         }
         memcpy(newstr, bstr, len);
         newstr[len] = 0;
@@ -445,14 +458,14 @@ JL_DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, si
             newstr = (char*)alloca(len + 1);
         }
         else {
-            newstr = tofree = (char*)malloc(len + 1);
+            newstr = tofree = (char*)malloc_s(len + 1);
         }
         memcpy(newstr, bstr, len);
         newstr[len] = 0;
         bstr = newstr;
         pend = bstr+len;
     }
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
     float out = (float)jl_strtod_c(bstr, &p);
 #else
     float out = jl_strtof_c(bstr, &p);

@@ -84,10 +84,6 @@ end
 function cache_result(result::InferenceResult, min_valid::UInt, max_valid::UInt)
     def = result.linfo.def
     toplevel = !isa(result.linfo.def, Method)
-    if toplevel
-        min_valid = UInt(0)
-        max_valid = UInt(0)
-    end
 
     # check if the existing linfo metadata is also sufficient to describe the current inference result
     # to decide if it is worth caching this
@@ -123,7 +119,7 @@ function cache_result(result::InferenceResult, min_valid::UInt, max_valid::UInt)
                     nslots = length(inferred_result.slotflags)
                     resize!(inferred_result.slottypes, nslots)
                     resize!(inferred_result.slotnames, nslots)
-                    inferred_result = ccall(:jl_compress_ast, Any, (Any, Any), def, inferred_result)
+                    inferred_result = ccall(:jl_compress_ir, Any, (Any, Any), def, inferred_result)
                 else
                     inferred_result = nothing
                 end
@@ -546,7 +542,7 @@ function typeinf_ext(mi::MethodInstance, params::Params)
                 tree.pure = true
                 tree.inlineable = true
                 tree.parent = mi
-                tree.rettype = typeof(code.rettype_const)
+                tree.rettype = Core.Typeof(code.rettype_const)
                 tree.min_world = code.min_world
                 tree.max_world = code.max_world
                 return tree
@@ -563,7 +559,7 @@ function typeinf_ext(mi::MethodInstance, params::Params)
                 return inf
             elseif isa(inf, Vector{UInt8})
                 i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
-                inf = _uncompressed_ast(code, inf)
+                inf = _uncompressed_ir(code, inf)
                 return inf
             end
         end

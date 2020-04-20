@@ -334,8 +334,8 @@ void LineNumberAnnotatedWriter::emitFunctionAnnot(
     if (FuncLoc) {
         std::vector<DILineInfo> DIvec(1);
         DILineInfo &DI = DIvec.back();
-        DI.FunctionName = FuncLoc->getName();
-        DI.FileName = FuncLoc->getFilename();
+        DI.FunctionName = FuncLoc->getName().str();
+        DI.FileName = FuncLoc->getFilename().str();
         DI.Line = FuncLoc->getLine();
         LinePrinter.emit_lineinfo(Out, DIvec);
     }
@@ -358,8 +358,8 @@ void LineNumberAnnotatedWriter::emitInstructionAnnot(
             DILineInfo &DI = DIvec.back();
             DIScope *scope = NewInstrLoc->getScope();
             if (scope)
-                DI.FunctionName = scope->getName();
-            DI.FileName = NewInstrLoc->getFilename();
+                DI.FunctionName = scope->getName().str();
+            DI.FileName = NewInstrLoc->getFilename().str();
             DI.Line = NewInstrLoc->getLine();
             NewInstrLoc = NewInstrLoc->getInlinedAt();
         } while (NewInstrLoc);
@@ -375,10 +375,66 @@ void LineNumberAnnotatedWriter::emitBasicBlockEndAnnot(
         LinePrinter.emit_finish(Out);
 }
 
+static void jl_strip_llvm_debug(Module *m, bool all_meta, LineNumberAnnotatedWriter *AAW)
+{
+    // strip metadata from all instructions in all functions in the module
+    Instruction *deletelast = nullptr; // can't actually delete until the iterator advances
+    for (Function &f : m->functions()) {
+        if (AAW)
+            AAW->addSubprogram(&f, f.getSubprogram());
+        for (BasicBlock &f_bb : f) {
+            for (Instruction &inst : f_bb) {
+                if (deletelast) {
+                    deletelast->eraseFromParent();
+                    deletelast = nullptr;
+                }
+                // remove dbg.declare and dbg.value calls
+                if (isa<DbgDeclareInst>(inst) || isa<DbgValueInst>(inst)) {
+                    deletelast = &inst;
+                    continue;
+                }
+
+                // iterate over all metadata kinds and set to NULL to remove
+                if (all_meta) {
+                    SmallVector<std::pair<unsigned, MDNode*>, 4> MDForInst;
+                    inst.getAllMetadataOtherThanDebugLoc(MDForInst);
+                    for (const auto &md_iter : MDForInst) {
+                        inst.setMetadata(md_iter.first, NULL);
+                    }
+                }
+                // record debug location before erasing it
+                if (AAW)
+                    AAW->addDebugLoc(&inst, inst.getDebugLoc());
+                inst.setDebugLoc(DebugLoc());
+            }
+            if (deletelast) {
+                deletelast->eraseFromParent();
+                deletelast = nullptr;
+            }
+        }
+        f.setSubprogram(NULL);
+    }
+    if (all_meta) {
+        for (GlobalObject &g : m->global_objects()) {
+            g.clearMetadata();
+        }
+    }
+    // now that the subprogram is not referenced, we can delete it too
+    if (NamedMDNode *md = m->getNamedMetadata("llvm.dbg.cu"))
+        m->eraseNamedMetadata(md);
+    //if (NamedMDNode *md = m->getNamedMetadata("llvm.module.flags"))
+    //    m->eraseNamedMetadata(md);
+}
+
+void jl_strip_llvm_debug(Module *m)
+{
+    jl_strip_llvm_debug(m, false, NULL);
+}
+
 // print an llvm IR acquired from jl_get_llvmf
 // warning: this takes ownership of, and destroys, f->getParent()
 extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_module, const char *debuginfo)
+jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_module, const char *debuginfo)
 {
     std::string code;
     llvm::raw_string_ostream stream(code);
@@ -396,43 +452,8 @@ jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_modul
     }
     else {
         Module *m = llvmf->getParent();
-        if (strip_ir_metadata) {
-            // strip metadata from all instructions in all functions in the module
-            Instruction *deletelast = nullptr; // can't actually delete until the iterator advances
-            for (Function &f2 : m->functions()) {
-                AAW.addSubprogram(&f2, f2.getSubprogram());
-                for (BasicBlock &f2_bb : f2) {
-                    for (Instruction &inst : f2_bb) {
-                        if (deletelast) {
-                            deletelast->eraseFromParent();
-                            deletelast = nullptr;
-                        }
-                        // remove dbg.declare and dbg.value calls
-                        if (isa<DbgDeclareInst>(inst) || isa<DbgValueInst>(inst)) {
-                            deletelast = &inst;
-                            continue;
-                        }
-
-                        // iterate over all metadata kinds and set to NULL to remove
-                        SmallVector<std::pair<unsigned, MDNode*>, 4> MDForInst;
-                        inst.getAllMetadataOtherThanDebugLoc(MDForInst);
-                        for (const auto &md_iter : MDForInst) {
-                            inst.setMetadata(md_iter.first, NULL);
-                        }
-                        // record debug location before erasing it
-                        AAW.addDebugLoc(&inst, inst.getDebugLoc());
-                        inst.setDebugLoc(DebugLoc());
-                    }
-                    if (deletelast) {
-                        deletelast->eraseFromParent();
-                        deletelast = nullptr;
-                    }
-                }
-            }
-            for (GlobalObject &g2 : m->global_objects()) {
-                g2.clearMetadata();
-            }
-        }
+        if (strip_ir_metadata)
+            jl_strip_llvm_debug(m, true, &AAW);
         if (dump_module) {
             m->print(stream, &AAW);
         }
@@ -448,50 +469,37 @@ jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_modul
 
 static void jl_dump_asm_internal(
         uintptr_t Fptr, size_t Fsize, int64_t slide,
-        const object::ObjectFile *object,
+        object::SectionRef Section,
         DIContext *di_ctx,
         raw_ostream &rstream,
         const char* asm_variant,
         const char* debuginfo);
 
 // This isn't particularly fast, but neither is printing assembly, and they're only used for interactive mode
-static uint64_t compute_obj_symsize(const object::ObjectFile *obj, uint64_t offset)
+static uint64_t compute_obj_symsize(object::SectionRef Section, uint64_t offset)
 {
-    // Scan the object file for the closest symbols above and below offset in the .text section
+    // Scan the object file for the closest symbols above and below offset in the given section
     uint64_t lo = 0;
     uint64_t hi = 0;
     bool setlo = false;
-    for (const object::SectionRef &Section : obj->sections()) {
-        uint64_t SAddr, SSize;
-        if (!Section.isText()) continue;
-        SAddr = Section.getAddress();
-        SSize = Section.getSize();
-        if (offset < SAddr || offset >= SAddr + SSize) continue;
-        assert(hi == 0);
-
-        // test for lower and upper symbol bounds relative to other symbols
-        hi = SAddr + SSize;
-        object::section_iterator ESection = obj->section_end();
-        for (const object::SymbolRef &Sym : obj->symbols()) {
-            uint64_t Addr;
-            object::section_iterator Sect = ESection;
-            auto SectOrError = Sym.getSection();
-            assert(SectOrError);
-            Sect = SectOrError.get();
-            if (Sect == ESection) continue;
-            if (Sect != Section) continue;
-            auto AddrOrError = Sym.getAddress();
-            assert(AddrOrError);
-            Addr = AddrOrError.get();
-            if (Addr <= offset && Addr >= lo) {
-                // test for lower bound on symbol
-                lo = Addr;
-                setlo = true;
-            }
-            if (Addr > offset && Addr < hi) {
-                // test for upper bound on symbol
-                hi = Addr;
-            }
+    uint64_t SAddr = Section.getAddress();
+    uint64_t SSize = Section.getSize();
+    if (offset < SAddr || offset >= SAddr + SSize)
+        return 0;
+    // test for lower and upper symbol bounds relative to other symbols
+    hi = SAddr + SSize;
+    for (const object::SymbolRef &Sym : Section.getObject()->symbols()) {
+        if (!Section.containsSymbol(Sym))
+            continue;
+        uint64_t Addr = cantFail(Sym.getAddress());
+        if (Addr <= offset && Addr >= lo) {
+            // test for lower bound on symbol
+            lo = Addr;
+            setlo = true;
+        }
+        if (Addr > offset && Addr < hi) {
+            // test for upper bound on symbol
+            hi = Addr;
         }
     }
     if (setlo)
@@ -509,19 +517,19 @@ jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant,
     llvm::raw_string_ostream stream(code);
 
     // Find debug info (line numbers) to print alongside
+    object::SectionRef Section;
+    int64_t slide = 0;
     uint64_t symsize = 0;
-    int64_t slide = 0, section_slide = 0;
     llvm::DIContext *context = NULL;
-    const object::ObjectFile *object = NULL;
-    if (!jl_DI_for_fptr(fptr, &symsize, &slide, &section_slide, &object, &context)) {
-        if (!jl_dylib_DI_for_fptr(fptr, &object, &context, &slide, &section_slide, false,
-            NULL, NULL, NULL, NULL)) {
-                jl_printf(JL_STDERR, "WARNING: Unable to find function pointer\n");
-                return jl_pchar_to_string("", 0);
+    if (!jl_DI_for_fptr(fptr, &symsize, &slide, &Section, &context)) {
+        if (!jl_dylib_DI_for_fptr(fptr, &Section, &slide, &context,
+                    false, NULL, NULL, NULL, NULL)) {
+            jl_printf(JL_STDERR, "WARNING: Unable to find function pointer\n");
+            return jl_pchar_to_string("", 0);
         }
     }
-    if (symsize == 0 && object != NULL)
-        symsize = compute_obj_symsize(object, fptr + slide + section_slide);
+    if (symsize == 0 && Section.getObject())
+        symsize = compute_obj_symsize(Section, fptr + slide);
     if (symsize == 0) {
         jl_printf(JL_STDERR, "WARNING: Could not determine size of symbol\n");
         return jl_pchar_to_string("", 0);
@@ -535,7 +543,7 @@ jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant,
     int8_t gc_state = jl_gc_safe_enter(ptls);
     jl_dump_asm_internal(
             fptr, symsize, slide,
-            object, context,
+            Section, context,
             stream,
             asm_variant,
             debuginfo);
@@ -602,20 +610,16 @@ const char *SymbolTable::lookupLocalPC(size_t addr) {
 
 StringRef SymbolTable::getSymbolNameAt(uint64_t offset) const
 {
-    if (object == NULL) return StringRef();
+    if (object == NULL)
+        return StringRef();
     object::section_iterator ESection = object->section_end();
     for (const object::SymbolRef &Sym : object->symbols()) {
-        uint64_t Addr, SAddr;
-        object::section_iterator Sect = ESection;
-        auto SectOrError = Sym.getSection();
-        assert(SectOrError);
-        Sect = SectOrError.get();
-        if (Sect == ESection) continue;
-        SAddr = Sect->getAddress();
-        if (SAddr == 0) continue;
-        auto AddrOrError = Sym.getAddress();
-        assert(AddrOrError);
-        Addr = AddrOrError.get();
+        auto Sect = cantFail(Sym.getSection());
+        if (Sect == ESection)
+            continue;
+        if (Sect->getAddress() == 0)
+            continue;
+        uint64_t Addr = cantFail(Sym.getAddress());
         if (Addr == offset) {
             auto sNameOrError = Sym.getName();
             if (sNameOrError)
@@ -646,8 +650,9 @@ void SymbolTable::createSymbols()
         }
         else {
             const char *global = lookupLocalPC(addr);
-            if (global)
+            if (global && global[0])
                 isymb->second = global;
+            // TODO: free(global)?
         }
     }
 }
@@ -672,7 +677,7 @@ const char *SymbolTable::lookupSymbolName(uint64_t addr)
             }
         }
         else {
-            Sym->second = local_name;
+            Sym->second = local_name.str();
         }
     }
     return Sym->second.empty() ? NULL : Sym->second.c_str();
@@ -740,7 +745,7 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Si
 
 static void jl_dump_asm_internal(
         uintptr_t Fptr, size_t Fsize, int64_t slide,
-        const object::ObjectFile *object,
+        object::SectionRef Section,
         DIContext *di_ctx,
         raw_ostream &rstream,
         const char* asm_variant,
@@ -758,10 +763,14 @@ static void jl_dump_asm_internal(
     const Target *TheTarget = TargetRegistry::lookupTarget(TheTriple.str(), err);
 
     // Set up required helpers and streamer
-    std::unique_ptr<MCStreamer> Streamer;
     SourceMgr SrcMgr;
 
-    std::unique_ptr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TheTriple.str()), TheTriple.str()));
+    MCTargetOptions Options;
+    std::unique_ptr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TheTriple.str()), TheTriple.str()
+#if JL_LLVM_VERSION >= 100000
+            , Options
+#endif
+        ));
     assert(MAI && "Unable to create target asm info!");
 
     std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TheTriple.str()));
@@ -786,53 +795,40 @@ static void jl_dump_asm_internal(
     }
     bool ShowEncoding = false;
 
-    std::unique_ptr<MCInstrInfo> MCII(TheTarget->createMCInstrInfo());
-    std::unique_ptr<MCInstrAnalysis>
-        MCIA(TheTarget->createMCInstrAnalysis(MCII.get()));
-    MCInstPrinter *IP =
-        TheTarget->createMCInstPrinter(TheTriple, OutputAsmVariant, *MAI, *MCII, *MRI);
+    std::unique_ptr<MCInstrInfo> MCII(
+            TheTarget->createMCInstrInfo());
+    std::unique_ptr<MCInstrAnalysis> MCIA(
+            TheTarget->createMCInstrAnalysis(MCII.get()));
+    std::unique_ptr<MCInstPrinter> IP(
+            TheTarget->createMCInstPrinter(TheTriple, OutputAsmVariant, *MAI, *MCII, *MRI));
     //IP->setPrintImmHex(true); // prefer hex or decimal immediates
-#if JL_LLVM_VERSION >= 70000
-    std::unique_ptr<MCCodeEmitter> CE = 0;
-    std::unique_ptr<MCAsmBackend> MAB = 0;
+    std::unique_ptr<MCCodeEmitter> CE;
+    std::unique_ptr<MCAsmBackend> MAB;
     if (ShowEncoding) {
-        CE = std::unique_ptr<MCCodeEmitter>(TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx));
-        MCTargetOptions Options;
-        MAB = std::unique_ptr<MCAsmBackend>(TheTarget->createMCAsmBackend(*STI, *MRI, Options));
+        CE.reset(TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx));
+        MAB.reset(TheTarget->createMCAsmBackend(*STI, *MRI, Options));
     }
-#else
-    MCCodeEmitter* CE = 0;
-    MCAsmBackend* MAB = 0;
-    if (ShowEncoding) {
-        CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx);
-        MCTargetOptions Options;
-        MAB = TheTarget->createMCAsmBackend(*STI, *MRI, Options);
-    }
-#endif
 
     // createAsmStreamer expects a unique_ptr to a formatted stream, which means
     // it will destruct the stream when it is done. We cannot have this, so we
     // start out with a raw stream, and create formatted stream from it here.
-    // LLVM will desctruct the formatted stream, and we keep the raw stream.
-    auto ustream = llvm::make_unique<formatted_raw_ostream>(rstream);
-#if JL_LLVM_VERSION >= 70000
-    Streamer.reset(TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
-                                                /*useDwarfDirectory*/ true,
-                                                IP, std::move(CE), std::move(MAB), /*ShowInst*/ false));
-#else
-    Streamer.reset(TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
-                                                /*useDwarfDirectory*/ true,
-                                                IP, CE, MAB, /*ShowInst*/ false));
-#endif
+    // LLVM will destroy the formatted stream, and we keep the raw stream.
+    std::unique_ptr<formatted_raw_ostream> ustream(new formatted_raw_ostream(rstream));
+    std::unique_ptr<MCStreamer> Streamer(
+            TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
+                                         /*useDwarfDirectory*/ true,
+                                         IP.release(),
+                                         std::move(CE), std::move(MAB),
+                                         /*ShowInst*/ false));
     Streamer->InitSections(true);
 
     // Make the MemoryObject wrapper
     ArrayRef<uint8_t> memoryObject(const_cast<uint8_t*>((const uint8_t*)Fptr),Fsize);
-    SymbolTable DisInfo(Ctx, object, slide, memoryObject);
+    SymbolTable DisInfo(Ctx, Section.getObject(), slide, memoryObject);
 
     DILineInfoTable di_lineinfo;
     if (di_ctx)
-        di_lineinfo = di_ctx->getLineInfoForAddressRange(makeAddress(Fptr + slide), Fsize);
+        di_lineinfo = di_ctx->getLineInfoForAddressRange(makeAddress(Section, Fptr + slide), Fsize);
     if (!di_lineinfo.empty()) {
         auto cur_addr = di_lineinfo[0].first;
         auto nlineinfo = di_lineinfo.size();
@@ -885,7 +881,11 @@ static void jl_dump_asm_internal(
                     std::string buf;
                     dbgctx.emit_lineinfo(buf, di_lineIter->second);
                     if (!buf.empty()) {
+#if JL_LLVM_VERSION >= 110000
+                        Streamer->emitRawText(buf);
+#else
                         Streamer->EmitRawText(buf);
+#endif
                     }
                 }
             }
@@ -902,15 +902,20 @@ static void jl_dump_asm_internal(
                     std::string buf;
                     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::Default,
                                                  DILineInfoSpecifier::FunctionNameKind::ShortName);
-                    DIInliningInfo dbg = di_ctx->getInliningInfoForAddress(makeAddress(Index + Fptr + slide), infoSpec);
+                    DIInliningInfo dbg = di_ctx->getInliningInfoForAddress(makeAddress(Section, Index + Fptr + slide), infoSpec);
                     if (dbg.getNumberOfFrames()) {
                         dbgctx.emit_lineinfo(buf, dbg);
                     }
                     else {
                         dbgctx.emit_lineinfo(buf, di_lineIter->second);
                     }
-                    if (!buf.empty())
+                    if (!buf.empty()) {
+#if JL_LLVM_VERSION >= 110000
+                        Streamer->emitRawText(buf);
+#else
                         Streamer->EmitRawText(buf);
+#endif
+                    }
                     nextLineAddr = (++di_lineIter)->first;
                 }
             }
@@ -920,15 +925,22 @@ static void jl_dump_asm_internal(
                 // Uncomment this to output addresses for all instructions
                 // stream << Index << ": ";
                 MCSymbol *symbol = DisInfo.lookupSymbol(Fptr+Index);
-                if (symbol)
+                if (symbol) {
+#if JL_LLVM_VERSION >= 110000
+                    Streamer->emitLabel(symbol);
+#else
                     Streamer->EmitLabel(symbol);
+#endif
+                }
             }
 
             MCInst Inst;
             MCDisassembler::DecodeStatus S;
             FuncMCView view = memoryObject.slice(Index);
             S = DisAsm->getInstruction(Inst, insSize, view, 0,
+#if JL_LLVM_VERSION < 100000
                                       /*VStream*/ nulls(),
+#endif
                                       /*CStream*/ pass != 0 ? Streamer->GetCommentOS() : nulls());
             if (pass != 0 && Streamer->GetCommentOS().tell() > 0)
                 Streamer->GetCommentOS() << '\n';
@@ -942,22 +954,33 @@ static void jl_dump_asm_internal(
 #endif
                 if (pass != 0) {
                     std::ostringstream buf;
-                    if (insSize == 4)
+                    if (insSize == 4) {
                         buf << "\t.long\t0x" << std::hex
                             << std::setfill('0') << std::setw(8)
                             << *(uint32_t*)(Fptr+Index);
-                    else
-                        for (uint64_t i=0; i<insSize; ++i)
+                    } else {
+                        for (uint64_t i=0; i<insSize; ++i) {
                             buf << "\t.byte\t0x" << std::hex
                                 << std::setfill('0') << std::setw(2)
                                 << (int)*(uint8_t*)(Fptr+Index+i);
+                        }
+#if JL_LLVM_VERSION >= 110000
+                    Streamer->emitRawText(StringRef(buf.str()));
+#else
                     Streamer->EmitRawText(StringRef(buf.str()));
+#endif
+                    }
                 }
                 break;
 
             case MCDisassembler::SoftFail:
-                if (pass != 0)
+                if (pass != 0) {
+#if JL_LLVM_VERSION >= 110000
+                    Streamer->emitRawText(StringRef("potentially undefined instruction encoding:"));
+#else
                     Streamer->EmitRawText(StringRef("potentially undefined instruction encoding:"));
+#endif
+                }
                 // Fall through
 
             case MCDisassembler::Success:
@@ -989,7 +1012,11 @@ static void jl_dump_asm_internal(
                             }
                         }
                     }
+#if JL_LLVM_VERSION >= 110000
+                    Streamer->emitInstruction(Inst, *STI);
+#else
                     Streamer->EmitInstruction(Inst, *STI);
+#endif
                 }
                 break;
             }
@@ -1003,7 +1030,11 @@ static void jl_dump_asm_internal(
             std::string buf;
             dbgctx.emit_finish(buf);
             if (!buf.empty()) {
+#if JL_LLVM_VERSION >= 110000
+                Streamer->emitRawText(buf);
+#else
                 Streamer->EmitRawText(buf);
+#endif
             }
         }
     }

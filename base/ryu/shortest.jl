@@ -1,6 +1,234 @@
+"""
+    b, e10 = reduce_shortest(f[, maxsignif])
+
+Reduce to shortest decimal representation where `abs(f) == b * 10^e10` and `b` is an
+integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
+"""
+@inline function reduce_shortest(f::T, maxsignif=nothing) where {T}
+    U = uinttype(T)
+    uf = reinterpret(U, f)
+    m = uf & significand_mask(T)
+    e = ((uf & exponent_mask(T)) >> significand_bits(T)) % Int
+
+    ## Step 1
+    #  mf * 2^ef == f
+    mf = (one(U) << significand_bits(T)) | m
+    ef = e - exponent_bias(T) - significand_bits(T)
+    f_isinteger = mf & ((one(U) << -ef) - one(U)) == 0
+
+    if ef > 0 || ef < -Base.significand_bits(T) || !f_isinteger
+        # fixup subnormals
+        if e == 0
+            ef = 1 - exponent_bias(T) - significand_bits(T)
+            mf = m
+        end
+
+        ## Step 2
+        #  u * 2^e2 == (f + prevfloat(f))/2
+        #  v * 2^e2 == f
+        #  w * 2^e2 == (f + nextfloat(f))/2
+        e2 = ef - 2
+        mf_iseven = iseven(mf) # trailing bit of significand is zero
+
+        v = U(4) * mf
+        w = v + U(2)
+        u_shift_half = m == 0 && e > 1 # if first element of binade, other than first normal one
+        u = v - U(2) + u_shift_half
+
+        ## Step 3
+        #  a == floor(u * 2^e2 / 10^e10), exact if a_allzero
+        #  b == floor(v * 2^e2 / 10^e10), exact if b_allzero
+        #  c == floor(w * 2^e2 / 10^e10)
+        a_allzero = false
+        b_allzero = false
+        b_lastdigit = 0x00
+        if e2 >= 0
+            q = log10pow2(e2) - (T == Float64 ? (e2 > 3) : 0)
+            e10 = q
+            k = pow5_inv_bitcount(T) + pow5bits(q) - 1
+            i = -e2 + q + k
+            a, b, c = mulshiftinvsplit(T, u, v, w, q, i)
+            if T == Float32 || T == Float16
+                if q != 0 && div(c - 1, 10) <= div(a, 10)
+                    l = pow5_inv_bitcount(T) + pow5bits(q - 1) - 1
+                    mul = pow5invsplit_lookup(T, q-1)
+                    b_lastdigit = (mulshift(v, mul, -e2 + q - 1 + l) % 10) % UInt8
+                end
+            end
+            if q <= qinvbound(T)
+                if ((v % UInt32) - 5 * div(v, 5)) == 0
+                    b_allzero = pow5(v, q)
+                elseif mf_iseven
+                    a_allzero = pow5(u, q)
+                else
+                    c -= pow5(w, q)
+                end
+            end
+        else
+            q = log10pow5(-e2) - (T == Float64 ? (-e2 > 1) : 0)
+            e10 = q + e2
+            i = -e2 - q
+            k = pow5bits(i) - pow5_bitcount(T)
+            j = q - k
+            a, b, c = mulshiftsplit(T, u, v, w, i, j)
+            if T == Float32 || T == Float16
+                if q != 0 && div(c - 1, 10) <= div(a, 10)
+                    j = q - 1 - (pow5bits(i + 1) - pow5_bitcount(T))
+                    mul = pow5split_lookup(T, i+1)
+                    b_lastdigit = (mulshift(v, mul, j) % 10) % UInt8
+                end
+            end
+            if q <= 1
+                b_allzero = true
+                if mf_iseven
+                    a_allzero = !u_shift_half
+                else
+                    c -= 1
+                end
+            elseif q < qbound(T)
+                b_allzero = pow2(v, q - (T != Float64))
+            end
+        end
+
+        ## Step 4: reduction
+        if a_allzero || b_allzero
+            # a) slow loop
+            while true
+                c_div10 = div(c, 10)
+                a_div10 = div(a, 10)
+                if c_div10 <= a_div10
+                    break
+                end
+                a_mod10 = (a % UInt32) - UInt32(10) * (a_div10 % UInt32)
+                b_div10 = div(b, 10)
+                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+                a_allzero &= a_mod10 == 0
+                b_allzero &= b_lastdigit == 0
+                b_lastdigit = b_mod10 % UInt8
+                b = b_div10
+                c = c_div10
+                a = a_div10
+                e10 += 1
+            end
+            if a_allzero
+                while true
+                    a_div10 = div(a, 10)
+                    a_mod10 = (a % UInt32) - UInt32(10) * (a_div10 % UInt32)
+                    if a_mod10 != 0 && (maxsignif === nothing || b < maxsignif)
+                        break
+                    end
+                    c_div10 = div(c, 10)
+                    b_div10 = div(b, 10)
+                    b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+                    b_allzero &= b_lastdigit == 0
+                    b_lastdigit = b_mod10 % UInt8
+                    b = b_div10
+                    c = c_div10
+                    a = a_div10
+                    e10 += 1
+                end
+            end
+            if b_allzero && b_lastdigit == 5 && iseven(b)
+                b_lastdigit = UInt8(4)
+            end
+            roundup = (b == a && (!mf_iseven || !a_allzero)) || b_lastdigit >= 5
+        else
+            # b) specialized for common case (99% Float64, 96% Float32)
+            roundup = b_lastdigit >= 5
+            c_div100 = div(c, 100)
+            a_div100 = div(a, 100)
+            if c_div100 > a_div100
+                b_div100 = div(b, 100)
+                b_mod100 = (b % UInt32) - UInt32(100) * (b_div100 % UInt32)
+                roundup = b_mod100 >= 50
+                b = b_div100
+                c = c_div100
+                a = a_div100
+                e10 += 2
+            end
+            while true
+                c_div10 = div(c, 10)
+                a_div10 = div(a, 10)
+                if c_div10 <= a_div10
+                    break
+                end
+                b_div10 = div(b, 10)
+                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+                roundup = b_mod10 >= 5
+                b = b_div10
+                c = c_div10
+                a = a_div10
+                e10 += 1
+            end
+            roundup = (b == a || roundup)
+        end
+        if maxsignif !== nothing && b > maxsignif
+            # reduce to max significant digits
+            while true
+                b_div10 = div(b, 10)
+                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+                if b <= maxsignif
+                    break
+                end
+                b = b_div10
+                roundup = (b_allzero && iseven(b)) ? b_mod10 > 5 : b_mod10 >= 5
+                b_allzero &= b_mod10 == 0
+                e10 += 1
+            end
+            b = b + roundup
+
+            # remove trailing zeros
+            while true
+                b_div10 = div(b, 10)
+                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+                if b_mod10 != 0
+                    break
+                end
+                b = b_div10
+                e10 += 1
+            end
+        else
+            b = b + roundup
+        end
+    else
+        # c) specialized f an integer < 2^53
+        b = mf >> -ef
+        e10 = 0
+
+        if maxsignif !== nothing && b > maxsignif
+            b_allzero = true
+            # reduce to max significant digits
+            while true
+                b_div10 = div(b, 10)
+                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+                if b <= maxsignif
+                    break
+                end
+                b = b_div10
+                roundup = (b_allzero && iseven(b)) ? b_mod10 > 5 : b_mod10 >= 5
+                b_allzero &= b_mod10 == 0
+                e10 += 1
+            end
+            b = b + roundup
+        end
+        while true
+            b_div10 = div(b, 10)
+            b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
+            if b_mod10 != 0
+                break
+            end
+            b = b_div10
+            e10 += 1
+        end
+    end
+    return b, e10
+end
+
+
 @inline function writeshortest(buf::Vector{UInt8}, pos, x::T,
-    plus=false, space=false, hash=true,
-    precision=-1, expchar=UInt8('e'), padexp=false, decchar=UInt8('.'), typed=false, compact=false) where {T}
+                               plus=false, space=false, hash=true,
+                               precision=-1, expchar=UInt8('e'), padexp=false, decchar=UInt8('.'),
+                               typed=false, compact=false) where {T}
     @assert 0 < pos <= length(buf)
     neg = signbit(x)
     # special cases
@@ -75,150 +303,7 @@
         return pos + neg + 3 + (typed && x isa Union{Float32, Float16} ? 2 : 0)
     end
 
-    bits = reinterpret(Unsigned, x)
-    mant = bits & (oftype(bits, 1) << significand_bits(T) - oftype(bits, 1))
-    exp = Int((bits >> significand_bits(T)) & ((Int64(1) << exponent_bits(T)) - 1))
-    m2 = oftype(bits, Int64(1) << significand_bits(T)) | mant
-    e2 = exp - exponent_bias(T) - significand_bits(T)
-    fraction = m2 & ((oftype(bits, 1) << -e2) - 1)
-    if e2 > 0 || e2 < -52 || fraction != 0
-        if exp == 0
-            e2 = 1 - exponent_bias(T) - significand_bits(T) - 2
-            m2 = mant
-        else
-            e2 -= 2
-        end
-        even = (m2 & 1) == 0
-        mv = oftype(m2, 4 * m2)
-        mp = oftype(m2, mv + 2)
-        mmShift = mant != 0 || exp <= 1
-        mm = oftype(m2, mv - 1 - mmShift)
-        vmIsTrailingZeros = false
-        vrIsTrailingZeros = false
-        lastRemovedDigit = 0x00
-        if e2 >= 0
-            q = log10pow2(e2) - (T == Float64 ? (e2 > 3) : 0)
-            e10 = q
-            k = pow5_inv_bitcount(T) + pow5bits(q) - 1
-            i = -e2 + q + k
-            vr, vp, vm = mulshiftinvsplit(T, mv, mp, mm, q, i)
-            if T == Float32 || T == Float16
-                if q != 0 && div(vp - 1, 10) <= div(vm, 10)
-                    l = pow5_inv_bitcount(T) + pow5bits(q - 1) - 1
-                    mul = T == Float32 ? FLOAT_POW5_INV_SPLIT[q] : HALF_POW5_INV_SPLIT[q]
-                    lastRemovedDigit = (mulshift(mv, mul, -e2 + q - 1 + l) % 10) % UInt8
-                end
-            end
-            if q <= qinvbound(T)
-                if ((mv % UInt32) - 5 * div(mv, 5)) == 0
-                    vrIsTrailingZeros = pow5(mv, q)
-                elseif even
-                    vmIsTrailingZeros = pow5(mm, q)
-                else
-                    vp -= pow5(mp, q)
-                end
-            end
-        else
-            q = log10pow5(-e2) - (T == Float64 ? (-e2 > 1) : 0)
-            e10 = q + e2
-            i = -e2 - q
-            k = pow5bits(i) - pow5_bitcount(T)
-            j = q - k
-            vr, vp, vm = mulshiftsplit(T, mv, mp, mm, i, j)
-            if T == Float32 || T == Float16
-                if q != 0 && div(vp - 1, 10) <= div(vm, 10)
-                    j = q - 1 - (pow5bits(i + 1) - pow5_bitcount(T))
-                    mul = T == Float32 ? FLOAT_POW5_SPLIT[i + 2] : HALF_POW5_SPLIT[i + 2]
-                    lastRemovedDigit = (mulshift(mv, mul, j) % 10) % UInt8
-                end
-            end
-            if q <= 1
-                vrIsTrailingZeros = true
-                if even
-                    vmIsTrailingZeros = mmShift
-                else
-                    vp -= 1
-                end
-            elseif q < qbound(T)
-                vrIsTrailingZeros = pow2(mv, q - (T != Float64))
-            end
-        end
-        removed = 0
-        if vmIsTrailingZeros || vrIsTrailingZeros
-            while true
-                vpDiv10 = div(vp, 10)
-                vmDiv10 = div(vm, 10)
-                vpDiv10 <= vmDiv10 && break
-                vmMod10 = (vm % UInt32) - UInt32(10) * (vmDiv10 % UInt32)
-                vrDiv10 = div(vr, 10)
-                vrMod10 = (vr % UInt32) - UInt32(10) * (vrDiv10 % UInt32)
-                vmIsTrailingZeros &= vmMod10 == 0
-                vrIsTrailingZeros &= lastRemovedDigit == 0
-                lastRemovedDigit = vrMod10 % UInt8
-                vr = vrDiv10
-                vp = vpDiv10
-                vm = vmDiv10
-                removed += 1
-            end
-            if vmIsTrailingZeros
-                while true
-                    vmDiv10 = div(vm, 10)
-                    vmMod10 = (vm % UInt32) - UInt32(10) * (vmDiv10 % UInt32)
-                    vmMod10 != 0 && break
-                    vpDiv10 = div(vp, 10)
-                    vrDiv10 = div(vr, 10)
-                    vrMod10 = (vr % UInt32) - UInt32(10) * (vrDiv10 % UInt32)
-                    vrIsTrailingZeros &= lastRemovedDigit == 0
-                    lastRemovedDigit = vrMod10 % UInt8
-                    vr = vrDiv10
-                    vp = vpDiv10
-                    vm = vmDiv10
-                    removed += 1
-                end
-            end
-            if vrIsTrailingZeros && lastRemovedDigit == 5 && vr % 2 == 0
-                lastRemovedDigit = UInt8(4)
-            end
-            output = vr + ((vr == vm && (!even || !vmIsTrailingZeros)) || lastRemovedDigit >= 5)
-        else
-            roundUp = false
-            vpDiv100 = div(vp, 100)
-            vmDiv100 = div(vm, 100)
-            if vpDiv100 > vmDiv100
-                vrDiv100 = div(vr, 100)
-                vrMod100 = (vr % UInt32) - UInt32(100) * (vrDiv100 % UInt32)
-                roundUp = vrMod100 >= 50
-                vr = vrDiv100
-                vp = vpDiv100
-                vm = vmDiv100
-                removed += 2
-            end
-            while true
-                vpDiv10 = div(vp, 10)
-                vmDiv10 = div(vm, 10)
-                vpDiv10 <= vmDiv10 && break
-                vrDiv10 = div(vr, 10)
-                vrMod10 = (vr % UInt32) - UInt32(10) * (vrDiv10 % UInt32)
-                roundUp = vrMod10 >= 5
-                vr = vrDiv10
-                vp = vpDiv10
-                vm = vmDiv10
-                removed += 1
-            end
-            output = vr + (vr == vm || roundUp || lastRemovedDigit >= 5)
-        end
-        nexp = e10 + removed
-    else
-        output = m2 >> -e2
-        nexp = 0
-        while true
-            q = div(output, 10)
-            r = (output % UInt32) - UInt32(10) * (q % UInt32)
-            r != 0 && break
-            output = q
-            nexp += 1
-        end
-    end
+    output, nexp = reduce_shortest(x, compact ? 999_999 : nothing)
 
     if typed && x isa Float16
         buf[pos] = UInt8('F')
@@ -242,40 +327,10 @@
         pos += 1
     end
 
-    if compact && output > 999999
-        lastdigit = output % 10
-        while true
-            output = div(output, 10)
-            nexp += nexp != 0
-            output > 999999 || break
-            lastdigit = output % 10
-        end
-        if lastdigit == 9
-            output += 1
-            lastdigit = 0
-        end
-        if lastdigit == 9
-            while true
-                output = div(output, 10)
-                nexp += nexp != 0
-                output % 10 == 9 || break
-            end
-            output += 1
-        elseif output % 10 == 0
-            while true
-                output = div(output, 10)
-                nexp += nexp != 0
-                output % 10 == 0 || break
-            end
-        else
-            output += lastdigit > 4
-        end
-    end
-
     olength = decimallength(output)
     exp_form = true
     pt = nexp + olength
-    if -4 < pt <= (precision == -1 ? (T == Float16 ? 5 : 6) : precision)
+    if -4 < pt <= (precision == -1 ? (T == Float16 ? 3 : 6) : precision)
         exp_form = false
         if pt <= 0
             buf[pos] = UInt8('0')
@@ -286,9 +341,9 @@
                 buf[pos] = UInt8('0')
                 pos += 1
             end
-        # elseif pt >= olength
+            # elseif pt >= olength
             # nothing to do at this point
-        # else
+            # else
             # nothing to do at this point
         end
     else

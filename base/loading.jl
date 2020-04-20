@@ -117,7 +117,14 @@ end
 
 const ns_dummy_uuid = UUID("fe0723d6-3a44-4c41-8065-ee0f42c8ceab")
 
-dummy_uuid(project_file::String) = uuid5(ns_dummy_uuid, realpath(project_file))
+function dummy_uuid(project_file::String)
+    project_path = try
+        realpath(project_file)
+    catch
+        project_file
+    end
+    return uuid5(ns_dummy_uuid, project_path)
+end
 
 ## package path slugs: turning UUID + SHA1 into a pair of 4-byte "slugs" ##
 
@@ -265,7 +272,7 @@ end
 """
     pathof(m::Module)
 
-Return the path of `m.jl` file that was used to `import` module `m`,
+Return the path of the `m.jl` file that was used to `import` module `m`,
 or `nothing` if `m` was not imported from a package.
 
 Use [`dirname`](@ref) to get the directory part and [`basename`](@ref)
@@ -275,6 +282,19 @@ function pathof(m::Module)
     pkgid = get(Base.module_keys, m, nothing)
     pkgid === nothing && return nothing
     return Base.locate_package(pkgid)
+end
+
+"""
+    pkgdir(m::Module)
+
+ Return the root directory of the package that imported module `m`,
+ or `nothing` if `m` was not imported from a package.
+ """
+function pkgdir(m::Module)
+    rootmodule = Base.moduleroot(m)
+    path = pathof(rootmodule)
+    path === nothing && return nothing
+    return dirname(dirname(path))
 end
 
 ## generic project & manifest API ##
@@ -477,15 +497,15 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
         state = :top
         for line in eachline(io)
             if occursin(re_section, line)
-                state == :top && root_name == name && return root_uuid
+                state === :top && root_name == name && return root_uuid
                 state = occursin(re_section_deps, line) ? :deps : :other
-            elseif state == :top
+            elseif state === :top
                 if (m = match(re_name_to_string, line)) !== nothing
                     root_name = String(m.captures[1])
                 elseif (m = match(re_uuid_to_string, line)) !== nothing
                     root_uuid = UUID(m.captures[1])
                 end
-            elseif state == :deps
+            elseif state === :deps
                 if (m = match(re_key_to_string, line)) !== nothing
                     m.captures[1] == name && return UUID(m.captures[2])
                 end
@@ -510,7 +530,7 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
                 uuid == where && break
                 uuid = deps = nothing
                 state = :stanza
-            elseif state == :stanza
+            elseif state === :stanza
                 if (m = match(re_uuid_to_string, line)) !== nothing
                     uuid = UUID(m.captures[1])
                 elseif (m = match(re_deps_to_any, line)) !== nothing
@@ -520,7 +540,7 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
                 elseif occursin(re_section, line)
                     state = :other
                 end
-            elseif state == :deps && uuid == where
+            elseif state === :deps && uuid == where
                 # [deps] section format gives both name and uuid
                 if (m = match(re_key_to_string, line)) !== nothing
                     m.captures[1] == name && return UUID(m.captures[2])
@@ -1053,21 +1073,32 @@ end
 # relative-path load
 
 """
-    include_string(m::Module, code::AbstractString, filename::AbstractString="string")
+    include_string([mapexpr::Function,] m::Module, code::AbstractString, filename::AbstractString="string")
 
 Like [`include`](@ref), except reads code from the given string rather than from a file.
+
+The optional first argument `mapexpr` can be used to transform the included code before
+it is evaluated: for each parsed expression `expr` in `code`, the `include_string` function
+actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
 """
-include_string(m::Module, txt::String, fname::String) =
-    ccall(:jl_load_file_string, Any, (Ptr{UInt8}, Csize_t, Cstring, Any),
-          txt, sizeof(txt), fname, m)
+function include_string(mapexpr::Function, m::Module, txt_::AbstractString, fname::AbstractString="string")
+    txt = String(txt_)
+    if mapexpr === identity
+        ccall(:jl_load_file_string, Any, (Ptr{UInt8}, Csize_t, Cstring, Any),
+            txt, sizeof(txt), String(fname), m)
+    else
+        ccall(:jl_load_rewrite_file_string, Any, (Ptr{UInt8}, Csize_t, Cstring, Any, Any),
+            txt, sizeof(txt), String(fname), m, mapexpr)
+    end
+end
 
 include_string(m::Module, txt::AbstractString, fname::AbstractString="string") =
-    include_string(m, String(txt), String(fname))
+    include_string(identity, m, txt, fname)
 
 function source_path(default::Union{AbstractString,Nothing}="")
     s = current_task().storage
-    if s !== nothing && haskey(s, :SOURCE_PATH)
-        return s[:SOURCE_PATH]
+    if s !== nothing && haskey(s::IdDict{Any,Any}, :SOURCE_PATH)
+        return s[:SOURCE_PATH]::Union{Nothing,String}
     end
     return default
 end
@@ -1078,15 +1109,19 @@ function source_dir()
 end
 
 """
-    Base.include([m::Module,] path::AbstractString)
+    Base.include([mapexpr::Function,] [m::Module,] path::AbstractString)
 
 Evaluate the contents of the input source file in the global scope of module `m`.
-Every module (except those defined with [`baremodule`](@ref)) has its own 1-argument
-definition of `include`, which evaluates the file in that module.
+Every module (except those defined with [`baremodule`](@ref)) has its own
+definition of `include` omitting the `m` argument, which evaluates the file in that module.
 Returns the result of the last evaluated expression of the input file. During including,
 a task-local include path is set to the directory containing the file. Nested calls to
 `include` will search relative to that path. This function is typically used to load source
 interactively, or to combine files in packages that are broken into multiple source files.
+
+The optional first argument `mapexpr` can be used to transform the included code before
+it is evaluated: for each parsed expression `expr` in `path`, the `include` function
+actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
 """
 Base.include # defined in sysimg.jl
 
@@ -1102,6 +1137,7 @@ function evalfile(path::AbstractString, args::Vector{String}=String[])
              :(const ARGS = $args),
              :(eval(x) = $(Expr(:core, :eval))(__anon__, x)),
              :(include(x) = $(Expr(:top, :include))(__anon__, x)),
+             :(include(mapexpr::Function, x) = $(Expr(:top, :include))(mapexpr, __anon__, x)),
              :(include($path))))
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
@@ -1133,10 +1169,11 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
             eval(Meta.parse(code))
         end
         """
+
     io = open(pipeline(`$(julia_cmd()) -O0
                        --output-ji $output --output-incremental=yes
                        --startup-file=no --history-file=no --warn-overwrite=yes
-                       --color=$(have_color ? "yes" : "no")
+                       --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
                        --eval $code_object`, stderr=stderr),
               "w", stdout)
     in = io.in
@@ -1191,7 +1228,10 @@ function compilecache_path(pkg::PkgId)::String
     if pkg.uuid === nothing
         abspath(cachepath, entryfile) * ".ji"
     else
-        project_precompile_slug = slug(_crc32c(something(Base.active_project(), "")), 5)
+        crc = _crc32c(something(Base.active_project(), ""))
+        crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
+        crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
+        project_precompile_slug = slug(crc, 5)
         abspath(cachepath, string(entryfile, "_", project_precompile_slug, ".ji"))
     end
 end
@@ -1241,6 +1281,8 @@ function compilecache(pkg::PkgId, path::String)
         open(cachefile, "a+") do f
             write(f, _crc32c(seekstart(f)))
         end
+        # inherit permission from the source file
+        chmod(cachefile, filemode(path) & 0o777)
     elseif p.exitcode == 125
         return PrecompilableError()
     else
@@ -1462,7 +1504,7 @@ Alternatively see [`PROGRAM_FILE`](@ref).
 """
 macro __FILE__()
     __source__.file === nothing && return nothing
-    return String(__source__.file)
+    return String(__source__.file::Symbol)
 end
 
 """
@@ -1474,6 +1516,6 @@ Return the current working directory if run from a REPL or if evaluated by `juli
 """
 macro __DIR__()
     __source__.file === nothing && return nothing
-    _dirname = dirname(String(__source__.file))
+    _dirname = dirname(String(__source__.file::Symbol))
     return isempty(_dirname) ? pwd() : abspath(_dirname)
 end

@@ -159,12 +159,13 @@ end
 
 ## system error handling ##
 """
-    systemerror(sysfunc, iftrue)
+    systemerror(sysfunc[, errno::Cint=Libc.errno()])
+    systemerror(sysfunc, iftrue::Bool)
 
 Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `iftrue` is `true`
 """
-systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), extrainfo)) : nothing
-
+systemerror(p, b::Bool; extrainfo=nothing) = b ? systemerror(p, extrainfo=extrainfo) : nothing
+systemerror(p, errno::Cint=Libc.errno(); extrainfo=nothing) = throw(Main.Base.SystemError(string(p), errno, extrainfo))
 
 ## system errors from Windows API functions
 struct WindowsErrorInfo
@@ -172,12 +173,14 @@ struct WindowsErrorInfo
     extrainfo
 end
 """
-    windowserror(sysfunc, iftrue)
+    windowserror(sysfunc[, code::UInt32=Libc.GetLastError()])
+    windowserror(sysfunc, iftrue::Bool)
 
-Like [`systemerror`](@ref), but for Windows API functions that use [`GetLastError`](@ref) instead
-of setting [`errno`](@ref).
+Like [`systemerror`](@ref), but for Windows API functions that use [`GetLastError`](@ref Base.Libc.GetLastError) to
+return an error code instead of setting [`errno`](@ref Base.Libc.errno).
 """
-windowserror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), WindowsErrorInfo(Libc.GetLastError(), extrainfo))) : nothing
+windowserror(p, b::Bool; extrainfo=nothing) = b ? windowserror(p, extrainfo=extrainfo) : nothing
+windowserror(p, code::UInt32=Libc.GetLastError(); extrainfo=nothing) = throw(Main.Base.SystemError(string(p), 0, WindowsErrorInfo(code, extrainfo)))
 
 
 ## assertion macro ##

@@ -71,6 +71,74 @@ function endswith(a::Union{String, SubString{String}},
 end
 
 """
+    contains(haystack::AbstractString, needle)
+
+Return `true` if `haystack` contains `needle`.
+This is the same as `occursin(needle, haystack)`, but is provided for consistency with
+`startswith(haystack, needle)` and `endswith(haystack, needle)`.
+
+# Examples
+```jldoctest
+julia> contains("JuliaLang is pretty cool!", "Julia")
+true
+
+julia> contains("JuliaLang is pretty cool!", 'a')
+true
+
+julia> contains("aba", r"a.a")
+true
+
+julia> contains("abba", r"a.a")
+false
+```
+
+!!! compat "Julia 1.5"
+    The `contains` function requires at least Julia 1.5.
+"""
+contains(haystack::AbstractString, needle) = occursin(needle, haystack)
+
+"""
+    endswith(suffix)
+
+Create a function that checks whether its argument ends with `suffix`, i.e.
+a function equivalent to `y -> endswith(y, suffix)`.
+
+The returned function is of type `Base.Fix2{typeof(endswith)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.5"
+    The single argument `endswith(suffix)` requires at least Julia 1.5.
+
+"""
+endswith(s) = Base.Fix2(endswith, s)
+
+"""
+    startswith(prefix)
+
+Create a function that checks whether its argument starts with `prefix`, i.e.
+a function equivalent to `y -> startswith(y, prefix)`.
+
+The returned function is of type `Base.Fix2{typeof(startswith)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.5"
+    The single argument `startswith(prefix)` requires at least Julia 1.5.
+
+"""
+startswith(s) = Base.Fix2(startswith, s)
+
+"""
+    contains(needle)
+
+Create a function that checks whether its argument contains `needle`, i.e.
+a function equivalent to `haystack -> contains(haystack, needle)`.
+
+The returned function is of type `Base.Fix2{typeof(contains)}`, which can be
+used to implement specialized methods.
+"""
+contains(needle) = Base.Fix2(contains, needle)
+
+"""
     chop(s::AbstractString; head::Integer = 0, tail::Integer = 1)
 
 Remove the first `head` and the last `tail` characters from `s`.
@@ -104,7 +172,7 @@ end
 # chop(s::AbstractString) = SubString(s, firstindex(s), prevind(s, lastindex(s)))
 
 """
-    chomp(s::AbstractString)
+    chomp(s::AbstractString) -> SubString
 
 Remove a single trailing newline from a string.
 
@@ -133,8 +201,8 @@ function chomp(s::String)
 end
 
 """
-    lstrip([pred=isspace,] str::AbstractString)
-    lstrip(str::AbstractString, chars)
+    lstrip([pred=isspace,] str::AbstractString) -> SubString
+    lstrip(str::AbstractString, chars) -> SubString
 
 Remove leading characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
@@ -165,8 +233,8 @@ lstrip(s::AbstractString) = lstrip(isspace, s)
 lstrip(s::AbstractString, chars::Chars) = lstrip(in(chars), s)
 
 """
-    rstrip([pred=isspace,] str::AbstractString)
-    rstrip(str::AbstractString, chars)
+    rstrip([pred=isspace,] str::AbstractString) -> SubString
+    rstrip(str::AbstractString, chars) -> SubString
 
 Remove trailing characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
@@ -196,8 +264,8 @@ rstrip(s::AbstractString) = rstrip(isspace, s)
 rstrip(s::AbstractString, chars::Chars) = rstrip(in(chars), s)
 
 """
-    strip([pred=isspace,] str::AbstractString)
-    strip(str::AbstractString, chars)
+    strip([pred=isspace,] str::AbstractString) -> SubString
+    strip(str::AbstractString, chars) -> SubString
 
 Remove leading and trailing characters from `str`, either those specified by `chars` or
 those for which the function `pred` returns `true`.
@@ -300,7 +368,7 @@ See also [`rsplit`](@ref).
 julia> a = "Ma.rch"
 "Ma.rch"
 
-julia> split(a,".")
+julia> split(a, ".")
 2-element Array{SubString{String},1}:
  "Ma"
  "rch"
@@ -362,7 +430,7 @@ Similar to [`split`](@ref), but starting from the end of the string.
 julia> a = "M.a.r.c.h"
 "M.a.r.c.h"
 
-julia> rsplit(a,".")
+julia> rsplit(a, ".")
 5-element Array{SubString{String},1}:
  "M"
  "a"
@@ -370,11 +438,11 @@ julia> rsplit(a,".")
  "c"
  "h"
 
-julia> rsplit(a,".";limit=1)
+julia> rsplit(a, "."; limit=1)
 1-element Array{SubString{String},1}:
  "M.a.r.c.h"
 
-julia> rsplit(a,".";limit=2)
+julia> rsplit(a, "."; limit=2)
 2-element Array{SubString{String},1}:
  "M.a.r.c"
  "h"
@@ -442,7 +510,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
     while j != 0
         if i == a || i <= k
-            unsafe_write(out, pointer(str, i), UInt(j-i))
+            GC.@preserve str unsafe_write(out, pointer(str, i), UInt(j-i))
             _replace(out, repl, str, r, pattern)
         end
         if k < j

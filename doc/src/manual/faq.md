@@ -67,7 +67,7 @@ When a file is run as the main script using `julia file.jl` one might want to ac
 functionality like command line argument handling. A way to determine that a file is run in
 this fashion is to check if `abspath(PROGRAM_FILE) == @__FILE__` is `true`.
 
-### How do I catch CTRL-C in a script?
+### [How do I catch CTRL-C in a script?](@id catch-ctrl-c)
 
 Running a Julia script using `julia file.jl` does not throw
 [`InterruptException`](@ref) when you try to terminate it with CTRL-C
@@ -90,8 +90,7 @@ use `exec` to replace the process to `julia`:
 ```julia
 #!/bin/bash
 #=
-exec julia --color=yes --startup-file=no -e 'include(popfirst!(ARGS))' \
-    "${BASH_SOURCE[0]}" "$@"
+exec julia --color=yes --startup-file=no "${BASH_SOURCE[0]}" "$@"
 =#
 
 @show ARGS  # put any Julia code here
@@ -101,6 +100,19 @@ In the example above, the code between `#=` and `=#` is run as a `bash`
 script.  Julia ignores this part since it is a multi-line comment for
 Julia.  The Julia code after `=#` is ignored by `bash` since it stops
 parsing the file once it reaches to the `exec` statement.
+
+!!! note
+    In order to [catch CTRL-C](@ref catch-ctrl-c) in the script you can use
+    ```julia
+    #!/bin/bash
+    #=
+    exec julia --color=yes --startup-file=no -e 'include(popfirst!(ARGS))' \
+        "${BASH_SOURCE[0]}" "$@"
+    =#
+
+    @show ARGS  # put any Julia code here
+    ```
+    instead. Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
 
 ## Functions
 
@@ -129,9 +141,9 @@ When calling `change_value!(x)` in the above example, `y` is a newly created var
 to the value of `x`, i.e. `10`; then `y` is rebound to the constant `17`, while the variable
 `x` of the outer scope is left untouched.
 
-But here is a thing you should pay attention to: suppose `x` is bound to an object of type `Array`
+However, if `x` is bound to an object of type `Array`
 (or any other *mutable* type). From within the function, you cannot "unbind" `x` from this Array,
-but you can change its content. For example:
+but you *can* change its content. For example:
 
 ```jldoctest
 julia> x = [1,2,3]
@@ -322,8 +334,8 @@ unstable (generic function with 1 method)
 
 It returns either an `Int` or a [`Float64`](@ref) depending on the value of its argument.
 Since Julia can't predict the return type of this function at compile-time, any computation
-that uses it will have to guard against both types possibly occurring, making generation of
-fast machine code difficult.
+that uses it must be able to cope with values of both types, which makes it hard to produce
+fast machine code.
 
 ### [Why does Julia give a `DomainError` for certain seemingly-sensible operations?](@id faq-domain-errors)
 
@@ -350,6 +362,45 @@ your willingness to accept an *output type* in which the result can be represent
 ```jldoctest
 julia> sqrt(-2.0+0im)
 0.0 + 1.4142135623730951im
+```
+
+### How can I constrain or compute type parameters?
+
+The parameters of a [parametric type](@ref Parametric-Types) can hold either
+types or bits values, and the type itself chooses how it makes use of these parameters.
+For example, `Array{Float64, 2}` is parameterized by the type `Float64` to express its
+element type and the integer value `2` to express its number of dimensions.  When
+defining your own parametric type, you can use subtype constraints to declare that a
+certain parameter must be a subtype ([`<:`](@ref)) of some abstract type or a previous
+type parameter.  There is not, however, a dedicated syntax to declare that a parameter
+must be a _value_ of a given type — that is, you cannot directly declare that a
+dimensionality-like parameter [`isa`](@ref) `Int` within the `struct` definition, for
+example.  Similarly, you cannot do computations (including simple things like addition
+or subtraction) on type parameters.  Instead, these sorts of constraints and
+relationships may be expressed through additional type parameters that are computed
+and enforced within the type's [constructors](@ref man-constructors).
+
+As an example, consider
+```julia
+struct ConstrainedType{T,N,N+1} # NOTE: INVALID SYNTAX
+    A::Array{T,N}
+    B::Array{T,N+1}
+end
+```
+where the user would like to enforce that the third type parameter is always the second plus one. This can be implemented with an explicit type parameter that is checked by an [inner constructor method](@ref man-inner-constructor-methods) (where it can be combined with other checks):
+```julia
+struct ConstrainedType{T,N,M}
+    A::Array{T,N}
+    B::Array{T,M}
+    function ConstrainedType(A::Array{T,N}, B::Array{T,M}) where {T,N,M}
+        N + 1 == M || throw(ArgumentError("second argument should have one more axis" ))
+        new{T,N,M}(A, B)
+    end
+end
+```
+This check is usually *costless*, as the compiler can elide the check for valid concrete types. If the second argument is also computed, it may be advantageous to provide an [outer constructor method](@ref man-outer-constructor-methods) that performs this calculation:
+```julia
+ConstrainedType(A) = ConstrainedType(A, compute_B(A))
 ```
 
 ### [Why does Julia use native machine integer arithmetic?](@id faq-integer-arithmetic)
@@ -576,6 +627,14 @@ have, it ends up having a substantial cost due to compilers (LLVM and GCC) not g
 around the added overflow checks. If this improves in the future, we could consider defaulting
 to checked integer arithmetic in Julia, but for now, we have to live with the possibility of overflow.
 
+In the meantime, overflow-safe integer operations can be achieved through the use of external libraries
+such as [SaferIntegers.jl](https://github.com/JeffreySarnoff/SaferIntegers.jl). Note that, as stated
+previously, the use of these libraries significantly increases the execution time of code using the
+checked integer types. However, for limited usage, this is far less of an issue than if it were used
+for all integer operations. You can follow the status of the discussion
+[here](https://github.com/JuliaLang/julia/issues/855).
+
+
 ### What are the possible causes of an `UndefVarError` during remote execution?
 
 As the error states, an immediate cause of an `UndefVarError` on a remote node is that a binding
@@ -711,8 +770,9 @@ generate efficient code when working with `Union{T, Nothing}` arguments or field
 To represent missing data in the statistical sense (`NA` in R or `NULL` in SQL), use the
 [`missing`](@ref) object. See the [`Missing Values`](@ref missing) section for more details.
 
-The empty tuple (`()`) is another form of nothingness. But, it should not really be thought of
-as nothing but rather a tuple of zero values.
+In some languages, the empty tuple (`()`) is considered the canonical
+form of nothingness. However, in julia it is best thought of as just
+a regular tuple that happens to contain zero values.
 
 The empty (or "bottom") type, written as `Union{}` (an empty union type), is a type with
 no values and no subtypes (except itself). You will generally not need to use this type.

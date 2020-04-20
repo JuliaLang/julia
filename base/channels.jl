@@ -24,14 +24,14 @@ Other constructors:
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
 
 !!! compat "Julia 1.3"
-  The default constructor `Channel()` and default `size=0` were added in Julia 1.3.
+    The default constructor `Channel()` and default `size=0` were added in Julia 1.3.
 """
 mutable struct Channel{T} <: AbstractChannel{T}
     cond_take::Threads.Condition                 # waiting for data to become available
     cond_wait::Threads.Condition                 # waiting for data to become maybe available
     cond_put::Threads.Condition                  # waiting for a writeable slot
     state::Symbol
-    excp::Union{Exception, Nothing}      # exception to be thrown when state != :open
+    excp::Union{Exception, Nothing}      # exception to be thrown when state !== :open
 
     data::Vector{T}
     sz_max::Int                          # maximum size of channel
@@ -108,9 +108,9 @@ true
 ```
 
 !!! compat "Julia 1.3"
-  The `spawn=` parameter was added in Julia 1.3. This constructor was added in Julia 1.3.
-  In earlier versions of Julia, Channel used keyword arguments to set `size` and `T`, but
-  those constructors are deprecated.
+    The `spawn=` parameter was added in Julia 1.3. This constructor was added in Julia 1.3.
+    In earlier versions of Julia, Channel used keyword arguments to set `size` and `T`, but
+    those constructors are deprecated.
 
 ```jldoctest
 julia> chnl = Channel{Char}(1, spawn=true) do ch
@@ -189,7 +189,7 @@ function close(c::Channel, excp::Exception=closed_exception())
     end
     nothing
 end
-isopen(c::Channel) = (c.state == :open)
+isopen(c::Channel) = (c.state === :open)
 
 """
     bind(chnl::Channel, task::Task)
@@ -242,10 +242,8 @@ Stacktrace:
 ```
 """
 function bind(c::Channel, task::Task)
-    # TODO: implement "schedulewait" and deprecate taskdone_hook
-    #T = Task(() -> close_chnl_on_taskdone(task, c))
-    #schedulewait(task, T)
-    register_taskdone_hook(task, tsk -> close_chnl_on_taskdone(tsk, c))
+    T = Task(() -> close_chnl_on_taskdone(task, c))
+    _wait2(task, T)
     return c
 end
 
@@ -277,28 +275,19 @@ end
 
 function close_chnl_on_taskdone(t::Task, c::Channel)
     isopen(c) || return
-    cleanup = () -> try
-            isopen(c) || return
-            if istaskfailed(t)
-                excp = task_result(t)
-                if excp isa Exception
-                    close(c, excp)
-                    return
-                end
+    lock(c)
+    try
+        isopen(c) || return
+        if istaskfailed(t)
+            excp = task_result(t)
+            if excp isa Exception
+                close(c, excp)
+                return
             end
-            close(c)
-            return
-        finally
-            unlock(c)
         end
-    if trylock(c)
-        # can't use `lock`, since attempts to task-switch to wait for it
-        # will just silently fail and leave us with broken state
-        cleanup()
-    else
-        # so schedule this to happen once we are finished destroying our task
-        # (on a new Task)
-        @async (lock(c); cleanup())
+        close(c)
+    finally
+        unlock(c)
     end
     nothing
 end
@@ -459,7 +448,7 @@ function iterate(c::Channel, state=nothing)
     try
         return (take!(c), nothing)
     catch e
-        if isa(e, InvalidStateException) && e.state == :closed
+        if isa(e, InvalidStateException) && e.state === :closed
             return nothing
         else
             rethrow()

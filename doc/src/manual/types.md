@@ -70,7 +70,7 @@ an exception is thrown, otherwise, the left-hand value is returned:
 
 ```jldoctest
 julia> (1+2)::AbstractFloat
-ERROR: TypeError: in typeassert, expected AbstractFloat, got Int64
+ERROR: TypeError: in typeassert, expected AbstractFloat, got a value of type Int64
 
 julia> (1+2)::Int
 3
@@ -232,7 +232,7 @@ has full control over whether the default or more specific method is used.
 An important point to note is that there is no loss in performance if the programmer relies on
 a function whose arguments are abstract types, because it is recompiled for each tuple of argument
 concrete types with which it is invoked. (There may be a performance issue, however, in the case
-of function arguments that are containers of abstract types; see [Performance Tips](@ref man-performance-tips).)
+of function arguments that are containers of abstract types; see [Performance Tips](@ref man-performance-abstract-container).)
 
 ## Primitive Types
 
@@ -493,7 +493,7 @@ julia> "Hello!" :: IntOrString
 "Hello!"
 
 julia> 1.0 :: IntOrString
-ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got Float64
+ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got a value of type Float64
 ```
 
 The compilers for many languages have an internal union construct for reasoning about types; Julia
@@ -812,7 +812,7 @@ julia> Pointy{AbstractString}
 ERROR: TypeError: in Pointy, in T, expected T<:Real, got Type{AbstractString}
 
 julia> Pointy{1}
-ERROR: TypeError: in Pointy, in T, expected T<:Real, got Int64
+ERROR: TypeError: in Pointy, in T, expected T<:Real, got a value of type Int64
 ```
 
 Type parameters for parametric composite types can be restricted in the same manner:
@@ -923,12 +923,26 @@ julia> typeof((a=1,b="hello"))
 NamedTuple{(:a, :b),Tuple{Int64,String}}
 ```
 
+The [`@NamedTuple`](@ref) macro provides a more convenient `struct`-like syntax for declaring
+`NamedTuple` types via `key::Type` declarations, where an omitted `::Type` corresponds to `::Any`.
+
+```jldoctest
+julia> @NamedTuple{a::Int, b::String}
+NamedTuple{(:a, :b),Tuple{Int64,String}}
+
+julia> @NamedTuple begin
+           a::Int
+           b::String
+       end
+NamedTuple{(:a, :b),Tuple{Int64,String}}
+```
+
 A `NamedTuple` type can be used as a constructor, accepting a single tuple argument.
 The constructed `NamedTuple` type can be either a concrete type, with both parameters specified,
 or a type that specifies only field names:
 
 ```jldoctest
-julia> NamedTuple{(:a, :b),Tuple{Float32, String}}((1,""))
+julia> @NamedTuple{a::Float32,b::String}((1,""))
 (a = 1.0f0, b = "")
 
 julia> NamedTuple{(:a, :b)}((1,""))
@@ -1193,8 +1207,7 @@ is raised:
 julia> supertype(Union{Float64,Int64})
 ERROR: MethodError: no method matching supertype(::Type{Union{Float64, Int64}})
 Closest candidates are:
-  supertype(!Matched::DataType) at operators.jl:42
-  supertype(!Matched::UnionAll) at operators.jl:47
+[...]
 ```
 
 ## [Custom pretty-printing](@id man-custom-pretty-printing)
@@ -1402,12 +1415,12 @@ julia> firstlast(Val(false))
 "Last"
 ```
 
-For consistency across Julia, the call site should always pass a `Val`*instance* rather than using
+For consistency across Julia, the call site should always pass a `Val` *instance* rather than using
 a *type*, i.e., use `foo(Val(:bar))` rather than `foo(Val{:bar})`.
 
 It's worth noting that it's extremely easy to mis-use parametric "value" types, including `Val`;
 in unfavorable cases, you can easily end up making the performance of your code much *worse*.
  In particular, you would never want to write actual code as illustrated above.  For more information
-about the proper (and improper) uses of `Val`, please read the more extensive discussion in [the performance tips](@ref man-performance-tips).
+about the proper (and improper) uses of `Val`, please read [the more extensive discussion in the performance tips](@ref man-performance-value-type).
 
 [^1]: "Small" is defined by the `MAX_UNION_SPLITTING` constant, which is currently set to 4.

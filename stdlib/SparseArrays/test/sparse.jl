@@ -36,6 +36,7 @@ end
 @testset "issparse" begin
     @test issparse(sparse(fill(1,5,5)))
     @test !issparse(fill(1,5,5))
+    @test nnz(zero(sparse(fill(1,5,5)))) == 0
 end
 
 @testset "iszero specialization for SparseMatrixCSC" begin
@@ -61,11 +62,17 @@ end
     @test SparseArrays.indtype(sparse(Int8[1,1],Int8[1,1],[1,1])) == Int8
 end
 
+@testset "spzeros de-splatting" begin
+    @test spzeros(Float64, Int64, (2, 2)) == spzeros(Float64, Int64, 2, 2)
+end
+
 @testset "conversion to AbstractMatrix/SparseMatrix of same eltype" begin
     a = sprand(5, 5, 0.2)
     @test AbstractMatrix{eltype(a)}(a) == a
     @test SparseMatrixCSC{eltype(a)}(a) == a
     @test SparseMatrixCSC{eltype(a), Int}(a) == a
+    @test SparseMatrixCSC{eltype(a)}(Array(a)) == a
+    @test Array(SparseMatrixCSC{eltype(a), Int8}(a)) == Array(a)
 end
 
 @testset "sparse matrix construction" begin
@@ -81,6 +88,9 @@ end
         SparseMatrixCSC(6, 6, big.([1,2,4,7,8,9,9]), big.([1,1,2,1,2,3,4,5]), big.([1,2,3,4,5,6,7,8])))
     @test sparse(Any[1,2,3], Any[1,2,3], Any[1,1,1]) == sparse([1,2,3], [1,2,3], [1,1,1])
     @test sparse(Any[1,2,3], Any[1,2,3], Any[1,1,1], 5, 4) == sparse([1,2,3], [1,2,3], [1,1,1], 5, 4)
+    # with combine
+    @test sparse([1, 1, 2, 2, 2], [1, 2, 1, 2, 2], 1.0, 2, 2, +) == sparse([1, 1, 2, 2], [1, 2, 1, 2], [1.0, 1.0, 1.0, 2.0], 2, 2)
+    @test sparse([1, 1, 2, 2, 2], [1, 2, 1, 2, 2], -1.0, 2, 2, *) == sparse([1, 1, 2, 2], [1, 2, 1, 2], [-1.0, -1.0, -1.0, 1.0], 2, 2)
 end
 
 @testset "SparseMatrixCSC construction from UniformScaling" begin
@@ -384,6 +394,29 @@ end
     end
 end
 
+@testset "multiplication of sparse matrix and triangular matrix" begin
+    _sparse_test_matrix(n, T) =  T == Int ? sparse(rand(0:4, n, n)) : sprandn(T, n, n, 0.6)
+    _triangular_test_matrix(n, TA, T) = T == Int ? TA(rand(0:9, n, n)) : TA(randn(T, n, n))
+
+    n = 5
+    for T1 in (Int, Float64, ComplexF32)
+        S = _sparse_test_matrix(n, T1)
+        MS = Matrix(S)
+        for T2 in (Int, Float64, ComplexF32)
+            for TM in (LowerTriangular, UnitLowerTriangular, UpperTriangular, UnitLowerTriangular)
+                T = _triangular_test_matrix(n, TM, T2)
+                MT = Matrix(T)
+                @test isa(T * S, DenseMatrix)
+                @test isa(S * T, DenseMatrix)
+                for transT in (identity, adjoint, transpose), transS in (identity, adjoint, transpose)
+                    @test transT(T) * transS(S) ≈ transT(MT) * transS(MS)
+                    @test transS(S) * transT(T) ≈ transS(MS) * transT(MT)
+                end
+            end
+        end
+    end
+end
+
 @testset "Issue #30502" begin
     @test nnz(sprand(UInt8(16), UInt8(16), 1.0)) == 256
     @test nnz(sprand(UInt8(16), UInt8(16), 1.0, ones)) == 256
@@ -556,6 +589,30 @@ end
     B = sparse(rand(Float32, 3, 3))
     copyto!(A, B)
     @test A == B
+    # Test copyto!(dense, sparse)
+    B = sprand(5, 5, 1.0)
+    A = rand(5,5)
+    A´ = similar(A)
+    @test copyto!(A, B) == copyto!(A´, Matrix(B))
+    # Test copyto!(dense, Rdest, sparse, Rsrc)
+    A = rand(5,5)
+    A´ = similar(A)
+    Rsrc = CartesianIndices((3:4, 2:3))
+    Rdest = CartesianIndices((2:3, 1:2))
+    copyto!(A, Rdest, B, Rsrc)
+    copyto!(A´, Rdest, Matrix(B), Rsrc)
+    @test A[Rdest] == A´[Rdest] == Matrix(B)[Rsrc]
+    # Test unaliasing of B´
+    B´ = copy(B)
+    copyto!(B´, Rdest, B´, Rsrc)
+    @test Matrix(B´)[Rdest] == Matrix(B)[Rsrc]
+    # Test that only elements at overlapping linear indices are overwritten
+    A = sprand(3, 3, 1.0); B = ones(4, 4)
+    copyto!(B, A)
+    @test B[4, :] != B[:, 4] == ones(4)
+    # Allow no-op copyto! with empty source even for incompatible eltypes
+    A = sparse(fill("", 0, 0))
+    @test copyto!(B, A) == B
 end
 
 @testset "conj" begin
@@ -1111,6 +1168,18 @@ end
         S[I] .= J
         @test sum(S) == (sumS1 - sumS2 + sum(J))
     end
+
+    # setindex with a Matrix{Bool}
+    Is = fill(false, 10, 10)
+    Is[1, 1] = true
+    Is[10, 10] = true
+    A = sprand(10, 10, 0.2)
+    A[Is] = [0.1, 0.5]
+    @test A[1, 1] == 0.1
+    @test A[10, 10] == 0.5
+    A = spzeros(10, 10)
+    A[Is] = [0.1, 0.5]
+    @test nnz(A) == 2
 end
 
 @testset "dropstored!" begin
@@ -1163,6 +1232,13 @@ end
     # --> Test dropping a block of the matrix towards the upper left
     SparseArrays.dropstored!(A, 2:5, 2:5)
     @test nnz(A) == 42
+    # --> Test dropping all elements
+    SparseArrays.dropstored!(A, :)
+    @test nnz(A) == 0
+    A[1:2:9, :] .= 1
+    @test nnz(A) == 50
+    SparseArrays.dropstored!(A, :, :)
+    @test nnz(A) == 0
 end
 
 @testset "issue #7507" begin
@@ -1629,15 +1705,11 @@ end
         for Awithzeros in (Aposzeros, Anegzeros, Abothsigns)
             # Basic functionality / dropzeros!
             @test dropzeros!(copy(Awithzeros)) == A
-            @test dropzeros!(copy(Awithzeros), trim = false) == A
             # Basic functionality / dropzeros
             @test dropzeros(Awithzeros) == A
-            @test dropzeros(Awithzeros, trim = false) == A
             # Check trimming works as expected
             @test length(nonzeros(dropzeros!(copy(Awithzeros)))) == length(nonzeros(A))
             @test length(rowvals(dropzeros!(copy(Awithzeros)))) == length(rowvals(A))
-            @test length(nonzeros(dropzeros!(copy(Awithzeros), trim = false))) == length(nonzeros(Awithzeros))
-            @test length(rowvals(dropzeros!(copy(Awithzeros), trim = false))) == length(rowvals(Awithzeros))
         end
     end
     # original lone dropzeros test
@@ -2022,12 +2094,21 @@ end
     @test issparse(LinearAlgebra.UnitLowerTriangular(m))
     @test issparse(UpperTriangular(m))
     @test issparse(LinearAlgebra.UnitUpperTriangular(m))
+    @test issparse(adjoint(m))
+    @test issparse(transpose(m))
     @test issparse(Symmetric(Array(m))) == false
     @test issparse(Hermitian(Array(m))) == false
     @test issparse(LowerTriangular(Array(m))) == false
     @test issparse(LinearAlgebra.UnitLowerTriangular(Array(m))) == false
     @test issparse(UpperTriangular(Array(m))) == false
     @test issparse(LinearAlgebra.UnitUpperTriangular(Array(m))) == false
+end
+
+@testset "issparse for sparse vectors #34253" begin
+    v = sprand(10, 0.5)
+    @test issparse(v)
+    @test issparse(v')
+    @test issparse(transpose(v))
 end
 
 @testset "test created type of sprand{T}(::Type{T}, m::Integer, n::Integer, density::AbstractFloat)" begin
@@ -2485,6 +2566,7 @@ end
     @test permutedims(S, (2,1)) == SP
     @test permutedims(S, (1,2)) == S
     @test permutedims(S, (1,2)) !== S
+    @test_throws ArgumentError permutedims(S, (1,3))
     MC = reshape([[(1+im) 2; 3 4], [9 10; 11 12], [(5 + 2im) 6; 7 8], [13 14; 15 16]], (2,2))
     SC = sparse(MC)
     @test isa(adjoint(SC), Adjoint)
@@ -2498,11 +2580,16 @@ begin
     B = ones(n)
     A = sprand(rng, n, n, 0.01)
     MA = Matrix(A)
+    lA = sprand(rng, n, n+10, 0.01)
     @testset "triangular multiply with $tr($wr)" for tr in (identity, adjoint, transpose),
     wr in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
         AW = tr(wr(A))
         MAW = tr(wr(MA))
         @test AW * B ≈ MAW * B
+        # and for SparseMatrixCSCView - a view of all rows and unit range of cols
+        vAW = tr(wr(view(A, :, 1:n)))
+        vMAW = tr(wr(view(MA, :, 1:n)))
+        @test vAW * B ≈ vMAW * B
     end
     A = A - Diagonal(diag(A)) + 2I # avoid rounding errors by division
     MA = Matrix(A)
@@ -2670,6 +2757,9 @@ end
     @test sparse([1,2,3,4,5]') == SparseMatrixCSC([1 2 3 4 5])
     @test sparse(UpperTriangular(A')) == UpperTriangular(B')
     @test sparse(Adjoint(UpperTriangular(A'))) == Adjoint(UpperTriangular(B'))
+    @test sparse(UnitUpperTriangular(spzeros(5,5))) == I
+    deepwrap(A) = (Adjoint(LowerTriangular(view(Symmetric(A), 5:7, 4:6))))
+    @test sparse(deepwrap(A)) == Matrix(deepwrap(B))
 end
 
 @testset "unary operations on matrices where length(nzval)>nnz" begin
@@ -2762,6 +2852,58 @@ end
     @test transpose(A)*transpose(B)       ≈ transpose(Array(A)) * transpose(Array(B))
     @test adjoint(B)*A                    ≈ adjoint(Array(B)) * Array(A)
     @test adjoint(B)*adjoint(complex.(A)) ≈ adjoint(Array(B)) * adjoint(Array(complex.(A)))
+end
+
+@testset "copy a ReshapedArray of SparseMatrixCSC" begin
+    A = sprand(20, 10, 0.2)
+    rA = reshape(A, 10, 20)
+    crA = copy(rA)
+    @test reshape(crA, 20, 10) == A
+end
+
+@testset "avoid aliasing of fields during constructing $T (issue #34630)" for T in
+    (SparseMatrixCSC, SparseMatrixCSC{Float64}, SparseMatrixCSC{Float64,Int16})
+
+    A = sparse([1 1; 1 0])
+    B = T(A)
+    @test A == B
+    A[2,2] = 1
+    @test A != B
+    @test getcolptr(A) !== getcolptr(B)
+    @test rowvals(A) !== rowvals(B)
+    @test nonzeros(A) !== nonzeros(B)
+end
+
+@testset "SparseMatrixCSCView" begin
+    A  = sprand(10, 10, 0.2)
+    vA = view(A, :, 1:5) # a CSCView contains all rows and a UnitRange of the columns
+    @test SparseArrays.getnzval(vA)  == SparseArrays.getnzval(A)
+    @test SparseArrays.getrowval(vA) == SparseArrays.getrowval(A)
+    @test SparseArrays.getcolptr(vA) == SparseArrays.getcolptr(A[:, 1:5])
+end
+
+@testset "mapreducecols" begin
+    n = 20
+    m = 10
+    A = sprand(n, m, 0.2)
+    B = mapreduce(identity, +, A, dims=2)
+    for row in 1:n
+        @test B[row] ≈ sum(A[row, :])
+    end
+    @test B ≈ mapreduce(identity, +, Matrix(A), dims=2)
+    # case when f(0) =\= 0
+    B = mapreduce(x->x+1, +, A, dims=2)
+    for row in 1:n
+        @test B[row] ≈ sum(A[row, :] .+ 1)
+    end
+    @test B ≈ mapreduce(x->x+1, +, Matrix(A), dims=2)
+    # case when there are no zeros in the sparse matrix
+    A = sparse(rand(n, m))
+    B = mapreduce(identity, +, A, dims=2)
+    for row in 1:n
+        @test B[row] ≈ sum(A[row, :])
+    end
+    @test B ≈ mapreduce(identity, +, Matrix(A), dims=2)
 end
 
 end # module

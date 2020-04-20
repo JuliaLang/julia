@@ -1,9 +1,11 @@
 const MANTISSA_MASK = Base.significand_mask(Float64)
 const EXP_MASK = Base.exponent_mask(Float64) >> Base.significand_bits(Float64)
 
-memcpy(d, doff, s, soff, n) = ccall(:memcpy, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Int), d + doff - 1, s + soff - 1, n)
-memmove(d, doff, s, soff, n) = ccall(:memmove, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Int), d + doff - 1, s + soff - 1, n)
+memcpy(d, doff, s, soff, n) = (ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), d + doff - 1, s + soff - 1, n); nothing)
+memmove(d, doff, s, soff, n) = (ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), d + doff - 1, s + soff - 1, n); nothing)
 
+# Note: these are smaller than the values given in Figure 4 from the paper
+# see https://github.com/ulfjack/ryu/issues/119
 pow5_bitcount(::Type{Float16}) = 30
 pow5_bitcount(::Type{Float32}) = 61
 pow5_bitcount(::Type{Float64}) = 121
@@ -123,48 +125,16 @@ end
     return 1
 end
 
-@inline function mulshiftinvsplit(::Type{Float64}, mv, mp, mm, i, j)
-    @inbounds mul = DOUBLE_POW5_INV_SPLIT[i + 1]
+@inline function mulshiftinvsplit(::Type{T}, mv, mp, mm, i, j) where {T}
+    mul = pow5invsplit_lookup(T, i)
     vr = mulshift(mv, mul, j)
     vp = mulshift(mp, mul, j)
     vm = mulshift(mm, mul, j)
     return vr, vp, vm
 end
 
-@inline function mulshiftinvsplit(::Type{Float32}, mv, mp, mm, i, j)
-    @inbounds mul = FLOAT_POW5_INV_SPLIT[i + 1]
-    vr = mulshift(mv, mul, j)
-    vp = mulshift(mp, mul, j)
-    vm = mulshift(mm, mul, j)
-    return vr, vp, vm
-end
-
-@inline function mulshiftinvsplit(::Type{Float16}, mv, mp, mm, i, j)
-    @inbounds mul = HALF_POW5_INV_SPLIT[i + 1]
-    vr = mulshift(mv, mul, j)
-    vp = mulshift(mp, mul, j)
-    vm = mulshift(mm, mul, j)
-    return vr, vp, vm
-end
-
-@inline function mulshiftsplit(::Type{Float64}, mv, mp, mm, i, j)
-    @inbounds mul = DOUBLE_POW5_SPLIT[i + 1]
-    vr = mulshift(mv, mul, j)
-    vp = mulshift(mp, mul, j)
-    vm = mulshift(mm, mul, j)
-    return vr, vp, vm
-end
-
-@inline function mulshiftsplit(::Type{Float32}, mv, mp, mm, i, j)
-    @inbounds mul = FLOAT_POW5_SPLIT[i + 1]
-    vr = mulshift(mv, mul, j)
-    vp = mulshift(mp, mul, j)
-    vm = mulshift(mm, mul, j)
-    return vr, vp, vm
-end
-
-@inline function mulshiftsplit(::Type{Float16}, mv, mp, mm, i, j)
-    @inbounds mul = HALF_POW5_SPLIT[i + 1]
+@inline function mulshiftsplit(::Type{T}, mv, mp, mm, i, j) where {T}
+    mul = pow5split_lookup(T, i)
     vr = mulshift(mv, mul, j)
     vp = mulshift(mp, mul, j)
     vm = mulshift(mm, mul, j)
@@ -377,6 +347,20 @@ function pow5invsplit(::Type{T}, i) where {T<:AbstractFloat}
 end
 
 """
+    Ryu.pow5invsplit_lookup(T, i)
+
+[`pow5invsplit`](@ref) computed via lookup table.
+"""
+function pow5invsplit_lookup end
+for T in (Float64, Float32, Float16)
+    e2_max = exponent_max(T) - precision(T) - 2
+    i_max = log10pow2(e2_max)
+    table = [pow5invsplit(T, i) for i = 0:i_max]
+    @eval pow5invsplit_lookup(::Type{$T}, i) = @inbounds($table[i+1])
+end
+
+
+"""
     Ryu.pow5split(T, i)
 
 Compute `floor(5^i/2^k)`, where `k = pow5bits(i) - pow5_bitcount(T)`. The result is an
@@ -389,13 +373,18 @@ function pow5split(::Type{T}, i) where {T<:AbstractFloat}
     return W(pow >> (ndigits(pow, base=2) - pow5_bitcount(T)))
 end
 
-const DOUBLE_POW5_INV_SPLIT = map(i->pow5invsplit(Float64, i), 0:291)
-const FLOAT_POW5_INV_SPLIT = map(i->pow5invsplit(Float32, i), 0:30)
-const HALF_POW5_INV_SPLIT = map(i->pow5invsplit(Float16, i), 0:17)
+"""
+    Ryu.pow5split_lookup(T, i)
 
-const DOUBLE_POW5_SPLIT = map(i->pow5split(Float64, i), 0:325)
-const FLOAT_POW5_SPLIT = map(i->pow5split(Float32, i), 0:46)
-const HALF_POW5_SPLIT = map(i->pow5split(Float16, i), 0:23)
+[`pow5split`](@ref) computed via lookup table.
+"""
+function pow5split_lookup end
+for T in (Float64, Float32, Float16)
+    e2_min = 1 - exponent_bias(T) - significand_bits(T) - 2
+    i_max = 1 - e2_min - log10pow5(-e2_min)
+    table = [pow5split(T, i) for i = 0:i_max]
+    @eval pow5split_lookup(::Type{$T}, i) = @inbounds($table[i+1])
+end
 
 const DIGIT_TABLE = UInt8[
   '0','0','0','1','0','2','0','3','0','4','0','5','0','6','0','7','0','8','0','9',

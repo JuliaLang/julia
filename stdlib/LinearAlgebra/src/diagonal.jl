@@ -127,8 +127,8 @@ iszero(D::Diagonal) = all(iszero, D.diag)
 isone(D::Diagonal) = all(isone, D.diag)
 isdiag(D::Diagonal) = all(isdiag, D.diag)
 isdiag(D::Diagonal{<:Number}) = true
-istriu(D::Diagonal) = true
-istril(D::Diagonal) = true
+istriu(D::Diagonal, k::Integer=0) = k <= 0 || iszero(D.diag) ? true : false
+istril(D::Diagonal, k::Integer=0) = k >= 0 || iszero(D.diag) ? true : false
 function triu!(D::Diagonal,k::Integer=0)
     n = size(D,1)
     if !(-n + 1 <= k <= n + 1)
@@ -155,6 +155,21 @@ end
 (-)(A::Diagonal) = Diagonal(-A.diag)
 (+)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag + Db.diag)
 (-)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag - Db.diag)
+
+for f in (:+, :-)
+    @eval function $f(D::Diagonal, S::Symmetric)
+        return Symmetric($f(D, S.data), sym_uplo(S.uplo))
+    end
+    @eval function $f(S::Symmetric, D::Diagonal)
+        return Symmetric($f(S.data, D), sym_uplo(S.uplo))
+    end
+    @eval function $f(D::Diagonal{<:Real}, H::Hermitian)
+        return Hermitian($f(D, H.data), sym_uplo(H.uplo))
+    end
+    @eval function $f(H::Hermitian, D::Diagonal{<:Real})
+        return Hermitian($f(H.data, D), sym_uplo(H.uplo))
+    end
+end
 
 (*)(x::Number, D::Diagonal) = Diagonal(x * D.diag)
 (*)(D::Diagonal, x::Number) = Diagonal(D.diag * x)
@@ -427,7 +442,7 @@ function ldiv!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
     end
     V
 end
-
+ldiv!(x::AbstractArray, A::Diagonal, b::AbstractArray) = (x .= A.diag .\ b)
 
 ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
     (D = adjD.parent; ldiv!(conj(D), B))
@@ -654,11 +669,9 @@ end
 
 function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
     info = 0
-    diagonal = A.diag
-    for i in axes(diagonal, 1)
-        d = diagonal[i]
-        if !(d == 0 || (isreal(d) && d < 0))
-            diagonal[i] = √d
+    for (i, di) in enumerate(A.diag)
+        if isreal(di) && real(di) > 0
+            A.diag[i] = √di
         elseif check
             throw(PosDefException(i))
         else
@@ -672,7 +685,29 @@ end
 cholesky(A::Diagonal, ::Val{false} = Val(false); check::Bool = true) =
     cholesky!(cholcopy(A), Val(false); check = check)
 
+function getproperty(C::Cholesky{<:Any,<:Diagonal}, d::Symbol)
+    Cfactors = getfield(C, :factors)
+    if d in (:U, :L, :UL)
+        return Cfactors
+    else
+        return getfield(C, d)
+    end
+end
+
 Base._sum(A::Diagonal, ::Colon) = sum(A.diag)
+function Base._sum(A::Diagonal, dims::Integer)
+    res = Base.reducedim_initarray(A, dims, zero(eltype(A)))
+    if dims <= 2
+        for i = 1:length(A.diag)
+            @inbounds res[i] = A.diag[i]
+        end
+    else
+        for i = 1:length(A.diag)
+            @inbounds res[i,i] = A.diag[i]
+        end
+    end
+    res
+end
 
 function logabsdet(A::Diagonal)
      mapreduce(x -> (log(abs(x)), sign(x)), ((d1, s1), (d2, s2)) -> (d1 + d2, s1 * s2),

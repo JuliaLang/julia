@@ -33,6 +33,28 @@ let ref = Tuple{T, Val{T}} where T<:(Val{T} where T<:(Val{T} where T<:(Val{T} wh
 end
 
 
+@test Core.Compiler.unionlen(Union{}) == 1
+@test Core.Compiler.unionlen(Int8) == 1
+@test Core.Compiler.unionlen(Union{Int8, Int16}) == 2
+@test Core.Compiler.unionlen(Union{Int8, Int16, Int32, Int64}) == 4
+@test Core.Compiler.unionlen(Tuple{Union{Int8, Int16, Int32, Int64}}) == 1
+@test Core.Compiler.unionlen(Union{Int8, Int16, Int32, T} where T) == 1
+
+@test Core.Compiler.unioncomplexity(Union{}) == 0
+@test Core.Compiler.unioncomplexity(Int8) == 0
+@test Core.Compiler.unioncomplexity(Val{Union{Int8, Int16, Int32, Int64}}) == 0
+@test Core.Compiler.unioncomplexity(Union{Int8, Int16}) == 1
+@test Core.Compiler.unioncomplexity(Union{Int8, Int16, Int32, Int64}) == 3
+@test Core.Compiler.unioncomplexity(Tuple{Union{Int8, Int16, Int32, Int64}}) == 3
+@test Core.Compiler.unioncomplexity(Union{Int8, Int16, Int32, T} where T) == 3
+@test Core.Compiler.unioncomplexity(Tuple{Val{T}, Union{Int8, Int16}, Int8} where T<:Union{Int8, Int16, Int32, Int64}) == 3
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Tuple{Union{Int8, Int16}}}}) == 1
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Symbol}}) == 0
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}) == 1
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}) == 2
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}}}}) == 3
+
+
 # PR 22120
 function tmerge_test(a, b, r, commutative=true)
     @test r == Core.Compiler.tuplemerge(a, b)
@@ -979,7 +1001,11 @@ end
 # but which also means we should still be storing the inference result from inferring the cycle
 f21653() = f21653()
 @test code_typed(f21653, Tuple{}, optimize=false)[1] isa Pair{CodeInfo, typeof(Union{})}
-@test which(f21653, ()).specializations.func.cache.rettype === Union{}
+let meth = which(f21653, ())
+    tt = Tuple{typeof(f21653)}
+    mi = ccall(:jl_specializations_lookup, Any, (Any, Any), meth, tt)::Core.MethodInstance
+    @test mi.cache.rettype === Union{}
+end
 
 # issue #22290
 f22290() = return 3
@@ -1061,11 +1087,9 @@ code_typed(f21933, (Val{1},))
 Base.return_types(f21933, (Val{1},))
 
 function count_specializations(method::Method)
-    n = 0
-    Base.visit(method.specializations) do m
-        n += 1
-    end
-    return n::Int
+    specs = method.specializations
+    n = count(i -> isassigned(specs, i), 1:length(specs))
+    return n
 end
 
 # demonstrate that inference can complete without waiting for MAX_TYPE_DEPTH
@@ -1501,7 +1525,7 @@ function f24852_kernel_cinfo(fsig::Type)
     world = typemax(UInt) # FIXME
     sig, spvals, method = Base._methods_by_ftype(fsig, -1, world)[1]
     isdefined(method, :source) || return (nothing, :(f(x, y)))
-    code_info = Base.uncompressed_ast(method)
+    code_info = Base.uncompressed_ir(method)
     Meta.partially_inline!(code_info.code, Any[], sig, Any[spvals...], 1, 0, :propagate)
     if startswith(String(method.name), "f24852")
         for a in code_info.code
@@ -1711,19 +1735,18 @@ g26826(x) = getfield26826(x, :a, :b)
 # If this test is broken (especially if inference is getting a correct, but loose result,
 # like a Union) then it's potentially an indication that the optimizer isn't hitting the
 # InferenceResult cache properly for varargs methods.
-typed_code = Core.Compiler.code_typed(f26826, (Float64,))[1].first
-found_well_typed_getfield_call = false
-let i
+let ct = Core.Compiler.code_typed(f26826, (Float64,))[1]
+    typed_code, retty = ct.first, ct.second
+    found_poorly_typed_getfield_call = false
     for i = 1:length(typed_code.code)
         stmt = typed_code.code[i]
         rhs = Meta.isexpr(stmt, :(=)) ? stmt.args[2] : stmt
-        if Meta.isexpr(rhs, :call) && rhs.args[1] == GlobalRef(Base, :getfield) && typed_code.ssavaluetypes[i] === Float64
-            global found_well_typed_getfield_call = true
+        if Meta.isexpr(rhs, :call) && rhs.args[1] == GlobalRef(Base, :getfield) && typed_code.ssavaluetypes[i] !== Float64
+            found_poorly_typed_getfield_call = true
         end
     end
+    @test !found_poorly_typed_getfield_call && retty === Float64
 end
-
-@test found_well_typed_getfield_call
 
 # 27059 fix fieldtype vararg and union handling
 
@@ -1913,7 +1936,9 @@ end
 # issue #27316 - inference shouldn't hang on these
 f27316(::Vector) = nothing
 f27316(::Any) = f27316(Any[][1]), f27316(Any[][1])
-@test Tuple{Nothing,Nothing} <: Base.return_types(f27316, Tuple{Int})[1] == Tuple{Union{Nothing, Tuple{Any,Any}},Union{Nothing, Tuple{Any,Any}}} # we may be able to improve this bound in the future
+let expected = NTuple{2, Union{Nothing, NTuple{2, Union{Nothing, Tuple{Any, Any}}}}}
+    @test Tuple{Nothing, Nothing} <: only(Base.return_types(f27316, Tuple{Int})) == expected # we may be able to improve this bound in the future
+end
 function g27316()
     x = nothing
     while rand() < 0.5
@@ -1921,7 +1946,7 @@ function g27316()
     end
     return x
 end
-@test Tuple{Tuple{Nothing}} <: Base.return_types(g27316, Tuple{})[1] == Any # we may be able to improve this bound in the future
+@test Tuple{Tuple{Nothing}} <: only(Base.return_types(g27316, Tuple{})) == Union{Nothing, Tuple{Any}} # we may be able to improve this bound in the future
 const R27316 = Tuple{Tuple{Vector{T}}} where T
 h27316_(x) = (x,)
 h27316_(x::Tuple{Vector}) = (Any[x][1],)::R27316 # a UnionAll of a Tuple, not vice versa!
@@ -1932,7 +1957,7 @@ function h27316()
     end
     return x
 end
-@test Tuple{Tuple{Vector{Int}}} <: Base.return_types(h27316, Tuple{})[1] == Union{Vector{Int}, Tuple{Any}} # we may be able to improve this bound in the future
+@test Tuple{Tuple{Vector{Int}}} <: only(Base.return_types(h27316, Tuple{})) == Union{Vector{Int}, Tuple{Any}} # we may be able to improve this bound in the future
 
 # PR 27434, inference when splatting iterators with type-based state
 splat27434(x) = (x...,)
@@ -2456,3 +2481,67 @@ const DenseIdx = Union{IntRange,Integer}
 @inline foo_26724(result, r::IntRange, I::DenseIdx...) =
     foo_26724((result..., length(r)), I...)
 @test @inferred(foo_26724((), 1:4, 1:5, 1:6)) === (4, 5, 6)
+
+# Non uniformity in expresions with PartialTypeVar
+@test Core.Compiler.:⊑(Core.Compiler.PartialTypeVar(TypeVar(:N), true, true), TypeVar)
+let N = TypeVar(:N)
+    @test Core.Compiler.apply_type_nothrow([Core.Compiler.Const(NTuple),
+        Core.Compiler.PartialTypeVar(N, true, true),
+        Core.Compiler.Const(Any)], Type{Tuple{Vararg{Any,N}}})
+end
+
+# issue #33768
+function f33768()
+    Core._apply()
+end
+function g33768()
+    a = Any[iterate, tuple, (1,)]
+    Core._apply_iterate(a...)
+end
+function h33768()
+    Core._apply_iterate()
+end
+@test_throws ArgumentError f33768()
+@test Base.return_types(f33768, ()) == Any[Union{}]
+@test g33768() === (1,)
+@test Base.return_types(g33768, ()) == Any[Any]
+@test_throws ArgumentError h33768()
+@test Base.return_types(h33768, ()) == Any[Union{}]
+
+# constant prop of `Symbol("")`
+f_getf_computed_symbol(p) = getfield(p, Symbol("first"))
+@test Base.return_types(f_getf_computed_symbol, Tuple{Pair{Int8,String}}) == [Int8]
+
+# issue #33954
+struct X33954
+    x::Ptr{X33954}
+end
+f33954(x) = rand(Bool) ? f33954((x,)) : x
+@test Base.return_types(f33954, Tuple{X33954})[1] >: X33954
+
+# issue #34752
+struct a34752{T} end
+function a34752(c, d...)
+    length(d) > 1 || error()
+end
+function h34752()
+    g = Tuple[(42, Any[42][1], 42)][1]
+    a34752(g...)
+end
+@test h34752() === true
+
+# issue 34834
+pickvarnames(x::Symbol) = x
+function pickvarnames(x::Vector{Any})
+    varnames = ()
+    for a in x
+        varnames = (varnames..., pickvarnames(a) )
+    end
+    return varnames
+end
+@test pickvarnames(:a) === :a
+@test pickvarnames(Any[:a, :b]) === (:a, :b)
+@test only(Base.return_types(pickvarnames, (Vector{Any},))) == Tuple{Vararg{Union{Symbol, Tuple}}}
+@test only(Base.code_typed(pickvarnames, (Vector{Any},), optimize=false))[2] == Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple}}}}}}
+
+@test map(>:, [Int], [Int]) == [true]

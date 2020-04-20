@@ -158,7 +158,8 @@ resulting expression is substituted directly into the program at the point where
 the macro is invoked.
 Macros are a way to run generated code without calling [`eval`](@ref Base.eval), since the generated
 code instead simply becomes part of the surrounding program.
-Macro arguments may include expressions, literal values, and symbols.
+Macro arguments may include expressions, literal values, and symbols. Macros can be defined for
+variable number of arguments (varargs), but do not accept keyword arguments.
 
 # Examples
 ```jldoctest
@@ -169,6 +170,14 @@ julia> macro sayhello(name)
 
 julia> @sayhello "Charlie"
 Hello, Charlie!
+
+julia> macro saylots(x...)
+           return :( println("Say: ", \$(x...)) )
+       end
+@saylots (macro with 1 method)
+
+julia> @saylots "hey " "there " "friend"
+Say: hey there friend
 ```
 """
 kw"macro"
@@ -309,6 +318,56 @@ julia> filter!(x -> x > 1, a) # in-place & thus more efficient than a = a[a .> 1
 kw"="
 
 """
+    .=
+
+Perform broadcasted assignment. The right-side argument is expanded as in
+[`broadcast`](@ref) and then assigned into the left-side argument in-place.
+Fuses with other dotted operators in the same expression; i.e. the whole
+assignment expression is converted into a single loop.
+
+`A .= B` is similar to `broadcast!(identity, A, B)`.
+
+# Examples
+```jldoctest
+julia> A = zeros(4, 4); B = [1, 2, 3, 4];
+
+julia> A .= B
+4×4 Array{Float64,2}:
+ 1.0  1.0  1.0  1.0
+ 2.0  2.0  2.0  2.0
+ 3.0  3.0  3.0  3.0
+ 4.0  4.0  4.0  4.0
+
+julia> A
+4×4 Array{Float64,2}:
+ 1.0  1.0  1.0  1.0
+ 2.0  2.0  2.0  2.0
+ 3.0  3.0  3.0  3.0
+ 4.0  4.0  4.0  4.0
+```
+"""
+kw".="
+
+"""
+    .
+
+The dot operator is used to access fields or properties of objects and access
+variables defined inside modules.
+
+In general, `a.b` calls `getproperty(a, :b)` (see [`getproperty`](@ref Base.getproperty)).
+
+# Examples
+```jldoctest
+julia> z = 1 + 2im; z.im
+2
+
+julia> Iterators.product
+product (generic function with 1 method)
+```
+"""
+kw"."
+
+"""
     let
 
 `let` statements allocate new variable bindings each time they run. Whereas an
@@ -446,6 +505,23 @@ julia> A'
 ```
 """
 kw"'"
+
+"""
+    \$
+
+Interpolation operator for interpolating into e.g. [strings](@ref string-interpolation)
+and [expressions](@ref man-expression-interpolation).
+
+# Examples
+```jldoctest
+julia> name = "Joe"
+"Joe"
+
+julia> "My name is \$name."
+"My name is Joe."
+```
+"""
+kw"$"
 
 """
     const
@@ -945,7 +1021,8 @@ kw"mutable struct"
 
 Special function available to inner constructors which created a new object
 of the type.
-See the manual section on [Inner Constructor Methods](@ref) for more information.
+See the manual section on [Inner Constructor Methods](@ref man-inner-constructor-methods)
+for more information.
 """
 kw"new"
 
@@ -1381,6 +1458,13 @@ This method allows invoking a method other than the most specific matching metho
 when the behavior of a more general definition is explicitly needed (often as part of the
 implementation of a more specific method of the same function).
 
+Be careful when using `invoke` for functions that you don't write.  What definition is used
+for given `argtypes` is an implementation detail unless the function is explicitly states
+that calling with certain `argtypes` is a part of public API.  For example, the change
+between `f1` and `f2` in the example below is usually considered compatible because the
+change is invisible by the caller with a normal (non-`invoke`) call.  However, the change is
+visible if you use `invoke`.
+
 # Examples
 ```jldoctest
 julia> f(x::Real) = x^2;
@@ -1389,6 +1473,25 @@ julia> f(x::Integer) = 1 + invoke(f, Tuple{Real}, x);
 
 julia> f(2)
 5
+
+julia> f1(::Integer) = Integer
+       f1(::Real) = Real;
+
+julia> f2(x::Real) = _f2(x)
+       _f2(::Integer) = Integer
+       _f2(_) = Real;
+
+julia> f1(1)
+Integer
+
+julia> f2(1)
+Integer
+
+julia> invoke(f1, Tuple{Real}, 1)
+Real
+
+julia> invoke(f2, Tuple{Real}, 1)
+Integer
 ```
 """
 invoke
@@ -1504,12 +1607,14 @@ julia> false * NaN
 """
 Bool
 
-for bit in (16, 32, 64)
+for (bit, sign, exp, frac) in ((16, 1, 5, 10), (32, 1, 8, 23), (64, 1, 11, 52))
     @eval begin
         """
             Float$($bit) <: AbstractFloat
 
-        $($bit)-bit floating point number type.
+        $($bit)-bit floating point number type (IEEE 754 standard).
+
+        Binary format: $($sign) sign, $($exp) exponent, $($frac) fraction bits.
         """
         $(Symbol("Float", bit))
     end
@@ -2098,7 +2203,7 @@ julia> "Hello!" :: IntOrString
 "Hello!"
 
 julia> 1.0 :: IntOrString
-ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got Float64
+ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got a value of type Float64
 ```
 """
 Union
@@ -2132,7 +2237,7 @@ Outside of declarations `::` is used to assert that expressions and variables in
 # Examples
 ```jldoctest
 julia> (1+2)::AbstractFloat
-ERROR: TypeError: typeassert: expected AbstractFloat, got Int64
+ERROR: TypeError: typeassert: expected AbstractFloat, got a value of type Int64
 
 julia> (1+2)::Int
 3
@@ -2215,7 +2320,7 @@ The syntax `x::type` calls this function.
 # Examples
 ```jldoctest
 julia> typeassert(2.5, Int)
-ERROR: TypeError: in typeassert, expected Int64, got Float64
+ERROR: TypeError: in typeassert, expected Int64, got a value of type Float64
 Stacktrace:
 [...]
 ```

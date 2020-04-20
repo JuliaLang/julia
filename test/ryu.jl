@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Base.Ryu
 
 const maxMantissa = (UInt64(1) << 53) - 1
@@ -738,24 +740,31 @@ end # exp
 
 @testset "compact" begin
 
-    writecompact(x) = Ryu.writeshortest(x, false, false, true, -1, UInt8('e'), false, UInt8('.'), false, true)
+    stringcompact(x) = sprint(show, x; context=:compact => true)
 
-    @test writecompact(0.49999999) == "0.5"
-    @test writecompact(0.459999999) == "0.46"
-    @test writecompact(0.20058603493384108) == "0.200586"
-    @test writecompact(0.9999999) == "1.0"
-    @test writecompact(0.1999999) == "0.2"
-    @test writecompact(123.4567) == "123.457"
-    @test writecompact(0.001234567) == "0.00123457"
-    @test writecompact(0.1234567) == "0.123457"
-    @test writecompact(1234567.0) == "123457.0"
-    @test writecompact(12345678910.0) == "1.23457e10"
-    @test writecompact(12345678.0) == "123457.0"
-    @test writecompact(0.10000049) == "0.1"
-    @test writecompact(22.89825) == "22.8983"
-    @test writecompact(0.646690981531646) == "0.646691"
-    @test writecompact(6.938893903907228e-17) == "6.93889e-17"
+    @test stringcompact(0.49999999) == "0.5"
+    @test stringcompact(0.459999999) == "0.46"
+    @test stringcompact(0.20058603493384108) == "0.200586"
+    @test stringcompact(0.9999999) == "1.0"
+    @test stringcompact(0.1999999) == "0.2"
+    @test stringcompact(123.4567) == "123.457"
+    @test stringcompact(0.001234567) == "0.00123457"
+    @test stringcompact(0.1234567) == "0.123457"
+    @test stringcompact(1234567.0) == "1.23457e6"
+    @test stringcompact(12345678910.0) == "1.23457e10"
+    @test stringcompact(12345678.0) == "1.23457e7"
+    @test stringcompact(0.10000049) == "0.1"
+    @test stringcompact(22.89825) == "22.8983"
+    @test stringcompact(0.646690981531646) == "0.646691"
+    @test stringcompact(6.938893903907228e-17) == "6.93889e-17"
+    @test stringcompact(1.015625) == "1.01562"
+    @test stringcompact(1.046875) == "1.04688"
+    @test stringcompact(0.025621074) == "0.0256211"
 
+    # subnormals
+    @test stringcompact(eps(0.0)) == "5.0e-324"
+    @test stringcompact(eps(0f0)) == "1.0f-45"
+    @test stringcompact(eps(Float16(0.0))) == "6.0e-8"
 end
 
 end # Ryu

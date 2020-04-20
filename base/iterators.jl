@@ -98,7 +98,6 @@ reverse(G::Generator) = Generator(G.f, reverse(G.iter))
 reverse(r::Reverse) = r.itr
 reverse(x::Union{Number,AbstractChar}) = x
 reverse(p::Pair) = Base.reverse(p) # copying pairs is cheap
-reverse(xs::Tuple) = Base.reverse(xs) # allows inference in mapfoldr and similar
 
 iterate(r::Reverse{<:Tuple}, i::Int = length(r.itr)) = i < 1 ? nothing : (r.itr[i], i-1)
 
@@ -289,7 +288,7 @@ julia> b = ["e","d","b","c","a"]
  "a"
 
 julia> c = zip(a,b)
-Base.Iterators.Zip{Tuple{UnitRange{Int64},Array{String,1}}}((1:5, ["e", "d", "b", "c", "a"]))
+zip(1:5, ["e", "d", "b", "c", "a"])
 
 julia> length(c)
 5
@@ -314,10 +313,11 @@ function _zip_min_length(is)
     end
 end
 _zip_min_length(is::Tuple{}) = nothing
-size(z::Zip) = _promote_shape(map(size, z.is)...)
-axes(z::Zip) = _promote_shape(map(axes, z.is)...)
-_promote_shape(a, b...) = promote_shape(a, _promote_shape(b...))
-_promote_shape(a) = a
+size(z::Zip) = mapreduce(size, _zip_promote_shape, z.is)
+axes(z::Zip) = mapreduce(axes, _zip_promote_shape, z.is)
+_zip_promote_shape((a,)::Tuple{OneTo}, (b,)::Tuple{OneTo}) = (intersect(a, b),)
+_zip_promote_shape((m,)::Tuple{Integer},(n,)::Tuple{Integer}) = (min(m,n),)
+_zip_promote_shape(a, b) = promote_shape(a, b)
 eltype(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_eltype(Is)
 _zip_eltype(::Type{Is}) where {Is<:Tuple} =
     tuple_type_cons(eltype(tuple_type_head(Is)), _zip_eltype(tuple_type_tail(Is)))
@@ -442,6 +442,70 @@ IteratorSize(::Type{<:Filter}) = SizeUnknown()
 
 reverse(f::Filter) = Filter(f.flt, reverse(f.itr))
 
+# Accumulate -- partial reductions of a function over an iterator
+
+struct Accumulate{F,I,T}
+    f::F
+    itr::I
+    init::T
+end
+
+"""
+    Iterators.accumulate(f, itr; [init])
+
+Given a 2-argument function `f` and an iterator `itr`, return a new
+iterator that successively applies `f` to the previous value and the
+next element of `itr`.
+
+This is effectively a lazy version of [`Base.accumulate`](@ref).
+
+!!! compat "Julia 1.5"
+    Keyword argument `init` is added in Julia 1.5.
+
+# Examples
+```jldoctest
+julia> f = Iterators.accumulate(+, [1,2,3,4]);
+
+julia> foreach(println, f)
+1
+3
+6
+10
+
+julia> f = Iterators.accumulate(+, [1,2,3]; init = 100);
+
+julia> foreach(println, f)
+101
+103
+106
+```
+"""
+accumulate(f, itr; init = Base._InitialValue()) = Accumulate(f, itr, init)
+
+function iterate(itr::Accumulate)
+    state = iterate(itr.itr)
+    if state === nothing
+        return nothing
+    end
+    val = Base.BottomRF(itr.f)(itr.init, state[1])
+    return (val, (val, state[2]))
+end
+
+function iterate(itr::Accumulate, state)
+    nxt = iterate(itr.itr, state[2])
+    if nxt === nothing
+        return nothing
+    end
+    val = itr.f(state[1], nxt[1])
+    return (val, (val, nxt[2]))
+end
+
+length(itr::Accumulate) = length(itr.itr)
+size(itr::Accumulate) = size(itr.itr)
+
+IteratorSize(::Type{<:Accumulate{F,I}}) where {F,I} = IteratorSize(I)
+IteratorEltype(::Type{<:Accumulate}) = EltypeUnknown()
+
 # Rest -- iterate starting at the given state
 
 struct Rest{I,S}
@@ -481,8 +545,8 @@ julia> a
 
 julia> collect(rest)
 2-element Array{Char,1}:
- 'b'
- 'c'
+ 'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
+ 'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
 ```
 """
 function peel(itr)
@@ -1022,37 +1086,56 @@ Iterate over a collection `n` elements at a time.
 # Examples
 ```jldoctest
 julia> collect(Iterators.partition([1,2,3,4,5], 2))
-3-element Array{Array{Int64,1},1}:
+3-element Array{SubArray{Int64,1,Array{Int64,1},Tuple{UnitRange{Int64}},true},1}:
  [1, 2]
  [3, 4]
  [5]
 ```
 """
-partition(c::T, n::Integer) where {T} = PartitionIterator{T}(c, Int(n))
+function partition(c, n::Integer)
+    n < 1 && throw(ArgumentError("cannot create partitions of length $n"))
+    return PartitionIterator(c, Int(n))
+end
 
 struct PartitionIterator{T}
     c::T
     n::Int
 end
+# Partitions are explicitly a linear indexing operation, so reshape to 1-d immediately
+PartitionIterator(A::AbstractArray, n::Int) = PartitionIterator(vec(A), n)
+PartitionIterator(v::AbstractVector, n::Int) = PartitionIterator{typeof(v)}(v, n)
 
 eltype(::Type{PartitionIterator{T}}) where {T} = Vector{eltype(T)}
+# Arrays use a generic `view`-of-a-`vec`, so we cannot exactly predict what we'll get back
+eltype(::Type{PartitionIterator{T}}) where {T<:AbstractArray} = AbstractVector{eltype(T)}
+# But for some common implementations in Base we know the answer exactly
+eltype(::Type{PartitionIterator{T}}) where {T<:Vector} = SubArray{eltype(T), 1, T, Tuple{UnitRange{Int}}, true}
+
+IteratorEltype(::Type{<:PartitionIterator{T}}) where {T} = IteratorEltype(T)
+IteratorEltype(::Type{<:PartitionIterator{T}}) where {T<:AbstractArray} = EltypeUnknown()
+IteratorEltype(::Type{<:PartitionIterator{T}}) where {T<:Vector} = IteratorEltype(T)
+
 partition_iteratorsize(::HasShape) = HasLength()
 partition_iteratorsize(isz) = isz
 function IteratorSize(::Type{PartitionIterator{T}}) where {T}
     partition_iteratorsize(IteratorSize(T))
 end
 
-IteratorEltype(::Type{<:PartitionIterator{T}}) where {T} = IteratorEltype(T)
-
 function length(itr::PartitionIterator)
     l = length(itr.c)
     return div(l, itr.n) + ((mod(l, itr.n) > 0) ? 1 : 0)
 end
 
-function iterate(itr::PartitionIterator{<:Vector}, state=1)
+function iterate(itr::PartitionIterator{<:AbstractRange}, state=1)
     state > length(itr.c) && return nothing
     r = min(state + itr.n - 1, length(itr.c))
-    return view(itr.c, state:r), r + 1
+    return @inbounds itr.c[state:r], r + 1
+end
+
+function iterate(itr::PartitionIterator{<:AbstractArray}, state=1)
+    state > length(itr.c) && return nothing
+    r = min(state + itr.n - 1, length(itr.c))
+    return @inbounds view(itr.c, state:r), r + 1
 end
 
 struct IterationCutShort; end
@@ -1107,14 +1190,14 @@ julia> popfirst!(a)
 
 julia> collect(Iterators.take(a, 3))
 3-element Array{Char,1}:
- 'b'
- 'c'
- 'd'
+ 'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
+ 'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
+ 'd': ASCII/Unicode U+0064 (category Ll: Letter, lowercase)
 
 julia> collect(a)
 2-element Array{Char,1}:
- 'e'
- 'f'
+ 'e': ASCII/Unicode U+0065 (category Ll: Letter, lowercase)
+ 'f': ASCII/Unicode U+0066 (category Ll: Letter, lowercase)
 ```
 
 ```jldoctest

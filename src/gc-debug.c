@@ -1218,6 +1218,7 @@ int gc_slot_to_arrayidx(void *obj, void *_slot)
     jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
     char *start = NULL;
     size_t len = 0;
+    size_t elsize = sizeof(void*);
     if (vt == jl_module_type) {
         jl_module_t *m = (jl_module_t*)obj;
         start = (char*)m->usings.items;
@@ -1233,10 +1234,11 @@ int gc_slot_to_arrayidx(void *obj, void *_slot)
             return -1;
         start = (char*)a->data;
         len = jl_array_len(a);
+        elsize = a->elsize;
     }
-    if (slot < start || slot >= start + sizeof(void*) * len)
+    if (slot < start || slot >= start + elsize * len)
         return -1;
-    return (slot - start) / sizeof(void*);
+    return (slot - start) / elsize;
 }
 
 // Print a backtrace from the bottom (start) of the mark stack up to `sp`
@@ -1310,7 +1312,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_off
                 break;
             }
             jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(data->parent);
-            jl_fielddesc8_t *desc = (jl_fielddesc8_t*)jl_dt_layout_fields(vt->layout);
+            uint8_t *desc = (uint8_t*)jl_dt_layout_ptrs(vt->layout);
             jl_safe_printf("%p:  %s Object (8bit) %p :: %p -- [%d, %d)\n        of type ",
                            (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
                            (int)(data->begin - desc), (int)(data->end - desc));
@@ -1323,7 +1325,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_off
                 break;
             }
             jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(data->parent);
-            jl_fielddesc16_t *desc = (jl_fielddesc16_t*)jl_dt_layout_fields(vt->layout);
+            uint16_t *desc = (uint16_t*)jl_dt_layout_ptrs(vt->layout);
             jl_safe_printf("%p:  %s Object (16bit) %p :: %p -- [%d, %d)\n        of type ",
                            (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
                            (int)(data->begin - desc), (int)(data->end - desc));
@@ -1336,7 +1338,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_off
                 break;
             }
             jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(data->parent);
-            jl_fielddesc32_t *desc = (jl_fielddesc32_t*)jl_dt_layout_fields(vt->layout);
+            uint32_t *desc = (uint32_t*)jl_dt_layout_ptrs(vt->layout);
             jl_safe_printf("%p:  %s Object (32bit) %p :: %p -- [%d, %d)\n        of type ",
                            (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
                            (int)(data->begin - desc), (int)(data->end - desc));

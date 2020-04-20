@@ -3,7 +3,7 @@
 #############################################
 # Create some temporary files & directories #
 #############################################
-starttime = time()
+starttime = time_ns() / 1e9
 pwd_ = pwd()
 dir = mktempdir()
 file = joinpath(dir, "afile.txt")
@@ -49,6 +49,18 @@ if !Sys.iswindows()
 end
 
 using Random
+
+@testset "that temp names are actually unique" begin
+    temps = [tempname(cleanup=false) for _ = 1:100]
+    @test allunique(temps)
+    temps = map(1:100) do _
+        path, io = mktemp(cleanup=false)
+        close(io)
+        rm(path, force=true)
+        return path
+    end
+    @test allunique(temps)
+end
 
 @testset "tempname with parent" begin
     t = tempname()
@@ -382,12 +394,14 @@ if Sys.iswindows()
 else
     @test filesize(dir) > 0
 end
-nowtime = time()
+# We need both: one to check passed time, one to comapare file's mtime()
+nowtime = time_ns() / 1e9
+nowwall = time()
 # Allow 10s skew in addition to the time it took us to actually execute this code
 let skew = 10 + (nowtime - starttime)
     mfile = mtime(file)
     mdir  = mtime(dir)
-    @test abs(nowtime - mfile) <= skew && abs(nowtime - mdir) <= skew && abs(mfile - mdir) <= skew
+    @test abs(nowwall - mfile) <= skew && abs(nowwall - mdir) <= skew && abs(mfile - mdir) <= skew
 end
 #@test Int(time()) >= Int(mtime(file)) >= Int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
 
@@ -506,20 +520,21 @@ end
     @test my_tempdir[end] != '\\'
 
     var =  Sys.iswindows() ? "TMP" : "TMPDIR"
-    PATH_PREFIX = Sys.iswindows() ? "C:\\" : "/tmp/"
+    PATH_PREFIX = Sys.iswindows() ? "C:\\" : "/tmp/" * "x"^255   # we want a long path on UNIX so that we test buffer resizing in `tempdir`
     # Warning: On Windows uv_os_tmpdir internally calls GetTempPathW. The max string length for
     # GetTempPathW is 261 (including the implied trailing backslash), not the typical length 259.
-    # We thus use 260 (with implied trailing slash backlash this then gives 261 chars) and
-    # subtract 9 to account for i = 0:9.
-    MAX_PATH = (Sys.iswindows() ? 260-9 : 1024) - length(PATH_PREFIX)
+    # We thus use 260 (with implied trailing slash backlash this then gives 261 chars)
+    # NOTE: not the actual max path on UNIX, but true in the Windows case for this function.
+    # NOTE: we subtract 9 to account for i = 0:9.
+    MAX_PATH = (Sys.iswindows() ? 260 - length(PATH_PREFIX) : 255)  - 9
     for i = 0:8
-        local tmp = PATH_PREFIX * "x"^MAX_PATH * "123456789"[1:i]
+        local tmp = joinpath(PATH_PREFIX, "x"^MAX_PATH * "123456789"[1:i])
         @test withenv(var => tmp) do
             tempdir()
         end == (tmp)
     end
     for i = 9
-        local tmp = PATH_PREFIX * "x"^MAX_PATH * "123456789"[1:i]
+        local tmp = joinpath(PATH_PREFIX, "x"^MAX_PATH * "123456789"[1:i])
         if Sys.iswindows()
             # libuv bug
             @test_broken withenv(var => tmp) do
@@ -1203,8 +1218,18 @@ cd(dirwalk) do
 
         root, dirs, files = take!(chnl)
         @test root == joinpath(".", "sub_dir1")
-        @test dirs == (has_symlinks ? ["link", "subsub_dir1", "subsub_dir2"] : ["subsub_dir1", "subsub_dir2"])
-        @test files == ["file1", "file2"]
+        if has_symlinks
+            if follow_symlinks
+                @test dirs ==  ["link", "subsub_dir1", "subsub_dir2"]
+                @test files == ["file1", "file2"]
+            else
+                @test dirs ==  ["subsub_dir1", "subsub_dir2"]
+                @test files == ["file1", "file2", "link"]
+            end
+        else
+            @test dirs ==  ["subsub_dir1", "subsub_dir2"]
+            @test files == ["file1", "file2"]
+        end
 
         root, dirs, files = take!(chnl)
         if follow_symlinks
@@ -1241,8 +1266,18 @@ cd(dirwalk) do
             root, dirs, files = take!(chnl)
         end
         @test root == joinpath(".", "sub_dir1")
-        @test dirs ==  (has_symlinks ? ["link", "subsub_dir1", "subsub_dir2"] : ["subsub_dir1", "subsub_dir2"])
-        @test files == ["file1", "file2"]
+        if has_symlinks
+            if follow_symlinks
+                @test dirs ==  ["link", "subsub_dir1", "subsub_dir2"]
+                @test files == ["file1", "file2"]
+            else
+                @test dirs ==  ["subsub_dir1", "subsub_dir2"]
+                @test files == ["file1", "file2", "link"]
+            end
+        else
+            @test dirs ==  ["subsub_dir1", "subsub_dir2"]
+            @test files == ["file1", "file2"]
+        end
 
         root, dirs, files = take!(chnl)
         @test root == joinpath(".", "sub_dir2")
@@ -1274,6 +1309,18 @@ cd(dirwalk) do
     @test root == joinpath(".", "sub_dir2")
     @test dirs == []
     @test files == ["file_dir2"]
+
+    # Test that symlink loops don't cause errors
+    if has_symlinks
+        mkdir(joinpath(".", "sub_dir3"))
+        symlink("foo", joinpath(".", "sub_dir3", "foo"))
+
+        @test_throws Base.IOError walkdir(joinpath(".", "sub_dir3"); follow_symlinks=true)
+        root, dirs, files = take!(walkdir(joinpath(".", "sub_dir3"); follow_symlinks=false))
+        @test root == joinpath(".", "sub_dir3")
+        @test dirs == []
+        @test files == ["foo"]
+    end
 end
 rm(dirwalk, recursive=true)
 

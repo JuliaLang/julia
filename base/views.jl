@@ -18,11 +18,11 @@ replace_ref_end!(ex) = replace_ref_end_!(ex, nothing)[1]
 # replace_ref_end_!(ex,withex) returns (new ex, whether withex was used)
 function replace_ref_end_!(ex, withex)
     used_withex = false
-    if isa(ex,Symbol) && ex == :end
+    if isa(ex,Symbol) && ex === :end
         withex === nothing && error("Invalid use of end")
         return withex, true
     elseif isa(ex,Expr)
-        if ex.head == :ref
+        if ex.head === :ref
             ex.args[1], used_withex = replace_ref_end_!(ex.args[1],withex)
             S = isa(ex.args[1],Symbol) ? ex.args[1]::Symbol : gensym(:S) # temp var to cache ex.args[1] if needed
             used_S = false # whether we actually need S
@@ -40,7 +40,7 @@ function replace_ref_end_!(ex, withex)
                     exj, used = replace_ref_end_!(ex.args[j],:($lastindex($S,$n)))
                     used_S |= used
                     ex.args[j] = exj
-                    if isa(exj,Expr) && exj.head == :...
+                    if isa(exj,Expr) && exj.head === :...
                         # splatted object
                         exjs = exj.args[1]
                         n = :($n + length($exjs))
@@ -141,7 +141,7 @@ function _views(ex::Expr)
         Expr(ex.head, Meta.isexpr(lhs, :ref) ?
                       Expr(:ref, _views.(lhs.args)...) : _views(lhs),
              _views(ex.args[2]))
-    elseif ex.head == :ref
+    elseif ex.head === :ref
         Expr(:call, maybeview, _views.(ex.args)...)
     else
         h = string(ex.head)

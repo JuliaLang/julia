@@ -4,7 +4,13 @@ abstract type AbstractCartesianIndex{N} end # This is a hacky forward declaratio
 const ViewIndex = Union{Real, AbstractArray}
 const ScalarIndex = Real
 
-# L is true if the view itself supports fast linear indexing
+"""
+    SubArray{T,N,P,I,L} <: AbstractArray{T,N}
+
+`N`-dimensional view into a parent array (of type `P`) with an element type `T`, restricted by a tuple of indices (of type `I`). `L` is true for types that support fast linear indexing, and `false` otherwise.
+
+Construct `SubArray`s using the [`view`](@ref) function.
+"""
 struct SubArray{T,N,P,I,L} <: AbstractArray{T,N}
     parent::P
     indices::I
@@ -401,22 +407,4 @@ _indices_sub() = ()
 function _indices_sub(i1::AbstractArray, I...)
     @_inline_meta
     (unsafe_indices(i1)..., _indices_sub(I...)...)
-end
-
-## Compatibility
-# deprecate?
-function parentdims(s::SubArray)
-    nd = ndims(s)
-    dimindex = Vector{Int}(undef, nd)
-    sp = strides(s.parent)
-    sv = strides(s)
-    j = 1
-    for i = 1:ndims(s.parent)
-        r = s.indices[i]
-        if j <= nd && (isa(r,AbstractRange) ? sp[i]*step(r) : sp[i]) == sv[j]
-            dimindex[j] = i
-            j += 1
-        end
-    end
-    dimindex
 end
