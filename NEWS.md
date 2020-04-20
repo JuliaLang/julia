@@ -143,7 +143,6 @@ Standard library changes
 * `close` on a file (`IOStream`) can now throw an exception if an error occurs when trying
   to flush buffered data to disk ([#35303]).
 
-
 #### LinearAlgebra
 * The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
 * `normalize` now supports multidimensional arrays ([#34239])
