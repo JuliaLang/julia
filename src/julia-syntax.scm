@@ -2503,13 +2503,20 @@
 (define (scope:implicit-globals s) (aref s 9))
 (define (scope:warn-vars s) (aref s 10))
 
-(define (var-kind var scope)
+(define (var-kind var scope (exclude-top-level-globals #f))
   (if scope
       (or (and (memq var (scope:args scope))    'argument)
           (and (memq var (scope:locals scope))  'local)
-          (and (memq var (scope:globals scope)) 'global)
+          (and (memq var (scope:globals scope))
+               (if (and exclude-top-level-globals
+                        (null? (lam:vars (scope:lam scope)))
+                        ;; don't inherit global decls from the outermost scope block
+                        ;; in a top-level expression.
+                        (or (not (scope:prev scope))
+                            (not (scope:prev (scope:prev scope)))))
+                   'none 'global))
           (and (memq var (scope:sp scope))      'static-parameter)
-          (var-kind var (scope:prev scope)))
+          (var-kind var (scope:prev scope) exclude-top-level-globals))
       'none))
 
 (define (in-scope? var scope) (not (eq? (var-kind var scope) 'none)))
@@ -2611,7 +2618,7 @@
                  (filter (if toplevel?
                              ;; make only assigned gensyms implicitly local at top level
                              some-gensym?
-                             (lambda (v) (and (memq (var-kind v scope) '(none static-parameter))
+                             (lambda (v) (and (memq (var-kind v scope #t) '(none static-parameter))
                                               (not (and soft?
                                                         (or (memq v (scope:implicit-globals scope))
                                                             (defined-julia-global v))))
@@ -2645,7 +2652,9 @@
 
            (for-each (lambda (v)
                        (if (or (memq v locals-def) (memq v local-decls))
-                           (error (string "variable \"" v "\" declared both local and global"))))
+                           (error (string "variable \"" v "\" declared both local and global")))
+                       (if (and (null? argnames) (memq (var-kind v scope) '(argument local)))
+                           (error (string "`global " v "`: " v " is a local variable in its enclosing scope"))))
                      globals)
            (if (and (pair? argnames) (eq? e (lam:body lam)))
                (for-each (lambda (v)
@@ -2667,8 +2676,7 @@
                               (make-scope lam
                                           '()
                                           (append locals-nondef locals-def)
-                                          ;; global declarations at the top level are not inherited
-                                          (if toplevel? '() globals)
+                                          globals
                                           '()
                                           (append (map cons need-rename renamed)
                                                   (map cons need-rename-def renamed-def))
@@ -4044,10 +4052,7 @@ f(x) = yt(x)
                  #f))
             ((global) ; keep global declarations as statements
              (if value (error "misplaced \"global\" declaration"))
-             (let ((vname (cadr e)))
-               (if (var-info-for vname vi) ;; issue #7264
-                   (error (string "`global " vname "`: " vname " is a local variable in its enclosing scope"))
-                   (emit e))))
+             (emit e))
             ((local-def) #f)
             ((local) #f)
             ((moved-local)
