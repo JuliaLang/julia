@@ -236,6 +236,14 @@ of function arguments that are containers of abstract types; see [Performance Ti
 
 ## Primitive Types
 
+!!! warning
+  It is almost always preferable to wrap an existing primitive type in a new
+  composite type than to define your own primitive type.
+
+  This functionality exists to allow Julia to bootstrap the standard primitive
+  types that LLVM supports. Once they are defined, there is very little reason
+  to define more.
+
 A primitive type is a concrete type whose data consists of plain old bits. Classic examples of primitive
 types are integers and floating-point values. Unlike most languages, Julia lets you declare your
 own primitive types, rather than providing only a fixed set of built-in ones. In fact, the standard
