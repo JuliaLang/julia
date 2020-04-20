@@ -1199,16 +1199,14 @@ static uint64_t *allocLine(std::vector<logdata_block*> &vec, int line)
     return &data[line];
 }
 
-static void visitLine(jl_codectx_t &ctx, std::vector<logdata_block*> &vec, int line, Value *addend, const char* name)
+static void visitLine(jl_codectx_t &ctx, std::vector<logdata_block*> &vec, int line, Value *addend, const char *name)
 {
     uint64_t *ptr = allocLine(vec, line);
     Value *pv = ConstantExpr::getIntToPtr(
         ConstantInt::get(T_size, (uintptr_t)ptr),
         T_pint64);
-    Value *v = ctx.builder.CreateLoad(pv, true, name);
-    v = ctx.builder.CreateAdd(v, addend);
-    ctx.builder.CreateStore(v, pv, true); // volatile, not atomic, so this might be an underestimate,
-                                          // but it's faster this way
+    Value *v = ctx.builder.CreateAtomicRMW(AtomicRMWInst::Add, pv, addend, AtomicOrdering::Monotonic);
+    v->setName(name);
 }
 
 // Code coverage
