@@ -42,7 +42,7 @@ top:
 ; CHECK: %v = call %jl_value_t addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, [[SIZE_T:i.[0-9]+]] 8)
 ; CHECK-NEXT: [[V2:%.*]] = bitcast %jl_value_t addrspace(10)* %v to %jl_value_t addrspace(10)* addrspace(10)*
 ; CHECK-NEXT: [[V_HEADROOM:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)* addrspace(10)* [[V2]], i64 -1
-; CHECK-NEXT: store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* [[V_HEADROOM]], !tbaa !0
+; CHECK-NEXT: store atomic %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* [[V_HEADROOM]] unordered, align 8, !tbaa !0
     %v = call noalias %jl_value_t addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, i64 8, %jl_value_t addrspace(10)* @tag)
 ; CHECK-NEXT: ret %jl_value_t addrspace(10)* %v
     ret %jl_value_t addrspace(10)* %v
@@ -61,7 +61,7 @@ top:
 ; CHECK: %v = call %jl_value_t addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, [[SIZE_T:i.[0-9]+]] 8)
 ; CHECK-NEXT: [[V2:%.*]] = bitcast %jl_value_t addrspace(10)* %v to %jl_value_t addrspace(10)* addrspace(10)*
 ; CHECK-NEXT: [[V_HEADROOM:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)* addrspace(10)* [[V2]], i64 -1
-; CHECK-NEXT: store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* [[V_HEADROOM]], !tbaa !0
+; CHECK-NEXT: store atomic %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* [[V_HEADROOM]] unordered, align 8, !tbaa !0
     %v = call noalias %jl_value_t addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, i64 8, %jl_value_t addrspace(10)* @tag)
 ; CHECK-NEXT: %v64 = bitcast %jl_value_t addrspace(10)* %v to i64 addrspace(10)*
     %v64 = bitcast %jl_value_t addrspace(10)* %v to i64 addrspace(10)*

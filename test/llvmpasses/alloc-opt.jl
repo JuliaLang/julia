@@ -12,7 +12,7 @@ println("""
 # CHECK-LABEL: @return_obj
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK: %v = call noalias nonnull %jl_value_t addrspace(10)* @jl_gc_pool_alloc
-# CHECK: store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* {{.*}}, !tbaa !0
+# CHECK: store atomic %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* {{.*}} unordered, align 8, !tbaa !0
 println("""
 define %jl_value_t addrspace(10)* @return_obj() {
   %ptls = call %jl_value_t*** @julia.ptls_states()
@@ -49,7 +49,7 @@ define i64 @return_load(i64 %i) {
 # CHECK: call %jl_value_t*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK: @jl_gc_pool_alloc
-# CHECK: store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* {{.*}}, !tbaa !0
+# CHECK: store atomic %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* {{.*}} unordered, align 8, !tbaa !0
 println("""
 define void @ccall_obj(i8* %fptr) {
   %ptls = call %jl_value_t*** @julia.ptls_states()
@@ -91,7 +91,7 @@ define void @ccall_ptr(i8* %fptr) {
 # CHECK: call %jl_value_t*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK: @jl_gc_pool_alloc
-# CHECK: store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* {{.*}}, !tbaa !0
+# CHECK: store atomic %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* {{.*}} unordered, align 8, !tbaa !0
 println("""
 define void @ccall_unknown_bundle(i8* %fptr) {
   %ptls = call %jl_value_t*** @julia.ptls_states()
@@ -153,7 +153,7 @@ L3:
 # CHECK: call %jl_value_t*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK-NOT: @jl_gc_pool_alloc
-# CHECK-NOT: store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* {{.*}}, !tbaa !0
+# CHECK-NOT: store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* {{.*}}, align 8, !tbaa !0
 println("""
 define void @object_field(%jl_value_t addrspace(10)* %field) {
   %ptls = call %jl_value_t*** @julia.ptls_states()
@@ -161,7 +161,7 @@ define void @object_field(%jl_value_t addrspace(10)* %field) {
   %v = call noalias %jl_value_t addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, %jl_value_t addrspace(10)* @tag)
   %va = addrspacecast %jl_value_t addrspace(10)* %v to %jl_value_t addrspace(11)*
   %vab = bitcast %jl_value_t addrspace(11)* %va to %jl_value_t addrspace(10)* addrspace(11)*
-  store %jl_value_t addrspace(10)* %field, %jl_value_t addrspace(10)* addrspace(11)* %vab
+  store %jl_value_t addrspace(10)* %field, %jl_value_t addrspace(10)* addrspace(11)* %vab, align 8
   ret void
 }
 """)

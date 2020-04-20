@@ -26,30 +26,30 @@ top:
   %ptls = call %jl_value_t*** @julia.ptls_states()
 ; CHECK-DAG: [[GCFRAME_SIZE_PTR:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 0
 ; CHECK-DAG: [[GCFRAME_SIZE_PTR2:%.*]] = bitcast %jl_value_t addrspace(10)** [[GCFRAME_SIZE_PTR]] to i64*
-; CHECK-DAG: store i64 8, i64* [[GCFRAME_SIZE_PTR2]], !tbaa !0
+; CHECK-DAG: store i64 8, i64* [[GCFRAME_SIZE_PTR2]], align 8, !tbaa !0
 ; CHECK-DAG: [[GCFRAME_SLOT:%.*]] = getelementptr %jl_value_t**, %jl_value_t*** %ptls, i32 0
 ; CHECK-DAG: [[PREV_GCFRAME_PTR:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 1
 ; CHECK-DAG: [[PREV_GCFRAME_PTR2:%.*]] = bitcast %jl_value_t addrspace(10)** [[PREV_GCFRAME_PTR]] to %jl_value_t***
-; CHECK-DAG: [[PREV_GCFRAME:%.*]] = load %jl_value_t**, %jl_value_t*** [[GCFRAME_SLOT]]
-; CHECK-DAG: store %jl_value_t** [[PREV_GCFRAME]], %jl_value_t*** [[PREV_GCFRAME_PTR2]], !tbaa !0
+; CHECK-DAG: [[PREV_GCFRAME:%.*]] = load %jl_value_t**, %jl_value_t*** [[GCFRAME_SLOT]], align 8
+; CHECK-DAG: store %jl_value_t** [[PREV_GCFRAME]], %jl_value_t*** [[PREV_GCFRAME_PTR2]], align 8, !tbaa !0
 ; CHECK-DAG: [[GCFRAME_SLOT2:%.*]] = bitcast %jl_value_t*** [[GCFRAME_SLOT]] to %jl_value_t addrspace(10)***
-; CHECK-NEXT: store %jl_value_t addrspace(10)** %gcframe, %jl_value_t addrspace(10)*** [[GCFRAME_SLOT2]]
+; CHECK-NEXT: store %jl_value_t addrspace(10)** %gcframe, %jl_value_t addrspace(10)*** [[GCFRAME_SLOT2]], align 8
   call void @julia.push_gc_frame(%jl_value_t addrspace(10)** %gcframe, i32 2)
   %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
 ; CHECK: %frame_slot_1 = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 3
   %frame_slot_1 = call %jl_value_t addrspace(10)** @julia.get_gc_frame_slot(%jl_value_t addrspace(10)** %gcframe, i32 1)
-  store %jl_value_t addrspace(10)* %aboxed, %jl_value_t addrspace(10)** %frame_slot_1
+  store %jl_value_t addrspace(10)* %aboxed, %jl_value_t addrspace(10)** %frame_slot_1, align 8
   %bboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %b)
 ; CHECK: %frame_slot_2 = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 2
   %frame_slot_2 = call %jl_value_t addrspace(10)** @julia.get_gc_frame_slot(%jl_value_t addrspace(10)** %gcframe, i32 0)
-  store %jl_value_t addrspace(10)* %bboxed, %jl_value_t addrspace(10)** %frame_slot_2
+  store %jl_value_t addrspace(10)* %bboxed, %jl_value_t addrspace(10)** %frame_slot_2, align 8
 ; CHECK: call void @boxed_simple(%jl_value_t addrspace(10)* %aboxed, %jl_value_t addrspace(10)* %bboxed)
   call void @boxed_simple(%jl_value_t addrspace(10)* %aboxed, %jl_value_t addrspace(10)* %bboxed)
 ; CHECK-NEXT: [[PREV_GCFRAME_PTR3:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 1
-; CHECK-NEXT: [[PREV_GCFRAME_PTR4:%.*]] = load %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** [[PREV_GCFRAME_PTR3]], !tbaa !0
+; CHECK-NEXT: [[PREV_GCFRAME_PTR4:%.*]] = load %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** [[PREV_GCFRAME_PTR3]], align 8, !tbaa !0
 ; CHECK-NEXT: [[GCFRAME_SLOT3:%.*]] = getelementptr %jl_value_t**, %jl_value_t*** %ptls, i32 0
 ; CHECK-NEXT: [[GCFRAME_SLOT4:%.*]] = bitcast %jl_value_t*** [[GCFRAME_SLOT3]] to %jl_value_t addrspace(10)**
-; CHECK-NEXT: store %jl_value_t addrspace(10)* [[PREV_GCFRAME_PTR4]], %jl_value_t addrspace(10)** [[GCFRAME_SLOT4]], !tbaa !0
+; CHECK-NEXT: store %jl_value_t addrspace(10)* [[PREV_GCFRAME_PTR4]], %jl_value_t addrspace(10)** [[GCFRAME_SLOT4]], align 8, !tbaa !0
   call void @julia.pop_gc_frame(%jl_value_t addrspace(10)** %gcframe)
 ; CHECK-NEXT: ret void
   ret void
@@ -64,7 +64,7 @@ top:
   %v = call %jl_value_t addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, i64 8)
   %0 = bitcast %jl_value_t addrspace(10)* %v to %jl_value_t addrspace(10)* addrspace(10)*
   %1 = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)* addrspace(10)* %0, i64 -1
-  store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* %1, !tbaa !0
+  store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* %1, align 8, !tbaa !0
   ret %jl_value_t addrspace(10)* %v
 }
 
