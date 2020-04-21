@@ -280,7 +280,8 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
     elseif h < 0 && x < last(a)
         lastindex(a) + 1
     else
-        -fld(floor(Integer, -x) + first(a), h) + 1
+        y = isa(x, Unsigned) ? floor(-Signed(x)) : floor(Integer, -x)
+        -fld(y + Signed(first(a)), h) + 1
     end
 end
 
