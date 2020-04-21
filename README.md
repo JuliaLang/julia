@@ -8,6 +8,7 @@
 Code coverage:
 [![coveralls][coveralls-img]](https://coveralls.io/r/JuliaLang/julia?branch=master)
 [![codecov][codecov-img]](https://codecov.io/github/JuliaLang/julia?branch=master)
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FJuliaLang%2Fjulia.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2FJuliaLang%2Fjulia?ref=badge_shield)
 
 Documentation:
 [![version 1][docs-img]](https://docs.julialang.org)
@@ -148,3 +149,7 @@ Code plugin), and
 (IntelliJ IDEA plugin). The popular [Jupyter](https://jupyter.org/)
 notebook interface is available through
 [IJulia](https://github.com/JuliaLang/IJulia.jl).
+
+
+## License
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FJuliaLang%2Fjulia.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2FJuliaLang%2Fjulia?ref=badge_large)
