@@ -7,6 +7,11 @@ kwf1(ones; tens=0, hundreds=0) = ones + 10*tens + 100*hundreds
     @test kwf1(2, tens=6) == 62
     @test kwf1(1, hundreds=2, tens=7) == 271
     @test kwf1(3, tens=7, hundreds=2) == 273
+    let tens = 2, hundreds = 4
+        @test kwf1(8; tens, hundreds) == 428
+        nt = (hundreds = 5,)
+        @test kwf1(7; nt.hundreds) == 507
+    end
 
     @test_throws MethodError kwf1()             # no method, too few args
     @test_throws MethodError kwf1(1, z=0)       # unsupported keyword

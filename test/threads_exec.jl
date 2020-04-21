@@ -4,6 +4,29 @@ using Test
 using Base.Threads
 using Base.Threads: SpinLock
 
+# for cfunction_closure
+include("testenv.jl")
+
+function killjob(d)
+    Core.print(Core.stderr, d)
+    if Sys.islinux()
+        SIGINFO = 10
+    elseif Sys.isbsd()
+        SIGINFO = 29
+    end
+    if @isdefined(SIGINFO)
+        ccall(:uv_kill, Cint, (Cint, Cint), getpid(), SIGINFO)
+        sleep(1)
+    end
+    ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
+    nothing
+end
+
+# set up a watchdog alarm for 20 minutes
+# so that we can attempt to get a "friendly" backtrace if something gets stuck
+# (expected test duration is about 18-180 seconds)
+Timer(t -> killjob("KILLING BY THREAD TEST WATCHDOG\n"), 1200)
+
 # threading constructs
 
 let a = zeros(Int, 2 * nthreads())
@@ -210,6 +233,19 @@ end
 @test_throws TypeError Atomic{BigInt}
 @test_throws TypeError Atomic{ComplexF64}
 
+if Sys.ARCH == :i686 || startswith(string(Sys.ARCH), "arm") ||
+   Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
+
+    @test_throws TypeError Atomic{Int128}()
+    @test_throws TypeError Atomic{UInt128}()
+end
+
+if Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
+    @test_throws TypeError Atomic{Float16}()
+    @test_throws TypeError Atomic{Float32}()
+    @test_throws TypeError Atomic{Float64}()
+end
+
 function test_atomic_bools()
     x = Atomic{Bool}(false)
     # Arithmetic functions are not defined.
@@ -321,18 +357,11 @@ end
 test_fence()
 
 # Test load / store with various types
-let atomic_types = [Int8, Int16, Int32, Int64, Int128,
-                    UInt8, UInt16, UInt32, UInt64, UInt128,
-                    Float16, Float32, Float64]
-    # Temporarily omit 128-bit types on 32bit x86
-    # 128-bit atomics do not exist on AArch32.
-    # And we don't support them yet on power, because they are lowered
-    # to `__sync_lock_test_and_set_16`.
-    if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
-       Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
-        filter!(T -> sizeof(T)<=8, atomic_types)
-    end
-    for T in atomic_types
+let atomictypes = intersect((Int8, Int16, Int32, Int64, Int128,
+                             UInt8, UInt16, UInt32, UInt64, UInt128,
+                             Float16, Float32, Float64),
+                            Base.Threads.atomictypes)
+    for T in atomictypes
         var = Atomic{T}()
         var[] = 42
         @test var[] === T(42)
@@ -359,7 +388,7 @@ function test_atomic_cas!(var::Atomic{T}, range::StepRange{Int,Int}) where T
         end
     end
 end
-for T in (Int32, Int64, Float32, Float64)
+for T in intersect((Int32, Int64, Float32, Float64), Base.Threads.atomictypes)
     var = Atomic{T}()
     nloops = 1000
     di = nthreads()
@@ -373,7 +402,7 @@ function test_atomic_xchg!(var::Atomic{T}, i::Int, accum::Atomic{Int}) where T
     old = atomic_xchg!(var, T(i))
     atomic_add!(accum, Int(old))
 end
-for T in (Int32, Int64, Float32, Float64)
+for T in intersect((Int32, Int64, Float32, Float64), Base.Threads.atomictypes)
     accum = Atomic{Int}()
     var = Atomic{T}()
     nloops = 1000
@@ -388,7 +417,7 @@ function test_atomic_float(varadd::Atomic{T}, varmax::Atomic{T}, varmin::Atomic{
     atomic_max!(varmax, T(i))
     atomic_min!(varmin, T(i))
 end
-for T in (Int32, Int64, Float32, Float64)
+for T in intersect((Int32, Int64, Float16, Float32, Float64), Base.Threads.atomictypes)
     varadd = Atomic{T}()
     varmax = Atomic{T}()
     varmin = Atomic{T}()
@@ -399,6 +428,10 @@ for T in (Int32, Int64, Float32, Float64)
     @test varadd[] === T(sum(1:nloops))
     @test varmax[] === T(maximum(1:nloops))
     @test varmin[] === T(0)
+    @test atomic_add!(Atomic{T}(1), T(2)) == 1
+    @test atomic_sub!(Atomic{T}(2), T(3)) == 2
+    @test atomic_min!(Atomic{T}(4), T(3)) == 4
+    @test atomic_max!(Atomic{T}(5), T(6)) == 5
 end
 
 using Dates
@@ -460,10 +493,12 @@ function test_thread_cfunction()
     end
     @test sum(ok) == 10000
 end
-if nthreads() == 1
-    test_thread_cfunction()
-else
-    @test_broken "cfunction trampoline code not thread-safe"
+if cfunction_closure
+    if nthreads() == 1
+        test_thread_cfunction()
+    else
+        @test_broken "cfunction trampoline code not thread-safe"
+    end
 end
 
 # Compare the two ways of checking if threading is enabled.
@@ -662,14 +697,11 @@ end
 
 
 # scheduling wake/sleep test (#32511)
-let timeout = 300 # this test should take about 1-10 seconds
-    t = Timer(timeout) do t
-        ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
-    end # set up a watchdog alarm
+let t = Timer(t -> killjob("KILLING BY QUICK KILL WATCHDOG\n"), 600) # this test should take about 1-10 seconds
     for _ = 1:10^5
         @threads for idx in 1:1024; #=nothing=# end
     end
-    close(t) # stop the watchdog
+    close(t) # stop the fast watchdog
 end
 
 # issue #32575

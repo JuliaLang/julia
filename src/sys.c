@@ -62,18 +62,11 @@
 extern "C" {
 #endif
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 JL_DLLEXPORT char *dirname(char *);
 #else
 #include <libgen.h>
 #endif
-
-JL_DLLEXPORT uint32_t jl_getutf8(ios_t *s)
-{
-    uint32_t wc=0;
-    ios_getutf8(s, &wc);
-    return wc;
-}
 
 JL_DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
 #ifndef _OS_WINDOWS_
@@ -413,7 +406,7 @@ JL_DLLEXPORT uint64_t jl_hrtime(void)
 #ifdef __APPLE__
 #include <crt_externs.h>
 #else
-#if !defined(_OS_WINDOWS_) || defined(_COMPILER_MINGW_)
+#if !defined(_OS_WINDOWS_) || defined(_COMPILER_GCC_)
 extern char **environ;
 #endif
 #endif

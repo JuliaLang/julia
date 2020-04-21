@@ -231,27 +231,20 @@ julia> Threads.nthreads()
 1
 ```
 
-The number of threads Julia starts up with is controlled by an environment variable called `JULIA_NUM_THREADS`.
-Now, let's start up Julia with 4 threads:
+The number of threads Julia starts up with is controlled either by using the
+`-t`/`--threads` command line argument or by using the
+[`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) environment variable. When both are
+specified, then `-t`/`--threads` takes precedence.
 
-Bash on Linux/OSX:
+!!! compat "Julia 1.5"
+    The `-t`/`--threads` command line argument requires at least Julia 1.5.
+    In older versions you must use the environment variable instead.
+
+Lets start Julia with 4 threads:
 
 ```bash
-export JULIA_NUM_THREADS=4
+$ julia --threads 4
 ```
-
-C shell on Linux/OSX, CMD on Windows:
-
-```bash
-set JULIA_NUM_THREADS=4
-```
-
-Powershell on Windows:
-
-```powershell
-$env:JULIA_NUM_THREADS=4
-```
-
 
 Let's verify there are 4 threads at our disposal.
 
@@ -266,6 +259,29 @@ But we are currently on the master thread. To check, we use the function [`Threa
 julia> Threads.threadid()
 1
 ```
+
+!!! note
+    If you prefer to use the environment variable you can set it as follows in
+    Bash (Linux/macOS):
+    ```bash
+    export JULIA_NUM_THREADS=4
+    ```
+    C shell on Linux/macOS, CMD on Windows:
+    ```bash
+    set JULIA_NUM_THREADS=4
+    ```
+    Powershell on Windows:
+    ```powershell
+    $env:JULIA_NUM_THREADS=4
+    ```
+    Note that this must be done *before* starting Julia.
+
+!!! note
+    The number of threads specified with `-t`/`--threads` is propagated to worker processes
+    that are spawned using the `-p`/`--procs` or `--machine-file` command line options.
+    For example, `julia -p2 -t2` spawns 1 main process with 2 worker processes, and all
+    three processes have 2 threads enabled. For more fine grained control over worker
+    threads use [`addprocs`](@ref) and pass `-t`/`--threads` as `exeflags`.
 
 ## The `@threads` Macro
 
@@ -394,7 +410,7 @@ julia> acc[]
 When using multi-threading we have to be careful when using functions that are not
 [pure](https://en.wikipedia.org/wiki/Pure_function) as we might get a wrong answer.
 For instance functions that have their
-[name ending with `!`](https://docs.julialang.org/en/latest/manual/style-guide/#Append-!-to-names-of-functions-that-modify-their-arguments-1)
+[name ending with `!`](@ref bang-convention)
 by convention modify their arguments and thus are not pure. However, there are
 functions that have side effects and their name does not end with `!`.
 
@@ -1574,7 +1590,7 @@ When using custom transports:
     the worker represented by the `IO` objects.
   * `init_worker(cookie, manager::FooManager)` *must* be called as part of worker process initialization.
   * Field `connect_at::Any` in `WorkerConfig` can be set by the cluster manager when [`launch`](@ref)
-    is called. The value of this field is passed in in all [`connect`](@ref) callbacks. Typically,
+    is called. The value of this field is passed in all [`connect`](@ref) callbacks. Typically,
     it carries information on *how to connect* to a worker. For example, the TCP/IP socket transport
     uses this field to specify the `(host, port)` tuple at which to connect to a worker.
 
@@ -1617,6 +1633,16 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
 
     Securing and encrypting all worker-worker traffic (via SSH) or encrypting individual messages
     can be done via a custom `ClusterManager`.
+
+  * If you specify `multiplex=true` as an option to `addprocs`, SSH multiplexing is used to create
+    a tunnel between the master and workers. If you have configured SSH multiplexing on your own and
+    the connection has already been established, SSH multiplexing is used regardless of `multiplex`
+    option. If multiplexing is enabled, forwarding is set by using the existing connection
+    (`-O forward` option in ssh). This is beneficial if your servers require password authentication;
+    you can avoid authentication in Julia by logging in to the server ahead of `addprocs`. The control
+    socket will be located at `~/.ssh/julia-%r@%h:%p` during the session unless the existing multiplexing
+    connection is used. Note that bandwidth may be limited if you create multiple processes on a node
+    and enable multiplexing, because in that case processes share a single multiplexing TCP connection.
 
 ### [Cluster Cookie](@id man-cluster-cookie)
 

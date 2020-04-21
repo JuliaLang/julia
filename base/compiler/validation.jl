@@ -26,6 +26,7 @@ const VALID_EXPR_HEADS = IdDict{Any,Any}(
     :foreigncall => 5:typemax(Int), # name, RT, AT, nreq, cconv, args..., roots...
     :cfunction => 5:5,
     :isdefined => 1:1,
+    :code_coverage_effect => 0:0,
     :loopinfo => 0:typemax(Int),
     :gc_preserve_begin => 0:typemax(Int),
     :gc_preserve_end => 0:typemax(Int),
@@ -144,7 +145,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                 head === :const || head === :enter || head === :leave || head === :pop_exception ||
                 head === :method || head === :global || head === :static_parameter ||
                 head === :new || head === :splatnew || head === :thunk || head === :loopinfo ||
-                head === :throw_undef_if_not || head === :unreachable
+                head === :throw_undef_if_not || head === :unreachable || head === :code_coverage_effect
                 validate_val!(x)
             else
                 # TODO: nothing is actually in statement position anymore

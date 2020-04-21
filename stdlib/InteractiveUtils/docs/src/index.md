@@ -6,6 +6,7 @@ InteractiveUtils.varinfo
 InteractiveUtils.versioninfo
 InteractiveUtils.methodswith
 InteractiveUtils.subtypes
+InteractiveUtils.supertypes
 InteractiveUtils.edit(::AbstractString, ::Integer)
 InteractiveUtils.edit(::Any)
 InteractiveUtils.@edit

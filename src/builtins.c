@@ -176,7 +176,11 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE
     if (dt == jl_datatype_type) {
         jl_datatype_t *dta = (jl_datatype_t*)a;
         jl_datatype_t *dtb = (jl_datatype_t*)b;
-        return dta->name == dtb->name && compare_svec(dta->parameters, dtb->parameters);
+        if (dta->name != dtb->name)
+            return 0;
+        if (dta->name != jl_tuple_typename && (dta->isconcretetype || dtb->isconcretetype))
+            return 0;
+        return compare_svec(dta->parameters, dtb->parameters);
     }
     if (dt == jl_string_type) {
         size_t l = jl_string_len(a);
@@ -240,7 +244,8 @@ JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPO
 
 static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOINT
 {
-    if (v == NULL) return 0;
+    if (v == NULL)
+        return 0;
     jl_datatype_t *tv = (jl_datatype_t*)jl_typeof(v);
     if (tv == jl_tvar_type) {
         jl_varidx_t *pe = env;
@@ -267,7 +272,10 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
         return bitmix(h, type_object_id_(u->body, &e));
     }
     if (tv == jl_datatype_type) {
-        uintptr_t h = ~((jl_datatype_t*)v)->name->hash;
+        jl_datatype_t *dtv = (jl_datatype_t*)v;
+        if (dtv->isconcretetype)
+            return dtv->hash;
+        uintptr_t h = ~dtv->name->hash;
         size_t i, l = jl_nparams(v);
         for (i = 0; i < l; i++) {
             h = bitmix(h, type_object_id_(jl_tparam(v, i), env));
@@ -324,11 +332,10 @@ JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPO
     jl_datatype_t *dt = (jl_datatype_t*)tv;
     if (dt == jl_datatype_type) {
         jl_datatype_t *dtv = (jl_datatype_t*)v;
-        // `name->wrapper` is cacheable even though it contains TypeVars
-        // that don't have stable IDs.
-        //if (jl_egal(dtv->name->wrapper, v))
-        //    return bitmix(~dtv->name->hash, 0xaa5566aa);
-        return bitmix(~dtv->name->hash, hash_svec(dtv->parameters));
+        if (dtv->isconcretetype)
+            return dtv->hash;
+        uintptr_t h = ~dtv->name->hash;
+        return bitmix(h, hash_svec(dtv->parameters));
     }
     if (dt == jl_typename_type)
         return ((jl_typename_t*)v)->hash;
@@ -341,7 +348,7 @@ JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPO
     }
     if (dt->mutabl)
         return inthash((uintptr_t)v);
-    return immut_id_(dt, v, jl_object_id(tv));
+    return immut_id_(dt, v, ((jl_datatype_t*)tv)->hash);
 }
 
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT
@@ -351,7 +358,7 @@ JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT
 
 // eq hash table --------------------------------------------------------------
 
-#include "table.c"
+#include "iddict.c"
 
 // object model and type primitives -------------------------------------------
 
@@ -884,9 +891,6 @@ JL_CALLABLE(jl_f_fieldtype)
         nargs -= 1;
     }
     JL_NARGS(fieldtype, 2, 2);
-    jl_datatype_t *st = (jl_datatype_t*)args[0];
-    if (st == jl_module_type)
-        jl_error("cannot assign variables in other modules");
     return get_fieldtype(args[0], args[1], 1);
 }
 
@@ -1343,7 +1347,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
     add_builtin("Type", (jl_value_t*)jl_type_type);
-    add_builtin("Nothing", (jl_value_t*)jl_void_type);
+    add_builtin("Nothing", (jl_value_t*)jl_nothing_type);
     add_builtin("nothing", (jl_value_t*)jl_nothing);
     add_builtin("TypeName", (jl_value_t*)jl_typename_type);
     add_builtin("DataType", (jl_value_t*)jl_datatype_type);
@@ -1373,6 +1377,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("CodeInfo", (jl_value_t*)jl_code_info_type);
     add_builtin("Ref", (jl_value_t*)jl_ref_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
+    add_builtin("AddrSpacePtr", (jl_value_t*)jl_addrspace_pointer_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
 
     add_builtin("AbstractArray", (jl_value_t*)jl_abstractarray_type);

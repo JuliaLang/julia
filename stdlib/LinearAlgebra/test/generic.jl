@@ -217,6 +217,25 @@ end
     @test norm(x, 3) ≈ cbrt(5^3  +sqrt(5)^3)
 end
 
+@testset "rotate! and reflect!" begin
+    x = rand(ComplexF64, 10)
+    y = rand(ComplexF64, 10)
+    c = rand(Float64)
+    s = rand(ComplexF64)
+
+    x2 = copy(x)
+    y2 = copy(y)
+    rotate!(x, y, c, s)
+    @test x ≈ c*x2 + s*y2
+    @test y ≈ -conj(s)*x2 + c*y2
+
+    x3 = copy(x)
+    y3 = copy(y)
+    reflect!(x, y, c, s)
+    @test x ≈ c*x3 + s*y3
+    @test y ≈ conj(s)*x3 - c*y3
+end
+
 @testset "LinearAlgebra.axp(b)y! for element type without commutative multiplication" begin
     α = [1 2; 3 4]
     β = [5 6; 7 8]
@@ -460,6 +479,11 @@ end
         @test dot(x, B', y) ≈ dot(B*x, y)
         elty <: Real && @test dot(x, transpose(B), y) ≈ dot(x, transpose(B)*y)
     end
+end
+
+@testset "condskeel #34512" begin
+    A = rand(3, 3)
+    @test condskeel(A) ≈ condskeel(A, [8,8,8])
 end
 
 end # module TestGeneric

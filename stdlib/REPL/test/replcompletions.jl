@@ -3,7 +3,13 @@
 using REPL.REPLCompletions
 using Test
 using Random
-
+using REPL
+    @testset "Check symbols previously not shown by REPL.doc_completions()" begin
+    symbols = ["?","=","[]","[","]","{}","{","}",";","","'","&&","||","julia","Julia","new","@var_str"]
+        for i in symbols
+            @test REPL.doc_completions(i)[1]==i
+        end
+    end
 let ex = quote
     module CompletionFoo
         using Random
@@ -804,7 +810,7 @@ end
 if Sys.iswindows()
     tmp = tempname()
     touch(tmp)
-    path = dirname(tmp)
+    path = realpath(dirname(tmp))
     file = basename(tmp)
     temp_name = basename(path)
     cd(path) do
@@ -1048,4 +1054,15 @@ let s = "prevind(\"θ\",1,"
     @test c[1] == string(first(methods(prevind, Tuple{String, Int})))
     @test r == 1:7
     @test s[r] == "prevind"
+end
+
+# Issue #32840
+let s = "typeof(+)."
+    c, r = test_complete_context(s)
+    @test length(c) == length(fieldnames(DataType))
+end
+
+let s = "test_dict[\"ab"
+    c, r = test_complete_context(s)
+    @test c == Any["\"abc\"", "\"abcd\""]
 end

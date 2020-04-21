@@ -20,7 +20,11 @@ struct Irrational{sym} <: AbstractIrrational end
 show(io::IO, x::Irrational{sym}) where {sym} = print(io, sym)
 
 function show(io::IO, ::MIME"text/plain", x::Irrational{sym}) where {sym}
-    print(io, sym, " = ", string(float(x))[1:15], "...")
+    if get(io, :compact, false)
+        print(io, sym)
+    else
+        print(io, sym, " = ", string(float(x))[1:15], "...")
+    end
 end
 
 promote_rule(::Type{<:AbstractIrrational}, ::Type{Float16}) = Float16
@@ -131,6 +135,12 @@ isone(::AbstractIrrational) = false
 hash(x::Irrational, h::UInt) = 3*objectid(x) - h
 
 widen(::Type{T}) where {T<:Irrational} = T
+
+zero(::AbstractIrrational) = false
+zero(::Type{<:AbstractIrrational}) = false
+
+one(::AbstractIrrational) = true
+one(::Type{<:AbstractIrrational}) = true
 
 -(x::AbstractIrrational) = -Float64(x)
 for op in Symbol[:+, :-, :*, :/, :^]

@@ -112,7 +112,7 @@ struct FlatteningRF{T}
 end
 
 @inline function (op::FlatteningRF)(acc, x)
-    op′, itr′ = _xfadjoint(BottomRF(op.rf), x)
+    op′, itr′ = _xfadjoint(op.rf, x)
     return _foldl_impl(op′, acc, itr′)
 end
 
@@ -178,8 +178,11 @@ foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 
 function mapfoldr_impl(f, op, nt, itr)
     op′, itr′ = _xfadjoint(BottomRF(FlipArgs(op)), Generator(f, itr))
-    return foldl_impl(op′, nt, Iterators.reverse(itr′))
+    return foldl_impl(op′, nt, _reverse(itr′))
 end
+
+_reverse(itr) = Iterators.reverse(itr)
+_reverse(itr::Tuple) = reverse(itr)  #33235
 
 struct FlipArgs{F}
     f::F
@@ -861,3 +864,19 @@ function count(pred, a::AbstractArray)
     return n
 end
 count(itr) = count(identity, itr)
+
+function count(::typeof(identity), x::Array{Bool})
+    n = 0
+    chunks = length(x) ÷ sizeof(UInt)
+    mask = 0x0101010101010101 % UInt
+    GC.@preserve x begin
+        ptr = Ptr{UInt}(pointer(x))
+        for i in 1:chunks
+            n += count_ones(unsafe_load(ptr, i) & mask)
+        end
+    end
+    for i in sizeof(UInt)*chunks+1:length(x)
+        n += x[i]
+    end
+    return n
+end

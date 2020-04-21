@@ -47,6 +47,7 @@ helpful to start contributing to the Julia codebase.
 - [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
 - [**Twitter**](https://twitter.com/JuliaLanguage)
 - [**Meetup**](https://julia.meetup.com/)
+- [**Learning resources**](https://julialang.org/learning/)
 
 ## Binary Installation
 
@@ -130,7 +131,7 @@ The Julia source code is organized as follows:
 ## Terminal, Editors and IDEs
 
 The Julia REPL is quite powerful.  See the section in the manual on
-[the Julia REPL](https://docs.julialang.org/en/latest/stdlib/REPL/)
+[the Julia REPL](https://docs.julialang.org/en/v1/stdlib/REPL/)
 for more details.
 
 Support for editing Julia is available for many

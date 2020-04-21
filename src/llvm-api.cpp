@@ -8,6 +8,7 @@
 // They are not to be considered a stable API, and will be removed
 // when better package build systems are available
 
+#include "llvm-version.h"
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
@@ -25,7 +26,6 @@
 #include <llvm/Transforms/IPO.h>
 
 #include "julia.h"
-#include "llvm-version.h"
 
 using namespace llvm::legacy;
 
@@ -188,21 +188,6 @@ extern "C" JL_DLLEXPORT LLVMContextRef LLVMExtraGetValueContext(LLVMValueRef V)
 {
     return wrap(&unwrap(V)->getContext());
 }
-
-
-#if JL_LLVM_VERSION < 80000
-extern ModulePass *createNVVMReflectPass();
-extern "C" JL_DLLEXPORT void LLVMExtraAddNVVMReflectPass(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createNVVMReflectPass());
-}
-#else
-FunctionPass *createNVVMReflectPass(unsigned int SmVersion);
-extern "C" JL_DLLEXPORT void LLVMExtraAddNVVMReflectFunctionPass(LLVMPassManagerRef PM, unsigned int SmVersion)
-{
-    unwrap(PM)->add(createNVVMReflectPass(SmVersion));
-}
-#endif
 
 extern "C" JL_DLLEXPORT void
 LLVMExtraAddTargetLibraryInfoByTiple(const char *T, LLVMPassManagerRef PM)

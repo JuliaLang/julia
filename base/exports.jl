@@ -220,6 +220,8 @@ export
     atanh,
     big,
     binomial,
+    bitreverse,
+    bitrotate,
     bswap,
     cbrt,
     ceil,
@@ -437,6 +439,7 @@ export
     zeros,
 
 # search, find, match and related functions
+    contains,
     eachmatch,
     endswith,
     findall,
@@ -502,6 +505,7 @@ export
     in,
     intersect!,
     intersect,
+    isdisjoint,
     isempty,
     issubset,
     issetequal,
@@ -514,7 +518,9 @@ export
     mapfoldr,
     mapreduce,
     merge!,
+    mergewith!,
     merge,
+    mergewith,
     pairs,
     reduce,
     setdiff!,
@@ -638,7 +644,7 @@ export
     identity,
     isbits,
     isequal,
-    isimmutable,
+    ismutable,
     isless,
     ifelse,
     objectid,
@@ -690,8 +696,10 @@ export
     backtrace,
     catch_backtrace,
     error,
+    register_error_hint,
     rethrow,
     retry,
+    show_error_hints,
     systemerror,
 
 # stack traces
@@ -906,6 +914,7 @@ export
 
 # C interface
     @cfunction,
+    @ccall,
     cglobal,
     disable_sigint,
     pointer,
@@ -939,6 +948,7 @@ export
     @s_str,    # regex substitution string
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
+    @NamedTuple,
 
     # documentation
     @text_str,

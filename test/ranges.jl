@@ -301,6 +301,12 @@ end
         end
     end
     @testset "findfirst" begin
+        @test findfirst(isequal(3), Base.OneTo(10)) == 3
+        @test findfirst(==(0), Base.OneTo(10)) == nothing
+        @test findfirst(==(11), Base.OneTo(10)) == nothing
+        @test findfirst(==(4), Int16(3):Int16(7)) === Int(2)
+        @test findfirst(==(2), Int16(3):Int16(7)) == nothing
+        @test findfirst(isequal(8), 3:7) == nothing
         @test findfirst(isequal(7), 1:2:10) == 4
         @test findfirst(==(7), 1:2:10) == 4
         @test findfirst(==(10), 1:2:10) == nothing
@@ -387,6 +393,11 @@ end
         @test !issubset(Base.OneTo(10), Base.OneTo(5))
         @test issubset(1:3:10, 1:10)
         @test !issubset(1:10, 1:3:10)
+        # with empty ranges
+        @test issubset(2:1, 3:4) #35225
+        @test issubset(2:1, 3:2)
+        @test issubset(Base.OneTo(0), Base.OneTo(3))
+        @test issubset(Base.OneTo(0), Base.OneTo(-3))
     end
     @testset "sort/sort!/partialsort" begin
         @test sort(UnitRange(1,2)) == UnitRange(1,2)
@@ -1326,6 +1337,16 @@ using .Main.Furlongs
           Vector(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)
 end
 
+@testset "sum arbitrary types" begin
+    @test sum(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong{1,Float64}(104.5)
+    @test sum(StepRangeLen(Furlong(1), Furlong(0.5), 19)) == Furlong{1,Float64}(104.5)
+    @test sum(0f0:0.001f0:1f0) == 500.5
+    @test sum(0f0:0.000001f0:1f0) == 500000.5
+    @test sum(0f0:0.1f0:10f0) == 505.
+    @test sum(Float16(0):Float16(0.001):Float16(1)) ≈ 500.5
+    @test sum(Float16(0):Float16(0.1):Float16(10)) == 505.
+end
+
 @testset "issue #22270" begin
     linsp = range(1.0, stop=2.0, length=10)
     @test typeof(linsp.ref) == Base.TwicePrecision{Float64}
@@ -1559,4 +1580,16 @@ end
     @test_throws MethodError mod(3, UnitRange(1.0,5.0))
     @test_throws MethodError mod(3, 1:2:7)
     @test_throws DivideError mod(3, 1:0)
+end
+
+@testset "issue #33882" begin
+    r = StepRangeLen('a',2,4)
+    @test step(r) === 2
+    @test collect(r) == ['a','c','e','g']
+end
+
+@testset "Return type of indexing with ranges" begin
+    for T = (Base.OneTo{Int}, UnitRange{Int}, StepRange{Int,Int}, StepRangeLen{Int}, LinRange{Int})
+        @test eltype(T(1:5)) === eltype(T(1:5)[1:2])
+    end
 end

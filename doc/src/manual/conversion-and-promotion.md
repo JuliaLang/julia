@@ -93,8 +93,8 @@ ERROR: MethodError: Cannot `convert` an object of type String to an object of ty
 ```
 
 Some languages consider parsing strings as numbers or formatting numbers as strings to be conversions
-(many dynamic languages will even perform conversion for you automatically), however Julia does
-not: even though some strings can be parsed as numbers, most strings are not valid representations
+(many dynamic languages will even perform conversion for you automatically). This is not the case in Julia.
+Even though some strings can be parsed as numbers, most strings are not valid representations
 of numbers, and only a very limited subset of them are. Therefore in Julia the dedicated [`parse`](@ref)
 function must be used to perform this operation, making it more explicit.
 

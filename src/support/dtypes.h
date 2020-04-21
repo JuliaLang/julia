@@ -29,7 +29,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 
-#if !defined(_COMPILER_MINGW_)
+#if !defined(_COMPILER_GCC_)
 
 #define strtoull                                            _strtoui64
 #define strtoll                                             _strtoi64
@@ -42,7 +42,7 @@
 #define STDOUT_FILENO                                       1
 #define STDERR_FILENO                                       2
 
-#endif /* !_COMPILER_MINGW_ */
+#endif /* !_COMPILER_GCC_ */
 
 #endif /* _OS_WINDOWS_ */
 
@@ -114,7 +114,7 @@
 #  define STATIC_INLINE static inline
 #endif
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 #  define NOINLINE __declspec(noinline)
 #  define NOINLINE_DECL(f) __declspec(noinline) f
 #else

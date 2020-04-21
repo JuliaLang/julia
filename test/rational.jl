@@ -34,6 +34,7 @@ using Test
     @test_throws InexactError rationalize(Int, NaN)
     # issue 32569
     @test_throws ArgumentError 1 // typemin(Int)
+    @test_throws ArgumentError 0 // 0
     @test -2 // typemin(Int) == -1 // (typemin(Int) >> 1)
     @test 2 // typemin(Int) == 1 // (typemin(Int) >> 1)
 
@@ -394,10 +395,37 @@ end
     @test gcdx(1//2, 1//0) == (1//0, 0, 1)
     @test gcdx(1//0, 1//0) == (1//0, 1, 1)
     @test gcdx(1//0, 0//1) == (1//0, 1, 0)
+    @test gcdx(0//1, 0//1) == (0//1, 1, 0)
 
     @test gcdx(1//3, 2) == (1//3, 1, 0)
     @test lcm(1//3, 1) == 1//1
     @test lcm(3//1, 1//0) == 3//1
     @test lcm(0//1, 1//0) == 0//1
+
+    @test gcd([5, 2, 1//2]) == 1//2
 end
 
+@testset "Binary operations with Integer" begin
+    @test 1//2 - 1 == -1//2
+    @test -1//2 + 1 == 1//2
+    @test 1 - 1//2 == 1//2
+    @test 1 + 1//2 == 3//2
+    for q in (19//3, -4//5), i in (6, -7)
+        @test rem(q, i) == q - i*div(q, i)
+        @test mod(q, i) == q - i*fld(q, i)
+    end
+    @test 1//2 * 3 == 3//2
+    @test -3 * (1//2) == -3//2
+
+    @test_throws OverflowError UInt(1)//2 - 1
+    @test_throws OverflowError 1 - UInt(5)//2
+    @test_throws OverflowError 1//typemax(Int64) + 1
+    @test_throws OverflowError Int8(1) + Int8(5)//(Int8(127)-Int8(1))
+    @test_throws InexactError UInt(1)//2 * -1
+    @test_throws OverflowError typemax(Int64)//1 * 2
+    @test_throws OverflowError -1//1 * typemin(Int64)
+
+    @test Int8(1) + Int8(4)//(Int8(127)-Int8(1)) == Int8(65) // Int8(63)
+    @test -Int32(1) // typemax(Int32) - Int32(1) == typemin(Int32) // typemax(Int32)
+    @test 1 // (typemax(Int128) + BigInt(1)) - 2 == (1 + BigInt(2)*typemin(Int128)) // (BigInt(1) + typemax(Int128))
+end

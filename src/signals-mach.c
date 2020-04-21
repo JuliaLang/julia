@@ -142,7 +142,7 @@ static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exceptio
     if (!ptls2->safe_restore) {
         assert(exception);
         ptls2->bt_size = rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE,
-                                           (bt_context_t*)&state, ptls2->pgcstack);
+                                           (bt_context_t*)&state, ptls2->pgcstack, 0);
         ptls2->sig_exception = exception;
     }
     jl_call_in_state(ptls2, &state, &jl_sig_throw);
@@ -448,7 +448,7 @@ void *mach_profile_listener(void *arg)
 
                 if (forceDwarf == 0) {
                     // Save the backtrace
-                    bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL);
+                    bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL, 1);
                 }
                 else if (forceDwarf == 1) {
                     bt_size_cur += rec_backtrace_ctx_dwarf((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL);

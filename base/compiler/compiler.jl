@@ -69,6 +69,8 @@ include("abstractarray.jl")
 include("bitarray.jl")
 include("bitset.jl")
 include("abstractdict.jl")
+include("iddict.jl")
+include("idset.jl")
 include("abstractset.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate

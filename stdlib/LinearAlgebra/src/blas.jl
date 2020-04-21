@@ -17,6 +17,7 @@ export
     blascopy!,
     dotc,
     dotu,
+    rot!,
     scal!,
     scal,
     nrm2,
@@ -31,6 +32,7 @@ export
     hpmv!,
     sbmv!,
     sbmv,
+    spmv!,
     symv!,
     symv,
     trsv!,
@@ -197,6 +199,37 @@ for (fname, elty) in ((:dcopy_,:Float64),
     end
 end
 
+
+## rot
+
+"""
+    rot!(n, X, incx, Y, incy, c, s)
+
+Overwrite `X` with `c*X + s*Y` and `Y` with `-conj(s)*X + c*Y` for the first `n` elements of array `X` with stride `incx` and
+first `n` elements of array `Y` with stride `incy`. Returns `X` and `Y`.
+
+!!! compat "Julia 1.5"
+    `rot!` requires at least Julia 1.5.
+"""
+function rot! end
+
+for (fname, elty, cty, sty, lib) in ((:drot_, :Float64, :Float64, :Float64, libblas),
+                                     (:srot_, :Float32, :Float32, :Float32, libblas),
+                                     (:zdrot_, :ComplexF64, :Float64, :Float64, libblas),
+                                     (:csrot_, :ComplexF32, :Float32, :Float32, libblas),
+                                     (:zrot_, :ComplexF64, :Float64, :ComplexF64, liblapack),
+                                     (:crot_, :ComplexF32, :Float32, :ComplexF32, liblapack))
+    @eval begin
+        # SUBROUTINE DROT(N,DX,INCX,DY,INCY,C,S)
+        function rot!(n::Integer, DX::Union{Ptr{$elty},AbstractArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},AbstractArray{$elty}}, incy::Integer, C::$cty, S::$sty)
+            ccall((@blasfunc($fname), $lib), Cvoid,
+                (Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{$cty}, Ref{$sty}),
+                 n, DX, incx, DY, incy, C, S)
+            DX, DY
+        end
+    end
+end
+
 ## scal
 
 """
@@ -333,7 +366,7 @@ function dot(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T}
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
-    GC.@preserve DX DY dot(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
+    return dot(n, DX, stride(DX, 1), DY, stride(DY, 1))
 end
 function dotc(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasComplex
     require_one_based_indexing(DX, DY)
@@ -341,7 +374,7 @@ function dotc(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
-    GC.@preserve DX DY dotc(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
+    return dotc(n, DX, stride(DX, 1), DY, stride(DY, 1))
 end
 function dotu(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasComplex
     require_one_based_indexing(DX, DY)
@@ -349,7 +382,7 @@ function dotu(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
-    GC.@preserve DX DY dotu(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
+    return dotu(n, DX, stride(DX, 1), DY, stride(DY, 1))
 end
 
 ## nrm2
@@ -383,7 +416,7 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
         end
     end
 end
-nrm2(x::Union{AbstractVector,DenseArray}) = GC.@preserve x nrm2(length(x), pointer(x), stride1(x))
+nrm2(x::Union{AbstractVector,DenseArray}) = nrm2(length(x), x, stride1(x))
 
 ## asum
 
@@ -416,7 +449,7 @@ for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
         end
     end
 end
-asum(x::Union{AbstractVector,DenseArray}) = GC.@preserve x asum(length(x), pointer(x), stride1(x))
+asum(x::Union{AbstractVector,DenseArray}) = asum(length(x), x, stride1(x))
 
 ## axpy
 
@@ -464,8 +497,7 @@ function axpy!(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, y::Union
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
-    GC.@preserve x y axpy!(length(x), convert(T,alpha), pointer(x), stride(x, 1), pointer(y), stride(y, 1))
-    y
+    return axpy!(length(x), convert(T,alpha), x, stride(x, 1), y, stride(y, 1))
 end
 
 function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},AbstractRange{Ti}},
@@ -479,8 +511,15 @@ function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},AbstractRange
     if minimum(ry) < 1 || maximum(ry) > length(y)
         throw(ArgumentError("range out of bounds for y, of length $(length(y))"))
     end
-    GC.@preserve x y axpy!(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
-    y
+    GC.@preserve x y axpy!(
+        length(rx),
+        convert(T, alpha),
+        pointer(x) + (first(rx) - 1)*sizeof(T),
+        step(rx),
+        pointer(y) + (first(ry) - 1)*sizeof(T),
+        step(ry))
+
+    return y
 end
 
 """
@@ -529,8 +568,7 @@ function axpby!(alpha::Number, x::Union{DenseArray{T},AbstractVector{T}}, beta::
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
-    GC.@preserve x y axpby!(length(x), convert(T,alpha), pointer(x), stride(x, 1), convert(T,beta), pointer(y), stride(y, 1))
-    y
+    return axpby!(length(x), convert(T, alpha), x, stride(x, 1), convert(T, beta), y, stride(y, 1))
 end
 
 ## iamax
@@ -546,7 +584,7 @@ for (fname, elty) in ((:idamax_,:Float64),
         end
     end
 end
-iamax(dx::Union{AbstractVector,DenseArray}) = GC.@preserve dx iamax(length(dx), pointer(dx), stride1(dx))
+iamax(dx::Union{AbstractVector,DenseArray}) = iamax(length(dx), dx, stride1(dx))
 
 """
     iamax(n, dx, incx)
@@ -837,7 +875,7 @@ for (fname, elty) in ((:zhpmv_, :ComplexF64),
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION A(N,N),X(N),Y(N)
         function hpmv!(uplo::AbstractChar,
-                       n::BlasInt,
+                       n::Integer,
                        α::$elty,
                        AP::Union{Ptr{$elty}, AbstractArray{$elty}},
                        x::Union{Ptr{$elty}, AbstractArray{$elty}},
@@ -865,6 +903,7 @@ for (fname, elty) in ((:zhpmv_, :ComplexF64),
                   β,
                   y,
                   incy)
+            return y
         end
     end
 end
@@ -877,24 +916,31 @@ function hpmv!(uplo::AbstractChar,
     if N != length(y)
         throw(DimensionMismatch("x has length $(N), but y has length $(length(y))"))
     end
-    if length(AP) < Int64(N*(N+1)/2)
+    if 2*length(AP) < N*(N + 1)
         throw(DimensionMismatch("Packed Hermitian matrix A has size smaller than length(x) =  $(N)."))
     end
-    GC.@preserve x y AP hpmv!(uplo, N, convert(T, α), AP, pointer(x), BlasInt(stride(x, 1)), convert(T, β), pointer(y), BlasInt(stride(y, 1)))
-    y
+    return hpmv!(uplo, N, convert(T, α), AP, x, stride(x, 1), convert(T, β), y, stride(y, 1))
 end
 
 """
     hpmv!(uplo, α, AP, x, β, y)
 
-Update vector `y` as `α*AP*x + β*y` where `AP` is a packed Hermitian matrix.
-The storage layout for `AP` is described in the reference BLAS module, level-2 BLAS at
-<http://www.netlib.org/lapack/explore-html/>.
+Update vector `y` as `α*A*x + β*y`, where `A` is a Hermitian matrix provided
+in packed format `AP`.
 
-The scalar inputs `α` and `β` shall be numbers.
+With `uplo = 'U'`, the array AP must contain the upper triangular part of the
+Hermitian matrix packed sequentially, column by column, so that `AP[1]`
+contains `A[1, 1]`, `AP[2]` and `AP[3]` contain `A[1, 2]` and `A[2, 2]`
+respectively, and so on.
 
-The array inputs `x`, `y` and `AP` must be complex one-dimensional julia arrays of the
-same type that is either `ComplexF32` or `ComplexF64`.
+With `uplo = 'L'`, the array AP must contain the lower triangular part of the
+Hermitian matrix packed sequentially, column by column, so that `AP[1]`
+contains `A[1, 1]`, `AP[2]` and `AP[3]` contain `A[2, 1]` and `A[3, 1]`
+respectively, and so on.
+
+The scalar inputs `α` and `β` must be complex or real numbers.
+
+The array inputs `x`, `y` and `AP` must all be of `ComplexF32` or `ComplexF64` type.
 
 Return the updated `y`.
 """
@@ -954,7 +1000,7 @@ sbmv(uplo, k, A, x)
 """
     sbmv!(uplo, k, alpha, A, x, beta, y)
 
-Update vector `y` as `alpha*A*x + beta*y` where `A` is a a symmetric band matrix of order
+Update vector `y` as `alpha*A*x + beta*y` where `A` is a symmetric band matrix of order
 `size(A,2)` with `k` super-diagonals stored in the argument `A`. The storage layout for `A`
 is described the reference BLAS module, level-2 BLAS at
 <http://www.netlib.org/lapack/explore-html/>.
@@ -963,6 +1009,90 @@ Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `A` is used.
 Return the updated `y`.
 """
 sbmv!
+
+### spmv!, (SP) symmetric packed matrix-vector operation defined as y := alpha*A*x + beta*y.
+for (fname, elty) in ((:dspmv_, :Float64),
+                      (:sspmv_, :Float32))
+    @eval begin
+        # SUBROUTINE DSPMV(UPLO,N,ALPHA,AP,X,INCX,BETA,Y,INCY)
+        # Y <- ALPHA*AP*X + BETA*Y
+        # *     .. Scalar Arguments ..
+        #       DOUBLE PRECISION ALPHA,BETA
+        #       INTEGER INCX,INCY,N
+        #       CHARACTER UPLO
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION A(N,N),X(N),Y(N)
+        function spmv!(uplo::AbstractChar,
+                       n::Integer,
+                       α::$elty,
+                       AP::Union{Ptr{$elty}, AbstractArray{$elty}},
+                       x::Union{Ptr{$elty}, AbstractArray{$elty}},
+                       incx::Integer,
+                       β::$elty,
+                       y::Union{Ptr{$elty}, AbstractArray{$elty}},
+                       incy::Integer)
+
+            ccall((@blasfunc($fname), libblas), Cvoid,
+                  (Ref{UInt8},     # uplo,
+                   Ref{BlasInt},   # n,
+                   Ref{$elty},     # α,
+                   Ptr{$elty},     # AP,
+                   Ptr{$elty},     # x,
+                   Ref{BlasInt},   # incx,
+                   Ref{$elty},     # β,
+                   Ptr{$elty},     # y, out
+                   Ref{BlasInt}),  # incy
+                  uplo,
+                  n,
+                  α,
+                  AP,
+                  x,
+                  incx,
+                  β,
+                  y,
+                  incy)
+            return y
+        end
+    end
+end
+
+function spmv!(uplo::AbstractChar,
+               α::Real, AP::Union{DenseArray{T}, AbstractVector{T}}, x::Union{DenseArray{T}, AbstractVector{T}},
+               β::Real, y::Union{DenseArray{T}, AbstractVector{T}}) where {T <: BlasReal}
+    require_one_based_indexing(AP, x, y)
+    N = length(x)
+    if N != length(y)
+        throw(DimensionMismatch("x has length $(N), but y has length $(length(y))"))
+    end
+    if 2*length(AP) < N*(N + 1)
+        throw(DimensionMismatch("Packed symmetric matrix A has size smaller than length(x) = $(N)."))
+    end
+    return spmv!(uplo, N, convert(T, α), AP, x, stride(x, 1), convert(T, β), y, stride(y, 1))
+end
+
+"""
+    spmv!(uplo, α, AP, x, β, y)
+
+Update vector `y` as `α*A*x + β*y`, where `A` is a symmetric matrix provided
+in packed format `AP`.
+
+With `uplo = 'U'`, the array AP must contain the upper triangular part of the
+symmetric matrix packed sequentially, column by column, so that `AP[1]`
+contains `A[1, 1]`, `AP[2]` and `AP[3]` contain `A[1, 2]` and `A[2, 2]`
+respectively, and so on.
+
+With `uplo = 'L'`, the array AP must contain the lower triangular part of the
+symmetric matrix packed sequentially, column by column, so that `AP[1]`
+contains `A[1, 1]`, `AP[2]` and `AP[3]` contain `A[2, 1]` and `A[3, 1]`
+respectively, and so on.
+
+The scalar inputs `α` and `β` must be real.
+
+The array inputs `x`, `y` and `AP` must all be of `Float32` or `Float64` type.
+
+Return the updated `y`.
+"""
+spmv!
 
 ### hbmv, (HB) Hermitian banded matrix-vector multiplication
 for (fname, elty) in ((:zhbmv_,:ComplexF64),
@@ -1800,10 +1930,12 @@ function copyto!(dest::Array{T}, rdest::Union{UnitRange{Ti},AbstractRange{Ti}},
     if length(rdest) != length(rsrc)
         throw(DimensionMismatch("ranges must be of the same length"))
     end
-    GC.@preserve src dest BLAS.blascopy!(length(rsrc),
-                                              pointer(src) + (first(rsrc) - 1) * sizeof(T),
-                                              step(rsrc),
-                                              pointer(dest) + (first(rdest) - 1) * sizeof(T),
-                                              step(rdest))
-    dest
+    GC.@preserve src dest BLAS.blascopy!(
+        length(rsrc),
+        pointer(src) + (first(rsrc) - 1) * sizeof(T),
+        step(rsrc),
+        pointer(dest) + (first(rdest) - 1) * sizeof(T),
+        step(rdest))
+
+    return dest
 end

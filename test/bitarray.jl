@@ -32,12 +32,12 @@ macro check_bit_operation(ex)
     Expr(:call, :check_bitop_call, nothing, map(esc, ex.args)...)
 end
 
-let t0 = time()
+let t0 = time_ns()
     global timesofar
     function timesofar(str)
         return # no-op, comment to see timings
-        t1 = time()
-        println(str, ": ", t1-t0, " seconds")
+        t1 = time_ns()
+        println(str, ": ", (t1-t0)/1e9, " seconds")
         t0 = t1
     end
 end

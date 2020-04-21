@@ -926,7 +926,7 @@ julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Bas
 """
 function operator_associativity(s::Symbol)
     if operator_precedence(s) in (prec_arrow, prec_assignment, prec_control_flow, prec_pair, prec_power) ||
-        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) || s === :<|
+        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) || s === :<| || s === :||
         return :right
     elseif operator_precedence(s) in (0, prec_comparison) || s in (:+, :++, :*)
         return :none
@@ -1207,13 +1207,7 @@ function show_unquoted_expr_fallback(io::IO, ex::Expr, indent::Int, quote_level:
     show(io, ex.head)
     for arg in ex.args
         print(io, ", ")
-        if isa(arg, Expr)
-            print(io, ":(")
-            show_unquoted(io, arg, indent, 0, quote_level+1)
-            print(io, ")")
-        else
-            show(io, arg)
-        end
+        show(io, arg)
     end
     print(io, "))")
 end
@@ -1258,16 +1252,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif head === :tuple
         print(io, "(")
         if nargs > 0 && is_expr(args[1], :parameters)
-            if nargs == 1 && isempty(args[1].args)
-                # TODO: for now avoid printing (;)
-                show_unquoted_expr_fallback(io, args[1], indent, quote_level)
-                print(io, ',')
-            else
-                show_list(io, args[2:end], ", ", indent, 0, quote_level)
-                nargs == 2 && print(io, ',')
-                print(io, "; ")
-                show_list(io, args[1].args, ", ", indent, 0, quote_level, false, true)
+            show_list(io, args[2:end], ", ", indent, 0, quote_level)
+            nargs == 2 && print(io, ',')
+            print(io, ";")
+            if !isempty(args[1].args)
+                print(io, " ")
             end
+            show_list(io, args[1].args, ", ", indent, 0, quote_level, false, true)
         else
             show_list(io, args, ", ", indent, 0, quote_level)
             nargs == 1 && print(io, ',')
@@ -1314,7 +1305,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         func_args = args[2:end]
 
         # :kw exprs are only parsed inside parenthesized calls
-        if any(a->is_expr(a, :kw), func_args)
+        if any(a->is_expr(a, :kw), func_args) || (!isempty(func_args) && is_expr(func_args[1], :parameters))
             show_call(io, head, func, func_args, indent, quote_level, true)
 
         # scalar multiplication (i.e. "100x")
@@ -1503,11 +1494,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
                is_core_macro(args[1], "@big_str")
             print(io, args[3])
         # x"y" and x"y"z
-        elseif isa(args[1], Symbol) &&
+        elseif isa(args[1], Symbol) && nargs >= 3 && isa(args[3], String) &&
                startswith(string(args[1]::Symbol), "@") &&
                endswith(string(args[1]::Symbol), "_str")
             s = string(args[1]::Symbol)
-            print(io, s[2:prevind(s,end,4)], "\"", args[3], "\"")
+            print(io, s[2:prevind(s,end,4)], "\"")
+            escape_raw_string(io, args[3])
+            print(io, "\"")
             if nargs == 4
                 print(io, args[4])
             end
@@ -1580,11 +1573,17 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             print(io, '(')
             ind = indent + indent_width
             for i = 1:length(ex.args)
-                i > 1 && print(io, ";\n", ' '^ind)
+                if i > 1
+                    # if there was only a comment before the first semicolon, the expression would get parsed as a NamedTuple
+                    if !(i == 2 && ex.args[1] isa LineNumberNode)
+                        print(io, ';')
+                    end
+                    print(io, "\n", ' '^ind)
+                end
                 show_unquoted(io, ex.args[i], ind, -1, quote_level)
             end
             if length(ex.args) < 2
-                print(isempty(ex.args) ? "nothing;)" : ";)")
+                print(io, isempty(ex.args) ? ";;)" : ";)")
             else
                 print(io, ')')
             end
@@ -1595,17 +1594,19 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     elseif head === :quote && nargs == 1 && isa(args[1], Symbol)
         show_unquoted_quote_expr(IOContext(io, beginsym=>false), args[1]::Symbol, indent, 0, quote_level+1)
-    elseif head === :quote && nargs == 1 && is_expr(args[1], :block)
-        show_block(IOContext(io, beginsym=>false), "quote", Expr(:quote, args[1].args...), indent,
-                   quote_level+1)
-        print(io, "end")
-    elseif head === :quote && nargs == 1
-        print(io, ":(")
-        show_unquoted(IOContext(io, beginsym=>false), args[1], indent+2, 0, quote_level+1)
-        print(io, ")")
-    elseif head === :quote
-        show_block(IOContext(io, beginsym=>false), "quote", ex, indent, quote_level+1)
-        print(io, "end")
+    elseif head === :quote && !get(io, :unquote_fallback, true)
+        if nargs == 1 && is_expr(args[1], :block)
+            show_block(IOContext(io, beginsym=>false), "quote", Expr(:quote, args[1].args...), indent,
+                       quote_level+1)
+            print(io, "end")
+        elseif nargs == 1
+            print(io, ":(")
+            show_unquoted(IOContext(io, beginsym=>false), args[1], indent+2, 0, quote_level+1)
+            print(io, ")")
+        else
+            show_block(IOContext(io, beginsym=>false), "quote", ex, indent, quote_level+1)
+            print(io, "end")
+        end
 
     elseif head === :gotoifnot && nargs == 2 && isa(args[2], Int)
         print(io, "unless ")
@@ -1640,12 +1641,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         if head === :$
             quote_level -= 1
         end
-        if head === :$ && quote_level < 0 && get(io, :unquote_fallback, true)
+        if head === :$ && get(io, :unquote_fallback, true)
             unhandled = true
         else
             print(io, head)
             a1 = args[1]
-            parens = (isa(a1,Expr) && (a1.head !== :tuple && a1.head !== :$)) ||
+            parens = (isa(a1,Expr) && !in(a1.head, (:tuple, :$, :vect, :braces))) ||
                      (isa(a1,Symbol) && isoperator(a1))
             parens && print(io, "(")
             show_unquoted(io, a1, 0, 0, quote_level)
@@ -1814,16 +1815,16 @@ function show(io::IO, tv::TypeVar)
     lb, ub = tv.lb, tv.ub
     if !in_env && lb !== Bottom
         if ub === Any
-            write(io, tv.name)
+            show_unquoted(io, tv.name)
             print(io, ">:")
             show_bound(io, lb)
         else
             show_bound(io, lb)
             print(io, "<:")
-            write(io, tv.name)
+            show_unquoted(io, tv.name)
         end
     else
-        write(io, tv.name)
+        show_unquoted(io, tv.name)
     end
     if !in_env && ub !== Any
         print(io, "<:")
@@ -2055,13 +2056,13 @@ alignment(io::IO, x::Number) = (length(sprint(show, x, context=io, sizehint=0)),
 alignment(io::IO, x::Integer) = (length(sprint(show, x, context=io, sizehint=0)), 0)
 "`alignment(4.23)` yields (1,3) for `4` and `.23`"
 function alignment(io::IO, x::Real)
-    m = match(r"^(.*?)((?:[\.eE].*)?)$", sprint(show, x, context=io, sizehint=0))
+    m = match(r"^(.*?)((?:[\.eEfF].*)?)$", sprint(show, x, context=io, sizehint=0))
     m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
 "`alignment(1 + 10im)` yields (3,5) for `1 +` and `_10im` (plus sign on left, space on right)"
 function alignment(io::IO, x::Complex)
-    m = match(r"^(.*[^e][\+\-])(.*)$", sprint(show, x, context=io, sizehint=0))
+    m = match(r"^(.*[^ef][\+\-])(.*)$", sprint(show, x, context=io, sizehint=0))
     m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
@@ -2217,6 +2218,15 @@ function showarg(io::IO, r::ReinterpretArray{T}, toplevel) where {T}
     showarg(io, parent(r), false)
     print(io, ')')
 end
+
+# printing iterators from Base.Iterators
+
+function show(io::IO, e::Iterators.Enumerate)
+    print(io, "enumerate(")
+    show(io, e.itr)
+    print(io, ')')
+end
+show(io::IO, z::Iterators.Zip) = show_delim_array(io, z.is, "zip(", ',', ')', false)
 
 # pretty printing for Iterators.Pairs
 function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, T}, toplevel) where T<:AbstractArray

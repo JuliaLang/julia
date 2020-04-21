@@ -18,6 +18,21 @@ julia> gcd(6,9)
 
 julia> gcd(6,-9)
 3
+
+julia> gcd(6,0)
+6
+
+julia> gcd(0,0)
+0
+
+julia> gcd(1//3,2//3)
+1//3
+
+julia> gcd(1//3,-2//3)
+1//3
+
+julia> gcd(1//3,2)
+1//3
 ```
 """
 function gcd(a::T, b::T) where T<:Integer
@@ -32,8 +47,8 @@ end
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
 function gcd(a::T, b::T) where T<:Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128}
-    a == 0 && return abs(b)
-    b == 0 && return abs(a)
+    a == 0 && return checked_abs(b)
+    b == 0 && return checked_abs(a)
     za = trailing_zeros(a)
     zb = trailing_zeros(b)
     k = min(za, zb)
@@ -69,12 +84,28 @@ julia> lcm(2,3)
 
 julia> lcm(-2,3)
 6
+
+julia> lcm(0,3)
+0
+
+julia> lcm(0,0)
+0
+
+julia> lcm(1//3,2//3)
+2//3
+
+julia> lcm(1//3,-2//3)
+2//3
+
+julia> lcm(1//3,2)
+2//1
 ```
 """
 function lcm(a::T, b::T) where T<:Integer
     # explicit a==0 test is to handle case of lcm(0,0) correctly
-    if a == 0
-        return a
+    # explicit b==0 test is to handle case of lcm(typemin(T),0) correctly
+    if a == 0 || b == 0
+        return zero(a)
     else
         return checked_abs(checked_mul(a, div(b, gcd(b,a))))
     end
@@ -82,14 +113,17 @@ end
 
 gcd(a::Union{Integer,Rational}) = a
 lcm(a::Union{Integer,Rational}) = a
-gcd(a::Union{Integer,Rational}, b::Union{Integer,Rational}) = gcd(promote(a,b)...)
-lcm(a::Union{Integer,Rational}, b::Union{Integer,Rational}) = lcm(promote(a,b)...)
-gcd(a::Union{Integer,Rational}, b::Union{Integer,Rational}...) = gcd(a, gcd(b...))
-lcm(a::Union{Integer,Rational}, b::Union{Integer,Rational}...) = lcm(a, lcm(b...))
+gcd(a::Real, b::Real) = gcd(promote(a,b)...)
+lcm(a::Real, b::Real) = lcm(promote(a,b)...)
+gcd(a::Real, b::Real, c::Real...) = gcd(a, gcd(b, c...))
+lcm(a::Real, b::Real, c::Real...) = lcm(a, lcm(b, c...))
+gcd(a::T, b::T) where T<:Real = throw(MethodError(gcd, (a,b)))
+lcm(a::T, b::T) where T<:Real = throw(MethodError(lcm, (a,b)))
 
-lcm(abc::AbstractArray{<:Union{Integer,Rational}}) = reduce(lcm, abc; init=one(eltype(abc)))
+gcd(abc::AbstractArray{<:Real}) = reduce(gcd, abc; init=zero(eltype(abc)))
+lcm(abc::AbstractArray{<:Real}) = reduce(lcm, abc; init=one(eltype(abc)))
 
-function gcd(abc::AbstractArray{<:Union{Integer,Rational}})
+function gcd(abc::AbstractArray{<:Integer})
     a = zero(eltype(abc))
     for b in abc
         a = gcd(a,b)
@@ -146,7 +180,8 @@ function gcdx(a::T, b::T) where T<:Integer
     end
     a < 0 ? (-a, -s0, -t0) : (a, s0, t0)
 end
-gcdx(a::Union{Integer,Rational}, b::Union{Integer,Rational}) = gcdx(promote(a,b)...)
+gcdx(a::Real, b::Real) = gcdx(promote(a,b)...)
+gcdx(a::T, b::T) where T<:Real = throw(MethodError(gcdx, (a,b)))
 
 # multiplicative inverse of n mod m, error if none
 
@@ -889,7 +924,7 @@ julia> binomial(-5, 3)
 * [`factorial`](@ref)
 
 # External links
-* [Binomial coeffient](https://en.wikipedia.org/wiki/Binomial_coefficient) on Wikipedia.
+* [Binomial coefficient](https://en.wikipedia.org/wiki/Binomial_coefficient) on Wikipedia.
 """
 function binomial(n::T, k::T) where T<:Integer
     n0, k0 = n, k

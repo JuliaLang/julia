@@ -17,8 +17,8 @@ end
     init_data = Profile.len_data()
     while iter < n_tries && Profile.len_data() == init_data
         iter += 1
-        tend = time() + t
-        while time() < tend end
+        tend = time_ns() + 1e9 * t
+        while time_ns() < tend end
     end
 end
 
