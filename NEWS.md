@@ -32,6 +32,10 @@ Multi-threading changes
 Build system changes
 --------------------
 
+* The windows executable now uses a launcher `.exe` to transparently set up environment variables necessary
+  for the "true" Julia executable to find its dependent libraries, as they are no longer located within the
+  main `bin` directory. ([#35629])
+
 
 New library functions
 ---------------------

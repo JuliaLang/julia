@@ -210,6 +210,19 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
         if (!WideCharToMultiByte(CP_UTF8, 0, warg, -1, arg, len, NULL, NULL)) return 1;
         argv[i] = (wchar_t*)arg;
     }
+
+    // If the exe wrapper has passed us the original PATH value in a separate
+    // sidechannel variable, apply that to Julia now, before doing anything else.
+    {
+        #define MAX_PATH_LEN 1920
+        WCHAR pathVal[MAX_PATH_LEN];
+        DWORD dwRet = GetEnvironmentVariable(TEXT("JULIA_ORIGINAL_PATH"), pathVal, MAX_PATH_LEN);
+        if (dwRet > 0 && dwRet < MAX_PATH_LEN) {
+            // Copy the value over to PATH and remove that sidechannel variable
+            SetEnvironmentVariable(TEXT("PATH"), pathVal);
+            SetEnvironmentVariable(TEXT("JULIA_ORIGINAL_PATH"), NULL);
+        }
+    }
 #endif
     libsupport_init();
     int lisp_prompt = (argc >= 2 && strcmp((char*)argv[1],"--lisp") == 0);

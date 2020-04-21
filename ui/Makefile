@@ -45,6 +45,8 @@ $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c $(HEADERS)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 ifeq ($(OS),WINNT)
+JLDFLAGS += -municode
+
 ifneq ($(USEMSVC), 1)
 $(BUILDDIR)/julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc $(JULIAHOME)/VERSION
 	JLVER=`cat $(JULIAHOME)/VERSION` && \
@@ -82,10 +84,36 @@ else
 CXXLD := $(LD)
 endif
 
+# Add `.exe` wrapper generation to properly setup `PATH` on windows to simulate `RPATH`
+ifeq ($(OS),WINNT)
+define rel_path_entry
+TEXT(\"$$(echo $(call rel_path,$(build_libexecdir),$(1)) | sed -e 's_/_\\\\_g')\")
+endef
+CPPFLAGS_PATH = -DPATH_ENTRIES="$(call rel_path_entry,$(build_shlibdir))"
+define julia_exe_path
+-DJULIA_EXE_PATH="\"$$(echo '$(libexecdir_rel)\\$(1)' | sed -e 's_\\_\\\\_g')\""
+endef
+define gen_wrapper_exe
+	-mv $(build_bindir)/$(1) $(build_libexecdir)/$(1)
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) $(call julia_exe_path,$(1)) $(CPPFLAGS_PATH) $(JULIAHOME)/contrib/windows/exe_path_wrapper.c -o $(build_bindir)/$(1) $(JLDFLAGS) -lshlwapi)
+endef
+
+$(build_bindir)/julia$(EXE):  $(JULIAHOME)/contrib/windows/exe_path_wrapper.c
+$(build_bindir)/julia-debug$(EXE):  $(JULIAHOME)/contrib/windows/exe_path_wrapper.c
+endif
+
+
 $(build_bindir)/julia$(EXE): $(OBJS)
 	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(LINK_FLAGS) $(SHIPFLAGS) $(OBJS) -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia $(JLDFLAGS) $(CXXLDFLAGS))
+ifeq ($(OS),WINNT)
+	@$(call gen_wrapper_exe,julia$(EXE))
+endif
+
 $(build_bindir)/julia-debug$(EXE): $(DOBJS)
 	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(LINK_FLAGS) $(DEBUGFLAGS) $(DOBJS) -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia-debug $(JLDFLAGS) $(CXXLDFLAGS))
+ifeq ($(OS),WINNT)
+	@$(call gen_wrapper_exe,julia-debug$(EXE))
+endif
 
 clean: | $(CLEAN_TARGETS)
 	rm -f *.o *.dbg.obj

@@ -168,6 +168,9 @@ include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # 
 
 # Initialize DL_LOAD_PATH as early as possible.  We are defining things here in
 # a slightly more verbose fashion than usual, because we're running so early.
+# On Windows, we initialize this such that we always search `bin`, even though
+# the true `julia.exe` is located wtihin `libexec`.  This allows us to use
+# `ccall((func, lib), ...)` syntax where that library is located in `bin`.
 const DL_LOAD_PATH = String[]
 let os = ccall(:jl_get_UNAME, Any, ())
     if os === :Darwin || os === :Apple
@@ -177,6 +180,8 @@ let os = ccall(:jl_get_UNAME, Any, ())
             push!(DL_LOAD_PATH, "@loader_path/julia")
         end
         push!(DL_LOAD_PATH, "@loader_path")
+    elseif os === :Windows || os === :NT
+        push!(DL_LOAD_PATH, "@executable_path\\")
     end
 end
 
