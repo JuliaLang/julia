@@ -59,6 +59,7 @@ ifeq ($(OS),WINNT)
 	@printf 'const LIBEXECDIR = "%s"\n' '$(subst /,\\,$(libexecdir_rel))' >> $@
 	@printf 'const PRIVATE_LIBDIR = "%s"\n' '$(subst /,\\,$(private_libdir_rel))' >> $@
 	@printf 'const INCLUDEDIR = "%s"\n' '$(subst /,\\,$(includedir_rel))' >> $@
+	@printf 'const PCRE_JLL_LIBDIR = "%s"\n' '$(subst /,\\,$(PCRE_LIBDIR_rel))' >> $@
 else
 	@echo "const SYSCONFDIR = \"$(sysconfdir_rel)\"" >> $@
 	@echo "const DATAROOTDIR = \"$(datarootdir_rel)\"" >> $@
@@ -67,6 +68,7 @@ else
 	@echo "const LIBEXECDIR = \"$(libexecdir_rel)\"" >> $@
 	@echo "const PRIVATE_LIBDIR = \"$(private_libdir_rel)\"" >> $@
 	@echo "const INCLUDEDIR = \"$(includedir_rel)\"" >> $@
+	@echo "const PCRE_JLL_LIBDIR = \"$(PCRE_LIBDIR_rel)\"" >> $@
 endif
 ifeq ($(DARWIN_FRAMEWORK), 1)
 	@echo "const DARWIN_FRAMEWORK = true" >> $@

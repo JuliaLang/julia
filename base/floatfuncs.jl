@@ -313,9 +313,9 @@ algorithms. See [`muladd`](@ref).
 function fma end
 
 fma_libm(x::Float32, y::Float32, z::Float32) =
-    ccall(("fmaf", libm_name), Float32, (Float32,Float32,Float32), x, y, z)
+    ccall(("fmaf", libm), Float32, (Float32,Float32,Float32), x, y, z)
 fma_libm(x::Float64, y::Float64, z::Float64) =
-    ccall(("fma", libm_name), Float64, (Float64,Float64,Float64), x, y, z)
+    ccall(("fma", libm), Float64, (Float64,Float64,Float64), x, y, z)
 fma_llvm(x::Float32, y::Float32, z::Float32) = fma_float(x, y, z)
 fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)
 # Disable LLVM's fma if it is incorrect, e.g. because LLVM falls back

@@ -165,6 +165,29 @@ include("strings/substring.jl")
 include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
 include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
 
+# Initialize DL_LOAD_PATH as early as possible.  We are defining things here in
+# a slightly more verbose fashion than usual, because we're running so early.
+const DL_LOAD_PATH = String[]
+let os = ccall(:jl_get_UNAME, Any, ()),
+    pathsep = (os == :Windows || os == :NT) ? "\\" : "/"
+
+    if (os == :Darwin || os == :Apple)
+        if Base.DARWIN_FRAMEWORK
+            push!(DL_LOAD_PATH, "@loader_path/Frameworks")
+        else
+            push!(DL_LOAD_PATH, "@loader_path/julia")
+        end
+        push!(DL_LOAD_PATH, "@loader_path")
+    end
+
+    # Include some paths for JLL libraries that we need (like pcre) that are so early
+    # in our boot-up process that we can't use even rewritten JLL packages.  We use
+    # the `@executable_path` format here, having taught `dlload.c` to
+    if !isempty(Base.PCRE_JLL_LIBDIR)
+        push!(DL_LOAD_PATH, string("@executable_path", pathsep, Base.PCRE_JLL_LIBDIR))
+    end
+end
+
 include("osutils.jl")
 include("c.jl")
 
@@ -203,15 +226,13 @@ include("version.jl")
 include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time
-
-const DL_LOAD_PATH = String[]
-if Sys.isapple()
-    if Base.DARWIN_FRAMEWORK
-        push!(DL_LOAD_PATH, "@loader_path/Frameworks")
-    else
-        push!(DL_LOAD_PATH, "@loader_path/julia")
+macro include_stdlib_jll(name)
+    quote
+        Core.include($(esc(__module__)), relpath(
+            joinpath(Sys.STDLIB, $(esc(name)), "src", string($(esc(name)), ".jl")),
+            pwd(),
+        ))
     end
-    push!(DL_LOAD_PATH, "@loader_path")
 end
 
 include("env.jl")
@@ -245,7 +266,24 @@ include("ttyhascolor.jl")
 include("grisu/grisu.jl")
 include("secretbuffer.jl")
 
-# core math functions
+# basic data structures
+include("ordering.jl")
+using .Order
+
+# Combinatorics
+include("sort.jl")
+using .Sort
+
+# reduction along dims
+include("reducedim.jl")  # macros in this file relies on string.jl
+include("accumulate.jl")
+
+
+
+# core math functions.  They occasionally need to ccall() out to Libm
+@include_stdlib_jll("Libm_jll")
+using .Libm_jll
+Libm_jll.__init__()
 include("floatfuncs.jl")
 include("math.jl")
 using .Math
@@ -268,18 +306,6 @@ let SOURCE_PATH = ""
     end
 end
 
-# reduction along dims
-include("reducedim.jl")  # macros in this file relies on string.jl
-include("accumulate.jl")
-
-# basic data structures
-include("ordering.jl")
-using .Order
-
-# Combinatorics
-include("sort.jl")
-using .Sort
-
 # Fast math
 include("fastmath.jl")
 using .FastMath
@@ -293,6 +319,7 @@ using .Enums
 # BigInts
 include("gmp.jl")
 using .GMP
+import .GMP: libgmp # We need this for hashing
 
 # float printing: requires BigInt
 include("ryu/Ryu.jl")
@@ -353,6 +380,13 @@ include("deprecated.jl")
 include("docs/basedocs.jl")
 
 include("client.jl")
+
+# Ensure we are including two important JLLs; CompilerSupportLibraries and libLLVM
+@include_stdlib_jll("CompilerSupportLibraries_jll")
+using .CompilerSupportLibraries_jll
+CompilerSupportLibraries_jll.__init__()
+@include_stdlib_jll("libLLVM_jll")
+using .libLLVM_jll
 
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")

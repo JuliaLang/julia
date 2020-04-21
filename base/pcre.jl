@@ -3,22 +3,24 @@
 ## low-level pcre2 interface ##
 
 module PCRE
-
+# We don't use PCRE2_jll here because we're too early in bootstrap
+# to make use of things like `joinpath()` or `relpath()`.  We instead
+# work around this by manually adding the PCRE library path to DL_LOAD_PATH
+# in Base.jl such that `ccall()` can find it quickly.
+const libpcre = "libpcre2-8"
 import ..RefValue
 
 include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "pcre_h.jl"))  # include($BUILDROOT/base/pcre_h.jl)
 
-const PCRE_LIB = "libpcre2-8"
-
 function create_match_context()
     JIT_STACK_START_SIZE = 32768
     JIT_STACK_MAX_SIZE = 1048576
-    jit_stack = ccall((:pcre2_jit_stack_create_8, PCRE_LIB), Ptr{Cvoid},
+    jit_stack = ccall((:pcre2_jit_stack_create_8, libpcre), Ptr{Cvoid},
                       (Cint, Cint, Ptr{Cvoid}),
                       JIT_STACK_START_SIZE, JIT_STACK_MAX_SIZE, C_NULL)
-    ctx = ccall((:pcre2_match_context_create_8, PCRE_LIB),
+    ctx = ccall((:pcre2_match_context_create_8, libpcre),
                 Ptr{Cvoid}, (Ptr{Cvoid},), C_NULL)
-    ccall((:pcre2_jit_stack_assign_8, PCRE_LIB), Cvoid,
+    ccall((:pcre2_jit_stack_assign_8, libpcre), Cvoid,
           (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), ctx, C_NULL, jit_stack)
     return ctx
 end
@@ -90,7 +92,7 @@ const UNSET = ~Csize_t(0)  # Indicates that an output vector element is unset
 
 function info(regex::Ptr{Cvoid}, what::Integer, ::Type{T}) where T
     buf = RefValue{T}()
-    ret = ccall((:pcre2_pattern_info_8, PCRE_LIB), Int32,
+    ret = ccall((:pcre2_pattern_info_8, libpcre), Int32,
                 (Ptr{Cvoid}, Int32, Ptr{Cvoid}),
                 regex, what, buf) % UInt32
     if ret != 0
@@ -103,13 +105,13 @@ function info(regex::Ptr{Cvoid}, what::Integer, ::Type{T}) where T
 end
 
 function ovec_length(match_data)
-    n = ccall((:pcre2_get_ovector_count_8, PCRE_LIB), UInt32,
+    n = ccall((:pcre2_get_ovector_count_8, libpcre), UInt32,
               (Ptr{Cvoid},), match_data)
     return 2n
 end
 
 function ovec_ptr(match_data)
-    ptr = ccall((:pcre2_get_ovector_pointer_8, PCRE_LIB), Ptr{Csize_t},
+    ptr = ccall((:pcre2_get_ovector_pointer_8, libpcre), Ptr{Csize_t},
                 (Ptr{Cvoid},), match_data)
     return ptr
 end
@@ -117,7 +119,7 @@ end
 function compile(pattern::AbstractString, options::Integer)
     errno = RefValue{Cint}(0)
     erroff = RefValue{Csize_t}(0)
-    re_ptr = ccall((:pcre2_compile_8, PCRE_LIB), Ptr{Cvoid},
+    re_ptr = ccall((:pcre2_compile_8, libpcre), Ptr{Cvoid},
                    (Ptr{UInt8}, Csize_t, UInt32, Ref{Cint}, Ref{Csize_t}, Ptr{Cvoid}),
                    pattern, sizeof(pattern), options, errno, erroff, C_NULL)
     re_ptr == C_NULL && error("PCRE compilation error: $(err_message(errno[])) at offset $(erroff[])")
@@ -125,7 +127,7 @@ function compile(pattern::AbstractString, options::Integer)
 end
 
 function jit_compile(regex::Ptr{Cvoid})
-    errno = ccall((:pcre2_jit_compile_8, PCRE_LIB), Cint,
+    errno = ccall((:pcre2_jit_compile_8, libpcre), Cint,
                   (Ptr{Cvoid}, UInt32), regex, JIT_COMPLETE) % UInt32
     errno == 0 && return true
     errno == ERROR_JIT_BADOPTION && return false
@@ -133,26 +135,26 @@ function jit_compile(regex::Ptr{Cvoid})
 end
 
 free_match_data(match_data) =
-    ccall((:pcre2_match_data_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), match_data)
+    ccall((:pcre2_match_data_free_8, libpcre), Cvoid, (Ptr{Cvoid},), match_data)
 
 free_re(re) =
-    ccall((:pcre2_code_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), re)
+    ccall((:pcre2_code_free_8, libpcre), Cvoid, (Ptr{Cvoid},), re)
 
 free_jit_stack(stack) =
-    ccall((:pcre2_jit_stack_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), stack)
+    ccall((:pcre2_jit_stack_free_8, libpcre), Cvoid, (Ptr{Cvoid},), stack)
 
 free_match_context(context) =
-    ccall((:pcre2_match_context_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), context)
+    ccall((:pcre2_match_context_free_8, libpcre), Cvoid, (Ptr{Cvoid},), context)
 
 function err_message(errno)
     buffer = Vector{UInt8}(undef, 256)
-    ccall((:pcre2_get_error_message_8, PCRE_LIB), Cvoid,
+    ccall((:pcre2_get_error_message_8, libpcre), Cvoid,
           (Int32, Ptr{UInt8}, Csize_t), errno, buffer, sizeof(buffer))
     GC.@preserve buffer unsafe_string(pointer(buffer))
 end
 
 function exec(re, subject, offset, options, match_data)
-    rc = ccall((:pcre2_match_8, PCRE_LIB), Cint,
+    rc = ccall((:pcre2_match_8, libpcre), Cint,
                (Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Csize_t, Cuint, Ptr{Cvoid}, Ptr{Cvoid}),
                re, subject, sizeof(subject), offset, options, match_data, get_local_match_context())
     # rc == -1 means no match, -2 means partial match.
@@ -174,18 +176,18 @@ function exec_r_data(re, subject, offset, options)
 end
 
 function create_match_data(re)
-    ccall((:pcre2_match_data_create_from_pattern_8, PCRE_LIB),
+    ccall((:pcre2_match_data_create_from_pattern_8, libpcre),
           Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}), re, C_NULL)
 end
 
 function substring_number_from_name(re, name)
-  ccall((:pcre2_substring_number_from_name_8, PCRE_LIB), Cint,
+  ccall((:pcre2_substring_number_from_name_8, libpcre), Cint,
         (Ptr{Cvoid}, Cstring), re, name)
 end
 
 function substring_length_bynumber(match_data, number)
     s = RefValue{Csize_t}()
-    rc = ccall((:pcre2_substring_length_bynumber_8, PCRE_LIB), Cint,
+    rc = ccall((:pcre2_substring_length_bynumber_8, libpcre), Cint,
           (Ptr{Cvoid}, UInt32, Ref{Csize_t}), match_data, number, s)
     rc < 0 && error("PCRE error: $(err_message(rc))")
     convert(Int, s[])
@@ -193,7 +195,7 @@ end
 
 function substring_copy_bynumber(match_data, number, buf, buf_size)
     s = RefValue{Csize_t}(buf_size)
-    rc = ccall((:pcre2_substring_copy_bynumber_8, PCRE_LIB), Cint,
+    rc = ccall((:pcre2_substring_copy_bynumber_8, libpcre), Cint,
                (Ptr{Cvoid}, UInt32, Ptr{UInt8}, Ref{Csize_t}),
                match_data, number, buf, s)
     rc < 0 && error("PCRE error: $(err_message(rc))")
