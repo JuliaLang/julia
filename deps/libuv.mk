@@ -63,9 +63,11 @@ compile-libuv: $(LIBUV_BUILDDIR)/build-compiled
 fastcheck-libuv: #none
 check-libuv: $(LIBUV_BUILDDIR)/build-checked
 
-else # USE_BINARYBUILDER_LIBUV
-LIBUV_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LibUV-v2+$(LIBUV_VER)-julia+$(LIBUV_BB_REL)
-LIBUV_BB_NAME := LibUV.v2.0.0+$(LIBUV_VER)-julia
+# If we built our own libuv, we need to generate a fake LibUV_jll package to load it in:
+$(eval $(call jll-generate,LibUV_jll,libuv=\"libuv\",,183b4373-6708-53ba-ad28-60e28bb38547,))
 
-$(eval $(call bb-install,libuv,LIBUV,false))
+else # USE_BINARYBUILDER_LIBUV
+
+# Install LibUV_jll into our stdlib folder
+$(eval $(call install-jll-and-artifact,LibUV_jll))
 endif

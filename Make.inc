@@ -126,6 +126,14 @@ $(error cowardly refusing to build from source directory with a shell-metacharac
     (got: $(value JULIAHOME)))
 endif
 
+# Literal values that are hard to use in Makefiles otherwise:
+define newline # a literal \n
+
+
+endef
+COMMA:=,
+SPACE:=$(eval) $(eval)
+
 # we include twice to pickup user definitions better
 # include from JULIAHOME first so that BUILDROOT can override
 MAYBE_HOST :=
@@ -167,6 +175,7 @@ JULIA_VERSION := $(shell cat $(JULIAHOME)/VERSION)
 JULIA_MAJOR_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 1)
 JULIA_MINOR_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 2)
 JULIA_PATCH_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 3)
+VERSDIR := v$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION)
 
 # libjulia's SONAME will follow the format libjulia.so.$(SOMAJOR). Before v1.0.0,
 # SOMAJOR will be a two-decimal value, e.g. libjulia.so.0.5, whereas at and beyond
@@ -321,6 +330,17 @@ CMAKE_GENERATOR ?= make
 export PKG_CONFIG_PATH = $(JULIAHOME)/usr/lib/pkgconfig
 export PKG_CONFIG_LIBDIR = $(JULIAHOME)/usr/lib/pkgconfig
 
+# Some utility functions
+define uppercase
+$(shell echo $1 | tr a-z A-Z)
+endef
+define lowercase
+$(shell echo $1 | tr A-Z a-z)
+endef
+define shell_escape
+$(subst \,\\,$(subst $$,$$$$,$(1)))
+endef
+
 # Figure out OS and architecture
 BUILD_OS := $(shell uname)
 
@@ -382,6 +402,29 @@ fPIC := -fPIC
 EXE :=
 endif
 
+
+# many of the following targets must be = not := because the expansion of the makefile functions (and $1) shouldn't happen until later
+ifeq ($(BUILD_OS), WINNT) # MSYS
+spawn = $(1)
+cygpath_w = $(1)
+cygpath = $(1)
+else ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # Cygwin
+spawn = $(1)
+cygpath_w = `cygpath -w $(1)`
+cygpath = `cygpath "$(call shell_escape,$(1))"`
+else
+ifeq ($(OS), WINNT) # unix-to-Windows cross-compile
+spawn = wine $(1)
+cygpath_w = `winepath -w $(1)`
+cygpath = $(1)
+else # not Windows
+spawn = $(1)
+cygpath_w = $(1)
+cygpath = $(1)
+endif
+endif
+exec = $(shell $(call spawn,$(1)))
+
 JULIACODEGEN := LLVM
 
 # flag for disabling assertions
@@ -395,8 +438,31 @@ CXX_DISABLE_ASSERTION := -DJL_NDEBUG
 DISABLE_ASSERTIONS := -DNDEBUG -DJL_NDEBUG
 endif
 
-# Compiler specific stuff
+ifneq (,$(findstring Linux,$(BUILD_OS))$(findstring FreeBSD,$(BUILD_OS)))
+EXE_ENV_VAR := PATH
+LIB_ENV_VAR := LD_LIBRARY_PATH
+PATHSEP := /
+else ifneq (,$(findstring Darwin,$(BUILD_OS)))
+EXE_ENV_VAR := PATH
+LIB_ENV_VAR := DYLD_LIBRARY_PATH
+PATHSEP := /
+else ifneq (,$(findstring WINNT,$(BUILD_OS))$(findstring CYGWIN,$(BUILD_OS)))
+EXE_ENV_VAR := PATH
+LIB_ENV_VAR :=
+PATHSEP := \\
+endif
 
+# Use this to set up the appropriate environment variables to run things like `clang` from `Clang_jll`.
+# Example usage: $(call jll_env_adjust,libLLVM_jll CompilerSupportLibraries_jll) $(clang_path) --version
+# We use `$(wildcard $(1))` here to include only entries that exist.
+define env_adjust
+$(EXE_ENV_VAR)="$(subst $(SPACE),:,$(wildcard $(1))):$$$(EXE_ENV_VAR)" $(if $(LIB_ENV_VAR),$(LIB_ENV_VAR)="$(subst $(SPACE),:,$(wildcard $(2))):$$$(LIB_ENV_VAR)",)
+endef
+define jll_env_adjust
+$(call env_adjust,$(foreach name,$(1),$($(name)_DIR)/bin $($(name)_DIR)/tools),$(foreach name,$(1),$($(name)_DIR)/lib))
+endef
+
+# Compiler specific stuff
 ifeq ($(USEMSVC), 1)
 USEGCC := 0
 USECLANG := 0
@@ -579,8 +645,10 @@ endif
 # On Windows, we want shared library files to end up in $(build_bindir), instead of $(build_libdir)
 ifeq ($(OS),WINNT)
 build_shlibdir := $(build_bindir)
+binlib := bin
 else
 build_shlibdir := $(build_libdir)
+binlib := lib
 endif
 
 ifeq ($(OS), FreeBSD)
@@ -777,7 +845,7 @@ endif
 
 # File name of make binary-dist result
 ifeq ($(JULIA_BINARYDIST_FILENAME),)
-DIST_OS:=$(shell echo $(OS) | tr '[:upper:]' '[:lower:]')
+DIST_OS:=$(call lowercase,$(OS))
 ifeq (WINNT,$(OS))
 DIST_OS:=win
 endif
@@ -873,62 +941,6 @@ ifeq ($(ISX86),1)
 endif
 endif
 
-ifeq ($(OS),WINNT)
-LIBUNWIND:=
-else ifneq ($(DISABLE_LIBUNWIND), 0)
-LIBUNWIND:=
-else
-ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
-ifneq ($(OS),Darwin)
-LIBUNWIND:=-lunwind-generic -lunwind
-# Only for linux since we want to use not yet released libunwind features
-JCFLAGS+=-DSYSTEM_LIBUNWIND
-JCPPFLAGS+=-DSYSTEM_LIBUNWIND
-endif
-else
-ifeq ($(OS),Darwin)
-LIBUNWIND:=$(build_libdir)/libosxunwind.a
-JCPPFLAGS+=-DLIBOSXUNWIND
-else
-LIBUNWIND:=$(build_libdir)/libunwind-generic.a $(build_libdir)/libunwind.a
-endif
-endif
-endif
-
-ifeq ($(origin LLVM_CONFIG), undefined)
-ifeq ($(USE_SYSTEM_LLVM), 1)
-LLVM_CONFIG := llvm-config$(EXE)
-else
-LLVM_CONFIG := $(build_depsbindir)/llvm-config$(EXE)
-endif
-endif # LLVM_CONFIG undefined
-
-ifeq ($(USE_SYSTEM_LLVM), 1)
-JCPPFLAGS+=-DSYSTEM_LLVM
-endif # SYSTEM_LLVM
-
-ifeq ($(BUILD_OS),$(OS))
-LLVM_CONFIG_HOST := $(LLVM_CONFIG)
-else
-LLVM_CONFIG_HOST := $(basename $(LLVM_CONFIG))-host$(BUILD_EXE)
-ifeq (exists, $(shell [ -f '$(LLVM_CONFIG_HOST)' ] && echo exists ))
-ifeq ($(shell $(LLVM_CONFIG_HOST) --version),3.3)
-# llvm-config-host <= 3.3 is broken, use llvm-config instead (in an emulator)
-# use delayed expansion (= not :=) because spawn isn't defined until later
-LLVM_CONFIG_HOST = $(call spawn,$(LLVM_CONFIG))
-endif
-else
-# llvm-config-host does not exist (cmake build)
-LLVM_CONFIG_HOST = $(call spawn,$(LLVM_CONFIG))
-endif
-endif
-
-ifeq ($(USE_SYSTEM_PCRE), 1)
-PCRE_CONFIG := pcre2-config
-else
-PCRE_CONFIG := $(build_depsbindir)/pcre2-config
-endif
-
 ifeq ($(USE_SYSTEM_PATCHELF), 1)
 PATCHELF := patchelf
 else
@@ -960,85 +972,45 @@ ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
 USE_BLAS64 := 0
 USE_SYSTEM_LAPACK := 0
-LIBBLAS := -L$(build_libdir) -lgfortblas
+  LIBBLAS := -lgfortblas
 LIBBLASNAME := libgfortblas
 else
 LIBBLAS ?= -lblas
 LIBBLASNAME ?= libblas
-endif
-else
-LIBBLAS := -L$(build_shlibdir) -lopenblas
-LIBBLASNAME := libopenblas
-endif
+endif # OS
 
-# OpenBLAS builds LAPACK as part of its build.
-# We only need to build LAPACK if we are not using OpenBLAS.
-ifeq ($(USE_SYSTEM_BLAS), 0)
-LIBLAPACK := $(LIBBLAS)
-LIBLAPACKNAME := $(LIBBLASNAME)
-else
 ifeq ($(USE_SYSTEM_LAPACK), 1)
 LIBLAPACK ?= -llapack
 LIBLAPACKNAME ?= liblapack
 else
-LIBLAPACK := -L$(build_shlibdir) -llapack $(LIBBLAS)
+  LIBLAPACK :=  -llapack $(LIBBLAS)
 LIBLAPACKNAME := liblapack
-endif
-endif
-
-ifeq ($(USE_SYSTEM_LIBM), 1)
-LIBM := -lm
-LIBMNAME := libm
+endif # USE_SYSTEM_LAPACK
 else
-LIBM := -lopenlibm
-LIBMNAME := libopenlibm
-endif
-
-ifeq ($(USE_SYSTEM_LIBUV), 1)
-  LIBUV := $(LOCALBASE)/lib/libuv-julia.a
-  LIBUV_INC := $(LOCALBASE)/include
-else
-  LIBUV := $(build_libdir)/libuv.a
-  LIBUV_INC := $(build_includedir)
-endif
-
-ifeq ($(USE_SYSTEM_UTF8PROC), 1)
-  LIBUTF8PROC := -lutf8proc
-  UTF8PROC_INC := $(LOCALBASE)/include
-else
-  LIBUTF8PROC := $(build_libdir)/libutf8proc.a
-  UTF8PROC_INC := $(build_includedir)
-endif
-
-# We need python for things like BB triplet recognition.  We don't really care
-# about version, generally, so just find something that works:
-PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)"
-PYTHON_SYSTEM := $(shell $(PYTHON) -c 'from __future__ import print_function; import platform; print(platform.system())')
-
-# If we're running on Cygwin, but using a native-windows Python, we need to use cygpath -w
-ifneq ($(and $(filter $(PYTHON_SYSTEM),Windows),$(findstring CYGWIN,$(BUILD_OS))),)
-define invoke_python
-$(PYTHON) "$$(cygpath -w "$(1)")"
-endef
-else
-define invoke_python
-$(PYTHON) "$(1)"
-endef
-endif
+  LIBBLAS := -lopenblas
+  LIBBLASNAME := libopenblas
+  # OpenBLAS builds LAPACK as part of its build.
+  # We only need to build LAPACK if we are not using OpenBLAS.
+  LIBLAPACK := $(LIBBLAS)
+  LIBLAPACKNAME := $(LIBBLASNAME)
+endif # USE_SYSTEM_BLAS
 
 # BinaryBuilder options.  We default to "on" for all the projects listed in BB_PROJECTS,
 # but only if contrib/normalize_triplet.py works for our requested triplet.
-ifeq ($(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) >/dev/null 2>/dev/null; echo $$?),0)
+ifeq ($(shell $(PYTHON) $(call python_cygpath,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) >/dev/null 2>/dev/null; echo $$?),0)
 USE_BINARYBUILDER ?= 1
+
+# Auto-detect triplet once
+BB_TRIPLET_LIBGFORTRAN_CXXABI := $(shell $(PYTHON) $(call python_cygpath,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) "$(shell $(FC) --version | head -1)" "$(or $(shell echo '\#include <string>' | $(CXX) $(CXXFLAGS) -x c++ -dM -E - | grep _GLIBCXX_USE_CXX11_ABI | awk '{ print $$3 }' ),1)")
 else
-ifneq ($(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) x86_64-linux-gnu),x86_64-linux-gnu)
+ifneq ($(shell $(PYTHON) $(call python_cygpath,$(JULIAHOME)/contrib/normalize_triplet.py) x86_64-linux-gnu),x86_64-linux-gnu)
 $(warning normalize_triplet.py appears to be non-functional (used python interpreter "$(PYTHON)"), so BinaryBuilder disabled)
 endif
 USE_BINARYBUILDER ?= 0
 endif
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
-BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP
+BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP CSL UTF8PROC
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1054,14 +1026,181 @@ endif
 endef
 $(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
 
+# We default MKL to off, but if it's turned on, then disable OpenBLAS:
+USE_BINARYBUILDER_MKL ?= 0
+ifeq ($(USE_BINARYBUILDER_MKL),1)
+USE_BINARYBUILDER_OPENBLAS := 0
+endif
+
+# We default libosxunwind to just use whatever libunwind is set to
+USE_BINARYBUILDER_LIBOSXUNWIND ?= $(USE_BINARYBUILDER_LIBUNWIND)
+
+# Parse the treehash of a particular artifact for the current platform
+define artifact_treehash
+$(shell $(PYTHON) $(call python_cygpath,$(JULIAHOME)/contrib/extract_artifact_info.py) $(call python_cygpath,$(build_datarootdir)/julia/stdlib/$(VERSDIR)/$(1)/Artifacts.toml) $(BB_TRIPLET_LIBGFORTRAN_CXXABI) | cut -d' ' -f1)
+endef
+
+# Find the directory an artifact will be unpacked into.  Note that this uses the
+# `hit_cache` function to maintain high efficiency while building; it will attempt
+# to expand $(1)_TREEHASH at rule invocation time, and any non-empty value will be
+# cached from then on, causing usage of `$(1)_DIR` to be slow the first time, but
+# fast after.
+define find_artifact
+$(1)_TREEHASH=$$(call artifact_treehash,$(1))
+$(1)_DIR=$(build_datarootdir)/julia/artifacts/$$(call hit_cache,$(1)_TREEHASH)
+endef
+
+ifeq ($(USE_SYSTEM_LIBUV), 1)
+  LIBUV = $(LOCALBASE)/lib/libuv-julia.a
+  LIBUV_INC = $(LOCALBASE)/include
+else
+ifeq ($(USE_BINARYBUILDER_LIBUV),1)
+  $(eval $(call find_artifact,LibUV_jll))
+  LIBUV = $(LibUV_jll_DIR)/lib/libuv.a
+  LIBUV_INC = $(LibUV_jll_DIR)/include
+else
+  LIBUV = $(build_libdir)/libuv.a
+  LIBUV_INC = $(build_includedir)
+endif # USE_BINARYBUILDER_LIBUV
+endif # USE_SYSTEM_LIBUV
+
+ifeq ($(USE_SYSTEM_PCRE), 1)
+  PCRE_CONFIG = pcre2-config$(EXE)
+  PCRE_INCDIR_ASK = $(shell $(PCRE_CONFIG) --prefix)/include
+  PCRE_INCDIR = $(call hit_cache,PCRE_INCDIR_ASK)
+else
+ifeq ($(USE_BINARYBUILDER_PCRE),1)
+  $(eval $(call find_artifact,PCRE2_jll))
+  PCRE_CONFIG = $(PCRE2_jll_DIR)/bin/pcre2-config$(EXE)
+  PCRE_INCDIR = $(PCRE2_jll_DIR)/include
+  PCRE_LIBDIR_rel = $(call rel_path,$(build_bindir),$(PCRE2_jll_DIR)/${binlib})
+else
+  PCRE_CONFIG = $(build_depsbindir)/pcre2-config$(EXE)
+  PCRE_INCDIR = $(build_includedir)
+  PCRE_LIBDIR_rel = $(build_libdir_rel)
+endif
+endif
+
+ifeq ($(USE_SYSTEM_UTF8PROC), 1)
+  LIBUTF8PROC = -lutf8proc
+  UTF8PROC_INC = $(LOCALBASE)/include
+else
+ifeq ($(USE_BINARYBUILDER_UTF8PROC),1)
+  $(eval $(call find_artifact,utf8proc_jll))
+  LIBUTF8PROC = $(utf8proc_jll_DIR)/lib/libutf8proc.a
+  UTF8PROC_INC = $(utf8proc_jll_DIR)/include
+else
+  LIBUTF8PROC = $(build_libdir)/libutf8proc.a
+  UTF8PROC_INC = $(build_includedir)
+endif # USE_BINARYBUILDER_UTF8PROC
+endif # USE_SYSTEM_UTF8PROC
+
+ifeq ($(USE_SYSTEM_LIBM), 1)
+  LIBM := -lm
+  LIBMNAME := libm
+else
+ifeq ($(USE_BINARYBUILDER_OPENLIBM),1)
+  $(eval $(call find_artifact,OpenLibm_jll))
+  OPENLIBM = $(OpenLibm_jll_DIR)/lib/libopenlibm.a
+else
+  OPENLIBM = $(build_libdir)/libopenlibm.a
+endif
+
+  LIBM := -lopenlibm
+  LIBMNAME := libopenlibm
+endif
+
+ifeq ($(USE_BINARYBUILDER_OBJCONV),1)
+  $(eval $(call find_artifact,Objconv_jll))
+endif
 
 
-# Use the Assertions build
-BINARYBUILDER_LLVM_ASSERTS ?= 0
+ifeq ($(OS),WINNT)
+  # Windows does not use libunwind
+  LIBUNWIND:=
+else ifneq ($(DISABLE_LIBUNWIND), 0)
+  LIBUNWIND:=
+else
+ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
+# If we're using system libunwind on Linux, we need to clue Julia in with -DSYSTEM_LIBUNWIND
+ifneq ($(OS),Darwin)
+  LIBUNWIND:=-lunwind-generic -lunwind
+  JCFLAGS+=-DSYSTEM_LIBUNWIND
+  JCPPFLAGS+=-DSYSTEM_LIBUNWIND
+endif # $(OS) != Darwin
+else # USE_SYSTEM_LIBUNWIND
+# If we're using BB unwind, choose the JLL name here:
+ifeq ($(OS),Darwin)
+  LIBUNWIND_JLL_NAME = LibOSXUnwind_jll
+  JCPPFLAGS+=-DLIBOSXUNWIND
+else
+  LIBUNWIND_JLL_NAME = LibUnwind_jll
+endif # $(OS) == Darwin
+
+ifeq ($(USE_BINARYBUILDER_LIBUNWIND),1)
+  $(eval $(call find_artifact,$(LIBUNWIND_JLL_NAME)))
+  LIBUNWIND = $($(LIBUNWIND_JLL_NAME)_DIR)/lib/$(firstword $(subst _, ,$(call lowercase,$(LIBUNWIND_JLL_NAME)))).a
+  LIBUNWIND_INC = $($(LIBUNWIND_JLL_NAME)_DIR)/include
+else
+ifeq ($(OS),Darwin)
+  LIBUNWIND = $(build_libdir)/libosxunwind.a
+  LIBUNWIND_INC = $(build_includedir)
+else
+  LIBUNWIND = $(build_libdir)/libunwind-generic.a $(build_libdir)/libunwind.a
+  LIBUNWIND_INC = $(build_includedir)
+endif # $(OS) == Darwin
+endif # $(USE_BINARYBUILDER_LIBUNWIND)
+endif # $(USE_SYSTEM_LIBUNWIND)
+endif # $(OS) == WINNT
 
 
+ifeq ($(USE_BINARYBUILDER_CSL),1)
+  $(eval $(call find_artifact,CompilerSupportLibraries_jll))
+  CSL_SHLIBDIR = $(CompilerSupportLibraries_jll_DIR)/$(binlib)
+endif
 
-# OS specific stuff
+
+ifeq ($(origin LLVM_CONFIG), undefined)
+ifeq ($(USE_SYSTEM_LLVM), 1)
+  LLVM_CONFIG = llvm-config$(EXE)
+  LLVM_SIZE = llvm-size$(EXE)
+else
+ifeq ($(USE_BINARYBUILDER_LLVM),1)
+  $(eval $(call find_artifact,libLLVM_jll))
+  LIBLLVM_SHLIBDIR = $(libLLVM_jll_DIR)/$(binlib)
+  LLVM_CONFIG = $(libLLVM_jll_DIR)/tools/llvm-config$(EXE)
+  LLVM_CONFIG_PATH_ADJUST = $(call jll_env_adjust,libLLVM_jll CompilerSupportLibraries_jll)
+
+  $(eval $(call find_artifact,Clang_jll))
+  CLANG_EXE = $(call jll_env_adjust,libLLVM_jll CompilerSupportLibraries_jll) $(Clang_jll_DIR)/tools/clang$(EXE)
+  CLANG_INCDIR = $(Clang_jll_DIR)/include
+
+  $(eval $(call find_artifact,LLVM_jll))
+  LLVM_SIZE = $(LLVM_jll_DIR)/tools/llvm-size$(EXE)
+else
+  LLVM_CONFIG = $(build_depsbindir)/llvm-config$(EXE)
+  LIBLLVM_SHLIBDIR = $(build_shlibdir)
+  CLANG_EXE = $(build_depsbindir)/clang$(EXE)
+  CLANG_INCDIR = $(build_includedir)
+  LLVM_SIZE = $(build_depsbindir)/llvm-size$(EXE)
+endif # USE_BINARYBUILDER_LLVM
+endif # USE_SYSTEM_LLVM
+endif # LLVM_CONFIG undefined
+
+ifeq ($(USE_SYSTEM_LLVM), 1)
+  JCPPFLAGS+=-DSYSTEM_LLVM
+endif # SYSTEM_LLVM
+
+ifeq ($(BUILD_OS),$(OS))
+  LLVM_CONFIG_HOST = $(LLVM_CONFIG_PATH_ADJUST) $(LLVM_CONFIG)
+else
+  LLVM_CONFIG_HOST = $(LLVM_CONFIG_PATH_ADJUST) $(call jll_env_adjust,libLLVM_jll CompilerSupportLibraries_jll) $(basename $(LLVM_CONFIG))-host$(BUILD_EXE)
+ifneq (exists, $(shell [ -f '$(LLVM_CONFIG_HOST)' ] && echo exists ))
+  # llvm-config-host does not exist (cmake build)
+  LLVM_CONFIG_HOST = $(LLVM_CONFIG_PATH_ADJUST) $(call jll_env_adjust,libLLVM_jll CompilerSupportLibraries_jll) $(call spawn,$(LLVM_CONFIG))
+endif
+endif
+
 
 # install_name_tool
 ifeq ($(OS), Darwin)
@@ -1083,23 +1222,53 @@ else
   DSYMUTIL := true -ignore
 endif
 
-# shared library runtime paths
+# Add rpath flag helper functions
 ifneq (,$(filter $(OS),WINNT emscripten))
-  RPATH :=
-  RPATH_ORIGIN :=
-  RPATH_ESCAPED_ORIGIN :=
-  RPATH_LIB :=
-else ifeq ($(OS), Darwin)
-  RPATH := -Wl,-rpath,'@executable_path/$(build_libdir_rel)'
-  RPATH_ORIGIN := -Wl,-rpath,'@loader_path/'
-  RPATH_ESCAPED_ORIGIN := $(RPATH_ORIGIN)
-  RPATH_LIB := -Wl,-rpath,'@loader_path/julia/' -Wl,-rpath,'@loader_path/'
+# Windows has no RPATH, so just don't add linker flags here
+define rpath_flag
+endef
+define rpath_link_flag
+endef
+define rpath_rel_link
+endef
 else
-  RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin
-  RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
-  RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin -Wl,-rpath-link,$(build_shlibdir)
-  RPATH_LIB := -Wl,-rpath,'$$ORIGIN/julia' -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
+
+# Macos/windows call RPATH stuff differently
+ifeq ($(OS),Darwin)
+RPATH_ORIGIN_ROOT := @loader_path
+else
+RPATH_ORIGIN_ROOT := $$ORIGIN
+# This seems to only be necessary on FreeBSD (musl and glibc ignore `DF_ORIGIN`),
+# but we set it everywhere for consistency, and because it doesn't hurt anything.
+RPATH_ENABLE_FLAG := -Wl,-z,origin
 endif
+
+define rpath_flag
+-Wl,-rpath,'$(1)' $(RPATH_ENABLE_FLAG)
+endef
+
+# Darwin does not have `-rpath-link`
+ifneq ($(OS),Darwin)
+define rpath_link_flag
+-Wl,-rpath-link,'$(1)' $(RPATH_ENABLE_FLAG)
+endef
+else
+define rpath_link_flag
+endef
+endif # $(OS) == Linux
+endif # $(OS) == Windows
+
+# Helper function for OS-independent relative RPATH links.  Note that we provide
+# both `-rpath` and `-rpath-link`, but we keep `-rpath-link` as absolute, not relative.
+define rpath_rel_link
+$(call rpath_flag,$(RPATH_ORIGIN_ROOT)/$(shell $(PYTHON) $(call python_cygpath,$(JULIAHOME)/contrib/relative_path.py) $(call python_cygpath,$(build_bindir)) $(1))) $(call rpath_link_flag,$(1))
+endef
+
+
+# shared library runtime paths
+RPATH := $(call rpath_rel_link,$(build_private_libdir)) $(call rpath_rel_link,$(build_shlibdir))
+RPATH_ORIGIN := $(call rpath_flag,$(RPATH_ORIGIN_ROOT))
+RPATH_ESCAPED_ORIGIN := $(call shell_escape,$(RPATH_ORIGIN))
 
 # --whole-archive
 ifeq ($(OS), Darwin)
@@ -1223,7 +1392,7 @@ LIBLAPACKNAME := libmkl_rt
 MKL_LDFLAGS := -L$(MKLLIB) -lmkl_rt
 ifneq ($(strip $(MKLLIB)),)
   ifeq ($(OS), Linux)
-    RPATH_MKL := -Wl,-rpath,$(MKLLIB)
+    RPATH_MKL := $(call rpath_flag,$(MKLLIB))
     RPATH     += $(RPATH_MKL)
     MKL_LDFLAGS += $(RPATH_MKL)
   endif
@@ -1336,25 +1505,6 @@ else
 endif
 endef
 
-# many of the following targets must be = not := because the expansion of the makefile functions (and $1) shouldn't happen until later
-ifeq ($(BUILD_OS), WINNT) # MSYS
-spawn = $(1)
-cygpath_w = $(1)
-else ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # Cygwin
-spawn = $(1)
-cygpath_w = `cygpath -w $(1)`
-else
-ifeq ($(OS), WINNT) # unix-to-Windows cross-compile
-spawn = wine $(1)
-cygpath_w = `winepath -w $(1)`
-else # not Windows
-spawn = $(1)
-cygpath_w = $(1)
-endif
-endif
-
-exec = $(shell $(call spawn,$(1)))
-
 JULIA_BUILD_MODE := release
 ifeq (,$(findstring release,$(MAKECMDGOALS)))
 ifneq (,$(findstring debug,$(MAKECMDGOALS)))
@@ -1412,10 +1562,6 @@ PRINT_JULIA = echo '$(subst ','\'',$(1))'; $(1)
 
 endif
 
-define newline # a literal \n
-
-
-endef
 
 # Makefile debugging trick:
 # call print-VARIABLE to see the runtime value of any variable
@@ -1423,6 +1569,3 @@ endef
 print-%:
 	@echo '$*=$(subst ','\'',$(subst $(newline),\n,$($*)))'
 
-# Literal values that are hard to use in Makefiles otherwise:
-COMMA:=,
-SPACE:=$(eval) $(eval)

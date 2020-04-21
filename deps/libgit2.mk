@@ -12,15 +12,14 @@ ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
 endif
 
-ifneq ($(OS),WINNT)
 ifeq ($(USE_SYSTEM_CURL), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/curl
-endif
 endif
 
 ifneq ($(USE_BINARYBUILDER_LIBGIT2),1)
 
-LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON -DUSE_BUNDLED_ZLIB=ON
+LIBGIT2_CMAKE_LIBPATH = $(build_shlibdir)
+LIBGIT2_OPTS = $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON "-DCMAKE_LIBRARY_PATH=$(subst $(SPACE),;,$(LIBGIT2_CMAKE_LIBPATH))"
 ifeq ($(OS),WINNT)
 LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON
 ifneq ($(ARCH),x86_64)
@@ -31,16 +30,22 @@ endif
 ifeq ($(BUILD_OS),WINNT)
 LIBGIT2_OPTS += -G"MSYS Makefiles"
 else
-LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
+LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DDLLTOOL=$(shell which $(CROSS_COMPILE)dlltool)
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
 else
-LIBGIT2_OPTS += -DCURL_INCLUDE_DIRS=$(build_includedir) -DCURL_LIBRARIES="curl"
+LIBGIT2_OPTS += -DCURL_INCLUDE_DIRS=$(LIBCURL_INCDIR) -DCURL_LIBRARIES="curl"
+LIBGIT2_CMAKE_LIBPATH += $(LIBCURL_LIBDIR)
 endif
 
 ifneq (,$(findstring $(OS),Linux FreeBSD))
 LIBGIT2_OPTS += -DUSE_HTTPS="mbedTLS" -DSHA1_BACKEND="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+LIBGIT2_OPTS += "-DMBEDTLS_INCLUDE_DIR=$(MBEDTLS_INCDIR)"
+LIBGIT2_CMAKE_LIBPATH += $(MBEDTLS_LIBDIR)
 endif
+
+LIBGIT2_CMAKE_LIBPATH += $(ZLIB_LIBDIR)
+LIBGIT2_CMAKE_LIBPATH += $(LIBSSH2_LIBDIR)
 
 LIBGIT2_SRC_PATH := $(SRCCACHE)/$(LIBGIT2_SRC_DIR)
 
@@ -93,16 +98,17 @@ configure-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured
 compile-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 fastcheck-libgit2: #none
 check-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-checked
-$(build_prefix)/manifest/libgit2: $(build_datarootdir)/julia/cert.pem # use libgit2 install status
+
+# If we built our own libgit2, we need to generate a fake LibGit2_jll package to load it in:
+$(eval $(call jll-generate,LibGit2_jll,libgit2=\"libgit2\",,e37daf67-58a4-590a-8e99-b0245dd2ffc5,\
+		                   MbedTLS_jll=c8ffd9c3-330d-5841-b78e-0817d7145fa1 \
+						   LibSSH2_jll=29816b5a-b9ab-546f-933c-edad1886dfa8 \
+						   LibCURL_jll=deac9b47-8bc7-5906-a0fe-35ac56dc84c0))
 
 else # USE_BINARYBUILDER_LIBGIT2
 
-LIBGIT2_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LibGit2_jll.jl/releases/download/LibGit2-v$(LIBGIT2_VER)+$(LIBGIT2_BB_REL)
-LIBGIT2_BB_NAME := LibGit2.v$(LIBGIT2_VER)
-$(eval $(call bb-install,libgit2,LIBGIT2,false))
-
-# BB tarball doesn't create a manifest, so directly depend the `install` target
-install-libgit2: $(build_datarootdir)/julia/cert.pem
+# Install LibGit2_jll into our stdlib folder
+$(eval $(call install-jll-and-artifact,LibGit2_jll))
 endif
 
 # Also download and install a cacert.pem file, regardless of whether or not
@@ -117,4 +123,4 @@ $(build_datarootdir)/julia/cert.pem: $(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION
 
 # When "get"'ing libgit2, download the .pem
 get-libgit2: $(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION).pem
-
+$(build_prefix)/manifest/libgit2: $(build_datarootdir)/julia/cert.pem

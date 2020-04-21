@@ -15,13 +15,8 @@ endif
 all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony file_constants.jl uv_constants.jl version_git.jl.phony)
 
 PCRE_CONST := 0x[0-9a-fA-F]+|[0-9]+|\([\-0-9]+\)
-ifeq ($(USE_SYSTEM_PCRE), 1)
-  PCRE_INCL_PATH := $(shell $(PCRE_CONFIG) --prefix)/include/pcre2.h
-else
-  PCRE_INCL_PATH := $(build_includedir)/pcre2.h
-endif
 
-$(BUILDDIR)/pcre_h.jl: $(PCRE_INCL_PATH)
+$(BUILDDIR)/pcre_h.jl: $(PCRE_INCDIR)/pcre2.h
 	@$(call PRINT_PERL, $(CPP) -D PCRE2_CODE_UNIT_WIDTH=8 -dM $< | perl -nle '/^\s*#define\s+PCRE2_(\w*)\s*\(?($(PCRE_CONST))\)?u?\s*$$/ and print "const $$1 = $$2 % UInt32"' | LC_ALL=C sort > $@)
 
 $(BUILDDIR)/errno_h.jl:
@@ -30,7 +25,7 @@ $(BUILDDIR)/errno_h.jl:
 $(BUILDDIR)/file_constants.jl: $(SRCDIR)/../src/file_constants.h
 	@$(call PRINT_PERL, $(CPP_STDOUT) -DJULIA $< | perl -nle 'print "$$1 0o$$2" if /^(\s*const\s+[A-z_]+\s+=)\s+(0[0-9]*)\s*$$/; print "$$1" if /^\s*(const\s+[A-z_]+\s+=\s+([1-9]|0x)[0-9A-z]*)\s*$$/' > $@)
 
-$(BUILDDIR)/uv_constants.jl: $(SRCDIR)/../src/uv_constants.h $(build_includedir)/uv/errno.h
+$(BUILDDIR)/uv_constants.jl: $(SRCDIR)/../src/uv_constants.h $(LIBUV_INC)/uv/errno.h
 	@$(call PRINT_PERL, $(CPP_STDOUT) "-I$(LIBUV_INC)" -DJULIA $< | tail -n 16 > $@)
 
 $(BUILDDIR)/build_h.jl.phony:
@@ -212,7 +207,7 @@ LLVM_CONFIG_HOST_LIBS := $(shell $(LLVM_CONFIG_HOST) --libfiles)
 # HACK: llvm-config doesn't correctly point to shared libs on all platforms
 #       https://github.com/JuliaLang/julia/issues/29981
 else
-LLVM_CONFIG_HOST_LIBS := $(shell $(LLVM_CONFIG_HOST) --libdir)/libLLVM.$(SHLIB_EXT)
+LLVM_CONFIG_HOST_LIBS := $(call cygpath,$(shell $(LLVM_CONFIG_HOST) --libdir))/libLLVM.$(SHLIB_EXT)
 endif
 $(build_private_libdir)/libLLVM.$(SHLIB_EXT):
 	REALPATH=$(LLVM_CONFIG_HOST_LIBS) && \

@@ -1,5 +1,9 @@
 ## CURL ##
 
+ifeq ($(USE_SYSTEM_ZLIB), 0)
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/zlib
+endif
+
 ifeq ($(USE_SYSTEM_LIBSSH2), 0)
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/libssh2
 endif
@@ -9,13 +13,15 @@ $(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/mbedtl
 endif
 
 ifneq ($(USE_BINARYBUILDER_CURL),1)
-CURL_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
+CURL_LDFLAGS = $(RPATH_ESCAPED_ORIGIN)
 
 # On older Linuces (those that use OpenSSL < 1.1) we include `libpthread` explicitly.
 # It doesn't hurt to include it explicitly elsewhere, so we do so.
 ifeq ($(OS),Linux)
 CURL_LDFLAGS += -lpthread
 endif
+
+CURL_LDFLAGS += $(call rpath_link_flag,$(MBEDTLS_LIBDIR)) $(call rpath_link_flag,$(LIBSSH2_LIBDIR)) $(call rpath_link_flag,$(ZLIB_LIBDIR))
 
 $(SRCCACHE)/curl-$(CURL_VER).tar.bz2: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://curl.haxx.se/download/curl-$(CURL_VER).tar.bz2
@@ -30,12 +36,14 @@ $(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/sour
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) --includedir=$(build_includedir) \
-		--without-ssl --without-gnutls --without-gssapi --without-zlib \
+		--without-ssl --without-gnutls --without-gssapi \
 		--without-libidn --without-libidn2 --without-libmetalink --without-librtmp \
 		--without-nghttp2 --without-nss --without-polarssl \
 		--without-spnego --without-libpsl --disable-ares \
 		--disable-ldap --disable-ldaps --without-zsh-functions-dir \
-		--with-libssh2=$(build_prefix) --with-mbedtls=$(build_prefix) \
+		--with-zlib=$(dir $(ZLIB_INCDIR)) \
+		--with-libssh2=$(dir $(LIBSSH2_INCDIR)) \
+		--with-mbedtls=$(dir $(MBEDTLS_INCDIR)) \
 		CFLAGS="$(CFLAGS) $(CURL_CFLAGS)" LDFLAGS="$(LDFLAGS) $(CURL_LDFLAGS)"
 	echo 1 > $@
 
@@ -68,10 +76,19 @@ compile-curl: $(BUILDDIR)/curl-$(CURL_VER)/build-compiled
 fastcheck-curl: #none
 check-curl: $(BUILDDIR)/curl-$(CURL_VER)/build-checked
 
+# If we built our own libcurl, we need to generate a fake LibCURL_jll package to load it in:
+$(eval $(call jll-generate,LibCURL_jll,libcurl=\"libcurl\",,deac9b47-8bc7-5906-a0fe-35ac56dc84c0, \
+                           LibSSH2_jll=29816b5a-b9ab-546f-933c-edad1886dfa8 \
+						   MbedTLS_jll=c8ffd9c3-330d-5841-b78e-0817d7145fa1 \
+						   Zlib_jll=83775a58-1f1d-513f-b197-d71354ab007a))
+install-curl: install-LibCURL_jll
+
 else # USE_BINARYBUILDER_CURL
 
-CURL_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LibCURL_jll.jl/releases/download/LibCURL-v$(CURL_VER)+$(CURL_BB_REL)
-CURL_BB_NAME := LibCURL.v$(CURL_VER)
+# Install LibCURL_jll into our stdlib folder
+$(eval $(call install-jll-and-artifact,LibCURL_jll))
 
-$(eval $(call bb-install,curl,CURL,false))
+# Insert curl -> libcurl naming adapters
+$(eval $(call fix-artifact-naming-mismatch,curl,LibCURL_jll))
+
 endif

@@ -1,0 +1,4 @@
+PCRE2_JLL_BRANCH = master
+PCRE2_JLL_SHA1 = 778425144f967f9711c1f7c7f297654115fc7bfd
+PCRE2_JLL_GIT_URL := git://github.com/JuliaBinaryWrappers/PCRE2_jll.jl.git
+PCRE2_JLL_TAR_URL = https://api.github.com/repos/JuliaBinaryWrappers/PCRE2_jll.jl/tarball/$1

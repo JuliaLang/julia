@@ -28,10 +28,11 @@ compile-zlib: $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled
 fastcheck-zlib: check-zlib
 check-zlib: compile-zlib
 
+# If we built our own zlib, we need to generate a fake Zlib_jll package to load it in:
+$(eval $(call jll-generate,Zlib_jll,zlib=\"libz\",,83775a58-1f1d-513f-b197-d71354ab007a,))
+
 else # USE_BINARYBUILDER_ZLIB
 
-ZLIB_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/Zlib_jll.jl/releases/download/Zlib-v$(ZLIB_VER)+$(ZLIB_BB_REL)
-ZLIB_BB_NAME := Zlib.v$(ZLIB_VER)
-$(eval $(call bb-install,zlib,ZLIB,false))
-
+# Install Zlib_jll into our stdlib folder
+$(eval $(call install-jll-and-artifact,Zlib_jll))
 endif # USE_BINARYBUILDER_ZLIB

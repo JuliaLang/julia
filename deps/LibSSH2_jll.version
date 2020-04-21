@@ -1,0 +1,4 @@
+LIBSSH2_JLL_BRANCH = master
+LIBSSH2_JLL_SHA1 = b188089ae11d066bb474916c12949415eb290bfe
+LIBSSH2_JLL_GIT_URL := git://github.com/JuliaBinaryWrappers/LibSSH2_jll.jl.git
+LIBSSH2_JLL_TAR_URL = https://api.github.com/repos/JuliaBinaryWrappers/LibSSH2_jll.jl/tarball/$1

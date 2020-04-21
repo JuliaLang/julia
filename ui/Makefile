@@ -14,7 +14,7 @@ SRCS := repl
 HEADERS := $(addprefix $(JULIAHOME)/src/,julia.h julia_assert.h julia_threads.h julia_internal.h options.h) \
 	$(BUILDDIR)/../src/julia_version.h $(wildcard $(JULIAHOME)/src/support/*.h) $(LIBUV_INC)/uv.h
 
-FLAGS := -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir)
+FLAGS := -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir) -I$(LIBUV_INC)
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -Wc++-compat
 endif
@@ -27,12 +27,12 @@ JLDFLAGS += $(LDFLAGS) $(NO_WHOLE_ARCHIVE) $(OSLIBS) $(RPATH)
 
 ifeq ($(USE_SYSTEM_LIBM),0)
 ifneq ($(UNTRUSTED_SYSTEM_LIBM),0)
-JLDFLAGS += $(WHOLE_ARCHIVE) $(build_libdir)/libopenlibm.a $(NO_WHOLE_ARCHIVE)
+JLDFLAGS += $(WHOLE_ARCHIVE) $(OPENLIBM) $(NO_WHOLE_ARCHIVE)
 endif
 endif
 
-ifeq ($(OS),WINNT)
-JLDFLAGS += -municode
+ifeq ($(USE_BINARYBUILDER_LLVM),1)
+JLDFLAGS += $(call rpath_rel_link,$(call cygpath,$(shell $(LLVM_CONFIG_HOST) --libdir)))
 endif
 
 default: release

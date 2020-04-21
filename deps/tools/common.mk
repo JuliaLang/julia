@@ -112,10 +112,6 @@ $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(build_prefix): | $(DIRS)
 $(eval $(call dir_target,$(SRCCACHE)))
 
-
-upper = $(shell echo $1 | tr a-z A-Z)
-
-
 ## A rule for calling `make install` ##
 # example usage:
 #   $(call staged-install, \
@@ -204,8 +200,6 @@ ifeq ($$(BUILD_OS), WINNT)
 	cmd //C mklink //J $$(call mingw_to_dos,$3/$1,cd $3 &&) $$(call mingw_to_dos,$$(BUILDDIR)/$2,)
 else ifneq (,$$(findstring CYGWIN,$$(BUILD_OS)))
 	cmd /C mklink /J $$(call cygpath_w,$3/$1) $$(call cygpath_w,$$(BUILDDIR)/$2)
-else ifdef JULIA_VAGRANT_BUILD
-	cp -R $$(BUILDDIR)/$2 $3/$1
 else
 	ln -sf $$(abspath $$(BUILDDIR)/$2) $3/$1
 endif
@@ -231,9 +225,14 @@ else
 UNTAR = $(TAR) -xmUzf
 endif
 
+define delete-uninstaller
+uninstall-$(strip $1):
+	-rm -rf $(2)
+	-rm $$(build_prefix)/manifest/$(strip $1)
+endef
 
 ## phony targets ##
 
 .PHONY: default get extract configure compile fastcheck check install uninstall reinstall cleanall distcleanall \
 	get-* extract-* configure-* compile-* fastcheck-* check-* install-* uninstall-* reinstall-* clean-* distclean-* \
-	update-llvm
+	update-libllvm

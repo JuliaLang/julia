@@ -10,6 +10,9 @@
 
 include $(JULIAHOME)/deps/tools/git-external.mk
 
+$(build_datarootdir)/julia/stdlib/$(VERSDIR):
+	mkdir -p $@
+
 define stdlib-external
 
 $$(eval $$(call git-external,$1,$2,,,$$(BUILDDIR)))
@@ -19,6 +22,7 @@ $$(BUILDDIR)/$$($2_SRC_DIR)/build-compiled: $$(BUILDDIR)/$$($2_SRC_DIR)/source-e
 $$(eval $$(call symlink_install,$1,$$$$($2_SRC_DIR),$$$$(build_datarootdir)/julia/stdlib/$$$$(VERSDIR)))
 clean-$1:
 	-rm $$(BUILDDIR)/$$($2_SRC_DIR)/build-compiled
+uninstall-$1:
 get-$1: $$($2_SRC_FILE)
 extract-$1: $$(BUILDDIR)/$$($2_SRC_DIR)/source-extracted
 configure-$1: extract-$1

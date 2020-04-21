@@ -1,0 +1,4 @@
+LIBUNWIND_JLL_BRANCH = master
+LIBUNWIND_JLL_SHA1 = 7e1f7818af1d652f0e3fe07d71bc873b23c89fab
+LIBUNWIND_JLL_GIT_URL := git://github.com/JuliaBinaryWrappers/LibUnwind_jll.jl.git
+LIBUNWIND_JLL_TAR_URL = https://api.github.com/repos/JuliaBinaryWrappers/LibUnwind_jll.jl/tarball/$1

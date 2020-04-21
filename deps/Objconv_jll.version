@@ -1,0 +1,4 @@
+OBJCONV_JLL_BRANCH = master
+OBJCONV_JLL_SHA1 = ef9f604a10bdc4826348b7a37871442fc9e1cd16
+OBJCONV_JLL_GIT_URL := git://github.com/JuliaBinaryWrappers/Objconv_jll.jl.git
+OBJCONV_JLL_TAR_URL = https://api.github.com/repos/JuliaBinaryWrappers/Objconv_jll.jl/tarball/$1

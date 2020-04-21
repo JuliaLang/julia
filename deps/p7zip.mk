@@ -33,8 +33,8 @@ $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-compiled: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/bu
 	echo 1 > $@
 
 define P7ZIP_INSTALL
-	mkdir -p $2/$$(build_bindir)
-	cp -a $1/bin/7za $2/$$(build_bindir)/7z
+	mkdir -p $2/$$(build_libexecdir)
+	cp -a $1/bin/7za $2/$$(build_libexecdir)/7z
 endef
 $(eval $(call staged-install, \
 	p7zip,p7zip-$(P7ZIP_VER), \
@@ -56,10 +56,12 @@ compile-p7zip: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-compiled
 fastcheck-p7zip: check-p7zip
 check-p7zip: compile-p7zip
 
+# If we built our own p7zip, we need to generate a fake p7zip_jll package to load it in:
+$(eval $(call jll-generate,p7zip_jll,,p7zip=\"7z$(EXE)\",05ff407c-b0c1-5878-9df8-858cc2e60c36,))
 
 else # USE_BINARYBUILDER_P7ZIP
-P7ZIP_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/p7zip_jll.jl/releases/download/p7zip-v$(P7ZIP_VER)+$(P7ZIP_BB_REL)
-P7ZIP_BB_NAME := p7zip.v$(P7ZIP_VER)
-$(eval $(call bb-install,p7zip,P7ZIP,false))
+
+# Install p7zip_jll into our stdlib folder
+$(eval $(call install-jll-and-artifact,p7zip_jll))
 
 endif

@@ -1,0 +1,4 @@
+LIBOSXUNWIND_JLL_BRANCH = master
+LIBOSXUNWIND_JLL_SHA1 = 274bc93efffc1efab84855f7b4a2598f9ff95067
+LIBOSXUNWIND_JLL_GIT_URL := git://github.com/JuliaBinaryWrappers/LibOSXUnwind_jll.jl.git
+LIBOSXUNWIND_JLL_TAR_URL = https://api.github.com/repos/JuliaBinaryWrappers/LibOSXUnwind_jll.jl/tarball/$1

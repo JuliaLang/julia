@@ -1,0 +1,4 @@
+P7ZIP_JLL_BRANCH = master
+P7ZIP_JLL_SHA1 = 60cd71165b1045796b77fd2745ef5a732f9c2807
+P7ZIP_JLL_GIT_URL := git://github.com/JuliaBinaryWrappers/p7zip_jll.jl.git
+P7ZIP_JLL_TAR_URL = https://api.github.com/repos/JuliaBinaryWrappers/p7zip_jll.jl/tarball/$1

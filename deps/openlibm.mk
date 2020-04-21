@@ -29,10 +29,11 @@ compile-openlibm: $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/build-compiled
 fastcheck-openlibm: check-openlibm
 check-openlibm: compile-openlibm
 
+# If we built our own openlibm, we need to generate a fake OpenLibm_jll package to load it in:
+$(eval $(call jll-generate,OpenLibm_jll,openlibm=\"libopenlibm\",,05823500-19ac-5b8b-9628-191a04bc5112,))
+
 else # USE_BINARYBUILDER_OPENLIBM
 
-OPENLIBM_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/OpenLibm_jll.jl/releases/download/OpenLibm-v$(OPENLIBM_VER)+$(OPENLIBM_BB_REL)
-OPENLIBM_BB_NAME := OpenLibm.v$(OPENLIBM_VER)
-
-$(eval $(call bb-install,openlibm,OPENLIBM,false))
+# Install OpenLibm_jll into our stdlib folder
+$(eval $(call install-jll-and-artifact,OpenLibm_jll))
 endif

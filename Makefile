@@ -1,8 +1,6 @@
 JULIAHOME := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 include $(JULIAHOME)/Make.inc
 
-VERSDIR := v`cut -d. -f1-2 < $(JULIAHOME)/VERSION`
-
 default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
@@ -48,12 +46,10 @@ $(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUI
 
 julia-symlink: julia-ui-$(JULIA_BUILD_MODE)
 ifeq ($(OS),WINNT)
-	@echo '@"%~dp0"\'"$(shell $(JULIAHOME)/contrib/relative_path.sh "$(BUILDROOT)" "$(JULIA_EXECUTABLE)" | tr / '\\')" '%*' > $(BUILDROOT)/julia.bat
+	@echo '@"%~dp0"\'"$$(echo $(call rel_path,$(BUILDROOT),$(JULIA_EXECUTABLE)) | tr / '\\')" '%*' > $(BUILDROOT)/julia.bat
 	chmod a+x $(BUILDROOT)/julia.bat
 else
-ifndef JULIA_VAGRANT_BUILD
-	@ln -sf "$(shell $(JULIAHOME)/contrib/relative_path.sh "$(BUILDROOT)" "$(JULIA_EXECUTABLE)")" $(BUILDROOT)/julia
-endif
+	@ln -sf $(call rel_path,$(BUILDROOT),$(JULIA_EXECUTABLE)) $(BUILDROOT)/julia
 endif
 
 julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test
@@ -240,41 +236,12 @@ $$(build_depsbindir)/lib$(1).dll: | $$(build_depsbindir)
 JL_TARGETS += $(1)
 endef
 julia-deps: julia-deps-libs
-
-# Given a list of space-separated libraries, return the first library name that is
-# correctly found through `pathsearch`.
-define select_std_dll
-$(firstword $(foreach name,$(1),$(if $(call pathsearch,lib$(name).dll,$(STD_LIB_PATH)),$(name),)))
-endef
-
-$(eval $(call std_dll,$(call select_std_dll,gfortran-3 gfortran-4 gfortran-5)))
-$(eval $(call std_dll,quadmath-0))
-$(eval $(call std_dll,stdc++-6))
-ifeq ($(ARCH),i686)
-$(eval $(call std_dll,gcc_s_sjlj-1))
-else
-$(eval $(call std_dll,gcc_s_seh-1))
-endif
-$(eval $(call std_dll,ssp-0))
-$(eval $(call std_dll,winpthread-1))
-$(eval $(call std_dll,atomic-1))
 endif
 
 
 define stringreplace
 	$(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep '$2' | awk '{print $$1;}') '$3' 255 "$(call cygpath_w,$1)"
 endef
-
-# Run fixup-libgfortran on all platforms but Windows and FreeBSD. On FreeBSD we
-# pull in the GCC libraries earlier and use them for the build to make sure we
-# don't inadvertently link to /lib/libgcc_s.so.1, which is incompatible with
-# libgfortran, and on Windows we copy them in earlier as well.
-ifeq (,$(findstring $(OS),FreeBSD WINNT))
-julia-base: $(build_libdir)/libgfortran*.$(SHLIB_EXT)*
-$(build_libdir)/libgfortran*.$(SHLIB_EXT)*: | $(build_libdir) julia-deps
-	-$(CUSTOM_LD_LIBRARY_PATH) PATH="$(PATH):$(build_depsbindir)" PATCHELF="$(PATCHELF)" FC="$(FC)" $(JULIAHOME)/contrib/fixup-libgfortran.sh --verbose $(build_libdir)
-JL_PRIVATE_LIBS-0 += libgfortran libgcc_s libquadmath
-endif
 
 
 install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
@@ -287,9 +254,9 @@ endif
 		mkdir -p $(DESTDIR)$$subdir; \
 	done
 
-	$(INSTALL_M) $(build_bindir)/julia $(DESTDIR)$(bindir)/
+	$(INSTALL_M) $(build_bindir)/julia$(EXE) $(DESTDIR)$(bindir)/
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
-	$(INSTALL_M) $(build_bindir)/julia-debug $(DESTDIR)$(bindir)/
+	$(INSTALL_M) $(build_bindir)/julia-debug$(EXE) $(DESTDIR)$(bindir)/
 endif
 ifeq ($(OS),WINNT)
 	-$(INSTALL_M) $(filter-out $(build_bindir)/libjulia-debug.dll,$(wildcard $(build_bindir)/*.dll)) $(DESTDIR)$(bindir)/
@@ -297,6 +264,12 @@ ifeq ($(OS),WINNT)
 
 	# We have a single exception; we want 7z.dll to live in libexec, not bin, so that 7z.exe can find it.
 	-mv $(DESTDIR)$(bindir)/7z.dll $(DESTDIR)$(libexecdir)/
+
+	# We also have a `julia.exe` and `julia-debug.exe` that live in $(libexecdir)
+	$(INSTALL_M) $(build_libexecdir)/julia$(EXE) $(DESTDIR)$(libexecdir)/
+ifeq ($(BUNDLE_DEBUG_LIBS),1)
+	$(INSTALL_M) $(build_libexecdir)/julia-debug$(EXE) $(DESTDIR)$(libexecdir)/
+endif
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	-$(INSTALL_M) $(build_bindir)/libjulia-debug.dll $(DESTDIR)$(bindir)/
 	-$(INSTALL_M) $(build_libdir)/libjulia-debug.dll.a $(DESTDIR)$(libdir)/
@@ -347,7 +320,7 @@ endif
 	done
 endif
 	# Install `7z` into libexec/
-	$(INSTALL_M) $(build_bindir)/7z$(EXE) $(DESTDIR)$(libexecdir)/
+	$(INSTALL_M) $(build_libexecdir)/7z$(EXE) $(DESTDIR)$(libexecdir)/
 
 	# Copy public headers
 	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
@@ -361,7 +334,13 @@ endif
 	mkdir -p $(DESTDIR)$(datarootdir)/julia/base $(DESTDIR)$(datarootdir)/julia/test
 	cp -R -L $(JULIAHOME)/base/* $(DESTDIR)$(datarootdir)/julia/base
 	cp -R -L $(JULIAHOME)/test/* $(DESTDIR)$(datarootdir)/julia/test
-	cp -R -L $(build_datarootdir)/julia/* $(DESTDIR)$(datarootdir)/julia
+	cp -Ra $(build_datarootdir)/julia/artifacts $(DESTDIR)$(datarootdir)/julia
+	# Copy everything except artifacts, collapsing symlinks
+	for f in $(build_datarootdir)/julia/*; do \
+		if [ $$(basename $${f}) != artifacts ]; then \
+			cp -R -L $${f} $(DESTDIR)$(datarootdir)/julia; \
+		fi; \
+	done
 	# Copy documentation
 	cp -R -L $(BUILDROOT)/doc/_build/html $(DESTDIR)$(docdir)/
 	# Remove various files which should not be installed
@@ -597,12 +576,10 @@ win-extras:
 	$(call spawn, $(JULIAHOME)/dist-extras/is.exe /DIR="$(call cygpath_w,$(JULIAHOME)/dist-extras/inno)" /PORTABLE=1 /CURRENTUSER /VERYSILENT)
 
 # various statistics about the build that may interest the user
-ifeq ($(USE_SYSTEM_LLVM), 1)
-LLVM_SIZE := llvm-size$(EXE)
-else
-LLVM_SIZE := $(build_depsbindir)/llvm-size$(EXE)
-endif
-build-stats:
+build-stats-deps:
+	@$(MAKE) -C deps install-llvm
+
+build-stats: | build-stats-deps
 	@printf $(JULCOLOR)' ==> ./julia binary sizes\n'$(ENDCOLOR)
 	$(call spawn,$(LLVM_SIZE) -A $(call cygpath_w,$(build_private_libdir)/sys.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_shlibdir)/libjulia.$(SHLIB_EXT)) \

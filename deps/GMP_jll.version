@@ -1,0 +1,4 @@
+GMP_JLL_BRANCH = master
+GMP_JLL_SHA1 = a69294cbe95041c8df67d197cb647e185b1f756e
+GMP_JLL_GIT_URL := git://github.com/JuliaBinaryWrappers/GMP_jll.jl.git
+GMP_JLL_TAR_URL = https://api.github.com/repos/JuliaBinaryWrappers/GMP_jll.jl/tarball/$1

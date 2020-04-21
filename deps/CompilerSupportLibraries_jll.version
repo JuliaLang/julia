@@ -1,0 +1,4 @@
+COMPILERSUPPORTLIBRARIES_JLL_BRANCH = master
+COMPILERSUPPORTLIBRARIES_JLL_SHA1 = 6e75bc762d5481c2a7f8846be987873a5e893932
+COMPILERSUPPORTLIBRARIES_JLL_GIT_URL := git://github.com/JuliaBinaryWrappers/CompilerSupportLibraries_jll.jl.git
+COMPILERSUPPORTLIBRARIES_JLL_TAR_URL = https://api.github.com/repos/JuliaBinaryWrappers/CompilerSupportLibraries_jll.jl/tarball/$1

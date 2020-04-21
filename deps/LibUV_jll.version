@@ -1,0 +1,4 @@
+LIBUV_JLL_BRANCH = master
+LIBUV_JLL_SHA1 = 19ba4686fb82bfe5338781a0f89f6d16353ff7e2
+LIBUV_JLL_GIT_URL := git://github.com/JuliaBinaryWrappers/LibUV_jll.jl.git
+LIBUV_JLL_TAR_URL = https://api.github.com/repos/JuliaBinaryWrappers/LibUV_jll.jl/tarball/$1
