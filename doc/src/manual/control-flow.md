@@ -40,7 +40,7 @@ julia> z = (x = 1; y = 2; x + y)
 ```
 
 This syntax is particularly useful with the terse single-line function definition form introduced
-in [Functions](@ref). Although it is typical, there is no requirement that `begin` blocks be multiline
+in [Functions](@ref man-functions). Although it is typical, there is no requirement that `begin` blocks be multiline
 or that `;` chains be single-line:
 
 ```jldoctest
