@@ -8,7 +8,7 @@ Load the index file for the repository `repo`.
 function GitIndex(repo::GitRepo)
     ensure_initialized()
     idx_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
-    @check ccall((:git_repository_index, :libgit2), Cint,
+    @check ccall((:git_repository_index, libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}), idx_ptr_ptr, repo.ptr)
     return GitIndex(repo, idx_ptr_ptr[])
 end
@@ -25,7 +25,7 @@ has changed since the last time it was loaded into `idx`.
 """
 function read!(idx::GitIndex, force::Bool = false)
     ensure_initialized()
-    @check ccall((:git_index_read, :libgit2), Cint, (Ptr{Cvoid}, Cint), idx.ptr, Cint(force))
+    @check ccall((:git_index_read, libgit2), Cint, (Ptr{Cvoid}, Cint), idx.ptr, Cint(force))
     return idx
 end
 
@@ -36,7 +36,7 @@ Write the state of index `idx` to disk using a file lock.
 """
 function write!(idx::GitIndex)
     ensure_initialized()
-    @check ccall((:git_index_write, :libgit2), Cint, (Ptr{Cvoid},), idx.ptr)
+    @check ccall((:git_index_write, libgit2), Cint, (Ptr{Cvoid},), idx.ptr)
     return idx
 end
 
@@ -51,7 +51,7 @@ repository cannot be bare. `idx` must not contain any files with conflicts.
 function write_tree!(idx::GitIndex)
     ensure_initialized()
     oid_ptr = Ref(GitHash())
-    @check ccall((:git_index_write_tree, :libgit2), Cint,
+    @check ccall((:git_index_write_tree, libgit2), Cint,
                  (Ptr{GitHash}, Ptr{Cvoid}), oid_ptr, idx.ptr)
     return oid_ptr[]
 end
@@ -73,7 +73,7 @@ Read the tree `tree` (or the tree pointed to by `treehash` in the repository own
 """
 function read_tree!(idx::GitIndex, tree::GitTree)
     ensure_initialized()
-    @check ccall((:git_index_read_tree, :libgit2), Cint,
+    @check ccall((:git_index_read_tree, libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{Cvoid}), idx.ptr, tree.ptr)
 end
 read_tree!(idx::GitIndex, hash::AbstractGitHash) =
@@ -104,7 +104,7 @@ with respect to ignored files:
 function add!(idx::GitIndex, files::AbstractString...;
               flags::Cuint = Consts.INDEX_ADD_DEFAULT)
     ensure_initialized()
-    @check ccall((:git_index_add_all, :libgit2), Cint,
+    @check ccall((:git_index_add_all, libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{StrArrayStruct}, Cuint, Ptr{Cvoid}, Ptr{Cvoid}),
                  idx.ptr, collect(files), flags, C_NULL, C_NULL)
 end
@@ -120,7 +120,7 @@ database.
 """
 function update!(idx::GitIndex, files::AbstractString...)
     ensure_initialized()
-    @check ccall((:git_index_update_all, :libgit2), Cint,
+    @check ccall((:git_index_update_all, libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{StrArrayStruct}, Ptr{Cvoid}, Ptr{Cvoid}),
                  idx.ptr, collect(files), C_NULL, C_NULL)
 end
@@ -134,7 +134,7 @@ of the `repo`).
 """
 function remove!(idx::GitIndex, files::AbstractString...)
     ensure_initialized()
-    @check ccall((:git_index_remove_all, :libgit2), Cint,
+    @check ccall((:git_index_remove_all, libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{StrArrayStruct}, Ptr{Cvoid}, Ptr{Cvoid}),
                  idx.ptr, collect(files), C_NULL, C_NULL)
 end
@@ -173,13 +173,13 @@ end
 
 function count(idx::GitIndex)
     ensure_initialized()
-    return ccall((:git_index_entrycount, :libgit2), Csize_t, (Ptr{Cvoid},), idx.ptr)
+    return ccall((:git_index_entrycount, libgit2), Csize_t, (Ptr{Cvoid},), idx.ptr)
 end
 
 function Base.getindex(idx::GitIndex, i::Integer)
     ensure_initialized()
     GC.@preserve idx begin
-        ie_ptr = ccall((:git_index_get_byindex, :libgit2),
+        ie_ptr = ccall((:git_index_get_byindex, libgit2),
                        Ptr{IndexEntry},
                        (Ptr{Cvoid}, Csize_t), idx.ptr, i-1)
         ie_ptr == C_NULL && return nothing
@@ -191,7 +191,7 @@ end
 function Base.findall(path::String, idx::GitIndex)
     ensure_initialized()
     pos_ref = Ref{Csize_t}(0)
-    ret = ccall((:git_index_find, :libgit2), Cint,
+    ret = ccall((:git_index_find, libgit2), Cint,
                   (Ref{Csize_t}, Ptr{Cvoid}, Cstring), pos_ref, idx.ptr, path)
     ret == Cint(Error.ENOTFOUND) && return nothing
     return pos_ref[]+1
@@ -210,7 +210,7 @@ of a multi-branch "octopus" merge, stages `2`, `3`, and `4` might be used).
 """
 function stage(ie::IndexEntry)
     ensure_initialized()
-    return ccall((:git_index_entry_stage, :libgit2), Cint, (Ptr{IndexEntry},), Ref(ie))
+    return ccall((:git_index_entry_stage, libgit2), Cint, (Ptr{IndexEntry},), Ref(ie))
 end
 
 function Base.show(io::IO, idx::GitIndex)

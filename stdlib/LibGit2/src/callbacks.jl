@@ -9,7 +9,7 @@ function mirror_callback(remote::Ptr{Ptr{Cvoid}}, repo_ptr::Ptr{Cvoid},
     ensure_initialized()
     # Create the remote with a mirroring url
     fetch_spec = "+refs/*:refs/*"
-    err = ccall((:git_remote_create_with_fetchspec, :libgit2), Cint,
+    err = ccall((:git_remote_create_with_fetchspec, libgit2), Cint,
                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Cstring),
                 remote, repo_ptr, name, url, fetch_spec)
     err != 0 && return Cint(err)
@@ -43,7 +43,7 @@ end
 function user_abort()
     ensure_initialized()
     # Note: Potentially it could be better to just throw a Julia error.
-    ccall((:giterr_set_str, :libgit2), Cvoid,
+    ccall((:giterr_set_str, libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "Aborting, user cancelled credential request.")
     return Cint(Error.EUSER)
@@ -51,7 +51,7 @@ end
 
 function prompt_limit()
     ensure_initialized()
-    ccall((:giterr_set_str, :libgit2), Cvoid,
+    ccall((:giterr_set_str, libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "Aborting, maximum number of prompts reached.")
     return Cint(Error.EAUTH)
@@ -59,7 +59,7 @@ end
 
 function exhausted_abort()
     ensure_initialized()
-    ccall((:giterr_set_str, :libgit2), Cvoid,
+    ccall((:giterr_set_str, libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "All authentication methods have failed.")
     return Cint(Error.EAUTH)
@@ -79,7 +79,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
 
     # first try ssh-agent if credentials support its usage
     if p.use_ssh_agent && username_ptr != Cstring(C_NULL) && (!revised || !isfilled(cred))
-        err = ccall((:git_cred_ssh_key_from_agent, :libgit2), Cint,
+        err = ccall((:git_cred_ssh_key_from_agent, libgit2), Cint,
                     (Ptr{Ptr{Cvoid}}, Cstring), libgit2credptr, username_ptr)
 
         p.use_ssh_agent = false  # use ssh-agent only one time
@@ -172,7 +172,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
     if !revised
         return exhausted_abort()
     end
-    return ccall((:git_cred_ssh_key_new, :libgit2), Cint,
+    return ccall((:git_cred_ssh_key_new, libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cstring, Cstring),
                  libgit2credptr, cred.user, cred.pubkey, cred.prvkey, cred.pass)
 end
@@ -232,7 +232,7 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
         return exhausted_abort()
     end
 
-    return ccall((:git_cred_userpass_plaintext_new, :libgit2), Cint,
+    return ccall((:git_cred_userpass_plaintext_new, libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Cstring, Cstring),
                  libgit2credptr, cred.user, cred.pass)
 end
@@ -333,7 +333,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
     if err == 0
         if p.explicit !== nothing
             ensure_initialized()
-            ccall((:giterr_set_str, :libgit2), Cvoid, (Cint, Cstring), Cint(Error.Callback),
+            ccall((:giterr_set_str, libgit2), Cvoid, (Cint, Cstring), Cint(Error.Callback),
                   "The explicitly provided credential is incompatible with the requested " *
                   "authentication methods.")
         end

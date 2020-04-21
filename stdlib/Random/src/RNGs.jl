@@ -74,8 +74,6 @@ seed!(rng::RandomDevice) = rng
 const MT_CACHE_F = 501 << 1 # number of Float64 in the cache
 const MT_CACHE_I = 501 << 4 # number of bytes in the UInt128 cache
 
-@assert dsfmt_get_min_array_size() <= MT_CACHE_F
-
 mutable struct MersenneTwister <: AbstractRNG
     seed::Vector{UInt32}
     state::DSFMT_state

@@ -1,6 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module SuiteSparse
+using SuiteSparse_jll
+# Ensure that SuiteSparse_jll is initialized properly
+SuiteSparse_jll.OpenBLAS_jll.__init__()
+SuiteSparse_jll.__init__()
 
 import Base: \
 import LinearAlgebra: ldiv!, rdiv!

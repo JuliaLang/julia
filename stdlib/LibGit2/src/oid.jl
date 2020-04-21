@@ -13,7 +13,7 @@ function GitHash(ptr::Ptr{UInt8})
     end
     ensure_initialized()
     oid_ptr = Ref(GitHash())
-    ccall((:git_oid_fromraw, :libgit2), Cvoid, (Ptr{GitHash}, Ptr{UInt8}), oid_ptr, ptr)
+    ccall((:git_oid_fromraw, libgit2), Cvoid, (Ptr{GitHash}, Ptr{UInt8}), oid_ptr, ptr)
     return oid_ptr[]
 end
 
@@ -42,7 +42,7 @@ function GitHash(id::AbstractString)
     end
     ensure_initialized()
     oid_ptr = Ref{GitHash}()
-    @check ccall((:git_oid_fromstrn, :libgit2), Cint,
+    @check ccall((:git_oid_fromstrn, libgit2), Cint,
               (Ptr{GitHash}, Ptr{UInt8}, Csize_t), oid_ptr, bstr, len)
     return oid_ptr[]
 end
@@ -55,7 +55,7 @@ Construct a `GitShortHash` from the data stored in the given [`Buffer`](@ref).
 function GitShortHash(buf::Buffer)
     ensure_initialized()
     oid_ptr = Ref{GitHash}()
-    @check ccall((:git_oid_fromstrn, :libgit2), Cint,
+    @check ccall((:git_oid_fromstrn, libgit2), Cint,
               (Ptr{GitHash}, Ptr{UInt8}, Csize_t), oid_ptr, buf.ptr, buf.size)
     GitShortHash(oid_ptr[], buf.size)
 end
@@ -70,7 +70,7 @@ function GitShortHash(id::AbstractString)
     bstr = String(id)
     len = sizeof(bstr)
     oid_ptr = Ref{GitHash}()
-    @check ccall((:git_oid_fromstrn, :libgit2), Cint,
+    @check ccall((:git_oid_fromstrn, libgit2), Cint,
               (Ptr{GitHash}, Ptr{UInt8}, Csize_t), oid_ptr, bstr, len)
     GitShortHash(oid_ptr[], len)
 end
@@ -112,7 +112,7 @@ function GitHash(ref::GitReference)
     reftype(ref) != Consts.REF_OID && return GitHash()
     ensure_initialized()
     GC.@preserve ref begin
-        oid_ptr = ccall((:git_reference_target, :libgit2), Ptr{UInt8}, (Ptr{Cvoid},), ref.ptr)
+        oid_ptr = ccall((:git_reference_target, libgit2), Ptr{UInt8}, (Ptr{Cvoid},), ref.ptr)
         oid_ptr == C_NULL && return GitHash()
         oid = GitHash(oid_ptr)
     end
@@ -130,7 +130,7 @@ function GitHash(repo::GitRepo, ref_name::AbstractString)
     isempty(repo) && return GitHash()
     ensure_initialized()
     oid_ptr  = Ref(GitHash())
-    @check ccall((:git_reference_name_to_id, :libgit2), Cint,
+    @check ccall((:git_reference_name_to_id, libgit2), Cint,
                     (Ptr{GitHash}, Ptr{Cvoid}, Cstring),
                      oid_ptr, repo.ptr, ref_name)
     return oid_ptr[]
@@ -143,7 +143,7 @@ Get the identifier (`GitHash`) of `obj`.
 """
 function GitHash(obj::GitObject)
     ensure_initialized()
-    GitHash(ccall((:git_object_id, :libgit2), Ptr{UInt8}, (Ptr{Cvoid},), obj.ptr))
+    GitHash(ccall((:git_object_id, libgit2), Ptr{UInt8}, (Ptr{Cvoid},), obj.ptr))
 end
 
 ==(obj1::GitObject, obj2::GitObject) = GitHash(obj1) == GitHash(obj2)
@@ -158,7 +158,7 @@ unambiuously identify the object in the repository.
 function GitShortHash(obj::GitObject)
     ensure_initialized()
     buf_ref = Ref(Buffer())
-    @check ccall((:git_object_short_id, :libgit2), Cint,
+    @check ccall((:git_object_short_id, libgit2), Cint,
                  (Ptr{Buffer},Ptr{Cvoid}), buf_ref, obj.ptr)
     sid = GitShortHash(buf_ref[])
     free(buf_ref)
@@ -186,7 +186,7 @@ Base.hash(id::GitHash, h::UInt) = hash(id.val, h)
 
 function Base.cmp(id1::GitHash, id2::GitHash)
     ensure_initialized()
-    Int(ccall((:git_oid_cmp, :libgit2), Cint,
+    Int(ccall((:git_oid_cmp, libgit2), Cint,
               (Ptr{GitHash}, Ptr{GitHash}),
               Ref(id1), Ref(id2)))
 end
@@ -194,7 +194,7 @@ function Base.cmp(id1::GitShortHash, id2::GitShortHash)
     ensure_initialized()
     # shortened hashes appear at the beginning of the order, i.e.
     # 000 < 01 < 010 < 011 < 0112
-    c = Int(ccall((:git_oid_ncmp, :libgit2), Cint,
+    c = Int(ccall((:git_oid_ncmp, libgit2), Cint,
                   (Ptr{GitHash}, Ptr{GitHash}, Csize_t),
                   Ref(id1.hash), Ref(id2.hash), min(id1.len, id2.len)))
     return c == 0 ? cmp(id1.len, id2.len) : c

@@ -99,7 +99,7 @@ StrArrayStruct() = StrArrayStruct(C_NULL, 0)
 
 function free(sa_ref::Base.Ref{StrArrayStruct})
     ensure_initialized()
-    ccall((:git_strarray_free, :libgit2), Cvoid, (Ptr{StrArrayStruct},), sa_ref)
+    ccall((:git_strarray_free, libgit2), Cvoid, (Ptr{StrArrayStruct},), sa_ref)
 end
 
 """
@@ -126,7 +126,7 @@ Buffer() = Buffer(C_NULL, 0, 0)
 
 function free(buf_ref::Base.Ref{Buffer})
     ensure_initialized()
-    ccall((:git_buf_free, :libgit2), Cvoid, (Ptr{Buffer},), buf_ref)
+    ccall((:git_buf_free, libgit2), Cvoid, (Ptr{Buffer},), buf_ref)
 end
 
 """
@@ -1030,11 +1030,11 @@ for (typ, owntyp, sup, cname) in [
     @eval function Base.close(obj::$typ)
         if obj.ptr != C_NULL
             ensure_initialized()
-            ccall(($(string(cname, :_free)), :libgit2), Cvoid, (Ptr{Cvoid},), obj.ptr)
+            ccall(($(string(cname, :_free)), libgit2), Cvoid, (Ptr{Cvoid},), obj.ptr)
             obj.ptr = C_NULL
             if Threads.atomic_sub!(REFCOUNT, 1) == 1
                 # will the last finalizer please turn out the lights?
-                ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
+                ccall((:git_libgit2_shutdown, libgit2), Cint, ())
             end
         end
     end
@@ -1064,7 +1064,7 @@ end
 function Base.close(obj::GitSignature)
     if obj.ptr != C_NULL
         ensure_initialized()
-        ccall((:git_signature_free, :libgit2), Cvoid, (Ptr{SignatureStruct},), obj.ptr)
+        ccall((:git_signature_free, libgit2), Cvoid, (Ptr{SignatureStruct},), obj.ptr)
         obj.ptr = C_NULL
     end
 end
@@ -1162,7 +1162,7 @@ Consts.OBJECT(::Type{GitObject})        = Consts.OBJ_ANY
 
 function Consts.OBJECT(ptr::Ptr{Cvoid})
     ensure_initialized()
-    ccall((:git_object_type, :libgit2), Consts.OBJECT, (Ptr{Cvoid},), ptr)
+    ccall((:git_object_type, libgit2), Consts.OBJECT, (Ptr{Cvoid},), ptr)
 end
 
 """

@@ -4,6 +4,13 @@
 Interface to [libgit2](https://libgit2.org/).
 """
 module LibGit2
+using LibGit2_jll
+# Ensure LibGit2_jll is initialized
+LibGit2_jll.MbedTLS_jll.__init__()
+LibGit2_jll.LibSSH2_jll.__init__()
+LibGit2_jll.LibCURL_jll.Zlib_jll.__init__()
+LibGit2_jll.LibCURL_jll.__init__()
+LibGit2_jll.__init__()
 
 import Base: ==
 using Base: something, notnothing
@@ -974,12 +981,12 @@ end
 end
 
 @noinline function initialize()
-    @check ccall((:git_libgit2_init, :libgit2), Cint, ())
+    @check ccall((:git_libgit2_init, libgit2), Cint, ())
 
     atexit() do
         # refcount zero, no objects to be finalized
         if Threads.atomic_sub!(REFCOUNT, 1) == 1
-            ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
+            ccall((:git_libgit2_shutdown, libgit2), Cint, ())
         end
     end
 
@@ -1002,7 +1009,7 @@ function set_ssl_cert_locations(cert_loc)
     cert_file = isfile(cert_loc) ? cert_loc : Cstring(C_NULL)
     cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
     cert_file == C_NULL && cert_dir == C_NULL && return
-    @check ccall((:git_libgit2_opts, :libgit2), Cint,
+    @check ccall((:git_libgit2_opts, libgit2), Cint,
           (Cint, Cstring...),
           Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
 end

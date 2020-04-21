@@ -3,7 +3,7 @@
 using Random, Sockets
 
 const STDLIB_DIR = Sys.STDLIB
-const STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), readdir(STDLIB_DIR))
+const STDLIBS = filter!(x -> !endswith(x, "_jll") && isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), readdir(STDLIB_DIR))
 
 """
 

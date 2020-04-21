@@ -5,6 +5,7 @@ module LibGit2Tests
 import LibGit2
 using Test
 using Random, Serialization, Sockets
+using LibGit2_jll
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :FakePTYs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FakePTYs.jl"))
@@ -124,7 +125,7 @@ end
 
 function get_global_dir()
     buf = Ref(LibGit2.Buffer())
-    LibGit2.@check ccall((:git_libgit2_opts, :libgit2), Cint,
+    LibGit2.@check ccall((:git_libgit2_opts, libgit2), Cint,
                          (Cint, Cint, Ptr{LibGit2.Buffer}),
                          LibGit2.Consts.GET_SEARCH_PATH, LibGit2.Consts.CONFIG_LEVEL_GLOBAL, buf)
     path = unsafe_string(buf[].ptr)
@@ -133,7 +134,7 @@ function get_global_dir()
 end
 
 function set_global_dir(dir)
-    LibGit2.@check ccall((:git_libgit2_opts, :libgit2), Cint,
+    LibGit2.@check ccall((:git_libgit2_opts, libgit2), Cint,
                          (Cint, Cint, Cstring),
                          LibGit2.Consts.SET_SEARCH_PATH, LibGit2.Consts.CONFIG_LEVEL_GLOBAL, dir)
     return
@@ -1134,7 +1135,7 @@ mktempdir() do dir
 
                 # test workaround for git_tree_walk issue
                 # https://github.com/libgit2/libgit2/issues/4693
-                ccall((:giterr_set_str, :libgit2), Cvoid, (Cint, Cstring),
+                ccall((:giterr_set_str, libgit2), Cvoid, (Cint, Cstring),
                       Cint(LibGit2.Error.Invalid), "previous error")
                 try
                     # file needs to exist in tree in order to trigger the stop walk condition
