@@ -664,33 +664,6 @@ ifeq (exists, $(shell [ -e $(BUILDROOT)/$(MAKE_USER_FNAME) ] && echo exists ))
 include $(BUILDROOT)/$(MAKE_USER_FNAME)
 endif
 
-# A bit of a kludge to work around libraries linking to FreeBSD's outdated system libgcc_s
-# Instead, let's link to the libgcc_s corresponding to the installation of gfortran
-ifeq ($(OS),FreeBSD)
-ifneq (,$(findstring gfortran,$(FC)))
-
-# First let's figure out what version of GCC we're dealing with
-_GCCMAJOR := $(shell $(FC) -dumpversion | cut -d'.' -f1)
-_GCCMINOR := $(shell $(FC) -dumpversion | cut -d'.' -f2)
-
-# The ports system uses major and minor for GCC < 5 (e.g. gcc49 for GCC 4.9), otherwise major only
-ifeq ($(_GCCMAJOR),4)
-  _GCCVER := $(_GCCMAJOR)$(_GCCMINOR)
-else
-  _GCCVER := $(_GCCMAJOR)
-endif
-
-# Allow the user to specify this in Make.user
-GCCPATH ?= $(LOCALBASE)/lib/gcc$(_GCCVER)
-
-# We're going to copy over the libraries we need from GCCPATH into build_libdir, then
-# tell everyone to look for them there. At install time, the build_libdir added into
-# the RPATH here is removed by patchelf.
-LDFLAGS += -L$(build_libdir) -Wl,-rpath,$(build_libdir)
-
-endif # gfortran
-endif # FreeBSD
-
 ifneq ($(CC_BASE)$(CXX_BASE),$(shell echo $(CC) | cut -d' ' -f1)$(shell echo $(CXX) | cut -d' ' -f1))
     $(error Forgot override directive on CC or CXX in Make.user? Cowardly refusing to build)
 endif
@@ -970,21 +943,21 @@ endif
 
 ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
-USE_BLAS64 := 0
-USE_SYSTEM_LAPACK := 0
+  USE_BLAS64 := 0
+  USE_SYSTEM_LAPACK := 0
   LIBBLAS := -lgfortblas
-LIBBLASNAME := libgfortblas
+  LIBBLASNAME := libgfortblas
 else
-LIBBLAS ?= -lblas
-LIBBLASNAME ?= libblas
+  LIBBLAS ?= -lblas
+  LIBBLASNAME ?= libblas
 endif # OS
 
 ifeq ($(USE_SYSTEM_LAPACK), 1)
-LIBLAPACK ?= -llapack
-LIBLAPACKNAME ?= liblapack
+  LIBLAPACK ?= -llapack
+  LIBLAPACKNAME ?= liblapack
 else
   LIBLAPACK :=  -llapack $(LIBBLAS)
-LIBLAPACKNAME := liblapack
+  LIBLAPACKNAME := liblapack
 endif # USE_SYSTEM_LAPACK
 else
   LIBBLAS := -lopenblas
@@ -1496,10 +1469,6 @@ ifeq ($$(BUILD_OS), WINNT)
 	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&) $$(call mingw_to_dos,$(1),)
 else ifneq (,$$(findstring CYGWIN,$$(BUILD_OS)))
 	@cmd /C mklink /J $$(call cygpath_w,$(2)/$(3)) $$(call cygpath_w,$(1))
-else ifdef JULIA_VAGRANT_BUILD
-	@rm -r $$@
-	@cp -R $$(abspath $(1)) $$@.tmp
-	@mv $$@.tmp $$@
 else
 	@ln -sf $$(abspath $(1)) $$@
 endif
