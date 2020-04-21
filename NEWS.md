@@ -15,6 +15,10 @@ Compiler/Runtime improvements
 -----------------------------
 
 
+* All platforms can now use `@executable_path` within `jl_load_dynamic_library()`.
+  This allows executable-relative paths to be embedded within executables on all
+  platforms, not just MacOS, which the syntax is borrowed from. ([#35627])
+
 Command-line option changes
 ---------------------------
 
