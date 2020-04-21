@@ -1131,11 +1131,11 @@ end
 
 function pop!(a::Vector, i::Integer)
     x = a[i]
-    _deleteat!(a, i, 1);
+    _deleteat!(a, i, 1)
     x
 end
 
-pop!(a::Vector, i::Integer, default) =
+function pop!(a::Vector, i::Integer, default)
     if 1 <= i <= length(a)
         x = @inbounds a[i]
         _deleteat!(a, i, 1)
@@ -1143,6 +1143,7 @@ pop!(a::Vector, i::Integer, default) =
     else
         default
     end
+end
 
 """
     pushfirst!(collection, items...) -> collection
