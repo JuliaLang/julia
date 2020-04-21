@@ -57,6 +57,7 @@ Standard library changes
 * `sum`, `prod`, `maximum`, and `minimum` now support `init` keyword argument ([#36188], [#35839]).
 * `unique(f, itr; seen=Set{T}())` now allows you to declare the container type used for
   keeping track of values returned by `f` on elements of `itr` ([#36280]).
+* `Libdl` has been moved to `Base.Libc.Libdl`, however it is still accessible as an stdlib ([#35628]).
 
 #### LinearAlgebra
 * New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).
