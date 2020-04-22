@@ -660,11 +660,8 @@ end
 *(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal) = Adjoint(map((t,s) -> t'*s, D.diag, parent(x)))
 *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal) = Transpose(map((t,s) -> transpose(t)*s, D.diag, parent(x)))
 function *(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector)
-    if all(isempty.((x, D, y)))
-        return zero(promote_type(eltype.((x, D, y))...))
-    else
-        return mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
-    end
+    return mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y);
+                     init = zero(promote_type(map(eltype, (x, D, y))...)))
 end
 function *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector)
     return mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y);
