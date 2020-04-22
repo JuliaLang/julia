@@ -1,23 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    unsafe_rational(num::Integer, den::Integer; checksign=false)
-    unsafe_rational{T<:Integer}(num::Integer, den::Integer; checksign::Bool=false)
-
-Create a `Rational` with numerator `num` and denominator `den`.
-
-The `unsafe` prefix on this function indicates that no check is performed on
-`num` and `den` to ensure that the resulting `Rational` is well-formed.
-A `Rational` is well-formed if its numerator and denominator are coprime and if
-the denominator is non-negative.
-
-`checksign` optionally specifies whether to check the sign of `den`.
-
-Ill-formed `Rational`s result in undefined behaviour.
-"""
-struct unsafe_rational{T<:Integer} <: Function end
-
-"""
     Rational{T<:Integer} <: Real
 
 Rational number type, with numerator and denominator of type `T`.
@@ -27,8 +10,12 @@ struct Rational{T<:Integer} <: Real
     num::T
     den::T
 
-    function (::Type{unsafe_rational{T}})(num::Integer, den::Integer; checksign::Bool=false) where T<:Integer
-        if checksign && T<:Signed && signbit(den)
+    function Rational{T}(num::Integer, den::Integer; safe::Bool=true, checksign::Bool=safe) where T<:Integer
+        if safe
+            num == den == zero(T) && __throw_rational_argerror_zero(T)
+            num, den = divgcd(num, den)
+        end
+        if T<:Signed && checksign && signbit(den)
             den = -den
             signbit(den) && __throw_rational_argerror_typemin(T)
             num = -num
@@ -36,21 +23,36 @@ struct Rational{T<:Integer} <: Real
         return new{T}(num, den)
     end
 end
-
 @noinline __throw_rational_argerror_zero(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
 @noinline __throw_rational_argerror_typemin(T) = throw(ArgumentError("invalid rational: denominator can't be typemin($T)"))
 
-function Rational{T}(num::Integer, den::Integer) where T<:Integer
-    num == den == zero(T) && __throw_rational_argerror_zero(T)
-    num2, den2 = divgcd(num, den)
-    return unsafe_rational{T}(num2, den2; checksign=true)
+function Rational(n::T, d::T; safe=true, checksign=safe) where T<:Integer
+    Rational{T}(n, d; safe, checksign)
 end
 
-Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n, d)
-Rational(n::Integer, d::Integer) = Rational(promote(n, d)...)
-unsafe_rational(n::T, d::T; checksign=false) where {T<:Integer} = unsafe_rational{T}(n, d; checksign)
-unsafe_rational(n::Integer, d::Integer; checksign=false) = unsafe_rational(promote(n, d)...; checksign)
-Rational(n::Integer) = unsafe_rational(n, one(n))
+"""
+    Rational(num::Integer, den::Integer; safe::Bool=true, checksign::Bool=safe)
+    Rational{T<:Integer}(num::Integer, den::Integer; safe::Bool=true, checksign::Bool=safe)
+
+Create a `Rational` with numerator `num` and denominator `den`.
+
+A `Rational` is well-formed if its numerator and denominator are coprime and if the
+denominator is non-negative. By default, the constructor checks its arguments so that
+the created `Rational` is well-formed. Well-formedness is kept across operations on
+`Rational`s.
+
+Unset the optional argument `checksign` to bypass the check on the sign of `den`.\\
+Unset the optional argument `safe` to bypass the coprimality check. By default, unsetting
+`safe` also unsets `checksign`.
+
+!!! warning
+    Using an ill-formed `Rational` result in undefined behavior. Only bypass checks if
+    `num` and `den` are known to satisfy them.
+"""
+function Rational(n::Integer, d::Integer; safe=true, checksign=safe)
+    Rational(promote(n, d)...; safe, checksign)
+end
+Rational(n::Integer) = Rational(n, one(n); safe=false)
 
 function divgcd(x::Integer,y::Integer)
     g = gcd(x,y)
@@ -75,16 +77,16 @@ julia> (3 // 5) // (2 // 1)
 
 function //(x::Rational, y::Integer)
     xn,yn = divgcd(x.num,y)
-    unsafe_rational(xn, checked_mul(x.den, yn); checksign=true)
+    Rational(xn, checked_mul(x.den, yn); safe=false, checksign=true)
 end
 function //(x::Integer,  y::Rational)
     xn,yn = divgcd(x,y.num)
-    unsafe_rational(checked_mul(xn, y.den), yn; checksign=true)
+    Rational(checked_mul(xn, y.den), yn; safe=false, checksign=true)
 end
 function //(x::Rational, y::Rational)
     xn,yn = divgcd(x.num,y.num)
     xd,yd = divgcd(x.den,y.den)
-    unsafe_rational(checked_mul(xn, yd), checked_mul(xd, yn); checksign=true)
+    Rational(checked_mul(xn, yd), checked_mul(xd, yn); safe=false, checksign=true)
 end
 
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
@@ -108,8 +110,12 @@ function write(s::IO, z::Rational)
     write(s,numerator(z),denominator(z))
 end
 
-Rational{T}(x::Rational) where {T<:Integer} = unsafe_rational{T}(convert(T,x.num), convert(T,x.den))
-Rational{T}(x::Integer) where {T<:Integer} = unsafe_rational{T}(convert(T,x), one(T))
+function Rational{T}(x::Rational) where T<:Integer
+    Rational{T}(convert(T, x.num), convert(T,x.den); safe=false)
+end
+function Rational{T}(x::Integer) where T<:Integer
+    Rational{T}(convert(T, x), one(T); safe=false)
+end
 
 Rational(x::Rational) = x
 
@@ -132,7 +138,7 @@ end
 Rational(x::Float64) = Rational{Int64}(x)
 Rational(x::Float32) = Rational{Int}(x)
 
-big(q::Rational) = unsafe_rational(big(numerator(q)), big(denominator(q)))
+big(q::Rational) = Rational(big(numerator(q)), big(denominator(q)); safe=false)
 
 big(z::Complex{<:Rational{<:Integer}}) = Complex{Rational{BigInt}}(z)
 
@@ -168,7 +174,7 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
         throw(OverflowError("cannot negate unsigned number"))
     end
     isnan(x) && return T(x)//one(T)
-    isinf(x) && return unsafe_rational(x < 0 ? -one(T) : one(T), zero(T))
+    isinf(x) && return Rational(x < 0 ? -one(T) : one(T), zero(T); safe=false)
 
     p,  q  = (x < 0 ? -one(T) : one(T)), zero(T)
     pp, qq = zero(T), one(T)
@@ -261,23 +267,23 @@ denominator(x::Rational) = x.den
 
 sign(x::Rational) = oftype(x, sign(x.num))
 signbit(x::Rational) = signbit(x.num)
-copysign(x::Rational, y::Real) = unsafe_rational(copysign(x.num, y), x.den)
-copysign(x::Rational, y::Rational) = unsafe_rational(copysign(x.num, y.num), x.den)
+copysign(x::Rational, y::Real) = Rational(copysign(x.num, y), x.den; safe=false)
+copysign(x::Rational, y::Rational) = Rational(copysign(x.num, y.num), x.den; safe=false)
 
 abs(x::Rational) = Rational(abs(x.num), x.den)
 
-typemin(::Type{Rational{T}}) where {T<:Signed} = unsafe_rational(-one(T), zero(T))
-typemin(::Type{Rational{T}}) where {T<:Integer} = unsafe_rational(zero(T), one(T))
-typemax(::Type{Rational{T}}) where {T<:Integer} = unsafe_rational(one(T), zero(T))
+typemin(::Type{Rational{T}}) where {T<:Signed} = Rational(-one(T), zero(T); safe=false)
+typemin(::Type{Rational{T}}) where {T<:Integer} = Rational(zero(T), one(T); safe=false)
+typemax(::Type{Rational{T}}) where {T<:Integer} = Rational(one(T), zero(T); safe=false)
 
 isinteger(x::Rational) = x.den == 1
 
-+(x::Rational) = unsafe_rational(+x.num, x.den)
--(x::Rational) = unsafe_rational(-x.num, x.den)
++(x::Rational) = Rational(+x.num, x.den; safe=false)
+-(x::Rational) = Rational(-x.num, x.den; safe=false)
 
 function -(x::Rational{T}) where T<:BitSigned
     x.num == typemin(T) && throw(OverflowError("rational numerator is typemin(T)"))
-    unsafe_rational(-x.num, x.den)
+    Rational(-x.num, x.den; safe=false)
 end
 function -(x::Rational{T}) where T<:Unsigned
     x.num != zero(T) && throw(OverflowError("cannot negate unsigned number"))
@@ -292,14 +298,14 @@ for (op,chop) in ((:+,:checked_add), (:-,:checked_sub), (:rem,:rem), (:mod,:mod)
         end
 
         function ($op)(x::Rational, y::Integer)
-            unsafe_rational(($chop)(x.num, checked_mul(x.den, y)), x.den)
+            Rational(($chop)(x.num, checked_mul(x.den, y)), x.den; safe=false)
         end
     end
 end
 for (op,chop) in ((:+,:checked_add), (:-,:checked_sub))
     @eval begin
         function ($op)(y::Integer, x::Rational)
-            unsafe_rational(($chop)(checked_mul(x.den, y), x.num), x.den)
+            Rational(($chop)(checked_mul(x.den, y), x.num), x.den; safe=false)
         end
     end
 end
@@ -314,20 +320,20 @@ end
 function *(x::Rational, y::Rational)
     xn, yd = divgcd(x.num, y.den)
     xd, yn = divgcd(x.den, y.num)
-    unsafe_rational(checked_mul(xn, yn), checked_mul(xd, yd))
+    Rational(checked_mul(xn, yn), checked_mul(xd, yd); safe=false)
 end
 function *(x::Rational, y::Integer)
     xd, yn = divgcd(x.den, y)
-    unsafe_rational(checked_mul(x.num, yn), xd)
+    Rational(checked_mul(x.num, yn), xd; safe=false)
 end
 function *(y::Integer, x::Rational)
     yn, xd = divgcd(y, x.den)
-    unsafe_rational(checked_mul(yn, x.num), xd)
+    Rational(checked_mul(yn, x.num), xd; safe=false)
 end
 /(x::Rational, y::Union{Rational, Integer}) = x//y
 /(x::Integer, y::Rational) = x//y
 /(x::Rational, y::Complex{<:Union{Integer,Rational}}) = x//y
-inv(x::Rational) = unsafe_rational(x.den, x.num; checksign=true)
+inv(x::Rational) = Rational(x.den, x.num; safe=false, checksign=true)
 
 fma(x::Rational, y::Rational, z::Rational) = x*y+z
 
@@ -444,7 +450,7 @@ round(x::Rational, r::RoundingMode=RoundNearest) = round(typeof(x), x, r)
 
 function round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {T,Tr}
     if iszero(denominator(x)) && !(T <: Integer)
-        return convert(T, copysign(unsafe_rational(one(Tr), zero(Tr)), numerator(x)))
+        return convert(T, copysign(Rational(one(Tr), zero(Tr); safe=false), numerator(x)))
     end
     convert(T, div(numerator(x), denominator(x), r))
 end
@@ -478,8 +484,8 @@ end
 
 float(::Type{Rational{T}}) where {T<:Integer} = float(T)
 
-gcd(x::Rational, y::Rational) = unsafe_rational(gcd(x.num, y.num), lcm(x.den, y.den))
-lcm(x::Rational, y::Rational) = unsafe_rational(lcm(x.num, y.num), gcd(x.den, y.den))
+gcd(x::Rational, y::Rational) = Rational(gcd(x.num, y.num), lcm(x.den, y.den); safe=false)
+lcm(x::Rational, y::Rational) = Rational(lcm(x.num, y.num), gcd(x.den, y.den); safe=false)
 function gcdx(x::Rational, y::Rational)
     c = gcd(x, y)
     if iszero(c.num)
