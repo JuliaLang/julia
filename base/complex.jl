@@ -1145,7 +1145,7 @@ Throws a `DivideError` if z2 is 0+0im.
 # Examples
 ```jldoctest
 julia> divrem(4 + 4im, 3 + 1im)
-(1 + 0im, -1 - im)
+(2 + 1im, -1 - 1im)
 ```
 """
 divrem(a::Complex{T}, b::Complex{T}, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr) where T<:Integer = (div(a, b, rr, ri), rem(a, b, rr, ri))
