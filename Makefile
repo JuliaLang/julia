@@ -155,36 +155,42 @@ ifeq ($(BUNDLE_DEBUG_LIBS),1)
 JL_TARGETS += julia-debug
 endif
 
-# private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS-0 := libccalltest libllvmcalltest
-ifeq ($(USE_GPL_LIBS), 1)
-JL_PRIVATE_LIBS-0 += libsuitesparse_wrapper
-JL_PRIVATE_LIBS-$(USE_SYSTEM_SUITESPARSE) += libamd libcamd libccolamd libcholmod libcolamd libumfpack libspqr libsuitesparseconfig
-endif
-JL_PRIVATE_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
-JL_PRIVATE_LIBS-$(USE_SYSTEM_DSFMT) += libdSFMT
-JL_PRIVATE_LIBS-$(USE_SYSTEM_GMP) += libgmp
-JL_PRIVATE_LIBS-$(USE_SYSTEM_MPFR) += libmpfr
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSSH2) += libssh2
-JL_PRIVATE_LIBS-$(USE_SYSTEM_MBEDTLS) += libmbedtls libmbedcrypto libmbedx509
-JL_PRIVATE_LIBS-$(USE_SYSTEM_CURL) += libcurl
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBGIT2) += libgit2
-ifeq ($(OS),WINNT)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += zlib
+# private libraries that are installed in $(prefix)/lib/julia and need to be installed to
+# the installation prefix for distribution.  Note that libraries provided by BB will not
+# be installed in this fashion; they are safely tucked away in the `artifacts` directory.
+define register_private_lib
+ifeq ($(USE_SYSTEM_$(1)),1)
+JL_PRIVATE_LIBS-1 += $(2)
+else ifeq ($(USE_BINARYBUILDER_$(1)),1)
+JL_PRIVATE_LIBS-2 += $(2)
 else
-JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += libz
+JL_PRIVATE_LIBS-0 += $(2)
 endif
+endef
+
+$(eval $(call register_private_lib,,libccalltest libllvmcalltest))
+ifeq ($(USE_GPL_LIBS), 1)
+$(eval $(call register_private_lib,,libsuitesparse_wrapper))
+$(eval $(call register_private_lib,SUITESPARSE,libamd libcamd libccolamd libcholmod libcolamd libumfpack libspqr libsuitesparseconfig))
+endif
+$(eval $(call register_private_lib,PCRE,libpcre2-8))
+$(eval $(call register_private_lib,DSFMT,libdSFMT))
+$(eval $(call register_private_lib,GMP,libgmp))
+$(eval $(call register_private_lib,MPFR,libmpfr))
+$(eval $(call register_private_lib,LIBSSH2,libssh2))
+$(eval $(call register_private_lib,MBEDTLS,libmbedtls libmbedcrypto libmbedx509))
+$(eval $(call register_private_lib,CURL,libcurl))
+$(eval $(call register_private_lib,LIBGIT2,libgit2))
+$(eval $(call register_private_lib,ZLIB,libz))
 ifeq ($(USE_LLVM_SHLIB),1)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM libLLVM-9jl
+$(eval $(call register_private_lib,LLVM,libLLVM libLLVM-9jl))
 endif
-
-ifeq ($(USE_SYSTEM_LIBM),0)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_OPENLIBM) += libopenlibm
-endif
-
-JL_PRIVATE_LIBS-$(USE_SYSTEM_BLAS) += $(LIBBLASNAME)
+$(eval $(call register_private_lib,OPENLIBM,libopenlibm))
+# Naming mismatches are annoying
+USE_SYSTEM_OPENBLAS := $(USE_SYSTEM_BLAS)
+$(eval $(call register_private_lib,OPENBLAS,$(LIBBLASNAME)))
 ifneq ($(LIBLAPACKNAME),$(LIBBLASNAME))
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LAPACK) += $(LIBLAPACKNAME)
+$(eval $(call register_private_lib,LAPACK,$(LIBLAPACKNAME)))
 endif
 
 ifeq ($(OS),Darwin)
@@ -194,50 +200,6 @@ JL_PRIVATE_LIBS-0 += libgfortblas
 endif
 endif
 endif
-
-# On FreeBSD, /lib/libgcc_s.so.1 is incompatible with Fortran; to use Fortran on FreeBSD,
-# we need to link to the libgcc_s that ships with the same GCC version used by libgfortran.
-# To work around this, we copy the GCC libraries we need, namely libgfortran, libgcc_s,
-# and libquadmath, into our build library directory, $(build_libdir). We also add them to
-# JL_PRIVATE_LIBS-0 so that they know where they need to live at install time.
-ifeq ($(OS),FreeBSD)
-define std_so
-julia-deps: | $$(build_libdir)/$(1).so
-$$(build_libdir)/$(1).so: | $$(build_libdir)
-	$$(INSTALL_M) $$(GCCPATH)/$(1).so* $$(build_libdir)
-JL_PRIVATE_LIBS-0 += $(1)
-endef
-
-$(eval $(call std_so,libgfortran))
-$(eval $(call std_so,libgcc_s))
-$(eval $(call std_so,libquadmath))
-endif # FreeBSD
-
-ifeq ($(OS),WINNT)
-# find the standard .dll folders
-ifeq ($(XC_HOST),)
-STD_LIB_PATH ?= $(PATH)
-else
-STD_LIB_PATH := $(shell LANG=C $(CC) -print-search-dirs | grep '^programs: =' | sed -e "s/^programs: =//")
-STD_LIB_PATH += :$(shell LANG=C $(CC) -print-search-dirs | grep '^libraries: =' | sed -e "s/^libraries: =//")
-ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # the cygwin-mingw32 compiler lies about it search directory paths
-STD_LIB_PATH := $(shell echo '$(STD_LIB_PATH)' | sed -e "s!/lib/!/bin/!g")
-endif
-endif
-
-pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
-
-define std_dll
-julia-deps-libs: | $$(build_bindir)/lib$(1).dll $$(build_depsbindir)/lib$(1).dll
-$$(build_bindir)/lib$(1).dll: | $$(build_bindir)
-	cp $$(or $$(call pathsearch,lib$(1).dll,$$(STD_LIB_PATH)),$$(error can't find lib$1.dll)) $$(build_bindir)
-$$(build_depsbindir)/lib$(1).dll: | $$(build_depsbindir)
-	cp $$(or $$(call pathsearch,lib$(1).dll,$$(STD_LIB_PATH)),$$(error can't find lib$1.dll)) $$(build_depsbindir)
-JL_TARGETS += $(1)
-endef
-julia-deps: julia-deps-libs
-endif
-
 
 define stringreplace
 	$(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep '$2' | awk '{print $$1;}') '$3' 255 "$(call cygpath_w,$1)"
@@ -408,7 +370,7 @@ ifeq ($(OS),FreeBSD)
 	# don't set libgfortran's RPATH, it won't be able to find its friends on systems
 	# that don't have the exact GCC port installed used for the build.
 	for lib in $(DESTDIR)$(private_libdir)/libgfortran*$(SHLIB_EXT)*; do \
-		$(PATCHELF) --set-rpath '$$ORIGIN' $$lib; \
+		[ ! -f $$lib ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$lib; \
 	done
 endif
 

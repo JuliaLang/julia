@@ -1130,7 +1130,10 @@ endif # $(OS) == WINNT
 ifeq ($(USE_BINARYBUILDER_CSL),1)
   $(eval $(call find_artifact,CompilerSupportLibraries_jll))
   CSL_SHLIBDIR = $(CompilerSupportLibraries_jll_DIR)/$(binlib)
+else
+  CSL_SHLIBDIR = $(build_shlibdir)
 endif
+CSL_LINK = -L$(CSL_SHLIBDIR) $(call rpath_rel_link,$(CSL_SHLIBDIR))
 
 
 ifeq ($(origin LLVM_CONFIG), undefined)

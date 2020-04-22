@@ -15,13 +15,20 @@ define fortran_src
 $(CSL_FORTRAN_LIBDIR)/$(1)*.$(SHLIB_EXT)*
 endef
 
+CXX_LIB_PATHS := $(foreach f,$(wildcard $(foreach lib,$(CXX_LIBS),$(call cxx_src,$(lib)))),$(realpath $(f)))
+FORTRAN_LIB_PATHS := $(foreach f,$(wildcard $(foreach lib,$(FORTRAN_LIBS),$(call fortran_src,$(lib)))),$(realpath $(f)))
+
+UNINSTALL_compilersupportlibraries = delete-uninstaller "$(wildcard $(foreach lib,$(CXX_LIBS) $(FORTRAN_LIBS),$(build_shlibdir)/$(lib)*.$(SHLIB_EXT)*))"
+$(build_prefix)/manifest/compilersupportlibraries: | $(build_shlibdir) $(build_prefix)/manifest
+	cp -va -l $(CXX_LIB_PATHS) $(build_shlibdir)/
+	cp -va $(FORTRAN_LIB_PATHS) $(build_shlibdir)/
+	echo '$(UNINSTALL_compilersupportlibraries)' > "$@"
+
 get-compilersupportlibraries:
 extract-compilersupportlibraries:
 configure-compilersupportlibraries:
 compile-compilersupportlibraries:
-install-compilersupportlibraries: | $(build_libdir)
-	cp -va $(foreach lib,$(CXX_LIBS),$(call cxx_src $(lib))) $(build_libdir)/
-	cp -va $(foreach lib,$(FORTRAN_LIBS),$(call fortran_src $(lib))) $(build_libdir)/
+install-compilersupportlibraries: $(build_prefix)/manifest/compilersupportlibraries
 
 $(eval $(call jll-generate,CompilerSupportLibraries_jll, \
                            libgcc_s=\"libgcc_s\" \
