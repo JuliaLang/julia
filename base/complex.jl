@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Base: checked_mul, checked_add
+export checked_abs2, checked_mul
+
 """
     Complex{T<:Real} <: Number
 
@@ -254,15 +257,27 @@ end
 
 Compute the complex conjugate of a complex number `z`.
 
+When `conj` is applied to signed complex integers, overflow may occur,
+resulting in the return of a negative value of imaginary part. This overflow
+occurs only when `conj` is applied to the minimum representable value of a
+signed integer. That is, when `x == typemin(typeof(x))`,
+`imag(conj(x * im)) == x < 0`, not `-x` as might be expected.
+
 # Examples
 ```jldoctest
 julia> conj(1 + 3im)
 1 - 3im
+
+julia> conj(1 + typemin(Int64)im)
+1 - 9223372036854775808im
+
 ```
 """
 conj(z::Complex) = Complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))
 abs2(z::Complex) = real(z)*real(z) + imag(z)*imag(z)
+checked_abs2(z::Complex{T}) where T<:Integer = Base.checked_add(Base.checked_mul(real(z), real(z)), Base.checked_mul(imag(z), imag(z)))
+
 function inv(z::Complex)
     c, d = reim(z)
     (isinf(c) | isinf(d)) && return complex(copysign(zero(c), c), flipsign(-zero(d), d))
@@ -276,6 +291,15 @@ inv(z::Complex{<:Integer}) = inv(float(z))
 -(z::Complex, w::Complex) = Complex(real(z) - real(w), imag(z) - imag(w))
 *(z::Complex, w::Complex) = Complex(real(z) * real(w) - imag(z) * imag(w),
                                     real(z) * imag(w) + imag(z) * real(w))
+
+function checked_mul(z::Complex{T}, w::Complex{V}) where {T<:Integer, V<:Integer}
+    zr, zi = reim(z)
+    wr, wi = reim(w)
+    Complex(Base.checked_sub(Base.checked_mul(zr, wr), Base.checked_mul(zi, wi)),
+            Base.checked_add(Base.checked_mul(zr, wi), Base.checked_mul(zi, wr)))
+end
+
+#checked_mul(z::Complex{T}, w::Complex{V}) where {T<:Integer, V<:Integer} = checked_mul(promote(z, w)...)
 
 muladd(z::Complex, w::Complex, x::Complex) =
     Complex(muladd(real(z), real(w), real(x)) - imag(z)*imag(w), # TODO: use mulsub given #15985
@@ -1030,16 +1054,18 @@ function complex(A::AbstractArray{T}) where T
 end
 
 """
-    div(z1, z2, r::RoundingMode=RoundNearest)
+    div(z1::Complex, z2::Complex[, RoundingModeReal=RoundNearest[, RoundingModeImaginary=RoundingModeReal]])
 
-The quotient from Euclidean division of two Gaussian integers. 
-Computes z1/z2, rounded to a Gaussian integer according to the rounding mode `r`. 
+The quotient from Euclidean division of two Gaussian integers.
+Computes z1/z2, rounded to a Gaussian integer according to the given
+rounding modes. The first [`RoundingMode`](@ref) is used for rounding the
+real components while the second is used for rounding the imaginary components.
 In other words, the quantity
 
-    round(z1/z2,r,r)
+    round(z1/z2, RoundingModeReal, RoundingModeImaginary)
 
 without any intermediate rounding.
-I.e. quotient with the same rounding mode `r` applied to real and imaginary parts.
+Throws a `DivideError` if z2 is 0+0im.
 
 # Examples:
 ```jldoctest
@@ -1065,34 +1091,65 @@ julia> div(-5 + 5im, 2 + 2im, RoundNearestTiesUp)
 0 + 3im
 ```
 """
-function div(a::Complex{T}, b::Complex{V}, r::RoundingMode=RoundNearest) where {T<:Integer, V<:Integer}
-    R = promote_type(T, V)
-    a, b = Complex{R}(a), Complex{R}(b)
+function div(a::Complex{T}, b::Complex{T}, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr) where T<:Integer
     b̅ = conj(b)
     # TODO: Handle overflow when calculating a*b̅
-    t = a*b̅
-    # TODO: Create checked_abs2(::Complex{<:Integer})
+    t = checked_mul(a, b̅)
     # TODO: Handle overflow when calculating the norm of complex numbers
-    abs2_b = abs2(b)
-    abs2_b < 0 && __throw_gcd_overflow(a, b)
-    Complex(div(real(t), abs2_b, r), div(imag(t), abs2_b, r))
+    abs2_b = checked_abs2(b)
+    # abs2_b < 0 && __throw_gcd_overflow(a, b)
+    Complex(div(real(t), abs2_b, rr), div(imag(t), abs2_b, ri))
 end
 
+div(a::Complex{T}, b::Complex{V}, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr) where {T<:Integer, V<:Integer} = div(promote(a, b)..., rr, ri)
+
 """
-    rem(z1, z2, r::RoundingMode=RoundNearest)
+    rem(z1::Complex, z2::Complex[, RoundingModeReal=RoundNearest[, RoundingModeImaginary=RoundingModeReal]])
 
-Compute the remainder of `z1` after Euclidean division by `z2`, with the quotient 
-rounded according to the rounding mode `r`. In other words, the quantity
+The remainder of `z1` after Euclidean division by `z2`, with the quotient
+rounded according to the given rounding modes. In other words, the quantity
 
-    z1 - z2*round(z1/z2,r,r)
+    z1 - z2*round(z1/z2, RoundingModeReal, RoundingModeImaginary)
 
 without any intermediate rounding.
+The first [`RoundingMode`](@ref) is used for rounding the real components while the
+second is used for rounding the imaginary components.
+Throws a `DivideError` if z2 is 0+0im.
+
+```jldoctest
+julia> rem(4 + 4im, 3 + 1im)
+-1 - im
+```
 """
-function rem(a::Complex{T}, b::Complex{V}, r::RoundingMode=RoundNearest) where {T<:Integer, V<:Integer}
-    R = promote_type(T, V)
-    a, b = Complex{R}(a), Complex{R}(b)
-    a - b * div(a, b, r)
+function rem(a::Complex{T}, b::Complex{T}, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr) where T<:Integer
+    a - b * div(a, b, rr, ri)
 end
+
+function rem(a::Complex{T}, b::Complex{T}, rr::RoundingMode{:Nearest}, ri::RoundingMode=rr) where T<:Integer
+    a - b * div(a, b, rr, ri)
+end
+
+rem(a::Complex{T}, b::Complex{V}, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr) where {T<:Integer, V<:Integer} = rem(promote(a, b)..., rr, ri)
+
+"""
+    divrem(z1::Complex, z2::Complex[, RoundingModeReal=RoundNearest[, RoundingModeImaginary=RoundingModeReal]])
+
+The quotient and remainder from Euclidean division.
+Equivalent to `(div(x, y, rr, ri), rem(x, y, rr, ri))`. Equivalently, with the default
+value of `rr` and `ri`, this call is equivalent to `(x÷y, x%y)`.
+The first [`RoundingMode`](@ref) is used for rounding the real components while the
+second is used for rounding the imaginary components.
+Throws a `DivideError` if z2 is 0+0im.
+
+# Examples
+```jldoctest
+julia> divrem(4 + 4im, 3 + 1im)
+(1 + 0im, -1 - im)
+```
+"""
+divrem(a::Complex{T}, b::Complex{T}, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr) where T<:Integer = (div(a, b, rr, ri), rem(a, b, rr, ri))
+
+divrem(a::Complex{T}, b::Complex{V}, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr) where {T<:Integer, V<:Integer} = divrem(promote(a, b)..., rr, ri)
 
 function _first_quadrant(a::Complex)
     ar, ai = reim(a)
@@ -1125,11 +1182,12 @@ julia> gcd(1 + 1im, 2 + 2im)
 
 julia> gcd(1 + 1im, -2 + 2im)
 1 + 1im
+
+julia> gcd(1 + 1im, 0 + 0im)
+1 + 1im
 ```
 """
-function gcd(z1::Complex{T}, z2::Complex{V}) where {T<:Integer, V<:Integer}
-    R = promote_type(T, V)
-    a, b = Complex{R}(z1), Complex{R}(z2)
+function gcd(a::Complex{T}, b::Complex{T}) where T<:Integer
     while b != 0
         r = rem(a, b)
         a = b
@@ -1137,5 +1195,7 @@ function gcd(z1::Complex{T}, z2::Complex{V}) where {T<:Integer, V<:Integer}
     end
     _first_quadrant(a)
 end
+
+gcd(z1::Complex{T}, z2::Complex{V}) where {T<:Integer, V<:Integer} = gcd(promote(z1, z2)...)
 
 gcd(a::Complex{<:Integer}, b::Complex{<:Integer}, c::Complex{<:Integer}...) = gcd(a, gcd(b, c...))
