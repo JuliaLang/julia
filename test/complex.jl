@@ -4,7 +4,8 @@ using LinearAlgebra
 
 @test reim(2 + 3im) == (2, 3)
 
-import Base: zero, real
+import Base: zero, real, checked_mul, checked_abs2
+
 struct TestQuaternion{T} <: Number
     scalar::T
     i_component::T
@@ -96,6 +97,240 @@ end
     @test isequal(complex(true,false) - true, complex(true,false) - complex(true,false))
     @test isequal(true * complex(true,false), complex(true,false) * complex(true,false))
     @test isequal(complex(true,false) * true, complex(true,false) * complex(true,false))
+
+    # This is mainly useful when x and y can have mutable types too.
+    # This is similar to === of immutable types, but for mutable types.
+    ≟(x,y) = (typeof(x)==typeof(y)) && (x==y)
+
+    # Multiply complex Integers
+    @testset for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt)
+        @test (complex(T(0), T(0)) * complex(T(0), T(1))) ≟ complex(T(0), T(0))
+        @test (complex(T(0), T(1)) * complex(T(0), T(0))) ≟ complex(T(0), T(0))
+        @test (complex(T(1), T(0)) * complex(T(0), T(1))) ≟ complex(T(0), T(1))
+        @test (complex(T(0), T(1)) * complex(T(1), T(0))) ≟ complex(T(0), T(1))
+        @test (complex(T(2), T(3)) * complex(T(2), T(0))) ≟ complex(T(4), T(6))
+        if T <: Signed
+            @test (complex(T(-1), T(0)) * complex(T(0), T(1))) ≟ complex(T(0), T(-1))
+            @test (complex(T(0), T(1)) * complex(T(-1), T(0))) ≟ complex(T(0), T(-1))
+
+            @test (complex(T(2), T(3)) * complex(T(-2), T(0))) ≟ complex(T(-4), T(-6))
+            @test (complex(T(2), T(3)) * complex(T(0), T(2))) ≟ complex(T(-6), T(4))
+            @test (complex(T(2), T(3)) * complex(T(0), T(-2))) ≟ complex(T(6), T(-4))
+
+            @test (complex(T(2), T(3)) * complex(T(2), T(3))) ≟ complex(T(-5), T(12))
+            @test (complex(T(2), T(3)) * complex(T(-2), T(3))) ≟ complex(T(-13), T(0))
+            @test (complex(T(2), T(3)) * complex(T(2), T(-3))) ≟ complex(T(13), T(0))
+            @test (complex(T(2), T(3)) * complex(T(-2), T(-3))) ≟ complex(T(5), T(-12))
+        end
+    end
+
+    # Multiply complex integers using checked arithmetic (checked_mul)
+    @testset for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt)
+        # Single argument checked_mul method.
+        for s in (-1, 0, +1), s2 in (-1, 0, +1)
+            if (s>=0 && s2>=0) || T <: Signed
+                @test checked_mul(complex(T(3s), T(4s2))) ≟ complex(T(3s), T(4s2))
+                if T != BigInt
+                    @test checked_mul(complex(T(s*typemax(T)), T(s2*typemax(T)))) ≟ complex(T(s*typemax(T)), T(s2*typemax(T)))
+                end
+            end
+            if T != BigInt
+                # -typemin(T) overflows for signed integers. -typemin(T) === typemin(T).
+                if T <: Signed
+                    @test checked_mul(complex(T(s)*typemax(T), T(s2)*typemin(T))) === complex(T(s)*typemax(T), T(s2)*typemin(T))
+                    @test checked_mul(complex(T(s2)*typemin(T), T(s)*typemax(T))) === complex(T(s2)*typemin(T), T(s)*typemax(T))
+                    @test checked_mul(complex(T(s)*typemin(T), T(s2)*typemin(T))) === complex(T(s)*typemin(T), T(s2)*typemin(T))
+                else # For unsigned integer types, typemin(T) === T(0). Hence -typemin(T) === typemin(T).
+                    if s>=0
+                        @test checked_mul(complex(T(s*typemax(T)), T(s2*typemin(T)))) === complex(T(s*typemax(T)), T(s2*typemin(T)))
+                        @test checked_mul(complex(T(s2*typemin(T)), T(s*typemax(T)))) === complex(T(s2*typemin(T)), T(s*typemax(T)))
+                        @test checked_mul(complex(T(s*typemin(T)), T(s2*typemin(T)))) === complex(T(s*typemin(T)), T(s2*typemin(T)))
+                    end
+                end
+            end
+        end
+
+        # Two arguments checked_mul method.
+        # regular cases
+        for s1 in (-1, 0, +1), s2 in (-1, 0, +1), s3 in (-1, 0, +1)
+            if (s1>=0 && s2>=0 && s3>=0) || T <: Signed
+                @test checked_mul(complex(T(5s1), T(7s3)), complex(T(6s2), T(0))) ≟ complex(T(5s1 * 6s2), T(7s3 * 6s2))
+                @test checked_mul(complex(T(5s1), T(0)), complex(T(6s2), T(8s3))) ≟ complex(T(5s1 * 6s2), T(5s1 * 8s3))
+            end
+            # Special cases, due to subtraction.
+            if ((s1==0 || s3==0) && s1>=0 && s2>=0 && s3>=0) || T <: Signed
+                @test checked_mul(complex(T(6s2), T(5s1)), complex(T(0), T(7s3))) ≟ complex(T(-5s1 * 7s3), T(6s2 * 7s3))
+                @test checked_mul(complex(T(0), T(7s3)), complex(T(6s2), T(5s1))) ≟ complex(T(-7s3 * 5s1), T(7s3 * 6s2))
+            end
+            for s4 in (-1, 0, +1)
+                if ((s3==0 || s4==0) && s1>=0 && s2>=0 && s3>=0 && s4>=0) || T <: Signed
+                    @test checked_mul(complex(T(5s1), T(7s3)), complex(T(6s2), T(8s4))) ≟ complex(T(5s1 * 6s2 - 7s3 * 8s4), T(7s3 * 6s2 + 5s1 * 8s4))
+                end
+            end
+        end
+        if T <: Unsigned
+            # Special case, due to subtraction.
+            @test_throws OverflowError checked_mul(complex(T(0), T(1)), complex(T(0), T(1)))
+        end
+
+        if T != BigInt
+            for s in (-1, 0, +1)
+                if s>=0 || T <: Signed
+                    @test checked_mul(complex(typemax(T), T(0)), complex(T(1s), T(0))) === complex(T(s*typemax(T)), T(0))
+                    @test checked_mul(complex(T(0), typemax(T)), complex(T(1s), T(0))) === complex(T(0), T(s*typemax(T)))
+                    @test checked_mul(complex(T(1s), T(0)), complex(typemax(T), T(0))) === complex(T(s*typemax(T)), T(0))
+                    @test checked_mul(complex(T(1s), T(0)), complex(T(0), typemax(T))) === complex(T(0), T(s*typemax(T)))
+
+                    @test checked_mul(complex(typemax(T), T(0)), complex(T(0), T(1s))) === complex(T(0), T(s*typemax(T)))
+                    @test checked_mul(complex(T(0), T(1s)), complex(typemax(T), T(0))) === complex(T(0), T(s*typemax(T)))
+                end
+                # Special cases, due to subtraction.
+                if s==0 || T <: Signed
+                    @test checked_mul(complex(T(0), typemax(T)), complex(T(0), T(1s))) === complex(T(-s*typemax(T)), T(0))
+                    @test checked_mul(complex(T(0), T(1s)), complex(T(0), typemax(T))) === complex(T(-s*typemax(T)), T(0))
+                end
+
+                if T <: Unsigned
+                    if s>=0
+                        # typemin(T) === 0 for T <: Unsigned
+                        @test checked_mul(complex(typemin(T), T(0)), complex(T(1s), T(0))) === complex(T(s*typemin(T)), T(0))
+                        @test checked_mul(complex(T(0), typemin(T)), complex(T(1s), T(0))) === complex(T(0), T(s*typemin(T)))
+                        @test checked_mul(complex(T(1s), T(0)), complex(typemin(T), T(0))) === complex(T(s*typemin(T)), T(0))
+                        @test checked_mul(complex(T(1s), T(0)), complex(T(0), typemin(T))) === complex(T(0), T(s*typemin(T)))
+
+                        @test checked_mul(complex(typemin(T), T(0)), complex(T(0), T(1s))) === complex(T(0), T(s*typemin(T)))
+                        @test checked_mul(complex(T(0), T(1s)), complex(typemin(T), T(0))) === complex(T(0), T(s*typemin(T)))
+                    end
+                else # T is Signed
+                    if s>=0
+                        @test checked_mul(complex(typemin(T), T(0)), complex(T(1s), T(0))) === complex(T(s*typemin(T)), T(0))
+                        @test checked_mul(complex(T(0), typemin(T)), complex(T(1s), T(0))) === complex(T(0), T(s*typemin(T)))
+                        @test checked_mul(complex(T(1s), T(0)), complex(typemin(T), T(0))) === complex(T(s*typemin(T)), T(0))
+                        @test checked_mul(complex(T(1s), T(0)), complex(T(0), typemin(T))) === complex(T(0), T(s*typemin(T)))
+
+                        @test checked_mul(complex(typemin(T), T(0)), complex(T(0), T(1s))) === complex(T(0), T(s*typemin(T)))
+                        @test checked_mul(complex(T(0), T(1s)), complex(typemin(T), T(0))) === complex(T(0), T(s*typemin(T)))
+                    else
+                        # -typemin(T) overflows for T <: Signed
+                        @test_throws OverflowError checked_mul(complex(typemin(T), T(0)), complex(T(1s), T(0)))
+                        @test_throws OverflowError checked_mul(complex(T(0), typemin(T)), complex(T(1s), T(0)))
+                        @test_throws OverflowError checked_mul(complex(T(1s), T(0)), complex(typemin(T), T(0)))
+                        @test_throws OverflowError checked_mul(complex(T(1s), T(0)), complex(T(0), typemin(T)))
+
+                        @test_throws OverflowError checked_mul(complex(typemin(T), T(0)), complex(T(0), T(1s)))
+                        @test_throws OverflowError checked_mul(complex(T(0), T(1s)), complex(typemin(T), T(0)))
+                    end
+                end
+                # Special cases, due to subtraction.
+                if T <: Unsigned
+                    # typemin(T) === 0 for T <: Unsigned
+                    if s >= 0
+                        @test checked_mul(complex(T(0), typemin(T)), complex(T(0), T(1s))) === complex(T(-s*typemin(T)), T(0))
+                        @test checked_mul(complex(T(0), T(1s)), complex(T(0), typemin(T))) === complex(T(-s*typemin(T)), T(0))
+                    end
+                else
+                    # -typemin(T) overflows for T <: Signed
+                    if s == 0
+                        @test checked_mul(complex(T(0), typemin(T)), complex(T(0), T(1s))) === complex(T(-s*typemin(T)), T(0))
+                        @test checked_mul(complex(T(0), T(1s)), complex(T(0), typemin(T))) === complex(T(-s*typemin(T)), T(0))
+                    else
+                        @test_throws OverflowError checked_mul(complex(T(0), typemin(T)), complex(T(0), T(1s)))
+                        @test_throws OverflowError checked_mul(complex(T(0), T(1s)), complex(T(0), typemin(T)))
+                    end
+                end
+            end
+
+            # corner cases
+            sqrtmax = T(1) << T(sizeof(T)*4)
+            half_sqrtmax = sqrtmax >> T(1)
+            half_sqrtmax_plus1 = half_sqrtmax + T(1)
+
+            @test_throws OverflowError checked_mul(complex(typemax(T), typemax(T)), complex(typemax(T), T(0)))
+            @test_throws OverflowError checked_mul(complex(typemax(T), typemax(T)), complex(T(0), typemax(T)))
+            @test_throws OverflowError checked_mul(complex(typemax(T), T(0)), complex(typemax(T), typemax(T)))
+            @test_throws OverflowError checked_mul(complex(T(0), typemax(T)), complex(typemax(T), typemax(T)))
+
+            @test_throws OverflowError checked_mul(complex(sqrtmax, T(0)), complex(sqrtmax, T(0)))
+            @test_throws OverflowError checked_mul(complex(sqrtmax, T(0)), complex(T(0), sqrtmax))
+            @test_throws OverflowError checked_mul(complex(T(0), sqrtmax), complex(sqrtmax, T(0)))
+            @test_throws OverflowError checked_mul(complex(T(0), sqrtmax), complex(T(0), sqrtmax))
+
+            if T<:Signed
+                @test_throws OverflowError checked_mul(complex(sqrtmax, T(0)), complex(half_sqrtmax, T(0)))
+                @test_throws OverflowError checked_mul(complex(sqrtmax, T(0)), complex(T(0), half_sqrtmax))
+                @test_throws OverflowError checked_mul(complex(T(0), half_sqrtmax), complex(sqrtmax, T(0)))
+                @test_throws OverflowError checked_mul(complex(T(0), sqrtmax), complex(T(0), half_sqrtmax))
+
+                @test checked_mul(complex(sqrtmax, T(0)), complex(-half_sqrtmax, T(0))) === complex(T(sqrtmax * -half_sqrtmax), T(0))
+                @test checked_mul(complex(sqrtmax, T(0)), complex(T(0), -half_sqrtmax)) === complex(T(0), T(sqrtmax * -half_sqrtmax))
+                @test checked_mul(complex(T(0), sqrtmax), complex(-half_sqrtmax, T(0))) === complex(T(0), T(sqrtmax * -half_sqrtmax))
+                @test_throws OverflowError checked_mul(complex(T(0), sqrtmax), complex(T(0), -half_sqrtmax))
+
+                @test_throws OverflowError checked_mul(complex(sqrtmax, T(0)), complex(-half_sqrtmax_plus1, T(0)))
+                @test_throws OverflowError checked_mul(complex(sqrtmax, T(0)), complex(T(0), -half_sqrtmax_plus1))
+                @test_throws OverflowError checked_mul(complex(T(0), -half_sqrtmax_plus1), complex(sqrtmax, T(0)))
+                @test_throws OverflowError checked_mul(complex(T(0), sqrtmax), complex(T(0), -half_sqrtmax_plus1))
+
+                @test checked_mul(complex(-sqrtmax, T(0)), complex(half_sqrtmax, T(0))) === complex(T(-sqrtmax * half_sqrtmax), T(0))
+                @test checked_mul(complex(-sqrtmax, T(0)), complex(T(0), half_sqrtmax)) === complex(T(0), T(-sqrtmax * half_sqrtmax))
+                @test checked_mul(complex(T(0), half_sqrtmax), complex(-sqrtmax, T(0))) === complex(T(0), T(-sqrtmax * half_sqrtmax))
+                @test_throws OverflowError checked_mul(complex(T(0), -sqrtmax), complex(T(0), half_sqrtmax))
+
+                @test_throws OverflowError checked_mul(complex(-sqrtmax, T(0)), complex(half_sqrtmax_plus1, T(0)))
+                @test_throws OverflowError checked_mul(complex(-sqrtmax, T(0)), complex(T(0), half_sqrtmax_plus1))
+                @test_throws OverflowError checked_mul(complex(T(0), half_sqrtmax_plus1), complex(-sqrtmax, T(0)))
+                @test_throws OverflowError checked_mul(complex(T(0), -sqrtmax), complex(T(0), half_sqrtmax_plus1))
+
+                @test_throws OverflowError checked_mul(complex(-sqrtmax, T(0)), complex(-half_sqrtmax, T(0)))
+                @test_throws OverflowError checked_mul(complex(-sqrtmax, T(0)), complex(T(0), -half_sqrtmax))
+                @test_throws OverflowError checked_mul(complex(T(0), -half_sqrtmax), complex(-sqrtmax, T(0)))
+                @test_throws OverflowError checked_mul(complex(T(0), -sqrtmax), complex(T(0), half_sqrtmax))
+            end
+        end
+    end
+
+    for s1 in (true, false), s2 in (true, false), s3 in (true, false), s4 in (true, false)
+        @test checked_mul(complex(s1, s2), complex(s3, s4)) === complex(s1 * s3 - s2 * s4, s2 * s3 + s1 * s4)
+    end
+
+    @testset "Additional tests for checked_mul" begin
+        # test promotions
+        @test checked_mul(complex(UInt(4), UInt(0)), complex(UInt8(3), UInt8(0))) === complex(UInt(12), UInt(0))
+        @test checked_mul(complex(UInt(4), UInt(0)), complex(UInt8(0), UInt8(3))) === complex(UInt(0), UInt(12))
+        @test checked_mul(complex(UInt(0), UInt(4)), complex(UInt8(3), UInt8(0))) === complex(UInt(0), UInt(12))
+        # Special case, due to subtraction.
+        @test_throws OverflowError checked_mul(complex(UInt(0), UInt(4)), complex(UInt8(0), UInt8(3)))
+
+        for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
+            @test checked_mul(complex(T(4), T(0)), complex(T(3), T(0))) === complex(T(12), T(0))
+            @test checked_mul(complex(T(4), T(0)), complex(T(0), T(3))) === complex(T(0), T(12))
+            @test checked_mul(complex(T(0), T(4)), complex(T(3), T(0))) === complex(T(0), T(12))
+            # Special case, due to subtraction.
+            @test_throws OverflowError checked_mul(complex(T(0), T(4)), complex(T(0), T(3)))
+
+            pow2 = sizeof(T)*8 - 2
+            @test_throws OverflowError checked_mul(complex(T(2)^pow2, T(0)), complex(T(2)^2, T(0)))
+            @test_throws OverflowError checked_mul(complex(T(2)^pow2, T(0)), complex(T(0), T(2)^2))
+            @test_throws OverflowError checked_mul(complex(T(0), T(2)^pow2), complex(T(2)^2, T(0)))
+            @test_throws OverflowError checked_mul(complex(T(0), T(2)^pow2), complex(T(0), T(2)^2))
+
+            @test_throws OverflowError checked_mul(complex(T(2)^2, T(0)), complex(T(2)^pow2, T(0)))
+            @test_throws OverflowError checked_mul(complex(T(2)^2, T(0)), complex(T(0), T(2)^pow2))
+            @test_throws OverflowError checked_mul(complex(T(0), T(2)^2), complex(T(2)^pow2, T(0)))
+            @test_throws OverflowError checked_mul(complex(T(0), T(2)^2), complex(T(0), T(2)^pow2))
+
+            pow2 += 1
+            @test_throws OverflowError checked_mul(complex(T(2)^pow2, T(0)), complex(T(2), T(0)))
+            @test_throws OverflowError checked_mul(complex(T(2)^pow2, T(0)), complex(T(0), T(2)))
+            @test_throws OverflowError checked_mul(complex(T(0), T(2)^pow2), complex(T(2), T(0)))
+            @test_throws OverflowError checked_mul(complex(T(0), T(2)^pow2), complex(T(0), T(2)))
+
+            @test_throws OverflowError checked_mul(complex(T(2), T(0)), complex(T(2)^pow2, T(0)))
+            @test_throws OverflowError checked_mul(complex(T(2), T(0)), complex(T(0), T(2)^pow2))
+            @test_throws OverflowError checked_mul(complex(T(0), T(2)), complex(T(2)^pow2, T(0)))
+            @test_throws OverflowError checked_mul(complex(T(0), T(2)), complex(T(0), T(2)^pow2))
+        end
+    end
 end
 
 @testset "basic math functions" begin
@@ -1189,64 +1424,236 @@ end
 @test_throws ErrorException complex(Union{Complex{Int}, Nothing}[])
 
 @testset "GCD for Gaussian Integers" begin
-    for T in (Int32, Int64)
-        @test gcd(complex(T(3), T(1)), complex(T(1), T(-1))) === complex(T(1), T(1))
-        @test gcd(complex(T(5), T(3)), complex(T(2), T(-8))) === complex(T(1), T(1))
-        @test gcd(complex(T(3), T(13)), complex(T(4), T(3))) === complex(T(1), T(0))
-        @test gcd(complex(T(11), T(7)), complex(T(18), T(-1))) === complex(T(1), T(0))
-        @test gcd(complex(T(5), T(1)), complex(T(3), T(5))) === complex(T(1), T(1))
-        @test gcd(complex(T(5), T(3)), complex(T(2), T(8))) === complex(T(5), T(3))
-        @test gcd(complex(T(135), T(-14)), complex(T(155), T(34))) === complex(T(5), T(12))
-        @test gcd(complex(T(4), T(22)), complex(T(17), T(1))) === complex(T(1), T(3))
-        @test gcd(complex(T(7), T(1)), complex(T(5), T(3))) === complex(T(1), T(1))
-        @test gcd(complex(T(2), T(2)), complex(T(-1), T(1))) === complex(T(1), T(1))
+    # This is mainly useful when x and y can have mutable types too.
+    # This is similar to === of immutable types, but for mutable types.
+    ≟(x, y) = (typeof(x) == typeof(y)) && (x == y)
 
-        @test gcd(complex(T(85), T(0)), complex(T(1), T(13))) === complex(T(7), T(6))
-        @test gcd(complex(T(0), T(0)), complex(T(1), T(13))) === complex(T(1), T(13))
-        @test gcd(complex(T(1), T(13)), complex(T(0), T(0))) === complex(T(1), T(13))
-        @test gcd(complex(T(1), T(3)), complex(T(3), T(9))) === complex(T(1), T(3))
-        @test gcd(complex(T(1), T(3)), complex(T(-9), T(3))) === complex(T(1), T(3))
-        @test gcd(complex(T(1), T(3)), complex(T(-3), T(-9))) === complex(T(1), T(3))
-        @test gcd(complex(T(1), T(3)), complex(T(9), T(-3))) === complex(T(1), T(3))
-        @test gcd(complex(T(-3), T(-9)), complex(T(1), T(3))) === complex(T(1), T(3))
-        @test gcd(complex(T(0), T(0)), complex(T(0), T(0))) === complex(T(0), T(0))
+    for T in (Int8, Int16, Int32, Int64, Int128, BigInt)
+        # Special cases
+        @test gcd(complex(T(3), T(1)), complex(T(0), T(0))) ≟ complex(T(3), T(1))
+        @test gcd(complex(T(0), T(0)), complex(T(3), T(1))) ≟ complex(T(3), T(1))
+        @test gcd(complex(T(0), T(0)), complex(T(0), T(0))) ≟ complex(T(0), T(0))
 
-        @test gcd(complex(T(3), T(0)), complex(T(5), T(0))) === complex(T(1), T(0))
-        @test gcd(complex(T(0), T(3)), complex(T(0), T(5))) === complex(T(1), T(0))
-        @test gcd(complex(T(-3), T(0)), complex(T(5), T(0))) === complex(T(1), T(0))
-        @test gcd(complex(T(0), T(-3)), complex(T(0), T(-5))) === complex(T(1), T(0))
-
-        let x = typemax(T)
-            @test gcd(complex(x, x), complex(T(1), T(0))) === complex(T(1), T(0))
-            @test gcd(complex(x, x), complex(T(-1), T(0))) === complex(T(1), T(0))
-            @test gcd(complex(x, x), complex(T(0), T(1))) === complex(T(1), T(0))
-            @test gcd(complex(x, x), complex(T(0), T(-1))) === complex(T(1), T(0))
-
-            @test gcd(complex(-x, -x), complex(T(1), T(0))) === complex(T(1), T(0))
-            @test gcd(complex(-x, -x), complex(T(-1), T(0))) === complex(T(1), T(0))
-            @test gcd(complex(-x, -x), complex(T(0), T(1))) === complex(T(1), T(0))
-            @test gcd(complex(-x, -x), complex(T(0), T(-1))) === complex(T(1), T(0))
-
-            @test_broken gcd(complex(x, T(0)), complex(T(2), T(0))) === complex(T(1), T(0))
-            @test_broken gcd(complex(x, x), complex(T(2), T(0))) === complex(T(1), T(1))
+        # Regular cases
+        @test gcd(complex(T(3), T(1)), complex(T(1), T(-1))) ≟ complex(T(1), T(1))
+        @test gcd(complex(T(5), T(3)), complex(T(2), T(-8))) ≟ complex(T(1), T(1))
+        @test gcd(complex(T(3), T(13)), complex(T(4), T(3))) ≟ complex(T(1), T(0))
+        @test gcd(complex(T(5), T(1)), complex(T(3), T(5))) ≟ complex(T(1), T(1))
+        @test gcd(complex(T(5), T(3)), complex(T(2), T(8))) ≟ complex(T(5), T(3))
+        if T != Int8
+            @test gcd(complex(T(11), T(7)), complex(T(18), T(-1))) ≟ complex(T(1), T(0))
+            @test gcd(complex(T(135), T(-14)), complex(T(155), T(34))) ≟ complex(T(5), T(12))
+            @test gcd(complex(T(4), T(22)), complex(T(17), T(1))) ≟ complex(T(1), T(3))
+            @test gcd(complex(T(85), T(0)), complex(T(1), T(13))) ≟ complex(T(7), T(6))
+            @test gcd(complex(T(0), T(0)), complex(T(1), T(13))) ≟ complex(T(1), T(13))
         end
-        let x = typemin(T)
-            @test gcd(complex(x, x), complex(T(1), T(0))) === complex(T(1), T(0))
-            @test gcd(complex(x, x), complex(T(-1), T(0))) === complex(T(1), T(0))
-            @test gcd(complex(x, x), complex(T(0), T(1))) === complex(T(1), T(0))
-            @test gcd(complex(x, x), complex(T(0), T(-1))) === complex(T(1), T(0))
+        @test gcd(complex(T(7), T(1)), complex(T(5), T(3))) ≟ complex(T(1), T(1))
+        @test gcd(complex(T(2), T(2)), complex(T(-1), T(1))) ≟ complex(T(1), T(1))
+
+        @test gcd(complex(T(1), T(3)), complex(T(3), T(9))) ≟ complex(T(1), T(3))
+        @test gcd(complex(T(1), T(3)), complex(T(-9), T(3))) ≟ complex(T(1), T(3))
+        @test gcd(complex(T(1), T(3)), complex(T(-3), T(-9))) ≟ complex(T(1), T(3))
+        @test gcd(complex(T(1), T(3)), complex(T(9), T(-3))) ≟ complex(T(1), T(3))
+        @test gcd(complex(T(-3), T(-9)), complex(T(1), T(3))) ≟ complex(T(1), T(3))
+
+        @test gcd(complex(T(3), T(0)), complex(T(5), T(0))) ≟ complex(T(1), T(0))
+        @test gcd(complex(T(0), T(3)), complex(T(0), T(5))) ≟ complex(T(1), T(0))
+        @test gcd(complex(T(-3), T(0)), complex(T(5), T(0))) ≟ complex(T(1), T(0))
+        @test gcd(complex(T(0), T(-3)), complex(T(0), T(-5))) ≟ complex(T(1), T(0))
+
+        if T != BigInt
+            for s in (T(-1), T(1))
+                let x = typemax(T)
+                    @test gcd(complex(s*x, s*x), complex(T(1), T(0))) === complex(T(1), T(0))
+                    @test gcd(complex(s*x, s*x), complex(T(-1), T(0))) === complex(T(1), T(0))
+                    @test gcd(complex(s*x, s*x), complex(T(0), T(1))) === complex(T(1), T(0))
+                    @test gcd(complex(s*x, s*x), complex(T(0), T(-1))) === complex(T(1), T(0))
+
+                    # These tests are failing because in div(z1/z2) = z1*conj(z2)/abs2(z2),
+                    # abs2(z2) overflows for these z2.
+                    @test_broken gcd(complex(T(1), T(0)), complex(s*x, s*x)) === complex(T(1), T(0))
+                    @test_broken gcd(complex(T(-1), T(0)), complex(s*x, s*x)) === complex(T(1), T(0))
+                    @test_broken gcd(complex(T(0), T(1)), complex(s*x, s*x)) === complex(T(1), T(0))
+                    @test_broken gcd(complex(T(0), T(-1)), complex(s*x, s*x)) === complex(T(1), T(0))
+
+                    # These tests are failing because in div(z1/z2) = z1*conj(z2)/abs2(z2),
+                    # z1*conj(z2) overflows for these.
+                    @test_broken gcd(complex(s*x, T(0)), complex(T(2), T(0))) === complex(T(1), T(0))
+                    @test_broken gcd(complex(T(2), T(0)), complex(s*x, T(0))) === complex(T(1), T(0))
+                    @test_broken gcd(complex(s*x, s*x), complex(T(2), T(0))) === complex(T(1), T(1))
+                    @test_broken gcd(complex(T(2), T(0)), complex(s*x, s*x)) === complex(T(1), T(1))
+                end
+                let x = typemin(T)
+                    @test gcd(complex(s*x, s*x), complex(T(1), T(0))) === complex(T(1), T(0))
+
+                    # These tests are failing because in div(z1/z2) = z1*conj(z2)/abs2(z2),
+                    # z1*conj(z2) overflows.
+                    @test_broken gcd(complex(s*x, s*x), complex(T(-1), T(0))) === complex(T(1), T(0))
+                    @test_broken gcd(complex(s*x, s*x), complex(T(0), T(1))) === complex(T(1), T(0))
+                    @test_broken gcd(complex(s*x, s*x), complex(T(0), T(-1))) === complex(T(1), T(0))
+
+                    # These tests are failing because in div(z1/z2) = z1*conj(z2)/abs2(z2),
+                    # abs2(z2) overflows for these z2.
+                    @test_broken gcd(complex(T(1), T(0)), complex(s*x, s*x)) === complex(T(1), T(0))
+                    @test_broken gcd(complex(T(-1), T(0)), complex(s*x, s*x)) === complex(T(1), T(0))
+                    @test_broken gcd(complex(T(0), T(1)), complex(s*x, s*x)) === complex(T(1), T(0))
+                    @test_broken gcd(complex(T(0), T(-1)), complex(s*x, s*x)) === complex(T(1), T(0))
+
+                    # These tests are failing because in div(z1/z2) = z1*conj(z2)/abs2(z2),
+                    # z1*conj(z2) overflows.
+                    @test_broken gcd(complex(s*x, T(0)), complex(T(2), T(0))) === complex(T(2), T(0))
+                    @test_broken gcd(complex(T(2), T(0)), complex(s*x, T(0))) === complex(T(2), T(0))
+                    @test_broken gcd(complex(s*x, s*x), complex(T(2), T(0))) === complex(T(1), T(1))
+                    @test_broken gcd(complex(T(2), T(0)), complex(s*x, s*x)) === complex(T(1), T(1))
+                end
+            end
         end
 
-        @test gcd(complex(T(2), T(0)), complex(T(4), T(0)), complex(T(6), T(0))) === complex(T(2), T(0))
-        @test gcd(complex(T(6), T(0)), complex(T(4), T(0)), complex(T(2), T(0))) === complex(T(2), T(0))
-        @test gcd(complex(T(1), T(0)), complex(T(4), T(0)), complex(T(6), T(0))) === complex(T(1), T(0))
-        @test gcd(complex(T(1), T(0)), complex(T(0), T(1)), complex(T(0), T(-1))) === complex(T(1), T(0))
-        @test gcd(complex(T(0), T(-1)), complex(T(-1), T(0)), complex(T(0), T(-1))) === complex(T(1), T(0))
+        # Multi argument gcd method
+        @test gcd(complex(T(2), T(0)), complex(T(4), T(0)), complex(T(6), T(0))) ≟ complex(T(2), T(0))
+        @test gcd(  complex(T(2), T(0)), complex(T(4), T(0)), complex(T(6), T(0)),
+                    complex(T(1), T(0))) ≟ complex(T(1), T(0))
+        @test gcd(complex(T(6), T(0)), complex(T(4), T(0)), complex(T(2), T(0))) ≟ complex(T(2), T(0))
+        @test gcd(complex(T(1), T(0)), complex(T(4), T(0)), complex(T(6), T(0))) ≟ complex(T(1), T(0))
+        @test gcd(complex(T(1), T(0)), complex(T(0), T(1)), complex(T(0), T(-1))) ≟ complex(T(1), T(0))
+        @test gcd(complex(T(0), T(-1)), complex(T(-1), T(0)), complex(T(0), T(-1))) ≟ complex(T(1), T(0))
     end
 
     @test_broken gcd(complex(Int32(10)^5, Int32(10)^5), complex(-Int32(10)^5, -Int32(10)^5)) === complex(Int32(10)^5, Int32(10)^5)
-    @test gcd(complex(Int32(10)^5, Int32(0)), complex(Int32(10)^5, Int32(0))) === complex(Int32(10)^5, Int32(0))
+    @test_broken gcd(complex(Int32(10)^5, Int32(0)), complex(Int32(10)^5, Int32(0))) === complex(Int32(10)^5, Int32(0))
 
     @test_broken gcd(complex(Int64(10)^10, Int64(10)^10), complex(-Int64(10)^10, -Int64(10)^10)) === complex(Int64(10)^10, Int64(10)^10)
-    @test gcd(complex(Int64(10)^10, Int64(0)), complex(Int64(10)^10, Int64(0))) === complex(Int64(10)^10, Int64(0))
+    @test_broken gcd(complex(Int64(10)^10, Int64(0)), complex(Int64(10)^10, Int64(0))) === complex(Int64(10)^10, Int64(0))
+end
+
+@testset "division and remainder for Gaussian Integers" begin
+    # This is mainly useful when x and y can have mutable types too.
+    # This is similar to === of immutable types, but for mutable types.
+    ≟(x, y) = (typeof(x) == typeof(y)) && (x == y)
+
+    for T in (Int8, Int16, Int32, Int64, Int128, BigInt)
+        # Regular cases
+        @test divrem(complex(T(3), T(1)), complex(T(1), T(-1))) ≟ (complex(T(1), T(2)), complex(T(0), T(0)))
+        @test divrem(complex(T(5), T(3)), complex(T(2), T(-8))) ≟ (complex(T(0), T(1)), complex(T(-3), T(1)))
+        @test divrem(complex(T(3), T(13)), complex(T(4), T(3))) ≟ (complex(T(2), T(2)), complex(T(1), T(-1)))
+        @test divrem(complex(T(5), T(1)), complex(T(3), T(5))) ≟ (complex(T(1), T(-1)), complex(T(-3), T(-1)))
+        @test divrem(complex(T(5), T(3)), complex(T(2), T(8))) ≟ (complex(T(0), T(0)), complex(T(5), T(3)))
+        if T != Int8
+            @test divrem(complex(T(11), T(7)), complex(T(18), T(-1))) ≟ (complex(T(1), T(0)), complex(T(-7), T(8)))
+            @test divrem(complex(T(135), T(-14)), complex(T(155), T(34))) ≟ (complex(T(1), T(0)), complex(T(-20), T(-48)))
+            @test divrem(complex(T(4), T(22)), complex(T(17), T(1))) ≟ (complex(T(0), T(1)), complex(T(5), T(5)))
+            @test divrem(complex(T(85), T(0)), complex(T(1), T(13))) ≟ (complex(T(0), T(-6)), complex(T(7), T(6)))
+        end
+        @test divrem(complex(T(7), T(1)), complex(T(5), T(3))) ≟ (complex(T(1), T(0)), complex(T(2), T(-2)))
+        @test divrem(complex(T(2), T(2)), complex(T(-1), T(1))) ≟ (complex(T(0), T(-2)), complex(T(0), T(0)))
+
+        @test divrem(complex(T(1), T(3)), complex(T(3), T(9))) ≟ (complex(T(0), T(0)), complex(T(1), T(3)))
+        @test divrem(complex(T(1), T(3)), complex(T(-9), T(3))) ≟ (complex(T(0), T(0)), complex(T(1), T(3)))
+        @test divrem(complex(T(1), T(3)), complex(T(-3), T(-9))) ≟ (complex(T(0), T(0)), complex(T(1), T(3)))
+        @test divrem(complex(T(1), T(3)), complex(T(9), T(-3))) ≟ (complex(T(0), T(0)), complex(T(1), T(3)))
+        @test divrem(complex(T(-3), T(-9)), complex(T(1), T(3))) ≟ (complex(T(-3), T(0)), complex(T(0), T(0)))
+
+        # Special cases
+        @test divrem(complex(T(0), T(0)), complex(T(5), T(1))) ≟ (complex(T(0), T(0)), complex(T(0), T(0)))
+        @test_throws DivideError divrem(complex(T(5), T(1)), complex(T(0), T(0)))
+        @test_throws DivideError divrem(complex(T(0), T(0)), complex(T(0), T(0)))
+
+        @test divrem(complex(T(3), T(0)), complex(T(5), T(0))) ≟ (complex(T(1), T(0)), complex(T(-2), T(0)))
+        @test divrem(complex(T(0), T(3)), complex(T(0), T(5))) ≟ (complex(T(1), T(0)), complex(T(0), T(-2)))
+        @test divrem(complex(T(-3), T(0)), complex(T(5), T(0))) ≟ (complex(T(-1), T(0)), complex(T(2), T(0)))
+        @test divrem(complex(T(0), T(-3)), complex(T(0), T(-5))) ≟ (complex(T(1), T(0)), complex(T(0), T(2)))
+
+        if T != BigInt
+            for s in (T(-1), T(1))
+                let x = typemax(T)
+                    @test divrem(complex(s*x, s*x), complex(T(1), T(0))) === (complex(T(s*x), T(s*x)), complex(T(0), T(0)))
+                    @test divrem(complex(s*x, s*x), complex(T(-1), T(0))) === (complex(T(-s*x), T(-s*x)), complex(T(0), T(0)))
+                    @test divrem(complex(s*x, s*x), complex(T(0), T(1))) === (complex(T(s*x), T(-s*x)), complex(T(0), T(0)))
+                    @test divrem(complex(s*x, s*x), complex(T(0), T(-1))) === (complex(T(-s*x), T(s*x)), complex(T(0), T(0)))
+
+                    # These tests are failing because in div(z1/z2) = z1*conj(z2)/abs2(z2),
+                    # abs2(z2) overflows for these z2.
+                    @test_broken divrem(complex(T(1), T(0)), complex(s*x, s*x)) === (complex(T(0), T(0)), complex(T(1), T(0)))
+                    @test_broken divrem(complex(T(-1), T(0)), complex(s*x, s*x)) === (complex(T(0), T(0)), complex(T(-1), T(0)))
+                    @test_broken divrem(complex(T(0), T(1)), complex(s*x, s*x)) === (complex(T(0), T(0)), complex(T(0), T(1)))
+                    @test_broken divrem(complex(T(0), T(-1)), complex(s*x, s*x)) === (complex(T(0), T(0)), complex(T(0), T(-1)))
+
+                    # These tests are failing because in div(z1/z2) = z1*conj(z2)/abs2(z2),
+                    # z1*conj(z2) overflows for these.
+                    @test_broken divrem(complex(s*x, T(0)), complex(T(2), T(0))) === (complex(T((s*x)÷2), T(0)), complex(T(s), T(0)))
+                    @test_broken divrem(complex(T(2), T(0)), complex(s*x, T(0))) === (complex(T(0), T(0)), complex(T(2), T(0)))
+                    @test_broken divrem(complex(s*x, s*x), complex(T(2), T(0))) === (complex(T((s*x)÷2), T((s*x)÷2)), complex(T(s), T(s)))
+                    @test_broken divrem(complex(T(2), T(0)), complex(s*x, s*x)) === (complex(T(0), T(0)), complex(T(2), T(0)))
+                end
+                let x = typemin(T)
+                    @test divrem(complex(s*x, s*x), complex(T(1), T(0))) === (complex(T(s*x), T(s*x)), complex(T(0), T(0)))
+                    # -typemin(T) overflows for T <: Signed
+                    @test_throws OverflowError divrem(complex(s*x, s*x), complex(T(-1), T(0))) === (complex(T(-s*x), T(-s*x)), complex(T(0), T(0)))
+                    @test_throws OverflowError divrem(complex(s*x, s*x), complex(T(0), T(1))) === (complex(T(s*x), T(-s*x)), complex(T(0), T(0)))
+                    @test_throws OverflowError divrem(complex(s*x, s*x), complex(T(0), T(-1))) === (complex(T(-s*x), T(s*x)), complex(T(0), T(0)))
+
+                    # These tests are failing because in div(z1/z2) = z1*conj(z2)/abs2(z2),
+                    # abs2(z2) overflows for these z2.
+                    @test_broken divrem(complex(T(1), T(0)), complex(s*x, s*x)) === (complex(T(0), T(0)), complex(T(1), T(0)))
+                    @test_broken divrem(complex(T(-1), T(0)), complex(s*x, s*x)) === (complex(T(0), T(0)), complex(T(-1), T(0)))
+                    @test_broken divrem(complex(T(0), T(1)), complex(s*x, s*x)) === (complex(T(0), T(0)), complex(T(0), T(1)))
+                    @test_broken divrem(complex(T(0), T(-1)), complex(s*x, s*x)) === (complex(T(0), T(0)), complex(T(0), T(-1)))
+
+                    # These tests are failing because in div(z1/z2) = z1*conj(z2)/abs2(z2),
+                    # z1*conj(z2) overflows for these.
+                    @test_broken divrem(complex(s*x, T(0)), complex(T(2), T(0))) === (complex(T((s*x)÷2), T(0)), complex(T(0), T(0)))
+                    @test_broken divrem(complex(s*x, s*x), complex(T(2), T(0))) === (complex(T((s*x)÷2), T((s*x)÷2)), complex(T(0), T(0)))
+                    @test_broken divrem(complex(T(2), T(0)), complex(s*x, T(0))) === (complex(T(0), T(0)), complex(T(2), T(0)))
+                    @test_broken divrem(complex(T(2), T(0)), complex(s*x, s*x)) === (complex(T(0), T(0)), complex(T(2), T(0)))
+                end
+            end
+        end
+    end
+
+    @test_broken divrem(complex(Int32(10)^5, Int32(10)^5), complex(-Int32(10)^5, -Int32(10)^5)) ≟ (complex(Int32(-1), Int32(0)), complex(Int32(0), Int32(0)))
+    @test_broken divrem(complex(Int32(10)^5, Int32(0)), complex(Int32(10)^5, Int32(0))) ≟ (complex(Int32(1), Int32(0)), complex(Int32(0), Int32(0)))
+
+    @test_broken divrem(complex(Int64(10)^10, Int64(10)^10), complex(-Int64(10)^10, -Int64(10)^10)) ≟ (complex(Int64(-1), Int64(0)), complex(Int64(0), Int64(0)))
+    @test_broken divrem(complex(Int64(10)^10, Int64(0)), complex(Int64(10)^10, Int64(0))) ≟ (complex(Int32(1), Int32(0)), complex(Int32(0), Int32(0)))
+end
+
+@testset "abs2 and checked_abs2 for Gaussian integers" begin
+    # This is mainly useful when x and y can have mutable types too.
+    # This is similar to === of immutable types, but for mutable types.
+    ≟(x, y) = (typeof(x) == typeof(y)) && (x == y)
+
+    for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt)
+        @test abs2(complex(T(0), T(0))) ≟ T(0)
+        @test checked_abs2(complex(T(0), T(0))) ≟ T(0)
+        for s in (-1, 0, +1), s2 in (-1, 0, +1)
+            if s==0 && s2==0
+                continue
+            end
+            if (s>=0 && s2>=0) || T <: Signed
+                @test abs2(complex(T(3s), T(4s2))) ≟ T( (s!=0)*T(9) + (s2!=0)*T(16) )
+                @test checked_abs2(complex(T(3s), T(4s2))) ≟ T( (s!=0)*T(9) + (s2!=0)*T(16) )
+                @test abs2(complex(T(2s), T(5s2))) ≟ T( (s!=0)*T(4) + (s2!=0)*T(25) )
+                @test checked_abs2(complex(T(2s), T(5s2))) ≟ T( (s!=0)*T(4) + (s2!=0)*T(25) )
+                if T != BigInt
+                    @test_throws OverflowError checked_abs2(complex(T(s*typemax(T)), T(s2*typemax(T))))
+                end
+            end
+            if T != BigInt
+                if T <: Signed
+                    @test_throws OverflowError checked_abs2(complex(T(s)*typemax(T), T(s2)*typemin(T)))
+                    @test_throws OverflowError checked_abs2(complex(T(s2)*typemin(T), T(s)*typemax(T)))
+                    @test_throws OverflowError checked_abs2(complex(T(s)*typemin(T), T(s2)*typemin(T)))
+                else # typemin(T) === T(0) for T <: Unsigned
+                    if s>0
+                        @test_throws OverflowError checked_abs2(complex(T(s*typemax(T)), T(s2*typemin(T))))
+                        @test_throws OverflowError checked_abs2(complex(T(s2*typemin(T)), T(s*typemax(T))))
+                    elseif s==0
+                        @test checked_abs2(complex(T(0), T(s2*typemin(T)))) === T(0)
+                        @test checked_abs2(complex(T(s2*typemin(T)), T(0))) === T(0)
+                    end
+                    @test checked_abs2(complex(T(s*typemin(T)), T(s2*typemin(T)))) === T(0)
+                end
+            end
+        end
+    end
 end
