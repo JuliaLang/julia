@@ -266,6 +266,14 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
             end
         end
     end
+
+    if isinteractive()
+        print(
+            io,
+            "\n\nTo edit a specific method, type the corresponding number into the " *
+            "REPL and press Ctrl+Q",
+        )
+    end
 end
 
 show(io::IO, ms::MethodList) = show_method_table(io, ms)
