@@ -659,10 +659,20 @@ end
 # disambiguation methods: * of Diagonal and Adj/Trans AbsVec
 *(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal) = Adjoint(map((t,s) -> t'*s, D.diag, parent(x)))
 *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal) = Transpose(map((t,s) -> transpose(t)*s, D.diag, parent(x)))
-*(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) =
-    mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
-*(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) =
-    mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
+function *(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector)
+    if all(isempty.((x, D, y)))
+        return zero(promote_type(eltype.((x, D, y))...))
+    else
+        return mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
+    end
+end
+function *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector)
+    if all(isempty.((x, D, y)))
+        return zero(promote_type(eltype.((x, D, y))...))
+    else
+        return mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
+    end
+end
 function dot(x::AbstractVector, D::Diagonal, y::AbstractVector)
     mapreduce(t -> dot(t[1], t[2], t[3]), +, zip(x, D.diag, y))
 end
