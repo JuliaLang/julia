@@ -507,22 +507,26 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
             // so we don't need to lift these operations, but we do need to check if it's loaded and continue walking the base pointer
             if (II->getIntrinsicID() == Intrinsic::masked_load ||
                 II->getIntrinsicID() == Intrinsic::masked_gather) {
-                if (auto PtrT = dyn_cast<PointerType>(II->getType()->getVectorElementType())) {
-                    if (PtrT->getAddressSpace() == AddressSpace::Loaded) {
-                        assert(isa<UndefValue>(II->getOperand(3)) && "unimplemented");
-                        CurrentV = II->getOperand(0);
-                        if (II->getIntrinsicID() == Intrinsic::masked_load) {
-                            fld_idx = -1;
-                            if (!isSpecialPtr(CurrentV->getType())) {
-                                CurrentV = ConstantPointerNull::get(Type::getInt8PtrTy(V->getContext()));
-                            }
-                        } else {
-                            if (!isSpecialPtr(CurrentV->getType()->getVectorElementType())) {
-                                CurrentV = ConstantPointerNull::get(Type::getInt8PtrTy(V->getContext()));
+                if (auto VTy = dyn_cast<VectorType>(II->getType())) {
+                    if (auto PtrT = dyn_cast<PointerType>(VTy->getElementType())) {
+                        if (PtrT->getAddressSpace() == AddressSpace::Loaded) {
+                            assert(isa<UndefValue>(II->getOperand(3)) && "unimplemented");
+                            CurrentV = II->getOperand(0);
+                            if (II->getIntrinsicID() == Intrinsic::masked_load) {
                                 fld_idx = -1;
+                                if (!isSpecialPtr(CurrentV->getType())) {
+                                    CurrentV = ConstantPointerNull::get(Type::getInt8PtrTy(V->getContext()));
+                                }
+                            } else {
+                                if (auto VTy2 = dyn_cast<VectorType>(CurrentV->getType())) {
+                                    if (!isSpecialPtr(VTy2->getElementType())) {
+                                        CurrentV = ConstantPointerNull::get(Type::getInt8PtrTy(V->getContext()));
+                                        fld_idx = -1;
+                                    }
+                                }
                             }
+                            continue;
                         }
-                        continue;
                     }
                 }
                 // In general a load terminates a walk
@@ -625,8 +629,8 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
     }
     std::vector<int> Numbers;
     unsigned NumRoots = 1;
-    if (isa<VectorType>(SI->getType()))
-        Numbers.resize(SI->getType()->getVectorNumElements(), -1);
+    if (auto VTy = dyn_cast<VectorType>(SI->getType()))
+        Numbers.resize(VTy->getNumElements(), -1);
     else
         assert(isa<PointerType>(SI->getType()) && "unimplemented");
     assert(!isTrackedValue(SI));
@@ -678,12 +682,14 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
         else
             Numbers[i] = Number;
     }
-    if (isa<VectorType>(SI->getType()) && NumRoots != Numbers.size()) {
-        // broadcast the scalar root number to fill the vector
-        assert(NumRoots == 1);
-        int Number = Numbers[0];
-        Numbers.resize(0);
-        Numbers.resize(SI->getType()->getVectorNumElements(), Number);
+    if (auto VTy = dyn_cast<VectorType>(SI->getType())) {
+        if (NumRoots != Numbers.size()) {
+            // broadcast the scalar root number to fill the vector
+            assert(NumRoots == 1);
+            int Number = Numbers[0];
+            Numbers.resize(0);
+            Numbers.resize(VTy->getNumElements(), Number);
+        }
     }
     if (!isa<PointerType>(SI->getType()))
         S.AllCompositeNumbering[SI] = Numbers;
@@ -698,8 +704,8 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
     SmallVector<PHINode *, 2> lifted;
     std::vector<int> Numbers;
     unsigned NumRoots = 1;
-    if (isa<VectorType>(Phi->getType())) {
-        NumRoots = Phi->getType()->getVectorNumElements();
+    if (auto VTy = dyn_cast<VectorType>(Phi->getType())) {
+        NumRoots = VTy->getNumElements();
         Numbers.resize(NumRoots);
     }
     else {
@@ -1333,17 +1339,19 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     }
                     if (II->getIntrinsicID() == Intrinsic::masked_load ||
                         II->getIntrinsicID() == Intrinsic::masked_gather) {
-                        if (auto PtrT = dyn_cast<PointerType>(II->getType()->getVectorElementType())) {
-                            if (isSpecialPtr(PtrT)) {
-                                // LLVM sometimes tries to materialize these operations with undefined pointers in our non-integral address space.
-                                // Hopefully LLVM didn't already propagate that information and poison our users. Set those to NULL now.
-                                Value *passthru = II->getArgOperand(3);
-                                if (isa<UndefValue>(passthru)) {
-                                    II->setArgOperand(3, Constant::getNullValue(passthru->getType()));
-                                }
-                                if (PtrT->getAddressSpace() == AddressSpace::Loaded) {
-                                    // These are not real defs
-                                    continue;
+                        if (auto VTy = dyn_cast<VectorType>(II->getType())) {
+                            if (auto PtrT = dyn_cast<PointerType>(VTy->getElementType())) {
+                                if (isSpecialPtr(PtrT)) {
+                                    // LLVM sometimes tries to materialize these operations with undefined pointers in our non-integral address space.
+                                    // Hopefully LLVM didn't already propagate that information and poison our users. Set those to NULL now.
+                                    Value *passthru = II->getArgOperand(3);
+                                    if (isa<UndefValue>(passthru)) {
+                                        II->setArgOperand(3, Constant::getNullValue(passthru->getType()));
+                                    }
+                                    if (PtrT->getAddressSpace() == AddressSpace::Loaded) {
+                                        // These are not real defs
+                                        continue;
+                                    }
                                 }
                             }
                         }
