@@ -1151,8 +1151,14 @@ divrem(a::Complex{T}, b::Complex{T}, rr::RoundingMode=RoundNearest, ri::Rounding
 
 divrem(a::Complex{T}, b::Complex{V}, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr) where {T<:Integer, V<:Integer} = divrem(promote(a, b)..., rr, ri)
 
-function _first_quadrant(a::Complex)
+function _first_quadrant(a::Complex{T}) where T<:Integer
     ar, ai = reim(a)
+    if (ar === typemin(ar)) || (ai === typemin(ai))
+        # if ar or ai is typemin(T), we have to throw an error.
+        # since -(typemin(T)) < 0.
+        throw(OverflowError("Cannot rotate $a into first quadrant."))
+    end
+
     if iszero(ar)
         Complex(abs(ai), zero(ar))
     elseif iszero(ai)

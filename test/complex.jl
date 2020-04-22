@@ -1657,3 +1657,33 @@ end
         end
     end
 end
+
+@testset "_first_quadrant for Gaussian integers" begin
+    # This is mainly useful when x and y can have mutable types too.
+    # This is similar to === of immutable types, but for mutable types.
+    ≟(x, y) = (typeof(x) == typeof(y)) && (x == y)
+
+    for T in (Int8, Int16, Int32, Int64, Int128, BigInt)
+        @test _first_quadrant(complex(T(0), T(0))) ≟ complex(T(0), T(0))
+        @test _first_quadrant(complex(T(2), T(1))) ≟ complex(T(2), T(1))
+        @test _first_quadrant(complex(T(-1), T(2))) ≟ complex(T(2), T(1))
+        @test _first_quadrant(complex(T(1), T(-2))) ≟ complex(T(2), T(1))
+        @test _first_quadrant(complex(T(-2), T(-1))) ≟ complex(T(2), T(1))
+        
+        @test _first_quadrant(complex(T(2), T(5))) ≟ complex(T(2), T(5))
+        @test _first_quadrant(complex(T(-5), T(2))) ≟ complex(T(2), T(5))
+        @test _first_quadrant(complex(T(5), T(-2))) ≟ complex(T(2), T(5))
+        @test _first_quadrant(complex(T(-2), T(-5))) ≟ complex(T(2), T(5))
+        if T != BigInt
+            for s in (-1, 0, +1), s2 in (-1, 0, +1)
+                if s==0 && s2==0
+                    continue
+                end
+                @test_throws _first_quadrant(complex(T(s*typemax(T)), T(s2*typemax(T)))) === complex(typemax(T), typemax(T))
+                @test_throws OverflowError _first_quadrant(complex(T(s)*typemax(T), T(s2)*typemin(T)))
+                @test_throws OverflowError _first_quadrant(complex(T(s2)*typemin(T), T(s)*typemax(T)))
+                @test_throws OverflowError _first_quadrant(complex(T(s)*typemin(T), T(s2)*typemin(T)))
+            end
+        end
+    end
+end
