@@ -42,6 +42,7 @@ struct JLOptions
     outputji::Ptr{UInt8}
     output_code_coverage::Ptr{UInt8}
     incremental::Int8
+    image_file_specified::Int8
     warn_scope::Int8
 end
 

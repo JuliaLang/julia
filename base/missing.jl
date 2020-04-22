@@ -283,7 +283,7 @@ function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
         i += 1
     end
     i > ilast && return mapreduce_empty(f, op, eltype(itr))
-    a1 = ai
+    a1::eltype(itr) = ai
     i += 1
     while i <= ilast
         @inbounds ai = A[i]
