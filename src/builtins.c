@@ -479,6 +479,7 @@ void STATIC_INLINE _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t 
     if (extra)
         // grow by an extra 50% if newalloc is still only a guess
         newalloc += oldalloc / 2 + 16;
+    JL_GC_PROMISE_ROOTED(*oldargs);
     jl_svec_t *newheap = _copy_to(newalloc, *oldargs, oldalloc);
     *root = (jl_value_t*)newheap;
     *arg_heap = newheap;
