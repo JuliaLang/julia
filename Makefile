@@ -350,6 +350,13 @@ endif
 	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/build-configured
 	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/build-compiled
 	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/build-checked
+	# Cleanup artifacts (no full LLVM, objconv, static libs, etc...)
+	-rm -f $(DESTDIR)$(datarootdir)/julia/artifacts/*/lib/*.a
+	[ -z $(LLVM_jll_TREEHASH) ] || rm -rf $(DESTDIR)$(datarootdir)/julia/artifacts/$(LLVM_jll_TREEHASH)
+	[ -z $(Objconv_jll_TREEHASH) ] || rm -rf $(DESTDIR)$(datarootdir)/julia/artifacts/$(Objconv_jll_TREEHASH)
+	-rm -rf $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/LLVM_jll
+	-rm -rf $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/Objconv_jll
+
 	# Copy in beautiful new man page
 	$(INSTALL_F) $(build_man1dir)/julia.1 $(DESTDIR)$(man1dir)/
 	# Copy icon and .desktop file
