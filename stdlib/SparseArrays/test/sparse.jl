@@ -2924,15 +2924,15 @@ end
 
         @test op(AWU, B) ≈ op(collect(AWU), B)
         @test op(AWL, B) ≈ op(collect(AWL), B)
-        @test op(A, Wrapper(B, :U)) ≈ op(A, collect(BWU))
-        @test op(A, Wrapper(B, :L)) ≈ op(A, collect(BWL))
+        @test op(A, BWU) ≈ op(A, collect(BWU))
+        @test op(A, BWL) ≈ op(A, collect(BWL))
 
-        @test op(Wrapper(A), Wrapper(B)) isa Wrapper{ComplexF64, <:SparseMatrixCSC}
+        @test op(AWU, BWL) isa Wrapper{ComplexF64, <:SparseMatrixCSC}
 
-        @test op(AWU, Wrapper(B, :U)) ≈ op(collect(AWU), collect(BWU))
-        @test op(AWU, Wrapper(B, :L)) ≈ op(collect(AWU), collect(BWL))
-        @test op(AWL, Wrapper(B, :U)) ≈ op(collect(AWL), collect(BWU))
-        @test op(AWL, Wrapper(B, :L)) ≈ op(collect(AWL), collect(BWL))
+        @test op(AWU, BWU) ≈ op(collect(AWU), collect(BWU))
+        @test op(AWU, BWL) ≈ op(collect(AWU), collect(BWL))
+        @test op(AWL, BWU) ≈ op(collect(AWL), collect(BWU))
+        @test op(AWL, BWL) ≈ op(collect(AWL), collect(BWL))
     end
 end
 
