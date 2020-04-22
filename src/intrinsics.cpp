@@ -188,7 +188,6 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         return ConstantInt::get(lt, val);
     }
 
-    CompositeType *lct = cast<CompositeType>(lt);
     size_t nf = jl_datatype_nfields(bt);
     std::vector<Constant*> fields(0);
     for (size_t i = 0; i < nf; i++) {
@@ -200,7 +199,12 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         assert(!jl_field_isptr(bt, i));
         unsigned llvm_idx = isa<StructType>(lt) ? convert_struct_offset(lt, offs) : i;
         while (fields.size() < llvm_idx)
-            fields.push_back(UndefValue::get(lct->getTypeAtIndex(fields.size())));
+            fields.push_back(
+#if JL_LLVM_VERSION >= 110000
+                UndefValue::get(GetElementPtrInst::getTypeAtIndex(lt, fields.size())));
+#else
+                UndefValue::get(cast<CompositeType>(lt)->getTypeAtIndex(fields.size())));
+#endif
         const uint8_t *ov = (const uint8_t*)ptr + offs;
         if (jl_is_uniontype(ft)) {
             // compute the same type layout as julia_struct_to_llvm
@@ -255,11 +259,11 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         }
     }
 
-    if (lct->isVectorTy())
+    if (lt->isVectorTy())
         return ConstantVector::get(fields);
-    if (StructType *st = dyn_cast<StructType>(lct))
+    if (StructType *st = dyn_cast<StructType>(lt))
         return ConstantStruct::get(st, fields);
-    ArrayType *at = cast<ArrayType>(lct);
+    ArrayType *at = cast<ArrayType>(lt);
     return ConstantArray::get(at, fields);
 }
 
@@ -410,7 +414,7 @@ static jl_value_t *staticeval_bitstype(const jl_cgval_t &targ)
 
 static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, const jl_cgval_t *argv, size_t nargs)
 {
-    Value *func = prepare_call(runtime_func[f]);
+    FunctionCallee func = prepare_call(runtime_func[f]);
     Value **argvalues = (Value**)alloca(sizeof(Value*) * nargs);
     for (size_t i = 0; i < nargs; ++i) {
         argvalues[i] = boxed(ctx, argv[i]);
@@ -1055,7 +1059,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     case fma_float: {
         assert(y->getType() == x->getType());
         assert(z->getType() == y->getType());
-        Value *fmaintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fma, makeArrayRef(t));
+        FunctionCallee fmaintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fma, makeArrayRef(t));
         return ctx.builder.CreateCall(fmaintr, {x, y, z});
     }
     case muladd_float: {
@@ -1085,7 +1089,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
                 (f == checked_smul_int ?
                  Intrinsic::smul_with_overflow :
                  Intrinsic::umul_with_overflow)))));
-        Value *intr = Intrinsic::getDeclaration(jl_Module, intr_id, makeArrayRef(t));
+        FunctionCallee intr = Intrinsic::getDeclaration(jl_Module, intr_id, makeArrayRef(t));
         Value *res = ctx.builder.CreateCall(intr, {x, y});
         Value *val = ctx.builder.CreateExtractValue(res, ArrayRef<unsigned>(0));
         Value *obit = ctx.builder.CreateExtractValue(res, ArrayRef<unsigned>(1));
@@ -1202,26 +1206,26 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
                 ctx.builder.CreateAShr(x, uint_cnvt(ctx, t, y)));
 
     case bswap_int: {
-        Value *bswapintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::bswap, makeArrayRef(t));
+        FunctionCallee bswapintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::bswap, makeArrayRef(t));
         return ctx.builder.CreateCall(bswapintr, x);
     }
     case ctpop_int: {
-        Value *ctpopintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctpop, makeArrayRef(t));
+        FunctionCallee ctpopintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctpop, makeArrayRef(t));
         return ctx.builder.CreateCall(ctpopintr, x);
     }
     case ctlz_int: {
-        Value *ctlz = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz, makeArrayRef(t));
+        FunctionCallee ctlz = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz, makeArrayRef(t));
         y = ConstantInt::get(T_int1, 0);
         return ctx.builder.CreateCall(ctlz, {x, y});
     }
     case cttz_int: {
-        Value *cttz = Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, makeArrayRef(t));
+        FunctionCallee cttz = Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, makeArrayRef(t));
         y = ConstantInt::get(T_int1, 0);
         return ctx.builder.CreateCall(cttz, {x, y});
     }
 
     case abs_float: {
-        Value *absintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fabs, makeArrayRef(t));
+        FunctionCallee absintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fabs, makeArrayRef(t));
         return ctx.builder.CreateCall(absintr, x);
     }
     case copysign_float: {
@@ -1250,27 +1254,27 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         return ctx.builder.CreateXor(ctx.builder.CreateAdd(x, tmp), tmp);
     }
     case ceil_llvm: {
-        Value *ceilintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::ceil, makeArrayRef(t));
+        FunctionCallee ceilintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::ceil, makeArrayRef(t));
         return ctx.builder.CreateCall(ceilintr, x);
     }
     case floor_llvm: {
-        Value *floorintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::floor, makeArrayRef(t));
+        FunctionCallee floorintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::floor, makeArrayRef(t));
         return ctx.builder.CreateCall(floorintr, x);
     }
     case trunc_llvm: {
-        Value *truncintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::trunc, makeArrayRef(t));
+        FunctionCallee truncintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::trunc, makeArrayRef(t));
         return ctx.builder.CreateCall(truncintr, x);
     }
     case rint_llvm: {
-        Value *rintintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::rint, makeArrayRef(t));
+        FunctionCallee rintintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::rint, makeArrayRef(t));
         return ctx.builder.CreateCall(rintintr, x);
     }
     case sqrt_llvm: {
-        Value *sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
+        FunctionCallee sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
         return ctx.builder.CreateCall(sqrtintr, x);
     }
     case sqrt_llvm_fast: {
-        Value *sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
+        FunctionCallee sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
         return math_builder(ctx, true)().CreateCall(sqrtintr, x);
     }
 

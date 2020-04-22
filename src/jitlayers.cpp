@@ -418,7 +418,11 @@ void JuliaOJIT::DebugObjectRegistrar::registerObject(RTDyldObjHandleT H, const O
     // record all of the exported symbols defined in this object
     // in the primary hash table for the enclosing JIT
     for (auto &Symbol : Object->symbols()) {
-        auto Flags = Symbol.getFlags();
+#if JL_LLVM_VERSION >= 110000
+        uint32_t Flags = Symbol.getFlags().get();
+#else
+        uint32_t Flags = Symbol.getFlags();
+#endif
         if (Flags & object::BasicSymbolRef::SF_Undefined)
             continue;
         if (!(Flags & object::BasicSymbolRef::SF_Exported))
