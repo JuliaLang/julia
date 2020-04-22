@@ -565,24 +565,16 @@ end
     @test findnext(isequal(0x00), [0x00, 0x01, 0x00], 2) == 3
     @test findprev(isequal(0x00), [0x00, 0x01, 0x00], 2) == 1
 
-    @testset "issue 32568" begin
-        @test findnext(!iszero,a,big(1)) isa keytype(a)
-        @test findnext(!iszero,a,big(2)) isa keytype(a)
-        @test findnext(!iszero,a,UInt(1)) isa keytype(a)
-        @test findnext(!iszero,a,UInt(2)) isa keytype(a)
-        @test findprev(!iszero,a,big(4)) isa keytype(a)
-        @test findprev(!iszero,a,big(5)) isa keytype(a)
-        @test findprev(!iszero,a,UInt(4)) isa keytype(a)
-        @test findprev(!iszero,a,UInt(5)) isa keytype(a)
-        b = [true,false,true]
-        @test findnext(b,big(2)) isa keytype(b)
-        @test findnext(b,big(3)) isa keytype(b)
-        @test findnext(b,UInt(2)) isa keytype(b)
-        @test findnext(b,UInt(3)) isa keytype(b)
-        @test findprev(b,big(1)) isa keytype(b)
-        @test findprev(b,big(2)) isa keytype(b)
-        @test findprev(b,UInt(1)) isa keytype(b)
-        @test findprev(b,UInt(2)) isa keytype(b)
+    @testset "issue 32568" for T = (UInt, BigInt)
+        @test findnext(!iszero, a, T(1)) isa keytype(a)
+        @test findnext(!iszero, a, T(2)) isa keytype(a)
+        @test findprev(!iszero, a, T(4)) isa keytype(a)
+        @test findprev(!iszero, a, T(5)) isa keytype(a)
+        b = [true, false, true]
+        @test findnext(b, T(2)) isa keytype(b)
+        @test findnext(b, T(3)) isa keytype(b)
+        @test findprev(b, T(1)) isa keytype(b)
+        @test findprev(b, T(2)) isa keytype(b)
     end
 end
 @testset "find with Matrix" begin
