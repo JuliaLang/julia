@@ -1,13 +1,18 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// RUN: %clang --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang %gc_plugin -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -Xclang -verify -Xclang -verify-ignore-unexpected=note -x c %s
+// RUN: clang --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang libGCCheckerPlugin%shlibext -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CPPFLAGS} ${CFLAGS} -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -Xclang -verify -x c %s
 
 #include "julia.h"
 #include "julia_internal.h"
 
+extern void look_at_value(jl_value_t *v);
+extern void process_unrooted(jl_value_t *maybe_unrooted JL_MAYBE_UNROOTED);
+extern void jl_gc_safepoint();
+
 void unrooted_argument() {
-    jl_((jl_value_t*)jl_svec1(NULL)); // expected-warning{{Passing non-rooted value as argument to function}}
-                                      // expected-note@-1{{Passing non-rooted value as argument to function}}
+    look_at_value((jl_value_t*)jl_svec1(NULL)); // expected-warning{{Passing non-rooted value as argument to function}}
+                                                // expected-note@-1{{Passing non-rooted value as argument to function}}
+                                                // expected-note@-2{{Started tracking value here}}
 };
 
 void simple_svec() {
@@ -16,13 +21,10 @@ void simple_svec() {
     assert(jl_svecref(val, 0) == NULL);
 }
 
-extern void jl_gc_safepoint();
 jl_value_t *simple_missing_root() {
     jl_svec_t *val = jl_svec1(NULL);
-    // This is a GC safepoint, so the above value could have been freed
-    jl_gc_safepoint(); // expected-note {{Value may have been GCed here}}
-    return jl_svecref(val, 0); // expected-warning{{Argument value may have been GCed}}
-                               // expected-note@-1{{Argument value may have been GCed}}
+    jl_gc_safepoint();
+    return jl_svecref(val, 0); // XXX-expected-warning{{Passing non-rooted value as argument to function}}
 };
 
 jl_value_t *root_value() {
@@ -33,6 +35,64 @@ jl_value_t *root_value() {
     JL_GC_POP();
     return ret;
 };
+
+void root_value_data() {
+    jl_svec_t *val = jl_svec1(NULL); // expected-note{{Started tracking value here}}
+    jl_value_t **data = jl_svec_data(val);
+    JL_GC_PUSH1(&val); // expected-note{{GC frame changed here}}
+                       // expected-note@-1{{Value was rooted here}}
+    jl_gc_safepoint();
+    look_at_value(*data);
+    JL_GC_POP(); // expected-note{{GC frame changed here}}
+                 // expected-note@-1{{Root was released here}}
+    jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
+    *data; // expected-warning{{Creating derivative of value that may have been GCed}}
+           // expected-note@-1{{Creating derivative of value that may have been GCed}}
+};
+
+void root_value_data2() {
+    jl_svec_t *val = jl_svec1(NULL); // expected-note{{Started tracking value here}}
+    jl_value_t **data = jl_svec_data(val);
+    JL_GC_PUSH1(&val); // expected-note{{GC frame changed here}}
+                       // expected-note@-1{{Value was rooted here}}
+    jl_gc_safepoint();
+    look_at_value(data[0]);
+    JL_GC_POP(); // expected-note{{GC frame changed here}}
+                 // expected-note@-1{{Root was released here}}
+    jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
+    data[0]; // expected-warning{{Creating derivative of value that may have been GCed}}
+             // expected-note@-1{{Creating derivative of value that may have been GCed}}
+};
+
+
+void root_value_data3() {
+    jl_svec_t *val = jl_svec1(NULL); // expected-note{{Started tracking value here}}
+    jl_value_t **data = jl_svec_data(val);
+    JL_GC_PUSH1(&val); // expected-note{{GC frame changed here}}
+                       // expected-note@-1{{Value was rooted here}}
+    jl_gc_safepoint();
+    look_at_value(**&data);
+    JL_GC_POP(); // expected-note{{GC frame changed here}}
+                 // expected-note@-1{{Root was released here}}
+    jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
+    **&data; // expected-warning{{Creating derivative of value that may have been GCed}}
+             // expected-note@-1{{Creating derivative of value that may have been GCed}}
+};
+
+void root_value_data4() {
+    jl_svec_t *val = jl_svec1(NULL); // expected-note{{Started tracking value here}}
+    jl_value_t **data = jl_svec_data(val);
+    JL_GC_PUSH1(&val); // expected-note{{GC frame changed here}}
+                       // expected-note@-1{{Value was rooted here}}
+    jl_gc_safepoint();
+    look_at_value(*&data[0]);
+    JL_GC_POP(); // expected-note{{GC frame changed here}}
+                 // expected-note@-1{{Root was released here}}
+    jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
+    *&data[0]; // expected-warning{{Creating derivative of value that may have been GCed}}
+               // expected-note@-1{{Creating derivative of value that may have been GCed}}
+};
+
 
 jl_value_t *existing_root() {
     jl_svec_t *val = NULL;
@@ -46,7 +106,7 @@ jl_value_t *existing_root() {
 
 jl_value_t *late_root() {
     jl_svec_t *val = NULL;
-    val = jl_svec1(NULL);
+    val = jl_svec1(NULL); // expected-note {{Started tracking value here}}
     jl_gc_safepoint(); // expected-note {{Value may have been GCed here}}
     JL_GC_PUSH1(&val); // expected-warning{{Trying to root value which may have been GCed}}
                        // expected-note@-1{{Trying to root value which may have been GCed}}
@@ -58,8 +118,8 @@ jl_value_t *late_root() {
 jl_value_t *late_root2() {
     jl_svec_t *val = NULL;
     jl_svec_t *val2 = NULL;
-    JL_GC_PUSH1(&val);
-    val2 = jl_svec1(NULL);
+    JL_GC_PUSH1(&val); // expected-note {{GC frame changed here}}
+    val2 = jl_svec1(NULL); // expected-note {{Started tracking value here}}
     jl_gc_safepoint(); // expected-note {{Value may have been GCed here}}
     val = val2; // expected-warning{{Trying to root value which may have been GCed}}
                 // expected-note@-1{{Trying to root value which may have been GCed}}
@@ -71,19 +131,18 @@ jl_value_t *late_root2() {
 jl_value_t *already_freed() {
     jl_svec_t *val = NULL;
     JL_GC_PUSH1(&val);
-    val = jl_svec1(NULL); // expected-note {{Value was rooted here}}
-    JL_GC_POP(); // exptected-noted {{Root was released here}}
-    jl_gc_safepoint(); // expected-note {{Value may have been GCed here}}
-    jl_value_t *ret = jl_svecref(val, 0); // expected-warning{{Argument value may have been GCed}}
-                                          // expected-note@-1{{Argument value may have been GCed}}
+    val = jl_svec1(NULL);
+    JL_GC_POP();
+    jl_gc_safepoint();
+    jl_value_t *ret = jl_svecref(val, 0);
     return ret;
 };
 
 int field_access() {
-    jl_svec_t *val = jl_svec1(NULL);
+    jl_svec_t *val = jl_svec1(NULL); // expected-note {{Started tracking value here}}
     jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
-    return val->length == 1; // expected-warning{{Creating derivative of value that may have been GCed}}
-                             // expected-note@-1{{Creating derivative of value that may have been GCed}}
+    return val->length == 1; // expected-warning{{Trying to access value which may have been GCed}}
+                             // expected-note@-1{{Trying to access value which may have been GCed}}
 }
 
 int pushargs_roots() {
@@ -98,27 +157,26 @@ int pushargs_roots() {
 
 int pushargs_roots_freed() {
   jl_value_t **margs;
-  jl_svec_t *val = jl_svec1(NULL);;
-  JL_GC_PUSHARGS(margs, 1);
+  jl_svec_t *val = jl_svec1(NULL); // expected-note{{Started tracking value here}}
+  JL_GC_PUSHARGS(margs, 1); // expected-note{{GC frame changed here}}
   margs[0] = (jl_value_t*)val; // expected-note{{Value was rooted here}}
-  JL_GC_POP(); // expected-note{{Root was released here}}
+  JL_GC_POP(); // expected-note{{GC frame changed here}}
+               // expected-note@-1{{Root was released here}}
   jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
-  return val->length == 1; // expected-warning{{Creating derivative of value that may have been GCed}}
-                           // expected-note@-1{{Creating derivative of value that may have been GCed}}
+  return val->length == 1; // expected-warning{{Trying to access value which may have been GCed}}
+                           // expected-note@-1{{Trying to access value which may have been GCed}}
 }
 
-extern void process_unrooted(jl_value_t *maybe_unrooted JL_MAYBE_UNROOTED);
 int unrooted() {
-  jl_svec_t *val = jl_svec1(NULL);
+  jl_svec_t *val = jl_svec1(NULL); // expected-note{{Started tracking value here}}
   // This is ok
   process_unrooted((jl_value_t*)val); // expected-note{{Value may have been GCed here}}
   // This is not
-  return val->length == 1; // expected-warning{{Creating derivative of value that may have been GCed}}
-                           // expected-note@-1{{Creating derivative of value that may have been GCed}}
+  return val->length == 1; // expected-warning{{Trying to access value which may have been GCed}}
+                           // expected-note@-1{{Trying to access value which may have been GCed}}
 }
 
 extern jl_value_t *global_value JL_GLOBALLY_ROOTED;
-extern void look_at_value(jl_value_t *v);
 void globally_rooted() {
   jl_value_t *val = global_value;
   jl_gc_safepoint();
@@ -284,20 +342,22 @@ void assoc_exact_broken(jl_value_t **args, size_t n, int8_t offs, size_t world) 
 }
 */
 
-void assoc_exact_ok(jl_value_t **args, size_t n, int8_t offs, size_t world) {
+void assoc_exact_ok(jl_value_t *args1, jl_value_t **args, size_t n, int8_t offs, size_t world) {
     jl_typemap_level_t *cache = jl_new_typemap_level();
     JL_GC_PUSH1(&cache);
-    jl_typemap_assoc_exact(cache->any, args, n, offs, world);
+    jl_typemap_assoc_exact(cache->any, args1, args, n, offs, world);
     JL_GC_POP();
 }
 
 // jl_box_* special cases
 void box_special_cases1(int i) {
-    jl_(jl_box_long(i)); //expected-warning{{Passing non-rooted value as argument to function that may GC}}
+    look_at_value(jl_box_long(i)); // expected-warning{{Passing non-rooted value as argument to function}}
+                                   // expected-note@-1{{Passing non-rooted value as argument to function}}
+                                   // expected-note@-2{{Started tracking value here}}
 }
 
 void box_special_cases2() {
-    jl_(jl_box_long(0));
+    look_at_value(jl_box_long(0));
 }
 
 jl_value_t *alloc_something();
@@ -330,7 +390,6 @@ typedef struct _varbinding {
     jl_value_t *ub;
 } jl_varbinding_t;
 
-extern void look_at_value(jl_value_t *v);
 extern void escape_vb(jl_varbinding_t **vb);
 void stack_rooted(jl_value_t *lb JL_MAYBE_UNROOTED, jl_value_t *ub JL_MAYBE_UNROOTED) {
     jl_varbinding_t vb = { NULL, lb, ub };
@@ -340,11 +399,10 @@ void stack_rooted(jl_value_t *lb JL_MAYBE_UNROOTED, jl_value_t *ub JL_MAYBE_UNRO
     JL_GC_POP();
 }
 
-extern void look_at_value(jl_value_t *v);
 void JL_NORETURN throw_internal(jl_value_t *e JL_MAYBE_UNROOTED)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    ptls->exception_in_transit = e;
+    ptls->sig_exception = e;
     jl_gc_unsafe_enter(ptls);
     look_at_value(e);
 }
