@@ -667,11 +667,8 @@ function *(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector)
     end
 end
 function *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector)
-    if all(isempty.((x, D, y)))
-        return zero(promote_type(eltype.((x, D, y))...))
-    else
-        return mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
-    end
+    return mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y);
+                     init = zero(promote_type(map(eltype, (x, D, y))...)))
 end
 function dot(x::AbstractVector, D::Diagonal, y::AbstractVector)
     mapreduce(t -> dot(t[1], t[2], t[3]), +, zip(x, D.diag, y))
