@@ -400,7 +400,7 @@ Base.eps(::Type{Date}) = Day(1)
 Base.eps(::Type{Time}) = Nanosecond(1)
 Base.eps(::T) where T <: TimeType = eps(T)::Period
 
-
+# zero returns dt::T - dt::T
 Base.zero(::Type{DateTime}) = Millisecond(0)
 Base.zero(::Type{Date}) = Day(0)
 Base.zero(::Type{Time}) = Nanosecond(0)
