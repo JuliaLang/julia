@@ -1404,6 +1404,7 @@ end
 
 # aux function: same as findnext(~B, start), but performed without temporaries
 function findnextnot(B::BitArray, start::Integer)
+    start = Int(start)
     start > 0 || throw(BoundsError(B, start))
     start > length(B) && return nothing
 
@@ -1411,9 +1412,8 @@ function findnextnot(B::BitArray, start::Integer)
     l = length(Bc)
     l == 0 && return nothing
 
-    st = Int(start)
-    chunk_start = _div64(st-1)+1
-    within_chunk_start = _mod64(st-1)
+    chunk_start = _div64(start-1)+1
+    within_chunk_start = _mod64(start-1)
     mask = ~(_msk64 << within_chunk_start)
 
     @inbounds if chunk_start < l
@@ -1485,14 +1485,14 @@ function findprev(B::BitArray, start::Integer)
 end
 
 function findprevnot(B::BitArray, start::Integer)
+    start = Int(start)
     start > 0 || return nothing
     start > length(B) && throw(BoundsError(B, start))
 
     Bc = B.chunks
 
-    st = Int(start)
-    chunk_start = _div64(st-1)+1
-    mask = ~_msk_end(st)
+    chunk_start = _div64(start-1)+1
+    mask = ~_msk_end(start)
 
     @inbounds begin
         if Bc[chunk_start] | mask != _msk64
