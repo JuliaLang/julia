@@ -659,15 +659,15 @@ end
 # disambiguation methods: * of Diagonal and Adj/Trans AbsVec
 *(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal) = Adjoint(map((t,s) -> t'*s, D.diag, parent(x)))
 *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal) = Transpose(map((t,s) -> transpose(t)*s, D.diag, parent(x)))
-*(x::Adjoint{<:Any,<:AbstractVector},   D::Diagonal, y::AbstractVector) = _dot(x, D, y)
-*(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) = _dot(x, D, y)
-dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _dot(x, D, y)
+*(x::Adjoint{<:Any,<:AbstractVector},   D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
+*(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
+dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x, D, y)
 
-function _dot(x, D::Diagonal, y)
-    if all((isempty(x), isempty(D), isempty(y)))
+function _mapreduce_prod(f, x, D::Diagonal, y)
+    if isempty(x) && isempty(D) && isempty(y)
         return zero(promote_type(eltype(x), eltype(D), eltype(y)))
     else
-        return mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
+        return mapreduce(t -> f(t[1], t[2], t[3]), +, zip(x, D.diag, y))
     end
 end
 
