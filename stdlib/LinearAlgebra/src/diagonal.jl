@@ -665,7 +665,7 @@ dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x,
 
 function _mapreduce_prod(f, x, D::Diagonal, y)
     if isempty(x) && isempty(D) && isempty(y)
-        return zero(promote_type(eltype(x), eltype(D), eltype(y)))
+        return zero(Base.promote_op(f, eltype(x), eltype(D), eltype(y)))
     else
         return mapreduce(t -> f(t[1], t[2], t[3]), +, zip(x, D.diag, y))
     end
