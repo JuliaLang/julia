@@ -94,6 +94,13 @@ Multi-threading changes
 
 Build system changes
 --------------------
+* Binary dependencies for the Julia compiler itself are now stored as artifacts belonging to JLL packages
+  such as `libLLVM_jll`, or `GMP_jll`.  These `JLL` packages follow the same conventions as any other JLL
+  package and form the binary object interface that can be relied upon to provide binaries as well as
+  inform `Pkg` on valid operations, taking the versions of these packages into account. ([#35193])
+
+* The build system now contains a pure-make caching system for expanding expensive operations at the latest
+  possible moment, while still only expanding it once. ([#35193])
 
 
 New library functions
@@ -148,6 +155,8 @@ Standard library changes
 * The BLAS submodule now supports the level-2 BLAS subroutine `spmv!` ([#34320]).
 * The BLAS submodule now supports the level-1 BLAS subroutine `rot!` ([#35124]).
 * New generic `rotate!(x, y, c, s)` and `reflect!(x, y, c, s)` functions ([#35124]).
+* The BLAS library can now be changed at runtime, so long as the underlying BLAS implementation
+  matches the ILP64-ness of the running Julia host. ([#35193])
 
 #### Markdown
 
