@@ -660,16 +660,21 @@ end
 *(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal) = Adjoint(map((t,s) -> t'*s, D.diag, parent(x)))
 *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal) = Transpose(map((t,s) -> transpose(t)*s, D.diag, parent(x)))
 function *(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector)
-    return mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y);
-                     init = zero(promote_type(map(eltype, (x, D, y))...)))
+    if all(isempty(x), isempty(D), isempty(y))
+        return zero(promote_type(eltype(x), eltype(D), eltype(y)))
+    else
+        return mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
+    end
 end
 function *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector)
-    mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y),
-              init=zero(promote_type(eltype(x), eltype(D), eltype(y))))
+    if all(isempty(x), isempty(D), isempty(y))
+        return zero(promote_type(eltype(x), eltype(D), eltype(y)))
+    else
+        return mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
+    end
 end
 function dot(x::AbstractVector, D::Diagonal, y::AbstractVector)
-    mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y),
-              init=zero(promote_type(eltype(x), eltype(D), eltype(y))))
+    mapreduce(t -> dot(t[1], t[2], t[3]), +, zip(x, D.diag, y))
 end
 
 function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
