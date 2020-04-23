@@ -10,15 +10,15 @@ struct Rational{T<:Integer} <: Real
     num::T
     den::T
 
-    function Rational{T}(num::Integer, den::Integer; safe::Bool=true, checksign::Bool=safe) where T<:Integer
+    function Rational{T}(num::Integer, den::Integer; safe::Bool=true) where T<:Integer
         if safe
             num == den == zero(T) && __throw_rational_argerror_zero(T)
             num, den = divgcd(num, den)
-        end
-        if T<:Signed && checksign && signbit(den)
-            den = -den
-            signbit(den) && __throw_rational_argerror_typemin(T)
-            num = -num
+            if T<:Signed && signbit(den)
+                den = -den
+                signbit(den) && __throw_rational_argerror_typemin(T)
+                num = -num
+            end
         end
         return new{T}(num, den)
     end
@@ -26,13 +26,13 @@ end
 @noinline __throw_rational_argerror_zero(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
 @noinline __throw_rational_argerror_typemin(T) = throw(ArgumentError("invalid rational: denominator can't be typemin($T)"))
 
-function Rational(n::T, d::T; safe=true, checksign=safe) where T<:Integer
-    Rational{T}(n, d; safe, checksign)
+function Rational(n::T, d::T; safe=true) where T<:Integer
+    Rational{T}(n, d; safe)
 end
 
 """
-    Rational(num::Integer, den::Integer; safe::Bool=true, checksign::Bool=safe)
-    Rational{T<:Integer}(num::Integer, den::Integer; safe::Bool=true, checksign::Bool=safe)
+    Rational(num::Integer, den::Integer; safe::Bool=true)
+    Rational{T<:Integer}(num::Integer, den::Integer; safe::Bool=true)
 
 Create a `Rational` with numerator `num` and denominator `den`.
 
@@ -41,16 +41,14 @@ denominator is non-negative. By default, the constructor checks its arguments so
 the created `Rational` is well-formed. Well-formedness is kept across operations on
 `Rational`s.
 
-Unset the optional argument `checksign` to bypass the check on the sign of `den`.\\
-Unset the optional argument `safe` to bypass the coprimality check. By default, unsetting
-`safe` also unsets `checksign`.
+Unset the optional argument `safe` to bypass all checks.
 
 !!! warning
     Using an ill-formed `Rational` result in undefined behavior. Only bypass checks if
     `num` and `den` are known to satisfy them.
 """
-function Rational(n::Integer, d::Integer; safe=true, checksign=safe)
-    Rational(promote(n, d)...; safe, checksign)
+function Rational(n::Integer, d::Integer; safe=true)
+    Rational(promote(n, d)...; safe)
 end
 Rational(n::Integer) = Rational(n, one(n); safe=false)
 
@@ -76,17 +74,35 @@ julia> (3 // 5) // (2 // 1)
 //(n::Integer,  d::Integer) = Rational(n,d)
 
 function //(x::Rational, y::Integer)
-    xn,yn = divgcd(x.num,y)
-    Rational(xn, checked_mul(x.den, yn); safe=false, checksign=true)
+    xn, yn = divgcd(x.num,y)
+    num, den = promote(xn, checked_mul(x.den, yn))
+    if signbit(den)
+        den = -den
+        signbit(den) && __throw_rational_argerror_typemin(typeof(den))
+        num = -num
+    end
+    Rational(num, den; safe=false)
 end
 function //(x::Integer,  y::Rational)
-    xn,yn = divgcd(x,y.num)
-    Rational(checked_mul(xn, y.den), yn; safe=false, checksign=true)
+    xn, yn = divgcd(x,y.num)
+    num, den = promote(checked_mul(xn, y.den), yn)
+    if signbit(den)
+        den = -den
+        signbit(den) && __throw_rational_argerror_typemin(typeof(den))
+        num = -num
+    end
+    Rational(num, den; safe=false)
 end
 function //(x::Rational, y::Rational)
     xn,yn = divgcd(x.num,y.num)
     xd,yd = divgcd(x.den,y.den)
-    Rational(checked_mul(xn, yd), checked_mul(xd, yn); safe=false, checksign=true)
+    num, den = promote(checked_mul(xn, yd), checked_mul(xd, yn))
+    if signbit(den)
+        den = -den
+        signbit(den) && __throw_rational_argerror_typemin(typeof(den))
+        num = -num
+    end
+    Rational(num, den; safe=false)
 end
 
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
@@ -333,7 +349,15 @@ end
 /(x::Rational, y::Union{Rational, Integer}) = x//y
 /(x::Integer, y::Rational) = x//y
 /(x::Rational, y::Complex{<:Union{Integer,Rational}}) = x//y
-inv(x::Rational) = Rational(x.den, x.num; safe=false, checksign=true)
+function inv(x::Rational{T}) where T
+    num, den = x.den, x.num
+    if signbit(den)
+        den = -den
+        signbit(den) && __throw_rational_argerror_typemin(T)
+        num = -num
+    end
+    Rational(num, den; safe=false)
+end
 
 fma(x::Rational, y::Rational, z::Rational) = x*y+z
 
