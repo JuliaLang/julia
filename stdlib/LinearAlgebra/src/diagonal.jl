@@ -664,11 +664,12 @@ function *(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector)
                      init = zero(promote_type(map(eltype, (x, D, y))...)))
 end
 function *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector)
-    return mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y);
-                     init = zero(promote_type(map(eltype, (x, D, y))...)))
+    mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y),
+              init=zero(promote_type(eltype(x), eltype(D), eltype(y))))
 end
 function dot(x::AbstractVector, D::Diagonal, y::AbstractVector)
-    mapreduce(t -> dot(t[1], t[2], t[3]), +, zip(x, D.diag, y))
+    mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y),
+              init=zero(promote_type(eltype(x), eltype(D), eltype(y))))
 end
 
 function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
