@@ -1374,7 +1374,7 @@ end
 
 count(B::BitArray) = bitcount(B.chunks)
 
-function unsafe_bitfindnext(Bc::Vector{UInt64}, start::Integer)
+function unsafe_bitfindnext(Bc::Vector{UInt64}, start::Int)
     chunk_start = _div64(start-1)+1
     within_chunk_start = _mod64(start-1)
     mask = _msk64 << within_chunk_start
