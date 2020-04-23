@@ -592,6 +592,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->ambig = jl_nothing;
     m->resorted = jl_nothing;
     m->roots = NULL;
+    m->ccallable = NULL;
     m->module = module;
     m->source = NULL;
     m->unspecialized = NULL;

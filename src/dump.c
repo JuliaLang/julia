@@ -69,6 +69,9 @@ static jl_array_t *serializer_worklist JL_GLOBALLY_ROOTED;
 // (only used by the incremental serializer in MODE_MODULE)
 htable_t edges_map;
 
+// list of requested ccallable signatures
+static arraylist_t ccallable_list;
+
 #define TAG_SYMBOL              2
 #define TAG_SSAVALUE            3
 #define TAG_DATATYPE            4
@@ -873,6 +876,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         write_int8(s->s, m->pure);
         jl_serialize_value(s, (jl_value_t*)m->slot_syms);
         jl_serialize_value(s, (jl_value_t*)m->roots);
+        jl_serialize_value(s, (jl_value_t*)m->ccallable);
         jl_serialize_value(s, (jl_value_t*)m->source);
         jl_serialize_value(s, (jl_value_t*)m->unspecialized);
         jl_serialize_value(s, (jl_value_t*)m->generator);
@@ -1778,6 +1782,11 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->roots = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->roots);
     if (m->roots)
         jl_gc_wb(m, m->roots);
+    m->ccallable = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&m->ccallable);
+    if (m->ccallable) {
+        jl_gc_wb(m, m->ccallable);
+        arraylist_push(&ccallable_list, m->ccallable);
+    }
     m->source = jl_deserialize_value(s, &m->source);
     if (m->source)
         jl_gc_wb(m, m->source);
@@ -3217,6 +3226,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     arraylist_new(&backref_list, 4000);
     arraylist_push(&backref_list, jl_main_module);
     arraylist_new(&flagref_list, 0);
+    arraylist_new(&ccallable_list, 0);
     htable_new(&uniquing_table, 0);
 
     jl_serializer_state s = {
@@ -3267,6 +3277,12 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
         arraylist_free(tracee_list);
         free(tracee_list);
     }
+    for (int i = 0; i < ccallable_list.len; i++) {
+        jl_svec_t *item = (jl_svec_t*)ccallable_list.items[i];
+        JL_GC_PROMISE_ROOTED(item);
+        jl_compile_extern_c(NULL, NULL, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+    }
+    arraylist_free(&ccallable_list);
     jl_value_t *ret = (jl_value_t*)jl_svec(2, restored, init_order);
     JL_GC_POP();
 

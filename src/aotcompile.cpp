@@ -271,7 +271,14 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
             continue;
         size_t i, l;
         for (i = 0, l = jl_array_len(methods); i < l; i++) {
-            mi = (jl_method_instance_t*)jl_array_ptr_ref(methods, i);
+            // each item in this list is either a MethodInstance indicating something
+            // to compile, or an svec(rettype, sig) describing a C-callable alias to create.
+            jl_value_t *item = jl_array_ptr_ref(methods, i);
+            if (jl_is_simplevector(item)) {
+                jl_compile_extern_c(shadow_output, &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+                continue;
+            }
+            mi = (jl_method_instance_t*)item;
             src = NULL;
             // if this method is generally visible to the current compilation world,
             // and this is either the primary world, or not applicable in the primary world
