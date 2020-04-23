@@ -257,7 +257,7 @@ Dict{String,Int64} with 2 entries:
 julia> empty!(A);
 
 julia> A
-Dict{String,Int64} with 0 entries
+Dict{String,Int64}()
 ```
 """
 function empty!(h::Dict{K,V}) where V where K
