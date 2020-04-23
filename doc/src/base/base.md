@@ -49,7 +49,7 @@ The following two-word sequences are reserved:
 However, you can create variables with names:
 `abstract`, `mutable`, `primitive` and `type`.
 
-Finally,`where` is parsed as an infix operator for writing parametric method
+Finally, `where` is parsed as an infix operator for writing parametric method
 and type definitions. Also `in` and `isa` are parsed as infix operators.
 Creation of a variable named `where`, `in` or `isa` is allowed though.
 

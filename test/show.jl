@@ -891,8 +891,8 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T,N}, indices::Vararg{$Int,N})")
 @test_repr repr(Expr(:quote, Expr(:typed_hcat, Expr(:$, :a), 1)))
 @test_repr "Expr(:quote, Expr(:typed_vcat, Expr(:\$, :a), 1))"
 @test_repr "Expr(:quote, Expr(:typed_hcat, Expr(:\$, :a), 1))"
-@test repr(Expr(:quote, Expr(:typed_vcat, Expr(:$, :a), 1))) == ":(:(\$a[1;]))"
-@test repr(Expr(:quote, Expr(:typed_hcat, Expr(:$, :a), 1))) == ":(:(\$a[1]))"
+@test_repr repr(Expr(:quote, Expr(:typed_vcat, Expr(:$, :a), 1)))
+@test_repr repr(Expr(:quote, Expr(:typed_hcat, Expr(:$, :a), 1)))
 
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
@@ -914,63 +914,6 @@ end"""
         \$a + \$b
     end
 end"""
-@test repr(Meta.parse(
-"""macro m(a, b)
-    quote
-        \$a + \$b
-    end
-end""")) ==
-"""
-:(macro m(a, b)
-      #= none:2 =#
-      quote
-          #= none:3 =#
-          \$a + \$b
-      end
-  end)"""
-@test repr(Base.remove_linenums!(Meta.parse(
-"""macro m(a, b)
-    quote
-        \$a + \$b
-    end
-end"""))) ==
-"""
-:(macro m(a, b)
-      quote
-          \$a + \$b
-      end
-  end)"""
-@test repr(Meta.parse(
-"""macro m(a, b)
-    :(\$a + \$b)
-end""")) ==
-":(macro m(a, b)\n      #= none:2 =#\n      :(\$a + \$b)\n  end)"
-@test repr(Expr(:macro, Expr(:call, :m, :x), Expr(:quote, Expr(:call, :+, Expr(:($), :x), 1)))) ==
-":(macro m(x)\n      :(\$x + 1)\n  end)"
-
-# nested quotes and interpolations
-@test repr(Meta.parse(
-"""quote
-    quote
-        \$\$x
-    end
-end""")) ==
-"""
-:(quote
-      #= none:2 =#
-      quote
-          #= none:3 =#
-          \$\$x
-      end
-  end)"""
-@weak_test_repr """
-quote
-    #= none:2 =#
-    quote
-        #= none:3 =#
-        \$\$x
-    end
-end"""
 
 # fallback printing + nested quotes and unquotes
 @weak_test_repr repr(Expr(:block, LineNumberNode(0, :none),
@@ -983,26 +926,15 @@ end"""
 @test_repr "Expr(:exotic_head, Expr(:call, :+, 1, \$\$y))"
 @test_repr ":(Expr(:exotic_head, Expr(:call, :+, 1, \$y)))"
 @test_repr ":(:(Expr(:exotic_head, Expr(:call, :+, 1, \$\$y))))"
-@test repr(Expr(:block, LineNumberNode(0, :none),
-                Expr(:exotic_head, Expr(:$, :x)))) ==
-"""
-quote
-    #= none:0 =#
-    \$(Expr(:exotic_head, :(\$x)))
-end"""
 @test repr(Expr(:exotic_head, Expr(:call, :+, 1, :(Expr(:$, :y))))) ==
     ":(\$(Expr(:exotic_head, :(1 + Expr(:\$, :y)))))"
-@test repr(Expr(:exotic_head, Expr(:call, :+, 1, Expr(:quote, Expr(:$, :y))))) ==
-    ":(\$(Expr(:exotic_head, :(1 + :(\$y)))))"
-@test repr(Expr(:quote, Expr(:exotic_head, Expr(:call, :+, 1, Expr(:$, :y))))) ==
-    ":(:(\$(Expr(:exotic_head, :(1 + \$y)))))"
 @test repr(Expr(:block, Expr(:(=), :y, 2),
                         Expr(:quote, Expr(:exotic_head,
                                           Expr(:call, :+, 1, Expr(:$, :y)))))) ==
 """
 quote
     y = 2
-    :(\$(Expr(:exotic_head, :(1 + \$y))))
+    \$(Expr(:quote, :(\$(Expr(:exotic_head, :(1 + \$(Expr(:\$, :y))))))))
 end"""
 @test repr(eval(Expr(:block, Expr(:(=), :y, 2),
                         Expr(:quote, Expr(:exotic_head,
@@ -1012,20 +944,20 @@ end"""
 # nested quotes and blocks
 @test_repr "Expr(:quote, Expr(:block, :a, :b))"
 @weak_test_repr repr(Expr(:quote, Expr(:block, LineNumberNode(0, :none), :a, LineNumberNode(0, :none), :b)))
-@test repr(Expr(:quote, Expr(:block, :a, :b))) ==
+@test_broken repr(Expr(:quote, Expr(:block, :a, :b))) ==
 ":(quote
       a
       b
   end)"
 @test_repr "Expr(:quote, Expr(:block, :a))"
 @weak_test_repr repr(Expr(:quote, Expr(:block, LineNumberNode(0, :none), :a)))
-@test repr(Expr(:quote, Expr(:block, :a))) ==
+@test_broken repr(Expr(:quote, Expr(:block, :a))) ==
 ":(quote
       a
   end)"
 @test_repr "Expr(:quote, Expr(:block, :(a + b)))"
 @weak_test_repr repr(Expr(:quote, Expr(:block, LineNumberNode(0, :none), :(a + b))))
-@test repr(Expr(:quote, Expr(:block, :(a + b)))) ==
+@test_broken repr(Expr(:quote, Expr(:block, :(a + b)))) ==
 ":(quote
       a + b
   end)"
@@ -1036,8 +968,9 @@ end"""
 @test_repr ":(QuoteNode(\$x))"
 @test_repr ":(:(QuoteNode(\$\$x)))"
 @test repr(QuoteNode(Expr(:$, :x))) == ":(\$(QuoteNode(:(\$(Expr(:\$, :x))))))"
-@test repr(QuoteNode(Expr(:quote, Expr(:$, :x)))) == ":(\$(QuoteNode(:(:(\$x)))))"
-@test repr(Expr(:quote, QuoteNode(Expr(:$, :x)))) == ":(:(\$(QuoteNode(:(\$(Expr(:\$, :x)))))))"
+@test repr(QuoteNode(Expr(:quote, Expr(:$, :x)))) == ":(\$(QuoteNode(:(\$(Expr(:quote, :(\$(Expr(:\$, :x)))))))))"
+@test repr(Expr(:quote, QuoteNode(Expr(:$, :x)))) == ":(\$(Expr(:quote, :(\$(QuoteNode(:(\$(Expr(:\$, :x)))))))))"
+@test repr(Expr(:quote, Expr(:quote, Expr(:foo)))) == ":(\$(Expr(:quote, :(\$(Expr(:quote, :(\$(Expr(:foo)))))))))"
 
 # unquoting
 @test_repr "\$y"
@@ -1060,13 +993,13 @@ y856739 = 2
 x856739 = :y856739
 z856739 = [:a, :b]
 @test_repr repr(:(:(f($$x856739))))
-@test repr(:(:(f($$x856739)))) == ":(:(f(\$y856739)))"
+@test_broken repr(:(:(f($$x856739)))) == ":(:(f(\$y856739)))"
 @test repr(eval(:(:(f($$x856739))))) == ":(f(2))"
 @test_repr repr(:(:(f($x856739))))
-@test repr(:(:(f($x856739)))) == ":(:(f(\$x856739)))"
+@test_broken repr(:(:(f($x856739)))) == ":(:(f(\$x856739)))"
 @test repr(eval(:(:(f($x856739))))) == ":(f(y856739))"
 @test_repr repr(:(:(f($(($z856739)...)))))
-@test repr(:(:(f($(($z856739)...))))) == ":(:(f(\$([:a, :b]...))))"
+@test_broken repr(:(:(f($(($z856739)...))))) == ":(:(f(\$([:a, :b]...))))"
 @test repr(eval(:(:(f($(($z856739)...)))))) == ":(f(a, b))"
 
 # string interpolation, if this is what the comment in test_rep function
@@ -1133,6 +1066,9 @@ z856739 = [:a, :b]
 @test sprint(show, Meta.parse("a\"b\"c")) == ":(a\"b\"c)"
 @test sprint(show, Meta.parse("aa\"b\"")) == ":(aa\"b\")"
 @test sprint(show, Meta.parse("a\"b\"cc")) == ":(a\"b\"cc)"
+@test sprint(show, Meta.parse("a\"\"\"issue \"35305\" \"\"\"")) == ":(a\"issue \\\"35305\\\" \")"
+@test sprint(show, Meta.parse("a\"\$\"")) == ":(a\"\$\")"
+@test sprint(show, Meta.parse("a\"\\b\"")) == ":(a\"\\b\")"
 # 11111111111111111111, 0xfffffffffffffffff, 1111...many digits...
 @test sprint(show, Meta.parse("11111111111111111111")) == ":(11111111111111111111)"
 # @test_repr "Base.@int128_str \"11111111111111111111\""
@@ -2007,3 +1943,21 @@ end
 @test_repr "a[(bla;)]"
 @test_repr "a[(;;)]"
 @weak_test_repr "a[x -> f(x)]"
+
+@testset "Base.Iterators" begin
+    @test sprint(show, enumerate("test")) == "enumerate(\"test\")"
+    @test sprint(show, enumerate(1:5)) == "enumerate(1:5)"
+    @test sprint(show, enumerate([1,2,3])) == "enumerate([1, 2, 3])"
+    @test sprint(show, enumerate((1,1.0,'a'))) == "enumerate((1, 1.0, 'a'))"
+    @test sprint(show, zip()) == "zip()"
+    @test sprint(show, zip([1,2,3])) == "zip([1, 2, 3])"
+    @test sprint(show, zip(1:3, ('a','b','c'))) == "zip(1:3, ('a', 'b', 'c'))"
+    @test sprint(show, zip(1:3, ('a','b','c'), "abc")) == "zip(1:3, ('a', 'b', 'c'), \"abc\")"
+end
+
+@testset "skipmissing" begin
+    @test sprint(show, skipmissing("test")) == "skipmissing(\"test\")"
+    @test sprint(show, skipmissing(1:5)) == "skipmissing(1:5)"
+    @test sprint(show, skipmissing([1,2,missing])) == "skipmissing(Union{Missing, $Int}[1, 2, missing])"
+    @test sprint(show, skipmissing((missing,1.0,'a'))) == "skipmissing((missing, 1.0, 'a'))"
+end

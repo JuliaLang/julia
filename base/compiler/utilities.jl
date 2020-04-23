@@ -107,7 +107,7 @@ function retrieve_code_info(linfo::MethodInstance)
     if c === nothing && isdefined(m, :source)
         src = m.source
         if isa(src, Array{UInt8,1})
-            c = ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, src)
+            c = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, src)
         else
             c = copy(src::CodeInfo)
         end
@@ -126,12 +126,9 @@ end
 # get a handle to the unique specialization object representing a particular instantiation of a call
 function specialize_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, preexisting::Bool=false)
     if preexisting
-        if method.specializations !== nothing
-            # check cached specializations
-            # for an existing result stored there
-            return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)
-        end
-        return nothing
+        # check cached specializations
+        # for an existing result stored there
+        return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)
     end
     return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atypes, sparams)
 end

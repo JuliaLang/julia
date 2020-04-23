@@ -18,7 +18,7 @@ running session by navigating to `base` and executing
 development than if you rebuild Julia for each change.
 
 Alternatively, you can use the [Revise.jl](https://github.com/timholy/Revise.jl)
-package to track the compiler changes by using the the command
+package to track the compiler changes by using the command
 `Revise.track(Core.Compiler)` at the beginning of your Julia session. As
 explained in the [Revise documentation](https://timholy.github.io/Revise.jl/stable/),
 the modifications to the compiler will be reflected when the modified files

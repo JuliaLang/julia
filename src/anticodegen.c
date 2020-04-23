@@ -9,7 +9,7 @@ int globalUnique = 0;
 
 #define UNAVAILABLE { jl_errorf("%s: not available in this build of Julia", __func__); }
 
-void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len) UNAVAILABLE
+void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname, const char *sysimg_data, size_t sysimg_len) UNAVAILABLE
 int32_t jl_get_llvm_gv(jl_value_t *p) UNAVAILABLE
 void jl_write_malloc_log(void) UNAVAILABLE
 void jl_write_coverage_data(void) UNAVAILABLE

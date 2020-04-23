@@ -279,25 +279,25 @@ int jl_pointer_egal(jl_value_t *t)
     return 0;
 }
 
-static int references_name(jl_value_t *p, jl_typename_t *name) JL_NOTSAFEPOINT
+static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout) JL_NOTSAFEPOINT
 {
     if (jl_is_uniontype(p))
-        return references_name(((jl_uniontype_t*)p)->a, name) ||
-               references_name(((jl_uniontype_t*)p)->b, name);
+        return references_name(((jl_uniontype_t*)p)->a, name, affects_layout) ||
+               references_name(((jl_uniontype_t*)p)->b, name, affects_layout);
     if (jl_is_unionall(p))
-        return references_name((jl_value_t*)((jl_unionall_t*)p)->var, name) ||
-               references_name(((jl_unionall_t*)p)->body, name);
+        return references_name((jl_value_t*)((jl_unionall_t*)p)->var, name, 0) ||
+               references_name(((jl_unionall_t*)p)->body, name, affects_layout);
     if (jl_is_typevar(p))
-        return references_name(((jl_tvar_t*)p)->ub, name) ||
-               references_name(((jl_tvar_t*)p)->lb, name);
+        return references_name(((jl_tvar_t*)p)->ub, name, 0) ||
+               references_name(((jl_tvar_t*)p)->lb, name, 0);
     if (jl_is_datatype(p)) {
-        if (((jl_datatype_t*)p)->name == name)
+        jl_datatype_t *dp = (jl_datatype_t*)p;
+        if (affects_layout && dp->name == name)
             return 1;
-        if (((jl_datatype_t*)p)->layout && jl_datatype_nfields(p) == 0)
-            return 0;
+        affects_layout = dp->types == NULL || jl_svec_len(dp->types) != 0;
         size_t i, l = jl_nparams(p);
         for (i = 0; i < l; i++) {
-            if (references_name(jl_tparam(p, i), name))
+            if (references_name(jl_tparam(p, i), name, affects_layout))
                 return 1;
         }
     }
@@ -390,7 +390,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         size_t i, nf = jl_svec_len(w->types);
         for (i = 0; i < nf; i++) {
             jl_value_t *fld = jl_svecref(w->types, i);
-            if (references_name(fld, w->name)) {
+            if (references_name(fld, w->name, 1)) {
                 isinlinealloc = 0;
                 isbitstype = 0;
                 break;
@@ -887,19 +887,10 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
 
 static void init_struct_tail(jl_datatype_t *type, jl_value_t *jv, size_t na)
 {
-    size_t nf = jl_datatype_nfields(type);
-    char *data = (char*)jl_data_ptr(jv);
-    for (size_t i = na; i < nf; i++) {
-        if (jl_field_isptr(type, i)) {
-            *(jl_value_t**)(data + jl_field_offset(type, i)) = NULL;
-        }
-        else {
-            jl_value_t *ft = jl_field_type(type, i);
-            if (jl_is_uniontype(ft)) {
-                uint8_t *psel = &((uint8_t *)data)[jl_field_offset(type, i) + jl_field_size(type, i) - 1];
-                *psel = 0;
-            }
-        }
+    if (na < jl_datatype_nfields(type)) {
+        char *data = (char*)jl_data_ptr(jv);
+        size_t offs = jl_field_offset(type, na);
+        memset(data + offs, 0, jl_datatype_size(type) - offs);
     }
 }
 

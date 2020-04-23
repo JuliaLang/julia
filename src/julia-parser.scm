@@ -1219,10 +1219,11 @@
                     ((eqv? (peek-token s) ':)
                      (begin
                        (take-token s)
-                       (if (or (eqv? (peek-token s) #\newline)
-                               (ts:space? s)) ;; uses side effect of previous peek-token
-                           (error "space not allowed after \":\" used for quoting"))
-                       `(|.| ,ex (quote ,(parse-atom s #f)))))
+                       (cond ((eqv? (peek-token s) #\newline)
+                              (error "newline not allowed after \":\" used for quoting"))
+                             ((ts:space? s) ;; uses side effect of previous peek-token
+                              (error "whitespace not allowed after \":\" used for quoting"))
+                             (else `(|.| ,ex (quote ,(parse-atom s #f)))))))
                     ((eq? (peek-token s) '$)
                      (take-token s)
                      (let ((dollarex (parse-atom s)))
@@ -1419,7 +1420,8 @@
               `(const ,assgn))))
 
        ((function macro)
-        (let* ((paren (eqv? (require-token s) #\())
+        (let* ((loc   (line-number-node s))
+               (paren (eqv? (require-token s) #\())
                (sig   (parse-def s (eq? word 'function) paren)))
           (if (and (not paren) (symbol-or-interpolate? sig))
               (begin (if (not (eq? (require-token s) 'end))
@@ -1440,7 +1442,7 @@
                                    sig)))
                      (body (parse-block s)))
                 (expect-end s word)
-                (list word def body)))))
+                (list word def (add-line-number body loc))))))
 
        ((abstract)
         (if (not (eq? (peek-token s) 'type))
@@ -2285,12 +2287,14 @@
                       (or (not (symbol? nxt))
                           (ts:space? s)))
                  ':
-                 (if (or (ts:space? s) (eqv? nxt #\newline))
-                     (error "space not allowed after \":\" used for quoting")
-                     (list 'quote
+                 (cond ((ts:space? s)
+                        (error "whitespace not allowed after \":\" used for quoting"))
+                       ((eqv? nxt #\newline)
+                        (error "newline not allowed after \":\" used for quoting"))
+                       (else (list 'quote
                            ;; being inside quote makes `end` non-special again. issue #27690
                            (with-bindings ((end-symbol #f))
-                                          (parse-atom s #f)))))))
+                                          (parse-atom s #f))))))))
 
           ;; misplaced =
           ((eq? t '=) (error "unexpected \"=\""))

@@ -16,10 +16,44 @@ let z = zip(1:2)
     @test eltype(z) == Tuple{Int}
 end
 
-let z = zip(1:2, 3:4)
-    @test size(z) == (2,)
+for z in (zip(1:2, 3:4), zip(1:2, 3:5))
     @test collect(z) == [(1,3), (2,4)]
     @test eltype(z) == Tuple{Int,Int}
+    @test size(z) == (2,)
+    @test axes(z) == (Base.OneTo(2),)
+    @test length(z) == 2
+end
+
+let z = zip(1:2, Iterators.countfrom(3))
+    @test collect(z) == [(1,3), (2,4)]
+    @test eltype(z) == Tuple{Int,Int}
+    @test_throws MethodError size(z) # by convention, the zip of a finite and
+                         # an infinite iterator has only `length`
+    @test_throws MethodError axes(z)
+    @test length(z) == 2
+end
+
+let z = zip([i*j for i in 1:3, j in -1:2:1], 1:6)
+    @test collect(z) == [(-1, 1)
+                         (-2, 2)
+                         (-3, 3)
+                         (1, 4)
+                         (2, 5)
+                         (3, 6) ]
+    @test eltype(z) == Tuple{Int,Int}
+    @test_throws DimensionMismatch size(z)
+    @test_throws DimensionMismatch axes(z)
+    @test length(z) == 6
+end
+
+let z = zip([i*j for i in 1:3, j in -1:2:1], [i*j for i in 1:3, j in -1:2:1])
+    @test collect(z) == [(-1, -1) (1, 1)
+                        (-2, -2) (2, 2)
+                        (-3, -3) (3, 3)]
+    @test eltype(z) == Tuple{Int,Int}
+    @test size(z) == (3, 2)
+    @test axes(z) == (Base.OneTo(3), Base.OneTo(2))
+    @test length(z) == 6
 end
 
 let z = zip(1:2, 3:4, 5:6)

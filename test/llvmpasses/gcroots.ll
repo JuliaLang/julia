@@ -703,6 +703,22 @@ top:
    ret i8 %val
 }
 
+define i8 @lost_select_decayed(i1 %arg1) {
+; CHECK-LABEL: @lost_select_decayed
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
+; CHECK: [[GEP0:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 2
+; CHECK: store %jl_value_t addrspace(10)* [[SOMETHING:%.*]], %jl_value_t addrspace(10)** [[GEP0]]
+top:
+    %ptls = call %jl_value_t*** @julia.ptls_states()
+    %obj1 = call %jl_value_t addrspace(10) *@alloc()
+    %decayed = addrspacecast %jl_value_t addrspace(10) *%obj1 to %jl_value_t addrspace(11)*
+    %selected = select i1 %arg1, %jl_value_t addrspace(11)* null, %jl_value_t addrspace(11)* %decayed
+    %casted = bitcast %jl_value_t addrspace(11)* %selected to i8 addrspace(11)*
+    call void @jl_safepoint()
+    %val = load i8, i8 addrspace(11)* %casted
+    ret i8 %val
+}
+
 !0 = !{!"jtbaa"}
 !1 = !{!"jtbaa_const", !0, i64 0}
 !2 = !{!1, !1, i64 0, i64 1}

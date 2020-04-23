@@ -290,7 +290,8 @@ typedef struct _jl_method_t {
     jl_value_t *resorted;
 
     // table of all jl_method_instance_t specializations we have
-    jl_typemap_t *specializations;
+    jl_svec_t *specializations; // allocated as [hashable, ..., NULL, linear, ....]
+    jl_array_t *speckeyset; // index lookup by hash into specializations
 
     jl_value_t *slot_syms; // compacted list of slot names (String)
     jl_value_t *source;  // original code template (jl_code_info_t, but may be compressed), null for builtins
@@ -494,6 +495,7 @@ typedef struct _jl_module_t {
     size_t primary_world;
     uint32_t counter;
     int32_t nospecialize;  // global bit flags: initialization for new methods
+    int32_t optlevel;
     uint8_t istopmod;
     jl_mutex_t lock;
 } jl_module_t;
@@ -1453,6 +1455,8 @@ extern JL_DLLEXPORT jl_module_t *jl_base_module JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_top_module JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name);
 JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on);
+JL_DLLEXPORT void jl_set_module_optlevel(jl_module_t *self, int lvl);
+JL_DLLEXPORT int jl_get_module_optlevel(jl_module_t *m);
 // get binding for reading
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var);
@@ -1524,16 +1528,17 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname,
                                                jl_value_t *ty JL_MAYBE_UNROOTED,
                                                jl_value_t *got JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var);
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error(jl_value_t *v,
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error(jl_value_t *v JL_MAYBE_UNROOTED,
                                               jl_value_t *t JL_MAYBE_UNROOTED);
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error_v(jl_value_t *v,
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error_v(jl_value_t *v JL_MAYBE_UNROOTED,
                                                 jl_value_t **idxs, size_t nidxs);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_int(jl_value_t *v JL_MAYBE_UNROOTED,
                                                   size_t i);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_tuple_int(jl_value_t **v,
                                                         size_t nv, size_t i);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_unboxed_int(void *v, jl_value_t *vt, size_t i);
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v, size_t *idxs, size_t nidxs);
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v JL_MAYBE_UNROOTED,
+                                                   size_t *idxs, size_t nidxs);
 JL_DLLEXPORT void JL_NORETURN jl_eof_error(void);
 
 // Return the exception currently being handled, or `jl_nothing`.
@@ -1647,13 +1652,14 @@ JL_DLLEXPORT void jl_register_newmeth_tracer(void (*callback)(jl_method_t *trace
 // AST access
 JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr JL_MAYBE_UNROOTED);
 
-JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code);
-JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data);
-JL_DLLEXPORT uint8_t jl_ast_flag_inferred(jl_array_t *data) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint8_t jl_ast_flag_inlineable(jl_array_t *data) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint8_t jl_ast_flag_pure(jl_array_t *data) JL_NOTSAFEPOINT;
-JL_DLLEXPORT ssize_t jl_ast_nslots(jl_array_t *data) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint8_t jl_ast_slotflag(jl_array_t *data, size_t i) JL_NOTSAFEPOINT;
+// IR representation
+JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code);
+JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data);
+JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_array_t *data) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint8_t jl_ir_flag_inlineable(jl_array_t *data) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint8_t jl_ir_flag_pure(jl_array_t *data) JL_NOTSAFEPOINT;
+JL_DLLEXPORT ssize_t jl_ir_nslots(jl_array_t *data) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint8_t jl_ir_slotflag(jl_array_t *data, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_compress_argnames(jl_array_t *syms);
 JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms);
 JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
@@ -1894,6 +1900,7 @@ typedef struct {
     const char **cmds;
     const char *image_file;
     const char *cpu_target;
+    int32_t nthreads;
     int32_t nprocs;
     const char *machine_file;
     const char *project;
@@ -1922,6 +1929,7 @@ typedef struct {
     const char *outputbc;
     const char *outputunoptbc;
     const char *outputo;
+    const char *outputasm;
     const char *outputji;
     const char *output_code_coverage;
     int8_t incremental;

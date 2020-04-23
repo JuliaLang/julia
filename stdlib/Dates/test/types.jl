@@ -181,6 +181,9 @@ c = Dates.Time(0)
 @testset "DateTime traits" begin
     @test Dates.calendar(a) == Dates.ISOCalendar
     @test Dates.calendar(b) == Dates.ISOCalendar
+    @test eps(DateTime) == Dates.Millisecond(1)
+    @test eps(Date) == Dates.Day(1)
+    @test eps(Time) == Dates.Nanosecond(1)
     @test eps(a) == Dates.Millisecond(1)
     @test eps(b) == Dates.Day(1)
     @test eps(c) == Dates.Nanosecond(1)
@@ -261,6 +264,10 @@ end
     @test typeof(datetime) == DateTime
     @test datetime == Dates.DateTime(1999, 2, 10, 5, 30, 14)
 
+end
+
+@testset "timedwait" begin
+    @test timedwait(() -> false, Second(0); pollint=Millisecond(1)) === :timed_out
 end
 
 end

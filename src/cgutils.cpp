@@ -44,16 +44,18 @@ static Function *function_proto(Function *F, Module *M = nullptr)
 }
 
 #define prepare_call(Callee) prepare_call_in(jl_Module, (Callee))
-static Value *prepare_call_in(Module *M, Value *Callee)
+static FunctionCallee prepare_call_in(Module *M, Value *Callee)
 {
     if (Function *F = dyn_cast<Function>(Callee)) {
         GlobalValue *local = M->getNamedValue(Callee->getName());
         if (!local) {
             local = function_proto(F, M);
         }
-        return local;
+        Callee = local;
     }
-    return Callee;
+    FunctionType *FnTy = cast<FunctionType>(
+        Callee->getType()->getPointerElementType());
+    return {FnTy, Callee};
 }
 
 // Take an arbitrary untracked value and make it gc-tracked
@@ -1341,9 +1343,16 @@ static void emit_write_multibarrier(jl_codectx_t&, Value*, Value*);
 
 std::vector<unsigned> first_ptr(Type *T)
 {
-    if (isa<CompositeType>(T)) {
-        if (!isa<StructType>(T) && cast<SequentialType>(T)->getNumElements() == 0)
-            return {};
+    if (isa<StructType>(T) || isa<ArrayType>(T) || isa<VectorType>(T)) {
+        if (!isa<StructType>(T)) {
+            uint64_t num_elements;
+            if (auto *AT = dyn_cast<ArrayType>(T))
+                num_elements = AT->getNumElements();
+            else
+                num_elements = cast<VectorType>(T)->getNumElements();
+            if (num_elements == 0)
+                return {};
+        }
         unsigned i = 0;
         for (Type *ElTy : T->subtypes()) {
             if (isa<PointerType>(ElTy) && ElTy->getPointerAddressSpace() == AddressSpace::Tracked) {
@@ -1524,7 +1533,11 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Va
     // for the load part (x.tbaa) and the store part (tbaa_stack).
     // since the tbaa lattice has to be a tree we have unfortunately
     // x.tbaa ∪ tbaa_stack = tbaa_root if x.tbaa != tbaa_stack
+#if JL_LLVM_VERSION >= 110000
+    ctx.builder.CreateMemCpy(dst, MaybeAlign(align), src, MaybeAlign(0), sz, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
+#else
     ctx.builder.CreateMemCpy(dst, align, src, 0, sz, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
+#endif
 }
 
 static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Value *src, MDNode *tbaa_src,
@@ -1534,7 +1547,11 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Va
         emit_memcpy_llvm(ctx, dst, tbaa_dst, src, tbaa_src, const_sz->getZExtValue(), align, is_volatile);
         return;
     }
+#if JL_LLVM_VERSION >= 110000
+    ctx.builder.CreateMemCpy(dst, MaybeAlign(align), src, MaybeAlign(0), sz, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
+#else
     ctx.builder.CreateMemCpy(dst, align, src, 0, sz, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
+#endif
 }
 
 template<typename T1>
