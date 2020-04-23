@@ -490,7 +490,7 @@ end
 @test Array(view(view(reshape(1:13^3, 13, 13, 13), 3:7, 6:6, :), 1:2:5, :, 1:2:5)) ==
     cat([68,70,72],[406,408,410],[744,746,748]; dims=3)
 
-# tests @view (and replace_ref_end!)
+# tests @view (and replace_ref_begin_end!)
 
 @test_throws ArgumentError(
     "Invalid use of @view macro: argument must be a reference expression A[...]."
@@ -501,16 +501,16 @@ Y = 4:-1:1
 
 @test isa(@view(X[1:3]), SubArray)
 
-@test X[1:end] == @.(@view X[1:end]) # test compatibility of @. and @view
-@test X[1:end-3] == @view X[1:end-3]
-@test X[1:end,2,2] == @view X[1:end,2,2]
-@test X[1,1:end-2,1] == @view X[1,1:end-2,1]
-@test X[1,2,1:end-2] == @view X[1,2,1:end-2]
-@test X[1,2,Y[2:end]] == @view X[1,2,Y[2:end]]
-@test X[1:end,2,Y[2:end]] == @view X[1:end,2,Y[2:end]]
+@test X[begin:end] == @.(@view X[begin:end]) # test compatibility of @. and @view
+@test X[begin:end-3] == @view X[begin:end-3]
+@test X[1:end,2,begin+1] == @view X[1:end,2,begin+1]
+@test X[begin,1:end-2,1] == @view X[begin,1:end-2,1]
+@test X[begin,begin+1,begin:end-2] == @view X[begin,begin+1,begin:end-2]
+@test X[begin,2,Y[2:end]] == @view X[begin,2,Y[2:end]]
+@test X[begin:end,2,Y[begin+1:end]] == @view X[begin:end,2,Y[begin+1:end]]
 
 u = (1,2:3)
-@test X[u...,2:end] == @view X[u...,2:end]
+@test X[u...,begin+1:end] == @view X[u...,begin+1:end]
 @test X[(1,)...,(2,)...,2:end] == @view X[(1,)...,(2,)...,2:end]
 
 # test macro hygiene
@@ -525,7 +525,7 @@ let foo = [X]
 end
 
 # test @views macro
-@views let f!(x) = x[1:end-1] .+= x[2:end].^2
+@views let f!(x) = x[begin:end-1] .+= x[begin+1:end].^2
     x = [1,2,3,4]
     f!(x)
     @test x == [5,11,19,4]
@@ -552,13 +552,13 @@ end
     @test x == [5,8,0,0]
 end
 @views @test isa(X[1:3], SubArray)
-@test X[1:end] == @views X[1:end]
-@test X[1:end-3] == @views X[1:end-3]
-@test X[1:end,2,2] == @views X[1:end,2,2]
-@test X[1,2,1:end-2] == @views X[1,2,1:end-2]
-@test X[1,2,Y[2:end]] == @views X[1,2,Y[2:end]]
-@test X[1:end,2,Y[2:end]] == @views X[1:end,2,Y[2:end]]
-@test X[u...,2:end] == @views X[u...,2:end]
+@test X[begin:end] == @views X[begin:end]
+@test X[begin:end-3] == @views X[begin:end-3]
+@test X[1:end,2,begin+1] == @views X[1:end,2,begin+1]
+@test X[begin,2,1:end-2] == @views X[begin,2,1:end-2]
+@test X[begin,2,Y[2:end]] == @views X[begin,2,Y[2:end]]
+@test X[begin:end,2,Y[begin+1:end]] == @views X[begin:end,2,Y[begin+1:end]]
+@test X[u...,begin+1:end] == @views X[u...,begin+1:end]
 @test X[(1,)...,(2,)...,2:end] == @views X[(1,)...,(2,)...,2:end]
 
 # @views for zero dimensional arrays
