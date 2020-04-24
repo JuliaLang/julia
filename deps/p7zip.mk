@@ -57,7 +57,7 @@ fastcheck-p7zip: check-p7zip
 check-p7zip: compile-p7zip
 
 # If we built our own p7zip, we need to generate a fake p7zip_jll package to load it in:
-$(eval $(call jll-generate,p7zip_jll,,p7zip=\"7z$(EXE)\",05ff407c-b0c1-5878-9df8-858cc2e60c36,))
+$(eval $(call jll-generate,p7zip_jll,,p7zip=\"7z$(EXE)\",3f19e933-33d8-53b3-aaab-bd5110c3b7a0,))
 
 else # USE_BINARYBUILDER_P7ZIP
 

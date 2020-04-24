@@ -135,8 +135,6 @@ endif
 	# fix private lib paths
 	$(JULIAHOME)/contrib/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_frameworks)/*
 
-	$(JULIAHOME)/contrib/fixup-libgfortran.sh $(DESTDIR)$(prefix)/$(framework_frameworks)
-
 	# Add framework header
 	sed -e 's/<Julia/<$(FRAMEWORK_NAME)/' $(JULIAHOME)/contrib/mac/framework/Julia.h > $(DESTDIR)$(prefix)/$(framework_headers)/$(FRAMEWORK_NAME).h
 

@@ -103,8 +103,17 @@ check-osxunwind: compile-osxunwind
 install-osxunwind: $(build_prefix)/manifest/osxunwind
 
 # If we built our own libunwind/libosxunwind, we need to generate a fake LibUnwind_jll/LibOSXUnwind_jll package to load it in:
-$(eval $(call jll-generate,LibUnwind_jll,libunwind=\"libunwind\",,745a5e78-f969-53e9-954f-d19f2f74f4e3,))
-$(eval $(call jll-generate,LibOSXUnwind_jll,libosxunwind=\"libosxunwind\",,a83860b7-747b-57cf-bf1f-3e79990d037f,))
+# Note that since we only build the static library above, we don't bother to generate any library products here.
+$(eval $(call jll-generate,LibUnwind_jll,,,745a5e78-f969-53e9-954f-d19f2f74f4e3,))
+$(eval $(call jll-generate,LibOSXUnwind_jll,,,a83860b7-747b-57cf-bf1f-3e79990d037f,))
+
+# Fix naming mismatches
+$(build_prefix)/manifest/libunwind: $(build_prefix)/manifest/unwind
+	@cp "$<" "$@"
+$(build_prefix)/manifest/libosxunwind: $(build_prefix)/manifest/osxunwind
+	@cp "$<" "$@"
+install-unwind: install-LibUnwind_jll
+install-osxunwind: install-LibOSXUnwind_jll
 
 else # USE_BINARYBUILDER_LIBUNWIND
 

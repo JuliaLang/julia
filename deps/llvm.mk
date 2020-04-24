@@ -477,7 +477,7 @@ ifeq ($(OS),Darwin)
 LLVM_INSTALL += && ln -s libLLVM.dylib $2$$(build_shlibdir)/libLLVM-$$(LLVM_VER_SHORT).dylib
 endif
 
-$(eval $(call staged-install,llvm,llvm-$$(LLVM_VER)/build_$$(LLVM_BUILDTYPE), \
+$(eval $(call staged-install,libllvm,llvm-$$(LLVM_VER)/build_$$(LLVM_BUILDTYPE), \
 	LLVM_INSTALL,,,))
 
 clean-libllvm: clean-libcxx clean-libcxxabi

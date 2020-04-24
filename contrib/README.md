@@ -7,8 +7,6 @@ Installation
 |[ check-whitespace.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/check-whitespace.sh) | Check for trailing white space |
 |[ commit-name.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/commit-name.sh) | Computes a version name for a commit |
 |[ filterArgs.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/filterArgs.sh) | Update library search code to use only tokens that start with -L |
-|[ fixup-libgfortran.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/fixup-libgfortran.sh) | Include libgfortran  and libquadmath for installations |
-|[ fixup-libstdc++.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/fixup-libstdc++.sh) | Include libstdc++ for    installations |
 |[ install.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/install.sh) | Installation script with different permissions |
 |[ julia.appdata.xml ](https://github.com/JuliaLang/julia/blob/master/contrib/julia.appdata.xml) | Appdata config file |
 |[ julia-config.jl ](https://github.com/JuliaLang/julia/blob/master/contrib/julia-config.jl) | Determines build parameters required by an embedded Julia |

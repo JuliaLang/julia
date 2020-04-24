@@ -83,6 +83,10 @@ $(eval $(call jll-generate,LibCURL_jll,libcurl=\"libcurl\",,deac9b47-8bc7-5906-a
 						   Zlib_jll=83775a58-1f1d-513f-b197-d71354ab007a))
 install-curl: install-LibCURL_jll
 
+# Fix naming mismatches
+$(build_prefix)/manifest/libcurl: $(build_prefix)/manifest/curl
+	@cp "$<" "$@"
+
 else # USE_BINARYBUILDER_CURL
 
 # Install LibCURL_jll into our stdlib folder

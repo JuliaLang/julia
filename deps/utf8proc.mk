@@ -26,7 +26,7 @@ define UTF8PROC_INSTALL
 	mkdir -p $2/$$(build_includedir) $2/$$(build_libdir)
 	cp $1/utf8proc.h $2/$$(build_includedir)
 	cp $1/libutf8proc.a $2/$$(build_libdir)
-	cp $1/libutf8proc.$(shlib_ext) $2/$$(build_shlibdir)
+	-cp $1/libutf8proc.$(SHLIB_EXT) $2/$$(build_shlibdir)
 endef
 $(eval $(call staged-install, \
 	utf8proc,$(UTF8PROC_SRC_DIR), \
@@ -44,8 +44,9 @@ compile-utf8proc: $(UTF8PROC_BUILDDIR)/build-compiled
 fastcheck-utf8proc: #check-utf8proc
 check-utf8proc: $(UTF8PROC_BUILDDIR)/build-checked
 
-# If we built our own utf8proc, we need to generate a fake utf8proc_jll package to load it in:
-$(eval $(call jll-generate,utf8proc_jll,libutf8proc=\"libutf8proc\",,00992c89-a35c-5347-9984-e6609dacc59a,))
+# If we built our own utf8proc, we need to generate a fake utf8proc_jll package to load it in.
+# Note that since we only build the static library above, we don't bother to generate any library products here.
+$(eval $(call jll-generate,utf8proc_jll,,,00992c89-a35c-5347-9984-e6609dacc59a,))
 
 else # USE_BINARYBUILDER_UTF8PROC
 

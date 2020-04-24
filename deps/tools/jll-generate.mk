@@ -77,7 +77,7 @@ $$($(1)_SRC_DIR)/src/$(1).jl: | $$($(1)_SRC_DIR)
 $$($(1)_SRC_DIR)/Project.toml: | $$($(1)_SRC_DIR)
 	@echo "name = \"$(strip $(1))\"" > "$$@"
 	@echo "uuid = \"$(strip $(4))\"" >> "$$@"
-	@echo "version = \"$(shell cat $(JULIAHOME)/VERSION | cut -d. -f1-3)\"" >> "$$@"
+	@echo "version = \"$(shell cat $(JULIAHOME)/VERSION | cut -d. -f1-3 | cut -d- -f1)+generated\"" >> "$$@"
 	
 	@echo "[deps]" >> "$$@"
 	@echo "Libdl = \"8f399da3-3557-5675-b5ff-fb832c97cbdb\"" >> "$$@"

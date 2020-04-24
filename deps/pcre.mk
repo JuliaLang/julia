@@ -56,21 +56,16 @@ check-pcre: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-checked
 
 # If we built our own libcurl, we need to generate a fake LibCURL_jll package to load it in:
 $(eval $(call jll-generate,PCRE2_jll,libpcre=\"libpcre2-8\",,efcefdf7-47ab-520b-bdef-62a2eaa19f15,))
+install-pcre: install-PCRE2_jll
+# Fix naming mismatch (pcre2 vs. pcre)
+$(build_prefix)/manifest/pcre2: $(build_prefix)/manifest/pcre
+	cp "$<" "$@"
 
 else # USE_BINARYBUILDER_PCRE
 
 # Install PCRE2_jll into our stdlib folder
 $(eval $(call install-jll-and-artifact,PCRE2_jll))
 
-# Fix naming mismatch (pcre2 vs. pcre)
-$(build_prefix)/manifest/pcre: $(build_prefix)/manifest/pcre2
-	cp "$<" "$@"
-clean-pcre: clean-pcre2
-distclean-pcre: distclean-pcre2
-get-pcre: get-pcre2
-extract-pcre: extract-pcre2
-compile-pcre: compile-pcre2
-install-pcre: install-pcre2 install-PCRE2_jll $(build_prefix)/manifest/pcre
-UNINSTALL_pcre = $(UNINSTALL_pcre2)
-uninstall-pcre: uninstall-pcre2
+# Fix naming mismatches ("pcre2" vs "pcre")
+$(eval $(call fix-artifact-naming-mismatch,pcre,PCRE2_jll))
 endif
