@@ -10,7 +10,7 @@ extern void process_unrooted(jl_value_t *maybe_unrooted JL_MAYBE_UNROOTED);
 extern void jl_gc_safepoint();
 
 void unrooted_argument() {
-    look_at_value((jl_value_t*)jl_svec1(NULL)); // expected-warning{{Passing non-rooted value as argument to function}}
+    look_at_value((jl_value_t*)jl_svec1(NULL)); // expected-warning{{Passing non-rooted value as argument to function that may GC}}
                                                 // expected-note@-1{{Passing non-rooted value as argument to function}}
                                                 // expected-note@-2{{Started tracking value here}}
 };
@@ -22,9 +22,10 @@ void simple_svec() {
 }
 
 jl_value_t *simple_missing_root() {
-    jl_svec_t *val = jl_svec1(NULL);
-    jl_gc_safepoint();
-    return jl_svecref(val, 0); // XXX-expected-warning{{Passing non-rooted value as argument to function}}
+    jl_svec_t *val = jl_svec1(NULL); // expected-note{{Started tracking value here}}
+    jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
+    return jl_svecref(val, 0); // expected-warning{{Argument value may have been GCed}}
+                               // expected-note@-1{{Argument value may have been GCed}}
 };
 
 jl_value_t *root_value() {
@@ -130,13 +131,17 @@ jl_value_t *late_root2() {
 
 jl_value_t *already_freed() {
     jl_svec_t *val = NULL;
-    JL_GC_PUSH1(&val);
-    val = jl_svec1(NULL);
-    JL_GC_POP();
-    jl_gc_safepoint();
-    jl_value_t *ret = jl_svecref(val, 0);
+    JL_GC_PUSH1(&val); // expected-note{{GC frame changed here}}
+    val = jl_svec1(NULL); // expected-note{{Started tracking value here}}
+                          // expected-note@-1{{Value was rooted here}}
+    JL_GC_POP(); // expected-note{{GC frame changed here}}
+                 // expected-note@-1{{Root was released here}}
+    jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
+    jl_value_t *ret = jl_svecref(val, 0); // expected-warning{{Argument value may have been GCed}}
+                                          // expected-note@-1{{Argument value may have been GCed}}
     return ret;
 };
+
 
 int field_access() {
     jl_svec_t *val = jl_svec1(NULL); // expected-note {{Started tracking value here}}

@@ -200,6 +200,7 @@ private:
                               const MemRegion *Region);
 
   static bool isGCTrackedType(QualType Type);
+  static bool isGCTracked(const Expr *E);
   bool isGloballyRootedType(QualType Type) const;
   static void dumpState(const ProgramStateRef &State);
   static bool declHasAnnotation(const clang::Decl *D, const char *which);
@@ -703,12 +704,8 @@ void GCChecker::checkBeginFunction(CheckerContext &C) const {
   }
 }
 
-#if LLVM_VERSION_MAJOR >= 7
 void GCChecker::checkEndFunction(const clang::ReturnStmt *RS,
                                  CheckerContext &C) const {
-#else
-void GCChecker::checkEndFunction(CheckerContext &C) const {
-#endif
   ProgramStateRef State = C.getState();
   bool Changed = false;
   if (State->get<GCDisabledAt>() == C.getStackFrame()->getIndex()) {
@@ -787,6 +784,19 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                return false;
              },
              QT);
+}
+
+bool GCChecker::isGCTracked(const Expr *E) {
+  while (1) {
+    if (isGCTrackedType(E->getType()))
+      return true;
+    if (auto ICE = dyn_cast<ImplicitCastExpr>(E))
+      E = ICE->getSubExpr();
+    else if (auto CE = dyn_cast<CastExpr>(E))
+      E = CE->getSubExpr();
+    else
+      return false;
+  }
 }
 
 bool GCChecker::isGloballyRootedType(QualType QT) const {
@@ -1053,7 +1063,7 @@ SymbolRef GCChecker::getSymbolForResult(const Expr *Result,
     QualType QT = Result->getType();
     if (!QT->isPointerType())
       return nullptr;
-    if (OldValS || GCChecker::isGCTrackedType(QT)) {
+    if (OldValS || GCChecker::isGCTracked(Result)) {
       Loaded = C.getSValBuilder().conjureSymbolVal(
           nullptr, Result, C.getLocationContext(), Result->getType(),
           C.blockCount());
@@ -1082,7 +1092,7 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
         State->set<GCValueMap>(NewSym, ValueState::getRooted(nullptr, -1)));
     return;
   }
-  if (!isGCTrackedType(Result->getType())) {
+  if (!isGCTracked(Result)) {
     // TODO: We may want to refine this. This is to track pointers through the
     // array list in jl_module_t.
     bool ParentIsModule = isJuliaType(
@@ -1091,8 +1101,7 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
     bool ResultIsArrayList = isJuliaType(
         [](StringRef Name) { return Name.endswith_lower("arraylist_t"); },
         Result->getType());
-    if (!(ParentIsModule && ResultIsArrayList) &&
-        isGCTrackedType(Parent->getType())) {
+    if (!(ParentIsModule && ResultIsArrayList) && isGCTracked(Parent)) {
       ResultTracked = false;
     }
   }
@@ -1144,7 +1153,7 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
   }
   if (!OldValS) {
     // This way we'll get better diagnostics
-    if (isGCTrackedType(Result->getType())) {
+    if (isGCTracked(Result)) {
       C.addTransition(
           State->set<GCValueMap>(NewSym, ValueState::getUntracked()));
     }
@@ -1167,8 +1176,7 @@ void GCChecker::checkPostStmt(const ArraySubscriptExpr *ASE,
   const MemRegion *Region = C.getSVal(ASE->getLHS()).getAsRegion();
   ProgramStateRef State = C.getState();
   SValExplainer Ex(C.getASTContext());
-  if (Region && Region->getAs<ElementRegion>() &&
-      isGCTrackedType(ASE->getType())) {
+  if (Region && Region->getAs<ElementRegion>() && isGCTracked(ASE)) {
     const RootState *RS =
         State->get<GCRootMap>(Region->getAs<ElementRegion>()->getSuperRegion());
     if (RS) {
@@ -1192,7 +1200,7 @@ void GCChecker::checkPostStmt(const MemberExpr *ME, CheckerContext &C) const {
   // It is possible for the member itself to be gcrooted, so check that first
   const MemRegion *Region = C.getSVal(ME).getAsRegion();
   ProgramStateRef State = C.getState();
-  if (Region && isGCTrackedType(ME->getType())) {
+  if (Region && isGCTracked(ME)) {
     if (const RootState *RS = State->get<GCRootMap>(Region)) {
       ValueState ValS = ValueState::getRooted(Region, RS->RootedAtDepth);
       SymbolRef NewSym = getSymbolForResult(ME, &ValS, State, C);
@@ -1274,7 +1282,7 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
     SourceRange range;
     if (const Expr *E = Call.getArgExpr(idx)) {
       range = E->getSourceRange();
-      if (!isGCTrackedType(E->getType()))
+      if (!isGCTracked(E))
         continue;
     }
     if (ValState->isPotentiallyFreed()) {
