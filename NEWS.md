@@ -122,6 +122,7 @@ New library features
 * `x::Signed % Unsigned` and `x::Unsigned % Signed` are supported for integer bitstypes.
 * `signed(unsigned_type)` is supported for integer bitstypes, `unsigned(signed_type)` has been supported.
 * `accumulate`, `cumsum`, and `cumprod` now support `Tuple` ([#34654]) and arbitrary iterators ([#34656]).
+* `pop!(collection, key, [default])` now has a method for `Vector` to remove an element at an arbitrary index ([#35513]).
 * In `splice!` with no replacement, values to be removed can now be specified with an
   arbitrary iterable (instead of a `UnitRange`) ([#34524]).
 * The `@view` and `@views` macros now support the `a[begin]` syntax that was introduced in Julia 1.4 ([#35289]).
