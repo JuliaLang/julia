@@ -23,7 +23,6 @@ abstract type LibuvStream <: IO end
 # .  +- Pipe
 # .  +- Process (not exported)
 # .  +- ProcessChain (not exported)
-# +- BufferStream
 # +- DevNull (not exported)
 # +- Filesystem.File
 # +- LibuvStream (not exported)
@@ -31,6 +30,7 @@ abstract type LibuvStream <: IO end
 # .  +- TCPSocket
 # .  +- TTY (not exported)
 # .  +- UDPSocket
+# .  +- BufferStream (FIXME: 2.0)
 # +- IOBuffer = Base.GenericIOBuffer{Array{UInt8,1}}
 # +- IOStream
 
@@ -1202,11 +1202,12 @@ end
 mutable struct BufferStream <: LibuvStream
     buffer::IOBuffer
     cond::Threads.Condition
+    readerror::Any
     is_open::Bool
     buffer_writes::Bool
     lock::ReentrantLock # advisory lock
 
-    BufferStream() = new(PipeBuffer(), Threads.Condition(), true, false, ReentrantLock())
+    BufferStream() = new(PipeBuffer(), Threads.Condition(), nothing, true, false, ReentrantLock())
 end
 
 isopen(s::BufferStream) = s.is_open

@@ -1129,6 +1129,22 @@ function pop!(a::Vector)
     return item
 end
 
+function pop!(a::Vector, i::Integer)
+    x = a[i]
+    _deleteat!(a, i, 1)
+    x
+end
+
+function pop!(a::Vector, i::Integer, default)
+    if 1 <= i <= length(a)
+        x = @inbounds a[i]
+        _deleteat!(a, i, 1)
+        x
+    else
+        default
+    end
+end
+
 """
     pushfirst!(collection, items...) -> collection
 
@@ -1411,7 +1427,7 @@ To insert `replacement` before an index `n` without removing any items, use
 # Examples
 ```jldoctest
 julia> A = [-1, -2, -3, 5, 4, 3, -1]; splice!(A, 4:3, 2)
-0-element Array{Int64,1}
+Int64[]
 
 julia> A
 8-element Array{Int64,1}:
@@ -2073,7 +2089,7 @@ julia> findall(A)
  CartesianIndex(2, 2)
 
 julia> findall(falses(3))
-0-element Array{Int64,1}
+Int64[]
 ```
 """
 function findall(A)

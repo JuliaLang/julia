@@ -122,8 +122,10 @@ New library features
 * `x::Signed % Unsigned` and `x::Unsigned % Signed` are supported for integer bitstypes.
 * `signed(unsigned_type)` is supported for integer bitstypes, `unsigned(signed_type)` has been supported.
 * `accumulate`, `cumsum`, and `cumprod` now support `Tuple` ([#34654]) and arbitrary iterators ([#34656]).
+* `pop!(collection, key, [default])` now has a method for `Vector` to remove an element at an arbitrary index ([#35513]).
 * In `splice!` with no replacement, values to be removed can now be specified with an
   arbitrary iterable (instead of a `UnitRange`) ([#34524]).
+* The `@view` and `@views` macros now support the `a[begin]` syntax that was introduced in Julia 1.4 ([#35289]).
 * `open` for files now accepts a keyword argument `lock` controlling whether file operations
   will acquire locks for safe multi-threaded access. Setting it to `false` provides better
   performance when only one thread will access the file.
@@ -154,6 +156,8 @@ Standard library changes
 
 #### Random
 
+* `randn!(::MersenneTwister, ::Array{Float64})` is faster, and as a result, for a given state of the RNG,
+  the corresponding generated numbers have changed ([#35078]).
 
 #### REPL
 
@@ -167,6 +171,8 @@ Standard library changes
 
 #### Dates
 * The `eps` function now accepts `TimeType` types ([#31487]).
+* The `zero` function now accepts `TimeType` types ([#35554]).
+
 
 #### Statistics
 
