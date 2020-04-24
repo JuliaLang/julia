@@ -70,6 +70,9 @@ Language changes
 * The line number of function definitions is now added by the parser as an
   additional `LineNumberNode` at the start of each function body ([#35138]).
 
+* There is a now an abstract type, `AbstractComplex` which is between `Complex` and `Number`
+  in the type heirarchy, i.e. `Complex{T<:Real} <: AbstractComplex <: Number`.
+
 Command-line option changes
 ---------------------------
 
