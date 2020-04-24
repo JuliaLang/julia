@@ -125,12 +125,13 @@ findfirst(ch::AbstractChar, string::AbstractString) = findfirst(==(ch), string)
 
 # AbstractString implementation of the generic findnext interface
 function findnext(testf::Function, s::AbstractString, i::Integer)
+    i = Int(i)
     z = ncodeunits(s) + 1
     1 ≤ i ≤ z || throw(BoundsError(s, i))
     @inbounds i == z || isvalid(s, i) || string_index_err(s, i)
     for (j, d) in pairs(SubString(s, i))
         if testf(d)
-            return Int(i + j - 1)
+            return i + j - 1
         end
     end
     return nothing
