@@ -2,8 +2,8 @@
 
 
 """
-    Complex{T<:Real} <: Number
     AbstractComplex <: Number
+
 Abstract supertype for complex numbers.
 """
 abstract type AbstractComplex <: Number end
