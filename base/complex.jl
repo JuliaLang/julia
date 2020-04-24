@@ -1,5 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+
+"""
+    Complex{T<:Real} <: Number
+    AbstractComplex <: Number
+Abstract supertype for complex numbers.
+"""
+abstract type AbstractComplex <: Number end
+AbstractComplex(z::AbstractComplex) = z
+AbstractComplex(x::Real) = Complex(x, zero(x))
+
 """
     Complex{T<:Real} <: Number
 
@@ -8,7 +18,7 @@ Complex number type with real and imaginary part of type `T`.
 `ComplexF16`, `ComplexF32` and `ComplexF64` are aliases for
 `Complex{Float16}`, `Complex{Float32}` and `Complex{Float64}` respectively.
 """
-struct Complex{T<:Real} <: Number
+struct Complex{T<:Real} <: AbstractComplex
     re::T
     im::T
 end
@@ -33,10 +43,11 @@ const ComplexF32  = Complex{Float32}
 const ComplexF16  = Complex{Float16}
 
 Complex{T}(x::Real) where {T<:Real} = Complex{T}(x,0)
-Complex{T}(z::Complex) where {T<:Real} = Complex{T}(real(z),imag(z))
+Complex{T}(z::AbstractComplex) where {T<:Real} = Complex{T}(real(z),imag(z))
 (::Type{T})(z::Complex) where {T<:Real} =
     isreal(z) ? T(real(z))::T : throw(InexactError(nameof(T), T, z))
 
+Complex(z::AbstractComplex) = Complex(real(z), imag(z))
 Complex(z::Complex) = z
 
 promote_rule(::Type{Complex{T}}, ::Type{S}) where {T<:Real,S<:Real} =
@@ -109,6 +120,7 @@ Float64
 real(T::Type) = typeof(real(zero(T)))
 real(::Type{T}) where {T<:Real} = T
 real(C::Type{<:Complex}) = fieldtype(C, 1)
+real(::Type{AbstractComplex}) = Real
 
 """
     isreal(x) -> Bool
@@ -130,13 +142,13 @@ false
 ```
 """
 isreal(x::Real) = true
-isreal(z::Complex) = iszero(imag(z))
-isinteger(z::Complex) = isreal(z) & isinteger(real(z))
-isfinite(z::Complex) = isfinite(real(z)) & isfinite(imag(z))
-isnan(z::Complex) = isnan(real(z)) | isnan(imag(z))
-isinf(z::Complex) = isinf(real(z)) | isinf(imag(z))
-iszero(z::Complex) = iszero(real(z)) & iszero(imag(z))
-isone(z::Complex) = isone(real(z)) & iszero(imag(z))
+isreal(z::AbstractComplex) = iszero(imag(z))
+isinteger(z::AbstractComplex) = isreal(z) & isinteger(real(z))
+isfinite(z::AbstractComplex) = isfinite(real(z)) & isfinite(imag(z))
+isnan(z::AbstractComplex) = isnan(real(z)) | isnan(imag(z))
+isinf(z::AbstractComplex) = isinf(real(z)) | isinf(imag(z))
+iszero(z::AbstractComplex) = iszero(real(z)) & iszero(imag(z))
+isone(z::AbstractComplex) = isone(real(z)) & iszero(imag(z))
 
 """
     complex(r, [i])
@@ -155,7 +167,7 @@ julia> complex([1, 2, 3])
  3 + 0im
 ```
 """
-complex(z::Complex) = z
+complex(z::AbstractComplex) = z
 complex(x::Real) = Complex(x)
 complex(x::Real, y::Real) = Complex(x, y)
 
@@ -176,6 +188,7 @@ Complex{Int64}
 """
 complex(::Type{T}) where {T<:Real} = Complex{T}
 complex(::Type{Complex{T}}) where {T<:Real} = Complex{T}
+complex(::Type{T}) where {T<:AbstractComplex} = T
 
 flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
@@ -226,13 +239,13 @@ bswap(z::Complex) = Complex(bswap(real(z)), bswap(imag(z)))
 
 ## equality and hashing of complex numbers ##
 
-==(z::Complex, w::Complex) = (real(z) == real(w)) & (imag(z) == imag(w))
-==(z::Complex, x::Real) = isreal(z) && real(z) == x
-==(x::Real, z::Complex) = isreal(z) && real(z) == x
+==(z::AbstractComplex, w::AbstractComplex) = (real(z) == real(w)) & (imag(z) == imag(w))
+==(z::AbstractComplex, x::Real) = isreal(z) && real(z) == x
+==(x::Real, z::AbstractComplex) = isreal(z) && real(z) == x
 
-isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
+isequal(z::AbstractComplex, w::AbstractComplex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
 
-in(x::Complex, r::AbstractRange{<:Real}) = isreal(x) && real(x) in r
+in(x::AbstractComplex, r::AbstractRange{<:Real}) = isreal(x) && real(x) in r
 
 if UInt === UInt64
     const h_imag = 0x32a7a07f3e7cd1f9
@@ -261,8 +274,8 @@ julia> conj(1 + 3im)
 ```
 """
 conj(z::Complex) = Complex(real(z),-imag(z))
-abs(z::Complex)  = hypot(real(z), imag(z))
-abs2(z::Complex) = real(z)*real(z) + imag(z)*imag(z)
+abs(z::AbstractComplex)  = hypot(real(z), imag(z))
+abs2(z::AbstractComplex) = real(z)*real(z) + imag(z)*imag(z)
 function inv(z::Complex)
     c, d = reim(z)
     (isinf(c) | isinf(d)) && return complex(copysign(zero(c), c), flipsign(-zero(d), d))
