@@ -2906,4 +2906,34 @@ end
     @test B ≈ mapreduce(identity, +, Matrix(A), dims=2)
 end
 
+@testset "Symmetric and Hermitian #35325" begin
+    A = sprandn(ComplexF64, 10, 10, 0.1)
+    B = sprandn(ComplexF64, 10, 10, 0.1)
+
+    @test Symmetric(real(A)) + Hermitian(B) isa Hermitian{ComplexF64, <:SparseMatrixCSC}
+    @test Hermitian(A) + Symmetric(real(B)) isa Hermitian{ComplexF64, <:SparseMatrixCSC}
+    @test Hermitian(A) + Symmetric(B) isa SparseMatrixCSC
+    @testset "$Wrapper $op" for op ∈ (+, -), Wrapper ∈ (Hermitian, Symmetric)
+        AWU = Wrapper(A, :U)
+        AWL = Wrapper(A, :L)
+        BWU = Wrapper(B, :U)
+        BWL = Wrapper(B, :L)
+
+        @test op(AWU, B) isa SparseMatrixCSC
+        @test op(A, BWL) isa SparseMatrixCSC
+
+        @test op(AWU, B) ≈ op(collect(AWU), B)
+        @test op(AWL, B) ≈ op(collect(AWL), B)
+        @test op(A, BWU) ≈ op(A, collect(BWU))
+        @test op(A, BWL) ≈ op(A, collect(BWL))
+
+        @test op(AWU, BWL) isa Wrapper{ComplexF64, <:SparseMatrixCSC}
+
+        @test op(AWU, BWU) ≈ op(collect(AWU), collect(BWU))
+        @test op(AWU, BWL) ≈ op(collect(AWU), collect(BWL))
+        @test op(AWL, BWU) ≈ op(collect(AWL), collect(BWU))
+        @test op(AWL, BWL) ≈ op(collect(AWL), collect(BWL))
+    end
+end
+
 end # module

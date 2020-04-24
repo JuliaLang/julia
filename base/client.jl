@@ -237,6 +237,13 @@ function exec_options(opts)
             repl = false
         elseif cmd == 'L'
             # nothing
+        elseif cmd == 'B' # --bug-report
+            # If we're doing a bug report, don't load anything else. We will
+            # spawn a child in which to execute these options.
+            let InteractiveUtils = load_InteractiveUtils()
+                InteractiveUtils.report_bug(arg)
+            end
+            return nothing
         else
             @warn "Unexpected command -$cmd'$arg'"
         end
@@ -349,20 +356,28 @@ _atreplinit(repl) = invokelatest(__atreplinit, repl)
 # The REPL stdlib hooks into Base using this Ref
 const REPL_MODULE_REF = Ref{Module}()
 
-# run the requested sort of evaluation loop on stdio
-function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
-    global active_repl
+function load_InteractiveUtils()
     # load interactive-only libraries
     if !isdefined(Main, :InteractiveUtils)
         try
             let InteractiveUtils = require(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
                 Core.eval(Main, :(const InteractiveUtils = $InteractiveUtils))
                 Core.eval(Main, :(using .InteractiveUtils))
+                return InteractiveUtils
             end
         catch ex
             @warn "Failed to import InteractiveUtils into module Main" exception=(ex, catch_backtrace())
         end
+        return nothing
     end
+    return getfield(Main, :InteractiveUtils)
+end
+
+# run the requested sort of evaluation loop on stdio
+function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
+    global active_repl
+
+    load_InteractiveUtils()
 
     if interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL

@@ -13,7 +13,6 @@ Installation
 |[ julia.appdata.xml ](https://github.com/JuliaLang/julia/blob/master/contrib/julia.appdata.xml) | Appdata config file |
 |[ julia-config.jl ](https://github.com/JuliaLang/julia/blob/master/contrib/julia-config.jl) | Determines build parameters required by an embedded Julia |
 |[ julia.desktop ](https://github.com/JuliaLang/julia/blob/master/contrib/julia.desktop) | GNOME desktop config file |
-|[ julia.svg ](https://github.com/JuliaLang/julia/blob/master/contrib/julia.svg) | Julia svg image file |
 |[ mac/ ](https://github.com/JuliaLang/julia/blob/master/contrib/mac/) | Mac install files |
 |[ relative_path.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/relative_path.sh) | Convert absolute path into   relative path script |
 |[ repackage_system_suitesparse4.make ](https://github.com/JuliaLang/julia/blob/master/contrib/repackage_system_suitesparse4.make) | Links shared    libraries from static-library for suitesparse4 |

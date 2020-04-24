@@ -1102,7 +1102,7 @@ When defining generated functions, there are five main differences to ordinary f
 3. Instead of calculating something or performing some action, you return a *quoted expression* which,
    when evaluated, does what you want.
 4. Generated functions are only permitted to call functions that were defined *before* the definition of the generated
-   function. (Failure to follow this my result on getting `MethodErrors` referring to functions from a future world-age.)
+   function. (Failure to follow this may result in getting `MethodErrors` referring to functions from a future world-age.)
 5. Generated functions must not *mutate* or *observe* any non-constant global state (including,
    for example, IO, locks, non-local dictionaries, or using [`hasmethod`](@ref)).
    This means they can only read global constants, and cannot have any side effects.

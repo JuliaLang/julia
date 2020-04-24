@@ -402,6 +402,12 @@ Base.eps(::Type{Date}) = Day(1)
 Base.eps(::Type{Time}) = Nanosecond(1)
 Base.eps(::T) where T <: TimeType = eps(T)::Period
 
+# zero returns dt::T - dt::T
+Base.zero(::Type{DateTime}) = Millisecond(0)
+Base.zero(::Type{Date}) = Day(0)
+Base.zero(::Type{Time}) = Nanosecond(0)
+Base.zero(::T) where T <: TimeType = zero(T)::Period
+
 
 Base.typemax(::Union{DateTime, Type{DateTime}}) = DateTime(146138512, 12, 31, 23, 59, 59)
 Base.typemin(::Union{DateTime, Type{DateTime}}) = DateTime(-146138511, 1, 1, 0, 0, 0)

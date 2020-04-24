@@ -187,6 +187,12 @@ c = Dates.Time(0)
     @test eps(a) == Dates.Millisecond(1)
     @test eps(b) == Dates.Day(1)
     @test eps(c) == Dates.Nanosecond(1)
+    @test zero(DateTime) == Dates.Millisecond(0)
+    @test zero(Date) == Dates.Day(0)
+    @test zero(Time) == Dates.Nanosecond(0)
+    @test zero(a) == Dates.Millisecond(0)
+    @test zero(b) == Dates.Day(0)
+    @test zero(c) == Dates.Nanosecond(0)
     @test string(typemax(Dates.DateTime)) == "146138512-12-31T23:59:59"
     @test string(typemin(Dates.DateTime)) == "-146138511-01-01T00:00:00"
     @test typemax(Dates.DateTime) - typemin(Dates.DateTime) == Dates.Millisecond(9223372017043199000)
