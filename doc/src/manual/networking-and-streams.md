@@ -335,16 +335,17 @@ concurrently and wait until they've all completed. You can use the [`@sync`](@re
 your program to block until all of the coroutines it wraps around have exited:
 
 ```julia-repl
-julia> @sync for filename in ("foo.txt", "bar.txt", "baz.txt")
-           @async open(filename, "w") do io
-               write(io, "My name is $(filename)")
+julia> using Sockets
+
+julia> @sync for hostname in ("google.com", "github.com", "julialang.org")
+           conn = connect(hostname, 80)
+           @async begin
+               write(conn, "GET / HTTP/1.1\r\nHost:$(hostname)\r\n\r\n")
+               readline(conn, keep=true)
+               println("Finished connection to $(hostname)")
            end
        end
-
-julia> for filename in ("foo.txt", "bar.txt", "baz.txt")
-           println(readlines(filename))
-       end
-["My name is foo.txt"]
-["My name is bar.txt"]
-["My name is baz.txt"]
+Finished connection to google.com
+Finished connection to julialang.org
+Finished connection to github.com
 ```
