@@ -10,11 +10,11 @@ struct Rational{T<:Integer} <: Real
     num::T
     den::T
 
-    function Rational{T}(num::Integer, den::Integer; checked::Bool=true) where T<:Integer
+    function Rational{T}(num::Integer, den::Integer; checked::Bool) where T<:Integer
         if checked
             num == den == zero(T) && __throw_rational_argerror_zero(T)
             num, den = divgcd(num, den)
-            num, den = _checked_den(num, den)
+            num, den = checking_den(num, den)
         end
         return new{T}(num, den)
     end
@@ -22,7 +22,7 @@ end
 @noinline __throw_rational_argerror_zero(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
 @noinline __throw_rational_argerror_typemin(T) = throw(ArgumentError("invalid rational: denominator can't be typemin($T)"))
 
-function _checked_den(num::T, den::T) where T<:Integer
+function checking_den(num::T, den::T) where T<:Integer
     if signbit(den)
         den = -den
         signbit(den) && __throw_rational_argerror_typemin(T)
@@ -32,9 +32,13 @@ function _checked_den(num::T, den::T) where T<:Integer
 end
 
 function checked_den(num::T, den::T) where T<:Integer
-    Rational{T}(_checked_den(num, den)...; checked=false)
+    Rational{T}(checking_den(num, den)...; checked=false)
 end
 checked_den(num::Integer, den::Integer) = checked_den(promote(num, den)...)
+
+function Rational{T}(num::Integer, den::Integer) where T<:Integer
+    Rational{T}(num, den; checked=true)
+end
 
 function Rational(n::T, d::T; checked=true) where T<:Integer
     Rational{T}(n, d; checked)
