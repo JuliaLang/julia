@@ -933,7 +933,7 @@ julia> convert.(Float32, [1, 2])
  1.0
  2.0
 
-julia> ceil.((UInt8,), [1.2 3.4; 5.6 6.7])
+julia> ceil.(UInt8, [1.2 3.4; 5.6 6.7])
 2×2 Array{UInt8,2}:
  0x02  0x04
  0x06  0x07
