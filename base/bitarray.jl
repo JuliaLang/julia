@@ -1459,7 +1459,7 @@ function findnext(testf::Function, B::BitArray, start::Integer)
 end
 #findfirst(testf::Function, B::BitArray) = findnext(testf, B, 1)  ## defined in array.jl
 
-function unsafe_bitfindprev(Bc::Vector{UInt64}, start::Integer)
+function unsafe_bitfindprev(Bc::Vector{UInt64}, start::Int)
     chunk_start = _div64(start-1)+1
     mask = _msk_end(start)
 
