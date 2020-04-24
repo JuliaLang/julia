@@ -285,11 +285,10 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
         lastindex(a) + 1
     else
         if o isa ForwardOrdering
-            y = isa(x, Unsigned) ? floor(-Signed(x)) : floor(Integer, -x)
+            -fld(floor(Integer, -x) + Signed(first(a)), h) + 1
         else
-            y = isa(x, Unsigned) ? ceil(-Signed(x)) : ceil(Integer, -x)
+            -fld(ceil(Integer, -x) + Signed(first(a)), h) + 1
         end
-        -fld(y + Signed(first(a)), h) + 1
     end
 end
 
