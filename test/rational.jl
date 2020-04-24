@@ -29,6 +29,7 @@ using Test
     @test_throws OverflowError (1//2)^63
     @test inv((1+typemin(Int))//typemax(Int)) == -1
     @test_throws ArgumentError inv(typemin(Int)//typemax(Int))
+    @test_throws ArgumentError Rational(0x1, typemin(Int32))
 
     @test @inferred(rationalize(Int, 3.0, 0.0)) === 3//1
     @test @inferred(rationalize(Int, 3.0, 0)) === 3//1
@@ -41,6 +42,11 @@ using Test
     @test_throws ArgumentError 0 // 0
     @test -2 // typemin(Int) == -1 // (typemin(Int) >> 1)
     @test 2 // typemin(Int) == 1 // (typemin(Int) >> 1)
+
+    @test_throws InexactError Rational(UInt(1), typemin(Int32))
+    @test iszero(Rational{Int}(UInt(0), 1))
+    @test Rational{BigInt}(UInt(1), Int(-1)) == -1
+    @test_broken Rational{Int64}(UInt(1), typemin(Int32)) == Int64(1) // Int64(typemin(Int32))
 
     for a = -5:5, b = -5:5
         if a == b == 0; continue; end

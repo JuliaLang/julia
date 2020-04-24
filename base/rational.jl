@@ -12,9 +12,9 @@ struct Rational{T<:Integer} <: Real
 
     function Rational{T}(num::Integer, den::Integer; checked::Bool) where T<:Integer
         if checked
-            num == den == zero(T) && __throw_rational_argerror_zero(T)
+            iszero(den) && iszero(num) && __throw_rational_argerror_zero(T)
             num, den = divgcd(num, den)
-            num, den = checking_den(num, den)
+            num, den = checking_den(T(num), T(den))
         end
         return new{T}(num, den)
     end
