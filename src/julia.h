@@ -8,6 +8,7 @@
 // stored and not total length, to save space.
 #define STORE_ARRAY_LEN
 //** End Configuration options **//
+#include "options.h"
 
 #include "libsupport.h"
 #include <stdint.h>
@@ -1721,8 +1722,10 @@ typedef struct _jl_handler_t {
     size_t locks_len;
     sig_atomic_t defer_signal;
     int finalizers_inhibited;
-    jl_timing_block_t *timing_stack;
     size_t world_age;
+#ifdef ENABLE_TIMINGS
+    jl_timing_block_t *timing_stack;
+#endif
 } jl_handler_t;
 
 typedef struct _jl_task_t {
@@ -1762,7 +1765,9 @@ typedef struct _jl_task_t {
     int16_t prio;
     // This is statically initialized when the task is not holding any locks
     arraylist_t locks;
+#ifdef ENABLE_TIMINGS
     jl_timing_block_t *timing_stack;
+#endif
 } jl_task_t;
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t*, jl_value_t*, size_t);
