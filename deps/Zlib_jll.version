@@ -1,0 +1,4 @@
+ZLIB_JLL_BRANCH = master
+ZLIB_JLL_SHA1 = db9995891f2c22c0eda8cb41af6c156bb45bc9da
+ZLIB_JLL_GIT_URL := git://github.com/JuliaBinaryWrappers/Zlib_jll.jl.git
+ZLIB_JLL_TAR_URL = https://api.github.com/repos/JuliaBinaryWrappers/Zlib_jll.jl/tarball/$1

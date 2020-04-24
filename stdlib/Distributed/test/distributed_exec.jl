@@ -1006,25 +1006,7 @@ end
 # Test addprocs enable_threaded_blas parameter
 
 const get_num_threads = function() # anonymous so it will be serialized when called
-    blas = LinearAlgebra.BLAS.vendor()
-    # Wrap in a try to catch unsupported blas versions
-    try
-        if blas == :openblas
-            return ccall((:openblas_get_num_threads, Base.libblas_name), Cint, ())
-        elseif blas == :openblas64
-            return ccall((:openblas_get_num_threads64_, Base.libblas_name), Cint, ())
-        elseif blas == :mkl
-            return ccall((:MKL_Get_Max_Num_Threads, Base.libblas_name), Cint, ())
-        end
-
-        # OSX BLAS looks at an environment variable
-        if Sys.isapple()
-            return tryparse(Cint, get(ENV, "VECLIB_MAXIMUM_THREADS", "1"))
-        end
-    catch
-    end
-
-    return nothing
+    return LinearAlgebra.BLAS.get_num_threads()
 end
 
 function get_remote_num_threads(processes_added)

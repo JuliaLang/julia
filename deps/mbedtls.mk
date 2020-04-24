@@ -88,11 +88,12 @@ compile-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-compiled
 fastcheck-mbedtls: #check-mbedtls
 check-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-checked
 
+# If we built our own libmbedtls, we need to generate a fake MbedTLS_jll package to load it in:
+$(eval $(call jll-generate,MbedTLS_jll,libbmedtls=\"libmbedtls\",,c8ffd9c3-330d-5841-b78e-0817d7145fa1,))
+
 else # USE_BINARYBUILDER_MBEDTLS
 
-MBEDTLS_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/MbedTLS_jll.jl/releases/download/MbedTLS-v$(MBEDTLS_VER)+$(MBEDTLS_BB_REL)
-MBEDTLS_BB_NAME := MbedTLS.v$(MBEDTLS_VER)
-
-$(eval $(call bb-install,mbedtls,MBEDTLS,false))
+# Install MbedTLS_jll into our stdlib folder
+$(eval $(call install-jll-and-artifact,MbedTLS_jll))
 
 endif

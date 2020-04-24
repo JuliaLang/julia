@@ -3,6 +3,7 @@
 module Error
 
 import ..LibGit2: ensure_initialized
+using ..LibGit2_jll
 
 export GitError
 
@@ -74,7 +75,7 @@ Base.show(io::IO, err::GitError) = print(io, "GitError(Code:$(err.code), Class:$
 
 function last_error()
     ensure_initialized()
-    err = ccall((:giterr_last, :libgit2), Ptr{ErrorStruct}, ())
+    err = ccall((:giterr_last, libgit2), Ptr{ErrorStruct}, ())
     if err != C_NULL
         err_obj   = unsafe_load(err)
         err_class = Class(err_obj.class)

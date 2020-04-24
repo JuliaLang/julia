@@ -76,10 +76,12 @@ compile-gmp: $(BUILDDIR)/gmp-$(GMP_VER)/build-compiled
 fastcheck-gmp: check-gmp
 check-gmp: $(BUILDDIR)/gmp-$(GMP_VER)/build-checked
 
+# If we built our own GMP, we need to generate a fake GMP_jll package to load it in:
+$(eval $(call jll-generate,GMP_jll,libgmp=\"libgmp\",,781609d7-10c4-51f6-84f2-b8444358ff6d,))
+
 else # USE_BINARYBUILDER_GMP
 
-GMP_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/GMP_jll.jl/releases/download/GMP-v$(GMP_VER)+$(GMP_BB_REL)
-GMP_BB_NAME := GMP.v$(GMP_VER)
+# Install GMP_jll into our stdlib folder
+$(eval $(call install-jll-and-artifact,GMP_jll))
 
-$(eval $(call bb-install,gmp,GMP,false))
 endif

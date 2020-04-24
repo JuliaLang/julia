@@ -23,8 +23,9 @@ SUITE_SPARSE_LIB := $(LDFLAGS) -L"$(abspath $(BUILDDIR))/SuiteSparse-$(SUITESPAR
 ifeq ($(OS), Darwin)
 SUITE_SPARSE_LIB += $(RPATH_ESCAPED_ORIGIN)
 endif
-SUITESPARSE_MFLAGS := CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
-	  LDFLAGS="$(SUITE_SPARSE_LIB)" CFOPENMP="" CUDA=no CUDA_PATH="" \
+SUITE_SPARSE_DEP_LIBS = -L"$(abspath $(OPENBLAS_LIBDIR))"
+SUITESPARSE_MFLAGS = CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
+	  LDFLAGS="$(SUITE_SPARSE_LIB) $(SUITE_SPARSE_DEP_LIBS)" CFOPENMP="" CUDA=no CUDA_PATH="" \
 	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" SPQR_CONFIG="$(SPQR_CONFIG)"
 ifeq ($(OS),WINNT)
 SUITESPARSE_MFLAGS += UNAME=Windows
@@ -56,7 +57,7 @@ else ifeq ($(USE_SYSTEM_LAPACK), 0)
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/lapack
 endif
 
-$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted
+$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted | $(build_prefix)/manifest/openblas
 	$(MAKE) -C $(dir $<)SuiteSparse_config library config $(SUITESPARSE_MFLAGS)
 	$(INSTALL_NAME_CMD)libsuitesparseconfig.$(SHLIB_EXT) $(dir $<)lib/libsuitesparseconfig.$(SHLIB_EXT)
 	for PROJ in $(SUITESPARSE_PROJECTS); do \
@@ -113,7 +114,7 @@ SUITESPARSE_INC := -I $(LOCALBASE)/include/suitesparse
 SUITESPARSE_LIB := -lumfpack -lcholmod -lamd -lcamd -lcolamd -lspqr
 else
 SUITESPARSE_INC := -I $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse_config -I $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SPQR/Include
-SUITESPARSE_LIB := -L$(build_shlibdir) -lcholmod -lumfpack -lspqr $(RPATH_ORIGIN)
+SUITESPARSE_LIB := -L$(build_shlibdir) -lcholmod -lumfpack -lspqr $(RPATH)
 $(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EXT): $(build_prefix)/manifest/suitesparse
 endif
 
@@ -136,12 +137,28 @@ fastcheck-suitesparse-wrapper: #none
 check-suitesparse-wrapper:
 install-suitesparse-wrapper: $(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EXT)
 
+# If we built our own libsuitesparse, we need to generate a fake SuiteSparse_jll package to load it in:
+# SuiteSparse has quite a few LibraryProducts...
+$(eval $(call jll-generate,SuiteSparse_jll,libsuitesparseconfig=\"libsuitesparseconfig\" \
+                                           libsuitesparse_wrapper=\"libsuitesparse_wrapper\" \
+										   libccolamd=\"libccolamd\" \
+										   libbtf=\"libbtf\" \
+										   libcamd=\"libcamd\" \
+										   libcolamd=\"libcolamd\" \
+										   libamd=\"libamd\" \
+										   librbio=\"librbio\" \
+										   libcholmod=\"libcholmod\" \
+										   libumfpack=\"libumfpack\" \
+										   libklu=\"libklu\" \
+										   libspqr=\"libspqr\",, \
+						   bea87d4a-7f5b-5778-9afe-8cc45184846c, \
+                           OpenBLAS_jll=4536629a-c528-5b80-bd46-f80d51c5b363))
+
 else # USE_BINARYBUILDER_SUITESPARSE
 
-SUITESPARSE_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/SuiteSparse_jll.jl/releases/download/SuiteSparse-v$(SUITESPARSE_VER)+$(SUITESPARSE_BB_REL)
-SUITESPARSE_BB_NAME := SuiteSparse.v$(SUITESPARSE_VER)
+# Install SuiteSparse_jll into our stdlib folder
+$(eval $(call install-jll-and-artifact,SuiteSparse_jll))
 
-$(eval $(call bb-install,suitesparse,SUITESPARSE,false))
 get-suitesparse-wrapper: get-suitesparse
 extract-suitesparse-wrapper: extract-suitesparse
 configure-suitesparse-wrapper: configure-suitesparse
@@ -152,6 +169,4 @@ clean-suitesparse-wrapper: clean-suitesparse
 distclean-suitesparse-wrapper: distclean-suitesparse
 install-suitesparse-wrapper: install-suitesparse
 
-# suitesparse depends on OpenBLAS
-compile-suitesparse: | $(build_prefix)/manifest/openblas
 endif

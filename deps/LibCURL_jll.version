@@ -1,0 +1,4 @@
+LIBCURL_JLL_BRANCH = master
+LIBCURL_JLL_SHA1 = 75b2b2b62f0dc86b595756ff87a3d5da8eb67045
+LIBCURL_JLL_GIT_URL := git://github.com/JuliaBinaryWrappers/LibCURL_jll.jl.git
+LIBCURL_JLL_TAR_URL = https://api.github.com/repos/JuliaBinaryWrappers/LibCURL_jll.jl/tarball/$1

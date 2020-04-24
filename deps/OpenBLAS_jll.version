@@ -1,0 +1,4 @@
+OPENBLAS_JLL_BRANCH = master
+OPENBLAS_JLL_SHA1 = 99a141f0b9b90aa32cef12eb77fbe2802ae87df6
+OPENBLAS_JLL_GIT_URL := git://github.com/JuliaBinaryWrappers/OpenBLAS_jll.jl.git
+OPENBLAS_JLL_TAR_URL = https://api.github.com/repos/JuliaBinaryWrappers/OpenBLAS_jll.jl/tarball/$1

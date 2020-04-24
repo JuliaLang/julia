@@ -6,6 +6,7 @@ export @printf, @sprintf
 using Base.Grisu
 using Base.GMP
 using Unicode: textwidth
+using Base.MPFR.MPFR_jll
 
 ### printf formatter generation ###
 const SmallFloatingPoint = Union{Float64,Float32,Float16}
@@ -1172,7 +1173,7 @@ function bigfloat_printf(out, d::BigFloat, flags::String, width::Int, precision:
     printf_fmt = take!(fmt)
     @assert length(printf_fmt) == fmt_len
     bufsiz = length(digits)
-    lng = ccall((:mpfr_snprintf,:libmpfr), Int32,
+    lng = ccall((:mpfr_snprintf,libmpfr), Int32,
                 (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}...),
                 digits, bufsiz, printf_fmt, d)
     lng > 0 || error("invalid printf formatting for BigFloat")

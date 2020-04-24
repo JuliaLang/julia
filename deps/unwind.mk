@@ -102,16 +102,18 @@ fastcheck-osxunwind: check-osxunwind
 check-osxunwind: compile-osxunwind
 install-osxunwind: $(build_prefix)/manifest/osxunwind
 
+# If we built our own libunwind/libosxunwind, we need to generate a fake LibUnwind_jll/LibOSXUnwind_jll package to load it in:
+$(eval $(call jll-generate,LibUnwind_jll,libunwind=\"libunwind\",,745a5e78-f969-53e9-954f-d19f2f74f4e3,))
+$(eval $(call jll-generate,LibOSXUnwind_jll,libosxunwind=\"libosxunwind\",,a83860b7-747b-57cf-bf1f-3e79990d037f,))
+
 else # USE_BINARYBUILDER_LIBUNWIND
 
-UNWIND_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LibUnwind-v$(UNWIND_VER)+$(UNWIND_BB_REL)
-UNWIND_BB_NAME := LibUnwind.v$(UNWIND_VER)
+# Install LibUnwind_jll/LibOSXUnwind_jll into our stdlib folder
+$(eval $(call install-jll-and-artifact,LibUnwind_jll))
+$(eval $(call install-jll-and-artifact,LibOSXUnwind_jll))
 
-$(eval $(call bb-install,unwind,UNWIND,false))
-
-OSXUNWIND_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LibOSXUnwind-$(OSXUNWIND_VER)-$(OSXUNWIND_BB_REL)
-OSXUNWIND_BB_NAME := LibOSXUnwind.v$(OSXUNWIND_VER)
-
-$(eval $(call bb-install,osxunwind,OSXUNWIND,false))
+# Fix naming mismatches (since the JLL packages have "Lib" in front)
+$(eval $(call fix-artifact-naming-mismatch,unwind,LibUnwind_jll))
+$(eval $(call fix-artifact-naming-mismatch,osxunwind,LibOSXUnwind_jll))
 
 endif

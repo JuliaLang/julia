@@ -1,0 +1,4 @@
+LIBGIT2_JLL_BRANCH = master
+LIBGIT2_JLL_SHA1 = 29cc93e04243d6994c1c98d615364c23e36eb7dd
+LIBGIT2_JLL_GIT_URL := git://github.com/JuliaBinaryWrappers/LibGit2_jll.jl.git
+LIBGIT2_JLL_TAR_URL = https://api.github.com/repos/JuliaBinaryWrappers/LibGit2_jll.jl/tarball/$1

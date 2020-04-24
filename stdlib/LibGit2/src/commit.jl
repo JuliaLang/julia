@@ -12,8 +12,8 @@ function message(c::GitCommit, raw::Bool=false)
     ensure_initialized()
     GC.@preserve c begin
         local msg_ptr::Cstring
-        msg_ptr = raw ? ccall((:git_commit_message_raw, :libgit2), Cstring, (Ptr{Cvoid},), c.ptr) :
-                        ccall((:git_commit_message, :libgit2), Cstring, (Ptr{Cvoid},), c.ptr)
+        msg_ptr = raw ? ccall((:git_commit_message_raw, libgit2), Cstring, (Ptr{Cvoid},), c.ptr) :
+                        ccall((:git_commit_message, libgit2), Cstring, (Ptr{Cvoid},), c.ptr)
         if msg_ptr == C_NULL
             return nothing
         end
@@ -31,7 +31,7 @@ the person who made changes to the relevant file(s). See also [`committer`](@ref
 function author(c::GitCommit)
     ensure_initialized()
     GC.@preserve c begin
-        ptr = ccall((:git_commit_author, :libgit2), Ptr{SignatureStruct}, (Ptr{Cvoid},), c.ptr)
+        ptr = ccall((:git_commit_author, libgit2), Ptr{SignatureStruct}, (Ptr{Cvoid},), c.ptr)
         @assert ptr != C_NULL
         sig = Signature(ptr)
     end
@@ -49,7 +49,7 @@ a `committer` who committed it.
 function committer(c::GitCommit)
     ensure_initialized()
     GC.@preserve c begin
-        ptr = ccall((:git_commit_committer, :libgit2), Ptr{SignatureStruct}, (Ptr{Cvoid},), c.ptr)
+        ptr = ccall((:git_commit_committer, libgit2), Ptr{SignatureStruct}, (Ptr{Cvoid},), c.ptr)
         sig = Signature(ptr)
     end
     return sig
@@ -72,7 +72,7 @@ function commit(repo::GitRepo,
     commit_id_ptr = Ref(GitHash())
     nparents = length(parents)
     parentptrs = Ptr{Cvoid}[c.ptr for c in parents]
-    @check ccall((:git_commit_create, :libgit2), Cint,
+    @check ccall((:git_commit_create, libgit2), Cint,
                  (Ptr{GitHash}, Ptr{Cvoid}, Ptr{UInt8},
                   Ptr{SignatureStruct}, Ptr{SignatureStruct},
                   Ptr{UInt8}, Ptr{UInt8}, Ptr{Cvoid},

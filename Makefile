@@ -1,8 +1,6 @@
 JULIAHOME := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 include $(JULIAHOME)/Make.inc
 
-VERSDIR := v`cut -d. -f1-2 < $(JULIAHOME)/VERSION`
-
 default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
@@ -48,12 +46,10 @@ $(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUI
 
 julia-symlink: julia-ui-$(JULIA_BUILD_MODE)
 ifeq ($(OS),WINNT)
-	@echo '@"%~dp0"\'"$(shell $(JULIAHOME)/contrib/relative_path.sh "$(BUILDROOT)" "$(JULIA_EXECUTABLE)" | tr / '\\')" '%*' > $(BUILDROOT)/julia.bat
+	@echo '@"%~dp0"\'"$$(echo $(call rel_path,$(BUILDROOT),$(JULIA_EXECUTABLE)) | tr / '\\')" '%*' > $(BUILDROOT)/julia.bat
 	chmod a+x $(BUILDROOT)/julia.bat
 else
-ifndef JULIA_VAGRANT_BUILD
-	@ln -sf "$(shell $(JULIAHOME)/contrib/relative_path.sh "$(BUILDROOT)" "$(JULIA_EXECUTABLE)")" $(BUILDROOT)/julia
-endif
+	@ln -sf $(call rel_path,$(BUILDROOT),$(JULIA_EXECUTABLE)) $(BUILDROOT)/julia
 endif
 
 julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test
@@ -159,36 +155,42 @@ ifeq ($(BUNDLE_DEBUG_LIBS),1)
 JL_TARGETS += julia-debug
 endif
 
-# private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS-0 := libccalltest libllvmcalltest
-ifeq ($(USE_GPL_LIBS), 1)
-JL_PRIVATE_LIBS-0 += libsuitesparse_wrapper
-JL_PRIVATE_LIBS-$(USE_SYSTEM_SUITESPARSE) += libamd libcamd libccolamd libcholmod libcolamd libumfpack libspqr libsuitesparseconfig
-endif
-JL_PRIVATE_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
-JL_PRIVATE_LIBS-$(USE_SYSTEM_DSFMT) += libdSFMT
-JL_PRIVATE_LIBS-$(USE_SYSTEM_GMP) += libgmp
-JL_PRIVATE_LIBS-$(USE_SYSTEM_MPFR) += libmpfr
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSSH2) += libssh2
-JL_PRIVATE_LIBS-$(USE_SYSTEM_MBEDTLS) += libmbedtls libmbedcrypto libmbedx509
-JL_PRIVATE_LIBS-$(USE_SYSTEM_CURL) += libcurl
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBGIT2) += libgit2
-ifeq ($(OS),WINNT)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += zlib
+# private libraries that are installed in $(prefix)/lib/julia and need to be installed to
+# the installation prefix for distribution.  Note that libraries provided by BB will not
+# be installed in this fashion; they are safely tucked away in the `artifacts` directory.
+define register_private_lib
+ifeq ($(USE_SYSTEM_$(1)),1)
+JL_PRIVATE_LIBS-1 += $(2)
+else ifeq ($(USE_BINARYBUILDER_$(1)),1)
+JL_PRIVATE_LIBS-2 += $(2)
 else
-JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += libz
+JL_PRIVATE_LIBS-0 += $(2)
 endif
+endef
+
+$(eval $(call register_private_lib,,libccalltest libllvmcalltest))
+ifeq ($(USE_GPL_LIBS), 1)
+$(eval $(call register_private_lib,,libsuitesparse_wrapper))
+$(eval $(call register_private_lib,SUITESPARSE,libamd libcamd libccolamd libcholmod libcolamd libumfpack libspqr libsuitesparseconfig))
+endif
+$(eval $(call register_private_lib,PCRE,libpcre2-8))
+$(eval $(call register_private_lib,DSFMT,libdSFMT))
+$(eval $(call register_private_lib,GMP,libgmp))
+$(eval $(call register_private_lib,MPFR,libmpfr))
+$(eval $(call register_private_lib,LIBSSH2,libssh2))
+$(eval $(call register_private_lib,MBEDTLS,libmbedtls libmbedcrypto libmbedx509))
+$(eval $(call register_private_lib,CURL,libcurl))
+$(eval $(call register_private_lib,LIBGIT2,libgit2))
+$(eval $(call register_private_lib,ZLIB,libz))
 ifeq ($(USE_LLVM_SHLIB),1)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM libLLVM-9jl
+$(eval $(call register_private_lib,LLVM,libLLVM libLLVM-9jl))
 endif
-
-ifeq ($(USE_SYSTEM_LIBM),0)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_OPENLIBM) += libopenlibm
-endif
-
-JL_PRIVATE_LIBS-$(USE_SYSTEM_BLAS) += $(LIBBLASNAME)
+$(eval $(call register_private_lib,OPENLIBM,libopenlibm))
+# Naming mismatches are annoying
+USE_SYSTEM_OPENBLAS := $(USE_SYSTEM_BLAS)
+$(eval $(call register_private_lib,OPENBLAS,$(LIBBLASNAME)))
 ifneq ($(LIBLAPACKNAME),$(LIBBLASNAME))
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LAPACK) += $(LIBLAPACKNAME)
+$(eval $(call register_private_lib,LAPACK,$(LIBLAPACKNAME)))
 endif
 
 ifeq ($(OS),Darwin)
@@ -199,82 +201,9 @@ endif
 endif
 endif
 
-# On FreeBSD, /lib/libgcc_s.so.1 is incompatible with Fortran; to use Fortran on FreeBSD,
-# we need to link to the libgcc_s that ships with the same GCC version used by libgfortran.
-# To work around this, we copy the GCC libraries we need, namely libgfortran, libgcc_s,
-# and libquadmath, into our build library directory, $(build_libdir). We also add them to
-# JL_PRIVATE_LIBS-0 so that they know where they need to live at install time.
-ifeq ($(OS),FreeBSD)
-define std_so
-julia-deps: | $$(build_libdir)/$(1).so
-$$(build_libdir)/$(1).so: | $$(build_libdir)
-	$$(INSTALL_M) $$(GCCPATH)/$(1).so* $$(build_libdir)
-JL_PRIVATE_LIBS-0 += $(1)
-endef
-
-$(eval $(call std_so,libgfortran))
-$(eval $(call std_so,libgcc_s))
-$(eval $(call std_so,libquadmath))
-endif # FreeBSD
-
-ifeq ($(OS),WINNT)
-# find the standard .dll folders
-ifeq ($(XC_HOST),)
-STD_LIB_PATH ?= $(PATH)
-else
-STD_LIB_PATH := $(shell LANG=C $(CC) -print-search-dirs | grep '^programs: =' | sed -e "s/^programs: =//")
-STD_LIB_PATH += :$(shell LANG=C $(CC) -print-search-dirs | grep '^libraries: =' | sed -e "s/^libraries: =//")
-ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # the cygwin-mingw32 compiler lies about it search directory paths
-STD_LIB_PATH := $(shell echo '$(STD_LIB_PATH)' | sed -e "s!/lib/!/bin/!g")
-endif
-endif
-
-pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
-
-define std_dll
-julia-deps-libs: | $$(build_bindir)/lib$(1).dll $$(build_depsbindir)/lib$(1).dll
-$$(build_bindir)/lib$(1).dll: | $$(build_bindir)
-	cp $$(or $$(call pathsearch,lib$(1).dll,$$(STD_LIB_PATH)),$$(error can't find lib$1.dll)) $$(build_bindir)
-$$(build_depsbindir)/lib$(1).dll: | $$(build_depsbindir)
-	cp $$(or $$(call pathsearch,lib$(1).dll,$$(STD_LIB_PATH)),$$(error can't find lib$1.dll)) $$(build_depsbindir)
-JL_TARGETS += $(1)
-endef
-julia-deps: julia-deps-libs
-
-# Given a list of space-separated libraries, return the first library name that is
-# correctly found through `pathsearch`.
-define select_std_dll
-$(firstword $(foreach name,$(1),$(if $(call pathsearch,lib$(name).dll,$(STD_LIB_PATH)),$(name),)))
-endef
-
-$(eval $(call std_dll,$(call select_std_dll,gfortran-3 gfortran-4 gfortran-5)))
-$(eval $(call std_dll,quadmath-0))
-$(eval $(call std_dll,stdc++-6))
-ifeq ($(ARCH),i686)
-$(eval $(call std_dll,gcc_s_sjlj-1))
-else
-$(eval $(call std_dll,gcc_s_seh-1))
-endif
-$(eval $(call std_dll,ssp-0))
-$(eval $(call std_dll,winpthread-1))
-$(eval $(call std_dll,atomic-1))
-endif
-
-
 define stringreplace
 	$(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep '$2' | awk '{print $$1;}') '$3' 255 "$(call cygpath_w,$1)"
 endef
-
-# Run fixup-libgfortran on all platforms but Windows and FreeBSD. On FreeBSD we
-# pull in the GCC libraries earlier and use them for the build to make sure we
-# don't inadvertently link to /lib/libgcc_s.so.1, which is incompatible with
-# libgfortran, and on Windows we copy them in earlier as well.
-ifeq (,$(findstring $(OS),FreeBSD WINNT))
-julia-base: $(build_libdir)/libgfortran*.$(SHLIB_EXT)*
-$(build_libdir)/libgfortran*.$(SHLIB_EXT)*: | $(build_libdir) julia-deps
-	-$(CUSTOM_LD_LIBRARY_PATH) PATH="$(PATH):$(build_depsbindir)" PATCHELF="$(PATCHELF)" FC="$(FC)" $(JULIAHOME)/contrib/fixup-libgfortran.sh --verbose $(build_libdir)
-JL_PRIVATE_LIBS-0 += libgfortran libgcc_s libquadmath
-endif
 
 
 install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
@@ -287,9 +216,9 @@ endif
 		mkdir -p $(DESTDIR)$$subdir; \
 	done
 
-	$(INSTALL_M) $(build_bindir)/julia $(DESTDIR)$(bindir)/
+	$(INSTALL_M) $(build_bindir)/julia$(EXE) $(DESTDIR)$(bindir)/
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
-	$(INSTALL_M) $(build_bindir)/julia-debug $(DESTDIR)$(bindir)/
+	$(INSTALL_M) $(build_bindir)/julia-debug$(EXE) $(DESTDIR)$(bindir)/
 endif
 ifeq ($(OS),WINNT)
 	-$(INSTALL_M) $(filter-out $(build_bindir)/libjulia-debug.dll,$(wildcard $(build_bindir)/*.dll)) $(DESTDIR)$(bindir)/
@@ -297,6 +226,12 @@ ifeq ($(OS),WINNT)
 
 	# We have a single exception; we want 7z.dll to live in libexec, not bin, so that 7z.exe can find it.
 	-mv $(DESTDIR)$(bindir)/7z.dll $(DESTDIR)$(libexecdir)/
+
+	# We also have a `julia.exe` and `julia-debug.exe` that live in $(libexecdir)
+	$(INSTALL_M) $(build_libexecdir)/julia$(EXE) $(DESTDIR)$(libexecdir)/
+ifeq ($(BUNDLE_DEBUG_LIBS),1)
+	$(INSTALL_M) $(build_libexecdir)/julia-debug$(EXE) $(DESTDIR)$(libexecdir)/
+endif
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	-$(INSTALL_M) $(build_bindir)/libjulia-debug.dll $(DESTDIR)$(bindir)/
 	-$(INSTALL_M) $(build_libdir)/libjulia-debug.dll.a $(DESTDIR)$(libdir)/
@@ -347,7 +282,7 @@ endif
 	done
 endif
 	# Install `7z` into libexec/
-	$(INSTALL_M) $(build_bindir)/7z$(EXE) $(DESTDIR)$(libexecdir)/
+	$(INSTALL_M) $(build_libexecdir)/7z$(EXE) $(DESTDIR)$(libexecdir)/
 
 	# Copy public headers
 	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
@@ -361,7 +296,13 @@ endif
 	mkdir -p $(DESTDIR)$(datarootdir)/julia/base $(DESTDIR)$(datarootdir)/julia/test
 	cp -R -L $(JULIAHOME)/base/* $(DESTDIR)$(datarootdir)/julia/base
 	cp -R -L $(JULIAHOME)/test/* $(DESTDIR)$(datarootdir)/julia/test
-	cp -R -L $(build_datarootdir)/julia/* $(DESTDIR)$(datarootdir)/julia
+	cp -Ra $(build_datarootdir)/julia/artifacts $(DESTDIR)$(datarootdir)/julia
+	# Copy everything except artifacts, collapsing symlinks
+	for f in $(build_datarootdir)/julia/*; do \
+		if [ $$(basename $${f}) != artifacts ]; then \
+			cp -R -L $${f} $(DESTDIR)$(datarootdir)/julia; \
+		fi; \
+	done
 	# Copy documentation
 	cp -R -L $(BUILDROOT)/doc/_build/html $(DESTDIR)$(docdir)/
 	# Remove various files which should not be installed
@@ -371,6 +312,13 @@ endif
 	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/build-configured
 	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/build-compiled
 	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/build-checked
+	# Cleanup artifacts (no full LLVM, objconv, static libs, etc...)
+	-rm -f $(DESTDIR)$(datarootdir)/julia/artifacts/*/lib/*.a
+	[ -z $(LLVM_jll_TREEHASH) ] || rm -rf $(DESTDIR)$(datarootdir)/julia/artifacts/$(LLVM_jll_TREEHASH)
+	[ -z $(Objconv_jll_TREEHASH) ] || rm -rf $(DESTDIR)$(datarootdir)/julia/artifacts/$(Objconv_jll_TREEHASH)
+	-rm -rf $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/LLVM_jll
+	-rm -rf $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/Objconv_jll
+
 	# Copy in beautiful new man page
 	$(INSTALL_F) $(build_man1dir)/julia.1 $(DESTDIR)$(man1dir)/
 	# Copy icon and .desktop file
@@ -422,7 +370,7 @@ ifeq ($(OS),FreeBSD)
 	# don't set libgfortran's RPATH, it won't be able to find its friends on systems
 	# that don't have the exact GCC port installed used for the build.
 	for lib in $(DESTDIR)$(private_libdir)/libgfortran*$(SHLIB_EXT)*; do \
-		$(PATCHELF) --set-rpath '$$ORIGIN' $$lib; \
+		[ ! -f $$lib ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$lib; \
 	done
 endif
 
@@ -597,12 +545,10 @@ win-extras:
 	$(call spawn, $(JULIAHOME)/dist-extras/is.exe /DIR="$(call cygpath_w,$(JULIAHOME)/dist-extras/inno)" /PORTABLE=1 /CURRENTUSER /VERYSILENT)
 
 # various statistics about the build that may interest the user
-ifeq ($(USE_SYSTEM_LLVM), 1)
-LLVM_SIZE := llvm-size$(EXE)
-else
-LLVM_SIZE := $(build_depsbindir)/llvm-size$(EXE)
-endif
-build-stats:
+build-stats-deps:
+	@$(MAKE) -C deps install-llvm
+
+build-stats: | build-stats-deps
 	@printf $(JULCOLOR)' ==> ./julia binary sizes\n'$(ENDCOLOR)
 	$(call spawn,$(LLVM_SIZE) -A $(call cygpath_w,$(build_private_libdir)/sys.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_shlibdir)/libjulia.$(SHLIB_EXT)) \

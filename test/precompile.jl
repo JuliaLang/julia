@@ -258,6 +258,11 @@ try
         @test_throws ErrorException Base.read_dependency_src(cachefile, joinpath(dir, "foo.jl"))
 
         modules, deps1 = Base.cache_dependencies(cachefile)
+        stdlib_modules = filter(readdir(Sys.STDLIB)) do s
+            pkg = Base.identify_package(s)
+            return pkg !== nothing &&
+                   haskey(Base.loaded_modules, pkg)
+        end
         @test Dict(modules) == merge(
             Dict(let m = Base.PkgId(s)
                     m => Base.module_build_id(Base.root_module(m))
@@ -267,12 +272,7 @@ try
             # plus modules included in the system image
             Dict(let m = Base.root_module(Base, s)
                      Base.PkgId(m) => Base.module_build_id(m)
-                 end for s in
-                [:Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching, :Markdown,
-                 :Future, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
-                 :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
-                 :Unicode, :REPL, :InteractiveUtils, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
-                 :Statistics, ]),
+                 end for s in Symbol.(stdlib_modules)),
                 # Plus precompilation module generated at build time
                 let id = Base.PkgId("__PackagePrecompilationStatementModule")
                     Dict(id => Base.module_build_id(Base.root_module(id)))

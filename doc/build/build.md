@@ -97,10 +97,10 @@ latest version.
    occasionally cause conflicts with existing builds of older versions.
 
    a. Special `make` targets exist to help wipe the existing build of a
-      dependency. For example, `make -C deps clean-llvm` will clean out the
-      existing build of `llvm` so that `llvm` will be rebuilt from the
+      dependency. For example, `make -C deps clean-libllvm` will clean out the
+      existing build of `libllvm` so that `llvm` will be rebuilt from the
       downloaded source distribution the next time `make` is called.
-      `make -C deps distclean-llvm` is a stronger wipe which will also delete
+      `make -C deps distclean-libllvm` is a stronger wipe which will also delete
       the downloaded source distribution, ensuring that a fresh copy of the
       source distribution will be downloaded and that any new patches will be
       applied the next time `make` is called.

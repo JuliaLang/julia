@@ -28,6 +28,8 @@ import Core.Intrinsics: sqrt_llvm_fast, neg_float_fast,
     add_float_fast, sub_float_fast, mul_float_fast, div_float_fast, rem_float_fast,
     eq_float_fast, ne_float_fast, lt_float_fast, le_float_fast
 
+using Base.Libm_jll
+
 const fast_op =
     Dict(# basic arithmetic
          :+ => :add_fast,
@@ -280,9 +282,6 @@ pow_fast(x::FloatTypes, ::Val{p}) where {p} = pow_fast(x, p) # inlines already v
 sqrt_fast(x::FloatTypes) = sqrt_llvm_fast(x)
 
 # libm
-
-const libm = Base.libm_name
-
 for f in (:acosh, :asinh, :atanh, :cbrt,
           :cosh, :exp2, :expm1, :log10, :log1p, :log2,
           :log, :sinh, :tanh)

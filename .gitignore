@@ -27,6 +27,7 @@
 *.jl.mem
 *.jl.*.mem
 *.ji
+*.pyc
 
 /perf*
 .DS_Store

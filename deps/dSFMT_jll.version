@@ -1,0 +1,4 @@
+DSFMT_JLL_BRANCH = master
+DSFMT_JLL_SHA1 = cebc397943bc19ab53f708999089bec2e60ada7a
+DSFMT_JLL_GIT_URL := git://github.com/JuliaBinaryWrappers/dSFMT_jll.jl.git
+DSFMT_JLL_TAR_URL = https://api.github.com/repos/JuliaBinaryWrappers/dSFMT_jll.jl/tarball/$1

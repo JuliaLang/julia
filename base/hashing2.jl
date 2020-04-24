@@ -199,7 +199,7 @@ function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
     s = BigInt()
     s.size = cld(x.prec, 8*sizeof(GMP.Limb)) # limbs
     b = s.size * sizeof(GMP.Limb)            # bytes
-    ccall((:__gmpz_realloc2, :libgmp), Cvoid, (Ref{BigInt}, Culong), s, 8b) # bits
+    ccall((:__gmpz_realloc2, libgmp), Cvoid, (Ref{BigInt}, Culong), s, 8b) # bits
     ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), s.d, x.d, b) # bytes
     s, x.exp - 8b, x.sign
 end

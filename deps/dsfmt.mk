@@ -63,10 +63,12 @@ compile-dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/build-compiled
 fastcheck-dsfmt: check-dsfmt
 check-dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/build-checked
 
+# If we built our own dSFMT, we need to generate a fake dSFMT_jll package to load it in:
+$(eval $(call jll-generate,dSFMT_jll,libdSFMT=\"libdSFMT\",,05ff407c-b0c1-5878-9df8-858cc2e60c36,))
+
 else
 
-DSFMT_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/dSFMT-v$(DSFMT_VER)-$(DSFMT_BB_REL)
-DSFMT_BB_NAME := dSFMT.v$(DSFMT_VER)
-$(eval $(call bb-install,dsfmt,DSFMT,false))
+# Install dSFMT_jll into our stdlib folder
+$(eval $(call install-jll-and-artifact,dSFMT_jll))
 
 endif # USE_BINARYBUILDER_DSFMT

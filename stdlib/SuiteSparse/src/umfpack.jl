@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module UMFPACK
+using SuiteSparse_jll
 
 export UmfpackLU
 
@@ -64,7 +65,7 @@ macro isok(A)
 end
 
 # check the size of SuiteSparse_long
-if Int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,())) == 4
+if Int(ccall((:jl_cholmod_sizeof_long,libsuitesparse_wrapper),Csize_t,())) == 4
     const UmfpackIndexTypes = (:Int32,)
     const UMFITypes = Int32
 else
@@ -78,20 +79,20 @@ const UMFVTypes = Union{Float64,ComplexF64}
 
 # the control and info arrays
 const umf_ctrl = Vector{Float64}(undef, UMFPACK_CONTROL)
-ccall((:umfpack_dl_defaults,:libumfpack), Cvoid, (Ptr{Float64},), umf_ctrl)
+ccall((:umfpack_dl_defaults,libumfpack), Cvoid, (Ptr{Float64},), umf_ctrl)
 const umf_info = Vector{Float64}(undef, UMFPACK_INFO)
 
 function show_umf_ctrl(level::Real = 2.0)
     old_prt::Float64 = umf_ctrl[1]
     umf_ctrl[1] = Float64(level)
-    ccall((:umfpack_dl_report_control, :libumfpack), Cvoid, (Ptr{Float64},), umf_ctrl)
+    ccall((:umfpack_dl_report_control, libumfpack), Cvoid, (Ptr{Float64},), umf_ctrl)
     umf_ctrl[1] = old_prt
 end
 
 function show_umf_info(level::Real = 2.0)
     old_prt::Float64 = umf_ctrl[1]
     umf_ctrl[1] = Float64(level)
-    ccall((:umfpack_dl_report_info, :libumfpack), Cvoid,
+    ccall((:umfpack_dl_report_info, libumfpack), Cvoid,
           (Ptr{Float64}, Ptr{Float64}), umf_ctrl, umf_info)
     umf_ctrl[1] = old_prt
 end
@@ -301,7 +302,7 @@ for itype in UmfpackIndexTypes
         function umfpack_symbolic!(U::UmfpackLU{Float64,$itype})
             if U.symbolic != C_NULL return U end
             tmp = Vector{Ptr{Cvoid}}(undef, 1)
-            @isok ccall(($sym_r, :libumfpack), $itype,
+            @isok ccall(($sym_r, libumfpack), $itype,
                         ($itype, $itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Cvoid},
                          Ptr{Float64}, Ptr{Float64}),
                         U.m, U.n, U.colptr, U.rowval, U.nzval, tmp,
@@ -312,7 +313,7 @@ for itype in UmfpackIndexTypes
         function umfpack_symbolic!(U::UmfpackLU{ComplexF64,$itype})
             if U.symbolic != C_NULL return U end
             tmp = Vector{Ptr{Cvoid}}(undef, 1)
-            @isok ccall(($sym_c, :libumfpack), $itype,
+            @isok ccall(($sym_c, libumfpack), $itype,
                         ($itype, $itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64}, Ptr{Cvoid},
                          Ptr{Float64}, Ptr{Float64}),
                         U.m, U.n, U.colptr, U.rowval, real(U.nzval), imag(U.nzval), tmp,
@@ -323,7 +324,7 @@ for itype in UmfpackIndexTypes
         function umfpack_numeric!(U::UmfpackLU{Float64,$itype})
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
             tmp = Vector{Ptr{Cvoid}}(undef, 1)
-            status = ccall(($num_r, :libumfpack), $itype,
+            status = ccall(($num_r, libumfpack), $itype,
                            (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Cvoid}, Ptr{Cvoid},
                             Ptr{Float64}, Ptr{Float64}),
                            U.colptr, U.rowval, U.nzval, U.symbolic, tmp,
@@ -338,7 +339,7 @@ for itype in UmfpackIndexTypes
         function umfpack_numeric!(U::UmfpackLU{ComplexF64,$itype})
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
             tmp = Vector{Ptr{Cvoid}}(undef, 1)
-            status = ccall(($num_c, :libumfpack), $itype,
+            status = ccall(($num_c, libumfpack), $itype,
                            (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64}, Ptr{Cvoid}, Ptr{Cvoid},
                             Ptr{Float64}, Ptr{Float64}),
                            U.colptr, U.rowval, real(U.nzval), imag(U.nzval), U.symbolic, tmp,
@@ -359,7 +360,7 @@ for itype in UmfpackIndexTypes
             end
             umfpack_numeric!(lu)
             (size(b,1) == lu.m) && (size(b) == size(x)) || throw(DimensionMismatch())
-            @isok ccall(($sol_r, :libumfpack), $itype,
+            @isok ccall(($sol_r, libumfpack), $itype,
                 ($itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64},
                  Ptr{Float64}, Ptr{Float64}, Ptr{Cvoid}, Ptr{Float64},
                  Ptr{Float64}),
@@ -378,7 +379,7 @@ for itype in UmfpackIndexTypes
             umfpack_numeric!(lu)
             (size(b, 1) == lu.m) && (size(b) == size(x)) || throw(DimensionMismatch())
             n = size(b, 1)
-            @isok ccall(($sol_c, :libumfpack), $itype,
+            @isok ccall(($sol_c, libumfpack), $itype,
                         ($itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64},
                          Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64},
                          Ptr{Float64}, Ptr{Cvoid}, Ptr{Float64}, Ptr{Float64}),
@@ -389,7 +390,7 @@ for itype in UmfpackIndexTypes
         end
         function det(lu::UmfpackLU{Float64,$itype})
             mx = Ref{Float64}()
-            @isok ccall(($det_r,:libumfpack), $itype,
+            @isok ccall(($det_r,libumfpack), $itype,
                            (Ptr{Float64},Ptr{Float64},Ptr{Cvoid},Ptr{Float64}),
                            mx, C_NULL, lu.numeric, umf_info)
             mx[]
@@ -397,7 +398,7 @@ for itype in UmfpackIndexTypes
         function det(lu::UmfpackLU{ComplexF64,$itype})
             mx = Ref{Float64}()
             mz = Ref{Float64}()
-            @isok ccall(($det_z,:libumfpack), $itype,
+            @isok ccall(($det_z,libumfpack), $itype,
                         (Ptr{Float64},Ptr{Float64},Ptr{Float64},Ptr{Cvoid},Ptr{Float64}),
                         mx, mz, C_NULL, lu.numeric, umf_info)
             complex(mx[], mz[])
@@ -408,7 +409,7 @@ for itype in UmfpackIndexTypes
             n_row = Ref{$itype}()
             n_col = Ref{$itype}()
             nz_diag = Ref{$itype}()
-            @isok ccall(($lunz_r,:libumfpack), $itype,
+            @isok ccall(($lunz_r,libumfpack), $itype,
                            (Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{Cvoid}),
                            lnz, unz, n_row, n_col, nz_diag, lu.numeric)
             (lnz[], unz[], n_row[], n_col[], nz_diag[])
@@ -419,7 +420,7 @@ for itype in UmfpackIndexTypes
             n_row = Ref{$itype}()
             n_col = Ref{$itype}()
             nz_diag = Ref{$itype}()
-            @isok ccall(($lunz_z,:libumfpack), $itype,
+            @isok ccall(($lunz_z,libumfpack), $itype,
                            (Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{Cvoid}),
                            lnz, unz, n_row, n_col, nz_diag, lu.numeric)
             (lnz[], unz[], n_row[], n_col[], nz_diag[])
@@ -436,7 +437,7 @@ for itype in UmfpackIndexTypes
             P  = Vector{$itype}(undef, n_row)
             Q  = Vector{$itype}(undef, n_col)
             Rs = Vector{Float64}(undef, n_row)
-            @isok ccall(($get_num_r,:libumfpack), $itype,
+            @isok ccall(($get_num_r,libumfpack), $itype,
                         (Ptr{$itype},Ptr{$itype},Ptr{Float64},
                          Ptr{$itype},Ptr{$itype},Ptr{Float64},
                          Ptr{$itype},Ptr{$itype},Ptr{Cvoid},
@@ -463,7 +464,7 @@ for itype in UmfpackIndexTypes
             P  = Vector{$itype}(undef, n_row)
             Q  = Vector{$itype}(undef, n_col)
             Rs = Vector{Float64}(undef, n_row)
-            @isok ccall(($get_num_z,:libumfpack), $itype,
+            @isok ccall(($get_num_z,libumfpack), $itype,
                         (Ptr{$itype},Ptr{$itype},Ptr{Float64},Ptr{Float64},
                          Ptr{$itype},Ptr{$itype},Ptr{Float64},Ptr{Float64},
                          Ptr{$itype},Ptr{$itype},Ptr{Cvoid}, Ptr{Cvoid},
@@ -579,7 +580,7 @@ for Tv in (:Float64, :ComplexF64), Ti in UmfpackIndexTypes
     @eval begin
         function ($f)(symb::Ptr{Cvoid})
             tmp = [symb]
-            ccall(($(string(f)), :libumfpack), Cvoid, (Ptr{Cvoid},), tmp)
+            ccall(($(string(f)), libumfpack), Cvoid, (Ptr{Cvoid},), tmp)
         end
 
         function umfpack_free_symbolic(lu::UmfpackLU{$Tv,$Ti})
@@ -595,7 +596,7 @@ for Tv in (:Float64, :ComplexF64), Ti in UmfpackIndexTypes
     @eval begin
         function ($f)(num::Ptr{Cvoid})
             tmp = [num]
-            ccall(($(string(f)), :libumfpack), Cvoid, (Ptr{Cvoid},), tmp)
+            ccall(($(string(f)), libumfpack), Cvoid, (Ptr{Cvoid},), tmp)
         end
         function umfpack_free_numeric(lu::UmfpackLU{$Tv,$Ti})
             if lu.numeric == C_NULL return lu end
@@ -609,7 +610,7 @@ end
 function umfpack_report_symbolic(symb::Ptr{Cvoid}, level::Real)
     old_prl::Float64 = umf_ctrl[UMFPACK_PRL]
     umf_ctrl[UMFPACK_PRL] = Float64(level)
-    @isok ccall((:umfpack_dl_report_symbolic, :libumfpack), Int,
+    @isok ccall((:umfpack_dl_report_symbolic, libumfpack), Int,
                 (Ptr{Cvoid}, Ptr{Float64}), symb, umf_ctrl)
     umf_ctrl[UMFPACK_PRL] = old_prl
 end
@@ -624,7 +625,7 @@ umfpack_report_symbolic(lu::UmfpackLU) = umfpack_report_symbolic(lu.symbolic,4.)
 function umfpack_report_numeric(num::Ptr{Cvoid}, level::Real)
     old_prl::Float64 = umf_ctrl[UMFPACK_PRL]
     umf_ctrl[UMFPACK_PRL] = Float64(level)
-    @isok ccall((:umfpack_dl_report_numeric, :libumfpack), Int,
+    @isok ccall((:umfpack_dl_report_numeric, libumfpack), Int,
                 (Ptr{Cvoid}, Ptr{Float64}), num, umf_ctrl)
     umf_ctrl[UMFPACK_PRL] = old_prl
 end

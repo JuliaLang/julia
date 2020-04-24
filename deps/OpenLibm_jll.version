@@ -1,0 +1,4 @@
+OPENLIBM_JLL_BRANCH = master
+OPENLIBM_JLL_SHA1 = 1b8e6e0eb24567f307d2562d0fd65505ae1c2113
+OPENLIBM_JLL_GIT_URL := git://github.com/JuliaBinaryWrappers/OpenLibm_jll.jl.git
+OPENLIBM_JLL_TAR_URL = https://api.github.com/repos/JuliaBinaryWrappers/OpenLibm_jll.jl/tarball/$1

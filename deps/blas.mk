@@ -40,8 +40,16 @@ endif
 # 64-bit BLAS interface
 ifeq ($(USE_BLAS64), 1)
 OPENBLAS_BUILD_OPTS += INTERFACE64=1 SYMBOLSUFFIX="$(OPENBLAS_SYMBOLSUFFIX)" LIBPREFIX="libopenblas$(OPENBLAS_LIBNAMESUFFIX)"
+
+# On macOS, we need objconv
 ifeq ($(OS), Darwin)
-OPENBLAS_BUILD_OPTS += OBJCONV=$(abspath $(BUILDDIR)/objconv/objconv)
+ifeq ($(USE_BINARYBUILDER_OBJCONV),1)
+  OBJCONV = $(Objconv_jll_DIR)/$(binlib)/objconv$(EXE)
+else
+  OBJCONV = $(BUILDDIR)/objconv/objconv
+endif
+
+OPENBLAS_BUILD_OPTS += OBJCONV=$(OBJCONV)
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: | $(BUILDDIR)/objconv/build-compiled
 endif
 endif
@@ -201,13 +209,14 @@ compile-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled
 fastcheck-lapack: check-lapack
 check-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/build-checked
 
+# If we built our own libopenblas, we need to generate a fake OpenBLAS_jll package to load it in:
+$(eval $(call jll-generate,OpenBLAS_jll,libopenblas=\"$(LIBBLASNAME)\",,f1936524-4db9-4c7a-6f3e-6fc869057263,))
+
 else # USE_BINARYBUILDER_OPENBLAS
 
+# Install MbedTLS_jll into our stdlib folder
+$(eval $(call install-jll-and-artifact,OpenBLAS_jll))
 
-OPENBLAS_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/OpenBLAS_jll.jl/releases/download/OpenBLAS-v$(OPENBLAS_VER)+$(OPENBLAS_BB_REL)
-OPENBLAS_BB_NAME := OpenBLAS.v$(OPENBLAS_VER)
-
-$(eval $(call bb-install,openblas,OPENBLAS,true))
 get-lapack: get-openblas
 extract-lapack: extract-openblas
 configure-lapack: configure-openblas

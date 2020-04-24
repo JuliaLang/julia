@@ -1,0 +1,4 @@
+MPFR_JLL_BRANCH = master
+MPFR_JLL_SHA1 = 7a5e7260e0a163c5a259f91a6c44e226ce810cbc
+MPFR_JLL_GIT_URL := git://github.com/JuliaBinaryWrappers/MPFR_jll.jl.git
+MPFR_JLL_TAR_URL = https://api.github.com/repos/JuliaBinaryWrappers/MPFR_jll.jl/tarball/$1

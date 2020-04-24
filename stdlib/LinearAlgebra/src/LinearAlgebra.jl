@@ -158,6 +158,13 @@ else
     const BlasInt = Int32
 end
 
+# Include utilities that bring in our ability to load and call BLAS functions,
+# polymorphizing on USE_BLAS64.
+Base.@include_stdlib_jll("BLAS_jll")
+using .BLAS_jll
+BLAS_jll.__init__()
+include("blaslib.jl")
+
 
 abstract type Algorithm end
 struct DivideAndConquer <: Algorithm end
@@ -424,21 +431,21 @@ end
 
 
 function versioninfo(io::IO=stdout)
-    if Base.libblas_name == "libopenblas" || BLAS.vendor() === :openblas || BLAS.vendor() === :openblas64
-        openblas_config = BLAS.openblas_get_config()
-        println(io, "BLAS: libopenblas (", openblas_config, ")")
+    ILP64str = Base.USE_BLAS64 ? " (ILP64)" : ""
+    vendor = determine_blas_vendor()
+    if vendor == :openblas
+        println(io, "BLAS: libopenblas (", openblas_get_config(), ")", ILP64str)
+    elseif vendor == :mkl
+        println(io, "BLAS: MKL", ILP64str)
     else
-        println(io, "BLAS: ",Base.libblas_name)
+        println(io, "BLAS: ", BLAS_jll.libblas, ILP64str)
     end
-    println(io, "LAPACK: ",Base.liblapack_name)
+    println(io, "LAPACK: ", BLAS_jll.liblapack)
 end
 
 function __init__()
     try
-        BLAS.check()
-        if BLAS.vendor() === :mkl
-            ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Cvoid, (Cint,), USE_BLAS64 ? 1 : 0)
-        end
+        set_blas_lapack_lib(BLAS_jll.libblas_handle, BLAS_jll.liblapack_handle)
         Threads.resize_nthreads!(Abuf)
         Threads.resize_nthreads!(Bbuf)
         Threads.resize_nthreads!(Cbuf)

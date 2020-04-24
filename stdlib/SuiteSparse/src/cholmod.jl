@@ -9,6 +9,7 @@
 # Ref: https://github.com/JuliaLang/julia/issues/25986
 
 module CHOLMOD
+using SuiteSparse_jll
 
 import Base: (*), convert, copy, eltype, getindex, getproperty, show, size,
              IndexStyle, IndexLinear, IndexCartesian, adjoint, axes
@@ -51,10 +52,10 @@ const common_nmethods   = Vector{Ptr{Cint}}()
 const common_postorder  = Vector{Ptr{Cint}}()
 
 ### These offsets are defined in SuiteSparse_wrapper.c
-const common_size = ccall((:jl_cholmod_common_size,:libsuitesparse_wrapper),Int,())
+const common_size = ccall((:jl_cholmod_common_size,libsuitesparse_wrapper),Int,())
 
 const cholmod_com_offsets = Vector{Csize_t}(undef, 19)
-ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
+ccall((:jl_cholmod_common_offsets, libsuitesparse_wrapper),
     Nothing, (Ptr{Csize_t},), cholmod_com_offsets)
 
 ## macro to generate the name of the C function according to the integer type
@@ -63,33 +64,33 @@ macro cholmod_name(nm)
 end
 
 function start(a::Vector{UInt8})
-    @isok ccall((@cholmod_name("start"), :libcholmod),
+    @isok ccall((@cholmod_name("start"), libcholmod),
         Cint, (Ptr{UInt8},), a)
     return a
 end
 
 function finish(a::Vector{UInt8})
-    @isok ccall((@cholmod_name("finish"), :libcholmod),
+    @isok ccall((@cholmod_name("finish"), libcholmod),
         Cint, (Ptr{UInt8},), a)
     return a
 end
 
 function defaults(a::Vector{UInt8})
-    @isok ccall((@cholmod_name("defaults"), :libcholmod),
+    @isok ccall((@cholmod_name("defaults"), libcholmod),
         Cint, (Ptr{UInt8},), a)
     return a
 end
 
 const build_version_array = Vector{Cint}(undef, 3)
-ccall((:jl_cholmod_version, :libsuitesparse_wrapper), Cint, (Ptr{Cint},), build_version_array)
+ccall((:jl_cholmod_version, libsuitesparse_wrapper), Cint, (Ptr{Cint},), build_version_array)
 const build_version = VersionNumber(build_version_array...)
 
 function __init__()
     try
         ### Check if the linked library is compatible with the Julia code
-        if Libdl.dlsym_e(Libdl.dlopen("libcholmod"), :cholmod_version) != C_NULL
+        if Libdl.dlsym_e(SuiteSparse_jll.libcholmod_handle, :cholmod_version) != C_NULL
             current_version_array = Vector{Cint}(undef, 3)
-            ccall((:cholmod_version, :libcholmod), Cint, (Ptr{Cint},), current_version_array)
+            ccall((:cholmod_version, libcholmod), Cint, (Ptr{Cint},), current_version_array)
             current_version = VersionNumber(current_version_array...)
         else # CHOLMOD < 2.1.1 does not include cholmod_version()
             current_version = v"0.0.0"
@@ -128,7 +129,7 @@ function __init__()
                 """
         end
 
-        intsize = Int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,()))
+        intsize = Int(ccall((:jl_cholmod_sizeof_long,libsuitesparse_wrapper),Csize_t,()))
         if intsize != 4length(IndexTypes)
             @error """
                  CHOLMOD integer size incompatibility
@@ -176,7 +177,7 @@ function __init__()
 
         # Register gc tracked allocator if CHOLMOD is new enough
         if current_version >= v"3.0.0"
-            cnfg = cglobal((:SuiteSparse_config, :libsuitesparseconfig), Ptr{Cvoid})
+            cnfg = cglobal((:SuiteSparse_config, libsuitesparseconfig), Ptr{Cvoid})
             unsafe_store!(cnfg, cglobal(:jl_malloc, Ptr{Cvoid}), 1)
             unsafe_store!(cnfg, cglobal(:jl_calloc, Ptr{Cvoid}), 2)
             unsafe_store!(cnfg, cglobal(:jl_realloc, Ptr{Cvoid}), 3)
@@ -411,32 +412,32 @@ Factor(FC::FactorComponent) = Factor(FC.F)
 
 ### cholmod_core_h ###
 function allocate_dense(m::Integer, n::Integer, d::Integer, ::Type{Tv}) where {Tv<:VTypes}
-    Dense(ccall((@cholmod_name("allocate_dense"), :libcholmod), Ptr{C_Dense{Tv}},
+    Dense(ccall((@cholmod_name("allocate_dense"), libcholmod), Ptr{C_Dense{Tv}},
                 (Csize_t, Csize_t, Csize_t, Cint, Ptr{Cvoid}),
                 m, n, d, xtyp(Tv), common_struct[Threads.threadid()]))
 end
 
 function free!(p::Ptr{C_Dense{Tv}}) where {Tv<:VTypes}
-    @isok ccall((@cholmod_name("free_dense"), :libcholmod), Cint,
+    @isok ccall((@cholmod_name("free_dense"), libcholmod), Cint,
                 (Ref{Ptr{C_Dense{Tv}}}, Ptr{Cvoid}),
                 p, common_struct[Threads.threadid()])
 end
 function zeros(m::Integer, n::Integer, ::Type{Tv}) where Tv<:VTypes
-    Dense(ccall((@cholmod_name("zeros"), :libcholmod), Ptr{C_Dense{Tv}},
+    Dense(ccall((@cholmod_name("zeros"), libcholmod), Ptr{C_Dense{Tv}},
                 (Csize_t, Csize_t, Cint, Ptr{UInt8}),
                 m, n, xtyp(Tv), common_struct[Threads.threadid()]))
 end
 zeros(m::Integer, n::Integer) = zeros(m, n, Float64)
 
 function ones(m::Integer, n::Integer, ::Type{Tv}) where Tv<:VTypes
-    Dense(ccall((@cholmod_name("ones"), :libcholmod), Ptr{C_Dense{Tv}},
+    Dense(ccall((@cholmod_name("ones"), libcholmod), Ptr{C_Dense{Tv}},
                 (Csize_t, Csize_t, Cint, Ptr{UInt8}),
                 m, n, xtyp(Tv), common_struct[Threads.threadid()]))
 end
 ones(m::Integer, n::Integer) = ones(m, n, Float64)
 
 function eye(m::Integer, n::Integer, ::Type{Tv}) where Tv<:VTypes
-    Dense(ccall((@cholmod_name("eye"), :libcholmod), Ptr{C_Dense{Tv}},
+    Dense(ccall((@cholmod_name("eye"), libcholmod), Ptr{C_Dense{Tv}},
                 (Csize_t, Csize_t, Cint, Ptr{UInt8}),
                 m, n, xtyp(Tv), common_struct[Threads.threadid()]))
 end
@@ -444,13 +445,13 @@ eye(m::Integer, n::Integer) = eye(m, n, Float64)
 eye(n::Integer) = eye(n, n, Float64)
 
 function copy(A::Dense{Tv}) where Tv<:VTypes
-    Dense(ccall((@cholmod_name("copy_dense"), :libcholmod), Ptr{C_Dense{Tv}},
+    Dense(ccall((@cholmod_name("copy_dense"), libcholmod), Ptr{C_Dense{Tv}},
                 (Ptr{C_Dense{Tv}}, Ptr{UInt8}),
                 A, common_struct[Threads.threadid()]))
 end
 
 function sort!(S::Sparse{Tv}) where Tv<:VTypes
-    @isok ccall((@cholmod_name("sort"), :libcholmod), Cint,
+    @isok ccall((@cholmod_name("sort"), libcholmod), Cint,
                 (Ptr{C_Sparse{Tv}}, Ptr{UInt8}),
                 S, common_struct[Threads.threadid()])
     return S
@@ -466,14 +467,14 @@ function norm_dense(D::Dense{Tv}, p::Integer) where Tv<:VTypes
     elseif p != 0 && p != 1
         throw(ArgumentError("second argument must be either 0 (Inf norm), 1, or 2"))
     end
-    ccall((@cholmod_name("norm_dense"), :libcholmod), Cdouble,
+    ccall((@cholmod_name("norm_dense"), libcholmod), Cdouble,
         (Ptr{C_Dense{Tv}}, Cint, Ptr{UInt8}),
           D, p, common_struct[Threads.threadid()])
 end
 
 ### cholmod_check.h ###
 function check_dense(A::Dense{Tv}) where Tv<:VTypes
-    ccall((@cholmod_name("check_dense"), :libcholmod), Cint,
+    ccall((@cholmod_name("check_dense"), libcholmod), Cint,
           (Ptr{C_Dense{Tv}}, Ptr{UInt8}),
           pointer(A), common_struct[Threads.threadid()]) != 0
 end
@@ -482,7 +483,7 @@ end
 ### cholmod_core.h ###
 function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer,
         sorted::Bool, packed::Bool, stype::Integer, ::Type{Tv}) where {Tv<:VTypes}
-    Sparse(ccall((@cholmod_name("allocate_sparse"), :libcholmod),
+    Sparse(ccall((@cholmod_name("allocate_sparse"), libcholmod),
             Ptr{C_Sparse{Tv}},
                 (Csize_t, Csize_t, Csize_t, Cint,
                  Cint, Cint, Cint, Ptr{Cvoid}),
@@ -491,33 +492,33 @@ function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer,
 end
 
 function free!(ptr::Ptr{C_Sparse{Tv}}) where Tv<:VTypes
-    @isok ccall((@cholmod_name("free_sparse"), :libcholmod), Cint,
+    @isok ccall((@cholmod_name("free_sparse"), libcholmod), Cint,
             (Ref{Ptr{C_Sparse{Tv}}}, Ptr{UInt8}),
                 ptr, common_struct[Threads.threadid()])
 end
 
 function free!(ptr::Ptr{C_Factor{Tv}}) where Tv<:VTypes
     # Warning! Important that finalizer doesn't modify the global Common struct.
-    @isok ccall((@cholmod_name("free_factor"), :libcholmod), Cint,
+    @isok ccall((@cholmod_name("free_factor"), libcholmod), Cint,
             (Ref{Ptr{C_Factor{Tv}}}, Ptr{Cvoid}),
                 ptr, common_struct[Threads.threadid()])
 end
 
 function aat(A::Sparse{Tv}, fset::Vector{SuiteSparse_long}, mode::Integer) where Tv<:VRealTypes
-    Sparse(ccall((@cholmod_name("aat"), :libcholmod),
+    Sparse(ccall((@cholmod_name("aat"), libcholmod),
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{SuiteSparse_long}, Csize_t, Cint, Ptr{UInt8}),
                 A, fset, length(fset), mode, common_struct[Threads.threadid()]))
 end
 
 function sparse_to_dense(A::Sparse{Tv}) where Tv<:VTypes
-    Dense(ccall((@cholmod_name("sparse_to_dense"),:libcholmod),
+    Dense(ccall((@cholmod_name("sparse_to_dense"),libcholmod),
         Ptr{C_Dense{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{UInt8}),
                 A, common_struct[Threads.threadid()]))
 end
 function dense_to_sparse(D::Dense{Tv}, ::Type{SuiteSparse_long}) where Tv<:VTypes
-    Sparse(ccall((@cholmod_name("dense_to_sparse"),:libcholmod),
+    Sparse(ccall((@cholmod_name("dense_to_sparse"),libcholmod),
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Dense{Tv}}, Cint, Ptr{UInt8}),
                 D, true, common_struct[Threads.threadid()]))
@@ -526,7 +527,7 @@ end
 function factor_to_sparse!(F::Factor{Tv}) where Tv<:VTypes
     ss = unsafe_load(pointer(F))
     ss.xtype == PATTERN && throw(CHOLMODException("only numeric factors are supported"))
-    Sparse(ccall((@cholmod_name("factor_to_sparse"),:libcholmod),
+    Sparse(ccall((@cholmod_name("factor_to_sparse"),libcholmod),
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Factor{Tv}}, Ptr{UInt8}),
                 F, common_struct[Threads.threadid()]))
@@ -534,64 +535,64 @@ end
 
 function change_factor!(F::Factor{Tv}, to_ll::Bool, to_super::Bool, to_packed::Bool,
                         to_monotonic::Bool) where Tv<:VTypes
-    @isok ccall((@cholmod_name("change_factor"),:libcholmod), Cint,
+    @isok ccall((@cholmod_name("change_factor"),libcholmod), Cint,
             (Cint, Cint, Cint, Cint, Cint, Ptr{C_Factor{Tv}}, Ptr{UInt8}),
                 xtyp(Tv), to_ll, to_super, to_packed, to_monotonic, F, common_struct[Threads.threadid()])
 end
 
 function check_sparse(A::Sparse{Tv}) where Tv<:VTypes
-    ccall((@cholmod_name("check_sparse"),:libcholmod), Cint,
+    ccall((@cholmod_name("check_sparse"),libcholmod), Cint,
           (Ptr{C_Sparse{Tv}}, Ptr{UInt8}),
            A, common_struct[Threads.threadid()]) != 0
 end
 
 function check_factor(F::Factor{Tv}) where Tv<:VTypes
-    ccall((@cholmod_name("check_factor"),:libcholmod), Cint,
+    ccall((@cholmod_name("check_factor"),libcholmod), Cint,
           (Ptr{C_Factor{Tv}}, Ptr{UInt8}),
            F, common_struct[Threads.threadid()]) != 0
 end
 
 function nnz(A::Sparse{Tv}) where Tv<:VTypes
-    ccall((@cholmod_name("nnz"),:libcholmod), Int,
+    ccall((@cholmod_name("nnz"),libcholmod), Int,
             (Ptr{C_Sparse{Tv}}, Ptr{UInt8}),
                 A, common_struct[Threads.threadid()])
 end
 
 function speye(m::Integer, n::Integer, ::Type{Tv}) where Tv<:VTypes
-    Sparse(ccall((@cholmod_name("speye"), :libcholmod),
+    Sparse(ccall((@cholmod_name("speye"), libcholmod),
         Ptr{C_Sparse{Tv}},
             (Csize_t, Csize_t, Cint, Ptr{UInt8}),
                 m, n, xtyp(Tv), common_struct[Threads.threadid()]))
 end
 
 function spzeros(m::Integer, n::Integer, nzmax::Integer, ::Type{Tv}) where Tv<:VTypes
-    Sparse(ccall((@cholmod_name("spzeros"), :libcholmod),
+    Sparse(ccall((@cholmod_name("spzeros"), libcholmod),
         Ptr{C_Sparse{Tv}},
             (Csize_t, Csize_t, Csize_t, Cint, Ptr{UInt8}),
              m, n, nzmax, xtyp(Tv), common_struct[Threads.threadid()]))
 end
 
 function transpose_(A::Sparse{Tv}, values::Integer) where Tv<:VTypes
-    Sparse(ccall((@cholmod_name("transpose"),:libcholmod),
+    Sparse(ccall((@cholmod_name("transpose"),libcholmod),
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Cint, Ptr{UInt8}),
                 A, values, common_struct[Threads.threadid()]))
 end
 
 function copy(F::Factor{Tv}) where Tv<:VTypes
-    Factor(ccall((@cholmod_name("copy_factor"),:libcholmod),
+    Factor(ccall((@cholmod_name("copy_factor"),libcholmod),
         Ptr{C_Factor{Tv}},
             (Ptr{C_Factor{Tv}}, Ptr{UInt8}),
                 F, common_struct[Threads.threadid()]))
 end
 function copy(A::Sparse{Tv}) where Tv<:VTypes
-    Sparse(ccall((@cholmod_name("copy_sparse"),:libcholmod),
+    Sparse(ccall((@cholmod_name("copy_sparse"),libcholmod),
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{UInt8}),
                 A, common_struct[Threads.threadid()]))
 end
 function copy(A::Sparse{Tv}, stype::Integer, mode::Integer) where Tv<:VRealTypes
-    Sparse(ccall((@cholmod_name("copy"),:libcholmod),
+    Sparse(ccall((@cholmod_name("copy"),libcholmod),
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Cint, Cint, Ptr{UInt8}),
                 A, stype, mode, common_struct[Threads.threadid()]))
@@ -601,14 +602,14 @@ end
 function print_sparse(A::Sparse{Tv}, name::String) where Tv<:VTypes
     isascii(name) || error("non-ASCII name: $name")
     set_print_level(common_struct[Threads.threadid()], 3)
-    @isok ccall((@cholmod_name("print_sparse"),:libcholmod), Cint,
+    @isok ccall((@cholmod_name("print_sparse"),libcholmod), Cint,
             (Ptr{C_Sparse{Tv}}, Ptr{UInt8}, Ptr{UInt8}),
                  A, name, common_struct[Threads.threadid()])
     nothing
 end
 function print_factor(F::Factor{Tv}, name::String) where Tv<:VTypes
     set_print_level(common_struct[Threads.threadid()], 3)
-    @isok ccall((@cholmod_name("print_factor"),:libcholmod), Cint,
+    @isok ccall((@cholmod_name("print_factor"),libcholmod), Cint,
             (Ptr{C_Factor{Tv}}, Ptr{UInt8}, Ptr{UInt8}),
                 F, name, common_struct[Threads.threadid()])
     nothing
@@ -622,7 +623,7 @@ function ssmult(A::Sparse{Tv}, B::Sparse{Tv}, stype::Integer,
     if lA.ncol != lB.nrow
         throw(DimensionMismatch("inner matrix dimensions do not fit"))
     end
-    Sparse(ccall((@cholmod_name("ssmult"),:libcholmod),
+    Sparse(ccall((@cholmod_name("ssmult"),libcholmod),
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{C_Sparse{Tv}}, Cint, Cint,
                 Cint, Ptr{UInt8}),
@@ -634,13 +635,13 @@ function norm_sparse(A::Sparse{Tv}, norm::Integer) where Tv<:VTypes
     if norm != 0 && norm != 1
         throw(ArgumentError("norm argument must be either 0 or 1"))
     end
-    ccall((@cholmod_name("norm_sparse"), :libcholmod), Cdouble,
+    ccall((@cholmod_name("norm_sparse"), libcholmod), Cdouble,
             (Ptr{C_Sparse{Tv}}, Cint, Ptr{UInt8}),
                 A, norm, common_struct[Threads.threadid()])
 end
 
 function horzcat(A::Sparse{Tv}, B::Sparse{Tv}, values::Bool) where Tv<:VRealTypes
-    Sparse(ccall((@cholmod_name("horzcat"), :libcholmod),
+    Sparse(ccall((@cholmod_name("horzcat"), libcholmod),
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{C_Sparse{Tv}}, Cint, Ptr{UInt8}),
              A, B, values, common_struct[Threads.threadid()]))
@@ -670,7 +671,7 @@ function scale!(S::Dense{Tv}, scale::Integer, A::Sparse{Tv}) where Tv<:VRealType
     end
 
     sA = unsafe_load(pointer(A))
-    @isok ccall((@cholmod_name("scale"),:libcholmod), Cint,
+    @isok ccall((@cholmod_name("scale"),libcholmod), Cint,
             (Ptr{C_Dense{Tv}}, Cint, Ptr{C_Sparse{Tv}}, Ptr{UInt8}),
                 S, scale, A, common_struct[Threads.threadid()])
     A
@@ -684,7 +685,7 @@ function sdmult!(A::Sparse{Tv}, transpose::Bool,
     if nc != size(X, 1)
         throw(DimensionMismatch("incompatible dimensions, $nc and $(size(X,1))"))
     end
-    @isok ccall((@cholmod_name("sdmult"),:libcholmod), Cint,
+    @isok ccall((@cholmod_name("sdmult"),libcholmod), Cint,
             (Ptr{C_Sparse{Tv}}, Cint,
              Ref{ComplexF64}, Ref{ComplexF64},
              Ptr{C_Dense{Tv}}, Ptr{C_Dense{Tv}}, Ptr{UInt8}),
@@ -693,7 +694,7 @@ function sdmult!(A::Sparse{Tv}, transpose::Bool,
 end
 
 function vertcat(A::Sparse{Tv}, B::Sparse{Tv}, values::Bool) where Tv<:VRealTypes
-    Sparse(ccall((@cholmod_name("vertcat"), :libcholmod),
+    Sparse(ccall((@cholmod_name("vertcat"), libcholmod),
             Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{C_Sparse{Tv}}, Cint, Ptr{UInt8}),
                 A, B, values, common_struct[Threads.threadid()]))
@@ -704,7 +705,7 @@ function symmetry(A::Sparse{Tv}, option::Integer) where Tv<:VTypes
     pmatched = Ref{SuiteSparse_long}()
     nzoffdiag = Ref{SuiteSparse_long}()
     nzdiag = Ref{SuiteSparse_long}()
-    rv = ccall((@cholmod_name("symmetry"), :libcholmod), Cint,
+    rv = ccall((@cholmod_name("symmetry"), libcholmod), Cint,
             (Ptr{C_Sparse{Tv}}, Cint, Ptr{SuiteSparse_long}, Ptr{SuiteSparse_long},
                 Ptr{SuiteSparse_long}, Ptr{SuiteSparse_long}, Ptr{UInt8}),
                     A, option, xmatched, pmatched,
@@ -716,7 +717,7 @@ end
 # For analyze, analyze_p, and factorize_p!, the Common argument must be
 # supplied in order to control if the factorization is LLt or LDLt
 function analyze(A::Sparse{Tv}, cmmn::Vector{UInt8}) where Tv<:VTypes
-    Factor(ccall((@cholmod_name("analyze"),:libcholmod),
+    Factor(ccall((@cholmod_name("analyze"),libcholmod),
         Ptr{C_Factor{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{UInt8}),
                 A, cmmn))
@@ -724,14 +725,14 @@ end
 function analyze_p(A::Sparse{Tv}, perm::Vector{SuiteSparse_long},
                    cmmn::Vector{UInt8}) where Tv<:VTypes
     length(perm) != size(A,1) && throw(BoundsError())
-    Factor(ccall((@cholmod_name("analyze_p"),:libcholmod),
+    Factor(ccall((@cholmod_name("analyze_p"),libcholmod),
             Ptr{C_Factor{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{SuiteSparse_long}, Ptr{SuiteSparse_long},
                 Csize_t, Ptr{UInt8}),
                 A, perm, C_NULL, 0, cmmn))
 end
 function factorize!(A::Sparse{Tv}, F::Factor{Tv}, cmmn::Vector{UInt8}) where Tv<:VTypes
-    @isok ccall((@cholmod_name("factorize"),:libcholmod), Cint,
+    @isok ccall((@cholmod_name("factorize"),libcholmod), Cint,
         (Ptr{C_Sparse{Tv}}, Ptr{C_Factor{Tv}}, Ptr{UInt8}),
             A, F, cmmn)
     F
@@ -739,7 +740,7 @@ end
 function factorize_p!(A::Sparse{Tv}, β::Real, F::Factor{Tv}, cmmn::Vector{UInt8}) where Tv<:VTypes
     # note that β is passed as a complex number (double beta[2]),
     # but the CHOLMOD manual says that only beta[0] (real part) is used
-    @isok ccall((@cholmod_name("factorize_p"),:libcholmod), Cint,
+    @isok ccall((@cholmod_name("factorize_p"),libcholmod), Cint,
         (Ptr{C_Sparse{Tv}}, Ref{ComplexF64}, Ptr{SuiteSparse_long}, Csize_t,
          Ptr{C_Factor{Tv}}, Ptr{UInt8}),
             A, β, C_NULL, 0, F, cmmn)
@@ -759,7 +760,7 @@ function solve(sys::Integer, F::Factor{Tv}, B::Dense{Tv}) where Tv<:VTypes
             throw(LinearAlgebra.ZeroPivotException(s.minor))
         end
     end
-    Dense(ccall((@cholmod_name("solve"),:libcholmod), Ptr{C_Dense{Tv}},
+    Dense(ccall((@cholmod_name("solve"),libcholmod), Ptr{C_Dense{Tv}},
             (Cint, Ptr{C_Factor{Tv}}, Ptr{C_Dense{Tv}}, Ptr{UInt8}),
                 sys, F, B, common_struct[Threads.threadid()]))
 end
@@ -769,7 +770,7 @@ function spsolve(sys::Integer, F::Factor{Tv}, B::Sparse{Tv}) where Tv<:VTypes
         throw(DimensionMismatch("LHS and RHS should have the same number of rows. " *
             "LHS has $(size(F,1)) rows, but RHS has $(size(B,1)) rows."))
     end
-    Sparse(ccall((@cholmod_name("spsolve"),:libcholmod),
+    Sparse(ccall((@cholmod_name("spsolve"),libcholmod),
         Ptr{C_Sparse{Tv}},
             (Cint, Ptr{C_Factor{Tv}}, Ptr{C_Sparse{Tv}}, Ptr{UInt8}),
                 sys, F, B, common_struct[Threads.threadid()]))
@@ -777,7 +778,7 @@ end
 
 # Autodetects the types
 function read_sparse(file::Libc.FILE, ::Type{SuiteSparse_long})
-    ptr = ccall((@cholmod_name("read_sparse"), :libcholmod),
+    ptr = ccall((@cholmod_name("read_sparse"), libcholmod),
         Ptr{C_Sparse{Cvoid}},
             (Ptr{Cvoid}, Ptr{UInt8}),
                 file.ptr, common_struct[Threads.threadid()])
@@ -1579,7 +1580,7 @@ function lowrankupdowndate!(F::Factor{Tv}, C::Sparse{Tv}, update::Cint) where Tv
     if lF.n != lC.nrow
         throw(DimensionMismatch("matrix dimensions do not fit"))
     end
-    @isok ccall((@cholmod_name("updown"), :libcholmod), Cint,
+    @isok ccall((@cholmod_name("updown"), libcholmod), Cint,
         (Cint, Ptr{C_Sparse{Tv}}, Ptr{C_Factor{Tv}}, Ptr{Cvoid}),
         update, C, F, common_struct[Threads.threadid()])
     F
