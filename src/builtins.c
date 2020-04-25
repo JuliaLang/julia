@@ -556,9 +556,13 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
     else {
         // put arguments on the heap if there are too many
         newargs = NULL;
-        n_alloc = 0;
-        assert(precount > 0); // let optimizer know this won't overflow
-        _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, precount, extra);
+        n_alloc = precount;
+        if (extra)
+            // grow by an extra 50% if newalloc is still only a guess
+            n_alloc += n_alloc / 2 + 16;
+        arg_heap = jl_alloc_svec(n_alloc);
+        roots[0] = (jl_value_t*)arg_heap;
+        newargs = jl_svec_data(arg_heap);
     }
     newargs[0] = f;
     precount -= 1;
