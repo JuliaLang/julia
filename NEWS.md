@@ -129,6 +129,7 @@ New library features
 * `open` for files now accepts a keyword argument `lock` controlling whether file operations
   will acquire locks for safe multi-threaded access. Setting it to `false` provides better
   performance when only one thread will access the file.
+* The introspection macros (`@which`, `@code_typed`, etc.) now work with `do`-block syntax ([#35283]) and with dot syntax ([#35522]).
 
 Standard library changes
 ------------------------
