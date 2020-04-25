@@ -239,9 +239,12 @@ end
     @test convert(Transpose{Float64,Matrix{Float64}}, Transpose(intmat))::Transpose{Float64,Matrix{Float64}} == Transpose(intmat)
 end
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
 @testset "Adjoint and Transpose convert methods to AbstractArray" begin
     # tests corresponding to #34995
-    using LinearAlgebra: ImmutableArray
     intvec, intmat = [1, 2], [1 2 3; 4 5 6]
     statvec = ImmutableArray(intvec)
     statmat = ImmutableArray(intmat)

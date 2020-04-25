@@ -540,9 +540,12 @@ end
     end
 end
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
 @testset "Conversion to AbstractArray" begin
     # tests corresponding to #34995
-    using LinearAlgebra: ImmutableArray
     immutablemat = ImmutableArray([1 2 3; 4 5 6; 7 8 9])
     for SymType in (Symmetric, Hermitian)
         S = Float64

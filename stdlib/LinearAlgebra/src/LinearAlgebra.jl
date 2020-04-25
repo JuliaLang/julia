@@ -465,19 +465,4 @@ function __init__()
 end
 
 
-# For testing purposes:
-# A wrapper type for arrays, which implements getindex but not setindex!
-# This type allows to test whether some methods preserve immutable arrays, e.g.,
-# after conversion.
-struct ImmutableArray{T,N,A<:AbstractArray} <: AbstractArray{T,N}
-    data::A
-end
-ImmutableArray(data::AbstractArray{T,N}) where {T,N} = ImmutableArray{T,N,typeof(data)}(data)
-Base.size(A::ImmutableArray) = size(A.data)
-Base.size(A::ImmutableArray, d) = size(A.data, d)
-Base.getindex(A::ImmutableArray, i...) = getindex(A.data, i...)
-AbstractArray{T}(A::ImmutableArray) where {T} = ImmutableArray(AbstractArray{T}(A.data))
-AbstractArray{T,N}(A::ImmutableArray{S,N}) where {S,T,N} = ImmutableArray(AbstractArray{T,N}(A.data))
-
-
 end # module LinearAlgebra

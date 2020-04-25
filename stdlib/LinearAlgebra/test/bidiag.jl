@@ -588,9 +588,12 @@ Base.transpose(n::MyNotANumberType) = n
     @test transpose(copy(tB)) == B
 end
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
 @testset "Conversion to AbstractArray" begin
     # tests corresponding to #34995
-    using LinearAlgebra: ImmutableArray
     dv = ImmutableArray([1, 2, 3, 4])
     ev = ImmutableArray([7, 8, 9])
     Bu = Bidiagonal(dv, ev, :U)

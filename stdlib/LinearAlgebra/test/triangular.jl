@@ -605,9 +605,11 @@ end
     end
 end
 
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
 @testset "AbstractArray constructor should preserve underlying storage type" begin
     # tests corresponding to #34995
-    using LinearAlgebra: ImmutableArray
     local m = 4
     local T, S = Float32, Float64
     immutablemat = ImmutableArray(randn(T,m,m))
