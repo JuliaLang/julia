@@ -414,13 +414,14 @@ ERROR: DimensionMismatch("in the axes of `A` and `B` must match, got (Base.OneTo
     This function requires at least Julia 1.5. In Julia 1.0-1.4 it is available from
     the `Compat` package.
 """
-function hadamard(A, B)
+function hadamard(A::AbstractArray, B::AbstractArray)
     @noinline throw_dmm(axA, axB) = throw(DimensionMismatch("Axes of `A` and `B` must match, got $axA and $axB"))
 
     axA, axB = axes(A), axes(B)
     axA == axB || throw_dmm(axA, axB)
-    return map(*, A, B)
+    return map(hadamard, A, B)
 end
+hadamard(a, b) = a * b
 const ⊙ = hadamard
 
 """
@@ -440,7 +441,7 @@ function hadamard!(dest::AbstractArray, A::AbstractArray, B::AbstractArray)
 
     axA, axB, axdest = axes(A), axes(B), axes(dest)
     ((axdest == axA) & (axdest == axB)) || throw_dmm(axA, axB, axdest)
-    @simd for I in CartesianIndices(axdest)
+    @simd for I in eachindex(dest, A, B)
         @inbounds dest[I] = A[I]*B[I]
     end
     return dest
@@ -497,10 +498,20 @@ function tensor!(dest::AbstractArray, A::AbstractArray, B::AbstractArray)
 
     axA, axB, axdest = axes(A), axes(B), axes(dest)
     axes(dest) == (axA..., axB...) || throw_dmm(axA, axB, axdest)
-    for IB in CartesianIndices(axB)
-        b = B[IB]
-        @simd for IA in CartesianIndices(axA)
-            @inbounds dest[IA,IB] = A[IA]*b
+    if IndexStyle(dest) === IndexCartesian()
+        for IB in CartesianIndices(axB)
+            @inbounds b = B[IB]
+            @simd for IA in CartesianIndices(axA)
+                @inbounds dest[IA,IB] = A[IA]*b
+            end
+        end
+    else
+        i = firstindex(dest)
+        @inbounds for b in B
+            @simd for a in A
+                dest[i] = a*b
+                i += 1
+            end
         end
     end
     return dest
