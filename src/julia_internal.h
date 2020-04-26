@@ -1011,6 +1011,7 @@ JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i);
 
 JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_current_task(void);
+JL_DLLEXPORT void jl_set_next_task(jl_task_t *task);
 
 // -- synchronization utilities -- //
 
