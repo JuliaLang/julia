@@ -415,7 +415,7 @@ ERROR: DimensionMismatch("in the axes of `A` and `B` must match, got (Base.OneTo
     the `Compat` package.
 """
 function hadamard(A, B)
-    @noinline throw_dmm(axA, axB) = throw(DimensionMismatch("in the axes of `A` and `B` must match, got $axA and $axB"))
+    @noinline throw_dmm(axA, axB) = throw(DimensionMismatch("Axes of `A` and `B` must match, got $axA and $axB"))
 
     axA, axB = axes(A), axes(B)
     axA == axB || throw_dmm(axA, axB)
