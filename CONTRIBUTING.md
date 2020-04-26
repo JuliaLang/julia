@@ -86,6 +86,7 @@ Julia's documentation source files are stored in the `doc/` directory and all do
 make docs
 ```
 
+
 from Julia's root directory. This will rebuild the Julia system image, then install or update the package dependencies required to build the documentation, and finally build the HTML documentation and place the resulting files in `doc/_build/html/`.
 
 > **Note**
@@ -199,11 +200,12 @@ Add new code to Julia's base libraries as follows (this is the "basic" approach;
 
 Build as usual, and do `make clean testall` to test your contribution. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent (be careful – this command will delete any files lying around that aren't checked into git).
 
-Note: You can run specific test files with `make`:
+#### Running specific tests
+There are `make` targets for running specific tests:
 
     make test-bitarray
 
-or with the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `test/math.jl`:
+You can also use the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `test/math.jl`:
 
     ./usr/bin/julia test/runtests.jl bitarray math
 
@@ -242,9 +244,9 @@ If you need to restart your Julia session, just start at step 2 above.
 built and incorporate them automatically. You only need to rebuild
 Julia if you made code-changes that Revise cannot handle.
 
-For convenience, there are also `test-revise-*` targets for every `test-*`
-target that use Revise to load any modifications to Base into the current
-process before running the corresponding test. This can be useful as a shortcut
+For convenience, there are also `test-revise-*` targets for every [`test-*`
+target](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#running-specific-tests) that use Revise to load any modifications to Base into the current
+system image before running the corresponding test. This can be useful as a shortcut
 on the command line (since tests aren't always designed to be run outside the
 runtest harness).
 
