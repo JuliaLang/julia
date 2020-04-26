@@ -2585,4 +2585,4 @@ end
 f() = _foldl_iter(step, (Missing[],), [0.0], 1)
 end
 @test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}) == Tuple{Int}
-@test Base.return_types(Issue35566.f) == [Val(:expected)]
+@test Base.return_types(Issue35566.f) == [Val{:expected}]
