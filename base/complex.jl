@@ -1,15 +1,20 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-
 """
-    AbstractComplex <: Number
+    AbstractComplex{T} <: Number
 
 Abstract supertype for complex numbers.
 """
-abstract type AbstractComplex <: Number end
+abstract type AbstractComplex{T} <: Number end
 AbstractComplex(z::AbstractComplex) = z
-AbstractComplex(x::Real) = Complex(x, zero(x))
+AbstractComplex(x::Real)    = Complex(x, zero(x))
+AbstractComplex{T}(x::Real) = Complex(T{x}, zero(T))
+AbstractComplex{T}
+Complex{T}(z::AbstractComplex) where  {T<:Real} = Complex{T}(real(z),imag(z))
+(::Type{T})(z::AbstractComplex) where {T<:Real} = isreal(z) ? T(real(z))::T : throw(InexactError(nameof(T), T, z))
 
+Complex(z::AbstractComplex)    = Complex(real(z), imag(z))
+Complex{T}(z::AbstractComplex) = Complex{T}(real(z), imag(z))
 """
     Complex{T<:Real} <: Number
 
@@ -18,7 +23,7 @@ Complex number type with real and imaginary part of type `T`.
 `ComplexF16`, `ComplexF32` and `ComplexF64` are aliases for
 `Complex{Float16}`, `Complex{Float32}` and `Complex{Float64}` respectively.
 """
-struct Complex{T<:Real} <: AbstractComplex
+struct Complex{T<:Real} <: AbstractComplex{T}
     re::T
     im::T
 end
@@ -43,11 +48,6 @@ const ComplexF32  = Complex{Float32}
 const ComplexF16  = Complex{Float16}
 
 Complex{T}(x::Real) where {T<:Real} = Complex{T}(x,0)
-Complex{T}(z::AbstractComplex) where {T<:Real} = Complex{T}(real(z),imag(z))
-(::Type{T})(z::Complex) where {T<:Real} =
-    isreal(z) ? T(real(z))::T : throw(InexactError(nameof(T), T, z))
-
-Complex(z::AbstractComplex) = Complex(real(z), imag(z))
 Complex(z::Complex) = z
 
 promote_rule(::Type{Complex{T}}, ::Type{S}) where {T<:Real,S<:Real} =
