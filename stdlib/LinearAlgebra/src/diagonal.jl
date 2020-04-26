@@ -483,8 +483,8 @@ rdiv!(A::AbstractMatrix{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
 rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     (D = transD.parent; rdiv!(A, D))
 
-(/)(A::Union{StridedMatrix, AbstractTriangular}, D::Diagonal) = 
-    rdiv!((typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A), D) 
+(/)(A::Union{StridedMatrix, AbstractTriangular}, D::Diagonal) =
+    rdiv!((typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A), D)
 
 (\)(F::Factorization, D::Diagonal) =
     ldiv!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
