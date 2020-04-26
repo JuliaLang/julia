@@ -3,7 +3,8 @@
 """
     AbstractComplex{T} <: Number
 
-Abstract supertype for complex numbers.
+Abstract supertype for complex numbers. The type parameter `T` is intended to represent
+the type of the underlying data stored by the constituent components of a complex number.
 """
 abstract type AbstractComplex{T} <: Number end
 AbstractComplex(z::AbstractComplex) = z
