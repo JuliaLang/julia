@@ -90,6 +90,10 @@ Base.getproperty(t::T1234321, ::Symbol) = "foo"
 Base.setproperty!(t::T1234321, ::Symbol, ::Symbol) = "foo"
 @test (@code_typed T1234321(1).f = :foo).second == String
 
+# Make sure `do` block works with `@code_...` macros
+@test (@code_typed map(1:1) do x; x; end).second == Vector{Int}
+@test (@code_typed open(`cat`; read=true) do _; 1; end).second == Int
+
 module ImportIntrinsics15819
 # Make sure changing the lookup path of an intrinsic doesn't break
 # the heuristic for type instability warning.
@@ -313,6 +317,20 @@ B33163(x) = x
 @test (@code_typed A33163(1, y=2))[1].inferred
 @test !(@code_typed optimize=false A33163(1, y=2))[1].inferred
 @test !(@code_typed optimize=false B33163(1))[1].inferred
+
+@test_throws MethodError (@code_lowered wrongkeyword=true 3 + 4)
+
+# Issue #14637
+@test (@which Base.Base.Base.nothing) == Core
+@test_throws ErrorException (@functionloc Base.nothing)
+@test (@code_typed (3//4).num)[2] == Int
+
+# Issue #28615
+@test_throws ErrorException (@which [1, 2] .+ [3, 4])
+@test (@code_typed optimize=true max.([1,7], UInt.([4])))[2] == Vector{UInt}
+@test (@code_typed Ref.([1,2])[1].x)[2] == Int
+@test (@code_typed max.(Ref(true).x))[2] == Bool
+@test !isempty(@code_typed optimize=false max.(Ref.([5, 6])...))
 
 module ReflectionTest
 using Test, Random, InteractiveUtils

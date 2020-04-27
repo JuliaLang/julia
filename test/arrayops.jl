@@ -3,6 +3,9 @@
 # Array test
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
+
+isdefined(@__MODULE__, :T24Linear) || include("testhelpers/arrayindexingtypes.jl")
+
 using SparseArrays
 
 using Random, LinearAlgebra
@@ -463,6 +466,21 @@ end
     end
     @test_throws BoundsError insert!(v, 5, 5)
 end
+
+@testset "pop!(::Vector, i, [default])" begin
+    a = [1, 2, 3, 4]
+    @test_throws BoundsError pop!(a, 0)
+    @test pop!(a, 0, "default") == "default"
+    @test a == 1:4
+    @test_throws BoundsError pop!(a, 5)
+    @test pop!(a, 1) == 1
+    @test a == [2, 3, 4]
+    @test pop!(a, 2) == 3
+    @test a == [2, 4]
+    badpop() = @inbounds pop!([1], 2)
+    @test_throws BoundsError badpop()
+end
+
 @testset "concatenation" begin
     @test isequal([fill(1.,2,2)  fill(2.,2,1)], [1. 1 2; 1 1 2])
     @test isequal([fill(1.,2,2); fill(2.,1,2)], [1. 1; 1 1; 2 2])
@@ -683,6 +701,13 @@ end
     y = [0, 0, 0, 0]
     copyto!(y, x)
     @test y == [1, 2, 3, 4]
+
+    # similar, https://github.com/JuliaLang/julia/pull/35304
+    x = PermutedDimsArray([1 2; 3 4], (2, 1))
+    @test similar(x, 3,3) isa Array
+    z = TSlow([1 2; 3 4])
+    x_slow = PermutedDimsArray(z, (2, 1))
+    @test similar(x_slow, 3,3) isa TSlow
 end
 
 @testset "circshift" begin
@@ -926,6 +951,7 @@ end
                                         3 4], inner=(2,), outer=(2, 2))
     @test_throws ArgumentError repeat([1 2;
                                         3 4], inner=(2, 2), outer=(2,))
+    @test_throws ArgumentError repeat([1, 2], inner=(1, -1), outer=(1, -1))
 
     A = reshape(1:8, 2, 2, 2)
     R = repeat(A, inner = (1, 1, 2), outer = (1, 1, 1))

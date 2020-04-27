@@ -145,7 +145,7 @@ typedef JITSymbol JL_JITSymbol;
 typedef JITSymbol JL_SymbolInfo;
 
 using RTDyldObjHandleT = orc::VModuleKey;
-#if JL_LLVM_VERSION >= 110000
+#if JL_LLVM_VERSION >= 100000
 using CompilerResultT = Expected<orc::LegacyRTDyldObjectLinkingLayerBase::ObjectPtr>;
 #else
 using CompilerResultT = std::unique_ptr<llvm::MemoryBuffer>;
@@ -212,7 +212,11 @@ private:
     // object fits in its entirety
     SmallVector<char, 4096> ObjBufferSV;
     raw_svector_ostream ObjStream;
-    legacy::PassManager PM;
+    legacy::PassManager PM0;  // per-optlevel pass managers
+    legacy::PassManager PM1;
+    legacy::PassManager PM2;
+    legacy::PassManager PM3;
+    TargetMachine *TMs[4];
     MCContext *Ctx;
     std::shared_ptr<RTDyldMemoryManager> MemMgr;
     DebugObjectRegistrar registrar;
@@ -243,3 +247,5 @@ static inline bool isIntrinsicFunction(Function *F)
 {
     return F->isIntrinsic() || F->getName().startswith("julia.");
 }
+
+CodeGenOpt::Level CodeGenOptLevelFor(int optlevel);

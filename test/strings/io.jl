@@ -148,6 +148,7 @@
         @test "aaa \\g \n" == unescape_string(str, ['g'])
         @test "aaa \\g \\n" == unescape_string(str, ['g', 'n'])
     end
+    @test Base.escape_raw_string(raw"\"\\\"\\-\\") == "\\\"\\\\\\\"\\\\-\\\\"
 end
 @testset "join()" begin
     @test join([]) == join([],",") == ""

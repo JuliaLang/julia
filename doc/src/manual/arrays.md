@@ -121,7 +121,7 @@ julia> [1, 2.3, 4//5] # Thus that's the element type of this Array
  0.8
 
 julia> []
-0-element Array{Any,1}
+Any[]
 ```
 
 ### [Concatenation](@id man-array-concatenation)
@@ -135,13 +135,6 @@ julia> [1:2, 4:5] # Has a comma, so no concatenation occurs. The ranges are them
 2-element Array{UnitRange{Int64},1}:
  1:2
  4:5
-
-julia> [1:2; 4:5]
-4-element Array{Int64,1}:
- 1
- 2
- 4
- 5
 
 julia> [1:2; 4:5]
 4-element Array{Int64,1}:
@@ -561,7 +554,7 @@ julia> A[[1 4; 3 8]]
  5  15
 
 julia> A[[]]
-0-element Array{Int64,1}
+Int64[]
 
 julia> A[1:2:5]
 3-element Array{Int64,1}:

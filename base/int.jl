@@ -44,6 +44,39 @@ const BitUnsigned64T   = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UIn
 
 const BitIntegerType = Union{map(T->Type{T}, BitInteger_types)...}
 
+# >> this use of `unsigned` is defined somewhere else << the docstring should migrate there
+"""
+    unsigned(T::Integer)
+
+Convert an integer bitstype to the unsigned type of the same size.
+# Examples
+```jldoctest
+julia> unsigned(Int16)
+UInt16
+julia> unsigned(UInt64)
+UInt64
+```
+""" unsigned
+
+"""
+    signed(T::Integer)
+
+Convert an integer bitstype to the signed type of the same size.
+# Examples
+```jldoctest
+julia> signed(UInt16)
+Int16
+julia> signed(UInt64)
+Int64
+```
+"""
+signed(::Type{UInt8}) = Int8
+signed(::Type{UInt16}) = Int16
+signed(::Type{UInt32}) = Int32
+signed(::Type{UInt64}) = Int64
+signed(::Type{UInt128}) = Int128
+signed(::Type{T}) where {T<:Signed} = T
+
 ## integer comparisons ##
 
 (<)(x::T, y::T) where {T<:BitSigned}  = slt_int(x, y)
@@ -77,7 +110,7 @@ isodd(n::Integer) = rem(n, 2) != 0
 """
     iseven(x::Integer) -> Bool
 
-Return `true` is `x` is even (that is, divisible by 2), and `false` otherwise.
+Return `true` if `x` is even (that is, divisible by 2), and `false` otherwise.
 
 # Examples
 ```jldoctest
@@ -138,19 +171,16 @@ abs(x::Signed) = flipsign(x,x)
 ~(n::Integer) = -n-1
 
 """
-    unsigned(x) -> Unsigned
+    unsigned(x)
 
 Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as
 unsigned without checking for negative values.
-
 # Examples
 ```jldoctest
 julia> unsigned(-2)
 0xfffffffffffffffe
-
 julia> unsigned(2)
 0x0000000000000002
-
 julia> signed(unsigned(-2))
 -2
 ```
@@ -506,6 +536,8 @@ if nameof(@__MODULE__) === :Base
 end
 
 rem(x::T, ::Type{T}) where {T<:Integer} = x
+rem(x::Signed, ::Type{Unsigned}) = x % unsigned(typeof(x))
+rem(x::Unsigned, ::Type{Signed}) = x % signed(typeof(x))
 rem(x::Integer, T::Type{<:Integer}) = convert(T, x)  # `x % T` falls back to `convert`
 rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
 mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)

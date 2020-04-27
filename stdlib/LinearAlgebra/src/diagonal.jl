@@ -156,6 +156,21 @@ end
 (+)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag + Db.diag)
 (-)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag - Db.diag)
 
+for f in (:+, :-)
+    @eval function $f(D::Diagonal, S::Symmetric)
+        return Symmetric($f(D, S.data), sym_uplo(S.uplo))
+    end
+    @eval function $f(S::Symmetric, D::Diagonal)
+        return Symmetric($f(S.data, D), sym_uplo(S.uplo))
+    end
+    @eval function $f(D::Diagonal{<:Real}, H::Hermitian)
+        return Hermitian($f(D, H.data), sym_uplo(H.uplo))
+    end
+    @eval function $f(H::Hermitian, D::Diagonal{<:Real})
+        return Hermitian($f(H.data, D), sym_uplo(H.uplo))
+    end
+end
+
 (*)(x::Number, D::Diagonal) = Diagonal(x * D.diag)
 (*)(D::Diagonal, x::Number) = Diagonal(D.diag * x)
 (/)(D::Diagonal, x::Number) = Diagonal(D.diag / x)
@@ -644,13 +659,18 @@ end
 # disambiguation methods: * of Diagonal and Adj/Trans AbsVec
 *(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal) = Adjoint(map((t,s) -> t'*s, D.diag, parent(x)))
 *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal) = Transpose(map((t,s) -> transpose(t)*s, D.diag, parent(x)))
-*(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) =
-    mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
-*(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) =
-    mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
-function dot(x::AbstractVector, D::Diagonal, y::AbstractVector)
-    mapreduce(t -> dot(t[1], t[2], t[3]), +, zip(x, D.diag, y))
+*(x::Adjoint{<:Any,<:AbstractVector},   D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
+*(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
+dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x, D, y)
+
+function _mapreduce_prod(f, x, D::Diagonal, y)
+    if isempty(x) && isempty(D) && isempty(y)
+        return zero(Base.promote_op(f, eltype(x), eltype(D), eltype(y)))
+    else
+        return mapreduce(t -> f(t[1], t[2], t[3]), +, zip(x, D.diag, y))
+    end
 end
+
 
 function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
     info = 0

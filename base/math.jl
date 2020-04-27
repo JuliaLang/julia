@@ -153,7 +153,7 @@ function evalpoly(z::Complex, p::Tuple)
             ai = Symbol("a", i)
             push!(as, :($ai = $a))
             a = :(muladd(r, $ai, $b))
-            b = :(p[$i] - s * $ai)
+            b = :(muladd(-s, $ai, p[$i]))
         end
         ai = :a0
         push!(as, :($ai = $a))
@@ -186,7 +186,7 @@ function _evalpoly(z::Complex, p)
     for i in N-2:-1:1
         ai = a
         a = muladd(r, ai, b)
-        b = p[i] - s * ai
+        b = muladd(-s, ai, p[i])
     end
     ai = a
     muladd(ai, z, b)

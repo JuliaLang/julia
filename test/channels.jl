@@ -252,7 +252,47 @@ using Distributed
     end
 end
 
-using Dates
+@testset "timedwait" begin
+    @test timedwait(() -> true, 0) === :ok
+    @test timedwait(() -> false, 0) === :timed_out
+    @test_throws ArgumentError timedwait(() -> true, 0; pollint=0)
+
+    # Allowing a smaller positive `pollint` results in `timewait` hanging
+    @test_throws ArgumentError timedwait(() -> true, 0, pollint=1e-4)
+
+    # Callback passed in raises an exception
+    failure_cb = function (fail_on_call=1)
+        i = 0
+        function ()
+            i += 1
+            i >= fail_on_call && error("callback failed")
+            return false
+        end
+    end
+
+    try
+        timedwait(failure_cb(1), 0)
+        @test false
+    catch e
+        @test e isa CapturedException
+        @test e.ex isa ErrorException
+    end
+
+    try
+        timedwait(failure_cb(2), 0)
+        @test false
+    catch e
+        @test e isa CapturedException
+        @test e.ex isa ErrorException
+    end
+
+    duration = @elapsed timedwait(() -> false, 1)  # Using default pollint of 0.1
+    @test duration ≈ 1 atol=0.4
+
+    duration = @elapsed timedwait(() -> false, 0; pollint=1)
+    @test duration ≈ 1 atol=0.4
+end
+
 @testset "timedwait on multiple channels" begin
     @Experimental.sync begin
         rr1 = Channel(1)
@@ -262,13 +302,13 @@ using Dates
         callback() = all(map(isready, [rr1, rr2, rr3]))
         # precompile functions which will be tested for execution time
         @test !callback()
-        @test timedwait(callback, 0.0) === :timed_out
+        @test timedwait(callback, 0) === :timed_out
 
         @async begin sleep(0.5); put!(rr1, :ok) end
         @async begin sleep(1.0); put!(rr2, :ok) end
         @async begin sleep(2.0); put!(rr3, :ok) end
 
-        et = @elapsed timedwait(callback, Dates.Second(1))
+        et = @elapsed timedwait(callback, 1)
 
         # assuming that 0.5 seconds is a good enough buffer on a typical modern CPU
         try

@@ -668,15 +668,17 @@ end
         @test_throws ArgumentError repeat(c, -1)
         @test_throws ArgumentError repeat(s, -1)
         @test_throws ArgumentError repeat(S, -1)
-        @test repeat(c, 0) === ""
-        @test repeat(s, 0) === ""
-        @test repeat(S, 0) === ""
-        @test repeat(c, 1) === s
-        @test repeat(s, 1) === s
-        @test repeat(S, 1) === S
-        @test repeat(c, 3) === S
-        @test repeat(s, 3) === S
-        @test repeat(S, 3) === S*S*S
+        for T in (Int, UInt)
+            @test repeat(c, T(0)) === ""
+            @test repeat(s, T(0)) === ""
+            @test repeat(S, T(0)) === ""
+            @test repeat(c, T(1)) === s
+            @test repeat(s, T(1)) === s
+            @test repeat(S, T(1)) === S
+            @test repeat(c, T(3)) === S
+            @test repeat(s, T(3)) === S
+            @test repeat(S, T(3)) === S*S*S
+        end
     end
     # Issue #32160 (string allocation unsigned overflow)
     @test_throws OutOfMemoryError repeat('x', typemax(Csize_t))

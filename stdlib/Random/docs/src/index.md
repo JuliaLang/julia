@@ -198,11 +198,11 @@ struct DiscreteDistribution{V <: AbstractVector}
     probabilities::V
 end
 ```
-and that we *always* want to build an a alias table, regardless of the number of values needed (we learn how to customize this below). The methods
+and that we *always* want to build an alias table, regardless of the number of values needed (we learn how to customize this below). The methods
 ```julia
 Random.eltype(::Type{<:DiscreteDistribution}) = Int
 
-function Random.Sampler(::AbstractRng, distribution::DiscreteDistribution, ::Repetition)
+function Random.Sampler(::Type{<:AbstractRNG}, distribution::DiscreteDistribution, ::Repetition)
     SamplerSimple(disribution, make_alias_table(distribution.probabilities))
 end
 ```

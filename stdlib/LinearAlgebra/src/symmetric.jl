@@ -239,7 +239,7 @@ end
 # For A<:Union{Symmetric,Hermitian}, similar(A[, neweltype]) should yield a matrix with the same
 # symmetry type, uplo flag, and underlying storage type as A. The following methods cover these cases.
 similar(A::Symmetric, ::Type{T}) where {T} = Symmetric(similar(parent(A), T), ifelse(A.uplo == 'U', :U, :L))
-# If the the Hermitian constructor's check ascertaining that the wrapped matrix's
+# If the Hermitian constructor's check ascertaining that the wrapped matrix's
 # diagonal is strictly real is removed, the following method can be simplified.
 function similar(A::Hermitian, ::Type{T}) where T
     B = similar(parent(A), T)
@@ -461,11 +461,25 @@ end
 (-)(A::Hermitian) = Hermitian(-A.data, sym_uplo(A.uplo))
 
 ## Addition/subtraction
+for f ∈ (:+, :-), (Wrapper, conjugation) ∈ ((:Hermitian, :adjoint), (:Symmetric, :transpose))
+    @eval begin
+        function $f(A::$Wrapper, B::$Wrapper)
+            if A.uplo == B.uplo
+                return $Wrapper($f(parent(A), parent(B)), sym_uplo(A.uplo))
+            elseif A.uplo == 'U'
+                return $Wrapper($f(parent(A), $conjugation(parent(B))), :U)
+            else
+                return $Wrapper($f($conjugation(parent(A)), parent(B)), :U)
+            end
+        end
+    end
+end
+
 for f in (:+, :-)
-    @eval $f(A::Symmetric, B::Symmetric) = Symmetric($f(A.data, B), sym_uplo(A.uplo))
-    @eval $f(A::Hermitian, B::Hermitian) = Hermitian($f(A.data, B), sym_uplo(A.uplo))
-    @eval $f(A::Hermitian, B::Symmetric{<:Real}) = Hermitian($f(A.data, B), sym_uplo(A.uplo))
-    @eval $f(A::Symmetric{<:Real}, B::Hermitian) = Hermitian($f(A.data, B), sym_uplo(A.uplo))
+    @eval begin
+        $f(A::Hermitian, B::Symmetric{<:Real}) = $f(A, Hermitian(parent(B), sym_uplo(B.uplo)))
+        $f(A::Symmetric{<:Real}, B::Hermitian) = $f(Hermitian(parent(A), sym_uplo(A.uplo)), B)
+    end
 end
 
 ## Matvec
