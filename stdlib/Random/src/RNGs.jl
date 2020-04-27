@@ -25,6 +25,7 @@ else # !windows
     end
 
     rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read(getfile(rd), sp[])
+    rand(rd::RandomDevice, ::SamplerType{Bool}) = read(getfile(rd), UInt8) % Bool
 
     function getfile(rd::RandomDevice)
         devrandom = rd.unlimited ? DEV_URANDOM : DEV_RANDOM
