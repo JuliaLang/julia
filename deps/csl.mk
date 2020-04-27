@@ -6,23 +6,14 @@ ifneq ($(USE_BINARYBUILDER_CSL),1)
 # is FreeBSD, where we cannot rely upon the `libgcc_s` in `/lib`, but must
 # explicitly link against the `libgcc_s` that comes with GCC, which we find here:
 
-$(BUILDDIR)/csl:
-	mkdir -p "$@"
-
-$(BUILDDIR)/csl/libgcc_finder.cc: | $(BUILDDIR)/csl
-	@echo "int main(void) { return 0; }" >> "$@"
-
-$(BUILDDIR)/csl/libgcc_finder.$(SHLIB_EXT): $(BUILDDIR)/csl/libgcc_finder.cc
-	@$(call PRINT_CC,$(CXX) -shared $(fPIC) -o "$@" "$<")
-
 ifeq ($(OS),FreeBSD)
-$(build_prefix)/manifest/compilersupportlibraries: $(build_prefix)/manifest/libwhich
-endif
-
-$(build_prefix)/manifest/compilersupportlibraries: $(BUILDDIR)/csl/libgcc_finder.$(SHLIB_EXT) | $(build_shlibdir) $(build_prefix)/manifest
-ifeq ($(OS),FreeBSD)
-	@cp -v $$($(call spawn,$(build_depsbindir)/libwhich) -a $< | tr '\0' '\n' | grep libgcc_s) $(build_shlibdir)
-	@echo "delete-uninstaller $(build_shlibdir)/libgcc_s*$(SHLIB_EXT)*" > "$@"
+UNINSTALL_compilersupportlibraries := delete-uninstaller $(build_shlibdir)/libgcc_s.so.1
+$(build_prefix)/manifest/compilersupportlibraries: | $(build_shlibdir) $(build_prefix)/manifest
+	@cp -v $$($(FC) --print-file-name=libgcc_s.so.1) $(build_shlibdir)
+	@echo "delete-uninstaller $(build_shlibdir)/libgcc_s.so.1" > "$@"
+else
+$(build_prefix)/manifest/compilersupportlibraries:
+	touch "$@"
 endif
 
 LIBGFORTRAN_SOVER := $(subst libgfortran,,$(word 4, $(subst -, ,$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
