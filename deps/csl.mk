@@ -10,6 +10,7 @@ ifeq ($(OS),FreeBSD)
 UNINSTALL_compilersupportlibraries := delete-uninstaller $(build_shlibdir)/libgcc_s.so.1
 $(build_prefix)/manifest/compilersupportlibraries: | $(build_shlibdir) $(build_prefix)/manifest
 	@cp -v $$($(FC) --print-file-name=libgcc_s.so.1) $(build_shlibdir)
+	@ln -s libgcc_s.so.1 $(build_shlibdir)/libgcc_s.so
 	@echo "delete-uninstaller $(build_shlibdir)/libgcc_s.so.1" > "$@"
 else
 $(build_prefix)/manifest/compilersupportlibraries:

@@ -338,7 +338,7 @@ define lowercase
 $(shell echo $1 | tr A-Z a-z)
 endef
 define shell_escape
-$(subst \,\\,$(subst $$,$$$$,$(1)))
+$(subst $$,\$$\$$,$(subst \,\\,$(1)))
 endef
 
 # Figure out OS and architecture

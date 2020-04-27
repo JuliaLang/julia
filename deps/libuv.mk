@@ -64,7 +64,8 @@ fastcheck-libuv: #none
 check-libuv: $(LIBUV_BUILDDIR)/build-checked
 
 # If we built our own libuv, we need to generate a fake LibUV_jll package to load it in:
-$(eval $(call jll-generate,LibUV_jll,libuv=\"libuv\",,183b4373-6708-53ba-ad28-60e28bb38547,))
+# Note that since we only build the static library above, we don't bother to generate any library products here.
+$(eval $(call jll-generate,LibUV_jll,,,183b4373-6708-53ba-ad28-60e28bb38547,))
 
 else # USE_BINARYBUILDER_LIBUV
 

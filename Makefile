@@ -171,7 +171,7 @@ endef
 $(eval $(call register_private_lib,,libccalltest libllvmcalltest))
 ifeq ($(USE_GPL_LIBS), 1)
 $(eval $(call register_private_lib,,libsuitesparse_wrapper))
-$(eval $(call register_private_lib,SUITESPARSE,libamd libcamd libccolamd libcholmod libcolamd libumfpack libspqr libsuitesparseconfig))
+$(eval $(call register_private_lib,SUITESPARSE,libamd libbtf libcamd libccolamd libcholmod libcolamd libklu libumfpack librbio libspqr libsuitesparseconfig))
 endif
 $(eval $(call register_private_lib,PCRE,libpcre2-8))
 $(eval $(call register_private_lib,DSFMT,libdSFMT))
@@ -296,7 +296,7 @@ endif
 	mkdir -p $(DESTDIR)$(datarootdir)/julia/base $(DESTDIR)$(datarootdir)/julia/test
 	cp -R -L $(JULIAHOME)/base/* $(DESTDIR)$(datarootdir)/julia/base
 	cp -R -L $(JULIAHOME)/test/* $(DESTDIR)$(datarootdir)/julia/test
-	cp -Ra $(build_datarootdir)/julia/artifacts $(DESTDIR)$(datarootdir)/julia
+	-cp -Ra $(build_datarootdir)/julia/artifacts $(DESTDIR)$(datarootdir)/julia
 	# Copy everything except artifacts, collapsing symlinks
 	for f in $(build_datarootdir)/julia/*; do \
 		if [ $$(basename $${f}) != artifacts ]; then \
