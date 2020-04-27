@@ -455,6 +455,38 @@ for rng in [MersenneTwister(), RandomDevice()],
     end
 end
 
+@testset "rand(Bool) uniform distribution" begin
+    for n in [rand(1:8), rand(9:16), rand(17:64)]
+        a = zeros(Bool, n)
+        as = zeros(Int, n)
+        # we will test statistical properties for each position of a,
+        # but also for 3 linear combinations of positions (for the array version)
+        lcs = unique!.([rand(1:n, 2), rand(1:n, 3), rand(1:n, 5)])
+        aslcs = zeros(Int, 3)
+        for rng = (MersenneTwister(), RandomDevice())
+            for scalar = [false, true]
+                fill!(a, 0)
+                fill!(as, 0)
+                fill!(aslcs, 0)
+                for _ = 1:49
+                    if scalar
+                        for i in eachindex(as)
+                            as[i] += rand(rng, Bool)
+                        end
+                    else
+                        as .+= rand!(rng, a)
+                        aslcs .+= [xor(getindex.(Ref(a), lcs[i])...) for i in 1:3]
+                    end
+                end
+                @test all(x -> 7 <= x <= 42, as) # for each x, fails with proba ≈ 2/35_000_000
+                if !scalar
+                    @test all(x -> 7 <= x <= 42, aslcs)
+                end
+            end
+        end
+    end
+end
+
 # test reproducility of methods
 let mta = MersenneTwister(42), mtb = MersenneTwister(42)
 
