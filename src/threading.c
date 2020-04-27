@@ -285,6 +285,7 @@ void jl_init_threadtls(int16_t tid)
     ptls->bt_data = bt_data;
     ptls->sig_exception = NULL;
     ptls->previous_exception = NULL;
+    ptls->next_task = NULL;
 #ifdef _OS_WINDOWS_
     ptls->needs_resetstkoflw = 0;
 #endif
