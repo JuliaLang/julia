@@ -614,26 +614,32 @@ function rand!(r::MersenneTwister, A1::Array{Bool}, sp::SamplerType{Bool})
     n1 = length(A1)
     n128 = n1 ÷ 16
 
-    GC.@preserve A1 begin
-        A = UnsafeView{UInt128}(pointer(A1), n128)
-        rand!(r, UnsafeView{Float64}(A.ptr, 2*n128), CloseOpen12())
-        # without masking, non-zero bits could be observed in other
-        # positions than the LSB of each byte
-        mask = 0x01010101010101010101010101010101
-        if n128 > 0
-            # we need up to 15 bits of entropy for the last loop;
-            # A[1] % UInt64 contains 52 bits of entropy, but 8
-            # of them will be used for A[i] itself (the first of
-            # each byte). To compensate, we xor with (A[1] >> 65),
+    if n128 == 0
+        bits = rand(r, UInt52Raw())
+    else
+        GC.@preserve A1 begin
+            A = UnsafeView{UInt128}(pointer(A1), n128)
+            rand!(r, UnsafeView{Float64}(A.ptr, 2*n128), CloseOpen12())
+            # without masking, non-zero bits could be observed in other
+            # positions than the LSB of each byte
+            mask = 0x01010101010101010101010101010101
+            # we need up to 15 bits of entropy in `bits` for the final loop,
+            # which we will extract from x = A[1] % UInt64;
+            # let y = x % UInt32; y contains 32 bits of entropy, but 4
+            # of them will be used for A[1] itself (the first of
+            # each byte). To compensate, we xor with (y >> 17),
             # which gets the entropy from the second bit of each byte
-            # of the upper-half of A[i].
-            bits = (A[1] % UInt64) ⊻ (A[1] >> 65) % UInt64
-        else
-            bits = rand(r, UInt52Raw())
-        end
-        for i = 1:n128
-            # << 5 to randomize the first bit of the 8th byte
-            A[i] = (A[i] ⊻ A[i] << 5) & mask
+            # of the upper-half of y, and sets it in the first bit
+            # of each byte of the lower half; the first two bytes
+            # now contain 16 usable random bits
+            x = A[1] % UInt64
+            bits = x ⊻ x >> 17
+            for i = 1:n128
+                # << 5 to randomize the first bit of the 8th & 16th byte
+                # (i.e. we move bit 52 (resp. 52 + 64), which is unused,
+                # to position 57 (resp. 57 + 64))
+                A[i] = (A[i] ⊻ A[i] << 5) & mask
+            end
         end
     end
     for i = 16*n128+1:n1
