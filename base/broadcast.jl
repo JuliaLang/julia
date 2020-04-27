@@ -897,13 +897,13 @@ broadcast_unalias(::Nothing, src) = src
 """
     potentially_self_aliased(A)
 
-Conservatively returns true if multiple locations in `A` might reference the same memory
+Returns true if multiple locations in `A` reference the same memory
 """
 potentially_self_aliased(::DenseArray) = false
 potentially_self_aliased(A::StridedArray) = any(==(0), strides(A))
-potentially_self_aliased(A::SubArray) = any(!allunique, A.indices)
+potentially_self_aliased(A::SubArray) = any(map(!allunique, A.indices))
 potentially_self_aliased(A::Union{Base.ReshapedArray,Base.ReinterpretArray}) = potentially_self_aliased(A.parent)
-potentially_self_aliased(::Any) = true
+potentially_self_aliased(::Any) = false
 
 # Preprocessing a `Broadcasted` does two things:
 # * unaliases any arguments from `dest`
