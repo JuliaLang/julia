@@ -174,6 +174,10 @@ function (*)(A::AbstractSparseMatrixCSC, D::Diagonal)
     T = Base.promote_op(*, eltype(D), eltype(A))
     mul!(LinearAlgebra.copy_oftype(A, T), A, D)
 end
+function (/)(A::AbstractSparseMatrixCSC, D::Diagonal)
+    T = typeof(oneunit(eltype(A))/oneunit(eltype(D)))
+    rdiv!(LinearAlgebra.copy_oftype(A, T), D)
+end
 
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
 # http://dl.acm.org/citation.cfm?id=355796
