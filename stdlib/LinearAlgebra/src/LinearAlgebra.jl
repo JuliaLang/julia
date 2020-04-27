@@ -406,7 +406,7 @@ julia> a ⊙ b
  21
 
 julia> a ⊙ [5]
-ERROR: DimensionMismatch("in the axes of `A` and `B` must match, got (Base.OneTo(2),) and (Base.OneTo(1),)")
+ERROR: DimensionMismatch("Axes of `A` and `B` must match, got (Base.OneTo(2),) and (Base.OneTo(1),)")
 [...]
 ```
 
