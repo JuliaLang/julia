@@ -303,7 +303,7 @@ end
 
 #### Nearly Division Less
 
-# cf. https://arxiv.org/abs/1805.10941
+# cf. https://arxiv.org/abs/1805.10941 (algorithm 5)
 
 struct SamplerRangeNDL{U<:Unsigned,T} <: Sampler{T}
     a::T  # first element of the range
@@ -326,7 +326,7 @@ function rand(rng::AbstractRNG, sp::SamplerRangeNDL{U,T}) where {U,T}
     m = x * s
     l = m % U
     if l < s
-        t = mod(-s, s)
+        t = mod(-s, s) # as s is unsigned, -s is equal to 2^L - s in the paper
         while l < t
             x = widen(rand(rng, U))
             m = x * s
