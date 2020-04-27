@@ -3761,6 +3761,8 @@ JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
 {
     if (obviously_disjoint(a, b, 1))
         return 0;
+    if (jl_has_free_typevars(a) || jl_has_free_typevars(b))
+        return 0;
     if (jl_subtype(b, a))
         return 0;
     if (jl_subtype(a, b))
