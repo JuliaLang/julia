@@ -34,8 +34,8 @@ function _search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 
         return i == n+1 ? 0 : throw(BoundsError(a, i))
     end
     p = pointer(a)
-    q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
-    q == C_NULL ? 0 : Int(q-p+1)
+    q = GC.@preserve a ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
+    return q == C_NULL ? 0 : Int(q-p+1)
 end
 
 function _search(a::ByteArray, b::AbstractChar, i::Integer = 1)
@@ -74,8 +74,8 @@ function _rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer =
         return i == n+1 ? 0 : throw(BoundsError(a, i))
     end
     p = pointer(a)
-    q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i)
-    q == C_NULL ? 0 : Int(q-p+1)
+    q = GC.@preserve a ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i)
+    return q == C_NULL ? 0 : Int(q-p+1)
 end
 
 function _rsearch(a::ByteArray, b::AbstractChar, i::Integer = length(a))
@@ -125,6 +125,7 @@ findfirst(ch::AbstractChar, string::AbstractString) = findfirst(==(ch), string)
 
 # AbstractString implementation of the generic findnext interface
 function findnext(testf::Function, s::AbstractString, i::Integer)
+    i = Int(i)
     z = ncodeunits(s) + 1
     1 ≤ i ≤ z || throw(BoundsError(s, i))
     @inbounds i == z || isvalid(s, i) || string_index_err(s, i)
@@ -272,7 +273,7 @@ julia> findnext("Lang", "JuliaLang", 2)
 6:9
 ```
 """
-findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, i)
+findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, Int(i))
 
 """
     findnext(ch::AbstractChar, string::AbstractString, start::Integer)
@@ -484,7 +485,7 @@ julia> findprev("Julia", "JuliaLang", 6)
 1:5
 ```
 """
-findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, i)
+findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, Int(i))
 
 """
     findprev(ch::AbstractChar, string::AbstractString, start::Integer)
@@ -526,6 +527,8 @@ true
 julia> occursin(r"a.a", "abba")
 false
 ```
+
+See also: [`contains`](@ref).
 """
 occursin(needle::Union{AbstractString,AbstractChar}, haystack::AbstractString) =
     _searchindex(haystack, needle, firstindex(haystack)) != 0

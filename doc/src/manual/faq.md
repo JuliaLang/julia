@@ -67,7 +67,7 @@ When a file is run as the main script using `julia file.jl` one might want to ac
 functionality like command line argument handling. A way to determine that a file is run in
 this fashion is to check if `abspath(PROGRAM_FILE) == @__FILE__` is `true`.
 
-### How do I catch CTRL-C in a script?
+### [How do I catch CTRL-C in a script?](@id catch-ctrl-c)
 
 Running a Julia script using `julia file.jl` does not throw
 [`InterruptException`](@ref) when you try to terminate it with CTRL-C
@@ -90,8 +90,7 @@ use `exec` to replace the process to `julia`:
 ```julia
 #!/bin/bash
 #=
-exec julia --color=yes --startup-file=no -e 'include(popfirst!(ARGS))' \
-    "${BASH_SOURCE[0]}" "$@"
+exec julia --color=yes --startup-file=no "${BASH_SOURCE[0]}" "$@"
 =#
 
 @show ARGS  # put any Julia code here
@@ -101,6 +100,19 @@ In the example above, the code between `#=` and `=#` is run as a `bash`
 script.  Julia ignores this part since it is a multi-line comment for
 Julia.  The Julia code after `=#` is ignored by `bash` since it stops
 parsing the file once it reaches to the `exec` statement.
+
+!!! note
+    In order to [catch CTRL-C](@ref catch-ctrl-c) in the script you can use
+    ```julia
+    #!/bin/bash
+    #=
+    exec julia --color=yes --startup-file=no -e 'include(popfirst!(ARGS))' \
+        "${BASH_SOURCE[0]}" "$@"
+    =#
+
+    @show ARGS  # put any Julia code here
+    ```
+    instead. Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
 
 ## Functions
 
@@ -129,9 +141,9 @@ When calling `change_value!(x)` in the above example, `y` is a newly created var
 to the value of `x`, i.e. `10`; then `y` is rebound to the constant `17`, while the variable
 `x` of the outer scope is left untouched.
 
-But here is a thing you should pay attention to: suppose `x` is bound to an object of type `Array`
+However, if `x` is bound to an object of type `Array`
 (or any other *mutable* type). From within the function, you cannot "unbind" `x` from this Array,
-but you can change its content. For example:
+but you *can* change its content. For example:
 
 ```jldoctest
 julia> x = [1,2,3]
@@ -322,8 +334,8 @@ unstable (generic function with 1 method)
 
 It returns either an `Int` or a [`Float64`](@ref) depending on the value of its argument.
 Since Julia can't predict the return type of this function at compile-time, any computation
-that uses it will have to guard against both types possibly occurring, making generation of
-fast machine code difficult.
+that uses it must be able to cope with values of both types, which makes it hard to produce
+fast machine code.
 
 ### [Why does Julia give a `DomainError` for certain seemingly-sensible operations?](@id faq-domain-errors)
 
@@ -615,6 +627,14 @@ have, it ends up having a substantial cost due to compilers (LLVM and GCC) not g
 around the added overflow checks. If this improves in the future, we could consider defaulting
 to checked integer arithmetic in Julia, but for now, we have to live with the possibility of overflow.
 
+In the meantime, overflow-safe integer operations can be achieved through the use of external libraries
+such as [SaferIntegers.jl](https://github.com/JeffreySarnoff/SaferIntegers.jl). Note that, as stated
+previously, the use of these libraries significantly increases the execution time of code using the
+checked integer types. However, for limited usage, this is far less of an issue than if it were used
+for all integer operations. You can follow the status of the discussion
+[here](https://github.com/JuliaLang/julia/issues/855).
+
+
 ### What are the possible causes of an `UndefVarError` during remote execution?
 
 As the error states, an immediate cause of an `UndefVarError` on a remote node is that a binding
@@ -750,8 +770,9 @@ generate efficient code when working with `Union{T, Nothing}` arguments or field
 To represent missing data in the statistical sense (`NA` in R or `NULL` in SQL), use the
 [`missing`](@ref) object. See the [`Missing Values`](@ref missing) section for more details.
 
-The empty tuple (`()`) is another form of nothingness. But, it should not really be thought of
-as nothing but rather a tuple of zero values.
+In some languages, the empty tuple (`()`) is considered the canonical
+form of nothingness. However, in julia it is best thought of as just
+a regular tuple that happens to contain zero values.
 
 The empty (or "bottom") type, written as `Union{}` (an empty union type), is a type with
 no values and no subtypes (except itself). You will generally not need to use this type.

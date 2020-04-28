@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Base.Ryu
 
 const maxMantissa = (UInt64(1) << 53) - 1

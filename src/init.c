@@ -13,7 +13,7 @@
 
 #include <errno.h>
 
-#if !defined(_OS_WINDOWS_) || defined(_COMPILER_MINGW_)
+#if !defined(_OS_WINDOWS_) || defined(_COMPILER_GCC_)
 #include <getopt.h>
 #endif
 
@@ -601,6 +601,8 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_options.outputji = abspath(jl_options.outputji, 0);
     if (jl_options.outputbc)
         jl_options.outputbc = abspath(jl_options.outputbc, 0);
+    if (jl_options.outputasm)
+        jl_options.outputasm = abspath(jl_options.outputasm, 0);
     if (jl_options.machine_file)
         jl_options.machine_file = abspath(jl_options.machine_file, 0);
     if (jl_options.output_code_coverage)
@@ -698,21 +700,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     }
 #endif
 
-#if defined(__linux__)
-    int ncores = jl_cpu_threads();
-    if (ncores > 1) {
-        cpu_set_t cpumask;
-        CPU_ZERO(&cpumask);
-        for(int i=0; i < ncores; i++) {
-            CPU_SET(i, &cpumask);
-        }
-        sched_setaffinity(0, sizeof(cpu_set_t), &cpumask);
-    }
-#endif
-
-    if ((jl_options.outputo || jl_options.outputbc) &&
+    if ((jl_options.outputo || jl_options.outputbc || jl_options.outputasm) &&
         (jl_options.code_coverage || jl_options.malloc_log)) {
-        jl_error("cannot generate code-coverage or track allocation information while generating a .o or .bc output file");
+        jl_error("cannot generate code-coverage or track allocation information while generating a .o, .bc, or .s output file");
     }
 
     jl_gc_init();
@@ -736,6 +726,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     else {
         jl_init_types();
         jl_init_codegen();
+        jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0); // used internally
     }
 
     jl_init_tasks();
@@ -744,12 +735,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_root_task->timing_stack = jl_root_timing;
 #endif
     jl_init_frontend();
-
-    jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0); // used by ml_matches
     jl_init_serializer();
 
     if (!jl_options.image_file) {
         jl_core_module = jl_new_module(jl_symbol("Core"));
+        jl_core_module->parent = jl_core_module;
         jl_type_typename->mt->module = jl_core_module;
         jl_top_module = jl_core_module;
         jl_init_intrinsic_functions();
@@ -759,16 +749,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         post_boot_hooks();
     }
 
-    // the Main module is the one which is always open, and set as the
-    // current module for bare (non-module-wrapped) toplevel expressions.
-    // it does "using Base" if Base is available.
     if (jl_base_module != NULL) {
-        jl_add_standard_imports(jl_main_module);
-        jl_value_t *maininclude = jl_get_global(jl_base_module, jl_symbol("MainInclude"));
-        if (maininclude && jl_is_module(maininclude)) {
-            jl_module_import(jl_main_module, (jl_module_t*)maininclude, jl_symbol("include"));
-            jl_module_import(jl_main_module, (jl_module_t*)maininclude, jl_symbol("eval"));
-        }
         // Do initialization needed before starting child threads
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("__preinit_threads__"));
         if (f) {

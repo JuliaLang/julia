@@ -31,7 +31,7 @@ Serializer(io::IO) = Serializer{typeof(io)}(io)
 
 const n_int_literals = 33
 const n_reserved_slots = 24
-const n_reserved_tags = 11
+const n_reserved_tags = 10
 
 const TAGS = Any[
     Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128,
@@ -57,6 +57,7 @@ const TAGS = Any[
     Symbol, # FULL_GLOBALREF_TAG
     Symbol, # HEADER_TAG
     Symbol, # IDDICT_TAG
+    Symbol, # SHARED_REF_TAG
     fill(Symbol, n_reserved_tags)...,
 
     (), Bool, Any, Bottom, Core.TypeofBottom, Type, svec(), Tuple{}, false, true, nothing,
@@ -76,7 +77,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 9 # do not make changes without bumping the version #!
+const ser_version = 10 # do not make changes without bumping the version #!
 
 const NTAGS = length(TAGS)
 
@@ -104,7 +105,7 @@ const TUPLE_TAG = sertag(Tuple)
 const SIMPLEVECTOR_TAG = sertag(SimpleVector)
 const SYMBOL_TAG = sertag(Symbol)
 const INT8_TAG = sertag(Int8)
-const ARRAY_TAG = sertag(Array)
+const ARRAY_TAG = findfirst(==(Array), TAGS)%Int32
 const EXPR_TAG = sertag(Expr)
 const MODULE_TAG = sertag(Module)
 const METHODINSTANCE_TAG = sertag(Core.MethodInstance)
@@ -135,6 +136,7 @@ const REF_OBJECT_TAG       = Int32(o0+13)
 const FULL_GLOBALREF_TAG   = Int32(o0+14)
 const HEADER_TAG           = Int32(o0+15)
 const IDDICT_TAG           = Int32(o0+16)
+const SHARED_REF_TAG       = Int32(o0+17)
 
 writetag(s::IO, tag) = (write(s, UInt8(tag)); nothing)
 
@@ -284,6 +286,10 @@ end
 
 function serialize(s::AbstractSerializer, ss::String)
     len = sizeof(ss)
+    if len > 7
+        serialize_cycle(s, ss) && return
+        writetag(s.io, SHARED_REF_TAG)
+    end
     if len <= 255
         writetag(s.io, STRING_TAG)
         write(s.io, UInt8(len))
@@ -631,7 +637,7 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
         serialize_type(s, t)
         write(s.io, x)
     else
-        if t.mutable && nf > 0
+        if t.mutable
             serialize_cycle(s, x) && return
             serialize_type(s, t, true)
         else
@@ -677,6 +683,38 @@ function writeheader(s::AbstractSerializer)
     write(io, UInt8(endianness) | (UInt8(machine) << 2))
     write(io, [0x00,0x00,0x00]) # 3 reserved bytes
     nothing
+end
+
+function readheader(s::AbstractSerializer)
+    # Tag already read
+    io = s.io
+    m1 = read(io, UInt8)
+    m2 = read(io, UInt8)
+    if m1 != UInt8('J') || m2 != UInt8('L')
+        error("Unsupported serialization format (got header magic bytes $m1 $m2)")
+    end
+    version    = read(io, UInt8)
+    flags      = read(io, UInt8)
+    reserved1  = read(io, UInt8)
+    reserved2  = read(io, UInt8)
+    reserved3  = read(io, UInt8)
+    endianflag = flags & 0x3
+    wordflag   = (flags >> 2) & 0x3
+    wordsize = wordflag == 0 ? 4 :
+               wordflag == 1 ? 8 :
+               error("Unknown word size flag in header")
+    endian_bom = endianflag == 0 ? 0x04030201 :
+                 endianflag == 1 ? 0x01020304 :
+                 error("Unknown endianness flag in header")
+    # Check protocol compatibility.
+    endian_bom == ENDIAN_BOM  || error("Serialized byte order mismatch ($(repr(endian_bom)))")
+    # We don't check wordsize == sizeof(Int) here, as Int is encoded concretely
+    # as Int32 or Int64, which should be enough to correctly deserialize a range
+    # of data structures between Julia versions.
+    if version > ser_version
+        error("""Cannot read stream serialized with a newer version of Julia.
+                 Got data version $version > current version $ser_version""")
+    end
 end
 
 """
@@ -802,6 +840,11 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         push!(s.pending_refs, slot)
         t = deserialize(s)
         return deserialize(s, t)
+    elseif b == SHARED_REF_TAG
+        slot = s.counter; s.counter += 1
+        obj = deserialize(s)
+        s.table[slot] = obj
+        return obj
     elseif b == SYMBOL_TAG
         return deserialize_symbol(s, Int(read(s.io, UInt8)::UInt8))
     elseif b == SHORTINT64_TAG
@@ -832,9 +875,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
     elseif b == LONGSYMBOL_TAG
         return deserialize_symbol(s, Int(read(s.io, Int32)::Int32))
     elseif b == HEADER_TAG
-        for _ = 1:7
-            read(s.io, UInt8)
-        end
+        readheader(s)
         return deserialize(s)
     elseif b == INT8_TAG
         return read(s.io, Int8)
@@ -1288,29 +1329,9 @@ function deserialize(s::AbstractSerializer, t::DataType)
     if nf == 0 && t.size > 0
         # bits type
         return read(s.io, t)
-    end
-    if nf == 0
-        return ccall(:jl_new_struct, Any, (Any,Any...), t)
-    elseif isbitstype(t)
-        if nf == 1
-            f1 = deserialize(s)
-            return ccall(:jl_new_struct, Any, (Any,Any...), t, f1)
-        elseif nf == 2
-            f1 = deserialize(s)
-            f2 = deserialize(s)
-            return ccall(:jl_new_struct, Any, (Any,Any...), t, f1, f2)
-        elseif nf == 3
-            f1 = deserialize(s)
-            f2 = deserialize(s)
-            f3 = deserialize(s)
-            return ccall(:jl_new_struct, Any, (Any,Any...), t, f1, f2, f3)
-        else
-            flds = Any[ deserialize(s) for i = 1:nf ]
-            return ccall(:jl_new_structv, Any, (Any,Ptr{Cvoid},UInt32), t, flds, nf)
-        end
-    else
+    elseif t.mutable
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
-        t.mutable && deserialize_cycle(s, x)
+        deserialize_cycle(s, x)
         for i in 1:nf
             tag = Int32(read(s.io, UInt8)::UInt8)
             if tag != UNDEFREF_TAG
@@ -1318,6 +1339,21 @@ function deserialize(s::AbstractSerializer, t::DataType)
             end
         end
         return x
+    elseif nf == 0
+        return ccall(:jl_new_struct_uninit, Any, (Any,), t)
+    else
+        na = nf
+        vflds = Vector{Any}(undef, nf)
+        for i in 1:nf
+            tag = Int32(read(s.io, UInt8)::UInt8)
+            if tag != UNDEFREF_TAG
+                f = handle_deserialize(s, tag)
+                na >= i && (vflds[i] = f)
+            else
+                na >= i && (na = i - 1) # rest of tail must be undefined values
+            end
+        end
+        return ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), t, vflds, na)
     end
 end
 

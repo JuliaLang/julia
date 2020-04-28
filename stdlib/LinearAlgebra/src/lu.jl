@@ -9,7 +9,7 @@
 Matrix factorization type of the `LU` factorization of a square matrix `A`. This
 is the return type of [`lu`](@ref), the corresponding matrix factorization function.
 
-The individual components of the factorization `F::LU` can be accessed via `getproperty`:
+The individual components of the factorization `F::LU` can be accessed via [`getproperty`](@ref):
 
 | Component | Description                              |
 |:----------|:-----------------------------------------|
@@ -140,9 +140,9 @@ function generic_lufact!(A::StridedMatrix{T}, ::Val{Pivot} = Val(true);
             # find index max
             kp = k
             if Pivot
-                amax = abs(zero(T))
+                amax = norm(zero(T))
                 for i = k:m
-                    absi = abs(A[i,k])
+                    absi = norm(A[i,k])
                     if absi > amax
                         kp = i
                         amax = absi
@@ -210,10 +210,10 @@ validity (via [`issuccess`](@ref)) lies with the user.
 
 In most cases, if `A` is a subtype `S` of `AbstractMatrix{T}` with an element
 type `T` supporting `+`, `-`, `*` and `/`, the return type is `LU{T,S{T}}`. If
-pivoting is chosen (default) the element type should also support `abs` and
-`<`.
+pivoting is chosen (default) the element type should also support [`abs`](@ref) and
+[`<`](@ref).
 
-The individual components of the factorization `F` can be accessed via `getproperty`:
+The individual components of the factorization `F` can be accessed via [`getproperty`](@ref):
 
 | Component | Description                         |
 |:----------|:------------------------------------|
@@ -489,6 +489,9 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true
     dl = A.dl
     d = A.d
     du = A.du
+    if dl === du
+        throw(ArgumentError("off-diagonals of `A` must not alias"))
+    end
     du2 = fill!(similar(d, n-2), 0)::V
 
     @inbounds begin

@@ -10,7 +10,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              sum, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             hastypemax
+             sign, hastypemax
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -76,6 +76,9 @@ julia> parse(BigInt, "42")
 
 julia> big"313"
 313
+
+julia> BigInt(10)^19
+10000000000000000000
 ```
 """
 BigInt(x)
@@ -665,6 +668,11 @@ flipsign!(x::BigInt, y::Integer) = (signbit(y) && (x.size = -x.size); x)
 flipsign( x::BigInt, y::Integer) = signbit(y) ? -x : x
 flipsign( x::BigInt, y::BigInt)  = signbit(y) ? -x : x
 # above method to resolving ambiguities with flipsign(::T, ::T) where T<:Signed
+function sign(x::BigInt)
+    isneg(x) && return -one(x)
+    ispos(x) && return one(x)
+    return x
+end
 
 show(io::IO, x::BigInt) = print(io, string(x))
 

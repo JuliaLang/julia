@@ -19,6 +19,7 @@ abstract type AbstractSet{T} end
 
 Supertype for dictionary-like types with keys of type `K` and values of type `V`.
 [`Dict`](@ref), [`IdDict`](@ref) and other types are subtypes of this.
+An `AbstractDict{K, V}` should be an iterator of `Pair{K, V}`.
 """
 abstract type AbstractDict{K,V} end
 
@@ -332,9 +333,7 @@ convert(T::Type{Tuple{Vararg{V}}}, x::Tuple) where {V} =
 #convert(_::Type{Tuple{Vararg{S, N}}},
 #        x::Tuple{Vararg{Any, N}}) where
 #       {S, N} = cnvt_all(S, x...)
-# TODO: These currently can't be used since
-#   Type{NTuple} <: (Type{Tuple{Vararg{S}}} where S) is true
-#   even though the value S doesn't exist
+# TODO: These are similar to the methods we currently use but cnvt_all might work better:
 #convert(_::Type{Tuple{Vararg{S}}},
 #        x::Tuple{Any, Vararg{Any}}) where
 #       {S} = cnvt_all(S, x...)
@@ -796,11 +795,6 @@ Return `0` if the line number could not be determined.
 """
 macro __LINE__()
     return __source__.line
-end
-
-# Just for bootstrapping purposes below
-macro __FILE_SYMBOL__()
-    return Expr(:quote, __source__.file)
 end
 
 # Iteration

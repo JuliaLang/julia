@@ -120,8 +120,10 @@ To extend `round` to new numeric types, it is typically sufficient to define `Ba
 """
 round(T::Type, x)
 
-round(::Type{T}, x::AbstractFloat, r::RoundingMode{:ToZero}) where {T<:Integer} = trunc(T, x)
-round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} = trunc(T, round(x,r))
+function round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer}
+    r != RoundToZero && (x = round(x,r))
+    trunc(T, x)
+end
 
 # NOTE: this relies on the current keyword dispatch behaviour (#9498).
 function round(x::Real, r::RoundingMode=RoundNearest;
@@ -273,6 +275,15 @@ true
 function isapprox(x::Number, y::Number; atol::Real=0, rtol::Real=rtoldefault(x,y,atol), nans::Bool=false)
     x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= max(atol, rtol*max(abs(x), abs(y)))) || (nans && isnan(x) && isnan(y))
 end
+
+"""
+    isapprox(x; kwargs...) / ≈(x; kwargs...)
+
+Create a function that compares its argument to `x` using `≈`, i.e. a function equivalent to `y -> y ≈ x`.
+
+The keyword arguments supported here are the same as those in the 2-argument `isapprox`.
+"""
+isapprox(y; kwargs...) = x -> isapprox(x, y; kwargs...)
 
 const ≈ = isapprox
 """

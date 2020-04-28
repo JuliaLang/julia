@@ -97,7 +97,7 @@ $(build_prefix)/manifest/libgit2: $(build_datarootdir)/julia/cert.pem # use libg
 
 else # USE_BINARYBUILDER_LIBGIT2
 
-LIBGIT2_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LibGit2-v$(LIBGIT2_VER)+$(LIBGIT2_BB_REL)
+LIBGIT2_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LibGit2_jll.jl/releases/download/LibGit2-v$(LIBGIT2_VER)+$(LIBGIT2_BB_REL)
 LIBGIT2_BB_NAME := LibGit2.v$(LIBGIT2_VER)
 $(eval $(call bb-install,libgit2,LIBGIT2,false))
 

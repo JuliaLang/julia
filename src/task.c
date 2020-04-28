@@ -125,7 +125,7 @@ static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt
     else {
         buf = lastt->stkbuf;
     }
-    *pt = lastt; // clear the gc-root for the target task before copying the stack for saving
+    *pt = NULL; // clear the gc-root for the target task before copying the stack for saving
     lastt->copy_stack = nb;
     lastt->sticky = 1;
     memcpy_a16((uint64_t*)buf, (uint64_t*)frame_addr, nb);
@@ -147,8 +147,9 @@ static void NOINLINE JL_NORETURN restore_stack(jl_task_t *t, jl_ptls_t ptls, cha
         }
         restore_stack(t, ptls, p); // pass p to ensure the compiler can't tailcall this or avoid the alloca
     }
-    assert(t->stkbuf != NULL);
-    memcpy_a16((uint64_t*)_x, (uint64_t*)t->stkbuf, nb); // destroys all but the current stackframe
+    void *_y = t->stkbuf;
+    assert(_x != NULL && _y != NULL);
+    memcpy_a16((uint64_t*)_x, (uint64_t*)_y, nb); // destroys all but the current stackframe
 
     sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
     jl_set_fiber(&t->ctx);
@@ -158,8 +159,9 @@ static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *lastt)
 {
     size_t nb = t->copy_stack;
     char *_x = (char*)ptls->stackbase - nb;
-    assert(t->stkbuf != NULL);
-    memcpy_a16((uint64_t*)_x, (uint64_t*)t->stkbuf, nb); // destroys all but the current stackframe
+    void *_y = t->stkbuf;
+    assert(_x != NULL && _y != NULL);
+    memcpy_a16((uint64_t*)_x, (uint64_t*)_y, nb); // destroys all but the current stackframe
     sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
     jl_swap_fiber(&lastt->ctx, &t->ctx);
     sanitizer_finish_switch_fiber();
@@ -246,10 +248,24 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     _julia_init(rel);
 }
 
+JL_DLLEXPORT void jl_set_next_task(jl_task_t *task)
+{
+    jl_get_ptls_states()->next_task = task;
+}
+
+JL_DLLEXPORT jl_task_t *jl_get_next_task(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (ptls->next_task)
+        return ptls->next_task;
+    return ptls->current_task;
+}
+
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
 
-static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
+static void ctx_switch(jl_ptls_t ptls)
 {
+    jl_task_t **pt = &ptls->next_task;
     jl_task_t *t = *pt;
     assert(t != ptls->current_task);
     jl_task_t *lastt = ptls->current_task;
@@ -261,9 +277,8 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
         arraylist_new(locks, 0);
     }
 
-    int started = t->started;
     int killed = (lastt->state == done_sym || lastt->state == failed_sym);
-    if (!started && !t->copy_stack) {
+    if (!t->started && !t->copy_stack) {
         // may need to allocate the stack
         if (t->stkbuf == NULL) {
             t->stkbuf = jl_alloc_fiber(&t->ctx, &t->bufsz, t);
@@ -282,7 +297,7 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
     }
 
     if (killed) {
-        *pt = lastt; // can't fail after here: clear the gc-root for the target task now
+        *pt = NULL; // can't fail after here: clear the gc-root for the target task now
         lastt->gcstack = NULL;
         if (!lastt->copy_stack && lastt->stkbuf) {
             // early free of stkbuf back to the pool
@@ -301,7 +316,7 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
         }
         else
 #endif
-        *pt = lastt; // can't fail after here: clear the gc-root for the target task now
+        *pt = NULL; // can't fail after here: clear the gc-root for the target task now
         lastt->gcstack = ptls->pgcstack;
     }
 
@@ -324,7 +339,7 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
         // after restoring the stack
         lastt_ctx = NULL;
 #endif
-    if (started) {
+    if (t->started) {
 #ifdef COPY_STACKS
         if (t->copy_stack) {
             if (lastt_ctx)
@@ -365,10 +380,10 @@ static jl_ptls_t NOINLINE refetch_ptls(void)
     return jl_get_ptls_states();
 }
 
-JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
+JL_DLLEXPORT void jl_switch(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_task_t *t = *pt;
+    jl_task_t *t = ptls->next_task;
     jl_task_t *ct = ptls->current_task;
     if (t == ct) {
         return;
@@ -400,7 +415,7 @@ JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
         jl_timing_block_stop(blk);
 #endif
 
-    ctx_switch(ptls, pt);
+    ctx_switch(ptls);
 
 #ifdef MIGRATE_TASKS
     ptls = refetch_ptls();
@@ -429,6 +444,12 @@ JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
     ptls->defer_signal = defer_signal;
     if (other_defer_signal && !defer_signal)
         jl_sigint_safepoint(ptls);
+}
+
+JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
+{
+    jl_set_next_task(*pt);
+    jl_switch();
 }
 
 JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e)
@@ -567,7 +588,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->prio = -1;
     t->tid = -1;
 #ifdef ENABLE_TIMINGS
-    t->timing_stack = NULL;
+    t->timing_stack = jl_root_timing;
 #endif
     arraylist_new(&t->locks, 0);
 

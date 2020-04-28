@@ -196,9 +196,16 @@ function retrieve()
 end
 
 function getdict(data::Vector{UInt})
+    # Lookup is expensive, so do it only once per ip.
+    udata = unique(data)
     dict = LineInfoDict()
-    for ip in data
-        get!(() -> lookup(convert(Ptr{Cvoid}, ip)), dict, UInt64(ip))
+    for ip in udata
+        st = lookup(convert(Ptr{Cvoid}, ip))
+        # To correct line numbers for moving code, put it in the form expected by
+        # Base.update_stackframes_callback[]
+        stn = map(x->(x, 1), st)
+        try Base.invokelatest(Base.update_stackframes_callback[], stn) catch end
+        dict[UInt64(ip)] = map(first, stn)
     end
     return dict
 end
@@ -536,7 +543,9 @@ function indent(depth::Int)
     depth < 1 && return ""
     depth <= length(indent_z) && return indent_s[1:indent_z[depth]]
     div, rem = divrem(depth, length(indent_z))
-    return (indent_s^div) * SubString(indent_s, 1, indent_z[rem])
+    indent = indent_s^div
+    rem != 0 && (indent *= SubString(indent_s, 1, indent_z[rem]))
+    return indent
 end
 
 function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, maxes, filenamemap::Dict{Symbol,String}, showpointer::Bool)

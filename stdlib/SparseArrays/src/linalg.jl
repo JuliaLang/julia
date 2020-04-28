@@ -1,11 +1,29 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import LinearAlgebra: checksquare
+import LinearAlgebra: checksquare, sym_uplo
 using Random: rand!
 
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 const StridedOrTriangularMatrix{T} = Union{StridedMatrix{T}, LowerTriangular{T}, UnitLowerTriangular{T}, UpperTriangular{T}, UnitUpperTriangular{T}}
 const AdjOrTransStridedOrTriangularMatrix{T} = Union{StridedOrTriangularMatrix{T},Adjoint{<:Any,<:StridedOrTriangularMatrix{T}},Transpose{<:Any,<:StridedOrTriangularMatrix{T}}}
+
+for op ∈ (:+, :-), Wrapper ∈ (:Hermitian, :Symmetric)
+    @eval begin
+        $op(A::AbstractSparseMatrix, B::$Wrapper{<:Any,<:AbstractSparseMatrix}) = $op(A, sparse(B))
+        $op(A::$Wrapper{<:Any,<:AbstractSparseMatrix}, B::AbstractSparseMatrix) = $op(sparse(A), B)
+
+        $op(A::AbstractSparseMatrix, B::$Wrapper) = $op(A, collect(B))
+        $op(A::$Wrapper, B::AbstractSparseMatrix) = $op(collect(A), B)
+    end
+end
+for op ∈ (:+, :-)
+    @eval begin
+        $op(A::Symmetric{<:Any,  <:AbstractSparseMatrix}, B::Hermitian{<:Any,  <:AbstractSparseMatrix}) = $op(sparse(A), sparse(B))
+        $op(A::Hermitian{<:Any,  <:AbstractSparseMatrix}, B::Symmetric{<:Any,  <:AbstractSparseMatrix}) = $op(sparse(A), sparse(B))
+        $op(A::Symmetric{<:Real, <:AbstractSparseMatrix}, B::Hermitian{<:Any,  <:AbstractSparseMatrix}) = $op(Hermitian(parent(A), sym_uplo(A.uplo)), B)
+        $op(A::Hermitian{<:Any,  <:AbstractSparseMatrix}, B::Symmetric{<:Real, <:AbstractSparseMatrix}) = $op(A, Hermitian(parent(B), sym_uplo(B.uplo)))
+    end
+end
 
 function mul!(C::StridedVecOrMat, A::AbstractSparseMatrixCSC, B::Union{StridedVector,AdjOrTransStridedOrTriangularMatrix}, α::Number, β::Number)
     size(A, 2) == size(B, 1) || throw(DimensionMismatch())
@@ -156,6 +174,10 @@ function (*)(A::AbstractSparseMatrixCSC, D::Diagonal)
     T = Base.promote_op(*, eltype(D), eltype(A))
     mul!(LinearAlgebra.copy_oftype(A, T), A, D)
 end
+function (/)(A::AbstractSparseMatrixCSC, D::Diagonal)
+    T = typeof(oneunit(eltype(A))/oneunit(eltype(D)))
+    rdiv!(LinearAlgebra.copy_oftype(A, T), D)
+end
 
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
 # http://dl.acm.org/citation.cfm?id=355796
@@ -168,7 +190,7 @@ end
 *(A::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, B::Adjoint{<:Any,<:AbstractSparseMatrixCSC}) = spmatmul(copy(A), copy(B))
 *(A::Transpose{<:Any,<:AbstractSparseMatrixCSC}, B::Transpose{<:Any,<:AbstractSparseMatrixCSC}) = spmatmul(copy(A), copy(B))
 
-# Gustavsen's matrix multiplication algorithm revisited.
+# Gustavson's matrix multiplication algorithm revisited.
 # The result rowval vector is already sorted by construction.
 # The auxiliary Vector{Ti} xb is replaced by a Vector{Bool} of same length.
 # The optional argument controlling a sorting algorithm is obsolete.
@@ -189,7 +211,6 @@ function spmatmul(A::AbstractSparseMatrixCSC{TvA,TiA}, B::AbstractSparseMatrixCS
     colptrC = Vector{Ti}(undef, nB+1)
     rowvalC = Vector{Ti}(undef, nnzC)
     nzvalC = Vector{Tv}(undef, nnzC)
-    nzpercol = nnzC ÷ max(nB, 1)
 
     @inbounds begin
         ip = 1
@@ -1360,7 +1381,7 @@ function copyinds!(C::AbstractSparseMatrixCSC, A::AbstractSparseMatrixCSC)
 end
 
 # multiply by diagonal matrix as vector
-function mul!(C::AbstractSparseMatrixCSC, A::AbstractSparseMatrixCSC, D::Diagonal{T, <:Vector}) where T
+function mul!(C::AbstractSparseMatrixCSC, A::AbstractSparseMatrixCSC, D::Diagonal)
     m, n = size(A)
     b    = D.diag
     (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch())
@@ -1374,7 +1395,7 @@ function mul!(C::AbstractSparseMatrixCSC, A::AbstractSparseMatrixCSC, D::Diagona
     C
 end
 
-function mul!(C::AbstractSparseMatrixCSC, D::Diagonal{T, <:Vector}, A::AbstractSparseMatrixCSC) where T
+function mul!(C::AbstractSparseMatrixCSC, D::Diagonal, A::AbstractSparseMatrixCSC)
     m, n = size(A)
     b    = D.diag
     (m==length(b) && size(A)==size(C)) || throw(DimensionMismatch())

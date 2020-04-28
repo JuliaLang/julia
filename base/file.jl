@@ -261,7 +261,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         try
             @static if Sys.iswindows()
                 # is writable on windows actually means "is deletable"
-                if (filemode(path) & 0o222) == 0
+                if (filemode(lstat(path)) & 0o222) == 0
                     chmod(path, 0o777)
                 end
             end
@@ -480,12 +480,16 @@ end
 function temp_cleanup_purge(all::Bool=true)
     need_gc = Sys.iswindows()
     for (path, asap) in TEMP_CLEANUP
-        if (all || asap) && ispath(path)
-            need_gc && GC.gc(true)
-            need_gc = false
-            rm(path, recursive=true, force=true)
+        try
+            if (all || asap) && ispath(path)
+                need_gc && GC.gc(true)
+                need_gc = false
+                rm(path, recursive=true, force=true)
+            end
+            !ispath(path) && delete!(TEMP_CLEANUP, path)
+        catch ex
+            @warn "temp cleanup" _group=:file exception=(ex, catch_backtrace())
         end
-        !ispath(path) && delete!(TEMP_CLEANUP, path)
     end
 end
 
@@ -513,20 +517,29 @@ function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     return (filename, Base.open(filename, "r+"))
 end
 
+# generate a random string from random bytes
+function _rand_string()
+    nchars = 10
+    A = Vector{UInt8}(undef, nchars)
+    windowserror("SystemFunction036 (RtlGenRandom)", 0 == ccall(
+        (:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
+            A, sizeof(A)))
+
+    slug = Base.StringVector(10)
+    chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    for i = 1:nchars
+        slug[i] = chars[(A[i] % length(chars)) + 1]
+    end
+    return name = String(slug)
+end
+
 function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
     isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
-    seed::UInt32 = rand(UInt32)
-    while true
-        if (seed & typemax(UInt16)) == 0
-            seed += 1
-        end
-        filename = _win_tempname(parent, seed)
-        if !ispath(filename)
-            cleanup && temp_cleanup_later(filename)
-            return filename
-        end
-        seed += 1
-    end
+    name = _rand_string()
+    filename = joinpath(parent, temp_prefix * name)
+    @assert !ispath(filename)
+    cleanup && temp_cleanup_later(filename)
+    return filename
 end
 
 else # !windows
@@ -840,10 +853,13 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
     dirs = Vector{eltype(content)}()
     files = Vector{eltype(content)}()
     for name in content
-        if isdir(joinpath(root, name))
-            push!(dirs, name)
-        else
+        path = joinpath(root, name)
+
+        # If we're not following symlinks, then treat all symlinks as files
+        if (!follow_symlinks && islink(path)) || !isdir(path)
             push!(files, name)
+        else
+            push!(dirs, name)
         end
     end
 

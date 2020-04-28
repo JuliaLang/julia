@@ -356,6 +356,13 @@ end
 @test occursin("o", "foo")
 @test occursin('o', "foo")
 
+# contains
+@test contains("foo", "o")
+@test contains("foo", 'o')
+# contains in curried form
+@test contains("o")("foo")
+@test contains('o')("foo")
+
 @test_throws ErrorException "ab" ∈ "abc"
 
 # issue #15723
@@ -381,4 +388,23 @@ s_18109 = "fooα🐨βcd3"
     @test findall("αβ", "blαh blαβ blαββy") == findall("αβ", "blαh blαβ blαββy", overlap=true) == [9:11, 16:18]
     @test findall("aa", "aaaaaa") == [1:2, 3:4, 5:6]
     @test findall("aa", "aaaaaa", overlap=true) == [1:2, 2:3, 3:4, 4:5, 5:6]
+end
+
+# issue 32568
+for T = (UInt, BigInt)
+    for x = (4, 5)
+        @test eltype(findnext(r"l", astr, T(x))) == Int
+        @test findnext(isequal('l'), astr, T(x)) isa Int
+        @test findprev(isequal('l'), astr, T(x)) isa Int
+        @test findnext('l', astr, T(x)) isa Int
+        @test findprev('l', astr, T(x)) isa Int
+    end
+    for x = (5, 6)
+        @test eltype(findprev(",b", "foo,bar,baz", T(x))) == Int
+    end
+    for x = (7, 8)
+        @test eltype(findnext(",b", "foo,bar,baz", T(x))) == Int
+        @test findnext(isletter, astr, T(x)) isa Int
+        @test findprev(isletter, astr, T(x)) isa Int
+    end
 end

@@ -119,10 +119,11 @@ Return equivalent expression with all macros removed (expanded).
 There are differences between `@macroexpand` and [`macroexpand`](@ref).
 
 * While [`macroexpand`](@ref) takes a keyword argument `recursive`, `@macroexpand`
-is always recursive. For a non recursive macro version, see [`@macroexpand1`](@ref).
+  is always recursive. For a non recursive macro version, see [`@macroexpand1`](@ref).
 
 * While [`macroexpand`](@ref) has an explicit `module` argument, `@macroexpand` always
-expands with respect to the module in which it is called.
+  expands with respect to the module in which it is called.
+
 This is best seen in the following example:
 ```julia-repl
 julia> module M
@@ -331,7 +332,7 @@ function is_short_function_def(ex)
 end
 
 function findmeta(ex::Expr)
-    if ex.head === :function || is_short_function_def(ex)
+    if ex.head === :function || is_short_function_def(ex) || ex.head === :->
         body::Expr = ex.args[2]
         body.head === :block || error(body, " is not a block expression")
         return findmeta_block(ex.args)

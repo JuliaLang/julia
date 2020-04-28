@@ -73,7 +73,8 @@ end
 
 const empty_sym = Symbol("")
 
-function kwarg_decl(m::Method)
+# NOTE: second argument is deprecated and is no longer used
+function kwarg_decl(m::Method, kwtype = nothing)
     mt = get_methodtable(m)
     if isdefined(mt, :kwsorter)
         kwtype = typeof(mt.kwsorter)

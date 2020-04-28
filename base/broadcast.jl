@@ -471,6 +471,7 @@ julia> Broadcast.combine_axes(1, 1, 1)
 ```
 """
 @inline combine_axes(A, B...) = broadcast_shape(axes(A), combine_axes(B...))
+@inline combine_axes(A, B) = broadcast_shape(axes(A), axes(B))
 combine_axes(A) = axes(A)
 
 # shape (i.e., tuple-of-indices) inputs
@@ -496,6 +497,7 @@ _bcsm(a::Number, b::Number) = a == b || b == 1
 # (We may not want to define general promotion rules between, say, OneTo and Slice, but if
 #  we get here we know the axes are at least consistent for the purposes of broadcasting)
 axistype(a::T, b::T) where T = a
+axistype(a::OneTo, b::OneTo) = OneTo{Int}(a)
 axistype(a, b) = UnitRange{Int}(a)
 
 ## Check that all arguments are broadcast compatible with shape

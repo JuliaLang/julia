@@ -434,21 +434,3 @@ function _indices_sub(i1::AbstractArray, I...)
     @_inline_meta
     (unsafe_indices(i1)..., _indices_sub(I...)...)
 end
-
-## Compatibility
-# deprecate?
-function parentdims(s::SubArray)
-    nd = ndims(s)
-    dimindex = Vector{Int}(undef, nd)
-    sp = strides(s.parent)
-    sv = strides(s)
-    j = 1
-    for i = 1:ndims(s.parent)
-        r = s.indices[i]
-        if j <= nd && (isa(r,AbstractRange) ? sp[i]*step(r) : sp[i]) == sv[j]
-            dimindex[j] = i
-            j += 1
-        end
-    end
-    dimindex
-end

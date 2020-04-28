@@ -475,7 +475,7 @@ endif
 ifeq ($(USECLANG),1)
 CC := $(CROSS_COMPILE)clang
 CXX := $(CROSS_COMPILE)clang++
-JCFLAGS := -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
 JCPPFLAGS := -fasynchronous-unwind-tables
 JCXXFLAGS := -pipe $(fPIC) -fno-rtti -pedantic
@@ -940,7 +940,7 @@ endif
 # explicitly tell it to use this large page size so that when we rewrite rpaths and
 # such, we don't accidentally create incorrectly-aligned sections in our ELF files.
 ifneq (,$(filter $(ARCH),aarch64 powerpc64le))
-PATCHELF += --page-size=65536
+PATCHELF += --page-size 65536
 endif
 
 # Use ILP64 BLAS interface when building openblas from source on 64-bit architectures
@@ -1010,13 +1010,29 @@ else
   UTF8PROC_INC := $(build_includedir)
 endif
 
+# We need python for things like BB triplet recognition.  We don't really care
+# about version, generally, so just find something that works:
+PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)"
+PYTHON_SYSTEM := $(shell $(PYTHON) -c 'from __future__ import print_function; import platform; print(platform.system())')
+
+# If we're running on Cygwin, but using a native-windows Python, we need to use cygpath -w
+ifneq ($(and $(filter $(PYTHON_SYSTEM),Windows),$(findstring CYGWIN,$(BUILD_OS))),)
+define invoke_python
+$(PYTHON) "$$(cygpath -w "$(1)")"
+endef
+else
+define invoke_python
+$(PYTHON) "$(1)"
+endef
+endif
+
 # BinaryBuilder options.  We default to "on" for all the projects listed in BB_PROJECTS,
 # but only if contrib/normalize_triplet.py works for our requested triplet.
-ifeq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) >/dev/null 2>/dev/null; echo $$?),0)
+ifeq ($(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) >/dev/null 2>/dev/null; echo $$?),0)
 USE_BINARYBUILDER ?= 1
 else
-ifneq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py x86_64-linux-gnu),x86_64-linux-gnu)
-$(warning python normalize_triplet.py appears to be non-functional, so BinaryBuilder disabled)
+ifneq ($(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) x86_64-linux-gnu),x86_64-linux-gnu)
+$(warning normalize_triplet.py appears to be non-functional (used python interpreter "$(PYTHON)"), so BinaryBuilder disabled)
 endif
 USE_BINARYBUILDER ?= 0
 endif
@@ -1261,7 +1277,7 @@ ifeq ($(USECLANG),1)
 CXXLDFLAGS += -stdlib=libc++
 else
 ifeq ($(USEGCC),1)
-$(error BUILD_CUSTOM_LIBCXX is currently only supported with Clang. Try setting BUILD_CUSTOM_LIBCXX=0)
+$(error BUILD_CUSTOM_LIBCXX is currently only supported with Clang. Try setting BUILD_CUSTOM_LIBCXX=0 or USECLANG=1)
 endif
 endif # Clang
 CUSTOM_LD_LIBRARY_PATH := LD_LIBRARY_PATH="$(build_libdir)"
@@ -1284,6 +1300,25 @@ ifeq ($(USE_SYSTEM_LIBM),1)
 # If we're using system libm, disable BB OpenLibm
 USE_BINARYBUILDER_OPENLIBM := 0
 endif
+
+
+# Note: we're passing *FLAGS here computed based on your system compiler to
+# clang. If that causes you problems, you might want to build and/or run
+# specific clang-sa-* files with clang explicitly selected:
+#   make CC=~+/../usr/tools/clang CXX=~+/../usr/tools/clang USECLANG=1 analyzegc
+#   make USECLANG=1 clang-sa-*
+CLANGSA_FLAGS :=
+CLANGSA_CXXFLAGS :=
+ifeq ($(OS), Darwin) # on new XCode, the files are hidden
+CLANGSA_FLAGS += -isysroot $(shell xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+CLANGSA_CXXFLAGS += -isystem $(shell xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1
+endif
+ifeq ($(USEGCC),1)
+# try to help clang find the c++ files for CC by guessing the value for --prefix
+# by dropping lib/gcc/<platform>/<version> from the install directory it reports
+CLANGSA_CXXFLAGS += --gcc-toolchain="$(abspath $(shell LANG=C $(CC) -print-search-dirs | grep '^install: ' | sed -e "s/^install: //")/../../../..)"
+endif
+
 
 # Make tricks
 
@@ -1340,17 +1375,19 @@ endif
 exec = $(shell $(call spawn,$(1)))
 
 JULIA_BUILD_MODE := release
-JULIA_LIBSUFFIX:=
 ifeq (,$(findstring release,$(MAKECMDGOALS)))
 ifneq (,$(findstring debug,$(MAKECMDGOALS)))
 JULIA_BUILD_MODE := debug
-JULIA_LIBSUFFIX:=-debug
 endif
 endif
 
 JULIA_EXECUTABLE_debug := $(build_bindir)/julia-debug$(EXE)
 JULIA_EXECUTABLE_release := $(build_bindir)/julia$(EXE)
 JULIA_EXECUTABLE := $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
+
+JULIA_SYSIMG_debug := $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
+JULIA_SYSIMG_release := $(build_private_libdir)/sys.$(SHLIB_EXT)
+JULIA_SYSIMG := $(JULIA_SYSIMG_$(JULIA_BUILD_MODE))
 
 # Colors for make
 ifndef VERBOSE

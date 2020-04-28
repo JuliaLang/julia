@@ -89,7 +89,7 @@
 
 #struct LineNumberNode
 #    line::Int
-#    file::Any # nominally Union{Symbol,Nothing}
+#    file::Union{Symbol,Nothing}
 #end
 
 #struct LineInfoNode
@@ -432,11 +432,12 @@ Array{T}(A::AbstractArray{S,N}) where {T,N,S} = Array{T,N}(A)
 AbstractArray{T}(A::AbstractArray{S,N}) where {T,S,N} = AbstractArray{T,N}(A)
 
 # primitive Symbol constructors
-function Symbol(s::String)
+eval(Core, :(function Symbol(s::String)
+    $(Expr(:meta, :pure))
     return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
                  ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s),
                  sizeof(s))
-end
+end))
 function Symbol(a::Array{UInt8,1})
     return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
                  ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),

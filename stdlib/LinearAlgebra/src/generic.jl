@@ -25,10 +25,23 @@ struct MulAddMul{ais1, bis0, TA, TB}
     beta::TB
 end
 
-MulAddMul(alpha::TA, beta::TB) where {TA, TB} =
-    MulAddMul{isone(alpha), iszero(beta), TA, TB}(alpha, beta)
+@inline function MulAddMul(alpha::TA, beta::TB) where {TA,TB}
+    if isone(alpha)
+        if iszero(beta)
+            return MulAddMul{true,true,TA,TB}(alpha, beta)
+        else
+            return MulAddMul{true,false,TA,TB}(alpha, beta)
+        end
+    else
+        if iszero(beta)
+            return MulAddMul{false,true,TA,TB}(alpha, beta)
+        else
+            return MulAddMul{false,false,TA,TB}(alpha, beta)
+        end
+    end
+end
 
-MulAddMul() = MulAddMul(true, false)
+MulAddMul() = MulAddMul{true,true,Bool,Bool}(true, false)
 
 @inline (::MulAddMul{true})(x) = x
 @inline (p::MulAddMul{false})(x) = x * p.alpha
@@ -75,6 +88,9 @@ julia> C
 end
 
 @inline function _rmul_or_fill!(C::AbstractArray, beta::Number)
+    if isempty(C)
+        return C
+    end
     if iszero(beta)
         fill!(C, zero(eltype(C)))
     else
@@ -238,6 +254,11 @@ function ldiv!(s::Number, X::AbstractArray)
     end
     X
 end
+ldiv!(Y::AbstractArray, s::Number, X::AbstractArray) = Y .= s .\ X
+
+# Generic fallback. This assumes that B and Y have the same sizes.
+ldiv!(Y::AbstractArray, A::AbstractMatrix, B::AbstractArray) = ldiv!(A, copyto!(Y, B))
+
 
 """
     cross(x, y)
@@ -1117,7 +1138,7 @@ condskeel(A::AbstractMatrix, p::Real=Inf) = opnorm(abs.(inv(A))*abs.(A), p)
 
 ```math
 \\kappa_S(M, p) = \\left\\Vert \\left\\vert M \\right\\vert \\left\\vert M^{-1} \\right\\vert \\right\\Vert_p \\\\
-\\kappa_S(M, x, p) = \\left\\Vert \\left\\vert M \\right\\vert \\left\\vert M^{-1} \\right\\vert \\left\\vert x \\right\\vert \\right\\Vert_p
+\\kappa_S(M, x, p) = \\frac{\\left\\Vert \\left\\vert M \\right\\vert \\left\\vert M^{-1} \\right\\vert \\left\\vert x \\right\\vert \\right\\Vert_p}{\\left \\Vert x \\right \\Vert_p}
 ```
 
 Skeel condition number ``\\kappa_S`` of the matrix `M`, optionally with respect to the
@@ -1129,7 +1150,9 @@ Valid values for `p` are `1`, `2` and `Inf` (default).
 This quantity is also known in the literature as the Bauer condition number, relative
 condition number, or componentwise relative condition number.
 """
-condskeel(A::AbstractMatrix, x::AbstractVector, p::Real=Inf) = norm(abs.(inv(A))*(abs.(A)*abs.(x)), p)
+function condskeel(A::AbstractMatrix, x::AbstractVector, p::Real=Inf)
+    norm(abs.(inv(A))*(abs.(A)*abs.(x)), p) / norm(x, p)
+end
 
 issymmetric(A::AbstractMatrix{<:Real}) = ishermitian(A)
 
@@ -1393,6 +1416,51 @@ function axpby!(α, x::AbstractArray, β, y::AbstractArray)
     y
 end
 
+"""
+    rotate!(x, y, c, s)
+
+Overwrite `x` with `c*x + s*y` and `y` with `-conj(s)*x + c*y`.
+Returns `x` and `y`.
+
+!!! compat "Julia 1.5"
+    `rotate!` requires at least Julia 1.5.
+"""
+function rotate!(x::AbstractVector, y::AbstractVector, c, s)
+    require_one_based_indexing(x, y)
+    n = length(x)
+    if n != length(y)
+        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+    end
+    @inbounds for i = 1:n
+        xi, yi = x[i], y[i]
+        x[i] =       c *xi + s*yi
+        y[i] = -conj(s)*xi + c*yi
+    end
+    return x, y
+end
+
+"""
+    reflect!(x, y, c, s)
+
+Overwrite `x` with `c*x + s*y` and `y` with `conj(s)*x - c*y`.
+Returns `x` and `y`.
+
+!!! compat "Julia 1.5"
+    `reflect!` requires at least Julia 1.5.
+"""
+function reflect!(x::AbstractVector, y::AbstractVector, c, s)
+    require_one_based_indexing(x, y)
+    n = length(x)
+    if n != length(y)
+        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+    end
+    @inbounds for i = 1:n
+        xi, yi = x[i], y[i]
+        x[i] =      c *xi + s*yi
+        y[i] = conj(s)*xi - c*yi
+    end
+    return x, y
+end
 
 # Elementary reflection similar to LAPACK. The reflector is not Hermitian but
 # ensures that tridiagonalization of Hermitian matrices become real. See lawn72
@@ -1574,39 +1642,39 @@ function isapprox(x::AbstractArray, y::AbstractArray;
 end
 
 """
-    normalize!(v::AbstractVector, p::Real=2)
+    normalize!(a::AbstractArray, p::Real=2)
 
-Normalize the vector `v` in-place so that its `p`-norm equals unity,
-i.e. `norm(v, p) == 1`.
+Normalize the array `a` in-place so that its `p`-norm equals unity,
+i.e. `norm(a, p) == 1`.
 See also [`normalize`](@ref) and [`norm`](@ref).
 """
-function normalize!(v::AbstractVector, p::Real=2)
-    nrm = norm(v, p)
-    __normalize!(v, nrm)
+function normalize!(a::AbstractArray, p::Real=2)
+    nrm = norm(a, p)
+    __normalize!(a, nrm)
 end
 
-@inline function __normalize!(v::AbstractVector, nrm::AbstractFloat)
+@inline function __normalize!(a::AbstractArray, nrm::AbstractFloat)
     # The largest positive floating point number whose inverse is less than infinity
     δ = inv(prevfloat(typemax(nrm)))
 
     if nrm ≥ δ # Safe to multiply with inverse
         invnrm = inv(nrm)
-        rmul!(v, invnrm)
+        rmul!(a, invnrm)
 
     else # scale elements to avoid overflow
         εδ = eps(one(nrm))/δ
-        rmul!(v, εδ)
-        rmul!(v, inv(nrm*εδ))
+        rmul!(a, εδ)
+        rmul!(a, inv(nrm*εδ))
     end
 
-    v
+    a
 end
 
 """
-    normalize(v::AbstractVector, p::Real=2)
+    normalize(a::AbstractArray, p::Real=2)
 
-Normalize the vector `v` so that its `p`-norm equals unity,
-i.e. `norm(v, p) == 1`.
+Normalize the array `a` so that its `p`-norm equals unity,
+i.e. `norm(a, p) == 1`.
 See also [`normalize!`](@ref) and [`norm`](@ref).
 
 # Examples
@@ -1630,15 +1698,29 @@ julia> c = normalize(a, 1)
 
 julia> norm(c, 1)
 1.0
+
+julia> a = [1 2 4 ; 1 2 4]
+2×3 Array{Int64,2}:
+ 1  2  4
+ 1  2  4
+
+julia> norm(a)
+6.48074069840786
+
+julia> normalize(a)
+2×3 Array{Float64,2}:
+ 0.154303  0.308607  0.617213
+ 0.154303  0.308607  0.617213
+
 ```
 """
-function normalize(v::AbstractVector, p::Real = 2)
-    nrm = norm(v, p)
-    if !isempty(v)
-        vv = copy_oftype(v, typeof(v[1]/nrm))
-        return __normalize!(vv, nrm)
+function normalize(a::AbstractArray, p::Real = 2)
+    nrm = norm(a, p)
+    if !isempty(a)
+        aa = copy_oftype(a, typeof(first(a)/nrm))
+        return __normalize!(aa, nrm)
     else
-        T = typeof(zero(eltype(v))/nrm)
+        T = typeof(zero(eltype(a))/nrm)
         return T[]
     end
 end

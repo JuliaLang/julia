@@ -290,3 +290,8 @@ end
 let K = rand(2,2)
     @test test_29253(K) == 2
 end
+
+# check getfield elim handling of GlobalRef
+const _some_coeffs = (1,[2],3,4)
+splat_from_globalref(x) = (x, _some_coeffs...,)
+@test splat_from_globalref(0) == (0, 1, [2], 3, 4)

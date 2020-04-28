@@ -32,6 +32,7 @@ Base.denominator
 Base.:(<<)
 Base.:(>>)
 Base.:(>>>)
+Base.bitrotate
 Base.:(:)
 Base.range
 Base.OneTo
@@ -173,6 +174,7 @@ Base.invmod
 Base.powermod
 Base.ndigits
 Base.widemul
+Base.Math.evalpoly
 Base.Math.@evalpoly
 Base.FastMath.@fastmath
 ```

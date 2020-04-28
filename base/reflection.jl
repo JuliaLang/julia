@@ -42,7 +42,7 @@ function moduleroot(m::Module)
     while true
         is_root_module(m) && return m
         p = parentmodule(m)
-        p == m && return m
+        p === m && return m
         m = p
     end
 end
@@ -317,10 +317,11 @@ datatype_fieldtypes(x::DataType) = ccall(:jl_get_fieldtypes, Any, (Any,), x)
 
 struct DataTypeLayout
     nfields::UInt32
-    alignment::UInt32
-    # alignment : 28;
+    npointers::UInt32
+    firstptr::Int32
+    alignment::UInt16
+    flags::UInt16
     # haspadding : 1;
-    # pointerfree : 1;
     # fielddesc_type : 2;
 end
 
@@ -334,7 +335,7 @@ function datatype_alignment(dt::DataType)
     @_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
     alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
-    return Int(alignment & 0x1FF)
+    return Int(alignment)
 end
 
 # amount of total space taken by T when stored in a container
@@ -367,8 +368,8 @@ Can be called on any `isconcretetype`.
 function datatype_haspadding(dt::DataType)
     @_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
-    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
-    return (alignment >> 9) & 1 == 1
+    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
+    return flags & 1 == 1
 end
 
 """
@@ -380,8 +381,8 @@ Can be called on any `isconcretetype`.
 function datatype_pointerfree(dt::DataType)
     @_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
-    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
-    return (alignment >> 10) & 0xFFFFF == 0
+    npointers = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
+    return npointers == 0
 end
 
 """
@@ -396,27 +397,27 @@ See also [`fieldoffset`](@ref).
 function datatype_fielddesc_type(dt::DataType)
     @_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
-    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
-    return (alignment >> 30) & 3
+    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
+    return (flags >> 1) & 3
 end
 
 """
-    isimmutable(v) -> Bool
+    ismutable(v) -> Bool
 
-Return `true` iff value `v` is immutable.  See [Mutable Composite Types](@ref)
+Return `true` iff value `v` is mutable.  See [Mutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you give it
 a type, it will tell you that a value of `DataType` is mutable.
 
 # Examples
 ```jldoctest
-julia> isimmutable(1)
-true
-
-julia> isimmutable([1,2])
+julia> ismutable(1)
 false
+
+julia> ismutable([1,2])
+true
 ```
 """
-isimmutable(@nospecialize(x)) = (@_pure_meta; !typeof(x).mutable)
+ismutable(@nospecialize(x)) = (@_pure_meta; typeof(x).mutable)
 
 """
     isstructtype(T) -> Bool
@@ -589,7 +590,9 @@ end
 Compute a type that contains the intersection of `T` and `S`. Usually this will be the
 smallest such type or one close to it.
 """
-typeintersect(@nospecialize(a),@nospecialize(b)) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
+typeintersect(@nospecialize(a), @nospecialize(b)) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any, Any), a, b))
+
+morespecific(@nospecialize(a), @nospecialize(b)) = ccall(:jl_type_morespecific, Cint, (Any, Any), a, b) != 0
 
 """
     fieldoffset(type, i)
@@ -784,7 +787,7 @@ implementations. An error is thrown if no fallback implementation exists.
 If `generated` is `true`, these `CodeInfo` instances will correspond to the method bodies
 yielded by expanding the generators.
 
-The keyword debuginfo controls the amount of code metadata present in the output.
+The keyword `debuginfo` controls the amount of code metadata present in the output.
 
 Note that an error will be thrown if `types` are not leaf types when `generated` is
 `true` and any of the corresponding methods are an `@generated` method.
@@ -808,7 +811,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
                       "not leaf types, but the `generated` argument is `true`.")
             end
         end
-        code = uncompressed_ast(m.def::Method)
+        code = uncompressed_ir(m.def::Method)
         debuginfo === :none && remove_linenums!(code)
         return code
     end
@@ -860,19 +863,29 @@ function MethodList(mt::Core.MethodTable)
 end
 
 """
-    methods(f, [types])
+    methods(f, [types], [module])
 
-Returns the method table for `f`.
+Return the method table for `f`.
 
-If `types` is specified, returns an array of methods whose types match.
+If `types` is specified, return an array of methods whose types match.
+If `module` is specified, return an array of methods defined in that module.
+A list of modules can also be specified as an array.
+
+!!! compat "Julia 1.4"
+    At least Julia 1.4 is required for specifying a module.
 """
-function methods(@nospecialize(f), @nospecialize(t))
+function methods(@nospecialize(f), @nospecialize(t),
+                 @nospecialize(mod::Union{Module,AbstractArray{Module},Nothing}=nothing))
+    if mod isa Module
+        mod = (mod,)
+    end
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
     t = to_tuple_type(t)
     world = typemax(UInt)
-    return MethodList(Method[m[3] for m in _methods(f, t, -1, world)], typeof(f).name.mt)
+    MethodList(Method[m[3] for m in _methods(f, t, -1, world) if mod === nothing || m[3].module in mod],
+               typeof(f).name.mt)
 end
 
 methods(f::Core.Builtin) = MethodList(Method[], typeof(f).name.mt)
@@ -885,9 +898,11 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     ms = ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), tt, -1, 1, world, min, max)::Array{Any,1}
     return MethodList(Method[m[3] for m in ms], typeof(f).name.mt)
 end
-function methods(@nospecialize(f))
+
+function methods(@nospecialize(f),
+                 @nospecialize(mod::Union{Module,AbstractArray{Module},Nothing}=nothing))
     # return all matches
-    return methods(f, Tuple{Vararg{Any}})
+    return methods(f, Tuple{Vararg{Any}}, mod)
 end
 
 function visit(f, mt::Core.MethodTable)
@@ -897,13 +912,13 @@ end
 function visit(f, mc::Core.TypeMapLevel)
     if mc.targ !== nothing
         e = mc.targ::Vector{Any}
-        for i in 1:length(e)
+        for i in 2:2:length(e)
             isassigned(e, i) && visit(f, e[i])
         end
     end
     if mc.arg1 !== nothing
         e = mc.arg1::Vector{Any}
-        for i in 1:length(e)
+        for i in 2:2:length(e)
             isassigned(e, i) && visit(f, e[i])
         end
     end
@@ -928,12 +943,15 @@ function length(mt::Core.MethodTable)
 end
 isempty(mt::Core.MethodTable) = (mt.defs === nothing)
 
-uncompressed_ast(m::Method) = isdefined(m, :source) ? _uncompressed_ast(m, m.source) :
-                              isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
-                              error("Code for this Method is not available.")
-_uncompressed_ast(m::Method, s::CodeInfo) = copy(s)
-_uncompressed_ast(m::Method, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)::CodeInfo
-_uncompressed_ast(ci::Core.CodeInstance, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Any, Any), ci.def.def::Method, ci, s)::CodeInfo
+uncompressed_ir(m::Method) = isdefined(m, :source) ? _uncompressed_ir(m, m.source) :
+                             isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
+                             error("Code for this Method is not available.")
+_uncompressed_ir(m::Method, s::CodeInfo) = copy(s)
+_uncompressed_ir(m::Method, s::Array{UInt8,1}) = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)::CodeInfo
+_uncompressed_ir(ci::Core.CodeInstance, s::Array{UInt8,1}) = ccall(:jl_uncompress_ir, Any, (Any, Any, Any), ci.def.def::Method, ci, s)::CodeInfo
+# for backwards compat
+const uncompressed_ast = uncompressed_ir
+const _uncompressed_ast = _uncompressed_ir
 
 function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = typemax(UInt))
     tt = signature_type(f, t)
@@ -950,8 +968,6 @@ default_debug_info_kind() = unsafe_load(cglobal(:jl_default_debug_info_kind, Cin
 
 # this type mirrors jl_cgparams_t (documented in julia.h)
 struct CodegenParams
-    cached::Cint
-
     track_allocations::Cint
     code_coverage::Cint
     static_alloc::Cint
@@ -965,22 +981,22 @@ struct CodegenParams
     emit_function::Any
     emitted_function::Any
 
-    CodegenParams(;cached::Bool=true,
-                   track_allocations::Bool=true, code_coverage::Bool=true,
+    function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    static_alloc::Bool=true, prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
                    module_setup=nothing, module_activation=nothing, raise_exception=nothing,
-                   emit_function=nothing, emitted_function=nothing) =
-        new(Cint(cached),
+                   emit_function=nothing, emitted_function=nothing)
+        return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(static_alloc), Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             module_setup, module_activation, raise_exception,
             emit_function, emitted_function)
+    end
 end
 
 const SLOT_USED = 0x8
-ast_slotflag(@nospecialize(code), i) = ccall(:jl_ast_slotflag, UInt8, (Any, Csize_t), code, i - 1)
+ast_slotflag(@nospecialize(code), i) = ccall(:jl_ir_slotflag, UInt8, (Any, Csize_t), code, i - 1)
 
 """
     may_invoke_generator(method, atypes, sparams)
@@ -1018,7 +1034,7 @@ function may_invoke_generator(method::Method, @nospecialize(atypes), sparams::Si
     nsparams = length(sparams)
     isdefined(generator_method, :source) || return false
     code = generator_method.source
-    nslots = ccall(:jl_ast_nslots, Int, (Any,), code)
+    nslots = ccall(:jl_ir_nslots, Int, (Any,), code)
     at = unwrap_unionall(atypes)
     (nslots >= 1 + length(sparams) + length(at.parameters)) || return false
 

@@ -394,6 +394,13 @@ end
     end
 end
 
+@testset "#35163" begin
+    # typemax(Int32) * Int32(1) + Int32(1) * Int32(1) should wrap around
+    # not promote to Int64, convert to Int32 and throw inexacterror
+    val = mul!(Int32[1], fill(typemax(Int32), 1, 1), Int32[1], Int32(1), Int32(1))
+    @test val[1] == typemin(Int32)
+end
+
 # Number types that lack conversion to the destination type
 struct RootInt
     i::Int
@@ -543,7 +550,7 @@ end
     @test  transpose(Xv2)*Xv2     ≈ XtX
     @test (transpose(Xv3)*Xv3)[1] ≈ XtX
     @test  Xv1'*Xv1     ≈ XcX
-    @test Xv2'*Xv2 ≈ norm(Xv2)^2
+    @test  Xv2'*Xv2     ≈ XcX
     @test (Xv3'*Xv3)[1] ≈ XcX
     @test (Xv1*transpose(Xv1))[1] ≈ XXt
     @test  Xv2*transpose(Xv2)     ≈ XXt
@@ -616,6 +623,12 @@ end
     C = A * B
     @test size(C) == (r, 0)
     @test_throws MethodError zero(eltype(C))
+end
+
+@testset "Issue #33873: genmatmul! with empty operands" begin
+    @test Matrix{Any}(undef, 0, 2) * Matrix{Any}(undef, 2, 3) == Matrix{Any}(undef, 0, 3)
+    @test_throws MethodError Matrix{Any}(undef, 2, 0) * Matrix{Any}(undef, 0, 3)
+    @test Matrix{Int}(undef, 2, 0) * Matrix{Int}(undef, 0, 3) == zeros(Int, 2, 3)
 end
 
 end # module TestMatmul

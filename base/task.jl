@@ -244,6 +244,22 @@ function _wait(t::Task)
     nothing
 end
 
+# have `waiter` wait for `t`
+function _wait2(t::Task, waiter::Task)
+    if !istaskdone(t)
+        lock(t.donenotify)
+        if !istaskdone(t)
+            push!(t.donenotify.waitq, waiter)
+            unlock(t.donenotify)
+            return nothing
+        else
+            unlock(t.donenotify)
+        end
+    end
+    schedule(waiter)
+    nothing
+end
+
 function wait(t::Task)
     t === current_task() && error("deadlock detected: cannot wait on current task")
     _wait(t)
@@ -328,19 +344,59 @@ end
     @async
 
 Wrap an expression in a [`Task`](@ref) and add it to the local machine's scheduler queue.
+
+Values can be interpolated into `@async` via `\$`, which copies the value directly into the
+constructed underlying closure. This allows you to insert the _value_ of a variable,
+isolating the aysnchronous code from changes to the variable's value in the current task.
+
+!!! compat "Julia 1.4"
+    Interpolating values via `\$` is available as of Julia 1.4.
 """
 macro async(expr)
+    letargs = Base._lift_one_interp!(expr)
+
     thunk = esc(:(()->($expr)))
     var = esc(sync_varname)
     quote
-        local task = Task($thunk)
-        if $(Expr(:isdefined, var))
-            push!($var, task)
+        let $(letargs...)
+            local task = Task($thunk)
+            if $(Expr(:islocal, var))
+                push!($var, task)
+            end
+            schedule(task)
+            task
         end
-        schedule(task)
-        task
     end
 end
+
+# Capture interpolated variables in $() and move them to let-block
+function _lift_one_interp!(e)
+    letargs = Any[]  # store the new gensymed arguments
+    _lift_one_interp_helper(e, false, letargs) # Start out _not_ in a quote context (false)
+    letargs
+end
+_lift_one_interp_helper(v, _, _) = v
+function _lift_one_interp_helper(expr::Expr, in_quote_context, letargs)
+    if expr.head === :$
+        if in_quote_context  # This $ is simply interpolating out of the quote
+            # Now, we're out of the quote, so any _further_ $ is ours.
+            in_quote_context = false
+        else
+            newarg = gensym()
+            push!(letargs, :($(esc(newarg)) = $(esc(expr.args[1]))))
+            return newarg  # Don't recurse into the lifted $() exprs
+        end
+    elseif expr.head === :quote
+        in_quote_context = true   # Don't try to lift $ directly out of quotes
+    elseif expr.head === :macrocall
+        return expr  # Don't recur into macro calls, since some other macros use $
+    end
+    for (i,e) in enumerate(expr.args)
+        expr.args[i] = _lift_one_interp_helper(e, in_quote_context, letargs)
+    end
+    expr
+end
+
 
 # add a wait-able object to the sync pool
 macro sync_add(expr)
@@ -350,12 +406,6 @@ macro sync_add(expr)
         push!($var, ref)
         ref
     end
-end
-
-function register_taskdone_hook(t::Task, hook)
-    tls = get_task_tls(t)
-    push!(get!(tls, :TASKDONE_HOOKS, []), hook)
-    return t
 end
 
 # runtime system hook called when a task finishes
@@ -379,13 +429,6 @@ function task_done_hook(t::Task)
         finally
             unlock(donenotify)
         end
-    end
-
-    # Execute any other hooks registered in the TLS
-    if isa(t.storage, IdDict) && haskey(t.storage, :TASKDONE_HOOKS)
-        foreach(hook -> hook(t), t.storage[:TASKDONE_HOOKS])
-        delete!(t.storage, :TASKDONE_HOOKS)
-        handled = true
     end
 
     if err && !handled && Threads.threadid() == 1
@@ -572,6 +615,8 @@ function yield()
     end
 end
 
+@inline set_next_task(t::Task) = ccall(:jl_set_next_task, Cvoid, (Any,), t)
+
 """
     yield(t::Task, arg = nothing)
 
@@ -581,7 +626,8 @@ immediately yields to `t` before calling the scheduler.
 function yield(t::Task, @nospecialize(x=nothing))
     t.result = x
     enq_work(current_task())
-    return try_yieldto(ensure_rescheduled, Ref(t))
+    set_next_task(t)
+    return try_yieldto(ensure_rescheduled)
 end
 
 """
@@ -594,14 +640,15 @@ or scheduling in any way. Its use is discouraged.
 """
 function yieldto(t::Task, @nospecialize(x=nothing))
     t.result = x
-    return try_yieldto(identity, Ref(t))
+    set_next_task(t)
+    return try_yieldto(identity)
 end
 
-function try_yieldto(undo, reftask::Ref{Task})
+function try_yieldto(undo)
     try
-        ccall(:jl_switchto, Cvoid, (Any,), reftask)
+        ccall(:jl_switch, Cvoid, ())
     catch
-        undo(reftask[])
+        undo(ccall(:jl_get_next_task, Ref{Task}, ()))
         rethrow()
     end
     ct = current_task()
@@ -653,20 +700,20 @@ function trypoptask(W::StickyWorkqueue)
     return t
 end
 
-@noinline function poptaskref(W::StickyWorkqueue)
+@noinline function poptask(W::StickyWorkqueue)
     task = trypoptask(W)
     if !(task isa Task)
-        gettask = () -> trypoptask(W)
-        task = ccall(:jl_task_get_next, Any, (Any,), gettask)::Task
+        task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any), trypoptask, W)
     end
-    return Ref(task)
+    set_next_task(task)
+    nothing
 end
 
 function wait()
     W = Workqueues[Threads.threadid()]
-    reftask = poptaskref(W)
-    result = try_yieldto(ensure_rescheduled, reftask)
-    Sys.isjsvm() || process_events()
+    poptask(W)
+    result = try_yieldto(ensure_rescheduled)
+    process_events()
     # return when we come out of the queue
     return result
 end

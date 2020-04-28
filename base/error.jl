@@ -179,7 +179,7 @@ end
 Like [`systemerror`](@ref), but for Windows API functions that use [`GetLastError`](@ref Base.Libc.GetLastError) to
 return an error code instead of setting [`errno`](@ref Base.Libc.errno).
 """
-windowserror(p, b::Bool; extrainfo=nothing) = b ? windowserror(b, extrainfo=extrainfo) : nothing
+windowserror(p, b::Bool; extrainfo=nothing) = b ? windowserror(p, extrainfo=extrainfo) : nothing
 windowserror(p, code::UInt32=Libc.GetLastError(); extrainfo=nothing) = throw(Main.Base.SystemError(string(p), 0, WindowsErrorInfo(code, extrainfo)))
 
 

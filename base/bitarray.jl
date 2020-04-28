@@ -71,6 +71,28 @@ const BitMatrix = BitArray{2}
 
 BitVector() = BitArray{1}(undef, 0)
 
+"""
+    BitVector(nt::Tuple{Vararg{Bool}})
+
+Construct a `BitVector` from a tuple of `Bool`.
+# Examples
+```julia-repl
+julia> nt = (true, false, true, false)
+(true, false, true, false)
+
+julia> BitVector(nt)
+4-element BitArray{1}:
+ 1
+ 0
+ 1
+ 0
+```
+"""
+function BitVector(nt::Tuple{Vararg{Bool}})
+    bv = BitVector(undef, length(nt))
+    bv .= nt
+end
+
 ## utility functions ##
 
 length(B::BitArray) = B.len
@@ -1165,16 +1187,6 @@ function reverse(A::BitArray; dims::Integer)
     return B
 end
 
-function reverse_bits(src::UInt64)
-    z    = src
-    z    = ((z >>>  1) & 0x5555555555555555) | ((z <<  1) & 0xaaaaaaaaaaaaaaaa)
-    z    = ((z >>>  2) & 0x3333333333333333) | ((z <<  2) & 0xcccccccccccccccc)
-    z    = ((z >>>  4) & 0x0f0f0f0f0f0f0f0f) | ((z <<  4) & 0xf0f0f0f0f0f0f0f0)
-    z    = ((z >>>  8) & 0x00ff00ff00ff00ff) | ((z <<  8) & 0xff00ff00ff00ff00)
-    z    = ((z >>> 16) & 0x0000ffff0000ffff) | ((z << 16) & 0xffff0000ffff0000)
-    return ((z >>> 32) & 0x00000000ffffffff) | ((z << 32) & 0xffffffff00000000)
-end
-
 function reverse!(B::BitVector)
     # Basic idea: each chunk is divided into two blocks of size k = n % 64, and
     # h = 64 - k. Walk from either end (with indices i and j) reversing chunks
@@ -1198,14 +1210,14 @@ function reverse!(B::BitVector)
 
     i, j = 0, length(B.chunks)
     u = UInt64(0)
-    v = reverse_bits(B.chunks[j])
+    v = bitreverse(B.chunks[j])
     B.chunks[j] = 0
     @inbounds while true
         i += 1
         if i == j
             break
         end
-        u = reverse_bits(B.chunks[i])
+        u = bitreverse(B.chunks[i])
         B.chunks[i] = 0
         B.chunks[j] |= u >>> h
         B.chunks[i] |= v >>> h
@@ -1214,7 +1226,7 @@ function reverse!(B::BitVector)
         if i == j
             break
         end
-        v = reverse_bits(B.chunks[j])
+        v = bitreverse(B.chunks[j])
         B.chunks[j] = 0
         B.chunks[i] |= v << k
         B.chunks[j] |= u << k
@@ -1362,7 +1374,7 @@ end
 
 count(B::BitArray) = bitcount(B.chunks)
 
-function unsafe_bitfindnext(Bc::Vector{UInt64}, start::Integer)
+function unsafe_bitfindnext(Bc::Vector{UInt64}, start::Int)
     chunk_start = _div64(start-1)+1
     within_chunk_start = _mod64(start-1)
     mask = _msk64 << within_chunk_start
@@ -1385,13 +1397,14 @@ end
 function findnext(B::BitArray, start::Integer)
     start > 0 || throw(BoundsError(B, start))
     start > length(B) && return nothing
-    unsafe_bitfindnext(B.chunks, start)
+    unsafe_bitfindnext(B.chunks, Int(start))
 end
 
 #findfirst(B::BitArray) = findnext(B, 1)  ## defined in array.jl
 
 # aux function: same as findnext(~B, start), but performed without temporaries
 function findnextnot(B::BitArray, start::Integer)
+    start = Int(start)
     start > 0 || throw(BoundsError(B, start))
     start > length(B) && return nothing
 
@@ -1446,7 +1459,7 @@ function findnext(testf::Function, B::BitArray, start::Integer)
 end
 #findfirst(testf::Function, B::BitArray) = findnext(testf, B, 1)  ## defined in array.jl
 
-function unsafe_bitfindprev(Bc::Vector{UInt64}, start::Integer)
+function unsafe_bitfindprev(Bc::Vector{UInt64}, start::Int)
     chunk_start = _div64(start-1)+1
     mask = _msk_end(start)
 
@@ -1468,10 +1481,11 @@ end
 function findprev(B::BitArray, start::Integer)
     start > 0 || return nothing
     start > length(B) && throw(BoundsError(B, start))
-    unsafe_bitfindprev(B.chunks, start)
+    unsafe_bitfindprev(B.chunks, Int(start))
 end
 
 function findprevnot(B::BitArray, start::Integer)
+    start = Int(start)
     start > 0 || return nothing
     start > length(B) && throw(BoundsError(B, start))
 

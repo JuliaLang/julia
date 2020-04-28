@@ -10,6 +10,7 @@ using Main.MacroCalls
 
 @test_throws MethodError convert(Enum, 1.0)
 
+@test_throws ArgumentError("invalid type expression for enum 1 + 1") @macrocall(@enum 1 + 1 2)
 @test_throws ArgumentError("no arguments given for Enum Foo") @macrocall(@enum Foo)
 @test_throws ArgumentError("invalid base type for Enum Foo2, Foo2::Float64=::Float64; base type must be an integer primitive type") @macrocall(@enum Foo2::Float64 apple=1.)
 
@@ -89,6 +90,7 @@ end
                                   2
                               end""") @macrocall(@enum Test2  x ? 1 : 2)
 @test_throws ArgumentError("invalid argument for Enum Test22: 1 = 2") @macrocall(@enum Test22 1=2)
+@test_throws ArgumentError("invalid name for Enum TestEnum; \"1 + 1\" is not a valid identifier") var"@enum"(LineNumberNode(@__LINE__), @__MODULE__, :TestEnum, Symbol("1 + 1"))
 
 # other Integer types of enum members
 @enum Test3::UInt8 _one_Test3=0x01 _two_Test3=0x02 _three_Test3=0x03
@@ -167,3 +169,34 @@ end
 @test Int(haggis) == 4
 
 @test (Vector{Fruit}(undef, 3) .= apple) == [apple, apple, apple]
+
+# long, discongruous
+@enum Alphabet begin
+    alphabet_a
+    alphabet_b
+    alphabet_c
+    alphabet_d
+    alphabet_e
+    alphabet_f
+    alphabet_g
+    alphabet_h
+    alphabet_i
+    alphabet_j
+    alphabet_k
+    alphabet_l
+    alphabet_m
+    alphabet_n
+    alphabet_o
+    alphabet_p
+    alphabet_q
+    alphabet_r
+    alphabet_s
+    alphabet_t
+    alphabet_u
+    alphabet_v
+    alphabet_w
+    alphabet_x
+    alphabet_y
+    alphabet_z = 26
+end
+@test alphabet_z == Alphabet(26)

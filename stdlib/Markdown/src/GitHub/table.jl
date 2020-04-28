@@ -65,8 +65,10 @@ function html(io::IO, md::Table)
     withtag(io, :table) do
         for (i, row) in enumerate(md.rows)
             withtag(io, :tr) do
-                for c in md.rows[i]
-                    withtag(io, i == 1 ? :th : :td) do
+                for (j, c) in enumerate(md.rows[i])
+                    alignment = md.align[j]
+                    alignment = alignment === :l ? "left" : alignment === :r ? "right" : "center"
+                     withtag(io, i == 1 ? :th : :td, ("align", alignment)) do
                         htmlinline(io, c)
                     end
                 end

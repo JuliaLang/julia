@@ -70,6 +70,15 @@ function typesubtract(@nospecialize(a), @nospecialize(b))
     if isa(a, Union)
         return Union{typesubtract(a.a, b),
                      typesubtract(a.b, b)}
+    elseif a isa DataType
+        if b isa DataType
+            if a.name === b.name === Tuple.name && length(a.types) == length(b.types)
+                ta = switchtupleunion(a)
+                if length(ta) > 1
+                    return typesubtract(Union{ta...}, b)
+                end
+            end
+        end
     end
     return a # TODO: improve this bound?
 end
@@ -95,11 +104,10 @@ _typename(union::UnionAll) = _typename(union.body)
 _typename(a::DataType) = Const(a.name)
 
 function tuple_tail_elem(@nospecialize(init), ct::Vector{Any})
-    # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
-    tmerge_maybe_vararg(@nospecialize(a), @nospecialize(b)) = tmerge(a, tvar_extent(unwrapva(b)))
     t = init
     for x in ct
-        t = tmerge_maybe_vararg(t, x)
+        # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
+        t = tmerge(t, tvar_extent(unwrapva(x)))
     end
     return Vararg{widenconst(t)}
 end
@@ -147,17 +155,13 @@ end
 # unioncomplexity estimates the number of calls to `tmerge` to obtain the given type by
 # counting the Union instances, taking also into account those hidden in a Tuple or UnionAll
 function unioncomplexity(u::Union)
-    inner = max(unioncomplexity(u.a), unioncomplexity(u.b))
-    return inner == 0 ? 0 : 1 + inner
+    return unioncomplexity(u.a) + unioncomplexity(u.b) + 1
 end
 function unioncomplexity(t::DataType)
-    t.name === Tuple.name || return 0
-    c = 1
+    t.name === Tuple.name || isvarargtype(t) || return 0
+    c = 0
     for ti in t.parameters
-        ci = unioncomplexity(ti)
-        if ci > c
-            c = ci
-        end
+        c = max(c, unioncomplexity(ti))
     end
     return c
 end
