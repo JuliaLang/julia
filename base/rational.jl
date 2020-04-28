@@ -10,7 +10,7 @@ struct Rational{T<:Integer} <: Real
     num::T
     den::T
 
-    function Rational{T}(num::Integer, den::Integer; checked::Bool) where T<:Integer
+    function Rational{T}(num::Integer, den::Integer; checked::Bool=true) where T<:Integer
         if checked
             iszero(den) && iszero(num) && __throw_rational_argerror_zero(T)
             num, den = divgcd(num, den)
@@ -35,10 +35,6 @@ function checked_den(num::T, den::T) where T<:Integer
     Rational{T}(checking_den(num, den)...; checked=false)
 end
 checked_den(num::Integer, den::Integer) = checked_den(promote(num, den)...)
-
-function Rational{T}(num::Integer, den::Integer) where T<:Integer
-    Rational{T}(num, den; checked=true)
-end
 
 function Rational(n::T, d::T; checked=true) where T<:Integer
     Rational{T}(n, d; checked)
@@ -160,6 +156,8 @@ promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat}
 
 widen(::Type{Rational{T}}) where {T} = Rational{widen(T)}
 
+@noinline __throw_negate_unsigned() = throw(OverflowError("cannot negate unsigned number"))
+
 """
     rationalize([T<:Integer=Int,] x; tol::Real=eps(x))
 
@@ -182,9 +180,7 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     if tol < 0
         throw(ArgumentError("negative tolerance $tol"))
     end
-    if T<:Unsigned && x < 0
-        throw(OverflowError("cannot negate unsigned number"))
-    end
+    T<:Unsigned && x < 0 && __throw_negate_unsigned()
     isnan(x) && return T(x)//one(T)
     isinf(x) && return Rational(x < 0 ? -one(T) : one(T), zero(T); checked=false)
 
@@ -294,11 +290,13 @@ isinteger(x::Rational) = x.den == 1
 -(x::Rational) = Rational(-x.num, x.den; checked=false)
 
 function -(x::Rational{T}) where T<:BitSigned
-    x.num == typemin(T) && throw(OverflowError("rational numerator is typemin(T)"))
+    x.num == typemin(T) && __throw_rational_numerator_typemin(T)
     Rational(-x.num, x.den; checked=false)
 end
+@noinline __throw_rational_numerator_typemin(T) = throw(OverflowError("rational numerator is typemin($T)"))
+
 function -(x::Rational{T}) where T<:Unsigned
-    x.num != zero(T) && throw(OverflowError("cannot negate unsigned number"))
+    x.num != zero(T) && __throw_negate_unsigned()
     x
 end
 
@@ -342,9 +340,8 @@ function *(y::Integer, x::Rational)
     yn, xd = divgcd(y, x.den)
     Rational(checked_mul(yn, x.num), xd; checked=false)
 end
-/(x::Rational, y::Union{Rational, Integer}) = x//y
-/(x::Integer, y::Rational) = x//y
-/(x::Rational, y::Complex{<:Union{Integer,Rational}}) = x//y
+/(x::Rational, y::Union{Rational, Integer, Complex{<:Union{Integer,Rational}}}) = x//y
+/(x::Union{Integer, Complex{<:Union{Integer,Rational}}}, y::Rational) = x//y
 function inv(x::Rational{T}) where T
     checked_den(x.den, x.num)
 end
