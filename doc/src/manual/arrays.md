@@ -945,7 +945,7 @@ julia> string.(1:3, ". ", ["First", "Second", "Third"])
  "3. Third"
 ```
 
-Sometimes, you have a non-scalar object like an array that you wish to treat as a scalar in a particular
+Sometimes, you have a non-scalar object like an array that you don't wish to broadcast into in a particular
 broadcast expression. This is best done by wrapping that item in a [`Tuple`](@ref)
 ```jldoctest
 julia> ([1, 2, 3], [4, 5, 6]) .+ ([1, 2, 3],)
