@@ -196,6 +196,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_compiled_modules,
            opt_machine_file,
            opt_project,
+           opt_bug_report
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
@@ -211,6 +212,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "eval",            required_argument, 0, 'e' },
         { "print",           required_argument, 0, 'E' },
         { "load",            required_argument, 0, 'L' },
+        { "bug-report",      required_argument, 0, opt_bug_report },
         { "sysimage",        required_argument, 0, 'J' },
         { "sysimage-native-code", required_argument, 0, opt_sysimage_native_code },
         { "compiled-modules",    required_argument, 0, opt_compiled_modules },
@@ -341,11 +343,12 @@ restart_switch:
         case 'e': // eval
         case 'E': // print
         case 'L': // load
+        case opt_bug_report: // bug
         {
             size_t sz = strlen(optarg) + 1;
             char *arg = (char*)malloc_s(sz + 1);
             const char **newcmds;
-            arg[0] = c;
+            arg[0] = c == opt_bug_report ? 'B' : c;
             memcpy(arg + 1, optarg, sz);
             newcmds = (const char**)realloc_s(cmds, (ncmds + 2) * sizeof(char*));
             cmds = newcmds;

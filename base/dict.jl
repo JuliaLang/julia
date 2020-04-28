@@ -257,7 +257,7 @@ Dict{String,Int64} with 2 entries:
 julia> empty!(A);
 
 julia> A
-Dict{String,Int64} with 0 entries
+Dict{String,Int64}()
 ```
 """
 function empty!(h::Dict{K,V}) where V where K
@@ -575,6 +575,9 @@ end
 
 Delete and return the mapping for `key` if it exists in `collection`, otherwise return
 `default`, or throw an error if `default` is not specified.
+
+!!! compat "Julia 1.5"
+    For `collection::Vector`, this method requires at least Julia 1.5.
 
 # Examples
 ```jldoctest

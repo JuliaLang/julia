@@ -37,9 +37,18 @@ emptymutable(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 _similar_for(c::AbstractSet, ::Type{T}, itr, isz) where {T} = empty(c, T)
 
 function show(io::IO, s::Set)
-    print(io, "Set(")
-    show_vector(io, s)
-    print(io, ')')
+    if isempty(s)
+        if get(io, :typeinfo, Any) == typeof(s)
+            print(io, "Set()")
+        else
+            show(io, typeof(s))
+            print(io, "()")
+        end
+    else
+        print(io, "Set(")
+        show_vector(io, s)
+        print(io, ')')
+    end
 end
 
 isempty(s::Set) = isempty(s.dict)
@@ -627,10 +636,18 @@ end
 function _replace!(new::Callable, res::AbstractArray, A::AbstractArray, count::Int)
     c = 0
     if count >= length(A) # simpler loop allows for SIMD
-        for i in eachindex(A)
-            @inbounds Ai = A[i]
-            y = new(Ai)
-            @inbounds res[i] = y
+        if res === A # for optimization only
+            for i in eachindex(A)
+                @inbounds Ai = A[i]
+                y = new(Ai)
+                @inbounds A[i] = y
+            end
+        else
+            for i in eachindex(A)
+                @inbounds Ai = A[i]
+                y = new(Ai)
+                @inbounds res[i] = y
+            end
         end
     else
         for i in eachindex(A)

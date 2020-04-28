@@ -385,24 +385,81 @@ end
 
 # issue #27039
 @testset "gcd, lcm, gcdx for Rational" begin
-    a = 6 // 35
-    b = 10 // 21
-    @test gcd(a, b) == 2//105
-    @test lcm(a, b) == 30//7
-    @test gcdx(a, b) == (2//105, -11, 4)
+    # TODO: Test gcd, lcm, gcdx for Rational{BigInt}.
+    for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128)
+        a = T(6) // T(35)
+        b = T(10) // T(21)
+        @test gcd(a, b) === T(2)//T(105)
+        @test gcd(b, a) === T(2)//T(105)
+        @test lcm(a, b) === T(30)//T(7)
+        if T <: Signed
+            @test gcdx(a, b) === (T(2)//T(105), T(-11), T(4))
+            @test gcd(-a, b) === T(2)//T(105)
+            @test gcd(a, -b) === T(2)//T(105)
+            @test gcd(-a, -b) === T(2)//T(105)
+            @test lcm(-a, b) === T(30)//T(7)
+            @test lcm(a, -b) === T(30)//T(7)
+            @test lcm(-a, -b) === T(30)//T(7)
+            @test gcdx(-a, b) === (T(2)//T(105), T(11), T(4))
+            @test gcdx(a, -b) === (T(2)//T(105), T(-11), T(-4))
+            @test gcdx(-a, -b) === (T(2)//T(105), T(11), T(-4))
+        end
 
-    @test gcdx(1//0, 1//2) == (1//0, 1, 0)
-    @test gcdx(1//2, 1//0) == (1//0, 0, 1)
-    @test gcdx(1//0, 1//0) == (1//0, 1, 1)
-    @test gcdx(1//0, 0//1) == (1//0, 1, 0)
-    @test gcdx(0//1, 0//1) == (0//1, 1, 0)
+        @test gcd(a, T(0)//T(1)) === a
+        @test lcm(a, T(0)//T(1)) === T(0)//T(1)
+        @test gcdx(a, T(0)//T(1)) === (a, T(1), T(0))
 
-    @test gcdx(1//3, 2) == (1//3, 1, 0)
-    @test lcm(1//3, 1) == 1//1
-    @test lcm(3//1, 1//0) == 3//1
-    @test lcm(0//1, 1//0) == 0//1
+        @test gcdx(T(1)//T(0), T(1)//T(2)) === (T(1)//T(0), T(1), T(0))
+        @test gcdx(T(1)//T(2), T(1)//T(0)) === (T(1)//T(0), T(0), T(1))
+        @test gcdx(T(1)//T(0), T(1)//T(1)) === (T(1)//T(0), T(1), T(0))
+        @test gcdx(T(1)//T(1), T(1)//T(0)) === (T(1)//T(0), T(0), T(1))
+        @test gcdx(T(1)//T(0), T(1)//T(0)) === (T(1)//T(0), T(1), T(1))
+        @test gcdx(T(1)//T(0), T(0)//T(1)) === (T(1)//T(0), T(1), T(0))
+        @test gcdx(T(0)//T(1), T(0)//T(1)) === (T(0)//T(1), T(1), T(0))
 
-    @test gcd([5, 2, 1//2]) == 1//2
+        if T <: Signed
+            @test gcdx(T(-1)//T(0), T(1)//T(2)) === (T(1)//T(0), T(1), T(0))
+            @test gcdx(T(1)//T(2), T(-1)//T(0)) === (T(1)//T(0), T(0), T(1))
+            @test gcdx(T(-1)//T(0), T(1)//T(1)) === (T(1)//T(0), T(1), T(0))
+            @test gcdx(T(1)//T(1), T(-1)//T(0)) === (T(1)//T(0), T(0), T(1))
+            @test gcdx(T(-1)//T(0), T(1)//T(0)) === (T(1)//T(0), T(1), T(1))
+            @test gcdx(T(1)//T(0), T(-1)//T(0)) === (T(1)//T(0), T(1), T(1))
+            @test gcdx(T(-1)//T(0), T(-1)//T(0)) === (T(1)//T(0), T(1), T(1))
+            @test gcdx(T(-1)//T(0), T(0)//T(1)) === (T(1)//T(0), T(1), T(0))
+            @test gcdx(T(0)//T(1), T(-1)//T(0)) === (T(1)//T(0), T(0), T(1))
+        end
+
+        @test gcdx(T(1)//T(3), T(2)) === (T(1)//T(3), T(1), T(0))
+        @test lcm(T(1)//T(3), T(1)) === T(1)//T(1)
+        @test lcm(T(3)//T(1), T(1)//T(0)) === T(3)//T(1)
+        @test lcm(T(0)//T(1), T(1)//T(0)) === T(0)//T(1)
+
+        @test lcm(T(1)//T(0), T(1)//T(2)) === T(1)//T(2)
+        @test lcm(T(1)//T(2), T(1)//T(0)) === T(1)//T(2)
+        @test lcm(T(1)//T(0), T(1)//T(1)) === T(1)//T(1)
+        @test lcm(T(1)//T(1), T(1)//T(0)) === T(1)//T(1)
+        @test lcm(T(1)//T(0), T(1)//T(0)) === T(1)//T(0)
+        @test lcm(T(1)//T(0), T(0)//T(1)) === T(0)//T(1)
+        @test lcm(T(0)//T(1), T(0)//T(1)) === T(0)//T(1)
+
+        if T <: Signed
+            @test lcm(T(-1)//T(0), T(1)//T(2)) === T(1)//T(2)
+            @test lcm(T(1)//T(2), T(-1)//T(0)) === T(1)//T(2)
+            @test lcm(T(-1)//T(0), T(1)//T(1)) === T(1)//T(1)
+            @test lcm(T(1)//T(1), T(-1)//T(0)) === T(1)//T(1)
+            @test lcm(T(-1)//T(0), T(1)//T(0)) === T(1)//T(0)
+            @test lcm(T(1)//T(0), T(-1)//T(0)) === T(1)//T(0)
+            @test lcm(T(-1)//T(0), T(-1)//T(0)) === T(1)//T(0)
+            @test lcm(T(-1)//T(0), T(0)//T(1)) === T(0)//T(1)
+            @test lcm(T(0)//T(1), T(-1)//T(0)) === T(0)//T(1)
+        end
+
+        @test gcd([T(5), T(2), T(1)//T(2)]) === T(1)//T(2)
+        @test gcd(T(5), T(2), T(1)//T(2)) === T(1)//T(2)
+
+        @test lcm([T(5), T(2), T(1)//T(2)]) === T(10)//T(1)
+        @test lcm(T(5), T(2), T(1)//T(2)) === T(10)//T(1)
+    end
 end
 
 @testset "Binary operations with Integer" begin

@@ -1234,6 +1234,7 @@ end
             @test i == (k += 1)
         end
         @test intersect(r, Base.OneTo(2)) == Base.OneTo(2)
+        @test union(r, Base.OneTo(4)) == Base.OneTo(4)
         @test intersect(r, 0:5) == 1:3
         @test intersect(r, 2) === intersect(2, r) === 2:2
         @test findall(in(r), r) === findall(in(1:length(r)), r) ===

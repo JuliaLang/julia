@@ -70,6 +70,16 @@ Language changes
 * The line number of function definitions is now added by the parser as an
   additional `LineNumberNode` at the start of each function body ([#35138]).
 
+Compiler/Runtime improvements
+-----------------------------
+
+* Immutable structs (including tuples) that contain references can now be allocated
+  on the stack, and allocated inline within arrays and other structs ([#33886]).
+  This significantly reduces the number of heap allocations in some workloads.
+  Code that requires assumptions about object layout and addresses (usually for
+  interoperability with C or other languages) might need to be updated; for
+  example any object that needs a stable address should be a `mutable struct`.
+
 Command-line option changes
 ---------------------------
 
@@ -78,9 +88,6 @@ Command-line option changes
   `Pkg.test()`. ([#35362]).
 
 * Color now defaults to on when stdout and stderr are TTYs ([#34347])
-
-Command-line option changes
----------------------------
 
   * `-t N`, `--threads N` starts Julia with `N` threads. This option takes precedence over
     `JULIA_NUM_THREADS`. The specified number of threads also propagates to worker
@@ -98,7 +105,7 @@ Build system changes
 
 New library functions
 ---------------------
-* The `@ccall` macro has been added added to Base. It is a near drop-in replacement for `ccall` with more Julia-like syntax. It also wraps the new `foreigncall` API for varargs of different types, though it lacks the capability to specify an LLVM calling convention. ([#32748])
+* The `@ccall` macro has been added to Base. It is a near drop-in replacement for `ccall` with more Julia-like syntax. It also wraps the new `foreigncall` API for varargs of different types, though it lacks the capability to specify an LLVM calling convention. ([#32748])
 * New functions `mergewith` and `mergewith!` supersede `merge` and `merge!` with `combine`
   argument.  They don't have the restriction for `combine` to be a `Function` and also
   provide one-argument method that returns a closure.  The old methods of `merge` and
@@ -122,11 +129,14 @@ New library features
 * `x::Signed % Unsigned` and `x::Unsigned % Signed` are supported for integer bitstypes.
 * `signed(unsigned_type)` is supported for integer bitstypes, `unsigned(signed_type)` has been supported.
 * `accumulate`, `cumsum`, and `cumprod` now support `Tuple` ([#34654]) and arbitrary iterators ([#34656]).
+* `pop!(collection, key, [default])` now has a method for `Vector` to remove an element at an arbitrary index ([#35513]).
 * In `splice!` with no replacement, values to be removed can now be specified with an
   arbitrary iterable (instead of a `UnitRange`) ([#34524]).
+* The `@view` and `@views` macros now support the `a[begin]` syntax that was introduced in Julia 1.4 ([#35289]).
 * `open` for files now accepts a keyword argument `lock` controlling whether file operations
   will acquire locks for safe multi-threaded access. Setting it to `false` provides better
   performance when only one thread will access the file.
+* The introspection macros (`@which`, `@code_typed`, etc.) now work with `do`-block syntax ([#35283]) and with dot syntax ([#35522]).
 
 Standard library changes
 ------------------------
@@ -155,6 +165,8 @@ Standard library changes
 
 #### Random
 
+* `randn!(::MersenneTwister, ::Array{Float64})` is faster, and as a result, for a given state of the RNG,
+  the corresponding generated numbers have changed ([#35078]).
 
 #### REPL
 
@@ -168,6 +180,8 @@ Standard library changes
 
 #### Dates
 * The `eps` function now accepts `TimeType` types ([#31487]).
+* The `zero` function now accepts `TimeType` types ([#35554]).
+
 
 #### Statistics
 
