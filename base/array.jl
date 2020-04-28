@@ -1669,7 +1669,7 @@ CartesianIndex(2, 1)
 """
 function findnext(A, start)
     l = last(keys(A))
-    i = start
+    i = oftype(l, start)
     i > l && return nothing
     while true
         A[i] && return i
@@ -1751,7 +1751,7 @@ CartesianIndex(1, 1)
 """
 function findnext(testf::Function, A, start)
     l = last(keys(A))
-    i = start
+    i = oftype(l, start)
     i > l && return nothing
     while true
         testf(A[i]) && return i
@@ -1855,8 +1855,8 @@ CartesianIndex(2, 1)
 ```
 """
 function findprev(A, start)
-    i = start
     f = first(keys(A))
+    i = oftype(f, start)
     i < f && return nothing
     while true
         A[i] && return i
@@ -1946,8 +1946,8 @@ CartesianIndex(2, 1)
 ```
 """
 function findprev(testf::Function, A, start)
-    i = start
     f = first(keys(A))
+    i = oftype(f, start)
     i < f && return nothing
     while true
         testf(A[i]) && return i

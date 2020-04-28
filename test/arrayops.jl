@@ -579,6 +579,18 @@ end
     @test findlast(isequal(0x00), [0x01, 0x00]) == 2
     @test findnext(isequal(0x00), [0x00, 0x01, 0x00], 2) == 3
     @test findprev(isequal(0x00), [0x00, 0x01, 0x00], 2) == 1
+
+    @testset "issue 32568" for T = (UInt, BigInt)
+        @test findnext(!iszero, a, T(1)) isa keytype(a)
+        @test findnext(!iszero, a, T(2)) isa keytype(a)
+        @test findprev(!iszero, a, T(4)) isa keytype(a)
+        @test findprev(!iszero, a, T(5)) isa keytype(a)
+        b = [true, false, true]
+        @test findnext(b, T(2)) isa keytype(b)
+        @test findnext(b, T(3)) isa keytype(b)
+        @test findprev(b, T(1)) isa keytype(b)
+        @test findprev(b, T(2)) isa keytype(b)
+    end
 end
 @testset "find with Matrix" begin
     A = [1 2 0; 3 4 0]
