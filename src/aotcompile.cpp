@@ -619,6 +619,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             PM->add(createLateLowerGCFramePass());
             PM->add(createFinalLowerGCPass());
             PM->add(createLowerPTLSPass(dump_native));
+            PM->add(createRemoveJuliaAddrspacesPass());
         }
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native)
@@ -735,6 +736,8 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createLowerPTLSPass(dump_native));
         // Clean up write barrier and ptls lowering
         PM->add(createCFGSimplificationPass());
+        // Remove Julia's address space information
+        PM->add(createRemoveJuliaAddrspacesPass());
     }
     PM->add(createCombineMulAddPass());
     PM->add(createDivRemPairsPass());
