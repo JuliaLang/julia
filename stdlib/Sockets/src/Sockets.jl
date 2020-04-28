@@ -232,7 +232,7 @@ const UV_UDP_REUSEADDR = 4
 
 ##
 
-function _bind(sock::TCPServer, host::Union{IPv4, IPv6}, port::UInt16, flags::UInt32=UInt32(0))
+function _bind(sock::Union{TCPServer, TCPSocket}, host::Union{IPv4, IPv6}, port::UInt16, flags::UInt32=UInt32(0))
     host_in = Ref(hton(host.host))
     return ccall(:jl_tcp_bind, Int32, (Ptr{Cvoid}, UInt16, Ptr{Cvoid}, Cuint, Cint),
             sock, hton(port), host_in, flags, host isa IPv6)
@@ -253,7 +253,7 @@ Bind `socket` to the given `host:port`. Note that `0.0.0.0` will listen on all d
 * If `reuseaddr=true`, multiple threads or processes can bind to the same address without error
   if they all set `reuseaddr=true`, but only the last to bind will receive any traffic.
 """
-function bind(sock::Union{TCPServer, UDPSocket}, host::IPAddr, port::Integer; ipv6only = false, reuseaddr = false, kws...)
+function bind(sock::Union{TCPServer, UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only = false, reuseaddr = false, kws...)
     if sock.status != StatusInit
         error("$(typeof(sock)) is not in initialization state")
     end
@@ -275,7 +275,9 @@ function bind(sock::Union{TCPServer, UDPSocket}, host::IPAddr, port::Integer; ip
             return false
         end
     end
-    sock.status = StatusOpen
+    if isa(sock, TCPServer) || isa(sock, UDPSocket)
+        sock.status = StatusOpen
+    end
     isa(sock, UDPSocket) && setopt(sock; kws...)
     iolock_end()
     return true
@@ -758,32 +760,28 @@ function _sockname(sock, self=true)
     end
     iolock_end()
     uv_error("cannot obtain socket name", r)
-    if r == 0
-        port = ntoh(rport[])
-        af_inet6 = @static if Sys.iswindows() # AF_INET6 in <sys/socket.h>
-            23
-        elseif Sys.isapple()
-            30
-        elseif Sys.KERNEL ∈ (:FreeBSD, :DragonFly)
-            28
-        elseif Sys.KERNEL ∈ (:NetBSD, :OpenBSD)
-            24
-        else
-            10
-        end
-
-        if rfamily[] == 2 # AF_INET
-            addrv4 = raddress[1:4]
-            naddr = ntoh(unsafe_load(Ptr{Cuint}(pointer(addrv4)), 1))
-            addr = IPv4(naddr)
-        elseif rfamily[] == af_inet6
-            naddr = ntoh(unsafe_load(Ptr{UInt128}(pointer(raddress)), 1))
-            addr = IPv6(naddr)
-        else
-            error(string("unsupported address family: ", getindex(rfamily)))
-        end
+    port = ntoh(rport[])
+    af_inet6 = @static if Sys.iswindows() # AF_INET6 in <sys/socket.h>
+        23
+    elseif Sys.isapple()
+        30
+    elseif Sys.KERNEL ∈ (:FreeBSD, :DragonFly)
+        28
+    elseif Sys.KERNEL ∈ (:NetBSD, :OpenBSD)
+        24
     else
-        error("cannot obtain socket name")
+        10
+    end
+
+    if rfamily[] == 2 # AF_INET
+        addrv4 = raddress[1:4]
+        naddr = ntoh(unsafe_load(Ptr{Cuint}(pointer(addrv4)), 1))
+        addr = IPv4(naddr)
+    elseif rfamily[] == af_inet6
+        naddr = ntoh(unsafe_load(Ptr{UInt128}(pointer(raddress)), 1))
+        addr = IPv6(naddr)
+    else
+        error(string("unsupported address family: ", rfamily[]))
     end
     return addr, port
 end

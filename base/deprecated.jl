@@ -21,6 +21,11 @@ The first argument `old` is the signature of the deprecated method, the second o
 `new` is the call which replaces it. `@deprecate` exports `old` unless the optional
 third argument is `false`.
 
+!!! compat "Julia 1.5"
+    As of Julia 1.5, functions defined by `@deprecate` do not print warning when `julia`
+    is run without the `--depwarn=yes` flag set, as the default value of `--depwarn` option
+    is `no`.  The warnings are printed from tests run by `Pkg.test()`.
+
 # Examples
 ```jldoctest
 julia> @deprecate old(x) new(x)
@@ -192,3 +197,37 @@ MPFR.BigFloat(x::Real, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding
 end
 
 # END 1.3 deprecations
+
+# BEGIN 1.5 deprecations
+
+"""
+    isimmutable(v) -> Bool
+!!! warning
+    Consider using `!ismutable(v)` instead, as `isimmutable(v)` will be replaced by `!ismutable(v)` in a future release. (Since Julia 1.5)
+Return `true` iff value `v` is immutable.  See [Mutable Composite Types](@ref)
+for a discussion of immutability. Note that this function works on values, so if you give it
+a type, it will tell you that a value of `DataType` is mutable.
+
+# Examples
+```jldoctest
+julia> isimmutable(1)
+true
+
+julia> isimmutable([1,2])
+false
+```
+"""
+isimmutable(@nospecialize(x)) = !ismutable(x)
+export isimmutable
+
+
+macro get!(h, key0, default)
+    f, l = __source__.file, __source__.line
+    depwarn("`@get!(dict, key, default)` at $f:$l is deprecated, use `get!(()->default, dict, key)` instead.", Symbol("@get!"))
+    return quote
+        get!(()->$(esc(default)), $(esc(h)), $(esc(key0)))
+    end
+end
+
+
+# END 1.5 deprecations

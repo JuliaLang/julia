@@ -7,9 +7,12 @@
 #include <atomics.h>
 // threading ------------------------------------------------------------------
 
-// WARNING: Threading support is incomplete and experimental
-// Nonetheless, we define JL_THREAD and use it to give advanced notice to
-// maintainers of what eventual threading support will change.
+// JULIA_ENABLE_THREADING may be controlled by altering JULIA_THREADS in Make.user
+
+// When running into scheduler issues, this may help provide information on the
+// sequence of events that led to the issue. Normally, it is empty.
+//#define JULIA_DEBUG_SLEEPWAKE(x) x
+#define JULIA_DEBUG_SLEEPWAKE(x)
 
 //  Options for task switching algorithm (in order of preference):
 // JL_HAVE_ASM -- mostly setjmp
@@ -182,6 +185,7 @@ struct _jl_tls_states_t {
     uv_cond_t wake_signal;
     volatile sig_atomic_t defer_signal;
     struct _jl_task_t *current_task;
+    struct _jl_task_t *next_task;
 #ifdef MIGRATE_TASKS
     struct _jl_task_t *previous_task;
 #endif
@@ -221,6 +225,13 @@ struct _jl_tls_states_t {
     // Saved exception for previous external API call or NULL if cleared.
     // Access via jl_exception_occurred().
     struct _jl_value_t *previous_exception;
+
+    JULIA_DEBUG_SLEEPWAKE(
+        uint64_t uv_run_enter;
+        uint64_t uv_run_leave;
+        uint64_t sleep_enter;
+        uint64_t sleep_leave;
+    )
 };
 
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`

@@ -1980,9 +1980,7 @@ mktempdir() do dir
                 mygit_cred = GitCredential("https", "mygithost")
 
                 @test LibGit2.credential_helpers(cfg, github_cred) == expected
-
-                println(stderr, "The following 'Resetting the helper list...' warning is expected:")
-                @test_broken LibGit2.credential_helpers(cfg, mygit_cred) == expected[2]
+                @test LibGit2.credential_helpers(cfg, mygit_cred) == expected[2:2]
 
                 Base.shred!(github_cred)
                 Base.shred!(mygit_cred)
@@ -2879,7 +2877,7 @@ mktempdir() do dir
             Base.shred!(valid_cred)
         end
 
-        # A hypothetical scenario where the the allowed authentication can either be
+        # A hypothetical scenario where the allowed authentication can either be
         # SSH or username/password.
         @testset "SSH & HTTPS authentication" begin
             allowed_types = Cuint(LibGit2.Consts.CREDTYPE_SSH_KEY) |

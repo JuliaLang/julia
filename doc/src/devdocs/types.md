@@ -236,14 +236,11 @@ MyType{Int64,2}
 
 julia> MyType{Float32, 5}
 MyType{Float32,5}
-
-julia> MyType.body.body.name.cache
-svec(MyType{Int64,2}, MyType{Float32,5}, #undef, #undef, #undef, #undef, #undef, #undef)
 ```
 
-(The cache is pre-allocated to have length 8, but only the first two entries are populated.) Consequently,
-when you instantiate a parametric type, each concrete type gets saved in a type cache.  However,
-instances containing free type variables are not cached.
+When you instantiate a parametric type, each concrete type gets saved in a type
+cache (`MyType.body.body.name.cache`). However, instances containing free type
+variables are not cached.
 
 ## Tuple types
 

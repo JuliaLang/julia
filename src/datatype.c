@@ -73,6 +73,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->names = NULL;
     tn->hash = bitmix(bitmix(module ? module->build_id : 0, name->hash), 0xa1ada1da);
     tn->mt = NULL;
+    tn->partial = NULL;
     return tn;
 }
 
@@ -87,6 +88,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_datatype_t *t = (jl_datatype_t*)jl_gc_alloc(ptls, sizeof(jl_datatype_t), jl_datatype_type);
+    t->hash = 0;
     t->hasfreetypevars = 0;
     t->isdispatchtuple = 0;
     t->isbitstype = 0;
@@ -105,6 +107,8 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
                                            jl_fielddesc32_t desc[],
                                            uint32_t pointers[]) JL_NOTSAFEPOINT
 {
+    assert(alignment); // should have been verified by caller
+
     // compute the smallest fielddesc type that can hold the layout description
     int fielddesc_type = 0;
     if (nfields > 0) {
@@ -191,7 +195,7 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
 {
     if (!jl_is_vecelement_type(t))
         return 0;
-    assert(jl_datatype_nfields(t)==1);
+    assert(jl_datatype_nfields(t) == 1);
     jl_value_t *ty = jl_field_type((jl_datatype_t*)t, 0);
     if (!jl_is_primitivetype(ty))
         // LLVM requires that a vector element be a primitive type.
@@ -199,22 +203,18 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
         // motivating use case comes up for Julia, we reject pointers.
         return 0;
     size_t elsz = jl_datatype_size(ty);
-    if (elsz>8 || (1<<elsz & 0x116) == 0)
-        // Element size is not 1, 2, 4, or 8.
+    if (elsz != 1 && elsz != 2 && elsz != 4 && elsz != 8)
+        // Only handle power-of-two-sized elements (for now)
         return 0;
-    size_t size = nfields*elsz;
-    // LLVM's alignment rule for vectors seems to be to round up to
-    // a power of two, even if that's overkill for the target hardware.
-    size_t alignment=1;
-    for( ; size>alignment; alignment*=2 )
-        continue;
-    return alignment;
+    size_t size = nfields * elsz;
+    // Use natural alignment for this vector: this matches LLVM and clang.
+    return next_power_of_two(size);
 }
 
 STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
 {
     return (!d->abstract && jl_datatype_size(d) == 0 && d != jl_symbol_type && d->name != jl_array_typename &&
-            d->uid != 0 && !d->mutabl);
+            d->isconcretetype && !d->mutabl);
 }
 
 STATIC_INLINE void jl_maybe_allocate_singleton_instance(jl_datatype_t *st)
@@ -280,25 +280,25 @@ int jl_pointer_egal(jl_value_t *t)
     return 0;
 }
 
-static int references_name(jl_value_t *p, jl_typename_t *name) JL_NOTSAFEPOINT
+static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout) JL_NOTSAFEPOINT
 {
     if (jl_is_uniontype(p))
-        return references_name(((jl_uniontype_t*)p)->a, name) ||
-               references_name(((jl_uniontype_t*)p)->b, name);
+        return references_name(((jl_uniontype_t*)p)->a, name, affects_layout) ||
+               references_name(((jl_uniontype_t*)p)->b, name, affects_layout);
     if (jl_is_unionall(p))
-        return references_name((jl_value_t*)((jl_unionall_t*)p)->var, name) ||
-               references_name(((jl_unionall_t*)p)->body, name);
+        return references_name((jl_value_t*)((jl_unionall_t*)p)->var, name, 0) ||
+               references_name(((jl_unionall_t*)p)->body, name, affects_layout);
     if (jl_is_typevar(p))
-        return references_name(((jl_tvar_t*)p)->ub, name) ||
-               references_name(((jl_tvar_t*)p)->lb, name);
+        return references_name(((jl_tvar_t*)p)->ub, name, 0) ||
+               references_name(((jl_tvar_t*)p)->lb, name, 0);
     if (jl_is_datatype(p)) {
-        if (((jl_datatype_t*)p)->name == name)
+        jl_datatype_t *dp = (jl_datatype_t*)p;
+        if (affects_layout && dp->name == name)
             return 1;
-        if (((jl_datatype_t*)p)->layout && jl_datatype_nfields(p) == 0)
-            return 0;
+        affects_layout = dp->types == NULL || jl_svec_len(dp->types) != 0;
         size_t i, l = jl_nparams(p);
         for (i = 0; i < l; i++) {
-            if (references_name(jl_tparam(p, i), name))
+            if (references_name(jl_tparam(p, i), name, affects_layout))
                 return 1;
         }
     }
@@ -317,7 +317,9 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     const uint64_t max_offset = (((uint64_t)1) << 32) - 1;
     const uint64_t max_size = max_offset >> 1;
 
-    if (st->types == NULL || st->name->wrapper == NULL || (jl_is_namedtuple_type(st) && !jl_is_concrete_type((jl_value_t*)st)))
+    if (st->types == NULL || st->name->wrapper == NULL)
+        return;
+    if ((jl_is_tuple_type(st) || jl_is_namedtuple_type(st)) && !jl_is_concrete_type((jl_value_t*)st))
         return;
     jl_datatype_t *w = (jl_datatype_t*)jl_unwrap_unionall(st->name->wrapper);
     if (w->types == NULL) // we got called too early--we'll be back
@@ -389,7 +391,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         size_t i, nf = jl_svec_len(w->types);
         for (i = 0; i < nf; i++) {
             jl_value_t *fld = jl_svecref(w->types, i);
-            if (references_name(fld, w->name)) {
+            if (references_name(fld, w->name, 1)) {
                 isinlinealloc = 0;
                 isbitstype = 0;
                 break;
@@ -452,7 +454,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     haspadding = 1;
                 }
             }
-            assert(al <= JL_HEAP_ALIGNMENT && (JL_HEAP_ALIGNMENT % al) == 0);
             if (al != 0) {
                 size_t alsz = LLT_ALIGN(sz, al);
                 if (sz & (al - 1))
@@ -472,10 +473,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             // Some tuples become LLVM vectors with stronger alignment than what was calculated above.
             unsigned al = jl_special_vector_alignment(nfields, firstty);
             assert(al % alignm == 0);
-            // JL_HEAP_ALIGNMENT is the biggest alignment we can guarantee on the heap.
-            if (al > JL_HEAP_ALIGNMENT)
-                alignm = JL_HEAP_ALIGNMENT;
-            else if (al)
+            if (al > alignm)
                 alignm = al;
         }
         st->size = LLT_ALIGN(sz, alignm);
@@ -509,11 +507,10 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     // now finish deciding if this instantiation qualifies for special properties
     assert(!isbitstype || st->layout->npointers == 0); // the definition of isbits
     if (isinlinealloc && st->layout->npointers > 0) {
-        //if (st->ninitialized != nfields)
-        //    isinlinealloc = 0;
-        //else if (st->layout->fielddesc_type != 0) // GC only implements support for this
-        //    isinlinealloc = 0;
-        isinlinealloc = 0;
+        if (st->ninitialized != nfields)
+            isinlinealloc = 0;
+        else if (st->layout->fielddesc_type != 0) // GC only implements support for this
+            isinlinealloc = 0;
     }
     st->isbitstype = isbitstype;
     st->isinlinealloc = isinlinealloc;
@@ -557,8 +554,6 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     t->mutabl = mutabl;
     t->ninitialized = ninitialized;
     t->instance = NULL;
-    t->struct_decl = NULL;
-    t->ditype = NULL;
     t->size = 0;
 
     t->name = NULL;
@@ -589,21 +584,17 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     if (t->name->wrapper == NULL) {
         t->name->wrapper = (jl_value_t*)t;
         jl_gc_wb(t->name, t);
-        int i;
-        int np = jl_svec_len(parameters);
-        for (i=np-1; i >= 0; i--) {
-            t->name->wrapper = jl_new_struct(jl_unionall_type, jl_svecref(parameters,i), t->name->wrapper);
+        int i, np = jl_svec_len(parameters);
+        for (i = np - 1; i >= 0; i--) {
+            t->name->wrapper = jl_new_struct(jl_unionall_type, jl_svecref(parameters, i), t->name->wrapper);
             jl_gc_wb(t->name, t->name->wrapper);
         }
     }
-    jl_precompute_memoized_dt(t);
+    jl_precompute_memoized_dt(t, 0);
 
-    t->uid = 0;
-    if (!abstract) {
-        if (jl_svec_len(parameters) == 0)
-            t->uid = jl_assign_type_uid();
+    if (!abstract)
         jl_compute_field_offsets(t);
-    }
+
     JL_GC_POP();
     return t;
 }
@@ -896,19 +887,10 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
 
 static void init_struct_tail(jl_datatype_t *type, jl_value_t *jv, size_t na)
 {
-    size_t nf = jl_datatype_nfields(type);
-    char *data = (char*)jl_data_ptr(jv);
-    for (size_t i = na; i < nf; i++) {
-        if (jl_field_isptr(type, i)) {
-            *(jl_value_t**)(data + jl_field_offset(type, i)) = NULL;
-        }
-        else {
-            jl_value_t *ft = jl_field_type(type, i);
-            if (jl_is_uniontype(ft)) {
-                uint8_t *psel = &((uint8_t *)data)[jl_field_offset(type, i) + jl_field_size(type, i) - 1];
-                *psel = 0;
-            }
-        }
+    if (na < jl_datatype_nfields(type)) {
+        char *data = (char*)jl_data_ptr(jv);
+        size_t offs = jl_field_offset(type, na);
+        memset(data + offs, 0, jl_datatype_size(type) - offs);
     }
 }
 

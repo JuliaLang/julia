@@ -153,7 +153,7 @@ function evalpoly(z::Complex, p::Tuple)
             ai = Symbol("a", i)
             push!(as, :($ai = $a))
             a = :(muladd(r, $ai, $b))
-            b = :(p[$i] - s * $ai)
+            b = :(muladd(-s, $ai, p[$i]))
         end
         ai = :a0
         push!(as, :($ai = $a))
@@ -186,7 +186,7 @@ function _evalpoly(z::Complex, p)
     for i in N-2:-1:1
         ai = a
         a = muladd(r, ai, b)
-        b = p[i] - s * ai
+        b = muladd(-s, ai, p[i])
     end
     ai = a
     muladd(ai, z, b)
@@ -629,9 +629,19 @@ julia> hypot(3, 4im)
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
 hypot(x::Complex, y::Complex) = hypot(abs(x), abs(y))
 hypot(x::T, y::T) where {T<:Real} = hypot(float(x), float(y))
-hypot(x::T, y::T) where {T<:Number} = (z = y/x; abs(x) * sqrt(one(z) + z*z))
+function hypot(x::T, y::T) where {T<:Number}
+    if !iszero(x)
+        z = y/x
+        z2 = z*z
+
+        abs(x) * sqrt(oneunit(z2) + z2)
+    else
+        abs(y)
+    end
+end
+
 function hypot(x::T, y::T) where T<:AbstractFloat
-    #Return Inf if either or both imputs is Inf (Compliance with IEEE754)
+    # Return Inf if either or both inputs is Inf (Compliance with IEEE754)
     if isinf(x) || isinf(y)
         return T(Inf)
     end

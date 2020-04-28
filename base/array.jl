@@ -332,7 +332,6 @@ copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, leng
 # N.B: The generic definition in multidimensional.jl covers, this, this is just here
 # for bootstrapping purposes.
 function fill!(dest::Array{T}, x) where T
-    @_noinline_meta
     xT = convert(T, x)
     for i in eachindex(dest)
         @inbounds dest[i] = xT
@@ -697,7 +696,8 @@ end
 function setindex_widen_up_to(dest::AbstractArray{T}, el, i) where T
     @_inline_meta
     new = similar(dest, promote_typejoin(T, typeof(el)))
-    copyto!(new, firstindex(new), dest, firstindex(dest), i-1)
+    f = first(LinearIndices(dest))
+    copyto!(new, first(LinearIndices(new)), dest, f, i-f)
     @inbounds new[i] = el
     return new
 end
@@ -1129,6 +1129,22 @@ function pop!(a::Vector)
     return item
 end
 
+function pop!(a::Vector, i::Integer)
+    x = a[i]
+    _deleteat!(a, i, 1)
+    x
+end
+
+function pop!(a::Vector, i::Integer, default)
+    if 1 <= i <= length(a)
+        x = @inbounds a[i]
+        _deleteat!(a, i, 1)
+        x
+    else
+        default
+    end
+end
+
 """
     pushfirst!(collection, items...) -> collection
 
@@ -1274,12 +1290,16 @@ Stacktrace:
 deleteat!(a::Vector, inds) = _deleteat!(a, inds)
 deleteat!(a::Vector, inds::AbstractVector) = _deleteat!(a, to_indices(a, (inds,))[1])
 
-function _deleteat!(a::Vector, inds)
+struct Nowhere; end
+push!(::Nowhere, _) = nothing
+
+function _deleteat!(a::Vector, inds, dltd=Nowhere())
     n = length(a)
     y = iterate(inds)
     y === nothing && return a
     n == 0 && throw(BoundsError(a, inds))
     (p, s) = y
+    p <= n && push!(dltd, @inbounds a[p])
     q = p+1
     while true
         y = iterate(inds, s)
@@ -1296,6 +1316,7 @@ function _deleteat!(a::Vector, inds)
             @inbounds a[p] = a[q]
             p += 1; q += 1
         end
+        push!(dltd, @inbounds a[i])
         q = i+1
     end
     while q <= n
@@ -1389,21 +1410,24 @@ function splice!(a::Vector, i::Integer, ins=_default_splice)
 end
 
 """
-    splice!(a::Vector, range, [replacement]) -> items
+    splice!(a::Vector, indices, [replacement]) -> items
 
-Remove items in the specified index range, and return a collection containing
+Remove items at specified indices, and return a collection containing
 the removed items.
-Subsequent items are shifted left to fill the resulting gap.
+Subsequent items are shifted left to fill the resulting gaps.
 If specified, replacement values from an ordered collection will be spliced in
-place of the removed items.
+place of the removed items; in this case, `indices` must be a `UnitRange`.
 
 To insert `replacement` before an index `n` without removing any items, use
 `splice!(collection, n:n-1, replacement)`.
 
+!!! compat "Julia 1.5"
+    Prior to Julia 1.5, `indices` must always be a `UnitRange`.
+
 # Examples
 ```jldoctest
 julia> A = [-1, -2, -3, 5, 4, 3, -1]; splice!(A, 4:3, 2)
-0-element Array{Int64,1}
+Int64[]
 
 julia> A
 8-element Array{Int64,1}:
@@ -1444,6 +1468,8 @@ function splice!(a::Vector, r::UnitRange{<:Integer}, ins=_default_splice)
     end
     return v
 end
+
+splice!(a::Vector, inds) = (dltds = eltype(a)[]; _deleteat!(a, inds, dltds); dltds)
 
 function empty!(a::Vector)
     _deleteend!(a, length(a))
@@ -1643,7 +1669,7 @@ CartesianIndex(2, 1)
 """
 function findnext(A, start)
     l = last(keys(A))
-    i = start
+    i = oftype(l, start)
     i > l && return nothing
     while true
         A[i] && return i
@@ -1725,7 +1751,7 @@ CartesianIndex(1, 1)
 """
 function findnext(testf::Function, A, start)
     l = last(keys(A))
-    i = start
+    i = oftype(l, start)
     i > l && return nothing
     while true
         testf(A[i]) && return i
@@ -1782,6 +1808,12 @@ end
 findfirst(testf::Function, A::Union{AbstractArray, AbstractString}) =
     findnext(testf, A, first(keys(A)))
 
+findfirst(p::Union{Fix2{typeof(isequal),Int},Fix2{typeof(==),Int}}, r::OneTo{Int}) =
+    1 <= p.x <= r.stop ? p.x : nothing
+
+findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange) where {T<:Integer} =
+    first(r) <= p.x <= last(r) ? 1+Int(p.x - first(r)) : nothing
+
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
@@ -1823,8 +1855,8 @@ CartesianIndex(2, 1)
 ```
 """
 function findprev(A, start)
-    i = start
     f = first(keys(A))
+    i = oftype(f, start)
     i < f && return nothing
     while true
         A[i] && return i
@@ -1914,8 +1946,8 @@ CartesianIndex(2, 1)
 ```
 """
 function findprev(testf::Function, A, start)
-    i = start
     f = first(keys(A))
+    i = oftype(f, start)
     i < f && return nothing
     while true
         testf(A[i]) && return i
@@ -2057,7 +2089,7 @@ julia> findall(A)
  CartesianIndex(2, 2)
 
 julia> findall(falses(3))
-0-element Array{Int64,1}
+Int64[]
 ```
 """
 function findall(A)
@@ -2347,10 +2379,13 @@ end
 ## Filter ##
 
 """
-    filter(f, a::AbstractArray)
+    filter(f, a)
 
-Return a copy of `a`, removing elements for which `f` is `false`.
+Return a copy of collection `a`, removing elements for which `f` is `false`.
 The function `f` is passed one argument.
+
+!!! compat "Julia 1.4"
+    Support for `a` as a tuple requires at least Julia 1.4.
 
 # Examples
 ```jldoctest
@@ -2396,9 +2431,9 @@ function filter(f, a::AbstractArray)
 end
 
 """
-    filter!(f, a::AbstractVector)
+    filter!(f, a)
 
-Update `a`, removing elements for which `f` is `false`.
+Update collection `a`, removing elements for which `f` is `false`.
 The function `f` is passed one argument.
 
 # Examples

@@ -679,10 +679,10 @@ Create an empty vector similar to `v`, optionally changing the `eltype`.
 
 ```jldoctest
 julia> empty([1.0, 2.0, 3.0])
-0-element Array{Float64,1}
+Float64[]
 
 julia> empty([1.0, 2.0, 3.0], String)
-0-element Array{String,1}
+String[]
 ```
 """
 empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
@@ -2157,7 +2157,11 @@ julia> a
  6.0
 ```
 """
-map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F} = map_n!(f, dest, As)
+function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
+    isempty(As) && throw(ArgumentError(
+        """map! requires at least one "source" argument"""))
+    map_n!(f, dest, As)
+end
 
 map(f) = f()
 map(f, iters...) = collect(Generator(f, iters...))
@@ -2204,6 +2208,7 @@ function hash(A::AbstractArray, h::UInt)
     keyidx = last(ks)
     linidx = key_to_linear[keyidx]
     fibskip = prevfibskip = oneunit(linidx)
+    first_linear = first(LinearIndices(linear_to_key))
     n = 0
     while true
         n += 1
@@ -2213,7 +2218,7 @@ function hash(A::AbstractArray, h::UInt)
 
         # Skip backwards a Fibonacci number of indices -- this is a linear index operation
         linidx = key_to_linear[keyidx]
-        linidx <= fibskip && break
+        linidx < fibskip + first_linear && break
         linidx -= fibskip
         keyidx = linear_to_key[linidx]
 

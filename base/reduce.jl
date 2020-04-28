@@ -178,8 +178,11 @@ foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 
 function mapfoldr_impl(f, op, nt, itr)
     op′, itr′ = _xfadjoint(BottomRF(FlipArgs(op)), Generator(f, itr))
-    return foldl_impl(op′, nt, Iterators.reverse(itr′))
+    return foldl_impl(op′, nt, _reverse(itr′))
 end
+
+_reverse(itr) = Iterators.reverse(itr)
+_reverse(itr::Tuple) = reverse(itr)  #33235
 
 struct FlipArgs{F}
     f::F
