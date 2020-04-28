@@ -842,6 +842,7 @@ adopted by C and Python (`numpy`) among other languages. Remembering the orderin
 have significant performance effects when looping over arrays. A rule of thumb to keep in mind
 is that with column-major arrays, the first index changes most rapidly. Essentially this means
 that looping will be faster if the inner-most loop index is the first to appear in a slice expression.
+Keep in mind that indexing an array with `:` is an implicit loop that iteratively accesses all elements within a particular dimension; it can be faster to extract columns than rows, for example.
 
 Consider the following contrived example. Imagine we wanted to write a function that accepts a
 [`Vector`](@ref) and returns a square [`Matrix`](@ref) with either the rows or the columns filled with copies
