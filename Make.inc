@@ -686,10 +686,10 @@ override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
 else
 ifneq ($(XC_HOST),)
 XC_HOST := $(ARCH)$(shell echo $(XC_HOST) | sed "s/[^-]*\(.*\)$$/\1/")
-ifneq ($(findstring arm, $(ARCH)),)
-MARCH := $(subst _,-,$(ARCH))
-else
+ifneq (,$(filter ,$(findstring arm, $(ARCH)) $(findstring aarch64, $(ARCH))))
 MCPU := $(subst _,-,$(ARCH)) # Arm prefers MCPU over MARCH
+else
+MARCH := $(subst _,-,$(ARCH))
 endif
 else # insert ARCH into HOST
 XC_HOST := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
