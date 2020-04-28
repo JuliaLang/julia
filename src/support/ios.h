@@ -20,7 +20,7 @@ typedef enum { bm_none=UV_HANDLE_TYPE_MAX+1, bm_line, bm_block, bm_mem } bufmode
 typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 
 #define IOS_INLSIZE 54
-#define IOS_BUFSIZE 131072
+#define IOS_BUFSIZE 32768
 
 #ifdef _P64
 #define ON_P64(x) x
