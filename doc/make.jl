@@ -75,7 +75,6 @@ const PAGES = [
         "manual/parallel-computing.md",
         "manual/asynchronous-programming.md",
         "manual/multi-threading.md",
-        "manual/asynchronous-programming.md",
         "manual/distributed-computing.md",
         "manual/running-external-programs.md",
         "manual/calling-c-and-fortran-code.md",
