@@ -176,6 +176,14 @@ end
     v = [1,2]
     @test_throws ErrorException v ⊗ v'
     @test_throws ErrorException v ⊗ transpose(v)
+    @test_throws ErrorException v' ⊗ v
+    @test_throws ErrorException transpose(v) ⊗ v
+    @test_throws ErrorException v' ⊗ v'
+    @test_throws ErrorException transpose(v) ⊗ transpose(v)
+    @test_throws ErrorException v' ⊗ transpose(v)
+    @test_throws ErrorException transpose(v) ⊗ v'
+    @test_throws ErrorException A ⊗ v'
+    @test_throws ErrorException A ⊗ transpose(v)
 
     # Docs comparison to `kron`
     v, w = [1,2,3], [5,7]

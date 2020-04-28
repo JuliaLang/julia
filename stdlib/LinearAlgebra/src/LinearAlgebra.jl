@@ -474,11 +474,18 @@ See also: [`kron`](@ref).
 tensor(A::AbstractArray, B::AbstractArray) = [a*b for a in A, b in B]
 const ⊗ = tensor
 
-function tensor(u::AbstractVector, v::Adjoint{T,<:AbstractVector}) where T
-    error("`u ⊗ v'` is not defined, perhaps you meant `u * v'` or `u * transpose(v)`")
+const CovectorLike{T} = Union{Adjoint{T,<:AbstractVector},Transpose{T,<:AbstractVector}}
+function tensor(u::AbstractArray, v::CovectorLike)
+    # If `v` is thought of as a covector, you might want this to be two-dimensional,
+    # but thought of as a matrix it should be three-dimensional.
+    # The safest is to avoid supporting it at all. See discussion in #35150.
+    error("`u ⊗ v` is not defined for co-vectors, perhaps you meant `*`?")
 end
-function tensor(u::AbstractVector, v::Transpose{T,<:AbstractVector}) where T
-    error("`u ⊗ v'` is not defined, perhaps you meant `u * v'` or `u * transpose(v)`")
+function tensor(u::CovectorLike, v::AbstractArray)
+    error("`u ⊗ v` is not defined for co-vectors, perhaps you meant `*`?")
+end
+function tensor(u::CovectorLike, v::CovectorLike)
+    error("`u ⊗ v` is not defined for co-vectors, perhaps you meant `*`?")
 end
 
 """
