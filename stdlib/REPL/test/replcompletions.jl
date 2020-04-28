@@ -101,11 +101,6 @@ test_scomplete(s) =  map_completion_text(shell_completions(s,lastindex(s)))
 test_bslashcomplete(s) =  map_completion_text(bslash_completions(s,lastindex(s))[2])
 test_complete_context(s) =  map_completion_text(completions(s,lastindex(s),Main.CompletionFoo))
 
-# Compare ranges by comparing their `first` and `last` elements and their `length`. This
-# returns `false` if empty ranges have different startpoints.
-==ᵣ(r::AbstractRange, s::AbstractRange) =
-    (first(r) == first(s)) & (length(r) == length(s)) & (last(r) == last(s))
-
 let s = ""
     c, r = test_complete(s)
     @test "CompletionFoo" in c
@@ -137,7 +132,7 @@ end
 let s = "Main.CompletionFoo."
     c, r = test_complete(s)
     @test "bar" in c
-    @test r ==ᵣ 20:19
+    @test r === UnitRange{Int64}(20:19)
     @test s[r] == ""
 end
 
@@ -600,7 +595,7 @@ end
 let c, r, res
     c, r, res = test_scomplete("\$a")
     @test c == String[]
-    @test r ==ᵣ 0:-1
+    @test r === UnitRange{Int64}(0:-1)
     @test res === false
 end
 
@@ -650,7 +645,7 @@ let s, c, r
         s = "/tmp/"
         c,r = test_scomplete(s)
         @test !("tmp/" in c)
-        @test r ==ᵣ 6:5
+        @test r === UnitRange{Int64}(6:5)
         @test s[r] == ""
     end
 
@@ -667,7 +662,7 @@ let s, c, r
         file = joinpath(path, "repl completions")
         s = "/tmp "
         c,r = test_scomplete(s)
-        @test r ==ᵣ 6:5
+        @test r === UnitRange{Int64}(6:5)
     end
 
     # Test completing paths with an escaped trailing space
@@ -981,7 +976,7 @@ end
 let s = ""
     c, r = test_complete_context(s)
     @test "bar" in c
-    @test r ==ᵣ 1:0
+    @test r === UnitRange{Int64}(1:0)
     @test s[r] == ""
 end
 

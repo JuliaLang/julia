@@ -7,11 +7,6 @@ using Dates
 
 using InteractiveUtils: subtypes
 
-# Compare ranges by comparing their `first` and `last` elements and their `length`. This
-# returns `false` if empty ranges have different startpoints.
-==ᵣ(r::AbstractRange, s::AbstractRange) =
-    (first(r) == first(s)) & (length(r) == length(s)) & (last(r) == last(s))
-
 let
     for T in (Dates.Date, Dates.DateTime)
         f1 = T(2014); l1 = T(2013, 12, 31)
@@ -40,7 +35,7 @@ let
                 @test first(reverse(dr)) < f1
                 @test last(reverse(dr)) >= f1
                 @test issorted(dr)
-                @test sortperm(dr) ==ᵣ 1:1:0
+                @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                 @test !(f1 in dr)
                 @test !(l1 in dr)
                 @test !(f1 - pos_step in dr)
@@ -98,7 +93,7 @@ let
                 @test first(reverse(dr)) > l1
                 @test last(reverse(dr)) <= l1
                 @test issorted(dr)
-                @test sortperm(dr) ==ᵣ 1:1:0
+                @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                 @test !(l1 in dr)
                 @test !(l1 in dr)
                 @test !(l1 - neg_step in dr)
@@ -158,7 +153,7 @@ let
                     @test first(reverse(dr)) < f1
                     @test last(reverse(dr)) >= f1
                     @test issorted(dr)
-                    @test sortperm(dr) ==ᵣ 1:1:0
+                    @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                     @test !(f1 in dr)
                     @test !(l1 in dr)
                     @test !(f1 - pos_step in dr)
@@ -216,7 +211,7 @@ let
                     @test first(reverse(dr)) > l1
                     @test last(reverse(dr)) <= l1
                     @test issorted(dr)
-                    @test sortperm(dr) ==ᵣ 1:1:0
+                    @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                     @test !(l1 in dr)
                     @test !(l1 in dr)
                     @test !(l1 - neg_step in dr)

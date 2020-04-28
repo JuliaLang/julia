@@ -77,12 +77,6 @@ end
     @test_throws ArgumentError partialsortperm!([1,2], [2,3,1], 1:2)
 end
 
-# Compare ranges by comparing their `first` and `last` elements and their `length`. This
-# returns `false` if empty ranges have different startpoints, which is relevant for
-# `searchsorted`
-==ᵣ(r::AbstractRange, s::AbstractRange) =
-    (first(r) == first(s)) & (length(r) == length(s)) & (last(r) == last(s))
-
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
                 UInt8, UInt16, UInt32, UInt64, UInt128,
@@ -100,10 +94,10 @@ end
         @test searchsorted(R[1, 1, 2, 2, 3, 3], T(4)) === 7:6
         @test searchsorted(R[1, 1, 2, 2, 3, 3], 2.5) === 5:4
 
-        @test searchsorted(1:3, T(0)) ==ᵣ 1:0
+        @test searchsorted(1:3, T(0)) === 1:0
         @test searchsorted(1:3, T(1)) == 1:1
         @test searchsorted(1:3, T(2)) == 2:2
-        @test searchsorted(1:3, T(4)) ==ᵣ 4:3
+        @test searchsorted(1:3, T(4)) === 4:3
 
         @test searchsorted(R[1:10;], T(1), by=(x -> x >= 5)) == 1:4
         @test searchsorted(R[1:10;], T(10), by=(x -> x >= 5)) == 5:10
