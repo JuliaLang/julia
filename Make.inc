@@ -686,7 +686,7 @@ override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
 else
 ifneq ($(XC_HOST),)
 XC_HOST := $(ARCH)$(shell echo $(XC_HOST) | sed "s/[^-]*\(.*\)$$/\1/")
-ifneq (,$(filter ,$(findstring arm, $(ARCH)) $(findstring aarch64, $(ARCH))))
+ifneq ($(findstring arm, $(ARCH))$(findstring aarch64, $(ARCH)),)
 MCPU := $(subst _,-,$(ARCH)) # Arm prefers MCPU over MARCH
 else
 MARCH := $(subst _,-,$(ARCH))
@@ -819,14 +819,12 @@ OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV8
 endif
 
-do_step =
 # Set MARCH-specific flags
 ifneq ($(MARCH),)
 CC += -march=$(MARCH)
 CXX += -march=$(MARCH)
 FC += -march=$(MARCH)
 JULIA_CPU_TARGET ?= $(MARCH)
-do_step = yes
 endif
 
 # Set MCPU-specific flags
@@ -835,10 +833,9 @@ CC += -mcpu=$(MCPU)
 CXX += -mcpu=$(MCPU)
 FC += -mcpu=$(MCPU)
 JULIA_CPU_TARGET ?= $(MCPU)
-do_step = yes
 endif
 
-ifdef do_step
+ifneq ($(MARCH)$(MCPU),)
 ifeq ($(OS),Darwin)
 # on Darwin, the standalone `as` program doesn't know
 # how to handle AVX instructions, but it does know how
