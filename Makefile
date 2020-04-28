@@ -192,6 +192,7 @@ $(eval $(call register_private_lib,OPENBLAS,$(LIBBLASNAME)))
 ifneq ($(LIBLAPACKNAME),$(LIBBLASNAME))
 $(eval $(call register_private_lib,LAPACK,$(LIBLAPACKNAME)))
 endif
+$(eval $(call register_private_lib,CSL,libgcc_s))
 
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
