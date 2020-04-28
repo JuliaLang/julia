@@ -321,6 +321,7 @@ LinearAlgebra.PosDefException
 LinearAlgebra.ZeroPivotException
 LinearAlgebra.dot
 LinearAlgebra.cross
+LinearAlgebra.hadamard
 LinearAlgebra.tensor
 LinearAlgebra.factorize
 LinearAlgebra.Diagonal
@@ -475,6 +476,7 @@ LinearAlgebra.lmul!
 LinearAlgebra.rmul!
 LinearAlgebra.ldiv!
 LinearAlgebra.rdiv!
+LinearAlgebra.hadamard!
 LinearAlgebra.tensor!
 ```
 

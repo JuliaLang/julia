@@ -392,8 +392,9 @@ export ⋅, ×
     hadamard(a, b)
     a ⊙ b
 
-Elementwise multiplication of `a` and `b`. This yields the same result as `map(*, a, b)`
-if `a` and `b` have the same axes, and throws an error otherwise.
+For arrays `a` and `b`, perform elementwise multiplication.
+`a` and `b` must have identical `axes`.
+When either `a` or `b` is not an array, `hadamard(a, b)` defaults to `a*b`.
 
 `⊙` can be passed as an operator to higher-order functions.
 
@@ -479,13 +480,13 @@ function tensor(u::AbstractArray, v::CovectorLike)
     # If `v` is thought of as a covector, you might want this to be two-dimensional,
     # but thought of as a matrix it should be three-dimensional.
     # The safest is to avoid supporting it at all. See discussion in #35150.
-    error("`u ⊗ v` is not defined for co-vectors, perhaps you meant `*`?")
+    error("`tensor` is not defined for co-vectors, perhaps you meant `*`?")
 end
 function tensor(u::CovectorLike, v::AbstractArray)
-    error("`u ⊗ v` is not defined for co-vectors, perhaps you meant `*`?")
+    error("`tensor` is not defined for co-vectors, perhaps you meant `*`?")
 end
 function tensor(u::CovectorLike, v::CovectorLike)
-    error("`u ⊗ v` is not defined for co-vectors, perhaps you meant `*`?")
+    error("`tensor` is not defined for co-vectors, perhaps you meant `*`?")
 end
 
 """
