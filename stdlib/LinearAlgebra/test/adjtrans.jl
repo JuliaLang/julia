@@ -501,10 +501,10 @@ end
     @test strides(Transpose(rand(3, 2) .+ rand(3, 2).*im)) == (3, 1)
 
     C = rand(3) .+ rand(3).*im
-    @test_throws MethodError pointer(Adjoint(C))
+    @test_throws ErrorException pointer(Adjoint(C))
     @test pointer(Transpose(C)) === pointer(C)
     D = rand(3,2) .+ rand(3,2).*im
-    @test_throws MethodError pointer(Adjoint(D))
+    @test_throws ErrorException pointer(Adjoint(D))
     @test pointer(Transpose(D)) === pointer(D)
 end
 
