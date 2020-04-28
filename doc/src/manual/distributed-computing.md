@@ -1,4 +1,4 @@
-# Multi-core and Distributed Processing
+# Multi-process and Distributed Processing
 
 An implementation of distributed memory parallel computing is provided by module `Distributed`
 as part of the standard library shipped with Julia.
