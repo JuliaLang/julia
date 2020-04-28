@@ -117,13 +117,15 @@ export
     Cwstring,
 
 # Exceptions
-    DimensionMismatch,
     CapturedException,
     CompositeException,
+    DimensionMismatch,
     EOFError,
     InvalidStateException,
     KeyError,
     MissingException,
+    ProcessFailedException,
+    TaskFailedException,
     SystemError,
     StringIndexError,
 
@@ -194,6 +196,7 @@ export
 
 # scalar math
     @evalpoly,
+    evalpoly,
     abs,
     abs2,
     acos,
@@ -217,6 +220,8 @@ export
     atanh,
     big,
     binomial,
+    bitreverse,
+    bitrotate,
     bswap,
     cbrt,
     ceil,
@@ -323,6 +328,7 @@ export
     sin,
     sinc,
     sincos,
+    sincosd,
     sind,
     sinh,
     sinpi,
@@ -365,7 +371,10 @@ export
     cumsum!,
     accumulate,
     accumulate!,
+    eachcol,
     eachindex,
+    eachrow,
+    eachslice,
     extrema,
     fill!,
     fill,
@@ -430,6 +439,7 @@ export
     zeros,
 
 # search, find, match and related functions
+    contains,
     eachmatch,
     endswith,
     findall,
@@ -495,6 +505,7 @@ export
     in,
     intersect!,
     intersect,
+    isdisjoint,
     isempty,
     issubset,
     issetequal,
@@ -507,7 +518,9 @@ export
     mapfoldr,
     mapreduce,
     merge!,
+    mergewith!,
     merge,
+    mergewith,
     pairs,
     reduce,
     setdiff!,
@@ -622,6 +635,7 @@ export
 
     enumerate,  # re-exported from Iterators
     zip,
+    only,
 
 # object identity and equality
     copy,
@@ -630,7 +644,7 @@ export
     identity,
     isbits,
     isequal,
-    isimmutable,
+    ismutable,
     isless,
     ifelse,
     objectid,
@@ -642,6 +656,7 @@ export
     islocked,
     istaskdone,
     istaskstarted,
+    istaskfailed,
     lock,
     notify,
     ReentrantLock,
@@ -669,6 +684,8 @@ export
     missing,
     skipmissing,
     something,
+    isnothing,
+    nonmissingtype,
 
 # time
     sleep,
@@ -679,8 +696,10 @@ export
     backtrace,
     catch_backtrace,
     error,
+    register_error_hint,
     rethrow,
     retry,
+    show_error_hints,
     systemerror,
 
 # stack traces
@@ -694,7 +713,10 @@ export
     fieldname,
     fieldnames,
     fieldcount,
+    fieldtypes,
+    hasfield,
     propertynames,
+    hasproperty,
     isabstracttype,
     isbitstype,
     isprimitivetype,
@@ -731,6 +753,7 @@ export
     nameof,
     parentmodule,
     pathof,
+    pkgdir,
     names,
     which,
     @isdefined,
@@ -891,6 +914,7 @@ export
 
 # C interface
     @cfunction,
+    @ccall,
     cglobal,
     disable_sigint,
     pointer,
@@ -924,6 +948,7 @@ export
     @s_str,    # regex substitution string
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
+    @NamedTuple,
 
     # documentation
     @text_str,

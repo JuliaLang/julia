@@ -4,11 +4,15 @@
 #undef DEBUG
 #include "llvm-version.h"
 
+#include <llvm-c/Core.h>
+#include <llvm-c/Types.h>
+
 #include <llvm/ADT/SmallSet.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/CFG.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -19,6 +23,10 @@
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/PromoteMemToReg.h>
+
+#if JL_LLVM_VERSION >= 100000
+#include <llvm/InitializePasses.h>
+#endif
 
 #include "codegen_shared.h"
 #include "julia.h"
@@ -67,8 +75,13 @@ static bool hasObjref(Type *ty)
 {
     if (auto ptrty = dyn_cast<PointerType>(ty))
         return ptrty->getAddressSpace() == AddressSpace::Tracked;
+#if JL_LLVM_VERSION >= 110000
+    if (isa<ArrayType>(ty) || isa<VectorType>(ty))
+        return GetElementPtrInst::getTypeAtIndex(ty, (uint64_t)0);
+#else
     if (auto seqty = dyn_cast<SequentialType>(ty))
         return hasObjref(seqty->getElementType());
+#endif
     if (auto structty = dyn_cast<StructType>(ty)) {
         for (auto elty: structty->elements()) {
             if (hasObjref(elty)) {
@@ -314,7 +327,7 @@ private:
     CheckInst::Stack check_stack;
     Lifetime::Stack lifetime_stack;
     ReplaceUses::Stack replace_stack;
-    std::map<BasicBlock*,Instruction*> first_safepoint;
+    std::map<BasicBlock*, llvm::WeakVH> first_safepoint;
 };
 
 void Optimizer::pushInstruction(Instruction *I)
@@ -408,8 +421,11 @@ bool Optimizer::isSafepoint(Instruction *inst)
 Instruction *Optimizer::getFirstSafepoint(BasicBlock *bb)
 {
     auto it = first_safepoint.find(bb);
-    if (it != first_safepoint.end())
-        return it->second;
+    if (it != first_safepoint.end()) {
+        Value *Val = it->second;
+        if (Val)
+            return cast<Instruction>(Val);
+    }
     Instruction *first = nullptr;
     for (auto &I: *bb) {
         if (isSafepoint(&I)) {
@@ -493,7 +509,7 @@ bool Optimizer::AllocUseInfo::addMemOp(Instruction *inst, unsigned opno, uint32_
     if (size >= UINT32_MAX - offset)
         return false;
     memop.size = size;
-    memop.isaggr = isa<CompositeType>(elty);
+    memop.isaggr = isa<StructType>(elty) || isa<ArrayType>(elty) || isa<VectorType>(elty);
     memop.isobjref = hasObjref(elty);
     auto &field = getField(offset, size, elty);
     if (field.first != offset || field.second.size != size)
@@ -582,7 +598,7 @@ void Optimizer::checkInst(Instruction *I)
             if (auto II = dyn_cast<IntrinsicInst>(call)) {
                 if (auto id = II->getIntrinsicID()) {
                     if (id == Intrinsic::memset) {
-                        assert(call->getNumArgOperands() == 5);
+                        assert(call->getNumArgOperands() == 4);
                         use_info.hasmemset = true;
                         if (cur.offset == UINT32_MAX ||
                             !isa<ConstantInt>(call->getArgOperand(2)) ||
@@ -870,25 +886,38 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
         args[i] = arg == orig_i ? new_i : arg;
         argTys[i] = args[i]->getType();
     }
+    auto oldfType = call->getFunctionType();
+    auto newfType = FunctionType::get(
+            oldfType->getReturnType(),
+            makeArrayRef(argTys).slice(0, oldfType->getNumParams()),
+            oldfType->isVarArg());
 
     // Accumulate an array of overloaded types for the given intrinsic
+    // and compute the new name mangling schema
     SmallVector<Type*, 4> overloadTys;
     {
         SmallVector<Intrinsic::IITDescriptor, 8> Table;
         getIntrinsicInfoTableEntries(ID, Table);
         ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
-        auto oldfType = call->getFunctionType();
+#if JL_LLVM_VERSION >= 90000
+        auto res = Intrinsic::matchIntrinsicSignature(newfType, TableRef, overloadTys);
+        assert(res == Intrinsic::MatchIntrinsicTypes_Match);
+        (void)res;
+#else
         bool res = Intrinsic::matchIntrinsicType(oldfType->getReturnType(), TableRef, overloadTys);
         assert(!res);
-        for (auto Ty : argTys) {
+        for (auto Ty : newfType->params()) {
             res = Intrinsic::matchIntrinsicType(Ty, TableRef, overloadTys);
             assert(!res);
         }
-        res = Intrinsic::matchIntrinsicVarArg(oldfType->isVarArg(), TableRef);
-        assert(!res);
         (void)res;
+#endif
+        bool matchvararg = Intrinsic::matchIntrinsicVarArg(newfType->isVarArg(), TableRef);
+        assert(!matchvararg);
+        (void)matchvararg;
     }
     auto newF = Intrinsic::getDeclaration(call->getModule(), ID, overloadTys);
+    assert(newF->getFunctionType() == newfType);
     newF->setCallingConv(call->getCallingConv());
     auto newCall = CallInst::Create(newF, args, "", call);
     newCall->setTailCallKind(call->getTailCallKind());
@@ -910,8 +939,8 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
     // SSA from it are live when we run the allocation again.
     // It is now safe to promote the allocation to an entry block alloca.
     size_t align = 1;
-    // TODO make codegen handling of alignment consistent and pass that as a parameter
-    // to the allocation function directly.
+    // TODO: This is overly conservative. May want to instead pass this as a
+    //       parameter to the allocation function directly.
     if (sz > 1)
         align = MinAlign(JL_SMALL_BYTE_ALIGNMENT, NextPowerOf2(sz));
     // No debug info for prolog instructions
@@ -928,12 +957,12 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         // The ccall root and GC preserve handling below makes sure that
         // the alloca isn't optimized out.
         buff = prolog_builder.CreateAlloca(pass.T_prjlvalue);
-        buff->setAlignment(align);
+        buff->setAlignment(Align(align));
         ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, pass.T_pint8));
     }
     else {
         buff = prolog_builder.CreateAlloca(Type::getIntNTy(*pass.ctx, sz * 8));
-        buff->setAlignment(align);
+        buff->setAlignment(Align(align));
         ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, pass.T_pint8));
     }
     insertLifetime(ptr, ConstantInt::get(pass.T_int64, sz), orig_inst);
@@ -1332,7 +1361,11 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                                                                           offset - slot.offset);
                             auto sub_size = std::min(slot.offset + slot.size, offset + size) -
                                 std::max(offset, slot.offset);
+#if JL_LLVM_VERSION >= 100000
+                            builder.CreateMemSet(ptr8, val_arg, sub_size, MaybeAlign(0));
+#else
                             builder.CreateMemSet(ptr8, val_arg, sub_size, 0);
+#endif
                         }
                         call->eraseFromParent();
                         return;
@@ -1486,4 +1519,9 @@ static RegisterPass<AllocOpt> X("AllocOpt", "Promote heap allocation to stack",
 Pass *createAllocOptPass()
 {
     return new AllocOpt();
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddAllocOptPass(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createAllocOptPass());
 }

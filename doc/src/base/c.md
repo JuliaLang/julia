@@ -20,6 +20,7 @@ Base.disable_sigint
 Base.reenable_sigint
 Base.exit_on_sigint
 Base.systemerror
+Base.windowserror
 Core.Ptr
 Core.Ref
 Base.Cchar

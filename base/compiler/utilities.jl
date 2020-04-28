@@ -59,7 +59,7 @@ end
 
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
-is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :simdloop)
+is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :loopinfo)
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
 
@@ -73,7 +73,9 @@ function quoted(@nospecialize(x))
 end
 
 function is_inlineable_constant(@nospecialize(x))
-    x isa Type && return true
+    if x isa Type || x isa Symbol
+        return true
+    end
     return isbits(x) && Core.sizeof(x) <= MAX_INLINE_CONST_SIZE
 end
 
@@ -81,11 +83,12 @@ end
 # MethodInstance/CodeInfo #
 ###########################
 
-function invoke_api(li::MethodInstance)
+function invoke_api(li::CodeInstance)
     return ccall(:jl_invoke_api, Cint, (Any,), li)
 end
 
 function get_staged(li::MethodInstance)
+    may_invoke_generator(li) || return nothing
     try
         # user code might throw errors – ignore them
         return ccall(:jl_code_for_staged, Any, (Any,), li)::CodeInfo
@@ -94,58 +97,46 @@ function get_staged(li::MethodInstance)
     end
 end
 
-# create copies of the CodeInfo definition, and any fields that type-inference might modify
-function copy_code_info(c::CodeInfo)
-    cnew = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), c)
-    cnew.code = copy_exprargs(cnew.code)
-    cnew.slotnames = copy(cnew.slotnames)
-    cnew.slotflags = copy(cnew.slotflags)
-    cnew.codelocs  = copy(cnew.codelocs)
-    cnew.linetable = copy(cnew.linetable)
-    return cnew
-end
-
 function retrieve_code_info(linfo::MethodInstance)
     m = linfo.def::Method
+    c = nothing
     if isdefined(m, :generator)
         # user code might throw errors – ignore them
-        return get_staged(linfo)
-    else
-        # TODO: post-inference see if we can swap back to the original arrays?
-        if isa(m.source, Array{UInt8,1})
-            c = ccall(:jl_uncompress_ast, Any, (Any, Any), m, m.source)
+        c = get_staged(linfo)
+    end
+    if c === nothing && isdefined(m, :source)
+        src = m.source
+        if isa(src, Array{UInt8,1})
+            c = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, src)
         else
-            c = copy_code_info(m.source)
+            c = copy(src::CodeInfo)
         end
     end
-    return c::CodeInfo
+    if c isa CodeInfo
+        c.parent = linfo
+        return c
+    end
 end
 
-function code_for_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, world::UInt, preexisting::Bool=false)
-    if world < min_world(method) || world > max_world(method)
-        return nothing
-    end
-    if isdefined(method, :generator) && !isdispatchtuple(atypes)
-        # don't call staged functions on abstract types.
-        # (see issues #8504, #10230)
-        # we can't guarantee that their type behavior is monotonic.
-        return nothing
-    end
+function inf_for_methodinstance(mi::MethodInstance, min_world::UInt, max_world::UInt=min_world)
+    return ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt), mi, min_world, max_world)::Union{Nothing, CodeInstance}
+end
+
+
+# get a handle to the unique specialization object representing a particular instantiation of a call
+function specialize_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, preexisting::Bool=false)
     if preexisting
-        if method.specializations !== nothing
-            # check cached specializations
-            # for an existing result stored there
-            return ccall(:jl_specializations_lookup, Any, (Any, Any, UInt), method, atypes, world)
-        end
-        return nothing
+        # check cached specializations
+        # for an existing result stored there
+        return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)
     end
-    return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any, UInt), method, atypes, sparams, world)
+    return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atypes, sparams)
 end
 
 # This function is used for computing alternate limit heuristics
-function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector, world::UInt)
-    if isdefined(method, :generator) && method.generator.expand_early
-        method_instance = code_for_method(method, sig, sparams, world, false)
+function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector)
+    if isdefined(method, :generator) && method.generator.expand_early && may_invoke_generator(method, sig, sparams)
+        method_instance = specialize_method(method, sig, sparams, false)
         if isa(method_instance, MethodInstance)
             cinfo = get_staged(method_instance)
             if isa(cinfo, CodeInfo)
@@ -159,18 +150,18 @@ function method_for_inference_heuristics(method::Method, @nospecialize(sig), spa
     return nothing
 end
 
-argextype(@nospecialize(x), state) = argextype(x, state.src, state.sp, state.slottypes)
+argextype(@nospecialize(x), state) = argextype(x, state.src, state.sptypes, state.slottypes)
 
 const empty_slottypes = Any[]
 
-function argextype(@nospecialize(x), src, spvals::SimpleVector, slottypes::Vector{Any} = empty_slottypes)
+function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vector{Any} = empty_slottypes)
     if isa(x, Expr)
         if x.head === :static_parameter
-            return sparam_type(spvals[x.args[1]])
+            return sptypes[x.args[1]]
         elseif x.head === :boundscheck
             return Bool
         elseif x.head === :copyast
-            return argextype(x.args[1], src, spvals, slottypes)
+            return argextype(x.args[1], src, sptypes, slottypes)
         end
         @assert false "argextype only works on argument-position values"
     elseif isa(x, SlotNumber)
@@ -233,8 +224,22 @@ end
 # options #
 ###########
 
+is_root_module(m::Module) = false
+
 inlining_enabled() = (JLOptions().can_inline == 1)
-coverage_enabled() = (JLOptions().code_coverage != 0)
+function coverage_enabled(m::Module)
+    ccall(:jl_generating_output, Cint, ()) == 0 || return false # don't alter caches
+    cov = JLOptions().code_coverage
+    if cov == 1
+        m = moduleroot(m)
+        m === Core && return false
+        isdefined(Main, :Base) && m === Main.Base && return false
+        return true
+    elseif cov == 2
+        return true
+    end
+    return false
+end
 function inbounds_option()
     opt_check_bounds = JLOptions().check_bounds
     opt_check_bounds == 0 && return :default

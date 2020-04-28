@@ -81,7 +81,7 @@ function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::CloseOpen01{BigFloat})
     z.exp = 0
     randbool &&
         ccall((:mpfr_sub_d, :libmpfr), Int32,
-              (Ref{BigFloat}, Ref{BigFloat}, Cdouble, Int32),
+              (Ref{BigFloat}, Ref{BigFloat}, Cdouble, Base.MPFR.MPFRRoundingMode),
               z, z, 0.5, Base.MPFR.ROUNDING_MODE[])
     z
 end
@@ -90,7 +90,7 @@ end
 # TODO: make an API for requesting full or not-full precision
 function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::CloseOpen01{BigFloat}, ::Nothing)
     z = _rand(rng, sp, CloseOpen12(BigFloat))
-    ccall((:mpfr_sub_ui, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, Int32),
+    ccall((:mpfr_sub_ui, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, Base.MPFR.MPFRRoundingMode),
           z, z, 1, Base.MPFR.ROUNDING_MODE[])
     z
 end
@@ -428,5 +428,61 @@ function rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractString,<:Sampler})::
     while true
         pos = rand(rng, sp.data)
         isvalid_unsafe(str, pos) && return str[pos]
+    end
+end
+
+
+## random elements from tuples
+
+### 1
+
+Sampler(::Type{<:AbstractRNG}, t::Tuple{A}, ::Repetition) where {A} =
+    SamplerTrivial(t)
+
+rand(rng::AbstractRNG, sp::SamplerTrivial{Tuple{A}}) where {A} =
+    @inbounds return sp[][1]
+
+### 2
+
+Sampler(RNG::Type{<:AbstractRNG}, t::Tuple{A,B}, n::Repetition) where {A,B} =
+    SamplerSimple(t, Sampler(RNG, Bool, n))
+
+rand(rng::AbstractRNG, sp::SamplerSimple{Tuple{A,B}}) where {A,B} =
+    @inbounds return sp[][1 + rand(rng, sp.data)]
+
+### 3
+
+Sampler(RNG::Type{<:AbstractRNG}, t::Tuple{A,B,C}, n::Repetition) where {A,B,C} =
+    SamplerSimple(t, Sampler(RNG, UInt52(), n))
+
+function rand(rng::AbstractRNG, sp::SamplerSimple{Tuple{A,B,C}}) where {A,B,C}
+    local r
+    while true
+        r = rand(rng, sp.data)
+        r != 0x000fffffffffffff && break # _very_ likely
+    end
+    @inbounds return sp[][1 + r ÷ 0x0005555555555555]
+end
+
+### n
+
+@generated function Sampler(RNG::Type{<:AbstractRNG}, t::Tuple, n::Repetition)
+    l = fieldcount(t)
+    if l < typemax(UInt32) && ispow2(l)
+        :(SamplerSimple(t, Sampler(RNG, UInt32, n)))
+    else
+        :(SamplerSimple(t, Sampler(RNG, Base.OneTo(length(t)), n)))
+    end
+end
+
+@generated function rand(rng::AbstractRNG, sp::SamplerSimple{T}) where T<:Tuple
+    l = fieldcount(T)
+    if l < typemax(UInt32) && ispow2(l)
+        quote
+            r = rand(rng, sp.data) & ($l-1)
+            @inbounds return sp[][1 + r]
+        end
+    else
+        :(@inbounds return sp[][rand(rng, sp.data)])
     end
 end

@@ -19,8 +19,8 @@ end
 # needs to be factored out so depwarn only warns once
 # when removed, also need to update shell_escape for a Cmd to pass shell_special
 # and may want to use it in the test for #10120 (currently the implementation is essentially copied there)
-@noinline warn_shell_special(special) =
-    depwarn("special characters \"$special\" should now be quoted in commands", :warn_shell_special)
+@noinline warn_shell_special(str,special) =
+    depwarn("Parsing command \"$str\". Special characters \"$special\" should now be quoted in commands", :warn_shell_special)
 
 function shell_parse(str::AbstractString, interpolate::Bool=true;
                      special::AbstractString="")
@@ -70,7 +70,14 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
             isempty(st) && error("\$ right before end of command")
             stpos, c = popfirst!(st)
             isspace(c) && error("space not allowed right after \$")
-            ex, j = Meta.parse(s,stpos,greedy=false)
+            if startswith(SubString(s, stpos), "var\"")
+                # Disallow var"#" syntax in cmd interpolations.
+                # TODO: Allow only identifiers after the $ for consistency with
+                # string interpolation syntax (see #3150)
+                ex, j = :var, stpos+3
+            else
+                ex, j = Meta.parse(s,stpos,greedy=false)
+            end
             last_parse = (stpos:prevind(s, j)) .+ s.offset
             update_arg(ex);
             s = SubString(s, j)
@@ -97,7 +104,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                     _ = popfirst!(st)
                 end
             elseif !in_single_quotes && !in_double_quotes && c in special
-                warn_shell_special(special) # noinline depwarn
+                warn_shell_special(str,special) # noinline depwarn
             end
         end
     end
@@ -128,9 +135,6 @@ function shell_split(s::AbstractString)
 end
 
 function print_shell_word(io::IO, word::AbstractString, special::AbstractString = "")
-    if isempty(word)
-        print(io, "''")
-    end
     has_single = false
     has_special = false
     for c in word
@@ -141,7 +145,9 @@ function print_shell_word(io::IO, word::AbstractString, special::AbstractString 
             end
         end
     end
-    if !has_special
+    if isempty(word)
+        print(io, "''")
+    elseif !has_special
         print(io, word)
     elseif !has_single
         print(io, '\'', word, '\'')
@@ -155,6 +161,7 @@ function print_shell_word(io::IO, word::AbstractString, special::AbstractString 
         end
         print(io, '"')
     end
+    nothing
 end
 
 function print_shell_escaped(io::IO, cmd::AbstractString, args::AbstractString...;
@@ -186,7 +193,7 @@ julia> Base.shell_escape("echo", "this", "&&", "that")
 ```
 """
 shell_escape(args::AbstractString...; special::AbstractString="") =
-    sprint(io->print_shell_escaped(io, args..., special=special))
+    sprint((io, args...) -> print_shell_escaped(io, args..., special=special), args...)
 
 
 function print_shell_escaped_posixly(io::IO, args::AbstractString...)
@@ -215,7 +222,9 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
             end
             return true
         end
-        if all(isword, arg)
+        if isempty(arg)
+            print(io, "''")
+        elseif all(isword, arg)
             have_single && (arg = replace(arg, '\'' => "\\'"))
             have_double && (arg = replace(arg, '"' => "\\\""))
             print(io, arg)
@@ -243,4 +252,63 @@ julia> Base.shell_escape_posixly("echo", "this", "&&", "that")
 ```
 """
 shell_escape_posixly(args::AbstractString...) =
-    sprint(io->print_shell_escaped_posixly(io, args...))
+    sprint(print_shell_escaped_posixly, args...)
+
+
+function print_shell_escaped_winsomely(io::IO, args::AbstractString...)
+    first = true
+    for arg in args
+        first || write(io, ' ')
+        first = false
+        # Quote any arg that contains a whitespace (' ' or '\t') or a double quote mark '"'.
+        # It's also valid to quote an arg with just a whitespace,
+        # but the following may be 'safer', and both implementations are valid anyways.
+        quotes = any(c -> c in (' ', '\t', '"'), arg) || isempty(arg)
+        quotes && write(io, '"')
+        backslashes = 0
+        for c in arg
+            if c == '\\'
+                backslashes += 1
+            else
+                # escape all backslashes and the following double quote
+                c == '"' && (backslashes = backslashes * 2 + 1)
+                for j = 1:backslashes
+                    # backslashes aren't special here
+                    write(io, '\\')
+                end
+                backslashes = 0
+                write(io, c)
+            end
+        end
+        # escape all backslashes, letting the terminating double quote we add below to then be interpreted as a special char
+        quotes && (backslashes *= 2)
+        for j = 1:backslashes
+            write(io, '\\')
+        end
+        quotes && write(io, '"')
+    end
+    return nothing
+end
+
+
+"""
+     shell_escaped_winsomely(args::Union{Cmd,AbstractString...})::String
+
+Convert the collection of strings `args` into single string suitable for passing as the argument
+string for a Windows command line. Windows passes the entire command line as a single string to
+the application (unlike POSIX systems, where the list of arguments are passed separately).
+Many Windows API applications (including julia.exe), use the conventions of the [Microsoft C
+runtime](https://docs.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments) to
+split that command line into a list of strings. This function implements the inverse of such a
+C runtime command-line parser. It joins command-line arguments to be passed to a Windows console
+application into a command line, escaping or quoting meta characters such as space,
+double quotes and backslash where needed. This may be useful in concert with the `windows_verbatim`
+flag to [`Cmd`](@ref) when constructing process pipelines.
+
+# Example
+```jldoctest
+julia> println(shell_escaped_winsomely("A B\\", "C"))
+"A B\\" C
+"""
+shell_escape_winsomely(args::AbstractString...) =
+    sprint(print_shell_escaped_winsomely, args..., sizehint=(sum(length, args)) + 3*length(args))

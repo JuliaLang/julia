@@ -14,6 +14,9 @@ of the form `"R±Iim"` as a `Complex(R,I)` of the requested type; `"i"` or `"j"`
 used instead of `"im"`, and `"R"` or `"Iim"` are also permitted.
 If the string does not contain a valid number, an error is raised.
 
+!!! compat "Julia 1.1"
+    `parse(Bool, str)` requires at least Julia 1.1.
+
 # Examples
 ```jldoctest
 julia> parse(Int, "1234")
@@ -73,7 +76,7 @@ function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos:
     (j == 0) && (return 0, 0, 0)
 
     if base == 0
-        if c == '0' && i <= ncodeunits(s)
+        if c == '0' && i <= endpos
             c, i = iterate(s,i)::Tuple{Char, Int}
             base = c=='b' ? 2 : c=='o' ? 8 : c=='x' ? 16 : 10
             if base != 10
@@ -107,7 +110,10 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     end
 
     base = convert(T, base)
-    m::T = div(typemax(T) - base + 1, base)
+    # Special case the common cases of base being 10 or 16 to avoid expensive runtime div
+    m::T = base == 10 ? div(typemax(T) - T(9), T(10)) :
+           base == 16 ? div(typemax(T) - T(15), T(16)) :
+                        div(typemax(T) - base + 1, base)
     n::T = 0
     a::Int = base <= 36 ? 10 : 36
     _0 = UInt32('0')
@@ -117,7 +123,8 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     _Z = UInt32('Z')
     _z = UInt32('z')
     while n <= m
-        _c = UInt32(c)
+        # Fast path from `UInt32(::Char)`; non-ascii will be >= 0x80
+        _c = reinterpret(UInt32, c) >> 24
         d::T = _0 <= _c <= _9 ? _c-_0             :
                _A <= _c <= _Z ? _c-_A+ UInt32(10) :
                _a <= _c <= _z ? _c-_a+a           : base
@@ -136,7 +143,8 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     end
     (T <: Signed) && (n *= sgn)
     while !isspace(c)
-        _c = UInt32(c)
+        # Fast path from `UInt32(::Char)`; non-ascii will be >= 0x80
+        _c = reinterpret(UInt32, c) >> 24
         d::T = _0 <= _c <= _9 ? _c-_0             :
                _A <= _c <= _Z ? _c-_A+ UInt32(10) :
                _a <= _c <= _z ? _c-_a+a           : base
@@ -172,6 +180,13 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
         return nothing
     end
 
+    if isnumeric(sbuff[1])
+        intres = tryparse_internal(UInt8, sbuff, startpos, endpos, base, false)
+        (intres == 1) && return true
+        (intres == 0) && return false
+        raise && throw(ArgumentError("invalid Bool representation: $(repr(sbuff))"))
+    end
+
     orig_start = startpos
     orig_end   = endpos
 
@@ -186,10 +201,8 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
     len = endpos - startpos + 1
     p   = pointer(sbuff) + startpos - 1
     GC.@preserve sbuff begin
-        (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-                                  p, "true", 4)) && (return true)
-        (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-                                  p, "false", 5)) && (return false)
+        (len == 4) && (0 == _memcmp(p, "true", 4)) && (return true)
+        (len == 5) && (0 == _memcmp(p, "false", 5)) && (return false)
     end
 
     if raise
@@ -306,7 +319,7 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
     end
 
     if i₊ == 0 # purely real or imaginary value
-        if iᵢ > 0 # purely imaginary
+        if iᵢ > i && !(iᵢ == i+1 && s[i] in ('+','-')) # purely imaginary (not "±inf")
             x = tryparse_internal(T, s, i, iᵢ-1, raise)
             x === nothing && return nothing
             return Complex{T}(zero(x),x)
@@ -347,8 +360,8 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     end
     return result
 end
-function tryparse_internal(::Type{T}, s::AbstractString, raise::Bool) where T<:Real
-    result = tryparse(T, s)
+function tryparse_internal(::Type{T}, s::AbstractString, raise::Bool; kwargs...) where T<:Real
+    result = tryparse(T, s; kwargs...)
     if raise && result === nothing
         _parse_failure(T, s)
     end
@@ -360,8 +373,8 @@ end
 tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Integer =
     tryparse_internal(T, s, startpos, endpos, 10, raise)
 
-parse(::Type{T}, s::AbstractString) where T<:Real =
-    convert(T, tryparse_internal(T, s, true))
+parse(::Type{T}, s::AbstractString; kwargs...) where T<:Real =
+    convert(T, tryparse_internal(T, s, true; kwargs...))
 parse(::Type{T}, s::AbstractString) where T<:Complex =
     convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s), true))
 

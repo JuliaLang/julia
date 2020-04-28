@@ -2,6 +2,10 @@
 
 // Processor feature detection
 
+#include "llvm-version.h"
+#include <llvm/ADT/StringRef.h>
+#include <llvm/Support/MathExtras.h>
+
 #include "processor.h"
 
 #include "julia.h"
@@ -9,10 +13,6 @@
 
 #include <map>
 #include <algorithm>
-
-#include "llvm-version.h"
-#include <llvm/ADT/StringRef.h>
-#include <llvm/Support/MathExtras.h>
 
 #include "julia_assert.h"
 
@@ -621,15 +621,17 @@ template<typename F>
 static inline jl_sysimg_fptrs_t parse_sysimg(void *hdl, F &&callback)
 {
     jl_sysimg_fptrs_t res = {nullptr, 0, nullptr, 0, nullptr, nullptr};
-    char * data_base;
 
     // .data base
-    jl_dlsym(hdl, "jl_sysimg_gvars_base", (void **)&data_base, 1);
+    char *data_base;
+    jl_dlsym(hdl, "jl_sysimg_gvars_base", (void**)&data_base, 1);
     // .text base
-    jl_dlsym(hdl, "jl_sysimg_fvars_base", (void **)&res.base, 1);
+    char *text_base;
+    jl_dlsym(hdl, "jl_sysimg_fvars_base", (void**)&text_base, 1);
+    res.base = text_base;
 
-    const int32_t * offsets;
-    jl_dlsym(hdl, "jl_sysimg_fvars_offsets", (void **)&offsets, 1);
+    int32_t *offsets;
+    jl_dlsym(hdl, "jl_sysimg_fvars_offsets", (void**)&offsets, 1);
     uint32_t nfunc = offsets[0];
     res.offsets = offsets + 1;
 
@@ -637,14 +639,14 @@ static inline jl_sysimg_fptrs_t parse_sysimg(void *hdl, F &&callback)
     jl_dlsym(hdl, "jl_dispatch_target_ids", &ids, 1);
     uint32_t target_idx = callback(ids);
 
-    const int32_t * reloc_slots;
-    jl_dlsym(hdl, "jl_dispatch_reloc_slots",(void **) &reloc_slots, 1);
+    int32_t *reloc_slots;
+    jl_dlsym(hdl, "jl_dispatch_reloc_slots", (void **)&reloc_slots, 1);
     const uint32_t nreloc = reloc_slots[0];
     reloc_slots += 1;
-    const uint32_t * clone_idxs;
-    const int32_t * clone_offsets;
-    jl_dlsym(hdl, "jl_dispatch_fvars_idxs", (void **)&clone_idxs, 1);
-    jl_dlsym(hdl, "jl_dispatch_fvars_offsets", (void **)&clone_offsets, 1);
+    uint32_t *clone_idxs;
+    int32_t *clone_offsets;
+    jl_dlsym(hdl, "jl_dispatch_fvars_idxs", (void**)&clone_idxs, 1);
+    jl_dlsym(hdl, "jl_dispatch_fvars_offsets", (void**)&clone_offsets, 1);
     uint32_t tag_len = clone_idxs[0];
     clone_idxs += 1;
 

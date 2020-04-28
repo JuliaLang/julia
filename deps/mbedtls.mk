@@ -1,5 +1,6 @@
 ## mbedtls
 
+ifneq ($(USE_BINARYBUILDER_MBEDTLS), 1)
 ifeq ($(USE_GPL_LIBS), 1)
 MBEDTLS_SRC = mbedtls-$(MBEDTLS_VER)-gpl
 else
@@ -63,8 +64,8 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libmbedx509.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedx509.$$(SHLIB_EXT) && \
 	$$(INSTALL_NAME_CMD)libmbedtls.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedtls.$$(SHLIB_EXT) && \
 	$$(INSTALL_NAME_CHANGE_CMD) libmbedx509.0.dylib @rpath/libmbedx509.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedtls.$$(SHLIB_EXT) && \
-	$$(INSTALL_NAME_CHANGE_CMD) libmbedcrypto.0.dylib @rpath/libmbedcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedtls.$$(SHLIB_EXT) && \
-	$$(INSTALL_NAME_CHANGE_CMD) libmbedcrypto.0.dylib @rpath/libmbedcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedx509.$$(SHLIB_EXT) && \
+	$$(INSTALL_NAME_CHANGE_CMD) libmbedcrypto.3.dylib @rpath/libmbedcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedtls.$$(SHLIB_EXT) && \
+	$$(INSTALL_NAME_CHANGE_CMD) libmbedcrypto.3.dylib @rpath/libmbedcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedx509.$$(SHLIB_EXT) && \
 	$$(INSTALL_NAME_CMD)libmbedcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedcrypto.$$(SHLIB_EXT)))
 
 
@@ -86,3 +87,12 @@ compile-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-compiled
 # tests disabled since they are known to fail
 fastcheck-mbedtls: #check-mbedtls
 check-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-checked
+
+else # USE_BINARYBUILDER_MBEDTLS
+
+MBEDTLS_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/MbedTLS_jll.jl/releases/download/MbedTLS-v$(MBEDTLS_VER)+$(MBEDTLS_BB_REL)
+MBEDTLS_BB_NAME := MbedTLS.v$(MBEDTLS_VER)
+
+$(eval $(call bb-install,mbedtls,MBEDTLS,false))
+
+endif

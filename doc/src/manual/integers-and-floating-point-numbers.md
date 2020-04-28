@@ -216,7 +216,7 @@ UInt128: [0,340282366920938463463374607431768211455]
 
 The values returned by [`typemin`](@ref) and [`typemax`](@ref) are always of the given argument
 type. (The above expression uses several features that have yet to be introduced, including [for loops](@ref man-loops),
-[Strings](@ref man-strings), and [Interpolation](@ref), but should be easy enough to understand for users
+[Strings](@ref man-strings), and [Interpolation](@ref string-interpolation), but should be easy enough to understand for users
 with some existing programming experience.)
 
 ### Overflow behavior
@@ -239,6 +239,16 @@ This reflects the characteristics of the underlying arithmetic of integers as im
 computers. In applications where overflow is possible, explicit checking for wraparound produced
 by overflow is essential; otherwise, the [`BigInt`](@ref) type in [Arbitrary Precision Arithmetic](@ref)
 is recommended instead.
+
+An example of overflow behavior and how to potentially resolve it is as follows:
+
+```jldoctest
+julia> 10^19
+-8446744073709551616
+
+julia> big(10)^19
+10000000000000000000
+```
 
 ### Division errors
 
@@ -505,7 +515,7 @@ Floating-point arithmetic entails many subtleties which can be surprising to use
 with the low-level implementation details. However, these subtleties are described in detail in
 most books on scientific computation, and also in the following references:
 
-  * The definitive guide to floating point arithmetic is the [IEEE 754-2008 Standard](http://standards.ieee.org/findstds/standard/754-2008.html);
+  * The definitive guide to floating point arithmetic is the [IEEE 754-2008 Standard](https://standards.ieee.org/standard/754-2008.html);
     however, it is not available for free online.
   * For a brief but lucid presentation of how floating-point numbers are represented, see John D.
     Cook's [article](https://www.johndcook.com/blog/2009/04/06/anatomy-of-a-floating-point-number/)
@@ -523,11 +533,11 @@ most books on scientific computation, and also in the following references:
 ## Arbitrary Precision Arithmetic
 
 To allow computations with arbitrary-precision integers and floating point numbers, Julia wraps
-the [GNU Multiple Precision Arithmetic Library (GMP)](https://gmplib.org) and the [GNU MPFR Library](http://www.mpfr.org),
+the [GNU Multiple Precision Arithmetic Library (GMP)](https://gmplib.org) and the [GNU MPFR Library](https://www.mpfr.org),
 respectively. The [`BigInt`](@ref) and [`BigFloat`](@ref) types are available in Julia for arbitrary
 precision integer and floating point numbers respectively.
 
-Constructors exist to create these types from primitive numerical types, and [`parse`](@ref)
+Constructors exist to create these types from primitive numerical types, and the [string literal](@ref non-standard-string-literals) [`@big_str`](@ref) or [`parse`](@ref)
 can be used to construct them from `AbstractString`s.  Once created, they participate in arithmetic
 with all other numeric types thanks to Julia's [type promotion and conversion mechanism](@ref conversion-and-promotion):
 
@@ -535,8 +545,14 @@ with all other numeric types thanks to Julia's [type promotion and conversion me
 julia> BigInt(typemax(Int64)) + 1
 9223372036854775808
 
+julia> big"123456789012345678901234567890" + 1
+123456789012345678901234567891
+
 julia> parse(BigInt, "123456789012345678901234567890") + 1
 123456789012345678901234567891
+
+julia> big"1.23456789012345678901"
+1.234567890123456789010000000000000000000000000000000000000000000000000000000004
 
 julia> parse(BigFloat, "1.23456789012345678901")
 1.234567890123456789010000000000000000000000000000000000000000000000000000000004

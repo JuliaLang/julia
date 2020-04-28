@@ -1,0 +1,94 @@
+From 4370214628487ac8495f963ae05960b5ecc31103 Mon Sep 17 00:00:00 2001
+From: Jameson Nash <vtjnash@gmail.com>
+Date: Thu, 12 Sep 2019 11:45:07 -0400
+Subject: [PATCH] Revert "[MC] Always emit relocations for same-section
+ function references"
+
+This reverts commit 9232972575cafac29c3e4817c8714c9aca0e8585.
+---
+ lib/MC/WinCOFFObjectWriter.cpp | 12 +++++-------
+ test/MC/COFF/diff.s            | 25 ++++++++-----------------
+ 2 files changed, 13 insertions(+), 24 deletions(-)
+
+diff --git a/lib/MC/WinCOFFObjectWriter.cpp b/lib/MC/WinCOFFObjectWriter.cpp
+index 9ffecd99df6..0214161e03c 100644
+--- a/lib/MC/WinCOFFObjectWriter.cpp
++++ b/lib/MC/WinCOFFObjectWriter.cpp
+@@ -690,14 +690,12 @@ void WinCOFFObjectWriter::executePostLayoutBinding(MCAssembler &Asm,
+ bool WinCOFFObjectWriter::isSymbolRefDifferenceFullyResolvedImpl(
+     const MCAssembler &Asm, const MCSymbol &SymA, const MCFragment &FB,
+     bool InSet, bool IsPCRel) const {
+-  // Don't drop relocations between functions, even if they are in the same text
+-  // section. Multiple Visual C++ linker features depend on having the
+-  // relocations present. The /INCREMENTAL flag will cause these relocations to
+-  // point to thunks, and the /GUARD:CF flag assumes that it can use relocations
+-  // to approximate the set of all address taken functions. LLD's implementation
+-  // of /GUARD:CF also relies on the existance of these relocations.
++  // MS LINK expects to be able to replace all references to a function with a
++  // thunk to implement their /INCREMENTAL feature.  Make sure we don't optimize
++  // away any relocations to functions.
+   uint16_t Type = cast<MCSymbolCOFF>(SymA).getType();
+-  if ((Type >> COFF::SCT_COMPLEX_TYPE_SHIFT) == COFF::IMAGE_SYM_DTYPE_FUNCTION)
++  if (Asm.isIncrementalLinkerCompatible() &&
++      (Type >> COFF::SCT_COMPLEX_TYPE_SHIFT) == COFF::IMAGE_SYM_DTYPE_FUNCTION)
+     return false;
+   return MCObjectWriter::isSymbolRefDifferenceFullyResolvedImpl(Asm, SymA, FB,
+                                                                 InSet, IsPCRel);
+diff --git a/test/MC/COFF/diff.s b/test/MC/COFF/diff.s
+index f89e4ed8901..d68e628577b 100644
+--- a/test/MC/COFF/diff.s
++++ b/test/MC/COFF/diff.s
+@@ -1,14 +1,19 @@
+ // RUN: llvm-mc -filetype=obj -triple i686-pc-mingw32 %s | llvm-readobj -s -sr -sd | FileCheck %s
+ 
+-// COFF resolves differences between labels in the same section, unless that
+-// label is declared with function type.
+-
+ .section baz, "xr"
++	.def	X
++	.scl	2;
++	.type	32;
++	.endef
+ 	.globl	X
+ X:
+ 	mov	Y-X+42,	%eax
+ 	retl
+ 
++	.def	Y
++	.scl	2;
++	.type	32;
++	.endef
+ 	.globl	Y
+ Y:
+ 	retl
+@@ -25,11 +30,6 @@ _foobar:                                # @foobar
+ # %bb.0:
+ 	ret
+ 
+-	.globl	_baz
+-_baz:
+-	calll	_foobar
+-	retl
+-
+ 	.data
+ 	.globl	_rust_crate             # @rust_crate
+ 	.align	4
+@@ -39,15 +39,6 @@ _rust_crate:
+ 	.long	_foobar-_rust_crate
+ 	.long	_foobar-_rust_crate
+ 
+-// Even though _baz and _foobar are in the same .text section, we keep the
+-// relocation for compatibility with the VC linker's /guard:cf and /incremental
+-// flags, even on mingw.
+-
+-// CHECK:        Name: .text
+-// CHECK:        Relocations [
+-// CHECK-NEXT:     0x12 IMAGE_REL_I386_REL32 _foobar
+-// CHECK-NEXT:   ]
+-
+ // CHECK:        Name: .data
+ // CHECK:        Relocations [
+ // CHECK-NEXT:     0x4 IMAGE_REL_I386_DIR32 _foobar
+-- 
+2.17.1
+

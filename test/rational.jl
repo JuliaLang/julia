@@ -32,6 +32,11 @@ using Test
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
     # issue 26823
     @test_throws InexactError rationalize(Int, NaN)
+    # issue 32569
+    @test_throws ArgumentError 1 // typemin(Int)
+    @test_throws ArgumentError 0 // 0
+    @test -2 // typemin(Int) == -1 // (typemin(Int) >> 1)
+    @test 2 // typemin(Int) == 1 // (typemin(Int) >> 1)
 
     for a = -5:5, b = -5:5
         if a == b == 0; continue; end
@@ -96,6 +101,11 @@ using Test
     @test !(1//3 < NaN)
     @test !(1//3 == NaN)
     @test !(1//3 > NaN)
+
+    # PR 29561
+    @test abs(one(Rational{UInt})) === one(Rational{UInt})
+    @test abs(one(Rational{Int})) === one(Rational{Int})
+    @test abs(-one(Rational{Int})) === one(Rational{Int})
 end
 
 @testset "Rational methods" begin
@@ -362,3 +372,117 @@ end
 
 # issue #16282
 @test_throws MethodError 3 // 4.5im
+
+# issue #31396
+@test round(1//2, RoundNearestTiesUp) === 1//1
+
+@testset "Unary plus on Rational (issue #30749)" begin
+   @test +Rational(true) == 1//1
+   @test +Rational(false) == 0//1
+   @test -Rational(true) == -1//1
+   @test -Rational(false) == 0//1
+end
+
+# issue #27039
+@testset "gcd, lcm, gcdx for Rational" begin
+    # TODO: Test gcd, lcm, gcdx for Rational{BigInt}.
+    for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128)
+        a = T(6) // T(35)
+        b = T(10) // T(21)
+        @test gcd(a, b) === T(2)//T(105)
+        @test gcd(b, a) === T(2)//T(105)
+        @test lcm(a, b) === T(30)//T(7)
+        if T <: Signed
+            @test gcdx(a, b) === (T(2)//T(105), T(-11), T(4))
+            @test gcd(-a, b) === T(2)//T(105)
+            @test gcd(a, -b) === T(2)//T(105)
+            @test gcd(-a, -b) === T(2)//T(105)
+            @test lcm(-a, b) === T(30)//T(7)
+            @test lcm(a, -b) === T(30)//T(7)
+            @test lcm(-a, -b) === T(30)//T(7)
+            @test gcdx(-a, b) === (T(2)//T(105), T(11), T(4))
+            @test gcdx(a, -b) === (T(2)//T(105), T(-11), T(-4))
+            @test gcdx(-a, -b) === (T(2)//T(105), T(11), T(-4))
+        end
+
+        @test gcd(a, T(0)//T(1)) === a
+        @test lcm(a, T(0)//T(1)) === T(0)//T(1)
+        @test gcdx(a, T(0)//T(1)) === (a, T(1), T(0))
+
+        @test gcdx(T(1)//T(0), T(1)//T(2)) === (T(1)//T(0), T(1), T(0))
+        @test gcdx(T(1)//T(2), T(1)//T(0)) === (T(1)//T(0), T(0), T(1))
+        @test gcdx(T(1)//T(0), T(1)//T(1)) === (T(1)//T(0), T(1), T(0))
+        @test gcdx(T(1)//T(1), T(1)//T(0)) === (T(1)//T(0), T(0), T(1))
+        @test gcdx(T(1)//T(0), T(1)//T(0)) === (T(1)//T(0), T(1), T(1))
+        @test gcdx(T(1)//T(0), T(0)//T(1)) === (T(1)//T(0), T(1), T(0))
+        @test gcdx(T(0)//T(1), T(0)//T(1)) === (T(0)//T(1), T(1), T(0))
+
+        if T <: Signed
+            @test gcdx(T(-1)//T(0), T(1)//T(2)) === (T(1)//T(0), T(1), T(0))
+            @test gcdx(T(1)//T(2), T(-1)//T(0)) === (T(1)//T(0), T(0), T(1))
+            @test gcdx(T(-1)//T(0), T(1)//T(1)) === (T(1)//T(0), T(1), T(0))
+            @test gcdx(T(1)//T(1), T(-1)//T(0)) === (T(1)//T(0), T(0), T(1))
+            @test gcdx(T(-1)//T(0), T(1)//T(0)) === (T(1)//T(0), T(1), T(1))
+            @test gcdx(T(1)//T(0), T(-1)//T(0)) === (T(1)//T(0), T(1), T(1))
+            @test gcdx(T(-1)//T(0), T(-1)//T(0)) === (T(1)//T(0), T(1), T(1))
+            @test gcdx(T(-1)//T(0), T(0)//T(1)) === (T(1)//T(0), T(1), T(0))
+            @test gcdx(T(0)//T(1), T(-1)//T(0)) === (T(1)//T(0), T(0), T(1))
+        end
+
+        @test gcdx(T(1)//T(3), T(2)) === (T(1)//T(3), T(1), T(0))
+        @test lcm(T(1)//T(3), T(1)) === T(1)//T(1)
+        @test lcm(T(3)//T(1), T(1)//T(0)) === T(3)//T(1)
+        @test lcm(T(0)//T(1), T(1)//T(0)) === T(0)//T(1)
+
+        @test lcm(T(1)//T(0), T(1)//T(2)) === T(1)//T(2)
+        @test lcm(T(1)//T(2), T(1)//T(0)) === T(1)//T(2)
+        @test lcm(T(1)//T(0), T(1)//T(1)) === T(1)//T(1)
+        @test lcm(T(1)//T(1), T(1)//T(0)) === T(1)//T(1)
+        @test lcm(T(1)//T(0), T(1)//T(0)) === T(1)//T(0)
+        @test lcm(T(1)//T(0), T(0)//T(1)) === T(0)//T(1)
+        @test lcm(T(0)//T(1), T(0)//T(1)) === T(0)//T(1)
+
+        if T <: Signed
+            @test lcm(T(-1)//T(0), T(1)//T(2)) === T(1)//T(2)
+            @test lcm(T(1)//T(2), T(-1)//T(0)) === T(1)//T(2)
+            @test lcm(T(-1)//T(0), T(1)//T(1)) === T(1)//T(1)
+            @test lcm(T(1)//T(1), T(-1)//T(0)) === T(1)//T(1)
+            @test lcm(T(-1)//T(0), T(1)//T(0)) === T(1)//T(0)
+            @test lcm(T(1)//T(0), T(-1)//T(0)) === T(1)//T(0)
+            @test lcm(T(-1)//T(0), T(-1)//T(0)) === T(1)//T(0)
+            @test lcm(T(-1)//T(0), T(0)//T(1)) === T(0)//T(1)
+            @test lcm(T(0)//T(1), T(-1)//T(0)) === T(0)//T(1)
+        end
+
+        @test gcd([T(5), T(2), T(1)//T(2)]) === T(1)//T(2)
+        @test gcd(T(5), T(2), T(1)//T(2)) === T(1)//T(2)
+
+        @test lcm([T(5), T(2), T(1)//T(2)]) === T(10)//T(1)
+        @test lcm(T(5), T(2), T(1)//T(2)) === T(10)//T(1)
+    end
+end
+
+@testset "Binary operations with Integer" begin
+    @test 1//2 - 1 == -1//2
+    @test -1//2 + 1 == 1//2
+    @test 1 - 1//2 == 1//2
+    @test 1 + 1//2 == 3//2
+    for q in (19//3, -4//5), i in (6, -7)
+        @test rem(q, i) == q - i*div(q, i)
+        @test mod(q, i) == q - i*fld(q, i)
+    end
+    @test 1//2 * 3 == 3//2
+    @test -3 * (1//2) == -3//2
+
+    @test_throws OverflowError UInt(1)//2 - 1
+    @test_throws OverflowError 1 - UInt(5)//2
+    @test_throws OverflowError 1//typemax(Int64) + 1
+    @test_throws OverflowError Int8(1) + Int8(5)//(Int8(127)-Int8(1))
+    @test_throws InexactError UInt(1)//2 * -1
+    @test_throws OverflowError typemax(Int64)//1 * 2
+    @test_throws OverflowError -1//1 * typemin(Int64)
+
+    @test Int8(1) + Int8(4)//(Int8(127)-Int8(1)) == Int8(65) // Int8(63)
+    @test -Int32(1) // typemax(Int32) - Int32(1) == typemin(Int32) // typemax(Int32)
+    @test 1 // (typemax(Int128) + BigInt(1)) - 2 == (1 + BigInt(2)*typemin(Int128)) // (BigInt(1) + typemax(Int128))
+end

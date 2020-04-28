@@ -8,6 +8,7 @@
 // They are not to be considered a stable API, and will be removed
 // when better package build systems are available
 
+#include "llvm-version.h"
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
@@ -25,7 +26,6 @@
 #include <llvm/Transforms/IPO.h>
 
 #include "julia.h"
-#include "llvm-version.h"
 
 using namespace llvm::legacy;
 
@@ -86,6 +86,12 @@ extern "C" JL_DLLEXPORT LLVMBool LLVMExtraInitializeNativeDisassembler()
     return InitializeNativeTargetDisassembler();
 }
 
+// Exporting the Barrier LLVM pass
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddBarrierNoopPass(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createBarrierNoopPass());
+}
 
 // Infrastructure for writing LLVM passes in Julia
 
@@ -170,37 +176,6 @@ LLVMExtraCreateFunctionPass(const char *Name, jl_value_t *Callback)
     return wrap(new JuliaFunctionPass(Name, Callback));
 }
 
-class JuliaBasicBlockPass : public BasicBlockPass {
-public:
-    JuliaBasicBlockPass(const char *Name, jl_value_t *Callback)
-        : BasicBlockPass(CreatePassID(Name)), Callback(Callback)
-    {
-    }
-
-    bool runOnBasicBlock(BasicBlock &BB)
-    {
-        jl_value_t **argv;
-        JL_GC_PUSHARGS(argv, 2);
-        argv[0] = Callback;
-        argv[1] = jl_box_voidpointer(wrap(&BB));
-
-        jl_value_t *ret = jl_apply(argv, 2);
-        bool changed = jl_unbox_bool(ret);
-
-        JL_GC_POP();
-        return changed;
-    }
-
-private:
-    jl_value_t *Callback;
-};
-
-extern "C" JL_DLLEXPORT LLVMPassRef
-LLVMExtraCreateBasicBlockPass(const char *Name, jl_value_t *Callback)
-{
-    return wrap(new JuliaBasicBlockPass(Name, Callback));
-}
-
 
 // Various missing functions
 
@@ -212,12 +187,6 @@ extern "C" JL_DLLEXPORT unsigned int LLVMExtraGetDebugMDVersion()
 extern "C" JL_DLLEXPORT LLVMContextRef LLVMExtraGetValueContext(LLVMValueRef V)
 {
     return wrap(&unwrap(V)->getContext());
-}
-
-extern ModulePass *createNVVMReflectPass();
-extern "C" JL_DLLEXPORT void LLVMExtraAddMVVMReflectPass(LLVMPassManagerRef PM)
-{
-    createNVVMReflectPass();
 }
 
 extern "C" JL_DLLEXPORT void

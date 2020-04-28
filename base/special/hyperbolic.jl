@@ -14,10 +14,6 @@
 # is preserved.
 # ====================================================
 
-_ldexp_exp(x::Float64, i::T) where T = ccall(("__ldexp_exp", libm), Float64, (Float64, T), x, i)
-_ldexp_exp(x::Float32, i::T) where T = ccall(("__ldexp_expf",libm), Float32, (Float32, T), x, i)
-_ldexp_exp(x::Real, i) = _ldexp_exp(float(x, i))
-
 # Hyperbolic functions
 # sinh methods
 H_SMALL_X(::Type{Float64}) = 2.0^-28
@@ -76,7 +72,7 @@ function sinh(x::T) where T <: Union{Float32, Float64}
     end
     # in d)
     if absx < H_OVERFLOW_X(T)
-        return h*T(2)*_ldexp_exp(absx, -1)
+        return h*T(2)*_ldexp_exp(absx, Int32(-1))
     end
     # in e)
     return copysign(T(Inf), x)
@@ -129,7 +125,7 @@ function cosh(x::T) where T <: Union{Float32, Float64}
     end
     # in e)
     if absx < H_OVERFLOW_X(T)
-        return _ldexp_exp(absx, -1)
+        return _ldexp_exp(absx, Int32(-1))
     end
     # in f)
     return T(Inf)

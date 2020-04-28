@@ -65,7 +65,9 @@ macro stat_call(sym, arg1type, arg)
     return quote
         stat_buf = zeros(UInt8, ccall(:jl_sizeof_stat, Int32, ()))
         r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), stat_buf)
-        r == 0 || r == Base.UV_ENOENT || r == Base.UV_ENOTDIR || throw(_UVError("stat", r))
+        if !(r in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL))
+            throw(_UVError("stat", r, "for file ", repr($(esc(arg)))))
+        end
         st = StatStruct(stat_buf)
         if ispath(st) != (r == 0)
             error("stat returned zero type for a valid path")
@@ -151,7 +153,9 @@ ctime(st::StatStruct) = st.ctime
 """
     ispath(path) -> Bool
 
-Return `true` if `path` is a valid filesystem path, `false` otherwise.
+Return `true` if a valid filesystem entity exists at `path`,
+otherwise returns `false`.
+This is the generalization of [`isfile`](@ref), [`isdir`](@ref) etc.
 """
 ispath(st::StatStruct) = filemode(st) & 0xf000 != 0x0000
 
@@ -182,6 +186,8 @@ true
 julia> isdir("not/a/directory")
 false
 ```
+
+See also: [`isfile`](@ref) and [`ispath`](@ref).
 """
 isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
 
@@ -209,6 +215,8 @@ true
 
 julia> close(f); rm("test_file.txt")
 ```
+
+See also: [`isdir`](@ref) and [`ispath`](@ref).
 """
 isfile(st::StatStruct) = filemode(st) & 0xf000 == 0x8000
 

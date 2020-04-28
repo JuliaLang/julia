@@ -5,8 +5,9 @@ default: html
 # You can set these variables from the command line.
 SRCDIR           := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 JULIAHOME        := $(abspath $(SRCDIR)/..)
+SRCCACHE         := $(abspath $(JULIAHOME)/deps/srccache)
 include $(JULIAHOME)/Make.inc
-JULIA_EXECUTABLE := $(call spawn,$(build_bindir)/julia)
+JULIA_EXECUTABLE := $(call spawn,$(build_bindir)/julia) --startup-file=no
 
 .PHONY: help clean cleanall html pdf deps deploy
 
@@ -20,13 +21,17 @@ help:
 	@echo "To fix outdated doctests, use 'make <target> doctest=fix'"
 
 
-DOCUMENTER_OPTIONS := linkcheck=$(linkcheck) doctest=$(doctest)
+DOCUMENTER_OPTIONS := linkcheck=$(linkcheck) doctest=$(doctest) buildroot=$(call cygpath_w,$(BUILDROOT)) \
+    texplatform=$(texplatform)
 
-UnicodeData.txt:
-	$(JLDOWNLOAD) http://www.unicode.org/Public/9.0.0/ucd/UnicodeData.txt
+UNICODE_DATA_VERSION=13.0.0
+$(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt:
+	@mkdir -p "$(SRCCACHE)"
+	$(JLDOWNLOAD) "$@" http://www.unicode.org/Public/$(UNICODE_DATA_VERSION)/ucd/UnicodeData.txt
 
-deps: UnicodeData.txt
-	$(JLCHECKSUM) UnicodeData.txt
+deps: $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt
+	$(JLCHECKSUM) "$<"
+	cp "$<" UnicodeData.txt
 
 clean:
 	-rm -rf _build/* deps/* docbuild.log UnicodeData.txt

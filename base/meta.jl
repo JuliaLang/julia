@@ -12,15 +12,70 @@ export quot,
        show_sexpr,
        @dump
 
+"""
+    Meta.quot(ex)::Expr
+
+Quote expression `ex` to produce an expression with head `quote`. This can for instance be used to represent objects of type `Expr` in the AST.
+See also the manual section about [QuoteNode](@ref man-quote-node).
+
+# Examples
+```jldoctest
+julia> eval(Meta.quot(:x))
+:x
+
+julia> dump(Meta.quot(:x))
+Expr
+  head: Symbol quote
+  args: Array{Any}((1,))
+    1: Symbol x
+
+julia> eval(Meta.quot(:(1+2)))
+:(1 + 2)
+```
+"""
 quot(ex) = Expr(:quote, ex)
 
+"""
+    Meta.isexpr(ex, head[, n])::Bool
+
+Check if `ex` is an expression with head `head` and `n` arguments.
+
+# Examples
+```jldoctest
+julia> ex = :(f(x))
+:(f(x))
+
+julia> Meta.isexpr(ex, :block)
+false
+
+julia> Meta.isexpr(ex, :call)
+true
+
+julia> Meta.isexpr(ex, [:block, :call]) # multiple possible heads
+true
+
+julia> Meta.isexpr(ex, :call, 1)
+false
+
+julia> Meta.isexpr(ex, :call, 2)
+true
+```
+"""
 isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
 isexpr(@nospecialize(ex), heads::Union{Set,Vector,Tuple}) = isa(ex, Expr) && in(ex.head, heads)
 isexpr(@nospecialize(ex), heads, n::Int) = isexpr(ex, heads) && length(ex.args) == n
 
+"""
+    Meta.show_sexpr([io::IO,], ex)
 
-# ---- show_sexpr: print an AST as an S-expression ----
+Show expression `ex` as a lisp style S-expression.
 
+# Examples
+```jldoctest
+julia> Meta.show_sexpr(:(f(x, g(y,z))))
+(:call, :f, :x, (:call, :g, :y, :z))
+```
+"""
 show_sexpr(ex) = show_sexpr(stdout, ex)
 show_sexpr(io::IO, ex) = show_sexpr(io, ex, 0)
 show_sexpr(io::IO, ex, indent::Int) = show(io, ex)
@@ -127,10 +182,6 @@ function parse(str::AbstractString, pos::Integer; greedy::Bool=true, raise::Bool
     end
     if raise && isa(ex,Expr) && ex.head === :error
         throw(ParseError(ex.args[1]))
-    end
-    if ex === ()
-        raise && throw(ParseError("end of input"))
-        ex = Expr(:error, "end of input")
     end
     return ex, pos+1 # C is zero-based, Julia is 1-based
 end
@@ -262,9 +313,9 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                 elseif i == 3
                     x.args[3] = Core.svec(Any[_instantiate_type_in_env(argt, type_signature, static_param_values) for argt in x.args[3]]...)
                 elseif i == 4
-                    @assert isa((x.args[4]::QuoteNode).value, Symbol)
+                    @assert isa(x.args[4], Int)
                 elseif i == 5
-                    @assert isa(x.args[5], Int)
+                    @assert isa((x.args[5]::QuoteNode).value, Symbol)
                 else
                     x.args[i] = _partially_inline!(x.args[i], slot_replacements,
                                                    type_signature, static_param_values,
@@ -297,6 +348,6 @@ end
 
 _instantiate_type_in_env(x, spsig, spvals) = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), x, spsig, spvals)
 
-is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :simdloop)
+is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :loopinfo)
 
 end # module

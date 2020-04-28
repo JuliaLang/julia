@@ -35,6 +35,20 @@ import Base.MPFR
 
     @test typeof(BigFloat(1//1)) == BigFloat
     @test typeof(BigFloat(one(Rational{BigInt}))) == BigFloat
+
+    # BigFloat constructor respects global precision when not specified
+    let prec = precision(BigFloat) < 16 ? 256 : precision(BigFloat) ÷ 2
+        xs = Real[T(1) for T in (Int, BigInt, Float32, Float64, BigFloat)]
+        f = xs[end]
+        @test BigFloat(f) === f # no-op when precision of operand is the same as global's one
+        setprecision(prec) do
+            @test precision(xs[end]) != prec
+            for x in xs
+                @test precision(BigFloat(x)) == prec
+                @test precision(BigFloat(x; precision=prec ÷ 2)) == prec ÷ 2
+            end
+        end
+    end
 end
 @testset "basic arithmetic" begin
     tol = 1e-12
@@ -358,12 +372,18 @@ end
     end
 end
 
-@testset "copysign" begin
+@testset "copysign / sign" begin
     x = BigFloat(1)
     y = BigFloat(-1)
     @test copysign(x, y) == y
     @test copysign(y, x) == x
     @test copysign(1.0, BigFloat(NaN)) == 1.0
+
+    @test sign(BigFloat(-3.0)) == -1.0
+    @test sign(BigFloat( 3.0)) == 1.0
+    @test isequal(sign(BigFloat(-0.0)), BigFloat(-0.0))
+    @test isequal(sign(BigFloat( 0.0)), BigFloat( 0.0))
+    @test isnan(sign(BigFloat(NaN)))
 end
 @testset "isfinite / isinf / isnan" begin
     x = BigFloat(Inf)
@@ -437,8 +457,21 @@ end
         @test BigFloat(nextfloat(12.12)) == nextfloat(x)
         @test BigFloat(prevfloat(12.12)) == prevfloat(x)
     end
+    x = BigFloat(12.12, 100)
+    @test nextfloat(x, 0) === x
+    @test prevfloat(x, 0) === x
+    @test nextfloat(x).prec == x.prec
+    @test prevfloat(x).prec == x.prec
+    @test nextfloat(x) == nextfloat(x, 1)
+    @test prevfloat(x) == prevfloat(x, 1)
+    @test nextfloat(x, -1) == prevfloat(x, 1)
+    @test nextfloat(x, -2) == prevfloat(x, 2)
+    @test prevfloat(x, -1) == nextfloat(x, 1)
+    @test prevfloat(x, -2) == nextfloat(x, 2)
     @test isnan(nextfloat(BigFloat(NaN)))
     @test isnan(prevfloat(BigFloat(NaN)))
+    @test isnan(nextfloat(BigFloat(NaN), 1))
+    @test isnan(prevfloat(BigFloat(NaN), 1))
 end
 # sqrt DomainError
 @test_throws DomainError sqrt(BigFloat(-1))
@@ -460,6 +493,9 @@ end
     x = BigFloat(12)
     @test precision(x) == old_precision
     @test_throws DomainError setprecision(1)
+    @test_throws DomainError BigFloat(1, precision = 0)
+    @test_throws DomainError BigFloat(big(1.1), precision = 0)
+    @test_throws DomainError BigFloat(2.5, precision = -900)
     # issue 15659
     @test (setprecision(53) do; big(1/3); end) < 1//3
 end
@@ -639,15 +675,15 @@ end
         @test string(nextfloat(BigFloat(1))) == str
     end
     setprecision(21) do
-        @test string(parse(BigFloat, "0.1")) == "1.0000002e-01"
+        @test string(parse(BigFloat, "0.1")) == "0.10000002"
         @test string(parse(BigFloat, "-9.9")) == "-9.9000015"
     end
     setprecision(40) do
-        @test string(parse(BigFloat, "0.1")) == "1.0000000000002e-01"
+        @test string(parse(BigFloat, "0.1")) == "0.10000000000002"
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999942"
     end
     setprecision(123) do
-        @test string(parse(BigFloat, "0.1")) == "9.99999999999999999999999999999999999953e-02"
+        @test string(parse(BigFloat, "0.1")) == "0.0999999999999999999999999999999999999953"
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999999999999999999999999999997"
     end
 end
@@ -818,6 +854,10 @@ end
     @test typeof(floor(UInt128,a)) == UInt128
     @test trunc(UInt128,a) == b
     @test typeof(trunc(UInt128,a)) == UInt128
+
+    # Issue #33676
+    @test trunc(UInt8, parse(BigFloat,"255.1")) == UInt8(255)
+    @test_throws InexactError trunc(UInt8, parse(BigFloat,"256.1"))
 end
 @testset "div" begin
     @test div(big"1.0",big"0.1") == 9
@@ -879,7 +919,7 @@ end
     # PR 17217 -- BigFloat constructors with given precision and rounding mode
     # test constructors and `big` with additional precision and rounding mode:
     for prec in (10, 100, 1000)
-        for val in ("3.1", pi, "-1.3", 3.1)
+        for val in ("3.1", pi, "-1.3", 3.1, 1//10)
             let a = BigFloat(val),
                 b = BigFloat(val, prec),
                 c = BigFloat(val, RoundUp),
@@ -927,6 +967,16 @@ end
     test_show_bigfloat(big"-1.23456789", contains_e=false, starts="-1.23")
     test_show_bigfloat(big"2.3457645687563543266576889678956787e10000", starts="2.345", ends="e+10000")
     test_show_bigfloat(big"-2.3457645687563543266576889678956787e-10000", starts="-2.345", ends="e-10000")
+    test_show_bigfloat(big"42.0", contains_e=false, starts="42.0")
+    test_show_bigfloat(big"420.0", contains_e=false, starts="420.0") # '0's have to be added on the right before point
+    test_show_bigfloat(big"-420.0", contains_e=false, starts="-420.0")
+    test_show_bigfloat(big"420000.0", contains_e=false, starts="420000.0")
+    test_show_bigfloat(big"654321.0", contains_e=false, starts="654321.0")
+    test_show_bigfloat(big"-654321.0", contains_e=false, starts="-654321.0")
+    test_show_bigfloat(big"6543210.0", contains_e=true, starts="6.5", ends="e+06")
+    test_show_bigfloat(big"0.000123", contains_e=false, starts="0.000123")
+    test_show_bigfloat(big"-0.000123", contains_e=false, starts="-0.000123")
+    test_show_bigfloat(big"0.00001234", contains_e=true, starts="1.23", ends="e-05")
 
     for to_string in [string,
                       x->sprint(show, x),

@@ -2,53 +2,57 @@
 
 using Random: randstring
 
-@test ifelse(true, 1, 2) == 1
-@test ifelse(false, 1, 2) == 2
+@testset "ifelse" begin
+    @test ifelse(true, 1, 2) == 1
+    @test ifelse(false, 1, 2) == 2
 
-let s = Set()
-    ifelse(true, push!(s, 1), push!(s, 2))
-    @test s == Set([1, 2])
+    let s = Set()
+        ifelse(true, push!(s, 1), push!(s, 2))
+        @test s == Set([1, 2])
+    end
+
+    let s = Set()
+        true ? push!(s, 1) : push!(s, 2)
+        false ? push!(s, 3) : push!(s, 4)
+        @test s == Set([1, 4])
+    end
+
+    let B = [true true false]
+        @test ifelse.(B, 1, 2) == [1 1 2]
+        @test ifelse.(B, 1, [2 3 4]) == [1 1 4]
+        @test ifelse.(B, [2 3 4], 1) == [2 3 1]
+        @test ifelse.(B, [2 3 4], [5 6 7]) == [2 3 7]
+    end
 end
 
-let s = Set()
-    true ? push!(s, 1) : push!(s, 2)
-    false ? push!(s, 3) : push!(s, 4)
-    @test s == Set([1, 4])
-end
+@testset "operations on Pairs" begin
+    @test reverse(Pair(1,2)) == Pair(2,1)
+    @test reverse(Pair("13","24")) == Pair("24","13")
+    @test typeof(reverse(Pair{String,Int64}("a",1))) == Pair{Int64,String}
+    @test convert(Pair{Float64,Float64}, 17 => 4711) === (17.0 => 4711.0)
+    @test convert(Pair{Int,Float64}, 17 => 4711) === (17 => 4711.0)
+    @test convert(Pair{Float64,Int}, 17 => 4711) === (17.0 => 4711)
+    @test convert(Pair{Any,Any}, 17 => 4711) === Pair{Any,Any}(17, 4711)
+    @test convert(Pair{Number,Number}, 17 => 4711) === Pair{Number,Number}(17, 4711)
+    @test promote(1=>1, 2=>2.0) === (1=>1.0, 2=>2.0)
+    @test promote(1=>1, 2.0=>2) === (1.0=>1, 2.0=>2)
+    @test promote(1=>1.0, 2.0=>2) === (1.0=>1.0, 2.0=>2.0)
+    @test promote(1=>1, :b=>2.0) === (Pair{Any,Float64}(1,1.0),Pair{Any,Float64}(:b,2.0))
+    @test isa([:a=>1, :b=>2], Vector{Pair{Symbol,Int}})
+    @test isa([:a=>1, :b=>2.0], Vector{Pair{Symbol,Float64}})
+    @test isa(["a"=>1, :b=>2.0], Vector{Pair{Any,Float64}})
 
-let B = [true true false]
-    @test ifelse.(B, 1, 2) == [1 1 2]
-    @test ifelse.(B, 1, [2 3 4]) == [1 1 4]
-    @test ifelse.(B, [2 3 4], 1) == [2 3 1]
-    @test ifelse.(B, [2 3 4], [5 6 7]) == [2 3 7]
+    p = 1=>:foo
+    @test first(p) == 1
+    @test last(p)  == :foo
+    @test first(reverse(p)) == :foo
+    @test last(reverse(p))  == 1
+    @test lastindex(p) == 2
+    @test p[lastindex(p)] == p[end] == p[2] == :foo
 end
-
-@test reverse(Pair(1,2)) == Pair(2,1)
-@test reverse(Pair("13","24")) == Pair("24","13")
-@test typeof(reverse(Pair{String,Int64}("a",1))) == Pair{Int64,String}
-@test convert(Pair{Float64,Float64}, 17 => 4711) === (17.0 => 4711.0)
-@test convert(Pair{Int,Float64}, 17 => 4711) === (17 => 4711.0)
-@test convert(Pair{Float64,Int}, 17 => 4711) === (17.0 => 4711)
-@test convert(Pair{Any,Any}, 17 => 4711) === Pair{Any,Any}(17, 4711)
-@test convert(Pair{Number,Number}, 17 => 4711) === Pair{Number,Number}(17, 4711)
-@test promote(1=>1, 2=>2.0) === (1=>1.0, 2=>2.0)
-@test promote(1=>1, 2.0=>2) === (1.0=>1, 2.0=>2)
-@test promote(1=>1.0, 2.0=>2) === (1.0=>1.0, 2.0=>2.0)
-@test promote(1=>1, :b=>2.0) === (Pair{Any,Float64}(1,1.0),Pair{Any,Float64}(:b,2.0))
-@test isa([:a=>1, :b=>2], Vector{Pair{Symbol,Int}})
-@test isa([:a=>1, :b=>2.0], Vector{Pair{Symbol,Float64}})
-@test isa(["a"=>1, :b=>2.0], Vector{Pair{Any,Float64}})
 
 # Infix `isa`
 @test 1 isa Integer
-
-p = 1=>:foo
-@test first(p) == 1
-@test last(p)  == :foo
-@test first(reverse(p)) == :foo
-@test last(reverse(p))  == 1
-@test lastindex(p) == 2
-@test p[lastindex(p)] == p[end] == p[2] == :foo
 
 @test (|)(2) == 2
 @test xor(2) == 2
@@ -79,10 +83,12 @@ import Base.<
 
 @test isless('a','b')
 
-@test 1 .!= 2
-@test 1 .== 1
-@test 1 .< 2
-@test 1 .<= 2
+@testset "vectorized comparisons between numbers" begin
+    @test 1 .!= 2
+    @test 1 .== 1
+    @test 1 .< 2
+    @test 1 .<= 2
+end
 
 # issue #13144: max() with 4 or more array arguments
 let xs = [[i:i+4;] for i in 1:10]
@@ -99,10 +105,36 @@ Base.convert(::Type{T19714}, ::Int) = T19714()
 Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
 @test T19714()/1 === 1/T19714() === T19714()
 
-# pr #17155
+# pr #17155 and #33568
 @testset "function composition" begin
     @test (uppercase∘(x->string(x,base=16)))(239487) == "3A77F"
+    @test ∘(x -> x-2, x -> x-3, x -> x+5)(7) == 7
+    fs = [x -> x[1:2], uppercase, lowercase]
+    @test ∘(fs...)("ABC") == "AB"
+
+    # Like +() and *() we leave ∘() undefined.
+    # While `∘() = identity` is a reasonable definition for functions, this
+    # would cause headaches for composition of user defined morphisms.
+    # See also #34251
+    @test_throws(MethodError, ∘())
+
+    @test ∘(x -> (x, 1))(0) === (0, 1)
+    @test ∘(x -> (x, 2), x -> (x, 1))(0) === ((0, 1), 2)
+    @test ∘(x -> (x, 3), x -> (x, 2), x->(x,1))(0) === (((0, 1), 2), 3)
+    @test ∘(x -> (x, 4), x -> (x, 3), x->(x,2), x-> (x, 1))(0) === ((((0, 1), 2), 3), 4)
+
+    # test that user defined functors only need to overload the two arg version
+    struct FreeMagma
+        word
+    end
+    Base.:(∘)(a::FreeMagma, b::FreeMagma) = FreeMagma((a.word, b.word))
+
+    @test ∘(FreeMagma(1)) === FreeMagma(1)
+    @test ∘(FreeMagma(1), FreeMagma(2)) === FreeMagma((1,2))
+    @test ∘(FreeMagma(1), FreeMagma(2), FreeMagma(3)) === FreeMagma(((1,2), 3))
+    @test ∘(FreeMagma(1), FreeMagma(2), FreeMagma(3), FreeMagma(4)) === FreeMagma((((1,2), 3), 4))
 end
+
 @testset "function negation" begin
     str = randstring(20)
     @test filter(!isuppercase, str) == replace(str, r"[A-Z]" => "")
@@ -189,4 +221,20 @@ end
     fy = Base.Fix2(/, y)
     @test fx(y) == x / y
     @test fy(x) == x / y
+end
+
+@testset "curried comparisons" begin
+    eql5 = (==)(5)
+    neq5 = (!=)(5)
+    gte5 = (>=)(5)
+    lte5 = (<=)(5)
+    gt5  = (>)(5)
+    lt5  = (<)(5)
+
+    @test eql5(5) && !eql5(0)
+    @test neq5(6) && !neq5(5)
+    @test gte5(5) && gte5(6)
+    @test lte5(5) && lte5(4)
+    @test gt5(6) && !gt5(5)
+    @test lt5(4) && !lt5(5)
 end

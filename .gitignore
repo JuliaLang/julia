@@ -3,6 +3,7 @@
 /dist
 /dist-extras
 /julia
+/julia.bat
 /usr
 /oprofile_data
 /usr-staging
@@ -16,6 +17,7 @@
 *.dwo
 *.do
 *.o
+*.o.tmp
 *.obj
 *.so
 *.dylib
@@ -23,7 +25,9 @@
 *.jl.cov
 *.jl.*.cov
 *.jl.mem
+*.jl.*.mem
 *.ji
 
 /perf*
 .DS_Store
+.idea/*

@@ -7,7 +7,7 @@ using Dates
 
 @testset "string/show representation of Date" begin
     @test string(Dates.Date(1, 1, 1)) == "0001-01-01" # January 1st, 1 AD/CE
-    @test sprint(show, Dates.Date(1, 1, 1)) == "0001-01-01"
+    @test sprint(show, Dates.Date(1, 1, 1)) == "Dates.Date(\"0001-01-01\")"
     @test string(Dates.Date(0, 12, 31)) == "0000-12-31" # December 31, 1 BC/BCE
     @test Dates.Date(1, 1, 1) - Dates.Date(0, 12, 31) == Dates.Day(1)
     @test Dates.Date(Dates.UTD(-306)) == Dates.Date(0, 2, 29)
@@ -16,21 +16,33 @@ using Dates
     @test string(Dates.Date(-1000000, 1, 1)) == "-1000000-01-01"
     @test string(Dates.Date(1000000, 1, 1)) == "1000000-01-01"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 1)) == "2000-01-01T00:00:00.001"
-    @test sprint(show, Dates.DateTime(2000, 1, 1, 0, 0, 0, 1)) == "2000-01-01T00:00:00.001"
+    @test sprint(show, Dates.DateTime(2000, 1, 1, 0, 0, 0, 1)) == "Dates.DateTime(\"2000-01-01T00:00:00.001\")"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 2)) == "2000-01-01T00:00:00.002"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 500)) == "2000-01-01T00:00:00.5"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 998)) == "2000-01-01T00:00:00.998"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 999)) == "2000-01-01T00:00:00.999"
-    @test string(Dates.Time(0)) == "00:00:00"
-    @test string(Dates.Time(0, 1)) == "00:01:00"
-    @test string(Dates.Time(0, 1, 2)) == "00:01:02"
-    @test string(Dates.Time(0, 1, 2, 3)) == "00:01:02.003"
-    @test string(Dates.Time(0, 1, 2, 3, 4)) == "00:01:02.003004"
-    @test string(Dates.Time(0, 1, 2, 3, 4, 5)) == "00:01:02.003004005"
-    @test string(Dates.Time(0, 0, 0, 0, 1)) == "00:00:00.000001"
-    @test string(Dates.Time(0, 0, 0, 0, 0, 1)) == "00:00:00.000000001"
-    @test string(Dates.Time(0, 0, 0, 1)) == "00:00:00.001"
 end
+
+@testset "string/show representation of Time" begin
+    tests = [
+        Dates.Time(0) => ("00:00:00", "Dates.Time(0)"),
+        Dates.Time(0, 1) => ("00:01:00", "Dates.Time(0, 1)"),
+        Dates.Time(0, 1, 2) => ("00:01:02", "Dates.Time(0, 1, 2)"),
+        Dates.Time(0, 1, 2, 3) => ("00:01:02.003", "Dates.Time(0, 1, 2, 3)"),
+        Dates.Time(0, 1, 2, 3, 4) => ("00:01:02.003004", "Dates.Time(0, 1, 2, 3, 4)"),
+        Dates.Time(0, 1, 2, 3, 4, 5) => ("00:01:02.003004005", "Dates.Time(0, 1, 2, 3, 4, 5)"),
+        Dates.Time(0, 0, 0, 0, 0, 1) => ("00:00:00.000000001", "Dates.Time(0, 0, 0, 0, 0, 1)"),
+        Dates.Time(0, 0, 0, 1) => ("00:00:00.001", "Dates.Time(0, 0, 0, 1)"),
+    ]
+
+    for (t, (printed, shown)) in tests
+        @test sprint(print, t) == printed
+        @test string(t) == printed
+        @test sprint(show, t) == shown
+        @test repr(t) == shown
+    end
+end
+
 @testset "DateTime parsing" begin
     # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
 
@@ -500,6 +512,39 @@ end
     @test_throws ArgumentError DateTime("2018-01-01 24:01","yyyy-mm-dd HH:MM")
     @test_throws ArgumentError DateTime(2018, 1, 1, 24, 0, 1)
     @test_throws ArgumentError DateTime(2018, 1, 1, 24, 0, 0, 1)
+end
+
+@testset "AM/PM" begin
+    # get the current locale
+    LC_TIME = 2
+    time_locale = ccall(:setlocale, Cstring, (Cint, Cstring), LC_TIME, C_NULL)
+    try
+        # set the locale
+        ccall(:setlocale, Cstring, (Cint, Cstring), LC_TIME, "C")
+
+        for (t12,t24) in (("12:00am","00:00"), ("12:07am","00:07"), ("01:24AM","01:24"),
+                        ("12:00pm","12:00"), ("12:15pm","12:15"), ("11:59PM","23:59"))
+            d = DateTime("2018-01-01T$t24:00")
+            t = Time("$t24:00")
+            for HH in ("HH","II")
+                @test DateTime("2018-01-01 $t12","yyyy-mm-dd $HH:MMp") == d
+                @test Time("$t12","$HH:MMp") == t
+            end
+            tmstruct = Libc.strptime("%I:%M%p", t12)
+            @test Time(tmstruct) == t
+            @test uppercase(t12) == Dates.format(t, "II:MMp") ==
+                                    Dates.format(d, "II:MMp") ==
+                Libc.strftime("%I:%M%p", tmstruct)
+        end
+        for bad in ("00:24am", "00:24pm", "13:24pm", "2pm", "12:24p.m.", "12:24 pm", "12:24pµ")
+            @eval @test_throws ArgumentError Time($bad, "II:MMp")
+        end
+        # if am/pm is missing, defaults to 24-hour clock
+        @eval Time("13:24", "II:MMp") == Time("13:24", "HH:MM")
+    finally
+        # recover the locale
+        ccall(:setlocale, Cstring, (Cint, Cstring), LC_TIME, time_locale)
+    end
 end
 
 end

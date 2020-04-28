@@ -243,8 +243,8 @@ julia> g(2, 3.0)
 
 julia> g(2.0, 3.0)
 ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
-  g(x, y::Float64) in Main at none:1
   g(x::Float64, y) in Main at none:1
+  g(x, y::Float64) in Main at none:1
 Possible fix, define
   g(::Float64, ::Float64)
 ```
@@ -386,7 +386,7 @@ true
 julia> same_type_numeric("foo", 2.0)
 ERROR: MethodError: no method matching same_type_numeric(::String, ::Float64)
 Closest candidates are:
-  same_type_numeric(!Matched::T<:Number, ::T<:Number) where T<:Number at none:1
+  same_type_numeric(!Matched::T, ::T) where T<:Number at none:1
   same_type_numeric(!Matched::Number, ::Number) at none:1
 
 julia> same_type_numeric("foo", "bar")
@@ -537,7 +537,7 @@ eltype(::Type{<:AbstractArray{T}}) where {T} = T
 ```
 using so-called triangular dispatch.  Note that if `T` is a `UnionAll`
 type, as e.g. `eltype(Array{T} where T <: Integer)`, then `Any` is
-returned (as does the the version of `eltype` in `Base`).
+returned (as does the version of `eltype` in `Base`).
 
 Another way, which used to be the only correct way before the advent of
 triangular dispatch in Julia v0.6, is:
@@ -727,7 +727,7 @@ function matmul(a::AbstractMatrix, b::AbstractMatrix)
     output = similar(b, R, (size(a, 1), size(b, 2)))
     if size(a, 2) > 0
         for j in 1:size(b, 2)
-            for i in 1:size(b, 1)
+            for i in 1:size(a, 1)
                 ## here we don't use `ab = zero(R)`,
                 ## since `R` might be `Any` and `zero(Any)` is not defined
                 ## we also must declare `ab::R` to make the type of `ab` constant in the loop,
@@ -981,9 +981,7 @@ f(x, y) = f(promote(x, y)...)
 One risk with this design is the possibility that if there is no
 suitable promotion method converting `x` and `y` to the same type, the
 second method will recurse on itself infinitely and trigger a stack
-overflow. The non-exported function `Base.promote_noncircular` can be
-used as an alternative; when promotion fails it will still throw an
-error, but one that fails faster with a more specific error message.
+overflow.
 
 ### Dispatch on one argument at a time
 

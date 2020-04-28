@@ -17,9 +17,9 @@ function GitConfig(path::AbstractString,
     cfg = GitConfig(cfg_ptr_ptr[])
     try
         addfile(cfg, path, level, repo, force)
-    catch ex
+    catch
         close(cfg)
-        rethrow(ex)
+        rethrow()
     end
     return cfg
 end

@@ -13,52 +13,139 @@ else
 end
 
 """
-    Base.add_sum(x,y)
+    Base.add_sum(x, y)
 
 The reduction operator used in `sum`. The main difference from [`+`](@ref) is that small
 integers are promoted to `Int`/`UInt`.
 """
-add_sum(x,y) = x + y
-add_sum(x::SmallSigned,y::SmallSigned) = Int(x) + Int(y)
-add_sum(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) + UInt(y)
+add_sum(x, y) = x + y
+add_sum(x::SmallSigned, y::SmallSigned) = Int(x) + Int(y)
+add_sum(x::SmallUnsigned, y::SmallUnsigned) = UInt(x) + UInt(y)
+add_sum(x::Real, y::Real)::Real = x + y
 
 """
-    Base.mul_prod(x,y)
+    Base.mul_prod(x, y)
 
 The reduction operator used in `prod`. The main difference from [`*`](@ref) is that small
 integers are promoted to `Int`/`UInt`.
 """
-mul_prod(x,y) = x * y
-mul_prod(x::SmallSigned,y::SmallSigned) = Int(x) * Int(y)
-mul_prod(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) * UInt(y)
+mul_prod(x, y) = x * y
+mul_prod(x::SmallSigned, y::SmallSigned) = Int(x) * Int(y)
+mul_prod(x::SmallUnsigned, y::SmallUnsigned) = UInt(x) * UInt(y)
+mul_prod(x::Real, y::Real)::Real = x * y
 
 ## foldl && mapfoldl
 
-@noinline function mapfoldl_impl(f, op, nt::NamedTuple{(:init,)}, itr, i...)
-    init = nt.init
+function mapfoldl_impl(f::F, op::OP, nt, itr) where {F,OP}
+    op′, itr′ = _xfadjoint(BottomRF(op), Generator(f, itr))
+    return foldl_impl(op′, nt, itr′)
+end
+
+function foldl_impl(op::OP, nt, itr) where {OP}
+    v = _foldl_impl(op, get(nt, :init, _InitialValue()), itr)
+    v isa _InitialValue && return reduce_empty_iter(op, itr)
+    return v
+end
+
+function _foldl_impl(op::OP, init, itr) where {OP}
     # Unroll the while loop once; if init is known, the call to op may
     # be evaluated at compile time
-    y = iterate(itr, i...)
+    y = iterate(itr)
     y === nothing && return init
-    v = op(init, f(y[1]))
+    v = op(init, y[1])
     while true
         y = iterate(itr, y[2])
         y === nothing && break
-        v = op(v, f(y[1]))
+        v = op(v, y[1])
     end
     return v
 end
 
-function mapfoldl_impl(f, op, nt::NamedTuple{()}, itr)
-    y = iterate(itr)
-    if y === nothing
-        return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
-    end
-    (x, i) = y
-    init = mapreduce_first(f, op, x)
-    mapfoldl_impl(f, op, (init=init,), itr, i)
+struct _InitialValue end
+
+"""
+    BottomRF(rf) -> rf′
+
+"Bottom" reducing function.  This is a thin wrapper around the `op` argument
+passed to `foldl`-like functions for handling the initial invocation to call
+[`reduce_first`](@ref).
+"""
+struct BottomRF{T}
+    rf::T
 end
 
+@inline (op::BottomRF)(::_InitialValue, x) = reduce_first(op.rf, x)
+@inline (op::BottomRF)(acc, x) = op.rf(acc, x)
+
+"""
+    MappingRF(f, rf) -> rf′
+
+Create a mapping reducing function `rf′(acc, x) = rf(acc, f(x))`.
+"""
+struct MappingRF{F, T}
+    f::F
+    rf::T
+end
+
+@inline (op::MappingRF)(acc, x) = op.rf(acc, op.f(x))
+
+"""
+    FilteringRF(f, rf) -> rf′
+
+Create a filtering reducing function `rf′(acc, x) = f(x) ? rf(acc, x) : acc`.
+"""
+struct FilteringRF{F, T}
+    f::F
+    rf::T
+end
+
+@inline (op::FilteringRF)(acc, x) = op.f(x) ? op.rf(acc, x) : acc
+
+"""
+    FlatteningRF(rf) -> rf′
+
+Create a flattening reducing function that is roughly equivalent to
+`rf′(acc, x) = foldl(rf, x; init=acc)`.
+"""
+struct FlatteningRF{T}
+    rf::T
+end
+
+@inline function (op::FlatteningRF)(acc, x)
+    op′, itr′ = _xfadjoint(op.rf, x)
+    return _foldl_impl(op′, acc, itr′)
+end
+
+"""
+    _xfadjoint(op, itr) -> op′, itr′
+
+Given a pair of reducing function `op` and an iterator `itr`, return a pair
+`(op′, itr′)` of similar types.  If the iterator `itr` is transformed by an
+iterator transform `ixf` whose adjoint transducer `xf` is known, `op′ = xf(op)`
+and `itr′ = ixf⁻¹(itr)` is returned.  Otherwise, `op` and `itr` are returned
+as-is.  For example, transducer `rf -> MappingRF(f, rf)` is the adjoint of
+iterator transform `itr -> Generator(f, itr)`.
+
+Nested iterator transforms are converted recursively.  That is to say,
+given `op` and
+
+    itr = (ixf₁ ∘ ixf₂ ∘ ... ∘ ixfₙ)(itr′)
+
+what is returned is `itr′` and
+
+    op′ = (xfₙ ∘ ... ∘ xf₂ ∘ xf₁)(op)
+"""
+_xfadjoint(op, itr) = (op, itr)
+_xfadjoint(op, itr::Generator) =
+    if itr.f === identity
+        _xfadjoint(op, itr.iter)
+    else
+        _xfadjoint(MappingRF(itr.f, op), itr.iter)
+    end
+_xfadjoint(op, itr::Filter) =
+    _xfadjoint(FilteringRF(itr.flt, op), itr.itr)
+_xfadjoint(op, itr::Flatten) =
+    _xfadjoint(FlatteningRF(op), itr.it)
 
 """
     mapfoldl(f, op, itr; [init])
@@ -79,39 +166,29 @@ argument `init` will be used exactly once. In general, it will be necessary to p
 # Examples
 ```jldoctest
 julia> foldl(=>, 1:4)
-((1=>2)=>3) => 4
+((1 => 2) => 3) => 4
 
 julia> foldl(=>, 1:4; init=0)
-(((0=>1)=>2)=>3) => 4
+(((0 => 1) => 2) => 3) => 4
 ```
 """
 foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 
 ## foldr & mapfoldr
 
-function mapfoldr_impl(f, op, nt::NamedTuple{(:init,)}, itr, i::Integer)
-    init = nt.init
-    # Unroll the while loop once; if init is known, the call to op may
-    # be evaluated at compile time
-    if isempty(itr) || i == 0
-        return init
-    else
-        x = itr[i]
-        v  = op(f(x), init)
-        while i > 1
-            x = itr[i -= 1]
-            v = op(f(x), v)
-        end
-        return v
-    end
+function mapfoldr_impl(f, op, nt, itr)
+    op′, itr′ = _xfadjoint(BottomRF(FlipArgs(op)), Generator(f, itr))
+    return foldl_impl(op′, nt, _reverse(itr′))
 end
 
-function mapfoldr_impl(f, op, ::NamedTuple{()}, itr, i::Integer)
-    if isempty(itr)
-        return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
-    end
-    return mapfoldr_impl(f, op, (init=mapreduce_first(f, op, itr[i]),), itr, i-1)
+_reverse(itr) = Iterators.reverse(itr)
+_reverse(itr::Tuple) = reverse(itr)  #33235
+
+struct FlipArgs{F}
+    f::F
 end
+
+@inline (f::FlipArgs)(x, y) = f.f(y, x)
 
 """
     mapfoldr(f, op, itr; [init])
@@ -120,7 +197,7 @@ Like [`mapreduce`](@ref), but with guaranteed right associativity, as in [`foldr
 provided, the keyword argument `init` will be used exactly once. In general, it will be
 necessary to provide `init` to work with empty collections.
 """
-mapfoldr(f, op, itr; kw...) = mapfoldr_impl(f, op, kw.data, itr, lastindex(itr))
+mapfoldr(f, op, itr; kw...) = mapfoldr_impl(f, op, kw.data, itr)
 
 
 """
@@ -133,10 +210,10 @@ argument `init` will be used exactly once. In general, it will be necessary to p
 # Examples
 ```jldoctest
 julia> foldr(=>, 1:4)
-1 => (2=>(3=>4))
+1 => (2 => (3 => 4))
 
 julia> foldr(=>, 1:4; init=0)
-1 => (2=>(3=>(4=>0)))
+1 => (2 => (3 => (4 => 0)))
 ```
 """
 foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
@@ -177,9 +254,9 @@ mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer) =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
 """
-    mapreduce(f, op, itr; [init])
+    mapreduce(f, op, itrs...; [init])
 
-Apply function `f` to each element in `itr`, and then reduce the result using the binary
+Apply function `f` to each element(s) in `itrs`, and then reduce the result using the binary
 function `op`. If provided, `init` must be a neutral element for `op` that will be returned
 for empty collections. It is unspecified whether `init` is used for non-empty collections.
 In general, it will be necessary to provide `init` to work with empty collections.
@@ -188,6 +265,9 @@ In general, it will be necessary to provide `init` to work with empty collection
 `reduce(op, map(f, itr); init=init)`, but will in general execute faster since no
 intermediate collection needs to be created. See documentation for [`reduce`](@ref) and
 [`map`](@ref).
+
+!!! compat "Julia 1.2"
+    `mapreduce` with multiple iterators requires Julia 1.2 or later.
 
 # Examples
 ```jldoctest
@@ -201,6 +281,7 @@ implementations may reuse the return value of `f` for elements that appear multi
 guaranteed left or right associativity and invocation of `f` for every value.
 """
 mapreduce(f, op, itr; kw...) = mapfoldl(f, op, itr; kw...)
+mapreduce(f, op, itrs...; kw...) = reduce(op, Generator(f, itrs...); kw...)
 
 # Note: sum_seq usually uses four or more accumulators after partial
 # unrolling, so each accumulator gets at most 256 numbers
@@ -236,6 +317,11 @@ reduce_empty(::typeof(mul_prod), T) = reduce_empty(*, T)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
 
+reduce_empty(op::BottomRF, T) = reduce_empty(op.rf, T)
+reduce_empty(op::MappingRF, T) = mapreduce_empty(op.f, op.rf, T)
+reduce_empty(op::FilteringRF, T) = reduce_empty(op.rf, T)
+reduce_empty(op::FlipArgs, T) = reduce_empty(op.f, T)
+
 """
     Base.mapreduce_empty(f, op, T)
 
@@ -253,10 +339,13 @@ mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
 mapreduce_empty(f::typeof(abs),  ::typeof(max), T) = abs(zero(T))
 mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
 
-mapreduce_empty_iter(f, op, itr, ::HasEltype) = mapreduce_empty(f, op, eltype(itr))
-mapreduce_empty_iter(f, op::typeof(&), itr, ::EltypeUnknown) = true
-mapreduce_empty_iter(f, op::typeof(|), itr, ::EltypeUnknown) = false
-mapreduce_empty_iter(f, op, itr, ::EltypeUnknown) = _empty_reduce_error()
+# For backward compatibility:
+mapreduce_empty_iter(f, op, itr, ItrEltype) =
+    reduce_empty_iter(MappingRF(f, op), itr, ItrEltype)
+
+@inline reduce_empty_iter(op, itr) = reduce_empty_iter(op, itr, IteratorEltype(itr))
+@inline reduce_empty_iter(op, itr, ::HasEltype) = reduce_empty(op, eltype(itr))
+reduce_empty_iter(op, itr, ::EltypeUnknown) = _empty_reduce_error()
 
 # handling of single-element iterators
 """
@@ -450,23 +539,93 @@ julia> prod(1:20)
 prod(a) = mapreduce(identity, mul_prod, a)
 
 ## maximum & minimum
+_fast(::typeof(min),x,y) = min(x,y)
+_fast(::typeof(max),x,y) = max(x,y)
+function _fast(::typeof(max), x::AbstractFloat, y::AbstractFloat)
+    ifelse(isnan(x),
+        x,
+        ifelse(x > y, x, y))
+end
+
+function _fast(::typeof(min),x::AbstractFloat, y::AbstractFloat)
+    ifelse(isnan(x),
+        x,
+        ifelse(x < y, x, y))
+end
+
+isbadzero(::typeof(max), x::AbstractFloat) = (x == zero(x)) & signbit(x)
+isbadzero(::typeof(min), x::AbstractFloat) = (x == zero(x)) & !signbit(x)
+isbadzero(op, x) = false
+isgoodzero(::typeof(max), x) = isbadzero(min, x)
+isgoodzero(::typeof(min), x) = isbadzero(max, x)
 
 function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
                         A::AbstractArray, first::Int, last::Int)
-    # locate the first non NaN number
-    @inbounds a1 = A[first]
-    v = mapreduce_first(f, op, a1)
-    i = first + 1
-    while (v == v) && (i <= last)
+    a1 = @inbounds A[first]
+    v1 = mapreduce_first(f, op, a1)
+    v2 = v3 = v4 = v1
+    chunk_len = 256
+    start = first + 1
+    simdstop  = start + chunk_len - 4
+    while simdstop <= last - 3
+        # short circuit in case of NaN
+        v1 == v1 || return v1
+        v2 == v2 || return v2
+        v3 == v3 || return v3
+        v4 == v4 || return v4
+        @inbounds for i in start:4:simdstop
+            v1 = _fast(op, v1, f(A[i+0]))
+            v2 = _fast(op, v2, f(A[i+1]))
+            v3 = _fast(op, v3, f(A[i+2]))
+            v4 = _fast(op, v4, f(A[i+3]))
+        end
+        checkbounds(A, simdstop+3)
+        start += chunk_len
+        simdstop += chunk_len
+    end
+    v = op(op(v1,v2),op(v3,v4))
+    for i in start:last
         @inbounds ai = A[i]
         v = op(v, f(ai))
-        i += 1
     end
-    v
+
+    # enforce correct order of 0.0 and -0.0
+    # e.g. maximum([0.0, -0.0]) === 0.0
+    # should hold
+    if isbadzero(op, v)
+        for i in first:last
+            x = @inbounds A[i]
+            isgoodzero(op,x) && return x
+        end
+    end
+    return v
 end
 
-maximum(f::Callable, a) = mapreduce(f, max, a)
-minimum(f::Callable, a) = mapreduce(f, min, a)
+"""
+    maximum(f, itr)
+
+Returns the largest result of calling function `f` on each element of `itr`.
+
+# Examples
+```jldoctest
+julia> maximum(length, ["Julion", "Julia", "Jule"])
+6
+```
+"""
+maximum(f, a) = mapreduce(f, max, a)
+
+"""
+    minimum(f, itr)
+
+Returns the smallest result of calling function `f` on each element of `itr`.
+
+# Examples
+```jldoctest
+julia> minimum(length, ["Julion", "Julia", "Jule"])
+4
+```
+"""
+minimum(f, a) = mapreduce(f, min, a)
 
 """
     maximum(itr)
@@ -516,10 +675,10 @@ values are `false` (or equivalently, if the input contains no `true` value), fol
 ```jldoctest
 julia> a = [true,false,false,true]
 4-element Array{Bool,1}:
-  true
- false
- false
-  true
+ 1
+ 0
+ 0
+ 1
 
 julia> any(a)
 true
@@ -551,10 +710,10 @@ values are `true` (or equivalently, if the input contains no `false` value), fol
 ```jldoctest
 julia> a = [true,false,false,true]
 4-element Array{Bool,1}:
-  true
- false
- false
-  true
+ 1
+ 0
+ 0
+ 1
 
 julia> all(a)
 false
@@ -705,3 +864,19 @@ function count(pred, a::AbstractArray)
     return n
 end
 count(itr) = count(identity, itr)
+
+function count(::typeof(identity), x::Array{Bool})
+    n = 0
+    chunks = length(x) ÷ sizeof(UInt)
+    mask = 0x0101010101010101 % UInt
+    GC.@preserve x begin
+        ptr = Ptr{UInt}(pointer(x))
+        for i in 1:chunks
+            n += count_ones(unsafe_load(ptr, i) & mask)
+        end
+    end
+    for i in sizeof(UInt)*chunks+1:length(x)
+        n += x[i]
+    end
+    return n
+end

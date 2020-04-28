@@ -171,36 +171,6 @@ function istril(A::BitMatrix)
     return true
 end
 
-function findmax(a::BitArray)
-    isempty(a) && throw(ArgumentError("BitArray must be non-empty"))
-    m, mi = false, 1
-    ti = 1
-    ac = a.chunks
-    for i = 1:length(ac)
-        @inbounds k = trailing_zeros(ac[i])
-        ti += k
-        k == 64 || return (true, ti)
-    end
-    return m, mi
-end
-
-function findmin(a::BitArray)
-    isempty(a) && throw(ArgumentError("BitArray must be non-empty"))
-    m, mi = true, 1
-    ti = 1
-    ac = a.chunks
-    for i = 1:length(ac)-1
-        @inbounds k = trailing_ones(ac[i])
-        ti += k
-        k == 64 || return (false, ti)
-    end
-    l = Base._mod64(length(a)-1) + 1
-    @inbounds k = trailing_ones(ac[end] & Base._msk_end(l))
-    ti += k
-    k == l || return (false, ti)
-    return m, mi
-end
-
 # fast 8x8 bit transpose from Henry S. Warrens's "Hacker's Delight"
 # http://www.hackersdelight.org/hdcodetxt/transpose8.c.txt
 function transpose8x8(x::UInt64)

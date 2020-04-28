@@ -13,6 +13,7 @@ using Test
     @test Dates.Year(1) != 1
     @test Dates.Year(1) + Dates.Year(1) == Dates.Year(2)
     @test Dates.Year(1) - Dates.Year(1) == zero(Dates.Year)
+    @test 1 == one(Dates.Year)
     @test_throws MethodError Dates.Year(1) * Dates.Year(1) == Dates.Year(1)
     t = Dates.Year(1)
     t2 = Dates.Year(2)
@@ -170,7 +171,22 @@ end
     @test y + Dates.Year(1f0) == Dates.Year(2)
     @test y * 4 == Dates.Year(4)
     @test y * 4f0 == Dates.Year(4)
-    @test_throws InexactError y * 3//4 == Dates.Year(1)
+    @test Dates.Year(2) * 0.5 == y
+    @test Dates.Year(2) * 3//2 == Dates.Year(3)
+    @test_throws InexactError y * 0.5
+    @test_throws InexactError y * 3//4
+    @test (1:1:5)*Second(5) === Second(5)*(1:1:5) === Second(5):Second(5):Second(25) === (1:5)*Second(5)
+    @test collect(1:1:5)*Second(5) == Second(5)*collect(1:1:5) == (1:5)*Second(5)
+    @test (Second(2):Second(2):Second(10))/Second(2) === 1.0:1.0:5.0
+    @test collect(Second(2):Second(2):Second(10))/Second(2) == 1:1:5
+    @test (Second(2):Second(2):Second(10)) / 2 === Second(1):Second(1):Second(5)
+    @test collect(Second(2):Second(2):Second(10)) / 2 == Second(1):Second(1):Second(5)
+    @test Dates.Year(4) / 2 == Dates.Year(2)
+    @test Dates.Year(4) / 2f0 == Dates.Year(2)
+    @test Dates.Year(4) / 0.5 == Dates.Year(8)
+    @test Dates.Year(4) / 2//3 == Dates.Year(6)
+    @test_throws InexactError Dates.Year(4) / 3.0
+    @test_throws InexactError Dates.Year(4) / 3//2
     @test div(y, 2) == Dates.Year(0)
     @test_throws MethodError div(2, y) == Dates.Year(2)
     @test div(y, y) == 1
@@ -341,6 +357,8 @@ end
     @test d - h == 23h
     @test !isequal(d - h, 23h)
     @test isequal(d - h, 2d - 2h - 1d + 1h)
+    @test sprint(show, y + m) == string(y + m)
+    @test convert(Dates.CompoundPeriod, y) + m == y + m
 end
 @testset "compound period simplification" begin
     # reduce compound periods into the most basic form
@@ -426,6 +444,12 @@ end
         @test y == z
         @test hash(y) == hash(z)
     end
+end
+
+@testset "#30832" begin
+    @test Dates.toms(Dates.Second(1) + Dates.Nanosecond(1)) == 1e3
+    @test Dates.tons(Dates.Second(1) + Dates.Nanosecond(1)) == 1e9 + 1
+    @test Dates.toms(Dates.Second(1) + Dates.Microsecond(1)) == 1e3
 end
 
 end

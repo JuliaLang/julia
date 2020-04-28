@@ -29,15 +29,92 @@ ERROR: MyException: test exception
 """
 showerror(io::IO, ex) = show(io, ex)
 
+"""
+    register_error_hint(handler, exceptiontype)
+
+Register a "hinting" function `handler(io, exception)` that can
+suggest potential ways for users to circumvent errors.  `handler`
+should examine `exception` to see whether the conditions appropriate
+for a hint are met, and if so generate output to `io`.
+Packages should call `register_error_hint` from within their
+`__init__` function.
+
+For specific exception types, `handler` is required to accept additional arguments:
+
+- `MethodError`: provide `handler(io, exc::MethodError, argtypes, kwargs)`,
+  which splits the combined arguments into positional and keyword arguments.
+
+When issuing a hint, the output should typically start with `\\n`.
+
+If you define custom exception types, your `showerror` method can
+support hints by calling [`show_error_hints`](@ref).
+
+# Example
+
+```
+julia> module Hinter
+
+       only_int(x::Int)      = 1
+       any_number(x::Number) = 2
+
+       function __init__()
+           register_error_hint(MethodError) do io, exc, argtypes, kwargs
+               if exc.f == only_int
+                    # Color is not necessary, this is just to show it's possible.
+                    print(io, "\\nDid you mean to call ")
+                    printstyled(io, "`any_number`?", color=:cyan)
+               end
+           end
+       end
+
+       end
+```
+
+Then if you call `Hinter.only_int` on something that isn't an `Int` (thereby triggering a `MethodError`), it issues the hint:
+
+```
+julia> Hinter.only_int(1.0)
+ERROR: MethodError: no method matching only_int(::Float64)
+Did you mean to call `any_number`?
+Closest candidates are:
+    ...
+```
+
+!!! compat "Julia 1.5"
+    Custom error hints are available as of Julia 1.5.
+"""
+function register_error_hint(handler, exct::Type)
+    list = get!(()->[], _hint_handlers, exct)
+    push!(list, handler)
+    return nothing
+end
+
+const _hint_handlers = IdDict{Type,Vector{Any}}()
+
+"""
+    show_error_hints(io, ex, args...)
+
+Invoke all handlers from [`register_error_hint`](@ref) for the particular
+exception type `typeof(ex)`. `args` must contain any other arguments expected by
+the handler for that type.
+"""
+function show_error_hints(io, ex, args...)
+    hinters = get!(()->[], _hint_handlers, typeof(ex))
+    for handler in hinters
+        try
+            Base.invokelatest(handler, io, ex, args...)
+        catch err
+            tn = typeof(handler).name
+            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error"
+        end
+    end
+end
+
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
         print(io, ": attempt to access ")
-        if isa(ex.a, AbstractArray)
-            print(io, summary(ex.a))
-        else
-            show(io, MIME"text/plain"(), ex.a)
-        end
+        summary(io, ex.a)
         if isdefined(ex, :i)
             !isa(ex.a, AbstractArray) && print(io, "\n ")
             print(io, " at index [")
@@ -49,25 +126,31 @@ function showerror(io::IO, ex::BoundsError)
             print(io, ']')
         end
     end
+    show_error_hints(io, ex)
 end
 
 function showerror(io::IO, ex::TypeError)
     print(io, "TypeError: ")
     if ex.expected === Bool
-        print(io, "non-boolean ($(typeof(ex.got))) used in boolean context")
+        print(io, "non-boolean (", typeof(ex.got), ") used in boolean context")
     else
-        if isa(ex.got, Type)
-            tstr = "Type{$(ex.got)}"
+        if isvarargtype(ex.got)
+            targs = (ex.got,)
+        elseif isa(ex.got, Type)
+            targs = ("Type{", ex.got, "}")
         else
-            tstr = string(typeof(ex.got))
+            targs = ("a value of type $(typeof(ex.got))",)
         end
-        if isempty(ex.context)
+        if ex.context == ""
             ctx = "in $(ex.func)"
+        elseif ex.func === Symbol("keyword argument")
+            ctx = "in keyword argument $(ex.context)"
         else
             ctx = "in $(ex.func), in $(ex.context)"
         end
-        print(io, ctx, ", expected $(ex.expected), got ", tstr)
+        print(io, ctx, ", expected ", ex.expected, ", got ", targs...)
     end
+    show_error_hints(io, ex)
 end
 
 function showerror(io::IO, ex, bt; backtrace=true)
@@ -90,11 +173,11 @@ showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 function showerror(io::IO, ex::InitError, bt; backtrace=true)
     print(io, "InitError: ")
     showerror(io, ex.error, bt, backtrace=backtrace)
-    print(io, "\nduring initialization of module $(ex.mod)")
+    print(io, "\nduring initialization of module ", ex.mod)
 end
 showerror(io::IO, ex::InitError) = showerror(io, ex, [])
 
-function showerror(io::IO, ex::DomainError, bt; backtrace=true)
+function showerror(io::IO, ex::DomainError)
     if isa(ex.val, AbstractArray)
         compact = get(io, :compact, true)
         limit = get(io, :limit, true)
@@ -106,17 +189,25 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
     if isdefined(ex, :msg)
         print(io, ":\n", ex.msg)
     end
-    backtrace && show_backtrace(io, bt)
+    show_error_hints(io, ex)
     nothing
 end
 
 function showerror(io::IO, ex::SystemError)
-    if ex.extrainfo === nothing
-        print(io, "SystemError: $(ex.prefix): $(Libc.strerror(ex.errnum))")
+    if @static(Sys.iswindows() ? ex.extrainfo isa WindowsErrorInfo : false)
+        errstring = Libc.FormatMessage(ex.extrainfo.errnum)
+        extrainfo = ex.extrainfo.extrainfo
     else
-        print(io, "SystemError (with $(ex.extrainfo)): $(ex.prefix): $(Libc.strerror(ex.errnum))")
+        errstring = Libc.strerror(ex.errnum)
+        extrainfo = ex.extrainfo
+    end
+    if extrainfo === nothing
+        print(io, "SystemError: $(ex.prefix): ", errstring)
+    else
+        print(io, "SystemError (with $extrainfo): $(ex.prefix): ", errstring)
     end
 end
+
 showerror(io::IO, ::DivideError) = print(io, "DivideError: integer division error")
 showerror(io::IO, ::StackOverflowError) = print(io, "StackOverflowError:")
 showerror(io::IO, ::UndefRefError) = print(io, "UndefRefError: access to undefined reference")
@@ -128,11 +219,13 @@ function showerror(io::IO, ex::ErrorException)
         print(io, "Use `codeunits(str)` instead.")
     end
 end
-showerror(io::IO, ex::KeyError) = print(io, "KeyError: key $(repr(ex.key)) not found")
+showerror(io::IO, ex::KeyError) = (print(io, "KeyError: key ");
+                                   show(io, ex.key);
+                                   print(io, " not found"))
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
-showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: $(ex.msg)")
-showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: $(ex.msg)")
-showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: $(ex.msg)")
+showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: ", ex.msg)
+showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: ", ex.msg)
+showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: ", ex.msg)
 
 showerror(io::IO, ex::UndefKeywordError) =
     print(io, "UndefKeywordError: keyword argument $(ex.var) not assigned")
@@ -149,10 +242,56 @@ function showerror(io::IO, ex::UndefVarError)
 end
 
 function showerror(io::IO, ex::InexactError)
-    print(io, "InexactError: ", ex.func, '(', ex.T, ", ", ex.val, ')')
+    print(io, "InexactError: ", ex.func, '(')
+    nameof(ex.T) === ex.func || print(io, ex.T, ", ")
+    print(io, ex.val, ')')
+    show_error_hints(io, ex)
 end
 
 typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
+
+function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b::DataType), color::Symbol)
+    if a.name === b.name
+        Base.show_type_name(io, a.name)
+        n = length(a.parameters)
+        print(io, '{')
+        for i = 1:n
+            if i > length(b.parameters)
+                printstyled(io, a.parameters[i], color=color)
+            else
+                print_with_compare(io::IO, a.parameters[i], b.parameters[i], color)
+            end
+            i < n && print(io, ',')
+        end
+        print(io, '}')
+    else
+        printstyled(io, a; color=color)
+    end
+end
+
+function print_with_compare(io::IO, @nospecialize(a), @nospecialize(b), color::Symbol)
+    if a === b
+        print(io, a)
+    else
+        printstyled(io, a; color=color)
+    end
+end
+
+function show_convert_error(io::IO, ex::MethodError, @nospecialize(arg_types_param))
+    # See #13033
+    T = striptype(ex.args[1])
+    if T === nothing
+        print(io, "First argument to `convert` must be a Type, got ", ex.args[1])
+    else
+        print_one_line = isa(T, DataType) && isa(arg_types_param[2], DataType) && T.name != arg_types_param[2].name
+        printstyled(io, "Cannot `convert` an object of type ")
+        print_one_line || printstyled(io, "\n  ")
+        print_with_compare(io, arg_types_param[2], T, :light_green)
+        printstyled(io, " to an object of type ")
+        print_one_line || printstyled(io, "\n  ")
+        print_with_compare(io, T, arg_types_param[2], :light_red)
+    end
+end
 
 function showerror(io::IO, ex::MethodError)
     # ex.args is a tuple type if it was thrown from `invoke` and is
@@ -170,7 +309,7 @@ function showerror(io::IO, ex::MethodError)
     name = ft.name.mt.name
     f_is_function = false
     kwargs = ()
-    if startswith(string(ft.name.name), "#kw#")
+    if endswith(string(ft.name.name), "##kw")
         f = ex.args[2]
         ft = typeof(f)
         name = ft.name.mt.name
@@ -178,19 +317,13 @@ function showerror(io::IO, ex::MethodError)
         kwargs = pairs(ex.args[1])
         ex = MethodError(f, ex.args[3:end])
     end
-    if f == Base.convert && length(arg_types_param) == 2 && !is_arg_types
+    if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
-        # See #13033
-        T = striptype(ex.args[1])
-        if T === nothing
-            print(io, "First argument to `convert` must be a Type, got ", ex.args[1])
-        else
-            print(io, "Cannot `convert` an object of type ", arg_types_param[2], " to an object of type ", T)
-        end
+        show_convert_error(io, ex, arg_types_param)
     elseif isempty(methods(f)) && isa(f, DataType) && f.abstract
-        print(io, "no constructors have been defined for $f")
+        print(io, "no constructors have been defined for ", f)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
-        print(io, "objects of type $ft are not callable")
+        print(io, "objects of type ", ft, " are not callable")
     else
         if ft <: Function && isempty(ft.parameters) &&
                 isdefined(ft.name.module, name) &&
@@ -204,7 +337,7 @@ function showerror(io::IO, ex::MethodError)
         end
         print(io, "(")
         for (i, typ) in enumerate(arg_types_param)
-            print(io, "::$typ")
+            print(io, "::", typ)
             i == length(arg_types_param) || print(io, ", ")
         end
         if !isempty(kwargs)
@@ -217,6 +350,21 @@ function showerror(io::IO, ex::MethodError)
         end
         print(io, ")")
     end
+    # catch the two common cases of element-wise addition and subtraction
+    if (f === Base.:+ || f === Base.:-) && length(arg_types_param) == 2
+        # we need one array of numbers and one number, in any order
+        if any(x -> x <: AbstractArray{<:Number}, arg_types_param) &&
+            any(x -> x <: Number, arg_types_param)
+
+            nouns = Dict(
+                Base.:+ => "addition",
+                Base.:- => "subtraction",
+            )
+            varnames = ("scalar", "array")
+            first, second = arg_types_param[1] <: Number ? varnames : reverse(varnames)
+            print(io, "\nFor element-wise $(nouns[f]), use broadcasting with dot syntax: $first .$f $second")
+        end
+    end
     if ft <: AbstractArray
         print(io, "\nUse square brackets [] for indexing an Array.")
     end
@@ -224,15 +372,14 @@ function showerror(io::IO, ex::MethodError)
     if f_is_function && isdefined(Base, name)
         basef = getfield(Base, name)
         if basef !== ex.f && hasmethod(basef, arg_types)
-            println(io)
-            print(io, "You may have intended to import Base.", name)
+            print(io, "\nYou may have intended to import ")
+            show_unquoted(io, Expr(:., :Base, QuoteNode(name)))
         end
     end
     if (ex.world != typemax(UInt) && hasmethod(ex.f, arg_types) &&
         !hasmethod(ex.f, arg_types, world = ex.world))
-        curworld = ccall(:jl_get_world_counter, UInt, ())
-        println(io)
-        print(io, "The applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
+        curworld = get_world_counter()
+        print(io, "\nThe applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
     end
     if !is_arg_types
         # Check for row vectors used where a column vector is intended.
@@ -249,6 +396,7 @@ function showerror(io::IO, ex::MethodError)
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
+    show_error_hints(io, ex, arg_types_param, kwargs)
     try
         show_method_candidates(io, ex, kwargs)
     catch ex
@@ -273,8 +421,14 @@ function showerror_ambiguous(io::IO, meth, f, args)
         sigfix = typeintersect(m.sig, sigfix)
     end
     if isa(unwrap_unionall(sigfix), DataType) && sigfix <: Tuple
-        print(io, "\nPossible fix, define\n  ")
-        Base.show_tuple_as_call(io, :function,  sigfix)
+        if all(m->morespecific(sigfix, m.sig), meth)
+            print(io, "\nPossible fix, define\n  ")
+            Base.show_tuple_as_call(io, :function,  sigfix)
+        else
+            println(io)
+            print(io, "To resolve the ambiguity, try making one of the methods more specific, or ")
+            print(io, "adding a new method more specific than any of the existing applicable methods.")
+        end
     end
     nothing
 end
@@ -315,11 +469,12 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     for (func, arg_types_param) in funcs
         for method in methods(func)
             buf = IOBuffer()
-            iob = IOContext(buf, io)
+            iob0 = iob = IOContext(buf, io)
             tv = Any[]
             sig0 = method.sig
             while isa(sig0, UnionAll)
                 push!(tv, sig0.var)
+                iob = IOContext(iob, :unionall_env => sig0.var)
                 sig0 = sig0.body
             end
             s1 = sig0.parameters[1]
@@ -341,10 +496,10 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # If isvarargtype then it checks whether the rest of the input arguments matches
                 # the varargtype
                 if Base.isvarargtype(sig[i])
-                    sigstr = string(unwrap_unionall(sig[i]).parameters[1], "...")
+                    sigstr = (unwrap_unionall(sig[i]).parameters[1], "...")
                     j = length(t_i)
                 else
-                    sigstr = string(sig[i])
+                    sigstr = (sig[i],)
                     j = i
                 end
                 # Checks if the type of arg 1:i of the input intersects with the current method
@@ -356,10 +511,10 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 if t_in === Union{}
                     if get(io, :color, false)
                         Base.with_output_color(Base.error_color(), iob) do iob
-                            print(iob, "::$sigstr")
+                            print(iob, "::", sigstr...)
                         end
                     else
-                        print(iob, "!Matched::$sigstr")
+                        print(iob, "!Matched::", sigstr...)
                     end
                     # If there is no typeintersect then the type signature from the method is
                     # inserted in t_i this ensures if the type at the next i matches the type
@@ -367,7 +522,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     t_i[i] = sig[i]
                 else
                     right_matches += j==i ? 1 : 0
-                    print(iob, "::$sigstr")
+                    print(iob, "::", sigstr...)
                 end
             end
             special && right_matches == 0 && continue
@@ -382,37 +537,36 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 end
             end
 
-            if right_matches > 0 || length(ex.args) < 2
+            if right_matches > 0 || length(arg_types_param) < 2
                 if length(t_i) < length(sig)
                     # If the methods args is longer than input then the method
                     # arguments is printed as not a match
                     for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
                         sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
                         if Base.isvarargtype(sigtype)
-                            sigstr = string(sigtype.parameters[1], "...")
+                            sigstr = (sigtype.parameters[1], "...")
                         else
-                            sigstr = string(sigtype)
+                            sigstr = (sigtype,)
                         end
                         if !((min(length(t_i), length(sig)) == 0) && k==1)
                             print(iob, ", ")
                         end
                         if get(io, :color, false)
                             Base.with_output_color(Base.error_color(), iob) do iob
-                                print(iob, "::$sigstr")
+                                print(iob, "::", sigstr...)
                             end
                         else
-                            print(iob, "!Matched::$sigstr")
+                            print(iob, "!Matched::", sigstr...)
                         end
                     end
                 end
-                kwords = Symbol[]
-                if isdefined(ft.name.mt, :kwsorter)
-                    kwsorter_t = typeof(ft.name.mt.kwsorter)
-                    kwords = kwarg_decl(method, kwsorter_t)
-                    length(kwords) > 0 && print(iob, "; ", join(kwords, ", "))
+                kwords = kwarg_decl(method)
+                if !isempty(kwords)
+                    print(iob, "; ")
+                    join(iob, kwords, ", ")
                 end
                 print(iob, ")")
-                show_method_params(iob, tv)
+                show_method_params(iob0, tv)
                 print(iob, " at ", method.file, ":", method.line)
                 if !isempty(kwargs)
                     unexpected = Symbol[]
@@ -430,9 +584,9 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                         end
                     end
                 end
-                if ex.world < min_world(method)
+                if ex.world < reinterpret(UInt, method.primary_world)
                     print(iob, " (method too new to be called from this world context.)")
-                elseif ex.world > max_world(method)
+                elseif ex.world > reinterpret(UInt, method.deleted_world)
                     print(iob, " (method deleted before this world age.)")
                 end
                 # TODO: indicate if it's in the wrong world
@@ -443,8 +597,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
 
     if !isempty(lines) # Display up to three closest candidates
         Base.with_output_color(:normal, io) do io
-            println(io)
-            print(io, "Closest candidates are:")
+            print(io, "\nClosest candidates are:")
             sort!(lines, by = x -> -x[2])
             i = 0
             for line in lines
@@ -512,7 +665,8 @@ function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
             i = frame_counter
             j = p
             while i < length(t) && t[i] == t[j]
-                i+=1 ; j+=1
+                i += 1
+                j += 1
             end
             if j >= frame_counter-1
                 #= At least one cycle repeated =#
@@ -580,6 +734,7 @@ function show_backtrace(io::IO, t::Vector)
 end
 
 function show_backtrace(io::IO, t::Vector{Any})
+    # t is a pre-processed backtrace (ref #12856)
     if length(t) < BIG_STACKTRACE_SIZE
         try invokelatest(update_stackframes_callback[], t) catch end
         for entry in t
@@ -590,26 +745,39 @@ function show_backtrace(io::IO, t::Vector{Any})
     end
 end
 
+function is_kw_sorter_name(name::Symbol)
+    sn = string(name)
+    return !startswith(sn, '#') && endswith(sn, "##kw")
+end
+
 function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     n = 0
     last_frame = StackTraces.UNKNOWN
     count = 0
     ret = Any[]
-    for i = eachindex(t)
-        lkups = StackTraces.lookup(t[i])
+    for i in eachindex(t)
+        lkups = t[i]
+        if lkups isa StackFrame
+            lkups = [lkups]
+        else
+            lkups = StackTraces.lookup(lkups)
+        end
         for lkup in lkups
             if lkup === StackTraces.UNKNOWN
                 continue
             end
 
-            if lkup.from_c && skipC; continue; end
-            if i == 1 && lkup.func == :error; continue; end
+            if (lkup.from_c && skipC) || is_kw_sorter_name(lkup.func)
+                continue
+            end
             count += 1
-            if count > limit; break; end
+            if count > limit
+                break
+            end
 
             if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func || lkup.linfo !== lkup.linfo
                 if n > 0
-                    push!(ret, (last_frame,n))
+                    push!(ret, (last_frame, n))
                 end
                 n = 1
                 last_frame = lkup
@@ -617,16 +785,35 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
                 n += 1
             end
         end
+        count > limit && break
     end
     if n > 0
-        push!(ret, (last_frame,n))
+        push!(ret, (last_frame, n))
     end
     return ret
 end
 
-@noinline function throw_eachindex_mismatch(::IndexLinear, A...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(LinearIndices.(A), ", ", " and "))"))
+function show_exception_stack(io::IO, stack::Vector)
+    # Display exception stack with the top of the stack first.  This ordering
+    # means that the user doesn't have to scroll up in the REPL to discover the
+    # root cause.
+    nexc = length(stack)
+    for i = nexc:-1:1
+        if nexc != i
+            printstyled(io, "caused by [exception ", i, "]\n", color=:light_black)
+        end
+        exc, bt = stack[i]
+        showerror(io, exc, bt, backtrace = bt!==nothing)
+        println(io)
+    end
 end
-@noinline function throw_eachindex_mismatch(::IndexCartesian, A...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(axes.(A), ", ", " and "))"))
+
+# Defined here rather than error.jl for bootstrap ordering
+function show(io::IO, ip::InterpreterIP)
+    print(io, typeof(ip))
+    if ip.code isa Core.CodeInfo
+        print(io, " in top-level CodeInfo for $(ip.mod) at statement $(Int(ip.stmt))")
+    else
+        print(io, " in $(ip.code) at statement $(Int(ip.stmt))")
+    end
 end

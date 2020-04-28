@@ -174,6 +174,9 @@ end
 
 function send_msg_(w::Worker, header, msg, now::Bool)
     check_worker_state(w)
+    if myid() != 1 && !isa(msg, IdentifySocketMsg) && !isa(msg, IdentifySocketAckMsg)
+        wait(w.initialized)
+    end
     io = w.w_stream
     lock(io.lock)
     try

@@ -44,16 +44,17 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
         !debug && return ""
         str = read(seekstart(output), String)
         isempty(str) && return ""
-        "Process output found:\n\"\"\"\n$str\n\"\"\""
+        return "Process output found:\n\"\"\"\n$str\n\"\"\""
     end
     out = IOBuffer()
-    with_fake_pty() do slave, master
-        p = run(detach(cmd), slave, slave, slave, wait=false)
+    with_fake_pty() do pty_slave, pty_master
+        p = run(detach(cmd), pty_slave, pty_slave, pty_slave, wait=false)
+        Base.close_stdio(pty_slave)
 
         # Kill the process if it takes too long. Typically occurs when process is waiting
         # for input.
         timer = Channel{Symbol}(1)
-        @async begin
+        watcher = @async begin
             waited = 0
             while waited < timeout && process_running(p)
                 sleep(1)
@@ -74,25 +75,29 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
                 sleep(3)
                 process_running(p) && kill(p, Base.SIGKILL)
             end
-
-            close(master)
+            wait(p)
         end
 
         for (challenge, response) in challenges
-            write(out, readuntil(master, challenge, keep=true))
-            if !isopen(master)
+            write(out, readuntil(pty_master, challenge, keep=true))
+            if !isopen(pty_master)
                 error("Could not locate challenge: \"$challenge\". ",
                       format_output(out))
             end
-            write(master, response)
+            write(pty_master, response)
         end
 
-        # Capture output from process until `master` is closed
-        while !eof(master)
-            write(out, readavailable(master))
+        # Capture output from process until `pty_slave` is closed
+        try
+            write(out, pty_master)
+        catch ex
+            if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
+                rethrow() # ignore EIO from master after slave dies
+            end
         end
 
         status = fetch(timer)
+        close(pty_master)
         if status != :success
             if status == :timeout
                 error("Process timed out possibly waiting for a response. ",
@@ -101,6 +106,7 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
                 error("Failed process. ", format_output(out), "\n", p)
             end
         end
+        wait(watcher)
     end
     nothing
 end
@@ -462,6 +468,45 @@ end
         Base.shred!(expected_cred)
     end
 
+    @testset "extra newline" begin
+        # The "Git for Windows" installer will also install the "Git Credential Manager for
+        # Windows" (https://github.com/Microsoft/Git-Credential-Manager-for-Windows) (also
+        # known as "manager" in the .gitconfig files). This credential manager returns an
+        # additional newline when returning the results.
+        str = """
+            protocol=https
+            host=example.com
+            path=
+            username=bob
+            password=*****
+
+            """
+        expected_cred = LibGit2.GitCredential("https", "example.com", "", "bob", "*****")
+
+        cred = read!(IOBuffer(str), LibGit2.GitCredential())
+        @test cred == expected_cred
+        @test sprint(write, cred) * "\n" == str
+        Base.shred!(cred)
+        Base.shred!(expected_cred)
+    end
+
+    @testset "unknown attribute" begin
+        str = """
+            protocol=https
+            host=example.com
+            attribute=value
+            username=bob
+            password=*****
+            """
+        expected_cred = LibGit2.GitCredential("https", "example.com", nothing, "bob", "*****")
+        expected_log = (:warn, "Unknown git credential attribute found: \"attribute\"")
+
+        cred = @test_logs expected_log read!(IOBuffer(str), LibGit2.GitCredential())
+        @test cred == expected_cred
+        Base.shred!(cred)
+        Base.shred!(expected_cred)
+    end
+
     @testset "use http path" begin
         cred = LibGit2.GitCredential("https", "example.com", "dir/file", "alice", "*****")
         expected = """
@@ -531,9 +576,31 @@ end
         @test !LibGit2.ismatch("https://@github.com", cred)
         Base.shred!(cred)
     end
+
+    @testset "GITHUB_REGEX" begin
+        github_regex_test = function(url, user, repo)
+            m = match(LibGit2.GITHUB_REGEX, url)
+            @test m !== nothing
+            @test m[1] == "$user/$repo"
+            @test m[2] == user
+            @test m[3] == repo
+        end
+        user = "User"
+        repo = "Repo"
+        github_regex_test("git@github.com/$user/$repo.git", user, repo)
+        github_regex_test("https://github.com/$user/$repo.git", user, repo)
+        github_regex_test("https://username@github.com/$user/$repo.git", user, repo)
+        github_regex_test("ssh://git@github.com/$user/$repo.git", user, repo)
+        github_regex_test("git@github.com/$user/$repo", user, repo)
+        github_regex_test("https://github.com/$user/$repo", user, repo)
+        github_regex_test("https://username@github.com/$user/$repo", user, repo)
+        github_regex_test("ssh://git@github.com/$user/$repo", user, repo)
+        @test !occursin(LibGit2.GITHUB_REGEX, "git@notgithub.com/$user/$repo.git")
+    end
 end
 
 mktempdir() do dir
+    dir = realpath(dir)
     # test parameters
     repo_url = "https://github.com/JuliaLang/Example.jl"
     cache_repo = joinpath(dir, "Example")
@@ -1076,7 +1143,7 @@ mktempdir() do dir
                     if isa(err, LibGit2.Error.GitError) && err.class == LibGit2.Error.Invalid
                         @test false
                     else
-                        rethrow(err)
+                        rethrow()
                     end
                 end
             end
@@ -1913,9 +1980,7 @@ mktempdir() do dir
                 mygit_cred = GitCredential("https", "mygithost")
 
                 @test LibGit2.credential_helpers(cfg, github_cred) == expected
-
-                println(stderr, "The following 'Resetting the helper list...' warning is expected:")
-                @test_broken LibGit2.credential_helpers(cfg, mygit_cred) == expected[2]
+                @test LibGit2.credential_helpers(cfg, mygit_cred) == expected[2:2]
 
                 Base.shred!(github_cred)
                 Base.shred!(mygit_cred)
@@ -2812,7 +2877,7 @@ mktempdir() do dir
             Base.shred!(valid_cred)
         end
 
-        # A hypothetical scenario where the the allowed authentication can either be
+        # A hypothetical scenario where the allowed authentication can either be
         # SSH or username/password.
         @testset "SSH & HTTPS authentication" begin
             allowed_types = Cuint(LibGit2.Consts.CREDTYPE_SSH_KEY) |

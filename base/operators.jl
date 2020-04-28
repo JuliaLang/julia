@@ -27,7 +27,7 @@ false
 
 Supertype operator, equivalent to `T2 <: T1`.
 """
-const (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
+(>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 
 """
     supertype(T::DataType)
@@ -132,16 +132,24 @@ isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(
 """
     isless(x, y)
 
-Test whether `x` is less than `y`, according to a canonical total order. Values that are
-normally unordered, such as `NaN`, are ordered in an arbitrary but consistent fashion.
+Test whether `x` is less than `y`, according to a fixed total order.
+`isless` is not defined on all pairs of values `(x, y)`. However, if it
+is defined, it is expected to satisfy the following:
+- If `isless(x, y)` is defined, then so is `isless(y, x)` and `isequal(x, y)`,
+  and exactly one of those three yields `true`.
+- The relation defined by `isless` is transitive, i.e.,
+  `isless(x, y) && isless(y, z)` implies `isless(x, z)`.
+
+Values that are normally unordered, such as `NaN`,
+are ordered in an arbitrary but consistent fashion.
 [`missing`](@ref) values are ordered last.
 
 This is the default comparison used by [`sort`](@ref).
 
 # Implementation
-Non-numeric types with a canonical total order should implement this function.
+Non-numeric types with a total order should implement this function.
 Numeric types only need to implement it if they have special values such as `NaN`.
-Types with a canonical partial order should implement [`<`](@ref).
+Types with a partial order should implement [`<`](@ref).
 """
 function isless end
 
@@ -152,11 +160,11 @@ isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x
 
 function ==(T::Type, S::Type)
     @_pure_meta
-    T<:S && S<:T
+    return ccall(:jl_types_equal, Cint, (Any, Any), T, S) != 0
 end
 function !=(T::Type, S::Type)
     @_pure_meta
-    !(T == S)
+    return !(T == S)
 end
 ==(T::TypeVar, S::Type) = false
 ==(T::Type, S::TypeVar) = false
@@ -440,24 +448,43 @@ julia> extrema([9,pi,4.5])
 (3.141592653589793, 9.0)
 ```
 """
-extrema(itr) = _extrema_itr(itr)
+extrema(itr) = _extrema_itr(identity, itr)
 
-function _extrema_itr(itr)
+"""
+    extrema(f, itr) -> Tuple
+
+Compute both the minimum and maximum of `f` applied to each element in `itr` and return
+them as a 2-tuple. Only one pass is made over `itr`.
+
+!!! compat "Julia 1.2"
+    This method requires Julia 1.2 or later.
+
+# Examples
+```jldoctest
+julia> extrema(sin, 0:π)
+(0.0, 0.9092974268256817)
+```
+"""
+extrema(f, itr) = _extrema_itr(f, itr)
+
+function _extrema_itr(f, itr)
     y = iterate(itr)
     y === nothing && throw(ArgumentError("collection must be non-empty"))
     (v, s) = y
-    vmin = vmax = v
+    vmin = vmax = f(v)
     while true
         y = iterate(itr, s)
         y === nothing && break
         (x, s) = y
-        vmax = max(x, vmax)
-        vmin = min(x, vmin)
+        fx = f(x)
+        vmax = max(fx, vmax)
+        vmin = min(fx, vmin)
     end
     return (vmin, vmax)
 end
 
 extrema(x::Real) = (x, x)
+extrema(f, x::Real) = (y = f(x); (y, y))
 
 ## definitions providing basic traits of arithmetic operators ##
 
@@ -520,17 +547,17 @@ julia> 3 \\ 6
 julia> inv(3) * 6
 2.0
 
-julia> A = [1 2; 3 4]; x = [5, 6];
+julia> A = [4 3; 2 1]; x = [5, 6];
 
 julia> A \\ x
 2-element Array{Float64,1}:
- -4.0
-  4.5
+  6.5
+ -7.0
 
 julia> inv(A) * x
 2-element Array{Float64,1}:
- -4.0
-  4.5
+  6.5
+ -7.0
 ```
 """
 \(x,y) = adjoint(adjoint(y)/adjoint(x))
@@ -562,10 +589,16 @@ See also [`>>`](@ref), [`>>>`](@ref).
 function <<(x::Integer, c::Integer)
     @_inline_meta
     typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
-    (x >= 0 || c >= 0) && return zero(x)
+    (x >= 0 || c >= 0) && return zero(x) << 0  # for type stability
     oftype(x, -1)
 end
-<<(x::Integer, c::Unsigned) = c <= typemax(UInt) ? x << (c % UInt) : zero(x)
+function <<(x::Integer, c::Unsigned)
+    @_inline_meta
+    if c isa UInt
+        throw(MethodError(<<, (x, c)))
+    end
+    c <= typemax(UInt) ? x << (c % UInt) : zero(x) << UInt(0)
+end
 <<(x::Integer, c::Int) = c >= 0 ? x << unsigned(c) : x >> unsigned(-c)
 
 """
@@ -600,11 +633,13 @@ See also [`>>>`](@ref), [`<<`](@ref).
 """
 function >>(x::Integer, c::Integer)
     @_inline_meta
+    if c isa UInt
+        throw(MethodError(>>, (x, c)))
+    end
     typemin(Int) <= c <= typemax(Int) && return x >> (c % Int)
-    (x >= 0 || c < 0) && return zero(x)
+    (x >= 0 || c < 0) && return zero(x) >> 0
     oftype(x, -1)
 end
->>(x::Integer, c::Unsigned) = c <= typemax(UInt) ? x >> (c % UInt) : zero(x)
 >>(x::Integer, c::Int) = c >= 0 ? x >> unsigned(c) : x << unsigned(-c)
 
 """
@@ -636,44 +671,16 @@ See also [`>>`](@ref), [`<<`](@ref).
 """
 function >>>(x::Integer, c::Integer)
     @_inline_meta
-    typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x)
+    typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x) >>> 0
 end
->>>(x::Integer, c::Unsigned) = c <= typemax(UInt) ? x >>> (c % UInt) : zero(x)
+function >>>(x::Integer, c::Unsigned)
+    @_inline_meta
+    if c isa UInt
+        throw(MethodError(>>>, (x, c)))
+    end
+    c <= typemax(UInt) ? x >>> (c % UInt) : zero(x) >>> 0
+end
 >>>(x::Integer, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
-
-# fallback div, fld, and cld implementations
-# NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
-# so it is used here as the basis of float div().
-div(x::T, y::T) where {T<:Real} = convert(T,round((x-rem(x,y))/y))
-
-"""
-    fld(x, y)
-
-Largest integer less than or equal to `x/y`.
-
-# Examples
-```jldoctest
-julia> fld(7.3,5.5)
-1.0
-```
-"""
-fld(x::T, y::T) where {T<:Real} = convert(T,round((x-mod(x,y))/y))
-
-"""
-    cld(x, y)
-
-Smallest integer larger than or equal to `x/y`.
-
-# Examples
-```jldoctest
-julia> cld(5.5,2.2)
-3.0
-```
-"""
-cld(x::T, y::T) where {T<:Real} = convert(T,round((x-modCeil(x,y))/y))
-#rem(x::T, y::T) where {T<:Real} = convert(T,x-y*trunc(x/y))
-#mod(x::T, y::T) where {T<:Real} = convert(T,x-y*floor(x/y))
-modCeil(x::T, y::T) where {T<:Real} = convert(T,x-y*ceil(x/y))
 
 # operator alias
 
@@ -711,6 +718,9 @@ julia> 9 ÷ 4
 
 julia> -5 ÷ 3
 -1
+
+julia> 5.0 ÷ 2
+2.0
 ```
 """
 div
@@ -820,17 +830,39 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 Compose functions: i.e. `(f ∘ g)(args...)` means `f(g(args...))`. The `∘` symbol can be
 entered in the Julia REPL (and most editors, appropriately configured) by typing `\\circ<tab>`.
 
+Function composition also works in prefix form: `∘(f, g)` is the same as `f ∘ g`.
+The prefix form supports composition of multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
+and splatting `∘(fs...)` for composing an iterable collection of functions.
+
+!!! compat "Julia 1.4"
+    Multiple function composition requires at least Julia 1.4.
+
+!!! compat "Julia 1.5"
+    Composition of one function ∘(f)  requires at least Julia 1.5.
+
 # Examples
 ```jldoctest
 julia> map(uppercase∘first, ["apple", "banana", "carrot"])
 3-element Array{Char,1}:
- 'A'
- 'B'
- 'C'
+ 'A': ASCII/Unicode U+0041 (category Lu: Letter, uppercase)
+ 'B': ASCII/Unicode U+0042 (category Lu: Letter, uppercase)
+ 'C': ASCII/Unicode U+0043 (category Lu: Letter, uppercase)
+
+julia> fs = [
+           x -> 2x
+           x -> x/2
+           x -> x-1
+           x -> x+1
+       ];
+
+julia> ∘(fs...)(3)
+3.0
 ```
 """
+function ∘ end
+∘(f) = f
 ∘(f, g) = (x...)->f(g(x...))
-
+∘(f, g, h...) = ∘(f ∘ g, h...)
 
 """
     !f::Function
@@ -909,6 +941,71 @@ used to implement specialized methods.
 ==(x) = Fix2(==, x)
 
 """
+    !=(x)
+
+Create a function that compares its argument to `x` using [`!=`](@ref), i.e.
+a function equivalent to `y -> y != x`.
+The returned function is of type `Base.Fix2{typeof(!=)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.2"
+    This functionality requires at least Julia 1.2.
+"""
+!=(x) = Fix2(!=, x)
+
+"""
+    >=(x)
+
+Create a function that compares its argument to `x` using [`>=`](@ref), i.e.
+a function equivalent to `y -> y >= x`.
+The returned function is of type `Base.Fix2{typeof(>=)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.2"
+    This functionality requires at least Julia 1.2.
+"""
+>=(x) = Fix2(>=, x)
+
+"""
+    <=(x)
+
+Create a function that compares its argument to `x` using [`<=`](@ref), i.e.
+a function equivalent to `y -> y <= x`.
+The returned function is of type `Base.Fix2{typeof(<=)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.2"
+    This functionality requires at least Julia 1.2.
+"""
+<=(x) = Fix2(<=, x)
+
+"""
+    >(x)
+
+Create a function that compares its argument to `x` using [`>`](@ref), i.e.
+a function equivalent to `y -> y > x`.
+The returned function is of type `Base.Fix2{typeof(>)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.2"
+    This functionality requires at least Julia 1.2.
+"""
+>(x) = Fix2(>, x)
+
+"""
+    <(x)
+
+Create a function that compares its argument to `x` using [`<`](@ref), i.e.
+a function equivalent to `y -> y < x`.
+The returned function is of type `Base.Fix2{typeof(<)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.2"
+    This functionality requires at least Julia 1.2.
+"""
+<(x) = Fix2(<, x)
+
+"""
     splat(f)
 
 Defined as
@@ -922,7 +1019,7 @@ passes a tuple as that single argument.
 
 # Example usage:
 ```jldoctest
-julia> map(splat(+), zip(1:3,4:6))
+julia> map(Base.splat(+), zip(1:3,4:6))
 3-element Array{Int64,1}:
  5
  7
@@ -981,6 +1078,17 @@ Some collections follow a slightly different definition. For example,
 use [`haskey`](@ref) or `k in keys(dict)`. For these collections, the result
 is always a `Bool` and never `missing`.
 
+To determine whether an item is not in a given collection, see [`:∉`](@ref).
+You may also negate the `in` by doing `!(a in b)` which is logically similar to "not in".
+
+When broadcasting with `in.(items, collection)` or `items .∈ collection`, both
+`item` and `collection` are broadcasted over, which is often not what is intended.
+For example, if both arguments are vectors (and the dimensions match), the result is
+a vector indicating whether each value in collection `items` is `in` the value at the
+corresponding position in `collection`. To get a vector indicating whether each value
+in `items` is in `collection`, wrap `collection` in a tuple or a `Ref` like this:
+`in.(items, Ref(collection))` or `items .∈ Ref(collection)`.
+
 # Examples
 ```jldoctest
 julia> a = 1:3:20
@@ -1003,6 +1111,22 @@ true
 
 julia> missing in Set([1, 2])
 false
+
+julia> !(21 in a)
+true
+
+julia> !(19 in a)
+false
+
+julia> [1, 2] .∈ [2, 3]
+2-element BitArray{1}:
+ 0
+ 0
+
+julia> [1, 2] .∈ ([2, 3],)
+2-element BitArray{1}:
+ 0
+ 1
 ```
 """
 in, ∋
@@ -1013,6 +1137,14 @@ in, ∋
 
 Negation of `∈` and `∋`, i.e. checks that `item` is not in `collection`.
 
+When broadcasting with `items .∉ collection`, both `item` and `collection` are
+broadcasted over, which is often not what is intended. For example, if both arguments
+are vectors (and the dimensions match), the result is a vector indicating whether
+each value in collection `items` is not in the value at the corresponding position
+in `collection`. To get a vector indicating whether each value in `items` is not in
+`collection`, wrap `collection` in a tuple or a `Ref` like this:
+`items .∉ Ref(collection)`.
+
 # Examples
 ```jldoctest
 julia> 1 ∉ 2:4
@@ -1020,6 +1152,16 @@ true
 
 julia> 1 ∉ 1:3
 false
+
+julia> [1, 2] .∉ [2, 3]
+2-element BitArray{1}:
+ 1
+ 1
+
+julia> [1, 2] .∉ ([2, 3],)
+2-element BitArray{1}:
+ 1
+ 0
 ```
 """
 ∉, ∌

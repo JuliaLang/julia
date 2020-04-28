@@ -35,7 +35,7 @@ const ComplexF16  = Complex{Float16}
 Complex{T}(x::Real) where {T<:Real} = Complex{T}(x,0)
 Complex{T}(z::Complex) where {T<:Real} = Complex{T}(real(z),imag(z))
 (::Type{T})(z::Complex) where {T<:Real} =
-    isreal(z) ? T(real(z))::T : throw(InexactError(Symbol(string(T)), T, z))
+    isreal(z) ? T(real(z))::T : throw(InexactError(nameof(T), T, z))
 
 Complex(z::Complex) = z
 
@@ -108,7 +108,7 @@ Float64
 """
 real(T::Type) = typeof(real(zero(T)))
 real(::Type{T}) where {T<:Real} = T
-real(::Type{Complex{T}}) where {T<:Real} = T
+real(C::Type{<:Complex}) = fieldtype(C, 1)
 
 """
     isreal(x) -> Bool
@@ -184,12 +184,16 @@ function show(io::IO, z::Complex)
     compact = get(io, :compact, false)
     show(io, r)
     if signbit(i) && !isnan(i)
-        i = -i
         print(io, compact ? "-" : " - ")
+        if isa(i,Signed) && !isa(i,BigInt) && i == typemin(typeof(i))
+            show(io, -widen(i))
+        else
+            show(io, -i)
+        end
     else
         print(io, compact ? "+" : " + ")
+        show(io, i)
     end
-    show(io, i)
     if !(isa(i,Integer) && !isa(i,Bool) || isa(i,AbstractFloat) && isfinite(i))
         print(io, "*")
     end
@@ -259,9 +263,14 @@ julia> conj(1 + 3im)
 conj(z::Complex) = Complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))
 abs2(z::Complex) = real(z)*real(z) + imag(z)*imag(z)
-inv(z::Complex)  = conj(z)/abs2(z)
+function inv(z::Complex)
+    c, d = reim(z)
+    (isinf(c) | isinf(d)) && return complex(copysign(zero(c), c), flipsign(-zero(d), d))
+    complex(c, -d)/(c * c + d * d)
+end
 inv(z::Complex{<:Integer}) = inv(float(z))
 
++(z::Complex) = Complex(+real(z), +imag(z))
 -(z::Complex) = Complex(-real(z), -imag(z))
 +(z::Complex, w::Complex) = Complex(real(z) + real(w), imag(z) + imag(w))
 -(z::Complex, w::Complex) = Complex(real(z) - real(w), imag(z) - imag(w))
@@ -345,15 +354,13 @@ function /(a::Complex{T}, b::Complex{T}) where T<:Real
 end
 
 inv(z::Complex{<:Union{Float16,Float32}}) =
-    oftype(z, conj(widen(z))/abs2(widen(z)))
+    oftype(z, inv(widen(z)))
 
 /(z::Complex{T}, w::Complex{T}) where {T<:Union{Float16,Float32}} =
     oftype(z, widen(z)*inv(widen(w)))
 
 # robust complex division for double precision
-# the first step is to scale variables if appropriate ,then do calculations
-# in a way that avoids over/underflow (subfuncs 1 and 2), then undo the scaling.
-# scaling variable s and other techniques
+# variables are scaled & unscaled to avoid over/underflow, if necessary
 # based on arxiv.1210.4539
 #             a + i*b
 #  p + i*q = ---------
@@ -363,13 +370,40 @@ function /(z::ComplexF64, w::ComplexF64)
     absa = abs(a); absb = abs(b);  ab = absa >= absb ? absa : absb # equiv. to max(abs(a),abs(b)) but without NaN-handling (faster)
     absc = abs(c); absd = abs(d);  cd = absc >= absd ? absc : absd
 
-    # constants
-    ov = floatmax(Float64)
-    un = floatmin(Float64)
-    ϵ  = eps(Float64)
-    halfov = 0.5*ov
-    twounϵ = un*2.0/ϵ
-    bs = 2.0/(ϵ*ϵ)
+    halfov = 0.5*floatmax(Float64)              # overflow threshold
+    twounϵ = floatmin(Float64)*2.0/eps(Float64) # underflow threshold
+
+    # actual division operations
+    if  ab>=halfov || ab<=twounϵ || cd>=halfov || cd<=twounϵ # over/underflow case
+        p,q = scaling_cdiv(a,b,c,d,ab,cd) # scales a,b,c,d before division (unscales after)
+    else
+        p,q = cdiv(a,b,c,d)
+    end
+
+    return ComplexF64(p,q)
+end
+
+# sub-functionality for /(z::ComplexF64, w::ComplexF64)
+@inline function cdiv(a::Float64, b::Float64, c::Float64, d::Float64)
+    if abs(d)<=abs(c)
+        p,q = robust_cdiv1(a,b,c,d)
+    else
+        p,q = robust_cdiv1(b,a,d,c)
+        q = -q
+    end
+    return p,q
+end
+@noinline function scaling_cdiv(a::Float64, b::Float64, c::Float64, d::Float64, ab::Float64, cd::Float64)
+    # this over/underflow functionality is outlined for performance, cf. #29688
+    a,b,c,d,s = scaleargs_cdiv(a,b,c,d,ab,cd)
+    p,q = cdiv(a,b,c,d)
+    return p*s,q*s
+end
+function scaleargs_cdiv(a::Float64, b::Float64, c::Float64, d::Float64, ab::Float64, cd::Float64)
+    ϵ      = eps(Float64)
+    halfov = 0.5*floatmax(Float64)
+    twounϵ = floatmin(Float64)*2.0/ϵ
+    bs     = 2.0/(ϵ*ϵ)
 
     # scaling
     s = 1.0
@@ -384,11 +418,9 @@ function /(z::ComplexF64, w::ComplexF64)
         c*=bs;  d*=bs;  s*=bs   # scale up c,d
     end
 
-    # division operations
-    abs(d)<=abs(c) ? ((p,q)=robust_cdiv1(a,b,c,d)  ) : ((p,q)=robust_cdiv1(b,a,d,c); q=-q)
-    return ComplexF64(p*s,q*s) # undo scaling
+    return a,b,c,d,s
 end
-function robust_cdiv1(a::Float64, b::Float64, c::Float64, d::Float64)
+@inline function robust_cdiv1(a::Float64, b::Float64, c::Float64, d::Float64)
     r = d/c
     t = 1.0/(c+d*r)
     p = robust_cdiv2(a,b,c,d,r,t)
@@ -406,6 +438,7 @@ end
 
 function inv(w::ComplexF64)
     c, d = reim(w)
+    (isinf(c) | isinf(d)) && return complex(copysign(0.0, c), flipsign(-0.0, d))
     half = 0.5
     two = 2.0
     cd = max(abs(c), abs(d))
@@ -929,10 +962,14 @@ function atanh(z::Complex{T}) where T<:AbstractFloat
             return Complex(copysign(zero(x),x), copysign(oftype(y,pi)/2, y))
         end
         return Complex(real(1/z), copysign(oftype(y,pi)/2, y))
-    elseif ax==1
+    end
+    β = copysign(one(T), x)
+    z *= β
+    x, y = reim(z)
+    if x == 1
         if y == 0
-            ξ = copysign(oftype(x,Inf),x)
-            η = zero(y)
+            ξ = oftype(x, Inf)
+            η = y
         else
             ym = ay+ρ
             ξ = log(sqrt(sqrt(4+y*y))/sqrt(ym))
@@ -947,7 +984,7 @@ function atanh(z::Complex{T}) where T<:AbstractFloat
         end
         η = angle(Complex((1-x)*(1+x)-ysq, 2y))/2
     end
-    Complex(ξ, η)
+    β * Complex(ξ, η)
 end
 atanh(z::Complex) = atanh(float(z))
 
@@ -991,7 +1028,3 @@ function complex(A::AbstractArray{T}) where T
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)
 end
-
-## promotion to complex ##
-
-_default_type(T::Type{Complex}) = Complex{Int}

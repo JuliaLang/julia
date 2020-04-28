@@ -30,6 +30,14 @@ using .Main.OffsetArrays
 
 @test Base.mapfoldr(abs2, -, 2:5) == -14
 @test Base.mapfoldr(abs2, -, 2:5; init=10) == -4
+@test @inferred(mapfoldr(x -> x + 1, (x, y) -> (x, y...), (1, 2.0, '3');
+                         init = ())) == (2, 3.0, '4')
+
+@test foldr((x, y) -> ('⟨' * x * '|' * y * '⟩'), "λ 🐨.α") == "⟨λ|⟨ |⟨🐨|⟨.|α⟩⟩⟩⟩" # issue #31780
+let x = rand(10)
+    @test 0 == @allocated(sum(Iterators.reverse(x)))
+    @test 0 == @allocated(foldr(-, x))
+end
 
 # reduce
 @test reduce(+, Int64[]) === Int64(0) # In reference to issue #20144 (PR #20160)
@@ -43,6 +51,27 @@ using .Main.OffsetArrays
 @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
 @test mapreduce((x)->x[1:3], (x,y)->"($x+$y)", ["abcd", "efgh", "01234"]) == "((abc+efg)+012)"
 
+# mapreduce with multiple iterators
+@test mapreduce(*, +, (i for i in 2:3), (i for i in 4:5)) == 23
+@test mapreduce(*, +, (i for i in 2:3), (i for i in 4:5); init = 2) == 25
+@test mapreduce(*, (x,y)->"($x+$y)", ["a", "b", "c"], ["d", "e", "f"]) == "((ad+be)+cf)"
+@test mapreduce(*, (x,y)->"($x+$y)", ["a", "b", "c"], ["d", "e", "f"]; init = "gh") ==
+    "(((gh+ad)+be)+cf)"
+
+@test mapreduce(*, +, [2, 3], [4, 5]) == 23
+@test mapreduce(*, +, [2, 3], [4, 5]; init = 2) == 25
+@test mapreduce(*, +, [2, 3], [4, 5]; dims = 1) == [23]
+@test mapreduce(*, +, [2, 3], [4, 5]; dims = 1, init = 2) == [25]
+@test mapreduce(*, +, [2, 3], [4, 5]; dims = 2) == [8, 15]
+@test mapreduce(*, +, [2, 3], [4, 5]; dims = 2, init = 2) == [10, 17]
+
+@test mapreduce(*, +, [2 3; 4 5], [6 7; 8 9]) == 110
+@test mapreduce(*, +, [2 3; 4 5], [6 7; 8 9]; init = 2) == 112
+@test mapreduce(*, +, [2 3; 4 5], [6 7; 8 9]; dims = 1) == [44 66]
+@test mapreduce(*, +, [2 3; 4 5], [6 7; 8 9]; dims = 1, init = 2) == [46 68]
+@test mapreduce(*, +, [2 3; 4 5], [6 7; 8 9]; dims = 2) == reshape([33, 77], :, 1)
+@test mapreduce(*, +, [2 3; 4 5], [6 7; 8 9]; dims = 2, init = 2) == reshape([35, 79], :, 1)
+
 # mapreduce() for 1- 2- and n-sized blocks (PR #19325)
 @test mapreduce(-, +, [-10]) == 10
 @test mapreduce(abs2, +, [-9, -3]) == 81 + 9
@@ -50,6 +79,7 @@ using .Main.OffsetArrays
 @test mapreduce(-, +, Vector(range(1.0, stop=10000.0, length=10000))) == -50005000.0
 # empty mr
 @test mapreduce(abs2, +, Float64[]) === 0.0
+@test mapreduce(abs2, *, Float64[]) === 1.0
 @test mapreduce(abs2, max, Float64[]) === 0.0
 @test mapreduce(abs, max, Float64[]) === 0.0
 @test_throws ArgumentError mapreduce(abs2, &, Float64[])
@@ -155,6 +185,7 @@ end
 
 @test prod([3]) === 3
 @test prod([Int8(3)]) === Int(3)
+@test prod([UInt8(3)]) === UInt(3)
 @test prod([3.0]) === 3.0
 
 @test prod(z) === 120
@@ -180,17 +211,94 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test maximum(5) == 5
 @test minimum(5) == 5
 @test extrema(5) == (5, 5)
+@test extrema(abs2, 5) == (25, 25)
 
-@test maximum([4, 3, 5, 2]) == 5
-@test minimum([4, 3, 5, 2]) == 2
-@test extrema([4, 3, 5, 2]) == (2, 5)
+let x = [4,3,5,2]
+    @test maximum(x) == 5
+    @test minimum(x) == 2
+    @test extrema(x) == (2, 5)
+
+    @test maximum(abs2, x) == 25
+    @test minimum(abs2, x) == 4
+    @test extrema(abs2, x) == (4, 25)
+end
+
+@test maximum([-0.,0.]) === 0.0
+@test maximum([0.,-0.]) === 0.0
+@test maximum([0.,-0.,0.]) === 0.0
+@test minimum([-0.,0.]) === -0.0
+@test minimum([0.,-0.]) === -0.0
+@test minimum([0.,-0.,0.]) === -0.0
+
+@testset "minimum/maximum checks all elements" begin
+    for N in [2:20;150;300]
+        for i in 1:N
+            arr = fill(0., N)
+            truth = rand()
+            arr[i] = truth
+            @test maximum(arr) == truth
+
+            truth = -rand()
+            arr[i] = truth
+            @test minimum(arr) == truth
+
+            arr[i] = NaN
+            @test isnan(maximum(arr))
+            @test isnan(minimum(arr))
+
+            arr = zeros(N)
+            @test minimum(arr) === 0.0
+            @test maximum(arr) === 0.0
+
+            arr[i] = -0.0
+            @test minimum(arr) === -0.0
+            @test maximum(arr) ===  0.0
+
+            arr = -zeros(N)
+            @test minimum(arr) === -0.0
+            @test maximum(arr) === -0.0
+            arr[i] = 0.0
+            @test minimum(arr) === -0.0
+            @test maximum(arr) === 0.0
+        end
+    end
+end
+
+@testset "maximum works on generic order #30320" begin
+    for n in [1:20;1500]
+        arr = randn(n)
+        @test GenericOrder(maximum(arr)) === maximum(map(GenericOrder, arr))
+        @test GenericOrder(minimum(arr)) === minimum(map(GenericOrder, arr))
+        f = x -> x
+        @test GenericOrder(maximum(f,arr)) === maximum(f,map(GenericOrder, arr))
+        @test GenericOrder(minimum(f,arr)) === minimum(f,map(GenericOrder, arr))
+    end
+end
+
+@testset "maximum no out of bounds access #30462" begin
+    arr = fill(-Inf, 128,128)
+    @test maximum(arr) == -Inf
+    arr = fill(Inf, 128^2)
+    @test minimum(arr) == Inf
+    for center in [256, 1024, 4096, 128^2]
+        for offset in -10:10
+            len = center + offset
+            x = randn()
+            arr = fill(x, len)
+            @test maximum(arr) === x
+            @test minimum(arr) === x
+        end
+    end
+end
 
 @test isnan(maximum([NaN]))
 @test isnan(minimum([NaN]))
 @test isequal(extrema([NaN]), (NaN, NaN))
 
 @test isnan(maximum([NaN, 2.]))
+@test isnan(maximum([2., NaN]))
 @test isnan(minimum([NaN, 2.]))
+@test isnan(minimum([2., NaN]))
 @test isequal(extrema([NaN, 2.]), (NaN,NaN))
 
 @test isnan(maximum([NaN, 2., 3.]))
@@ -211,6 +319,7 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 
 @test maximum(abs2, 3:7) == 49
 @test minimum(abs2, 3:7) == 9
+@test extrema(abs2, 3:7) == (9, 49)
 
 @test maximum(Int16[1]) === Int16(1)
 @test maximum(Vector(Int16(1):Int16(100))) === Int16(100)
@@ -227,6 +336,7 @@ A = circshift(reshape(1:24,2,3,4), (0,1,1))
 @test size(extrema(A,dims=1)) == size(maximum(A,dims=1))
 @test size(extrema(A,dims=(1,2))) == size(maximum(A,dims=(1,2)))
 @test size(extrema(A,dims=(1,2,3))) == size(maximum(A,dims=(1,2,3)))
+@test extrema(x->div(x, 2), A, dims=(2,3)) == reshape([(0,11),(1,12)],2,1,1)
 
 # any & all
 
@@ -335,6 +445,11 @@ struct SomeFunctor end
 @test count(x->x>0, Int[]) == count(Bool[]) == 0
 @test count(x->x>0, -3:5) == count((-3:5) .> 0) == 5
 @test count([true, true, false, true]) == count(BitVector([true, true, false, true])) == 3
+let x = repeat([false, true, false, true, true, false], 7)
+    @test count(x) == 21
+    GC.@preserve x (unsafe_store!(Ptr{UInt8}(pointer(x)), 0xfe, 3))
+    @test count(x) == 21
+end
 @test_throws TypeError count(sqrt, [1])
 @test_throws TypeError count([1])
 let itr = (x for x in 1:10 if x < 7)
@@ -425,3 +540,11 @@ x = [j^2 for j in i]
 i = Base.Slice(0:0)
 x = [j+7 for j in i]
 @test sum(x) == 7
+
+@testset "initial value handling with flatten" begin
+    @test mapfoldl(
+        x -> (x, x),
+        ((a, b), (c, d)) -> (min(a, c), max(b, d)),
+        Iterators.flatten((1:2, 3:4)),
+    ) == (1, 4)
+end

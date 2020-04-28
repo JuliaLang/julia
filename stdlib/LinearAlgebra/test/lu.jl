@@ -3,7 +3,7 @@
 module TestLU
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: ldiv!, BlasInt, BlasFloat
+using LinearAlgebra: ldiv!, BlasReal, BlasInt, BlasFloat, rdiv!
 
 n = 10
 
@@ -72,6 +72,12 @@ dimg  = randn(n)/2
             bft = eltya <: Real ? LinearAlgebra.LU{BigFloat} : LinearAlgebra.LU{Complex{BigFloat}}
             bflua = convert(bft, lua)
             @test bflua.L*bflua.U ≈ big.(a)[p,:] rtol=ε
+            @test Factorization{eltya}(lua) === lua
+            # test Factorization with different eltype
+            if eltya <: BlasReal
+                @test Array(Factorization{Float16}(lua)) ≈ Array(lu(convert(Matrix{Float16}, a)))
+                @test eltype(Factorization{Float16}(lua)) == Float16
+            end
         end
         # compact printing
         lstring = sprint(show,l)
@@ -86,6 +92,13 @@ dimg  = randn(n)/2
         @test lud.L*lud.U ≈ lud.P*Array(d)
         @test lud.L*lud.U ≈ Array(d)[lud.p,:]
         @test AbstractArray(lud) ≈ d
+        @test Array(lud) ≈ d
+        if eltya != Int
+            dlu = convert.(eltya, [1, 1])
+            dia = convert.(eltya, [-2, -2, -2])
+            tri = Tridiagonal(dlu, dia, dlu)
+            @test_throws ArgumentError lu!(tri)
+        end
     end
     @testset for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
         b  = eltyb == Int ? rand(1:5, n, 2) :
@@ -128,6 +141,17 @@ dimg  = randn(n)/2
                 ldiv!(c_dest, adjoint(lua), c)
                 @test norm(b_dest - lua' \ b, 1) < ε*κ*2n
                 @test norm(c_dest - lua' \ c, 1) < ε*κ*n
+
+                if eltyb != Int && !(eltya <: Complex) || eltya <: Complex && eltyb <: Complex
+                    p = Matrix(b')
+                    q = Matrix(c')
+                    p_dest = copy(p)
+                    q_dest = copy(q)
+                    rdiv!(p_dest, lua)
+                    rdiv!(q_dest, lua)
+                    @test norm(p_dest - p / lua, 1) < ε*κ*2n
+                    @test norm(q_dest - q / lua, 1) < ε*κ*n
+                end
             end
             if eltya <: BlasFloat && eltyb <: BlasFloat
                 e = rand(eltyb,n,n)
@@ -196,10 +220,10 @@ end
     @test_throws SingularException lu!(copy(A); check = true)
     @test !issuccess(lu(A; check = false))
     @test !issuccess(lu!(copy(A); check = false))
-    @test_throws SingularException lu(A, Val(false))
-    @test_throws SingularException lu!(copy(A), Val(false))
-    @test_throws SingularException lu(A, Val(false); check = true)
-    @test_throws SingularException lu!(copy(A), Val(false); check = true)
+    @test_throws ZeroPivotException lu(A, Val(false))
+    @test_throws ZeroPivotException lu!(copy(A), Val(false))
+    @test_throws ZeroPivotException lu(A, Val(false); check = true)
+    @test_throws ZeroPivotException lu!(copy(A), Val(false); check = true)
     @test !issuccess(lu(A, Val(false); check = false))
     @test !issuccess(lu!(copy(A), Val(false); check = false))
     F = lu(A; check = false)
@@ -214,6 +238,7 @@ end
     falu = lu(fa)
     alu = lu(a)
     falu = convert(typeof(falu),alu)
+    @test Array(alu) == fa
     @test AbstractArray(alu) == fa
 end
 
@@ -254,10 +279,6 @@ end
     @test_throws DomainError logdet([1 1; 1 -1])
 end
 
-@testset "Issue 21453" begin
-    @test_throws ArgumentError LinearAlgebra._cond1Inf(lu(randn(5,5)), 2, 2.0)
-end
-
 @testset "REPL printing" begin
         bf = IOBuffer()
         show(bf, "text/plain", lu(Matrix(I, 4, 4)))
@@ -290,10 +311,53 @@ include("trickyarithmetic.jl")
 @testset "lu with type whose sum is another type" begin
     A = TrickyArithmetic.A[1 2; 3 4]
     ElT = TrickyArithmetic.D{TrickyArithmetic.C,TrickyArithmetic.C}
-    B = lu(A)
+    B = lu(A, Val(false))
     @test B isa LinearAlgebra.LU{ElT,Matrix{ElT}}
-    C = lu(A, Val(false))
-    @test C isa LinearAlgebra.LU{ElT,Matrix{ElT}}
+end
+
+@testset "Issue #30917. Determinant of integer matrix" begin
+    @test det([1 1 0 0 1 0 0 0
+               1 0 1 0 0 1 0 0
+               1 0 0 1 0 0 1 0
+               0 1 1 1 0 0 0 0
+               0 1 0 0 0 0 1 1
+               0 0 1 0 1 0 0 1
+               0 0 0 1 1 1 0 0
+               0 0 0 0 1 1 0 1]) ≈ 6
+end
+
+@testset "Issue #33177. No ldiv!(LU, Adjoint)" begin
+    A = [1 0; 1 1]
+    B = [1 2; 2 8]
+    F = lu(B)
+    @test (A  / F') * B == A
+    @test (A' / F') * B == A'
+
+    a = complex.(randn(2), randn(2))
+    @test (a' / F') * B ≈ a'
+    @test (transpose(a) / F') * B ≈ transpose(a)
+
+    A = complex.(randn(2, 2), randn(2, 2))
+    @test (A' / F') * B ≈ A'
+    @test (transpose(A) / F') * B ≈ transpose(A)
+end
+
+@testset "0x0 matrix" begin
+    A = ones(0, 0)
+    F = lu(A)
+    @test F.U == ones(0, 0)
+    @test F.L == ones(0, 0)
+    @test F.P == ones(0, 0)
+    @test F.p == []
+end
+
+@testset "more rdiv! methods" begin
+    for elty in (Float16, Float64, ComplexF64), transform in (transpose, adjoint)
+        A = randn(elty, 5, 5)
+        C = copy(A)
+        B = randn(elty, 5, 5)
+        @test rdiv!(transform(A), transform(lu(B))) ≈ transform(C) / transform(B)
+    end
 end
 
 end # module TestLU

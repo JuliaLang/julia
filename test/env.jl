@@ -33,10 +33,16 @@ end
     @test_throws KeyError ENV[key]
     @test get(ENV,key,"default") == "default"
     @test get(() -> "default", ENV, key) == "default"
+
+    key = randstring(25)
+    @test !haskey(ENV, key)
+    @test get!(ENV, key, "default") == "default"
+    @test haskey(ENV, key)
+    @test ENV[key] == "default"
 end
 @testset "#17956" begin
     @test length(ENV) > 1
-    k1, k2 = "__test__", "__test1__"
+    k1, k2 = "__TEST__", "__TEST1__"
     withenv(k1=>k1, k2=>k2) do
         b_k1, b_k2 = false, false
         for (k, v) in ENV
@@ -80,4 +86,25 @@ end
     @test haskey(ENV, "testing_envdict")
     @test ENV["testing_envdict"] == "tested"
     delete!(ENV, "testing_envdict")
+end
+
+if Sys.iswindows()
+    @testset "windows case-insensitivity" begin
+        for k in ("testing_envdict", "testing_envdict_\u00ee")
+            K = uppercase(k)
+            v = "tested $k"
+            ENV[k] = v
+            @test haskey(ENV, K)
+            @test ENV[K] == v
+            @test K in keys(ENV)
+            @test K in collect(keys(ENV))
+            @test k ∉ collect(keys(ENV))
+            env = copy(ENV)
+            @test haskey(env, K)
+            @test env[K] == v
+            @test !haskey(env, k)
+            delete!(ENV, k)
+            @test !haskey(ENV, K)
+        end
+    end
 end

@@ -164,8 +164,8 @@ julia> collect(Iterators.reverse(Squares(4)))
 |:-------------------- |:-------------------------------- |
 | `getindex(X, i)`     | `X[i]`, indexed element access   |
 | `setindex!(X, v, i)` | `X[i] = v`, indexed assignment   |
-| `firstindex(X)`      | The first index                  |
-| `lastindex(X)`        | The last index, used in `X[end]` |
+| `firstindex(X)`         | The first index, used in `X[begin]` |
+| `lastindex(X)`           | The last index, used in `X[end]` |
 
 For the `Squares` iterable above, we can easily compute the `i`th element of the sequence by squaring
 it.  We can expose this as an indexing expression `S[i]`. To opt into this behavior, `Squares`
@@ -181,8 +181,8 @@ julia> Squares(100)[23]
 529
 ```
 
-Additionally, to support the syntax `S[end]`, we must define [`lastindex`](@ref) to specify the last
-valid index. It is recommended to also define [`firstindex`](@ref) to specify the first valid index:
+Additionally, to support the syntax `S[begin]` and `S[end]`, we must define [`firstindex`](@ref) and
+[`lastindex`](@ref) to specify the first and last valid indices, respectively:
 
 ```jldoctest squaretype
 julia> Base.firstindex(S::Squares) = 1
@@ -226,7 +226,7 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | **Optional methods**                            | **Default definition**                 | **Brief description**                                                                 |
 | `IndexStyle(::Type)`                            | `IndexCartesian()`                     | Returns either `IndexLinear()` or `IndexCartesian()`. See the description below.      |
 | `getindex(A, I...)`                             | defined in terms of scalar `getindex`  | [Multidimensional and nonscalar indexing](@ref man-array-indexing)                    |
-| `setindex!(A, I...)`                            | defined in terms of scalar `setindex!` | [Multidimensional and nonscalar indexed assignment](@ref man-array-indexing)          |
+| `setindex!(A, X, I...)`                            | defined in terms of scalar `setindex!` | [Multidimensional and nonscalar indexed assignment](@ref man-array-indexing)          |
 | `iterate`                                       | defined in terms of scalar `getindex`  | Iteration                                                                             |
 | `length(A)`                                     | `prod(size(A))`                        | Number of elements                                                                    |
 | `similar(A)`                                    | `similar(A, eltype(A), size(A))`       | Return a mutable array with the same shape and element type                           |
@@ -235,8 +235,8 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `similar(A, ::Type{S}, dims::Dims)`             | `Array{S}(undef, dims)`                | Return a mutable array with the specified element type and size                       |
 | **Non-traditional indices**                     | **Default definition**                 | **Brief description**                                                                 |
 | `axes(A)`                                    | `map(OneTo, size(A))`                  | Return the `AbstractUnitRange` of valid indices                                       |
-| `Base.similar(A, ::Type{S}, inds)`              | `similar(A, S, Base.to_shape(inds))`   | Return a mutable array with the specified indices `inds` (see below)                  |
-| `Base.similar(T::Union{Type,Function}, inds)`   | `T(Base.to_shape(inds))`               | Return an array similar to `T` with the specified indices `inds` (see below)          |
+| `similar(A, ::Type{S}, inds)`              | `similar(A, S, Base.to_shape(inds))`   | Return a mutable array with the specified indices `inds` (see below)                  |
+| `similar(T::Union{Type,Function}, inds)`   | `T(Base.to_shape(inds))`               | Return an array similar to `T` with the specified indices `inds` (see below)          |
 
 If a type is defined as a subtype of `AbstractArray`, it inherits a very large set of rich behaviors
 including iteration and multidimensional indexing built on top of single-element access.  See
@@ -406,7 +406,7 @@ perhaps range-types `Ind` of your own design. For more information, see
 | Methods to implement                            |                                        | Brief description                                                                     |
 |:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
 | `strides(A)`                             |                                        | Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If `A` is an `AbstractArray{T,0}`, this should return an empty tuple.    |
-| `Base.unsafe_convert(::Type{Ptr{T}}, A)`        |                                        | Return the native address of an array.                                            |
+| `Base.unsafe_convert(::Type{Ptr{T}}, A)`        |                                        | Return the native address of an array.                                     |
 | **Optional methods**                            | **Default definition**                 | **Brief description**                                                                 |
 | `stride(A, i::Int)`                             |     `strides(A)[i]`                                   | Return the distance in memory (in number of elements) between adjacent elements in dimension k.    |
 
@@ -440,7 +440,7 @@ V = view(A, [1,2,4], :)   # is not strided, as the spacing between rows is not f
 | `Base.similar(bc::Broadcasted{DestStyle}, ::Type{ElType})` | Allocation of output container |
 | **Optional methods** | | |
 | `Base.BroadcastStyle(::Style1, ::Style2) = Style12()` | Precedence rules for mixing styles |
-| `Base.broadcast_axes(x)` | Declaration of the indices of `x` for broadcasting purposes (defaults to [`axes(x)`](@ref)) |
+| `Base.axes(x)` | Declaration of the indices of `x`, as per [`axes(x)`](@ref). |
 | `Base.broadcastable(x)` | Convert `x` to an object that has `axes` and supports indexing |
 | **Bypassing default machinery** | |
 | `Base.copy(bc::Broadcasted{DestStyle})` | Custom implementation of `broadcast` |
@@ -565,10 +565,11 @@ end
 find_aac(bc::Base.Broadcast.Broadcasted) = find_aac(bc.args)
 find_aac(args::Tuple) = find_aac(find_aac(args[1]), Base.tail(args))
 find_aac(x) = x
+find_aac(::Tuple{}) = nothing
 find_aac(a::ArrayAndChar, rest) = a
 find_aac(::Any, rest) = find_aac(rest)
 # output
-find_aac (generic function with 5 methods)
+find_aac (generic function with 6 methods)
 ```
 
 From these definitions, one obtains the following behavior:

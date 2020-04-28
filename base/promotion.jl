@@ -104,7 +104,9 @@ function typejoin(@nospecialize(a), @nospecialize(b))
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && ai <: bi && bi <: ai)
                     aprimary = aprimary{ai}
                 else
-                    pushfirst!(vars, aprimary.var)
+                    # pushfirst!(vars, aprimary.var)
+                    _growbeg!(vars, 1)
+                    arrayset(false, vars, aprimary.var, 1)
                     aprimary = aprimary.body
                 end
             end
@@ -231,10 +233,6 @@ it for new types as appropriate.
 function promote_rule end
 
 promote_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
-# To fix ambiguities
-promote_rule(::Type{Any}, ::Type{<:Any}) = Any
-promote_rule(::Type{<:Any}, ::Type{Any}) = Any
-promote_rule(::Type{Any}, ::Type{Any}) = Any
 
 promote_result(::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} = (@_inline_meta; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
@@ -351,9 +349,6 @@ muladd(x::Number, y::Number, z::Number) = muladd(promote(x,y,z)...)
 <( x::Real, y::Real)     = (< )(promote(x,y)...)
 <=(x::Real, y::Real)     = (<=)(promote(x,y)...)
 
-div(x::Real, y::Real) = div(promote(x,y)...)
-fld(x::Real, y::Real) = fld(promote(x,y)...)
-cld(x::Real, y::Real) = cld(promote(x,y)...)
 rem(x::Real, y::Real) = rem(promote(x,y)...)
 mod(x::Real, y::Real) = mod(promote(x,y)...)
 
@@ -363,11 +358,6 @@ fld1(x::Real, y::Real) = fld1(promote(x,y)...)
 max(x::Real, y::Real) = max(promote(x,y)...)
 min(x::Real, y::Real) = min(promote(x,y)...)
 minmax(x::Real, y::Real) = minmax(promote(x, y)...)
-
-# "Promotion" that takes a function into account and tries to preserve
-# non-concrete types. These are meant to be used mainly by elementwise
-# operations, so it is advised against overriding them
-_default_type(T::Type) = T
 
 if isdefined(Core, :Compiler)
     const _return_type = Core.Compiler.return_type
@@ -382,28 +372,11 @@ Guess what an appropriate container eltype would be for storing results of
 `f(::argtypes...)`. The guess is in part based on type inference, so can change any time.
 
 !!! warning
-    In pathological cases, the type returned by `promote_op(f, argtypes...)` may not even
-    be a supertype of the return value of `f(::argtypes...)`. Therefore, `promote_op`
-    should _not_ be used e.g. in the preallocation of an output array.
-
-!!! warning
     Due to its fragility, use of `promote_op` should be avoided. It is preferable to base
     the container eltype on the type of the actual elements. Only in the absence of any
     elements (for an empty result container), it may be unavoidable to call `promote_op`.
 """
-promote_op(::Any...) = Any
-function promote_op(f, ::Type{S}) where S
-    TT = Tuple{_default_type(S)}
-    T = _return_type(f, TT)
-    isdispatchtuple(Tuple{S}) && return isdispatchtuple(Tuple{T}) ? T : Any
-    return typejoin(S, T)
-end
-function promote_op(f, ::Type{R}, ::Type{S}) where {R,S}
-    TT = Tuple{_default_type(R), _default_type(S)}
-    T = _return_type(f, TT)
-    isdispatchtuple(Tuple{R}) && isdispatchtuple(Tuple{S}) && return isdispatchtuple(Tuple{T}) ? T : Any
-    return typejoin(R, S, T)
-end
+promote_op(f, S::Type...) = _return_type(f, Tuple{S...})
 
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 

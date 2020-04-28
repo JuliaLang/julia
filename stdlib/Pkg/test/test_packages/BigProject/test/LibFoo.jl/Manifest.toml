@@ -1,8 +1,0 @@
-[[Example]]
-deps = ["Test"]
-git-tree-sha1 = "8eb7b4d4ca487caade9ba3e85932e28ce6d6e1f8"
-uuid = "7876af07-990d-54b4-ab0e-23690620f79a"
-version = "0.5.1"
-
-[[Test]]
-uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

@@ -116,7 +116,6 @@ Types:
 ```c
 jl_datatype_t *jl_apply_type(jl_datatype_t *tc, jl_tuple_t *params);
 jl_datatype_t *jl_apply_array_type(jl_datatype_t *type, size_t dim);
-jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types);
 ```
 
 While these are the most commonly used options, there are more low-level constructors too, which

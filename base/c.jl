@@ -26,7 +26,7 @@ and will be converted automatically at the call site to the appropriate type.
 
 See [`@cfunction`](@ref).
 """
-struct CFunction <: Ref{Cvoid}
+mutable struct CFunction <: Ref{Cvoid}
     ptr::Ptr{Cvoid}
     f::Any
     _1::Ptr{Cvoid}
@@ -39,7 +39,7 @@ unsafe_convert(::Type{Ptr{Cvoid}}, cf::CFunction) = cf.ptr
     @cfunction(callable, ReturnType, (ArgumentTypes...,)) -> Ptr{Cvoid}
     @cfunction(\$callable, ReturnType, (ArgumentTypes...,)) -> CFunction
 
-Generate a C-callable function pointer from the Julia function `closure`
+Generate a C-callable function pointer from the Julia function `callable`
 for the given type signature.
 To pass the return value to a `ccall`, use the argument type `Ptr{Cvoid}` in the signature.
 
@@ -47,7 +47,7 @@ Note that the argument type tuple must be a literal tuple, and not a tuple-value
 (although it can include a splat expression). And that these arguments will be evaluated in global scope
 during compile-time (not deferred until runtime).
 Adding a '\\\$' in front of the function argument changes this to instead create a runtime closure
-over the local variable `callable`.
+over the local variable `callable` (this is not supported on all architectures).
 
 See [manual section on ccall and cfunction usage](@ref Calling-C-and-Fortran-Code).
 
@@ -61,12 +61,12 @@ julia> @cfunction(foo, Int, (Int, Int))
 Ptr{Cvoid} @0x000000001b82fcd0
 ```
 """
-macro cfunction(f, at, rt)
-    if !(isa(rt, Expr) && rt.head === :tuple)
+macro cfunction(f, rt, at)
+    if !(isa(at, Expr) && at.head === :tuple)
         throw(ArgumentError("@cfunction argument types must be a literal tuple"))
     end
-    rt.head = :call
-    pushfirst!(rt.args, GlobalRef(Core, :svec))
+    at.head = :call
+    pushfirst!(at.args, GlobalRef(Core, :svec))
     if isa(f, Expr) && f.head === :$
         fptr = f.args[1]
         typ = CFunction
@@ -74,7 +74,7 @@ macro cfunction(f, at, rt)
         fptr = QuoteNode(f)
         typ = Ptr{Cvoid}
     end
-    cfun = Expr(:cfunction, typ, fptr, at, rt, QuoteNode(:ccall))
+    cfun = Expr(:cfunction, typ, fptr, rt, at, QuoteNode(:ccall))
     return esc(cfun)
 end
 
@@ -183,7 +183,7 @@ Calling [`Ref(array[, index])`](@ref Ref) is generally preferable to this functi
 """
 function pointer end
 
-pointer(p::Cstring) = convert(Ptr{UInt8}, p)
+pointer(p::Cstring) = convert(Ptr{Cchar}, p)
 pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
 
 # comparisons against pointers (mainly to support `cstr==C_NULL`)
@@ -203,7 +203,7 @@ function cconvert(::Type{Cwstring}, s::AbstractString)
     return v
 end
 
-eltype(::Type{Cstring}) = UInt8
+eltype(::Type{Cstring}) = Cchar
 eltype(::Type{Cwstring}) = Cwchar_t
 
 containsnul(p::Ptr, len) =
@@ -292,7 +292,7 @@ transcode(T, src::String) = transcode(T, codeunits(src))
 transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
 function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
-    @assert !has_offset_axes(src)
+    require_one_based_indexing(src)
     dst = UInt16[]
     i, n = 1, length(src)
     n > 0 || return dst
@@ -343,7 +343,7 @@ function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
 end
 
 function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
-    @assert !has_offset_axes(src)
+    require_one_based_indexing(src)
     n = length(src)
     n == 0 && return UInt8[]
 
@@ -518,4 +518,177 @@ macro ccallable(def)
 end
 macro ccallable(rt, def)
     expand_ccallable(rt, def)
+end
+
+# @ccall implementation
+"""
+    ccall_macro_parse(expression)
+
+`ccall_macro_parse` is an implementation detail of `@ccall
+
+it takes an expression like `:(printf("%d"::Cstring, value::Cuint)::Cvoid)`
+returns: a tuple of `(function_name, return_type, arg_types, args)`
+
+The above input outputs this:
+
+    (:printf, :Cvoid, [:Cstring, :Cuint], ["%d", :value])
+"""
+function ccall_macro_parse(expr::Expr)
+    # setup and check for errors
+    if !Meta.isexpr(expr, :(::))
+        throw(ArgumentError("@ccall needs a function signature with a return type"))
+    end
+    rettype = expr.args[2]
+
+    call = expr.args[1]
+    if !Meta.isexpr(call, :call)
+        throw(ArgumentError("@ccall has to take a function call"))
+    end
+
+    # get the function symbols
+    func = let f = call.args[1]
+        if Meta.isexpr(f, :.)
+            :(($(f.args[2]), $(f.args[1])))
+        elseif Meta.isexpr(f, :$)
+            f
+        elseif f isa Symbol
+            QuoteNode(f)
+        else
+            throw(ArgumentError("@ccall function name must be a symbol, a `.` node (e.g. `libc.printf`) or an interpolated function pointer (with `\$`)"))
+        end
+    end
+
+    # detect varargs
+    varargs = nothing
+    argstart = 2
+    callargs = call.args
+    if length(callargs) >= 2 && Meta.isexpr(callargs[2], :parameters)
+        argstart = 3
+        varargs = callargs[2].args
+    end
+
+    # collect args and types
+    args = []
+    types = []
+
+    function pusharg!(arg)
+        if !Meta.isexpr(arg, :(::))
+            throw(ArgumentError("args in @ccall need type annotations. '$arg' doesn't have one."))
+        end
+        push!(args, arg.args[1])
+        push!(types, arg.args[2])
+    end
+
+    for i in argstart:length(callargs)
+        pusharg!(callargs[i])
+    end
+    # add any varargs if necessary
+    nreq = 0
+    if !isnothing(varargs)
+        if length(args) == 0
+            throw(ArgumentError("C ABI prohibits vararg without one required argument"))
+        end
+        nreq = length(args)
+        for a in varargs
+            pusharg!(a)
+        end
+    end
+
+    return func, rettype, types, args, nreq
+end
+
+
+function ccall_macro_lower(convention, func, rettype, types, args, nreq)
+    lowering = []
+    realargs = []
+    gcroots = []
+
+    # if interpolation was used, ensure  variable is a function pointer at runtime.
+    if Meta.isexpr(func, :$)
+        push!(lowering, Expr(:(=), :func, esc(func.args[1])))
+        name = QuoteNode(func.args[1])
+        func = :func
+        check = quote
+            if !isa(func, Ptr{Cvoid})
+                name = $name
+                throw(ArgumentError("interpolated function `$name` was not a Ptr{Cvoid}, but $(typeof(func))"))
+            end
+        end
+        push!(lowering, check)
+    else
+        func = esc(func)
+    end
+
+    for (i, (arg, type)) in enumerate(zip(args, types))
+        sym = Symbol(string("arg", i, "root"))
+        sym2 = Symbol(string("arg", i, ))
+        earg, etype = esc(arg), esc(type)
+        push!(lowering, :($sym = Base.cconvert($etype, $earg)))
+        push!(lowering, :($sym2 = Base.unsafe_convert($etype, $sym)))
+        push!(realargs, sym2)
+        push!(gcroots, sym)
+    end
+    etypes = Expr(:call, Expr(:core, :svec), types...)
+    exp = Expr(:foreigncall,
+               func,
+               esc(rettype),
+               esc(etypes),
+               nreq,
+               QuoteNode(convention),
+               realargs..., gcroots...)
+    push!(lowering, exp)
+
+    return Expr(:block, lowering...)
+end
+
+"""
+    @ccall library.function_name(argvalue1::argtype1, ...)::returntype
+    @ccall function_name(argvalue1::argtype1, ...)::returntype
+    @ccall \$function_pointer(argvalue1::argtype1, ...)::returntype
+
+Call a function in a C-exported shared library, specified by
+`library.function_name`, where `library` is a string constant or
+literal. The library may be omitted, in which case the `function_name`
+is resolved in the current process. Alternatively, `@ccall` may
+also be used to call a function pointer `\$function_pointer`, such as
+one returned by `dlsym`.
+
+Each `argvalue` to `@ccall` is converted to the corresponding
+`argtype`, by automatic insertion of calls to `unsafe_convert(argtype,
+cconvert(argtype, argvalue))`. (See also the documentation for
+[`unsafe_convert`](@ref Base.unsafe_convert) and [`cconvert`](@ref
+Base.cconvert) for further details.) In most cases, this simply
+results in a call to `convert(argtype, argvalue)`.
+
+
+# Examples
+
+    @ccall strlen(s::Cstring)::Csize_t
+
+This calls the C standard library function:
+
+    size_t strlen(char *)
+
+with a Julia variable named `s`. See also `ccall`.
+
+Varargs are supported with the following convention:
+
+    @ccall sprintf("%s = %d"::Cstring ; "foo"::Cstring, foo::Cint)::Cint
+
+The semicolon is used to separate required arguments (of which there
+must be at least one) from variadic arguments.
+
+Example using an external library:
+
+    # C signature of g_uri_escape_string:
+    # char *g_uri_escape_string(const char *unescaped, const char *reserved_chars_allowed, gboolean allow_utf8);
+
+    const glib = "libglib-2.0"
+    @ccall glib.g_uri_escape_string(my_uri::Cstring, ":/"::Cstring, true::Cint)::Cstring
+
+The string literal could also be used directly before the function
+name, if desired `"libglib-2.0".g_uri_escape_string(...`
+"""
+macro ccall(expr)
+    return ccall_macro_lower(:ccall, ccall_macro_parse(expr)...)
 end

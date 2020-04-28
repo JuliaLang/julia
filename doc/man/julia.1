@@ -64,6 +64,12 @@ Display version information
 Print help message
 
 .TP
+--project[=<dir>/@.]
+Set <dir> as the home project/environment. The default @. option will search
+through parent directories until a Project.toml or JuliaProject.toml file is
+found.
+
+.TP
 -J, --sysimage <file>
 Start up with the given system image file
 
@@ -94,6 +100,10 @@ Evaluate <expr> and display the result
 .TP
 -L, --load <file>
 Load <file> immediately on all processors
+
+.TP
+-t, --threads <n>
+Enable n threads
 
 .TP
 -p, --procs <n>

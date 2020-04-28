@@ -18,3 +18,5 @@
 /libjulia-release.so
 /libjulia-release.dylib
 /julia_version.h
+/flisp/host
+/support/host

@@ -262,7 +262,7 @@ authentication was successful or not. To avoid an infinite loop from repeatedly
 using the same faulty credentials, we will keep track of state using the payload.
 
 For addition details see the LibGit2 guide on
-[authenticating against a server](https://libgit2.github.com/docs/guides/authentication/).
+[authenticating against a server](https://libgit2.org/docs/guides/authentication/).
 """
 function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
                               username_ptr::Cstring, allowed_types::Cuint,
@@ -344,7 +344,7 @@ end
 
 function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
                               username_ptr::Cstring, allowed_types::Cuint,
-                              payloads::Dict)
+                              payloads::Dict{Symbol, Any})
     p = payloads[:credentials]
     return credentials_callback(libgit2credptr, url_ptr, username_ptr, allowed_types, p)
 end

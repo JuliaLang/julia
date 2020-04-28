@@ -28,7 +28,15 @@ using Test
         @test !isshredded(secret_b)
 
         # TODO: ideally we'd test that the finalizer warns from GC.gc(), but that is harder
-        @test_logs (:warn, r".*SecretBuffer was `shred!`ed by the GC.*") finalize(secret_b)
+        @test_logs (:warn, r".*SecretBuffer was `shred!`ed by the GC.*") begin
+            finalize(secret_b)
+            # Allow the async task which produces the SecretBuffer warning to run.
+            # This is a hack, but we don't have a way to get a handle to that
+            # task in order to `wait` on it.
+            for i=1:1000
+                yield()
+            end
+        end
         @test isshredded(secret_b)
         secret_b = nothing
         GC.gc()
@@ -46,6 +54,69 @@ using Test
         @test Base.unsafe_string(ptr3) == ""
         @test s1 == s2 == s3
 
-        shred!(s1); shred!(s2); shred!(s3)
+        s4 = SecretBuffer(split("setec astronomy", " ")[1]) # initialize from SubString
+        s5 = convert(SecretBuffer, split("setec astronomy", " ")[1]) # initialize from SubString
+        @test s4 == s5
+        shred!(s1); shred!(s2); shred!(s3); shred!(s4), shred!(s5);
+    end
+    @testset "basics" begin
+        s1 = SecretBuffer("setec astronomy")
+        @test sprint(show, s1) == "SecretBuffer(\"*******\")"
+        @test !isempty(s1)
+        shred!(s1)
+        s2 = SecretBuffer!([0x00])
+        @test_throws ArgumentError Base.cconvert(Cstring, s2)
+        shred!(s2)
+    end
+    @testset "write! past data size" begin
+        sb = SecretBuffer(sizehint=2)
+        # data vector will not grow
+        bits = typemax(UInt8)
+        write(sb, bits)
+        write(sb, bits)
+        # data vector must grow
+        write(sb, bits)
+        seek(sb, 0)
+        @test read(sb, String) == "\xff\xff\xff"
+        shred!(sb)
+    end
+    @testset "bytes available" begin
+        sb = SecretBuffer("secret")
+        @test bytesavailable(sb) == sb.size
+        seek(sb, 3)
+        @test bytesavailable(sb) == sb.size - 3
+        seekend(sb)
+        @test bytesavailable(sb) == 0
+        shred!(sb)
+    end
+    @testset "testing the skip function" begin
+        sb = SecretBuffer("computer")
+        skip(sb, 2)
+        @test position(sb) == 2
+        seek(sb, 0)
+        @test position(sb) == 0
+        skip(sb, sb.size)
+        @test position(sb) == sb.size
+    end
+    @testset "seekend" begin
+        sb = SecretBuffer("hello")
+        seekend(sb)
+        @test read(sb, String) == ""
+        shred!(sb)
+    end
+    @testset "position" begin
+        sb = SecretBuffer("Julia")
+        println("testing position")
+        initial_pos = (position(sb))
+        seek(sb,2)
+        mid_pos = position(sb)
+        seekend(sb)
+        @test initial_pos == 0 && mid_pos == 2 && position(sb)==sb.size
+        shred!(sb)
+    end
+    @testset "hashing secret buffers" begin
+        sb1 = SecretBuffer("hello")
+        sb2 = SecretBuffer("juliaisawesome")
+        @test hash(sb1, UInt(5)) === hash(sb2, UInt(5))
     end
 end

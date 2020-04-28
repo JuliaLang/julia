@@ -108,7 +108,7 @@ f17016(f, t::T_17016) = 0
 f17016(f, t1::Tuple) = 1
 @test f17016(0, (1,2,3)) == 0
 
-@test  args_morespecific(Tuple{Type{Any}, Any}, Tuple{Type{T}, Any} where T<:VecElement)
+@test !args_morespecific(Tuple{Type{Any}, Any}, Tuple{Type{T}, Any} where T<:VecElement)
 @test !args_morespecific((Tuple{Type{T}, Any} where T<:VecElement), Tuple{Type{Any}, Any})
 
 @test !args_morespecific(Tuple{Type{T}, Tuple{Any, Vararg{Any, N} where N}} where T<:Tuple{Any, Vararg{Any, N} where N},
@@ -225,3 +225,84 @@ MathTypes22592{T,C} = Union{AbstractRGB22592{T},AbstractGray22592{T}}
 @test !args_morespecific(Tuple{MathTypes22592, MathTypes22592}, Tuple{AbstractGray22592})
 
 @test args_morespecific(Union{Set,Dict,Vector}, Union{Vector,AbstractSet})
+
+let N = Tuple{Type{Union{Nothing, T}}, Union{Nothing, T}} where T,
+    LI = Tuple{Type{LinearIndices{N,R}}, LinearIndices{N}} where {N,R},
+    A = Tuple{Type{T},T} where T<:AbstractArray
+    @test  args_morespecific(LI, A)
+    @test  args_morespecific(A, N)
+    @test  args_morespecific(LI, N)
+end
+
+# issue #29528
+@test !args_morespecific(Tuple{Array,Vararg{Int64,N} where N}, Tuple{AbstractArray, Array})
+@test !args_morespecific(Tuple{Array,Vararg{Int64,N}} where N, Tuple{AbstractArray, Array})
+@test  args_morespecific(Tuple{Array,Int64}, Tuple{Array,Vararg{Int64,N}} where N)
+@test  args_morespecific(Tuple{Array,Int64}, Tuple{Array,Vararg{Int64,N} where N})
+@test !args_morespecific(Tuple{Array,Int64}, Tuple{AbstractArray, Array})
+
+# issue #30114
+let T1 = Tuple{Type{Tuple{Vararg{AbstractUnitRange{Int64},N} where N}},CartesianIndices{N,R} where R<:Tuple{Vararg{AbstractUnitRange{Int64},N}}} where N
+    T2 = Tuple{Type{T},T} where T<:AbstractArray
+    T3 = Tuple{Type{AbstractArray{T,N} where N},AbstractArray} where T
+    T4 = Tuple{Type{AbstractArray{T,N}},AbstractArray{s57,N} where s57} where N where T
+    @test !args_morespecific(T1, T2)
+    @test !args_morespecific(T1, T3)
+    @test !args_morespecific(T1, T4)
+    @test  args_morespecific(T2, T3)
+    @test  args_morespecific(T2, T4)
+end
+
+@test !args_morespecific(Tuple{Type{Tuple{Vararg{AbstractUnitRange{Int64},N}}},} where N,
+                         Tuple{Type{Tuple{Vararg{AbstractUnitRange,N} where N}},})
+
+@test  args_morespecific(Tuple{Type{SubArray{T,2,P} where T}, Array{T}} where T where P,
+                         Tuple{Type{AbstractArray{T,N} where N},AbstractArray} where T)
+
+# these are ambiguous
+@test !args_morespecific(Tuple{Type{T},T} where T<:BitArray,
+                         Tuple{Type{BitArray},Any})
+@test !args_morespecific(Tuple{Type{BitArray},Any},
+                         Tuple{Type{T},T} where T<:BitArray)
+
+abstract type Domain{T} end
+
+abstract type AbstractInterval{T} <: Domain{T} end
+
+struct Interval{L,R,T} <: AbstractInterval{T}
+end
+
+let A = Tuple{Type{Interval{:closed,:closed,T} where T}, Interval{:closed,:closed,T} where T},
+    B = Tuple{Type{II},                                  AbstractInterval} where II<:(Interval{:closed,:closed,T} where T),
+    C = Tuple{Type{AbstractInterval},                    AbstractInterval}
+    @test  args_morespecific(A, B)
+    @test !args_morespecific(B, C)
+    @test !args_morespecific(A, C)
+end
+
+let A = Tuple{Type{Domain},              Interval{L,R,T} where T} where R where L,
+    B = Tuple{Type{II},                  AbstractInterval} where II<:(Interval{:closed,:closed,T} where T),
+    C = Tuple{Type{AbstractInterval{T}}, AbstractInterval{T}} where T
+    @test !args_morespecific(A, B)
+    @test  args_morespecific(B, C)
+    @test !args_morespecific(A, C)
+end
+
+let A = Tuple{Type{AbstractInterval},    Interval{L,R,T} where T} where R where L,
+    B = Tuple{Type{II},                  AbstractInterval} where II<:(Interval{:closed,:closed,T} where T),
+    C = Tuple{Type{AbstractInterval{T}}, AbstractInterval{T}} where T
+    @test !args_morespecific(A, B)
+    @test  args_morespecific(B, C)
+    @test  args_morespecific(A, C)
+end
+
+@test args_morespecific(Tuple{Type{Missing},Any},
+                        Tuple{Type{Union{Nothing, T}},Any} where T)
+
+let A = Tuple{Type{SubString{S}},AbstractString} where S<:AbstractString,
+    B = Tuple{Type{T},AbstractString} where T<:AbstractString,
+    C = Tuple{Type{Union{Missing, Nothing, T}},Union{Missing, Nothing, T}} where T
+    @test  args_morespecific(A, B)
+    @test  args_morespecific(B, C)
+    @test  args_morespecific(A, C)
+end

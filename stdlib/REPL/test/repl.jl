@@ -28,6 +28,7 @@ function kill_timer(delay)
         # **DON'T COPY ME.**
         # The correct way to handle timeouts is to close the handle:
         # e.g. `close(stdout_read); close(stdin_write)`
+        test_task.queue === nothing || Base.list_deletefirst!(test_task.queue, test_task)
         schedule(test_task, "hard kill repl test"; error=true)
         print(stderr, "WARNING: attempting hard kill of repl test after exceeding timeout\n")
     end
@@ -46,7 +47,7 @@ function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_
     Base.link_pipe!(output, reader_supports_async=true, writer_supports_async=true)
     Base.link_pipe!(err, reader_supports_async=true, writer_supports_async=true)
 
-    repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in), true)
+    repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in, options.hascolor), options.hascolor)
     repl.options = options
 
     hard_kill = kill_timer(900) # Your debugging session starts now. You have 15 minutes. Go.
@@ -65,13 +66,31 @@ end
 
 # Writing ^C to the repl will cause sigint, so let's not die on that
 Base.exit_on_sigint(false)
+
+# make sure `run_interface` can normally handle `eof`
+# without any special handling by the user
+fake_repl() do stdin_write, stdout_read, repl
+    panel = LineEdit.Prompt("test";
+        prompt_prefix = "",
+        prompt_suffix = Base.text_colors[:white],
+        on_enter = s -> true)
+    panel.on_done = (s, buf, ok) -> begin
+        @test !ok
+        @test bytesavailable(buf) == position(buf) == 0
+        nothing
+    end
+    repltask = @async REPL.run_interface(repl.t, LineEdit.ModalInterface(Any[panel]))
+    close(stdin_write)
+    Base.wait(repltask)
+end
+
 # These are integration tests. If you want to unit test test e.g. completion, or
 # exact LineEdit behavior, put them in the appropriate test files.
 # Furthermore since we are emulating an entire terminal, there may be control characters
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-fake_repl() do stdin_write, stdout_read, repl
+fake_repl(options = REPL.Options(confirm_exit=false,hascolor=false)) do stdin_write, stdout_read, repl
     repl.specialdisplay = REPL.REPLDisplay(repl)
     repl.history_file = false
 
@@ -106,45 +125,52 @@ fake_repl() do stdin_write, stdout_read, repl
     # Test cd feature in shell mode.
     origpwd = pwd()
     mktempdir() do tmpdir
-        # Test `cd`'ing to an absolute path
-        write(stdin_write, ";")
-        readuntil(stdout_read, "shell> ")
-        write(stdin_write, "cd $(escape_string(tmpdir))\n")
-        readuntil(stdout_read, "cd $(escape_string(tmpdir))")
-        readuntil(stdout_read, realpath(tmpdir))
-        readuntil(stdout_read, "\n")
-        readuntil(stdout_read, "\n")
-        @test pwd() == realpath(tmpdir)
+        try
+            samefile = Base.Filesystem.samefile
+            tmpdir_pwd = cd(pwd, tmpdir)
+            homedir_pwd = cd(pwd, homedir())
 
-        # Test using `cd` to move to the home directory
-        write(stdin_write, ";")
-        readuntil(stdout_read, "shell> ")
-        write(stdin_write, "cd\n")
-        readuntil(stdout_read, realpath(homedir()))
-        readuntil(stdout_read, "\n")
-        readuntil(stdout_read, "\n")
-        @test pwd() == realpath(homedir())
-
-        # Test using `-` to jump backward to tmpdir
-        write(stdin_write, ";")
-        readuntil(stdout_read, "shell> ")
-        write(stdin_write, "cd -\n")
-        readuntil(stdout_read, tmpdir)
-        readuntil(stdout_read, "\n")
-        readuntil(stdout_read, "\n")
-        @test pwd() == realpath(tmpdir)
-
-        # Test using `~` in `cd` commands
-        if !Sys.iswindows()
+            # Test `cd`'ing to an absolute path
             write(stdin_write, ";")
             readuntil(stdout_read, "shell> ")
-            write(stdin_write, "cd ~\n")
-            readuntil(stdout_read, realpath(homedir()))
+            write(stdin_write, "cd $(escape_string(tmpdir))\n")
+            readuntil(stdout_read, "cd $(escape_string(tmpdir))")
+            readuntil(stdout_read, tmpdir_pwd)
             readuntil(stdout_read, "\n")
             readuntil(stdout_read, "\n")
-            @test pwd() == realpath(homedir())
+            @test samefile(".", tmpdir)
+
+            # Test using `cd` to move to the home directory
+            write(stdin_write, ";")
+            readuntil(stdout_read, "shell> ")
+            write(stdin_write, "cd\n")
+            readuntil(stdout_read, homedir_pwd)
+            readuntil(stdout_read, "\n")
+            readuntil(stdout_read, "\n")
+            @test samefile(".", homedir_pwd)
+
+            # Test using `-` to jump backward to tmpdir
+            write(stdin_write, ";")
+            readuntil(stdout_read, "shell> ")
+            write(stdin_write, "cd -\n")
+            readuntil(stdout_read, tmpdir_pwd)
+            readuntil(stdout_read, "\n")
+            readuntil(stdout_read, "\n")
+            @test samefile(".", tmpdir)
+
+            # Test using `~` (Base.expanduser) in `cd` commands
+            if !Sys.iswindows()
+                write(stdin_write, ";")
+                readuntil(stdout_read, "shell> ")
+                write(stdin_write, "cd ~\n")
+                readuntil(stdout_read, homedir_pwd)
+                readuntil(stdout_read, "\n")
+                readuntil(stdout_read, "\n")
+                @test samefile(".", homedir_pwd)
+            end
+        finally
+            cd(origpwd)
         end
-        cd(origpwd)
     end
 
     # issue #20482
@@ -220,7 +246,7 @@ fake_repl() do stdin_write, stdout_read, repl
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
-        write(stdin_write, """ -e "println(\\"HI\\")\"""")
+        write(stdin_write, """ -e "println(\\"HI\\")\" """)
         readuntil(stdout_read, ")\"")
         proc_stdout_read, proc_stdout = redirect_stdout()
         get_stdout = @async read(proc_stdout_read, String)
@@ -298,8 +324,16 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "\e[B\n")
     readuntil(stdout_read, s2)
 
-    # Close REPL ^D
-    write(stdin_write, '\x04')
+    # test that prefix history search "passes through" key bindings to parent mode
+    write(stdin_write, "0x321\n")
+    readuntil(stdout_read, "0x321")
+    write(stdin_write, "\e[A\e[1;3C|||") # uparrow (go up history) and then Meta-rightarrow (indent right)
+    s2 = readuntil(stdout_read, "|||", keep=true)
+    @test endswith(s2, " 0x321\r\e[13C|||") # should have a space (from Meta-rightarrow) and not
+                                            # have a spurious C before ||| (the one here is not spurious!)
+
+    # Delete line (^U) and close REPL (^D)
+    write(stdin_write, "\x15\x04")
     Base.wait(repltask)
 
     nothing
@@ -413,6 +447,11 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         # Some manual setup
         s = LineEdit.init_state(repl.t, repl.interface)
         LineEdit.edit_insert(s, "wip")
+
+        # LineEdit functions related to history
+        LineEdit.edit_insert_last_word(s)
+        @test buffercontents(LineEdit.buffer(s)) == "wip2"
+        LineEdit.edit_backspace(s) # remove the "2"
 
         # Test that navigating history skips invalid modes
         # (in both directions)
@@ -601,6 +640,16 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         @test buffercontents(LineEdit.buffer(s)) == "x ΔxΔ"
         @test position(LineEdit.buffer(s)) == 0
 
+        LineEdit.edit_clear(s)
+        LineEdit.enter_search(s, histp, true)
+        ss = LineEdit.state(s, histp)
+        write(ss.query_buffer, "Å") # should not be in history
+        LineEdit.update_display_buffer(ss, ss)
+        @test buffercontents(ss.response_buffer) == ""
+        @test position(ss.response_buffer) == 0
+        LineEdit.history_next_result(s, ss) # should not throw BoundsError
+        LineEdit.accept_result(s, histp)
+
         # Try entering search mode while in custom repl mode
         LineEdit.enter_search(s, custom_histp, true)
     end
@@ -690,16 +739,17 @@ fake_repl() do stdin_write, stdout_read, repl
         LineEdit.default_keymap, LineEdit.escape_defaults])
 
     c = Condition()
-    panel.on_done = (s,buf,ok)->begin
+    panel.on_done = (s, buf, ok) -> begin
         if !ok
-            LineEdit.transition(s,:abort)
+            LineEdit.transition(s, :abort)
         end
         line = strip(String(take!(buf)))
         LineEdit.reset_state(s)
-        return notify(c,line)
+        notify(c, line)
+        nothing
     end
 
-    repltask = @async REPL.run_interface(repl.t, LineEdit.ModalInterface([panel,search_prompt]))
+    repltask = @async REPL.run_interface(repl.t, LineEdit.ModalInterface(Any[panel, search_prompt]))
 
     write(stdin_write,"a\n")
     @test wait(c) == "a"
@@ -718,24 +768,44 @@ Base.exit_on_sigint(true)
 
 let exename = Base.julia_cmd()
     # Test REPL in dumb mode
-    if !Sys.iswindows()
-        with_fake_pty() do slave, master
-            nENV = copy(ENV)
-            nENV["TERM"] = "dumb"
-            p = run(setenv(`$exename --startup-file=no -q`,nENV),slave,slave,slave,wait=false)
-            output = readuntil(master,"julia> ",keep=true)
-            if ccall(:jl_running_on_valgrind,Cint,()) == 0
-                # If --trace-children=yes is passed to valgrind, we will get a
-                # valgrind banner here, not just the prompt.
-                @test output == "julia> "
-            end
-            write(master,"1\nexit()\n")
-
-            wait(p)
-            output = readuntil(master,' ',keep=true)
-            @test output == "1\r\nexit()\r\n1\r\n\r\njulia> "
-            @test bytesavailable(master) == 0
+    with_fake_pty() do pty_slave, pty_master
+        nENV = copy(ENV)
+        nENV["TERM"] = "dumb"
+        p = run(detach(setenv(`$exename --startup-file=no -q`, nENV)), pty_slave, pty_slave, pty_slave, wait=false)
+        Base.close_stdio(pty_slave)
+        output = readuntil(pty_master, "julia> ", keep=true)
+        if ccall(:jl_running_on_valgrind, Cint,()) == 0
+            # If --trace-children=yes is passed to valgrind, we will get a
+            # valgrind banner here, not just the prompt.
+            @test output == "julia> "
         end
+        write(pty_master, "1\nexit()\n")
+
+        output = readuntil(pty_master, ' ', keep=true)
+        if Sys.iswindows()
+	    # Our fake pty is actually a pipe, and thus lacks the input echo feature of posix
+            @test output == "1\n\njulia> "
+        else
+            @test output == "1\r\nexit()\r\n1\r\n\r\njulia> "
+        end
+        @test bytesavailable(pty_master) == 0
+        @test if Sys.iswindows() || Sys.isbsd()
+                eof(pty_master)
+            else
+                # Some platforms (such as linux) report EIO instead of EOF
+                # possibly consume child-exited notification
+                # for example, see discussion in https://bugs.python.org/issue5380
+                try
+                    eof(pty_master) && !Sys.islinux()
+                catch ex
+                    (ex isa Base.IOError && ex.code == Base.UV_EIO) || rethrow()
+                    @test_throws ex eof(pty_master) # make sure the error is sticky
+                    pty_master.readerror = nothing
+                    eof(pty_master)
+                end
+            end
+        @test read(pty_master, String) == ""
+        wait(p)
     end
 
     # Test stream mode
@@ -744,12 +814,13 @@ let exename = Base.julia_cmd()
     @test read(p, String) == "1\n"
 end # let exename
 
-# issue #19864:
+# issue #19864
 mutable struct Error19864 <: Exception; end
 function test19864()
     @eval Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
     buf = IOBuffer()
-    REPL.print_response(buf, Error19864(), [], false, false, nothing)
+    fake_response = (Any[(Error19864(), Ptr{Cvoid}[])], true)
+    REPL.print_response(buf, fake_response, false, false, nothing)
     return String(take!(buf))
 end
 @test occursin("correct19864", test19864())
@@ -759,6 +830,7 @@ let io = IOBuffer()
     Base.display_error(io,
         try
             [][trues(6000)]
+            @assert false
         catch e
             e
         end, [])
@@ -941,6 +1013,8 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
+help_result(line) = Base.eval(REPL._helpmode(IOBuffer(), line))
+
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
 # rather than complete integration with Julia's REPL mode system.
 for (line, expr) in Pair[
@@ -955,12 +1029,77 @@ for (line, expr) in Pair[
     "while       " => :while, # keyword, trailing spaces should be stripped.
     "0"            => 0,
     "\"...\""      => "...",
-    "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "...")
+    "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "..."),
+    "using Foo"    => :using,
+    "import Foo"   => :import,
     ]
-    #@test REPL._helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(119, doc_util_path), stdout, expr)
-    buf = IOBuffer()
-    @test Base.eval(REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
+    @test REPL._helpmode(line).args[4] == expr
+    @test help_result(line) isa Union{Markdown.MD,Nothing}
 end
+
+# PR 30754, Issues #22013, #24871, #26933, #29282, #29361, #30348
+for line in ["′", "abstract", "type"]
+    @test occursin("No documentation found.",
+        sprint(show, help_result(line)::Union{Markdown.MD,Nothing}))
+end
+
+# PR 35154
+@test occursin("|=", sprint(show, help_result("|=")))
+@test occursin("broadcast", sprint(show, help_result(".=")))
+
+# PR 35277
+@test occursin("identical", sprint(show, help_result("===")))
+@test occursin("broadcast", sprint(show, help_result(".<=")))
+
+# Issue #25930
+
+# Brief and extended docs (issue #25930)
+let text =
+        """
+            brief_extended()
+
+        Short docs
+
+        # Extended help
+
+        Long docs
+        """,
+    md = Markdown.parse(text)
+    @test md == REPL.trimdocs(md, false)
+    @test !isa(md.content[end], REPL.Message)
+    mdbrief = REPL.trimdocs(md, true)
+    @test length(mdbrief.content) == 3
+    @test isa(mdbrief.content[1], Markdown.Code)
+    @test isa(mdbrief.content[2], Markdown.Paragraph)
+    @test isa(mdbrief.content[3], REPL.Message)
+    @test occursin("??", mdbrief.content[3].msg)
+end
+
+# issue #35216: empty and non-strings in H1 headers
+let emptyH1 = Markdown.parse("# "),
+    codeH1 = Markdown.parse("# `hello`")
+    @test emptyH1 == REPL.trimdocs(emptyH1, false) == REPL.trimdocs(emptyH1, true)
+    @test codeH1 == REPL.trimdocs(codeH1, false) == REPL.trimdocs(codeH1, true)
+end
+
+module BriefExtended
+"""
+    f()
+
+Short docs
+
+# Extended help
+
+Long docs
+"""
+f() = nothing
+end # module BriefExtended
+buf = IOBuffer()
+md = Base.eval(REPL._helpmode(buf, "$(@__MODULE__).BriefExtended.f"))
+@test length(md.content) == 2 && isa(md.content[2], REPL.Message)
+buf = IOBuffer()
+md = Base.eval(REPL._helpmode(buf, "?$(@__MODULE__).BriefExtended.f"))
+@test length(md.content) == 1 && length(md.content[1].content[1].content) == 4
 
 # PR #27562
 fake_repl() do stdin_write, stdout_read, repl
@@ -969,11 +1108,98 @@ fake_repl() do stdin_write, stdout_read, repl
     end
     write(stdin_write, "Expr(:call, GlobalRef(Base.Math, :float), Core.SlotNumber(1))\n")
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0m:((Base.Math.float)(_1))"
+    @test readline(stdout_read) == "\e[0m:(Base.Math.float(_1))"
     write(stdin_write, "ans\n")
     readline(stdout_read)
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0m:((Base.Math.float)(_1))"
+    @test readline(stdout_read) == "\e[0m:(Base.Math.float(_1))"
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
+
+# issue #31352
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "struct Errs end\n")
+    readline(stdout_read)
+    readline(stdout_read)
+    write(stdin_write, "Base.show(io::IO, ::Errs) = throw(Errs())\n")
+    readline(stdout_read)
+    readline(stdout_read)
+    write(stdin_write, "Errs()\n")
+    write(stdin_write, '\x04')
+    wait(repltask)
+    @test istaskdone(repltask)
+end
+
+# issue #34842
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "?;\n")
+    readline(stdout_read)
+    @test endswith(readline(stdout_read),";")
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
+end
+
+
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "anything\x15\x19\x19") # ^u^y^y : kill line backwards + 2 yanks
+    s1 = readuntil(stdout_read, "anything") # typed
+    s2 = readuntil(stdout_read, "anything") # yanked (first ^y)
+    s3 = readuntil(stdout_read, "anything") # previous yanked refreshed (from second ^y)
+    s4 = readuntil(stdout_read, "anything", keep=true) # last yanked
+    # necessary to read at least some part of the buffer,
+    # for the "region_active" to have time to be updated
+
+    @test LineEdit.state(repl.mistate).region_active == :off
+    @test s4 == "anything" # no control characters between the last two occurrences of "anything"
+    write(stdin_write, "\x15\x04")
+    Base.wait(repltask)
+end
+
+# AST transformations (softscope, Revise, OhMyREPL, etc.)
+@testset "AST Transformation" begin
+    backend = REPL.REPLBackend()
+    @async REPL.start_repl_backend(backend)
+    put!(backend.repl_channel, (:(1+1), false))
+    reply = take!(backend.response_channel)
+    @test reply == (2, false)
+    twice(ex) = Expr(:tuple, ex, ex)
+    push!(backend.ast_transforms, twice)
+    put!(backend.repl_channel, (:(1+1), false))
+    reply = take!(backend.response_channel)
+    @test reply == ((2, 2), false)
+    put!(backend.repl_channel, (nothing, -1))
+    Base.wait(backend.backend_task)
+end
+
+
+backend = REPL.REPLBackend()
+frontend_task = @async begin
+    try
+        @testset "AST Transformations Async" begin
+            put!(backend.repl_channel, (:(1+1), false))
+            reply = take!(backend.response_channel)
+            @test reply == (2, false)
+            twice(ex) = Expr(:tuple, ex, ex)
+            push!(backend.ast_transforms, twice)
+            put!(backend.repl_channel, (:(1+1), false))
+            reply = take!(backend.response_channel)
+            @test reply == ((2, 2), false)
+        end
+    catch e
+        Base.rethrow(e)
+    finally
+        put!(backend.repl_channel, (nothing, -1))
+    end
+end
+REPL.start_repl_backend(backend)
+Base.wait(frontend_task)

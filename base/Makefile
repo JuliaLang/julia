@@ -14,7 +14,7 @@ endif
 
 all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony file_constants.jl uv_constants.jl version_git.jl.phony)
 
-PCRE_CONST := 0x[0-9a-fA-F]+|[0-9]+
+PCRE_CONST := 0x[0-9a-fA-F]+|[0-9]+|\([\-0-9]+\)
 ifeq ($(USE_SYSTEM_PCRE), 1)
   PCRE_INCL_PATH := $(shell $(PCRE_CONFIG) --prefix)/include/pcre2.h
 else
@@ -22,7 +22,7 @@ else
 endif
 
 $(BUILDDIR)/pcre_h.jl: $(PCRE_INCL_PATH)
-	@$(call PRINT_PERL, $(CPP) -D PCRE2_CODE_UNIT_WIDTH=8 -dM $< | perl -nle '/^\s*#define\s+PCRE2_(\w*)\s*\(?($(PCRE_CONST))\)?u?\s*$$/ and print "const $$1 = UInt32($$2)"' | LC_ALL=C sort > $@)
+	@$(call PRINT_PERL, $(CPP) -D PCRE2_CODE_UNIT_WIDTH=8 -dM $< | perl -nle '/^\s*#define\s+PCRE2_(\w*)\s*\(?($(PCRE_CONST))\)?u?\s*$$/ and print "const $$1 = $$2 % UInt32"' | LC_ALL=C sort > $@)
 
 $(BUILDDIR)/errno_h.jl:
 	@$(call PRINT_PERL, echo '#include <errno.h>' | $(CPP) -dM - | perl -nle 'print "const $$1 = Int32($$2)" if /^#define\s+(E\w+)\s+(\d+)\s*$$/' | LC_ALL=C sort > $@)
@@ -61,6 +61,7 @@ ifeq ($(OS),WINNT)
 	@printf 'const DATAROOTDIR = "%s"\n' '$(subst /,\\,$(datarootdir_rel))' >> $@
 	@printf 'const DOCDIR = "%s"\n' '$(subst /,\\,$(docdir_rel))' >> $@
 	@printf 'const LIBDIR = "%s"\n' '$(subst /,\\,$(libdir_rel))' >> $@
+	@printf 'const LIBEXECDIR = "%s"\n' '$(subst /,\\,$(libexecdir_rel))' >> $@
 	@printf 'const PRIVATE_LIBDIR = "%s"\n' '$(subst /,\\,$(private_libdir_rel))' >> $@
 	@printf 'const INCLUDEDIR = "%s"\n' '$(subst /,\\,$(includedir_rel))' >> $@
 else
@@ -68,8 +69,15 @@ else
 	@echo "const DATAROOTDIR = \"$(datarootdir_rel)\"" >> $@
 	@echo "const DOCDIR = \"$(docdir_rel)\"" >> $@
 	@echo "const LIBDIR = \"$(libdir_rel)\"" >> $@
+	@echo "const LIBEXECDIR = \"$(libexecdir_rel)\"" >> $@
 	@echo "const PRIVATE_LIBDIR = \"$(private_libdir_rel)\"" >> $@
 	@echo "const INCLUDEDIR = \"$(includedir_rel)\"" >> $@
+endif
+ifeq ($(DARWIN_FRAMEWORK), 1)
+	@echo "const DARWIN_FRAMEWORK = true" >> $@
+	@echo "const DARWIN_FRAMEWORK_NAME = \"$(FRAMEWORK_NAME)\"" >> $@
+else
+	@echo "const DARWIN_FRAMEWORK = false" >> $@
 endif
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
@@ -104,7 +112,7 @@ else
 endif
 endif
 
-ifneq ($(OS), WINNT)
+ifeq (,$(filter $(OS), WINNT emscripten))
 # For any USE_SYSTEM_* libraries that will be dynamically loaded by libjulia,
 # put a symlink in the private libdir.
 # System package managers may want to install these links manually,
@@ -181,6 +189,8 @@ endif
 $(eval $(call symlink_system_library,libgmp,GMP))
 $(eval $(call symlink_system_library,libmpfr,MPFR))
 $(eval $(call symlink_system_library,libmbedtls,MBEDTLS))
+$(eval $(call symlink_system_library,libmbedcrypto,MBEDTLS))
+$(eval $(call symlink_system_library,libmbedx509,MBEDTLS))
 $(eval $(call symlink_system_library,libssh2,LIBSSH2))
 $(eval $(call symlink_system_library,libcurl,CURL))
 $(eval $(call symlink_system_library,libgit2,LIBGIT2))
@@ -192,14 +202,20 @@ $(eval $(call symlink_system_library,libcolamd,SUITESPARSE))
 $(eval $(call symlink_system_library,libumfpack,SUITESPARSE))
 $(eval $(call symlink_system_library,libspqr,SUITESPARSE))
 $(eval $(call symlink_system_library,libsuitesparseconfig,SUITESPARSE))
-ifneq ($(DISABLE_LIBUNWIND),0)
-$(eval $(call symlink_system_library,libunwind,LIBUNWIND))
-endif
+# EXCLUDED LIBRARIES (installed/used, but not vendored for use with dlopen):
+# libunwind
 endif # WINNT
 
-symlink_libLLVM: $(build_private_libdir)/libLLVM.dylib
-$(build_private_libdir)/libLLVM.dylib:
-	REALPATH=`$(LLVM_CONFIG_HOST) --libdir`/libLLVM.$(SHLIB_EXT) && \
+symlink_libLLVM: $(build_private_libdir)/libLLVM.$(SHLIB_EXT)
+ifneq ($(USE_SYSTEM_LLVM),0)
+LLVM_CONFIG_HOST_LIBS := $(shell $(LLVM_CONFIG_HOST) --libfiles)
+# HACK: llvm-config doesn't correctly point to shared libs on all platforms
+#       https://github.com/JuliaLang/julia/issues/29981
+else
+LLVM_CONFIG_HOST_LIBS := $(shell $(LLVM_CONFIG_HOST) --libdir)/libLLVM.$(SHLIB_EXT)
+endif
+$(build_private_libdir)/libLLVM.$(SHLIB_EXT):
+	REALPATH=$(LLVM_CONFIG_HOST_LIBS) && \
 	$(call resolve_path,REALPATH) && \
 	[ -e "$$REALPATH" ] && \
 	([ ! -e "$@" ] || rm "$@") && \

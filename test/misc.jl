@@ -88,6 +88,7 @@ end
 # lock / unlock
 let l = ReentrantLock()
     lock(l)
+    @test islocked(l)
     success = Ref(false)
     @test trylock(l) do
         @test lock(l) do
@@ -129,6 +130,8 @@ let c = Ref(0),
     @test c[] == 100
 end
 
+@test_throws ErrorException("deadlock detected: cannot wait on current task") wait(current_task())
+
 # test that @sync is lexical (PR #27164)
 
 const x27164 = Ref(0)
@@ -155,9 +158,18 @@ let t = @elapsed 1+1
 end
 
 let
-    val, t = @timed sin(1)
-    @test val == sin(1)
-    @test isa(t, Real) && t >= 0
+    stats = @timed sin(1)
+    @test stats.value == sin(1)
+    @test isa(stats.time, Real) && stats.time >= 0
+
+    # The return type of gcstats was changed in Julia 1.4 (# 34147)
+    # Test that the 1.0 API still works
+    val, t, bytes, gctime, gcstats = stats
+    @test val === stats.value
+    @test t === stats.time
+    @test bytes === stats.bytes
+    @test gctime === stats.gctime
+    @test gcstats === stats.gcstats
 end
 
 # problem after #11801 - at global scope
@@ -170,6 +182,9 @@ v11801, t11801 = @timed sin(1)
 @test names(@__MODULE__, all = true) == names_before_timing
 
 # interactive utilities
+
+struct ambigconvert; end # inject a problematic `convert` method to ensure it still works
+Base.convert(::Any, v::ambigconvert) = v
 
 import Base.summarysize
 @test summarysize(Core) > (summarysize(Core.Compiler) + Base.summarysize(Core.Intrinsics)) > Core.sizeof(Core)
@@ -189,6 +204,20 @@ let A = zeros(1000), B = reshape(A, (1,1000))
 
     # check that object header is accounted for
     @test summarysize(A) > sizeof(A)
+end
+
+# issue #32881
+mutable struct S32881; end
+let s = "abc"
+    @test summarysize([s,s]) < summarysize(["abc","xyz"])
+end
+@test summarysize(Vector{Union{Nothing,Missing}}(undef, 16)) < summarysize(Vector{Union{Nothing,Missing}}(undef, 32))
+@test summarysize(Vector{Nothing}(undef, 16)) == summarysize(Vector{Nothing}(undef, 32))
+@test summarysize(S32881()) == sizeof(Int)
+
+# issue #33675
+let vec = vcat(missing, ones(100000))
+    @test length(unique(summarysize(vec) for i = 1:20)) == 1
 end
 
 # issue #13021
@@ -418,6 +447,30 @@ let buf = IOBuffer()
     @test Base.prompt(IOBuffer("blah\n"), buf, "baz", default="foobar") == "blah"
 end
 
+# these tests are not in a test block so that they will compile separately
+@static if Sys.iswindows()
+    SetLastError(code) = ccall(:SetLastError, stdcall, Cvoid, (UInt32,), code)
+else
+    SetLastError(_) = nothing
+end
+@test Libc.errno(0xc0ffee) === nothing
+@test SetLastError(0xc0def00d) === nothing
+let finalized = false
+    function closefunc(_)
+        Libc.errno(0)
+        SetLastError(0)
+        finalized = true
+    end
+    @eval (finalizer($closefunc, zeros()); nothing)
+    GC.gc(); GC.gc(); GC.gc(); GC.gc()
+    @test finalized
+end
+@static if Sys.iswindows()
+    @test ccall(:GetLastError, stdcall, UInt32, ()) == 0xc0def00d
+    @test Libc.GetLastError() == 0xc0def00d
+end
+@test Libc.errno() == 0xc0ffee
+
 # Test that we can VirtualProtect jitted code to writable
 @noinline function WeVirtualProtectThisToRWX(x, y)
     return x + y
@@ -430,7 +483,7 @@ end
         err18083 = ccall(:VirtualProtect, stdcall, Cint,
             (Ptr{Cvoid}, Csize_t, UInt32, Ptr{UInt32}),
             addr, 4096, PAGE_EXECUTE_READWRITE, oldPerm)
-        err18083 == 0 && error(Libc.GetLastError())
+        err18083 == 0 && Base.windowserror(:VirtualProtect)
     end
 end
 
@@ -601,8 +654,9 @@ end
 
 include("testenv.jl")
 
+
 let flags = Cmd(filter(a->!occursin("depwarn", a), collect(test_exeflags)))
-    local cmd = `$test_exename $flags deprecation_exec.jl`
+    local cmd = `$test_exename $flags --depwarn=yes deprecation_exec.jl`
 
     if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
         error("Deprecation test failed, cmd : $cmd")
@@ -679,10 +733,89 @@ end
     @test Test27970Empty() == Test27970Empty()
 end
 
+abstract type AbstractTest29307 end
+@kwdef struct Test29307{T<:Integer} <: AbstractTest29307
+    a::T=2
+end
+
+@testset "subtyped @kwdef" begin
+    @test Test29307() == Test29307{Int}(2)
+    @test Test29307(a=0x03) == Test29307{UInt8}(0x03)
+    @test Test29307{UInt32}() == Test29307{UInt32}(2)
+    @test Test29307{UInt32}(a=0x03) == Test29307{UInt32}(0x03)
+end
+
+@kwdef struct TestInnerConstructor
+    a = 1
+    TestInnerConstructor(a::Int) = (@assert a>0; new(a))
+    function TestInnerConstructor(a::String)
+        @assert length(a) > 0
+        new(a)
+    end
+end
+
+@testset "@kwdef inner constructor" begin
+    @test TestInnerConstructor() == TestInnerConstructor(1)
+    @test TestInnerConstructor(a=2) == TestInnerConstructor(2)
+    @test_throws AssertionError TestInnerConstructor(a=0)
+    @test TestInnerConstructor(a="2") == TestInnerConstructor("2")
+    @test_throws AssertionError TestInnerConstructor(a="")
+end
+
+const outsidevar = 7
+@kwdef struct TestOutsideVar
+    a::Int=outsidevar
+end
+@test TestOutsideVar() == TestOutsideVar(7)
+
+
 @testset "exports of modules" begin
     for (_, mod) in Base.loaded_modules
        for v in names(mod)
            @test isdefined(mod, v)
        end
    end
+end
+
+@testset "ordering UUIDs" begin
+    a = Base.UUID("dbd321ed-e87e-4f33-9511-65b7d01cdd55")
+    b = Base.UUID("2832b20a-2ad5-46e9-abb1-2d20c8c31dd3")
+    @test isless(b, a)
+    @test sort([a, b]) == [b, a]
+end
+
+@testset "Libc.rand" begin
+    low, high = extrema(Libc.rand(Float64) for i=1:10^4)
+    # these fail with probability 2^(-10^4) ≈ 5e-3011
+    @test 0 ≤ low < 0.5
+    @test 0.5 < high < 1
+end
+
+# Pointer 0-arg constructor
+@test Ptr{Cvoid}() == C_NULL
+
+@testset "Pointer to unsigned/signed integer" begin
+    # assuming UInt and Ptr have the same size
+    @assert sizeof(UInt) == sizeof(Ptr{Nothing})
+    uint = UInt(0x12345678)
+    sint = signed(uint)
+    ptr = reinterpret(Ptr{Nothing}, uint)
+    @test unsigned(ptr) === uint
+    @test signed(ptr) === sint
+end
+
+# Finalizer with immutable should throw
+@test_throws ErrorException finalizer(x->nothing, 1)
+@test_throws ErrorException finalizer(C_NULL, 1)
+
+
+@testset "GC utilities" begin
+    GC.gc()
+    GC.gc(true); GC.gc(false)
+
+    GC.safepoint()
+end
+
+@testset "fieldtypes Module" begin
+    @test fieldtypes(Module) isa Tuple
 end

@@ -2,6 +2,8 @@
 
 module Multimedia
 
+import .Base: show, print, convert, repr
+
 export AbstractDisplay, display, pushdisplay, popdisplay, displayable, redisplay,
     MIME, @MIME_str, istextmime,
     showable, TextDisplay
@@ -11,11 +13,39 @@ export AbstractDisplay, display, pushdisplay, popdisplay, displayable, redisplay
 # that Julia's dispatch and overloading mechanisms can be used to
 # dispatch show and to add conversions for new types.
 
-# defined in sysimg.jl for bootstrapping:
-# struct MIME{mime} end
-# macro MIME_str(s)
-import .Base: MIME, @MIME_str
-import .Base: show, print, string, convert, repr
+"""
+    MIME
+
+A type representing a standard internet data format. "MIME" stands for
+"Multipurpose Internet Mail Extensions", since the standard was originally
+used to describe multimedia attachments to email messages.
+
+A `MIME` object can be passed as the second argument to [`show`](@ref) to
+request output in that format.
+
+# Examples
+```jldoctest
+julia> show(stdout, MIME("text/plain"), "hi")
+"hi"
+```
+"""
+struct MIME{mime} end
+
+"""
+    @MIME_str
+
+A convenience macro for writing [`MIME`](@ref) types, typically used when
+adding methods to [`show`](@ref).
+For example the syntax `show(io::IO, ::MIME"text/html", x::MyType) = ...`
+could be used to define how to write an HTML representation of `MyType`.
+"""
+macro MIME_str(s)
+    :(MIME{$(Expr(:quote, Symbol(s)))})
+end
+
+# fallback text/plain representation of any type:
+show(io::IO, ::MIME"text/plain", x) = show(io, x)
+
 MIME(s) = MIME{Symbol(s)}()
 show(io::IO, ::MIME{mime}) where {mime} = print(io, "MIME type ", string(mime))
 print(io::IO, ::MIME{mime}) where {mime} = print(io, mime)
@@ -172,6 +202,12 @@ end
 # cannot be displayed.  The return value of display(...) is up to the
 # AbstractDisplay type.
 
+"""
+    AbstractDisplay
+
+Abstract supertype for rich display output devices. [`TextDisplay`](@ref) is a subtype
+of this.
+"""
 abstract type AbstractDisplay end
 
 # it is convenient to accept strings instead of ::MIME
@@ -279,6 +315,9 @@ a `MethodError` if this type is not supported by either the display(s) or by `x`
 variants, one can also supply the "raw" data in the requested MIME type by passing
 `x::AbstractString` (for MIME types with text-based storage, such as text/html or
 application/postscript) or `x::Vector{UInt8}` (for binary MIME types).
+
+To customize how instances of a type are displayed, overload [`show`](@ref) rather than `display`,
+as explained in the manual section on [custom pretty-printing](@id man-custom-pretty-printing).
 """
 function display(@nospecialize x)
     for i = length(displays):-1:1

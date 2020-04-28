@@ -2,7 +2,6 @@
 
 include("formatting.jl")
 
-const margin = 2
 cols(io) = displaysize(io)[2]
 
 function term(io::IO, content::Vector, cols)
@@ -35,13 +34,13 @@ end
 function term(io::IO, md::Admonition, columns)
     col = :default
     # If the types below are modified, the page manual/documentation.md must be updated accordingly.
-    if lowercase(md.title) == "danger"
+    if md.category == "danger"
         col = Base.error_color()
-    elseif lowercase(md.title) == "warning"
+    elseif md.category == "warning"
         col = Base.warn_color()
-    elseif lowercase(md.title) in ("info", "note")
+    elseif md.category in ("info", "note")
         col = Base.info_color()
-    elseif lowercase(md.title) == "tip"
+    elseif md.category == "tip"
         col = :green
     end
     printstyled(io, ' '^margin, "│ "; color=col, bold=true)
@@ -111,6 +110,10 @@ function term(io::IO, md::Code, columns)
     end
 end
 
+function term(io::IO, tex::LaTeX, columns)
+    printstyled(io, ' '^margin, tex.formula, color=:magenta)
+end
+
 term(io::IO, br::LineBreak, columns) = nothing # line breaks already printed between subsequent elements
 
 function term(io::IO, br::HorizontalRule, columns)
@@ -161,6 +164,10 @@ end
 
 function terminline(io::IO, code::Code)
     printstyled(io, code.code, color=:cyan)
+end
+
+function terminline(io::IO, tex::LaTeX)
+    printstyled(io, tex.formula, color=:magenta)
 end
 
 terminline(io::IO, x) = show(io, MIME"text/plain"(), x)

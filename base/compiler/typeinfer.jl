@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const COMPILER_TEMP_SYM = Symbol("#temp#")
-
 # build (and start inferring) the inference frame for the linfo
 function typeinf(result::InferenceResult, cached::Bool, params::Params)
     frame = InferenceState(result, cached, params)
@@ -11,7 +9,6 @@ function typeinf(result::InferenceResult, cached::Bool, params::Params)
 end
 
 function typeinf(frame::InferenceState)
-    cached = frame.cached
     typeinf_nocycle(frame) || return false # frame is now part of a higher cycle
     # with no active ip's, frame is done
     frames = frame.callers_in_cycle
@@ -28,6 +25,7 @@ function typeinf(frame::InferenceState)
     # empty!(frames)
     min_valid = frame.min_valid
     max_valid = frame.max_valid
+    cached = frame.cached
     if cached || frame.parent !== nothing
         for caller in results
             opt = caller.src
@@ -56,21 +54,27 @@ function typeinf(frame::InferenceState)
                 end
             end
         end
+    end
+    if max_valid == get_world_counter()
+        max_valid = typemax(UInt)
+    end
+    for caller in frames
+        caller.min_valid = min_valid
+        caller.max_valid = max_valid
+        caller.src.min_world = min_valid
+        caller.src.max_world = max_valid
         if cached
-            for caller in results
-                cache_result(caller, min_valid, max_valid)
+            cache_result(caller.result, min_valid, max_valid)
+        end
+        if max_valid == typemax(UInt)
+            # if we aren't cached, we don't need this edge
+            # but our caller might, so let's just make it anyways
+            for caller in frames
+                store_backedges(caller)
             end
         end
-    end
-    # if we aren't cached, we don't need this edge
-    # but our caller might, so let's just make it anyways
-    for caller in frames
-        finalize_backedges(caller)
-    end
-    if max_valid == typemax(UInt)
-        for caller in frames
-            store_backedges(caller)
-        end
+        # finalize and record the linfo result
+        caller.inferred = true
     end
     return true
 end
@@ -80,39 +84,30 @@ end
 function cache_result(result::InferenceResult, min_valid::UInt, max_valid::UInt)
     def = result.linfo.def
     toplevel = !isa(result.linfo.def, Method)
-    if toplevel
-        min_valid = UInt(0)
-        max_valid = UInt(0)
-    end
 
     # check if the existing linfo metadata is also sufficient to describe the current inference result
-    # to decide if it is worth caching it again (which would also clear any generated code)
+    # to decide if it is worth caching this
     already_inferred = !result.linfo.inInference
-    if isdefined(result.linfo, :inferred)
-        inf = result.linfo.inferred
-        if !isa(inf, CodeInfo) || (inf::CodeInfo).inferred
-            if min_world(result.linfo) == min_valid && max_world(result.linfo) == max_valid
-                already_inferred = true
-            end
-        end
+    if inf_for_methodinstance(result.linfo, min_valid, max_valid) isa CodeInstance
+        already_inferred = true
     end
 
-    # don't store inferred code if we've decided to interpret this function
-    if !already_inferred && invoke_api(result.linfo) != 4
+    # TODO: also don't store inferred code if we've previously decided to interpret this function
+    if !already_inferred
         inferred_result = result.src
         if inferred_result isa Const
             # use constant calling convention
-            inferred_const = (result.src::Const).val
+            rettype_const = (result.src::Const).val
             const_flags = 0x3
         else
             if isa(result.result, Const)
-                inferred_const = (result.result::Const).val
+                rettype_const = (result.result::Const).val
                 const_flags = 0x2
             elseif isconstType(result.result)
-                inferred_const = result.result.parameters[1]
+                rettype_const = result.result.parameters[1]
                 const_flags = 0x2
             else
-                inferred_const = nothing
+                rettype_const = nothing
                 const_flags = 0x00
             end
             if !toplevel && inferred_result isa CodeInfo
@@ -121,7 +116,10 @@ function cache_result(result::InferenceResult, min_valid::UInt, max_valid::UInt)
                      ccall(:jl_isa_compileable_sig, Int32, (Any, Any), result.linfo.specTypes, def) != 0)
                 if cache_the_tree
                     # compress code for non-toplevel thunks
-                    inferred_result = ccall(:jl_compress_ast, Any, (Any, Any), def, inferred_result)
+                    nslots = length(inferred_result.slotflags)
+                    resize!(inferred_result.slottypes, nslots)
+                    resize!(inferred_result.slotnames, nslots)
+                    inferred_result = ccall(:jl_compress_ir, Any, (Any, Any), def, inferred_result)
                 else
                     inferred_result = nothing
                 end
@@ -130,13 +128,9 @@ function cache_result(result::InferenceResult, min_valid::UInt, max_valid::UInt)
         if !isa(inferred_result, Union{CodeInfo, Vector{UInt8}})
             inferred_result = nothing
         end
-        cache = ccall(:jl_set_method_inferred, Ref{MethodInstance}, (Any, Any, Any, Any, Int32, UInt, UInt),
-            result.linfo, widenconst(result.result), inferred_const, inferred_result,
+        ccall(:jl_set_method_inferred, Ref{CodeInstance}, (Any, Any, Any, Any, Int32, UInt, UInt),
+            result.linfo, widenconst(result.result), rettype_const, inferred_result,
             const_flags, min_valid, max_valid)
-        if cache !== result.linfo
-            result.linfo.inInference = false
-            result.linfo = cache
-        end
     end
     result.linfo.inInference = false
     nothing
@@ -172,37 +166,32 @@ function finish(src::CodeInfo)
     nothing
 end
 
-function finalize_backedges(me::InferenceState)
-    # update all of the (cycle) callers with real backedges
-    # by traversing the temporary list of backedges
-    for (i, _) in me.cycle_backedges
-        add_backedge!(me.linfo, i)
-    end
-
-    # finalize and record the linfo result
-    me.inferred = true
-    nothing
-end
-
-# add the real backedges
+# record the backedges
 function store_backedges(frame::InferenceState)
     toplevel = !isa(frame.linfo.def, Method)
     if !toplevel && (frame.cached || frame.parent !== nothing)
         caller = frame.result.linfo
         for edges in frame.stmt_edges
-            i = 1
-            while i <= length(edges)
-                to = edges[i]
-                if isa(to, MethodInstance)
-                    ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), to, caller)
-                    i += 1
-                else
-                    typeassert(to, Core.MethodTable)
-                    typ = edges[i + 1]
-                    ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
-                    i += 2
-                end
-            end
+            store_backedges(caller, edges)
+        end
+        store_backedges(caller, frame.src.edges)
+        frame.src.edges = nothing
+    end
+end
+
+store_backedges(caller, edges::Nothing) = nothing
+function store_backedges(caller, edges::Vector)
+    i = 1
+    while i <= length(edges)
+        to = edges[i]
+        if isa(to, MethodInstance)
+            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), to, caller)
+            i += 1
+        else
+            typeassert(to, Core.MethodTable)
+            typ = edges[i + 1]
+            ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
+            i += 2
         end
     end
 end
@@ -220,18 +209,9 @@ function widen_all_consts!(src::CodeInfo)
         end
     end
 
-    return src
-end
+    src.rettype = widenconst(src.rettype)
 
-maybe_widen_conditional(@nospecialize vt) = vt
-function maybe_widen_conditional(vt::Conditional)
-    if vt.vtype === Bottom
-        return Const(false)
-    elseif vt.elsetype === Bottom
-        return Const(true)
-    else
-        return Bool
-    end
+    return src
 end
 
 function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
@@ -256,7 +236,7 @@ end
 function visit_slot_load!(sl::Slot, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
     id = slot_id(sl)
     s = vtypes[id]
-    vt = maybe_widen_conditional(s.typ)
+    vt = widenconditional(s.typ)
     if s.undef
         # find used-undef variables
         undefs[id] = true
@@ -312,12 +292,14 @@ function type_annotate!(sv::InferenceState)
         if gt[j] === NOT_FOUND
             gt[j] = Union{}
         end
-        gt[j] = maybe_widen_conditional(gt[j])
+        gt[j] = widenconditional(gt[j])
     end
 
     # compute the required type for each slot
     # to hold all of the items assigned into it
     record_slot_assign!(sv)
+    sv.src.slottypes = sv.slottypes
+    sv.src.rettype = sv.bestguess
 
     # annotate variables load types
     # remove dead code optimization
@@ -325,7 +307,7 @@ function type_annotate!(sv::InferenceState)
     src = sv.src
     states = sv.stmt_types
     nargs = sv.nargs
-    nslots = length(states[1])
+    nslots = length(states[1]::Array{Any,1})
     undefs = fill(false, nslots)
     body = src.code::Array{Any,1}
     nexpr = length(body)
@@ -350,7 +332,7 @@ function type_annotate!(sv::InferenceState)
         st_i = states[i]
         expr = body[i]
         if isa(st_i, VarTable)
-            # st_i === ()  =>  unreached statement  (see issue #7836)
+            # st_i === nothing  =>  unreached statement  (see issue #7836)
             if isa(expr, Expr)
                 annotate_slot_load!(expr, st_i, sv, undefs)
             elseif isa(expr, Slot)
@@ -408,7 +390,7 @@ function union_caller_cycle!(a::InferenceState, b::InferenceState)
     return
 end
 
-function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, child::InferenceState)
+function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, child::InferenceState, limited::Bool)
     # add backedge of parent <- child
     # then add all backedges of parent <- parent.parent
     # and merge all of the callers into ancestor.callers_in_cycle
@@ -419,6 +401,11 @@ function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, chi
         child = parent
         parent = child.parent
         child === ancestor && break
+    end
+    if limited
+        for caller in ancestor.callers_in_cycle
+            caller.limited = true
+        end
     end
 end
 
@@ -432,17 +419,28 @@ end
 function resolve_call_cycle!(linfo::MethodInstance, parent::InferenceState)
     frame = parent
     uncached = false
+    limited = false
     while isa(frame, InferenceState)
         uncached |= !frame.cached # ensure we never add an uncached frame to a cycle
+        limited |= frame.limited
         if frame.linfo === linfo
-            uncached && return true
-            merge_call_chain!(parent, frame, frame)
+            if uncached
+                # our attempt to speculate into a constant call lead to an undesired self-cycle
+                # that cannot be converged: poison our call-stack (up to the discovered duplicate frame)
+                # with the limited flag and abort (set return type to Any) now
+                poison_callstack(parent, frame, false)
+                return true
+            end
+            merge_call_chain!(parent, frame, frame, limited)
             return frame
         end
         for caller in frame.callers_in_cycle
             if caller.linfo === linfo
-                uncached && return true
-                merge_call_chain!(parent, frame, caller)
+                if uncached
+                    poison_callstack(parent, frame, false)
+                    return true
+                end
+                merge_call_chain!(parent, frame, caller, limited)
                 return caller
             end
         end
@@ -453,20 +451,14 @@ end
 
 # compute (and cache) an inferred AST and return the current best estimate of the result type
 function typeinf_edge(method::Method, @nospecialize(atypes), sparams::SimpleVector, caller::InferenceState)
-    code = code_for_method(method, atypes, sparams, caller.params.world)
-    code === nothing && return Any, nothing
-    code = code::MethodInstance
-    if isdefined(code, :inferred)
-        # return rettype if the code is already inferred
-        # staged functions make this hard since they have two "inferred" conditions,
-        # so need to check whether the code itself is also inferred
-        inf = code.inferred
-        if !isa(inf, CodeInfo) || (inf::CodeInfo).inferred
-            if isdefined(code, :inferred_const)
-                return AbstractEvalConstant(code.inferred_const), code
-            else
-                return code.rettype, code
-            end
+    mi = specialize_method(method, atypes, sparams)::MethodInstance
+    code = inf_for_methodinstance(mi, caller.params.world)
+    if code isa CodeInstance # return existing rettype if the code is already inferred
+        update_valid_age!(min_world(code), max_world(code), caller)
+        if isdefined(code, :rettype_const)
+            return Const(code.rettype_const), mi
+        else
+            return code.rettype, mi
         end
     end
     if !caller.cached && caller.parent === nothing
@@ -474,40 +466,46 @@ function typeinf_edge(method::Method, @nospecialize(atypes), sparams::SimpleVect
         # (if we asked resolve_call_cyle, it might instead detect that there is a cycle that it can't merge)
         frame = false
     else
-        frame = resolve_call_cycle!(code, caller)
+        frame = resolve_call_cycle!(mi, caller)
     end
     if frame === false
         # completely new
-        code.inInference = true
-        result = InferenceResult(code)
+        mi.inInference = true
+        result = InferenceResult(mi)
         frame = InferenceState(result, #=cached=#true, caller.params) # always use the cache for edge targets
         if frame === nothing
             # can't get the source for this, so we know nothing
-            code.inInference = false
+            mi.inInference = false
             return Any, nothing
         end
         if caller.cached || caller.limited # don't involve uncached functions in cycle resolution
             frame.parent = caller
         end
         typeinf(frame)
-        return frame.bestguess, frame.inferred ? frame.linfo : nothing
+        update_valid_age!(frame, caller)
+        return widenconst_bestguess(frame.bestguess), frame.inferred ? mi : nothing
     elseif frame === true
         # unresolvable cycle
         return Any, nothing
     end
+    # return the current knowledge about this cycle
     frame = frame::InferenceState
-    return frame.bestguess, nothing
+    update_valid_age!(frame, caller)
+    return widenconst_bestguess(frame.bestguess), nothing
 end
 
+function widenconst_bestguess(bestguess)
+    !isa(bestguess, Const) && !isa(bestguess, Type) && return widenconst(bestguess)
+    return bestguess
+end
 
 #### entry points for inferring a MethodInstance given a type signature ####
 
 # compute an inferred AST and return type
 function typeinf_code(method::Method, @nospecialize(atypes), sparams::SimpleVector, run_optimizer::Bool, params::Params)
-    code = code_for_method(method, atypes, sparams, params.world)
-    code === nothing && return (nothing, Any)
+    mi = specialize_method(method, atypes, sparams)::MethodInstance
     ccall(:jl_typeinf_begin, Cvoid, ())
-    result = InferenceResult(code)
+    result = InferenceResult(mi)
     frame = InferenceState(result, false, params)
     frame === nothing && return (nothing, Any)
     if typeinf(frame) && run_optimizer
@@ -521,77 +519,76 @@ function typeinf_code(method::Method, @nospecialize(atypes), sparams::SimpleVect
 end
 
 # compute (and cache) an inferred AST and return type
-function typeinf_ext(linfo::MethodInstance, params::Params)
+function typeinf_ext(mi::MethodInstance, params::Params)
+    method = mi.def::Method
     for i = 1:2 # test-and-lock-and-test
         i == 2 && ccall(:jl_typeinf_begin, Cvoid, ())
-        if isdefined(linfo, :inferred)
+        code = inf_for_methodinstance(mi, params.world)
+        if code isa CodeInstance
             # see if this code already exists in the cache
-            # staged functions make this hard since they have two "inferred" conditions,
-            # so need to check whether the code itself is also inferred
-            if min_world(linfo) <= params.world <= max_world(linfo)
-                inf = linfo.inferred
-                if invoke_api(linfo) == 2
-                    method = linfo.def::Method
-                    tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
-                    tree.code = Any[ Expr(:return, quoted(linfo.inferred_const)) ]
-                    tree.method_for_inference_limit_heuristics = nothing
-                    tree.slotnames = Any[ COMPILER_TEMP_SYM for i = 1:method.nargs ]
-                    tree.slotflags = fill(0x00, Int(method.nargs))
-                    tree.ssavaluetypes = 0
-                    tree.codelocs = Int32[1]
-                    tree.linetable = [LineInfoNode(method.module, method.name, method.file, Int(method.line), 0)]
-                    tree.inferred = true
-                    tree.ssaflags = UInt8[]
-                    tree.pure = true
-                    tree.inlineable = true
-                    i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
-                    return svec(linfo, tree)
-                elseif isa(inf, CodeInfo)
-                    if inf.inferred
-                        i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
-                        return svec(linfo, inf)
-                    end
-                elseif isa(inf, Vector{UInt8})
-                    inf = uncompressed_ast(linfo.def::Method, inf)
-                    if inf.inferred
-                        i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
-                        return svec(linfo, inf)
-                    end
+            inf = code.inferred
+            if invoke_api(code) == 2
+                i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
+                tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
+                tree.code = Any[ Expr(:return, quoted(code.rettype_const)) ]
+                nargs = Int(method.nargs)
+                tree.slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), method.slot_syms)
+                tree.slotflags = fill(0x00, nargs)
+                tree.ssavaluetypes = 1
+                tree.codelocs = Int32[1]
+                tree.linetable = [LineInfoNode(method, method.file, Int(method.line), 0)]
+                tree.inferred = true
+                tree.ssaflags = UInt8[0]
+                tree.pure = true
+                tree.inlineable = true
+                tree.parent = mi
+                tree.rettype = Core.Typeof(code.rettype_const)
+                tree.min_world = code.min_world
+                tree.max_world = code.max_world
+                return tree
+            elseif isa(inf, CodeInfo)
+                i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
+                if !(inf.min_world == code.min_world &&
+                     inf.max_world == code.max_world &&
+                     inf.rettype === code.rettype)
+                    inf = copy(inf)
+                    inf.min_world = code.min_world
+                    inf.max_world = code.max_world
+                    inf.rettype = code.rettype
                 end
+                return inf
+            elseif isa(inf, Vector{UInt8})
+                i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
+                inf = _uncompressed_ir(code, inf)
+                return inf
             end
         end
     end
-    linfo.inInference = true
-    frame = InferenceState(InferenceResult(linfo), #=cached=#true, params)
-    frame === nothing && return svec(nothing, nothing)
+    mi.inInference = true
+    frame = InferenceState(InferenceResult(mi), #=cached=#true, params)
+    frame === nothing && return nothing
     typeinf(frame)
     ccall(:jl_typeinf_end, Cvoid, ())
-    frame.src.inferred || return svec(nothing, nothing)
-    return svec(frame.result.linfo, frame.src)
+    frame.src.inferred || return nothing
+    return frame.src
 end
 
 # compute (and cache) an inferred AST and return the inferred return type
 function typeinf_type(method::Method, @nospecialize(atypes), sparams::SimpleVector, params::Params)
     if contains_is(unwrap_unionall(atypes).parameters, Union{})
-        return Union{}
+        return Union{} # don't ask: it does weird and unnecessary things, if it occurs during bootstrap
     end
-    code = code_for_method(method, atypes, sparams, params.world)
-    code === nothing && return nothing
-    code = code::MethodInstance
+    mi = specialize_method(method, atypes, sparams)::MethodInstance
     for i = 1:2 # test-and-lock-and-test
         i == 2 && ccall(:jl_typeinf_begin, Cvoid, ())
-        if isdefined(code, :inferred)
+        code = inf_for_methodinstance(mi, params.world)
+        if code isa CodeInstance
             # see if this rettype already exists in the cache
-            # staged functions make this hard since they have two "inferred" conditions,
-            # so need to check whether the code itself is also inferred
-            inf = code.inferred
-            if !isa(inf, CodeInfo) || (inf::CodeInfo).inferred
-                i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
-                return code.rettype
-            end
+            i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
+            return code.rettype
         end
     end
-    frame = InferenceResult(code)
+    frame = InferenceResult(mi)
     typeinf(frame, true, params)
     ccall(:jl_typeinf_end, Cvoid, ())
     frame.result isa InferenceState && return nothing
@@ -601,25 +598,33 @@ end
 @timeit function typeinf_ext(linfo::MethodInstance, world::UInt)
     if isa(linfo.def, Method)
         # method lambda - infer this specialization via the method cache
-        return typeinf_ext(linfo, Params(world))
+        src = typeinf_ext(linfo, Params(world))
     else
-        # toplevel lambda - infer directly
-        ccall(:jl_typeinf_begin, Cvoid, ())
-        result = InferenceResult(linfo)
-        frame = InferenceState(result, linfo.inferred::CodeInfo,
-                               #=cached=#true, Params(world))
-        typeinf(frame)
-        ccall(:jl_typeinf_end, Cvoid, ())
-        @assert frame.inferred # TODO: deal with this better
-        @assert frame.linfo === linfo
-        linfo.rettype = widenconst(frame.bestguess)
-        return svec(linfo, frame.src)
+        src = linfo.uninferred::CodeInfo
+        if !src.inferred
+            # toplevel lambda - infer directly
+            ccall(:jl_typeinf_begin, Cvoid, ())
+            if !src.inferred
+                result = InferenceResult(linfo)
+                frame = InferenceState(result, src, #=cached=#true, Params(world))
+                typeinf(frame)
+                @assert frame.inferred # TODO: deal with this better
+                src = frame.src
+            end
+            ccall(:jl_typeinf_end, Cvoid, ())
+        end
     end
+    return src
 end
 
 
 function return_type(@nospecialize(f), @nospecialize(t))
-    params = Params(ccall(:jl_get_tls_world_age, UInt, ()))
+    world = ccall(:jl_get_tls_world_age, UInt, ())
+    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), Any[_return_type, f, t, world], 4)
+end
+
+function _return_type(@nospecialize(f), @nospecialize(t), world)
+    params = Params(world)
     rt = Union{}
     if isa(f, Builtin)
         rt = builtin_tfunction(f, Any[t.parameters...], nothing, params)

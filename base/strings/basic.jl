@@ -50,6 +50,18 @@ access this string must satisfy `1 ≤ i ≤ ncodeunits(s)`. Not all such indic
 are valid – they may not be the start of a character, but they will return a
 code unit value when calling `codeunit(s,i)`.
 
+# Examples
+```jldoctest
+julia> ncodeunits("The Julia Language")
+18
+
+julia> ncodeunits("∫eˣ")
+6
+
+julia> ncodeunits('∫'), ncodeunits('e'), ncodeunits('ˣ')
+(3, 1, 2)
+```
+
 See also: [`codeunit`](@ref), [`checkbounds`](@ref), [`sizeof`](@ref),
 [`length`](@ref), [`lastindex`](@ref)
 """
@@ -99,7 +111,6 @@ See also: [`getindex`](@ref), [`iterate`](@ref), [`thisind`](@ref),
 [`nextind`](@ref), [`prevind`](@ref), [`length`](@ref)
 
 # Examples
-
 ```jldoctest
 julia> str = "αβγdef";
 
@@ -107,7 +118,7 @@ julia> isvalid(str, 1)
 true
 
 julia> str[1]
-'α': Unicode U+03b1 (category Ll: Letter, lowercase)
+'α': Unicode U+03B1 (category Ll: Letter, lowercase)
 
 julia> isvalid(str, 2)
 false
@@ -142,8 +153,8 @@ eltype(::Type{<:AbstractString}) = Char # some string types may use another Abst
 """
     sizeof(str::AbstractString)
 
-Size, in bytes, of the string `s`. Equal to the number of code units in `s` multiplied by
-the size, in bytes, of one code unit in `s`.
+Size, in bytes, of the string `str`. Equal to the number of code units in `str` multiplied by
+the size, in bytes, of one code unit in `str`.
 
 # Examples
 ```jldoctest
@@ -157,6 +168,7 @@ julia> sizeof("∀")
 sizeof(s::AbstractString) = ncodeunits(s) * sizeof(codeunit(s))
 firstindex(s::AbstractString) = 1
 lastindex(s::AbstractString) = thisind(s, ncodeunits(s))
+isempty(s::AbstractString) = iszero(ncodeunits(s))
 
 function getindex(s::AbstractString, i::Integer)
     @boundscheck checkbounds(s, i)
@@ -203,6 +215,7 @@ string(s::AbstractString) = s
 (::Type{Vector{T}})(s::AbstractString) where {T<:AbstractChar} = collect(T, s)
 
 Symbol(s::AbstractString) = Symbol(String(s))
+Symbol(x...) = Symbol(string(x...))
 
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
 convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
@@ -383,12 +396,12 @@ julia> thisind("α", 3)
 3
 
 julia> thisind("α", 4)
-ERROR: BoundsError: attempt to access "α"
+ERROR: BoundsError: attempt to access String
   at index [4]
 [...]
 
 julia> thisind("α", -1)
-ERROR: BoundsError: attempt to access "α"
+ERROR: BoundsError: attempt to access String
   at index [-1]
 [...]
 ```
@@ -439,7 +452,7 @@ julia> prevind("α", 1)
 0
 
 julia> prevind("α", 0)
-ERROR: BoundsError: attempt to access "α"
+ERROR: BoundsError: attempt to access String
   at index [0]
 [...]
 
@@ -499,7 +512,7 @@ julia> nextind("α", 1)
 3
 
 julia> nextind("α", 3)
-ERROR: BoundsError: attempt to access "α"
+ERROR: BoundsError: attempt to access String
   at index [3]
 [...]
 
@@ -563,18 +576,22 @@ isascii(c::Char) = bswap(reinterpret(UInt32, c)) < 0x80
 isascii(s::AbstractString) = all(isascii, s)
 isascii(c::AbstractChar) = UInt32(c) < 0x80
 
-## string map, filter, has ##
+## string map, filter ##
 
 function map(f, s::AbstractString)
-    out = IOBuffer(sizehint=sizeof(s))
+    out = StringVector(max(4, sizeof(s)÷sizeof(codeunit(s))))
+    index = UInt(1)
     for c in s
         c′ = f(c)
         isa(c′, AbstractChar) || throw(ArgumentError(
             "map(f, s::AbstractString) requires f to return AbstractChar; " *
             "try map(f, collect(s)) or a comprehension instead"))
-        write(out, c′::AbstractChar)
+        index + 3 > length(out) && resize!(out, unsigned(2 * length(out)))
+        index += __unsafe_string!(out, convert(Char, c′), index)
     end
-    String(take!(out))
+    resize!(out, index-1)
+    sizehint!(out, index-1)
+    return String(out)
 end
 
 function filter(f, s::AbstractString)
@@ -592,6 +609,7 @@ end
 
 Get a string consisting of the first `n` characters of `s`.
 
+# Examples
 ```jldoctest
 julia> first("∀ϵ≠0: ϵ²>0", 0)
 ""
@@ -603,13 +621,14 @@ julia> first("∀ϵ≠0: ϵ²>0", 3)
 "∀ϵ≠"
 ```
 """
-first(s::AbstractString, n::Integer) = s[1:min(end, nextind(s, 0, n))]
+first(s::AbstractString, n::Integer) = @inbounds s[1:min(end, nextind(s, 0, n))]
 
 """
     last(s::AbstractString, n::Integer)
 
 Get a string consisting of the last `n` characters of `s`.
 
+# Examples
 ```jldoctest
 julia> last("∀ϵ≠0: ϵ²>0", 0)
 ""
@@ -621,7 +640,7 @@ julia> last("∀ϵ≠0: ϵ²>0", 3)
 "²>0"
 ```
 """
-last(s::AbstractString, n::Integer) = s[max(1, prevind(s, ncodeunits(s)+1, n)):end]
+last(s::AbstractString, n::Integer) = @inbounds s[max(1, prevind(s, ncodeunits(s)+1, n)):end]
 
 """
     reverseind(v, i)
@@ -693,7 +712,6 @@ end
 length(s::CodeUnits) = ncodeunits(s.s)
 sizeof(s::CodeUnits{T}) where {T} = ncodeunits(s.s) * sizeof(T)
 size(s::CodeUnits) = (length(s),)
-strides(s::CodeUnits) = (1,)
 elsize(s::CodeUnits{T}) where {T} = sizeof(T)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
@@ -710,5 +728,17 @@ unsafe_convert(::Type{Ptr{Int8}}, s::CodeUnits{UInt8}) = unsafe_convert(Ptr{Int8
 Obtain a vector-like object containing the code units of a string.
 Returns a `CodeUnits` wrapper by default, but `codeunits` may optionally be defined
 for new string types if necessary.
+
+# Examples
+```jldoctest
+julia> codeunits("Juλia")
+6-element Base.CodeUnits{UInt8,String}:
+ 0x4a
+ 0x75
+ 0xce
+ 0xbb
+ 0x69
+ 0x61
+```
 """
 codeunits(s::AbstractString) = CodeUnits(s)

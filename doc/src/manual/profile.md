@@ -23,8 +23,7 @@ is subject to statistical noise.
 
 Despite these limitations, sampling profilers have substantial strengths:
 
-  * You do not have to make any modifications to your code to take timing measurements (in contrast
-    to the alternative [instrumenting profiler](https://github.com/timholy/IProfile.jl)).
+  * You do not have to make any modifications to your code to take timing measurements.
   * It can profile into Julia's core code and even (optionally) into C and Fortran libraries.
   * By running "infrequently" there is very little performance overhead; while profiling, your code
     can run at nearly native speed.
@@ -330,7 +329,7 @@ For example with `OProfile` you can try a simple recording :
 >opreport -l `which ./julia`
 ```
 
-Or similary with with `perf` :
+Or similary with `perf` :
 
 ```
 $ ENABLE_JITPROFILING=1 perf record -o /tmp/perf.data --call-graph dwarf ./julia /test/fastmath.jl
@@ -341,5 +340,5 @@ There are many more interesting things that you can measure about your program, 
 please read the [Linux perf examples page](http://www.brendangregg.com/perf.html).
 
 Remember that perf saves for each execution a `perf.data` file that, even for small programs, can get
-quite large. Also the perf LLVM module saves temporarly debug objects in `~/.debug/jit`, remember
+quite large. Also the perf LLVM module saves temporarily debug objects in `~/.debug/jit`, remember
 to clean that folder frequently.

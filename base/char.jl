@@ -56,6 +56,10 @@ Char
 Return the number of code units required to encode a character as UTF-8.
 This is the number of bytes which will be printed if the character is written
 to an output stream, or `ncodeunits(string(c))` but computed efficiently.
+
+!!! compat "Julia 1.1"
+    This method requires at least Julia 1.1. In Julia 1.0 consider
+    using `ncodeunits(string(c))`.
 """
 ncodeunits(c::Char) = write(devnull, c) # this is surprisingly efficient
 
@@ -183,10 +187,11 @@ typemax(::Type{Char}) = reinterpret(Char, typemax(UInt32))
 typemin(::Type{Char}) = reinterpret(Char, typemin(UInt32))
 
 size(c::AbstractChar) = ()
-size(c::AbstractChar,d) = convert(Int, d) < 1 ? throw(BoundsError()) : 1
+size(c::AbstractChar, d::Integer) = d < 1 ? throw(BoundsError()) : 1
 ndims(c::AbstractChar) = 0
 ndims(::Type{<:AbstractChar}) = 0
 length(c::AbstractChar) = 1
+IteratorSize(::Type{Char}) = HasShape{0}()
 firstindex(c::AbstractChar) = 1
 lastindex(c::AbstractChar) = 1
 getindex(c::AbstractChar) = c
@@ -213,10 +218,10 @@ isless(x::AbstractChar, y::AbstractChar) = isless(Char(x), Char(y))
 hash(x::AbstractChar, h::UInt) = hash(Char(x), h)
 widen(::Type{T}) where {T<:AbstractChar} = T
 
--(x::AbstractChar, y::AbstractChar) = Int(x) - Int(y)
--(x::T, y::Integer) where {T<:AbstractChar} = T(Int32(x) - Int32(y))
-+(x::T, y::Integer) where {T<:AbstractChar} = T(Int32(x) + Int32(y))
-+(x::Integer, y::AbstractChar) = y + x
+@inline -(x::AbstractChar, y::AbstractChar) = Int(x) - Int(y)
+@inline -(x::T, y::Integer) where {T<:AbstractChar} = T(Int32(x) - Int32(y))
+@inline +(x::T, y::Integer) where {T<:AbstractChar} = T(Int32(x) + Int32(y))
+@inline +(x::Integer, y::AbstractChar) = y + x
 
 # `print` should output UTF-8 by default for all AbstractChar types.
 # (Packages may implement other IO subtypes to specify different encodings.)
@@ -290,6 +295,7 @@ end
 
 function show(io::IO, ::MIME"text/plain", c::T) where {T<:AbstractChar}
     show(io, c)
+    get(io, :compact, false) && return
     if !ismalformed(c)
         print(io, ": ")
         if isoverlong(c)
@@ -299,7 +305,7 @@ function show(io::IO, ::MIME"text/plain", c::T) where {T<:AbstractChar}
         else
             u = codepoint(c)
         end
-        h = string(u, base = 16, pad = u ≤ 0xffff ? 4 : 6)
+        h = uppercase(string(u, base = 16, pad = 4))
         print(io, (isascii(c) ? "ASCII/" : ""), "Unicode U+", h)
     else
         print(io, ": Malformed UTF-8")

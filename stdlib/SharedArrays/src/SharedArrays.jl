@@ -275,13 +275,23 @@ function finalize_refs(S::SharedArray{T,N}) where T where N
     S
 end
 
+"""
+    SharedVector
 
+A one-dimensional [`SharedArray`](@ref).
+"""
 const SharedVector{T} = SharedArray{T,1}
+"""
+    SharedMatrix
+
+A two-dimensional [`SharedArray`](@ref).
+"""
 const SharedMatrix{T} = SharedArray{T,2}
 
-length(S::SharedArray) = prod(S.dims)
+SharedVector(A::Vector) = SharedArray(A)
+SharedMatrix(A::Matrix) = SharedArray(A)
+
 size(S::SharedArray) = S.dims
-ndims(S::SharedArray) = length(S.dims)
 IndexStyle(::Type{<:SharedArray}) = IndexLinear()
 
 function reshape(a::SharedArray{T}, dims::NTuple{N,Int}) where {T,N}
@@ -444,7 +454,7 @@ function serialize(s::AbstractSerializer, S::SharedArray)
     for n in fieldnames(SharedArray)
         if n in [:s, :pidx, :loc_subarr_1d]
             writetag(s.io, UNDEFREF_TAG)
-        elseif n == :refs
+        elseif n === :refs
             v = getfield(S, n)
             if isa(v[1], Future)
                 # convert to ids to avoid distributed GC overhead
@@ -487,7 +497,7 @@ function show(io::IO, mime::MIME"text/plain", S::SharedArray)
         invoke(show, Tuple{IO,MIME"text/plain",DenseArray}, io, MIME"text/plain"(), S)
     else
         # retrieve from the first worker mapping the array.
-        println(io, summary(S), ":")
+        summary(io, S); println(io, ":")
         Base.print_array(io, remotecall_fetch(sharr->sharr.s, S.pids[1], S))
     end
 end
@@ -602,9 +612,9 @@ function print_shmem_limits(slen)
             pfx = "kernel"
         elseif Sys.isapple()
             pfx = "kern.sysv"
-        elseif Sys.KERNEL == :FreeBSD || Sys.KERNEL == :DragonFly
+        elseif Sys.KERNEL === :FreeBSD || Sys.KERNEL === :DragonFly
             pfx = "kern.ipc"
-        elseif Sys.KERNEL == :OpenBSD
+        elseif Sys.KERNEL === :OpenBSD
             pfx = "kern.shminfo"
         else
             # seems NetBSD does not have *.shmall
@@ -637,9 +647,9 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
 
     try
         A = _shm_mmap_array(T, dims, shm_seg_name, mode)
-    catch e
+    catch
         print_shmem_limits(prod(dims)*sizeof(T))
-        rethrow(e)
+        rethrow()
 
     finally
         if s !== nothing

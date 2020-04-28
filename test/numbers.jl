@@ -6,11 +6,6 @@ using LinearAlgebra
 
 const ≣ = isequal # convenient for comparing NaNs
 
-# remove these tests and re-enable the same ones in the
-# testset "issue #4156" later in this file when #23866 is resolved
-@test fld(0.3,0.01) == 29.0
-@test div(0.3,0.01) == 29.0
-
 @testset "basic booleans" begin
     @test true
     @test !false
@@ -63,6 +58,11 @@ end
 
     @test iszero(false) && !iszero(true)
     @test isone(true) && !isone(false)
+
+    @test typemin(Bool) == false
+    @test typemax(Bool) == true
+    @test abs(false) == false
+    @test abs(true) == true
 end
 @testset "basic arithmetic" begin
     @test 2 + 3 == 5
@@ -207,6 +207,11 @@ end
 @test isa(170141183460469231731687303715884105728,BigInt)
 
 @test isa(0170141183460469231731687303715884105728,BigInt)
+
+# GMP allocation overflow should not cause crash
+if Base.GMP.ALLOC_OVERFLOW_FUNCTION[] && sizeof(Int) > 4
+  @test_throws OutOfMemoryError BigInt(2)^(typemax(Culong))
+end
 
 # exponentiating with a negative base
 @test -3^2 == -9
@@ -410,11 +415,11 @@ end
     @test repr(-NaN) == "NaN"
     @test repr(Float64(pi)) == "3.141592653589793"
     # issue 6608
-    @test sprint(show, 666666.6, context=:compact => true) == "6.66667e5"
+    @test sprint(show, 666666.6, context=:compact => true) == "666667.0"
     @test sprint(show, 666666.049, context=:compact => true) == "666666.0"
     @test sprint(show, 666665.951, context=:compact => true) == "666666.0"
     @test sprint(show, 66.66666, context=:compact => true) == "66.6667"
-    @test sprint(show, -666666.6, context=:compact => true) == "-6.66667e5"
+    @test sprint(show, -666666.6, context=:compact => true) == "-666667.0"
     @test sprint(show, -666666.049, context=:compact => true) == "-666666.0"
     @test sprint(show, -666665.951, context=:compact => true) == "-666666.0"
     @test sprint(show, -66.66666, context=:compact => true) == "-66.6667"
@@ -458,6 +463,12 @@ end
     @test isa(sign(2//3 + 2//3im), Complex{Float64})
     @test sign(one(UInt)) == 1
     @test sign(zero(UInt)) == 0
+
+    isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
+    using .Main.Furlongs
+    x = Furlong(3.0)
+    @test sign(x) * x == x
+    @test sign(-x) * -x == x
 
     @test signbit(1) == 0
     @test signbit(0) == 0
@@ -592,6 +603,17 @@ end
     # test x = Inf
     @test isinf(copysign(1/0,1))
     @test isinf(copysign(1/0,-1))
+
+    # with Unsigned argument
+    @test copysign(Float16(-1), 0x01) === Float16(1)
+    @test copysign(Float16(1), 0x01) === Float16(1)
+    @test copysign(-1.0f0, 0x01) === 1.0f0
+    @test copysign(1.0f0, 0x01) === 1.0f0
+    @test copysign(-1.0, 0x01) === 1.0
+    @test copysign(-1, 0x02) === 1
+    @test copysign(big(-1), 0x02) == 1
+    @test copysign(big(-1.0), 0x02) == 1.0
+    @test copysign(-1//2, 0x01) == 1//2
 end
 
 @testset "isnan/isinf/isfinite" begin
@@ -973,6 +995,11 @@ end
     @test Float32(typemin(UInt128)) == 0.0f0
     @test Float64(typemax(UInt128)) == 2.0^128
     @test Float32(typemax(UInt128)) == 2.0f0^128
+    # leading zeros > 53
+    @test Float64(UInt128(Int64(2)^54)) == 1.8014398509481984e16
+    @test Float64(Int128(Int64(2)^54)) == 1.8014398509481984e16
+    @test Float32(UInt128(Int64(2)^54)) == 1.8014399f16
+    @test Float32(Int128(Int64(2)^54)) == 1.8014399f16
 
     # check for double rounding in conversion
     @test Float64(10633823966279328163822077199654060032) == 1.0633823966279327e37 #0x1p123
@@ -988,6 +1015,16 @@ end
     @test Float64(UInt128(3.7e19)) == 3.7e19
     @test Float64(UInt128(3.7e30)) == 3.7e30
 end
+@testset "Float16 vs Int comparisons" begin
+    @test Inf16 != typemax(Int16)
+    @test Inf16 != typemax(Int32)
+    @test Inf16 != typemax(Int64)
+    @test Inf16 != typemax(Int128)
+    @test Inf16 != typemax(UInt16)
+    @test Inf16 != typemax(UInt32)
+    @test Inf16 != typemax(UInt64)
+    @test Inf16 != typemax(UInt128)
+end
 @testset "NaN comparisons" begin
     @test !(NaN <= 1)
     @test !(NaN >= 1)
@@ -997,6 +1034,13 @@ end
     @test !(1 >= NaN)
     @test !(1 < NaN)
     @test !(1 > NaN)
+end
+
+@testset "Irrational zero and one" begin
+    @test one(pi) === true
+    @test zero(pi) === false
+    @test one(typeof(pi)) === true
+    @test zero(typeof(pi)) === false
 end
 
 @testset "Irrationals compared with Irrationals" begin
@@ -1010,6 +1054,10 @@ end
             @test isequal(i>j, Float64(i)>Float64(j))
         end
     end
+end
+
+@testset "Irrational Inverses, Issue #30882" begin
+    @test @inferred(inv(π)) ≈ 0.3183098861837907
 end
 
 @testset "Irrationals compared with Rationals and Floats" begin
@@ -1037,6 +1085,12 @@ end
     @test 2646693125139304345//842468587426513207 != pi
 
     @test sqrt(2) == 1.4142135623730951
+end
+@testset "Irrational printing" begin
+    @test sprint(show, "text/plain", π) == "π = 3.1415926535897..."
+    @test sprint(show, "text/plain", π, context=:compact => true) == "π"
+    @test sprint(show, π) == "π"
+
 end
 @testset "issue #6365" begin
     for T in (Float32, Float64)
@@ -1526,6 +1580,18 @@ end
     @test signed(cld(typemax(UInt),typemin(Int)>>1))     == -3
     @test signed(cld(typemax(UInt),(typemin(Int)>>1)+1)) == -4
 
+    @testset "UInt128 div/rem" begin
+        uints = [0xadc0db298a7401251f4fa96ba429cb24, 0xd11ef418102afb1f7959b6df48d08044]
+        for x in uints, y in uints, sx in 0:128, sy in 0:127
+            xs = x >> sx
+            ys = y >> sy
+            q, r = @inferred(divrem(xs, ys))::Tuple{UInt128,UInt128}
+            @test xs == q*ys + r && r < ys
+            @test q == @inferred(div(xs, ys))::UInt128
+            @test r == @inferred(rem(xs, ys))::UInt128
+        end
+    end
+
     @testset "exceptions and special cases" begin
         for T in (Int8,Int16,Int32,Int64,Int128, UInt8,UInt16,UInt32,UInt64,UInt128)
             @test_throws DivideError div(T(1), T(0))
@@ -1543,10 +1609,10 @@ end
         end
     end
     @testset "issue #4156" begin
-        @test fld(1.4,0.35667494393873234) == 3.0
-        @test div(1.4,0.35667494393873234) == 3.0
-        # @test fld(0.3,0.01) == 29.0 # uncomment when #23866 is resolved
-        # @test div(0.3,0.01) == 29.0 # uncomment when #23866 is resolved
+        @test fld(1.4, 0.35667494393873234) == 3.0
+        @test div(1.4, 0.35667494393873234) == 3.0
+        @test fld(0.3, 0.01) == 29.0
+        @test div(0.3, 0.01) == 29.0
         # see https://github.com/JuliaLang/julia/issues/3127
     end
     @testset "issue #8831" begin
@@ -2142,8 +2208,10 @@ end
     @test bswap(0x01020304) === 0x04030201
     @test reinterpret(Float64,bswap(0x000000000000f03f)) === 1.0
     @test reinterpret(Float32,bswap(0x0000c03f)) === 1.5f0
+    @test reinterpret(Float16,bswap(0x003c)) === Float16(1.0)
     @test bswap(reinterpret(Float64,0x000000000000f03f)) === 1.0
     @test bswap(reinterpret(Float32,0x0000c03f)) === 1.5f0
+    @test bswap(reinterpret(Float16,0x003e)) === Float16(1.5)
     zbuf = IOBuffer([0xbf, 0xc0, 0x00, 0x00, 0x40, 0x20, 0x00, 0x00,
                      0x40, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                      0xc0, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
@@ -2293,6 +2361,15 @@ for (d,B) in ((4//2+1im,Rational{BigInt}),(3.0+1im,BigFloat),(2+1im,BigInt))
     @test big.([d]) == [d]
 end
 
+# big fallback
+import Base: zero, big
+struct TestNumber{Inner} <: Number
+    inner::Inner
+end
+zero(::Type{TestNumber{Inner}}) where {Inner} = TestNumber(zero(Inner))
+big(test_number::TestNumber) = TestNumber(big(test_number.inner))
+@test big(TestNumber{Int}) == TestNumber{BigInt}
+
 @testset "multiplicative inverses" begin
     function testmi(numrange, denrange)
         for d in denrange
@@ -2322,6 +2399,7 @@ end
     @test !isinteger(π)
     @test size(1) == ()
     @test length(1) == 1
+    @test firstindex(1) == 1
     @test lastindex(1) == 1
     @test eltype(Integer) == Integer
 end
@@ -2396,6 +2474,19 @@ end
     @test rem(T(-1.5), T(2), RoundNearest) == 0.5
     @test rem(T(-1.5), T(2), RoundDown)    == 0.5
     @test rem(T(-1.5), T(2), RoundUp)      == -1.5
+end
+
+@testset "rem for $T RoundNearest" for T in (Int8, Int16, Int32, Int64, Int128)
+    for (n, r) in zip(3:7, -2:2)
+        @test rem(T(n), T(5), RoundNearest) == rem(float(n), 5.0, RoundNearest) == r
+        @test rem(T(n), T(-5), RoundNearest) == rem(float(n), -5.0, RoundNearest) == r
+        @test rem(T(-n), T(-5), RoundNearest) == rem(float(-n), -5.0, RoundNearest) == -r
+        @test rem(T(-n), T(5), RoundNearest) == rem(float(-n), 5.0, RoundNearest) == -r
+        @test rem(T(n), T(5), RoundNearest) == rem(T(n)//T(1), T(5)//T(1), RoundNearest)
+        @test rem(T(-n), T(5), RoundNearest) == rem(T(-n)//T(1), T(5)//T(1), RoundNearest)
+        @test rem(T(n), T(-5), RoundNearest) == rem(T(n)//T(1), T(-5)//T(1), RoundNearest)
+        @test rem(T(-n), T(-5), RoundNearest) == rem(T(-n)//T(1), T(-5)//T(1), RoundNearest)
+    end
 end
 
 @testset "rem2pi $T" for T in (Float16, Float32, Float64, BigFloat)

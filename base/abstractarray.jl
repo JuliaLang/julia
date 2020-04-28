@@ -35,7 +35,7 @@ julia> size(A, 2)
 3
 ```
 """
-size(t::AbstractArray{T,N}, d) where {T,N} = d <= N ? size(t)[d] : 1
+size(t::AbstractArray{T,N}, d) where {T,N} = d::Integer <= N ? size(t)[d] : 1
 
 """
     axes(A, d)
@@ -54,7 +54,7 @@ Base.OneTo(6)
 """
 function axes(A::AbstractArray{T,N}, d) where {T,N}
     @_inline_meta
-    d <= N ? axes(A)[d] : OneTo(1)
+    d::Integer <= N ? axes(A)[d] : OneTo(1)
 end
 
 """
@@ -86,6 +86,8 @@ has_offset_axes(A)    = _tuple_any(x->first(x)!=1, axes(A))
 has_offset_axes(A...) = _tuple_any(has_offset_axes, A)
 has_offset_axes(::Colon) = false
 
+require_one_based_indexing(A...) = !has_offset_axes(A...) || throw(ArgumentError("offset arrays are not supported but got an array with index other than 1"))
+
 # Performance optimization: get rid of a branch on `d` in `axes(A, d)`
 # for d=1. 1d arrays are heavily used, and the first dimension comes up
 # in other applications.
@@ -98,6 +100,51 @@ unsafe_indices(r::AbstractRange) = (OneTo(unsafe_length(r)),) # Ranges use check
 
 keys(a::AbstractArray) = CartesianIndices(axes(a))
 keys(a::AbstractVector) = LinearIndices(a)
+
+"""
+    keytype(T::Type{<:AbstractArray})
+    keytype(A::AbstractArray)
+
+Return the key type of an array. This is equal to the
+`eltype` of the result of `keys(...)`, and is provided
+mainly for compatibility with the dictionary interface.
+
+# Examples
+```jldoctest
+julia> keytype([1, 2, 3]) == Int
+true
+
+julia> keytype([1 2; 3 4])
+CartesianIndex{2}
+```
+
+!!! compat "Julia 1.2"
+     For arrays, this function requires at least Julia 1.2.
+"""
+keytype(a::AbstractArray) = keytype(typeof(a))
+
+keytype(A::Type{<:AbstractArray}) = CartesianIndex{ndims(A)}
+keytype(A::Type{<:AbstractVector}) = Int
+
+valtype(a::AbstractArray) = valtype(typeof(a))
+
+"""
+    valtype(T::Type{<:AbstractArray})
+    valtype(A::AbstractArray)
+
+Return the value type of an array. This is identical to `eltype` and is
+provided mainly for compatibility with the dictionary interface.
+
+# Examples
+```jldoctest
+julia> valtype(["one", "two", "three"])
+String
+```
+
+!!! compat "Julia 1.2"
+     For arrays, this function requires at least Julia 1.2.
+"""
+valtype(A::Type{<:AbstractArray}) = eltype(A)
 
 prevind(::AbstractArray, i::Integer) = Int(i)-1
 nextind(::AbstractArray, i::Integer) = Int(i)+1
@@ -164,6 +211,13 @@ eachindex(itrs...) = keys(itrs...)
 # eachindex iterates over all indices. IndexCartesian definitions are later.
 eachindex(A::AbstractVector) = (@_inline_meta(); axes1(A))
 
+@noinline function throw_eachindex_mismatch(::IndexLinear, A...)
+    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(eachindex.(A), ", ", " and "))"))
+end
+@noinline function throw_eachindex_mismatch(::IndexCartesian, A...)
+    throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(axes.(A), ", ", " and "))"))
+end
+
 """
     eachindex(A...)
 
@@ -178,9 +232,8 @@ If you supply more than one `AbstractArray` argument, `eachindex` will create an
 iterable object that is fast for all arguments (a [`UnitRange`](@ref)
 if all inputs have fast linear indexing, a [`CartesianIndices`](@ref)
 otherwise).
-If the arrays have different sizes and/or dimensionalities, `eachindex` will return an
-iterable that spans the largest range along each dimension.
-
+If the arrays have different sizes and/or dimensionalities, a DimensionMismatch exception
+will be thrown.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4];
@@ -354,7 +407,7 @@ function isassigned(a::AbstractArray, i::Integer...)
         if isa(e, BoundsError) || isa(e, UndefRefError)
             return false
         else
-            rethrow(e)
+            rethrow()
         end
     end
 end
@@ -553,8 +606,8 @@ elements since `BitArray`s are both mutable and can support 1-dimensional arrays
 ```julia-repl
 julia> similar(trues(10,10), 2)
 2-element BitArray{1}:
- false
- false
+ 0
+ 0
 ```
 
 Since `BitArray`s can only store elements of type [`Bool`](@ref), however, if you request a
@@ -626,10 +679,10 @@ Create an empty vector similar to `v`, optionally changing the `eltype`.
 
 ```jldoctest
 julia> empty([1.0, 2.0, 3.0])
-0-element Array{Float64,1}
+Float64[]
 
 julia> empty([1.0, 2.0, 3.0], String)
-0-element Array{String,1}
+String[]
 ```
 """
 empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
@@ -638,6 +691,28 @@ empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
 emptymutable(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
 emptymutable(itr, ::Type{U}) where {U} = Vector{U}()
 
+"""
+    copy!(dst, src) -> dst
+
+In-place [`copy`](@ref) of `src` into `dst`, discarding any pre-existing
+elements in `dst`.
+If `dst` and `src` are of the same type, `dst == src` should hold after
+the call. If `dst` and `src` are multidimensional arrays, they must have
+equal [`axes`](@ref).
+See also [`copyto!`](@ref).
+
+!!! compat "Julia 1.1"
+    This method requires at least Julia 1.1. In Julia 1.0 this method
+    is available from the `Future` standard library as `Future.copy!`.
+"""
+copy!(dst::AbstractVector, src::AbstractVector) = append!(empty!(dst), src)
+
+function copy!(dst::AbstractArray, src::AbstractArray)
+    axes(dst) == axes(src) || throw(ArgumentError(
+        "arrays must have the same axes for copy! (consider using `copyto!`)"))
+    copyto!(dst, src)
+end
+
 ## from general iterable to any array
 
 function copyto!(dest::AbstractArray, src)
@@ -645,7 +720,7 @@ function copyto!(dest::AbstractArray, src)
     y = iterate(destiter)
     for x in src
         y === nothing &&
-            throw(ArgumentError(string("destination has fewer elements than required")))
+            throw(ArgumentError("destination has fewer elements than required"))
         dest[y[1]] = x
         y = iterate(destiter, y[2])
     end
@@ -676,10 +751,10 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer)
     end
     if y === nothing
         throw(ArgumentError(string("source has fewer elements than required, ",
-                                      "expected at least ",sstart,", got ",sstart-1)))
+                                   "expected at least ",sstart,", got ",sstart-1)))
     end
     i = Int(dstart)
-    while y != nothing
+    while y !== nothing
         val, st = y
         dest[i] = val
         i += 1
@@ -1110,17 +1185,17 @@ Perform a conservative test to check if arrays `A` and `B` might share the same 
 By default, this simply checks if either of the arrays reference the same memory
 regions, as identified by their [`Base.dataids`](@ref).
 """
-mightalias(A::AbstractArray, B::AbstractArray) = !_isdisjoint(dataids(A), dataids(B))
+mightalias(A::AbstractArray, B::AbstractArray) = !isbits(A) && !isbits(B) && !_isdisjoint(dataids(A), dataids(B))
 mightalias(x, y) = false
 
 _isdisjoint(as::Tuple{}, bs::Tuple{}) = true
-_isdisjoint(as::Tuple{}, bs::Tuple{Any}) = true
+_isdisjoint(as::Tuple{}, bs::Tuple{UInt}) = true
 _isdisjoint(as::Tuple{}, bs::Tuple) = true
-_isdisjoint(as::Tuple{Any}, bs::Tuple{}) = true
-_isdisjoint(as::Tuple{Any}, bs::Tuple{Any}) = as[1] != bs[1]
-_isdisjoint(as::Tuple{Any}, bs::Tuple) = !(as[1] in bs)
+_isdisjoint(as::Tuple{UInt}, bs::Tuple{}) = true
+_isdisjoint(as::Tuple{UInt}, bs::Tuple{UInt}) = as[1] != bs[1]
+_isdisjoint(as::Tuple{UInt}, bs::Tuple) = !(as[1] in bs)
 _isdisjoint(as::Tuple, bs::Tuple{}) = true
-_isdisjoint(as::Tuple, bs::Tuple{Any}) = !(bs[1] in as)
+_isdisjoint(as::Tuple, bs::Tuple{UInt}) = !(bs[1] in as)
 _isdisjoint(as::Tuple, bs::Tuple) = !(as[1] in bs) && _isdisjoint(tail(as), bs)
 
 """
@@ -1144,7 +1219,7 @@ RangeVecIntList{A<:AbstractVector{Int}} = Union{Tuple{Vararg{Union{AbstractRange
     AbstractVector{UnitRange{Int}}, AbstractVector{AbstractRange{Int}}, AbstractVector{A}}
 
 get(A::AbstractArray, i::Integer, default) = checkbounds(Bool, A, i) ? A[i] : default
-get(A::AbstractArray, I::Tuple{}, default) = similar(A, typeof(default), 0)
+get(A::AbstractArray, I::Tuple{}, default) = checkbounds(Bool, A) ? A[] : default
 get(A::AbstractArray, I::Dims, default) = checkbounds(Bool, A, I...) ? A[I...] : default
 
 function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
@@ -1464,6 +1539,15 @@ julia> hcat(c...)
  1  4
  2  5
  3  6
+
+julia> x = Matrix(undef, 3, 0)  # x = [] would have created an Array{Any, 1}, but need an Array{Any, 2}
+3×0 Array{Any,2}
+
+julia> hcat(x, [1; 2; 3])
+3×1 Array{Any,2}:
+ 1
+ 2
+ 3
 ```
 """
 hcat(X...) = cat(X...; dims=Val(2))
@@ -1987,7 +2071,8 @@ concatenate_setindex!(R, X::AbstractArray, I...) = (R[I...] = X)
 
 function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
     for (i,j) in zip(eachindex(dest),eachindex(A))
-        dest[i] = f(A[j])
+        val = f(@inbounds A[j])
+        @inbounds dest[i] = val
     end
     return dest
 end
@@ -2027,7 +2112,9 @@ map(f, ::AbstractSet) = error("map is not defined on sets")
 ## 2 argument
 function map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) where F
     for (i, j, k) in zip(eachindex(dest), eachindex(A), eachindex(B))
-        dest[i] = f(A[j], B[k])
+        @inbounds a, b = A[j], B[k]
+        val = f(a, b)
+        @inbounds dest[i] = val
     end
     return dest
 end
@@ -2035,11 +2122,18 @@ end
 ## N argument
 
 @inline ith_all(i, ::Tuple{}) = ()
-@inline ith_all(i, as) = (as[1][i], ith_all(i, tail(as))...)
+function ith_all(i, as)
+    @_propagate_inbounds_meta
+    return (as[1][i], ith_all(i, tail(as))...)
+end
 
 function map_n!(f::F, dest::AbstractArray, As) where F
-    for i = LinearIndices(As[1])
-        dest[i] = f(ith_all(i, As)...)
+    idxs1 = LinearIndices(As[1])
+    @boundscheck LinearIndices(dest) == idxs1 && all(x -> LinearIndices(x) == idxs1, As)
+    for i = idxs1
+        @inbounds I = ith_all(i, As)
+        val = f(I...)
+        @inbounds dest[i] = val
     end
     return dest
 end
@@ -2063,7 +2157,11 @@ julia> a
  6.0
 ```
 """
-map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F} = map_n!(f, dest, As)
+function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
+    isempty(As) && throw(ArgumentError(
+        """map! requires at least one "source" argument"""))
+    map_n!(f, dest, As)
+end
 
 map(f) = f()
 map(f, iters...) = collect(Generator(f, iters...))
@@ -2110,6 +2208,7 @@ function hash(A::AbstractArray, h::UInt)
     keyidx = last(ks)
     linidx = key_to_linear[keyidx]
     fibskip = prevfibskip = oneunit(linidx)
+    first_linear = first(LinearIndices(linear_to_key))
     n = 0
     while true
         n += 1
@@ -2119,7 +2218,7 @@ function hash(A::AbstractArray, h::UInt)
 
         # Skip backwards a Fibonacci number of indices -- this is a linear index operation
         linidx = key_to_linear[keyidx]
-        linidx <= fibskip && break
+        linidx < fibskip + first_linear && break
         linidx -= fibskip
         keyidx = linear_to_key[linidx]
 

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const max_ccall_threads = parse(Int, get(ENV, "UV_THREADPOOL_SIZE", "4"))
-const thread_notifiers = Union{Condition, Nothing}[nothing for i in 1:max_ccall_threads]
+const thread_notifiers = Union{Base.Condition, Nothing}[nothing for i in 1:max_ccall_threads]
 const threadcall_restrictor = Semaphore(max_ccall_threads)
 
 """
@@ -18,7 +18,7 @@ Note that the called function should never call back into Julia.
 """
 macro threadcall(f, rettype, argtypes, argvals...)
     # check for usage errors
-    isa(argtypes,Expr) && argtypes.head == :tuple ||
+    isa(argtypes,Expr) && argtypes.head === :tuple ||
         error("threadcall: argument types must be a tuple")
     length(argtypes.args) == length(argvals) ||
         error("threadcall: wrong number of arguments to C function")
@@ -81,7 +81,7 @@ function do_threadcall(fun_ptr::Ptr{Cvoid}, rettype::Type, argtypes::Vector, arg
     # wait for a worker thread to be available
     acquire(threadcall_restrictor)
     idx = findfirst(isequal(nothing), thread_notifiers)::Int
-    thread_notifiers[idx] = Condition()
+    thread_notifiers[idx] = Base.Condition()
 
     GC.@preserve args_arr ret_arr roots begin
         # queue up the work to be done

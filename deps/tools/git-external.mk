@@ -21,9 +21,11 @@
 #   distclean-dirname:
 #
 define git-external
-include $(SRCDIR)/$1.version
+include $$(SRCDIR)/$1.version
+$2_SHA1 := $$(strip $$($2_SHA1))
+$2_BRANCH := $$(strip $$($2_BRANCH))
 
-ifeq ($(DEPS_GIT),1)
+ifneq (,$$(filter $1 1,$$(DEPS_GIT)))
 $2_SRC_DIR := $1
 $2_SRC_FILE := $$(SRCCACHE)/$1.git
 $$($2_SRC_FILE)/HEAD: | $$(SRCCACHE)
@@ -53,7 +55,7 @@ $5/$1/source-compiled: $5/$1/.git/HEAD
 $$($2_SRC_FILE): | $$($2_SRC_FILE)/HEAD
 	touch -c $$@
 
-else # DEPS_GIT
+else # DEPS_GIT=0
 
 $2_SRC_DIR := $1-$$($2_SHA1)
 $2_SRC_FILE := $$(SRCCACHE)/$$($2_SRC_DIR).tar.gz
@@ -61,12 +63,13 @@ $$($2_SRC_FILE): | $$(SRCCACHE)
 	$$(JLDOWNLOAD) $$@ $$(call $2_TAR_URL,$$($2_SHA1))
 $5/$$($2_SRC_DIR)/source-extracted: $$($2_SRC_FILE)
 	$$(JLCHECKSUM) $$<
-	-rm -r $$(dir $$@)
+	-[ ! \( -e $$(dir $$@) -o -h $$(dir $$@) \) ] || rm -r $$(dir $$@)
 	mkdir -p $$(dir $$@)
 	$(TAR) -C $$(dir $$@) --strip-components 1 -xf $$<
 	echo 1 > $$@
 endif # DEPS_GIT
 
+$$(build_prefix)/manifest/$1: $$(SRCDIR)/$1.version # make the manifest stale if the version file is touched (causing re-install for compliant targets)
 distclean-$1:
 	-rm -rf $5/$$($2_SRC_DIR) $$($2_SRC_FILE) $$(BUILDDIR)/$$($2_SRC_DIR)
 endef

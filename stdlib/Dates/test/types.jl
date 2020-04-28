@@ -181,9 +181,18 @@ c = Dates.Time(0)
 @testset "DateTime traits" begin
     @test Dates.calendar(a) == Dates.ISOCalendar
     @test Dates.calendar(b) == Dates.ISOCalendar
+    @test eps(DateTime) == Dates.Millisecond(1)
+    @test eps(Date) == Dates.Day(1)
+    @test eps(Time) == Dates.Nanosecond(1)
     @test eps(a) == Dates.Millisecond(1)
     @test eps(b) == Dates.Day(1)
     @test eps(c) == Dates.Nanosecond(1)
+    @test zero(DateTime) == Dates.Millisecond(0)
+    @test zero(Date) == Dates.Day(0)
+    @test zero(Time) == Dates.Nanosecond(0)
+    @test zero(a) == Dates.Millisecond(0)
+    @test zero(b) == Dates.Day(0)
+    @test zero(c) == Dates.Nanosecond(0)
     @test string(typemax(Dates.DateTime)) == "146138512-12-31T23:59:59"
     @test string(typemin(Dates.DateTime)) == "-146138511-01-01T00:00:00"
     @test typemax(Dates.DateTime) - typemin(Dates.DateTime) == Dates.Millisecond(9223372017043199000)
@@ -194,6 +203,10 @@ c = Dates.Time(0)
     @test isfinite(Dates.Date)
     @test isfinite(Dates.DateTime)
     @test isfinite(Dates.Time)
+    @test c == c
+    @test c == (c + Dates.Hour(24))
+    @test hash(c) == hash(c + Dates.Hour(24))
+    @test hash(c + Dates.Nanosecond(10)) == hash(c + Dates.Hour(24) + Dates.Nanosecond(10))
 end
 @testset "Date-DateTime conversion/promotion" begin
     global a, b, c, d
@@ -222,6 +235,45 @@ end
     @test a < b
     @test a != b
     @test Dates.Date(Dates.DateTime(Dates.Date(2012, 7, 1))) == Dates.Date(2012, 7, 1)
+end
+
+@testset "min and max" begin
+    for (a, b) in [(Dates.Date(2000), Dates.Date(2001)),
+                    (Dates.Time(10), Dates.Time(11)),
+                    (Dates.DateTime(3000), Dates.DateTime(3001)),
+                    (Dates.Week(42), Dates.Week(1972))]
+        @test min(a, b) == a
+        @test min(b, a) == a
+        @test min(a) == a
+        @test max(a, b) == b
+        @test max(b, a) == b
+        @test max(b) == b
+        @test minmax(a, b) == (a, b)
+        @test minmax(b, a) == (a, b)
+        @test minmax(a) == (a, a)
+    end
+end
+
+@testset "issue #31524" begin
+    dt1 = Libc.strptime("%Y-%M-%dT%H:%M:%SZ", "2018-11-16T10:26:14Z")
+    dt2 = Base.Libc.TmStruct(14, 30, 5, 10, 1, 99, 3, 40, 0)
+
+    time = Time(dt1)
+    @test typeof(time) == Time
+    @test time == Dates.Time(10, 26, 14)
+
+    date = Date(dt2)
+    @test typeof(date) == Date
+    @test date == Dates.Date(1999, 2, 10)
+
+    datetime = DateTime(dt2)
+    @test typeof(datetime) == DateTime
+    @test datetime == Dates.DateTime(1999, 2, 10, 5, 30, 14)
+
+end
+
+@testset "timedwait" begin
+    @test timedwait(() -> false, Second(0); pollint=Millisecond(1)) === :timed_out
 end
 
 end

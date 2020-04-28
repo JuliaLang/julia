@@ -46,11 +46,11 @@ The statement `using BigLib: thing1, thing2` brings just the identifiers `thing1
 into scope from module `BigLib`. If these names refer to functions, adding methods to them
 will not be allowed (you may only "use" them, not extend them).
 
-The `import` keyword supports the same syntax as `using`, but only operates on a single name
-at a time. It does not add modules to be searched the way `using` does. `import` also differs
+The [`import`](@ref) keyword supports the same syntax as [`using`](@ref).
+It does not add modules to be searched the way `using` does. `import` also differs
 from `using` in that functions imported using `import` can be extended with new methods.
 
-In `MyModule` above we wanted to add a method to the standard `show` function, so we had to write
+In `MyModule` above we wanted to add a method to the standard [`show`](@ref) function, so we had to write
 `import Base.show`. Functions whose names are only visible via `using` cannot be extended.
 
 Once a variable is made visible via `using` or `import`, a module may not create its own variable
@@ -117,25 +117,18 @@ end
 
 ### Standard modules
 
-There are three important standard modules: Main, Core, and Base.
-
-Main is the top-level module, and Julia starts with Main set as the current module.  Variables
-defined at the prompt go in Main, and `varinfo()` lists variables in Main.
-
-Core contains all identifiers considered "built in" to the language, i.e. part of the core language
-and not libraries. Every module implicitly specifies `using Core`, since you can't do anything
-without those definitions.
-
-Base is a module that contains basic functionality (the contents of base/). All modules implicitly contain `using Base`,
-since this is needed in the vast majority of cases.
+There are three important standard modules:
+* [`Core`](@ref) contains all functionality "built into" the language.
+* [`Base`](@ref) contains basic functionality that is useful in almost all cases.
+* [`Main`](@ref) is the top-level module and the current module, when Julia is started.
 
 ### Default top-level definitions and bare modules
 
 In addition to `using Base`, modules also automatically contain
-definitions of the `eval` and `include` functions,
+definitions of the [`eval`](@ref) and [`include`](@ref) functions,
 which evaluate expressions/files within the global scope of that module.
 
-If these default definitions are not wanted, modules can be defined using the keyword `baremodule`
+If these default definitions are not wanted, modules can be defined using the keyword [`baremodule`](@ref)
 instead (note: `Core` is still imported, as per above). In terms of `baremodule`, a standard
 `module` looks like this:
 
@@ -183,19 +176,6 @@ look for `Utils` in `Parent`'s enclosing module rather than in `Parent` itself.
 
 Note that relative-import qualifiers are only valid in `using` and `import` statements.
 
-### Module file paths
-
-The global variable [`LOAD_PATH`](@ref) contains the directories Julia searches for modules when calling
-`require`. It can be extended using [`push!`](@ref):
-
-```julia
-push!(LOAD_PATH, "/Path/To/My/Module/")
-```
-
-Putting this statement in the file `~/.julia/config/startup.jl` will extend [`LOAD_PATH`](@ref) on
-every Julia startup. Alternatively, the module load path can be extended by defining the environment
-variable `JULIA_LOAD_PATH`.
-
 ### Namespace miscellanea
 
 If a name is qualified (e.g. `Base.sin`), then it can be accessed even if it is not exported.
@@ -222,10 +202,10 @@ Julia creates precompiled caches of the module to reduce this time.
 
 The incremental precompiled module file are created and used automatically when using `import`
 or `using` to load a module.  This will cause it to be automatically compiled the first time
-it is imported. Alternatively, you can manually call `Base.compilecache(modulename)`. The resulting
+it is imported. Alternatively, you can manually call [`Base.compilecache(modulename)`](@ref). The resulting
 cache files will be stored in `DEPOT_PATH[1]/compiled/`. Subsequently, the module is automatically
 recompiled upon `using` or `import` whenever any of its dependencies change; dependencies are modules it
-imports, the Julia build, files it includes, or explicit dependencies declared by `include_dependency(path)`
+imports, the Julia build, files it includes, or explicit dependencies declared by [`include_dependency(path)`](@ref)
 in the module file(s).
 
 For file dependencies, a change is determined by examining whether the modification time (mtime)
@@ -288,12 +268,12 @@ we can ensure that the type is known to the compiler and allow it to generate be
 code. Obviously, any other globals in your module that depends on `foo_data_ptr` would also have
 to be initialized in `__init__`.
 
-Constants involving most Julia objects that are not produced by `ccall` do not need to be placed
+Constants involving most Julia objects that are not produced by [`ccall`](@ref) do not need to be placed
 in `__init__`: their definitions can be precompiled and loaded from the cached module image. This
 includes complicated heap-allocated objects like arrays. However, any routine that returns a raw
-pointer value must be called at runtime for precompilation to work (Ptr objects will turn into
-null pointers unless they are hidden inside an isbits object). This includes the return values
-of the Julia functions `cfunction` and `pointer`.
+pointer value must be called at runtime for precompilation to work ([`Ptr`](@ref) objects will turn into
+null pointers unless they are hidden inside an [`isbits`](@ref) object). This includes the return values
+of the Julia functions `cfunction` and [`pointer`](@ref).
 
 Dictionary and set types, or in general anything that depends on the output of a `hash(key)` method,
 are a trickier case.  In the common case where the keys are numbers, strings, symbols, ranges,
@@ -302,7 +282,7 @@ precompile.  However, for a few other key types, such as `Function` or `DataType
 user-defined types where you haven't defined a `hash` method, the fallback `hash` method depends
 on the memory address of the object (via its `objectid`) and hence may change from run to run.
 If you have one of these key types, or if you aren't sure, to be safe you can initialize this
-dictionary from within your `__init__` function. Alternatively, you can use the `IdDict`
+dictionary from within your `__init__` function. Alternatively, you can use the [`IdDict`](@ref)
 dictionary type, which is specially handled by precompilation so that it is safe to initialize
 at compile-time.
 
@@ -313,7 +293,7 @@ that also generates compiled code.
 
 Other known potential failure scenarios include:
 
-1. Global counters (for example, for attempting to uniquely identify objects) Consider the following
+1. Global counters (for example, for attempting to uniquely identify objects). Consider the following
    code snippet:
 
    ```julia
@@ -362,7 +342,7 @@ code to help the user avoid other wrong-behavior situations:
 A few other points to be aware of:
 
 1. No code reload / cache invalidation is performed after changes are made to the source files themselves,
-   (including by [`Pkg.update`], and no cleanup is done after [`Pkg.rm`]
+   (including by `Pkg.update`), and no cleanup is done after `Pkg.rm`
 2. The memory sharing behavior of a reshaped array is disregarded by precompilation (each view gets
    its own copy)
 3. Expecting the filesystem to be unchanged between compile-time and runtime e.g. [`@__FILE__`](@ref)/`source_path()`

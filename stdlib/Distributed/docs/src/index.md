@@ -1,9 +1,5 @@
 # Distributed Computing
 
-```@meta
-DocTestSetup = :(using Distributed)
-```
-
 ```@docs
 Distributed.addprocs
 Distributed.nprocs
@@ -18,17 +14,18 @@ Distributed.pmap
 Distributed.RemoteException
 Distributed.Future
 Distributed.RemoteChannel
-Distributed.wait
-Distributed.fetch(::Any)
+Distributed.fetch(::Distributed.Future)
+Distributed.fetch(::RemoteChannel)
 Distributed.remotecall(::Any, ::Integer, ::Any...)
 Distributed.remotecall_wait(::Any, ::Integer, ::Any...)
 Distributed.remotecall_fetch(::Any, ::Integer, ::Any...)
 Distributed.remote_do(::Any, ::Integer, ::Any...)
 Distributed.put!(::RemoteChannel, ::Any...)
-Distributed.put!(::Future, ::Any)
+Distributed.put!(::Distributed.Future, ::Any)
 Distributed.take!(::RemoteChannel, ::Any...)
 Distributed.isready(::RemoteChannel, ::Any...)
-Distributed.isready(::Future)
+Distributed.isready(::Distributed.Future)
+Distributed.AbstractWorkerPool
 Distributed.WorkerPool
 Distributed.CachingPool
 Distributed.default_worker_pool
@@ -38,13 +35,9 @@ Distributed.remotecall(::Any, ::AbstractWorkerPool, ::Any...)
 Distributed.remotecall_wait(::Any, ::AbstractWorkerPool, ::Any...)
 Distributed.remotecall_fetch(::Any, ::AbstractWorkerPool, ::Any...)
 Distributed.remote_do(::Any, ::AbstractWorkerPool, ::Any...)
-Distributed.timedwait
-Distributed.@spawn
 Distributed.@spawnat
 Distributed.@fetch
 Distributed.@fetchfrom
-Distributed.@async
-Distributed.@sync
 Distributed.@distributed
 Distributed.@everywhere
 Distributed.clear!(::Any, ::Any; ::Any)
@@ -63,6 +56,8 @@ same host, and `SSHManager`, for launching on remote hosts via `ssh`. TCP/IP soc
 and transport messages between processes. It is possible for Cluster Managers to provide a different transport.
 
 ```@docs
+Distributed.ClusterManager
+Distributed.WorkerConfig
 Distributed.launch
 Distributed.manage
 Distributed.kill(::ClusterManager, ::Int, ::WorkerConfig)
@@ -70,8 +65,4 @@ Distributed.connect(::ClusterManager, ::Int, ::WorkerConfig)
 Distributed.init_worker
 Distributed.start_worker
 Distributed.process_messages
-```
-
-```@meta
-DocTestSetup = nothing
 ```

@@ -72,7 +72,8 @@ vals = Any[
     # Overflow with Int8
     Any[Int8(127), Int8(-128), -383], 127:-255:-383,
     # Loss of precision with Float64
-    Any[-2^53-1, 0.0, 2^53+1], [-2^53-1, 0, 2^53+1], (-2^53-1):2^53+1:(2^53+1),
+    Any[-Int64(2)^53-1, 0.0, Int64(2)^53+1], [-Int64(2)^53-1, 0, Int64(2)^53+1],
+        (-Int64(2)^53-1):Int64(2)^53+1:(Int64(2)^53+1),
     # Some combinations of elements support -, others do not
     [1, 2, "a"], [1, "a", 2], [1, 2, "a", 2], [1, 'a', 2],
     Set([1,2,3,4]),
@@ -90,6 +91,8 @@ vals = Any[
     [-0. 0; -0. 0.], SparseMatrixCSC(2, 2, [1, 3, 3], [1, 2], [-0., -0.]),
     # issue #16364
     1:4, 1:1:4, 1:-1:0, 1.0:4.0, 1.0:1.0:4.0, range(1, stop=4, length=4),
+    # issue #35597, when `LinearIndices` does not begin at 1
+    Base.IdentityUnitRange(2:4),
     'a':'e', ['a', 'b', 'c', 'd', 'e'],
     # check that hash is still consistent with heterogeneous arrays for which - is defined
     # for some pairs and not others
@@ -101,9 +104,9 @@ for a in vals, b in vals
 end
 
 for a in vals
-    if a isa AbstractArray
-        @test hash(a) == hash(Array(a)) == hash(Array{Any}(a))
-    end
+    a isa AbstractArray || continue
+    keys(a) == keys(Array(a)) || continue
+    @test hash(a) == hash(Array(a)) == hash(Array{Any}(a))
 end
 
 vals = Any[
@@ -159,6 +162,7 @@ Base.hash(x::CustomHashReal, h::UInt) = hash(x.x, h)
 Base.:(==)(x::CustomHashReal, y::Number) = x.x == y
 Base.:(==)(x::Number, y::CustomHashReal) = x == y.x
 Base.zero(::Type{CustomHashReal}) = CustomHashReal(0.0)
+Base.zero(x::CustomHashReal) = zero(CustomHashReal)
 
 let a = sparse([CustomHashReal(0), CustomHashReal(3), CustomHashReal(3)])
     @test hash(a) == hash(Array(a))

@@ -23,7 +23,7 @@ julia> prog = "1 + 1"
 **What happens next?**
 
 The next step is to [parse](https://en.wikipedia.org/wiki/Parsing#Computer_languages) each string
-into an object called an expression, represented by the Julia type `Expr`:
+into an object called an expression, represented by the Julia type [`Expr`](@ref):
 
 ```jldoctest prog
 julia> ex1 = Meta.parse(prog)
@@ -35,7 +35,7 @@ Expr
 
 `Expr` objects contain two parts:
 
-  * a `Symbol` identifying the kind of expression. A symbol is an [interned string](https://en.wikipedia.org/wiki/String_interning)
+  * a [`Symbol`](@ref) identifying the kind of expression. A symbol is an [interned string](https://en.wikipedia.org/wiki/String_interning)
     identifier (more discussion below).
 
 ```jldoctest prog
@@ -126,10 +126,13 @@ julia> Symbol(:var,'_',"sym")
 :var_sym
 ```
 
+Note that to use `:` syntax, the symbol's name must be a valid identifier.
+Otherwise the `Symbol(str)` constructor must be used.
+
 In the context of an expression, symbols are used to indicate access to variables; when an expression
 is evaluated, a symbol is replaced with the value bound to that symbol in the appropriate [scope](@ref scope-of-variables).
 
-Sometimes extra parentheses around the argument to `:` are needed to avoid ambiguity in parsing.:
+Sometimes extra parentheses around the argument to `:` are needed to avoid ambiguity in parsing:
 
 ```jldoctest
 julia> :(:)
@@ -144,7 +147,7 @@ julia> :(::)
 ### Quoting
 
 The second syntactic purpose of the `:` character is to create expression objects without using
-the explicit `Expr` constructor. This is referred to as *quoting*. The `:` character, followed
+the explicit [`Expr`](@ref) constructor. This is referred to as *quoting*. The `:` character, followed
 by paired parentheses around a single statement of Julia code, produces an `Expr` object based
 on the enclosed code. Here is example of the short form used to quote an arithmetic expression:
 
@@ -196,9 +199,9 @@ julia> typeof(ex)
 Expr
 ```
 
-### Interpolation
+### [Interpolation](@id man-expression-interpolation)
 
-Direct construction of `Expr` objects with value arguments is powerful, but `Expr` constructors
+Direct construction of [`Expr`](@ref) objects with value arguments is powerful, but `Expr` constructors
 can be tedious compared to "normal" Julia syntax. As an alternative, Julia allows *interpolation* of
 literals or expressions into quoted expressions. Interpolation is indicated by a prefix `$`.
 
@@ -265,7 +268,7 @@ end))
 end
 ```
 
-Notice that the result contains `Expr(:$, :x)`, which means that `x` has not been
+Notice that the result contains `$x`, which means that `x` has not been
 evaluated yet.
 In other words, the `$` expression "belongs to" the inner quote expression, and
 so its argument is only evaluated when the inner quote expression is:
@@ -293,7 +296,7 @@ end))
 end
 ```
 
-Notice that `:(1 + 2)` now appears in the result instead of the symbol `:x`.
+Notice that `(1 + 2)` now appears in the result instead of the symbol `x`.
 Evaluating this expression yields an interpolated `3`:
 
 ```jldoctest interp1
@@ -308,9 +311,9 @@ The intuition behind this behavior is that `x` is evaluated once for each `$`:
 one `$` works similarly to `eval(:x)`, giving `x`'s value, while two `$`s do the
 equivalent of `eval(eval(:x))`.
 
-### QuoteNode
+### [QuoteNode](@id man-quote-node)
 
-The usual representation of a `quote` form in an AST is an `Expr` with head `:quote`:
+The usual representation of a `quote` form in an AST is an [`Expr`](@ref) with head `:quote`:
 
 ```jldoctest interp1
 julia> dump(Meta.parse(":(1+2)"))
@@ -328,9 +331,15 @@ Expr
 As we have seen, such expressions support interpolation with `$`.
 However, in some situations it is necessary to quote code *without* performing interpolation.
 This kind of quoting does not yet have syntax, but is represented internally
-as an object of type `QuoteNode`.
-The parser yields `QuoteNode`s for simple quoted items like symbols:
+as an object of type `QuoteNode`:
+```jldoctest interp1
+julia> eval(Meta.quot(Expr(:$, :(1+2))))
+3
 
+julia> eval(QuoteNode(Expr(:$, :(1+2))))
+:($(Expr(:$, :(1 + 2))))
+```
+The parser yields `QuoteNode`s for simple quoted items like symbols:
 ```jldoctest interp1
 julia> dump(Meta.parse(":x"))
 QuoteNode
@@ -339,7 +348,7 @@ QuoteNode
 
 `QuoteNode` can also be used for certain advanced metaprogramming tasks.
 
-### [`eval`](@ref) and effects
+### Evaluating expressions
 
 Given an expression object, one can cause Julia to evaluate (execute) it at global scope using
 [`eval`](@ref):
@@ -415,7 +424,7 @@ value 1 and the variable `b`. Note the important distinction between the way `a`
 ### Functions on `Expr`essions
 
 As hinted above, one extremely useful feature of Julia is the capability to generate and manipulate
-Julia code within Julia itself. We have already seen one example of a function returning `Expr`
+Julia code within Julia itself. We have already seen one example of a function returning [`Expr`](@ref)
 objects: the [`parse`](@ref) function, which takes a string of Julia code and returns the corresponding
 `Expr`. A function can also take one or more `Expr` objects as arguments, and return another
 `Expr`. Here is a simple, motivating example:
@@ -511,7 +520,7 @@ this is an extremely useful tool for debugging macros):
 
 ```julia-repl sayhello2
 julia> ex = macroexpand(Main, :(@sayhello("human")) )
-:((Main.println)("Hello, ", "human"))
+:(Main.println("Hello, ", "human"))
 
 julia> typeof(ex)
 Expr
@@ -524,7 +533,7 @@ There also exists a macro [`@macroexpand`](@ref) that is perhaps a bit more conv
 
 ```jldoctest sayhello2
 julia> @macroexpand @sayhello "human"
-:((println)("Hello, ", "human"))
+:(println("Hello, ", "human"))
 ```
 
 ### Hold up: why macros?
@@ -544,7 +553,7 @@ julia> macro twostep(arg)
 @twostep (macro with 1 method)
 
 julia> ex = macroexpand(Main, :(@twostep :(1, 2, 3)) );
-I execute at parse time. The argument is: $(Expr(:quote, :((1, 2, 3))))
+I execute at parse time. The argument is: :((1, 2, 3))
 ```
 
 The first call to [`println`](@ref) is executed when [`macroexpand`](@ref) is called. The
@@ -555,7 +564,7 @@ julia> typeof(ex)
 Expr
 
 julia> ex
-:((println)("I execute at runtime. The argument is: ", $(Expr(:copyast, :($(QuoteNode(:((1, 2, 3)))))))))
+:(println("I execute at runtime. The argument is: ", $(Expr(:copyast, :($(QuoteNode(:((1, 2, 3)))))))))
 
 julia> eval(ex)
 I execute at runtime. The argument is: (1, 2, 3)
@@ -613,7 +622,7 @@ The argument `__source__` provides information (in the form of a `LineNumberNode
 of the `@` sign from the macro invocation.
 This allows macros to include better error diagnostic information,
 and is commonly used by logging, string-parser macros, and docs, for example,
-as well as to implement the `@__LINE__`, `@__FILE__`, and `@__DIR__` macros.
+as well as to implement the [`@__LINE__`](@ref), [`@__FILE__`](@ref), and [`@__DIR__`](@ref) macros.
 
 The location information can be accessed by referencing `__source__.line` and `__source__.file`:
 
@@ -638,7 +647,7 @@ in the current module.
 
 ### Building an advanced macro
 
-Here is a simplified definition of Julia's `@assert` macro:
+Here is a simplified definition of Julia's [`@assert`](@ref) macro:
 
 ```jldoctest building
 julia> macro assert(ex)
@@ -667,7 +676,7 @@ This is equivalent to writing:
 That is, in the first call, the expression `:(1 == 1.0)` is spliced into the test condition slot,
 while the value of `string(:(1 == 1.0))` is spliced into the assertion message slot. The entire
 expression, thus constructed, is placed into the syntax tree where the `@assert` macro call occurs.
-Then at execution time, if the test expression evaluates to true, then `nothing` is returned,
+Then at execution time, if the test expression evaluates to true, then [`nothing`](@ref) is returned,
 whereas if the test is false, an error is raised indicating the asserted expression that was false.
 Notice that it would not be possible to write this as a function, since only the *value* of the
 condition is available and it would be impossible to display the expression that computed it in
@@ -675,7 +684,7 @@ the error message.
 
 The actual definition of `@assert` in Julia Base is more complicated. It allows the
 user to optionally specify their own error message, instead of just printing the failed expression.
-Just like in functions with a variable number of arguments, this is specified with an ellipses
+Just like in functions with a variable number of arguments ([Varargs Functions](@ref)), this is specified with an ellipses
 following the last argument:
 
 ```jldoctest assert2
@@ -698,14 +707,14 @@ julia> @macroexpand @assert a == b
 :(if Main.a == Main.b
         Main.nothing
     else
-        (Main.throw)((Main.AssertionError)("a == b"))
+        Main.throw(Main.AssertionError("a == b"))
     end)
 
 julia> @macroexpand @assert a==b "a should equal b!"
 :(if Main.a == Main.b
         Main.nothing
     else
-        (Main.throw)((Main.AssertionError)("a should equal b!"))
+        Main.throw(Main.AssertionError("a should equal b!"))
     end)
 ```
 
@@ -762,10 +771,10 @@ final value. The macro might look like this:
 ```julia
 macro time(ex)
     return quote
-        local t0 = time()
+        local t0 = time_ns()
         local val = $ex
-        local t1 = time()
-        println("elapsed time: ", t1-t0, " seconds")
+        local t1 = time_ns()
+        println("elapsed time: ", (t1-t0)/1e9, " seconds")
         val
     end
 end
@@ -837,7 +846,7 @@ This kind of manipulation of variables should be used judiciously, but is occasi
 Getting the hygiene rules correct can be a formidable challenge.
 Before using a macro, you might want to consider whether a function closure
 would be sufficient. Another useful strategy is to defer as much work as possible to runtime.
-For example, many macros simply wrap their arguments in a QuoteNode or other similar Expr.
+For example, many macros simply wrap their arguments in a `QuoteNode` or other similar [`Expr`](@ref).
 Some examples of this include `@task body` which simply returns `schedule(Task(() -> $body))`,
 and `@eval expr`, which simply returns `eval(QuoteNode(expr))`.
 
@@ -848,10 +857,10 @@ macro time(expr)
     return :(timeit(() -> $(esc(expr))))
 end
 function timeit(f)
-    t0 = time()
+    t0 = time_ns()
     val = f()
-    t1 = time()
-    println("elapsed time: ", t1-t0, " seconds")
+    t1 = time_ns()
+    println("elapsed time: ", (t1-t0)/1e9, " seconds")
     return val
 end
 ```
@@ -1084,17 +1093,18 @@ To make this efficient, the result is usually cached. And to make this inferable
 subset of the language is usable. Thus, generated functions provide a flexible way to move work from
 run time to compile time, at the expense of greater restrictions on allowed constructs.
 
-When defining generated functions, there are four main differences to ordinary functions:
+When defining generated functions, there are five main differences to ordinary functions:
 
 1. You annotate the function declaration with the `@generated` macro. This adds some information
    to the AST that lets the compiler know that this is a generated function.
 2. In the body of the generated function you only have access to the *types* of the arguments –
-   not their values – and any function that was defined *before* the definition of the generated
-   function.
+   not their values.
 3. Instead of calculating something or performing some action, you return a *quoted expression* which,
    when evaluated, does what you want.
-4. Generated functions must not *mutate* or *observe* any non-constant global state (including,
-   for example, IO, locks, non-local dictionaries, or using `hasmethod`).
+4. Generated functions are only permitted to call functions that were defined *before* the definition of the generated
+   function. (Failure to follow this may result in getting `MethodErrors` referring to functions from a future world-age.)
+5. Generated functions must not *mutate* or *observe* any non-constant global state (including,
+   for example, IO, locks, non-local dictionaries, or using [`hasmethod`](@ref)).
    This means they can only read global constants, and cannot have any side effects.
    In other words, they must be completely pure.
    Due to an implementation limitation, this also means that they currently cannot define a closure
@@ -1285,7 +1295,7 @@ to build some more advanced (and valid) functionality...
 
 ### An advanced example
 
-Julia's base library has a an internal `sub2ind` function to calculate a linear index into an n-dimensional
+Julia's base library has an internal `sub2ind` function to calculate a linear index into an n-dimensional
 array, based on a set of n multilinear indices - in other words, to calculate the index `i` that
 can be used to index into an array `A` using `A[i]`, instead of `A[x,y,z,...]`. One possible implementation
 is the following:

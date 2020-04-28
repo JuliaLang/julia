@@ -5,12 +5,8 @@
 # Please add new deprecations at the bottom of the file.
 # A function deprecated in a release will be removed in the next one.
 # Please also add a reference to the pull request which introduced the
-# deprecation.
-#
-# For simple cases where a direct replacement is available, use @deprecate:
-# the first argument is the signature of the deprecated method, the second one
-# is the call which replaces it. Remove the definition of the deprecated method
-# and unexport it, as @deprecate takes care of calling the replacement
+# deprecation. For simple cases where a direct replacement is available,
+# use @deprecate. @deprecate takes care of calling the replacement
 # and of exporting the function.
 #
 # For more complex cases, move the body of the deprecated method in this file,
@@ -18,6 +14,27 @@
 # the name of the function, which is used to ensure that the deprecation warning
 # is only printed the first time for each call place.
 
+"""
+    @deprecate old new [ex=true]
+
+The first argument `old` is the signature of the deprecated method, the second one
+`new` is the call which replaces it. `@deprecate` exports `old` unless the optional
+third argument is `false`.
+
+!!! compat "Julia 1.5"
+    As of Julia 1.5, functions defined by `@deprecate` do not print warning when `julia`
+    is run without the `--depwarn=yes` flag set, as the default value of `--depwarn` option
+    is `no`.  The warnings are printed from tests run by `Pkg.test()`.
+
+# Examples
+```jldoctest
+julia> @deprecate old(x) new(x)
+old (generic function with 1 method)
+
+julia> @deprecate old(x) new(x) false
+old (generic function with 1 method)
+```
+"""
 macro deprecate(old, new, ex=true)
     meta = Expr(:meta, :noinline)
     if isa(old, Symbol)
@@ -30,16 +47,16 @@ macro deprecate(old, new, ex=true)
                   depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
                   $(esc(new))(args...)
               end))
-    elseif isa(old, Expr) && (old.head == :call || old.head == :where)
+    elseif isa(old, Expr) && (old.head === :call || old.head === :where)
         remove_linenums!(new)
         oldcall = sprint(show_unquoted, old)
         newcall = sprint(show_unquoted, new)
         # if old.head is a :where, step down one level to the :call to avoid code duplication below
-        callexpr = old.head == :call ? old : old.args[1]
-        if callexpr.head == :call
+        callexpr = old.head === :call ? old : old.args[1]
+        if callexpr.head === :call
             if isa(callexpr.args[1], Symbol)
                 oldsym = callexpr.args[1]::Symbol
-            elseif isa(callexpr.args[1], Expr) && callexpr.args[1].head == :curly
+            elseif isa(callexpr.args[1], Expr) && callexpr.args[1].head === :curly
                 oldsym = callexpr.args[1].args[1]::Symbol
             else
                 error("invalid usage of @deprecate")
@@ -89,33 +106,28 @@ firstcaller(bt::Vector, funcsym::Symbol) = firstcaller(bt, (funcsym,))
 function firstcaller(bt::Vector, funcsyms)
     # Identify the calling line
     found = false
-    lkup = StackTraces.UNKNOWN
-    found_frame = Ptr{Cvoid}(0)
-    for frame in bt
-        lkups = StackTraces.lookup(frame)
-        for outer lkup in lkups
+    for ip in bt
+        lkups = StackTraces.lookup(ip)
+        for lkup in lkups
             if lkup == StackTraces.UNKNOWN || lkup.from_c
                 continue
             end
             if found
-                found_frame = frame
-                @goto found
+                return ip, lkup
             end
             found = lkup.func in funcsyms
             # look for constructor type name
             if !found && lkup.linfo isa Core.MethodInstance
                 li = lkup.linfo
                 ft = ccall(:jl_first_argument_datatype, Any, (Any,), li.def.sig)
-                if isa(ft,DataType) && ft.name === Type.body.name
+                if isa(ft, DataType) && ft.name === Type.body.name
                     ft = unwrap_unionall(ft.parameters[1])
-                    found = (isa(ft,DataType) && ft.name.name in funcsyms)
+                    found = (isa(ft, DataType) && ft.name.name in funcsyms)
                 end
             end
         end
     end
-    return found_frame, StackTraces.UNKNOWN
-    @label found
-    return found_frame, lkup
+    return C_NULL, StackTraces.UNKNOWN
 end
 
 deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Cvoid, (Any, Any, Cint), m, s, flag)
@@ -160,4 +172,62 @@ function promote_eltype_op end
 
 # BEGIN 1.0 deprecations
 
+# @deprecate one(i::CartesianIndex) oneunit(i)
+# @deprecate one(::Type{I}) where I<:CartesianIndex oneunit(I)
+
+@deprecate reindex(V, idxs, subidxs) reindex(idxs, subidxs) false
+@deprecate substrides(parent::AbstractArray, strds::Tuple, I::Tuple) substrides(strds, I) false
+
+# TODO: deprecate these
+one(::CartesianIndex{N}) where {N} = one(CartesianIndex{N})
+one(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val(N)))
+
+MPFR.BigFloat(x, prec::Int) = BigFloat(x; precision=prec)
+MPFR.BigFloat(x, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision=prec)
+MPFR.BigFloat(x::Real, prec::Int) = BigFloat(x; precision=prec)
+MPFR.BigFloat(x::Real, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision=prec)
+
 # END 1.0 deprecations
+
+# BEGIN 1.3 deprecations
+
+@eval Threads begin
+    Base.@deprecate_binding RecursiveSpinLock ReentrantLock
+    Base.@deprecate_binding Mutex ReentrantLock
+end
+
+# END 1.3 deprecations
+
+# BEGIN 1.5 deprecations
+
+"""
+    isimmutable(v) -> Bool
+!!! warning
+    Consider using `!ismutable(v)` instead, as `isimmutable(v)` will be replaced by `!ismutable(v)` in a future release. (Since Julia 1.5)
+Return `true` iff value `v` is immutable.  See [Mutable Composite Types](@ref)
+for a discussion of immutability. Note that this function works on values, so if you give it
+a type, it will tell you that a value of `DataType` is mutable.
+
+# Examples
+```jldoctest
+julia> isimmutable(1)
+true
+
+julia> isimmutable([1,2])
+false
+```
+"""
+isimmutable(@nospecialize(x)) = !ismutable(x)
+export isimmutable
+
+
+macro get!(h, key0, default)
+    f, l = __source__.file, __source__.line
+    depwarn("`@get!(dict, key, default)` at $f:$l is deprecated, use `get!(()->default, dict, key)` instead.", Symbol("@get!"))
+    return quote
+        get!(()->$(esc(default)), $(esc(h)), $(esc(key0)))
+    end
+end
+
+
+# END 1.5 deprecations

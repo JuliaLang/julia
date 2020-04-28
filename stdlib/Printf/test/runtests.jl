@@ -51,9 +51,13 @@ end
 if Sys.WORD_SIZE == 64
     @test (@sprintf "%20p" 0) == "  0x0000000000000000"
     @test (@sprintf "%-20p" 0) == "0x0000000000000000  "
+    @test (@sprintf "%20p" C_NULL) == "  0x0000000000000000"
+    @test (@sprintf "%-20p" C_NULL) == "0x0000000000000000  "
 elseif Sys.WORD_SIZE == 32
     @test (@sprintf "%20p" 0) == "          0x00000000"
     @test (@sprintf "%-20p" 0) == "0x00000000          "
+    @test (@sprintf "%20p" C_NULL) == "          0x00000000"
+    @test (@sprintf "%-20p" C_NULL) == "0x00000000          "
 else
     @test false
 end
@@ -271,6 +275,7 @@ end
 @test (@sprintf "%s %s %s %d %d %d %f %f %f" Any[10^x+y for x=1:3,y=1:3 ]...) == "11 101 1001 12 102 1002 13.000000 103.000000 1003.000000"
 
 # @printf
+@test_me ArgumentError("@printf: called with no arguments") @macroexpand(@printf)
 @test_me ArgumentError("@printf: first or second argument must be a format string") @macroexpand(@printf 1)
 
 # Check bug with trailing nul printing BigFloat
@@ -294,4 +299,5 @@ end
 # test at macro execution time
 @test_throws ArgumentError("@sprintf: wrong number of arguments (2) should be (3)") (@sprintf "%d%d%d" 1:2...)
 
-
+# issue #29662
+@test (@sprintf "%12.3e" pi*1e100) == "  3.142e+100"

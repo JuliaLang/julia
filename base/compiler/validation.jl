@@ -11,20 +11,23 @@ const VALID_EXPR_HEADS = IdDict{Any,Any}(
     :method => 1:4,
     :const => 1:1,
     :new => 1:typemax(Int),
+    :splatnew => 2:2,
     :return => 1:1,
     :unreachable => 0:0,
     :the_exception => 0:0,
     :enter => 1:1,
     :leave => 1:1,
+    :pop_exception => 1:1,
     :inbounds => 1:1,
     :boundscheck => 0:0,
     :copyast => 1:1,
     :meta => 0:typemax(Int),
     :global => 1:1,
-    :foreigncall => 3:typemax(Int),
+    :foreigncall => 5:typemax(Int), # name, RT, AT, nreq, cconv, args..., roots...
     :cfunction => 5:5,
     :isdefined => 1:1,
-    :simdloop => 1:1,
+    :code_coverage_effect => 0:0,
+    :loopinfo => 0:typemax(Int),
     :gc_preserve_begin => 0:typemax(Int),
     :gc_preserve_end => 0:typemax(Int),
     :thunk => 1:1,
@@ -39,7 +42,7 @@ const INVALID_RVALUE = "invalid RHS value"
 const INVALID_RETURN = "invalid argument to :return"
 const INVALID_CALL_ARG = "invalid :call argument"
 const EMPTY_SLOTNAMES = "slotnames field is empty"
-const SLOTFLAGS_MISMATCH = "length(slotnames) != length(slotflags)"
+const SLOTFLAGS_MISMATCH = "length(slotnames) < length(slotflags)"
 const SSAVALUETYPES_MISMATCH = "not all SSAValues in AST have a type in ssavaluetypes"
 const SSAVALUETYPES_MISMATCH_UNINFERRED = "uninferred CodeInfo ssavaluetypes field does not equal the number of present SSAValues"
 const NON_TOP_LEVEL_METHOD = "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"
@@ -137,12 +140,12 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                     push!(errors, InvalidCodeError(INVALID_RETURN, x.args[1]))
                 end
                 validate_val!(x.args[1])
-            elseif head === :call || head === :invoke || head == :gc_preserve_end || head === :meta ||
+            elseif head === :call || head === :invoke || head === :gc_preserve_end || head === :meta ||
                 head === :inbounds || head === :foreigncall || head === :cfunction ||
-                head === :const || head === :enter || head === :leave ||
+                head === :const || head === :enter || head === :leave || head === :pop_exception ||
                 head === :method || head === :global || head === :static_parameter ||
-                head === :new || head === :thunk || head === :simdloop ||
-                head === :throw_undef_if_not || head === :unreachable
+                head === :new || head === :splatnew || head === :thunk || head === :loopinfo ||
+                head === :throw_undef_if_not || head === :unreachable || head === :code_coverage_effect
                 validate_val!(x)
             else
                 # TODO: nothing is actually in statement position anymore
@@ -166,7 +169,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
     nslotflags = length(c.slotflags)
     nssavals = length(c.code)
     !is_top_level && nslotnames == 0 && push!(errors, InvalidCodeError(EMPTY_SLOTNAMES))
-    nslotnames != nslotflags && push!(errors, InvalidCodeError(SLOTFLAGS_MISMATCH, (nslotnames, nslotflags)))
+    nslotnames < nslotflags && push!(errors, InvalidCodeError(SLOTFLAGS_MISMATCH, (nslotnames, nslotflags)))
     if c.inferred
         nssavaluetypes = length(c.ssavaluetypes)
         nssavaluetypes < nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH, (nssavals, nssavaluetypes)))
@@ -223,7 +226,7 @@ end
 
 function is_valid_rvalue(@nospecialize(x))
     is_valid_argument(x) && return true
-    if isa(x, Expr) && x.head in (:new, :the_exception, :isdefined, :call, :invoke, :foreigncall, :cfunction, :gc_preserve_begin, :copyast)
+    if isa(x, Expr) && x.head in (:new, :splatnew, :the_exception, :isdefined, :call, :invoke, :foreigncall, :cfunction, :gc_preserve_begin, :copyast)
         return true
     end
     return false

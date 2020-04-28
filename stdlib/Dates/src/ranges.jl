@@ -52,11 +52,15 @@ function in(x::T, r::StepRange{T}) where T<:TimeType
     n >= 1 && n <= length(r) && r[n] == x
 end
 
-Base.iterate(r::StepRange{<:TimeType}, i::Int=0) = length(r) <= i ? nothing : (r.start + r.step*i, i + 1)
+Base.iterate(r::StepRange{<:TimeType}) = length(r) <= 0 ? nothing : (r.start, (length(r), 1))
+Base.iterate(r::StepRange{<:TimeType}, (l, i)) = l <= i ? nothing : (r.start + r.step * i, (l, i + 1))
 
 +(x::Period, r::AbstractRange{<:TimeType}) = (x + first(r)):step(r):(x + last(r))
 +(r::AbstractRange{<:TimeType}, x::Period) = x + r
 -(r::AbstractRange{<:TimeType}, x::Period) = (first(r)-x):step(r):(last(r)-x)
+*(x::Period, r::AbstractRange{<:Real}) = (x * first(r)):(x * step(r)):(x * last(r))
+*(r::AbstractRange{<:Real}, x::Period) = x * r
+/(r::AbstractRange{<:P}, x::P) where {P<:Period} = (first(r)/x):(step(r)/x):(last(r)/x)
 
 # Combinations of types and periods for which the range step is regular
 Base.RangeStepStyle(::Type{<:OrdinalRange{<:TimeType, <:FixedPeriod}}) =

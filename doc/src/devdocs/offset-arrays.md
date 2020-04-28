@@ -15,7 +15,7 @@ the exported interfaces of Julia.
 If you find it more convenient to just force your users to supply traditional arrays where indexing starts at one, you can add
 
 ```julia
-@assert !Base.has_offset_axes(arrays...)
+Base.require_one_based_indexing(arrays...)
 ```
 
 where `arrays...` is a list of the array objects that you wish to check for anything that
@@ -27,7 +27,7 @@ As an overview, the steps are:
 
   * replace many uses of `size` with `axes`
   * replace `1:length(A)` with `eachindex(A)`, or in some cases `LinearIndices(A)`
-  * replace explicit allocations like `Array{Int}(size(B))` with `similar(Array{Int}, axes(B))`
+  * replace explicit allocations like `Array{Int}(undef, size(B))` with `similar(Array{Int}, axes(B))`
 
 These are described in more detail below.
 
@@ -101,7 +101,7 @@ underlying "conventional" behavior you'd like, e.g., `Array{Int}` or `BitArray` 
 a convenient way of producing an all-zeros array that matches the indices of A is simply `zeros(A)`.
 
 Let's walk through a couple of explicit examples. First, if `A` has conventional indices, then
-`similar(Array{Int}, axes(A))` would end up calling `Array{Int}(size(A))`, and thus return
+`similar(Array{Int}, axes(A))` would end up calling `Array{Int}(undef, size(A))`, and thus return
 an array.  If `A` is an `AbstractArray` type with unconventional indexing, then `similar(Array{Int}, axes(A))`
 should return something that "behaves like" an `Array{Int}` but with a shape (including indices)
 that matches `A`.  (The most obvious implementation is to allocate an `Array{Int}(undef, size(A))` and
@@ -150,13 +150,13 @@ axes(A::AbstractArray{T,N}, d) where {T,N} = d <= N ? axes(A)[d] : OneTo(1)
 ```
 
 may not be what you want: you may need to specialize it to return something other than `OneTo(1)`
-when `d > ndims(A)`.  Likewise, in `Base` there is a dedicated function `indices1` which is equivalent
+when `d > ndims(A)`.  Likewise, in `Base` there is a dedicated function `axes1` which is equivalent
 to `axes(A, 1)` but which avoids checking (at runtime) whether `ndims(A) > 0`. (This is purely
 a performance optimization.)  It is defined as:
 
 ```julia
-indices1(A::AbstractArray{T,0}) where {T} = OneTo(1)
-indices1(A::AbstractArray) = axes(A)[1]
+axes1(A::AbstractArray{T,0}) where {T} = OneTo(1)
+axes1(A::AbstractArray) = axes(A)[1]
 ```
 
 If the first of these (the zero-dimensional case) is problematic for your custom array type, be

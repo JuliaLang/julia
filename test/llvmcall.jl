@@ -206,3 +206,38 @@ module CcallableRetTypeTest
     end
     @test do_the_call() === 42.0
 end
+
+# If this test breaks, you've probably broken Cxx.jl - please check
+module LLVMCallFunctionTest
+    using Base: llvmcall
+    using Test
+
+    function julia_to_llvm(@nospecialize x)
+        isboxed = Ref{UInt8}()
+        ccall(:jl_type_to_llvm, Ptr{Cvoid}, (Any, Ref{UInt8}), x, isboxed)
+    end
+    const AnyTy = julia_to_llvm(Any)
+
+    const libllvmcalltest = "libllvmcalltest"
+    const the_f = ccall((:MakeIdentityFunction, libllvmcalltest), Ptr{Cvoid}, (Ptr{Cvoid},), AnyTy)
+
+    @eval really_complicated_identity(x) = llvmcall($(the_f), Any, Tuple{Any}, x)
+
+    mutable struct boxed_struct
+    end
+    let x = boxed_struct()
+        @test really_complicated_identity(x) === x
+    end
+
+    # Define two functions that each compute the address of a dedicated internal global variable.
+    # The names of these globals are the same, so if their linkages are overwritten, then the
+    # linker will merge the globals. Consequently, we can test that linkage is preserved by testing
+    # that the addresses of the globals differ. The next few lines of code do just that.
+    const the_other_f1 = ccall((:MakeLoadGlobalFunction, libllvmcalltest), Ptr{Cvoid}, (Ptr{Cvoid},), AnyTy)
+    const the_other_f2 = ccall((:MakeLoadGlobalFunction, libllvmcalltest), Ptr{Cvoid}, (Ptr{Cvoid},), AnyTy)
+
+    @eval global_value_address1() = llvmcall($(the_other_f1), Int64, Tuple{})
+    @eval global_value_address2() = llvmcall($(the_other_f2), Int64, Tuple{})
+
+    @test global_value_address1() != global_value_address2()
+end

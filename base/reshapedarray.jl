@@ -35,6 +35,22 @@ end
 length(R::ReshapedArrayIterator) = length(R.iter)
 eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedIndex{eltype(I)} : Any
 
+## reshape(::Array, ::Dims) returns an Array, except for isbitsunion eltypes (issue #28611)
+# reshaping to same # of dimensions
+function reshape(a::Array{T,M}, dims::NTuple{N,Int}) where {T,N,M}
+    throw_dmrsa(dims, len) =
+        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $len"))
+
+    if prod(dims) != length(a)
+        throw_dmrsa(dims, length(a))
+    end
+    isbitsunion(T) && return ReshapedArray(a, dims, ())
+    if N == M && dims == size(a)
+        return a
+    end
+    ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
+end
+
 """
     reshape(A, dims...) -> AbstractArray
     reshape(A, dims) -> AbstractArray
@@ -96,6 +112,7 @@ reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo}, Vararg{Union{Int
 reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 # Allow missing dimensions with Colon():
+reshape(parent::AbstractVector, ::Colon) = parent
 reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
 reshape(parent::AbstractArray, dims::Union{Int,Colon}...) = reshape(parent, dims)
 reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = _reshape(parent, _reshape_uncolon(parent, dims))
@@ -106,12 +123,15 @@ reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = _reshape
         "must be divisible by the product of the new dimensions $dims")))
     pre = _before_colon(dims...)
     post = _after_colon(dims...)
-    any(d -> d isa Colon, post) && throw1(dims)
+    _any_colon(post...) && throw1(dims)
     sz, remainder = divrem(length(A), prod(pre)*prod(post))
     remainder == 0 || throw2(A, dims)
     (pre..., Int(sz), post...)
 end
-@inline _before_colon(dim::Any, tail...) =  (dim, _before_colon(tail...)...)
+@inline _any_colon() = false
+@inline _any_colon(dim::Colon, tail...) = true
+@inline _any_colon(dim::Any, tail...) = _any_colon(tail...)
+@inline _before_colon(dim::Any, tail...) = (dim, _before_colon(tail...)...)
 @inline _before_colon(dim::Colon, tail...) = ()
 @inline _after_colon(dim::Any, tail...) =  _after_colon(tail...)
 @inline _after_colon(dim::Colon, tail...) = tail
@@ -145,7 +165,7 @@ _reshape(parent::Array, dims::Dims) = reshape(parent, dims)
 
 # When reshaping Vector->Vector, don't wrap with a ReshapedArray
 function _reshape(v::AbstractVector, dims::Dims{1})
-    @assert !has_offset_axes(v)
+    require_one_based_indexing(v)
     len = dims[1]
     len == length(v) || _throw_dmrs(length(v), "length", len)
     v
@@ -194,13 +214,15 @@ elsize(::Type{<:ReshapedArray{<:Any,<:Any,P}}) where {P} = elsize(P)
 unaliascopy(A::ReshapedArray) = typeof(A)(unaliascopy(A.parent), A.dims, A.mi)
 dataids(A::ReshapedArray) = dataids(A.parent)
 
-@inline ind2sub_rs(ax, ::Tuple{}, i::Int) = i
+@inline ind2sub_rs(ax, ::Tuple{}, i::Int) = (i,)
 @inline ind2sub_rs(ax, strds, i) = _ind2sub_rs(ax, strds, i - 1)
 @inline _ind2sub_rs(ax, ::Tuple{}, ind) = (ind + first(ax[end]),)
 @inline function _ind2sub_rs(ax, strds, ind)
     d, r = divrem(ind, strds[1])
     (_ind2sub_rs(front(ax), tail(strds), r)..., d + first(ax[end]))
 end
+offset_if_vec(i::Integer, axs::Tuple{<:AbstractUnitRange}) = i + first(axs[1]) - 1
+offset_if_vec(i::Integer, axs::Tuple) = i
 
 @inline function getindex(A::ReshapedArrayLF, index::Int)
     @boundscheck checkbounds(A, index)
@@ -218,8 +240,9 @@ end
 end
 
 @inline function _unsafe_getindex(A::ReshapedArray{T,N}, indices::Vararg{Int,N}) where {T,N}
-    i = Base._sub2ind(size(A), indices...)
-    I = ind2sub_rs(axes(A.parent), A.mi, i)
+    axp = axes(A.parent)
+    i = offset_if_vec(Base._sub2ind(size(A), indices...), axp)
+    I = ind2sub_rs(axp, A.mi, i)
     _unsafe_getindex_rs(parent(A), I)
 end
 @inline _unsafe_getindex_rs(A, i::Integer) = (@inbounds ret = A[i]; ret)
@@ -241,7 +264,9 @@ end
 end
 
 @inline function _unsafe_setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Int,N}) where {T,N}
-    @inbounds parent(A)[ind2sub_rs(axes(A.parent), A.mi, Base._sub2ind(size(A), indices...))...] = val
+    axp = axes(A.parent)
+    i = offset_if_vec(Base._sub2ind(size(A), indices...), axp)
+    @inbounds parent(A)[ind2sub_rs(axes(A.parent), A.mi, i)...] = val
     val
 end
 

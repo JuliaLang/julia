@@ -33,8 +33,9 @@ abstract type AbstractLogger ; end
 
 Log a message to `logger` at `level`.  The logical location at which the
 message was generated is given by module `_module` and `group`; the source
-location by `file` and `line`. `id` is an arbitrary unique `Symbol` to be used
-as a key to identify the log statement when filtering.
+location by `file` and `line`. `id` is an arbitrary unique value (typically a
+[`Symbol`](@ref)) to be used as a key to identify the log statement when
+filtering.
 """
 function handle_message end
 
@@ -49,7 +50,7 @@ function shouldlog end
 """
     min_enabled_level(logger)
 
-Return the maximum disabled level for `logger` for early filtering.  That is,
+Return the minimum enabled level for `logger` for early filtering.  That is,
 the log level below or equal to which all messages are filtered.
 """
 function min_enabled_level end
@@ -70,7 +71,7 @@ logger type.
 catch_exceptions(logger) = true
 
 
-# The logger equivalent of /dev/null, for when a placeholder is needed
+
 """
     NullLogger()
 
@@ -150,7 +151,7 @@ formatted as markdown when presented.
 The optional list of `key=value` pairs supports arbitrary user defined
 metadata which will be passed through to the logging backend as part of the
 log record.  If only a `value` expression is supplied, a key representing the
-expression will be generated using `Symbol`. For example, `x` becomes `x=x`,
+expression will be generated using [`Symbol`](@ref). For example, `x` becomes `x=x`,
 and `foo(10)` becomes `Symbol("foo(10)")=foo(10)`.  For splatting a list of
 key value pairs, use the normal splatting syntax, `@info "blah" kws...`.
 
@@ -203,7 +204,7 @@ end
 macro _sourceinfo()
     esc(quote
         (__module__,
-         __source__.file === nothing ? "?" : String(__source__.file),
+         __source__.file === nothing ? "?" : String(__source__.file::Symbol),
          __source__.line)
     end)
 end
@@ -222,17 +223,17 @@ macro error(exs...) logmsg_code((@_sourceinfo)..., :Error, exs...) end
 @eval @doc $_logmsg_docs :(@error)
 
 _log_record_ids = Set{Symbol}()
-# Generate a unique, stable, short, human readable identifier for a logging
-# statement.  The idea here is to have a key against which log records can be
-# filtered and otherwise manipulated. The key should uniquely identify the
-# source location in the originating module, but should be stable across
-# versions of the originating module, provided the log generating statement
-# itself doesn't change.
-function log_record_id(_module, level, message_ex)
+# Generate a unique, stable, short, somewhat human readable identifier for a
+# logging *statement*. The idea here is to have a key against which log events
+# can be filtered and otherwise manipulated. The key should uniquely identify
+# the source location in the originating module, but ideally should be stable
+# across versions of the originating module, provided the log generating
+# statement itself doesn't change.
+function log_record_id(_module, level, message, log_kws)
     modname = _module === nothing ?  "" : join(fullname(_module), "_")
-    # Use (1<<31) to fit well within an (arbitriraly chosen) eight hex digits,
-    # as we increment h to resolve any collisions.
-    h = hash(string(modname, level, message_ex)) % (1<<31)
+    # Use an arbitriraly chosen eight hex digits here. TODO: Figure out how to
+    # make the id exactly the same on 32 and 64 bit systems.
+    h = UInt32(hash(string(modname, level, message, log_kws)) & 0xFFFFFFFF)
     while true
         id = Symbol(modname, '_', string(h, base = 16, pad = 8))
         # _log_record_ids is a registry of log record ids for use during
@@ -247,9 +248,11 @@ function log_record_id(_module, level, message_ex)
     end
 end
 
+default_group(file) = Symbol(splitext(basename(file))[1])
+
 # Generate code for logging macros
 function logmsg_code(_module, file, line, level, message, exs...)
-    id = nothing
+    id = Expr(:quote, log_record_id(_module, level, message, exs))
     group = nothing
     kwargs = Any[]
     for ex in exs
@@ -260,20 +263,20 @@ function logmsg_code(_module, file, line, level, message, exs...)
             end
             k = ex.args[1]
             # Recognize several special keyword arguments
-            if k == :_id
+            if k === :_id
                 # id may be overridden if you really want several log
                 # statements to share the same id (eg, several pertaining to
                 # the same progress step).  In those cases it may be wise to
                 # manually call log_record_id to get a unique id in the same
                 # format.
                 id = esc(v)
-            elseif k == :_module
+            elseif k === :_module
                 _module = esc(v)
-            elseif k == :_line
+            elseif k === :_line
                 line = esc(v)
-            elseif k == :_file
+            elseif k === :_file
                 file = esc(v)
-            elseif k == :_group
+            elseif k === :_group
                 group = esc(v)
             else
                 # Copy across key value pairs for structured log records
@@ -289,17 +292,15 @@ function logmsg_code(_module, file, line, level, message, exs...)
         end
     end
 
-    # Note that it may be necessary to set `id` and `group` manually during bootstrap
-    id = something(id, :(log_record_id(_module, level, $exs)))
-    if group == nothing
+    if group === nothing
         group = if isdefined(Base, :basename) && isa(file, String)
             # precompute if we can
-            QuoteNode(splitext(basename(file))[1])
+            QuoteNode(default_group(file))
         else
             # memoized run-time execution
             ref = Ref{Symbol}()
             :(isassigned($ref) ? $ref[]
-                               : $ref[] = Symbol(splitext(basename(something($file, "")))[1]))
+                               : $ref[] = default_group(something($file, "")))
         end
     end
 
@@ -415,38 +416,49 @@ function disable_logging(level::LogLevel)
     _min_enabled_level[] = level + 1
 end
 
-let _debug_groups = Symbol[],
+let _debug_groups_include::Vector{Symbol} = Symbol[],
+    _debug_groups_exclude::Vector{Symbol} = Symbol[],
     _debug_str::String = ""
 global function env_override_minlevel(group, _module)
     debug = get(ENV, "JULIA_DEBUG", "")
     if !(debug === _debug_str)
         _debug_str = debug
-        empty!(_debug_groups)
+        empty!(_debug_groups_include)
+        empty!(_debug_groups_exclude)
         for g in split(debug, ',')
-            isempty(g) && continue
-            if g == "all"
-                empty!(_debug_groups)
-                push!(_debug_groups, :all)
-                break
+            if !isempty(g)
+                if startswith(g, "!")
+                    if !isempty(g[2:end])
+                        push!(_debug_groups_exclude, Symbol(g[2:end]))
+                    end
+                else
+                    push!(_debug_groups_include, Symbol(g))
+                end
             end
-            push!(_debug_groups, Symbol(g))
         end
+        unique!(_debug_groups_include)
+        unique!(_debug_groups_exclude)
     end
-    if isempty(_debug_groups)
-        return false
-    end
-    if _debug_groups[1] == :all
-        return true
-    end
-    if isa(group, Symbol) && group in _debug_groups
-        return true
-    end
-    if isa(_module, Module)
-        if nameof(_module) in _debug_groups
+
+    if !(:all in _debug_groups_exclude) && (:all in _debug_groups_include || !isempty(_debug_groups_exclude))
+        if isempty(_debug_groups_exclude)
+            return true
+        elseif isa(group, Symbol) && group in _debug_groups_exclude
+            return false
+        elseif isa(_module, Module) && (nameof(_module) in _debug_groups_exclude || nameof(Base.moduleroot(_module)) in _debug_groups_exclude)
+            return false
+        else
             return true
         end
-        if nameof(Base.moduleroot(_module)) in _debug_groups
+    else
+        if isempty(_debug_groups_include)
+            return false
+        elseif isa(group, Symbol) && group in _debug_groups_include
             return true
+        elseif isa(_module, Module) && (nameof(_module) in _debug_groups_include || nameof(Base.moduleroot(_module)) in _debug_groups_include)
+            return true
+        else
+            return false
         end
     end
     return false
@@ -525,7 +537,7 @@ catch_exceptions(logger::SimpleLogger) = false
 
 function handle_message(logger::SimpleLogger, level, message, _module, group, id,
                         filepath, line; maxlog=nothing, kwargs...)
-    if maxlog != nothing && maxlog isa Integer
+    if maxlog !== nothing && maxlog isa Integer
         remaining = get!(logger.message_limits, id, maxlog)
         logger.message_limits[id] = remaining - 1
         remaining > 0 || return

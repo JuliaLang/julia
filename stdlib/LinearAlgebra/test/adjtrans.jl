@@ -489,7 +489,7 @@ using .Main.OffsetArrays
 
 @testset "offset axes" begin
     s = Base.Slice(-3:3)'
-    @test axes(s) === (Base.OneTo(1), Base.Slice(-3:3))
+    @test axes(s) === (Base.OneTo(1), Base.IdentityUnitRange(-3:3))
     @test collect(LinearIndices(s)) == reshape(1:7, 1, 7)
     @test collect(CartesianIndices(s)) == reshape([CartesianIndex(1,i) for i = -3:3], 1, 7)
     @test s[1] == -3
@@ -502,6 +502,27 @@ using .Main.OffsetArrays
     @test s[1, 0] ==  0
     @test_throws BoundsError s[1,-4]
     @test_throws BoundsError s[1, 4]
+end
+
+@testset "specialized conj of Adjoint/Transpose" begin
+    realmat = [1 2; 3 4]
+    complexmat = ComplexF64[1+im 2; 3 4-im]
+    nested = [[complexmat] [-complexmat]; [0complexmat] [3complexmat]]
+    @testset "AdjOrTrans{...,$(typeof(i))}" for i in (
+                                                      realmat, vec(realmat),
+                                                      complexmat, vec(complexmat),
+                                                      nested, vec(nested),
+                                                     )
+        for (t,type) in ((transpose, Adjoint), (adjoint, Transpose))
+            M = t(i)
+            @test conj(M) isa type
+            @test conj(M) == conj(collect(M))
+            @test conj(conj(M)) === M
+        end
+    end
+    # test if `conj(transpose(::Hermitian))` is a no-op
+    hermitian = Hermitian([1 2+im; 2-im 3])
+    @test conj(transpose(hermitian)) === hermitian
 end
 
 end # module TestAdjointTranspose

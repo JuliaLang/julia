@@ -58,19 +58,24 @@ for T in [Int32,Int64,Float32,Float64]
 end
 
 # Test that scope rules match regular for
-let j=4
+let j=4, k=4
     # Use existing local variable.
     @simd for j=1:0 end
-    @test j==4
+          for k=1:0 end
+    @test j==k
     @simd for j=1:3 end
-    @test j==3
+          for k=1:3 end
+    @test j==k
 
     # Use global variable
     global simd_glob = 4
+    global glob = 4
     @simd for simd_glob=1:0 end
-    @test simd_glob==4
+          for      glob=1:0 end
+    @test simd_glob==glob
     @simd for simd_glob=1:3 end
-    @test simd_glob==3
+          for      glob=1:3 end
+    @test simd_glob==glob
 
     # Index that is local to loop
     @simd for simd_loop_local=1:0 end
@@ -158,3 +163,14 @@ function simd_sum_over_array(a)
 end
 @test 2001000 == simd_sum_over_array(Vector(1:2000))
 @test 2001000 == simd_sum_over_array(Float32[i+j*500 for i=1:500, j=0:3])
+
+#Opt out of simd
+struct iter31113{T}
+    parent::T
+end
+Base.iterate(it::iter31113, args...) = iterate(it.parent, args...)
+Base.eltype(it::iter31113) = eltype(it.parent)
+Base.SimdLoop.simd_index(v::iter31113, j, i) = j
+Base.SimdLoop.simd_inner_length(v::iter31113, j) = 1
+Base.SimdLoop.simd_outer_range(v::iter31113) = v
+@test 2001000 == simd_sum_over_array(iter31113(Vector(1:2000)))

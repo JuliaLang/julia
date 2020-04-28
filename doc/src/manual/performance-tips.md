@@ -36,7 +36,7 @@ Passing arguments to functions is better style. It leads to more reusable code a
 
 !!! note
     All code in the REPL is evaluated in global scope, so a variable defined and assigned
-    at toplevel will be a **global** variable. Variables defined in at top level scope inside
+    at top level will be a **global** variable. Variables defined at top level scope inside
     modules are also global.
 
 In the following REPL session:
@@ -142,7 +142,7 @@ the performance of your code:
   * [Profiling](@ref) allows you to measure the performance of your running code and identify lines
     that serve as bottlenecks. For complex projects, the [ProfileView](https://github.com/timholy/ProfileView.jl)
     package can help you visualize your profiling results.
-  * The [Traceur](https://github.com/MikeInnes/Traceur.jl) package can help you find common performance problems in your code.
+  * The [Traceur](https://github.com/JunoLab/Traceur.jl) package can help you find common performance problems in your code.
   * Unexpectedly-large memory allocations--as reported by [`@time`](@ref), [`@allocated`](@ref), or
     the profiler (through calls to the garbage-collection routines)--hint that there might be issues
     with your code. If you don't see another reason for the allocations, suspect a type problem.
@@ -151,7 +151,7 @@ the performance of your code:
   * `@code_warntype` generates a representation of your code that can be helpful in finding expressions
     that result in type uncertainty. See [`@code_warntype`](@ref) below.
 
-## Avoid containers with abstract type parameters
+## [Avoid containers with abstract type parameters](@id man-performance-abstract-container)
 
 When working with parameterized types, including arrays, it is best to avoid parameterizing with
 abstract types where possible.
@@ -160,12 +160,12 @@ Consider the following:
 
 ```jldoctest
 julia> a = Real[]
-0-element Array{Real,1}
+Real[]
 
 julia> push!(a, 1); push!(a, 2.0); push!(a, π)
 3-element Array{Real,1}:
-  1
-  2.0
+ 1
+ 2.0
  π = 3.1415926535897...
 ```
 
@@ -177,7 +177,7 @@ efficiently:
 
 ```jldoctest
 julia> a = Float64[]
-0-element Array{Float64,1}
+Float64[]
 
 julia> push!(a, 1); push!(a, 2.0); push!(a,  π)
 3-element Array{Float64,1}:
@@ -481,25 +481,69 @@ c = (b + 1.0f0)::Complex{T}
 does not hinder performance (but does not help either) since the compiler can determine the type of `c`
 at the time `k` is compiled.
 
-### Declare types of keyword arguments
+### Be aware of when Julia avoids specializing
 
-Keyword arguments can have declared types:
+As a heuristic, Julia avoids automatically specializing on argument type parameters in three
+specific cases: `Type`, `Function`, and `Vararg`. Julia will always specialize when the argument is
+used within the method, but not if the argument is just passed through to another function. This
+usually has no performance impact at runtime and
+[improves compiler performance](@ref compiler-efficiency-issues). If you find it does have a
+performance impact at runtime in your case, you can trigger specialization by adding a type
+parameter to the method declaration. Here are some examples:
+
+This will not specialize:
 
 ```julia
-function with_keyword(x; name::Int = 1)
-    ...
+function f_type(t)  # or t::Type
+    x = ones(t, 10)
+    return sum(map(sin, x))
 end
 ```
 
-Functions are specialized on the types of keyword arguments, so these declarations will not affect
-performance of code inside the function. However, they will reduce the overhead of calls to the
-function that include keyword arguments.
+but this will:
 
-Functions with keyword arguments have near-zero overhead for call sites that pass only positional
-arguments.
+```julia
+function g_type(t::Type{T}) where T
+    x = ones(T, 10)
+    return sum(map(sin, x))
+end
+```
 
-Passing dynamic lists of keyword arguments, as in `f(x; keywords...)`, can be slow and should
-be avoided in performance-sensitive code.
+These will not specialize:
+
+```julia
+f_func(f, num) = ntuple(f, div(num, 2))
+g_func(g::Function, num) = ntuple(g, div(num, 2))
+```
+
+but this will:
+
+```julia
+h_func(h::H, num) where {H} = ntuple(h, div(num, 2))
+```
+
+This will not specialize:
+
+```julia
+f_vararg(x::Int...) = tuple(x...)
+```
+
+but this will:
+
+```julia
+g_vararg(x::Vararg{Int, N}) where {N} = tuple(x...)
+```
+
+One only needs to introduce a single type parameter to force specialization, even if the other types are unconstrained. For example, this will also specialize, and is useful when the arguments are not all of the same type:
+```julia
+h_vararg(x::Vararg{Any, N}) where {N} = tuple(x...)
+```
+
+Note that [`@code_typed`](@ref) and friends will always show you specialized code, even if Julia
+would not normally specialize that method call. You need to check the
+[method internals](@ref ast-lowered-method) if you want to see whether specializations are generated
+when argument types are changed, i.e., if `(@which f(...)).specializations` contains specializations
+for the argument in question.
 
 ## Break functions into multiple definitions
 
@@ -635,7 +679,7 @@ or the [`fill!`](@ref) function, which we could have used instead of writing our
 Functions like `strange_twos` occur when dealing with data of uncertain type, for example data
 loaded from an input file that might contain either integers, floats, strings, or something else.
 
-## Types with values-as-parameters
+## [Types with values-as-parameters](@id man-performance-value-type)
 
 Let's say you want to create an `N`-dimensional array that has size 3 along each axis. Such arrays
 can be created like this:
@@ -727,7 +771,7 @@ type-domain.
 
 ## The dangers of abusing multiple dispatch (aka, more on types with values-as-parameters)
 
-Once one learns to appreciate multiple dispatch, there's an understandable tendency to go crazy
+Once one learns to appreciate multiple dispatch, there's an understandable tendency to go overboard
 and try to use it for everything. For example, you might imagine using it to store information,
 e.g.
 
@@ -772,7 +816,7 @@ or thousands of variants compiled for it. Each of these increases the size of th
 code, the length of internal lists of methods, etc. Excess enthusiasm for values-as-parameters
 can easily waste enormous resources.
 
-## Access arrays in memory order, along columns
+## [Access arrays in memory order, along columns](@id man-performance-column-major)
 
 Multidimensional arrays in Julia are stored in column-major order. This means that arrays are
 stacked one column at a time. This can be verified using the `vec` function or the syntax `[:]`
@@ -850,7 +894,7 @@ julia> x = randn(10000);
 
 julia> fmt(f) = println(rpad(string(f)*": ", 14, ' '), @elapsed f(x))
 
-julia> map(fmt, Any[copy_cols, copy_rows, copy_col_row, copy_row_col]);
+julia> map(fmt, [copy_cols, copy_rows, copy_col_row, copy_row_col]);
 copy_cols:    0.331706323
 copy_rows:    1.799009911
 copy_col_row: 0.415630047
@@ -974,7 +1018,7 @@ example, but in many contexts it is more convenient to just sprinkle
 some dots in your expressions rather than defining a separate function
 for each vectorized operation.)
 
-## Consider using views for slices
+## [Consider using views for slices](@id man-performance-views)
 
 In Julia, an array "slice" expression like `array[1:5, :]` creates
 a copy of that data (except on the left-hand side of an assignment,
@@ -1091,7 +1135,7 @@ using Distributed
 responses = Vector{Any}(undef, nworkers())
 @sync begin
     for (idx, pid) in enumerate(workers())
-        @async responses[idx] = remotecall_fetch(pid, foo, args...)
+        @async responses[idx] = remotecall_fetch(foo, pid, args...)
     end
 end
 ```
@@ -1149,7 +1193,7 @@ Sometimes you can enable better optimization by promising certain program proper
 
 The common idiom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing,
 and may cause a segmentation fault if bounds checking is turned off. Use `LinearIndices(x)` or `eachindex(x)`
-instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays)).
+instead (see also [Arrays with custom indices](@ref man-custom-indices)).
 
 !!! note
     While `@simd` needs to be placed directly in front of an innermost `for` loop, both `@inbounds` and `@fastmath`
@@ -1382,29 +1426,21 @@ julia> @noinline pos(x) = x < 0 ? 0 : x;
 
 julia> function f(x)
            y = pos(x)
-           sin(y*x + 1)
+           return sin(y*x + 1)
        end;
 
 julia> @code_warntype f(3.2)
+Variables
+  #self#::Core.Compiler.Const(f, false)
+  x::Float64
+  y::Union{Float64, Int64}
+
 Body::Float64
-2 1 ─ %1  = invoke Main.pos(%%x::Float64)::UNION{FLOAT64, INT64}
-3 │   %2  = isa(%1, Float64)::Bool
-  └──       goto 3 if not %2
-  2 ─ %4  = π (%1, Float64)
-  │   %5  = Base.mul_float(%4, %%x)::Float64
-  └──       goto 6
-  3 ─ %7  = isa(%1, Int64)::Bool
-  └──       goto 5 if not %7
-  4 ─ %9  = π (%1, Int64)
-  │   %10 = Base.sitofp(Float64, %9)::Float64
-  │   %11 = Base.mul_float(%10, %%x)::Float64
-  └──       goto 6
-  5 ─       Base.error("fatal error in type inference (type bound)")
-  └──       unreachable
-  6 ┄ %15 = φ (2 => %5, 4 => %11)::Float64
-  │   %16 = Base.add_float(%15, 1.0)::Float64
-  │   %17 = invoke Main.sin(%16::Float64)::Float64
-  └──       return %17
+1 ─      (y = Main.pos(x))
+│   %2 = (y * x)::Float64
+│   %3 = (%2 + 1)::Float64
+│   %4 = Main.sin(%3)::Float64
+└──      return %4
 ```
 
 Interpreting the output of [`@code_warntype`](@ref), like that of its cousins [`@code_lowered`](@ref),
@@ -1541,3 +1577,11 @@ will not require this degree of programmer annotation to attain performance.
 In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
+
+# Checking for equality with a singleton
+
+When checking if a value is equal to some singleton it can be
+better for performance to check for identicality (`===`) instead of
+equality (`==`). The same advice applies to using `!==` over `!=`.
+These type of checks frequently occur e.g. when implementing the iteration
+protocol and checking if `nothing` is returned from [`iterate`](@ref).

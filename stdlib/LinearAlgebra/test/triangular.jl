@@ -27,13 +27,21 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
 
         # Construct test matrix
         A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> cholesky(t't).U |> t -> uplo1 == :U ? t : copy(t')))
-
+        @test t1(A1) === A1
+        @test t1{elty1}(A1) === A1
+        # test the ctor works for AbstractMatrix
+        symm = Symmetric(rand(Int8, n, n))
+        t1s = t1{elty1}(symm)
+        @test typeof(t1s) == t1{elty1, Symmetric{elty1, Matrix{elty1}}}
+        t1t = t1{elty1}(t1(rand(Int8, n, n)))
+        @test typeof(t1t) == t1{elty1, Matrix{elty1}}
 
         debug && println("elty1: $elty1, A1: $t1")
 
         # Convert
         @test convert(AbstractMatrix{elty1}, A1) == A1
         @test convert(Matrix, A1) == A1
+        @test t1{elty1}(convert(AbstractMatrix{elty1}, A1)) == A1
 
         # full!
         @test full!(copy(A1)) == A1
@@ -212,6 +220,10 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 A2tmp = unitt(A1)
                 mul!(A1tmp, A2tmp, cr)
                 @test A1tmp == cr * A2tmp
+                A1tmp = copy(A1)
+                A2tmp = unitt(A1)
+                mul!(A1tmp, cr, A2tmp)
+                @test A1tmp == cr * A2tmp
             else
                 A1tmp = copy(A1)
                 rmul!(A1tmp, ci)
@@ -221,8 +233,23 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 @test A1tmp == ci*A1
                 A1tmp = copy(A1)
                 A2tmp = unitt(A1)
-                mul!(A1tmp, A2tmp, ci)
+                mul!(A1tmp, ci, A2tmp)
                 @test A1tmp == ci * A2tmp
+                A1tmp = copy(A1)
+                A2tmp = unitt(A1)
+                mul!(A1tmp, A2tmp, ci)
+                @test A1tmp == A2tmp*ci
+            end
+        end
+
+        # generalized dot
+        for eltyb in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
+            b1 = convert(Vector{eltyb}, (elty1 <: Complex ? real(A1) : A1)*fill(1., n))
+            b2 = convert(Vector{eltyb}, (elty1 <: Complex ? real(A1) : A1)*randn(n))
+            if elty1 in (BigFloat, Complex{BigFloat}) || eltyb in (BigFloat, Complex{BigFloat})
+                @test dot(b1, A1, b2) ≈ dot(A1'b1, b2)  atol=sqrt(max(eps(real(float(one(elty1)))),eps(real(float(one(eltyb))))))*n*n
+            else
+                @test dot(b1, A1, b2) ≈ dot(A1'b1, b2)  atol=sqrt(max(eps(real(float(one(elty1)))),eps(real(float(one(eltyb))))))*n*n
             end
         end
 
@@ -302,6 +329,8 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 # Triangular-Triangualar multiplication and division
                 @test A1*A2 ≈ Matrix(A1)*Matrix(A2)
                 @test transpose(A1)*A2 ≈ transpose(Matrix(A1))*Matrix(A2)
+                @test transpose(A1)*adjoint(A2) ≈ transpose(Matrix(A1))*adjoint(Matrix(A2))
+                @test adjoint(A1)*transpose(A2) ≈ adjoint(Matrix(A1))*transpose(Matrix(A2))
                 @test A1'A2 ≈ Matrix(A1)'Matrix(A2)
                 @test A1*transpose(A2) ≈ Matrix(A1)*transpose(Matrix(A2))
                 @test A1*A2' ≈ Matrix(A1)*Matrix(A2)'
@@ -319,6 +348,21 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 @test_throws DimensionMismatch transpose(A2) * offsizeA
                 @test_throws DimensionMismatch A2'  * offsizeA
                 @test_throws DimensionMismatch A2   * offsizeA
+                if (uplo1 == uplo2 && elty1 == elty2 != Int && t1 != UnitLowerTriangular && t1 != UnitUpperTriangular)
+                    @test rdiv!(copy(A1), copy(A2)) ≈ A1/A2 ≈ Matrix(A1)/Matrix(A2)
+                end
+                if (uplo1 != uplo2 && elty1 == elty2 != Int && t2 != UnitLowerTriangular && t2 != UnitUpperTriangular)
+                    @test lmul!(adjoint(copy(A1)), copy(A2)) ≈ A1'*A2 ≈ Matrix(A1)'*Matrix(A2)
+                    @test lmul!(transpose(copy(A1)), copy(A2)) ≈ transpose(A1)*A2 ≈ transpose(Matrix(A1))*Matrix(A2)
+                    @test ldiv!(adjoint(copy(A1)), copy(A2)) ≈ A1'\A2 ≈ Matrix(A1)'\Matrix(A2)
+                    @test ldiv!(transpose(copy(A1)), copy(A2)) ≈ transpose(A1)\A2 ≈ transpose(Matrix(A1))\Matrix(A2)
+                end
+                if (uplo1 != uplo2 && elty1 == elty2 != Int && t1 != UnitLowerTriangular && t1 != UnitUpperTriangular)
+                    @test rmul!(copy(A1), adjoint(copy(A2))) ≈ A1*A2' ≈ Matrix(A1)*Matrix(A2)'
+                    @test rmul!(copy(A1), transpose(copy(A2))) ≈ A1*transpose(A2) ≈ Matrix(A1)*transpose(Matrix(A2))
+                    @test rdiv!(copy(A1), adjoint(copy(A2))) ≈ A1/A2' ≈ Matrix(A1)/Matrix(A2)'
+                    @test rdiv!(copy(A1), transpose(copy(A2))) ≈ A1/transpose(A2) ≈ Matrix(A1)/transpose(Matrix(A2))
+                end
             end
         end
 
@@ -330,6 +374,13 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             if !(eltyB in (BigFloat, Complex{BigFloat})) # rand does not support BigFloat and Complex{BigFloat} as of Dec 2015
                 Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
                 @test lmul!(Tri,copy(A1)) ≈ Tri*Matrix(A1)
+                Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
+                C = Matrix{promote_type(elty1,eltyB)}(undef, n, n)
+                mul!(C, Tri, copy(A1))
+                @test C ≈ Tri*Matrix(A1)
+                Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
+                mul!(C, copy(A1), Tri)
+                @test C ≈ Matrix(A1)*Tri
             end
 
             # Triangular-dense Matrix/vector multiplication
@@ -340,11 +391,15 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test transpose(A1)*B ≈ transpose(Matrix(A1))*B
             @test A1'B ≈ Matrix(A1)'B
             @test A1*transpose(B) ≈ Matrix(A1)*transpose(B)
+            @test adjoint(A1)*transpose(B) ≈ Matrix(A1)'*transpose(B)
+            @test transpose(A1)*adjoint(B) ≈ transpose(Matrix(A1))*adjoint(B)
             @test A1*B' ≈ Matrix(A1)*B'
             @test B*A1 ≈ B*Matrix(A1)
             @test transpose(B[:,1])*A1 ≈ transpose(B[:,1])*Matrix(A1)
             @test B[:,1]'A1 ≈ B[:,1]'Matrix(A1)
             @test transpose(B)*A1 ≈ transpose(B)*Matrix(A1)
+            @test transpose(B)*adjoint(A1) ≈ transpose(B)*Matrix(A1)'
+            @test adjoint(B)*transpose(A1) ≈ adjoint(B)*transpose(Matrix(A1))
             @test B'A1 ≈ B'Matrix(A1)
             @test B*transpose(A1) ≈ B*transpose(Matrix(A1))
             @test B*A1' ≈ B*Matrix(A1)'
@@ -354,16 +409,20 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test B'A1' ≈ B'Matrix(A1)'
 
             if eltyB == elty1
-                @test mul!(similar(B),A1,B)  ≈ A1*B
-                @test mul!(similar(B), A1, adjoint(B)) ≈ A1*B'
-                @test mul!(similar(B), A1, transpose(B)) ≈ A1*transpose(B)
-                @test mul!(similar(B), adjoint(A1), B) ≈ A1'*B
-                @test mul!(similar(B), transpose(A1), B) ≈ transpose(A1)*B
+                @test mul!(similar(B), A1, B) ≈ Matrix(A1)*B
+                @test mul!(similar(B), A1, adjoint(B)) ≈ Matrix(A1)*B'
+                @test mul!(similar(B), A1, transpose(B)) ≈ Matrix(A1)*transpose(B)
+                @test mul!(similar(B), adjoint(A1), adjoint(B)) ≈ Matrix(A1)'*B'
+                @test mul!(similar(B), transpose(A1), transpose(B)) ≈ transpose(Matrix(A1))*transpose(B)
+                @test mul!(similar(B), transpose(A1), adjoint(B)) ≈ transpose(Matrix(A1))*B'
+                @test mul!(similar(B), adjoint(A1), transpose(B)) ≈ Matrix(A1)'*transpose(B)
+                @test mul!(similar(B), adjoint(A1), B) ≈ Matrix(A1)'*B
+                @test mul!(similar(B), transpose(A1), B) ≈ transpose(Matrix(A1))*B
                 # test also vector methods
                 B1 = vec(B[1,:])
-                @test mul!(similar(B1),A1,B1)  ≈ A1*B1
-                @test mul!(similar(B1), adjoint(A1), B1) ≈ A1'*B1
-                @test mul!(similar(B1), transpose(A1), B1) ≈ transpose(A1)*B1
+                @test mul!(similar(B1), A1, B1)  ≈ Matrix(A1)*B1
+                @test mul!(similar(B1), adjoint(A1), B1) ≈ Matrix(A1)'*B1
+                @test mul!(similar(B1), transpose(A1), B1) ≈ transpose(Matrix(A1))*B1
             end
             #error handling
             Ann, Bmm, bm = A1, Matrix{eltyB}(undef, n+1, n+1), Vector{eltyB}(undef, n+1)
@@ -518,9 +577,8 @@ let n = 5
     @test_throws DimensionMismatch rdiv!(A, transpose(UnitUpperTriangular(B)))
 end
 
-# Test that UpperTriangular(LowerTriangular) throws. See #16201
-@test_throws ArgumentError LowerTriangular(UpperTriangular(randn(3,3)))
-@test_throws ArgumentError UpperTriangular(LowerTriangular(randn(3,3)))
+@test isdiag(LowerTriangular(UpperTriangular(randn(3,3))))
+@test isdiag(UpperTriangular(LowerTriangular(randn(3,3))))
 
 # Issue 16196
 @test UpperTriangular(Matrix(1.0I, 3, 3)) \ view(fill(1., 3), [1,2,3]) == fill(1., 3)
@@ -581,6 +639,16 @@ end
         @test transpose(b1) * A1' ≈ transpose(b1) * Matrix(A1')
         @test transpose(b4) * A4' ≈ transpose(b4) * Matrix(A4')
     end
+end
+
+@testset "Error condition for powm" begin
+    A = UpperTriangular(rand(ComplexF64, 10, 10))
+    @test_throws ArgumentError LinearAlgebra.powm!(A, 2.2)
+    A = LowerTriangular(rand(ComplexF64, 10, 10))
+    At = copy(transpose(A))
+    p = rand()
+    @test LinearAlgebra.powm(A, p) == transpose(LinearAlgebra.powm!(At, p))
+    @test_throws ArgumentError LinearAlgebra.powm(A, 2.2)
 end
 
 end # module TestTriangular

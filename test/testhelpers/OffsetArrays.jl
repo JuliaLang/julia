@@ -39,13 +39,13 @@ Base.eachindex(::IndexLinear, A::OffsetVector) = axes(A, 1)
 # Implementations of indices and axes1. Since bounds-checking is
 # performance-critical and relies on indices, these are usually worth
 # optimizing thoroughly.
-@inline Base.axes(A::OffsetArray, d) = 1 <= d <= length(A.offsets) ? Base.Slice(axes(parent(A))[d] .+ A.offsets[d]) : Base.Slice(1:1)
+@inline Base.axes(A::OffsetArray, d) = 1 <= d <= length(A.offsets) ? Base.IdentityUnitRange(axes(parent(A))[d] .+ A.offsets[d]) : Base.IdentityUnitRange(1:1)
 @inline Base.axes(A::OffsetArray) = _indices(axes(parent(A)), A.offsets)  # would rather use ntuple, but see #15276
-@inline _indices(inds, offsets) = (Base.Slice(inds[1] .+ offsets[1]), _indices(tail(inds), tail(offsets))...)
+@inline _indices(inds, offsets) = (Base.IdentityUnitRange(inds[1] .+ offsets[1]), _indices(tail(inds), tail(offsets))...)
 _indices(::Tuple{}, ::Tuple{}) = ()
-Base.axes1(A::OffsetArray{T,0}) where {T} = Base.Slice(1:1)  # we only need to specialize this one
+Base.axes1(A::OffsetArray{T,0}) where {T} = Base.IdentityUnitRange(1:1)  # we only need to specialize this one
 
-const OffsetAxis = Union{Integer, UnitRange, Base.Slice{<:UnitRange}, Base.OneTo}
+const OffsetAxis = Union{Integer, UnitRange, Base.IdentityUnitRange{<:UnitRange}, Base.OneTo}
 function Base.similar(A::OffsetArray, T::Type, dims::Dims)
     B = similar(parent(A), T, dims)
 end
@@ -119,6 +119,14 @@ end
     first_idx = offset(A.offsets, (first(i),))[1]
     last_idx = offset(A.offsets, (last(i),))[1]
     @inbounds deleteat!(parent(A), first_idx:last_idx)
+end
+
+function Base.push!(a::OffsetArray{T,1}, item) where T
+    # convert first so we don't grow the array if the assignment won't work
+    itemT = convert(T, item)
+    resize!(a, length(a)+1)
+    a[end] = itemT
+    return a
 end
 
 # Computing a shifted index (subtracting the offset)

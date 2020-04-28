@@ -24,7 +24,7 @@ For help on a specific function or macro, type `?` followed
 by its name, e.g. `?cos`, or `?@time`, and press enter.
 Type `;` to enter shell mode, `]` to enter package mode.
 """
-kw"help", kw"?", kw"julia", kw""
+kw"help", kw"?", kw"Julia", kw"julia", kw""
 
 """
     using
@@ -75,7 +75,7 @@ kw"abstract type"
 """
     module
 
-`module` declares a `Module`, which is a separate global variable workspace. Within a
+`module` declares a [`Module`](@ref), which is a separate global variable workspace. Within a
 module, you can control which names from other modules are visible (via importing), and
 specify which of your names are intended to be public (via exporting).
 Modules allow you to create top-level definitions without worrying about name conflicts
@@ -101,10 +101,33 @@ end
 kw"module"
 
 """
+    __init__
+
+`__init__()` function in your module would executes immediately *after* the module is loaded at
+runtime for the first time (i.e., it is only called once and only after all statements in the
+module have been executed). Because it is called *after* fully importing the module, `__init__`
+functions of submodules will be executed *first*. Two typical uses of __init__ are calling
+runtime initialization functions of external C libraries and initializing global constants
+that involve pointers returned by external libraries.
+See the [manual section about modules](@ref modules) for more details.
+
+# Examples
+```julia
+const foo_data_ptr = Ref{Ptr{Cvoid}}(0)
+function __init__()
+    ccall((:foo_init, :libfoo), Cvoid, ())
+    foo_data_ptr[] = ccall((:foo_data, :libfoo), Ptr{Cvoid}, ())
+    nothing
+end
+```
+"""
+kw"__init__"
+
+"""
     baremodule
 
 `baremodule` declares a module that does not contain `using Base`
-or a definition of `eval`. It does still import `Core`.
+or a definition of [`eval`](@ref Base.eval). It does still import `Core`.
 """
 kw"baremodule"
 
@@ -129,10 +152,14 @@ kw"primitive type"
 """
     macro
 
-`macro` defines a method to include generated code in the final body of a program. A
-macro maps a tuple of arguments to a returned expression, and the resulting expression
-is compiled directly rather than requiring a runtime `eval` call. Macro arguments may
-include expressions, literal values, and symbols. For example:
+`macro` defines a method for inserting generated code into a program.
+A macro maps a sequence of argument expressions to a returned expression, and the
+resulting expression is substituted directly into the program at the point where
+the macro is invoked.
+Macros are a way to run generated code without calling [`eval`](@ref Base.eval), since the generated
+code instead simply becomes part of the surrounding program.
+Macro arguments may include expressions, literal values, and symbols. Macros can be defined for
+variable number of arguments (varargs), but do not accept keyword arguments.
 
 # Examples
 ```jldoctest
@@ -143,6 +170,14 @@ julia> macro sayhello(name)
 
 julia> @sayhello "Charlie"
 Hello, Charlie!
+
+julia> macro saylots(x...)
+           return :( println("Say: ", \$(x...)) )
+       end
+@saylots (macro with 1 method)
+
+julia> @saylots "hey " "there " "friend"
+Say: hey there friend
 ```
 """
 kw"macro"
@@ -198,6 +233,141 @@ julia> z
 kw"global"
 
 """
+    =
+
+`=` is the assignment operator.
+* For variable `a` and expression `b`, `a = b` makes `a` refer to the value of `b`.
+* For functions `f(x)`, `f(x) = x` defines a new function constant `f`, or adds a new method to `f` if `f` is already defined; this usage is equivalent to `function f(x); x; end`.
+* `a[i] = v` calls [`setindex!`](@ref)`(a,v,i)`.
+* `a.b = c` calls [`setproperty!`](@ref)`(a,:b,c)`.
+* Inside a function call, `f(a=b)` passes `b` as the value of keyword argument `a`.
+* Inside parentheses with commas, `(a=1,)` constructs a [`NamedTuple`](@ref).
+
+# Examples
+Assigning `a` to `b` does not create a copy of `b`; instead use [`copy`](@ref) or [`deepcopy`](@ref).
+
+```jldoctest
+julia> b = [1]; a = b; b[1] = 2; a
+1-element Array{Int64,1}:
+ 2
+
+julia> b = [1]; a = copy(b); b[1] = 2; a
+1-element Array{Int64,1}:
+ 1
+
+```
+Collections passed to functions are also not copied. Functions can modify (mutate) the contents of the objects their arguments refer to. (The names of functions which do this are conventionally suffixed with '!'.)
+```jldoctest
+julia> function f!(x); x[:] .+= 1; end
+f! (generic function with 1 method)
+
+julia> a = [1]; f!(a); a
+1-element Array{Int64,1}:
+ 2
+
+```
+Assignment can operate on multiple variables in parallel, taking values from an iterable:
+```jldoctest
+julia> a, b = 4, 5
+(4, 5)
+
+julia> a, b = 1:3
+1:3
+
+julia> a, b
+(1, 2)
+
+```
+Assignment can operate on multiple variables in series, and will return the value of the right-hand-most expression:
+```jldoctest
+julia> a = [1]; b = [2]; c = [3]; a = b = c
+1-element Array{Int64,1}:
+ 3
+
+julia> b[1] = 2; a, b, c
+([2], [2], [2])
+
+```
+Assignment at out-of-bounds indices does not grow a collection. If the collection is a [`Vector`](@ref) it can instead be grown with [`push!`](@ref) or [`append!`](@ref).
+```jldoctest
+julia> a = [1, 1]; a[3] = 2
+ERROR: BoundsError: attempt to access 2-element Array{Int64,1} at index [3]
+[...]
+
+julia> push!(a, 2, 3)
+4-element Array{Int64,1}:
+ 1
+ 1
+ 2
+ 3
+
+```
+Assigning `[]` does not eliminate elements from a collection; instead use [`filter!`](@ref).
+```jldoctest
+julia> a = collect(1:3); a[a .<= 1] = []
+ERROR: DimensionMismatch("tried to assign 0 elements to 1 destinations")
+[...]
+
+julia> filter!(x -> x > 1, a) # in-place & thus more efficient than a = a[a .> 1]
+2-element Array{Int64,1}:
+ 2
+ 3
+
+```
+"""
+kw"="
+
+"""
+    .=
+
+Perform broadcasted assignment. The right-side argument is expanded as in
+[`broadcast`](@ref) and then assigned into the left-side argument in-place.
+Fuses with other dotted operators in the same expression; i.e. the whole
+assignment expression is converted into a single loop.
+
+`A .= B` is similar to `broadcast!(identity, A, B)`.
+
+# Examples
+```jldoctest
+julia> A = zeros(4, 4); B = [1, 2, 3, 4];
+
+julia> A .= B
+4×4 Array{Float64,2}:
+ 1.0  1.0  1.0  1.0
+ 2.0  2.0  2.0  2.0
+ 3.0  3.0  3.0  3.0
+ 4.0  4.0  4.0  4.0
+
+julia> A
+4×4 Array{Float64,2}:
+ 1.0  1.0  1.0  1.0
+ 2.0  2.0  2.0  2.0
+ 3.0  3.0  3.0  3.0
+ 4.0  4.0  4.0  4.0
+```
+"""
+kw".="
+
+"""
+    .
+
+The dot operator is used to access fields or properties of objects and access
+variables defined inside modules.
+
+In general, `a.b` calls `getproperty(a, :b)` (see [`getproperty`](@ref Base.getproperty)).
+
+# Examples
+```jldoctest
+julia> z = 1 + 2im; z.im
+2
+
+julia> Iterators.product
+product (generic function with 1 method)
+```
+"""
+kw"."
+
+"""
     let
 
 `let` statements allocate new variable bindings each time they run. Whereas an
@@ -221,8 +391,8 @@ kw"let"
 """
     quote
 
-`quote` creates multiple expression objects in a block without using the explicit `Expr`
-constructor. For example:
+`quote` creates multiple expression objects in a block without using the explicit
+[`Expr`](@ref) constructor. For example:
 
 ```julia
 ex = quote
@@ -236,6 +406,85 @@ to the expression tree, which must be considered when directly manipulating the 
 For other purposes, `:( ... )` and `quote .. end` blocks are treated identically.
 """
 kw"quote"
+
+"""
+    {}
+
+Curly braces are used to specify [type parameters](@ref man-parametric-types).
+
+Type parameters allow a single type declaration to introduce a whole family of
+new types — one for each possible combination of parameter values. For example,
+the [`Set`](@ref) type describes many possible types of sets; it uses one type
+parameter to describe the type of the elements it contains. The specific _parameterized_
+types `Set{Float64}` and `Set{Int64}` describe two _concrete_ types: both are
+subtypes ([`<:`](@ref)) of `Set`, but the former has `Float64` elements and the latter
+has `Int64` elements.
+"""
+kw"{", kw"{}", kw"}"
+
+"""
+    []
+
+Square braces are used for [indexing](@ref man-array-indexing), [indexed assignment](@ref man-indexed-assignment),
+[array literals](@ref man-array-literals), and [array comprehensions](@ref man-comprehensions).
+"""
+kw"[", kw"[]", kw"]"
+
+"""
+    ()
+
+Parentheses are used to group expressions, call functions, and construct [tuples](@ref Tuple) and [named tuples](@ref NamedTuple).
+"""
+kw"(", kw"()", kw")"
+
+"""
+    #
+
+The number sign (or hash) character is used to begin a single-line comment.
+"""
+kw"#"
+
+"""
+    #= =#
+
+A multi-line comment begins with `#=` and ends with `=#`, and may be nested.
+"""
+kw"#=", kw"=#"
+
+"""
+    ;
+
+Semicolons are used as statement separators and mark the beginning of keyword arguments in function declarations or calls.
+"""
+kw";"
+
+"""
+    Expr(head::Symbol, args...)
+
+A type representing compound expressions in parsed julia code (ASTs).
+Each expression consists of a `head` `Symbol` identifying which kind of
+expression it is (e.g. a call, for loop, conditional statement, etc.),
+and subexpressions (e.g. the arguments of a call).
+The subexpressions are stored in a `Vector{Any}` field called `args`.
+
+See the manual chapter on [Metaprogramming](@ref) and the developer
+documentation [Julia ASTs](@ref).
+
+# Examples
+```jldoctest
+julia> Expr(:call, :+, 1, 2)
+:(1 + 2)
+
+julia> dump(:(a ? b : c))
+Expr
+  head: Symbol if
+  args: Array{Any}((3,))
+    1: Symbol a
+    2: Symbol b
+    3: Symbol c
+```
+"""
+Expr
 
 """
     '
@@ -256,6 +505,23 @@ julia> A'
 ```
 """
 kw"'"
+
+"""
+    \$
+
+Interpolation operator for interpolating into e.g. [strings](@ref string-interpolation)
+and [expressions](@ref man-expression-interpolation).
+
+# Examples
+```jldoctest
+julia> name = "Joe"
+"Joe"
+
+julia> "My name is \$name."
+"My name is Joe."
+```
+"""
+kw"$"
 
 """
     const
@@ -314,7 +580,9 @@ kw"function"
 """
     return
 
-`return` can be used in function bodies to exit early and return a given value, e.g.
+`return x` causes the enclosing function to exit early, passing the given value `x`
+back to its caller. `return` by itself with no value is equivalent to `return nothing`
+(see [`nothing`](@ref)).
 
 ```julia
 function compare(a, b)
@@ -340,12 +608,15 @@ function test2(xs)
     end
 end
 ```
-In the first example, the return breaks out of its enclosing function as soon as it hits
+In the first example, the return breaks out of `test1` as soon as it hits
 an even number, so `test1([5,6,7])` returns `12`.
 
 You might expect the second example to behave the same way, but in fact the `return`
 there only breaks out of the *inner* function (inside the `do` block) and gives a value
 back to `map`. `test2([5,6,7])` then returns `[5,12,7]`.
+
+When used in a top-level expression (i.e. outside any function), `return` causes
+the entire current top-level expression to terminate early.
 """
 kw"return"
 
@@ -376,7 +647,7 @@ kw"if", kw"elseif", kw"else"
 """
     for
 
-`for` loops repeatedly evaluate the body of the loop by
+`for` loops repeatedly evaluate a block of statements while
 iterating over a sequence of values.
 
 # Examples
@@ -394,8 +665,8 @@ kw"for"
 """
     while
 
-`while` loops repeatedly evaluate a conditional expression, and continues evaluating the
-body of the while loop so long as the expression remains `true`. If the condition
+`while` loops repeatedly evaluate a conditional expression, and continue evaluating the
+body of the while loop as long as the expression remains true. If the condition
 expression is false when the while loop is first reached, the body is never evaluated.
 
 # Examples
@@ -442,19 +713,35 @@ kw"end"
 """
     try/catch
 
-A `try`/`catch` statement allows for `Exception`s to be tested for. For example, a
-customized square root function can be written to automatically call either the real or
-complex square root method on demand using `Exception`s:
+A `try`/`catch` statement allows intercepting errors (exceptions) thrown
+by [`throw`](@ref) so that program execution can continue.
+For example, the following code attempts to write a file, but warns the user
+and proceeds instead of terminating execution if the file cannot be written:
 
 ```julia
-f(x) = try
-    sqrt(x)
+try
+    open("/danger", "w") do f
+        println(f, "Hello")
+    end
 catch
-    sqrt(complex(x, 0))
+    @warn "Could not write file."
 end
 ```
 
-`try`/`catch` statements also allow the `Exception` to be saved in a variable, e.g. `catch y`.
+or, when the file cannot be read into a variable:
+
+```julia
+lines = try
+    open("/danger", "r") do f
+        readlines(f)
+    end
+catch
+    @warn "File not found."
+end
+```
+
+The syntax `catch e` (where `e` is any variable) assigns the thrown
+exception object to the given variable within the `catch` block.
 
 The power of the `try`/`catch` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling functions.
@@ -530,7 +817,9 @@ kw"continue"
 """
     do
 
-Create an anonymous function. For example:
+Create an anonymous function and pass it as the first argument to
+a function call.
+For example:
 
 ```julia
 map(1:10) do x
@@ -618,11 +907,13 @@ kw"||"
 
 """
     ccall((function_name, library), returntype, (argtype1, ...), argvalue1, ...)
+    ccall(function_name, returntype, (argtype1, ...), argvalue1, ...)
     ccall(function_pointer, returntype, (argtype1, ...), argvalue1, ...)
 
 Call a function in a C-exported shared library, specified by the tuple `(function_name, library)`,
-where each component is either a string or symbol. Alternatively, `ccall` may
-also be used to call a function pointer `function_pointer`, such as one returned by `dlsym`.
+where each component is either a string or symbol. Instead of specifying a library,
+one can also use a `function_name` symbol or string, which is resolved in the current process.
+Alternatively, `ccall` may also be used to call a function pointer `function_pointer`, such as one returned by `dlsym`.
 
 Note that the argument type tuple must be a literal tuple, and not a tuple-valued
 variable or expression.
@@ -692,10 +983,10 @@ end
 Fields can have type restrictions, which may be parameterized:
 
 ```julia
-    struct Point{X}
-        x::X
-        y::Float64
-    end
+struct Point{X}
+    x::X
+    y::Float64
+end
 ```
 
 A struct can also declare an abstract super type via `<:` syntax:
@@ -730,7 +1021,8 @@ kw"mutable struct"
 
 Special function available to inner constructors which created a new object
 of the type.
-See the manual section on [Inner Constructor Methods](@ref) for more information.
+See the manual section on [Inner Constructor Methods](@ref man-inner-constructor-methods)
+for more information.
 """
 kw"new"
 
@@ -741,7 +1033,7 @@ The `where` keyword creates a type that is an iterated union of other types, ove
 values of some variable. For example `Vector{T} where T<:Real` includes all [`Vector`](@ref)s
 where the element type is some kind of `Real` number.
 
-The variable bound defaults to `Any` if it is omitted:
+The variable bound defaults to [`Any`](@ref) if it is omitted:
 
 ```julia
 Vector{T} where T    # short for `where T<:Any`
@@ -771,6 +1063,29 @@ using the syntax `T{p1, p2, ...}`.
 kw"where"
 
 """
+    var
+
+The syntax `var"#example#"` refers to a variable named `Symbol("#example#")`,
+even though `#example#` is not a valid Julia identifier name.
+
+This can be useful for interoperability with programming languages which have
+different rules for the construction of valid identifiers. For example, to
+refer to the `R` variable `draw.segments`, you can use `var"draw.segments"` in
+your Julia code.
+
+It is also used to `show` julia source code which has gone through macro
+hygiene or otherwise contains variable names which can't be parsed normally.
+
+Note that this syntax requires parser support so it is expanded directly by the
+parser rather than being implemented as a normal string macro `@var_str`.
+
+!!! compat "Julia 1.3"
+    This syntax requires at least Julia 1.3.
+
+"""
+kw"var\"name\"", kw"@var_str"
+
+"""
     ans
 
 A variable referring to the last computed value, automatically set at the interactive prompt.
@@ -781,7 +1096,7 @@ kw"ans"
     devnull
 
 Used in a stream redirect to discard all data written to it. Essentially equivalent to
-/dev/null on Unix or NUL on Windows. Usage:
+`/dev/null` on Unix or `NUL` on Windows. Usage:
 
 ```julia
 run(pipeline(`cat test.txt`, devnull))
@@ -809,7 +1124,7 @@ nothing
 """
     Core.TypeofBottom
 
-The singleton type containing only the value `Union{}`.
+The singleton type containing only the value `Union{}` (which represents the empty type).
 """
 Core.TypeofBottom
 
@@ -818,6 +1133,7 @@ Core.TypeofBottom
 
 Abstract type of all functions.
 
+# Examples
 ```jldoctest
 julia> isa(+, Function)
 true
@@ -843,7 +1159,7 @@ ReadOnlyMemoryError
 
 Generic error type. The error message, in the `.msg` field, may provide more specific details.
 
-# Example
+# Examples
 ```jldoctest
 julia> ex = ErrorException("I've done a bad thing");
 
@@ -866,6 +1182,22 @@ Core.WrappedException
     UndefRefError()
 
 The item or field is not defined for the given object.
+
+# Examples
+```jldoctest
+julia> struct MyType
+           a::Vector{Int}
+           MyType() = new()
+       end
+
+julia> A = MyType()
+MyType(#undef)
+
+julia> A.a
+ERROR: UndefRefError: access to undefined reference
+Stacktrace:
+[...]
+```
 """
 UndefRefError
 
@@ -955,7 +1287,7 @@ Cannot exactly convert `val` to type `T` in a method of function `name`.
 # Examples
 ```jldoctest
 julia> convert(Float64, 1+2im)
-ERROR: InexactError: Float64(Float64, 1 + 2im)
+ERROR: InexactError: Float64(1 + 2im)
 Stacktrace:
 [...]
 ```
@@ -1056,6 +1388,20 @@ UndefVarError
     UndefKeywordError(var::Symbol)
 
 The required keyword argument `var` was not assigned in a function call.
+
+# Examples
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+julia> function my_func(;my_arg)
+           return my_arg + 1
+       end
+my_func (generic function with 1 method)
+
+julia> my_func()
+ERROR: UndefKeywordError: keyword argument my_arg not assigned
+Stacktrace:
+ [1] my_func() at ./REPL[1]:2
+ [2] top-level scope at REPL[2]:1
+```
 """
 UndefKeywordError
 
@@ -1124,6 +1470,13 @@ This method allows invoking a method other than the most specific matching metho
 when the behavior of a more general definition is explicitly needed (often as part of the
 implementation of a more specific method of the same function).
 
+Be careful when using `invoke` for functions that you don't write.  What definition is used
+for given `argtypes` is an implementation detail unless the function is explicitly states
+that calling with certain `argtypes` is a part of public API.  For example, the change
+between `f1` and `f2` in the example below is usually considered compatible because the
+change is invisible by the caller with a normal (non-`invoke`) call.  However, the change is
+visible if you use `invoke`.
+
 # Examples
 ```jldoctest
 julia> f(x::Real) = x^2;
@@ -1132,6 +1485,25 @@ julia> f(x::Integer) = 1 + invoke(f, Tuple{Real}, x);
 
 julia> f(2)
 5
+
+julia> f1(::Integer) = Integer
+       f1(::Real) = Real;
+
+julia> f2(x::Real) = _f2(x)
+       _f2(::Integer) = Integer
+       _f2(_) = Real;
+
+julia> f1(1)
+Integer
+
+julia> f2(1)
+Integer
+
+julia> invoke(f1, Tuple{Real}, 1)
+Real
+
+julia> invoke(f2, Tuple{Real}, 1)
+Integer
 ```
 """
 invoke
@@ -1225,16 +1597,36 @@ Unsigned
 """
     Bool <: Integer
 
-Boolean type.
+Boolean type, containing the values `true` and `false`.
+
+`Bool` is a kind of number: `false` is numerically
+equal to `0` and `true` is numerically equal to `1`.
+Moreover, `false` acts as a multiplicative "strong zero":
+
+```jldoctest
+julia> false == 0
+true
+
+julia> true == 1
+true
+
+julia> 0 * NaN
+NaN
+
+julia> false * NaN
+0.0
+```
 """
 Bool
 
-for bit in (16, 32, 64)
+for (bit, sign, exp, frac) in ((16, 1, 5, 10), (32, 1, 8, 23), (64, 1, 11, 52))
     @eval begin
         """
             Float$($bit) <: AbstractFloat
 
-        $($bit)-bit floating point number type.
+        $($bit)-bit floating point number type (IEEE 754 standard).
+
+        Binary format: $($sign) sign, $($exp) exponent, $($frac) fraction bits.
         """
         $(Symbol("Float", bit))
     end
@@ -1259,9 +1651,40 @@ for bit in (8, 16, 32, 64, 128)
 end
 
 """
+    Symbol
+
+The type of object used to represent identifiers in parsed julia code (ASTs).
+Also often used as a name or label to identify an entity (e.g. as a dictionary key).
+`Symbol`s can be entered using the `:` quote operator:
+```jldoctest
+julia> :name
+:name
+
+julia> typeof(:name)
+Symbol
+
+julia> x = 42
+42
+
+julia> eval(:x)
+42
+```
+`Symbol`s can also be constructed from strings or other values by calling the
+constructor `Symbol(x...)`.
+
+`Symbol`s are immutable and should be compared using `===`.
+The implementation re-uses the same object for all `Symbol`s with the same name,
+so comparison tends to be efficient (it can just compare pointers).
+
+Unlike strings, `Symbol`s are "atomic" or "scalar" entities that do not support
+iteration over characters.
+"""
+Symbol
+
+"""
     Symbol(x...) -> Symbol
 
-Create a `Symbol` by concatenating the string representations of the arguments together.
+Create a [`Symbol`](@ref) by concatenating the string representations of the arguments together.
 
 # Examples
 ```jldoctest
@@ -1272,7 +1695,7 @@ julia> Symbol("day", 4)
 :day4
 ```
 """
-Symbol
+Symbol(x...)
 
 """
     tuple(xs...)
@@ -1282,16 +1705,17 @@ Construct a tuple of the given objects.
 # Examples
 ```jldoctest
 julia> tuple(1, 'a', pi)
-(1, 'a', π = 3.1415926535897...)
+(1, 'a', π)
 ```
 """
 tuple
 
 """
     getfield(value, name::Symbol)
+    getfield(value, i::Int)
 
-Extract a named field from a `value` of composite type.
-See also [`getproperty`](@ref Base.getproperty).
+Extract a field from a composite `value` by name or position.
+See also [`getproperty`](@ref Base.getproperty) and [`fieldnames`](@ref).
 
 # Examples
 ```jldoctest
@@ -1302,6 +1726,9 @@ julia> getfield(a, :num)
 1
 
 julia> a.num
+1
+
+julia> getfield(a, 1)
 1
 ```
 """
@@ -1331,7 +1758,7 @@ julia> a = 1//2
 1//2
 
 julia> setfield!(a, :num, 3);
-ERROR: type Rational is immutable
+ERROR: setfield! immutable struct of type Rational cannot be changed
 ```
 """
 setfield!
@@ -1361,8 +1788,12 @@ typeof
     isdefined(object, s::Symbol)
     isdefined(object, index::Int)
 
-Tests whether an assignable location is defined. The arguments can be a module and a symbol
+Tests whether a global variable or object field is defined. The arguments can be a module and a symbol
 or a composite object and field name (as a symbol) or index.
+
+To test whether an array element is defined, use [`isassigned`](@ref) instead.
+
+See also [`@isdefined`](@ref).
 
 # Examples
 ```jldoctest
@@ -1599,6 +2030,13 @@ julia> Array{Float64,1}(undef, 3)
 undef
 
 """
+    Ptr{T}()
+
+Creates a null pointer to type `T`.
+"""
+Ptr{T}()
+
+"""
     +(x, y...)
 
 Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`.
@@ -1722,7 +2160,7 @@ AssertionError
 """
     LoadError(file::AbstractString, line::Int, error)
 
-An error occurred while `include`ing, `require`ing, or [`using`](@ref) a file. The error specifics
+An error occurred while [`include`](@ref Base.include)ing, [`require`](@ref Base.require)ing, or [`using`](@ref) a file. The error specifics
 should be available in the `.error` field.
 """
 LoadError
@@ -1777,7 +2215,7 @@ julia> "Hello!" :: IntOrString
 "Hello!"
 
 julia> 1.0 :: IntOrString
-ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got Float64
+ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got a value of type Float64
 ```
 """
 Union
@@ -1811,7 +2249,7 @@ Outside of declarations `::` is used to assert that expressions and variables in
 # Examples
 ```jldoctest
 julia> (1+2)::AbstractFloat
-ERROR: TypeError: typeassert: expected AbstractFloat, got Int64
+ERROR: TypeError: typeassert: expected AbstractFloat, got a value of type Int64
 
 julia> (1+2)::Int
 3
@@ -1863,15 +2301,41 @@ See the manual section on [Tuple Types](@ref).
 Tuple
 
 """
-The base library of Julia.
+    NamedTuple{names}(args::Tuple)
+
+Construct a named tuple with the given `names` (a tuple of Symbols) from a tuple of values.
 """
-kw"Base"
+NamedTuple{names}(args::Tuple)
+
+"""
+    NamedTuple{names,T}(args::Tuple)
+
+Construct a named tuple with the given `names` (a tuple of Symbols) and field types `T`
+(a `Tuple` type) from a tuple of values.
+"""
+NamedTuple{names,T}(args::Tuple)
+
+"""
+    NamedTuple{names}(nt::NamedTuple)
+
+Construct a named tuple by selecting fields in `names` (a tuple of Symbols) from
+another named tuple.
+"""
+NamedTuple{names}(nt::NamedTuple)
 
 """
     typeassert(x, type)
 
-Throw a TypeError unless `x isa type`.
+Throw a [`TypeError`](@ref) unless `x isa type`.
 The syntax `x::type` calls this function.
+
+# Examples
+```jldoctest
+julia> typeassert(2.5, Int)
+ERROR: TypeError: in typeassert, expected Int64, got a value of type Float64
+Stacktrace:
+[...]
+```
 """
 typeassert
 
@@ -1879,6 +2343,32 @@ typeassert
     getproperty(value, name::Symbol)
 
 The syntax `a.b` calls `getproperty(a, :b)`.
+
+# Examples
+```jldoctest
+julia> struct MyType
+           x
+       end
+
+julia> function Base.getproperty(obj::MyType, sym::Symbol)
+           if sym === :special
+               return obj.x + 1
+           else # fallback to getfield
+               return getfield(obj, sym)
+           end
+       end
+
+julia> obj = MyType(1);
+
+julia> obj.special
+2
+
+julia> obj.x
+1
+```
+
+See also [`propertynames`](@ref Base.propertynames) and
+[`setproperty!`](@ref Base.setproperty!).
 """
 Base.getproperty
 
@@ -1886,6 +2376,9 @@ Base.getproperty
     setproperty!(value, name::Symbol, x)
 
 The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
+
+See also [`propertynames`](@ref Base.propertynames) and
+[`getproperty`](@ref Base.getproperty).
 """
 Base.setproperty!
 
@@ -1923,5 +2416,44 @@ StridedMatrix
 Union type of [`StridedVector`](@ref) and [`StridedMatrix`](@ref) with elements of type `T`.
 """
 StridedVecOrMat
+
+"""
+    Module
+
+A `Module` is a separate global variable workspace. See [`module`](@ref) and the [manual section about modules](@ref modules) for details.
+"""
+Module
+
+"""
+    Core
+
+`Core` is the module that contains all identifiers considered "built in" to the language, i.e. part of the core language and not libraries. Every module implicitly specifies `using Core`, since you can't do anything without those definitions.
+"""
+Core.Core
+
+"""
+    Main
+
+`Main` is the top-level module, and Julia starts with `Main` set as the current module.  Variables defined at the prompt go in `Main`, and `varinfo` lists variables in `Main`.
+```jldoctest
+julia> @__MODULE__
+Main
+```
+"""
+Main.Main
+
+"""
+    Base
+
+The base library of Julia. `Base` is a module that contains basic functionality (the contents of `base/`). All modules implicitly contain `using Base`, since this is needed in the vast majority of cases.
+"""
+Base.Base
+
+"""
+    QuoteNode
+
+A quoted piece of code, that does not support interpolation. See the [manual section about QuoteNodes](@ref man-quote-node) for details.
+"""
+QuoteNode
 
 end

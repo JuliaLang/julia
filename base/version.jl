@@ -1,13 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## semantic version numbers (http://semver.org)
+## semantic version numbers (https://semver.org/)
 
 const VInt = UInt32
 """
     VersionNumber
 
 Version number type which follow the specifications of
-[semantic versioning](http://semver.org), composed of major, minor
+[semantic versioning](https://semver.org/), composed of major, minor
 and patch numeric values, followed by pre-release and build
 alpha-numeric annotations. See also [`@v_str`](@ref).
 
@@ -211,26 +211,6 @@ nextpatch(v::VersionNumber) = v < thispatch(v) ? thispatch(v) : VersionNumber(v.
 nextminor(v::VersionNumber) = v < thisminor(v) ? thisminor(v) : VersionNumber(v.major, v.minor+1, 0)
 nextmajor(v::VersionNumber) = v < thismajor(v) ? thismajor(v) : VersionNumber(v.major+1, 0, 0)
 
-function check_new_version(existing::Vector{VersionNumber}, ver::VersionNumber)
-    @assert issorted(existing)
-    if isempty(existing)
-        for v in [v"0", v"0.0.1", v"0.1", v"1"]
-            lowerbound(v) <= ver <= v && return
-        end
-        error("$ver is not a valid initial version (try 0.0.0, 0.0.1, 0.1 or 1.0)")
-    end
-    idx = searchsortedlast(existing, ver)
-    prv = existing[idx]
-    ver == prv && error("version $ver already exists")
-    nxt = thismajor(ver) != thismajor(prv) ? nextmajor(prv) :
-          thisminor(ver) != thisminor(prv) ? nextminor(prv) : nextpatch(prv)
-    ver <= nxt || error("$ver skips over $nxt")
-    thispatch(ver) <= ver && return # regular or build release
-    idx < length(existing) && thispatch(existing[idx+1]) <= nxt &&
-        error("$ver is a pre-release of existing version $(existing[idx+1])")
-    return # acceptable new version
-end
-
 ## julia version info
 
 """
@@ -257,7 +237,13 @@ catch e
     VersionNumber(0)
 end
 
-const libllvm_version = VersionNumber(libllvm_version_string)
+const libllvm_version = if endswith(libllvm_version_string, "jl")
+    # strip the "jl" SONAME suffix (JuliaLang/julia#33058)
+    # (LLVM does never report a prerelease version anyway)
+    VersionNumber(libllvm_version_string[1:end-2])
+else
+    VersionNumber(libllvm_version_string)
+end
 
 function banner(io::IO = stdout)
     if GIT_VERSION_INFO.tagged_commit
