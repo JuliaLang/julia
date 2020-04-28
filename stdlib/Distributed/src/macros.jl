@@ -48,7 +48,7 @@ macro spawn(expr)
     var = esc(Base.sync_varname)
     quote
         local ref = spawn_somewhere($thunk)
-        if $(Expr(:isdefined, var))
+        if $(Expr(:islocal, var))
             push!($var, ref)
         end
         ref
@@ -93,7 +93,7 @@ macro spawnat(p, expr)
     end
     quote
         local ref = $spawncall
-        if $(Expr(:isdefined, var))
+        if $(Expr(:islocal, var))
             push!($var, ref)
         end
         ref
@@ -171,7 +171,7 @@ extract_imports(x) = extract_imports!(Any[], x)
 
 Execute an expression under `Main` on all `procs`.
 Errors on any of the processes are collected into a
-`CompositeException` and thrown. For example:
+[`CompositeException`](@ref) and thrown. For example:
 
     @everywhere bar = 1
 
@@ -209,9 +209,9 @@ end
 Execute an expression under module `m` on the processes
 specified in `procs`.
 Errors on any of the processes are collected into a
-`CompositeException` and thrown.
+[`CompositeException`](@ref) and thrown.
 
-See also `@everywhere`.
+See also [`@everywhere`](@ref).
 """
 function remotecall_eval(m::Module, procs, ex)
     @sync begin
@@ -241,13 +241,12 @@ function remotecall_eval(m::Module, pid::Int, ex)
 end
 
 
-# Statically split range [1,N] into equal sized chunks for np processors
-function splitrange(N::Int, np::Int)
-    each = div(N,np)
-    extras = rem(N,np)
+# Statically split range [firstIndex,lastIndex] into equal sized chunks for np processors
+function splitrange(firstIndex::Int, lastIndex::Int, np::Int)
+    each, extras = divrem(lastIndex-firstIndex+1, np)
     nchunks = each > 0 ? np : extras
     chunks = Vector{UnitRange{Int}}(undef, nchunks)
-    lo = 1
+    lo = firstIndex
     for i in 1:nchunks
         hi = lo + each - 1
         if extras > 0
@@ -261,8 +260,7 @@ function splitrange(N::Int, np::Int)
 end
 
 function preduce(reducer, f, R)
-    N = length(R)
-    chunks = splitrange(Int(N), nworkers())
+    chunks = splitrange(Int(firstindex(R)), Int(lastindex(R)), nworkers())
     all_w = workers()[1:length(chunks)]
 
     w_exec = Task[]
@@ -275,7 +273,7 @@ function preduce(reducer, f, R)
 end
 
 function pfor(f, R)
-    @async @sync for c in splitrange(length(R), nworkers())
+    @async @sync for c in splitrange(Int(firstindex(R)), Int(lastindex(R)), nworkers())
         @spawnat :any f(R, first(c), last(c))
     end
 end
@@ -346,7 +344,7 @@ macro distributed(args...)
         syncvar = esc(Base.sync_varname)
         return quote
             local ref = pfor($(make_pfor_body(var, body)), $(esc(r)))
-            if $(Expr(:isdefined, syncvar))
+            if $(Expr(:islocal, syncvar))
                 push!($syncvar, ref)
             end
             ref

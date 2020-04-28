@@ -19,23 +19,23 @@ if Sys.iswindows()
     end
 else # !windows
     struct RandomDevice <: AbstractRNG
-        file::IOStream
         unlimited::Bool
 
-        RandomDevice(; unlimited::Bool=true) =
-            new(open(unlimited ? "/dev/urandom" : "/dev/random"), unlimited)
+        RandomDevice(; unlimited::Bool=true) = new(unlimited)
     end
 
-    rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read( rd.file, sp[])
+    rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read(getfile(rd), sp[])
 
-    function serialize(s::AbstractSerializer, rd::RandomDevice)
-        Serialization.serialize_type(s, typeof(rd))
-        serialize(s, rd.unlimited)
+    function getfile(rd::RandomDevice)
+        devrandom = rd.unlimited ? DEV_URANDOM : DEV_RANDOM
+        # TODO: there is a data-race, this can leak up to nthreads() copies of the file descriptors,
+        # so use a "thread-once" utility once available
+        isassigned(devrandom) || (devrandom[] = open(rd.unlimited ? "/dev/urandom" : "/dev/random"))
+        devrandom[]
     end
-    function deserialize(s::AbstractSerializer, t::Type{RandomDevice})
-        unlimited = deserialize(s)
-        return RandomDevice(unlimited=unlimited)
-    end
+
+    const DEV_RANDOM  = Ref{IOStream}()
+    const DEV_URANDOM = Ref{IOStream}()
 
 end # os-test
 
@@ -43,12 +43,13 @@ end # os-test
 for T in (Bool, BitInteger_types...)
     if Sys.iswindows()
         @eval function rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T})
-            ccall((:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
-                  A, sizeof(A))
+            Base.windowserror("SystemFunction036 (RtlGenRandom)", 0 == ccall(
+                (:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
+                  A, sizeof(A)))
             A
         end
     else
-        @eval rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T}) = read!(rd.file, A)
+        @eval rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T}) = read!(getfile(rd), A)
     end
 end
 
@@ -295,7 +296,7 @@ seed!(seed::Union{Integer,Vector{UInt32}}) = seed!(default_rng(), seed)
 const THREAD_RNGs = MersenneTwister[]
 @inline default_rng() = default_rng(Threads.threadid())
 @noinline function default_rng(tid::Int)
-    @assert 0 < tid <= length(THREAD_RNGs)
+    0 < tid <= length(THREAD_RNGs) || _rng_length_assert()
     if @inbounds isassigned(THREAD_RNGs, tid)
         @inbounds MT = THREAD_RNGs[tid]
     else
@@ -304,6 +305,8 @@ const THREAD_RNGs = MersenneTwister[]
     end
     return MT
 end
+@noinline _rng_length_assert() =  @assert false "0 < tid <= length(THREAD_RNGs)"
+
 function __init__()
     resize!(empty!(THREAD_RNGs), Threads.nthreads()) # ensures that we didn't save a bad object
 end
@@ -313,6 +316,9 @@ struct _GLOBAL_RNG <: AbstractRNG
     global const GLOBAL_RNG = _GLOBAL_RNG.instance
 end
 
+# GLOBAL_RNG currently represents a MersenneTwister
+typeof_rng(::_GLOBAL_RNG) = MersenneTwister
+
 copy!(dst::MersenneTwister, ::_GLOBAL_RNG) = copy!(dst, default_rng())
 copy!(::_GLOBAL_RNG, src::MersenneTwister) = copy!(default_rng(), src)
 copy(::_GLOBAL_RNG) = copy(default_rng())
@@ -320,6 +326,7 @@ copy(::_GLOBAL_RNG) = copy(default_rng())
 seed!(::_GLOBAL_RNG, seed::Vector{UInt32}) = seed!(default_rng(), seed)
 seed!(::_GLOBAL_RNG, n::Integer) = seed!(default_rng(), n)
 seed!(::_GLOBAL_RNG, ::Nothing) = seed!(default_rng(), nothing)
+seed!(::_GLOBAL_RNG) = seed!(default_rng(), nothing)
 
 rng_native_52(::_GLOBAL_RNG) = rng_native_52(default_rng())
 rand(::_GLOBAL_RNG, sp::SamplerBoolBitInteger) = rand(default_rng(), sp)
@@ -597,7 +604,7 @@ end
 #### from a range
 
 for T in BitInteger_types, R=(1, Inf) # eval because of ambiguity otherwise
-    @eval Sampler(::Type{MersenneTwister}, r::UnitRange{$T}, ::Val{$R}) =
+    @eval Sampler(::Type{MersenneTwister}, r::AbstractUnitRange{$T}, ::Val{$R}) =
         SamplerRangeFast(r)
 end
 

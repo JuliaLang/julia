@@ -125,7 +125,7 @@ function (ss::SummarySize)(obj::Array)
             dsize += length(obj)
         end
         size += dsize
-        if !isbitstype(eltype(obj)) && !isempty(obj)
+        if !isempty(obj) && !Base.allocatedinline(eltype(obj))
             push!(ss.frontier_x, obj)
             push!(ss.frontier_i, 1)
         end

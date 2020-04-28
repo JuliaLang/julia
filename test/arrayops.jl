@@ -3,6 +3,9 @@
 # Array test
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
+
+isdefined(@__MODULE__, :T24Linear) || include("testhelpers/arrayindexingtypes.jl")
+
 using SparseArrays
 
 using Random, LinearAlgebra
@@ -463,6 +466,21 @@ end
     end
     @test_throws BoundsError insert!(v, 5, 5)
 end
+
+@testset "pop!(::Vector, i, [default])" begin
+    a = [1, 2, 3, 4]
+    @test_throws BoundsError pop!(a, 0)
+    @test pop!(a, 0, "default") == "default"
+    @test a == 1:4
+    @test_throws BoundsError pop!(a, 5)
+    @test pop!(a, 1) == 1
+    @test a == [2, 3, 4]
+    @test pop!(a, 2) == 3
+    @test a == [2, 4]
+    badpop() = @inbounds pop!([1], 2)
+    @test_throws BoundsError badpop()
+end
+
 @testset "concatenation" begin
     @test isequal([fill(1.,2,2)  fill(2.,2,1)], [1. 1 2; 1 1 2])
     @test isequal([fill(1.,2,2); fill(2.,1,2)], [1. 1; 1 1; 2 2])
@@ -676,6 +694,20 @@ end
 
     v = [1,2,3]
     @test permutedims(v) == [1 2 3]
+
+    x = PermutedDimsArray([1 2; 3 4], (2, 1))
+    @test size(x) == (2, 2)
+    @test copy(x) == [1 3; 2 4]
+    y = [0, 0, 0, 0]
+    copyto!(y, x)
+    @test y == [1, 2, 3, 4]
+
+    # similar, https://github.com/JuliaLang/julia/pull/35304
+    x = PermutedDimsArray([1 2; 3 4], (2, 1))
+    @test similar(x, 3,3) isa Array
+    z = TSlow([1 2; 3 4])
+    x_slow = PermutedDimsArray(z, (2, 1))
+    @test similar(x_slow, 3,3) isa TSlow
 end
 
 @testset "circshift" begin
@@ -919,6 +951,7 @@ end
                                         3 4], inner=(2,), outer=(2, 2))
     @test_throws ArgumentError repeat([1 2;
                                         3 4], inner=(2, 2), outer=(2,))
+    @test_throws ArgumentError repeat([1, 2], inner=(1, -1), outer=(1, -1))
 
     A = reshape(1:8, 2, 2, 2)
     R = repeat(A, inner = (1, 1, 2), outer = (1, 1, 1))
@@ -1335,6 +1368,7 @@ end
             @test a == [acopy[1:(first(idx)-1)]; repl; acopy[(last(idx)+1):end]]
         end
     end
+    @test splice!([4,3,2,1], [2, 4]) == [3, 1]
 end
 
 @testset "filter!" begin
@@ -1473,6 +1507,10 @@ end
     a = rand(5,3)
     @test reverse(reverse(a,dims=2),dims=2) == a
     @test_throws ArgumentError reverse(a,dims=3)
+    # reversed dimension is not a singleton
+    # a lower dimension is not a singleton
+    # eltype not allocated inline
+    @test reverse(["a" "b"; "c" "d"], dims = 2) == ["b" "a"; "d" "c"]
 end
 
 @testset "isdiag, istril, istriu" begin
@@ -2344,6 +2382,17 @@ end
     @test size(a) == size(b)
 end
 
+@testset "Converting size integers to ints" begin
+    @test size(Array{Float64}(undef, unsigned(2))) == (2,)
+    @test size(Array{Float64}(undef, unsigned(2), unsigned(3))) == (2, 3)
+    @test size(Array{Float64}(undef, unsigned(2), unsigned(3), unsigned(4))) == (2, 3, 4)
+    @test size(Array{Float64}(undef, unsigned(2), unsigned(3), unsigned(4), unsigned(5))) == (2, 3, 4, 5)
+    # with number of dimensions
+    @test size(Array{Float64, 3}(undef, unsigned(2), unsigned(3), unsigned(4))) == (2, 3, 4)
+    # unsplatted
+    @test size(Array{Float64}(undef, (unsigned(2), unsigned(3), unsigned(4)))) == (2, 3, 4)
+end
+
 @testset "type constructor Array{T, N}(nothing, d...) works (especially for N>3)" for T in (Int, String),
                                                                                       U in (Nothing, Missing)
     a = Array{Union{T, U}}(U(), 10)
@@ -2648,5 +2697,62 @@ end
 # Fix oneunit bug for unitful arrays
 @test oneunit([Second(1) Second(2); Second(3) Second(4)]) == [Second(1) Second(0); Second(0) Second(1)]
 
+@testset "indexing by CartesianIndices" begin
+    A = rand(10,10)
+    for (I,Rs) in ((keys(A), (1:10, 1:10)),
+                   (CartesianIndex(2,2):CartesianIndex(9,9), (2:9, 2:9)),
+                   (CartesianIndex(5,3):CartesianIndex(6,7), (5:6, 3:7)))
+        @test A[I] == A[Rs...] == @view(A[I]) == @view(A[Rs...])
+        @test @view(A[I]) isa StridedArray
+        @test !checkbounds(Bool, [], I)
+        @test !checkbounds(Bool, fill(2,1,1,1), :, I)
+        @test !checkbounds(Bool, fill(2,1,1,1), I, :)
+    end
+    @test !checkbounds(Bool, rand(3,3,3), :, CartesianIndex(0,0):CartesianIndex(1,1))
+    @test !checkbounds(Bool, rand(3,3,3), CartesianIndex(0,0):CartesianIndex(1,1), :)
+
+    CI0 = CartesianIndices(())
+    # 0-dimensional
+    @test setindex!(fill(0.0), fill(1.0), CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), CI0, CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), :, CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), CI0, :) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), :, CI0, CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), CI0, :, CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), CI0, CI0, :) == fill(1.0)
+    @test setindex!(fill(fill(0.0)), fill(fill(1.0)), CI0) == fill(fill(1.0))
+    # 1-dimensional
+    @test setindex!(zeros(2), ones(2), :, CI0) == ones(2)
+    @test setindex!(zeros(2), ones(2), CI0, :) == ones(2)
+    @test setindex!(zeros(2), ones(2), :, CI0, CI0) == ones(2)
+    @test setindex!(zeros(2), ones(2), CI0, :, CI0) == ones(2)
+    @test setindex!(zeros(2), ones(2), CI0, CI0, :) == ones(2)
+    @test setindex!([fill(0.0)], fill(1.0), 1) == [fill(1.0)]
+    # 0-dimensional assigment into ≥1-dimensional arrays
+    @test setindex!(zeros(2), fill(1.0), 1, CI0) == [1.0, 0.0]
+    @test setindex!(zeros(2), fill(1.0), CI0, 1) == [1.0, 0.0]
+    @test setindex!(zeros(2,2), fill(1.0), 1, 1, CI0) == [1.0 0.0; 0.0 0.0]
+    @test setindex!(zeros(2,2), fill(1.0), 1, CI0, 1) == [1.0 0.0; 0.0 0.0]
+    @test setindex!(zeros(2,2), fill(1.0), CI0, 1, 1) == [1.0 0.0; 0.0 0.0]
+end
+
 # Throws ArgumentError for negative dimensions in Array
 @test_throws ArgumentError fill('a', -10)
+
+@testset "Issue 33919" begin
+    A = Array[rand(2, 3), rand(3, 1)]
+    B = Array[rand(2, 2), rand(1, 4)]
+    C = hcat(A, B)
+    @test typeof(C) == Array{Array{Float64,2},2}
+end
+
+# issue #33974
+let n = 12000000, k = 257000000
+    # tests skipped since they use a lot of memory
+    @test_skip filter(x -> x[2] < 1.0, collect(enumerate(vcat(fill(0.5, n), fill(NaN, k)))))[end] == (n, 0.5)
+    @test_skip let v = collect(enumerate(vcat(fill(0.5, n), fill(NaN, k))))
+        resize!(v, n)
+        sizehint!(v, n)
+        v[end] == (n, 0.5)
+    end
+end

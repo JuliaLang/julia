@@ -19,25 +19,49 @@ abstract type IndexStyle end
 Subtype of [`IndexStyle`](@ref) used to describe arrays which
 are optimally indexed by one linear index.
 
-A linear indexing style uses one integer to describe the position in the array
+A linear indexing style uses one integer index to describe the position in the array
 (even if it's a multidimensional array) and column-major
-ordering is used to access the elements. For example,
-if `A` were a `(2, 3)` custom matrix type with linear indexing,
-and we referenced `A[5]` (using linear style), this would
-be equivalent to referencing `A[1, 3]` (since `2*1 + 3 = 5`).
+ordering is used to efficiently access the elements. This means that
+requesting [`eachindex`](@ref) from an array that is `IndexLinear` will return
+a simple one-dimensional range, even if it is multidimensional.
+
+A custom array that reports its `IndexStyle` as `IndexLinear` only needs
+to implement indexing (and indexed assignment) with a single `Int` index;
+all other indexing expressions — including multidimensional accesses — will
+be recomputed to the linear index.  For example, if `A` were a `2×3` custom
+matrix with linear indexing, and we referenced `A[1, 3]`, this would be
+recomputed to the equivalent linear index and call `A[5]` since `2*1 + 3 = 5`.
+
 See also [`IndexCartesian`](@ref).
 """
 struct IndexLinear <: IndexStyle end
+
 """
     IndexCartesian()
 
 Subtype of [`IndexStyle`](@ref) used to describe arrays which
-are optimally indexed by a Cartesian index.
+are optimally indexed by a Cartesian index. This is the default
+for new custom [`AbstractArray`](@ref) subtypes.
 
-A cartesian indexing style uses multiple integers/indices to describe the position in the array.
-For example, if `A` were a `(2, 3, 4)` custom matrix type with cartesian indexing,
-we could reference `A[2, 1, 3]` and Julia would automatically convert this into the
-correct location in the underlying memory. See also [`IndexLinear`](@ref).
+A Cartesian indexing style uses multiple integer indices to describe the position in
+a multidimensional array, with exactly one index per dimension. This means that
+requesting [`eachindex`](@ref) from an array that is `IndexCartesian` will return
+a range of [`CartesianIndices`](@ref).
+
+A `N`-dimensional custom array that reports its `IndexStyle` as `IndexCartesian` needs
+to implement indexing (and indexed assignment) with exactly `N` `Int` indices;
+all other indexing expressions — including linear indexing — will
+be recomputed to the equivalent Cartesian location.  For example, if `A` were a `2×3` custom
+matrix with cartesian indexing, and we referenced `A[5]`, this would be
+recomputed to the equivalent Cartesian index and call `A[1, 3]` since `5 = 2*1 + 3`.
+
+It is significantly more expensive to compute Cartesian indices from a linear index than it is
+to go the other way.  The former operation requires division — a very costly operation — whereas
+the latter only uses multiplication and addition and is essentially free. This asymmetry means it
+is far more costly to use linear indexing with an `IndexCartesian` array than it is to use
+Cartesian indexing with an `IndexLinear` array.
+
+See also [`IndexLinear`](@ref).
 """
 struct IndexCartesian <: IndexStyle end
 
@@ -48,7 +72,7 @@ struct IndexCartesian <: IndexStyle end
 `IndexStyle` specifies the "native indexing style" for array `A`. When
 you define a new [`AbstractArray`](@ref) type, you can choose to implement
 either linear indexing (with [`IndexLinear`](@ref)) or cartesian indexing.
-If you decide to implement linear indexing, then you must set this trait for your array
+If you decide to only implement linear indexing, then you must set this trait for your array
 type:
 
     Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
@@ -56,7 +80,7 @@ type:
 The default is [`IndexCartesian()`](@ref).
 
 Julia's internal indexing machinery will automatically (and invisibly)
-convert all indexing operations into the preferred style. This allows users
+recompute all indexing operations into the preferred style. This allows users
 to access elements of your array using any indexing style, even when explicit
 methods have not been provided.
 
@@ -84,14 +108,14 @@ promote_shape(::Tuple{}, ::Tuple{}) = ()
 
 function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
     if a[1] != b[1]
-        throw(DimensionMismatch("dimensions must match"))
+        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
     end
     return a
 end
 
 function promote_shape(a::Tuple{Int,Int}, b::Tuple{Int,})
     if a[1] != b[1] || a[2] != 1
-        throw(DimensionMismatch("dimensions must match"))
+        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
     end
     return a
 end
@@ -100,7 +124,7 @@ promote_shape(a::Tuple{Int,}, b::Tuple{Int,Int}) = promote_shape(b, a)
 
 function promote_shape(a::Tuple{Int, Int}, b::Tuple{Int, Int})
     if a[1] != b[1] || a[2] != b[2]
-        throw(DimensionMismatch("dimensions must match"))
+        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
     end
     return a
 end
@@ -130,12 +154,12 @@ function promote_shape(a::Dims, b::Dims)
     end
     for i=1:length(b)
         if a[i] != b[i]
-            throw(DimensionMismatch("dimensions must match"))
+            throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b, mismatch at $i"))
         end
     end
     for i=length(b)+1:length(a)
         if a[i] != 1
-            throw(DimensionMismatch("dimensions must match"))
+            throw(DimensionMismatch("dimensions must match: a has dims $a, must have singleton at dim $i"))
         end
     end
     return a
@@ -151,12 +175,12 @@ function promote_shape(a::Indices, b::Indices)
     end
     for i=1:length(b)
         if a[i] != b[i]
-            throw(DimensionMismatch("dimensions must match"))
+            throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b, mismatch at $i"))
         end
     end
     for i=length(b)+1:length(a)
         if a[i] != 1:1
-            throw(DimensionMismatch("dimensions must match"))
+            throw(DimensionMismatch("dimensions must match: a has dims $a, must have singleton at dim $i"))
         end
     end
     return a

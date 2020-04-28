@@ -18,7 +18,7 @@ Optionally generate an array of normally-distributed random numbers.
 The `Base` module currently provides an implementation for the types
 [`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default), and their
 [`Complex`](@ref) counterparts. When the type argument is complex, the values are drawn
-from the circularly symmetric complex normal distribution.
+from the circularly symmetric complex normal distribution of variance 1 (corresponding to real and imaginary part having independent normal distribution with mean zero and variance `1/2`).
 
 # Examples
 ```jldoctest
@@ -35,9 +35,11 @@ julia> randn(rng, ComplexF32, (2, 3))
   0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im
 ```
 """
-@inline function randn(rng::AbstractRNG=default_rng())
+@inline randn(rng::AbstractRNG=default_rng()) = _randn(rng, rand(rng, UInt52Raw()))
+
+@inline function _randn(rng::AbstractRNG, r::UInt64)
     @inbounds begin
-        r = rand(rng, UInt52())
+        r &= 0x000fffffffffffff
         rabs = Int64(r>>1) # One bit for the sign
         idx = rabs & 0xFF
         x = ifelse(r % Bool, -rabs, rabs)*wi[idx+1]
@@ -95,9 +97,11 @@ julia> randexp(rng, 3, 3)
  0.695867  0.693292  0.643644
 ```
 """
-function randexp(rng::AbstractRNG=default_rng())
+randexp(rng::AbstractRNG=default_rng()) = _randexp(rng, rand(rng, UInt52Raw()))
+
+function _randexp(rng::AbstractRNG, ri::UInt64)
     @inbounds begin
-        ri = rand(rng, UInt52())
+        ri &= 0x000fffffffffffff
         idx = ri & 0xFF
         x = ri*we[idx+1]
         ri < ke[idx+1] && return x # 98.9% of the time we return here 1st try
@@ -162,6 +166,7 @@ function randexp! end
 
 for randfun in [:randn, :randexp]
     randfun! = Symbol(randfun, :!)
+    _randfun = Symbol(:_, randfun)
     @eval begin
         # scalars
         $randfun(rng::AbstractRNG, T::BitFloatType) = convert(T, $randfun(rng))
@@ -171,6 +176,21 @@ for randfun in [:randn, :randexp]
         function $randfun!(rng::AbstractRNG, A::AbstractArray{T}) where T
             for i in eachindex(A)
                 @inbounds A[i] = $randfun(rng, T)
+            end
+            A
+        end
+
+        # optimization for MersenneTwister, which randomizes natively Array{Float64}
+        function $randfun!(rng::MersenneTwister, A::Array{Float64})
+            if length(A) < 13
+                for i in eachindex(A)
+                    @inbounds A[i] = $randfun(rng, Float64)
+                end
+            else
+                rand!(rng, A, CloseOpen12())
+                for i in eachindex(A)
+                    @inbounds A[i] = $_randfun(rng, reinterpret(UInt64, A[i]))
+                end
             end
             A
         end

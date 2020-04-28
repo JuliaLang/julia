@@ -4,7 +4,7 @@ module TestSymmetric
 
 using Test, LinearAlgebra, SparseArrays, Random
 
-Random.seed!(101)
+Random.seed!(1010)
 
 @testset "Pauli σ-matrices: $σ" for σ in map(Hermitian,
         Any[ [1 0; 0 1], [0 1; 1 0], [0 -im; im 0], [1 0; 0 -1] ])
@@ -365,6 +365,52 @@ end
                 @test Symmetric(asym)\b  ≈ asym\b
             end
         end
+        @testset "generalized dot product" begin
+            for uplo in (:U, :L)
+                @test dot(x, Hermitian(aherm, uplo), y) ≈ dot(x, Hermitian(aherm, uplo)*y) ≈ dot(x, Matrix(Hermitian(aherm, uplo)), y)
+                @test dot(x, Hermitian(aherm, uplo), x) ≈ dot(x, Hermitian(aherm, uplo)*x) ≈ dot(x, Matrix(Hermitian(aherm, uplo)), x)
+            end
+            if eltya <: Real
+                for uplo in (:U, :L)
+                    @test dot(x, Symmetric(aherm, uplo), y) ≈ dot(x, Symmetric(aherm, uplo)*y) ≈ dot(x, Matrix(Symmetric(aherm, uplo)), y)
+                    @test dot(x, Symmetric(aherm, uplo), x) ≈ dot(x, Symmetric(aherm, uplo)*x) ≈ dot(x, Matrix(Symmetric(aherm, uplo)), x)
+                end
+            end
+        end
+
+        @testset "dot product of symmetric and Hermitian matrices" begin
+            for mtype in (Symmetric, Hermitian)
+                symau = mtype(a, :U)
+                symal = mtype(a, :L)
+                msymau = Matrix(symau)
+                msymal = Matrix(symal)
+                @test_throws DimensionMismatch dot(symau, mtype(zeros(eltya, n-1, n-1)))
+                for eltyc in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
+                    creal = randn(n, n)/2
+                    cimag = randn(n, n)/2
+                    c = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(creal, cimag) : creal)
+                    symcu = mtype(c, :U)
+                    symcl = mtype(c, :L)
+                    msymcu = Matrix(symcu)
+                    msymcl = Matrix(symcl)
+                    @test dot(symau, symcu) ≈ dot(msymau, msymcu)
+                    @test dot(symau, symcl) ≈ dot(msymau, msymcl)
+                    @test dot(symal, symcu) ≈ dot(msymal, msymcu)
+                    @test dot(symal, symcl) ≈ dot(msymal, msymcl)
+                end
+
+                # block matrices
+                blockm = [eltya == Int ? rand(1:7, 3, 3) : convert(Matrix{eltya}, eltya <: Complex ? complex.(randn(3, 3)/2, randn(3, 3)/2) : randn(3, 3)/2) for _ in 1:3, _ in 1:3]
+                symblockmu = mtype(blockm, :U)
+                symblockml = mtype(blockm, :L)
+                msymblockmu = Matrix(symblockmu)
+                msymblockml = Matrix(symblockml)
+                @test dot(symblockmu, symblockmu) ≈ dot(msymblockmu, msymblockmu)
+                @test dot(symblockmu, symblockml) ≈ dot(msymblockmu, msymblockml)
+                @test dot(symblockml, symblockmu) ≈ dot(msymblockml, msymblockmu)
+                @test dot(symblockml, symblockml) ≈ dot(msymblockml, msymblockml)
+            end
+        end
     end
 end
 
@@ -435,6 +481,9 @@ end
         W[1,1] = 4
         @test W == T([4 -1; -1 1])
         @test_throws ArgumentError (W[1,2] = 2)
+        if T == Hermitian
+            @test_throws ArgumentError (W[2,2] = 3+4im)
+        end
 
         @test Y + I == T([2 -1; -1 2])
         @test Y - I == T([0 -1; -1 0])
@@ -596,6 +645,15 @@ end
     @test_throws ArgumentError Symmetric(B) == Symmetric(Matrix(B))
     A[1,1] = 1; A[2,2] = 4
     @test Symmetric(B) == Symmetric(Matrix(B))
+end
+
+@testset "issue #32079: det for singular Symmetric matrix" begin
+    A = ones(Float64, 3, 3)
+    @test det(Symmetric(A))::Float64 == det(A) == 0.0
+    @test det(Hermitian(A))::Float64 == det(A) == 0.0
+    A = ones(ComplexF64, 3, 3)
+    @test det(Symmetric(A))::ComplexF64 == det(A) == 0.0
+    @test det(Hermitian(A))::Float64 == det(A) == 0.0
 end
 
 @testset "symmetric()/hermitian() for Numbers" begin

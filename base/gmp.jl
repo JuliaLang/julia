@@ -5,12 +5,12 @@ module GMP
 export BigInt
 
 import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
-             binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
+             binomial, cmp, convert, div, divrem, factorial, cld, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             hastypemax
+             sign, hastypemax
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -76,6 +76,9 @@ julia> parse(BigInt, "42")
 
 julia> big"313"
 313
+
+julia> BigInt(10)^19
+10000000000000000000
 ```
 """
 BigInt(x)
@@ -146,7 +149,8 @@ sizeinbase(a::BigInt, b) = Int(ccall((:__gmpz_sizeinbase, :libgmp), Csize_t, (mp
 
 for (op, nbits) in (:add => :(BITS_PER_LIMB*(1 + max(abs(a.size), abs(b.size)))),
                     :sub => :(BITS_PER_LIMB*(1 + max(abs(a.size), abs(b.size)))),
-                    :mul => 0, :fdiv_q => 0, :tdiv_q => 0, :fdiv_r => 0, :tdiv_r => 0,
+                    :mul => 0, :fdiv_q => 0, :tdiv_q => 0, :cdiv_q => 0,
+                    :fdiv_r => 0, :tdiv_r => 0, :cdiv_r => 0,
                     :gcd => 0, :lcm => 0, :and => 0, :ior => 0, :xor => 0)
     op! = Symbol(op, :!)
     @eval begin
@@ -187,7 +191,7 @@ for op in (:neg, :com, :sqrt, :set)
         $op!(x::BigInt, a::BigInt) = (ccall($(gmpz(op)), Cvoid, (mpz_t, mpz_t), x, a); x)
         $op(a::BigInt) = $op!(BigInt(), a)
     end
-    op == :set && continue # MPZ.set!(x) would make no sense
+    op === :set && continue # MPZ.set!(x) would make no sense
     @eval $op!(x::BigInt) = $op!(x, x)
 end
 
@@ -465,13 +469,24 @@ big(n::Integer) = convert(BigInt, n)
 
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
-                 (:fld, :fdiv_q), (:div, :tdiv_q), (:mod, :fdiv_r), (:rem, :tdiv_r),
+                 (:mod, :fdiv_r), (:rem, :tdiv_r),
                  (:gcd, :gcd), (:lcm, :lcm),
                  (:&, :and), (:|, :ior), (:xor, :xor))
     @eval begin
         ($fJ)(x::BigInt, y::BigInt) = MPZ.$fC(x, y)
     end
 end
+
+for (r, f) in ((RoundToZero, :tdiv_q),
+               (RoundDown, :fdiv_q),
+               (RoundUp, :cdiv_q))
+    @eval div(x::BigInt, y::BigInt, ::typeof($r)) = MPZ.$f(x, y)
+end
+
+# For compat only. Remove in 2.0.
+div(x::BigInt, y::BigInt) = div(x, y, RoundToZero)
+fld(x::BigInt, y::BigInt) = div(x, y, RoundDown)
+cld(x::BigInt, y::BigInt) = div(x, y, RoundUp)
 
 /(x::BigInt, y::BigInt) = float(x)/float(y)
 
@@ -653,6 +668,11 @@ flipsign!(x::BigInt, y::Integer) = (signbit(y) && (x.size = -x.size); x)
 flipsign( x::BigInt, y::Integer) = signbit(y) ? -x : x
 flipsign( x::BigInt, y::BigInt)  = signbit(y) ? -x : x
 # above method to resolving ambiguities with flipsign(::T, ::T) where T<:Signed
+function sign(x::BigInt)
+    isneg(x) && return -one(x)
+    ispos(x) && return one(x)
+    return x
+end
 
 show(io::IO, x::BigInt) = print(io, string(x))
 

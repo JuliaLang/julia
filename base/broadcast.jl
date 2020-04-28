@@ -270,8 +270,13 @@ of the `Broadcasted` object empty (populated with [`nothing`](@ref)).
     end
     return Broadcasted{Style}(bc.f, bc.args, axes)
 end
-instantiate(bc::Broadcasted{<:Union{AbstractArrayStyle{0}, Style{Tuple}}}) = bc
-
+instantiate(bc::Broadcasted{<:AbstractArrayStyle{0}}) = bc
+# Tuples don't need axes, but when they have axes (for .= assignment), we need to check them (#33020)
+instantiate(bc::Broadcasted{Style{Tuple}, Nothing}) = bc
+function instantiate(bc::Broadcasted{Style{Tuple}})
+    check_broadcast_axes(bc.axes, bc.args...)
+    return bc
+end
 ## Flattening
 
 """
@@ -476,6 +481,7 @@ julia> Broadcast.combine_axes(1, 1, 1)
 ```
 """
 @inline combine_axes(A, B...) = broadcast_shape(axes(A), combine_axes(B...))
+@inline combine_axes(A, B) = broadcast_shape(axes(A), axes(B))
 combine_axes(A) = axes(A)
 
 # shape (i.e., tuple-of-indices) inputs
@@ -501,6 +507,7 @@ _bcsm(a::Number, b::Number) = a == b || b == 1
 # (We may not want to define general promotion rules between, say, OneTo and Slice, but if
 #  we get here we know the axes are at least consistent for the purposes of broadcasting)
 axistype(a::T, b::T) where T = a
+axistype(a::OneTo, b::OneTo) = OneTo{Int}(a)
 axistype(a, b) = UnitRange{Int}(a)
 
 ## Check that all arguments are broadcast compatible with shape
@@ -513,7 +520,7 @@ function check_broadcast_shape(shp, Ashp::Tuple)
     _bcsm(shp[1], Ashp[1]) || throw(DimensionMismatch("array could not be broadcast to match destination"))
     check_broadcast_shape(tail(shp), tail(Ashp))
 end
-check_broadcast_axes(shp, A) = check_broadcast_shape(shp, axes(A))
+@inline check_broadcast_axes(shp, A) = check_broadcast_shape(shp, axes(A))
 # comparing many inputs
 @inline function check_broadcast_axes(shp, A, As...)
     check_broadcast_axes(shp, A)
@@ -560,7 +567,7 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 @inline function _newindexer(indsA::Tuple)
     ind1 = indsA[1]
     keep, Idefault = _newindexer(tail(indsA))
-    (Base.length(ind1)!=1, keep...), (first(ind1), Idefault...)
+    (Base.length(ind1)::Integer != 1, keep...), (first(ind1), Idefault...)
 end
 
 @inline function Base.getindex(bc::Broadcasted, I::Union{Integer,CartesianIndex})
@@ -814,13 +821,13 @@ Like [`broadcast`](@ref), except in the case of a 0-dimensional result where it 
 Broadcast automatically unwraps zero-dimensional results to be just the element itself,
 but in some cases it is necessary to always return a container — even in the 0-dimensional case.
 """
-function broadcast_preserving_zero_d(f, As...)
+@inline function broadcast_preserving_zero_d(f, As...)
     bc = broadcasted(f, As...)
     r = materialize(bc)
     return length(axes(bc)) == 0 ? fill!(similar(bc, typeof(r)), r) : r
 end
-broadcast_preserving_zero_d(f) = fill(f())
-broadcast_preserving_zero_d(f, as::Number...) = fill(f(as...))
+@inline broadcast_preserving_zero_d(f) = fill(f())
+@inline broadcast_preserving_zero_d(f, as::Number...) = fill(f(as...))
 
 """
     Broadcast.materialize(bc)
@@ -927,22 +934,22 @@ end
 @inline function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
     ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
+    length(dest) < 256 && return invoke(copyto!, Tuple{AbstractArray, Broadcasted{Nothing}}, dest, bc)
     tmp = Vector{Bool}(undef, bitcache_size)
     destc = dest.chunks
-    ind = cind = 1
+    cind = 1
     bc′ = preprocess(dest, bc)
-    @simd for I in eachindex(bc′)
-        @inbounds tmp[ind] = bc′[I]
-        ind += 1
-        if ind > bitcache_size
-            dumpbitcache(destc, cind, tmp)
-            cind += bitcache_chunks
-            ind = 1
+    for P in Iterators.partition(eachindex(bc′), bitcache_size)
+        ind = 1
+        @simd for I in P
+            @inbounds tmp[ind] = bc′[I]
+            ind += 1
         end
-    end
-    if ind > 1
-        @inbounds tmp[ind:bitcache_size] .= false
+        @simd for i in ind:bitcache_size
+            @inbounds tmp[i] = false
+        end
         dumpbitcache(destc, cind, tmp)
+        cind += bitcache_chunks
     end
     return dest
 end
@@ -1155,12 +1162,12 @@ Base.@propagate_inbounds dotview(args...) = Base.maybeview(args...)
 dottable(x) = false # avoid dotting spliced objects (e.g. view calls inserted by @view)
 # don't add dots to dot operators
 dottable(x::Symbol) = (!isoperator(x) || first(string(x)) != '.' || x === :..) && x !== :(:)
-dottable(x::Expr) = x.head != :$
+dottable(x::Expr) = x.head !== :$
 undot(x) = x
 function undot(x::Expr)
-    if x.head == :.=
+    if x.head === :.=
         Expr(:(=), x.args...)
-    elseif x.head == :block # occurs in for x=..., y=...
+    elseif x.head === :block # occurs in for x=..., y=...
         Expr(:block, map(undot, x.args)...)
     else
         x
@@ -1169,22 +1176,22 @@ end
 __dot__(x) = x
 function __dot__(x::Expr)
     dotargs = map(__dot__, x.args)
-    if x.head == :call && dottable(x.args[1])
+    if x.head === :call && dottable(x.args[1])
         Expr(:., dotargs[1], Expr(:tuple, dotargs[2:end]...))
-    elseif x.head == :comparison
+    elseif x.head === :comparison
         Expr(:comparison, (iseven(i) && dottable(arg) && arg isa Symbol && isoperator(arg) ?
                                Symbol('.', arg) : arg for (i, arg) in pairs(dotargs))...)
-    elseif x.head == :$
+    elseif x.head === :$
         x.args[1]
-    elseif x.head == :let # don't add dots to `let x=...` assignments
+    elseif x.head === :let # don't add dots to `let x=...` assignments
         Expr(:let, undot(dotargs[1]), dotargs[2])
-    elseif x.head == :for # don't add dots to for x=... assignments
+    elseif x.head === :for # don't add dots to for x=... assignments
         Expr(:for, undot(dotargs[1]), dotargs[2])
-    elseif (x.head == :(=) || x.head == :function || x.head == :macro) &&
+    elseif (x.head === :(=) || x.head === :function || x.head === :macro) &&
            Meta.isexpr(x.args[1], :call) # function or macro definition
         Expr(x.head, x.args[1], dotargs[2])
     else
-        if x.head == :&& || x.head == :||
+        if x.head === :&& || x.head === :||
             error("""
                 Using `&&` and `||` is disallowed in `@.` expressions.
                 Use `&` or `|` for elementwise logical operations.

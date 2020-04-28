@@ -39,31 +39,116 @@ mul_prod(x::Real, y::Real)::Real = x * y
 
 ## foldl && mapfoldl
 
-function mapfoldl_impl(f, op, nt::NamedTuple{(:init,)}, itr, i...)
-    init = nt.init
+function mapfoldl_impl(f::F, op::OP, nt, itr) where {F,OP}
+    op′, itr′ = _xfadjoint(BottomRF(op), Generator(f, itr))
+    return foldl_impl(op′, nt, itr′)
+end
+
+function foldl_impl(op::OP, nt, itr) where {OP}
+    v = _foldl_impl(op, get(nt, :init, _InitialValue()), itr)
+    v isa _InitialValue && return reduce_empty_iter(op, itr)
+    return v
+end
+
+function _foldl_impl(op::OP, init, itr) where {OP}
     # Unroll the while loop once; if init is known, the call to op may
     # be evaluated at compile time
-    y = iterate(itr, i...)
+    y = iterate(itr)
     y === nothing && return init
-    v = op(init, f(y[1]))
+    v = op(init, y[1])
     while true
         y = iterate(itr, y[2])
         y === nothing && break
-        v = op(v, f(y[1]))
+        v = op(v, y[1])
     end
     return v
 end
 
-function mapfoldl_impl(f, op, nt::NamedTuple{()}, itr)
-    y = iterate(itr)
-    if y === nothing
-        return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
-    end
-    x, i = y
-    init = mapreduce_first(f, op, x)
-    return mapfoldl_impl(f, op, (init=init,), itr, i)
+struct _InitialValue end
+
+"""
+    BottomRF(rf) -> rf′
+
+"Bottom" reducing function.  This is a thin wrapper around the `op` argument
+passed to `foldl`-like functions for handling the initial invocation to call
+[`reduce_first`](@ref).
+"""
+struct BottomRF{T}
+    rf::T
 end
 
+@inline (op::BottomRF)(::_InitialValue, x) = reduce_first(op.rf, x)
+@inline (op::BottomRF)(acc, x) = op.rf(acc, x)
+
+"""
+    MappingRF(f, rf) -> rf′
+
+Create a mapping reducing function `rf′(acc, x) = rf(acc, f(x))`.
+"""
+struct MappingRF{F, T}
+    f::F
+    rf::T
+end
+
+@inline (op::MappingRF)(acc, x) = op.rf(acc, op.f(x))
+
+"""
+    FilteringRF(f, rf) -> rf′
+
+Create a filtering reducing function `rf′(acc, x) = f(x) ? rf(acc, x) : acc`.
+"""
+struct FilteringRF{F, T}
+    f::F
+    rf::T
+end
+
+@inline (op::FilteringRF)(acc, x) = op.f(x) ? op.rf(acc, x) : acc
+
+"""
+    FlatteningRF(rf) -> rf′
+
+Create a flattening reducing function that is roughly equivalent to
+`rf′(acc, x) = foldl(rf, x; init=acc)`.
+"""
+struct FlatteningRF{T}
+    rf::T
+end
+
+@inline function (op::FlatteningRF)(acc, x)
+    op′, itr′ = _xfadjoint(op.rf, x)
+    return _foldl_impl(op′, acc, itr′)
+end
+
+"""
+    _xfadjoint(op, itr) -> op′, itr′
+
+Given a pair of reducing function `op` and an iterator `itr`, return a pair
+`(op′, itr′)` of similar types.  If the iterator `itr` is transformed by an
+iterator transform `ixf` whose adjoint transducer `xf` is known, `op′ = xf(op)`
+and `itr′ = ixf⁻¹(itr)` is returned.  Otherwise, `op` and `itr` are returned
+as-is.  For example, transducer `rf -> MappingRF(f, rf)` is the adjoint of
+iterator transform `itr -> Generator(f, itr)`.
+
+Nested iterator transforms are converted recursively.  That is to say,
+given `op` and
+
+    itr = (ixf₁ ∘ ixf₂ ∘ ... ∘ ixfₙ)(itr′)
+
+what is returned is `itr′` and
+
+    op′ = (xfₙ ∘ ... ∘ xf₂ ∘ xf₁)(op)
+"""
+_xfadjoint(op, itr) = (op, itr)
+_xfadjoint(op, itr::Generator) =
+    if itr.f === identity
+        _xfadjoint(op, itr.iter)
+    else
+        _xfadjoint(MappingRF(itr.f, op), itr.iter)
+    end
+_xfadjoint(op, itr::Filter) =
+    _xfadjoint(FilteringRF(itr.flt, op), itr.itr)
+_xfadjoint(op, itr::Flatten) =
+    _xfadjoint(FlatteningRF(op), itr.it)
 
 """
     mapfoldl(f, op, itr; [init])
@@ -94,21 +179,19 @@ foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 
 ## foldr & mapfoldr
 
-mapfoldr_impl(f, op, nt::NamedTuple{(:init,)}, itr) =
-    mapfoldl_impl(f, (x,y) -> op(y,x), nt, Iterators.reverse(itr))
-
-# we can't just call mapfoldl_impl with (x,y) -> op(y,x), because
-# we need to use the type of op for mapreduce_empty_iter and mapreduce_first.
-function mapfoldr_impl(f, op, nt::NamedTuple{()}, itr)
-    ritr = Iterators.reverse(itr)
-    y = iterate(ritr)
-    if y === nothing
-        return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
-    end
-    x, i = y
-    init = mapreduce_first(f, op, x)
-    return mapfoldl_impl(f, (x,y) -> op(y,x), (init=init,), ritr, i)
+function mapfoldr_impl(f, op, nt, itr)
+    op′, itr′ = _xfadjoint(BottomRF(FlipArgs(op)), Generator(f, itr))
+    return foldl_impl(op′, nt, _reverse(itr′))
 end
+
+_reverse(itr) = Iterators.reverse(itr)
+_reverse(itr::Tuple) = reverse(itr)  #33235
+
+struct FlipArgs{F}
+    f::F
+end
+
+@inline (f::FlipArgs)(x, y) = f.f(y, x)
 
 """
     mapfoldr(f, op, itr; [init])
@@ -238,6 +321,11 @@ reduce_empty(::typeof(mul_prod), T) = reduce_empty(*, T)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
 
+reduce_empty(op::BottomRF, T) = reduce_empty(op.rf, T)
+reduce_empty(op::MappingRF, T) = mapreduce_empty(op.f, op.rf, T)
+reduce_empty(op::FilteringRF, T) = reduce_empty(op.rf, T)
+reduce_empty(op::FlipArgs, T) = reduce_empty(op.f, T)
+
 """
     Base.mapreduce_empty(f, op, T)
 
@@ -255,10 +343,13 @@ mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
 mapreduce_empty(f::typeof(abs),  ::typeof(max), T) = abs(zero(T))
 mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
 
-mapreduce_empty_iter(f, op, itr, ::HasEltype) = mapreduce_empty(f, op, eltype(itr))
-mapreduce_empty_iter(f, op::typeof(&), itr, ::EltypeUnknown) = true
-mapreduce_empty_iter(f, op::typeof(|), itr, ::EltypeUnknown) = false
-mapreduce_empty_iter(f, op, itr, ::EltypeUnknown) = _empty_reduce_error()
+# For backward compatibility:
+mapreduce_empty_iter(f, op, itr, ItrEltype) =
+    reduce_empty_iter(MappingRF(f, op), itr, ItrEltype)
+
+@inline reduce_empty_iter(op, itr) = reduce_empty_iter(op, itr, IteratorEltype(itr))
+@inline reduce_empty_iter(op, itr, ::HasEltype) = reduce_empty(op, eltype(itr))
+reduce_empty_iter(op, itr, ::EltypeUnknown) = _empty_reduce_error()
 
 # handling of single-element iterators
 """
@@ -777,3 +868,19 @@ function count(pred, a::AbstractArrayOrBroadcasted)
     return n
 end
 count(itr) = count(identity, itr)
+
+function count(::typeof(identity), x::Array{Bool})
+    n = 0
+    chunks = length(x) ÷ sizeof(UInt)
+    mask = 0x0101010101010101 % UInt
+    GC.@preserve x begin
+        ptr = Ptr{UInt}(pointer(x))
+        for i in 1:chunks
+            n += count_ones(unsafe_load(ptr, i) & mask)
+        end
+    end
+    for i in sizeof(UInt)*chunks+1:length(x)
+        n += x[i]
+    end
+    return n
+end

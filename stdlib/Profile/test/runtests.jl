@@ -17,11 +17,12 @@ end
     init_data = Profile.len_data()
     while iter < n_tries && Profile.len_data() == init_data
         iter += 1
-        tend = time() + t
-        while time() < tend end
+        tend = time_ns() + 1e9 * t
+        while time_ns() < tend end
     end
 end
 
+busywait(0, 0) # compile
 @profile busywait(1, 20)
 
 let r = Profile.retrieve()
@@ -52,8 +53,16 @@ let iobuf = IOBuffer()
     truncate(iobuf, 0)
     Profile.print(iobuf, format=:flat, sortedby=:count)
     @test !isempty(String(take!(iobuf)))
-    Profile.clear()
-    @test isempty(Profile.fetch())
+    Profile.print(iobuf, format=:tree, recur=:flat)
+    str = String(take!(iobuf))
+    @test !isempty(str)
+    truncate(iobuf, 0)
+end
+
+Profile.clear()
+@test isempty(Profile.fetch())
+
+let
     @test Profile.callers("\\") !== nothing
     @test Profile.callers(\) !== nothing
     # linerange with no filename provided should fail
@@ -83,4 +92,22 @@ end
     @test n_ == 1_000_001
     @test delay_ == 0.0005
     Profile.init(n=1_000_000, delay=def_delay)
+end
+
+@testset "Line number correction" begin
+    @profile busywait(1, 20)
+    _, fdict0 = Profile.flatten(Profile.retrieve()...)
+    Base.update_stackframes_callback[] = function(list)
+        modify((sf, n)) = sf.func == :busywait ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
+        map!(modify, list, list)
+    end
+    _, fdictc = Profile.flatten(Profile.retrieve()...)
+    Base.update_stackframes_callback[] = identity
+    function getline(sfs)
+        for sf in sfs
+            sf.func == :busywait && return sf.line
+        end
+        nothing
+    end
+    @test getline(values(fdictc)) == getline(values(fdict0)) + 2
 end

@@ -78,7 +78,13 @@ function instanceof_tfunc(@nospecialize(t))
     elseif isa(t, UnionAll)
         t′ = unwrap_unionall(t)
         t′′, isexact = instanceof_tfunc(t′)
-        return rewrap_unionall(t′′, t), isexact
+        tr = rewrap_unionall(t′′, t)
+        if t′′ isa DataType && !has_free_typevars(tr)
+            # a real instance must be within the declared bounds of the type,
+            # so we can intersect with the original wrapper.
+            tr = typeintersect(tr, t′′.name.wrapper)
+        end
+        return tr, isexact
     elseif isa(t, Union)
         ta, isexact_a = instanceof_tfunc(t.a)
         tb, isexact_b = instanceof_tfunc(t.b)
@@ -158,6 +164,7 @@ add_tfunc(floor_llvm, 1, 1, math_tfunc, 10)
 add_tfunc(trunc_llvm, 1, 1, math_tfunc, 10)
 add_tfunc(rint_llvm, 1, 1, math_tfunc, 10)
 add_tfunc(sqrt_llvm, 1, 1, math_tfunc, 20)
+add_tfunc(sqrt_llvm_fast, 1, 1, math_tfunc, 20)
     ## same-type comparisons ##
 cmp_tfunc(@nospecialize(x), @nospecialize(y)) = Bool
 add_tfunc(eq_int, 2, 2, cmp_tfunc, 1)
@@ -281,7 +288,7 @@ function isdefined_tfunc(@nospecialize(args...))
                 return Const(true)
             elseif isa(arg1, Const)
                 arg1v = (arg1::Const).val
-                if isimmutable(arg1v) || isdefined(arg1v, idx) || (isa(arg1v, DataType) && is_dt_const_field(idx))
+                if !ismutable(arg1v) || isdefined(arg1v, idx) || (isa(arg1v, DataType) && is_dt_const_field(idx))
                     return Const(isdefined(arg1v, idx))
                 end
             end
@@ -396,20 +403,23 @@ add_tfunc(Core._typevar, 3, 3, typevar_tfunc, 100)
 add_tfunc(applicable, 1, INT_INF, (@nospecialize(f), args...)->Bool, 100)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecialize(x)->Int, 4)
 add_tfunc(arraysize, 2, 2, (@nospecialize(a), @nospecialize(d))->Int, 4)
+function pointer_eltype(@nospecialize(ptr))
+    a = widenconst(ptr)
+    if a <: Ptr
+        if isa(a,DataType) && isa(a.parameters[1],Type)
+            return a.parameters[1]
+        elseif isa(a,UnionAll) && !has_free_typevars(a)
+            unw = unwrap_unionall(a)
+            if isa(unw,DataType)
+                return rewrap_unionall(unw.parameters[1], a)
+            end
+        end
+    end
+    return Any
+end
 add_tfunc(pointerref, 3, 3,
           function (@nospecialize(a), @nospecialize(i), @nospecialize(align))
-              a = widenconst(a)
-              if a <: Ptr
-                  if isa(a,DataType) && isa(a.parameters[1],Type)
-                      return a.parameters[1]
-                  elseif isa(a,UnionAll) && !has_free_typevars(a)
-                      unw = unwrap_unionall(a)
-                      if isa(unw,DataType)
-                          return rewrap_unionall(unw.parameters[1], a)
-                      end
-                  end
-              end
-              return Any
+            return pointer_eltype(a)
           end, 4)
 add_tfunc(pointerset, 4, 4, (@nospecialize(a), @nospecialize(v), @nospecialize(i), @nospecialize(align)) -> a, 5)
 
@@ -715,7 +725,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
             if !(isa(nv,Symbol) || isa(nv,Int))
                 return Bottom
             end
-            if (isa(sv, SimpleVector) || isimmutable(sv)) && isdefined(sv, nv)
+            if (isa(sv, SimpleVector) || !ismutable(sv)) && isdefined(sv, nv)
                 return AbstractEvalConstant(getfield(sv, nv))
             end
         end
@@ -991,7 +1001,7 @@ function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
     for i = 2:length(argtypes)
         isa(u, UnionAll) || return false
         ai = widenconditional(argtypes[i])
-        if ai === TypeVar
+        if ai ⊑ TypeVar
             # We don't know anything about the bounds of this typevar, but as
             # long as the UnionAll is not constrained, that's ok.
             if !(u.var.lb === Union{} && u.var.ub === Any)
@@ -1386,24 +1396,35 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
 end
 
 # Query whether the given intrinsic is nothrow
-intrinsic_nothrow(f::IntrinsicFunction) = !(
-        f === Intrinsics.checked_sdiv_int ||
-        f === Intrinsics.checked_udiv_int ||
-        f === Intrinsics.checked_srem_int ||
-        f === Intrinsics.checked_urem_int ||
-        f === Intrinsics.cglobal
-    )
 
 function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
+    # First check that we have the correct number of arguments
+    iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
+    if iidx < 1 || iidx > length(T_IFUNC)
+        # invalid intrinsic
+        return false
+    end
+    tf = T_IFUNC[iidx]
+    tf = tf::Tuple{Int, Int, Any}
+    if !(tf[1] <= length(argtypes) <= tf[2])
+        # wrong # of args
+        return false
+    end
     # TODO: We could do better for cglobal
     f === Intrinsics.cglobal && return false
+    # TODO: We can't know for sure, but the user should have a way to assert
+    # that it won't
+    f === Intrinsics.llvmcall && return false
     if f === Intrinsics.checked_udiv_int || f === Intrinsics.checked_urem_int || f === Intrinsics.checked_srem_int || f === Intrinsics.checked_sdiv_int
         # Nothrow as long as the second argument is guaranteed not to be zero
         isa(argtypes[2], Const) || return false
+        if !isprimitivetype(widenconst(argtypes[1])) ||
+           (widenconst(argtypes[1]) !== widenconst(argtypes[2]))
+            return false
+        end
         den_val = argtypes[2].val
         den_val !== zero(typeof(den_val)) || return false
-    end
-    if f === Intrinsics.checked_sdiv_int
+        f !== Intrinsics.checked_sdiv_int && return true
         # Nothrow as long as we additionally don't do typemin(T)/-1
         return den_val !== -1 || (isa(argtypes[1], Const) &&
             argtypes[1].val !== typemin(typeof(den_val)))
@@ -1414,6 +1435,39 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
         # in that it is legal to remove unused non-volatile loads.
         length(argtypes) == 3 || return false
         return argtypes[1] ⊑ Ptr && argtypes[2] ⊑ Int && argtypes[3] ⊑ Int
+    end
+    if f === Intrinsics.pointerset
+        eT = pointer_eltype(argtypes[1])
+        isprimitivetype(eT) || return false
+        return argtypes[2] ⊑ eT && argtypes[3] ⊑ Int && argtypes[4] ⊑ Int
+    end
+    if f === Intrinsics.arraylen
+        return argtypes[1] ⊑ Array
+    end
+    if f === Intrinsics.bitcast
+        ty = instanceof_tfunc(argtypes[1])[1]
+        xty = widenconst(argtypes[2])
+        return isprimitivetype(ty) && isprimitivetype(xty) && ty.size === xty.size
+    end
+    if f in (Intrinsics.sext_int, Intrinsics.zext_int, Intrinsics.trunc_int,
+             Intrinsics.fptoui, Intrinsics.fptosi, Intrinsics.uitofp,
+             Intrinsics.sitofp, Intrinsics.fptrunc, Intrinsics.fpext)
+        # If !isexact, `ty` may be Union{} at runtime even if we have
+        # isprimitivetype(ty).
+        ty, isexact = instanceof_tfunc(argtypes[1])
+        xty = widenconst(argtypes[2])
+        return isexact && isprimitivetype(ty) && isprimitivetype(xty)
+    end
+    # The remaining intrinsics are math/bits/comparison intrinsics. They work on all
+    # primitive types of the same type.
+    isshift = f == shl_int || f == lshr_int || f == ashr_int
+    argtype1 = widenconst(argtypes[1])
+    isprimitivetype(argtype1) || return false
+    for i = 2:length(argtypes)
+        argtype = widenconst(argtypes[i])
+        if isshift ? !isprimitivetype(argtype) : argtype !== argtype1
+            return false
+        end
     end
     return true
 end
@@ -1434,14 +1488,7 @@ function return_type_tfunc(argtypes::Vector{Any}, vtypes::VarTable, sv::Inferenc
                     if contains_is(argtypes_vec, Union{})
                         return Const(Union{})
                     end
-                    astype = argtypes_to_type(argtypes_vec)
-                    if isa(aft, Const)
-                        rt = abstract_call(aft.val, nothing, argtypes_vec, vtypes, sv, -1)
-                    elseif isconstType(aft)
-                        rt = abstract_call(aft.parameters[1], nothing, argtypes_vec, vtypes, sv, -1)
-                    else
-                        rt = abstract_call_gf_by_type(nothing, argtypes_vec, astype, sv, -1)
-                    end
+                    rt = abstract_call(nothing, argtypes_vec, vtypes, sv, -1)
                     if isa(rt, Const)
                         # output was computed to be constant
                         return Const(typeof(rt.val))

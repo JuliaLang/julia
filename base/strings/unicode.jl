@@ -198,11 +198,11 @@ function normalize(
 end
 
 function normalize(s::AbstractString, nf::Symbol)
-    utf8proc_map(s, nf == :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
-                    nf == :NFD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE) :
-                    nf == :NFKC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE
+    utf8proc_map(s, nf === :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
+                    nf === :NFD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE) :
+                    nf === :NFKC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE
                                    | UTF8PROC_COMPAT) :
-                    nf == :NFKD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE
+                    nf === :NFKD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE
                                    | UTF8PROC_COMPAT) :
                     throw(ArgumentError(":$nf is not one of :NFC, :NFD, :NFKC, :NFKD")))
 end

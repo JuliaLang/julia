@@ -31,6 +31,14 @@ static int is_bom(uint32_t wc)
     return wc == 0xFEFF;
 }
 
+static int safe_peekutf8(fl_context_t *fl_ctx, ios_t *s, uint32_t *pwc)
+{
+    int result = ios_peekutf8(s, pwc);
+    if (result == 0)
+        lerror(fl_ctx, fl_ctx->IOError, "invalid UTF-8 sequence");
+    return result;
+}
+
 value_t fl_skipws(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "skip-ws", nargs, 2);
@@ -39,7 +47,7 @@ value_t fl_skipws(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     uint32_t wc=0;
     value_t skipped = fl_ctx->F;
     while (1) {
-        if (ios_peekutf8(s, &wc) == IOS_EOF) {
+        if (safe_peekutf8(fl_ctx, s, &wc) == IOS_EOF) {
             ios_getutf8(s, &wc);  // to set EOF flag if this is a true EOF
             if (!ios_eof(s))
                 lerror(fl_ctx, symbol(fl_ctx, "error"), "incomplete character");
@@ -241,6 +249,7 @@ value_t fl_julia_strip_op_suffix(fl_context_t *fl_ctx, value_t *args, uint32_t n
     if (!op[i]) return args[0]; // no suffix to strip
     if (!i) return args[0]; // only suffix chars --- might still be a valid identifier
     char *opnew = strncpy((char*)malloc(i+1), op, i);
+    // TODO: if argument to opnew == NULL
     opnew[i] = 0;
     value_t opnew_symbol = symbol(fl_ctx, opnew);
     free(opnew);
@@ -317,13 +326,13 @@ value_t fl_accum_julia_symbol(fl_context_t *fl_ctx, value_t *args, uint32_t narg
         type_error(fl_ctx, "accum-julia-symbol", "wchar", args[0]);
     uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0]));
     ios_t str;
-    int allascii=1;
+    int allascii = 1;
     ios_mem(&str, 0);
     do {
         allascii &= (wc <= 0x7f);
         ios_getutf8(s, &wc);
         if (wc == '!') {
-            uint32_t nwc;
+            uint32_t nwc = 0;
             ios_peekutf8(s, &nwc);
             // make sure != is always an operator
             if (nwc == '=') {
@@ -332,7 +341,7 @@ value_t fl_accum_julia_symbol(fl_context_t *fl_ctx, value_t *args, uint32_t narg
             }
         }
         ios_pututf8(&str, wc);
-        if (ios_peekutf8(s, &wc) == IOS_EOF)
+        if (safe_peekutf8(fl_ctx, s, &wc) == IOS_EOF)
             break;
     } while (jl_id_char(wc));
     ios_pututf8(&str, 0);

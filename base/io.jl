@@ -69,7 +69,7 @@ function bytesavailable end
     readavailable(stream)
 
 Read all available data on the stream, blocking the task only if no data is available. The
-result is a `Vector{UInt8,1}`.
+result is a `Vector{UInt8}`.
 """
 function readavailable end
 
@@ -135,7 +135,7 @@ Read the entirety of `io`, as a `String`.
 julia> io = IOBuffer("JuliaLang is a GitHub organization");
 
 julia> read(io, Char)
-'J': ASCII/Unicode U+004a (category Lu: Letter, uppercase)
+'J': ASCII/Unicode U+004A (category Lu: Letter, uppercase)
 
 julia> io = IOBuffer("JuliaLang is a GitHub organization");
 
@@ -381,8 +381,8 @@ read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
 read(filename::AbstractString, ::Type{T}) where {T} = open(io->read(io, T), filename)
 
 """
-    read!(stream::IO, array::Union{Array, BitArray})
-    read!(filename::AbstractString, array::Union{Array, BitArray})
+    read!(stream::IO, array::AbstractArray)
+    read!(filename::AbstractString, array::AbstractArray)
 
 Read binary data from an I/O stream or file, filling in `array`.
 """
@@ -682,8 +682,8 @@ function read!(s::IO, a::Array{UInt8})
     return a
 end
 
-function read!(s::IO, a::Array{T}) where T
-    if isbitstype(T)
+function read!(s::IO, a::AbstractArray{T}) where T
+    if isbitstype(T) && (a isa Array || a isa FastContiguousSubArray{T,<:Any,<:Array{T}})
         GC.@preserve a unsafe_read(s, pointer(a), sizeof(a))
     else
         for i in eachindex(a)

@@ -158,7 +158,8 @@ resulting expression is substituted directly into the program at the point where
 the macro is invoked.
 Macros are a way to run generated code without calling [`eval`](@ref Base.eval), since the generated
 code instead simply becomes part of the surrounding program.
-Macro arguments may include expressions, literal values, and symbols.
+Macro arguments may include expressions, literal values, and symbols. Macros can be defined for
+variable number of arguments (varargs), but do not accept keyword arguments.
 
 # Examples
 ```jldoctest
@@ -169,6 +170,14 @@ julia> macro sayhello(name)
 
 julia> @sayhello "Charlie"
 Hello, Charlie!
+
+julia> macro saylots(x...)
+           return :( println("Say: ", \$(x...)) )
+       end
+@saylots (macro with 1 method)
+
+julia> @saylots "hey " "there " "friend"
+Say: hey there friend
 ```
 """
 kw"macro"
@@ -309,6 +318,56 @@ julia> filter!(x -> x > 1, a) # in-place & thus more efficient than a = a[a .> 1
 kw"="
 
 """
+    .=
+
+Perform broadcasted assignment. The right-side argument is expanded as in
+[`broadcast`](@ref) and then assigned into the left-side argument in-place.
+Fuses with other dotted operators in the same expression; i.e. the whole
+assignment expression is converted into a single loop.
+
+`A .= B` is similar to `broadcast!(identity, A, B)`.
+
+# Examples
+```jldoctest
+julia> A = zeros(4, 4); B = [1, 2, 3, 4];
+
+julia> A .= B
+4×4 Array{Float64,2}:
+ 1.0  1.0  1.0  1.0
+ 2.0  2.0  2.0  2.0
+ 3.0  3.0  3.0  3.0
+ 4.0  4.0  4.0  4.0
+
+julia> A
+4×4 Array{Float64,2}:
+ 1.0  1.0  1.0  1.0
+ 2.0  2.0  2.0  2.0
+ 3.0  3.0  3.0  3.0
+ 4.0  4.0  4.0  4.0
+```
+"""
+kw".="
+
+"""
+    .
+
+The dot operator is used to access fields or properties of objects and access
+variables defined inside modules.
+
+In general, `a.b` calls `getproperty(a, :b)` (see [`getproperty`](@ref Base.getproperty)).
+
+# Examples
+```jldoctest
+julia> z = 1 + 2im; z.im
+2
+
+julia> Iterators.product
+product (generic function with 1 method)
+```
+"""
+kw"."
+
+"""
     let
 
 `let` statements allocate new variable bindings each time they run. Whereas an
@@ -347,6 +406,57 @@ to the expression tree, which must be considered when directly manipulating the 
 For other purposes, `:( ... )` and `quote .. end` blocks are treated identically.
 """
 kw"quote"
+
+"""
+    {}
+
+Curly braces are used to specify [type parameters](@ref man-parametric-types).
+
+Type parameters allow a single type declaration to introduce a whole family of
+new types — one for each possible combination of parameter values. For example,
+the [`Set`](@ref) type describes many possible types of sets; it uses one type
+parameter to describe the type of the elements it contains. The specific _parameterized_
+types `Set{Float64}` and `Set{Int64}` describe two _concrete_ types: both are
+subtypes ([`<:`](@ref)) of `Set`, but the former has `Float64` elements and the latter
+has `Int64` elements.
+"""
+kw"{", kw"{}", kw"}"
+
+"""
+    []
+
+Square braces are used for [indexing](@ref man-array-indexing), [indexed assignment](@ref man-indexed-assignment),
+[array literals](@ref man-array-literals), and [array comprehensions](@ref man-comprehensions).
+"""
+kw"[", kw"[]", kw"]"
+
+"""
+    ()
+
+Parentheses are used to group expressions, call functions, and construct [tuples](@ref Tuple) and [named tuples](@ref NamedTuple).
+"""
+kw"(", kw"()", kw")"
+
+"""
+    #
+
+The number sign (or hash) character is used to begin a single-line comment.
+"""
+kw"#"
+
+"""
+    #= =#
+
+A multi-line comment begins with `#=` and ends with `=#`, and may be nested.
+"""
+kw"#=", kw"=#"
+
+"""
+    ;
+
+Semicolons are used as statement separators and mark the beginning of keyword arguments in function declarations or calls.
+"""
+kw";"
 
 """
     Expr(head::Symbol, args...)
@@ -395,6 +505,23 @@ julia> A'
 ```
 """
 kw"'"
+
+"""
+    \$
+
+Interpolation operator for interpolating into e.g. [strings](@ref string-interpolation)
+and [expressions](@ref man-expression-interpolation).
+
+# Examples
+```jldoctest
+julia> name = "Joe"
+"Joe"
+
+julia> "My name is \$name."
+"My name is Joe."
+```
+"""
+kw"$"
 
 """
     const
@@ -856,10 +983,10 @@ end
 Fields can have type restrictions, which may be parameterized:
 
 ```julia
-    struct Point{X}
-        x::X
-        y::Float64
-    end
+struct Point{X}
+    x::X
+    y::Float64
+end
 ```
 
 A struct can also declare an abstract super type via `<:` syntax:
@@ -894,7 +1021,8 @@ kw"mutable struct"
 
 Special function available to inner constructors which created a new object
 of the type.
-See the manual section on [Inner Constructor Methods](@ref) for more information.
+See the manual section on [Inner Constructor Methods](@ref man-inner-constructor-methods)
+for more information.
 """
 kw"new"
 
@@ -1330,6 +1458,13 @@ This method allows invoking a method other than the most specific matching metho
 when the behavior of a more general definition is explicitly needed (often as part of the
 implementation of a more specific method of the same function).
 
+Be careful when using `invoke` for functions that you don't write.  What definition is used
+for given `argtypes` is an implementation detail unless the function is explicitly states
+that calling with certain `argtypes` is a part of public API.  For example, the change
+between `f1` and `f2` in the example below is usually considered compatible because the
+change is invisible by the caller with a normal (non-`invoke`) call.  However, the change is
+visible if you use `invoke`.
+
 # Examples
 ```jldoctest
 julia> f(x::Real) = x^2;
@@ -1338,6 +1473,25 @@ julia> f(x::Integer) = 1 + invoke(f, Tuple{Real}, x);
 
 julia> f(2)
 5
+
+julia> f1(::Integer) = Integer
+       f1(::Real) = Real;
+
+julia> f2(x::Real) = _f2(x)
+       _f2(::Integer) = Integer
+       _f2(_) = Real;
+
+julia> f1(1)
+Integer
+
+julia> f2(1)
+Integer
+
+julia> invoke(f1, Tuple{Real}, 1)
+Real
+
+julia> invoke(f2, Tuple{Real}, 1)
+Integer
 ```
 """
 invoke
@@ -1432,15 +1586,35 @@ Unsigned
     Bool <: Integer
 
 Boolean type, containing the values `true` and `false`.
+
+`Bool` is a kind of number: `false` is numerically
+equal to `0` and `true` is numerically equal to `1`.
+Moreover, `false` acts as a multiplicative "strong zero":
+
+```jldoctest
+julia> false == 0
+true
+
+julia> true == 1
+true
+
+julia> 0 * NaN
+NaN
+
+julia> false * NaN
+0.0
+```
 """
 Bool
 
-for bit in (16, 32, 64)
+for (bit, sign, exp, frac) in ((16, 1, 5, 10), (32, 1, 8, 23), (64, 1, 11, 52))
     @eval begin
         """
             Float$($bit) <: AbstractFloat
 
-        $($bit)-bit floating point number type.
+        $($bit)-bit floating point number type (IEEE 754 standard).
+
+        Binary format: $($sign) sign, $($exp) exponent, $($frac) fraction bits.
         """
         $(Symbol("Float", bit))
     end
@@ -1526,9 +1700,10 @@ tuple
 
 """
     getfield(value, name::Symbol)
+    getfield(value, i::Int)
 
-Extract a named field from a `value` of composite type.
-See also [`getproperty`](@ref Base.getproperty).
+Extract a field from a composite `value` by name or position.
+See also [`getproperty`](@ref Base.getproperty) and [`fieldnames`](@ref).
 
 # Examples
 ```jldoctest
@@ -1539,6 +1714,9 @@ julia> getfield(a, :num)
 1
 
 julia> a.num
+1
+
+julia> getfield(a, 1)
 1
 ```
 """
@@ -2025,7 +2203,7 @@ julia> "Hello!" :: IntOrString
 "Hello!"
 
 julia> 1.0 :: IntOrString
-ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got Float64
+ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got a value of type Float64
 ```
 """
 Union
@@ -2059,7 +2237,7 @@ Outside of declarations `::` is used to assert that expressions and variables in
 # Examples
 ```jldoctest
 julia> (1+2)::AbstractFloat
-ERROR: TypeError: typeassert: expected AbstractFloat, got Int64
+ERROR: TypeError: typeassert: expected AbstractFloat, got a value of type Int64
 
 julia> (1+2)::Int
 3
@@ -2111,6 +2289,29 @@ See the manual section on [Tuple Types](@ref).
 Tuple
 
 """
+    NamedTuple{names}(args::Tuple)
+
+Construct a named tuple with the given `names` (a tuple of Symbols) from a tuple of values.
+"""
+NamedTuple{names}(args::Tuple)
+
+"""
+    NamedTuple{names,T}(args::Tuple)
+
+Construct a named tuple with the given `names` (a tuple of Symbols) and field types `T`
+(a `Tuple` type) from a tuple of values.
+"""
+NamedTuple{names,T}(args::Tuple)
+
+"""
+    NamedTuple{names}(nt::NamedTuple)
+
+Construct a named tuple by selecting fields in `names` (a tuple of Symbols) from
+another named tuple.
+"""
+NamedTuple{names}(nt::NamedTuple)
+
+"""
     typeassert(x, type)
 
 Throw a [`TypeError`](@ref) unless `x isa type`.
@@ -2119,7 +2320,7 @@ The syntax `x::type` calls this function.
 # Examples
 ```jldoctest
 julia> typeassert(2.5, Int)
-ERROR: TypeError: in typeassert, expected Int64, got Float64
+ERROR: TypeError: in typeassert, expected Int64, got a value of type Float64
 Stacktrace:
 [...]
 ```

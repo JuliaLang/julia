@@ -54,10 +54,13 @@ optionally with a given step (defaults to 1, a [`UnitRange`](@ref)).
 One of `length` or `stop` is required.  If `length`, `stop`, and `step` are all specified, they must agree.
 
 If `length` and `stop` are provided and `step` is not, the step size will be computed
-automatically such that there are `length` linearly spaced elements in the range (a [`LinRange`](@ref)).
+automatically such that there are `length` linearly spaced elements in the range.
 
 If `step` and `stop` are provided and `length` is not, the overall range length will be computed
-automatically such that the elements are `step` spaced (a [`StepRange`](@ref)).
+automatically such that the elements are `step` spaced.
+
+Special care is taken to ensure intermediate values are computed rationally.
+To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
 
 `stop` may be specified as either a positional or keyword argument.
 
@@ -367,6 +370,26 @@ julia> LinRange(1.5, 5.5, 9)
 9-element LinRange{Float64}:
  1.5,2.0,2.5,3.0,3.5,4.0,4.5,5.0,5.5
 ```
+
+Compared to using [`range`](@ref), directly constructing a `LinRange` should
+have less overhead but won't try to correct for floating point errors:
+```julia
+julia> collect(range(-0.1, 0.3, length=5))
+5-element Array{Float64,1}:
+ -0.1
+  0.0
+  0.1
+  0.2
+  0.3
+
+julia> collect(LinRange(-0.1, 0.3, 5))
+5-element Array{Float64,1}:
+ -0.1
+ -1.3877787807814457e-17
+  0.09999999999999999
+  0.19999999999999998
+  0.3
+```
 """
 struct LinRange{T} <: AbstractRange{T}
     start::T
@@ -500,7 +523,8 @@ julia> step(range(2.5, stop=10.9, length=85))
 """
 step(r::StepRange) = r.step
 step(r::AbstractUnitRange{T}) where{T} = oneunit(T) - zero(T)
-step(r::StepRangeLen{T}) where {T} = T(r.step)
+step(r::StepRangeLen) = r.step
+step(r::StepRangeLen{T}) where {T<:AbstractFloat} = T(r.step)
 step(r::LinRange) = (last(r)-first(r))/r.lendiv
 
 step_hp(r::StepRangeLen) = r.step
@@ -703,12 +727,12 @@ function getindex(r::StepRangeLen{T}, s::OrdinalRange{<:Integer}) where {T}
     return StepRangeLen{T}(ref, r.step*step(s), length(s), offset)
 end
 
-function getindex(r::LinRange, s::OrdinalRange{<:Integer})
+function getindex(r::LinRange{T}, s::OrdinalRange{<:Integer}) where {T}
     @_inline_meta
     @boundscheck checkbounds(r, s)
     vfirst = unsafe_getindex(r, first(s))
     vlast  = unsafe_getindex(r, last(s))
-    return LinRange(vfirst, vlast, length(s))
+    return LinRange{T}(vfirst, vlast, length(s))
 end
 
 show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
@@ -738,6 +762,7 @@ function ==(r::AbstractRange, s::AbstractRange)
 end
 
 intersect(r::OneTo, s::OneTo) = OneTo(min(r.stop,s.stop))
+union(r::OneTo, s::OneTo) = OneTo(max(r.stop,s.stop))
 
 intersect(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) = max(first(r),first(s)):min(last(r),last(s))
 
@@ -852,7 +877,7 @@ end
 issubset(r::OneTo, s::OneTo) = r.stop <= s.stop
 
 issubset(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) =
-    first(r) >= first(s) && last(r) <= last(s)
+    isempty(r) || first(r) >= first(s) && last(r) <= last(s)
 
 ## linear operations on ranges ##
 
@@ -1010,14 +1035,14 @@ function _define_range_op(@nospecialize f)
         function $f(r1::OrdinalRange, r2::OrdinalRange)
             r1l = length(r1)
             (r1l == length(r2) ||
-             throw(DimensionMismatch("argument dimensions must match")))
+             throw(DimensionMismatch("argument dimensions must match: length of r1 is $r1l, length of r2 is $(length(r2))")))
             range($f(first(r1), first(r2)), step=$f(step(r1), step(r2)), length=r1l)
         end
 
         function $f(r1::LinRange{T}, r2::LinRange{T}) where T
             len = r1.len
             (len == r2.len ||
-             throw(DimensionMismatch("argument dimensions must match")))
+             throw(DimensionMismatch("argument dimensions must match: length of r1 is $len, length of r2 is $(r2.len)")))
             LinRange{T}(convert(T, $f(first(r1), first(r2))),
                         convert(T, $f(last(r1), last(r2))), len)
         end
@@ -1033,7 +1058,7 @@ _define_range_op(:-)
 function +(r1::StepRangeLen{T,S}, r2::StepRangeLen{T,S}) where {T,S}
     len = length(r1)
     (len == length(r2) ||
-        throw(DimensionMismatch("argument dimensions must match")))
+     throw(DimensionMismatch("argument dimensions must match: length of r1 is $len, length of r2 is $(length(r2))")))
     StepRangeLen(first(r1)+first(r2), step(r1)+step(r2), len)
 end
 

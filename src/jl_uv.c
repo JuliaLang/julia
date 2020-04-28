@@ -157,7 +157,7 @@ static void uv_flush_callback(uv_write_t *req, int status)
 // Turn a normal write into a blocking write (primarily for use from C and gdb).
 // Warning: This calls uv_run, so it can have unbounded side-effects.
 // Be care where you call it from! - the libuv loop is also not reentrant.
-void jl_uv_flush(uv_stream_t *stream)
+JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream)
 {
     if (stream == (void*)STDIN_FILENO ||
         stream == (void*)STDOUT_FILENO ||
@@ -173,7 +173,7 @@ void jl_uv_flush(uv_stream_t *stream)
         uv_buf_t buf;
         buf.base = (char*)(&buf + 1);
         buf.len = 0;
-        uv_write_t *write_req = (uv_write_t*)malloc(sizeof(uv_write_t));
+        uv_write_t *write_req = (uv_write_t*)malloc_s(sizeof(uv_write_t));
         write_req->data = (void*)&fired;
         if (uv_write(write_req, stream, &buf, 1, uv_flush_callback) != 0) {
             JL_UV_UNLOCK();
@@ -203,26 +203,13 @@ JL_DLLEXPORT void *jl_uv_write_handle(uv_write_t *req) { return req->handle; }
 
 extern volatile unsigned _threadedregion;
 
-JL_DLLEXPORT int jl_run_once(uv_loop_t *loop)
+JL_DLLEXPORT int jl_process_events(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
+    uv_loop_t *loop = jl_io_loop;
     if (loop && (_threadedregion || ptls->tid == 0)) {
         jl_gc_safepoint_(ptls);
-        JL_UV_LOCK();
-        loop->stop_flag = 0;
-        int r = uv_run(loop, UV_RUN_ONCE);
-        JL_UV_UNLOCK();
-        return r;
-    }
-    return 0;
-}
-
-JL_DLLEXPORT int jl_process_events(uv_loop_t *loop)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (loop && (_threadedregion || ptls->tid == 0)) {
-        jl_gc_safepoint_(ptls);
-        if (jl_mutex_trylock(&jl_uv_mutex)) {
+        if (jl_atomic_load(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
             loop->stop_flag = 0;
             int r = uv_run(loop, UV_RUN_NOWAIT);
             JL_UV_UNLOCK();
@@ -260,7 +247,7 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
     }
 
     if (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP || handle->type == UV_TTY) {
-        uv_write_t *req = (uv_write_t*)malloc(sizeof(uv_write_t));
+        uv_write_t *req = (uv_write_t*)malloc_s(sizeof(uv_write_t));
         req->handle = (uv_stream_t*)handle;
         jl_uv_flush_close_callback(req, 0);
         JL_UV_UNLOCK();
@@ -532,9 +519,9 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
     }
     else {
         // Write to libuv stream...
-        uv_write_t *req = (uv_write_t*)malloc(sizeof(uv_write_t)+n);
-        char *data = (char*)(req+1);
-        memcpy(data,str,n);
+        uv_write_t *req = (uv_write_t*)malloc_s(sizeof(uv_write_t) + n);
+        char *data = (char*)(req + 1);
+        memcpy(data, str, n);
         uv_buf_t buf[1];
         buf[0].base = data;
         buf[0].len = n;
@@ -576,10 +563,10 @@ extern int vasprintf(char **str, const char *fmt, va_list ap);
 
 JL_DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
 {
-    char *str=NULL;
+    char *str = NULL;
     int c;
     va_list al;
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
     al = args;
 #else
     va_copy(al, args);
@@ -610,6 +597,10 @@ JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...) JL_NOTSAFEPOINT
 {
     static char buf[1000];
     buf[0] = '\0';
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
 
     va_list args;
     va_start(args, fmt);
@@ -621,6 +612,10 @@ JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...) JL_NOTSAFEPOINT
     if (write(STDERR_FILENO, buf, strlen(buf)) < 0) {
         // nothing we can do; ignore the failure
     }
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
 }
 
 JL_DLLEXPORT void jl_exit(int exitcode)
@@ -677,6 +672,8 @@ JL_DLLEXPORT int jl_tcp_getsockname(uv_tcp_t *handle, uint16_t *port,
     memset(&addr, 0, sizeof(struct sockaddr_storage));
     namelen = sizeof addr;
     int res = uv_tcp_getsockname(handle, (struct sockaddr*)&addr, &namelen);
+    if (res)
+        return res;
     *family = addr.ss_family;
     if (addr.ss_family == AF_INET) {
         struct sockaddr_in *addr4 = (struct sockaddr_in*)&addr;
@@ -687,9 +684,6 @@ JL_DLLEXPORT int jl_tcp_getsockname(uv_tcp_t *handle, uint16_t *port,
         struct sockaddr_in6 *addr6 = (struct sockaddr_in6*)&addr;
         *port = addr6->sin6_port;
         memcpy(host, &(addr6->sin6_addr), 16);
-    }
-    else {
-        return -1;
     }
     return res;
 }
@@ -702,6 +696,8 @@ JL_DLLEXPORT int jl_tcp_getpeername(uv_tcp_t *handle, uint16_t *port,
     memset(&addr, 0, sizeof(struct sockaddr_storage));
     namelen = sizeof addr;
     int res = uv_tcp_getpeername(handle, (struct sockaddr*)&addr, &namelen);
+    if (res)
+        return res;
     *family = addr.ss_family;
     if (addr.ss_family == AF_INET) {
         struct sockaddr_in *addr4 = (struct sockaddr_in*)&addr;
@@ -712,9 +708,6 @@ JL_DLLEXPORT int jl_tcp_getpeername(uv_tcp_t *handle, uint16_t *port,
         struct sockaddr_in6 *addr6 = (struct sockaddr_in6*)&addr;
         *port = addr6->sin6_port;
         memcpy(host, &(addr6->sin6_addr), 16);
-    }
-    else {
-        return -1;
     }
     return res;
 }
@@ -836,7 +829,7 @@ JL_DLLEXPORT int jl_tcp_connect(uv_tcp_t *handle, void *host, uint16_t port,
 {
     uv_sockaddr_in addr;
     jl_sockaddr_fill(&addr, port, host, ipv6);
-    uv_connect_t *req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
+    uv_connect_t *req = (uv_connect_t*)malloc_s(sizeof(uv_connect_t));
     req->data = NULL;
     int r = uv_tcp_connect(req, handle, &addr.in, cb);
     if (r)
@@ -973,7 +966,6 @@ struct work_baton {
     void      *work_args;
     void      *work_retval;
     notify_cb_t notify_func;
-    int       tid;
     int       notify_idx;
 };
 
@@ -997,7 +989,7 @@ void jl_work_notifier(uv_work_t *req, int status)
 JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *work_args, void *work_retval,
                                notify_cb_t notify_func, int notify_idx)
 {
-    struct work_baton *baton = (struct work_baton*) malloc(sizeof(struct work_baton));
+    struct work_baton *baton = (struct work_baton*)malloc_s(sizeof(struct work_baton));
     baton->req.data = (void*) baton;
     baton->work_func = work_func;
     baton->work_args = work_args;

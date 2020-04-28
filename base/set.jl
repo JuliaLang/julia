@@ -37,9 +37,18 @@ emptymutable(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 _similar_for(c::AbstractSet, ::Type{T}, itr, isz) where {T} = empty(c, T)
 
 function show(io::IO, s::Set)
-    print(io, "Set(")
-    show_vector(io, s)
-    print(io, ')')
+    if isempty(s)
+        if get(io, :typeinfo, Any) == typeof(s)
+            print(io, "Set()")
+        else
+            show(io, typeof(s))
+            print(io, "()")
+        end
+    else
+        print(io, "Set(")
+        show_vector(io, s)
+        print(io, ')')
+    end
 end
 
 isempty(s::Set) = isempty(s.dict)
@@ -373,10 +382,11 @@ function allunique(C)
     true
 end
 
-allunique(::Set) = true
+allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
 allunique(r::StepRange{T,S}) where {T,S} = (step(r) != zero(S)) || (length(r) <= 1)
+allunique(r::StepRangeLen{T,R,S}) where {T,R,S} = (step(r) != zero(S)) || (length(r) <= 1)
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 
@@ -439,7 +449,10 @@ julia> replace!([1, 2, 1, 3], 1=>0, 2=>4, count=2)
  3
 
 julia> replace!(Set([1, 2, 3]), 1=>0)
-Set([0, 2, 3])
+Set{Int64} with 3 elements:
+  0
+  2
+  3
 ```
 """
 replace!(A, old_new::Pair...; count::Integer=typemax(Int)) =
@@ -479,7 +492,9 @@ Dict{Int64,Int64} with 2 entries:
   1 => 3
 
 julia> replace!(x->2x, Set([3, 6]))
-Set([6, 12])
+Set{Int64} with 2 elements:
+  6
+  12
 ```
 """
 replace!(new::Callable, A; count::Integer=typemax(Int)) =
@@ -546,7 +561,7 @@ subtract_singletontype(::Type{T}, x::Pair{K}, y::Pair...) where {T, K} =
 """
     replace(new::Function, A; [count::Integer])
 
-Return a copy of `A` where each value `x` in `A` is replaced by `new(x)`
+Return a copy of `A` where each value `x` in `A` is replaced by `new(x)`.
 If `count` is specified, then replace at most `count` values in total
 (replacements being defined as `new(x) !== x`).
 
@@ -584,6 +599,7 @@ askey(k, ::AbstractSet) = k
 
 function _replace!(new::Callable, res::T, A::T,
                    count::Int) where T<:Union{AbstractDict,AbstractSet}
+    count == 0 && return res
     c = 0
     if res === A # cannot replace elements while iterating over A
         repl = Pair{eltype(A),eltype(A)}[]
@@ -592,8 +608,8 @@ function _replace!(new::Callable, res::T, A::T,
             if x !== y
                 push!(repl, x => y)
                 c += 1
+                c == count && break
             end
-            c == count && break
         end
         for oldnew in repl
             pop!(res, askey(first(oldnew), res))
@@ -608,8 +624,8 @@ function _replace!(new::Callable, res::T, A::T,
                 pop!(res, askey(x, res))
                 push!(res, y)
                 c += 1
+                c == count && break
             end
-            c == count && break
         end
     end
     res
@@ -620,10 +636,18 @@ end
 function _replace!(new::Callable, res::AbstractArray, A::AbstractArray, count::Int)
     c = 0
     if count >= length(A) # simpler loop allows for SIMD
-        for i in eachindex(A)
-            @inbounds Ai = A[i]
-            y = new(Ai)
-            @inbounds res[i] = y
+        if res === A # for optimization only
+            for i in eachindex(A)
+                @inbounds Ai = A[i]
+                y = new(Ai)
+                @inbounds A[i] = y
+            end
+        else
+            for i in eachindex(A)
+                @inbounds Ai = A[i]
+                y = new(Ai)
+                @inbounds res[i] = y
+            end
         end
     else
         for i in eachindex(A)

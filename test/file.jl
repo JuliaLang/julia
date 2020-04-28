@@ -3,7 +3,7 @@
 #############################################
 # Create some temporary files & directories #
 #############################################
-starttime = time()
+starttime = time_ns() / 1e9
 pwd_ = pwd()
 dir = mktempdir()
 file = joinpath(dir, "afile.txt")
@@ -15,14 +15,14 @@ subdir = joinpath(dir, "adir")
 mkdir(subdir)
 subdir2 = joinpath(dir, "adir2")
 mkdir(subdir2)
-@test_throws SystemError mkdir(file)
+@test_throws Base.IOError mkdir(file)
 let err = nothing
     try
         mkdir(file)
     catch err
         io = IOBuffer()
         showerror(io, err)
-        @test startswith(String(take!(io)), "SystemError (with $file): mkdir:")
+        @test startswith(String(take!(io)), "IOError: mkdir: file already exists (EEXIST)")
     end
 end
 
@@ -48,6 +48,30 @@ if !Sys.iswindows()
     cd(pwd_)
 end
 
+using Random
+
+@testset "that temp names are actually unique" begin
+    temps = [tempname(cleanup=false) for _ = 1:100]
+    @test allunique(temps)
+    temps = map(1:100) do _
+        path, io = mktemp(cleanup=false)
+        close(io)
+        rm(path, force=true)
+        return path
+    end
+    @test allunique(temps)
+end
+
+@testset "tempname with parent" begin
+    t = tempname()
+    @test dirname(t) == tempdir()
+    mktempdir() do d
+        t = tempname(d)
+        @test dirname(t) == d
+    end
+    @test_throws ArgumentError tempname(randstring())
+end
+
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
 
 @testset "mktemp/dir basic cleanup" begin
@@ -66,6 +90,14 @@ child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $co
     @test !ispath(t)
     # mktempdir with cleanup
     t = child_eval("t = mktempdir(); touch(joinpath(t, \"file.txt\")); t")
+    @test !ispath(t)
+    # tempname without cleanup
+    t = child_eval("t = tempname(cleanup=false); touch(t); t")
+    @test isfile(t)
+    rm(t, force=true)
+    @test !ispath(t)
+    # tempname with cleanup
+    t = child_eval("t = tempname(); touch(t); t")
     @test !ispath(t)
 end
 
@@ -362,12 +394,14 @@ if Sys.iswindows()
 else
     @test filesize(dir) > 0
 end
-nowtime = time()
+# We need both: one to check passed time, one to comapare file's mtime()
+nowtime = time_ns() / 1e9
+nowwall = time()
 # Allow 10s skew in addition to the time it took us to actually execute this code
 let skew = 10 + (nowtime - starttime)
     mfile = mtime(file)
     mdir  = mtime(dir)
-    @test abs(nowtime - mfile) <= skew && abs(nowtime - mdir) <= skew && abs(mfile - mdir) <= skew
+    @test abs(nowwall - mfile) <= skew && abs(nowwall - mdir) <= skew && abs(mfile - mdir) <= skew
 end
 #@test Int(time()) >= Int(mtime(file)) >= Int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
 
@@ -486,20 +520,21 @@ end
     @test my_tempdir[end] != '\\'
 
     var =  Sys.iswindows() ? "TMP" : "TMPDIR"
-    PATH_PREFIX = Sys.iswindows() ? "C:\\" : "/tmp/"
+    PATH_PREFIX = Sys.iswindows() ? "C:\\" : "/tmp/" * "x"^255   # we want a long path on UNIX so that we test buffer resizing in `tempdir`
     # Warning: On Windows uv_os_tmpdir internally calls GetTempPathW. The max string length for
     # GetTempPathW is 261 (including the implied trailing backslash), not the typical length 259.
-    # We thus use 260 (with implied trailing slash backlash this then gives 261 chars) and
-    # subtract 9 to account for i = 0:9.
-    MAX_PATH = (Sys.iswindows() ? 260-9 : 1024) - length(PATH_PREFIX)
+    # We thus use 260 (with implied trailing slash backlash this then gives 261 chars)
+    # NOTE: not the actual max path on UNIX, but true in the Windows case for this function.
+    # NOTE: we subtract 9 to account for i = 0:9.
+    MAX_PATH = (Sys.iswindows() ? 260 - length(PATH_PREFIX) : 255)  - 9
     for i = 0:8
-        local tmp = PATH_PREFIX * "x"^MAX_PATH * "123456789"[1:i]
+        local tmp = joinpath(PATH_PREFIX, "x"^MAX_PATH * "123456789"[1:i])
         @test withenv(var => tmp) do
             tempdir()
         end == (tmp)
     end
     for i = 9
-        local tmp = PATH_PREFIX * "x"^MAX_PATH * "123456789"[1:i]
+        local tmp = joinpath(PATH_PREFIX, "x"^MAX_PATH * "123456789"[1:i])
         if Sys.iswindows()
             # libuv bug
             @test_broken withenv(var => tmp) do
@@ -1183,8 +1218,18 @@ cd(dirwalk) do
 
         root, dirs, files = take!(chnl)
         @test root == joinpath(".", "sub_dir1")
-        @test dirs == (has_symlinks ? ["link", "subsub_dir1", "subsub_dir2"] : ["subsub_dir1", "subsub_dir2"])
-        @test files == ["file1", "file2"]
+        if has_symlinks
+            if follow_symlinks
+                @test dirs ==  ["link", "subsub_dir1", "subsub_dir2"]
+                @test files == ["file1", "file2"]
+            else
+                @test dirs ==  ["subsub_dir1", "subsub_dir2"]
+                @test files == ["file1", "file2", "link"]
+            end
+        else
+            @test dirs ==  ["subsub_dir1", "subsub_dir2"]
+            @test files == ["file1", "file2"]
+        end
 
         root, dirs, files = take!(chnl)
         if follow_symlinks
@@ -1221,8 +1266,18 @@ cd(dirwalk) do
             root, dirs, files = take!(chnl)
         end
         @test root == joinpath(".", "sub_dir1")
-        @test dirs ==  (has_symlinks ? ["link", "subsub_dir1", "subsub_dir2"] : ["subsub_dir1", "subsub_dir2"])
-        @test files == ["file1", "file2"]
+        if has_symlinks
+            if follow_symlinks
+                @test dirs ==  ["link", "subsub_dir1", "subsub_dir2"]
+                @test files == ["file1", "file2"]
+            else
+                @test dirs ==  ["subsub_dir1", "subsub_dir2"]
+                @test files == ["file1", "file2", "link"]
+            end
+        else
+            @test dirs ==  ["subsub_dir1", "subsub_dir2"]
+            @test files == ["file1", "file2"]
+        end
 
         root, dirs, files = take!(chnl)
         @test root == joinpath(".", "sub_dir2")
@@ -1254,8 +1309,34 @@ cd(dirwalk) do
     @test root == joinpath(".", "sub_dir2")
     @test dirs == []
     @test files == ["file_dir2"]
+
+    # Test that symlink loops don't cause errors
+    if has_symlinks
+        mkdir(joinpath(".", "sub_dir3"))
+        symlink("foo", joinpath(".", "sub_dir3", "foo"))
+
+        @test_throws Base.IOError walkdir(joinpath(".", "sub_dir3"); follow_symlinks=true)
+        root, dirs, files = take!(walkdir(joinpath(".", "sub_dir3"); follow_symlinks=false))
+        @test root == joinpath(".", "sub_dir3")
+        @test dirs == []
+        @test files == ["foo"]
+    end
 end
 rm(dirwalk, recursive=true)
+
+###################
+#     readdir     #
+###################
+@testset "readdir is sorted" begin
+    mktempdir() do dir
+        cd(dir) do
+            for k in 1:10
+                touch(randstring())
+            end
+            @test issorted(readdir())
+        end
+    end
+end
 
 ############
 # Clean up #
@@ -1320,7 +1401,7 @@ mktempdir() do dir
             @test basename(realpath(uppercase(path))) == path
         end
         rm(path)
-        @test_throws SystemError realpath(path)
+        @test_throws Base.IOError realpath(path)
     end
 end
 
@@ -1382,5 +1463,50 @@ end
         @test startswith(tmpdir, tmpdirbase)
         @test sizeof(tmpdir) == 6 + sizeof(tmpdirbase)
         @test sizeof(basename(tmpdir)) == 6
+    end
+end
+
+@testset "readdir tests" begin
+    ≛(a, b) = sort(a) == sort(b)
+    mktempdir() do dir
+        d = cd(pwd, dir) # might resolve symlinks
+        @test isempty(readdir(d))
+        @test isempty(readdir(d, join=true))
+        cd(d) do
+            @test isempty(readdir())
+            @test isempty(readdir(join=true))
+        end
+        touch(joinpath(d, "file"))
+        mkdir(joinpath(d, "dir"))
+        names = ["dir", "file"]
+        paths = [joinpath(d, x) for x in names]
+        @test readdir(d) ≛ names
+        @test readdir(d, join=true) ≛ paths
+        cd(d) do
+            @test readdir() ≛ names
+            @test readdir(join=true) ≛ paths
+        end
+        t, b = splitdir(d)
+        cd(t) do
+            @test readdir(b) ≛ names
+            @test readdir(b, join=true) ≛ [joinpath(b, x) for x in names]
+        end
+    end
+    if !Sys.iswindows()
+        mktempdir() do dir
+            cd(dir) do
+                d = pwd() # might resolve symlinks
+                @test isdir(d)
+                @test Base.Filesystem.samefile(d, ".")
+                @test isempty(readdir())
+                @test isempty(readdir(d))
+                @test isempty(readdir(join=true))
+                rm(d, recursive=true)
+                @test !ispath(d)
+                @test isempty(readdir())
+                @test_throws SystemError readdir(d)
+                @test_throws Base.IOError readdir(join=true)
+            end
+        end
     end
 end

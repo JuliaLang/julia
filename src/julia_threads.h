@@ -7,9 +7,12 @@
 #include <atomics.h>
 // threading ------------------------------------------------------------------
 
-// WARNING: Threading support is incomplete and experimental
-// Nonetheless, we define JL_THREAD and use it to give advanced notice to
-// maintainers of what eventual threading support will change.
+// JULIA_ENABLE_THREADING may be controlled by altering JULIA_THREADS in Make.user
+
+// When running into scheduler issues, this may help provide information on the
+// sequence of events that led to the issue. Normally, it is empty.
+//#define JULIA_DEBUG_SLEEPWAKE(x) x
+#define JULIA_DEBUG_SLEEPWAKE(x)
 
 //  Options for task switching algorithm (in order of preference):
 // JL_HAVE_ASM -- mostly setjmp
@@ -155,7 +158,7 @@ typedef struct {
     jl_gc_mark_data_t *data_stack;
 } jl_gc_mark_cache_t;
 
-typedef struct _jl_excstack_t jl_excstack_t;
+struct _jl_bt_element_t;
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
 #define JL_MAX_BT_SIZE 80000
@@ -193,7 +196,7 @@ struct _jl_tls_states_t {
     // Temp storage for exception thrown in signal handler. Not rooted.
     struct _jl_value_t *sig_exception;
     // Temporary backtrace buffer. Scanned for gc roots when bt_size > 0.
-    uintptr_t *bt_data; // JL_MAX_BT_SIZE + 1 elements long
+    struct _jl_bt_element_t *bt_data; // JL_MAX_BT_SIZE + 1 elements long
     size_t bt_size;    // Size for backtrace in transit in bt_data
     // Atomically set by the sender, reset by the handler.
     volatile sig_atomic_t signal_request;
@@ -221,6 +224,13 @@ struct _jl_tls_states_t {
     // Saved exception for previous external API call or NULL if cleared.
     // Access via jl_exception_occurred().
     struct _jl_value_t *previous_exception;
+
+    JULIA_DEBUG_SLEEPWAKE(
+        uint64_t uv_run_enter;
+        uint64_t uv_run_leave;
+        uint64_t sleep_enter;
+        uint64_t sleep_leave;
+    )
 };
 
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`

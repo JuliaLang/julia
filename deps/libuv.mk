@@ -42,7 +42,7 @@ $(LIBUV_BUILDDIR)/build-compiled: $(LIBUV_BUILDDIR)/build-configured
 
 $(LIBUV_BUILDDIR)/build-checked: $(LIBUV_BUILDDIR)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
-	-$(MAKE) -C $(dir $@) check
+	$(MAKE) -C $(dir $@) check
 endif
 	echo 1 > $@
 

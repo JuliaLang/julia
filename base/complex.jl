@@ -108,7 +108,7 @@ Float64
 """
 real(T::Type) = typeof(real(zero(T)))
 real(::Type{T}) where {T<:Real} = T
-real(::Type{Complex{T}}) where {T<:Real} = T
+real(C::Type{<:Complex}) = fieldtype(C, 1)
 
 """
     isreal(x) -> Bool
@@ -184,12 +184,16 @@ function show(io::IO, z::Complex)
     compact = get(io, :compact, false)
     show(io, r)
     if signbit(i) && !isnan(i)
-        i = -i
         print(io, compact ? "-" : " - ")
+        if isa(i,Signed) && !isa(i,BigInt) && i == typemin(typeof(i))
+            show(io, -widen(i))
+        else
+            show(io, -i)
+        end
     else
         print(io, compact ? "+" : " + ")
+        show(io, i)
     end
-    show(io, i)
     if !(isa(i,Integer) && !isa(i,Bool) || isa(i,AbstractFloat) && isfinite(i))
         print(io, "*")
     end

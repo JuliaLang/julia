@@ -132,3 +132,34 @@ function f32579(x::Int, b::Bool)
 end
 @test f32579(0, true) === true
 @test f32579(0, false) === false
+
+# Test for bug caused by renaming blocks improperly, related to PR #32145
+using Base.Meta
+let ci = (Meta.@lower 1 + 1).args[1]
+    ci.code = [
+        # block 1
+        Core.Compiler.GotoIfNot(Expr(:boundscheck), 6),
+        # block 2
+        Expr(:call, GlobalRef(Base, :size), Core.Compiler.Argument(3)),
+        Core.Compiler.ReturnNode(),
+        # block 3
+        Core.PhiNode(),
+        Core.Compiler.ReturnNode(),
+        # block 4
+        Expr(:call,
+             GlobalRef(Main, :something),
+             GlobalRef(Main, :somethingelse)),
+        Core.Compiler.GotoIfNot(Core.SSAValue(6), 9),
+        # block 5
+        Core.Compiler.ReturnNode(Core.SSAValue(6)),
+        # block 6
+        Core.Compiler.ReturnNode(Core.SSAValue(6))
+    ]
+    nstmts = length(ci.code)
+    ci.ssavaluetypes = nstmts
+    ci.codelocs = fill(Int32(1), nstmts)
+    ci.ssaflags = fill(Int32(0), nstmts)
+    ir = Core.Compiler.inflate_ir(ci)
+    ir = Core.Compiler.compact!(ir, true)
+    @test Core.Compiler.verify_ir(ir) == nothing
+end

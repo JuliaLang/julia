@@ -63,18 +63,18 @@ end
 # CHECK: call void @julia.loopinfo_marker(), {{.*}}, !julia.loopinfo [[LOOPINFO3:![0-9]+]]
 # LOWER-NOT: call void @julia.loopinfo_marker()
 # LOWER: br {{.*}}, !llvm.loop [[LOOPID3:![0-9]+]]
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL-NOT: call void @julia_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL-NOT: call void @j_iteration
 # FINAL: br
     end
 end
 
 # Example from a GPU kernel where we want to unroll the outer loop
 # and the inner loop is a boundschecked single iteration loop.
-# The `@show` is used to bloat the loop and `FINAL-COUNT-10:` seems
-# not to be working so we duplicate the checks.
+# The `@show` is used to bloat the loop and `X-COUNT-10:` seems
+# not to be working so we duplicate the checks. FIXME LLVM8
 # CHECK-LABEL: @julia_loop_unroll2
 # LOWER-LABEL: @julia_loop_unroll2
 # FINAL-LABEL: @julia_loop_unroll2
@@ -89,17 +89,17 @@ end
 # CHECK: call void @julia.loopinfo_marker(), {{.*}}, !julia.loopinfo [[LOOPINFO4:![0-9]+]]
 # LOWER-NOT: call void @julia.loopinfo_marker()
 # LOWER: br {{.*}}, !llvm.loop [[LOOPID4:![0-9]+]]
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL-NOT: call void @julia_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL-NOT: call void @j_iteration
     end
 end
 
@@ -110,8 +110,8 @@ function notunroll(J, I)
             1 <= j <= I && continue
             @show (i,j)
             iteration(i)
-# FINAL: call void @julia_iteration
-# FINAL-NOT: call void @julia_iteration
+# FINAL: call void @j_iteration
+# FINAL-NOT: call void @j_iteration
         end
     end
 end

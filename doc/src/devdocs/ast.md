@@ -59,7 +59,7 @@ call. Finally, chains of comparisons have their own special expression structure
 | `a==b`      | `(call == a b)`           |
 | `1<i<=n`    | `(comparison 1 < i <= n)` |
 | `a.b`       | `(. a (quote b))`         |
-| `a.(b)`     | `(. a b)`                 |
+| `a.(b)`     | `(. a (tuple b))`         |
 
 ### Bracketed forms
 
@@ -356,20 +356,20 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
       * `args[2]`
 
-        A `call` expression that creates `SimpleVector` specifying its parameters
+        A `call` expression that creates a `SimpleVector` specifying its parameters
 
       * `args[3]`
 
-        A `call` expression that creates `SimpleVector` specifying its fieldnames
+        A `call` expression that creates a `SimpleVector` specifying its fieldnames
 
       * `args[4]`
 
-        A `Symbol` or `GlobalRef` specifying the supertype (e.g., `:Integer` or
-        `GlobalRef(Core, :Any)`)
+        A `Symbol`, `GlobalRef`, or `Expr` specifying the supertype (e.g., `:Integer`,
+        `GlobalRef(Core, :Any)`, or `:(Core.apply_type(AbstractArray, T, N))`)
 
       * `args[5]`
 
-        A `call` expression that creates `SimpleVector` specifying its fieldtypes
+        A `call` expression that creates a `SimpleVector` specifying its fieldtypes
 
       * `args[6]`
 
@@ -384,7 +384,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `abstract_type`
 
     A 3-argument expression that defines a new abstract type. The
-    arguments are the same as the first three arguments of
+    arguments are the same as arguments 1, 2, and 4 of
     `struct_type` expressions.
 
   * `primitive_type`
@@ -503,7 +503,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
         See [Working with LLVM](@ref Working-with-LLVM) for where these are derived from and how they get handled.
 
 
-### Method
+### [Method](@id ast-lowered-method)
 
 A unique'd container describing the shared metadata for a single method.
 

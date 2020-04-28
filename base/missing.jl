@@ -108,7 +108,7 @@ for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
 end
 
 # Binary operators/functions
-for f in (:(+), :(-), :(*), :(/), :(^), :(div), :(mod), :(fld), :(rem))
+for f in (:(+), :(-), :(*), :(/), :(^), :(mod), :(rem))
     @eval begin
         # Scalar with missing
         ($f)(::Missing, ::Missing) = missing
@@ -116,6 +116,10 @@ for f in (:(+), :(-), :(*), :(/), :(^), :(div), :(mod), :(fld), :(rem))
         ($f)(::Number,  ::Missing) = missing
     end
 end
+
+div(::Missing, ::Missing, r::RoundingMode) = missing
+div(::Missing, ::Number, r::RoundingMode) = missing
+div(::Number, ::Missing, r::RoundingMode) = missing
 
 min(::Missing, ::Missing) = missing
 min(::Missing, ::Any)     = missing
@@ -192,7 +196,7 @@ of the input.
 # Examples
 ```jldoctest
 julia> x = skipmissing([1, missing, 2])
-Base.SkipMissing{Array{Union{Missing, Int64},1}}(Union{Missing, Int64}[1, missing, 2])
+skipmissing(Union{Missing, Int64}[1, missing, 2])
 
 julia> sum(x)
 3
@@ -255,6 +259,12 @@ keys(itr::SkipMissing) =
     v
 end
 
+function show(io::IO, s::SkipMissing)
+    print(io, "skipmissing(")
+    show(io, s.x)
+    print(io, ')')
+end
+
 # Optimized mapreduce implementation
 # The generic method is faster when !(eltype(A) >: Missing) since it does not need
 # additional loops to identify the two first non-missing values of each block
@@ -273,7 +283,7 @@ function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
         i += 1
     end
     i > ilast && return mapreduce_empty(f, op, eltype(itr))
-    a1 = ai
+    a1::eltype(itr) = ai
     i += 1
     while i <= ilast
         @inbounds ai = A[i]
@@ -382,6 +392,8 @@ end
 
 Return the first value in the arguments which is not equal to [`missing`](@ref),
 if any. Otherwise return `missing`.
+
+See also [`something`](@ref).
 
 # Examples
 

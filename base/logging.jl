@@ -33,8 +33,9 @@ abstract type AbstractLogger ; end
 
 Log a message to `logger` at `level`.  The logical location at which the
 message was generated is given by module `_module` and `group`; the source
-location by `file` and `line`. `id` is an arbitrary unique [`Symbol`](@ref) to be used
-as a key to identify the log statement when filtering.
+location by `file` and `line`. `id` is an arbitrary unique value (typically a
+[`Symbol`](@ref)) to be used as a key to identify the log statement when
+filtering.
 """
 function handle_message end
 
@@ -203,7 +204,7 @@ end
 macro _sourceinfo()
     esc(quote
         (__module__,
-         __source__.file === nothing ? "?" : String(__source__.file),
+         __source__.file === nothing ? "?" : String(__source__.file::Symbol),
          __source__.line)
     end)
 end
@@ -247,6 +248,8 @@ function log_record_id(_module, level, message, log_kws)
     end
 end
 
+default_group(file) = Symbol(splitext(basename(file))[1])
+
 # Generate code for logging macros
 function logmsg_code(_module, file, line, level, message, exs...)
     id = Expr(:quote, log_record_id(_module, level, message, exs))
@@ -260,20 +263,20 @@ function logmsg_code(_module, file, line, level, message, exs...)
             end
             k = ex.args[1]
             # Recognize several special keyword arguments
-            if k == :_id
+            if k === :_id
                 # id may be overridden if you really want several log
                 # statements to share the same id (eg, several pertaining to
                 # the same progress step).  In those cases it may be wise to
                 # manually call log_record_id to get a unique id in the same
                 # format.
                 id = esc(v)
-            elseif k == :_module
+            elseif k === :_module
                 _module = esc(v)
-            elseif k == :_line
+            elseif k === :_line
                 line = esc(v)
-            elseif k == :_file
+            elseif k === :_file
                 file = esc(v)
-            elseif k == :_group
+            elseif k === :_group
                 group = esc(v)
             else
                 # Copy across key value pairs for structured log records
@@ -292,12 +295,12 @@ function logmsg_code(_module, file, line, level, message, exs...)
     if group === nothing
         group = if isdefined(Base, :basename) && isa(file, String)
             # precompute if we can
-            QuoteNode(splitext(basename(file))[1])
+            QuoteNode(default_group(file))
         else
             # memoized run-time execution
             ref = Ref{Symbol}()
             :(isassigned($ref) ? $ref[]
-                               : $ref[] = Symbol(splitext(basename(something($file, "")))[1]))
+                               : $ref[] = default_group(something($file, "")))
         end
     end
 
@@ -413,38 +416,49 @@ function disable_logging(level::LogLevel)
     _min_enabled_level[] = level + 1
 end
 
-let _debug_groups = Symbol[],
+let _debug_groups_include::Vector{Symbol} = Symbol[],
+    _debug_groups_exclude::Vector{Symbol} = Symbol[],
     _debug_str::String = ""
 global function env_override_minlevel(group, _module)
     debug = get(ENV, "JULIA_DEBUG", "")
     if !(debug === _debug_str)
         _debug_str = debug
-        empty!(_debug_groups)
+        empty!(_debug_groups_include)
+        empty!(_debug_groups_exclude)
         for g in split(debug, ',')
-            isempty(g) && continue
-            if g == "all"
-                empty!(_debug_groups)
-                push!(_debug_groups, :all)
-                break
+            if !isempty(g)
+                if startswith(g, "!")
+                    if !isempty(g[2:end])
+                        push!(_debug_groups_exclude, Symbol(g[2:end]))
+                    end
+                else
+                    push!(_debug_groups_include, Symbol(g))
+                end
             end
-            push!(_debug_groups, Symbol(g))
         end
+        unique!(_debug_groups_include)
+        unique!(_debug_groups_exclude)
     end
-    if isempty(_debug_groups)
-        return false
-    end
-    if _debug_groups[1] == :all
-        return true
-    end
-    if isa(group, Symbol) && group in _debug_groups
-        return true
-    end
-    if isa(_module, Module)
-        if nameof(_module) in _debug_groups
+
+    if !(:all in _debug_groups_exclude) && (:all in _debug_groups_include || !isempty(_debug_groups_exclude))
+        if isempty(_debug_groups_exclude)
+            return true
+        elseif isa(group, Symbol) && group in _debug_groups_exclude
+            return false
+        elseif isa(_module, Module) && (nameof(_module) in _debug_groups_exclude || nameof(Base.moduleroot(_module)) in _debug_groups_exclude)
+            return false
+        else
             return true
         end
-        if nameof(Base.moduleroot(_module)) in _debug_groups
+    else
+        if isempty(_debug_groups_include)
+            return false
+        elseif isa(group, Symbol) && group in _debug_groups_include
             return true
+        elseif isa(_module, Module) && (nameof(_module) in _debug_groups_include || nameof(Base.moduleroot(_module)) in _debug_groups_include)
+            return true
+        else
+            return false
         end
     end
     return false

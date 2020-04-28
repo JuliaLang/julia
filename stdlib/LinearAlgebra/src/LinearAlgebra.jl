@@ -124,6 +124,8 @@ export
     opnorm,
     rank,
     rdiv!,
+    reflect!,
+    rotate!,
     schur,
     schur!,
     svd,
@@ -232,9 +234,9 @@ function checksquare(A...)
 end
 
 function char_uplo(uplo::Symbol)
-    if uplo == :U
+    if uplo === :U
         return 'U'
-    elseif uplo == :L
+    elseif uplo === :L
         return 'L'
     else
         throw_uplo()
@@ -422,7 +424,7 @@ end
 
 
 function versioninfo(io::IO=stdout)
-    if Base.libblas_name == "libopenblas" || BLAS.vendor() == :openblas || BLAS.vendor() == :openblas64
+    if Base.libblas_name == "libopenblas" || BLAS.vendor() === :openblas || BLAS.vendor() === :openblas64
         openblas_config = BLAS.openblas_get_config()
         println(io, "BLAS: libopenblas (", openblas_config, ")")
     else
@@ -434,7 +436,7 @@ end
 function __init__()
     try
         BLAS.check()
-        if BLAS.vendor() == :mkl
+        if BLAS.vendor() === :mkl
             ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Cvoid, (Cint,), USE_BLAS64 ? 1 : 0)
         end
         Threads.resize_nthreads!(Abuf)

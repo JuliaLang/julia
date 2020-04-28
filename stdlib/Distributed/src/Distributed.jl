@@ -10,7 +10,7 @@ import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
              hash, ==, kill, close, isopen, showerror
 
 # imports for use
-using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, @sync_add,
+using Base: Process, Semaphore, JLOptions, buffer_writes, @sync_add,
             VERSION_STRING, binding_module, atexit, julia_exename,
             julia_cmd, AsyncGenerator, acquire, release, invokelatest,
             shell_escape_posixly, uv_error, something, notnothing, isbuffered
@@ -91,7 +91,6 @@ include("macros.jl")      # @spawn and friends
 include("workerpool.jl")
 include("pmap.jl")
 include("managers.jl")    # LocalManager and SSHManager
-include("precompile.jl")
 
 function __init__()
     init_parallel()

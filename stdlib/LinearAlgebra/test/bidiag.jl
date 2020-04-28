@@ -132,7 +132,16 @@ Random.seed!(1)
             bidiagcopy(dv, ev, uplo) = Bidiagonal(copy(dv), copy(ev), uplo)
 
             @test istril(Bidiagonal(dv,ev,:L))
+            @test istril(Bidiagonal(dv,ev,:L), 1)
+            @test !istril(Bidiagonal(dv,ev,:L), -1)
+            @test istril(Bidiagonal(zerosdv,ev,:L), -1)
+            @test !istril(Bidiagonal(zerosdv,ev,:L), -2)
+            @test istril(Bidiagonal(zerosdv,zerosev,:L), -2)
             @test !istril(Bidiagonal(dv,ev,:U))
+            @test istril(Bidiagonal(dv,ev,:U), 1)
+            @test !istril(Bidiagonal(dv,ev,:U), -1)
+            @test !istril(Bidiagonal(zerosdv,ev,:U), -1)
+            @test istril(Bidiagonal(zerosdv,zerosev,:U), -1)
             @test tril!(bidiagcopy(dv,ev,:U),-1) == Bidiagonal(zerosdv,zerosev,:U)
             @test tril!(bidiagcopy(dv,ev,:L),-1) == Bidiagonal(zerosdv,ev,:L)
             @test tril!(bidiagcopy(dv,ev,:U),-2) == Bidiagonal(zerosdv,zerosev,:U)
@@ -145,7 +154,16 @@ Random.seed!(1)
             @test_throws ArgumentError tril!(bidiagcopy(dv, ev, :U), n)
 
             @test istriu(Bidiagonal(dv,ev,:U))
+            @test istriu(Bidiagonal(dv,ev,:U), -1)
+            @test !istriu(Bidiagonal(dv,ev,:U), 1)
+            @test istriu(Bidiagonal(zerosdv,ev,:U), 1)
+            @test !istriu(Bidiagonal(zerosdv,ev,:U), 2)
+            @test istriu(Bidiagonal(zerosdv,zerosev,:U), 2)
             @test !istriu(Bidiagonal(dv,ev,:L))
+            @test istriu(Bidiagonal(dv,ev,:L), -1)
+            @test !istriu(Bidiagonal(dv,ev,:L), 1)
+            @test !istriu(Bidiagonal(zerosdv,ev,:L), 1)
+            @test istriu(Bidiagonal(zerosdv,zerosev,:L), 1)
             @test triu!(bidiagcopy(dv,ev,:L),1)  == Bidiagonal(zerosdv,zerosev,:L)
             @test triu!(bidiagcopy(dv,ev,:U),1)  == Bidiagonal(zerosdv,ev,:U)
             @test triu!(bidiagcopy(dv,ev,:U),2)  == Bidiagonal(zerosdv,zerosev,:U)
@@ -309,11 +327,23 @@ Random.seed!(1)
             @test Array(TriSym*T) ≈ Array(TriSym)*Array(T)
             # test pass-through of mul! for AbstractTriangular*Bidiagonal
             Tri = UpperTriangular(diagm(1 => T.ev))
-            @test Array(Tri*T) ≈ Array(Tri)*Array(T)
-            # test mul! for Diagonal*Bidiagonal
-            C = Matrix{elty}(undef, n, n)
             Dia = Diagonal(T.dv)
-            @test mul!(C, Dia, T) ≈ Array(Dia)*Array(T)
+            @test Array(Tri*T) ≈ Array(Tri)*Array(T)
+            # test mul! itself for these types
+            for AA in (Tri, Dia)
+                for f in (identity, transpose, adjoint)
+                    C = rand(elty, n, n)
+                    D = copy(C) + 2.0 * Array(f(AA) * T)
+                    mul!(C, f(AA), T, 2.0, 1.0) ≈ D
+                end
+            end
+            # test mul! for BiTrySym * adjoint/transpose AbstractMat
+            for f in (identity, transpose, adjoint)
+                C = relty == Int ? rand(float(elty), n, n) : rand(elty, n, n)
+                B = rand(elty, n, n)
+                D = copy(C) + 2.0 * Array(T*f(B))
+                mul!(C, T, f(B), 2.0, 1.0) ≈ D
+            end
 
             # Issue #31870
             # Bi/Tri/Sym times Diagonal
@@ -444,15 +474,118 @@ end
     @test vcat((Aub\bb)...) ≈ UpperTriangular(A)\b
 end
 
-@testset "sum" begin
-    @test sum(Bidiagonal([1,2,3], [1,2], :U)) == 9
-    @test sum(Bidiagonal([1,2,3], [1,2], :L)) == 9
+@testset "sum, mapreduce" begin
+    Bu = Bidiagonal([1,2,3], [1,2], :U)
+    Budense = Matrix(Bu)
+    Bl = Bidiagonal([1,2,3], [1,2], :L)
+    Bldense = Matrix(Bl)
+    @test sum(Bu) == 9
+    @test sum(Bl) == 9
+    @test_throws ArgumentError sum(Bu, dims=0)
+    @test sum(Bu, dims=1) == sum(Budense, dims=1)
+    @test sum(Bu, dims=2) == sum(Budense, dims=2)
+    @test sum(Bu, dims=3) == sum(Budense, dims=3)
+    @test typeof(sum(Bu, dims=1)) == typeof(sum(Budense, dims=1))
+    @test mapreduce(one, min, Bu, dims=1) == mapreduce(one, min, Budense, dims=1)
+    @test mapreduce(one, min, Bu, dims=2) == mapreduce(one, min, Budense, dims=2)
+    @test mapreduce(one, min, Bu, dims=3) == mapreduce(one, min, Budense, dims=3)
+    @test typeof(mapreduce(one, min, Bu, dims=1)) == typeof(mapreduce(one, min, Budense, dims=1))
+    @test mapreduce(zero, max, Bu, dims=1) == mapreduce(zero, max, Budense, dims=1)
+    @test mapreduce(zero, max, Bu, dims=2) == mapreduce(zero, max, Budense, dims=2)
+    @test mapreduce(zero, max, Bu, dims=3) == mapreduce(zero, max, Budense, dims=3)
+    @test typeof(mapreduce(zero, max, Bu, dims=1)) == typeof(mapreduce(zero, max, Budense, dims=1))
+    @test_throws ArgumentError sum(Bl, dims=0)
+    @test sum(Bl, dims=1) == sum(Bldense, dims=1)
+    @test sum(Bl, dims=2) == sum(Bldense, dims=2)
+    @test sum(Bl, dims=3) == sum(Bldense, dims=3)
+    @test typeof(sum(Bl, dims=1)) == typeof(sum(Bldense, dims=1))
+    @test mapreduce(one, min, Bl, dims=1) == mapreduce(one, min, Bldense, dims=1)
+    @test mapreduce(one, min, Bl, dims=2) == mapreduce(one, min, Bldense, dims=2)
+    @test mapreduce(one, min, Bl, dims=3) == mapreduce(one, min, Bldense, dims=3)
+    @test typeof(mapreduce(one, min, Bl, dims=1)) == typeof(mapreduce(one, min, Bldense, dims=1))
+    @test mapreduce(zero, max, Bl, dims=1) == mapreduce(zero, max, Bldense, dims=1)
+    @test mapreduce(zero, max, Bl, dims=2) == mapreduce(zero, max, Bldense, dims=2)
+    @test mapreduce(zero, max, Bl, dims=3) == mapreduce(zero, max, Bldense, dims=3)
+    @test typeof(mapreduce(zero, max, Bl, dims=1)) == typeof(mapreduce(zero, max, Bldense, dims=1))
+
+    Bu = Bidiagonal([2], Int[], :U)
+    Budense = Matrix(Bu)
+    Bl = Bidiagonal([2], Int[], :L)
+    Bldense = Matrix(Bl)
+    @test sum(Bu) == 2
+    @test sum(Bl) == 2
+    @test_throws ArgumentError sum(Bu, dims=0)
+    @test sum(Bu, dims=1) == sum(Budense, dims=1)
+    @test sum(Bu, dims=2) == sum(Budense, dims=2)
+    @test sum(Bu, dims=3) == sum(Budense, dims=3)
+    @test typeof(sum(Bu, dims=1)) == typeof(sum(Budense, dims=1))
 end
 
 @testset "empty sub-diagonal" begin
     # `mul!` must use non-specialized method when sub-diagonal is empty
     A = [1 2 3 4]'
     @test A * Tridiagonal(ones(1, 1)) == A
+end
+
+@testset "generalized dot" begin
+    for elty in (Float64, ComplexF64)
+        dv = randn(elty, 5)
+        ev = randn(elty, 4)
+        x = randn(elty, 5)
+        y = randn(elty, 5)
+        for uplo in (:U, :L)
+            B = Bidiagonal(dv, ev, uplo)
+            @test dot(x, B, y) ≈ dot(B'x, y) ≈ dot(x, Matrix(B), y)
+        end
+    end
+end
+
+@testset "multiplication of bidiagonal and triangular matrix" begin
+    n = 5
+    for eltyB in (Int, ComplexF64)
+        if eltyB == Int
+            BU = Bidiagonal(rand(1:7, n), rand(1:7, n - 1), :U)
+            BL = Bidiagonal(rand(1:7, n), rand(1:7, n - 1), :L)
+        else
+            BU = Bidiagonal(randn(eltyB, n), randn(eltyB, n - 1), :U)
+            BL = Bidiagonal(randn(eltyB, n), randn(eltyB, n - 1), :L)
+        end
+        for eltyT in (Int, ComplexF64)
+            for TriT in (LowerTriangular, UnitLowerTriangular, UpperTriangular, UnitUpperTriangular)
+                if eltyT == Int
+                    T = TriT(rand(1:7, n, n))
+                else
+                    T = TriT(randn(eltyT, n, n))
+                end
+                for B in (BU, BL)
+                    MB = Matrix(B)
+                    MT = Matrix(T)
+                    for transB in (identity, adjoint, transpose), transT in (identity, adjoint, transpose)
+                        @test transB(B) * transT(T) ≈ transB(MB) * transT(MT)
+                        @test transT(T) * transB(B) ≈ transT(MT) * transB(MB)
+                    end
+                end
+            end
+        end
+    end
+end
+
+struct MyNotANumberType
+    n::Float64
+end
+Base.zero(n::MyNotANumberType)      = MyNotANumberType(zero(Float64))
+Base.zero(T::Type{MyNotANumberType}) = MyNotANumberType(zero(Float64))
+Base.copy(n::MyNotANumberType)      = MyNotANumberType(copy(n.n))
+Base.transpose(n::MyNotANumberType) = n
+
+@testset "transpose for a non-numeric eltype" begin
+    @test !(MyNotANumberType(1.0) isa Number)
+    a = [MyNotANumberType(1.0), MyNotANumberType(2.0), MyNotANumberType(3.0)]
+    b = [MyNotANumberType(5.0), MyNotANumberType(6.0)]
+    B = Bidiagonal(a, b, :U)
+    tB = transpose(B)
+    @test tB == Bidiagonal(a, b, :L)
+    @test transpose(copy(tB)) == B
 end
 
 end # module TestBidiagonal

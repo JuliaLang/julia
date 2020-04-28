@@ -1,5 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    DNSError
+
+The type of exception thrown when an error occurs in DNS lookup.
+The `host` field indicates the host URL string.
+The `code` field indicates the error code based on libuv.
+"""
 struct DNSError <: Exception
     host::String
     code::Int32
@@ -73,11 +80,16 @@ function getalladdrinfo(host::String)
     end
     ct = current_task()
     preserve_handle(ct)
+    Base.sigatomic_begin()
     uv_req_set_data(req, ct)
     iolock_end()
     r = try
+        Base.sigatomic_end()
         wait()
     finally
+        Base.sigatomic_end()
+        iolock_begin()
+        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we don't get spurious notifications later
@@ -87,6 +99,7 @@ function getalladdrinfo(host::String)
             # done with req
             Libc.free(req)
         end
+        iolock_end()
         unpreserve_handle(ct)
     end
     if isa(r, IOError)
@@ -176,11 +189,16 @@ function getnameinfo(address::Union{IPv4, IPv6})
     end
     ct = current_task()
     preserve_handle(ct)
+    Base.sigatomic_begin()
     uv_req_set_data(req, ct)
     iolock_end()
     r = try
+        Base.sigatomic_end()
         wait()
     finally
+        Base.sigatomic_end()
+        iolock_begin()
+        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we don't get spurious notifications later
@@ -190,6 +208,7 @@ function getnameinfo(address::Union{IPv4, IPv6})
             # done with req
             Libc.free(req)
         end
+        iolock_end()
         unpreserve_handle(ct)
     end
     if isa(r, IOError)
@@ -222,6 +241,9 @@ addresses are available.
 Get an IP address of the local machine of the specified type. Throws if no
 addresses of the specified type are available.
 
+This function is a backwards-compatibility wrapper around [`getipaddrs`](@ref).
+New applications should use [`getipaddrs`](@ref) instead.
+
 # Examples
 ```julia-repl
 julia> getipaddr()
@@ -230,6 +252,8 @@ ip"192.168.1.28"
 julia> getipaddr(IPv6)
 ip"fe80::9731:35af:e1c5:6e49"
 ```
+
+See also: [`getipaddrs`](@ref)
 """
 function getipaddr(addr_type::Type{T}) where T<:IPAddr
     addrs = getipaddrs(addr_type)
@@ -246,15 +270,13 @@ getipaddr() = getipaddr(IPv4)
 
 
 """
-    getipaddrs(; loopback::Bool=false) -> Vector{IPAddr}
+    getipaddrs(addr_type::Type{T}=IPAddr; loopback::Bool=false) where T<:IPAddr -> Vector{T}
 
-Get the IPv4 addresses of the local machine.
+Get the IP addresses of the local machine.
 
-    getipaddrs(addr_type::Type{T}; loopback::Bool=false) where T<:IPAddr -> Vector{T}
+Setting the optional `addr_type` parameter to `IPv4` or `IPv6` causes only addresses of that type to be returned.
 
-Get the IP addresses of the local machine of the specified type.
-
-The `loopback` keyword argument dictates whether loopback addresses are included.
+The `loopback` keyword argument dictates whether loopback addresses (e.g. `ip"127.0.0.1"`, `ip"::1"`) are included.
 
 !!! compat "Julia 1.2"
     This function is available as of Julia 1.2.
@@ -262,15 +284,21 @@ The `loopback` keyword argument dictates whether loopback addresses are included
 # Examples
 ```julia-repl
 julia> getipaddrs()
-2-element Array{IPv4,1}:
- ip"10.255.0.183"
- ip"172.17.0.1"
+5-element Array{IPAddr,1}:
+ ip"198.51.100.17"
+ ip"203.0.113.2"
+ ip"2001:db8:8:4:445e:5fff:fe5d:5500"
+ ip"2001:db8:8:4:c164:402e:7e3c:3668"
+ ip"fe80::445e:5fff:fe5d:5500"
 
 julia> getipaddrs(IPv6)
-2-element Array{IPv6,1}:
- ip"fe80::9731:35af:e1c5:6e49"
+3-element Array{IPv6,1}:
+ ip"2001:db8:8:4:445e:5fff:fe5d:5500"
+ ip"2001:db8:8:4:c164:402e:7e3c:3668"
  ip"fe80::445e:5fff:fe5d:5500"
 ```
+
+See also: [`islinklocaladdr`](@ref), `split(ENV["SSH_CONNECTION"], ' ')[3]`
 """
 function getipaddrs(addr_type::Type{T}=IPAddr; loopback::Bool=false) where T<:IPAddr
     addresses = T[]
@@ -299,4 +327,30 @@ function getipaddrs(addr_type::Type{T}=IPAddr; loopback::Bool=false) where T<:IP
     end
     ccall(:uv_free_interface_addresses, Cvoid, (Ptr{UInt8}, Int32), addr, count)
     return addresses
+end
+
+"""
+    islinklocaladdr(addr::IPAddr)
+
+Tests if an IP address is a link-local address. Link-local addresses
+are not guaranteed to be unique beyond their network segment,
+therefore routers do not forward them. Link-local addresses are from
+the address blocks `169.254.0.0/16` or `fe80::/10`.
+
+# Example
+```julia
+filter(!islinklocaladdr, getipaddrs())
+```
+"""
+function islinklocaladdr(addr::IPv4)
+    # RFC 3927
+    return (addr.host &
+            0xFFFF0000) ==
+            0xA9FE0000
+end
+function islinklocaladdr(addr::IPv6)
+    # RFC 4291
+    return (addr.host &
+            0xFFC00000000000000000000000000000) ==
+            0xFE800000000000000000000000000000
 end

@@ -27,7 +27,7 @@ false
 
 Supertype operator, equivalent to `T2 <: T1`.
 """
-const (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
+(>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 
 """
     supertype(T::DataType)
@@ -682,40 +682,6 @@ function >>>(x::Integer, c::Unsigned)
 end
 >>>(x::Integer, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
 
-# fallback div, fld, and cld implementations
-# NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
-# so it is used here as the basis of float div().
-div(x::T, y::T) where {T<:Real} = convert(T,round((x-rem(x,y))/y))
-
-"""
-    fld(x, y)
-
-Largest integer less than or equal to `x/y`.
-
-# Examples
-```jldoctest
-julia> fld(7.3,5.5)
-1.0
-```
-"""
-fld(x::T, y::T) where {T<:Real} = convert(T,round((x-mod(x,y))/y))
-
-"""
-    cld(x, y)
-
-Smallest integer larger than or equal to `x/y`.
-
-# Examples
-```jldoctest
-julia> cld(5.5,2.2)
-3.0
-```
-"""
-cld(x::T, y::T) where {T<:Real} = convert(T,round((x-modCeil(x,y))/y))
-#rem(x::T, y::T) where {T<:Real} = convert(T,x-y*trunc(x/y))
-#mod(x::T, y::T) where {T<:Real} = convert(T,x-y*floor(x/y))
-modCeil(x::T, y::T) where {T<:Real} = convert(T,x-y*ceil(x/y))
-
 # operator alias
 
 """
@@ -752,6 +718,9 @@ julia> 9 ÷ 4
 
 julia> -5 ÷ 3
 -1
+
+julia> 5.0 ÷ 2
+2.0
 ```
 """
 div
@@ -861,17 +830,39 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 Compose functions: i.e. `(f ∘ g)(args...)` means `f(g(args...))`. The `∘` symbol can be
 entered in the Julia REPL (and most editors, appropriately configured) by typing `\\circ<tab>`.
 
+Function composition also works in prefix form: `∘(f, g)` is the same as `f ∘ g`.
+The prefix form supports composition of multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
+and splatting `∘(fs...)` for composing an iterable collection of functions.
+
+!!! compat "Julia 1.4"
+    Multiple function composition requires at least Julia 1.4.
+
+!!! compat "Julia 1.5"
+    Composition of one function ∘(f)  requires at least Julia 1.5.
+
 # Examples
 ```jldoctest
 julia> map(uppercase∘first, ["apple", "banana", "carrot"])
 3-element Array{Char,1}:
- 'A'
- 'B'
- 'C'
+ 'A': ASCII/Unicode U+0041 (category Lu: Letter, uppercase)
+ 'B': ASCII/Unicode U+0042 (category Lu: Letter, uppercase)
+ 'C': ASCII/Unicode U+0043 (category Lu: Letter, uppercase)
+
+julia> fs = [
+           x -> 2x
+           x -> x/2
+           x -> x-1
+           x -> x+1
+       ];
+
+julia> ∘(fs...)(3)
+3.0
 ```
 """
+function ∘ end
+∘(f) = f
 ∘(f, g) = (x...)->f(g(x...))
-
+∘(f, g, h...) = ∘(f ∘ g, h...)
 
 """
     !f::Function
@@ -1087,6 +1078,17 @@ Some collections follow a slightly different definition. For example,
 use [`haskey`](@ref) or `k in keys(dict)`. For these collections, the result
 is always a `Bool` and never `missing`.
 
+To determine whether an item is not in a given collection, see [`:∉`](@ref).
+You may also negate the `in` by doing `!(a in b)` which is logically similar to "not in".
+
+When broadcasting with `in.(items, collection)` or `items .∈ collection`, both
+`item` and `collection` are broadcasted over, which is often not what is intended.
+For example, if both arguments are vectors (and the dimensions match), the result is
+a vector indicating whether each value in collection `items` is `in` the value at the
+corresponding position in `collection`. To get a vector indicating whether each value
+in `items` is in `collection`, wrap `collection` in a tuple or a `Ref` like this:
+`in.(items, Ref(collection))` or `items .∈ Ref(collection)`.
+
 # Examples
 ```jldoctest
 julia> a = 1:3:20
@@ -1109,6 +1111,22 @@ true
 
 julia> missing in Set([1, 2])
 false
+
+julia> !(21 in a)
+true
+
+julia> !(19 in a)
+false
+
+julia> [1, 2] .∈ [2, 3]
+2-element BitArray{1}:
+ 0
+ 0
+
+julia> [1, 2] .∈ ([2, 3],)
+2-element BitArray{1}:
+ 0
+ 1
 ```
 """
 in, ∋
@@ -1119,6 +1137,14 @@ in, ∋
 
 Negation of `∈` and `∋`, i.e. checks that `item` is not in `collection`.
 
+When broadcasting with `items .∉ collection`, both `item` and `collection` are
+broadcasted over, which is often not what is intended. For example, if both arguments
+are vectors (and the dimensions match), the result is a vector indicating whether
+each value in collection `items` is not in the value at the corresponding position
+in `collection`. To get a vector indicating whether each value in `items` is not in
+`collection`, wrap `collection` in a tuple or a `Ref` like this:
+`items .∉ Ref(collection)`.
+
 # Examples
 ```jldoctest
 julia> 1 ∉ 2:4
@@ -1126,6 +1152,16 @@ true
 
 julia> 1 ∉ 1:3
 false
+
+julia> [1, 2] .∉ [2, 3]
+2-element BitArray{1}:
+ 1
+ 1
+
+julia> [1, 2] .∉ ([2, 3],)
+2-element BitArray{1}:
+ 1
+ 0
 ```
 """
 ∉, ∌

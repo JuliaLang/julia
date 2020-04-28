@@ -185,6 +185,7 @@ end
 
 @testset "sprint, repr" begin
     @test sprint(show, "text/plain", '$') == "'\$': ASCII/Unicode U+0024 (category Sc: Symbol, currency)"
+    @test sprint(show, "text/plain", '$', context=:compact => true) == "'\$'"
     @test repr('$') == "'\$'"
 end
 
@@ -289,4 +290,13 @@ end
 
 @testset "broadcasting of Char" begin
     @test identity.('a') == 'a'
+end
+
+@testset "code point format of U+ syntax (PR 33291)" begin
+    @test repr("text/plain", '\n') == "'\\n': ASCII/Unicode U+000A (category Cc: Other, control)"
+    @test repr("text/plain", '/') == "'/': ASCII/Unicode U+002F (category Po: Punctuation, other)"
+    @test repr("text/plain", '\u10e') == "'Ď': Unicode U+010E (category Lu: Letter, uppercase)"
+    @test repr("text/plain", '\u3a2c') == "'㨬': Unicode U+3A2C (category Lo: Letter, other)"
+    @test repr("text/plain", '\U001f428') == "'🐨': Unicode U+1F428 (category So: Symbol, other)"
+    @test repr("text/plain", '\U010f321') == "'\\U10f321': Unicode U+10F321 (category Co: Other, private use)"
 end

@@ -166,7 +166,7 @@ downloaded (or in a few cases, included in the Julia source
 repository) and then compiled from source the first time you run
 `make`:
 
-- **[LLVM]** (6.0 + [patches](https://github.com/JuliaLang/julia/tree/master/deps/patches)) — compiler infrastructure (see [note below](#llvm)).
+- **[LLVM]** (9.0 + [patches](https://github.com/JuliaLang/julia/tree/master/deps/patches)) — compiler infrastructure (see [note below](#llvm)).
 - **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
 - **[libuv]**  (custom fork) — portable, high-performance event-based I/O library.
 - **[OpenLibm]**             — portable libm library containing elementary math functions.
@@ -257,3 +257,15 @@ Add the following to the `Make.user` file:
     USE_INTEL_MKL = 1
 
 It is highly recommended to start with a fresh clone of the Julia repository.
+
+## Source distributions of releases
+
+Each pre-release and release of Julia has a "full" source distribution and a "light" source
+distribution.
+
+The full source distribution contains the source code for Julia and all dependencies so
+that it can be built from source without an internet connection. The light source
+distribution does not include the source code of dependencies.
+
+For example, `julia-1.0.0.tar.gz` is the light source distribution for the `v1.0.0` release
+of Julia, while `julia-1.0.0-full.tar.gz` is the full source distribution.

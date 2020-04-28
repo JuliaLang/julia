@@ -142,13 +142,13 @@ static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exceptio
     if (!ptls2->safe_restore) {
         assert(exception);
         ptls2->bt_size = rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE,
-                                           (bt_context_t*)&state);
+                                           (bt_context_t*)&state, ptls2->pgcstack, 0);
         ptls2->sig_exception = exception;
     }
     jl_call_in_state(ptls2, &state, &jl_sig_throw);
     ret = thread_set_state(thread, x86_THREAD_STATE64,
                            (thread_state_t)&state, count);
-    HANDLE_MACH_ERROR("thread_set_state",ret);
+    HANDLE_MACH_ERROR("thread_set_state", ret);
 }
 
 //exc_server uses dlsym to find symbol
@@ -343,7 +343,7 @@ static void jl_exit_thread0(int exitstate)
     jl_call_in_state(ptls2, &state, (void (*)(void))exit_func);
     ret = thread_set_state(thread, x86_THREAD_STATE64,
                            (thread_state_t)&state, count);
-    HANDLE_MACH_ERROR("thread_set_state",ret);
+    HANDLE_MACH_ERROR("thread_set_state", ret);
 
     ret = thread_resume(thread);
     HANDLE_MACH_ERROR("thread_resume", ret);
@@ -412,7 +412,7 @@ void *mach_profile_listener(void *arg)
 #ifdef LIBOSXUNWIND
     mach_profiler_thread = mach_thread_self();
 #endif
-    mig_reply_error_t *bufRequest = (mig_reply_error_t *) malloc(max_size);
+    mig_reply_error_t *bufRequest = (mig_reply_error_t*)malloc_s(max_size);
     while (1) {
         kern_return_t ret = mach_msg(&bufRequest->Head, MACH_RCV_MSG,
                                      0, max_size, profile_port,
@@ -427,52 +427,50 @@ void *mach_profile_listener(void *arg)
 
             unw_context_t *uc;
             jl_thread_suspend_and_get_state(i, &uc);
-
+            if (running) {
 #ifdef LIBOSXUNWIND
-            /*
-             *  Unfortunately compact unwind info is incorrectly generated for quite a number of
-             *  libraries by quite a large number of compilers. We can fall back to DWARF unwind info
-             *  in some cases, but in quite a number of cases (especially libraries not compiled in debug
-             *  mode, only the compact unwind info may be available). Even more unfortunately, there is no
-             *  way to detect such bogus compact unwind info (other than noticing the resulting segfault).
-             *  What we do here is ugly, but necessary until the compact unwind info situation improves.
-             *  We try to use the compact unwind info and if that results in a segfault, we retry with DWARF info.
-             *  Note that in a small number of cases this may result in bogus stack traces, but at least the topmost
-             *  entry will always be correct, and the number of cases in which this is an issue is rather small.
-             *  Other than that, this implementation is not incorrect as the other thread is paused while we are profiling
-             *  and during stack unwinding we only ever read memory, but never write it.
-             */
+                /*
+                 *  Unfortunately compact unwind info is incorrectly generated for quite a number of
+                 *  libraries by quite a large number of compilers. We can fall back to DWARF unwind info
+                 *  in some cases, but in quite a number of cases (especially libraries not compiled in debug
+                 *  mode, only the compact unwind info may be available). Even more unfortunately, there is no
+                 *  way to detect such bogus compact unwind info (other than noticing the resulting segfault).
+                 *  What we do here is ugly, but necessary until the compact unwind info situation improves.
+                 *  We try to use the compact unwind info and if that results in a segfault, we retry with DWARF info.
+                 *  Note that in a small number of cases this may result in bogus stack traces, but at least the topmost
+                 *  entry will always be correct, and the number of cases in which this is an issue is rather small.
+                 *  Other than that, this implementation is not incorrect as the other thread is paused while we are profiling
+                 *  and during stack unwinding we only ever read memory, but never write it.
+                 */
 
-            forceDwarf = 0;
-            unw_getcontext(&profiler_uc); // will resume from this point if the next lines segfault at any point
+                forceDwarf = 0;
+                unw_getcontext(&profiler_uc); // will resume from this point if the next lines segfault at any point
 
-            if (forceDwarf == 0) {
-                // Save the backtrace
-                bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
-            }
-            else if (forceDwarf == 1) {
-                bt_size_cur += rec_backtrace_ctx_dwarf((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
-            }
-            else if (forceDwarf == -1) {
-                jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
-            }
+                if (forceDwarf == 0) {
+                    // Save the backtrace
+                    bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL, 1);
+                }
+                else if (forceDwarf == 1) {
+                    bt_size_cur += rec_backtrace_ctx_dwarf((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL);
+                }
+                else if (forceDwarf == -1) {
+                    jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
+                }
 
-            forceDwarf = -2;
+                forceDwarf = -2;
 #else
-            bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
+                bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL);
 #endif
 
-            // Mark the end of this block with 0
-            bt_data_prof[bt_size_cur++] = 0;
+                // Mark the end of this block with 0
+                bt_data_prof[bt_size_cur++].uintptr = 0;
 
-            // We're done! Resume the thread.
-            jl_thread_resume(i, 0);
-
-            if (running) {
                 // Reset the alarm
                 kern_return_t ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
                 HANDLE_MACH_ERROR("clock_alarm", ret)
             }
+            // We're done! Resume the thread.
+            jl_thread_resume(i, 0);
         }
     }
 }

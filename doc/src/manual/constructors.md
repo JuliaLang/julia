@@ -38,7 +38,7 @@ addresses all of these cases and more.
     is used to mean "constructor method" rather than "constructor function", especially as it is often
     used in the sense of singling out a particular method of the constructor from all of the others.
 
-## Outer Constructor Methods
+## [Outer Constructor Methods](@id man-outer-constructor-methods)
 
 A constructor is just like any other function in Julia in that its overall behavior is defined
 by the combined behavior of its methods. Accordingly, you can add functionality to a constructor
@@ -71,7 +71,7 @@ become clear very shortly, additional constructor methods declared as normal met
 are called *outer* constructor methods. Outer constructor methods can only ever create a new instance
 by calling another constructor method, such as the automatically provided default ones.
 
-## Inner Constructor Methods
+## [Inner Constructor Methods](@id man-inner-constructor-methods)
 
 While outer constructor methods succeed in addressing the problem of providing additional convenience
 methods for constructing objects, they fail to address the other two use cases mentioned in the
@@ -550,7 +550,7 @@ julia> struct SummedArray{T<:Number,S<:Number}
 julia> SummedArray(Int32[1; 2; 3], Int32(6))
 ERROR: MethodError: no method matching SummedArray(::Array{Int32,1}, ::Int32)
 Closest candidates are:
-  SummedArray(::Array{T,1}) where T at none:5
+  SummedArray(::Array{T,1}) where T at none:4
 ```
 
 This constructor will be invoked by the syntax `SummedArray(a)`. The syntax `new{T,S}` allows

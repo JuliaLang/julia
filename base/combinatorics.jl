@@ -36,6 +36,22 @@ end
 
 # Basic functions for working with permutations
 
+@inline function _foldoneto(op, acc, ::Val{N}) where N
+    @assert N::Integer > 0
+    if @generated
+        quote
+            acc_0 = acc
+            Base.Cartesian.@nexprs $N i -> acc_{i} = op(acc_{i-1}, i)
+            return $(Symbol(:acc_, N))
+        end
+    else
+        for i in 1:N
+            acc = op(acc, i)
+        end
+        return acc
+    end
+end
+
 """
     isperm(v) -> Bool
 
@@ -50,7 +66,9 @@ julia> isperm([1; 3])
 false
 ```
 """
-function isperm(A)
+isperm(A) = _isperm(A)
+
+function _isperm(A)
     n = length(A)
     used = falses(n)
     for a in A
@@ -62,6 +80,18 @@ end
 isperm(p::Tuple{}) = true
 isperm(p::Tuple{Int}) = p[1] == 1
 isperm(p::Tuple{Int,Int}) = ((p[1] == 1) & (p[2] == 2)) | ((p[1] == 2) & (p[2] == 1))
+
+function isperm(P::Tuple)
+    valn = Val(length(P))
+    _foldoneto(true, valn) do b,i
+        s = _foldoneto(false, valn) do s, j
+            s || P[j]==i
+        end
+        b&s
+    end
+end
+
+isperm(P::Any16) = _isperm(P)
 
 # swap columns i and j of a, in-place
 function swapcols!(a::AbstractMatrix, i, j)
@@ -213,17 +243,17 @@ julia> A = ['a','b','c','d'];
 
 julia> B = A[v]
 4-element Array{Char,1}:
- 'b'
- 'd'
- 'c'
- 'a'
+ 'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
+ 'd': ASCII/Unicode U+0064 (category Ll: Letter, lowercase)
+ 'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
+ 'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 
 julia> B[invperm(v)]
 4-element Array{Char,1}:
- 'a'
- 'b'
- 'c'
- 'd'
+ 'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
+ 'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
+ 'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
+ 'd': ASCII/Unicode U+0064 (category Ll: Letter, lowercase)
 ```
 """
 function invperm(a::AbstractVector)
@@ -242,7 +272,21 @@ function invperm(p::Union{Tuple{},Tuple{Int},Tuple{Int,Int}})
     isperm(p) || throw(ArgumentError("argument is not a permutation"))
     p  # in dimensions 0-2, every permutation is its own inverse
 end
-invperm(a::Tuple) = (invperm([a...])...,)
+
+function invperm(P::Tuple)
+    valn = Val(length(P))
+    ntuple(valn) do i
+        s = _foldoneto(nothing, valn) do s, j
+            s !== nothing && return s
+            P[j]==i && return j
+            nothing
+        end
+        s === nothing && throw(ArgumentError("argument is not a permutation"))
+        s
+    end
+end
+
+invperm(P::Any16) = Tuple(invperm(collect(P)))
 
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
 """

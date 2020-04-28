@@ -90,7 +90,7 @@ Example: On errors, retry `f` on an element a maximum of 3 times without any del
 pmap(f, c; retry_delays = zeros(3))
 ```
 
-Example: Retry `f` only if the exception is not of type `InexactError`, with exponentially increasing
+Example: Retry `f` only if the exception is not of type [`InexactError`](@ref), with exponentially increasing
 delays up to 3 times. Return a `NaN` in place for all `InexactError` occurrences.
 ```julia
 pmap(f, c; on_error = e->(isa(e, InexactError) ? NaN : rethrow()), retry_delays = ExponentialBackOff(n = 3))

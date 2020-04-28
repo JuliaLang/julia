@@ -233,7 +233,7 @@ are compared according to the [IEEE 754 standard](https://en.wikipedia.org/wiki/
   * Finite numbers are ordered in the usual manner.
   * Positive zero is equal but not greater than negative zero.
   * `Inf` is equal to itself and greater than everything else except `NaN`.
-  * `-Inf` is equal to itself and less then everything else except `NaN`.
+  * `-Inf` is equal to itself and less than everything else except `NaN`.
   * `NaN` is not equal to, not less than, and not greater than anything, including itself.
 
 The last point is potentially surprising and thus worth noting:
@@ -386,7 +386,7 @@ You can also find the numerical precedence for any given operator via the built-
 
 ```jldoctest
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
-(11, 13, 17)
+(11, 12, 17)
 
 julia> Base.operator_precedence(:sin), Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
 (0, 1, 1)

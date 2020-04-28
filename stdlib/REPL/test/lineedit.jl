@@ -246,7 +246,7 @@ for i = 1:6
     @test position(buf) == i
 end
 @test eof(buf)
-for i = 5:0
+for i = 5:-1:0
     LineEdit.edit_move_left(buf)
     @test position(buf) == i
 end
@@ -606,7 +606,7 @@ end
 
 @testset "change case on the right" begin
     local buf = IOBuffer()
-    edit_insert(buf, "aa bb CC")
+    edit_insert(buf, "aa bB CC")
     seekstart(buf)
     LineEdit.edit_upper_case(buf)
     LineEdit.edit_title_case(buf)
@@ -878,5 +878,20 @@ end
     buf.mark = 0
     seek(buf, 1)
     @test transform!(transpose_lines_down_reg!, buf) == ("l2\nl3\nl1", 4, 3)
+end
 
+@testset "edit_insert_last_word" begin
+    get_last_word(str::String) = LineEdit.get_last_word(IOBuffer(str))
+    @test get_last_word("1+2") == "2"
+    @test get_last_word("1+23") == "23"
+    @test get_last_word("1+2") == "2"
+    @test get_last_word(""" "a" * "b" """) == "b"
+    @test get_last_word(""" "a" * 'b' """) == "b"
+    @test get_last_word(""" "a" * `b` """) == "b"
+    @test get_last_word("g()") == "g()"
+    @test get_last_word("g(1, 2)") == "2"
+    @test get_last_word("g(1, f())") == "f"
+    @test get_last_word("a[1]") == "1"
+    @test get_last_word("a[b[]]") == "b"
+    @test get_last_word("a[]") == "a[]"
 end

@@ -212,7 +212,7 @@ eachindex(itrs...) = keys(itrs...)
 eachindex(A::AbstractVector) = (@_inline_meta(); axes1(A))
 
 @noinline function throw_eachindex_mismatch(::IndexLinear, A...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(LinearIndices.(A), ", ", " and "))"))
+    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(eachindex.(A), ", ", " and "))"))
 end
 @noinline function throw_eachindex_mismatch(::IndexCartesian, A...)
     throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(axes.(A), ", ", " and "))"))
@@ -232,9 +232,8 @@ If you supply more than one `AbstractArray` argument, `eachindex` will create an
 iterable object that is fast for all arguments (a [`UnitRange`](@ref)
 if all inputs have fast linear indexing, a [`CartesianIndices`](@ref)
 otherwise).
-If the arrays have different sizes and/or dimensionalities, `eachindex` will return an
-iterable that spans the largest range along each dimension.
-
+If the arrays have different sizes and/or dimensionalities, a DimensionMismatch exception
+will be thrown.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4];
@@ -680,10 +679,10 @@ Create an empty vector similar to `v`, optionally changing the `eltype`.
 
 ```jldoctest
 julia> empty([1.0, 2.0, 3.0])
-0-element Array{Float64,1}
+Float64[]
 
 julia> empty([1.0, 2.0, 3.0], String)
-0-element Array{String,1}
+String[]
 ```
 """
 empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
@@ -1190,13 +1189,13 @@ mightalias(A::AbstractArray, B::AbstractArray) = !isbits(A) && !isbits(B) && !_i
 mightalias(x, y) = false
 
 _isdisjoint(as::Tuple{}, bs::Tuple{}) = true
-_isdisjoint(as::Tuple{}, bs::Tuple{Any}) = true
+_isdisjoint(as::Tuple{}, bs::Tuple{UInt}) = true
 _isdisjoint(as::Tuple{}, bs::Tuple) = true
-_isdisjoint(as::Tuple{Any}, bs::Tuple{}) = true
-_isdisjoint(as::Tuple{Any}, bs::Tuple{Any}) = as[1] != bs[1]
-_isdisjoint(as::Tuple{Any}, bs::Tuple) = !(as[1] in bs)
+_isdisjoint(as::Tuple{UInt}, bs::Tuple{}) = true
+_isdisjoint(as::Tuple{UInt}, bs::Tuple{UInt}) = as[1] != bs[1]
+_isdisjoint(as::Tuple{UInt}, bs::Tuple) = !(as[1] in bs)
 _isdisjoint(as::Tuple, bs::Tuple{}) = true
-_isdisjoint(as::Tuple, bs::Tuple{Any}) = !(bs[1] in as)
+_isdisjoint(as::Tuple, bs::Tuple{UInt}) = !(bs[1] in as)
 _isdisjoint(as::Tuple, bs::Tuple) = !(as[1] in bs) && _isdisjoint(tail(as), bs)
 
 """
@@ -1540,6 +1539,15 @@ julia> hcat(c...)
  1  4
  2  5
  3  6
+
+julia> x = Matrix(undef, 3, 0)  # x = [] would have created an Array{Any, 1}, but need an Array{Any, 2}
+3×0 Array{Any,2}
+
+julia> hcat(x, [1; 2; 3])
+3×1 Array{Any,2}:
+ 1
+ 2
+ 3
 ```
 """
 hcat(X...) = cat(X...; dims=Val(2))
@@ -2149,7 +2157,11 @@ julia> a
  6.0
 ```
 """
-map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F} = map_n!(f, dest, As)
+function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
+    isempty(As) && throw(ArgumentError(
+        """map! requires at least one "source" argument"""))
+    map_n!(f, dest, As)
+end
 
 map(f) = f()
 map(f, iters...) = collect(Generator(f, iters...))

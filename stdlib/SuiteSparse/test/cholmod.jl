@@ -5,7 +5,9 @@ using DelimitedFiles
 using Test
 using Random
 using Serialization
-using LinearAlgebra: issuccess, PosDefException
+using LinearAlgebra: issuccess, PosDefException, ZeroPivotException
+using SparseArrays
+using SparseArrays: getcolptr
 
 # CHOLMOD tests
 Random.seed!(123)
@@ -232,7 +234,7 @@ end
 @testset "illegal dtype (for now but should be supported at some point)" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
         (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct[Threads.threadid()])
     puint = convert(Ptr{UInt32}, p)
     unsafe_store!(puint, CHOLMOD.SINGLE, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 4)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -241,7 +243,7 @@ end
 @testset "illegal dtype" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
         (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct[Threads.threadid()])
     puint = convert(Ptr{UInt32}, p)
     unsafe_store!(puint, 5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 4)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -250,7 +252,7 @@ end
 @testset "illegal xtype" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
         (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct[Threads.threadid()])
     puint = convert(Ptr{UInt32}, p)
     unsafe_store!(puint, 3, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 3)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -259,7 +261,7 @@ end
 @testset "illegal itype I" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
         (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct[Threads.threadid()])
     puint = convert(Ptr{UInt32}, p)
     unsafe_store!(puint, CHOLMOD.INTLONG, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 2)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -268,7 +270,7 @@ end
 @testset "illegal itype II" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
         (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct[Threads.threadid()])
     puint = convert(Ptr{UInt32}, p)
     unsafe_store!(puint,  5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 2)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -319,7 +321,7 @@ end
 @testset "test free!" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Float64}},
         (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct[Threads.threadid()])
     @test CHOLMOD.free!(p)
 end
 
@@ -330,11 +332,11 @@ end
     A1Sparse = CHOLMOD.Sparse(A1)
     A2Sparse = CHOLMOD.Sparse(A2)
     A1pdSparse = CHOLMOD.Sparse(
-        A1pd.m,
-        A1pd.n,
-        SuiteSparse.decrement(A1pd.colptr),
-        SuiteSparse.decrement(A1pd.rowval),
-        A1pd.nzval)
+        size(A1pd, 1),
+        size(A1pd, 2),
+        SuiteSparse.decrement(getcolptr(A1pd)),
+        SuiteSparse.decrement(rowvals(A1pd)),
+        nonzeros(A1pd))
 
     ## High level interface
     @test isa(CHOLMOD.Sparse(3, 3, [0,1,3,4], [0,2,1,2], fill(1., 4)), CHOLMOD.Sparse) # Sparse doesn't require columns to be sorted
@@ -382,8 +384,8 @@ end
     b = fill(1., size(A1, 1))
     @test_throws PosDefException cholesky(C - 2λmaxC*I)
     @test_throws PosDefException cholesky(C, shift=-2λmaxC)
-    @test_throws PosDefException ldlt(C - C[1,1]*I)
-    @test_throws PosDefException ldlt(C, shift=-real(C[1,1]))
+    @test_throws ZeroPivotException ldlt(C - C[1,1]*I)
+    @test_throws ZeroPivotException ldlt(C, shift=-real(C[1,1]))
     @test !isposdef(cholesky(C - 2λmaxC*I; check = false))
     @test !isposdef(cholesky(C, shift=-2λmaxC; check = false))
     @test !issuccess(ldlt(C - C[1,1]*I; check = false))
@@ -704,6 +706,16 @@ end
     @test A\view(Matrix(1.0I, 5, 5), :, :) ≈ Matrix(Diagonal(x))
 end
 
+@testset "Test \\ for Factor and SparseVecOrMat" begin
+    sparseI = sparse(1.0I, 100, 100)
+    sparseb = sprandn(100, 0.5)
+    sparseB = sprandn(100, 100, 0.5)
+    chI = cholesky(sparseI)
+    @test chI \ sparseb ≈ sparseb
+    @test chI \ sparseB ≈ sparseB
+    @test chI \ sparseI ≈ sparseI
+end
+
 @testset "Real factorization and complex rhs" begin
     A = sprandn(5, 5, 0.4) |> t -> t't + I
     B = complex.(randn(5, 2), randn(5, 2))
@@ -766,7 +778,8 @@ end
 @testset "Check inputs to Sparse. Related to #20024" for A_ in (
     SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1,2], Float64[]),
     SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1,2], Float64[1.0]))
-    @test_throws ArgumentError CHOLMOD.Sparse(size(A_)..., A_.colptr .- 1, A_.rowval .- 1, A_.nzval)
+    args = (size(A_)..., getcolptr(A_) .- 1, rowvals(A_) .- 1, nonzeros(A_))
+    @test_throws ArgumentError CHOLMOD.Sparse(args...)
     @test_throws ArgumentError CHOLMOD.Sparse(A_)
 end
 
@@ -846,9 +859,29 @@ end
     B = sparse(ComplexF64[0 0; 0 0])
     for M in (A, B, Symmetric(A), Hermitian(B))
         F = ldlt(M; check = false)
-        @test_throws PosDefException ldlt(M)
-        @test_throws PosDefException ldlt!(F, M)
+        @test_throws ZeroPivotException ldlt(M)
+        @test_throws ZeroPivotException ldlt!(F, M)
         @test !issuccess(ldlt(M; check = false))
         @test !issuccess(ldlt!(F, M; check = false))
     end
+end
+
+@testset "Issue #27860" begin
+    for typeA in (Float64, ComplexF64), typeB in (Float64, ComplexF64), transform in (adjoint, transpose)
+        A = sparse(typeA[2.0 0.1; 0.1 2.0])
+        B = randn(typeB, 2, 2)
+        @test A \ transform(B) ≈ cholesky(A) \ transform(B) ≈ Matrix(A) \ transform(B)
+    end
+end
+
+@testset "Issue #33365" begin
+    A = Sparse(spzeros(0, 0))
+    @test A * A' == A
+    @test A' * A == A
+    B = Sparse(spzeros(0, 4))
+    @test B * B' == Sparse(spzeros(0, 0))
+    @test B' * B == Sparse(spzeros(4, 4))
+    C = Sparse(spzeros(3, 0))
+    @test C * C' == Sparse(spzeros(3, 3))
+    @test C' * C == Sparse(spzeros(0, 0))
 end

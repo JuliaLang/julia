@@ -104,7 +104,7 @@ install-osxunwind: $(build_prefix)/manifest/osxunwind
 
 else # USE_BINARYBUILDER_LIBUNWIND
 
-UNWIND_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LibUnwind-v$(UNWIND_VER)-$(UNWIND_BB_REL)
+UNWIND_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LibUnwind-v$(UNWIND_VER)+$(UNWIND_BB_REL)
 UNWIND_BB_NAME := LibUnwind.v$(UNWIND_VER)
 
 $(eval $(call bb-install,unwind,UNWIND,false))

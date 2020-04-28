@@ -64,6 +64,9 @@ function scrub_exc_stack(stack)
     return Any[ (x[1], scrub_backtrace(x[2])) for x in stack ]
 end
 
+# define most of the test infrastructure without type specialization
+@nospecialize
+
 """
     Result
 
@@ -89,10 +92,10 @@ function Base.show(io::IO, t::Pass)
     if !(t.orig_expr === nothing)
         print(io, "\n  Expression: ", t.orig_expr)
     end
-    if t.test_type == :test_throws
+    if t.test_type === :test_throws
         # The correct type of exception was thrown
         print(io, "\n      Thrown: ", typeof(t.value))
-    elseif t.test_type == :test && t.data !== nothing
+    elseif t.test_type === :test && t.data !== nothing
         # The test was an expression, so display the term-by-term
         # evaluated version as well
         print(io, "\n   Evaluated: ", t.data)
@@ -117,15 +120,15 @@ function Base.show(io::IO, t::Fail)
     print(io, " at ")
     printstyled(io, something(t.source.file, :none), ":", t.source.line, "\n"; bold=true, color=:default)
     print(io, "  Expression: ", t.orig_expr)
-    if t.test_type == :test_throws_wrong
+    if t.test_type === :test_throws_wrong
         # An exception was thrown, but it was of the wrong type
         print(io, "\n    Expected: ", t.data)
         print(io, "\n      Thrown: ", isa(t.data, Type) ? typeof(t.value) : t.value)
-    elseif t.test_type == :test_throws_nothing
+    elseif t.test_type === :test_throws_nothing
         # An exception was expected, but no exception was thrown
         print(io, "\n    Expected: ", t.data)
         print(io, "\n  No exception thrown")
-    elseif t.test_type == :test && t.data !== nothing
+    elseif t.test_type === :test && t.data !== nothing
         # The test was an expression, so display the term-by-term
         # evaluated version as well
         print(io, "\n   Evaluated: ", t.data)
@@ -164,34 +167,32 @@ mutable struct Error <: Result
     end
 end
 function Base.show(io::IO, t::Error)
-    if t.test_type == :test_interrupted
+    if t.test_type === :test_interrupted
         printstyled(io, "Interrupted", color=Base.error_color())
         return
     end
     printstyled(io, "Error During Test"; bold=true, color=Base.error_color())
     print(io, " at ")
     printstyled(io, something(t.source.file, :none), ":", t.source.line, "\n"; bold=true, color=:default)
-    if t.test_type == :test_nonbool
+    if t.test_type === :test_nonbool
         println(io, "  Expression evaluated to non-Boolean")
         println(io, "  Expression: ", t.orig_expr)
         print(  io, "       Value: ", t.value)
-    elseif t.test_type == :test_error
+    elseif t.test_type === :test_error
         println(io, "  Test threw exception")
         println(io, "  Expression: ", t.orig_expr)
         # Capture error message and indent to match
-        print(io, join(map(line->string("  ",line),
-                           split(t.backtrace, "\n")), "\n"))
-    elseif t.test_type == :test_unbroken
+        join(io, ("  " * line for line in split(t.backtrace, "\n")), "\n")
+    elseif t.test_type === :test_unbroken
         # A test that was expected to fail did not
         println(io, " Unexpected Pass")
         println(io, " Expression: ", t.orig_expr)
         println(io, " Got correct result, please change to @test if no longer broken.")
-    elseif t.test_type == :nontest_error
+    elseif t.test_type === :nontest_error
         # we had an error outside of a @test
         println(io, "  Got exception outside of a @test")
         # Capture error message and indent to match
-        print(io, join(map(line->string("  ",line),
-                           split(t.backtrace, "\n")), "\n"))
+        join(io, ("  " * line for line in split(t.backtrace, "\n")), "\n")
     end
 end
 
@@ -207,7 +208,7 @@ mutable struct Broken <: Result
 end
 function Base.show(io::IO, t::Broken)
     printstyled(io, "Test Broken\n"; bold=true, color=Base.warn_color())
-    if t.test_type == :skipped && !(t.orig_expr === nothing)
+    if t.test_type === :skipped && !(t.orig_expr === nothing)
         print(io, "  Skipped: ", t.orig_expr)
     elseif !(t.orig_expr === nothing)
         print(io, "  Expression: ", t.orig_expr)
@@ -237,7 +238,7 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
     quoted_args = quoted.args
     n = length(evaled_args)
     kw_suffix = ""
-    if evaluated.head == :comparison
+    if evaluated.head === :comparison
         args = evaled_args
         while i < n
             a, op, b = args[i], args[i+1], args[i+2]
@@ -249,7 +250,7 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
             i += 2
         end
 
-    elseif evaluated.head == :call
+    elseif evaluated.head === :call
         op = evaled_args[1]
         kwargs = evaled_args[2].args  # Keyword arguments from `Expr(:parameters, ...)`
         args = evaled_args[3:n]
@@ -294,9 +295,9 @@ so that e.g. `@test a ≈ b atol=ε` means `@test ≈(a, b, atol=ε)`.
 test_expr!(m, ex) = ex
 
 function test_expr!(m, ex, kws...)
-    ex isa Expr && ex.head == :call || @goto fail
+    ex isa Expr && ex.head === :call || @goto fail
     for kw in kws
-        kw isa Expr && kw.head == :(=) || @goto fail
+        kw isa Expr && kw.head === :(=) || @goto fail
         kw.head = :kw
         push!(ex.args, kw)
     end
@@ -362,7 +363,7 @@ Test Broken
 
 julia> @test_broken 1 == 2 atol=0.1
 Test Broken
-  Expression: ==(1, 2, atol=0.1)
+  Expression: ==(1, 2, atol = 0.1)
 ```
 """
 macro test_broken(ex, kws...)
@@ -391,7 +392,7 @@ Test Broken
 
 julia> @test_skip 1 == 2 atol=0.1
 Test Broken
-  Skipped: ==(1, 2, atol=0.1)
+  Skipped: ==(1, 2, atol = 0.1)
 ```
 """
 macro test_skip(ex, kws...)
@@ -410,18 +411,18 @@ function get_test_result(ex, source)
     negate = QuoteNode(false)
     orig_ex = ex
     # Evaluate `not` wrapped functions separately for pretty-printing failures
-    if isa(ex, Expr) && ex.head == :call && length(ex.args) == 2 && ex.args[1] === :!
+    if isa(ex, Expr) && ex.head === :call && length(ex.args) == 2 && ex.args[1] === :!
         negate = QuoteNode(true)
         ex = ex.args[2]
     end
     # Normalize non-dot comparison operator calls to :comparison expressions
-    is_splat = x -> isa(x, Expr) && x.head == :...
-    if isa(ex, Expr) && ex.head == :call && length(ex.args) == 3 &&
+    is_splat = x -> isa(x, Expr) && x.head === :...
+    if isa(ex, Expr) && ex.head === :call && length(ex.args) == 3 &&
         first(string(ex.args[1])) != '.' && !is_splat(ex.args[2]) && !is_splat(ex.args[3]) &&
         (ex.args[1] === :(==) || Base.operator_precedence(ex.args[1]) == comparison_prec)
         ex = Expr(:comparison, ex.args[2], ex.args[1], ex.args[3])
     end
-    if isa(ex, Expr) && ex.head == :comparison
+    if isa(ex, Expr) && ex.head === :comparison
         # pass all terms of the comparison to `eval_comparison`, as an Expr
         escaped_terms = [esc(arg) for arg in ex.args]
         quoted_terms = [QuoteNode(arg) for arg in ex.args]
@@ -431,7 +432,7 @@ function get_test_result(ex, source)
             $(QuoteNode(source)),
             $negate,
         ))
-    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in DISPLAY_FAILED
+    elseif isa(ex, Expr) && ex.head === :call && ex.args[1] in DISPLAY_FAILED
         escaped_func = esc(ex.args[1])
         quoted_func = QuoteNode(ex.args[1])
 
@@ -441,18 +442,18 @@ function get_test_result(ex, source)
         # Keywords that occur before `;`. Note that the keywords are being revised into
         # a form we can splat.
         for a in ex.args[2:end]
-            if isa(a, Expr) && a.head == :kw
+            if isa(a, Expr) && a.head === :kw
                 push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[1]), esc(a.args[2])))
             end
         end
 
         # Keywords that occur after ';'
         parameters_expr = ex.args[2]
-        if isa(parameters_expr, Expr) && parameters_expr.head == :parameters
+        if isa(parameters_expr, Expr) && parameters_expr.head === :parameters
             for a in parameters_expr.args
-                if isa(a, Expr) && a.head == :kw
+                if isa(a, Expr) && a.head === :kw
                     push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[1]), esc(a.args[2])))
-                elseif isa(a, Expr) && a.head == :...
+                elseif isa(a, Expr) && a.head === :...
                     push!(escaped_kwargs, Expr(:..., esc(a.args[1])))
                 end
             end
@@ -462,7 +463,7 @@ function get_test_result(ex, source)
         for a in ex.args[2:end]
             isa(a, Expr) && a.head in (:kw, :parameters) && continue
 
-            if isa(a, Expr) && a.head == :...
+            if isa(a, Expr) && a.head === :...
                 push!(escaped_args, Expr(:..., esc(a.args[1])))
             else
                 push!(escaped_args, esc(a))
@@ -570,7 +571,7 @@ end
 
 # An internal function, called by the code generated by @test_throws
 # to evaluate and catch the thrown exception - if it exists
-function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), @nospecialize(extype))
+function do_test_throws(result::ExecutionResult, orig_expr, extype)
     if isa(result, Threw)
         # Check that the right type of exception was thrown
         success = false
@@ -619,6 +620,9 @@ tuple or array, checks that the error output contains/matches each item in `msg`
 Returns the result of evaluating `expr`.
 
 See also [`@test_nowarn`](@ref) to check for the absence of error output.
+
+Note: Warnings generated by `@warn` cannot be tested with this macro. Use
+`@test_logs` instead.
 """
 macro test_warn(msg, expr)
     quote
@@ -643,6 +647,9 @@ end
 
 Test whether evaluating `expr` results in empty [`stderr`](@ref) output
 (no warnings or other messages).  Returns the result of evaluating `expr`.
+
+Note: The absence of warnings generated by `@warn` cannot be tested
+with this macro. Use `@test_logs expr` instead.
 """
 macro test_nowarn(expr)
     quote
@@ -760,7 +767,7 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error})
     if myid() == 1
         printstyled(ts.description, ": ", color=:white)
         # don't print for interrupted tests
-        if !(t isa Error) || t.test_type != :test_interrupted
+        if !(t isa Error) || t.test_type !== :test_interrupted
             print(t)
             # don't print the backtrace for Errors because it gets printed in the show
             # method
@@ -778,6 +785,8 @@ end
 # testset, if there is one. This allows for recursive printing of
 # the results at the end of the tests
 record(ts::DefaultTestSet, t::AbstractTestSet) = push!(ts.results, t)
+
+@specialize
 
 function print_test_errors(ts::DefaultTestSet)
     for t in ts.results
@@ -1060,11 +1069,11 @@ macro testset(args...)
     tests = args[end]
 
     # Determine if a single block or for-loop style
-    if !isa(tests,Expr) || (tests.head != :for && tests.head != :block)
+    if !isa(tests,Expr) || (tests.head !== :for && tests.head !== :block)
         error("Expected begin/end block or for loop as argument to @testset")
     end
 
-    if tests.head == :for
+    if tests.head === :for
         return testset_forloop(args, tests, __source__)
     else
         return testset_beginend(args, tests, __source__)
@@ -1091,25 +1100,24 @@ function testset_beginend(args, tests, source)
     # action (such as reporting the results)
     ex = quote
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
-        ts = $(testsettype)($desc; $options...)
-        # this empty loop is here to force the block to be compiled,
-        # which is needed for backtrace scrubbing to work correctly.
-        while false; end
+        local ts = $(testsettype)($desc; $options...)
         push_testset(ts)
         # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
         local RNG = default_rng()
-        oldrng = copy(RNG)
+        local oldrng = copy(RNG)
         try
             # RNG is re-seeded with its own seed to ease reproduce a failed test
             Random.seed!(RNG.seed)
-            $(esc(tests))
+            let
+                $(esc(tests))
+            end
         catch err
             err isa InterruptException && rethrow()
             # something in the test block threw an error. Count that as an
             # error in this test set
-            record(ts, Error(:nontest_error, :(), err, Base.catch_stack(), $(QuoteNode(source))))
+            record(ts, Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), $(QuoteNode(source))))
         finally
             copy!(RNG, oldrng)
         end
@@ -1132,9 +1140,9 @@ function testset_forloop(args, testloop, source)
     # description and we'll definitely need them for generating the
     # comprehension expression at the end
     loopvars = Expr[]
-    if testloop.args[1].head == :(=)
+    if testloop.args[1].head === :(=)
         push!(loopvars, testloop.args[1])
-    elseif testloop.args[1].head == :block
+    elseif testloop.args[1].head === :block
         for loopvar in testloop.args[1].args
             push!(loopvars, loopvar)
         end
@@ -1182,11 +1190,11 @@ function testset_forloop(args, testloop, source)
             err isa InterruptException && rethrow()
             # Something in the test block threw an error. Count that as an
             # error in this test set
-            record(ts, Error(:nontest_error, :(), err, Base.catch_stack(), $(QuoteNode(source))))
+            record(ts, Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), $(QuoteNode(source))))
         end
     end
     quote
-        arr = Vector{Any}()
+        local arr = Vector{Any}()
         local first_iteration = true
         local ts
         local RNG = default_rng()
@@ -1194,7 +1202,9 @@ function testset_forloop(args, testloop, source)
         Random.seed!(RNG.seed)
         local tmprng = copy(RNG)
         try
-            $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
+            let
+                $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
+            end
         finally
             # Handle `return` in test body
             if !first_iteration
@@ -1221,10 +1231,10 @@ function parse_testset_args(args)
         if isa(arg, Symbol)
             testsettype = esc(arg)
         # a string is the description
-        elseif isa(arg, AbstractString) || (isa(arg, Expr) && arg.head == :string)
+        elseif isa(arg, AbstractString) || (isa(arg, Expr) && arg.head === :string)
             desc = esc(arg)
         # an assignment is an option
-        elseif isa(arg, Expr) && arg.head == :(=)
+        elseif isa(arg, Expr) && arg.head === :(=)
             # we're building up a Dict literal here
             key = Expr(:quote, arg.args[1])
             push!(options.args, Expr(:call, :(=>), key, arg.args[2]))
@@ -1481,7 +1491,7 @@ function detect_unbound_args(mods...;
                 continue
             end
             f = Base.unwrap_unionall(getfield(mod, n))
-            if recursive && isa(f, Module) && parentmodule(f) === mod && nameof(f) === n
+            if recursive && isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
                 subambs = detect_unbound_args(f, imported=imported, recursive=recursive)
                 union!(ambs, subambs)
             elseif isa(f, DataType) && isdefined(f.name, :mt)
