@@ -1307,7 +1307,7 @@ true
 julia> typeof(cuC)
 CuArray{Float64,1}
 ```
-Keep in mind that some Julia features are not currently supported by CUDAnative.jl [^2] , especially some functions like `sin` will need to be replaced with `CUDAnative.sin`(cc: @maleadt).
+Keep in mind that some Julia features are not currently supported by CUDAnative.jl[^2] , especially some functions like `sin` will need to be replaced with `CUDAnative.sin`(cc: @maleadt).
 
 In the following example we will use both `DistributedArrays.jl` and `CuArrays.jl` to distribute an array across multiple
 processes and call a generic function on it.
