@@ -14,7 +14,7 @@ environment should allow control over the "ownership" of a chunk of memory by a 
 Julia provides a multiprocessing environment based on message passing to allow programs to run
 on multiple processes in separate memory domains at once.
 
-Julia's implementation of message passing is different from other environments such as MPI [^1].
+Julia's implementation of message passing is different from other environments such as MPI[^1].
 Communication in Julia is generally "one-sided", meaning that the programmer needs to explicitly
 manage only one process in a two-process operation. Furthermore, these operations typically do
 not look like "message send" and "message receive" but rather resemble higher-level operations
