@@ -95,7 +95,7 @@ JL_DLLEXPORT int ios_eof_blocking(ios_t *s);
 JL_DLLEXPORT int ios_flush(ios_t *s);
 JL_DLLEXPORT int ios_close(ios_t *s) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int ios_isopen(ios_t *s);
-JL_DLLEXPORT char *ios_take_buffer(ios_t *s, size_t *psize);  // release buffer to caller
+JL_DLLEXPORT char *ios_take_buffer(ios_t *s, size_t *psize);  // nul terminate and release buffer to caller
 // set buffer space to use
 JL_DLLEXPORT int ios_setbuf(ios_t *s, char *buf, size_t size, int own) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int ios_bufmode(ios_t *s, bufmode_t mode) JL_NOTSAFEPOINT;

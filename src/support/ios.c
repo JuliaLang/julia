@@ -198,14 +198,12 @@ static char *_buf_realloc(ios_t *s, size_t sz)
 
     if (s->ownbuf && s->buf != &s->local[0]) {
         // if we own the buffer we're free to resize it
-        // always allocate 1 bigger in case user wants to add a NUL
-        // terminator after taking over the buffer
-        temp = (char*)LLT_REALLOC(s->buf, sz+1);
+        temp = (char*)LLT_REALLOC(s->buf, sz);
         if (temp == NULL)
             return NULL;
     }
     else {
-        temp = (char*)LLT_ALLOC(sz+1);
+        temp = (char*)LLT_ALLOC(sz);
         if (temp == NULL)
             return NULL;
         s->ownbuf = 1;
@@ -691,22 +689,24 @@ char *ios_take_buffer(ios_t *s, size_t *psize)
 
     ios_flush(s);
 
-    if (s->buf == &s->local[0]) {
+    if (s->buf == &s->local[0] || s->buf == NULL || (!s->ownbuf && s->size == s->maxsize)) {
         buf = (char*)LLT_ALLOC((size_t)s->size + 1);
         if (buf == NULL)
             return NULL;
         if (s->size)
             memcpy(buf, s->buf, (size_t)s->size);
     }
+    else if (s->size == s->maxsize) {
+        buf = (char*)LLT_REALLOC(s->buf, (size_t)s->size + 1);
+        if (buf == NULL)
+            return NULL;
+    }
     else {
-        if (s->buf == NULL)
-            buf = (char*)LLT_ALLOC((size_t)s->size + 1);
-        else
-            buf = s->buf;
+        buf = s->buf;
     }
     buf[s->size] = '\0';
 
-    *psize = s->size+1;  // buffer is actually 1 bigger for terminating NUL
+    *psize = s->size + 1;
 
     /* empty stream and reinitialize */
     _buf_init(s, s->bm);
