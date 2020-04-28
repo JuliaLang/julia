@@ -443,7 +443,7 @@ function hadamard!(dest::AbstractArray, A::AbstractArray, B::AbstractArray)
     axA, axB, axdest = axes(A), axes(B), axes(dest)
     ((axdest == axA) & (axdest == axB)) || throw_dmm(axA, axB, axdest)
     @simd for I in eachindex(dest, A, B)
-        @inbounds dest[I] = A[I]*B[I]
+        @inbounds dest[I] = hadamard(A[I], B[I])
     end
     return dest
 end
