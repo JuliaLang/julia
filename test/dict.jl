@@ -1046,11 +1046,11 @@ end
             Dict{Int,Float64}(1 => 2, 2 => 3),         # values are converted
         ]
         @testset "copy!(_, ::$(typeof(Dict(a))))" for a in Any[
-            [3 => 4],
-            [0x3 => 0x4],
-            [3 => 4, 5 => 6, 7 => 8],
-            Pair{UInt,UInt}[3=>4, 5=>6, 7=>8],
-        ]
+                [3 => 4],
+                [0x3 => 0x4],
+                [3 => 4, 5 => 6, 7 => 8],
+                Pair{UInt,UInt}[3=>4, 5=>6, 7=>8],
+            ]
             if s isa Dict{Union{Int,UInt},Int} && a isa Vector{Pair{UInt8,UInt8}}
                 @test_broken s === copy!(s, Dict(a)) == Dict(a)
                 continue
