@@ -1112,8 +1112,10 @@ end
 """
     parent(A)
 
-Return the "parent array" of an array view (e.g. a `SubArray`), or the array itself if
-it is not a view.
+Return the "parent array” which was the argument of `view`, `transpose` or 
+another function which creates a wrapper (like `SubArray`, 
+`ReshapedArray` or `LinearAlgebra.Transpose`). Or else return the array 
+itself if it cannot be further unwrapped.
 
 # Examples
 ```jldoctest
