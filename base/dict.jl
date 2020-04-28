@@ -315,7 +315,7 @@ function unsafe_copy!(dst::Dict, src::Dict)
     return dst
 end
 
-function copy!(dst::Dict{Kd}, src::Dict{Ks}) where {Ks,Kd>:Ks}
+function copy!(dst::Dict{Kd}, src::Dict{Ks}) where {Kd, Ks<:Kd}
     try
         return unsafe_copy!(dst, src)
     catch
@@ -325,7 +325,7 @@ function copy!(dst::Dict{Kd}, src::Dict{Ks}) where {Ks,Kd>:Ks}
 end
 
 # It's safe to call `unsafe_copy!` if `Vd>:Vs`:
-copy!(dst::Dict{Kd,Vd}, src::Dict{Ks,Vs}) where {Ks,Kd>:Ks,Vs,Vd>:Vs} =
+copy!(dst::Dict{Kd,Vd}, src::Dict{Ks,Vs}) where {Kd, Ks<:Kd, Vd, Vs<:Vd} =
     unsafe_copy!(dst, src)
 
 # get the index where a key is stored, or -1 if not present

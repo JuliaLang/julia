@@ -1040,11 +1040,11 @@ end
 
 @testset "copy!" begin
     @testset "copy!(::$(typeof(s)), _)" for s in Any[
-        Dict(1 => 2, 2 => 3),                      # concrete key type
-        Dict{Union{Int,UInt},Int}(1 => 2, 2 => 3), # union key type
-        Dict{Any,Int}(1 => 2, 2 => 3),             # abstract key type
-        Dict{Int,Float64}(1 => 2, 2 => 3),         # values are converted
-    ]
+            Dict(1 => 2, 2 => 3),                      # concrete key type
+            Dict{Union{Int,UInt},Int}(1 => 2, 2 => 3), # union key type
+            Dict{Any,Int}(1 => 2, 2 => 3),             # abstract key type
+            Dict{Int,Float64}(1 => 2, 2 => 3),         # values are converted
+        ]
         @testset "copy!(_, ::$(typeof(Dict(a))))" for a in Any[
             [3 => 4],
             [0x3 => 0x4],
