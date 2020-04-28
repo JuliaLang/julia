@@ -83,7 +83,7 @@ static void *const _tags[] = {
          &jl_builtin_getfield, &jl_builtin_setfield, &jl_builtin_fieldtype, &jl_builtin_arrayref,
          &jl_builtin_const_arrayref, &jl_builtin_arrayset, &jl_builtin_arraysize,
          &jl_builtin_apply_type, &jl_builtin_applicable, &jl_builtin_invoke,
-         &jl_builtin__expr, &jl_builtin_ifelse,
+         &jl_builtin__expr, &jl_builtin_ifelse, &jl_builtin__typebody,
          NULL };
 static jl_value_t **const*const tags = (jl_value_t**const*const)_tags;
 
@@ -119,7 +119,8 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_getfield, &jl_f_setfield, &jl_f_fieldtype, &jl_f_nfields,
     &jl_f_arrayref, &jl_f_const_arrayref, &jl_f_arrayset, &jl_f_arraysize, &jl_f_apply_type,
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
-    &jl_f_ifelse,
+    &jl_f_ifelse, &jl_f__structtype, &jl_f__abstracttype, &jl_f__primitivetype,
+    &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef,
     NULL };
 
 typedef struct {

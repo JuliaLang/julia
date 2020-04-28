@@ -1181,6 +1181,188 @@ JL_CALLABLE(jl_f_arrayset)
     return args[1];
 }
 
+// type definition ------------------------------------------------------------
+
+JL_CALLABLE(jl_f__structtype)
+{
+    JL_NARGS(_structtype, 6, 6);
+    JL_TYPECHK(_structtype, module, args[0]);
+    JL_TYPECHK(_structtype, symbol, args[1]);
+    JL_TYPECHK(_structtype, simplevector, args[2]);
+    JL_TYPECHK(_structtype, simplevector, args[3]);
+    JL_TYPECHK(_structtype, bool, args[4]);
+    JL_TYPECHK(_structtype, long, args[5]);
+    jl_value_t *fieldnames = args[3];
+    jl_datatype_t *dt = NULL;
+    dt = jl_new_datatype((jl_sym_t*)args[1], (jl_module_t*)args[0], NULL, (jl_svec_t*)args[2],
+                         (jl_svec_t*)fieldnames, NULL,
+                         0, args[4]==jl_true ? 1 : 0, jl_unbox_long(args[5]));
+    return dt->name->wrapper;
+}
+
+JL_CALLABLE(jl_f__abstracttype)
+{
+    JL_NARGS(_abstracttype, 3, 3);
+    JL_TYPECHK(_abstracttype, module, args[0]);
+    JL_TYPECHK(_abstracttype, symbol, args[1]);
+    JL_TYPECHK(_abstracttype, simplevector, args[2]);
+    jl_datatype_t *dt = jl_new_abstracttype(args[1], (jl_module_t*)args[0], NULL, (jl_svec_t*)args[2]);
+    return dt->name->wrapper;
+}
+
+JL_CALLABLE(jl_f__primitivetype)
+{
+    JL_NARGS(_primitivetype, 4, 4);
+    JL_TYPECHK(_primitivetype, module, args[0]);
+    JL_TYPECHK(_primitivetype, symbol, args[1]);
+    JL_TYPECHK(_primitivetype, simplevector, args[2]);
+    jl_sym_t *name = (jl_sym_t*)args[1];
+    jl_value_t *vnb = args[3];
+    if (!jl_is_long(vnb))
+        jl_errorf("invalid declaration of primitive type %s",
+                  jl_symbol_name((jl_sym_t*)name));
+    ssize_t nb = jl_unbox_long(vnb);
+    if (nb < 1 || nb >= (1 << 23) || (nb & 7) != 0)
+        jl_errorf("invalid number of bits in primitive type %s",
+                  jl_symbol_name((jl_sym_t*)name));
+    jl_datatype_t *dt = jl_new_primitivetype(args[1], (jl_module_t*)args[0], NULL, (jl_svec_t*)args[2], nb);
+    return dt->name->wrapper;
+}
+
+void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
+{
+    if (!jl_is_datatype(super) || !jl_is_abstracttype(super) ||
+        tt->super != NULL ||
+        tt->name == ((jl_datatype_t*)super)->name ||
+        jl_subtype(super, (jl_value_t*)jl_vararg_type) ||
+        jl_is_tuple_type(super) ||
+        jl_is_namedtuple_type(super) ||
+        jl_subtype(super, (jl_value_t*)jl_type_type) ||
+        jl_subtype(super, (jl_value_t*)jl_builtin_type)) {
+        jl_errorf("invalid subtyping in definition of %s",
+                  jl_symbol_name(tt->name->name));
+    }
+    tt->super = (jl_datatype_t*)super;
+    jl_gc_wb(tt, tt->super);
+}
+
+JL_CALLABLE(jl_f__setsuper)
+{
+    JL_NARGS(_setsuper!, 2, 2);
+    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[0]);
+    JL_TYPECHK(_setsuper!, datatype, (jl_value_t*)dt);
+    jl_set_datatype_super(dt, args[1]);
+    return jl_nothing;
+}
+
+void jl_reinstantiate_inner_types(jl_datatype_t *t);
+
+JL_CALLABLE(jl_f__typebody)
+{
+    JL_NARGS(_typebody!, 1, 2);
+    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[0]);
+    JL_TYPECHK(_typebody!, datatype, (jl_value_t*)dt);
+    if (nargs == 2) {
+        jl_value_t *ft = args[1];
+        JL_TYPECHK(_typebody!, simplevector, ft);
+        dt->types = (jl_svec_t*)ft;
+        jl_gc_wb(dt, ft);
+        for (size_t i = 0; i < jl_svec_len(dt->types); i++) {
+            jl_value_t *elt = jl_svecref(dt->types, i);
+            if ((!jl_is_type(elt) && !jl_is_typevar(elt)) || jl_is_vararg_type(elt)) {
+                jl_type_error_rt(jl_symbol_name(dt->name->name),
+                                 "type definition",
+                                 (jl_value_t*)jl_type_type, elt);
+            }
+        }
+    }
+
+    JL_TRY {
+        jl_reinstantiate_inner_types(dt);
+    }
+    JL_CATCH {
+        dt->name->partial = NULL;
+        jl_rethrow();
+    }
+
+    if (jl_is_structtype(dt))
+        jl_compute_field_offsets(dt);
+    return jl_nothing;
+}
+
+// this is a heuristic for allowing "redefining" a type to something identical
+static int equiv_type(jl_value_t *ta, jl_value_t *tb)
+{
+    jl_datatype_t *dta = (jl_datatype_t*)jl_unwrap_unionall(ta);
+    if (!jl_is_datatype(dta))
+        return 0;
+    jl_datatype_t *dtb = (jl_datatype_t*)jl_unwrap_unionall(tb);
+    if (!(jl_typeof(dta) == jl_typeof(dtb) &&
+          dta->name->name == dtb->name->name &&
+          dta->abstract == dtb->abstract &&
+          dta->mutabl == dtb->mutabl &&
+          dta->size == dtb->size &&
+          dta->ninitialized == dtb->ninitialized &&
+          jl_egal((jl_value_t*)jl_field_names(dta), (jl_value_t*)jl_field_names(dtb)) &&
+          jl_nparams(dta) == jl_nparams(dtb) &&
+          jl_svec_len(dta->types) == jl_svec_len(dtb->types)))
+        return 0;
+    jl_value_t *a=NULL, *b=NULL;
+    int ok = 1;
+    size_t i, nf = jl_svec_len(dta->types);
+    JL_GC_PUSH2(&a, &b);
+    a = jl_rewrap_unionall((jl_value_t*)dta->super, dta->name->wrapper);
+    b = jl_rewrap_unionall((jl_value_t*)dtb->super, dtb->name->wrapper);
+    if (!jl_types_equal(a, b))
+        goto no;
+    JL_TRY {
+        a = jl_apply_type(dtb->name->wrapper, jl_svec_data(dta->parameters), jl_nparams(dta));
+    }
+    JL_CATCH {
+        ok = 0;
+    }
+    if (!ok)
+        goto no;
+    assert(jl_is_datatype(a));
+    a = dta->name->wrapper;
+    b = dtb->name->wrapper;
+    while (jl_is_unionall(a)) {
+        jl_unionall_t *ua = (jl_unionall_t*)a;
+        jl_unionall_t *ub = (jl_unionall_t*)b;
+        if (!jl_egal(ua->var->lb, ub->var->lb) || !jl_egal(ua->var->ub, ub->var->ub) ||
+            ua->var->name != ub->var->name)
+            goto no;
+        a = jl_instantiate_unionall(ua, (jl_value_t*)ub->var);
+        b = ub->body;
+    }
+    assert(jl_is_datatype(a) && jl_is_datatype(b));
+    a = (jl_value_t*)jl_get_fieldtypes((jl_datatype_t*)a);
+    b = (jl_value_t*)jl_get_fieldtypes((jl_datatype_t*)b);
+    for (i = 0; i < nf; i++) {
+        jl_value_t *ta = jl_svecref(a, i);
+        jl_value_t *tb = jl_svecref(b, i);
+        if (jl_has_free_typevars(ta)) {
+            if (!jl_has_free_typevars(tb) || !jl_egal(ta, tb))
+                goto no;
+        }
+        else if (jl_has_free_typevars(tb) || jl_typeof(ta) != jl_typeof(tb) ||
+                 !jl_types_equal(ta, tb)) {
+            goto no;
+        }
+    }
+    JL_GC_POP();
+    return 1;
+ no:
+    JL_GC_POP();
+    return 0;
+}
+
+JL_CALLABLE(jl_f__equiv_typedef)
+{
+    JL_NARGS(_equiv_typedef, 2, 2);
+    return equiv_type(args[0], args[1]) ? jl_true : jl_false;
+}
+
 // IntrinsicFunctions ---------------------------------------------------------
 
 static void (*runtime_fp[num_intrinsics])(void);
@@ -1343,6 +1525,12 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("_apply_pure", jl_f__apply_pure);
     add_builtin_func("_apply_latest", jl_f__apply_latest);
     add_builtin_func("_typevar", jl_f__typevar);
+    add_builtin_func("_structtype", jl_f__structtype);
+    add_builtin_func("_abstracttype", jl_f__abstracttype);
+    add_builtin_func("_primitivetype", jl_f__primitivetype);
+    add_builtin_func("_setsuper!", jl_f__setsuper);
+    jl_builtin__typebody = add_builtin_func("_typebody!", jl_f__typebody);
+    add_builtin_func("_equiv_typedef", jl_f__equiv_typedef);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
