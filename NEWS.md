@@ -143,6 +143,8 @@ Standard library changes
 * A 1-d `Zip` iterator (where `Base.IteratorSize` is `Base.HasShape{1}()`) with defined length of `n` has now also size of `(n,)` (instead of throwing an error with truncated iterators) ([#29927]).
 * The `@timed` macro now returns a `NamedTuple` ([#34149])
 * New `supertypes(T)` function returns a tuple of all supertypes of `T` ([#34419]).
+* Views of builtin ranges are now recomputed ranges (like indexing returns) instead of
+  `SubArray`s ([#26872]).
 * Sorting-related functions such as `sort` that take the keyword arguments `lt`, `rev`, `order`
   and `by` now do not discard `order` if `by` or `lt` are passed. In the former case, the
   order from `order` is used to compare the values of `by(element)`. In the latter case,
