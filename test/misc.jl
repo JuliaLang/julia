@@ -526,7 +526,7 @@ end
 
 @testset "`displaysize` on closed TTY #34620" begin
     Main.FakePTYs.with_fake_pty() do rawfd, _
-        tty = Base.TTY(rawfd)
+        tty = open(rawfd)::Base.TTY
         @test displaysize(tty) isa Tuple{Integer,Integer}
         close(tty)
         @test_throws Base.IOError displaysize(tty)
