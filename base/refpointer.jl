@@ -18,6 +18,17 @@ converted to a native pointer to the data it references.
 
 There is no invalid (NULL) `Ref` in Julia, but a `C_NULL` instance of `Ptr` can be passed to
 a `ccall` Ref argument.
+
+# Use in broadcasting
+`Ref` is sometimes used in broadcasting in order to treat the referenced values as a scalar:
+
+```jldoctest
+julia> isa.(Ref([1,2,3]), [Array, Dict, Int])
+3-element BitArray{1}:
+ 1
+ 0
+ 0
+```
 """
 Ref
 
