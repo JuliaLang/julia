@@ -49,7 +49,7 @@ macro spawn(expr)
     quote
         local ref = spawn_somewhere($thunk)
         if $(Expr(:islocal, var))
-            push!($var, ref)
+            put!($var, ref)
         end
         ref
     end
@@ -94,7 +94,7 @@ macro spawnat(p, expr)
     quote
         local ref = $spawncall
         if $(Expr(:islocal, var))
-            push!($var, ref)
+            put!($var, ref)
         end
         ref
     end
@@ -345,7 +345,7 @@ macro distributed(args...)
         return quote
             local ref = pfor($(make_pfor_body(var, body)), $(esc(r)))
             if $(Expr(:islocal, syncvar))
-                push!($syncvar, ref)
+                put!($syncvar, ref)
             end
             ref
         end
