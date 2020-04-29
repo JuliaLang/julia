@@ -1,30 +1,166 @@
-# Asynchronous Programming
+# [Asynchronous Programming](@id man-asynchronous)
 
-Julia's parallel programming platform uses [Tasks (aka Coroutines)](@ref man-tasks) to switch among multiple computations.
-To express an order of execution between lightweight threads communication primitives are necessary.
-Julia offers `Channel(func::Function, ctype=Any, csize=0, taskref=nothing)` that creates a new task from `func`,
-binds it to a new channel of type `ctype` and size `csize` and schedule the task.
-`Channels` can serve as a way to communicate between tasks, as `Channel{T}(sz::Int)` creates a buffered channel of type `T` and size `sz`.
-Whenever code performs a communication operation like [`fetch`](@ref) or [`wait`](@ref),
-the current task is suspended and a scheduler picks another task to run.
-A task is restarted when the event it is waiting for completes.
+When a program needs to interact with the outside world, for example communicating
+with another machine over the internet, operations in the program may need to
+happen in an unpredictable order.
+Say your program needs to download a file. We would like to initiate the download
+operation, perform other operations while we wait for it to complete, and then
+resume the code that needs the downloaded file when it is available.
+This sort of scenario falls in the domain of asynchronous programming, sometimes
+also referred to as concurrent programming (since, conceptually, multiple things
+are happening at once).
 
-For many problems, it is not necessary to think about tasks directly. However, they can be used
-to wait for multiple events at the same time, which provides for *dynamic scheduling*. In dynamic
-scheduling, a program decides what to compute or where to compute it based on when other jobs
-finish. This is needed for unpredictable or unbalanced workloads, where we want to assign more
-work to processes only when they finish their current tasks.
+To address these scenarios, Julia provides `Task`s (also known by several other
+names, such as symmetric coroutines, lightweight threads, cooperative multitasking,
+or one-shot continuations).
+When a piece of computing work (in practice, executing a particular function) is designated as
+a [`Task`](@ref), it becomes possible to interrupt it by switching to another [`Task`](@ref).
+The original [`Task`](@ref) can later be resumed, at which point it will pick up right where it
+left off. At first, this may seem similar to a function call. However there are two key differences.
+First, switching tasks does not use any space, so any number of task switches can occur without
+consuming the call stack. Second, switching among tasks can occur in any order, unlike function
+calls, where the called function must finish executing before control returns to the calling function.
 
-## Channels
+## Basic `Task` operations
 
-The section on [`Task`](@ref)s in [Control Flow](@ref) discussed the execution of multiple functions in
-a co-operative manner. [`Channel`](@ref)s can be quite useful to pass data between running tasks, particularly
-those involving I/O operations.
+You can think of a `Task` as a handle to a unit of computational work to be performed.
+It has a create-start-run-finish lifecycle.
+Tasks are created by calling the `Task` constructor on a 0-argument function to run,
+or using the `@task` macro:
 
-Examples of operations involving I/O include reading/writing to files, accessing web services,
-executing external programs, etc. In all these cases, overall execution time can be improved if
-other tasks can be run while a file is being read, or while waiting for an external service/program
-to complete.
+```
+julia> t = @task begin; sleep(5); println("done"); end
+Task (runnable) @0x00007f13a40c0eb0
+```
+
+`@task x` is equivalent to `Task(()->x)`.
+
+This task will wait for five seconds, and then print `done`. However, it has not
+started running yet. We can run it whenever we're ready by calling `schedule`:
+
+```
+julia> schedule(t);
+```
+
+If you try this in the REPL, you will see that `schedule` returns immediately.
+That is because it simply adds `t` to an internal queue of tasks to run.
+Then, the REPL will print the next prompt and wait for more input.
+Waiting for keyboard input provides an opportunity for other tasks to run,
+so at that point `t` will start.
+`t` calls `sleep`, which sets a timer and stops execution.
+If other tasks have been scheduled, they could run then.
+After five seconds, the timer fires and restarts `t`, and you will see `done`
+printed. `t` is then finished.
+
+The `wait` function blocks the calling task until some other task finishes.
+So for example if you type
+
+```
+julia> schedule(t); wait(t)
+```
+
+instead of only calling `schedule`, you will see a five second pause before
+the next input prompt appears. That is because the REPL is waiting for `t`
+to finish before proceeding.
+
+It is common to want to create a task and schedule it right away, so a
+macro called `@async` is provided for that purpose --- `@async x` is
+equivalent to `schedule(@task x)`.
+
+## Communicating with Channels
+
+In some problems,
+the various pieces of required work are not naturally related by function calls; there is no obvious
+"caller" or "callee" among the jobs that need to be done. An example is the producer-consumer
+problem, where one complex procedure is generating values and another complex procedure is consuming
+them. The consumer cannot simply call a producer function to get a value, because the producer
+may have more values to generate and so might not yet be ready to return. With tasks, the producer
+and consumer can both run as long as they need to, passing values back and forth as necessary.
+
+Julia provides a [`Channel`](@ref) mechanism for solving this problem.
+A [`Channel`](@ref) is a waitable first-in first-out queue which can have
+multiple tasks reading from and writing to it.
+
+Let's define a producer task, which produces values via the [`put!`](@ref) call.
+To consume values, we need to schedule the producer to run in a new task. A special [`Channel`](@ref)
+constructor which accepts a 1-arg function as an argument can be used to run a task bound to a channel.
+We can then [`take!`](@ref) values repeatedly from the channel object:
+
+```jldoctest producer
+julia> function producer(c::Channel)
+           put!(c, "start")
+           for n=1:4
+               put!(c, 2n)
+           end
+           put!(c, "stop")
+       end;
+
+julia> chnl = Channel(producer);
+
+julia> take!(chnl)
+"start"
+
+julia> take!(chnl)
+2
+
+julia> take!(chnl)
+4
+
+julia> take!(chnl)
+6
+
+julia> take!(chnl)
+8
+
+julia> take!(chnl)
+"stop"
+```
+
+One way to think of this behavior is that `producer` was able to return multiple times. Between
+calls to [`put!`](@ref), the producer's execution is suspended and the consumer has control.
+
+The returned [`Channel`](@ref) can be used as an iterable object in a `for` loop, in which case the
+loop variable takes on all the produced values. The loop is terminated when the channel is closed.
+
+```jldoctest producer
+julia> for x in Channel(producer)
+           println(x)
+       end
+start
+2
+4
+6
+8
+stop
+```
+
+Note that we did not have to explicitly close the channel in the producer. This is because
+the act of binding a [`Channel`](@ref) to a [`Task`](@ref) associates the open lifetime of
+a channel with that of the bound task. The channel object is closed automatically when the task
+terminates. Multiple channels can be bound to a task, and vice-versa.
+
+While the [`Task`](@ref) constructor expects a 0-argument function, the [`Channel`](@ref)
+method that creates a task-bound channel expects a function that accepts a single argument of
+type [`Channel`](@ref). A common pattern is for the producer to be parameterized, in which case a partial
+function application is needed to create a 0 or 1 argument [anonymous function](@ref man-anonymous-functions).
+
+For [`Task`](@ref) objects this can be done either directly or by use of a convenience macro:
+
+```julia
+function mytask(myarg)
+    ...
+end
+
+taskHdl = Task(() -> mytask(7))
+# or, equivalently
+taskHdl = @task mytask(7)
+```
+
+To orchestrate more advanced work distribution patterns, [`bind`](@ref) and [`schedule`](@ref)
+can be used in conjunction with [`Task`](@ref) and [`Channel`](@ref)
+constructors to explicitly link a set of channels with a set of producer/consumer tasks.
+
+### More on Channels
 
 A channel can be visualized as a pipe, i.e., it has a write end and a read end :
 
@@ -99,36 +235,6 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
     [...]
     ```
 
-A `Channel` can be used as an iterable object in a `for` loop, in which case the loop runs as
-long as the `Channel` has data or is open. The loop variable takes on all values added to the
-`Channel`. The `for` loop is terminated once the `Channel` is closed and emptied.
-
-For example, the following would cause the `for` loop to wait for more data:
-
-```julia-repl
-julia> c = Channel{Int}(10);
-
-julia> foreach(i->put!(c, i), 1:3) # add a few entries
-
-julia> data = [i for i in c]
-```
-
-while this will return after reading all data:
-
-```julia-repl
-julia> c = Channel{Int}(10);
-
-julia> foreach(i->put!(c, i), 1:3); # add a few entries
-
-julia> close(c);                    # `for` loops can exit
-
-julia> data = [i for i in c]
-3-element Array{Int64,1}:
- 1
- 2
- 3
-```
-
 Consider a simple example using channels for inter-task communication. We start 4 tasks to process
 data from a single `jobs` channel. Jobs, identified by an id (`job_id`), are written to the channel.
 Each task in this simulation reads a `job_id`, waits for a random amount of time and writes back
@@ -183,8 +289,49 @@ julia> @elapsed while n > 0 # print out results
 0.029772311
 ```
 
-The current version of Julia multiplexes all tasks onto a single OS thread. Thus, while tasks
-involving I/O operations benefit from parallel execution, compute bound tasks are effectively
-executed sequentially on a single OS thread. Future versions of Julia may support scheduling of
-tasks on multiple threads, in which case compute bound tasks will see benefits of parallel execution
-too.
+## More task operations
+
+Task operations are built on a low-level primitive called [`yieldto`](@ref).
+`yieldto(task, value)` suspends the current task, switches to the specified `task`, and causes
+that task's last [`yieldto`](@ref) call to return the specified `value`. Notice that [`yieldto`](@ref)
+is the only operation required to use task-style control flow; instead of calling and returning
+we are always just switching to a different task. This is why this feature is also called "symmetric
+coroutines"; each task is switched to and from using the same mechanism.
+
+[`yieldto`](@ref) is powerful, but most uses of tasks do not invoke it directly. Consider why
+this might be. If you switch away from the current task, you will probably want to switch back
+to it at some point, but knowing when to switch back, and knowing which task has the responsibility
+of switching back, can require considerable coordination. For example, [`put!`](@ref) and [`take!`](@ref)
+are blocking operations, which, when used in the context of channels maintain state to remember
+who the consumers are. Not needing to manually keep track of the consuming task is what makes [`put!`](@ref)
+easier to use than the low-level [`yieldto`](@ref).
+
+In addition to [`yieldto`](@ref), a few other basic functions are needed to use tasks effectively.
+
+  * [`current_task`](@ref) gets a reference to the currently-running task.
+  * [`istaskdone`](@ref) queries whether a task has exited.
+  * [`istaskstarted`](@ref) queries whether a task has run yet.
+  * [`task_local_storage`](@ref) manipulates a key-value store specific to the current task.
+
+## Tasks and events
+
+Most task switches occur as a result of waiting for events such as I/O requests, and are performed
+by a scheduler included in Julia Base. The scheduler maintains a queue of runnable tasks,
+and executes an event loop that restarts tasks based on external events such as message arrival.
+
+The basic function for waiting for an event is [`wait`](@ref). Several objects implement [`wait`](@ref);
+for example, given a `Process` object, [`wait`](@ref) will wait for it to exit. [`wait`](@ref)
+is often implicit; for example, a [`wait`](@ref) can happen inside a call to [`read`](@ref)
+to wait for data to be available.
+
+In all of these cases, [`wait`](@ref) ultimately operates on a [`Condition`](@ref) object, which
+is in charge of queueing and restarting tasks. When a task calls [`wait`](@ref) on a [`Condition`](@ref),
+the task is marked as non-runnable, added to the condition's queue, and switches to the scheduler.
+The scheduler will then pick another task to run, or block waiting for external events. If all
+goes well, eventually an event handler will call [`notify`](@ref) on the condition, which causes
+tasks waiting for that condition to become runnable again.
+
+A task created explicitly by calling [`Task`](@ref) is initially not known to the scheduler. This
+allows you to manage tasks manually using [`yieldto`](@ref) if you wish. However, when such
+a task waits for an event, it still gets restarted automatically when the event happens, as you
+would expect.
