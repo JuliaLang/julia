@@ -2,10 +2,11 @@
 
 module CoreLogging
 
-import Base: isless, +, -, convert, show
+import Base: print, show
 
 export
     AbstractLogger,
+    AbstractLogLevel,
     LogLevel,
     NullLogger,
     @debug,
@@ -44,14 +45,18 @@ function handle_message end
 
 Return true when `logger` accepts a message at `level`, generated for
 `_module`, `group` and with unique log identifier `id`.
+
+For very early filtering of custom log levels, users may override
+`shouldlog(level)`.
 """
 function shouldlog end
 
 """
     min_enabled_level(logger)
 
-Return the minimum enabled level for `logger` for early filtering.  That is,
-the log level below or equal to which all messages are filtered.
+Return the minimum enabled severity (or log level) for `logger`. Log messages
+with a severity less than this will be filtered out early in the log event
+processing pipeline before `shouldlog` or `handle_message` is called.
 """
 function min_enabled_level end
 
@@ -80,7 +85,7 @@ equivalent of /dev/null.
 """
 struct NullLogger <: AbstractLogger; end
 
-min_enabled_level(::NullLogger) = AboveMaxLevel
+min_enabled_level(::NullLogger) = severity(AboveMaxLevel)
 shouldlog(::NullLogger, args...) = false
 handle_message(::NullLogger, args...; kwargs...) =
     error("Null logger handle_message() should not be called")
@@ -88,6 +93,33 @@ handle_message(::NullLogger, args...; kwargs...) =
 
 #-------------------------------------------------------------------------------
 # Standard log levels
+"""
+    AbstractLogLevel
+
+A parent type for all log levels, including the standard `LogLevel` and user
+defined levels.
+
+User defined levels must implement the `severity` function to map the level to
+an integer. Implementing `print` is also encouraged for producing a
+human-readable textural form of the level.
+"""
+abstract type AbstractLogLevel ; end
+
+"""
+    severity(level)
+
+Return an `Int` defining the severity of a log `level` to be used as the
+primary log filtering mechanism.
+
+Severity of user defined log levels should be relative to the standard log
+levels which are defined to have `severity.([Debug, Info, Warn, Error]) ==
+[-1000, 0, 1000, 2000]`.
+"""
+function severity
+end
+
+severity(sev::Integer) = convert(Int, sev)
+
 """
     LogLevel(level)
 
@@ -97,16 +129,13 @@ The log level provides a key against which potential log records may be
 filtered, before any other work is done to construct the log record data
 structure itself.
 """
-struct LogLevel
+struct LogLevel <: AbstractLogLevel
     level::Int32
 end
 
 LogLevel(level::LogLevel) = level
 
-isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
-+(level::LogLevel, inc::Integer) = LogLevel(level.level+inc)
--(level::LogLevel, inc::Integer) = LogLevel(level.level-inc)
-convert(::Type{LogLevel}, level::Integer) = LogLevel(level)
+severity(level::LogLevel) = Int(level.level)
 
 const BelowMinLevel = LogLevel(-1000001)
 const Debug         = LogLevel(   -1000)
@@ -115,17 +144,18 @@ const Warn          = LogLevel(    1000)
 const Error         = LogLevel(    2000)
 const AboveMaxLevel = LogLevel( 1000001)
 
-function show(io::IO, level::LogLevel)
+function print(io::IO, level::LogLevel)
     if     level == BelowMinLevel  print(io, "BelowMinLevel")
     elseif level == Debug          print(io, "Debug")
     elseif level == Info           print(io, "Info")
-    elseif level == Warn           print(io, "Warn")
+    elseif level == Warn           print(io, "Warning")
     elseif level == Error          print(io, "Error")
     elseif level == AboveMaxLevel  print(io, "AboveMaxLevel")
     else                           print(io, "LogLevel($(level.level))")
     end
 end
 
+show(io::IO, level::LogLevel) = print(io, level == Warn ? "Warn" : level)
 
 #-------------------------------------------------------------------------------
 # Logging macros
@@ -140,7 +170,7 @@ _logmsg_docs = """
 
 Create a log record with an informational `message`.  For convenience, four
 logging macros `@debug`, `@info`, `@warn` and `@error` are defined which log at
-the standard severity levels `Debug`, `Info`, `Warn` and `Error`.  `@logmsg`
+the standard log levels `Debug`, `Info`, `Warn` and `Error`.  `@logmsg`
 allows `level` to be set programmatically to any `LogLevel` or custom log level
 types.
 
@@ -231,7 +261,7 @@ _log_record_ids = Set{Symbol}()
 # statement itself doesn't change.
 function log_record_id(_module, level, message, log_kws)
     modname = _module === nothing ?  "" : join(fullname(_module), "_")
-    # Use an arbitriraly chosen eight hex digits here. TODO: Figure out how to
+    # Use an arbitrarily chosen eight hex digits here. TODO: Figure out how to
     # make the id exactly the same on 32 and 64 bit systems.
     h = UInt32(hash(string(modname, level, message, log_kws)) & 0xFFFFFFFF)
     while true
@@ -306,11 +336,11 @@ function logmsg_code(_module, file, line, level, message, exs...)
 
     quote
         level = $level
-        std_level = convert(LogLevel, level)
-        if std_level >= getindex(_min_enabled_level)
+        if shouldlog(level)
             group = $group
             _module = $_module
-            logger = current_logger_for_env(std_level, group, _module)
+            sev = severity(level)
+            logger = current_logger_for_env(sev, group, _module)
             if !(logger === nothing)
                 id = $id
                 # Second chance at an early bail-out (before computing the message),
@@ -335,7 +365,7 @@ end
 @noinline function logging_error(logger, level, _module, group, id,
                                  filepath, line, @nospecialize(err))
     if !catch_exceptions(logger)
-        rethrow(err)
+        rethrow()
     end
     try
         msg = "Exception while generating log record in module $_module at $filepath:$line"
@@ -365,16 +395,20 @@ end
 
 # Global log limiting mechanism for super fast but inflexible global log
 # limiting.
-const _min_enabled_level = Ref(Debug)
+const _min_enabled_severity = Ref{Int}(severity(Debug))
+
+function shouldlog(level::AbstractLogLevel)
+    severity(level) >= getindex(_min_enabled_severity)
+end
 
 # LogState - a concretely typed cache of data extracted from the logger, plus
 # the logger itself.
 struct LogState
-    min_enabled_level::LogLevel
+    min_severity::Int
     logger::AbstractLogger
 end
 
-LogState(logger) = LogState(LogLevel(min_enabled_level(logger)), logger)
+LogState(logger) = LogState(severity(min_enabled_level(logger)), logger)
 
 function current_logstate()
     logstate = current_task().logstate
@@ -382,9 +416,9 @@ function current_logstate()
 end
 
 # helper function to get the current logger, if enabled for the specified message type
-@noinline function current_logger_for_env(std_level::LogLevel, group, _module)
+@noinline function current_logger_for_env(sev::Int, group, _module)
     logstate = current_logstate()
-    if std_level >= logstate.min_enabled_level || env_override_minlevel(group, _module)
+    if sev >= logstate.min_severity || env_override_minlevel(group, _module)
         return logstate.logger
     end
     return nothing
@@ -408,12 +442,13 @@ end
 """
     disable_logging(level)
 
-Disable all log messages at log levels equal to or less than `level`.  This is
-a *global* setting, intended to make debug logging extremely cheap when
-disabled.
+Disable all log messages at log level severity equal to or less than
+`severity(level)`. This is a *global* setting, intended to make debug logging
+extremely cheap when disabled.
 """
-function disable_logging(level::LogLevel)
-    _min_enabled_level[] = level + 1
+disable_logging(level::AbstractLogLevel) = disable_logging(severity(level))
+function disable_logging(level::Int)
+    _min_enabled_severity[] = level + 1
 end
 
 let _debug_groups_include::Vector{Symbol} = Symbol[],
@@ -516,22 +551,24 @@ current_logger() = current_logstate().logger
 #-------------------------------------------------------------------------------
 # SimpleLogger
 """
-    SimpleLogger(stream=stderr, min_level=Info)
+    SimpleLogger(stream=stderr, min_severity=Info)
 
 Simplistic logger for logging all messages with level greater than or equal to
-`min_level` to `stream`.
+`min_severity` to `stream`.
 """
 struct SimpleLogger <: AbstractLogger
     stream::IO
-    min_level::LogLevel
+    min_severity::Int
     message_limits::Dict{Any,Int}
 end
-SimpleLogger(stream::IO=stderr, level=Info) = SimpleLogger(stream, level, Dict{Any,Int}())
+function SimpleLogger(stream::IO=stderr, min_severity=Info)
+    SimpleLogger(stream, severity(min_severity), Dict{Any,Int}())
+end
 
 shouldlog(logger::SimpleLogger, level, _module, group, id) =
     get(logger.message_limits, id, 1) > 0
 
-min_enabled_level(logger::SimpleLogger) = logger.min_level
+min_enabled_level(logger::SimpleLogger) = logger.min_severity
 
 catch_exceptions(logger::SimpleLogger) = false
 
@@ -544,9 +581,8 @@ function handle_message(logger::SimpleLogger, level, message, _module, group, id
     end
     buf = IOBuffer()
     iob = IOContext(buf, logger.stream)
-    levelstr = level == Warn ? "Warning" : string(level)
     msglines = split(chomp(string(message)), '\n')
-    println(iob, "┌ ", levelstr, ": ", msglines[1])
+    println(iob, "┌ ", level, ": ", msglines[1])
     for i in 2:length(msglines)
         println(iob, "│ ", msglines[i])
     end

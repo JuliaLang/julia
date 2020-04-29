@@ -25,7 +25,7 @@ struct Ignored ; end
 # Logger with extra test-related state
 mutable struct TestLogger <: AbstractLogger
     logs::Vector{LogRecord}
-    min_level::LogLevel
+    min_level
     catch_exceptions::Bool
     shouldlog_args
 end
