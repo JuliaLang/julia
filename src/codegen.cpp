@@ -6605,8 +6605,10 @@ jl_compile_result_t jl_emit_codeinst(
 
 void jl_compile_workqueue(
     std::map<jl_code_instance_t*, jl_compile_result_t> &emitted,
-    jl_codegen_params_t &params)
+    jl_codegen_params_t &params, CompilationPolicy policy)
 {
+    jl_code_info_t *src = NULL;
+    JL_GC_PUSH1(&src);
     while (!params.workqueue.empty()) {
         jl_code_instance_t *codeinst;
         Function *protodecl;
@@ -6636,7 +6638,17 @@ void jl_compile_workqueue(
                 decls = &std::get<1>(result);
             }
             else {
-                result = jl_emit_codeinst(codeinst, NULL, params);
+                // Reinfer the function. The JIT came along and removed the inferred
+                // method body. See #34993
+                if (policy == CompilationPolicy::Extern &&
+                    codeinst->inferred && codeinst->inferred == jl_nothing) {
+                    src = jl_type_infer(codeinst->def, jl_world_counter, 0);
+                    if (src)
+                        result = jl_emit_code(codeinst->def, src, src->rettype, params);
+                }
+                else {
+                    result = jl_emit_codeinst(codeinst, NULL, params);
+                }
                 if (std::get<0>(result))
                     decls = &std::get<1>(result);
                 else
@@ -6690,6 +6702,7 @@ void jl_compile_workqueue(
             }
         }
     }
+    JL_GC_POP();
 }
 
 
