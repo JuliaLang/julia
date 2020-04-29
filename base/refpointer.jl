@@ -74,7 +74,7 @@ RefArray(x::AbstractArray{T}, i::Int=1, roots::Nothing=nothing) where {T} = RefA
 convert(::Type{Ref{T}}, x::AbstractArray{T}) where {T} = RefArray(x, 1)
 
 function unsafe_convert(P::Type{Ptr{T}}, b::RefArray{T}) where T
-    if datatype_pointerfree(RefValue{T})
+    if allocatedinline(T)
         p = pointer(b.x, b.i)
     elseif isconcretetype(T) && T.mutable
         p = pointer_from_objref(b.x[b.i])
@@ -126,9 +126,27 @@ cconvert(::Type{Ref{P}}, a::Array{<:Ptr}) where {P<:Ptr} = a
 cconvert(::Type{Ptr{P}}, a::Array) where {P<:Union{Ptr,Cwstring,Cstring}} = Ref{P}(a)
 cconvert(::Type{Ref{P}}, a::Array) where {P<:Union{Ptr,Cwstring,Cstring}} = Ref{P}(a)
 
+# pass NTuple{N,T} as Ptr{T}/Ref{T}
+cconvert(::Type{Ref{T}}, t::NTuple{N,T}) where {N,T} = Ref{NTuple{N,T}}(t)
+cconvert(::Type{Ref{T}}, r::Ref{NTuple{N,T}}) where {N,T} = r
+unsafe_convert(::Type{Ref{T}}, r::Ref{NTuple{N,T}}) where {N,T} =
+    convert(Ptr{T}, unsafe_convert(Ptr{NTuple{N,T}}, r))
+unsafe_convert(::Type{Ptr{T}}, r::Ref{NTuple{N,T}}) where {N,T} =
+    convert(Ptr{T}, unsafe_convert(Ptr{NTuple{N,T}}, r))
+unsafe_convert(::Type{Ptr{T}}, r::Ptr{NTuple{N,T}}) where {N,T} =
+    convert(Ptr{T}, r)
+
 ###
 
 getindex(b::RefArray) = b.x[b.i]
 setindex!(b::RefArray, x) = (b.x[b.i] = x; b)
 
 ###
+
+"""
+    AddrSpacePtr{T, AS}
+
+When passed as a `ccall` argument with the `llvmcall` calling convention, an `AddrSpacePtr` will be converted to an LLVM pointer type with the correct address space.
+This type is mainly used to ensure Julia's codegen uses the correct address space when calling LLVM intrinsics.
+"""
+Core.AddrSpacePtr

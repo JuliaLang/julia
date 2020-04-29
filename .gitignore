@@ -30,3 +30,4 @@
 
 /perf*
 .DS_Store
+.idea/*

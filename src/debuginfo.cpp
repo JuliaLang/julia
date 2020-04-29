@@ -73,8 +73,8 @@ struct ObjectInfo {
 // Maintain a mapping of unrealized function names -> linfo objects
 // so that when we see it get emitted, we can add a link back to the linfo
 // that it came from (providing name, type signature, file info, etc.)
-static StringMap<jl_code_instance_t*> ncode_in_flight;
-static std::string mangle(const std::string &Name, const DataLayout &DL)
+static StringMap<jl_code_instance_t*> codeinst_in_flight;
+static std::string mangle(StringRef Name, const DataLayout &DL)
 {
     std::string MangledName;
     {
@@ -85,7 +85,7 @@ static std::string mangle(const std::string &Name, const DataLayout &DL)
 }
 void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL)
 {
-    ncode_in_flight[mangle(name, DL)] = codeinst;
+    codeinst_in_flight[mangle(name, DL)] = codeinst;
 }
 
 
@@ -195,10 +195,10 @@ public:
 
         auto SavedObject = L.getObjectForDebug(Object).takeBinary();
         // If the debug object is unavailable, save (a copy of) the original object
-        // for our backtraces
+        // for our backtraces.
+        // This copy seems unfortunate, but there doesn't seem to be a way to take
+        // ownership of the original buffer.
         if (!SavedObject.first) {
-            // This is unfortunate, but there doesn't seem to be a way to take
-            // ownership of the original buffer
             auto NewBuffer = MemoryBuffer::getMemBufferCopy(
                     Object.getData(), Object.getFileName());
             auto NewObj = object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
@@ -399,11 +399,11 @@ public:
                    (uint8_t*)(uintptr_t)Addr, (size_t)Size, sName,
                    (uint8_t*)(uintptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
 #endif
-            StringMap<jl_code_instance_t*>::iterator linfo_it = ncode_in_flight.find(sName);
+            StringMap<jl_code_instance_t*>::iterator codeinst_it = codeinst_in_flight.find(sName);
             jl_code_instance_t *codeinst = NULL;
-            if (linfo_it != ncode_in_flight.end()) {
-                codeinst = linfo_it->second;
-                ncode_in_flight.erase(linfo_it);
+            if (codeinst_it != codeinst_in_flight.end()) {
+                codeinst = codeinst_it->second;
+                codeinst_in_flight.erase(codeinst_it);
             }
             uv_rwlock_wrlock(&threadsafe);
             if (codeinst)
@@ -431,6 +431,14 @@ public:
     {
         uv_rwlock_rdlock(&threadsafe);
         return objectmap;
+    }
+
+    Optional<std::map<size_t, ObjectInfo, revcomp>*> trygetObjectMap()
+    {
+        if (0 == uv_rwlock_tryrdlock(&threadsafe)) {
+            return &objectmap;
+        }
+        return {};
     }
 };
 
@@ -588,7 +596,7 @@ typedef struct {
 typedef std::map<uint64_t, objfileentry_t, revcomp> obfiletype;
 static obfiletype objfilemap;
 
-static bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16])
+static bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16]) JL_NOTSAFEPOINT
 {
     for (auto Load : obj->load_commands())
     {
@@ -885,7 +893,7 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTS
         // the DebugSymbols framework is moved or removed, an alternative would
         // be to directly query Spotlight for the dSYM bundle.
 
-        typedef CFURLRef (*DBGCopyFullDSYMURLForUUIDfn)(CFUUIDRef, CFURLRef);
+        typedef CFURLRef (*DBGCopyFullDSYMURLForUUIDfn)(CFUUIDRef, CFURLRef) JL_NOTSAFEPOINT;
         DBGCopyFullDSYMURLForUUIDfn DBGCopyFullDSYMURLForUUID = NULL;
 
         // First, try to load the private DebugSymbols framework.
@@ -937,7 +945,7 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTS
         if (objpath.empty()) {
             // Fall back to simple path relative to the dynamic library.
             size_t sep = fname.rfind('/');
-            debuginfopath = fname;
+            debuginfopath = fname.str();
             debuginfopath += ".dSYM/Contents/Resources/DWARF/";
             debuginfopath += fname.substr(sep + 1);
             objpath = debuginfopath;
@@ -969,12 +977,12 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTS
                 // that can be ignored.
                 ignoreError(DebugInfo);
                 if (fname.substr(sep + 1) != info.filename) {
-                    debuginfopath = fname.substr(0, sep + 1);
+                    debuginfopath = fname.substr(0, sep + 1).str();
                     debuginfopath += info.filename;
                     DebugInfo = openDebugInfo(debuginfopath, info);
                 }
                 if (!DebugInfo) {
-                    debuginfopath = fname.substr(0, sep + 1);
+                    debuginfopath = fname.substr(0, sep + 1).str();
                     debuginfopath += ".debug/";
                     debuginfopath += info.filename;
                     ignoreError(DebugInfo);
@@ -1662,3 +1670,22 @@ uint64_t jl_getUnwindInfo(uint64_t dwAddr)
     uv_rwlock_rdunlock(&threadsafe);
     return ipstart;
 }
+
+extern "C"
+uint64_t jl_trygetUnwindInfo(uint64_t dwAddr)
+{
+    // Might be called from unmanaged thread
+    Optional<std::map<size_t, ObjectInfo, revcomp>*> maybeobjmap = jl_jit_events->trygetObjectMap();
+    if (maybeobjmap) {
+        std::map<size_t, ObjectInfo, revcomp> &objmap = **maybeobjmap;
+        std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(dwAddr);
+        uint64_t ipstart = 0; // ip of the start of the section (if found)
+        if (it != objmap.end() && dwAddr < it->first + it->second.SectionSize) {
+            ipstart = (uint64_t)(uintptr_t)(*it).first;
+        }
+        uv_rwlock_rdunlock(&threadsafe);
+        return ipstart;
+    }
+    return 0;
+}
+

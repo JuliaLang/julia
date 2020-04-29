@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Base: eltype
+
 abstract type AbstractRemoteRef end
 
 """
@@ -118,6 +120,8 @@ function RemoteChannel(f::Function, pid::Integer=myid())
         RemoteChannel{typeof(rv.c)}(myid(), rrid)
     end
 end
+
+Base.eltype(::Type{RemoteChannel{T}}) where {T} = eltype(T)
 
 hash(r::AbstractRemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
 ==(r::AbstractRemoteRef, s::AbstractRemoteRef) = (r.whence==s.whence && r.id==s.id)

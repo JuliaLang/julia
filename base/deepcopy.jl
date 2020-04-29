@@ -13,10 +13,6 @@ independent object. For example, deep-copying an array produces a new array whos
 are deep copies of the original elements. Calling `deepcopy` on an object should generally
 have the same effect as serializing and then deserializing it.
 
-As a special case, functions can only be actually deep-copied if they are anonymous,
-otherwise they are just copied. The difference is only relevant in the case of closures,
-i.e. functions which may contain hidden internal references.
-
 While it isn't normally necessary, user-defined types can override the default `deepcopy`
 behavior by defining a specialized version of the function
 `deepcopy_internal(x::T, dict::IdDict)` (which shouldn't otherwise be used),
@@ -56,20 +52,35 @@ end
 
 function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
     T = typeof(x)::DataType
-    isbitstype(T) && return x
-    if haskey(stackdict, x)
-        return stackdict[x]
-    end
-    y = ccall(:jl_new_struct_uninit, Any, (Any,), T)
+    nf = nfields(x)
     if T.mutable
-        stackdict[x] = y
-    end
-    for i in 1:nfields(x)
-        if isdefined(x,i)
-            xi = getfield(x, i)
-            xi = deepcopy_internal(xi, stackdict)::typeof(xi)
-            ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), y, i-1, xi)
+        if haskey(stackdict, x)
+            return stackdict[x]
         end
+        y = ccall(:jl_new_struct_uninit, Any, (Any,), T)
+        stackdict[x] = y
+        for i in 1:nf
+            if isdefined(x, i)
+                xi = getfield(x, i)
+                xi = deepcopy_internal(xi, stackdict)::typeof(xi)
+                ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), y, i-1, xi)
+            end
+        end
+    elseif nf == 0 || isbitstype(T)
+        y = x
+    else
+        flds = Vector{Any}(undef, nf)
+        for i in 1:nf
+            if isdefined(x, i)
+                xi = getfield(x, i)
+                xi = deepcopy_internal(xi, stackdict)::typeof(xi)
+                flds[i] = xi
+            else
+                nf = i - 1 # rest of tail must be undefined values
+                break
+            end
+        end
+        y = ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, flds, nf)
     end
     return y::T
 end

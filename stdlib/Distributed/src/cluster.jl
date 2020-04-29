@@ -28,6 +28,8 @@ The `userdata` field is used to store information for each worker by external ma
 
 Some fields are used by `SSHManager` and similar managers:
   * `tunnel` -- `true` (use tunneling), `false` (do not use tunneling), or [`nothing`](@ref) (use default for the manager)
+  * `multiplex` -- `true` (use SSH multiplexing for tunneling) or `false`
+  * `forward` -- the forwarding option used for `-L` option of ssh
   * `bind_addr` -- the address on the remote host to bind to
   * `sshflags` -- flags to use in establishing the SSH connection
   * `max_parallel` -- the maximum number of workers to connect to in parallel on the host
@@ -58,6 +60,8 @@ mutable struct WorkerConfig
 
     # SSHManager / SSH tunnel connections to workers
     tunnel::Union{Bool, Nothing}
+    multiplex::Union{Bool, Nothing}
+    forward::Union{AbstractString, Nothing}
     bind_addr::Union{AbstractString, Nothing}
     sshflags::Union{Cmd, Nothing}
     max_parallel::Union{Int, Nothing}
@@ -293,12 +297,11 @@ Base.showerror(io::IO, e::LaunchWorkerError) = print(io, e.msg)
 # The master process uses this to connect to the worker and subsequently
 # setup a all-to-all network.
 function read_worker_host_port(io::IO)
-    t0 = time()
+    t0 = time_ns()
 
     # Wait at most for JULIA_WORKER_TIMEOUT seconds to read host:port
     # info from the worker
-    timeout = worker_timeout()
-
+    timeout = worker_timeout() * 1e9
     # We expect the first line to contain the host:port string. However, as
     # the worker may be launched via ssh or a cluster manager like SLURM,
     # ignore any informational / warning lines printed by the launch command.
@@ -311,7 +314,7 @@ function read_worker_host_port(io::IO)
         while ntries > 0
             readtask = @async readline(io)
             yield()
-            while !istaskdone(readtask) && ((time() - t0) < timeout)
+            while !istaskdone(readtask) && ((time_ns() - t0) < timeout)
                 sleep(0.05)
             end
             !istaskdone(readtask) && break
@@ -549,7 +552,7 @@ function launch_n_additional_processes(manager, frompid, fromconfig, cnt, launch
             (bind_addr, port) = address
 
             wconfig = WorkerConfig()
-            for x in [:host, :tunnel, :sshflags, :exeflags, :exename, :enable_threaded_blas]
+            for x in [:host, :tunnel, :multiplex, :sshflags, :exeflags, :exename, :enable_threaded_blas]
                 Base.setproperty!(wconfig, x, Base.getproperty(fromconfig, x))
             end
             wconfig.bind_addr = bind_addr
@@ -569,6 +572,7 @@ end
 function create_worker(manager, wconfig)
     # only node 1 can add new nodes, since nobody else has the full list of address:port
     @assert LPROC.id == 1
+    timeout = worker_timeout()
 
     # initiate a connect. Does not wait for connection completion in case of TCP.
     w = Worker()
@@ -633,9 +637,14 @@ function create_worker(manager, wconfig)
             (notnothing(x.config.ident) in something(wconfig.connect_idents, []))
 
         wlist = filter(filterfunc, PGRP.workers)
+        waittime = 0
         while wconfig.connect_idents !== nothing &&
               length(wlist) < length(wconfig.connect_idents)
+            if waittime >= timeout
+                error("peer workers did not connect within $timeout seconds")
+            end
             sleep(1.0)
+            waittime += 1
             wlist = filter(filterfunc, PGRP.workers)
         end
 
@@ -655,7 +664,13 @@ function create_worker(manager, wconfig)
     send_msg_now(w, MsgHeader(RRID(0,0), ntfy_oid), join_message)
 
     @async manage(w.manager, w.id, w.config, :register)
+    # wait for rr_ntfy_join with timeout
+    timedout = false
+    @async (sleep($timeout); timedout = true; put!(rr_ntfy_join, 1))
     wait(rr_ntfy_join)
+    if timedout
+        error("worker did not connect within $timeout seconds")
+    end
     lock(client_refs) do
         delete!(PGRP.refs, ntfy_oid)
     end
@@ -695,20 +710,20 @@ function redirect_output_from_additional_worker(pid, port)
 end
 
 function check_master_connect()
-    timeout = worker_timeout()
+    timeout = worker_timeout() * 1e9
     # If we do not have at least process 1 connect to us within timeout
     # we log an error and exit, unless we're running on valgrind
     if ccall(:jl_running_on_valgrind,Cint,()) != 0
         return
     end
     @async begin
-        start = time()
-        while !haskey(map_pid_wrkr, 1) && (time() - start) < timeout
+        start = time_ns()
+        while !haskey(map_pid_wrkr, 1) && (time_ns() - start) < timeout
             sleep(1.0)
         end
 
         if !haskey(map_pid_wrkr, 1)
-            print(stderr, "Master process (id 1) could not connect within $timeout seconds.\nexiting.\n")
+            print(stderr, "Master process (id 1) could not connect within $(timeout/1e9) seconds.\nexiting.\n")
             exit(1)
         end
     end
@@ -1023,10 +1038,10 @@ function _rmprocs(pids, waitfor)
             end
         end
 
-        start = time()
-        while (time() - start) < waitfor
+        start = time_ns()
+        while (time_ns() - start) < waitfor*1e9
             all(w -> w.state == W_TERMINATED, rmprocset) && break
-            sleep(min(0.1, waitfor - (time() - start)))
+            sleep(min(0.1, waitfor - (time_ns() - start)/1e9))
         end
 
         unremoved = [wrkr.id for wrkr in filter(w -> w.state != W_TERMINATED, rmprocset)]
@@ -1283,6 +1298,7 @@ end
 
 write_cookie(io::IO) = print(io.in, string(cluster_cookie(), "\n"))
 
+# Starts workers specified by (-n|--procs) and --machine-file command line options
 function process_opts(opts)
     # startup worker.
     # opts.startupfile, opts.load, etc should should not be processed for workers.
@@ -1295,14 +1311,17 @@ function process_opts(opts)
         end
     end
 
+    # Propagate --threads to workers
+    exeflags = opts.nthreads > 0 ? `--threads=$(opts.nthreads)` : ``
+
     # add processors
     if opts.nprocs > 0
-        addprocs(opts.nprocs)
+        addprocs(opts.nprocs; exeflags=exeflags)
     end
 
     # load processes from machine file
     if opts.machine_file != C_NULL
-        addprocs(load_machine_file(unsafe_string(opts.machine_file)))
+        addprocs(load_machine_file(unsafe_string(opts.machine_file)); exeflags=exeflags)
     end
     return nothing
 end

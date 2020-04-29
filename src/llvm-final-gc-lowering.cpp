@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "llvm-version.h"
+
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IntrinsicInst.h>
@@ -9,16 +11,12 @@
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 
-#include "llvm-version.h"
 #include "codegen_shared.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "llvm-pass-helpers.h"
 
 #define DEBUG_TYPE "final_gc_lowering"
-#if JL_LLVM_VERSION < 70000
-#define LLVM_DEBUG DEBUG
-#endif
 
 using namespace llvm;
 
@@ -85,24 +83,13 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     tempSlot_i8->insertAfter(gcframe);
     Type *argsT[2] = {tempSlot_i8->getType(), T_int32};
     Function *memset = Intrinsic::getDeclaration(F.getParent(), Intrinsic::memset, makeArrayRef(argsT));
-#if JL_LLVM_VERSION >= 70000
-        Value *args[4] = {
-            tempSlot_i8, // dest
-            ConstantInt::get(Type::getInt8Ty(F.getContext()), 0), // val
-            ConstantInt::get(T_int32, sizeof(jl_value_t*) * (nRoots + 2)), // len
-            ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
-#else
-        Value *args[5] = {
-            tempSlot_i8, // dest
-            ConstantInt::get(Type::getInt8Ty(F.getContext()), 0), // val
-            ConstantInt::get(T_int32, sizeof(jl_value_t*) * (nRoots + 2)), // len
-            ConstantInt::get(T_int32, 16), // align
-            ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
-#endif
+    Value *args[4] = {
+        tempSlot_i8, // dest
+        ConstantInt::get(Type::getInt8Ty(F.getContext()), 0), // val
+        ConstantInt::get(T_int32, sizeof(jl_value_t*) * (nRoots + 2)), // len
+        ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
     CallInst *zeroing = CallInst::Create(memset, makeArrayRef(args));
-#if JL_LLVM_VERSION >= 70000
-     cast<MemSetInst>(zeroing)->setDestAlignment(16);
-#endif
+    cast<MemSetInst>(zeroing)->setDestAlignment(16);
     zeroing->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     zeroing->insertAfter(tempSlot_i8);
 

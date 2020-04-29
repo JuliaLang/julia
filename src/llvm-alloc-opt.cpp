@@ -75,8 +75,13 @@ static bool hasObjref(Type *ty)
 {
     if (auto ptrty = dyn_cast<PointerType>(ty))
         return ptrty->getAddressSpace() == AddressSpace::Tracked;
+#if JL_LLVM_VERSION >= 110000
+    if (isa<ArrayType>(ty) || isa<VectorType>(ty))
+        return GetElementPtrInst::getTypeAtIndex(ty, (uint64_t)0);
+#else
     if (auto seqty = dyn_cast<SequentialType>(ty))
         return hasObjref(seqty->getElementType());
+#endif
     if (auto structty = dyn_cast<StructType>(ty)) {
         for (auto elty: structty->elements()) {
             if (hasObjref(elty)) {
@@ -504,7 +509,7 @@ bool Optimizer::AllocUseInfo::addMemOp(Instruction *inst, unsigned opno, uint32_
     if (size >= UINT32_MAX - offset)
         return false;
     memop.size = size;
-    memop.isaggr = isa<CompositeType>(elty);
+    memop.isaggr = isa<StructType>(elty) || isa<ArrayType>(elty) || isa<VectorType>(elty);
     memop.isobjref = hasObjref(elty);
     auto &field = getField(offset, size, elty);
     if (field.first != offset || field.second.size != size)
@@ -593,11 +598,7 @@ void Optimizer::checkInst(Instruction *I)
             if (auto II = dyn_cast<IntrinsicInst>(call)) {
                 if (auto id = II->getIntrinsicID()) {
                     if (id == Intrinsic::memset) {
-#if JL_LLVM_VERSION < 70000
-                        assert(call->getNumArgOperands() == 5);
-#else
                         assert(call->getNumArgOperands() == 4);
-#endif
                         use_info.hasmemset = true;
                         if (cur.offset == UINT32_MAX ||
                             !isa<ConstantInt>(call->getArgOperand(2)) ||
@@ -938,8 +939,8 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
     // SSA from it are live when we run the allocation again.
     // It is now safe to promote the allocation to an entry block alloca.
     size_t align = 1;
-    // TODO make codegen handling of alignment consistent and pass that as a parameter
-    // to the allocation function directly.
+    // TODO: This is overly conservative. May want to instead pass this as a
+    //       parameter to the allocation function directly.
     if (sz > 1)
         align = MinAlign(JL_SMALL_BYTE_ALIGNMENT, NextPowerOf2(sz));
     // No debug info for prolog instructions
@@ -1360,7 +1361,11 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                                                                           offset - slot.offset);
                             auto sub_size = std::min(slot.offset + slot.size, offset + size) -
                                 std::max(offset, slot.offset);
+#if JL_LLVM_VERSION >= 100000
+                            builder.CreateMemSet(ptr8, val_arg, sub_size, MaybeAlign(0));
+#else
                             builder.CreateMemSet(ptr8, val_arg, sub_size, 0);
+#endif
                         }
                         call->eraseFromParent();
                         return;

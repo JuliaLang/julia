@@ -370,10 +370,17 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
             end
         elseif isa(leaf, QuoteNode)
             leaf = leaf.value
+        elseif isa(leaf, GlobalRef)
+            mod, name = leaf.mod, leaf.name
+            if isdefined(mod, name) && isconst(mod, name)
+                leaf = getfield(mod, name)
+            else
+                return nothing
+            end
         elseif isa(leaf, Union{Argument, Expr})
             return nothing
         end
-        isimmutable(leaf) || return nothing
+        !ismutable(leaf) || return nothing
         isdefined(leaf, field) || return nothing
         val = getfield(leaf, field)
         is_inlineable_constant(val) || return nothing

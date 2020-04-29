@@ -28,6 +28,14 @@ struct CountTrackedPointers {
     CountTrackedPointers(llvm::Type *T);
 };
 
+#if JL_LLVM_VERSION >= 110000
+unsigned TrackWithShadow(llvm::Value *Src, llvm::Type *T, bool isptr, llvm::Value *Dst, llvm::IRBuilder<> &irbuilder);
+std::vector<llvm::Value*> ExtractTrackedValues(llvm::Value *Src, llvm::Type *STy, bool isptr, llvm::IRBuilder<> &irbuilder);
+#else
+unsigned TrackWithShadow(llvm::Value *Src, llvm::Type *T, bool isptr, llvm::Value *Dst, llvm::IRBuilder<> irbuilder);
+std::vector<llvm::Value*> ExtractTrackedValues(llvm::Value *Src, llvm::Type *STy, bool isptr, llvm::IRBuilder<> irbuilder);
+#endif
+
 static inline void llvm_dump(llvm::Value *v)
 {
     v->print(llvm::dbgs(), true);

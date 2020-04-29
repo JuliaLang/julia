@@ -160,13 +160,13 @@ Consider the following:
 
 ```jldoctest
 julia> a = Real[]
-0-element Array{Real,1}
+Real[]
 
 julia> push!(a, 1); push!(a, 2.0); push!(a, π)
 3-element Array{Real,1}:
  1
  2.0
- π
+ π = 3.1415926535897...
 ```
 
 Because `a` is a an array of abstract type [`Real`](@ref), it must be able to hold any
@@ -177,7 +177,7 @@ efficiently:
 
 ```jldoctest
 julia> a = Float64[]
-0-element Array{Float64,1}
+Float64[]
 
 julia> push!(a, 1); push!(a, 2.0); push!(a,  π)
 3-element Array{Float64,1}:
@@ -532,6 +532,11 @@ but this will:
 
 ```julia
 g_vararg(x::Vararg{Int, N}) where {N} = tuple(x...)
+```
+
+One only needs to introduce a single type parameter to force specialization, even if the other types are unconstrained. For example, this will also specialize, and is useful when the arguments are not all of the same type:
+```julia
+h_vararg(x::Vararg{Any, N}) where {N} = tuple(x...)
 ```
 
 Note that [`@code_typed`](@ref) and friends will always show you specialized code, even if Julia
@@ -1013,7 +1018,7 @@ example, but in many contexts it is more convenient to just sprinkle
 some dots in your expressions rather than defining a separate function
 for each vectorized operation.)
 
-## Consider using views for slices
+## [Consider using views for slices](@id man-performance-views)
 
 In Julia, an array "slice" expression like `array[1:5, :]` creates
 a copy of that data (except on the left-hand side of an assignment,
@@ -1188,7 +1193,7 @@ Sometimes you can enable better optimization by promising certain program proper
 
 The common idiom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing,
 and may cause a segmentation fault if bounds checking is turned off. Use `LinearIndices(x)` or `eachindex(x)`
-instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays/)).
+instead (see also [Arrays with custom indices](@ref man-custom-indices)).
 
 !!! note
     While `@simd` needs to be placed directly in front of an innermost `for` loop, both `@inbounds` and `@fastmath`

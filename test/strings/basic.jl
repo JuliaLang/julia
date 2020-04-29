@@ -51,71 +51,119 @@ end
 
 @testset "{starts,ends}with" begin
     @test startswith("abcd", 'a')
+    @test startswith('a')("abcd")
     @test startswith("abcd", "a")
+    @test startswith("a")("abcd")
     @test startswith("abcd", "ab")
+    @test startswith("ab")("abcd")
     @test !startswith("ab", "abcd")
+    @test !startswith("abcd")("ab")
     @test !startswith("abcd", "bc")
+    @test !startswith("bc")("abcd")
     @test endswith("abcd", 'd')
+    @test endswith('d')("abcd")
     @test endswith("abcd", "d")
+    @test endswith("d")("abcd")
     @test endswith("abcd", "cd")
+    @test endswith("cd")("abcd")
     @test !endswith("abcd", "dc")
+    @test !endswith("dc")("abcd")
     @test !endswith("cd", "abcd")
+    @test !endswith("abcd")("cd")
     @test startswith("ab\0cd", "ab\0c")
+    @test startswith("ab\0c")("ab\0cd")
     @test !startswith("ab\0cd", "ab\0d")
+    @test !startswith("ab\0d")("ab\0cd")
     x = "∀"
     y = String(codeunits(x)[1:2])
     z = String(codeunits(x)[1:1])
     @test !startswith(x, y)
+    @test !startswith(y)(x)
     @test !startswith(x, z)
+    @test !startswith(z)(x)
     @test !startswith(y, z)
+    @test !startswith(z)(y)
     @test startswith(x, x)
+    @test startswith(x)(x)
     @test startswith(y, y)
+    @test startswith(y)(y)
     @test startswith(z, z)
+    @test startswith(z)(z)
     x = SubString(x)
     y = SubString(y)
     z = SubString(z)
     @test !startswith(x, y)
+    @test !startswith(y)(x)
     @test !startswith(x, z)
+    @test !startswith(z)(x)
     @test !startswith(y, z)
+    @test !startswith(z)(y)
     @test startswith(x, x)
+    @test startswith(x)(x)
     @test startswith(y, y)
+    @test startswith(y)(y)
     @test startswith(z, z)
+    @test startswith(z)(z)
     x = "x∀y"
     y = SubString("x\xe2\x88y", 1, 2)
     z = SubString("x\xe2y", 1, 2)
     @test !startswith(x, y)
+    @test !startswith(y)(x)
     @test !startswith(x, z)
+    @test !startswith(z)(x)
     @test !startswith(y, z)
+    @test !startswith(z)(y)
     @test startswith(x, x)
+    @test startswith(x)(x)
     @test startswith(y, y)
+    @test startswith(y)(y)
     @test startswith(z, z)
+    @test startswith(z)(z)
     x = "∀"
     y = String(codeunits(x)[2:3])
     z = String(codeunits(x)[3:3])
     @test !endswith(x, y)
+    @test !endswith(y)(x)
     @test !endswith(x, z)
+    @test !endswith(z)(x)
     @test endswith(y, z)
+    @test endswith(z)(y)
     @test endswith(x, x)
+    @test endswith(x)(x)
     @test endswith(y, y)
+    @test endswith(y)(y)
     @test endswith(z, z)
+    @test endswith(z)(z)
     x = SubString(x)
     y = SubString(y)
     z = SubString(z)
     @test !endswith(x, y)
+    @test !endswith(y)(x)
     @test !endswith(x, z)
+    @test !endswith(z)(x)
     @test endswith(y, z)
+    @test endswith(z)(y)
     @test endswith(x, x)
+    @test endswith(x)(x)
     @test endswith(y, y)
+    @test endswith(y)(y)
     @test endswith(z, z)
+    @test endswith(z)(z)
     x = "x∀y"
     y = SubString("x\x88\x80y", 2, 4)
     z = SubString("x\x80y", 2, 3)
     @test !endswith(x, y)
+    @test !endswith(y)(x)
     @test !endswith(x, z)
+    @test !endswith(z)(x)
     @test endswith(y, z)
+    @test endswith(z)(y)
     @test endswith(x, x)
+    @test endswith(x)(x)
     @test endswith(y, y)
+    @test endswith(y)(y)
     @test endswith(z, z)
+    @test endswith(z)(z)
 end
 
 @testset "filter specialization on String issue #32460" begin
@@ -162,8 +210,8 @@ end
     @test string(sym) == string(Char(0xdcdb))
     @test String(sym) == string(Char(0xdcdb))
     @test Meta.lower(Main, sym) === sym
-    res = string(Meta.parse(string(Char(0xdcdb)," = 1"),1,raise=false)[1])
-    @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\" near column 1\"))"""
+    @test Meta.parse(string(Char(0xe0080)," = 1"), 1, raise=false)[1] ==
+        Expr(:error, "invalid character \"\Ue0080\" near column 1")
 end
 
 @testset "Symbol and gensym" begin
@@ -620,15 +668,17 @@ end
         @test_throws ArgumentError repeat(c, -1)
         @test_throws ArgumentError repeat(s, -1)
         @test_throws ArgumentError repeat(S, -1)
-        @test repeat(c, 0) === ""
-        @test repeat(s, 0) === ""
-        @test repeat(S, 0) === ""
-        @test repeat(c, 1) === s
-        @test repeat(s, 1) === s
-        @test repeat(S, 1) === S
-        @test repeat(c, 3) === S
-        @test repeat(s, 3) === S
-        @test repeat(S, 3) === S*S*S
+        for T in (Int, UInt)
+            @test repeat(c, T(0)) === ""
+            @test repeat(s, T(0)) === ""
+            @test repeat(S, T(0)) === ""
+            @test repeat(c, T(1)) === s
+            @test repeat(s, T(1)) === s
+            @test repeat(S, T(1)) === S
+            @test repeat(c, T(3)) === S
+            @test repeat(s, T(3)) === S
+            @test repeat(S, T(3)) === S*S*S
+        end
     end
     # Issue #32160 (string allocation unsigned overflow)
     @test_throws OutOfMemoryError repeat('x', typemax(Csize_t))
@@ -646,6 +696,17 @@ end
     @test 'a' * "b" * 'c' == "abc"
     @test "a" * 'b' * 'c' == "abc"
 end
+
+# this tests a possible issue in subtyping with long argument lists to `string(...)`
+getString(dic, key) = haskey(dic,key) ? "$(dic[key])" : ""
+function getData(dic)
+    val = getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"") *
+        "," * getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"") *
+        "," * getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"") *
+        "," * getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"") *
+        "," * getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"")
+end
+@test getData(Dict()) == ",,,,,,,,,,,,,,,,,,"
 
 @testset "unrecognized escapes in string/char literals" begin
     @test_throws Meta.ParseError Meta.parse("\"\\.\"")

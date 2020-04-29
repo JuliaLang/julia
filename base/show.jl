@@ -1,7 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function show(io::IO, ::MIME"text/plain", u::UndefInitializer)
-    print(io, u, ": array initializer with undefined values")
+    show(io, u)
+    get(io, :compact, false) && return
+    print(io, ": array initializer with undefined values")
 end
 
 # first a few multiline show functions for types defined before the MIME type:
@@ -9,18 +11,18 @@ end
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
 
 function show(io::IO, ::MIME"text/plain", r::LinRange)
+    isempty(r) && return show(io, r)
     # show for LinRange, e.g.
     # range(1, stop=3, length=7)
     # 7-element LinRange{Float64}:
     #   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
     summary(io, r)
-    if !isempty(r)
-        println(io, ":")
-        print_range(io, r)
-    end
+    println(io, ":")
+    print_range(io, r)
 end
 
 function show(io::IO, ::MIME"text/plain", f::Function)
+    get(io, :compact, false) && return show(io, f)
     ft = typeof(f)
     mt = ft.name.mt
     if isa(f, Core.IntrinsicFunction)
@@ -43,6 +45,7 @@ function show(io::IO, ::MIME"text/plain", f::Function)
 end
 
 function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
+    isempty(iter) && get(io, :compact, false) && return show(io, iter)
     summary(io, iter)
     isempty(iter) && return
     print(io, ". ", isa(iter,KeySet) ? "Keys" : "Values", ":")
@@ -73,6 +76,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
 end
 
 function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
+    isempty(t) && return show(io, t)
     # show more descriptively, with one line per key/value pair
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)
@@ -142,6 +146,7 @@ function summary(io::IO, t::AbstractSet)
 end
 
 function show(io::IO, ::MIME"text/plain", t::AbstractSet{T}) where T
+    isempty(t) && return show(io, t)
     # show more descriptively, with one line per value
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)
@@ -926,7 +931,7 @@ julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Bas
 """
 function operator_associativity(s::Symbol)
     if operator_precedence(s) in (prec_arrow, prec_assignment, prec_control_flow, prec_pair, prec_power) ||
-        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) || s === :<|
+        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) || s === :<| || s === :||
         return :right
     elseif operator_precedence(s) in (0, prec_comparison) || s in (:+, :++, :*)
         return :none
@@ -934,8 +939,8 @@ function operator_associativity(s::Symbol)
     return :left
 end
 
-is_expr(ex, head::Symbol)         = (isa(ex, Expr) && (ex.head == head))
-is_expr(ex, head::Symbol, n::Int) = is_expr(ex, head) && length(ex.args) == n
+is_expr(@nospecialize(ex), head::Symbol)         = isa(ex, Expr) && (ex.head === head)
+is_expr(@nospecialize(ex), head::Symbol, n::Int) = is_expr(ex, head) && length(ex.args) == n
 
 is_quoted(ex)            = false
 is_quoted(ex::QuoteNode) = true
@@ -991,7 +996,8 @@ function show_block(io::IO, head, arg, block, i::Int, quote_level::Int)
 end
 
 # show an indented list
-function show_list(io::IO, items, sep, indent::Int, prec::Int=0, quote_level::Int=0, enclose_operators::Bool=false)
+function show_list(io::IO, items, sep, indent::Int, prec::Int=0, quote_level::Int=0, enclose_operators::Bool=false,
+                   kw::Bool=false)
     n = length(items)
     n == 0 && return
     indent += indent_width
@@ -1004,20 +1010,27 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, quote_level::In
               (item isa Real && item < 0))) ||
               (enclose_operators && item isa Symbol && isoperator(item))
         parens && print(io, '(')
-        show_unquoted(io, item, indent, parens ? 0 : prec, quote_level)
+        if kw && is_expr(item, :kw, 2)
+            show_unquoted(io, Expr(:(=), item.args[1], item.args[2]), indent, parens ? 0 : prec, quote_level)
+        elseif kw && is_expr(item, :(=), 2)
+            show_unquoted_expr_fallback(io, item, indent, quote_level)
+        else
+            show_unquoted(io, item, indent, parens ? 0 : prec, quote_level)
+        end
         parens && print(io, ')')
         first = false
     end
 end
 # show an indented list inside the parens (op, cl)
-function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, quote_level=0, encl_ops=false)
+function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, quote_level=0, encl_ops=false, kw::Bool=false)
     print(io, op)
-    show_list(io, items, sep, indent, prec, quote_level, encl_ops)
+    show_list(io, items, sep, indent, prec, quote_level, encl_ops, kw)
     print(io, cl)
 end
 
 # show a normal (non-operator) function call, e.g. f(x, y) or A[z]
-function show_call(io::IO, head, func, func_args, indent, quote_level)
+# kw: `=` expressions are parsed with head `kw` in this context
+function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool)
     op, cl = expr_calls[head]
     if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
             (isa(func, Expr) && (func.head === :. || func.head === :curly || func.head === :macroname)) ||
@@ -1033,12 +1046,12 @@ function show_call(io::IO, head, func, func_args, indent, quote_level)
     end
     if !isempty(func_args) && isa(func_args[1], Expr) && func_args[1].head === :parameters
         print(io, op)
-        show_list(io, func_args[2:end], ", ", indent, 0, quote_level)
+        show_list(io, func_args[2:end], ", ", indent, 0, quote_level, false, kw)
         print(io, "; ")
-        show_list(io, func_args[1].args, ", ", indent, 0, quote_level)
+        show_list(io, func_args[1].args, ", ", indent, 0, quote_level, false, kw)
         print(io, cl)
     else
-        show_enclosed_list(io, op, func_args, ", ", cl, indent, 0, quote_level)
+        show_enclosed_list(io, op, func_args, ", ", cl, indent, 0, quote_level, false, kw)
     end
 end
 
@@ -1147,7 +1160,7 @@ function show_generator(io, ex, indent, quote_level)
 end
 
 function valid_import_path(@nospecialize ex)
-    return Meta.isexpr(ex, :(.)) && length((ex::Expr).args) > 0 && all(a->isa(a,Symbol), (ex::Expr).args)
+    return is_expr(ex, :(.)) && length((ex::Expr).args) > 0 && all(a->isa(a,Symbol), (ex::Expr).args)
 end
 
 function show_import_path(io::IO, ex, quote_level)
@@ -1194,6 +1207,16 @@ end
 # as an ordinary symbol, which is true in indexing expressions.
 const beginsym = gensym(:beginsym)
 
+function show_unquoted_expr_fallback(io::IO, ex::Expr, indent::Int, quote_level::Int)
+    print(io, "\$(Expr(")
+    show(io, ex.head)
+    for arg in ex.args
+        print(io, ", ")
+        show(io, arg)
+    end
+    print(io, "))")
+end
+
 # TODO: implement interpolated strings
 function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::Int = 0)
     head, args, nargs = ex.head, ex.args, length(ex.args)
@@ -1204,7 +1227,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             item = args[1]
             # field
             field = unquoted(args[2])
-            parens = !is_quoted(item) && !(item isa Symbol && isidentifier(item)) && !Meta.isexpr(item, :(.))
+            parens = !is_quoted(item) && !(item isa Symbol && isidentifier(item)) && !is_expr(item, :(.))
             parens && print(io, '(')
             show_unquoted(io, item, indent, 0, quote_level)
             parens && print(io, ')')
@@ -1231,8 +1254,24 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             show_list(io, args, head_, indent, func_prec, quote_level, true)
         end
 
-    # list (i.e. "(1, 2, 3)" or "[1, 2, 3]")
-    elseif haskey(expr_parens, head) ||                          # :tuple/:vcat
+    elseif head === :tuple
+        print(io, "(")
+        if nargs > 0 && is_expr(args[1], :parameters)
+            show_list(io, args[2:end], ", ", indent, 0, quote_level)
+            nargs == 2 && print(io, ',')
+            print(io, ";")
+            if !isempty(args[1].args)
+                print(io, " ")
+            end
+            show_list(io, args[1].args, ", ", indent, 0, quote_level, false, true)
+        else
+            show_list(io, args, ", ", indent, 0, quote_level)
+            nargs == 1 && print(io, ',')
+        end
+        print(io, ")")
+
+    # list-like forms, e.g. "[1, 2, 3]"
+    elseif haskey(expr_parens, head) ||                          # :vcat etc.
         head === :typed_vcat || head === :typed_hcat
         # print the type and defer to the untyped case
         if head === :typed_vcat || head === :typed_hcat
@@ -1255,12 +1294,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         end
         head !== :row && print(io, op)
         show_list(io, args, sep, indent, 0, quote_level)
-        if nargs == 1
-            if head === :tuple
-                print(io, ',')
-            elseif head === :vcat
-                print(io, ';')
-            end
+        if nargs == 1 && head === :vcat
+            print(io, ';')
         end
         head !== :row && print(io, cl)
 
@@ -1274,8 +1309,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         end
         func_args = args[2:end]
 
+        # :kw exprs are only parsed inside parenthesized calls
+        if any(a->is_expr(a, :kw), func_args) || (!isempty(func_args) && is_expr(func_args[1], :parameters))
+            show_call(io, head, func, func_args, indent, quote_level, true)
+
         # scalar multiplication (i.e. "100x")
-        if (func === :* &&
+        elseif (func === :* &&
             length(func_args)==2 && isa(func_args[1], Real) && isa(func_args[2], Symbol))
             if func_prec <= prec
                 show_enclosed_list(io, '(', func_args, "", ')', indent, func_prec, quote_level)
@@ -1313,12 +1352,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
                 print(io, ")")
                 show_enclosed_list(io, op, func_args, ", ", cl, indent, 0, quote_level)
             else
-                show_call(io, head, func, func_args, indent, quote_level)
+                show_call(io, head, func, func_args, indent, quote_level, true)
             end
 
         # normal function (i.e. "f(x,y)")
         else
-            show_call(io, head, func, func_args, indent, quote_level)
+            show_call(io, head, func, func_args, indent, quote_level, true)
         end
 
     # new expr
@@ -1328,7 +1367,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
     elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
         funcargslike = head === :(.) ? args[2].args : args[2:end]
-        show_call(head == :ref ? IOContext(io, beginsym=>true) : io, head, args[1], funcargslike, indent, quote_level)
+        show_call(head == :ref ? IOContext(io, beginsym=>true) : io, head, args[1], funcargslike, indent, quote_level, head !== :curly)
 
     # comprehensions
     elseif head === :typed_comprehension && nargs == 2
@@ -1386,7 +1425,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     # block with argument
     elseif head in (:for,:while,:function,:macro,:if,:elseif,:let) && nargs==2
-        if Meta.isexpr(args[2], :block)
+        if is_expr(args[2], :block)
             show_block(IOContext(io, beginsym=>false), head, args[1], args[2], indent, quote_level)
         else
             show_block(IOContext(io, beginsym=>false), head, args[1], Expr(:block, args[2]), indent, quote_level)
@@ -1460,11 +1499,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
                is_core_macro(args[1], "@big_str")
             print(io, args[3])
         # x"y" and x"y"z
-        elseif isa(args[1], Symbol) &&
+        elseif isa(args[1], Symbol) && nargs >= 3 && isa(args[3], String) &&
                startswith(string(args[1]::Symbol), "@") &&
                endswith(string(args[1]::Symbol), "_str")
             s = string(args[1]::Symbol)
-            print(io, s[2:prevind(s,end,4)], "\"", args[3], "\"")
+            print(io, s[2:prevind(s,end,4)], "\"")
+            escape_raw_string(io, args[3])
+            print(io, "\"")
             if nargs == 4
                 print(io, args[4])
             end
@@ -1478,7 +1519,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             # prec=-1 and hide the line number argument from the argument list
             mname = allow_macroname(args[1])
             if prec >= 0
-                show_call(io, :call, mname, args[3:end], indent, quote_level)
+                show_call(io, :call, mname, args[3:end], indent, quote_level, false)
             else
                 show_args = Vector{Any}(undef, nargs - 1)
                 show_args[1] = mname
@@ -1537,11 +1578,17 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             print(io, '(')
             ind = indent + indent_width
             for i = 1:length(ex.args)
-                i > 1 && print(io, ";\n", ' '^ind)
+                if i > 1
+                    # if there was only a comment before the first semicolon, the expression would get parsed as a NamedTuple
+                    if !(i == 2 && ex.args[1] isa LineNumberNode)
+                        print(io, ';')
+                    end
+                    print(io, "\n", ' '^ind)
+                end
                 show_unquoted(io, ex.args[i], ind, -1, quote_level)
             end
             if length(ex.args) < 2
-                print(isempty(ex.args) ? "nothing;)" : ";)")
+                print(io, isempty(ex.args) ? ";;)" : ";)")
             else
                 print(io, ')')
             end
@@ -1552,17 +1599,19 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     elseif head === :quote && nargs == 1 && isa(args[1], Symbol)
         show_unquoted_quote_expr(IOContext(io, beginsym=>false), args[1]::Symbol, indent, 0, quote_level+1)
-    elseif head === :quote && nargs == 1 && Meta.isexpr(args[1], :block)
-        show_block(IOContext(io, beginsym=>false), "quote", Expr(:quote, args[1].args...), indent,
-                   quote_level+1)
-        print(io, "end")
-    elseif head === :quote && nargs == 1
-        print(io, ":(")
-        show_unquoted(IOContext(io, beginsym=>false), args[1], indent+2, 0, quote_level+1)
-        print(io, ")")
-    elseif head === :quote
-        show_block(IOContext(io, beginsym=>false), "quote", ex, indent, quote_level+1)
-        print(io, "end")
+    elseif head === :quote && !get(io, :unquote_fallback, true)
+        if nargs == 1 && is_expr(args[1], :block)
+            show_block(IOContext(io, beginsym=>false), "quote", Expr(:quote, args[1].args...), indent,
+                       quote_level+1)
+            print(io, "end")
+        elseif nargs == 1
+            print(io, ":(")
+            show_unquoted(IOContext(io, beginsym=>false), args[1], indent+2, 0, quote_level+1)
+            print(io, ")")
+        else
+            show_block(IOContext(io, beginsym=>false), "quote", ex, indent, quote_level+1)
+            print(io, "end")
+        end
 
     elseif head === :gotoifnot && nargs == 2 && isa(args[2], Int)
         print(io, "unless ")
@@ -1575,11 +1624,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     elseif head === :null
         print(io, "nothing")
-
-    elseif head === :kw && nargs == 2
-        show_unquoted(io, args[1], indent+indent_width, 0, quote_level)
-        print(io, '=')
-        show_unquoted(io, args[2], indent+indent_width, 0, quote_level)
 
     elseif head === :string
         print(io, '"')
@@ -1602,12 +1646,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         if head === :$
             quote_level -= 1
         end
-        if head === :$ && quote_level < 0 && get(io, :unquote_fallback, true)
+        if head === :$ && get(io, :unquote_fallback, true)
             unhandled = true
         else
             print(io, head)
             a1 = args[1]
-            parens = (isa(a1,Expr) && (a1.head !== :tuple && a1.head !== :$)) ||
+            parens = (isa(a1,Expr) && !in(a1.head, (:tuple, :$, :vect, :braces))) ||
                      (isa(a1,Symbol) && isoperator(a1))
             parens && print(io, "(")
             show_unquoted(io, a1, 0, 0, quote_level)
@@ -1642,7 +1686,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     elseif (head === :import || head === :using) &&
            ((nargs == 1 && (valid_import_path(args[1]) ||
-                           (Meta.isexpr(args[1], :(:)) &&
+                           (is_expr(args[1], :(:)) &&
                             length((args[1]::Expr).args) > 1 &&
                             all(valid_import_path, (args[1]::Expr).args)))) ||
              all(valid_import_path, args))
@@ -1667,19 +1711,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         unhandled = true
     end
     if unhandled
-        print(io, "\$(Expr(")
-        show(io, ex.head)
-        for arg in args
-            print(io, ", ")
-            if isa(arg, Expr)
-                print(io, ":(")
-                show_unquoted(io, arg, indent, 0, quote_level+1)
-                print(io, ")")
-            else
-                show(io, arg)
-            end
-        end
-        print(io, "))")
+        show_unquoted_expr_fallback(io, ex, indent, quote_level)
     end
     nothing
 end
@@ -1788,16 +1820,16 @@ function show(io::IO, tv::TypeVar)
     lb, ub = tv.lb, tv.ub
     if !in_env && lb !== Bottom
         if ub === Any
-            write(io, tv.name)
+            show_unquoted(io, tv.name)
             print(io, ">:")
             show_bound(io, lb)
         else
             show_bound(io, lb)
             print(io, "<:")
-            write(io, tv.name)
+            show_unquoted(io, tv.name)
         end
     else
-        write(io, tv.name)
+        show_unquoted(io, tv.name)
     end
     if !in_env && ub !== Any
         print(io, "<:")
@@ -2029,13 +2061,13 @@ alignment(io::IO, x::Number) = (length(sprint(show, x, context=io, sizehint=0)),
 alignment(io::IO, x::Integer) = (length(sprint(show, x, context=io, sizehint=0)), 0)
 "`alignment(4.23)` yields (1,3) for `4` and `.23`"
 function alignment(io::IO, x::Real)
-    m = match(r"^(.*?)((?:[\.eE].*)?)$", sprint(show, x, context=io, sizehint=0))
+    m = match(r"^(.*?)((?:[\.eEfF].*)?)$", sprint(show, x, context=io, sizehint=0))
     m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
 "`alignment(1 + 10im)` yields (3,5) for `1 +` and `_10im` (plus sign on left, space on right)"
 function alignment(io::IO, x::Complex)
-    m = match(r"^(.*[^e][\+\-])(.*)$", sprint(show, x, context=io, sizehint=0))
+    m = match(r"^(.*[^ef][\+\-])(.*)$", sprint(show, x, context=io, sizehint=0))
     m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
@@ -2191,6 +2223,15 @@ function showarg(io::IO, r::ReinterpretArray{T}, toplevel) where {T}
     showarg(io, parent(r), false)
     print(io, ')')
 end
+
+# printing iterators from Base.Iterators
+
+function show(io::IO, e::Iterators.Enumerate)
+    print(io, "enumerate(")
+    show(io, e.itr)
+    print(io, ')')
+end
+show(io::IO, z::Iterators.Zip) = show_delim_array(io, z.is, "zip(", ',', ')', false)
 
 # pretty printing for Iterators.Pairs
 function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, T}, toplevel) where T<:AbstractArray

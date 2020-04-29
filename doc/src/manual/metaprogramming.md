@@ -261,10 +261,10 @@ julia> x = :(1 + 2);
 julia> e = quote quote $x end end
 quote
     #= none:1 =#
-    quote
-        #= none:1 =#
-        $x
-    end
+    $(Expr(:quote, quote
+    #= none:1 =#
+    $(Expr(:$, :x))
+end))
 end
 ```
 
@@ -289,10 +289,10 @@ This is done with multiple `$`s:
 julia> e = quote quote $$x end end
 quote
     #= none:1 =#
-    quote
-        #= none:1 =#
-        $(1 + 2)
-    end
+    $(Expr(:quote, quote
+    #= none:1 =#
+    $(Expr(:$, :(1 + 2)))
+end))
 end
 ```
 
@@ -771,10 +771,10 @@ final value. The macro might look like this:
 ```julia
 macro time(ex)
     return quote
-        local t0 = time()
+        local t0 = time_ns()
         local val = $ex
-        local t1 = time()
-        println("elapsed time: ", t1-t0, " seconds")
+        local t1 = time_ns()
+        println("elapsed time: ", (t1-t0)/1e9, " seconds")
         val
     end
 end
@@ -857,10 +857,10 @@ macro time(expr)
     return :(timeit(() -> $(esc(expr))))
 end
 function timeit(f)
-    t0 = time()
+    t0 = time_ns()
     val = f()
-    t1 = time()
-    println("elapsed time: ", t1-t0, " seconds")
+    t1 = time_ns()
+    println("elapsed time: ", (t1-t0)/1e9, " seconds")
     return val
 end
 ```
@@ -1102,7 +1102,7 @@ When defining generated functions, there are five main differences to ordinary f
 3. Instead of calculating something or performing some action, you return a *quoted expression* which,
    when evaluated, does what you want.
 4. Generated functions are only permitted to call functions that were defined *before* the definition of the generated
-   function. (Failure to follow this my result on getting `MethodErrors` referring to functions from a future world-age.)
+   function. (Failure to follow this may result in getting `MethodErrors` referring to functions from a future world-age.)
 5. Generated functions must not *mutate* or *observe* any non-constant global state (including,
    for example, IO, locks, non-local dictionaries, or using [`hasmethod`](@ref)).
    This means they can only read global constants, and cannot have any side effects.

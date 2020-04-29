@@ -204,11 +204,13 @@ function Documenter.deploy_folder(::BuildBotConfig; devurl, kwargs...)
     return nothing
 end
 
+const devurl = "v$(VERSION.major).$(VERSION.minor)-dev"
+
 deploydocs(
     repo = "github.com/JuliaLang/docs.julialang.org.git",
     deploy_config = BuildBotConfig(),
     target = joinpath(buildroot, "doc", "_build", "html", "en"),
     dirname = "en",
-    devurl = "v1.4-dev",
-    versions = ["v#.#", "v1.4-dev" => "v1.4-dev"]
+    devurl = devurl,
+    versions = ["v#.#", devurl => devurl]
 )

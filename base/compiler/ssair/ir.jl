@@ -608,7 +608,7 @@ function count_added_node!(compact::IncrementalCompact, @nospecialize(v))
 end
 
 function resort_pending!(compact)
-    sort!(compact.pending_perm, DEFAULT_STABLE, Order.By(x->compact.pending_nodes[x].pos))
+    sort!(compact.pending_perm, DEFAULT_STABLE, Order.By(x->compact.pending_nodes[x].pos, Order.Forward))
 end
 
 function insert_node!(compact::IncrementalCompact, before, @nospecialize(typ), @nospecialize(val), attach_after::Bool=false)

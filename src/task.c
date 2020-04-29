@@ -568,7 +568,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->prio = -1;
     t->tid = -1;
 #ifdef ENABLE_TIMINGS
-    t->timing_stack = NULL;
+    t->timing_stack = jl_root_timing;
 #endif
     arraylist_new(&t->locks, 0);
 

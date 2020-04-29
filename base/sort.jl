@@ -164,6 +164,10 @@ same thing as `partialsort!` but leaving `v` unmodified.
 partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
     partialsort!(copymutable(v), k; kws...)
 
+# This implementation of `midpoint` is performance-optimized but safe
+# only if `lo <= hi`.
+midpoint(lo::T, hi::T) where T<:Integer = lo + ((hi - lo) >>> 0x01)
+midpoint(lo::Integer, hi::Integer) = midpoint(promote(lo, hi)...)
 
 # reference on sorted binary search:
 #   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
@@ -175,7 +179,7 @@ function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering) wher
     lo = lo - u
     hi = hi + u
     @inbounds while lo < hi - u
-        m = (lo + hi) >>> 1
+        m = midpoint(lo, hi)
         if lt(o, v[m], x)
             lo = m
         else
@@ -192,7 +196,7 @@ function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering) where
     lo = lo - u
     hi = hi + u
     @inbounds while lo < hi - u
-        m = (lo + hi) >>> 1
+        m = midpoint(lo, hi)
         if lt(o, x, v[m])
             hi = m
         else
@@ -210,7 +214,7 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering) where T
     lo = ilo - u
     hi = ihi + u
     @inbounds while lo < hi - u
-        m = (lo + hi) >>> 1
+        m = midpoint(lo, hi)
         if lt(o, v[m], x)
             lo = m
         elseif lt(o, x, v[m])
@@ -246,19 +250,45 @@ end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
     require_one_based_indexing(a)
-    if step(a) == 0
+    h = step(a)
+    if h == 0
         lt(o, x, first(a)) ? 0 : length(a)
+    elseif h > 0 && x < first(a)
+        firstindex(a) - 1
+    elseif h > 0 && x >= last(a)
+        lastindex(a)
+    elseif h < 0 && x > first(a)
+        firstindex(a) - 1
+    elseif h < 0 && x <= last(a)
+        lastindex(a)
     else
-        clamp( fld(floor(Integer, x) - first(a), step(a)) + 1, 0, length(a))
+        if o isa ForwardOrdering
+            fld(floor(Integer, x) - first(a), h) + 1
+        else
+            fld(ceil(Integer, x) - first(a), h) + 1
+        end
     end
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
     require_one_based_indexing(a)
-    if step(a) == 0
+    h = step(a)
+    if h == 0
         lt(o, first(a), x) ? length(a)+1 : 1
+    elseif h > 0 && x <= first(a)
+        firstindex(a)
+    elseif h > 0 && x > last(a)
+        lastindex(a) + 1
+    elseif h < 0 && x >= first(a)
+        firstindex(a)
+    elseif h < 0 && x < last(a)
+        lastindex(a) + 1
     else
-        clamp(-fld(floor(Integer, -x) + first(a), step(a)) + 1, 1, length(a) + 1)
+        if o isa ForwardOrdering
+            -fld(floor(Integer, -x) + first(a), h) + 1
+        else
+            -fld(ceil(Integer, -x) + first(a), h) + 1
+        end
     end
 end
 
@@ -487,7 +517,7 @@ end
 
 @inline function selectpivot!(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     @inbounds begin
-        mi = (lo+hi)>>>1
+        mi = midpoint(lo, hi)
 
         # sort v[mi] <= v[lo] <= v[hi] such that the pivot is immediately in place
         if lt(o, v[lo], v[mi])
@@ -552,7 +582,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::MergeSortAlg, o::
     @inbounds if lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
-        m = (lo+hi)>>>1
+        m = midpoint(lo, hi)
         (length(t) < m-lo+1) && resize!(t, m-lo+1)
 
         sort!(v, lo,  m,  a, o, t)
@@ -689,14 +719,14 @@ function sort!(v::AbstractVector;
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
-    if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
+    if (ordr === Forward || ordr === Reverse) && eltype(v)<:Integer
         n = length(v)
         if n > 1
             min, max = extrema(v)
             (diff, o1) = sub_with_overflow(max, min)
             (rangelen, o2) = add_with_overflow(diff, oneunit(diff))
             if !o1 && !o2 && rangelen < div(n,2)
-                return sort_int_range!(v, rangelen, min)
+                return sort_int_range!(v, rangelen, min, ordr === Reverse ? reverse : identity)
             end
         end
     end
@@ -704,17 +734,16 @@ function sort!(v::AbstractVector;
 end
 
 # sort! for vectors of few unique integers
-function sort_int_range!(x::Vector{<:Integer}, rangelen, minval)
+function sort_int_range!(x::AbstractVector{<:Integer}, rangelen, minval, maybereverse)
     offs = 1 - minval
-    n = length(x)
 
     where = fill(0, rangelen)
-    @inbounds for i = 1:n
+    @inbounds for i = eachindex(x)
         where[x[i] + offs] += 1
     end
 
-    idx = 1
-    @inbounds for i = 1:rangelen
+    idx = firstindex(x)
+    @inbounds for i = maybereverse(1:rangelen)
         lastidx = idx + where[i] - 1
         val = i-offs
         for j = idx:lastidx

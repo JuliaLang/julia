@@ -334,8 +334,8 @@ void LineNumberAnnotatedWriter::emitFunctionAnnot(
     if (FuncLoc) {
         std::vector<DILineInfo> DIvec(1);
         DILineInfo &DI = DIvec.back();
-        DI.FunctionName = FuncLoc->getName();
-        DI.FileName = FuncLoc->getFilename();
+        DI.FunctionName = FuncLoc->getName().str();
+        DI.FileName = FuncLoc->getFilename().str();
         DI.Line = FuncLoc->getLine();
         LinePrinter.emit_lineinfo(Out, DIvec);
     }
@@ -358,8 +358,8 @@ void LineNumberAnnotatedWriter::emitInstructionAnnot(
             DILineInfo &DI = DIvec.back();
             DIScope *scope = NewInstrLoc->getScope();
             if (scope)
-                DI.FunctionName = scope->getName();
-            DI.FileName = NewInstrLoc->getFilename();
+                DI.FunctionName = scope->getName().str();
+            DI.FileName = NewInstrLoc->getFilename().str();
             DI.Line = NewInstrLoc->getLine();
             NewInstrLoc = NewInstrLoc->getInlinedAt();
         } while (NewInstrLoc);
@@ -375,10 +375,66 @@ void LineNumberAnnotatedWriter::emitBasicBlockEndAnnot(
         LinePrinter.emit_finish(Out);
 }
 
+static void jl_strip_llvm_debug(Module *m, bool all_meta, LineNumberAnnotatedWriter *AAW)
+{
+    // strip metadata from all instructions in all functions in the module
+    Instruction *deletelast = nullptr; // can't actually delete until the iterator advances
+    for (Function &f : m->functions()) {
+        if (AAW)
+            AAW->addSubprogram(&f, f.getSubprogram());
+        for (BasicBlock &f_bb : f) {
+            for (Instruction &inst : f_bb) {
+                if (deletelast) {
+                    deletelast->eraseFromParent();
+                    deletelast = nullptr;
+                }
+                // remove dbg.declare and dbg.value calls
+                if (isa<DbgDeclareInst>(inst) || isa<DbgValueInst>(inst)) {
+                    deletelast = &inst;
+                    continue;
+                }
+
+                // iterate over all metadata kinds and set to NULL to remove
+                if (all_meta) {
+                    SmallVector<std::pair<unsigned, MDNode*>, 4> MDForInst;
+                    inst.getAllMetadataOtherThanDebugLoc(MDForInst);
+                    for (const auto &md_iter : MDForInst) {
+                        inst.setMetadata(md_iter.first, NULL);
+                    }
+                }
+                // record debug location before erasing it
+                if (AAW)
+                    AAW->addDebugLoc(&inst, inst.getDebugLoc());
+                inst.setDebugLoc(DebugLoc());
+            }
+            if (deletelast) {
+                deletelast->eraseFromParent();
+                deletelast = nullptr;
+            }
+        }
+        f.setSubprogram(NULL);
+    }
+    if (all_meta) {
+        for (GlobalObject &g : m->global_objects()) {
+            g.clearMetadata();
+        }
+    }
+    // now that the subprogram is not referenced, we can delete it too
+    if (NamedMDNode *md = m->getNamedMetadata("llvm.dbg.cu"))
+        m->eraseNamedMetadata(md);
+    //if (NamedMDNode *md = m->getNamedMetadata("llvm.module.flags"))
+    //    m->eraseNamedMetadata(md);
+}
+
+void jl_strip_llvm_debug(Module *m)
+{
+    jl_strip_llvm_debug(m, false, NULL);
+}
+
 // print an llvm IR acquired from jl_get_llvmf
 // warning: this takes ownership of, and destroys, f->getParent()
 extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_module, const char *debuginfo)
+jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_module, const char *debuginfo)
 {
     std::string code;
     llvm::raw_string_ostream stream(code);
@@ -396,43 +452,8 @@ jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_modul
     }
     else {
         Module *m = llvmf->getParent();
-        if (strip_ir_metadata) {
-            // strip metadata from all instructions in all functions in the module
-            Instruction *deletelast = nullptr; // can't actually delete until the iterator advances
-            for (Function &f2 : m->functions()) {
-                AAW.addSubprogram(&f2, f2.getSubprogram());
-                for (BasicBlock &f2_bb : f2) {
-                    for (Instruction &inst : f2_bb) {
-                        if (deletelast) {
-                            deletelast->eraseFromParent();
-                            deletelast = nullptr;
-                        }
-                        // remove dbg.declare and dbg.value calls
-                        if (isa<DbgDeclareInst>(inst) || isa<DbgValueInst>(inst)) {
-                            deletelast = &inst;
-                            continue;
-                        }
-
-                        // iterate over all metadata kinds and set to NULL to remove
-                        SmallVector<std::pair<unsigned, MDNode*>, 4> MDForInst;
-                        inst.getAllMetadataOtherThanDebugLoc(MDForInst);
-                        for (const auto &md_iter : MDForInst) {
-                            inst.setMetadata(md_iter.first, NULL);
-                        }
-                        // record debug location before erasing it
-                        AAW.addDebugLoc(&inst, inst.getDebugLoc());
-                        inst.setDebugLoc(DebugLoc());
-                    }
-                    if (deletelast) {
-                        deletelast->eraseFromParent();
-                        deletelast = nullptr;
-                    }
-                }
-            }
-            for (GlobalObject &g2 : m->global_objects()) {
-                g2.clearMetadata();
-            }
-        }
+        if (strip_ir_metadata)
+            jl_strip_llvm_debug(m, true, &AAW);
         if (dump_module) {
             m->print(stream, &AAW);
         }
@@ -629,8 +650,9 @@ void SymbolTable::createSymbols()
         }
         else {
             const char *global = lookupLocalPC(addr);
-            if (global)
+            if (global && global[0])
                 isymb->second = global;
+            // TODO: free(global)?
         }
     }
 }
@@ -655,7 +677,7 @@ const char *SymbolTable::lookupSymbolName(uint64_t addr)
             }
         }
         else {
-            Sym->second = local_name;
+            Sym->second = local_name.str();
         }
     }
     return Sym->second.empty() ? NULL : Sym->second.c_str();
@@ -741,7 +763,6 @@ static void jl_dump_asm_internal(
     const Target *TheTarget = TargetRegistry::lookupTarget(TheTriple.str(), err);
 
     // Set up required helpers and streamer
-    std::unique_ptr<MCStreamer> Streamer;
     SourceMgr SrcMgr;
 
     MCTargetOptions Options;
@@ -774,42 +795,31 @@ static void jl_dump_asm_internal(
     }
     bool ShowEncoding = false;
 
-    std::unique_ptr<MCInstrInfo> MCII(TheTarget->createMCInstrInfo());
-    std::unique_ptr<MCInstrAnalysis>
-        MCIA(TheTarget->createMCInstrAnalysis(MCII.get()));
-    MCInstPrinter *IP =
-        TheTarget->createMCInstPrinter(TheTriple, OutputAsmVariant, *MAI, *MCII, *MRI);
+    std::unique_ptr<MCInstrInfo> MCII(
+            TheTarget->createMCInstrInfo());
+    std::unique_ptr<MCInstrAnalysis> MCIA(
+            TheTarget->createMCInstrAnalysis(MCII.get()));
+    std::unique_ptr<MCInstPrinter> IP(
+            TheTarget->createMCInstPrinter(TheTriple, OutputAsmVariant, *MAI, *MCII, *MRI));
     //IP->setPrintImmHex(true); // prefer hex or decimal immediates
-#if JL_LLVM_VERSION >= 70000
-    std::unique_ptr<MCCodeEmitter> CE = 0;
-    std::unique_ptr<MCAsmBackend> MAB = 0;
+    std::unique_ptr<MCCodeEmitter> CE;
+    std::unique_ptr<MCAsmBackend> MAB;
     if (ShowEncoding) {
-        CE = std::unique_ptr<MCCodeEmitter>(TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx));
-        MAB = std::unique_ptr<MCAsmBackend>(TheTarget->createMCAsmBackend(*STI, *MRI, Options));
+        CE.reset(TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx));
+        MAB.reset(TheTarget->createMCAsmBackend(*STI, *MRI, Options));
     }
-#else
-    MCCodeEmitter* CE = 0;
-    MCAsmBackend* MAB = 0;
-    if (ShowEncoding) {
-        CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx);
-        MAB = TheTarget->createMCAsmBackend(*STI, *MRI, Options);
-    }
-#endif
 
     // createAsmStreamer expects a unique_ptr to a formatted stream, which means
     // it will destruct the stream when it is done. We cannot have this, so we
     // start out with a raw stream, and create formatted stream from it here.
     // LLVM will destroy the formatted stream, and we keep the raw stream.
     std::unique_ptr<formatted_raw_ostream> ustream(new formatted_raw_ostream(rstream));
-#if JL_LLVM_VERSION >= 70000
-    Streamer.reset(TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
-                                                /*useDwarfDirectory*/ true,
-                                                IP, std::move(CE), std::move(MAB), /*ShowInst*/ false));
-#else
-    Streamer.reset(TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
-                                                /*useDwarfDirectory*/ true,
-                                                IP, CE, MAB, /*ShowInst*/ false));
-#endif
+    std::unique_ptr<MCStreamer> Streamer(
+            TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
+                                         /*useDwarfDirectory*/ true,
+                                         IP.release(),
+                                         std::move(CE), std::move(MAB),
+                                         /*ShowInst*/ false));
     Streamer->InitSections(true);
 
     // Make the MemoryObject wrapper
@@ -871,7 +881,11 @@ static void jl_dump_asm_internal(
                     std::string buf;
                     dbgctx.emit_lineinfo(buf, di_lineIter->second);
                     if (!buf.empty()) {
+#if JL_LLVM_VERSION >= 110000
+                        Streamer->emitRawText(buf);
+#else
                         Streamer->EmitRawText(buf);
+#endif
                     }
                 }
             }
@@ -886,8 +900,13 @@ static void jl_dump_asm_internal(
             if (pass != 0 && nextLineAddr != (uint64_t)-1 && Index + Fptr + slide == nextLineAddr) {
                 if (di_ctx) {
                     std::string buf;
-                    DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::Default,
-                                                 DILineInfoSpecifier::FunctionNameKind::ShortName);
+                    DILineInfoSpecifier infoSpec(
+#if JL_LLVM_VERSION >= 110000
+                        DILineInfoSpecifier::FileLineInfoKind::RawValue,
+#else
+                        DILineInfoSpecifier::FileLineInfoKind::Default,
+#endif
+                        DILineInfoSpecifier::FunctionNameKind::ShortName);
                     DIInliningInfo dbg = di_ctx->getInliningInfoForAddress(makeAddress(Section, Index + Fptr + slide), infoSpec);
                     if (dbg.getNumberOfFrames()) {
                         dbgctx.emit_lineinfo(buf, dbg);
@@ -895,8 +914,13 @@ static void jl_dump_asm_internal(
                     else {
                         dbgctx.emit_lineinfo(buf, di_lineIter->second);
                     }
-                    if (!buf.empty())
+                    if (!buf.empty()) {
+#if JL_LLVM_VERSION >= 110000
+                        Streamer->emitRawText(buf);
+#else
                         Streamer->EmitRawText(buf);
+#endif
+                    }
                     nextLineAddr = (++di_lineIter)->first;
                 }
             }
@@ -906,15 +930,22 @@ static void jl_dump_asm_internal(
                 // Uncomment this to output addresses for all instructions
                 // stream << Index << ": ";
                 MCSymbol *symbol = DisInfo.lookupSymbol(Fptr+Index);
-                if (symbol)
+                if (symbol) {
+#if JL_LLVM_VERSION >= 110000
+                    Streamer->emitLabel(symbol);
+#else
                     Streamer->EmitLabel(symbol);
+#endif
+                }
             }
 
             MCInst Inst;
             MCDisassembler::DecodeStatus S;
             FuncMCView view = memoryObject.slice(Index);
             S = DisAsm->getInstruction(Inst, insSize, view, 0,
+#if JL_LLVM_VERSION < 100000
                                       /*VStream*/ nulls(),
+#endif
                                       /*CStream*/ pass != 0 ? Streamer->GetCommentOS() : nulls());
             if (pass != 0 && Streamer->GetCommentOS().tell() > 0)
                 Streamer->GetCommentOS() << '\n';
@@ -928,22 +959,33 @@ static void jl_dump_asm_internal(
 #endif
                 if (pass != 0) {
                     std::ostringstream buf;
-                    if (insSize == 4)
+                    if (insSize == 4) {
                         buf << "\t.long\t0x" << std::hex
                             << std::setfill('0') << std::setw(8)
                             << *(uint32_t*)(Fptr+Index);
-                    else
-                        for (uint64_t i=0; i<insSize; ++i)
+                    } else {
+                        for (uint64_t i=0; i<insSize; ++i) {
                             buf << "\t.byte\t0x" << std::hex
                                 << std::setfill('0') << std::setw(2)
                                 << (int)*(uint8_t*)(Fptr+Index+i);
+                        }
+#if JL_LLVM_VERSION >= 110000
+                    Streamer->emitRawText(StringRef(buf.str()));
+#else
                     Streamer->EmitRawText(StringRef(buf.str()));
+#endif
+                    }
                 }
                 break;
 
             case MCDisassembler::SoftFail:
-                if (pass != 0)
+                if (pass != 0) {
+#if JL_LLVM_VERSION >= 110000
+                    Streamer->emitRawText(StringRef("potentially undefined instruction encoding:"));
+#else
                     Streamer->EmitRawText(StringRef("potentially undefined instruction encoding:"));
+#endif
+                }
                 // Fall through
 
             case MCDisassembler::Success:
@@ -975,7 +1017,11 @@ static void jl_dump_asm_internal(
                             }
                         }
                     }
+#if JL_LLVM_VERSION >= 110000
+                    Streamer->emitInstruction(Inst, *STI);
+#else
                     Streamer->EmitInstruction(Inst, *STI);
+#endif
                 }
                 break;
             }
@@ -989,7 +1035,11 @@ static void jl_dump_asm_internal(
             std::string buf;
             dbgctx.emit_finish(buf);
             if (!buf.empty()) {
+#if JL_LLVM_VERSION >= 110000
+                Streamer->emitRawText(buf);
+#else
                 Streamer->EmitRawText(buf);
+#endif
             }
         }
     }

@@ -198,6 +198,9 @@ function splitext(path::String)
     a*m.captures[1], String(m.captures[2])
 end
 
+# NOTE: deprecated in 1.4
+pathsep() = path_separator
+
 """
     splitpath(path::AbstractString) -> Vector{String}
 

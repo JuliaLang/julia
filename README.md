@@ -5,10 +5,6 @@
 </a>
 </div>
 
-Build status:
-[![travis][travis-img]](https://travis-ci.org/JuliaLang/julia)
-[![appveyor][appveyor-img]](https://ci.appveyor.com/project/JuliaLang/julia/branch/master)
-
 Code coverage:
 [![coveralls][coveralls-img]](https://coveralls.io/r/JuliaLang/julia?branch=master)
 [![codecov][codecov-img]](https://codecov.io/github/JuliaLang/julia?branch=master)
@@ -51,6 +47,7 @@ helpful to start contributing to the Julia codebase.
 - [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
 - [**Twitter**](https://twitter.com/JuliaLanguage)
 - [**Meetup**](https://julia.meetup.com/)
+- [**Learning resources**](https://julialang.org/learning/)
 
 ## Binary Installation
 
@@ -134,7 +131,7 @@ The Julia source code is organized as follows:
 ## Terminal, Editors and IDEs
 
 The Julia REPL is quite powerful.  See the section in the manual on
-[the Julia REPL](https://docs.julialang.org/en/latest/stdlib/REPL/)
+[the Julia REPL](https://docs.julialang.org/en/v1/stdlib/REPL/)
 for more details.
 
 Support for editing Julia is available for many

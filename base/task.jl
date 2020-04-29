@@ -344,19 +344,59 @@ end
     @async
 
 Wrap an expression in a [`Task`](@ref) and add it to the local machine's scheduler queue.
+
+Values can be interpolated into `@async` via `\$`, which copies the value directly into the
+constructed underlying closure. This allows you to insert the _value_ of a variable,
+isolating the aysnchronous code from changes to the variable's value in the current task.
+
+!!! compat "Julia 1.4"
+    Interpolating values via `\$` is available as of Julia 1.4.
 """
 macro async(expr)
+    letargs = Base._lift_one_interp!(expr)
+
     thunk = esc(:(()->($expr)))
     var = esc(sync_varname)
     quote
-        local task = Task($thunk)
-        if $(Expr(:islocal, var))
-            push!($var, task)
+        let $(letargs...)
+            local task = Task($thunk)
+            if $(Expr(:islocal, var))
+                push!($var, task)
+            end
+            schedule(task)
+            task
         end
-        schedule(task)
-        task
     end
 end
+
+# Capture interpolated variables in $() and move them to let-block
+function _lift_one_interp!(e)
+    letargs = Any[]  # store the new gensymed arguments
+    _lift_one_interp_helper(e, false, letargs) # Start out _not_ in a quote context (false)
+    letargs
+end
+_lift_one_interp_helper(v, _, _) = v
+function _lift_one_interp_helper(expr::Expr, in_quote_context, letargs)
+    if expr.head === :$
+        if in_quote_context  # This $ is simply interpolating out of the quote
+            # Now, we're out of the quote, so any _further_ $ is ours.
+            in_quote_context = false
+        else
+            newarg = gensym()
+            push!(letargs, :($(esc(newarg)) = $(esc(expr.args[1]))))
+            return newarg  # Don't recurse into the lifted $() exprs
+        end
+    elseif expr.head === :quote
+        in_quote_context = true   # Don't try to lift $ directly out of quotes
+    elseif expr.head === :macrocall
+        return expr  # Don't recur into macro calls, since some other macros use $
+    end
+    for (i,e) in enumerate(expr.args)
+        expr.args[i] = _lift_one_interp_helper(e, in_quote_context, letargs)
+    end
+    expr
+end
+
 
 # add a wait-able object to the sync pool
 macro sync_add(expr)
@@ -668,7 +708,7 @@ function wait()
     W = Workqueues[Threads.threadid()]
     reftask = poptaskref(W)
     result = try_yieldto(ensure_rescheduled, reftask)
-    Sys.isjsvm() || process_events()
+    process_events()
     # return when we come out of the queue
     return result
 end
