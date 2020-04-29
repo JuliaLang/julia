@@ -1113,8 +1113,8 @@ end
     parent(A)
 
 Return the underlying "parent array”. This parent array of objects of types `SubArray`, `ReshapedArray`
-or `LinearAlgebra.Transpose` are passed as arguments to functions such as `view`, `reshape`, `transpose`, etc.
-If the input is not a wrapped object, return the input itself.
+or `LinearAlgebra.Transpose` is what was passed as an argument to `view`, `reshape`, `transpose`, etc.
+during object creation. If the input is not a wrapped object, return the input itself.
 
 # Examples
 ```jldoctest
