@@ -97,7 +97,7 @@ using:
 fun, T = +, Tuple{Int,Int} # Substitute your function of interest here
 optimize = false
 open("plus.ll", "w") do file
-    println(file, InteractiveUtils._dump_function(fun, T, false, false, false, true, :att, optimize))
+    println(file, InteractiveUtils._dump_function(fun, T, false, false, false, true, :att, optimize, :default))
 end
 ```
 These files can be processed the same way as the unoptimized sysimg IR shown

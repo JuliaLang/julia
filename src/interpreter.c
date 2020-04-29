@@ -447,7 +447,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 #endif
         return val;
     }
-    assert(!jl_is_phinode(e) && !jl_is_phicnode(e) && !jl_is_upsilonnode(e) && "malformed AST");
+    assert(!jl_is_phinode(e) && !jl_is_phicnode(e) && !jl_is_upsilonnode(e) && "malformed IR");
     if (!jl_is_expr(e))
         return e;
     jl_expr_t *ex = (jl_expr_t*)e;
@@ -655,7 +655,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         jl_value_t *stmt = jl_array_ptr_ref(stmts, ip);
         assert(!jl_is_phinode(stmt));
         size_t next_ip = ip + 1;
-        assert(!jl_is_phinode(stmt) && !jl_is_phicnode(stmt) && "malformed AST");
+        assert(!jl_is_phinode(stmt) && !jl_is_phicnode(stmt) && "malformed IR");
         if (jl_is_gotonode(stmt)) {
             next_ip = jl_gotonode_label(stmt) - 1;
         }
@@ -784,6 +784,10 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 else if (head == structtype_sym) {
                     eval_structtype((jl_expr_t*)stmt, s);
                 }
+                else if (head == toplevel_sym) {
+                    jl_value_t *res = jl_toplevel_eval(s->module, stmt);
+                    s->locals[jl_source_nslots(s->src) + s->ip] = res;
+                }
                 else if (jl_is_toplevel_only_expr(stmt)) {
                     jl_toplevel_eval(s->module, stmt);
                 }
@@ -793,6 +797,12 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     }
                     if (jl_expr_nargs(stmt) == 1 && jl_exprarg(stmt, 0) == (jl_value_t*)specialize_sym) {
                         jl_set_module_nospecialize(s->module, 0);
+                    }
+                    if (jl_expr_nargs(stmt) == 2 && jl_exprarg(stmt, 0) == (jl_value_t*)optlevel_sym) {
+                        if (jl_is_long(jl_exprarg(stmt, 1))) {
+                            int n = jl_unbox_long(jl_exprarg(stmt, 1));
+                            jl_set_module_optlevel(s->module, n);
+                        }
                     }
                 }
                 else {
@@ -838,7 +848,7 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi)
         }
         if (src && (jl_value_t*)src != jl_nothing) {
             JL_GC_PUSH1(&src);
-            src = jl_uncompress_ast(mi->def.method, NULL, (jl_array_t*)src);
+            src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
             mi->uninferred = (jl_value_t*)src;
             jl_gc_wb(mi, src);
             JL_GC_POP();

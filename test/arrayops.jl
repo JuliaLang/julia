@@ -3,6 +3,9 @@
 # Array test
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
+
+isdefined(@__MODULE__, :T24Linear) || include("testhelpers/arrayindexingtypes.jl")
+
 using SparseArrays
 
 using Random, LinearAlgebra
@@ -463,6 +466,21 @@ end
     end
     @test_throws BoundsError insert!(v, 5, 5)
 end
+
+@testset "pop!(::Vector, i, [default])" begin
+    a = [1, 2, 3, 4]
+    @test_throws BoundsError pop!(a, 0)
+    @test pop!(a, 0, "default") == "default"
+    @test a == 1:4
+    @test_throws BoundsError pop!(a, 5)
+    @test pop!(a, 1) == 1
+    @test a == [2, 3, 4]
+    @test pop!(a, 2) == 3
+    @test a == [2, 4]
+    badpop() = @inbounds pop!([1], 2)
+    @test_throws BoundsError badpop()
+end
+
 @testset "concatenation" begin
     @test isequal([fill(1.,2,2)  fill(2.,2,1)], [1. 1 2; 1 1 2])
     @test isequal([fill(1.,2,2); fill(2.,1,2)], [1. 1; 1 1; 2 2])
@@ -683,6 +701,13 @@ end
     y = [0, 0, 0, 0]
     copyto!(y, x)
     @test y == [1, 2, 3, 4]
+
+    # similar, https://github.com/JuliaLang/julia/pull/35304
+    x = PermutedDimsArray([1 2; 3 4], (2, 1))
+    @test similar(x, 3,3) isa Array
+    z = TSlow([1 2; 3 4])
+    x_slow = PermutedDimsArray(z, (2, 1))
+    @test similar(x_slow, 3,3) isa TSlow
 end
 
 @testset "circshift" begin
@@ -926,6 +951,7 @@ end
                                         3 4], inner=(2,), outer=(2, 2))
     @test_throws ArgumentError repeat([1 2;
                                         3 4], inner=(2, 2), outer=(2,))
+    @test_throws ArgumentError repeat([1, 2], inner=(1, -1), outer=(1, -1))
 
     A = reshape(1:8, 2, 2, 2)
     R = repeat(A, inner = (1, 1, 2), outer = (1, 1, 1))
@@ -1342,6 +1368,7 @@ end
             @test a == [acopy[1:(first(idx)-1)]; repl; acopy[(last(idx)+1):end]]
         end
     end
+    @test splice!([4,3,2,1], [2, 4]) == [3, 1]
 end
 
 @testset "filter!" begin
@@ -1480,6 +1507,10 @@ end
     a = rand(5,3)
     @test reverse(reverse(a,dims=2),dims=2) == a
     @test_throws ArgumentError reverse(a,dims=3)
+    # reversed dimension is not a singleton
+    # a lower dimension is not a singleton
+    # eltype not allocated inline
+    @test reverse(["a" "b"; "c" "d"], dims = 2) == ["b" "a"; "d" "c"]
 end
 
 @testset "isdiag, istril, istriu" begin
@@ -2679,6 +2710,30 @@ end
     end
     @test !checkbounds(Bool, rand(3,3,3), :, CartesianIndex(0,0):CartesianIndex(1,1))
     @test !checkbounds(Bool, rand(3,3,3), CartesianIndex(0,0):CartesianIndex(1,1), :)
+
+    CI0 = CartesianIndices(())
+    # 0-dimensional
+    @test setindex!(fill(0.0), fill(1.0), CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), CI0, CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), :, CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), CI0, :) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), :, CI0, CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), CI0, :, CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), CI0, CI0, :) == fill(1.0)
+    @test setindex!(fill(fill(0.0)), fill(fill(1.0)), CI0) == fill(fill(1.0))
+    # 1-dimensional
+    @test setindex!(zeros(2), ones(2), :, CI0) == ones(2)
+    @test setindex!(zeros(2), ones(2), CI0, :) == ones(2)
+    @test setindex!(zeros(2), ones(2), :, CI0, CI0) == ones(2)
+    @test setindex!(zeros(2), ones(2), CI0, :, CI0) == ones(2)
+    @test setindex!(zeros(2), ones(2), CI0, CI0, :) == ones(2)
+    @test setindex!([fill(0.0)], fill(1.0), 1) == [fill(1.0)]
+    # 0-dimensional assigment into ≥1-dimensional arrays
+    @test setindex!(zeros(2), fill(1.0), 1, CI0) == [1.0, 0.0]
+    @test setindex!(zeros(2), fill(1.0), CI0, 1) == [1.0, 0.0]
+    @test setindex!(zeros(2,2), fill(1.0), 1, 1, CI0) == [1.0 0.0; 0.0 0.0]
+    @test setindex!(zeros(2,2), fill(1.0), 1, CI0, 1) == [1.0 0.0; 0.0 0.0]
+    @test setindex!(zeros(2,2), fill(1.0), CI0, 1, 1) == [1.0 0.0; 0.0 0.0]
 end
 
 # Throws ArgumentError for negative dimensions in Array

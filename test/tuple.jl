@@ -368,6 +368,17 @@ end
     end
 end
 
+@testset "accumulate" begin
+    @test @inferred(cumsum(())) == ()
+    @test @inferred(cumsum((1, 2, 3))) == (1, 3, 6)
+    @test @inferred(cumprod((1, 2, 3))) == (1, 2, 6)
+    @test @inferred(accumulate(+, (1, 2, 3); init=10)) == (11, 13, 16)
+    op(::Nothing, ::Any) = missing
+    op(::Missing, ::Any) = nothing
+    @test @inferred(accumulate(op, (1, 2, 3, 4); init = nothing)) ===
+          (missing, nothing, missing, nothing)
+end
+
 @testset "ntuple" begin
     nttest1(x::NTuple{n, Int}) where {n} = n
     @test nttest1(()) == 0
@@ -480,3 +491,18 @@ end
 
 # tuple_type_tail on non-normalized vararg tuple
 @test Base.tuple_type_tail(Tuple{Vararg{T, 3}} where T<:Real) == Tuple{Vararg{T, 2}} where T<:Real
+
+@testset "setindex" begin
+    @test Base.setindex((1, ), 2, 1) === (2, )
+    @test Base.setindex((1, 2), 3, 1) === (3, 2)
+    @test_throws BoundsError Base.setindex((), 1, 1)
+    @test_throws BoundsError Base.setindex((1, ), 2, 2)
+    @test_throws BoundsError Base.setindex((1, 2), 2, 0)
+    @test_throws BoundsError Base.setindex((1, 2, 3), 2, -1)
+
+    @test_throws BoundsError Base.setindex((1, 2), 2, 3)
+    @test_throws BoundsError Base.setindex((1, 2), 2, 4)
+
+    @test Base.setindex((1, 2, 4), 4, true) === (4, 2, 4)
+    @test_throws BoundsError Base.setindex((1, 2), 2, false)
+end

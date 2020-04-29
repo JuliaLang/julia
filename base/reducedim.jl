@@ -4,11 +4,11 @@
 
 # for reductions that expand 0 dims to 1
 reduced_index(i::OneTo) = OneTo(1)
-reduced_index(i::Union{Slice, IdentityUnitRange}) = first(i):first(i)
+reduced_index(i::Union{Slice, IdentityUnitRange}) = oftype(i, first(i):first(i))
 reduced_index(i::AbstractUnitRange) =
     throw(ArgumentError(
 """
-No method is implemented for reducing index range of type $typeof(i). Please implement
+No method is implemented for reducing index range of type $(typeof(i)). Please implement
 reduced_index for this index type or report this as an issue.
 """
     ))
@@ -20,7 +20,7 @@ reduced_indices0(a::AbstractArray, region) = reduced_indices0(axes(a), region)
 function reduced_indices(inds::Indices{N}, d::Int) where N
     d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
     if d == 1
-        return (reduced_index(inds[1]), tail(inds)...)
+        return (reduced_index(inds[1]), tail(inds)...)::typeof(inds)
     elseif 1 < d <= N
         return tuple(inds[1:d-1]..., oftype(inds[d], reduced_index(inds[d])), inds[d+1:N]...)::typeof(inds)
     else
@@ -34,7 +34,7 @@ function reduced_indices0(inds::Indices{N}, d::Int) where N
         ind = inds[d]
         rd = isempty(ind) ? ind : reduced_index(inds[d])
         if d == 1
-            return (rd, tail(inds)...)
+            return (rd, tail(inds)...)::typeof(inds)
         else
             return tuple(inds[1:d-1]..., oftype(inds[d], rd), inds[d+1:N]...)::typeof(inds)
         end

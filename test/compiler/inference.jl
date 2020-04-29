@@ -33,6 +33,28 @@ let ref = Tuple{T, Val{T}} where T<:(Val{T} where T<:(Val{T} where T<:(Val{T} wh
 end
 
 
+@test Core.Compiler.unionlen(Union{}) == 1
+@test Core.Compiler.unionlen(Int8) == 1
+@test Core.Compiler.unionlen(Union{Int8, Int16}) == 2
+@test Core.Compiler.unionlen(Union{Int8, Int16, Int32, Int64}) == 4
+@test Core.Compiler.unionlen(Tuple{Union{Int8, Int16, Int32, Int64}}) == 1
+@test Core.Compiler.unionlen(Union{Int8, Int16, Int32, T} where T) == 1
+
+@test Core.Compiler.unioncomplexity(Union{}) == 0
+@test Core.Compiler.unioncomplexity(Int8) == 0
+@test Core.Compiler.unioncomplexity(Val{Union{Int8, Int16, Int32, Int64}}) == 0
+@test Core.Compiler.unioncomplexity(Union{Int8, Int16}) == 1
+@test Core.Compiler.unioncomplexity(Union{Int8, Int16, Int32, Int64}) == 3
+@test Core.Compiler.unioncomplexity(Tuple{Union{Int8, Int16, Int32, Int64}}) == 3
+@test Core.Compiler.unioncomplexity(Union{Int8, Int16, Int32, T} where T) == 3
+@test Core.Compiler.unioncomplexity(Tuple{Val{T}, Union{Int8, Int16}, Int8} where T<:Union{Int8, Int16, Int32, Int64}) == 3
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Tuple{Union{Int8, Int16}}}}) == 1
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Symbol}}) == 0
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}) == 1
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}) == 2
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}}}}) == 3
+
+
 # PR 22120
 function tmerge_test(a, b, r, commutative=true)
     @test r == Core.Compiler.tuplemerge(a, b)
@@ -979,7 +1001,11 @@ end
 # but which also means we should still be storing the inference result from inferring the cycle
 f21653() = f21653()
 @test code_typed(f21653, Tuple{}, optimize=false)[1] isa Pair{CodeInfo, typeof(Union{})}
-@test which(f21653, ()).specializations.func.cache.rettype === Union{}
+let meth = which(f21653, ())
+    tt = Tuple{typeof(f21653)}
+    mi = ccall(:jl_specializations_lookup, Any, (Any, Any), meth, tt)::Core.MethodInstance
+    @test mi.cache.rettype === Union{}
+end
 
 # issue #22290
 f22290() = return 3
@@ -1061,11 +1087,9 @@ code_typed(f21933, (Val{1},))
 Base.return_types(f21933, (Val{1},))
 
 function count_specializations(method::Method)
-    n = 0
-    Base.visit(method.specializations) do m
-        n += 1
-    end
-    return n::Int
+    specs = method.specializations
+    n = count(i -> isassigned(specs, i), 1:length(specs))
+    return n
 end
 
 # demonstrate that inference can complete without waiting for MAX_TYPE_DEPTH
@@ -1501,7 +1525,7 @@ function f24852_kernel_cinfo(fsig::Type)
     world = typemax(UInt) # FIXME
     sig, spvals, method = Base._methods_by_ftype(fsig, -1, world)[1]
     isdefined(method, :source) || return (nothing, :(f(x, y)))
-    code_info = Base.uncompressed_ast(method)
+    code_info = Base.uncompressed_ir(method)
     Meta.partially_inline!(code_info.code, Any[], sig, Any[spvals...], 1, 0, :propagate)
     if startswith(String(method.name), "f24852")
         for a in code_info.code
@@ -1912,7 +1936,9 @@ end
 # issue #27316 - inference shouldn't hang on these
 f27316(::Vector) = nothing
 f27316(::Any) = f27316(Any[][1]), f27316(Any[][1])
-@test Tuple{Nothing,Nothing} <: Base.return_types(f27316, Tuple{Int})[1] == Tuple{Union{Nothing, Tuple{Any,Any}},Union{Nothing, Tuple{Any,Any}}} # we may be able to improve this bound in the future
+let expected = NTuple{2, Union{Nothing, NTuple{2, Union{Nothing, Tuple{Any, Any}}}}}
+    @test Tuple{Nothing, Nothing} <: only(Base.return_types(f27316, Tuple{Int})) == expected # we may be able to improve this bound in the future
+end
 function g27316()
     x = nothing
     while rand() < 0.5
@@ -1920,7 +1946,7 @@ function g27316()
     end
     return x
 end
-@test Tuple{Tuple{Nothing}} <: Base.return_types(g27316, Tuple{})[1] == Any # we may be able to improve this bound in the future
+@test Tuple{Tuple{Nothing}} <: only(Base.return_types(g27316, Tuple{})) == Union{Nothing, Tuple{Any}} # we may be able to improve this bound in the future
 const R27316 = Tuple{Tuple{Vector{T}}} where T
 h27316_(x) = (x,)
 h27316_(x::Tuple{Vector}) = (Any[x][1],)::R27316 # a UnionAll of a Tuple, not vice versa!
@@ -1931,7 +1957,7 @@ function h27316()
     end
     return x
 end
-@test Tuple{Tuple{Vector{Int}}} <: Base.return_types(h27316, Tuple{})[1] == Union{Vector{Int}, Tuple{Any}} # we may be able to improve this bound in the future
+@test Tuple{Tuple{Vector{Int}}} <: only(Base.return_types(h27316, Tuple{})) == Union{Vector{Int}, Tuple{Any}} # we may be able to improve this bound in the future
 
 # PR 27434, inference when splatting iterators with type-based state
 splat27434(x) = (x...,)
@@ -2492,3 +2518,30 @@ struct X33954
 end
 f33954(x) = rand(Bool) ? f33954((x,)) : x
 @test Base.return_types(f33954, Tuple{X33954})[1] >: X33954
+
+# issue #34752
+struct a34752{T} end
+function a34752(c, d...)
+    length(d) > 1 || error()
+end
+function h34752()
+    g = Tuple[(42, Any[42][1], 42)][1]
+    a34752(g...)
+end
+@test h34752() === true
+
+# issue 34834
+pickvarnames(x::Symbol) = x
+function pickvarnames(x::Vector{Any})
+    varnames = ()
+    for a in x
+        varnames = (varnames..., pickvarnames(a) )
+    end
+    return varnames
+end
+@test pickvarnames(:a) === :a
+@test pickvarnames(Any[:a, :b]) === (:a, :b)
+@test only(Base.return_types(pickvarnames, (Vector{Any},))) == Tuple{Vararg{Union{Symbol, Tuple}}}
+@test only(Base.code_typed(pickvarnames, (Vector{Any},), optimize=false))[2] == Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple}}}}}}
+
+@test map(>:, [Int], [Int]) == [true]

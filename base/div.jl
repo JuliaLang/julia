@@ -64,9 +64,11 @@ without any intermediate rounding.
 rem(x, y, r::RoundingMode)
 
 # TODO: Make these primitive and have the two-argument version call these
-rem(x, y, ::RoundingMode{:ToZero}) = rem(x,y)
-rem(x, y, ::RoundingMode{:Down}) = mod(x,y)
-rem(x, y, ::RoundingMode{:Up}) = mod(x,-y)
+rem(x, y, ::RoundingMode{:ToZero}) = rem(x, y)
+rem(x, y, ::RoundingMode{:Down}) = mod(x, y)
+rem(x, y, ::RoundingMode{:Up}) = mod(x, -y)
+rem(x, y, r::RoundingMode{:Nearest}) = x - y*div(x, y, r)
+rem(x::Integer, y::Integer, r::RoundingMode{:Nearest}) = divrem(x, y, r)[2]
 
 """
     fld(x, y)
@@ -103,7 +105,7 @@ cld(a, b) = div(a, b, RoundUp)
     divrem(x, y, r::RoundingMode=RoundToZero)
 
 The quotient and remainder from Euclidean division.
-Equivalent to `(div(x,y,r), rem(x,y,r))`. Equivalently, with the the default
+Equivalent to `(div(x,y,r), rem(x,y,r))`. Equivalently, with the default
 value of `r`, this call is equivalent to `(x÷y, x%y)`.
 
 # Examples
@@ -117,7 +119,7 @@ julia> divrem(7,3)
 """
 divrem(x, y) = divrem(x, y, RoundToZero)
 function divrem(a, b, r::RoundingMode)
-    if r == RoundToZero
+    if r === RoundToZero
         # For compat. Remove in 2.0.
         (div(a, b), rem(a, b))
     elseif r === RoundDown
@@ -207,7 +209,7 @@ end
 function div(x::Integer, y::Integer, rnd::Union{typeof(RoundNearest),
                                               typeof(RoundNearestTiesAway),
                                               typeof(RoundNearestTiesUp)})
-    divrem(x,y,rnd)[1]
+    divrem(x, y, rnd)[1]
 end
 
 # For bootstrapping purposes, we define div for integers directly. Provide the
@@ -245,7 +247,7 @@ cld(x::T, y::T) where {T<:Real} = throw(MethodError(div, (x, y, RoundUp)))
 # Promotion
 function div(x::Real, y::Real, r::RoundingMode)
     typeof(x) === typeof(y) && throw(MethodError(div, (x, y, r)))
-    if r == RoundToZero
+    if r === RoundToZero
         # For compat. Remove in 2.0.
         div(promote(x, y)...)
     else

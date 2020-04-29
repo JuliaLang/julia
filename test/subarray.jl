@@ -351,7 +351,6 @@ sA = view(A, 2:2, 1:5, :)
 @test @inferred(strides(sA)) == (1, 3, 15)
 @test parent(sA) == A
 @test parentindices(sA) == (2:2, 1:5, Base.Slice(1:8))
-@test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (1, 5, 8)
 @test axes(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(8))
 @test sA[1, 2, 1:8][:] == [5:15:120;]
@@ -363,7 +362,6 @@ sA[2:5:end] .= -1
 @test stride(sA,4) == 120
 test_bounds(sA)
 sA = view(A, 1:3, 1:5, 5)
-@test Base.parentdims(sA) == [1:2;]
 sA[1:3,1:5] .= -2
 @test all(A[:,:,5] .== -2)
 fill!(sA, -3)
@@ -373,14 +371,12 @@ sA[:] .= 4
 @test @inferred(strides(sA)) == (1,3)
 test_bounds(sA)
 sA = view(A, 1:3, 3:3, 2:5)
-@test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (3,1,4)
 @test axes(sA) === (Base.OneTo(3), Base.OneTo(1), Base.OneTo(4))
 @test sA == A[1:3,3:3,2:5]
 @test sA[:] == A[1:3,3,2:5][:]
 test_bounds(sA)
 sA = view(A, 1:2:3, 1:3:5, 1:2:8)
-@test Base.parentdims(sA) == [1:3;]
 @test @inferred(strides(sA)) == (2,9,30)
 @test sA[:] == A[1:2:3, 1:3:5, 1:2:8][:]
 # issue #8807
@@ -409,7 +405,6 @@ A = copy(reshape(1:120, 3, 5, 8))
 sA = view(A, 2, :, 1:8)
 @test parent(sA) == A
 @test parentindices(sA) == (2, Base.Slice(1:5), 1:8)
-@test Base.parentdims(sA) == [2:3;]
 @test size(sA) == (5, 8)
 @test axes(sA) === (Base.OneTo(5), Base.OneTo(8))
 @test @inferred(strides(sA)) == (3,15)
@@ -421,13 +416,11 @@ sA[2:5:end] .= -1
 @test all(A[5:15:120] .== -1)
 test_bounds(sA)
 sA = view(A, 1:3, 1:5, 5)
-@test Base.parentdims(sA) == [1:2;]
 @test size(sA) == (3,5)
 @test axes(sA) === (Base.OneTo(3),Base.OneTo(5))
 @test @inferred(strides(sA)) == (1,3)
 test_bounds(sA)
 sA = view(A, 1:2:3, 3, 1:2:8)
-@test Base.parentdims(sA) == [1,3]
 @test size(sA) == (2,4)
 @test axes(sA) === (Base.OneTo(2), Base.OneTo(4))
 @test @inferred(strides(sA)) == (2,30)
@@ -497,22 +490,27 @@ end
 @test Array(view(view(reshape(1:13^3, 13, 13, 13), 3:7, 6:6, :), 1:2:5, :, 1:2:5)) ==
     cat([68,70,72],[406,408,410],[744,746,748]; dims=3)
 
-# tests @view (and replace_ref_end!)
+# tests @view (and replace_ref_begin_end!)
+
+@test_throws ArgumentError(
+    "Invalid use of @view macro: argument must be a reference expression A[...]."
+) var"@view"(LineNumberNode(@__LINE__), @__MODULE__, 1)
+
 X = reshape(1:24,2,3,4)
 Y = 4:-1:1
 
 @test isa(@view(X[1:3]), SubArray)
 
-@test X[1:end] == @.(@view X[1:end]) # test compatibility of @. and @view
-@test X[1:end-3] == @view X[1:end-3]
-@test X[1:end,2,2] == @view X[1:end,2,2]
-@test X[1,1:end-2,1] == @view X[1,1:end-2,1]
-@test X[1,2,1:end-2] == @view X[1,2,1:end-2]
-@test X[1,2,Y[2:end]] == @view X[1,2,Y[2:end]]
-@test X[1:end,2,Y[2:end]] == @view X[1:end,2,Y[2:end]]
+@test X[begin:end] == @.(@view X[begin:end]) # test compatibility of @. and @view
+@test X[begin:end-3] == @view X[begin:end-3]
+@test X[1:end,2,begin+1] == @view X[1:end,2,begin+1]
+@test X[begin,1:end-2,1] == @view X[begin,1:end-2,1]
+@test X[begin,begin+1,begin:end-2] == @view X[begin,begin+1,begin:end-2]
+@test X[begin,2,Y[2:end]] == @view X[begin,2,Y[2:end]]
+@test X[begin:end,2,Y[begin+1:end]] == @view X[begin:end,2,Y[begin+1:end]]
 
 u = (1,2:3)
-@test X[u...,2:end] == @view X[u...,2:end]
+@test X[u...,begin+1:end] == @view X[u...,begin+1:end]
 @test X[(1,)...,(2,)...,2:end] == @view X[(1,)...,(2,)...,2:end]
 
 # test macro hygiene
@@ -527,7 +525,7 @@ let foo = [X]
 end
 
 # test @views macro
-@views let f!(x) = x[1:end-1] .+= x[2:end].^2
+@views let f!(x) = x[begin:end-1] .+= x[begin+1:end].^2
     x = [1,2,3,4]
     f!(x)
     @test x == [5,11,19,4]
@@ -554,14 +552,20 @@ end
     @test x == [5,8,0,0]
 end
 @views @test isa(X[1:3], SubArray)
-@test X[1:end] == @views X[1:end]
-@test X[1:end-3] == @views X[1:end-3]
-@test X[1:end,2,2] == @views X[1:end,2,2]
-@test X[1,2,1:end-2] == @views X[1,2,1:end-2]
-@test X[1,2,Y[2:end]] == @views X[1,2,Y[2:end]]
-@test X[1:end,2,Y[2:end]] == @views X[1:end,2,Y[2:end]]
-@test X[u...,2:end] == @views X[u...,2:end]
+@test X[begin:end] == @views X[begin:end]
+@test X[begin:end-3] == @views X[begin:end-3]
+@test X[1:end,2,begin+1] == @views X[1:end,2,begin+1]
+@test X[begin,2,1:end-2] == @views X[begin,2,1:end-2]
+@test X[begin,2,Y[2:end]] == @views X[begin,2,Y[2:end]]
+@test X[begin:end,2,Y[begin+1:end]] == @views X[begin:end,2,Y[begin+1:end]]
+@test X[u...,begin+1:end] == @views X[u...,begin+1:end]
 @test X[(1,)...,(2,)...,2:end] == @views X[(1,)...,(2,)...,2:end]
+
+# @views for zero dimensional arrays
+A = Array{Int, 0}(undef)
+A[] = 2
+@test (@views A[]) == 2
+
 # test macro hygiene
 let size=(x,y)-> error("should not happen"), Base=nothing
     @test X[1:end,2,2] == @views X[1:end,2,2]

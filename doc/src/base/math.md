@@ -32,6 +32,7 @@ Base.denominator
 Base.:(<<)
 Base.:(>>)
 Base.:(>>>)
+Base.bitrotate
 Base.:(:)
 Base.range
 Base.OneTo

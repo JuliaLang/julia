@@ -6,6 +6,14 @@ using Test, LinearAlgebra, Random
 
 Random.seed!(123)
 
+@testset "Factorization conversions of LDLT" begin
+    S = SymTridiagonal(randn(5), randn(4))
+    F = ldlt(S)
+    @test Factorization{eltype(S)}(F) === F
+    @test Array(Factorization{complex(eltype(S))}(F)) ≈ Array(ldlt(complex(S)))
+    @test eltype(Factorization{complex(eltype(S))}) == complex(eltype(S))
+end
+
 @testset "REPL printing of LDLT" begin
     S = SymTridiagonal(randn(5), randn(4))
     F = ldlt(S)

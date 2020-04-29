@@ -665,8 +665,9 @@ end
 
 include("testenv.jl")
 
+
 let flags = Cmd(filter(a->!occursin("depwarn", a), collect(test_exeflags)))
-    local cmd = `$test_exename $flags deprecation_exec.jl`
+    local cmd = `$test_exename $flags --depwarn=yes deprecation_exec.jl`
 
     if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
         error("Deprecation test failed, cmd : $cmd")
@@ -804,6 +805,16 @@ end
 # Pointer 0-arg constructor
 @test Ptr{Cvoid}() == C_NULL
 
+@testset "Pointer to unsigned/signed integer" begin
+    # assuming UInt and Ptr have the same size
+    @assert sizeof(UInt) == sizeof(Ptr{Nothing})
+    uint = UInt(0x12345678)
+    sint = signed(uint)
+    ptr = reinterpret(Ptr{Nothing}, uint)
+    @test unsigned(ptr) === uint
+    @test signed(ptr) === sint
+end
+
 # Finalizer with immutable should throw
 @test_throws ErrorException finalizer(x->nothing, 1)
 @test_throws ErrorException finalizer(C_NULL, 1)
@@ -814,4 +825,8 @@ end
     GC.gc(true); GC.gc(false)
 
     GC.safepoint()
+end
+
+@testset "fieldtypes Module" begin
+    @test fieldtypes(Module) isa Tuple
 end

@@ -51,7 +51,8 @@ function scan_slot_def_use(nargs::Int, ci::CodeInfo, code::Vector{Any})
     for var in result[1:(1+nargs)]
         push!(var.defs, 0)
     end
-    for (idx, stmt) in Iterators.enumerate(code)
+    for idx in 1:length(code)
+        stmt = code[idx]
         scan_entry!(result, idx, stmt)
     end
     result

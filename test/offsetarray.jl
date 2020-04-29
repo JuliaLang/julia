@@ -9,6 +9,10 @@ using Statistics
 
 const OAs_name = join(fullname(OffsetArrays), ".")
 
+if !isdefined(@__MODULE__, :T24Linear)
+    include("testhelpers/arrayindexingtypes.jl")
+end
+
 let
 # Basics
 v0 = rand(4)
@@ -290,12 +294,15 @@ copyto!(a, -2, (1,2,3), 1, 2)
 
 b = 1:2    # copy between AbstractArrays
 bo = OffsetArray(1:2, (-3,))
-@test_throws BoundsError copyto!(a, b)
+copyto!(a, b)    # no BoundsError, see #34049
+@test a[-3] == 1
+@test a[-2] == 2
+@test a[-1] == 2
 fill!(a, -1)
 copyto!(a, bo)
-@test a[-3] == -1
-@test a[-2] == 1
-@test a[-1] == 2
+@test a[-3] == 1
+@test a[-2] == 2
+@test a[-1] == -1
 fill!(a, -1)
 copyto!(a, -2, bo)
 @test a[-3] == -1
@@ -328,6 +335,16 @@ map!(+, dest, am, am)
 am = map(identity, a)
 @test isa(am, OffsetArray)
 @test am == a
+
+# https://github.com/JuliaArrays/OffsetArrays.jl/issues/106
+@test isequal(map(!, OffsetArray([true,missing],2)), OffsetArray([false, missing], 2))
+@test isequal(map(!, OffsetArray([true missing; false true], 2, -1)), OffsetArray([false missing; true false], 2, -1))
+P = view([true missing; false true; true false], 1:2:3, :)
+@test IndexStyle(P) === IndexCartesian()
+@test isequal(map(!, OffsetArray(P, 2, -1)), OffsetArray(map(!, P), 2, -1))
+P = TSlow([true missing; false true])
+@test IndexStyle(P) === IndexCartesian()
+@test isequal(map(!, OffsetArray(P, 2, -1)), OffsetArray(map(!, P), 2, -1))
 
 # dropdims
 a0 = rand(1,1,8,8,1)
@@ -439,6 +456,14 @@ I = findall(!iszero, z)
 @test std(A_3_3, dims=1) == OffsetArray([1 1 1], A_3_3.offsets)
 @test std(A_3_3, dims=2) == OffsetArray(reshape([3,3,3], (3,1)), A_3_3.offsets)
 @test sum(OffsetArray(fill(1,3000), -1000)) == 3000
+
+# https://github.com/JuliaArrays/OffsetArrays.jl/issues/92
+A92 = OffsetArray(reshape(1:27, 3, 3, 3), -2, -2, -2)
+B92 = view(A92, :, :, -1:0)
+@test axes(B92) == (-1:1, -1:1, 1:2)
+@test sum(B92, dims=(2,3)) == OffsetArray(reshape([51,57,63], Val(3)), -2, -2, 0)
+B92 = view(A92, :, :, Base.IdentityUnitRange(-1:0))
+@test sum(B92, dims=(2,3)) == OffsetArray(reshape([51,57,63], Val(3)), -2, -2, -2)
 
 @test norm(v) ≈ norm(parent(v))
 @test norm(A) ≈ norm(parent(A))

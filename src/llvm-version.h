@@ -15,3 +15,5 @@
 #if JL_LLVM_VERSION < 100000
 #define Align(a) (a)
 #endif
+
+#define LLVM_DISABLE_ABI_BREAKING_CHECKS_ENFORCING 0
