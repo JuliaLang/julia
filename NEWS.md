@@ -104,6 +104,9 @@ Command-line option changes
 
 Multi-threading changes
 -----------------------
+* `@threads` now allows an optional schedule argument. Use `@threads :static ...` to
+  ensure that the same schedule will be used as in past versions; the default schedule
+  is likely to change in the future.
 
 
 Build system changes
