@@ -38,7 +38,10 @@ co-ordinate their processing by referencing the same remote `Channel`.
 Each process has an associated identifier. The process providing the interactive Julia prompt
 always has an `id` equal to 1. The processes used by default for parallel operations are referred
 to as "workers". When there is only one process, process 1 is considered a worker. Otherwise,
-workers are considered to be all processes other than process 1.
+workers are considered to be all processes other than process 1. As a result, adding 2 or more
+processes is required to gain benefits from parallel processing methods like [`pmap`](@ref). Adding
+a single process is beneficial if you just wish to do other things in the main process while a long
+computation is running on the worker.
 
 Let's try this out. Starting with `julia -p n` provides `n` worker processes on the local machine.
 Generally it makes sense for `n` to equal the number of CPU threads (logical cores) on the machine. Note that the `-p`
