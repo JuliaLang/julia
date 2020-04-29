@@ -852,7 +852,7 @@ Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
 This setting will cause `eachindex` iteration over a `MyArray` to use integers. If you don't
 specify this trait, the default value `IndexCartesian()` is used.
 
-## Array and Vectorized Operators and Functions
+## [Array and Vectorized Operators and Functions](@id man-array-and-vectorized-operators-and-functions)
 
 The following operators are supported for arrays:
 
@@ -914,7 +914,7 @@ julia> broadcast(+, a, b)
 ```
 
 [Dotted operators](@ref man-dot-operators) such as `.+` and `.*` are equivalent
-to `broadcast` calls (except that they fuse, as described below). There is also a
+to `broadcast` calls (except that they fuse, as [described above](@ref man-array-and-vectorized-operators-and-functions)). There is also a
 [`broadcast!`](@ref) function to specify an explicit destination (which can also
 be accessed in a fusing fashion by `.=` assignment). In fact, `f.(args...)`
 is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broadcast any function
