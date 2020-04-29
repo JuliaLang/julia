@@ -51,6 +51,18 @@ julia> 3*2/12
 operators. For instance, we would generally write `-x + 2` to reflect that first `x` gets negated,
 and then `2` is added to that result.)
 
+When used in multiplication, `false` acts as a *strong zero*:
+
+```jldoctest
+julia> NaN * false
+0.0
+
+julia> false * Inf
+0.0
+```
+
+This is useful for preventing the propagation of `NaN` values in quantities that are known to be zero. See [Knuth (1992)](https://arxiv.org/abs/math/9205211) for motivation.
+
 ## Bitwise Operators
 
 The following [bitwise operators](https://en.wikipedia.org/wiki/Bitwise_operation#Bitwise_operators)
