@@ -154,10 +154,9 @@ The absolute path of the shell with which Julia should execute external commands
 (via `Base.repl_cmd()`). Defaults to the environment variable `$SHELL`, and
 falls back to `/bin/sh` if `$SHELL` is unset.
 
-!!! note
-
-    On Windows, this environment variable is ignored, and external commands are
-    executed directly.
+On Windows, `$JULIA_SHELL` can be set to `cmd`, `powershell`, `busybox` or `""`.
+If set to `""` external commands are executed directly. Defaults to `cmd` if
+`$JULIA_SHELL` is not set.
 
 ### `JULIA_EDITOR`
 

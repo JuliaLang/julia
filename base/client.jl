@@ -31,8 +31,11 @@ stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bol
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
 function repl_cmd(cmd, out)
-    shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
+    shell = shell_split(get(ENV, "JULIA_SHELL", Sys.iswindows() ? "cmd" : get(ENV, "SHELL", "/bin/sh")))
     shell_name = Base.basename(shell[1])
+    if Sys.iswindows()
+        shell_name = lowercase(splitext(shell_name)[1]) # canonicalize for comparisons below
+    end
 
     # Immediately expand all arguments, so that typing e.g. ~/bin/foo works.
     cmd.exec .= expanduser.(cmd.exec)
@@ -58,15 +61,28 @@ function repl_cmd(cmd, out)
         ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
-        @static if !Sys.iswindows()
+        local command::Cmd
+        if Sys.iswindows()
+            if shell_name == ""
+                command = cmd
+            elseif shell_name == "cmd"
+                command = Cmd(`$shell /s /c $(string('"', cmd, '"'))`, windows_verbatim=true)
+            elseif shell_name == "powershell" || shell_name == "pwsh"
+                command = `$shell -Command $cmd`
+            elseif shell_name == "busybox"
+                command = `$shell sh -c $(shell_escape_posixly(cmd))`
+            else
+                command = `$shell $cmd`
+            end
+        else
             if shell_name == "fish"
                 shell_escape_cmd = "begin; $(shell_escape_posixly(cmd)); and true; end"
             else
                 shell_escape_cmd = "($(shell_escape_posixly(cmd))) && true"
             end
-            cmd = `$shell -c $shell_escape_cmd`
+            command = `$shell -c $shell_escape_cmd`
         end
-        run(ignorestatus(cmd))
+        run(ignorestatus(command))
     end
     nothing
 end
