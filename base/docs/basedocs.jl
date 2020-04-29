@@ -24,7 +24,7 @@ For help on a specific function or macro, type `?` followed
 by its name, e.g. `?cos`, or `?@time`, and press enter.
 Type `;` to enter shell mode, `]` to enter package mode.
 """
-kw"help", kw"?", kw"Julia", kw"julia", kw""
+kw"help", kw"Julia", kw"julia", kw""
 
 """
     using
@@ -643,6 +643,28 @@ evaluated. The `elseif` and `else` blocks are optional, and as many `elseif` blo
 desired can be used.
 """
 kw"if", kw"elseif", kw"else"
+
+"""
+    a ? b : c
+
+Short form for conditionals; read "if `a`, evaluate `b` otherwise evaluate `c`".
+Also known as the [ternary operator](https://en.wikipedia.org/wiki/%3F:).
+
+This syntax is equivalent to `if a; b else c end`, but is often used to
+emphasize the value `b`-or-`c` which is being used as part of a larger
+expression, rather than the side effects that evaluating `b` or `c` may have.
+
+See the manual section on [control flow](@ref man-conditional-evaluation) for more details.
+
+# Examples
+```
+julia> x = 1; y = 2;
+
+julia> println(x > y ? "x is larger" : "y is larger")
+y is larger
+```
+"""
+kw"?", kw"?:"
 
 """
     for
