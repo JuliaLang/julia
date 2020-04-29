@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Random, LinearAlgebra, SparseArrays
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
 
 types = Any[
     Bool,
@@ -93,6 +95,10 @@ vals = Any[
     1:4, 1:1:4, 1:-1:0, 1.0:4.0, 1.0:1.0:4.0, range(1, stop=4, length=4),
     # issue #35597, when `LinearIndices` does not begin at 1
     Base.IdentityUnitRange(2:4),
+    OffsetArray(1:4, -2),
+    OffsetArray([1 3; 2 4], -2, 2),
+    OffsetArray(1:4, 0),
+    OffsetArray([1 3; 2 4], 0, 0),
     'a':'e', ['a', 'b', 'c', 'd', 'e'],
     # check that hash is still consistent with heterogeneous arrays for which - is defined
     # for some pairs and not others
@@ -105,8 +111,11 @@ end
 
 for a in vals
     a isa AbstractArray || continue
-    keys(a) == keys(Array(a)) || continue
-    @test hash(a) == hash(Array(a)) == hash(Array{Any}(a))
+    if keys(a) == keys(Array(a))
+        @test hash(a) == hash(Array(a)) == hash(Array{Any}(a))
+    else
+        @test hash(a) == hash(OffsetArray(Array(a), (first.(axes(a)).-1)...)) == hash(OffsetArray(Array{Any}(a), (first.(axes(a)).-1)...))
+    end
 end
 
 vals = Any[
