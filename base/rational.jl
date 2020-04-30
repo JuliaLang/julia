@@ -395,65 +395,25 @@ for (S, T) in ((Rational, Integer), (Integer, Rational), (Rational, Rational))
     end
 end
 
-trunc(::Type{T}, x::Rational) where {T} = convert(T,div(x.num,x.den))
-floor(::Type{T}, x::Rational) where {T} = convert(T,fld(x.num,x.den))
-ceil(::Type{T}, x::Rational) where {T} = convert(T,cld(x.num,x.den))
-round(::Type{T}, x::Rational, r::RoundingMode=RoundNearest) where {T} = _round_rational(T, x, r)
-round(x::Rational, r::RoundingMode) = round(Rational, x, r)
+trunc(::Type{T}, x::Rational) where {T} = round(T, x, RoundToZero)
+floor(::Type{T}, x::Rational) where {T} = round(T, x, RoundDown)
+ceil(::Type{T}, x::Rational) where {T} = round(T, x, RoundUp)
 
-function _round_rational(::Type{T}, x::Rational{Tr}, ::RoundingMode{:Nearest}) where {T,Tr}
-    if denominator(x) == zero(Tr) && T <: Integer
-        throw(DivideError())
-    elseif denominator(x) == zero(Tr)
+round(x::Rational, r::RoundingMode=RoundNearest) = round(typeof(x), x, r)
+
+function round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {T,Tr}
+    if iszero(denominator(x)) && !(T <: Integer)
         return convert(T, copysign(one(Tr)//zero(Tr), numerator(x)))
     end
-    q,r = divrem(numerator(x), denominator(x))
-    s = q
-    if abs(r) >= abs((denominator(x)-copysign(Tr(4), numerator(x))+one(Tr)+iseven(q))>>1 + copysign(Tr(2), numerator(x)))
-        s += copysign(one(Tr),numerator(x))
-    end
-    convert(T, s)
-end
-
-function _round_rational(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesAway}) where {T,Tr}
-    if denominator(x) == zero(Tr) && T <: Integer
-        throw(DivideError())
-    elseif denominator(x) == zero(Tr)
-        return convert(T, copysign(one(Tr)//zero(Tr), numerator(x)))
-    end
-    q,r = divrem(numerator(x), denominator(x))
-    s = q
-    if abs(r) >= abs((denominator(x)-copysign(Tr(4), numerator(x))+one(Tr))>>1 + copysign(Tr(2), numerator(x)))
-        s += copysign(one(Tr),numerator(x))
-    end
-    convert(T, s)
-end
-
-function _round_rational(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesUp}) where {T,Tr}
-    if denominator(x) == zero(Tr) && T <: Integer
-        throw(DivideError())
-    elseif denominator(x) == zero(Tr)
-        return convert(T, copysign(one(Tr)//zero(Tr), numerator(x)))
-    end
-    q,r = divrem(numerator(x), denominator(x))
-    s = q
-    if abs(r) >= abs((denominator(x)-copysign(Tr(4), numerator(x))+one(Tr)+(numerator(x)<0))>>1 + copysign(Tr(2), numerator(x)))
-        s += copysign(one(Tr),numerator(x))
-    end
-    convert(T, s)
+    convert(T, div(numerator(x), denominator(x), r))
 end
 
 function round(::Type{T}, x::Rational{Bool}, ::RoundingMode=RoundNearest) where T
-    if denominator(x) == false && (T <: Union{Integer, Bool})
+    if denominator(x) == false && (T <: Integer)
         throw(DivideError())
     end
     convert(T, x)
 end
-
-trunc(x::Rational{T}) where {T} = Rational(trunc(T,x))
-floor(x::Rational{T}) where {T} = Rational(floor(T,x))
-ceil(x::Rational{T}) where {T} = Rational(ceil(T,x))
-round(x::Rational{T}) where {T} = Rational(round(T,x))
 
 function ^(x::Rational, n::Integer)
     n >= 0 ? power_by_squaring(x,n) : power_by_squaring(inv(x),-n)
