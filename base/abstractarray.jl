@@ -705,7 +705,15 @@ See also [`copyto!`](@ref).
     This method requires at least Julia 1.1. In Julia 1.0 this method
     is available from the `Future` standard library as `Future.copy!`.
 """
-copy!(dst::AbstractVector, src::AbstractVector) = append!(empty!(dst), src)
+function copy!(dst::AbstractVector, src::AbstractVector)
+    if length(dst) != length(src)
+        resize!(dst, length(src))
+    end
+    for i in eachindex(dst, src)
+        @inbounds dst[i] = src[i]
+    end
+    dst
+end
 
 function copy!(dst::AbstractArray, src::AbstractArray)
     axes(dst) == axes(src) || throw(ArgumentError(
