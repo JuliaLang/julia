@@ -279,12 +279,9 @@ function close_chnl_on_taskdone(t::Task, c::Channel)
     lock(c)
     try
         isopen(c) || return
-        if istaskfailed(t)
-            excp = task_result(t)
-            if excp isa Exception
-                close(c, TaskFailedException(t))
-                return
-            end
+        if istaskfailed(t) && task_result(t) isa Exception
+            close(c, TaskFailedException(t))
+            return
         end
         close(c)
     finally
