@@ -480,7 +480,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     return InputAreaState(cur_row, curs_row)
 end
 
-function highlight_region(lwrite::String, regstart::Int, regstop::Int, written::Int, slength::Int)
+function highlight_region(lwrite::AbstractString, regstart::Int, regstop::Int, written::Int, slength::Int)
     if written <= regstop <= written+slength
         i = thisind(lwrite, regstop-written)
         lwrite = lwrite[1:i] * Base.disable_text_style[:reverse] * lwrite[nextind(lwrite, i):end]
