@@ -1112,8 +1112,9 @@ end
 """
     parent(A)
 
-Returns the "parent array" of an array view type (e.g., `SubArray`), or the array itself if
-it is not a view.
+Return the underlying "parent array”. This parent array of objects of types `SubArray`, `ReshapedArray`
+or `LinearAlgebra.Transpose` is what was passed as an argument to `view`, `reshape`, `transpose`, etc.
+during object creation. If the input is not a wrapped object, return the input itself.
 
 # Examples
 ```jldoctest
