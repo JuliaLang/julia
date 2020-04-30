@@ -1440,7 +1440,7 @@ end
     z = view(x, :)
     ty = typeof
     @testset "matvec multiplication $(ty(X)) * $(ty(v))" for X in (U, L), v in (x, y, z)
-        @test X * v == Matrix(X) * Vector(v)
+        @test X * v ≈ Matrix(X) * Vector(v)
         @test typeof(X * v) == typeof(x)
     end
 end

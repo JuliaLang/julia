@@ -185,7 +185,6 @@ const SparseOrTri{Tv,Ti} = Union{SparseMatrixCSCUnion{Tv,Ti},SparseTriangular{Tv
 *(A::SparseOrTri, B::SparseColumnView) = spmatmulv(A, B)
 *(A::SparseOrTri, B::SparseVectorView) = spmatmulv(A, B)
 *(A::SparseMatrixCSCUnion, B::SparseMatrixCSCUnion) = spmatmul(A,B)
-*(A::SparseMatrixCSCUnion, B::SubArray{<:Any,1,<:AbstractSparseVector}) = spmatmulv(A, B)
 *(A::SparseTriangular, B::SparseMatrixCSCUnion) = spmatmul(A,B)
 *(A::SparseMatrixCSCUnion, B::SparseTriangular) = spmatmul(A,B)
 *(A::SparseTriangular, B::SparseTriangular) = spmatmul1(A,B)
