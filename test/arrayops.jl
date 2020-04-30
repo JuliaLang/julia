@@ -2768,3 +2768,35 @@ let n = 12000000, k = 257000000
         v[end] == (n, 0.5)
     end
 end
+
+@testset "BoundsError printing" begin
+    x = rand(2, 2)
+
+    err = try x[10, :]; catch err; err; end
+    b = IOBuffer()
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [10, 1:2]"
+
+    err = try x[10, trues(2)]; catch err; err; end
+    b = IOBuffer()
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [10, Bool[1, 1]]"
+
+    # Also test : directly for custom types for which it may appear as-is
+    err = BoundsError(x, (10, :))
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [10, :]"
+
+    err = BoundsError(x, "bad index")
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [\"bad index\"]"
+
+    err = BoundsError(x, (10, "bad index"))
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [10, \"bad index\"]"
+end

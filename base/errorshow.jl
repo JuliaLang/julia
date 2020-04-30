@@ -110,6 +110,13 @@ function show_error_hints(io, ex, args...)
     end
 end
 
+show_index(io::IO, x::Any) = show(io, x)
+show_index(io::IO, x::Slice) = show_index(io, x.indices)
+show_index(io::IO, x::LogicalIndex) = show_index(io, x.mask)
+show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
+show_index(io::IO, x::Colon) = print(io, ':')
+
+
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
@@ -118,10 +125,15 @@ function showerror(io::IO, ex::BoundsError)
         if isdefined(ex, :i)
             !isa(ex.a, AbstractArray) && print(io, "\n ")
             print(io, " at index [")
-            if isa(ex.i, AbstractRange)
+            if ex.i isa AbstractRange
                 print(io, ex.i)
+            elseif ex.i isa AbstractString
+                show(io, ex.i)
             else
-                join(io, ex.i, ", ")
+                for (i, x) in enumerate(ex.i)
+                    i > 1 && print(io, ", ")
+                    show_index(io, x)
+                end
             end
             print(io, ']')
         end
