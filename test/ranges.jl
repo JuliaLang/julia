@@ -1401,6 +1401,22 @@ end
     @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
 end
 
+@testset "Views of ranges" begin
+    @test view(Base.OneTo(10), Base.OneTo(5)) === Base.OneTo(5)
+    @test view(1:10, 1:5) === 1:5
+    @test view(1:10, 1:2:5) === 1:2:5
+    @test view(1:2:9, 1:5) === 1:2:9
+
+    # Ensure we don't hit a fallback `view` if there's a better `getindex` implementation
+    vmt = collect(methods(view, Tuple{AbstractRange, AbstractRange}))
+    for m in methods(getindex, Tuple{AbstractRange, AbstractRange})
+        tt = Base.tuple_type_tail(m.sig)
+        tt == Tuple{AbstractArray,Vararg{Any,N}} where N && continue
+        vm = findfirst(sig->tt <: Base.tuple_type_tail(sig.sig), vmt)
+        @test vmt[vm].sig != Tuple{typeof(view),AbstractArray,Vararg{Any,N}} where N
+    end
+end
+
 @testset "Issue #26608" begin
     @test_throws BoundsError (Int8(-100):Int8(100))[400]
     @test_throws BoundsError (-100:100)[typemax(UInt)]

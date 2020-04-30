@@ -164,6 +164,32 @@ function view(A::AbstractArray, I::Vararg{Any,N}) where {N}
     unsafe_view(_maybe_reshape_parent(A, index_ndims(J...)), J...)
 end
 
+# Ranges implement getindex to return recomputed ranges; use that for views, too (when possible)
+function view(r1::OneTo, r2::OneTo)
+    @_propagate_inbounds_meta
+    getindex(r1, r2)
+end
+function view(r1::AbstractUnitRange, r2::AbstractUnitRange{<:Integer})
+    @_propagate_inbounds_meta
+    getindex(r1, r2)
+end
+function view(r1::AbstractUnitRange, r2::StepRange{<:Integer})
+    @_propagate_inbounds_meta
+    getindex(r1, r2)
+end
+function view(r1::StepRange, r2::AbstractRange{<:Integer})
+    @_propagate_inbounds_meta
+    getindex(r1, r2)
+end
+function view(r1::StepRangeLen, r2::OrdinalRange{<:Integer})
+    @_propagate_inbounds_meta
+    getindex(r1, r2)
+end
+function view(r1::LinRange, r2::OrdinalRange{<:Integer})
+    @_propagate_inbounds_meta
+    getindex(r1, r2)
+end
+
 function unsafe_view(A::AbstractArray, I::Vararg{ViewIndex,N}) where {N}
     @_inline_meta
     SubArray(A, I)
