@@ -23,7 +23,8 @@ const extended_help_on = Ref{Any}(nothing)
 
 function _helpmode(io::IO, line::AbstractString)
     line = strip(line)
-    if startswith(line, '?')
+    ternary_operator_help = (line == "?" || line == "?:")
+    if startswith(line, '?') && !ternary_operator_help
         line = line[2:end]
         extended_help_on[] = line
         brief = false
