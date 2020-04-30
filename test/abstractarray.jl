@@ -878,6 +878,10 @@ end
             @test s === copy!(s, Vector(a)) == Vector(a)
             @test s === copy!(s, SparseVector(a)) == Vector(a)
         end
+        # issue #35649
+        s = [1, 2, 3, 4]
+        s2 = reshape(s, 2, 2) # shared data
+        @test s === copy!(s, 11:14) == 11:14
     end
     @testset "AbstractArray" begin
         @test_throws ArgumentError copy!(zeros(2, 3), zeros(3, 2))
