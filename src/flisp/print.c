@@ -448,6 +448,7 @@ void fl_print_child(fl_context_t *fl_ctx, ios_t *f, value_t v)
     case TAG_CVALUE:
     case TAG_CPRIM:
         if (v == UNBOUND) { outs(fl_ctx, "#<undefined>", f); break; }
+        JL_FALLTHROUGH;
     case TAG_VECTOR:
     case TAG_CONS:
         if (print_circle_prefix(fl_ctx, f, v)) break;
@@ -641,10 +642,10 @@ static void cvalue_printdata(fl_context_t *fl_ctx, ios_t *f, void *data,
             if (init == 0) {
 #if defined(RTLD_SELF)
                 jl_static_print = (size_t (*)(ios_t*, void*))
-                    dlsym(RTLD_SELF, "jl_static_show");
+                    (uintptr_t)dlsym(RTLD_SELF, "jl_static_show");
 #elif defined(RTLD_DEFAULT)
                 jl_static_print = (size_t (*)(ios_t*, void*))
-                    dlsym(RTLD_DEFAULT, "jl_static_show");
+                    (uintptr_t)dlsym(RTLD_DEFAULT, "jl_static_show");
 #elif defined(_OS_WINDOWS_)
                 HMODULE handle;
                 if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
@@ -652,7 +653,7 @@ static void cvalue_printdata(fl_context_t *fl_ctx, ios_t *f, void *data,
                                        (LPCWSTR)(&cvalue_printdata),
                                        &handle)) {
                     jl_static_print = (size_t (*)(ios_t*, void*))
-                        GetProcAddress(handle, "jl_static_show");
+                        (uintptr_t)GetProcAddress(handle, "jl_static_show");
                 }
 #endif
                 init = 1;
@@ -747,8 +748,7 @@ static void cvalue_print(fl_context_t *fl_ctx, ios_t *f, value_t v)
         void *fptr = *(void**)data;
         label = (value_t)ptrhash_get(&fl_ctx->reverse_dlsym_lookup_table, cv);
         if (label == (value_t)HT_NOTFOUND) {
-            fl_ctx->HPOS += ios_printf(f, "#<builtin @0x%08zx>",
-                                  (size_t)(builtin_t)fptr);
+            fl_ctx->HPOS += ios_printf(f, "#<builtin @0x%08zx>", (size_t)fptr);
         }
         else {
             if (fl_ctx->print_princ) {

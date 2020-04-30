@@ -1,6 +1,6 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-immutable RUsage
+struct RUsage
     ru_utime_sec::Clong         #  user CPU time used
     ru_utime_usec::Clong        #  user CPU time used
     ru_stime_sec::Clong         #  system CPU time used
@@ -22,8 +22,8 @@ immutable RUsage
 end
 
 function get_vmsize()
-    ru = Array{RUsage}(1)
-    ccall(:getrusage, Cint, (Cint, Ptr{Void}), 0, ru)
+    ru = Vector{RUsage}(undef, 1)
+    ccall(:getrusage, Cint, (Cint, Ptr{Cvoid}), 0, ru)
     return ru[1].ru_maxrss
 end
 
@@ -48,14 +48,14 @@ function mtest_create_strings()
     for i in 1:10^8
         string("$i")
     end
-    gc()
+    GC.gc()
 end
 
 function mtest_remotecall_fetch()
     for i in 1:10^5
         remotecall_fetch(myid, 1)
     end
-    gc()
+    GC.gc()
 end
 
 run_mtest("create_strings", () -> mtest_create_strings())

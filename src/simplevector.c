@@ -1,13 +1,13 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
-#include <assert.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_assert.h"
 
-JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...)
+JL_DLLEXPORT jl_svec_t *(jl_svec)(size_t n, ...)
 {
     va_list args;
     if (n == 0) return jl_emptysvec;
@@ -15,6 +15,19 @@ JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...)
     jl_svec_t *jv = jl_alloc_svec_uninit(n);
     for(size_t i=0; i < n; i++)
         jl_svecset(jv, i, va_arg(args, jl_value_t*));
+    va_end(args);
+    return jv;
+}
+
+jl_svec_t *(jl_perm_symsvec)(size_t n, ...)
+{
+    if (n == 0) return jl_emptysvec;
+    jl_svec_t *jv = (jl_svec_t*)jl_gc_permobj((n + 1) * sizeof(void*), jl_simplevector_type);
+    jl_svec_set_len_unsafe(jv, n);
+    va_list args;
+    va_start(args, n);
+    for (size_t i = 0; i < n; i++)
+        jl_svecset(jv, i, jl_symbol(va_arg(args, const char*)));
     va_end(args);
     return jv;
 }

@@ -123,8 +123,8 @@ typedef struct {
 #define isclosure(x) isfunction(x)
 #define iscbuiltin(ctx, x) (iscvalue(x) && (cv_class((cvalue_t*)ptr(x))==ctx->builtintype))
 
-void fl_gc_handle(fl_context_t *fl_ctx, value_t *pv);
-void fl_free_gc_handles(fl_context_t *fl_ctx, uint32_t n);
+void fl_gc_handle(fl_context_t *fl_ctx, value_t *pv) JL_NOTSAFEPOINT;
+void fl_free_gc_handles(fl_context_t *fl_ctx, uint32_t n) JL_NOTSAFEPOINT;
 
 #include "opcodes.h"
 
@@ -142,14 +142,14 @@ void fl_free_gc_handles(fl_context_t *fl_ctx, uint32_t n);
 value_t fl_read_sexpr(fl_context_t *fl_ctx, value_t f);
 void fl_print(fl_context_t *fl_ctx, ios_t *f, value_t v);
 value_t fl_toplevel_eval(fl_context_t *fl_ctx, value_t expr);
-value_t fl_apply(fl_context_t *fl_ctx, value_t f, value_t l);
-value_t fl_applyn(fl_context_t *fl_ctx, uint32_t n, value_t f, ...);
+value_t fl_apply(fl_context_t *fl_ctx, value_t f, value_t l) JL_NOTSAFEPOINT;
+value_t fl_applyn(fl_context_t *fl_ctx, uint32_t n, value_t f, ...) JL_NOTSAFEPOINT;
 
 /* object model manipulation */
-value_t fl_cons(fl_context_t *fl_ctx, value_t a, value_t b);
-value_t fl_list2(fl_context_t *fl_ctx, value_t a, value_t b);
-value_t fl_listn(fl_context_t *fl_ctx, size_t n, ...);
-value_t symbol(fl_context_t *fl_ctx, const char *str);
+value_t fl_cons(fl_context_t *fl_ctx, value_t a, value_t b) JL_NOTSAFEPOINT;
+value_t fl_list2(fl_context_t *fl_ctx, value_t a, value_t b) JL_NOTSAFEPOINT;
+value_t fl_listn(fl_context_t *fl_ctx, size_t n, ...) JL_NOTSAFEPOINT;
+value_t symbol(fl_context_t *fl_ctx, const char *str) JL_NOTSAFEPOINT;
 char *symbol_name(fl_context_t *fl_ctx, value_t v);
 int fl_is_keyword_name(const char *str, size_t len);
 value_t alloc_vector(fl_context_t *fl_ctx, size_t n, int init);
@@ -167,8 +167,25 @@ fixnum_t tofixnum(fl_context_t *fl_ctx, value_t v, const char *fname);
 char *tostring(fl_context_t *fl_ctx, value_t v, const char *fname);
 
 /* error handling */
+#if defined(_OS_WINDOWS_)
+#define fl_jmp_buf jmp_buf
+#if defined(_COMPILER_GCC_)
+int __attribute__ ((__nothrow__,__returns_twice__)) (jl_setjmp)(jmp_buf _Buf);
+__declspec(noreturn) __attribute__ ((__nothrow__)) void (jl_longjmp)(jmp_buf _Buf, int _Value);
+#else
+int (jl_setjmp)(jmp_buf _Buf);
+void (jl_longjmp)(jmp_buf _Buf, int _Value);
+#endif
+#define fl_setjmp(a) (jl_setjmp)((a))
+#define fl_longjmp(a, b) (jl_longjmp)((a), (b))
+#else // !_OS_WINDOWS_
+#define fl_jmp_buf sigjmp_buf
+#define fl_setjmp(a) sigsetjmp((a), 0)
+#define fl_longjmp(a, b) siglongjmp((a), (b))
+#endif
+
 typedef struct _ectx_t {
-    jmp_buf buf;
+    fl_jmp_buf buf;
     uint32_t sp;
     uint32_t frame;
     uint32_t ngchnd;
@@ -179,7 +196,7 @@ typedef struct _ectx_t {
 #define FL_TRY_EXTERN(fl_ctx)                                           \
   fl_exception_context_t _ctx; int l__tr, l__ca;                        \
   fl_savestate(fl_ctx, &_ctx); fl_ctx->exc_ctx = &_ctx;                      \
-  if (!setjmp(_ctx.buf))                                                \
+  if (!fl_setjmp(_ctx.buf))                                                \
       for (l__tr=1; l__tr; l__tr=0, (void)(fl_ctx->exc_ctx=fl_ctx->exc_ctx->prev))
 
 #define FL_CATCH_EXTERN(fl_ctx)                                         \
@@ -188,13 +205,13 @@ typedef struct _ectx_t {
 
 #if defined(_OS_WINDOWS_)
 __declspec(noreturn) void lerrorf(fl_context_t *fl_ctx, value_t e, const char *format, ...);
-__declspec(noreturn) void lerror(fl_context_t *fl_ctx, value_t e, const char *msg);
+__declspec(noreturn) void lerror(fl_context_t *fl_ctx, value_t e, const char *msg) JL_NOTSAFEPOINT;
 __declspec(noreturn) void fl_raise(fl_context_t *fl_ctx, value_t e);
 __declspec(noreturn) void type_error(fl_context_t *fl_ctx, const char *fname, const char *expected, value_t got);
 __declspec(noreturn) void bounds_error(fl_context_t *fl_ctx, const char *fname, value_t arr, value_t ind);
 #else
 void lerrorf(fl_context_t *fl_ctx, value_t e, const char *format, ...) __attribute__ ((__noreturn__));
-void lerror(fl_context_t *fl_ctx, value_t e, const char *msg) __attribute__ ((__noreturn__));
+void lerror(fl_context_t *fl_ctx, value_t e, const char *msg) __attribute__((__noreturn__)) JL_NOTSAFEPOINT;
 void fl_raise(fl_context_t *fl_ctx, value_t e) __attribute__ ((__noreturn__));
 void type_error(fl_context_t *fl_ctx, const char *fname, const char *expected, value_t got) __attribute__ ((__noreturn__));
 void bounds_error(fl_context_t *fl_ctx, const char *fname, value_t arr, value_t ind) __attribute__ ((__noreturn__));
@@ -231,7 +248,7 @@ typedef struct _fltype_t {
     cvinitfunc_t init;
 } fltype_t;
 
-typedef struct {
+JL_EXTENSION typedef struct {
     fltype_t *type;
     void *data;
     size_t len;            // length of *data in bytes
@@ -302,7 +319,7 @@ typedef float    fl_float_t;
 
 typedef value_t (*builtin_t)(fl_context_t*, value_t*, uint32_t);
 
-value_t cvalue(fl_context_t *fl_ctx, fltype_t *type, size_t sz);
+value_t cvalue(fl_context_t *fl_ctx, fltype_t *type, size_t sz) JL_NOTSAFEPOINT;
 void add_finalizer(fl_context_t *fl_ctx, cvalue_t *cv);
 void cv_autorelease(fl_context_t *fl_ctx, cvalue_t *cv);
 void cv_pin(fl_context_t *fl_ctx, cvalue_t *cv);
@@ -332,7 +349,7 @@ void to_sized_ptr(fl_context_t *fl_ctx, value_t v, const char *fname, char **pda
 fltype_t *get_type(fl_context_t *fl_ctx, value_t t);
 fltype_t *get_array_type(fl_context_t *fl_ctx, value_t eltype);
 fltype_t *define_opaque_type(value_t sym, size_t sz, const cvtable_t *vtab,
-                             cvinitfunc_t init);
+                             cvinitfunc_t init) JL_NOTSAFEPOINT;
 
 value_t mk_double(fl_context_t *fl_ctx, fl_double_t n);
 value_t mk_float(fl_context_t *fl_ctx, fl_float_t n);
@@ -347,20 +364,21 @@ typedef struct {
     builtin_t fptr;
 } builtinspec_t;
 
-void assign_global_builtins(fl_context_t *fl_ctx, const builtinspec_t *b);
+void assign_global_builtins(fl_context_t *fl_ctx, const builtinspec_t *b) JL_NOTSAFEPOINT;
 
 /* builtins */
 value_t fl_hash(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
 value_t cvalue_byte(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
 value_t cvalue_wchar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
 
-void fl_init(fl_context_t *fl_ctx, size_t initial_heapsize);
+void fl_init(fl_context_t *fl_ctx, size_t initial_heapsize) JL_NOTSAFEPOINT;
 int fl_load_system_image(fl_context_t *fl_ctx, value_t ios);
-int fl_load_system_image_str(fl_context_t *fl_ctx, char* str, size_t len);
+int fl_load_system_image_str(fl_context_t *fl_ctx, char* str, size_t len) JL_NOTSAFEPOINT;
 
 /* julia extensions */
 JL_DLLEXPORT int jl_id_char(uint32_t wc);
 JL_DLLEXPORT int jl_id_start_char(uint32_t wc);
+JL_DLLEXPORT int jl_op_suffix_char(uint32_t wc);
 
 struct _fl_context_t {
     symbol_t *symtab;

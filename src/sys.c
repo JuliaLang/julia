@@ -1,18 +1,18 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   sys.c
   I/O and operating system utility functions
 */
-#include "julia.h"
-#include "julia_internal.h"
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include <errno.h>
 #include <signal.h>
 #include <fcntl.h>
+
+#include "julia.h"
+#include "julia_internal.h"
 
 #ifdef _OS_WINDOWS_
 #include <psapi.h>
@@ -56,24 +56,18 @@
 #include <sanitizer/msan_interface.h>
 #endif
 
+#include "julia_assert.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 JL_DLLEXPORT char *dirname(char *);
 #else
 #include <libgen.h>
 #endif
 
-JL_DLLEXPORT uint32_t jl_getutf8(ios_t *s)
-{
-    uint32_t wc=0;
-    ios_getutf8(s, &wc);
-    return wc;
-}
-
-JL_DLLEXPORT int jl_sizeof_uv_mutex(void) { return sizeof(uv_mutex_t); }
 JL_DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
 #ifndef _OS_WINDOWS_
 JL_DLLEXPORT int jl_sizeof_mode_t(void) { return sizeof(mode_t); }
@@ -95,9 +89,13 @@ JL_DLLEXPORT void *jl_mmap(void *addr, size_t length, int prot, int flags,
     return mmap(addr, length, prot, flags, fd, (off_t)offset);
 }
 #else
-JL_DLLEXPORT int64_t jl_lseek(int fd, int64_t offset, int whence)
+JL_DLLEXPORT int64_t jl_lseek(HANDLE fd, int64_t offset, int whence)
 {
-    return _lseeki64(fd, offset, whence);
+    LARGE_INTEGER tell;
+    tell.QuadPart = offset;
+    if (SetFilePointerEx(fd, tell, &tell, whence) == 0)
+        return -1;
+    return tell.QuadPart;
 }
 #endif
 JL_DLLEXPORT int jl_sizeof_ios_t(void) { return sizeof(ios_t); }
@@ -112,9 +110,8 @@ JL_DLLEXPORT int32_t jl_nb_available(ios_t *s)
 // --- dir/file stuff ---
 
 JL_DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
-JL_DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t *req) { uv_fs_req_cleanup(req); }
 JL_DLLEXPORT char *jl_uv_fs_t_ptr(uv_fs_t *req) { return (char*)req->ptr; }
-JL_DLLEXPORT int jl_uv_fs_result(uv_fs_t *f) { return f->result; }
+JL_DLLEXPORT char *jl_uv_fs_t_path(uv_fs_t *req) { return (char*)req->path; }
 
 // --- stat ---
 JL_DLLEXPORT int jl_sizeof_stat(void) { return sizeof(uv_stat_t); }
@@ -126,7 +123,7 @@ JL_DLLEXPORT int32_t jl_stat(const char *path, char *statbuf)
 
     // Ideally one would use the statbuf for the storage in req, but
     // it's not clear that this is possible using libuv
-    ret = uv_fs_stat(uv_default_loop(), &req, path, NULL);
+    ret = uv_fs_stat(unused_uv_loop_arg, &req, path, NULL);
     if (ret == 0)
         memcpy(statbuf, req.ptr, sizeof(uv_stat_t));
     uv_fs_req_cleanup(&req);
@@ -138,19 +135,19 @@ JL_DLLEXPORT int32_t jl_lstat(const char *path, char *statbuf)
     uv_fs_t req;
     int ret;
 
-    ret = uv_fs_lstat(uv_default_loop(), &req, path, NULL);
+    ret = uv_fs_lstat(unused_uv_loop_arg, &req, path, NULL);
     if (ret == 0)
         memcpy(statbuf, req.ptr, sizeof(uv_stat_t));
     uv_fs_req_cleanup(&req);
     return ret;
 }
 
-JL_DLLEXPORT int32_t jl_fstat(int fd, char *statbuf)
+JL_DLLEXPORT int32_t jl_fstat(uv_os_fd_t fd, char *statbuf)
 {
     uv_fs_t req;
     int ret;
 
-    ret = uv_fs_fstat(uv_default_loop(), &req, fd, NULL);
+    ret = uv_fs_fstat(unused_uv_loop_arg, &req, fd, NULL);
     if (ret == 0)
         memcpy(statbuf, req.ptr, sizeof(uv_stat_t));
     uv_fs_req_cleanup(&req);
@@ -250,15 +247,29 @@ JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s)
     return a;
 }
 
-JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
+// str: if 1 return a string, otherwise return a Vector{UInt8}
+// chomp:
+//   0 - keep delimiter
+//   1 - remove 1 byte delimiter
+//   2 - remove 2 bytes \r\n if present
+JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint8_t chomp)
 {
     jl_array_t *a;
     // manually inlined common case
-    char *pd = (char*)memchr(s->buf+s->bpos, delim, (size_t)(s->size - s->bpos));
+    char *pd = (char*)memchr(s->buf + s->bpos, delim, (size_t)(s->size - s->bpos));
     if (pd) {
-        size_t n = pd-(s->buf+s->bpos)+1;
-        a = jl_alloc_array_1d(jl_array_uint8_type, n);
-        memcpy(jl_array_data(a), s->buf + s->bpos, n);
+        size_t n = pd - (s->buf + s->bpos) + 1;
+        size_t nchomp = 0;
+        if (chomp) {
+            nchomp = chomp == 2 ? ios_nchomp(s, n) : 1;
+        }
+        if (str) {
+            jl_value_t *str = jl_pchar_to_string(s->buf + s->bpos, n - nchomp);
+            s->bpos += n;
+            return str;
+        }
+        a = jl_alloc_array_1d(jl_array_uint8_type, n - nchomp);
+        memcpy(jl_array_data(a), s->buf + s->bpos, n - nchomp);
         s->bpos += n;
     }
     else {
@@ -267,6 +278,15 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
         ios_mem(&dest, 0);
         ios_setbuf(&dest, (char*)a->data, 80, 0);
         size_t n = ios_copyuntil(&dest, s, delim);
+        if (chomp && n > 0 && dest.buf[n - 1] == delim) {
+            n--;
+            if (chomp == 2 && n > 0 && dest.buf[n - 1] == '\r') {
+                n--;
+            }
+            int truncret = ios_trunc(&dest, n); // it should always be possible to truncate dest
+            assert(truncret == 0);
+            (void)truncret; // ensure the variable is used to avoid warnings
+        }
         if (dest.buf != a->data) {
             a = jl_take_buffer(&dest);
         }
@@ -277,20 +297,31 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
             a->nrows = n;
             ((char*)a->data)[n] = '\0';
         }
+        if (str) {
+            JL_GC_PUSH1(&a);
+            jl_value_t *st = jl_array_to_string(a);
+            JL_GC_POP();
+            return st;
+        }
     }
     return (jl_value_t*)a;
 }
 
-JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
+JL_DLLEXPORT int jl_ios_buffer_n(ios_t *s, const size_t n)
 {
-    assert(n <= 8);
     size_t space, ret;
     do {
         space = (size_t)(s->size - s->bpos);
         ret = ios_readprep(s, n);
         if (space == ret && ret < n)
-            jl_eof_error();
-    } while(ret < n);
+            return 1;
+    } while (ret < n);
+    return 0;
+}
+
+JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
+{
+    assert(n <= 8);
     uint64_t x = 0;
     uint8_t *buf = (uint8_t*)&s->buf[s->bpos];
     if (n == 8) {
@@ -318,7 +349,7 @@ JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
 JL_DLLEXPORT int jl_errno(void) { return errno; }
 JL_DLLEXPORT void jl_set_errno(int e) { errno = e; }
 
-// -- get the number of CPU cores --
+// -- get the number of CPU threads (logical cores) --
 
 #ifdef _OS_WINDOWS_
 typedef DWORD (WINAPI *GAPC)(WORD);
@@ -327,7 +358,7 @@ typedef DWORD (WINAPI *GAPC)(WORD);
 #endif
 #endif
 
-JL_DLLEXPORT int jl_cpu_cores(void)
+JL_DLLEXPORT int jl_cpu_threads(void)
 {
 #if defined(HW_AVAILCPU) && defined(HW_NCPU)
     size_t len = 4;
@@ -347,12 +378,8 @@ JL_DLLEXPORT int jl_cpu_cores(void)
     return count;
 #elif defined(_OS_WINDOWS_)
     //Try to get WIN7 API method
-    GAPC gapc = (GAPC) jl_dlsym_e(
-        jl_kernel32_handle,
-        "GetActiveProcessorCount"
-    );
-
-    if (gapc) {
+    GAPC gapc;
+    if (jl_dlsym(jl_kernel32_handle, "GetActiveProcessorCount", (void **)&gapc, 0)) {
         return gapc(ALL_PROCESSOR_GROUPS);
     }
     else { //fall back on GetSystemInfo
@@ -366,6 +393,7 @@ JL_DLLEXPORT int jl_cpu_cores(void)
 #endif
 }
 
+
 // -- high resolution timers --
 // Returns time in nanosec
 JL_DLLEXPORT uint64_t jl_hrtime(void)
@@ -378,7 +406,7 @@ JL_DLLEXPORT uint64_t jl_hrtime(void)
 #ifdef __APPLE__
 #include <crt_externs.h>
 #else
-#if !defined(_OS_WINDOWS_) || defined(_COMPILER_MINGW_)
+#if !defined(_OS_WINDOWS_) || defined(_COMPILER_GCC_)
 extern char **environ;
 #endif
 #endif
@@ -426,136 +454,6 @@ JL_DLLEXPORT JL_STREAM *jl_stdin_stream(void)  { return JL_STDIN; }
 JL_DLLEXPORT JL_STREAM *jl_stdout_stream(void) { return JL_STDOUT; }
 JL_DLLEXPORT JL_STREAM *jl_stderr_stream(void) { return JL_STDERR; }
 
-// CPUID
-
-#ifdef HAVE_CPUID
-JL_DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
-{
-#if defined _MSC_VER
-    __cpuid(CPUInfo, InfoType);
-#else
-    __asm__ __volatile__ (
-        #if defined(__i386__) && defined(__PIC__)
-        "xchg %%ebx, %%esi;"
-        "cpuid;"
-        "xchg %%esi, %%ebx;":
-        "=S" (CPUInfo[1]) ,
-        #else
-        "cpuid":
-        "=b" (CPUInfo[1]),
-        #endif
-        "=a" (CPUInfo[0]),
-        "=c" (CPUInfo[2]),
-        "=d" (CPUInfo[3]) :
-        "a" (InfoType)
-    );
-#endif
-}
-#endif
-
-// -- set/clear the FZ/DAZ flags on x86 & x86-64 --
-#ifdef __SSE__
-
-// Cache of information recovered from jl_cpuid.
-// In a multithreaded environment, there will be races on subnormal_flags,
-// but they are harmless idempotent races.  If we ever embrace C11, then
-// subnormal_flags should be declared atomic.
-static volatile int32_t subnormal_flags = 1;
-
-static int32_t get_subnormal_flags(void)
-{
-    uint32_t f = subnormal_flags;
-    if (f & 1) {
-        // CPU capabilities not yet inspected.
-        f = 0;
-        int32_t info[4];
-        jl_cpuid(info, 0);
-        if (info[0] >= 1) {
-            jl_cpuid(info, 0x00000001);
-            if (info[3] & (1 << 26)) {
-                // SSE2 supports both FZ and DAZ
-                f = 0x00008040;
-            }
-            else if (info[3] & (1 << 25)) {
-                // SSE supports only the FZ flag
-                f = 0x00008000;
-            }
-        }
-        subnormal_flags = f;
-    }
-    return f;
-}
-
-// Returns non-zero if subnormals go to 0; zero otherwise.
-JL_DLLEXPORT int32_t jl_get_zero_subnormals(void)
-{
-    uint32_t flags = get_subnormal_flags();
-    return _mm_getcsr() & flags;
-}
-
-// Return zero on success, non-zero on failure.
-JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
-{
-    uint32_t flags = get_subnormal_flags();
-    if (flags) {
-        uint32_t state = _mm_getcsr();
-        if (isZero)
-            state |= flags;
-        else
-            state &= ~flags;
-        _mm_setcsr(state);
-        return 0;
-    }
-    else {
-        // Report a failure only if user is trying to enable FTZ/DAZ.
-        return isZero;
-    }
-}
-
-#elif defined(_CPU_AARCH64_)
-
-// FZ, bit [24]
-static const uint32_t fpcr_fz_mask = 1 << 24;
-
-static inline uint32_t get_fpcr_aarch64(void)
-{
-    uint32_t fpcr;
-    asm volatile("mrs %0, fpcr" : "=r"(fpcr));
-    return fpcr;
-}
-
-static inline void set_fpcr_aarch64(uint32_t fpcr)
-{
-    asm volatile("msr fpcr, %0" :: "r"(fpcr));
-}
-
-JL_DLLEXPORT int32_t jl_get_zero_subnormals(void)
-{
-    return (get_fpcr_aarch64() & fpcr_fz_mask) != 0;
-}
-
-JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
-{
-    uint32_t fpcr = get_fpcr_aarch64();
-    fpcr = isZero ? (fpcr | fpcr_fz_mask) : (fpcr & ~fpcr_fz_mask);
-    set_fpcr_aarch64(fpcr);
-    return 0;
-}
-
-#else
-
-JL_DLLEXPORT int32_t jl_get_zero_subnormals(void)
-{
-    return 0;
-}
-
-JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
-{
-    return isZero;
-}
-
-#endif
-
 // -- processor native alignment information --
 
 JL_DLLEXPORT void jl_native_alignment(uint_t *int8align, uint_t *int16align, uint_t *int32align,
@@ -590,7 +488,9 @@ JL_DLLEXPORT long jl_getpagesize(void)
 #else
 JL_DLLEXPORT long jl_getpagesize(void)
 {
-    return sysconf(_SC_PAGESIZE);
+    long page_size = sysconf(_SC_PAGESIZE);
+    assert(page_size != -1);
+    return page_size;
 }
 #endif
 
@@ -621,20 +521,6 @@ JL_DLLEXPORT long jl_SC_CLK_TCK(void)
 #endif
 }
 
-JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
-{
-    if (ty->layout == NULL || field > jl_datatype_nfields(ty) || field < 1)
-        jl_bounds_error_int((jl_value_t*)ty, field);
-    return jl_field_offset(ty, field - 1);
-}
-
-JL_DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
-{
-    if (ty->layout == NULL)
-        jl_error("non-leaf type doesn't have an alignment");
-    return ty->layout->alignment;
-}
-
 // Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
 JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 {
@@ -643,10 +529,10 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 
 #ifdef __APPLE__
     // Iterate through all images currently in memory
-    for (int32_t i = _dyld_image_count(); i >= 0 ; i--) {
+    for (int32_t i = _dyld_image_count() - 1; i >= 0 ; i--) {
         // dlopen() each image, check handle
         const char *image_name = _dyld_get_image_name(i);
-        void *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT);
+        void *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT, 0);
         jl_dlclose(probe_lib);
 
         // If the handle is the same as what was passed in (modulo mode bits), return this image name
@@ -656,7 +542,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 
 #elif defined(_OS_WINDOWS_)
 
-    wchar_t *pth16 = (wchar_t*)malloc(32768); // max long path length
+    wchar_t *pth16 = (wchar_t*)malloc_s(32768 * sizeof(*pth16)); // max long path length
     DWORD n16 = GetModuleFileNameW((HMODULE)handle,pth16,32768);
     if (n16 <= 0) {
         free(pth16);
@@ -668,7 +554,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
         free(pth16);
         return NULL;
     }
-    char *filepath = (char*)malloc(++n8);
+    char *filepath = (char*)malloc_s(++n8);
     if (!WideCharToMultiByte(CP_UTF8, 0, pth16, -1, filepath, n8, NULL, NULL)) {
         free(pth16);
         free(filepath);
@@ -743,11 +629,13 @@ JL_DLLEXPORT size_t jl_maxrss(void)
     GetProcessMemoryInfo( GetCurrentProcess( ), &counter, sizeof(counter) );
     return (size_t)counter.PeakWorkingSetSize;
 
+// FIXME: `rusage` is available on OpenBSD, DragonFlyBSD and NetBSD as well.
+//        All of them return `ru_maxrss` in kilobytes.
 #elif defined(_OS_LINUX_) || defined(_OS_DARWIN_) || defined (_OS_FREEBSD_)
     struct rusage rusage;
     getrusage( RUSAGE_SELF, &rusage );
 
-#if defined(_OS_LINUX_)
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
     return (size_t)(rusage.ru_maxrss * 1024);
 #else
     return (size_t)rusage.ru_maxrss;
@@ -760,11 +648,7 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 
 JL_DLLEXPORT int jl_threading_enabled(void)
 {
-#ifdef JULIA_ENABLE_THREADING
     return 1;
-#else
-    return 0;
-#endif
 }
 
 #ifdef __cplusplus

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Grisu
 
@@ -14,7 +14,7 @@ function trimrep(buffer)
 end
 
 const bufsize = 500
-buffer = Array{UInt8}(bufsize)
+buffer = Vector{UInt8}(undef, bufsize)
 fill!(buffer,0)
 bignums = [Grisu.Bignums.Bignum(),Grisu.Bignums.Bignum(),Grisu.Bignums.Bignum(),Grisu.Bignums.Bignum()]
 
@@ -1278,14 +1278,14 @@ fill!(buffer,0)
 map(x->Grisu.Bignums.zero!(x),bignums)
 
 #Float16
-min_double = realmin(Float16)
+min_double = floatmin(Float16)
 status,len,point = Grisu.fastshortest(min_double,buffer)
 @test status
 @test "6104" == trimrep(buffer)
 @test -4 == point
 fill!(buffer,0)
 
-max_double = realmax(Float16)
+max_double = floatmax(Float16)
 status,len,point = Grisu.fastshortest(max_double,buffer)
 @test status
 @test "655" == trimrep(buffer)
@@ -1751,3 +1751,14 @@ len,point,neg = Grisu.grisu(1.0, Grisu.FIXED, 0, buffer)
 @test 1 >= len-1
 @test "1" == unsafe_string(pointer(buffer))
 @test !neg
+
+# issue #29885
+@sync let p = Pipe(), q = Pipe()
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
+    Base.link_pipe!(q, reader_supports_async=true, writer_supports_async=true)
+    @async write(p, zeros(UInt8, 2^18))
+    @async (print(p, 12.345); close(p.in))
+    @async print(q, 9.8)
+    read(p, 2^18)
+    @test read(p, String) == "12.345"
+end

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Checked integer arithmetic
 
@@ -8,7 +8,7 @@ import Base: checked_abs, checked_neg, checked_add, checked_sub, checked_mul,
 
 # checked operations
 
-for T in (Int8, Int16, Int32, Int64, Int128)
+@testset for T in (Int8, Int16, Int32, Int64, Int128)
     # regular cases
     @test checked_abs(T(0)) === T(0)
     @test checked_neg(T(0)) === T(0)
@@ -168,7 +168,7 @@ for T in (Int8, Int16, Int32, Int64, Int128)
     @test_throws DivideError checked_cld(typemin(T), T(-1))
 end
 
-for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
+@testset for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
     # regular cases
     @test checked_abs(T(0)) === T(0)
     @test checked_neg(T(0)) === T(0)
@@ -256,69 +256,81 @@ for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
     @test_throws DivideError checked_cld(typemax(T), T(0))
 end
 
-# Boolean
-@test checked_add(false) === 0
-@test checked_add(true) === 1
-@test checked_neg(false) === 0
-@test checked_neg(true) === -1
-@test checked_abs(true) === true
-@test checked_abs(false) === false
-@test checked_mul(false) === false
-@test checked_mul(true) === true
+@testset "Boolean" begin
+    @test checked_add(false) === 0
+    @test checked_add(true) === 1
+    @test checked_neg(false) === 0
+    @test checked_neg(true) === -1
+    @test checked_abs(true) === true
+    @test checked_abs(false) === false
+    @test checked_mul(false) === false
+    @test checked_mul(true) === true
 
-@test checked_add(true, true) === 2
-@test checked_add(true, false) === 1
-@test checked_add(false, false) === 0
-@test checked_add(false, true) === 1
+    @test checked_add(true, true) === 2
+    @test checked_add(true, false) === 1
+    @test checked_add(false, false) === 0
+    @test checked_add(false, true) === 1
 
-@test checked_sub(true, true) === 0
-@test checked_sub(true, false) === 1
-@test checked_sub(false, false) === 0
-@test checked_sub(false, true) === -1
+    @test checked_sub(true, true) === 0
+    @test checked_sub(true, false) === 1
+    @test checked_sub(false, false) === 0
+    @test checked_sub(false, true) === -1
 
-@test checked_mul(true, false) === false
-@test checked_mul(false, false) === false
-@test checked_mul(true, true) === true
-@test checked_mul(false, true) === false
+    @test checked_mul(true, false) === false
+    @test checked_mul(false, false) === false
+    @test checked_mul(true, true) === true
+    @test checked_mul(false, true) === false
 
-@test checked_div(true, true) === true
-@test checked_div(false, true) === false
-@test_throws DivideError checked_div(true, false)
-@test checked_rem(true, true) === false
-@test checked_rem(false, true) === false
-@test_throws DivideError checked_rem(true, false)
-@test checked_fld(true, true) === true
-@test checked_fld(false, true) === false
-@test_throws DivideError checked_fld(true, false)
-@test checked_mod(true, true) === false
-@test checked_mod(false, true) === false
-@test_throws DivideError checked_mod(true, false)
-@test checked_cld(true, true) === true
-@test checked_cld(false, true) === false
-@test_throws DivideError checked_cld(true, false)
+    @test checked_div(true, true) === true
+    @test checked_div(false, true) === false
+    @test_throws DivideError checked_div(true, false)
+    @test checked_rem(true, true) === false
+    @test checked_rem(false, true) === false
+    @test_throws DivideError checked_rem(true, false)
+    @test checked_fld(true, true) === true
+    @test checked_fld(false, true) === false
+    @test_throws DivideError checked_fld(true, false)
+    @test checked_mod(true, true) === false
+    @test checked_mod(false, true) === false
+    @test_throws DivideError checked_mod(true, false)
+    @test checked_cld(true, true) === true
+    @test checked_cld(false, true) === false
+    @test_throws DivideError checked_cld(true, false)
+end
+@testset "BigInt" begin
+    @test checked_abs(BigInt(-1)) == BigInt(1)
+    @test checked_abs(BigInt(1)) == BigInt(1)
+    @test checked_neg(BigInt(-1)) == BigInt(1)
+    @test checked_neg(BigInt(1)) == BigInt(-1)
+end
 
-# BigInt
-@test checked_abs(BigInt(-1)) == BigInt(1)
-@test checked_abs(BigInt(1)) == BigInt(1)
-@test checked_neg(BigInt(-1)) == BigInt(1)
-@test checked_neg(BigInt(1)) == BigInt(-1)
+@testset "Additional tests" begin
+    # test promotions
+    @test checked_add(UInt(4), UInt8(3)) === UInt(7)
+    @test checked_sub(UInt(4), UInt8(3)) === UInt(1)
+    @test checked_mul(UInt(4), UInt8(3)) === UInt(12)
+    @test checked_div(UInt(4), UInt8(2)) === UInt(2)
+    @test checked_mod(UInt(4), UInt8(2)) === UInt(0)
+    @test checked_rem(UInt(5), UInt8(2)) === UInt(1)
+    @test checked_fld(UInt(5), UInt8(1)) === UInt(5)
+    @test checked_cld(UInt(5), UInt8(1)) === UInt(5)
 
-# Additional tests
+    @test checked_sub(UInt(4), UInt(3)) === UInt(1)
+    @test_throws OverflowError checked_sub(UInt(5), UInt(6))
+    @test checked_mul(UInt(4), UInt(3)) === UInt(12)
 
-@test checked_sub(UInt(4), UInt(3)) === UInt(1)
-@test_throws OverflowError checked_sub(UInt(5), UInt(6))
-@test checked_mul(UInt(4), UInt(3)) === UInt(12)
+    @test checked_sub(Int128(-1),Int128(-2)) === Int128(1)
 
-@test checked_sub(Int128(-1),Int128(-2)) === Int128(1)
+    @test_throws OverflowError checked_mul(UInt32(2)^30, UInt32(2)^2)
+    @test_throws OverflowError checked_mul(UInt64(2)^62, UInt64(2)^2)
 
-@test_throws OverflowError checked_mul(UInt32(2)^30, UInt32(2)^2)
-@test_throws OverflowError checked_mul(UInt64(2)^62, UInt64(2)^2)
+    @test checked_add(UInt128(1), UInt128(2)) === UInt128(3)
+    @test_throws OverflowError checked_add(UInt128(2)^127, UInt128(2)^127)
 
-@test checked_add(UInt128(1), UInt128(2)) === UInt128(3)
-@test_throws OverflowError checked_add(UInt128(2)^127, UInt128(2)^127)
+    @test checked_sub(UInt128(2), UInt128(1)) === UInt128(1)
+    @test_throws OverflowError checked_sub(UInt128(3), UInt128(4))
 
-@test checked_sub(UInt128(2), UInt128(1)) === UInt128(1)
-@test_throws OverflowError checked_sub(UInt128(3), UInt128(4))
+    @test checked_mul(UInt128(3), UInt128(4)) === UInt128(12)
+    @test_throws OverflowError checked_mul(UInt128(2)^127, UInt128(2))
 
-@test checked_mul(UInt128(3), UInt128(4)) === UInt128(12)
-@test_throws OverflowError checked_mul(UInt128(2)^127, UInt128(2))
+end

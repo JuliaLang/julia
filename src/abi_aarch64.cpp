@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 //===----------------------------------------------------------------------===//
 //
@@ -45,7 +45,7 @@ Type *get_llvm_vectype(jl_datatype_t *dt) const
     // the homogeneity check.
     jl_datatype_t *ft0 = (jl_datatype_t*)jl_field_type(dt, 0);
     // `ft0` should be a `VecElement` type and the true element type
-    // should be a `bitstype`
+    // should be a primitive type
     if (ft0->name != jl_vecelement_typename ||
         ((jl_datatype_t*)jl_field_type(ft0, 0))->layout->nfields)
         return nullptr;
@@ -58,6 +58,7 @@ Type *get_llvm_vectype(jl_datatype_t *dt) const
     return lltype;
 }
 
+#define jl_is_floattype(v)   jl_subtype(v,(jl_value_t*)jl_floatingpoint_type)
 Type *get_llvm_fptype(jl_datatype_t *dt) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
@@ -87,7 +88,7 @@ Type *get_llvm_fptype(jl_datatype_t *dt) const
 Type *get_llvm_fp_or_vectype(jl_datatype_t *dt) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
-    if (dt->mutabl || !dt->layout->pointerfree || dt->layout->haspadding)
+    if (dt->mutabl || dt->layout->npointers || dt->layout->haspadding)
         return nullptr;
     return dt->layout->nfields ? get_llvm_vectype(dt) : get_llvm_fptype(dt);
 }
@@ -179,7 +180,7 @@ Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele) const
     // uniquely addressable members.
     // Maximum HFA and HVA size is 64 bytes (4 x fp128 or 16bytes vector)
     size_t dsz = jl_datatype_size(dt);
-    if (dsz > 64 || !dt->layout || !dt->layout->pointerfree || dt->layout->haspadding)
+    if (dsz > 64 || !dt->layout || dt->layout->npointers || dt->layout->haspadding)
         return NULL;
     nele = 0;
     ElementType eltype;
@@ -188,14 +189,14 @@ Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele) const
     return NULL;
 }
 
-void needPassByRef(jl_datatype_t *dt, bool *byRef, bool *inReg) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 {
     // B.2
     //   If the argument type is an HFA or an HVA, then the argument is used
     //   unmodified.
     size_t size;
     if (isHFAorHVA(dt, size))
-        return;
+        return false;
     // B.3
     //   If the argument type is a Composite Type that is larger than 16 bytes,
     //   then the argument is copied to memory allocated by the caller and the
@@ -203,7 +204,7 @@ void needPassByRef(jl_datatype_t *dt, bool *byRef, bool *inReg) override
     // We only check for the total size and not whether it is a composite type
     // since there's no corresponding C type and we just treat such large
     // bitstype as a composite type of the right size.
-    *byRef = jl_datatype_size(dt) > 16;
+    return jl_datatype_size(dt) > 16;
     // B.4
     //   If the argument type is a Composite Type then the size of the argument
     //   is rounded up to the nearest multiple of 8 bytes.
@@ -317,7 +318,7 @@ Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
     // with weird size as a black box composite type.
     // The type can fit in 8 x 8 bytes since it is handled by
     // need_pass_by_ref otherwise.
-    // 0-size types (Void) won't be rewritten and that is what we want
+    // 0-size types (Nothing) won't be rewritten and that is what we want
     assert(jl_datatype_size(dt) <= 16); // Should be pass by reference otherwise
     *rewrite_len = (jl_datatype_size(dt) + 7) >> 3;
     // Rewrite to [n x Int64] where n is the **size in dword**

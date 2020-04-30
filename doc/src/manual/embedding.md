@@ -1,0 +1,553 @@
+# Embedding Julia
+
+As we have seen in [Calling C and Fortran Code](@ref), Julia has a simple and efficient way to
+call functions written in C. But there are situations where the opposite is needed: calling Julia
+function from C code. This can be used to integrate Julia code into a larger C/C++ project, without
+the need to rewrite everything in C/C++. Julia has a C API to make this possible. As almost all
+programming languages have some way to call C functions, the Julia C API can also be used to build
+further language bridges (e.g. calling Julia from Python or C#).
+
+## High-Level Embedding
+
+__Note__: This section covers embedding Julia code in C on Unix-like operating systems. For doing
+this on Windows, please see the section following this.
+
+We start with a simple C program that initializes Julia and calls some Julia code:
+
+```c
+#include <julia.h>
+JULIA_DEFINE_FAST_TLS() // only define this once, in an executable (not in a shared library) if you want fast code.
+
+int main(int argc, char *argv[])
+{
+    /* required: setup the Julia context */
+    jl_init();
+
+    /* run Julia commands */
+    jl_eval_string("print(sqrt(2.0))");
+
+    /* strongly recommended: notify Julia that the
+         program is about to terminate. this allows
+         Julia time to cleanup pending write requests
+         and run all finalizers
+    */
+    jl_atexit_hook(0);
+    return 0;
+}
+```
+
+In order to build this program you have to put the path to the Julia header into the include path
+and link against `libjulia`. For instance, when Julia is installed to `$JULIA_DIR`, one can compile
+the above test program `test.c` with `gcc` using:
+
+```
+gcc -o test -fPIC -I$JULIA_DIR/include/julia -L$JULIA_DIR/lib -Wl,-rpath,$JULIA_DIR/lib test.c -ljulia
+```
+
+Alternatively, look at the `embedding.c` program in the Julia source tree in the `test/embedding/` folder.
+The file `ui/repl.c` program is another simple example of how to set `jl_options` options while
+linking against `libjulia`.
+
+The first thing that has to be done before calling any other Julia C function is to initialize
+Julia. This is done by calling `jl_init`, which tries to automatically determine Julia's install
+location. If you need to specify a custom location, or specify which system image to load,
+use `jl_init_with_image` instead.
+
+The second statement in the test program evaluates a Julia statement using a call to `jl_eval_string`.
+
+Before the program terminates, it is strongly recommended to call `jl_atexit_hook`.  The above
+example program calls this before returning from `main`.
+
+!!! note
+    Currently, dynamically linking with the `libjulia` shared library requires passing the `RTLD_GLOBAL`
+    option. In Python, this looks like:
+
+    ```
+    >>> julia=CDLL('./libjulia.dylib',RTLD_GLOBAL)
+    >>> julia.jl_init.argtypes = []
+    >>> julia.jl_init()
+    250593296
+    ```
+
+!!! note
+    If the julia program needs to access symbols from the main executable, it may be necessary to
+    add `-Wl,--export-dynamic` linker flag at compile time on Linux in addition to the ones generated
+    by `julia-config.jl` described below. This is not necessary when compiling a shared library.
+
+### Using julia-config to automatically determine build parameters
+
+The script `julia-config.jl` was created to aid in determining what build parameters are required
+by a program that uses embedded Julia.  This script uses the build parameters and system configuration
+of the particular Julia distribution it is invoked by to export the necessary compiler flags for
+an embedding program to interact with that distribution.  This script is located in the Julia
+shared data directory.
+
+#### Example
+
+```c
+#include <julia.h>
+
+int main(int argc, char *argv[])
+{
+    jl_init();
+    (void)jl_eval_string("println(sqrt(2.0))");
+    jl_atexit_hook(0);
+    return 0;
+}
+```
+
+#### On the command line
+
+A simple use of this script is from the command line.  Assuming that `julia-config.jl` is located
+in `/usr/local/julia/share/julia`, it can be invoked on the command line directly and takes any
+combination of 3 flags:
+
+```
+/usr/local/julia/share/julia/julia-config.jl
+Usage: julia-config [--cflags|--ldflags|--ldlibs]
+```
+
+If the above example source is saved in the file `embed_example.c`, then the following command
+will compile it into a running program on Linux and Windows (MSYS2 environment), or if on OS/X,
+then substitute `clang` for `gcc`.:
+
+```
+/usr/local/julia/share/julia/julia-config.jl --cflags --ldflags --ldlibs | xargs gcc embed_example.c
+```
+
+#### Use in Makefiles
+
+But in general, embedding projects will be more complicated than the above, and so the following
+allows general makefile support as well – assuming GNU make because of the use of the **shell**
+macro expansions.  Additionally, though many times `julia-config.jl` may be found in the directory
+`/usr/local`, this is not necessarily the case, but Julia can be used to locate `julia-config.jl`
+too, and the makefile can be used to take advantage of that.  The above example is extended to
+use a Makefile:
+
+```
+JL_SHARE = $(shell julia -e 'print(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia"))')
+CFLAGS   += $(shell $(JL_SHARE)/julia-config.jl --cflags)
+CXXFLAGS += $(shell $(JL_SHARE)/julia-config.jl --cflags)
+LDFLAGS  += $(shell $(JL_SHARE)/julia-config.jl --ldflags)
+LDLIBS   += $(shell $(JL_SHARE)/julia-config.jl --ldlibs)
+
+all: embed_example
+```
+
+Now the build command is simply `make`.
+
+## High-Level Embedding on Windows with Visual Studio
+
+If the `JULIA_DIR` environment variable hasn't been setup, add it using the System panel before
+starting Visual Studio. The `bin` folder under JULIA_DIR should be on the system PATH.
+
+We start by opening Visual Studio and creating a new Console Application project. To the 'stdafx.h'
+header file, add the following lines at the end:
+
+```c
+#include <julia.h>
+```
+
+Then, replace the main() function in the project with this code:
+
+```c
+int main(int argc, char *argv[])
+{
+    /* required: setup the Julia context */
+    jl_init();
+
+    /* run Julia commands */
+    jl_eval_string("print(sqrt(2.0))");
+
+    /* strongly recommended: notify Julia that the
+         program is about to terminate. this allows
+         Julia time to cleanup pending write requests
+         and run all finalizers
+    */
+    jl_atexit_hook(0);
+    return 0;
+}
+```
+
+The next step is to set up the project to find the Julia include files and the libraries. It's important to
+know whether the Julia installation is 32- or 64-bits. Remove any platform configuration that doesn't correspond
+to the Julia installation before proceeding.
+
+Using the project Properties dialog, go to `C/C++` | `General` and add `$(JULIA_DIR)\include\julia\` to the
+Additional Include Directories property. Then, go to the `Linker` | `General` section and add `$(JULIA_DIR)\lib`
+to the Additional Library Directories property. Finally, under `Linker` | `Input`, add `libjulia.dll.a;libopenlibm.dll.a;`
+to the list of libraries.
+
+At this point, the project should build and run.
+
+## Converting Types
+
+Real applications will not just need to execute expressions, but also return their values to the
+host program. `jl_eval_string` returns a `jl_value_t*`, which is a pointer to a heap-allocated
+Julia object. Storing simple data types like [`Float64`](@ref) in this way is called `boxing`,
+and extracting the stored primitive data is called `unboxing`. Our improved sample program that
+calculates the square root of 2 in Julia and reads back the result in C looks as follows:
+
+```c
+jl_value_t *ret = jl_eval_string("sqrt(2.0)");
+
+if (jl_typeis(ret, jl_float64_type)) {
+    double ret_unboxed = jl_unbox_float64(ret);
+    printf("sqrt(2.0) in C: %e \n", ret_unboxed);
+}
+else {
+    printf("ERROR: unexpected return type from sqrt(::Float64)\n");
+}
+```
+
+In order to check whether `ret` is of a specific Julia type, we can use the
+`jl_isa`, `jl_typeis`, or `jl_is_...` functions.
+By typing `typeof(sqrt(2.0))` into the Julia shell we can see that the return type is
+[`Float64`](@ref) (`double` in C). To convert the boxed Julia value into a C double the
+`jl_unbox_float64` function is used in the above code snippet.
+
+Corresponding `jl_box_...` functions are used to convert the other way:
+
+```c
+jl_value_t *a = jl_box_float64(3.0);
+jl_value_t *b = jl_box_float32(3.0f);
+jl_value_t *c = jl_box_int32(3);
+```
+
+As we will see next, boxing is required to call Julia functions with specific arguments.
+
+## Calling Julia Functions
+
+While `jl_eval_string` allows C to obtain the result of a Julia expression, it does not allow
+passing arguments computed in C to Julia. For this you will need to invoke Julia functions directly,
+using `jl_call`:
+
+```c
+jl_function_t *func = jl_get_function(jl_base_module, "sqrt");
+jl_value_t *argument = jl_box_float64(2.0);
+jl_value_t *ret = jl_call1(func, argument);
+```
+
+In the first step, a handle to the Julia function `sqrt` is retrieved by calling `jl_get_function`.
+The first argument passed to `jl_get_function` is a pointer to the `Base` module in which `sqrt`
+is defined. Then, the double value is boxed using `jl_box_float64`. Finally, in the last step,
+the function is called using `jl_call1`. `jl_call0`, `jl_call2`, and `jl_call3` functions also
+exist, to conveniently handle different numbers of arguments. To pass more arguments, use `jl_call`:
+
+```
+jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs)
+```
+
+Its second argument `args` is an array of `jl_value_t*` arguments and `nargs` is the number of
+arguments.
+
+## Memory Management
+
+As we have seen, Julia objects are represented in C as pointers. This raises the question of who
+is responsible for freeing these objects.
+
+Typically, Julia objects are freed by a garbage collector (GC), but the GC does not automatically
+know that we are holding a reference to a Julia value from C. This means the GC can free objects
+out from under you, rendering pointers invalid.
+
+The GC can only run when Julia objects are allocated. Calls like `jl_box_float64` perform allocation,
+and allocation might also happen at any point in running Julia code. However, it is generally
+safe to use pointers in between `jl_...` calls. But in order to make sure that values can survive
+`jl_...` calls, we have to tell Julia that we still hold a reference to Julia
+[root](https://www.cs.purdue.edu/homes/hosking/690M/p611-fenichel.pdf) values, a process
+called "GC rooting". Rooting a value will ensure that the garbage collector does not accidentally
+identify this value as unused and free the memory backing that value. This can be done using the
+`JL_GC_PUSH` macros:
+
+```c
+jl_value_t *ret = jl_eval_string("sqrt(2.0)");
+JL_GC_PUSH1(&ret);
+// Do something with ret
+JL_GC_POP();
+```
+
+The `JL_GC_POP` call releases the references established by the previous `JL_GC_PUSH`. Note that
+`JL_GC_PUSH` stores references on the C stack, so it must be exactly paired with a `JL_GC_POP`
+before the scope is exited. That is, before the function returns, or control flow otherwise
+leaves the block in which the `JL_GC_PUSH` was invoked.
+
+Several Julia values can be pushed at once using the `JL_GC_PUSH2` , `JL_GC_PUSH3` , `JL_GC_PUSH4` ,
+`JL_GC_PUSH5` , and `JL_GC_PUSH6` macros. To push an array of Julia values one can use the
+`JL_GC_PUSHARGS` macro, which can be used as follows:
+
+```c
+jl_value_t **args;
+JL_GC_PUSHARGS(args, 2); // args can now hold 2 `jl_value_t*` objects
+args[0] = some_value;
+args[1] = some_other_value;
+// Do something with args (e.g. call jl_... functions)
+JL_GC_POP();
+```
+
+Each scope must have only one call to `JL_GC_PUSH*`. Hence, if all variables cannot be pushed once by
+a single call to `JL_GC_PUSH*`, or if there are more than 6 variables to be pushed and using an array
+of arguments is not an option, then one can use inner blocks:
+
+```c
+jl_value_t *ret1 = jl_eval_string("sqrt(2.0)");
+JL_GC_PUSH1(&ret1);
+jl_value_t *ret2 = 0;
+{
+    jl_function_t *func = jl_get_function(jl_base_module, "exp");
+    ret2 = jl_call1(func, ret1);
+    JL_GC_PUSH1(&ret2);
+    // Do something with ret2.
+    JL_GC_POP();    // This pops ret2.
+}
+JL_GC_POP();    // This pops ret1.
+```
+
+If it is required to hold the pointer to a variable between functions (or block scopes), then it is
+not possible to use `JL_GC_PUSH*`. In this case, it is necessary to create and keep a reference to the
+variable in the Julia global scope. One simple way to accomplish this is to use a global `IdDict` that
+will hold the references, avoiding deallocation by the GC. However, this method will only work
+properly with mutable types.
+
+```c
+// This functions shall be executed only once, during the initialization.
+jl_value_t* refs = jl_eval_string("refs = IdDict()");
+jl_function_t* setindex = jl_get_function(jl_base_module, "setindex!");
+
+...
+
+// `var` is the variable we want to protect between function calls.
+jl_value_t* var = 0;
+
+...
+
+// `var` is a `Vector{Float64}`, which is mutable.
+var = jl_eval_string("[sqrt(2.0); sqrt(4.0); sqrt(6.0)]");
+
+// To protect `var`, add its reference to `refs`.
+jl_call3(setindex, refs, var, var);
+```
+
+If the variable is immutable, then it needs to be wrapped in an equivalent mutable container or,
+preferably, in a `RefValue{Any}` before it is pushed to `IdDict`. In this approach, the container has
+to be created or filled in via C code using, for example, the function `jl_new_struct`. If the
+container is created by `jl_call*`, then you will need to reload the pointer to be used in C code.
+
+```c
+// This functions shall be executed only once, during the initialization.
+jl_value_t* refs = jl_eval_string("refs = IdDict()");
+jl_function_t* setindex = jl_get_function(jl_base_module, "setindex!");
+jl_datatype_t* reft = (jl_datatype_t*)jl_eval_string("Base.RefValue{Any}");
+
+...
+
+// `var` is the variable we want to protect between function calls.
+jl_value_t* var = 0;
+
+...
+
+// `var` is a `Float64`, which is immutable.
+var = jl_eval_string("sqrt(2.0)");
+
+// Protect `var` until we add its reference to `refs`.
+JL_GC_PUSH1(&var);
+
+// Wrap `var` in `RefValue{Any}` and push to `refs` to protect it.
+jl_value_t* rvar = jl_new_struct(reft, var);
+JL_GC_POP();
+
+jl_call3(setindex, refs, rvar, rvar);
+```
+
+The GC can be allowed to deallocate a variable by removing the reference to it from `refs` using
+the function `delete!`, provided that no other reference to the variable is kept anywhere:
+
+```c
+jl_function_t* delete = jl_get_function(jl_base_module, "delete!");
+jl_call2(delete, refs, rvar);
+```
+
+As an alternative for very simple cases, it is possible to just create a global container of type
+`Vector{Any}` and fetch the elements from that when necessary, or even to create one global variable
+per pointer using
+
+```c
+jl_set_global(jl_main_module, jl_symbol("var"), var);
+```
+
+### Updating fields of GC-managed objects
+
+The garbage collector operates under the assumption that it is aware of every old-generation
+object pointing to a young-generation one. Any time a pointer is updated breaking that assumption,
+it must be signaled to the collector with the `jl_gc_wb` (write barrier) function like so:
+
+```c
+jl_value_t *parent = some_old_value, *child = some_young_value;
+((some_specific_type*)parent)->field = child;
+jl_gc_wb(parent, child);
+```
+
+It is in general impossible to predict which values will be old at runtime, so the write barrier
+must be inserted after all explicit stores. One notable exception is if the `parent` object was
+just allocated and garbage collection was not run since then. Remember that most `jl_...` functions
+can sometimes invoke garbage collection.
+
+The write barrier is also necessary for arrays of pointers when updating their data directly.
+For example:
+
+```c
+jl_array_t *some_array = ...; // e.g. a Vector{Any}
+void **data = (void**)jl_array_data(some_array);
+jl_value_t *some_value = ...;
+data[0] = some_value;
+jl_gc_wb(some_array, some_value);
+```
+
+### Manipulating the Garbage Collector
+
+There are some functions to control the GC. In normal use cases, these should not be necessary.
+
+| Function             | Description                                  |
+|:-------------------- |:-------------------------------------------- |
+| `jl_gc_collect()`    | Force a GC run                               |
+| `jl_gc_enable(0)`    | Disable the GC, return previous state as int |
+| `jl_gc_enable(1)`    | Enable the GC,  return previous state as int |
+| `jl_gc_is_enabled()` | Return current state as int                  |
+
+## Working with Arrays
+
+Julia and C can share array data without copying. The next example will show how this works.
+
+Julia arrays are represented in C by the datatype `jl_array_t*`. Basically, `jl_array_t` is a
+struct that contains:
+
+  * Information about the datatype
+  * A pointer to the data block
+  * Information about the sizes of the array
+
+To keep things simple, we start with a 1D array. Creating an array containing Float64 elements
+of length 10 is done by:
+
+```c
+jl_value_t* array_type = jl_apply_array_type((jl_value_t*)jl_float64_type, 1);
+jl_array_t* x          = jl_alloc_array_1d(array_type, 10);
+```
+
+Alternatively, if you have already allocated the array you can generate a thin wrapper around
+its data:
+
+```c
+double *existingArray = (double*)malloc(sizeof(double)*10);
+jl_array_t *x = jl_ptr_to_array_1d(array_type, existingArray, 10, 0);
+```
+
+The last argument is a boolean indicating whether Julia should take ownership of the data. If
+this argument is non-zero, the GC will call `free` on the data pointer when the array is no longer
+referenced.
+
+In order to access the data of x, we can use `jl_array_data`:
+
+```c
+double *xData = (double*)jl_array_data(x);
+```
+
+Now we can fill the array:
+
+```c
+for(size_t i=0; i<jl_array_len(x); i++)
+    xData[i] = i;
+```
+
+Now let us call a Julia function that performs an in-place operation on `x`:
+
+```c
+jl_function_t *func = jl_get_function(jl_base_module, "reverse!");
+jl_call1(func, (jl_value_t*)x);
+```
+
+By printing the array, one can verify that the elements of `x` are now reversed.
+
+### Accessing Returned Arrays
+
+If a Julia function returns an array, the return value of `jl_eval_string` and `jl_call` can be
+cast to a `jl_array_t*`:
+
+```c
+jl_function_t *func  = jl_get_function(jl_base_module, "reverse");
+jl_array_t *y = (jl_array_t*)jl_call1(func, (jl_value_t*)x);
+```
+
+Now the content of `y` can be accessed as before using `jl_array_data`. As always, be sure to
+keep a reference to the array while it is in use.
+
+### Multidimensional Arrays
+
+Julia's multidimensional arrays are stored in memory in column-major order. Here is some code
+that creates a 2D array and accesses its properties:
+
+```c
+// Create 2D array of float64 type
+jl_value_t *array_type = jl_apply_array_type(jl_float64_type, 2);
+jl_array_t *x  = jl_alloc_array_2d(array_type, 10, 5);
+
+// Get array pointer
+double *p = (double*)jl_array_data(x);
+// Get number of dimensions
+int ndims = jl_array_ndims(x);
+// Get the size of the i-th dim
+size_t size0 = jl_array_dim(x,0);
+size_t size1 = jl_array_dim(x,1);
+
+// Fill array with data
+for(size_t i=0; i<size1; i++)
+    for(size_t j=0; j<size0; j++)
+        p[j + size0*i] = i + j;
+```
+
+Notice that while Julia arrays use 1-based indexing, the C API uses 0-based indexing (for example
+in calling `jl_array_dim`) in order to read as idiomatic C code.
+
+## Exceptions
+
+Julia code can throw exceptions. For example, consider:
+
+```c
+jl_eval_string("this_function_does_not_exist()");
+```
+
+This call will appear to do nothing. However, it is possible to check whether an exception was
+thrown:
+
+```c
+if (jl_exception_occurred())
+    printf("%s \n", jl_typeof_str(jl_exception_occurred()));
+```
+
+If you are using the Julia C API from a language that supports exceptions (e.g. Python, C#, C++),
+it makes sense to wrap each call into `libjulia` with a function that checks whether an exception
+was thrown, and then rethrows the exception in the host language.
+
+### Throwing Julia Exceptions
+
+When writing Julia callable functions, it might be necessary to validate arguments and throw exceptions
+to indicate errors. A typical type check looks like:
+
+```c
+if (!jl_typeis(val, jl_float64_type)) {
+    jl_type_error(function_name, (jl_value_t*)jl_float64_type, val);
+}
+```
+
+General exceptions can be raised using the functions:
+
+```c
+void jl_error(const char *str);
+void jl_errorf(const char *fmt, ...);
+```
+
+`jl_error` takes a C string, and `jl_errorf` is called like `printf`:
+
+```c
+jl_errorf("argument x = %d is too large", x);
+```
+
+where in this example `x` is assumed to be an integer.

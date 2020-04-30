@@ -6,13 +6,14 @@ $(eval $(call git-external,utf8proc,UTF8PROC,,,$(BUILDDIR)))
 UTF8PROC_OBJ_LIB    := $(build_libdir)/libutf8proc.a
 UTF8PROC_OBJ_HEADER := $(build_includedir)/utf8proc.h
 UTF8PROC_CFLAGS     := -O2
-UTF8PROC_MFLAGS     := CC="$(CC) $(DEPS_CFLAGS)" CFLAGS="$(CFLAGS) $(UTF8PROC_CFLAGS)" PICFLAG="$(fPIC)" AR="$(AR)"
+UTF8PROC_MFLAGS     := CC="$(CC)" CFLAGS="$(CFLAGS) $(UTF8PROC_CFLAGS)" PICFLAG="$(fPIC)" AR="$(AR)"
+UTF8PROC_BUILDDIR   := $(BUILDDIR)/$(UTF8PROC_SRC_DIR)
 
-$(BUILDDIR)/$(UTF8PROC_SRC_DIR)/build-compiled: $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/source-extracted
+$(UTF8PROC_BUILDDIR)/build-compiled: $(UTF8PROC_BUILDDIR)/source-extracted
 	$(MAKE) -C $(dir $<) $(UTF8PROC_MFLAGS) libutf8proc.a
 	echo 1 > $@
 
-$(BUILDDIR)/$(UTF8PROC_SRC_DIR)/build-checked: $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/build-compiled
+$(UTF8PROC_BUILDDIR)/build-checked: $(UTF8PROC_BUILDDIR)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) $(UTF8PROC_MFLAGS) check
 endif
@@ -32,9 +33,9 @@ clean-utf8proc:
 	-$(MAKE) -C $(BUILDDIR)/$(UTF8PROC_SRC_DIR) clean
 
 get-utf8proc: $(UTF8PROC_SRC_FILE)
-extract-utf8proc: $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/source-extracted
+extract-utf8proc: $(UTF8PROC_BUILDDIR)/source-extracted
 configure-utf8proc: extract-utf8proc
-compile-utf8proc: $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/build-compiled
+compile-utf8proc: $(UTF8PROC_BUILDDIR)/build-compiled
 # utf8proc tests disabled since they require a download
 fastcheck-utf8proc: #check-utf8proc
-check-utf8proc: $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/build-checked
+check-utf8proc: $(UTF8PROC_BUILDDIR)/build-checked

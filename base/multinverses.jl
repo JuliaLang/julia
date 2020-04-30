@@ -1,9 +1,9 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module MultiplicativeInverses
 
 import Base: div, divrem, rem, unsigned
-using  Base: LinearFast, LinearSlow, tail
+using  Base: IndexLinear, IndexCartesian, tail
 export multiplicativeinverse
 
 unsigned(::Type{Int8}) = UInt8
@@ -11,9 +11,9 @@ unsigned(::Type{Int16}) = UInt16
 unsigned(::Type{Int32}) = UInt32
 unsigned(::Type{Int64}) = UInt64
 unsigned(::Type{Int128}) = UInt128
-unsigned{T<:Unsigned}(::Type{T}) = T
+unsigned(::Type{T}) where {T<:Unsigned} = T
 
-abstract MultiplicativeInverse{T}
+abstract type  MultiplicativeInverse{T} end
 
 # Computes integer division by a constant using multiply, add, and bitshift.
 
@@ -43,13 +43,13 @@ abstract MultiplicativeInverse{T}
 #
 # Further details can be found in Hacker's Delight, Chapter 10.
 
-immutable SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
+struct SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
     divisor::T
     multiplier::T
     addmul::Int8
     shift::UInt8
 
-    function SignedMultiplicativeInverse(d::T)
+    function SignedMultiplicativeInverse{T}(d::T) where T<:Signed
         d == 0 && throw(ArgumentError("cannot compute magic for d == $d"))
         signedmin = unsigned(typemin(T))
         UT = unsigned(T)
@@ -88,13 +88,13 @@ immutable SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
 end
 SignedMultiplicativeInverse(x::Signed) = SignedMultiplicativeInverse{typeof(x)}(x)
 
-immutable UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
+struct UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
     divisor::T
     multiplier::T
     add::Bool
     shift::UInt8
 
-    function UnsignedMultiplicativeInverse(d::T)
+    function UnsignedMultiplicativeInverse{T}(d::T) where T<:Unsigned
         d == 0 && throw(ArgumentError("cannot compute magic for d == $d"))
         u2 = convert(T, 2)
         add = false
@@ -134,21 +134,21 @@ immutable UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
 end
 UnsignedMultiplicativeInverse(x::Unsigned) = UnsignedMultiplicativeInverse{typeof(x)}(x)
 
-function div{T}(a::T, b::SignedMultiplicativeInverse{T})
-    x = ((widen(a)*b.multiplier) >>> sizeof(a)*8) % T
+function div(a::T, b::SignedMultiplicativeInverse{T}) where T
+    x = ((widen(a)*b.multiplier) >>> (sizeof(a)*8)) % T
     x += (a*b.addmul) % T
     ifelse(abs(b.divisor) == 1, a*b.divisor, (signbit(x) + (x >> b.shift)) % T)
 end
-function div{T}(a::T, b::UnsignedMultiplicativeInverse{T})
-    x = ((widen(a)*b.multiplier) >>> sizeof(a)*8) % T
+function div(a::T, b::UnsignedMultiplicativeInverse{T}) where T
+    x = ((widen(a)*b.multiplier) >>> (sizeof(a)*8)) % T
     x = ifelse(b.add, convert(T, convert(T, (convert(T, a - x) >>> 1)) + x), x)
     ifelse(b.divisor == 1, a, x >>> b.shift)
 end
 
-rem{T}(a::T, b::MultiplicativeInverse{T}) =
+rem(a::T, b::MultiplicativeInverse{T}) where {T} =
     a - div(a, b)*b.divisor
 
-function divrem{T}(a::T, b::MultiplicativeInverse{T})
+function divrem(a::T, b::MultiplicativeInverse{T}) where T
     d = div(a, b)
     (d, a - d*b.divisor)
 end

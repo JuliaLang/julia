@@ -1,15 +1,15 @@
 ## patchelf ##
 
-$(SRCDIR)/srccache/patchelf-$(PATCHELF_VER).tar.gz: | $(SRCDIR)/srccache
-	$(JLDOWNLOAD) $@ http://nixos.org/releases/patchelf/patchelf-$(PATCHELF_VER)/patchelf-$(PATCHELF_VER).tar.gz
+$(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.gz: | $(SRCCACHE)
+	$(JLDOWNLOAD) $@ https://nixos.org/releases/patchelf/patchelf-$(PATCHELF_VER)/patchelf-$(PATCHELF_VER).tar.gz
 
-$(SRCDIR)/srccache/patchelf-$(PATCHELF_VER)/source-extracted: $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER).tar.gz
+$(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted: $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.gz
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) zxf $<
-	touch -c $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER)/configure # old target
+	touch -c $(SRCCACHE)/patchelf-$(PATCHELF_VER)/configure # old target
 	echo 1 > $@
 
-$(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER)/source-extracted | $(LIBCXX_DEPENDENCY)
+$(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted | $(LIBCXX_DEPENDENCY)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) LDFLAGS="$(CXXLDFLAGS)" CPPFLAGS="$(CPPFLAGS)"
@@ -36,13 +36,13 @@ clean-patchelf:
 	-$(MAKE) -C $(BUILDDIR)/patchelf-$(PATCHELF_VER) clean
 
 distclean-patchelf:
-	-rm -rf $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER).tar.gz \
-		$(SRCDIR)/srccache/patchelf-$(PATCHELF_VER) \
+	-rm -rf $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.gz \
+		$(SRCCACHE)/patchelf-$(PATCHELF_VER) \
 		$(BUILDDIR)/patchelf-$(PATCHELF_VER)
 
 
-get-patchelf: $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER).tar.gz
-extract-patchelf: $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER)/source-extracted
+get-patchelf: $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.gz
+extract-patchelf: $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted
 configure-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured
 compile-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-compiled
 check-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-checked

@@ -8,27 +8,30 @@ ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/mbedtls
 endif
 
+ifneq ($(USE_BINARYBUILDER_CURL),1)
 CURL_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
 
-$(SRCDIR)/srccache/curl-$(CURL_VER).tar.bz2: | $(SRCDIR)/srccache
+# On older Linuces (those that use OpenSSL < 1.1) we include `libpthread` explicitly.
+# It doesn't hurt to include it explicitly elsewhere, so we do so.
+ifeq ($(OS),Linux)
+CURL_LDFLAGS += -lpthread
+endif
+
+$(SRCCACHE)/curl-$(CURL_VER).tar.bz2: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://curl.haxx.se/download/curl-$(CURL_VER).tar.bz2
 
-$(SRCDIR)/srccache/curl-$(CURL_VER)/source-extracted: $(SRCDIR)/srccache/curl-$(CURL_VER).tar.bz2
+$(SRCCACHE)/curl-$(CURL_VER)/source-extracted: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) jxf $(notdir $<)
-	touch -c $(SRCDIR)/srccache/curl-$(CURL_VER)/configure # old target
+	touch -c $(SRCCACHE)/curl-$(CURL_VER)/configure # old target
 	echo 1 > $@
 
-$(SRCDIR)/srccache/curl-$(CURL_VER)/curl-mbedtls-includes.patch-applied: $(SRCDIR)/srccache/curl-$(CURL_VER)/source-extracted
-	cd $(SRCDIR)/srccache/curl-$(CURL_VER) && patch -p1 -f < $(SRCDIR)/patches/curl-mbedtls-includes.patch
-	echo 1 > $@
-
-$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCDIR)/srccache/curl-$(CURL_VER)/source-extracted $(SRCDIR)/srccache/curl-$(CURL_VER)/curl-mbedtls-includes.patch-applied
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) --includedir=$(build_includedir) \
 		--without-ssl --without-gnutls --without-gssapi --without-zlib \
-		--without-libidn --without-libmetalink --without-librtmp \
+		--without-libidn --without-libidn2 --without-libmetalink --without-librtmp \
 		--without-nghttp2 --without-nss --without-polarssl \
 		--without-spnego --without-libpsl --disable-ares \
 		--disable-ldap --disable-ldaps --without-zsh-functions-dir \
@@ -56,11 +59,19 @@ clean-curl:
 	-$(MAKE) -C $(BUILDDIR)/curl-$(CURL_VER) clean
 
 distclean-curl:
-	-rm -rf $(SRCDIR)/srccache/curl-$(CURL_VER).tar.bz2 $(SRCDIR)/srccache/curl-$(CURL_VER) $(BUILDDIR)/curl-$(CURL_VER)
+	-rm -rf $(SRCCACHE)/curl-$(CURL_VER).tar.bz2 $(SRCCACHE)/curl-$(CURL_VER) $(BUILDDIR)/curl-$(CURL_VER)
 
-get-curl: $(SRCDIR)/srccache/curl-$(CURL_VER).tar.bz2
-extract-curl: $(SRCDIR)/srccache/curl-$(CURL_VER)/source-extracted
+get-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
+extract-curl: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
 configure-curl: $(BUILDDIR)/curl-$(CURL_VER)/build-configured
 compile-curl: $(BUILDDIR)/curl-$(CURL_VER)/build-compiled
 fastcheck-curl: #none
 check-curl: $(BUILDDIR)/curl-$(CURL_VER)/build-checked
+
+else # USE_BINARYBUILDER_CURL
+
+CURL_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LibCURL_jll.jl/releases/download/LibCURL-v$(CURL_VER)+$(CURL_BB_REL)
+CURL_BB_NAME := LibCURL.v$(CURL_VER)
+
+$(eval $(call bb-install,curl,CURL,false))
+endif

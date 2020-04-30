@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-version.h"
 #include <llvm/ADT/ArrayRef.h>
@@ -8,14 +8,16 @@
 
 #include "APInt-C.h"
 #include "julia.h"
+#include "julia_assert.h"
 
 using namespace llvm;
 
-#if JL_LLVM_VERSION >= 30900
 inline uint64_t RoundUpToAlignment(uint64_t Value, uint64_t Align, uint64_t Skew = 0) {
     return alignTo(Value, Align, Skew);
 }
-#endif
+
+const unsigned int integerPartWidth = llvm::APInt::APINT_BITS_PER_WORD;
+const unsigned int host_char_bit = 8;
 
 /* create "APInt s" from "integerPart *ps" */
 #define CREATE(s) \
@@ -80,34 +82,26 @@ void LLVMMul(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr
 
 extern "C" JL_DLLEXPORT
 void LLVMSDiv(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
-    CREATE(a)
-    CREATE(b)
-    a = a.sdiv(b);
-    ASSIGN(r, a)
+    if (LLVMDiv_sov(numbits, pa, pb, pr))
+        jl_throw(jl_diverror_exception);
 }
 
 extern "C" JL_DLLEXPORT
 void LLVMUDiv(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
-    CREATE(a)
-    CREATE(b)
-    a = a.udiv(b);
-    ASSIGN(r, a)
+    if (LLVMDiv_uov(numbits, pa, pb, pr))
+        jl_throw(jl_diverror_exception);
 }
 
 extern "C" JL_DLLEXPORT
 void LLVMSRem(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
-    CREATE(a)
-    CREATE(b)
-    a = a.srem(b);
-    ASSIGN(r, a)
+    if (LLVMRem_sov(numbits, pa, pb, pr))
+        jl_throw(jl_diverror_exception);
 }
 
 extern "C" JL_DLLEXPORT
 void LLVMURem(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
-    CREATE(a)
-    CREATE(b)
-    a = a.urem(b);
-    ASSIGN(r, a)
+    if (LLVMRem_uov(numbits, pa, pb, pr))
+        jl_throw(jl_diverror_exception);
 }
 
 extern "C" JL_DLLEXPORT
@@ -270,6 +264,8 @@ extern "C" JL_DLLEXPORT
 int LLVMDiv_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
+    if (!b)
+        return true;
     bool Overflow;
     a = a.sdiv_ov(b, Overflow);
     ASSIGN(r, a)
@@ -280,9 +276,10 @@ extern "C" JL_DLLEXPORT
 int LLVMDiv_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
+    if (!b)
+        return true;
     a = a.udiv(b);
     ASSIGN(r, a)
-    // unsigned division cannot overflow
     return false;
 }
 
@@ -290,9 +287,10 @@ extern "C" JL_DLLEXPORT
 int LLVMRem_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
+    if (!b)
+        return true;
     a = a.srem(b);
     ASSIGN(r, a)
-    // signed remainder cannot overflow
     return false;
 }
 
@@ -300,9 +298,10 @@ extern "C" JL_DLLEXPORT
 int LLVMRem_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
+    if (!b)
+        return true;
     a = a.urem(b);
     ASSIGN(r, a)
-    // unsigned remainder cannot overflow
     return false;
 }
 
@@ -350,7 +349,7 @@ void LLVMFPtoInt(unsigned numbits, integerPart *pa, unsigned onumbits, integerPa
         APFloat::roundingMode rounding_mode = APFloat::rmNearestTiesToEven;
         unsigned nbytes = RoundUpToAlignment(onumbits, integerPartWidth) / host_char_bit;
         integerPart *parts = (integerPart*)alloca(nbytes);
-        APFloat::opStatus status = a.convertToInteger(parts, onumbits, isSigned, rounding_mode, &isVeryExact);
+        APFloat::opStatus status = a.convertToInteger(MutableArrayRef<integerPart>(parts, nbytes), onumbits, isSigned, rounding_mode, &isVeryExact);
         memcpy(pr, parts, onumbytes);
         if (isExact)
             *isExact = (status == APFloat::opOK);
@@ -383,8 +382,11 @@ int LLVMFPtoUI_exact(unsigned numbits, integerPart *pa, unsigned onumbits, integ
 
 extern "C" JL_DLLEXPORT
 void LLVMSItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
-    CREATE(a)
-    double val = a.roundToDouble(true);
+    double val;
+    { // end scope before jl_error call
+        CREATE(a)
+        val = a.roundToDouble(true);
+    }
     if (onumbits == 32)
         *(float*)pr = val;
     else if (onumbits == 64)
@@ -395,8 +397,11 @@ void LLVMSItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPar
 
 extern "C" JL_DLLEXPORT
 void LLVMUItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
-    CREATE(a)
-    double val = a.roundToDouble(false);
+    double val;
+    { // end scope before jl_error call
+        CREATE(a)
+        val = a.roundToDouble(false);
+    }
     if (onumbits == 32)
         *(float*)pr = val;
     else if (onumbits == 64)
@@ -407,7 +412,8 @@ void LLVMUItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPar
 
 extern "C" JL_DLLEXPORT
 void LLVMSExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
-    assert(inumbits < onumbits);
+    if (!(onumbits > inumbits))
+        jl_error("SExt: output bitsize must be > input bitsize");
     unsigned inumbytes = RoundUpToAlignment(inumbits, host_char_bit) / host_char_bit;
     unsigned onumbytes = RoundUpToAlignment(onumbits, host_char_bit) / host_char_bit;
     int bits = (0 - inumbits) % host_char_bit;
@@ -425,7 +431,8 @@ void LLVMSExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart
 
 extern "C" JL_DLLEXPORT
 void LLVMZExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
-    assert(inumbits < onumbits);
+    if (!(onumbits > inumbits))
+        jl_error("ZExt: output bitsize must be > input bitsize");
     unsigned inumbytes = RoundUpToAlignment(inumbits, host_char_bit) / host_char_bit;
     unsigned onumbytes = RoundUpToAlignment(onumbits, host_char_bit) / host_char_bit;
     int bits = (0 - inumbits) % host_char_bit;
@@ -441,67 +448,58 @@ void LLVMZExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart
 
 extern "C" JL_DLLEXPORT
 void LLVMTrunc(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
-    assert(inumbits > onumbits);
+    if (!(onumbits < inumbits))
+        jl_error("Trunc: output bitsize must be < input bitsize");
     unsigned onumbytes = RoundUpToAlignment(onumbits, host_char_bit) / host_char_bit;
     memcpy(pr, pa, onumbytes);
 }
 
 extern "C" JL_DLLEXPORT
 unsigned countTrailingZeros_8(uint8_t Val) {
-#if JL_LLVM_VERSION >= 30500
     return countTrailingZeros(Val);
-#else
-    return CountTrailingZeros_32(Val);
-#endif
 }
 
 extern "C" JL_DLLEXPORT
 unsigned countTrailingZeros_16(uint16_t Val) {
-#if JL_LLVM_VERSION >= 30500
     return countTrailingZeros(Val);
-#else
-    return CountTrailingZeros_32(Val);
-#endif
 }
 
 extern "C" JL_DLLEXPORT
 unsigned countTrailingZeros_32(uint32_t Val) {
-#if JL_LLVM_VERSION >= 30500
     return countTrailingZeros(Val);
-#else
-    return CountTrailingZeros_32(Val);
-#endif
 }
 
 extern "C" JL_DLLEXPORT
 unsigned countTrailingZeros_64(uint64_t Val) {
-#if JL_LLVM_VERSION >= 30500
     return countTrailingZeros(Val);
-#else
-    return CountTrailingZeros_64(Val);
-#endif
 }
 
 extern "C" JL_DLLEXPORT
 void jl_LLVMSMod(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
-    CREATE(a)
-    CREATE(b)
-    APInt r = a.srem(b);
-    if (a.isNegative() != b.isNegative()) {
-        r = (b + r).srem(b);
+    { // end scope before jl_error call
+        CREATE(a)
+        CREATE(b)
+        if (!!b) {
+            APInt r = a.srem(b);
+            if (a.isNegative() != b.isNegative()) {
+                r = (b + r).srem(b);
+            }
+            ASSIGN(r, r)
+            return;
+        }
     }
-    ASSIGN(r, r)
+    jl_throw(jl_diverror_exception);
 }
 
 extern "C" JL_DLLEXPORT
 void jl_LLVMFlipSign(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
-    unsigned numbytes = RoundUpToAlignment(numbits, host_char_bit) / host_char_bit;
+    unsigned numbytes = (numbits + host_char_bit - 1) / host_char_bit;
     int signbit = (numbits - 1) % host_char_bit;
-    int sign = ((unsigned char*)pa)[numbytes - 1] & (1 << signbit) ? -1 : 0;
+    int sign = ((unsigned char*)pb)[numbytes - 1] & (1 << signbit);
     if (sign)
         LLVMNeg(numbits, pa, pr);
     else
-        memcpy(pr, pa,  numbytes);
+        memcpy(pr, pa, numbytes);
 }
 
 extern "C" JL_DLLEXPORT

@@ -1,15 +1,15 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Implementation of
 #  "Table-driven Implementation of the Logarithm Function in IEEE Floating-point Arithmetic"
 #  Tang, Ping-Tak Peter
 #  ACM Trans. Math. Softw. (1990), 16(4):378--400
-#  http://dx.doi.org/10.1145/98267.98294
+#  https://doi.org/10.1145/98267.98294
 
 # Does not currently handle floating point flags (inexact, div-by-zero, etc).
 
-import Base.unsafe_trunc
-import Base.Math.@horner
+import .Base.unsafe_trunc
+import .Base.Math.@horner
 
 # Float64 lookup table.
 # to generate values:
@@ -26,7 +26,7 @@ import Base.Math.@horner
   #   print("(",l_hi,",",l_lo,"),")
   # end
 
-const t_log_Float64 = [(0.0,0.0),(0.007782140442941454,-8.865052917267247e-13),
+const t_log_Float64 = ((0.0,0.0),(0.007782140442941454,-8.865052917267247e-13),
     (0.015504186536418274,-4.530198941364935e-13),(0.0231670592820592,-5.248209479295644e-13),
     (0.03077165866670839,4.529814257790929e-14),(0.0383188643027097,-5.730994833076631e-13),
     (0.04580953603181115,-5.16945692881222e-13),(0.053244514518155484,6.567993368985218e-13),
@@ -90,7 +90,7 @@ const t_log_Float64 = [(0.0,0.0),(0.007782140442941454,-8.865052917267247e-13),
     (0.6694306539429817,-3.5246757297904794e-13),(0.6734226752123504,-1.8372084495629058e-13),
     (0.6773988235909201,8.860668981349492e-13),(0.6813592248072382,6.64862680714687e-13),
     (0.6853040030982811,6.383161517064652e-13),(0.6892332812385575,2.5144230728376075e-13),
-    (0.6931471805601177,-1.7239444525614835e-13)]
+    (0.6931471805601177,-1.7239444525614835e-13))
 
 
 # Float32 lookup table
@@ -105,7 +105,7 @@ const t_log_Float64 = [(0.0,0.0),(0.007782140442941454,-8.865052917267247e-13),
   #   print(float64(Base.log(big(1.0+j*is7))),",")
   # end
 
-const t_log_Float32 = [0.0,0.007782140442054949,0.015504186535965254,0.02316705928153438,
+const t_log_Float32 = (0.0,0.007782140442054949,0.015504186535965254,0.02316705928153438,
     0.030771658666753687,0.0383188643021366,0.0458095360312942,0.053244514518812285,
     0.06062462181643484,0.06795066190850775,0.07522342123758753,0.08244366921107459,
     0.08961215868968714,0.09672962645855111,0.10379679368164356,0.11081436634029011,
@@ -137,11 +137,11 @@ const t_log_Float32 = [0.0,0.007782140442054949,0.015504186535965254,0.023167059
     0.6451379613735847,0.6492279466251099,0.6533012720127457,0.65735807270836,
     0.661398482245365,0.6654226325450905,0.6694306539426292,0.6734226752121667,
     0.6773988235918061,0.6813592248079031,0.6853040030989194,0.689233281238809,
-    0.6931471805599453]
+    0.6931471805599453)
 
 # determine if hardware FMA is available
 # should probably check with LLVM, see #9855.
-const FMA_NATIVE = muladd(nextfloat(1.0),nextfloat(1.0),-nextfloat(1.0,2)) == -4.930380657631324e-32
+const FMA_NATIVE = muladd(nextfloat(1.0),nextfloat(1.0),-nextfloat(1.0,2)) != 0
 
 # truncate lower order bits (up to 26)
 # ideally, this should be able to use ANDPD instructions, see #9868.
@@ -282,7 +282,7 @@ function log(x::Float64)
     elseif isnan(x)
         NaN
     else
-        throw(DomainError())
+        throw_complex_domainerror(:log, x)
     end
 end
 
@@ -318,7 +318,7 @@ function log(x::Float32)
     elseif isnan(x)
         NaN32
     else
-        throw(DomainError())
+        throw_complex_domainerror(:log, x)
     end
 end
 
@@ -353,7 +353,7 @@ function log1p(x::Float64)
     elseif isnan(x)
         NaN
     else
-        throw(DomainError())
+        throw_complex_domainerror(:log1p, x)
     end
 end
 
@@ -386,7 +386,7 @@ function log1p(x::Float32)
     elseif isnan(x)
         NaN32
     else
-        throw(DomainError())
+        throw_complex_domainerror(:log1p, x)
     end
 end
 

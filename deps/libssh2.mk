@@ -2,12 +2,13 @@
 
 LIBSSH2_GIT_URL := git://github.com/libssh2/libssh2.git
 LIBSSH2_TAR_URL = https://api.github.com/repos/libssh2/libssh2/tarball/$1
-$(eval $(call git-external,libssh2,LIBSSH2,CMakeLists.txt,,$(SRCDIR)/srccache))
+$(eval $(call git-external,libssh2,LIBSSH2,CMakeLists.txt,,$(SRCCACHE)))
 
 ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
 endif
 
+ifneq ($(USE_BINARYBUILDER_LIBSSH2), 1)
 LIBSSH2_OPTS := $(CMAKE_COMMON) -DBUILD_SHARED_LIBS=ON -DBUILD_EXAMPLES=OFF \
 		-DCMAKE_BUILD_TYPE=Release
 
@@ -20,21 +21,15 @@ else
 LIBSSH2_OPTS += -DCRYPTO_BACKEND=mbedTLS -DENABLE_ZLIB_COMPRESSION=OFF
 endif
 
-ifeq ($(OS),Linux)
+ifneq (,$(findstring $(OS),Linux FreeBSD))
 LIBSSH2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
-$(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/source-extracted
-	cd $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libssh2-encryptedpem.patch
-	echo 1 > $@
+ifeq ($(LIBSSH2_ENABLE_TESTS), 0)
+LIBSSH2_OPTS += -DBUILD_TESTING=OFF
+endif
 
-# Patch submitted upstream: https://github.com/libssh2/libssh2/pull/148
-# Remove the patch here once we're using a version of libssh2 that includes the upstream patch
-$(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-netinet-in.patch-applied: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied
-	cd $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/libssh2-netinet-in.patch
-	echo 1 > $@
-
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/source-extracted $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-netinet-in.patch-applied
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LIBSSH2_OPTS)
@@ -61,8 +56,16 @@ clean-libssh2:
 
 
 get-libssh2: $(LIBSSH2_SRC_FILE)
-extract-libssh2: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/source-extracted
+extract-libssh2: $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/source-extracted
 configure-libssh2: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured
 compile-libssh2: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled
 fastcheck-libssh2: check-libssh2
 check-libssh2: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-checked
+
+else # USE_BINARYBUILDER_LIBSSH2
+
+LIBSSH2_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LibSSH2_jll.jl/releases/download/LibSSH2-v$(LIBSSH2_VER)+$(LIBSSH2_BB_REL)
+LIBSSH2_BB_NAME := LibSSH2.v$(LIBSSH2_VER)
+
+$(eval $(call bb-install,libssh2,LIBSSH2,false))
+endif

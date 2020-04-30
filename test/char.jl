@@ -1,26 +1,28 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#tests for /base/char.jl
+@testset "basic properties" begin
 
-@test typemin(Char) == Char(0)
-@test ndims(Char) == 0
-@test getindex('a', 1) == 'a'
-@test_throws BoundsError getindex('a',2)
-# This is current behavior, but it seems incorrect
-@test getindex('a',1,1,1) == 'a'
-@test_throws BoundsError getindex('a',1,1,2)
-# bswap of a Char should be removed, only the underlying codeunit (UInt32)
-# should be swapped
-@test bswap('\U10200') == '\U20100'
+    @test typemin(Char) == Char(0)
+    @test ndims(Char) == 0
+    @test getindex('a', 1) == 'a'
+    @test_throws BoundsError getindex('a', 2)
+    # This is current behavior, but it seems questionable
+    @test getindex('a', 1, 1, 1) == 'a'
+    @test_throws BoundsError getindex('a', 1, 1, 2)
 
-@test 'b' + 1 == 'c'
-@test typeof('b' + 1) == Char
-@test 1 + 'b' == 'c'
-@test typeof(1 + 'b') == Char
-@test 'b' - 1 == 'a'
-@test typeof('b' - 1) == Char
+    @test 'b' + 1 == 'c'
+    @test typeof('b' + 1) == Char
+    @test 1 + 'b' == 'c'
+    @test typeof(1 + 'b') == Char
+    @test 'b' - 1 == 'a'
+    @test typeof('b' - 1) == Char
 
-let
+    @test widen('a') === 'a'
+    # just check this works
+    @test_throws Base.CodePointError Base.code_point_err(UInt32(1))
+end
+
+@testset "ASCII conversion to/from Integer" begin
     numberchars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
     lowerchars = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
     upperchars = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
@@ -89,9 +91,9 @@ let
         @test length(x) == 1
     end
 
-    #endof(c::Char) = 1
+    #lastindex(c::Char) = 1
     for x in testarrays
-        @test endof(x) == 1
+        @test lastindex(x) == 1
     end
 
     #getindex(c::Char) = c
@@ -114,23 +116,10 @@ let
         @test eltype(x) == Char
     end
 
-    #start(c::Char) = false
+    #iterate(c::Char)
     for x in testarrays
-        @test start(x) == false
-    end
-
-    #next(c::Char, state) = (c, true)
-    for x in testarrays
-        for state in [true, false]
-            @test next(x, state) == (x, true)
-        end
-    end
-
-    #done(c::Char, state) = state
-    for x in testarrays
-        for state in [true, false]
-            @test done(x, state) == state
-        end
+        @test iterate(x)[1] == x
+        @test iterate(x, iterate(x)[2]) == nothing
     end
 
     #isless(x::Char, y::Integer) = isless(UInt32(x), y)
@@ -174,13 +163,13 @@ let
     for x in plane2_cjkpart1
         @test isless(Char(131071), x) == true
     end
+
+    @test !isequal('x', 120)
+    @test convert(Signed, 'A') === Int32(65)
+    @test convert(Unsigned, 'A') === UInt32(65)
 end #end of let block
 
-@test convert(Signed, 'A') === Int32(65)
-@test convert(Unsigned, 'A') === UInt32(65)
-
-# issue #14573
-let
+@testset "issue #14573" begin
     array = ['a', 'b', 'c'] + [1, 2, 3]
     @test array == ['b', 'd', 'f']
     @test eltype(array) == Char
@@ -194,4 +183,120 @@ let
     @test eltype(array) == Char
 end
 
-@test !isequal('x', 120)
+@testset "sprint, repr" begin
+    @test sprint(show, "text/plain", '$') == "'\$': ASCII/Unicode U+0024 (category Sc: Symbol, currency)"
+    @test sprint(show, "text/plain", '$', context=:compact => true) == "'\$'"
+    @test repr('$') == "'\$'"
+end
+
+@testset "read incomplete character at end of stream or file" begin
+    local file = tempname()
+    local iob = IOBuffer([0xf0])
+    local bytes(c::Char) = codeunits(string(c))
+    @test bytes(read(iob, Char)) == [0xf0]
+    @test eof(iob)
+    try
+        write(file, 0xf0)
+        open(file) do io
+            @test bytes(read(io, Char)) == [0xf0]
+            @test eof(io)
+        end
+        let io = Base.Filesystem.open(file, Base.Filesystem.JL_O_RDONLY)
+            @test bytes(read(io, Char)) == [0xf0]
+            @test eof(io)
+            close(io)
+        end
+    finally
+        rm(file, force=true)
+    end
+end
+
+@testset "overlong codes" begin
+    function test_overlong(c::Char, n::Integer, rep::String)
+        if isvalid(c)
+            @test Int(c) == n
+        else
+            @test_throws Base.InvalidCharError UInt32(c)
+        end
+        @test sprint(show, c) == rep
+        if Base.isoverlong(c)
+            @test occursin(rep*": [overlong]", sprint(show, "text/plain", c))
+        end
+    end
+
+    # TODO: use char syntax once #25072 is fixed
+    test_overlong('\0', 0, "'\\0'")
+    test_overlong("\xc0\x80"[1], 0, "'\\xc0\\x80'")
+    test_overlong("\xe0\x80\x80"[1], 0, "'\\xe0\\x80\\x80'")
+    test_overlong("\xf0\x80\x80\x80"[1], 0, "'\\xf0\\x80\\x80\\x80'")
+
+    test_overlong('\x30', 0x30, "'0'")
+    test_overlong("\xc0\xb0"[1], 0x30, "'\\xc0\\xb0'")
+    test_overlong("\xe0\x80\xb0"[1], 0x30, "'\\xe0\\x80\\xb0'")
+    test_overlong("\xf0\x80\x80\xb0"[1], 0x30, "'\\xf0\\x80\\x80\\xb0'")
+
+    test_overlong('\u8430', 0x8430, "'萰'")
+    test_overlong("\xf0\x88\x90\xb0"[1], 0x8430, "'\\xf0\\x88\\x90\\xb0'")
+end
+
+# create a new AbstractChar type to test the fallbacks
+primitive type ASCIIChar <: AbstractChar 8 end
+ASCIIChar(c::UInt8) = reinterpret(ASCIIChar, c)
+ASCIIChar(c::UInt32) = ASCIIChar(UInt8(c))
+Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
+
+@testset "abstractchar" begin
+    @test AbstractChar('x') === AbstractChar(UInt32('x')) === 'x'
+
+    @test isascii(ASCIIChar('x'))
+    @test ASCIIChar('x') < 'y'
+    @test ASCIIChar('x') == 'x' === Char(ASCIIChar('x')) === convert(Char, ASCIIChar('x'))
+    @test ASCIIChar('x')^3 == "xxx"
+    @test repr(ASCIIChar('x')) == "'x'"
+    @test string(ASCIIChar('x')) == "x"
+    @test_throws MethodError write(IOBuffer(), ASCIIChar('x'))
+    @test_throws MethodError read(IOBuffer('x'), ASCIIChar)
+end
+
+@testset "ncodeunits(::Char)" begin
+    # valid encodings
+    @test ncodeunits('\0')       == 1
+    @test ncodeunits('\x1')      == 1
+    @test ncodeunits('\x7f')     == 1
+    @test ncodeunits('\u80')     == 2
+    @test ncodeunits('\uff')     == 2
+    @test ncodeunits('\u7ff')    == 2
+    @test ncodeunits('\u800')    == 3
+    @test ncodeunits('\uffff')   == 3
+    @test ncodeunits('\U10000')  == 4
+    @test ncodeunits('\U10ffff') == 4
+    # invalid encodings
+    @test ncodeunits(reinterpret(Char, 0x80_00_00_00)) == 1
+    @test ncodeunits(reinterpret(Char, 0x01_00_00_00)) == 1
+    @test ncodeunits(reinterpret(Char, 0x00_80_00_00)) == 2
+    @test ncodeunits(reinterpret(Char, 0x00_01_00_00)) == 2
+    @test ncodeunits(reinterpret(Char, 0x00_00_80_00)) == 3
+    @test ncodeunits(reinterpret(Char, 0x00_00_01_00)) == 3
+    @test ncodeunits(reinterpret(Char, 0x00_00_00_80)) == 4
+    @test ncodeunits(reinterpret(Char, 0x00_00_00_01)) == 4
+end
+
+@testset "reinterpret(Char, ::UInt32)" begin
+    for s = 0:31
+        u = one(UInt32) << s
+        @test reinterpret(UInt32, reinterpret(Char, u)) === u
+    end
+end
+
+@testset "broadcasting of Char" begin
+    @test identity.('a') == 'a'
+end
+
+@testset "code point format of U+ syntax (PR 33291)" begin
+    @test repr("text/plain", '\n') == "'\\n': ASCII/Unicode U+000A (category Cc: Other, control)"
+    @test repr("text/plain", '/') == "'/': ASCII/Unicode U+002F (category Po: Punctuation, other)"
+    @test repr("text/plain", '\u10e') == "'Ď': Unicode U+010E (category Lu: Letter, uppercase)"
+    @test repr("text/plain", '\u3a2c') == "'㨬': Unicode U+3A2C (category Lo: Letter, other)"
+    @test repr("text/plain", '\U001f428') == "'🐨': Unicode U+1F428 (category So: Symbol, other)"
+    @test repr("text/plain", '\U010f321') == "'\\U10f321': Unicode U+10F321 (category Co: Other, private use)"
+end

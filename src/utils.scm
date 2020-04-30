@@ -40,12 +40,13 @@
                 (cdr expr)))))
 
 ;; same as above, with predicate
-(define (expr-contains-p p expr)
-  (or (p expr)
-      (and (pair? expr)
-           (not (quoted? expr))
-           (any (lambda (y) (expr-contains-p p y))
-                (cdr expr)))))
+(define (expr-contains-p p expr (filt (lambda (x) #t)))
+  (and (filt expr)
+       (or (p expr)
+           (and (pair? expr)
+                (not (quoted? expr))
+                (any (lambda (y) (expr-contains-p p y filt))
+                     (cdr expr))))))
 
 ;; find all subexprs satisfying `p`, applying `key` to each one
 (define (expr-find-all p expr key (filt (lambda (x) #t)))
@@ -76,11 +77,19 @@
         ((f (car xs)) (cons (car xs) (take-while f (cdr xs))))
         (else '())))
 
-(define (without alst remove)
-  (cond ((null? alst)               '())
-        ((null? remove)             alst)
-        ((memq (caar alst) remove)  (without (cdr alst) remove))
-        (else                       (cons (car alst)
-                                          (without (cdr alst) remove)))))
-
 (define (caddddr x) (car (cdr (cdr (cdr (cdr x))))))
+
+(define (table.clone t)
+  (let ((nt (table)))
+    (table.foldl (lambda (k v z) (put! nt k v))
+                 () t)
+    nt))
+
+;; `any`, but call predicate on every element in order no matter what
+(define (eager-any pred lst)
+  (let loop ((lst lst)
+             (any #f))
+    (if (null? lst)
+        any
+        (loop (cdr lst)
+              (or (pred (car lst)) any)))))

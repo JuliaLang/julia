@@ -460,6 +460,9 @@ static value_t read_string(fl_context_t *fl_ctx)
     uint32_t wc=0;
 
     buf = (char*)malloc(sz);
+    if (buf == NULL) {
+        lerror(fl_ctx, fl_ctx->ParseError, "read: out of memory reading string");
+    }
     while (1) {
         if (i >= sz-4) {  // -4: leaves room for longest utf8 sequence
             sz *= 2;
@@ -516,7 +519,12 @@ static value_t read_string(fl_context_t *fl_ctx)
                     i += u8_wc_toutf8(&buf[i], wc);
             }
             else {
-                buf[i++] = read_escape_control_char((char)c);
+                char esc = read_escape_control_char((char)c);
+                if (esc == (char)c && !strchr("\\'\"$`", esc)) {
+                    free(buf);
+                    lerror(fl_ctx, fl_ctx->ParseError, "read: invalid escape sequence");
+                }
+                buf[i++] = esc;
             }
         }
         else {

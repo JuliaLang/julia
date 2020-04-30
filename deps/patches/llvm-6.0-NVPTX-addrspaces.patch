@@ -1,0 +1,32 @@
+diff --git a/lib/Target/NVPTX/NVPTXISelLowering.cpp b/lib/Target/NVPTX/NVPTXISelLowering.cpp
+index f1e4251a44b..73d49f5d7e4 100644
+--- a/lib/Target/NVPTX/NVPTXISelLowering.cpp
++++ b/lib/Target/NVPTX/NVPTXISelLowering.cpp
+@@ -1248,6 +1248,14 @@ SDValue NVPTXTargetLowering::getSqrtEstimate(SDValue Operand, SelectionDAG &DAG,
+   }
+ }
+ 
++bool NVPTXTargetLowering::isNoopAddrSpaceCast(unsigned SrcAS,
++                                               unsigned DestAS) const {
++  assert(SrcAS != DestAS && "Expected different address spaces!");
++
++  return (SrcAS  == ADDRESS_SPACE_GENERIC || SrcAS  > ADDRESS_SPACE_LOCAL) &&
++         (DestAS == ADDRESS_SPACE_GENERIC || DestAS > ADDRESS_SPACE_LOCAL);
++}
++
+ SDValue
+ NVPTXTargetLowering::LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const {
+   SDLoc dl(Op);
+diff --git a/lib/Target/NVPTX/NVPTXISelLowering.h b/lib/Target/NVPTX/NVPTXISelLowering.h
+index ef04a8573d4..68a9a7195c4 100644
+--- a/lib/Target/NVPTX/NVPTXISelLowering.h
++++ b/lib/Target/NVPTX/NVPTXISelLowering.h
+@@ -443,6 +443,8 @@ public:
+                                const NVPTXSubtarget &STI);
+   SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
+ 
++  bool isNoopAddrSpaceCast(unsigned SrcAS, unsigned DestAS) const override;
++
+   SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
+ 
+   const char *getTargetNodeName(unsigned Opcode) const override;

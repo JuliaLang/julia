@@ -1,9 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Copyright 2014 Paul Lange <palango@gmx.de> -->
-<application>
- <id type="desktop">julia.desktop</id>
+<component>
+ <id>org.julialang.julia</id>
+ <name>Julia</name>
+ <launchable type="desktop-id">julia.desktop</launchable>
  <metadata_license>CC-BY-SA-3.0</metadata_license>
  <project_license>MIT and LGPL-2.1+ and GPL-2.0+</project_license>
+ <summary>High-performance programming language for technical computing</summary>
+ <provides>
+  <binary>julia</binary>
+ </provides>
  <description>
   <p>
    Julia is a high-level, high-performance dynamic programming language for
@@ -21,8 +27,9 @@
   </p>
  </description>
  <screenshots>
-  <screenshot type="default">http://julialang.org/images/julia-gnome.png</screenshot>
+  <screenshot type="default">
+   <image>https://julialang.org/images/julia-gnome.png</image>
+  </screenshot>
  </screenshots>
- <url type="homepage">http://julialang.org/</url>
- <updatecontact>julia-dev@googlegroups.com</updatecontact>
-</application>
+ <url type="homepage">https://julialang.org/</url>
+</component>

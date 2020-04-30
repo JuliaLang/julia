@@ -30,7 +30,7 @@ CACHE_URL="$CACHE_HOST/$URL"
 
 if [ -x "$CURL" ] && $CURL -V >/dev/null; then
     GETURL="$CURL $CURL_OPTS"
-elif [ -x "$WGET" ] && $WGET -V >/dev/null; then
+elif [ -x "$WGET" ] && $WGET --help >/dev/null 2>&1; then
     GETURL="$WGET $WGET_OPTS"
 elif [ -x "$FETCH" ]; then
     GETURL="$FETCH $FETCH_OPTS"

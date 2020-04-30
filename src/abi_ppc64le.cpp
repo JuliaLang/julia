@@ -41,7 +41,7 @@
 
 struct ABI_PPC64leLayout : AbiLayout {
 
-// count the homogeneous floating agregate size (saturating at max count of 8)
+// count the homogeneous floating aggregate size (saturating at max count of 8)
 unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const
 {
     size_t i, l = ty->layout->nfields;
@@ -62,7 +62,7 @@ unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const
     if (!jl_is_datatype(fld0) || ty->name == jl_vecelement_typename)
         return 9;
     if (fld0->name == jl_vecelement_typename) {
-        if (!jl_is_bitstype(jl_tparam0(fld0)) || jl_datatype_size(ty) > 16)
+        if (!jl_is_primitivetype(jl_tparam0(fld0)) || jl_datatype_size(ty) > 16)
             return 9;
         if (l != 1 && l != 2 && l != 4 && l != 8 && l != 16)
             return 9;
@@ -101,12 +101,15 @@ bool use_sret(jl_datatype_t *dt) override
     return false;
 }
 
-void needPassByRef(jl_datatype_t *dt, bool *byRef, bool *inReg) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 {
     jl_datatype_t *ty0 = NULL;
     bool hva = false;
-    if (jl_datatype_size(dt) > 64 && isHFA(dt, &ty0, &hva) > 8)
-        *byRef = true;
+    if (jl_datatype_size(dt) > 64 && isHFA(dt, &ty0, &hva) > 8) {
+        ab.addAttribute(Attribute::ByVal);
+        return true;
+    }
+    return false;
 }
 
 Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
@@ -130,10 +133,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
         else {
             jl_datatype_t *vecty = (jl_datatype_t*)jl_field_type(ty0, 0);
             assert(jl_is_datatype(vecty) && vecty->name == jl_vecelement_typename);
-            jl_value_t *elemty = jl_tparam0(vecty);
-            assert(jl_is_bitstype(elemty));
-
-            Type *ety = julia_type_to_llvm(elemty);
+            Type *ety = bitstype_to_llvm(jl_tparam0(vecty));
             Type *vty = VectorType::get(ety, jl_datatype_nfields(ty0));
             return ArrayType::get(vty, hfa);
         }
@@ -141,7 +141,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
     // rewrite integer-sized (non-HFA) struct to an array
     // the bitsize of the integer gives the desired alignment
     if (size > 8) {
-        if (dt->layout->alignment <= 8) {
+        if (jl_datatype_align(dt) <= 8) {
             return ArrayType::get(T_int64, (size + 7) / 8);
         }
         else {

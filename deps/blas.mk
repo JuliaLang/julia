@@ -4,7 +4,7 @@ OPENBLAS_GIT_URL := git://github.com/xianyi/OpenBLAS.git
 OPENBLAS_TAR_URL = https://api.github.com/repos/xianyi/OpenBLAS/tarball/$1
 $(eval $(call git-external,openblas,OPENBLAS,,,$(BUILDDIR)))
 
-OPENBLAS_BUILD_OPTS := CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
+OPENBLAS_BUILD_OPTS := CC="$(CC)" FC="$(FC)" LD="$(LD)" RANLIB="$(RANLIB)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
 
 # Thread support
 ifeq ($(OPENBLAS_USE_THREAD), 1)
@@ -46,6 +46,9 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: | $(BUILDDIR)/objconv/build-comp
 endif
 endif
 
+OPENBLAS_FFLAGS := $(JFFLAGS)
+OPENBLAS_CFLAGS := -O2
+
 # Decide whether to build for 32-bit or 64-bit arch
 ifneq ($(BUILD_OS),$(OS))
 OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 HOSTCC=$(HOSTCC) CROSS_SUFFIX=$(CROSS_COMPILE)
@@ -53,11 +56,24 @@ endif
 ifeq ($(OS),WINNT)
 ifneq ($(ARCH),x86_64)
 ifneq ($(USECLANG),1)
-OPENBLAS_BUILD_OPTS += CFLAGS="$(CFLAGS) -mincoming-stack-boundary=2"
+OPENBLAS_CFLAGS += -mincoming-stack-boundary=2
 endif
-OPENBLAS_BUILD_OPTS += FFLAGS="$(FFLAGS) -mincoming-stack-boundary=2"
+OPENBLAS_FFLAGS += -mincoming-stack-boundary=2
 endif
 endif
+
+# Work around invalid register errors on 64-bit Windows
+# See discussion in https://github.com/xianyi/OpenBLAS/issues/1708
+# TODO: Remove this once we use a version of OpenBLAS where this is set automatically
+ifeq ($(OS),WINNT)
+ifeq ($(ARCH),x86_64)
+OPENBLAS_CFLAGS += -fno-asynchronous-unwind-tables
+endif
+endif
+
+OPENBLAS_BUILD_OPTS += CFLAGS="$(CFLAGS) $(OPENBLAS_CFLAGS)"
+OPENBLAS_BUILD_OPTS += FFLAGS="$(FFLAGS) $(OPENBLAS_FFLAGS)"
+OPENBLAS_BUILD_OPTS += LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN)"
 
 # Debug OpenBLAS
 ifeq ($(OPENBLAS_DEBUG), 1)
@@ -66,22 +82,24 @@ endif
 
 # Allow disabling AVX for older binutils
 ifeq ($(OPENBLAS_NO_AVX), 1)
-OPENBLAS_BUILD_OPTS += NO_AVX=1 NO_AVX2=1
+OPENBLAS_BUILD_OPTS += NO_AVX=1 NO_AVX2=1 NO_AVX512=1
 else ifeq ($(OPENBLAS_NO_AVX2), 1)
-OPENBLAS_BUILD_OPTS += NO_AVX2=1
+OPENBLAS_BUILD_OPTS += NO_AVX2=1 NO_AVX512=1
+else ifeq ($(OPENBLAS_NO_AVX512), 1)
+OPENBLAS_BUILD_OPTS += NO_AVX512=1
 endif
 
 # Do not overwrite the "-j" flag
 OPENBLAS_BUILD_OPTS += MAKE_NB_JOBS=0
 
-# Patch submitted upstream: https://github.com/xianyi/OpenBLAS/pull/1015
-# Remove the patch here once we're using a version of OpenBLAS that includes the upstream patch
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-freebsd.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
-	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/openblas-freebsd.patch
+ifneq ($(USE_BINARYBUILDER_OPENBLAS), 1)
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/openblas-winexit.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-freebsd.patch-applied
-	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $(dir $<)/Makefile.system
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured
@@ -131,10 +149,10 @@ LAPACK_MFLAGS := NOOPT="$(FFLAGS) $(JFFLAGS) $(USE_BLAS_FFLAGS) -O0" \
     OPTS="$(FFLAGS) $(JFFLAGS) $(USE_BLAS_FFLAGS)" FORTRAN="$(FC)" \
     LOADER="$(FC)" BLASLIB="$(RPATH_ESCAPED_ORIGIN) $(LIBBLAS)"
 
-$(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz: | $(SRCDIR)/srccache
+$(SRCCACHE)/lapack-$(LAPACK_VER).tgz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ http://www.netlib.org/lapack/$(notdir $@)
 
-$(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted: $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz
+$(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz
 	$(JLCHECKSUM) $<
 	mkdir -p $(BUILDDIR)
 	cd $(BUILDDIR) && $(TAR) -zxf $<
@@ -173,12 +191,30 @@ clean-lapack:
 	-$(MAKE) -C $(BUILDDIR)/lapack-$(LAPACK_VER) clean
 
 distclean-lapack:
-	-rm -rf $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz $(BUILDDIR)/lapack-$(LAPACK_VER)
+	-rm -rf $(SRCCACHE)/lapack-$(LAPACK_VER).tgz $(BUILDDIR)/lapack-$(LAPACK_VER)
 
 
-get-lapack: $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz
+get-lapack: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz
 extract-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted
 configure-lapack: extract-lapack
 compile-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled
 fastcheck-lapack: check-lapack
 check-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/build-checked
+
+else # USE_BINARYBUILDER_OPENBLAS
+
+
+OPENBLAS_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/OpenBLAS_jll.jl/releases/download/OpenBLAS-v$(OPENBLAS_VER)+$(OPENBLAS_BB_REL)
+OPENBLAS_BB_NAME := OpenBLAS.v$(OPENBLAS_VER)
+
+$(eval $(call bb-install,openblas,OPENBLAS,true))
+get-lapack: get-openblas
+extract-lapack: extract-openblas
+configure-lapack: configure-openblas
+compile-lapack: compile-openblas
+fastcheck-lapack: fastcheck-openblas
+check-lapack: check-openblas
+clean-lapack: clean-openblas
+distclean-lapack: distclean-openblas
+install-lapack: install-openblas
+endif

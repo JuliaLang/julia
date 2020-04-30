@@ -1,11 +1,11 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # NOTES on range reduction
 # [1] compute numbers near pi: http://www.cs.berkeley.edu/~wkahan/testpi/nearpi.c
 # [2] range reduction: http://hal-ujm.ccsd.cnrs.fr/docs/00/08/69/04/PDF/RangeReductionIEEETC0305.pdf
 # [3] precise addition, see Add22: http://ftp.nluug.nl/pub/os/BSD/FreeBSD/distfiles/crlibm/crlibm-1.0beta3.pdf
 
-# Examples:
+# Examples
 # ΓΓ = 6411027962775774 / 2^45  # see [2] above, section 1.2
 # julia> mod(ΓΓ, 2pi)    # "naive" way - easily wrong
 # 7.105427357601002e-15
@@ -155,7 +155,7 @@ function testModPi()
     numTestCases = size(testCases,1)
     modFns = [mod2pi]
     xDivisors = [2pi]
-    errsNew, errsOld = Array{Float64}(0), Array{Float64}(0)
+    errsNew, errsOld = Vector{Float64}(), Vector{Float64}()
     for rowIdx in 1:numTestCases
         xExact = testCases[rowIdx,1]
         for colIdx in 1:1
@@ -194,3 +194,75 @@ testModPi()
 @test mod2pi(355.0f0) ≈ 3.1416228f0
 @test mod2pi(Int64(2)^60) == mod2pi(2.0^60)
 @test_throws ArgumentError mod2pi(Int64(2)^60-1)
+
+@testset "rem_pio2_kernel" begin
+    # test worst case
+    x = 6381956970095103.0 * 2.0^797
+    a = setprecision(BigFloat, 4096) do
+        rem(big(x), big(pi)/2, RoundNearest)
+    end
+
+    n, yrem = Base.Math.rem_pio2_kernel(x)
+    y=yrem.hi+yrem.lo
+    @test a-y<nextfloat(y)/2
+    # The following has easy and hard cases in each interval. A hard case is one
+    # where x ≈ k*pi/2 for some integer k.
+    cases = [0.0, pi/6, # -π/4 <= x <= π/4
+             2*pi/4-0.1, 2*pi/4, # -2π/4 <= x <= 2π/4
+             3*pi/4-0.1, # -3π/4 <= x <= 3π/4
+             pi-0.1, Float64(pi), # -4π/4 <= x <= 4π/4
+             5*pi/4-0.1, # -5π/4 <= x <= 5π/4
+             6*pi/4-0.1, 6*pi/4, # -6π/4 <= x <= 6π/4
+             7*pi/4-0.1, # -7π/4 <= x <= 7π/4
+             2*pi, 2*pi-0.1, # -8π/4 <= x <= 8π/4
+             9*pi/4-0.1, # -9π/4 <= x <= 9π/4
+             2.0^10*pi/4, # -2.0^20π/2 <= x <= 2.0^20π/2
+             2.0^30*pi/4, # |x| >= 2.0^20π/2, idx < 0
+             2.0^80*pi/4] # |x| >= 2.0^20π/2, idx > 0-0.22370138542135648
+
+     # ieee754_rem_pio2_return contains the returned value from the ieee754_rem_pio2
+     # function in openlibm: https://github.com/JuliaLang/openlibm/blob/0598080ca09468490a13ae393ba17d8620c1b201/src/e_rem_pio2.c
+     ieee754_rem_pio2_return = [ 1.5707963267948966       1.5707963267948966;
+                                 1.0471975511965979      -1.0471975511965979;
+                                 0.10000000000000014     -0.10000000000000014;
+                                 6.123233995736766e-17   -6.123233995736766e-17;
+                                -0.6853981633974481       0.6853981633974481;
+                                 0.10000000000000021     -0.10000000000000021;
+                                 1.2246467991473532e-16  -1.2246467991473532e-16;
+                                -0.6853981633974481       0.6853981633974481;
+                                 0.09999999999999983     -0.09999999999999983;
+                                 1.8369701987210297e-16  -1.8369701987210297e-16;
+                                -0.6853981633974484       0.6853981633974484;
+                                 2.4492935982947064e-16  -2.4492935982947064e-16;
+                                 0.0999999999999999      -0.0999999999999999;
+                                -0.6853981633974484       0.6853981633974484;
+                                 3.135095805817224e-14   -3.135095805817224e-14;
+                                 3.287386219680602e-8    -3.287386219680602e-8;
+                                -0.1757159771004682       0.1757159771004682      ]'
+
+    for (i, case) in enumerate(cases)
+        # negative argument
+        n, ret = Base.Math.rem_pio2_kernel(-case)
+        ret_sum = ret.hi+ret.lo
+        ulp_error = (ret_sum-ieee754_rem_pio2_return[1, i])/eps(ieee754_rem_pio2_return[1, i])
+        @test ulp_error <= 0.5
+        diff = Float64(mod(big(-case), big(pi)/2))-(ret.hi+ret.lo)
+        @test abs(diff) in (0.0, 1.5707963267948966, 1.5707963267948968)
+        # positive argument
+        n, ret = Base.Math.rem_pio2_kernel(case)
+        ret_sum = ret.hi+ret.lo
+        ulp_error = (ret_sum-ieee754_rem_pio2_return[2, i])/eps(ieee754_rem_pio2_return[2, i])
+        @test ulp_error <= 0.5
+        diff = Float64(mod(big(case), big(pi)/2))-(ret.hi+ret.lo)
+        @test abs(diff) in (0.0, 1.5707963267948966, 1.5707963267948968)
+    end
+end
+@testset "rem_pio2_kernel and mod2pi" begin
+    for int in (3632982096228748, 1135326194816)
+        bignum = int*big(pi)/2+0.00001
+        bigrem = rem(bignum, big(pi)/2, RoundDown)
+        fnum = Float64(bignum)
+        n, ret = Base.Math.rem_pio2_kernel(fnum)
+        @test mod2pi(fnum) == (ret.hi+ret.lo)
+    end
+end

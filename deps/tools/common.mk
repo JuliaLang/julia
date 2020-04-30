@@ -1,5 +1,9 @@
 ## Some shared configuration options ##
 
+# NOTE: Do not make RPATH changes in CMAKE_COMMON on platforms other than FreeBSD, since
+# it will make its way into the LLVM build flags, and LLVM is picky about RPATH (though
+# apparently not on FreeBSD). Ref PR #22352
+
 CONFIGURE_COMMON := --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir)) --bindir=$(abspath $(build_depsbindir)) $(CUSTOM_LD_LIBRARY_PATH)
 ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
@@ -8,11 +12,13 @@ ifeq ($(OS),WINNT)
 ifneq ($(USEMSVC), 1)
 CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) -Wl,--stack,8388608"
 endif
+else
+CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN)"
 endif
-CONFIGURE_COMMON += F77="$(FC)" CC="$(CC) $(DEPS_CFLAGS)" CXX="$(CXX) $(DEPS_CXXFLAGS)"
+CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)" LD="$(LD)"
 
-CMAKE_CC_ARG := $(CC_ARG) $(DEPS_CFLAGS)
-CMAKE_CXX_ARG := $(CXX_ARG) $(DEPS_CXXFLAGS)
+CMAKE_CC_ARG := $(CC_ARG)
+CMAKE_CXX_ARG := $(CXX_ARG)
 
 CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_PREFIX_PATH=$(build_prefix)
 CMAKE_COMMON += -DCMAKE_INSTALL_LIBDIR=$(build_libdir) -DCMAKE_INSTALL_BINDIR=$(build_bindir)
@@ -29,6 +35,7 @@ CMAKE_COMMON += -DCMAKE_CXX_COMPILER="$(CXX_BASE)"
 ifneq ($(strip $(CMAKE_CXX_ARG)),)
 CMAKE_COMMON += -DCMAKE_CXX_COMPILER_ARG1="$(CMAKE_CXX_ARG)"
 endif
+CMAKE_COMMON += -DCMAKE_LINKER="$(LD)" -DCMAKE_AR="$(shell which $(AR))" -DCMAKE_RANLIB="$(shell which $(RANLIB))"
 
 ifeq ($(OS),WINNT)
 CMAKE_COMMON += -DCMAKE_SYSTEM_NAME=Windows
@@ -38,14 +45,12 @@ endif
 endif
 
 # For now this is LLVM specific, but I expect it won't be in the future
-ifeq ($(LLVM_USE_CMAKE),1)
 ifeq ($(CMAKE_GENERATOR),Ninja)
 CMAKE_GENERATOR_COMMAND := -G Ninja
 else ifeq ($(CMAKE_GENERATOR),make)
 CMAKE_GENERATOR_COMMAND := -G "Unix Makefiles"
 else
 $(error Unknown CMake generator '$(CMAKE_GENERATOR)'. Options are 'Ninja' and 'make')
-endif
 endif
 
 # If the top-level Makefile is called with environment variables,
@@ -66,6 +71,15 @@ ifeq ($(USEIFC),1)
 USE_BLAS_FFLAGS += -i8
 else
 USE_BLAS_FFLAGS += -fdefault-integer-8
+endif
+endif
+
+ifeq ($(USE_INTEL_MKL),1)
+# We want to test if gfortran is used but currently only gfortran and ifort are supported
+# so not ifort is the same as gfortran. If support for new Fortran compilers is added
+# then this should be adjusted
+ifneq ($(USEIFC),1)
+USE_BLAS_FFLAGS += -ff2c
 endif
 endif
 
@@ -96,10 +110,11 @@ DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_inclu
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 
 $(build_prefix): | $(DIRS)
-$(eval $(call dir_target,$(SRCDIR)/srccache))
+$(eval $(call dir_target,$(SRCCACHE)))
 
 
 upper = $(shell echo $1 | tr a-z A-Z)
+
 
 ## A rule for calling `make install` ##
 # example usage:
@@ -129,9 +144,6 @@ endef
 define staged-install
 stage-$(strip $1): $$(build_staging)/$2.tgz
 install-$(strip $1): $$(build_prefix)/manifest/$(strip $1)
-uninstall-$(strip $1):
-	-rm $$(build_prefix)/manifest/$(strip $1)
-	-cd $$(build_prefix) && rm -dv -- $$$$($(TAR) -tzf $$(build_staging)/$2.tgz --exclude './$$$$')
 
 ifeq (exists, $$(shell [ -e $$(build_staging)/$2.tgz ] && echo exists ))
 # clean depends on uninstall only if the staged file exists
@@ -156,19 +168,67 @@ $$(build_staging)/$2.tgz: $$(BUILDDIR)/$2/build-compiled
 	rm -rf $$(build_staging)/$2
 	mv $$@.tmp $$@
 
+UNINSTALL_$(strip $1) := $2 staged-uninstaller
+
 $$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tgz | $(build_prefix)/manifest
+	-+[ ! -e $$@ ] || $$(MAKE) uninstall-$(strip $1)
 	mkdir -p $$(build_prefix)
 	$(UNTAR) $$< -C $$(build_prefix)
 	$6
-	echo $2 > $$@
+	echo '$$(UNINSTALL_$(strip $1))' > $$@
 endef
+
+define staged-uninstaller
+uninstall-$(strip $1):
+	-cd $$(build_prefix) && rm -fdv -- $$$$($$(TAR) -tzf $$(build_staging)/$2.tgz --exclude './$$$$')
+	-rm $$(build_prefix)/manifest/$(strip $1)
+endef
+
+
+## A rule for "installing" via a symlink ##
+# example usage:
+#   $(call symlink_install, \
+#       1 target, \               # name
+#       2 rel-build-directory, \  # BUILDDIR-relative path to content folder
+#       3 abs-target-directory)   # absolute path to installation folder for symlink `name`
+define symlink_install # (target-name, rel-from, abs-to)
+clean-$1: uninstall-$1
+install-$1: $$(build_prefix)/manifest/$1
+reinstall-$1: install-$1
+
+UNINSTALL_$(strip $1) := $2 symlink-uninstaller $3
+
+$$(build_prefix)/manifest/$1: $$(BUILDDIR)/$2/build-compiled | $3 $$(build_prefix)/manifest
+	-+[ ! \( -e $3/$1 -o -h $3/$1 \) ] || $$(MAKE) uninstall-$1
+ifeq ($$(BUILD_OS), WINNT)
+	cmd //C mklink //J $$(call mingw_to_dos,$3/$1,cd $3 &&) $$(call mingw_to_dos,$$(BUILDDIR)/$2,)
+else ifneq (,$$(findstring CYGWIN,$$(BUILD_OS)))
+	cmd /C mklink /J $$(call cygpath_w,$3/$1) $$(call cygpath_w,$$(BUILDDIR)/$2)
+else ifdef JULIA_VAGRANT_BUILD
+	cp -R $$(BUILDDIR)/$2 $3/$1
+else
+	ln -sf $$(abspath $$(BUILDDIR)/$2) $3/$1
+endif
+	echo '$$(UNINSTALL_$(strip $1))' > $$@
+endef
+
+define symlink-uninstaller
+uninstall-$1:
+ifeq ($$(BUILD_OS), WINNT)
+	-cmd //C rmdir $$(call mingw_to_dos,$3/$1,cd $3 &&)
+else
+	-rm -r $3/$1
+endif
+	-rm $$(build_prefix)/manifest/$1
+endef
+
 
 ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
 #gnu tar
-UNTAR = $(TAR) -xzf
+UNTAR = $(TAR) -xmzf
 else
 #bsd tar
-UNTAR = $(TAR) -xUzf
+UNTAR = $(TAR) -xmUzf
 endif
 
 

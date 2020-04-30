@@ -1,75 +1,103 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Order
+
+
+import ..@__MODULE__, ..parentmodule
+const Base = parentmodule(@__MODULE__)
+import .Base:
+    AbstractVector, @propagate_inbounds, isless, identity, getindex,
+    +, -, !, &, <, |
 
 ## notions of element ordering ##
 
 export # not exported by Base
-    Ordering, Forward, Reverse, Lexicographic,
+    Ordering, Forward, Reverse,
     By, Lt, Perm,
-    ReverseOrdering, ForwardOrdering, LexicographicOrdering,
+    ReverseOrdering, ForwardOrdering,
     DirectOrdering,
     lt, ord, ordtype
 
-abstract Ordering
+abstract type Ordering end
 
-immutable ForwardOrdering <: Ordering end
-immutable ReverseOrdering{Fwd<:Ordering} <: Ordering
+struct ForwardOrdering <: Ordering end
+struct ReverseOrdering{Fwd<:Ordering} <: Ordering
     fwd::Fwd
 end
 
 ReverseOrdering(rev::ReverseOrdering) = rev.fwd
-ReverseOrdering{Fwd}(fwd::Fwd) = ReverseOrdering{Fwd}(fwd)
+ReverseOrdering(fwd::Fwd) where {Fwd} = ReverseOrdering{Fwd}(fwd)
+ReverseOrdering() = ReverseOrdering(ForwardOrdering())
 
-typealias DirectOrdering Union{ForwardOrdering,ReverseOrdering{ForwardOrdering}}
+const DirectOrdering = Union{ForwardOrdering,ReverseOrdering{ForwardOrdering}}
 
 const Forward = ForwardOrdering()
-const Reverse = ReverseOrdering(Forward)
+const Reverse = ReverseOrdering()
 
-immutable LexicographicOrdering <: Ordering end
-const Lexicographic = LexicographicOrdering()
-
-immutable By{T} <: Ordering
+struct By{T, O} <: Ordering
     by::T
+    order::O
 end
 
-immutable Lt{T} <: Ordering
+# backwards compatibility with VERSION < v"1.5-"
+By(by) = By(by, Forward)
+
+struct Lt{T} <: Ordering
     lt::T
 end
 
-immutable Perm{O<:Ordering,V<:AbstractVector} <: Ordering
+struct Perm{O<:Ordering,V<:AbstractVector} <: Ordering
     order::O
     data::V
 end
 
+ReverseOrdering(by::By) = By(by.by, ReverseOrdering(by.order))
+ReverseOrdering(perm::Perm) = Perm(ReverseOrdering(perm.order), perm.data)
+
 lt(o::ForwardOrdering,       a, b) = isless(a,b)
 lt(o::ReverseOrdering,       a, b) = lt(o.fwd,b,a)
-lt(o::By,                    a, b) = isless(o.by(a),o.by(b))
+lt(o::By,                    a, b) = lt(o.order,o.by(a),o.by(b))
 lt(o::Lt,                    a, b) = o.lt(a,b)
-lt(o::LexicographicOrdering, a, b) = lexcmp(a,b) < 0
 
-function lt(p::Perm, a::Integer, b::Integer)
+@propagate_inbounds function lt(p::Perm, a::Integer, b::Integer)
     da = p.data[a]
     db = p.data[b]
     lt(p.order, da, db) | (!lt(p.order, db, da) & (a < b))
 end
-function lt(p::Perm{LexicographicOrdering}, a::Integer, b::Integer)
-    c = lexcmp(p.data[a], p.data[b])
-    c != 0 ? c < 0 : a < b
+
+_ord(lt::typeof(isless), by::typeof(identity), order::Ordering) = order
+_ord(lt::typeof(isless), by,                   order::Ordering) = By(by, order)
+
+function _ord(lt, by, order::Ordering)
+    if order === Forward
+        return Lt((x, y) -> lt(by(x), by(y)))
+    elseif order === Reverse
+        return Lt((x, y) -> lt(by(y), by(x)))
+    else
+        error("Passing both lt= and order= arguments is ambiguous; please pass order=Forward or order=Reverse (or leave default)")
+    end
 end
 
-ordtype(o::ReverseOrdering, vs::AbstractArray) = ordtype(o.fwd, vs)
-ordtype(o::Perm,            vs::AbstractArray) = ordtype(o.order, o.data)
-# TODO: here, we really want the return type of o.by, without calling it
-ordtype(o::By,              vs::AbstractArray) = try typeof(o.by(vs[1])) catch; Any end
-ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
+ord(lt, by, rev::Nothing, order::Ordering=Forward) = _ord(lt, by, order)
 
 function ord(lt, by, rev::Bool, order::Ordering=Forward)
-    o = (lt===isless) & (by===identity) ? order  :
-        (lt===isless) & (by!==identity) ? By(by) :
-        (lt!==isless) & (by===identity) ? Lt(lt) :
-                                          Lt((x,y)->lt(by(x),by(y)))
-    rev ? ReverseOrdering(o) : o
+    o = _ord(lt, by, order)
+    return rev ? ReverseOrdering(o) : o
+end
+
+
+# This function is not in use anywhere in Base but we observed
+# use in sorting-related packages (#34719). It's probably best to move
+# this functionality to those packages in the future; let's remind/force
+# ourselves to deprecate this in v2.0.
+# The following clause means `if VERSION < v"2.0-"` but it also works during
+# bootstrap. For the same reason, we need to write `Int32` instead of `Cint`.
+if ccall(:jl_ver_major, Int32, ()) < 2
+    ordtype(o::ReverseOrdering, vs::AbstractArray) = ordtype(o.fwd, vs)
+    ordtype(o::Perm,            vs::AbstractArray) = ordtype(o.order, o.data)
+    # TODO: here, we really want the return type of o.by, without calling it
+    ordtype(o::By,              vs::AbstractArray) = try typeof(o.by(vs[1])) catch; Any end
+    ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
 end
 
 end

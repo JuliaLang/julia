@@ -5,7 +5,7 @@
 # VARNAME is the uppercased variable name prefix
 # file_from_download (deprecated)
 # file_from_compile (deprecated)
-# SRCDIR is either $(SRCDIR)/srccache or $(BUILDDIR), depending on whether the target supports out-of-tree builds
+# SRCDIR is either $(SRCCACHE) or $(BUILDDIR), depending on whether the target supports out-of-tree builds
 #
 # also, in a file named dirname.version, define variables VARNAME_BRANCH and VARNAME_SHA1
 #
@@ -14,19 +14,21 @@
 # this will pass along the VARNAME_SHA1 target in $1 for its use
 #
 # this defines rules for:
-#   VARNAME_SRC_DIR = source directory for the output, relative to $(SRCDIR)/srccache or $(BUILDDIR)
+#   VARNAME_SRC_DIR = source directory for the output, relative to $(SRCCACHE) or $(BUILDDIR)
 #   VARNAME_SRC_FILE = target file for make get-VARNAME target
 #   dirname:
 #   dirname/source-extracted:
 #   distclean-dirname:
 #
 define git-external
-include $(SRCDIR)/$1.version
+include $$(SRCDIR)/$1.version
+$2_SHA1 := $$(strip $$($2_SHA1))
+$2_BRANCH := $$(strip $$($2_BRANCH))
 
-ifeq ($(DEPS_GIT),1)
+ifneq (,$$(filter $1 1,$$(DEPS_GIT)))
 $2_SRC_DIR := $1
-$2_SRC_FILE := $$(SRCDIR)/srccache/$1.git
-$$($2_SRC_FILE)/HEAD: | $$(SRCDIR)/srccache
+$2_SRC_FILE := $$(SRCCACHE)/$1.git
+$$($2_SRC_FILE)/HEAD: | $$(SRCCACHE)
 	git clone -q --mirror --branch $$($2_BRANCH) $$($2_GIT_URL) $$(dir $$@)
 $5/$1/.git/HEAD: | $$($2_SRC_FILE)/HEAD
 	# try to update the cache, if that fails, attempt to continue anyways (the ref might already be local)
@@ -44,8 +46,8 @@ $5/$1/source-extracted: | $$(BUILDDIR)/$1
 endif
 $5/$1/source-extracted: $$(SRCDIR)/$1.version | $5/$1/.git/HEAD
 	# try to update the cache, if that fails, attempt to continue anyways (the ref might already be local)
-	-cd $$(SRCDIR)/srccache/$1.git && git fetch -q $$($2_GIT_URL) $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
-	cd $5/$1 && git fetch -q $$(SRCDIR)/srccache/$1.git remotes/origin/$$($2_BRANCH):remotes/origin/$$($2_BRANCH)
+	-cd $$(SRCCACHE)/$1.git && git fetch -q $$($2_GIT_URL) $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
+	cd $5/$1 && git fetch -q $$(SRCCACHE)/$1.git remotes/origin/$$($2_BRANCH):remotes/origin/$$($2_BRANCH)
 	cd $5/$1 && git checkout -q --detach $$($2_SHA1)
 	@[ '$$($2_SHA1)' = "$$$$(cd $5/$1 && git show -s --format='%H' HEAD)" ] || echo $$(WARNCOLOR)'==> warning: SHA1 hash did not match $1.version file'$$(ENDCOLOR)
 	echo 1 > $$@
@@ -53,20 +55,21 @@ $5/$1/source-compiled: $5/$1/.git/HEAD
 $$($2_SRC_FILE): | $$($2_SRC_FILE)/HEAD
 	touch -c $$@
 
-else # DEPS_GIT
+else # DEPS_GIT=0
 
 $2_SRC_DIR := $1-$$($2_SHA1)
-$2_SRC_FILE := $$(SRCDIR)/srccache/$$($2_SRC_DIR).tar.gz
-$$($2_SRC_FILE): | $$(SRCDIR)/srccache
+$2_SRC_FILE := $$(SRCCACHE)/$$($2_SRC_DIR).tar.gz
+$$($2_SRC_FILE): | $$(SRCCACHE)
 	$$(JLDOWNLOAD) $$@ $$(call $2_TAR_URL,$$($2_SHA1))
 $5/$$($2_SRC_DIR)/source-extracted: $$($2_SRC_FILE)
 	$$(JLCHECKSUM) $$<
-	-rm -r $$(dir $$@)
+	-[ ! \( -e $$(dir $$@) -o -h $$(dir $$@) \) ] || rm -r $$(dir $$@)
 	mkdir -p $$(dir $$@)
 	$(TAR) -C $$(dir $$@) --strip-components 1 -xf $$<
 	echo 1 > $$@
 endif # DEPS_GIT
 
+$$(build_prefix)/manifest/$1: $$(SRCDIR)/$1.version # make the manifest stale if the version file is touched (causing re-install for compliant targets)
 distclean-$1:
 	-rm -rf $5/$$($2_SRC_DIR) $$($2_SRC_FILE) $$(BUILDDIR)/$$($2_SRC_DIR)
 endef

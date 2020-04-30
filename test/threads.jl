@@ -1,401 +1,131 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+let cmd = `$(Base.julia_cmd()) --depwarn=error --startup-file=no threads_exec.jl`
+    for test_nthreads in (1, 2, 4, 4) # run once to try single-threaded mode, then try a couple times to trigger bad races
+        run(pipeline(setenv(cmd, "JULIA_NUM_THREADS" => test_nthreads), stdout = stdout, stderr = stderr))
+    end
+end
+
+# issue #34415 - make sure external affinity settings work
+if Sys.islinux() && Sys.CPU_THREADS > 1 && Sys.which("taskset") !== nothing
+    run_with_affinity(spec) = readchomp(`taskset -c $spec $(Base.julia_cmd()) -e "run(\`taskset -p \$(getpid())\`)"`)
+    @test endswith(run_with_affinity("1"), "2")
+    @test endswith(run_with_affinity("0,1"), "3")
+end
+
+# issue #34769
+function idle_callback(handle)
+    idle = @Base.handle_as handle UvTestIdle
+    if idle.active
+        idle.count += 1
+        if idle.count == 1
+            # We want to hit the case where we're allowing
+            # the thread to go to sleep, which only happens
+            # after some default amount of time (DEFAULT_THREAD_SLEEP_THRESHOLD)
+            # so spend that amount of time here.
+            Libc.systemsleep(0.004)
+        elseif idle.count >= 10
+            lock(idle.cond)
+            try
+                notify(idle.cond, true)
+            finally
+                unlock(idle.cond)
+            end
+            idle.active = false
+        end
+    end
+    nothing
+end
+
+mutable struct UvTestIdle
+    handle::Ptr{Cvoid}
+    cond::Base.ThreadSynchronizer
+    isopen::Bool
+    active::Bool
+    count::Int
+
+    function UvTestIdle()
+        this = new(Libc.malloc(Base._sizeof_uv_idle), Base.ThreadSynchronizer(), true, false, 0)
+        Base.iolock_begin()
+        Base.associate_julia_struct(this.handle, this)
+        err = ccall(:uv_idle_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}),
+            Base.eventloop(), this.handle)
+        if err != 0
+            Libc.free(this.handle)
+            this.handle = C_NULL
+            throw(_UVError("uv_idle_init", err))
+        end
+        err = ccall(:uv_idle_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}),
+            this.handle, @cfunction(idle_callback, Cvoid, (Ptr{Cvoid},)))
+        if err != 0
+            Libc.free(this.handle)
+            this.handle = C_NULL
+            throw(_UVError("uv_idle_start", err))
+        end
+        finalizer(Base.uvfinalize, this)
+        Base.iolock_end()
+        return this
+    end
+end
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, idle::UvTestIdle) = idle.handle
+
+function Base.uvfinalize(t::UvTestIdle)
+    Base.iolock_begin()
+    Base.lock(t.cond)
+    try
+        if t.handle != C_NULL
+            Base.disassociate_julia_struct(t.handle) # not going to call the usual close hooks
+            if t.isopen
+                t.isopen = false
+                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
+            end
+            t.handle = C_NULL
+            notify(t.cond, false)
+        end
+    finally
+        unlock(t.cond)
+    end
+    Base.iolock_end()
+    nothing
+end
+
+function Base.wait(idle::UvTestIdle)
+    Base.iolock_begin()
+    Base.preserve_handle(idle)
+    Base.lock(idle.cond)
+    try
+        idle.active = true
+        wait(idle.cond)
+    finally
+        Base.unlock(idle.cond)
+        Base.unpreserve_handle(idle)
+        Base.iolock_end()
+    end
+end
+
+# Spawn another process as a watchdog. If this test fails, it'll unrecoverably
+# hang in the event loop. Another process needs to kill it
+cmd = """
+    @async (Base.wait_readnb(stdin, 1); exit())
+    sleep(100)
+    isopen(stdin) || exit()
+    println(stderr, "ERROR: Killing threads test due to watchdog expiry")
+    ccall(:uv_kill, Cint, (Cint, Cint), $(getpid()), Base.SIGTERM)
+"""
+proc = open(pipeline(`$(Base.julia_cmd()) -e $cmd`; stderr=stderr); write=true)
+
+let idle=UvTestIdle()
+    wait(idle)
+end
+
 using Base.Threads
-
-# threading constructs
-
-# parallel loop with parallel atomic addition
-function threaded_loop(a, r, x)
-    @threads for i in r
-        a[i] = 1 + atomic_add!(x, 1)
+@threads for i = 1:1
+    let idle=UvTestIdle()
+        wait(idle)
     end
 end
 
-function test_threaded_loop_and_atomic_add()
-    x = Atomic()
-    a = zeros(Int,10000)
-    threaded_loop(a,1:10000,x)
-    found = zeros(Bool,10000)
-    was_inorder = true
-    for i=1:length(a)
-        was_inorder &= a[i]==i
-        found[a[i]] = true
-    end
-    @test x[] == 10000
-    # Next test checks that all loop iterations ran,
-    # and were unique (via pigeon-hole principle).
-    @test findfirst(found,false) == 0
-    if was_inorder
-        println(STDERR, "Warning: threaded loop executed in order")
-    end
-end
+@test process_running(proc)
 
-test_threaded_loop_and_atomic_add()
-
-# Helper for test_threaded_atomic_minmax that verifies sequential consistency.
-function check_minmax_consistency{T}(old::Array{T,1}, m::T, start::T, o::Base.Ordering)
-    for v in old
-        if v != start
-            # Check that atomic op that installed v reported consistent old value.
-            @test Base.lt(o, old[v-m+1], v)
-        end
-    end
-end
-
-function test_threaded_atomic_minmax{T}(m::T,n::T)
-    mid = m + (n-m)>>1
-    x = Atomic{T}(mid)
-    y = Atomic{T}(mid)
-    oldx = Array{T}(n-m+1)
-    oldy = Array{T}(n-m+1)
-    @threads for i = m:n
-        oldx[i-m+1] = atomic_min!(x, T(i))
-        oldy[i-m+1] = atomic_max!(y, T(i))
-    end
-    @test x[] == m
-    @test y[] == n
-    check_minmax_consistency(oldy,m,mid,Base.Forward)
-    check_minmax_consistency(oldx,m,mid,Base.Reverse)
-end
-
-# The ranges below verify that the correct signed/unsigned comparison is used.
-test_threaded_atomic_minmax(Int16(-5000),Int16(5000))
-test_threaded_atomic_minmax(UInt16(27000),UInt16(37000))
-
-function threaded_add_locked{LockT}(::Type{LockT}, x, n)
-    critical = LockT()
-    @threads for i = 1:n
-        @test lock(critical) === nothing
-        @test islocked(critical)
-        x = x + 1
-        @test unlock(critical) === nothing
-    end
-    @test !islocked(critical)
-    nentered = 0
-    nfailed = Atomic()
-    @threads for i = 1:n
-        if trylock(critical)
-            @test islocked(critical)
-            nentered += 1
-            @test unlock(critical) === nothing
-        else
-            atomic_add!(nfailed, 1)
-        end
-    end
-    @test 0 < nentered <= n
-    @test nentered + nfailed[] == n
-    @test !islocked(critical)
-    return x
-end
-
-@test threaded_add_locked(SpinLock, 0, 10000) == 10000
-@test threaded_add_locked(RecursiveSpinLock, 0, 10000) == 10000
-@test threaded_add_locked(Mutex, 0, 10000) == 10000
-
-# Check if the recursive lock can be locked and unlocked correctly.
-let critical = RecursiveSpinLock()
-    @test !islocked(critical)
-    @test_throws AssertionError unlock(critical)
-    @test lock(critical) === nothing
-    @test islocked(critical)
-    @test lock(critical) === nothing
-    @test trylock(critical) == true
-    @test islocked(critical)
-    @test unlock(critical) === nothing
-    @test islocked(critical)
-    @test unlock(critical) === nothing
-    @test islocked(critical)
-    @test unlock(critical) === nothing
-    @test !islocked(critical)
-    @test_throws AssertionError unlock(critical)
-    @test trylock(critical) == true
-    @test islocked(critical)
-    @test unlock(critical) === nothing
-    @test !islocked(critical)
-    @test_throws AssertionError unlock(critical)
-    @test !islocked(critical)
-end
-
-# Make sure doing a GC while holding a lock doesn't cause dead lock
-# PR 14190. (This is only meaningful for threading)
-function threaded_gc_locked{LockT}(::Type{LockT})
-    critical = LockT()
-    @threads for i = 1:20
-        @test lock(critical) === nothing
-        @test islocked(critical)
-        gc(false)
-        @test unlock(critical) === nothing
-    end
-    @test !islocked(critical)
-end
-
-threaded_gc_locked(SpinLock)
-threaded_gc_locked(Threads.RecursiveSpinLock)
-threaded_gc_locked(Mutex)
-
-# Issue 14726
-# Make sure that eval'ing in a different module doesn't mess up other threads
-orig_curmodule14726 = current_module()
-main_var14726 = 1
-module M14726
-module_var14726 = 1
-end
-
-@threads for i in 1:100
-    for j in 1:100
-        eval(M14726, :(module_var14726 = $j))
-    end
-end
-@test isdefined(:orig_curmodule14726)
-@test isdefined(:main_var14726)
-@test current_module() == orig_curmodule14726
-
-@threads for i in 1:100
-    # Make sure current module is not null.
-    # The @test might not be particularly meaningful currently since the
-    # thread infrastructures swallows the error. (Same below)
-    @test current_module() == orig_curmodule14726
-end
-
-module M14726_2
-using Base.Test
-using Base.Threads
-@threads for i in 1:100
-    # Make sure current module is the same as the one on the thread that
-    # pushes the work onto the threads.
-    # The @test might not be particularly meaningful currently since the
-    # thread infrastructures swallows the error. (See also above)
-    @test current_module() == M14726_2
-end
-end
-
-# Ensure only LLVM-supported types can be atomic
-@test_throws TypeError Atomic{Bool}
-@test_throws TypeError Atomic{BigInt}
-@test_throws TypeError Atomic{Complex128}
-
-# Test atomic memory ordering with load/store
-type CommBuf
-    var1::Atomic{Int}
-    var2::Atomic{Int}
-    correct_write::Bool
-    correct_read::Bool
-    CommBuf() = new(Atomic{Int}(0), Atomic{Int}(0), false, false)
-end
-function test_atomic_write(commbuf::CommBuf, n::Int)
-    for i in 1:n
-        # The atomic stores guarantee that var1 >= var2
-        commbuf.var1[] = i
-        commbuf.var2[] = i
-    end
-    commbuf.correct_write = true
-end
-function test_atomic_read(commbuf::CommBuf, n::Int)
-    correct = true
-    while true
-        # load var2 before var1
-        var2 = commbuf.var2[]
-        var1 = commbuf.var1[]
-        correct &= var1 >= var2
-        var1 == n && break
-        # Temporary solution before we have gc transition support in codegen.
-        ccall(:jl_gc_safepoint, Void, ())
-    end
-    commbuf.correct_read = correct
-end
-function test_atomic()
-    commbuf = CommBuf()
-    count = 1_000_000
-    @threads for i in 1:2
-        if i==1
-            test_atomic_write(commbuf, count)
-        else
-            test_atomic_read(commbuf, count)
-        end
-    end
-    @test commbuf.correct_write == true
-    @test commbuf.correct_read == true
-end
-test_atomic()
-
-# Test ordering with fences using Peterson's algorithm
-# Example adapted from <https://en.wikipedia.org/wiki/Peterson%27s_algorithm>
-type Peterson
-    # State for Peterson's algorithm
-    flag::Vector{Atomic{Int}}
-    turn::Atomic{Int}
-    # Collision detection
-    critical::Vector{Atomic{Int}}
-    correct::Vector{Bool}
-    Peterson() =
-        new([Atomic{Int}(0), Atomic{Int}(0)],
-            Atomic{Int}(0),
-            [Atomic{Int}(0), Atomic{Int}(0)],
-            [false, false])
-end
-function test_fence(p::Peterson, id::Int, n::Int)
-    @assert id == mod1(id,2)
-    correct = true
-    otherid = mod1(id+1,2)
-    for i in 1:n
-        p.flag[id][] = 1
-        p.turn[] = otherid
-        atomic_fence()
-        while p.flag[otherid][] != 0 && p.turn[] == otherid
-            # busy wait
-            # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Void, ())
-        end
-        # critical section
-        p.critical[id][] = 1
-        correct &= p.critical[otherid][] == 0
-        p.critical[id][] = 0
-        # end of critical section
-        p.flag[id][] = 0
-    end
-    p.correct[id] = correct
-end
-function test_fence()
-    commbuf = Peterson()
-    count = 1_000_000
-    @threads for i in 1:2
-        test_fence(commbuf, i, count)
-    end
-    @test commbuf.correct[1] == true
-    @test commbuf.correct[2] == true
-end
-test_fence()
-
-# Test load / store with various types
-let atomic_types = [Int8, Int16, Int32, Int64, Int128,
-                    UInt8, UInt16, UInt32, UInt64, UInt128,
-                    Float16, Float32, Float64]
-    # Temporarily omit 128-bit types on 32bit x86
-    # 128-bit atomics do not exist on AArch32.
-    # And we don't support them yet on power.
-    if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
-       Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
-        filter!(T -> sizeof(T)<=8, atomic_types)
-    end
-    for T in atomic_types
-        var = Atomic{T}()
-        var[] = 42
-        @test var[] === T(42)
-        old = atomic_xchg!(var, T(13))
-        @test old === T(42)
-        @test var[] === T(13)
-        old = atomic_cas!(var, T(13), T(14))   # this will succeed
-        @test old === T(13)
-        @test var[] === T(14)
-        old = atomic_cas!(var, T(13), T(15))   # this will fail
-        @test old === T(14)
-        @test var[] === T(14)
-    end
-end
-
-# Test atomic_cas! and atomic_xchg!
-function test_atomic_cas!{T}(var::Atomic{T}, range::StepRange{Int,Int})
-    for i in range
-        while true
-            old = atomic_cas!(var, T(i-1), T(i))
-            old == T(i-1) && break
-            # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Void, ())
-        end
-    end
-end
-for T in (Int32, Int64, Float32, Float64)
-    var = Atomic{T}()
-    nloops = 1000
-    di = nthreads()
-    @threads for i in 1:di
-        test_atomic_cas!(var, i:di:nloops)
-    end
-    @test var[] === T(nloops)
-end
-
-function test_atomic_xchg!{T}(var::Atomic{T}, i::Int, accum::Atomic{Int})
-    old = atomic_xchg!(var, T(i))
-    atomic_add!(accum, Int(old))
-end
-for T in (Int32, Int64, Float32, Float64)
-    accum = Atomic{Int}()
-    var = Atomic{T}()
-    nloops = 1000
-    @threads for i in 1:nloops
-        test_atomic_xchg!(var, i, accum)
-    end
-    @test accum[] + Int(var[]) === sum(0:nloops)
-end
-
-function test_atomic_float{T}(varadd::Atomic{T}, varmax::Atomic{T}, varmin::Atomic{T}, i::Int)
-    atomic_add!(varadd, T(i))
-    atomic_max!(varmax, T(i))
-    atomic_min!(varmin, T(i))
-end
-for T in (Int32, Int64, Float32, Float64)
-    varadd = Atomic{T}()
-    varmax = Atomic{T}()
-    varmin = Atomic{T}()
-    nloops = 1000
-    @threads for i in 1:nloops
-        test_atomic_float(varadd, varmax, varmin, i)
-    end
-    @test varadd[] === T(sum(1:nloops))
-    @test varmax[] === T(maximum(1:nloops))
-    @test varmin[] === T(0)
-end
-
-let async = Base.AsyncCondition(), t
-    c = Condition()
-    task = schedule(Task(function()
-        notify(c)
-        wait(c)
-        t = Timer(0.06)
-        wait(t)
-        ccall(:uv_async_send, Void, (Ptr{Void},), async)
-        ccall(:uv_async_send, Void, (Ptr{Void},), async)
-        wait(c)
-        sleep(0.06)
-        ccall(:uv_async_send, Void, (Ptr{Void},), async)
-        ccall(:uv_async_send, Void, (Ptr{Void},), async)
-    end))
-    wait(c)
-    notify(c)
-    delay1 = @elapsed wait(async)
-    notify(c)
-    delay2 = @elapsed wait(async)
-    @test istaskdone(task)
-    @test delay1 > 0.05
-    @test delay2 > 0.05
-    @test isopen(async)
-    @test !isopen(t)
-    close(t)
-    close(async)
-    @test_throws EOFError wait(async)
-    @test !isopen(async)
-    @test_throws EOFError wait(t)
-    @test_throws EOFError wait(async)
-end
-
-# Compare the two ways of checking if threading is enabled.
-# `jl_tls_states` should only be defined on non-threading build.
-if ccall(:jl_threading_enabled, Cint, ()) == 0
-    @test nthreads() == 1
-    cglobal(:jl_tls_states) != C_NULL
-else
-    @test_throws ErrorException cglobal(:jl_tls_states)
-end
-
-# Thread safety of `jl_load_and_lookup`.
-function test_load_and_lookup_18020(n)
-    @threads for i in 1:n
-        try
-            ccall(:jl_load_and_lookup,
-                  Ptr{Void}, (Cstring, Cstring, Ref{Ptr{Void}}),
-                  "$i", :f, C_NULL)
-        end
-    end
-end
-test_load_and_lookup_18020(10000)
+# We don't need the watchdog anymore
+close(proc.in)

@@ -1,20 +1,43 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## general machinery for irrational mathematical constants
 
-immutable Irrational{sym} <: Real end
+"""
+    AbstractIrrational <: Real
 
-show{sym}(io::IO, x::Irrational{sym}) = print(io, "$sym = $(string(float(x))[1:15])...")
+Number type representing an exact irrational value.
+"""
+abstract type AbstractIrrational <: Real end
 
-promote_rule{s}(::Type{Irrational{s}}, ::Type{Float32}) = Float32
-promote_rule{s,t}(::Type{Irrational{s}}, ::Type{Irrational{t}}) = Float64
-promote_rule{s,T<:Number}(::Type{Irrational{s}}, ::Type{T}) = promote_type(Float64,T)
+"""
+    Irrational{sym} <: AbstractIrrational
 
-convert(::Type{AbstractFloat}, x::Irrational) = Float64(x)
-convert(::Type{Float16}, x::Irrational) = Float16(Float32(x))
-convert{T<:Real}(::Type{Complex{T}}, x::Irrational) = convert(Complex{T}, convert(T,x))
+Number type representing an exact irrational value denoted by the
+symbol `sym`.
+"""
+struct Irrational{sym} <: AbstractIrrational end
 
-@pure function convert{T<:Integer}(::Type{Rational{T}}, x::Irrational)
+show(io::IO, x::Irrational{sym}) where {sym} = print(io, sym)
+
+function show(io::IO, ::MIME"text/plain", x::Irrational{sym}) where {sym}
+    if get(io, :compact, false)
+        print(io, sym)
+    else
+        print(io, sym, " = ", string(float(x))[1:15], "...")
+    end
+end
+
+promote_rule(::Type{<:AbstractIrrational}, ::Type{Float16}) = Float16
+promote_rule(::Type{<:AbstractIrrational}, ::Type{Float32}) = Float32
+promote_rule(::Type{<:AbstractIrrational}, ::Type{<:AbstractIrrational}) = Float64
+promote_rule(::Type{<:AbstractIrrational}, ::Type{T}) where {T<:Real} = promote_type(Float64, T)
+promote_rule(::Type{S}, ::Type{T}) where {S<:AbstractIrrational,T<:Number} = promote_type(promote_type(S, real(T)), T)
+
+AbstractFloat(x::AbstractIrrational) = Float64(x)
+Float16(x::AbstractIrrational) = Float16(Float32(x))
+Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
+
+@pure function Rational{T}(x::AbstractIrrational) where T<:Integer
     o = precision(BigFloat)
     p = 256
     while true
@@ -28,48 +51,59 @@ convert{T<:Real}(::Type{Complex{T}}, x::Irrational) = convert(Complex{T}, conver
         p += 32
     end
 end
-convert(::Type{Rational{BigInt}}, x::Irrational) = throw(ArgumentError("Cannot convert an Irrational to a Rational{BigInt}: use rationalize(Rational{BigInt}, x) instead"))
+(::Type{Rational{BigInt}})(x::AbstractIrrational) = throw(ArgumentError("Cannot convert an AbstractIrrational to a Rational{BigInt}: use rationalize(BigInt, x) instead"))
 
-@pure function (t::Type{T}){T<:Union{Float32,Float64}}(x::Irrational, r::RoundingMode)
+@pure function (t::Type{T})(x::AbstractIrrational, r::RoundingMode) where T<:Union{Float32,Float64}
     setprecision(BigFloat, 256) do
         T(BigFloat(x), r)
     end
 end
 
-=={s}(::Irrational{s}, ::Irrational{s}) = true
-==(::Irrational, ::Irrational) = false
+float(::Type{<:AbstractIrrational}) = Float64
+
+==(::Irrational{s}, ::Irrational{s}) where {s} = true
+==(::AbstractIrrational, ::AbstractIrrational) = false
+
+<(::Irrational{s}, ::Irrational{s}) where {s} = false
+function <(x::AbstractIrrational, y::AbstractIrrational)
+    Float64(x) != Float64(y) || throw(MethodError(<, (x, y)))
+    return Float64(x) < Float64(y)
+end
+
+<=(::Irrational{s}, ::Irrational{s}) where {s} = true
+<=(x::AbstractIrrational, y::AbstractIrrational) = x==y || x<y
 
 # Irrationals, by definition, can't have a finite representation equal them exactly
-==(x::Irrational, y::Real) = false
-==(x::Real, y::Irrational) = false
+==(x::AbstractIrrational, y::Real) = false
+==(x::Real, y::AbstractIrrational) = false
 
 # Irrational vs AbstractFloat
-<(x::Irrational, y::Float64) = Float64(x,RoundUp) <= y
-<(x::Float64, y::Irrational) = x <= Float64(y,RoundDown)
-<(x::Irrational, y::Float32) = Float32(x,RoundUp) <= y
-<(x::Float32, y::Irrational) = x <= Float32(y,RoundDown)
-<(x::Irrational, y::Float16) = Float32(x,RoundUp) <= y
-<(x::Float16, y::Irrational) = x <= Float32(y,RoundDown)
-<(x::Irrational, y::BigFloat) = setprecision(precision(y)+32) do
+<(x::AbstractIrrational, y::Float64) = Float64(x,RoundUp) <= y
+<(x::Float64, y::AbstractIrrational) = x <= Float64(y,RoundDown)
+<(x::AbstractIrrational, y::Float32) = Float32(x,RoundUp) <= y
+<(x::Float32, y::AbstractIrrational) = x <= Float32(y,RoundDown)
+<(x::AbstractIrrational, y::Float16) = Float32(x,RoundUp) <= y
+<(x::Float16, y::AbstractIrrational) = x <= Float32(y,RoundDown)
+<(x::AbstractIrrational, y::BigFloat) = setprecision(precision(y)+32) do
     big(x) < y
 end
-<(x::BigFloat, y::Irrational) = setprecision(precision(x)+32) do
+<(x::BigFloat, y::AbstractIrrational) = setprecision(precision(x)+32) do
     x < big(y)
 end
 
-<=(x::Irrational, y::AbstractFloat) = x < y
-<=(x::AbstractFloat, y::Irrational) = x < y
+<=(x::AbstractIrrational, y::AbstractFloat) = x < y
+<=(x::AbstractFloat, y::AbstractIrrational) = x < y
 
 # Irrational vs Rational
-@pure function rationalize{T<:Integer}(::Type{T}, x::Irrational; tol::Real=0)
+@pure function rationalize(::Type{T}, x::AbstractIrrational; tol::Real=0) where T
     return rationalize(T, big(x), tol=tol)
 end
-@pure function lessrational{T<:Integer}(rx::Rational{T}, x::Irrational)
+@pure function lessrational(rx::Rational{<:Integer}, x::AbstractIrrational)
     # an @pure version of `<` for determining if the rationalization of
     # an irrational number required rounding up or down
     return rx < big(x)
 end
-function <{T}(x::Irrational, y::Rational{T})
+function <(x::AbstractIrrational, y::Rational{T}) where T
     T <: Unsigned && x < 0.0 && return true
     rx = rationalize(T, x)
     if lessrational(rx, x)
@@ -78,7 +112,7 @@ function <{T}(x::Irrational, y::Rational{T})
         return rx <= y
     end
 end
-function <{T}(x::Rational{T}, y::Irrational)
+function <(x::Rational{T}, y::AbstractIrrational) where T
     T <: Unsigned && y < 0.0 && return false
     ry = rationalize(T, y)
     if lessrational(ry, y)
@@ -87,116 +121,79 @@ function <{T}(x::Rational{T}, y::Irrational)
         return x < ry
     end
 end
-<(x::Irrational, y::Rational{BigInt}) = big(x) < y
-<(x::Rational{BigInt}, y::Irrational) = x < big(y)
+<(x::AbstractIrrational, y::Rational{BigInt}) = big(x) < y
+<(x::Rational{BigInt}, y::AbstractIrrational) = x < big(y)
 
-<=(x::Irrational, y::Rational) = x < y
-<=(x::Rational, y::Irrational) = x < y
+<=(x::AbstractIrrational, y::Rational) = x < y
+<=(x::Rational, y::AbstractIrrational) = x < y
 
-isfinite(::Irrational) = true
+isfinite(::AbstractIrrational) = true
+isinteger(::AbstractIrrational) = false
+iszero(::AbstractIrrational) = false
+isone(::AbstractIrrational) = false
 
-hash(x::Irrational, h::UInt) = 3*object_id(x) - h
+hash(x::Irrational, h::UInt) = 3*objectid(x) - h
 
--(x::Irrational) = -Float64(x)
+widen(::Type{T}) where {T<:Irrational} = T
+
+zero(::AbstractIrrational) = false
+zero(::Type{<:AbstractIrrational}) = false
+
+one(::AbstractIrrational) = true
+one(::Type{<:AbstractIrrational}) = true
+
+-(x::AbstractIrrational) = -Float64(x)
 for op in Symbol[:+, :-, :*, :/, :^]
-    @eval $op(x::Irrational, y::Irrational) = $op(Float64(x),Float64(y))
+    @eval $op(x::AbstractIrrational, y::AbstractIrrational) = $op(Float64(x),Float64(y))
 end
-*(x::Bool, y::Irrational) = ifelse(x, Float64(y), 0.0)
+*(x::Bool, y::AbstractIrrational) = ifelse(x, Float64(y), 0.0)
 
+round(x::Irrational, r::RoundingMode) = round(float(x), r)
+
+"""
+	@irrational sym val def
+	@irrational(sym, val, def)
+
+Define a new `Irrational` value, `sym`, with pre-computed `Float64` value `val`,
+and arbitrary-precision definition in terms of `BigFloat`s given be the expression `def`.
+"""
 macro irrational(sym, val, def)
     esym = esc(sym)
     qsym = esc(Expr(:quote, sym))
     bigconvert = isa(def,Symbol) ? quote
-        function Base.convert(::Type{BigFloat}, ::Irrational{$qsym})
-            c = BigFloat()
+        function Base.BigFloat(::Irrational{$qsym}, r::MPFR.MPFRRoundingMode=MPFR.ROUNDING_MODE[]; precision=precision(BigFloat))
+            c = BigFloat(;precision=precision)
             ccall(($(string("mpfr_const_", def)), :libmpfr),
-                  Cint, (Ptr{BigFloat}, Int32),
-                  &c, MPFR.ROUNDING_MODE[])
+                  Cint, (Ref{BigFloat}, MPFR.MPFRRoundingMode), c, r)
             return c
         end
     end : quote
-        Base.convert(::Type{BigFloat}, ::Irrational{$qsym}) = $(esc(def))
+        function Base.BigFloat(::Irrational{$qsym}; precision=precision(BigFloat))
+            setprecision(BigFloat, precision) do
+                $(esc(def))
+            end
+        end
     end
     quote
         const $esym = Irrational{$qsym}()
         $bigconvert
-        Base.convert(::Type{Float64}, ::Irrational{$qsym}) = $val
-        Base.convert(::Type{Float32}, ::Irrational{$qsym}) = $(Float32(val))
+        Base.Float64(::Irrational{$qsym}) = $val
+        Base.Float32(::Irrational{$qsym}) = $(Float32(val))
         @assert isa(big($esym), BigFloat)
         @assert Float64($esym) == Float64(big($esym))
         @assert Float32($esym) == Float32(big($esym))
     end
 end
 
-big(x::Irrational) = convert(BigFloat,x)
-
-## specific irriational mathematical constants
-
-@irrational π        3.14159265358979323846  pi
-@irrational e        2.71828182845904523536  exp(big(1))
-@irrational γ        0.57721566490153286061  euler
-@irrational catalan  0.91596559417721901505  catalan
-@irrational φ        1.61803398874989484820  (1+sqrt(big(5)))/2
-
-# aliases
-"""
-    pi
-    π
-
-The constant pi.
-"""
-const pi = π
-
-"""
-    e
-    eu
-
-The constant e.
-"""
-const eu = e
-
-"""
-    γ
-    eulergamma
-
-Euler's constant.
-"""
-const eulergamma = γ
-
-"""
-    φ
-    golden
-
-The golden ratio.
-"""
-const golden = φ
-
-"""
-    catalan
-
-Catalan's constant.
-"""
-catalan
-
-# special behaviors
-
-# use exp for e^x or e.^x, as in
-#    ^(::Irrational{:e}, x::Number) = exp(x)
-#    .^(::Irrational{:e}, x) = exp(x)
-# but need to loop over types to prevent ambiguity with generic rules for ^(::Number, x) etc.
-for T in (Irrational, Rational, Integer, Number)
-    ^(::Irrational{:e}, x::T) = exp(x)
-end
-for T in (Range, BitArray, StridedArray, AbstractArray)
-    .^(::Irrational{:e}, x::T) = exp.(x)
-end
-
-log(::Irrational{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
-log(::Irrational{:e}, x::Number) = log(x)
+big(x::AbstractIrrational) = BigFloat(x)
+big(::Type{<:AbstractIrrational}) = BigFloat
 
 # align along = for nice Array printing
-function alignment(io::IO, x::Irrational)
-    m = match(r"^(.*?)(=.*)$", sprint(0, showcompact, x, env=io))
-    m === nothing ? (length(sprint(0, showcompact, x, env=io)), 0) :
+function alignment(io::IO, x::AbstractIrrational)
+    m = match(r"^(.*?)(=.*)$", sprint(show, x, context=io, sizehint=0))
+    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
     (length(m.captures[1]), length(m.captures[2]))
 end
+
+# inv
+inv(x::AbstractIrrational) = 1/x

@@ -1,5 +1,5 @@
 # This file is a part of Julia, but is derived from
-# https://github.com/floitsch/double-conversion which has the following license
+# https://github.com/google/double-conversion which has the following license
 #
 # Copyright 2006-2014, the V8 project authors. All rights reserved.
 # Redistribution and use in source and binary forms, with or without
@@ -87,7 +87,7 @@ function digitgen(w,buffer,requested_digits=1000)
     return r, kappa, len
 end
 
-function fastprecision(v, requested_digits, buffer = Array{UInt8}(100))
+function fastprecision(v, requested_digits, buffer = Vector{UInt8}(undef, 100))
     f = normalize(Float64(v))
     ten_mk_min_exp = kMinExp - (f.e + FloatSignificandSize)
     ten_mk_max_exp = kMaxExp - (f.e + FloatSignificandSize)

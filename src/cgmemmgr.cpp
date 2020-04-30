@@ -1,20 +1,16 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-version.h"
 #include "platform.h"
 #include "options.h"
 
-#ifdef USE_MCJIT
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include "julia.h"
 #include "julia_internal.h"
 
-#if JL_LLVM_VERSION >= 30700
-#if JL_LLVM_VERSION < 30800
-#  include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
-#endif
 #ifdef _OS_LINUX_
 #  include <sys/syscall.h>
+#  include <sys/utsname.h>
 #endif
 #ifndef _OS_WINDOWS_
 #  include <sys/mman.h>
@@ -28,6 +24,7 @@
 #ifdef _OS_FREEBSD_
 #  include <sys/types.h>
 #endif
+#include "julia_assert.h"
 
 namespace {
 
@@ -99,9 +96,11 @@ static bool check_fd_or_close(int fd)
 {
     if (fd == -1)
         return false;
-    fcntl(fd, F_SETFD, FD_CLOEXEC);
-    fchmod(fd, S_IRWXU);
-    if (ftruncate(fd, jl_page_size) != 0) {
+    int err = fcntl(fd, F_SETFD, FD_CLOEXEC);
+    assert(err == 0);
+    (void)err; // prevent compiler warning
+    if (fchmod(fd, S_IRWXU) != 0 ||
+        ftruncate(fd, jl_page_size) != 0) {
         close(fd);
         return false;
     }
@@ -261,10 +260,45 @@ static void *alloc_shared_page(size_t size, size_t *id, bool exec)
 #ifdef _OS_LINUX_
 // Using `/proc/self/mem`, A.K.A. Keno's remote memory manager.
 
-static int self_mem_fd = -1;
-
-static int init_self_mem()
+ssize_t pwrite_addr(int fd, const void *buf, size_t nbyte, uintptr_t addr)
 {
+    static_assert(sizeof(off_t) >= 8, "off_t is smaller than 64bits");
+#ifdef _P64
+    const uintptr_t sign_bit = uintptr_t(1) << 63;
+    if (__unlikely(sign_bit & addr)) {
+        // This case should not happen with default kernel on 64bit since the address belongs
+        // to kernel space (linear mapping).
+        // However, it seems possible to change this at kernel compile time.
+
+        // pwrite doesn't support offset with sign bit set but lseek does.
+        // This is obviously not thread safe but none of the mem manager does anyway...
+        // From the kernel code, `lseek` with `SEEK_SET` can't fail.
+        // However, this can possibly confuse the glibc wrapper to think that
+        // we have invalid input value. Use syscall directly to be sure.
+        syscall(SYS_lseek, (long)fd, addr, (long)SEEK_SET);
+        // The return value can be -1 when the glibc syscall function
+        // think we have an error return with and `addr` that's too large.
+        // Ignore the return value for now.
+        return write(fd, buf, nbyte);
+    }
+#endif
+    return pwrite(fd, buf, nbyte, (off_t)addr);
+}
+
+// Do not call this directly.
+// Use `get_self_mem_fd` which has a guard to call this only once.
+static int _init_self_mem()
+{
+    struct utsname kernel;
+    uname(&kernel);
+    int major, minor;
+    if (-1 == sscanf(kernel.release, "%d.%d", &major, &minor))
+        return -1;
+    // Can't risk getting a memory block backed by transparent huge pages,
+    // which cause the kernel to freeze on systems that have the DirtyCOW
+    // mitigation patch, but are < 4.10.
+    if (!(major > 4 || (major == 4 && minor >= 10)))
+        return -1;
 #ifdef O_CLOEXEC
     int fd = open("/proc/self/mem", O_RDWR | O_SYNC | O_CLOEXEC);
     if (fd == -1)
@@ -275,22 +309,34 @@ static int init_self_mem()
         return -1;
     fcntl(fd, F_SETFD, FD_CLOEXEC);
 #endif
-    // buffer to check if write works;
-    volatile uint64_t buff = 0;
-    uint64_t v = 0x12345678;
-    int ret = pwrite(fd, (void*)&v, sizeof(uint64_t), (uintptr_t)&buff);
-    if (ret != sizeof(uint64_t) || buff != 0x12345678) {
+
+    // Check if we can write to a RX page
+    void *test_pg = mmap(nullptr, jl_page_size, PROT_READ | PROT_EXEC,
+                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    // We can ignore this though failure to allocate executable memory would be a bigger problem.
+    assert(test_pg != MAP_FAILED && "Cannot allocate executable memory");
+
+    const uint64_t v = 0xffff000012345678u;
+    int ret = pwrite_addr(fd, (const void*)&v, sizeof(uint64_t), (uintptr_t)test_pg);
+    if (ret != sizeof(uint64_t) || *(volatile uint64_t*)test_pg != v) {
+        munmap(test_pg, jl_page_size);
         close(fd);
         return -1;
     }
-    self_mem_fd = fd;
+    munmap(test_pg, jl_page_size);
+    return fd;
+}
+
+static int get_self_mem_fd()
+{
+    static int fd = _init_self_mem();
     return fd;
 }
 
 static void write_self_mem(void *dest, void *ptr, size_t size)
 {
     while (size > 0) {
-        ssize_t ret = pwrite(self_mem_fd, ptr, size, (uintptr_t)dest);
+        ssize_t ret = pwrite_addr(get_self_mem_fd(), ptr, size, (uintptr_t)dest);
         if ((size_t)ret == size)
             return;
         if (ret == -1 && (errno == EAGAIN || errno == EINTR))
@@ -644,7 +690,7 @@ public:
         : ROAllocator<exec>(),
           temp_buff()
     {
-        assert(self_mem_fd != -1);
+        assert(get_self_mem_fd() != -1);
     }
     void finalize() override
     {
@@ -704,7 +750,7 @@ public:
           code_allocated(false)
     {
 #ifdef _OS_LINUX_
-        if (!ro_alloc && init_self_mem() != -1) {
+        if (!ro_alloc && get_self_mem_fd() != -1) {
             ro_alloc.reset(new SelfMemAllocator<false>());
             exe_alloc.reset(new SelfMemAllocator<true>());
         }
@@ -719,18 +765,20 @@ public:
     }
     void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
                           size_t Size) override;
+#if 0
+    // Disable for now since we are not actually using this.
     void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr,
                             size_t Size) override;
+#endif
     uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
                                  unsigned SectionID,
                                  StringRef SectionName) override;
     uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
                                  unsigned SectionID, StringRef SectionName,
                                  bool isReadOnly) override;
-#if JL_LLVM_VERSION >= 30800
+    using SectionMemoryManager::notifyObjectLoaded;
     void notifyObjectLoaded(RuntimeDyld &Dyld,
                             const object::ObjectFile &Obj) override;
-#endif
     bool finalizeMemory(std::string *ErrMsg = nullptr) override;
     template <typename DL, typename Alloc>
     void mapAddresses(DL &Dyld, Alloc &&allocator)
@@ -802,7 +850,6 @@ uint8_t *RTDyldMemoryManagerJL::allocateDataSection(uintptr_t Size,
                                                      SectionName, isReadOnly);
 }
 
-#if JL_LLVM_VERSION >= 30800
 void RTDyldMemoryManagerJL::notifyObjectLoaded(RuntimeDyld &Dyld,
                                                const object::ObjectFile &Obj)
 {
@@ -814,7 +861,6 @@ void RTDyldMemoryManagerJL::notifyObjectLoaded(RuntimeDyld &Dyld,
     assert(exe_alloc);
     mapAddresses(Dyld);
 }
-#endif
 
 bool RTDyldMemoryManagerJL::finalizeMemory(std::string *ErrMsg)
 {
@@ -846,22 +892,16 @@ void RTDyldMemoryManagerJL::registerEHFrames(uint8_t *Addr,
     }
 }
 
+#if 0
 void RTDyldMemoryManagerJL::deregisterEHFrames(uint8_t *Addr,
                                                uint64_t LoadAddr,
                                                size_t Size)
 {
     deregister_eh_frames((uint8_t*)LoadAddr, Size);
 }
-
-}
-
-#if JL_LLVM_VERSION < 30800
-void notifyObjectLoaded(RTDyldMemoryManager *memmgr,
-                        llvm::orc::ObjectLinkingLayerBase::ObjSetHandleT H)
-{
-    ((RTDyldMemoryManagerJL*)memmgr)->mapAddresses(**H);
-}
 #endif
+
+}
 
 #ifdef _OS_WINDOWS_
 void *lookupWriteAddressFor(RTDyldMemoryManager *memmgr, void *rt_addr)
@@ -870,12 +910,7 @@ void *lookupWriteAddressFor(RTDyldMemoryManager *memmgr, void *rt_addr)
 }
 #endif
 
-#else // JL_LLVM_VERSION >= 30700
-typedef SectionMemoryManager RTDyldMemoryManagerJL;
-#endif // JL_LLVM_VERSION >= 30700
-
 RTDyldMemoryManager* createRTDyldMemoryManager()
 {
     return new RTDyldMemoryManagerJL();
 }
-#endif // USE_MCJIT

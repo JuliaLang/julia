@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 //===----------------------------------------------------------------------===//
 //
@@ -23,10 +23,12 @@
 
 struct ABI_ARMLayout : AbiLayout {
 
-void needPassByRef(jl_datatype_t *dt, bool *byRef, bool *inReg) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 {
-    return;
+    return false;
 }
+
+#define jl_is_floattype(v)   jl_subtype(v,(jl_value_t*)jl_floatingpoint_type)
 
 Type *get_llvm_fptype(jl_datatype_t *dt) const
 {
@@ -80,7 +82,7 @@ size_t isLegalHA(jl_datatype_t *dt, Type *&base) const
     if (jl_is_structtype(dt)) {
         // Fast path checks before descending the type hierarchy
         // (4 x 128b vector == 64B max size)
-        if (jl_datatype_size(dt) > 64 || !dt->layout->pointerfree || dt->layout->haspadding)
+        if (jl_datatype_size(dt) > 64 || dt->layout->npointers || dt->layout->haspadding)
             return 0;
 
         base = NULL;
@@ -166,8 +168,8 @@ void classify_return_arg(jl_datatype_t *dt, bool *reg,
     // - A double-word sized Fundamental Data Type (e.g., long long, double and
     //   64-bit containerized vectors) is returned in r0 and r1.
     // - A word-sized Fundamental Data Type (eg., int, float) is returned in r0.
-    // NOTE: assuming "fundamental type" == jl_is_bitstype, might need exact def
-    if (jl_is_bitstype(dt) && jl_datatype_size(dt) <= 8) {
+    // NOTE: assuming "fundamental type" == jl_is_primitivetype, might need exact def
+    if (jl_is_primitivetype(dt) && jl_datatype_size(dt) <= 8) {
         *reg = true;
         return;
     }
@@ -229,7 +231,7 @@ void classify_arg(jl_datatype_t *dt, bool *reg,
         return;
 
     // Handle fundamental types
-    if (jl_is_bitstype(dt) && jl_datatype_size(dt) <= 8) {
+    if (jl_is_primitivetype(dt) && jl_datatype_size(dt) <= 8) {
         *reg = true;
         return;
     }
@@ -268,7 +270,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
     //   For a Composite Type, the alignment of the copy will have 4-byte
     //   alignment if its natural alignment is <= 4 and 8-byte alignment if
     //   its natural alignment is >= 8
-    size_t align = dt->layout->alignment;
+    size_t align = jl_datatype_align(dt);
     if (align < 4)
         align = 4;
     if (align > 8)

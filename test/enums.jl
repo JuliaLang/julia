@@ -1,18 +1,23 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const curmod = current_module()
-const curmod_name = fullname(curmod)
-const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+# For curmod_*
+include("testenv.jl")
 
-using Base.Test
+using Test, Serialization
+
+isdefined(Main, :MacroCalls) || @eval Main include("testhelpers/MacroCalls.jl")
+using Main.MacroCalls
 
 @test_throws MethodError convert(Enum, 1.0)
 
-@test_throws ArgumentError eval(:(@enum Foo))
+@test_throws ArgumentError("invalid type expression for enum 1 + 1") @macrocall(@enum 1 + 1 2)
+@test_throws ArgumentError("no arguments given for Enum Foo") @macrocall(@enum Foo)
+@test_throws ArgumentError("invalid base type for Enum Foo2, Foo2::Float64=::Float64; base type must be an integer primitive type") @macrocall(@enum Foo2::Float64 apple=1.)
 
 @enum Fruit apple orange kiwi
 @test typeof(Fruit) == DataType
-@test isbits(Fruit)
+@test isbitstype(Fruit)
+@test isbits(apple)
 @test typeof(apple) <: Fruit <: Enum
 @test Int(apple) == 0
 @test Int(orange) == 1
@@ -27,19 +32,19 @@ using Base.Test
 @test_throws MethodError Fruit(0.0)
 @test typemin(Fruit) == apple
 @test typemax(Fruit) == kiwi
-@test convert(Fruit,0) == apple
-@test convert(Fruit,1) == orange
-@test convert(Fruit,2) == kiwi
-@test_throws ArgumentError convert(Fruit,3)
-@test_throws ArgumentError convert(Fruit,-1)
-@test convert(UInt8,apple) === 0x00
-@test convert(UInt16,orange) === 0x0001
-@test convert(UInt128,kiwi) === 0x00000000000000000000000000000002
-@test typeof(convert(BigInt,apple)) <: BigInt
-@test convert(BigInt,apple) == 0
-@test convert(Bool,apple) == false
-@test convert(Bool,orange) == true
-@test_throws InexactError convert(Bool,kiwi)
+@test Fruit(0) == apple
+@test Fruit(1) == orange
+@test Fruit(2) == kiwi
+@test_throws ArgumentError Fruit(3)
+@test_throws ArgumentError Fruit(-1)
+@test UInt8(apple) === 0x00
+@test UInt16(orange) === 0x0001
+@test UInt128(kiwi) === 0x00000000000000000000000000000002
+@test typeof(BigInt(apple)) <: BigInt
+@test BigInt(apple) == 0
+@test Bool(apple) == false
+@test Bool(orange) == true
+@test_throws InexactError Bool(kiwi)
 @test instances(Fruit) == (apple, orange, kiwi)
 
 f(x::Fruit) = "hey, I'm a Fruit"
@@ -67,75 +72,46 @@ end
 @enum Negative _neg1=-1 _neg2=-2
 @test Int(_neg1) === -1
 @test Int(_neg2) === -2
-@test_throws InexactError convert(UInt8, _neg1)
+@test_throws InexactError UInt8(_neg1)
 @enum Negative2 _neg5=-5 _neg4 _neg3
 @test Int(_neg5) === -5
 @test Int(_neg4) === -4
 @test Int(_neg3) === -3
 
-@test_throws ArgumentError eval(:(@enum Test1 _zerofp=0.0))
-@test_throws ArgumentError eval(:(@enum Test11 _zerofp2=0.5))
+@test_throws ArgumentError("invalid value for Enum Test1, _zerofp = 0.0; values must be integers") @macrocall(@enum Test1 _zerofp=0.0)
+@test_throws ArgumentError("invalid value for Enum Test11, _zerofp2 = 0.5; values must be integers") @macrocall(@enum Test11 _zerofp2=0.5)
 @enum Test111 _zerobi=BigInt(1)
 @test Integer(_zerobi) == 1
 
 # can't use non-identifiers as enum members
-@test_throws ArgumentError eval(:(@enum(Test2, ?)))
-@test_throws ArgumentError eval(:(@enum Test22 1=2))
+@test_throws ArgumentError("""invalid argument for Enum Test2: if x
+                                  1
+                              else
+                                  2
+                              end""") @macrocall(@enum Test2  x ? 1 : 2)
+@test_throws ArgumentError("invalid argument for Enum Test22: 1 = 2") @macrocall(@enum Test22 1=2)
+@test_throws ArgumentError("invalid name for Enum TestEnum; \"1 + 1\" is not a valid identifier") var"@enum"(LineNumberNode(@__LINE__), @__MODULE__, :TestEnum, Symbol("1 + 1"))
 
 # other Integer types of enum members
-# TODO - not yet supported
-#=
-@enum Test3 _one_Test3=0x01 _two_Test3=0x02 _three_Test3=0x03
-@test typeof(_one_Test3.val) <: UInt8
-@test _one_Test3.val === 0x01
+@enum Test3::UInt8 _one_Test3=0x01 _two_Test3=0x02 _three_Test3=0x03
+@test Test3.size == 1
+@test UInt8(_one_Test3) === 0x01
 @test length(instances(Test3)) == 3
 
-@enum Test4 _one_Test4=0x01 _two_Test4=0x0002 _three_Test4=0x03
-@test _one_Test4.val === 0x0001
-@test _two_Test4.val === 0x0002
-@test _three_Test4.val === 0x0003
-@test typeof(_one_Test4.val) <: UInt16
+@enum Test4::UInt16 _one_Test4=0x01 _two_Test4=0x0002 _three_Test4=0x03
+@test Test4.size == 2
 
-@enum Test5 _one_Test5=0x01 _two_Test5=0x00000002 _three_Test5=0x00000003
-@test _one_Test5.val === 0x00000001
-@test _two_Test5.val === 0x00000002
-@test _three_Test5.val === 0x00000003
-@test typeof(_one_Test5.val) <: UInt32
+@enum Test5::UInt32 _one_Test5=0x01 _two_Test5=0x00000002 _three_Test5=0x00000003
+@test Test5.size == 4
 
-@enum Test6 _one_Test6=0x00000000000000000000000000000001 _two_Test6=0x00000000000000000000000000000002
-@test _one_Test6.val === 0x00000000000000000000000000000001
-@test _two_Test6.val === 0x00000000000000000000000000000002
-@test typeof(_one_Test6.val) <: UInt128
+@enum Test6::UInt128 _one_Test6=0x00000000000000000000000000000001 _two_Test6=0x00000000000000000000000000000002
+@test Test6.size == 16
+@test typeof(Integer(_one_Test6)) == UInt128
 
-@enum Test7 _zero_Test7=0b0 _one_Test7=0b1 _two_Test7=0b10
-@test _zero_Test7.val === 0x00
-@test _one_Test7.val === 0x01
-@test _two_Test7.val === 0x02
-@test typeof(_zero_Test7.val) <: UInt8
-
-@test_throws ArgumentError eval(:(@enum Test8 _zero="zero"))
-@test_throws ArgumentError eval(:(@enum Test9 _zero='0'))
-
-@enum Test8 _zero_Test8=zero(Int64)
-@test typeof(_zero_Test8.val) <: Int64
-@test _zero_Test8.val === Int64(0)
-
-@enum Test9 _zero_Test9 _one_Test9=0x01 _two_Test9
-@test typeof(_zero_Test9.val) <: Int
-@test _zero_Test9.val === 0
-@test typeof(_one_Test9.val) <: Int
-@test _one_Test9.val === 1
-@test typeof(_two_Test9.val) <: Int
-@test _two_Test9.val === 2
-
-@enum Test10 _zero_Test10=0x00 _one_Test10 _two_Test10
-@test typeof(_zero_Test10.val) <: UInt8
-@test _zero_Test10.val === 0x00
-@test typeof(_one_Test10.val) <: UInt8
-@test _one_Test10.val === 0x01
-@test typeof(_two_Test10.val) <: UInt8
-@test _two_Test10.val === 0x02
-=#
+# enum values must be integers
+@test_throws ArgumentError("invalid value for Enum Test7, _zero = \"zero\"; values must be integers") @macrocall(@enum Test7 _zero="zero")
+@test_throws ArgumentError("invalid value for Enum Test8, _zero = '0'; values must be integers") @macrocall(@enum Test8 _zero='0')
+@test_throws ArgumentError("invalid value for Enum Test9, _zero = 0.5; values must be integers") @macrocall(@enum Test9 _zero=0.5)
 
 # test macro handles keyword arguments
 @enum(Test11, _zero_Test11=2,
@@ -149,16 +125,23 @@ end
 @test Int(_three_Test11) == 6
 
 # don't allow enum value to overflow
-@test_throws ArgumentError @eval(@enum EnumOvf x=typemax(Int32) y)
+@test_throws ArgumentError("overflow in value \"y\" of Enum EnumOvf") @macrocall(@enum EnumOvf x=typemax(Int32) y)
 
 # test for unique Enum values
-@test_throws ArgumentError eval(:(@enum(Test14, _zero_Test14, _one_Test14, _two_Test14=0)))
+@test_throws ArgumentError("both _two_Test14 and _zero_Test14 have value 0 in Enum Test14; values must be unique") @macrocall(@enum(Test14, _zero_Test14, _one_Test14, _two_Test14=0))
+# and names
+@test_throws ArgumentError("name \"_zero_Test15\" in Enum Test15 is not unique") @macrocall(@enum(Test15, _zero_Test15, _one_Test15, _zero_Test15))
 
-@test repr(apple) == "apple::$(string(Fruit)) = 0"
+@test repr(apple) == "$(@__MODULE__).apple"
 @test string(apple) == "apple"
 
-@test reprmime("text/plain", Fruit) == "Enum $(string(Fruit)):\napple = 0\norange = 1\nkiwi = 2"
-@test reprmime("text/plain", orange) == "orange::$(curmod_prefix)Fruit = 1"
+@test repr("text/plain", Fruit) == "Enum $(string(Fruit)):\napple = 0\norange = 1\nkiwi = 2"
+@test repr("text/plain", orange) == "orange::Fruit = 1"
+let io = IOBuffer()
+    ioc = IOContext(io, :compact=>false)
+    show(io, Fruit)
+    @test String(take!(io)) == sprint(print, Fruit)
+end
 
 @enum LogLevel DEBUG INFO WARN ERROR CRITICAL
 @test DEBUG < CRITICAL
@@ -169,3 +152,51 @@ let b = IOBuffer()
     seekstart(b)
     @test deserialize(b) === apple
 end
+
+@enum UI8::UInt8 ten=0x0A thr=0x03 sevn=0x07 fiftn=0xF0
+@test repr("text/plain", UI8)   == "Enum $(string(UI8)):\nten = 0x0a\nthr = 0x03\nsevn = 0x07\nfiftn = 0xf0"
+@test repr("text/plain", ten)   == "$(string(ten))::UI8 = 0x0a"
+@test repr("text/plain", thr)   == "$(string(thr))::UI8 = 0x03"
+@test repr("text/plain", sevn)  == "$(string(sevn))::UI8 = 0x07"
+@test repr("text/plain", fiftn) == "$(string(fiftn))::UI8 = 0xf0"
+
+# test block form
+@enum BritishFood begin
+    blackpudding = 1
+    scotchegg    = 2
+    haggis       = 4
+end
+@test Int(haggis) == 4
+
+@test (Vector{Fruit}(undef, 3) .= apple) == [apple, apple, apple]
+
+# long, discongruous
+@enum Alphabet begin
+    alphabet_a
+    alphabet_b
+    alphabet_c
+    alphabet_d
+    alphabet_e
+    alphabet_f
+    alphabet_g
+    alphabet_h
+    alphabet_i
+    alphabet_j
+    alphabet_k
+    alphabet_l
+    alphabet_m
+    alphabet_n
+    alphabet_o
+    alphabet_p
+    alphabet_q
+    alphabet_r
+    alphabet_s
+    alphabet_t
+    alphabet_u
+    alphabet_v
+    alphabet_w
+    alphabet_x
+    alphabet_y
+    alphabet_z = 26
+end
+@test alphabet_z == Alphabet(26)

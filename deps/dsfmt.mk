@@ -1,5 +1,7 @@
 ## DSFMT ##
 
+ifneq ($(USE_BINARYBUILDER_DSFMT),1)
+
 DSFMT_CFLAGS := $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES
 ifneq ($(USEMSVC), 1)
 DSFMT_CFLAGS += -O3 -finline-functions -fomit-frame-pointer -fno-strict-aliasing \
@@ -11,11 +13,11 @@ ifeq ($(ARCH), x86_64)
 DSFMT_CFLAGS += -msse2 -DHAVE_SSE2
 endif
 
-$(SRCDIR)/srccache/dsfmt-$(DSFMT_VER).tar.gz: | $(SRCDIR)/srccache
+$(SRCCACHE)/dsfmt-$(DSFMT_VER).tar.gz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz
 	touch -c $@
 
-$(BUILDDIR)/dsfmt-$(DSFMT_VER)/source-extracted: $(SRCDIR)/srccache/dsfmt-$(DSFMT_VER).tar.gz
+$(BUILDDIR)/dsfmt-$(DSFMT_VER)/source-extracted: $(SRCCACHE)/dsfmt-$(DSFMT_VER).tar.gz
 	$(JLCHECKSUM) $<
 	-rm -r $(dir $@)
 	mkdir -p $(dir $@)
@@ -52,11 +54,19 @@ clean-dsfmt:
 	-rm $(BUILDDIR)/dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
 
 distclean-dsfmt:
-	-rm -rf $(SRCDIR)/srccache/dsfmt*.tar.gz $(SRCDIR)/srccache/dsfmt-$(DSFMT_VER) $(BUILDDIR)/dsfmt-$(DSFMT_VER)
+	-rm -rf $(SRCCACHE)/dsfmt*.tar.gz $(SRCCACHE)/dsfmt-$(DSFMT_VER) $(BUILDDIR)/dsfmt-$(DSFMT_VER)
 
-get-dsfmt: $(SRCDIR)/srccache/dsfmt-$(DSFMT_VER).tar.gz
+get-dsfmt: $(SRCCACHE)/dsfmt-$(DSFMT_VER).tar.gz
 extract-dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/source-extracted
 configure-dsfmt: extract-dsfmt
 compile-dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/build-compiled
 fastcheck-dsfmt: check-dsfmt
 check-dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/build-checked
+
+else
+
+DSFMT_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/dSFMT-v$(DSFMT_VER)-$(DSFMT_BB_REL)
+DSFMT_BB_NAME := dSFMT.v$(DSFMT_VER)
+$(eval $(call bb-install,dsfmt,DSFMT,false))
+
+endif # USE_BINARYBUILDER_DSFMT

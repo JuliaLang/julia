@@ -1,15 +1,34 @@
 # Vagrantfile for building Windows Julia via MSYS2 or Cygwin
 
+$script_cygwin = <<SCRIPT
+# change the following to 32 for 32-bit Julia
+$bits = "64"
+$arch = "x86_$bits".Replace("x86_32", "i686")
+$setup = "setup-$arch.exe".Replace("i686", "x86")
+$cyginstall = "C:\\cygwin$bits"
+
+mkdir -Force $cyginstall | Out-Null
+(new-object net.webclient).DownloadFile(
+  "https://cygwin.com/$setup", "$cyginstall\\$setup")
+foreach ($pkg in @("git,make,curl,patch,python,gcc-g++,m4,cmake,p7zip",
+    "mingw64-$arch-gcc-g++,mingw64-$arch-gcc-fortran")) {
+  & "$cyginstall\\$setup" -q -n -R $cyginstall -l $cyginstall\\packages `
+    -s https://mirrors.kernel.org/sourceware/cygwin -g -P $pkg | Where-Object `
+    -FilterScript {$_ -notlike "Installing file *"} | Write-Output
+}
+& "$cyginstall\\bin\\sh" -lc "if ! [ -e julia$bits ]; then git clone \\
+  git://github.com/JuliaLang/julia.git julia$bits; fi && cd julia$bits && git pull && \\
+  echo 'XC_HOST = $arch-w64-mingw32' > Make.user && make cleanall && \\
+  make -j2 testall && make win-extras binary-dist"
+SCRIPT
+
 $script_msys2 = <<SCRIPT
-# change the following to 32 for 32 bit Julia
+# change the following to 32 for 32-bit Julia
 $bits = "64"
 $arch = "x86_$bits".Replace("x86_32", "i686")
 # change the date in the following for future msys2 releases
 $msys2tarball = "msys2-base-$arch-20150916.tar"
-
-# these environment variables need to be set, or Julia gets confused
-[Environment]::SetEnvironmentVariable("HOMEDRIVE", "C:")
-[Environment]::SetEnvironmentVariable("HOMEPATH", "\\Users\\vagrant")
+$msys2install = "C:\\msys$bits"
 
 # install chocolatey, cmake, and python2
 iex ((new-object net.webclient).DownloadString("https://chocolatey.org/install.ps1"))
@@ -18,55 +37,32 @@ choco install -y python2
 
 # pacman is picky, reinstall msys2 from scratch
 foreach ($dir in @("etc", "usr", "var")) {
-  if (Test-Path "C:\\msys$bits\\$dir") {
-    rm -Recurse -Force C:\\msys$bits\\$dir
+  if (Test-Path "$msys2install\\$dir") {
+    rm -Recurse -Force $msys2install\\$dir
   }
 }
-mkdir -Force C:\\msys$bits | Out-Null
+mkdir -Force $msys2install | Out-Null
 (new-object net.webclient).DownloadFile(
   "https://chocolatey.org/7za.exe",
-  "C:\\msys$bits\\7za.exe")
+  "$msys2install\\7za.exe")
 (new-object net.webclient).DownloadFile(
-  "http://sourceforge.net/projects/msys2/files/Base/$arch/$msys2tarball.xz",
-  "C:\\msys$bits\\$msys2tarball.xz")
+  "https://sourceforge.net/projects/msys2/files/Base/$arch/$msys2tarball.xz",
+  "$msys2install\\$msys2tarball.xz")
 cd C:\\
 & "msys$bits\\7za.exe" x -y msys$bits\\$msys2tarball.xz
 & "msys$bits\\7za.exe" x -y $msys2tarball | Out-Null
 rm $msys2tarball, msys$bits\\$msys2tarball.xz, msys$bits\\7za.exe
 
-& "C:\\msys$bits\\usr\\bin\\sh" -lc "pacman --noconfirm --force --needed -Sy \\
+& "$msys2install\\usr\\bin\\sh" -lc "pacman --noconfirm --force --needed -Sy \\
   bash pacman pacman-mirrors msys2-runtime"
-& "C:\\msys$bits\\usr\\bin\\sh" -lc "pacman --noconfirm -Syu && \\
+& "$msys2install\\usr\\bin\\sh" -lc "pacman --noconfirm -Syu && \\
   pacman --noconfirm -S diffutils git m4 make patch tar p7zip msys/openssh"
-& "C:\\msys$bits\\usr\\bin\\sh" -lc "if ! [ -e julia$bits ]; then
+& "$msys2install\\usr\\bin\\sh" -lc "if ! [ -e julia$bits ]; then
   git clone git://github.com/JuliaLang/julia.git julia$bits; fi && cd julia$bits && git pull && \\
   if ! [ -e usr/$arch-w64-mingw32 ]; then contrib/windows/get_toolchain.sh $bits; fi && \\
   export PATH=`$PWD/usr/$arch-w64-mingw32/sys-root/mingw/bin:`$PATH:/c/tools/python2 && \\
   echo 'override CMAKE=/c/Program\\ Files\\ \\(x86\\)/CMake/bin/cmake' > Make.user && \\
   make cleanall && make -j2 testall && make win-extras binary-dist"
-SCRIPT
-
-$script_cygwin = <<SCRIPT
-# change the following to 32 for 32 bit Julia
-$bits = "64"
-$arch = "x86_$bits".Replace("x86_32", "i686")
-$setup = "setup-$arch.exe".Replace("i686", "x86")
-
-mkdir -Force C:\\cygwin$bits | Out-Null
-(new-object net.webclient).DownloadFile(
-  "http://cygwin.com/$setup", "C:\\cygwin$bits\\$setup")
-foreach ($pkg in @("git,make,curl,patch,python,gcc-g++,m4,cmake,p7zip",
-    "mingw64-$arch-gcc-g++,mingw64-$arch-gcc-fortran")) {
-  & "C:\\cygwin$bits\\$setup" -q -n -R C:\\cygwin$bits -l C:\\cygwin$bits\\packages `
-    -s http://mirrors.mit.edu/cygwin -g -P $pkg | Where-Object `
-    -FilterScript {$_ -notlike "Installing file *"} | Write-Output
-}
-[Environment]::SetEnvironmentVariable("HOMEDRIVE", "C:")
-[Environment]::SetEnvironmentVariable("HOMEPATH", "\\Users\\vagrant")
-& "C:\\cygwin$bits\\bin\\sh" -lc "if ! [ -e julia$bits ]; then git clone \\
-  git://github.com/JuliaLang/julia.git julia$bits; fi && cd julia$bits && git pull && \\
-  echo 'XC_HOST = $arch-w64-mingw32' > Make.user && make cleanall && \\
-  make -j2 testall && make win-extras binary-dist"
 SCRIPT
 
 Vagrant.configure("2") do |config|

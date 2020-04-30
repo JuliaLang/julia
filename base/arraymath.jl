@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## Unary operators ##
 
@@ -7,141 +7,59 @@
 
 Transform an array to its complex conjugate in-place.
 
-See also [`conj`](:func:`conj`).
+See also [`conj`](@ref).
+
+# Examples
+```jldoctest
+julia> A = [1+im 2-im; 2+2im 3+im]
+2×2 Array{Complex{Int64},2}:
+ 1+1im  2-1im
+ 2+2im  3+1im
+
+julia> conj!(A);
+
+julia> A
+2×2 Array{Complex{Int64},2}:
+ 1-1im  2+1im
+ 2-2im  3-1im
+```
 """
-function conj!{T<:Number}(A::AbstractArray{T})
-    for i in eachindex(A)
-        A[i] = conj(A[i])
-    end
-    return A
+conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
+
+for f in (:-, :conj, :real, :imag)
+    @eval ($f)(A::AbstractArray) = broadcast_preserving_zero_d($f, A)
 end
 
-for f in (:-, :~, :conj, :sign)
-    @eval begin
-        function ($f)(A::AbstractArray)
-            F = similar(A)
-            RF, RA = eachindex(F), eachindex(A)
-            if RF == RA
-                for i in RA
-                    F[i] = ($f)(A[i])
-                end
-            else
-                for (iF, iA) in zip(RF, RA)
-                   F[iF] = ($f)(A[iA])
-                end
-            end
-            return F
-        end
-    end
-end
-
-(-)(A::AbstractArray{Bool}) = reshape([ -A[i] for i in eachindex(A) ], size(A))
-
-real(A::AbstractArray) = reshape([ real(x) for x in A ], size(A))
-imag(A::AbstractArray) = reshape([ imag(x) for x in A ], size(A))
-
-function !(A::AbstractArray{Bool})
-    F = similar(A)
-    RF, RA = eachindex(F), eachindex(A)
-    if RF == RA
-        for i in RA
-            F[i] = !A[i]
-        end
-    else
-        for (iF, iA) in zip(RF, RA)
-            F[iF] = !A[iA]
-        end
-    end
-    return F
-end
 
 ## Binary arithmetic operators ##
 
-promote_array_type(F, ::Type, ::Type, T::Type) = T
-promote_array_type{S<:Real, A<:AbstractFloat}(F, ::Type{S}, ::Type{A}, ::Type) = A
-promote_array_type{S<:Integer, A<:Integer}(F, ::Type{S}, ::Type{A}, ::Type) = A
-promote_array_type{S<:Integer, A<:Integer}(::typeof(./), ::Type{S}, ::Type{A}, T::Type) = T
-promote_array_type{S<:Integer, A<:Integer}(::typeof(.\), ::Type{S}, ::Type{A}, T::Type) = T
-promote_array_type{S<:Integer}(::typeof(./), ::Type{S}, ::Type{Bool}, T::Type) = T
-promote_array_type{S<:Integer}(::typeof(.\), ::Type{S}, ::Type{Bool}, T::Type) = T
-promote_array_type{S<:Integer}(F, ::Type{S}, ::Type{Bool}, T::Type) = T
-
-for f in (:+, :-, :div, :mod, :&, :|, :xor)
-    @eval ($f)(A::AbstractArray, B::AbstractArray) =
-        _elementwise($f, promote_eltype_op($f, A, B), A, B)
-end
-function _elementwise(op, ::Type{Any}, A::AbstractArray, B::AbstractArray)
-    promote_shape(A, B) # check size compatibility
-    return broadcast(op, A, B)
-end
-function _elementwise{T}(op, ::Type{T}, A::AbstractArray, B::AbstractArray)
-    F = similar(A, T, promote_shape(A, B))
-    RF, RA, RB  = eachindex(F), eachindex(A), eachindex(B)
-    if RF == RA == RB
-        for i in RA
-            @inbounds F[i] = op(A[i], B[i])
-        end
-    else
-        for (iF, iA, iB) in zip(RF, RA, RB)
-            @inbounds F[iF] = op(A[iA], B[iB])
-        end
-    end
-    return F
-end
-
-for f in (:.+, :.-, :.*, :./, :.\, :.^, :.÷, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :xor)
-    @eval begin
-        function ($f){T}(A::Number, B::AbstractArray{T})
-            R = promote_op($f, typeof(A), T)
-            S = promote_array_type($f, typeof(A), T, R)
-            S === Any && return [($f)(A, b) for b in B]
-            F = similar(B, S)
-            RF, RB = eachindex(F), eachindex(B)
-            if RF == RB
-                for i in RB
-                    @inbounds F[i] = ($f)(A, B[i])
-                end
-            else
-                for (iF, iB) in zip(RF, RB)
-                    @inbounds F[iF] = ($f)(A, B[iB])
-                end
-            end
-            return F
-        end
-        function ($f){T}(A::AbstractArray{T}, B::Number)
-            R = promote_op($f, T, typeof(B))
-            S = promote_array_type($f, typeof(B), T, R)
-            S === Any && return [($f)(a, B) for a in A]
-            F = similar(A, S)
-            RF, RA = eachindex(F), eachindex(A)
-            if RF == RA
-                for i in RA
-                    @inbounds F[i] = ($f)(A[i], B)
-                end
-            else
-                for (iF, iA) in zip(RF, RA)
-                    @inbounds F[iF] = ($f)(A[iA], B)
-                end
-            end
-            return F
-        end
+for f in (:+, :-)
+    @eval function ($f)(A::AbstractArray, B::AbstractArray)
+        promote_shape(A, B) # check size compatibility
+        broadcast_preserving_zero_d($f, A, B)
     end
 end
 
-# familiar aliases for broadcasting operations of array ± scalar (#7226):
-(+)(A::AbstractArray{Bool},x::Bool) = A .+ x
-(+)(x::Bool,A::AbstractArray{Bool}) = x .+ A
-(-)(A::AbstractArray{Bool},x::Bool) = A .- x
-(-)(x::Bool,A::AbstractArray{Bool}) = x .- A
-(+)(A::AbstractArray,x::Number) = A .+ x
-(+)(x::Number,A::AbstractArray) = x .+ A
-(-)(A::AbstractArray,x::Number) = A .- x
-(-)(x::Number,A::AbstractArray) = x .- A
+function +(A::Array, Bs::Array...)
+    for B in Bs
+        promote_shape(A, B) # check size compatibility
+    end
+    broadcast_preserving_zero_d(+, A, Bs...)
+end
+
+for f in (:/, :\, :*)
+    if f !== :/
+        @eval ($f)(A::Number, B::AbstractArray) = broadcast_preserving_zero_d($f, A, B)
+    end
+    if f !== :\
+        @eval ($f)(A::AbstractArray, B::Number) = broadcast_preserving_zero_d($f, A, B)
+    end
+end
 
 ## data movement ##
 
-function flipdim{T}(A::Array{T}, d::Integer)
-    nd = ndims(A)
+function reverse(A::Array{T}; dims::Integer) where T
+    nd = ndims(A); d = dims
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)
     if sd == 1 || isempty(A)
@@ -155,7 +73,7 @@ function flipdim{T}(A::Array{T}, d::Integer)
         nnd += Int(size(A,i)==1 || i==d)
     end
     if nnd==nd
-        # flip along the only non-singleton dimension
+        # reverse along the only non-singleton dimension
         for i = 1:sd
             B[i] = A[sd+1-i]
         end
@@ -176,13 +94,13 @@ function flipdim{T}(A::Array{T}, d::Integer)
             end
         end
     else
-        if isbits(T) && M>200
+        if allocatedinline(T) && M>200
             for i = 1:sd
                 ri = sd+1-i
                 for j=0:stride:(N-stride)
                     offs = j + 1 + (i-1)*M
                     boffs = j + 1 + (ri-1)*M
-                    copy!(B, boffs, A, offs, M)
+                    copyto!(B, boffs, A, offs, M)
                 end
             end
         else
@@ -206,6 +124,7 @@ end
 
 Rotate matrix `A` left 90 degrees.
 
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -219,10 +138,10 @@ julia> rotl90(a)
 ```
 """
 function rotl90(A::AbstractMatrix)
-    ind1, ind2 = indices(A)
+    ind1, ind2 = axes(A)
     B = similar(A, (ind2,ind1))
     n = first(ind2)+last(ind2)
-    for i=indices(A,1), j=ind2
+    for i=axes(A,1), j=ind2
         B[n-j,i] = A[i,j]
     end
     return B
@@ -233,6 +152,7 @@ end
 
 Rotate matrix `A` right 90 degrees.
 
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -246,10 +166,10 @@ julia> rotr90(a)
 ```
 """
 function rotr90(A::AbstractMatrix)
-    ind1, ind2 = indices(A)
+    ind1, ind2 = axes(A)
     B = similar(A, (ind2,ind1))
     m = first(ind1)+last(ind1)
-    for i=ind1, j=indices(A,2)
+    for i=ind1, j=axes(A,2)
         B[j,m-i] = A[i,j]
     end
     return B
@@ -259,6 +179,7 @@ end
 
 Rotate matrix `A` 180 degrees.
 
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -273,7 +194,7 @@ julia> rot180(a)
 """
 function rot180(A::AbstractMatrix)
     B = similar(A)
-    ind1, ind2 = indices(A,1), indices(A,2)
+    ind1, ind2 = axes(A,1), axes(A,2)
     m, n = first(ind1)+last(ind1), first(ind2)+last(ind2)
     for j=ind2, i=ind1
         B[m-i,n-j] = A[i,j]
@@ -283,9 +204,10 @@ end
 """
     rotl90(A, k)
 
-Rotate matrix `A` left 90 degrees an integer `k` number of times.
-If `k` is zero or a multiple of four, this is equivalent to a `copy`.
+Left-rotate matrix `A` 90 degrees counterclockwise an integer `k` number of times.
+If `k` is a multiple of four (including zero), this is equivalent to a `copy`.
 
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -322,9 +244,10 @@ end
 """
     rotr90(A, k)
 
-Rotate matrix `A` right 90 degrees an integer `k` number of times. If `k` is zero or a
-multiple of four, this is equivalent to a `copy`.
+Right-rotate matrix `A` 90 degrees clockwise an integer `k` number of times.
+If `k` is a multiple of four (including zero), this is equivalent to a `copy`.
 
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -359,6 +282,7 @@ rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
 Rotate matrix `A` 180 degrees an integer `k` number of times.
 If `k` is even, this is equivalent to a `copy`.
 
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -377,114 +301,3 @@ julia> rot180(a,2)
 ```
 """
 rot180(A::AbstractMatrix, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)
-
-## Transpose ##
-
-"""
-    transpose!(dest,src)
-
-Transpose array `src` and store the result in the preallocated array `dest`, which should
-have a size corresponding to `(size(src,2),size(src,1))`. No in-place transposition is
-supported and unexpected results will happen if `src` and `dest` have overlapping memory
-regions.
-"""
-transpose!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(transpose, B, A)
-
-"""
-    ctranspose!(dest,src)
-
-Conjugate transpose array `src` and store the result in the preallocated array `dest`, which
-should have a size corresponding to `(size(src,2),size(src,1))`. No in-place transposition
-is supported and unexpected results will happen if `src` and `dest` have overlapping memory
-regions.
-"""
-ctranspose!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(ctranspose, B, A)
-function transpose!(B::AbstractVector, A::AbstractMatrix)
-    indices(B,1) == indices(A,2) && indices(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
-    copy!(B, A)
-end
-function transpose!(B::AbstractMatrix, A::AbstractVector)
-    indices(B,2) == indices(A,1) && indices(B,1) == 1:1 || throw(DimensionMismatch("transpose"))
-    copy!(B, A)
-end
-function ctranspose!(B::AbstractVector, A::AbstractMatrix)
-    indices(B,1) == indices(A,2) && indices(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
-    ccopy!(B, A)
-end
-function ctranspose!(B::AbstractMatrix, A::AbstractVector)
-    indices(B,2) == indices(A,1) && indices(B,1) == 1:1 || throw(DimensionMismatch("transpose"))
-    ccopy!(B, A)
-end
-
-const transposebaselength=64
-function transpose_f!(f,B::AbstractMatrix,A::AbstractMatrix)
-    inds = indices(A)
-    indices(B,1) == inds[2] && indices(B,2) == inds[1] || throw(DimensionMismatch(string(f)))
-
-    m, n = length(inds[1]), length(inds[2])
-    if m*n<=4*transposebaselength
-        @inbounds begin
-            for j = inds[2]
-                for i = inds[1]
-                    B[j,i] = f(A[i,j])
-                end
-            end
-        end
-    else
-        transposeblock!(f,B,A,m,n,first(inds[1])-1,first(inds[2])-1)
-    end
-    return B
-end
-function transposeblock!(f,B::AbstractMatrix,A::AbstractMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
-    if m*n<=transposebaselength
-        @inbounds begin
-            for j = offsetj+(1:n)
-                for i = offseti+(1:m)
-                    B[j,i] = f(A[i,j])
-                end
-            end
-        end
-    elseif m>n
-        newm=m>>1
-        transposeblock!(f,B,A,newm,n,offseti,offsetj)
-        transposeblock!(f,B,A,m-newm,n,offseti+newm,offsetj)
-    else
-        newn=n>>1
-        transposeblock!(f,B,A,m,newn,offseti,offsetj)
-        transposeblock!(f,B,A,m,n-newn,offseti,offsetj+newn)
-    end
-    return B
-end
-
-function ccopy!(B, A)
-    RB, RA = eachindex(B), eachindex(A)
-    if RB == RA
-        for i = RB
-            B[i] = ctranspose(A[i])
-        end
-    else
-        for (i,j) = zip(RB, RA)
-            B[i] = ctranspose(A[j])
-        end
-    end
-end
-
-"""
-    transpose(A)
-
-The transposition operator (`.'`).
-"""
-function transpose(A::AbstractMatrix)
-    ind1, ind2 = indices(A)
-    B = similar(A, (ind2, ind1))
-    transpose!(B, A)
-end
-function ctranspose(A::AbstractMatrix)
-    ind1, ind2 = indices(A)
-    B = similar(A, (ind2, ind1))
-    ctranspose!(B, A)
-end
-ctranspose{T<:Real}(A::AbstractVecOrMat{T}) = transpose(A)
-
-transpose(x::AbstractVector) = [ transpose(v) for i=of_indices(x, OneTo(1)), v in x ]
-ctranspose{T}(x::AbstractVector{T}) = T[ ctranspose(v) for i=of_indices(x, OneTo(1)), v in x ]

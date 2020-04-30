@@ -37,7 +37,8 @@ checksum_error()
     echo "  But \`$CHECKSUM_PROG\` results in:" >&2
     print_hash "$CURR_CHECKSUM"
     echo "  This can happen due to bad downloads or network proxies, please check your" >&2
-    echo "  network proxy/firewall settings and delete deps/srccache/$BASENAME" >&2
+    echo "  network proxy/firewall settings and delete" >&2
+    echo "  $(realpath $ARG1)" >&2
     echo "  to force a redownload when you are ready" >&2
     echo "===============================================================================" >&2
     exit 2

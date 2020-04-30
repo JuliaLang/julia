@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -9,6 +9,7 @@
 #define MAP_ANONYMOUS MAP_ANON
 #endif
 #endif
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -109,7 +110,10 @@ void jl_safepoint_init(void)
 
 int jl_safepoint_start_gc(void)
 {
-#ifdef JULIA_ENABLE_THREADING
+    if (jl_n_threads == 1) {
+        jl_gc_running = 1;
+        return 1;
+    }
     // The thread should have set this already
     assert(jl_get_ptls_states()->gc_state == JL_GC_STATE_WAITING);
     jl_mutex_lock_nogc(&safepoint_lock);
@@ -126,19 +130,15 @@ int jl_safepoint_start_gc(void)
     jl_safepoint_enable(2);
     jl_mutex_unlock_nogc(&safepoint_lock);
     return 1;
-#else
-    // For single thread, GC should not call itself (in finalizers) before
-    // setting `jl_gc_running` to false so this should never happen.
-    assert(!jl_gc_running);
-    jl_gc_running = 1;
-    return 1;
-#endif
 }
 
 void jl_safepoint_end_gc(void)
 {
     assert(jl_gc_running);
-#ifdef JULIA_ENABLE_THREADING
+    if (jl_n_threads == 1) {
+        jl_gc_running = 0;
+        return;
+    }
     jl_mutex_lock_nogc(&safepoint_lock);
     // Need to reset the page protection before resetting the flag since
     // the thread will trigger a segfault immediately after returning from
@@ -151,14 +151,10 @@ void jl_safepoint_end_gc(void)
     jl_mach_gc_end();
 #  endif
     jl_mutex_unlock_nogc(&safepoint_lock);
-#else
-    jl_gc_running = 0;
-#endif
 }
 
 void jl_safepoint_wait_gc(void)
 {
-#ifdef JULIA_ENABLE_THREADING
     // The thread should have set this is already
     assert(jl_get_ptls_states()->gc_state != 0);
     // Use normal volatile load in the loop.
@@ -166,9 +162,6 @@ void jl_safepoint_wait_gc(void)
     while (jl_gc_running || jl_atomic_load_acquire(&jl_gc_running)) {
         jl_cpu_pause(); // yield?
     }
-#else
-    assert(0 && "No one should wait for the GC on another thread");
-#endif
 }
 
 void jl_safepoint_enable_sigint(void)

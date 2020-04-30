@@ -1,35 +1,49 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function runtests(name, isolate=true)
-    if isolate
-        mod_name = Symbol("TestMain_", replace(name, '/', '_'))
-        m = eval(Main, :(module $mod_name end))
-    else
-        m = Main
-    end
-    eval(m, :(using Base.Test))
-    @printf("     \033[1m*\033[0m \033[31m%-21s\033[0m", name)
-    ex = quote
-        @timed @testset $"$name" begin
-            include($"$name.jl")
+using Test, Random
+
+function runtests(name, path, isolate=true; seed=nothing)
+    old_print_setting = Test.TESTSET_PRINT_ENABLE[]
+    Test.TESTSET_PRINT_ENABLE[] = false
+    try
+        if isolate
+            # Simple enough to type and random enough so that no one will hard
+            # code it in the test
+            mod_name = Symbol("Test", rand(1:100), "Main_", replace(name, '/' => '_'))
+            m = @eval(Main, module $mod_name end)
+        else
+            m = Main
         end
+        @eval(m, using Test, Random)
+        let id = myid()
+            wait(@spawnat 1 print_testworker_started(name, id))
+        end
+        ex = quote
+            @timed @testset $"$name" begin
+                # Random.seed!(nothing) will fail
+                $seed != nothing && Random.seed!($seed)
+                include($"$path.jl")
+            end
+        end
+        res_and_time_data = Core.eval(m, ex)
+        rss = Sys.maxrss()
+        #res_and_time_data[1] is the testset
+        passes,fails,error,broken,c_passes,c_fails,c_errors,c_broken = Test.get_test_counts(res_and_time_data[1])
+        if res_and_time_data[1].anynonpass == false
+            res_and_time_data = (
+                                 (passes+c_passes,broken+c_broken),
+                                 res_and_time_data[2],
+                                 res_and_time_data[3],
+                                 res_and_time_data[4],
+                                 res_and_time_data[5])
+        end
+        vcat(collect(res_and_time_data), rss)
+    finally
+        Test.TESTSET_PRINT_ENABLE[] = old_print_setting
     end
-    res_and_time_data = eval(m, ex)
-    rss = Sys.maxrss()
-    @printf(" maxrss %7.2f MB\n", rss / 2^20)
-    #res_and_time_data[1] is the testset
-    passes,fails,error,broken,c_passes,c_fails,c_errors,c_broken = Base.Test.get_test_counts(res_and_time_data[1])
-    if res_and_time_data[1].anynonpass == false
-        res_and_time_data = (
-                             (passes+c_passes,broken+c_broken),
-                             res_and_time_data[2],
-                             res_and_time_data[3],
-                             res_and_time_data[4],
-                             res_and_time_data[5])
-    end
-    vcat(collect(res_and_time_data), rss)
 end
 
 # looking in . messes things up badly
 filter!(x->x!=".", LOAD_PATH)
-nothing
+
+nothing # File is loaded via a remotecall to "include". Ensure it returns "nothing".
