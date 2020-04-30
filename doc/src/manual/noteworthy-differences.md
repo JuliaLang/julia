@@ -226,26 +226,26 @@ For users coming to Julia from R, these are some noteworthy differences:
     On the other hand, the function `g(x=[1,2]) = push!(x,3)` returns `[1,2,3]` every time it is called
     as `g()`.
   * In Julia `%` is the remainder operator, whereas in Python it is the modulus.
-  * The commonly used `Int` type corresponds to the machine integer type (`Int32` or `Int64`).
-    This means it will overflow, such that `2^64 == 0`. If you need larger values use another appropriate type,
+  * In Julia, the commonly used `Int` type corresponds to the machine integer type (`Int32` or `Int64`), unlike in Python, where `int` is an arbitrary length integer.
+    This means in Julia the `Int` type will overflow, such that `2^64 == 0`. If you need larger values use another appropriate type,
     such as `Int128`, [`BigInt`](@ref) or a floating point type like `Float64`.
   * The imaginary unit `sqrt(-1)` is represented in Julia as `im`, not `j` as in Python.
   * In Julia, the exponentiation operator is `^`, not `**` as in Python.
   * Julia uses `nothing` of type `Nothing` to represent a null value, whereas Python uses `None` of type `NoneType`.
   * In Julia, the standard operators over a matrix type are matrix operations, whereas, in Python, the standard operators are element-wise operations. When both `A` and `B` are matrices, `A * B` in Julia performs matrix multiplication, not element-wise multiplication as in Python. `A * B` in Julia is equivalent with `A @ B` in Python, whereas `A * B` in Python is equivalent with `A .* B` in Julia.
   * The adjoint operator `'` in Julia returns an adjoint of a vector (a lazy representation of row vector), whereas the transpose operator `.T` over a vector in Python returns the original vector (non-op).
-  * Functions in Python have one implementation (no polymorphism), whereas in Julia a function may contain multiple concrete implementations (called *Methods*), selected via multiple dispatch.
+  * In Julia, a function may contain multiple concrete implementations (called *Methods*), selected via multiple dispatch, whereas functions in Python have a single implementation (no polymorphism).
   * There are no classes in Julia. Instead they are structures (mutable or immutable), containing data but no methods.
   * Calling a method of a class in Python (`a = MyClass(x), x.func(y)`) corresponds to a function call in Julia, e.g. `a = MyStruct(x), func(x::MyStruct, y)`. In general, multiple dispatch is more flexible and powerful than the Python class system.
-  * Python classes can inherit from one or more superclasses. Julia structures may have exactly one abstract supertype.
-  * The Python code structure is defined by directories (Packages) and files (Modules), whereas the logical Julia program structure (Packages and Modules) is independent of the file strucutre (`include` for additional files).
-  * Conditional expression in Python `1 if x > 0 else -1` corresponds to the ternary operator `x > 0 ? 1 : -1` in Julia.
-  * In Python, the `@` symbol refers to a decorator, whereas in Julia it refers to a macro.
-  * Exception handling in Julia is done using `try` - `catch` - `finally`, instead of `try` - `except` - `finally`. In contrast to Python, it is not recommended to use exception handling as part of the normal workflow in Julia due to performance reasons.
+  * Julia structures may have exactly one abstract supertype, whereas Python classes can inherit from one or more (abstract or concrete) superclasses.
+  * The logical Julia program structure (Packages and Modules) is independent of the file strucutre (`include` for additional files), whereas the Python code structure is defined by directories (Packages) and files (Modules).
+  * The ternary operator `x > 0 ? 1 : -1` in Julia corresponds to conditional expression in Python `1 if x > 0 else -1`.
+  * In Julia the `@` symbol refers to a macro, whereas in Python it refers to a decorator.
+  * Exception handling in Julia is done using `try` — `catch` — `finally`, instead of `try` — `except` — `finally`. In contrast to Python, it is not recommended to use exception handling as part of the normal workflow in Julia due to performance reasons.
   * In Julia loops are fast, there is no need to write "vectorized" code for performance reasons.
   * Be careful with non-constant global variables in Julia, especially in tight loops. Since you can write close-to-metal code in Julia (unlike Python), the effect of globals can be drastic (see [Performance Tips](@ref man-performance-tips)).
   * In Python, the majority of values can be used in logical contexts (e.g. `if "a":` means the following block is executed, and `if "":` means it is not). In Julia, you need explicit conversion to `Bool` (e.g. `if "a"` throws an exception). If you want to test for a non-empty string in Julia, you would explicitly write `if !isempty("")`.
-  * In Julia, a new local scope is introduced by most code blocks, including loops and `try`-`catch`-`finally`. Note that comprehensions (list, generator, etc.) introduce a new local scope both in Python and Julia, whereas `if` blocks do not introduce a new local scope in both languages.
+  * In Julia, a new local scope is introduced by most code blocks, including loops and `try` — `catch` — `finally`. Note that comprehensions (list, generator, etc.) introduce a new local scope both in Python and Julia, whereas `if` blocks do not introduce a new local scope in both languages.
 
 ## Noteworthy differences from C/C++
 
