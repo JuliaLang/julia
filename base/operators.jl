@@ -150,7 +150,7 @@ This is the default comparison used by [`sort`](@ref).
 Non-numeric types with a total order should implement this function.
 Numeric types only need to implement it if they have special values such as `NaN`.
 Types with a partial order should implement [`<`](@ref).
-"""
+
 # Examples
  ```jldoctest
  julia> isless(1, 3)
@@ -159,6 +159,7 @@ Types with a partial order should implement [`<`](@ref).
  julia> isless("Red", "Blue")
  false
  ```
+"""
 function isless end
 
 isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
