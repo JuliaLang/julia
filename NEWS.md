@@ -89,11 +89,11 @@ Command-line option changes
 
 * Color now defaults to on when stdout and stderr are TTYs ([#34347])
 
-  * `-t N`, `--threads N` starts Julia with `N` threads. This option takes precedence over
-    `JULIA_NUM_THREADS`. The specified number of threads also propagates to worker
-    processes spawned using the `-p`/`--procs` or `--machine-file` command line arguments.
-    In order to set number of threads for worker processes spawned with `addprocs` use the
-    `exeflags` keyword argument, e.g. `` addprocs(...; exeflags=`--threads 4`) `` ([#35108]).
+* `-t N`, `--threads N` starts Julia with `N` threads. This option takes precedence over
+  `JULIA_NUM_THREADS`. The specified number of threads also propagates to worker
+  processes spawned using the `-p`/`--procs` or `--machine-file` command line arguments.
+  In order to set number of threads for worker processes spawned with `addprocs` use the
+  `exeflags` keyword argument, e.g. `` addprocs(...; exeflags=`--threads 4`) `` ([#35108]).
 
 Multi-threading changes
 -----------------------

@@ -852,7 +852,7 @@ Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
 This setting will cause `eachindex` iteration over a `MyArray` to use integers. If you don't
 specify this trait, the default value `IndexCartesian()` is used.
 
-## Array and Vectorized Operators and Functions
+## [Array and Vectorized Operators and Functions](@id man-array-and-vectorized-operators-and-functions)
 
 The following operators are supported for arrays:
 
@@ -914,7 +914,7 @@ julia> broadcast(+, a, b)
 ```
 
 [Dotted operators](@ref man-dot-operators) such as `.+` and `.*` are equivalent
-to `broadcast` calls (except that they fuse, as described below). There is also a
+to `broadcast` calls (except that they fuse, as [described above](@ref man-array-and-vectorized-operators-and-functions)). There is also a
 [`broadcast!`](@ref) function to specify an explicit destination (which can also
 be accessed in a fusing fashion by `.=` assignment). In fact, `f.(args...)`
 is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broadcast any function
@@ -933,7 +933,7 @@ julia> convert.(Float32, [1, 2])
  1.0
  2.0
 
-julia> ceil.((UInt8,), [1.2 3.4; 5.6 6.7])
+julia> ceil.(UInt8, [1.2 3.4; 5.6 6.7])
 2×2 Array{UInt8,2}:
  0x02  0x04
  0x06  0x07
@@ -943,6 +943,17 @@ julia> string.(1:3, ". ", ["First", "Second", "Third"])
  "1. First"
  "2. Second"
  "3. Third"
+```
+
+Sometimes, you want a container (like an array) that would normally participate in broadcast to be "protected"
+from broadcast's behavior of iterating over all of its elements. By placing it inside another container
+(like a single element [`Tuple`](@ref)) broadcast will treat it as a single value.
+```jldoctest
+julia> ([1, 2, 3], [4, 5, 6]) .+ ([1, 2, 3],)
+([2, 4, 6], [5, 7, 9])
+
+julia> ([1, 2, 3], [4, 5, 6]) .+ tuple([1, 2, 3])
+([2, 4, 6], [5, 7, 9])
 ```
 
 ## Implementation
