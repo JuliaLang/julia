@@ -211,7 +211,7 @@ function steprange_last(start::T, step, stop) where T
     if isa(start,AbstractFloat) || isa(step,AbstractFloat)
         throw(ArgumentError("StepRange should not be used with floating point"))
     end
-    if isa(start,Integer) && !isinteger(step)
+    if isa(start,Integer) && !isinteger(start + step)
         throw(ArgumentError("StepRange{<:Integer} cannot have non-integer step"))
     end
     z = zero(step)
@@ -347,7 +347,7 @@ struct StepRangeLen{T,R,S} <: AbstractRange{T}
     offset::Int  # the index of ref
 
     function StepRangeLen{T,R,S}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S}
-        if T <: Integer && !isinteger(step)
+        if T <: Integer && !isinteger(ref + step)
             throw(ArgumentError("StepRangeLen{<:Integer} cannot have non-integer step"))
         end
         len >= 0 || throw(ArgumentError("length cannot be negative, got $len"))

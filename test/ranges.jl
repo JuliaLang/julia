@@ -998,11 +998,11 @@ end
 end
 
 @testset "Ranges with <:Integer eltype but non-integer step (issue #32419)" begin
-    @test eltype(StepRange(1, 1//1, 2)) <: Integer
+    @test eltype(StepRange(1, 1//1, 2)) === Int
     @test_throws ArgumentError StepRange(1, 1//2, 2)
-    @test eltype(StepRangeLen{Int}(1, 1//1, 2)) <: Integer
+    @test eltype(StepRangeLen{Int}(1, 1//1, 2)) === Int
     @test_throws ArgumentError StepRangeLen{Int}(1, 1//2, 2)
-    @test eltype(LinRange{Int}(1, 5, 3)) <: Integer
+    @test eltype(LinRange{Int}(1, 5, 3)) === Int
     @test_throws ArgumentError LinRange{Int}(1, 5, 4)
 end
 
@@ -1333,7 +1333,6 @@ Base.:+(x, y::NotReal) = x + y.val
 Base.zero(y::NotReal) = zero(y.val)
 Base.rem(x, y::NotReal) = rem(x, y.val)
 Base.isless(x, y::NotReal) = isless(x, y.val)
-Base.isinteger(y::NotReal) = isinteger(y.val)
 @test (:)(1, NotReal(1), 5) isa StepRange{Int,NotReal}
 
 isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
