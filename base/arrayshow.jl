@@ -47,7 +47,7 @@ end
 const undef_ref_alignment = (3,3)
 
 """
-`alignment(X, rows, cols, cols_if_complete, cols_otherwise, sep)` returns the
+`alignment(io, X, rows, cols, cols_if_complete, cols_otherwise, sep)` returns the
 alignment for specified parts of array `X`, returning the (left,right) info.
 It will look in X's `rows`, `cols` (both lists of indices)
 and figure out what's needed to be fully aligned, for example looking all
