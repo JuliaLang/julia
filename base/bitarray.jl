@@ -16,8 +16,10 @@ By default, Julia returns `BitArrays` from [broadcasting](@ref Broadcasting) ope
 that generate boolean elements (including dotted-comparisons like `.==`) as well as from
 the functions [`trues`](@ref) and [`falses`](@ref).
 
-Note that due to its packed storage format concurrent access to the elements of a `BitArray`
+!!! note 
+Due to its packed storage format, concurrent access to the elements of a `BitArray`
 where at least one of them is a write is not thread safe.
+
 """
 mutable struct BitArray{N} <: AbstractArray{Bool, N}
     chunks::Vector{UInt64}
