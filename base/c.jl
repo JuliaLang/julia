@@ -474,6 +474,9 @@ and in Julia script run with `-i` option.
 If `true`, `InterruptException` is not thrown by Ctrl-C.  Running code
 upon such event requires [`atexit`](@ref).  This is the default
 behavior in Julia script run without `-i` option.
+
+!!! compat "Julia 1.5"
+    Function `exit_on_sigint` requires at least Julia 1.5.
 """
 function exit_on_sigint(on::Bool)
     ccall(:jl_exit_on_sigint, Cvoid, (Cint,), on)

@@ -118,6 +118,8 @@ New library functions
 * New function `bitrotate(x, k)` for rotating the bits in a fixed-width integer ([#33937]).
 * One argument methods `startswith(x)` and `endswith(x)` have been added, returning partially-applied versions of the functions, similar to existing methods like `isequal(x)` ([#33193]).
 * New function `contains(haystack, needle)` and its one argument partially applied form have been added, it acts like `occursin(needle, haystack)`([#35132]).
+* New function `Base.exit_on_sigint` is added to control if `InterruptException` is
+  thrown by Ctrl-C ([#29411]).
 
 New library features
 --------------------
