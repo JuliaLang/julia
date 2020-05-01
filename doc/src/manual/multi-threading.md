@@ -213,3 +213,35 @@ therefore a blocking call like other Julia APIs.
 It is very important that the called function does not call back into Julia, as it will segfault.
 
 `@threadcall` may be removed/changed in future versions of Julia.
+
+## Caveats
+
+At this time, most operations in the Julia runtime and standard libraries
+can be used in a thread-safe manner, if the user code is data-race free.
+However, in some areas work on stabilizing thread support is ongoing.
+Multi-threaded programming has many inherent difficulties, and if a program
+using threads exhibits unusual or undesirable behavior (e.g. crashes or
+mysterious results), thread interactions should typically be suspected first.
+
+There are a few specific limitations and warnings to be aware of when using
+threads in Julia:
+
+  * Base collection types require manual locking if used simultaneously by
+    multiple threads where at least one thread modifies the collection
+    (common examples include `push!` on arrays, or inserting
+    items into a `Dict`).
+  * After a task starts running on a certain thread (e.g. via `@spawn`), it
+    will always be restarted on the same thread after blocking. In the future
+    this limitation will be removed, and tasks will migrate between threads.
+  * `@threads` currently uses a static schedule, using all threads and assigning
+    equal iteration counts to each. In the future the default schedule is likely
+    to change to be dynamic.
+  * The schedule used by `@spawn` is nondeterministic and should not be relied on.
+  * Compute-bound, non-memory-allocating tasks can prevent garbage collection from
+    running in other threads that are allocating memory. In these cases it may
+    be necessary to insert a manual call to `GC.safepoint()` to allow GC to run.
+    This limitation will be removed in the future.
+  * Avoid using finalizers in conjunction with threads, particularly if they
+    operate on objects shared by multiple threads.
+  * Avoid running top-level operations, e.g. `include`, or `eval` of type,
+    method, and module definitions in parallel.

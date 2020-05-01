@@ -104,10 +104,13 @@ Command-line option changes
 
 Multi-threading changes
 -----------------------
+
+* Parts of the multi-threading API are now considered stable, with caveats.
+  This includes all documented identifiers from `Base.Threads` except the
+  `atomic_` operations.
 * `@threads` now allows an optional schedule argument. Use `@threads :static ...` to
   ensure that the same schedule will be used as in past versions; the default schedule
   is likely to change in the future.
-
 
 Build system changes
 --------------------
