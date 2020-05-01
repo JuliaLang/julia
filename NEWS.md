@@ -17,8 +17,10 @@ New language features
   Similarly, passing an `a.b` expression uses `b` as the keyword or field name ([#29333]).
 
 * Packages can now provide custom hints to help users resolve errors by using the
-  `register_error_hint` function. Packages that define custom exception types
-  can support hints by calling `show_error_hints` from their `showerror` method. ([#35094])
+  experimental `Base.Experimental.register_error_hint` function.
+  Packages that define custom exception types can support hints by
+  calling the `Base.Experimental.show_error_hints` from their
+  `showerror` method. ([#35094])
 
 * Support for Unicode 13.0.0 (via utf8proc 2.5) ([#35282]).
 
