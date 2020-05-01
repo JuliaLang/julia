@@ -251,13 +251,15 @@ function unsafe_read(s::IO, p::Ptr{UInt8}, n::UInt)
     nothing
 end
 
-function peek(s::IO)
+function peek(s::IO, ::Type{T}) where T
     mark(s)
-    try read(s, UInt8)
+    try read(s, T)
     finally
         reset(s)
     end
 end
+
+peek(s) = peek(s, UInt8)
 
 # Generic `open` methods
 

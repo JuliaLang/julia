@@ -787,9 +787,9 @@ ismissing(::Missing) = true
 function popfirst! end
 
 """
-    peek(stream)
+    peek(stream[, T=UInt8])
 
-Read and return the next value from a stream without advancing the current position
+Read and return a value of type `T` from a stream without advancing the current position
 in the stream.
 
 # Examples
@@ -802,7 +802,13 @@ julia> peek(b)
 
 julia> position(b)
 0
+
+julia> peek(b, Char)
+'j': ASCII/Unicode U+006A (category Ll: Letter, lowercase)
 ```
+
+!!! compat "Julia 1.5"
+    The method which accepts a type requires Julia 1.5 or later.
 """
 function peek end
 

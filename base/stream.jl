@@ -1193,9 +1193,9 @@ unmark(x::LibuvStream)   = unmark(x.buffer)
 reset(x::LibuvStream)    = reset(x.buffer)
 ismarked(x::LibuvStream) = ismarked(x.buffer)
 
-function peek(s::LibuvStream)
+function peek(s::LibuvStream, ::Type{T}) where T
     mark(s)
-    try read(s, UInt8)
+    try read(s, T)
     finally
         reset(s)
     end
