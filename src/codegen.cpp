@@ -57,12 +57,14 @@
 // support
 #include <llvm/ADT/SmallBitVector.h>
 #include <llvm/ADT/Optional.h>
+#include <llvm/ADT/Statistic.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/SourceMgr.h> // for llvmcall
 #include <llvm/Transforms/Utils/Cloning.h> // for llvmcall inlining
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/IR/Verifier.h> // for llvmcall validation
+#include <llvm/IR/PassTimingInfo.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
 
 // C API
@@ -7596,6 +7598,13 @@ extern "C" void jl_init_codegen(void)
     UBOX_F(ssavalue,size);
 
     jl_init_intrinsic_functions_codegen(m);
+}
+
+extern "C" void jl_teardown_codegen()
+{
+    // output LLVM timings and statistics
+    reportAndResetTimings();
+    PrintStatistics();
 }
 
 // the rest of this file are convenience functions
