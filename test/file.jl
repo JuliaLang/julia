@@ -1526,4 +1526,9 @@ if Sys.isunix()
             @test_throws SystemError Libc.mkfifo(existing_file)
         end
     end
+else
+    @test_throws(
+        ErrorException("not supported on this platform"),
+        Libc.mkfifo(joinpath(pwd(), "dummy_path")),
+    )
 end
