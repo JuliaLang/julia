@@ -619,7 +619,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             PM->add(createLateLowerGCFramePass());
             PM->add(createFinalLowerGCPass());
             PM->add(createLowerPTLSPass(dump_native));
-            PM->add(createRemoveJuliaAddrspacesPass());
         }
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native)
@@ -736,8 +735,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createLowerPTLSPass(dump_native));
         // Clean up write barrier and ptls lowering
         PM->add(createCFGSimplificationPass());
-        // Remove Julia's address space information
-        PM->add(createRemoveJuliaAddrspacesPass());
     }
     PM->add(createCombineMulAddPass());
     PM->add(createDivRemPairsPass());
@@ -798,6 +795,14 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         PM = new legacy::PassManager();
         addTargetPasses(PM, jl_TargetMachine);
         addOptimizationPasses(PM, jl_options.opt_level);
+        PM->add(createRemoveJuliaAddrspacesPass());
+    }
+
+    static legacy::PassManager *PM_minimal;
+    if (!PM_minimal) {
+        PM_minimal = new legacy::PassManager();
+        addTargetPasses(PM_minimal, jl_TargetMachine);
+        PM_minimal->add(createRemoveJuliaAddrspacesPass());
     }
 
     // get the source code for this function
@@ -839,6 +844,8 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
             // if compilation succeeded, prepare to return the result
             if (optimize)
                 PM->run(*m.get());
+            else
+                PM_minimal->run(*m.get());
             const std::string *fname;
             if (decls.functionObject == "jl_fptr_args" || decls.functionObject == "jl_fptr_sparam")
                 getwrapper = false;
