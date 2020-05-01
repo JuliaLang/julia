@@ -1,9 +1,6 @@
-# [Multi-Threading (Experimental)](@id man-multithreading)
+# [Multi-Threading](@id man-multithreading)
 
-In addition to tasks Julia natively supports multi-threading.
-Note that this section is experimental and the interfaces may change in the future.
-
-## Starting Julia with multi-threading
+## Starting Julia with multiple threads
 
 By default, Julia starts up with a single thread of execution. This can be verified by using the
 command [`Threads.nthreads()`](@ref):
@@ -13,7 +10,7 @@ julia> Threads.nthreads()
 1
 ```
 
-The number of threads Julia starts up with is controlled either by using the
+The number of execution threads is controlled either by using the
 `-t`/`--threads` command line argument or by using the
 [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) environment variable. When both are
 specified, then `-t`/`--threads` takes precedence.
@@ -96,7 +93,7 @@ julia> Threads.@threads for i = 1:10
        end
 ```
 
-The iteration space is split amongst the threads, after which each thread writes its thread ID
+The iteration space is split among the threads, after which each thread writes its thread ID
 to its assigned locations:
 
 ```julia-repl
@@ -191,34 +188,26 @@ julia> acc[]
 
 When using multi-threading we have to be careful when using functions that are not
 [pure](https://en.wikipedia.org/wiki/Pure_function) as we might get a wrong answer.
-For instance functions that have their
+For instance functions that have a
 [name ending with `!`](@ref bang-convention)
-by convention modify their arguments and thus are not pure. However, there are
-functions that have side effects and their name does not end with `!`.
+by convention modify their arguments and thus are not pure.
 
 ## @threadcall
 
-All I/O tasks, timers, REPL commands, etc are multiplexed onto a single OS thread via an event
-loop. A patched version of libuv ([http://docs.libuv.org/en/v1.x/](http://docs.libuv.org/en/v1.x/))
-provides this functionality. Yield points provide for co-operatively scheduling multiple tasks
-onto the same OS thread. I/O tasks and timers yield implicitly while waiting for the event to
-occur. Calling [`yield`](@ref) explicitly allows for other tasks to be scheduled.
+External libraries, such as those called via [`ccall`](@ref), pose a problem for
+Julia's task-based I/O mechanism.
+If a C library performs a blocking operation, that prevents the Julia scheduler
+from executing any other tasks until the call returns.
+(Exceptions are calls into custom C code that call back into Julia, which may then
+yield, or C code that calls `jl_yield()`, the C equivalent of [`yield`](@ref).)
 
-Thus, a task executing a [`ccall`](@ref) effectively prevents the Julia scheduler from executing any other
-tasks till the call returns. This is true for all calls into external libraries. Exceptions are
-calls into custom C code that call back into Julia (which may then yield) or C code that calls
-`jl_yield()` (C equivalent of [`yield`](@ref)).
-
-Note that while Julia code runs on a single thread (by default), libraries used by Julia may launch
-their own internal threads. For example, the BLAS library may start as many threads as there are
-cores on a machine.
-
-The [`@threadcall`](@ref) macro addresses scenarios where we do not want a [`ccall`](@ref) to block the main Julia
-event loop. It schedules a C function for execution in a separate thread. A threadpool with a
+The [`@threadcall`](@ref) macro provides a way to avoid stalling execution in such
+a scenario.
+It schedules a C function for execution in a separate thread. A threadpool with a
 default size of 4 is used for this. The size of the threadpool is controlled via environment variable
 `UV_THREADPOOL_SIZE`. While waiting for a free thread, and during function execution once a thread
 is available, the requesting task (on the main Julia event loop) yields to other tasks. Note that
-`@threadcall` does not return till the execution is complete. From a user point of view, it is
+`@threadcall` does not return until the execution is complete. From a user point of view, it is
 therefore a blocking call like other Julia APIs.
 
 It is very important that the called function does not call back into Julia, as it will segfault.
