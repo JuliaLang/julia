@@ -70,6 +70,11 @@ Language changes
 * The line number of function definitions is now added by the parser as an
   additional `LineNumberNode` at the start of each function body ([#35138]).
 
+* Statements of the form `a'` now get lowered to `var"'"(a)` instead of `Base.adjoint(a)`. This
+  allows for shadowing this function in local scopes, although this is generally discouraged.
+  By default, Base exports `var"'"` as an alias of `Base.adjoint`, so custom types should still
+  extend `Base.adjoint`. ([#34634])
+
 Compiler/Runtime improvements
 -----------------------------
 
