@@ -825,4 +825,4 @@ case the `finally` block will run after `catch` has handled the error.
 
 Tasks are a control flow feature that allows computations to be suspended and resumed in a flexible
 manner. We mention them here only for completeness; for a full discussion see
-[Asynchronous Programming](@id man-asynchronous).
+[Asynchronous Programming](@ref man-asynchronous).
