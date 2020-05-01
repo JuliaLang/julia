@@ -424,25 +424,27 @@ the common idiom `fill(x)` creates a zero-dimensional array containing the singl
 
 # Examples
 ```jldoctest
-julia> fill(1.0, (5,5))
-5×5 Array{Float64,2}:
- 1.0  1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0  1.0
-
-julia> fill(0.5, 1, 2)
-1×2 Array{Float64,2}:
- 0.5  0.5
+julia> fill(1.0, (2,3))
+2×3 Array{Float64,2}:
+ 1.0  1.0  1.0
+ 1.0  1.0  1.0
 
 julia> fill(42)
 0-dimensional Array{Int64,0}:
 42
 ```
 
-If `x` is an object reference, all elements will refer to the same object. `fill(Foo(),
-dims)` will return an array filled with the result of evaluating `Foo()` once.
+If `x` is an object reference, all elements will refer to the same object:
+```jldoctest
+julia> A = fill(zeros(2), 2);
+
+julia> A[1][1] = 42; # modifies both A[1][1] and A[2][1]
+
+julia> A
+2-element Array{Array{Float64,1},1}:
+ [42.0, 0.0]
+ [42.0, 0.0]
+```
 """
 function fill end
 
