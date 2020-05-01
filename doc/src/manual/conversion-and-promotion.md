@@ -297,7 +297,7 @@ promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 
 one declares that when 64-bit and 32-bit floating-point values are promoted together, they should
 be promoted to 64-bit floating-point. The promotion type does not need to be one of the argument
-types, however; the following promotion rules both occur in Julia Base:
+types. For example, the following promotion rules both occur in Julia Base:
 
 ```julia
 promote_rule(::Type{BigInt}, ::Type{Float64}) = BigFloat

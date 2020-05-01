@@ -23,7 +23,8 @@ const extended_help_on = Ref{Any}(nothing)
 
 function _helpmode(io::IO, line::AbstractString)
     line = strip(line)
-    if startswith(line, '?')
+    ternary_operator_help = (line == "?" || line == "?:")
+    if startswith(line, '?') && !ternary_operator_help
         line = line[2:end]
         extended_help_on[] = line
         brief = false
@@ -208,7 +209,7 @@ function lookup_doc(ex)
     end
     if isa(ex, Symbol) && Base.isoperator(ex)
         str = string(ex)
-        if endswith(str, "=")
+        if endswith(str, "=") && Base.operator_precedence(ex) == Base.prec_assignment
             op = str[1:end-1]
             return Markdown.parse("`x $op= y` is a synonym for `x = x $op y`")
         elseif startswith(str, ".")

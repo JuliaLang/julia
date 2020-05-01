@@ -138,7 +138,7 @@ f265(::Int) = 1
 h265() = true
 loc_h265 = "$(@__FILE__):$(@__LINE__() - 1)"
 @test h265()
-@test_throws MethodError put_n_take!(h265, ())
+@test_throws TaskFailedException(t265) put_n_take!(h265, ())
 @test_throws TaskFailedException(t265) fetch(t265)
 @test istaskdone(t265)
 let ex = t265.exception

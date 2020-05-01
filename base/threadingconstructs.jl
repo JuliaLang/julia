@@ -18,6 +18,26 @@ on [`threadid()`](@ref).
 """
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
+function threading_run(func)
+    ccall(:jl_enter_threaded_region, Cvoid, ())
+    n = nthreads()
+    tasks = Vector{Task}(undef, n)
+    for i = 1:n
+        t = Task(func)
+        t.sticky = true
+        ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, i-1)
+        tasks[i] = t
+        schedule(t)
+    end
+    try
+        for i = 1:n
+            wait(tasks[i])
+        end
+    finally
+        ccall(:jl_exit_threaded_region, Cvoid, ())
+    end
+end
+
 function _threadsfor(iter,lbody)
     lidx = iter.args[1]         # index
     range = iter.args[2]
@@ -66,7 +86,7 @@ function _threadsfor(iter,lbody)
             # only thread 1 can enter/exit _threadedregion
             Base.invokelatest(threadsfor_fun, true)
         else
-            ccall(:jl_threading_run, Cvoid, (Any,), threadsfor_fun)
+            threading_run(threadsfor_fun)
         end
         nothing
     end

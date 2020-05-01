@@ -228,15 +228,16 @@ false
 ```jldoctest
 julia> c = Channel(0);
 
-julia> task = @async (put!(c,1);error("foo"));
+julia> task = @async (put!(c, 1); error("foo"));
 
-julia> bind(c,task);
+julia> bind(c, task);
 
 julia> take!(c)
 1
 
-julia> put!(c,1);
-ERROR: foo
+julia> put!(c, 1);
+ERROR: TaskFailedException:
+foo
 Stacktrace:
 [...]
 ```
@@ -281,7 +282,7 @@ function close_chnl_on_taskdone(t::Task, c::Channel)
         if istaskfailed(t)
             excp = task_result(t)
             if excp isa Exception
-                close(c, excp)
+                close(c, TaskFailedException(t))
                 return
             end
         end

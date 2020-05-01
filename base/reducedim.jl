@@ -12,7 +12,7 @@ No method is implemented for reducing index range of type $(typeof(i)). Please i
 reduced_index for this index type or report this as an issue.
 """
     ))
-reduced_indices(a::AbstractArray, region) = reduced_indices(axes(a), region)
+reduced_indices(a::AbstractArrayOrBroadcasted, region) = reduced_indices(axes(a), region)
 
 # for reductions that keep 0 dims as 0
 reduced_indices0(a::AbstractArray, region) = reduced_indices0(axes(a), region)
@@ -89,8 +89,8 @@ for (Op, initval) in ((:(typeof(&)), true), (:(typeof(|)), false))
 end
 
 # reducedim_initarray is called by
-reducedim_initarray(A::AbstractArray, region, init, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices(A,region)), init)
-reducedim_initarray(A::AbstractArray, region, init::T) where {T} = reducedim_initarray(A, region, init, T)
+reducedim_initarray(A::AbstractArrayOrBroadcasted, region, init, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices(A,region)), init)
+reducedim_initarray(A::AbstractArrayOrBroadcasted, region, init::T) where {T} = reducedim_initarray(A, region, init, T)
 
 # TODO: better way to handle reducedim initialization
 #
@@ -156,8 +156,8 @@ end
 reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray{T}, region) where {T} =
     reducedim_initarray(A, region, zero(f(zero(T))), _realtype(f, T))
 
-reducedim_init(f, op::typeof(&), A::AbstractArray, region) = reducedim_initarray(A, region, true)
-reducedim_init(f, op::typeof(|), A::AbstractArray, region) = reducedim_initarray(A, region, false)
+reducedim_init(f, op::typeof(&), A::AbstractArrayOrBroadcasted, region) = reducedim_initarray(A, region, true)
+reducedim_init(f, op::typeof(|), A::AbstractArrayOrBroadcasted, region) = reducedim_initarray(A, region, false)
 
 # specialize to make initialization more efficient for common cases
 
@@ -179,8 +179,11 @@ end
 
 ## generic (map)reduction
 
-has_fast_linear_indexing(a::AbstractArray) = false
+has_fast_linear_indexing(a::AbstractArrayOrBroadcasted) = false
 has_fast_linear_indexing(a::Array) = true
+has_fast_linear_indexing(::Number) = true  # for Broadcasted
+has_fast_linear_indexing(bc::Broadcast.Broadcasted) =
+    all(has_fast_linear_indexing, bc.args)
 
 function check_reducedims(R, A)
     # Check whether R has compatible dimensions w.r.t. A for reduction
@@ -233,7 +236,7 @@ _firstslice(i::OneTo) = OneTo(1)
 _firstslice(i::Slice) = Slice(_firstslice(i.indices))
 _firstslice(i) = i[firstindex(i):firstindex(i)]
 
-function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
+function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
     lsiz = check_reducedims(R,A)
     isempty(A) && return R
 
@@ -271,10 +274,10 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
     return R
 end
 
-mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) =
+mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted) =
     (_mapreducedim!(f, op, R, A); R)
 
-reducedim!(op, R::AbstractArray{RT}, A::AbstractArray) where {RT} =
+reducedim!(op, R::AbstractArray{RT}, A::AbstractArrayOrBroadcasted) where {RT} =
     mapreducedim!(identity, op, R, A)
 
 """
@@ -304,17 +307,21 @@ julia> mapreduce(isodd, |, a, dims=1)
  1  1  1  1
 ```
 """
-mapreduce(f, op, A::AbstractArray; dims=:, kw...) = _mapreduce_dim(f, op, kw.data, A, dims)
-mapreduce(f, op, A::AbstractArray...; kw...) = reduce(op, map(f, A...); kw...)
+mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, kw...) =
+    _mapreduce_dim(f, op, kw.data, A, dims)
+mapreduce(f, op, A::AbstractArrayOrBroadcasted...; kw...) =
+    reduce(op, map(f, A...); kw...)
 
-_mapreduce_dim(f, op, nt::NamedTuple{(:init,)}, A::AbstractArray, ::Colon) = mapfoldl(f, op, A; nt...)
+_mapreduce_dim(f, op, nt::NamedTuple{(:init,)}, A::AbstractArrayOrBroadcasted, ::Colon) =
+    mapfoldl(f, op, A; nt...)
 
-_mapreduce_dim(f, op, ::NamedTuple{()}, A::AbstractArray, ::Colon) = _mapreduce(f, op, IndexStyle(A), A)
+_mapreduce_dim(f, op, ::NamedTuple{()}, A::AbstractArrayOrBroadcasted, ::Colon) =
+    _mapreduce(f, op, IndexStyle(A), A)
 
-_mapreduce_dim(f, op, nt::NamedTuple{(:init,)}, A::AbstractArray, dims) =
+_mapreduce_dim(f, op, nt::NamedTuple{(:init,)}, A::AbstractArrayOrBroadcasted, dims) =
     mapreducedim!(f, op, reducedim_initarray(A, dims, nt.init), A)
 
-_mapreduce_dim(f, op, ::NamedTuple{()}, A::AbstractArray, dims) =
+_mapreduce_dim(f, op, ::NamedTuple{()}, A::AbstractArrayOrBroadcasted, dims) =
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
 
 """

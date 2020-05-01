@@ -696,7 +696,8 @@ end
 function setindex_widen_up_to(dest::AbstractArray{T}, el, i) where T
     @_inline_meta
     new = similar(dest, promote_typejoin(T, typeof(el)))
-    copyto!(new, firstindex(new), dest, firstindex(dest), i-1)
+    f = first(LinearIndices(dest))
+    copyto!(new, first(LinearIndices(new)), dest, f, i-f)
     @inbounds new[i] = el
     return new
 end
@@ -1128,6 +1129,22 @@ function pop!(a::Vector)
     return item
 end
 
+function pop!(a::Vector, i::Integer)
+    x = a[i]
+    _deleteat!(a, i, 1)
+    x
+end
+
+function pop!(a::Vector, i::Integer, default)
+    if 1 <= i <= length(a)
+        x = @inbounds a[i]
+        _deleteat!(a, i, 1)
+        x
+    else
+        default
+    end
+end
+
 """
     pushfirst!(collection, items...) -> collection
 
@@ -1410,7 +1427,7 @@ To insert `replacement` before an index `n` without removing any items, use
 # Examples
 ```jldoctest
 julia> A = [-1, -2, -3, 5, 4, 3, -1]; splice!(A, 4:3, 2)
-0-element Array{Int64,1}
+Int64[]
 
 julia> A
 8-element Array{Int64,1}:
@@ -1652,7 +1669,7 @@ CartesianIndex(2, 1)
 """
 function findnext(A, start)
     l = last(keys(A))
-    i = start
+    i = oftype(l, start)
     i > l && return nothing
     while true
         A[i] && return i
@@ -1734,7 +1751,7 @@ CartesianIndex(1, 1)
 """
 function findnext(testf::Function, A, start)
     l = last(keys(A))
-    i = start
+    i = oftype(l, start)
     i > l && return nothing
     while true
         testf(A[i]) && return i
@@ -1791,6 +1808,12 @@ end
 findfirst(testf::Function, A::Union{AbstractArray, AbstractString}) =
     findnext(testf, A, first(keys(A)))
 
+findfirst(p::Union{Fix2{typeof(isequal),Int},Fix2{typeof(==),Int}}, r::OneTo{Int}) =
+    1 <= p.x <= r.stop ? p.x : nothing
+
+findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange) where {T<:Integer} =
+    first(r) <= p.x <= last(r) ? 1+Int(p.x - first(r)) : nothing
+
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
@@ -1832,8 +1855,8 @@ CartesianIndex(2, 1)
 ```
 """
 function findprev(A, start)
-    i = start
     f = first(keys(A))
+    i = oftype(f, start)
     i < f && return nothing
     while true
         A[i] && return i
@@ -1923,8 +1946,8 @@ CartesianIndex(2, 1)
 ```
 """
 function findprev(testf::Function, A, start)
-    i = start
     f = first(keys(A))
+    i = oftype(f, start)
     i < f && return nothing
     while true
         testf(A[i]) && return i
@@ -2066,7 +2089,7 @@ julia> findall(A)
  CartesianIndex(2, 2)
 
 julia> findall(falses(3))
-0-element Array{Int64,1}
+Int64[]
 ```
 """
 function findall(A)
@@ -2356,10 +2379,13 @@ end
 ## Filter ##
 
 """
-    filter(f, a::AbstractArray)
+    filter(f, a)
 
-Return a copy of `a`, removing elements for which `f` is `false`.
+Return a copy of collection `a`, removing elements for which `f` is `false`.
 The function `f` is passed one argument.
+
+!!! compat "Julia 1.4"
+    Support for `a` as a tuple requires at least Julia 1.4.
 
 # Examples
 ```jldoctest
@@ -2405,9 +2431,9 @@ function filter(f, a::AbstractArray)
 end
 
 """
-    filter!(f, a::AbstractVector)
+    filter!(f, a)
 
-Update `a`, removing elements for which `f` is `false`.
+Update collection `a`, removing elements for which `f` is `false`.
 The function `f` is passed one argument.
 
 # Examples

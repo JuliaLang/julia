@@ -342,7 +342,7 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
     //TODO: fast-path for leaf-type tuples?
     //if (ttypes->isdispatchtuple) {
     //    register jl_typemap_intersection_visitor_fptr fptr = closure->fptr;
-    //        struct jl_typemap_assoc search = {(jl_value_t*)closure->type, world, 1, closure->env, 0, ~(size_t)0};
+    //        struct jl_typemap_assoc search = {(jl_value_t*)closure->type, world, closure->env, 0, ~(size_t)0};
     //        jl_typemap_entry_t *ml = jl_typemap_assoc_by_type(map, search, offs, /*subtype*/1);
     //        if (ml) {
     //            closure->env = search->env;
@@ -483,8 +483,6 @@ static jl_typemap_entry_t *jl_typemap_entry_assoc_by_type(
                         // ignore method table entries that have been replaced in the current world
                         if (search->min_valid <= ml->max_world)
                             search->min_valid = ml->max_world + 1;
-                        if (search->world <= (ml->max_world | search->max_world_mask))
-                            return ml;
                     }
                     else {
                         // intersect the env valid range with method's valid range
@@ -509,7 +507,7 @@ static jl_typemap_entry_t *jl_typemap_entry_lookup_by_type(
         jl_typemap_entry_t *ml, struct jl_typemap_assoc *search)
 {
     for (; ml != (void*)jl_nothing; ml = ml->next) {
-        if (search->world < ml->min_world || search->world > (ml->max_world | search->max_world_mask))
+        if (search->world < ml->min_world || search->world > ml->max_world)
             continue;
         // unroll the first few cases here, to the extent that is possible to do fast and easily
         jl_value_t *types = search->types;

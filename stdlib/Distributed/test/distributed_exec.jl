@@ -834,6 +834,7 @@ remote_do(fut->put!(fut, myid()), id_other, f)
 
 # Github issue #29932
 rc_unbuffered = RemoteChannel(()->Channel{Vector{Float64}}(0))
+@test eltype(rc_unbuffered) == Vector{Float64}
 
 @async begin
     # Trigger direct write (no buffering) of largish array

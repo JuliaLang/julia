@@ -1061,3 +1061,8 @@ let s = "typeof(+)."
     c, r = test_complete_context(s)
     @test length(c) == length(fieldnames(DataType))
 end
+
+let s = "test_dict[\"ab"
+    c, r = test_complete_context(s)
+    @test c == Any["\"abc\"", "\"abcd\""]
+end

@@ -397,6 +397,19 @@ try
             occursin("ERROR: LoadError: break me", exc.msg) && rethrow()
         end
 
+    # Test that trying to eval into closed modules during precompilation is an error
+    FooBar3_file = joinpath(dir, "FooBar3.jl")
+    FooBar3_inc = joinpath(dir, "FooBar3_inc.jl")
+    write(FooBar3_inc, "x=1\n")
+    for code in ["Core.eval(Base, :(x=1))", "Base.include(Base, \"FooBar3_inc.jl\")"]
+        write(FooBar3_file, code)
+        @test_warn "Evaluation into the closed module `Base` breaks incremental compilation" try
+                Base.require(Main, :FooBar3)
+            catch exc
+                isa(exc, ErrorException) || rethrow()
+            end
+    end
+
     # Test transitive dependency for #21266
     FooBarT_file = joinpath(dir, "FooBarT.jl")
     write(FooBarT_file,

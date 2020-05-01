@@ -176,7 +176,7 @@
   (jl-expand-to-thunk
    (let* ((name (caddr e))
           (body (cadddr e))
-          (loc  (cadr body))
+          (loc  (if (null? (cdr body)) () (cadr body)))
           (loc  (if (and (pair? loc) (eq? (car loc) 'line))
                     (list loc)
                     '()))

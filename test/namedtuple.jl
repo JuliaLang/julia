@@ -121,7 +121,10 @@ end
 @test get(()->0, (a=1,), :b) == 0
 @test Base.tail((a = 1, b = 2.0, c = 'x')) ≡ (b = 2.0, c = 'x')
 @test Base.tail((a = 1, )) ≡ NamedTuple()
+@test Base.front((a = 1, b = 2.0, c = 'x')) ≡ (a = 1, b = 2.0)
+@test Base.front((a = 1, )) ≡ NamedTuple()
 @test_throws ArgumentError Base.tail(NamedTuple())
+@test_throws ArgumentError Base.front(NamedTuple())
 
 # syntax errors
 

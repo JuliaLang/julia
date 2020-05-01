@@ -10,7 +10,7 @@ using .Base: copymutable, LinearIndices, length, (:),
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
-    length, resize!, fill, Missing, require_one_based_indexing
+    length, resize!, fill, Missing, require_one_based_indexing, keytype
 
 using .Base: >>>, !==
 
@@ -174,7 +174,7 @@ midpoint(lo::Integer, hi::Integer) = midpoint(promote(lo, hi)...)
 
 # index of the first value of vector a that is greater than or equal to x;
 # returns length(v)+1 if x is greater than all values in v.
-function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering) where T<:Integer
+function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     u = T(1)
     lo = lo - u
     hi = hi + u
@@ -191,7 +191,7 @@ end
 
 # index of the last value of vector a that is less than or equal to x;
 # returns 0 if x is less than all values of v.
-function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering) where T<:Integer
+function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     u = T(1)
     lo = lo - u
     hi = hi + u
@@ -209,7 +209,7 @@ end
 # returns the range of indices of v equal to x
 # if v does not contain x, returns a 0-length range
 # indicating the insertion point of x
-function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering) where T<:Integer
+function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRange{keytype(v)} where T<:Integer
     u = T(1)
     lo = ilo - u
     hi = ihi + u
@@ -228,7 +228,7 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering) where T
     return (lo + 1) : (hi - 1)
 end
 
-function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
+function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
@@ -238,7 +238,7 @@ function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
+function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
     if step(a) == 0
         lt(o, first(a), x) ? length(a) + 1 : 1
@@ -248,7 +248,7 @@ function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
+function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
     h = step(a)
     if h == 0
@@ -262,11 +262,15 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
     elseif h < 0 && x <= last(a)
         lastindex(a)
     else
-        fld(floor(Integer, x) - first(a), h) + 1
+        if o isa ForwardOrdering
+            fld(floor(Integer, x) - first(a), h) + 1
+        else
+            fld(ceil(Integer, x) - first(a), h) + 1
+        end
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
+function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
     h = step(a)
     if h == 0
@@ -280,11 +284,15 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
     elseif h < 0 && x < last(a)
         lastindex(a) + 1
     else
-        -fld(floor(Integer, -x) + first(a), h) + 1
+        if o isa ForwardOrdering
+            -fld(floor(Integer, -x) + Signed(first(a)), h) + 1
+        else
+            -fld(ceil(Integer, -x) + Signed(first(a)), h) + 1
+        end
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
+function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
     if lt(o, first(a), x)
         if step(a) == 0
@@ -297,7 +305,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOr
     end
 end
 
-function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
+function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
     if lt(o, x, first(a))
         0

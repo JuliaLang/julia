@@ -254,6 +254,18 @@ end
     @test close(bstream) === nothing
     @test eof(bstream)
     @test bytesavailable(bstream) == 0
+    flag = Ref{Bool}(false)
+    event = Base.Event()
+    bstream = Base.BufferStream()
+    task = @async begin
+        notify(event)
+        read(bstream, 16)
+        flag[] = true
+    end
+    wait(event)
+    write(bstream, rand(UInt8, 16))
+    wait(task)
+    @test flag[] == true
 end
 
 @test flush(IOBuffer()) === nothing # should be a no-op

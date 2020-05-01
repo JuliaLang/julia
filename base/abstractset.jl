@@ -208,7 +208,7 @@ julia> symdiff([1,2,1], [2, 1, 2])
  2
 
 julia> symdiff(unique([1,2,1]), unique([2, 1, 2]))
-0-element Array{Int64,1}
+Int64[]
 ```
 """
 symdiff(s, sets...) = symdiff!(emptymutable(s, promote_eltype(s, sets...)), s, sets...)

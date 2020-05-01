@@ -40,7 +40,7 @@ julia> z = (x = 1; y = 2; x + y)
 ```
 
 This syntax is particularly useful with the terse single-line function definition form introduced
-in [Functions](@ref). Although it is typical, there is no requirement that `begin` blocks be multiline
+in [Functions](@ref man-functions). Although it is typical, there is no requirement that `begin` blocks be multiline
 or that `;` chains be single-line:
 
 ```jldoctest
@@ -655,6 +655,7 @@ julia> Base.showerror(io::IO, e::MyUndefVarError) = print(io, e.var, " not defin
 
 !!! note
     When writing an error message, it is preferred to make the first word lowercase. For example,
+
     `size(A) == size(B) || throw(DimensionMismatch("size of A not equal to size of B"))`
 
     is preferred over
@@ -662,7 +663,9 @@ julia> Base.showerror(io::IO, e::MyUndefVarError) = print(io, e.var, " not defin
     `size(A) == size(B) || throw(DimensionMismatch("Size of A not equal to size of B"))`.
 
     However, sometimes it makes sense to keep the uppercase first letter, for instance if an argument
-    to a function is a capital letter: `size(A,1) == size(B,2) || throw(DimensionMismatch("A has first dimension..."))`.
+    to a function is a capital letter:
+
+    `size(A,1) == size(B,2) || throw(DimensionMismatch("A has first dimension..."))`.
 
 ### Errors
 

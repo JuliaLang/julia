@@ -301,6 +301,12 @@ end
         end
     end
     @testset "findfirst" begin
+        @test findfirst(isequal(3), Base.OneTo(10)) == 3
+        @test findfirst(==(0), Base.OneTo(10)) == nothing
+        @test findfirst(==(11), Base.OneTo(10)) == nothing
+        @test findfirst(==(4), Int16(3):Int16(7)) === Int(2)
+        @test findfirst(==(2), Int16(3):Int16(7)) == nothing
+        @test findfirst(isequal(8), 3:7) == nothing
         @test findfirst(isequal(7), 1:2:10) == 4
         @test findfirst(==(7), 1:2:10) == 4
         @test findfirst(==(10), 1:2:10) == nothing
@@ -1226,6 +1232,7 @@ end
             @test i == (k += 1)
         end
         @test intersect(r, Base.OneTo(2)) == Base.OneTo(2)
+        @test union(r, Base.OneTo(4)) == Base.OneTo(4)
         @test intersect(r, 0:5) == 1:3
         @test intersect(r, 2) === intersect(2, r) === 2:2
         @test findall(in(r), r) === findall(in(1:length(r)), r) ===
@@ -1392,6 +1399,22 @@ end
     x = range(3, stop=3, length=5)
     @test step(x) == 0.0
     @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+end
+
+@testset "Views of ranges" begin
+    @test view(Base.OneTo(10), Base.OneTo(5)) === Base.OneTo(5)
+    @test view(1:10, 1:5) === 1:5
+    @test view(1:10, 1:2:5) === 1:2:5
+    @test view(1:2:9, 1:5) === 1:2:9
+
+    # Ensure we don't hit a fallback `view` if there's a better `getindex` implementation
+    vmt = collect(methods(view, Tuple{AbstractRange, AbstractRange}))
+    for m in methods(getindex, Tuple{AbstractRange, AbstractRange})
+        tt = Base.tuple_type_tail(m.sig)
+        tt == Tuple{AbstractArray,Vararg{Any,N}} where N && continue
+        vm = findfirst(sig->tt <: Base.tuple_type_tail(sig.sig), vmt)
+        @test vmt[vm].sig != Tuple{typeof(view),AbstractArray,Vararg{Any,N}} where N
+    end
 end
 
 @testset "Issue #26608" begin
@@ -1580,4 +1603,10 @@ end
     r = StepRangeLen('a',2,4)
     @test step(r) === 2
     @test collect(r) == ['a','c','e','g']
+end
+
+@testset "Return type of indexing with ranges" begin
+    for T = (Base.OneTo{Int}, UnitRange{Int}, StepRange{Int,Int}, StepRangeLen{Int}, LinRange{Int})
+        @test eltype(T(1:5)) === eltype(T(1:5)[1:2])
+    end
 end

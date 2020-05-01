@@ -9,6 +9,10 @@ using Statistics
 
 const OAs_name = join(fullname(OffsetArrays), ".")
 
+if !isdefined(@__MODULE__, :T24Linear)
+    include("testhelpers/arrayindexingtypes.jl")
+end
+
 let
 # Basics
 v0 = rand(4)
@@ -331,6 +335,16 @@ map!(+, dest, am, am)
 am = map(identity, a)
 @test isa(am, OffsetArray)
 @test am == a
+
+# https://github.com/JuliaArrays/OffsetArrays.jl/issues/106
+@test isequal(map(!, OffsetArray([true,missing],2)), OffsetArray([false, missing], 2))
+@test isequal(map(!, OffsetArray([true missing; false true], 2, -1)), OffsetArray([false missing; true false], 2, -1))
+P = view([true missing; false true; true false], 1:2:3, :)
+@test IndexStyle(P) === IndexCartesian()
+@test isequal(map(!, OffsetArray(P, 2, -1)), OffsetArray(map(!, P), 2, -1))
+P = TSlow([true missing; false true])
+@test IndexStyle(P) === IndexCartesian()
+@test isequal(map(!, OffsetArray(P, 2, -1)), OffsetArray(map(!, P), 2, -1))
 
 # dropdims
 a0 = rand(1,1,8,8,1)

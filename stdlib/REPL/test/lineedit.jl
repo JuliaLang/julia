@@ -246,7 +246,7 @@ for i = 1:6
     @test position(buf) == i
 end
 @test eof(buf)
-for i = 5:0
+for i = 5:-1:0
     LineEdit.edit_move_left(buf)
     @test position(buf) == i
 end

@@ -241,6 +241,7 @@ include("filesystem.jl")
 using .Filesystem
 include("cmd.jl")
 include("process.jl")
+include("ttyhascolor.jl")
 include("grisu/grisu.jl")
 include("secretbuffer.jl")
 
@@ -337,6 +338,7 @@ include("uuid.jl")
 include("loading.jl")
 
 # misc useful functions & macros
+include("timing.jl")
 include("util.jl")
 
 include("asyncmap.jl")
