@@ -168,11 +168,12 @@ end
 
 # there are three implemented samplers for unit ranges, the two first of which
 # assume that Float64 (i.e. 52 random bits) is the native type for the RNG:
-# 1) "Fast", which is most efficient when the underlying RNG produces rand(Float64)
-#    "fast enough". The tradeoff is faster creation of the sampler, but more
-#    consumption of entropy bits
-# 2) "Original" which tries to use as few entropy bits as possible, at the cost of a
-#    a bigger upfront price associated with the creation of the sampler
+# 1) "Fast" (SamplerRangeFast), which is most efficient when the underlying RNG produces
+#    rand(Float64) "fast enough".
+#    The tradeoff is faster creation of the sampler, but more consumption of entropy bits.
+# 2) "Slow" (SamplerRangeInt) which tries to use as few entropy bits as possible, at the
+#    cost of a a bigger upfront price associated with the creation of the sampler.
+#    This sampler is most appropriate for slower random generators.
 # 3) "Nearly Division Less" (NDL) which is generally the fastest algorithm for types of size
 #    up to 64 bits. This is the default for these types since Julia 1.5.
 #    The "Fast" algorithm can be faster than NDL when the length of the range is
@@ -234,7 +235,7 @@ function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt128,T}) where T
     x % T + a
 end
 
-#### Original
+#### "Slow" / SamplerRangeInt
 
 # remainder function according to Knuth, where rem_knuth(a, 0) = a
 rem_knuth(a::UInt, b::UInt) = a % (b + (b == 0)) + a * (b == 0)
@@ -335,10 +336,6 @@ function rand(rng::AbstractRNG, sp::SamplerRangeNDL{U,T}) where {U,T}
     end
     (s == 0 ? x : m >> (8*sizeof(U))) % T + sp.a
 end
-
-# API until this is made the default
-fast(r::AbstractUnitRange{<:Base.BitInteger64}) = SamplerRangeNDL(r)
-fast(r::AbstractArray) = Random.SamplerSimple(r, fast(firstindex(r):lastindex(r)))
 
 
 ### BigInt
