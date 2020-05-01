@@ -536,6 +536,9 @@ end
         @test modf( convert(elty,1.2) )[2] ≈ convert(elty,1.0)
         @test modf( convert(elty,1.0) )[1] ≈ convert(elty,0.0)
         @test modf( convert(elty,1.0) )[2] ≈ convert(elty,1.0)
+        @test isequal(modf( convert(elty,-Inf) ), (-0.0, -Inf))
+        @test isequal(modf( convert(elty,Inf) ), (0.0, Inf))
+        @test isequal(modf( convert(elty,NaN) ), (NaN, NaN))
     end
 end
 

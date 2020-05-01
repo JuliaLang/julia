@@ -571,9 +571,8 @@ end
     @test modf(x+y) == (y, x)
     x = BigFloat(NaN)
     @test map(isnan, modf(x)) == (true, true)
-    x = BigFloat(Inf)
-    y = modf(x)
-    @test (isnan(y[1]), isinf(y[2])) == (true, true)
+    @test isequal(modf(BigFloat(-Inf)), (BigFloat(-0.0), BigFloat(-Inf)))
+    @test isequal(modf(BigFloat(Inf)), (BigFloat(0.0), BigFloat(Inf)))
 end
 @testset "rem" begin
     setprecision(53) do

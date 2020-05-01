@@ -868,7 +868,7 @@ julia> modf(-3.5)
 (-0.5, -3.0)
 ```
 """
-modf(x) = rem(x,one(x)), trunc(x)
+modf(x) = isinf(x) ? (flipsign(zero(x), x), x) : (rem(x, one(x)), trunc(x))
 
 function modf(x::Float32)
     temp = Ref{Float32}()
