@@ -1332,6 +1332,16 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
                 show_unquoted(io, arg1, indent, func_prec, quote_level)
             end
 
+        # adjoint operator (i.e. "a'")
+        elseif func === :var"'" && length(func_args) == 1
+            arg1 = func_args[1]
+            if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1))
+                show_enclosed_list(io, '(', func_args, ", ", ')', indent, func_prec)
+            else
+                show_unquoted(io, arg1, indent, func_prec)
+            end
+            print(io, ''')
+
         # binary operator (i.e. "x + y")
         elseif func_prec > 0 # is a binary operator
             na = length(func_args)
@@ -1657,17 +1667,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             show_unquoted(io, a1, 0, 0, quote_level)
             parens && print(io, ")")
         end
-
-    # transpose
-    elseif head === Symbol('\'') && nargs == 1
-        if isa(args[1], Symbol)
-            show_unquoted(io, args[1], 0, 0, quote_level)
-        else
-            print(io, "(")
-            show_unquoted(io, args[1], 0, 0, quote_level)
-            print(io, ")")
-        end
-        print(io, head)
 
     # `where` syntax
     elseif head === :where && nargs > 1

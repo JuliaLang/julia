@@ -74,7 +74,7 @@ macro test999_str(args...); args; end
 @test_throws ParseError Meta.parse("sqrt(16)2")
 @test_throws ParseError Meta.parse("x' y")
 @test_throws ParseError Meta.parse("x 'y")
-@test Meta.parse("x'y") == Expr(:call, :*, Expr(Symbol("'"), :x), :y)
+@test Meta.parse("x'y") == Expr(:call, :*, Expr(:call, Symbol("'"), :x), :y)
 
 # issue #18851
 @test Meta.parse("-2[m]") == Expr(:call, :-, Expr(:ref, 2, :m))

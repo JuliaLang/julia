@@ -1238,7 +1238,7 @@
              (if (ts:space? s)
                  (error (string "space not allowed before \"" t "\"")))
              (take-token s)
-             (loop (list t ex)))
+             (loop (list 'call t ex)))
             ((|.'|) (error "the \".'\" operator is discontinued"))
             ((#\{ )
              (disallow-space s ex t)
