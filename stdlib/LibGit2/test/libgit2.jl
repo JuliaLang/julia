@@ -1969,7 +1969,12 @@ mktempdir() do dir
             end
 
             LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
-                @test length(collect(LibGit2.GitConfigIter(cfg, r"credential.*"))) == 3
+                iter = LibGit2.GitConfigIter(cfg, r"credential.*\.helper")
+                @test LibGit2.split_cfg_entry.(iter) == [
+                    ("credential", "", "helper", "!echo first"),
+                    ("credential", "https://mygithost", "helper", ""),
+                    ("credential", "", "helper", "!echo second"),
+                ]
 
                 expected = [
                     GitCredentialHelper(`echo first`),
