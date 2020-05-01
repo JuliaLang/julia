@@ -171,6 +171,13 @@ Standard library changes
 * `randn!(::MersenneTwister, ::Array{Float64})` is faster, and as a result, for a given state of the RNG,
   the corresponding generated numbers have changed ([#35078]).
 
+* A new faster algorithm ("nearly division less") is used for generating random numbers
+  within a range ([#29240]).
+  As a result, the streams of generated numbers is changed.
+  Also, for performance, the undocumented property that, given a seed and `a, b` of type `Int`,
+  `rand(a:b)` produces the same stream on 32 and 64 bits architectures, is dropped.
+
+
 #### REPL
 
 

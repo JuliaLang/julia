@@ -602,14 +602,6 @@ for T in BitInteger_types
     end
 end
 
-#### from a range
-
-for T in BitInteger_types, R=(1, Inf) # eval because of ambiguity otherwise
-    @eval Sampler(::Type{MersenneTwister}, r::AbstractUnitRange{$T}, ::Val{$R}) =
-        SamplerRangeFast(r)
-end
-
-
 ### randjump
 
 # Old randjump methods are deprecated, the scalar version is in the Future module.
