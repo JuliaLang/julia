@@ -101,7 +101,6 @@ static const char opts[]  =
     // parallel options
     " -t, --threads {N|auto}    Enable N threads; \"auto\" currently sets N to the number of local\n"
     "                           CPU threads but this might change in the future\n"
-    " -t, --threads {N|auto}    Enable N threads. \"auto\" sets N to the number of local CPU threads.\n"
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
     "                           \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
     " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
