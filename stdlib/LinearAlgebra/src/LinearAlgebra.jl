@@ -394,7 +394,6 @@ export ⋅, ×
 
 For arrays `a` and `b`, perform elementwise multiplication.
 `a` and `b` must have identical `axes`.
-When either `a` or `b` is not an array, `hadamard(a, b)` defaults to `a*b`.
 
 `⊙` can be passed as an operator to higher-order functions.
 
@@ -420,9 +419,8 @@ function hadamard(A::AbstractArray, B::AbstractArray)
 
     axA, axB = axes(A), axes(B)
     axA == axB || throw_dmm(axA, axB)
-    return map(hadamard, A, B)
+    return map(*, A, B)
 end
-hadamard(a, b) = a * b
 const ⊙ = hadamard
 
 """
@@ -443,7 +441,7 @@ function hadamard!(dest::AbstractArray, A::AbstractArray, B::AbstractArray)
     axA, axB, axdest = axes(A), axes(B), axes(dest)
     ((axdest == axA) & (axdest == axB)) || throw_dmm(axA, axB, axdest)
     @simd for I in eachindex(dest, A, B)
-        @inbounds dest[I] = hadamard(A[I], B[I])
+        @inbounds dest[I] = A[I] * B[I]
     end
     return dest
 end
