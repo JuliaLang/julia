@@ -1203,10 +1203,14 @@ int ios_vprintf(ios_t *s, const char *format, va_list args)
         char *start = s->buf + s->bpos;
         c = vsnprintf(start, avail, format, args);
         if (c < 0) {
+#if defined(_OS_WINDOWS_)
+            // on windows this can mean not enough space was available
+#else
             va_end(al);
             return c;
+#endif
         }
-        if (c < avail) {
+        else if (c < avail) {
             s->bpos += (size_t)c;
             _write_update_pos(s);
             // TODO: only works right if newline is at end
