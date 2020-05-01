@@ -392,7 +392,7 @@ julia> gap(minmax(10, 2))
 8
 ```
 
-Notice the extra set of parentheses in the definition of `gap`. Without those, `gap` 
+Notice the extra set of parentheses in the definition of `gap`. Without those, `gap`
 would be a two-argument function, and this example would not work.
 
 ## Varargs Functions
