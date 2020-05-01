@@ -106,8 +106,7 @@ julia> cumsum(a, dims=2)
 
     In the former case, the integers are widened to system word size and
     therefore the result is `Int64[100, 128]`. In the latter case, no such
-    widening happens and integer overflow results in `Int8[100, -128]`. See also
-    [`Base.add_sum`](@ref)
+    widening happens and integer overflow results in `Int8[100, -128]`.
 """
 function cumsum(A::AbstractArray{T}; dims::Integer) where T
     out = similar(A, promote_op(add_sum, T, T))
