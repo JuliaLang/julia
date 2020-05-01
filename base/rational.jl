@@ -319,9 +319,7 @@ function *(y::Integer, x::Rational)
 end
 /(x::Rational, y::Union{Rational, Integer, Complex{<:Union{Integer,Rational}}}) = x//y
 /(x::Union{Integer, Complex{<:Union{Integer,Rational}}}, y::Rational) = x//y
-function inv(x::Rational{T}) where T
-    checked_den(x.den, x.num)
-end
+inv(x::Rational{T}) where {T} = checked_den(x.den, x.num)
 
 fma(x::Rational, y::Rational, z::Rational) = x*y+z
 
