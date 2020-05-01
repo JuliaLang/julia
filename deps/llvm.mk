@@ -376,14 +376,12 @@ endef
 ifeq ($(LLVM_VER_SHORT),8.0)
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
 $(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
-$(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX -- warning: this fails check-llvm-codegen-nvptx
 $(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
 $(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
 $(eval $(call LLVM_PATCH,llvm7-D50010-VNCoercion-ni))
 $(eval $(call LLVM_PATCH,llvm-8.0-D50167-scev-umin))
 $(eval $(call LLVM_PATCH,llvm7-windows-race))
 $(eval $(call LLVM_PATCH,llvm-D57118-powerpc)) # remove for 9.0
-$(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
 $(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-8.0-D66401-mingw-reloc)) # remove for 9.0
@@ -401,10 +399,8 @@ endif # LLVM_VER 8.0
 ifeq ($(LLVM_VER_SHORT),9.0)
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
 $(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
-$(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX -- warning: this fails check-llvm-codegen-nvptx
 $(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
 $(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
-$(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
 $(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm7-revert-D44485))
@@ -419,10 +415,8 @@ endif # LLVM_VER 9.0
 ifeq ($(LLVM_VER_SHORT),10.0)
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
 $(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
-$(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX -- warning: this fails check-llvm-codegen-nvptx
 $(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
 $(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
-$(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
 $(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm7-revert-D44485))
