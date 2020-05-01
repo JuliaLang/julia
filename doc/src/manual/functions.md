@@ -386,15 +386,14 @@ a symbol, then an assignment `(x, y) = argument` will be inserted for you:
 ```julia
 julia> minmax(x, y) = (y < x) ? (y, x) : (x, y)
 
-julia> range((min, max)) = max - min
+julia> gap((min, max)) = max - min
 
-julia> range(minmax(10, 2))
+julia> gap(minmax(10, 2))
 8
 ```
 
-Notice the extra set of parentheses in the definition of `range`.
-Without those, `range` would be a two-argument function, and this example would
-not work.
+Notice the extra set of parentheses in the definition of `gap`. Without those, `gap` 
+would be a two-argument function, and this example would not work.
 
 ## Varargs Functions
 
