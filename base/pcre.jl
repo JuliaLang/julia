@@ -129,7 +129,7 @@ function jit_compile(regex::Ptr{Cvoid})
                   (Ptr{Cvoid}, UInt32), regex, JIT_COMPLETE) % UInt32
     errno == 0 && return true
     errno == ERROR_JIT_BADOPTION && return false
-    error("PCRE JIT error: $(err_message(errno))")
+    error("PCRE JIT error: $(err_message(errno % Int32))")
 end
 
 free_match_data(match_data) =
