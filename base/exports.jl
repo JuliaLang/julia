@@ -697,10 +697,8 @@ export
     backtrace,
     catch_backtrace,
     error,
-    register_error_hint,
     rethrow,
     retry,
-    show_error_hints,
     systemerror,
 
 # stack traces

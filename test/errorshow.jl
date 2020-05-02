@@ -597,7 +597,7 @@ function recommend_oneunit(io, ex, arg_types, kwargs)
         end
     end
 end
-@test register_error_hint(recommend_oneunit, MethodError) === nothing
+@test Base.Experimental.register_error_hint(recommend_oneunit, MethodError) === nothing
 let err_str
     err_str = @except_str one(HasNoOne()) MethodError
     @test occursin(r"MethodError: no method matching one\(::.*HasNoOne\)", err_str)
@@ -606,19 +606,19 @@ let err_str
     @test occursin(r"MethodError: no method matching one\(::.*HasNoOne; value=2\)", err_str)
     @test occursin("`one` doesn't take keyword arguments, that would be silly", err_str)
 end
-pop!(Base._hint_handlers[MethodError])  # order is undefined, don't copy this
+pop!(Base.Experimental._hint_handlers[MethodError])  # order is undefined, don't copy this
 
 function busted_hint(io, exc, notarg)  # wrong number of args
     print(io, "\nI don't have a hint for you, sorry")
 end
-@test register_error_hint(busted_hint, DomainError) === nothing
+@test Base.Experimental.register_error_hint(busted_hint, DomainError) === nothing
 try
     sqrt(-2)
 catch ex
     io = IOBuffer()
     @test_logs (:error, "Hint-handler busted_hint for DomainError in $(@__MODULE__) caused an error") showerror(io, ex)
 end
-pop!(Base._hint_handlers[DomainError])  # order is undefined, don't copy this
+pop!(Base.Experimental._hint_handlers[DomainError])  # order is undefined, don't copy this
 
 
 # issue #28442
