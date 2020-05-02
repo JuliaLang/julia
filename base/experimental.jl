@@ -173,6 +173,8 @@ Closest candidates are:
     Custom error hints are available as of Julia 1.5.
 !!! warning
     This interface is experimental and subject to change or removal without notice.
+    To insulate yourself against changes, consider putting any registrations inside an
+    `if isdefined(Base.Experimental, :register_error_hint) ... end` block.
 """
 function register_error_hint(handler, exct::Type)
     list = get!(()->[], _hint_handlers, exct)
