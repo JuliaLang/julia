@@ -1154,7 +1154,7 @@ Core.TypeofBottom
     Core.Type{T}
 
 `Core.Type` is an abstract type which has all type objects as its instances.
-The only instance of the singleton type `Core.Type{T} where T` is the object
+The only instance of the singleton type `Core.Type{T}` is the object
 `T`.
 
 # Examples
