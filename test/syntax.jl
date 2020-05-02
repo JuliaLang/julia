@@ -861,7 +861,7 @@ let f = function (x::T, y::S) where T<:S where S
 end
 
 # issue #20541
-@test Meta.parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :(.!), :b))
+@test Meta.parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :.!, :b))
 
 @test Meta.lower(Main, :(a{1} = b)) == Expr(:error, "invalid type parameter name \"1\"")
 @test Meta.lower(Main, :(a{2<:Any} = b)) == Expr(:error, "invalid type parameter name \"2\"")

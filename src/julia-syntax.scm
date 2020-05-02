@@ -1763,7 +1763,7 @@
              (args (map dot-to-fuse (cdr kws+args)))
              (make `(call (top ,(if (null? kws) 'broadcasted 'broadcasted_kwsyntax)) ,@kws ,f ,@args)))
         (if top (cons 'fuse make) make)))
-    (if (and (pair? e) (eq? (car e) '|.|))
+    (if (and (pair? e) (eq? (car e) '|.|) (length= e 3))
         (let ((f (cadr e)) (x (caddr e)))
           (cond ((or (atom? x) (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
                  `(call (top getproperty) ,f ,x))
@@ -1960,7 +1960,9 @@
 
    '|.|
    (lambda (e) ; e = (|.| f x)
-     (expand-fuse-broadcast '() e))
+     (if (length= e 2)
+         `(call (top BroadcastFunction) ,(cadr e))
+         (expand-fuse-broadcast '() e)))
 
    '.=
    (lambda (e)

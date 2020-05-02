@@ -630,7 +630,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
 
     jl_expr_t *ex = (jl_expr_t*)e;
 
-    if (ex->head == dot_sym) {
+    if (ex->head == dot_sym && jl_expr_nargs(ex) != 1) {
         if (jl_expr_nargs(ex) != 2)
             jl_eval_errorf(m, "syntax: malformed \".\" expression");
         jl_value_t *lhs = jl_exprarg(ex, 0);
