@@ -1884,13 +1884,15 @@
       `(= ,lhs ,rhs)))
 
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref module toplevel ssavalue null true false meta using import export thismodule toplevel-only)))
-      e
-      (let ((ex (get expand-table (car e) #f)))
+  (cond
+    ((atom? e) (if (dotop-named? e) `(call (top BroadcastOp) ,(undotop e)) e))
+    ((memq (car e) '(quote inert top core globalref outerref module toplevel ssavalue null true false meta using import export thismodule toplevel-only))
+      e)
+    (else (let ((ex (get expand-table (car e) #f)))
         (if ex
             (ex e)
             (cons (car e)
-                  (map expand-forms (cdr e)))))))
+                  (map expand-forms (cdr e))))))))
 
 ;; table mapping expression head to a function expanding that form
 (define expand-table

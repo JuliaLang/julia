@@ -11,7 +11,7 @@ using .Base.Cartesian
 using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
 import .Base: copy, copyto!, axes
-export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, broadcast_preserving_zero_d
+export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, broadcast_preserving_zero_d, BroadcastOp
 
 ## Computing the result's axes: deprecated name
 const broadcast_axes = axes
@@ -1260,5 +1260,11 @@ end
     broadcasted(combine_styles(arg1′, arg2′, args′...), f, arg1′, arg2′, args′...)
 end
 @inline broadcasted(::S, f, args...) where S<:BroadcastStyle = Broadcasted{S}(f, args)
+
+struct BroadcastOp{F}
+    f::F
+end
+
+(op::BroadcastOp)(x...) = op.f.(x...)
 
 end # module
