@@ -359,6 +359,67 @@ julia> reduce(max, a, dims=1)
 reduce(op, A::AbstractArray; kw...) = mapreduce(identity, op, A; kw...)
 
 ##### Specific reduction functions #####
+
+"""
+    count([f=identity,] A::AbstractArray; dims=:)
+
+Count the number of elements in `A` for which `f` returns `true` over the given
+dimensions.
+
+!!! compat "Julia 1.5"
+    `dims` keyword was added in Julia 1.5.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> count(<=(2), A, dims=1)
+1×2 Array{Int64,2}:
+ 1  1
+
+julia> count(<=(2), A, dims=2)
+2×1 Array{Int64,2}:
+ 2
+ 0
+```
+"""
+count(A::AbstractArrayOrBroadcasted; dims=:) = count(identity, A, dims=dims)
+count(f, A::AbstractArrayOrBroadcasted; dims=:) = mapreduce(_bool(f), add_sum, A, dims=dims, init=0)
+
+"""
+    count!([f=identity,] r, A; init=true)
+
+Count the number of elements in `A` for which `f` returns `true` over the
+singleton dimensions of `r`, writing the result into `r` in-place.
+If `init` is `true`, values in `r` are initialized to zero.
+
+!!! compat "Julia 1.5"
+    inplace `count!` was added in Julia 1.5.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> count!(<=(2), [1 1], A)
+1×2 Array{Int64,2}:
+ 1  1
+
+julia> count!(<=(2), [1; 1], A)
+2-element Array{Int64,1}:
+ 2
+ 0
+```
+"""
+count!(r::AbstractArray, A::AbstractArrayOrBroadcasted; init::Bool=true) = count!(identity, r, A; init=init)
+count!(f, r::AbstractArray, A::AbstractArrayOrBroadcasted; init::Bool=true) =
+    mapreducedim!(_bool(f), add_sum, initarray!(r, add_sum, init, A), A)
+
 """
     sum(A::AbstractArray; dims)
 

@@ -146,6 +146,8 @@ New library features
   will acquire locks for safe multi-threaded access. Setting it to `false` provides better
   performance when only one thread will access the file.
 * The introspection macros (`@which`, `@code_typed`, etc.) now work with `do`-block syntax ([#35283]) and with dot syntax ([#35522]).
+* `count` now accepts the `dims` keyword.
+* new in-place `count!` function similar to `sum!`.
 
 Standard library changes
 ------------------------
