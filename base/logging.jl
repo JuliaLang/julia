@@ -391,6 +391,7 @@ end
 end
 
 function with_logstate(f::Function, logstate)
+    @nospecialize
     t = current_task()
     old = t.logstate
     try
@@ -400,7 +401,6 @@ function with_logstate(f::Function, logstate)
         t.logstate = old
     end
 end
-
 
 #-------------------------------------------------------------------------------
 # Control of the current logger and early log filtering
@@ -502,7 +502,7 @@ with_logger(logger) do
 end
 ```
 """
-with_logger(f::Function, logger::AbstractLogger) = with_logstate(f, LogState(logger))
+with_logger(@nospecialize(f::Function), logger::AbstractLogger) = with_logstate(f, LogState(logger))
 
 """
     current_logger()
