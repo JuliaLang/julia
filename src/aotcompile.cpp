@@ -801,6 +801,14 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         PM = new legacy::PassManager();
         addTargetPasses(PM, jl_TargetMachine);
         addOptimizationPasses(PM, jl_options.opt_level);
+        PM->add(createRemoveJuliaAddrspacesPass());
+    }
+
+    static legacy::PassManager *PM_minimal;
+    if (!PM_minimal) {
+        PM_minimal = new legacy::PassManager();
+        addTargetPasses(PM_minimal, jl_TargetMachine);
+        PM_minimal->add(createRemoveJuliaAddrspacesPass());
     }
 
     // get the source code for this function
@@ -842,6 +850,8 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
             // if compilation succeeded, prepare to return the result
             if (optimize)
                 PM->run(*m.get());
+            else
+                PM_minimal->run(*m.get());
             const std::string *fname;
             if (decls.functionObject == "jl_fptr_args" || decls.functionObject == "jl_fptr_sparam")
                 getwrapper = false;
