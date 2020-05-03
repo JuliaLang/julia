@@ -1229,6 +1229,12 @@ end
     R = reshape(A, 2, 2)
     A[R] .= reshape((1:4) .+ 2^30, 2, 2)
     @test A == [2,1,4,3] .+ 2^30
+
+    # unequal dimensionality (see comment in #35714)
+    a = [1 3; 2 4]
+    b = [3, 1, 4, 2]
+    copyto!(view(a, b), a)
+    @test a == [2 1; 4 3]
 end
 
 @testset "Base.mightalias unit tests" begin
