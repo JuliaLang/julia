@@ -15,6 +15,11 @@ Some general notes:
   * By convention, function names ending with an exclamation point (`!`) modify their arguments.
     Some functions have both modifying (e.g., `sort!`) and non-modifying (`sort`) versions.
 
+The behaviors of `Base` and standard libraries are stable as defined in
+[SemVer](https://semver.org/) only if they are documented; i.e., included in the
+[Julia documentation](https://docs.julialang.org/) and not explicitly marked as non-stable.
+See [API FAQ](@ref man-api) for more information.
+
 ## Getting Around
 
 ```@docs
