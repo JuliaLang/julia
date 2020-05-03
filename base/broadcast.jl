@@ -1265,6 +1265,6 @@ struct BroadcastOp{F}
     f::F
 end
 
-(op::BroadcastOp)(x...) = op.f.(x...)
+@inline (op::BroadcastOp)(x...) = op.f.(x...)
 
 end # module
