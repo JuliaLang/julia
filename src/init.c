@@ -290,6 +290,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 #ifdef ENABLE_TIMINGS
     jl_print_timings();
 #endif
+
+    jl_teardown_codegen();
 }
 
 static void post_boot_hooks(void);
