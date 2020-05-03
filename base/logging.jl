@@ -71,6 +71,15 @@ logger type.
 catch_exceptions(logger) = true
 
 
+# Prevent invalidation when packages define custom loggers
+# Using invoke in combination with @nospecialize eliminates backedges to these methods
+function _invoked_shouldlog(logger, level, _module, group, id)
+    @nospecialize
+    invoke(shouldlog, Tuple{typeof(logger), typeof(level), typeof(_module), typeof(group), typeof(id)}, logger, level, _module, group, id)
+end
+
+_invoked_min_enabled_level(@nospecialize(logger)) = invoke(min_enabled_level, Tuple{typeof(logger)}, logger)
+
 
 """
     NullLogger()
@@ -315,7 +324,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
                 id = $id
                 # Second chance at an early bail-out (before computing the message),
                 # based on arbitrary logger-specific logic.
-                if shouldlog(logger, level, _module, group, id)
+                if _invoked_shouldlog(logger, level, _module, group, id)
                     file = $file
                     line = $line
                     try
@@ -374,7 +383,7 @@ struct LogState
     logger::AbstractLogger
 end
 
-LogState(logger) = LogState(LogLevel(min_enabled_level(logger)), logger)
+LogState(logger) = LogState(LogLevel(_invoked_min_enabled_level(logger)), logger)
 
 function current_logstate()
     logstate = current_task().logstate
