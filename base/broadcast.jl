@@ -1261,7 +1261,7 @@ end
 end
 @inline broadcasted(::S, f, args...) where S<:BroadcastStyle = Broadcasted{S}(f, args)
 
-struct BroadcastOp{F}
+struct BroadcastOp{F} <: Function
     f::F
 end
 
