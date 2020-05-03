@@ -65,21 +65,48 @@ find_bidiagonal(a::Bidiagonal, rest...) = a
 find_bidiagonal(bc::Broadcast.Broadcasted, rest...) = find_bidiagonal(find_bidiagonal(bc.args...), rest...)
 find_bidiagonal(x, rest...) = find_bidiagonal(rest...)
 
-find_uplo(a::Char) = a
-find_uplo(a::Missing) = a
-function find_uplo(a::Bidiagonal, rest...)
-    if length(rest) > 0
-        return a.uplo == rest[1].uplo ? a.uplo : missing
+function find_uplo(bc::Broadcast.Broadcasted, rest...)
+
+    if typeof(bc.args[1]) <: Broadcast.Broadcasted
+        left = find_uplo(bc.args[1])
+    else
+        left = bc.args[1]
     end
-    return a.uplo
+
+    if typeof(bc.args[2]) <: Broadcast.Broadcasted
+        right = find_uplo(bc.args[2])
+    else
+        right = bc.args[2]
+    end
+
+    tmp = (left, right)
+    myuplo = Nothing
+    for i = 1:length(tmp)
+        if :uplo in fieldnames(typeof(tmp[i]))
+            if myuplo == Nothing
+                myuplo = tmp[i].uplo
+            else
+                myuplo = tmp[i].uplo == myuplo ? myuplo : 'T'
+            end
+        else
+            if typeof(tmp[i]) == Char
+                if myuplo == Nothing
+                    myuplo = tmp[i]
+                else
+                    myuplo = tmp[i] == myuplo ? myuplo : 'T'
+                end
+            end
+        end
+    end
+    return myuplo
 end
 
-find_uplo(bc::Broadcast.Broadcasted, rest...) = find_uplo(find_uplo(bc.args...), rest...)
-find_uplo(x, rest...) = find_uplo(rest...)
-
 function structured_broadcast_alloc(bc, ::Type{<:Bidiagonal}, ::Type{ElType}, n) where {ElType}
-    uplo = find_uplo(bc)
-    if typeof(uplo) <: Missing
+    uplo = Nothing
+    if length(bc.args) > 1
+        uplo = find_uplo(bc)
+    end
+    if uplo == 'T'
         return Tridiagonal(Array{ElType}(undef, n-1), Array{ElType}(undef, n), Array{ElType}(undef, n-1))
     end
     ex = find_bidiagonal(bc)

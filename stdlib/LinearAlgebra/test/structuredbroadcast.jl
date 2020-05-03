@@ -176,5 +176,19 @@ end
     @test Bl .* Bu == Tridiagonal(zeros(N-1), dV .* dV, zeros(N-1))
     @test Bu .* Bu == Bidiagonal(dV .* dV, evu .* evu, :U)
     @test Bl .* Bl == Bidiagonal(dV .* dV, evl .* evl, :L)
+
+    Bu2 =  Bu .* 2
+    @test typeof(Bu2) <: Bidiagonal && Bu2.uplo == 'U'
+    Bu2 = 2 .* Bu
+    @test typeof(Bu2) <: Bidiagonal && Bu2.uplo == 'U'
+    Bl2 =  Bl .* 2
+    @test typeof(Bl2) <: Bidiagonal && Bl2.uplo == 'L'
+    Bu2 = 2 .* Bl
+    @test typeof(Bl2) <: Bidiagonal && Bl2.uplo == 'L'
+
+    # Example of Nested Brodacasts
+    tmp = (1 .* 2) .* (Bidiagonal(1:3, 1:2, 'U') .* (3 .* 4)) .* (5 .* Bidiagonal(1:3, 1:2, 'L'))
+    @test typeof(tmp) <: Tridiagonal
+
 end
 end
