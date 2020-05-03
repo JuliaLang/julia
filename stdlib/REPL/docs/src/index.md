@@ -450,11 +450,11 @@ ENV["JULIA_WARN_COLOR"] = :yellow
 ENV["JULIA_INFO_COLOR"] = :cyan
 ```
 
-# TerminalMenus
+## TerminalMenus
 
 TerminalMenus is a submodule of the Julia REPL and enables small, low-profile interactive menus in the terminal.
 
-## Examples
+### Examples
 
 ```julia
 import REPL
@@ -465,7 +465,7 @@ options = ["apple", "orange", "grape", "strawberry",
 
 ```
 
-### RadioMenu
+#### RadioMenu
 
 The RadioMenu allows the user to select one option from the list. The `request`
 function displays the interactive menu and returns the index of the selected
@@ -501,7 +501,7 @@ v  peach
 Your favorite fruit is blueberry!
 ```
 
-### MultiSelectMenu
+#### MultiSelectMenu
 
 The MultiSelectMenu allows users to select many choices from a list.
 
@@ -542,12 +542,12 @@ You like the following fruits:
   - peach
 ```
 
-## Customization / Configuration
+### Customization / Configuration
 
 All interface customization is done through the keyword only
 `TerminalMenus.config()` function.
 
-### Arguments
+#### Arguments
 
  - `charset::Symbol=:na`: ui characters to use (`:ascii` or `:unicode`); overridden by other arguments
  - `cursor::Char='>'|'→'`: character to use for cursor
@@ -559,7 +559,7 @@ All interface customization is done through the keyword only
  - `supress_output::Bool=false`: For testing. If true, menu will not be printed to console.
  - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
 
-### Examples
+#### Examples
 
 ```julia
 julia> menu = MultiSelectMenu(options, pagesize=5);
@@ -597,7 +597,7 @@ Set([4, 2])
 
 ```
 
-# References
+## References
 
 ```@docs
 Base.atreplinit
