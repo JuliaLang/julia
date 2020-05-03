@@ -140,7 +140,11 @@ static const char opts[]  =
     "                           Append coverage information to the LCOV tracefile (filename supports format tokens).\n"
 // TODO: These TOKENS are defined in `runtime_ccall.cpp`. A more verbose `--help` should include that list here.
     " --track-allocation={none|user|all}, --track-allocation\n"
-    "                           Count bytes allocated by each source line (omitting setting is equivalent to \"user\")\n\n"
+    "                           Count bytes allocated by each source line (omitting setting is equivalent to \"user\")\n"
+    " --bug-report=KIND         Launch a bug report session. It can be used to start a REPL, run a script, or evaluate\n"
+    "                           expressions. It first tries to use BugReporting.jl installed in current environment and\n"
+    "                           fallbacks to the latest compatible BugReporting.jl if not. For available bug report\n"
+    "                           KINDs, see https://github.com/JuliaLang/BugReporting.jl.\n\n"
 ;
 
 static const char opts_hidden[]  =
