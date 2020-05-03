@@ -241,7 +241,62 @@ threads in Julia:
     running in other threads that are allocating memory. In these cases it may
     be necessary to insert a manual call to `GC.safepoint()` to allow GC to run.
     This limitation will be removed in the future.
-  * Avoid using finalizers in conjunction with threads, particularly if they
-    operate on objects shared by multiple threads.
   * Avoid running top-level operations, e.g. `include`, or `eval` of type,
     method, and module definitions in parallel.
+  * Be aware that finalizers registered by a library may break if threads are enabled.
+    This may require some transitional work across the ecosystem before threading
+    can be widely adopted with confidence. See the next section for further details.
+
+## Safe use of Finalizers
+
+Because finalizers can interrupt any code, they must be very careful in how
+they interact with any global state. Unfortunately, the main reason that
+finalizers are used is to update global state (a pure function is generally
+rather pointless as a finalizer). This leads us to a bit of a conundrum.
+There are a few approaches to dealing with this problem:
+
+1. When single-threaded, code could call the internal `jl_gc_enable_finalizers`
+C function to prevent finalizers from being scheduled
+inside a critical region. Internally, this is used inside some functions (such
+as our C locks) to prevent recursion when doing certain operations (incremental
+package loading, codegen, etc.). The combination of a lock and this flag
+can be used to make finalizers safe.
+
+2. A second strategy, employed by Base in a couple places, is to explicitly
+delay a finalizer until it may be able to acquire its lock non-recursively.
+The following example demonstrates how this strategy could be applied to
+`Distributed.finalize_ref`:
+
+```
+function finalize_ref(r::AbstractRemoteRef)
+    if r.where > 0 # Check if the finalizer is already run
+        if islocked(client_refs) || !trylock(client_refs)
+            # delay finalizer for later if we aren't free to acquire the lock
+            finalizer(finalize_ref, r)
+            return nothing
+        end
+        try # `lock` should always be followed by `try`
+            if r.where > 0 # Must check again here
+                # Do actual cleanup here
+                r.where = 0
+            end
+        finally
+            unlock(client_refs)
+        end
+    end
+    nothing
+end
+```
+
+3. A related third strategy is to use a yield-free queue. We don't currently
+have a lock-free queue implemented in Base, but
+`Base.InvasiveLinkedListSynchronized{T}` is suitable. This can frequently be a
+good strategy to use for code with event loops. For example, this strategy is
+employed by `Gtk.jl` to manage lifetime ref-counting. In this approach, we
+don't do any explicit work inside the `finalizer`, and instead add it to a queue
+to run at a safer time. In fact, Julia's task scheduler already uses this, so
+defining the finalizer as `x -> @spawn do_cleanup(x)` is one example of this
+approach. Note however that this doesn't control which thread `do_cleanup`
+runs on, so `do_cleanup` would still need to acquire a lock. That
+doesn't need to be true if you implement your own queue, as you can explicitly
+only drain that queue from your thread.
