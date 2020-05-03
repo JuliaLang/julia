@@ -595,12 +595,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createVerifierPass());
 #endif
 
-#if defined(JL_ASAN_ENABLED)
-    PM->add(createAddressSanitizerFunctionPass());
-#endif
-#if defined(JL_MSAN_ENABLED)
-    PM->add(llvm::createMemorySanitizerPass(true));
-#endif
     if (opt_level < 2) {
         PM->add(createCFGSimplificationPass());
         if (opt_level == 1) {
@@ -623,6 +617,12 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native)
             PM->add(createMultiVersioningPass());
+#if defined(JL_ASAN_ENABLED)
+        PM->add(createAddressSanitizerFunctionPass());
+#endif
+#if defined(JL_MSAN_ENABLED)
+        PM->add(createMemorySanitizerPass(true));
+#endif
         return;
     }
     PM->add(createPropagateJuliaAddrspaces());
@@ -738,6 +738,12 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     }
     PM->add(createCombineMulAddPass());
     PM->add(createDivRemPairsPass());
+#if defined(JL_ASAN_ENABLED)
+    PM->add(createAddressSanitizerFunctionPass());
+#endif
+#if defined(JL_MSAN_ENABLED)
+    PM->add(createMemorySanitizerPass(true));
+#endif
 }
 
 // An LLVM module pass that just runs all julia passes in order. Useful for
