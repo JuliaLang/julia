@@ -140,9 +140,9 @@ function generic_lufact!(A::StridedMatrix{T}, ::Val{Pivot} = Val(true);
             # find index max
             kp = k
             if Pivot
-                amax = abs(zero(T))
+                amax = norm(zero(T))
                 for i = k:m
-                    absi = abs(A[i,k])
+                    absi = norm(A[i,k])
                     if absi > amax
                         kp = i
                         amax = absi
@@ -489,6 +489,9 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true
     dl = A.dl
     d = A.d
     du = A.du
+    if dl === du
+        throw(ArgumentError("off-diagonals of `A` must not alias"))
+    end
     du2 = fill!(similar(d, n-2), 0)::V
 
     @inbounds begin

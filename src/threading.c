@@ -285,6 +285,7 @@ void jl_init_threadtls(int16_t tid)
     ptls->bt_data = bt_data;
     ptls->sig_exception = NULL;
     ptls->previous_exception = NULL;
+    ptls->next_task = NULL;
 #ifdef _OS_WINDOWS_
     ptls->needs_resetstkoflw = 0;
 #endif
@@ -407,8 +408,11 @@ void jl_init_threading(void)
     // how many threads available, usable
     int max_threads = jl_cpu_threads();
     jl_n_threads = JULIA_NUM_THREADS;
-    cp = getenv(NUM_THREADS_NAME);
-    if (cp)
+    if (jl_options.nthreads < 0) // --threads=auto
+        jl_n_threads = max_threads;
+    else if (jl_options.nthreads > 0) // --threads=N
+        jl_n_threads = jl_options.nthreads;
+    else if ((cp = getenv(NUM_THREADS_NAME)))
         jl_n_threads = (uint64_t)strtol(cp, NULL, 10);
     if (jl_n_threads > max_threads)
         jl_n_threads = max_threads;
@@ -477,65 +481,19 @@ void jl_start_threads(void)
 
 unsigned volatile _threadedregion; // HACK: keep track of whether it is safe to do IO
 
-// simple fork/join mode code
-JL_DLLEXPORT void jl_threading_run(jl_value_t *func)
+JL_DLLEXPORT void jl_enter_threaded_region(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    int8_t gc_state = jl_gc_unsafe_enter(ptls);
-    size_t world = jl_world_counter;
-    jl_method_instance_t *mfunc = jl_lookup_generic(&func, 1, jl_int32hash_fast(jl_return_address()), world);
-    // Ignore constant return value for now.
-    jl_code_instance_t *fptr = jl_compile_method_internal(mfunc, world);
-    if (fptr->invoke == jl_fptr_const_return)
-        return;
-
-    size_t nthreads = jl_n_threads;
-    jl_svec_t *ts = jl_alloc_svec(nthreads);
-    JL_GC_PUSH1(&ts);
-    jl_value_t *wait_func = jl_get_global(jl_base_module, jl_symbol("wait"));
-    jl_value_t *schd_func = jl_get_global(jl_base_module, jl_symbol("schedule"));
-    // create and schedule all tasks
     _threadedregion += 1;
-    for (int i = 0; i < nthreads; i++) {
-        jl_value_t *args2[2];
-        args2[0] = (jl_value_t*)jl_task_type;
-        args2[1] = func;
-        jl_task_t *t = (jl_task_t*)jl_apply(args2, 2);
-        jl_svecset(ts, i, t);
-        t->sticky = 1;
-        t->tid = i;
-        args2[0] = schd_func;
-        args2[1] = (jl_value_t*)t;
-        jl_apply(args2, 2);
-        if (i == 1 && nthreads > 2) {
-            // hint to threads that work is coming soon
-            jl_wakeup_thread(-1);
-        }
-    }
-    // join with all tasks
-    JL_TRY {
-        for (int i = 0; i < nthreads; i++) {
-            jl_value_t *t = jl_svecref(ts, i);
-            jl_value_t *args[2] = { wait_func, t };
-            jl_apply(args, 2);
-        }
-    }
-    JL_CATCH {
-        _threadedregion -= 1;
-        jl_wake_libuv();
-        JL_UV_LOCK();
-        JL_UV_UNLOCK();
-        jl_rethrow();
-    }
-    // make sure no threads are sitting in the event loop
+}
+
+JL_DLLEXPORT void jl_exit_threaded_region(void)
+{
     _threadedregion -= 1;
     jl_wake_libuv();
     // make sure no more callbacks will run while user code continues
     // outside thread region and might touch an I/O object.
     JL_UV_LOCK();
     JL_UV_UNLOCK();
-    JL_GC_POP();
-    jl_gc_unsafe_leave(ptls, gc_state);
 }
 
 

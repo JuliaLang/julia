@@ -100,10 +100,14 @@ Base.unaliascopy(A::Union{Adjoint,Transpose}) = typeof(A)(Base.unaliascopy(A.par
 
 # wrapping lowercase quasi-constructors
 """
+    A'
     adjoint(A)
 
-Lazy adjoint (conjugate transposition) (also postfix `'`).
-Note that `adjoint` is applied recursively to elements.
+Lazy adjoint (conjugate transposition). Note that `adjoint` is applied recursively to
+elements.
+
+For number types, `adjoint` returns the complex conjugate, and therefore it is equivalent to
+the identity function for real numbers.
 
 This operation is intended for linear algebra usage - for general data manipulation see
 [`permutedims`](@ref Base.permutedims).
@@ -119,6 +123,14 @@ julia> adjoint(A)
 2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:
  3-2im  8-7im
  9-2im  4-6im
+
+julia> x = [3, 4im]
+2-element Array{Complex{Int64},1}:
+ 3 + 0im
+ 0 + 4im
+
+julia> x'x
+25 + 0im
 ```
 """
 adjoint(A::AbstractVecOrMat) = Adjoint(A)
@@ -242,13 +254,10 @@ Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) 
 ## multiplication *
 
 # Adjoint/Transpose-vector * vector
-*(u::AdjointAbsVec, v::AbstractVector) = dot(u.parent, v)
+*(u::AdjointAbsVec{T}, v::AbstractVector{T}) where {T<:Number} = dot(u.parent, v)
 *(u::TransposeAbsVec{T}, v::AbstractVector{T}) where {T<:Real} = dot(u.parent, v)
-function *(u::TransposeAbsVec, v::AbstractVector)
-    require_one_based_indexing(u, v)
-    @boundscheck length(u) == length(v) || throw(DimensionMismatch())
-    return sum(@inbounds(u[k]*v[k]) for k in 1:length(u))
-end
+*(u::AdjOrTransAbsVec, v::AbstractVector) = sum(uu*vv for (uu, vv) in zip(u, v))
+
 # vector * Adjoint/Transpose-vector
 *(u::AbstractVector, v::AdjOrTransAbsVec) = broadcast(*, u, v)
 # Adjoint/Transpose-vector * Adjoint/Transpose-vector

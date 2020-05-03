@@ -301,15 +301,15 @@ let undefvar
     err_str = @except_str 0::Bool TypeError
     @test err_str == "TypeError: non-boolean ($Int) used in boolean context"
     err_str = @except_str 0::AbstractFloat TypeError
-    @test err_str == "TypeError: in typeassert, expected AbstractFloat, got $Int"
+    @test err_str == "TypeError: in typeassert, expected AbstractFloat, got a value of type $Int"
     err_str = @except_str 0::7 TypeError
-    @test err_str == "TypeError: in typeassert, expected Type, got $Int"
+    @test err_str == "TypeError: in typeassert, expected Type, got a value of type $Int"
     err_str = @except_str "" <: AbstractString TypeError
-    @test err_str == "TypeError: in <:, expected Type, got String"
+    @test err_str == "TypeError: in <:, expected Type, got a value of type String"
     err_str = @except_str AbstractString <: "" TypeError
-    @test err_str == "TypeError: in <:, expected Type, got String"
+    @test err_str == "TypeError: in <:, expected Type, got a value of type String"
     err_str = @except_str Type{""} TypeError
-    @test err_str == "TypeError: in Type, in parameter, expected Type, got String"
+    @test err_str == "TypeError: in Type, in parameter, expected Type, got a value of type String"
     err_str = @except_str TypeWithIntParam{Any} TypeError
     @test err_str == "TypeError: in TypeWithIntParam, in T, expected T<:Integer, got Type{Any}"
     err_str = @except_str Type{Vararg} TypeError
@@ -585,6 +585,41 @@ end
         @test !occursin("The applicable method may be too new", str)
     end
 end
+
+# Custom hints
+struct HasNoOne end
+function recommend_oneunit(io, ex, arg_types, kwargs)
+    if ex.f === Base.one && length(arg_types) == 1 && arg_types[1] === HasNoOne
+        if isempty(kwargs)
+            print(io, "\nHasNoOne does not support `one`; did you mean `oneunit`?")
+        else
+            print(io, "\n`one` doesn't take keyword arguments, that would be silly")
+        end
+    end
+end
+@test Base.Experimental.register_error_hint(recommend_oneunit, MethodError) === nothing
+let err_str
+    err_str = @except_str one(HasNoOne()) MethodError
+    @test occursin(r"MethodError: no method matching one\(::.*HasNoOne\)", err_str)
+    @test occursin("HasNoOne does not support `one`; did you mean `oneunit`?", err_str)
+    err_str = @except_str one(HasNoOne(); value=2) MethodError
+    @test occursin(r"MethodError: no method matching one\(::.*HasNoOne; value=2\)", err_str)
+    @test occursin("`one` doesn't take keyword arguments, that would be silly", err_str)
+end
+pop!(Base.Experimental._hint_handlers[MethodError])  # order is undefined, don't copy this
+
+function busted_hint(io, exc, notarg)  # wrong number of args
+    print(io, "\nI don't have a hint for you, sorry")
+end
+@test Base.Experimental.register_error_hint(busted_hint, DomainError) === nothing
+try
+    sqrt(-2)
+catch ex
+    io = IOBuffer()
+    @test_logs (:error, "Hint-handler busted_hint for DomainError in $(@__MODULE__) caused an error") showerror(io, ex)
+end
+pop!(Base.Experimental._hint_handlers[DomainError])  # order is undefined, don't copy this
+
 
 # issue #28442
 @testset "Long stacktrace printing" begin

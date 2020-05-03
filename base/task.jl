@@ -615,6 +615,8 @@ function yield()
     end
 end
 
+@inline set_next_task(t::Task) = ccall(:jl_set_next_task, Cvoid, (Any,), t)
+
 """
     yield(t::Task, arg = nothing)
 
@@ -624,7 +626,8 @@ immediately yields to `t` before calling the scheduler.
 function yield(t::Task, @nospecialize(x=nothing))
     t.result = x
     enq_work(current_task())
-    return try_yieldto(ensure_rescheduled, Ref(t))
+    set_next_task(t)
+    return try_yieldto(ensure_rescheduled)
 end
 
 """
@@ -637,14 +640,15 @@ or scheduling in any way. Its use is discouraged.
 """
 function yieldto(t::Task, @nospecialize(x=nothing))
     t.result = x
-    return try_yieldto(identity, Ref(t))
+    set_next_task(t)
+    return try_yieldto(identity)
 end
 
-function try_yieldto(undo, reftask::Ref{Task})
+function try_yieldto(undo)
     try
-        ccall(:jl_switchto, Cvoid, (Any,), reftask)
+        ccall(:jl_switch, Cvoid, ())
     catch
-        undo(reftask[])
+        undo(ccall(:jl_get_next_task, Ref{Task}, ()))
         rethrow()
     end
     ct = current_task()
@@ -696,18 +700,19 @@ function trypoptask(W::StickyWorkqueue)
     return t
 end
 
-@noinline function poptaskref(W::StickyWorkqueue)
+@noinline function poptask(W::StickyWorkqueue)
     task = trypoptask(W)
     if !(task isa Task)
         task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any), trypoptask, W)
     end
-    return Ref(task)
+    set_next_task(task)
+    nothing
 end
 
 function wait()
     W = Workqueues[Threads.threadid()]
-    reftask = poptaskref(W)
-    result = try_yieldto(ensure_rescheduled, reftask)
+    poptask(W)
+    result = try_yieldto(ensure_rescheduled)
     process_events()
     # return when we come out of the queue
     return result

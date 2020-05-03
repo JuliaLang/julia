@@ -78,6 +78,16 @@ end
         @test rem(BigInt(i), BigInt(j)) == rem(i,j)
     end
 end
+@testset "copysign / sign" begin
+    x = BigInt(1)
+    y = BigInt(-1)
+    @test copysign(x, y) == y
+    @test copysign(y, x) == x
+
+    @test sign(BigInt(-3)) == -1
+    @test sign(BigInt( 0)) == 0
+    @test sign(BigInt( 3)) == 1
+end
 
 @testset "Signed addition" begin
     @test a+Int8(1) == b
@@ -439,6 +449,15 @@ end
     @test big(Int32(-2147483648)) == big"-2147483648"
     @test big(Int64(-9223372036854775808)) == big"-9223372036854775808"
     @test big(Int128(-170141183460469231731687303715884105728)) == big"-170141183460469231731687303715884105728"
+end
+
+@testset "type conversion with Signed, Unsigned" begin
+    x = BigInt(typemin(Int128)) - 1
+    @test x % Signed === x
+    @test_throws MethodError x % Unsigned
+    y = BigInt(1)
+    @test y % Signed === y
+    @test_throws MethodError y % Unsigned
 end
 
 @testset "conversion to Float" begin

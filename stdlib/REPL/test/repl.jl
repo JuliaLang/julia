@@ -47,7 +47,7 @@ function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_
     Base.link_pipe!(output, reader_supports_async=true, writer_supports_async=true)
     Base.link_pipe!(err, reader_supports_async=true, writer_supports_async=true)
 
-    repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in), true)
+    repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in, options.hascolor), options.hascolor)
     repl.options = options
 
     hard_kill = kill_timer(900) # Your debugging session starts now. You have 15 minutes. Go.
@@ -65,7 +65,7 @@ function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_
 end
 
 # Writing ^C to the repl will cause sigint, so let's not die on that
-ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 0)
+Base.exit_on_sigint(false)
 
 # make sure `run_interface` can normally handle `eof`
 # without any special handling by the user
@@ -90,7 +90,7 @@ end
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-fake_repl() do stdin_write, stdout_read, repl
+fake_repl(options = REPL.Options(confirm_exit=false,hascolor=false)) do stdin_write, stdout_read, repl
     repl.specialdisplay = REPL.REPLDisplay(repl)
     repl.history_file = false
 
@@ -764,7 +764,7 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
-ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
+Base.exit_on_sigint(true)
 
 let exename = Base.julia_cmd()
     # Test REPL in dumb mode
@@ -1013,6 +1013,8 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
+help_result(line) = Base.eval(REPL._helpmode(IOBuffer(), line))
+
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
 # rather than complete integration with Julia's REPL mode system.
 for (line, expr) in Pair[
@@ -1032,15 +1034,22 @@ for (line, expr) in Pair[
     "import Foo"   => :import,
     ]
     @test REPL._helpmode(line).args[4] == expr
-    buf = IOBuffer()
-    @test Base.eval(REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
+    @test help_result(line) isa Union{Markdown.MD,Nothing}
 end
 
 # PR 30754, Issues #22013, #24871, #26933, #29282, #29361, #30348
-for line in ["′", "abstract", "type", "|=", ".="]
+for line in ["′", "abstract", "type"]
     @test occursin("No documentation found.",
-        sprint(show, Base.eval(REPL._helpmode(IOBuffer(), line))::Union{Markdown.MD,Nothing}))
+        sprint(show, help_result(line)::Union{Markdown.MD,Nothing}))
 end
+
+# PR 35154
+@test occursin("|=", sprint(show, help_result("|=")))
+@test occursin("broadcast", sprint(show, help_result(".=")))
+
+# PR 35277
+@test occursin("identical", sprint(show, help_result("===")))
+@test occursin("broadcast", sprint(show, help_result(".<=")))
 
 # Issue #25930
 
@@ -1064,6 +1073,13 @@ let text =
     @test isa(mdbrief.content[2], Markdown.Paragraph)
     @test isa(mdbrief.content[3], REPL.Message)
     @test occursin("??", mdbrief.content[3].msg)
+end
+
+# issue #35216: empty and non-strings in H1 headers
+let emptyH1 = Markdown.parse("# "),
+    codeH1 = Markdown.parse("# `hello`")
+    @test emptyH1 == REPL.trimdocs(emptyH1, false) == REPL.trimdocs(emptyH1, true)
+    @test codeH1 == REPL.trimdocs(codeH1, false) == REPL.trimdocs(codeH1, true)
 end
 
 module BriefExtended
@@ -1118,6 +1134,19 @@ fake_repl() do stdin_write, stdout_read, repl
     @test istaskdone(repltask)
 end
 
+# issue #34842
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "?;\n")
+    readline(stdout_read)
+    @test endswith(readline(stdout_read),";")
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
+end
+
+
 fake_repl() do stdin_write, stdout_read, repl
     repltask = @async begin
         REPL.run_repl(repl)
@@ -1137,16 +1166,40 @@ fake_repl() do stdin_write, stdout_read, repl
 end
 
 # AST transformations (softscope, Revise, OhMyREPL, etc.)
-repl_channel = Channel(1)
-response_channel = Channel(1)
-backend = REPL.start_repl_backend(repl_channel, response_channel)
-put!(repl_channel, (:(1+1), false))
-reply = take!(response_channel)
-@test reply == (2, false)
-twice(ex) = Expr(:tuple, ex, ex)
-push!(backend.ast_transforms, twice)
-put!(repl_channel, (:(1+1), false))
-reply = take!(response_channel)
-@test reply == ((2, 2), false)
-put!(repl_channel, (nothing, -1))
-Base.wait(backend.backend_task)
+@testset "AST Transformation" begin
+    backend = REPL.REPLBackend()
+    @async REPL.start_repl_backend(backend)
+    put!(backend.repl_channel, (:(1+1), false))
+    reply = take!(backend.response_channel)
+    @test reply == (2, false)
+    twice(ex) = Expr(:tuple, ex, ex)
+    push!(backend.ast_transforms, twice)
+    put!(backend.repl_channel, (:(1+1), false))
+    reply = take!(backend.response_channel)
+    @test reply == ((2, 2), false)
+    put!(backend.repl_channel, (nothing, -1))
+    Base.wait(backend.backend_task)
+end
+
+
+backend = REPL.REPLBackend()
+frontend_task = @async begin
+    try
+        @testset "AST Transformations Async" begin
+            put!(backend.repl_channel, (:(1+1), false))
+            reply = take!(backend.response_channel)
+            @test reply == (2, false)
+            twice(ex) = Expr(:tuple, ex, ex)
+            push!(backend.ast_transforms, twice)
+            put!(backend.repl_channel, (:(1+1), false))
+            reply = take!(backend.response_channel)
+            @test reply == ((2, 2), false)
+        end
+    catch e
+        Base.rethrow(e)
+    finally
+        put!(backend.repl_channel, (nothing, -1))
+    end
+end
+REPL.start_repl_backend(backend)
+Base.wait(frontend_task)

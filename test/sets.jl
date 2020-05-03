@@ -96,7 +96,8 @@ end
     @test ===(eltype(s3), Float32)
 end
 @testset "show" begin
-    @test sprint(show, Set()) == "Set(Any[])"
+    @test sprint(show, Set()) == "Set{Any}()"
+    @test repr([Set(),Set()]) == "Set{Any}[Set(), Set()]"
     @test sprint(show, Set(['a'])) == "Set(['a'])"
 end
 @testset "isempty, length, in, push, pop, delete" begin
@@ -452,6 +453,7 @@ end
     @test allunique(7:-1:1)       # negative step
     @test allunique(Date(2018, 8, 7):Day(1):Date(2018, 8, 11))  # JuliaCon 2018
     @test allunique(DateTime(2018, 8, 7):Hour(1):DateTime(2018, 8, 11))
+    @test allunique(('a':1:'c')[1:2]) == true
 end
 @testset "filter(f, ::$S)" for S = (Set, BitSet)
     s = S([1,2,3,4])
@@ -590,8 +592,12 @@ end
     @test s == Set([2, 3])
     @test replace!(x->2x, s, count=0x1) in [Set([4, 3]), Set([2, 6])]
 
-    for count = (0, 0x0, big(0))
-        @test replace([1, 2], 1=>0, 2=>0, count=count) == [1, 2] # count=0 --> no replacements
+    for count = (0, 0x0, big(0)) # count == 0 --> no replacements
+        @test replace([1, 2], 1=>0, 2=>0; count) == [1, 2]
+        for dict = (Dict(1=>2, 2=>3), IdDict(1=>2, 2=>3))
+            @test replace(dict, (1=>2) => (1=>3); count) == dict
+        end
+        @test replace(Set([1, 2]), 2=>-1; count) == Set([1, 2])
     end
 
     # test collisions with AbstractSet/AbstractDict

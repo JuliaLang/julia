@@ -87,9 +87,9 @@ try
               (::Task)(::UInt8, ::UInt16, ::UInt32) = 2
 
               # issue 16471 (capturing references to a kwfunc)
-              Test.@test !isdefined(Base.Nothing.name.mt, :kwsorter)
-              Base.nothing(::UInt8, ::UInt16, ::UInt32; x = 52) = x
-              const nothingkw = Core.kwfunc(Base.nothing)
+              Test.@test !isdefined(typeof(sin).name.mt, :kwsorter)
+              Base.sin(::UInt8, ::UInt16, ::UInt32; x = 52) = x
+              const sinkw = Core.kwfunc(Base.sin)
 
               # issue 16908 (some complicated types and external method definitions)
               abstract type CategoricalPool{T, R <: Integer, V} end
@@ -172,8 +172,8 @@ try
               const layout3 = collect(x.match for x in eachmatch(r"..", "abcdefghijk"))::Vector{SubString{String}}
           end
           """)
-    # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
-    @test !isdefined(Base.Nothing.name.mt, :kwsorter)
+    # make sure `sin` didn't have a kwfunc (which would invalidate the attempted test)
+    @test !isdefined(typeof(sin).name.mt, :kwsorter)
 
     # Issue #12623
     @test __precompile__(false) === nothing
@@ -281,9 +281,9 @@ try
         @test discard_module.(deps) == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
-        @test nothing(0x01, 0x4000, 0x30031234) == 52
-        @test nothing(0x01, 0x4000, 0x30031234; x = 9142) == 9142
-        @test Foo.nothingkw === Core.kwfunc(Base.nothing)
+        @test sin(0x01, 0x4000, 0x30031234) == 52
+        @test sin(0x01, 0x4000, 0x30031234; x = 9142) == 9142
+        @test Foo.sinkw === Core.kwfunc(Base.sin)
 
         @test Foo.NominalValue() == 1
         @test Foo.OrdinalValue() == 1
@@ -396,6 +396,19 @@ try
             isa(exc, ErrorException) || rethrow()
             occursin("ERROR: LoadError: break me", exc.msg) && rethrow()
         end
+
+    # Test that trying to eval into closed modules during precompilation is an error
+    FooBar3_file = joinpath(dir, "FooBar3.jl")
+    FooBar3_inc = joinpath(dir, "FooBar3_inc.jl")
+    write(FooBar3_inc, "x=1\n")
+    for code in ["Core.eval(Base, :(x=1))", "Base.include(Base, \"FooBar3_inc.jl\")"]
+        write(FooBar3_file, code)
+        @test_warn "Evaluation into the closed module `Base` breaks incremental compilation" try
+                Base.require(Main, :FooBar3)
+            catch exc
+                isa(exc, ErrorException) || rethrow()
+            end
+    end
 
     # Test transitive dependency for #21266
     FooBarT_file = joinpath(dir, "FooBarT.jl")

@@ -49,7 +49,7 @@ The following two-word sequences are reserved:
 However, you can create variables with names:
 `abstract`, `mutable`, `primitive` and `type`.
 
-Finally,`where` is parsed as an infix operator for writing parametric method
+Finally, `where` is parsed as an infix operator for writing parametric method
 and type definitions. Also `in` and `isa` are parsed as infix operators.
 Creation of a variable named `where`, `in` or `isa` is allowed though.
 
@@ -85,6 +85,7 @@ where
 ...
 ;
 =
+?:
 ```
 
 ## Standard Modules
@@ -146,6 +147,8 @@ Base.identity
 
 ```@docs
 Base.supertype
+Core.Type
+Core.DataType
 Core.:(<:)
 Base.:(>:)
 Base.typejoin
@@ -334,6 +337,8 @@ Base.backtrace
 Base.catch_backtrace
 Base.catch_stack
 Base.@assert
+Base.Experimental.register_error_hint
+Base.Experimental.show_error_hints
 Base.ArgumentError
 Base.AssertionError
 Core.BoundsError

@@ -439,6 +439,7 @@ export
     zeros,
 
 # search, find, match and related functions
+    contains,
     eachmatch,
     endswith,
     findall,
@@ -458,6 +459,7 @@ export
     startswith,
 
 # linear algebra
+    var"'", # to enable syntax a' for adjoint
     adjoint,
     transpose,
     kron,
@@ -484,6 +486,7 @@ export
     any,
     firstindex,
     collect,
+    count!,
     count,
     delete!,
     deleteat!,
@@ -911,6 +914,7 @@ export
 
 # C interface
     @cfunction,
+    @ccall,
     cglobal,
     disable_sigint,
     pointer,

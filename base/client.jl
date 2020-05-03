@@ -3,7 +3,7 @@
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
 
-have_color = false
+have_color = nothing
 default_color_warn = :yellow
 default_color_error = :light_red
 default_color_info = :cyan
@@ -109,6 +109,7 @@ display_error(er, bt=nothing) = display_error(stderr, er, bt)
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
     lasterr = nothing
+    have_color = get(stdout, :color, false)
     while true
         try
             if have_color
@@ -220,7 +221,7 @@ function exec_options(opts)
     startup               = (opts.startupfile != 2)
     history_file          = (opts.historyfile != 0)
     color_set             = (opts.color != 0) # --color!=auto
-    global have_color     = (opts.color == 1) # --color=on
+    global have_color     = color_set ? (opts.color == 1) : nothing # --color=on
     global is_interactive = (opts.isinteractive != 0)
 
     # pre-process command line argument list
@@ -236,6 +237,13 @@ function exec_options(opts)
             repl = false
         elseif cmd == 'L'
             # nothing
+        elseif cmd == 'B' # --bug-report
+            # If we're doing a bug report, don't load anything else. We will
+            # spawn a child in which to execute these options.
+            let InteractiveUtils = load_InteractiveUtils()
+                InteractiveUtils.report_bug(arg)
+            end
+            return nothing
         else
             @warn "Unexpected command -$cmd'$arg'"
         end
@@ -282,7 +290,7 @@ function exec_options(opts)
     if arg_is_program
         # program
         if !is_interactive
-            ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
+            exit_on_sigint(true)
         end
         try
             include(Main, PROGRAM_FILE)
@@ -348,20 +356,28 @@ _atreplinit(repl) = invokelatest(__atreplinit, repl)
 # The REPL stdlib hooks into Base using this Ref
 const REPL_MODULE_REF = Ref{Module}()
 
-# run the requested sort of evaluation loop on stdio
-function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
-    global active_repl
+function load_InteractiveUtils()
     # load interactive-only libraries
     if !isdefined(Main, :InteractiveUtils)
         try
             let InteractiveUtils = require(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
                 Core.eval(Main, :(const InteractiveUtils = $InteractiveUtils))
                 Core.eval(Main, :(using .InteractiveUtils))
+                return InteractiveUtils
             end
         catch ex
             @warn "Failed to import InteractiveUtils into module Main" exception=(ex, catch_backtrace())
         end
+        return nothing
     end
+    return getfield(Main, :InteractiveUtils)
+end
+
+# run the requested sort of evaluation loop on stdio
+function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
+    global active_repl
+
+    load_InteractiveUtils()
 
     if interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
@@ -492,7 +508,7 @@ function _start()
         invokelatest(display_error, catch_stack())
         exit(1)
     end
-    if is_interactive && have_color
+    if is_interactive && have_color === true
         print(color_normal)
     end
 end

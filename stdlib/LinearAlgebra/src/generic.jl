@@ -1416,6 +1416,51 @@ function axpby!(α, x::AbstractArray, β, y::AbstractArray)
     y
 end
 
+"""
+    rotate!(x, y, c, s)
+
+Overwrite `x` with `c*x + s*y` and `y` with `-conj(s)*x + c*y`.
+Returns `x` and `y`.
+
+!!! compat "Julia 1.5"
+    `rotate!` requires at least Julia 1.5.
+"""
+function rotate!(x::AbstractVector, y::AbstractVector, c, s)
+    require_one_based_indexing(x, y)
+    n = length(x)
+    if n != length(y)
+        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+    end
+    @inbounds for i = 1:n
+        xi, yi = x[i], y[i]
+        x[i] =       c *xi + s*yi
+        y[i] = -conj(s)*xi + c*yi
+    end
+    return x, y
+end
+
+"""
+    reflect!(x, y, c, s)
+
+Overwrite `x` with `c*x + s*y` and `y` with `conj(s)*x - c*y`.
+Returns `x` and `y`.
+
+!!! compat "Julia 1.5"
+    `reflect!` requires at least Julia 1.5.
+"""
+function reflect!(x::AbstractVector, y::AbstractVector, c, s)
+    require_one_based_indexing(x, y)
+    n = length(x)
+    if n != length(y)
+        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+    end
+    @inbounds for i = 1:n
+        xi, yi = x[i], y[i]
+        x[i] =      c *xi + s*yi
+        y[i] = conj(s)*xi - c*yi
+    end
+    return x, y
+end
 
 # Elementary reflection similar to LAPACK. The reflector is not Hermitian but
 # ensures that tridiagonalization of Hermitian matrices become real. See lawn72

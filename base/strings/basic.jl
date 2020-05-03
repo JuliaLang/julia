@@ -91,6 +91,15 @@ Return the code unit value in the string `s` at index `i`. Note that
 I.e. the value returned by `codeunit(s, i)` is of the type returned by
 `codeunit(s)`.
 
+# Examples
+```jldoctest
+julia> a = codeunit("Hello", 2)
+0x65
+
+julia> typeof(a)
+UInt8
+```
+
 See also: [`ncodeunits`](@ref), [`checkbounds`](@ref)
 """
 @propagate_inbounds codeunit(s::AbstractString, i::Integer) = typeof(i) === Int ?

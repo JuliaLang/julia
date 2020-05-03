@@ -29,6 +29,13 @@ ERROR: MyException: test exception
 """
 showerror(io::IO, ex) = show(io, ex)
 
+show_index(io::IO, x::Any) = show(io, x)
+show_index(io::IO, x::Slice) = show_index(io, x.indices)
+show_index(io::IO, x::LogicalIndex) = show_index(io, x.mask)
+show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
+show_index(io::IO, x::Colon) = print(io, ':')
+
+
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
@@ -37,14 +44,20 @@ function showerror(io::IO, ex::BoundsError)
         if isdefined(ex, :i)
             !isa(ex.a, AbstractArray) && print(io, "\n ")
             print(io, " at index [")
-            if isa(ex.i, AbstractRange)
+            if ex.i isa AbstractRange
                 print(io, ex.i)
+            elseif ex.i isa AbstractString
+                show(io, ex.i)
             else
-                join(io, ex.i, ", ")
+                for (i, x) in enumerate(ex.i)
+                    i > 1 && print(io, ", ")
+                    show_index(io, x)
+                end
             end
             print(io, ']')
         end
     end
+    Experimental.show_error_hints(io, ex)
 end
 
 function showerror(io::IO, ex::TypeError)
@@ -57,7 +70,7 @@ function showerror(io::IO, ex::TypeError)
         elseif isa(ex.got, Type)
             targs = ("Type{", ex.got, "}")
         else
-            targs = (typeof(ex.got),)
+            targs = ("a value of type $(typeof(ex.got))",)
         end
         if ex.context == ""
             ctx = "in $(ex.func)"
@@ -68,6 +81,7 @@ function showerror(io::IO, ex::TypeError)
         end
         print(io, ctx, ", expected ", ex.expected, ", got ", targs...)
     end
+    Experimental.show_error_hints(io, ex)
 end
 
 function showerror(io::IO, ex, bt; backtrace=true)
@@ -106,6 +120,7 @@ function showerror(io::IO, ex::DomainError)
     if isdefined(ex, :msg)
         print(io, ":\n", ex.msg)
     end
+    Experimental.show_error_hints(io, ex)
     nothing
 end
 
@@ -161,6 +176,7 @@ function showerror(io::IO, ex::InexactError)
     print(io, "InexactError: ", ex.func, '(')
     nameof(ex.T) === ex.func || print(io, ex.T, ", ")
     print(io, ex.val, ')')
+    Experimental.show_error_hints(io, ex)
 end
 
 typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
@@ -232,7 +248,7 @@ function showerror(io::IO, ex::MethodError)
         kwargs = pairs(ex.args[1])
         ex = MethodError(f, ex.args[3:end])
     end
-    if f == Base.convert && length(arg_types_param) == 2 && !is_arg_types
+    if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         show_convert_error(io, ex, arg_types_param)
     elseif isempty(methods(f)) && isa(f, DataType) && f.abstract
@@ -266,7 +282,7 @@ function showerror(io::IO, ex::MethodError)
         print(io, ")")
     end
     # catch the two common cases of element-wise addition and subtraction
-    if f in (Base.:+, Base.:-) && length(arg_types_param) == 2
+    if (f === Base.:+ || f === Base.:-) && length(arg_types_param) == 2
         # we need one array of numbers and one number, in any order
         if any(x -> x <: AbstractArray{<:Number}, arg_types_param) &&
             any(x -> x <: Number, arg_types_param)
@@ -311,6 +327,7 @@ function showerror(io::IO, ex::MethodError)
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
+    Experimental.show_error_hints(io, ex, arg_types_param, kwargs)
     try
         show_method_candidates(io, ex, kwargs)
     catch ex
@@ -731,4 +748,3 @@ function show(io::IO, ip::InterpreterIP)
         print(io, " in $(ip.code) at statement $(Int(ip.stmt))")
     end
 end
-

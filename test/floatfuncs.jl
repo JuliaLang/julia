@@ -101,6 +101,67 @@ end
     @test round(Float16(1.1), sigdigits=70) === Float16(1.1)
 end
 
+@testset "literal pow matches runtime pow matches optimized pow" begin
+    two = 2
+    @test 1.0000000105367122^2 == 1.0000000105367122^two
+    @test 1.0041504f0^2 == 1.0041504f0^two
+
+    function g2(start, two, N)
+        x = start
+        n = 0
+        for _ in 1:N
+           n += (x^2 !== x^two)
+           x = nextfloat(x)
+        end
+        return n
+    end
+    @test g2(1.0, 2, 100_000_000) == 0
+    @test g2(1.0f0, 2, 100_000_000) == 0
+    g2′(start, N) = g2(start, 2, N)
+    @test g2′(1.0, 100_000_000) == 0
+    @test g2′(1.0f0, 100_000_000) == 0
+
+    function g3(start, three, N)
+        x = start
+        n = 0
+        for _ in 1:N
+           n += (x^3 !== x^three)
+           x = nextfloat(x)
+        end
+        return n
+    end
+    @test g3(1.0, 3, 100_000_000) == 0
+    @test g3(1.0f0, 3, 100_000_000) == 0
+    g3′(start, N) = g3(start, 3, N)
+    @test g3′(1.0, 100_000_000) == 0
+    @test g3′(1.0f0, 100_000_000) == 0
+
+    function ginv(start, inv, N)
+        x = start
+        n = 0
+        for _ in 1:N
+           n += (x^-1 !== x^inv)
+           x = nextfloat(x)
+        end
+        return n
+    end
+    @test ginv(1.0, -1, 100_000_000) == 0
+    @test ginv(1.0f0, -1, 100_000_000) == 0
+    ginv′(start, N) = ginv(start, -1, N)
+    @test ginv′(1.0, 100_000_000) == 0
+    @test ginv′(1.0f0, 100_000_000) == 0
+
+    f(x, p) = x^p
+    finv(x) = f(x, -1)
+    f2(x) = f(x, 2)
+    f3(x) = f(x, 3)
+    x = 1.0000000105367122
+    @test x^2 == f(x, 2) == f2(x) == x*x == Float64(big(x)*big(x))
+    @test x^3 == f(x, 3) == f3(x) == x*x*x == Float64(big(x)*big(x)*big(x))
+    x = 1.000000007393669
+    @test x^-1 == f(x, -1) == finv(x) == 1/x == inv(x) == Float64(1/big(x)) == Float64(inv(big(x)))
+end
+
 @testset "curried approximation" begin
 
     @test ≈(1.0; atol=1).(1.0:3.0) == [true, true, false]

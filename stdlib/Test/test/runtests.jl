@@ -916,3 +916,6 @@ end
     end
 end
 
+# Issue 20620
+@test @inferred(.![true, false]) == [false, true]
+@test @inferred([3, 4] .- [1, 2] .+ [-2, -2]) == [0, 0]

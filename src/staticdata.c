@@ -70,7 +70,9 @@ static void *const _tags[] = {
          &jl_segv_exception,
 #endif
          // other special values
-         &jl_emptysvec, &jl_emptytuple, &jl_false, &jl_true, &jl_nothing, &jl_an_empty_string,
+         &jl_emptysvec, &jl_emptytuple, &jl_false, &jl_true, &jl_nothing,
+         &jl_an_empty_string, &jl_an_empty_vec_any,
+
          &jl_module_init_order, &jl_core_module, &jl_base_module, &jl_main_module, &jl_top_module,
          &jl_typeinf_func, &jl_type_type_mt, &jl_nonfunction_mt,
          // some Core.Builtin Functions that we want to be able to reference:
@@ -81,7 +83,7 @@ static void *const _tags[] = {
          &jl_builtin_getfield, &jl_builtin_setfield, &jl_builtin_fieldtype, &jl_builtin_arrayref,
          &jl_builtin_const_arrayref, &jl_builtin_arrayset, &jl_builtin_arraysize,
          &jl_builtin_apply_type, &jl_builtin_applicable, &jl_builtin_invoke,
-         &jl_builtin__expr, &jl_builtin_ifelse,
+         &jl_builtin__expr, &jl_builtin_ifelse, &jl_builtin__typebody,
          NULL };
 static jl_value_t **const*const tags = (jl_value_t**const*const)_tags;
 
@@ -105,6 +107,8 @@ static arraylist_t reinit_list;
 
 // hash of definitions for predefined function pointers
 static htable_t fptr_to_id;
+void *native_functions;
+
 // array of definitions for the predefined function pointers
 // (reverse of fptr_to_id)
 // This is a manually constructed dual of the fvars array, which would be produced by codegen for Julia code, for C.
@@ -115,7 +119,8 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_getfield, &jl_f_setfield, &jl_f_fieldtype, &jl_f_nfields,
     &jl_f_arrayref, &jl_f_const_arrayref, &jl_f_arrayset, &jl_f_arraysize, &jl_f_apply_type,
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
-    &jl_f_ifelse,
+    &jl_f_ifelse, &jl_f__structtype, &jl_f__abstracttype, &jl_f__primitivetype,
+    &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef,
     NULL };
 
 typedef struct {
@@ -494,7 +499,8 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
             write_gctaggedfield(s, (uintptr_t)BindingRef << RELOC_TAG_OFFSET);
             tot += sizeof(void*);
             size_t binding_reloc_offset = ios_pos(s->s);
-            record_gvar(s, jl_get_llvm_gv((jl_value_t*)b), ((uintptr_t)DataRef << RELOC_TAG_OFFSET) + binding_reloc_offset);
+            record_gvar(s, jl_get_llvm_gv(native_functions, (jl_value_t*)b),
+                    ((uintptr_t)DataRef << RELOC_TAG_OFFSET) + binding_reloc_offset);
             write_pointerfield(s, (jl_value_t*)b->name);
             write_pointerfield(s, b->value);
             write_pointerfield(s, b->globalref);
@@ -614,7 +620,7 @@ static void jl_write_values(jl_serializer_state *s)
         size_t reloc_offset = ios_pos(s->s);
         assert(item < layout_table.len && layout_table.items[item] == NULL);
         layout_table.items[item] = (void*)reloc_offset;
-        record_gvar(s, jl_get_llvm_gv(v), ((uintptr_t)DataRef << RELOC_TAG_OFFSET) + reloc_offset);
+        record_gvar(s, jl_get_llvm_gv(native_functions, v), ((uintptr_t)DataRef << RELOC_TAG_OFFSET) + reloc_offset);
 
         // write data
         if (jl_is_cpointer(v)) {
@@ -784,50 +790,49 @@ static void jl_write_values(jl_serializer_state *s)
                 jl_code_instance_t *newm = (jl_code_instance_t*)&s->s->buf[reloc_offset];
 
                 newm->invoke = NULL;
+                newm->isspecsig = 0;
                 newm->specptr.fptr = NULL;
-                newm->functionObjectsDecls.functionObject = NULL;
-                newm->functionObjectsDecls.specFunctionObject = NULL;
-                uintptr_t fptr_id = JL_API_NULL;
-                uintptr_t specfptr_id = 0;
+                int8_t fptr_id = JL_API_NULL;
+                int8_t builtin_id = 0;
                 if (m->invoke == jl_fptr_const_return) {
                     fptr_id = JL_API_CONST;
                 }
                 else {
                     if (jl_is_method(m->def->def.method)) {
-                        specfptr_id = jl_fptr_id(m->specptr.fptr);
-                        const char *fname = m->functionObjectsDecls.functionObject;
-                        if (specfptr_id) { // found in the table of builtins
-                            assert(specfptr_id >= 2);
+                        builtin_id = jl_fptr_id(m->specptr.fptr);
+                        if (builtin_id) { // found in the table of builtins
+                            assert(builtin_id >= 2);
                             fptr_id = JL_API_BUILTIN;
                         }
-                        else if (fname) {
-                            assert(reloc_offset < INT32_MAX);
-                            if (!strcmp(fname, "jl_fptr_args")) {
-                                fptr_id = JL_API_BOXED;
-                            }
-                            else if (!strcmp(fname, "jl_fptr_sparam")) {
-                                fptr_id = JL_API_WITH_PARAMETERS;
-                            }
-                            else {
-                                int func = jl_assign_functionID(fname);
-                                assert(func > 0);
-                                ios_ensureroom(s->fptr_record, func * sizeof(void*));
-                                ios_seek(s->fptr_record, (func - 1) * sizeof(void*));
-                                write_uint32(s->fptr_record, ~reloc_offset);
+                        else {
+                            int32_t invokeptr_id = 0;
+                            int32_t specfptr_id = 0;
+                            jl_get_function_id(native_functions, m, &invokeptr_id, &specfptr_id); // see if we generated code for it
+                            if (invokeptr_id) {
+                                if (invokeptr_id == -1) {
+                                    fptr_id = JL_API_BOXED;
+                                }
+                                else if (invokeptr_id == -2) {
+                                    fptr_id = JL_API_WITH_PARAMETERS;
+                                }
+                                else {
+                                    assert(invokeptr_id > 0);
+                                    ios_ensureroom(s->fptr_record, invokeptr_id * sizeof(void*));
+                                    ios_seek(s->fptr_record, (invokeptr_id - 1) * sizeof(void*));
+                                    write_uint32(s->fptr_record, ~reloc_offset);
 #ifdef _P64
-                                write_padding(s->fptr_record, 4);
+                                    write_padding(s->fptr_record, 4);
 #endif
-                            }
-                            fname = m->functionObjectsDecls.specFunctionObject;
-                            if (fname) {
-                                int cfunc = jl_assign_functionID(fname);
-                                assert(cfunc > 0);
-                                ios_ensureroom(s->fptr_record, cfunc * sizeof(void*));
-                                ios_seek(s->fptr_record, (cfunc - 1) * sizeof(void*));
-                                write_uint32(s->fptr_record, reloc_offset);
+                                }
+                                if (specfptr_id) {
+                                    assert(specfptr_id > invokeptr_id && specfptr_id > 0);
+                                    ios_ensureroom(s->fptr_record, specfptr_id * sizeof(void*));
+                                    ios_seek(s->fptr_record, (specfptr_id - 1) * sizeof(void*));
+                                    write_uint32(s->fptr_record, reloc_offset);
 #ifdef _P64
-                                write_padding(s->fptr_record, 4);
+                                    write_padding(s->fptr_record, 4);
 #endif
+                                }
                             }
                         }
                     }
@@ -837,16 +842,14 @@ static void jl_write_values(jl_serializer_state *s)
                     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_code_instance_t, invoke))); // relocation location
                     arraylist_push(&s->relocs_list, (void*)(((uintptr_t)FunctionRef << RELOC_TAG_OFFSET) + fptr_id)); // relocation target
                 }
-                if (specfptr_id >= 2) {
+                if (builtin_id >= 2) {
                     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_code_instance_t, specptr.fptr))); // relocation location
-                    arraylist_push(&s->relocs_list, (void*)(((uintptr_t)BuiltinFunctionRef << RELOC_TAG_OFFSET) + specfptr_id - 2)); // relocation target
+                    arraylist_push(&s->relocs_list, (void*)(((uintptr_t)BuiltinFunctionRef << RELOC_TAG_OFFSET) + builtin_id - 2)); // relocation target
                 }
             }
             else if (jl_is_datatype(v)) {
                 jl_datatype_t *dt = (jl_datatype_t*)v;
                 jl_datatype_t *newdt = (jl_datatype_t*)&s->s->buf[reloc_offset];
-                newdt->struct_decl = NULL;
-                newdt->ditype = NULL;
                 if (dt->layout != NULL) {
                     size_t nf = dt->layout->nfields;
                     size_t np = dt->layout->npointers;
@@ -881,7 +884,7 @@ static void jl_write_gv_syms(jl_serializer_state *s, jl_sym_t *v)
 {
     // since symbols are static, they might not have had a
     // reference anywhere in the code image other than here
-    int32_t gv = jl_get_llvm_gv((jl_value_t*)v);
+    int32_t gv = jl_get_llvm_gv(native_functions, (jl_value_t*)v);
     if (gv != 0) {
         uintptr_t item = backref_id(s, v);
         assert(item >> RELOC_TAG_OFFSET == SymbolRef);
@@ -895,7 +898,7 @@ static void jl_write_gv_syms(jl_serializer_state *s, jl_sym_t *v)
 
 static void jl_write_gv_int(jl_serializer_state *s, jl_value_t *v)
 {
-    int32_t gv = jl_get_llvm_gv((jl_value_t*)v);
+    int32_t gv = jl_get_llvm_gv(native_functions, (jl_value_t*)v);
     if (gv != 0) {
         uintptr_t item = backref_id(s, v);
         assert(item >> RELOC_TAG_OFFSET == TagRef);
@@ -1172,10 +1175,13 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
                 break;
             }
             void *fptr = (void*)(base + offset);
-            if (specfunc)
+            if (specfunc) {
                 codeinst->specptr.fptr = fptr;
-            else
+                codeinst->isspecsig = 1; // TODO: set only if confirmed to be true
+            }
+            else {
                 codeinst->invoke = (jl_callptr_t)fptr;
+            }
             jl_fptr_to_llvm(fptr, codeinst, specfunc);
         }
     }
@@ -1285,11 +1291,12 @@ static void jl_prune_type_cache(jl_svec_t *cache)
         jl_value_t *ti = jl_svecref(cache, i);
         if (ti == NULL)
             break;
-        if (ptrhash_get(&backref_table, ti) != HT_NOTFOUND || jl_get_llvm_gv(ti) != 0)
+        if (ptrhash_get(&backref_table, ti) != HT_NOTFOUND || jl_get_llvm_gv(native_functions, ti) != 0)
             jl_svecset(cache, ins++, ti);
         else if (jl_is_datatype(ti)) {
             jl_value_t *singleton = ((jl_datatype_t*)ti)->instance;
-            if (singleton && (ptrhash_get(&backref_table, singleton) != HT_NOTFOUND || jl_get_llvm_gv(singleton) != 0))
+            if (singleton && (ptrhash_get(&backref_table, singleton) != HT_NOTFOUND ||
+                        jl_get_llvm_gv(native_functions, singleton) != 0))
                 jl_svecset(cache, ins++, ti);
         }
     }
@@ -1415,7 +1422,6 @@ static void jl_save_system_image_to_stream(ios_t *f)
             jl_write_value(&s, tag);
         }
         jl_write_value(&s, s.ptls->root_task->tls);
-        write_uint32(f, jl_get_t_uid_ctr());
         write_uint32(f, jl_get_gs_ctr());
         write_uint32(f, jl_world_counter);
         write_uint32(f, jl_typeinf_world);
@@ -1431,10 +1437,11 @@ static void jl_save_system_image_to_stream(ios_t *f)
     jl_gc_enable(en);
 }
 
-JL_DLLEXPORT ios_t *jl_create_system_image(void)
+JL_DLLEXPORT ios_t *jl_create_system_image(void *_native_data)
 {
     ios_t *f = (ios_t*)malloc_s(sizeof(ios_t));
     ios_mem(f, 0);
+    native_functions = _native_data;
     jl_save_system_image_to_stream(f);
     return f;
 }
@@ -1543,11 +1550,9 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     jl_init_int32_int64_cache();
     jl_init_box_caches();
 
-    uint32_t uid_ctr = read_uint32(f);
     uint32_t gs_ctr = read_uint32(f);
     jl_world_counter = read_uint32(f);
     jl_typeinf_world = read_uint32(f);
-    jl_set_t_uid_ctr(uid_ctr);
     jl_set_gs_ctr(gs_ctr);
     s.s = NULL;
 

@@ -25,6 +25,7 @@ else # !windows
     end
 
     rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read(getfile(rd), sp[])
+    rand(rd::RandomDevice, ::SamplerType{Bool}) = read(getfile(rd), UInt8) % Bool
 
     function getfile(rd::RandomDevice)
         devrandom = rd.unlimited ? DEV_URANDOM : DEV_RANDOM
@@ -600,14 +601,6 @@ for T in BitInteger_types
         A
     end
 end
-
-#### from a range
-
-for T in BitInteger_types, R=(1, Inf) # eval because of ambiguity otherwise
-    @eval Sampler(::Type{MersenneTwister}, r::AbstractUnitRange{$T}, ::Val{$R}) =
-        SamplerRangeFast(r)
-end
-
 
 ### randjump
 

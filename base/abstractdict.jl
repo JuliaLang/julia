@@ -424,22 +424,9 @@ Dict{Int64,String} with 1 entry:
 function filter(f, d::AbstractDict)
     # don't just do filter!(f, copy(d)): avoid making a whole copy of d
     df = empty(d)
-    try
-        for pair in d
-            if f(pair)
-                df[pair.first] = pair.second
-            end
-        end
-    catch e
-        if isa(e, MethodError) && e.f === f
-            depwarn("In `filter(f, dict)`, `f` is now passed a single pair instead of two arguments.", :filter)
-            for (k, v) in d
-                if f(k, v)
-                    df[k] = v
-                end
-            end
-        else
-            rethrow()
+    for pair in d
+        if f(pair)
+            df[pair.first] = pair.second
         end
     end
     return df
@@ -512,6 +499,14 @@ end
 getindex(t::AbstractDict, k1, k2, ks...) = getindex(t, tuple(k1,k2,ks...))
 setindex!(t::AbstractDict, v, k1, k2, ks...) = setindex!(t, v, tuple(k1,k2,ks...))
 
+get!(t::AbstractDict, key, default) = get!(() -> default, t, key)
+function get!(default::Callable, t::AbstractDict{K,V}, key) where K where V
+    haskey(t, key) && return t[key]
+    val = default()
+    t[key] = val
+    return val
+end
+
 push!(t::AbstractDict, p::Pair) = setindex!(t, p.second, p.first)
 push!(t::AbstractDict, p::Pair, q::Pair) = push!(push!(t, p), q)
 push!(t::AbstractDict, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q), r...)
@@ -551,6 +546,9 @@ end
 Modifies `dict` by transforming each value from `val` to `f(val)`.
 Note that the type of `dict` cannot be changed: if `f(val)` is not an instance of the value type
 of `dict` then it will be converted to the value type if possible and otherwise raise an error.
+
+!!! compat "Julia 1.2"
+    `map!(f, values(dict::AbstractDict))` requires Julia 1.2 or later.
 
 # Examples
 ```jldoctest

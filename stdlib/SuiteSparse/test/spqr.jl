@@ -92,6 +92,30 @@ end
     @test F.Q*F.R == A[F.prow,F.pcol]
 end
 
+@testset "select ordering overdetermined" begin
+     A = sparse([1:n; rand(1:m, nn - n)], [1:n; rand(1:n, nn - n)], randn(nn), m, n)
+     b = randn(m)
+     xref = Array(A) \ b
+     for ordering ∈ SuiteSparse.SPQR.ORDERINGS
+         QR = qr(A, ordering=ordering)
+         x = QR \ b
+         @test x ≈ xref
+     end
+     @test_throws ErrorException qr(A, ordering=Int32(10))
+end
+
+@testset "select ordering underdetermined" begin
+     A = sparse([1:n; rand(1:n, nn - n)], [1:n; rand(1:m, nn - n)], randn(nn), n, m)
+     b = A * ones(m)
+     for ordering ∈ SuiteSparse.SPQR.ORDERINGS
+         QR = qr(A, ordering=ordering)
+         x = QR \ b
+         # x ≂̸ Array(A) \ b; LAPACK returns a min-norm x while SPQR returns a basic x
+         @test A * x ≈ b
+     end
+     @test_throws ErrorException qr(A, ordering=Int32(10))
+end
+
 @testset "propertynames of QRSparse" begin
     A = sparse([0.0 1 0 0; 0 0 0 0])
     F = qr(A)

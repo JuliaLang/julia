@@ -27,7 +27,7 @@ function show(io::IO, t::AbstractDict{K,V}) where V where K
 
     limit::Bool = get(io, :limit, false)
     # show in a Julia-syntax-like form: Dict(k=>v, ...)
-    print(io, typeinfo_prefix(io, t))
+    print(io, typeinfo_prefix(io, t)[1])
     print(io, '(')
     if !isempty(t) && !show_circular(io, t)
         first = true
@@ -257,7 +257,7 @@ Dict{String,Int64} with 2 entries:
 julia> empty!(A);
 
 julia> A
-Dict{String,Int64} with 0 entries
+Dict{String,Int64}()
 ```
 """
 function empty!(h::Dict{K,V}) where V where K
@@ -416,8 +416,6 @@ Dict{String,Int64} with 4 entries:
 ```
 """
 get!(collection, key, default)
-
-get!(h::Dict{K,V}, key0, default) where {K,V} = get!(()->default, h, key0)
 
 """
     get!(f::Function, collection, key)
@@ -578,6 +576,9 @@ end
 Delete and return the mapping for `key` if it exists in `collection`, otherwise return
 `default`, or throw an error if `default` is not specified.
 
+!!! compat "Julia 1.5"
+    For `collection::Vector`, this method requires at least Julia 1.5.
+
 # Examples
 ```jldoctest
 julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
@@ -704,7 +705,7 @@ end
 function map!(f, iter::ValueIterator{<:Dict})
     dict = iter.dict
     vals = dict.vals
-    # @inbounds is here so the it gets propigated to isslotfiled
+    # @inbounds is here so the it gets propagated to isslotfiled
     @inbounds for i = dict.idxfloor:lastindex(vals)
         if isslotfilled(dict, i)
             vals[i] = f(vals[i])
@@ -725,14 +726,14 @@ end
 """
     ImmutableDict
 
-ImmutableDict is a Dictionary implemented as an immutable linked list,
-which is optimal for small dictionaries that are constructed over many individual insertions
+`ImmutableDict` is a dictionary implemented as an immutable linked list,
+which is optimal for small dictionaries that are constructed over many individual insertions.
 Note that it is not possible to remove a value, although it can be partially overridden and hidden
-by inserting a new value with the same key
+by inserting a new value with the same key.
 
     ImmutableDict(KV::Pair)
 
-Create a new entry in the Immutable Dictionary for the key => value pair
+Create a new entry in the `ImmutableDict` for a `key => value` pair
 
  - use `(key => value) in dict` to see if this particular combination is in the properties set
  - use `get(dict, key, default)` to retrieve the most recent value for a particular key

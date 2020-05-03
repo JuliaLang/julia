@@ -107,6 +107,12 @@ jl_array_t *jl_get_loaded_modules(void)
     return NULL;
 }
 
+static int jl_is__toplevel__mod(jl_module_t *mod)
+{
+    return jl_base_module &&
+        (jl_value_t*)mod == jl_get_global(jl_base_module, jl_symbol("__toplevel__"));
+}
+
 // TODO: add locks around global state mutation operations
 jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
 {
@@ -115,6 +121,11 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     if (jl_array_len(ex->args) != 3 || !jl_is_expr(jl_exprarg(ex, 2))) {
         jl_error("syntax: malformed module expression");
     }
+
+    if (((jl_expr_t *)(jl_exprarg(ex, 2)))->head != jl_symbol("block")) {
+        jl_error("syntax: module expression third argument must be a block");
+    }
+
     int std_imports = (jl_exprarg(ex, 0) == jl_true);
     jl_sym_t *name = (jl_sym_t*)jl_exprarg(ex, 1);
     if (!jl_is_symbol(name)) {
@@ -128,8 +139,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
 
     // copy parent environment info into submodule
     newm->uuid = parent_module->uuid;
-    if (jl_base_module &&
-            (jl_value_t*)parent_module == jl_get_global(jl_base_module, jl_symbol("__toplevel__"))) {
+    if (jl_is__toplevel__mod(parent_module)) {
         newm->parent = newm;
         jl_register_root_module(newm);
     }
@@ -302,8 +312,7 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
         *has_defs = 1;
         return;
     }
-    else if (head == method_sym || head == abstracttype_sym || head == primtype_sym ||
-             head == structtype_sym || jl_is_toplevel_only_expr(v)) {
+    else if (head == method_sym || jl_is_toplevel_only_expr(v)) {
         *has_defs = 1;
     }
     else if (head == cfunction_sym) {
@@ -329,10 +338,15 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
         else if (jl_is_quotenode(f)) {
             called = jl_quotenode_value(f);
         }
-        if (called && jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall) {
-            *has_intrinsics = 1;
-            return;
+        if (called) {
+            if (jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall) {
+                *has_intrinsics = 1;
+            }
+            if (called == jl_builtin__typebody) {
+                *has_defs = 1;
+            }
         }
+        return;
     }
     int i;
     for (i = 0; i < jl_array_len(e->args); i++) {
@@ -822,30 +836,43 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v)
     return jl_toplevel_eval_flex(m, v, 1, 0);
 }
 
+// Check module `m` is open for `eval/include`, or throw an error.
+void jl_check_open_for(jl_module_t *m, const char* funcname)
+{
+    if (jl_options.incremental && jl_generating_output()) {
+        if (!ptrhash_has(&jl_current_modules, (void*)m) && !jl_is__toplevel__mod(m)) {
+            if (m != jl_main_module) { // TODO: this was grand-fathered in
+                const char* name = jl_symbol_name(m->name);
+                jl_errorf("Evaluation into the closed module `%s` breaks incremental compilation "
+                          "because the side effects will not be permanent. "
+                          "This is likely due to some other module mutating `%s` with `%s` during "
+                          "precompilation - don't do this.", name, name, funcname);
+            }
+        }
+    }
+}
+
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (ptls->in_pure_callback)
         jl_error("eval cannot be used in a generated function");
+    jl_check_open_for(m, "eval");
     jl_value_t *v = NULL;
     int last_lineno = jl_lineno;
-    if (jl_options.incremental && jl_generating_output()) {
-        if (!ptrhash_has(&jl_current_modules, (void*)m)) {
-            if (m != jl_main_module) { // TODO: this was grand-fathered in
-                jl_printf(JL_STDERR, "WARNING: eval into closed module %s:\n", jl_symbol_name(m->name));
-                jl_static_show(JL_STDERR, ex);
-                jl_printf(JL_STDERR, "\n  ** incremental compilation may be fatally broken for this module **\n\n");
-            }
-        }
-    }
+    const char *last_filename = jl_filename;
+    jl_lineno = 1;
+    jl_filename = "none";
     JL_TRY {
         v = jl_toplevel_eval(m, ex);
     }
     JL_CATCH {
         jl_lineno = last_lineno;
+        jl_filename = last_filename;
         jl_rethrow();
     }
     jl_lineno = last_lineno;
+    jl_filename = last_filename;
     assert(v);
     return v;
 }
