@@ -135,6 +135,43 @@ julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 shell> echo hello
 hello
 ```
+!!! note
+    For Windows users, Julia's shell mode does not expose windows shell commands.
+    Hence, this will fail:
+
+```julia-repl
+julia> ; # upon typing ;, the prompt changes (in place) to: shell>
+
+shell> dir
+ERROR: IOError: could not spawn `dir`: no such file or directory (ENOENT)
+Stacktrace!
+.......
+```
+However, you can get access to `PowerShell` like this:
+```julia-repl
+julia> ; # upon typing ;, the prompt changes (in place) to: shell>
+
+shell> powershell
+Windows PowerShell
+Copyright (C) Microsoft Corporation. All rights reserved.
+PS C:\Users\elm>
+```
+... and to `cmd.exe` like that (see the `dir` command):
+```julia-repl
+julia> ; # upon typing ;, the prompt changes (in place) to: shell>
+
+shell> cmd
+Microsoft Windows [version 10.0.17763.973]
+(c) 2018 Microsoft Corporation. All rights reserved.
+C:\Users\elm>dir
+ Volume in drive C has no label
+ Volume Serial Number is 1643-0CD7
+  Directory of C:\Users\elm
+
+29/01/2020  22:15    <DIR>          .
+29/01/2020  22:15    <DIR>          ..
+02/02/2020  08:06    <DIR>          .atom
+```
 
 ### Search modes
 
@@ -230,7 +267,7 @@ const mykeys = Dict{Any,Any}(
     # Up Arrow
     "\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),
     # Down Arrow
-    "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
+    "\e[B" => (s,o...)->(LineEdit.edit_move_down(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
 )
 
 function customize_keys(repl)

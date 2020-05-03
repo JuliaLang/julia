@@ -121,7 +121,10 @@ end
 @test get(()->0, (a=1,), :b) == 0
 @test Base.tail((a = 1, b = 2.0, c = 'x')) ≡ (b = 2.0, c = 'x')
 @test Base.tail((a = 1, )) ≡ NamedTuple()
+@test Base.front((a = 1, b = 2.0, c = 'x')) ≡ (a = 1, b = 2.0)
+@test Base.front((a = 1, )) ≡ NamedTuple()
 @test_throws ArgumentError Base.tail(NamedTuple())
+@test_throws ArgumentError Base.front(NamedTuple())
 
 # syntax errors
 
@@ -275,4 +278,27 @@ let nt0 = NamedTuple(), nt1 = (a=33,), nt2 = (a=0, b=:v)
     @test Base.setindex(Base.setindex(nt1, 0, :a), :v, :b) == nt2
     @test Base.setindex(nt1, "value", :a) == (a="value",)
     @test Base.setindex(nt1, "value", :a) isa NamedTuple{(:a,),<:Tuple{AbstractString}}
+end
+
+# @NamedTuple
+@testset "@NamedTuple" begin
+    @test @NamedTuple{a::Int, b::String} === NamedTuple{(:a, :b),Tuple{Int,String}} ===
+        @NamedTuple begin
+            a::Int
+            b::String
+        end
+    @test @NamedTuple{a::Int, b} === NamedTuple{(:a, :b),Tuple{Int,Any}}
+    @test_throws LoadError include_string(Main, "@NamedTuple{a::Int, b, 3}")
+    @test_throws LoadError include_string(Main, "@NamedTuple(a::Int, b)")
+end
+
+# issue #29333, implicit names
+let x = 1, y = 2
+    @test (;y) === (y = 2,)
+    a = (; x, y)
+    @test a === (x=1, y=2)
+    @test (; a.y, a.x) === (y=2, x=1)
+    y = 3
+    @test Meta.lower(Main, Meta.parse("(; a.y, y)")) == Expr(:error, "field name \"y\" repeated in named tuple")
+    @test (; a.y, x) === (y=2, x=1)
 end

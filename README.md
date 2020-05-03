@@ -31,7 +31,7 @@ and installing Julia, below.
 - **Homepage:** <https://julialang.org>
 - **Binaries:** <https://julialang.org/downloads/>
 - **Source code:** <https://github.com/JuliaLang/julia>
-- **Documentation:** <https://docs.julialang.org/>
+- **Documentation:** <https://docs.julialang.org>
 - **Packages:** <https://pkg.julialang.org/>
 - **Discussion forum:** <https://discourse.julialang.org>
 - **Slack:** <https://julialang.slack.com> (get an invite from <https://slackinvite.julialang.org>)
@@ -47,6 +47,7 @@ helpful to start contributing to the Julia codebase.
 - [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
 - [**Twitter**](https://twitter.com/JuliaLanguage)
 - [**Meetup**](https://julia.meetup.com/)
+- [**Learning resources**](https://julialang.org/learning/)
 
 ## Binary Installation
 

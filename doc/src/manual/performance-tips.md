@@ -160,7 +160,7 @@ Consider the following:
 
 ```jldoctest
 julia> a = Real[]
-0-element Array{Real,1}
+Real[]
 
 julia> push!(a, 1); push!(a, 2.0); push!(a, π)
 3-element Array{Real,1}:
@@ -177,7 +177,7 @@ efficiently:
 
 ```jldoctest
 julia> a = Float64[]
-0-element Array{Float64,1}
+Float64[]
 
 julia> push!(a, 1); push!(a, 2.0); push!(a,  π)
 3-element Array{Float64,1}:
@@ -534,6 +534,11 @@ but this will:
 g_vararg(x::Vararg{Int, N}) where {N} = tuple(x...)
 ```
 
+One only needs to introduce a single type parameter to force specialization, even if the other types are unconstrained. For example, this will also specialize, and is useful when the arguments are not all of the same type:
+```julia
+h_vararg(x::Vararg{Any, N}) where {N} = tuple(x...)
+```
+
 Note that [`@code_typed`](@ref) and friends will always show you specialized code, even if Julia
 would not normally specialize that method call. You need to check the
 [method internals](@ref ast-lowered-method) if you want to see whether specializations are generated
@@ -611,8 +616,8 @@ number (the result of [`/`](@ref) operator). This makes it more difficult for th
 optimize the body of the loop. There are several possible fixes:
 
   * Initialize `x` with `x = 1.0`
-  * Declare the type of `x`: `x::Float64 = 1`
-  * Use an explicit conversion: `x = oneunit(Float64)`
+  * Declare the type of `x` explicitly as `x::Float64 = 1`
+  * Use an explicit conversion by `x = oneunit(Float64)`
   * Initialize with the first loop iteration, to `x = 1 / rand()`, then loop `for i = 2:10`
 
 ## [Separate kernel functions (aka, function barriers)](@id kernel-functions)
@@ -837,6 +842,7 @@ adopted by C and Python (`numpy`) among other languages. Remembering the orderin
 have significant performance effects when looping over arrays. A rule of thumb to keep in mind
 is that with column-major arrays, the first index changes most rapidly. Essentially this means
 that looping will be faster if the inner-most loop index is the first to appear in a slice expression.
+Keep in mind that indexing an array with `:` is an implicit loop that iteratively accesses all elements within a particular dimension; it can be faster to extract columns than rows, for example.
 
 Consider the following contrived example. Imagine we wanted to write a function that accepts a
 [`Vector`](@ref) and returns a square [`Matrix`](@ref) with either the rows or the columns filled with copies
@@ -1428,7 +1434,7 @@ julia> @code_warntype f(3.2)
 Variables
   #self#::Core.Compiler.Const(f, false)
   x::Float64
-  y::Union{Float64, Int64}
+  y::UNION{FLOAT64, INT64}
 
 Body::Float64
 1 ─      (y = Main.pos(x))
@@ -1443,8 +1449,8 @@ Interpreting the output of [`@code_warntype`](@ref), like that of its cousins [`
 Your code is being presented in form that has been heavily digested on its way to generating
 compiled machine code. Most of the expressions are annotated by a type, indicated by the `::T`
 (where `T` might be [`Float64`](@ref), for example). The most important characteristic of [`@code_warntype`](@ref)
-is that non-concrete types are displayed in red; in the above example, such output is shown in
-uppercase.
+is that non-concrete types are displayed in red; since this document is written in Markdown, which has no color,
+in this document, red text is denoted by uppercase.
 
 At the top, the inferred return type of the function is shown as `Body::Float64`.
 The next lines represent the body of `f` in Julia's SSA IR form.

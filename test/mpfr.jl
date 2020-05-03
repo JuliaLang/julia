@@ -372,12 +372,18 @@ end
     end
 end
 
-@testset "copysign" begin
+@testset "copysign / sign" begin
     x = BigFloat(1)
     y = BigFloat(-1)
     @test copysign(x, y) == y
     @test copysign(y, x) == x
     @test copysign(1.0, BigFloat(NaN)) == 1.0
+
+    @test sign(BigFloat(-3.0)) == -1.0
+    @test sign(BigFloat( 3.0)) == 1.0
+    @test isequal(sign(BigFloat(-0.0)), BigFloat(-0.0))
+    @test isequal(sign(BigFloat( 0.0)), BigFloat( 0.0))
+    @test isnan(sign(BigFloat(NaN)))
 end
 @testset "isfinite / isinf / isnan" begin
     x = BigFloat(Inf)
@@ -565,9 +571,8 @@ end
     @test modf(x+y) == (y, x)
     x = BigFloat(NaN)
     @test map(isnan, modf(x)) == (true, true)
-    x = BigFloat(Inf)
-    y = modf(x)
-    @test (isnan(y[1]), isinf(y[2])) == (true, true)
+    @test isequal(modf(BigFloat(-Inf)), (BigFloat(-0.0), BigFloat(-Inf)))
+    @test isequal(modf(BigFloat(Inf)), (BigFloat(0.0), BigFloat(Inf)))
 end
 @testset "rem" begin
     setprecision(53) do
@@ -848,6 +853,10 @@ end
     @test typeof(floor(UInt128,a)) == UInt128
     @test trunc(UInt128,a) == b
     @test typeof(trunc(UInt128,a)) == UInt128
+
+    # Issue #33676
+    @test trunc(UInt8, parse(BigFloat,"255.1")) == UInt8(255)
+    @test_throws InexactError trunc(UInt8, parse(BigFloat,"256.1"))
 end
 @testset "div" begin
     @test div(big"1.0",big"0.1") == 9

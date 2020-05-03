@@ -79,7 +79,7 @@ for op in (:+, :-, :lcm, :gcd)
 end
 
 /(x::P, y::P) where {P<:Period} = /(value(x), value(y))
-/(x::P, y::Real) where {P<:Period} = P(/(value(x), Int64(y)))
+/(x::P, y::Real) where {P<:Period} = P(/(value(x), y))
 div(x::P, y::P, r::RoundingMode) where {P<:Period} = div(value(x), value(y), r)
 div(x::P, y::Real, r::RoundingMode) where {P<:Period} = P(div(value(x), Int64(y), r))
 
@@ -90,8 +90,11 @@ for op in (:rem, :mod)
     end
 end
 
-(*)(x::P, y::Real) where {P<:Period} = P(value(x) * Int64(y))
+(*)(x::P, y::Real) where {P<:Period} = P(value(x) * y)
 (*)(y::Real, x::Period) = x * y
+
+(*)(A::Period, B::AbstractArray) = Broadcast.broadcast_preserving_zero_d(*, A, B)
+(*)(A::AbstractArray, B::Period) = Broadcast.broadcast_preserving_zero_d(*, A, B)
 
 # intfuncs
 Base.gcdx(a::T, b::T) where {T<:Period} = ((g, x, y) = gcdx(value(a), value(b)); return T(g), x, y)

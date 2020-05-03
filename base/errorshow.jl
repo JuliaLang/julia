@@ -29,6 +29,94 @@ ERROR: MyException: test exception
 """
 showerror(io::IO, ex) = show(io, ex)
 
+"""
+    register_error_hint(handler, exceptiontype)
+
+Register a "hinting" function `handler(io, exception)` that can
+suggest potential ways for users to circumvent errors.  `handler`
+should examine `exception` to see whether the conditions appropriate
+for a hint are met, and if so generate output to `io`.
+Packages should call `register_error_hint` from within their
+`__init__` function.
+
+For specific exception types, `handler` is required to accept additional arguments:
+
+- `MethodError`: provide `handler(io, exc::MethodError, argtypes, kwargs)`,
+  which splits the combined arguments into positional and keyword arguments.
+
+When issuing a hint, the output should typically start with `\\n`.
+
+If you define custom exception types, your `showerror` method can
+support hints by calling [`show_error_hints`](@ref).
+
+# Example
+
+```
+julia> module Hinter
+
+       only_int(x::Int)      = 1
+       any_number(x::Number) = 2
+
+       function __init__()
+           register_error_hint(MethodError) do io, exc, argtypes, kwargs
+               if exc.f == only_int
+                    # Color is not necessary, this is just to show it's possible.
+                    print(io, "\\nDid you mean to call ")
+                    printstyled(io, "`any_number`?", color=:cyan)
+               end
+           end
+       end
+
+       end
+```
+
+Then if you call `Hinter.only_int` on something that isn't an `Int` (thereby triggering a `MethodError`), it issues the hint:
+
+```
+julia> Hinter.only_int(1.0)
+ERROR: MethodError: no method matching only_int(::Float64)
+Did you mean to call `any_number`?
+Closest candidates are:
+    ...
+```
+
+!!! compat "Julia 1.5"
+    Custom error hints are available as of Julia 1.5.
+"""
+function register_error_hint(handler, exct::Type)
+    list = get!(()->[], _hint_handlers, exct)
+    push!(list, handler)
+    return nothing
+end
+
+const _hint_handlers = IdDict{Type,Vector{Any}}()
+
+"""
+    show_error_hints(io, ex, args...)
+
+Invoke all handlers from [`register_error_hint`](@ref) for the particular
+exception type `typeof(ex)`. `args` must contain any other arguments expected by
+the handler for that type.
+"""
+function show_error_hints(io, ex, args...)
+    hinters = get!(()->[], _hint_handlers, typeof(ex))
+    for handler in hinters
+        try
+            Base.invokelatest(handler, io, ex, args...)
+        catch err
+            tn = typeof(handler).name
+            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error"
+        end
+    end
+end
+
+show_index(io::IO, x::Any) = show(io, x)
+show_index(io::IO, x::Slice) = show_index(io, x.indices)
+show_index(io::IO, x::LogicalIndex) = show_index(io, x.mask)
+show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
+show_index(io::IO, x::Colon) = print(io, ':')
+
+
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
@@ -37,14 +125,20 @@ function showerror(io::IO, ex::BoundsError)
         if isdefined(ex, :i)
             !isa(ex.a, AbstractArray) && print(io, "\n ")
             print(io, " at index [")
-            if isa(ex.i, AbstractRange)
+            if ex.i isa AbstractRange
                 print(io, ex.i)
+            elseif ex.i isa AbstractString
+                show(io, ex.i)
             else
-                join(io, ex.i, ", ")
+                for (i, x) in enumerate(ex.i)
+                    i > 1 && print(io, ", ")
+                    show_index(io, x)
+                end
             end
             print(io, ']')
         end
     end
+    show_error_hints(io, ex)
 end
 
 function showerror(io::IO, ex::TypeError)
@@ -57,7 +151,7 @@ function showerror(io::IO, ex::TypeError)
         elseif isa(ex.got, Type)
             targs = ("Type{", ex.got, "}")
         else
-            targs = (typeof(ex.got),)
+            targs = ("a value of type $(typeof(ex.got))",)
         end
         if ex.context == ""
             ctx = "in $(ex.func)"
@@ -68,6 +162,7 @@ function showerror(io::IO, ex::TypeError)
         end
         print(io, ctx, ", expected ", ex.expected, ", got ", targs...)
     end
+    show_error_hints(io, ex)
 end
 
 function showerror(io::IO, ex, bt; backtrace=true)
@@ -106,6 +201,7 @@ function showerror(io::IO, ex::DomainError)
     if isdefined(ex, :msg)
         print(io, ":\n", ex.msg)
     end
+    show_error_hints(io, ex)
     nothing
 end
 
@@ -161,6 +257,7 @@ function showerror(io::IO, ex::InexactError)
     print(io, "InexactError: ", ex.func, '(')
     nameof(ex.T) === ex.func || print(io, ex.T, ", ")
     print(io, ex.val, ')')
+    show_error_hints(io, ex)
 end
 
 typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
@@ -232,7 +329,7 @@ function showerror(io::IO, ex::MethodError)
         kwargs = pairs(ex.args[1])
         ex = MethodError(f, ex.args[3:end])
     end
-    if f == Base.convert && length(arg_types_param) == 2 && !is_arg_types
+    if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         show_convert_error(io, ex, arg_types_param)
     elseif isempty(methods(f)) && isa(f, DataType) && f.abstract
@@ -265,6 +362,21 @@ function showerror(io::IO, ex::MethodError)
         end
         print(io, ")")
     end
+    # catch the two common cases of element-wise addition and subtraction
+    if (f === Base.:+ || f === Base.:-) && length(arg_types_param) == 2
+        # we need one array of numbers and one number, in any order
+        if any(x -> x <: AbstractArray{<:Number}, arg_types_param) &&
+            any(x -> x <: Number, arg_types_param)
+
+            nouns = Dict(
+                Base.:+ => "addition",
+                Base.:- => "subtraction",
+            )
+            varnames = ("scalar", "array")
+            first, second = arg_types_param[1] <: Number ? varnames : reverse(varnames)
+            print(io, "\nFor element-wise $(nouns[f]), use broadcasting with dot syntax: $first .$f $second")
+        end
+    end
     if ft <: AbstractArray
         print(io, "\nUse square brackets [] for indexing an Array.")
     end
@@ -296,6 +408,7 @@ function showerror(io::IO, ex::MethodError)
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
+    show_error_hints(io, ex, arg_types_param, kwargs)
     try
         show_method_candidates(io, ex, kwargs)
     catch ex
@@ -716,4 +829,3 @@ function show(io::IO, ip::InterpreterIP)
         print(io, " in $(ip.code) at statement $(Int(ip.stmt))")
     end
 end
-

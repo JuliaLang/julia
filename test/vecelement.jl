@@ -3,7 +3,7 @@
 make_value(::Type{T}, i::Integer) where {T<:Integer} = 3*i%T
 make_value(::Type{T},i::Integer) where {T<:AbstractFloat} = T(3*i)
 
-Vec{N,T} = NTuple{N,Base.VecElement{T}}
+const Vec{N,T} = NTuple{N,Base.VecElement{T}}
 
 # Crash report for #15244 motivated this test.
 @generated function thrice_iota(::Type{Vec{N,T}}) where {N,T}
@@ -73,6 +73,13 @@ end
 
 @test isa(VecElement((1,2)), VecElement{Tuple{Int,Int}})
 
+# test for alignment agreement (#32414)
+@noinline function bar32414(a)
+    v = ntuple(w -> VecElement(Float64(10w)), Val(8))
+    return a, (v, (a, (1e6, 1e9)))
+end
+@test bar32414(-35.0) === (-35.0, ((VecElement(10.0), VecElement(20.0), VecElement(30.0), VecElement(40.0), VecElement(50.0), VecElement(60.0), VecElement(70.0), VecElement(80.0)), (-35.0, (1.0e6, 1.0e9))))
+
 # The following test mimic SIMD.jl
 const _llvmtypes = Dict{DataType, String}(
     Float64 => "double",
@@ -105,8 +112,8 @@ end
 # Test various SIMD Vectors with known good sizes
 for T in (Float64, Float32, Int64, Int32)
     for N in 1:36
-        a = ntuple(i->VecElement(T(i)), N)
-        result = ntuple(i-> VecElement(T(i+i)), N)
+        a = ntuple(i -> VecElement(T(i)), N)
+        result = ntuple(i -> VecElement(T(i+i)), N)
         b = vecadd(a, a)
         @test b == result
         b = f20961([a], [a])

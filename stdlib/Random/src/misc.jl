@@ -52,14 +52,14 @@ number generator, see [Random Numbers](@ref).
 
 # Examples
 ```jldoctest
-julia> Random.seed!(0); randstring()
-"0IPrGg0J"
+julia> Random.seed!(3); randstring()
+"4zSHdXlw"
 
-julia> randstring(MersenneTwister(0), 'a':'z', 6)
-"aszvqk"
+julia> randstring(MersenneTwister(3), 'a':'z', 6)
+"bzlhqn"
 
 julia> randstring("ACGT")
-"TATCGGTC"
+"AGGACATT"
 ```
 
 !!! note
@@ -132,7 +132,10 @@ julia> rng = MersenneTwister(1234);
 
 julia> S = Int64[];
 
-julia> randsubseq!(rng, S, collect(1:8), 0.3);
+julia> randsubseq!(rng, S, 1:8, 0.3)
+2-element Array{Int64,1}:
+ 7
+ 8
 
 julia> S
 2-element Array{Int64,1}:
@@ -157,7 +160,7 @@ large.) Technically, this process is known as "Bernoulli sampling" of `A`.
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
-julia> randsubseq(rng, collect(1:8), 0.3)
+julia> randsubseq(rng, 1:8, 0.3)
 2-element Array{Int64,1}:
  7
  8

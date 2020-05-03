@@ -153,7 +153,7 @@ function evalpoly(z::Complex, p::Tuple)
             ai = Symbol("a", i)
             push!(as, :($ai = $a))
             a = :(muladd(r, $ai, $b))
-            b = :(p[$i] - s * $ai)
+            b = :(muladd(-s, $ai, p[$i]))
         end
         ai = :a0
         push!(as, :($ai = $a))
@@ -186,7 +186,7 @@ function _evalpoly(z::Complex, p)
     for i in N-2:-1:1
         ai = a
         a = muladd(r, ai, b)
-        b = p[i] - s * ai
+        b = muladd(-s, ai, p[i])
     end
     ai = a
     muladd(ai, z, b)
@@ -629,9 +629,19 @@ julia> hypot(3, 4im)
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
 hypot(x::Complex, y::Complex) = hypot(abs(x), abs(y))
 hypot(x::T, y::T) where {T<:Real} = hypot(float(x), float(y))
-hypot(x::T, y::T) where {T<:Number} = (z = y/x; abs(x) * sqrt(one(z) + z*z))
+function hypot(x::T, y::T) where {T<:Number}
+    if !iszero(x)
+        z = y/x
+        z2 = z*z
+
+        abs(x) * sqrt(oneunit(z2) + z2)
+    else
+        abs(y)
+    end
+end
+
 function hypot(x::T, y::T) where T<:AbstractFloat
-    #Return Inf if either or both imputs is Inf (Compliance with IEEE754)
+    # Return Inf if either or both inputs is Inf (Compliance with IEEE754)
     if isinf(x) || isinf(y)
         return T(Inf)
     end
@@ -858,7 +868,7 @@ julia> modf(-3.5)
 (-0.5, -3.0)
 ```
 """
-modf(x) = rem(x,one(x)), trunc(x)
+modf(x) = isinf(x) ? (flipsign(zero(x), x), x) : (rem(x, one(x)), trunc(x))
 
 function modf(x::Float32)
     temp = Ref{Float32}()
@@ -886,8 +896,22 @@ end
     end
     z
 end
-@inline ^(x::Float64, y::Integer) = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
-@inline ^(x::Float32, y::Integer) = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
+@inline function ^(x::Float64, y::Integer)
+    y == -1 && return inv(x)
+    y == 0 && return one(x)
+    y == 1 && return x
+    y == 2 && return x*x
+    y == 3 && return x*x*x
+    ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
+end
+@inline function ^(x::Float32, y::Integer)
+    y == -1 && return inv(x)
+    y == 0 && return one(x)
+    y == 1 && return x
+    y == 2 && return x*x
+    y == 3 && return x*x*x
+    ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
+end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
 @inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
 

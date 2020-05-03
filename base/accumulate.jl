@@ -64,9 +64,9 @@ end
 """
     cumsum(A; dims::Integer)
 
-Cumulative sum along the dimension `dims`. See also [`cumsum!`](@ref)
-to use a preallocated output array, both for performance and to control the precision of the
-output (e.g. to avoid overflow).
+Cumulative sum along the dimension `dims`. See also [`cumsum!`](@ref) to use a
+preallocated output array, both for performance and to control the precision of
+the output (e.g. to avoid overflow).
 
 # Examples
 ```jldoctest
@@ -85,6 +85,28 @@ julia> cumsum(a, dims=2)
  1  3   6
  4  9  15
 ```
+
+!!! note
+    The return array's `eltype` is `Int` for signed integers of less than system
+    word size  and `UInt` for unsigned integers of less than system word size.
+    To preserve `eltype` of arrays with small signed or unsigned integer
+    `accumulate(+, A)` should be used.
+
+    ```jldoctest
+    julia> cumsum(Int8[100, 28])
+    2-element Array{Int64,1}:
+     100
+     128
+
+    julia> accumulate(+,Int8[100, 28])
+    2-element Array{Int8,1}:
+      100
+     -128
+    ```
+
+    In the former case, the integers are widened to system word size and
+    therefore the result is `Int64[100, 128]`. In the latter case, no such
+    widening happens and integer overflow results in `Int8[100, -128]`.
 """
 function cumsum(A::AbstractArray{T}; dims::Integer) where T
     out = similar(A, promote_op(add_sum, T, T))
@@ -92,11 +114,14 @@ function cumsum(A::AbstractArray{T}; dims::Integer) where T
 end
 
 """
-    cumsum(x::AbstractVector)
+    cumsum(itr)
 
-Cumulative sum a vector. See also [`cumsum!`](@ref)
+Cumulative sum an iterator. See also [`cumsum!`](@ref)
 to use a preallocated output array, both for performance and to control the precision of the
 output (e.g. to avoid overflow).
+
+!!! compat "Julia 1.5"
+    `cumsum` on a non-array iterator requires at least Julia 1.5.
 
 # Examples
 ```jldoctest
@@ -111,9 +136,19 @@ julia> cumsum([fill(1, 2) for i in 1:3])
  [1, 1]
  [2, 2]
  [3, 3]
+
+julia> cumsum((1, 1, 1))
+(1, 2, 3)
+
+julia> cumsum(x^2 for x in 1:3)
+3-element Array{Int64,1}:
+  1
+  5
+ 14
 ```
 """
 cumsum(x::AbstractVector) = cumsum(x, dims=1)
+cumsum(itr) = accumulate(add_sum, itr)
 
 
 """
@@ -163,11 +198,14 @@ function cumprod(A::AbstractArray; dims::Integer)
 end
 
 """
-    cumprod(x::AbstractVector)
+    cumprod(itr)
 
-Cumulative product of a vector. See also
+Cumulative product of an iterator. See also
 [`cumprod!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow).
+
+!!! compat "Julia 1.5"
+    `cumprod` on a non-array iterator requires at least Julia 1.5.
 
 # Examples
 ```jldoctest
@@ -182,9 +220,19 @@ julia> cumprod([fill(1//3, 2, 2) for i in 1:3])
  [1//3 1//3; 1//3 1//3]
  [2//9 2//9; 2//9 2//9]
  [4//27 4//27; 4//27 4//27]
+
+julia> cumprod((1, 2, 1))
+(1, 2, 2)
+
+julia> cumprod(x^2 for x in 1:3)
+3-element Array{Int64,1}:
+  1
+  4
+ 36
 ```
 """
 cumprod(x::AbstractVector) = cumprod(x, dims=1)
+cumprod(itr) = accumulate(mul_prod, itr)
 
 
 """
@@ -195,6 +243,9 @@ for vectors). An initial value `init` may optionally be provided by a keyword ar
 also [`accumulate!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow). For common operations
 there are specialized variants of `accumulate`, see: [`cumsum`](@ref), [`cumprod`](@ref)
+
+!!! compat "Julia 1.5"
+    `accumulate` on a non-array iterator requires at least Julia 1.5.
 
 # Examples
 ```jldoctest
@@ -236,6 +287,10 @@ julia> accumulate(+, fill(1, 3, 3), dims=2)
 ```
 """
 function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
+    if dims === nothing && !(A isa AbstractVector)
+        # This branch takes care of the cases not handled by `_accumulate!`.
+        return collect(Iterators.accumulate(op, A; kw...))
+    end
     nt = kw.data
     if nt isa NamedTuple{()}
         out = similar(A, promote_op(op, eltype(A), eltype(A)))
@@ -245,6 +300,15 @@ function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
         throw(ArgumentError("acccumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
     end
     accumulate!(op, out, A; dims=dims, kw...)
+end
+
+function accumulate(op, xs::Tuple; init = _InitialValue())
+    rf = BottomRF(op)
+    ys, = afoldl(((), init), xs...) do (ys, acc), x
+        acc = rf(acc, x)
+        (ys..., acc), acc
+    end
+    return ys
 end
 
 """

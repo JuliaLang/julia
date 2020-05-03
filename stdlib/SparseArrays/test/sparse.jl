@@ -71,6 +71,8 @@ end
     @test AbstractMatrix{eltype(a)}(a) == a
     @test SparseMatrixCSC{eltype(a)}(a) == a
     @test SparseMatrixCSC{eltype(a), Int}(a) == a
+    @test SparseMatrixCSC{eltype(a)}(Array(a)) == a
+    @test Array(SparseMatrixCSC{eltype(a), Int8}(a)) == Array(a)
 end
 
 @testset "sparse matrix construction" begin
@@ -517,6 +519,9 @@ dA = Array(sA)
         @test lmul!(Diagonal(bi), copy(dA)) ≈ ldiv!(Diagonal(b), copy(sA))
         @test lmul!(Diagonal(bi), copy(dA)) ≈ ldiv!(transpose(Diagonal(b)), copy(sA))
         @test lmul!(Diagonal(conj(bi)), copy(dA)) ≈ ldiv!(adjoint(Diagonal(b)), copy(sA))
+        Aob = Diagonal(b) \ sA
+        @test Aob == ldiv!(Diagonal(b), copy(sA))
+        @test issparse(Aob)
         @test_throws DimensionMismatch ldiv!(Diagonal(fill(1., length(b)+1)), copy(sA))
         @test_throws LinearAlgebra.SingularException ldiv!(Diagonal(zeros(length(b))), copy(sA))
 
@@ -525,6 +530,9 @@ dA = Array(sA)
         @test rmul!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), Diagonal(b))
         @test rmul!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), transpose(Diagonal(b)))
         @test rmul!(copy(dAt), Diagonal(conj(bi))) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
+        Atob = sAt / Diagonal(b)
+        @test Atob == rdiv!(copy(dAt), Diagonal(b))
+        @test issparse(Atob)
         @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(fill(1., length(b)+1)))
         @test_throws LinearAlgebra.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
     end
@@ -587,6 +595,30 @@ end
     B = sparse(rand(Float32, 3, 3))
     copyto!(A, B)
     @test A == B
+    # Test copyto!(dense, sparse)
+    B = sprand(5, 5, 1.0)
+    A = rand(5,5)
+    A´ = similar(A)
+    @test copyto!(A, B) == copyto!(A´, Matrix(B))
+    # Test copyto!(dense, Rdest, sparse, Rsrc)
+    A = rand(5,5)
+    A´ = similar(A)
+    Rsrc = CartesianIndices((3:4, 2:3))
+    Rdest = CartesianIndices((2:3, 1:2))
+    copyto!(A, Rdest, B, Rsrc)
+    copyto!(A´, Rdest, Matrix(B), Rsrc)
+    @test A[Rdest] == A´[Rdest] == Matrix(B)[Rsrc]
+    # Test unaliasing of B´
+    B´ = copy(B)
+    copyto!(B´, Rdest, B´, Rsrc)
+    @test Matrix(B´)[Rdest] == Matrix(B)[Rsrc]
+    # Test that only elements at overlapping linear indices are overwritten
+    A = sprand(3, 3, 1.0); B = ones(4, 4)
+    copyto!(B, A)
+    @test B[4, :] != B[:, 4] == ones(4)
+    # Allow no-op copyto! with empty source even for incompatible eltypes
+    A = sparse(fill("", 0, 0))
+    @test copyto!(B, A) == B
 end
 
 @testset "conj" begin
@@ -1679,15 +1711,11 @@ end
         for Awithzeros in (Aposzeros, Anegzeros, Abothsigns)
             # Basic functionality / dropzeros!
             @test dropzeros!(copy(Awithzeros)) == A
-            @test dropzeros!(copy(Awithzeros), trim = false) == A
             # Basic functionality / dropzeros
             @test dropzeros(Awithzeros) == A
-            @test dropzeros(Awithzeros, trim = false) == A
             # Check trimming works as expected
             @test length(nonzeros(dropzeros!(copy(Awithzeros)))) == length(nonzeros(A))
             @test length(rowvals(dropzeros!(copy(Awithzeros)))) == length(rowvals(A))
-            @test length(nonzeros(dropzeros!(copy(Awithzeros), trim = false))) == length(nonzeros(Awithzeros))
-            @test length(rowvals(dropzeros!(copy(Awithzeros), trim = false))) == length(rowvals(Awithzeros))
         end
     end
     # original lone dropzeros test
@@ -2440,6 +2468,22 @@ end
         @test findnext(!iszero, z,i) == findnext(!iszero, z_sp,i)
         @test findprev(!iszero, z,i) == findprev(!iszero, z_sp,i)
     end
+
+    # issue 32568
+    for T = (UInt, BigInt)
+        @test findnext(!iszero, x_sp, T(4)) isa keytype(x_sp)
+        @test findnext(!iszero, x_sp, T(5)) isa keytype(x_sp)
+        @test findprev(!iszero, x_sp, T(5)) isa keytype(x_sp)
+        @test findprev(!iszero, x_sp, T(6)) isa keytype(x_sp)
+        @test findnext(iseven, x_sp, T(4)) isa keytype(x_sp)
+        @test findnext(iseven, x_sp, T(5)) isa keytype(x_sp)
+        @test findprev(iseven, x_sp, T(4)) isa keytype(x_sp)
+        @test findprev(iseven, x_sp, T(5)) isa keytype(x_sp)
+        @test findnext(!iszero, z_sp, T(4)) isa keytype(z_sp)
+        @test findnext(!iszero, z_sp, T(5)) isa keytype(z_sp)
+        @test findprev(!iszero, z_sp, T(4)) isa keytype(z_sp)
+        @test findprev(!iszero, z_sp, T(5)) isa keytype(z_sp)
+    end
 end
 
 # #20711
@@ -2558,11 +2602,16 @@ begin
     B = ones(n)
     A = sprand(rng, n, n, 0.01)
     MA = Matrix(A)
+    lA = sprand(rng, n, n+10, 0.01)
     @testset "triangular multiply with $tr($wr)" for tr in (identity, adjoint, transpose),
     wr in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
         AW = tr(wr(A))
         MAW = tr(wr(MA))
         @test AW * B ≈ MAW * B
+        # and for SparseMatrixCSCView - a view of all rows and unit range of cols
+        vAW = tr(wr(view(A, :, 1:n)))
+        vMAW = tr(wr(view(MA, :, 1:n)))
+        @test vAW * B ≈ vMAW * B
     end
     A = A - Diagonal(diag(A)) + 2I # avoid rounding errors by division
     MA = Matrix(A)
@@ -2832,6 +2881,81 @@ end
     rA = reshape(A, 10, 20)
     crA = copy(rA)
     @test reshape(crA, 20, 10) == A
+end
+
+@testset "avoid aliasing of fields during constructing $T (issue #34630)" for T in
+    (SparseMatrixCSC, SparseMatrixCSC{Float64}, SparseMatrixCSC{Float64,Int16})
+
+    A = sparse([1 1; 1 0])
+    B = T(A)
+    @test A == B
+    A[2,2] = 1
+    @test A != B
+    @test getcolptr(A) !== getcolptr(B)
+    @test rowvals(A) !== rowvals(B)
+    @test nonzeros(A) !== nonzeros(B)
+end
+
+@testset "SparseMatrixCSCView" begin
+    A  = sprand(10, 10, 0.2)
+    vA = view(A, :, 1:5) # a CSCView contains all rows and a UnitRange of the columns
+    @test SparseArrays.getnzval(vA)  == SparseArrays.getnzval(A)
+    @test SparseArrays.getrowval(vA) == SparseArrays.getrowval(A)
+    @test SparseArrays.getcolptr(vA) == SparseArrays.getcolptr(A[:, 1:5])
+end
+
+@testset "mapreducecols" begin
+    n = 20
+    m = 10
+    A = sprand(n, m, 0.2)
+    B = mapreduce(identity, +, A, dims=2)
+    for row in 1:n
+        @test B[row] ≈ sum(A[row, :])
+    end
+    @test B ≈ mapreduce(identity, +, Matrix(A), dims=2)
+    # case when f(0) =\= 0
+    B = mapreduce(x->x+1, +, A, dims=2)
+    for row in 1:n
+        @test B[row] ≈ sum(A[row, :] .+ 1)
+    end
+    @test B ≈ mapreduce(x->x+1, +, Matrix(A), dims=2)
+    # case when there are no zeros in the sparse matrix
+    A = sparse(rand(n, m))
+    B = mapreduce(identity, +, A, dims=2)
+    for row in 1:n
+        @test B[row] ≈ sum(A[row, :])
+    end
+    @test B ≈ mapreduce(identity, +, Matrix(A), dims=2)
+end
+
+@testset "Symmetric and Hermitian #35325" begin
+    A = sprandn(ComplexF64, 10, 10, 0.1)
+    B = sprandn(ComplexF64, 10, 10, 0.1)
+
+    @test Symmetric(real(A)) + Hermitian(B) isa Hermitian{ComplexF64, <:SparseMatrixCSC}
+    @test Hermitian(A) + Symmetric(real(B)) isa Hermitian{ComplexF64, <:SparseMatrixCSC}
+    @test Hermitian(A) + Symmetric(B) isa SparseMatrixCSC
+    @testset "$Wrapper $op" for op ∈ (+, -), Wrapper ∈ (Hermitian, Symmetric)
+        AWU = Wrapper(A, :U)
+        AWL = Wrapper(A, :L)
+        BWU = Wrapper(B, :U)
+        BWL = Wrapper(B, :L)
+
+        @test op(AWU, B) isa SparseMatrixCSC
+        @test op(A, BWL) isa SparseMatrixCSC
+
+        @test op(AWU, B) ≈ op(collect(AWU), B)
+        @test op(AWL, B) ≈ op(collect(AWL), B)
+        @test op(A, BWU) ≈ op(A, collect(BWU))
+        @test op(A, BWL) ≈ op(A, collect(BWL))
+
+        @test op(AWU, BWL) isa Wrapper{ComplexF64, <:SparseMatrixCSC}
+
+        @test op(AWU, BWU) ≈ op(collect(AWU), collect(BWU))
+        @test op(AWU, BWL) ≈ op(collect(AWU), collect(BWL))
+        @test op(AWL, BWU) ≈ op(collect(AWL), collect(BWU))
+        @test op(AWL, BWL) ≈ op(collect(AWL), collect(BWL))
+    end
 end
 
 end # module

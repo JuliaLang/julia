@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Sockets, Random, Test
+using Base: Experimental
 
 # set up a watchdog alarm for 10 minutes
 # so that we can attempt to get a "friendly" backtrace if something gets stuck
@@ -135,7 +136,7 @@ defaultport = rand(2000:4000)
                 write(sock, "Hello World\n")
 
                 # test "locked" println to a socket
-                @sync begin
+                @Experimental.sync begin
                     for i in 1:100
                         @async println(sock, "a", 1)
                     end
@@ -181,6 +182,18 @@ defaultport = rand(2000:4000)
         @test read(conn, String) == ""
     end
 end
+
+@testset "getsockname errors" begin
+    sock = TCPSocket()
+    serv = Sockets.TCPServer()
+    @test_throws MethodError getpeername(serv)
+    @test_throws Base._UVError("cannot obtain socket name", Base.UV_EBADF) getpeername(sock)
+    @test_throws Base._UVError("cannot obtain socket name", Base.UV_EBADF) getsockname(serv)
+    @test_throws Base._UVError("cannot obtain socket name", Base.UV_EBADF) getsockname(sock)
+    close(sock)
+    close(serv)
+end
+
 
 @testset "getnameinfo on some unroutable IP addresses (RFC 5737)" begin
     @test getnameinfo(ip"192.0.2.1") == "192.0.2.1"
@@ -267,7 +280,7 @@ end
         bind(a, ip"127.0.0.1", randport)
         bind(b, ip"127.0.0.1", randport + 1)
 
-        @sync begin
+        @Experimental.sync begin
             let i = 0
                 for _ = 1:30
                     @async let msg = String(recv(a))
@@ -344,26 +357,35 @@ end
         @test addr == gsn_addr
         @test port == gsn_port
 
-        @test_throws MethodError getpeername(listen_sock)
-
         # connect to it
         client_sock = connect(addr, port)
-        server_sock = accept(listen_sock)
+        test_done = false
+        @Experimental.sync begin
+            @async begin
+                Base.wait_readnb(client_sock, 1)
+                test_done || error("Client disconnected prematurely.")
+            end
+            @async begin
+                server_sock = accept(listen_sock)
 
-        self_client_addr, self_client_port = getsockname(client_sock)
-        peer_client_addr, peer_client_port = getpeername(client_sock)
-        self_srvr_addr, self_srvr_port = getsockname(server_sock)
-        peer_srvr_addr, peer_srvr_port = getpeername(server_sock)
+                self_client_addr, self_client_port = getsockname(client_sock)
+                peer_client_addr, peer_client_port = getpeername(client_sock)
+                self_srvr_addr, self_srvr_port = getsockname(server_sock)
+                peer_srvr_addr, peer_srvr_port = getpeername(server_sock)
 
-        @test self_client_addr == peer_client_addr == self_srvr_addr == peer_srvr_addr
+                @test self_client_addr == peer_client_addr == self_srvr_addr == peer_srvr_addr
 
-        @test peer_client_port == self_srvr_port
-        @test peer_srvr_port == self_client_port
-        @test self_srvr_port != self_client_port
+                @test peer_client_port == self_srvr_port
+                @test peer_srvr_port == self_client_port
+                @test self_srvr_port != self_client_port
 
-        close(listen_sock)
-        close(client_sock)
-        close(server_sock)
+                test_done = true
+
+                close(listen_sock)
+                close(client_sock)
+                close(server_sock)
+            end
+        end
     end
 end
 

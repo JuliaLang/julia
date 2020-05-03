@@ -28,6 +28,8 @@ The `userdata` field is used to store information for each worker by external ma
 
 Some fields are used by `SSHManager` and similar managers:
   * `tunnel` -- `true` (use tunneling), `false` (do not use tunneling), or [`nothing`](@ref) (use default for the manager)
+  * `multiplex` -- `true` (use SSH multiplexing for tunneling) or `false`
+  * `forward` -- the forwarding option used for `-L` option of ssh
   * `bind_addr` -- the address on the remote host to bind to
   * `sshflags` -- flags to use in establishing the SSH connection
   * `max_parallel` -- the maximum number of workers to connect to in parallel on the host
@@ -58,6 +60,8 @@ mutable struct WorkerConfig
 
     # SSHManager / SSH tunnel connections to workers
     tunnel::Union{Bool, Nothing}
+    multiplex::Union{Bool, Nothing}
+    forward::Union{AbstractString, Nothing}
     bind_addr::Union{AbstractString, Nothing}
     sshflags::Union{Cmd, Nothing}
     max_parallel::Union{Int, Nothing}
@@ -548,7 +552,7 @@ function launch_n_additional_processes(manager, frompid, fromconfig, cnt, launch
             (bind_addr, port) = address
 
             wconfig = WorkerConfig()
-            for x in [:host, :tunnel, :sshflags, :exeflags, :exename, :enable_threaded_blas]
+            for x in [:host, :tunnel, :multiplex, :sshflags, :exeflags, :exename, :enable_threaded_blas]
                 Base.setproperty!(wconfig, x, Base.getproperty(fromconfig, x))
             end
             wconfig.bind_addr = bind_addr
@@ -1294,6 +1298,7 @@ end
 
 write_cookie(io::IO) = print(io.in, string(cluster_cookie(), "\n"))
 
+# Starts workers specified by (-n|--procs) and --machine-file command line options
 function process_opts(opts)
     # startup worker.
     # opts.startupfile, opts.load, etc should should not be processed for workers.
@@ -1306,14 +1311,17 @@ function process_opts(opts)
         end
     end
 
+    # Propagate --threads to workers
+    exeflags = opts.nthreads > 0 ? `--threads=$(opts.nthreads)` : ``
+
     # add processors
     if opts.nprocs > 0
-        addprocs(opts.nprocs)
+        addprocs(opts.nprocs; exeflags=exeflags)
     end
 
     # load processes from machine file
     if opts.machine_file != C_NULL
-        addprocs(load_machine_file(unsafe_string(opts.machine_file)))
+        addprocs(load_machine_file(unsafe_string(opts.machine_file)); exeflags=exeflags)
     end
     return nothing
 end

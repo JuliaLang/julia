@@ -318,7 +318,7 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
     else {
         align = elsz = sizeof(void*);
     }
-    if (((uintptr_t)data) & (align - 1))
+    if (((uintptr_t)data) & ((align > JL_HEAP_ALIGNMENT ? JL_HEAP_ALIGNMENT : align) - 1))
         jl_exceptionf(jl_argumenterror_type,
                       "unsafe_wrap: pointer %p is not properly aligned to %u bytes", data, align);
 
@@ -385,7 +385,7 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
     else {
         align = elsz = sizeof(void*);
     }
-    if (((uintptr_t)data) & (align - 1))
+    if (((uintptr_t)data) & ((align > JL_HEAP_ALIGNMENT ? JL_HEAP_ALIGNMENT : align) - 1))
         jl_exceptionf(jl_argumenterror_type,
                       "unsafe_wrap: pointer %p is not properly aligned to %u bytes", data, align);
 

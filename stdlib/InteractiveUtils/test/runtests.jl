@@ -23,6 +23,12 @@ struct B20086{T,N} <: A20086{T,N} end
 @test subtypes(A20086{T,3} where T) == [B20086{T,3} where T]
 @test subtypes(A20086{Int,3}) == [B20086{Int,3}]
 
+# supertypes
+@test supertypes(B20086) == (B20086, A20086, Any)
+@test supertypes(B20086{Int}) == (B20086{Int}, A20086{Int}, Any)
+@test supertypes(B20086{Int,2}) == (B20086{Int,2}, A20086{Int,2}, Any)
+@test supertypes(Any) == (Any,)
+
 # code_warntype
 module WarnType
 using Test, Random, InteractiveUtils
@@ -83,6 +89,10 @@ Base.getproperty(t::T1234321, ::Symbol) = "foo"
 @test (@code_typed T1234321(1).f).second == String
 Base.setproperty!(t::T1234321, ::Symbol, ::Symbol) = "foo"
 @test (@code_typed T1234321(1).f = :foo).second == String
+
+# Make sure `do` block works with `@code_...` macros
+@test (@code_typed map(1:1) do x; x; end).second == Vector{Int}
+@test (@code_typed open(`cat`; read=true) do _; 1; end).second == Int
 
 module ImportIntrinsics15819
 # Make sure changing the lookup path of an intrinsic doesn't break
@@ -251,19 +261,6 @@ end
 @which get_A18434()(1, y=2)
 @test counter18434 == 2
 
-@eval function f_invalid(x)
-    Base.@_noinline_meta
-    $(Expr(:loopinfo, 1.0f0)) # some expression that throws an error in codegen
-    x
-end
-
-let _true = Ref(true), g, h
-    @noinline g() = _true[] ? 0 : h()
-    @noinline h() = (g(); f_invalid(_true[]))
-    @test_throws ErrorException @code_native h() # due to a failure to compile f()
-    @test g() == 0
-end
-
 let _true = Ref(true), f, g, h
     @noinline f() = ccall((:time, "error_library_doesnt_exist\0"), Cvoid, ()) # should throw error during runtime
     @noinline g() = _true[] ? 0 : h()
@@ -272,12 +269,68 @@ let _true = Ref(true), f, g, h
     @test_throws ErrorException h()
 end
 
+# manually generate a broken function, which will break codegen
+# and make sure Julia doesn't crash
+@eval @noinline f_broken_code() = 0
+let m = which(f_broken_code, ())
+   let src = Base.uncompressed_ast(m)
+       src.code = Any[
+           Expr(:meta, :noinline)
+           Expr(:return, Expr(:invalid))
+       ]
+       m.source = src
+   end
+end
+_true = true
+# and show that we can still work around it
+@noinline g_broken_code() = _true ? 0 : h_broken_code()
+@noinline h_broken_code() = (g_broken_code(); f_broken_code())
+let err = tempname(),
+    old_stderr = stderr,
+    new_stderr = open(err, "w")
+    try
+        redirect_stderr(new_stderr)
+        println(new_stderr, "start")
+        flush(new_stderr)
+        @eval @test occursin("h_broken_code", sprint(code_native, h_broken_code, ()))
+        Libc.flush_cstdio()
+        println(new_stderr, "end")
+        flush(new_stderr)
+        @eval @test g_broken_code() == 0
+    finally
+        redirect_stderr(old_stderr)
+        close(new_stderr)
+        let errstr = read(err, String)
+            @test startswith(errstr, """start
+                Internal error: encountered unexpected error during compilation of f_broken_code:
+                ErrorException(\"unsupported or misplaced expression \"invalid\" in function f_broken_code\")
+                """) || errstr
+            @test endswith(errstr, "\nend\n") || errstr
+        end
+        rm(err)
+    end
+end
+
 # Issue #33163
 A33163(x; y) = x + y
 B33163(x) = x
 @test (@code_typed A33163(1, y=2))[1].inferred
 @test !(@code_typed optimize=false A33163(1, y=2))[1].inferred
 @test !(@code_typed optimize=false B33163(1))[1].inferred
+
+@test_throws MethodError (@code_lowered wrongkeyword=true 3 + 4)
+
+# Issue #14637
+@test (@which Base.Base.Base.nothing) == Core
+@test_throws ErrorException (@functionloc Base.nothing)
+@test (@code_typed (3//4).num)[2] == Int
+
+# Issue #28615
+@test_throws ErrorException (@which [1, 2] .+ [3, 4])
+@test (@code_typed optimize=true max.([1,7], UInt.([4])))[2] == Vector{UInt}
+@test (@code_typed Ref.([1,2])[1].x)[2] == Int
+@test (@code_typed max.(Ref(true).x))[2] == Bool
+@test !isempty(@code_typed optimize=false max.(Ref.([5, 6])...))
 
 module ReflectionTest
 using Test, Random, InteractiveUtils
@@ -329,27 +382,26 @@ ix86 = r"i[356]86"
 
 if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
     function linear_foo()
-        x = 4
-        y = 5
+        return 5
     end
 
     rgx = r"%"
     buf = IOBuffer()
-    output=""
+    output = ""
     #test that the string output is at&t syntax by checking for occurrences of '%'s
-    code_native(buf,linear_foo,(), syntax = :att)
-    output=String(take!(buf))
+    code_native(buf, linear_foo, (), syntax = :att, debuginfo = :none)
+    output = String(take!(buf))
 
     @test occursin(rgx, output)
 
     #test that the code output is intel syntax by checking it has no occurrences of '%'
-    code_native(buf,linear_foo,(), syntax = :intel)
-    output=String(take!(buf))
+    code_native(buf, linear_foo, (), syntax = :intel, debuginfo = :none)
+    output = String(take!(buf))
 
     @test !occursin(rgx, output)
 
-    code_native(buf,linear_foo,())
-    output=String(take!(buf))
+    code_native(buf, linear_foo, ())
+    output = String(take!(buf))
 
     @test occursin(rgx, output)
 end
@@ -440,3 +492,9 @@ end
 # buildbot path updating
 file, ln = functionloc(versioninfo, Tuple{})
 @test isfile(file)
+
+@testset "Issue #34434" begin
+    io = IOBuffer()
+    code_native(io, eltype, Tuple{Int})
+    @test occursin("eltype", String(take!(io)))
+end

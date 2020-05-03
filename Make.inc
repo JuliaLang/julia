@@ -686,7 +686,11 @@ override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
 else
 ifneq ($(XC_HOST),)
 XC_HOST := $(ARCH)$(shell echo $(XC_HOST) | sed "s/[^-]*\(.*\)$$/\1/")
+ifneq ($(findstring arm, $(ARCH))$(findstring aarch64, $(ARCH)),)
+MCPU := $(subst _,-,$(ARCH)) # Arm prefers MCPU over MARCH
+else
 MARCH := $(subst _,-,$(ARCH))
+endif
 else # insert ARCH into HOST
 XC_HOST := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
 endif
@@ -821,6 +825,17 @@ CC += -march=$(MARCH)
 CXX += -march=$(MARCH)
 FC += -march=$(MARCH)
 JULIA_CPU_TARGET ?= $(MARCH)
+endif
+
+# Set MCPU-specific flags
+ifneq ($(MCPU),)
+CC += -mcpu=$(MCPU)
+CXX += -mcpu=$(MCPU)
+FC += -mcpu=$(MCPU)
+JULIA_CPU_TARGET ?= $(MCPU)
+endif
+
+ifneq ($(MARCH)$(MCPU),)
 ifeq ($(OS),Darwin)
 # on Darwin, the standalone `as` program doesn't know
 # how to handle AVX instructions, but it does know how
@@ -1010,13 +1025,29 @@ else
   UTF8PROC_INC := $(build_includedir)
 endif
 
+# We need python for things like BB triplet recognition.  We don't really care
+# about version, generally, so just find something that works:
+PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)"
+PYTHON_SYSTEM := $(shell $(PYTHON) -c 'from __future__ import print_function; import platform; print(platform.system())')
+
+# If we're running on Cygwin, but using a native-windows Python, we need to use cygpath -w
+ifneq ($(and $(filter $(PYTHON_SYSTEM),Windows),$(findstring CYGWIN,$(BUILD_OS))),)
+define invoke_python
+$(PYTHON) "$$(cygpath -w "$(1)")"
+endef
+else
+define invoke_python
+$(PYTHON) "$(1)"
+endef
+endif
+
 # BinaryBuilder options.  We default to "on" for all the projects listed in BB_PROJECTS,
 # but only if contrib/normalize_triplet.py works for our requested triplet.
-ifeq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) >/dev/null 2>/dev/null; echo $$?),0)
+ifeq ($(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) >/dev/null 2>/dev/null; echo $$?),0)
 USE_BINARYBUILDER ?= 1
 else
-ifneq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py x86_64-linux-gnu),x86_64-linux-gnu)
-$(warning python normalize_triplet.py appears to be non-functional, so BinaryBuilder disabled)
+ifneq ($(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) x86_64-linux-gnu),x86_64-linux-gnu)
+$(warning normalize_triplet.py appears to be non-functional (used python interpreter "$(PYTHON)"), so BinaryBuilder disabled)
 endif
 USE_BINARYBUILDER ?= 0
 endif
@@ -1284,6 +1315,25 @@ ifeq ($(USE_SYSTEM_LIBM),1)
 # If we're using system libm, disable BB OpenLibm
 USE_BINARYBUILDER_OPENLIBM := 0
 endif
+
+
+# Note: we're passing *FLAGS here computed based on your system compiler to
+# clang. If that causes you problems, you might want to build and/or run
+# specific clang-sa-* files with clang explicitly selected:
+#   make CC=~+/../usr/tools/clang CXX=~+/../usr/tools/clang USECLANG=1 analyzegc
+#   make USECLANG=1 clang-sa-*
+CLANGSA_FLAGS :=
+CLANGSA_CXXFLAGS :=
+ifeq ($(OS), Darwin) # on new XCode, the files are hidden
+CLANGSA_FLAGS += -isysroot $(shell xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+CLANGSA_CXXFLAGS += -isystem $(shell xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1
+endif
+ifeq ($(USEGCC),1)
+# try to help clang find the c++ files for CC by guessing the value for --prefix
+# by dropping lib/gcc/<platform>/<version> from the install directory it reports
+CLANGSA_CXXFLAGS += --gcc-toolchain="$(abspath $(shell LANG=C $(CC) -print-search-dirs | grep '^install: ' | sed -e "s/^install: //")/../../../..)"
+endif
+
 
 # Make tricks
 

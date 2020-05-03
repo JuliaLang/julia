@@ -35,6 +35,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     m->primary_world = 0;
     m->counter = 1;
     m->nospecialize = 0;
+    m->optlevel = -1;
     JL_MUTEX_INIT(&m->lock);
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
@@ -70,6 +71,21 @@ JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports)
 JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on)
 {
     self->nospecialize = (on ? -1 : 0);
+}
+
+JL_DLLEXPORT void jl_set_module_optlevel(jl_module_t *self, int lvl)
+{
+    self->optlevel = lvl;
+}
+
+JL_DLLEXPORT int jl_get_module_optlevel(jl_module_t *m)
+{
+    int lvl = m->optlevel;
+    while (lvl == -1 && m->parent != m && m != jl_base_module) {
+        m = m->parent;
+        lvl = m->optlevel;
+    }
+    return lvl;
 }
 
 JL_DLLEXPORT void jl_set_istopmod(jl_module_t *self, uint8_t isprimary)
@@ -766,6 +782,25 @@ int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT
             return 0;
         child = child->parent;
     }
+}
+
+// Remove implicitly imported identifiers, effectively resetting all the binding
+// resolution decisions for a module. This is dangerous, and should only be
+// done for modules that are essentially empty anyway. The only use case for this
+// is to leave `Main` as empty as possible in the default system image.
+JL_DLLEXPORT void jl_clear_implicit_imports(jl_module_t *m)
+{
+    size_t i;
+    JL_LOCK(&m->lock);
+    void **table = m->bindings.table;
+    for (i = 1; i < m->bindings.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            if (b->owner != m && !b->imported)
+                table[i] = HT_NOTFOUND;
+        }
+    }
+    JL_UNLOCK(&m->lock);
 }
 
 #ifdef __cplusplus

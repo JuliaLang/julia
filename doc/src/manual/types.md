@@ -70,7 +70,7 @@ an exception is thrown, otherwise, the left-hand value is returned:
 
 ```jldoctest
 julia> (1+2)::AbstractFloat
-ERROR: TypeError: in typeassert, expected AbstractFloat, got Int64
+ERROR: TypeError: in typeassert, expected AbstractFloat, got a value of type Int64
 
 julia> (1+2)::Int
 3
@@ -236,6 +236,14 @@ of function arguments that are containers of abstract types; see [Performance Ti
 
 ## Primitive Types
 
+!!! warning
+  It is almost always preferable to wrap an existing primitive type in a new
+  composite type than to define your own primitive type.
+
+  This functionality exists to allow Julia to bootstrap the standard primitive
+  types that LLVM supports. Once they are defined, there is very little reason
+  to define more.
+
 A primitive type is a concrete type whose data consists of plain old bits. Classic examples of primitive
 types are integers and floating-point values. Unlike most languages, Julia lets you declare your
 own primitive types, rather than providing only a fixed set of built-in ones. In fact, the standard
@@ -273,8 +281,9 @@ a name. A primitive type can optionally be declared to be a subtype of some supe
 is omitted, then the type defaults to having `Any` as its immediate supertype. The declaration
 of [`Bool`](@ref) above therefore means that a boolean value takes eight bits to store, and has
 [`Integer`](@ref) as its immediate supertype. Currently, only sizes that are multiples of
-8 bits are supported. Therefore, boolean values, although they really need just a single bit,
-cannot be declared to be any smaller than eight bits.
+8 bits are supported and you are likely to experience LLVM bugs with sizes other than those used above.
+Therefore, boolean values, although they really need just a single bit, cannot be declared to be any
+smaller than eight bits.
 
 The types [`Bool`](@ref), [`Int8`](@ref) and [`UInt8`](@ref) all have identical representations:
 they are eight-bit chunks of memory. Since Julia's type system is nominative, however, they
@@ -493,7 +502,7 @@ julia> "Hello!" :: IntOrString
 "Hello!"
 
 julia> 1.0 :: IntOrString
-ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got Float64
+ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got a value of type Float64
 ```
 
 The compilers for many languages have an internal union construct for reasoning about types; Julia
@@ -812,7 +821,7 @@ julia> Pointy{AbstractString}
 ERROR: TypeError: in Pointy, in T, expected T<:Real, got Type{AbstractString}
 
 julia> Pointy{1}
-ERROR: TypeError: in Pointy, in T, expected T<:Real, got Int64
+ERROR: TypeError: in Pointy, in T, expected T<:Real, got a value of type Int64
 ```
 
 Type parameters for parametric composite types can be restricted in the same manner:
@@ -923,12 +932,26 @@ julia> typeof((a=1,b="hello"))
 NamedTuple{(:a, :b),Tuple{Int64,String}}
 ```
 
+The [`@NamedTuple`](@ref) macro provides a more convenient `struct`-like syntax for declaring
+`NamedTuple` types via `key::Type` declarations, where an omitted `::Type` corresponds to `::Any`.
+
+```jldoctest
+julia> @NamedTuple{a::Int, b::String}
+NamedTuple{(:a, :b),Tuple{Int64,String}}
+
+julia> @NamedTuple begin
+           a::Int
+           b::String
+       end
+NamedTuple{(:a, :b),Tuple{Int64,String}}
+```
+
 A `NamedTuple` type can be used as a constructor, accepting a single tuple argument.
 The constructed `NamedTuple` type can be either a concrete type, with both parameters specified,
 or a type that specifies only field names:
 
 ```jldoctest
-julia> NamedTuple{(:a, :b),Tuple{Float32, String}}((1,""))
+julia> @NamedTuple{a::Float32,b::String}((1,""))
 (a = 1.0f0, b = "")
 
 julia> NamedTuple{(:a, :b)}((1,""))
@@ -1193,8 +1216,7 @@ is raised:
 julia> supertype(Union{Float64,Int64})
 ERROR: MethodError: no method matching supertype(::Type{Union{Float64, Int64}})
 Closest candidates are:
-  supertype(!Matched::DataType) at operators.jl:42
-  supertype(!Matched::UnionAll) at operators.jl:47
+[...]
 ```
 
 ## [Custom pretty-printing](@id man-custom-pretty-printing)
@@ -1402,7 +1424,7 @@ julia> firstlast(Val(false))
 "Last"
 ```
 
-For consistency across Julia, the call site should always pass a `Val`*instance* rather than using
+For consistency across Julia, the call site should always pass a `Val` *instance* rather than using
 a *type*, i.e., use `foo(Val(:bar))` rather than `foo(Val{:bar})`.
 
 It's worth noting that it's extremely easy to mis-use parametric "value" types, including `Val`;

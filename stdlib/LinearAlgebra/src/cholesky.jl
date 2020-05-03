@@ -148,13 +148,6 @@ function _chol!(A::StridedMatrix{<:BlasFloat}, ::Type{LowerTriangular})
     C, info = LAPACK.potrf!('L', A)
     return LowerTriangular(C), info
 end
-function _chol!(A::StridedMatrix)
-    if !ishermitian(A) # return with info = -1 if not Hermitian
-        return UpperTriangular(A), convert(BlasInt, -1)
-    else
-        return _chol!(A, UpperTriangular)
-    end
-end
 
 ## Non BLAS/LAPACK element types (generic)
 function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
@@ -308,6 +301,9 @@ The triangular Cholesky factor can be obtained from the factorization `F` with: 
 The following functions are available for `Cholesky` objects: [`size`](@ref), [`\\`](@ref),
 [`inv`](@ref), [`det`](@ref), [`logdet`](@ref) and [`isposdef`](@ref).
 
+If you have a matrix `A` that is slightly non-Hermitian due to roundoff errors in its construction,
+wrap it in `Hermitian(A)` before passing it to `cholesky` in order to treat it as perfectly Hermitian.
+
 When `check = true`, an error is thrown if the decomposition fails.
 When `check = false`, responsibility for checking the decomposition's
 validity (via [`issuccess`](@ref)) lies with the user.
@@ -360,6 +356,9 @@ The following functions are available for `CholeskyPivoted` objects:
 [`size`](@ref), [`\\`](@ref), [`inv`](@ref), [`det`](@ref), and [`rank`](@ref).
 The argument `tol` determines the tolerance for determining the rank.
 For negative values, the tolerance is the machine precision.
+
+If you have a matrix `A` that is slightly non-Hermitian due to roundoff errors in its construction,
+wrap it in `Hermitian(A)` before passing it to `cholesky` in order to treat it as perfectly Hermitian.
 
 When `check = true`, an error is thrown if the decomposition fails.
 When `check = false`, responsibility for checking the decomposition's

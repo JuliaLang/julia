@@ -6,6 +6,9 @@ using Base.Order
 using Random
 using Test
 
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
 @testset "Order" begin
     @test Forward == ForwardOrdering()
     @test ReverseOrdering(Forward) == ReverseOrdering() == Reverse
@@ -138,6 +141,20 @@ end
         @test searchsortedlast(500:1.0:600, -1.0e20) == 0
         @test searchsortedlast(500:1.0:600, 1.0e20) == 101
     end
+
+    @testset "issue 32568" begin
+        for R in numTypes, T in numTypes
+            for arr in [R[1:5;], R(1):R(5), R(1):2:R(5)]
+                @test eltype(searchsorted(arr, T(2))) == keytype(arr)
+                @test eltype(searchsorted(arr, T(2), big(1), big(4), Forward)) == keytype(arr)
+                @test searchsortedfirst(arr, T(2)) isa keytype(arr)
+                @test searchsortedfirst(arr, T(2), big(1), big(4), Forward) isa keytype(arr)
+                @test searchsortedlast(arr, T(2)) isa keytype(arr)
+                @test searchsortedlast(arr, T(2), big(1), big(4), Forward) isa keytype(arr)
+            end
+        end
+    end
+
     @testset "issue #34157" begin
         @test searchsorted(1:2.0, -Inf) === 1:0
         @test searchsorted([1,2], -Inf) === 1:0
@@ -170,8 +187,18 @@ end
                 @test searchsortedlast(reverse(coll), -huge, rev=true) === lastindex(coll)
                 @test searchsorted(reverse(coll), huge, rev=true) === firstindex(coll):firstindex(coll) - 1
                 @test searchsorted(reverse(coll), -huge, rev=true) === lastindex(coll)+1:lastindex(coll)
-
             end
+        end
+    end
+    @testset "issue #35272" begin
+        for v0 = (3:-1:1, 3.0:-1.0:1.0), v = (v0, collect(v0))
+            @test searchsorted(v, 3, rev=true) == 1:1
+            @test searchsorted(v, 3.0, rev=true) == 1:1
+            @test searchsorted(v, 2.5, rev=true) == 2:1
+            @test searchsorted(v, 2, rev=true) == 2:2
+            @test searchsorted(v, 1.2, rev=true) == 3:2
+            @test searchsorted(v, 1, rev=true) == 3:3
+            @test searchsorted(v, 0.1, rev=true) == 4:3
         end
     end
 end
@@ -499,6 +526,20 @@ end
     @test issorted(c)
     @test isequal(c, [5,6,7,NaN])
     @test isequal(a, [8,6,7,NaN,5,3,0,9])
+end
+
+@testset "sort!(::AbstractVector{<:Integer}) with short int range" begin
+    a = view([9:-1:0;], :)::SubArray
+    sort!(a)
+    @test issorted(a)
+
+    a = view([9:-1:0;], :)::SubArray
+    Base.Sort.sort_int_range!(a, 10, 0, identity)  # test it supports non-Vector
+    @test issorted(a)
+
+    a = OffsetArray([9:-1:0;], -5)
+    Base.Sort.sort_int_range!(a, 10, 0, identity)
+    @test issorted(a)
 end
 
 end

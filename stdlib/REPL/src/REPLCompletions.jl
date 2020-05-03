@@ -266,7 +266,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false, shell_escap
         end
     end
 
-    matchList = Completion[PathCompletion(shell_escape ? replace(s, r"\s" => s"\\\0") : s) for s in matches]
+    matchList = PathCompletion[PathCompletion(shell_escape ? replace(s, r"\s" => s"\\\0") : s) for s in matches]
     startpos = pos - lastindex(prefix) + 1 - count(isequal(' '), prefix)
     # The pos - lastindex(prefix) + 1 is correct due to `lastindex(prefix)-lastindex(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
@@ -518,7 +518,7 @@ function bslash_completions(string, pos)::Tuple{Bool, Completions}
     return (false, (Completion[], 0:-1, false))
 end
 
-function dict_identifier_key(str,tag)
+function dict_identifier_key(str, tag, context_module = Main)
     if tag === :string
         str_close = str*"\""
     elseif tag === :cmd
@@ -529,7 +529,7 @@ function dict_identifier_key(str,tag)
 
     frange, end_of_identifier = find_start_brace(str_close, c_start='[', c_end=']')
     isempty(frange) && return (nothing, nothing, nothing)
-    obj = Main
+    obj = context_module
     for name in split(str[frange[1]:end_of_identifier], '.')
         Base.isidentifier(name) || return (nothing, nothing, nothing)
         sym = Symbol(name)
@@ -544,7 +544,7 @@ end
 
 # This needs to be a separate non-inlined function, see #19441
 @noinline function find_dict_matches(identifier, partial_key)
-    matches = []
+    matches = String[]
     for key in keys(identifier)
         rkey = repr(key)
         startswith(rkey,partial_key) && push!(matches,rkey)
@@ -581,7 +581,7 @@ function completions(string, pos, context_module=Main)::Completions
     inc_tag = Base.incomplete_tag(Meta.parse(partial, raise=false, depwarn=false))
 
     # if completing a key in a Dict
-    identifier, partial_key, loc = dict_identifier_key(partial,inc_tag)
+    identifier, partial_key, loc = dict_identifier_key(partial, inc_tag, context_module)
     if identifier !== nothing
         matches = find_dict_matches(identifier, partial_key)
         length(matches)==1 && (lastindex(string) <= pos || string[nextind(string,pos)] != ']') && (matches[1]*=']')

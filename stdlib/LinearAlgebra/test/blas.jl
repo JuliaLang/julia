@@ -78,6 +78,32 @@ Random.seed!(100)
                 @test BLAS.iamax(z) == argmax(map(x -> abs(real(x)) + abs(imag(x)), z))
             end
         end
+        @testset "rot!" begin
+            if elty <: Real
+                x = convert(Vector{elty}, randn(n))
+                y = convert(Vector{elty}, randn(n))
+                c = rand(elty)
+                s = rand(elty)
+                x2 = copy(x)
+                y2 = copy(y)
+                BLAS.rot!(n, x, 1, y, 1, c, s)
+                @test x ≈ c*x2 + s*y2
+                @test y ≈ -s*x2 + c*y2
+            else
+                x = convert(Vector{elty}, complex.(randn(n),rand(n)))
+                y = convert(Vector{elty}, complex.(randn(n),rand(n)))
+                cty = (elty == ComplexF32) ? Float32 : Float64
+                c = rand(cty)
+                for sty in [cty, elty]
+                    s = rand(sty)
+                    x2 = copy(x)
+                    y2 = copy(y)
+                    BLAS.rot!(n, x, 1, y, 1, c, s)
+                    @test x ≈ c*x2 + s*y2
+                    @test y ≈ -conj(s)*x2 + c*y2
+                end
+            end
+        end
         @testset "axp(b)y" begin
             if elty <: Real
                 x1 = convert(Vector{elty}, randn(n))
@@ -208,36 +234,83 @@ Random.seed!(100)
                 # Define the inputs and outputs of hpmv!, y = α*A*x+β*y
                 α = rand(elty)
                 M = rand(elty, n, n)
-                A = (M+M')/elty(2.0)
+                AL = Hermitian(M, :L)
+                AU = Hermitian(M, :U)
                 x = rand(elty, n)
                 β = rand(elty)
                 y = rand(elty, n)
 
-                y_result_julia = α*A*x+β*y
+                y_result_julia_lower = α*AL*x + β*y
 
-                # Create lower triangular packing of A
-                AP = typeof(A[1,1])[]
+                # Create lower triangular packing of AL
+                AP = typeof(AL[1,1])[]
                 for j in 1:n
                     for i in j:n
-                        push!(AP, A[i,j])
+                        push!(AP, AL[i,j])
                     end
                 end
 
                 y_result_blas_lower = copy(y)
                 BLAS.hpmv!('L', α, AP, x, β, y_result_blas_lower)
-                @test y_result_julia≈y_result_blas_lower
+                @test y_result_julia_lower ≈ y_result_blas_lower
 
-                # Create upper triangular packing of A
-                AP = typeof(A[1,1])[]
+                y_result_julia_upper = α*AU*x + β*y
+
+                # Create upper triangular packing of AU
+                AP = typeof(AU[1,1])[]
                 for j in 1:n
                     for i in 1:j
-                        push!(AP, A[i,j])
+                        push!(AP, AU[i,j])
                     end
                 end
 
                 y_result_blas_upper = copy(y)
                 BLAS.hpmv!('U', α, AP, x, β, y_result_blas_upper)
-                @test y_result_julia≈y_result_blas_upper
+                @test y_result_julia_upper ≈ y_result_blas_upper
+            end
+        end
+
+        # spmv!
+        if elty in (Float32, Float64)
+            @testset "spmv!" begin
+                # Both matrix dimensions n coincide, as we have symmetric matrices.
+                # Define the inputs and outputs of spmv!, y = α*A*x+β*y
+                α = rand(elty)
+                M = rand(elty, n, n)
+                AL = Symmetric(M, :L)
+                AU = Symmetric(M, :U)
+                x = rand(elty, n)
+                β = rand(elty)
+                y = rand(elty, n)
+
+                y_result_julia_lower = α*AL*x + β*y
+
+                # Create lower triangular packing of AL
+                AP = typeof(M[1,1])[]
+                for j in 1:n
+                    for i in j:n
+                        push!(AP, AL[i,j])
+                    end
+                end
+
+                y_result_blas_lower = copy(y)
+                BLAS.spmv!('L', α, AP, x, β, y_result_blas_lower)
+                @test y_result_julia_lower ≈ y_result_blas_lower
+
+
+                y_result_julia_upper = α*AU*x + β*y
+
+                # Create upper triangular packing of AU
+                AP = typeof(M[1,1])[]
+                for j in 1:n
+                    for i in 1:j
+                        push!(AP, AU[i,j])
+                    end
+                end
+
+                y_result_blas_upper = copy(y)
+                BLAS.spmv!('U', α, AP, x, β, y_result_blas_upper)
+                @test y_result_julia_upper ≈ y_result_blas_upper
             end
         end
 

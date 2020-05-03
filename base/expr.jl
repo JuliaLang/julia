@@ -332,7 +332,7 @@ function is_short_function_def(ex)
 end
 
 function findmeta(ex::Expr)
-    if ex.head === :function || is_short_function_def(ex)
+    if ex.head === :function || is_short_function_def(ex) || ex.head === :->
         body::Expr = ex.args[2]
         body.head === :block || error(body, " is not a block expression")
         return findmeta_block(ex.args)

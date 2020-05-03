@@ -23,7 +23,6 @@ abstract type LibuvStream <: IO end
 # .  +- Pipe
 # .  +- Process (not exported)
 # .  +- ProcessChain (not exported)
-# +- BufferStream
 # +- DevNull (not exported)
 # +- Filesystem.File
 # +- LibuvStream (not exported)
@@ -31,6 +30,7 @@ abstract type LibuvStream <: IO end
 # .  +- TCPSocket
 # .  +- TTY (not exported)
 # .  +- UDPSocket
+# .  +- BufferStream (FIXME: 2.0)
 # +- IOBuffer = Base.GenericIOBuffer{Array{UInt8,1}}
 # +- IOStream
 
@@ -289,7 +289,7 @@ function open(h::OS_HANDLE)
             if ccall(:jl_ispty, Cint, (Ptr{Cvoid},), io.handle) != 0
                 # replace the Julia `PipeEndpoint` type with a `TTY` type,
                 # if we detect that this is a cygwin pty object
-                pipe_handle, pipe_status = io.handle, pipe.status
+                pipe_handle, pipe_status = io.handle, io.status
                 io.status = StatusClosed
                 io.handle = C_NULL
                 io = TTY(pipe_handle, pipe_status)
@@ -455,6 +455,9 @@ displaysize() = (parse(Int, get(ENV, "LINES",   "24")),
                  parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}
 
 function displaysize(io::TTY)
+    # A workaround for #34620 and #26687 (this still has the TOCTOU problem).
+    check_open(io)
+
     local h::Int, w::Int
     default_size = displaysize()
 
@@ -484,11 +487,6 @@ function displaysize(io::TTY)
     w > 0 || (w = default_size[2])
     return h, w
 end
-
-in(key_value::Pair{Symbol,Bool}, ::TTY) = key_value.first === :color && key_value.second === have_color
-haskey(::TTY, key::Symbol) = key === :color
-getindex(::TTY, key::Symbol) = key === :color ? have_color : throw(KeyError(key))
-get(::TTY, key::Symbol, default) = key === :color ? have_color : default
 
 ### Libuv callbacks ###
 
@@ -1207,11 +1205,12 @@ end
 mutable struct BufferStream <: LibuvStream
     buffer::IOBuffer
     cond::Threads.Condition
+    readerror::Any
     is_open::Bool
     buffer_writes::Bool
     lock::ReentrantLock # advisory lock
 
-    BufferStream() = new(PipeBuffer(), Threads.Condition(), true, false, ReentrantLock())
+    BufferStream() = new(PipeBuffer(), Threads.Condition(), nothing, true, false, ReentrantLock())
 end
 
 isopen(s::BufferStream) = s.is_open

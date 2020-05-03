@@ -192,6 +192,9 @@ end
     @test x1[] === x2[] === Int64(2)
 end
 
+# avoid nesting
+@test parent(reinterpret(eltype(A), reinterpret(eltype(B), A))) === A
+
 # Test 0-dimensional Arrays
 A = zeros(UInt32)
 B = reinterpret(Int32,A)

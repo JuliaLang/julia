@@ -24,7 +24,7 @@ Other constructors:
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
 
 !!! compat "Julia 1.3"
-  The default constructor `Channel()` and default `size=0` were added in Julia 1.3.
+    The default constructor `Channel()` and default `size=0` were added in Julia 1.3.
 """
 mutable struct Channel{T} <: AbstractChannel{T}
     cond_take::Threads.Condition                 # waiting for data to become available
@@ -108,9 +108,9 @@ true
 ```
 
 !!! compat "Julia 1.3"
-  The `spawn=` parameter was added in Julia 1.3. This constructor was added in Julia 1.3.
-  In earlier versions of Julia, Channel used keyword arguments to set `size` and `T`, but
-  those constructors are deprecated.
+    The `spawn=` parameter was added in Julia 1.3. This constructor was added in Julia 1.3.
+    In earlier versions of Julia, Channel used keyword arguments to set `size` and `T`, but
+    those constructors are deprecated.
 
 ```jldoctest
 julia> chnl = Channel{Char}(1, spawn=true) do ch
@@ -228,15 +228,16 @@ false
 ```jldoctest
 julia> c = Channel(0);
 
-julia> task = @async (put!(c,1);error("foo"));
+julia> task = @async (put!(c, 1); error("foo"));
 
-julia> bind(c,task);
+julia> bind(c, task);
 
 julia> take!(c)
 1
 
-julia> put!(c,1);
-ERROR: foo
+julia> put!(c, 1);
+ERROR: TaskFailedException:
+foo
 Stacktrace:
 [...]
 ```
@@ -278,12 +279,9 @@ function close_chnl_on_taskdone(t::Task, c::Channel)
     lock(c)
     try
         isopen(c) || return
-        if istaskfailed(t)
-            excp = task_result(t)
-            if excp isa Exception
-                close(c, excp)
-                return
-            end
+        if istaskfailed(t) && task_result(t) isa Exception
+            close(c, TaskFailedException(t))
+            return
         end
         close(c)
     finally

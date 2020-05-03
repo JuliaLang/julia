@@ -14,6 +14,10 @@ function code_coverage_test()
     not_reached
 end
 
-exit(code_coverage_test() == [1, 2, 3] ? 0 : 1)
+short_form_func_coverage_test(x) = x*x
+
+success = code_coverage_test() == [1, 2, 3] &&
+          short_form_func_coverage_test(2) == 4
+exit(success ?  0 : 1)
 
 # end of file
