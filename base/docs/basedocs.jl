@@ -2320,7 +2320,7 @@ arguments accepted by varargs methods (see the section on [Varargs Functions](@r
 # Examples
 ```jldoctest
 julia> mytupletype = Tuple{AbstractString,Vararg{Int}}
-Tuple{AbstractString,Vararg{Int64,N} where N}
+Tuple{AbstractString,Vararg{Int64}}
 
 julia> isa(("1",), mytupletype)
 true

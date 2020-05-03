@@ -901,7 +901,7 @@ of trailing elements:
 
 ```jldoctest
 julia> mytupletype = Tuple{AbstractString,Vararg{Int}}
-Tuple{AbstractString,Vararg{Int64,N} where N}
+Tuple{AbstractString,Vararg{Int64}}
 
 julia> isa(("1",), mytupletype)
 true
@@ -1089,7 +1089,7 @@ consider the two types created by the following declarations:
 
 ```jldoctest
 julia> const T1 = Array{Array{T,1} where T, 1}
-Array{Array{T,1} where T,1}
+Array{Array{<:Any,1},1}
 
 julia> const T2 = Array{Array{T,1}, 1} where T
 Array{Array{T,1},1} where T

@@ -298,7 +298,7 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
                     tp = t
                     while true
                         show(tvar_io, tp.var)
-                        tvar_io = IOContext(tvar_io, :unionall_env => tp.var)
+                        tvar_io = IOContext(tvar_io, :tv_standalone => tp.var)
                         tp = tp.body
                         if isa(tp, UnionAll)
                             print(io, ", ")

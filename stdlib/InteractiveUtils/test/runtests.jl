@@ -56,7 +56,7 @@ end
 Base.getindex(A::Stable, i) = A.A[i]
 Base.getindex(A::Unstable, i) = A.A[i]
 
-tag = "ARRAY{FLOAT64,N}"
+tag = "ARRAY{FLOAT64}"
 @test warntype_hastag(getindex, Tuple{Unstable{Float64},Int}, tag)
 @test !warntype_hastag(getindex, Tuple{Stable{Float64,2},Int}, tag)
 @test warntype_hastag(getindex, Tuple{Stable{Float64},Int}, tag)

@@ -404,7 +404,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
             sig0 = method.sig
             while isa(sig0, UnionAll)
                 push!(tv, sig0.var)
-                iob = IOContext(iob, :unionall_env => sig0.var)
+                iob = IOContext(iob, :tv_standalone => sig0.var)
                 sig0 = sig0.body
             end
             s1 = sig0.parameters[1]

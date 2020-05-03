@@ -61,7 +61,7 @@ function arg_decl_parts(m::Method, html=false)
     if length(argnames) >= m.nargs
         show_env = ImmutableDict{Symbol, Any}()
         for t in tv
-            show_env = ImmutableDict(show_env, :unionall_env => t)
+            show_env = ImmutableDict(show_env, :tv_standalone => t)
         end
         decls = Tuple{String,String}[argtype_decl(show_env, argnames[i], sig, i, m.nargs, m.isva)
                     for i = 1:m.nargs]
@@ -112,7 +112,7 @@ function show_method_params(io::IO, tv)
                 end
                 x = tv[i]
                 show(io, x)
-                io = IOContext(io, :unionall_env => x)
+                io = IOContext(io, :tv_standalone => x)
             end
             print(io, "}")
         end

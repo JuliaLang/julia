@@ -252,7 +252,7 @@ julia> Tuple
 Tuple
 
 julia> Tuple.parameters
-svec(Vararg{Any,N} where N)
+svec(Vararg{Any})
 ```
 
 Unlike other types, tuple types are covariant in their parameters, so this definition permits
