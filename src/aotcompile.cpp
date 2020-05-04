@@ -274,7 +274,7 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
             // each item in this list is either a MethodInstance indicating something
             // to compile, or an svec(rettype, sig) describing a C-callable alias to create.
             jl_value_t *item = jl_array_ptr_ref(methods, i);
-            if (jl_is_simplevector(item)) {
+            if (jl_is_simplevector(item) && worlds == 1) {
                 jl_compile_extern_c(shadow_output, &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
                 continue;
             }
