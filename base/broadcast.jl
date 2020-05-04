@@ -1290,7 +1290,7 @@ end
 
 @inline (op::BroadcastOp)(x...) = op.f.(x...)
 
-show(io::IO, op::BroadcastOp) = print(io, "Base.BroadcastOp(", op.f, ')')
+show(io::IO, op::BroadcastOp) = print(io, BroadcastOp, '(', op.f, ')')
 show(io::IO, ::MIME"text/plain", op::BroadcastOp) = show(io, op)
 
 end # module
