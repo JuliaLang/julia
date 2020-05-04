@@ -13,9 +13,10 @@ Creation of a `Ref` to a value `x` of type `T` is usually written `Ref(x)`.
 Additionally, for creating interior pointers to containers (such as Array or Ptr),
 it can be written `Ref(a, i)` for creating a reference to the `i`-th element of `a`.
 
-A `Ref` of type `T` referring to `undef` can be made by `Ref{T}()`. To check if
-a `Ref` refers to undef, use `isdefined(ref,1)`.
-For example, `isdefined(Ref{T}(),1)` is `false`.
+A `Ref` of a non-primitive type `T` referring to `undef` can be made by
+`Ref{T}()`.  To check if a `Ref` refers to undef, use `isdefined(ref,1)`.
+For example, `isdefined(Ref{T}(),1)` is `false` if T is a struct. This does not
+apply to primitive types. `isdefined(Ref{Int64}(),1)` results in `true`.
 
 When passed as a `ccall` argument (either as a `Ptr` or `Ref` type), a `Ref` object will be
 converted to a native pointer to the data it references.
