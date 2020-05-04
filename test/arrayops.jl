@@ -708,6 +708,11 @@ end
     @inferred circshift!(dst,src,s)
 end
 
+@testset "circcopy" begin
+    src=rand(3,4,5)
+    dst=similar(src)
+    @inferred circcopy!(dst,src)
+end
 # unique across dim
 
 # With hash collisions
