@@ -399,7 +399,6 @@ PDP GCChecker::GCValueBugVisitor::ExplainNoPropagationFromExpr(
     PathDiagnosticLocation Pos, BugReporterContext &BRC, BugReport &BR) {
   const MemRegion *Region =
       N->getState()->getSVal(FromWhere, N->getLocationContext()).getAsRegion();
-  SValExplainer Ex(BRC.getASTContext());
   SymbolRef Parent = walkToRoot(
       [&](SymbolRef Sym, const ValueState *OldVState) { return !OldVState; },
       N->getState(), Region);
@@ -612,7 +611,6 @@ bool GCChecker::propagateArgumentRootedness(CheckerContext &C,
 
   bool Change = false;
   int idx = 0;
-  SValExplainer Ex(C.getASTContext());
   for (const auto P : FD->parameters()) {
     if (!isGCTrackedType(P->getType())) {
       continue;
@@ -682,7 +680,6 @@ void GCChecker::checkBeginFunction(CheckerContext &C) const {
       C.addTransition(State);
     return;
   }
-  SValExplainer Ex(C.getASTContext());
   for (const auto P : FD->parameters()) {
     if (declHasAnnotation(P, "julia_require_rooted_slot")) {
       auto Param = State->getLValue(P, LCtx);
@@ -857,7 +854,6 @@ bool GCChecker::processPotentialSafepoint(const CallEvent &Call,
   if (!isSafepoint(Call))
     return false;
   bool DidChange = false;
-  SValExplainer Ex(C.getASTContext());
   if (!gcEnabledHere(C))
     return false;
   const Decl *D = Call.getDecl();
@@ -907,7 +903,6 @@ GCChecker::getValStateForRegion(ASTContext &AstC, const ProgramStateRef &State,
                                 const MemRegion *Region, bool Debug) {
   if (!Region)
     return nullptr;
-  SValExplainer Ex(AstC);
   SymbolRef Sym = walkToRoot(
       [&](SymbolRef Sym, const ValueState *OldVState) {
         return !OldVState || !OldVState->isRooted();
@@ -936,7 +931,6 @@ bool GCChecker::processArgumentRooting(const CallEvent &Call, CheckerContext &C,
   }
   if (!RootingRegion || !RootedSymbol)
     return false;
-  SValExplainer Ex(C.getASTContext());
   const ValueState *OldVState =
       getValStateForRegion(C.getASTContext(), State, RootingRegion);
   if (!OldVState)
@@ -955,7 +949,6 @@ bool GCChecker::processAllocationOfResult(const CallEvent &Call,
     return false;
   }
   SymbolRef Sym = Call.getReturnValue().getAsSymbol();
-  SValExplainer Ex(C.getASTContext());
   if (!Sym) {
     SVal S = C.getSValBuilder().conjureSymbolVal(
         Call.getOriginExpr(), C.getLocationContext(), QT, C.blockCount());
@@ -1053,13 +1046,12 @@ SymbolRef GCChecker::getSymbolForResult(const Expr *Result,
                                         const ValueState *OldValS,
                                         ProgramStateRef &State,
                                         CheckerContext &C) const {
-  auto ValLoc = C.getSVal(Result).getAs<Loc>();
+  auto ValLoc = State->getSVal(Result, C.getLocationContext()).getAs<Loc>();
   if (!ValLoc) {
     return nullptr;
   }
   SVal Loaded = State->getSVal(*ValLoc);
-  SValExplainer Ex(C.getASTContext());
-  if (Loaded.isUnknown()) {
+  if (Loaded.isUnknown() || !Loaded.getAsSymbol()) {
     QualType QT = Result->getType();
     if (!QT->isPointerType())
       return nullptr;
@@ -1077,6 +1069,14 @@ SymbolRef GCChecker::getSymbolForResult(const Expr *Result,
 
 void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
                                   bool ParentIsLoc, CheckerContext &C) const {
+  if (auto PE = dyn_cast<ParenExpr>(Parent)) {
+    Parent = PE->getSubExpr();
+  }
+  if (auto UO = dyn_cast<UnaryOperator>(Parent)) {
+    if (UO->getOpcode() == UO_AddrOf) {
+      Parent = UO->getSubExpr();
+    }
+  }
   bool ResultTracked = true;
   ProgramStateRef State = C.getState();
   if (isGloballyRootedType(Result->getType())) {
@@ -1106,11 +1106,19 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
     }
   }
   // This is the pointer
-  SValExplainer Ex(C.getASTContext());
-  auto ValLoc = C.getSVal(Result).getAs<Loc>();
-  if (!ValLoc) {
-    return;
+  auto ResultVal = C.getSVal(Result);
+  if (ResultVal.isUnknown()) {
+    if (!Result->getType()->isPointerType()) {
+      return;
+    }
+    ResultVal = C.getSValBuilder().conjureSymbolVal(
+        Result, C.getLocationContext(), Result->getType(),
+        C.blockCount());
+    State = State->BindExpr(Result, C.getLocationContext(), ResultVal);
   }
+  auto ValLoc = ResultVal.getAs<Loc>();
+  if (!ValLoc)
+    return;
   SVal ParentVal = C.getSVal(Parent);
   SymbolRef OldSym = ParentVal.getAsSymbol(true);
   const MemRegion *Region = C.getSVal(Parent).getAsRegion();
@@ -1175,7 +1183,6 @@ void GCChecker::checkPostStmt(const ArraySubscriptExpr *ASE,
   // by that array.
   const MemRegion *Region = C.getSVal(ASE->getLHS()).getAsRegion();
   ProgramStateRef State = C.getState();
-  SValExplainer Ex(C.getASTContext());
   if (Region && Region->getAs<ElementRegion>() && isGCTracked(ASE)) {
     const RootState *RS =
         State->get<GCRootMap>(Region->getAs<ElementRegion>()->getSuperRegion());
@@ -1255,7 +1262,6 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
       return;
     }
   }
-  SValExplainer Ex(C.getASTContext());
   if (FD && FD->getDeclName().isIdentifier() &&
       FD->getName() == "JL_GC_PROMISE_ROOTED")
     return;
@@ -1319,7 +1325,6 @@ bool GCChecker::evalCall(const CallExpr *CE,
 #endif
   unsigned CurrentDepth = C.getState()->get<GCDepth>();
   auto name = C.getCalleeName(CE);
-  SValExplainer Ex(C.getASTContext());
   if (name == "JL_GC_POP") {
     if (CurrentDepth == 0) {
       report_error(C, "JL_GC_POP without corresponding push");
@@ -1551,7 +1556,6 @@ bool GCChecker::rootRegionIfGlobal(const MemRegion *R, ProgramStateRef &State,
                                    CheckerContext &C, ValueState *ValS) const {
   if (!R)
     return false;
-  SValExplainer Ex(C.getASTContext());
   const VarRegion *VR = R->getAs<VarRegion>();
   if (!VR)
     return false;
