@@ -507,7 +507,7 @@ void jl_module_run_initializer(jl_module_t *m);
 jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT;
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
-extern jl_array_t *jl_cfunction_list JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT void jl_compile_extern_c(void *llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
 
 #ifdef JL_USE_INTEL_JITEVENTS
 extern char jl_using_intel_jitevents;

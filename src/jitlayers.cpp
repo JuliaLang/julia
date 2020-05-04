@@ -197,47 +197,72 @@ static jl_callptr_t _jl_compile_codeinst(
     return fptr;
 }
 
-// get the address of a C-callable entry point for a function
+Function *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
+
+// compile a C-callable alias
 extern "C" JL_DLLEXPORT
-void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
+void jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
-    JL_GC_PUSH1(&argt);
     JL_LOCK(&codegen_lock);
     jl_codegen_params_t params;
-    Function *llvmf = jl_cfunction_object(f, rt, (jl_tupletype_t*)argt, params);
-    jl_jit_globals(params.globals);
-    assert(params.workqueue.empty());
-    jl_add_to_ee();
-    JL_GC_POP();
-    void *ptr = (void*)getAddressForFunction(llvmf->getName());
+    jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
+    if (pparams == NULL)
+        pparams = &params;
+    jl_generate_ccallable(llvmmod, sysimg, declrt, sigt, *pparams);
+    if (!sysimg) {
+        if (p == NULL) {
+            jl_jit_globals(params.globals);
+            assert(params.workqueue.empty());
+        }
+        if (llvmmod == NULL)
+            jl_add_to_ee();
+    }
     JL_UNLOCK(&codegen_lock);
-    return ptr;
 }
 
-// export a C-callable entry point for a function (dllexport'ed dlsym), with a given name
+bool jl_type_mappable_to_c(jl_value_t *ty);
+
+// declare a C-callable entry point; called during code loading from the toplevel
 extern "C" JL_DLLEXPORT
-void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
+void jl_extern_c(jl_value_t *declrt, jl_tupletype_t *sigt)
 {
+    // validate arguments. try to do as many checks as possible here to avoid
+    // throwing errors later during codegen.
+    JL_TYPECHK(@ccallable, type, declrt);
+    if (!jl_is_tuple_type(sigt))
+        jl_type_error("@ccallable", (jl_value_t*)jl_anytuple_type_type, (jl_value_t*)sigt);
+    // check that f is a guaranteed singleton type
+    jl_datatype_t *ft = (jl_datatype_t*)jl_tparam0(sigt);
+    if (!jl_is_datatype(ft) || ft->instance == NULL)
+        jl_error("@ccallable: function object must be a singleton");
+
+    // compute / validate return type
+    if (!jl_is_concrete_type(declrt) || jl_is_kind(declrt))
+        jl_error("@ccallable: return type must be concrete and correspond to a C type");
     JL_LOCK(&codegen_lock);
-    jl_codegen_params_t params;
-    Function *llvmf = jl_cfunction_object(f, rt, (jl_tupletype_t*)argt, params);
-    jl_jit_globals(params.globals);
-    assert(params.workqueue.empty());
-    // force eager emission of the function (llvm 3.3 gets confused otherwise and tries to do recursive compilation)
-    jl_add_to_ee();
-    uint64_t Addr = getAddressForFunction(llvmf->getName());
-
-    if (imaging_mode)
-        llvmf = cast<Function>(shadow_output->getNamedValue(llvmf->getName()));
-
-    // make the alias to the shadow_module
-    GlobalAlias *GA =
-        GlobalAlias::create(llvmf->getType()->getElementType(), llvmf->getType()->getAddressSpace(),
-                            GlobalValue::ExternalLinkage, name, llvmf, shadow_output);
-
-    // make sure the alias name is valid for the current session
-    jl_ExecutionEngine->addGlobalMapping(GA, (void*)(uintptr_t)Addr);
+    if (!jl_type_mappable_to_c(declrt))
+        jl_error("@ccallable: return type doesn't correspond to a C type");
     JL_UNLOCK(&codegen_lock);
+
+    // validate method signature
+    size_t i, nargs = jl_nparams(sigt);
+    for (i = 1; i < nargs; i++) {
+        jl_value_t *ati = jl_tparam(sigt, i);
+        if (!jl_is_concrete_type(ati) || jl_is_kind(ati))
+            jl_error("@ccallable: argument types must be concrete");
+    }
+
+    // save a record of this so that the alias is generated when we write an object file
+    jl_method_t *meth = (jl_method_t*)jl_methtable_lookup(ft->name->mt, (jl_value_t*)sigt, jl_world_counter);
+    if (!jl_is_method(meth))
+        jl_error("@ccallable: could not find requested method");
+    JL_GC_PUSH1(&meth);
+    meth->ccallable = jl_svec2(declrt, (jl_value_t*)sigt);
+    jl_gc_wb(meth, meth->ccallable);
+    JL_GC_POP();
+
+    // create the alias in the current runtime environment
+    jl_compile_extern_c(NULL, NULL, NULL, declrt, (jl_value_t*)sigt);
 }
 
 // this compiles li and emits fptr

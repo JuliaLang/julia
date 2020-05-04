@@ -298,6 +298,7 @@ typedef struct _jl_method_t {
     struct _jl_method_instance_t *unspecialized;  // unspecialized executable method instance, or null
     jl_value_t *generator;  // executable code-generating function if available
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
+    jl_svec_t *ccallable; // svec(rettype, sig) if a ccallable entry point is requested for this
 
     // cache of specializations of this method for invoke(), i.e.
     // cases where this method was called even though it was not necessarily
