@@ -591,7 +591,7 @@ Keyword arguments can also be used in varargs functions:
 ```julia
 function plot(x...; style="solid")
     ###
-end   
+end
 ```
 
 Extra keyword arguments can be collected using `...`, as in varargs functions:
