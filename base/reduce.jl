@@ -306,25 +306,29 @@ with reduction `op` over an empty array with element type of `T`.
 
 If not defined, this will throw an `ArgumentError`.
 """
-reduce_empty(op, T) = _empty_reduce_error()
-reduce_empty(::typeof(+), T) = zero(T)
+reduce_empty(op, ::Type{T}) where T = _empty_reduce_error()
+reduce_empty(::typeof(+), ::Type{Union{}}) = _empty_reduce_error()   # avoid invalidation
+reduce_empty(::typeof(+), ::Type{T}) where T = zero(T)
 reduce_empty(::typeof(+), ::Type{Bool}) = zero(Int)
-reduce_empty(::typeof(*), T) = one(T)
+reduce_empty(::typeof(*), ::Type{Union{}}) = _empty_reduce_error()
+reduce_empty(::typeof(*), ::Type{T}) where T = one(T)
 reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
-reduce_empty(::typeof(add_sum), T) = reduce_empty(+, T)
+reduce_empty(::typeof(add_sum), ::Type{Union{}}) = _empty_reduce_error()
+reduce_empty(::typeof(add_sum), ::Type{T}) where T = reduce_empty(+, T)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallSigned}  = zero(Int)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallUnsigned} = zero(UInt)
-reduce_empty(::typeof(mul_prod), T) = reduce_empty(*, T)
+reduce_empty(::typeof(mul_prod), ::Type{Union{}}) = _empty_reduce_error()
+reduce_empty(::typeof(mul_prod), ::Type{T}) where T = reduce_empty(*, T)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
 
-reduce_empty(op::BottomRF, T) = reduce_empty(op.rf, T)
-reduce_empty(op::MappingRF, T) = mapreduce_empty(op.f, op.rf, T)
-reduce_empty(op::FilteringRF, T) = reduce_empty(op.rf, T)
-reduce_empty(op::FlipArgs, T) = reduce_empty(op.f, T)
+reduce_empty(op::BottomRF, ::Type{T}) where T = reduce_empty(op.rf, T)
+reduce_empty(op::MappingRF, ::Type{T}) where T = mapreduce_empty(op.f, op.rf, T)
+reduce_empty(op::FilteringRF, ::Type{T}) where T = reduce_empty(op.rf, T)
+reduce_empty(op::FlipArgs, ::Type{T}) where T = reduce_empty(op.f, T)
 
 """
     Base.mapreduce_empty(f, op, T)
@@ -336,12 +340,12 @@ of `T`.
 If not defined, this will throw an `ArgumentError`.
 """
 mapreduce_empty(f, op, T) = _empty_reduce_error()
-mapreduce_empty(::typeof(identity), op, T) = reduce_empty(op, T)
-mapreduce_empty(::typeof(abs), op, T)      = abs(reduce_empty(op, T))
-mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
+mapreduce_empty(::typeof(identity), op, ::Type{T}) where T = reduce_empty(op, T)
+mapreduce_empty(::typeof(abs), op, ::Type{T}) where T      = abs(reduce_empty(op, T))
+mapreduce_empty(::typeof(abs2), op, ::Type{T}) where T     = abs2(reduce_empty(op, T))
 
-mapreduce_empty(f::typeof(abs),  ::typeof(max), T) = abs(zero(T))
-mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
+mapreduce_empty(::typeof(abs),  ::typeof(max), ::Type{T}) where T = abs(zero(T))
+mapreduce_empty(::typeof(abs2), ::typeof(max), ::Type{T}) where T = abs2(zero(T))
 
 # For backward compatibility:
 mapreduce_empty_iter(f, op, itr, ItrEltype) =

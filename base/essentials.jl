@@ -166,6 +166,7 @@ true
 """
 function convert end
 
+convert(::Type{Union{}}, x::Union{}) = throw(MethodError(convert, (Union{}, x)))
 convert(::Type{Union{}}, x) = throw(MethodError(convert, (Union{}, x)))
 convert(::Type{Any}, x) = x
 convert(::Type{T}, x::T) where {T} = x
@@ -447,6 +448,9 @@ Stacktrace:
 ```
 """
 sizeof(x) = Core.sizeof(x)
+# The next two methods prevent invalidation
+sizeof(::Type{Union{}}) = Core.sizeof(Union{})
+sizeof(::Type{T}) where T = Core.sizeof(T)
 
 # simple Array{Any} operations needed for bootstrap
 @eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)
