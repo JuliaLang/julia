@@ -1271,9 +1271,9 @@ Can be created by just passing an operator preceded by a dot to a higher-order f
 
 # Examples
 ```jldoctest
-julia> a = [[1 3; 2 4], [5 7; 6 8]]
+julia> a = [[1 3; 2 4], [5 7; 6 8]];
 
-julia> b = [[9 11; 10 12], [13 15; 14 16]]
+julia> b = [[9 11; 10 12], [13 15; 14 16]];
 
 julia> map(.*, a, b)
 2-element Array{Array{Int64,2},1}:
