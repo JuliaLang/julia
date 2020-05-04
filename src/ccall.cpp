@@ -236,7 +236,9 @@ static GlobalVariable *emit_plt_thunk(
     SmallVector<Value*, 16> args;
     for (Function::arg_iterator arg = plt->arg_begin(), arg_e = plt->arg_end(); arg != arg_e; ++arg)
         args.push_back(&*arg);
-    CallInst *ret = irbuilder.CreateCall(ptr, ArrayRef<Value*>(args));
+    CallInst *ret = irbuilder.CreateCall(
+        cast<FunctionType>(ptr->getType()->getPointerElementType()),
+        ptr, ArrayRef<Value*>(args));
     ret->setAttributes(attrs);
     if (cc != CallingConv::C)
         ret->setCallingConv(cc);
@@ -1029,7 +1031,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         std::stringstream name;
         name << "jl_llvmcall" << llvmcallnumbering++;
         f->setName(name.str());
-        f = cast<Function>(prepare_call(function_proto(f)));
+        f = cast<Function>(prepare_call(function_proto(f)).getCallee());
     }
     else {
         f->setLinkage(GlobalValue::LinkOnceODRLinkage);
@@ -1617,6 +1619,16 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(pct)),
             retboxed, rt, unionall, static_rt);
     }
+    else if (is_libjulia_func(jl_set_next_task)) {
+        assert(lrt == T_void);
+        assert(!isVa && !llvmcall && nccallargs == 1);
+        JL_GC_POP();
+        Value *ptls_pv = emit_bitcast(ctx, ctx.ptlsStates, T_ppjlvalue);
+        const int nt_offset = offsetof(jl_tls_states_t, next_task);
+        Value *pnt = ctx.builder.CreateGEP(ptls_pv, ConstantInt::get(T_size, nt_offset / sizeof(void*)));
+        ctx.builder.CreateStore(emit_pointer_from_objref(ctx, boxed(ctx, argv[0])), pnt);
+        return ghostValue(jl_nothing_type);
+    }
     else if (is_libjulia_func(jl_sigatomic_begin)) {
         assert(lrt == T_void);
         assert(!isVa && !llvmcall && nccallargs == 0);
@@ -1710,11 +1722,19 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 
         ctx.builder.CreateMemCpy(
                 ctx.builder.CreateIntToPtr(destp, T_pint8),
+#if JL_LLVM_VERSION >= 110000
+                MaybeAlign(1),
+#else
                 1,
+#endif
                 ctx.builder.CreateIntToPtr(
                     emit_unbox(ctx, T_size, src, (jl_value_t*)jl_voidpointer_type),
                     T_pint8),
+#if JL_LLVM_VERSION >= 110000
+                MaybeAlign(0),
+#else
                 0,
+#endif
                 emit_unbox(ctx, T_size, n, (jl_value_t*)jl_ulong_type),
                 false);
         JL_GC_POP();

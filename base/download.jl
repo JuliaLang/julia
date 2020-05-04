@@ -69,10 +69,17 @@ function download(url::AbstractString, filename::AbstractString)
             rm(filename, force=true)  # wget always creates a file
             rethrow()
         end
+    elseif Sys.which("busybox") !== nothing
+        try
+            run(`busybox wget -O $filename $url`)
+        catch
+            rm(filename, force=true)  # wget always creates a file
+            rethrow()
+        end
     elseif Sys.which("fetch") !== nothing
         run(`fetch -f $filename $url`)
     else
-        error("No download agent available; install curl, wget, or fetch.")
+        error("No download agent available; install curl, wget, busybox or fetch.")
     end
     return filename
 end

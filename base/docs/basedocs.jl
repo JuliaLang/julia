@@ -14,7 +14,7 @@ end
 """
 **Welcome to Julia $(string(VERSION)).** The full manual is available at
 
-    https://docs.julialang.org/
+    https://docs.julialang.org
 
 as well as many great tutorials and learning resources:
 
@@ -24,7 +24,7 @@ For help on a specific function or macro, type `?` followed
 by its name, e.g. `?cos`, or `?@time`, and press enter.
 Type `;` to enter shell mode, `]` to enter package mode.
 """
-kw"help", kw"?", kw"Julia", kw"julia", kw""
+kw"help", kw"Julia", kw"julia", kw""
 
 """
     using
@@ -487,26 +487,6 @@ Expr
 Expr
 
 """
-    '
-
-The conjugate transposition operator, see [`adjoint`](@ref).
-
-# Examples
-```jldoctest
-julia> A = [1.0 -2.0im; 4.0im 2.0]
-2×2 Array{Complex{Float64},2}:
- 1.0+0.0im  -0.0-2.0im
- 0.0+4.0im   2.0+0.0im
-
-julia> A'
-2×2 Array{Complex{Float64},2}:
-  1.0-0.0im  0.0-4.0im
- -0.0+2.0im  2.0-0.0im
-```
-"""
-kw"'"
-
-"""
     \$
 
 Interpolation operator for interpolating into e.g. [strings](@ref string-interpolation)
@@ -643,6 +623,28 @@ evaluated. The `elseif` and `else` blocks are optional, and as many `elseif` blo
 desired can be used.
 """
 kw"if", kw"elseif", kw"else"
+
+"""
+    a ? b : c
+
+Short form for conditionals; read "if `a`, evaluate `b` otherwise evaluate `c`".
+Also known as the [ternary operator](https://en.wikipedia.org/wiki/%3F:).
+
+This syntax is equivalent to `if a; b else c end`, but is often used to
+emphasize the value `b`-or-`c` which is being used as part of a larger
+expression, rather than the side effects that evaluating `b` or `c` may have.
+
+See the manual section on [control flow](@ref man-conditional-evaluation) for more details.
+
+# Examples
+```
+julia> x = 1; y = 2;
+
+julia> println(x > y ? "x is larger" : "y is larger")
+y is larger
+```
+"""
+kw"?", kw"?:"
 
 """
     for
@@ -1129,6 +1131,56 @@ The singleton type containing only the value `Union{}` (which represents the emp
 Core.TypeofBottom
 
 """
+    Core.Type{T}
+
+`Core.Type` is an abstract type which has all type objects as its instances.
+The only instance of the singleton type `Core.Type{T}` is the object
+`T`.
+
+# Examples
+```jldoctest
+julia> isa(Type{Float64}, Type)
+true
+
+julia> isa(Float64, Type)
+true
+
+julia> isa(Real, Type{Float64})
+false
+
+julia> isa(Real, Type{Real})
+true
+```
+"""
+Core.Type
+
+"""
+    DataType <: Type{T}
+
+`DataType` represents explicitly declared types that have names, explicitly
+declared supertypes, and, optionally, parameters.  Every concrete value in the
+system is an instance of some `DataType`.
+
+# Examples
+```jldoctest
+julia> typeof(Real)
+DataType
+
+julia> typeof(Int)
+DataType
+
+julia> struct Point
+           x::Int
+           y
+       end
+
+julia> typeof(Point)
+DataType
+```
+"""
+Core.DataType
+
+"""
     Function
 
 Abstract type of all functions.
@@ -1423,6 +1475,18 @@ TypeError
     InterruptException()
 
 The process was stopped by a terminal interrupt (CTRL+C).
+
+Note that, in Julia script started without `-i` (interactive) option,
+`InterruptException` is not thrown by default.  Calling
+[`Base.exit_on_sigint(false)`](@ref Base.exit_on_sigint) in the script
+can recover the behavior of the REPL.  Alternatively, a Julia script
+can be started with
+
+```sh
+julia -e "include(popfirst!(ARGS))" script.jl
+```
+
+to let `InterruptException` be thrown by CTRL+C during the execution.
 """
 InterruptException
 
@@ -2373,9 +2437,10 @@ Base.setproperty!
 """
     StridedArray{T, N}
 
-An `N` dimensional *strided* array with elements of type `T`. These arrays follow
-the [strided array interface](@ref man-interface-strided-arrays). If `A` is a
-`StridedArray`, then its elements are stored in memory with offsets, which may
+A hard-coded [`Union`](@ref) of common array types that follow the [strided array interface](@ref man-interface-strided-arrays),
+with elements of type `T` and `N` dimensions.
+
+If `A` is a `StridedArray`, then its elements are stored in memory with offsets, which may
 vary between dimensions but are constant within a dimension. For example, `A` could
 have stride 2 in dimension 1, and stride 3 in dimension 2. Incrementing `A` along
 dimension `d` jumps in memory by [`strides(A, d)`] slots. Strided arrays are

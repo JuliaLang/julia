@@ -2219,7 +2219,60 @@ end
 @test Meta.parse("aa\UE0080", raise=false) ==
     Expr(:error, "invalid character \"\Ue0080\" near column 3")
 
+# issue #31238
+a31238, b31238 = let x
+    return 1
+end
+@test !@isdefined(a31238) && !@isdefined(b31238)
+@test @eval((a31238, b31238) = let x
+    return 1
+end) === 1
+
 # issue #35201
 h35201(x; k=1) = (x, k)
 f35201(c) = h35201((;c...), k=true)
 @test f35201(Dict(:a=>1,:b=>3)) === ((a=1,b=3), true)
+
+
+@testset "issue #34544/35367" begin
+    # Test these evals shouldnt segfault
+    eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar1, Expr(:block)))))
+    eval(Expr(:module, true, :bar2, Expr(:block)))
+    eval(Expr(:quote, Expr(:module, true, :bar3, Expr(:quote))))
+    @test_throws ErrorException eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar4, Expr(:quote)))))
+    @test_throws ErrorException eval(Expr(:module, true, :bar5, Expr(:foo)))
+    @test_throws ErrorException eval(Expr(:module, true, :bar6, Expr(:quote)))
+end
+
+# issue #35391
+macro a35391(b)
+    :(GC.@preserve ($(esc(b)),) )
+end
+@test @a35391(0) === (0,)
+
+# global declarations from the top level are not inherited by functions.
+# don't allow such a declaration to override an outer local, since it's not
+# clear what it should do.
+@test Meta.lower(Main, :(let
+                           x = 1
+                           let
+                             global x
+                           end
+                         end)) == Expr(:error, "`global x`: x is a local variable in its enclosing scope")
+# note: this `begin` block must be at the top level
+_temp_33553 = begin
+    global _x_this_remains_undefined
+    let
+        local _x_this_remains_undefined = 2
+        _x_this_remains_undefined
+    end
+end
+@test _temp_33553 == 2
+@test !@isdefined(_x_this_remains_undefined)
+
+# lowering of adjoint
+@test (1 + im)' == 1 - im
+x = let var"'"(x) = 2x
+    3'
+end
+@test x == 6

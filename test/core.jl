@@ -6796,7 +6796,7 @@ function f27597(y)
     return y
 end
 @test f27597([1]) == [1]
-@test f27597([]) == 1:0
+@test f27597([]) === 1:0
 
 # issue #22291
 wrap22291(ind) = (ind...,)
@@ -7198,3 +7198,11 @@ struct NFANode34126
 end
 
 @test repr(NFANode34126()) == "$NFANode34126(Tuple{Nothing,$NFANode34126}[])"
+
+# issue #35416
+struct Node35416{T,K,X}
+end
+struct AVL35416{K,V}
+    avl:: Union{Nothing,Node35416{AVL35416{K,V},<:K,<:V}}
+end
+@test AVL35416(Node35416{AVL35416{Integer,AbstractString},Int,String}()) isa AVL35416{Integer,AbstractString}

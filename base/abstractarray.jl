@@ -679,10 +679,10 @@ Create an empty vector similar to `v`, optionally changing the `eltype`.
 
 ```jldoctest
 julia> empty([1.0, 2.0, 3.0])
-0-element Array{Float64,1}
+Float64[]
 
 julia> empty([1.0, 2.0, 3.0], String)
-0-element Array{String,1}
+String[]
 ```
 """
 empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
@@ -705,7 +705,15 @@ See also [`copyto!`](@ref).
     This method requires at least Julia 1.1. In Julia 1.0 this method
     is available from the `Future` standard library as `Future.copy!`.
 """
-copy!(dst::AbstractVector, src::AbstractVector) = append!(empty!(dst), src)
+function copy!(dst::AbstractVector, src::AbstractVector)
+    if length(dst) != length(src)
+        resize!(dst, length(src))
+    end
+    for i in eachindex(dst, src)
+        @inbounds dst[i] = src[i]
+    end
+    dst
+end
 
 function copy!(dst::AbstractArray, src::AbstractArray)
     axes(dst) == axes(src) || throw(ArgumentError(
@@ -1112,8 +1120,9 @@ end
 """
     parent(A)
 
-Returns the "parent array" of an array view type (e.g., `SubArray`), or the array itself if
-it is not a view.
+Return the underlying "parent array”. This parent array of objects of types `SubArray`, `ReshapedArray`
+or `LinearAlgebra.Transpose` is what was passed as an argument to `view`, `reshape`, `transpose`, etc.
+during object creation. If the input is not a wrapped object, return the input itself.
 
 # Examples
 ```jldoctest
@@ -2208,6 +2217,7 @@ function hash(A::AbstractArray, h::UInt)
     keyidx = last(ks)
     linidx = key_to_linear[keyidx]
     fibskip = prevfibskip = oneunit(linidx)
+    first_linear = first(LinearIndices(linear_to_key))
     n = 0
     while true
         n += 1
@@ -2217,7 +2227,7 @@ function hash(A::AbstractArray, h::UInt)
 
         # Skip backwards a Fibonacci number of indices -- this is a linear index operation
         linidx = key_to_linear[keyidx]
-        linidx <= fibskip && break
+        linidx < fibskip + first_linear && break
         linidx -= fibskip
         keyidx = linear_to_key[linidx]
 

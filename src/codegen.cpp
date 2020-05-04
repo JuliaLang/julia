@@ -40,6 +40,8 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Object/SymbolSize.h>
 
+#include <llvm/InitializePasses.h>
+
 // IR building
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/Object/ObjectFile.h>
@@ -55,12 +57,14 @@
 // support
 #include <llvm/ADT/SmallBitVector.h>
 #include <llvm/ADT/Optional.h>
+#include <llvm/ADT/Statistic.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/SourceMgr.h> // for llvmcall
 #include <llvm/Transforms/Utils/Cloning.h> // for llvmcall inlining
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/IR/Verifier.h> // for llvmcall validation
+#include <llvm/IR/PassTimingInfo.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
 
 // C API
@@ -2614,7 +2618,7 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, Value *theFptr, Value *theF,
     }
     FunctionType *FTy = FunctionType::get(T_prjlvalue, argsT, false);
     CallInst *result = ctx.builder.CreateCall(FTy,
-        ctx.builder.CreateBitCast(prepare_call(theFptr), FTy->getPointerTo()),
+        ctx.builder.CreateBitCast(prepare_call(theFptr).getCallee(), FTy->getPointerTo()),
         theArgs);
     add_return_attr(result, Attribute::NonNull);
     result->setCallingConv(cc);
@@ -2836,7 +2840,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
         }
     }
     if (!handled) {
-        Value *r = emit_jlcall(ctx, prepare_call(jlinvoke_func), boxed(ctx, lival), argv, nargs, JLCALL_F2_CC);
+        Value *r = emit_jlcall(ctx, prepare_call(jlinvoke_func).getCallee(), boxed(ctx, lival), argv, nargs, JLCALL_F2_CC);
         result = mark_julia_type(ctx, r, true, rt);
     }
     if (result.typ == jl_bottom_type)
@@ -3264,7 +3268,11 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             Value *isboxed = ctx.builder.CreateICmpNE(
                     ctx.builder.CreateAnd(Tindex_phi, ConstantInt::get(T_int8, 0x80)),
                     ConstantInt::get(T_int8, 0));
+#if JL_LLVM_VERSION >= 110000
+            ctx.builder.CreateMemCpy(phi, MaybeAlign(min_align), dest, MaybeAlign(0), nbytes, false);
+#else
             ctx.builder.CreateMemCpy(phi, min_align, dest, 0, nbytes, false);
+#endif
             ctx.builder.CreateLifetimeEnd(dest);
             Value *ptr = ctx.builder.CreateSelect(isboxed,
                 maybe_bitcast(ctx, decay_derived(ptr_phi), T_pint8),
@@ -3304,9 +3312,15 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
         // here it's moved into phi in the successor (from dest)
         dest = emit_static_alloca(ctx, vtype);
         Value *phi = emit_static_alloca(ctx, vtype);
+#if JL_LLVM_VERSION >= 110000
+        ctx.builder.CreateMemCpy(phi, MaybeAlign(julia_alignment(phiType)),
+             dest, MaybeAlign(0),
+             jl_datatype_size(phiType), false);
+#else
         ctx.builder.CreateMemCpy(phi, julia_alignment(phiType),
              dest, 0,
              jl_datatype_size(phiType), false);
+#endif
         ctx.builder.CreateLifetimeEnd(dest);
         slot = mark_julia_slot(phi, phiType, NULL, tbaa_stack);
     }
@@ -3843,14 +3857,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
             ctx.builder.CreateCall(prepare_call(jltopeval_func), args);
             return ghostValue(jl_nothing_type);
         }
-        if (head == abstracttype_sym || head == structtype_sym ||
-            head == primtype_sym) {
-            jl_errorf("type definition not allowed inside a local scope");
-        }
-        else {
-            jl_errorf("unsupported or misplaced expression \"%s\" in function %s",
-                      jl_symbol_name(head), ctx.name);
-        }
+        jl_errorf("unsupported or misplaced expression \"%s\" in function %s",
+                  jl_symbol_name(head), ctx.name);
     }
     return jl_cgval_t();
 }
@@ -3891,26 +3899,21 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     ctx.f = f; // for jl_Module
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     ctx.builder.SetInsertPoint(b0);
-    Value *theFptr;
+    FunctionCallee theFunc;
     Value *theFarg;
     if (codeinst->invoke != NULL) {
         StringRef theFptrName = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)codeinst->invoke, codeinst);
-        theFptr = M->getOrInsertFunction(theFptrName, jlinvoke_func->getFunctionType())
-#if JL_LLVM_VERSION >= 90000
-                .getCallee();
-#else
-                ;
-#endif
+        theFunc = M->getOrInsertFunction(theFptrName, jlinvoke_func->getFunctionType());
         theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst);
     }
     else {
-        theFptr = prepare_call(jlinvoke_func);
+        theFunc = prepare_call(jlinvoke_func);
         theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst->def);
     }
     theFarg = maybe_decay_untracked(theFarg);
     auto args = f->arg_begin();
-    CallInst *r = ctx.builder.CreateCall(theFptr, { &*args, &*++args, &*++args, theFarg });
-    r->setAttributes(cast<Function>(theFptr)->getAttributes());
+    CallInst *r = ctx.builder.CreateCall(theFunc, { &*args, &*++args, &*++args, theFarg });
+    r->setAttributes(cast<Function>(theFunc.getCallee())->getAttributes());
     ctx.builder.CreateRet(r);
     return f;
 }
@@ -4334,7 +4337,7 @@ static Function* gen_cfun_wrapper(
             ctx.builder.CreateBr(b_after);
             ctx.builder.SetInsertPoint(b_generic);
         }
-        Value *ret = emit_jlcall(ctx, prepare_call(jlapplygeneric_func), NULL, inputargs, nargs + 1, JLCALL_F_CC);
+        Value *ret = emit_jlcall(ctx, prepare_call(jlapplygeneric_func).getCallee(), NULL, inputargs, nargs + 1, JLCALL_F_CC);
         if (age_ok) {
             ctx.builder.CreateBr(b_after);
             ctx.builder.SetInsertPoint(b_after);
@@ -4416,7 +4419,9 @@ static Function* gen_cfun_wrapper(
             emit_cfunc_invalidate(gf_thunk, returninfo.cc, returninfo.return_roots, lam->specTypes, codeinst->rettype, nargs + 1, ctx.emission_context);
             theFptr = ctx.builder.CreateSelect(age_ok, theFptr, gf_thunk);
         }
-        CallInst *call = ctx.builder.CreateCall(theFptr, ArrayRef<Value*>(args));
+        CallInst *call = ctx.builder.CreateCall(
+            cast<FunctionType>(theFptr->getType()->getPointerElementType()),
+            theFptr, ArrayRef<Value*>(args));
         call->setAttributes(returninfo.decl->getAttributes());
         switch (returninfo.cc) {
             case jl_returninfo_t::Boxed:
@@ -4997,7 +5002,8 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
         jl_value_t *jt = jl_tparam(sig, i);
         if (is_uniquerep_Type(jt))
             continue;
-        Type *ty = deserves_argbox(jt) ? T_prjlvalue : julia_type_to_llvm(ctx, jt);
+        bool isboxed = deserves_argbox(jt);
+        Type *ty = isboxed ? T_prjlvalue : julia_type_to_llvm(ctx, jt);
         if (type_is_ghost(ty))
             continue;
         unsigned argno = fsig.size();
@@ -5005,6 +5011,9 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
             attributes = attributes.addParamAttribute(jl_LLVMContext, argno, Attribute::NoCapture);
             attributes = attributes.addParamAttribute(jl_LLVMContext, argno, Attribute::ReadOnly);
             ty = PointerType::get(ty, AddressSpace::Derived);
+        }
+        else if (isboxed && jl_is_immutable_datatype(jt)) {
+            attributes = attributes.addParamAttribute(jl_LLVMContext, argno, Attribute::ReadOnly);
         }
         fsig.push_back(ty);
     }
@@ -5581,6 +5590,8 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             if (isboxed) // e.g. is-pointer
                 maybe_mark_argument_dereferenceable(Arg, argType);
             theArg = mark_julia_type(ctx, Arg, isboxed, argType);
+            if (theArg.tbaa == tbaa_immut)
+                theArg.tbaa = tbaa_const;
         }
         return theArg;
     };
@@ -5683,7 +5694,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                 emit_varinfo_assign(ctx, vi, tuple);
             }
             else {
-                restTuple = emit_jlcall(ctx, prepare_call(jltuple_func), maybe_decay_untracked(V_null),
+                restTuple = emit_jlcall(ctx, prepare_call(jltuple_func).getCallee(), maybe_decay_untracked(V_null),
                     vargs, ctx.nvargs, JLCALL_F_CC);
                 jl_cgval_t tuple = mark_julia_type(ctx, restTuple, true, vi.value.typ);
                 emit_varinfo_assign(ctx, vi, tuple);
@@ -6392,12 +6403,12 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         bool in_prologue = true;
         for (auto &BB : *ctx.f) {
             for (auto &I : BB) {
-                CallSite call(&I);
+                CallBase *call = dyn_cast<CallBase>(&I);
                 if (call && !I.getDebugLoc()) {
                     // LLVM Verifier: inlinable function call in a function with debug info must have a !dbg location
                     // make sure that anything we attempt to call has some inlining info, just in case optimization messed up
                     // (except if we know that it is an intrinsic used in our prologue, which should never have its own debug subprogram)
-                    Function *F = call.getCalledFunction();
+                    Function *F = call->getCalledFunction();
                     if (!in_prologue || !F || !(F->isIntrinsic() || F->getName().startswith("julia.") || &I == restTuple)) {
                         I.setDebugLoc(topdebugloc);
                     }
@@ -7418,6 +7429,37 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_llvm(void)
 {
+    jl_page_size = jl_getpagesize();
+    imaging_mode = jl_generating_output() && !jl_options.incremental;
+    jl_default_cgparams.module_setup = jl_nothing;
+    jl_default_cgparams.module_activation = jl_nothing;
+    jl_default_cgparams.raise_exception = jl_nothing;
+    jl_default_cgparams.emit_function = jl_nothing;
+    jl_default_cgparams.emitted_function = jl_nothing;
+    jl_init_debuginfo();
+
+    InitializeNativeTarget();
+    InitializeNativeTargetAsmPrinter();
+    InitializeNativeTargetAsmParser();
+    InitializeNativeTargetDisassembler();
+
+    // Initialize passes
+    PassRegistry &Registry = *PassRegistry::getPassRegistry();
+    initializeCore(Registry);
+    initializeCoroutines(Registry);
+    initializeScalarOpts(Registry);
+    initializeVectorization(Registry);
+    initializeAnalysis(Registry);
+    initializeTransformUtils(Registry);
+    initializeInstCombine(Registry);
+    initializeAggressiveInstCombine(Registry);
+    initializeInstrumentation(Registry);
+    initializeTarget(Registry);
+#ifdef USE_POLLY
+    polly::initializePollyPasses(Registry);
+#endif
+
+    // Parse command line flags after initialization
     const char *const argv_tailmerge[] = {"", "-enable-tail-merge=0"}; // NOO TOUCHIE; NO TOUCH! See #922
     cl::ParseCommandLineOptions(sizeof(argv_tailmerge)/sizeof(argv_tailmerge[0]), argv_tailmerge, "disable-tail-merge\n");
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
@@ -7437,26 +7479,6 @@ extern "C" void jl_init_llvm(void)
         const char *const argv_smdl[] = {"", "-combiner-store-merge-dependence-limit=4"};
         cl::ParseCommandLineOptions(sizeof(argv_smdl)/sizeof(argv_smdl[0]), argv_smdl);
     }
-
-    jl_page_size = jl_getpagesize();
-    imaging_mode = jl_generating_output() && !jl_options.incremental;
-    jl_default_cgparams.module_setup = jl_nothing;
-    jl_default_cgparams.module_activation = jl_nothing;
-    jl_default_cgparams.raise_exception = jl_nothing;
-    jl_default_cgparams.emit_function = jl_nothing;
-    jl_default_cgparams.emitted_function = jl_nothing;
-    jl_init_debuginfo();
-
-#ifdef USE_POLLY
-    PassRegistry &Registry = *PassRegistry::getPassRegistry();
-    polly::initializePollyPasses(Registry);
-    initializeAnalysis(Registry);
-#endif
-
-    InitializeNativeTarget();
-    InitializeNativeTargetAsmPrinter();
-    InitializeNativeTargetAsmParser();
-    InitializeNativeTargetDisassembler();
 
     TargetOptions options = TargetOptions();
     //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
@@ -7576,6 +7598,13 @@ extern "C" void jl_init_codegen(void)
     UBOX_F(ssavalue,size);
 
     jl_init_intrinsic_functions_codegen(m);
+}
+
+extern "C" void jl_teardown_codegen()
+{
+    // output LLVM timings and statistics
+    reportAndResetTimings();
+    PrintStatistics();
 }
 
 // the rest of this file are convenience functions

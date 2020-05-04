@@ -459,10 +459,10 @@ end
     end
 end
 @testset "indexing range with empty range (#4309)" begin
-    @test (3:6)[5:4] == 7:6
+    @test (3:6)[5:4] === 7:6
     @test_throws BoundsError (3:6)[5:5]
     @test_throws BoundsError (3:6)[5]
-    @test (0:2:10)[7:6] == 12:2:10
+    @test (0:2:10)[7:6] === 12:2:10
     @test_throws BoundsError (0:2:10)[7:7]
 end
 # indexing with negative ranges (#8351)
@@ -818,7 +818,8 @@ end
                        map(Int32,1:3:17), map(Int64,1:3:17), 1:0, 1:-1:0, 17:-3:0,
                        0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),map(Float32,LinRange(0.0, 1.0, 11)),
                        1.0:eps():1.0 .+ 10eps(), 9007199254740990.:1.0:9007199254740994,
-                       range(0, stop=1, length=20), map(Float32, range(0, stop=1, length=20))]
+                       range(0, stop=1, length=20), map(Float32, range(0, stop=1, length=20)),
+                       3:2, 5:-2:7, range(0.0, step=2.0, length=0), 3//2:3//2:0//1, LinRange(2,3,0)]
     for r in Rs
         local r
         ar = Vector(r)
@@ -838,6 +839,7 @@ end
     @test 1:1:10 == 1:10 == 1:10 == Base.OneTo(10) == Base.OneTo(10)
     @test 1:10 != 2:10 != 2:11 != Base.OneTo(11)
     @test Base.OneTo(10) != Base.OneTo(11) != 1:10
+    @test Base.OneTo(0) == 5:4
 end
 # issue #2959
 @test 1.0:1.5 == 1.0:1.0:1.5 == 1.0:1.0
@@ -1232,6 +1234,7 @@ end
             @test i == (k += 1)
         end
         @test intersect(r, Base.OneTo(2)) == Base.OneTo(2)
+        @test union(r, Base.OneTo(4)) == Base.OneTo(4)
         @test intersect(r, 0:5) == 1:3
         @test intersect(r, 2) === intersect(2, r) === 2:2
         @test findall(in(r), r) === findall(in(1:length(r)), r) ===
@@ -1400,6 +1403,22 @@ end
     @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
 end
 
+@testset "Views of ranges" begin
+    @test view(Base.OneTo(10), Base.OneTo(5)) === Base.OneTo(5)
+    @test view(1:10, 1:5) === 1:5
+    @test view(1:10, 1:2:5) === 1:2:5
+    @test view(1:2:9, 1:5) === 1:2:9
+
+    # Ensure we don't hit a fallback `view` if there's a better `getindex` implementation
+    vmt = collect(methods(view, Tuple{AbstractRange, AbstractRange}))
+    for m in methods(getindex, Tuple{AbstractRange, AbstractRange})
+        tt = Base.tuple_type_tail(m.sig)
+        tt == Tuple{AbstractArray,Vararg{Any,N}} where N && continue
+        vm = findfirst(sig->tt <: Base.tuple_type_tail(sig.sig), vmt)
+        @test vmt[vm].sig != Tuple{typeof(view),AbstractArray,Vararg{Any,N}} where N
+    end
+end
+
 @testset "Issue #26608" begin
     @test_throws BoundsError (Int8(-100):Int8(100))[400]
     @test_throws BoundsError (-100:100)[typemax(UInt)]
@@ -1538,11 +1557,11 @@ end
         for stops in [-2, 0, 2, 100]
             for lengths in [2, 10, 100]
                 if stops >= starts
-                    @test range(starts, stops, length=lengths) == range(starts, stop=stops, length=lengths)
+                    @test range(starts, stops, length=lengths) === range(starts, stop=stops, length=lengths)
                 end
             end
             for steps in [0.01, 1, 2]
-                @test range(starts, stops, step=steps) == range(starts, stop=stops, step=steps)
+                @test range(starts, stops, step=steps) === range(starts, stop=stops, step=steps)
             end
         end
     end

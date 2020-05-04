@@ -116,4 +116,96 @@ macro optlevel(n::Int)
     return Expr(:meta, :optlevel, n)
 end
 
+# UI features for errors
+
+"""
+    Experimental.register_error_hint(handler, exceptiontype)
+
+Register a "hinting" function `handler(io, exception)` that can
+suggest potential ways for users to circumvent errors.  `handler`
+should examine `exception` to see whether the conditions appropriate
+for a hint are met, and if so generate output to `io`.
+Packages should call `register_error_hint` from within their
+`__init__` function.
+
+For specific exception types, `handler` is required to accept additional arguments:
+
+- `MethodError`: provide `handler(io, exc::MethodError, argtypes, kwargs)`,
+  which splits the combined arguments into positional and keyword arguments.
+
+When issuing a hint, the output should typically start with `\\n`.
+
+If you define custom exception types, your `showerror` method can
+support hints by calling [`Experimental.show_error_hints`](@ref).
+
+# Example
+
+```
+julia> module Hinter
+
+       only_int(x::Int)      = 1
+       any_number(x::Number) = 2
+
+       function __init__()
+           Base.Experimental.register_error_hint(MethodError) do io, exc, argtypes, kwargs
+               if exc.f == only_int
+                    # Color is not necessary, this is just to show it's possible.
+                    print(io, "\\nDid you mean to call ")
+                    printstyled(io, "`any_number`?", color=:cyan)
+               end
+           end
+       end
+
+       end
+```
+
+Then if you call `Hinter.only_int` on something that isn't an `Int` (thereby triggering a `MethodError`), it issues the hint:
+
+```
+julia> Hinter.only_int(1.0)
+ERROR: MethodError: no method matching only_int(::Float64)
+Did you mean to call `any_number`?
+Closest candidates are:
+    ...
+```
+
+!!! compat "Julia 1.5"
+    Custom error hints are available as of Julia 1.5.
+!!! warning
+    This interface is experimental and subject to change or removal without notice.
+    To insulate yourself against changes, consider putting any registrations inside an
+    `if isdefined(Base.Experimental, :register_error_hint) ... end` block.
+"""
+function register_error_hint(handler, exct::Type)
+    list = get!(()->[], _hint_handlers, exct)
+    push!(list, handler)
+    return nothing
+end
+
+const _hint_handlers = IdDict{Type,Vector{Any}}()
+
+"""
+    Experimental.show_error_hints(io, ex, args...)
+
+Invoke all handlers from [`Experimental.register_error_hint`](@ref) for the particular
+exception type `typeof(ex)`. `args` must contain any other arguments expected by
+the handler for that type.
+
+!!! compat "Julia 1.5"
+    Custom error hints are available as of Julia 1.5.
+!!! warning
+    This interface is experimental and subject to change or removal without notice.
+"""
+function show_error_hints(io, ex, args...)
+    hinters = get!(()->[], _hint_handlers, typeof(ex))
+    for handler in hinters
+        try
+            Base.invokelatest(handler, io, ex, args...)
+        catch err
+            tn = typeof(handler).name
+            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error"
+        end
+    end
+end
+
 end

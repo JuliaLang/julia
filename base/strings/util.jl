@@ -71,6 +71,33 @@ function endswith(a::Union{String, SubString{String}},
 end
 
 """
+    contains(haystack::AbstractString, needle)
+
+Return `true` if `haystack` contains `needle`.
+This is the same as `occursin(needle, haystack)`, but is provided for consistency with
+`startswith(haystack, needle)` and `endswith(haystack, needle)`.
+
+# Examples
+```jldoctest
+julia> contains("JuliaLang is pretty cool!", "Julia")
+true
+
+julia> contains("JuliaLang is pretty cool!", 'a')
+true
+
+julia> contains("aba", r"a.a")
+true
+
+julia> contains("abba", r"a.a")
+false
+```
+
+!!! compat "Julia 1.5"
+    The `contains` function requires at least Julia 1.5.
+"""
+contains(haystack::AbstractString, needle) = occursin(needle, haystack)
+
+"""
     endswith(suffix)
 
 Create a function that checks whether its argument ends with `suffix`, i.e.
@@ -99,6 +126,17 @@ used to implement specialized methods.
 
 """
 startswith(s) = Base.Fix2(startswith, s)
+
+"""
+    contains(needle)
+
+Create a function that checks whether its argument contains `needle`, i.e.
+a function equivalent to `haystack -> contains(haystack, needle)`.
+
+The returned function is of type `Base.Fix2{typeof(contains)}`, which can be
+used to implement specialized methods.
+"""
+contains(needle) = Base.Fix2(contains, needle)
 
 """
     chop(s::AbstractString; head::Integer = 0, tail::Integer = 1)
@@ -330,7 +368,7 @@ See also [`rsplit`](@ref).
 julia> a = "Ma.rch"
 "Ma.rch"
 
-julia> split(a,".")
+julia> split(a, ".")
 2-element Array{SubString{String},1}:
  "Ma"
  "rch"
@@ -354,8 +392,8 @@ end
 function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
     i = 1 # firstindex(str)
     n = lastindex(str)
-    r = something(findfirst(splitter,str), 0)
-    if r != 0:-1
+    r = findfirst(splitter,str)
+    if !isnothing(r)
         j, k = first(r), nextind(str,last(r))
         while 0 < j <= n && length(strs) != limit-1
             if i < k
@@ -365,8 +403,8 @@ function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, 
                 i = k
             end
             (k <= j) && (k = nextind(str,j))
-            r = something(findnext(splitter,str,k), 0)
-            r == 0:-1 && break
+            r = findnext(splitter,str,k)
+            isnothing(r) && break
             j, k = first(r), nextind(str,last(r))
         end
     end
@@ -392,7 +430,7 @@ Similar to [`split`](@ref), but starting from the end of the string.
 julia> a = "M.a.r.c.h"
 "M.a.r.c.h"
 
-julia> rsplit(a,".")
+julia> rsplit(a, ".")
 5-element Array{SubString{String},1}:
  "M"
  "a"
@@ -400,11 +438,11 @@ julia> rsplit(a,".")
  "c"
  "h"
 
-julia> rsplit(a,".";limit=1)
+julia> rsplit(a, "."; limit=1)
 1-element Array{SubString{String},1}:
  "M.a.r.c.h"
 
-julia> rsplit(a,".";limit=2)
+julia> rsplit(a, "."; limit=2)
 2-element Array{SubString{String},1}:
  "M.a.r.c"
  "h"

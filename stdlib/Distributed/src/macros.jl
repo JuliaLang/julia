@@ -175,7 +175,8 @@ Errors on any of the processes are collected into a
 
     @everywhere bar = 1
 
-will define `Main.bar` on all processes.
+will define `Main.bar` on all current processes. Any processes added later
+(say with [`addprocs()`](@ref)) will not have the expression defined.
 
 Unlike [`@spawnat`](@ref), `@everywhere` does not capture any local variables.
 Instead, local variables can be broadcast using interpolation:

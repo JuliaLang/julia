@@ -424,25 +424,27 @@ the common idiom `fill(x)` creates a zero-dimensional array containing the singl
 
 # Examples
 ```jldoctest
-julia> fill(1.0, (5,5))
-5×5 Array{Float64,2}:
- 1.0  1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0  1.0
-
-julia> fill(0.5, 1, 2)
-1×2 Array{Float64,2}:
- 0.5  0.5
+julia> fill(1.0, (2,3))
+2×3 Array{Float64,2}:
+ 1.0  1.0  1.0
+ 1.0  1.0  1.0
 
 julia> fill(42)
 0-dimensional Array{Int64,0}:
 42
 ```
 
-If `x` is an object reference, all elements will refer to the same object. `fill(Foo(),
-dims)` will return an array filled with the result of evaluating `Foo()` once.
+If `x` is an object reference, all elements will refer to the same object:
+```jldoctest
+julia> A = fill(zeros(2), 2);
+
+julia> A[1][1] = 42; # modifies both A[1][1] and A[2][1]
+
+julia> A
+2-element Array{Array{Float64,1},1}:
+ [42.0, 0.0]
+ [42.0, 0.0]
+```
 """
 function fill end
 
@@ -1129,6 +1131,22 @@ function pop!(a::Vector)
     return item
 end
 
+function pop!(a::Vector, i::Integer)
+    x = a[i]
+    _deleteat!(a, i, 1)
+    x
+end
+
+function pop!(a::Vector, i::Integer, default)
+    if 1 <= i <= length(a)
+        x = @inbounds a[i]
+        _deleteat!(a, i, 1)
+        x
+    else
+        default
+    end
+end
+
 """
     pushfirst!(collection, items...) -> collection
 
@@ -1411,7 +1429,7 @@ To insert `replacement` before an index `n` without removing any items, use
 # Examples
 ```jldoctest
 julia> A = [-1, -2, -3, 5, 4, 3, -1]; splice!(A, 4:3, 2)
-0-element Array{Int64,1}
+Int64[]
 
 julia> A
 8-element Array{Int64,1}:
@@ -1653,7 +1671,7 @@ CartesianIndex(2, 1)
 """
 function findnext(A, start)
     l = last(keys(A))
-    i = start
+    i = oftype(l, start)
     i > l && return nothing
     while true
         A[i] && return i
@@ -1735,7 +1753,7 @@ CartesianIndex(1, 1)
 """
 function findnext(testf::Function, A, start)
     l = last(keys(A))
-    i = start
+    i = oftype(l, start)
     i > l && return nothing
     while true
         testf(A[i]) && return i
@@ -1839,8 +1857,8 @@ CartesianIndex(2, 1)
 ```
 """
 function findprev(A, start)
-    i = start
     f = first(keys(A))
+    i = oftype(f, start)
     i < f && return nothing
     while true
         A[i] && return i
@@ -1930,8 +1948,8 @@ CartesianIndex(2, 1)
 ```
 """
 function findprev(testf::Function, A, start)
-    i = start
     f = first(keys(A))
+    i = oftype(f, start)
     i < f && return nothing
     while true
         testf(A[i]) && return i
@@ -2073,7 +2091,7 @@ julia> findall(A)
  CartesianIndex(2, 2)
 
 julia> findall(falses(3))
-0-element Array{Int64,1}
+Int64[]
 ```
 """
 function findall(A)
@@ -2363,10 +2381,13 @@ end
 ## Filter ##
 
 """
-    filter(f, a::AbstractArray)
+    filter(f, a)
 
-Return a copy of `a`, removing elements for which `f` is `false`.
+Return a copy of collection `a`, removing elements for which `f` is `false`.
 The function `f` is passed one argument.
+
+!!! compat "Julia 1.4"
+    Support for `a` as a tuple requires at least Julia 1.4.
 
 # Examples
 ```jldoctest
@@ -2412,9 +2433,9 @@ function filter(f, a::AbstractArray)
 end
 
 """
-    filter!(f, a::AbstractVector)
+    filter!(f, a)
 
-Update `a`, removing elements for which `f` is `false`.
+Update collection `a`, removing elements for which `f` is `false`.
 The function `f` is passed one argument.
 
 # Examples

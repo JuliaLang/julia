@@ -787,7 +787,7 @@ implementations. An error is thrown if no fallback implementation exists.
 If `generated` is `true`, these `CodeInfo` instances will correspond to the method bodies
 yielded by expanding the generators.
 
-The keyword debuginfo controls the amount of code metadata present in the output.
+The keyword `debuginfo` controls the amount of code metadata present in the output.
 
 Note that an error will be thrown if `types` are not leaf types when `generated` is
 `true` and any of the corresponding methods are an `@generated` method.
@@ -1063,17 +1063,6 @@ function func_for_method_checked(m::Method, @nospecialize(types), sparams::Simpl
     end
     return m
 end
-
-function func_for_method_checked(m::Method, @nospecialize(types))
-    depwarn("The two argument form of `func_for_method_checked` is deprecated. Pass sparams in addition.",
-            :func_for_method_checked)
-    if isdefined(m, :generator) && !isdispatchtuple(types)
-        error("cannot call @generated function `", m, "` ",
-              "with abstract argument types: ", types)
-    end
-    return m
-end
-
 
 """
     code_typed(f, types; optimize=true, debuginfo=:default)

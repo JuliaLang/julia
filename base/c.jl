@@ -463,6 +463,25 @@ function reenable_sigint(f::Function)
     res
 end
 
+"""
+    exit_on_sigint(on::Bool)
+
+Set `exit_on_sigint` flag of the julia runtime.  If `false`, Ctrl-C
+(SIGINT) is capturable as [`InterruptException`](@ref) in `try` block.
+This is the default behavior in REPL, any code run via `-e` and `-E`
+and in Julia script run with `-i` option.
+
+If `true`, `InterruptException` is not thrown by Ctrl-C.  Running code
+upon such event requires [`atexit`](@ref).  This is the default
+behavior in Julia script run without `-i` option.
+
+!!! compat "Julia 1.5"
+    Function `exit_on_sigint` requires at least Julia 1.5.
+"""
+function exit_on_sigint(on::Bool)
+    ccall(:jl_exit_on_sigint, Cvoid, (Cint,), on)
+end
+
 function ccallable(f::Function, rt::Type, argt::Type, name::Union{AbstractString,Symbol}=string(f))
     ccall(:jl_extern_c, Cvoid, (Any, Any, Any, Cstring), f, rt, argt, name)
 end

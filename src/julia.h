@@ -391,6 +391,7 @@ typedef struct {
     jl_svec_t *linearcache;  // unsorted array
     intptr_t hash;
     struct _jl_methtable_t *mt;
+    jl_array_t *partial;     // incomplete instantiations of this type
 } jl_typename_t;
 
 typedef struct {
@@ -1900,6 +1901,7 @@ typedef struct {
     const char **cmds;
     const char *image_file;
     const char *cpu_target;
+    int32_t nthreads;
     int32_t nprocs;
     const char *machine_file;
     const char *project;
@@ -1928,6 +1930,7 @@ typedef struct {
     const char *outputbc;
     const char *outputunoptbc;
     const char *outputo;
+    const char *outputasm;
     const char *outputji;
     const char *output_code_coverage;
     int8_t incremental;

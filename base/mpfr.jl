@@ -691,7 +691,6 @@ function min(x::BigFloat, y::BigFloat)
 end
 
 function modf(x::BigFloat)
-    isinf(x) && return (BigFloat(NaN), x)
     zint = BigFloat()
     zfloat = BigFloat()
     ccall((:mpfr_modf, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), zint, zfloat, x, ROUNDING_MODE[])

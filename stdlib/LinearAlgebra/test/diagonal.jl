@@ -711,4 +711,10 @@ end
     @test s1 == prod(sign, d)
 end
 
+@testset "Empty (#35424)" begin
+    @test zeros(0)'*Diagonal(zeros(0))*zeros(0) === 0.0
+    @test transpose(zeros(0))*Diagonal(zeros(Complex{Int}, 0))*zeros(0) === 0.0 + 0.0im
+    @test dot(zeros(Int32, 0), Diagonal(zeros(Int, 0)), zeros(Int16, 0)) === 0
+end
+
 end # module TestDiagonal

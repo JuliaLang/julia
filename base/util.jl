@@ -139,12 +139,12 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
                   end
         isempty(compile) || push!(addflags, "--compile=$compile")
     end
-    let depwarn = if opts.depwarn == 0
-                      "no"
+    let depwarn = if opts.depwarn == 1
+                      "yes"
                   elseif opts.depwarn == 2
                       "error"
                   else
-                      "" # default = "yes"
+                      "" # default = "no"
                   end
         isempty(depwarn) || push!(addflags, "--depwarn=$depwarn")
     end
@@ -506,22 +506,26 @@ end
 
 """
     Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_THREADS / 2),
-                  exit_on_error=false, [seed])
+                  exit_on_error=false, revise=false, [seed])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
 strings, using `ncores` processors. If `exit_on_error` is `false`, when one test
 fails, all remaining tests in other files will still be run; they are otherwise discarded,
 when `exit_on_error == true`.
+If `revise` is `true`, the `Revise` package is used to load any modifications to `Base` or
+to the standard libraries before running the tests.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
 function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
-                  exit_on_error=false,
+                  exit_on_error::Bool=false,
+                  revise::Bool=false,
                   seed::Union{BitInteger,Nothing}=nothing)
     if isa(tests,AbstractString)
         tests = split(tests)
     end
     exit_on_error && push!(tests, "--exit-on-error")
+    revise && push!(tests, "--revise")
     seed !== nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"

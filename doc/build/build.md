@@ -258,6 +258,8 @@ Add the following to the `Make.user` file:
 
 It is highly recommended to start with a fresh clone of the Julia repository.
 
+If you are building Julia for the sole purpose of incorporating Intel MKL, it may be beneficial to first try [MKL.jl](https://github.com/JuliaComputing/MKL.jl). This package will automatically download MKL and rebuild Julia's system image against it, sidestepping the need to set up a working build environment just to add MKL functionality.
+
 ## Source distributions of releases
 
 Each pre-release and release of Julia has a "full" source distribution and a "light" source

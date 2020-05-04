@@ -216,6 +216,7 @@ private:
     legacy::PassManager PM1;
     legacy::PassManager PM2;
     legacy::PassManager PM3;
+    TargetMachine *TMs[4];
     MCContext *Ctx;
     std::shared_ptr<RTDyldMemoryManager> MemMgr;
     DebugObjectRegistrar registrar;
@@ -239,6 +240,7 @@ Pass *createLateLowerGCFramePass();
 Pass *createLowerExcHandlersPass();
 Pass *createGCInvariantVerifierPass(bool Strong);
 Pass *createPropagateJuliaAddrspaces();
+Pass *createRemoveJuliaAddrspacesPass();
 Pass *createMultiVersioningPass();
 Pass *createAllocOptPass();
 // Whether the Function is an llvm or julia intrinsic.

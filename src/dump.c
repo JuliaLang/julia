@@ -2022,6 +2022,7 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
             memset(tn, 0, sizeof(jl_typename_t));
             tn->cache = jl_emptysvec; // the cache is refilled later (tag 5)
             tn->linearcache = jl_emptysvec; // the cache is refilled later (tag 5)
+            tn->partial = NULL;
             if (usetable)
                 backref_list.items[pos] = tn;
         }
@@ -2284,7 +2285,7 @@ static void jl_insert_methods(jl_array_t *list)
     }
 }
 
-extern int JL_DEBUG_METHOD_INVALIDATION;
+extern int jl_debug_method_invalidation;
 
 // verify that these edges intersect with the same methods as before
 static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
@@ -2376,7 +2377,7 @@ static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
             }
         }
         else {
-            if (JL_DEBUG_METHOD_INVALIDATION) {
+            if (jl_debug_method_invalidation) {
                 jl_static_show(JL_STDOUT, (jl_value_t*)caller);
                 jl_uv_puts(JL_STDOUT, "<<<\n", 4);
             }

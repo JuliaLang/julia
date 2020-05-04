@@ -19,8 +19,10 @@ New language features
   Similarly, passing an `a.b` expression uses `b` as the keyword or field name ([#29333]).
 
 * Packages can now provide custom hints to help users resolve errors by using the
-  `register_error_hint` function. Packages that define custom exception types
-  can support hints by calling `show_error_hints` from their `showerror` method. ([#35094])
+  experimental `Base.Experimental.register_error_hint` function.
+  Packages that define custom exception types can support hints by
+  calling the `Base.Experimental.show_error_hints` from their
+  `showerror` method. ([#35094])
 
 * Support for Unicode 13.0.0 (via utf8proc 2.5) ([#35282]).
 
@@ -72,7 +74,35 @@ Language changes
 * The line number of function definitions is now added by the parser as an
   additional `LineNumberNode` at the start of each function body ([#35138]).
 
+* Statements of the form `a'` now get lowered to `var"'"(a)` instead of `Base.adjoint(a)`. This
+  allows for shadowing this function in local scopes, although this is generally discouraged.
+  By default, Base exports `var"'"` as an alias of `Base.adjoint`, so custom types should still
+  extend `Base.adjoint`. ([#34634])
+
+Compiler/Runtime improvements
+-----------------------------
+
+* Immutable structs (including tuples) that contain references can now be allocated
+  on the stack, and allocated inline within arrays and other structs ([#33886]).
+  This significantly reduces the number of heap allocations in some workloads.
+  Code that requires assumptions about object layout and addresses (usually for
+  interoperability with C or other languages) might need to be updated; for
+  example any object that needs a stable address should be a `mutable struct`.
+
+Command-line option changes
+---------------------------
+
+* Deprecation warnings are no longer shown by default. i.e. if the `--depwarn=...` flag is
+  not passed it defaults to `--depwarn=no`. The warnings are printed from tests run by
+  `Pkg.test()`. ([#35362]).
+
 * Color now defaults to on when stdout and stderr are TTYs ([#34347])
+
+* `-t N`, `--threads N` starts Julia with `N` threads. This option takes precedence over
+  `JULIA_NUM_THREADS`. The specified number of threads also propagates to worker
+  processes spawned using the `-p`/`--procs` or `--machine-file` command line arguments.
+  In order to set number of threads for worker processes spawned with `addprocs` use the
+  `exeflags` keyword argument, e.g. `` addprocs(...; exeflags=`--threads 4`) `` ([#35108]).
 
 Multi-threading changes
 -----------------------
@@ -80,11 +110,13 @@ Multi-threading changes
 
 Build system changes
 --------------------
+* The build system now contains a pure-make caching system for expanding expensive operations at the latest
+  possible moment, while still expanding it only once. ([#35626])
 
 
 New library functions
 ---------------------
-* The `@ccall` macro has been added added to Base. It is a near drop-in replacement for `ccall` with more Julia-like syntax. It also wraps the new `foreigncall` API for varargs of different types, though it lacks the the capability to specify an LLVM calling convention. ([#32748])
+* The `@ccall` macro has been added to Base. It is a near drop-in replacement for `ccall` with more Julia-like syntax. It also wraps the new `foreigncall` API for varargs of different types, though it lacks the capability to specify an LLVM calling convention. ([#32748])
 * New functions `mergewith` and `mergewith!` supersede `merge` and `merge!` with `combine`
   argument.  They don't have the restriction for `combine` to be a `Function` and also
   provide one-argument method that returns a closure.  The old methods of `merge` and
@@ -96,6 +128,9 @@ New library functions
 * New function `bitreverse` for reversing the order of bits in a fixed-width integer ([#34791]).
 * New function `bitrotate(x, k)` for rotating the bits in a fixed-width integer ([#33937]).
 * One argument methods `startswith(x)` and `endswith(x)` have been added, returning partially-applied versions of the functions, similar to existing methods like `isequal(x)` ([#33193]).
+* New function `contains(haystack, needle)` and its one argument partially applied form have been added, it acts like `occursin(needle, haystack)`([#35132]).
+* New function `Base.exit_on_sigint` is added to control if `InterruptException` is
+  thrown by Ctrl-C ([#29411]).
 
 New library features
 --------------------
@@ -107,14 +142,25 @@ New library features
 * `x::Signed % Unsigned` and `x::Unsigned % Signed` are supported for integer bitstypes.
 * `signed(unsigned_type)` is supported for integer bitstypes, `unsigned(signed_type)` has been supported.
 * `accumulate`, `cumsum`, and `cumprod` now support `Tuple` ([#34654]) and arbitrary iterators ([#34656]).
+* `pop!(collection, key, [default])` now has a method for `Vector` to remove an element at an arbitrary index ([#35513]).
 * In `splice!` with no replacement, values to be removed can now be specified with an
   arbitrary iterable (instead of a `UnitRange`) ([#34524]).
+* The `@view` and `@views` macros now support the `a[begin]` syntax that was introduced in Julia 1.4 ([#35289]).
+* `open` for files now accepts a keyword argument `lock` controlling whether file operations
+  will acquire locks for safe multi-threaded access. Setting it to `false` provides better
+  performance when only one thread will access the file.
+* The introspection macros (`@which`, `@code_typed`, etc.) now work with `do`-block syntax ([#35283]) and with dot syntax ([#35522]).
+* `count` now accepts the `dims` keyword.
+* new in-place `count!` function similar to `sum!`.
 
 Standard library changes
 ------------------------
+* Empty ranges now compare equal, regardless of their startpoint and step ([#32348]).
 * A 1-d `Zip` iterator (where `Base.IteratorSize` is `Base.HasShape{1}()`) with defined length of `n` has now also size of `(n,)` (instead of throwing an error with truncated iterators) ([#29927]).
 * The `@timed` macro now returns a `NamedTuple` ([#34149])
 * New `supertypes(T)` function returns a tuple of all supertypes of `T` ([#34419]).
+* Views of builtin ranges are now recomputed ranges (like indexing returns) instead of
+  `SubArray`s ([#26872]).
 * Sorting-related functions such as `sort` that take the keyword arguments `lt`, `rev`, `order`
   and `by` now do not discard `order` if `by` or `lt` are passed. In the former case, the
   order from `order` is used to compare the values of `by(element)`. In the latter case,
@@ -122,6 +168,8 @@ Standard library changes
   ambiguity.
 * `close` on a file (`IOStream`) can now throw an exception if an error occurs when trying
   to flush buffered data to disk ([#35303]).
+* The large `StridedArray` `Union` now has special printing to avoid printing out its entire
+  contents ([#31149]).
 
 #### LinearAlgebra
 * The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
@@ -130,11 +178,25 @@ Standard library changes
 * The BLAS submodule now supports the level-2 BLAS subroutine `spmv!` ([#34320]).
 * The BLAS submodule now supports the level-1 BLAS subroutine `rot!` ([#35124]).
 * New generic `rotate!(x, y, c, s)` and `reflect!(x, y, c, s)` functions ([#35124]).
+* `hadamard` or `⊙` (`\odotTAB`) can be used as an elementwise multiplication operator,
+  and `tensor` or `⊗` (`\otimesTAB`) as the tensor product operator ([#35150]).
 
 #### Markdown
 
 
 #### Random
+
+* `randn!(::MersenneTwister, ::Array{Float64})` is faster, and as a result, for a given state of the RNG,
+  the corresponding generated numbers have changed ([#35078]).
+
+* `rand!(::MersenneTwister, ::Array{Bool})` is faster, and as a result, for a given state of the RNG,
+  the corresponding generated numbers have changed ([#33721]).
+
+* A new faster algorithm ("nearly division less") is used for generating random numbers
+  within a range ([#29240]). As a result, the streams of generated numbers are changed
+  (for ranges, like in `rand(1:9)`, and for collections in general, like in `rand([1, 2, 3])`).
+  Also, for performance, the undocumented property that, given a seed and `a, b` of type `Int`,
+  `rand(a:b)` produces the same stream on 32 and 64 bits architectures, is dropped.
 
 
 #### REPL
@@ -149,11 +211,15 @@ Standard library changes
 
 #### Dates
 * The `eps` function now accepts `TimeType` types ([#31487]).
+* The `zero` function now accepts `TimeType` types ([#35554]).
+
 
 #### Statistics
 
 
 #### Sockets
+* Joining and leaving UDP multicast groups on a `UDPSocket` is now supported
+  through `join_multicast_group()` and `leave_multicast_group()` ([#35521]).
 
 #### Distributed
 * `launch_on_machine` now supports and parses ipv6 square-bracket notation ([#34430])

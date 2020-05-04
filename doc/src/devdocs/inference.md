@@ -18,7 +18,7 @@ running session by navigating to `base` and executing
 development than if you rebuild Julia for each change.
 
 Alternatively, you can use the [Revise.jl](https://github.com/timholy/Revise.jl)
-package to track the compiler changes by using the the command
+package to track the compiler changes by using the command
 `Revise.track(Core.Compiler)` at the beginning of your Julia session. As
 explained in the [Revise documentation](https://timholy.github.io/Revise.jl/stable/),
 the modifications to the compiler will be reflected when the modified files
@@ -101,7 +101,7 @@ Each statement gets analyzed for its total cost in a function called
 where `f` is your function and `tt` is the Tuple-type of the arguments:
 
 ```jldoctest
-# A demo on `fill(3.5, (2, 3))
+# A demo on `fill(3.5, (2, 3))`
 f = fill
 tt = Tuple{Float64, Tuple{Int,Int}}
 # Create the objects we need to interact with the compiler
@@ -132,7 +132,7 @@ cst = map(cost, ci.code)
   0
   0
   0
-  1
+  0
   0
   0
   0

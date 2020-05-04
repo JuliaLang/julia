@@ -35,7 +35,7 @@ let
                 @test first(reverse(dr)) < f1
                 @test last(reverse(dr)) >= f1
                 @test issorted(dr)
-                @test sortperm(dr) == 1:1:0
+                @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                 @test !(f1 in dr)
                 @test !(l1 in dr)
                 @test !(f1 - pos_step in dr)
@@ -93,7 +93,7 @@ let
                 @test first(reverse(dr)) > l1
                 @test last(reverse(dr)) <= l1
                 @test issorted(dr)
-                @test sortperm(dr) == 1:1:0
+                @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                 @test !(l1 in dr)
                 @test !(l1 in dr)
                 @test !(l1 - neg_step in dr)
@@ -153,7 +153,7 @@ let
                     @test first(reverse(dr)) < f1
                     @test last(reverse(dr)) >= f1
                     @test issorted(dr)
-                    @test sortperm(dr) == 1:1:0
+                    @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                     @test !(f1 in dr)
                     @test !(l1 in dr)
                     @test !(f1 - pos_step in dr)
@@ -211,7 +211,7 @@ let
                     @test first(reverse(dr)) > l1
                     @test last(reverse(dr)) <= l1
                     @test issorted(dr)
-                    @test sortperm(dr) == 1:1:0
+                    @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                     @test !(l1 in dr)
                     @test !(l1 in dr)
                     @test !(l1 - neg_step in dr)

@@ -17,6 +17,7 @@ using Test
     @test 5//0 == 1//0
     @test -1//0 == -1//0
     @test -7//0 == -1//0
+    @test  (-1//2) // (-2//5) == 5//4
 
     @test_throws OverflowError -(0x01//0x0f)
     @test_throws OverflowError -(typemin(Int)//1)
@@ -26,9 +27,13 @@ using Test
     @test (typemax(Int)//1) / (typemax(Int)//1) == 1
     @test (1//typemax(Int)) / (1//typemax(Int)) == 1
     @test_throws OverflowError (1//2)^63
+    @test inv((1+typemin(Int))//typemax(Int)) == -1
+    @test_throws ArgumentError inv(typemin(Int)//typemax(Int))
+    @test_throws ArgumentError Rational(0x1, typemin(Int32))
 
     @test @inferred(rationalize(Int, 3.0, 0.0)) === 3//1
     @test @inferred(rationalize(Int, 3.0, 0)) === 3//1
+    @test_throws OverflowError rationalize(UInt, -2.0)
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
     # issue 26823
     @test_throws InexactError rationalize(Int, NaN)
@@ -37,6 +42,11 @@ using Test
     @test_throws ArgumentError 0 // 0
     @test -2 // typemin(Int) == -1 // (typemin(Int) >> 1)
     @test 2 // typemin(Int) == 1 // (typemin(Int) >> 1)
+
+    @test_throws InexactError Rational(UInt(1), typemin(Int32))
+    @test iszero(Rational{Int}(UInt(0), 1))
+    @test Rational{BigInt}(UInt(1), Int(-1)) == -1
+    @test_broken Rational{Int64}(UInt(1), typemin(Int32)) == Int64(1) // Int64(typemin(Int32))
 
     for a = -5:5, b = -5:5
         if a == b == 0; continue; end
@@ -119,6 +129,8 @@ end
         @test typemax(Rational{T}) == one(T)//zero(T)
         @test widen(Rational{T}) == Rational{widen(T)}
     end
+
+    @test iszero(typemin(Rational{UInt}))
 
     @test Rational(Float32(rand_int)) == Rational(rand_int)
 
@@ -247,22 +259,97 @@ end
 end
 
 @testset "round" begin
-    @test round(11//2) == 6//1 # rounds to closest _even_ integer
-    @test round(-11//2) == -6//1 # rounds to closest _even_ integer
-    @test round(11//3) == 4//1 # rounds to closest _even_ integer
-    @test round(-11//3) == -4//1 # rounds to closest _even_ integer
+    @test round(11//2) == round(11//2, RoundNearest) == 6//1 # rounds to closest _even_ integer
+    @test round(-11//2) == round(-11//2, RoundNearest) == -6//1 # rounds to closest _even_ integer
+    @test round(13//2) == round(13//2, RoundNearest) == 6//1 # rounds to closest _even_ integer
+    @test round(-13//2) == round(-13//2, RoundNearest) == -6//1 # rounds to closest _even_ integer
+    @test round(11//3) == round(11//3, RoundNearest) == 4//1 # rounds to closest _even_ integer
+    @test round(-11//3) == round(-11//3, RoundNearest) == -4//1 # rounds to closest _even_ integer
+
+    @test round(11//2, RoundNearestTiesAway) == 6//1
+    @test round(-11//2, RoundNearestTiesAway) == -6//1
+    @test round(13//2, RoundNearestTiesAway) == 7//1
+    @test round(-13//2, RoundNearestTiesAway) == -7//1
+    @test round(11//3, RoundNearestTiesAway) == 4//1
+    @test round(-11//3, RoundNearestTiesAway) == -4//1
+
+    @test round(11//2, RoundNearestTiesUp) == 6//1
+    @test round(-11//2, RoundNearestTiesUp) == -5//1
+    @test round(13//2, RoundNearestTiesUp) == 7//1
+    @test round(-13//2, RoundNearestTiesUp) == -6//1
+    @test round(11//3, RoundNearestTiesUp) == 4//1
+    @test round(-11//3, RoundNearestTiesUp) == -4//1
+
+    @test trunc(11//2) == round(11//2, RoundToZero) == 5//1
+    @test trunc(-11//2) == round(-11//2, RoundToZero) == -5//1
+    @test trunc(13//2) == round(13//2, RoundToZero) == 6//1
+    @test trunc(-13//2) == round(-13//2, RoundToZero) == -6//1
+    @test trunc(11//3) == round(11//3, RoundToZero) == 3//1
+    @test trunc(-11//3) == round(-11//3, RoundToZero) == -3//1
+
+    @test ceil(11//2) == round(11//2, RoundUp) == 6//1
+    @test ceil(-11//2) == round(-11//2, RoundUp) == -5//1
+    @test ceil(13//2) == round(13//2, RoundUp) == 7//1
+    @test ceil(-13//2) == round(-13//2, RoundUp) == -6//1
+    @test ceil(11//3) == round(11//3, RoundUp) == 4//1
+    @test ceil(-11//3) == round(-11//3, RoundUp) == -3//1
+
+    @test floor(11//2) == round(11//2, RoundDown) == 5//1
+    @test floor(-11//2) == round(-11//2, RoundDown) == -6//1
+    @test floor(13//2) == round(13//2, RoundDown) == 6//1
+    @test floor(-13//2) == round(-13//2, RoundDown) == -7//1
+    @test floor(11//3) == round(11//3, RoundDown) == 3//1
+    @test floor(-11//3) == round(-11//3, RoundDown) == -4//1
 
     for T in (Float16, Float32, Float64)
         @test round(T, true//false) === convert(T, Inf)
         @test round(T, true//true) === one(T)
         @test round(T, false//true) === zero(T)
+        @test trunc(T, true//false) === convert(T, Inf)
+        @test trunc(T, true//true) === one(T)
+        @test trunc(T, false//true) === zero(T)
+        @test floor(T, true//false) === convert(T, Inf)
+        @test floor(T, true//true) === one(T)
+        @test floor(T, false//true) === zero(T)
+        @test ceil(T, true//false) === convert(T, Inf)
+        @test ceil(T, true//true) === one(T)
+        @test ceil(T, false//true) === zero(T)
     end
 
     for T in (Int8, Int16, Int32, Int64, Bool)
         @test_throws DivideError round(T, true//false)
         @test round(T, true//true) === one(T)
         @test round(T, false//true) === zero(T)
+        @test_throws DivideError trunc(T, true//false)
+        @test trunc(T, true//true) === one(T)
+        @test trunc(T, false//true) === zero(T)
+        @test_throws DivideError floor(T, true//false)
+        @test floor(T, true//true) === one(T)
+        @test floor(T, false//true) === zero(T)
+        @test_throws DivideError ceil(T, true//false)
+        @test ceil(T, true//true) === one(T)
+        @test ceil(T, false//true) === zero(T)
     end
+
+    # issue 34657
+    @test round(1//0) === round(Rational, 1//0) === 1//0
+    @test trunc(1//0) === trunc(Rational, 1//0) === 1//0
+    @test floor(1//0) === floor(Rational, 1//0) === 1//0
+    @test ceil(1//0) === ceil(Rational, 1//0) === 1//0
+    @test round(-1//0) === round(Rational, -1//0) === -1//0
+    @test trunc(-1//0) === trunc(Rational, -1//0) === -1//0
+    @test floor(-1//0) === floor(Rational, -1//0) === -1//0
+    @test ceil(-1//0) === ceil(Rational, -1//0) === -1//0
+    for r = [RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp,
+             RoundToZero, RoundUp, RoundDown]
+        @test round(1//0, r) === 1//0
+        @test round(-1//0, r) === -1//0
+    end
+
+    @test @inferred(round(1//0, digits=1)) === Inf
+    @test @inferred(trunc(1//0, digits=2)) === Inf
+    @test @inferred(floor(-1//0, sigdigits=1)) === -Inf
+    @test @inferred(ceil(-1//0, sigdigits=2)) === -Inf
 end
 
 @testset "issue 1552" begin
@@ -385,23 +472,106 @@ end
 
 # issue #27039
 @testset "gcd, lcm, gcdx for Rational" begin
-    a = 6 // 35
-    b = 10 // 21
-    @test gcd(a, b) == 2//105
-    @test lcm(a, b) == 30//7
-    @test gcdx(a, b) == (2//105, -11, 4)
+    # TODO: Test gcd, lcm, gcdx for Rational{BigInt}.
+    for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128)
+        a = T(6) // T(35)
+        b = T(10) // T(21)
+        @test gcd(a, b) === T(2)//T(105)
+        @test gcd(b, a) === T(2)//T(105)
+        @test lcm(a, b) === T(30)//T(7)
+        if T <: Signed
+            @test gcdx(a, b) === (T(2)//T(105), T(-11), T(4))
+            @test gcd(-a, b) === T(2)//T(105)
+            @test gcd(a, -b) === T(2)//T(105)
+            @test gcd(-a, -b) === T(2)//T(105)
+            @test lcm(-a, b) === T(30)//T(7)
+            @test lcm(a, -b) === T(30)//T(7)
+            @test lcm(-a, -b) === T(30)//T(7)
+            @test gcdx(-a, b) === (T(2)//T(105), T(11), T(4))
+            @test gcdx(a, -b) === (T(2)//T(105), T(-11), T(-4))
+            @test gcdx(-a, -b) === (T(2)//T(105), T(11), T(-4))
+        end
 
-    @test gcdx(1//0, 1//2) == (1//0, 1, 0)
-    @test gcdx(1//2, 1//0) == (1//0, 0, 1)
-    @test gcdx(1//0, 1//0) == (1//0, 1, 1)
-    @test gcdx(1//0, 0//1) == (1//0, 1, 0)
-    @test gcdx(0//1, 0//1) == (0//1, 1, 0)
+        @test gcd(a, T(0)//T(1)) === a
+        @test lcm(a, T(0)//T(1)) === T(0)//T(1)
+        @test gcdx(a, T(0)//T(1)) === (a, T(1), T(0))
 
-    @test gcdx(1//3, 2) == (1//3, 1, 0)
-    @test lcm(1//3, 1) == 1//1
-    @test lcm(3//1, 1//0) == 3//1
-    @test lcm(0//1, 1//0) == 0//1
+        @test gcdx(T(1)//T(0), T(1)//T(2)) === (T(1)//T(0), T(1), T(0))
+        @test gcdx(T(1)//T(2), T(1)//T(0)) === (T(1)//T(0), T(0), T(1))
+        @test gcdx(T(1)//T(0), T(1)//T(1)) === (T(1)//T(0), T(1), T(0))
+        @test gcdx(T(1)//T(1), T(1)//T(0)) === (T(1)//T(0), T(0), T(1))
+        @test gcdx(T(1)//T(0), T(1)//T(0)) === (T(1)//T(0), T(1), T(1))
+        @test gcdx(T(1)//T(0), T(0)//T(1)) === (T(1)//T(0), T(1), T(0))
+        @test gcdx(T(0)//T(1), T(0)//T(1)) === (T(0)//T(1), T(1), T(0))
 
-    @test gcd([5, 2, 1//2]) == 1//2
+        if T <: Signed
+            @test gcdx(T(-1)//T(0), T(1)//T(2)) === (T(1)//T(0), T(1), T(0))
+            @test gcdx(T(1)//T(2), T(-1)//T(0)) === (T(1)//T(0), T(0), T(1))
+            @test gcdx(T(-1)//T(0), T(1)//T(1)) === (T(1)//T(0), T(1), T(0))
+            @test gcdx(T(1)//T(1), T(-1)//T(0)) === (T(1)//T(0), T(0), T(1))
+            @test gcdx(T(-1)//T(0), T(1)//T(0)) === (T(1)//T(0), T(1), T(1))
+            @test gcdx(T(1)//T(0), T(-1)//T(0)) === (T(1)//T(0), T(1), T(1))
+            @test gcdx(T(-1)//T(0), T(-1)//T(0)) === (T(1)//T(0), T(1), T(1))
+            @test gcdx(T(-1)//T(0), T(0)//T(1)) === (T(1)//T(0), T(1), T(0))
+            @test gcdx(T(0)//T(1), T(-1)//T(0)) === (T(1)//T(0), T(0), T(1))
+        end
+
+        @test gcdx(T(1)//T(3), T(2)) === (T(1)//T(3), T(1), T(0))
+        @test lcm(T(1)//T(3), T(1)) === T(1)//T(1)
+        @test lcm(T(3)//T(1), T(1)//T(0)) === T(3)//T(1)
+        @test lcm(T(0)//T(1), T(1)//T(0)) === T(0)//T(1)
+
+        @test lcm(T(1)//T(0), T(1)//T(2)) === T(1)//T(2)
+        @test lcm(T(1)//T(2), T(1)//T(0)) === T(1)//T(2)
+        @test lcm(T(1)//T(0), T(1)//T(1)) === T(1)//T(1)
+        @test lcm(T(1)//T(1), T(1)//T(0)) === T(1)//T(1)
+        @test lcm(T(1)//T(0), T(1)//T(0)) === T(1)//T(0)
+        @test lcm(T(1)//T(0), T(0)//T(1)) === T(0)//T(1)
+        @test lcm(T(0)//T(1), T(0)//T(1)) === T(0)//T(1)
+
+        if T <: Signed
+            @test lcm(T(-1)//T(0), T(1)//T(2)) === T(1)//T(2)
+            @test lcm(T(1)//T(2), T(-1)//T(0)) === T(1)//T(2)
+            @test lcm(T(-1)//T(0), T(1)//T(1)) === T(1)//T(1)
+            @test lcm(T(1)//T(1), T(-1)//T(0)) === T(1)//T(1)
+            @test lcm(T(-1)//T(0), T(1)//T(0)) === T(1)//T(0)
+            @test lcm(T(1)//T(0), T(-1)//T(0)) === T(1)//T(0)
+            @test lcm(T(-1)//T(0), T(-1)//T(0)) === T(1)//T(0)
+            @test lcm(T(-1)//T(0), T(0)//T(1)) === T(0)//T(1)
+            @test lcm(T(0)//T(1), T(-1)//T(0)) === T(0)//T(1)
+        end
+
+        @test gcd([T(5), T(2), T(1)//T(2)]) === T(1)//T(2)
+        @test gcd(T(5), T(2), T(1)//T(2)) === T(1)//T(2)
+
+        @test lcm([T(5), T(2), T(1)//T(2)]) === T(10)//T(1)
+        @test lcm(T(5), T(2), T(1)//T(2)) === T(10)//T(1)
+    end
 end
 
+@testset "Binary operations with Integer" begin
+    @test 1//2 - 1 == -1//2
+    @test -1//2 + 1 == 1//2
+    @test 1 - 1//2 == 1//2
+    @test 1 + 1//2 == 3//2
+    for q in (19//3, -4//5), i in (6, -7)
+        @test rem(q, i) == q - i*div(q, i)
+        @test mod(q, i) == q - i*fld(q, i)
+    end
+    @test 1//2 * 3 == 3//2
+    @test -3 * (1//2) == -3//2
+    @test (6//5) // -3 == -2//5
+    @test -4 // (-6//5) == 10//3
+
+    @test_throws OverflowError UInt(1)//2 - 1
+    @test_throws OverflowError 1 - UInt(5)//2
+    @test_throws OverflowError 1//typemax(Int64) + 1
+    @test_throws OverflowError Int8(1) + Int8(5)//(Int8(127)-Int8(1))
+    @test_throws InexactError UInt(1)//2 * -1
+    @test_throws OverflowError typemax(Int64)//1 * 2
+    @test_throws OverflowError -1//1 * typemin(Int64)
+
+    @test Int8(1) + Int8(4)//(Int8(127)-Int8(1)) == Int8(65) // Int8(63)
+    @test -Int32(1) // typemax(Int32) - Int32(1) == typemin(Int32) // typemax(Int32)
+    @test 1 // (typemax(Int128) + BigInt(1)) - 2 == (1 + BigInt(2)*typemin(Int128)) // (BigInt(1) + typemax(Int128))
+end

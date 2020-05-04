@@ -110,7 +110,7 @@ isodd(n::Integer) = rem(n, 2) != 0
 """
     iseven(x::Integer) -> Bool
 
-Return `true` is `x` is even (that is, divisible by 2), and `false` otherwise.
+Return `true` if `x` is even (that is, divisible by 2), and `false` otherwise.
 
 # Examples
 ```jldoctest
@@ -287,7 +287,8 @@ false
     x & y
 
 Bitwise and. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
-returning [`missing`](@ref) if one operand is `missing` and the other is `true`.
+returning [`missing`](@ref) if one operand is `missing` and the other is `true`. Add parentheses for
+function application form: `(&)(x, y)`.
 
 # Examples
 ```jldoctest

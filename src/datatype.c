@@ -73,6 +73,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->names = NULL;
     tn->hash = bitmix(bitmix(module ? module->build_id : 0, name->hash), 0xa1ada1da);
     tn->mt = NULL;
+    tn->partial = NULL;
     return tn;
 }
 
@@ -506,11 +507,10 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     // now finish deciding if this instantiation qualifies for special properties
     assert(!isbitstype || st->layout->npointers == 0); // the definition of isbits
     if (isinlinealloc && st->layout->npointers > 0) {
-        //if (st->ninitialized != nfields)
-        //    isinlinealloc = 0;
-        //else if (st->layout->fielddesc_type != 0) // GC only implements support for this
-        //    isinlinealloc = 0;
-        isinlinealloc = 0;
+        if (st->ninitialized != nfields)
+            isinlinealloc = 0;
+        else if (st->layout->fielddesc_type != 0) // GC only implements support for this
+            isinlinealloc = 0;
     }
     st->isbitstype = isbitstype;
     st->isinlinealloc = isinlinealloc;
