@@ -52,30 +52,34 @@ macro aliasscope(body)
 end
 
 
-function sync_end(refs)
-    local c_ex
-    defined = false
-    t = current_task()
-    cond = Threads.Condition()
-    lock(cond)
-    nremaining = length(refs)
-    for r in refs
-        schedule(Task(()->begin
-            try
-                wait(r)
-                lock(cond)
-                nremaining -= 1
-                nremaining == 0 && notify(cond)
-                unlock(cond)
-            catch e
-                lock(cond)
-                notify(cond, e; error=true)
-                unlock(cond)
-            end
-        end))
+function sync_end(c::Channel{Any})
+    if !isready(c)
+        # there must be at least one item to begin with
+        close(c)
+        return
     end
-    wait(cond)
-    unlock(cond)
+    nremaining::Int = 0
+    while true
+        event = take!(c)
+        if event === :__completion__
+            nremaining -= 1
+            if nremaining == 0
+                break
+            end
+        else
+            nremaining += 1
+            schedule(Task(()->begin
+                try
+                    wait(event)
+                    put!(c, :__completion__)
+                catch e
+                    close(c, e)
+                end
+            end))
+        end
+    end
+    close(c)
+    nothing
 end
 
 """
@@ -92,7 +96,7 @@ during error handling.
 macro sync(block)
     var = esc(sync_varname)
     quote
-        let $var = Any[]
+        let $var = Channel(Inf)
             v = $(esc(block))
             sync_end($var)
             v

@@ -821,3 +821,16 @@ end
     x = 2
     @test @eval(fetch(@async 2+$x)) == 4
 end
+
+# issue #34666
+fib34666(x) =
+    @sync begin
+        function f(x)
+            x in (0, 1) && return x
+            a = Threads.@spawn f(x - 2)
+            b = Threads.@spawn f(x - 1)
+            return fetch(a) + fetch(b)
+        end
+        f(x)
+    end
+@test fib34666(25) == 75025
