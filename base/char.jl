@@ -49,6 +49,7 @@ Char
 (::Type{AbstractChar})(x::Number) = Char(x)
 (::Type{T})(x::AbstractChar) where {T<:Union{Number,AbstractChar}} = T(codepoint(x))
 (::Type{T})(x::T) where {T<:AbstractChar} = x
+AbstractChar(x::AbstractChar) = x
 
 """
     ncodeunits(c::Char) -> Int
@@ -179,6 +180,7 @@ convert(::Type{AbstractChar}, x::Number) = Char(x) # default to Char
 convert(::Type{T}, x::Number) where {T<:AbstractChar} = T(x)
 convert(::Type{T}, x::AbstractChar) where {T<:Number} = T(x)
 convert(::Type{T}, c::AbstractChar) where {T<:AbstractChar} = T(c)
+convert(::Type{AbstractChar}, c::AbstractChar) = c
 convert(::Type{T}, c::T) where {T<:AbstractChar} = c
 
 rem(x::AbstractChar, ::Type{T}) where {T<:Number} = rem(codepoint(x), T)

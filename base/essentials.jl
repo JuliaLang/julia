@@ -174,6 +174,8 @@ convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent o
                                    # in the absence of inlining-enabled
                                    # (due to fields typed as `Type`, which is generally a bad idea)
 
+Union{}(x::Union{}) = throw(MethodError(convert, (Union{}, x)))
+
 """
     @eval [mod,] ex
 
