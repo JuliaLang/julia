@@ -108,6 +108,8 @@ Multi-threading changes
 
 Build system changes
 --------------------
+* The build system now contains a pure-make caching system for expanding expensive operations at the latest
+  possible moment, while still expanding it only once. ([#35626])
 
 
 New library functions

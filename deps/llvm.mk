@@ -79,8 +79,8 @@ LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_HOST_TRIPL
 ifeq ($(USE_POLLY_ACC),1)
 LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
 endif
-LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(shell $(JULIAHOME)/contrib/relative_path.sh $(build_prefix) $(build_depsbindir))
-LLVM_CMAKE += -DLLVM_UTILS_INSTALL_DIR=$(shell $(JULIAHOME)/contrib/relative_path.sh $(build_prefix) $(build_depsbindir))
+LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
+LLVM_CMAKE += -DLLVM_UTILS_INSTALL_DIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
 LLVM_CMAKE += -DLLVM_INCLUDE_UTILS=ON -DLLVM_INSTALL_UTILS=ON
 LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_HISTEDIT_H=Off -DHAVE_LIBEDIT=Off
 ifeq ($(LLVM_ASSERTIONS), 1)
