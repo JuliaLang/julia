@@ -715,6 +715,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64, modpath::U
                 invokelatest(callback, modkey)
             end
             for M in mod::Vector{Any}
+                M = M::Module
                 if PkgId(M) == modkey && module_build_id(M) === build_id
                     return M
                 end
