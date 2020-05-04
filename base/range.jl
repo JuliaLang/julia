@@ -289,16 +289,19 @@ unitrange_last(start::T, stop::T) where {T} =
                           convert(T,start-oneunit(stop-start)))
 
 if isdefined(Main, :Base)
-    function getindex(t::Tuple, r::AbstractUnitRange{<:Real})
-        n = length(r)
-        n == 0 && return ()
-        a = Vector{eltype(t)}(undef, n)
-        o = first(r) - 1
-        for i = 1:n
-            el = t[o + i]
-            @inbounds a[i] = el
+    # Constant-fold-able indexing into tuples to functionally expose Base.tail and Base.front
+    function getindex(@nospecialize(t::Tuple), r::UnitRange)
+        @_inline_meta
+        r.start > r.stop && return ()
+        if r.start == 1
+            r.stop == length(t)   && return t
+            r.stop == length(t)-1 && return front(t)
+            r.stop == length(t)-2 && return front(front(t))
+        elseif r.stop == length(t)
+            r.start == 2 && return tail(t)
+            r.start == 3 && return tail(tail(t))
         end
-        (a...,)
+        return (eltype(t)[t[ri] for ri in r]...,)
     end
 end
 
