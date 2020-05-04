@@ -1265,15 +1265,15 @@ end
     BroadcastOp{F} <: Function
 
 Represents the "dotted" version of an operator, which broadcasts the operator over its
-arguments, so `BroadcastOp(op)` is functionally equivalent to `(x...) -> op.(x...)`.
+arguments, so `BroadcastOp(op)` is functionally equivalent to `(x...) -> (op).(x...)`.
 
 Can be created by just passing an operator preceded by a dot to a higher-order function.
 
 # Examples
 ```jldoctest
-julia> a = [reshape(i:i+3, 2, 2) for i in [1, 5]];
+julia> a = [[1 3; 2 4], [5 7; 6 8]]
 
-julia> b = [reshape(i:i+3, 2, 2) for i in [9, 13]];
+julia> b = [[9 11; 10 12], [13 15; 14 16]]
 
 julia> map(.*, a, b)
 2-element Array{Array{Int64,2},1}:
@@ -1289,5 +1289,8 @@ struct BroadcastOp{F} <: Function
 end
 
 @inline (op::BroadcastOp)(x...) = op.f.(x...)
+
+show(io::IO, op::BroadcastOp) = print(io, "Base.BroadcastOp(", op.f, ')')
+show(io::IO, ::MIME"text/plain", op::BroadcastOp) = show(io, op)
 
 end # module
