@@ -65,29 +65,14 @@ find_bidiagonal(a::Bidiagonal, rest...) = a
 find_bidiagonal(bc::Broadcast.Broadcasted, rest...) = find_bidiagonal(find_bidiagonal(bc.args...), rest...)
 find_bidiagonal(x, rest...) = find_bidiagonal(rest...)
 
+merge_uplos(::Nothing, ::Nothing) = nothing
+merge_uplos(a, ::Nothing) = a
+merge_uplos(::Nothing, b) = b
+merge_uplos(a, b) = a == b ? a : 'T'
+
 find_uplo(a::Bidiagonal) = a.uplo
-find_uplo(a::Char) = a
-find_uplo(a::Number) = Nothing
-find_uplo(a) = Nothing
-
-function find_uplo(bc::Broadcast.Broadcasted, rest...)
-
-    left = find_uplo(bc.args[1])
-    right = find_uplo(bc.args[2])
-
-    tmp = (left, right)
-    myuplo = Nothing
-    for i = 1:length(tmp)
-        if typeof(tmp[i]) == Char
-            if myuplo == Nothing
-                myuplo = tmp[i]
-            else
-                myuplo = tmp[i] == myuplo ? myuplo : 'T'
-            end
-        end
-    end
-    return myuplo
-end
+find_uplo(a) = nothing
+find_uplo(bc::Broadcasted) = mapreduce(find_uplo, merge_uplos, bc.args, init=nothing)
 
 function structured_broadcast_alloc(bc, ::Type{<:Bidiagonal}, ::Type{ElType}, n) where {ElType}
     uplo = Nothing
