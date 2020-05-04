@@ -3,6 +3,8 @@
 # promote Bool to any other numeric type
 promote_rule(::Type{Bool}, ::Type{T}) where {T<:Number} = T
 
+convert(::Type{Bool}, x::Bool) = x   # prevent invalidation
+
 typemin(::Type{Bool}) = false
 typemax(::Type{Bool}) = true
 
