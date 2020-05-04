@@ -309,7 +309,17 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
     end
 
     # find trailing im/i/j
-    iᵢ = something(findprev(in(('m','i','j')), s, e), 0)
+    iᵢ = 0
+    # findprev with a predicate function is quite slow,
+    # use three separate calls to findprev with a char instead
+    for c in ('j', 'i', 'm')
+        local i = findprev(c, s, e)
+        if i !== nothing
+            iᵢ = i
+            break
+        end
+    end
+
     if iᵢ > 0 && s[iᵢ] == 'm' # im
         iᵢ -= 1
         if s[iᵢ] != 'i'
