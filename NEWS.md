@@ -28,6 +28,10 @@ New language features
   `Base.Experimental.@optlevel n`. For code that is not performance-critical, setting
   this to 0 or 1 can provide significant latency improvements ([#34896]).
 
+* Standalone "dotted" operators now get lowered to `Base.BroadcastOp(op)` and can be passed to
+  higher-order functions, i.e. `.op` is functionally equivalent to `(x...) -> op.(x...)`.
+  ([#34156], [#35706])
+
 Language changes
 ----------------
 
