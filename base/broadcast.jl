@@ -1261,6 +1261,29 @@ end
 end
 @inline broadcasted(::S, f, args...) where S<:BroadcastStyle = Broadcasted{S}(f, args)
 
+"""
+    BroadcastOp{F} <: Function
+
+Represents the "dotted" version of an operator, which broadcasts the operator over its
+arguments, so `BroadcastOp(op)` is functionally equivalent to `(x...) -> op.(x...)`.
+
+Can be created by just passing an operator preceded by a dot to a higher-order function.
+
+# Examples
+```jldoctest
+julia> a = [reshape(i:i+3, 2, 2) for i in [1, 5]];
+
+julia> b = [reshape(i:i+3, 2, 2) for i in [9, 13]];
+
+julia> map(.*, a, b)
+2-element Array{Array{Int64,2},1}:
+ [9 33; 20 48]
+ [65 105; 84 128]
+
+julia> Base.BroadcastOp(+)(a, b) == a .+ b
+true
+```
+"""
 struct BroadcastOp{F} <: Function
     f::F
 end
