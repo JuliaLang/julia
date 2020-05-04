@@ -502,7 +502,7 @@ v = OffsetArray(rand(8), (-2,))
 @test sort(A, dims=2) == OffsetArray(sort(parent(A), dims=2), A.offsets)
 # Issue #33977
 soa = OffsetArray([2,2,3], -2)
-@test searchsorted(soa, 1) == -1:-2
+@test searchsorted(soa, 1) === -1:-2
 @test searchsortedfirst(soa, 1) == -1
 @test searchsortedlast(soa, 1) == -2
 @test first(sort!(soa; alg=QuickSort)) == 2

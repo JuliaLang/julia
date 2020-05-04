@@ -6796,7 +6796,7 @@ function f27597(y)
     return y
 end
 @test f27597([1]) == [1]
-@test f27597([]) == 1:0
+@test f27597([]) === 1:0
 
 # issue #22291
 wrap22291(ind) = (ind...,)

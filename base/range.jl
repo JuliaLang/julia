@@ -743,18 +743,20 @@ show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
 
 ==(r::T, s::T) where {T<:AbstractRange} =
-    (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
+    (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s)))
 ==(r::OrdinalRange, s::OrdinalRange) =
-    (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
+    (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s)))
 ==(r::T, s::T) where {T<:Union{StepRangeLen,LinRange}} =
-    (first(r) == first(s)) & (length(r) == length(s)) & (last(r) == last(s))
+    (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (length(r) == length(s)) & (last(r) == last(s)))
 ==(r::Union{StepRange{T},StepRangeLen{T,T}}, s::Union{StepRange{T},StepRangeLen{T,T}}) where {T} =
-    (first(r) == first(s)) & (last(r) == last(s)) & (step(r) == step(s))
+    (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s)))
 
 function ==(r::AbstractRange, s::AbstractRange)
     lr = length(r)
     if lr != length(s)
         return false
+    elseif iszero(lr)
+        return true
     end
     yr, ys = iterate(r), iterate(s)
     while yr !== nothing
