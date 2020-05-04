@@ -1627,7 +1627,7 @@ static int invalidate_mt_cache(jl_typemap_entry_t *oldentry, void *closure0)
         }
         if (intersects) {
             if (jl_debug_method_invalidation) {
-                jl_uv_puts(JL_STDOUT, "-- ", 4);
+                jl_uv_puts(JL_STDOUT, "-- ", 3);
                 jl_static_show(JL_STDOUT, (jl_value_t*)mi);
                 jl_uv_puts(JL_STDOUT, "\n", 1);
             }
