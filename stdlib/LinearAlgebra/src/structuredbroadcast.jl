@@ -65,36 +65,23 @@ find_bidiagonal(a::Bidiagonal, rest...) = a
 find_bidiagonal(bc::Broadcast.Broadcasted, rest...) = find_bidiagonal(find_bidiagonal(bc.args...), rest...)
 find_bidiagonal(x, rest...) = find_bidiagonal(rest...)
 
+find_uplo(a::Bidiagonal) = a.uplo
+find_uplo(a::Number) = Nothing
+find_uplo(a::Char) = a
+
 function find_uplo(bc::Broadcast.Broadcasted, rest...)
 
-    if typeof(bc.args[1]) <: Broadcast.Broadcasted
-        left = find_uplo(bc.args[1])
-    else
-        left = bc.args[1]
-    end
-
-    if typeof(bc.args[2]) <: Broadcast.Broadcasted
-        right = find_uplo(bc.args[2])
-    else
-        right = bc.args[2]
-    end
+    left = find_uplo(bc.args[1])
+    right = find_uplo(bc.args[2])
 
     tmp = (left, right)
     myuplo = Nothing
     for i = 1:length(tmp)
-        if :uplo in fieldnames(typeof(tmp[i]))
+        if typeof(tmp[i]) == Char
             if myuplo == Nothing
-                myuplo = tmp[i].uplo
+                myuplo = tmp[i]
             else
-                myuplo = tmp[i].uplo == myuplo ? myuplo : 'T'
-            end
-        else
-            if typeof(tmp[i]) == Char
-                if myuplo == Nothing
-                    myuplo = tmp[i]
-                else
-                    myuplo = tmp[i] == myuplo ? myuplo : 'T'
-                end
+                myuplo = tmp[i] == myuplo ? myuplo : 'T'
             end
         end
     end
