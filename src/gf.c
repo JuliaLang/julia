@@ -1489,12 +1489,12 @@ static void update_max_args(jl_methtable_t *mt, jl_value_t *type)
         mt->max_args = na;
 }
 
-int JL_DEBUG_METHOD_INVALIDATION = 0;
+JL_DLLEXPORT int jl_debug_method_invalidation = 0;
 
 // recursively invalidate cached methods that had an edge to a replaced method
 static void invalidate_method_instance(jl_method_instance_t *replaced, size_t max_world, int depth)
 {
-    if (JL_DEBUG_METHOD_INVALIDATION) {
+    if (jl_debug_method_invalidation) {
         int d0 = depth;
         while (d0-- > 0)
             jl_uv_puts(JL_STDOUT, " ", 1);
@@ -1626,8 +1626,8 @@ static int invalidate_mt_cache(jl_typemap_entry_t *oldentry, void *closure0)
             }
         }
         if (intersects) {
-            if (JL_DEBUG_METHOD_INVALIDATION) {
-                jl_uv_puts(JL_STDOUT, "-- ", 4);
+            if (jl_debug_method_invalidation) {
+                jl_uv_puts(JL_STDOUT, "-- ", 3);
                 jl_static_show(JL_STDOUT, (jl_value_t*)mi);
                 jl_uv_puts(JL_STDOUT, "\n", 1);
             }
@@ -1776,7 +1776,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
             }
         }
     }
-    if (invalidated && JL_DEBUG_METHOD_INVALIDATION) {
+    if (invalidated && jl_debug_method_invalidation) {
         jl_uv_puts(JL_STDOUT, ">> ", 3);
         jl_static_show(JL_STDOUT, (jl_value_t*)method);
         jl_uv_puts(JL_STDOUT, " ", 1);
