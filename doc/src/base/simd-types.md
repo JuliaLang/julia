@@ -10,7 +10,7 @@ end
 ```
 
 It has a special compilation rule: a homogeneous tuple of `VecElement{T}` maps to an LLVM `vector`
-type.
+type when `T` is a primitive bits type.
 
 At `-O3`, the compiler *might* automatically vectorize operations on such tuples. For example,
 the following program, when compiled with `julia -O3` generates two SIMD addition instructions
