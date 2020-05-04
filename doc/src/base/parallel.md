@@ -9,6 +9,7 @@ Base.asyncmap
 Base.asyncmap!
 Base.fetch(t::Task)
 Base.current_task
+Base.root_task
 Base.istaskdone
 Base.istaskstarted
 Base.istaskfailed
