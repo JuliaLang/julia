@@ -623,6 +623,10 @@ getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]..
 Test whether the given array has a value associated with index `i`. Return `false`
 if the index is out of bounds, or has an undefined reference.
 
+    isassigned(ref) -> Bool
+
+Test whether the given [`Ref`](@ref) has been associated with a value. This is always true for a [`Ref`](@ref) for a bitstype. Return `false` if the reference is undefined.
+
 # Examples
 ```jldoctest
 julia> isassigned(rand(3, 3), 5)
@@ -641,6 +645,18 @@ julia> v = similar(rand(3), Foo)
 
 julia> isassigned(v, 1)
 false
+
+julia> ref = Ref{Function}()
+Base.RefValue{Function}(#undef)
+
+julia> ref[] = max
+max (generic function with 12 methods)
+
+julia> isassigned(ref)
+true
+
+julia> isassigned(Ref{Int}())
+true
 ```
 """
 function isassigned end
