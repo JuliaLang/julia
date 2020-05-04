@@ -66,8 +66,9 @@ find_bidiagonal(bc::Broadcast.Broadcasted, rest...) = find_bidiagonal(find_bidia
 find_bidiagonal(x, rest...) = find_bidiagonal(rest...)
 
 find_uplo(a::Bidiagonal) = a.uplo
-find_uplo(a::Number) = Nothing
 find_uplo(a::Char) = a
+find_uplo(a::Number) = Nothing
+find_uplo(a) = Nothing
 
 function find_uplo(bc::Broadcast.Broadcasted, rest...)
 
