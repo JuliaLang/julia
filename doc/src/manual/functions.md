@@ -399,7 +399,7 @@ would be a two-argument function, and this example would not work.
 
 It is often convenient to be able to write functions taking an arbitrary number of arguments.
 Such functions are traditionally known as "varargs" functions, which is short for "variable number
-of arguments". You can define a varargs function by following the last argument with an ellipsis:
+of arguments". You can define a varargs function by following the last positional argument with an ellipsis:
 
 ```jldoctest barfunc
 julia> bar(a,b,x...) = (a,b,x)
@@ -582,6 +582,14 @@ The types of keyword arguments can be made explicit as follows:
 
 ```julia
 function f(;x::Int=1)
+    ###
+end
+```
+
+Keyword arguments can also be used in varargs functions:
+
+```julia
+function plot(x...; style="solid")
     ###
 end
 ```
