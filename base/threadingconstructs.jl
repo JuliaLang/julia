@@ -155,7 +155,7 @@ constructed underlying closure. This allows you to insert the _value_ of a varia
 isolating the aysnchronous code from changes to the variable's value in the current task.
 
 !!! note
-    This feature is currently considered experimental.
+    See the manual chapter on threading for important caveats.
 
 !!! compat "Julia 1.3"
     This macro is available as of Julia 1.3.
