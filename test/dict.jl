@@ -1071,12 +1071,34 @@ end
 end
 
 @testset "copy!" begin
-    s = Dict(1=>2, 2=>3)
-    for a = ([3=>4], [0x3=>0x4], [3=>4, 5=>6, 7=>8], Pair{UInt,UInt}[3=>4, 5=>6, 7=>8])
-        @test s === copy!(s, Dict(a)) == Dict(a)
-        if length(a) == 1 # current limitation of Base.ImmutableDict
-            @test s === copy!(s, Base.ImmutableDict(a[])) == Dict(a[])
+    @testset "copy!(::$(typeof(s)), _)" for s in Any[
+            Dict(1 => 2, 2 => 3),                      # concrete key type
+            Dict{Union{Int,UInt},Int}(1 => 2, 2 => 3), # union key type
+            Dict{Any,Int}(1 => 2, 2 => 3),             # abstract key type
+            Dict{Int,Float64}(1 => 2, 2 => 3),         # values are converted
+        ]
+        @testset "copy!(_, ::$(typeof(Dict(a))))" for a in Any[
+                [3 => 4],
+                [0x3 => 0x4],
+                [3 => 4, 5 => 6, 7 => 8],
+                Pair{UInt,UInt}[3=>4, 5=>6, 7=>8],
+            ]
+            if s isa Dict{Union{Int,UInt},Int} && a isa Vector{Pair{UInt8,UInt8}}
+                @test_broken s === copy!(s, Dict(a)) == Dict(a)
+                continue
+            end
+            @test s === copy!(s, Dict(a)) == Dict(a)
+            if length(a) == 1 # current limitation of Base.ImmutableDict
+                @test s === copy!(s, Base.ImmutableDict(a[])) == Dict(a[])
+            end
         end
+    end
+
+    @testset "no corruption on failed copy!" begin
+        dst = Dict{Int,Int}(1 => 2)
+        # Fails while trying `convert`:
+        @test_throws MethodError copy!(dst, Dict(1 => "2"))
+        @test dst == Dict()
     end
 end
 
