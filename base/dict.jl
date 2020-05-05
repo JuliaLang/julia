@@ -274,60 +274,6 @@ function empty!(h::Dict{K,V}) where V where K
     return h
 end
 
-# Fast pass for exactly same `Dict` type:
-function copy!(dst::D, src::D) where {D <: Dict}
-    copy!(dst.vals, src.vals)
-    copy!(dst.keys, src.keys)
-    copy!(dst.slots, src.slots)
-    dst.ndel = src.ndel
-    dst.count = src.count
-    dst.age = src.age
-    dst.idxfloor = src.idxfloor
-    dst.maxprobe = src.maxprobe
-    return dst
-end
-
-# Fast pass when not changing key types (hence not changing hashes).
-# It is unsafe to call this function in the sense it may leave `dst`
-# in a state that is unsafe to use after `unsafe_copy!` failed.
-function unsafe_copy!(dst::Dict, src::Dict)
-    resize!(dst.vals, length(src.vals))
-    resize!(dst.keys, length(src.keys))
-
-    svals = src.vals
-    skeys = src.keys
-    dvals = dst.vals
-    dkeys = dst.keys
-    @inbounds for i = src.idxfloor:lastindex(svals)
-        if isslotfilled(src, i)
-            dvals[i] = svals[i]
-            dkeys[i] = skeys[i]
-        end
-    end
-
-    copy!(dst.slots, src.slots)
-
-    dst.ndel = src.ndel
-    dst.count = src.count
-    dst.age = src.age
-    dst.idxfloor = src.idxfloor
-    dst.maxprobe = src.maxprobe
-    return dst
-end
-
-function copy!(dst::Dict{Kd}, src::Dict{Ks}) where {Kd, Ks<:Kd}
-    try
-        return unsafe_copy!(dst, src)
-    catch
-        empty!(dst)  # avoid leaving `dst` in a corrupt state
-        rethrow()
-    end
-end
-
-# It's safe to call `unsafe_copy!` if `Vd>:Vs`:
-copy!(dst::Dict{Kd,Vd}, src::Dict{Ks,Vs}) where {Kd, Ks<:Kd, Vd, Vs<:Vd} =
-    unsafe_copy!(dst, src)
-
 # get the index where a key is stored, or -1 if not present
 function ht_keyindex(h::Dict{K,V}, key) where V where K
     sz = length(h.keys)
