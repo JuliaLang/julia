@@ -13,16 +13,20 @@ Creation of a `Ref` to a value `x` of type `T` is usually written `Ref(x)`.
 Additionally, for creating interior pointers to containers (such as Array or Ptr),
 it can be written `Ref(a, i)` for creating a reference to the `i`-th element of `a`.
 
-A `Ref` of a non-bitstype `T` referring to `undef` can be made by `Ref{T}()`.
-To check if a `Ref` refers to undef, use `isassigned(ref)`.
-For example, `isassigned(Ref{T}())` is `false` if T is a struct. This does not
-apply to primitive types. `isassigned(Ref{Int64}())` results in `true`.
+`Ref{T}()` creates a reference to a value of type `T` without initialization.
+For a bitstype `T`, the value will be whatever currently resides in the memory
+allocated. For a non-bitstype `T`, the value will be `undef` and will result in
+an error, "UndefRefError: access to undefined reference" if the Ref is
+deferenced.
 
-When passed as a `ccall` argument (either as a `Ptr` or `Ref` type), a `Ref` object will be
-converted to a native pointer to the data it references.
+To check if a `Ref` refers to [`undef`](@ref), use [`isassigned(ref::RefValue)`](@ref).
+For example, `isassigned(Ref{T}())` is `false` if T is not a bitstype struct.
+This does not apply to primitive types.
 
-There is no invalid (NULL) `Ref` in Julia, but a `C_NULL` instance of `Ptr` can be passed to
-a `ccall` Ref argument.
+When passed as a `ccall` argument (either as a `Ptr` or `Ref` type), a `Ref`
+object will be converted to a native pointer to the data it references.
+
+A `C_NULL` instance of `Ptr` can be passed to a `ccall` Ref argument to initialize it.
 
 # Use in broadcasting
 `Ref` is sometimes used in broadcasting in order to treat the referenced values as a scalar:
@@ -33,6 +37,18 @@ julia> isa.(Ref([1,2,3]), [Array, Dict, Int])
  1
  0
  0
+
+julia> Ref{Function}()
+Base.RefValue{Function}(#undef)
+
+julia> try Ref{Function}()[] catch e; println(e); end
+UndefRefError()
+
+julia> isassigned(Ref{Int64}())
+true
+
+julia> Ref(C_NULL)
+Base.RefValue{Ptr{Nothing}}(Ptr{Nothing} @0x0000000000000000)
 ```
 """
 Ref

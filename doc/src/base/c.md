@@ -23,6 +23,7 @@ Base.systemerror
 Base.windowserror
 Core.Ptr
 Core.Ref
+Base.isassigned(::Base.RefValue)
 Base.Cchar
 Base.Cuchar
 Base.Cshort
