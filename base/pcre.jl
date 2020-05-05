@@ -126,9 +126,9 @@ end
 
 function jit_compile(regex::Ptr{Cvoid})
     errno = ccall((:pcre2_jit_compile_8, PCRE_LIB), Cint,
-                  (Ptr{Cvoid}, UInt32), regex, JIT_COMPLETE) % UInt32
+                  (Ptr{Cvoid}, UInt32), regex, JIT_COMPLETE)
     errno == 0 && return true
-    errno == ERROR_JIT_BADOPTION && return false
+    errno % UInt32 == ERROR_JIT_BADOPTION && return false
     error("PCRE JIT error: $(err_message(errno))")
 end
 
@@ -147,7 +147,7 @@ free_match_context(context) =
 function err_message(errno)
     buffer = Vector{UInt8}(undef, 256)
     ccall((:pcre2_get_error_message_8, PCRE_LIB), Cvoid,
-          (UInt32, Ptr{UInt8}, Csize_t), errno, buffer, sizeof(buffer))
+          (Cint, Ptr{UInt8}, Csize_t), errno % Cint, buffer, sizeof(buffer))
     GC.@preserve buffer unsafe_string(pointer(buffer))
 end
 
