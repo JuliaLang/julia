@@ -728,9 +728,18 @@ end
     a = [1:5;]
     @test_throws ArgumentError Base.circshift!(a, a, 1)
     b = copy(a)
-    @test Base.circshift!(b, a, 1) == [5,1,2,3,4]
+    @test @inferred(Base.circshift!(b, a, 1) == [5,1,2,3,4])
+    src=rand(3,4,5)
+    dst=similar(src)
+    s=(1,2,3)
+    @inferred Base.circshift!(dst,src,s)
 end
 
+@testset "circcopy" begin
+    src=rand(3,4,5)
+    dst=similar(src)
+    @inferred Base.circcopy!(dst,src)
+end
 # unique across dim
 
 # With hash collisions
