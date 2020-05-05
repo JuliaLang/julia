@@ -395,6 +395,14 @@ end
     @test kron(b',2) == [8 10 12]
 end
 
+@testset "kron adjoint" begin
+    a = [1, 2, 3]
+    b = [4, 5, 6]
+    @test kron(a', b') isa Adjoint
+    @test kron(transpose(a), b') isa Transpose
+    @test kron(transpose(a), transpose(b)) isa Transpose
+end
+
 @testset "issue #4796" begin
     dim=2
     S=zeros(Complex,dim,dim)
