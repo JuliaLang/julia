@@ -569,3 +569,8 @@ end
     @test_throws BoundsError (1,2.0)[0:1]
     @test_throws BoundsError (1,2.0)[0:0]
 end
+
+@testset "big tuple convert stackoverflow #31935" begin
+    t = (rand(1:typemax(UInt8), 1024)...,);
+    @test convert(NTuple{1024, UInt8}, t) isa NTuple{1024, UInt8}
+end
