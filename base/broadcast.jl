@@ -11,7 +11,7 @@ using .Base.Cartesian
 using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
 import .Base: copy, copyto!, axes
-export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, broadcast_preserving_zero_d, BroadcastOp
+export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, broadcast_preserving_zero_d, BroadcastFunction
 
 ## Computing the result's axes: deprecated name
 const broadcast_axes = axes
@@ -1262,10 +1262,10 @@ end
 @inline broadcasted(::S, f, args...) where S<:BroadcastStyle = Broadcasted{S}(f, args)
 
 """
-    BroadcastOp{F} <: Function
+    BroadcastFunction{F} <: Function
 
 Represents the "dotted" version of an operator, which broadcasts the operator over its
-arguments, so `BroadcastOp(op)` is functionally equivalent to `(x...) -> (op).(x...)`.
+arguments, so `BroadcastFunction(op)` is functionally equivalent to `(x...) -> (op).(x...)`.
 
 Can be created by just passing an operator preceded by a dot to a higher-order function.
 
@@ -1280,17 +1280,17 @@ julia> map(.*, a, b)
  [9 33; 20 48]
  [65 105; 84 128]
 
-julia> Base.BroadcastOp(+)(a, b) == a .+ b
+julia> Base.BroadcastFunction(+)(a, b) == a .+ b
 true
 ```
 """
-struct BroadcastOp{F} <: Function
+struct BroadcastFunction{F} <: Function
     f::F
 end
 
-@inline (op::BroadcastOp)(x...) = op.f.(x...)
+@inline (op::BroadcastFunction)(x...) = op.f.(x...)
 
-Base.show(io::IO, op::BroadcastOp) = print(io, BroadcastOp, '(', op.f, ')')
-Base.show(io::IO, ::MIME"text/plain", op::BroadcastOp) = show(io, op)
+Base.show(io::IO, op::BroadcastFunction) = print(io, BroadcastFunction, '(', op.f, ')')
+Base.show(io::IO, ::MIME"text/plain", op::BroadcastFunction) = show(io, op)
 
 end # module

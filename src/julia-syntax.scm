@@ -1885,10 +1885,10 @@
 
 (define (expand-forms e)
   (cond
-    ;; if atom is a dotted operator .op, lower to BroadcastOp(op)
+    ;; if atom is a dotted operator .op, lower to BroadcastFunction(op)
     ((atom? e)
       (if (dotop-named? e)
-        `(call (top BroadcastOp) ,(undotop e))
+        `(call (top BroadcastFunction) ,(undotop e))
         e))
     ((memq (car e) '(quote inert top core globalref outerref module toplevel ssavalue null true false meta using import export thismodule toplevel-only))
       e)

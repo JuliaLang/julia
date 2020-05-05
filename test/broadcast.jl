@@ -924,8 +924,8 @@ f(a,b,c,d,e) = @. a = a + 1*(b+c+d+e)
 @allocated f(u,k1,k2,k3,k4)
 @test (@allocated f(u,k1,k2,k3,k4)) == 0
 
-@test identity(.+) == Broadcast.BroadcastOp(+)
-@test identity.(.*) == Broadcast.BroadcastOp(*)
+@test identity(.+) == Broadcast.BroadcastFunction(+)
+@test identity.(.*) == Broadcast.BroadcastFunction(*)
 @test map(.+, [[1,2], [3,4]], [5, 6]) == [[6,7], [9,10]]
-@test repr(.!) == "Base.Broadcast.BroadcastOp(!)"
-@test eval(:.+) == Base.BroadcastOp(+)
+@test repr(.!) == "Base.Broadcast.BroadcastFunction(!)"
+@test eval(:.+) == Base.BroadcastFunction(+)
