@@ -221,6 +221,7 @@ similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent,
 # sundry basic definitions
 parent(A::AdjOrTrans) = A.parent
 vec(v::TransposeAbsVec) = parent(v)
+vec(v::AdjointAbsVec{<:Real}) = parent(v)
 
 ### concatenation
 # preserve Adjoint/Transpose wrapper around vectors
