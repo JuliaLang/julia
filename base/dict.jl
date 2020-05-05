@@ -378,10 +378,6 @@ end
 
 function setindex!(h::Dict{K,V}, v0, key::K) where V where K
     v = convert(V, v0)
-    setindex!(h, v, key)
-end
-
-function setindex!(h::Dict{K,V}, v::V, key::K) where V where K
     index = ht_keyindex2!(h, key)
 
     if index > 0
