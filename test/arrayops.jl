@@ -705,13 +705,13 @@ end
     src=rand(3,4,5)
     dst=similar(src)
     s=(1,2,3)
-    @inferred circshift!(dst,src,s)
+    @inferred Base.circshift!(dst,src,s)
 end
 
 @testset "circcopy" begin
     src=rand(3,4,5)
     dst=similar(src)
-    @inferred circcopy!(dst,src)
+    @inferred Base.circcopy!(dst,src)
 end
 # unique across dim
 
