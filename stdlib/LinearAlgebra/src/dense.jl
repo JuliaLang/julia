@@ -301,7 +301,9 @@ function diagm_size(size::Tuple{Int,Int}, kv::Pair{<:Integer,<:AbstractVector}..
 end
 function diagm_container(size, kv::Pair{<:Integer,<:AbstractVector}...)
     T = promote_type(map(x -> eltype(x.second), kv)...)
-    return zeros(T, diagm_size(size, kv...)...)
+    # For some type `T`, `zero(T)` is not a `T` and `zeros(T, ...)` fails.
+    U = promote_type(T, typeof(zero(T)))
+    return zeros(U, diagm_size(size, kv...)...)
 end
 diagm_container(size, kv::Pair{<:Integer,<:BitVector}...) =
     falses(diagm_size(size, kv...)...)
