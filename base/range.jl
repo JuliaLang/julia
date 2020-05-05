@@ -1141,3 +1141,13 @@ julia> mod(3, 0:2)
 """
 mod(i::Integer, r::OneTo) = mod1(i, last(r))
 mod(i::Integer, r::AbstractUnitRange{<:Integer}) = mod(i-first(r), length(r)) + first(r)
+
+"""
+    clamp(x::Integer, r::AbstractUnitRange)
+
+Clamp `x` to lie within range `r`.
+
+!!! compat "Julia 1.5"
+     This method requires at least Julia 1.5.
+"""
+clamp(x::Integer, r::AbstractUnitRange) = clamp(x, first(r), last(r))
