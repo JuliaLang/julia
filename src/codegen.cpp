@@ -7547,6 +7547,16 @@ extern "C" void jl_teardown_codegen()
     PrintStatistics();
 }
 
+JL_DLLEXPORT void jl_codegenlock_begin(void)
+{
+    JL_LOCK(&codegen_lock);
+}
+
+JL_DLLEXPORT void jl_codegenlock_end(void)
+{
+    JL_UNLOCK(&codegen_lock);
+}
+
 // the rest of this file are convenience functions
 // that are exported for assisting with debugging from gdb
 extern "C" void jl_dump_llvm_value(void *v)
