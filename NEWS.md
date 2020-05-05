@@ -137,6 +137,7 @@ New library features
 * The introspection macros (`@which`, `@code_typed`, etc.) now work with `do`-block syntax ([#35283]) and with dot syntax ([#35522]).
 * `count` now accepts the `dims` keyword.
 * new in-place `count!` function similar to `sum!`.
+* `peek` is now exported and accepts a type to peek from a stream ([#28811]).
 
 Standard library changes
 ------------------------
