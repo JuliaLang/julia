@@ -1065,3 +1065,7 @@ defining your own strided arrays. [`StridedVector`](@ref) and [`StridedMatrix`](
 convenient aliases for many of the builtin array types that are considered strided arrays,
 allowing them to dispatch to select specialized implementations that call highly tuned and
 optimized BLAS and LAPACK functions using just the pointer and strides.
+
+It is worth emphasizing that strides are about offsets in memory rather than indexing. If
+you are looking to convert between linear (single-index) indexing and cartesian
+(multi-index) indexing, see [`LinearIndices`](@ref) and [`CartesianIndices`](@ref).
