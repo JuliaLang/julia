@@ -341,9 +341,9 @@ end
 
 Kronecker tensor product of two vectors or two matrices.
 
-For vectors v and w, the Kronecker product is related to the tensor product [`tensor`](@ref), or `⊗`, by
-`kron(v,w) == vec(w ⊗ v)` or
-`w ⊗ v == reshape(kron(v,w), (length(w), length(v)))`.
+For vectors v and w, the Kronecker product is related to the outer product by
+`kron(v,w) == vec(w*transpose(v))` or
+`w*transpose(v) == reshape(kron(v,w), (length(w), length(v)))`.
 Note how the ordering of `v` and `w` differs on the left and right
 of these expressions (due to column-major storage).
 
