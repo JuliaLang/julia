@@ -928,3 +928,4 @@ f(a,b,c,d,e) = @. a = a + 1*(b+c+d+e)
 @test identity.(.*) == Broadcast.BroadcastOp(*)
 @test map(.+, [[1,2], [3,4]], [5, 6]) == [[6,7], [9,10]]
 @test repr(.!) == "Base.Broadcast.BroadcastOp(!)"
+@test eval(:.+) == Base.BroadcastOp(+)

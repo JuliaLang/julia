@@ -616,6 +616,12 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
             while (*n == '_') ++n;
             if (*n == 0 && n > n0)
                 jl_eval_errorf(m, "all-underscore identifier used as rvalue");
+            // .op needs special lowering
+            if (jl_is_dotop_named(n)) {
+                jl_value_t *expanded = jl_expand(e, m);
+                if (!jl_is_symbol(expanded))
+                    return jl_toplevel_eval_flex(m, expanded, fast, expanded);
+            }
         }
         return jl_interpret_toplevel_expr_in(m, e, NULL, NULL);
     }
