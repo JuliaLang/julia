@@ -1669,7 +1669,6 @@ JL_DLLEXPORT int jl_is_operator(char *sym);
 JL_DLLEXPORT int jl_is_unary_operator(char *sym);
 JL_DLLEXPORT int jl_is_unary_and_binary_operator(char *sym);
 JL_DLLEXPORT int jl_operator_precedence(char *sym);
-JL_DLLEXPORT int jl_is_dotop_named(char *sym);
 
 STATIC_INLINE int jl_vinfo_sa(uint8_t vi)
 {

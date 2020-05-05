@@ -1037,15 +1037,6 @@ JL_DLLEXPORT int jl_operator_precedence(char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_is_dotop_named(char *sym)
-{
-    jl_ast_context_t *ctx = jl_ast_ctx_enter();
-    fl_context_t *fl_ctx = &ctx->fl;
-    int res = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "dotop-named?")), symbol(fl_ctx, sym));
-    jl_ast_ctx_leave(ctx);
-    return res;
-}
-
 int jl_has_meta(jl_array_t *body, jl_sym_t *sym)
 {
     size_t i, l = jl_array_len(body);
