@@ -43,14 +43,6 @@ check_parent_index_match(parent::AbstractArray{T,N}, ::NTuple{N, Bool}) where {T
 check_parent_index_match(parent, ::NTuple{N, Bool}) where {N} =
     throw(ArgumentError("number of indices ($N) must match the parent dimensionality ($(ndims(parent)))"))
 
-# This makes it possible to elide view allocation in cases where the
-# view is indexed with a boundscheck but otherwise all its uses
-# are inlined
-@inline Base.throw_boundserror(A::SubArray, I) =
-    __subarray_throw_boundserror(typeof(A), A.parent, A.indices, A.offset1, A.stride1, I)
-@noinline __subarray_throw_boundserror(::Type{T}, parent, indices, offset1, stride1, I) where {T} =
-    throw(BoundsError(T(parent, indices, offset1, stride1), I))
-
 # This computes the linear indexing compatibility for a given tuple of indices
 viewindexing(I::Tuple{}) = IndexLinear()
 # Leading scalar indices simply increase the stride
