@@ -139,4 +139,7 @@
     # Test that PCRE throws the correct kind of error
     # TODO: Uncomment this once the corresponding change has propagated to CI
     #@test_throws ErrorException Base.PCRE.info(C_NULL, Base.PCRE.INFO_NAMECOUNT, UInt32)
+
+    # test that we can get the error message of negative error codes
+    @test Base.PCRE.err_message(Base.PCRE.ERROR_NOMEMORY) isa String
 end
