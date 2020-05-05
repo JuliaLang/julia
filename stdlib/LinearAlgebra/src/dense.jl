@@ -341,11 +341,12 @@ end
 
 Kronecker tensor product of two vectors or two matrices.
 
-For vectors v and w, the Kronecker product is related to the outer product by
-`kron(v,w) == vec(w*transpose(v))` or
-`w*transpose(v) == reshape(kron(v,w), (length(w), length(v)))`.
+For real vectors `v` and `w`, the Kronecker product is related to the outer product by
+`kron(v,w) == vec(w * transpose(v))` or
+`w * transpose(v) == reshape(kron(v,w), (length(w), length(v)))`.
 Note how the ordering of `v` and `w` differs on the left and right
 of these expressions (due to column-major storage).
+For complex vectors, the outer product `w * v'` also differs by conjugation of `v`.
 
 # Examples
 ```jldoctest
