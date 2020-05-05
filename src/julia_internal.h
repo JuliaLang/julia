@@ -905,6 +905,10 @@ JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     jl_unionall_t *env, jl_value_t **vals);
 
 
+// Method invalidation debug output
+extern ios_t jl_f_method_invalidated;
+extern JL_STREAM* jl_s_method_invalidated;
+
 // Windows only
 #define JL_EXE_LIBNAME ((const char*)1)
 #define JL_DL_LIBNAME ((const char*)2)

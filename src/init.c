@@ -612,6 +612,24 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     }
 }
 
+ios_t jl_f_method_invalidated;
+JL_STREAM* jl_s_method_invalidated;
+static void jl_init_method_invalidated_streams(void) {
+    if (jl_options.trace_method_invalidations != NULL) {
+        if (jl_s_method_invalidated == NULL) {
+            const char* t = jl_options.trace_method_invalidations;
+            if (!strncmp(t, "stderr", 6))
+                jl_s_method_invalidated = JL_STDERR;
+            else {
+                if (ios_file(&jl_f_method_invalidated, t, 1, 1, 1, 1) == NULL)
+                    jl_errorf("cannot open method invalidation file \"%s\" for writing", t);
+                jl_s_method_invalidated = (JL_STREAM*) &jl_f_method_invalidated;
+            }
+        }
+    }
+}
+
+
 static void jl_set_io_wait(int v)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -774,6 +792,8 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         }
         JL_GC_POP();
     }
+
+    jl_init_method_invalidated_streams();
 
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_sigint_handler();

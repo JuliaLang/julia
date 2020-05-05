@@ -1921,6 +1921,7 @@ typedef struct {
     int8_t can_inline;
     int8_t polly;
     const char *trace_compile;
+    const char *trace_method_invalidations;
     int8_t fast_math;
     int8_t worker;
     const char *cookie;

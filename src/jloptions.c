@@ -58,6 +58,7 @@ jl_options_t jl_options = { 0,    // quiet
                             1,    // can_inline
                             JL_OPTIONS_POLLY_ON, // polly
                             NULL, // trace_compile
+                            NULL, // trace_method_invalidations
                             JL_OPTIONS_FAST_MATH_DEFAULT,
                             0,    // worker
                             NULL, // cookie
@@ -161,8 +162,10 @@ static const char opts_hidden[]  =
     " --output-bc name          Generate LLVM bitcode (.bc)\n"
     " --output-asm name         Generate an assembly file (.s)\n"
     " --output-incremental=no   Generate an incremental output file (rather than complete)\n"
-    " --trace-compile={stdout,stderr}\n"
+    " --trace-compile={name,stderr}\n"
     "                           Print precompile statements for methods compiled during execution.\n\n"
+    " --trace-method-invalidations={name,stderr}\n"
+    "                           Print method invalidations.\n\n"
 ;
 
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
@@ -183,6 +186,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_inline,
            opt_polly,
            opt_trace_compile,
+           opt_trace_method_invalidations,
            opt_math_mode,
            opt_worker,
            opt_bind_to,
@@ -244,6 +248,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "inline",          required_argument, 0, opt_inline },
         { "polly",           required_argument, 0, opt_polly },
         { "trace-compile",   required_argument, 0, opt_trace_compile },
+        { "trace-method-invalidations", required_argument, 0, opt_trace_method_invalidations },
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
@@ -615,6 +620,11 @@ restart_switch:
          case opt_trace_compile:
             jl_options.trace_compile = strdup(optarg);
             if (!jl_options.trace_compile)
+                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            break;
+        case opt_trace_method_invalidations:
+            jl_options.trace_method_invalidations = strdup(optarg);
+            if (!jl_options.trace_method_invalidations)
                 jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
             break;
         case opt_math_mode:

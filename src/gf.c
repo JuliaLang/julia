@@ -1485,17 +1485,17 @@ static void update_max_args(jl_methtable_t *mt, jl_value_t *type)
         mt->max_args = na;
 }
 
-JL_DLLEXPORT int jl_debug_method_invalidation = 0;
-
 // recursively invalidate cached methods that had an edge to a replaced method
 static void invalidate_method_instance(jl_method_instance_t *replaced, size_t max_world, int depth)
 {
-    if (jl_debug_method_invalidation) {
+    if (jl_options.trace_method_invalidations != NULL) {
         int d0 = depth;
         while (d0-- > 0)
-            jl_uv_puts(JL_STDOUT, " ", 1);
-        jl_static_show(JL_STDOUT, (jl_value_t*)replaced);
-        jl_uv_puts(JL_STDOUT, "\n", 1);
+            jl_uv_puts(jl_s_method_invalidated, " ", 1);
+        jl_static_show(jl_s_method_invalidated, (jl_value_t*)replaced);
+        jl_uv_puts(jl_s_method_invalidated, "\n", 1);
+        if (jl_s_method_invalidated != JL_STDERR)
+            ios_flush(&jl_f_method_invalidated);
     }
     if (!jl_is_method(replaced->def.method))
         return; // shouldn't happen, but better to be safe
@@ -1622,10 +1622,12 @@ static int invalidate_mt_cache(jl_typemap_entry_t *oldentry, void *closure0)
             }
         }
         if (intersects) {
-            if (jl_debug_method_invalidation) {
-                jl_uv_puts(JL_STDOUT, "-- ", 3);
-                jl_static_show(JL_STDOUT, (jl_value_t*)mi);
-                jl_uv_puts(JL_STDOUT, "\n", 1);
+            if (jl_options.trace_method_invalidations != NULL) {
+                jl_uv_puts(jl_s_method_invalidated, "-- ", 3);
+                jl_static_show(jl_s_method_invalidated, (jl_value_t*)mi);
+                jl_uv_puts(jl_s_method_invalidated, "\n", 1);
+                if (jl_s_method_invalidated != JL_STDERR)
+                    ios_flush(&jl_f_method_invalidated);
             }
             oldentry->max_world = env->max_world;
         }
@@ -1772,12 +1774,14 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
             }
         }
     }
-    if (invalidated && jl_debug_method_invalidation) {
-        jl_uv_puts(JL_STDOUT, ">> ", 3);
-        jl_static_show(JL_STDOUT, (jl_value_t*)method);
-        jl_uv_puts(JL_STDOUT, " ", 1);
-        jl_static_show(JL_STDOUT, (jl_value_t*)type);
-        jl_uv_puts(JL_STDOUT, "\n", 1);
+    if (invalidated && jl_options.trace_method_invalidations != NULL) {
+        jl_uv_puts(jl_s_method_invalidated, ">> ", 3);
+        jl_static_show(jl_s_method_invalidated, (jl_value_t*)method);
+        jl_uv_puts(jl_s_method_invalidated, " ", 1);
+        jl_static_show(jl_s_method_invalidated, (jl_value_t*)type);
+        jl_uv_puts(jl_s_method_invalidated, "\n", 1);
+        if (jl_s_method_invalidated != JL_STDERR)
+            ios_flush(&jl_f_method_invalidated);
     }
     update_max_args(mt, type);
     JL_UNLOCK(&mt->writelock);
