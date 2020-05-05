@@ -774,6 +774,13 @@ static Type *julia_struct_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, jl_unionall
     return _julia_struct_to_llvm(&ctx.emission_context, jt, ua, isboxed);
 }
 
+bool jl_type_mappable_to_c(jl_value_t *ty)
+{
+    jl_codegen_params_t params;
+    bool toboxed;
+    return _julia_struct_to_llvm(&params, ty, NULL, &toboxed) != NULL;
+}
+
 static bool is_datatype_all_pointers(jl_datatype_t *dt)
 {
     size_t i, l = jl_datatype_nfields(dt);

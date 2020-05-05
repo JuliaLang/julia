@@ -43,8 +43,7 @@ jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *new_sym;     jl_sym_t *using_sym;
 jl_sym_t *splatnew_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
-jl_sym_t *abstracttype_sym; jl_sym_t *primtype_sym;
-jl_sym_t *structtype_sym;   jl_sym_t *foreigncall_sym;
+jl_sym_t *foreigncall_sym;
 jl_sym_t *global_sym; jl_sym_t *list_sym;
 jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
 jl_sym_t *boundscheck_sym; jl_sym_t *inbounds_sym;
@@ -62,7 +61,7 @@ jl_sym_t *throw_undef_if_not_sym; jl_sym_t *getfield_undefref_sym;
 jl_sym_t *gc_preserve_begin_sym; jl_sym_t *gc_preserve_end_sym;
 jl_sym_t *coverageeffect_sym; jl_sym_t *escape_sym;
 jl_sym_t *aliasscope_sym; jl_sym_t *popaliasscope_sym;
-jl_sym_t *optlevel_sym;
+jl_sym_t *optlevel_sym; jl_sym_t *thismodule_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -357,9 +356,6 @@ void jl_init_frontend(void)
     const_sym = jl_symbol("const");
     global_sym = jl_symbol("global");
     thunk_sym = jl_symbol("thunk");
-    abstracttype_sym = jl_symbol("abstract_type");
-    primtype_sym = jl_symbol("primitive_type");
-    structtype_sym = jl_symbol("struct_type");
     toplevel_sym = jl_symbol("toplevel");
     dot_sym = jl_symbol(".");
     colon_sym = jl_symbol(":");
@@ -395,6 +391,7 @@ void jl_init_frontend(void)
     coverageeffect_sym = jl_symbol("code_coverage_effect");
     aliasscope_sym = jl_symbol("aliasscope");
     popaliasscope_sym = jl_symbol("popaliasscope");
+    thismodule_sym = jl_symbol("thismodule");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
@@ -576,6 +573,9 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
             assert(jl_is_symbol(ex));
             temp = jl_module_globalref(jl_core_module, (jl_sym_t*)ex);
+        }
+        else if (sym == thismodule_sym) {
+            temp = (jl_value_t*)mod;
         }
         else if (iscons(e) && (sym == inert_sym || (sym == quote_sym && (!iscons(car_(e)))))) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);

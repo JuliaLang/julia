@@ -287,7 +287,8 @@ false
     x & y
 
 Bitwise and. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
-returning [`missing`](@ref) if one operand is `missing` and the other is `true`.
+returning [`missing`](@ref) if one operand is `missing` and the other is `true`. Add parentheses for
+function application form: `(&)(x, y)`.
 
 # Examples
 ```jldoctest

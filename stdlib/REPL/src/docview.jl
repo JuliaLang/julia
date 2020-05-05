@@ -23,7 +23,8 @@ const extended_help_on = Ref{Any}(nothing)
 
 function _helpmode(io::IO, line::AbstractString)
     line = strip(line)
-    if startswith(line, '?')
+    ternary_operator_help = (line == "?" || line == "?:")
+    if startswith(line, '?') && !ternary_operator_help
         line = line[2:end]
         extended_help_on[] = line
         brief = false
@@ -42,7 +43,8 @@ function _helpmode(io::IO, line::AbstractString)
     x = Meta.parse(line, raise = false, depwarn = false)
     assym = Symbol(line)
     expr =
-        if haskey(keywords, assym) || Base.isoperator(assym) || isexpr(x, :error) || isexpr(x, :invalid)
+        if haskey(keywords, Symbol(line)) || Base.isoperator(assym) || isexpr(x, :error) ||
+            isexpr(x, :invalid) || isexpr(x, :incomplete)
             # Docs for keywords must be treated separately since trying to parse a single
             # keyword such as `function` would throw a parse error due to the missing `end`.
             assym

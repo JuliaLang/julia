@@ -2586,7 +2586,13 @@ function sqrt(A::UpperTriangular)
             end
         end
     end
-    sqrt(A,Val(realmatrix))
+    # Writing an explicit if instead of using Val(realmatrix) below
+    # makes the calls to sqrt(::UpperTriangular,::Val) type stable.
+    if realmatrix
+        return sqrt(A,Val(true))
+    else
+        return sqrt(A,Val(false))
+    end
 end
 function sqrt(A::UpperTriangular{T},::Val{realmatrix}) where {T,realmatrix}
     B = A.data

@@ -490,6 +490,22 @@ function show(io::IO, @nospecialize(x::Type))
         show_datatype(io, x)
         return
     elseif x isa Union
+        if x.a isa DataType && Core.Compiler.typename(x.a) === Core.Compiler.typename(DenseArray)
+            T, N = x.a.parameters
+            if x == StridedArray{T,N}
+                print(io, "StridedArray")
+                show_delim_array(io, (T,N), '{', ',', '}', false)
+                return
+            elseif x == StridedVecOrMat{T}
+                print(io, "StridedVecOrMat")
+                show_delim_array(io, (T,), '{', ',', '}', false)
+                return
+            elseif StridedArray{T,N} <: x
+                print(io, "Union")
+                show_delim_array(io, vcat(StridedArray{T,N}, uniontypes(Core.Compiler.typesubtract(x, StridedArray{T,N}))), '{', ',', '}', false)
+                return
+            end
+        end
         print(io, "Union")
         show_delim_array(io, uniontypes(x), '{', ',', '}', false)
         return
@@ -2052,20 +2068,20 @@ end
 
 
 """
-`alignment(X)` returns a tuple (left,right) showing how many characters are
+`alignment(io, X)` returns a tuple (left,right) showing how many characters are
 needed on either side of an alignment feature such as a decimal point.
 """
 alignment(io::IO, x::Any) = (0, length(sprint(show, x, context=io, sizehint=0)))
 alignment(io::IO, x::Number) = (length(sprint(show, x, context=io, sizehint=0)), 0)
-"`alignment(42)` yields (2,0)"
+"`alignment(stdout, 42)` yields (2, 0)"
 alignment(io::IO, x::Integer) = (length(sprint(show, x, context=io, sizehint=0)), 0)
-"`alignment(4.23)` yields (1,3) for `4` and `.23`"
+"`alignment(stdout, 4.23)` yields (1, 3) for `4` and `.23`"
 function alignment(io::IO, x::Real)
     m = match(r"^(.*?)((?:[\.eEfF].*)?)$", sprint(show, x, context=io, sizehint=0))
     m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
-"`alignment(1 + 10im)` yields (3,5) for `1 +` and `_10im` (plus sign on left, space on right)"
+"`alignment(stdout, 1 + 10im)` yields (3, 5) for `1 +` and `_10im` (plus sign on left, space on right)"
 function alignment(io::IO, x::Complex)
     m = match(r"^(.*[^ef][\+\-])(.*)$", sprint(show, x, context=io, sizehint=0))
     m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :

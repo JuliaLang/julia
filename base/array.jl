@@ -249,6 +249,30 @@ function unsafe_copyto!(dest::Ptr{T}, src::Ptr{T}, n) where T
     return dest
 end
 
+
+function _unsafe_copyto!(dest, doffs, src, soffs, n)
+    destp = pointer(dest, doffs)
+    srcp = pointer(src, soffs)
+    @inbounds if destp < srcp || destp > srcp + n
+        for i = 1:n
+            if isassigned(src, soffs + i - 1)
+                dest[doffs + i - 1] = src[soffs + i - 1]
+            else
+                _unsetindex!(dest, doffs + i - 1)
+            end
+        end
+    else
+        for i = n:-1:1
+            if isassigned(src, soffs + i - 1)
+                dest[doffs + i - 1] = src[soffs + i - 1]
+            else
+                _unsetindex!(dest, doffs + i - 1)
+            end
+        end
+    end
+    return dest
+end
+
 """
     unsafe_copyto!(dest::Array, do, src::Array, so, N)
 
@@ -279,29 +303,15 @@ function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
               ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), src) + soffs - 1,
               n)
     else
-        # handle base-case: everything else above was just optimizations
-        @inbounds if destp < srcp || destp > srcp + n
-            for i = 1:n
-                if isassigned(src, soffs + i - 1)
-                    dest[doffs + i - 1] = src[soffs + i - 1]
-                else
-                    _unsetindex!(dest, doffs + i - 1)
-                end
-            end
-        else
-            for i = n:-1:1
-                if isassigned(src, soffs + i - 1)
-                    dest[doffs + i - 1] = src[soffs + i - 1]
-                else
-                    _unsetindex!(dest, doffs + i - 1)
-                end
-            end
-        end
+        _unsafe_copyto!(dest, doffs, src, soffs, n)
     end
     @_gc_preserve_end t2
     @_gc_preserve_end t1
     return dest
 end
+
+unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n) =
+    _unsafe_copyto!(dest, doffs, src, soffs, n)
 
 """
     copyto!(dest, do, src, so, N)
@@ -309,7 +319,7 @@ end
 Copy `N` elements from collection `src` starting at offset `so`, to array `dest` starting at
 offset `do`. Return `dest`.
 """
-function copyto!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where T
+function copyto!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
     n == 0 && return dest
     n > 0 || _throw_argerror()
     if soffs < 1 || doffs < 1 || soffs+n-1 > length(src) || doffs+n-1 > length(dest)
@@ -327,7 +337,7 @@ function _throw_argerror()
     throw(ArgumentError("Number of elements to copy must be nonnegative."))
 end
 
-copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, length(src))
+copyto!(dest::Array, src::Array) = copyto!(dest, 1, src, 1, length(src))
 
 # N.B: The generic definition in multidimensional.jl covers, this, this is just here
 # for bootstrapping purposes.
@@ -424,25 +434,27 @@ the common idiom `fill(x)` creates a zero-dimensional array containing the singl
 
 # Examples
 ```jldoctest
-julia> fill(1.0, (5,5))
-5×5 Array{Float64,2}:
- 1.0  1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0  1.0
-
-julia> fill(0.5, 1, 2)
-1×2 Array{Float64,2}:
- 0.5  0.5
+julia> fill(1.0, (2,3))
+2×3 Array{Float64,2}:
+ 1.0  1.0  1.0
+ 1.0  1.0  1.0
 
 julia> fill(42)
 0-dimensional Array{Int64,0}:
 42
 ```
 
-If `x` is an object reference, all elements will refer to the same object. `fill(Foo(),
-dims)` will return an array filled with the result of evaluating `Foo()` once.
+If `x` is an object reference, all elements will refer to the same object:
+```jldoctest
+julia> A = fill(zeros(2), 2);
+
+julia> A[1][1] = 42; # modifies both A[1][1] and A[2][1]
+
+julia> A
+2-element Array{Array{Float64,1},1}:
+ [42.0, 0.0]
+ [42.0, 0.0]
+```
 """
 function fill end
 
@@ -1669,7 +1681,7 @@ CartesianIndex(2, 1)
 """
 function findnext(A, start)
     l = last(keys(A))
-    i = start
+    i = oftype(l, start)
     i > l && return nothing
     while true
         A[i] && return i
@@ -1751,7 +1763,7 @@ CartesianIndex(1, 1)
 """
 function findnext(testf::Function, A, start)
     l = last(keys(A))
-    i = start
+    i = oftype(l, start)
     i > l && return nothing
     while true
         testf(A[i]) && return i
@@ -1855,8 +1867,8 @@ CartesianIndex(2, 1)
 ```
 """
 function findprev(A, start)
-    i = start
     f = first(keys(A))
+    i = oftype(f, start)
     i < f && return nothing
     while true
         A[i] && return i
@@ -1946,8 +1958,8 @@ CartesianIndex(2, 1)
 ```
 """
 function findprev(testf::Function, A, start)
-    i = start
     f = first(keys(A))
+    i = oftype(f, start)
     i < f && return nothing
     while true
         testf(A[i]) && return i

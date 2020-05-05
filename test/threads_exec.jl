@@ -729,6 +729,17 @@ let a = zeros(nthreads())
     @test a == [1:nthreads();]
 end
 
+# static schedule
+function _atthreads_static_schedule()
+    ids = zeros(Int, nthreads())
+    Threads.@threads :static for i = 1:nthreads()
+        ids[i] = Threads.threadid()
+    end
+    return ids
+end
+@test _atthreads_static_schedule() == [1:nthreads();]
+@test_throws TaskFailedException @threads for i = 1:1; _atthreads_static_schedule(); end
+
 try
     @macroexpand @threads(for i = 1:10, j = 1:10; end)
 catch ex
@@ -821,3 +832,16 @@ end
     x = 2
     @test @eval(fetch(@async 2+$x)) == 4
 end
+
+# issue #34666
+fib34666(x) =
+    @sync begin
+        function f(x)
+            x in (0, 1) && return x
+            a = Threads.@spawn f(x - 2)
+            b = Threads.@spawn f(x - 1)
+            return fetch(a) + fetch(b)
+        end
+        f(x)
+    end
+@test fib34666(25) == 75025

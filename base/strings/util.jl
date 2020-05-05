@@ -392,8 +392,8 @@ end
 function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
     i = 1 # firstindex(str)
     n = lastindex(str)
-    r = something(findfirst(splitter,str), 0)
-    if r != 0:-1
+    r = findfirst(splitter,str)
+    if !isnothing(r)
         j, k = first(r), nextind(str,last(r))
         while 0 < j <= n && length(strs) != limit-1
             if i < k
@@ -403,8 +403,8 @@ function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, 
                 i = k
             end
             (k <= j) && (k = nextind(str,j))
-            r = something(findnext(splitter,str,k), 0)
-            r == 0:-1 && break
+            r = findnext(splitter,str,k)
+            isnothing(r) && break
             j, k = first(r), nextind(str,last(r))
         end
     end

@@ -312,8 +312,7 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
         *has_defs = 1;
         return;
     }
-    else if (head == method_sym || head == abstracttype_sym || head == primtype_sym ||
-             head == structtype_sym || jl_is_toplevel_only_expr(v)) {
+    else if (head == method_sym || jl_is_toplevel_only_expr(v)) {
         *has_defs = 1;
     }
     else if (head == cfunction_sym) {
@@ -339,10 +338,15 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
         else if (jl_is_quotenode(f)) {
             called = jl_quotenode_value(f);
         }
-        if (called && jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall) {
-            *has_intrinsics = 1;
-            return;
+        if (called) {
+            if (jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall) {
+                *has_intrinsics = 1;
+            }
+            if (called == jl_builtin__typebody) {
+                *has_defs = 1;
+            }
         }
+        return;
     }
     int i;
     for (i = 0; i < jl_array_len(e->args); i++) {

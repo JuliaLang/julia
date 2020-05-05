@@ -73,6 +73,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->names = NULL;
     tn->hash = bitmix(bitmix(module ? module->build_id : 0, name->hash), 0xa1ada1da);
     tn->mt = NULL;
+    tn->partial = NULL;
     return tn;
 }
 
@@ -506,11 +507,10 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     // now finish deciding if this instantiation qualifies for special properties
     assert(!isbitstype || st->layout->npointers == 0); // the definition of isbits
     if (isinlinealloc && st->layout->npointers > 0) {
-        //if (st->ninitialized != nfields)
-        //    isinlinealloc = 0;
-        //else if (st->layout->fielddesc_type != 0) // GC only implements support for this
-        //    isinlinealloc = 0;
-        isinlinealloc = 0;
+        if (st->ninitialized != nfields)
+            isinlinealloc = 0;
+        else if (st->layout->fielddesc_type != 0) // GC only implements support for this
+            isinlinealloc = 0;
     }
     st->isbitstype = isbitstype;
     st->isinlinealloc = isinlinealloc;
@@ -901,20 +901,16 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, 
         jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
     if (type->ninitialized > na || na > jl_datatype_nfields(type))
         jl_error("invalid struct allocation");
-    if (type->instance != NULL) {
-        for (size_t i = 0; i < na; i++) {
-            jl_value_t *ft = jl_field_type(type, i);
-            if (!jl_isa(args[i], ft))
-                jl_type_error("new", ft, args[i]);
-        }
-        return type->instance;
-    }
-    jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
-    JL_GC_PUSH1(&jv);
     for (size_t i = 0; i < na; i++) {
         jl_value_t *ft = jl_field_type(type, i);
         if (!jl_isa(args[i], ft))
             jl_type_error("new", ft, args[i]);
+    }
+    if (type->instance != NULL)
+        return type->instance;
+    jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
+    JL_GC_PUSH1(&jv);
+    for (size_t i = 0; i < na; i++) {
         set_nth_field(type, (void*)jv, i, args[i]);
     }
     init_struct_tail(type, jv, na);
@@ -946,6 +942,12 @@ JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
     jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
     jl_value_t *fi = NULL;
     JL_GC_PUSH2(&jv, &fi);
+    if (type->layout->npointers > 0) {
+        // if there are references, zero the space first to prevent the GC
+        // from seeing uninitialized references during jl_get_nth_field and jl_isa,
+        // which can allocate.
+        memset(jl_data_ptr(jv), 0, jl_datatype_size(type));
+    }
     for (size_t i = 0; i < nargs; i++) {
         jl_value_t *ft = jl_field_type(type, i);
         fi = jl_get_nth_field(tup, i);

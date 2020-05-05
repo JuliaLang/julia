@@ -1909,6 +1909,16 @@ end
     @test replstr(Set(['a'^100])) == "Set{String} with 1 element:\n  \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa…"
 end
 
+@testset "Simple printing of StridedArray" begin
+    @test startswith(sprint(show, StridedArray), "StridedArray")
+    @test startswith(sprint(show, StridedVecOrMat), "StridedVecOrMat")
+    @test startswith(sprint(show, StridedVector), "Strided")
+    @test startswith(sprint(show, StridedMatrix), "Strided")
+    @test occursin("StridedArray", sprint(show, SubArray{T, N, A} where {T,N,A<:StridedArray}))
+    @test !occursin("Strided", sprint(show, Union{DenseArray, SubArray}))
+    @test !occursin("Strided", sprint(show, Union{DenseArray, Base.ReinterpretArray, Base.ReshapedArray, SubArray}))
+end
+
 @testset "0-dimensional Array. Issue #31481" begin
     for x in (zeros(Int32), collect('b'), fill(nothing), BitArray(0))
         @test eval(Meta.parse(repr(x))) == x

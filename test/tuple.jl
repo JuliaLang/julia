@@ -479,6 +479,13 @@ end
     @test findprev(isequal(1), (1, 1), 1) == 1
     @test findnext(isequal(1), (2, 3), 1) === nothing
     @test findprev(isequal(1), (2, 3), 2) === nothing
+
+    @testset "issue 32568" begin
+        @test findnext(isequal(1), (1, 2), big(1)) isa Int
+        @test findprev(isequal(1), (1, 2), big(2)) isa Int
+        @test findnext(isequal(1), (1, 1), UInt(2)) isa Int
+        @test findprev(isequal(1), (1, 1), UInt(1)) isa Int
+    end
 end
 
 @testset "properties" begin
@@ -505,4 +512,65 @@ end
 
     @test Base.setindex((1, 2, 4), 4, true) === (4, 2, 4)
     @test_throws BoundsError Base.setindex((1, 2), 2, false)
+end
+
+@testset "inferrable range indexing with constant values" begin
+    whole(t) = t[1:end]
+    tail(t) = t[2:end]
+    ttail(t) = t[3:end]
+    front(t) = t[1:end-1]
+    ffront(t) = t[1:end-2]
+
+    @test @inferred( whole(())) == ()
+    @test @inferred(  tail(())) == ()
+    @test @inferred( ttail(())) == ()
+    @test @inferred( front(())) == ()
+    @test @inferred(ffront(())) == ()
+
+    @test @inferred( whole((1,))) == (1,)
+    @test @inferred(  tail((1,))) == ()
+    @test @inferred( ttail((1,))) == ()
+    @test @inferred( front((1,))) == ()
+    @test @inferred(ffront((1,))) == ()
+
+    @test @inferred( whole((1,2.0))) == (1,2.0)
+    @test @inferred(  tail((1,2.0))) == (2.0,)
+    @test @inferred( ttail((1,2.0))) == ()
+    @test @inferred( front((1,2.0))) == (1.0,)
+    @test @inferred(ffront((1,2.0))) == ()
+
+    @test @inferred( whole((1,2.0,3//1))) == (1,2.0,3//1)
+    @test @inferred(  tail((1,2.0,3//1))) == (2.0,3//1)
+    @test @inferred( ttail((1,2.0,3//1))) == (3//1,)
+    @test @inferred( front((1,2.0,3//1))) == (1,2.0)
+    @test @inferred(ffront((1,2.0,3//1))) == (1,)
+
+    @test @inferred( whole((1,2.0,3//1,0x04))) == (1,2.0,3//1,0x04)
+    @test @inferred(  tail((1,2.0,3//1,0x04))) == (2.0,3//1,0x04)
+    @test @inferred( ttail((1,2.0,3//1,0x04))) == (3//1,0x04)
+    @test @inferred( front((1,2.0,3//1,0x04))) == (1,2.0,3//1)
+    @test @inferred(ffront((1,2.0,3//1,0x04))) == (1,2.0)
+
+    @test (1,)[0:-1] == ()
+    @test (1,)[1:0] == ()
+    @test (1,)[2:1] == ()
+    @test (1,2.0)[0:-1] == ()
+    @test (1,2.0)[1:0] == ()
+    @test (1,2.0)[2:1] == ()
+    @test (1,2.0)[3:2] == ()
+
+    @test_throws BoundsError (1,)[2:2]
+    @test_throws BoundsError (1,)[1:2]
+    @test_throws BoundsError (1,)[0:1]
+    @test_throws BoundsError (1,)[0:0]
+    @test_throws BoundsError (1,2.0)[3:3]
+    @test_throws BoundsError (1,2.0)[1:3]
+    @test_throws BoundsError (1,2.0)[0:2]
+    @test_throws BoundsError (1,2.0)[0:1]
+    @test_throws BoundsError (1,2.0)[0:0]
+end
+
+@testset "big tuple convert stackoverflow #31935" begin
+    t = (rand(1:typemax(UInt8), 1024)...,);
+    @test convert(NTuple{1024, UInt8}, t) isa NTuple{1024, UInt8}
 end

@@ -15,13 +15,6 @@ function rstrip_shell(s::AbstractString)
     SubString(s, 1, 0)
 end
 
-
-# needs to be factored out so depwarn only warns once
-# when removed, also need to update shell_escape for a Cmd to pass shell_special
-# and may want to use it in the test for #10120 (currently the implementation is essentially copied there)
-@noinline warn_shell_special(str,special) =
-    depwarn("Parsing command \"$str\". Special characters \"$special\" should now be quoted in commands", :warn_shell_special)
-
 function shell_parse(str::AbstractString, interpolate::Bool=true;
                      special::AbstractString="")
     s::SubString = SubString(str, firstindex(str))
@@ -104,7 +97,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                     _ = popfirst!(st)
                 end
             elseif !in_single_quotes && !in_double_quotes && c in special
-                warn_shell_special(str,special) # noinline depwarn
+                error("parsing command `$str`: special characters \"$special\" must be quoted in commands")
             end
         end
     end

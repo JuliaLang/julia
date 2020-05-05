@@ -68,8 +68,6 @@
     __sync_bool_compare_and_swap(obj, expected, desired)
 #  define jl_atomic_exchange(obj, desired)              \
     __atomic_exchange_n(obj, desired, __ATOMIC_SEQ_CST)
-#  define jl_atomic_exchange_generic(obj, desired, orig)\
-    __atomic_exchange(obj, desired, orig, __ATOMIC_SEQ_CST)
 #  define jl_atomic_exchange_relaxed(obj, desired)      \
     __atomic_exchange_n(obj, desired, __ATOMIC_RELAXED)
 // TODO: Maybe add jl_atomic_compare_exchange_weak for spin lock
@@ -123,7 +121,6 @@ jl_atomic_fetch_add(T *obj, T2 arg)
 {
     return (T)_InterlockedExchangeAdd64((volatile __int64*)obj, (__int64)arg);
 }
-// TODO: jl_atomic_exchange_generic
 #define jl_atomic_fetch_add_relaxed(obj, arg) jl_atomic_fetch_add(obj, arg)
 
 // and
@@ -285,5 +282,42 @@ static inline T jl_atomic_load_acquire(volatile T *obj)
 #else
 #  error "No atomic operations supported."
 #endif
+
+#ifdef __clang_analyzer__
+// for the purposes of the analyzer, we can turn these into non-atomic expressions with similar properties
+
+#undef jl_atomic_exchange
+#undef jl_atomic_exchange_relaxed
+#define jl_atomic_exchange(obj, desired) \
+    (__extension__({ \
+            __typeof__((obj)) p = (obj); \
+            __typeof__(*p) temp = *p; \
+            *p = desired; \
+            temp; \
+        }))
+#define jl_atomic_exchange_relaxed jl_atomic_exchange
+
+#undef jl_atomic_compare_exchange
+#define jl_atomic_compare_exchange(obj, expected, desired) ((expected), jl_atomic_exchange((obj), (desired)))
+
+#undef jl_atomic_bool_compare_exchange
+#define jl_atomic_bool_compare_exchange(obj, expected, desired) ((expected) == jl_atomic_exchange((obj), (desired)))
+
+#undef jl_atomic_store
+#undef jl_atomic_store_release
+#undef jl_atomic_store_relaxed
+#define jl_atomic_store(obj, val)         (*(obj) = (val))
+#define jl_atomic_store_release(obj, val) (*(obj) = (val))
+#define jl_atomic_store_relaxed(obj, val) (*(obj) = (val))
+
+#undef jl_atomic_load
+#undef jl_atomic_load_acquire
+#undef jl_atomic_load_relaxed
+#define jl_atomic_load(obj)         (*(obj))
+#define jl_atomic_load_acquire(obj) (*(obj))
+#define jl_atomic_load_relaxed(obj) (*(obj))
+
+#endif
+
 
 #endif // JL_ATOMICS_H

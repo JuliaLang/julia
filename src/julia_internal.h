@@ -507,7 +507,7 @@ void jl_module_run_initializer(jl_module_t *m);
 jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT;
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
-extern jl_array_t *jl_cfunction_list JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT void jl_compile_extern_c(void *llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
 
 #ifdef JL_USE_INTEL_JITEVENTS
 extern char jl_using_intel_jitevents;
@@ -538,6 +538,8 @@ void jl_gc_init(void);
 void jl_init_uv(void);
 void jl_init_debuginfo(void);
 void jl_init_thread_heap(jl_ptls_t ptls);
+
+void jl_teardown_codegen(void);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
 
@@ -613,7 +615,7 @@ JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char*
 JL_DLLEXPORT jl_value_t *jl_dump_llvm_asm(void *F, const char* asm_variant, const char *debuginfo);
 JL_DLLEXPORT jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_module, const char *debuginfo);
 
-void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams);
+void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int policy);
 void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len);
@@ -1011,6 +1013,7 @@ JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i);
 
 JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_current_task(void);
+JL_DLLEXPORT void jl_set_next_task(jl_task_t *task);
 
 // -- synchronization utilities -- //
 
@@ -1142,8 +1145,7 @@ extern jl_sym_t *new_sym;     extern jl_sym_t *using_sym;
 extern jl_sym_t *splatnew_sym;
 extern jl_sym_t *pop_exception_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
-extern jl_sym_t *abstracttype_sym; extern jl_sym_t *primtype_sym;
-extern jl_sym_t *structtype_sym;   extern jl_sym_t *foreigncall_sym;
+extern jl_sym_t *foreigncall_sym;
 extern jl_sym_t *global_sym; extern jl_sym_t *list_sym;
 extern jl_sym_t *dot_sym;    extern jl_sym_t *newvar_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *inbounds_sym;
@@ -1168,8 +1170,6 @@ struct _jl_sysimg_fptrs_t;
 
 void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *fptrs,
                        jl_method_instance_t **linfos, size_t n);
-
-extern arraylist_t partial_inst;
 
 #if jl_has_builtin(__builtin_unreachable) || defined(_COMPILER_GCC_) || defined(_COMPILER_INTEL_)
 #  define jl_unreachable() __builtin_unreachable()

@@ -257,6 +257,10 @@ that function calls should have during a stack trace at the terminal.
 
 ## Debugging and profiling
 
+### `JULIA_DEBUG`
+
+Enable debug logging for a file or module, see [`Logging`](@ref Logging) for more information.
+
 ### `JULIA_GC_ALLOC_POOL`, `JULIA_GC_ALLOC_OTHER`, `JULIA_GC_ALLOC_PRINT`
 
 If set, these environment variables take strings that optionally start with the

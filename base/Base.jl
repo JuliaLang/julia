@@ -216,11 +216,12 @@ end
 
 include("env.jl")
 
-# Scheduling
+# Concurrency
 include("linked_list.jl")
 include("condition.jl")
 include("threads.jl")
 include("lock.jl")
+include("channels.jl")
 include("task.jl")
 include("weakkeydict.jl")
 
@@ -314,9 +315,6 @@ using .MathConstants: ℯ, π, pi
 
 # metaprogramming
 include("meta.jl")
-
-# concurrency and parallelism
-include("channels.jl")
 
 # utilities
 include("deepcopy.jl")

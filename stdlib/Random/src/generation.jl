@@ -166,13 +166,24 @@ end
 
 ### BitInteger
 
-# there are two implemented samplers for unit ranges, which assume that Float64 (i.e.
-# 52 random bits) is the native type for the RNG:
-# 1) "Fast", which is the most efficient when the underlying RNG produces rand(Float64)
-#     "fast enough". The tradeoff is faster creation of the sampler, but more
-#     consumption of entropy bits
-# 2) "Default" which tries to use as few entropy bits as possible, at the cost of a
-#    a bigger upfront price associated with the creation of the sampler
+# there are three implemented samplers for unit ranges, the two first of which
+# assume that Float64 (i.e. 52 random bits) is the native type for the RNG:
+# 1) "Fast" (SamplerRangeFast), which is most efficient when the underlying RNG produces
+#    rand(Float64) "fast enough".
+#    The tradeoff is faster creation of the sampler, but more consumption of entropy bits.
+# 2) "Slow" (SamplerRangeInt) which tries to use as few entropy bits as possible, at the
+#    cost of a a bigger upfront price associated with the creation of the sampler.
+#    This sampler is most appropriate for slower random generators.
+# 3) "Nearly Division Less" (NDL) which is generally the fastest algorithm for types of size
+#    up to 64 bits. This is the default for these types since Julia 1.5.
+#    The "Fast" algorithm can be faster than NDL when the length of the range is
+#    less than and close to a power of 2.
+
+Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{T},
+        ::Repetition) where {T<:Base.BitInteger64} = SamplerRangeNDL(r)
+
+Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{T},
+        ::Repetition) where {T<:Union{Int128,UInt128}} = SamplerRangeFast(r)
 
 #### helper functions
 
@@ -224,7 +235,7 @@ function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt128,T}) where T
     x % T + a
 end
 
-#### Default
+#### "Slow" / SamplerRangeInt
 
 # remainder function according to Knuth, where rem_knuth(a, 0) = a
 rem_knuth(a::UInt, b::UInt) = a % (b + (b == 0)) + a * (b == 0)
@@ -274,10 +285,6 @@ function SamplerRangeInt(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
     SamplerRangeInt{T,U}(a, bw, k, mult) # overflow ok
 end
 
-Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{T},
-        ::Repetition) where {T<:BitInteger} = SamplerRangeInt(r)
-
-
 rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt32}) where {T<:BitInteger} =
     (unsigned(sp.a) + rem_knuth(rand(rng, LessThan(sp.u, UInt52Raw(UInt32))), sp.k)) % T
 
@@ -293,6 +300,41 @@ function rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt128}) where T<:BitInte
         sp.bw <= 104 ? rand(rng, LessThan(sp.u, UInt104(UInt128))) :
                        rand(rng, LessThan(sp.u, uniform(UInt128)))
     return ((sp.a % UInt128) + rem_knuth(x, sp.k)) % T
+end
+
+#### Nearly Division Less
+
+# cf. https://arxiv.org/abs/1805.10941 (algorithm 5)
+
+struct SamplerRangeNDL{U<:Unsigned,T} <: Sampler{T}
+    a::T  # first element of the range
+    s::U  # range length or zero for full range
+end
+
+function SamplerRangeNDL(r::AbstractUnitRange{T}) where {T}
+    isempty(r) && throw(ArgumentError("range must be non-empty"))
+    a = first(r)
+    U = uint_sup(T)
+    s = (last(r) - first(r)) % unsigned(T) % U + one(U) # overflow ok
+    # mod(-s, s) could be put in the Sampler object for repeated calls, but
+    # this would be an advantage only for very big s and number of calls
+    SamplerRangeNDL(a, s)
+end
+
+function rand(rng::AbstractRNG, sp::SamplerRangeNDL{U,T}) where {U,T}
+    s = sp.s
+    x = widen(rand(rng, U))
+    m = x * s
+    l = m % U
+    if l < s
+        t = mod(-s, s) # as s is unsigned, -s is equal to 2^L - s in the paper
+        while l < t
+            x = widen(rand(rng, U))
+            m = x * s
+            l = m % U
+        end
+    end
+    (s == 0 ? x : m >> (8*sizeof(U))) % T + sp.a
 end
 
 
