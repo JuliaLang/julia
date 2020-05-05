@@ -2607,7 +2607,11 @@ function sqrt(A::UpperTriangular{T},::Val{realmatrix}) where {T,realmatrix}
             @simd for k = i+1:j-1
                 r -= R[i,k]*R[k,j]
             end
-            iszero(r) || (R[i,j] = sylvester(R[i,i],R[j,j],-r))
+            if R[i,i] == 0 && R[j,j] == 0
+                R[i,j] = 0
+            else
+                iszero(r) || (R[i,j] = sylvester(R[i,i],R[j,j],-r))
+            end
         end
     end
     return UpperTriangular(R)
