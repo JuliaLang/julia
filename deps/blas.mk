@@ -94,7 +94,12 @@ OPENBLAS_BUILD_OPTS += MAKE_NB_JOBS=0
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS), 1)
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-fix-initialization-to-zero-in-the-NEON-SGEMM_BETA-ke.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/openblas-fix-initialization-to-zero-in-the-NEON-SGEMM_BETA-ke.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-fix-initialization-to-zero-in-the-NEON-SGEMM_BETA-ke.patch-applied
 	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
 		patch -p1 -f < $(SRCDIR)/patches/openblas-winexit.patch
 	echo 1 > $@
