@@ -97,7 +97,7 @@ static jl_callptr_t _jl_compile_codeinst(
         jl_compile_result_t result = jl_emit_codeinst(codeinst, src, params);
         if (std::get<0>(result))
             emitted[codeinst] = std::move(result);
-        jl_compile_workqueue(emitted, params);
+        jl_compile_workqueue(emitted, params, CompilationPolicy::Default);
 
         jl_add_to_ee();
         StringMap<std::unique_ptr<Module>*> NewExports;

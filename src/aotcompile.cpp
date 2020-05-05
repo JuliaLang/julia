@@ -250,9 +250,12 @@ static void makeSafeName(GlobalObject &G)
 
 
 // takes the running content that has collected in the shadow module and dump it to disk
-// this builds the object file portion of the sysimage files for fast startup
+// this builds the object file portion of the sysimage files for fast startup, and can
+// also be used be extern consumers like GPUCompiler.jl to obtain a module containing
+// all reachable & inferrrable functions. The `policy` flag switches between the defaul
+// mode `0` and the extern mode `1`.
 extern "C" JL_DLLEXPORT
-void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
+void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _policy)
 {
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
     jl_codegen_params_t params;
@@ -263,11 +266,16 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
     JL_GC_PUSH1(&src);
     JL_LOCK(&codegen_lock);
 
+    CompilationPolicy policy = (CompilationPolicy) _policy;
+
     // compile all methods for the current world and type-inference world
     size_t compile_for[] = { jl_typeinf_world, jl_world_counter };
     for (int worlds = 0; worlds < 2; worlds++) {
         params.world = compile_for[worlds];
         if (!params.world)
+            continue;
+        // Don't emit methods for the typeinf_world with extern policy
+        if (policy == CompilationPolicy::Extern && params.world == jl_typeinf_world)
             continue;
         size_t i, l;
         for (i = 0, l = jl_array_len(methods); i < l; i++) {
@@ -311,8 +319,9 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
                 }
             }
         }
+
         // finally, make sure all referenced methods also get compiled or fixed up
-        jl_compile_workqueue(emitted, params);
+        jl_compile_workqueue(emitted, params, policy);
     }
     JL_GC_POP();
 

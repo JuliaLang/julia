@@ -75,9 +75,15 @@ jl_compile_result_t jl_emit_codeinst(
         jl_code_info_t *src,
         jl_codegen_params_t &params);
 
+enum CompilationPolicy {
+    Default = 0,
+    Extern = 1
+};
+
 void jl_compile_workqueue(
     std::map<jl_code_instance_t*, jl_compile_result_t> &emitted,
-    jl_codegen_params_t &params);
+    jl_codegen_params_t &params,
+    CompilationPolicy policy);
 
 Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *argt,
     jl_codegen_params_t &params);
