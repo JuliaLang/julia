@@ -401,6 +401,9 @@ kron(a::AbstractVector, b::AbstractVector) = vec(kron(reshape(a ,length(a), 1), 
 kron(a::AbstractMatrix, b::AbstractVector) = kron(a, reshape(b, length(b), 1))
 kron(a::AbstractVector, b::AbstractMatrix) = kron(reshape(a, length(a), 1), b)
 
+kron(a::AdjointAbsVec, b::AdjointAbsVec) = adjoint(kron(parent(a), parent(b)))
+kron(a::AdjOrTransAbsVec, b::AdjOrTransAbsVec) = transpose(kron(vec(a), vec(b)))
+
 # Matrix power
 (^)(A::AbstractMatrix, p::Integer) = p < 0 ? power_by_squaring(inv(A), -p) : power_by_squaring(A, p)
 function (^)(A::AbstractMatrix{T}, p::Integer) where T<:Integer
