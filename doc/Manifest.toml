@@ -1,65 +1,43 @@
+# This file is machine-generated - editing it directly is not advised
+
 [[Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
-[[Compat]]
-git-tree-sha1 = "45abe32cc7bcf2632dda2fb2549c7060811ea0ec"
-repo-rev = "kc/Compat_fix"
-repo-url = "https://github.com/JuliaLang/Compat.jl.git"
-uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "0.65.0+"
-
-    [Compat.deps]
-    Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
-    Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
-    DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
-    Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
-    InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
-    IterativeEigensolvers = "de555fa4-b82f-55e7-8b71-53f60bbc027d"
-    LibGit2 = "76f85450-5226-5b5a-8eaa-529ad045b433"
-    Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
-    LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-    Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
-    Mmap = "a63ad114-7e13-5084-954f-fe012c677804"
-    OldPkg = "fe1c5a76-5840-53d2-82f9-288dd83ce2ce"
-    Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-    Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
-    REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
-    Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-    Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
-    SharedArrays = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
-    Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
-    SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
-    SuiteSparse = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
-    Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-    UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
-    Unicode = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
-
 [[Dates]]
+deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 
-[[DelimitedFiles]]
-uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
-
 [[Distributed]]
+deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[DocStringExtensions]]
-deps = ["Compat"]
-git-tree-sha1 = "0e9a957a5c1cc5d06e54aab3b8b9c4c495253269"
+deps = ["LibGit2", "Markdown", "Pkg", "Test"]
+git-tree-sha1 = "88bb0edb352b16608036faadcc071adda068582a"
 uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
-version = "0.4.4"
+version = "0.8.1"
 
 [[Documenter]]
-deps = ["Compat", "DocStringExtensions", "Logging", "REPL"]
-git-tree-sha1 = "4fc4abdb5ac20ece943ff6e0a7e2a254d148f434"
+deps = ["Base64", "Dates", "DocStringExtensions", "InteractiveUtils", "JSON", "LibGit2", "Logging", "Markdown", "REPL", "Test", "Unicode"]
+git-tree-sha1 = "646ebc3db49889ffeb4c36f89e5d82c6a26295ff"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-version = "0.18.0"
+version = "0.24.7"
+
+[[DocumenterLaTeX]]
+deps = ["Documenter", "Test"]
+git-tree-sha1 = "653299370be20ff580bccd707dc9f360c0852d7f"
+uuid = "cd674d7a-5f81-5cf3-af33-235ef1834b99"
+version = "0.2.0"
 
 [[InteractiveUtils]]
+deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 
-[[IterativeEigensolvers]]
-uuid = "de555fa4-b82f-55e7-8b71-53f60bbc027d"
+[[JSON]]
+deps = ["Dates", "Mmap", "Parsers", "Unicode"]
+git-tree-sha1 = "b34d7cef7b337321e97d22242c3c2b91f476748e"
+uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+version = "0.21.0"
 
 [[LibGit2]]
 uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
@@ -67,46 +45,53 @@ uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 [[Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 
-[[LinearAlgebra]]
-uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-
 [[Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
 [[Markdown]]
+deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 
 [[Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
+[[Parsers]]
+deps = ["Dates", "Test"]
+git-tree-sha1 = "0c16b3179190d3046c073440d94172cfc3bb0553"
+uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
+version = "0.3.12"
+
+[[Pkg]]
+deps = ["Dates", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Test", "UUIDs"]
+uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+
 [[Printf]]
+deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
 [[REPL]]
+deps = ["InteractiveUtils", "Markdown", "Sockets"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[Random]]
+deps = ["Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[[SHA]]
+uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 
 [[Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
-[[SharedArrays]]
-uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
-
 [[Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 
-[[SparseArrays]]
-uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
-
-[[SuiteSparse]]
-uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
-
 [[Test]]
+deps = ["Distributed", "InteractiveUtils", "Logging", "Random"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [[UUIDs]]
+deps = ["Random", "SHA"]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [[Unicode]]

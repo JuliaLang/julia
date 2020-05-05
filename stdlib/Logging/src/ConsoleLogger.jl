@@ -46,7 +46,7 @@ min_enabled_level(logger::ConsoleLogger) = logger.min_level
 showvalue(io, msg) = show(io, "text/plain", msg)
 function showvalue(io, e::Tuple{Exception,Any})
     ex,bt = e
-    showerror(io, ex, bt; backtrace = bt!=nothing)
+    showerror(io, ex, bt; backtrace = bt!==nothing)
 end
 showvalue(io, ex::Exception) = showerror(io, ex)
 
@@ -60,8 +60,18 @@ end
 function default_metafmt(level, _module, group, id, file, line)
     color = default_logcolor(level)
     prefix = (level == Warn ? "Warning" : string(level))*':'
-    suffix = (Info <= level < Warn) ? "" : "@ $_module $(basename(file)):$line"
-    color,prefix,suffix
+    suffix = ""
+    Info <= level < Warn && return color, prefix, suffix
+    _module !== nothing && (suffix *= "$(_module)")
+    if file !== nothing
+        _module !== nothing && (suffix *= " ")
+        suffix *= Base.contractuser(file)
+        if line !== nothing
+            suffix *= ":$(isa(line, UnitRange) ? "$(first(line))-$(last(line))" : line)"
+        end
+    end
+    !isempty(suffix) && (suffix = "@ " * suffix)
+    return color, prefix, suffix
 end
 
 # Length of a string as it will appear in the terminal (after ANSI color codes
@@ -87,7 +97,7 @@ end
 
 function handle_message(logger::ConsoleLogger, level, message, _module, group, id,
                         filepath, line; maxlog=nothing, kwargs...)
-    if maxlog != nothing && maxlog isa Integer
+    if maxlog !== nothing && maxlog isa Integer
         remaining = get!(logger.message_limits, id, maxlog)
         logger.message_limits[id] = remaining - 1
         remaining > 0 || return
@@ -101,10 +111,8 @@ function handle_message(logger::ConsoleLogger, level, message, _module, group, i
         valbuf = IOBuffer()
         rows_per_value = max(1, dsize[1]÷(length(kwargs)+1))
         valio = IOContext(IOContext(valbuf, logger.stream),
-                          :displaysize=>(rows_per_value,dsize[2]-5))
-        if logger.show_limited
-            valio = IOContext(valio, :limit=>true)
-        end
+                          :displaysize => (rows_per_value,dsize[2]-5),
+                          :limit => logger.show_limited)
         for (key,val) in pairs(kwargs)
             showvalue(valio, val)
             vallines = split(String(take!(valbuf)), '\n')

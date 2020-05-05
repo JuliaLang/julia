@@ -1,14 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using SuiteSparse: increment!
+using Serialization
+using LinearAlgebra: Adjoint, Transpose, SingularException
+
 @testset "UMFPACK wrappers" begin
     se33 = sparse(1.0I, 3, 3)
     do33 = fill(1., 3)
     @test isequal(se33 \ do33, do33)
 
     # based on deps/Suitesparse-4.0.2/UMFPACK/Demo/umfpack_di_demo.c
-
-    using SuiteSparse: increment!
-    using LinearAlgebra: Adjoint, Transpose
 
     A0 = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
                 increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
@@ -89,13 +90,15 @@
         end
     end
 
-    @testset "Rectangular cases" for elty in (Float64, ComplexF64)
-        for (m, n) in ((10,5), (5, 10))
-            A = sparse([1:min(m,n); rand(1:m, 10)], [1:min(m,n); rand(1:n, 10)], elty == Float64 ? randn(min(m, n) + 10) : complex.(randn(min(m, n) + 10), randn(min(m, n) + 10)))
-            F = lu(A)
-            L, U, p, q, Rs = F.:(:)
-            @test (Diagonal(Rs) * A)[p,q] ≈ L * U
-        end
+    @testset "Rectangular cases. elty=$elty, m=$m, n=$n" for
+        elty in (Float64, ComplexF64),
+            (m, n) in ((10,5), (5, 10))
+
+        Random.seed!(30072018)
+        A = sparse([1:min(m,n); rand(1:m, 10)], [1:min(m,n); rand(1:n, 10)], elty == Float64 ? randn(min(m, n) + 10) : complex.(randn(min(m, n) + 10), randn(min(m, n) + 10)))
+        F = lu(A)
+        L, U, p, q, Rs = F.:(:)
+        @test (Diagonal(Rs) * A)[p,q] ≈ L * U
     end
 
     @testset "Issue #4523 - complex sparse \\" begin
@@ -167,4 +170,67 @@
         @test LinearAlgebra.ldiv!(copy(X), transpose(luA), B) ≈ LinearAlgebra.ldiv!(copy(X), transpose(lufA), B)
     end
 
+    @testset "singular matrix" begin
+        for A in sparse.((Float64[1 2; 0 0], ComplexF64[1 2; 0 0]))
+            @test_throws SingularException lu(A)
+            @test !issuccess(lu(A; check = false))
+        end
+    end
+
+    @testset "deserialization" begin
+        A  = 10*I + sprandn(10, 10, 0.4)
+        F1 = lu(A)
+        b  = IOBuffer()
+        serialize(b, F1)
+        seekstart(b)
+        F2 = deserialize(b)
+        for nm in (:colptr, :m, :n, :nzval, :rowval, :status)
+            @test getfield(F1, nm) == getfield(F2, nm)
+        end
+    end
+
+    @testset "Reuse symbolic LU factorization" begin
+        A1 = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
+                    increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
+                    [2.,1.,3.,4.,-1.,-3.,3.,9.,2.,1.,4.,2.], 5, 5)
+        for Tv in (Float64, ComplexF64, Float16, Float32, ComplexF16, ComplexF32)
+            for Ti in Base.uniontypes(SuiteSparse.UMFPACK.UMFITypes)
+                A = convert(SparseMatrixCSC{Tv,Ti}, A0)
+                B = convert(SparseMatrixCSC{Tv,Ti}, A1)
+                b = Tv[8., 45., -3., 3., 19.]
+                F = lu(A)
+                lu!(F, B)
+                @test F\b ≈ B\b ≈ Matrix(B)\b
+
+                # singular matrix
+                C = copy(B)
+                C[4, 3] = Tv(0)
+                F = lu(A)
+                @test_throws SingularException lu!(F, C)
+
+                # change of nonzero pattern
+                D = copy(B)
+                D[5, 1] = Tv(1.0)
+                F = lu(A)
+                @test_throws ArgumentError lu!(F, D)
+            end
+        end
+    end
+
+end
+
+@testset "REPL printing of UmfpackLU" begin
+    # regular matrix
+    A = sparse([1, 2], [1, 2], Float64[1.0, 1.0])
+    F = lu(A)
+    facstring = sprint((t, s) -> show(t, "text/plain", s), F)
+    lstring = sprint((t, s) -> show(t, "text/plain", s), F.L)
+    ustring = sprint((t, s) -> show(t, "text/plain", s), F.U)
+    @test facstring == "$(summary(F))\nL factor:\n$lstring\nU factor:\n$ustring"
+
+    # singular matrix
+    B = sparse(zeros(Float64, 2, 2))
+    F = lu(B; check=false)
+    facstring = sprint((t, s) -> show(t, "text/plain", s), F)
+    @test facstring == "Failed factorization of type $(summary(F))"
 end

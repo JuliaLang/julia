@@ -86,7 +86,7 @@ One issue here is that if a function inherently requires integers, it might be b
 the caller to decide how non-integers should be converted (e.g. floor or ceiling). Another issue
 is that declaring more specific types leaves more "space" for future method definitions.
 
-## Append `!` to names of functions that modify their arguments
+## [Append `!` to names of functions that modify their arguments](@id bang-convention)
 
 Instead of:
 
@@ -119,27 +119,6 @@ is typical for such functions to also return the modified array for convenience.
 
 Types such as `Union{Function,AbstractString}` are often a sign that some design could be cleaner.
 
-## Avoid type Unions in fields
-
-When creating a type such as:
-
-```julia
-mutable struct MyType
-    ...
-    x::Union{Nothing,T}
-end
-```
-
-ask whether the option for `x` to be `nothing` (of type `Nothing`) is really necessary. Here are
-some alternatives to consider:
-
-  * Find a safe default value to initialize `x` with
-  * Introduce another type that lacks `x`
-  * If there are many fields like `x`, store them in a dictionary
-  * Determine whether there is a simple rule for when `x` is `nothing`. For example, often the field
-    will start as `nothing` but get initialized at some well-defined point. In that case, consider
-    leaving it undefined at first.
-
 ## Avoid elaborate container types
 
 It is usually not much help to construct arrays like the following:
@@ -151,7 +130,7 @@ a = Vector{Union{Int,AbstractString,Tuple,Array}}(undef, n)
 In this case `Vector{Any}(undef, n)` is better. It is also more helpful to the compiler to annotate specific
 uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
 
-## Use naming conventions consistent with Julia's `base/`
+## Use naming conventions consistent with Julia `base/`
 
   * modules and type names use capitalization and camel case: `module SparseArrays`, `struct UnitRange`.
   * functions are lowercase ([`maximum`](@ref), [`convert`](@ref)) and, when readable, with multiple
@@ -164,7 +143,7 @@ uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
 If a function name requires multiple words, consider whether it might represent more than one
 concept and might be better split into pieces.
 
-## Write functions with argument ordering similar to Julia's Base
+## Write functions with argument ordering similar to Julia Base
 
 As a general rule, the Base library uses the following order of arguments to functions,
 as applicable:
@@ -197,7 +176,7 @@ as applicable:
 
 7. **Value**.
    For associative collections, this is the value of the key-value pair(s).
-   In cases like `fill!(x, v)`, this is `v`.
+   In cases like [`fill!(x, v)`](@ref fill!), this is `v`.
 
 8. **Everything else**.
    Any other arguments.

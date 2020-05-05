@@ -11,7 +11,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-srand(1234321)
+Random.seed!(1234321)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -37,14 +37,22 @@ aimg  = randn(n,n)/2
 
         sch, vecs, vals = schur(UpperTriangular(triu(a)))
         @test vecs*sch*vecs' ≈ triu(a)
+        sch, vecs, vals = schur(UnitUpperTriangular(triu(a)))
+        @test vecs*sch*vecs' ≈ UnitUpperTriangular(triu(a))
         sch, vecs, vals = schur(LowerTriangular(tril(a)))
         @test vecs*sch*vecs' ≈ tril(a)
+        sch, vecs, vals = schur(UnitLowerTriangular(tril(a)))
+        @test vecs*sch*vecs' ≈ UnitLowerTriangular(tril(a))
         sch, vecs, vals = schur(Hermitian(asym))
         @test vecs*sch*vecs' ≈ asym
         sch, vecs, vals = schur(Symmetric(a + transpose(a)))
         @test vecs*sch*vecs' ≈ a + transpose(a)
         sch, vecs, vals = schur(Tridiagonal(a + transpose(a)))
         @test vecs*sch*vecs' ≈ Tridiagonal(a + transpose(a))
+        sch, vecs, vals = schur(Bidiagonal(a, :U))
+        @test vecs*sch*vecs' ≈ Bidiagonal(a, :U)
+        sch, vecs, vals = schur(Bidiagonal(a, :L))
+        @test vecs*sch*vecs' ≈ Bidiagonal(a, :L)
 
         tstring = sprint((t, s) -> show(t, "text/plain", s), f.T)
         zstring = sprint((t, s) -> show(t, "text/plain", s), f.Z)
@@ -97,7 +105,7 @@ aimg  = randn(n,n)/2
             select = abs2.(NS.values) .< 1
             m = sum(select)
             S = ordschur(NS, select)
-            # Make sure that the new factorization stil factors matrix
+            # Make sure that the new factorization still factors matrix
             @test S.Q*S.S*S.Z' ≈ a1_sf
             @test S.Q*S.T*S.Z' ≈ a2_sf
             # Make sure that we have sorted it correctly

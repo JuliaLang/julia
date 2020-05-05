@@ -21,6 +21,7 @@
 
 #include "uv.h"
 #include "../src/julia.h"
+#include "../src/options.h"
 #include "../src/julia_assert.h"
 
 JULIA_DEFINE_FAST_TLS()
@@ -29,30 +30,29 @@ JULIA_DEFINE_FAST_TLS()
 extern "C" {
 #endif
 
+#ifdef JL_ASAN_ENABLED
+JL_DLLEXPORT const char* __asan_default_options() {
+    return "allow_user_segv_handler=1:detect_leaks=0";
+    // FIXME: enable LSAN after fixing leaks & defining __lsan_default_suppressions(),
+    //        or defining __lsan_default_options = exitcode=0 once publicly available
+    //        (here and in flisp/flmain.c)
+}
+#endif
+
 static int exec_program(char *program)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     JL_TRY {
         jl_load(jl_main_module, program);
     }
     JL_CATCH {
         jl_value_t *errs = jl_stderr_obj();
-        jl_value_t *e = ptls->exception_in_transit;
-        // Manually save and restore the backtrace so that we print the original
-        // one instead of the one caused by `show`.
-        // We can't use safe_restore since that will cause any error
-        // (including the ones that would have been caught) to abort.
-        uintptr_t *volatile bt_data = NULL;
-        size_t bt_size = ptls->bt_size;
         volatile int shown_err = 0;
         jl_printf(JL_STDERR, "error during bootstrap:\n");
         JL_TRY {
             if (errs) {
-                bt_data = (uintptr_t*)malloc(bt_size * sizeof(void*));
-                memcpy(bt_data, ptls->bt_data, bt_size * sizeof(void*));
                 jl_value_t *showf = jl_get_function(jl_base_module, "show");
                 if (showf != NULL) {
-                    jl_call2(showf, errs, e);
+                    jl_call2(showf, errs, jl_current_exception());
                     jl_printf(JL_STDERR, "\n");
                     shown_err = 1;
                 }
@@ -60,13 +60,8 @@ static int exec_program(char *program)
         }
         JL_CATCH {
         }
-        if (bt_data) {
-            ptls->bt_size = bt_size;
-            memcpy(ptls->bt_data, bt_data, bt_size * sizeof(void*));
-            free(bt_data);
-        }
         if (!shown_err) {
-            jl_static_show(JL_STDERR, e);
+            jl_static_show(JL_STDERR, jl_current_exception());
             jl_printf(JL_STDERR, "\n");
         }
         jlbacktrace();
@@ -99,7 +94,6 @@ static void print_profile(void)
 
 static NOINLINE int true_main(int argc, char *argv[])
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     jl_set_ARGS(argc, argv);
 
     jl_function_t *start_client = jl_base_module ?
@@ -113,7 +107,7 @@ static NOINLINE int true_main(int argc, char *argv[])
             jl_get_ptls_states()->world_age = last_age;
         }
         JL_CATCH {
-            jl_no_exc_handler(jl_exception_in_transit);
+            jl_no_exc_handler(jl_current_exception());
         }
         return 0;
     }
@@ -138,7 +132,7 @@ static NOINLINE int true_main(int argc, char *argv[])
             jl_value_t *val = (jl_value_t*)jl_eval_string(line);
             if (jl_exception_occurred()) {
                 jl_printf(JL_STDERR, "error during run:\n");
-                jl_static_show(JL_STDERR, ptls->exception_in_transit);
+                jl_static_show(JL_STDERR, jl_exception_occurred());
                 jl_exception_clear();
             }
             else if (val) {
@@ -155,7 +149,7 @@ static NOINLINE int true_main(int argc, char *argv[])
                 line = NULL;
             }
             jl_printf(JL_STDERR, "\nparser error:\n");
-            jl_static_show(JL_STDERR, ptls->exception_in_transit);
+            jl_static_show(JL_STDERR, jl_current_exception());
             jl_printf(JL_STDERR, "\n");
             jlbacktrace();
         }
@@ -169,22 +163,9 @@ int main(int argc, char *argv[])
     uv_setup_args(argc, argv); // no-op on Windows
 #else
 
-#if defined(_P64) && defined(JL_DEBUG_BUILD)
-static int is_running_under_wine()
-{
-    static const char * (CDECL *pwine_get_version)(void);
-    HMODULE hntdll = GetModuleHandle("ntdll.dll");
-    assert(hntdll);
-    pwine_get_version = (void *)GetProcAddress(hntdll, "wine_get_version");
-    return pwine_get_version != 0;
-}
-#endif
-
 static void lock_low32() {
 #if defined(_P64) && defined(JL_DEBUG_BUILD)
     // Wine currently has a that causes it to answer VirtualQuery incorrectly.
-    // See https://www.winehq.org/pipermail/wine-devel/2016-March/112188.html for details
-    int under_wine = is_running_under_wine();
     // block usage of the 32-bit address space on win64, to catch pointer cast errors
     char *const max32addr = (char*)0xffffffffL;
     SYSTEM_INFO info;
@@ -198,7 +179,6 @@ static void lock_low32() {
         if (meminfo.State == MEM_FREE) { // reserve all free pages in the first 4GB of memory
             char *first = (char*)meminfo.BaseAddress;
             char *last = first + meminfo.RegionSize;
-            char *p;
             if (last > max32addr)
                 last = max32addr;
             // adjust first up to the first allocation granularity boundary
@@ -206,8 +186,12 @@ static void lock_low32() {
             first = (char*)(((long long)first + info.dwAllocationGranularity - 1) & ~(info.dwAllocationGranularity - 1));
             last = (char*)((long long)last & ~(info.dwAllocationGranularity - 1));
             if (last != first) {
-                p = VirtualAlloc(first, last - first, MEM_RESERVE, PAGE_NOACCESS); // reserve all memory in between
-                assert(under_wine || p == first);
+                void *p = VirtualAlloc(first, last - first, MEM_RESERVE, PAGE_NOACCESS); // reserve all memory in between
+                if ((char*)p != first)
+                    // Wine and Windows10 seem to have issues with reporting memory access information correctly
+                    // so we sometimes end up with unexpected results - this is just ignore those and continue
+                    // this is just a debugging aid to help find accidental pointer truncation anyways, so it's not critical
+                    VirtualFree(p, 0, MEM_RELEASE);
             }
         }
         meminfo.BaseAddress += meminfo.RegionSize;

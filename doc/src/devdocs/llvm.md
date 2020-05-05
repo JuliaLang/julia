@@ -12,14 +12,14 @@ The code for lowering Julia AST to LLVM IR or interpreting it directly is in dir
 | File                | Description                                                |
 |:------------------- |:---------------------------------------------------------- |
 | `builtins.c`        | Builtin functions                                          |
-| `ccall.cpp`         | Lowering `ccall`                                           |
+| `ccall.cpp`         | Lowering [`ccall`](@ref)                                   |
 | `cgutils.cpp`       | Lowering utilities, notably for array and tuple accesses   |
 | `codegen.cpp`       | Top-level of code generation, pass list, lowering builtins |
 | `debuginfo.cpp`     | Tracks debug information for JIT code                      |
 | `disasm.cpp`        | Handles native object file and JIT code diassembly         |
 | `gf.c`              | Generic functions                                          |
 | `intrinsics.cpp`    | Lowering intrinsics                                        |
-| `llvm-simdloop.cpp` | Custom LLVM pass for `@simd`                               |
+| `llvm-simdloop.cpp` | Custom LLVM pass for [`@simd`](@ref)                       |
 | `sys.c`             | I/O and operating system utility functions                 |
 
 Some of the `.cpp` files form a group that compile to a single object.
@@ -42,10 +42,10 @@ The default version of LLVM is specified in `deps/Versions.make`. You can overri
 a file called `Make.user` in the top-level directory and adding a line to it such as:
 
 ```
-LLVM_VER = 3.5.0
+LLVM_VER = 6.0.1
 ```
 
-Besides the LLVM release numerals, you can also use `LLVM_VER = svn` to bulid against the latest
+Besides the LLVM release numerals, you can also use `LLVM_VER = svn` to build against the latest
 development version of LLVM.
 
 You can also specify to build a debug version of LLVM, by setting either `LLVM_DEBUG = 1` or
@@ -94,10 +94,10 @@ process (e.g. because it creates unserializable state). However, the resulting
 It is also possible to dump an LLVM IR module for just one Julia function,
 using:
 ```julia
-f, T = +, Tuple{Int,Int} # Substitute your function of interest here
+fun, T = +, Tuple{Int,Int} # Substitute your function of interest here
 optimize = false
-open("plus.ll", "w") do f
-    println(f, Base._dump_function(f, T, false, false, false, true, :att, optimize))
+open("plus.ll", "w") do file
+    println(file, InteractiveUtils._dump_function(fun, T, false, false, false, true, :att, optimize, :default))
 end
 ```
 These files can be processed the same way as the unoptimized sysimg IR shown
@@ -168,7 +168,7 @@ without having to worry (too much) about which values may or may not be GC
 tracked.
 
 However, in order to be able to do late GC root placement, we need to be able to
-identify a) which pointers are gc tracked and b) all uses of such pointers. The
+identify a) which pointers are GC tracked and b) all uses of such pointers. The
 goal of the GC placement pass is thus simple:
 
 Minimize the number of needed GC roots/stores to them subject to the constraint
@@ -211,6 +211,11 @@ three different address spaces (their numbers are defined in `src/codegen_shared
   future), but unlike the other pointers need not be rooted if passed to a
   call (they do still need to be rooted if they are live across another safepoint
   between the definition and the call).
+- Pointers loaded from tracked object (currently 13): This is used by arrays,
+  which themselves contain a pointer to the managed data. This data area is owned
+  by the array, but is not a GC-tracked object by itself. The compiler guarantees
+  that as long as this pointer is live, the object that this pointer was loaded
+  from will keep being live.
 
 ### Invariants
 
@@ -257,27 +262,28 @@ optimizer from making optimizations that would introduce these operations. Note
 we can still insert static constants at JIT time by using `inttoptr` in address
 space 0 and then decaying to the appropriate address space afterwards.
 
-### Supporting ccall
+### Supporting [`ccall`](@ref)
 
 One important aspect missing from the discussion so far is the handling of
-`ccall`. `ccall` has the peculiar feature that the location and scope of a use
-do not coincide. As an example consider:
+[`ccall`](@ref). [`ccall`](@ref) has the peculiar feature that the location and
+scope of a use do not coincide. As an example consider:
 ```julia
 A = randn(1024)
 ccall(:foo, Cvoid, (Ptr{Float64},), A)
 ```
 In lowering, the compiler will insert a conversion from the array to the
 pointer which drops the reference to the array value. However, we of course
-need to make sure that the array does stay alive while we're doing the `ccall`.
-To understand how this is done, first recall the lowering of the above code:
+need to make sure that the array does stay alive while we're doing the
+[`ccall`](@ref). To understand how this is done, first recall the lowering of the
+above code:
 ```julia
-return $(Expr(:foreigncall, :(:foo), Cvoid, svec(Ptr{Float64}), :(:ccall), 1, :($(Expr(:foreigncall, :(:jl_array_ptr), Ptr{Float64}, svec(Any), :(:ccall), 1, :(A)))), :(A)))
+return $(Expr(:foreigncall, :(:foo), Cvoid, svec(Ptr{Float64}), 0, :(:ccall), Expr(:foreigncall, :(:jl_array_ptr), Ptr{Float64}, svec(Any), 0, :(:ccall), :(A)), :(A)))
 ```
 The last `:(A)`, is an extra argument list inserted during lowering that informs
 the code generator which Julia level values need to be kept alive for the
-duration of this `ccall`. We then take this information and represent it in an
-"operand bundle" at the IR level. An operand bundle is essentially a fake use
-that is attached to the call site. At the IR level, this looks like so:
+duration of this [`ccall`](@ref). We then take this information and represent
+it in an "operand bundle" at the IR level. An operand bundle is essentially a fake
+use that is attached to the call site. At the IR level, this looks like so:
 ```llvm
 call void inttoptr (i64 ... to void (double*)*)(double* %5) [ "jl_roots"(%jl_value_t addrspace(10)* %A) ]
 ```
@@ -285,10 +291,10 @@ The GC root placement pass will treat the `jl_roots` operand bundle as if it wer
 a regular operand. However, as a final step, after the GC roots are inserted,
 it will drop the operand bundle to avoid confusing instruction selection.
 
-### Supporting pointer_from_objref
+### Supporting [`pointer_from_objref`](@ref)
 
-`pointer_from_objref` is special because it requires the user to take explicit
-control of GC rooting. By our above invariants, this function is illegal,
+[`pointer_from_objref`](@ref) is special because it requires the user to take
+explicit control of GC rooting. By our above invariants, this function is illegal,
 because it performs an address space cast from 10 to 0. However, it can be useful,
 in certain situations, so we provide a special intrinsic:
 ```llvm

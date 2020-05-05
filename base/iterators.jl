@@ -12,7 +12,7 @@ using .Base:
     @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
     tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
     IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange,
-    LinearIndices, (:), |, +, -, !==, !, <=, <, missing
+    LinearIndices, (:), |, +, -, !==, !, <=, <, missing, map, any, @boundscheck, @inbounds
 
 import .Base:
     first, last,
@@ -22,7 +22,7 @@ import .Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek
 
-export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition
 
 tail_if_any(::Tuple{}) = ()
 tail_if_any(x::Tuple) = tail(x)
@@ -115,7 +115,7 @@ and `x` is the `i`th value from the given iterator. It's useful when
 you need not only the values `x` over which you are iterating, but
 also the number of iterations so far. Note that `i` may not be valid
 for indexing `iter`; it's also possible that `x != iter[i]`, if `iter`
-has indices that do not start at 1. See the `enumerate(IndexLinear(),
+has indices that do not start at 1. See the `pairs(IndexLinear(),
 iter)` method if you want to ensure that `i` is an index.
 
 # Examples
@@ -181,9 +181,9 @@ Also similar to `enumerate(A)`, except `i` will be a valid index
 for `A`, while `enumerate` always counts from 1 regardless of the indices
 of `A`.
 
-Specifying `IndexLinear()` ensures that `i` will be an integer;
-specifying `IndexCartesian()` ensures that `i` will be a
-`CartesianIndex`; specifying `IndexStyle(A)` chooses whichever has
+Specifying [`IndexLinear()`](@ref) ensures that `i` will be an integer;
+specifying [`IndexCartesian()`](@ref) ensures that `i` will be a
+[`CartesianIndex`](@ref); specifying `IndexStyle(A)` chooses whichever has
 been defined as the native indexing style for array `A`.
 
 Mutation of the bounds of the underlying array will invalidate this iterator.
@@ -224,6 +224,7 @@ pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
 pairs(A::AbstractVector) = pairs(IndexLinear(), A)
 pairs(tuple::Tuple) = Pairs(tuple, keys(tuple))
 pairs(nt::NamedTuple) = Pairs(nt, keys(nt))
+pairs(v::Core.SimpleVector) = Pairs(v, LinearIndices(v))
 # pairs(v::Pairs) = v # listed for reference, but already defined from being an AbstractDict
 
 length(v::Pairs) = length(v.itr)
@@ -249,11 +250,9 @@ values(v::Pairs) = v.data
 getindex(v::Pairs, key) = v.data[key]
 setindex!(v::Pairs, value, key) = (v.data[key] = value; v)
 get(v::Pairs, key, default) = get(v.data, key, default)
-get(f::Base.Callable, collection::Pairs, key) = get(f, v.data, key)
+get(f::Base.Callable, v::Pairs, key) = get(f, v.data, key)
 
 # zip
-
-abstract type AbstractZipIterator end
 
 zip_iteratorsize(a, b) = and_iteratorsize(a,b) # as `and_iteratorsize` but inherit `Union{HasLength,IsInfinite}` of the shorter iterator
 zip_iteratorsize(::HasLength, ::IsInfinite) = HasLength()
@@ -261,85 +260,19 @@ zip_iteratorsize(::HasShape, ::IsInfinite) = HasLength()
 zip_iteratorsize(a::IsInfinite, b) = zip_iteratorsize(b,a)
 zip_iteratorsize(a::IsInfinite, b::IsInfinite) = IsInfinite()
 
-
-struct Zip1{I} <: AbstractZipIterator
-    a::I
-end
-zip(a) = Zip1(a)
-length(z::Zip1) = length(z.a)
-size(z::Zip1) = size(z.a)
-axes(z::Zip1) = axes(z.a)
-eltype(::Type{Zip1{I}}) where {I} = Tuple{eltype(I)}
-@propagate_inbounds function iterate(z::Zip1, state...)
-    n = iterate(z.a, state...)
-    n === nothing && return n
-    return ((n[1],), n[2])
-end
-@inline isdone(z::Zip1, state...) = isdone(z.a, state...)
-
-IteratorSize(::Type{Zip1{I}}) where {I} = IteratorSize(I)
-IteratorEltype(::Type{Zip1{I}}) where {I} = IteratorEltype(I)
-
-struct Zip2{I1, I2} <: AbstractZipIterator
-    a::I1
-    b::I2
-end
-zip(a, b) = Zip2(a, b)
-length(z::Zip2) = _min_length(z.a, z.b, IteratorSize(z.a), IteratorSize(z.b))
-size(z::Zip2) = promote_shape(size(z.a), size(z.b))
-axes(z::Zip2) = promote_shape(axes(z.a), axes(z.b))
-eltype(::Type{Zip2{I1,I2}}) where {I1,I2} = Tuple{eltype(I1), eltype(I2)}
-@inline isdone(z::Zip2) = isdone(z.a) | isdone(z.b)
-@inline isdone(z::Zip2, (sa, sb)::Tuple{Any, Any}) = isdone(z.a, sa) | isdone(z.b, sb)
-function zip_iterate(a, b, sta, stb) # the states are either Tuple{} or Tuple{Any}
-    da, db = isdone(a), isdone(b)
-    da === true && return nothing
-    db === true && return nothing
-    if da === missing
-       ya = iterate(a, sta...)
-       ya === nothing && return nothing
-    end
-    if db === missing
-       yb = iterate(b, stb...)
-       yb === nothing && return nothing
-    end
-    if da === false
-         ya = iterate(a, sta...)
-         ya === nothing && return nothing
-    end
-    if db === false
-         yb = iterate(b, stb...)
-         yb === nothing && return nothing
-    end
-    return (ya, yb)
-end
-let interleave(a, b) = ((a[1], b[1]), (a[2], b[2]))
-    global iterate
-    @propagate_inbounds function iterate(z::Zip2)
-        ys = zip_iterate(z.a, z.b, (), ())
-        ys === nothing && return nothing
-        return interleave(ys...)
-    end
-    @propagate_inbounds function iterate(z::Zip2, st::Tuple{Any, Any})
-        ys = zip_iterate(z.a, z.b, (st[1],), (st[2],))
-        ys === nothing && return nothing
-        return interleave(ys...)
-    end
-end
-
-IteratorSize(::Type{Zip2{I1,I2}}) where {I1,I2} = zip_iteratorsize(IteratorSize(I1),IteratorSize(I2))
-IteratorEltype(::Type{Zip2{I1,I2}}) where {I1,I2} = and_iteratoreltype(IteratorEltype(I1),IteratorEltype(I2))
-
-struct Zip{I, Z<:AbstractZipIterator} <: AbstractZipIterator
-    a::I
-    z::Z
+struct Zip{Is<:Tuple}
+    is::Is
 end
 
 """
     zip(iters...)
 
-For a set of iterable objects, return an iterable of tuples, where the `i`th tuple contains
-the `i`th component of each input iterable.
+Run multiple iterators at the same time, until any of them is exhausted. The value type of
+the `zip` iterator is a tuple of values of its subiterators.
+
+!!! note
+    `zip` orders the calls to its subiterators in such a way that stateful iterators will
+    not advance when another iterator finishes in the current iteration.
 
 # Examples
 ```jldoctest
@@ -355,7 +288,7 @@ julia> b = ["e","d","b","c","a"]
  "a"
 
 julia> c = zip(a,b)
-Base.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5, ["e", "d", "b", "c", "a"])
+zip(1:5, ["e", "d", "b", "c", "a"])
 
 julia> length(c)
 5
@@ -364,33 +297,98 @@ julia> first(c)
 (1, "e")
 ```
 """
-zip(a, b, c...) = Zip(a, zip(b, c...))
-length(z::Zip) = _min_length(z.a, z.z, IteratorSize(z.a), IteratorSize(z.z))
-size(z::Zip) = promote_shape(size(z.a), size(z.z))
-axes(z::Zip) = promote_shape(axes(z.a), axes(z.z))
-eltype(::Type{Zip{I,Z}}) where {I,Z} = tuple_type_cons(eltype(I), eltype(Z))
-@inline isdone(z::Zip) = isdone(z.a) | isdone(z.z)
-@inline isdone(z::Zip, (sa, sz)) = isdone(z.a, sa) | isdone(z.a, sz)
-let interleave(a, b) = ((a[1], b[1]...), (a[2], b[2]))
-    global iterate
-    @propagate_inbounds function iterate(z::Zip)
-        ys = zip_iterate(z.a, z.z, (), ())
-        ys === nothing && return nothing
-        return interleave(ys...)
-    end
-    @propagate_inbounds function iterate(z::Zip, st::Tuple{Any, Any})
-        ys = zip_iterate(z.a, z.z, (st[1],), (st[2],))
-        ys === nothing && return nothing
-        return interleave(ys...)
+zip(a...) = Zip(a)
+function length(z::Zip)
+    n = _zip_min_length(z.is)
+    n === nothing && throw(ArgumentError("iterator is of undefined length"))
+    return n
+end
+function _zip_min_length(is)
+    i = is[1]
+    n = _zip_min_length(tail(is))
+    if IteratorSize(i) isa IsInfinite
+        return n
+    else
+        return n === nothing ? length(i) : min(n, length(i))
     end
 end
+_zip_min_length(is::Tuple{}) = nothing
+size(z::Zip) = mapreduce(size, _zip_promote_shape, z.is)
+axes(z::Zip) = mapreduce(axes, _zip_promote_shape, z.is)
+_zip_promote_shape((a,)::Tuple{OneTo}, (b,)::Tuple{OneTo}) = (intersect(a, b),)
+_zip_promote_shape((m,)::Tuple{Integer},(n,)::Tuple{Integer}) = (min(m,n),)
+_zip_promote_shape(a, b) = promote_shape(a, b)
+eltype(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_eltype(Is)
+_zip_eltype(::Type{Is}) where {Is<:Tuple} =
+    tuple_type_cons(eltype(tuple_type_head(Is)), _zip_eltype(tuple_type_tail(Is)))
+_zip_eltype(::Type{Tuple{}}) = Tuple{}
+@inline isdone(z::Zip) = _zip_any_isdone(z.is, map(_ -> (), z.is))
+@inline isdone(z::Zip, ss) = _zip_any_isdone(z.is, map(tuple, ss))
+@inline function _zip_any_isdone(is, ss)
+    d1 = isdone(is[1], ss[1]...)
+    d1 === true && return true
+    return d1 | _zip_any_isdone(tail(is), tail(ss))
+end
+@inline _zip_any_isdone(::Tuple{}, ::Tuple{}) = false
 
-IteratorSize(::Type{Zip{I1,I2}}) where {I1,I2} = zip_iteratorsize(IteratorSize(I1),IteratorSize(I2))
-IteratorEltype(::Type{Zip{I1,I2}}) where {I1,I2} = and_iteratoreltype(IteratorEltype(I1),IteratorEltype(I2))
+@propagate_inbounds iterate(z::Zip) = _zip_iterate_all(z.is, map(_ -> (), z.is))
+@propagate_inbounds iterate(z::Zip, ss) = _zip_iterate_all(z.is, map(tuple, ss))
 
-reverse(z::Zip1) = Zip1(reverse(z.a))
-reverse(z::Zip2) = Zip2(reverse(z.a), reverse(z.b))
-reverse(z::Zip) = Zip(reverse(z.a), reverse(z.z))
+# This first queries isdone from every iterator. If any gives true, it immediately returns
+# nothing. It then iterates all those where isdone returned missing, afterwards all those
+# it returned false, again terminating immediately if any iterator is exhausted. Finally,
+# the results are interleaved appropriately.
+@propagate_inbounds function _zip_iterate_all(is, ss)
+    d, ds = _zip_isdone(is, ss)
+    d && return nothing
+    xs1 = _zip_iterate_some(is, ss, ds, missing)
+    xs1 === nothing && return nothing
+    xs2 = _zip_iterate_some(is, ss, ds, false)
+    xs2 === nothing && return nothing
+    return _zip_iterate_interleave(xs1, xs2, ds)
+end
+
+@propagate_inbounds function _zip_iterate_some(is, ss, ds::Tuple{T,Vararg{Any}}, f::T) where T
+    x = iterate(is[1], ss[1]...)
+    x === nothing && return nothing
+    y = _zip_iterate_some(tail(is), tail(ss), tail(ds), f)
+    y === nothing && return nothing
+    return (x, y...)
+end
+@propagate_inbounds _zip_iterate_some(is, ss, ds::Tuple{Any,Vararg{Any}}, f) =
+    _zip_iterate_some(tail(is), tail(ss), tail(ds), f)
+_zip_iterate_some(::Tuple{}, ::Tuple{}, ::Tuple{}, ::Any) = ()
+
+function _zip_iterate_interleave(xs1, xs2, ds)
+    t = _zip_iterate_interleave(tail(xs1), xs2, tail(ds))
+    ((xs1[1][1], t[1]...), (xs1[1][2], t[2]...))
+end
+function _zip_iterate_interleave(xs1, xs2, ds::Tuple{Bool,Vararg{Any}})
+    t = _zip_iterate_interleave(xs1, tail(xs2), tail(ds))
+    ((xs2[1][1], t[1]...), (xs2[1][2], t[2]...))
+end
+_zip_iterate_interleave(::Tuple{}, ::Tuple{}, ::Tuple{}) = ((), ())
+
+function _zip_isdone(is, ss)
+    d = isdone(is[1], ss[1]...)
+    d´, ds = _zip_isdone(tail(is), tail(ss))
+    return (d === true || d´, (d, ds...))
+end
+_zip_isdone(::Tuple{}, ::Tuple{}) = (false, ())
+
+IteratorSize(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_iterator_size(Is)
+_zip_iterator_size(::Type{Is}) where {Is<:Tuple} =
+    zip_iteratorsize(IteratorSize(tuple_type_head(Is)),
+                     _zip_iterator_size(tuple_type_tail(Is)))
+_zip_iterator_size(::Type{Tuple{I}}) where {I} = IteratorSize(I)
+_zip_iterator_size(::Type{Tuple{}}) = IsInfinite()
+IteratorEltype(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_iterator_eltype(Is)
+_zip_iterator_eltype(::Type{Is}) where {Is<:Tuple} =
+    and_iteratoreltype(IteratorEltype(tuple_type_head(Is)),
+                       _zip_iterator_eltype(tuple_type_tail(Is)))
+_zip_iterator_eltype(::Type{Tuple{}}) = HasEltype()
+
+reverse(z::Zip) = Zip(map(reverse, z.is))
 
 # filter
 
@@ -444,6 +442,70 @@ IteratorSize(::Type{<:Filter}) = SizeUnknown()
 
 reverse(f::Filter) = Filter(f.flt, reverse(f.itr))
 
+# Accumulate -- partial reductions of a function over an iterator
+
+struct Accumulate{F,I,T}
+    f::F
+    itr::I
+    init::T
+end
+
+"""
+    Iterators.accumulate(f, itr; [init])
+
+Given a 2-argument function `f` and an iterator `itr`, return a new
+iterator that successively applies `f` to the previous value and the
+next element of `itr`.
+
+This is effectively a lazy version of [`Base.accumulate`](@ref).
+
+!!! compat "Julia 1.5"
+    Keyword argument `init` is added in Julia 1.5.
+
+# Examples
+```jldoctest
+julia> f = Iterators.accumulate(+, [1,2,3,4]);
+
+julia> foreach(println, f)
+1
+3
+6
+10
+
+julia> f = Iterators.accumulate(+, [1,2,3]; init = 100);
+
+julia> foreach(println, f)
+101
+103
+106
+```
+"""
+accumulate(f, itr; init = Base._InitialValue()) = Accumulate(f, itr, init)
+
+function iterate(itr::Accumulate)
+    state = iterate(itr.itr)
+    if state === nothing
+        return nothing
+    end
+    val = Base.BottomRF(itr.f)(itr.init, state[1])
+    return (val, (val, state[2]))
+end
+
+function iterate(itr::Accumulate, state)
+    nxt = iterate(itr.itr, state[2])
+    if nxt === nothing
+        return nothing
+    end
+    val = itr.f(state[1], nxt[1])
+    return (val, (val, nxt[2]))
+end
+
+length(itr::Accumulate) = length(itr.itr)
+size(itr::Accumulate) = size(itr.itr)
+
+IteratorSize(::Type{<:Accumulate{F,I}}) where {F,I} = IteratorSize(I)
+IteratorEltype(::Type{<:Accumulate}) = EltypeUnknown()
+
 # Rest -- iterate starting at the given state
 
 struct Rest{I,S}
@@ -466,6 +528,7 @@ julia> collect(Iterators.rest([1,2,3,4], 2))
 ```
 """
 rest(itr,state) = Rest(itr,state)
+rest(itr::Rest,state) = Rest(itr.itr,state)
 rest(itr) = itr
 
 """
@@ -473,7 +536,7 @@ rest(itr) = itr
 
 Returns the first element and an iterator over the remaining elements.
 
-# Example
+# Examples
 ```jldoctest
 julia> (a, rest) = Iterators.peel("abc");
 
@@ -482,8 +545,8 @@ julia> a
 
 julia> collect(rest)
 2-element Array{Char,1}:
- 'b'
- 'c'
+ 'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
+ 'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
 ```
 """
 function peel(itr)
@@ -495,8 +558,6 @@ end
 
 @propagate_inbounds iterate(i::Rest, st=i.st) = iterate(i.itr, st)
 isdone(i::Rest, st...) = isdone(i.itr, st...)
-@propagate_inbounds iterate(i::Rest{I,S}, st::S=i.st) where {I,S<:Base.LegacyIterationCompat{I}} =
-    done(i.itr, st) ? nothing : next(i.itr, st)
 
 eltype(::Type{<:Rest{I}}) where {I} = eltype(I)
 IteratorEltype(::Type{<:Rest{I}}) where {I} = IteratorEltype(I)
@@ -653,6 +714,105 @@ end
 iterate(it::Drop, state) = iterate(it.xs, state)
 isdone(it::Drop, state) = isdone(it.xs, state)
 
+
+# takewhile
+
+struct TakeWhile{I,P<:Function}
+    pred::P
+    xs::I
+end
+
+"""
+    takewhile(pred, iter)
+
+An iterator that generates element from `iter` as long as predicate `pred` is true,
+afterwards, drops every element.
+
+!!! compat "Julia 1.4"
+    This function requires at least Julia 1.4.
+
+# Examples
+
+```jldoctest
+julia> s = collect(1:5)
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> collect(Iterators.takewhile(<(3),s))
+2-element Array{Int64,1}:
+ 1
+ 2
+```
+"""
+takewhile(pred,xs) = TakeWhile(pred,xs)
+
+function iterate(ibl::TakeWhile, itr...)
+    y = iterate(ibl.xs,itr...)
+    y === nothing && return nothing
+    ibl.pred(y[1]) || return nothing
+    y
+end
+
+IteratorSize(::Type{<:TakeWhile}) = SizeUnknown()
+eltype(::Type{TakeWhile{I,P}}) where {I,P} = eltype(I)
+IteratorEltype(::Type{TakeWhile{I,P}}) where {I,P} = IteratorEltype(I)
+
+
+# dropwhile
+
+struct DropWhile{I,P<:Function}
+    pred::P
+    xs::I
+end
+
+"""
+    dropwhile(pred, iter)
+
+An iterator that drops element from `iter` as long as predicate `pred` is true,
+afterwards, returns every element.
+
+!!! compat "Julia 1.4"
+    This function requires at least Julia 1.4.
+
+# Examples
+
+```jldoctest
+julia> s = collect(1:5)
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> collect(Iterators.dropwhile(<(3),s))
+3-element Array{Int64,1}:
+ 3
+ 4
+ 5
+```
+"""
+dropwhile(pred,itr) = DropWhile(pred,itr)
+
+iterate(ibl::DropWhile,itr) = iterate(ibl.xs, itr)
+function iterate(ibl::DropWhile)
+    y = iterate(ibl.xs)
+    while y !== nothing
+        ibl.pred(y[1]) || break
+        y = iterate(ibl.xs,y[2])
+    end
+    y
+end
+
+IteratorSize(::Type{<:DropWhile}) = SizeUnknown()
+eltype(::Type{DropWhile{I,P}}) where {I,P} = eltype(I)
+IteratorEltype(::Type{DropWhile{I,P}}) where {I,P} = IteratorEltype(I)
+
+
 # Cycle an iterator forever
 
 struct Cycle{I}
@@ -663,7 +823,7 @@ end
     cycle(iter)
 
 An iterator that cycles through `iter` forever.
-N.B. if `iter` is empty, so is `cycle(iter)`.
+If `iter` is empty, so is `cycle(iter)`.
 
 # Examples
 ```jldoctest
@@ -774,15 +934,14 @@ _prod_size1(a, A) =
 
 axes(P::ProductIterator) = _prod_indices(P.iterators)
 _prod_indices(::Tuple{}) = ()
-_prod_indices(t::Tuple) = (_prod_indices1(t[1], IteratorSize(t[1]))..., _prod_indices(tail(t))...)
-_prod_indices1(a, ::HasShape)  = axes(a)
-_prod_indices1(a, ::HasLength) = (OneTo(length(a)),)
-_prod_indices1(a, A) =
+_prod_indices(t::Tuple) = (_prod_axes1(t[1], IteratorSize(t[1]))..., _prod_indices(tail(t))...)
+_prod_axes1(a, ::HasShape)  = axes(a)
+_prod_axes1(a, ::HasLength) = (OneTo(length(a)),)
+_prod_axes1(a, A) =
     throw(ArgumentError("Cannot compute indices for object of type $(typeof(a))"))
 
 ndims(p::ProductIterator) = length(axes(p))
 length(P::ProductIterator) = prod(size(P))
-_length(p::ProductIterator) = prod(map(unsafe_length, axes(p)))
 
 IteratorEltype(::Type{ProductIterator{Tuple{}}}) = HasEltype()
 IteratorEltype(::Type{ProductIterator{Tuple{I}}}) where {I} = IteratorEltype(I)
@@ -803,7 +962,7 @@ iterate(::ProductIterator{Tuple{}}, state) = nothing
 @inline isdone(P::ProductIterator) = any(isdone, P.iterators)
 @inline function _pisdone(iters, states)
     iter1 = first(iters)
-    done1 = isdone(iter1, first(states)) # check step
+    done1 = isdone(iter1, first(states)[2]) # check step
     done1 === true || return done1 # false or missing
     done1 = isdone(iter1) # check restart
     done1 === true || return done1 # false or missing
@@ -875,7 +1034,9 @@ julia> collect(Iterators.flatten((1:2, 8:9)))
 flatten(itr) = Flatten(itr)
 
 eltype(::Type{Flatten{I}}) where {I} = eltype(eltype(I))
+eltype(::Type{Flatten{Tuple{}}}) = eltype(Tuple{})
 IteratorEltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, IteratorEltype(I))
+IteratorEltype(::Type{Flatten{Tuple{}}}) = IteratorEltype(Tuple{})
 _flatteneltype(I, ::HasEltype) = IteratorEltype(eltype(I))
 _flatteneltype(I, et) = EltypeUnknown()
 
@@ -886,6 +1047,7 @@ flatten_iteratorsize(a, b) = SizeUnknown()
 
 _flatten_iteratorsize(sz, ::EltypeUnknown, I) = SizeUnknown()
 _flatten_iteratorsize(sz, ::HasEltype, I) = flatten_iteratorsize(sz, eltype(I))
+_flatten_iteratorsize(sz, ::HasEltype, ::Type{Tuple{}}) = HasLength()
 
 IteratorSize(::Type{Flatten{I}}) where {I} = _flatten_iteratorsize(IteratorSize(I), IteratorEltype(I), I)
 
@@ -896,6 +1058,7 @@ flatten_length(f, ::Type{<:Number}) = length(f.it)
 flatten_length(f, T) = throw(ArgumentError(
     "Iterates of the argument to Flatten are not known to have constant length"))
 length(f::Flatten{I}) where {I} = flatten_length(f, eltype(I))
+length(f::Flatten{Tuple{}}) = 0
 
 @propagate_inbounds function iterate(f::Flatten, state=())
     if state !== ()
@@ -904,7 +1067,13 @@ length(f::Flatten{I}) where {I} = flatten_length(f, eltype(I))
     end
     x = (state === () ? iterate(f.it) : iterate(f.it, state[1]))
     x === nothing && return nothing
-    iterate(f, (x[2], x[1]))
+    y = iterate(x[1])
+    while y === nothing
+         x = iterate(f.it, x[2])
+         x === nothing && return nothing
+         y = iterate(x[1])
+    end
+    return y[1], (x[2], x[1], y[2])
 end
 
 reverse(f::Flatten) = Flatten(reverse(itr) for itr in reverse(f.it))
@@ -917,39 +1086,56 @@ Iterate over a collection `n` elements at a time.
 # Examples
 ```jldoctest
 julia> collect(Iterators.partition([1,2,3,4,5], 2))
-3-element Array{Array{Int64,1},1}:
+3-element Array{SubArray{Int64,1,Array{Int64,1},Tuple{UnitRange{Int64}},true},1}:
  [1, 2]
  [3, 4]
  [5]
 ```
 """
-partition(c::T, n::Integer) where {T} = PartitionIterator{T}(c, Int(n))
-
+function partition(c, n::Integer)
+    n < 1 && throw(ArgumentError("cannot create partitions of length $n"))
+    return PartitionIterator(c, Int(n))
+end
 
 struct PartitionIterator{T}
     c::T
     n::Int
 end
+# Partitions are explicitly a linear indexing operation, so reshape to 1-d immediately
+PartitionIterator(A::AbstractArray, n::Int) = PartitionIterator(vec(A), n)
+PartitionIterator(v::AbstractVector, n::Int) = PartitionIterator{typeof(v)}(v, n)
 
 eltype(::Type{PartitionIterator{T}}) where {T} = Vector{eltype(T)}
+# Arrays use a generic `view`-of-a-`vec`, so we cannot exactly predict what we'll get back
+eltype(::Type{PartitionIterator{T}}) where {T<:AbstractArray} = AbstractVector{eltype(T)}
+# But for some common implementations in Base we know the answer exactly
+eltype(::Type{PartitionIterator{T}}) where {T<:Vector} = SubArray{eltype(T), 1, T, Tuple{UnitRange{Int}}, true}
+
+IteratorEltype(::Type{<:PartitionIterator{T}}) where {T} = IteratorEltype(T)
+IteratorEltype(::Type{<:PartitionIterator{T}}) where {T<:AbstractArray} = EltypeUnknown()
+IteratorEltype(::Type{<:PartitionIterator{T}}) where {T<:Vector} = IteratorEltype(T)
+
 partition_iteratorsize(::HasShape) = HasLength()
 partition_iteratorsize(isz) = isz
 function IteratorSize(::Type{PartitionIterator{T}}) where {T}
     partition_iteratorsize(IteratorSize(T))
 end
 
-IteratorEltype(::Type{<:PartitionIterator{T}}) where {T} = IteratorEltype(T)
-
 function length(itr::PartitionIterator)
     l = length(itr.c)
     return div(l, itr.n) + ((mod(l, itr.n) > 0) ? 1 : 0)
 end
 
-function iterate(itr::PartitionIterator{<:Vector}, state=1)
-    iterate(itr.c, state) === nothing && return nothing
-    l = state
-    r = min(state + itr.n-1, length(itr.c))
-    return view(itr.c, l:r), r + 1
+function iterate(itr::PartitionIterator{<:AbstractRange}, state=1)
+    state > length(itr.c) && return nothing
+    r = min(state + itr.n - 1, length(itr.c))
+    return @inbounds itr.c[state:r], r + 1
+end
+
+function iterate(itr::PartitionIterator{<:AbstractArray}, state=1)
+    state > length(itr.c) && return nothing
+    r = min(state + itr.n - 1, length(itr.c))
+    return @inbounds view(itr.c, state:r), r + 1
 end
 
 struct IterationCutShort; end
@@ -981,18 +1167,18 @@ There are several different ways to think about this iterator wrapper:
 
 1. It provides a mutable wrapper around an iterator and
    its iteration state.
-2. It turns an iterator-like abstraction into a Channel-like
+2. It turns an iterator-like abstraction into a `Channel`-like
    abstraction.
 3. It's an iterator that mutates to become its own rest iterator
    whenever an item is produced.
 
 `Stateful` provides the regular iterator interface. Like other mutable iterators
-(e.g. `Channel`), if iteration is stopped early (e.g. by a `break` in a `for` loop),
+(e.g. [`Channel`](@ref)), if iteration is stopped early (e.g. by a [`break`](@ref) in a [`for`](@ref) loop),
 iteration can be resumed from the same spot by continuing to iterate over the
 same iterator object (in contrast, an immutable iterator would restart from the
 beginning).
 
-# Example:
+# Examples
 ```jldoctest
 julia> a = Iterators.Stateful("abcdef");
 
@@ -1004,14 +1190,14 @@ julia> popfirst!(a)
 
 julia> collect(Iterators.take(a, 3))
 3-element Array{Char,1}:
- 'b'
- 'c'
- 'd'
+ 'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
+ 'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
+ 'd': ASCII/Unicode U+0064 (category Ll: Letter, lowercase)
 
 julia> collect(a)
 2-element Array{Char,1}:
- 'e'
- 'f'
+ 'e': ASCII/Unicode U+0065 (category Ll: Letter, lowercase)
+ 'f': ASCII/Unicode U+0066 (category Ll: Letter, lowercase)
 ```
 
 ```jldoctest
@@ -1031,15 +1217,18 @@ mutable struct Stateful{T, VS}
     # A bit awkward right now, but adapted to the new iteration protocol
     nextvalstate::Union{VS, Nothing}
     taken::Int
+    @inline function Stateful{<:Any, Any}(itr::T) where {T}
+        new{T, Any}(itr, iterate(itr), 0)
+    end
     @inline function Stateful(itr::T) where {T}
         VS = approx_iter_type(T)
-        new{T, VS}(itr, iterate(itr)::VS, 0)
+        return new{T, VS}(itr, iterate(itr)::VS, 0)
     end
 end
 
 function reset!(s::Stateful{T,VS}, itr::T) where {T,VS}
     s.itr = itr
-    s.nextvalstate = iterate(itr)
+    setfield!(s, :nextvalstate, iterate(itr))
     s.taken = 0
     s
 end
@@ -1055,7 +1244,8 @@ else
     # having to typesubtract
     function doiterate(itr, valstate::Union{Nothing, Tuple{Any, Any}})
         valstate === nothing && return nothing
-        iterate(itr, tail(valstate))
+        val, st = valstate
+        return iterate(itr, st)
     end
     function _approx_iter_type(itrT::Type, vstate::Type)
         vstate <: Union{Nothing, Tuple{Any, Any}} || return Any
@@ -1075,7 +1265,7 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
         throw(EOFError())
     else
         val, state = vs
-        s.nextvalstate = iterate(s.itr, state)
+        Core.setfield!(s, :nextvalstate, iterate(s.itr, state))
         s.taken += 1
         return val
     end
@@ -1083,10 +1273,46 @@ end
 
 @inline peek(s::Stateful, sentinel=nothing) = s.nextvalstate !== nothing ? s.nextvalstate[1] : sentinel
 @inline iterate(s::Stateful, state=nothing) = s.nextvalstate === nothing ? nothing : (popfirst!(s), nothing)
-IteratorSize(::Type{Stateful{VS,T}} where VS) where {T} =
-    isa(IteratorSize(T), SizeUnknown) ? SizeUnknown() : HasLength()
+IteratorSize(::Type{Stateful{T,VS}}) where {T,VS} = IteratorSize(T) isa HasShape ? HasLength() : IteratorSize(T)
 eltype(::Type{Stateful{T, VS}} where VS) where {T} = eltype(T)
-IteratorEltype(::Type{Stateful{VS,T}} where VS) where {T} = IteratorEltype(T)
+IteratorEltype(::Type{Stateful{T,VS}}) where {T,VS} = IteratorEltype(T)
 length(s::Stateful) = length(s.itr) - s.taken
+
+"""
+    only(x)
+
+Returns the one and only element of collection `x`, and throws an `ArgumentError` if the
+collection has zero or multiple elements.
+
+See also: [`first`](@ref), [`last`](@ref).
+
+!!! compat "Julia 1.4"
+    This method requires at least Julia 1.4.
+"""
+@propagate_inbounds function only(x)
+    i = iterate(x)
+    @boundscheck if i === nothing
+        throw(ArgumentError("Collection is empty, must contain exactly 1 element"))
+    end
+    (ret, state) = i
+    @boundscheck if iterate(x, state) !== nothing
+        throw(ArgumentError("Collection has multiple elements, must contain exactly 1 element"))
+    end
+    return ret
+end
+
+# Collections of known size
+only(x::Ref) = x[]
+only(x::Number) = x
+only(x::Char) = x
+only(x::Tuple{Any}) = x[1]
+only(x::Tuple) = throw(
+    ArgumentError("Tuple contains $(length(x)) elements, must contain exactly 1 element")
+)
+only(a::AbstractArray{<:Any, 0}) = @inbounds return a[]
+only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
+only(x::NamedTuple) = throw(
+    ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
+)
 
 end

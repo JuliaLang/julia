@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Printf: @sprintf
 using Random
+using InteractiveUtils: code_llvm, code_native
 
 @generated function staged_t1(a,b)
     if a == Int
@@ -32,7 +32,7 @@ stagediobuf = IOBuffer()
     :(nothing)
 end
 
-const intstr = @sprintf("%s", Int)
+const intstr = string(Int)
 splat2(1)
 @test String(take!(stagediobuf)) == "($intstr,)"
 splat2(1, 3)
@@ -154,6 +154,7 @@ module TestGeneratedThrow
         @cfunction(foo, Cvoid, ())
         global inited = true
     end
+    inited = false
 end
 @test TestGeneratedThrow.inited
 
@@ -169,7 +170,7 @@ end
 @test _g_f_with_inner2(1)(2) == 2
 
 # @generated functions errors
-global gf_err_ref = Ref{Int}()
+const gf_err_ref = Ref{Int}()
 
 gf_err_ref[] = 0
 let gf_err, tsk = @async nothing # create a Task for yield to try to run
@@ -178,8 +179,9 @@ let gf_err, tsk = @async nothing # create a Task for yield to try to run
         yield()
         gf_err_ref[] += 1000
     end
-    @test_throws ErrorException gf_err()
-    @test_throws ErrorException gf_err()
+    Expected = ErrorException("task switch not allowed from inside staged nor pure functions")
+    @test_throws Expected gf_err()
+    @test_throws Expected gf_err()
     @test gf_err_ref[] == 4
 end
 
@@ -188,14 +190,18 @@ let gf_err2
     @generated function gf_err2(::f) where {f}
         gf_err_ref[] += 1
         reflect = f.instance
-        gf_err_ref[] += 1
-        reflect(+, (Int,Int))
+        gf_err_ref[] += 10
+        reflect(+, (Int, Int))
         gf_err_ref[] += 1000
         return nothing
     end
-    @test_throws ErrorException gf_err2(code_typed)
-    @test gf_err_ref[] == 4
+    Expected = ErrorException("code reflection cannot be used from generated functions")
+    @test_throws Expected gf_err2(code_typed)
+    @test_throws Expected gf_err2(code_llvm)
+    @test_throws Expected gf_err2(code_native)
+    @test gf_err_ref[] == 66
     @test gf_err2(code_lowered) === nothing
+    @test gf_err_ref[] == 1077
 end
 
 # issue #15043
@@ -242,9 +248,8 @@ f22440kernel(::Type{T}) where {T<:AbstractFloat} = zero(T)
 
 @generated function f22440(y)
     sig, spvals, method = Base._methods_by_ftype(Tuple{typeof(f22440kernel),y}, -1, typemax(UInt))[1]
-    code_info = Base.uncompressed_ast(method)
-    body = Expr(:block, code_info.code...)
-    Base.Core.Compiler.substitute!(body, 0, Any[], sig, Any[spvals...], 0, :propagate)
+    code_info = Base.uncompressed_ir(method)
+    Meta.partially_inline!(code_info.code, Any[], sig, Any[spvals...], 0, 0, :propagate)
     return code_info
 end
 
@@ -277,11 +282,25 @@ end
 let a = Any[]
     @test f23168(a, 3) == (6, Int)
     @test a == [1, 6, 3]
-    @test occursin("x + x", string(code_lowered(f23168, (Vector{Any},Int))))
-    @test occursin("2 * x", string(Base.uncompressed_ast(first(methods(f23168)))))
-    @test occursin("2 * x", string(code_lowered(f23168, (Vector{Any},Int), generated=false)))
+    @test occursin(" + ", string(code_lowered(f23168, (Vector{Any},Int))))
+    @test occursin("2 * ", string(Base.uncompressed_ir(first(methods(f23168)))))
+    @test occursin("2 * ", string(code_lowered(f23168, (Vector{Any},Int), generated=false)))
     @test occursin("Base.add_int", string(code_typed(f23168, (Vector{Any},Int))))
 end
 
 # issue #18747
 @test_throws ErrorException eval(:(f(x) = @generated g() = x))
+
+@generated function f30284(x)
+    quote
+        local x
+    end
+end
+
+@test_throws ErrorException("syntax: local variable name \"x\" conflicts with an argument") f30284(1)
+
+# issue #33243
+@generated function f33243()
+    :(global x33243 = 2)
+end
+@test_throws ErrorException f33243()

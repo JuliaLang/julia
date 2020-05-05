@@ -1,6 +1,27 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Sockets, Random
+using Sockets, Random, Test
+using Base: Experimental
+
+# set up a watchdog alarm for 10 minutes
+# so that we can attempt to get a "friendly" backtrace if something gets stuck
+# (although this'll also terminate any attempted debugging session)
+# expected test duration is about 5-10 seconds
+function killjob(d)
+    Core.print(Core.stderr, d)
+    if Sys.islinux()
+        SIGINFO = 10
+    elseif Sys.isbsd()
+        SIGINFO = 29
+    end
+    if @isdefined(SIGINFO)
+        ccall(:uv_kill, Cint, (Cint, Cint), getpid(), SIGINFO)
+        sleep(1)
+    end
+    ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
+    nothing
+end
+Timer(t -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"), 600)
 
 @testset "parsing" begin
     @test ip"127.0.0.1" == IPv4(127,0,0,1)
@@ -64,6 +85,11 @@ end
     inet = Sockets.InetAddr(IPv4(127,0,0,1), 1024)
     @test inet.host == ip"127.0.0.1"
     @test inet.port == 1024
+    str = "Sockets.InetAddr{$(isdefined(Main, :IPv4) ? "" : "Sockets.")IPv4}(ip\"127.0.0.1\", 1024)"
+    @test sprint(show, inet) == str
+    inet = Sockets.InetAddr("127.0.0.1", 1024)
+    @test inet.host == ip"127.0.0.1"
+    @test inet.port == 1024
 end
 @testset "InetAddr invalid port" begin
     @test_throws InexactError Sockets.InetAddr(IPv4(127,0,0,1), -1)
@@ -75,6 +101,11 @@ end
     @test ip"1.2.3.4" >= ip"1.2.3.4" >= ip"1.2.3.1"
     @test isless(ip"1.2.3.4", ip"1.2.3.5")
     @test_throws MethodError sort([ip"2.3.4.5", ip"1.2.3.4", ip"2001:1:2::1"])
+end
+
+@testset "broadcastable" begin
+    @test size(ip"127.0.0.1" .== ip"127.0.0.1") == ()
+    @test size(ip"::1" .== ip"::1") == ()
 end
 
 @testset "RFC 5952 Compliance" begin
@@ -105,7 +136,7 @@ defaultport = rand(2000:4000)
                 write(sock, "Hello World\n")
 
                 # test "locked" println to a socket
-                @sync begin
+                @Experimental.sync begin
                     for i in 1:100
                         @async println(sock, "a", 1)
                     end
@@ -118,7 +149,7 @@ defaultport = rand(2000:4000)
         let p = fetch(port)
             otherip = getipaddr()
             if otherip != Sockets.localhost
-                @test_throws Base.UVError("connect", Base.UV_ECONNREFUSED) connect(otherip, p)
+                @test_throws Base._UVError("connect", Base.UV_ECONNREFUSED) connect(otherip, p)
             end
             for i in 1:3
                 client = connect(p)
@@ -130,25 +161,39 @@ defaultport = rand(2000:4000)
                 @test read(client, String) == "Hello World\n" * ("a1\n"^100)
             end
         end
-        Base._wait(tsk)
+        wait(tsk)
     end
 
     mktempdir() do tmpdir
         socketname = Sys.iswindows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
-        c = Condition()
-        tsk = @async begin
-            s = listen(socketname)
-            notify(c)
-            sock = accept(s)
-            write(sock,"Hello World\n")
-            close(s)
-            close(sock)
+        local nconn = 0
+        srv = listen(socketname)
+        t = accept(srv) do client
+            write(client, "Hello World $(nconn += 1)\n")
+            close(client)
+            nconn == 3 && Base.wait_close(srv)
         end
-        wait(c)
-        @test read(connect(socketname), String) == "Hello World\n"
-        Base._wait(tsk)
+        @test read(connect(socketname), String) == "Hello World 1\n"
+        @test read(connect(socketname), String) == "Hello World 2\n"
+        @test read(connect(socketname), String) == "Hello World 3\n"
+        conn = connect(socketname)
+        close(srv)
+        wait(t)
+        @test read(conn, String) == ""
     end
 end
+
+@testset "getsockname errors" begin
+    sock = TCPSocket()
+    serv = Sockets.TCPServer()
+    @test_throws MethodError getpeername(serv)
+    @test_throws Base._UVError("cannot obtain socket name", Base.UV_EBADF) getpeername(sock)
+    @test_throws Base._UVError("cannot obtain socket name", Base.UV_EBADF) getsockname(serv)
+    @test_throws Base._UVError("cannot obtain socket name", Base.UV_EBADF) getsockname(sock)
+    close(sock)
+    close(serv)
+end
+
 
 @testset "getnameinfo on some unroutable IP addresses (RFC 5737)" begin
     @test getnameinfo(ip"192.0.2.1") == "192.0.2.1"
@@ -185,7 +230,7 @@ end
     end
     @test_throws Sockets.DNSError getaddrinfo(".invalid")
     @test_throws ArgumentError getaddrinfo("localhost\0") # issue #10994
-    @test_throws Base.UVError("connect", Base.UV_ECONNREFUSED) connect(ip"127.0.0.1", 21452)
+    @test_throws Base._UVError("connect", Base.UV_ECONNREFUSED) connect(ip"127.0.0.1", 21452)
     e = (try; getaddrinfo(".invalid"); catch ex; ex; end)
     @test startswith(sprint(show, e), "DNSError:")
 end
@@ -202,11 +247,11 @@ end
     r = Channel(1)
     tsk = @async begin
         put!(r, :start)
-        @test_throws Base.UVError("accept", Base.UV_ECONNABORTED) accept(server)
+        @test_throws Base._UVError("accept", Base.UV_ECONNABORTED) accept(server)
     end
     @test fetch(r) === :start
     close(server)
-    Base._wait(tsk)
+    wait(tsk)
 end
 
 # test connecting to a named port
@@ -216,7 +261,7 @@ let localhost = getaddrinfo("localhost")
     @async connect("localhost", randport)
     s1 = accept(server)
     @test_throws ErrorException("client TCPSocket is not in initialization state") accept(server, s1)
-    @test_throws Base.UVError("listen", Base.UV_EADDRINUSE) listen(randport)
+    @test_throws Base._UVError("listen", Base.UV_EADDRINUSE) listen(randport)
     port2, server2 = listenany(localhost, randport)
     @test randport != port2
     close(server)
@@ -227,57 +272,77 @@ end
 
 @testset "UDPSocket" begin
     # test show() function for UDPSocket()
-    @test endswith(repr(UDPSocket()), "UDPSocket(init)")
-    a = UDPSocket()
-    b = UDPSocket()
-    bind(a, ip"127.0.0.1", randport)
-    bind(b, ip"127.0.0.1", randport + 1)
+    @test repr(UDPSocket()) ∈ ("Sockets.UDPSocket(init)", "UDPSocket(init)")
 
-    c = Condition()
-    tsk = @async begin
-        @test String(recv(a)) == "Hello World"
-        # Issue 6505
-        tsk2 = @async begin
-            @test String(recv(a)) == "Hello World"
-            notify(c)
-        end
-        send(b, ip"127.0.0.1", randport, "Hello World")
-        Base._wait(tsk2)
-    end
-    send(b, ip"127.0.0.1", randport, "Hello World")
-    wait(c)
-    Base._wait(tsk)
+    let
+        a = UDPSocket()
+        b = UDPSocket()
+        bind(a, ip"127.0.0.1", randport)
+        bind(b, ip"127.0.0.1", randport + 1)
 
-    tsk = @async begin
-        @test begin
-            (addr,data) = recvfrom(a)
-            addr == ip"127.0.0.1" && String(data) == "Hello World"
+        @Experimental.sync begin
+            let i = 0
+                for _ = 1:30
+                    @async let msg = String(recv(a))
+                        @test msg == "Hello World $(i += 1)"
+                    end
+                end
+            end
+            yield()
+            for i = 1:30
+                send(b, ip"127.0.0.1", randport, "Hello World $i")
+            end
         end
+        let msg = Vector{UInt8}("fedcba9876543210"^36) # The minimum reassembly buffer size for IPv4 is 576 bytes
+            tsk = @async @test recv(a) == msg
+            @test send(b, ip"127.0.0.1", randport, msg) === nothing
+            wait(tsk)
+        end
+        let msg = Vector{UInt8}("1234"^16377) # The maximum size of an IPv4 datagram is 65535 bytes, including the header
+            @test_throws(Base._UVError("send", Base.UV_EMSGSIZE),
+                         send(b, ip"127.0.0.1", randport, msg))
+            pop!(msg)
+            tsk = @async recv(a)
+            try
+                send(b, ip"127.0.0.1", randport, msg)
+            catch ex
+                if !(ex isa Base.IOError && ex.code == Base.UV_EMSGSIZE) || Sys.islinux() || Sys.iswindows()
+                    # this is allowed failure on some platforms which might further restrict
+                    # the maximum packet size being sent (even locally), such as BSD's `sysctl net.inet.udp.maxdgram`
+                    rethrow()
+                end
+                empty!(msg)
+                send(b, ip"127.0.0.1", randport, msg) # check that the socket is still alive
+            end
+            @test fetch(tsk) == msg
+        end
+        let tsk = @async send(b, ip"127.0.0.1", randport, "WORLD HELLO")
+            (inetaddr, data) = recvfrom(a)
+            @test inetaddr.host == ip"127.0.0.1" && String(data) == "WORLD HELLO"
+            wait(tsk)
+        end
+        close(a)
+        close(b)
     end
-    send(b, ip"127.0.0.1", randport, "Hello World")
-    Base._wait(tsk)
 
     @test_throws MethodError bind(UDPSocket(), randport)
 
-    close(a)
-    close(b)
-
-    if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+    let
         a = UDPSocket()
         b = UDPSocket()
         bind(a, ip"::1", UInt16(randport))
         bind(b, ip"::1", UInt16(randport + 1))
 
-        tsk = @async begin
-            @test begin
-                (addr, data) = recvfrom(a)
-                addr == ip"::1" && String(data) == "Hello World"
+        for i = 1:3
+            tsk = @async begin
+                let (inetaddr, data) = recvfrom(a)
+                    @test inetaddr.host == ip"::1"
+                    @test String(data) == "Hello World"
+                end
             end
+            send(b, ip"::1", randport, "Hello World")
+            wait(tsk)
         end
-        send(b, ip"::1", randport, "Hello World")
-        Base._wait(tsk)
-        send(b, ip"::1", randport, "Hello World")
-        Base._wait(tsk)
     end
 end
 
@@ -292,69 +357,110 @@ end
         @test addr == gsn_addr
         @test port == gsn_port
 
-        @test_throws MethodError getpeername(listen_sock)
-
         # connect to it
         client_sock = connect(addr, port)
-        server_sock = accept(listen_sock)
+        test_done = false
+        @Experimental.sync begin
+            @async begin
+                Base.wait_readnb(client_sock, 1)
+                test_done || error("Client disconnected prematurely.")
+            end
+            @async begin
+                server_sock = accept(listen_sock)
 
-        self_client_addr, self_client_port = getsockname(client_sock)
-        peer_client_addr, peer_client_port = getpeername(client_sock)
-        self_srvr_addr, self_srvr_port = getsockname(server_sock)
-        peer_srvr_addr, peer_srvr_port = getpeername(server_sock)
+                self_client_addr, self_client_port = getsockname(client_sock)
+                peer_client_addr, peer_client_port = getpeername(client_sock)
+                self_srvr_addr, self_srvr_port = getsockname(server_sock)
+                peer_srvr_addr, peer_srvr_port = getpeername(server_sock)
 
-        @test self_client_addr == peer_client_addr == self_srvr_addr == peer_srvr_addr
+                @test self_client_addr == peer_client_addr == self_srvr_addr == peer_srvr_addr
 
-        @test peer_client_port == self_srvr_port
-        @test peer_srvr_port == self_client_port
-        @test self_srvr_port != self_client_port
+                @test peer_client_port == self_srvr_port
+                @test peer_srvr_port == self_client_port
+                @test self_srvr_port != self_client_port
 
-        close(listen_sock)
-        close(client_sock)
-        close(server_sock)
+                test_done = true
+
+                close(listen_sock)
+                close(client_sock)
+                close(server_sock)
+            end
+        end
     end
 end
 
 @testset "Local-machine broadcast" begin
     let a, b, c
-        # (Mac OS X's loopback interface doesn't support broadcasts)
+        # Apple does not support broadcasting on 127.255.255.255
         bcastdst = Sys.isapple() ? ip"255.255.255.255" : ip"127.255.255.255"
 
-        function create_socket()
+        function create_socket(addr::IPAddr, port)
             s = UDPSocket()
-            bind(s, ip"0.0.0.0", 2000, reuseaddr = true, enable_broadcast = true)
-            s
+            bind(s, addr, port, reuseaddr = true, enable_broadcast = true)
+            return s
         end
 
-        function wait_with_timeout(recvs)
-            TIMEOUT_VAL = 3  # seconds
-            t0 = time()
+        # Wait for futures to finish with a given timeout
+        function wait_with_timeout(recvs, TIMEOUT_VAL = 3*1e9)
+            t0 = time_ns()
             recvs_check = copy(recvs)
             while ((length(filter!(t->!istaskdone(t), recvs_check)) > 0)
-                  && (time() - t0 < TIMEOUT_VAL))
+                  && (time_ns() - t0 < TIMEOUT_VAL))
                 sleep(0.05)
             end
             length(recvs_check) > 0 && error("timeout")
-            map(Base._wait, recvs)
+            map(wait, recvs)
         end
 
-        a, b, c = [create_socket() for i = 1:3]
+        # First, test IPv4 broadcast
+        port = 2000
+        a, b, c = [create_socket(ip"0.0.0.0", port) for i in 1:3]
         try
-            # bsd family do not allow broadcasting to ip"255.255.255.255"
-            # or ip"127.255.255.255"
+            # bsd family do not allow broadcasting on loopbacks
             @static if !Sys.isbsd() || Sys.isapple()
-                send(c, bcastdst, 2000, "hello")
+                send(c, bcastdst, port, "hello")
                 recvs = [@async @test String(recv(s)) == "hello" for s in (a, b)]
                 wait_with_timeout(recvs)
             end
         catch e
-            if isa(e, Base.UVError) && Base.uverrorname(e) == "EPERM"
-                @warn "UDP broadcast test skipped (permission denied upon send, restrictive firewall?)"
+            if isa(e, Base.IOError) && Base.uverrorname(e.code) == "EPERM"
+                @warn "UDP IPv4 broadcast test skipped (permission denied upon send, restrictive firewall?)"
             else
                 rethrow()
             end
         end
         [close(s) for s in [a, b, c]]
+
+        # Test ipv6 broadcast groups
+        a, b, c = [create_socket(ip"::", port) for i in 1:3]
+        try
+            # Exemplary Interface-local ipv6 multicast group, if we wanted this to actually be routed
+            # to other computers, we should use a link-local or larger address scope group
+            # bsd family and darwin do not allow broadcasting on loopbacks
+            @static if !Sys.isbsd() && !Sys.isapple()
+                group = ip"ff11::6a75:6c69:61"
+                join_multicast_group(a, group)
+                join_multicast_group(b, group)
+
+                send(c, group, port, "hello")
+                recvs = [@async @test String(recv(s)) == "hello" for s in (a, b)]
+                wait_with_timeout(recvs)
+
+                leave_multicast_group(a, group)
+                leave_multicast_group(b, group)
+
+                send(c, group, port, "hello")
+                recvs = [@async @test String(recv(s)) == "hello" for s in (a, b)]
+                # We only wait 200ms since we're pretty sure this is going to time out
+                @test_throws ErrorException wait_with_timeout(recvs, 2e8)
+            end
+        catch e
+            if isa(e, Base.IOError) && Base.uverrorname(e.code) == "EPERM"
+                @warn "UDP IPv6 broadcast test skipped (permission denied upon send, restrictive firewall?)"
+            else
+                rethrow()
+            end
+        end
     end
 end
 
@@ -381,12 +487,12 @@ end
     # on windows, the kernel fails to do even that
     # causing the `write` call to freeze
     # so we end up forced to do a slightly weaker test here
-    Sys.iswindows() || Base._wait(t)
+    Sys.iswindows() || wait(t)
     @test isopen(P) # without an active uv_reader, P shouldn't be closed yet
     @test !eof(P) # should already know this,
     @test isopen(P) #  so it still shouldn't have an active uv_reader
     @test readuntil(P, 'w') == "llo"
-    Sys.iswindows() && Base._wait(t)
+    Sys.iswindows() && wait(t)
     @test eof(P)
     @test !isopen(P) # eof test should have closed this by now
     close(P) # should be a no-op, just make sure
@@ -398,21 +504,16 @@ end
     # test the method matching connect!(::TCPSocket, ::Sockets.InetAddr{T<:Base.IPAddr})
     let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
         srv = listen(addr)
-        c = Condition()
-        r = @async try; close(accept(srv)); finally; notify(c); end
-        try
-            close(connect(addr))
-            fetch(c)
-        finally
-            close(srv)
-        end
+        r = @async close(accept(srv))
+        close(connect(addr))
         fetch(r)
+        close(srv)
     end
 
     let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
         srv = listen(addr)
         r = @async close(srv)
-        @test_throws Base.UVError("accept", Base.UV_ECONNABORTED) accept(srv)
+        @test_throws Base._UVError("accept", Base.UV_ECONNABORTED) accept(srv)
         fetch(r)
     end
 
@@ -421,8 +522,19 @@ end
         s = Sockets.TCPSocket()
         Sockets.connect!(s, addr)
         r = @async close(s)
-        @test_throws Base.UVError("connect", Base.UV_ECANCELED) Sockets.wait_connected(s)
+        @test_throws Base._UVError("connect", Base.UV_ECANCELED) Sockets.wait_connected(s)
         fetch(r)
+    end
+end
+
+@testset "iswritable" begin
+    let addr = Sockets.InetAddr(ip"127.0.0.1", 4445)
+        srv = listen(addr)
+        s = Sockets.TCPSocket()
+        Sockets.connect!(s, addr)
+        @test iswritable(s)
+        close(s)
+        @test !iswritable(s)
     end
 end
 
@@ -430,6 +542,47 @@ end
     s = Sockets.TCPServer(; delay=false)
     if ccall(:jl_has_so_reuseport, Int32, ()) == 1
         @test 0 == ccall(:jl_tcp_reuseport, Int32, (Ptr{Cvoid},), s.handle)
+    end
+end
+
+@testset "getipaddrs" begin
+    @test getipaddr() in getipaddrs()
+    try
+        getipaddr(IPv6) in getipaddrs(IPv6)
+    catch
+        if !isempty(getipaddrs(IPv6))
+            @test "getipaddr(IPv6) errored when it shouldn't have!"
+        end
+    end
+
+    @testset "including loopback addresses" begin
+        @test issubset(getipaddrs(), getipaddrs(loopback=true))
+        @test issubset(getipaddrs(IPv6), getipaddrs(IPv6, loopback=true))
+    end
+end
+
+@testset "address scope" begin
+    @test islinklocaladdr(ip"169.254.1.0")
+    @test islinklocaladdr(ip"169.254.254.255")
+    @test islinklocaladdr(ip"fe80::")
+    @test islinklocaladdr(ip"febf::")
+    @test !islinklocaladdr(ip"127.0.0.1")
+    @test !islinklocaladdr(ip"2001::")
+
+end
+
+@static if !Sys.iswindows()
+    # Issue #29234
+    @testset "TCPSocket stdin" begin
+        let addr = Sockets.InetAddr(ip"127.0.0.1", 4455)
+            srv = listen(addr)
+            s = connect(addr)
+
+            @test success(pipeline(`$(Base.julia_cmd()) --startup-file=no -e "exit()" -i`, stdin=s))
+
+            close(s)
+            close(srv)
+        end
     end
 end
 

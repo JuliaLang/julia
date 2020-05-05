@@ -35,7 +35,7 @@ let
                 @test first(reverse(dr)) < f1
                 @test last(reverse(dr)) >= f1
                 @test issorted(dr)
-                @test sortperm(dr) == 1:1:0
+                @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                 @test !(f1 in dr)
                 @test !(l1 in dr)
                 @test !(f1 - pos_step in dr)
@@ -55,7 +55,7 @@ let
                     @test maximum(dr) == last(dr)
                     @test dr[1] == f
                     @test dr[end] <= l
-                    @test iterate(dr) == (first(dr), 1)
+                    @test iterate(dr) == (first(dr), (length(dr), 1))
 
                     if len < 10000
                         dr1 = [i for i in dr]
@@ -93,7 +93,7 @@ let
                 @test first(reverse(dr)) > l1
                 @test last(reverse(dr)) <= l1
                 @test issorted(dr)
-                @test sortperm(dr) == 1:1:0
+                @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                 @test !(l1 in dr)
                 @test !(l1 in dr)
                 @test !(l1 - neg_step in dr)
@@ -113,7 +113,7 @@ let
                     @test maximum(dr) == first(dr)
                     @test dr[1] == l
                     @test dr[end] >= f
-                    @test iterate(dr) == (first(dr), 1)
+                    @test iterate(dr) == (first(dr), (length(dr), 1))
 
                     if len < 10000
                         dr1 = [i for i in dr]
@@ -153,7 +153,7 @@ let
                     @test first(reverse(dr)) < f1
                     @test last(reverse(dr)) >= f1
                     @test issorted(dr)
-                    @test sortperm(dr) == 1:1:0
+                    @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                     @test !(f1 in dr)
                     @test !(l1 in dr)
                     @test !(f1 - pos_step in dr)
@@ -173,7 +173,7 @@ let
                         @test maximum(dr) == last(dr)
                         @test dr[1] == f
                         @test dr[end] <= l
-                        @test iterate(dr) == (first(dr), 1)
+                        @test iterate(dr) == (first(dr), (length(dr), 1))
 
                         if len < 10000
                             dr1 = [i for i in dr]
@@ -211,7 +211,7 @@ let
                     @test first(reverse(dr)) > l1
                     @test last(reverse(dr)) <= l1
                     @test issorted(dr)
-                    @test sortperm(dr) == 1:1:0
+                    @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                     @test !(l1 in dr)
                     @test !(l1 in dr)
                     @test !(l1 - neg_step in dr)
@@ -231,7 +231,7 @@ let
                         @test maximum(dr) == first(dr)
                         @test dr[1] == l
                         @test dr[end] >= f
-                        @test iterate(dr) == (first(dr), 1)
+                        @test iterate(dr) == (first(dr), (length(dr), 1))
 
                         if len < 10000
                             dr1 = [i for i in dr]
@@ -577,5 +577,9 @@ a = Dates.Time(23, 1, 1)
 @test !(Complex(1, 0) in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
 @test !(π in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
 @test !("a" in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
+
+@test hash(Any[Date("2018-1-03"), Date("2018-1-04"), Date("2018-1-05")]) ==
+      hash([Date("2018-1-03"), Date("2018-1-04"), Date("2018-1-05")]) ==
+      hash(Date("2018-1-03"):Day(1):Date("2018-1-05"))
 
 end

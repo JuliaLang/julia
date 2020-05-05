@@ -18,6 +18,8 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/curl
 endif
 endif
 
+ifneq ($(USE_BINARYBUILDER_LIBGIT2),1)
+
 LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON -DUSE_BUNDLED_ZLIB=ON
 ifeq ($(OS),WINNT)
 LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON
@@ -33,65 +35,24 @@ LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
 else
-LIBGIT2_OPTS += -DCURL_INCLUDE_DIRS=$(build_includedir) -DCURL_LIBRARIES="-L$(build_shlibdir) -lcurl"
+LIBGIT2_OPTS += -DCURL_INCLUDE_DIRS=$(build_includedir) -DCURL_LIBRARIES="curl"
 endif
 
 ifneq (,$(findstring $(OS),Linux FreeBSD))
-LIBGIT2_OPTS += -DUSE_HTTPS=ON -DTLS_BACKEND="mbedTLS" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+LIBGIT2_OPTS += -DUSE_HTTPS="mbedTLS" -DSHA1_BACKEND="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
 LIBGIT2_SRC_PATH := $(SRCCACHE)/$(LIBGIT2_SRC_DIR)
 
-$(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p0 -f < $(SRCDIR)/patches/libgit2-ssh.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied: $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied
+$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted
 	cd $(LIBGIT2_SRC_PATH) && \
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-agent-nonfatal.patch
 	echo 1 > $@
 
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls-verify.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-fixup.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls-fixup.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-ssh-loop.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls-fixup.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-ssh-loop.patch
-	echo 1 > $@
-$(LIBGIT2_SRC_PATH)/libgit2-bundled_zlib.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-ssh-loop.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-bundled_zlib.patch
-	echo 1 > $@
-
-$(build_datarootdir)/julia/cert.pem:
-	$(JLDOWNLOAD) $(shell pwd)/cacert-2018-01-17.pem https://curl.haxx.se/ca/cacert-2018-01-17.pem
-	$(JLCHECKSUM) $(shell pwd)/cacert-2018-01-17.pem
-	mkdir -p $(build_datarootdir)/julia
-	mv $(shell pwd)/cacert-2018-01-17.pem $@
-
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
-	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-fixup.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-ssh-loop.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-bundled_zlib.patch-applied \
 
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted $(build_datarootdir)/julia/cert.pem
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LIBGIT2_OPTS)
@@ -122,12 +83,38 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libgit2.$$(SHLIB_EXT) $$(build_shlibdir)/libgit2.$$(SHLIB_EXT)))
 
 clean-libgit2:
+	-rm $(build_datarootdir)/julia/cert.pem
 	-rm $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(LIBGIT2_SRC_DIR) clean
 
-get-libgit2: $(LIBGIT2_SRC_FILE) $(build_datarootdir)/julia/cert.pem
+get-libgit2: $(LIBGIT2_SRC_FILE)
 extract-libgit2: $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted
 configure-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured
 compile-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 fastcheck-libgit2: #none
 check-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-checked
+$(build_prefix)/manifest/libgit2: $(build_datarootdir)/julia/cert.pem # use libgit2 install status
+
+else # USE_BINARYBUILDER_LIBGIT2
+
+LIBGIT2_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LibGit2_jll.jl/releases/download/LibGit2-v$(LIBGIT2_VER)+$(LIBGIT2_BB_REL)
+LIBGIT2_BB_NAME := LibGit2.v$(LIBGIT2_VER)
+$(eval $(call bb-install,libgit2,LIBGIT2,false))
+
+# BB tarball doesn't create a manifest, so directly depend the `install` target
+install-libgit2: $(build_datarootdir)/julia/cert.pem
+endif
+
+# Also download and install a cacert.pem file, regardless of whether or not
+# we're using BinaryBuilder-sourced binaries
+$(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION).pem:
+	$(JLDOWNLOAD) $@ https://curl.haxx.se/ca/cacert-$(MOZILLA_CACERT_VERSION).pem
+
+$(build_datarootdir)/julia/cert.pem: $(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION).pem | $(build_datarootdir)
+	$(JLCHECKSUM) $<
+	mkdir -p $(build_datarootdir)/julia
+	cp $< $@
+
+# When "get"'ing libgit2, download the .pem
+get-libgit2: $(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION).pem
+

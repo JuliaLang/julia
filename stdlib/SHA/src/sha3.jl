@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function transform!(context::T) where {T<:SHA3_CTX}
     # First, update state with buffer
     pbuf = Ptr{eltype(context.state)}(pointer(context.buffer))

@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Distributed, Random
+using Test: guardseed
 
 import Logging: Debug, Info, Warn
 
@@ -83,39 +84,52 @@ end
 Test.record(ts::NoThrowTestSet, t::Test.Result) = (push!(ts.results, t); t)
 Test.finish(ts::NoThrowTestSet) = ts.results
 let fails = @testset NoThrowTestSet begin
-        # Fail - wrong exception
+        # 1 - Fail - wrong exception
         @test_throws OverflowError error()
-        # Fail - no exception
+        # 2 - Fail - no exception
         @test_throws OverflowError 1 + 1
-        # Fail - comparison
+        # 3 - Fail - comparison
         @test 1+1 == 2+2
-        # Fail - approximate comparison
+        # 4 - Fail - approximate comparison
         @test 1/1 ≈ 2/1
-        # Fail - chained comparison
+        # 5 - Fail - chained comparison
         @test 1+0 == 2+0 == 3+0
-        # Fail - comparison call
+        # 6 - Fail - comparison call
         @test ==(1 - 2, 2 - 1)
-        # Fail - splatting
+        # 7 - Fail - splatting
         @test ==(1:2...)
-        # Fail - isequal
+        # 8 - Fail - isequal
         @test isequal(0 / 0, 1 / 0)
-        # Fail - function splatting
+        # 9 - Fail - function splatting
         @test isequal(1:2...)
-        # Fail - isapprox
+        # 10 - Fail - isapprox
         @test isapprox(0 / 1, -1 / 0)
-        # Fail - function with keyword
+        # 11 & 12 - Fail - function with keyword
         @test isapprox(1 / 2, 2 / 1, atol=1 / 1)
         @test isapprox(1 - 2, 2 - 1; atol=1 - 1)
-        # Fail - function keyword splatting
+        # 13 - Fail - function keyword splatting
         k = [(:atol, 0), (:nans, true)]
         @test isapprox(1, 2; k...)
-        # Error - unexpected pass
-        @test_broken true
-        # Error - converting a call into a comparison
-        @test ==(1, 1:2...)
+        # 14 - Fail - call negation
+        @test !isequal(1, 2 - 1)
+        # 15 - Fail - comparison negation
+        @test !(2 + 3 == 1 + 4)
+        # 16 - Fail - chained negation
+        @test !(2 + 3 == 1 + 4 == 5)
+        # 17 - Fail - isempty
+        nonempty = [1, 2, 3]
+        @test isempty(nonempty)
+        str1 = "Hello"
+        str2 = "World"
+        # 18 - Fail - occursin
+        @test occursin(str1, str2)
+        # 19 - Fail - startswith
+        @test startswith(str1, str2)
+        # 20 - Fail - endswith
+        @test endswith(str1, str2)
     end
-    for i in 1:length(fails) - 2
-        @test isa(fails[i], Test.Fail)
+    for fail in fails
+        @test fail isa Test.Fail
     end
 
     let str = sprint(show, fails[1])
@@ -169,26 +183,73 @@ let fails = @testset NoThrowTestSet begin
     end
 
     let str = sprint(show, fails[11])
-        @test occursin("Expression: isapprox(1 / 2, 2 / 1, atol=1 / 1)", str)
-        @test occursin("Evaluated: isapprox(0.5, 2.0; atol=1.0)", str)
+        @test occursin("Expression: isapprox(1 / 2, 2 / 1, atol = 1 / 1)", str)
+        @test occursin("Evaluated: isapprox(0.5, 2.0; atol = 1.0)", str)
     end
 
     let str = sprint(show, fails[12])
-        @test occursin("Expression: isapprox(1 - 2, 2 - 1; atol=1 - 1)", str)
-        @test occursin("Evaluated: isapprox(-1, 1; atol=0)", str)
+        @test occursin("Expression: isapprox(1 - 2, 2 - 1; atol = 1 - 1)", str)
+        @test occursin("Evaluated: isapprox(-1, 1; atol = 0)", str)
     end
 
     let str = sprint(show, fails[13])
         @test occursin("Expression: isapprox(1, 2; k...)", str)
-        @test occursin("Evaluated: isapprox(1, 2; atol=0, nans=true)", str)
+        @test occursin("Evaluated: isapprox(1, 2; atol = 0, nans = true)", str)
     end
 
     let str = sprint(show, fails[14])
+        @test occursin("Expression: !(isequal(1, 2 - 1))", str)
+        @test occursin("Evaluated: !(isequal(1, 1))", str)
+    end
+
+    let str = sprint(show, fails[15])
+        @test occursin("Expression: !(2 + 3 == 1 + 4)", str)
+        @test occursin("Evaluated: !(5 == 5)", str)
+    end
+
+    let str = sprint(show, fails[16])
+        @test occursin("Expression: !(2 + 3 == 1 + 4 == 5)", str)
+        @test occursin("Evaluated: !(5 == 5 == 5)", str)
+    end
+
+    let str = sprint(show, fails[17])
+        @test occursin("Expression: isempty(nonempty)", str)
+        @test occursin("Evaluated: isempty([1, 2, 3])", str)
+    end
+
+    let str = sprint(show, fails[18])
+        @test occursin("Expression: occursin(str1, str2)", str)
+        @test occursin("Evaluated: occursin(\"Hello\", \"World\")", str)
+    end
+
+    let str = sprint(show, fails[19])
+        @test occursin("Expression: startswith(str1, str2)", str)
+        @test occursin("Evaluated: startswith(\"Hello\", \"World\")", str)
+    end
+
+    let str = sprint(show, fails[20])
+        @test occursin("Expression: endswith(str1, str2)", str)
+        @test occursin("Evaluated: endswith(\"Hello\", \"World\")", str)
+    end
+end
+
+let errors = @testset NoThrowTestSet begin
+        # 1 - Error - unexpected pass
+        @test_broken true
+        # 2 - Error - converting a call into a comparison
+        @test ==(1, 1:2...)
+    end
+
+    for err in errors
+        @test err isa Test.Error
+    end
+
+    let str = sprint(show, errors[1])
         @test occursin("Unexpected Pass", str)
         @test occursin("Expression: true", str)
     end
 
-    let str = sprint(show, fails[15])
+    let str = sprint(show, errors[2])
         @test occursin("Expression: ==(1, 1:2...)", str)
         @test occursin("MethodError: no method matching ==(::$Int, ::$Int, ::$Int)", str)
     end
@@ -490,13 +551,15 @@ for i in 1:6
 end
 
 # test @inferred
-function uninferrable_function(i)
-    q = [1, "1"]
-    return q[i]
-end
-
+uninferrable_function(i) = (1, "1")[i]
+uninferrable_small_union(i) = (1, nothing)[i]
 @test_throws ErrorException @inferred(uninferrable_function(1))
 @test @inferred(identity(1)) == 1
+@test @inferred(Nothing, uninferrable_small_union(1)) === 1
+@test @inferred(Nothing, uninferrable_small_union(2)) === nothing
+@test_throws ErrorException @inferred(Missing, uninferrable_small_union(1))
+@test_throws ErrorException @inferred(Missing, uninferrable_small_union(2))
+@test_throws ArgumentError @inferred(nothing, uninferrable_small_union(1))
 
 # Ensure @inferred only evaluates the arguments once
 inferred_test_global = 0
@@ -511,8 +574,8 @@ end
 struct SillyArray <: AbstractArray{Float64,1} end
 Base.getindex(a::SillyArray, i) = rand() > 0.5 ? 0 : false
 @testset "@inferred works with A[i] expressions" begin
-    @test @inferred((1:3)[2]) == 2
-    test_result = @test_throws ErrorException @inferred(SillyArray()[2])
+    @test (@inferred (1:3)[2]) == 2
+    test_result = @test_throws ErrorException (@inferred SillyArray()[2])
     @test occursin("Bool", test_result.value.msg)
 end
 # Issue #14928
@@ -521,16 +584,12 @@ end
 
 # Issue #17105
 # @inferred with kwargs
-function inferrable_kwtest(x; y=1)
-    2x
-end
-function uninferrable_kwtest(x; y=1)
-    2x+y
-end
-@test @inferred(inferrable_kwtest(1)) == 2
-@test @inferred(inferrable_kwtest(1; y=1)) == 2
-@test @inferred(uninferrable_kwtest(1)) == 3
-@test @inferred(uninferrable_kwtest(1; y=2)) == 4
+inferrable_kwtest(x; y=1) = 2x
+uninferrable_kwtest(x; y=1) = 2x+y
+@test (@inferred inferrable_kwtest(1)) == 2
+@test (@inferred inferrable_kwtest(1; y=1)) == 2
+@test (@inferred uninferrable_kwtest(1)) == 3
+@test (@inferred uninferrable_kwtest(1; y=2)) == 4
 
 @test_throws ErrorException @testset "$(error())" for i in 1:10
 end
@@ -548,8 +607,6 @@ end
     end
     """)
     local msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=devnull), String)
-    # NOTE: This test depends on the code generated by @testset getting compiled,
-    # to get good backtraces. If it fails, check the implementation of `testset_beginend`.
     @test !occursin("do_test(", msg)
     @test !occursin("include(", msg)
     @test occursin("at " * f * ":3", msg)
@@ -611,23 +668,23 @@ let msg = split(read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=n
     @test msg == rstrip(msg)
 end
 
-@testset "test guarded srand" begin
+@testset "test guarded Random.seed!" begin
     seed = rand(UInt)
-    orig = copy(Random.GLOBAL_RNG)
-    @test guardsrand(()->rand(), seed) == guardsrand(()->rand(), seed)
-    @test guardsrand(()->rand(Int), seed) == guardsrand(()->rand(Int), seed)
+    orig = copy(Random.default_rng())
+    @test guardseed(()->rand(), seed) == guardseed(()->rand(), seed)
+    @test guardseed(()->rand(Int), seed) == guardseed(()->rand(Int), seed)
     r1, r2 = MersenneTwister(0), MersenneTwister(0)
-    a, b = guardsrand(r1) do
-        srand(r1, 0)
+    a, b = guardseed(r1) do
+        Random.seed!(r1, 0)
         rand(r1), rand(r1, Int)
     end::Tuple{Float64,Int}
-    c, d = guardsrand(r2) do
-        srand(r2, 0)
+    c, d = guardseed(r2) do
+        Random.seed!(r2, 0)
         rand(r2), rand(r2, Int)
     end::Tuple{Float64,Int}
     @test a == c == rand(r1) == rand(r2)
     @test b == d == rand(r1, Int) == rand(r2, Int)
-    @test orig == Random.GLOBAL_RNG
+    @test orig == Random.default_rng()
     @test rand(orig) == rand()
 end
 
@@ -705,11 +762,14 @@ end
         @test_logs (Warn,) foo(1)
         @test_logs (Warn,) match_mode=:any @info "foo"
         @test_logs (Debug,) @debug "foo"
+        @test_logs (Warn,) error()
     end
-    @test length(fails) == 3
+    @test length(fails) == 4
     @test fails[1] isa Test.LogTestFailure
     @test fails[2] isa Test.LogTestFailure
     @test fails[3] isa Test.LogTestFailure
+    @test fails[4] isa Test.Error
+    @test startswith(fails[4].value, "ErrorException")
 end
 
 function newfunc()
@@ -738,9 +798,9 @@ end
 end
 
 @testset "@testset preserves GLOBAL_RNG's state, and re-seeds it" begin
-    # i.e. it behaves as if it was wrapped in a `guardsrand(GLOBAL_RNG.seed)` block
+    # i.e. it behaves as if it was wrapped in a `guardseed(GLOBAL_RNG.seed)` block
     seed = rand(UInt128)
-    srand(seed)
+    Random.seed!(seed)
     a = rand()
     @testset begin
         # global RNG must re-seeded at the beginning of @testset
@@ -751,7 +811,7 @@ end
     end
     # the @testset's above must have no consequence for rand() below
     b = rand()
-    srand(seed)
+    Random.seed!(seed)
     @test a == rand()
     @test b == rand()
 end
@@ -763,38 +823,39 @@ end
         @test_throws InterruptException throw(InterruptException())
     end
 
-    f = tempname()
+    mktemp() do f, _
+        write(f,
+        """
+        using Test
+        @testset begin
+            try
+                @test_throws ErrorException throw(InterruptException())
+            catch e
+                @test e isa InterruptException
+            end
+        end
 
-    write(f,
-    """
-    using Test
-    @testset begin
         try
-            @test_throws ErrorException throw(InterruptException())
+            @testset begin
+                @test 1 == 1
+                throw(InterruptException())
+            end
         catch e
             @test e isa InterruptException
         end
-    end
 
-    try
-        @testset begin
-            @test 1 == 1
-            throw(InterruptException())
+        try
+            @testset for i in 1:1
+                @test 1 == 1
+                throw(InterruptException())
+            end
+        catch e
+            @test e isa InterruptException
         end
-    catch e
-        @test e isa InterruptException
+        """)
+        cmd = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+        msg = success(pipeline(ignorestatus(cmd), stderr=devnull))
     end
-
-    try
-        @testset for i in 1:1
-            @test 1 == 1
-            throw(InterruptException())
-        end
-    catch e
-        @test e isa InterruptException
-    end
-    """)
-    msg = success(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=devnull))
 end
 
 @testset "non AbstractTestSet as testset" begin
@@ -811,6 +872,7 @@ end
     msg = read(err, String)
     @test occursin("Expected `desc` to be an AbstractTestSet, it is a String", msg)
     rm(f; force=true)
+    rm(err, force=true)
 end
 
 f25835(;x=nothing) = _f25835(x)
@@ -842,3 +904,18 @@ end
     a = [1, 2, 3]
     @test isapprox(identity.((a, a))...)
 end
+
+@testset "treat NaN and missing in exception fields" begin
+    struct Exception31219{T}
+        value::T
+    end
+    f31219(x) = throw(Exception31219(x))
+
+    @testset "exception field '$(repr(x))'" for x in ("ok", nothing, NaN, missing)
+        @test_throws Exception31219(x) f31219(x)
+    end
+end
+
+# Issue 20620
+@test @inferred(.![true, false]) == [false, true]
+@test @inferred([3, 4] .- [1, 2] .+ [-2, -2]) == [0, 0]

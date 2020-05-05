@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 "The `Future` module implements future behavior of already existing functions,
 which will replace the current version in a future release of Julia."
 module Future
@@ -10,23 +8,21 @@ using Random
 
 ## copy!
 
+# This has now been moved to Base (#29178), and should be deprecated in the
+# next "deprecation phase".
+
 """
     Future.copy!(dst, src) -> dst
 
 Copy `src` into `dst`.
-For collections of the same type, copy the elements of `src` into `dst`,
-discarding any pre-existing elements in `dst`.
-Usually, `dst == src` holds after the call.
-"""
-copy!(dst::AbstractSet, src::AbstractSet) = union!(empty!(dst), src)
-copy!(dst::AbstractDict, src::AbstractDict) = merge!(empty!(dst), src)
-copy!(dst::AbstractVector, src::AbstractVector) = append!(empty!(dst), src)
 
-function copy!(dst::AbstractArray, src::AbstractArray)
-    size(dst) == size(src) || throw(ArgumentError(
-        "arrays must have the same size for copy! (consider using `copyto!`)"))
-    copyto!(dst, src)
-end
+!!! compat "Julia 1.1"
+    This function has moved to `Base` with Julia 1.1, consider using `copy!(dst, src)` instead.
+    `Future.copy!` will be deprecated in the future.
+"""
+copy!(dst::AbstractSet, src::AbstractSet) = Base.copy!(dst, src)
+copy!(dst::AbstractDict, src::AbstractDict) = Base.copy!(dst, src)
+copy!(dst::AbstractArray, src::AbstractArray) = Base.copy!(dst, src)
 
 
 ## randjump

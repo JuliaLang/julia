@@ -40,7 +40,7 @@ matrix:
             - gfortran-5
     - os: osx
       env: ARCH="x86_64"
-      osx_image: xcode8
+      osx_image: xcode8.3
 cache: ccache
 branches:
   only:
@@ -49,15 +49,6 @@ branches:
     - /^v\d+\.\d+\.\d+$/
 notifications:
     email: false
-    irc:
-        channels:
-            - "chat.freenode.net#julia-notifications"
-        on_success: change
-        on_failure: always
-    webhooks:
-        urls:
-          - http://status.julialang.org/put/travis
-          - http://julia.mit.edu:8000/travis-hook
 before_install:
     - make check-whitespace
     - if [ `uname` = "Linux" ]; then
@@ -70,10 +61,10 @@ before_install:
         ln -s /usr/bin/g++-5 $HOME/bin/x86_64-linux-gnu-g++;
         gcc --version;
         BAR="bar -i 30";
-        BUILDOPTS="-j5 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 USECCACHE=1";
+        BUILDOPTS="-j5 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 USECCACHE=1 USE_BINARYBUILDER_LIBUV=0 USE_BINARYBUILDER_LIBUNWIND=0 USE_BINARYBUILDER_LLVM=0";
         echo "override ARCH=$ARCH" >> Make.user;
         sudo sh -c "echo 0 > /proc/sys/net/ipv6/conf/lo/disable_ipv6";
-        export JULIA_CPU_CORES=4;
+        export JULIA_CPU_THREADS=4;
         export JULIA_TEST_MAXRSS_MB=1200;
         TESTSTORUN="all";
       elif [ `uname` = "Darwin" ]; then
@@ -82,26 +73,19 @@ before_install:
         export PATH="$(brew --prefix ccache)/libexec:$PATH";
         BAR="pv -i 30";
         contrib/travis_fastfail.sh || exit 1;
-        brew tap staticfloat/julia;
-        brew rm --force $(brew deps --HEAD julia);
-        brew install -v --only-dependencies --HEAD julia;
-        brew install -v staticfloat/juliadeps/libgfortran;
-        BUILDOPTS="-j3 USECLANG=1 USECCACHE=1 BINARYBUILDER_TRIPLET=x86_64-apple-darwin14";
-        BUILDOPTS="$BUILDOPTS USE_BINARYBUILDER_LLVM=1 LLVM_CONFIG=$TRAVIS_BUILD_DIR/usr/tools/llvm-config LLVM_SIZE=$TRAVIS_BUILD_DIR/usr/tools/llvm-size";
-        BUILDOPTS="$BUILDOPTS VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include FORCE_ASSERTIONS=1";
-        BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
-        for lib in SUITESPARSE ARPACK BLAS LAPACK GMP MPFR PCRE LIBUNWIND; do
+        brew rm --force gcc gmp mpfr pcre2;
+        brew install -v gcc gmp mpfr pcre2;
+        BUILDOPTS="-j3 USECLANG=1 USECCACHE=1 VERBOSE=1 FORCE_ASSERTIONS=1";
+        for proj in LLVM LLVM_ASSERTS OPENBLAS SUITESPARSE OPENLIBM; do
+            BUILDOPTS="$BUILDOPTS USE_BINARYBUILDER_${proj}=1";
+        done;
+        for lib in GMP MPFR LIBUNWIND; do
             BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
         done;
-        export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";
         spawn_DYLD_FALLBACK_LIBRARY_PATH="/usr/local/lib:/lib:/usr/lib";
-        spawn_DYLD_FALLBACK_LIBRARY_PATH+=":$(brew --prefix openblas-julia)/lib";
-        spawn_DYLD_FALLBACK_LIBRARY_PATH+=":$(brew --prefix suite-sparse-julia)/lib";
-        spawn_DYLD_FALLBACK_LIBRARY_PATH+=":$(brew --prefix arpack-julia)/lib";
         export JULIA_MACOS_SPAWN="DYLD_FALLBACK_LIBRARY_PATH=\"$spawn_DYLD_FALLBACK_LIBRARY_PATH\" \$1";
         export BUILDOPTS="$BUILDOPTS spawn=\$(JULIA_MACOS_SPAWN)";
-        make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
-        export JULIA_CPU_CORES=2;
+        export JULIA_CPU_THREADS=2;
         export JULIA_TEST_MAXRSS_MB=600;
         TESTSTORUN="all --skip linalg/triangular subarray"; fi # TODO: re enable these if possible without timing out
     - echo "override JULIA_CPU_TARGET=generic;native" >> Make.user
@@ -129,34 +113,41 @@ script:
           echo "-- end of deps build log -----------------------------------------------";
           false; }
     # compile / install Julia
+    - make $BUILDOPTS NO_GIT=1 prefix=/tmp/julia release | moreutils/ts -s "%.s"
     - make $BUILDOPTS NO_GIT=1 prefix=/tmp/julia install | moreutils/ts -s "%.s"
     - make $BUILDOPTS NO_GIT=1 build-stats
     - du -sk /tmp/julia/*
     - ls -l /tmp/julia/lib
     - ls -l /tmp/julia/lib/julia
+    - FILES_CHANGED=$(git diff --name-only $TRAVIS_COMMIT_RANGE -- || git ls-files)
     - cd .. && mv julia julia2
     # run tests
-    - /tmp/julia/bin/julia --sysimage-native-code=no -e 'true' &&
-        /tmp/julia/bin/julia-debug --sysimage-native-code=no -e 'true'
-    - /tmp/julia/bin/julia -e 'versioninfo()'
+    - /tmp/julia/bin/julia --sysimage-native-code=no -e 'true'
+    # - /tmp/julia/bin/julia-debug --sysimage-native-code=no -e 'true'
+    - /tmp/julia/bin/julia -e 'Base.require(Main, :InteractiveUtils).versioninfo()'
     - pushd /tmp/julia/share/julia/test
-    - /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
-      /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online OldPkg/pkg Pkg/pkg download
+    # skip tests if only files within the "doc" dir have changed
+    - if [ $(echo "$FILES_CHANGED" | grep -cv '^doc/') -gt 0 ]; then
+        /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
+        /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online download; fi
     - popd
     # test that the embedding code works on our installation
     - mkdir /tmp/embedding-test &&
-        make check -C /tmp/julia/share/julia/test/embedding \
-             JULIA="/tmp/julia/bin/julia" \
-             BIN=/tmp/embedding-test \
+        make check -C /tmp/julia/share/julia/test/embedding
+             JULIA="/tmp/julia/bin/julia"
+             BIN=/tmp/embedding-test
              "$(cd julia2 && make print-CC)"
     # restore initial state and prepare for travis caching
     - mv julia2 julia &&
         rm -f julia/deps/scratch/libgit2-*/CMakeFiles/CMakeOutput.log
+    # run the LLVM tests on Linux
+    - if [ `uname` = "Linux" ]; then
+        pushd julia && make -C test/llvmpasses && popd; fi
     # run the doctests on Linux 64-bit
     - if [ `uname` = "Linux" ] && [ $ARCH = "x86_64" ]; then
         pushd julia && make -C doc doctest=true && popd; fi
 # uncomment the following if failures are suspected to be due to the out-of-memory killer
 #    - dmesg
--after_success:
+after_success:
     - if [ `uname` = "Linux" ] && [ $ARCH = "x86_64" ]; then
         cd julia && make -C doc deploy; fi

@@ -12,7 +12,7 @@ struct Pair{A, B}
         return new(a, b)
     end
 end
-Pair(a::A, b::B) where {A, B} = Pair{A, B}(a, b)
+Pair(a, b) = Pair{typeof(a), typeof(b)}(a, b)
 const => = Pair
 
 """
@@ -21,7 +21,7 @@ const => = Pair
 
 Construct a `Pair` object with type `Pair{typeof(x), typeof(y)}`. The elements
 are stored in the fields `first` and `second`. They can also be accessed via
-iteration.
+iteration (but a `Pair` is treated as a single "scalar" for broadcasting operations).
 
 See also: [`Dict`](@ref)
 

@@ -124,6 +124,8 @@ unsafe_store!(p::Ptr{T}, x, i::Integer=1) where {T} = pointerset(p, convert(T,x)
 Convert a `Ptr` to an object reference. Assumes the pointer refers to a valid heap-allocated
 Julia object. If this is not the case, undefined behavior results, hence this function is
 considered "unsafe" and should be used with care.
+
+See also: [`pointer_from_objref`](@ref).
 """
 unsafe_pointer_to_objref(x::Ptr) = ccall(:jl_value_ptr, Any, (Ptr{Cvoid},), x)
 
@@ -136,6 +138,8 @@ remains referenced for the whole time that the `Ptr` will be used.
 
 This function may not be called on immutable objects, since they do not have
 stable memory addresses.
+
+See also: [`unsafe_pointer_to_objref`](@ref).
 """
 function pointer_from_objref(@nospecialize(x))
     @_inline_meta
@@ -152,6 +156,9 @@ isless(x::Ptr{T}, y::Ptr{T}) where {T} = x < y
 <(x::Ptr,  y::Ptr) = UInt(x) < UInt(y)
 -(x::Ptr,  y::Ptr) = UInt(x) - UInt(y)
 
-+(x::Ptr, y::Integer) = oftype(x, Intrinsics.add_ptr(UInt(x), (y % UInt) % UInt))
--(x::Ptr, y::Integer) = oftype(x, Intrinsics.sub_ptr(UInt(x), (y % UInt) % UInt))
++(x::Ptr, y::Integer) = oftype(x, add_ptr(UInt(x), (y % UInt) % UInt))
+-(x::Ptr, y::Integer) = oftype(x, sub_ptr(UInt(x), (y % UInt) % UInt))
 +(x::Integer, y::Ptr) = y + x
+
+unsigned(x::Ptr) = UInt(x)
+signed(x::Ptr) = Int(x)

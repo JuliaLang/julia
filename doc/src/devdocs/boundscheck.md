@@ -43,8 +43,9 @@ between the `@inbounds` and `@boundscheck` declarations. For instance, the defau
 methods have the chain `getindex(A::AbstractArray, i::Real)` calls `getindex(IndexStyle(A), A, i)`
 calls `_getindex(::IndexLinear, A, i)`.
 
-To override the "one layer of inlining" rule, a function may be marked with `@propagate_inbounds`
-to propagate an inbounds context (or out of bounds context) through one additional layer of inlining.
+To override the "one layer of inlining" rule, a function may be marked with
+[`Base.@propagate_inbounds`](@ref) to propagate an inbounds context (or out of bounds
+context) through one additional layer of inlining.
 
 ## The bounds checking call hierarchy
 

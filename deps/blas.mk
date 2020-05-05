@@ -62,8 +62,18 @@ OPENBLAS_FFLAGS += -mincoming-stack-boundary=2
 endif
 endif
 
+# Work around invalid register errors on 64-bit Windows
+# See discussion in https://github.com/xianyi/OpenBLAS/issues/1708
+# TODO: Remove this once we use a version of OpenBLAS where this is set automatically
+ifeq ($(OS),WINNT)
+ifeq ($(ARCH),x86_64)
+OPENBLAS_CFLAGS += -fno-asynchronous-unwind-tables
+endif
+endif
+
 OPENBLAS_BUILD_OPTS += CFLAGS="$(CFLAGS) $(OPENBLAS_CFLAGS)"
 OPENBLAS_BUILD_OPTS += FFLAGS="$(FFLAGS) $(OPENBLAS_FFLAGS)"
+OPENBLAS_BUILD_OPTS += LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN)"
 
 # Debug OpenBLAS
 ifeq ($(OPENBLAS_DEBUG), 1)
@@ -72,16 +82,24 @@ endif
 
 # Allow disabling AVX for older binutils
 ifeq ($(OPENBLAS_NO_AVX), 1)
-OPENBLAS_BUILD_OPTS += NO_AVX=1 NO_AVX2=1
+OPENBLAS_BUILD_OPTS += NO_AVX=1 NO_AVX2=1 NO_AVX512=1
 else ifeq ($(OPENBLAS_NO_AVX2), 1)
-OPENBLAS_BUILD_OPTS += NO_AVX2=1
+OPENBLAS_BUILD_OPTS += NO_AVX2=1 NO_AVX512=1
+else ifeq ($(OPENBLAS_NO_AVX512), 1)
+OPENBLAS_BUILD_OPTS += NO_AVX512=1
 endif
 
 # Do not overwrite the "-j" flag
 OPENBLAS_BUILD_OPTS += MAKE_NB_JOBS=0
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
-	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $(dir $<)/Makefile.system
+ifneq ($(USE_BINARYBUILDER_OPENBLAS), 1)
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/openblas-winexit.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured
@@ -182,3 +200,21 @@ configure-lapack: extract-lapack
 compile-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled
 fastcheck-lapack: check-lapack
 check-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/build-checked
+
+else # USE_BINARYBUILDER_OPENBLAS
+
+
+OPENBLAS_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/OpenBLAS_jll.jl/releases/download/OpenBLAS-v$(OPENBLAS_VER)+$(OPENBLAS_BB_REL)
+OPENBLAS_BB_NAME := OpenBLAS.v$(OPENBLAS_VER)
+
+$(eval $(call bb-install,openblas,OPENBLAS,true))
+get-lapack: get-openblas
+extract-lapack: extract-openblas
+configure-lapack: configure-openblas
+compile-lapack: compile-openblas
+fastcheck-lapack: fastcheck-openblas
+check-lapack: check-openblas
+clean-lapack: clean-openblas
+distclean-lapack: distclean-openblas
+install-lapack: install-openblas
+endif

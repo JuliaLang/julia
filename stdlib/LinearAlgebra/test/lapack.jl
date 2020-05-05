@@ -11,7 +11,7 @@ using LinearAlgebra: BlasInt
 @test_throws ArgumentError LinearAlgebra.LAPACK.chktrans('Z')
 
 @testset "syevr" begin
-    srand(123)
+    Random.seed!(123)
     Ainit = randn(5,5)
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         if elty == ComplexF32 || elty == ComplexF64
@@ -208,7 +208,7 @@ end
 
 @testset "gels" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        srand(913)
+        Random.seed!(913)
         A = rand(elty,10,10)
         X = rand(elty,10)
         B,Y,z = LAPACK.gels!('N',copy(A),copy(X))
@@ -231,7 +231,7 @@ end
     @testset for elty in (ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         Aw, Avl, Avr = LAPACK.geev!('N','V',copy(A))
-        fA = eigen(A)
+        fA = eigen(A, sortby=nothing)
         @test fA.values  ≈ Aw
         @test fA.vectors ≈ Avr
     end
@@ -425,6 +425,45 @@ end
     end
 end
 
+@testset "larfg & larf" begin
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        ## larfg
+        Random.seed!(0)
+        x  = rand(elty, 5)
+        v  = copy(x)
+        τ = LinearAlgebra.LAPACK.larfg!(v)
+        H = (I - τ*v*v')
+        # for complex input, LAPACK wants a conjugate transpose of H (check clarfg docs)
+        y = elty <: Complex ? H'*x : H*x
+        # we have rotated a vector
+        @test norm(y) ≈ norm(x)
+        # an annihilated almost all the first column
+        @test norm(y[2:end], Inf) < 10*eps(real(one(elty)))
+
+        ## larf
+        C = rand(elty, 5, 5)
+        C_norm = norm(C, 2)
+        v = C[1:end, 1]
+        τ = LinearAlgebra.LAPACK.larfg!(v)
+        LinearAlgebra.LAPACK.larf!('L', v, conj(τ), C)
+        # we have applied a unitary transformation
+        @test norm(C, 2) ≈ C_norm
+        # an annihilated almost all the first column
+        @test norm(C[2:end, 1], Inf) < 10*eps(real(one(elty)))
+
+        # apply left and right
+        C1 = rand(elty, 5, 5)
+        C2 = rand(elty, 5, 5)
+        C = C2*C1
+
+        v = C1[1:end, 1]
+        τ = LinearAlgebra.LAPACK.larfg!(v)
+        LinearAlgebra.LAPACK.larf!('L', v,      τ, C1)
+        LinearAlgebra.LAPACK.larf!('R', v, conj(τ), C2)
+        @test C ≈ C2*C1
+    end
+end
+
 @testset "tgsen, tzrzf, & trsyl" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         Z = zeros(elty,10,10)
@@ -443,7 +482,7 @@ end
 
 @testset "sysv" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        srand(123)
+        Random.seed!(123)
         A = rand(elty,10,10)
         A = A + transpose(A) #symmetric!
         b = rand(elty,10)
@@ -456,7 +495,7 @@ end
 
 @testset "hesv" begin
     @testset for elty in (ComplexF32, ComplexF64)
-        srand(935)
+        Random.seed!(935)
         A = rand(elty,10,10)
         A = A + A' #hermitian!
         b = rand(elty,10)
@@ -561,18 +600,18 @@ end
 @testset "trrfs & trevc" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         T = triu(rand(elty,10,10))
-        S = copy(T)
+        v = eigvecs(T, sortby=nothing)[:,1]
         select = zeros(LinearAlgebra.BlasInt,10)
         select[1] = 1
         select,Vr = LAPACK.trevc!('R','S',select,copy(T))
-        @test Vr ≈ eigvecs(S)[:,1]
+        @test Vr ≈ v
         select = zeros(LinearAlgebra.BlasInt,10)
         select[1] = 1
         select,Vl = LAPACK.trevc!('L','S',select,copy(T))
         select = zeros(LinearAlgebra.BlasInt,10)
         select[1] = 1
         select,Vln,Vrn = LAPACK.trevc!('B','S',select,copy(T))
-        @test Vrn ≈ eigvecs(S)[:,1]
+        @test Vrn ≈ v
         @test Vln ≈ Vl
         @test_throws ArgumentError LAPACK.trevc!('V','S',select,copy(T))
         @test_throws DimensionMismatch LAPACK.trrfs!('U','N','N',T,rand(elty,10,10),rand(elty,10,11))

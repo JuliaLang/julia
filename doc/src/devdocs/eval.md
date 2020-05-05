@@ -71,6 +71,14 @@ which handles tokenizing Julia code and turning it into an AST, and [`julia-synt
 which handles transforming complex AST representations into simpler, "lowered" AST representations
 which are more suitable for analysis and execution.
 
+If you want to test the parser without re-building Julia in its entirety, you can run the frontend
+on its own as follows:
+
+    $ cd src
+    $ flisp/flisp
+    > (load "jlfrontend.scm")
+    > (jl-parse-file "<filename>")
+
 ## [Macro Expansion](@id dev-macro-expansion)
 
 When [`eval()`](@ref) encounters a macro, it expands that AST node before attempting to evaluate
@@ -83,7 +91,7 @@ although it can also be invoked directly by a call to [`macroexpand()`](@ref)/`j
 
 ## [Type Inference](@id dev-type-inference)
 
-Type inference is implemented in Julia by [`typeinf()` in `compiler/typeinf.jl`](https://github.com/JuliaLang/julia/blob/master/base/compiler/typeinf.jl).
+Type inference is implemented in Julia by [`typeinf()` in `compiler/typeinfer.jl`](https://github.com/JuliaLang/julia/blob/master/base/compiler/typeinfer.jl).
 Type inference is the process of examining a Julia function and determining bounds for the types
 of each of its variables, as well as bounds on the type of the return value from the function.
 This enables many future optimizations, such as unboxing of known immutable values, and compile-time

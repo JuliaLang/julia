@@ -1,25 +1,24 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 module InteractiveUtils
 
+Base.Experimental.@optlevel 1
+
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,
-    versioninfo, subtypes, peakflops, @which, @edit, @less, @functionloc, @code_warntype,
-    @code_typed, @code_lowered, @code_llvm, @code_native
+    versioninfo, subtypes, supertypes, @which, @edit, @less, @functionloc, @code_warntype,
+    @code_typed, @code_lowered, @code_llvm, @code_native, clipboard
 
 import Base.Docs.apropos
 
-using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_expr_type, show_unquoted, summarysize,
+using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_unquoted, summarysize,
     to_tuple_type, signature_type, format_bytes
 
 using Markdown
-using LinearAlgebra  # for peakflops
-import OldPkg
 
 include("editless.jl")
 include("codeview.jl")
 include("macros.jl")
+include("clipboard.jl")
 
 """
     varinfo(m::Module=Main, pattern::Regex=r"")
@@ -45,15 +44,14 @@ end
 varinfo(pat::Regex) = varinfo(Main, pat)
 
 """
-    versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
+    versioninfo(io::IO=stdout; verbose::Bool=false)
 
 Print information about the version of Julia in use. The output is
 controlled with boolean keyword arguments:
 
-- `packages`: print information about installed packages
 - `verbose`: print all additional information
 """
-function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
+function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "Julia Version $VERSION")
     if !isempty(Base.GIT_VERSION_INFO.commit_short)
         println(io, "Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
@@ -68,10 +66,10 @@ function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
     if verbose
         lsb = ""
         if Sys.islinux()
-            try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=devnull)) end
+            try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=devnull)); catch; end
         end
         if Sys.iswindows()
-            try lsb = strip(read(`$(ENV["COMSPEC"]) /c ver`, String)) end
+            try lsb = strip(read(`$(ENV["COMSPEC"]) /c ver`, String)); catch; end
         end
         if !isempty(lsb)
             println(io, "      ", lsb)
@@ -95,7 +93,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
 
     if verbose
         println(io, "  Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
-        try println(io, "  Uptime: $(Sys.uptime()) sec") end
+        try println(io, "  Uptime: $(Sys.uptime()) sec"); catch; end
         print(io, "  Load Avg: ")
         Base.print_matrix(io, Sys.loadavg()')
         println(io)
@@ -112,17 +110,6 @@ function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
         println(io, "Environment:")
         for str in env_strs
             println(io, str)
-        end
-    end
-    if packages || verbose
-        println(io, "Packages:")
-        println(io, "  Package Directory: ", OldPkg.dir())
-        print(io, "  Package Status:")
-        if isdir(OldPkg.dir())
-            println(io, "")
-            OldPkg.status(io)
-        else
-            println(io, " no packages installed")
         end
     end
 end
@@ -188,7 +175,7 @@ function methodswith(t::Type; supertypes::Bool=false)
 end
 
 # subtypes
-function _subtypes(m::Module, x::Type, sts=Set{Any}(), visited=Set{Module}())
+function _subtypes(m::Module, x::Type, sts=Base.IdSet{Any}(), visited=Base.IdSet{Module}())
     push!(visited, m)
     xt = unwrap_unionall(x)
     if !isa(xt, DataType)
@@ -227,8 +214,8 @@ function _subtypes_in(mods::Array, x::Type)
         # Fast path
         return Type[]
     end
-    sts = Set{Any}()
-    visited = Set{Module}()
+    sts = Base.IdSet{Any}()
+    visited = Base.IdSet{Module}()
     for m in mods
         _subtypes(m, x, sts, visited)
     end
@@ -253,6 +240,26 @@ julia> subtypes(Integer)
 ```
 """
 subtypes(x::Type) = _subtypes_in(Base.loaded_modules_array(), x)
+
+"""
+    supertypes(T::Type)
+
+Return a tuple `(T, ..., Any)` of `T` and all its supertypes, as determined by
+successive calls to the [`supertype`](@ref) function, listed in order of `<:`
+and terminated by `Any`.
+
+# Examples
+```jldoctest
+julia> supertypes(Int)
+(Int64, Signed, Integer, Real, Number, Any)
+```
+"""
+function supertypes(T::Type)
+    S = supertype(T)
+    # note: we return a tuple here, not an Array as for subtypes, because in
+    #       the future we could evaluate this function statically if desired.
+    return S === T ? (T,) : (T, supertypes(S)...)
+end
 
 # dumptype is for displaying abstract type hierarchies,
 # based on Jameson Nash's typetree.jl in https://github.com/JuliaArchive/Examples
@@ -322,51 +329,53 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
     nothing
 end
 
-const Distributed_modref = Ref{Module}()
-
+# TODO: @deprecate peakflops to LinearAlgebra
+export peakflops
 """
     peakflops(n::Integer=2000; parallel::Bool=false)
 
 `peakflops` computes the peak flop rate of the computer by using double precision
-[`gemm!`](@ref LinearAlgebra.BLAS.gemm!). By default, if no arguments are specified, it
-multiplies a matrix of size `n x n`, where `n = 2000`. If the underlying BLAS is using
-multiple threads, higher flop rates are realized. The number of BLAS threads can be set with
-[`BLAS.set_num_threads(n)`](@ref).
+[`gemm!`](@ref LinearAlgebra.BLAS.gemm!). For more information see
+[`LinearAlgebra.peakflops`](@ref).
 
-If the keyword argument `parallel` is set to `true`, `peakflops` is run in parallel on all
-the worker processors. The flop rate of the entire parallel computer is returned. When
-running in parallel, only 1 BLAS thread is used. The argument `n` still refers to the size
-of the problem that is solved on each processor.
+!!! compat "Julia 1.1"
+    This function will be moved from `InteractiveUtils` to `LinearAlgebra` in the
+    future. In Julia 1.1 and later it is available as `LinearAlgebra.peakflops`.
 """
 function peakflops(n::Integer=2000; parallel::Bool=false)
-    a = fill(1.,100,100)
-    t = @elapsed a2 = a*a
-    a = fill(1.,n,n)
-    t = @elapsed a2 = a*a
-    @assert a2[1,1] == n
-    if parallel
-        if !isassigned(Distributed_modref)
-            Distributed_modref[] = Base.require(Base, :Distributed)
-        end
-        Dist = Distributed_modref[]
-        sum(Dist.pmap(peakflops, fill(n, Dist.nworkers())))
-    else
-        2*Float64(n)^3 / t
+    # Base.depwarn("`peakflop`s have moved to the LinearAlgebra module, " *
+    #              "add `using LinearAlgebra` to your imports.", :peakflops)
+    let LinearAlgebra = Base.require(Base.PkgId(
+            Base.UUID((0x37e2e46d_f89d_539d,0xb4ee_838fcccc9c8e)), "LinearAlgebra"))
+        return LinearAlgebra.peakflops(n; parallel = parallel)
     end
 end
 
-@deprecate methodswith(typ, supertypes) methodswith(typ, supertypes = supertypes)
-@deprecate whos(io::IO, m::Module, pat::Regex) show(io, varinfo(m, pat))
-@deprecate whos(io::IO, m::Module)             show(io, varinfo(m))
-@deprecate whos(io::IO)                        show(io, varinfo())
-@deprecate whos(m::Module, pat::Regex)         varinfo(m, pat)
-@deprecate whos(m::Module)                     varinfo(m)
-@deprecate whos(pat::Regex)                    varinfo(pat)
-@deprecate whos()                              varinfo()
-@deprecate code_native(io, f, types, syntax) code_native(io, f, types, syntax = syntax)
-@deprecate code_native(f, types, syntax) code_native(f, types, syntax = syntax)
-# PR #21974
-@deprecate versioninfo(verbose::Bool) versioninfo(verbose=verbose)
-@deprecate versioninfo(io::IO, verbose::Bool) versioninfo(io, verbose=verbose)
+function report_bug(kind)
+    @info "Loading BugReporting package..."
+    BugReportingId = Base.PkgId(
+        Base.UUID((0xbcf9a6e7_4020_453c,0xb88e_690564246bb8)), "BugReporting")
+    # Check if the BugReporting package exists in the current environment
+    local BugReporting
+    if Base.locate_package(BugReportingId) === nothing
+        @info "Package `BugReporting` not found - attempting temporary installation"
+        # Create a temporary environment and add BugReporting
+        let Pkg = Base.require(Base.PkgId(
+            Base.UUID((0x44cfe95a_1eb2_52ea,0xb672_e2afdf69b78f)), "Pkg"))
+            mktempdir() do tmp
+                prev_active = Base.ACTIVE_PROJECT[]
+                env_path = joinpath(tmp, "TmpForBugReporting")
+                Pkg.generate(env_path)
+                Pkg.activate(env_path)
+                Pkg.add(Pkg.PackageSpec(BugReportingId.name, BugReportingId.uuid))
+                BugReporting = Base.require(BugReportingId)
+                Base.ACTIVE_PROJECT[] = prev_active
+            end
+        end
+    else
+        BugReporting = Base.require(BugReportingId)
+    end
+    return Base.invokelatest(BugReporting.make_interactive_report, kind)
+end
 
 end

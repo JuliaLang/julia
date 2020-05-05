@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# RUN: julia --startup-file=no %s | opt -load libjulia%shlibext -AllocOpt -LateLowerGCFrame -S - | FileCheck %s
+# RUN: julia --startup-file=no %s | opt -load libjulia%shlibext -AllocOpt -LateLowerGCFrame -FinalLowerGC -S - | FileCheck %s
 
 isz = sizeof(UInt) == 8 ? "i64" : "i32"
 
@@ -28,7 +28,6 @@ define %jl_value_t addrspace(10)* @return_obj() {
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK-NOT: @jl_gc_pool_alloc
 # CHECK: call void @llvm.lifetime.start{{.*}}(i64 8, i8*
-# CHECK-NEXT: %v64 = bitcast %jl_value_t* %v to i64*
 # CHECK-NOT: @tag
 # CHECK-NOT: @llvm.lifetime.end
 println("""
@@ -153,8 +152,8 @@ L3:
 # CHECK-LABEL: @object_field
 # CHECK: call %jl_value_t*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
-# CHECK: @jl_gc_pool_alloc
-# CHECK: store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* {{.*}}, !tbaa !0
+# CHECK-NOT: @jl_gc_pool_alloc
+# CHECK-NOT: store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* {{.*}}, !tbaa !0
 println("""
 define void @object_field(%jl_value_t addrspace(10)* %field) {
   %ptls = call %jl_value_t*** @julia.ptls_states()
@@ -189,15 +188,11 @@ top:
 # CHECK-LABEL: }
 
 # CHECK-LABEL: @preserve_opt
-# CHECK: alloca i128, align 16
 # CHECK: call %jl_value_t*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK-NOT: @jl_gc_pool_alloc
-# CHECK: @llvm.lifetime.start
 # CHECK-NOT: @llvm.lifetime.end
 # CHECK: @external_function
-# CHECK-NEXT: @llvm.lifetime.end
-# CHECK-NEXT: @external_function
 println("""
 define void @preserve_opt(i8* %v22) {
 top:
@@ -216,20 +211,16 @@ top:
 # CHECK-LABEL: }
 
 # CHECK-LABEL: @preserve_branches
-# CHECK: alloca i64
 # CHECK: call %jl_value_t*** @julia.ptls_states()
 # CHECK: L1:
-# CHECK-NEXT: call void @llvm.lifetime.start{{.*}}(i64 8,
 # CHECK-NEXT: @external_function()
 # CHECK-NEXT: br i1 %b2, label %L2, label %L3
 
 # CHECK: L2:
-# CHECK-NOT: call void @llvm.lifetime.end{{.*}}(i64 8,
 # CHECK: @external_function()
 # CHECK-NEXT: br label %L3
 
 # CHECK: L3:
-# CHECK-NEXT: call void @llvm.lifetime.end{{.*}}(i64 8,
 println("""
 define void @preserve_branches(i8* %fptr, i1 %b, i1 %b2) {
   %ptls = call %jl_value_t*** @julia.ptls_states()

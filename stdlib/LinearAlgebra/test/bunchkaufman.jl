@@ -12,7 +12,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-srand(1234321)
+Random.seed!(12343210)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -72,6 +72,21 @@ bimg  = randn(n,2)/2
                 @test_throws ErrorException bc1.Z
                 @test_throws ArgumentError uplo == :L ? bc1.U : bc1.L
             end
+            # test Base.iterate
+            ref_objs = (bc1.D, uplo == :L ? bc1.L : bc1.U, bc1.p)
+            for (bki, bkobj) in enumerate(bc1)
+                @test bkobj == ref_objs[bki]
+            end
+            if eltya <: BlasFloat
+                @test convert(LinearAlgebra.BunchKaufman{eltya}, bc1) === bc1
+                @test convert(LinearAlgebra.Factorization{eltya}, bc1) === bc1
+                if eltya <: BlasReal
+                    @test convert(LinearAlgebra.Factorization{Float16}, bc1) == convert(LinearAlgebra.BunchKaufman{Float16}, bc1)
+                elseif eltya <: BlasComplex
+                    @test convert(LinearAlgebra.Factorization{ComplexF16}, bc1) == convert(LinearAlgebra.BunchKaufman{ComplexF16}, bc1)
+                end
+            end
+            @test Base.propertynames(bc1) == (:p, :P, :L, :U, :D)
         end
 
         @testset "$eltyb argument B" for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
@@ -104,30 +119,22 @@ bimg  = randn(n,2)/2
                 end
             end
         end
-        if eltya <: BlasReal
-            As1 = fill(eltya(1), n, n)
-            As2 = fill(complex(eltya(1)), n, n)
-            As3 = fill(complex(eltya(1)), n, n)
-            As3[end, 1] += im/2
-            As3[1, end] -= im/2
-            for As = (As1, As2, As3)
-                for As in (As, view(As, 1:n, 1:n))
-                    @testset "$uplo Bunch-Kaufman factors of a singular matrix" for uplo in (:L, :U)
-                        @testset for rook in (false, true)
-                            F = bunchkaufman(issymmetric(As) ? Symmetric(As, uplo) : Hermitian(As, uplo), rook)
-                            @test !LinearAlgebra.issuccess(F)
-                            # test printing of this as well!
-                            bks = sprint(show, "text/plain", F)
-                            @test bks == "Failed factorization of type $(typeof(F))"
-                            @test det(F) == 0
-                            @test_throws LinearAlgebra.SingularException inv(F)
-                            @test_throws LinearAlgebra.SingularException F \ fill(1., size(As,1))
-                        end
-                    end
-                end
-            end
-        end
     end
+end
+
+@testset "Singular matrices" begin
+    R = Float64[1 0; 0 0]
+    C = ComplexF64[1 0; 0 0]
+    for A in (R, Symmetric(R), C, Hermitian(C))
+        @test_throws SingularException bunchkaufman(A)
+        @test_throws SingularException bunchkaufman!(copy(A))
+        @test_throws SingularException bunchkaufman(A; check = true)
+        @test_throws SingularException bunchkaufman!(copy(A); check = true)
+        @test !issuccess(bunchkaufman(A; check = false))
+        @test !issuccess(bunchkaufman!(copy(A); check = false))
+    end
+    F = bunchkaufman(R; check = false)
+    @test sprint(show, "text/plain", F) == "Failed factorization of type $(typeof(F))"
 end
 
 @testset "test example due to @timholy in PR 15354" begin
@@ -138,8 +145,30 @@ end
     @test F\v5 == F\v6[1:5]
 end
 
+@testset "issue #32080" begin
+    A = Symmetric([-5 -9 9; -9 4 1; 9 1 2])
+    B = bunchkaufman(A, true)
+    @test B.U * B.D * B.U' ≈ A[B.p, B.p]
+end
+
 @test_throws DomainError logdet(bunchkaufman([-1 -1; -1 1]))
-@test logabsdet(bunchkaufman([8 4; 4 2]))[1] == -Inf
-@test isa(bunchkaufman(Symmetric(ones(0,0))), BunchKaufman) # 0x0 matrix
+@test logabsdet(bunchkaufman([8 4; 4 2]; check = false))[1] == -Inf
+
+@testset "0x0 matrix" begin
+    for ul in (:U, :L)
+        B = bunchkaufman(Symmetric(ones(0, 0), ul))
+        @test isa(B, BunchKaufman)
+        @test B.D == Tridiagonal([], [], [])
+        @test B.P == ones(0, 0)
+        @test B.p == []
+        if ul == :U
+            @test B.U == UnitUpperTriangular(ones(0, 0))
+            @test_throws ArgumentError B.L
+        else
+            @test B.L == UnitLowerTriangular(ones(0, 0))
+            @test_throws ArgumentError B.U
+        end
+    end
+end
 
 end # module TestBunchKaufman

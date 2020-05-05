@@ -13,12 +13,15 @@ export
     atomic_and!, atomic_nand!, atomic_or!, atomic_xor!,
     atomic_max!, atomic_min!,
     atomic_fence
-
-# Disable 128-bit types on 32-bit Intel sytems due to LLVM problems;
-# see <https://github.com/JuliaLang/julia/issues/14818> (fixed on LLVM 3.9)
-# 128-bit atomics do not exist on AArch32.
-if (Base.libllvm_version < v"3.9-" && ARCH === :i686) ||
-        startswith(string(ARCH), "arm")
+##
+# Filter out unsupported atomic types on platforms
+# - 128-bit atomics do not exist on AArch32.
+# - Omitting 128-bit types on 32bit x86 and ppc64
+# - LLVM doesn't currently support atomics on floats for ppc64
+#   C++20 is adding limited support for atomics on float, but as of
+#   now Clang does not support that yet.
+if Sys.ARCH == :i686 || startswith(string(Sys.ARCH), "arm") ||
+   Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
     const inttypes = (Int8, Int16, Int32, Int64,
                       UInt8, UInt16, UInt32, UInt64)
 else
@@ -28,7 +31,12 @@ end
 const floattypes = (Float16, Float32, Float64)
 const arithmetictypes = (inttypes..., floattypes...)
 # TODO: Support Ptr
-const atomictypes = (arithmetictypes..., Bool)
+if Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
+    const atomictypes = (inttypes..., Bool)
+else
+    const atomictypes = (arithmetictypes..., Bool)
+end
+
 const IntTypes = Union{inttypes...}
 const FloatTypes = Union{floattypes...}
 const ArithmeticTypes = Union{arithmetictypes...}
@@ -337,7 +345,7 @@ inttype(::Type{Float32}) = Int32
 inttype(::Type{Float64}) = Int64
 
 
-alignment(::Type{T}) where {T} = ccall(:jl_alignment, Cint, (Csize_t,), sizeof(T))
+import ..Base.gc_alignment
 
 # All atomic operations have acquire and/or release semantics, depending on
 # whether the load or store values. Most of the time, this is what one wants
@@ -345,18 +353,18 @@ alignment(::Type{T}) where {T} = ccall(:jl_alignment, Cint, (Csize_t,), sizeof(T
 for typ in atomictypes
     lt = llvmtypes[typ]
     ilt = llvmtypes[inttype(typ)]
-    rt = Base.libllvm_version >= v"3.6" ? "$lt, $lt*" : "$lt*"
-    irt = Base.libllvm_version >= v"3.6" ? "$ilt, $ilt*" : "$ilt*"
+    rt = "$lt, $lt*"
+    irt = "$ilt, $ilt*"
     @eval getindex(x::Atomic{$typ}) =
         llvmcall($"""
                  %ptr = inttoptr i$WORD_SIZE %0 to $lt*
-                 %rv = load atomic $rt %ptr acquire, align $(alignment(typ))
+                 %rv = load atomic $rt %ptr acquire, align $(gc_alignment(typ))
                  ret $lt %rv
                  """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
     @eval setindex!(x::Atomic{$typ}, v::$typ) =
         llvmcall($"""
                  %ptr = inttoptr i$WORD_SIZE %0 to $lt*
-                 store atomic $lt %1, $lt* %ptr release, align $(alignment(typ))
+                 store atomic $lt %1, $lt* %ptr release, align $(gc_alignment(typ))
                  ret void
                  """, Cvoid, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
 
@@ -401,7 +409,7 @@ for typ in atomictypes
                          ret $lt %rv
                          """, $typ, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
         else
-            rmwop == :xchg || continue
+            rmwop === :xchg || continue
             @eval $fn(x::Atomic{$typ}, v::$typ) =
                 llvmcall($"""
                          %iptr = inttoptr i$WORD_SIZE %0 to $ilt*
@@ -425,7 +433,7 @@ for op in [:+, :-, :max, :min]
             new = $op(old, val)
             cmp = old
             old = atomic_cas!(var, cmp, new)
-            reinterpret(IT, old) == reinterpret(IT, cmp) && return new
+            reinterpret(IT, old) == reinterpret(IT, cmp) && return old
             # Temporary solution before we have gc transition support in codegen.
             ccall(:jl_gc_safepoint, Cvoid, ())
         end

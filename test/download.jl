@@ -1,11 +1,34 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+let urls = ["http://httpbin.org/ip", "https://httpbin.org/ip"]
+    for url in urls
+        @test Base.download_url(url) == url
+    end
+    push!(Base.DOWNLOAD_HOOKS, url->replace(url, r"^http://" => "https://"))
+    for url in urls
+        @test Base.download_url(url) == urls[end]
+    end
+    pop!(Base.DOWNLOAD_HOOKS)
+    for url in urls
+        @test Base.download_url(url) == url
+    end
+end
+
 mktempdir() do temp_dir
     # Download a file
     file = joinpath(temp_dir, "ip")
     @test download("http://httpbin.org/ip", file) == file
     @test isfile(file)
     @test !isempty(read(file))
+    ip = read(file, String)
+
+    # Test download rewrite hook
+    push!(Base.DOWNLOAD_HOOKS, url->replace(url, r"/status/404$" => "/ip"))
+    @test download("http://httpbin.org/status/404", file) == file
+    @test isfile(file)
+    @test !isempty(read(file))
+    @test ip == read(file, String)
+    pop!(Base.DOWNLOAD_HOOKS)
 
     # Download an empty file
     empty_file = joinpath(temp_dir, "empty")
@@ -16,7 +39,7 @@ mktempdir() do temp_dir
 
     # Make sure that failed downloads do not leave files around
     missing_file = joinpath(temp_dir, "missing")
-    @test_throws ErrorException download("http://httpbin.org/status/404", missing_file)
+    @test_throws ProcessFailedException download("http://httpbin.org/status/404", missing_file)
     @test !isfile(missing_file)
 
     # Make sure we properly handle metachar '
@@ -28,6 +51,6 @@ mktempdir() do temp_dir
 
     # Use a TEST-NET (192.0.2.0/24) address which shouldn't be bound
     invalid_host_file = joinpath(temp_dir, "invalid_host")
-    @test_throws ErrorException download("http://192.0.2.1", invalid_host_file)
+    @test_throws ProcessFailedException download("http://192.0.2.1", invalid_host_file)
     @test !isfile(invalid_host_file)
 end

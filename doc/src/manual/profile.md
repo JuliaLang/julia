@@ -23,8 +23,7 @@ is subject to statistical noise.
 
 Despite these limitations, sampling profilers have substantial strengths:
 
-  * You do not have to make any modifications to your code to take timing measurements (in contrast
-    to the alternative [instrumenting profiler](https://github.com/timholy/IProfile.jl)).
+  * You do not have to make any modifications to your code to take timing measurements.
   * It can profile into Julia's core code and even (optionally) into C and Fortran libraries.
   * By running "infrequently" there is very little performance overhead; while profiling, your code
     can run at nearly native speed.
@@ -58,8 +57,17 @@ julia> using Profile
 julia> @profile myfunc()
 ```
 
-To see the profiling results, there is a [graphical browser](https://github.com/timholy/ProfileView.jl)
-available, but here we'll use the text-based display that comes with the standard library:
+To see the profiling results, there are several graphical browsers.
+One "family" of visualizers is based on [FlameGraphs.jl](https://github.com/timholy/FlameGraphs.jl), with each family member providing a different user interface:
+- [Juno](https://junolab.org/) is a full IDE with built-in support for profile visualization
+- [ProfileView.jl](https://github.com/timholy/ProfileView.jl) is a stand-alone visualizer based on GTK
+- [ProfileVega.jl](https://github.com/davidanthoff/ProfileVega.jl) uses VegaLight and integrates well with Jupyter notebooks
+- [StatProfilerHTML](https://github.com/tkluck/StatProfilerHTML.jl) produces HTML and presents some additional summaries, and also integrates well with Jupyter notebooks
+- [ProfileSVG](https://github.com/timholy/ProfileSVG.jl) renders SVG
+
+An entirely independent approach to profile visualization is [PProf.jl](https://github.com/vchuravy/PProf.jl), which uses the external `pprof` tool.
+
+Here, though, we'll use the text-based display that comes with the standard library:
 
 ```julia-repl
 julia> Profile.print()
@@ -312,3 +320,34 @@ memory allocation). The recommended procedure is to force compilation by executi
 you want to analyze, then call [`Profile.clear_malloc_data()`](@ref) to reset all allocation counters.
  Finally, execute the desired commands and quit Julia to trigger the generation of the `.mem`
 files.
+
+# External Profiling
+
+Currently Julia supports `Intel VTune`, `OProfile` and `perf` as external profiling tools.
+
+Depending on the tool you choose, compile with `USE_INTEL_JITEVENTS`, `USE_OPROFILE_JITEVENTS` and
+`USE_PERF_JITEVENTS` set to 1 in `Make.user`. Multiple flags are supported.
+
+Before running Julia set the environment variable `ENABLE_JITPROFILING` to 1.
+
+Now you have a multitude of ways to employ those tools!
+For example with `OProfile` you can try a simple recording :
+
+```
+>ENABLE_JITPROFILING=1 sudo operf -Vdebug ./julia test/fastmath.jl
+>opreport -l `which ./julia`
+```
+
+Or similary with `perf` :
+
+```
+$ ENABLE_JITPROFILING=1 perf record -o /tmp/perf.data --call-graph dwarf ./julia /test/fastmath.jl
+$ perf report --call-graph -G
+```
+
+There are many more interesting things that you can measure about your program, to get a comprehensive list
+please read the [Linux perf examples page](http://www.brendangregg.com/perf.html).
+
+Remember that perf saves for each execution a `perf.data` file that, even for small programs, can get
+quite large. Also the perf LLVM module saves temporarily debug objects in `~/.debug/jit`, remember
+to clean that folder frequently.

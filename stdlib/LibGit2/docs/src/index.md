@@ -1,10 +1,6 @@
 # LibGit2
 
-```@meta
-DocTestSetup = :(using LibGit2)
-```
-
-The LibGit2 module provides bindings to [libgit2](https://libgit2.github.com/), a portable C library that
+The LibGit2 module provides bindings to [libgit2](https://libgit2.org/), a portable C library that
 implements core functionality for the [Git](https://git-scm.com/) version control system.
 These bindings are currently used to power Julia's package manager.
 It is expected that this module will eventually be moved into a separate package.
@@ -13,7 +9,7 @@ It is expected that this module will eventually be moved into a separate package
 
 Some of this documentation assumes some prior knowledge of the libgit2 API.
 For more information on some of the objects and methods referenced here, consult the upstream
-[libgit2 API reference](https://libgit2.github.com/libgit2/#v0.25.1).
+[libgit2 API reference](https://libgit2.org/libgit2/#v0.25.1).
 
 ```@docs
 LibGit2.Buffer
@@ -137,6 +133,7 @@ LibGit2.revcount
 LibGit2.set_remote_url
 LibGit2.shortname
 LibGit2.snapshot
+LibGit2.split_cfg_entry
 LibGit2.status
 LibGit2.stage
 LibGit2.tag_create
@@ -161,8 +158,4 @@ LibGit2.CachedCredentials
 LibGit2.CredentialPayload
 LibGit2.approve
 LibGit2.reject
-```
-
-```@meta
-DocTestSetup = nothing
 ```

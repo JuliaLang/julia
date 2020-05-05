@@ -1,8 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Set tests
-isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using .Main.TestHelpers.OAs
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
+using Dates
 
 @testset "Construction, collect" begin
     @test Set([1,2,3]) isa Set{Int}
@@ -94,7 +96,8 @@ end
     @test ===(eltype(s3), Float32)
 end
 @testset "show" begin
-    @test sprint(show, Set()) == "Set(Any[])"
+    @test sprint(show, Set()) == "Set{Any}()"
+    @test repr([Set(),Set()]) == "Set{Any}[Set(), Set()]"
     @test sprint(show, Set(['a'])) == "Set(['a'])"
 end
 @testset "isempty, length, in, push, pop, delete" begin
@@ -134,10 +137,24 @@ end
     @test !in(100,c)
     @test !in(200,s)
 end
+
+@testset "copy!" begin
+    for S = (Set, BitSet)
+        s = S([1, 2])
+        for a = ([1], UInt[1], [3, 4, 5], UInt[3, 4, 5])
+            @test s === copy!(s, Set(a)) == S(a)
+            @test s === copy!(s, BitSet(a)) == S(a)
+        end
+    end
+end
+
 @testset "sizehint, empty" begin
     s = Set([1])
     @test isequal(sizehint!(s, 10), Set([1]))
     @test isequal(empty!(s), Set())
+    s2 = GenericSet(s)
+    sizehint!(s2, 10)
+    @test s2 == GenericSet(s)
 end
 @testset "rehash!" begin
     # Use a pointer type to have defined behavior for uninitialized
@@ -200,6 +217,9 @@ end
     # union must uniquify
     @test union([1, 2, 1]) == union!([1, 2, 1]) == [1, 2]
     @test union([1, 2, 1], [2, 2]) == union!([1, 2, 1], [2, 2]) == [1, 2]
+    s2 = Set([nothing])
+    union!(s2, [nothing])
+    @test s2 == Set([nothing])
 end
 
 @testset "intersect" begin
@@ -262,6 +282,14 @@ end
     s = Set([1,2,3,4])
     setdiff!(s, Set([2,4,5,6]))
     @test isequal(s,Set([1,3]))
+
+    # setdiff iterates the shorter set - make sure this algorithm works
+    sa, sb = Set([1,2,3,4,5,6,7]), Set([2,3,9])
+    @test Set([1,4,5,6,7]) == setdiff(sa, sb) !== sa
+    @test Set([1,4,5,6,7]) == setdiff!(sa, sb) === sa
+    sa, sb = Set([1,2,3,4,5,6,7]), Set([2,3,9])
+    @test Set([9]) == setdiff(sb, sa) !== sb
+    @test Set([9]) == setdiff!(sb, sa) === sb
 end
 
 @testset "ordering" begin
@@ -280,13 +308,15 @@ end
     @test !(Set([1,2,3]) <= Set([1,2,4]))
 end
 
-@testset "issubset, symdiff" begin
+@testset "issubset, symdiff, isdisjoint" begin
     for S in (Set, BitSet, Vector)
         for (l,r) in ((S([1,2]),     S([3,4])),
                       (S([5,6,7,8]), S([7,8,9])),
                       (S([1,2]),     S([3,4])),
                       (S([5,6,7,8]), S([7,8,9])),
                       (S([1,2,3]),   S()),
+                      (S(),          S()),
+                      (S(),          S([1,2,3])),
                       (S([1,2,3]),   S([1])),
                       (S([1,2,3]),   S([1,2])),
                       (S([1,2,3]),   S([1,2,3])),
@@ -296,6 +326,8 @@ end
             @test issubset(intersect(l,r), r)
             @test issubset(l, union(l,r))
             @test issubset(r, union(l,r))
+            @test isdisjoint(l,l) == isempty(l)
+            @test isdisjoint(l,r) == isempty(intersect(l,r))
             if S === Vector
                 @test sort(union(intersect(l,r),symdiff(l,r))) == sort(union(l,r))
             else
@@ -326,6 +358,29 @@ end
     # symdiff must NOT uniquify
     @test symdiff([1, 2, 1]) == symdiff!([1, 2, 1]) == [2]
     @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [2]
+
+    # Base.hasfastin
+    @test all(Base.hasfastin, Any[Dict(1=>2), Set(1), BitSet(1), 1:9, 1:2:9,
+                                  Dict, Set, BitSet, UnitRange, StepRange])
+    @test !any(Base.hasfastin, Any[[1, 2, 3], "123",
+                                   Array, String])
+
+    # tests for Dict
+    d1 = Dict(1=>nothing, 2=>nothing)
+    d2 = Dict(1=>nothing, 3=>nothing)
+    d3 = Dict(1=>nothing, 2=>nothing, 3=>nothing)
+    @test d3 == merge(d1, d2)
+    @test !issubset(d1, d2)
+    @test !issubset(d2, d1)
+    @test !issubset(d3, d1)
+    @test !issubset(d3, d2)
+    @test issubset(d1, d3)
+    @test issubset(d2, d3)
+
+    # no fast in, long enough container
+    @test issubset(Set(Bool[]), rand(Bool, 100)) == true
+    # neither has a fast in, right doesn't have a length
+    @test isdisjoint([1, 3, 5, 7, 9], Iterators.filter(iseven, 1:10))
 end
 
 @testset "unique" begin
@@ -377,6 +432,10 @@ end
     unique!(u)
     @test u == [5,"w","we","r"]
     u = [1,2,5,1,3,2]
+    @test unique!(x -> x ^ 2, [1, -1, 3, -3, 5, -5]) == [1, 3, 5]
+    @test unique!(n -> n % 3, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6]) == [5, 1, 9]
+    @test unique!(iseven, [2, 3, 5, 7, 9]) == [2, 3]
+    @test unique!(x -> x % 2 == 0 ? :even : :odd, [1, 2, 3, 4, 2, 2, 1]) == [1, 2]
 end
 
 @testset "allunique" begin
@@ -392,6 +451,9 @@ end
     @test allunique(4.0:0.3:7.0)
     @test allunique(4:-1:5)       # empty range
     @test allunique(7:-1:1)       # negative step
+    @test allunique(Date(2018, 8, 7):Day(1):Date(2018, 8, 11))  # JuliaCon 2018
+    @test allunique(DateTime(2018, 8, 7):Hour(1):DateTime(2018, 8, 11))
+    @test allunique(('a':1:'c')[1:2]) == true
 end
 @testset "filter(f, ::$S)" for S = (Set, BitSet)
     s = S([1,2,3,4])
@@ -514,16 +576,12 @@ end
     @test replace!(x->2x, a, count=0x2) == [4, 8, 3, 2]
 
     d = Dict(1=>2, 3=>4)
-    @test replace(x->x.first > 2, d, 0=>0) == Dict(1=>2, 0=>0)
     @test replace!(x -> x.first > 2 ? x.first=>2*x.second : x, d) === d
     @test d == Dict(1=>2, 3=>8)
     @test replace(d, (3=>8)=>(0=>0)) == Dict(1=>2, 0=>0)
     @test replace!(d, (3=>8)=>(2=>2)) === d
     @test d == Dict(1=>2, 2=>2)
-    for count = (1, 0x1, big(1))
-        @test replace(x->x.second == 2, d, 0=>0, count=count) in [Dict(1=>2, 0=>0),
-                                                                  Dict(2=>2, 0=>0)]
-    end
+
     s = Set([1, 2, 3])
     @test replace(x -> x > 1 ? 2x : x, s) == Set([1, 4, 6])
     for count = (1, 0x1, big(1))
@@ -534,8 +592,12 @@ end
     @test s == Set([2, 3])
     @test replace!(x->2x, s, count=0x1) in [Set([4, 3]), Set([2, 6])]
 
-    for count = (0, 0x0, big(0))
-        @test replace([1, 2], 1=>0, 2=>0, count=count) == [1, 2] # count=0 --> no replacements
+    for count = (0, 0x0, big(0)) # count == 0 --> no replacements
+        @test replace([1, 2], 1=>0, 2=>0; count) == [1, 2]
+        for dict = (Dict(1=>2, 2=>3), IdDict(1=>2, 2=>3))
+            @test replace(dict, (1=>2) => (1=>3); count) == dict
+        end
+        @test replace(Set([1, 2]), 2=>-1; count) == Set([1, 2])
     end
 
     # test collisions with AbstractSet/AbstractDict
@@ -549,15 +611,12 @@ end
     # test eltype promotion
     x = @inferred replace([1, 2], 2=>2.5)
     @test x == [1, 2.5] && x isa Vector{Float64}
-    x = @inferred replace(x -> x > 1, [1, 2], 2.5)
-    @test x == [1, 2.5] && x isa Vector{Float64}
 
     x = @inferred replace([1, 2], 2=>missing)
     @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
-    x = @inferred replace(x -> x > 1, [1, 2], missing)
-    @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
 
-    x = @inferred replace([1, missing], missing=>2)
+    @test_broken @inferred replace([1, missing], missing=>2)
+    x = replace([1, missing], missing=>2)
     @test x == [1, 2] && x isa Vector{Int}
     x = @inferred replace([1, missing], missing=>2, count=1)
     @test x == [1, 2] && x isa Vector{Union{Int, Missing}}
@@ -572,11 +631,16 @@ end
 end
 
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin
-    a = [1, 2]
-    b = [2, 1, 3]
-    for C = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
-        A = C(a)
-        B = C(b)
+    a = [2, 1, 2]
+    b = [2, 3, 1, 3]
+    ua = unique(a)
+    ub = unique(b)
+    for TA in (Tuple, identity, Set, BitSet, Base.IdSet{Int}),
+        TB in (Tuple, identity, Set, BitSet, Base.IdSet{Int}),
+        uA = false:true,
+        uB = false:true
+        A = TA(uA ? ua : a)
+        B = TB(uB ? ub : b)
         @test A ⊆ B
         @test A ⊊ B
         @test !(A ⊈ B)
@@ -591,6 +655,10 @@ end
         @test !(B ⊉ A)
         @test !issetequal(A, B)
         @test !issetequal(B, A)
+        for T = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
+            @test issetequal(A, T(A))
+            @test issetequal(B, T(B))
+        end
         if A isa AbstractSet && B isa AbstractSet
             @test A <= B
             @test A <  B
@@ -601,9 +669,43 @@ end
             @test B >= A
             @test B >  A
         end
-        for D = (Tuple, identity, Set, BitSet)
-            @test issetequal(A, D(A))
-            @test !issetequal(A, D(B))
-        end
     end
+    # first doesn't have length
+    @test issetequal(Iterators.filter(iseven, 1:10), [2, 4, 6, 8, 10])
+    # both don't have length
+    @test issetequal(Iterators.filter(iseven, 1:10), Iterators.filter(iseven, 1:10))
+end
+
+@testset "optimized union! with max_values" begin
+    # issue #30315
+    T = Union{Nothing, Bool}
+    @test Base.max_values(T) == 3
+    d = Set{T}()
+    union!(d, (nothing, true, false))
+    @test length(d) == 3
+    @test d == Set((nothing, true, false))
+    @test nothing in d
+    @test true    in d
+    @test false   in d
+
+    for X = (Int8, Int16, Int32, Int64)
+        @test Base.max_values(Union{Nothing, X}) == (sizeof(X) < sizeof(Int) ?
+                                                     2^(8*sizeof(X)) + 1 :
+                                                     typemax(Int))
+    end
+    # this does not account for non-empty intersections of the unioned types
+    @test Base.max_values(Union{Int8,Int16}) == 2^8 + 2^16
+end
+
+struct OpenInterval{T}
+    lower::T
+    upper::T
+end
+Base.in(x, i::OpenInterval) = i.lower < x < i.upper
+Base.IteratorSize(::Type{<:OpenInterval}) = Base.SizeUnknown()
+
+@testset "Continuous sets" begin
+    i = OpenInterval(2, 4)
+    @test 3 ∈ i
+    @test issubset(3, i)
 end

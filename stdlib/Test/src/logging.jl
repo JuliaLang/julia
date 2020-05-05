@@ -66,7 +66,7 @@ end
 function Base.show(io::IO, t::LogTestFailure)
     printstyled(io, "Log Test Failed"; bold=true, color=Base.error_color())
     print(io, " at ")
-    printstyled(io, t.source.file, ":", t.source.line, "\n"; bold=true, color=:default)
+    printstyled(io, something(t.source.file, :none), ":", t.source.line, "\n"; bold=true, color=:default)
     println(io, "  Expression: ", t.orig_expr)
     println(io, "  Log Pattern: ", join(t.patterns, " "))
     println(io, "  Captured Logs: ")
@@ -136,6 +136,11 @@ If we also wanted to test the debug messages, these need to be enabled with the
 
     @test_logs (:info,"Doing foo with n=2") (:debug,"Iteration 1") (:debug,"Iteration 2") min_level=Debug foo(2)
 
+If you want to test that some particular messages are generated while ignoring the rest,
+you can set the keyword `match_mode=:any`:
+
+    @test_logs (:info,) (:debug,"Iteration 42") min_level=Debug match_mode=:any foo(100)
+
 The macro may be chained with `@test` to also test the returned value:
 
     @test (@test_logs (:info,"Doing foo with n=2") foo(2)) == 42
@@ -147,7 +152,7 @@ macro test_logs(exs...)
     patterns = Any[]
     kwargs = Any[]
     for e in exs[1:end-1]
-        if e isa Expr && e.head == :(=)
+        if e isa Expr && e.head === :(=)
             push!(kwargs, esc(Expr(:kw, e.args...)))
         else
             push!(patterns, esc(e))
@@ -169,7 +174,7 @@ macro test_logs(exs...)
                                              $(QuoteNode(exs[1:end-1])), logs)
                 end
             catch e
-                testres = Error(:test_error, $orig_expr, e, catch_backtrace(), $sourceloc)
+                testres = Error(:test_error, $orig_expr, e, Base.catch_stack(), $sourceloc)
             end
             Test.record(Test.get_testset(), testres)
             value
@@ -179,10 +184,10 @@ end
 
 function match_logs(f, patterns...; match_mode::Symbol=:all, kwargs...)
     logs,value = collect_test_logs(f; kwargs...)
-    if match_mode == :all
+    if match_mode === :all
         didmatch = length(logs) == length(patterns) &&
             all(occursin(p, l) for (p,l) in zip(patterns, logs))
-    elseif match_mode == :any
+    elseif match_mode === :any
         didmatch = all(any(occursin(p, l) for l in logs) for p in patterns)
     end
     didmatch,logs,value
@@ -190,12 +195,12 @@ end
 
 # TODO: Use a version of parse_level from stdlib/Logging, when it exists.
 function parse_level(level::Symbol)
-    if      level == :belowminlevel  return  Logging.BelowMinLevel
-    elseif  level == :debug          return  Logging.Debug
-    elseif  level == :info           return  Logging.Info
-    elseif  level == :warn           return  Logging.Warn
-    elseif  level == :error          return  Logging.Error
-    elseif  level == :abovemaxlevel  return  Logging.AboveMaxLevel
+    if      level === :belowminlevel  return  Logging.BelowMinLevel
+    elseif  level === :debug          return  Logging.Debug
+    elseif  level === :info           return  Logging.Info
+    elseif  level === :warn           return  Logging.Warn
+    elseif  level === :error          return  Logging.Error
+    elseif  level === :abovemaxlevel  return  Logging.AboveMaxLevel
     else
         throw(ArgumentError("Unknown log level $level"))
     end

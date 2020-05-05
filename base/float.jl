@@ -137,24 +137,69 @@ function Float32(x::Int128)
     reinterpret(Float32, s | d + y)
 end
 
+# Float32 -> Float16 algorithm from:
+#   "Fast Half Float Conversion" by Jeroen van der Zijp
+#   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
+#
+# With adjustments for round-to-nearest, ties to even.
+#
+let _basetable = Vector{UInt16}(undef, 512),
+    _shifttable = Vector{UInt8}(undef, 512)
+    for i = 0:255
+        e = i - 127
+        if e < -25  # Very small numbers map to zero
+            _basetable[i|0x000+1] = 0x0000
+            _basetable[i|0x100+1] = 0x8000
+            _shifttable[i|0x000+1] = 25
+            _shifttable[i|0x100+1] = 25
+        elseif e < -14  # Small numbers map to denorms
+            _basetable[i|0x000+1] = 0x0000
+            _basetable[i|0x100+1] = 0x8000
+            _shifttable[i|0x000+1] = -e-1
+            _shifttable[i|0x100+1] = -e-1
+        elseif e <= 15  # Normal numbers just lose precision
+            _basetable[i|0x000+1] = ((e+15)<<10)
+            _basetable[i|0x100+1] = ((e+15)<<10) | 0x8000
+            _shifttable[i|0x000+1] = 13
+            _shifttable[i|0x100+1] = 13
+        elseif e < 128  # Large numbers map to Infinity
+            _basetable[i|0x000+1] = 0x7C00
+            _basetable[i|0x100+1] = 0xFC00
+            _shifttable[i|0x000+1] = 24
+            _shifttable[i|0x100+1] = 24
+        else  # Infinity and NaN's stay Infinity and NaN's
+            _basetable[i|0x000+1] = 0x7C00
+            _basetable[i|0x100+1] = 0xFC00
+            _shifttable[i|0x000+1] = 13
+            _shifttable[i|0x100+1] = 13
+        end
+    end
+    global const shifttable = (_shifttable...,)
+    global const basetable = (_basetable...,)
+end
+
 function Float16(val::Float32)
     f = reinterpret(UInt32, val)
     if isnan(val)
         t = 0x8000 ⊻ (0x8000 & ((f >> 0x10) % UInt16))
         return reinterpret(Float16, t ⊻ ((f >> 0xd) % UInt16))
     end
-    i = (f >> 23) & 0x1ff + 1
-    sh = shifttable[i]
-    f &= 0x007fffff
-    h::UInt16 = basetable[i] + (f >> sh)
+    i = ((f & ~significand_mask(Float32)) >> significand_bits(Float32)) + 1
+    @inbounds sh = shifttable[i]
+    f &= significand_mask(Float32)
+    # If `val` is subnormal, the tables are set up to force the
+    # result to 0, so the significand has an implicit `1` in the
+    # cases we care about.
+    f |= significand_mask(Float32) + 0x1
+    @inbounds h = (basetable[i] + (f >> sh) & significand_mask(Float16)) % UInt16
     # round
     # NOTE: we maybe should ignore NaNs here, but the payload is
     # getting truncated anyway so "rounding" it might not matter
     nextbit = (f >> (sh-1)) & 1
-    if nextbit != 0
+    if nextbit != 0 && (h & 0x7C00) != 0x7C00
         # Round halfway to even or check lower bits
         if h&1 == 1 || (f & ((1<<(sh-1))-1)) != 0
-            h += 1
+            h += UInt16(1)
         end
     end
     reinterpret(Float16, h)
@@ -179,7 +224,7 @@ function Float32(val::Float16)
                 bit = bit >> 1
             end
             sign = sign << 31
-            exp = (-14 - n_bit + 127) << 23
+            exp = ((-14 - n_bit + 127) << 23) % UInt32
             sig = ((sig & (~bit)) << n_bit) << (23 - 10)
             ret = sign | exp | sig
         end
@@ -195,48 +240,11 @@ function Float32(val::Float16)
         end
     else
         sign = sign << 31
-        exp  = (exp - 15 + 127) << 23
+        exp  = ((exp - 15 + 127) << 23) % UInt32
         sig  = sig << (23 - 10)
         ret = sign | exp | sig
     end
     return reinterpret(Float32, ret)
-end
-
-# Float32 -> Float16 algorithm from:
-#   "Fast Half Float Conversion" by Jeroen van der Zijp
-#   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
-
-const basetable = Vector{UInt16}(undef, 512)
-const shifttable = Vector{UInt8}(undef, 512)
-
-for i = 0:255
-    e = i - 127
-    if e < -24  # Very small numbers map to zero
-        basetable[i|0x000+1] = 0x0000
-        basetable[i|0x100+1] = 0x8000
-        shifttable[i|0x000+1] = 24
-        shifttable[i|0x100+1] = 24
-    elseif e < -14  # Small numbers map to denorms
-        basetable[i|0x000+1] = (0x0400>>(-e-14))
-        basetable[i|0x100+1] = (0x0400>>(-e-14)) | 0x8000
-        shifttable[i|0x000+1] = -e-1
-        shifttable[i|0x100+1] = -e-1
-    elseif e <= 15  # Normal numbers just lose precision
-        basetable[i|0x000+1] = ((e+15)<<10)
-        basetable[i|0x100+1] = ((e+15)<<10) | 0x8000
-        shifttable[i|0x000+1] = 13
-        shifttable[i|0x100+1] = 13
-    elseif e < 128  # Large numbers map to Infinity
-        basetable[i|0x000+1] = 0x7C00
-        basetable[i|0x100+1] = 0xFC00
-        shifttable[i|0x000+1] = 24
-        shifttable[i|0x100+1] = 24
-    else  # Infinity and NaN's stay Infinity and NaN's
-        basetable[i|0x000+1] = 0x7C00
-        basetable[i|0x100+1] = 0xFC00
-        shifttable[i|0x000+1] = 13
-        shifttable[i|0x100+1] = 13
-    end
 end
 
 #convert(::Type{Float16}, x::Float32) = fptrunc(Float16, x)
@@ -274,6 +282,7 @@ float(x) = AbstractFloat(x)
 Return an appropriate type to represent a value of type `T` as a floating point value.
 Equivalent to `typeof(float(zero(T)))`.
 
+# Examples
 ```jldoctest
 julia> float(Complex{Int})
 Complex{Float64}
@@ -379,8 +388,6 @@ promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 
 widen(::Type{Float16}) = Float32
 widen(::Type{Float32}) = Float64
-
-_default_type(T::Union{Type{Real},Type{AbstractFloat}}) = Float64
 
 ## floating point arithmetic ##
 -(x::Float64) = neg_float(x)
@@ -502,15 +509,18 @@ for Ti in (Int64,UInt64,Int128,UInt128)
         end
     end
 end
+for op in (:(==), :<, :<=)
+    @eval begin
+        ($op)(x::Float16, y::Union{Int128,UInt128,Int64,UInt64}) = ($op)(Float64(x), Float64(y))
+        ($op)(x::Union{Int128,UInt128,Int64,UInt64}, y::Float16) = ($op)(Float64(x), Float64(y))
 
-==(x::Float32, y::Union{Int32,UInt32}) = Float64(x)==Float64(y)
-==(x::Union{Int32,UInt32}, y::Float32) = Float64(x)==Float64(y)
+        ($op)(x::Union{Float16,Float32}, y::Union{Int32,UInt32}) = ($op)(Float64(x), Float64(y))
+        ($op)(x::Union{Int32,UInt32}, y::Union{Float16,Float32}) = ($op)(Float64(x), Float64(y))
 
-<(x::Float32, y::Union{Int32,UInt32}) = Float64(x)<Float64(y)
-<(x::Union{Int32,UInt32}, y::Float32) = Float64(x)<Float64(y)
-
-<=(x::Float32, y::Union{Int32,UInt32}) = Float64(x)<=Float64(y)
-<=(x::Union{Int32,UInt32}, y::Float32) = Float64(x)<=Float64(y)
+        ($op)(x::Float16, y::Union{Int16,UInt16}) = ($op)(Float32(x), Float32(y))
+        ($op)(x::Union{Int16,UInt16}, y::Float16) = ($op)(Float32(x), Float32(y))
+    end
+end
 
 
 abs(x::Float16) = reinterpret(Float16, reinterpret(UInt16, x) & 0x7fff)
@@ -520,7 +530,8 @@ abs(x::Float64) = abs_float(x)
 """
     isnan(f) -> Bool
 
-Test whether a floating point number is not a number (NaN).
+Test whether a number value is a NaN, an indeterminate value which is neither an infinity
+nor a finite number ("not a number").
 """
 isnan(x::AbstractFloat) = x != x
 isnan(x::Float16) = reinterpret(UInt16,x)&0x7fff > 0x7c00
@@ -531,6 +542,7 @@ isnan(x::Real) = false
 
 Test whether a number is finite.
 
+# Examples
 ```jldoctest
 julia> isfinite(5)
 true
@@ -567,7 +579,7 @@ hash(x::Float32, h::UInt) = hash(Float64(x), h)
     precision(num::AbstractFloat)
 
 Get the precision of a floating point number, as defined by the effective number of bits in
-the mantissa.
+the significand.
 """
 function precision end
 
@@ -639,6 +651,14 @@ Return the smallest floating point number `y` of the same type as `x` such `x < 
 such `y` exists (e.g. if `x` is `Inf` or `NaN`), then return `x`.
 """
 nextfloat(x::AbstractFloat) = nextfloat(x,1)
+
+"""
+    prevfloat(x::AbstractFloat, n::Integer)
+
+The result of `n` iterative applications of `prevfloat` to `x` if `n >= 0`, or `-n`
+applications of `nextfloat` if `n < 0`.
+"""
+prevfloat(x::AbstractFloat, d::Integer) = nextfloat(x, -d)
 
 """
     prevfloat(x::AbstractFloat)
@@ -715,14 +735,14 @@ end
     typemin(x::T) where {T<:Real} = typemin(T)
     typemax(x::T) where {T<:Real} = typemax(T)
 
-    realmin(::Type{Float16}) = $(bitcast(Float16, 0x0400))
-    realmin(::Type{Float32}) = $(bitcast(Float32, 0x00800000))
-    realmin(::Type{Float64}) = $(bitcast(Float64, 0x0010000000000000))
-    realmax(::Type{Float16}) = $(bitcast(Float16, 0x7bff))
-    realmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
-    realmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
+    floatmin(::Type{Float16}) = $(bitcast(Float16, 0x0400))
+    floatmin(::Type{Float32}) = $(bitcast(Float32, 0x00800000))
+    floatmin(::Type{Float64}) = $(bitcast(Float64, 0x0010000000000000))
+    floatmax(::Type{Float16}) = $(bitcast(Float16, 0x7bff))
+    floatmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
+    floatmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
 
-    eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
+    eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= floatmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
     eps(::Type{Float16}) = $(bitcast(Float16, 0x1400))
     eps(::Type{Float32}) = $(bitcast(Float32, 0x34000000))
     eps(::Type{Float64}) = $(bitcast(Float64, 0x3cb0000000000000))
@@ -730,31 +750,46 @@ end
 end
 
 """
-    realmin(T)
+    floatmin(T = Float64)
 
-The smallest in absolute value non-subnormal value representable by the given
-floating-point DataType `T`.
-"""
-realmin(x::T) where {T<:AbstractFloat} = realmin(T)
-
-"""
-    realmax(T)
-
-The highest finite value representable by the given floating-point DataType `T`.
+Return the smallest positive normal number representable by the floating-point
+type `T`.
 
 # Examples
 ```jldoctest
-julia> realmax(Float16)
-Float16(6.55e4)
+julia> floatmin(Float16)
+Float16(6.104e-5)
 
-julia> realmax(Float32)
-3.4028235f38
+julia> floatmin(Float32)
+1.1754944f-38
+
+julia> floatmin()
+2.2250738585072014e-308
 ```
 """
-realmax(x::T) where {T<:AbstractFloat} = realmax(T)
+floatmin(x::T) where {T<:AbstractFloat} = floatmin(T)
 
-realmin() = realmin(Float64)
-realmax() = realmax(Float64)
+"""
+    floatmax(T = Float64)
+
+Return the largest finite number representable by the floating-point type `T`.
+
+# Examples
+```jldoctest
+julia> floatmax(Float16)
+Float16(6.55e4)
+
+julia> floatmax(Float32)
+3.4028235f38
+
+julia> floatmax()
+1.7976931348623157e308
+```
+"""
+floatmax(x::T) where {T<:AbstractFloat} = floatmax(T)
+
+floatmin() = floatmin(Float64)
+floatmax() = floatmax(Float64)
 
 """
     eps(::Type{T}) where T<:AbstractFloat
@@ -765,6 +800,7 @@ default). This is defined as the gap between 1 and the next largest value repres
 `typeof(one(T))`, and is equivalent to `eps(one(T))`.  (Since `eps(T)` is a
 bound on the *relative error* of `T`, it is a "dimensionless" quantity like [`one`](@ref).)
 
+# Examples
 ```jldoctest
 julia> eps()
 2.220446049250313e-16
@@ -802,6 +838,7 @@ is the nearest floating point number to ``y``, then
 |y-x| \\leq \\operatorname{eps}(x)/2.
 ```
 
+# Examples
 ```jldoctest
 julia> eps(1.0)
 2.220446049250313e-16
@@ -826,8 +863,7 @@ eps(::AbstractFloat)
 
 
 ## byte order swaps for arbitrary-endianness serialization/deserialization ##
-bswap(x::Float32) = bswap_int(x)
-bswap(x::Float64) = bswap_int(x)
+bswap(x::IEEEFloat) = bswap_int(x)
 
 # bit patterns
 reinterpret(::Type{Unsigned}, x::Float64) = reinterpret(UInt64, x)
@@ -852,6 +888,16 @@ exponent_mask(::Type{Float16}) =    0x7c00
 exponent_one(::Type{Float16}) =     0x3c00
 exponent_half(::Type{Float16}) =    0x3800
 significand_mask(::Type{Float16}) = 0x03ff
+
+for T in (Float16, Float32, Float64)
+    @eval significand_bits(::Type{$T}) = $(trailing_ones(significand_mask(T)))
+    @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - significand_bits(T) - 1)
+    @eval exponent_bias(::Type{$T}) = $(Int(exponent_one(T) >> significand_bits(T)))
+    # maximum float exponent
+    @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T))
+    # maximum float exponent without bias
+    @eval exponent_raw_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)))
+end
 
 # integer size of float
 uinttype(::Type{Float64}) = UInt64

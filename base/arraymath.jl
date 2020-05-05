@@ -27,7 +27,7 @@ julia> A
 conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
 
 for f in (:-, :conj, :real, :imag)
-    @eval ($f)(A::AbstractArray) = broadcast($f, A)
+    @eval ($f)(A::AbstractArray) = broadcast_preserving_zero_d($f, A)
 end
 
 
@@ -36,7 +36,7 @@ end
 for f in (:+, :-)
     @eval function ($f)(A::AbstractArray, B::AbstractArray)
         promote_shape(A, B) # check size compatibility
-        broadcast($f, A, B)
+        broadcast_preserving_zero_d($f, A, B)
     end
 end
 
@@ -44,15 +44,15 @@ function +(A::Array, Bs::Array...)
     for B in Bs
         promote_shape(A, B) # check size compatibility
     end
-    broadcast(+, A, Bs...)
+    broadcast_preserving_zero_d(+, A, Bs...)
 end
 
 for f in (:/, :\, :*)
-    if f != :/
-        @eval ($f)(A::Number, B::AbstractArray) = broadcast($f, A, B)
+    if f !== :/
+        @eval ($f)(A::Number, B::AbstractArray) = broadcast_preserving_zero_d($f, A, B)
     end
-    if f != :\
-        @eval ($f)(A::AbstractArray, B::Number) = broadcast($f, A, B)
+    if f !== :\
+        @eval ($f)(A::AbstractArray, B::Number) = broadcast_preserving_zero_d($f, A, B)
     end
 end
 
@@ -94,7 +94,7 @@ function reverse(A::Array{T}; dims::Integer) where T
             end
         end
     else
-        if isbitstype(T) && M>200
+        if allocatedinline(T) && M>200
             for i = 1:sd
                 ri = sd+1-i
                 for j=0:stride:(N-stride)
@@ -204,8 +204,8 @@ end
 """
     rotl90(A, k)
 
-Rotate matrix `A` left 90 degrees an integer `k` number of times.
-If `k` is zero or a multiple of four, this is equivalent to a `copy`.
+Left-rotate matrix `A` 90 degrees counterclockwise an integer `k` number of times.
+If `k` is a multiple of four (including zero), this is equivalent to a `copy`.
 
 # Examples
 ```jldoctest
@@ -244,8 +244,8 @@ end
 """
     rotr90(A, k)
 
-Rotate matrix `A` right 90 degrees an integer `k` number of times. If `k` is zero or a
-multiple of four, this is equivalent to a `copy`.
+Right-rotate matrix `A` 90 degrees clockwise an integer `k` number of times.
+If `k` is a multiple of four (including zero), this is equivalent to a `copy`.
 
 # Examples
 ```jldoctest

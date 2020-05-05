@@ -1,9 +1,11 @@
-"""
-    replace_ref_end!(ex)
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-Recursively replace occurrences of the symbol :end in a "ref" expression (i.e. A[...]) `ex`
-with the appropriate function calls (`lastindex` or `size`). Replacement uses
-the closest enclosing ref, so
+"""
+    replace_ref_begin_end!(ex)
+
+Recursively replace occurrences of the symbols `:begin` and `:end` in a "ref" expression
+(i.e. `A[...]`) `ex` with the appropriate function calls (`firstindex` or `lastindex`).
+Replacement uses the closest enclosing ref, so
 
     A[B[end]]
 
@@ -12,16 +14,21 @@ should transform to
     A[B[lastindex(B)]]
 
 """
-replace_ref_end!(ex) = replace_ref_end_!(ex, nothing)[1]
-# replace_ref_end_!(ex,withex) returns (new ex, whether withex was used)
-function replace_ref_end_!(ex, withex)
+replace_ref_begin_end!(ex) = replace_ref_begin_end_!(ex, nothing)[1]
+# replace_ref_begin_end_!(ex,withex) returns (new ex, whether withex was used)
+function replace_ref_begin_end_!(ex, withex)
     used_withex = false
-    if isa(ex,Symbol) && ex == :end
-        withex === nothing && error("Invalid use of end")
-        return withex, true
+    if isa(ex,Symbol)
+        if ex === :begin
+            withex === nothing && error("Invalid use of begin")
+            return withex[1], true
+        elseif ex === :end
+            withex === nothing && error("Invalid use of end")
+            return withex[2], true
+        end
     elseif isa(ex,Expr)
-        if ex.head == :ref
-            ex.args[1], used_withex = replace_ref_end_!(ex.args[1],withex)
+        if ex.head === :ref
+            ex.args[1], used_withex = replace_ref_begin_end_!(ex.args[1], withex)
             S = isa(ex.args[1],Symbol) ? ex.args[1]::Symbol : gensym(:S) # temp var to cache ex.args[1] if needed
             used_S = false # whether we actually need S
             # new :ref, so redefine withex
@@ -30,15 +37,15 @@ function replace_ref_end_!(ex, withex)
                 return ex, used_withex
             elseif nargs == 1
                 # replace with lastindex(S)
-                ex.args[2], used_S = replace_ref_end_!(ex.args[2],:($lastindex($S)))
+                ex.args[2], used_S = replace_ref_begin_end_!(ex.args[2], (:($firstindex($S)),:($lastindex($S))))
             else
                 n = 1
                 J = lastindex(ex.args)
                 for j = 2:J
-                    exj, used = replace_ref_end_!(ex.args[j],:($lastindex($S,$n)))
+                    exj, used = replace_ref_begin_end_!(ex.args[j], (:($firstindex($S)),:($lastindex($S,$n))))
                     used_S |= used
                     ex.args[j] = exj
-                    if isa(exj,Expr) && exj.head == :...
+                    if isa(exj,Expr) && exj.head === :...
                         # splatted object
                         exjs = exj.args[1]
                         n = :($n + length($exjs))
@@ -59,7 +66,7 @@ function replace_ref_end_!(ex, withex)
         else
             # recursive search
             for i = eachindex(ex.args)
-                ex.args[i], used = replace_ref_end_!(ex.args[i],withex)
+                ex.args[i], used = replace_ref_begin_end_!(ex.args[i], withex)
                 used_withex |= used
             end
         end
@@ -75,6 +82,11 @@ reference expression (e.g. `@view A[1,2:end]`), and should *not* be used as the 
 an assignment (e.g. `@view(A[1,2:end]) = ...`).  See also [`@views`](@ref)
 to switch an entire block of code to use views for slicing.
 
+!!! compat "Julia 1.5"
+    Using `begin` in an indexing expression to refer to the first index requires at least
+    Julia 1.5.
+
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -99,7 +111,7 @@ julia> A
 """
 macro view(ex)
     if Meta.isexpr(ex, :ref)
-        ex = replace_ref_end!(ex)
+        ex = replace_ref_begin_end!(ex)
         if Meta.isexpr(ex, :ref)
             ex = Expr(:call, view, ex.args...)
         else # ex replaced by let ...; foo[...]; end
@@ -126,7 +138,7 @@ end
 # _views implements the transformation for the @views macro.
 # @views calls esc(_views(...)) to work around #20241,
 # so any function calls we insert (to maybeview, or to
-# lastindex in replace_ref_end!) must be interpolated
+# firstindex and lastindex in replace_ref_begin_end!) must be interpolated
 # as values rather than as symbols to ensure that they are called
 # from Base rather than from the caller's scope.
 _views(x) = x
@@ -138,7 +150,7 @@ function _views(ex::Expr)
         Expr(ex.head, Meta.isexpr(lhs, :ref) ?
                       Expr(:ref, _views.(lhs.args)...) : _views(lhs),
              _views(ex.args[2]))
-    elseif ex.head == :ref
+    elseif ex.head === :ref
         Expr(:call, maybeview, _views.(ex.args)...)
     else
         h = string(ex.head)
@@ -183,13 +195,17 @@ end
 Convert every array-slicing operation in the given expression
 (which may be a `begin`/`end` block, loop, function, etc.)
 to return a view. Scalar indices, non-array types, and
-explicit `getindex` calls (as opposed to `array[...]`) are
+explicit [`getindex`](@ref) calls (as opposed to `array[...]`) are
 unaffected.
 
 !!! note
     The `@views` macro only affects `array[...]` expressions
     that appear explicitly in the given `expression`, not array slicing that
     occurs in functions called by that code.
+
+!!! compat "Julia 1.5"
+    Using `begin` in an indexing expression to refer to the first index requires at least
+    Julia 1.5.
 
 # Examples
 ```jldoctest
@@ -208,5 +224,5 @@ julia> A
 ```
 """
 macro views(x)
-    esc(_views(replace_ref_end!(x)))
+    esc(_views(replace_ref_begin_end!(x)))
 end

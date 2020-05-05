@@ -3,5 +3,10 @@ uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 
 [deps]
 Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
-OldPkg = "fe1c5a76-5840-53d2-82f9-288dd83ce2ce"
-LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[targets]
+test = ["Test", "Random"]

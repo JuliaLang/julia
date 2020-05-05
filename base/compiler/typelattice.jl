@@ -4,7 +4,6 @@
 # structs/constants #
 #####################
 
-
 # The type of a value might be constant
 struct Const
     val
@@ -71,6 +70,11 @@ struct StateUpdate
     state::VarTable
 end
 
+struct PartialStruct
+    typ
+    fields::Vector{Any} # elements are other type lattice members
+end
+
 struct NotFound end
 
 const NOT_FOUND = NotFound()
@@ -99,7 +103,7 @@ function maybe_extract_const_bool(c::Conditional)
     (c.elsetype === Bottom && !(c.vtype === Bottom)) && return true
     nothing
 end
-maybe_extract_const_bool(c) = nothing
+maybe_extract_const_bool(@nospecialize c) = nothing
 
 function ⊑(@nospecialize(a), @nospecialize(b))
     if isa(a, MaybeUndef) && !isa(b, MaybeUndef)
@@ -119,24 +123,78 @@ function ⊑(@nospecialize(a), @nospecialize(b))
         end
         a = Bool
     elseif isa(b, Conditional)
-        return a === Bottom
+        return false
+    end
+    if isa(a, PartialStruct)
+        if isa(b, PartialStruct)
+            if !(length(a.fields) == length(b.fields) && a.typ <: b.typ)
+                return false
+            end
+            for i in 1:length(b.fields)
+                # XXX: let's handle varargs later
+                ⊑(a.fields[i], b.fields[i]) || return false
+            end
+            return true
+        end
+        return isa(b, Type) && a.typ <: b
+    elseif isa(b, PartialStruct)
+        if isa(a, Const)
+            nfields(a.val) == length(b.fields) || return false
+            widenconst(b).name === widenconst(a).name || return false
+            # We can skip the subtype check if b is a Tuple, since in that
+            # case, the ⊑ of the elements is sufficient.
+            if b.typ.name !== Tuple.name && !(widenconst(a) <: widenconst(b))
+                return false
+            end
+            for i in 1:nfields(a.val)
+                # XXX: let's handle varargs later
+                isdefined(a.val, i) || return false
+                ⊑(Const(getfield(a.val, i)), b.fields[i]) || return false
+            end
+            return true
+        end
+        return false
     end
     if isa(a, Const)
         if isa(b, Const)
             return a.val === b.val
         end
-        return isa(a.val, widenconst(b))
+        # TODO: `b` could potentially be a `PartialTypeVar` here, in which case we might be
+        # able to return `true` in more cases; in the meantime, just returning this is the
+        # most conservative option.
+        return isa(b, Type) && isa(a.val, b)
     elseif isa(b, Const)
         if isa(a, DataType) && isdefined(a, :instance)
             return a.instance === b.val
         end
-        return a === Bottom
+        return false
+    elseif isa(a, PartialTypeVar) && b === TypeVar
+        return true
     elseif !(isa(a, Type) || isa(a, TypeVar)) ||
            !(isa(b, Type) || isa(b, TypeVar))
         return a === b
     else
         return a <: b
     end
+end
+
+# Check if two lattice elements are partial order equivalent. This is basically
+# `a ⊑ b && b ⊑ a` but with extra performance optimizations.
+function is_lattice_equal(@nospecialize(a), @nospecialize(b))
+    a === b && return true
+    if isa(a, PartialStruct)
+        isa(b, PartialStruct) || return false
+        length(a.fields) == length(b.fields) || return false
+        widenconst(a) == widenconst(b) || return false
+        for i in 1:length(a.fields)
+            is_lattice_equal(a.fields[i], b.fields[i]) || return false
+        end
+        return true
+    end
+    isa(b, PartialStruct) && return false
+    a isa Const && return false
+    b isa Const && return false
+    return a ⊑ b && b ⊑ a
 end
 
 widenconst(c::Conditional) = Bool
@@ -152,6 +210,7 @@ function widenconst(c::Const)
 end
 widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(c::PartialTypeVar) = TypeVar
+widenconst(t::PartialStruct) = t.typ
 widenconst(@nospecialize(t)) = t
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
@@ -168,6 +227,7 @@ end
 @inline tchanged(@nospecialize(n), @nospecialize(o)) = o === NOT_FOUND || (n !== NOT_FOUND && !(n ⊑ o))
 @inline schanged(@nospecialize(n), @nospecialize(o)) = (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !issubstate(n, o)))
 
+widenconditional(@nospecialize typ) = typ
 function widenconditional(typ::Conditional)
     if typ.vtype == Union{}
         return Const(false)
@@ -178,7 +238,7 @@ function widenconditional(typ::Conditional)
     end
 end
 
-function stupdate!(state::Tuple{}, changes::StateUpdate)
+function stupdate!(state::Nothing, changes::StateUpdate)
     newst = copy(changes.state)
     if isa(changes.var, Slot)
         changeid = slot_id(changes.var::Slot)
@@ -238,9 +298,9 @@ function stupdate!(state::VarTable, changes::VarTable)
     return newstate
 end
 
-stupdate!(state::Tuple{}, changes::VarTable) = copy(changes)
+stupdate!(state::Nothing, changes::VarTable) = copy(changes)
 
-stupdate!(state::Tuple{}, changes::Tuple{}) = false
+stupdate!(state::Nothing, changes::Nothing) = false
 
 function stupdate1!(state::VarTable, change::StateUpdate)
     if !isa(change.var, Slot)

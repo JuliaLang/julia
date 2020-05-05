@@ -30,9 +30,9 @@
         @test read(file, Char) == 'n'
 
         # test it correctly handles unicode
-        for (byte,char) in zip(1:4, ('@','߷','࿊','𐋺'))
+        for (byte, char) in zip(1:4, ('@','߷','࿊','𐋺'))
             append_to_file("abcdef$char")
-            @test Base.codelen(char) == byte
+            @test ncodeunits(char) == byte
             @test !eof(skipchars(isletter, file))
             @test read(file, Char) == char
         end
@@ -70,4 +70,42 @@ end
     end
 end
 
+@testset "issue #27951" begin
+    a = UInt8[1 3; 2 4]
+    s = view(a, [1,2], :)
+    mktemp() do path, io
+        write(io, s)
+        seek(io, 0)
+        b = Vector{UInt8}(undef, 4)
+        @test readbytes!(io, b) == 4
+        @test b == 0x01:0x04
+    end
+end
+
 @test Base.open_flags(read=false, write=true, append=false) == (read=false, write=true, create=true, truncate=true, append=false)
+
+@testset "issue #30978" begin
+    mktemp() do path, io
+        x = rand(UInt8, 100)
+        write(path, x)
+        # Should not throw OutOfMemoryError
+        y = open(f -> read(f, typemax(Int)), path)
+        @test x == y
+
+        # Should resize y to right length
+        y = zeros(UInt8, 99)
+        open(f -> readbytes!(f, y, 101, all=true), path)
+        @test x == y
+        y = zeros(UInt8, 99)
+        open(f -> readbytes!(f, y, 101, all=false), path)
+        @test x == y
+
+        # Should never shrink y below original size
+        y = zeros(UInt8, 101)
+        open(f -> readbytes!(f, y, 102, all=true), path)
+        @test y == [x; 0]
+        y = zeros(UInt8, 101)
+        open(f -> readbytes!(f, y, 102, all=false), path)
+        @test y == [x; 0]
+    end
+end

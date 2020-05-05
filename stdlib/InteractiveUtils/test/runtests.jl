@@ -23,6 +23,12 @@ struct B20086{T,N} <: A20086{T,N} end
 @test subtypes(A20086{T,3} where T) == [B20086{T,3} where T]
 @test subtypes(A20086{Int,3}) == [B20086{Int,3}]
 
+# supertypes
+@test supertypes(B20086) == (B20086, A20086, Any)
+@test supertypes(B20086{Int}) == (B20086{Int}, A20086{Int}, Any)
+@test supertypes(B20086{Int,2}) == (B20086{Int,2}, A20086{Int,2}, Any)
+@test supertypes(Any) == (Any,)
+
 # code_warntype
 module WarnType
 using Test, Random, InteractiveUtils
@@ -83,6 +89,10 @@ Base.getproperty(t::T1234321, ::Symbol) = "foo"
 @test (@code_typed T1234321(1).f).second == String
 Base.setproperty!(t::T1234321, ::Symbol, ::Symbol) = "foo"
 @test (@code_typed T1234321(1).f = :foo).second == String
+
+# Make sure `do` block works with `@code_...` macros
+@test (@code_typed map(1:1) do x; x; end).second == Vector{Int}
+@test (@code_typed open(`cat`; read=true) do _; 1; end).second == Int
 
 module ImportIntrinsics15819
 # Make sure changing the lookup path of an intrinsic doesn't break
@@ -175,24 +185,18 @@ end
 # PR #23075
 @testset "versioninfo" begin
     # check that versioninfo(io; verbose=true) doesn't error, produces some output
-    # and doesn't invoke OldPkg.status which will error if JULIA_PKGDIR is set
     mktempdir() do dir
-        withenv("JULIA_PKGDIR" => dir) do
-            buf = PipeBuffer()
-            versioninfo(buf, verbose=true)
-            ver = read(buf, String)
-            @test startswith(ver, "Julia Version $VERSION")
-            @test occursin("Environment:", ver)
-            @test occursin("Package Status:", ver)
-            @test occursin("no packages installed", ver)
-            @test isempty(readdir(dir))
-        end
+        buf = PipeBuffer()
+        versioninfo(buf, verbose=true)
+        ver = read(buf, String)
+        @test startswith(ver, "Julia Version $VERSION")
+        @test occursin("Environment:", ver)
     end
     let exename = `$(Base.julia_cmd()) --startup-file=no`
         @test !occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
                                                     String[]), String))
         @test  occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
-                                                    String["JULIA_CPU_CORES=1"]), String))
+                                                    String["JULIA_CPU_THREADS=1"]), String))
     end
 end
 
@@ -202,16 +206,25 @@ const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
 
 @test_throws ErrorException("\"this_is_not_defined\" is not defined in module $curmod_str") @which this_is_not_defined
 # issue #13264
-@test isa((@which vcat(1...)), Method)
+@test (@which vcat(1...)).name == :vcat
+
+# PR #28122, issue #25474
+@test (@which [1][1]).name === :getindex
+@test (@which [1][1] = 2).name === :setindex!
+@test (@which [1]).name === :vect
+@test (@which [1 2]).name === :hcat
+@test (@which [1; 2]).name === :vcat
+@test (@which Int[1 2]).name === :typed_hcat
+@test (@which Int[1; 2]).name === :typed_vcat
+@test (@which [1 2;3 4]).name === :hvcat
+@test (@which Int[1 2;3 4]).name === :typed_hvcat
 
 # issue #13464
-let t13464 = "hey there sailor"
-    try
-        @which t13464[1,1] = (1.0,true)
-        error("unexpected")
-    catch err13464
-        @test startswith(err13464.msg, "expression is not a function call, or is too complex")
-    end
+try
+    @which x = 1
+    error("unexpected")
+catch err13464
+    @test startswith(err13464.msg, "expression is not a function call, or is too complex")
 end
 
 module MacroTest
@@ -249,12 +262,75 @@ end
 @test counter18434 == 2
 
 let _true = Ref(true), f, g, h
-    @noinline f() = ccall((:time, "error_library_doesnt_exist\0"), Cvoid, ()) # some expression that throws an error in codegen
+    @noinline f() = ccall((:time, "error_library_doesnt_exist\0"), Cvoid, ()) # should throw error during runtime
     @noinline g() = _true[] ? 0 : h()
     @noinline h() = (g(); f())
-    @test_throws ErrorException @code_native h() # due to a failure to compile f()
     @test g() == 0
+    @test_throws ErrorException h()
 end
+
+# manually generate a broken function, which will break codegen
+# and make sure Julia doesn't crash
+@eval @noinline f_broken_code() = 0
+let m = which(f_broken_code, ())
+   let src = Base.uncompressed_ast(m)
+       src.code = Any[
+           Expr(:meta, :noinline)
+           Expr(:return, Expr(:invalid))
+       ]
+       m.source = src
+   end
+end
+_true = true
+# and show that we can still work around it
+@noinline g_broken_code() = _true ? 0 : h_broken_code()
+@noinline h_broken_code() = (g_broken_code(); f_broken_code())
+let err = tempname(),
+    old_stderr = stderr,
+    new_stderr = open(err, "w")
+    try
+        redirect_stderr(new_stderr)
+        println(new_stderr, "start")
+        flush(new_stderr)
+        @eval @test occursin("h_broken_code", sprint(code_native, h_broken_code, ()))
+        Libc.flush_cstdio()
+        println(new_stderr, "end")
+        flush(new_stderr)
+        @eval @test g_broken_code() == 0
+    finally
+        redirect_stderr(old_stderr)
+        close(new_stderr)
+        let errstr = read(err, String)
+            @test startswith(errstr, """start
+                Internal error: encountered unexpected error during compilation of f_broken_code:
+                ErrorException(\"unsupported or misplaced expression \"invalid\" in function f_broken_code\")
+                """) || errstr
+            @test endswith(errstr, "\nend\n") || errstr
+        end
+        rm(err)
+    end
+end
+
+# Issue #33163
+A33163(x; y) = x + y
+B33163(x) = x
+@test (@code_typed A33163(1, y=2))[1].inferred
+@test !(@code_typed optimize=false A33163(1, y=2))[1].inferred
+@test !(@code_typed optimize=false B33163(1))[1].inferred
+
+@test_throws MethodError (@code_lowered wrongkeyword=true 3 + 4)
+
+# Issue #14637
+@test (@which Base.Base.Base.nothing) == Core
+@test_throws ErrorException (@functionloc Base.nothing)
+@test (@code_typed (3//4).num)[2] == Int
+
+# Issue #28615
+@test_throws ErrorException (@which [1, 2] .+ [3, 4])
+@test (@code_typed optimize=true max.([1,7], UInt.([4])))[2] == Vector{UInt}
+@test (@code_typed Ref.([1,2])[1].x)[2] == Int
+@test (@code_typed max.(Ref(true).x))[2] == Bool
+@test !isempty(@code_typed optimize=false max.(Ref.([5, 6])...))
 
 module ReflectionTest
 using Test, Random, InteractiveUtils
@@ -279,8 +355,8 @@ function test_code_reflection(freflect, f, types, tester)
 end
 
 function test_code_reflections(tester, freflect)
-    test_code_reflection(freflect, contains,
-                         Tuple{AbstractString, Regex}, tester) # abstract type
+    test_code_reflection(freflect, occursin,
+                         Tuple{Regex, AbstractString}, tester) # abstract type
     test_code_reflection(freflect, +, Tuple{Int, Int}, tester) # leaftype signature
     test_code_reflection(freflect, +,
                          Tuple{Array{Float32}, Array{Float32}}, tester) # incomplete types
@@ -306,29 +382,35 @@ ix86 = r"i[356]86"
 
 if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
     function linear_foo()
-        x = 4
-        y = 5
+        return 5
     end
 
     rgx = r"%"
     buf = IOBuffer()
-    output=""
+    output = ""
     #test that the string output is at&t syntax by checking for occurrences of '%'s
-    code_native(buf,linear_foo,(), syntax = :att)
-    output=String(take!(buf))
+    code_native(buf, linear_foo, (), syntax = :att, debuginfo = :none)
+    output = String(take!(buf))
 
     @test occursin(rgx, output)
 
     #test that the code output is intel syntax by checking it has no occurrences of '%'
-    code_native(buf,linear_foo,(), syntax = :intel)
-    output=String(take!(buf))
+    code_native(buf, linear_foo, (), syntax = :intel, debuginfo = :none)
+    output = String(take!(buf))
 
     @test !occursin(rgx, output)
 
-    code_native(buf,linear_foo,())
-    output=String(take!(buf))
+    code_native(buf, linear_foo, ())
+    output = String(take!(buf))
 
     @test occursin(rgx, output)
+end
+
+@testset "error message" begin
+    err = ErrorException("expression is not a function call or symbol")
+    @test_throws err @code_lowered ""
+    @test_throws err @code_lowered 1
+    @test_throws err @code_lowered 1.0
 end
 
 using InteractiveUtils: editor
@@ -336,7 +418,7 @@ using InteractiveUtils: editor
 # Issue #13032
 withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
     # Make sure editor doesn't error when no ENV editor is set.
-    @test isa(editor(), Array)
+    @test isa(editor(), Cmd)
 
     # Invalid editor
     ENV["JULIA_EDITOR"] = ""
@@ -347,27 +429,72 @@ withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
 
     # Editor on the path.
     ENV["JULIA_EDITOR"] = "vim"
-    @test editor() == ["vim"]
+    @test editor() == `vim`
 
     # Absolute path to editor.
     ENV["JULIA_EDITOR"] = "/usr/bin/vim"
-    @test editor() == ["/usr/bin/vim"]
+    @test editor() == `/usr/bin/vim`
 
     # Editor on the path using arguments.
     ENV["JULIA_EDITOR"] = "subl -w"
-    @test editor() == ["subl", "-w"]
+    @test editor() == `subl -w`
 
     # Absolute path to editor with spaces.
     ENV["JULIA_EDITOR"] = "/Applications/Sublime\\ Text.app/Contents/SharedSupport/bin/subl"
-    @test editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl"]
+    @test editor() == `'/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl'`
 
     # Paths with spaces and arguments (#13032).
     ENV["JULIA_EDITOR"] = "/Applications/Sublime\\ Text.app/Contents/SharedSupport/bin/subl -w"
-    @test editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
+    @test editor() == `'/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl' -w`
 
     ENV["JULIA_EDITOR"] = "'/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl' -w"
-    @test editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
+    @test editor() == `'/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl' -w`
 
     ENV["JULIA_EDITOR"] = "\"/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl\" -w"
-    @test editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
+    @test editor() == `'/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl' -w`
+end
+
+# clipboard functionality
+if Sys.isapple()
+    let str = "abc\0def"
+        clipboard(str)
+        @test clipboard() == str
+    end
+end
+if Sys.iswindows() || Sys.isapple()
+    for str in ("Hello, world.", "∀ x ∃ y", "")
+        clipboard(str)
+        @test clipboard() == str
+    end
+end
+@static if Sys.iswindows()
+    @test_broken false # CI has trouble with this test
+    ## concurrent access error
+    #hDesktop = ccall((:GetDesktopWindow, "user32"), stdcall, Ptr{Cvoid}, ())
+    #ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), hDesktop) == 0 && Base.windowserror("OpenClipboard")
+    #try
+    #    @test_throws Base.SystemError("OpenClipboard", 0, Base.WindowsErrorInfo(0x00000005, nothing)) clipboard() # ACCESS_DENIED
+    #finally
+    #    ccall((:CloseClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror("CloseClipboard")
+    #end
+    # empty clipboard failure
+    ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), C_NULL) == 0 && Base.windowserror("OpenClipboard")
+    try
+        ccall((:EmptyClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror("EmptyClipboard")
+    finally
+        ccall((:CloseClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror("CloseClipboard")
+    end
+    @test clipboard() == ""
+    # nul error (unsupported data)
+    @test_throws ArgumentError("Windows clipboard strings cannot contain NUL character") clipboard("abc\0")
+end
+
+# buildbot path updating
+file, ln = functionloc(versioninfo, Tuple{})
+@test isfile(file)
+
+@testset "Issue #34434" begin
+    io = IOBuffer()
+    code_native(io, eltype, Tuple{Int})
+    @test occursin("eltype", String(take!(io)))
 end

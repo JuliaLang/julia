@@ -102,17 +102,26 @@ end
 # math functions
 
 @testset "real arithmetic" begin
-    for T in (Float32, Float64, BigFloat)
+    for T in (Float16, Float32, Float64, BigFloat)
         half = 1/convert(T,2)
         third = 1/convert(T,3)
 
         for f in (:+, :-, :abs, :abs2, :conj, :inv, :sign,
                   :acos, :asin, :asinh, :atan, :atanh, :cbrt, :cos, :cosh,
-                  :exp10, :exp2, :exp, :expm1, :lgamma, :log10, :log1p,
-                  :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh)
+                  :exp10, :exp2, :exp, :log10, :log1p,
+                  :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh,
+                  :min, :max)
             @eval begin
                 @test @fastmath($f($half)) ≈ $f($half)
                 @test @fastmath($f($third)) ≈ $f($third)
+            end
+        end
+        if T != Float16
+            for f in (:expm1,)
+                @eval begin
+                    @test @fastmath($f($half)) ≈ $f($half)
+                    @test @fastmath($f($third)) ≈ $f($third)
+                end
             end
         end
         for f in (:acosh,)
@@ -121,13 +130,27 @@ end
                 @test @fastmath($f(1+$third)) ≈ $f(1+$third)
             end
         end
+        for f in (:sincos,)
+            @eval begin
+                @test all(@fastmath($f($half)) .≈ $f($half))
+                @test all(@fastmath($f($third)) .≈ $f($third))
+            end
+        end
         for f in (:+, :-, :*, :/, :%, :(==), :!=, :<, :<=, :>, :>=, :^,
-                  :atan2, :hypot, :max, :min, :log)
+                  :atan, :hypot, :max, :min, :log)
             @eval begin
                 @test @fastmath($f($half, $third)) ≈ $f($half, $third)
                 @test @fastmath($f($third, $half)) ≈ $f($third, $half)
             end
         end
+
+        # issue 31795
+        for f in (:min, :max)
+            @eval begin
+                @test @fastmath($f($half, $third, 1+$half)) ≈ $f($half, $third, 1+$half)
+            end
+        end
+
         for f in (:minmax,)
             @eval begin
                 @test @fastmath($f($half, $third)[1]) ≈ $f($half, $third)[1]
@@ -211,4 +234,21 @@ end
 
 @testset "literal powers" begin
     @test @fastmath(2^-2) == @fastmath(2.0^-2) == 0.25
+end
+
+@testset "sincos fall-backs" begin
+    struct FloatWrapper
+        inner::Float64
+    end
+    Base.sin(outer::FloatWrapper) = sin(outer.inner)
+    Base.cos(outer::FloatWrapper) = cos(outer.inner)
+    for zilch in (FloatWrapper(0.0), 0, 0 + 0 * im)
+        @test (@fastmath sincos(zilch)) == (0, 1)
+    end
+end
+
+@testset "non-numeric fallbacks" begin
+    @test (@fastmath :(:sin)) == :(:sin)
+    @test (@fastmath "a" * "b") == "ab"
+    @test (@fastmath "a" ^ 2) == "aa"
 end

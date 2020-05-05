@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module TestStructuredBroadcast
 using Test, LinearAlgebra
 
@@ -12,7 +14,8 @@ using Test, LinearAlgebra
     T = Tridiagonal(rand(N - 1), rand(N), rand(N - 1))
     U = UpperTriangular(rand(N,N))
     L = LowerTriangular(rand(N,N))
-    structuredarrays = (D, B, T, U, L)
+    M = Matrix(rand(N,N))
+    structuredarrays = (D, B, T, U, L, M)
     fstructuredarrays = map(Array, structuredarrays)
     for (X, fX) in zip(structuredarrays, fstructuredarrays)
         @test (Q = broadcast(sin, X); typeof(Q) == typeof(X) && Q == broadcast(sin, fX))
@@ -25,6 +28,20 @@ using Test, LinearAlgebra
         @test broadcast!(+, Z, fV, fA, X) == broadcast(+, fV, fA, fX)
         @test (Q = broadcast(*, s, fV, fA, X); Q isa Matrix && Q == broadcast(*, s, fV, fA, fX))
         @test broadcast!(*, Z, s, fV, fA, X) == broadcast(*, s, fV, fA, fX)
+
+        @test X .* 2.0 == X .* (2.0,) == fX .* 2.0
+        @test X .* 2.0 isa typeof(X)
+        @test X .* (2.0,) isa typeof(X)
+        @test isequal(X .* Inf, fX .* Inf)
+
+        two = 2
+        @test X .^ 2 ==  X .^ (2,) == fX .^ 2 == X .^ two
+        @test X .^ 2 isa typeof(X)
+        @test X .^ (2,) isa typeof(X)
+        @test X .^ two isa typeof(X)
+        @test X .^ 0 == fX .^ 0
+        @test X .^ -1 == fX .^ -1
+
         for (Y, fY) in zip(structuredarrays, fstructuredarrays)
             @test broadcast(+, X, Y) == broadcast(+, fX, fY)
             @test broadcast!(+, Z, X, Y) == broadcast(+, fX, fY)
@@ -49,14 +66,40 @@ end
     A = rand(N, N)
     sA = A + copy(A')
     D = Diagonal(rand(N))
-    B = Bidiagonal(rand(N), rand(N - 1), :U)
+    Bu = Bidiagonal(rand(N), rand(N - 1), :U)
+    Bl = Bidiagonal(rand(N), rand(N - 1), :L)
     T = Tridiagonal(rand(N - 1), rand(N), rand(N - 1))
+    ◣ = LowerTriangular(rand(N,N))
+    ◥ = UpperTriangular(rand(N,N))
+    M = Matrix(rand(N,N))
+
     @test broadcast!(sin, copy(D), D) == Diagonal(sin.(D))
-    @test broadcast!(sin, copy(B), B) == Bidiagonal(sin.(B), :U)
+    @test broadcast!(sin, copy(Bu), Bu) == Bidiagonal(sin.(Bu), :U)
+    @test broadcast!(sin, copy(Bl), Bl) == Bidiagonal(sin.(Bl), :L)
     @test broadcast!(sin, copy(T), T) == Tridiagonal(sin.(T))
+    @test broadcast!(sin, copy(◣), ◣) == LowerTriangular(sin.(◣))
+    @test broadcast!(sin, copy(◥), ◥) == UpperTriangular(sin.(◥))
+    @test broadcast!(sin, copy(M), M) == Matrix(sin.(M))
     @test broadcast!(*, copy(D), D, A) == Diagonal(broadcast(*, D, A))
-    @test broadcast!(*, copy(B), B, A) == Bidiagonal(broadcast(*, B, A), :U)
+    @test broadcast!(*, copy(Bu), Bu, A) == Bidiagonal(broadcast(*, Bu, A), :U)
+    @test broadcast!(*, copy(Bl), Bl, A) == Bidiagonal(broadcast(*, Bl, A), :L)
     @test broadcast!(*, copy(T), T, A) == Tridiagonal(broadcast(*, T, A))
+    @test broadcast!(*, copy(◣), ◣, A) == LowerTriangular(broadcast(*, ◣, A))
+    @test broadcast!(*, copy(◥), ◥, A) == UpperTriangular(broadcast(*, ◥, A))
+    @test broadcast!(*, copy(M), M, A) == Matrix(broadcast(*, M, A))
+
+    @test_throws ArgumentError broadcast!(cos, copy(D), D) == Diagonal(sin.(D))
+    @test_throws ArgumentError broadcast!(cos, copy(Bu), Bu) == Bidiagonal(sin.(Bu), :U)
+    @test_throws ArgumentError broadcast!(cos, copy(Bl), Bl) == Bidiagonal(sin.(Bl), :L)
+    @test_throws ArgumentError broadcast!(cos, copy(T), T) == Tridiagonal(sin.(T))
+    @test_throws ArgumentError broadcast!(cos, copy(◣), ◣) == LowerTriangular(sin.(◣))
+    @test_throws ArgumentError broadcast!(cos, copy(◥), ◥) == UpperTriangular(sin.(◥))
+    @test_throws ArgumentError broadcast!(+, copy(D), D, A) == Diagonal(broadcast(*, D, A))
+    @test_throws ArgumentError broadcast!(+, copy(Bu), Bu, A) == Bidiagonal(broadcast(*, Bu, A), :U)
+    @test_throws ArgumentError broadcast!(+, copy(Bl), Bl, A) == Bidiagonal(broadcast(*, Bl, A), :L)
+    @test_throws ArgumentError broadcast!(+, copy(T), T, A) == Tridiagonal(broadcast(*, T, A))
+    @test_throws ArgumentError broadcast!(+, copy(◣), ◣, A) == LowerTriangular(broadcast(*, ◣, A))
+    @test_throws ArgumentError broadcast!(+, copy(◥), ◥, A) == UpperTriangular(broadcast(*, ◥, A))
 end
 
 @testset "map[!] over combinations of structured matrices" begin
@@ -68,7 +111,8 @@ end
     T = Tridiagonal(rand(N - 1), rand(N), rand(N - 1))
     U = UpperTriangular(rand(N,N))
     L = LowerTriangular(rand(N,N))
-    structuredarrays = (D, B, T, U, L)
+    M = Matrix(rand(N,N))
+    structuredarrays = (M, D, B, T, U, L)
     fstructuredarrays = map(Array, structuredarrays)
     for (X, fX) in zip(structuredarrays, fstructuredarrays)
         @test (Q = map(sin, X); typeof(Q) == typeof(X) && Q == map(sin, fX))
@@ -98,4 +142,22 @@ end
     end
 end
 
+@testset "Issue #33397" begin
+    N = 5
+    U = UpperTriangular(rand(N, N))
+    L = LowerTriangular(rand(N, N))
+    UnitU = UnitUpperTriangular(rand(N, N))
+    UnitL = UnitLowerTriangular(rand(N, N))
+    D = Diagonal(rand(N))
+    @test U .+ L .+ D == U + L + D
+    @test L .+ U .+ D == L + U + D
+    @test UnitU .+ UnitL .+ D == UnitU + UnitL + D
+    @test UnitL .+ UnitU .+ D == UnitL + UnitU + D
+    @test U .+ UnitL .+ D == U + UnitL + D
+    @test L .+ UnitU .+ D == L + UnitU + D
+    @test L .+ U .+ L .+ U == L + U + L + U
+    @test U .+ L .+ U .+ L == U + L + U + L
+    @test L .+ UnitL .+ UnitU .+ U .+ D == L + UnitL + UnitU + U + D
+    @test L .+ U .+ D .+ D .+ D .+ D == L + U + D + D + D + D
+end
 end

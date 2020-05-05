@@ -5,8 +5,8 @@
 
 Given a function `f` and an iterator `iter`, construct an iterator that yields
 the values of `f` applied to the elements of `iter`.
-The syntax `f(x) for x in iter [if cond(x)::Bool]` is syntax for constructing an instance of this
-type. The `[if cond(x)::Bool]` expression is optional and acts as a "guard", effectively
+The syntax for constructing an instance of this type is `f(x) for x in iter [if cond(x)::Bool] `.
+The `[if cond(x)::Bool]` expression is optional and acts as a "guard", effectively
 filtering out values where the condition is false.
 
 ```jldoctest
@@ -41,9 +41,10 @@ Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(a->T(a...), zip(I1, I2
 
 function iterate(g::Generator, s...)
     @_inline_meta
-    y = iterate(g.iter, s...)::Union{Tuple{Any, Any}, Nothing}
+    y = iterate(g.iter, s...)
     y === nothing && return nothing
-    g.f(y[1]), y[2]
+    y = y::Tuple{Any, Any} # try to give inference some idea of what to expect about the behavior of the next line
+    return (g.f(y[1]), y[2])
 end
 
 length(g::Generator) = length(g.iter)

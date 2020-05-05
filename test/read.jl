@@ -54,9 +54,9 @@ function run_test_server(srv, text)
             try
                 write(sock, text)
             catch e
-                if !(isa(e, Base.UVError) && e.code == Base.UV_EPIPE)
-                    if !(isa(e, Base.UVError) && e.code == Base.UV_ECONNRESET)
-                        rethrow(e)
+                if !(isa(e, Base.IOError) && e.code == Base.UV_EPIPE)
+                    if !(isa(e, Base.IOError) && e.code == Base.UV_ECONNRESET)
+                        rethrow()
                     end
                 end
             finally
@@ -127,11 +127,11 @@ end
 open_streams = []
 function cleanup()
     for s_ in open_streams
-        try close(s_) end
+        close(s_)
     end
     empty!(open_streams)
     for tsk in tasks
-        Base._wait(tsk)
+        wait(tsk)
     end
     empty!(tasks)
 end
@@ -463,7 +463,7 @@ if !Sys.iswindows() && get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") !=
     # msvcrt _wchmod documentation states that all files are readable,
     # so we don't test that it correctly set the umask on windows
     @test_throws SystemError open(f)
-    @test_throws Base.UVError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
+    @test_throws Base.IOError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
 else
     Sys.iswindows() || @warn "File permissions tests skipped due to running tests as root (not recommended)"
     close(open(f))
@@ -504,14 +504,14 @@ end
 @test eof(f1)
 @test eof(f2)
 @test_throws ArgumentError write(f1, '*')
-@test_throws Base.UVError write(f2, '*')
+@test_throws Base.IOError write(f2, '*')
 close(f1)
 close(f2)
 @test eof(f1)
-@test_throws Base.UVError eof(f2)
+@test_throws Base.IOError eof(f2)
 if get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"
     @test_throws SystemError open(f, "r+")
-    @test_throws Base.UVError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
+    @test_throws Base.IOError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
 else
     @warn "File permissions tests skipped due to running tests as root (not recommended)"
 end
@@ -559,12 +559,55 @@ let p = Pipe()
     t = @async read(p)
     @sync begin
         @async write(p, zeros(UInt16, 660_000))
+        yield() # TODO: need to add an Event to the previous line
+        order::UInt16 = 0
         for i = 1:typemax(UInt16)
-            @async write(p, UInt16(i))
+            @async (order += 1; write(p, order); nothing)
         end
+        yield() # TODO: need to add an Event to the previous line
         @async close(p.in)
     end
     s = reinterpret(UInt16, fetch(t))
     @test length(s) == 660_000 + typemax(UInt16)
     @test s[(end - typemax(UInt16)):end] == UInt16.(0:typemax(UInt16))
+end
+
+# issue #26419
+@test Base.return_types(read, (String, Type{String})) == Any[String]
+
+@testset "read! to view" begin
+    x = rand(4, 4)
+    y = rand(10)
+    z = 1:10
+    v = [1.0, 2.0, 3.0, 4.0]
+    io = IOBuffer()
+    write(io, v)
+    flush(io)
+    seekstart(io)
+    read!(io, @view x[:, 3])
+    @test x[:, 3] == v
+    x = rand(3, 3)
+    seekstart(io)
+    read!(io, @view x[1:2, 2:3])
+    @test x[1:2, 2:3][:] == v[:]
+    seekstart(io)
+    read!(io, @view y[4:7])
+    @test y[4:7] == v
+    seekstart(io)
+    @test_throws ErrorException read!(io, @view z[4:6])
+end
+
+# Bulk read from pipe
+let p = Pipe()
+    data = rand(UInt8, Base.SZ_UNBUFFERED_IO + 100)
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
+    t = @async write(p.in, data)
+    @test read(p.out, UInt8) == data[1]
+    data_read = Vector{UInt8}(undef, 10*Base.SZ_UNBUFFERED_IO)
+    nread = readbytes!(p.out, data_read, Base.SZ_UNBUFFERED_IO + 50)
+    @test nread == Base.SZ_UNBUFFERED_IO + 50
+    @test data_read[1:nread] == data[2:nread+1]
+    @test read(p.out, 49) == data[end-48:end]
+    wait(t)
+    close(p)
 end

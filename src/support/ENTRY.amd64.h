@@ -66,7 +66,9 @@ _START_ENTRY
 .scl 2
 .type 32
 .endef
+.seh_proc EXT(CNAME)
 EXT(CNAME):
+.seh_endprologue
 #else
 .code
 CNAME proc

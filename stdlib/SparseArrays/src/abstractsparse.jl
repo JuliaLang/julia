@@ -1,9 +1,35 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    AbstractSparseArray{Tv,Ti,N}
+
+Supertype for `N`-dimensional sparse arrays (or array-like types) with elements
+of type `Tv` and index type `Ti`. [`SparseMatrixCSC`](@ref), [`SparseVector`](@ref)
+and `SuiteSparse.CHOLMOD.Sparse` are subtypes of this.
+"""
 abstract type AbstractSparseArray{Tv,Ti,N} <: AbstractArray{Tv,N} end
 
+"""
+    AbstractSparseVector{Tv,Ti}
+
+Supertype for one-dimensional sparse arrays (or array-like types) with elements
+of type `Tv` and index type `Ti`. Alias for `AbstractSparseArray{Tv,Ti,1}`.
+"""
 const AbstractSparseVector{Tv,Ti} = AbstractSparseArray{Tv,Ti,1}
+"""
+    AbstractSparseMatrix{Tv,Ti}
+
+Supertype for two-dimensional sparse arrays (or array-like types) with elements
+of type `Tv` and index type `Ti`. Alias for `AbstractSparseArray{Tv,Ti,2}`.
+"""
 const AbstractSparseMatrix{Tv,Ti} = AbstractSparseArray{Tv,Ti,2}
+
+"""
+    AbstractSparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
+
+Supertype for matrix with compressed sparse column (CSC).
+"""
+abstract type AbstractSparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti} end
 
 """
     issparse(S)
@@ -26,6 +52,8 @@ false
 """
 issparse(A::AbstractArray) = false
 issparse(S::AbstractSparseArray) = true
+issparse(S::LinearAlgebra.Adjoint{<:Any,<:AbstractSparseArray}) = true
+issparse(S::LinearAlgebra.Transpose{<:Any,<:AbstractSparseArray}) = true
 
 issparse(S::LinearAlgebra.Symmetric{<:Any,<:AbstractSparseMatrix}) = true
 issparse(S::LinearAlgebra.Hermitian{<:Any,<:AbstractSparseMatrix}) = true
@@ -45,21 +73,31 @@ end
 
 # The following two methods should be overloaded by concrete types to avoid
 # allocating the I = findall(...)
-_sparse_findnextnz(v::AbstractSparseArray, i::Integer) = (I = findall(!iszero, v); n = searchsortedfirst(I, i); n<=length(I) ? I[n] : nothing)
-_sparse_findprevnz(v::AbstractSparseArray, i::Integer) = (I = findall(!iszero, v); n = searchsortedlast(I, i);  !iszero(n)   ? I[n] : nothing)
+_sparse_findnextnz(v::AbstractSparseArray, i) = (I = findall(!iszero, v); n = searchsortedfirst(I, i); n<=length(I) ? I[n] : nothing)
+_sparse_findprevnz(v::AbstractSparseArray, i) = (I = findall(!iszero, v); n = searchsortedlast(I, i);  !iszero(n)   ? I[n] : nothing)
 
-function findnext(f::typeof(!iszero), v::AbstractSparseArray, i::Integer)
+function findnext(f::Function, v::AbstractSparseArray, i)
+    # short-circuit the case f == !iszero because that avoids
+    # allocating e.g. zero(BigInt) for the f(zero(...)) test.
+    if nnz(v) == length(v) || (f != (!iszero) && f(zero(eltype(v))))
+        return invoke(findnext, Tuple{Function,Any,Any}, f, v, i)
+    end
     j = _sparse_findnextnz(v, i)
     while j !== nothing && !f(v[j])
-        j = _sparse_findnextnz(v, j+1)
+        j = _sparse_findnextnz(v, nextind(v, j))
     end
     return j
 end
 
-function findprev(f::typeof(!iszero), v::AbstractSparseArray, i::Integer)
+function findprev(f::Function, v::AbstractSparseArray, i)
+    # short-circuit the case f == !iszero because that avoids
+    # allocating e.g. zero(BigInt) for the f(zero(...)) test.
+    if nnz(v) == length(v) || (f != (!iszero) && f(zero(eltype(v))))
+        return invoke(findprev, Tuple{Function,Any,Any}, f, v, i)
+    end
     j = _sparse_findprevnz(v, i)
     while j !== nothing && !f(v[j])
-        j = _sparse_findprevnz(v, j-1)
+        j = _sparse_findprevnz(v, prevind(v, j))
     end
     return j
 end
@@ -67,52 +105,20 @@ end
 """
     findnz(A)
 
-Return a tuple `(I, J, V)` where `I` and `J` are the row and column indices of the non-zero
-values in matrix `A`, and `V` is a vector of the non-zero values.
+Return a tuple `(I, J, V)` where `I` and `J` are the row and column indices of the stored
+("structurally non-zero") values in sparse matrix `A`, and `V` is a vector of the values.
 
 # Examples
 ```jldoctest
-julia> A = [1 2 0; 0 0 3; 0 4 0]
-3×3 Array{Int64,2}:
- 1  2  0
- 0  0  3
- 0  4  0
+julia> A = sparse([1 2 0; 0 0 3; 0 4 0])
+3×3 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
+  [1, 1]  =  1
+  [1, 2]  =  2
+  [3, 2]  =  4
+  [2, 3]  =  3
 
 julia> findnz(A)
 ([1, 1, 3, 2], [1, 2, 2, 3], [1, 2, 4, 3])
 ```
 """
-function findnz(A::AbstractMatrix{T}) where T
-    nnzA = count(t -> t != 0, A)
-    I = zeros(Int, nnzA)
-    J = zeros(Int, nnzA)
-    NZs = Vector{T}(undef, nnzA)
-    cnt = 1
-    if nnzA > 0
-        for j=axes(A,2), i=axes(A,1)
-            Aij = A[i,j]
-            if Aij != 0
-                I[cnt] = i
-                J[cnt] = j
-                NZs[cnt] = Aij
-                cnt += 1
-            end
-        end
-    end
-    return (I, J, NZs)
-end
-
-function findnz(B::BitMatrix)
-    nnzB = count(B)
-    I = Vector{Int}(undef, nnzB)
-    J = Vector{Int}(undef, nnzB)
-    cnt = 1
-    for j = 1:size(B,2), i = 1:size(B,1)
-        if B[i,j]
-            I[cnt] = i
-            J[cnt] = j
-            cnt += 1
-        end
-    end
-    return I, J, trues(length(I))
-end
+function findnz end

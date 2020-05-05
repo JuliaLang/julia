@@ -11,7 +11,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-srand(1234321)
+Random.seed!(1234321)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -71,6 +71,11 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 rstring  = sprint((t, s) -> show(t, "text/plain", s), r)
                 qstring  = sprint((t, s) -> show(t, "text/plain", s), q)
                 @test qrstring == "$(summary(qra))\nQ factor:\n$qstring\nR factor:\n$rstring"
+                # iterate
+                q, r = qra
+                @test q*r ≈ a
+                # property names
+                @test Base.propertynames(qra)       == (:R, :Q)
             end
             @testset "Thin QR decomposition (without pivoting)" begin
                 qra   = @inferred qr(a[:, 1:n1], Val(false))
@@ -82,6 +87,9 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test q*r ≈ a[:, 1:n1]
                 @test q*b[1:n1] ≈ rectangularQ(q)*b[1:n1] atol=100ε
                 @test q*b ≈ squareQ(q)*b atol=100ε
+                if eltya != Int
+                    @test Array{eltya}(q) ≈ Matrix(q)
+                end
                 @test_throws DimensionMismatch q*b[1:n1 + 1]
                 @test_throws DimensionMismatch b[1:n1 + 1]*q'
                 sq = size(q.factors, 2)
@@ -89,6 +97,11 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 if eltya != Int
                     @test Matrix{eltyb}(I, a_1, a_1)*q ≈ convert(AbstractMatrix{tab},q)
                 end
+                # iterate
+                q, r = qra
+                @test q*r ≈ a[:, 1:n1]
+                # property names
+                @test Base.propertynames(qra)       == (:R, :Q)
             end
             @testset "(Automatic) Fat (pivoted) QR decomposition" begin
                 @inferred qr(a, Val(true))
@@ -106,11 +119,19 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test q*r*transpose(qrpa.P) ≈ a[1:n1,:]
                 @test a[1:n1,:]*(qrpa\b[1:n1]) ≈ b[1:n1] atol=5000ε
                 @test Array(qrpa) ≈ a[1:5,:]
+                if eltya != Int
+                    @test Array{eltya}(q) ≈ Matrix(q)
+                end
                 @test_throws DimensionMismatch q*b[1:n1+1]
                 @test_throws DimensionMismatch b[1:n1+1]*q'
                 if eltya != Int
                     @test Matrix{eltyb}(I, n1, n1)*q ≈ convert(AbstractMatrix{tab},q)
                 end
+                # iterate
+                q, r, p = qrpa
+                @test q*r[:,invperm(p)] ≈ a[1:n1,:]
+                # property names
+                @test Base.propertynames(qrpa)       == (:R, :Q, :p, :P)
             end
             @testset "(Automatic) Thin (pivoted) QR decomposition" begin
                 qrpa  = factorize(a[:,1:n1])
@@ -122,6 +143,9 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test q*r ≈ a[:,p]
                 @test q*r[:,invperm(p)] ≈ a[:,1:n1]
                 @test Array(qrpa) ≈ a[:,1:5]
+                if eltya != Int
+                    @test Array{eltya}(q) ≈ Matrix(q)
+                end
                 @test_throws DimensionMismatch q*b[1:n1+1]
                 @test_throws DimensionMismatch b[1:n1+1]*q'
                 sq = size(q.factors, 2)
@@ -134,6 +158,11 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 qstring  = sprint((t, s) -> show(t, "text/plain", s), q)
                 pstring  = sprint((t, s) -> show(t, "text/plain", s), p)
                 @test qrstring == "$(summary(qrpa))\nQ factor:\n$qstring\nR factor:\n$rstring\npermutation:\n$pstring"
+                # iterate
+                q, r, p = qrpa
+                @test q*r[:,invperm(p)] ≈ a[:,1:n1]
+                # property names
+                @test Base.propertynames(qrpa)       == (:R, :Q, :p, :P)
             end
         end
         if eltya != Int
@@ -145,9 +174,17 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test_throws DimensionMismatch rmul!(Matrix{eltya}(I, n+1, n+1),q)
                 @test rmul!(squareQ(q), adjoint(q)) ≈ Matrix(I, n, n)
                 @test_throws DimensionMismatch rmul!(Matrix{eltya}(I, n+1, n+1), adjoint(q))
-                @test_throws BoundsError size(q,-1)
+                @test_throws ErrorException size(q,-1)
                 @test_throws DimensionMismatch LinearAlgebra.lmul!(q,zeros(eltya,n1+1))
                 @test_throws DimensionMismatch LinearAlgebra.lmul!(adjoint(q), zeros(eltya,n1+1))
+
+                b = similar(a); rand!(b)
+                c = similar(a)
+                @test mul!(c, q, b) ≈ q*b
+                @test mul!(c, q', b) ≈ q'*b
+                @test mul!(c, b, q) ≈ b*q
+                @test mul!(c, b, q') ≈ b*q'
+                @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n), q, b)
 
                 qra = qr(a[:,1:n1], Val(false))
                 q, r = qra.Q, qra.R
@@ -155,8 +192,14 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test_throws DimensionMismatch rmul!(Matrix{eltya}(I, n+1, n+1),q)
                 @test rmul!(squareQ(q), adjoint(q)) ≈ Matrix(I, n, n)
                 @test_throws DimensionMismatch rmul!(Matrix{eltya}(I, n+1, n+1),adjoint(q))
-                @test_throws BoundsError size(q,-1)
+                @test_throws ErrorException size(q,-1)
                 @test_throws DimensionMismatch q * Matrix{Int8}(I, n+4, n+4)
+
+                @test mul!(c, q, b) ≈ q*b
+                @test mul!(c, q', b) ≈ q'*b
+                @test mul!(c, b, q) ≈ b*q
+                @test mul!(c, b, q') ≈ b*q'
+                @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n), q, b)
             end
         end
     end
@@ -174,7 +217,7 @@ end
 @testset "Issue 7304" begin
     A = [-√.5 -√.5; -√.5 √.5]
     Q = rectangularQ(qr(A).Q)
-    @test vecnorm(A-Q) < eps()
+    @test norm(A-Q) < eps()
 end
 
 @testset "qr on AbstractVector" begin
@@ -220,12 +263,38 @@ end
 end
 
 @testset "Issue Test Factorization fallbacks for rectangular problems" begin
-    A = randn(3,2)
+    A  = randn(3,2)
     Ac = copy(A')
-    b = randn(3)
-    c = randn(2)
+    b  = randn(3)
+    b0 = copy(b)
+    c  = randn(2)
     @test A \b ≈ ldiv!(c, qr(A ), b)
+    @test b == b0
+    c0 = copy(c)
     @test Ac\c ≈ ldiv!(b, qr(Ac, Val(true)), c)
+    @test c0 == c
+end
+
+@testset "det(Q::Union{QRCompactWYQ, QRPackedQ})" begin
+    # 40 is the number larger than the default block size 36 of QRCompactWY
+    @testset for n in [1:3; 40], m in [1:3; 40], pivot in [false, true]
+        @testset "real" begin
+            @testset for k in 0:min(n, m, 5)
+                A = cat(Array(I(k)), randn(n - k, m - k); dims=(1, 2))
+                Q, = qr(A, Val(pivot))
+                @test det(Q) ≈ det(collect(Q))
+                @test abs(det(Q)) ≈ 1
+            end
+        end
+        @testset "complex" begin
+            @testset for k in 0:min(n, m, 5)
+                A = cat(Array(I(k)), randn(ComplexF64, n - k, m - k); dims=(1, 2))
+                Q, = qr(A, Val(pivot))
+                @test det(Q) ≈ det(collect(Q))
+                @test abs(det(Q)) ≈ 1
+            end
+        end
+    end
 end
 
 end # module TestQR

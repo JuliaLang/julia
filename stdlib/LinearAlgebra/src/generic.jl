@@ -2,50 +2,144 @@
 
 ## linalg.jl: Some generic Linear Algebra definitions
 
+"""
+    MulAddMul(alpha, beta)
+
+A callable for operating short-circuiting version of `x * alpha + y * beta`.
+
+# Examples
+```jldoctest
+julia> using LinearAlgebra: MulAddMul
+
+julia> _add = MulAddMul(1, 0);
+
+julia> _add(123, nothing)
+123
+
+julia> MulAddMul(12, 34)(56, 78) == 56 * 12 + 78 * 34
+true
+```
+"""
+struct MulAddMul{ais1, bis0, TA, TB}
+    alpha::TA
+    beta::TB
+end
+
+@inline function MulAddMul(alpha::TA, beta::TB) where {TA,TB}
+    if isone(alpha)
+        if iszero(beta)
+            return MulAddMul{true,true,TA,TB}(alpha, beta)
+        else
+            return MulAddMul{true,false,TA,TB}(alpha, beta)
+        end
+    else
+        if iszero(beta)
+            return MulAddMul{false,true,TA,TB}(alpha, beta)
+        else
+            return MulAddMul{false,false,TA,TB}(alpha, beta)
+        end
+    end
+end
+
+MulAddMul() = MulAddMul{true,true,Bool,Bool}(true, false)
+
+@inline (::MulAddMul{true})(x) = x
+@inline (p::MulAddMul{false})(x) = x * p.alpha
+@inline (::MulAddMul{true, true})(x, _) = x
+@inline (p::MulAddMul{false, true})(x, _) = x * p.alpha
+@inline (p::MulAddMul{true, false})(x, y) = x + y * p.beta
+@inline (p::MulAddMul{false, false})(x, y) = x * p.alpha + y * p.beta
+
+"""
+    _modify!(_add::MulAddMul, x, C, idx)
+
+Short-circuiting version of `C[idx] = _add(x, C[idx])`.
+
+Short-circuiting the indexing `C[idx]` is necessary for avoiding `UndefRefError`
+when mutating an array of non-primitive numbers such as `BigFloat`.
+
+# Examples
+```jldoctest
+julia> using LinearAlgebra: MulAddMul, _modify!
+
+julia> _add = MulAddMul(1, 0);
+       C = Vector{BigFloat}(undef, 1);
+
+julia> _modify!(_add, 123, C, 1)
+
+julia> C
+1-element Array{BigFloat,1}:
+ 123.0
+```
+"""
+@inline @propagate_inbounds function _modify!(p::MulAddMul{ais1, bis0},
+                                              x, C, idx′) where {ais1, bis0}
+    # `idx′` may be an integer, a tuple of integer, or a `CartesianIndex`.
+    #  Let `CartesianIndex` constructor normalize them so that it can be
+    # used uniformly.  It also acts as a workaround for performance penalty
+    # of splatting a number (#29114):
+    idx = CartesianIndex(idx′)
+    if bis0
+        C[idx] = p(x)
+    else
+        C[idx] = p(x, C[idx])
+    end
+    return
+end
+
+@inline function _rmul_or_fill!(C::AbstractArray, beta::Number)
+    if isempty(C)
+        return C
+    end
+    if iszero(beta)
+        fill!(C, zero(eltype(C)))
+    else
+        rmul!(C, beta)
+    end
+    return C
+end
+
+
+function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number, _add::MulAddMul)
+    if length(C) != length(X)
+        throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
+    end
+    for (IC, IX) in zip(eachindex(C), eachindex(X))
+        @inbounds _modify!(_add, X[IX] * s, C, IC)
+    end
+    C
+end
+
+function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray, _add::MulAddMul)
+    if length(C) != length(X)
+        throw(DimensionMismatch("first array has length $(length(C)) which does not
+match the length of the second, $(length(X))."))
+    end
+    for (IC, IX) in zip(eachindex(C), eachindex(X))
+        @inbounds _modify!(_add, s * X[IX], C, IC)
+    end
+    C
+end
+
+@inline mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number) =
+    generic_mul!(C, s, X, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number) =
+    generic_mul!(C, X, s, MulAddMul(alpha, beta))
+
 # For better performance when input and output are the same array
 # See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
-function generic_rmul!(X::AbstractArray, s::Number)
-    @simd for I in eachindex(X)
-        @inbounds X[I] *= s
-    end
-    X
-end
-
-function generic_lmul!(s::Number, X::AbstractArray)
-    @simd for I in eachindex(X)
-        @inbounds X[I] = s*X[I]
-    end
-    X
-end
-
-function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number)
-    if _length(C) != _length(X)
-        throw(DimensionMismatch("first array has length $(_length(C)) which does not match the length of the second, $(_length(X))."))
-    end
-    for (IC, IX) in zip(eachindex(C), eachindex(X))
-        @inbounds C[IC] = X[IX]*s
-    end
-    C
-end
-
-function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray)
-    if _length(C) != _length(X)
-        throw(DimensionMismatch("first array has length $(_length(C)) which does not
-match the length of the second, $(_length(X))."))
-    end
-    for (IC, IX) in zip(eachindex(C), eachindex(X))
-        @inbounds C[IC] = s*X[IX]
-    end
-    C
-end
-
-mul!(C::AbstractArray, s::Number, X::AbstractArray) = generic_mul!(C, X, s)
-mul!(C::AbstractArray, X::AbstractArray, s::Number) = generic_mul!(C, s, X)
-
 """
     rmul!(A::AbstractArray, b::Number)
 
-Scale an array `A` by a scalar `b` overwriting `A` in-place.
+Scale an array `A` by a scalar `b` overwriting `A` in-place.  Use
+[`lmul!`](@ref) to multiply scalar from left.  The scaling operation
+respects the semantics of the multiplication [`*`](@ref) between an
+element of `A` and `b`.  In particular, this also applies to
+multiplication involving non-finite numbers such as `NaN` and `±Inf`.
+
+!!! compat "Julia 1.1"
+    Prior to Julia 1.1, `NaN` and `±Inf` entries in `A` were treated
+    inconsistently.
 
 # Examples
 ```jldoctest
@@ -58,14 +152,32 @@ julia> rmul!(A, 2)
 2×2 Array{Int64,2}:
  2  4
  6  8
+
+julia> rmul!([NaN], 0.0)
+1-element Array{Float64,1}:
+ NaN
 ```
 """
-rmul!(A::AbstractArray, b::Number) = generic_rmul!(A, b)
+function rmul!(X::AbstractArray, s::Number)
+    @simd for I in eachindex(X)
+        @inbounds X[I] *= s
+    end
+    X
+end
+
 
 """
     lmul!(a::Number, B::AbstractArray)
 
-Scale an array `B` by a scalar `a` overwriting `B` in-place.
+Scale an array `B` by a scalar `a` overwriting `B` in-place.  Use
+[`rmul!`](@ref) to multiply scalar from right.  The scaling operation
+respects the semantics of the multiplication [`*`](@ref) between `a`
+and an element of `B`.  In particular, this also applies to
+multiplication involving non-finite numbers such as `NaN` and `±Inf`.
+
+!!! compat "Julia 1.1"
+    Prior to Julia 1.1, `NaN` and `±Inf` entries in `B` were treated
+    inconsistently.
 
 # Examples
 ```jldoctest
@@ -78,9 +190,75 @@ julia> lmul!(2, B)
 2×2 Array{Int64,2}:
  2  4
  6  8
+
+julia> lmul!(0.0, [Inf])
+1-element Array{Float64,1}:
+ NaN
 ```
 """
-lmul!(a::Number, B::AbstractArray) = generic_lmul!(a, B)
+function lmul!(s::Number, X::AbstractArray)
+    @simd for I in eachindex(X)
+        @inbounds X[I] = s*X[I]
+    end
+    X
+end
+
+"""
+    rdiv!(A::AbstractArray, b::Number)
+
+Divide each entry in an array `A` by a scalar `b` overwriting `A`
+in-place.  Use [`ldiv!`](@ref) to divide scalar from left.
+
+# Examples
+```jldoctest
+julia> A = [1.0 2.0; 3.0 4.0]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> rdiv!(A, 2.0)
+2×2 Array{Float64,2}:
+ 0.5  1.0
+ 1.5  2.0
+```
+"""
+function rdiv!(X::AbstractArray, s::Number)
+    @simd for I in eachindex(X)
+        @inbounds X[I] /= s
+    end
+    X
+end
+
+"""
+    ldiv!(a::Number, B::AbstractArray)
+
+Divide each entry in an array `B` by a scalar `a` overwriting `B`
+in-place.  Use [`rdiv!`](@ref) to divide scalar from right.
+
+# Examples
+```jldoctest
+julia> B = [1.0 2.0; 3.0 4.0]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> ldiv!(2.0, B)
+2×2 Array{Float64,2}:
+ 0.5  1.0
+ 1.5  2.0
+```
+"""
+function ldiv!(s::Number, X::AbstractArray)
+    @simd for I in eachindex(X)
+        @inbounds X[I] = s\X[I]
+    end
+    X
+end
+ldiv!(Y::AbstractArray, s::Number, X::AbstractArray) = Y .= s .\ X
+
+# Generic fallback. This assumes that B and Y have the same sizes.
+ldiv!(Y::AbstractArray, A::AbstractMatrix, B::AbstractArray) = ldiv!(A, copyto!(Y, B))
+
 
 """
     cross(x, y)
@@ -247,10 +425,10 @@ tril!(M::AbstractMatrix) = tril!(M,0)
 diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to construct a diagonal matrix"))
 
 ###########################################################################################
-# Inner products and norms
+# Dot products and norms
 
-# special cases of vecnorm; note that they don't need to handle isempty(x)
-function generic_vecnormMinusInf(x)
+# special cases of norm; note that they don't need to handle isempty(x)
+function generic_normMinusInf(x)
     (v, s) = iterate(x)::Tuple
     minabs = norm(v)
     while true
@@ -263,7 +441,7 @@ function generic_vecnormMinusInf(x)
     return float(minabs)
 end
 
-function generic_vecnormInf(x)
+function generic_normInf(x)
     (v, s) = iterate(x)::Tuple
     maxabs = norm(v)
     while true
@@ -276,7 +454,7 @@ function generic_vecnormInf(x)
     return float(maxabs)
 end
 
-function generic_vecnorm1(x)
+function generic_norm1(x)
     (v, s) = iterate(x)::Tuple
     av = float(norm(v))
     T = typeof(av)
@@ -295,12 +473,12 @@ norm_sqr(x) = norm(x)^2
 norm_sqr(x::Number) = abs2(x)
 norm_sqr(x::Union{T,Complex{T},Rational{T}}) where {T<:Integer} = abs2(float(x))
 
-function generic_vecnorm2(x)
-    maxabs = vecnormInf(x)
+function generic_norm2(x)
+    maxabs = normInf(x)
     (maxabs == 0 || isinf(maxabs)) && return maxabs
     (v, s) = iterate(x)::Tuple
     T = typeof(maxabs)
-    if isfinite(_length(x)*maxabs*maxabs) && maxabs*maxabs != 0 # Scaling not necessary
+    if isfinite(length(x)*maxabs*maxabs) && maxabs*maxabs != 0 # Scaling not necessary
         sum::promote_type(Float64, T) = norm_sqr(v)
         while true
             y = iterate(x, s)
@@ -323,17 +501,17 @@ end
 
 # Compute L_p norm ‖x‖ₚ = sum(abs(x).^p)^(1/p)
 # (Not technically a "norm" for p < 1.)
-function generic_vecnormp(x, p)
+function generic_normp(x, p)
     (v, s) = iterate(x)::Tuple
     if p > 1 || p < -1 # might need to rescale to avoid overflow
-        maxabs = p > 1 ? vecnormInf(x) : vecnormMinusInf(x)
+        maxabs = p > 1 ? normInf(x) : normMinusInf(x)
         (maxabs == 0 || isinf(maxabs)) && return maxabs
         T = typeof(maxabs)
     else
         T = typeof(float(norm(v)))
     end
     spp::promote_type(Float64, T) = p
-    if -1 <= p <= 1 || (isfinite(_length(x)*maxabs^spp) && maxabs^spp != 0) # scaling not necessary
+    if -1 <= p <= 1 || (isfinite(length(x)*maxabs^spp) && maxabs^spp != 0) # scaling not necessary
         sum::promote_type(Float64, T) = norm(v)^spp
         while true
             y = iterate(x, s)
@@ -346,7 +524,7 @@ function generic_vecnormp(x, p)
         sum = (norm(v)/maxabs)^spp
         while true
             y = iterate(x, s)
-            y == nothing && break
+            y === nothing && break
             (v, s) = y
             sum += (norm(v)/maxabs)^spp
         end
@@ -354,85 +532,137 @@ function generic_vecnormp(x, p)
     end
 end
 
-vecnormMinusInf(x) = generic_vecnormMinusInf(x)
-vecnormInf(x) = generic_vecnormInf(x)
-vecnorm1(x) = generic_vecnorm1(x)
-vecnorm2(x) = generic_vecnorm2(x)
-vecnormp(x, p) = generic_vecnormp(x, p)
+normMinusInf(x) = generic_normMinusInf(x)
+normInf(x) = generic_normInf(x)
+norm1(x) = generic_norm1(x)
+norm2(x) = generic_norm2(x)
+normp(x, p) = generic_normp(x, p)
+
 
 """
-    vecnorm(A, p::Real=2)
+    norm(A, p::Real=2)
 
 For any iterable container `A` (including arrays of any dimension) of numbers (or any
 element type for which `norm` is defined), compute the `p`-norm (defaulting to `p=2`) as if
 `A` were a vector of the corresponding length.
 
-The `p`-norm is defined as:
+The `p`-norm is defined as
 ```math
 \\|A\\|_p = \\left( \\sum_{i=1}^n | a_i | ^p \\right)^{1/p}
 ```
-with ``a_i`` the entries of ``A`` and ``n`` its length.
+with ``a_i`` the entries of ``A``, ``| a_i |`` the [`norm`](@ref) of ``a_i``, and
+``n`` the length of ``A``. Since the `p`-norm is computed using the [`norm`](@ref)s
+of the entries of `A`, the `p`-norm of a vector of vectors is not compatible with
+the interpretation of it as a block vector in general if `p != 2`.
 
 `p` can assume any numeric value (even though not all values produce a
-mathematically valid vector norm). In particular, `vecnorm(A, Inf)` returns the largest value
-in `abs(A)`, whereas `vecnorm(A, -Inf)` returns the smallest. If `A` is a matrix and `p=2`,
+mathematically valid vector norm). In particular, `norm(A, Inf)` returns the largest value
+in `abs.(A)`, whereas `norm(A, -Inf)` returns the smallest. If `A` is a matrix and `p=2`,
 then this is equivalent to the Frobenius norm.
+
+The second argument `p` is not necessarily a part of the interface for `norm`, i.e. a custom
+type may only implement `norm(A)` without second argument.
+
+Use [`opnorm`](@ref) to compute the operator norm of a matrix.
 
 # Examples
 ```jldoctest
-julia> vecnorm([1 2 3; 4 5 6; 7 8 9])
+julia> v = [3, -2, 6]
+3-element Array{Int64,1}:
+  3
+ -2
+  6
+
+julia> norm(v)
+7.0
+
+julia> norm(v, 1)
+11.0
+
+julia> norm(v, Inf)
+6.0
+
+julia> norm([1 2 3; 4 5 6; 7 8 9])
 16.881943016134134
 
-julia> vecnorm([1 2 3 4 5 6 7 8 9])
+julia> norm([1 2 3 4 5 6 7 8 9])
 16.881943016134134
+
+julia> norm(1:9)
+16.881943016134134
+
+julia> norm(hcat(v,v), 1) == norm(vcat(v,v), 1) != norm([v,v], 1)
+true
+
+julia> norm(hcat(v,v), 2) == norm(vcat(v,v), 2) == norm([v,v], 2)
+true
+
+julia> norm(hcat(v,v), Inf) == norm(vcat(v,v), Inf) != norm([v,v], Inf)
+true
 ```
 """
-function vecnorm(itr, p::Real=2)
+function norm(itr, p::Real=2)
     isempty(itr) && return float(norm(zero(eltype(itr))))
     if p == 2
-        return vecnorm2(itr)
+        return norm2(itr)
     elseif p == 1
-        return vecnorm1(itr)
+        return norm1(itr)
     elseif p == Inf
-        return vecnormInf(itr)
+        return normInf(itr)
     elseif p == 0
         return typeof(float(norm(first(itr))))(count(!iszero, itr))
     elseif p == -Inf
-        return vecnormMinusInf(itr)
+        return normMinusInf(itr)
     else
-        vecnormp(itr,p)
+        normp(itr, p)
     end
 end
 
 """
-    vecnorm(x::Number, p::Real=2)
+    norm(x::Number, p::Real=2)
 
-For numbers, return ``\\left( |x|^p \\right) ^{1/p}``.
+For numbers, return ``\\left( |x|^p \\right)^{1/p}``.
 
 # Examples
 ```jldoctest
-julia> vecnorm(2, 1)
-2
+julia> norm(2, 1)
+2.0
 
-julia> vecnorm(-2, 1)
-2
+julia> norm(-2, 1)
+2.0
 
-julia> vecnorm(2, 2)
-2
+julia> norm(2, 2)
+2.0
 
-julia> vecnorm(-2, 2)
-2
+julia> norm(-2, 2)
+2.0
 
-julia> vecnorm(2, Inf)
-2
+julia> norm(2, Inf)
+2.0
 
-julia> vecnorm(-2, Inf)
-2
+julia> norm(-2, Inf)
+2.0
 ```
 """
-@inline vecnorm(x::Number, p::Real=2) = p == 0 ? (x==0 ? zero(abs(x)) : oneunit(abs(x))) : abs(x)
+@inline function norm(x::Number, p::Real=2)
+    afx = abs(float(x))
+    if p == 0
+        if x == 0
+            return zero(afx)
+        elseif !isnan(x)
+            return oneunit(afx)
+        else
+            return afx
+        end
+    else
+        return afx
+    end
+end
+norm(::Missing, p::Real=2) = missing
 
-function norm1(A::AbstractMatrix{T}) where T
+# special cases of opnorm
+function opnorm1(A::AbstractMatrix{T}) where T
+    require_one_based_indexing(A)
     m, n = size(A)
     Tnorm = typeof(float(real(zero(T))))
     Tsum = promote_type(Float64, Tnorm)
@@ -448,13 +678,17 @@ function norm1(A::AbstractMatrix{T}) where T
     end
     return convert(Tnorm, nrm)
 end
-function norm2(A::AbstractMatrix{T}) where T
+
+function opnorm2(A::AbstractMatrix{T}) where T
+    require_one_based_indexing(A)
     m,n = size(A)
-    if m == 1 || n == 1 return vecnorm2(A) end
+    if m == 1 || n == 1 return norm2(A) end
     Tnorm = typeof(float(real(zero(T))))
     (m == 0 || n == 0) ? zero(Tnorm) : convert(Tnorm, svdvals(A)[1])
 end
-function normInf(A::AbstractMatrix{T}) where T
+
+function opnormInf(A::AbstractMatrix{T}) where T
+    require_one_based_indexing(A)
     m,n = size(A)
     Tnorm = typeof(float(real(zero(T))))
     Tsum = promote_type(Float64, Tnorm)
@@ -471,58 +705,25 @@ function normInf(A::AbstractMatrix{T}) where T
     return convert(Tnorm, nrm)
 end
 
-"""
-    norm(A::AbstractArray, p::Real=2)
-
-Compute the `p`-norm of a vector or the operator norm of a matrix `A`,
-defaulting to the 2-norm.
-
-    norm(A::AbstractVector, p::Real=2)
-
-For vectors, this is equivalent to [`vecnorm`](@ref) and equal to:
-```math
-\\|A\\|_p = \\left( \\sum_{i=1}^n | a_i | ^p \\right)^{1/p}
-```
-with ``a_i`` the entries of ``A`` and ``n`` its length.
-
-`p` can assume any numeric value (even though not all values produce a
-mathematically valid vector norm). In particular, `norm(A, Inf)` returns the largest value
-in `abs(A)`, whereas `norm(A, -Inf)` returns the smallest.
-
-# Examples
-```jldoctest
-julia> v = [3, -2, 6]
-3-element Array{Int64,1}:
-  3
- -2
-  6
-
-julia> norm(v)
-7.0
-
-julia> norm(v, Inf)
-6.0
-```
-"""
-norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
 
 """
-    norm(A::AbstractMatrix, p::Real=2)
+    opnorm(A::AbstractMatrix, p::Real=2)
 
-For matrices, the matrix norm induced by the vector `p`-norm is used, where valid values of
-`p` are `1`, `2`, or `Inf`. (Note that for sparse matrices, `p=2` is currently not
-implemented.) Use [`vecnorm`](@ref) to compute the Frobenius norm.
+Compute the operator norm (or matrix norm) induced by the vector `p`-norm,
+where valid values of `p` are `1`, `2`, or `Inf`. (Note that for sparse matrices,
+`p=2` is currently not implemented.) Use [`norm`](@ref) to compute the Frobenius
+norm.
 
-When `p=1`, the matrix norm is the maximum absolute column sum of `A`:
+When `p=1`, the operator norm is the maximum absolute column sum of `A`:
 ```math
 \\|A\\|_1 = \\max_{1 ≤ j ≤ n} \\sum_{i=1}^m | a_{ij} |
 ```
 with ``a_{ij}`` the entries of ``A``, and ``m`` and ``n`` its dimensions.
 
-When `p=2`, the matrix norm is the spectral norm, equal to the largest
+When `p=2`, the operator norm is the spectral norm, equal to the largest
 singular value of `A`.
 
-When `p=Inf`, the matrix norm is the maximum absolute row sum of `A`:
+When `p=Inf`, the operator norm is the maximum absolute row sum of `A`:
 ```math
 \\|A\\|_\\infty = \\max_{1 ≤ i ≤ m} \\sum _{j=1}^n | a_{ij} |
 ```
@@ -534,40 +735,44 @@ julia> A = [1 -2 -3; 2 3 -1]
  1  -2  -3
  2   3  -1
 
-julia> norm(A, Inf)
+julia> opnorm(A, Inf)
 6.0
+
+julia> opnorm(A, 1)
+5.0
 ```
 """
-function norm(A::AbstractMatrix, p::Real=2)
+function opnorm(A::AbstractMatrix, p::Real=2)
     if p == 2
-        return norm2(A)
+        return opnorm2(A)
     elseif p == 1
-        return norm1(A)
+        return opnorm1(A)
     elseif p == Inf
-        return normInf(A)
+        return opnormInf(A)
     else
         throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
     end
 end
 
 """
-    norm(x::Number, p::Real=2)
+    opnorm(x::Number, p::Real=2)
 
 For numbers, return ``\\left( |x|^p \\right)^{1/p}``.
-This is equivalent to [`vecnorm`](@ref).
+This is equivalent to [`norm`](@ref).
 """
-@inline norm(x::Number, p::Real=2) = vecnorm(x, p)
+@inline opnorm(x::Number, p::Real=2) = norm(x, p)
 
 """
-    norm(A::Adjoint{<:Any,<:AbstracVector}, q::Real=2)
-    norm(A::Transpose{<:Any,<:AbstracVector}, q::Real=2)
+    opnorm(A::Adjoint{<:Any,<:AbstracVector}, q::Real=2)
+    opnorm(A::Transpose{<:Any,<:AbstracVector}, q::Real=2)
 
-For Adjoint/Transpose-wrapped vectors, return the ``q``-norm of `A`, which is
-equivalent to the p-norm with value `p = q/(q-1)`. They coincide at `p = q = 2`.
+For Adjoint/Transpose-wrapped vectors, return the operator ``q``-norm of `A`, which is
+equivalent to the `p`-norm with value `p = q/(q-1)`. They coincide at `p = q = 2`.
+Use [`norm`](@ref) to compute the `p` norm of `A` as a vector.
 
 The difference in norm between a vector space and its dual arises to preserve
-the relationship between duality and the inner product, and the result is
-consistent with the p-norm of `1 × n` matrix.
+the relationship between duality and the dot product, and the result is
+consistent with the operator `p`-norm of a `1 × n` matrix.
 
 # Examples
 ```jldoctest
@@ -575,11 +780,17 @@ julia> v = [1; im];
 
 julia> vc = v';
 
-julia> norm(vc, 1)
+julia> opnorm(vc, 1)
 1.0
+
+julia> norm(vc, 1)
+2.0
 
 julia> norm(v, 1)
 2.0
+
+julia> opnorm(vc, 2)
+1.4142135623730951
 
 julia> norm(vc, 2)
 1.4142135623730951
@@ -587,54 +798,61 @@ julia> norm(vc, 2)
 julia> norm(v, 2)
 1.4142135623730951
 
-julia> norm(vc, Inf)
+julia> opnorm(vc, Inf)
 2.0
+
+julia> norm(vc, Inf)
+1.0
 
 julia> norm(v, Inf)
 1.0
 ```
 """
-norm(v::TransposeAbsVec, q::Real) = q == Inf ? norm(v.parent, 1) : norm(v.parent, q/(q-1))
-norm(v::AdjointAbsVec, q::Real) = q == Inf ? norm(conj(v.parent), 1) : norm(conj(v.parent), q/(q-1))
-norm(v::AdjointAbsVec) = norm(conj(v.parent))
-norm(v::TransposeAbsVec) = norm(v.parent)
+opnorm(v::TransposeAbsVec, q::Real) = q == Inf ? norm(v.parent, 1) : norm(v.parent, q/(q-1))
+opnorm(v::AdjointAbsVec, q::Real) = q == Inf ? norm(conj(v.parent), 1) : norm(conj(v.parent), q/(q-1))
+opnorm(v::AdjointAbsVec) = norm(conj(v.parent))
+opnorm(v::TransposeAbsVec) = norm(v.parent)
 
-function vecdot(x::AbstractArray, y::AbstractArray)
-    lx = _length(x)
-    if lx != _length(y)
-        throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(_length(y))."))
-    end
-    if lx == 0
-        return dot(zero(eltype(x)), zero(eltype(y)))
-    end
-    s = zero(dot(first(x), first(y)))
-    for (Ix, Iy) in zip(eachindex(x), eachindex(y))
-        @inbounds  s += dot(x[Ix], y[Iy])
-    end
-    s
-end
+norm(v::Union{TransposeAbsVec,AdjointAbsVec}, p::Real) = norm(v.parent, p)
 
 """
-    vecdot(x, y)
+    dot(x, y)
+    x ⋅ y
 
-For any iterable containers `x` and `y` (including arrays of any dimension) of numbers (or
-any element type for which `dot` is defined), compute the Euclidean dot product (the sum of
-`dot(x[i],y[i])`) as if they were vectors.
+Compute the dot product between two vectors. For complex vectors, the first
+vector is conjugated.
+
+`dot` also works on arbitrary iterable objects, including arrays of any dimension,
+as long as `dot` is defined on the elements.
+
+`dot` is semantically equivalent to `sum(dot(vx,vy) for (vx,vy) in zip(x, y))`,
+with the added restriction that the arguments must have equal lengths.
+
+`x ⋅ y` (where `⋅` can be typed by tab-completing `\\cdot` in the REPL) is a synonym for
+`dot(x, y)`.
 
 # Examples
 ```jldoctest
-julia> vecdot(1:5, 2:6)
+julia> dot([1; 1], [2; 3])
+5
+
+julia> dot([im; im], [1; 1])
+0 - 2im
+
+julia> dot(1:5, 2:6)
 70
 
 julia> x = fill(2., (5,5));
 
 julia> y = fill(3., (5,5));
 
-julia> vecdot(x, y)
+julia> dot(x, y)
 150.0
 ```
 """
-function vecdot(x, y) # arbitrary iterables
+function dot end
+
+function dot(x, y) # arbitrary iterables
     ix = iterate(x)
     iy = iterate(y)
     if ix === nothing
@@ -652,72 +870,97 @@ function vecdot(x, y) # arbitrary iterables
     while true
         ix = iterate(x, xs)
         iy = iterate(y, ys)
-        if (ix == nothing) || (iy == nothing)
-            break
-        end
+        ix === nothing && break
+        iy === nothing && break
         (vx, xs), (vy, ys) = ix, iy
         s += dot(vx, vy)
     end
-    if !(iy == nothing && ix == nothing)
-            throw(DimensionMismatch("x and y are of different lengths!"))
+    if !(iy === nothing && ix === nothing)
+        throw(DimensionMismatch("x and y are of different lengths!"))
     end
     return s
 end
 
-vecdot(x::Number, y::Number) = conj(x) * y
+dot(x::Number, y::Number) = conj(x) * y
 
-dot(x::Number, y::Number) = vecdot(x, y)
+function dot(x::AbstractArray, y::AbstractArray)
+    lx = length(x)
+    if lx != length(y)
+        throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(length(y))."))
+    end
+    if lx == 0
+        return dot(zero(eltype(x)), zero(eltype(y)))
+    end
+    s = zero(dot(first(x), first(y)))
+    for (Ix, Iy) in zip(eachindex(x), eachindex(y))
+        @inbounds s += dot(x[Ix], y[Iy])
+    end
+    s
+end
 
 """
-    dot(x, y)
-    ⋅(x,y)
+    dot(x, A, y)
 
-Compute the dot product between two vectors. For complex vectors, the first vector is conjugated.
-When the vectors have equal lengths, calling `dot` is semantically equivalent to `sum(vx'vy for (vx,vy) in zip(x, y))`.
+Compute the generalized dot product `dot(x, A*y)` between two vectors `x` and `y`,
+without storing the intermediate result of `A*y`. As for the two-argument
+[`dot(_,_)`](@ref), this acts recursively. Moreover, for complex vectors, the
+first vector is conjugated.
+
+!!! compat "Julia 1.4"
+    Three-argument `dot` requires at least Julia 1.4.
 
 # Examples
 ```jldoctest
-julia> dot([1; 1], [2; 3])
-5
+julia> dot([1; 1], [1 2; 3 4], [2; 3])
+26
 
-julia> dot([im; im], [1; 1])
-0 - 2im
+julia> dot(1:5, reshape(1:25, 5, 5), 2:6)
+4850
+
+julia> ⋅(1:5, reshape(1:25, 5, 5), 2:6) == dot(1:5, reshape(1:25, 5, 5), 2:6)
+true
 ```
 """
-function dot(x::AbstractVector, y::AbstractVector)
-    if length(x) != length(y)
-        throw(DimensionMismatch("dot product arguments have lengths $(length(x)) and $(length(y))"))
-    end
-    ix = iterate(x)
-    if ix === nothing
-        # we only need to check the first vector, since equal lengths have been asserted
-        return zero(eltype(x))'zero(eltype(y))
-    end
-    iy = iterate(y)
-    s = ix[1]'iy[1]
-    ix, iy = iterate(x, ix[2]), iterate(y, iy[2])
-    while ix != nothing
-        s += ix[1]'iy[1]
-        ix = iterate(x, ix[2])
-        iy = iterate(y, iy[2])
+dot(x, A, y) = dot(x, A*y) # generic fallback for cases that are not covered by specialized methods
+
+function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
+    (axes(x)..., axes(y)...) == axes(A) || throw(DimensionMismatch())
+    T = typeof(dot(first(x), first(A), first(y)))
+    s = zero(T)
+    i₁ = first(eachindex(x))
+    x₁ = first(x)
+    @inbounds for j in eachindex(y)
+        yj = y[j]
+        if !iszero(yj)
+            temp = zero(adjoint(A[i₁,j]) * x₁)
+            @simd for i in eachindex(x)
+                temp += adjoint(A[i,j]) * x[i]
+            end
+            s += dot(temp, yj)
+        end
     end
     return s
 end
-
-# Call optimized BLAS methods for vectors of numbers
-dot(x::AbstractVector{<:Number}, y::AbstractVector{<:Number}) = vecdot(x, y)
-
+dot(x::AbstractVector, adjA::Adjoint, y::AbstractVector) = adjoint(dot(y, adjA.parent, x))
+dot(x::AbstractVector, transA::Transpose{<:Real}, y::AbstractVector) = adjoint(dot(y, transA.parent, x))
 
 ###########################################################################################
 
 """
-    rank(A[, tol::Real])
+    rank(A::AbstractMatrix; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ)
+    rank(A::AbstractMatrix, rtol::Real)
 
 Compute the rank of a matrix by counting how many singular
-values of `A` have magnitude greater than `tol*σ₁` where `σ₁` is
-`A`'s largest singular values. By default, the value of `tol` is the smallest
-dimension of `A` multiplied by the [`eps`](@ref)
-of the [`eltype`](@ref) of `A`.
+values of `A` have magnitude greater than `max(atol, rtol*σ₁)` where `σ₁` is
+`A`'s largest singular value. `atol` and `rtol` are the absolute and relative
+tolerances, respectively. The default relative tolerance is `n*ϵ`, where `n`
+is the size of the smallest dimension of `A`, and `ϵ` is the [`eps`](@ref) of
+the element type of `A`.
+
+!!! compat "Julia 1.1"
+    The `atol` and `rtol` keyword arguments requires at least Julia 1.1.
+    In Julia 1.0 `rtol` is available as a positional argument, but this
+    will be deprecated in Julia 2.0.
 
 # Examples
 ```jldoctest
@@ -727,16 +970,21 @@ julia> rank(Matrix(I, 3, 3))
 julia> rank(diagm(0 => [1, 0, 2]))
 2
 
-julia> rank(diagm(0 => [1, 0.001, 2]), 0.1)
+julia> rank(diagm(0 => [1, 0.001, 2]), rtol=0.1)
 2
 
-julia> rank(diagm(0 => [1, 0.001, 2]), 0.00001)
+julia> rank(diagm(0 => [1, 0.001, 2]), rtol=0.00001)
 3
+
+julia> rank(diagm(0 => [1, 0.001, 2]), atol=1.5)
+1
 ```
 """
-function rank(A::AbstractMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
+function rank(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol))
+    isempty(A) && return 0 # 0-dimensional case
     s = svdvals(A)
-    count(x -> x > tol*s[1], s)
+    tol = max(atol, rtol*s[1])
+    count(x -> x > tol, s)
 end
 rank(x::Number) = x == 0 ? 0 : 1
 
@@ -798,6 +1046,8 @@ function inv(A::AbstractMatrix{T}) where T
     dest = Matrix{S0}(I, n, n)
     ldiv!(factorize(convert(AbstractMatrix{S}, A)), dest)
 end
+inv(A::Adjoint) = adjoint(inv(parent(A)))
+inv(A::Transpose) = transpose(inv(parent(A)))
 
 pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T<:Real} = _vectorpinv(transpose, v, tol)
 pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T<:Complex} = _vectorpinv(adjoint, v, tol)
@@ -850,6 +1100,7 @@ true
 ```
 """
 function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
+    require_one_based_indexing(A, B)
     m, n = size(A)
     if m == n
         if istril(A)
@@ -868,7 +1119,10 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
-(/)(A::AbstractVecOrMat, B::AbstractVecOrMat) = copy(adjoint(adjoint(B) \ adjoint(A)))
+function (/)(A::AbstractVecOrMat, B::AbstractVecOrMat)
+    size(A,2) != size(B,2) && throw(DimensionMismatch("Both inputs should have the same number of columns"))
+    return copy(adjoint(adjoint(B) \ adjoint(A)))
+end
 # \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
 # /(x::Number,A::StridedMatrix) = x*inv(A)
 /(x::Number, v::AbstractVector) = x*pinv(v)
@@ -877,14 +1131,14 @@ cond(x::Number) = x == 0 ? Inf : 1.0
 cond(x::Number, p) = cond(x)
 
 #Skeel condition numbers
-condskeel(A::AbstractMatrix, p::Real=Inf) = norm(abs.(inv(A))*abs.(A), p)
+condskeel(A::AbstractMatrix, p::Real=Inf) = opnorm(abs.(inv(A))*abs.(A), p)
 
 """
     condskeel(M, [x, p::Real=Inf])
 
 ```math
 \\kappa_S(M, p) = \\left\\Vert \\left\\vert M \\right\\vert \\left\\vert M^{-1} \\right\\vert \\right\\Vert_p \\\\
-\\kappa_S(M, x, p) = \\left\\Vert \\left\\vert M \\right\\vert \\left\\vert M^{-1} \\right\\vert \\left\\vert x \\right\\vert \\right\\Vert_p
+\\kappa_S(M, x, p) = \\frac{\\left\\Vert \\left\\vert M \\right\\vert \\left\\vert M^{-1} \\right\\vert \\left\\vert x \\right\\vert \\right\\Vert_p}{\\left \\Vert x \\right \\Vert_p}
 ```
 
 Skeel condition number ``\\kappa_S`` of the matrix `M`, optionally with respect to the
@@ -896,7 +1150,9 @@ Valid values for `p` are `1`, `2` and `Inf` (default).
 This quantity is also known in the literature as the Bauer condition number, relative
 condition number, or componentwise relative condition number.
 """
-condskeel(A::AbstractMatrix, x::AbstractVector, p::Real=Inf) = norm(abs.(inv(A))*(abs.(A)*abs.(x)), p)
+function condskeel(A::AbstractMatrix, x::AbstractVector, p::Real=Inf)
+    norm(abs.(inv(A))*(abs.(A)*abs.(x)), p) / norm(x, p)
+end
 
 issymmetric(A::AbstractMatrix{<:Real}) = ishermitian(A)
 
@@ -1009,6 +1265,7 @@ false
 ```
 """
 function istriu(A::AbstractMatrix, k::Integer = 0)
+    require_one_based_indexing(A)
     m, n = size(A)
     for j in 1:min(n, m + k - 1)
         for i in max(1, j - k + 1):m
@@ -1050,6 +1307,7 @@ false
 ```
 """
 function istril(A::AbstractMatrix, k::Integer = 0)
+    require_one_based_indexing(A)
     m, n = size(A)
     for j in max(1, k + 2):n
         for i in 1:min(j - k - 1, m)
@@ -1073,10 +1331,10 @@ julia> a = [1 2; 2 -1]
  1   2
  2  -1
 
-julia> isbanded(a, 0, 0)
+julia> LinearAlgebra.isbanded(a, 0, 0)
 false
 
-julia> isbanded(a, -1, 1)
+julia> LinearAlgebra.isbanded(a, -1, 1)
 true
 
 julia> b = [1 0; -im -1] # lower bidiagonal
@@ -1084,10 +1342,10 @@ julia> b = [1 0; -im -1] # lower bidiagonal
  1+0im   0+0im
  0-1im  -1+0im
 
-julia> isbanded(b, 0, 0)
+julia> LinearAlgebra.isbanded(b, 0, 0)
 false
 
-julia> isbanded(b, -1, 0)
+julia> LinearAlgebra.isbanded(b, -1, 0)
 true
 ```
 """
@@ -1124,9 +1382,9 @@ isdiag(x::Number) = true
 # BLAS-like in-place y = x*α+y function (see also the version in blas.jl
 #                                          for BlasFloat Arrays)
 function axpy!(α, x::AbstractArray, y::AbstractArray)
-    n = _length(x)
-    if n != _length(y)
-        throw(DimensionMismatch("x has length $n, but y has length $(_length(y))"))
+    n = length(x)
+    if n != length(y)
+        throw(DimensionMismatch("x has length $n, but y has length $(length(y))"))
     end
     for (IY, IX) in zip(eachindex(y), eachindex(x))
         @inbounds y[IY] += x[IX]*α
@@ -1135,8 +1393,8 @@ function axpy!(α, x::AbstractArray, y::AbstractArray)
 end
 
 function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractArray, ry::AbstractArray{<:Integer})
-    if _length(rx) != _length(ry)
-        throw(DimensionMismatch("rx has length $(_length(rx)), but ry has length $(_length(ry))"))
+    if length(rx) != length(ry)
+        throw(DimensionMismatch("rx has length $(length(rx)), but ry has length $(length(ry))"))
     elseif !checkindex(Bool, eachindex(IndexLinear(), x), rx)
         throw(BoundsError(x, rx))
     elseif !checkindex(Bool, eachindex(IndexLinear(), y), ry)
@@ -1149,8 +1407,8 @@ function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractAr
 end
 
 function axpby!(α, x::AbstractArray, β, y::AbstractArray)
-    if _length(x) != _length(y)
-        throw(DimensionMismatch("x has length $(_length(x)), but y has length $(_length(y))"))
+    if length(x) != length(y)
+        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
     for (IX, IY) in zip(eachindex(x), eachindex(y))
         @inbounds y[IY] = x[IX]*α + y[IY]*β
@@ -1158,10 +1416,56 @@ function axpby!(α, x::AbstractArray, β, y::AbstractArray)
     y
 end
 
+"""
+    rotate!(x, y, c, s)
+
+Overwrite `x` with `c*x + s*y` and `y` with `-conj(s)*x + c*y`.
+Returns `x` and `y`.
+
+!!! compat "Julia 1.5"
+    `rotate!` requires at least Julia 1.5.
+"""
+function rotate!(x::AbstractVector, y::AbstractVector, c, s)
+    require_one_based_indexing(x, y)
+    n = length(x)
+    if n != length(y)
+        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+    end
+    @inbounds for i = 1:n
+        xi, yi = x[i], y[i]
+        x[i] =       c *xi + s*yi
+        y[i] = -conj(s)*xi + c*yi
+    end
+    return x, y
+end
+
+"""
+    reflect!(x, y, c, s)
+
+Overwrite `x` with `c*x + s*y` and `y` with `conj(s)*x - c*y`.
+Returns `x` and `y`.
+
+!!! compat "Julia 1.5"
+    `reflect!` requires at least Julia 1.5.
+"""
+function reflect!(x::AbstractVector, y::AbstractVector, c, s)
+    require_one_based_indexing(x, y)
+    n = length(x)
+    if n != length(y)
+        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+    end
+    @inbounds for i = 1:n
+        xi, yi = x[i], y[i]
+        x[i] =      c *xi + s*yi
+        y[i] = conj(s)*xi - c*yi
+    end
+    return x, y
+end
 
 # Elementary reflection similar to LAPACK. The reflector is not Hermitian but
 # ensures that tridiagonalization of Hermitian matrices become real. See lawn72
 @inline function reflector!(x::AbstractVector)
+    require_one_based_indexing(x)
     n = length(x)
     @inbounds begin
         ξ1 = x[1]
@@ -1169,7 +1473,7 @@ end
         for i = 2:n
             normu += abs2(x[i])
         end
-        if normu == zero(normu)
+        if iszero(normu)
             return zero(ξ1/normu)
         end
         normu = sqrt(normu)
@@ -1185,6 +1489,7 @@ end
 
 # apply reflector from left
 @inline function reflectorApply!(x::AbstractVector, τ::Number, A::StridedMatrix)
+    require_one_based_indexing(x)
     m, n = size(A)
     if length(x) != m
         throw(DimensionMismatch("reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
@@ -1230,7 +1535,7 @@ function det(A::AbstractMatrix{T}) where T
         S = typeof((one(T)*zero(T) + zero(T))/one(T))
         return convert(S, det(UpperTriangular(A)))
     end
-    return det(lu(A))
+    return det(lu(A; check = false))
 end
 det(x::Number) = x
 
@@ -1265,7 +1570,7 @@ julia> logabsdet(B)
 (0.6931471805599453, 1.0)
 ```
 """
-logabsdet(A::AbstractMatrix) = logabsdet(lu(A))
+logabsdet(A::AbstractMatrix) = logabsdet(lu(A, check=false))
 
 """
     logdet(M)
@@ -1307,18 +1612,18 @@ Currently supports only numeric leaf elements.
 ```jldoctest
 julia> a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
 3-element Array{Any,1}:
-  Any[1,2,[3,4]]
+  Any[1, 2, [3, 4]]
  5.0
-  Any[0+6im,[7.0,8.0]]
+  Any[0 + 6im, [7.0, 8.0]]
 
-julia> promote_leaf_eltypes(a)
+julia> LinearAlgebra.promote_leaf_eltypes(a)
 Complex{Float64}
 ```
 """
-promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) where {T<:Number} = T
-promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) where {T<:NumberArray} = eltype(T)
+promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{T,Vararg{T}}}) where {T<:Number} = T
+promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{T,Vararg{T}}}) where {T<:NumberArray} = eltype(T)
 promote_leaf_eltypes(x::T) where {T} = T
-promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_eltypes, promote_type, Bool, x)
+promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_eltypes, promote_type, x; init=Bool)
 
 # isapprox: approximate equality of arrays [like isapprox(Number,Number)]
 # Supports nested arrays; e.g., for `a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]`
@@ -1326,7 +1631,7 @@ promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_elt
 function isapprox(x::AbstractArray, y::AbstractArray;
     atol::Real=0,
     rtol::Real=Base.rtoldefault(promote_leaf_eltypes(x),promote_leaf_eltypes(y),atol),
-    nans::Bool=false, norm::Function=vecnorm)
+    nans::Bool=false, norm::Function=norm)
     d = norm(x - y)
     if isfinite(d)
         return d <= max(atol, rtol*max(norm(x), norm(y)))
@@ -1337,40 +1642,40 @@ function isapprox(x::AbstractArray, y::AbstractArray;
 end
 
 """
-    normalize!(v::AbstractVector, p::Real=2)
+    normalize!(a::AbstractArray, p::Real=2)
 
-Normalize the vector `v` in-place so that its `p`-norm equals unity,
-i.e. `norm(v, p) == 1`.
-See also [`normalize`](@ref) and [`vecnorm`](@ref).
+Normalize the array `a` in-place so that its `p`-norm equals unity,
+i.e. `norm(a, p) == 1`.
+See also [`normalize`](@ref) and [`norm`](@ref).
 """
-function normalize!(v::AbstractVector, p::Real=2)
-    nrm = norm(v, p)
-    __normalize!(v, nrm)
+function normalize!(a::AbstractArray, p::Real=2)
+    nrm = norm(a, p)
+    __normalize!(a, nrm)
 end
 
-@inline function __normalize!(v::AbstractVector, nrm::AbstractFloat)
+@inline function __normalize!(a::AbstractArray, nrm::AbstractFloat)
     # The largest positive floating point number whose inverse is less than infinity
     δ = inv(prevfloat(typemax(nrm)))
 
     if nrm ≥ δ # Safe to multiply with inverse
         invnrm = inv(nrm)
-        rmul!(v, invnrm)
+        rmul!(a, invnrm)
 
     else # scale elements to avoid overflow
         εδ = eps(one(nrm))/δ
-        rmul!(v, εδ)
-        rmul!(v, inv(nrm*εδ))
+        rmul!(a, εδ)
+        rmul!(a, inv(nrm*εδ))
     end
 
-    v
+    a
 end
 
 """
-    normalize(v::AbstractVector, p::Real=2)
+    normalize(a::AbstractArray, p::Real=2)
 
-Normalize the vector `v` so that its `p`-norm equals unity,
-i.e. `norm(v, p) == vecnorm(v, p) == 1`.
-See also [`normalize!`](@ref) and [`vecnorm`](@ref).
+Normalize the array `a` so that its `p`-norm equals unity,
+i.e. `norm(a, p) == 1`.
+See also [`normalize!`](@ref) and [`norm`](@ref).
 
 # Examples
 ```jldoctest
@@ -1393,15 +1698,29 @@ julia> c = normalize(a, 1)
 
 julia> norm(c, 1)
 1.0
+
+julia> a = [1 2 4 ; 1 2 4]
+2×3 Array{Int64,2}:
+ 1  2  4
+ 1  2  4
+
+julia> norm(a)
+6.48074069840786
+
+julia> normalize(a)
+2×3 Array{Float64,2}:
+ 0.154303  0.308607  0.617213
+ 0.154303  0.308607  0.617213
+
 ```
 """
-function normalize(v::AbstractVector, p::Real = 2)
-    nrm = norm(v, p)
-    if !isempty(v)
-        vv = copy_oftype(v, typeof(v[1]/nrm))
-        return __normalize!(vv, nrm)
+function normalize(a::AbstractArray, p::Real = 2)
+    nrm = norm(a, p)
+    if !isempty(a)
+        aa = copy_oftype(a, typeof(first(a)/nrm))
+        return __normalize!(aa, nrm)
     else
-        T = typeof(zero(eltype(v))/nrm)
+        T = typeof(zero(eltype(a))/nrm)
         return T[]
     end
 end

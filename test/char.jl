@@ -185,6 +185,7 @@ end
 
 @testset "sprint, repr" begin
     @test sprint(show, "text/plain", '$') == "'\$': ASCII/Unicode U+0024 (category Sc: Symbol, currency)"
+    @test sprint(show, "text/plain", '$', context=:compact => true) == "'\$'"
     @test repr('$') == "'\$'"
 end
 
@@ -205,7 +206,7 @@ end
             @test eof(io)
             close(io)
         end
-   finally
+    finally
         rm(file, force=true)
     end
 end
@@ -255,4 +256,47 @@ Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
     @test string(ASCIIChar('x')) == "x"
     @test_throws MethodError write(IOBuffer(), ASCIIChar('x'))
     @test_throws MethodError read(IOBuffer('x'), ASCIIChar)
+end
+
+@testset "ncodeunits(::Char)" begin
+    # valid encodings
+    @test ncodeunits('\0')       == 1
+    @test ncodeunits('\x1')      == 1
+    @test ncodeunits('\x7f')     == 1
+    @test ncodeunits('\u80')     == 2
+    @test ncodeunits('\uff')     == 2
+    @test ncodeunits('\u7ff')    == 2
+    @test ncodeunits('\u800')    == 3
+    @test ncodeunits('\uffff')   == 3
+    @test ncodeunits('\U10000')  == 4
+    @test ncodeunits('\U10ffff') == 4
+    # invalid encodings
+    @test ncodeunits(reinterpret(Char, 0x80_00_00_00)) == 1
+    @test ncodeunits(reinterpret(Char, 0x01_00_00_00)) == 1
+    @test ncodeunits(reinterpret(Char, 0x00_80_00_00)) == 2
+    @test ncodeunits(reinterpret(Char, 0x00_01_00_00)) == 2
+    @test ncodeunits(reinterpret(Char, 0x00_00_80_00)) == 3
+    @test ncodeunits(reinterpret(Char, 0x00_00_01_00)) == 3
+    @test ncodeunits(reinterpret(Char, 0x00_00_00_80)) == 4
+    @test ncodeunits(reinterpret(Char, 0x00_00_00_01)) == 4
+end
+
+@testset "reinterpret(Char, ::UInt32)" begin
+    for s = 0:31
+        u = one(UInt32) << s
+        @test reinterpret(UInt32, reinterpret(Char, u)) === u
+    end
+end
+
+@testset "broadcasting of Char" begin
+    @test identity.('a') == 'a'
+end
+
+@testset "code point format of U+ syntax (PR 33291)" begin
+    @test repr("text/plain", '\n') == "'\\n': ASCII/Unicode U+000A (category Cc: Other, control)"
+    @test repr("text/plain", '/') == "'/': ASCII/Unicode U+002F (category Po: Punctuation, other)"
+    @test repr("text/plain", '\u10e') == "'Ď': Unicode U+010E (category Lu: Letter, uppercase)"
+    @test repr("text/plain", '\u3a2c') == "'㨬': Unicode U+3A2C (category Lo: Letter, other)"
+    @test repr("text/plain", '\U001f428') == "'🐨': Unicode U+1F428 (category So: Symbol, other)"
+    @test repr("text/plain", '\U010f321') == "'\\U10f321': Unicode U+10F321 (category Co: Other, private use)"
 end

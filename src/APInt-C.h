@@ -9,11 +9,7 @@ extern "C" {
 #include "dtypes.h"
 
 #ifdef LLVM_VERSION_MAJOR
-#  if JL_LLVM_VERSION >= 50000
 using integerPart = llvm::APInt::WordType;
-#  else
-using llvm::integerPart;
-#  endif
 #else
 typedef void integerPart;
 #endif

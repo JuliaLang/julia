@@ -21,16 +21,23 @@ const DEFAULT_VAL = 0
 Uses of non-constant globals can be optimized by annotating their types at the point of use:
 
 ```julia
-global x
-y = f(x::Int + 1)
+global x = rand(1000)
+
+function loop_over_global()
+    s = 0.0
+    for i in x::Vector{Float64}
+        s += i
+    end
+    return s
+end
 ```
 
-Writing functions is better style. It leads to more reusable code and clarifies what steps are
-being done, and what their inputs and outputs are.
+Passing arguments to functions is better style. It leads to more reusable code and clarifies what the inputs and outputs are.
 
 !!! note
     All code in the REPL is evaluated in global scope, so a variable defined and assigned
-    at toplevel will be a **global** variable.
+    at top level will be a **global** variable. Variables defined at top level scope inside
+    modules are also global.
 
 In the following REPL session:
 
@@ -48,61 +55,84 @@ so all the performance issues discussed previously apply.
 
 ## Measure performance with [`@time`](@ref) and pay attention to memory allocation
 
-A useful tool for measuring performance is the [`@time`](@ref) macro. The following example
-illustrates good working style:
+A useful tool for measuring performance is the [`@time`](@ref) macro. We here repeat the example
+with the global variable above, but this time with the type annotation removed:
 
-```julia-repl
-julia> function f(n)
-           s = 0
-           for i = 1:n
-               s += i/2
+```jldoctest; setup = :(using Random; Random.seed!(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
+julia> x = rand(1000);
+
+julia> function sum_global()
+           s = 0.0
+           for i in x
+               s += i
            end
-           s
-       end
-f (generic function with 1 method)
+           return s
+       end;
 
-julia> @time f(1)
-  0.012686 seconds (2.09 k allocations: 103.421 KiB)
-0.5
+julia> @time sum_global()
+  0.017705 seconds (15.28 k allocations: 694.484 KiB)
+496.84883432553846
 
-julia> @time f(10^6)
-  0.021061 seconds (3.00 M allocations: 45.777 MiB, 11.69% gc time)
-2.5000025e11
+julia> @time sum_global()
+  0.000140 seconds (3.49 k allocations: 70.313 KiB)
+496.84883432553846
 ```
 
-On the first call (`@time f(1)`), `f` gets compiled.  (If you've not yet used [`@time`](@ref)
+On the first call (`@time sum_global()`) the function gets compiled. (If you've not yet used [`@time`](@ref)
 in this session, it will also compile functions needed for timing.)  You should not take the results
 of this run seriously. For the second run, note that in addition to reporting the time, it also
-indicated that a large amount of memory was allocated.
+indicated that a significant amount of memory was allocated. We are here just computing a sum over all elements in
+a vector of 64-bit floats so there should be no need to allocate memory (at least not on the heap which is what `@time` reports).
 
 Unexpected memory allocation is almost always a sign of some problem with your code, usually a
-problem with type-stability. Consequently, in addition to the allocation itself, it's very likely
+problem with type-stability or creating many small temporary arrays.
+Consequently, in addition to the allocation itself, it's very likely
 that the code generated for your function is far from optimal. Take such indications seriously
 and follow the advice below.
 
-For more serious benchmarking, consider the [BenchmarkTools.jl](https://github.com/JuliaCI/BenchmarkTools.jl)
-package which evaluates the function multiple times in order to reduce noise.
-
-As a teaser, an improved version of this function allocates no memory
+If we instead pass `x` as an argument to the function it no longer allocates memory
 (the allocation reported below is due to running the `@time` macro in global scope)
-and has an order of magnitude faster execution after the first call:
+and is significantly faster after the first call:
 
-```julia-repl
-julia> @time f_improved(1)
-  0.007008 seconds (1.32 k allocations: 63.640 KiB)
-0.5
+```jldoctest sumarg; setup = :(using Random; Random.seed!(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
+julia> x = rand(1000);
 
-julia> @time f_improved(10^6)
-  0.002997 seconds (6 allocations: 192 bytes)
-2.5000025e11
+julia> function sum_arg(x)
+           s = 0.0
+           for i in x
+               s += i
+           end
+           return s
+       end;
+
+julia> @time sum_arg(x)
+  0.007701 seconds (821 allocations: 43.059 KiB)
+496.84883432553846
+
+julia> @time sum_arg(x)
+  0.000006 seconds (5 allocations: 176 bytes)
+496.84883432553846
 ```
 
-Below you'll learn how to spot the problem with `f` and how to fix it.
+The 5 allocations seen are from running the `@time` macro itself in global scope. If we instead run
+the timing in a function, we can see that indeed no allocations are performed:
+
+```jldoctest sumarg; filter = r"[0-9\.]+ seconds"
+julia> time_sum(x) = @time sum_arg(x);
+
+julia> time_sum(x)
+  0.000001 seconds
+496.84883432553846
+```
 
 In some situations, your function may need to allocate memory as part of its operation, and this
 can complicate the simple picture above. In such cases, consider using one of the [tools](@ref tools)
 below to diagnose problems, or write a version of your function that separates allocation from
 its algorithmic aspects (see [Pre-allocating outputs](@ref)).
+
+!!! note
+    For more serious benchmarking, consider the [BenchmarkTools.jl](https://github.com/JuliaCI/BenchmarkTools.jl)
+    package which among other things evaluates the function multiple times in order to reduce noise.
 
 ## [Tools](@id tools)
 
@@ -110,42 +140,54 @@ Julia and its package ecosystem includes tools that may help you diagnose proble
 the performance of your code:
 
   * [Profiling](@ref) allows you to measure the performance of your running code and identify lines
-    that serve as bottlenecks.  For complex projects, the [ProfileView](https://github.com/timholy/ProfileView.jl)
+    that serve as bottlenecks. For complex projects, the [ProfileView](https://github.com/timholy/ProfileView.jl)
     package can help you visualize your profiling results.
+  * The [Traceur](https://github.com/JunoLab/Traceur.jl) package can help you find common performance problems in your code.
   * Unexpectedly-large memory allocations--as reported by [`@time`](@ref), [`@allocated`](@ref), or
     the profiler (through calls to the garbage-collection routines)--hint that there might be issues
-    with your code.  If you don't see another reason for the allocations, suspect a type problem.
+    with your code. If you don't see another reason for the allocations, suspect a type problem.
      You can also start Julia with the `--track-allocation=user` option and examine the resulting
-    `*.mem` files to see information about where those allocations occur.  See [Memory allocation analysis](@ref).
+    `*.mem` files to see information about where those allocations occur. See [Memory allocation analysis](@ref).
   * `@code_warntype` generates a representation of your code that can be helpful in finding expressions
     that result in type uncertainty. See [`@code_warntype`](@ref) below.
-  * The [Lint](https://github.com/tonyhffong/Lint.jl)
-    package can also warn you of certain types of programming errors.
 
-## Avoid containers with abstract type parameters
+## [Avoid containers with abstract type parameters](@id man-performance-abstract-container)
 
 When working with parameterized types, including arrays, it is best to avoid parameterizing with
 abstract types where possible.
 
 Consider the following:
 
-```julia
-a = Real[]    # typeof(a) = Array{Real,1}
-if (f = rand()) < .8
-    push!(a, f)
-end
+```jldoctest
+julia> a = Real[]
+Real[]
+
+julia> push!(a, 1); push!(a, 2.0); push!(a, π)
+3-element Array{Real,1}:
+ 1
+ 2.0
+ π = 3.1415926535897...
 ```
 
 Because `a` is a an array of abstract type [`Real`](@ref), it must be able to hold any
-`Real` value.  Since `Real` objects can be of arbitrary size and structure, `a` must be
-represented as an array of pointers to individually allocated `Real` objects. Because `f`
-will always be a [`Float64`](@ref), we should instead, use:
+`Real` value. Since `Real` objects can be of arbitrary size and structure, `a` must be
+represented as an array of pointers to individually allocated `Real` objects. However, if we instead
+only allow numbers of the same type, e.g. [`Float64`](@ref), to be stored in `a` these can be stored more
+efficiently:
 
-```julia
-a = Float64[] # typeof(a) = Array{Float64,1}
+```jldoctest
+julia> a = Float64[]
+Float64[]
+
+julia> push!(a, 1); push!(a, 2.0); push!(a,  π)
+3-element Array{Float64,1}:
+ 1.0
+ 2.0
+ 3.141592653589793
 ```
 
-which will create a contiguous block of 64-bit floating-point values that can be manipulated efficiently.
+Assigning numbers into `a` will now convert them to `Float64` and `a` will be stored as
+a contiguous block of 64-bit floating-point values that can be manipulated efficiently.
 
 See also the discussion under [Parametric Types](@ref).
 
@@ -168,7 +210,7 @@ julia> struct MyAmbiguousType
 
 This allows `a` to be of any type. This can often be useful, but it does have a downside: for
 objects of type `MyAmbiguousType`, the compiler will not be able to generate high-performance
-code.  The reason is that the compiler uses the types of objects, not their values, to determine
+code. The reason is that the compiler uses the types of objects, not their values, to determine
 how to build code. Unfortunately, very little can be inferred about an object of type `MyAmbiguousType`:
 
 ```jldoctest myambig
@@ -185,7 +227,7 @@ julia> typeof(c)
 MyAmbiguousType
 ```
 
-`b` and `c` have the same type, yet their underlying representation of data in memory is very
+The values of `b` and `c` have the same type, yet their underlying representation of data in memory is very
 different. Even if you stored just numeric values in field `a`, the fact that the memory representation
 of a [`UInt8`](@ref) differs from a [`Float64`](@ref) also means that the CPU needs to handle
 them using two different kinds of instructions. Since the required information is not available
@@ -208,7 +250,7 @@ julia> mutable struct MyStillAmbiguousType
        end
 ```
 
-because the first version specifies the type of `a` from the type of the wrapper object.  For
+because the first version specifies the type of `a` from the type of the wrapper object. For
 example:
 
 ```jldoctest myambig2
@@ -226,7 +268,7 @@ MyStillAmbiguousType
 ```
 
 The type of field `a` can be readily determined from the type of `m`, but not from the type of
-`t`.  Indeed, in `t` it's possible to change the type of field `a`:
+`t`. Indeed, in `t` it's possible to change the type of the field `a`:
 
 ```jldoctest myambig2
 julia> typeof(t.a)
@@ -249,11 +291,11 @@ julia> typeof(m.a)
 Float64
 ```
 
-The fact that the type of `m.a` is known from `m`'s type--coupled with the fact that its type
-cannot change mid-function--allows the compiler to generate highly-optimized code for objects
+The fact that the type of `m.a` is known from `m`'s type—coupled with the fact that its type
+cannot change mid-function—allows the compiler to generate highly-optimized code for objects
 like `m` but not for objects like `t`.
 
-Of course, all of this is true only if we construct `m` with a concrete type.  We can break this
+Of course, all of this is true only if we construct `m` with a concrete type. We can break this
 by explicitly constructing it with an abstract type:
 
 ```jldoctest myambig2
@@ -281,9 +323,8 @@ func(m::MyType) = m.a+1
 using
 
 ```julia
-code_llvm(func,Tuple{MyType{Float64}})
-code_llvm(func,Tuple{MyType{AbstractFloat}})
-code_llvm(func,Tuple{MyType})
+code_llvm(func, Tuple{MyType{Float64}})
+code_llvm(func, Tuple{MyType{AbstractFloat}})
 ```
 
 For reasons of length the results are not shown here, but you may wish to try this yourself. Because
@@ -295,11 +336,11 @@ to resolve the type at run-time. This results in shorter and faster code.
 The same best practices also work for container types:
 
 ```jldoctest containers
-julia> mutable struct MySimpleContainer{A<:AbstractVector}
+julia> struct MySimpleContainer{A<:AbstractVector}
            a::A
        end
 
-julia> mutable struct MyAmbiguousContainer{T}
+julia> struct MyAmbiguousContainer{T}
            a::AbstractVector{T}
        end
 ```
@@ -332,10 +373,10 @@ For `MySimpleContainer`, the object is fully-specified by its type and parameter
 can generate optimized functions. In most instances, this will probably suffice.
 
 While the compiler can now do its job perfectly well, there are cases where *you* might wish that
-your code could do different things depending on the *element type* of `a`.  Usually the best
+your code could do different things depending on the *element type* of `a`. Usually the best
 way to achieve this is to wrap your specific operation (here, `foo`) in a separate function:
 
-```julia jldoctest containers
+```jldoctest containers
 julia> function sumfoo(c::MySimpleContainer)
            s = 0
            for x in c.a
@@ -355,108 +396,36 @@ foo (generic function with 2 methods)
 This keeps things simple, while allowing the compiler to generate optimized code in all cases.
 
 However, there are cases where you may need to declare different versions of the outer function
-for different element types of `a`. You could do it like this:
+for different element types or types of the `AbstractVector` of the field `a` in `MySimpleContainer`.
+You could do it like this:
 
-```
-function myfun(c::MySimpleContainer{Vector{T}}) where T<:AbstractFloat
-    ...
-end
-function myfun(c::MySimpleContainer{Vector{T}}) where T<:Integer
-    ...
-end
-```
-
-This works fine for `Vector{T}`, but we'd also have to write explicit versions for `UnitRange{T}`
-or other abstract types. To prevent such tedium, you can use two parameters in the declaration
-of `MyContainer`:
-
-```jldoctest containers2
-julia> mutable struct MyContainer{T, A<:AbstractVector}
-           a::A
-       end
-
-julia> MyContainer(v::AbstractVector) = MyContainer{eltype(v), typeof(v)}(v)
-MyContainer
-
-julia> b = MyContainer(1:5);
-
-julia> typeof(b)
-MyContainer{Int64,UnitRange{Int64}}
-```
-
-Note the somewhat surprising fact that `T` doesn't appear in the declaration of field `a`, a point
-that we'll return to in a moment. With this approach, one can write functions such as:
-
-```jldoctest containers2
-julia> function myfunc(c::MyContainer{<:Integer, <:AbstractArray})
+```jldoctest containers
+julia> function myfunc(c::MySimpleContainer{<:AbstractArray{<:Integer}})
            return c.a[1]+1
        end
 myfunc (generic function with 1 method)
 
-julia> function myfunc(c::MyContainer{<:AbstractFloat})
+julia> function myfunc(c::MySimpleContainer{<:AbstractArray{<:AbstractFloat}})
            return c.a[1]+2
        end
 myfunc (generic function with 2 methods)
 
-julia> function myfunc(c::MyContainer{T,Vector{T}}) where T<:Integer
+julia> function myfunc(c::MySimpleContainer{Vector{T}}) where T <: Integer
            return c.a[1]+3
        end
 myfunc (generic function with 3 methods)
 ```
 
-!!! note
-    Because we can only define `MyContainer` for
-    `A<:AbstractArray`, and any unspecified parameters are arbitrary,
-    the first function above could have been written more succinctly as
-    `function myfunc(c::MyContainer{<:Integer})`
-
-
-```jldoctest containers2
-julia> myfunc(MyContainer(1:3))
+```jldoctest containers
+julia> myfunc(MySimpleContainer(1:3))
 2
 
-julia> myfunc(MyContainer(1.0:3))
+julia> myfunc(MySimpleContainer(1.0:3))
 3.0
 
-julia> myfunc(MyContainer([1:3;]))
+julia> myfunc(MySimpleContainer([1:3;]))
 4
 ```
-
-As you can see, with this approach it's possible to specialize on both the element type `T` and
-the array type `A`.
-
-However, there's one remaining hole: we haven't enforced that `A` has element type `T`, so it's
-perfectly possible to construct an object like this:
-
-```jldoctest containers2
-julia> b = MyContainer{Int64, UnitRange{Float64}}(UnitRange(1.3, 5.0));
-
-julia> typeof(b)
-MyContainer{Int64,UnitRange{Float64}}
-```
-
-To prevent this, we can add an inner constructor:
-
-```jldoctest containers3
-julia> mutable struct MyBetterContainer{T<:Real, A<:AbstractVector}
-           a::A
-           MyBetterContainer{T,A}(v::AbstractVector{T}) where {T,A} = new(v)
-       end
-
-julia> MyBetterContainer(v::AbstractVector) = MyBetterContainer{eltype(v),typeof(v)}(v)
-MyBetterContainer
-
-julia> b = MyBetterContainer(UnitRange(1.3, 5.0));
-
-julia> typeof(b)
-MyBetterContainer{Float64,UnitRange{Float64}}
-
-julia> b = MyBetterContainer{Int64, UnitRange{Float64}}(UnitRange(1.3, 5.0));
-ERROR: MethodError: Cannot `convert` an object of type UnitRange{Float64} to an object of type MyBetterContainer{Int64,UnitRange{Float64}}
-[...]
-```
-
-The inner constructor requires that the element type of `A` be `T`.
 
 ### Annotate values taken from untyped locations
 
@@ -477,7 +446,7 @@ an annotation like this has the added benefit that it will raise a run-time erro
 value is not of the expected type, potentially catching certain bugs earlier.
 
 In the case that the type of `a[1]` is not known precisely, `x` can be declared via
-`x = convert(Int32,a[1])::Int32`. The use of the [`convert`](@ref) function allows `a[1]`
+`x = convert(Int32, a[1])::Int32`. The use of the [`convert`](@ref) function allows `a[1]`
 to be any object convertible to an `Int32` (such as `UInt8`), thus increasing the genericity
 of the code by loosening the type requirement. Notice that `convert` itself needs a type
 annotation in this context in order to achieve type stability. This is because the compiler
@@ -498,7 +467,7 @@ end
 ```
 
 the annotation of `c` harms performance. To write performant code involving types constructed at
-run-time, use the [function-barrier technique](@ref kernal-functions) discussed below, and ensure
+run-time, use the [function-barrier technique](@ref kernel-functions) discussed below, and ensure
 that the constructed type appears among the argument types of the kernel function so that the kernel
 operations are properly specialized by the compiler. For example, in the above snippet, as soon as
 `b` is constructed, it can be passed to another function `k`, the kernel. If, for example, function
@@ -512,25 +481,69 @@ c = (b + 1.0f0)::Complex{T}
 does not hinder performance (but does not help either) since the compiler can determine the type of `c`
 at the time `k` is compiled.
 
-### Declare types of keyword arguments
+### Be aware of when Julia avoids specializing
 
-Keyword arguments can have declared types:
+As a heuristic, Julia avoids automatically specializing on argument type parameters in three
+specific cases: `Type`, `Function`, and `Vararg`. Julia will always specialize when the argument is
+used within the method, but not if the argument is just passed through to another function. This
+usually has no performance impact at runtime and
+[improves compiler performance](@ref compiler-efficiency-issues). If you find it does have a
+performance impact at runtime in your case, you can trigger specialization by adding a type
+parameter to the method declaration. Here are some examples:
+
+This will not specialize:
 
 ```julia
-function with_keyword(x; name::Int = 1)
-    ...
+function f_type(t)  # or t::Type
+    x = ones(t, 10)
+    return sum(map(sin, x))
 end
 ```
 
-Functions are specialized on the types of keyword arguments, so these declarations will not affect
-performance of code inside the function. However, they will reduce the overhead of calls to the
-function that include keyword arguments.
+but this will:
 
-Functions with keyword arguments have near-zero overhead for call sites that pass only positional
-arguments.
+```julia
+function g_type(t::Type{T}) where T
+    x = ones(T, 10)
+    return sum(map(sin, x))
+end
+```
 
-Passing dynamic lists of keyword arguments, as in `f(x; keywords...)`, can be slow and should
-be avoided in performance-sensitive code.
+These will not specialize:
+
+```julia
+f_func(f, num) = ntuple(f, div(num, 2))
+g_func(g::Function, num) = ntuple(g, div(num, 2))
+```
+
+but this will:
+
+```julia
+h_func(h::H, num) where {H} = ntuple(h, div(num, 2))
+```
+
+This will not specialize:
+
+```julia
+f_vararg(x::Int...) = tuple(x...)
+```
+
+but this will:
+
+```julia
+g_vararg(x::Vararg{Int, N}) where {N} = tuple(x...)
+```
+
+One only needs to introduce a single type parameter to force specialization, even if the other types are unconstrained. For example, this will also specialize, and is useful when the arguments are not all of the same type:
+```julia
+h_vararg(x::Vararg{Any, N}) where {N} = tuple(x...)
+```
+
+Note that [`@code_typed`](@ref) and friends will always show you specialized code, even if Julia
+would not normally specialize that method call. You need to check the
+[method internals](@ref ast-lowered-method) if you want to see whether specializations are generated
+when argument types are changed, i.e., if `(@which f(...)).specializations` contains specializations
+for the argument in question.
 
 ## Break functions into multiple definitions
 
@@ -540,13 +553,15 @@ code, or even inline it.
 Here is an example of a "compound function" that should really be written as multiple definitions:
 
 ```julia
-function norm(A)
+using LinearAlgebra
+
+function mynorm(A)
     if isa(A, Vector)
         return sqrt(real(dot(A,A)))
     elseif isa(A, Matrix)
         return maximum(svdvals(A))
     else
-        error("norm: invalid argument")
+        error("mynorm: invalid argument")
     end
 end
 ```
@@ -554,9 +569,12 @@ end
 This can be written more concisely and efficiently as:
 
 ```julia
-norm(x::Vector) = sqrt(real(dot(x,x)))
+norm(x::Vector) = sqrt(real(dot(x, x)))
 norm(A::Matrix) = maximum(svdvals(A))
 ```
+
+It should however be noted that the compiler is quite efficient at optimizing away the dead branches in code
+written as the `mynorm` example.
 
 ## Write "type-stable" functions
 
@@ -576,7 +594,7 @@ easily be fixed as follows:
 pos(x) = x < 0 ? zero(x) : x
 ```
 
-There is also a [`one`](@ref) function, and a more general [`oftype(x, y)`](@ref) function, which
+There is also a [`oneunit`](@ref) function, and a more general [`oftype(x, y)`](@ref) function, which
 returns `y` converted to the type of `x`.
 
 ## Avoid changing the type of a variable
@@ -587,7 +605,7 @@ An analogous "type-stability" problem exists for variables used repeatedly withi
 function foo()
     x = 1
     for i = 1:10
-        x = x/bar()
+        x /= rand()
     end
     return x
 end
@@ -598,33 +616,25 @@ number (the result of [`/`](@ref) operator). This makes it more difficult for th
 optimize the body of the loop. There are several possible fixes:
 
   * Initialize `x` with `x = 1.0`
-  * Declare the type of `x`: `x::Float64 = 1`
-  * Use an explicit conversion: `x = oneunit(T)`
-  * Initialize with the first loop iteration, to `x = 1/bar()`, then loop `for i = 2:10`
+  * Declare the type of `x` explicitly as `x::Float64 = 1`
+  * Use an explicit conversion by `x = oneunit(Float64)`
+  * Initialize with the first loop iteration, to `x = 1 / rand()`, then loop `for i = 2:10`
 
-## [Separate kernel functions (aka, function barriers)](@id kernal-functions)
+## [Separate kernel functions (aka, function barriers)](@id kernel-functions)
 
 Many functions follow a pattern of performing some set-up work, and then running many iterations
 to perform a core computation. Where possible, it is a good idea to put these core computations
 in separate functions. For example, the following contrived function returns an array of a randomly-chosen
 type:
 
-```@meta
-DocTestSetup = quote
-    import Random
-    Random.srand(1234)
-end
-```
-
-```jldoctest
+```jldoctest; setup = :(using Random; Random.seed!(1234))
 julia> function strange_twos(n)
            a = Vector{rand(Bool) ? Int64 : Float64}(undef, n)
            for i = 1:n
                a[i] = 2
            end
            return a
-       end
-strange_twos (generic function with 1 method)
+       end;
 
 julia> strange_twos(3)
 3-element Array{Float64,1}:
@@ -635,20 +645,18 @@ julia> strange_twos(3)
 
 This should be written as:
 
-```jldoctest
+```jldoctest; setup = :(using Random; Random.seed!(1234))
 julia> function fill_twos!(a)
            for i = eachindex(a)
                a[i] = 2
            end
-       end
-fill_twos! (generic function with 1 method)
+       end;
 
 julia> function strange_twos(n)
            a = Vector{rand(Bool) ? Int64 : Float64}(undef, n)
            fill_twos!(a)
            return a
-       end
-strange_twos (generic function with 1 method)
+       end;
 
 julia> strange_twos(3)
 3-element Array{Float64,1}:
@@ -664,14 +672,14 @@ of `fill_twos!` for different types of `a`.
 
 The second form is also often better style and can lead to more code reuse.
 
-This pattern is used in several places in Julia Base. For example, see `hvcat_fill`
-in [`abstractarray.jl`](https://github.com/JuliaLang/julia/blob/master/base/abstractarray.jl), or
-the [`fill!`](@ref) function, which we could have used instead of writing our own `fill_twos!`.
+This pattern is used in several places in Julia Base. For example, see `vcat` and `hcat`
+in [`abstractarray.jl`](https://github.com/JuliaLang/julia/blob/40fe264f4ffaa29b749bcf42239a89abdcbba846/base/abstractarray.jl#L1205-L1206),
+or the [`fill!`](@ref) function, which we could have used instead of writing our own `fill_twos!`.
 
 Functions like `strange_twos` occur when dealing with data of uncertain type, for example data
 loaded from an input file that might contain either integers, floats, strings, or something else.
 
-## Types with values-as-parameters
+## [Types with values-as-parameters](@id man-performance-value-type)
 
 Let's say you want to create an `N`-dimensional array that has size 3 along each axis. Such arrays
 can be created like this:
@@ -711,8 +719,8 @@ does not (and cannot) predict its value in advance. This means that code using t
 function has to be conservative, checking the type on each access of `A`; such code will be very
 slow.
 
-Now, one very good way to solve such problems is by using the [function-barrier technique](@ref kernal-functions).
-However, in some cases you might want to eliminate the type-instability altogether.  In such cases,
+Now, one very good way to solve such problems is by using the [function-barrier technique](@ref kernel-functions).
+However, in some cases you might want to eliminate the type-instability altogether. In such cases,
 one approach is to pass the dimensionality as a parameter, for example through `Val{T}()` (see
 ["Value types"](@ref)):
 
@@ -743,8 +751,8 @@ end
 ```
 
 Here, you've created the same problem all over again: the compiler can't guess what `n` is,
-so it doesn't know the *type* of `Val(n)`.  Attempting to use `Val`, but doing so incorrectly, can
-easily make performance *worse* in many situations.  (Only in situations where you're effectively
+so it doesn't know the *type* of `Val(n)`. Attempting to use `Val`, but doing so incorrectly, can
+easily make performance *worse* in many situations. (Only in situations where you're effectively
 combining `Val` with the function-barrier trick, to make the kernel function more efficient, should
 code like the above be used.)
 
@@ -757,18 +765,18 @@ function filter3(A::AbstractArray{T,N}) where {T,N}
 end
 ```
 
-In this example, `N` is passed as a parameter, so its "value" is known to the compiler.  Essentially,
+In this example, `N` is passed as a parameter, so its "value" is known to the compiler. Essentially,
 `Val(T)` works only when `T` is either hard-coded/literal (`Val(3)`) or already specified in the
 type-domain.
 
 ## The dangers of abusing multiple dispatch (aka, more on types with values-as-parameters)
 
-Once one learns to appreciate multiple dispatch, there's an understandable tendency to go crazy
+Once one learns to appreciate multiple dispatch, there's an understandable tendency to go overboard
 and try to use it for everything. For example, you might imagine using it to store information,
 e.g.
 
 ```
-struct Car{Make,Model}
+struct Car{Make, Model}
     year::Int
     ...more fields...
 end
@@ -776,10 +784,11 @@ end
 
 and then dispatch on objects like `Car{:Honda,:Accord}(year, args...)`.
 
-This might be worthwhile when the following are true:
+This might be worthwhile when either of the following are true:
 
   * You require CPU-intensive processing on each `Car`, and it becomes vastly more efficient if you
-    know the `Make` and `Model` at compile time.
+    know the `Make` and `Model` at compile time and the total number of different `Make` or `Model`
+    that will be used is not too large.
   * You have homogenous lists of the same type of `Car` to process, so that you can store them all
     in an `Array{Car{:Honda,:Accord},N}`.
 
@@ -789,7 +798,7 @@ type), so Julia can "look up" the correct method calls when the function is bein
 the need to check at run-time) and thereby emit efficient code for processing the whole list.
 
 When these do not hold, then it's likely that you'll get no benefit; worse, the resulting "combinatorial
-explosion of types" will be counterproductive.  If `items[i+1]` has a different type than `item[i]`,
+explosion of types" will be counterproductive. If `items[i+1]` has a different type than `item[i]`,
 Julia has to look up the type at run-time, search for the appropriate method in method tables,
 decide (via type intersection) which one matches, determine whether it has been JIT-compiled yet
 (and do so if not), and then make the call. In essence, you're asking the full type- system and
@@ -803,11 +812,11 @@ Perhaps even worse than the run-time impact is the compile-time impact: Julia wi
 functions for each different `Car{Make, Model}`; if you have hundreds or thousands of such types,
 then every function that accepts such an object as a parameter (from a custom `get_year` function
 you might write yourself, to the generic `push!` function in Julia Base) will have hundreds
-or thousands of variants compiled for it.  Each of these increases the size of the cache of compiled
-code, the length of internal lists of methods, etc.  Excess enthusiasm for values-as-parameters
+or thousands of variants compiled for it. Each of these increases the size of the cache of compiled
+code, the length of internal lists of methods, etc. Excess enthusiasm for values-as-parameters
 can easily waste enormous resources.
 
-## Access arrays in memory order, along columns
+## [Access arrays in memory order, along columns](@id man-performance-column-major)
 
 Multidimensional arrays in Julia are stored in column-major order. This means that arrays are
 stacked one column at a time. This can be verified using the `vec` function or the syntax `[:]`
@@ -833,6 +842,7 @@ adopted by C and Python (`numpy`) among other languages. Remembering the orderin
 have significant performance effects when looping over arrays. A rule of thumb to keep in mind
 is that with column-major arrays, the first index changes most rapidly. Essentially this means
 that looping will be faster if the inner-most loop index is the first to appear in a slice expression.
+Keep in mind that indexing an array with `:` is an implicit loop that iteratively accesses all elements within a particular dimension; it can be faster to extract columns than rows, for example.
 
 Consider the following contrived example. Imagine we wanted to write a function that accepts a
 [`Vector`](@ref) and returns a square [`Matrix`](@ref) with either the rows or the columns filled with copies
@@ -847,7 +857,7 @@ function copy_cols(x::Vector{T}) where T
     for i = inds
         out[:, i] = x
     end
-    out
+    return out
 end
 
 function copy_rows(x::Vector{T}) where T
@@ -856,7 +866,7 @@ function copy_rows(x::Vector{T}) where T
     for i = inds
         out[i, :] = x
     end
-    out
+    return out
 end
 
 function copy_col_row(x::Vector{T}) where T
@@ -865,7 +875,7 @@ function copy_col_row(x::Vector{T}) where T
     for col = inds, row = inds
         out[row, col] = x[row]
     end
-    out
+    return out
 end
 
 function copy_row_col(x::Vector{T}) where T
@@ -874,7 +884,7 @@ function copy_row_col(x::Vector{T}) where T
     for row = inds, col = inds
         out[row, col] = x[col]
     end
-    out
+    return out
 end
 ```
 
@@ -885,7 +895,7 @@ julia> x = randn(10000);
 
 julia> fmt(f) = println(rpad(string(f)*": ", 14, ' '), @elapsed f(x))
 
-julia> map(fmt, Any[copy_cols, copy_rows, copy_col_row, copy_row_col]);
+julia> map(fmt, [copy_cols, copy_rows, copy_col_row, copy_row_col]);
 copy_cols:    0.331706323
 copy_rows:    1.799009911
 copy_col_row: 0.415630047
@@ -900,50 +910,50 @@ first element to appear in a slice expression should be coupled with the inner-m
 ## Pre-allocating outputs
 
 If your function returns an `Array` or some other complex type, it may have to allocate memory.
- Unfortunately, oftentimes allocation and its converse, garbage collection, are substantial bottlenecks.
+Unfortunately, oftentimes allocation and its converse, garbage collection, are substantial bottlenecks.
 
 Sometimes you can circumvent the need to allocate memory on each function call by preallocating
-the output.  As a trivial example, compare
+the output. As a trivial example, compare
 
-```julia
-function xinc(x)
-    return [x, x+1, x+2]
-end
+```jldoctest prealloc
+julia> function xinc(x)
+           return [x, x+1, x+2]
+       end;
 
-function loopinc()
-    y = 0
-    for i = 1:10^7
-        ret = xinc(i)
-        y += ret[2]
-    end
-    y
-end
+julia> function loopinc()
+           y = 0
+           for i = 1:10^7
+               ret = xinc(i)
+               y += ret[2]
+           end
+           return y
+       end;
 ```
 
 with
 
-```julia
-function xinc!(ret::AbstractVector{T}, x::T) where T
-    ret[1] = x
-    ret[2] = x+1
-    ret[3] = x+2
-    nothing
-end
+```jldoctest prealloc
+julia> function xinc!(ret::AbstractVector{T}, x::T) where T
+           ret[1] = x
+           ret[2] = x+1
+           ret[3] = x+2
+           nothing
+       end;
 
-function loopinc_prealloc()
-    ret = Vector{Int}(undef, 3)
-    y = 0
-    for i = 1:10^7
-        xinc!(ret, i)
-        y += ret[2]
-    end
-    y
-end
+julia> function loopinc_prealloc()
+           ret = Vector{Int}(undef, 3)
+           y = 0
+           for i = 1:10^7
+               xinc!(ret, i)
+               y += ret[2]
+           end
+           return y
+       end;
 ```
 
 Timing results:
 
-```julia-repl
+```jldoctest prealloc; filter = r"[0-9\.]+ seconds \(.*?\)"
 julia> @time loopinc()
   0.529894 seconds (40.00 M allocations: 1.490 GiB, 12.14% gc time)
 50000015000000
@@ -954,7 +964,7 @@ julia> @time loopinc_prealloc()
 ```
 
 Preallocation has other advantages, for example by allowing the caller to control the "output"
-type from an algorithm.  In the example above, we could have passed a `SubArray` rather than an
+type from an algorithm. In the example above, we could have passed a `SubArray` rather than an
 [`Array`](@ref), had we so desired.
 
 Taken to its extreme, pre-allocation can make your code uglier, so performance measurements and
@@ -978,30 +988,30 @@ to instead use `vector .+ vector` and `vector .* scalar` because the
 resulting loops can be fused with surrounding computations. For example,
 consider the two functions:
 
-```julia
-f(x) = 3x.^2 + 4x + 7x.^3
+```jldoctest dotfuse
+julia> f(x) = 3x.^2 + 4x + 7x.^3;
 
-fdot(x) = @. 3x^2 + 4x + 7x^3 # equivalent to 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3
+julia> fdot(x) = @. 3x^2 + 4x + 7x^3 # equivalent to 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3;
 ```
 
-Both `f` and `fdot` compute the same thing.  However, `fdot`
+Both `f` and `fdot` compute the same thing. However, `fdot`
 (defined with the help of the [`@.`](@ref @__dot__) macro) is
 significantly faster when applied to an array:
 
-```julia-repl
+```jldoctest dotfuse; filter = r"[0-9\.]+ seconds \(.*?\)"
 julia> x = rand(10^6);
 
 julia> @time f(x);
-  0.010986 seconds (18 allocations: 53.406 MiB, 11.45% gc time)
+  0.019049 seconds (16 allocations: 45.777 MiB, 18.59% gc time)
 
 julia> @time fdot(x);
-  0.003470 seconds (6 allocations: 7.630 MiB)
+  0.002790 seconds (6 allocations: 7.630 MiB)
 
 julia> @time f.(x);
-  0.003297 seconds (30 allocations: 7.631 MiB)
+  0.002626 seconds (8 allocations: 7.630 MiB)
 ```
 
-That is, `fdot(x)` is three times faster and allocates 1/7 the
+That is, `fdot(x)` is ten times faster and allocates 1/6 the
 memory of `f(x)`, because each `*` and `+` operation in `f(x)` allocates
 a new temporary array and executes in a separate loop. (Of course,
 if you just do `f.(x)` then it is as fast as `fdot(x)` in this
@@ -1009,7 +1019,7 @@ example, but in many contexts it is more convenient to just sprinkle
 some dots in your expressions rather than defining a separate function
 for each vectorized operation.)
 
-## Consider using views for slices
+## [Consider using views for slices](@id man-performance-views)
 
 In Julia, an array "slice" expression like `array[1:5, :]` creates
 a copy of that data (except on the left-hand side of an assignment,
@@ -1023,16 +1033,16 @@ substantial.
 
 An alternative is to create a "view" of the array, which is
 an array object (a `SubArray`) that actually references the data
-of the original array in-place, without making a copy.  (If you
+of the original array in-place, without making a copy. (If you
 write to a view, it modifies the original array's data as well.)
 This can be done for individual slices by calling [`view`](@ref),
 or more simply for a whole expression or block of code by putting
-[`@views`](@ref) in front of that expression.  For example:
+[`@views`](@ref) in front of that expression. For example:
 
-```julia-repl
-julia> fcopy(x) = sum(x[2:end-1])
+```jldoctest; filter = r"[0-9\.]+ seconds \(.*?\)"
+julia> fcopy(x) = sum(x[2:end-1]);
 
-julia> @views fview(x) = sum(x[2:end-1])
+julia> @views fview(x) = sum(x[2:end-1]);
 
 julia> x = rand(10^6);
 
@@ -1056,9 +1066,11 @@ can drastically slow down computations on arrays because of non-sequential memor
 Copying irregularly-accessed data into a contiguous array before operating on it can result
 in a large speedup, such as in the example below. Here, a matrix and a vector are being accessed at
 800,000 of their randomly-shuffled indices before being multiplied. Copying the views into
-plain arrays speeds the multiplication by more than a factor of 2 even with the cost of the copying operation.
+plain arrays speeds up the multiplication even with the cost of the copying operation.
 
 ```julia-repl
+julia> using Random
+
 julia> x = randn(1_000_000);
 
 julia> inds = shuffle(1:1_000_000)[1:800000];
@@ -1070,17 +1082,18 @@ julia> xtmp = zeros(800_000);
 julia> Atmp = zeros(50, 800_000);
 
 julia> @time sum(view(A, :, inds) * view(x, inds))
-  0.640320 seconds (41 allocations: 1.391 KiB)
-7253.242699002263
+  0.412156 seconds (14 allocations: 960 bytes)
+-4256.759568345458
 
 julia> @time begin
            copyto!(xtmp, view(x, inds))
            copyto!(Atmp, view(A, :, inds))
            sum(Atmp * xtmp)
        end
-  0.261294 seconds (41 allocations: 1.391 KiB)
-7253.242699002323
+  0.285923 seconds (14 allocations: 960 bytes)
+-4256.759568345134
 ```
+
 Provided there is enough memory for the copies, the cost of copying the view to an array is
 far outweighed by the speed boost from doing the matrix multiplication on a contiguous array.
 
@@ -1118,10 +1131,12 @@ println(file, f(a), f(b))
 When executing a remote function in parallel:
 
 ```julia
-responses = Vector{Any}(nworkers())
+using Distributed
+
+responses = Vector{Any}(undef, nworkers())
 @sync begin
     for (idx, pid) in enumerate(workers())
-        @async responses[idx] = remotecall_fetch(pid, foo, args...)
+        @async responses[idx] = remotecall_fetch(foo, pid, args...)
     end
 end
 ```
@@ -1129,7 +1144,9 @@ end
 is faster than:
 
 ```julia
-refs = Vector{Any}(nworkers())
+using Distributed
+
+refs = Vector{Any}(undef, nworkers())
 for (idx, pid) in enumerate(workers())
     refs[idx] = @spawnat pid foo(args...)
 end
@@ -1161,56 +1178,64 @@ These are some minor points that might help in tight inner loops.
 
 Sometimes you can enable better optimization by promising certain program properties.
 
-  * Use `@inbounds` to eliminate array bounds checking within expressions. Be certain before doing
+  * Use [`@inbounds`](@ref) to eliminate array bounds checking within expressions. Be certain before doing
     this. If the subscripts are ever out of bounds, you may suffer crashes or silent corruption.
-  * Use `@fastmath` to allow floating point optimizations that are correct for real numbers, but lead
+  * Use [`@fastmath`](@ref) to allow floating point optimizations that are correct for real numbers, but lead
     to differences for IEEE numbers. Be careful when doing this, as this may change numerical results.
     This corresponds to the `-ffast-math` option of clang.
-  * Write `@simd` in front of `for` loops that are amenable to vectorization. **This feature is experimental**
+  * Write [`@simd`](@ref) in front of `for` loops to promise that the iterations are independent and may be
+    reordered.  Note that in many cases, Julia can automatically vectorize code without the `@simd` macro;
+    it is only beneficial in cases where such a transformation would otherwise be illegal, including cases
+    like allowing floating-point re-associativity and ignoring dependent memory accesses (`@simd ivdep`).
+    Again, be very careful when asserting `@simd` as erroneously annotating a loop with dependent iterations
+    may result in unexpected results. In particular, note that `setindex!` on some `AbstractArray` subtypes is
+    inherently dependent upon iteration order. **This feature is experimental**
     and could change or disappear in future versions of Julia.
 
 The common idiom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing,
 and may cause a segmentation fault if bounds checking is turned off. Use `LinearIndices(x)` or `eachindex(x)`
-instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays)).
+instead (see also [Arrays with custom indices](@ref man-custom-indices)).
 
-Note: While `@simd` needs to be placed directly in front of a loop, both `@inbounds` and `@fastmath`
-can be applied to several statements at once, e.g. using `begin` ... `end`, or even to a whole
-function.
+!!! note
+    While `@simd` needs to be placed directly in front of an innermost `for` loop, both `@inbounds` and `@fastmath`
+    can be applied to either single expressions or all the expressions that appear within nested blocks of code, e.g.,
+    using `@inbounds begin` or `@inbounds for ...`.
 
-Here is an example with both `@inbounds` and `@simd` markup:
+Here is an example with both `@inbounds` and `@simd` markup (we here use `@noinline` to prevent
+the optimizer from trying to be too clever and defeat our benchmark):
 
 ```julia
-function inner(x, y)
+@noinline function inner(x, y)
     s = zero(eltype(x))
     for i=eachindex(x)
         @inbounds s += x[i]*y[i]
     end
-    s
+    return s
 end
 
-function innersimd(x, y)
+@noinline function innersimd(x, y)
     s = zero(eltype(x))
-    @simd for i=eachindex(x)
-        @inbounds s += x[i]*y[i]
+    @simd for i = eachindex(x)
+        @inbounds s += x[i] * y[i]
     end
-    s
+    return s
 end
 
 function timeit(n, reps)
-    x = rand(Float32,n)
-    y = rand(Float32,n)
+    x = rand(Float32, n)
+    y = rand(Float32, n)
     s = zero(Float64)
     time = @elapsed for j in 1:reps
-        s+=inner(x,y)
+        s += inner(x, y)
     end
-    println("GFlop/sec        = ",2.0*n*reps/time*1E-9)
+    println("GFlop/sec        = ", 2n*reps / time*1E-9)
     time = @elapsed for j in 1:reps
-        s+=innersimd(x,y)
+        s += innersimd(x, y)
     end
-    println("GFlop/sec (SIMD) = ",2.0*n*reps/time*1E-9)
+    println("GFlop/sec (SIMD) = ", 2n*reps / time*1E-9)
 end
 
-timeit(1000,1000)
+timeit(1000, 1000)
 ```
 
 On a computer with a 2.4GHz Intel Core i5 processor, this produces:
@@ -1220,33 +1245,7 @@ GFlop/sec        = 1.9467069505224963
 GFlop/sec (SIMD) = 17.578554163920018
 ```
 
-(`GFlop/sec` measures the performance, and larger numbers are better.) The range for a `@simd for`
-loop should be a one-dimensional range. A variable used for accumulating, such as `s` in the example,
-is called a *reduction variable*. By using `@simd`, you are asserting several properties of the
-loop:
-
-  * It is safe to execute iterations in arbitrary or overlapping order, with special consideration
-    for reduction variables.
-  * Floating-point operations on reduction variables can be reordered, possibly causing different
-    results than without `@simd`.
-  * No iteration ever waits on another iteration to make forward progress.
-
-A loop containing `break`, `continue`, or `@goto` will cause a compile-time error.
-
-Using `@simd` merely gives the compiler license to vectorize. Whether it actually does so depends
-on the compiler. To actually benefit from the current implementation, your loop should have the
-following additional properties:
-
-  * The loop must be an innermost loop.
-  * The loop body must be straight-line code. This is why `@inbounds` is currently needed for all
-    array accesses. The compiler can sometimes turn short `&&`, `||`, and `?:` expressions into straight-line
-    code, if it is safe to evaluate all operands unconditionally. Consider using the [`ifelse`](@ref)
-    function instead of `?:` in the loop if it is safe to do so.
-  * Accesses must have a stride pattern and cannot be "gathers" (random-index reads) or "scatters"
-    (random-index writes).
-  * The stride should be unit stride.
-  * In some simple cases, for example with 2-3 arrays accessed in a loop, the LLVM auto-vectorization
-    may kick in automatically, leading to no further speedup with `@simd`.
+(`GFlop/sec` measures the performance, and larger numbers are better.)
 
 Here is an example with all three kinds of markup. This program first calculates the finite difference
 of a one-dimensional array, and then evaluates the L2-norm of the result:
@@ -1270,14 +1269,14 @@ function deriv!(u::Vector, du)
     @fastmath @inbounds du[n] = (u[n] - u[n-1]) / dx
 end
 
-function norm(u::Vector)
+function mynorm(u::Vector)
     n = length(u)
     T = eltype(u)
     s = zero(T)
     @fastmath @inbounds @simd for i in 1:n
         s += u[i]^2
     end
-    @fastmath @inbounds return sqrt(s/n)
+    @fastmath @inbounds return sqrt(s)
 end
 
 function main()
@@ -1287,11 +1286,11 @@ function main()
     du = similar(u)
 
     deriv!(u, du)
-    nu = norm(du)
+    nu = mynorm(du)
 
     @time for i in 1:10^6
         deriv!(u, du)
-        nu = norm(du)
+        nu = mynorm(du)
     end
 
     println(nu)
@@ -1304,10 +1303,12 @@ On a computer with a 2.7 GHz Intel Core i7 processor, this produces:
 
 ```
 $ julia wave.jl;
-elapsed time: 1.207814709 seconds (0 bytes allocated)
+  1.207814709 seconds
+4.443986180758249
 
 $ julia --math-mode=ieee wave.jl;
-elapsed time: 4.487083643 seconds (0 bytes allocated)
+  4.487083643 seconds
+4.443986180758249
 ```
 
 Here, the option `--math-mode=ieee` disables the `@fastmath` macro, so that we can compare results.
@@ -1328,6 +1329,20 @@ on this particular computer), the main difference is that the expression `1 / (2
 is much faster to evaluate. Of course, both the actual optimization that is applied by the compiler
 as well as the resulting speedup depend very much on the hardware. You can examine the change
 in generated code by using Julia's [`code_native`](@ref) function.
+
+Note that `@fastmath` also assumes that `NaN`s will not occur during the computation, which can lead to surprising behavior:
+
+```julia-repl
+julia> f(x) = isnan(x);
+
+julia> f(NaN)
+true
+
+julia> f_fast(x) = @fastmath isnan(x);
+
+julia> f_fast(NaN)
+false
+```
 
 ## Treat Subnormal Numbers as Zeros
 
@@ -1366,6 +1381,19 @@ for trial=1:6
 end
 ```
 
+This gives an output similar to
+
+```
+  0.002202 seconds (1 allocation: 4.063 KiB)
+  0.001502 seconds (1 allocation: 4.063 KiB)
+  0.002139 seconds (1 allocation: 4.063 KiB)
+  0.001454 seconds (1 allocation: 4.063 KiB)
+  0.002115 seconds (1 allocation: 4.063 KiB)
+  0.001455 seconds (1 allocation: 4.063 KiB)
+```
+
+Note how each even iteration is significantly faster.
+
 This example generates many subnormal numbers because the values in `a` become an exponentially
 decreasing curve, which slowly flattens out over time.
 
@@ -1394,91 +1422,53 @@ a = rand(Float32,1000) * 1.f-9
 The macro [`@code_warntype`](@ref) (or its function variant [`code_warntype`](@ref)) can sometimes
 be helpful in diagnosing type-related problems. Here's an example:
 
-```julia
-pos(x) = x < 0 ? 0 : x
+```julia-repl
+julia> @noinline pos(x) = x < 0 ? 0 : x;
 
-function f(x)
-    y = pos(x)
-    sin(y*x+1)
-end
+julia> function f(x)
+           y = pos(x)
+           return sin(y*x + 1)
+       end;
 
 julia> @code_warntype f(3.2)
-Variables:
-  #self#::#f
+Variables
+  #self#::Core.Compiler.Const(f, false)
   x::Float64
-  y::UNION{FLOAT64,INT64}
-  fy::Float64
-  #temp#@_5::UNION{FLOAT64,INT64}
-  #temp#@_6::Core.MethodInstance
-  #temp#@_7::Float64
+  y::UNION{FLOAT64, INT64}
 
-Body:
-  begin
-      $(Expr(:inbounds, false))
-      # meta: location REPL[1] pos 1
-      # meta: location float.jl < 487
-      fy::Float64 = (Core.typeassert)((Base.sitofp)(Float64,0)::Float64,Float64)::Float64
-      # meta: pop location
-      unless (Base.or_int)((Base.lt_float)(x::Float64,fy::Float64)::Bool,(Base.and_int)((Base.and_int)((Base.eq_float)(x::Float64,fy::Float64)::Bool,(Base.lt_float)(fy::Float64,9.223372036854776e18)::Bool)::Bool,(Base.slt_int)((Base.fptosi)(Int64,fy::Float64)::Int64,0)::Bool)::Bool)::Bool goto 9
-      #temp#@_5::UNION{FLOAT64,INT64} = 0
-      goto 11
-      9:
-      #temp#@_5::UNION{FLOAT64,INT64} = x::Float64
-      11:
-      # meta: pop location
-      $(Expr(:inbounds, :pop))
-      y::UNION{FLOAT64,INT64} = #temp#@_5::UNION{FLOAT64,INT64} # line 3:
-      unless (y::UNION{FLOAT64,INT64} isa Int64)::ANY goto 19
-      #temp#@_6::Core.MethodInstance = MethodInstance for *(::Int64, ::Float64)
-      goto 28
-      19:
-      unless (y::UNION{FLOAT64,INT64} isa Float64)::ANY goto 23
-      #temp#@_6::Core.MethodInstance = MethodInstance for *(::Float64, ::Float64)
-      goto 28
-      23:
-      goto 25
-      25:
-      #temp#@_7::Float64 = (y::UNION{FLOAT64,INT64} * x::Float64)::Float64
-      goto 30
-      28:
-      #temp#@_7::Float64 = $(Expr(:invoke, :(#temp#@_6), :(Main.*), :(y), :(x)))
-      30:
-      return $(Expr(:invoke, MethodInstance for sin(::Float64), :(Main.sin), :((Base.add_float)(#temp#@_7,(Base.sitofp)(Float64,1)::Float64)::Float64)))
-  end::Float64
+Body::Float64
+1 ─      (y = Main.pos(x))
+│   %2 = (y * x)::Float64
+│   %3 = (%2 + 1)::Float64
+│   %4 = Main.sin(%3)::Float64
+└──      return %4
 ```
 
 Interpreting the output of [`@code_warntype`](@ref), like that of its cousins [`@code_lowered`](@ref),
 [`@code_typed`](@ref), [`@code_llvm`](@ref), and [`@code_native`](@ref), takes a little practice.
-Your code is being presented in form that has been partially digested on its way to generating
-compiled machine code.  Most of the expressions are annotated by a type, indicated by the `::T`
+Your code is being presented in form that has been heavily digested on its way to generating
+compiled machine code. Most of the expressions are annotated by a type, indicated by the `::T`
 (where `T` might be [`Float64`](@ref), for example). The most important characteristic of [`@code_warntype`](@ref)
-is that non-concrete types are displayed in red; in the above example, such output is shown in
-all-caps.
+is that non-concrete types are displayed in red; since this document is written in Markdown, which has no color,
+in this document, red text is denoted by uppercase.
 
-The top part of the output summarizes the type information for the different variables internal
-to the function. You can see that `y`, one of the variables you created, is a `Union{Int64,Float64}`,
-due to the type-instability of `pos`.  There is another variable, `_var4`, which you can see also
-has the same type.
-
-The next lines represent the body of `f`. The lines starting with a number followed by a colon
-(`1:`, `2:`) are labels, and represent targets for jumps (via `goto`) in your code.  Looking at
-the body, you can see that `pos` has been *inlined* into `f`--everything before `2:` comes from
-code defined in `pos`.
-
-Starting at `2:`, the variable `y` is defined, and again annotated as a `Union` type.  Next, we
-see that the compiler created the temporary variable `_var1` to hold the result of `y*x`. Because
-a [`Float64`](@ref) times *either* an [`Int64`](@ref) or `Float64` yields a `Float64`,
-all type-instability ends here. The net result is that `f(x::Float64)` will not be type-unstable
+At the top, the inferred return type of the function is shown as `Body::Float64`.
+The next lines represent the body of `f` in Julia's SSA IR form.
+The numbered boxes are labels and represent targets for jumps (via `goto`) in your code.
+Looking at the body, you can see that the first thing that happens is that `pos` is called and the
+return value has been inferred as the `Union` type `UNION{FLOAT64, INT64}` shown in uppercase since
+it is a non-concrete type. This means that we cannot know the exact return type of `pos` based on the
+input types. However, the result of `y*x`is a `Float64` no matter if `y` is a `Float64` or `Int64`
+The net result is that `f(x::Float64)` will not be type-unstable
 in its output, even if some of the intermediate computations are type-unstable.
 
 How you use this information is up to you. Obviously, it would be far and away best to fix `pos`
 to be type-stable: if you did so, all of the variables in `f` would be concrete, and its performance
-would be optimal.  However, there are circumstances where this kind of *ephemeral* type instability
+would be optimal. However, there are circumstances where this kind of *ephemeral* type instability
 might not matter too much: for example, if `pos` is never used in isolation, the fact that `f`'s
 output is type-stable (for [`Float64`](@ref) inputs) will shield later code from the propagating
-effects of type instability.  This is particularly relevant in cases where fixing the type instability
-is difficult or impossible: for example, currently it's not possible to infer the return type
-of an anonymous function.  In such cases, the tips above (e.g., adding type annotations and/or
+effects of type instability. This is particularly relevant in cases where fixing the type instability
+is difficult or impossible. In such cases, the tips above (e.g., adding type annotations and/or
 breaking up functions) are your best tools to contain the "damage" from type instability.
 Also, note that even Julia Base has functions that are type unstable.
 For example, the function [`findfirst`](@ref) returns the index into an array where a key is found,
@@ -1488,22 +1478,111 @@ are color highlighted in yellow, instead of red.
 
 The following examples may help you interpret expressions marked as containing non-leaf types:
 
-  * Function body ending in `end::Union{T1,T2})`
-
+  * Function body starting with `Body::UNION{T1,T2})`
       * Interpretation: function with unstable return type
       * Suggestion: make the return value type-stable, even if you have to annotate it
-  * `f(x::T)::Union{T1,T2}`
 
-      * Interpretation: call to a type-unstable function
+  * `invoke Main.g(%%x::Int64)::UNION{FLOAT64, INT64}`
+      * Interpretation: call to a type-unstable function `g`.
       * Suggestion: fix the function, or if necessary annotate the return value
-  * `(top(arrayref))(A::Array{Any,1},1)::Any`
 
+  * `invoke Base.getindex(%%x::Array{Any,1}, 1::Int64)::ANY`
       * Interpretation: accessing elements of poorly-typed arrays
       * Suggestion: use arrays with better-defined types, or if necessary annotate the type of individual
         element accesses
-  * `(top(getfield))(A::ArrayContainer{Float64},:data)::Array{Float64,N}`
 
+  * `Base.getfield(%%x, :(:data))::ARRAY{FLOAT64,N} WHERE N`
       * Interpretation: getting a field that is of non-leaf type. In this case, `ArrayContainer` had a
         field `data::Array{T}`. But `Array` needs the dimension `N`, too, to be a concrete type.
       * Suggestion: use concrete types like `Array{T,3}` or `Array{T,N}`, where `N` is now a parameter
         of `ArrayContainer`
+
+## [Performance of captured variable](@id man-performance-captured)
+
+Consider the following example that defines an inner function:
+```julia
+function abmult(r::Int)
+    if r < 0
+        r = -r
+    end
+    f = x -> x * r
+    return f
+end
+```
+
+Function `abmult` returns a function `f` that multiplies its argument by
+the absolute value of `r`. The inner function assigned to `f` is called a
+"closure". Inner functions are also used by the
+language for `do`-blocks and for generator expressions.
+
+This style of code presents performance challenges for the language.
+The parser, when translating it into lower-level instructions,
+substantially reorganizes the above code by extracting the
+inner function to a separate code block.  "Captured" variables such as `r`
+that are shared by inner functions and their enclosing scope are
+also extracted into a heap-allocated "box" accessible to both inner and
+outer functions because the language specifies that `r` in the
+inner scope must be identical to `r` in the outer scope even after the
+outer scope (or another inner function) modifies `r`.
+
+The discussion in the preceding paragraph referred to the "parser", that is, the phase
+of compilation that takes place when the module containing `abmult` is first loaded,
+as opposed to the later phase when it is first invoked. The parser does not "know" that
+`Int` is a fixed type, or that the statement `r = -r` transforms an `Int` to another `Int`.
+The magic of type inference takes place in the later phase of compilation.
+
+Thus, the parser does not know that `r` has a fixed type (`Int`).
+nor that `r` does not change value once the inner function is created (so that
+the box is unneeded).  Therefore, the parser emits code for
+box that holds an object with an abstract type such as `Any`, which
+requires run-time type dispatch for each occurrence of `r`.  This can be
+verified by applying `@code_warntype` to the above function.  Both the boxing
+and the run-time type dispatch can cause loss of performance.
+
+If captured variables are used in a performance-critical section of the code,
+then the following tips help ensure that their use is performant. First, if
+it is known that a captured variable does not change its type, then this can
+be declared explicitly with a type annotation (on the variable, not the
+right-hand side):
+```julia
+function abmult2(r0::Int)
+    r::Int = r0
+    if r < 0
+        r = -r
+    end
+    f = x -> x * r
+    return f
+end
+```
+The type annotation partially recovers lost performance due to capturing because
+the parser can associate a concrete type to the object in the box.
+Going further, if the captured variable does not need to be boxed at all (because it
+will not be reassigned after the closure is created), this can be indicated
+with `let` blocks as follows.
+```julia
+function abmult3(r::Int)
+    if r < 0
+        r = -r
+    end
+    f = let r = r
+            x -> x * r
+    end
+    return f
+end
+```
+The `let` block creates a new variable `r` whose scope is only the
+inner function. The second technique recovers full language performance
+in the presence of captured variables. Note that this is a rapidly
+evolving aspect of the compiler, and it is likely that future releases
+will not require this degree of programmer annotation to attain performance.
+In the mean time, some user-contributed packages like
+[FastClosures](https://github.com/c42f/FastClosures.jl) automate the
+insertion of `let` statements as in `abmult3`.
+
+# Checking for equality with a singleton
+
+When checking if a value is equal to some singleton it can be
+better for performance to check for identicality (`===`) instead of
+equality (`==`). The same advice applies to using `!==` over `!=`.
+These type of checks frequently occur e.g. when implementing the iteration
+protocol and checking if `nothing` is returned from [`iterate`](@ref).

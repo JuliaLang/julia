@@ -30,7 +30,7 @@ static int sig_match_by_type_leaf(jl_value_t **types, jl_tupletype_t *sig, size_
 {
     size_t i;
     for (i = 0; i < n; i++) {
-        jl_value_t *decl = jl_field_type(sig, i);
+        jl_value_t *decl = jl_tparam(sig, i);
         jl_value_t *a = types[i];
         if (jl_is_type_type(a)) // decl is not Type, because it wouldn't be leafsig
             a = jl_typeof(jl_tparam0(a));
@@ -45,7 +45,7 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
     size_t i;
     if (va) lensig -= 1;
     for (i = 0; i < lensig; i++) {
-        jl_value_t *decl = jl_field_type(sig, i);
+        jl_value_t *decl = jl_tparam(sig, i);
         jl_value_t *a = types[i];
         jl_value_t *unw = jl_is_unionall(decl) ? ((jl_unionall_t*)decl)->body : decl;
         if (jl_is_type_type(unw)) {
@@ -78,7 +78,7 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
         }
     }
     if (va) {
-        jl_value_t *decl = jl_unwrap_unionall(jl_field_type(sig, i));
+        jl_value_t *decl = jl_unwrap_unionall(jl_tparam(sig, i));
         if (jl_vararg_kind(decl) == JL_VARARG_INT) {
             if (n - i != jl_unbox_long(jl_tparam1(decl)))
                 return 0;
@@ -95,14 +95,16 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
     return 1;
 }
 
-static inline int sig_match_leaf(jl_value_t **args, jl_value_t **sig, size_t n)
+static inline int sig_match_leaf(jl_value_t *arg1, jl_value_t **args, jl_value_t **sig, size_t n)
 {
     // NOTE: This function is a huge performance hot spot!!
     size_t i;
-    for (i = 0; i < n; i++) {
+    if (jl_typeof(arg1) != sig[0])
+        return 0;
+    for (i = 1; i < n; i++) {
         jl_value_t *decl = sig[i];
-        jl_value_t *a = args[i];
-        if ((jl_value_t*)jl_typeof(a) != decl) {
+        jl_value_t *a = args[i - 1];
+        if (jl_typeof(a) != decl) {
             /*
               we are only matching concrete types here, and those types are
               hash-consed, so pointer comparison should work.
@@ -113,16 +115,17 @@ static inline int sig_match_leaf(jl_value_t **args, jl_value_t **sig, size_t n)
     return 1;
 }
 
-static inline int sig_match_simple(jl_value_t **args, size_t n, jl_value_t **sig,
+static inline int sig_match_simple(jl_value_t *arg1, jl_value_t **args, size_t n, jl_value_t **sig,
                                    int va, size_t lensig)
 {
     // NOTE: This function is a performance hot spot!!
     size_t i;
-    if (va) lensig -= 1;
+    if (va)
+        lensig -= 1;
     for (i = 0; i < lensig; i++) {
         jl_value_t *decl = sig[i];
-        jl_value_t *a = args[i];
-        if (decl == (jl_value_t*)jl_any_type || ((jl_value_t*)jl_typeof(a) == decl)) {
+        jl_value_t *a = (i == 0 ? arg1 : args[i - 1]);
+        if (jl_typeof(a) == decl || decl == (jl_value_t*)jl_any_type) {
             /*
               we are only matching concrete types here, and those types are
               hash-consed, so pointer comparison should work.
@@ -166,7 +169,8 @@ static inline int sig_match_simple(jl_value_t **args, size_t n, jl_value_t **sig
         }
         jl_value_t *t = jl_unwrap_vararg(decl);
         for (; i < n; i++) {
-            if (!jl_isa(args[i], t))
+            jl_value_t *a = (i == 0 ? arg1 : args[i - 1]);
+            if (!jl_isa(a, t))
                 return 0;
         }
         return 1;
@@ -177,212 +181,60 @@ static inline int sig_match_simple(jl_value_t **args, size_t n, jl_value_t **sig
 
 // ----- MethodCache helper functions ----- //
 
-static inline size_t jl_intref(const jl_array_t *arr, size_t idx)
+// predicate to fast-test if this type is a leaf type that can exist in the cache
+// and does not need a more expensive linear scan to find all intersections
+// be careful not to put non-leaf types or DataType/UnionAll in the cache here,
+// since they should have a lower priority and need to go into the sorted list
+int is_cache_leaf(jl_value_t *ty)
 {
-    jl_value_t *el = jl_tparam0(jl_typeof(arr));
-    if (el == (jl_value_t*)jl_uint8_type)
-        return ((uint8_t*)jl_array_data(arr))[idx];
-    else if (el == (jl_value_t*)jl_uint16_type)
-        return ((uint16_t*)jl_array_data(arr))[idx];
-    else if (el == (jl_value_t*)jl_uint32_type)
-        return ((uint32_t*)jl_array_data(arr))[idx];
-    else
-        abort();
+    return (jl_is_concrete_type(ty) && !jl_is_kind(ty));
 }
 
-static inline void jl_intset(const jl_array_t *arr, size_t idx, size_t val)
+static jl_typemap_t **mtcache_hash_lookup_bp(jl_array_t *cache JL_PROPAGATES_ROOT, jl_value_t *ty) JL_NOTSAFEPOINT
 {
-    jl_value_t *el = jl_tparam0(jl_typeof(arr));
-    if (el == (jl_value_t*)jl_uint8_type)
-        ((uint8_t*)jl_array_data(arr))[idx] = val;
-    else if (el == (jl_value_t*)jl_uint16_type)
-        ((uint16_t*)jl_array_data(arr))[idx] = val;
-    else if (el == (jl_value_t*)jl_uint32_type)
-        ((uint32_t*)jl_array_data(arr))[idx] = val;
-    else
-        abort();
+    if (cache == (jl_array_t*)jl_an_empty_vec_any)
+        return NULL;
+    jl_typemap_t **pml = jl_table_peek_bp(cache, ty);
+    JL_GC_PROMISE_ROOTED(pml); // clang-sa doesn't trust our JL_PROPAGATES_ROOT claim
+    return pml;
 }
 
-static inline size_t jl_max_int(const jl_array_t *arr)
+static void mtcache_hash_insert(jl_array_t **cache, jl_value_t *parent, jl_value_t *key, jl_typemap_t *val)
 {
-    jl_value_t *el = jl_tparam0(jl_typeof(arr));
-    if (el == (jl_value_t*)jl_uint8_type)
-        return 0xFF;
-    else if (el == (jl_value_t*)jl_uint16_type)
-        return 0xFFFF;
-    else if (el == (jl_value_t*)jl_uint32_type)
-        return 0xFFFFFFFF;
-    else
-        abort();
+    int inserted = 0;
+    jl_array_t *a = *cache;
+    if (a == (jl_array_t*)jl_an_empty_vec_any) {
+        a = jl_alloc_vec_any(16);
+        *cache = a;
+        jl_gc_wb(parent, a);
+    }
+    a = jl_eqtable_put(a, key, val, &inserted);
+    assert(inserted);
+    if (a != *cache) {
+        *cache = a;
+        jl_gc_wb(parent, a);
+    }
 }
 
-
-static jl_array_t *jl_alloc_int_1d(size_t np, size_t len)
+static jl_typemap_t *mtcache_hash_lookup(jl_array_t *cache JL_PROPAGATES_ROOT, jl_value_t *ty) JL_NOTSAFEPOINT
 {
-    jl_value_t *ty;
-    if (np < 0xFF) {
-        ty = jl_array_uint8_type;
-    }
-    else if (np < 0xFFFF) {
-        static jl_value_t *int16 = NULL;
-        if (int16 == NULL)
-            int16 = jl_apply_array_type((jl_value_t*)jl_uint16_type, 1);
-        ty = int16;
-    }
-    else {
-        assert(np < 0x7FFFFFFF);
-        static jl_value_t *int32 = NULL;
-        if (int32 == NULL)
-            int32 = jl_apply_array_type((jl_value_t*)jl_uint32_type, 1);
-        ty = int32;
-    }
-    jl_array_t *a = jl_alloc_array_1d(ty, len);
-    memset(a->data, 0, len * a->elsize);
-    return a;
-}
-
-static inline
-union jl_typemap_t mtcache_hash_lookup(const struct jl_ordereddict_t *a, jl_value_t *ty, int8_t tparam, int8_t offs)
-{
-    uintptr_t uid = ((jl_datatype_t*)ty)->uid;
-    union jl_typemap_t ml;
-    ml.unknown = jl_nothing;
-    if (!uid)
-        return ml;
-    size_t idx = jl_intref(a->indices, uid & (a->indices->nrows-1));
-    if (idx > 0) {
-        ml.unknown = jl_array_ptr_ref(a->values, idx - 1);
-        if (ml.unknown == jl_nothing)
-            return ml;
-        jl_value_t *t;
-        if (jl_typeof(ml.unknown) == (jl_value_t*)jl_typemap_level_type) {
-            t = ml.node->key;
-        }
-        else {
-            assert(jl_typeof(ml.unknown) == (jl_value_t*)jl_typemap_entry_type);
-            t = jl_field_type(jl_unwrap_unionall((jl_value_t*)ml.leaf->sig), offs);
-            if (tparam)
-                t = jl_tparam0(t);
-        }
-        if (t != ty)
-            ml.unknown = jl_nothing;
-    }
+    if (cache == (jl_array_t*)jl_an_empty_vec_any)
+        return NULL;
+    jl_typemap_t *ml = (jl_typemap_t*)jl_eqtable_get(cache, ty, jl_nothing);
+    JL_GC_PROMISE_ROOTED(ml); // clang-sa doesn't trust our JL_PROPAGATES_ROOT claim
     return ml;
-}
-
-static void mtcache_rehash(struct jl_ordereddict_t *pa, size_t newlen, jl_value_t *parent, int8_t tparam, int8_t offs)
-{
-    size_t i, nval = jl_array_len(pa->values);
-    jl_array_t *n = jl_alloc_int_1d(nval + 1, newlen);
-    for (i = 1; i <= nval; i++) {
-        union jl_typemap_t ml;
-        ml.unknown = jl_array_ptr_ref(pa->values, i - 1);
-        if (ml.unknown == jl_nothing)
-            continue;
-        jl_value_t *t;
-        if (jl_typeof(ml.unknown) == (jl_value_t*)jl_typemap_level_type) {
-            t = ml.node->key;
-        }
-        else {
-            assert(jl_typeof(ml.unknown) == (jl_value_t*)jl_typemap_entry_type);
-            t = jl_field_type(jl_unwrap_unionall((jl_value_t*)ml.leaf->sig), offs);
-            if (tparam)
-                t = jl_tparam0(t);
-        }
-        uintptr_t uid = ((jl_datatype_t*)t)->uid;
-        size_t newi = uid & (newlen - 1);
-        if (jl_intref(n, newi) == 0) {
-            jl_intset(n, newi, i);
-        }
-        else {
-            // hash collision: start over after doubling the size again
-            i = 0;
-            newlen *= 2;
-            n = jl_alloc_int_1d(nval + 1, newlen);
-        }
-    }
-    pa->indices = n;
-    jl_gc_wb(parent, n);
-}
-
-// Recursively rehash a TypeMap (for example, after deserialization)
-void jl_typemap_rehash(union jl_typemap_t ml, int8_t offs);
-void jl_typemap_rehash_array(struct jl_ordereddict_t *pa, jl_value_t *parent, int8_t tparam, int8_t offs)
-{
-    size_t i, len = jl_array_len(pa->values);
-    for (i = 0; i < len; i++) {
-        union jl_typemap_t ml;
-        ml.unknown = jl_array_ptr_ref(pa->values, i);
-        assert(ml.unknown != NULL);
-        jl_typemap_rehash(ml, offs+1);
-    }
-    mtcache_rehash(pa, 4 * next_power_of_two(len), parent, tparam, offs);
-}
-void jl_typemap_rehash(union jl_typemap_t ml, int8_t offs) {
-    if (jl_typeof(ml.unknown) == (jl_value_t*)jl_typemap_level_type) {
-        if (ml.node->targ.values != (void*)jl_nothing)
-            jl_typemap_rehash_array(&ml.node->targ, ml.unknown, 1, offs);
-        if (ml.node->arg1.values != (void*)jl_nothing)
-            jl_typemap_rehash_array(&ml.node->arg1, ml.unknown, 0, offs);
-        jl_typemap_rehash(ml.node->any, offs+1);
-    }
-}
-
-static union jl_typemap_t *mtcache_hash_bp(struct jl_ordereddict_t *pa, jl_value_t *ty,
-                                           int8_t tparam, int8_t offs, jl_value_t *parent)
-{
-    if (jl_is_datatype(ty)) {
-        uintptr_t uid = ((jl_datatype_t*)ty)->uid;
-        if (!uid || jl_is_kind(ty) || jl_has_free_typevars(ty))
-            // be careful not to put non-leaf types or DataType/UnionAll in the cache here,
-            // since they should have a lower priority and need to go into the sorted list
-            return NULL;
-        if (pa->values == (void*)jl_nothing) {
-            pa->indices = jl_alloc_int_1d(0, INIT_CACHE_SIZE);
-            jl_gc_wb(parent, pa->indices);
-            pa->values = jl_alloc_vec_any(0);
-            jl_gc_wb(parent, pa->values);
-        }
-        while (1) {
-            size_t slot = uid & (pa->indices->nrows - 1);
-            size_t idx = jl_intref(pa->indices, slot);
-            if (idx == 0) {
-                jl_array_ptr_1d_push(pa->values, jl_nothing);
-                idx = jl_array_len(pa->values);
-                if (idx > jl_max_int(pa->indices))
-                    mtcache_rehash(pa, jl_array_len(pa->indices), parent, tparam, offs);
-                jl_intset(pa->indices, slot, idx);
-                return &((union jl_typemap_t*)jl_array_data(pa->values))[idx - 1];
-            }
-            union jl_typemap_t *pml = &((union jl_typemap_t*)jl_array_data(pa->values))[idx - 1];
-            if (pml->unknown == jl_nothing)
-                return pml;
-            jl_value_t *t;
-            if (jl_typeof(pml->unknown) == (jl_value_t*)jl_typemap_level_type) {
-                t = pml->node->key;
-            }
-            else {
-                assert(jl_typeof(pml->unknown) == (jl_value_t*)jl_typemap_entry_type);
-                t = jl_field_type(jl_unwrap_unionall((jl_value_t*)pml->leaf->sig), offs);
-                if (tparam)
-                    t = jl_tparam0(t);
-            }
-            if (t == ty)
-                return pml;
-            mtcache_rehash(pa, jl_array_len(pa->indices) * 2, parent, tparam, offs);
-        }
-    }
-    return NULL;
 }
 
 // ----- Sorted Type Signature Lookup Matching ----- //
 
-static int jl_typemap_array_visitor(struct jl_ordereddict_t *a, jl_typemap_visitor_fptr fptr, void *closure)
+static int jl_typemap_array_visitor(jl_array_t *a, jl_typemap_visitor_fptr fptr, void *closure)
 {
-    size_t i, l = jl_array_len(a->values);
-    union jl_typemap_t *data = (union jl_typemap_t*)jl_array_data(a->values);
-    for(i=0; i < l; i++) {
-        if (!jl_typemap_visitor(data[i], fptr, closure))
+    size_t i, l = jl_array_len(a);
+    jl_typemap_t **data = (jl_typemap_t **)jl_array_data(a);
+    for (i = 1; i < l; i += 2) {
+        jl_value_t *d = data[i];
+        JL_GC_PROMISE_ROOTED(d);
+        if (d && !jl_typemap_visitor(d, fptr, closure))
             return 0;
     }
     return 1;
@@ -399,54 +251,42 @@ static int jl_typemap_node_visitor(jl_typemap_entry_t *ml, jl_typemap_visitor_fp
     return 1;
 }
 
-int jl_typemap_visitor(union jl_typemap_t cache, jl_typemap_visitor_fptr fptr, void *closure)
+int jl_typemap_visitor(jl_typemap_t *cache, jl_typemap_visitor_fptr fptr, void *closure)
 {
-    if (jl_typeof(cache.unknown) == (jl_value_t*)jl_typemap_level_type) {
-        if (cache.node->targ.values != (void*)jl_nothing)
-            if (!jl_typemap_array_visitor(&cache.node->targ, fptr, closure))
+    if (jl_typeof(cache) == (jl_value_t*)jl_typemap_level_type) {
+        jl_typemap_level_t *node = (jl_typemap_level_t*)cache;
+        if (node->targ != (jl_array_t*)jl_an_empty_vec_any)
+            if (!jl_typemap_array_visitor(node->targ, fptr, closure))
                 return 0;
-        if (cache.node->arg1.values != (void*)jl_nothing)
-            if (!jl_typemap_array_visitor(&cache.node->arg1, fptr, closure))
+        if (node->arg1 != (jl_array_t*)jl_an_empty_vec_any)
+            if (!jl_typemap_array_visitor(node->arg1, fptr, closure))
                 return 0;
-        if (!jl_typemap_node_visitor(cache.node->linear, fptr, closure))
+        if (!jl_typemap_node_visitor(node->linear, fptr, closure))
             return 0;
-        return jl_typemap_visitor(cache.node->any, fptr, closure);
+        return jl_typemap_visitor(node->any, fptr, closure);
     }
     else {
-        return jl_typemap_node_visitor(cache.leaf, fptr, closure);
+        return jl_typemap_node_visitor((jl_typemap_entry_t*)cache, fptr, closure);
     }
 }
 
-// predicate to fast-test if this type is a leaf type that can exist in the cache
-// and does not need a more expensive linear scan to find all intersections
-int is_cache_leaf(jl_value_t *ty)
-{
-    return (jl_is_datatype(ty) && ((jl_datatype_t*)ty)->uid != 0 && !jl_is_kind(ty));
-}
-
-static int jl_typemap_intersection_array_visitor(struct jl_ordereddict_t *a, jl_value_t *ty, int tparam,
+static int jl_typemap_intersection_array_visitor(jl_array_t *a, jl_value_t *ty, int tparam,
                                                  int offs, struct typemap_intersection_env *closure)
 {
-    size_t i, l = jl_array_len(a->values);
-    union jl_typemap_t *data = (union jl_typemap_t*)jl_array_data(a->values);
-    for (i = 0; i < l; i++) {
-        union jl_typemap_t ml = data[i];
-        if (ml.unknown == jl_nothing)
+    size_t i, l = jl_array_len(a);
+    jl_typemap_t **data = (jl_typemap_t **)jl_array_data(a);
+    for (i = 0; i < l; i += 2) {
+        jl_value_t *t = data[i];
+        JL_GC_PROMISE_ROOTED(t);
+        if (t == jl_nothing || t == NULL)
             continue;
-        jl_value_t *t;
-        if (jl_typeof(ml.unknown) == (jl_value_t*)jl_typemap_level_type) {
-            t = ml.node->key;
-        }
-        else {
-            t = jl_field_type(jl_unwrap_unionall((jl_value_t*)ml.leaf->sig), offs);
-            if (tparam)
-                t = jl_tparam0(t);
-        }
         // `t` is a leaftype, so intersection test becomes subtype
         if (ty == (jl_value_t*)jl_any_type || // easy case: Any always matches
             (tparam
              ? (jl_typeof(t) == ty || jl_isa(t, ty)) // (Type{t} <: ty), where is_leaf_type(t) => isa(t, ty)
              : (t == ty || jl_subtype(t, ty)))) {
+            jl_typemap_t *ml = data[i + 1];
+            JL_GC_PROMISE_ROOTED(ml);
             if (!jl_typemap_intersection_visitor(ml, offs + 1, closure))
                 return 0;
         }
@@ -465,27 +305,28 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
     while (ml != (void*)jl_nothing) {
         if (closure->type == (jl_value_t*)ml->sig) {
             // fast-path for the intersection of a type with itself
-            if (closure->env) {
+            if (closure->env)
                 closure->env = jl_outer_unionall_vars((jl_value_t*)ml->sig);
-            }
             closure->ti = closure->type;
             closure->issubty = 1;
             if (!fptr(ml, closure))
                 return 0;
         }
         else {
-            jl_value_t *ti;
+            jl_svec_t **penv = NULL;
             if (closure->env) {
                 closure->env = jl_emptysvec;
-                ti = jl_type_intersection_env_s(closure->type, (jl_value_t*)ml->sig, &closure->env, &closure->issubty);
+                penv = &closure->env;
             }
-            else {
-                ti = jl_type_intersection(closure->type, (jl_value_t*)ml->sig);
-            }
-            if (ti != (jl_value_t*)jl_bottom_type) {
-                closure->ti = ti;
-                if (!fptr(ml, closure))
-                    return 0;
+            closure->ti = jl_type_intersection_env_s(closure->type, (jl_value_t*)ml->sig, penv, &closure->issubty);
+            if (closure->ti != (jl_value_t*)jl_bottom_type) {
+                // In some corner cases type intersection is conservative and returns something
+                // for intersect(A, B) even though A is a dispatch tuple and !(A <: B).
+                // For dispatch purposes in such a case we know there's no match. This check
+                // fixes issue #30394.
+                if (closure->issubty || !jl_is_dispatch_tupletype(closure->type))
+                    if (!fptr(ml, closure))
+                        return 0;
             }
         }
         ml = ml->next;
@@ -493,15 +334,28 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
     return 1;
 }
 
-int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
+int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                                     struct typemap_intersection_env *closure)
 {
-    if (jl_typeof(map.unknown) == (jl_value_t*)jl_typemap_level_type) {
-        jl_typemap_level_t *cache = map.node;
+    jl_value_t *ttypes = jl_unwrap_unionall(closure->type);
+    assert(jl_is_datatype(ttypes));
+    //TODO: fast-path for leaf-type tuples?
+    //if (ttypes->isdispatchtuple) {
+    //    register jl_typemap_intersection_visitor_fptr fptr = closure->fptr;
+    //        struct jl_typemap_assoc search = {(jl_value_t*)closure->type, world, closure->env, 0, ~(size_t)0};
+    //        jl_typemap_entry_t *ml = jl_typemap_assoc_by_type(map, search, offs, /*subtype*/1);
+    //        if (ml) {
+    //            closure->env = search->env;
+    //            if (!fptr(ml, closure))
+    //                return 0;
+    //        }
+    //    }
+    //    return 1;
+    //}
+    if (jl_typeof(map) == (jl_value_t *)jl_typemap_level_type) {
+        jl_typemap_level_t *cache = (jl_typemap_level_t*)map;
         jl_value_t *ty = NULL;
-        jl_value_t *ttypes = jl_unwrap_unionall(closure->type);
-        assert(jl_is_datatype(ttypes));
-        size_t l = jl_field_count(ttypes);
+        size_t l = jl_nparams(ttypes);
         if (closure->va && l <= offs + 1) {
             ty = closure->va;
         }
@@ -509,13 +363,23 @@ int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
             ty = jl_tparam(ttypes, offs);
         }
         if (ty) {
-            if (cache->targ.values != (void*)jl_nothing) {
+            while (jl_is_typevar(ty))
+                ty = ((jl_tvar_t*)ty)->ub;
+            // approxify the tparam until we have a valid type
+            if (jl_has_free_typevars(ty)) {
+                ty = jl_unwrap_unionall(ty);
+                if (jl_is_datatype(ty))
+                    ty = ((jl_datatype_t*)ty)->name->wrapper;
+                else
+                    ty = (jl_value_t*)jl_any_type;
+            }
+            if (cache->targ != (jl_array_t*)jl_an_empty_vec_any) {
                 jl_value_t *typetype = jl_is_type_type(ty) ? jl_tparam0(ty) : NULL;
-                if (typetype && !jl_has_free_typevars(typetype)) {
+                if (typetype) {
                     if (is_cache_leaf(typetype)) {
                         // direct lookup of leaf types
-                        union jl_typemap_t ml = mtcache_hash_lookup(&cache->targ, typetype, 1, offs);
-                        if (ml.unknown != jl_nothing) {
+                        jl_typemap_t *ml = mtcache_hash_lookup(cache->targ, typetype);
+                        if (ml != jl_nothing) {
                             if (!jl_typemap_intersection_visitor(ml, offs+1, closure)) return 0;
                         }
                     }
@@ -524,29 +388,30 @@ int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
                     // else an array scan is required to check subtypes
                     // first, fast-path: optimized pre-intersection test to see if `ty` could intersect with any Type
                     if (typetype || !jl_has_empty_intersection((jl_value_t*)jl_type_type, ty))
-                        if (!jl_typemap_intersection_array_visitor(&cache->targ, ty, 1, offs, closure)) return 0;
+                        if (!jl_typemap_intersection_array_visitor(cache->targ, ty, 1, offs, closure)) return 0;
                 }
             }
-            if (cache->arg1.values != (void*)jl_nothing) {
+            if (cache->arg1 != (jl_array_t*)jl_an_empty_vec_any) {
                 if (is_cache_leaf(ty)) {
                     // direct lookup of leaf types
-                    union jl_typemap_t ml = mtcache_hash_lookup(&cache->arg1, ty, 0, offs);
-                    if (ml.unknown != jl_nothing) {
+                    jl_typemap_t *ml = mtcache_hash_lookup(cache->arg1, ty);
+                    if (ml != jl_nothing) {
                         if (!jl_typemap_intersection_visitor(ml, offs+1, closure)) return 0;
                     }
                 }
                 else {
                     // else an array scan is required to check subtypes
-                    if (!jl_typemap_intersection_array_visitor(&cache->arg1, ty, 0, offs, closure)) return 0;
+                    if (!jl_typemap_intersection_array_visitor(cache->arg1, ty, 0, offs, closure)) return 0;
                 }
             }
         }
-        if (!jl_typemap_intersection_node_visitor(map.node->linear, closure))
+        if (!jl_typemap_intersection_node_visitor(cache->linear, closure))
             return 0;
-        return jl_typemap_intersection_visitor(map.node->any, offs+1, closure);
+        return jl_typemap_intersection_visitor(cache->any, offs+1, closure);
     }
     else {
-        return jl_typemap_intersection_node_visitor(map.leaf, closure);
+        return jl_typemap_intersection_node_visitor(
+            (jl_typemap_entry_t*)map, closure);
     }
 }
 
@@ -561,21 +426,22 @@ int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
   there tends to be lots of variation there. The type of the 0th argument
   (the function) is always the same for most functions.
 */
-static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_value_t *types,
-                                                     jl_svec_t **penv, size_t world, size_t max_world_mask)
+static jl_typemap_entry_t *jl_typemap_entry_assoc_by_type(
+        jl_typemap_entry_t *ml,
+        struct jl_typemap_assoc *search)
 {
+    jl_value_t *types = search->types;
+    JL_GC_PROMISE_ROOTED(types);
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)types);
     int isua = jl_is_unionall(types);
-    size_t n = jl_field_count(unw);
+    size_t n = jl_nparams(unw);
     int typesisva = n == 0 ? 0 : jl_is_vararg_type(jl_tparam(unw, n-1));
     for (; ml != (void*)jl_nothing; ml = ml->next) {
-        if (world < ml->min_world || world > (ml->max_world | max_world_mask))
-            continue; // ignore replaced methods
-        size_t lensig = jl_field_count(jl_unwrap_unionall((jl_value_t*)ml->sig));
+        size_t lensig = jl_nparams(jl_unwrap_unionall((jl_value_t*)ml->sig));
         if (lensig == n || (ml->va && lensig <= n+1)) {
             int resetenv = 0, ismatch = 1;
             if (ml->simplesig != (void*)jl_nothing && !isua) {
-                size_t lensimplesig = jl_field_count(ml->simplesig);
+                size_t lensimplesig = jl_nparams(ml->simplesig);
                 int isva = lensimplesig > 0 && jl_is_vararg_type(jl_tparam(ml->simplesig, lensimplesig - 1));
                 if (lensig == n || (isva && lensimplesig <= n + 1))
                     ismatch = sig_match_by_type_simple(jl_svec_data(((jl_datatype_t*)types)->parameters), n,
@@ -593,8 +459,8 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
                 ismatch = sig_match_by_type_simple(jl_svec_data(((jl_datatype_t*)types)->parameters), n,
                                                    ml->sig, lensig, ml->va);
             else {
-                ismatch = jl_subtype_matching(types, (jl_value_t*)ml->sig, penv);
-                if (ismatch && penv)
+                ismatch = jl_subtype_matching(types, (jl_value_t*)ml->sig, search->env ? &search->env : NULL);
+                if (ismatch && search->env)
                     resetenv = 1;
             }
 
@@ -607,11 +473,29 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
                         break;
                     }
                 }
-                if (ismatch)
-                    return ml;
+                if (ismatch) {
+                    if (search->world < ml->min_world) {
+                        // ignore method table entries that are part of a later world
+                        if (search->max_valid >= ml->min_world)
+                            search->max_valid = ml->min_world - 1;
+                    }
+                    else if (search->world > ml->max_world) {
+                        // ignore method table entries that have been replaced in the current world
+                        if (search->min_valid <= ml->max_world)
+                            search->min_valid = ml->max_world + 1;
+                    }
+                    else {
+                        // intersect the env valid range with method's valid range
+                        if (search->min_valid < ml->min_world)
+                            search->min_valid = ml->min_world;
+                        if (search->max_valid > ml->max_world)
+                            search->max_valid = ml->max_world;
+                        return ml;
+                    }
+                }
             }
             if (resetenv)
-                *penv = jl_emptysvec;
+                search->env = jl_emptysvec;
         }
     }
     return NULL;
@@ -619,13 +503,15 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
 
 int jl_obviously_unequal(jl_value_t *a, jl_value_t *b);
 
-static jl_typemap_entry_t *jl_typemap_lookup_by_type_(jl_typemap_entry_t *ml, jl_value_t *types,
-                                                      size_t world, size_t max_world_mask)
+static jl_typemap_entry_t *jl_typemap_entry_lookup_by_type(
+        jl_typemap_entry_t *ml, struct jl_typemap_assoc *search)
 {
     for (; ml != (void*)jl_nothing; ml = ml->next) {
-        if (world < ml->min_world || world > (ml->max_world | max_world_mask))
+        if (search->world < ml->min_world || search->world > ml->max_world)
             continue;
         // unroll the first few cases here, to the extent that is possible to do fast and easily
+        jl_value_t *types = search->types;
+        JL_GC_PROMISE_ROOTED(types);
         jl_value_t *a = jl_unwrap_unionall(types);
         jl_value_t *b = jl_unwrap_unionall((jl_value_t*)ml->sig);
         size_t na = jl_nparams(a);
@@ -648,7 +534,7 @@ static jl_typemap_entry_t *jl_typemap_lookup_by_type_(jl_typemap_entry_t *ml, jl
                 }
             }
         }
-        if (jl_types_equal((jl_value_t*)types, (jl_value_t*)ml->sig))
+        if (jl_types_equal(types, (jl_value_t*)ml->sig))
             return ml;
     }
     return NULL;
@@ -657,16 +543,19 @@ static jl_typemap_entry_t *jl_typemap_lookup_by_type_(jl_typemap_entry_t *ml, jl
 
 // this is the general entry point for looking up a type in the cache
 // as a subtype, or with type_equal
-jl_typemap_entry_t *jl_typemap_assoc_by_type(union jl_typemap_t ml_or_cache, jl_value_t *types, jl_svec_t **penv,
-                                             int8_t subtype, int8_t offs, size_t world, size_t max_world_mask)
+jl_typemap_entry_t *jl_typemap_assoc_by_type(
+        jl_typemap_t *ml_or_cache,
+        struct jl_typemap_assoc *search,
+        int8_t offs, uint8_t subtype)
 {
-    if (jl_typeof(ml_or_cache.unknown) == (jl_value_t*)jl_typemap_level_type) {
-        jl_typemap_level_t *cache = ml_or_cache.node;
+    if (jl_typeof(ml_or_cache) == (jl_value_t *)jl_typemap_level_type) {
+        jl_typemap_level_t *cache = (jl_typemap_level_t*)ml_or_cache;
         // called object is the primary key for constructors, otherwise first argument
         jl_value_t *ty = NULL;
-        jl_value_t *ttypes = jl_unwrap_unionall((jl_value_t*)types);
+        jl_value_t *ttypes = jl_unwrap_unionall((jl_value_t*)search->types);
+        JL_GC_PROMISE_ROOTED(ttypes);
         assert(jl_is_datatype(ttypes));
-        size_t l = jl_field_count(ttypes);
+        size_t l = jl_nparams(ttypes);
         int isva = 0;
         // compute the type at offset `offs` into `types`, which may be a Vararg
         if (l <= offs + 1) {
@@ -685,70 +574,73 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(union jl_typemap_t ml_or_cache, jl_
         // If there is a type at offs, look in the optimized caches
         if (!subtype) {
             if (ty && jl_is_any(ty))
-                return jl_typemap_assoc_by_type(cache->any, types, penv, subtype, offs + 1, world, max_world_mask);
+                return jl_typemap_assoc_by_type(cache->any, search, offs + 1, subtype);
             if (isva) // in lookup mode, want to match Vararg exactly, not as a subtype
                 ty = NULL;
         }
         if (ty) {
             if (jl_is_type_type(ty)) {
                 jl_value_t *a0 = jl_tparam0(ty);
-                if (cache->targ.values != (void*)jl_nothing && jl_is_datatype(a0)) {
-                    union jl_typemap_t ml = mtcache_hash_lookup(&cache->targ, a0, 1, offs);
-                    if (ml.unknown != jl_nothing) {
-                        jl_typemap_entry_t *li =
-                            jl_typemap_assoc_by_type(ml, types, penv, subtype, offs + 1, world, max_world_mask);
+                if (is_cache_leaf(a0)) {
+                    if (cache->targ != (jl_array_t*)jl_an_empty_vec_any) {
+                        jl_typemap_t *ml = mtcache_hash_lookup(cache->targ, a0);
+                        if (ml != jl_nothing) {
+                            jl_typemap_entry_t *li = jl_typemap_assoc_by_type(ml, search, offs + 1, subtype);
+                            if (li) return li;
+                        }
+                    }
+                    if (!subtype) return NULL;
+                }
+            }
+            if (is_cache_leaf(ty)) {
+                if (cache->arg1 != (jl_array_t*)jl_an_empty_vec_any) {
+                    jl_typemap_t *ml = mtcache_hash_lookup(cache->arg1, ty);
+                    if (ml != jl_nothing) {
+                        jl_typemap_entry_t *li = jl_typemap_assoc_by_type(ml, search, offs + 1, subtype);
                         if (li) return li;
                     }
                 }
-                if (!subtype && is_cache_leaf(a0)) return NULL;
+                if (!subtype) return NULL;
             }
-            if (cache->arg1.values != (void*)jl_nothing && jl_is_datatype(ty)) {
-                union jl_typemap_t ml = mtcache_hash_lookup(&cache->arg1, ty, 0, offs);
-                if (ml.unknown != jl_nothing) {
-                    jl_typemap_entry_t *li =
-                        jl_typemap_assoc_by_type(ml, types, penv, subtype, offs + 1, world, max_world_mask);
-                    if (li) return li;
-                }
-            }
-            if (!subtype && is_cache_leaf(ty)) return NULL;
         }
         // Always check the list (since offs doesn't always start at 0)
         if (subtype) {
-            jl_typemap_entry_t *li = jl_typemap_assoc_by_type_(cache->linear, types, penv, world, max_world_mask);
+            jl_typemap_entry_t *li = jl_typemap_entry_assoc_by_type(cache->linear, search);
             if (li) return li;
-            return jl_typemap_assoc_by_type(cache->any, types, penv, subtype, offs + 1, world, max_world_mask);
+            return jl_typemap_assoc_by_type(cache->any, search, offs + 1, subtype);
         }
         else {
-            return jl_typemap_lookup_by_type_(cache->linear, types, world, max_world_mask);
+            return jl_typemap_entry_lookup_by_type(cache->linear, search);
         }
     }
     else {
+        jl_typemap_entry_t *leaf = (jl_typemap_entry_t*)ml_or_cache;
         return subtype ?
-            jl_typemap_assoc_by_type_(ml_or_cache.leaf, types, penv, world, max_world_mask) :
-            jl_typemap_lookup_by_type_(ml_or_cache.leaf, types, world, max_world_mask);
+            jl_typemap_entry_assoc_by_type(leaf, search) :
+            jl_typemap_entry_lookup_by_type(leaf, search);
     }
 }
 
-jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_value_t **args, size_t n, size_t world)
+jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_value_t *arg1, jl_value_t **args, size_t n, size_t world)
 {
     // some manually-unrolled common special cases
     while (ml->simplesig == (void*)jl_nothing && ml->guardsigs == jl_emptysvec && ml->isleafsig) {
-        // use a tight loop for a long as possible
+        // use a tight loop for as long as possible
         if (world >= ml->min_world && world <= ml->max_world) {
-            if (n == jl_field_count(ml->sig) && jl_typeof(args[0]) == jl_tparam(ml->sig, 0)) {
+            if (n == jl_nparams(ml->sig) && jl_typeof(arg1) == jl_tparam(ml->sig, 0)) {
                 if (n == 1)
                     return ml;
                 if (n == 2) {
-                    if (jl_typeof(args[1]) == jl_tparam(ml->sig, 1))
+                    if (jl_typeof(args[0]) == jl_tparam(ml->sig, 1))
                         return ml;
                 }
                 else if (n == 3) {
-                    if (jl_typeof(args[1]) == jl_tparam(ml->sig, 1) &&
-                        jl_typeof(args[2]) == jl_tparam(ml->sig, 2))
+                    if (jl_typeof(args[0]) == jl_tparam(ml->sig, 1) &&
+                        jl_typeof(args[1]) == jl_tparam(ml->sig, 2))
                         return ml;
                 }
                 else {
-                    if (sig_match_leaf(args, jl_svec_data(ml->sig->parameters), n))
+                    if (sig_match_leaf(arg1, args, jl_svec_data(ml->sig->parameters), n))
                         return ml;
                 }
             }
@@ -761,13 +653,13 @@ jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_valu
     for (; ml != (void*)jl_nothing; ml = ml->next) {
         if (world < ml->min_world || world > ml->max_world)
             continue; // ignore replaced methods
-        size_t lensig = jl_field_count(ml->sig);
+        size_t lensig = jl_nparams(ml->sig);
         if (lensig == n || (ml->va && lensig <= n+1)) {
             if (ml->simplesig != (void*)jl_nothing) {
-                size_t lensimplesig = jl_field_count(ml->simplesig);
+                size_t lensimplesig = jl_nparams(ml->simplesig);
                 int isva = lensimplesig > 0 && jl_is_vararg_type(jl_tparam(ml->simplesig, lensimplesig - 1));
                 if (lensig == n || (isva && lensimplesig <= n + 1)) {
-                    if (!sig_match_simple(args, n, jl_svec_data(ml->simplesig->parameters), isva, lensimplesig))
+                    if (!sig_match_simple(arg1, args, n, jl_svec_data(ml->simplesig->parameters), isva, lensimplesig))
                         continue;
                 }
                 else {
@@ -776,15 +668,15 @@ jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_valu
             }
 
             if (ml->isleafsig) {
-                if (!sig_match_leaf(args, jl_svec_data(ml->sig->parameters), n))
+                if (!sig_match_leaf(arg1, args, jl_svec_data(ml->sig->parameters), n))
                     continue;
             }
             else if (ml->issimplesig) {
-                if (!sig_match_simple(args, n, jl_svec_data(ml->sig->parameters), ml->va, lensig))
+                if (!sig_match_simple(arg1, args, n, jl_svec_data(ml->sig->parameters), ml->va, lensig))
                     continue;
             }
             else {
-                if (!jl_tuple_isa(args, n, ml->sig))
+                if (!jl_tuple1_isa(arg1, args, n, ml->sig))
                     continue;
             }
 
@@ -794,7 +686,7 @@ jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_valu
                     // checking guard entries require a more
                     // expensive subtype check, since guard entries added for @nospecialize might be
                     // abstract. this fixed issue #12967.
-                    if (jl_tuple_isa(args, n, (jl_tupletype_t*)jl_svecref(ml->guardsigs, i))) {
+                    if (jl_tuple1_isa(arg1, args, n, (jl_tupletype_t*)jl_svecref(ml->guardsigs, i))) {
                         goto nomatch;
                     }
                 }
@@ -807,36 +699,36 @@ nomatch:
     return NULL;
 }
 
-jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_value_t **args, size_t n, int8_t offs, size_t world)
+jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_value_t *arg1, jl_value_t **args, size_t n, int8_t offs, size_t world)
 {
     if (n > offs) {
-        jl_value_t *a1 = args[offs];
-        jl_value_t *ty = (jl_value_t*)jl_typeof(a1);
+        jl_value_t *a1 = (offs == 0 ? arg1 : args[offs - 1]);
+        jl_value_t *ty = jl_typeof(a1);
         assert(jl_is_datatype(ty));
-        if (ty == (jl_value_t*)jl_datatype_type && cache->targ.values != (void*)jl_nothing) {
-            union jl_typemap_t ml_or_cache = mtcache_hash_lookup(&cache->targ, a1, 1, offs);
-            jl_typemap_entry_t *ml = jl_typemap_assoc_exact(ml_or_cache, args, n, offs+1, world);
+        if (ty == (jl_value_t*)jl_datatype_type && cache->targ != (jl_array_t*)jl_an_empty_vec_any && is_cache_leaf(a1)) {
+            jl_typemap_t *ml_or_cache = mtcache_hash_lookup(cache->targ, a1);
+            jl_typemap_entry_t *ml = jl_typemap_assoc_exact(ml_or_cache, arg1, args, n, offs+1, world);
             if (ml) return ml;
         }
-        if (cache->arg1.values != (void*)jl_nothing) {
-            union jl_typemap_t ml_or_cache = mtcache_hash_lookup(&cache->arg1, ty, 0, offs);
-            jl_typemap_entry_t *ml = jl_typemap_assoc_exact(ml_or_cache, args, n, offs+1, world);
+        if (cache->arg1 != (jl_array_t*)jl_an_empty_vec_any && is_cache_leaf(ty)) {
+            jl_typemap_t *ml_or_cache = mtcache_hash_lookup(cache->arg1, ty);
+            jl_typemap_entry_t *ml = jl_typemap_assoc_exact(ml_or_cache, arg1, args, n, offs+1, world);
             if (ml) return ml;
         }
     }
     if (cache->linear != (jl_typemap_entry_t*)jl_nothing) {
-        jl_typemap_entry_t *ml = jl_typemap_entry_assoc_exact(cache->linear, args, n, world);
+        jl_typemap_entry_t *ml = jl_typemap_entry_assoc_exact(cache->linear, arg1, args, n, world);
         if (ml) return ml;
     }
-    if (cache->any.unknown != jl_nothing)
-        return jl_typemap_assoc_exact(cache->any, args, n, offs+1, world);
+    if (cache->any != jl_nothing)
+        return jl_typemap_assoc_exact(cache->any, arg1, args, n, offs+1, world);
     return NULL;
 }
 
 
 // ----- Method List Insertion Management ----- //
 
-static unsigned jl_typemap_list_count(jl_typemap_entry_t *ml)
+static unsigned jl_typemap_list_count(jl_typemap_entry_t *ml) JL_NOTSAFEPOINT
 {
     unsigned count = 0;
     while (ml != (void*)jl_nothing) {
@@ -846,9 +738,10 @@ static unsigned jl_typemap_list_count(jl_typemap_entry_t *ml)
     return count;
 }
 
-static void jl_typemap_level_insert_(jl_typemap_level_t *cache, jl_typemap_entry_t *newrec, int8_t offs, const struct jl_typemap_info *tparams);
-static void jl_typemap_list_insert_sorted(jl_typemap_entry_t **pml, jl_value_t *parent,
-                                          jl_typemap_entry_t *newrec, const struct jl_typemap_info *tparams);
+static void jl_typemap_level_insert_(jl_typemap_t *map, jl_typemap_level_t *cache, jl_typemap_entry_t *newrec, int8_t offs, const struct jl_typemap_info *tparams);
+static void jl_typemap_list_insert_sorted(
+        jl_typemap_t *map, jl_typemap_entry_t **pml, jl_value_t *parent,
+        jl_typemap_entry_t *newrec, const struct jl_typemap_info *tparams);
 
 static jl_typemap_level_t *jl_new_typemap_level(void)
 {
@@ -856,35 +749,35 @@ static jl_typemap_level_t *jl_new_typemap_level(void)
     jl_typemap_level_t *cache =
         (jl_typemap_level_t*)jl_gc_alloc(ptls, sizeof(jl_typemap_level_t),
                                          jl_typemap_level_type);
-    cache->key = NULL;
     cache->linear = (jl_typemap_entry_t*)jl_nothing;
-    cache->any.unknown = jl_nothing;
-    cache->targ.indices = (jl_array_t*)jl_nothing;
-    cache->targ.values = (jl_array_t*)jl_nothing;
-    cache->arg1.indices = (jl_array_t*)jl_nothing;
-    cache->arg1.values = (jl_array_t*)jl_nothing;
+    cache->any = jl_nothing;
+    cache->targ = (jl_array_t*)jl_an_empty_vec_any;
+    cache->arg1 = (jl_array_t*)jl_an_empty_vec_any;
     return cache;
 }
 
-static jl_typemap_level_t *jl_method_convert_list_to_cache(jl_typemap_entry_t *ml, jl_value_t *key, int8_t offs,
-                                                           const struct jl_typemap_info *tparams)
+static jl_typemap_level_t *jl_method_convert_list_to_cache(
+        jl_typemap_t *map, jl_typemap_entry_t *ml, int8_t offs,
+        const struct jl_typemap_info *tparams)
 {
     jl_typemap_level_t *cache = jl_new_typemap_level();
-    cache->key = key;
     jl_typemap_entry_t *next = NULL;
     JL_GC_PUSH3(&cache, &next, &ml);
     while (ml != (void*)jl_nothing) {
         next = ml->next;
         ml->next = (jl_typemap_entry_t*)jl_nothing;
-        jl_typemap_level_insert_(cache, ml, offs, tparams);
+        // TODO: for Methods this can locally mess up the `.resorted` list
+        // --> how to recover that?
+        jl_typemap_level_insert_(map, cache, ml, offs, tparams);
         ml = next;
     }
     JL_GC_POP();
     return cache;
 }
 
-static void jl_typemap_list_insert_(jl_typemap_entry_t **pml, jl_value_t *parent,
-                                    jl_typemap_entry_t *newrec, const struct jl_typemap_info *tparams)
+static void jl_typemap_list_insert_(
+        jl_typemap_t *map, jl_typemap_entry_t **pml, jl_value_t *parent,
+        jl_typemap_entry_t *newrec, const struct jl_typemap_info *tparams)
 {
     if (*pml == (void*)jl_nothing || newrec->isleafsig || (tparams && tparams->unsorted)) {
         newrec->next = *pml;
@@ -893,45 +786,55 @@ static void jl_typemap_list_insert_(jl_typemap_entry_t **pml, jl_value_t *parent
         jl_gc_wb(parent, newrec);
     }
     else {
-        jl_typemap_list_insert_sorted(pml, parent, newrec, tparams);
+        jl_typemap_list_insert_sorted(map, pml, parent, newrec, tparams);
     }
 }
 
-static void jl_typemap_insert_generic(union jl_typemap_t *pml, jl_value_t *parent,
-                                      jl_typemap_entry_t *newrec, jl_value_t *key, int8_t offs,
-                                      const struct jl_typemap_info *tparams)
+static void jl_typemap_insert_generic(
+        jl_typemap_t *map, jl_typemap_t **pml, jl_value_t *parent,
+        jl_typemap_entry_t *newrec, int8_t offs,
+        const struct jl_typemap_info *tparams)
 {
-    if (jl_typeof(pml->unknown) == (jl_value_t*)jl_typemap_level_type) {
-        jl_typemap_level_insert_(pml->node, newrec, offs, tparams);
+    if (jl_typeof(*pml) == (jl_value_t*)jl_typemap_level_type) {
+        jl_typemap_level_insert_(map, (jl_typemap_level_t*)*pml, newrec, offs, tparams);
         return;
     }
 
-    unsigned count = jl_typemap_list_count(pml->leaf);
+    unsigned count = jl_typemap_list_count((jl_typemap_entry_t*)*pml);
     if (count > MAX_METHLIST_COUNT) {
-        pml->node = jl_method_convert_list_to_cache(pml->leaf, key, offs, tparams);
-        jl_gc_wb(parent, pml->node);
-        jl_typemap_level_insert_(pml->node, newrec, offs, tparams);
+        *pml = (jl_typemap_t*)jl_method_convert_list_to_cache(
+            map, (jl_typemap_entry_t *)*pml,
+            offs, tparams);
+        jl_gc_wb(parent, *pml);
+        jl_typemap_level_insert_(map, (jl_typemap_level_t*)*pml, newrec, offs, tparams);
         return;
     }
 
-    jl_typemap_list_insert_(&pml->leaf, parent, newrec, tparams);
+    jl_typemap_list_insert_(map, (jl_typemap_entry_t **)pml,
+        parent, newrec, tparams);
 }
 
-static int jl_typemap_array_insert_(struct jl_ordereddict_t *cache, jl_value_t *key, jl_typemap_entry_t *newrec,
-                                    jl_value_t *parent, int8_t tparam, int8_t offs,
-                                    const struct jl_typemap_info *tparams)
+static int jl_typemap_array_insert_(
+        jl_typemap_t *map, jl_array_t **cache, jl_value_t *key, jl_typemap_entry_t *newrec,
+        jl_value_t *parent, int8_t tparam, int8_t offs,
+        const struct jl_typemap_info *tparams)
 {
-    union jl_typemap_t *pml = mtcache_hash_bp(cache, key, tparam, offs, (jl_value_t*)parent);
-    if (pml)
-        jl_typemap_insert_generic(pml, (jl_value_t*)cache->values, newrec, key, offs+1, tparams);
-    return pml != NULL;
+    if (!is_cache_leaf(key))
+        return 0;
+    jl_typemap_t **pml = mtcache_hash_lookup_bp(*cache, key);
+    if (pml != NULL)
+        jl_typemap_insert_generic(map, pml, (jl_value_t*)*cache, newrec, offs+1, tparams);
+    else
+        mtcache_hash_insert(cache, parent, key, (jl_typemap_t*)newrec);
+    return 1;
 }
 
-static void jl_typemap_level_insert_(jl_typemap_level_t *cache, jl_typemap_entry_t *newrec, int8_t offs,
-                                     const struct jl_typemap_info *tparams)
+static void jl_typemap_level_insert_(
+        jl_typemap_t *map, jl_typemap_level_t *cache, jl_typemap_entry_t *newrec, int8_t offs,
+        const struct jl_typemap_info *tparams)
 {
     jl_value_t *ttypes = jl_unwrap_unionall((jl_value_t*)newrec->sig);
-    size_t l = jl_field_count(ttypes);
+    size_t l = jl_nparams(ttypes);
     // compute the type at offset `offs` into `sig`, which may be a Vararg
     jl_value_t *t1 = NULL;
     int isva = 0;
@@ -950,7 +853,7 @@ static void jl_typemap_level_insert_(jl_typemap_level_t *cache, jl_typemap_entry
     }
     // If the type at `offs` is Any, put it in the Any list
     if (t1 && jl_is_any(t1)) {
-        jl_typemap_insert_generic(&cache->any, (jl_value_t*)cache, newrec, (jl_value_t*)jl_any_type, offs+1, tparams);
+        jl_typemap_insert_generic(map, &cache->any, (jl_value_t*)cache, newrec, offs+1, tparams);
         return;
     }
     // Don't put Varargs in the optimized caches (too hard to handle in lookup and bp)
@@ -960,41 +863,27 @@ static void jl_typemap_level_insert_(jl_typemap_level_t *cache, jl_typemap_entry
         // the table indexed for that purpose.
         if (t1 != (jl_value_t*)jl_typetype_type && jl_is_type_type(t1)) {
             jl_value_t *a0 = jl_tparam0(t1);
-            if (jl_typemap_array_insert_(&cache->targ, a0, newrec, (jl_value_t*)cache, 1, offs, tparams))
+            if (jl_typemap_array_insert_(map, &cache->targ, a0, newrec, (jl_value_t*)cache, 1, offs, tparams))
                 return;
         }
-        if (jl_typemap_array_insert_(&cache->arg1, t1, newrec, (jl_value_t*)cache, 0, offs, tparams))
+        if (jl_typemap_array_insert_(map, &cache->arg1, t1, newrec, (jl_value_t*)cache, 0, offs, tparams))
             return;
     }
-    jl_typemap_list_insert_(&cache->linear, (jl_value_t*)cache, newrec, tparams);
+    jl_typemap_list_insert_(map, &cache->linear, (jl_value_t*)cache, newrec, tparams);
 }
 
-jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *parent,
+jl_typemap_entry_t *jl_typemap_insert(jl_typemap_t **cache, jl_value_t *parent,
                                       jl_tupletype_t *type,
                                       jl_tupletype_t *simpletype, jl_svec_t *guardsigs,
                                       jl_value_t *newvalue, int8_t offs,
                                       const struct jl_typemap_info *tparams,
-                                      size_t min_world, size_t max_world,
-                                      jl_value_t **overwritten)
+                                      size_t min_world, size_t max_world)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     assert(min_world > 0 && max_world > 0);
     if (!simpletype)
         simpletype = (jl_tupletype_t*)jl_nothing;
     jl_value_t *ttype = jl_unwrap_unionall((jl_value_t*)type);
-
-    if ((jl_value_t*)simpletype == jl_nothing) {
-        jl_typemap_entry_t *ml = jl_typemap_assoc_by_type(*cache, (jl_value_t*)type, NULL, 0, offs, min_world, 0);
-        if (ml && ml->simplesig == (void*)jl_nothing) {
-            if (overwritten != NULL)
-                *overwritten = ml->func.value;
-            if (newvalue == ml->func.value) // no change. TODO: involve world in computation!
-                return ml;
-            if (newvalue == NULL)  // don't overwrite with guard entries
-                return ml;
-            ml->max_world = min_world - 1;
-        }
-    }
 
     jl_typemap_entry_t *newrec =
         (jl_typemap_entry_t*)jl_gc_alloc(ptls, sizeof(jl_typemap_entry_t),
@@ -1013,8 +902,8 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
     JL_GC_PUSH1(&newrec);
     assert(jl_is_tuple_type(ttype));
     size_t i, l;
-    for (i = 0, l = jl_field_count(ttype); i < l && newrec->issimplesig; i++) {
-        jl_value_t *decl = jl_field_type(ttype, i);
+    for (i = 0, l = jl_nparams(ttype); i < l && newrec->issimplesig; i++) {
+        jl_value_t *decl = jl_tparam(ttype, i);
         if (jl_is_kind(decl))
             newrec->isleafsig = 0; // Type{} may have a higher priority than a kind
         else if (jl_is_type_type(decl))
@@ -1027,37 +916,25 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
             newrec->isleafsig = newrec->issimplesig = 0;
     }
     // TODO: assert that guardsigs == jl_emptysvec && simplesig == jl_nothing if isleafsig and optimize with that knowledge?
-    jl_typemap_insert_generic(cache, parent, newrec, NULL, offs, tparams);
+    jl_typemap_insert_generic(*cache, cache, parent, newrec, offs, tparams);
     JL_GC_POP();
     return newrec;
 }
 
-static int has_unions(jl_value_t *type)
-{
-    type = jl_unwrap_unionall(type);
-    int i;
-    for (i = 0; i < jl_nparams(type); i++) {
-        jl_value_t *t = jl_tparam(type, i);
-        if (jl_is_uniontype(t) ||
-            (jl_is_vararg_type(t) && jl_is_uniontype(jl_unwrap_vararg(t))))
-            return 1;
-    }
-    return 0;
-}
-
-static void jl_typemap_list_insert_sorted(jl_typemap_entry_t **pml, jl_value_t *parent,
-                                          jl_typemap_entry_t *newrec,
-                                          const struct jl_typemap_info *tparams)
+static void jl_typemap_list_insert_sorted(
+        jl_typemap_t *map, jl_typemap_entry_t **pml, jl_value_t *parent,
+        jl_typemap_entry_t *newrec, const struct jl_typemap_info *tparams)
 {
     jl_typemap_entry_t *l, **pl;
     pl = pml;
     l = *pml;
     jl_value_t *pa = parent;
-    while (l != (void*)jl_nothing) {
+    while ((jl_value_t*)l != jl_nothing) {
         if (!l->isleafsig) { // quickly ignore all of the leafsig entries (these were handled by caller)
             if (jl_type_morespecific((jl_value_t*)newrec->sig, (jl_value_t*)l->sig)) {
                 if (l->simplesig == (void*)jl_nothing ||
-                    newrec->simplesig != (void*)jl_nothing || !jl_types_equal((jl_value_t*)l->sig, (jl_value_t*)newrec->sig)) {
+                    newrec->simplesig != (void*)jl_nothing ||
+                    !jl_types_equal((jl_value_t*)l->sig, (jl_value_t*)newrec->sig)) {
                     // might need to insert multiple entries for a lookup differing only by their simplesig
                     // when simplesig contains a kind
                     // TODO: make this test more correct or figure out a better way to compute this
@@ -1070,49 +947,11 @@ static void jl_typemap_list_insert_sorted(jl_typemap_entry_t **pml, jl_value_t *
         l = l->next;
     }
 
-    JL_SIGATOMIC_BEGIN();
+    // insert newrec at the first point it is more specific than the following method
     newrec->next = l;
     jl_gc_wb(newrec, l);
     *pl = newrec;
     jl_gc_wb(pa, newrec);
-    // if this contains Union types, methods after it might actually be
-    // more specific than it. we need to re-sort them.
-    if (has_unions((jl_value_t*)newrec->sig)) {
-        jl_value_t *item_parent = (jl_value_t*)newrec;
-        jl_value_t *next_parent = 0;
-        jl_typemap_entry_t *item = newrec->next, *next;
-        jl_typemap_entry_t **pitem = &newrec->next, **pnext;
-        while (item != (void*)jl_nothing) {
-            pl = pml;
-            l = *pml;
-            pa = parent;
-            next = item->next;
-            pnext = &item->next;
-            next_parent = (jl_value_t*)item;
-            while (l != newrec->next) {
-                if (jl_type_morespecific((jl_value_t*)item->sig, (jl_value_t*)l->sig)) {
-                    // reinsert item earlier in the list
-                    *pitem = next;
-                    jl_gc_wb(item_parent, next);
-                    item->next = l;
-                    jl_gc_wb(item, item->next);
-                    *pl = item;
-                    jl_gc_wb(pa, item);
-                    pnext = pitem;
-                    next_parent = item_parent;
-                    break;
-                }
-                pl = &l->next;
-                pa = (jl_value_t*)l;
-                l = l->next;
-            }
-            item = next;
-            pitem = pnext;
-            item_parent = next_parent;
-        }
-    }
-    JL_SIGATOMIC_END();
-    return;
 }
 
 #ifdef __cplusplus

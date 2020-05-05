@@ -9,8 +9,10 @@ struct JLOptions
     commands::Ptr{Ptr{UInt8}} # (e)eval, (E)print, (L)load
     image_file::Ptr{UInt8}
     cpu_target::Ptr{UInt8}
+    nthreads::Int32
     nprocs::Int32
     machine_file::Ptr{UInt8}
+    project::Ptr{UInt8}
     isinteractive::Int8
     color::Int8
     historyfile::Int8
@@ -25,6 +27,7 @@ struct JLOptions
     warn_overwrite::Int8
     can_inline::Int8
     polly::Int8
+    trace_compile::Ptr{UInt8}
     fast_math::Int8
     worker::Int8
     cookie::Ptr{UInt8}
@@ -34,10 +37,13 @@ struct JLOptions
     bindto::Ptr{UInt8}
     outputbc::Ptr{UInt8}
     outputunoptbc::Ptr{UInt8}
-    outputjitbc::Ptr{UInt8}
     outputo::Ptr{UInt8}
+    outputasm::Ptr{UInt8}
     outputji::Ptr{UInt8}
+    output_code_coverage::Ptr{UInt8}
     incremental::Int8
+    image_file_specified::Int8
+    warn_scope::Int8
 end
 
 # This runs early in the sysimage != is not defined yet

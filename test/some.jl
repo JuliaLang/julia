@@ -49,47 +49,52 @@
 @test !isequal(Some(1), nothing)
 @test !isequal(Some(nothing), nothing)
 
-# coalesce()
+@testset "something" begin
+    @test_throws ArgumentError something()
+    @test something(1) === 1
+    @test something(missing) === missing
+    @test_throws ArgumentError something(nothing)
+    @test something(nothing, 1) === 1
+    @test something(1, nothing) === 1
+    @test_throws ArgumentError something(nothing, nothing)
+    @test something(nothing, 1, 2) === 1
+    @test something(1, nothing, 2) === 1
+    @test something(nothing, nothing, 2) === 2
 
-for v in (nothing, missing)
-    @test coalesce(1) === 1
-    @test coalesce(v) === v
-    @test coalesce(v, 1) === 1
-    @test coalesce(1, v) === 1
-    @test coalesce(v, v) === v
-    @test coalesce(v, 1, 2) === 1
-    @test coalesce(1, v, 2) === 1
-    @test coalesce(v, v, 2) === 2
-    @test coalesce(v, v, v) === v
+    @test something(Some(1)) === 1
+    @test something(Some(nothing)) === nothing
+    @test something(Some(missing)) === missing
+    @test something(Some(1), 0) === 1
+    @test something(Some(nothing), 0) === nothing
+    @test something(nothing, Some(nothing)) === nothing
+    @test something(Some(1), nothing) === 1
+    @test something(nothing, Some(1)) === 1
+    @test something(nothing, Some(1), nothing) === 1
+    @test something(nothing, Some(1), Some(2)) === 1
+    @test something(Some(1), nothing, Some(2)) === 1
 
-    @test coalesce(Some(1)) === 1
-    @test coalesce(Some(v)) === v
-    @test coalesce(Some(1), 0) === 1
-    @test coalesce(Some(v), 0) === v
-    @test coalesce(v, Some(v)) === v
-    @test coalesce(Some(1), v) === 1
-    @test coalesce(v, Some(1)) === 1
-    @test coalesce(v, Some(1), v) === 1
-    @test coalesce(v, Some(1), Some(2)) === 1
-    @test coalesce(Some(1), v, Some(2)) === 1
-
-    @test coalesce(v, missing) === missing
-    @test coalesce(v, nothing) === nothing
-    @test coalesce(v, missing, v) === v
-    @test coalesce(v, nothing, v) === v
-
-    # issue #26927
-    a = [missing, nothing, Some(nothing), Some(missing)]
-    @test a isa Vector{Union{Missing, Nothing, Some}}
-    @test a[1] === missing && a[2] === nothing && a[3] === Some(nothing) && a[4] === Some(missing)
-    b = [ "replacement", "replacement", nothing, missing ]
-    @test b isa Vector{Union{Missing, Nothing, String}}
-    # the original operation from the issue, though it was not the source of the problem
-    @test all(coalesce.(a, "replacement") .=== b)
+    @test something(nothing, missing) === missing
+    @test something(missing, nothing) === missing
+    @test something(nothing, missing, nothing) === missing
+    @test something(missing, nothing, missing) === missing
 end
+
+# issue #26927
+a = [missing, nothing, Some(nothing), Some(missing)]
+@test a isa Vector{Union{Missing, Nothing, Some}}
+@test a[1] === missing && a[2] === nothing && a[3] === Some(nothing) && a[4] === Some(missing)
+b = [ "replacement", "replacement", nothing, missing ]
+@test b isa Vector{Union{Missing, Nothing, String}}
+# the original operation from the issue, though it was not the source of the problem
+@test all(coalesce.(a, "replacement") .=== ["replacement", nothing, Some(nothing), Some(missing)])
+@test all(something.(a, "replacement") .=== [missing, "replacement", nothing, missing])
 
 # notnothing()
 
 using Base: notnothing
 @test notnothing(1) === 1
 @test_throws ArgumentError notnothing(nothing)
+
+# isnothing()
+@test !isnothing(1)
+@test isnothing(nothing)

@@ -8,8 +8,6 @@ const FALSE = Int32(0)
 const INT     = Int32(0)  # all integer arrays are int
 const INTLONG = Int32(1)  # most are int, some are SuiteSparse_long
 const LONG    = Int32(2)  # all integer arrays are SuiteSparse_long
-ityp(::Type{Int32}) = INT
-ityp(::Type{Int64}) = LONG
 
 ## dtype defines what the numerical type is (double or float):
 const DOUBLE = Int32(0)        # all numerical values are double
@@ -66,6 +64,8 @@ else
     const IndexTypes = (:Int32, :Int64)
     const ITypes = Union{Int32, Int64}
 end
+ityp(::Type{SuiteSparse_long}) = LONG
+
 
 const VTypes = Union{ComplexF64, Float64}
 const VRealTypes = Union{Float64}

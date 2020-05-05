@@ -5,8 +5,8 @@
 # especially try to make sure any recursive and leaf functions have concrete signatures,
 # since we won't be able to specialize & infer them at runtime
 
-let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call, optimize, run_passes],
-    world = ccall(:jl_get_world_counter, UInt, ())
+let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call, run_passes],
+    world = get_world_counter()
     for x in T_FFUNC_VAL
         push!(fs, x[3])
     end
@@ -27,7 +27,7 @@ let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call, optimize, run_p
                     typ[i] = typ[i].ub
                 end
             end
-            typeinf_type(m[3], Tuple{typ...}, m[2], true, Params(world))
+            typeinf_type(m[3], Tuple{typ...}, m[2], Params(world))
         end
     end
 end

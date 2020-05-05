@@ -34,8 +34,8 @@ Base.IteratorEltype
 
 Fully implemented by:
 
-  * `AbstractRange`
-  * `UnitRange`
+  * [`AbstractRange`](@ref)
+  * [`UnitRange`](@ref)
   * `Tuple`
   * `Number`
   * [`AbstractArray`](@ref)
@@ -49,6 +49,17 @@ Fully implemented by:
   * [`Pair`](@ref)
   * [`NamedTuple`](@ref)
 
+## Constructors and Types
+
+```@docs
+Base.AbstractRange
+Base.OrdinalRange
+Base.AbstractUnitRange
+Base.StepRange
+Base.UnitRange
+Base.LinRange
+```
+
 ## General Collections
 
 ```@docs
@@ -59,8 +70,8 @@ Base.length
 
 Fully implemented by:
 
-  * `AbstractRange`
-  * `UnitRange`
+  * [`AbstractRange`](@ref)
+  * [`UnitRange`](@ref)
   * `Tuple`
   * `Number`
   * [`AbstractArray`](@ref)
@@ -82,18 +93,14 @@ Base.indexin
 Base.unique
 Base.unique!
 Base.allunique
-Base.reduce(::Any, ::Any, ::Any)
 Base.reduce(::Any, ::Any)
-Base.foldl(::Any, ::Any, ::Any)
 Base.foldl(::Any, ::Any)
-Base.foldr(::Any, ::Any, ::Any)
 Base.foldr(::Any, ::Any)
 Base.maximum
 Base.maximum!
 Base.minimum
 Base.minimum!
-Base.extrema(::Any)
-Base.extrema(::AbstractArray, ::Any)
+Base.extrema
 Base.argmax
 Base.argmin
 Base.findmax
@@ -116,21 +123,19 @@ Base.all(::Any, ::Any)
 Base.foreach
 Base.map
 Base.map!
-Base.mapreduce(::Any, ::Any, ::Any, ::Any)
 Base.mapreduce(::Any, ::Any, ::Any)
-Base.mapfoldl(::Any, ::Any, ::Any, ::Any)
 Base.mapfoldl(::Any, ::Any, ::Any)
-Base.mapfoldr(::Any, ::Any, ::Any, ::Any)
 Base.mapfoldr(::Any, ::Any, ::Any)
 Base.first
 Base.last
+Base.front
+Base.tail
 Base.step
 Base.collect(::Any)
 Base.collect(::Type, ::Any)
 Base.filter
 Base.filter!
 Base.replace(::Any, ::Pair...)
-Base.replace(::Base.Callable, ::Any, ::Any)
 Base.replace(::Base.Callable, ::Any)
 Base.replace!
 ```
@@ -153,8 +158,8 @@ Fully implemented by:
 
 Partially implemented by:
 
-  * `AbstractRange`
-  * `UnitRange`
+  * [`AbstractRange`](@ref)
+  * [`UnitRange`](@ref)
   * `Tuple`
   * `AbstractString`
   * [`Dict`](@ref)
@@ -172,6 +177,8 @@ two functions for custom types to override how they are stored in a hash table.
 
 [`WeakKeyDict`](@ref) is a hash table implementation where the keys are weak references to objects, and
 thus may be garbage collected even when referenced in a hash table.
+Like `Dict` it uses `hash` for hashing and `isequal` for equality, unlike `Dict` it does
+not convert keys on insertion.
 
 [`Dict`](@ref)s can be created by passing pair objects constructed with `=>` to a [`Dict`](@ref)
 constructor: `Dict("A"=>1, "B"=>2)`. This call will attempt to infer type information from the
@@ -186,6 +193,7 @@ for the key `x`).  Multiple arguments to `D[...]` are converted to tuples; for e
 `D[x,y]`  is equivalent to `D[(x,y)]`, i.e. it refers to the value keyed by the tuple `(x,y)`.
 
 ```@docs
+Base.AbstractDict
 Base.Dict
 Base.IdDict
 Base.WeakKeyDict
@@ -202,8 +210,9 @@ Base.keys
 Base.values
 Base.pairs
 Base.merge
-Base.merge!(::AbstractDict, ::AbstractDict...)
-Base.merge!(::Function, ::AbstractDict, ::AbstractDict...)
+Base.mergewith
+Base.merge!
+Base.mergewith!
 Base.sizehint!
 Base.keytype
 Base.valtype
@@ -228,6 +237,7 @@ Partially implemented by:
 ## Set-Like Collections
 
 ```@docs
+Base.AbstractSet
 Base.Set
 Base.BitSet
 Base.union
@@ -242,6 +252,7 @@ Base.issubset
 Base.:⊈
 Base.:⊊
 Base.issetequal
+Base.isdisjoint
 ```
 
 Fully implemented by:

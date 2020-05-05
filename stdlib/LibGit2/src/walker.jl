@@ -19,6 +19,7 @@ Here, `count` finds the number of commits along the walk with a certain `GitHash
 Since the `GitHash` is unique to a commit, `cnt` will be `1`.
 """
 function GitRevWalker(repo::GitRepo)
+    ensure_initialized()
     w_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_revwalk_new, :libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}), w_ptr, repo.ptr)
@@ -26,6 +27,7 @@ function GitRevWalker(repo::GitRepo)
 end
 
 function Base.iterate(w::GitRevWalker, state=nothing)
+    ensure_initialized()
     id_ptr = Ref(GitHash())
     err = ccall((:git_revwalk_next, :libgit2), Cint,
                 (Ptr{GitHash}, Ptr{Cvoid}), id_ptr, w.ptr)
@@ -48,6 +50,7 @@ Push the HEAD commit and its ancestors onto the [`GitRevWalker`](@ref)
 during the walk.
 """
 function push_head!(w::GitRevWalker)
+    ensure_initialized()
     @check ccall((:git_revwalk_push_head, :libgit2), Cint, (Ptr{Cvoid},), w.ptr)
     return w
 end
@@ -60,16 +63,19 @@ to apply a function to all commits since a certain year, by passing the first co
 of that year as `cid` and then passing the resulting `w` to [`map`](@ref LibGit2.map).
 """
 function push!(w::GitRevWalker, cid::GitHash)
+    ensure_initialized()
     @check ccall((:git_revwalk_push, :libgit2), Cint, (Ptr{Cvoid}, Ptr{GitHash}), w.ptr, Ref(cid))
     return w
 end
 
 function push!(w::GitRevWalker, range::AbstractString)
+    ensure_initialized()
     @check ccall((:git_revwalk_push_range, :libgit2), Cint, (Ptr{Cvoid}, Ptr{UInt8}), w.ptr, range)
     return w
 end
 
 function Base.sort!(w::GitRevWalker; by::Cint = Consts.SORT_NONE, rev::Bool=false)
+    ensure_initialized()
     rev && (by |= Consts.SORT_REVERSE)
     ccall((:git_revwalk_sorting, :libgit2), Cvoid, (Ptr{Cvoid}, Cint), w.ptr, by)
     return w

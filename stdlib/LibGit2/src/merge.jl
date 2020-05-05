@@ -14,6 +14,7 @@ tip of a remote branch, for instance when a [`FetchHead`](@ref) is passed, or to
 branch head described using `GitReference`.
 """
 function GitAnnotated(repo::GitRepo, commit_id::GitHash)
+    ensure_initialized()
     ann_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_annotated_commit_lookup, :libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{GitHash}),
@@ -22,6 +23,7 @@ function GitAnnotated(repo::GitRepo, commit_id::GitHash)
 end
 
 function GitAnnotated(repo::GitRepo, ref::GitReference)
+    ensure_initialized()
     ann_ref_ref = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_annotated_commit_from_ref, :libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{Cvoid}),
@@ -30,6 +32,7 @@ function GitAnnotated(repo::GitRepo, ref::GitReference)
 end
 
 function GitAnnotated(repo::GitRepo, fh::FetchHead)
+    ensure_initialized()
     ann_ref_ref = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_annotated_commit_from_fetchhead, :libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Ptr{GitHash}),
@@ -44,6 +47,7 @@ function GitAnnotated(repo::GitRepo, comittish::AbstractString)
 end
 
 function GitHash(ann::GitAnnotated)
+    ensure_initialized()
     GC.@preserve ann begin
         oid = unsafe_load(ccall((:git_annotated_commit_id, :libgit2), Ptr{GitHash}, (Ptr{Cvoid},), ann.ptr))
     end
@@ -79,6 +83,7 @@ Return two outputs, `analysis` and `preference`. `analysis` has several possible
 `preference` can be controlled through the repository or global git configuration.
 """
 function merge_analysis(repo::GitRepo, anns::Vector{GitAnnotated})
+    ensure_initialized()
     analysis = Ref{Cint}(0)
     preference = Ref{Cint}(0)
     anns_ref = Ref(Base.map(a->a.ptr, anns), 1)
@@ -140,6 +145,7 @@ LibGit2.merge!(repo, [upst_ann])
 function merge!(repo::GitRepo, anns::Vector{GitAnnotated};
                 merge_opts::MergeOptions = MergeOptions(),
                 checkout_opts::CheckoutOptions = CheckoutOptions())
+    ensure_initialized()
     anns_size = Csize_t(length(anns))
     @check ccall((:git_merge, :libgit2), Cint,
                   (Ptr{Cvoid}, Ptr{Ptr{Cvoid}}, Csize_t,
@@ -250,6 +256,7 @@ Find a merge base (a common ancestor) between the commits `one` and `two`.
 `one` and `two` may both be in string form. Return the `GitHash` of the merge base.
 """
 function merge_base(repo::GitRepo, one::AbstractString, two::AbstractString)
+    ensure_initialized()
     oid1_ptr = Ref(GitHash(one))
     oid2_ptr = Ref(GitHash(two))
     moid_ptr = Ref(GitHash())

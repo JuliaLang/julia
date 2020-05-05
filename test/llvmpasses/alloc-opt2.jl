@@ -12,20 +12,17 @@ println("""
 # Test that the gc_preserve intrinsics are deleted directly.
 
 # CHECK-LABEL: @preserve_branches
-# CHECK: alloca i64
 # CHECK: call %jl_value_t*** @julia.ptls_states()
 # CHECK: L1:
-# CHECK-NEXT: call void @llvm.lifetime.start{{.*}}(i64 8,
+# CHECK-NOT: @llvm.julia.gc_preserve_begin
 # CHECK-NEXT: @external_function()
 # CHECK-NEXT: br i1 %b2, label %L2, label %L3
 
 # CHECK: L2:
-# CHECK-NOT: call void @llvm.lifetime.end{{.*}}(i64 8,
 # CHECK: @external_function()
 # CHECK-NEXT: br label %L3
 
 # CHECK: L3:
-# CHECK-NEXT: call void @llvm.lifetime.end{{.*}}(i64 8,
 println("""
 define void @preserve_branches(i8* %fptr, i1 %b, i1 %b2) {
   %ptls = call %jl_value_t*** @julia.ptls_states()
@@ -49,21 +46,17 @@ L3:
 # CHECK-LABEL: }
 
 # CHECK-LABEL: @preserve_branches2
-# CHECK: alloca i64
 # CHECK: call %jl_value_t*** @julia.ptls_states()
 # CHECK: L1:
-# CHECK-NEXT: call void @llvm.lifetime.start{{.*}}(i64 8,
 # CHECK-NEXT: @llvm.julia.gc_preserve_begin{{.*}}%jl_value_t addrspace(10)* %v2
 # CHECK-NEXT: @external_function()
 # CHECK-NEXT: br i1 %b2, label %L2, label %L3
 
 # CHECK: L2:
-# CHECK-NOT: call void @llvm.lifetime.end{{.*}}(i64 8,
 # CHECK: @external_function()
 # CHECK-NEXT: br label %L3
 
 # CHECK: L3:
-# CHECK-NEXT: call void @llvm.lifetime.end{{.*}}(i64 8,
 println("""
 define void @preserve_branches2(i8* %fptr, i1 %b, i1 %b2) {
   %ptls = call %jl_value_t*** @julia.ptls_states()

@@ -167,7 +167,7 @@ function maptwice(wrapped_f, chnl, worker_tasks, c...)
             # in asyncrun due to a closed channel.
             asyncrun_excp = ex
         else
-            rethrow(ex)
+            rethrow()
         end
     end
 

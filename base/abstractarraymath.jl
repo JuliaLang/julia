@@ -5,7 +5,6 @@
 isreal(x::AbstractArray) = all(isreal,x)
 iszero(x::AbstractArray) = all(iszero,x)
 isreal(x::AbstractArray{<:Real}) = true
-all(::typeof(isinteger), ::AbstractArray{<:Integer}) = true
 
 ## Constructors ##
 
@@ -39,7 +38,7 @@ julia> vec(1:3)
 
 See also [`reshape`](@ref).
 """
-vec(a::AbstractArray) = reshape(a,_length(a))
+vec(a::AbstractArray) = reshape(a,length(a))
 vec(a::AbstractVector) = a
 
 _sub(::Tuple{}, ::Tuple{}) = ()
@@ -47,7 +46,7 @@ _sub(t::Tuple, ::Tuple{}) = t
 _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
 
 """
-    squeeze(A; dims)
+    dropdims(A; dims)
 
 Remove the dimensions specified by `dims` from array `A`.
 Elements of `dims` must be unique and within the range `1:ndims(A)`.
@@ -61,20 +60,20 @@ julia> a = reshape(Vector(1:4),(2,2,1,1))
  1  3
  2  4
 
-julia> squeeze(a; dims=3)
+julia> dropdims(a; dims=3)
 2×2×1 Array{Int64,3}:
 [:, :, 1] =
  1  3
  2  4
 ```
 """
-squeeze(A; dims) = _squeeze(A, dims)
-function _squeeze(A::AbstractArray, dims::Dims)
-    for i in 1:length(dims)
-        1 <= dims[i] <= ndims(A) || throw(ArgumentError("squeezed dims must be in range 1:ndims(A)"))
-        _length(axes(A, dims[i])) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
+dropdims(A; dims) = _dropdims(A, dims)
+function _dropdims(A::AbstractArray, dims::Dims)
+    for i in eachindex(dims)
+        1 <= dims[i] <= ndims(A) || throw(ArgumentError("dropped dims must be in range 1:ndims(A)"))
+        length(axes(A, dims[i])) == 1 || throw(ArgumentError("dropped dims must all be size 1"))
         for j = 1:i-1
-            dims[j] == dims[i] && throw(ArgumentError("squeezed dims must be unique"))
+            dims[j] == dims[i] && throw(ArgumentError("dropped dims must be unique"))
         end
     end
     d = ()
@@ -85,7 +84,7 @@ function _squeeze(A::AbstractArray, dims::Dims)
     end
     reshape(A, d::typeof(_sub(axes(A), dims)))
 end
-_squeeze(A::AbstractArray, dim::Integer) = _squeeze(A, (Int(dim),))
+_dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
 
 ## Unary operators ##
 
@@ -120,9 +119,9 @@ julia> selectdim(A, 2, 3)
  7
 ```
 """
-@inline selectdim(A::AbstractArray, d::Integer, i) = _selectdim(A, d, i, setindex(map(Slice, axes(A)), i, d))
+@inline selectdim(A::AbstractArray, d::Integer, i) = _selectdim(A, d, i, _setindex(i, d, map(Slice, axes(A))...))
 @noinline function _selectdim(A, d, i, idxs)
-    d >= 1 || throw(ArgumentError("dimension must be ≥ 1"))
+    d >= 1 || throw(ArgumentError("dimension must be ≥ 1, got $d"))
     nd = ndims(A)
     d > nd && (i == 1 || throw(BoundsError(A, (ntuple(k->Colon(),d-1)..., i))))
     return view(A, idxs...)
@@ -158,7 +157,7 @@ function reverse(A::AbstractArray; dims::Integer)
     B = similar(A)
     nnd = 0
     for i = 1:nd
-        nnd += Int(_length(inds[i])==1 || i==d)
+        nnd += Int(length(inds[i])==1 || i==d)
     end
     indsd = inds[d]
     sd = first(indsd)+last(indsd)
@@ -214,27 +213,27 @@ julia> circshift(b, (-1,0))
 
 julia> a = BitArray([true, true, false, false, true])
 5-element BitArray{1}:
-  true
-  true
- false
- false
-  true
+ 1
+ 1
+ 0
+ 0
+ 1
 
 julia> circshift(a, 1)
 5-element BitArray{1}:
-  true
-  true
-  true
- false
- false
+ 1
+ 1
+ 1
+ 0
+ 0
 
 julia> circshift(a, -1)
 5-element BitArray{1}:
-  true
- false
- false
-  true
-  true
+ 1
+ 0
+ 0
+ 1
+ 1
 ```
 
 See also [`circshift!`](@ref).
@@ -367,7 +366,13 @@ _rshps(shp, shp_i, sz, i, ::Tuple{}) =
 _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
     "($n) cannot be less than number of dimensions of input ($N)"))
 
+_negreperr(n) = throw(ArgumentError("number of $n repetitions" *
+    "cannot be negative"))
+
 @noinline function _repeat(A::AbstractArray, inner, outer)
+    any(<(0), inner) && _negreperr("inner")
+    any(<(0), outer) && _negreperr("outer")
+
     shape, inner_shape = rep_shapes(A, inner, outer)
 
     R = similar(A, shape)
@@ -376,8 +381,9 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
     end
 
     # fill the first inner block
-    if all(x -> x == 1, inner)
-        R[axes(A)...] = A
+    if all(isequal(1), inner)
+        idxs = (axes(A)..., ntuple(n->OneTo(1), ndims(R)-ndims(A))...) # keep dimension consistent
+        R[idxs...] = A
     else
         inner_indices = [1:n for n in inner]
         for c in CartesianIndices(axes(A))
@@ -390,12 +396,12 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
     end
 
     # fill the outer blocks along each dimension
-    if all(x -> x == 1, outer)
+    if all(isequal(1), outer)
         return R
     end
     src_indices  = [1:n for n in inner_shape]
     dest_indices = copy(src_indices)
-    for i in 1:length(outer)
+    for i in eachindex(outer)
         B = view(R, src_indices...)
         for j in 2:outer[i]
             dest_indices[i] = dest_indices[i] .+ inner_shape[i]
@@ -405,4 +411,92 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
     end
 
     return R
+end
+
+"""
+    eachrow(A::AbstractVecOrMat)
+
+Create a generator that iterates over the first dimension of vector or matrix `A`,
+returning the rows as `AbstractVector` views.
+
+See also [`eachcol`](@ref) and [`eachslice`](@ref).
+
+!!! compat "Julia 1.1"
+     This function requires at least Julia 1.1.
+
+# Example
+
+```jldoctest
+julia> a = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> first(eachrow(a))
+2-element view(::Array{Int64,2}, 1, :) with eltype Int64:
+ 1
+ 2
+
+julia> collect(eachrow(a))
+2-element Array{SubArray{Int64,1,Array{Int64,2},Tuple{Int64,Base.Slice{Base.OneTo{Int64}}},true},1}:
+ [1, 2]
+ [3, 4]
+```
+"""
+eachrow(A::AbstractVecOrMat) = (view(A, i, :) for i in axes(A, 1))
+
+
+"""
+    eachcol(A::AbstractVecOrMat)
+
+Create a generator that iterates over the second dimension of matrix `A`, returning the
+columns as `AbstractVector` views.
+
+See also [`eachrow`](@ref) and [`eachslice`](@ref).
+
+!!! compat "Julia 1.1"
+     This function requires at least Julia 1.1.
+
+# Example
+
+```jldoctest
+julia> a = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> first(eachcol(a))
+2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
+ 1
+ 3
+
+julia> collect(eachcol(a))
+2-element Array{SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true},1}:
+ [1, 3]
+ [2, 4]
+```
+"""
+eachcol(A::AbstractVecOrMat) = (view(A, :, i) for i in axes(A, 2))
+
+"""
+    eachslice(A::AbstractArray; dims)
+
+Create a generator that iterates over dimensions `dims` of `A`, returning views that select all
+the data from the other dimensions in `A`.
+
+Only a single dimension in `dims` is currently supported. Equivalent to `(view(A,:,:,...,i,:,:
+...)) for i in axes(A, dims))`, where `i` is in position `dims`.
+
+See also [`eachrow`](@ref), [`eachcol`](@ref), and [`selectdim`](@ref).
+
+!!! compat "Julia 1.1"
+     This function requires at least Julia 1.1.
+"""
+@inline function eachslice(A::AbstractArray; dims)
+    length(dims) == 1 || throw(ArgumentError("only single dimensions are supported"))
+    dim = first(dims)
+    dim <= ndims(A) || throw(DimensionMismatch("A doesn't have $dim dimensions"))
+    inds_before = ntuple(d->(:), dim-1)
+    inds_after = ntuple(d->(:), ndims(A)-dim)
+    return (view(A, inds_before..., i, inds_after...) for i in axes(A, dim))
 end

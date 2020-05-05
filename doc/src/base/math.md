@@ -32,6 +32,7 @@ Base.denominator
 Base.:(<<)
 Base.:(>>)
 Base.:(>>>)
+Base.bitrotate
 Base.:(:)
 Base.range
 Base.OneTo
@@ -72,7 +73,6 @@ Base.tanh(::Number)
 Base.asin(::Number)
 Base.acos(::Number)
 Base.atan(::Number)
-Base.Math.atan2
 Base.Math.asind
 Base.Math.acosd
 Base.Math.atand
@@ -120,6 +120,7 @@ Base.Rounding.RoundNearest
 Base.Rounding.RoundNearestTiesAway
 Base.Rounding.RoundNearestTiesUp
 Base.Rounding.RoundToZero
+Base.Rounding.RoundFromZero
 Base.Rounding.RoundUp
 Base.Rounding.RoundDown
 Base.round(::Complex{<: AbstractFloat}, ::RoundingMode, ::RoundingMode)
@@ -166,32 +167,40 @@ Base.gcd
 Base.lcm
 Base.gcdx
 Base.ispow2
-Base.nextpow2
-Base.prevpow2
 Base.nextpow
 Base.prevpow
 Base.nextprod
 Base.invmod
 Base.powermod
-Base.Math.gamma
-Base.Math.lgamma
-Base.Math.lfact
-Base.Math.beta
-Base.Math.lbeta
 Base.ndigits
 Base.widemul
+Base.Math.evalpoly
 Base.Math.@evalpoly
 Base.FastMath.@fastmath
 ```
 
-## Statistics
+## Customizable binary operators
 
-```@docs
-Base.mean
-Base.mean!
-Base.middle
-Base.median
-Base.median!
-Base.quantile
-Base.quantile!
-```
+Some unicode characters can be used to define new binary operators
+that support infix notation.
+For example
+```⊗(x,y) = kron(x,y)```
+defines the `⊗` (otimes) function to be the Kronecker product,
+and one can call it as binary operator using infix syntax:
+```C = A ⊗ B```
+as well as with the usual prefix syntax
+```C = ⊗(A,B)```.
+
+Other characters that support such extensions include
+\odot `⊙`
+and
+\oplus `⊕`
+
+The complete list is in the parser code:
+https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm
+
+Those that are parsed like `*` (in terms of precedence) include
+`* / ÷ % & ⋅ ∘ × |\\| ∩ ∧ ⊗ ⊘ ⊙ ⊚ ⊛ ⊠ ⊡ ⊓ ∗ ∙ ∤ ⅋ ≀ ⊼ ⋄ ⋆ ⋇ ⋉ ⋊ ⋋ ⋌ ⋏ ⋒ ⟑ ⦸ ⦼ ⦾ ⦿ ⧶ ⧷ ⨇ ⨰ ⨱ ⨲ ⨳ ⨴ ⨵ ⨶ ⨷ ⨸ ⨻ ⨼ ⨽ ⩀ ⩃ ⩄ ⩋ ⩍ ⩎ ⩑ ⩓ ⩕ ⩘ ⩚ ⩜ ⩞ ⩟ ⩠ ⫛ ⊍ ▷ ⨝ ⟕ ⟖ ⟗`
+and those that are parsed like `+` include
+`+ - |\|| ⊕ ⊖ ⊞ ⊟ |++| ∪ ∨ ⊔ ± ∓ ∔ ∸ ≏ ⊎ ⊻ ⊽ ⋎ ⋓ ⧺ ⧻ ⨈ ⨢ ⨣ ⨤ ⨥ ⨦ ⨧ ⨨ ⨩ ⨪ ⨫ ⨬ ⨭ ⨮ ⨹ ⨺ ⩁ ⩂ ⩅ ⩊ ⩌ ⩏ ⩐ ⩒ ⩔ ⩖ ⩗ ⩛ ⩝ ⩡ ⩢ ⩣`
+There are many others that are related to arrows, comparisons, and powers.

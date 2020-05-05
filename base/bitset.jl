@@ -8,7 +8,7 @@ const NO_OFFSET = Int === Int64 ? -one(Int) << 60 : -one(Int) << 29
 #   or -2^26:2^26 (32-bits architectures)
 # + when the offset is NO_OFFSET, the bits field *must* be empty
 # + NO_OFFSET could be made to be > 0, but a negative one allows
-#   a small optimization in the in(x, ::BitSet)
+#   a small optimization in the in(x, ::BitSet) method
 
 mutable struct BitSet <: AbstractSet{Int}
     bits::Vector{UInt64}
@@ -29,7 +29,12 @@ very large integers), use [`Set`](@ref) instead.
 BitSet(itr) = union!(BitSet(), itr)
 
 # Special implementation for BitSet, which lacks a fast `length` method.
-union!(s::BitSet, itr) = foldl(push!, s, itr)
+function union!(s::BitSet, itr)
+    for x in itr
+        push!(s, x)
+    end
+    return s
+end
 
 @inline intoffset(s::BitSet) = s.offset << 6
 
@@ -41,14 +46,6 @@ emptymutable(s::BitSet, ::Type{Int}=Int) = BitSet()
 copy(s1::BitSet) = copy!(BitSet(), s1)
 copymutable(s::BitSet) = copy(s)
 
-"""
-    copy!(dst, src)
-
-In-place [`copy`](@ref) of `src` into `dst`. After the call to `copy!`,
-`dst` must be left equal to `src`, otherwise an error is thrown; this
-function appropriately resizes `dst` if necessary.
-See also [`copyto!`](@ref).
-"""
 function copy!(dest::BitSet, src::BitSet)
     resize!(dest.bits, length(src.bits))
     copyto!(dest.bits, src.bits)
@@ -124,6 +121,54 @@ end
     for i in 1:nchunks
         @inbounds b[i] = CHK0
     end
+end
+
+function union!(s::BitSet, r::AbstractUnitRange{<:Integer})
+    isempty(r) && return s
+    a, b = _check_bitset_bounds(first(r)), _check_bitset_bounds(last(r))
+    cidxa = _div64(a)
+    cidxb = _div64(b)
+    if s.offset == NO_OFFSET
+        s.offset = cidxa
+    end
+    len = length(s.bits)
+    diffa = cidxa - s.offset
+    diffb = cidxb - s.offset
+
+    # grow s.bits as necessary
+    if diffb >= len
+        _growend!(s.bits, diffb - len + 1)
+        # we set only some values to CHK0, those which will not be
+        # fully overwritten (i.e. only or'ed with `|`)
+        s.bits[end] = CHK0 # end == diffb + 1
+        if diffa >= len
+            s.bits[diffa + 1] = CHK0
+        end
+    end
+    if diffa < 0
+        _growbeg!(s.bits, -diffa)
+        s.bits[1] = CHK0
+        if diffb < 0
+            s.bits[diffb - diffa + 1] = CHK0
+        end
+        s.offset = cidxa # s.offset += diffa
+        diffb -= diffa
+        diffa = 0
+    end
+
+    # update s.bits
+    i = _mod64(a)
+    j = _mod64(b)
+    @inbounds if diffa == diffb
+        s.bits[diffa + 1] |= (((~CHK0) >> i) << (i+63-j)) >> (63-j)
+    else
+        s.bits[diffa + 1] |= ((~CHK0) >> i) << i
+        s.bits[diffb + 1] |= (~CHK0  << (63-j)) >> (63-j)
+        for n = diffa+1:diffb-1
+            s.bits[n+1] = ~CHK0
+        end
+    end
+    s
 end
 
 function _matched_map!(f, s1::BitSet, s2::BitSet)
@@ -274,7 +319,12 @@ intersect!(s1::BitSet, s2::BitSet) = _matched_map!(&, s1, s2)
 
 setdiff!(s1::BitSet, s2::BitSet) = _matched_map!((p, q) -> p & ~q, s1, s2)
 
-symdiff!(s::BitSet, ns) = foldl(int_symdiff!, s, ns)
+function symdiff!(s::BitSet, ns)
+    for x in ns
+        int_symdiff!(s, x)
+    end
+    return s
+end
 
 function int_symdiff!(s::BitSet, n::Integer)
     n0 = _check_bitset_bounds(n)
@@ -290,10 +340,13 @@ filter!(f, s::BitSet) = unsafe_filter!(f, s)
 @inline in(n::Int, s::BitSet) = _bits_getindex(s.bits, n, s.offset)
 @inline in(n::Integer, s::BitSet) = _is_convertible_Int(n) ? in(Int(n), s) : false
 
-function iterate(s::BitSet, idx=0)
-   idx = _bits_findnext(s.bits, idx)
-   idx == -1 && return nothing
-   (idx + intoffset(s), idx+1)
+function iterate(s::BitSet, (word, idx) = (CHK0, 0))
+    while word == 0
+        idx == length(s.bits) && return nothing
+        idx += 1
+        word = @inbounds s.bits[idx]
+    end
+    trailing_zeros(word) + (idx - 1 + s.offset) << 6, (_blsr(word), idx)
 end
 
 @noinline _throw_bitset_notempty_error() =
@@ -309,7 +362,7 @@ function last(s::BitSet)
     idx == -1 ? _throw_bitset_notempty_error() : idx + intoffset(s)
 end
 
-length(s::BitSet) = bitcount(s.bits) # = mapreduce(count_ones, +, 0, s.bits)
+length(s::BitSet) = bitcount(s.bits) # = mapreduce(count_ones, +, s.bits; init=0)
 
 function show(io::IO, s::BitSet)
     print(io, "BitSet([")
@@ -353,7 +406,11 @@ function ==(s1::BitSet, s2::BitSet)
 
     # compare overlap values
     if overlap > 0
+        t1 = @_gc_preserve_begin a1
+        t2 = @_gc_preserve_begin a2
         _memcmp(pointer(a1, b2-b1+1), pointer(a2), overlap<<3) == 0 || return false
+        @_gc_preserve_end t2
+        @_gc_preserve_end t1
     end
 
     return true

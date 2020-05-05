@@ -1,8 +1,7 @@
 # Base.Cartesian
 
 The (non-exported) Cartesian module provides macros that facilitate writing multidimensional algorithms.
-It is hoped that Cartesian will not, in the long term, be necessary; however, at present it is
-one of the few ways to write compact and performant multidimensional code.
+Most often you can write such algorithms with [straightforward techniques](https://julialang.org/blog/2016/02/iteration); however, there are a few cases where `Base.Cartesian` is still useful or necessary.
 
 ## Principles of usage
 
@@ -17,10 +16,10 @@ end
 which generates the following code:
 
 ```julia
-for i_3 = 1:size(A,3)
-    for i_2 = 1:size(A,2)
-        for i_1 = 1:size(A,1)
-            s += A[i_1,i_2,i_3]
+for i_3 = axes(A, 3)
+    for i_2 = axes(A, 2)
+        for i_1 = axes(A, 1)
+            s += A[i_1, i_2, i_3]
         end
     end
 end
@@ -39,7 +38,7 @@ The (basic) syntax of `@nloops` is as follows:
   * The second argument is the symbol-prefix used for the iterator variable. Here we used `i`, and
     variables `i_1, i_2, i_3` were generated.
   * The third argument specifies the range for each iterator variable. If you use a variable (symbol)
-    here, it's taken as `1:size(A,dim)`. More flexibly, you can use the anonymous-function expression
+    here, it's taken as `axes(A, dim)`. More flexibly, you can use the anonymous-function expression
     syntax described below.
   * The last argument is the body of the loop. Here, that's what appears between the `begin...end`.
 
@@ -47,7 +46,7 @@ There are some additional features of `@nloops` described in the [reference sect
 
 `@nref` follows a similar pattern, generating `A[i_1,i_2,i_3]` from `@nref 3 A i`. The general
 practice is to read from left to right, which is why `@nloops` is `@nloops 3 i A expr` (as in
-`for i_2 = 1:size(A,2)`, where `i_2` is to the left and the range is to the right) whereas `@nref`
+`for i_2 = axes(A, 2)`, where `i_2` is to the left and the range is to the right) whereas `@nref`
 is `@nref 3 A i` (as in `A[i_1,i_2,i_3]`, where the array comes first).
 
 If you're developing code with Cartesian, you may find that debugging is easier when you examine
@@ -72,10 +71,7 @@ DocTestSetup = nothing
 
 The first argument to both of these macros is the number of expressions, which must be an integer.
 When you're writing a function that you intend to work in multiple dimensions, this may not be
-something you want to hard-code. If you're writing code that you need to work with older Julia
-versions, currently you should use the `@ngenerate` macro described in [an older version of this documentation](https://docs.julialang.org/en/release-0.3/devdocs/cartesian/#supplying-the-number-of-expressions).
-
-Starting in Julia 0.4-pre, the recommended approach is to use a `@generated function`.  Here's
+something you want to hard-code. The recommended approach is to use a `@generated function`.  Here's
 an example:
 
 ```julia

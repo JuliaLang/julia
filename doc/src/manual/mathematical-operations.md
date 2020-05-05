@@ -28,6 +28,8 @@ as well as the negation on [`Bool`](@ref) types:
 |:---------- |:-------- |:---------------------------------------- |
 | `!x`       | negation | changes `true` to `false` and vice versa |
 
+A numeric literal placed directly before an identifier or parentheses, e.g. `2x` or `2(x+y)`, is treated as a multiplication, except with higher precedence than other binary operations.  See [Numeric Literal Coefficients](@ref man-numeric-literal-coefficients) for details.
+
 Julia's promotion system makes arithmetic operations on mixtures of argument types "just work"
 naturally and automatically. See [Conversion and Promotion](@ref conversion-and-promotion) for details of the promotion
 system.
@@ -48,6 +50,18 @@ julia> 3*2/12
 (By convention, we tend to space operators more tightly if they get applied before other nearby
 operators. For instance, we would generally write `-x + 2` to reflect that first `x` gets negated,
 and then `2` is added to that result.)
+
+When used in multiplication, `false` acts as a *strong zero*:
+
+```jldoctest
+julia> NaN * false
+0.0
+
+julia> false * Inf
+0.0
+```
+
+This is useful for preventing the propagation of `NaN` values in quantities that are known to be zero. See [Knuth (1992)](https://arxiv.org/abs/math/9205211) for motivation.
 
 ## Bitwise Operators
 
@@ -231,7 +245,7 @@ are compared according to the [IEEE 754 standard](https://en.wikipedia.org/wiki/
   * Finite numbers are ordered in the usual manner.
   * Positive zero is equal but not greater than negative zero.
   * `Inf` is equal to itself and greater than everything else except `NaN`.
-  * `-Inf` is equal to itself and less then everything else except `NaN`.
+  * `-Inf` is equal to itself and less than everything else except `NaN`.
   * `NaN` is not equal to, not less than, and not greater than anything, including itself.
 
 The last point is potentially surprising and thus worth noting:
@@ -250,7 +264,7 @@ julia> NaN > NaN
 false
 ```
 
-and can cause especial headaches with [Arrays](@ref):
+and can cause headaches when working with [arrays](@ref man-multi-dim-arrays):
 
 ```jldoctest
 julia> [1 NaN] == [1 NaN]
@@ -356,16 +370,17 @@ Julia applies the following order and associativity of operations, from highest 
 |:-------------- |:------------------------------------------------------------------------------------------------- |:-------------------------- |
 | Syntax         | `.` followed by `::`                                                                              | Left                       |
 | Exponentiation | `^`                                                                                               | Right                      |
-| Unary          | `+ - √`                                                                                           | Right[^1]                   |
-| Fractions      | `//`                                                                                              | Left                       |
-| Multiplication | `* / % & \ ÷`                                                                                     | Left[^2]                    |
+| Unary          | `+ - √`                                                                                           | Right[^1]                  |
 | Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
-| Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                    |
+| Fractions      | `//`                                                                                              | Left                       |
+| Multiplication | `* / % & \ ÷`                                                                                     | Left[^2]                   |
+| Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                   |
 | Syntax         | `: ..`                                                                                            | Left                       |
 | Syntax         | `\|>`                                                                                             | Left                       |
 | Syntax         | `<\|`                                                                                             | Right                      |
 | Comparisons    | `> < >= <= == === != !== <:`                                                                      | Non-associative            |
 | Control flow   | `&&` followed by `\|\|` followed by `?`                                                           | Right                      |
+| Pair           | `=>`                                                                                              | Right                      |
 | Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            | Right                      |
 
 [^1]:
@@ -377,11 +392,13 @@ Julia applies the following order and associativity of operations, from highest 
 For a complete list of *every* Julia operator's precedence, see the top of this file:
 [`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm)
 
+[Numeric literal coefficients](@ref man-numeric-literal-coefficients), e.g. `2x`, are treated as multiplications with higher precedence than any other binary operation, and also have higher precedence than `^`.
+
 You can also find the numerical precedence for any given operator via the built-in function `Base.operator_precedence`, where higher numbers take precedence:
 
 ```jldoctest
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
-(11, 13, 17)
+(11, 12, 17)
 
 julia> Base.operator_precedence(:sin), Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
 (0, 1, 1)
@@ -431,12 +448,12 @@ julia> Int8(127.0)
 127
 
 julia> Int8(3.14)
-ERROR: InexactError: Int8(Int8, 3.14)
+ERROR: InexactError: Int8(3.14)
 Stacktrace:
 [...]
 
 julia> Int8(128.0)
-ERROR: InexactError: Int8(Int8, 128.0)
+ERROR: InexactError: Int8(128.0)
 Stacktrace:
 [...]
 
@@ -528,12 +545,11 @@ sin    cos    tan    cot    sec    csc
 sinh   cosh   tanh   coth   sech   csch
 asin   acos   atan   acot   asec   acsc
 asinh  acosh  atanh  acoth  asech  acsch
-sinc   cosc   atan2
+sinc   cosc
 ```
 
-These are all single-argument functions, with the exception of [atan2](https://en.wikipedia.org/wiki/Atan2),
-which gives the angle in [radians](https://en.wikipedia.org/wiki/Radian) between the *x*-axis
-and the point specified by its arguments, interpreted as *x* and *y* coordinates.
+These are all single-argument functions, with [`atan`](@ref) also accepting two arguments
+corresponding to a traditional [`atan2`](https://en.wikipedia.org/wiki/Atan2) function.
 
 Additionally, [`sinpi(x)`](@ref) and [`cospi(x)`](@ref) are provided for more accurate computations
 of [`sin(pi*x)`](@ref) and [`cos(pi*x)`](@ref) respectively.
@@ -549,10 +565,5 @@ asind  acosd  atand  acotd  asecd  acscd
 
 ### Special functions
 
-| Function                                                      | Description                                                                                                                                                     |
-|:------------------------------------------------------------- |:--------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`gamma(x)`](@ref)                                            | [gamma function](https://en.wikipedia.org/wiki/Gamma_function) at `x`                                                                                           |
-| [`lgamma(x)`](@ref)                                           | accurate `log(gamma(x))` for large `x`                                                                                                                          |
-| [`lfact(x)`](@ref)                                            | accurate `log(factorial(x))` for large `x`; same as `lgamma(x+1)` for `x > 1`, zero otherwise                                                                   |
-| [`beta(x,y)`](@ref)                                           | [beta function](https://en.wikipedia.org/wiki/Beta_function) at `x,y`                                                                                           |
-| [`lbeta(x,y)`](@ref)                                          | accurate `log(beta(x,y))` for large `x` or `y`                                                                                                                  |
+Many other special mathematical functions are provided by the package
+[SpecialFunctions.jl](https://github.com/JuliaMath/SpecialFunctions.jl).

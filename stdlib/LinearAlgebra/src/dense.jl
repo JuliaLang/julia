@@ -4,8 +4,7 @@
 
 ## BLAS cutoff threshold constants
 
-const SCAL_CUTOFF = 2048
-const DOT_CUTOFF = 128
+#TODO const DOT_CUTOFF = 128
 const ASUM_CUTOFF = 32
 const NRM2_CUTOFF = 32
 
@@ -13,27 +12,6 @@ const NRM2_CUTOFF = 32
 # L1 cache: 32K, L2 cache: 256K, L3 cache: 6144K
 # This constant should ideally be determined by the actual CPU cache size
 const ISONE_CUTOFF = 2^21 # 2M
-
-function rmul!(X::Array{T}, s::T) where T<:BlasFloat
-    s == 0 && return fill!(X, zero(T))
-    s == 1 && return X
-    if length(X) < SCAL_CUTOFF
-        generic_rmul!(X, s)
-    else
-        BLAS.scal!(length(X), s, X, 1)
-    end
-    X
-end
-
-lmul!(s::T, X::Array{T}) where {T<:BlasFloat} = rmul!(X, s)
-
-rmul!(X::Array{T}, s::Number) where {T<:BlasFloat} = rmul!(X, convert(T, s))
-function rmul!(X::Array{T}, s::Real) where T<:BlasComplex
-    R = typeof(real(zero(T)))
-    GC.@preserve X BLAS.scal!(2*length(X), convert(R,s), convert(Ptr{R},pointer(X)), 1)
-    X
-end
-
 
 function isone(A::StridedMatrix)
     m, n = size(A)
@@ -89,7 +67,8 @@ julia> A
  2.0  6.78233
 ```
 """
-isposdef!(A::AbstractMatrix) = ishermitian(A) && isposdef(cholesky!(Hermitian(A)))
+isposdef!(A::AbstractMatrix) =
+    ishermitian(A) && isposdef(cholesky!(Hermitian(A); check = false))
 
 """
     isposdef(A) -> Bool
@@ -109,24 +88,9 @@ julia> isposdef(A)
 true
 ```
 """
-isposdef(A::AbstractMatrix) = ishermitian(A) && isposdef(cholesky(Hermitian(A)))
+isposdef(A::AbstractMatrix) =
+    ishermitian(A) && isposdef(cholesky(Hermitian(A); check = false))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
-
-# the definition of strides for Array{T,N} is tuple() if N = 0, otherwise it is
-# a tuple containing 1 and a cumulative product of the first N-1 sizes
-# this definition is also used for StridedReshapedArray and StridedReinterpretedArray
-# which have the same memory storage as Array
-function stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int)
-    if i > ndims(a)
-        return length(a)
-    end
-    s = 1
-    for n = 1:(i-1)
-        s *= size(a, n)
-    end
-    return s
-end
-strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
 
 function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasFloat,TI<:Integer}
     if minimum(rx) < 1 || maximum(rx) > length(x)
@@ -135,11 +99,11 @@ function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) w
     GC.@preserve x BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
-vecnorm1(x::Union{Array{T},StridedVector{T}}) where {T<:BlasReal} =
-    length(x) < ASUM_CUTOFF ? generic_vecnorm1(x) : BLAS.asum(x)
+norm1(x::Union{Array{T},StridedVector{T}}) where {T<:BlasReal} =
+    length(x) < ASUM_CUTOFF ? generic_norm1(x) : BLAS.asum(x)
 
-vecnorm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
-    length(x) < NRM2_CUTOFF ? generic_vecnorm2(x) : BLAS.nrm2(x)
+norm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
+    length(x) < NRM2_CUTOFF ? generic_norm2(x) : BLAS.nrm2(x)
 
 """
     triu!(M, k::Integer)
@@ -167,18 +131,12 @@ julia> triu!(M, 1)
 ```
 """
 function triu!(M::AbstractMatrix, k::Integer)
+    require_one_based_indexing(M)
     m, n = size(M)
-    if !(-m + 1 <= k <= n + 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-m + 1) and at most $(n + 1) in an $m-by-$n matrix")))
-    end
-    idx = 1
-    for j = 0:n-1
-        ii = min(max(0, j+1-k), m)
-        for i = (idx+ii):(idx+m-1)
-            M[i] = zero(M[i])
+    for j in 1:min(n, m + k)
+        for i in max(1, j - k + 1):m
+            M[i,j] = zero(M[i,j])
         end
-        idx += m
     end
     M
 end
@@ -211,18 +169,12 @@ julia> tril!(M, 2)
 ```
 """
 function tril!(M::AbstractMatrix, k::Integer)
+    require_one_based_indexing(M)
     m, n = size(M)
-    if !(-m - 1 <= k <= n - 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-m - 1) and at most $(n - 1) in an $m-by-$n matrix")))
-    end
-    idx = 1
-    for j = 0:n-1
-        ii = min(max(0, j-k), m)
-        for i = idx:(idx+ii-1)
-            M[i] = zero(M[i])
+    for j in max(1, k + 1):n
+        @inbounds for i in 1:min(j - k - 1, m)
+            M[i,j] = zero(M[i,j])
         end
-        idx += m
     end
     M
 end
@@ -234,6 +186,7 @@ tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 Fill the band between diagonals `l` and `u` with the value `x`.
 """
 function fillband!(A::AbstractMatrix{T}, x, l, u) where T
+    require_one_based_indexing(A)
     m, n = size(A)
     xT = convert(T, x)
     for j in 1:n
@@ -244,13 +197,8 @@ function fillband!(A::AbstractMatrix{T}, x, l, u) where T
     return A
 end
 
-function diagind(m::Integer, n::Integer, k::Integer=0)
-    if !(-m <= k <= n)
-        throw(ArgumentError(string("requested diagonal, $k, must be at least $(-m) and ",
-            "at most $n in an $m-by-$n matrix")))
-    end
+diagind(m::Integer, n::Integer, k::Integer=0) =
     k <= 0 ? range(1-k, step=m+1, length=min(m+k, n)) : range(k*m+1, step=m+1, length=min(m, n-k))
-end
 
 """
     diagind(M, k::Integer=0)
@@ -269,7 +217,10 @@ julia> diagind(A,-1)
 2:4:6
 ```
 """
-diagind(A::AbstractMatrix, k::Integer=0) = diagind(size(A,1), size(A,2), k)
+function diagind(A::AbstractMatrix, k::Integer=0)
+    require_one_based_indexing(A)
+    diagind(size(A,1), size(A,2), k)
+end
 
 """
     diag(M, k::Integer=0)
@@ -296,9 +247,14 @@ diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
 
 """
     diagm(kv::Pair{<:Integer,<:AbstractVector}...)
+    diagm(m::Integer, n::Integer, kv::Pair{<:Integer,<:AbstractVector}...)
 
-Construct a square matrix from `Pair`s of diagonals and vectors.
+Construct a matrix from `Pair`s of diagonals and vectors.
 Vector `kv.second` will be placed on the `kv.first` diagonal.
+By default the matrix is square and its size is inferred
+from `kv`, but a non-square size `m`×`n` (padded with zeros as needed)
+can be specified by passing `m,n` as the first arguments.
+
 `diagm` constructs a full matrix; if you want storage-efficient
 versions with fast arithmetic, see [`Diagonal`](@ref), [`Bidiagonal`](@ref)
 [`Tridiagonal`](@ref) and [`SymTridiagonal`](@ref).
@@ -320,8 +276,10 @@ julia> diagm(1 => [1,2,3], -1 => [4,5])
  0  0  0  0
 ```
 """
-function diagm(kv::Pair{<:Integer,<:AbstractVector}...)
-    A = diagm_container(kv...)
+diagm(kv::Pair{<:Integer,<:AbstractVector}...) = _diagm(nothing, kv...)
+diagm(m::Integer, n::Integer, kv::Pair{<:Integer,<:AbstractVector}...) = _diagm((Int(m),Int(n)), kv...)
+function _diagm(size, kv::Pair{<:Integer,<:AbstractVector}...)
+    A = diagm_container(size, kv...)
     for p in kv
         inds = diagind(A, p.first)
         for (i, val) in enumerate(p.second)
@@ -330,16 +288,44 @@ function diagm(kv::Pair{<:Integer,<:AbstractVector}...)
     end
     return A
 end
-function diagm_container(kv::Pair{<:Integer,<:AbstractVector}...)
+function diagm_size(size::Nothing, kv::Pair{<:Integer,<:AbstractVector}...)
+    mnmax = mapreduce(x -> length(x.second) + abs(Int(x.first)), max, kv; init=0)
+    return mnmax, mnmax
+end
+function diagm_size(size::Tuple{Int,Int}, kv::Pair{<:Integer,<:AbstractVector}...)
+    mmax = mapreduce(x -> length(x.second) - min(0,Int(x.first)), max, kv; init=0)
+    nmax = mapreduce(x -> length(x.second) + max(0,Int(x.first)), max, kv; init=0)
+    m, n = size
+    (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch("invalid size=$size"))
+    return m, n
+end
+function diagm_container(size, kv::Pair{<:Integer,<:AbstractVector}...)
     T = promote_type(map(x -> eltype(x.second), kv)...)
-    n = mapreduce(x -> length(x.second) + abs(x.first), max, kv)
-    return zeros(T, n, n)
+    return zeros(T, diagm_size(size, kv...)...)
 end
-function diagm_container(kv::Pair{<:Integer,<:BitVector}...)
-    n = mapreduce(x -> length(x.second) + abs(x.first), max, kv)
-    return falses(n, n)
-end
+diagm_container(size, kv::Pair{<:Integer,<:BitVector}...) =
+    falses(diagm_size(size, kv...)...)
 
+"""
+    diagm(v::AbstractVector)
+    diagm(m::Integer, n::Integer, v::AbstractVector)
+
+Construct a matrix with elements of the vector as diagonal elements.
+By default (if `size=nothing`), the matrix is square and its size is given by
+`length(v)`, but a non-square size `m`×`n` can be specified
+by passing `m,n` as the first arguments.
+
+# Examples
+```jldoctest
+julia> diagm([1,2,3])
+3×3 Array{Int64,2}:
+ 1  0  0
+ 0  2  0
+ 0  0  3
+```
+"""
+diagm(v::AbstractVector) = diagm(0 => v)
+diagm(m::Integer, n::Integer, v::AbstractVector) = diagm(m, n, 0 => v)
 
 function tr(A::Matrix{T}) where T
     n = checksquare(A)
@@ -354,6 +340,12 @@ end
     kron(A, B)
 
 Kronecker tensor product of two vectors or two matrices.
+
+For vectors v and w, the Kronecker product is related to the tensor product [`tensor`](@ref), or `⊗`, by
+`kron(v,w) == vec(w ⊗ v)` or
+`w ⊗ v == reshape(kron(v,w), (length(w), length(v)))`.
+Note how the ordering of `v` and `w` differs on the left and right
+of these expressions (due to column-major storage).
 
 # Examples
 ```jldoctest
@@ -373,16 +365,30 @@ julia> kron(A, B)
  1+0im  0-1im  2+0im  0-2im
  0+3im  3+0im  0+4im  4+0im
  3+0im  0-3im  4+0im  0-4im
+
+julia> v = [1, 2]; w = [3, 4, 5];
+
+julia> w*transpose(v)
+3×2 Array{Int64,2}:
+ 3   6
+ 4   8
+ 5  10
+
+julia> reshape(kron(v,w), (length(w), length(v)))
+3×2 Array{Int64,2}:
+ 3   6
+ 4   8
+ 5  10
 ```
 """
 function kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
+    require_one_based_indexing(a, b)
     R = Matrix{promote_op(*,T,S)}(undef, size(a,1)*size(b,1), size(a,2)*size(b,2))
-    m = 1
-    for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
+    m = 0
+    @inbounds for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
         aij = a[i,j]
         for k = 1:size(b,1)
-            R[m] = aij*b[k,l]
-            m += 1
+            R[m += 1] = aij*b[k,l]
         end
     end
     R
@@ -465,6 +471,20 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     # Otherwise, use Schur decomposition
     return schurpow(A, p)
 end
+
+"""
+    ^(A::AbstractMatrix, p::Number)
+
+Matrix power, equivalent to ``\\exp(p\\log(A))``
+
+# Examples
+```jldoctest
+julia> [1 2; 0 3]^3
+2×2 Array{Int64,2}:
+ 1  26
+ 0  27
+```
+"""
 (^)(A::AbstractMatrix, p::Number) = exp(p*log(A))
 
 # Matrix exponential
@@ -499,6 +519,32 @@ julia> exp(A)
 exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
 exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
 
+"""
+    ^(b::Number, A::AbstractMatrix)
+
+Matrix exponential, equivalent to ``\\exp(\\log(b)A)``.
+
+!!! compat "Julia 1.1"
+    Support for raising `Irrational` numbers (like `ℯ`)
+    to a matrix was added in Julia 1.1.
+
+# Examples
+```jldoctest
+julia> 2^[1 2; 0 3]
+2×2 Array{Float64,2}:
+ 2.0  6.0
+ 0.0  8.0
+
+julia> ℯ^[1 2; 0 3]
+2×2 Array{Float64,2}:
+ 2.71828  17.3673
+ 0.0      20.0855
+```
+"""
+Base.:^(b::Number, A::AbstractMatrix) = exp!(log(b)*A)
+# method for ℯ to explicitly elide the log(b) multiplication
+Base.:^(::Irrational{:ℯ}, A::AbstractMatrix) = exp(A)
+
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
 function exp!(A::StridedMatrix{T}) where T<:BlasFloat
@@ -507,7 +553,7 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         return copytri!(parent(exp(Hermitian(A))), 'U', true)
     end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
-    nA   = norm(A, 1)
+    nA   = opnorm(A, 1)
     Inn    = Matrix{T}(I, n, n)
     ## For sufficiently small nA, use lower order Padé-Approximations
     if (nA <= 2.1)
@@ -551,10 +597,10 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         A2 = A * A
         A4 = A2 * A2
         A6 = A2 * A4
-        U  = A * (A6 * (CC[14]*A6 + CC[12]*A4 + CC[10]*A2) +
-                  CC[8]*A6 + CC[6]*A4 + CC[4]*A2 + CC[2]*Inn)
-        V  = A6 * (CC[13]*A6 + CC[11]*A4 + CC[9]*A2) +
-                   CC[7]*A6 + CC[5]*A4 + CC[3]*A2 + CC[1]*Inn
+        U  = A * (A6 * (CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2) .+
+                  CC[8].*A6 .+ CC[6].*A4 .+ CC[4].*A2 .+ CC[2].*Inn)
+        V  = A6 * (CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2) .+
+                   CC[7].*A6 .+ CC[5].*A4 .+ CC[3].*A2 .+ CC[1].*Inn
 
         X = V + U
         LAPACK.gesv!(V-U, X)
@@ -935,8 +981,8 @@ this function, see [^AH16_1].
 ```jldoctest
 julia> acos(cos([0.5 0.1; -0.2 0.3]))
 2×2 Array{Complex{Float64},2}:
-  0.5-5.55112e-17im  0.1-2.77556e-17im
- -0.2+2.498e-16im    0.3-3.46945e-16im
+  0.5-8.32667e-17im  0.1+0.0im
+ -0.2+2.63678e-16im  0.3-3.46945e-16im
 ```
 """
 function acos(A::AbstractMatrix)
@@ -1199,6 +1245,7 @@ function factorize(A::StridedMatrix{T}) where T
                 if (herm & (T <: Complex)) | sym
                     try
                         return ldlt!(SymTridiagonal(diag(A), diag(A, -1)))
+                    catch
                     end
                 end
                 return lu(Tridiagonal(diag(A, -1), diag(A), diag(A, 1)))
@@ -1208,7 +1255,7 @@ function factorize(A::StridedMatrix{T}) where T
             return UpperTriangular(A)
         end
         if herm
-            cf = cholesky(A)
+            cf = cholesky(A; check = false)
             if cf.info == 0
                 return cf
             else
@@ -1228,20 +1275,22 @@ factorize(A::Transpose) = transpose(factorize(parent(A)))
 ## Moore-Penrose pseudoinverse
 
 """
-    pinv(M[, tol::Real])
+    pinv(M; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ)
+    pinv(M, rtol::Real) = pinv(M; rtol=rtol) # to be deprecated in Julia 2.0
 
 Computes the Moore-Penrose pseudoinverse.
 
 For matrices `M` with floating point elements, it is convenient to compute
-the pseudoinverse by inverting only singular values above a given threshold,
-`tol`.
+the pseudoinverse by inverting only singular values greater than
+`max(atol, rtol*σ₁)` where `σ₁` is the largest singular value of `M`.
 
-The optimal choice of `tol` varies both with the value of `M` and the intended application
-of the pseudoinverse. The default value of `tol` is
-`eps(real(float(one(eltype(M)))))*minumum(size(M))`, which is essentially machine epsilon
-for the real part of a matrix element multiplied by the larger matrix dimension. For
-inverting dense ill-conditioned matrices in a least-squares sense,
-`tol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
+The optimal choice of absolute (`atol`) and relative tolerance (`rtol`) varies
+both with the value of `M` and the intended application of the pseudoinverse.
+The default relative tolerance is `n*ϵ`, where `n` is the size of the smallest
+dimension of `M`, and `ϵ` is the [`eps`](@ref) of the element type of `M`.
+
+For inverting dense ill-conditioned matrices in a least-squares sense,
+`rtol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
 
 For more information, see [^issue8859], [^B96], [^S84], [^KY88].
 
@@ -1263,7 +1312,7 @@ julia> M * N
  4.44089e-16   1.0
 ```
 
-[^issue8859]: Issue 8859, "Fix least squares", https://github.com/JuliaLang/julia/pull/8859
+[^issue8859]: Issue 8859, "Fix least squares", [https://github.com/JuliaLang/julia/pull/8859](https://github.com/JuliaLang/julia/pull/8859)
 
 [^B96]: Åke Björck, "Numerical Methods for Least Squares Problems",  SIAM Press, Philadelphia, 1996, "Other Titles in Applied Mathematics", Vol. 51. [doi:10.1137/1.9781611971484](http://epubs.siam.org/doi/book/10.1137/1.9781611971484)
 
@@ -1271,7 +1320,7 @@ julia> M * N
 
 [^KY88]: Konstantinos Konstantinides and Kung Yao, "Statistical analysis of effective singular values in matrix rank determination", IEEE Transactions on Acoustics, Speech and Signal Processing, 36(5), 1988, 757-763. [doi:10.1109/29.1585](https://doi.org/10.1109/29.1585)
 """
-function pinv(A::StridedMatrix{T}, tol::Real) where T
+function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(float(one(T))))*min(size(A)...))*iszero(atol)) where T
     m, n = size(A)
     Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
     if m == 0 || n == 0
@@ -1280,9 +1329,10 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
     if istril(A)
         if istriu(A)
             maxabsA = maximum(abs.(diag(A)))
+            tol = max(rtol*maxabsA, atol)
             B = zeros(Tout, n, m)
             for i = 1:min(m, n)
-                if abs(A[i,i]) > tol*maxabsA
+                if abs(A[i,i]) > tol
                     Aii = inv(A[i,i])
                     if isfinite(Aii)
                         B[i,i] = Aii
@@ -1293,16 +1343,13 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
         end
     end
     SVD         = svd(A, full = false)
+    tol         = max(rtol*maximum(SVD.S), atol)
     Stype       = eltype(SVD.S)
     Sinv        = zeros(Stype, length(SVD.S))
-    index       = SVD.S .> tol*maximum(SVD.S)
+    index       = SVD.S .> tol
     Sinv[index] = one(Stype) ./ SVD.S[index]
     Sinv[findall(.!isfinite.(Sinv))] .= zero(Stype)
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
-end
-function pinv(A::StridedMatrix{T}) where T
-    tol = eps(real(float(one(T))))*min(size(A)...)
-    return pinv(A, tol)
 end
 function pinv(x::Number)
     xi = inv(x)
@@ -1312,13 +1359,16 @@ end
 ## Basis for null space
 
 """
-    nullspace(M[, tol::Real])
+    nullspace(M; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ)
+    nullspace(M, rtol::Real) = nullspace(M; rtol=rtol) # to be deprecated in Julia 2.0
 
 Computes a basis for the nullspace of `M` by including the singular
-vectors of A whose singular have magnitude are greater than `tol*σ₁`,
-where `σ₁` is `A`'s largest singular values. By default, the value of
-`tol` is the smallest dimension of `A` multiplied by the [`eps`](@ref)
-of the [`eltype`](@ref) of `A`.
+vectors of `M` whose singular values have magnitudes greater than `max(atol, rtol*σ₁)`,
+where `σ₁` is `M`'s largest singular value.
+
+By default, the relative tolerance `rtol` is `n*ϵ`, where `n`
+is the size of the smallest dimension of `M`, and `ϵ` is the [`eps`](@ref) of
+the element type of `M`.
 
 # Examples
 ```jldoctest
@@ -1334,21 +1384,29 @@ julia> nullspace(M)
  0.0
  1.0
 
-julia> nullspace(M, 2)
+julia> nullspace(M, rtol=3)
 3×3 Array{Float64,2}:
  0.0  1.0  0.0
  1.0  0.0  0.0
  0.0  0.0  1.0
+
+julia> nullspace(M, atol=0.95)
+3×1 Array{Float64,2}:
+ 0.0
+ 0.0
+ 1.0
 ```
 """
-function nullspace(A::StridedMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
+function nullspace(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol))
     m, n = size(A)
-    (m == 0 || n == 0) && return Matrix{T}(I, n, n)
+    (m == 0 || n == 0) && return Matrix{eltype(A)}(I, n, n)
     SVD = svd(A, full=true)
-    indstart = sum(SVD.S .> SVD.S[1]*tol) + 1
+    tol = max(atol, SVD.S[1]*rtol)
+    indstart = sum(s -> s .> tol, SVD.S) + 1
     return copy(SVD.Vt[indstart:end,:]')
 end
-nullspace(a::StridedVector, tol::Real = min(size(a)...)*eps(real(float(one(eltype(a)))))) = nullspace(reshape(a, length(a), 1), tol)
+
+nullspace(A::AbstractVector; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol)) = nullspace(reshape(A, length(A), 1), rtol= rtol, atol= atol)
 
 """
     cond(M, p::Real=2)
@@ -1360,15 +1418,22 @@ function cond(A::AbstractMatrix, p::Real=2)
     if p == 2
         v = svdvals(A)
         maxv = maximum(v)
-        return maxv == 0.0 ? oftype(real(A[1,1]),Inf) : maxv / minimum(v)
+        return iszero(maxv) ? oftype(real(maxv), Inf) : maxv / minimum(v)
     elseif p == 1 || p == Inf
         checksquare(A)
-        return _cond1Inf(A, p)
+        try
+            Ainv = inv(A)
+            return opnorm(A, p)*opnorm(Ainv, p)
+        catch e
+            if isa(e, LAPACKException) || isa(e, SingularException)
+                return convert(float(real(eltype(A))), Inf)
+            else
+                rethrow()
+            end
+        end
     end
     throw(ArgumentError("p-norm must be 1, 2 or Inf, got $p"))
 end
-_cond1Inf(A::StridedMatrix{<:BlasFloat}, p::Real) = _cond1Inf(lu(A), p, norm(A, p))
-_cond1Inf(A::AbstractMatrix, p::Real)             = norm(A, p)*norm(inv(A), p)
 
 ## Lyapunov and Sylvester equation
 

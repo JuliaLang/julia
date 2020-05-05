@@ -1,11 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.CoreLogging
+using Test, Base.CoreLogging
 import Base.CoreLogging: BelowMinLevel, Debug, Info, Warn, Error,
     handle_message, shouldlog, min_enabled_level, catch_exceptions
 
 import Test: collect_test_logs, TestLogger
-using Base.Printf: @sprintf
+using Printf: @sprintf
+
+isdefined(Main, :MacroCalls) || @eval Main include("testhelpers/MacroCalls.jl")
+using Main.MacroCalls
 
 #-------------------------------------------------------------------------------
 @testset "Logging" begin
@@ -109,6 +112,26 @@ end
     @test record._module == logger.shouldlog_args[2]
     @test record.group   == logger.shouldlog_args[3]
     @test record.id      == logger.shouldlog_args[4]
+
+    # handling of nothing
+    logger = TestLogger()
+    with_logger(logger) do
+        @info "foo" _module = nothing _file = nothing _line = nothing
+    end
+    @test length(logger.logs) == 1
+    record = logger.logs[1]
+    @test record._module == nothing
+    @test record.file == nothing
+    @test record.line == nothing
+end
+
+# PR #28209
+@testset "0-arg MethodErrors" begin
+    @test_throws MethodError @macrocall(@logmsg :Notice)
+    @test_throws MethodError @macrocall(@debug)
+    @test_throws MethodError @macrocall(@info)
+    @test_throws MethodError @macrocall(@warn)
+    @test_throws MethodError @macrocall(@error)
 end
 
 
@@ -155,20 +178,52 @@ end
         logger = TestLogger()
         with_logger(logger) do
             for (e, r) in (("", false),
-                           (",,,,", false),
-                           ("al", false),
-                           ("all", true),
-                           ("a,b,all,c", true),
-                           ("a,b,,c", false),
-                           ("Mainb", false),
-                           ("aMain", false),
-                           ("Main", true),
-                           ("a,b,Main,c", true),
-                           ("Base", true),
-                           ("a,b,Base,c", true),
-                           ("Filesystem", true),
-                           ("a,b,Filesystem,c", true),
-                           ("a,b,Base.Filesystem,c", false))
+                            (",,,,", false),
+                            ("al", false),
+                            ("all", true),
+                            ("a,b,all,c", true),
+                            ("a,b,,c", false),
+                            ("Mainb", false),
+                            ("aMain", false),
+                            ("Main", true),
+                            ("a,b,Main,c", true),
+                            ("Base", true),
+                            ("a,b,Base,c", true),
+                            ("Filesystem", true),
+                            ("a,b,Filesystem,c", true),
+                            ("a,b,Base.Filesystem,c", false),
+                            ("!al", true),
+                            ("all,!al", true),
+                            ("all,!al,!all", false),
+                            ("!all,Main", true),
+                            ("!all,!Main", false),
+                            ("!all,a,b,!Main,c", false),
+                            ("!all,Filesystem", true),
+                            ("!all,Base.Filesystem", false),
+                            ("a,b,all,!all,c", false),
+                            ("!Main", false),
+                            ("a,b,!Main,c", false),
+                            ("!Base", false),
+                            ("all,!Base", false),
+                            ("!all,Base", true),
+                            ("!all,!Base", false),
+                            ("a,b,!Base,c", false),
+                            ("all,a,b,!Base,c", false),
+                            ("!all,a,b,Base,c", true),
+                            ("!all,a,b,!Base,c", false),
+                            ("!Filesystem", false),
+                            ("all,!Filesystem", false),
+                            ("!all,Filesystem", true),
+                            ("!all,!Filesystem", false),
+                            ("a,b,!Filesystem,c", false),
+                            ("all,a,b,!Filesystem,c", false),
+                            ("!all,a,b,Filesystem,c", true),
+                            ("!all,a,b,!Filesystem,c", false),
+                            ("a,b,!Base.Filesystem,c", true),
+                            ("all,a,b,!Base.Filesystem,c", true),
+                            ("!all,a,b,Base.Filesystem,c", false),
+                            ("!all,a,b,!Base.Filesystem,c", false),
+                           )
                 ENV["JULIA_DEBUG"] = e
                 @test CoreLogging.env_override_minlevel(:Main, Base.Filesystem) === r
                 @test CoreLogging.current_logger_for_env(BelowMinLevel, :Main, Base.Filesystem) === (r ? logger : nothing)
@@ -292,6 +347,13 @@ end
     │   b = asdf
     └ @ Base other.jl:101
     """
+
+    # nothing values
+    @test genmsg(Warn, "msg", nothing, nothing, nothing) ==
+    """
+    ┌ Warning: msg
+    └ @ nothing nothing:nothing
+    """
 end
 
 # Issue #26273
@@ -300,6 +362,34 @@ let m = Module(:Bare26273i, false)
     @test_logs (:error, "Hello") Core.eval(m, quote
         @error "Hello"
     end)
+end
+
+@testset "#26335: _module and _file kwargs" begin
+    ignored = Test.Ignored()
+    @test_logs (:warn, "a", ignored, ignored, ignored, "foo.jl") (@warn "a" _file="foo.jl")
+    @test_logs (:warn, "a", Base) (@warn "a" _module=Base)
+end
+
+# Issue #28786
+@testset "ID generation" begin
+    logs,_ = collect_test_logs() do
+        for i in 1:2
+            @info "test"
+            @info "test"
+        end
+    end
+    @test length(logs) == 4
+    @test logs[1].id == logs[3].id
+    @test logs[2].id == logs[4].id
+    @test logs[1].id != logs[2].id
+end
+
+# Issue #34485
+@testset "`_group` must be a `Symbol`" begin
+    (record,), _ = collect_test_logs() do
+        @info "test"
+    end
+    @test record.group == :logging  # name of this file
 end
 
 end

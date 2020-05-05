@@ -7,6 +7,11 @@ kwf1(ones; tens=0, hundreds=0) = ones + 10*tens + 100*hundreds
     @test kwf1(2, tens=6) == 62
     @test kwf1(1, hundreds=2, tens=7) == 271
     @test kwf1(3, tens=7, hundreds=2) == 273
+    let tens = 2, hundreds = 4
+        @test kwf1(8; tens, hundreds) == 428
+        nt = (hundreds = 5,)
+        @test kwf1(7; nt.hundreds) == 507
+    end
 
     @test_throws MethodError kwf1()             # no method, too few args
     @test_throws MethodError kwf1(1, z=0)       # unsupported keyword
@@ -117,6 +122,17 @@ end
     @test kwf7(1.5;k=2.5) === Float64
     @test_throws MethodError kwf7(1.5)
     @test_throws TypeError kwf7(1.5; k=2)
+
+    # issue #30792
+    g30792(a::C; b=R(1)) where {R <: Real, C <: Union{R, Complex{R}}} = R
+    @test g30792(1.0) === Float64
+    @test g30792(1.0im) === Float64
+    @test g30792(1.0im, b=1) === Float64
+    @test_throws MethodError g30792("")
+    f30792(a::C; b::R=R(1)) where {R <: Real, C <: Union{R, Complex{R}}} = R
+    @test f30792(2im) === Int
+    @test f30792(2im, b=3) === Int
+    @test_throws TypeError f30792(2im, b=3.0)
 end
 # try to confuse it with quoted symbol
 kwf8(x::MIME{:T};k::T=0) where {T} = 0
@@ -331,3 +347,22 @@ end
     @test g() == (1,1)
     @test g(2) == (2,2)
 end
+
+# issue #32074
+function g32074(i::Float32; args...)
+    hook(i; args...) = args
+    hook(i; args...)
+end
+function g32074(i::Int32; args...)
+    hook(i; args...) = args
+    hook(i; args...)
+end
+@test isempty(g32074(Int32(1)))
+
+# issue #33026
+using InteractiveUtils
+@test (@which kwf1(1, tens=2)).line > 0
+
+no_kw_args(x::Int) = 0
+@test_throws MethodError no_kw_args(1, k=1)
+@test_throws MethodError no_kw_args("", k=1)

@@ -12,11 +12,14 @@ import Base: show, ==, hash, string, Symbol, isless, length, eltype,
     isvalid(value) -> Bool
 
 Returns `true` if the given value is valid for its type, which currently can be either
-`AbstractChar` or `String`.
+`AbstractChar` or `String` or `SubString{String}`.
 
 # Examples
 ```jldoctest
 julia> isvalid(Char(0xd800))
+false
+
+julia> isvalid(SubString(String(UInt8[0xfe,0x80,0x80,0x80,0x80,0x80]),1,2))
 false
 
 julia> isvalid(Char(0xd799))
@@ -30,12 +33,15 @@ isvalid(value)
 
 Returns `true` if the given value is valid for that type. Types currently can
 be either `AbstractChar` or `String`. Values for `AbstractChar` can be of type `AbstractChar` or [`UInt32`](@ref).
-Values for `String` can be of that type, or `Vector{UInt8}`.
+Values for `String` can be of that type, or `Vector{UInt8}` or `SubString{String}`.
 
 # Examples
 ```jldoctest
 julia> isvalid(Char, 0xd800)
 false
+
+julia> isvalid(String, SubString("thisisvalid",1,5))
+true
 
 julia> isvalid(Char, 0xd799)
 true
@@ -192,11 +198,11 @@ function normalize(
 end
 
 function normalize(s::AbstractString, nf::Symbol)
-    utf8proc_map(s, nf == :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
-                    nf == :NFD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE) :
-                    nf == :NFKC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE
+    utf8proc_map(s, nf === :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
+                    nf === :NFD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE) :
+                    nf === :NFKC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE
                                    | UTF8PROC_COMPAT) :
-                    nf == :NFKD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE
+                    nf === :NFKD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE
                                    | UTF8PROC_COMPAT) :
                     throw(ArgumentError(":$nf is not one of :NFC, :NFD, :NFKC, :NFKD")))
 end
@@ -214,7 +220,7 @@ Give the number of columns needed to print a character.
 julia> textwidth('α')
 1
 
-julia> textwidth('❤')
+julia> textwidth('⛵')
 2
 ```
 """
@@ -234,7 +240,7 @@ julia> textwidth("March")
 5
 ```
 """
-textwidth(s::AbstractString) = mapreduce(textwidth, +, 0, s)
+textwidth(s::AbstractString) = mapreduce(textwidth, +, s; init=0)
 
 lowercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) :
     T(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
@@ -344,7 +350,7 @@ julia> isdigit('α')
 false
 ```
 """
-isdigit(c::AbstractChar) = '0' <= c <= '9'
+isdigit(c::AbstractChar) = (c >= '0') & (c <= '9')
 
 """
     isletter(c::AbstractChar) -> Bool

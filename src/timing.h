@@ -35,13 +35,6 @@ void jl_timing_block_stop(jl_timing_block_t *cur_block);
 #define JL_TIMING(owner)
 #else
 
-static inline uint64_t rdtscp(void)
-{
-    uint64_t rax,rdx;
-    asm volatile ( "rdtscp\n" : "=a" (rax), "=d" (rdx) : : "rcx" );
-    return (rdx << 32) + rax;
-}
-
 #define JL_TIMING_OWNERS          \
         X(ROOT),                  \
         X(GC),                    \
@@ -55,6 +48,7 @@ static inline uint64_t rdtscp(void)
         X(LLVM_MODULE_FINISH),    \
         X(LLVM_EMIT),             \
         X(METHOD_LOOKUP_COMPILE), \
+        X(METHOD_MATCH),          \
         X(TYPE_CACHE_LOOKUP),     \
         X(TYPE_CACHE_INSERT),     \
         X(STAGED_FUNCTION),       \
@@ -63,7 +57,11 @@ static inline uint64_t rdtscp(void)
         X(AST_UNCOMPRESS),        \
         X(SYSIMG_LOAD),           \
         X(SYSIMG_DUMP),           \
-        X(NATIVE_DUMP),
+        X(NATIVE_DUMP),           \
+        X(ADD_METHOD),            \
+        X(LOAD_MODULE),           \
+        X(SAVE_MODULE),           \
+        X(INIT_MODULE),
 
 enum jl_timing_owners {
 #define X(name) JL_TIMING_ ## name
@@ -102,7 +100,7 @@ STATIC_INLINE void _jl_timing_block_start(jl_timing_block_t *block, uint64_t t) 
 }
 
 STATIC_INLINE uint64_t _jl_timing_block_init(jl_timing_block_t *block, int owner) {
-    uint64_t t = rdtscp();
+    uint64_t t = cycleclock();
     block->owner = owner;
     block->total = 0;
 #ifdef JL_DEBUG_BUILD
@@ -122,7 +120,7 @@ STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int owner) {
 }
 
 STATIC_INLINE void _jl_timing_block_destroy(jl_timing_block_t *block) {
-    uint64_t t = rdtscp();
+    uint64_t t = cycleclock();
     _jl_timing_block_stop(block, t);
     jl_timing_data[block->owner] += block->total;
     jl_timing_block_t **pcur = jl_current_task ? &jl_current_task->timing_stack : &jl_root_timing;

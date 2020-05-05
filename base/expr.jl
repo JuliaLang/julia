@@ -35,7 +35,6 @@ end
 function copy(e::Expr)
     n = Expr(e.head)
     n.args = copy_exprargs(e.args)
-    n.typ = e.typ
     return n
 end
 
@@ -59,6 +58,22 @@ function copy_exprs(x::PhiCNode)
     return PhiCNode(new_values)
 end
 copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(x[i]) for i in 1:length(x)]
+
+# create copies of the CodeInfo definition, and any mutable fields
+function copy(c::CodeInfo)
+    cnew = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), c)
+    cnew.code = copy_exprargs(cnew.code)
+    cnew.slotnames = copy(cnew.slotnames)
+    cnew.slotflags = copy(cnew.slotflags)
+    cnew.codelocs  = copy(cnew.codelocs)
+    cnew.linetable = copy(cnew.linetable)
+    cnew.ssaflags  = copy(cnew.ssaflags)
+    cnew.edges     = cnew.edges === nothing ? nothing : copy(cnew.edges)
+    ssavaluetypes  = cnew.ssavaluetypes
+    ssavaluetypes isa Vector{Any} && (cnew.ssavaluetypes = copy(ssavaluetypes))
+    return cnew
+end
+
 
 ==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
 ==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
@@ -104,10 +119,11 @@ Return equivalent expression with all macros removed (expanded).
 There are differences between `@macroexpand` and [`macroexpand`](@ref).
 
 * While [`macroexpand`](@ref) takes a keyword argument `recursive`, `@macroexpand`
-is always recursive. For a non recursive macro version, see [`@macroexpand1`](@ref).
+  is always recursive. For a non recursive macro version, see [`@macroexpand1`](@ref).
 
 * While [`macroexpand`](@ref) has an explicit `module` argument, `@macroexpand` always
-expands with respect to the module in which it is called.
+  expands with respect to the module in which it is called.
+
 This is best seen in the following example:
 ```julia-repl
 julia> module M
@@ -182,7 +198,7 @@ end
 """
     @noinline
 
-Prevents the compiler from inlining a function.
+Give a hint to the compiler that it should not inline a function.
 
 Small functions are typically inlined automatically.
 By using `@noinline` on small functions, auto-inlining can be
@@ -194,12 +210,29 @@ prevented. This is shown in the following example:
         Function Definition
     =#
 end
+
+If the function is trivial (for example returning a constant) it might get inlined anyway.
 ```
 """
 macro noinline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :noinline) : ex)
 end
 
+"""
+    @pure ex
+    @pure(ex)
+
+`@pure` gives the compiler a hint for the definition of a pure function,
+helping for type inference.
+
+A pure function can only depend on immutable information.
+This also means a `@pure` function cannot use any global mutable state, including
+generic functions. Calls to generic functions depend on method tables which are
+mutable global state.
+Use with caution, incorrect `@pure` annotation of a function may introduce
+hard to identify bugs. Double check for calls to generic functions.
+This macro is intended for internal compiler use and may be subject to changes.
+"""
 macro pure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
 end
@@ -213,10 +246,8 @@ macro propagate_inbounds(ex)
     if isa(ex, Expr)
         pushmeta!(ex, :inline)
         pushmeta!(ex, :propagate_inbounds)
-        esc(ex)
-    else
-        esc(ex)
     end
+    esc(ex)
 end
 
 """
@@ -238,7 +269,7 @@ function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
     end
 
     inner = ex
-    while inner.head == :macrocall
+    while inner.head === :macrocall
         inner = inner.args[end]::Expr
     end
 
@@ -256,7 +287,7 @@ popmeta!(body, sym) = _getmeta(body, sym, true)
 peekmeta(body, sym) = _getmeta(body, sym, false)
 
 function _getmeta(body::Expr, sym::Symbol, delete::Bool)
-    body.head == :block || return false, []
+    body.head === :block || return false, []
     _getmeta(body.args, sym, delete)
 end
 _getmeta(arg, sym, delete::Bool) = (false, [])
@@ -291,19 +322,19 @@ function findmetaarg(metaargs, sym)
 end
 
 function is_short_function_def(ex)
-    ex.head == :(=) || return false
+    ex.head === :(=) || return false
     while length(ex.args) >= 1 && isa(ex.args[1], Expr)
-        (ex.args[1].head == :call) && return true
-        (ex.args[1].head == :where || ex.args[1].head == :(::)) || return false
+        (ex.args[1].head === :call) && return true
+        (ex.args[1].head === :where || ex.args[1].head === :(::)) || return false
         ex = ex.args[1]
     end
     return false
 end
 
 function findmeta(ex::Expr)
-    if ex.head == :function || is_short_function_def(ex)
+    if ex.head === :function || is_short_function_def(ex) || ex.head === :->
         body::Expr = ex.args[2]
-        body.head == :block || error(body, " is not a block expression")
+        body.head === :block || error(body, " is not a block expression")
         return findmeta_block(ex.args)
     end
     error(ex, " is not a function expression")
@@ -315,9 +346,9 @@ function findmeta_block(exargs, argsmatch=args->true)
     for i = 1:length(exargs)
         a = exargs[i]
         if isa(a, Expr)
-            if (a::Expr).head == :meta && argsmatch((a::Expr).args)
+            if (a::Expr).head === :meta && argsmatch((a::Expr).args)
                 return i, exargs
-            elseif (a::Expr).head == :block
+            elseif (a::Expr).head === :block
                 idx, exa = findmeta_block(a.args, argsmatch)
                 if idx != 0
                     return idx, exa
@@ -330,7 +361,7 @@ end
 
 remove_linenums!(ex) = ex
 function remove_linenums!(ex::Expr)
-    if ex.head === :body || ex.head === :block || ex.head === :quote
+    if ex.head === :block || ex.head === :quote
         # remove line number expressions from metadata (not argument literal or inert) position
         filter!(ex.args) do x
             isa(x, Expr) && x.head === :line && return false
@@ -339,15 +370,49 @@ function remove_linenums!(ex::Expr)
         end
     end
     for subex in ex.args
-        remove_linenums!(subex)
+        subex isa Expr && remove_linenums!(subex)
     end
     return ex
+end
+function remove_linenums!(src::CodeInfo)
+    src.codelocs .= 0
+    length(src.linetable) > 1 && resize!(src.linetable, 1)
+    return src
 end
 
 macro generated()
     return Expr(:generated)
 end
 
+"""
+    @generated f
+    @generated(f)
+`@generated` is used to annotate a function which will be generated.
+In the body of the generated function, only types of arguments can be read
+(not the values). The function returns a quoted expression evaluated when the
+function is called. The `@generated` macro should not be used on functions mutating
+the global scope or depending on mutable elements.
+
+See [Metaprogramming](@ref) for further details.
+
+## Example:
+```julia
+julia> @generated function bar(x)
+           if x <: Integer
+               return :(x ^ 2)
+           else
+               return :(x)
+           end
+       end
+bar (generic function with 1 method)
+
+julia> bar(4)
+16
+
+julia> bar("baz")
+"baz"
+```
+"""
 macro generated(f)
     if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
         body = f.args[2]

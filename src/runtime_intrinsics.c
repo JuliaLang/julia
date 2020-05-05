@@ -69,7 +69,7 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
         size_t nb = LLT_ALIGN(elsz, jl_datatype_align(ety));
         char *pp = (char*)jl_unbox_long(p) + (jl_unbox_long(i)-1)*nb;
         if (jl_typeof(x) != ety)
-            jl_error("pointerset: type mismatch in assign");
+            jl_type_error("pointerset", ety, x);
         memcpy(pp, x, elsz);
     }
     return p;
@@ -78,9 +78,11 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
 JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 {
     JL_TYPECHK(cglobal, type, ty);
+    JL_GC_PUSH1(&v);
     jl_value_t *rt =
-        v == (jl_value_t*)jl_void_type ? (jl_value_t*)jl_voidpointer_type : // a common case
+        ty == (jl_value_t*)jl_nothing_type ? (jl_value_t*)jl_voidpointer_type : // a common case
             (jl_value_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, ty);
+    JL_GC_PROMISE_ROOTED(rt); // (JL_ALWAYS_LEAFTYPE)
 
     if (!jl_is_concrete_type(rt))
         jl_error("cglobal: type argument not concrete");
@@ -88,12 +90,15 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
     if (jl_is_tuple(v) && jl_nfields(v) == 1)
         v = jl_fieldref(v, 0);
 
-    if (jl_is_pointer(v))
-        return jl_bitcast(rt, v);
+    if (jl_is_pointer(v)) {
+        v = jl_bitcast(rt, v);
+        JL_GC_POP();
+        return v;
+    }
 
     char *f_lib = NULL;
     if (jl_is_tuple(v) && jl_nfields(v) > 1) {
-        jl_value_t *t1 = jl_fieldref(v, 1);
+        jl_value_t *t1 = jl_fieldref_noalloc(v, 1);
         v = jl_fieldref(v, 0);
         if (jl_is_symbol(t1))
             f_lib = jl_symbol_name((jl_sym_t*)t1);
@@ -116,30 +121,32 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
         f_lib = (char*)jl_dlfind_win32(f_name);
 #endif
 
-    void *ptr = jl_dlsym(jl_get_library(f_lib), f_name);
+    void *ptr;
+    jl_dlsym(jl_get_library(f_lib), f_name, &ptr, 1);
     jl_value_t *jv = jl_gc_alloc_1w();
     jl_set_typeof(jv, rt);
     *(void**)jl_data_ptr(jv) = ptr;
+    JL_GC_POP();
     return jv;
 }
 
 JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v) {
-    return jl_cglobal(v, (jl_value_t*)jl_void_type);
+    return jl_cglobal(v, (jl_value_t*)jl_nothing_type);
 }
 
-static inline char signbitbyte(void *a, unsigned bytes)
+static inline char signbitbyte(void *a, unsigned bytes) JL_NOTSAFEPOINT
 {
     // sign bit of an signed number of n bytes, as a byte
     return (((signed char*)a)[bytes - 1] < 0) ? ~0 : 0;
 }
 
-static inline char usignbitbyte(void *a, unsigned bytes)
+static inline char usignbitbyte(void *a, unsigned bytes) JL_NOTSAFEPOINT
 {
     // sign bit of an unsigned number
     return 0;
 }
 
-static inline unsigned select_by_size(unsigned sz)
+static inline unsigned select_by_size(unsigned sz) JL_NOTSAFEPOINT
 {
     /* choose the right sized function specialization */
     switch (sz) {
@@ -154,7 +161,7 @@ static inline unsigned select_by_size(unsigned sz)
 
 #define SELECTOR_FUNC(intrinsic) \
     typedef intrinsic##_t select_##intrinsic##_t[6]; \
-    static inline intrinsic##_t select_##intrinsic(unsigned sz, const select_##intrinsic##_t list) \
+    static inline intrinsic##_t select_##intrinsic(unsigned sz, const select_##intrinsic##_t list) JL_NOTSAFEPOINT \
     { \
         intrinsic##_t thunk = list[select_by_size(sz)]; \
         if (!thunk) thunk = list[0]; \
@@ -174,7 +181,7 @@ static inline unsigned select_by_size(unsigned sz)
 // nbits::number of bits
 // c_type::c_type corresponding to nbits
 #define un_iintrinsic_ctype(OP, name, nbits, c_type) \
-static inline void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pr) \
+static inline void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pr) JL_NOTSAFEPOINT \
 { \
     c_type a = *(c_type*)pa; \
     *(c_type*)pr = OP(a); \
@@ -186,7 +193,7 @@ static inline void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pr) 
 // nbits::number of bits
 // c_type::c_type corresponding to nbits
 #define uu_iintrinsic_ctype(OP, name, nbits, c_type) \
-static inline unsigned jl_##name##nbits(unsigned runtime_nbits, void *pa) \
+static inline unsigned jl_##name##nbits(unsigned runtime_nbits, void *pa) JL_NOTSAFEPOINT \
 { \
     c_type a = *(c_type*)pa; \
     return OP(a); \
@@ -198,7 +205,7 @@ static inline unsigned jl_##name##nbits(unsigned runtime_nbits, void *pa) \
 // nbits::number of bits in the *input*
 // c_type::c_type corresponding to nbits
 #define un_fintrinsic_ctype(OP, name, c_type) \
-static inline void name(unsigned osize, void *pa, void *pr) \
+static inline void name(unsigned osize, void *pa, void *pr) JL_NOTSAFEPOINT \
 { \
     c_type a = *(c_type*)pa; \
     OP((c_type*)pr, a); \
@@ -210,7 +217,7 @@ static inline void name(unsigned osize, void *pa, void *pr) \
 // nbits::number of bits
 // c_type::c_type corresponding to nbits
 #define bi_intrinsic_ctype(OP, name, nbits, c_type) \
-static void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *pr) \
+static void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *pr) JL_NOTSAFEPOINT \
 { \
     c_type a = *(c_type*)pa; \
     c_type b = *(c_type*)pb; \
@@ -223,7 +230,7 @@ static void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *p
 // nbits::number of bits
 // c_type::c_type corresponding to nbits
 #define bool_intrinsic_ctype(OP, name, nbits, c_type) \
-static int jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb) \
+static int jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb) JL_NOTSAFEPOINT \
 { \
     c_type a = *(c_type*)pa; \
     c_type b = *(c_type*)pb; \
@@ -236,14 +243,12 @@ static int jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb) \
 // nbits::number of bits
 // c_type::c_type corresponding to nbits
 #define checked_intrinsic_ctype(CHECK_OP, OP, name, nbits, c_type) \
-static int jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *pr) \
+static int jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *pr) JL_NOTSAFEPOINT \
 { \
     c_type a = *(c_type*)pa; \
     c_type b = *(c_type*)pb; \
-    if (CHECK_OP(a, b)) \
-        return 1; \
     *(c_type*)pr = (c_type)OP(a, b); \
-    return 0; \
+    return CHECK_OP(a, b); \
 }
 
 // float inputs
@@ -252,7 +257,7 @@ static int jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *pr
 // nbits::number of bits
 // c_type::c_type corresponding to nbits
 #define ter_intrinsic_ctype(OP, name, nbits, c_type) \
-static void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *pc, void *pr) \
+static void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *pc, void *pr) JL_NOTSAFEPOINT \
 { \
     c_type a = *(c_type*)pa; \
     c_type b = *(c_type*)pb; \
@@ -395,8 +400,6 @@ static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const 
     void *pr = alloca(osize);
     unsigned isize_bits = isize * host_char_bit;
     unsigned osize_bits = osize * host_char_bit;
-    if (aty == (jl_value_t*)jl_bool_type)
-       isize_bits = 1;
     op(isize_bits, pa, osize_bits, pr);
     return jl_new_bits(ty, pr);
 }
@@ -493,7 +496,7 @@ static const select_intrinsic_cmp_t name##_list = { \
 }; \
 cmp_iintrinsic(name, u)
 
-typedef int (*intrinsic_checked_t)(unsigned, void*, void*, void*);
+typedef int (*intrinsic_checked_t)(unsigned, void*, void*, void*) JL_NOTSAFEPOINT;
 SELECTOR_FUNC(intrinsic_checked)
 #define checked_iintrinsic(name, u, lambda_checked) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
@@ -585,6 +588,7 @@ static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, v
     params[0] = ty;
     params[1] = (jl_value_t*)jl_bool_type;
     jl_datatype_t *tuptyp = jl_apply_tuple_type_v(params, 2);
+    JL_GC_PROMISE_ROOTED(tuptyp); // (JL_ALAWYS_LEAFTYPE)
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *newv = jl_gc_alloc(ptls, ((jl_datatype_t*)tuptyp)->size, tuptyp);
 
@@ -751,7 +755,7 @@ typedef union {
 } bits64;
 
 #define fpiseq_n(c_type, nbits) \
-static inline int fpiseq##nbits(c_type a, c_type b) { \
+static inline int fpiseq##nbits(c_type a, c_type b) JL_NOTSAFEPOINT { \
     bits##nbits ua, ub; \
     ua.f = a; \
     ub.f = b; \
@@ -762,21 +766,22 @@ fpiseq_n(double, 64)
 #define fpiseq(a,b) \
     sizeof(a) == sizeof(float) ? fpiseq32(a, b) : fpiseq64(a, b)
 
-#define fpislt_n(c_type, nbits) \
-static inline int fpislt##nbits(c_type a, c_type b) { \
-    bits##nbits ua, ub; \
-    ua.f = a; \
-    ub.f = b; \
-    if (!isnan(a) && isnan(b)) \
-        return 1; \
-    if (isnan(a) || isnan(b)) \
-        return 0; \
-    if (ua.d >= 0 && ua.d < ub.d) \
-        return 1; \
-    if (ua.d < 0 && ua.ud > ub.ud) \
-        return 1; \
-    return 0; \
-}
+#define fpislt_n(c_type, nbits)                                         \
+    static inline int fpislt##nbits(c_type a, c_type b) JL_NOTSAFEPOINT \
+    {                                                                   \
+        bits##nbits ua, ub;                                             \
+        ua.f = a;                                                       \
+        ub.f = b;                                                       \
+        if (!isnan(a) && isnan(b))                                      \
+            return 1;                                                   \
+        if (isnan(a) || isnan(b))                                       \
+            return 0;                                                   \
+        if (ua.d >= 0 && ua.d < ub.d)                                   \
+            return 1;                                                   \
+        if (ua.d < 0 && ua.ud > ub.ud)                                  \
+            return 1;                                                   \
+        return 0;                                                       \
+    }
 fpislt_n(float, 32)
 fpislt_n(double, 64)
 #define fpislt(a, b) \
@@ -800,7 +805,7 @@ bi_iintrinsic_fast(LLVMXor, xor_op, xor_int, u)
 bi_iintrinsic_cnvtb_fast(LLVMShl, shl_op, shl_int, u, 1)
 #define lshr_op(a,b) (b >= 8 * sizeof(a)) ? 0 : a >> b
 bi_iintrinsic_cnvtb_fast(LLVMLShr, lshr_op, lshr_int, u, 1)
-#define ashr_op(a,b) ((b < 0 || b >= 8 * sizeof(a)) ? a >> (8*sizeof(a) - 1) : a >> b)
+#define ashr_op(a,b) ((b < 0 || b >= 8 * sizeof(a)) ? a >> (8 * sizeof(a) - 1) : a >> b)
 bi_iintrinsic_cnvtb_fast(LLVMAShr, ashr_op, ashr_int, , 1)
 //#define bswap_op(a) __builtin_bswap(a)
 //un_iintrinsic_fast(LLVMByteSwap, bswap_op, bswap_int, u)
@@ -826,31 +831,61 @@ cvt_iintrinsic(LLVMUItoFP, uitofp)
 cvt_iintrinsic(LLVMFPtoSI, fptosi)
 cvt_iintrinsic(LLVMFPtoUI, fptoui)
 
-#define fpcvt(pr, a) \
+#define fptrunc(pr, a) \
+        if (!(osize < 8 * sizeof(a))) \
+            jl_error("fptrunc: output bitsize must be < input bitsize"); \
         if (osize == 32) \
             *(float*)pr = a; \
         else if (osize == 64) \
             *(double*)pr = a; \
         else \
-            jl_error("fptrunc/fpext: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
-un_fintrinsic_withtype(fpcvt,fptrunc)
-un_fintrinsic_withtype(fpcvt,fpext)
+            jl_error("fptrunc: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
+#define fpext(pr, a) \
+        if (!(osize > 8 * sizeof(a))) \
+            jl_error("fpext: output bitsize must be > input bitsize"); \
+        if (osize == 32) \
+            *(float*)pr = a; \
+        else if (osize == 64) \
+            *(double*)pr = a; \
+        else \
+            jl_error("fpext: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
+un_fintrinsic_withtype(fptrunc,fptrunc)
+un_fintrinsic_withtype(fpext,fpext)
 
 // checked arithmetic
+/**
+ * s_typemin = - s_typemax - 1
+ * s_typemax = ((typeof a)1 << (runtime_nbits - 1)) - 1
+ * u_typemin = 0
+ * u_typemax = ((typeof a)1 << runtime_nbits) - 1
+ * where (a - a) == (typeof(a)0
+ **/
+#define sTYPEMIN(a) -sTYPEMAX(a) - 1
+#define sTYPEMAX(a)                                                \
+    (8 * sizeof(a) == runtime_nbits                                \
+         ? (((((a - a + 1) << (8 * sizeof(a) - 2)) - 1) << 1) + 1) \
+         : (  ((a - a + 1) << (runtime_nbits - 1)) - 1))
+
+#define uTYPEMIN(a) (0)
+#define uTYPEMAX(a) \
+    (8 * sizeof(~a) == runtime_nbits \
+     ? (~(a - a)) \
+     : (~((~(a - a)) << runtime_nbits)))
 #define check_sadd_int(a,b) \
-        /* this test is a reduction of (b > 0) ? (a + b > typemax(a)) : (a + b < typemin(a)) ==> overflow \
-         * where (a - a) == (typeof(a))0 */ \
-        (b > 0) ? (a > ~((a - a + 1) << (8 * sizeof(a) - 1)) - b) : (a < ((a - a + 1) << (8 * sizeof(a) - 1)) - b)
+        /* this test checks for (b >= 0) ? (a + b > typemax) : (a + b < typemin) ==> overflow */ \
+        (b >= 0) ? (a > sTYPEMAX(a) - b) : (a < sTYPEMIN(a) - b)
 checked_iintrinsic_fast(LLVMAdd_sov, check_sadd_int, add, checked_sadd_int,  )
 #define check_uadd_int(a,b) \
         /* this test checks for (a + b) > typemax(a) ==> overflow */ \
-        a >= -b
+        a > uTYPEMAX(a) - b
 checked_iintrinsic_fast(LLVMAdd_uov, check_uadd_int, add, checked_uadd_int, u)
-#define check_ssub_int(a,b) check_sadd_int(a,-b)
+#define check_ssub_int(a,b) \
+        /* this test checks for (b >= 0) ? (a - b < typemin) : (a - b > typemax) ==> overflow */ \
+        (b >= 0) ? (a < sTYPEMIN(a) + b) : (a > sTYPEMAX(a) + b)
 checked_iintrinsic_fast(LLVMSub_sov, check_ssub_int, sub, checked_ssub_int,  )
 #define check_usub_int(a,b) \
-        /* this test checks for (a - b) < 0 ==> overflow */ \
-        a < b
+        /* this test checks for (a - b) < typemin ==> overflow */ \
+        a < uTYPEMIN(a) + b
 checked_iintrinsic_fast(LLVMSub_uov, check_usub_int, sub, checked_usub_int, u)
 checked_iintrinsic_slow(LLVMMul_sov, checked_smul_int,  )
 checked_iintrinsic_slow(LLVMMul_uov, checked_umul_int, u)
@@ -864,15 +899,13 @@ checked_iintrinsic_div(LLVMRem_uov, checked_urem_int, u)
 #define flipsign(a, b) \
         (b >= 0) ? a : -a
 bi_iintrinsic_fast(jl_LLVMFlipSign, flipsign, flipsign_int,  )
-#define abs_float(pr, a) *pr = fp_select(a, fabs)
-#define ceil_float(pr, a) *pr = fp_select(a, ceil)
-#define floor_float(pr, a) *pr = fp_select(a, floor)
-#define trunc_float(pr, a) *pr = fp_select(a, trunc)
-#define rint_float(pr, a) *pr = fp_select(a, rint)
-#define sqrt_float(pr, a) \
-        *pr = fp_select(a, sqrt)
-#define copysign_float(a, b) \
-        fp_select2(a, b, copysign)
+#define abs_float(pr, a)      *pr = fp_select(a, fabs)
+#define ceil_float(pr, a)     *pr = fp_select(a, ceil)
+#define floor_float(pr, a)    *pr = fp_select(a, floor)
+#define trunc_float(pr, a)    *pr = fp_select(a, trunc)
+#define rint_float(pr, a)     *pr = fp_select(a, rint)
+#define sqrt_float(pr, a)     *pr = fp_select(a, sqrt)
+#define copysign_float(a, b)  fp_select2(a, b, copysign)
 
 un_fintrinsic(abs_float,abs_float)
 bi_fintrinsic(copysign_float,copysign_float)
@@ -881,6 +914,7 @@ un_fintrinsic(floor_float,floor_llvm)
 un_fintrinsic(trunc_float,trunc_llvm)
 un_fintrinsic(rint_float,rint_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm)
+un_fintrinsic(sqrt_float,sqrt_llvm_fast)
 
 JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a)
 {

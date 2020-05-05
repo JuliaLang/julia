@@ -15,7 +15,7 @@ For multiple collection arguments, apply `f` elementwise.
 Results are returned in order as they become available.
 
 Note that `f` must be made available to all worker processes; see
-[Code Availability and Loading Packages](@ref)
+[Code Availability and Loading Packages](@ref code-availability)
 for details.
 """
 function pgenerate(p::WorkerPool, f, c)
@@ -38,7 +38,7 @@ workers and tasks.
 For multiple collection arguments, apply `f` elementwise.
 
 Note that `f` must be made available to all worker processes; see
-[Code Availability and Loading Packages](@ref) for details.
+[Code Availability and Loading Packages](@ref code-availability) for details.
 
 If a worker pool is not specified, all available workers, i.e., the default worker pool
 is used.
@@ -90,10 +90,10 @@ Example: On errors, retry `f` on an element a maximum of 3 times without any del
 pmap(f, c; retry_delays = zeros(3))
 ```
 
-Example: Retry `f` only if the exception is not of type `InexactError`, with exponentially increasing
+Example: Retry `f` only if the exception is not of type [`InexactError`](@ref), with exponentially increasing
 delays up to 3 times. Return a `NaN` in place for all `InexactError` occurrences.
 ```julia
-pmap(f, c; on_error = e->(isa(e, InexactError) ? NaN : rethrow(e)), retry_delays = ExponentialBackOff(n = 3))
+pmap(f, c; on_error = e->(isa(e, InexactError) ? NaN : rethrow()), retry_delays = ExponentialBackOff(n = 3))
 ```
 """
 function pmap(f, p::AbstractWorkerPool, c; distributed=true, batch_size=1, on_error=nothing,
@@ -187,9 +187,9 @@ function wrap_batch(f, p, handle_errors)
             remotecall_fetch(f, p, batch)
         catch e
             if handle_errors
-                return Any[BatchProcessingError(batch[i], e) for i in 1:length(batch)]
+                return Any[BatchProcessingError(b, e) for b in batch]
             else
-                rethrow(e)
+                rethrow()
             end
         end
     end
@@ -212,9 +212,9 @@ function process_batch_errors!(p, f, results, on_error, retry_delays, retry_chec
         errors = [x[2] for x in reprocess]
         exceptions = [x.ex for x in errors]
         state = iterate(retry_delays)
-        state != nothing && (state = state[2])
+        state !== nothing && (state = state[2])
         if (length(retry_delays) > 0) &&
-                (retry_check==nothing || all([retry_check(state,ex)[2] for ex in exceptions]))
+                (retry_check === nothing || all([retry_check(state,ex)[2] for ex in exceptions]))
             # BatchProcessingError.data is a tuple of original args
             error_processed = pmap(x->f(x...), p, [x.data for x in errors];
                     on_error = on_error, retry_delays = collect(retry_delays)[2:end], retry_check = retry_check)
@@ -238,14 +238,11 @@ Return `head`: the first `n` elements of `c`;
 and `tail`: an iterator over the remaining elements.
 
 ```jldoctest
-julia> a = 1:10
-1:10
-
-julia> b, c = Base.head_and_tail(a, 3)
-([1,2,3],Base.Iterators.Rest{UnitRange{Int64},Int64}(1:10,4))
+julia> b, c = Distributed.head_and_tail(1:10, 3)
+([1, 2, 3], Base.Iterators.Rest{UnitRange{Int64},Int64}(1:10, 3))
 
 julia> collect(c)
-7-element Array{Any,1}:
+7-element Array{Int64,1}:
   4
   5
   6
@@ -260,15 +257,15 @@ function head_and_tail(c, n)
     n == 0 && return (head, c)
     i = 1
     y = iterate(c)
-    y == nothing && return (resize!(head, 0), ())
+    y === nothing && return (resize!(head, 0), ())
     head[i] = y[1]
     while i < n
         y = iterate(c, y[2])
-        y == nothing && return (resize!(head, i), ())
+        y === nothing && return (resize!(head, i), ())
         i += 1
         head[i] = y[1]
     end
-    return head, Iterators.rest(c, s)
+    return head, Iterators.rest(c, y[2])
 end
 
 """

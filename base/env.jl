@@ -15,9 +15,7 @@ if Sys.iswindows()
         end
         val = zeros(UInt16,len)
         ret = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,val,len)
-        if (ret == 0 && len != 1) || ret != len-1 || val[end] != 0
-            error(string("getenv: ", str, ' ', len, "-1 != ", ret, ": ", Libc.FormatMessage()))
-        end
+        windowserror(:getenv, (ret == 0 && len != 1) || ret != len-1 || val[end] != 0)
         pop!(val) # NUL
         return transcode(String, val)
     end
@@ -27,14 +25,14 @@ if Sys.iswindows()
         val = cwstring(sval)
         if overwrite || !_hasenv(var)
             ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,val)
-            systemerror(:setenv, ret == 0)
+            windowserror(:setenv, ret == 0)
         end
     end
 
     function _unsetenv(svar::AbstractString)
         var = cwstring(svar)
         ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,C_NULL)
-        systemerror(:setenv, ret == 0)
+        windowserror(:setenv, ret == 0)
     end
 else # !windows
     _getenv(var::AbstractString) = ccall(:getenv, Cstring, (Cstring,), var)
@@ -70,6 +68,11 @@ struct EnvDict <: AbstractDict{String,String}; end
 
 Reference to the singleton `EnvDict`, providing a dictionary interface to system environment
 variables.
+
+(On Windows, system environment variables are case-insensitive, and `ENV` correspondingly converts
+all keys to uppercase for display, iteration, and copying. Portable code should not rely on the
+ability to distinguish variables by case, and should beware that setting an ostensibly lowercase
+variable may result in an uppercase `ENV` key.)
 """
 const ENV = EnvDict()
 
@@ -85,6 +88,16 @@ push!(::EnvDict, kv::Pair{<:AbstractString}) = setindex!(ENV, kv.second, kv.firs
 
 if Sys.iswindows()
     GESW() = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{UInt16},()); (pos,pos))
+    function winuppercase(s::AbstractString)
+        isempty(s) && return s
+        LOCALE_INVARIANT = 0x0000007f
+        LCMAP_UPPERCASE  = 0x00000200
+        ws = transcode(UInt16, String(s))
+        result = ccall(:LCMapStringW, stdcall, Cint, (UInt32, UInt32, Ptr{UInt16}, Cint, Ptr{UInt16}, Cint),
+                       LOCALE_INVARIANT, LCMAP_UPPERCASE, ws, length(ws), ws, length(ws))
+        systemerror(:LCMapStringW, iszero(result))
+        return transcode(String, ws)
+    end
     function iterate(hash::EnvDict, block::Tuple{Ptr{UInt16},Ptr{UInt16}} = GESW())
         if unsafe_load(block[1]) == 0
             ccall(:FreeEnvironmentStringsW, stdcall, Int32, (Ptr{UInt16},), block[2])
@@ -100,7 +113,7 @@ if Sys.iswindows()
         if m === nothing
             error("malformed environment entry: $env")
         end
-        return (Pair{String,String}(m.captures[1], m.captures[2]), (pos+(len+1)*2, blk))
+        return (Pair{String,String}(winuppercase(m.captures[1]), m.captures[2]), (pos+(len+1)*2, blk))
     end
 else # !windows
     function iterate(::EnvDict, i=0)
@@ -115,7 +128,7 @@ else # !windows
     end
 end # os-test
 
-#TODO: Make these more efficent
+#TODO: Make these more efficient
 function length(::EnvDict)
     i = 0
     for (k,v) in ENV

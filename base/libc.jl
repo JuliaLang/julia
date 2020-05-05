@@ -5,7 +5,7 @@ module Libc
 Interface to libc, the C standard library.
 """ Libc
 
-import Base: transcode
+import Base: transcode, windowserror
 import Core.Intrinsics: bitcast
 
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
@@ -19,6 +19,15 @@ include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "errno_h.jl"))  # inc
 ## RawFD ##
 
 # Wrapper for an OS file descriptor (on both Unix and Windows)
+"""
+    RawFD
+
+Primitive type which wraps the native OS file descriptor.
+`RawFD`s can be passed to methods like [`stat`](@ref) to
+discover information about the underlying file, and can
+also be used to open streams, with the `RawFD` describing
+the OS file backing the stream.
+"""
 primitive type RawFD 32 end
 RawFD(fd::Integer) = bitcast(RawFD, Cint(fd))
 RawFD(fd::RawFD) = fd
@@ -45,7 +54,7 @@ if Sys.iswindows()
         status = ccall(:DuplicateHandle, stdcall, Int32,
             (Ptr{Cvoid}, WindowsRawSocket, Ptr{Cvoid}, Ptr{WindowsRawSocket}, UInt32, Int32, UInt32),
             my_process, src, my_process, new_handle, 0, false, DUPLICATE_SAME_ACCESS)
-        status == 0 && error("dup failed: $(FormatMessage())")
+        windowserror("dup failed", status == 0)
         return new_handle[]
     end
     function dup(src::WindowsRawSocket, target::RawFD)
@@ -113,6 +122,16 @@ elseif Sys.iswindows()
 else
     error("systemsleep undefined for this OS")
 end
+"""
+    systemsleep(s::Real)
+
+Suspends execution for `s` seconds.
+This function does not yield to Julia's scheduler and therefore blocks
+the Julia thread that it is running on for the duration of the sleep time.
+
+See also: [`sleep`](@ref)
+"""
+systemsleep
 
 struct TimeVal
    sec::Int64
@@ -170,12 +189,13 @@ library.
 """
 strftime(t) = strftime("%c", t)
 strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
+# Use wcsftime instead of strftime to support different locales
 function strftime(fmt::AbstractString, tm::TmStruct)
-    timestr = Base.StringVector(128)
-    n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Cstring, Ref{TmStruct}),
-              timestr, length(timestr), fmt, tm)
+    wctimestr = Vector{Cwchar_t}(undef, 128)
+    n = ccall(:wcsftime, Csize_t, (Ptr{Cwchar_t}, Csize_t, Cwstring, Ref{TmStruct}),
+              wctimestr, length(wctimestr), fmt, tm)
     n == 0 && return ""
-    return String(resize!(timestr,n))
+    return transcode(String, resize!(wctimestr, n))
 end
 
 """
@@ -293,14 +313,15 @@ function FormatMessage end
 if Sys.iswindows()
     GetLastError() = ccall(:GetLastError, stdcall, UInt32, ())
 
-    function FormatMessage(e=GetLastError())
+    FormatMessage(e) = FormatMessage(UInt32(e))
+    function FormatMessage(e::UInt32=GetLastError())
         FORMAT_MESSAGE_ALLOCATE_BUFFER = UInt32(0x100)
         FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
         FORMAT_MESSAGE_IGNORE_INSERTS = UInt32(0x200)
         FORMAT_MESSAGE_MAX_WIDTH_MASK = UInt32(0xFF)
         lpMsgBuf = Ref{Ptr{UInt16}}()
         lpMsgBuf[] = 0
-        len = ccall(:FormatMessageW, stdcall, UInt32, (Cint, Ptr{Cvoid}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Cvoid}),
+        len = ccall(:FormatMessageW, stdcall, UInt32, (UInt32, Ptr{Cvoid}, UInt32, UInt32, Ptr{Ptr{UInt16}}, UInt32, Ptr{Cvoid}),
                     FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
                     C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
         p = lpMsgBuf[]
@@ -317,8 +338,8 @@ end
 """
     free(addr::Ptr)
 
-Call `free` from the C standard library. Only use this on memory obtained from `malloc`, not
-on pointers retrieved from other C libraries. `Ptr` objects obtained from C libraries should
+Call `free` from the C standard library. Only use this on memory obtained from [`malloc`](@ref), not
+on pointers retrieved from other C libraries. [`Ptr`](@ref) objects obtained from C libraries should
 be freed by the free functions defined in that library, to avoid assertion failures if
 multiple `libc` libraries exist on the system.
 """
@@ -336,8 +357,8 @@ malloc(size::Integer) = ccall(:malloc, Ptr{Cvoid}, (Csize_t,), size)
 
 Call `realloc` from the C standard library.
 
-See warning in the documentation for `free` regarding only using this on memory originally
-obtained from `malloc`.
+See warning in the documentation for [`free`](@ref) regarding only using this on memory originally
+obtained from [`malloc`](@ref).
 """
 realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), p, size)
 
@@ -362,15 +383,21 @@ Interface to the C `rand()` function. If `T` is provided, generate a value of ty
 by composing two calls to `rand()`. `T` can be `UInt32` or `Float64`.
 """
 rand() = ccall(:rand, Cint, ())
-# RAND_MAX at least 2^15-1 in theory, but we assume 2^16-1 (in practice, it's 2^31-1)
-rand(::Type{UInt32}) = ((rand() % UInt32) << 16) ⊻ (rand() % UInt32)
-rand(::Type{Float64}) = rand(UInt32) / 2^32
+@static if Sys.iswindows()
+    # Windows RAND_MAX is 2^15-1
+    rand(::Type{UInt32}) = ((rand() % UInt32) << 17) ⊻ ((rand() % UInt32) << 8) ⊻ (rand() % UInt32)
+else
+    # RAND_MAX is at least 2^15-1 in theory, but we assume 2^16-1
+    # on non-Windows systems (in practice, it's 2^31-1)
+    rand(::Type{UInt32}) = ((rand() % UInt32) << 16) ⊻ (rand() % UInt32)
+end
+rand(::Type{Float64}) = rand(UInt32) * 2.0^-32
 
 """
     srand([seed])
 
 Interface to the C `srand(seed)` function.
 """
-srand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
+srand(seed=floor(Int, time()) % Cuint) = ccall(:srand, Cvoid, (Cuint,), seed)
 
 end # module

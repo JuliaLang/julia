@@ -9,18 +9,20 @@
 #include "support/dtypes.h"
 #include <sstream>
 
+#include <llvm-c/Core.h>
+#include <llvm-c/Types.h>
+
 #include <llvm/Pass.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/MDBuilder.h>
 
-#if defined(JULIA_ENABLE_THREADING)
-#  include <llvm/IR/InlineAsm.h>
-#  include <llvm/Transforms/Utils/BasicBlockUtils.h>
-#endif
+#include <llvm/IR/InlineAsm.h>
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -28,6 +30,8 @@
 #include "julia_assert.h"
 
 using namespace llvm;
+
+typedef Instruction TerminatorInst;
 
 std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr,
                                            bool isConstant=false);
@@ -53,30 +57,20 @@ private:
     Type *T_int8;
     Type *T_size;
     PointerType *T_pint8;
-#ifdef JULIA_ENABLE_THREADING
     GlobalVariable *ptls_slot{nullptr};
     GlobalVariable *ptls_offset{nullptr};
     void set_ptls_attrs(CallInst *ptlsStates) const;
     Instruction *emit_ptls_tp(Value *offset, Instruction *insertBefore) const;
     template<typename T> T *add_comdat(T *G) const;
     GlobalVariable *create_aliased_global(Type *T, StringRef name) const;
-#else
-    GlobalVariable *static_tls;
-#endif
-    void fix_ptls_use(CallInst *ptlsStates) const;
+    void fix_ptls_use(CallInst *ptlsStates);
     bool runOnModule(Module &M) override;
 };
 
-#ifdef JULIA_ENABLE_THREADING
 void LowerPTLS::set_ptls_attrs(CallInst *ptlsStates) const
 {
-#if JL_LLVM_VERSION >= 50000
     ptlsStates->addAttribute(AttributeList::FunctionIndex, Attribute::ReadNone);
     ptlsStates->addAttribute(AttributeList::FunctionIndex, Attribute::NoUnwind);
-#else
-    ptlsStates->addAttribute(AttributeSet::FunctionIndex, Attribute::ReadNone);
-    ptlsStates->addAttribute(AttributeSet::FunctionIndex, Attribute::NoUnwind);
-#endif
 }
 
 Instruction *LowerPTLS::emit_ptls_tp(Value *offset, Instruction *insertBefore) const
@@ -179,16 +173,14 @@ inline T *LowerPTLS::add_comdat(T *G) const
 #endif
     return G;
 }
-#endif
 
-void LowerPTLS::fix_ptls_use(CallInst *ptlsStates) const
+void LowerPTLS::fix_ptls_use(CallInst *ptlsStates)
 {
     if (ptlsStates->use_empty()) {
         ptlsStates->eraseFromParent();
         return;
     }
 
-#ifdef JULIA_ENABLE_THREADING
     if (imaging_mode) {
         if (jl_tls_elf_support) {
             // if (offset != 0)
@@ -197,6 +189,7 @@ void LowerPTLS::fix_ptls_use(CallInst *ptlsStates) const
             //     ptls = getter();
             auto offset = new LoadInst(T_size, ptls_offset, "", false, ptlsStates);
             offset->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+            offset->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(*ctx, None));
             auto cmp = new ICmpInst(ptlsStates, CmpInst::ICMP_NE, offset,
                                     Constant::getNullValue(offset->getType()));
             MDBuilder MDB(*ctx);
@@ -212,7 +205,8 @@ void LowerPTLS::fix_ptls_use(CallInst *ptlsStates) const
             ptlsStates->moveBefore(slowTerm);
             auto getter = new LoadInst(T_ptls_getter, ptls_slot, "", false, ptlsStates);
             getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-            ptlsStates->setCalledFunction(getter);
+            getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(*ctx, None));
+            ptlsStates->setCalledFunction(ptlsStates->getFunctionType(), getter);
             set_ptls_attrs(ptlsStates);
 
             phi->addIncoming(fastTLS, fastTLS->getParent());
@@ -226,7 +220,8 @@ void LowerPTLS::fix_ptls_use(CallInst *ptlsStates) const
         // since we may not know which getter function to use ahead of time.
         auto getter = new LoadInst(T_ptls_getter, ptls_slot, "", false, ptlsStates);
         getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-        ptlsStates->setCalledFunction(getter);
+        getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(*ctx, None));
+        ptlsStates->setCalledFunction(ptlsStates->getFunctionType(), getter);
         set_ptls_attrs(ptlsStates);
     }
     else if (jl_tls_offset != -1) {
@@ -236,13 +231,9 @@ void LowerPTLS::fix_ptls_use(CallInst *ptlsStates) const
     else {
         // use the address of the actual getter function directly
         auto val = ConstantInt::get(T_size, (uintptr_t)jl_get_ptls_states_getter());
-        ptlsStates->setCalledFunction(ConstantExpr::getIntToPtr(val, T_ptls_getter));
+        ptlsStates->setCalledFunction(ptlsStates->getFunctionType(), ConstantExpr::getIntToPtr(val, T_ptls_getter));
         set_ptls_attrs(ptlsStates);
     }
-#else
-    ptlsStates->replaceAllUsesWith(static_tls);
-    ptlsStates->eraseFromParent();
-#endif
 }
 
 bool LowerPTLS::runOnModule(Module &_M)
@@ -262,15 +253,10 @@ bool LowerPTLS::runOnModule(Module &_M)
     T_int8 = Type::getInt8Ty(*ctx);
     T_size = sizeof(size_t) == 8 ? Type::getInt64Ty(*ctx) : Type::getInt32Ty(*ctx);
     T_pint8 = T_int8->getPointerTo();
-#ifdef JULIA_ENABLE_THREADING
     if (imaging_mode) {
         ptls_slot = create_aliased_global(T_ptls_getter, "jl_get_ptls_states_slot");
         ptls_offset = create_aliased_global(T_size, "jl_tls_offset");
     }
-#else
-    static_tls = new GlobalVariable(*M, T_ppjlvalue, false, GlobalVariable::ExternalLinkage,
-                                    NULL, "jl_tls_states");
-#endif
 
     for (auto it = ptls_getter->user_begin(); it != ptls_getter->user_end();) {
         auto call = cast<CallInst>(*it);
@@ -294,4 +280,9 @@ static RegisterPass<LowerPTLS> X("LowerPTLS", "LowerPTLS Pass",
 Pass *createLowerPTLSPass(bool imaging_mode)
 {
     return new LowerPTLS(imaging_mode);
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddLowerPTLSPass(LLVMPassManagerRef PM, LLVMBool imaging_mode)
+{
+    unwrap(PM)->add(createLowerPTLSPass(imaging_mode));
 }

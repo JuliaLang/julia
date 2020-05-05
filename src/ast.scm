@@ -41,11 +41,14 @@
   (string head "\n" (indented-block lst ilvl)
           (string.rep "    " ilvl) "end"))
 
+(define (deparse-colon-dot e)
+  (if (dotop? e)
+      (string ":" (deparse e))
+      (deparse e)))
+
 (define (deparse e (ilvl 0))
   (cond ((or (symbol? e) (number? e)) (string e))
         ((string? e) (print-to-string e))
-        ((eq? e #t) "true")
-        ((eq? e #f) "false")
         ((eq? (typeof e) 'julia_value)
          (let ((s (string e)))
            (if (string.find s "#<julia: ")
@@ -57,12 +60,12 @@
         ((eq? (car e) '|.|)
          (string (deparse (cadr e)) '|.|
                  (cond ((and (pair? (caddr e)) (memq (caaddr e) '(quote inert)))
-                        (deparse (cadr (caddr e))))
+                        (deparse-colon-dot (cadr (caddr e))))
                        ((and (pair? (caddr e)) (eq? (caaddr e) 'copyast))
-                        (deparse (cadr (cadr (caddr e)))))
+                        (deparse-colon-dot (cadr (cadr (caddr e)))))
                        (else
                         (string #\( (deparse (caddr e)) #\))))))
-        ((memq (car e) '(... |'| |.'|))
+        ((memq (car e) '(... |'|))
          (string (deparse (cadr e)) (car e)))
         ((or (syntactic-op? (car e)) (eq? (car e) '|<:|) (eq? (car e) '|>:|))
          (if (length= e 2)
@@ -70,6 +73,9 @@
              (string (deparse (cadr e)) " " (car e) " " (deparse (caddr e)))))
         (else
          (case (car e)
+           ((null)  "nothing")
+           ((true)  "true")
+           ((false) "false")
            ;; calls and operators
            ((call)
             (cond ((and (eq? (cadr e) ':) (or (length= e 4) (length= e 5)))
@@ -81,7 +87,9 @@
                    (string #\( (deparse (caddr e)) " " (cadr e) " " (deparse (cadddr e)) #\) ))
                   (else
                    (deparse-prefix-call (cadr e) (cddr e) #\( #\)))))
-           (($ &)          (if (pair? (cadr e))
+           (($ &)          (if (and (pair? (cadr e))
+                                    (not (memq (caadr e)
+                                               '(outerref null true false tuple $ vect braces))))
                                (string (car e) "(" (deparse (cadr e)) ")")
                                (string (car e) (deparse (cadr e)))))
            ((|::|)         (if (length= e 2)
@@ -165,7 +173,7 @@
                     (indented-block (cdr (cadr e)) ilvl)
                     (if (and (pair? (cadddr e)) (eq? (car (cadddr e)) 'block))
                         (string (string.rep "    " ilvl) "catch"
-                                (if (eq? (caddr e) 'false)
+                                (if (equal? (caddr e) '(false))
                                     ""
                                     (string " " (caddr e)))
                                 "\n"
@@ -187,7 +195,7 @@
 				     (deparse-arglist args))
 			     (cdr body) ilvl)))
            ((struct)
-            (string (if (eq? (cadr e) 'true) "mutable " "")
+            (string (if (equal? (cadr e) '(true)) "mutable " "")
                     "struct "
                     (deparse-block (deparse (caddr e)) (cdr (cadddr e)) ilvl)))
            ((abstract)
@@ -195,12 +203,12 @@
            ((primitive)
             (string "primitive type " (deparse (cadr e)) " " (deparse (caddr e)) " end"))
            ((module)
-            (string (if (eq? (cadr e) 'true) "module " "baremodule ")
+            (string (if (equal? (cadr e) '(true)) "module " "baremodule ")
                     (caddr e) "\n"
                     (string.join (map deparse (cdr (cadddr e))) "\n") "\n"
                     "end"))
            ;; misc syntax forms
-           ((import importall using)
+           ((import using)
             (define (deparse-path e)
               (cond ((and (pair? e) (eq? (car e) '|.|))
                      (let loop ((lst   (cdr e))
@@ -220,7 +228,7 @@
            ((const)        (string "const " (deparse (cadr e))))
            ((top)          (deparse (cadr e)))
            ((core)         (string "Core." (deparse (cadr e))))
-           ((globalref)    (string (deparse (cadr e)) "." (deparse (caddr e))))
+           ((globalref)    (string (deparse (cadr e)) "." (deparse-colon-dot (caddr e))))
            ((outerref)     (string (deparse (cadr e))))
            ((ssavalue)     (string "SSAValue(" (cadr e) ")"))
            ((line)         (if (length= e 2)
@@ -256,6 +264,9 @@
 (define (reset-gensyms)
   (set! *current-gensyms* *gensyms*))
 
+(define (some-gensym? x)
+  (or (gensym? x) (memq x *gensyms*)))
+
 (define make-ssavalue
   (let ((ssavalue-counter 0))
     (lambda ()
@@ -264,8 +275,17 @@
 
 ;; predicates and accessors
 
-(define (quoted? e) (memq (car e) '(quote top core globalref outerref line break inert meta)))
+(define (quoted? e)
+  (memq (car e) '(quote top core globalref outerref line break inert meta inbounds loopinfo)))
 (define (quotify e) `',e)
+(define (unquote e)
+  (if (and (pair? e) (memq (car e) '(quote inert)))
+      (cadr e)
+      e))
+
+(define (quoted-sym? e)
+  (and (length= e 2) (memq (car e) '(quote inert))
+       (symbol? (cadr e))))
 
 (define (lam:args x) (cadr x))
 (define (lam:vars x) (llist-vars (lam:args x)))
@@ -277,7 +297,7 @@
   (error (string #\" (deparse v) #\" " is not a valid function argument name")))
 
 (define (valid-name? s)
-  (not (memq s '(true false ccall cglobal))))
+  (not (memq s '(ccall cglobal))))
 
 (define (arg-name v)
   (cond ((and (symbol? v) (valid-name? v))
@@ -338,18 +358,20 @@
 (define (globalref? e)
   (and (pair? e) (eq? (car e) 'globalref)))
 
+(define (outerref? e)
+  (and (pair? e) (eq? (car e) 'outerref)))
+
 (define (symbol-like? e)
-  (or (and (symbol? e) (not (eq? e 'true)) (not (eq? e 'false)))
-      (ssavalue? e)))
+  (or (symbol? e) (ssavalue? e)))
 
 (define (simple-atom? x)
-  (or (number? x) (string? x) (char? x) (eq? x 'true) (eq? x 'false)
-      (and (pair? x) (memq (car x) '(ssavalue null)))
+  (or (number? x) (string? x) (char? x)
+      (and (pair? x) (memq (car x) '(ssavalue null true false thismodule)))
       (eq? (typeof x) 'julia_value)))
 
 ;; identify some expressions that are safe to repeat
 (define (effect-free? e)
-  (or (not (pair? e)) (ssavalue? e) (sym-dot? e) (quoted? e) (equal? e '(null))))
+  (or (not (pair? e)) (ssavalue? e) (sym-dot? e) (quoted? e) (memq (car e) '(null true false))))
 
 ;; get the variable name part of a declaration, x::int => x
 (define (decl-var v)
@@ -367,49 +389,44 @@
       (cadr (caddr e))
       e))
 
-(define (dotop? o) (and (symbol? o) (eqv? (string.char (string o) 0) #\.)
-                        (not (eq? o '|.|))
-                        (not (eqv? (string.char (string o) 1) #\.))))
+(define (identifier-name e)
+  (cond ((symbol? e)    e)
+        ((globalref? e) (caddr e))
+        (else           e)))
 
-; convert '.xx to 'xx
+(define (dotop-named? e) (dotop? (identifier-name e)))
+
+;; convert '.xx to 'xx
 (define (undotop op)
-  (let ((str (string op)))
-    (assert (eqv? (string.char str 0) #\.))
-    (symbol (string.sub str 1 (length str)))))
+  (if (globalref? op)
+      `(globalref ,(cadr op) ,(undotop (caddr op)))
+      (let ((str (string op)))
+        (assert (eqv? (string.char str 0) #\.))
+        (symbol (string.sub str 1 (length str))))))
 
-; convert '.xx to 'xx, and (|.| _ '.xx) to (|.| _ 'xx), and otherwise return #f
-(define (maybe-undotop e)
-  (if (symbol? e)
-      (let ((str (string e)))
-        (if (and (eqv? (string.char str 0) #\.)
-                 (not (eq? e '|.|))
-                 (not (eqv? (string.char str 1) #\.)))
-            (symbol (string.sub str 1 (length str)))
-            #f))
+;; raise an error for using .op as a function name
+(define (check-dotop e)
+  (if (dotop-named? e)
+      (error (string "invalid function name \"" (deparse e) "\""))
       (if (pair? e)
           (if (eq? (car e) '|.|)
-              (let ((op (maybe-undotop (caddr e))))
-                (if op
-                    (list '|.| (cadr e) op)
-                    #f))
+              (check-dotop (caddr e))
               (if (quoted? e)
-                  (let ((op (maybe-undotop (cadr e))))
-                    (if op (list (car e) op) #f))
-                  #f))
-          #f)))
+                  (check-dotop (cadr e))))))
+  e)
 
 (define (vararg? x) (and (pair? x) (eq? (car x) '...)))
-(define (varargexpr? x) (and
-                         (pair? x)
-                         (eq? (car x) '::)
-                         (or
-                          (eq? (caddr x) 'Vararg)
-                          (and
-                           (pair? (caddr x))
-                           (length> (caddr x) 1)
-                           (eq? (cadr (caddr x)) 'Vararg)))))
-(define (trans?  x) (and (pair? x) (eq? (car x) '|.'|)))
-(define (ctrans? x) (and (pair? x) (eq? (car x) '|'|)))
+(define (vararg-type-expr? x)
+  (or (eq? x 'Vararg)
+      (and (length> x 1)
+           (or (and (eq? (car x) 'curly)
+                    (vararg-type-expr? (cadr x)))
+               (and (eq? (car x) 'where)
+                    (vararg-type-expr? (cadr x)))))))
+(define (varargexpr? x)
+  (and (pair? x)
+       (eq? (car x) '::)
+       (vararg-type-expr? (caddr x))))
 (define (linenum? x) (and (pair? x) (eq? (car x) 'line)))
 
 (define (make-assignment l r) `(= ,l ,r))
@@ -417,8 +434,7 @@
 (define (return? e) (and (pair? e) (eq? (car e) 'return)))
 (define (complex-return? e) (and (return? e)
                                  (let ((x (cadr e)))
-                                   (not (or (simple-atom? x) (ssavalue? x)
-                                            (equal? x '(null)))))))
+                                   (not (simple-atom? x)))))
 
 (define (eq-sym? a b)
   (or (eq? a b) (and (ssavalue? a) (ssavalue? b) (eqv? (cdr a) (cdr b)))))
@@ -438,7 +454,7 @@
 (define (vinfo:capt v) (< 0 (logand (caddr v) 1)))
 (define (vinfo:asgn v) (< 0 (logand (caddr v) 2)))
 (define (vinfo:never-undef v) (< 0 (logand (caddr v) 4)))
-(define (vinfo:const v) (< 0 (logand (caddr v) 8)))
+(define (vinfo:read v) (< 0 (logand (caddr v) 8)))
 (define (vinfo:sa v) (< 0 (logand (caddr v) 16)))
 (define (set-bit x b val) (if val (logior x b) (logand x (lognot b))))
 ;; record whether var is captured
@@ -447,8 +463,8 @@
 (define (vinfo:set-asgn! v a)  (set-car! (cddr v) (set-bit (caddr v) 2 a)))
 ;; whether the assignments to var are known to dominate its usages
 (define (vinfo:set-never-undef! v a) (set-car! (cddr v) (set-bit (caddr v) 4 a)))
-;; whether var is const
-(define (vinfo:set-const! v a) (set-car! (cddr v) (set-bit (caddr v) 8 a)))
+;; whether var is ever read
+(define (vinfo:set-read! v a) (set-car! (cddr v) (set-bit (caddr v) 8 a)))
 ;; whether var is assigned once
 (define (vinfo:set-sa! v a)    (set-car! (cddr v) (set-bit (caddr v) 16 a)))
 ;; occurs undef: mask 32
@@ -456,9 +472,6 @@
 (define (vinfo:set-called! v a)  (set-car! (cddr v) (set-bit (caddr v) 64 a)))
 
 (define var-info-for assq)
-
-(define (assignment? e)
-  (and (pair? e) (eq? (car e) '=)))
 
 (define (assignment-like? e)
   (and (pair? e) (is-prec-assignment? (car e))))
@@ -468,7 +481,7 @@
 
 (define (nospecialize-meta? e (one #f))
   (and (if one (length= e 3) (length> e 2))
-       (eq? (car e) 'meta) (eq? (cadr e) 'nospecialize)))
+       (eq? (car e) 'meta) (memq (cadr e) '(nospecialize specialize))))
 
 (define (if-generated? e)
   (and (length= e 4) (eq? (car e) 'if) (equal? (cadr e) '(generated))))

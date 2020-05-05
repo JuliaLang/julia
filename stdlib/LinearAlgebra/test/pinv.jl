@@ -4,7 +4,7 @@ module TestPinv
 
 using Test, LinearAlgebra, Random
 
-srand(12345)
+Random.seed!(12345)
 
 function hilb(T::Type, n::Integer)
     a = Matrix{T}(undef, n, n)
@@ -89,14 +89,14 @@ end
 function test_pinv(a,m,n,tol1,tol2,tol3)
     apinv = @inferred pinv(a)
 
-    @test vecnorm(a*apinv*a-a)/vecnorm(a) ≈ 0 atol=tol1
+    @test norm(a*apinv*a-a)/norm(a) ≈ 0 atol=tol1
     x0 = randn(n); b = a*x0; x = apinv*b
-    @test vecnorm(a*x-b)/vecnorm(b) ≈ 0 atol=tol1
+    @test norm(a*x-b)/norm(b) ≈ 0 atol=tol1
     apinv = pinv(a,sqrt(eps(real(one(eltype(a))))))
 
-    @test vecnorm(a*apinv*a-a)/vecnorm(a) ≈ 0 atol=tol2
+    @test norm(a*apinv*a-a)/norm(a) ≈ 0 atol=tol2
     x0 = randn(n); b = a*x0; x = apinv*b
-    @test vecnorm(a*x-b)/vecnorm(b) ≈ 0 atol=tol2
+    @test norm(a*x-b)/norm(b) ≈ 0 atol=tol2
 end
 
 @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64)
@@ -160,24 +160,24 @@ end
 
     if eltya <: LinearAlgebra.BlasReal
         @testset "sub-normal numbers/vectors/matrices" begin
-            a = pinv(realmin(eltya)/100)
+            a = pinv(floatmin(eltya)/100)
             @test a ≈ 0.0
             # Complex subnormal
-            a = pinv(realmin(eltya)/100*(1+1im))
+            a = pinv(floatmin(eltya)/100*(1+1im))
             @test a ≈ 0.0
 
-            a = pinv([realmin(eltya); realmin(eltya)]/100)
+            a = pinv([floatmin(eltya); floatmin(eltya)]/100)
             @test a[1] ≈ 0.0
             @test a[2] ≈ 0.0
             # Complex subnormal
-            a = pinv([realmin(eltya); realmin(eltya)]/100*(1+1im))
+            a = pinv([floatmin(eltya); floatmin(eltya)]/100*(1+1im))
             @test a[1] ≈ 0.0
             @test a[2] ≈ 0.0
-            a = pinv(Diagonal([realmin(eltya); realmin(eltya)]/100))
+            a = pinv(Diagonal([floatmin(eltya); floatmin(eltya)]/100))
             @test a.diag[1] ≈ 0.0
             @test a.diag[2] ≈ 0.0
             # Complex subnormal
-            a = pinv(Diagonal([realmin(eltya); realmin(eltya)]/100*(1+1im)))
+            a = pinv(Diagonal([floatmin(eltya); floatmin(eltya)]/100*(1+1im)))
             @test a.diag[1] ≈ 0.0
             @test a.diag[2] ≈ 0.0
         end

@@ -1,8 +1,19 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
+"""
+Run Evaluate Print Loop (REPL)
 
+    Example minimal code
+    ```
+    import REPL
+    term = REPL.Terminals.TTYTerminal("dumb", stdin, stdout, stderr)
+    repl = REPL.LineEditREPL(term, true)
+    REPL.run_repl(repl)
+    ```
+"""
 module REPL
+
+Base.Experimental.@optlevel 1
 
 using Base.Meta, Sockets
 import InteractiveUtils
@@ -18,7 +29,8 @@ import Base:
     display,
     show,
     AnyDict,
-    ==
+    ==,
+    catch_stack
 
 
 include("Terminals.jl")
@@ -48,6 +60,8 @@ using .REPLCompletions
 include("TerminalMenus/TerminalMenus.jl")
 include("docview.jl")
 
+@nospecialize # use only declared type signatures
+
 function __init__()
     Base.REPL_MODULE_REF[] = REPL
 end
@@ -61,63 +75,126 @@ const JULIA_PROMPT = "julia> "
 mutable struct REPLBackend
     "channel for AST"
     repl_channel::Channel
-    "channel for results: (value, nothing) or (error, backtrace)"
+    "channel for results: (value, iserror)"
     response_channel::Channel
     "flag indicating the state of this backend"
     in_eval::Bool
+    "transformation functions to apply before evaluating expressions"
+    ast_transforms::Vector{Any}
     "current backend task"
     backend_task::Task
 
-    REPLBackend(repl_channel, response_channel, in_eval) =
-        new(repl_channel, response_channel, in_eval)
+    REPLBackend(repl_channel, response_channel, in_eval, ast_transforms=copy(repl_ast_transforms)) =
+        new(repl_channel, response_channel, in_eval, ast_transforms)
+end
+REPLBackend() = REPLBackend(Channel(1),Channel(1),false)
+
+"""
+    softscope(ex)
+
+Return a modified version of the parsed expression `ex` that uses
+the REPL's "soft" scoping rules for global syntax blocks.
+"""
+function softscope(@nospecialize ex)
+    if ex isa Expr
+        h = ex.head
+        if h === :toplevel
+            ex′ = Expr(h)
+            map!(softscope, resize!(ex′.args, length(ex.args)), ex.args)
+            return ex′
+        elseif h in (:meta, :import, :using, :export, :module, :error, :incomplete, :thunk)
+            return ex
+        else
+            return Expr(:block, Expr(:softscope, true), ex)
+        end
+    end
+    return ex
 end
 
+# Temporary alias until Documenter updates
+const softscope! = softscope
+
+const repl_ast_transforms = Any[softscope] # defaults for new REPL backends
+
 function eval_user_input(@nospecialize(ast), backend::REPLBackend)
-    iserr, lasterr = false, ((), nothing)
+    lasterr = nothing
     Base.sigatomic_begin()
     while true
         try
             Base.sigatomic_end()
-            if iserr
-                put!(backend.response_channel, lasterr)
+            if lasterr !== nothing
+                put!(backend.response_channel, (lasterr,true))
             else
                 backend.in_eval = true
+                for xf in backend.ast_transforms
+                    ast = Base.invokelatest(xf, ast)
+                end
                 value = Core.eval(Main, ast)
                 backend.in_eval = false
-                # note: value wrapped carefully here to ensure it doesn't get passed through expand
-                Core.eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
-                put!(backend.response_channel, (value, nothing))
+                # note: use jl_set_global to make sure value isn't passed through `expand`
+                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :ans, value)
+                put!(backend.response_channel, (value,false))
             end
             break
         catch err
-            if iserr
+            if lasterr !== nothing
                 println("SYSTEM ERROR: Failed to report error to REPL frontend")
                 println(err)
             end
-            iserr, lasterr = true, (err, catch_backtrace())
+            lasterr = catch_stack()
         end
     end
     Base.sigatomic_end()
+    nothing
 end
 
+"""
+    start_repl_backend(repl_channel::Channel,response_channel::Channel)
+
+    Starts loop for REPL backend
+    Returns a REPLBackend with backend_task assigned
+
+    Deprecated since sync / async behavior cannot be selected
+"""
 function start_repl_backend(repl_channel::Channel, response_channel::Channel)
+    # Maintain legacy behavior of asynchronous backend
     backend = REPLBackend(repl_channel, response_channel, false)
-    backend.backend_task = @async begin
-        # include looks at this to determine the relative include path
-        # nothing means cwd
-        while true
-            tls = task_local_storage()
-            tls[:SOURCE_PATH] = nothing
-            ast, show_value = take!(backend.repl_channel)
-            if show_value == -1
-                # exit flag
-                break
-            end
-            eval_user_input(ast, backend)
-        end
-    end
-    backend
+    # Assignment will be made twice, but will be immediately available
+    backend.backend_task = @async start_repl_backend(backend)
+    return backend
 end
+
+"""
+    start_repl_backend(backend::REPLBackend)
+
+    Call directly to run backend loop on current Task.
+    Use @async for run backend on new Task.
+
+    Does not return backend until loop is finished.
+"""
+function start_repl_backend(backend::REPLBackend,  @nospecialize(consumer = x -> nothing))
+    backend.backend_task = Base.current_task()
+    consumer(backend)
+    repl_backend_loop(backend)
+    return backend
+end
+
+function repl_backend_loop(backend::REPLBackend)
+    # include looks at this to determine the relative include path
+    # nothing means cwd
+    while true
+        tls = task_local_storage()
+        tls[:SOURCE_PATH] = nothing
+        ast, show_value = take!(backend.repl_channel)
+        if show_value == -1
+            # exit flag
+            break
+        end
+        eval_user_input(ast, backend)
+    end
+    nothing
+end
+
 struct REPLDisplay{R<:AbstractREPL} <: AbstractDisplay
     repl::R
 end
@@ -127,23 +204,31 @@ end
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     io = outstream(d.repl)
     get(io, :color, false) && write(io, answer_color(d.repl))
-    show(IOContext(io, :limit => true), mime, x)
+    if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
+        # this can override the :limit property set initially
+        io = foldl(IOContext, d.repl.options.iocontext,
+                   init=IOContext(io, :limit => true, :module => Main))
+    end
+    show(io, mime, x)
     println(io)
+    nothing
 end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
-function print_response(repl::AbstractREPL, @nospecialize(val), bt, show_value::Bool, have_color::Bool)
-    repl.waserror = bt !== nothing
-    print_response(outstream(repl), val, bt, show_value, have_color, specialdisplay(repl))
+function print_response(repl::AbstractREPL, @nospecialize(response), show_value::Bool, have_color::Bool)
+    repl.waserror = response[2]
+    io = IOContext(outstream(repl), :module => Main)
+    print_response(io, response, show_value, have_color, specialdisplay(repl))
+    nothing
 end
-function print_response(errio::IO, @nospecialize(val), bt, show_value::Bool, have_color::Bool, specialdisplay=nothing)
+function print_response(errio::IO, @nospecialize(response), show_value::Bool, have_color::Bool, specialdisplay=nothing)
     Base.sigatomic_begin()
+    val, iserr = response
     while true
         try
             Base.sigatomic_end()
-            if bt !== nothing
-                Base.invokelatest(Base.display_error, errio, val, bt)
-                iserr, lasterr = false, ()
+            if iserr
+                Base.invokelatest(Base.display_error, errio, val)
             else
                 if val !== nothing && show_value
                     try
@@ -152,39 +237,61 @@ function print_response(errio::IO, @nospecialize(val), bt, show_value::Bool, hav
                         else
                             Base.invokelatest(display, specialdisplay, val)
                         end
-                    catch err
+                    catch
                         println(errio, "Error showing value of type ", typeof(val), ":")
-                        rethrow(err)
+                        rethrow()
                     end
                 end
             end
             break
-        catch err
-            if bt !== nothing
-                println(errio, "SYSTEM: show(lasterr) caused an error")
-                println(errio, err)
-                Base.show_backtrace(errio, bt)
+        catch
+            if iserr
+                println(errio) # an error during printing is likely to leave us mid-line
+                println(errio, "SYSTEM (REPL): showing an error caused an error")
+                try
+                    Base.invokelatest(Base.display_error, errio, catch_stack())
+                catch e
+                    # at this point, only print the name of the type as a Symbol to
+                    # minimize the possibility of further errors.
+                    println(errio)
+                    println(errio, "SYSTEM (REPL): caught exception of type ", typeof(e).name.name,
+                            " while trying to handle a nested exception; giving up")
+                end
                 break
             end
-            val = err
-            bt = catch_backtrace()
+            val = catch_stack()
+            iserr = true
         end
     end
     Base.sigatomic_end()
+    nothing
 end
 
-# A reference to a backend
+# A reference to a backend that is not mutable
 struct REPLBackendRef
     repl_channel::Channel
     response_channel::Channel
 end
+REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel,backend.response_channel)
 
-function run_repl(repl::AbstractREPL, consumer::Function = x->nothing)
-    repl_channel = Channel(1)
-    response_channel = Channel(1)
-    backend = start_repl_backend(repl_channel, response_channel)
-    consumer(backend)
-    run_frontend(repl, REPLBackendRef(repl_channel,response_channel))
+"""
+    run_repl(repl::AbstractREPL)
+    run_repl(repl, consumer = backend->nothing; backend_on_current_task = true)
+
+    Main function to start the REPL
+
+    consumer is an optional function that takes a REPLBackend as an argument
+"""
+function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task::Bool = true)
+    backend = REPLBackend()
+    backend_ref = REPLBackendRef(backend)
+    if backend_on_current_task
+        @async run_frontend(repl, backend_ref)
+        start_repl_backend(backend,consumer)
+    else
+        @async start_repl_backend(backend,consumer)
+        run_frontend(repl, backend_ref)
+    end
     return backend
 end
 
@@ -193,16 +300,16 @@ end
 mutable struct BasicREPL <: AbstractREPL
     terminal::TextTerminal
     waserror::Bool
-    BasicREPL(t) = new(t,false)
+    BasicREPL(t) = new(t, false)
 end
 
 outstream(r::BasicREPL) = r.terminal
+hascolor(r::BasicREPL) = hascolor(r.terminal)
 
 function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     d = REPLDisplay(repl)
     dopushdisplay = !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
-    repl_channel, response_channel = backend.repl_channel, backend.response_channel
     hit_eof = false
     while true
         Base.reseteof(repl.terminal)
@@ -217,6 +324,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
                 if isa(e,InterruptException)
                     try # raise the debugger if present
                         ccall(:jl_raise_debugger, Int, ())
+                    catch
                     end
                     line = ""
                     interrupted = true
@@ -229,21 +337,19 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
                 end
             end
             ast = Base.parse_input_line(line)
-            (isa(ast,Expr) && ast.head == :incomplete) || break
+            (isa(ast,Expr) && ast.head === :incomplete) || break
         end
         if !isempty(line)
-            put!(repl_channel, (ast, 1))
-            val, bt = take!(response_channel)
-            if !ends_with_semicolon(line)
-                print_response(repl, val, bt, true, false)
-            end
+            response = eval_with_backend(ast, backend)
+            print_response(repl, response, !ends_with_semicolon(line), false)
         end
         write(repl.terminal, '\n')
         ((!interrupted && isempty(line)) || hit_eof) && break
     end
     # terminate backend
-    put!(repl_channel, (nothing, -1))
+    put!(backend.repl_channel, (nothing, -1))
     dopushdisplay && popdisplay(d)
+    nothing
 end
 
 ## User Options
@@ -267,6 +373,12 @@ mutable struct Options
     backspace_adjust::Bool
     confirm_exit::Bool # ^D must be repeated to confirm exit
     auto_indent::Bool # indent a newline like line above
+    auto_indent_tmp_off::Bool # switch auto_indent temporarily off if copy&paste
+    auto_indent_bracketed_paste::Bool # set to true if terminal knows paste mode
+    # cancel auto-indent when next character is entered within this time frame :
+    auto_indent_time_threshold::Float64
+    # default IOContext settings at the REPL
+    iocontext::Dict{Symbol,Any}
 end
 
 Options(;
@@ -280,12 +392,19 @@ Options(;
         beep_use_current = true,
         backspace_align = true, backspace_adjust = backspace_align,
         confirm_exit = false,
-        auto_indent = true) =
+        auto_indent = true,
+        auto_indent_tmp_off = false,
+        auto_indent_bracketed_paste = false,
+        auto_indent_time_threshold = 0.005,
+        iocontext = Dict{Symbol,Any}()) =
             Options(hascolor, extra_keymap, tabwidth,
                     kill_ring_max, region_animation_duration,
                     beep_duration, beep_blink, beep_maxduration,
                     beep_colors, beep_use_current,
-                    backspace_align, backspace_adjust, confirm_exit, auto_indent)
+                    backspace_align, backspace_adjust, confirm_exit,
+                    auto_indent, auto_indent_tmp_off, auto_indent_bracketed_paste,
+                    auto_indent_time_threshold,
+                    iocontext)
 
 # for use by REPLs not having an options field
 const GlobalOptions = Options()
@@ -312,13 +431,14 @@ mutable struct LineEditREPL <: AbstractREPL
     interface::ModalInterface
     backendref::REPLBackendRef
     LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors) =
-        new(t,true,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
+        new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
             in_help,envcolors,false,nothing, Options(), nothing)
 end
 outstream(r::LineEditREPL) = r.t
 specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t
+hascolor(r::LineEditREPL) = r.hascolor
 
 LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
     LineEditREPL(t, hascolor,
@@ -340,7 +460,7 @@ function complete_line(c::REPLCompletionProvider, s)
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
     ret, range, should_complete = completions(full, lastindex(partial))
-    return ret, partial[range], should_complete
+    return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
 function complete_line(c::ShellCompletionProvider, s)
@@ -348,14 +468,14 @@ function complete_line(c::ShellCompletionProvider, s)
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
     ret, range, should_complete = shell_completions(full, lastindex(partial))
-    return ret, partial[range], should_complete
+    return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
 function complete_line(c::LatexCompletions, s)
     partial = beforecursor(LineEdit.buffer(s))
     full = LineEdit.input_string(s)
     ret, range, should_complete = bslash_completions(full, lastindex(partial))[2]
-    return ret, partial[range], should_complete
+    return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
 mutable struct REPLHistoryProvider <: HistoryProvider
@@ -433,7 +553,7 @@ function hist_from_file(hp, file, path)
     end
     seekend(file)
     hp.start_idx = length(hp.history)
-    hp
+    return hp
 end
 
 function mode_idx(hist::REPLHistoryProvider, mode)
@@ -462,6 +582,7 @@ function add_history(hist::REPLHistoryProvider, s)
     seekend(hist.history_file)
     print(hist.history_file, entry)
     flush(hist.history_file)
+    nothing
 end
 
 function history_move(s::Union{LineEdit.MIState,LineEdit.PrefixSearchState}, hist::REPLHistoryProvider, idx::Int, save_idx::Int = hist.cur_idx)
@@ -501,18 +622,12 @@ function history_move(s::Union{LineEdit.MIState,LineEdit.PrefixSearchState}, his
     return :ok
 end
 
-# Modified version of accept_result that also transitions modes
-function LineEdit.accept_result(s, p::LineEdit.HistoryPrompt{REPLHistoryProvider})
-    parent = LineEdit.state(s, p).parent
-    hist = p.hp
+# REPL History can also transitions modes
+function LineEdit.accept_result_newmode(hist::REPLHistoryProvider)
     if 1 <= hist.cur_idx <= length(hist.modes)
-        m = hist.mode_mapping[hist.modes[hist.cur_idx]]
-        LineEdit.transition(s, m) do
-            LineEdit.replace_line(LineEdit.state(s, m), LineEdit.state(s, p).response_buffer)
-        end
-    else
-        LineEdit.transition(s, parent)
+        return hist.mode_mapping[hist.modes[hist.cur_idx]]
     end
+    return nothing
 end
 
 function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider,
@@ -525,11 +640,11 @@ function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider,
         LineEdit.reset_key_repeats(s) do
             LineEdit.move_line_end(s)
         end
-        LineEdit.refresh_line(s)
+        return LineEdit.refresh_line(s)
     elseif m === :skip
-        history_prev(s, hist, num+1, save_idx)
+        return history_prev(s, hist, num+1, save_idx)
     else
-        Terminals.beep(s)
+        return Terminals.beep(s)
     end
 end
 
@@ -550,11 +665,11 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
     m = history_move(s, hist, cur_idx+num, save_idx)
     if m === :ok
         LineEdit.move_input_end(s)
-        LineEdit.refresh_line(s)
+        return LineEdit.refresh_line(s)
     elseif m === :skip
-        history_next(s, hist, num+1, save_idx)
+        return history_next(s, hist, num+1, save_idx)
     else
-        Terminals.beep(s)
+        return Terminals.beep(s)
     end
 end
 
@@ -599,6 +714,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
         end
     end
     Terminals.beep(s)
+    nothing
 end
 history_next_prefix(s::LineEdit.PrefixSearchState, hist::REPLHistoryProvider, prefix::AbstractString) =
     history_move_prefix(s, hist, prefix, false)
@@ -618,15 +734,20 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     # FIXME: I'm pretty sure this is broken since it uses an index
     # into the search data to index into the response string
     b = a + sizeof(searchdata)
-    b = b ≤ ncodeunits(response_str) ? prevind(response_str, b) : b-1
+    b = b ≤ ncodeunits(response_str) ? prevind(response_str, b) : b-1
     b = min(lastindex(response_str), b) # ensure that b is valid
-
-    !skip_current && searchdata == response_str[a:b] && return true
 
     searchfunc1, searchfunc2, searchstart, skipfunc = backwards ?
                                                       (findlast, findprev, b, prevind) :
                                                       (findfirst, findnext, a, nextind)
-    skip_current && (searchstart = skipfunc(response_str, searchstart))
+
+    if searchdata == response_str[a:b]
+        if skip_current
+            searchstart = skipfunc(response_str, searchstart)
+        else
+            return true
+        end
+    end
 
     # Start searching
     # First the current response buffer
@@ -660,32 +781,27 @@ function history_reset_state(hist::REPLHistoryProvider)
         hist.last_idx = hist.cur_idx
         hist.cur_idx = length(hist.history) + 1
     end
+    nothing
 end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
 function return_callback(s)
     ast = Base.parse_input_line(String(take!(copy(LineEdit.buffer(s)))), depwarn=false)
-    if  !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
-        return true
-    else
-        return false
-    end
+    return !(isa(ast, Expr) && ast.head === :incomplete)
 end
 
 find_hist_file() = get(ENV, "JULIA_HISTORY",
-    joinpath(homedir(), ".julia", "logs", "repl_history.jl"))
+                       !isempty(DEPOT_PATH) ? joinpath(DEPOT_PATH[1], "logs", "repl_history.jl") :
+                       error("DEPOT_PATH is empty and and ENV[\"JULIA_HISTORY\"] not set."))
 
 backend(r::AbstractREPL) = r.backendref
 
-send_to_backend(ast, backend::REPLBackendRef) =
-    send_to_backend(ast, backend.repl_channel, backend.response_channel)
-
-function send_to_backend(ast, req, rep)
-    put!(req, (ast, 1))
-    return take!(rep) # (val, bt)
+function eval_with_backend(ast, backend::REPLBackendRef)
+    put!(backend.repl_channel, (ast, 1))
+    take!(backend.response_channel) # (val, iserr)
 end
 
-function respond(f, repl, main; pass_empty = false)
+function respond(f, repl, main; pass_empty = false, suppress_on_semicolon = true)
     return function do_respond(s, buf, ok)
         if !ok
             return transition(s, :abort)
@@ -693,27 +809,25 @@ function respond(f, repl, main; pass_empty = false)
         line = String(take!(buf))
         if !isempty(line) || pass_empty
             reset(repl)
-            local val, bt
+            local response
             try
-                response = Base.invokelatest(f, line)
-                val, bt = send_to_backend(response, backend(repl))
-            catch err
-                val = err
-                bt = catch_backtrace()
+                ast = Base.invokelatest(f, line)
+                response = eval_with_backend(ast, backend(repl))
+            catch
+                response = (catch_stack(), true)
             end
-            if !ends_with_semicolon(line) || bt !== nothing
-                print_response(repl, val, bt, true, Base.have_color)
-            end
+            hide_output = suppress_on_semicolon && ends_with_semicolon(line)
+            print_response(repl, response, !hide_output, hascolor(repl))
         end
         prepare_next(repl)
         reset_state(s)
-        s.current_mode.sticky || transition(s, main)
+        return s.current_mode.sticky ? true : transition(s, main)
     end
 end
 
 function reset(repl::LineEditREPL)
     raw!(repl.t, false)
-    print(repl.t,Base.text_colors[:normal])
+    print(repl.t, Base.text_colors[:normal])
 end
 
 function prepare_next(repl::LineEditREPL)
@@ -742,7 +856,7 @@ function mode_keymap(julia_prompt::Prompt)
     end)
 end
 
-repl_filename(repl, hp::REPLHistoryProvider) = "REPL[$(length(hp.history)-hp.start_idx)]"
+repl_filename(repl, hp::REPLHistoryProvider) = "REPL[$(max(length(hp.history)-hp.start_idx, 1))]"
 repl_filename(repl, hp) = "REPL"
 
 const JL_PROMPT_PASTE = Ref(true)
@@ -752,28 +866,29 @@ setup_interface(
     repl::LineEditREPL;
     # those keyword arguments may be deprecated eventually in favor of the Options mechanism
     hascolor::Bool = repl.options.hascolor,
-    extra_repl_keymap::Union{Dict,Vector{<:Dict}} = repl.options.extra_keymap
+    extra_repl_keymap::Any = repl.options.extra_keymap
 ) = setup_interface(repl, hascolor, extra_repl_keymap)
 
 # This non keyword method can be precompiled which is important
 function setup_interface(
     repl::LineEditREPL,
     hascolor::Bool,
-    extra_repl_keymap::Union{Dict,Vector{<:Dict}},
+    extra_repl_keymap::Any, # Union{Dict,Vector{<:Dict}},
 )
+    # The precompile statement emitter has problem outputting valid syntax for the
+    # type of `Union{Dict,Vector{<:Dict}}` (see #28808).
+    # This function is however important to precompile for REPL startup time, therefore,
+    # make the type Any and just assert that we have the correct type below.
+    @assert extra_repl_keymap isa Union{Dict,Vector{<:Dict}}
+
     ###
     #
     # This function returns the main interface that describes the REPL
     # functionality, it is called internally by functions that setup a
-    # Terminal-based REPL frontend, but if you want to customize your REPL
-    # or embed the REPL in another interface, you may call this function
-    # directly and append it to your interface.
+    # Terminal-based REPL frontend.
     #
-    # Usage:
-    #
-    # repl_channel,response_channel = Channel(),Channel()
-    # start_repl_backend(repl_channel, response_channel)
-    # setup_interface(REPLDisplay(t),repl_channel,response_channel)
+    # See run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
+    # for usage
     #
     ###
 
@@ -808,7 +923,7 @@ function setup_interface(
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to help("$line")
-        on_done = respond(helpmode, repl, julia_prompt, pass_empty=true))
+        on_done = respond(helpmode, repl, julia_prompt, pass_empty=true, suppress_on_semicolon=false))
 
     # Set up shell mode
     shell_mode = Prompt("shell> ";
@@ -843,8 +958,8 @@ function setup_interface(
                 close(f)
             end
             hist_from_file(hp, f, hist_path)
-        catch e
-            print_response(repl, e, catch_backtrace(), true, Base.have_color)
+        catch
+            print_response(repl, (catch_stack(),true), true, hascolor(repl))
             println(outstream(repl))
             @info "Disabling history file for this session"
             repl.history_file = false
@@ -913,6 +1028,7 @@ function setup_interface(
             oldpos = firstindex(input)
             firstline = true
             isprompt_paste = false
+            jl_prompt_len = 7 # "julia> "
             while oldpos <= lastindex(input) # loop until all lines have been executed
                 if JL_PROMPT_PASTE[]
                     # Check if the next statement starts with "julia> ", in that case
@@ -922,7 +1038,6 @@ function setup_interface(
                         oldpos >= sizeof(input) && return
                     end
                     # Check if input line starts with "julia> ", remove it if we are in prompt paste mode
-                    jl_prompt_len = 7
                     if (firstline || isprompt_paste) && startswith(SubString(input, oldpos), JULIA_PROMPT)
                         isprompt_paste = true
                         oldpos += jl_prompt_len
@@ -936,7 +1051,7 @@ function setup_interface(
                     end
                 end
                 ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
-                if (isa(ast, Expr) && (ast.head == :error || ast.head == :continue || ast.head == :incomplete)) ||
+                if (isa(ast, Expr) && (ast.head === :error || ast.head === :incomplete)) ||
                         (pos > ncodeunits(input) && !endswith(input, '\n'))
                     # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
                     # Insert all the remaining text as one line (might be empty)
@@ -947,7 +1062,7 @@ function setup_interface(
                         tail = lstrip(tail)
                     end
                     if isprompt_paste # remove indentation spaces corresponding to the prompt
-                        tail = replace(tail, r"^ {7}"m => "") # 7: jl_prompt_len
+                        tail = replace(tail, r"^"m * ' '^jl_prompt_len => "")
                     end
                     LineEdit.replace_line(s, tail, true)
                     LineEdit.refresh_line(s)
@@ -957,7 +1072,7 @@ function setup_interface(
                 line = strip(input[oldpos:prevind(input, pos)])
                 if !isempty(line)
                     if isprompt_paste # remove indentation spaces corresponding to the prompt
-                        line = replace(line, r"^ {7}"m => "") # 7: jl_prompt_len
+                        line = replace(line, r"^"m * ' '^jl_prompt_len => "")
                     end
                     # put the line on the screen and history
                     LineEdit.replace_line(s, line)
@@ -1008,7 +1123,8 @@ function setup_interface(
 
     shell_mode.keymap_dict = help_mode.keymap_dict = LineEdit.keymap(b)
 
-    ModalInterface([julia_prompt, shell_mode, help_mode, search_prompt, prefix_prompt])
+    allprompts = [julia_prompt, shell_mode, help_mode, search_prompt, prefix_prompt]
+    return ModalInterface(allprompts)
 end
 
 function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
@@ -1023,14 +1139,10 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     repl.backendref = backend
     repl.mistate = LineEdit.init_state(terminal(repl), interface)
     run_interface(terminal(repl), interface, repl.mistate)
+    # Terminate Backend
+    put!(backend.repl_channel, (nothing, -1))
     dopushdisplay && popdisplay(d)
-end
-
-if isdefined(Base, :banner_color)
-    banner(io, t) = banner(io, hascolor(t))
-    banner(io, x::Bool) = print(io, x ? Base.banner_color : Base.banner_plain)
-else
-    banner(io,t) = Base.banner(io)
+    nothing
 end
 
 ## StreamREPL ##
@@ -1047,6 +1159,7 @@ StreamREPL(stream::IO) = StreamREPL(stream, Base.text_colors[:green], Base.input
 run_repl(stream::IO) = run_repl(StreamREPL(stream))
 
 outstream(s::StreamREPL) = s.stream
+hascolor(s::StreamREPL) = get(s.stream, :color, false)
 
 answer_color(r::LineEditREPL) = r.envcolors ? Base.answer_color() : r.answer_color
 answer_color(r::StreamREPL) = r.answer_color
@@ -1105,12 +1218,11 @@ function ends_with_semicolon(line::AbstractString)
 end
 
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
-    have_color = Base.have_color
-    banner(repl.stream, have_color)
+    have_color = hascolor(repl)
+    Base.banner(repl.stream)
     d = REPLDisplay(repl)
     dopushdisplay = !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
-    repl_channel, response_channel = backend.repl_channel, backend.response_channel
     while !eof(repl.stream)
         if have_color
             print(repl.stream,repl.prompt_color)
@@ -1125,22 +1237,21 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
             if have_color
                 print(repl.stream, Base.color_normal)
             end
-            put!(repl_channel, (ast, 1))
-            val, bt = take!(response_channel)
-            if !ends_with_semicolon(line)
-                print_response(repl, val, bt, true, have_color)
-            end
+            response = eval_with_backend(ast, backend)
+            print_response(repl, response, !ends_with_semicolon(line), have_color)
         end
     end
     # Terminate Backend
-    put!(repl_channel, (nothing, -1))
+    put!(backend.repl_channel, (nothing, -1))
     dopushdisplay && popdisplay(d)
+    nothing
 end
 
 function start_repl_server(port::Int)
-    listen(port) do server, status
+    return listen(port) do server, status
         client = accept(server)
         run_repl(client)
+        nothing
     end
 end
 

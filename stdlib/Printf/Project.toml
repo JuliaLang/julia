@@ -3,3 +3,9 @@ uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
 [deps]
 Unicode = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

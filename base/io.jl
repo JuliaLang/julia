@@ -61,9 +61,7 @@ Close an I/O stream. Performs a [`flush`](@ref) first.
 """
 function close end
 function flush end
-function wait_connected end
 function wait_readnb end
-function wait_readbyte end
 function wait_close end
 function bytesavailable end
 
@@ -71,7 +69,7 @@ function bytesavailable end
     readavailable(stream)
 
 Read all available data on the stream, blocking the task only if no data is available. The
-result is a `Vector{UInt8,1}`.
+result is a `Vector{UInt8}`.
 """
 function readavailable end
 
@@ -128,6 +126,9 @@ function eof end
 
 Read a single value of type `T` from `io`, in canonical binary representation.
 
+Note that Julia does not convert the endianness for you. Use [`ntoh`](@ref) or
+[`ltoh`](@ref) for this purpose.
+
     read(io::IO, String)
 
 Read the entirety of `io`, as a `String`.
@@ -137,7 +138,7 @@ Read the entirety of `io`, as a `String`.
 julia> io = IOBuffer("JuliaLang is a GitHub organization");
 
 julia> read(io, Char)
-'J': ASCII/Unicode U+004a (category Lu: Letter, uppercase)
+'J': ASCII/Unicode U+004A (category Lu: Letter, uppercase)
 
 julia> io = IOBuffer("JuliaLang is a GitHub organization");
 
@@ -152,8 +153,12 @@ read(stream, t)
     write(filename::AbstractString, x)
 
 Write the canonical binary representation of a value to the given I/O stream or file.
-Return the number of bytes written into the stream.   See also [`print`](@ref) to
+Return the number of bytes written into the stream. See also [`print`](@ref) to
 write a text representation (with an encoding that may depend upon `io`).
+
+The endianness of the written value depends on the endianness of the host system.
+Convert to/from a fixed endianness when writing/reading (e.g. using  [`htol`](@ref) and
+[`ltoh`](@ref)) to get results that are consistent across platforms.
 
 You can write multiple values with the same `write` call. i.e. the following are equivalent:
 
@@ -161,6 +166,24 @@ You can write multiple values with the same `write` call. i.e. the following are
     write(io, x) + write(io, y...)
 
 # Examples
+Consistent serialization:
+```jldoctest
+julia> fname = tempname(); # random temporary filename
+
+julia> open(fname,"w") do f
+           # Make sure we write 64bit integer in little-endian byte order
+           write(f,htol(Int64(42)))
+       end
+8
+
+julia> open(fname,"r") do f
+           # Convert back to host byte order and host integer type
+           Int(ltoh(read(f,Int64)))
+       end
+42
+```
+
+Merging write calls:
 ```jldoctest
 julia> io = IOBuffer();
 
@@ -175,6 +198,19 @@ julia> write(io, "Sometimes those members") + write(io, " write documentation.")
 
 julia> String(take!(io))
 "Sometimes those members write documentation."
+```
+User-defined plain-data types without `write` methods can be written when wrapped in a `Ref`:
+```jldoctest
+julia> struct MyStruct; x::Float64; end
+
+julia> io = IOBuffer()
+IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=0, maxsize=Inf, ptr=1, mark=-1)
+
+julia> write(io, Ref(MyStruct(42.0)))
+8
+
+julia> seekstart(io); read!(io, Ref(MyStruct(NaN)))
+Base.RefValue{MyStruct}(MyStruct(42.0))
 ```
 """
 function write end
@@ -215,6 +251,80 @@ function unsafe_read(s::IO, p::Ptr{UInt8}, n::UInt)
     nothing
 end
 
+function peek(s::IO)
+    mark(s)
+    try read(s, UInt8)
+    finally
+        reset(s)
+    end
+end
+
+# Generic `open` methods
+
+"""
+    open_flags(; keywords...) -> NamedTuple
+
+Compute the `read`, `write`, `create`, `truncate`, `append` flag value for
+a given set of keyword arguments to [`open`](@ref) a [`NamedTuple`](@ref).
+"""
+function open_flags(;
+    read     :: Union{Bool,Nothing} = nothing,
+    write    :: Union{Bool,Nothing} = nothing,
+    create   :: Union{Bool,Nothing} = nothing,
+    truncate :: Union{Bool,Nothing} = nothing,
+    append   :: Union{Bool,Nothing} = nothing,
+)
+    if write === true && read !== true && append !== true
+        create   === nothing && (create   = true)
+        truncate === nothing && (truncate = true)
+    end
+
+    if truncate === true || append === true
+        write  === nothing && (write  = true)
+        create === nothing && (create = true)
+    end
+
+    write    === nothing && (write    = false)
+    read     === nothing && (read     = !write)
+    create   === nothing && (create   = false)
+    truncate === nothing && (truncate = false)
+    append   === nothing && (append   = false)
+
+    return (
+        read = read,
+        write = write,
+        create = create,
+        truncate = truncate,
+        append = append,
+    )
+end
+
+"""
+    open(f::Function, args...; kwargs....)
+
+Apply the function `f` to the result of `open(args...; kwargs...)` and close the resulting file
+descriptor upon completion.
+
+# Examples
+```jldoctest
+julia> open("myfile.txt", "w") do io
+           write(io, "Hello world!")
+       end;
+
+julia> open(f->read(f, String), "myfile.txt")
+"Hello world!"
+
+julia> rm("myfile.txt")
+```
+"""
+function open(f::Function, args...; kwargs...)
+    io = open(args...; kwargs...)
+    try
+        f(io)
+    finally
+        close(io)
+    end
+end
 
 # Generic wrappers around other IO objects
 abstract type AbstractPipe <: IO end
@@ -234,15 +344,20 @@ readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io
 readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io), target, keep, out)
+readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = readbytes!(pipe_reader(io), target, n)
 
-readavailable(io::AbstractPipe) = readavailable(pipe_reader(io))
+for f in (
+        # peek/mark interface
+        :peek, :mark, :unmark, :reset, :ismarked,
+        # Simple reader functions
+        :readavailable, :isreadable)
+    @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io))
+end
 
-isreadable(io::AbstractPipe) = isreadable(pipe_reader(io))
 iswritable(io::AbstractPipe) = iswritable(pipe_writer(io))
 isopen(io::AbstractPipe) = isopen(pipe_writer(io)) || isopen(pipe_reader(io))
 close(io::AbstractPipe) = (close(pipe_writer(io)); close(pipe_reader(io)))
 wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io), nb)
-wait_readbyte(io::AbstractPipe, byte::UInt8) = wait_readbyte(pipe_reader(io), byte)
 wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)); wait_close(pipe_reader(io)))
 
 """
@@ -289,9 +404,11 @@ Read the entire contents of a file as a string.
 """
 read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
 
+read(filename::AbstractString, ::Type{T}) where {T} = open(io->read(io, T), filename)
+
 """
-    read!(stream::IO, array::Union{Array, BitArray})
-    read!(filename::AbstractString, array::Union{Array, BitArray})
+    read!(stream::IO, array::AbstractArray)
+    read!(filename::AbstractString, array::AbstractArray)
 
 Read binary data from an I/O stream or file, filling in `array`.
 """
@@ -353,21 +470,13 @@ julia> readline("my_file.txt", keep=true)
 julia> rm("my_file.txt")
 ```
 """
-function readline(filename::AbstractString; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
-    end
+function readline(filename::AbstractString; keep::Bool=false)
     open(filename) do f
         readline(f, keep=keep)
     end
 end
 
-function readline(s::IO=stdin; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
-    end
+function readline(s::IO=stdin; keep::Bool=false)::String
     line = readuntil(s, 0x0a, keep=true)
     i = length(line)
     if keep || i == 0 || line[i] != 0x0a
@@ -519,7 +628,7 @@ write(to::IO, p::Ptr) = write(to, convert(UInt, p))
 
 function write(s::IO, A::AbstractArray)
     if !isbitstype(eltype(A))
-        depwarn("Calling `write` on non-isbits arrays is deprecated. Use a loop or `serialize` instead.", :write)
+        error("`write` is not supported on non-isbits arrays")
     end
     nb = 0
     for a in A
@@ -532,17 +641,12 @@ function write(s::IO, a::Array)
     if isbitstype(eltype(a))
         return GC.@preserve a unsafe_write(s, pointer(a), sizeof(a))
     else
-        depwarn("Calling `write` on non-isbits arrays is deprecated. Use a loop or `serialize` instead.", :write)
-        nb = 0
-        for b in a
-            nb += write(s, b)
-        end
-        return nb
+        error("`write` is not supported on non-isbits arrays")
     end
 end
 
 function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
-    if !isbitstype(T)
+    if !isbitstype(T) || !isa(a, StridedArray)
         return invoke(write, Tuple{IO, AbstractArray}, s, a)
     end
     elsz = sizeof(T)
@@ -604,8 +708,8 @@ function read!(s::IO, a::Array{UInt8})
     return a
 end
 
-function read!(s::IO, a::Array{T}) where T
-    if isbitstype(T)
+function read!(s::IO, a::AbstractArray{T}) where T
+    if isbitstype(T) && (a isa Array || a isa FastContiguousSubArray{T,<:Any,<:Array{T}})
         GC.@preserve a unsafe_read(s, pointer(a), sizeof(a))
     else
         for i in eachindex(a)
@@ -804,6 +908,7 @@ The size of `b` will be increased if needed (i.e. if `nb` is greater than `lengt
 and enough bytes could be read), but it will never be decreased.
 """
 function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))
+    require_one_based_indexing(b)
     olb = lb = length(b)
     nr = 0
     while nr < nb && !eof(s)
@@ -839,13 +944,12 @@ read(s::IO, T::Type) = error("The IO stream does not support reading objects of 
 
 ## high-level iterator interfaces ##
 
-struct EachLine
-    stream::IO
+struct EachLine{IOT <: IO}
+    stream::IOT
     ondone::Function
     keep::Bool
-
     EachLine(stream::IO=stdin; ondone::Function=()->nothing, keep::Bool=false) =
-        new(stream, ondone, keep)
+        new{typeof(stream)}(stream, ondone, keep)
 end
 
 """
@@ -873,19 +977,11 @@ JuliaLang is a GitHub organization. It has many members.
 julia> rm("my_file.txt");
 ```
 """
-function eachline(stream::IO=stdin; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
-    end
+function eachline(stream::IO=stdin; keep::Bool=false)
     EachLine(stream, keep=keep)::EachLine
 end
 
-function eachline(filename::AbstractString; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
-    end
+function eachline(filename::AbstractString; keep::Bool=false)
     s = open(filename)
     EachLine(s, ondone=()->close(s), keep=keep)::EachLine
 end
@@ -895,9 +991,9 @@ function iterate(itr::EachLine, state=nothing)
     (readline(itr.stream, keep=itr.keep), nothing)
 end
 
-eltype(::Type{EachLine}) = String
+eltype(::Type{<:EachLine}) = String
 
-IteratorSize(::Type{EachLine}) = SizeUnknown()
+IteratorSize(::Type{<:EachLine}) = SizeUnknown()
 
 # IOStream Marking
 # Note that these functions expect that io.mark exists for
@@ -937,7 +1033,7 @@ previously marked position. Throw an error if the stream is not marked.
 See also [`mark`](@ref), [`unmark`](@ref), [`ismarked`](@ref).
 """
 function reset(io::T) where T<:IO
-    ismarked(io) || throw(ArgumentError("$(T) not marked"))
+    ismarked(io) || throw(ArgumentError("$T not marked"))
     m = io.mark
     seek(io, m)
     io.mark = -1 # must be after seek, or seek may fail
@@ -988,7 +1084,7 @@ function skipchars(predicate, io::IO; linecomment=nothing)
         if c === linecomment
             readline(io)
         elseif !predicate(c)
-            skip(io, -codelen(c))
+            skip(io, -ncodeunits(c))
             break
         end
     end

@@ -93,17 +93,9 @@ end
 
 ## Constructors
 
-A constructor call is just a call to a type. The type of most types is `DataType`, so the method
-table for `DataType` contains most constructor definitions. One wrinkle is the fallback definition
-that makes all types callable via `convert`:
-
-```julia
-(::Type{T})(args...) where {T} = convert(T, args...)::T
-```
-
-In this definition the function type is abstract, which is not normally supported. To make this
-work, all subtypes of `Type` (`Type`, `UnionAll`, `Union`, and `DataType`) currently share
-a method table via special arrangement.
+A constructor call is just a call to a type. The method table for `Type` contains all
+constructor definitions. All subtypes of `Type` (`Type`, `UnionAll`, `Union`, and `DataType`)
+currently share a method table via special arrangement.
 
 ## Builtins
 
@@ -133,11 +125,11 @@ Keyword arguments work by associating a special, hidden function object with eac
 that has definitions with keyword arguments. This function is called the "keyword argument sorter"
 or "keyword sorter", or "kwsorter", and is stored in the `kwsorter` field of `MethodTable` objects.
 Every definition in the kwsorter function has the same arguments as some definition in the normal
-method table, except with a single `Array` argument prepended. This array contains alternating
-symbols and values that represent the passed keyword arguments. The kwsorter's job is to move
-keyword arguments into their canonical positions based on name, plus evaluate and substitute any
-needed default value expressions. The result is a normal positional argument list, which is then
-passed to yet another function.
+method table, except with a single `NamedTuple` argument prepended, which gives
+the names and values of passed keyword arguments. The kwsorter's job is to move keyword arguments
+into their canonical positions based on name, plus evaluate and substitute any needed default value
+expressions. The result is a normal positional argument list, which is then passed to yet another
+compiler-generated function.
 
 The easiest way to understand the process is to look at how a keyword argument method definition
 is lowered. The code:
@@ -149,8 +141,8 @@ end
 ```
 
 actually produces *three* method definitions. The first is a function that accepts all arguments
-(including keywords) as positional arguments, and includes the code for the method body. It has
-an auto-generated name:
+(including keyword arguments) as positional arguments, and includes the code for the method body.
+It has an auto-generated name:
 
 ```julia
 function #circle#1(color, fill::Bool, options, circle, center, radius)
@@ -163,27 +155,38 @@ the case where no keyword arguments are passed:
 
 ```julia
 function circle(center, radius)
-    #circle#1(black, true, Any[], circle, center, radius)
+    #circle#1(black, true, pairs(NamedTuple()), circle, center, radius)
 end
 ```
 
-This simply dispatches to the first method, passing along default values. Finally there is the
-kwsorter definition:
+This simply dispatches to the first method, passing along default values.
+`pairs` is applied to the named tuple of rest arguments to provide key-value pair iteration.
+Note that if the method doesn't accept rest keyword arguments then this argument
+is absent.
+
+Finally there is the kwsorter definition:
 
 ```
-function (::Core.kwftype(typeof(circle)))(kw::Array, circle, center, radius)
-    options = Any[]
-    color = arg associated with :color, or black if not found
-    fill = arg associated with :fill, or true if not found
-    # push remaining elements of kw into options array
-    #circle#1(color, fill, options, circle, center, radius)
+function (::Core.kwftype(typeof(circle)))(kws, circle, center, radius)
+    if haskey(kws, :color)
+        color = kws.color
+    else
+        color = black
+    end
+    # etc.
+
+    # put remaining kwargs in `options`
+    options = structdiff(kws, NamedTuple{(:color, :fill)})
+
+    # if the method doesn't accept rest keywords, throw an error
+    # unless `options` is empty
+
+    #circle#1(color, fill, pairs(options), circle, center, radius)
 end
 ```
 
-The front end generates code to loop over the `kw` array and pick out arguments in the right order,
-evaluating default expressions when an argument is not found.
-
-The function `Core.kwftype(t)` fetches (and creates, if necessary) the field `t.name.mt.kwsorter`.
+The function `Core.kwftype(t)` creates the field `t.name.mt.kwsorter` (if it hasn't been created
+yet), and returns the type of that function.
 
 This design has the feature that call sites that don't use keyword arguments require no special
 handling; everything works as if they were not part of the language at all. Call sites that do
@@ -197,15 +200,17 @@ circle((0,0), 1.0, color = red; other...)
 is lowered to:
 
 ```julia
-kwfunc(circle)(Any[:color,red,other...], circle, (0,0), 1.0)
+kwfunc(circle)(merge((color = red,), other), circle, (0,0), 1.0)
 ```
 
-The unpacking procedure represented here as `other...` actually further unpacks each *element*
-of `other`, expecting each one to contain two values (a symbol and a value). `kwfunc` (also in
-`Core`) fetches the kwsorter for the called function. Notice that the original `circle` function
-is passed through, to handle closures.
+ `kwfunc` (also in`Core`) fetches the kwsorter for the called function.
+The keyword splatting operation (written as `other...`) calls the named tuple `merge` function.
+This function further unpacks each *element* of `other`, expecting each one to contain two values
+(a symbol and a value).
+Naturally, a more efficient implementation is available if all splatted arguments are named tuples.
+Notice that the original `circle` function is passed through, to handle closures.
 
-## Compiler efficiency issues
+## [Compiler efficiency issues](@id compiler-efficiency-issues)
 
 Generating a new type for every function has potentially serious consequences for compiler resource
 use when combined with Julia's "specialize on all arguments by default" design. Indeed, the initial

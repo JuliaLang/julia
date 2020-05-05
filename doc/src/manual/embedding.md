@@ -9,6 +9,9 @@ further language bridges (e.g. calling Julia from Python or C#).
 
 ## High-Level Embedding
 
+__Note__: This section covers embedding Julia code in C on Unix-like operating systems. For doing
+this on Windows, please see the section following this.
+
 We start with a simple C program that initializes Julia and calls some Julia code:
 
 ```c
@@ -38,11 +41,8 @@ and link against `libjulia`. For instance, when Julia is installed to `$JULIA_DI
 the above test program `test.c` with `gcc` using:
 
 ```
-gcc -o test -fPIC -I$JULIA_DIR/include/julia -L$JULIA_DIR/lib test.c -ljulia $JULIA_DIR/lib/julia/libstdc++.so.6
+gcc -o test -fPIC -I$JULIA_DIR/include/julia -L$JULIA_DIR/lib -Wl,-rpath,$JULIA_DIR/lib test.c -ljulia
 ```
-
-Then if the environment variable `JULIA_BINDIR` is set to `$JULIA_DIR/bin`, the output `test` program
-can be executed.
 
 Alternatively, look at the `embedding.c` program in the Julia source tree in the `test/embedding/` folder.
 The file `ui/repl.c` program is another simple example of how to set `jl_options` options while
@@ -136,6 +136,50 @@ all: embed_example
 
 Now the build command is simply `make`.
 
+## High-Level Embedding on Windows with Visual Studio
+
+If the `JULIA_DIR` environment variable hasn't been setup, add it using the System panel before
+starting Visual Studio. The `bin` folder under JULIA_DIR should be on the system PATH.
+
+We start by opening Visual Studio and creating a new Console Application project. To the 'stdafx.h'
+header file, add the following lines at the end:
+
+```c
+#include <julia.h>
+```
+
+Then, replace the main() function in the project with this code:
+
+```c
+int main(int argc, char *argv[])
+{
+    /* required: setup the Julia context */
+    jl_init();
+
+    /* run Julia commands */
+    jl_eval_string("print(sqrt(2.0))");
+
+    /* strongly recommended: notify Julia that the
+         program is about to terminate. this allows
+         Julia time to cleanup pending write requests
+         and run all finalizers
+    */
+    jl_atexit_hook(0);
+    return 0;
+}
+```
+
+The next step is to set up the project to find the Julia include files and the libraries. It's important to
+know whether the Julia installation is 32- or 64-bits. Remove any platform configuration that doesn't correspond
+to the Julia installation before proceeding.
+
+Using the project Properties dialog, go to `C/C++` | `General` and add `$(JULIA_DIR)\include\julia\` to the
+Additional Include Directories property. Then, go to the `Linker` | `General` section and add `$(JULIA_DIR)\lib`
+to the Additional Library Directories property. Finally, under `Linker` | `Input`, add `libjulia.dll.a;libopenlibm.dll.a;`
+to the list of libraries.
+
+At this point, the project should build and run.
+
 ## Converting Types
 
 Real applications will not just need to execute expressions, but also return their values to the
@@ -209,8 +253,11 @@ out from under you, rendering pointers invalid.
 The GC can only run when Julia objects are allocated. Calls like `jl_box_float64` perform allocation,
 and allocation might also happen at any point in running Julia code. However, it is generally
 safe to use pointers in between `jl_...` calls. But in order to make sure that values can survive
-`jl_...` calls, we have to tell Julia that we hold a reference to a Julia value. This can be done
-using the `JL_GC_PUSH` macros:
+`jl_...` calls, we have to tell Julia that we still hold a reference to Julia
+[root](https://www.cs.purdue.edu/homes/hosking/690M/p611-fenichel.pdf) values, a process
+called "GC rooting". Rooting a value will ensure that the garbage collector does not accidentally
+identify this value as unused and free the memory backing that value. This can be done using the
+`JL_GC_PUSH` macros:
 
 ```c
 jl_value_t *ret = jl_eval_string("sqrt(2.0)");
@@ -220,12 +267,13 @@ JL_GC_POP();
 ```
 
 The `JL_GC_POP` call releases the references established by the previous `JL_GC_PUSH`. Note that
-`JL_GC_PUSH`  is working on the stack, so it must be exactly paired with a `JL_GC_POP` before
-the stack frame is destroyed.
+`JL_GC_PUSH` stores references on the C stack, so it must be exactly paired with a `JL_GC_POP`
+before the scope is exited. That is, before the function returns, or control flow otherwise
+leaves the block in which the `JL_GC_PUSH` was invoked.
 
-Several Julia values can be pushed at once using the `JL_GC_PUSH2` , `JL_GC_PUSH3` , and `JL_GC_PUSH4`
-macros. To push an array of Julia values one can use the  `JL_GC_PUSHARGS` macro, which can be
-used as follows:
+Several Julia values can be pushed at once using the `JL_GC_PUSH2` , `JL_GC_PUSH3` , `JL_GC_PUSH4` ,
+`JL_GC_PUSH5` , and `JL_GC_PUSH6` macros. To push an array of Julia values one can use the
+`JL_GC_PUSHARGS` macro, which can be used as follows:
 
 ```c
 jl_value_t **args;
@@ -236,7 +284,99 @@ args[1] = some_other_value;
 JL_GC_POP();
 ```
 
-The garbage collector also operates under the assumption that it is aware of every old-generation
+Each scope must have only one call to `JL_GC_PUSH*`. Hence, if all variables cannot be pushed once by
+a single call to `JL_GC_PUSH*`, or if there are more than 6 variables to be pushed and using an array
+of arguments is not an option, then one can use inner blocks:
+
+```c
+jl_value_t *ret1 = jl_eval_string("sqrt(2.0)");
+JL_GC_PUSH1(&ret1);
+jl_value_t *ret2 = 0;
+{
+    jl_function_t *func = jl_get_function(jl_base_module, "exp");
+    ret2 = jl_call1(func, ret1);
+    JL_GC_PUSH1(&ret2);
+    // Do something with ret2.
+    JL_GC_POP();    // This pops ret2.
+}
+JL_GC_POP();    // This pops ret1.
+```
+
+If it is required to hold the pointer to a variable between functions (or block scopes), then it is
+not possible to use `JL_GC_PUSH*`. In this case, it is necessary to create and keep a reference to the
+variable in the Julia global scope. One simple way to accomplish this is to use a global `IdDict` that
+will hold the references, avoiding deallocation by the GC. However, this method will only work
+properly with mutable types.
+
+```c
+// This functions shall be executed only once, during the initialization.
+jl_value_t* refs = jl_eval_string("refs = IdDict()");
+jl_function_t* setindex = jl_get_function(jl_base_module, "setindex!");
+
+...
+
+// `var` is the variable we want to protect between function calls.
+jl_value_t* var = 0;
+
+...
+
+// `var` is a `Vector{Float64}`, which is mutable.
+var = jl_eval_string("[sqrt(2.0); sqrt(4.0); sqrt(6.0)]");
+
+// To protect `var`, add its reference to `refs`.
+jl_call3(setindex, refs, var, var);
+```
+
+If the variable is immutable, then it needs to be wrapped in an equivalent mutable container or,
+preferably, in a `RefValue{Any}` before it is pushed to `IdDict`. In this approach, the container has
+to be created or filled in via C code using, for example, the function `jl_new_struct`. If the
+container is created by `jl_call*`, then you will need to reload the pointer to be used in C code.
+
+```c
+// This functions shall be executed only once, during the initialization.
+jl_value_t* refs = jl_eval_string("refs = IdDict()");
+jl_function_t* setindex = jl_get_function(jl_base_module, "setindex!");
+jl_datatype_t* reft = (jl_datatype_t*)jl_eval_string("Base.RefValue{Any}");
+
+...
+
+// `var` is the variable we want to protect between function calls.
+jl_value_t* var = 0;
+
+...
+
+// `var` is a `Float64`, which is immutable.
+var = jl_eval_string("sqrt(2.0)");
+
+// Protect `var` until we add its reference to `refs`.
+JL_GC_PUSH1(&var);
+
+// Wrap `var` in `RefValue{Any}` and push to `refs` to protect it.
+jl_value_t* rvar = jl_new_struct(reft, var);
+JL_GC_POP();
+
+jl_call3(setindex, refs, rvar, rvar);
+```
+
+The GC can be allowed to deallocate a variable by removing the reference to it from `refs` using
+the function `delete!`, provided that no other reference to the variable is kept anywhere:
+
+```c
+jl_function_t* delete = jl_get_function(jl_base_module, "delete!");
+jl_call2(delete, refs, rvar);
+```
+
+As an alternative for very simple cases, it is possible to just create a global container of type
+`Vector{Any}` and fetch the elements from that when necessary, or even to create one global variable
+per pointer using
+
+```c
+jl_set_global(jl_main_module, jl_symbol("var"), var);
+```
+
+### Updating fields of GC-managed objects
+
+The garbage collector operates under the assumption that it is aware of every old-generation
 object pointing to a young-generation one. Any time a pointer is updated breaking that assumption,
 it must be signaled to the collector with the `jl_gc_wb` (write barrier) function like so:
 

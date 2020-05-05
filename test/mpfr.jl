@@ -12,7 +12,7 @@ import Base.MPFR
     @test x == BigFloat(x) == BigFloat(0xc) == BigFloat(12.) ==
           BigFloat(BigInt(12)) == BigFloat(BigFloat(12)) == parse(BigFloat,"12") ==
           parse(BigFloat,"12 ") == parse(BigFloat," 12") == parse(BigFloat," 12 ") ==
-          BigFloat(Float32(12.)) == BigFloat(12//1)
+          BigFloat(Float32(12.)) == BigFloat(12//1) == BigFloat(SubString("12"))
 
     @test typeof(BigFloat(typemax(Int8))) == BigFloat
     @test typeof(BigFloat(typemax(Int16))) == BigFloat
@@ -27,14 +27,28 @@ import Base.MPFR
     @test typeof(BigFloat(typemax(UInt64))) == BigFloat
     @test typeof(BigFloat(typemax(UInt128))) == BigFloat
 
-    @test typeof(BigFloat(realmax(Float32))) == BigFloat
-    @test typeof(BigFloat(realmax(Float64))) == BigFloat
+    @test typeof(BigFloat(floatmax(Float32))) == BigFloat
+    @test typeof(BigFloat(floatmax(Float64))) == BigFloat
 
     @test typeof(BigFloat(BigInt(1))) == BigFloat
     @test typeof(BigFloat(BigFloat(1))) == BigFloat
 
     @test typeof(BigFloat(1//1)) == BigFloat
     @test typeof(BigFloat(one(Rational{BigInt}))) == BigFloat
+
+    # BigFloat constructor respects global precision when not specified
+    let prec = precision(BigFloat) < 16 ? 256 : precision(BigFloat) ÷ 2
+        xs = Real[T(1) for T in (Int, BigInt, Float32, Float64, BigFloat)]
+        f = xs[end]
+        @test BigFloat(f) === f # no-op when precision of operand is the same as global's one
+        setprecision(prec) do
+            @test precision(xs[end]) != prec
+            for x in xs
+                @test precision(BigFloat(x)) == prec
+                @test precision(BigFloat(x; precision=prec ÷ 2)) == prec ÷ 2
+            end
+        end
+    end
 end
 @testset "basic arithmetic" begin
     tol = 1e-12
@@ -298,6 +312,12 @@ end
     x = BigFloat(12)
     y = BigFloat(4)
     @test x^y == BigFloat(20736)
+
+    @test big(2.0)^big(3) == 8
+    for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt]
+        @test T(2)^big(3.0) == 8
+        @test big(2.0)^T(3) == 8
+    end
 end
 @testset "iterated arithmetic" begin
     a = BigFloat(12.25)
@@ -352,12 +372,18 @@ end
     end
 end
 
-@testset "copysign" begin
+@testset "copysign / sign" begin
     x = BigFloat(1)
     y = BigFloat(-1)
     @test copysign(x, y) == y
     @test copysign(y, x) == x
     @test copysign(1.0, BigFloat(NaN)) == 1.0
+
+    @test sign(BigFloat(-3.0)) == -1.0
+    @test sign(BigFloat( 3.0)) == 1.0
+    @test isequal(sign(BigFloat(-0.0)), BigFloat(-0.0))
+    @test isequal(sign(BigFloat( 0.0)), BigFloat( 0.0))
+    @test isnan(sign(BigFloat(NaN)))
 end
 @testset "isfinite / isinf / isnan" begin
     x = BigFloat(Inf)
@@ -431,8 +457,21 @@ end
         @test BigFloat(nextfloat(12.12)) == nextfloat(x)
         @test BigFloat(prevfloat(12.12)) == prevfloat(x)
     end
+    x = BigFloat(12.12, precision = 100)
+    @test nextfloat(x, 0) === x
+    @test prevfloat(x, 0) === x
+    @test nextfloat(x).prec == x.prec
+    @test prevfloat(x).prec == x.prec
+    @test nextfloat(x) == nextfloat(x, 1)
+    @test prevfloat(x) == prevfloat(x, 1)
+    @test nextfloat(x, -1) == prevfloat(x, 1)
+    @test nextfloat(x, -2) == prevfloat(x, 2)
+    @test prevfloat(x, -1) == nextfloat(x, 1)
+    @test prevfloat(x, -2) == nextfloat(x, 2)
     @test isnan(nextfloat(BigFloat(NaN)))
     @test isnan(prevfloat(BigFloat(NaN)))
+    @test isnan(nextfloat(BigFloat(NaN), 1))
+    @test isnan(prevfloat(BigFloat(NaN), 1))
 end
 # sqrt DomainError
 @test_throws DomainError sqrt(BigFloat(-1))
@@ -454,6 +493,11 @@ end
     x = BigFloat(12)
     @test precision(x) == old_precision
     @test_throws DomainError setprecision(1)
+    @test_throws DomainError BigFloat(1, precision = 0)
+    @test_throws DomainError BigFloat(big(1.1), precision = 0)
+    @test_throws DomainError BigFloat(2.5, precision = -900)
+    # issue 15659
+    @test (setprecision(53) do; big(1/3); end) < 1//3
 end
 @testset "isinteger" begin
     @test !isinteger(BigFloat(1.2))
@@ -527,9 +571,8 @@ end
     @test modf(x+y) == (y, x)
     x = BigFloat(NaN)
     @test map(isnan, modf(x)) == (true, true)
-    x = BigFloat(Inf)
-    y = modf(x)
-    @test (isnan(y[1]), isinf(y[2])) == (true, true)
+    @test isequal(modf(BigFloat(-Inf)), (BigFloat(-0.0), BigFloat(-Inf)))
+    @test isequal(modf(BigFloat(Inf)), (BigFloat(0.0), BigFloat(Inf)))
 end
 @testset "rem" begin
     setprecision(53) do
@@ -631,15 +674,15 @@ end
         @test string(nextfloat(BigFloat(1))) == str
     end
     setprecision(21) do
-        @test string(parse(BigFloat, "0.1")) == "1.0000002e-01"
+        @test string(parse(BigFloat, "0.1")) == "0.10000002"
         @test string(parse(BigFloat, "-9.9")) == "-9.9000015"
     end
     setprecision(40) do
-        @test string(parse(BigFloat, "0.1")) == "1.0000000000002e-01"
+        @test string(parse(BigFloat, "0.1")) == "0.10000000000002"
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999942"
     end
     setprecision(123) do
-        @test string(parse(BigFloat, "0.1")) == "9.99999999999999999999999999999999999953e-02"
+        @test string(parse(BigFloat, "0.1")) == "0.0999999999999999999999999999999999999953"
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999999999999999999999999999997"
     end
 end
@@ -648,11 +691,11 @@ end
     @test BigFloat(1) + x == BigFloat(1) + prevfloat(x)
     @test eps(BigFloat) == eps(BigFloat(1))
 end
-@testset "realmin/realmax" begin
-    x = realmin(BigFloat)
+@testset "floatmin/floatmax" begin
+    x = floatmin(BigFloat)
     @test x > 0
     @test prevfloat(x) == 0
-    x = realmax(BigFloat)
+    x = floatmax(BigFloat)
     @test !isinf(x)
     @test isinf(nextfloat(x))
 end
@@ -696,9 +739,9 @@ end
     # hypot
     @test hypot(BigFloat(3), BigFloat(4)) == 5
 
-    # atan2
+    # atan
     setprecision(53) do
-        @test atan2(12,2) == atan2(BigFloat(12), BigFloat(2))
+        @test atan(12,2) == atan(BigFloat(12), BigFloat(2))
     end
 end
 @testset "ldexp" begin
@@ -810,6 +853,10 @@ end
     @test typeof(floor(UInt128,a)) == UInt128
     @test trunc(UInt128,a) == b
     @test typeof(trunc(UInt128,a)) == UInt128
+
+    # Issue #33676
+    @test trunc(UInt8, parse(BigFloat,"255.1")) == UInt8(255)
+    @test_throws InexactError trunc(UInt8, parse(BigFloat,"256.1"))
 end
 @testset "div" begin
     @test div(big"1.0",big"0.1") == 9
@@ -853,11 +900,17 @@ end
 @test_throws ArgumentError parse(BigFloat, "1\0")
 
 @testset "serialization (issue #12386)" begin
-    b = IOBuffer()
-    x = 2.1 * big(pi)
-    serialize(b, x)
-    seekstart(b)
-    @test deserialize(b) == x
+    b = PipeBuffer()
+    let x = setprecision(53) do
+            return 2.1 * big(pi)
+        end
+        serialize(b, x)
+        @test deserialize(b) == x
+    end
+    let x = BigFloat(Inf, precision = 46)
+        serialize(b, x)
+        @test deserialize(b) == x == BigFloat(Inf, precision = 2)
+    end
 end
 @test isnan(sqrt(BigFloat(NaN)))
 
@@ -865,12 +918,12 @@ end
     # PR 17217 -- BigFloat constructors with given precision and rounding mode
     # test constructors and `big` with additional precision and rounding mode:
     for prec in (10, 100, 1000)
-        for val in ("3.1", pi, "-1.3", 3.1)
+        for val in ("3.1", pi, "-1.3", 3.1, 1//10)
             let a = BigFloat(val),
-                b = BigFloat(val, prec),
+                b = BigFloat(val, precision = prec),
                 c = BigFloat(val, RoundUp),
-                d = BigFloat(val, prec, RoundDown),
-                e = BigFloat(val, prec, RoundUp)
+                d = BigFloat(val, RoundDown, precision = prec),
+                e = BigFloat(val, RoundUp, precision = prec)
 
                 @test precision(a) == precision(BigFloat)
                 @test precision(b) == prec
@@ -913,6 +966,16 @@ end
     test_show_bigfloat(big"-1.23456789", contains_e=false, starts="-1.23")
     test_show_bigfloat(big"2.3457645687563543266576889678956787e10000", starts="2.345", ends="e+10000")
     test_show_bigfloat(big"-2.3457645687563543266576889678956787e-10000", starts="-2.345", ends="e-10000")
+    test_show_bigfloat(big"42.0", contains_e=false, starts="42.0")
+    test_show_bigfloat(big"420.0", contains_e=false, starts="420.0") # '0's have to be added on the right before point
+    test_show_bigfloat(big"-420.0", contains_e=false, starts="-420.0")
+    test_show_bigfloat(big"420000.0", contains_e=false, starts="420000.0")
+    test_show_bigfloat(big"654321.0", contains_e=false, starts="654321.0")
+    test_show_bigfloat(big"-654321.0", contains_e=false, starts="-654321.0")
+    test_show_bigfloat(big"6543210.0", contains_e=true, starts="6.5", ends="e+06")
+    test_show_bigfloat(big"0.000123", contains_e=false, starts="0.000123")
+    test_show_bigfloat(big"-0.000123", contains_e=false, starts="-0.000123")
+    test_show_bigfloat(big"0.00001234", contains_e=true, starts="1.23", ends="e-05")
 
     for to_string in [string,
                       x->sprint(show, x),
@@ -924,4 +987,9 @@ end
     end
 end
 
-@test beta(big(1.0),big(1.2)) ≈ beta(1.0,1.2) rtol=4*eps()
+@testset "big(::Type)" begin
+    for x in (2f0, pi, 7.8, big(ℯ))
+        @test big(typeof(x)) == typeof(big(x))
+        @test big(typeof(complex(x, x))) == typeof(big(complex(x, x)))
+    end
+end

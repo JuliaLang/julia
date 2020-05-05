@@ -7,10 +7,10 @@ struct DateLocale
     months_abbr::Vector{String}
     days_of_week::Vector{String}
     days_of_week_abbr::Vector{String}
-    month_value::Dict{String, Int}
-    month_abbr_value::Dict{String, Int}
-    day_of_week_value::Dict{String, Int}
-    day_of_week_abbr_value::Dict{String, Int}
+    month_value::Dict{String, Int64}
+    month_abbr_value::Dict{String, Int64}
+    day_of_week_value::Dict{String, Int64}
+    day_of_week_abbr_value::Dict{String, Int64}
 end
 
 function locale_dict(names::Vector{<:AbstractString})
@@ -122,7 +122,29 @@ dayofweek(dt::TimeType) = dayofweek(days(dt))
 
 const Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday = 1, 2, 3, 4, 5, 6, 7
 const Mon, Tue, Wed, Thu, Fri, Sat, Sun = 1, 2, 3, 4, 5, 6, 7
+for (ii, day_ind, short_day, long_day) in ((1, "first", :Mon, :Monday), (2, "second", :Tue, :Tuesday), (3, "third", :Wed, :Wednesday), (4, "fourth", :Thu, :Thursday), (5, "fifth", :Fri, :Friday), (6, "sixth", :Sat, :Saturday), (7, "seventh", :Sun, :Sunday))
+    short_name = string(short_day)
+    long_name = string(long_day)
+    name_ind = day_ind
+    ind_str = string(ii)
+    @eval begin
+        @doc """
+        $($long_name)
+        $($short_name)
 
+        The $($name_ind) day of the week.
+
+        # Examples
+        ```jldoctest
+        julia> $($long_name)
+        $($ind_str)
+
+        julia> $($short_name)
+        $($ind_str)
+        ```
+        """ ($long_day, $short_day)
+   end
+end
 dayname(day::Integer, locale::DateLocale) = locale.days_of_week[day]
 dayabbr(day::Integer, locale::DateLocale) = locale.days_of_week_abbr[day]
 dayname(day::Integer; locale::AbstractString="english") = dayname(day, LOCALES[locale])
@@ -130,14 +152,18 @@ dayabbr(day::Integer; locale::AbstractString="english") = dayabbr(day, LOCALES[l
 
 """
     dayname(dt::TimeType; locale="english") -> String
+    dayname(day::Integer; locale="english") -> String
 
 Return the full day name corresponding to the day of the week of the `Date` or `DateTime` in
-the given `locale`.
+the given `locale`. Also accepts `Integer`.
 
 # Examples
 ```jldoctest
 julia> Dates.dayname(Date("2000-01-01"))
 "Saturday"
+
+julia> Dates.dayname(4)
+"Thursday"
 ```
 """
 function dayname(dt::TimeType;locale::AbstractString="english")
@@ -146,14 +172,18 @@ end
 
 """
     dayabbr(dt::TimeType; locale="english") -> String
+    dayabbr(day::Integer; locale="english") -> String
 
 Return the abbreviated name corresponding to the day of the week of the `Date` or `DateTime`
-in the given `locale`.
+in the given `locale`. Also accepts `Integer`.
 
 # Examples
 ```jldoctest
 julia> Dates.dayabbr(Date("2000-01-01"))
 "Sat"
+
+julia> Dates.dayabbr(3)
+"Wed"
 ```
 """
 function dayabbr(dt::TimeType;locale::AbstractString="english")
@@ -187,7 +217,7 @@ julia> Dates.dayofweekofmonth(Date("2000-02-08"))
 
 julia> Dates.dayofweekofmonth(Date("2000-02-15"))
 3
-````
+```
 """
 function dayofweekofmonth(dt::TimeType)
     d = day(dt)
@@ -226,9 +256,304 @@ function daysofweekinmonth(dt::TimeType)
 end
 
 ### Months
-const January, February, March, April, May, June = 1, 2, 3, 4, 5, 6
-const July, August, September, October, November, December = 7, 8, 9, 10, 11, 12
-const Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+"""
+    January
+
+The first month of the year.
+
+# Examples
+```jldoctest
+julia> January
+1
+```
+"""
+const January = 1
+
+"""
+    Jan
+
+Abbreviation for [`January`](@ref).
+
+# Examples
+```jldoctest
+julia> Jan
+1
+```
+"""
+const Jan = 1
+
+"""
+    February
+
+The second month of the year.
+
+# Examples
+```jldoctest
+julia> February
+2
+```
+"""
+const February = 2
+
+"""
+    Feb
+
+Abbreviation for [`February`](@ref).
+
+# Examples
+```jldoctest
+julia> Feb
+2
+```
+"""
+const Feb = 2
+
+"""
+    March
+
+The third month of the year.
+
+# Examples
+```jldoctest
+julia> March
+3
+```
+"""
+const March = 3
+
+"""
+    Mar
+
+Abbreviation for [`March`](@ref).
+
+# Examples
+```jldoctest
+julia> Mar
+3
+```
+"""
+const Mar = 3
+
+"""
+    April
+
+The fourth month of the year.
+
+# Examples
+```jldoctest
+julia> April
+4
+```
+"""
+const April = 4
+
+"""
+    Apr
+
+Abbreviation for [`April`](@ref).
+
+# Examples
+```jldoctest
+julia> Apr
+4
+```
+"""
+const Apr = 4
+
+"""
+    May
+
+The fifth month of the year.
+
+# Examples
+```jldoctest
+julia> May
+5
+```
+"""
+const May = 5
+
+"""
+    June
+
+The sixth month of the year.
+
+# Examples
+```jldoctest
+julia> June
+6
+```
+"""
+const June = 6
+
+"""
+    Jun
+
+Abbreviation for [`June`](@ref).
+
+# Examples
+```jldoctest
+julia> Jun
+6
+```
+"""
+const Jun = 6
+
+"""
+    July
+
+The seventh month of the year.
+
+# Examples
+```jldoctest
+julia> July
+7
+```
+"""
+const July = 7
+
+"""
+    Jul
+
+Abbreviation for [`July`](@ref).
+
+# Examples
+```jldoctest
+julia> Jul
+7
+```
+"""
+const Jul = 7
+
+"""
+    August
+
+The eighth month of the year.
+
+# Examples
+```jldoctest
+julia> August
+8
+```
+"""
+const August = 8
+
+"""
+    Aug
+
+Abbreviation for [`August`](@ref).
+
+# Examples
+```jldoctest
+julia> Aug
+8
+```
+"""
+const Aug = 8
+
+"""
+    September
+
+The ninth month of the year.
+
+# Examples
+```jldoctest
+julia> September
+9
+```
+"""
+const September = 9
+
+"""
+    Sep
+
+Abbreviation for [`September`](@ref).
+
+# Examples
+```jldoctest
+julia> Sep
+9
+```
+"""
+const Sep = 9
+
+"""
+    October
+
+The tenth month of the year.
+
+# Examples
+```jldoctest
+julia> October
+10
+```
+"""
+const October = 10
+
+"""
+    Oct
+
+Abbreviation for [`October`](@ref).
+
+# Examples
+```jldoctest
+julia> Oct
+10
+```
+"""
+const Oct = 10
+
+"""
+    November
+
+The eleventh month of the year.
+
+# Examples
+```jldoctest
+julia> November
+11
+```
+"""
+const November = 11
+
+"""
+    Nov
+
+Abbreviation for [`November`](@ref).
+
+# Examples
+```jldoctest
+julia> Nov
+11
+```
+"""
+const Nov = 11
+
+"""
+    December
+
+The last month of the year.
+
+# Examples
+```jldoctest
+julia> December
+12
+```
+"""
+const December = 12
+
+"""
+    Dec
+
+Abbreviation for [`December`](@ref).
+
+# Examples
+```jldoctest
+julia> Dec
+12
+```
+"""
+const Dec = 12
 
 monthname(month::Integer, locale::DateLocale) = locale.months[month]
 monthabbr(month::Integer, locale::DateLocale) = locale.months_abbr[month]
@@ -237,13 +562,18 @@ monthabbr(month::Integer; locale::AbstractString="english") = monthabbr(month, L
 
 """
     monthname(dt::TimeType; locale="english") -> String
+    monthname(month::Integer, locale="english") -> String
 
-Return the full name of the month of the `Date` or `DateTime` in the given `locale`.
+
+Return the full name of the month of the `Date` or `DateTime` or `Integer` in the given `locale`.
 
 # Examples
 ```jldoctest
 julia> Dates.monthname(Date("2005-01-04"))
 "January"
+
+julia> Dates.monthname(2)
+"February"
 ```
 """
 function monthname(dt::TimeType; locale::AbstractString="english")
@@ -252,13 +582,17 @@ end
 
 """
     monthabbr(dt::TimeType; locale="english") -> String
+    monthabbr(month::Integer, locale="english") -> String
 
-Return the abbreviated month name of the `Date` or `DateTime` in the given `locale`.
+Return the abbreviated month name of the `Date` or `DateTime` or `Integer` in the given `locale`.
 
 # Examples
 ```jldoctest
 julia> Dates.monthabbr(Date("2005-01-04"))
 "Jan"
+
+julia> monthabbr(2)
+"Feb"
 ```
 """
 function monthabbr(dt::TimeType; locale::AbstractString="english")

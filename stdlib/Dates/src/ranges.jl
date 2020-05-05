@@ -21,9 +21,30 @@ Base.length(r::StepRange{<:TimeType}) = isempty(r) ? Int64(0) : len(r.start, r.s
 # Period ranges hook into Int64 overflow detection
 Base.length(r::StepRange{<:Period}) = length(StepRange(value(r.start), value(r.step), value(r.stop)))
 
-# Used to calculate the last valid date in the range given the start, stop, and step
-# last = stop - steprem(start, stop, step)
-Base.steprem(a::T, b::T, c) where {T<:TimeType} = b - (a + c * len(a, b, c))
+# Overload Base.steprange_last because `rem` is not overloaded for `TimeType`s
+function Base.steprange_last(start::T, step, stop) where T<:TimeType
+    if isa(step,AbstractFloat)
+        throw(ArgumentError("StepRange should not be used with floating point"))
+    end
+    z = zero(step)
+    step == z && throw(ArgumentError("step cannot be zero"))
+
+    if stop == start
+        last = stop
+    else
+        if (step > z) != (stop > start)
+            last = Base.steprange_last_empty(start, step, stop)
+        else
+            diff = stop - start
+            if (diff > zero(diff)) != (stop > start)
+                throw(OverflowError())
+            end
+            remain = stop - (start + step * len(start, stop, step))
+            last = stop - remain
+        end
+    end
+    last
+end
 
 import Base.in
 function in(x::T, r::StepRange{T}) where T<:TimeType
@@ -31,11 +52,15 @@ function in(x::T, r::StepRange{T}) where T<:TimeType
     n >= 1 && n <= length(r) && r[n] == x
 end
 
-Base.iterate(r::StepRange{<:TimeType}, i::Int=0) = length(r) <= i ? nothing : (r.start + r.step*i, i + 1)
+Base.iterate(r::StepRange{<:TimeType}) = length(r) <= 0 ? nothing : (r.start, (length(r), 1))
+Base.iterate(r::StepRange{<:TimeType}, (l, i)) = l <= i ? nothing : (r.start + r.step * i, (l, i + 1))
 
 +(x::Period, r::AbstractRange{<:TimeType}) = (x + first(r)):step(r):(x + last(r))
 +(r::AbstractRange{<:TimeType}, x::Period) = x + r
 -(r::AbstractRange{<:TimeType}, x::Period) = (first(r)-x):step(r):(last(r)-x)
+*(x::Period, r::AbstractRange{<:Real}) = (x * first(r)):(x * step(r)):(x * last(r))
+*(r::AbstractRange{<:Real}, x::Period) = x * r
+/(r::AbstractRange{<:P}, x::P) where {P<:Period} = (first(r)/x):(step(r)/x):(last(r)/x)
 
 # Combinations of types and periods for which the range step is regular
 Base.RangeStepStyle(::Type{<:OrdinalRange{<:TimeType, <:FixedPeriod}}) =

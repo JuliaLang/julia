@@ -145,9 +145,9 @@ finalize(S)
 
 # call gc 3 times to avoid unlink: operation not permitted (EPERM) on Windows
 S = nothing
-@everywhere GC.gc()
-@everywhere GC.gc()
-@everywhere GC.gc()
+@everywhere GC.gc(true)
+@everywhere GC.gc(true)
+@everywhere GC.gc(true)
 rm(fn); rm(fn2); rm(fn3)
 
 ### Utility functions
@@ -213,7 +213,7 @@ d[5,1:2:4,8] .= 19
 AA = rand(4,2)
 A = @inferred(convert(SharedArray, AA))
 B = @inferred(convert(SharedArray, copy(AA')))
-@test B*A == AA'*AA
+@test B*A ≈ AA'*AA
 
 d=SharedArray{Int64,2}((10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])
 d2 = map(x->1, d)
@@ -288,7 +288,7 @@ let
     id = a1.id
     aorig = nothing
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
-    GC.gc(); GC.gc()
+    GC.gc(true); GC.gc(true)
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
     @test haskey(SharedArrays.sa_refs, id)
     finalize(a1)
@@ -303,3 +303,14 @@ end
 let S = SharedArray([1,2,3])
     @test sprint(show, S) == "[1, 2, 3]"
 end
+
+let S = SharedArray(Int64[]) # Issue #26582
+    @test sprint(show, S) == "Int64[]"
+    @test sprint(show, "text/plain", S, context = :module=>@__MODULE__) == "0-element SharedArray{Int64,1}:\n"
+end
+
+#28133
+@test SharedVector([1; 2; 3]) == [1; 2; 3]
+@test SharedMatrix([0.1 0.2; 0.3 0.4]) == [0.1 0.2; 0.3 0.4]
+@test_throws MethodError SharedVector(rand(4,4))
+@test_throws MethodError SharedMatrix(rand(4))

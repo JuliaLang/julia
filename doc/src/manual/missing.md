@@ -11,11 +11,11 @@ and behaves like them in most situations.
 
 ## Propagation of Missing Values
 
-The behavior of `missing` values follows one basic rule: `missing`
-values *propagate* automatically when passed to standard operators and functions,
-in particular mathematical functions. Uncertainty about the value of one of the operands
-induces uncertainty about the result. In practice, this means an operation involving
-a `missing` value generally returns `missing`
+`missing` values *propagate* automatically when passed to standard mathematical
+operators and functions.
+For these functions, uncertainty about the value of one of the operands
+induces uncertainty about the result. In practice, this means a math operation
+involving a `missing` value generally returns `missing`
 ```jldoctest
 julia> missing + 1
 missing
@@ -31,11 +31,16 @@ As `missing` is a normal Julia object, this propagation rule only works
 for functions which have opted in to implement this behavior. This can be
 achieved either via a specific method defined for arguments of type `Missing`,
 or simply by accepting arguments of this type, and passing them to functions
-which propagate them (like standard operators). Packages should consider
+which propagate them (like standard math operators). Packages should consider
 whether it makes sense to propagate missing values when defining new functions,
 and define methods appropriately if that is the case. Passing a `missing` value
 to a function for which no method accepting arguments of type `Missing` is defined
-throws a `MethodError`, just like for any other type.
+throws a [`MethodError`](@ref), just like for any other type.
+
+Functions that do not propagate `missing` values can be made to do so by wrapping
+them in the `passmissing` function provided by the
+[Missings.jl](https://github.com/JuliaData/Missings.jl) package.
+For example, `f(x)` becomes `passmissing(f)(x)`.
 
 ## Equality and Comparison Operators
 
@@ -191,7 +196,7 @@ Control flow operators including [`if`](@ref), [`while`](@ref) and the
 [ternary operator](@ref man-conditional-evaluation) `x ? y : z`
 do not allow for missing values. This is because of the uncertainty about whether
 the actual value would be `true` or `false` if we could observe it,
-which implies that we do not know how the program should behave. A `TypeError`
+which implies that we do not know how the program should behave. A [`TypeError`](@ref)
 is thrown as soon as a `missing` value is encountered in this context
 ```jldoctest
 julia> if missing
@@ -294,20 +299,52 @@ julia> sum(skipmissing([1, missing]))
 
 This convenience function returns an iterator which filters out `missing` values
 efficiently. It can therefore be used with any function which supports iterators
-```jldoctest
-julia> maximum(skipmissing([3, missing, 2, 1]))
+```jldoctest skipmissing; setup = :(using Statistics)
+julia> x = skipmissing([3, missing, 2, 1])
+skipmissing(Union{Missing, Int64}[3, missing, 2, 1])
+
+julia> maximum(x)
 3
 
-julia> mean(skipmissing([3, missing, 2, 1]))
+julia> mean(x)
 2.0
 
-julia> mapreduce(sqrt, +, skipmissing([3, missing, 2, 1]))
+julia> mapreduce(sqrt, +, x)
 4.146264369941973
 ```
 
+Objects created by calling `skipmissing` on an array can be indexed using indices
+from the parent array. Indices corresponding to missing values are not valid for
+these objects and an error is thrown when trying to use them (they are also skipped
+by `keys` and `eachindex`)
+```jldoctest skipmissing
+julia> x[1]
+3
+
+julia> x[2]
+ERROR: MissingException: the value at index (2,) is missing
+[...]
+```
+
+This allows functions which operate on indices to work in combination with `skipmissing`.
+This is notably the case for search and find functions, which return indices
+valid for the object returned by `skipmissing` which are also the indices of the
+matching entries *in the parent array*
+```jldoctest skipmissing
+julia> findall(==(1), x)
+1-element Array{Int64,1}:
+ 4
+
+julia> findfirst(!iszero, x)
+1
+
+julia> argmax(x)
+1
+```
+
 Use [`collect`](@ref) to extract non-`missing` values and store them in an array
-```jldoctest
-julia> collect(skipmissing([3, missing, 2, 1]))
+```jldoctest skipmissing
+julia> collect(x)
 3-element Array{Int64,1}:
  3
  2

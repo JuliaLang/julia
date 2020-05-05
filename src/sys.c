@@ -62,20 +62,12 @@
 extern "C" {
 #endif
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 JL_DLLEXPORT char *dirname(char *);
 #else
 #include <libgen.h>
 #endif
 
-JL_DLLEXPORT uint32_t jl_getutf8(ios_t *s)
-{
-    uint32_t wc=0;
-    ios_getutf8(s, &wc);
-    return wc;
-}
-
-JL_DLLEXPORT int jl_sizeof_uv_mutex(void) { return sizeof(uv_mutex_t); }
 JL_DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
 #ifndef _OS_WINDOWS_
 JL_DLLEXPORT int jl_sizeof_mode_t(void) { return sizeof(mode_t); }
@@ -118,9 +110,8 @@ JL_DLLEXPORT int32_t jl_nb_available(ios_t *s)
 // --- dir/file stuff ---
 
 JL_DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
-JL_DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t *req) { uv_fs_req_cleanup(req); }
 JL_DLLEXPORT char *jl_uv_fs_t_ptr(uv_fs_t *req) { return (char*)req->ptr; }
-JL_DLLEXPORT ssize_t jl_uv_fs_result(uv_fs_t *f) { return f->result; }
+JL_DLLEXPORT char *jl_uv_fs_t_path(uv_fs_t *req) { return (char*)req->path; }
 
 // --- stat ---
 JL_DLLEXPORT int jl_sizeof_stat(void) { return sizeof(uv_stat_t); }
@@ -132,7 +123,7 @@ JL_DLLEXPORT int32_t jl_stat(const char *path, char *statbuf)
 
     // Ideally one would use the statbuf for the storage in req, but
     // it's not clear that this is possible using libuv
-    ret = uv_fs_stat(uv_default_loop(), &req, path, NULL);
+    ret = uv_fs_stat(unused_uv_loop_arg, &req, path, NULL);
     if (ret == 0)
         memcpy(statbuf, req.ptr, sizeof(uv_stat_t));
     uv_fs_req_cleanup(&req);
@@ -144,7 +135,7 @@ JL_DLLEXPORT int32_t jl_lstat(const char *path, char *statbuf)
     uv_fs_t req;
     int ret;
 
-    ret = uv_fs_lstat(uv_default_loop(), &req, path, NULL);
+    ret = uv_fs_lstat(unused_uv_loop_arg, &req, path, NULL);
     if (ret == 0)
         memcpy(statbuf, req.ptr, sizeof(uv_stat_t));
     uv_fs_req_cleanup(&req);
@@ -156,7 +147,7 @@ JL_DLLEXPORT int32_t jl_fstat(uv_os_fd_t fd, char *statbuf)
     uv_fs_t req;
     int ret;
 
-    ret = uv_fs_fstat(uv_default_loop(), &req, fd, NULL);
+    ret = uv_fs_fstat(unused_uv_loop_arg, &req, fd, NULL);
     if (ret == 0)
         memcpy(statbuf, req.ptr, sizeof(uv_stat_t));
     uv_fs_req_cleanup(&req);
@@ -316,16 +307,21 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
     return (jl_value_t*)a;
 }
 
-JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
+JL_DLLEXPORT int jl_ios_buffer_n(ios_t *s, const size_t n)
 {
-    assert(n <= 8);
     size_t space, ret;
     do {
         space = (size_t)(s->size - s->bpos);
         ret = ios_readprep(s, n);
         if (space == ret && ret < n)
-            jl_eof_error();
-    } while(ret < n);
+            return 1;
+    } while (ret < n);
+    return 0;
+}
+
+JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
+{
+    assert(n <= 8);
     uint64_t x = 0;
     uint8_t *buf = (uint8_t*)&s->buf[s->bpos];
     if (n == 8) {
@@ -353,7 +349,7 @@ JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
 JL_DLLEXPORT int jl_errno(void) { return errno; }
 JL_DLLEXPORT void jl_set_errno(int e) { errno = e; }
 
-// -- get the number of CPU cores --
+// -- get the number of CPU threads (logical cores) --
 
 #ifdef _OS_WINDOWS_
 typedef DWORD (WINAPI *GAPC)(WORD);
@@ -362,7 +358,7 @@ typedef DWORD (WINAPI *GAPC)(WORD);
 #endif
 #endif
 
-JL_DLLEXPORT int jl_cpu_cores(void)
+JL_DLLEXPORT int jl_cpu_threads(void)
 {
 #if defined(HW_AVAILCPU) && defined(HW_NCPU)
     size_t len = 4;
@@ -382,12 +378,8 @@ JL_DLLEXPORT int jl_cpu_cores(void)
     return count;
 #elif defined(_OS_WINDOWS_)
     //Try to get WIN7 API method
-    GAPC gapc = (GAPC) jl_dlsym_e(
-        jl_kernel32_handle,
-        "GetActiveProcessorCount"
-    );
-
-    if (gapc) {
+    GAPC gapc;
+    if (jl_dlsym(jl_kernel32_handle, "GetActiveProcessorCount", (void **)&gapc, 0)) {
         return gapc(ALL_PROCESSOR_GROUPS);
     }
     else { //fall back on GetSystemInfo
@@ -414,7 +406,7 @@ JL_DLLEXPORT uint64_t jl_hrtime(void)
 #ifdef __APPLE__
 #include <crt_externs.h>
 #else
-#if !defined(_OS_WINDOWS_) || defined(_COMPILER_MINGW_)
+#if !defined(_OS_WINDOWS_) || defined(_COMPILER_GCC_)
 extern char **environ;
 #endif
 #endif
@@ -496,7 +488,9 @@ JL_DLLEXPORT long jl_getpagesize(void)
 #else
 JL_DLLEXPORT long jl_getpagesize(void)
 {
-    return sysconf(_SC_PAGESIZE);
+    long page_size = sysconf(_SC_PAGESIZE);
+    assert(page_size != -1);
+    return page_size;
 }
 #endif
 
@@ -538,7 +532,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
     for (int32_t i = _dyld_image_count() - 1; i >= 0 ; i--) {
         // dlopen() each image, check handle
         const char *image_name = _dyld_get_image_name(i);
-        void *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT);
+        void *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT | JL_RTLD_NOLOAD, 0);
         jl_dlclose(probe_lib);
 
         // If the handle is the same as what was passed in (modulo mode bits), return this image name
@@ -548,7 +542,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 
 #elif defined(_OS_WINDOWS_)
 
-    wchar_t *pth16 = (wchar_t*)malloc(32768); // max long path length
+    wchar_t *pth16 = (wchar_t*)malloc_s(32768 * sizeof(*pth16)); // max long path length
     DWORD n16 = GetModuleFileNameW((HMODULE)handle,pth16,32768);
     if (n16 <= 0) {
         free(pth16);
@@ -560,7 +554,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
         free(pth16);
         return NULL;
     }
-    char *filepath = (char*)malloc(++n8);
+    char *filepath = (char*)malloc_s(++n8);
     if (!WideCharToMultiByte(CP_UTF8, 0, pth16, -1, filepath, n8, NULL, NULL)) {
         free(pth16);
         free(filepath);
@@ -654,11 +648,7 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 
 JL_DLLEXPORT int jl_threading_enabled(void)
 {
-#ifdef JULIA_ENABLE_THREADING
     return 1;
-#else
-    return 0;
-#endif
 }
 
 #ifdef __cplusplus
