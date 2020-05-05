@@ -8,8 +8,8 @@ Interface to libc, the C standard library.
 import Base: transcode, windowserror
 import Core.Intrinsics: bitcast
 
-export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
-    errno, strerror, flush_cstdio, systemsleep, time, transcode
+export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, mkfifo,
+    calloc, realloc, errno, strerror, flush_cstdio, systemsleep, time, transcode
 if Sys.iswindows()
     export GetLastError, FormatMessage
 end
@@ -399,5 +399,28 @@ rand(::Type{Float64}) = rand(UInt32) * 2.0^-32
 Interface to the C `srand(seed)` function.
 """
 srand(seed=floor(Int, time()) % Cuint) = ccall(:srand, Cvoid, (Cuint,), seed)
+
+"""
+    mkfifo(path::AbstractString, [mode::Integer]) -> path
+
+Make a FIFO special file (a named pipe) at `path`.  Return `path` as-is on success.
+
+!!! compat "Julia 1.5"
+    `mkfifo` requires at least Julia 1.5.
+"""
+function mkfifo(
+    path::AbstractString,
+    mode::Integer = Base.S_IRUSR | Base.S_IWUSR | Base.S_IRGRP | Base.S_IWGRP |
+                    Base.S_IROTH | Base.S_IWOTH,
+)
+    @static if Sys.isunix()
+        # Default `mode` is compatible with `mkfifo` CLI in coreutils.
+        ret = ccall(:mkfifo, Cint, (Cstring, Base.Cmode_t), path, mode)
+        systemerror("mkfifo", ret == -1)
+        return path
+    else
+        error("not supported on this platform")
+    end
+end
 
 end # module

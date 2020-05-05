@@ -15,4 +15,5 @@ Base.Libc.strptime
 Base.Libc.TmStruct
 Base.Libc.flush_cstdio
 Base.Libc.systemsleep
+Base.Libc.mkfifo
 ```
