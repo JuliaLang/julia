@@ -481,6 +481,11 @@ void jl_start_threads(void)
 
 unsigned volatile _threadedregion; // HACK: keep track of whether it is safe to do IO
 
+JL_DLLEXPORT int jl_in_threaded_region(void)
+{
+    return _threadedregion != 0;
+}
+
 JL_DLLEXPORT void jl_enter_threaded_region(void)
 {
     _threadedregion += 1;

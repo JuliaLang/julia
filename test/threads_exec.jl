@@ -729,6 +729,17 @@ let a = zeros(nthreads())
     @test a == [1:nthreads();]
 end
 
+# static schedule
+function _atthreads_static_schedule()
+    ids = zeros(Int, nthreads())
+    Threads.@threads :static for i = 1:nthreads()
+        ids[i] = Threads.threadid()
+    end
+    return ids
+end
+@test _atthreads_static_schedule() == [1:nthreads();]
+@test_throws TaskFailedException @threads for i = 1:1; _atthreads_static_schedule(); end
+
 try
     @macroexpand @threads(for i = 1:10, j = 1:10; end)
 catch ex
