@@ -1692,7 +1692,6 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
 {
     jl_binding_t *bnd = NULL;
     Value *bp = global_binding_pointer(ctx, mod, name, &bnd, false);
-    // TODO: refactor. this partially duplicates code in emit_var
     if (bnd && bnd->value != NULL) {
         if (bnd->constp) {
             return mark_julia_const(bnd->value);
