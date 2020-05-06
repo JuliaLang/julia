@@ -219,6 +219,8 @@ Deprecated or removed
 External dependencies
 ---------------------
 
+* OpenBLAS has been updated to v0.3.9 ([#35113]).
+
 Tooling Improvements
 ---------------------
 

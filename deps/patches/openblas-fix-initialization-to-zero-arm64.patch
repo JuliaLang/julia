@@ -1,0 +1,67 @@
+From 2c87b7f3892710e082e0c4dfea9bc234a38dc160 Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Tue, 31 Mar 2020 16:53:56 +0200
+Subject: [PATCH] Fix zero initialization arm64
+
+---
+ kernel/arm64/dgemm_beta.S | 16 ++++++++--------
+ kernel/arm64/sgemm_beta.S | 16 ++++++++--------
+ 2 files changed, 16 insertions(+), 16 deletions(-)
+
+diff --git a/kernel/arm64/dgemm_beta.S b/kernel/arm64/dgemm_beta.S
+index 20011c34..7d21525c 100644
+--- a/kernel/arm64/dgemm_beta.S
++++ b/kernel/arm64/dgemm_beta.S
+@@ -81,14 +81,14 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ .endm
+ 
+ .macro INIT_ZERO
+-	fmul v0.2d, v0.2d, betaV0
+-	fmul v1.2d, v1.2d, betaV0
+-	fmul v2.2d, v2.2d, betaV0
+-	fmul v3.2d, v3.2d, betaV0
+-	fmul v4.2d, v4.2d, betaV0
+-	fmul v5.2d, v5.2d, betaV0
+-	fmul v6.2d, v6.2d, betaV0
+-	fmul v7.2d, v7.2d, betaV0
++	movi v0.2d, #0000000000000000
++	movi v1.2d, #0000000000000000
++	movi v2.2d, #0000000000000000
++	movi v3.2d, #0000000000000000
++	movi v4.2d, #0000000000000000
++	movi v5.2d, #0000000000000000
++	movi v6.2d, #0000000000000000
++	movi v7.2d, #0000000000000000
+ .endm
+ 
+ /**************************************************************************************
+diff --git a/kernel/arm64/sgemm_beta.S b/kernel/arm64/sgemm_beta.S
+index a3b97e23..574485bc 100755
+--- a/kernel/arm64/sgemm_beta.S
++++ b/kernel/arm64/sgemm_beta.S
+@@ -81,14 +81,14 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ .endm
+ 
+ .macro INIT_ZERO
+-	fmul v0.4s, v0.4s, betaV0
+-	fmul v1.4s, v1.4s, betaV0
+-	fmul v2.4s, v2.4s, betaV0
+-	fmul v3.4s, v3.4s, betaV0
+-	fmul v4.4s, v4.4s, betaV0
+-	fmul v5.4s, v5.4s, betaV0
+-	fmul v6.4s, v6.4s, betaV0
+-	fmul v7.4s, v7.4s, betaV0
++	movi v0.4s, #0x0
++	movi v1.4s, #0x0
++	movi v2.4s, #0x0
++	movi v3.4s, #0x0
++	movi v4.4s, #0x0
++	movi v5.4s, #0x0
++	movi v6.4s, #0x0
++	movi v7.4s, #0x0
+ .endm
+ 
+ /**************************************************************************************
+-- 
+2.25.1
+
