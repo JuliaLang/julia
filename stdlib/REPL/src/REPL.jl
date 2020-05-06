@@ -104,6 +104,8 @@ function softscope(@nospecialize ex)
             return ex′
         elseif h in (:meta, :import, :using, :export, :module, :error, :incomplete, :thunk)
             return ex
+        elseif h === :global && all(x->isa(x, Symbol), ex.args)
+            return ex
         else
             return Expr(:block, Expr(:softscope, true), ex)
         end
