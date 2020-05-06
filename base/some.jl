@@ -112,7 +112,7 @@ length(::Some) = 1
 size(::Some) = ()
 axes(::Some) = ()
 
-IteratorSize(::Type{<:Some}) = Base.HasShape{0}()
+IteratorSize(::Type{<:Some}) = HasShape{0}()
 broadcastable(s::Some) = s
 
 eltype(::Some{T})       where {T} = T
