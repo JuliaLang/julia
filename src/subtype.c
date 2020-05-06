@@ -3177,7 +3177,28 @@ JL_DLLEXPORT jl_value_t *jl_intersect_types(jl_value_t *x, jl_value_t *y)
 // TODO: this can probably be done more efficiently
 JL_DLLEXPORT int jl_has_empty_intersection(jl_value_t *x, jl_value_t *y)
 {
-    return intersect_types(x, y, 1) == jl_bottom_type;
+    jl_value_t *res = intersect_types(x, y, 1);
+    if (res == jl_bottom_type)
+        return 1;
+    if (jl_is_tuple_type(res)) {
+        // Check for Type{Union{}}
+        for (int i = 0; i < jl_nparams(res); i++) {
+            jl_value_t *p = jl_tparam(res, i);
+            if (jl_is_type_type(p)) {
+                jl_value_t *pp = jl_tparam0(p);
+                    if (pp == jl_bottom_type) {
+                        jl_value_t *ux = jl_unwrap_unionall(x);
+                        jl_value_t *uy = jl_unwrap_unionall(y);
+                        jl_value_t *px = jl_unwrap_unionall(jl_tparam(ux, i));
+                        jl_value_t *py = jl_unwrap_unionall(jl_tparam(uy, i));
+                        if (jl_tparam0(px) != jl_bottom_type &&
+                            jl_tparam0(py) != jl_bottom_type)
+                            return 1;
+                    }
+                }
+        }
+    }
+    return 0;
 }
 
 // return a SimpleVector of all vars from UnionAlls wrapping a given type
