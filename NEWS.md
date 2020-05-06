@@ -18,6 +18,8 @@ New language features
 * The compiler optimization level can now be set per-module using the experimental macro
   `Base.Experimental.@optlevel n`. For code that is not performance-critical, setting
   this to 0 or 1 can provide significant latency improvements ([#34896]).
+* `Some`containers now support broadcast as zero dimensional immutable containers. `Some(x)`
+  should be preferred to `Ref(x)` when you wish to exempt `x` from broadcasting ([#35778]).
 
 Language changes
 ----------------
