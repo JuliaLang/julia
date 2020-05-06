@@ -90,6 +90,14 @@ periods; so `"y-m-d"` lets the parser know that between the first and second slo
 like `"2014-07-16"`, it should find the `-` character. The `y`, `m`, and `d` characters let the
 parser know which periods to parse in each slot.
 
+As in the case of constructors above such as `Date(2013)`, delimited `DateFormat`s allow for
+missing parts of dates and times so long as the preceding parts are given. The other parts are given the usual
+default values.  For example, `Date("1981-03", "y-m-d")` returns `1981-03-01`, whilst
+`Date("31/12", "d/m/y")` gives `0001-12-31`.  (Note that the default year is
+1 AD/CE.)
+Consequently, an empty string will always return `0001-01-01` for `Date`s,
+and `0001-01-01T00:00:00.000` for `DateTime`s.
+
 Fixed-width slots are specified by repeating the period character the number of times corresponding
 to the width with no delimiter between characters. So `"yyyymmdd"` would correspond to a date
 string like `"20140716"`. The parser distinguishes a fixed-width slot by the absence of a delimiter,
@@ -124,6 +132,21 @@ julia> for i = 1:10^5
            Date("2015-01-01", dateformat"y-m-d")
        end
 ```
+
+As well as via the constructors, a `Date` or `DateTime` can be constructed from
+strings using the [`parse`](@ref) and [`tryparse`](@ref) functions, but with
+an optional third argument of type `DateFormat` specifying the format; for example,
+`parse(Date, "06.23.2013", dateformat"m.d.y")`, or
+`tryparse(DateTime, "1999-12-31T23:59:59")` which uses the default format.
+The notable difference between the functions is that with [`tryparse`](@ref),
+an error is not thrown if the string is in an invalid format;
+instead `nothing` is returned.  Note however that as with the constructors
+above, empty date and time parts assume
+default values and consequently an empty string (`""`) is valid
+for _any_ `DateFormat`, giving for example a `Date` of `0001-01-01`.  Code
+relying on `parse` or `tryparse` for `Date` and `DateTime` parsing should
+therefore also check whether parsed strings are empty before using the
+result.
 
 A full suite of parsing and formatting tests and examples is available in [`stdlib/Dates/test/io.jl`](https://github.com/JuliaLang/julia/blob/master/stdlib/Dates/test/io.jl).
 
@@ -667,6 +690,8 @@ Dates.Time(::Int64::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
 Dates.Time(::Dates.TimePeriod)
 Dates.Time(::Function, ::Any...)
 Dates.Time(::Dates.DateTime)
+Dates.Time(::AbstractString, ::AbstractString)
+Dates.Time(::AbstractString, ::Dates.DateFormat)
 Dates.now()
 Dates.now(::Type{Dates.UTC})
 Base.eps
