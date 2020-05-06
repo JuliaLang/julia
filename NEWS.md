@@ -47,12 +47,7 @@ Language changes
   used to yield the string " a\nb", since the single space before `b` set the indent level.
   Now the result is "a\n b", since the space before `b` is no longer considered to occur
   at the start of a line. The old behavior is considered a bug ([#35001]).
-
 * `<:` and `>:` can now be broadcasted over arrays with `.<:` and `.>:`  ([#35085])
-
-* Color now defaults to on when stdout and stderr are TTYs ([#34347])
-
-
 * The line number of function definitions is now added by the parser as an
   additional `LineNumberNode` at the start of each function body ([#35138]).
 * Statements of the form `a'` now get lowered to `var"'"(a)` instead of `Base.adjoint(a)`. This
@@ -82,7 +77,6 @@ Command-line option changes
   processes spawned using the `-p`/`--procs` or `--machine-file` command line arguments.
   In order to set number of threads for worker processes spawned with `addprocs` use the
   `exeflags` keyword argument, e.g. ```addprocs(...; exeflags=`--threads 4`)``` ([#35108]).
-
 
 Multi-threading changes
 -----------------------

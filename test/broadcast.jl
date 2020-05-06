@@ -914,7 +914,6 @@ end
 # 28680
 @test 1 .+ 1 .+  (1, 2) == (3, 4)
 
-
 # PR #35260 no allocations in simple broadcasts
 u = rand(100)
 k1 = similar(u)
