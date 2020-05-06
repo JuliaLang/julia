@@ -350,11 +350,12 @@ readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = 
 
 for f in (
         # peek/mark interface
-        :peek, :mark, :unmark, :reset, :ismarked,
+        :mark, :unmark, :reset, :ismarked,
         # Simple reader functions
         :readavailable, :isreadable)
     @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io))
 end
+peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io), T)
 
 iswritable(io::AbstractPipe) = iswritable(pipe_writer(io))
 isopen(io::AbstractPipe) = isopen(pipe_writer(io)) || isopen(pipe_reader(io))
