@@ -99,21 +99,21 @@ something(x::Some, y...) = x.value
 something(x::Any, y...) = x
 
 #Methods for broadcast
-Base.getindex(s::Some) = s.value
-Base.getindex(s::Some, ::CartesianIndex{0}) = s.value
+getindex(s::Some) = s.value
+getindex(s::Some, ::CartesianIndex{0}) = s.value
 
-Base.iterate(s::Some) = (s.value, nothing)
-Base.iterate( ::Some, s) = nothing
+iterate(s::Some) = (s.value, nothing)
+iterate( ::Some, s) = nothing
 
-Base.ndims(::Some) = 0
-Base.ndims(::Type{<:Some}) = 0
+ndims(::Some) = 0
+ndims(::Type{<:Some}) = 0
 
-Base.length(::Some) = 1
-Base.size(::Some) = ()
-Base.axes(::Some) = ()
+length(::Some) = 1
+size(::Some) = ()
+axes(::Some) = ()
 
-Base.IteratorSize(::Type{<:Some}) = Base.HasShape{0}()
-Base.broadcastable(s::Some) = s
+IteratorSize(::Type{<:Some}) = Base.HasShape{0}()
+broadcastable(s::Some) = s
 
-Base.eltype(::Some{T})       where {T} = T
-Base.eltype(::Type{Some{T}}) where {T} = T
+eltype(::Some{T})       where {T} = T
+eltype(::Type{Some{T}}) where {T} = T
