@@ -130,9 +130,9 @@ function findnext(testf::Function, s::AbstractString, i::Integer)
     1 ≤ i ≤ z || throw(BoundsError(s, i))
     @inbounds i == z || isvalid(s, i) || string_index_err(s, i)
     e = lastindex(s)
-    @inbounds while i <= e
-        testf(s[i]) && return i
-        i = nextind(s, i)
+    while i <= e
+        testf(@inbounds s[i]) && return i
+        i = @inbounds nextind(s, i)
     end
     return nothing
 end
@@ -340,9 +340,9 @@ function findprev(testf::Function, s::AbstractString, i::Integer)
     0 ≤ i ≤ z || throw(BoundsError(s, i))
     i == z && return nothing
     @inbounds i == 0 || isvalid(s, i) || string_index_err(s, i)
-    @inbounds while i >= 1
-        testf(s[i]) && return i
-        i = prevind(s, i)
+    while i >= 1
+        testf(@inbounds s[i]) && return i
+        i = @inbounds prevind(s, i)
     end
     return nothing
 end
