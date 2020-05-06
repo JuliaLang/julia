@@ -1981,6 +1981,9 @@ end
 f33987(args::(Vararg{Any, N} where N); kwargs...) = args
 @test f33987(1,2,3) === (1,2,3)
 
+@test Meta.parse("a !> b") == Expr(:call, :(!>), :a, :b)
+@test Meta.parse("a <! b") == Expr(:call, :(!>), :a, :b)
+
 macro id_for_kwarg(x); x; end
 Xo65KdlD = @id_for_kwarg let x = 1
     function f(; x)
