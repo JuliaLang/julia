@@ -317,7 +317,7 @@ variants, one can also supply the "raw" data in the requested MIME type by passi
 application/postscript) or `x::Vector{UInt8}` (for binary MIME types).
 
 To customize how instances of a type are displayed, overload [`show`](@ref) rather than `display`,
-as explained in the manual section on [custom pretty-printing](@id man-custom-pretty-printing).
+as explained in the manual section on [custom pretty-printing](@ref man-custom-pretty-printing).
 """
 function display(@nospecialize x)
     for i = length(displays):-1:1

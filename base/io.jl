@@ -126,6 +126,9 @@ function eof end
 
 Read a single value of type `T` from `io`, in canonical binary representation.
 
+Note that Julia does not convert the endianness for you. Use [`ntoh`](@ref) or
+[`ltoh`](@ref) for this purpose.
+
     read(io::IO, String)
 
 Read the entirety of `io`, as a `String`.
@@ -150,8 +153,12 @@ read(stream, t)
     write(filename::AbstractString, x)
 
 Write the canonical binary representation of a value to the given I/O stream or file.
-Return the number of bytes written into the stream.   See also [`print`](@ref) to
+Return the number of bytes written into the stream. See also [`print`](@ref) to
 write a text representation (with an encoding that may depend upon `io`).
+
+The endianness of the written value depends on the endianness of the host system.
+Convert to/from a fixed endianness when writing/reading (e.g. using  [`htol`](@ref) and
+[`ltoh`](@ref)) to get results that are consistent across platforms.
 
 You can write multiple values with the same `write` call. i.e. the following are equivalent:
 
@@ -159,6 +166,24 @@ You can write multiple values with the same `write` call. i.e. the following are
     write(io, x) + write(io, y...)
 
 # Examples
+Consistent serialization:
+```jldoctest
+julia> fname = tempname(); # random temporary filename
+
+julia> open(fname,"w") do f
+           # Make sure we write 64bit integer in little-endian byte order
+           write(f,htol(Int64(42)))
+       end
+8
+
+julia> open(fname,"r") do f
+           # Convert back to host byte order and host integer type
+           Int(ltoh(read(f,Int64)))
+       end
+42
+```
+
+Merging write calls:
 ```jldoctest
 julia> io = IOBuffer();
 
@@ -319,6 +344,7 @@ readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io
 readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io), target, keep, out)
+readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = readbytes!(pipe_reader(io), target, n)
 
 for f in (
         # peek/mark interface

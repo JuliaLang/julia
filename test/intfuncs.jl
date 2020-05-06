@@ -142,6 +142,8 @@ using Random
     end
     @test lcm(0x5, 3) == 15
     @test gcd(0xf, 20) == 5
+    @test gcd(UInt32(6), Int8(-50)) == 2
+    @test gcd(typemax(UInt), -16) == 1
 end
 
 @testset "gcd/lcm for arrays" begin
@@ -184,6 +186,9 @@ end
         @test gcdx(T(-5), T(-12)) === (T(1), T(-5), T(2))
         @test gcdx(T(-25), T(-4)) === (T(1), T(-1), T(6))
     end
+    x, y = Int8(-12), UInt(100)
+    d, u, v = gcdx(x, y)
+    @test x*u + y*v == d
 end
 
 @testset "gcd/lcm/gcdx for custom types" begin
@@ -199,12 +204,13 @@ end
 end
 
 @testset "invmod" begin
-    @test invmod(6, 31) === 26
-    @test invmod(-1, 3) === 2
-    @test invmod(1, -3) === -2
-    @test invmod(-1, -3) === -1
-    @test invmod(0x2, 0x3) === 0x2
-    @test invmod(2, 0x3) === 2
+    @test invmod(6, 31) == 26
+    @test invmod(-1, 3) == 2
+    @test invmod(1, -3) == -2
+    @test invmod(-1, -3) == -1
+    @test invmod(0x2, 0x3) == 2
+    @test invmod(2, 0x3) == 2
+    @test invmod(0x8, -3) == -1
     @test_throws DomainError invmod(0, 3)
 end
 

@@ -459,6 +459,7 @@ export
     startswith,
 
 # linear algebra
+    var"'", # to enable syntax a' for adjoint
     adjoint,
     transpose,
     kron,
@@ -485,6 +486,7 @@ export
     any,
     firstindex,
     collect,
+    count!,
     count,
     delete!,
     deleteat!,
@@ -696,10 +698,8 @@ export
     backtrace,
     catch_backtrace,
     error,
-    register_error_hint,
     rethrow,
     retry,
-    show_error_hints,
     systemerror,
 
 # stack traces

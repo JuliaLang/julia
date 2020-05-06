@@ -250,9 +250,12 @@ static void makeSafeName(GlobalObject &G)
 
 
 // takes the running content that has collected in the shadow module and dump it to disk
-// this builds the object file portion of the sysimage files for fast startup
+// this builds the object file portion of the sysimage files for fast startup, and can
+// also be used be extern consumers like GPUCompiler.jl to obtain a module containing
+// all reachable & inferrrable functions. The `policy` flag switches between the defaul
+// mode `0` and the extern mode `1`.
 extern "C" JL_DLLEXPORT
-void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
+void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _policy)
 {
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
     jl_codegen_params_t params;
@@ -263,15 +266,28 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
     JL_GC_PUSH1(&src);
     JL_LOCK(&codegen_lock);
 
+    CompilationPolicy policy = (CompilationPolicy) _policy;
+
     // compile all methods for the current world and type-inference world
     size_t compile_for[] = { jl_typeinf_world, jl_world_counter };
     for (int worlds = 0; worlds < 2; worlds++) {
         params.world = compile_for[worlds];
         if (!params.world)
             continue;
+        // Don't emit methods for the typeinf_world with extern policy
+        if (policy == CompilationPolicy::Extern && params.world == jl_typeinf_world)
+            continue;
         size_t i, l;
         for (i = 0, l = jl_array_len(methods); i < l; i++) {
-            mi = (jl_method_instance_t*)jl_array_ptr_ref(methods, i);
+            // each item in this list is either a MethodInstance indicating something
+            // to compile, or an svec(rettype, sig) describing a C-callable alias to create.
+            jl_value_t *item = jl_array_ptr_ref(methods, i);
+            if (jl_is_simplevector(item)) {
+                if (worlds == 1)
+                    jl_compile_extern_c(shadow_output, &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+                continue;
+            }
+            mi = (jl_method_instance_t*)item;
             src = NULL;
             // if this method is generally visible to the current compilation world,
             // and this is either the primary world, or not applicable in the primary world
@@ -304,8 +320,9 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
                 }
             }
         }
+
         // finally, make sure all referenced methods also get compiled or fixed up
-        jl_compile_workqueue(emitted, params);
+        jl_compile_workqueue(emitted, params, policy);
     }
     JL_GC_POP();
 
@@ -595,12 +612,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createVerifierPass());
 #endif
 
-#if defined(JL_ASAN_ENABLED)
-    PM->add(createAddressSanitizerFunctionPass());
-#endif
-#if defined(JL_MSAN_ENABLED)
-    PM->add(llvm::createMemorySanitizerPass(true));
-#endif
     if (opt_level < 2) {
         PM->add(createCFGSimplificationPass());
         if (opt_level == 1) {
@@ -623,6 +634,12 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native)
             PM->add(createMultiVersioningPass());
+#if defined(JL_ASAN_ENABLED)
+        PM->add(createAddressSanitizerFunctionPass());
+#endif
+#if defined(JL_MSAN_ENABLED)
+        PM->add(createMemorySanitizerPass(true));
+#endif
         return;
     }
     PM->add(createPropagateJuliaAddrspaces());
@@ -738,6 +755,12 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     }
     PM->add(createCombineMulAddPass());
     PM->add(createDivRemPairsPass());
+#if defined(JL_ASAN_ENABLED)
+    PM->add(createAddressSanitizerFunctionPass());
+#endif
+#if defined(JL_MSAN_ENABLED)
+    PM->add(createMemorySanitizerPass(true));
+#endif
 }
 
 // An LLVM module pass that just runs all julia passes in order. Useful for
@@ -795,6 +818,14 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         PM = new legacy::PassManager();
         addTargetPasses(PM, jl_TargetMachine);
         addOptimizationPasses(PM, jl_options.opt_level);
+        PM->add(createRemoveJuliaAddrspacesPass());
+    }
+
+    static legacy::PassManager *PM_minimal;
+    if (!PM_minimal) {
+        PM_minimal = new legacy::PassManager();
+        addTargetPasses(PM_minimal, jl_TargetMachine);
+        PM_minimal->add(createRemoveJuliaAddrspacesPass());
     }
 
     // get the source code for this function
@@ -836,6 +867,8 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
             // if compilation succeeded, prepare to return the result
             if (optimize)
                 PM->run(*m.get());
+            else
+                PM_minimal->run(*m.get());
             const std::string *fname;
             if (decls.functionObject == "jl_fptr_args" || decls.functionObject == "jl_fptr_sparam")
                 getwrapper = false;

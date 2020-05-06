@@ -466,6 +466,21 @@ end
     end
     @test_throws BoundsError insert!(v, 5, 5)
 end
+
+@testset "pop!(::Vector, i, [default])" begin
+    a = [1, 2, 3, 4]
+    @test_throws BoundsError pop!(a, 0)
+    @test pop!(a, 0, "default") == "default"
+    @test a == 1:4
+    @test_throws BoundsError pop!(a, 5)
+    @test pop!(a, 1) == 1
+    @test a == [2, 3, 4]
+    @test pop!(a, 2) == 3
+    @test a == [2, 4]
+    badpop() = @inbounds pop!([1], 2)
+    @test_throws BoundsError badpop()
+end
+
 @testset "concatenation" begin
     @test isequal([fill(1.,2,2)  fill(2.,2,1)], [1. 1 2; 1 1 2])
     @test isequal([fill(1.,2,2); fill(2.,1,2)], [1. 1; 1 1; 2 2])
@@ -564,6 +579,18 @@ end
     @test findlast(isequal(0x00), [0x01, 0x00]) == 2
     @test findnext(isequal(0x00), [0x00, 0x01, 0x00], 2) == 3
     @test findprev(isequal(0x00), [0x00, 0x01, 0x00], 2) == 1
+
+    @testset "issue 32568" for T = (UInt, BigInt)
+        @test findnext(!iszero, a, T(1)) isa keytype(a)
+        @test findnext(!iszero, a, T(2)) isa keytype(a)
+        @test findprev(!iszero, a, T(4)) isa keytype(a)
+        @test findprev(!iszero, a, T(5)) isa keytype(a)
+        b = [true, false, true]
+        @test findnext(b, T(2)) isa keytype(b)
+        @test findnext(b, T(3)) isa keytype(b)
+        @test findprev(b, T(1)) isa keytype(b)
+        @test findprev(b, T(2)) isa keytype(b)
+    end
 end
 @testset "find with Matrix" begin
     A = [1 2 0; 3 4 0]
@@ -701,9 +728,18 @@ end
     a = [1:5;]
     @test_throws ArgumentError Base.circshift!(a, a, 1)
     b = copy(a)
-    @test Base.circshift!(b, a, 1) == [5,1,2,3,4]
+    @test @inferred(Base.circshift!(b, a, 1) == [5,1,2,3,4])
+    src=rand(3,4,5)
+    dst=similar(src)
+    s=(1,2,3)
+    @inferred Base.circshift!(dst,src,s)
 end
 
+@testset "circcopy" begin
+    src=rand(3,4,5)
+    dst=similar(src)
+    @inferred Base.circcopy!(dst,src)
+end
 # unique across dim
 
 # With hash collisions
@@ -936,6 +972,7 @@ end
                                         3 4], inner=(2,), outer=(2, 2))
     @test_throws ArgumentError repeat([1 2;
                                         3 4], inner=(2, 2), outer=(2,))
+    @test_throws ArgumentError repeat([1, 2], inner=(1, -1), outer=(1, -1))
 
     A = reshape(1:8, 2, 2, 2)
     R = repeat(A, inner = (1, 1, 2), outer = (1, 1, 1))
@@ -1201,6 +1238,12 @@ end
     R = reshape(A, 2, 2)
     A[R] .= reshape((1:4) .+ 2^30, 2, 2)
     @test A == [2,1,4,3] .+ 2^30
+
+    # unequal dimensionality (see comment in #35714)
+    a = [1 3; 2 4]
+    b = [3, 1, 4, 2]
+    copyto!(view(a, b), a)
+    @test a == [2 1; 4 3]
 end
 
 @testset "Base.mightalias unit tests" begin
@@ -2739,4 +2782,36 @@ let n = 12000000, k = 257000000
         sizehint!(v, n)
         v[end] == (n, 0.5)
     end
+end
+
+@testset "BoundsError printing" begin
+    x = rand(2, 2)
+
+    err = try x[10, :]; catch err; err; end
+    b = IOBuffer()
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [10, 1:2]"
+
+    err = try x[10, trues(2)]; catch err; err; end
+    b = IOBuffer()
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [10, Bool[1, 1]]"
+
+    # Also test : directly for custom types for which it may appear as-is
+    err = BoundsError(x, (10, :))
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [10, :]"
+
+    err = BoundsError(x, "bad index")
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [\"bad index\"]"
+
+    err = BoundsError(x, (10, "bad index"))
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [10, \"bad index\"]"
 end

@@ -101,7 +101,7 @@ Each statement gets analyzed for its total cost in a function called
 where `f` is your function and `tt` is the Tuple-type of the arguments:
 
 ```jldoctest
-# A demo on `fill(3.5, (2, 3))
+# A demo on `fill(3.5, (2, 3))`
 f = fill
 tt = Tuple{Float64, Tuple{Int,Int}}
 # Create the objects we need to interact with the compiler
@@ -132,7 +132,7 @@ cst = map(cost, ci.code)
   0
   0
   0
-  1
+  0
   0
   0
   0

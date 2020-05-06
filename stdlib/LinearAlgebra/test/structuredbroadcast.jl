@@ -28,6 +28,20 @@ using Test, LinearAlgebra
         @test broadcast!(+, Z, fV, fA, X) == broadcast(+, fV, fA, fX)
         @test (Q = broadcast(*, s, fV, fA, X); Q isa Matrix && Q == broadcast(*, s, fV, fA, fX))
         @test broadcast!(*, Z, s, fV, fA, X) == broadcast(*, s, fV, fA, fX)
+
+        @test X .* 2.0 == X .* (2.0,) == fX .* 2.0
+        @test X .* 2.0 isa typeof(X)
+        @test X .* (2.0,) isa typeof(X)
+        @test isequal(X .* Inf, fX .* Inf)
+
+        two = 2
+        @test X .^ 2 ==  X .^ (2,) == fX .^ 2 == X .^ two
+        @test X .^ 2 isa typeof(X)
+        @test X .^ (2,) isa typeof(X)
+        @test X .^ two isa typeof(X)
+        @test X .^ 0 == fX .^ 0
+        @test X .^ -1 == fX .^ -1
+
         for (Y, fY) in zip(structuredarrays, fstructuredarrays)
             @test broadcast(+, X, Y) == broadcast(+, fX, fY)
             @test broadcast!(+, Z, X, Y) == broadcast(+, fX, fY)

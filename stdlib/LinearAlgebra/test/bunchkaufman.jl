@@ -12,7 +12,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-Random.seed!(1234321)
+Random.seed!(12343210)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2

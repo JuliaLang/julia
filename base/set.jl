@@ -37,9 +37,18 @@ emptymutable(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 _similar_for(c::AbstractSet, ::Type{T}, itr, isz) where {T} = empty(c, T)
 
 function show(io::IO, s::Set)
-    print(io, "Set(")
-    show_vector(io, s)
-    print(io, ')')
+    if isempty(s)
+        if get(io, :typeinfo, Any) == typeof(s)
+            print(io, "Set()")
+        else
+            show(io, typeof(s))
+            print(io, "()")
+        end
+    else
+        print(io, "Set(")
+        show_vector(io, s)
+        print(io, ')')
+    end
 end
 
 isempty(s::Set) = isempty(s.dict)
@@ -58,6 +67,7 @@ delete!(s::Set, x) = (delete!(s.dict, x); s)
 
 copy(s::Set) = copymutable(s)
 
+copymutable(s::Set{T}) where {T} = Set{T}(s)
 # Set is the default mutable fall-back
 copymutable(s::AbstractSet{T}) where {T} = Set{T}(s)
 

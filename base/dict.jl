@@ -257,7 +257,7 @@ Dict{String,Int64} with 2 entries:
 julia> empty!(A);
 
 julia> A
-Dict{String,Int64} with 0 entries
+Dict{String,Int64}()
 ```
 """
 function empty!(h::Dict{K,V}) where V where K
@@ -378,6 +378,10 @@ end
 
 function setindex!(h::Dict{K,V}, v0, key::K) where V where K
     v = convert(V, v0)
+    setindex!(h, v, key)
+end
+
+function setindex!(h::Dict{K,V}, v::V, key::K) where V where K
     index = ht_keyindex2!(h, key)
 
     if index > 0
@@ -575,6 +579,9 @@ end
 
 Delete and return the mapping for `key` if it exists in `collection`, otherwise return
 `default`, or throw an error if `default` is not specified.
+
+!!! compat "Julia 1.5"
+    For `collection::Vector`, this method requires at least Julia 1.5.
 
 # Examples
 ```jldoctest

@@ -519,6 +519,9 @@ dA = Array(sA)
         @test lmul!(Diagonal(bi), copy(dA)) ≈ ldiv!(Diagonal(b), copy(sA))
         @test lmul!(Diagonal(bi), copy(dA)) ≈ ldiv!(transpose(Diagonal(b)), copy(sA))
         @test lmul!(Diagonal(conj(bi)), copy(dA)) ≈ ldiv!(adjoint(Diagonal(b)), copy(sA))
+        Aob = Diagonal(b) \ sA
+        @test Aob == ldiv!(Diagonal(b), copy(sA))
+        @test issparse(Aob)
         @test_throws DimensionMismatch ldiv!(Diagonal(fill(1., length(b)+1)), copy(sA))
         @test_throws LinearAlgebra.SingularException ldiv!(Diagonal(zeros(length(b))), copy(sA))
 
@@ -527,6 +530,9 @@ dA = Array(sA)
         @test rmul!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), Diagonal(b))
         @test rmul!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), transpose(Diagonal(b)))
         @test rmul!(copy(dAt), Diagonal(conj(bi))) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
+        Atob = sAt / Diagonal(b)
+        @test Atob == rdiv!(copy(dAt), Diagonal(b))
+        @test issparse(Atob)
         @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(fill(1., length(b)+1)))
         @test_throws LinearAlgebra.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
     end
@@ -2461,6 +2467,22 @@ end
     for i in keys(z)
         @test findnext(!iszero, z,i) == findnext(!iszero, z_sp,i)
         @test findprev(!iszero, z,i) == findprev(!iszero, z_sp,i)
+    end
+
+    # issue 32568
+    for T = (UInt, BigInt)
+        @test findnext(!iszero, x_sp, T(4)) isa keytype(x_sp)
+        @test findnext(!iszero, x_sp, T(5)) isa keytype(x_sp)
+        @test findprev(!iszero, x_sp, T(5)) isa keytype(x_sp)
+        @test findprev(!iszero, x_sp, T(6)) isa keytype(x_sp)
+        @test findnext(iseven, x_sp, T(4)) isa keytype(x_sp)
+        @test findnext(iseven, x_sp, T(5)) isa keytype(x_sp)
+        @test findprev(iseven, x_sp, T(4)) isa keytype(x_sp)
+        @test findprev(iseven, x_sp, T(5)) isa keytype(x_sp)
+        @test findnext(!iszero, z_sp, T(4)) isa keytype(z_sp)
+        @test findnext(!iszero, z_sp, T(5)) isa keytype(z_sp)
+        @test findprev(!iszero, z_sp, T(4)) isa keytype(z_sp)
+        @test findprev(!iszero, z_sp, T(5)) isa keytype(z_sp)
     end
 end
 

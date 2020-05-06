@@ -113,7 +113,7 @@ static inline void sift_down(taskheap_t *heap, int32_t idx)
                 child < tasks_per_heap && child <= heap_d*idx + heap_d;
                 ++child) {
             if (heap->tasks[child]
-                    && heap->tasks[child]->prio <= heap->tasks[idx]->prio) {
+                    &&  heap->tasks[child]->prio < heap->tasks[idx]->prio) {
                 jl_task_t *t = heap->tasks[idx];
                 heap->tasks[idx] = heap->tasks[child];
                 heap->tasks[child] = t;

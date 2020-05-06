@@ -101,7 +101,6 @@ static const char opts[]  =
     // parallel options
     " -t, --threads {N|auto}    Enable N threads; \"auto\" currently sets N to the number of local\n"
     "                           CPU threads but this might change in the future\n"
-    " -t, --threads {N|auto}    Enable N threads. \"auto\" sets N to the number of local CPU threads.\n"
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
     "                           \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
     " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
@@ -141,7 +140,11 @@ static const char opts[]  =
     "                           Append coverage information to the LCOV tracefile (filename supports format tokens).\n"
 // TODO: These TOKENS are defined in `runtime_ccall.cpp`. A more verbose `--help` should include that list here.
     " --track-allocation={none|user|all}, --track-allocation\n"
-    "                           Count bytes allocated by each source line (omitting setting is equivalent to \"user\")\n\n"
+    "                           Count bytes allocated by each source line (omitting setting is equivalent to \"user\")\n"
+    " --bug-report=KIND         Launch a bug report session. It can be used to start a REPL, run a script, or evaluate\n"
+    "                           expressions. It first tries to use BugReporting.jl installed in current environment and\n"
+    "                           fallbacks to the latest compatible BugReporting.jl if not. For more information, see\n"
+    "                           --bug-report=help.\n\n"
 ;
 
 static const char opts_hidden[]  =

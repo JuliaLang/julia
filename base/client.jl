@@ -290,7 +290,7 @@ function exec_options(opts)
     if arg_is_program
         # program
         if !is_interactive
-            ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
+            exit_on_sigint(true)
         end
         try
             include(Main, PROGRAM_FILE)

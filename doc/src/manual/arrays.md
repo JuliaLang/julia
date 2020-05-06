@@ -66,7 +66,7 @@ omitted it will default to [`Float64`](@ref).
 | [`reinterpret(T, A)`](@ref)                    | an array with the same binary data as `A`, but with element type `T`                                                                                                                                                                         |
 | [`rand(T, dims...)`](@ref)                     | an `Array` with random, iid [^1] and uniformly distributed values in the half-open interval ``[0, 1)``                                                                                                                                       |
 | [`randn(T, dims...)`](@ref)                    | an `Array` with random, iid and standard normally distributed values                                                                                                                                                                         |
-| [`Matrix{T}(I, m, n)`](@ref)                   | `m`-by-`n` identity matrix (requires `using LinearAlgebra`)                                                                                                                                                                                                                   |
+| [`Matrix{T}(I, m, n)`](@ref)                   | `m`-by-`n` identity matrix. Requires `using LinearAlgebra` for [`I`](@ref).                                                                                                                                                                                                                   |
 | [`range(start, stop=stop, length=n)`](@ref)    | range of `n` linearly spaced elements from `start` to `stop`                                                                                                                                                                                 |
 | [`fill!(A, x)`](@ref)                          | fill the array `A` with the value `x`                                                                                                                                                                                                        |
 | [`fill(x, dims...)`](@ref)                     | an `Array` filled with the value `x`                                                                                                                                                                                                         |
@@ -121,7 +121,7 @@ julia> [1, 2.3, 4//5] # Thus that's the element type of this Array
  0.8
 
 julia> []
-0-element Array{Any,1}
+Any[]
 ```
 
 ### [Concatenation](@id man-array-concatenation)
@@ -554,7 +554,7 @@ julia> A[[1 4; 3 8]]
  5  15
 
 julia> A[[]]
-0-element Array{Int64,1}
+Int64[]
 
 julia> A[1:2:5]
 3-element Array{Int64,1}:
@@ -852,7 +852,7 @@ Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
 This setting will cause `eachindex` iteration over a `MyArray` to use integers. If you don't
 specify this trait, the default value `IndexCartesian()` is used.
 
-## Array and Vectorized Operators and Functions
+## [Array and Vectorized Operators and Functions](@id man-array-and-vectorized-operators-and-functions)
 
 The following operators are supported for arrays:
 
@@ -914,7 +914,7 @@ julia> broadcast(+, a, b)
 ```
 
 [Dotted operators](@ref man-dot-operators) such as `.+` and `.*` are equivalent
-to `broadcast` calls (except that they fuse, as described below). There is also a
+to `broadcast` calls (except that they fuse, as [described above](@ref man-array-and-vectorized-operators-and-functions)). There is also a
 [`broadcast!`](@ref) function to specify an explicit destination (which can also
 be accessed in a fusing fashion by `.=` assignment). In fact, `f.(args...)`
 is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broadcast any function
@@ -933,7 +933,7 @@ julia> convert.(Float32, [1, 2])
  1.0
  2.0
 
-julia> ceil.((UInt8,), [1.2 3.4; 5.6 6.7])
+julia> ceil.(UInt8, [1.2 3.4; 5.6 6.7])
 2×2 Array{UInt8,2}:
  0x02  0x04
  0x06  0x07
@@ -943,6 +943,17 @@ julia> string.(1:3, ". ", ["First", "Second", "Third"])
  "1. First"
  "2. Second"
  "3. Third"
+```
+
+Sometimes, you want a container (like an array) that would normally participate in broadcast to be "protected"
+from broadcast's behavior of iterating over all of its elements. By placing it inside another container
+(like a single element [`Tuple`](@ref)) broadcast will treat it as a single value.
+```jldoctest
+julia> ([1, 2, 3], [4, 5, 6]) .+ ([1, 2, 3],)
+([2, 4, 6], [5, 7, 9])
+
+julia> ([1, 2, 3], [4, 5, 6]) .+ tuple([1, 2, 3])
+([2, 4, 6], [5, 7, 9])
 ```
 
 ## Implementation
@@ -989,57 +1000,72 @@ create a `SubArray` view instead.
 They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
 and can be converted to/from the latter via `Array(bitarray)` and `BitArray(array)`, respectively.
 
-A "strided" array is stored in memory with elements laid out in regular offsets such that
-an instance with a supported `isbits` element type can be passed to
-external C and Fortran functions that expect this memory layout. Strided arrays
-must define a [`strides(A)`](@ref) method that returns a tuple of "strides" for each dimension; a
-provided [`stride(A,k)`](@ref) method accesses the `k`th element within this tuple. Increasing the
-index of dimension `k` by `1` should increase the index `i` of [`getindex(A,i)`](@ref) by
-[`stride(A,k)`](@ref). If a pointer conversion method [`Base.unsafe_convert(Ptr{T}, A)`](@ref) is
-provided, the memory layout must correspond in the same way to these strides. `DenseArray` is a
-very specific example of a strided array where the elements are arranged contiguously, thus it
-provides its subtypes with the appropriate definition of `strides`. More concrete examples
-can be found within the [interface guide for strided arrays](@ref man-interface-strided-arrays).
-[`StridedVector`](@ref) and [`StridedMatrix`](@ref) are convenient aliases for many of the builtin array types that
-are considered strided arrays, allowing them to dispatch to select specialized implementations that
-call highly tuned and optimized BLAS and LAPACK functions using just the pointer and strides.
-
-The following example computes the QR decomposition of a small section of a larger array, without
-creating any temporaries, and by calling the appropriate LAPACK function with the right leading
-dimension size and stride parameters.
+An array is "strided" if it is stored in memory with well-defined spacings (strides) between
+its elements. A strided array with a supported element type may be passed to an external
+(non-Julia) library like BLAS or LAPACK by simply passing its [`pointer`](@ref) and the
+stride for each dimension. The [`stride(A, d)`](@ref) is the distance between elements along
+dimension `d`. For example, the builtin `Array` returned by `rand(5,7,2)` has its elements
+arranged contiguously in column major order. This means that the stride of the first
+dimension — the spacing between elements in the same column — is `1`:
 
 ```julia-repl
-julia> a = rand(10, 10)
-10×10 Array{Float64,2}:
- 0.517515  0.0348206  0.749042   0.0979679  …  0.75984     0.950481   0.579513
- 0.901092  0.873479   0.134533   0.0697848     0.0586695   0.193254   0.726898
- 0.976808  0.0901881  0.208332   0.920358      0.288535    0.705941   0.337137
- 0.657127  0.0317896  0.772837   0.534457      0.0966037   0.700694   0.675999
- 0.471777  0.144969   0.0718405  0.0827916     0.527233    0.173132   0.694304
- 0.160872  0.455168   0.489254   0.827851   …  0.62226     0.0995456  0.946522
- 0.291857  0.769492   0.68043    0.629461      0.727558    0.910796   0.834837
- 0.775774  0.700731   0.700177   0.0126213     0.00822304  0.327502   0.955181
- 0.9715    0.64354    0.848441   0.241474      0.591611    0.792573   0.194357
- 0.646596  0.575456   0.0995212  0.038517      0.709233    0.477657   0.0507231
+julia> A = rand(5,7,2);
 
-julia> b = view(a, 2:2:8,2:2:4)
-4×2 view(::Array{Float64,2}, 2:2:8, 2:2:4) with eltype Float64:
- 0.873479   0.0697848
- 0.0317896  0.534457
- 0.455168   0.827851
- 0.700731   0.0126213
-
-julia> (q, r) = qr(b);
-
-julia> q
-4×4 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
- -0.722358    0.227524  -0.247784    -0.604181
- -0.0262896  -0.575919  -0.804227     0.144377
- -0.376419   -0.75072    0.540177    -0.0541979
- -0.579497    0.230151  -0.00552346   0.781782
-
-julia> r
-2×2 Array{Float64,2}:
- -1.20921  -0.383393
-  0.0      -0.910506
+julia> stride(A,1)
+1
 ```
+
+The stride of the second dimension is the spacing between elements in the same row, skipping
+as many elements as there are in a single column (`5`). Similarly, jumping between the two
+"pages" (in the third dimension) requires skipping `5*7 == 35` elements.  The [`strides`](@ref)
+of this array is the tuple of these three numbers together:
+
+```julia-repl
+julia> strides(A)
+(1, 5, 35)
+```
+
+In this particular case, the number of elements skipped _in memory_ matches the number of
+_linear indices_ skipped. This is only the case for contiguous arrays like `Array` (and
+other `DenseArray` subtypes) and is not true in general. Views with range indices are a good
+example of _non-contiguous_ strided arrays; consider `V = @view A[1:3:4, 2:2:6, 2:-1:1]`.
+This view `V` refers to the same memory as `A` but is skipping and re-arranging some of its
+elements. The stride of the first dimension of `V` is `3` because we're only selecting every
+third row from our original array:
+
+```julia-repl
+julia> V = @view A[1:3:4, 2:2:6, 2:-1:1];
+
+julia> stride(V, 1)
+3
+```
+
+This view is similarly selecting every other column from our original `A` — and thus it
+needs to skip the equivalent of two five-element columns when moving between indices in the
+second dimension:
+
+```julia-repl
+julia> stride(V, 2)
+10
+```
+
+The third dimension is interesting because its order is reversed! Thus to get from the first
+"page" to the second one it must go _backwards_ in memory, and so its stride in this
+dimension is negative!
+
+```julia-repl
+julia> stride(V, 3)
+-35
+```
+
+This means that the `pointer` for `V` is actually pointing into the middle of `A`'s memory
+block, and it refers to elements both backwards and forwards in memory. See the
+[interface guide for strided arrays](@ref man-interface-strided-arrays) for more details on
+defining your own strided arrays. [`StridedVector`](@ref) and [`StridedMatrix`](@ref) are
+convenient aliases for many of the builtin array types that are considered strided arrays,
+allowing them to dispatch to select specialized implementations that call highly tuned and
+optimized BLAS and LAPACK functions using just the pointer and strides.
+
+It is worth emphasizing that strides are about offsets in memory rather than indexing. If
+you are looking to convert between linear (single-index) indexing and cartesian
+(multi-index) indexing, see [`LinearIndices`](@ref) and [`CartesianIndices`](@ref).
