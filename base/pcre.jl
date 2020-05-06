@@ -157,7 +157,9 @@ function exec(re, subject, offset, options, match_data)
                re, subject, sizeof(subject), offset, options, match_data, get_local_match_context())
     # rc == -1 means no match, -2 means partial match.
     rc < -2 && error("PCRE.exec error: $(err_message(rc))")
-    rc >= 0
+    (rc >= 0 ||
+        # Allow partial matches if they were requested in the options.
+        ((options & PARTIAL_HARD != 0 || options & PARTIAL_SOFT != 0) && rc == -2))
 end
 
 function exec_r(re, subject, offset, options)
