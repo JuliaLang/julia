@@ -6,6 +6,8 @@
 A wrapper type used in `Union{Some{T}, Nothing}` to distinguish between the absence
 of a value ([`nothing`](@ref)) and the presence of a `nothing` value (i.e. `Some(nothing)`).
 
+`Some` is also used in broadcasting to treat it's enclosed value as a scalar.
+
 Use [`something`](@ref) to access the value wrapped by a `Some` object.
 """
 struct Some{T}
@@ -95,3 +97,23 @@ something() = throw(ArgumentError("No value arguments present"))
 something(x::Nothing, y...) = something(y...)
 something(x::Some, y...) = x.value
 something(x::Any, y...) = x
+
+#Methods for broadcast
+Base.getindex(s::Some) = s.value
+Base.getindex(s::Some, ::CartesianIndex{0}) = s.value
+
+Base.iterate(s::Some) = (s.value, nothing)
+Base.iterate( ::Some, s) = nothing
+
+Base.ndims(::Some) = 0
+Base.ndims(::Type{<:Some}) = 0
+
+Base.length(::Some) = 1
+Base.size(::Some) = ()
+Base.axes(::Some) = ()
+
+Base.IteratorSize(::Type{<:Some}) = Base.HasShape{0}()
+Base.broadcastable(s::Some) = s
+
+Base.eltype(::Some{T})       where {T} = T
+Base.eltype(::Type{Some{T}}) where {T} = T

@@ -98,3 +98,14 @@ using Base: notnothing
 # isnothing()
 @test !isnothing(1)
 @test isnothing(nothing)
+
+#Eltype
+@test eltype(Some{Int}) == Int
+@test eltype(Some(1)) == Int
+
+# Broadcast with Some
+@testset "Some Broadcast" begin
+    @test Some(1) .+ 1 == 2
+    @test Some([1, 2]) .+ [[1, 2,], [3, 4]] == [[2, 4], [4, 6]]
+    @test isa.(Some([1,2,3]), [Array, Dict, Int]) == [true, false, false]
+end

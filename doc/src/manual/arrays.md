@@ -947,12 +947,9 @@ julia> string.(1:3, ". ", ["First", "Second", "Third"])
 
 Sometimes, you want a container (like an array) that would normally participate in broadcast to be "protected"
 from broadcast's behavior of iterating over all of its elements. By placing it inside another container
-(like a single element [`Tuple`](@ref)) broadcast will treat it as a single value.
+(we recommend [`Some`](@ref)), broadcast will treat it as a single value.
 ```jldoctest
-julia> ([1, 2, 3], [4, 5, 6]) .+ ([1, 2, 3],)
-([2, 4, 6], [5, 7, 9])
-
-julia> ([1, 2, 3], [4, 5, 6]) .+ tuple([1, 2, 3])
+julia> ([1, 2, 3], [4, 5, 6]) .+ Some([1, 2, 3])
 ([2, 4, 6], [5, 7, 9])
 ```
 
