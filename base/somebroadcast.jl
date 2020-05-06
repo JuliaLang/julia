@@ -15,5 +15,4 @@ axes(::Some) = ()
 IteratorSize(::Type{<:Some}) = HasShape{0}()
 Broadcast.broadcastable(s::Some) = s
 
-eltype(::Some{T})       where {T} = T
 eltype(::Type{Some{T}}) where {T} = T
