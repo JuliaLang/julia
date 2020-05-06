@@ -47,6 +47,7 @@ Language changes
   used to yield the string " a\nb", since the single space before `b` set the indent level.
   Now the result is "a\n b", since the space before `b` is no longer considered to occur
   at the start of a line. The old behavior is considered a bug ([#35001]).
+* `<:` and `>:` can now be broadcasted over arrays with `.<:` and `.>:`  ([#35085])
 * The line number of function definitions is now added by the parser as an
   additional `LineNumberNode` at the start of each function body ([#35138]).
 * Statements of the form `a'` now get lowered to `var"'"(a)` instead of `Base.adjoint(a)`. This
