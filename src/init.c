@@ -47,6 +47,8 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 #include <unistd.h>
 #endif
 
+JL_DLLEXPORT uint32_t jl_crc32c(uint32_t, const char *, size_t);
+
 // list of modules being deserialized with __init__ methods
 jl_array_t *jl_module_init_order;
 
@@ -541,6 +543,38 @@ static const char *absformat(const char *in)
     return out;
 }
 
+static char slug_char(char i)
+{
+    if (i < 26) {
+        return 'A' + i;
+    } else if (i < 26 + 26) {
+        return 'a' + (i - 26);
+    } else {
+        return '0' + (i - (26 + 26));
+    }
+}
+
+JL_DLLEXPORT char *jl_slug32(uint32_t x, int p)
+{
+    const int n = 26 + 26 + 10; // length(['A':'Z'; 'a':'z'; '0':'9'])
+    char *out = (char*)malloc(p + 1);
+    if (out == NULL) {
+        return out;
+    }
+    for (int i = 0; i < p; ++i){
+        int d = x % n;
+        x = x / n;
+        out[i] = slug_char(d);
+    }
+    out[p] = 0;
+    return out;
+}
+
+JL_DLLEXPORT char *jl_sysimage_path_slug(void)
+{
+    return jl_slug32(jl_crc32c(0, jl_options.julia_bin, strlen(jl_options.julia_bin)), 5);
+}
+
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
 {   // this function resolves the paths in jl_options to absolute file locations as needed
     // and it replaces the pointers to `julia_bindir`, `julia_bin`, `image_file`, and output file paths
@@ -570,6 +604,73 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_options.julia_bindir = abspath(jl_options.julia_bindir, 0);
     free(free_path);
     free_path = NULL;
+    if (rel == JL_IMAGE_JULIA_HOME && jl_options.project && strcmp(jl_options.project, "@.")) {
+        uv_stat_t pathstat;
+        if (!jl_stat(jl_options.project, (char *)&pathstat)) {
+            char *project = strdup(jl_options.project), *projectdir = NULL;
+            if (!project) {
+                jl_errorf("fatal error: failed to allocate memory: %s",
+                          strerror(errno));
+            }
+            if ((pathstat.st_mode & 0xf000) == 0x8000) { // --project=$projectdir/Project.toml
+                projectdir = dirname(project);
+            } else if ((pathstat.st_mode & 0xf000) == 0x4000) { // --project=$projectdir
+                projectdir = project;
+            }
+            if (projectdir) {
+                char *slug = jl_sysimage_path_slug();
+                if (!slug) {
+                    jl_errorf("fatal error: failed to allocate memory: %s",
+                              strerror(errno));
+                }
+                free_path = (char*)malloc_s(PATH_MAX); // $projectdir/.julia/sysimage.path
+                int n = snprintf(free_path, PATH_MAX,
+                                 "%s" PATHSEPSTRING ".julia"
+                                 PATHSEPSTRING "sysimages"
+                                 PATHSEPSTRING "%s.path",
+                                 projectdir, slug);
+                // This definition of path must be matched with
+                // `project_sysimage_path` in `../base/loading.jl`.
+                if (n >= PATH_MAX || n < 0) {
+                    jl_error("fatal error: jl_options.project path too long");
+                }
+                ios_t pathfile;
+                if (ios_file(&pathfile, free_path, 1, 0, 0, 0)) {
+                    char *data = (char*)malloc_s(PATH_MAX);
+                    int n = ios_readall(&pathfile, data, PATH_MAX);
+                    if (ios_close(&pathfile)) {
+                        jl_printf(JL_STDERR, "WARNING: failed to close file %s\n", free_path);
+                    }
+                    if (n >= PATH_MAX || n < 0) {
+                        jl_errorf("fatal error: cannot read path from %s", free_path);
+                    } else {
+                        // Use the path in `$projectdir/.julia/sysimage.path`
+                        if (isabspath(data)) {
+                            jl_options.image_file = data;
+                        } else {
+                            char *basepath = strdup(free_path);
+                            if (!basepath) {
+                                jl_errorf("fatal error: failed to allocate memory: %s",
+                                          strerror(errno));
+                            }
+                            basepath = dirname(basepath);
+                            int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
+                                             basepath, data);
+                            if (n >= PATH_MAX || n < 0) {
+                                jl_error("fatal error: jl_options.project path too long");
+                            }
+                            jl_options.image_file = abspath(free_path, 0);
+                            free(data);
+                        }
+                    }
+                }
+                free(project);
+                free(slug);
+                free(free_path);
+                free_path = NULL;
+            }
+        }
+    }
     if (jl_options.image_file) {
         if (rel == JL_IMAGE_JULIA_HOME && !isabspath(jl_options.image_file)) {
             // build time path, relative to JULIA_BINDIR

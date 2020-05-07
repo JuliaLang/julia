@@ -1495,6 +1495,50 @@ function stale_cachefile(modpath::String, cachefile::String)
     end
 end
 
+function _sysimage_path_slug()
+    ptr = @ccall jl_sysimage_path_slug()::Ptr{UInt8}
+    if ptr === C_NULL
+        error("`jl_sysimage_path_slug` failed")
+    end
+    slug = unsafe_string(ptr)
+    Libc.free(ptr)
+    return slug
+end
+
+"""
+    Base.project_sysimage_path(project::AbstractString = Base.active_project())
+
+A path to the file that stores the system image path for `project` that would be
+used by default.
+"""
+function project_sysimage_path(project::AbstractString = active_project())
+    if !isfile(project)
+        error("Non-existing project file: $project")
+    end
+    slug = _sysimage_path_slug()
+    return joinpath(dirname(project), ".julia", "sysimages", slug * ".path")
+end
+# This definition of path must be matched with `jl_resolve_sysimg_location`
+# in `../src/init.c`.
+
+"""
+    Base.set_sysimage_path([project::AbstractString,] sysimg::AbstractString)
+
+Use system image `sysimg` for project `project` by default, for this
+julia binary executable.  `project` defaults to currently active project.
+"""
+function set_sysimage_path end
+set_sysimage_path(sysimg::AbstractString) = set_sysimage_path(active_project(), sysimg)
+function set_sysimage_path(project::AbstractString, sysimg::AbstractString)
+    path = project_sysimage_path(project)
+    if !abspath(sysimg)
+        sysimg = relpath(sysimg, sysimg)
+    end
+    mkpath(dirname(path))
+    write(path, sysimg)
+    return
+end
+
 """
     @__FILE__ -> AbstractString
 
