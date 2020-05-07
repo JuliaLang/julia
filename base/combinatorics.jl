@@ -290,14 +290,14 @@ invperm(P::Any16) = Tuple(invperm(collect(P)))
 
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
 """
-    nextprod([k_1, k_2,...], n)
+    nextprod(factors::Union{Tuple,AbstractArray}, n)
 
 Next integer greater than or equal to `n` that can be written as ``\\prod k_i^{p_i}`` for integers
-``p_1``, ``p_2``, etc.
+``p_1``, ``p_2``, etcetera, for factors ``k_i`` in `factors`.
 
 # Examples
 ```jldoctest
-julia> nextprod([2, 3], 105)
+julia> nextprod((2, 3), 105)
 108
 
 julia> 2^2 * 3^3

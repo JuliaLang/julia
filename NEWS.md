@@ -143,6 +143,7 @@ Standard library changes
 ------------------------
 
 * Empty ranges now compare equal, regardless of their startpoint and step ([#32348]).
+* The `nextprod` function now accepts tuples and other array types for its first argument ([#35791]).
 * A 1-d `Zip` iterator (where `Base.IteratorSize` is `Base.HasShape{1}()`) with defined length of `n` has now also size of `(n,)` (instead of throwing an error with truncated iterators) ([#29927]).
 * The `@timed` macro now returns a `NamedTuple` ([#34149]).
 * New `supertypes(T)` function returns a tuple of all supertypes of `T` ([#34419]).
