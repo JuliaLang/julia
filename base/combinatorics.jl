@@ -303,6 +303,9 @@ julia> nextprod((2, 3), 105)
 julia> 2^2 * 3^3
 108
 ```
+
+!!! compat "Julia 1.6"
+    The method that accepts a tuple requires Julia 1.6 or later.
 """
 function nextprod(a::Union{Tuple{Vararg{<:Integer}},AbstractVector{<:Integer}}, x::Real)
     if x > typemax(Int)
