@@ -2607,8 +2607,8 @@ function sqrt(A::UpperTriangular{T},::Val{realmatrix}) where {T,realmatrix}
             @simd for k = i+1:j-1
                 r -= R[i,k]*R[k,j]
             end
-            if !(iszero(R[i,i]) && iszero(R[j,j]))
-                iszero(r) || (R[i,j] = sylvester(R[i,i],R[j,j],-r))
+            if !(iszero(r) || (iszero(R[i,i]) && iszero(R[j,j])))
+                R[i,j] = sylvester(R[i,i],R[j,j],-r)
             end
         end
     end
