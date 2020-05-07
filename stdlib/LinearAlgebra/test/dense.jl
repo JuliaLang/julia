@@ -395,6 +395,17 @@ end
     @test kron(b',2) == [8 10 12]
 end
 
+@testset "kron adjoint" begin
+    a = [1+im, 2, 3]
+    b = [4, 5, 6+7im]
+    @test kron(a', b') isa Adjoint
+    @test kron(a', b') == kron(a, b)'
+    @test kron(transpose(a), b') isa Transpose
+    @test kron(transpose(a), b') == kron(permutedims(a), collect(b'))
+    @test kron(transpose(a), transpose(b)) isa Transpose
+    @test kron(transpose(a), transpose(b)) == transpose(kron(a, b))
+end
+
 @testset "issue #4796" begin
     dim=2
     S=zeros(Complex,dim,dim)
