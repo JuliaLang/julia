@@ -290,7 +290,7 @@ invperm(P::Any16) = Tuple(invperm(collect(P)))
 
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
 """
-    nextprod(factors::Union{Tuple,AbstractArray}, n)
+    nextprod(factors::Union{Tuple,AbstractVector}, n)
 
 Next integer greater than or equal to `n` that can be written as ``\\prod k_i^{p_i}`` for integers
 ``p_1``, ``p_2``, etcetera, for factors ``k_i`` in `factors`.
@@ -304,7 +304,7 @@ julia> 2^2 * 3^3
 108
 ```
 """
-function nextprod(a::Union{Tuple{Vararg{<:Integer}},AbstractArray{<:Integer}}, x::Real)
+function nextprod(a::Union{Tuple{Vararg{<:Integer}},AbstractVector{<:Integer}}, x::Real)
     if x > typemax(Int)
         throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end
