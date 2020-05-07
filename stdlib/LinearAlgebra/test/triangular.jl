@@ -665,6 +665,6 @@ B = [
        0.0        0.0        0.0        0.0
     ]
 C = sqrt(A*B*A')
-@test !any(isnan,C)
+@test C^2 ≈ A*B*A'
 
 end # module TestTriangular
