@@ -118,7 +118,7 @@ julia> chnl = Channel{Char}(1, spawn=true) do ch
                put!(ch, c)
            end
        end
-Channel{Char}(sz_max:1,sz_curr:1)
+Channel{Char}(1) (1 item available)
 
 julia> String(collect(chnl))
 "hello world"
@@ -440,7 +440,24 @@ end
 
 eltype(::Type{Channel{T}}) where {T} = T
 
-show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(n_avail(c)))")
+show(io::IO, c::Channel) = print(io, typeof(c), "(", c.sz_max, ")")
+
+function show(io::IO, ::MIME"text/plain", c::Channel)
+    show(io, c)
+    if !get(io, :compact, false)
+        if !isopen(c)
+            print(io, " (closed)")
+        else
+            n = n_avail(c)
+            if n == 0
+                print(io, " (empty)")
+            else
+                s = n == 1 ? "" : "s"
+                print(io, " (", n_avail(c), " item$s available)")
+            end
+        end
+    end
+end
 
 function iterate(c::Channel, state=nothing)
     try
