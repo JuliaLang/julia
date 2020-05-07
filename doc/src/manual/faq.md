@@ -20,7 +20,7 @@ On the other hand, language *interoperability* is extremely useful: we want to e
 
 ## [Public API](@id man-api)
 
-### How does Julia declare public API?
+### How does Julia define its public API?
 
 The only interfaces that are stable with respect to [SemVer](https://semver.org/) of `julia`
 version are the Julia `Base` and standard libraries interfaces described in
