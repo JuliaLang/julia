@@ -303,7 +303,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
                 continue;
             }
 
-            auto callee = CI->getCalledFunction();
+            auto callee = CI->getCalledValue();
 
             if (callee == newGCFrameFunc) {
                 replaceInstruction(CI, lowerNewGCFrame(CI, F), it);

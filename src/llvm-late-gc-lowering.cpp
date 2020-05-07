@@ -2061,7 +2061,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 continue;
             }
             CallingConv::ID CC = CI->getCallingConv();
-            auto callee = CI->getCalledFunction();
+            auto callee = CI->getCalledValue();
             if (callee && (callee == gc_flush_func || callee == gc_preserve_begin_func
                         || callee == gc_preserve_end_func)) {
                 /* No replacement */
