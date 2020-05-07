@@ -163,6 +163,7 @@ Standard library changes
 * The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
 * `normalize` now supports multidimensional arrays ([#34239]).
 * `lq` factorizations can now be used to compute the minimum-norm solution to under-determined systems ([#34350]).
+* `sqrt(::Hermitian)` now treats slightly negative eigenvalues as zero for nearly semidefinite matrices, and accepts a new `rtol` keyword argument for this tolerance ([#35057]).
 * The BLAS submodule now supports the level-2 BLAS subroutine `spmv!` ([#34320]).
 * The BLAS submodule now supports the level-1 BLAS subroutine `rot!` ([#35124]).
 * New generic `rotate!(x, y, c, s)` and `reflect!(x, y, c, s)` functions ([#35124]).
