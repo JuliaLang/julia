@@ -669,10 +669,10 @@ julia> Broadcast.broadcastable([1,2,3]) # like `identity` since arrays already s
  3
 
 julia> Broadcast.broadcastable(Int) # Types don't support axes, indexing, or iteration but are commonly used as scalars
-Base.RefValue{Type{Int64}}(Int64)
+Some(Int)
 
 julia> Broadcast.broadcastable("hello") # Strings break convention of matching iteration and act like a scalar instead
-Base.RefValue{String}("hello")
+Some("hello")
 ```
 """
 broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,Regex,Pair}) = Some(x)
