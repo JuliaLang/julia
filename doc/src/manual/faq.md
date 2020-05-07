@@ -24,9 +24,9 @@ On the other hand, language *interoperability* is extremely useful: we want to e
 
 The only interfaces that are stable with respect to [SemVer](https://semver.org/) of `julia`
 version are the Julia `Base` and standard libraries interfaces described in
-[the documentation](https://docs.julialang.org/) and not explicitly marked as non-stable.
-Functions, types, and constants are not part of the public API if they are not included in
-the documentation, _even if they have docstrings_.
+[the documentation](https://docs.julialang.org/) and not marked as unstable (e.g.,
+experimental and internal).  Functions, types, and constants are not part of the public
+API if they are not included in the documentation, _even if they have docstrings_.
 
 ### There is a useful undocumented function/type/constant. Can I use it?
 

@@ -17,7 +17,7 @@ Some general notes:
 
 The behaviors of `Base` and standard libraries are stable as defined in
 [SemVer](https://semver.org/) only if they are documented; i.e., included in the
-[Julia documentation](https://docs.julialang.org/) and not explicitly marked as non-stable.
+[Julia documentation](https://docs.julialang.org/) and not marked as unstable.
 See [API FAQ](@ref man-api) for more information.
 
 ## Getting Around
