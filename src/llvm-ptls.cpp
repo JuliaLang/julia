@@ -261,7 +261,7 @@ bool LowerPTLS::runOnModule(Module &_M)
     for (auto it = ptls_getter->user_begin(); it != ptls_getter->user_end();) {
         auto call = cast<CallInst>(*it);
         ++it;
-        assert(call->getCalledValue() == ptls_getter);
+        assert(call->getCalledFunction() == ptls_getter);
         fix_ptls_use(call);
     }
     assert(ptls_getter->use_empty());
