@@ -332,3 +332,12 @@ end
     @test readline(b) == "Goodbye!"
     close(b)
 end
+
+@testset "peek(::GenericIOBuffer)" begin
+    io = Base.GenericIOBuffer(UInt8[], true, true, false, true, typemax(Int))
+    write(io, "こんにちは")
+    @test peek(io) == 0xe3
+    @test peek(io, Char) == 'こ'
+    @test peek(io, Int32) == -476872221
+    close(io)
+end
