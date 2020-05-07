@@ -668,8 +668,8 @@ julia> Broadcast.broadcastable([1,2,3]) # like `identity` since arrays already s
  2
  3
 
-julia> Broadcast.broadcastable(Int) # Types don't support axes, indexing, or iteration but are commonly used as scalars
-Some(Int)
+julia> Broadcast.broadcastable(Int64) # Types don't support axes, indexing, or iteration but are commonly used as scalars
+Some(Int64)
 
 julia> Broadcast.broadcastable("hello") # Strings break convention of matching iteration and act like a scalar instead
 Some("hello")
