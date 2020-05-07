@@ -304,13 +304,13 @@ julia> 2^2 * 3^3
 108
 ```
 """
-function nextprod(a::Vector{Int}, x)
+function nextprod(a::Union{Tuple{Vararg{<:Integer}},AbstractArray{<:Integer}}, x::Real)
     if x > typemax(Int)
         throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end
     k = length(a)
     v = fill(1, k)                    # current value of each counter
-    mx = [nextpow(ai,x) for ai in a]  # maximum value of each counter
+    mx = map(a -> nextpow(a,x), a)   # maximum value of each counter
     v[1] = mx[1]                      # start at first case that is >= x
     p::widen(Int) = mx[1]             # initial value of product in this case
     best = p

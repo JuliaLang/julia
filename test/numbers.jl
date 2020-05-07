@@ -2013,8 +2013,9 @@ end
 end
 @testset "nextprod" begin
     @test_throws ArgumentError nextprod([2,3,5],Int128(typemax(Int))+1)
-    @test nextprod([2,3,5],30) == 30
+    @test nextprod([2,3,5],30) == nextprod((2,3,5),30) == 30
     @test nextprod([2,3,5],33) == 36
+    @text nextprod([3,5],33) == nextprod(3:2:5,33) == 45
 end
 @testset "nextfloat/prevfloat" begin
     @test nextfloat(0.0) == 5.0e-324
