@@ -16,7 +16,7 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
-#include <llvm/IR/CallSite.h>
+// #include <llvm/IR/CallSite.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/Module.h>
@@ -2061,7 +2061,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 continue;
             }
             CallingConv::ID CC = CI->getCallingConv();
-            auto callee = CI->getCalledValue();
+            auto callee = CI->getCalledOperand();
             if (callee && (callee == gc_flush_func || callee == gc_preserve_begin_func
                         || callee == gc_preserve_end_func)) {
                 /* No replacement */

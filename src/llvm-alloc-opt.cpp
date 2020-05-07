@@ -442,7 +442,7 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
     auto call = dyn_cast<CallInst>(I);
     if (!call)
         return -1;
-    if (call->getCalledValue() != pass.alloc_obj)
+    if (call->getCalledOperand() != pass.alloc_obj)
         return -1;
     assert(call->getNumArgOperands() == 3);
     size_t sz = (size_t)cast<ConstantInt>(call->getArgOperand(1))->getZExtValue();
@@ -594,7 +594,7 @@ void Optimizer::checkInst(Instruction *I)
         if (auto call = dyn_cast<CallInst>(inst)) {
             // TODO handle `memcmp`
             // None of the intrinsics should care if the memory is stack or heap allocated.
-            auto callee = call->getCalledValue();
+            auto callee = call->getCalledOperand();
             if (auto II = dyn_cast<IntrinsicInst>(call)) {
                 if (auto id = II->getIntrinsicID()) {
                     if (id == Intrinsic::memset) {
@@ -1010,7 +1010,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
             user->replaceUsesOfWith(orig_i, new_i);
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
-            auto callee = call->getCalledValue();
+            auto callee = call->getCalledOperand();
             if (pass.ptr_from_objref == callee) {
                 call->replaceAllUsesWith(new_i);
                 call->eraseFromParent();
@@ -1126,7 +1126,7 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
             return;
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
-            auto callee = call->getCalledValue();
+            auto callee = call->getCalledOperand();
             if (pass.gc_preserve_begin == callee) {
                 removeGCPreserve(call, orig_i);
                 return;
@@ -1325,7 +1325,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             return;
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
-            auto callee = call->getCalledValue();
+            auto callee = call->getCalledOperand();
             if (auto intrinsic = dyn_cast<IntrinsicInst>(call)) {
                 if (Intrinsic::ID id = intrinsic->getIntrinsicID()) {
                     if (id == Intrinsic::memset) {
