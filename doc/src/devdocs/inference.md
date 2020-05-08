@@ -34,12 +34,10 @@ mths = methods(convert, atypes)  # worth checking that there is only one
 m = first(mths)
 
 # Create variables needed to call `typeinf_code`
-params = Core.Compiler.Params(typemax(UInt))  # parameter is the world age,
-                                              # typemax(UInt) -> most recent
-sparams = Core.svec()      # this particular method doesn't have type-parameters
-optimize = true            # run all inference optimizations
-types = Tuple{typeof(convert), atypes.parameters...} # Tuple{typeof(convert), Type{Int}, UInt}
-Core.Compiler.typeinf_code(m, types, sparams, optimize, params)
+params = Core.Compiler.Params(Base.get_world_counter()) # parameter is the world age,
+sparams = Core.svec(Int64)                              # this particular method has a type-parameter
+optimize = true                                         # run all inference optimizations
+Core.Compiler.typeinf_code(m, atypes, sparams, optimize, params)
 ```
 
 If your debugging adventures require a `MethodInstance`, you can look it up by
