@@ -38,6 +38,7 @@ export
     ComplexF64,
     ComplexF32,
     ComplexF16,
+    ContextVar,
     DenseMatrix,
     DenseVecOrMat,
     DenseVector,
@@ -525,6 +526,7 @@ export
     mergewith,
     pairs,
     reduce,
+    set!,
     setdiff!,
     setdiff,
     setindex!,
@@ -672,6 +674,11 @@ export
     timedwait,
     asyncmap,
     asyncmap!,
+    @contextvar,
+    reset_context,
+    set_context,
+    snapshot_context,
+    with_context,
 
 # channels
     take!,

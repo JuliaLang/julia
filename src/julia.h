@@ -1728,6 +1728,7 @@ typedef struct _jl_task_t {
     jl_value_t *next; // invasive linked list for scheduler
     jl_value_t *queue; // invasive linked list for scheduler
     jl_value_t *tls;
+    jl_value_t *ctxvars;
     jl_sym_t *state;
     jl_value_t *donenotify;
     jl_value_t *result;
