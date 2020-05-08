@@ -149,7 +149,7 @@ _default_tol(A::SparseMatrixCSC) =
     20*sum(size(A))*eps(real(eltype(A)))*maximum(norm(view(A, :, i)) for i in 1:size(A, 2))
 
 """
-    qr(A) -> QRSparse
+    qr(A::SparseMatrixCSC; tol=_default_tol(A), ordering=ORDERING_DEFAULT) -> QRSparse
 
 Compute the `QR` factorization of a sparse matrix `A`. Fill-reducing row and column permutations
 are used such that `F.R = F.Q'*A[F.prow,F.pcol]`. The main application of this type is to
