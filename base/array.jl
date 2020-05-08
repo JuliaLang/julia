@@ -646,6 +646,12 @@ if isdefined(Core, :Compiler)
         return quote
             if $I isa Generator && ($I).f isa Type
                 ($I).f
+            elseif $I isa Tuple
+                if isempty($I) || length($I) > 16
+                    Any
+                else
+                    mapreduce(typeof, typejoin, $I; init=Union{})
+                end
             else
                 Core.Compiler.return_type(first, Tuple{typeof($I)})
             end
