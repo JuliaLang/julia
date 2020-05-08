@@ -760,7 +760,7 @@ SharedArray{T,N}(dims::NTuple; init=false, pids=Int[])
 which creates an `N`-dimensional shared array of a bits type `T` and size `dims` across the processes specified
 by `pids`. Unlike distributed arrays, a shared array is accessible only from those participating
 workers specified by the `pids` named argument (and the creating process too, if it is on the
-same host). Note that only objects where `isbits(obj) == true` are supported in a SharedArray.
+same host). Note that only elements that are [`isbits`](@ref) are supported in a SharedArray.
 
 If an `init` function, of signature `initfn(S::SharedArray)`, is specified, it is called on all
 the participating workers. You can specify that each worker runs the `init` function on a distinct
