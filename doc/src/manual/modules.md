@@ -283,7 +283,7 @@ in `__init__`: their definitions can be precompiled and loaded from the cached m
 includes complicated heap-allocated objects like arrays. However, any routine that returns a raw
 pointer value must be called at runtime for precompilation to work ([`Ptr`](@ref) objects will turn into
 null pointers unless they are hidden inside an [`isbits`](@ref) object). This includes the return values
-of the Julia functions [`cfunction`](@ref) and [`pointer`](@ref).
+of the Julia functions [`@cfunction`](@ref) and [`pointer`](@ref).
 
 Dictionary and set types, or in general anything that depends on the output of a `hash(key)` method,
 are a trickier case.  In the common case where the keys are numbers, strings, symbols, ranges,
