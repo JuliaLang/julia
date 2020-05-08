@@ -702,7 +702,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
                 Type *AlignmentType = IntegerType::get(jl_LLVMContext, 8 * al);
                 unsigned NumATy = fsz / al;
                 unsigned remainder = fsz % al;
-                assert(NumATy > 0);
+                assert(al == 1 || NumATy > 0);
                 while (NumATy--)
                     latypes.push_back(AlignmentType);
                 while (remainder--)

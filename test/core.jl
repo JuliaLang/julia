@@ -5961,6 +5961,16 @@ let a33709 = A33709(A33709(nothing))
     @test isnothing(a33709.a.a)
 end
 
+# issue #35793
+struct A35793
+    x::Union{Nothing, Missing}
+end
+let x = A35793(nothing), y = A35793(missing)
+    @test x isa A35793
+    @test x.x === nothing
+    @test y.x === missing
+end
+
 # issue 31583
 a31583 = "a"
 f31583() = a31583 === "a"
