@@ -166,15 +166,12 @@ true
 """
 function convert end
 
-convert(::Type{Union{}}, x::Union{}) = throw(MethodError(convert, (Union{}, x)))
 convert(::Type{Union{}}, x) = throw(MethodError(convert, (Union{}, x)))
 convert(::Type{Any}, x) = x
 convert(::Type{T}, x::T) where {T} = x
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled
                                    # (due to fields typed as `Type`, which is generally a bad idea)
-
-Union{}(x::Union{}) = throw(MethodError(convert, (Union{}, x)))
 
 """
     @eval [mod,] ex
@@ -450,9 +447,8 @@ Stacktrace:
 ```
 """
 sizeof(x) = Core.sizeof(x)
-# The next two methods prevent invalidation
+# The next method prevents invalidation
 sizeof(::Type{Union{}}) = Core.sizeof(Union{})
-sizeof(::Type{T}) where T = Core.sizeof(T)
 
 # simple Array{Any} operations needed for bootstrap
 @eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)

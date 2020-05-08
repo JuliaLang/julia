@@ -3,7 +3,6 @@
 ## generic operations on numbers ##
 
 # prevent invalidation
-Union{}(x::Number)                  = throw(MethodError(convert, (Union{}, x)))
 convert(::Type{Union{}}, x::Number) = throw(MethodError(convert, (Union{}, x)))
 
 # Numbers are convertible
@@ -245,7 +244,6 @@ julia> zero(rand(2,2))
 zero(x::Number) = oftype(x,0)
 zero(::Type{T}) where {T<:Number} = convert(T,0)
 # prevent invalidation
-zero(x::Union{})      = throw(MethodError(zero, (x,)))
 zero(::Type{Union{}}) = throw(MethodError(zero, (Union{},)))
 
 """
@@ -283,7 +281,6 @@ julia> import Dates; one(Dates.Day(1))
 one(::Type{T}) where {T<:Number} = convert(T,1)
 one(x::T) where {T<:Number} = one(T)
 # prevent invalidation
-one(x::Union{})      = throw(MethodError(one, (x,)))
 one(::Type{Union{}}) = throw(MethodError(one, (Union{},)))
 # note that convert(T, 1) should throw an error if T is dimensionful,
 # so this fallback definition should be okay.
@@ -309,7 +306,6 @@ julia> import Dates; oneunit(Dates.Day)
 oneunit(x::T) where {T} = T(one(x))
 oneunit(::Type{T}) where {T} = T(one(T))
 # prevent invalidation
-oneunit(x::Union{})      = throw(MethodError(oneunit, (x,)))
 oneunit(::Type{Union{}}) = throw(MethodError(oneunit, (Union{},)))
 
 """
