@@ -43,7 +43,7 @@ ntuple(f, ::Val{2}) = (@_inline_meta; (f(1), f(2)))
 ntuple(f, ::Val{3}) = (@_inline_meta; (f(1), f(2), f(3)))
 
 """
-    ntuple(f::Function, ::Val{N})
+    ntuple(f, ::Val{N})
 
 Create a tuple of length `N`, computing each element as `f(i)`,
 where `i` is the index of the element. By taking a `Val(N)` 
