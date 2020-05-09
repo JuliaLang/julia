@@ -1092,7 +1092,7 @@ julia> div(-5 + 5im, 2 + 2im, RoundNearestTiesUp)
 ```
 """
 function div(a::Complex{T}, b::Complex{T}, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr) where T<:Integer
-    (T != BigInt) && (imag(b) === typemin(T)) && throw(OverflowError("Cannot compute conj($b)."))
+    (T <: Base.BitSigned) && (imag(b) === typemin(T)) && throw(OverflowError("Cannot compute conj($b)."))
     b̅ = conj(b)
     # TODO: Handle overflow when calculating a*b̅
     t = checked_mul(a, b̅)
@@ -1105,7 +1105,7 @@ end
 div(a::Complex{T}, b::Complex{V}, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr) where {T<:Integer, V<:Integer} = div(promote(a, b)..., rr, ri)
 
 """
-    rem(z1::Complex, z2::Complex[, RoundingModeReal=RoundNearest[, RoundingModeImaginary=RoundingModeReal]])
+    rem(z1::Complex, z2::Complex, RoundingModeReal=RoundNearest, RoundingModeImaginary=RoundingModeReal)
 
 The remainder of `z1` after Euclidean division by `z2`, with the quotient
 rounded according to the given rounding modes. In other words, the quantity
@@ -1119,18 +1119,32 @@ Throws a `DivideError` if z2 is 0+0im.
 
 ```jldoctest
 julia> rem(4 + 4im, 3 + 1im)
--1 - im
+-1 - 1im
 ```
 """
-function rem(a::Complex{T}, b::Complex{T}, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr) where T<:Integer
+function rem(a::Complex{T}, b::Complex{T}, rr::RoundingMode{:Down}, ri::RoundingMode=rr) where T<:Integer
     a - b * div(a, b, rr, ri)
 end
+
+rem(a::Complex{T}, b::Complex{V}, rr::RoundingMode{:Down}, ri::RoundingMode=rr) where {T<:Integer, V<:Integer} = rem(promote(a, b)..., rr, ri)
 
 function rem(a::Complex{T}, b::Complex{T}, rr::RoundingMode{:Nearest}, ri::RoundingMode=rr) where T<:Integer
     a - b * div(a, b, rr, ri)
 end
 
-rem(a::Complex{T}, b::Complex{V}, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr) where {T<:Integer, V<:Integer} = rem(promote(a, b)..., rr, ri)
+rem(a::Complex{T}, b::Complex{V}, rr::RoundingMode{:Nearest}, ri::RoundingMode=rr) where {T<:Integer, V<:Integer} = rem(promote(a, b)..., rr, ri)
+
+function rem(a::Complex{T}, b::Complex{T}, rr::RoundingMode{:ToZero}, ri::RoundingMode=rr) where T<:Integer
+    a - b * div(a, b, rr, ri)
+end
+
+rem(a::Complex{T}, b::Complex{V}, rr::RoundingMode{:ToZero}, ri::RoundingMode=rr) where {T<:Integer, V<:Integer} = rem(promote(a, b)..., rr, ri)
+
+function rem(a::Complex{T}, b::Complex{T}, rr::RoundingMode{:Up}, ri::RoundingMode=rr) where T<:Integer
+    a - b * div(a, b, rr, ri)
+end
+
+rem(a::Complex{T}, b::Complex{V}, rr::RoundingMode{:Up}, ri::RoundingMode=rr) where {T<:Integer, V<:Integer} = rem(promote(a, b)..., rr, ri)
 
 """
     divrem(z1::Complex, z2::Complex[, RoundingModeReal=RoundNearest[, RoundingModeImaginary=RoundingModeReal]])
@@ -1154,7 +1168,7 @@ divrem(a::Complex{T}, b::Complex{V}, rr::RoundingMode=RoundNearest, ri::Rounding
 
 function _first_quadrant(a::Complex{T}) where T<:Integer
     ar, ai = reim(a)
-    if (T != BigInt) && ((ar === typemin(ar)) || (ai === typemin(ai)))
+    if (T <: Base.BitSigned) && ((ar === typemin(ar)) || (ai === typemin(ai)))
         # if ar or ai is typemin(T), we have to throw an error.
         # since -(typemin(T)) < 0.
         throw(OverflowError("Cannot rotate $a into first quadrant."))
@@ -1196,7 +1210,7 @@ julia> gcd(1 + 1im, 0 + 0im)
 """
 function gcd(a::Complex{T}, b::Complex{T}) where T<:Integer
     while b != 0
-        r = rem(a, b)
+        r = rem(a, b, RoundNearest, RoundNearest)
         a = b
         b = r
     end
