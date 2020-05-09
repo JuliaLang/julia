@@ -1118,7 +1118,7 @@ second is used for rounding the imaginary components.
 Throws a `DivideError` if z2 is 0+0im.
 
 ```jldoctest
-julia> rem(4 + 4im, 3 + 1im)
+julia> rem(4 + 4im, 3 + 1im, RoundNearest, RoundNearest)
 -1 - 1im
 ```
 """
