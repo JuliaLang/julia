@@ -500,6 +500,8 @@ end
     @test _macroexpand1(ex) != macroexpand(M,ex)
     @test _macroexpand1(_macroexpand1(ex)) == macroexpand(M, ex)
     @test (@macroexpand1 @nest2b 42) == _macroexpand1(ex)
+    @test_throws LoadError @macroexpand1 @static "hello world"
+    @test_throws ArgumentError @macroexpand1 (@static "hello world") false
 end
 
 foo_9965(x::Float64; w=false) = x
