@@ -514,14 +514,14 @@ let
     @test !isempty(m.specializations) # uncached, but creates the specializations entry
     mi = Core.Compiler.specialize_method(m, Tuple{ft}, Core.svec())
     interp = Core.Compiler.NativeInterpreter(world)
-    @test Core.Compiler.inf_for_methodinstance(interp, mi, world) === nothing
+    @test !Core.Compiler.haskey(Core.Compiler.code_cache(interp), mi)
     @test !isdefined(mi, :cache)
 
     code_typed(f18888, Tuple{}; optimize=true)
     @test !isdefined(mi, :cache)
 
     Base.return_types(f18888, Tuple{})
-    @test Core.Compiler.inf_for_methodinstance(interp, mi, world) === mi.cache
+    @test Core.Compiler.getindex(Core.Compiler.code_cache(interp), mi) === mi.cache
     @test mi.cache isa Core.CodeInstance
     @test !isdefined(mi.cache, :next)
 end

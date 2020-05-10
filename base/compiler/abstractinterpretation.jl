@@ -242,7 +242,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
     mi = mi::MethodInstance
     # decide if it's likely to be worthwhile
     if !force_inference
-        code = inf_for_methodinstance(interp, mi, get_world_counter(interp))
+        code = get(code_cache(interp), mi, nothing)
         declared_inline = isdefined(method, :source) && ccall(:jl_ir_flag_inlineable, Bool, (Any,), method.source)
         cache_inlineable = declared_inline
         if isdefined(code, :inferred) && !cache_inlineable

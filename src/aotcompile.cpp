@@ -248,6 +248,32 @@ static void makeSafeName(GlobalObject &G)
         G.setName(StringRef(SafeName.data(), SafeName.size()));
 }
 
+static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance_t *mi, size_t world, jl_code_instance_t **ci_out, jl_code_info_t **src_out)
+{
+    jl_value_t *ci = cgparams.lookup(mi, world, world);
+    JL_GC_PROMISE_ROOTED(ci);
+    jl_code_instance_t *codeinst = NULL;
+    if (ci != jl_nothing) {
+        codeinst = (jl_code_instance_t*)ci;
+        *src_out = (jl_code_info_t*)codeinst->inferred;
+        jl_method_t *def = codeinst->def->def.method;
+        if ((jl_value_t*)*src_out == jl_nothing)
+            *src_out = NULL;
+        if (*src_out && jl_is_method(def))
+            *src_out = jl_uncompress_ir(def, codeinst, (jl_array_t*)*src_out);
+    }
+    if (*src_out == NULL || !jl_is_code_info(*src_out)) {
+        if (cgparams.lookup != jl_rettype_inferred) {
+            jl_error("Refusing to automatically run type inference with custom cache lookup.");
+        } else {
+            *src_out = jl_type_infer(mi, world, 0);
+            codeinst = jl_get_method_inferred(mi, (*src_out)->rettype, (*src_out)->min_world, (*src_out)->max_world);
+            if ((*src_out)->inferred && !codeinst->inferred)
+                codeinst->inferred = jl_nothing;
+        }
+    }
+    *ci_out = codeinst;
+}
 
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup, and can
@@ -294,23 +320,8 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
             // then we want to compile and emit this
             if (mi->def.method->primary_world <= params.world && params.world <= mi->def.method->deleted_world) {
                 // find and prepare the source code to compile
-                jl_value_t *ci = jl_rettype_inferred(mi, params.world, params.world);
                 jl_code_instance_t *codeinst = NULL;
-                if (ci != jl_nothing) {
-                    codeinst = (jl_code_instance_t*)ci;
-                    src = (jl_code_info_t*)codeinst->inferred;
-                    jl_method_t *def = codeinst->def->def.method;
-                    if ((jl_value_t*)src == jl_nothing)
-                        src = NULL;
-                    if (src && jl_is_method(def))
-                        src = jl_uncompress_ir(def, codeinst, (jl_array_t*)src);
-                }
-                if (src == NULL || !jl_is_code_info(src)) {
-                    src = jl_type_infer(mi, params.world, 0);
-                    codeinst = jl_get_method_inferred(mi, src->rettype, src->min_world, src->max_world);
-                    if (src->inferred && !codeinst->inferred)
-                        codeinst->inferred = jl_nothing;
-                }
+                jl_ci_cache_lookup(cgparams, mi, params.world, &codeinst, &src);
                 if (src && !emitted.count(codeinst)) {
                     // now add it to our compilation results
                     JL_GC_PROMISE_ROOTED(codeinst->rettype);

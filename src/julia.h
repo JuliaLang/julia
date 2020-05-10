@@ -2034,7 +2034,10 @@ typedef struct {
 #define jl_root_task (jl_get_ptls_states()->root_task)
 
 // codegen interface ----------------------------------------------------------
-
+// The root propagation here doesn't have to be literal, but callers should
+// ensure that the return value outlives the MethodInstance
+typedef jl_value_t *(*jl_codeinstance_lookup_t)(jl_method_instance_t *mi JL_PROPAGATES_ROOT,
+    size_t min_world, size_t max_world);
 typedef struct {
     int track_allocations;  // can we track allocations?
     int code_coverage;      // can we measure coverage?
@@ -2072,6 +2075,9 @@ typedef struct {
     // parameters: MethodInstance, CodeInfo, world age as UInt
     // return value: none
     jl_value_t *emitted_function;
+
+    // Cache access. Default: jl_rettype_inferred.
+    jl_codeinstance_lookup_t lookup;
 } jl_cgparams_t;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
