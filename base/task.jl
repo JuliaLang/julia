@@ -130,6 +130,14 @@ root_task() = roottask
 # Alternatively, consider exposing :jl_get_root_task
 
 """
+    isroottask(task::Task = current_task())
+
+Test if the current or optionally passed [`Task`](@ref) is the root `Task`.
+Returns true if the current or given `Task` is the root `Task`.
+"""
+isroottask(task::Task = current_task()) = Base.roottask === task
+
+"""
     istaskdone(t::Task) -> Bool
 
 Determine whether a task has exited.
