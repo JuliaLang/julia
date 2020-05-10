@@ -179,12 +179,16 @@ ERROR: ArgumentError: invalid @static macro
 julia> @macroexpand1 @static "hello world"
 ERROR: LoadError: ArgumentError: invalid @static macro
 [...]
+
+julia> @macroinvoke @macroinvoke a + a
+ERROR: ArgumentError: `@macroinvoke` requires a macro call
 ```
 """
-macro macroinvoke(code)
+macro macroinvoke(code::Expr)
+    code.head == :macrocall ||
+            throw(ArgumentError("`@macroinvoke` requires a macro call"))
     esc(Expr(:call, code.args[1],
-        # :quote to make sure the linenumbernode won't be scrubbed away
-        Expr(:quote, code.args[2]), __module__, code.args[3:end]...
+        Meta.quot(code.args[2]), __module__, Meta.quot.(code.args[3:end])...
     ))
 end
 
