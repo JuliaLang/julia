@@ -467,6 +467,8 @@ Base.propertynames(F::QRPivoted, private::Bool=false) =
 
 abstract type AbstractQ{T} <: AbstractMatrix{T} end
 
+inv(Q::AbstractQ) = Q'
+
 """
     QRPackedQ <: AbstractMatrix
 
