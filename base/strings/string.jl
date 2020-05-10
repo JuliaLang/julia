@@ -144,7 +144,7 @@ end
     @inbounds l = codeunit(s, i)
     (l < 0x80) | (0xf8 ≤ l) && return i+1
     if l < 0xc0
-        i′ = thisind(s, i)
+        i′ = @inbounds thisind(s, i)
         return i′ < i ? nextind(s, i′) : i+1
     end
     # first continuation byte
