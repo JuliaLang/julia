@@ -739,6 +739,7 @@ export
     macroexpand,
     @macroexpand1,
     @macroexpand,
+    @macroinvoke,
     parse,
 
 # help and reflection

@@ -164,6 +164,30 @@ macro macroexpand1(code)
     return :(macroexpand($__module__, $(QuoteNode(code)), recursive=false))
 end
 
+"""
+    @macroinvoke code
+
+Apply a single macro, returning the transformed expression. Similar to
+[`@macroexpand1`](@ref), but requires a top-level macro and will not wrap errors in a
+`LoadError`.
+
+```jldoctest
+julia> @macroinvoke @static "hello world"
+ERROR: ArgumentError: invalid @static macro
+[...]
+
+julia> @macroexpand1 @static "hello world"
+ERROR: LoadError: ArgumentError: invalid @static macro
+[...]
+```
+"""
+macro macroinvoke(code)
+    esc(Expr(:call, code.args[1],
+        # :quote to make sure the linenumbernode won't be scrubbed away
+        Expr(:quote, code.args[2]), __module__, code.args[3:end]...
+    ))
+end
+
 ## misc syntax ##
 
 """
