@@ -1138,3 +1138,5 @@ let m = Markdown.parse("---"), io = IOBuffer()
     show(io, "text/latex", m)
     @test String(take!(io)) == "\\rule{\\textwidth}{1pt}\n"
 end
+
+sprint(show, md"\\") == "\\\\\n"
