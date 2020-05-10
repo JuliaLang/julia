@@ -297,4 +297,11 @@ end
     end
 end
 
+@testset "inv(::AbstractQ)" begin
+    for T in (Float64, ComplexF64)
+        Q = qr(randn(T,5,5)).Q
+        @test inv(Q) == Q'
+    end
+end
+
 end # module TestQR
