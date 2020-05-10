@@ -1898,6 +1898,20 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     print(io, ")")
 end
 
+function show(io::IO, inferred::Core.Compiler.InferenceResult)
+    tt = inferred.linfo.specTypes.parameters[2:end]
+    tts = join(["::$(t)" for t in tt], ", ")
+    rettype = inferred.result
+    if isa(rettype, Core.Compiler.InferenceState)
+        rettype = rettype.bestguess
+    end
+    print(io, "$(inferred.linfo.def.name)($(tts)) => $(rettype)")
+end
+
+function show(io::IO, ::Core.Compiler.NativeInterpreter)
+    print(io, "Core.Compiler.NativeInterpreter")
+end
+
 
 function dump(io::IOContext, x::SimpleVector, n::Int, indent)
     if isempty(x)

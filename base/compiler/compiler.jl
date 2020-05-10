@@ -94,11 +94,11 @@ using .Sort
 # compiler #
 ############
 
+include("compiler/types.jl")
 include("compiler/utilities.jl")
 include("compiler/validation.jl")
 
 include("compiler/inferenceresult.jl")
-include("compiler/params.jl")
 include("compiler/inferencestate.jl")
 
 include("compiler/typeutils.jl")
@@ -111,7 +111,7 @@ include("compiler/typeinfer.jl")
 include("compiler/optimize.jl") # TODO: break this up further + extract utilities
 
 include("compiler/bootstrap.jl")
-ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext)
+ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
 
 end # baremodule Compiler
 ))
