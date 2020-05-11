@@ -145,7 +145,7 @@ end
     (l < 0x80) | (0xf8 ≤ l) && return i+1
     if l < 0xc0
         i′ = @inbounds thisind(s, i)
-        return i′ < i ? nextind(s, i′) : i+1
+        return i′ < i ? @inbounds(nextind(s, i′)) : i+1
     end
     # first continuation byte
     (i += 1) > n && return i
