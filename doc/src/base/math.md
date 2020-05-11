@@ -161,6 +161,7 @@ Base.reim
 Base.conj
 Base.angle
 Base.cis
+Base.cispi
 Base.binomial
 Base.factorial
 Base.gcd

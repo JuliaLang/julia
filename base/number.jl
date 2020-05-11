@@ -92,6 +92,11 @@ copy(x::Number) = x # some code treats numbers as collection-like
 
 Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
 
+Related to `signbit` is [`cispi`](@ref) (which calculates `(-1)^n`).
+This allows decomposing integers into sign bit and absolute value:
+``cispi(signbit(n)) * abs(n) == n``. For boolean values, it is also,
+``signbit(cispi(b)) == b``.
+
 # Examples
 ```jldoctest
 julia> signbit(-4)

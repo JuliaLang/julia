@@ -123,6 +123,8 @@ end
             @test atanh(x) ≈ atanh(big(x))
             @test cis(real(x)) ≈ cis(real(big(x)))
             @test cis(x) ≈ cis(big(x))
+            @test cispi(real(x)) ≈ cispi(real(big(x)))
+            @test cispi(x) ≈ cispi(big(x))
             @test cos(x) ≈ cos(big(x))
             @test cosh(x) ≈ cosh(big(x))
             @test exp(x) ≈ exp(big(x))
@@ -918,6 +920,21 @@ end
     @test cis(1.0+0.0im) ≈ 0.54030230586813971740093660744297660373231042061+0.84147098480789650665250232163029899962256306079im
     @test cis(pi) ≈ -1.0+0.0im
     @test cis(pi/2) ≈ 0.0+1.0im
+    @test cispi(false) == 1
+    @test cispi(true) == -1
+    @test cispi(-1) == -1
+    @test cispi(0) == 1
+    @test cispi(1) == -1
+    @test cispi(2) == 1
+    @test cispi(0.0) == cispi(0)
+    @test cispi(1.0) == cispi(1)
+    @test cispi(2.0) == cispi(2)
+    @test cispi(0.5) == im
+    @test cispi(1.5) == -im
+    @test cispi(0.25) ≈ cis(π/4)
+    @test cispi(0.0+0.0im) == cispi(0)
+    @test cispi(1.0+0.0im) == cispi(1)
+    @test cispi(2.0+0.0im) == cispi(2)
 end
 
 @testset "exp2" begin
