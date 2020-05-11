@@ -307,21 +307,21 @@ julia> mapreduce(isodd, |, a, dims=1)
  1  1  1  1
 ```
 """
-mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, kw...) =
-    _mapreduce_dim(f, op, kw.data, A, dims)
+mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) =
+    _mapreduce_dim(f, op, init, A, dims)
 mapreduce(f, op, A::AbstractArrayOrBroadcasted...; kw...) =
     reduce(op, map(f, A...); kw...)
 
-_mapreduce_dim(f, op, nt::NamedTuple{(:init,)}, A::AbstractArrayOrBroadcasted, ::Colon) =
-    mapfoldl(f, op, A; nt...)
+_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
+    mapfoldl_impl(f, op, nt, A)
 
-_mapreduce_dim(f, op, ::NamedTuple{()}, A::AbstractArrayOrBroadcasted, ::Colon) =
+_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) =
     _mapreduce(f, op, IndexStyle(A), A)
 
-_mapreduce_dim(f, op, nt::NamedTuple{(:init,)}, A::AbstractArrayOrBroadcasted, dims) =
-    mapreducedim!(f, op, reducedim_initarray(A, dims, nt.init), A)
+_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims) =
+    mapreducedim!(f, op, reducedim_initarray(A, dims, nt), A)
 
-_mapreduce_dim(f, op, ::NamedTuple{()}, A::AbstractArrayOrBroadcasted, dims) =
+_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) =
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
 
 """
@@ -717,12 +717,12 @@ for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod, 
                             (:maximum, :_maximum, :max),     (:minimum, :_minimum, :min)]
     @eval begin
         # User-facing methods with keyword arguments
-        @inline ($fname)(a::AbstractArray; dims=:) = ($_fname)(a, dims)
-        @inline ($fname)(f, a::AbstractArray; dims=:) = ($_fname)(f, a, dims)
+        @inline ($fname)(a::AbstractArray; dims=:, kw...) = ($_fname)(a, dims; kw...)
+        @inline ($fname)(f, a::AbstractArray; dims=:, kw...) = ($_fname)(f, a, dims; kw...)
 
         # Underlying implementations using dispatch
-        ($_fname)(a, ::Colon) = ($_fname)(identity, a, :)
-        ($_fname)(f, a, ::Colon) = mapreduce(f, $op, a)
+        ($_fname)(a, ::Colon; kw...) = ($_fname)(identity, a, :; kw...)
+        ($_fname)(f, a, ::Colon; kw...) = mapreduce(f, $op, a; kw...)
     end
 end
 
@@ -743,8 +743,8 @@ for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
             mapreducedim!(f, $(op), initarray!(r, $(op), init, A), A)
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
 
-        $(_fname)(A, dims)    = $(_fname)(identity, A, dims)
-        $(_fname)(f, A, dims) = mapreduce(f, $(op), A, dims=dims)
+        $(_fname)(A, dims; kw...)    = $(_fname)(identity, A, dims; kw...)
+        $(_fname)(f, A, dims; kw...) = mapreduce(f, $(op), A; dims=dims, kw...)
     end
 end
 
