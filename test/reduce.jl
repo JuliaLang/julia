@@ -133,6 +133,7 @@ fz = float(z)
 @test sum(z) === 136
 @test sum(fz) === 136.0
 
+@test_throws ArgumentError sum(Union{}[])
 @test_throws ArgumentError sum(sin, Int[])
 @test sum(sin, 3) == sin(3.0)
 @test sum(sin, [3]) == sin(3.0)
