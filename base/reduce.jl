@@ -307,7 +307,7 @@ with reduction `op` over an empty array with element type of `T`.
 If not defined, this will throw an `ArgumentError`.
 """
 reduce_empty(op, ::Type{T}) where T = _empty_reduce_error()
-reduce_empty(::typeof(+), ::Type{Union{}}) = _empty_reduce_error()   # avoid invalidation
+reduce_empty(::typeof(+), ::Type{Union{}}) = _empty_reduce_error()
 reduce_empty(::typeof(+), ::Type{T}) where T = zero(T)
 reduce_empty(::typeof(+), ::Type{Bool}) = zero(Int)
 reduce_empty(::typeof(*), ::Type{Union{}}) = _empty_reduce_error()
@@ -340,12 +340,12 @@ of `T`.
 If not defined, this will throw an `ArgumentError`.
 """
 mapreduce_empty(f, op, T) = _empty_reduce_error()
-mapreduce_empty(::typeof(identity), op, ::Type{T}) where T = reduce_empty(op, T)
-mapreduce_empty(::typeof(abs), op, ::Type{T}) where T      = abs(reduce_empty(op, T))
-mapreduce_empty(::typeof(abs2), op, ::Type{T}) where T     = abs2(reduce_empty(op, T))
+mapreduce_empty(::typeof(identity), op, T) = reduce_empty(op, T)
+mapreduce_empty(::typeof(abs), op, T)      = abs(reduce_empty(op, T))
+mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
 
-mapreduce_empty(::typeof(abs),  ::typeof(max), ::Type{T}) where T = abs(zero(T))
-mapreduce_empty(::typeof(abs2), ::typeof(max), ::Type{T}) where T = abs2(zero(T))
+mapreduce_empty(f::typeof(abs),  ::typeof(max), T) = abs(zero(T))
+mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
 
 # For backward compatibility:
 mapreduce_empty_iter(f, op, itr, ItrEltype) =
