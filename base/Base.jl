@@ -391,6 +391,12 @@ function include(mapexpr::Function, mod::Module, _path::AbstractString)
     return result
 end
 
+# Hack: add a method to Base.! to prevent union splitting
+struct _NEG_UNION_SPLITTING_BLOCKER
+end
+!(::_NEG_UNION_SPLITTING_BLOCKER) = "foo"
+
+
 end_base_include = time_ns()
 
 if is_primary_base_module
