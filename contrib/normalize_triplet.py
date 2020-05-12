@@ -33,10 +33,11 @@ call_abi_mapping = {
 }
 gcc_version_mapping = {
     'blank_gcc': "",
-    'gcc4': "-gcc4",
-    'gcc7': "-gcc7",
-    'gcc8': "-gcc8",
-    'gcc9': "-gcc8",
+    'gcc4':  "-gcc4",
+    'gcc7':  "-gcc7",
+    'gcc8':  "-gcc8",
+    'gcc9':  "-gcc8",
+    'gcc10': "-gcc8",
 }
 cxx_abi_mapping = {
     'blank_cxx_abi': "",
@@ -111,13 +112,14 @@ def p(x):
 if gcc_version == "blank_gcc":
     if len(sys.argv) >= 3:
         gcc_version = {
-            "4": "gcc4",
-            "5": "gcc4",
-            "6": "gcc4",
-            "7": "gcc7",
-            "8": "gcc8",
-            "9": "gcc8",
-        }[list(filter(lambda x: re.match("\d+\.\d+(\.\d+)?", x), sys.argv[2].split()))[-1][0]]
+            "4":  "gcc4",
+            "5":  "gcc4",
+            "6":  "gcc4",
+            "7":  "gcc7",
+            "8":  "gcc8",
+            "9":  "gcc8",
+            "10": "gcc8",
+        }[list(filter(lambda x: re.match("\d+\.\d+(\.\d+)?", x), sys.argv[2].split()))[-1].split('.')[0]]
 
 if cxx_abi == "blank_cxx_abi":
     if len(sys.argv) == 4:
