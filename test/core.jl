@@ -4708,6 +4708,11 @@ let ft = Base.datatype_fieldtypes
     @test !isdefined(ft(B12238.body.body)[1], :instance)  # has free type vars
 end
 
+# `where` syntax in constructor definitions
+(A12238{T} where T<:Real)(x) = 0
+@test A12238{<:Real}(0) == 0
+@test_throws MethodError A12238{<:Integer}(0)
+
 # issue #16315
 let a = Any[]
     @noinline f() = a[end]
