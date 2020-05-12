@@ -160,6 +160,7 @@ Standard library changes
   results table ([#38042]).
 * `@testset` now supports the option `verbose` to show the test result summary
   of the children even if they all pass ([#33755]).
+* `rand` now supports sampling of tuple types ([#35856]).
 
 #### LinearAlgebra
 
