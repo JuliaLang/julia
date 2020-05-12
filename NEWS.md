@@ -64,6 +64,7 @@ Compiler/Runtime improvements
   Code that requires assumptions about object layout and addresses (usually for
   interoperability with C or other languages) might need to be updated; for
   example any object that needs a stable address should be a `mutable struct`.
+* Array `view`s no longer allocate ([#34126]).
 
 Command-line option changes
 ---------------------------
