@@ -48,7 +48,7 @@ static void *const _tags[] = {
          &jl_task_type, &jl_uniontype_type, &jl_typetype_type, &jl_abstractstring_type,
          &jl_array_any_type, &jl_intrinsic_type, &jl_abstractslot_type,
          &jl_methtable_type, &jl_typemap_level_type, &jl_typemap_entry_type,
-         &jl_voidpointer_type, &jl_newvarnode_type,
+         &jl_voidpointer_type, &jl_uint8pointer_type, &jl_newvarnode_type,
          &jl_anytuple_type_type, &jl_anytuple_type, &jl_namedtuple_type, &jl_emptytuple_type,
          &jl_array_symbol_type, &jl_array_uint8_type, &jl_array_int32_type,
          &jl_int32_type, &jl_int64_type, &jl_bool_type, &jl_uint8_type,

@@ -740,4 +740,19 @@ Unsigned(x::Union{Float32, Float64, Bool}) = UInt(x)
 Integer(x::Integer) = x
 Integer(x::Union{Float32, Float64}) = Int(x)
 
+# Binding for the julia parser, called as
+#
+#    Core._parse(text, filename, offset, options)
+#
+# Parse Julia code from the buffer `text`, starting at `offset` and attributing
+# it to `filename`. `text` may be a `String` or `svec(ptr::Ptr{UInt8},
+# len::Int)` for a raw unmanaged buffer. `options` should be one of `:atom`,
+# `:statement` or `:all`, indicating how much the parser will consume.
+#
+# `_parse` must return an `svec` containing an `Expr` and the new offset as an
+# `Int`.
+#
+# The internal jl_parse which will call into Core._parse if not `nothing`.
+_parse = nothing
+
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)
