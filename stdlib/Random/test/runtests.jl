@@ -790,6 +790,14 @@ end
     end
 end
 
+@testset "rand(::Type{<:Tuple})" begin
+    @test_throws ArgumentError rand(Tuple)
+    @test rand(Tuple{}) == ()
+    @inferred rand(Tuple{Int32,Int64,Float64})
+    @inferred rand(NTuple{20,Int})
+    @test_throws TypeError rand(Tuple{1:2,3:4})
+end
+
 @testset "GLOBAL_RNG" begin
     @test VERSION < v"2" # deprecate this in v2 (GLOBAL_RNG must go)
     local GLOBAL_RNG = Random.GLOBAL_RNG

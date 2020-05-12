@@ -175,7 +175,11 @@ function Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {T<:Tuple, RNG<:Ab
 end
 
 function Sampler(::Type{RNG}, ::Type{Tuple{Vararg{T, N}}}, n::Repetition) where {T, N, RNG<:AbstractRNG}
-    SamplerTag{Tuple{Vararg{T, N}}}((Sampler(RNG, T, n),))
+    if N > 0
+        SamplerTag{Tuple{Vararg{T, N}}}((Sampler(RNG, T, n),))
+    else
+        SamplerTag{Tuple{}}(())
+    end
 end
 
 function rand(rng::AbstractRNG, sp::SamplerTag{T}) where T<:Tuple
