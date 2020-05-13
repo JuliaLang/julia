@@ -638,10 +638,15 @@ function create_worker(manager, wconfig)
     timeout = worker_timeout()
     Timer(1, interval=1) do timer
         timeout -= 1
-        if timeout <= 0.0
-            put!(rr_ntfy_join, :TIMEDOUT)
-        elseif istaskdone(procmsg_task)
-            put!(rr_ntfy_join, :ERROR)
+        try
+            if timeout <= 0.0
+                put!(rr_ntfy_join, :TIMEDOUT)
+            elseif istaskdone(procmsg_task)
+                put!(rr_ntfy_join, :ERROR)
+            end
+        catch
+            # can happen if rr_ntfy_join is already filled
+            close(timer)
         end
         isready(rr_ntfy_join) && close(timer)
     end
@@ -706,13 +711,7 @@ function create_worker(manager, wconfig)
     send_msg_now(w, MsgHeader(RRID(0,0), ntfy_oid), join_message)
 
     @async manage(w.manager, w.id, w.config, :register)
-    # wait for rr_ntfy_join with timeout
-    timedout = false
-    @async (sleep(maxwait); timedout = true; put!(rr_ntfy_join, 1))
     wait(rr_ntfy_join)
-    if timedout
-        @error("worker did not connect within $maxwait seconds")
-    end
     lock(client_refs) do
         delete!(PGRP.refs, ntfy_oid)
     end
