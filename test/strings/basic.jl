@@ -166,6 +166,22 @@ end
     @test endswith(z)(z)
 end
 
+@testset "SubStrings and Views" begin
+    x = "abcdefg"
+    @test SubString(x, 2:4) == "bcd"
+    @test view(x, 2:4) == "bcd"
+    @test view(x, 2:4) isa SubString
+    @test (@view x[4:end]) == "defg"
+    @test (@view x[4:end]) isa SubString
+
+    # We don't (at present) make non-contiguous SubStrings with views
+    @test_throws MethodError (@view x[[1,3,5]]) == "ace"
+    @test (@views (x[[1,3,5]])) isa String
+
+    @test (@views (x[1], x[1:2], x[[1,4]])) isa Tuple{Char, SubString, String}
+end
+
+
 @testset "filter specialization on String issue #32460" begin
      @test filter(x -> x ∉ ['작', 'Ï', 'z', 'ξ'],
                   GenericString("J'étais n작작é pour plaiÏre à toute âξme un peu fière")) ==
