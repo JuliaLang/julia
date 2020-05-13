@@ -260,12 +260,9 @@ function showerror(io::IO, ex::MethodError)
                 isdefined(ft.name.module, name) &&
                 ft == typeof(getfield(ft.name.module, name))
             f_is_function = true
-            print(io, "no method matching ", name)
-        elseif isa(f, Type)
-            print(io, "no method matching ", f)
-        else
-            print(io, "no method matching (::", ft, ")")
         end
+        print(io, "no method matching ")
+        show_signature_function(io, isa(f, Type) ? Type{f} : typeof(f))
         print(io, "(")
         for (i, typ) in enumerate(arg_types_param)
             print(io, "::", typ)
@@ -339,7 +336,9 @@ striptype(::Type{T}) where {T} = T
 striptype(::Any) = nothing
 
 function showerror_ambiguous(io::IO, meth, f, args)
-    print(io, "MethodError: ", f, "(")
+    print(io, "MethodError: ")
+    show_signature_function(io, isa(f, Type) ? Type{f} : typeof(f))
+    print(io, "(")
     p = args.parameters
     for (i,a) in enumerate(p)
         print(io, "::", a)
@@ -415,9 +414,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # function itself doesn't match
                 continue
             else
-                # TODO: use the methodshow logic here
-                use_constructor_syntax = isa(func, Type)
-                print(iob, use_constructor_syntax ? func : typeof(func).name.mt.name)
+                show_signature_function(iob, s1)
             end
             print(iob, "(")
             t_i = copy(arg_types_param)
