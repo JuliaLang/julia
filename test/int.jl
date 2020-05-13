@@ -270,7 +270,9 @@ end
 @testset "Signed, Unsigned, signed, unsigned for bitstypes" begin
     for (S,U) in zip(Base.BitSigned_types, Base.BitUnsigned_types)
         @test signed(U) === S
+        @test signed(S) === S
         @test unsigned(S) === U
+        @test unsigned(U) === U
         @test typemin(S) % Signed === typemin(S)
         @test typemax(U) % Unsigned === typemax(U)
         @test -one(S) % Unsigned % Signed === -one(S)
