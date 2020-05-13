@@ -339,7 +339,7 @@
          (anames (map (lambda (x) (if (underscore-symbol? x) UNUSED x))(llist-vars argl)))
          (unused_anames (filter (lambda (x) (not (eq? x UNUSED))) anames)))
      (if (has-dups unused_anames)
-         (error (string "function argument name not unique: " (car (has-dups unused_anames)))))
+         (error (string "function argument name not unique: \"" (car (has-dups unused_anames)) "\"")))
      (if (has-dups names)
          (error "function static parameter names not unique"))
      (if (any (lambda (x) (and (not (eq? x UNUSED)) (memq x names))) anames)
