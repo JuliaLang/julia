@@ -30,9 +30,14 @@ API if they are not included in the documentation, _even if they have docstrings
 
 ### There is a useful undocumented function/type/constant. Can I use it?
 
-Please open an [issue](https://github.com/JuliaLang/julia/issues) or
+Updating Julia may break your code if you use non-public API.  If the code is
+self-contained, it may be a good idea to copy it into your project.  If you want to rely on
+a complex non-public API, especially when using it from a stable package, it is a good idea
+to open an [issue](https://github.com/JuliaLang/julia/issues) or
 [pull request](https://github.com/JuliaLang/julia/pulls) to start a discussion for turning it
-into a public API before relying on it.
+into a public API.  However, we do not discourage the attempt to create packages that expose
+stable public interfaces while relying on non-public implementation details of `julia` and
+buffering the differences across different `julia` versions.
 
 ### The documentation is not accurate enough. Can I rely on the existing behavior?
 
