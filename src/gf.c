@@ -1682,18 +1682,33 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
     JL_UNLOCK(&mt->writelock);
 }
 
+static int is_call_ambiguous(jl_methtable_t *mt, jl_value_t *types JL_PROPAGATES_ROOT, size_t world)
+{
+    struct jl_typemap_assoc search = {(jl_value_t*)types, world, NULL, 0, ~(size_t)0};
+    jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->defs, &search, /*offs*/0, /*subtype*/1);
+    if (entry == NULL)
+        return 0; // we added a new definition to consider
+    jl_typemap_entry_t *m = jl_typemap_morespecific_by_type(entry, (jl_value_t*)types, NULL, world);
+    if (m == NULL) {
+        // TODO: this isn't quite right, since we just ask if the entry dominates
+        // over all subtypes of `types`, but wanted to ask the inverse question
+        return 1; // a new ambiguity doesn't change the result of method lookup
+    }
+    return 0; // existing and/or method already covered this intersection (TODO: which is it?)
+}
+
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype)
 {
     JL_TIMING(ADD_METHOD);
     assert(jl_is_method(method));
     assert(jl_is_mtable(mt));
     jl_value_t *type = method->sig;
-    jl_value_t *oldvalue = NULL;
+    jl_value_t *oldvalue = NULL, *isect = NULL;
     if (method->primary_world == 1)
         method->primary_world = ++jl_world_counter;
     size_t max_world = method->primary_world - 1;
     int invalidated = 0;
-    JL_GC_PUSH1(&oldvalue);
+    JL_GC_PUSH2(&oldvalue, &isect);
     JL_LOCK(&mt->writelock);
     // first delete the existing entry (we'll disable it later)
     struct jl_typemap_assoc search = {(jl_value_t*)type, method->primary_world, NULL, 0, ~(size_t)0};
@@ -1718,7 +1733,8 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
             size_t ins = 0;
             for (i = 1; i < na; i += 2) {
                 jl_value_t *backedgetyp = backedges[i - 1];
-                if (!jl_has_empty_intersection(backedgetyp, (jl_value_t*)type)) {
+                isect = jl_type_intersection(backedgetyp, (jl_value_t*)type);
+                if (isect != jl_bottom_type && !is_call_ambiguous(mt, isect, max_world)) {
                     jl_method_instance_t *backedge = (jl_method_instance_t*)backedges[i];
                     invalidate_method_instance(backedge, max_world, 0);
                     invalidated = 1;
@@ -1766,9 +1782,12 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
             size_t i, l = jl_svec_len(specializations);
             for (i = 0; i < l; i++) {
                 jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, i);
-                if (mi != NULL && !jl_has_empty_intersection(type, (jl_value_t*)mi->specTypes))
-                    if (invalidate_backedges(mi, max_world))
-                        invalidated = 1;
+                if (mi != NULL) {
+                    isect = jl_type_intersection(type, (jl_value_t*)mi->specTypes);
+                    if (isect != jl_bottom_type && !is_call_ambiguous(mt, isect, max_world))
+                        if (invalidate_backedges(mi, max_world))
+                            invalidated = 1;
+                }
             }
         }
     }
