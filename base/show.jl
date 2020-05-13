@@ -1764,6 +1764,7 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
             print(io, "($fargname::", ft, ")")
         end
     end
+    nothing
 end
 
 function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwargs=nothing)
