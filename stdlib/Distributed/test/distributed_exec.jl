@@ -3,6 +3,8 @@
 using Test, Distributed, Random, Serialization, Sockets
 import Distributed: launch, manage, connect
 
+const VERBOSE = false
+
 @test cluster_cookie() isa String
 
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
@@ -563,7 +565,7 @@ function walk_args(i)
         try
             results_test(pmap(mapf, data; kwargs...))
         catch
-            println("pmap executing with args : ", kwargs)
+            VERBOSE && println("pmap executing with args : ", kwargs)
             rethrow()
         end
 
@@ -645,15 +647,15 @@ clear!(wp)
 DoFullTest = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
 
 if DoFullTest
-    println("Testing exception printing on remote worker from a `remote_do` call")
-    println("Please ensure the remote error and backtrace is displayed on screen")
+    VERBOSE && println("Testing exception printing on remote worker from a `remote_do` call")
+    VERBOSE && println("Please ensure the remote error and backtrace is displayed on screen")
 
     remote_do(id_other) do
         throw(ErrorException("TESTING EXCEPTION ON REMOTE DO. PLEASE IGNORE"))
     end
     sleep(0.5)  # Give some time for the above error to be printed
 
-    println("\n\nThe following 'invalid connection credentials' error messages are to be ignored.")
+    VERBOSE && println("\n\nThe following 'invalid connection credentials' error messages are to be ignored.")
     all_w = workers()
     # Test sending fake data to workers. The worker processes will print an
     # error message but should not terminate.
@@ -684,11 +686,11 @@ if Sys.isunix() # aka have ssh
         remotecall_fetch(rmprocs, 1, new_pids)
     end
 
-    println("\n\nTesting SSHManager. A minimum of 4GB of RAM is recommended.")
-    println("Please ensure:")
-    println("1) sshd is running locally with passwordless login enabled.")
-    println("2) Env variable USER is defined and is the ssh user.")
-    println("3) Port 9300 is not in use.")
+    VERBOSE && println("\n\nTesting SSHManager. A minimum of 4GB of RAM is recommended.")
+    VERBOSE && println("Please ensure:")
+    VERBOSE && println("1) sshd is running locally with passwordless login enabled.")
+    VERBOSE && println("2) Env variable USER is defined and is the ssh user.")
+    VERBOSE && println("3) Port 9300 is not in use.")
 
     sshflags = `-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=ERROR `
     #Issue #9951
@@ -700,27 +702,27 @@ if Sys.isunix() # aka have ssh
         append!(hosts, localhost_aliases)
     end
 
-    println("\nTesting SSH addprocs with $(length(hosts)) workers...")
+    VERBOSE && println("\nTesting SSH addprocs with $(length(hosts)) workers...")
     new_pids = addprocs_with_testenv(hosts; sshflags=sshflags)
     @test length(new_pids) == length(hosts)
     test_n_remove_pids(new_pids)
 
-    println("\nTexting mixed SSH addprocs with :auto ...")
+    VERBOSE && println("\nTexting mixed SSH addprocs with :auto ...")
     new_pids = addprocs_with_testenv(["localhost", ("127.0.0.1", :auto), "localhost"]; sshflags=sshflags)
     @test length(new_pids) == (2 + Sys.CPU_THREADS)
     test_n_remove_pids(new_pids)
 
-    println("\nTesting mixed SSH addprocs with numeric counts...")
+    VERBOSE && println("\nTesting mixed SSH addprocs with numeric counts...")
     new_pids = addprocs_with_testenv([("localhost", 2), ("127.0.0.1", 2), "localhost"]; sshflags=sshflags)
     @test length(new_pids) == 5
     test_n_remove_pids(new_pids)
 
-    println("\nTesting SSH addprocs with tunnel...")
+    VERBOSE && println("\nTesting SSH addprocs with tunnel...")
     new_pids = addprocs_with_testenv([("localhost", num_workers)]; tunnel=true, sshflags=sshflags)
     @test length(new_pids) == num_workers
     test_n_remove_pids(new_pids)
 
-    println("\nTesting SSH addprocs with tunnel (SSH multiplexing)...")
+    VERBOSE && println("\nTesting SSH addprocs with tunnel (SSH multiplexing)...")
     new_pids = addprocs_with_testenv([("localhost", num_workers)]; tunnel=true, multiplex=true, sshflags=sshflags)
     @test length(new_pids) == num_workers
     controlpath = joinpath(homedir(), ".ssh", "julia-$(ENV["USER"])@localhost:22")
@@ -728,7 +730,7 @@ if Sys.isunix() # aka have ssh
     test_n_remove_pids(new_pids)
     @test :ok == timedwait(()->!issocket(controlpath), 10.0; pollint=0.5)
 
-    println("\nTesting all supported formats for hostname...")
+    VERBOSE && println("\nTesting all supported formats for hostname...")
     h1 = "localhost"
     user = ENV["USER"]
     h2 = "$user@$h1"
@@ -740,7 +742,7 @@ if Sys.isunix() # aka have ssh
     @test length(new_pids) == 5
     test_n_remove_pids(new_pids)
 
-    println("\nTesting keyword args for exename...")
+    VERBOSE && println("\nTesting keyword args for exename...")
     for exename in [`$(joinpath(Sys.BINDIR, Base.julia_exename()))`, "$(joinpath(Sys.BINDIR, Base.julia_exename()))"]
         for addp_func in [()->addprocs_with_testenv(["localhost"]; exename=exename, exeflags=test_exeflags, sshflags=sshflags),
                           ()->addprocs_with_testenv(1; exename=exename, exeflags=test_exeflags)]
@@ -803,7 +805,7 @@ fetch(v15406)
 remotecall_wait(fetch, id_other, v15406)
 
 # Test various forms of remotecall* invocations
-println("\nTesting various forms of remotecall invocations...")
+VERBOSE && println("\nTesting various forms of remotecall invocations...")
 
 @everywhere f_args(v1, v2=0; kw1=0, kw2=0) = v1+v2+kw1+kw2
 
@@ -825,7 +827,7 @@ for tid in [id_other, id_me, default_worker_pool()]
 end
 
 # Test remote_do
-println("\nTesting remote_do...")
+VERBOSE && println("\nTesting remote_do...")
 f=Future(id_me)
 remote_do(fut->put!(fut, myid()), id_me, f)
 @test fetch(f) == id_me
@@ -919,7 +921,7 @@ end
 @test retval > 0.0 && retval < 10.0
 
 # serialization tests
-println("\nTesting remotecall serialization...")
+VERBOSE && println("\nTesting remotecall serialization...")
 wrkr1 = workers()[1]
 wrkr2 = workers()[end]
 
@@ -1007,7 +1009,7 @@ let (p, p2) = filter!(p -> p != myid(), procs())
 end
 
 # Test addprocs enable_threaded_blas parameter
-println("\nTesting addprocs enable_threaded_blas parameter...")
+VERBOSE && println("\nTesting addprocs enable_threaded_blas parameter...")
 
 function get_remote_num_threads(processes_added)
     return [remotecall_fetch(BLAS.get_num_threads, proc_id) for proc_id in processes_added]
@@ -1088,7 +1090,7 @@ end
 
 # Test that an exception is thrown if workers are unable to be removed within requested time.
 if DoFullTest
-    println("\nTesting that an exception is thrown if workers are unable to be removed within requested time...")
+    VERBOSE && println("\nTesting that an exception is thrown if workers are unable to be removed within requested time...")
     pids=addprocs_with_testenv(4);
     @test_throws ErrorException rmprocs(pids; waitfor=0.001);
     # wait for workers to be removed
@@ -1099,7 +1101,7 @@ end
 end
 
 # Test addprocs/rmprocs from master node only
-println("\nTesting addprocs/rmprocs from master node only...")
+VERBOSE && println("\nTesting addprocs/rmprocs from master node only...")
 for f in [ ()->addprocs(1; exeflags=test_exeflags), ()->rmprocs(workers()) ]
     local f
     try
@@ -1156,7 +1158,7 @@ append!(testruns, [
     (()->addprocs_with_testenv(ErrorSimulator(:timeout)), "Timed out waiting to read host:port string from worker.", ("JULIA_WORKER_TIMEOUT"=>"1",))
 ])
 
-println("\nTesting simulated addprocs errors...")
+VERBOSE && println("\nTesting simulated addprocs errors...")
 for (addp_testf, expected_errstr, env) in testruns
     old_stdout = stdout
     stdout_out, stdout_in = redirect_stdout()
@@ -1183,7 +1185,7 @@ end
 
 
 # Auto serialization of globals from Main.
-println("\nTesting auto serialization of globals from Main...")
+VERBOSE && println("\nTesting auto serialization of globals from Main...")
 # bitstypes
 global v1 = 1
 @test remotecall_fetch(()->v1, id_other) == v1
@@ -1503,7 +1505,7 @@ let
     end
 end
 
-println("\nTesting worker arguments...")
+VERBOSE && println("\nTesting worker arguments...")
 # cookie and command line option `--worker` tests. remove workers, set cookie and test
 struct WorkerArgTester <: ClusterManager
     worker_opt
@@ -1544,7 +1546,7 @@ cluster_cookie("foobar") # custom cookie
 npids = addprocs_with_testenv(WorkerArgTester(`--worker=foobar`, false))
 @test remotecall_fetch(myid, npids[1]) == npids[1]
 
-println("\nTesting connect timeout...")
+VERBOSE && println("\nTesting connect timeout...")
 # tests for connect timeout to worker
 struct ConnectTimeoutTester <: ClusterManager
     block::Channel
@@ -1601,7 +1603,7 @@ end
 @test nprocs() == 1
 @test abs(t - 10.0) <= 5.0
 
-println("\nTesting options to retain stdout/stderr...")
+VERBOSE && println("\nTesting options to retain stdout/stderr...")
 # tests for start_worker options to retain stdio (issue #31035)
 struct RetainStdioTester <: ClusterManager
     close_stdin::Bool
@@ -1681,13 +1683,13 @@ function reuseport_tests()
 end
 
 # Test failure during worker setup
-println("\nTesting failure during worker setup...")
+VERBOSE && println("\nTesting failure during worker setup...")
 old_stderr = stderr
 old_stdout = stdout
 stderr_out, stderr_in = redirect_stderr()
 stdout_out, stdout_in = redirect_stdout()
 try
-    rmprocs(workers())
+    (nprocs() > 1) && rmprocs(workers())
     local npids = addprocs(1; topology=:all_to_all, lazy=false)
     @test length(npids) == 1
     @test nprocs() == 2
@@ -1715,14 +1717,14 @@ try
         end
     end # full-test
 finally
-    rmprocs(workers())
+    (nprocs() > 1) && rmprocs(workers())
     redirect_stderr(old_stderr)
     redirect_stdout(old_stdout)
     close(stderr_in)
     close(stdout_in)
 end
 
-println("\nTesting that client port is reused when possible...")
+VERBOSE && println("\nTesting that client port is reused when possible...")
 # Test that the client port is reused. SO_REUSEPORT may not be supported on
 # all UNIX platforms, Linux kernels prior to 3.9 and older versions of OSX
 if ccall(:jl_has_so_reuseport, Int32, ()) == 1
