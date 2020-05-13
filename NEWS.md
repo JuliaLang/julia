@@ -4,6 +4,8 @@ Julia v1.6 Release Notes
 New language features
 ---------------------
 
+* Types written with `where` syntax can now be used to define constructors, e.g.
+  `(Foo{T} where T)(x) = ...`.
 
 Language changes
 ----------------
