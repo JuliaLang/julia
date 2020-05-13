@@ -10,7 +10,9 @@ will wait for all internally spawned tasks to complete before returning.
 !!! compat "Julia 1.6"
     This function requires Julia 1.6 or later.
 """
-function Threads.foreach(f, channel::Channel; ntasks=Threads.nthreads())
+function Threads.foreach(f, channel::Channel; ntasks=Threads.nthreads(),
+                         schedule=:fair)
+    apply = schedule === :static ? (f, x) -> f(x) : _waitspawn
     stop = Threads.Atomic{Bool}(false)
     @sync for _ in 1:ntasks
         Threads.@spawn try
