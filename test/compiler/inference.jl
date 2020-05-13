@@ -2592,4 +2592,4 @@ end
 # Test that we do not union split ! based on the number of methods
 # because that leads to excessive invalidations if a package
 # defines an additional method for !
-Core.Compiler.return_type(x -> !(x[]), Tuple{Ref{Any}}) == Any
+@test Core.Compiler.return_type(x -> !(x[]), Tuple{Ref{Any}}) == Any
