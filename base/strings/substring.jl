@@ -47,7 +47,6 @@ end
 SubString(s::AbstractString) = SubString(s, 1, lastindex(s))
 SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s))
 
-
 @propagate_inbounds view(s::AbstractString, r) = SubString(s, r)
 @propagate_inbounds maybeview(s::AbstractString, r::UnitRange{<:Integer}) = view(s, r)
 @propagate_inbounds maybeview(s::AbstractString, args...) = getindex(s, args...)
