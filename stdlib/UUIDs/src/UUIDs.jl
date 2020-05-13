@@ -50,7 +50,7 @@ julia> uuid1(rng)
 UUID("cfc395e8-590f-11e8-1f13-43a2532b2fa8")
 ```
 """
-function uuid1(rng::AbstractRNG=Random.default_rng())
+function uuid1(rng::AbstractRNG=Random.RandomDevice())
     u = rand(rng, UInt128)
 
     # mask off clock sequence and node
@@ -87,7 +87,7 @@ julia> uuid4(rng)
 UUID("196f2941-2d58-45ba-9f13-43a2532b2fa8")
 ```
 """
-function uuid4(rng::AbstractRNG=Random.default_rng())
+function uuid4(rng::AbstractRNG=Random.RandomDevice())
     u = rand(rng, UInt128)
     u &= 0xffffffffffff0fff3fffffffffffffff
     u |= 0x00000000000040008000000000000000
