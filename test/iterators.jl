@@ -868,6 +868,7 @@ end
     @test cumprod(x + 1 for x in 1:3) == [2, 6, 24]
     @test accumulate(+, (x^2 for x in 1:3); init=100) == [101, 105, 114]
 end
+
 @testset "Iterators.tail_if_any" begin
     @test Iterators.tail_if_any(()) == ()
     @test Iterators.tail_if_any((1, 2)) == (2, )
