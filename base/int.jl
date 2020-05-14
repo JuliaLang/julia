@@ -45,7 +45,7 @@ const BitUnsigned64T   = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UIn
 const BitIntegerType = Union{map(T->Type{T}, BitInteger_types)...}
 
 """
-    signed(T::Integer)
+    signed(T::Type{<:Integer})
 
 Convert an integer bitstype to the signed type of the same size.
 # Examples
@@ -60,6 +60,8 @@ julia> signed(Int64)
 Int64
 ```
 """
+function signed(::Type{<:Integer}) end
+
 signed(::Type{UInt8}) = Int8
 signed(::Type{UInt16}) = Int16
 signed(::Type{UInt32}) = Int32

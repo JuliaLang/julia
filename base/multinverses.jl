@@ -7,7 +7,7 @@ using  Base: IndexLinear, IndexCartesian, tail
 export multiplicativeinverse
 
 """
-    unsigned(T::Integer)
+    unsigned(T::Type{<:Integer})
 
 Convert an integer bitstype to the unsigned type of the same size.
 # Examples
@@ -18,6 +18,8 @@ julia> unsigned(UInt64)
 UInt64
 ```
 """
+function unsigned(::Type{<:Integer}) end
+
 unsigned(::Type{Int8}) = UInt8
 unsigned(::Type{Int16}) = UInt16
 unsigned(::Type{Int32}) = UInt32
