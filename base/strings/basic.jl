@@ -421,7 +421,7 @@ function thisind(s::AbstractString, i::Int)
     z = ncodeunits(s) + 1
     i == z && return i
     @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
-    @inbounds while 1 < i && !isvalid(s, i)
+    @inbounds while 1 < i && !(isvalid(s, i)::Bool)
         i -= 1
     end
     return i
