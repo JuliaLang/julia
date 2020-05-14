@@ -48,10 +48,10 @@ julia> rng = MersenneTwister(1234);
 
 julia> uuid1(rng)
 UUID("cfc395e8-590f-11e8-1f13-43a2532b2fa8")
+```
 
 !!! compat "Julia 1.6"
     The default rng has been changed to use Random.RandomDevice as of Julia 1.6
-```
 """
 function uuid1(rng::AbstractRNG=Random.RandomDevice())
     u = rand(rng, UInt128)
@@ -88,10 +88,9 @@ julia> rng = MersenneTwister(1234);
 
 julia> uuid4(rng)
 UUID("196f2941-2d58-45ba-9f13-43a2532b2fa8")
-
+```
 !!! compat "Julia 1.6"
     The default rng has been changed to use Random.RandomDevice as of Julia 1.6
-```
 """
 function uuid4(rng::AbstractRNG=Random.RandomDevice())
     u = rand(rng, UInt128)
