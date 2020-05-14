@@ -261,10 +261,10 @@ julia> x = :(1 + 2);
 julia> e = quote quote $x end end
 quote
     #= none:1 =#
-    quote
-        #= none:1 =#
-        $x
-    end
+    $(Expr(:quote, quote
+    #= none:1 =#
+    $(Expr(:$, :x))
+end))
 end
 ```
 
@@ -289,10 +289,10 @@ This is done with multiple `$`s:
 julia> e = quote quote $$x end end
 quote
     #= none:1 =#
-    quote
-        #= none:1 =#
-        $(1 + 2)
-    end
+    $(Expr(:quote, quote
+    #= none:1 =#
+    $(Expr(:$, :(1 + 2)))
+end))
 end
 ```
 

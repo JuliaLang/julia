@@ -147,7 +147,7 @@ free_match_context(context) =
 function err_message(errno)
     buffer = Vector{UInt8}(undef, 256)
     ccall((:pcre2_get_error_message_8, PCRE_LIB), Cvoid,
-          (Int32, Ptr{UInt8}, Csize_t), errno, buffer, sizeof(buffer))
+          (UInt32, Ptr{UInt8}, Csize_t), errno, buffer, sizeof(buffer))
     GC.@preserve buffer unsafe_string(pointer(buffer))
 end
 
