@@ -234,10 +234,8 @@ the square root of [`eps`](@ref) of the type of `x` or `y`, whichever is bigger 
 This corresponds to requiring equality of about half of the significand digits. Otherwise,
 e.g. for integer arguments or if an `atol > 0` is supplied, `rtol` defaults to zero.
 
-If `x` and `y` are scalar values (i.e., numbers), `norm` defaults to `abs`, but
-may be changed by passing a `norm::Function` keyword argument.
-`x` and `y` may also be arrays of numbers, in which case `norm` defaults to the usual
-`norm` function in LinearAlgebra.
+The `norm` keyword defaults to `abs` for numeric `(x,y)` and to `LinearAlgebra.norm` for
+arrays (where an alternative `norm` choice is sometimes useful).
 When `x` and `y` are arrays, if `norm(x-y)` is not finite (i.e. `±Inf`
 or `NaN`), the comparison falls back to checking whether all elements of `x` and `y` are
 approximately equal component-wise.
