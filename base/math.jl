@@ -101,7 +101,7 @@ end
 """
     evalpoly(x, p)
 
-Evaluate the polynomial ``\\sum_k p[k] x^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
+Evaluate the polynomial ``\\sum_k x^{k-1} p[k]`` for the coefficients `p[1]`, `p[2]`, ...;
 that is, the coefficients are given in ascending order by power of `x`.
 Loops are unrolled at compile time if the number of coefficients is statically known, i.e.
 when `p` is a `Tuple`.
@@ -210,7 +210,7 @@ end
 """
     @evalpoly(z, c...)
 
-Evaluate the polynomial ``\\sum_k c[k] z^{k-1}`` for the coefficients `c[1]`, `c[2]`, ...;
+Evaluate the polynomial ``\\sum_k z^{k-1} c[k]`` for the coefficients `c[1]`, `c[2]`, ...;
 that is, the coefficients are given in ascending order by power of `z`.  This macro expands
 to efficient inline code that uses either Horner's method or, for complex `z`, a more
 efficient Goertzel-like algorithm.
