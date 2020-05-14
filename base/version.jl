@@ -154,7 +154,7 @@ function ident_cmp(
     B::Tuple{Vararg{Union{Integer,String}}},
 )
     for (a, b) in zip(A, B)
-       c = ident_cmp(a,b)
+       c = ident_cmp(a,b)::Int
        (c != 0) && return c
     end
     length(A) < length(B) ? -1 :
