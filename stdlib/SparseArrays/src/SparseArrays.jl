@@ -24,7 +24,7 @@ import Base: acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
     tand, tanh, trunc, abs, abs2,
     broadcast, ceil, complex, conj, convert, copy, copyto!, adjoint,
     exp, expm1, findall, findmax, findmin, float, getindex,
-    vcat, hcat, hvcat, cat, imag, argmax, kron, length, log, log1p, max, min,
+    vcat, hcat, hvcat, cat, imag, argmax, kron, kron!, length, log, log1p, max, min,
     maximum, minimum, one, promote_eltype, real, reshape, rot180,
     rotl90, rotr90, round, setindex!, similar, size, transpose,
     vec, permute!, map, map!, Array, diff, circshift!, circshift

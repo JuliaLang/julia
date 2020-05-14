@@ -1295,16 +1295,21 @@ function opnormestinv(A::AbstractSparseMatrixCSC{T}, t::Integer = min(2,maximum(
 end
 
 ## kron
-
-# sparse matrix ⊗ sparse matrix
-function kron(A::AbstractSparseMatrixCSC{T1,S1}, B::AbstractSparseMatrixCSC{T2,S2}) where {T1,S1,T2,S2}
+@inline function kron!(C::SparseMatrixCSC, A::AbstractSparseMatrixCSC, B::AbstractSparseMatrixCSC)
     nnzC = nnz(A)*nnz(B)
     mA, nA = size(A); mB, nB = size(B)
     mC, nC = mA*mB, nA*nB
-    colptrC = Vector{promote_type(S1,S2)}(undef, nC+1)
-    rowvalC = Vector{promote_type(S1,S2)}(undef, nnzC)
-    nzvalC  = Vector{typeof(one(T1)*one(T2))}(undef, nnzC)
-    colptrC[1] = 1
+
+    rowvalC = rowvals(C)
+    nzvalC = nonzeros(C)
+    colptrC = getcolptr(C)
+
+    @boundscheck begin
+        length(colptrC) == nC+1 || throw(DimensionMismatch("expect C to be preallocated with $(nC+1) colptrs "))
+        length(rowvalC) == nnzC || throw(DimensionMismatch("expect C to be preallocated with $(nnzC) rowvals"))
+        length(nzvalC) == nnzC || throw(DimensionMismatch("expect C to be preallocated with $(nnzC) nzvals"))
+    end
+
     col = 1
     @inbounds for j = 1:nA
         startA = getcolptr(A)[j]
@@ -1328,7 +1333,43 @@ function kron(A::AbstractSparseMatrixCSC{T1,S1}, B::AbstractSparseMatrixCSC{T2,S
             end
         end
     end
-    return SparseMatrixCSC(mC, nC, colptrC, rowvalC, nzvalC)
+    return C
+end
+
+@inline function kron!(z::SparseVector, x::SparseVector, y::SparseVector)
+    nnzx = nnz(x); nnzy = nnz(y); nnzz = nnz(z);
+    nzind = nonzeroinds(z)
+    nzval = nonzeros(z)
+
+    @boundscheck begin
+        nnzval = length(nzval); nnzind = length(nzind)
+        nnzz = nnzx*nnzy
+        nnzval == nnzz || throw(DimensionMismatch("expect z to be preallocated with $nnzz nonzeros"))
+        nnzind == nnzz || throw(DimensionMismatch("expect z to be preallocated with $nnzz nonzeros"))
+    end
+
+    @inbounds for i = 1:nnzx, j = 1:nnzy
+        this_ind = (i-1)*nnzy+j
+        nzind[this_ind] = (nonzeroinds(x)[i]-1)*length(y) + nonzeroinds(y)[j]
+        nzval[this_ind] = nonzeros(x)[i] * nonzeros(y)[j]
+    end
+    return z
+end
+
+# sparse matrix ⊗ sparse matrix
+function kron(A::AbstractSparseMatrixCSC{T1,S1}, B::AbstractSparseMatrixCSC{T2,S2}) where {T1,S1,T2,S2}
+    nnzC = nnz(A)*nnz(B)
+    mA, nA = size(A); mB, nB = size(B)
+    mC, nC = mA*mB, nA*nB
+    Tv = typeof(one(T1)*one(T2))
+    Ti = promote_type(S1,S2)
+    colptrC = Vector{Ti}(undef, nC+1)
+    rowvalC = Vector{Ti}(undef, nnzC)
+    nzvalC  = Vector{Tv}(undef, nnzC)
+    colptrC[1] = 1
+    # skip sparse_check
+    C = SparseMatrixCSC{Tv, Ti}(mC, nC, colptrC, rowvalC, nzvalC)
+    return @inbounds kron!(C, A, B)
 end
 
 # sparse vector ⊗ sparse vector
@@ -1337,27 +1378,33 @@ function kron(x::SparseVector{T1,S1}, y::SparseVector{T2,S2}) where {T1,S1,T2,S2
     nnzz = nnzx*nnzy # number of nonzeros in new vector
     nzind = Vector{promote_type(S1,S2)}(undef, nnzz) # the indices of nonzeros
     nzval = Vector{typeof(one(T1)*one(T2))}(undef, nnzz) # the values of nonzeros
-    @inbounds for i = 1:nnzx, j = 1:nnzy
-        this_ind = (i-1)*nnzy+j
-        nzind[this_ind] = (nonzeroinds(x)[i]-1)*length(y::SparseVector) + nonzeroinds(y)[j]
-        nzval[this_ind] = nonzeros(x)[i] * nonzeros(y)[j]
-    end
-    return SparseVector(length(x::SparseVector)*length(y::SparseVector), nzind, nzval)
+    z = SparseVector(length(x)*length(y), nzind, nzval)
+    return @inbounds kron!(z, x, y)
 end
 
 # sparse matrix ⊗ sparse vector & vice versa
+Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::AbstractSparseMatrixCSC, x::SparseVector) = kron!(C, A, SparseMatrixCSC(x))
+Base.@propagate_inbounds kron!(C::SparseMatrixCSC, x::SparseVector, A::AbstractSparseMatrixCSC) = kron!(C, SparseMatrixCSC(x), A)
+
 kron(A::AbstractSparseMatrixCSC, x::SparseVector) = kron(A, SparseMatrixCSC(x))
 kron(x::SparseVector, A::AbstractSparseMatrixCSC) = kron(SparseMatrixCSC(x), A)
 
 # sparse vec/mat ⊗ vec/mat and vice versa
+Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::Union{SparseVector,AbstractSparseMatrixCSC}, B::VecOrMat) = kron!(C, A, sparse(B))
+Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::VecOrMat, B::Union{SparseVector,AbstractSparseMatrixCSC}) = kron!(C, sparse(A), B)
+
 kron(A::Union{SparseVector,AbstractSparseMatrixCSC}, B::VecOrMat) = kron(A, sparse(B))
 kron(A::VecOrMat, B::Union{SparseVector,AbstractSparseMatrixCSC}) = kron(sparse(A), B)
 
 # sparse vec/mat ⊗ Diagonal and vice versa
+Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::Diagonal{T}, B::Union{SparseVector{S}, AbstractSparseMatrixCSC{S}}) where {T<:Number, S<:Number} = kron!(C, sparse(A), B)
+Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::Union{SparseVector{T}, AbstractSparseMatrixCSC{T}}, B::Diagonal{S}) where {T<:Number, S<:Number} = kron!(C, A, sparse(B))
+
 kron(A::Diagonal{T}, B::Union{SparseVector{S}, AbstractSparseMatrixCSC{S}}) where {T<:Number, S<:Number} = kron(sparse(A), B)
 kron(A::Union{SparseVector{T}, AbstractSparseMatrixCSC{T}}, B::Diagonal{S}) where {T<:Number, S<:Number} = kron(A, sparse(B))
 
 # sparse outer product
+kron!(C::SparseMatrixCSC, A::SparseVectorUnion, B::AdjOrTransSparseVectorUnion) = broadcast!(*, C, A, B)
 kron(A::SparseVectorUnion, B::AdjOrTransSparseVectorUnion) = A .* B
 
 ## det, inv, cond

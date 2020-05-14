@@ -542,6 +542,8 @@ for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
     end
 end
 
+function kron! end
+
 const var"'" = adjoint
 
 """

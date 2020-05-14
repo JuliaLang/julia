@@ -29,7 +29,7 @@ Build system changes
 
 New library functions
 ---------------------
-
+* New function `Base.kron!` and corresponding overloads for various matrix types for performing Kronecker product in-place. ([#31069]).
 
 New library features
 --------------------
