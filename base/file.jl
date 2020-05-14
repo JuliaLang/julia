@@ -991,7 +991,7 @@ that directory will be recursively changed.
 Return `path`.
 
 !!! note
-     Prior to Julia 1.5, this did not correctly manipulate filesystem ACLs
+     Prior to Julia 1.6, this did not correctly manipulate filesystem ACLs
      on Windows, therefore it would only set read-only bits on files.  It
      now is able to manipulate ACLs.
 """
