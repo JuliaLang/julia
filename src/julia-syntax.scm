@@ -336,8 +336,8 @@
                                    (append req opt vararg) rett)))))
    ;; no optional positional args
    (let* ((names (map car sparams))
-         (anames (map (lambda (x) (if (underscore-symbol? x) UNUSED x))(llist-vars argl)))
-         (unused_anames (filter (lambda (x) (not (eq? x UNUSED))) anames)))
+          (anames (map (lambda (x) (if (underscore-symbol? x) UNUSED x)) (llist-vars argl)))
+          (unused_anames (filter (lambda (x) (not (eq? x UNUSED))) anames)))
      (if (has-dups unused_anames)
          (error (string "function argument name not unique: \"" (car (has-dups unused_anames)) "\"")))
      (if (has-dups names)
