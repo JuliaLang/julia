@@ -243,8 +243,8 @@ julia> g(2, 3.0)
 
 julia> g(2.0, 3.0)
 ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
-  g(x::Float64, y) in Main at none:1
   g(x, y::Float64) in Main at none:1
+  g(x::Float64, y) in Main at none:1
 Possible fix, define
   g(::Float64, ::Float64)
 ```

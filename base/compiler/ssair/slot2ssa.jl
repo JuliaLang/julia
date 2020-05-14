@@ -83,10 +83,6 @@ function make_ssa!(ci::CodeInfo, code::Vector{Any}, idx, slot, @nospecialize(typ
     idx
 end
 
-struct UndefToken
-end
-const undef_token = UndefToken()
-
 function new_to_regular(@nospecialize(stmt), new_offset::Int)
     if isa(stmt, NewSSAValue)
         return SSAValue(stmt.id + new_offset)

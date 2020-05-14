@@ -405,15 +405,14 @@ end
 
 let s = "(1, CompletionFoo.test2(`')'`,"
     c, r, res = test_complete(s)
-    @test c[1] == string(first(methods(Main.CompletionFoo.test2, Tuple{Cmd})))
     @test length(c) == 1
+    @test c[1] == string(first(methods(Main.CompletionFoo.test2, Tuple{Cmd})))
 end
 
 let s = "CompletionFoo.test3([1, 2] .+ CompletionFoo.varfloat,"
     c, r, res = test_complete(s)
     @test !res
-    @test_broken c[1] == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
-    @test_broken length(c) == 1
+    @test_broken only(c) == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
 end
 
 let s = "CompletionFoo.test3([1.,2.], 1.,"
@@ -439,8 +438,7 @@ end
 let s = "CompletionFoo.test5(broadcast((x,y)->x==y, push!(Base.split(\"\",' '),\"\",\"\"), \"\"),"
     c, r, res = test_complete(s)
     @test !res
-    @test_broken length(c) == 1
-    @test_broken c[1] == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
+    @test_broken only(c) == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
 end
 
 # test partial expression expansion

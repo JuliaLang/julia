@@ -568,7 +568,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         write_uint8(s->s, TAG_METHOD);
         jl_method_t *m = (jl_method_t*)v;
         int internal = 1;
-        int external_mt = 0;
         internal = module_in_worklist(m->module);
         if (!internal) {
             // flag this in the backref table as special
@@ -581,22 +580,11 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         write_uint8(s->s, internal);
         if (!internal)
             return;
-        jl_methtable_t *mt = jl_method_table_for((jl_value_t*)m->sig);
-        assert((jl_value_t*)mt != jl_nothing);
-        external_mt = !module_in_worklist(mt->module);
         jl_serialize_value(s, m->specializations);
         jl_serialize_value(s, m->speckeyset);
         jl_serialize_value(s, (jl_value_t*)m->name);
         jl_serialize_value(s, (jl_value_t*)m->file);
         write_int32(s->s, m->line);
-        if (external_mt) {
-            jl_serialize_value(s, jl_nothing);
-            jl_serialize_value(s, jl_nothing);
-        }
-        else {
-            jl_serialize_value(s, (jl_value_t*)m->ambig);
-            jl_serialize_value(s, (jl_value_t*)m->resorted);
-        }
         write_int32(s->s, m->called);
         write_int32(s->s, m->nargs);
         write_int32(s->s, m->nospecialize);
@@ -995,7 +983,8 @@ static void jl_collect_backedges(jl_array_t *s, jl_array_t *t)
                         }
                         size_t min_valid = 0;
                         size_t max_valid = ~(size_t)0;
-                        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, -1, 0, jl_world_counter, &min_valid, &max_valid);
+                        int ambig = 0;
+                        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, -1, 0, jl_world_counter, &min_valid, &max_valid, &ambig);
                         if (matches == jl_false) {
                             valid = 0;
                             break;
@@ -1405,10 +1394,6 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->line = read_int32(s->s);
     m->primary_world = jl_world_counter;
     m->deleted_world = ~(size_t)0;
-    m->ambig = jl_deserialize_value(s, (jl_value_t**)&m->ambig);
-    jl_gc_wb(m, m->ambig);
-    m->resorted = jl_deserialize_value(s, (jl_value_t**)&m->resorted);
-    jl_gc_wb(m, m->resorted);
     m->called = read_int32(s->s);
     m->nargs = read_int32(s->s);
     m->nospecialize = read_int32(s->s);
@@ -1858,7 +1843,9 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
         int valid = 1;
         size_t min_valid = 0;
         size_t max_valid = ~(size_t)0;
-        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, -1, 0, jl_world_counter, &min_valid, &max_valid);
+        int ambig = 0;
+        // TODO: possibly need to included ambiguities too (for the optimizer correctness)?
+        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, -1, 0, jl_world_counter, &min_valid, &max_valid, &ambig);
         if (matches == jl_false || jl_array_len(matches) != jl_array_len(expected)) {
             valid = 0;
         }

@@ -19,7 +19,7 @@ mutable struct OptimizationState
     const_api::Bool
     # cached results of calling `_methods_by_ftype` from inference, including
     # `min_valid` and `max_valid`
-    matching_methods_cache::IdDict{Any, Tuple{Any, UInt, UInt}}
+    matching_methods_cache::IdDict{Any, Tuple{Any, UInt, UInt, Bool}}
     # TODO: This will be eliminated once optimization no longer needs to do method lookups
     interp::AbstractInterpreter
     function OptimizationState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
@@ -64,7 +64,7 @@ mutable struct OptimizationState
                    src, inmodule, nargs,
                    get_world_counter(), UInt(1), get_world_counter(),
                    sptypes_from_meth_instance(linfo), slottypes, false,
-                   IdDict{Any, Tuple{Any, UInt, UInt}}(), interp)
+                   IdDict{Any, Tuple{Any, UInt, UInt, Bool}}(), interp)
         end
 end
 

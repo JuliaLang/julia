@@ -746,16 +746,12 @@ Base.delete_method(m)
 foo(::Int, ::Int) = 1
 foo(::Real, ::Int) = 2
 foo(::Int, ::Real) = 3
-@test all(map(g->g.ambig==nothing, methods(foo)))
 Base.delete_method(first(methods(foo)))
-@test !all(map(g->g.ambig==nothing, methods(foo)))
 @test_throws MethodError foo(1, 1)
 foo(::Int, ::Int) = 1
 foo(1, 1)
-@test map(g->g.ambig==nothing, methods(foo)) == [true, false, false]
 Base.delete_method(first(methods(foo)))
 @test_throws MethodError foo(1, 1)
-@test map(g->g.ambig==nothing, methods(foo)) == [false, false]
 
 # multiple deletions and ambiguities
 typeparam(::Type{T}, a::Array{T}) where T<:AbstractFloat = 1

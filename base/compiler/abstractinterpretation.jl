@@ -16,18 +16,19 @@ const _REF_NAME = Ref.body.name
 call_result_unused(frame::InferenceState, pc::LineNum=frame.currpc) =
     isexpr(frame.src.code[frame.currpc], :call) && isempty(frame.ssavalue_uses[pc])
 
-function matching_methods(@nospecialize(atype), cache::IdDict{Any, Tuple{Any, UInt, UInt}}, max_methods::Int, world::UInt)
+function matching_methods(@nospecialize(atype), cache::IdDict{Any, Tuple{Any, UInt, UInt, Bool}}, max_methods::Int, world::UInt)
     box = Core.Box(atype)
     return get!(cache, atype) do
         _min_val = UInt[typemin(UInt)]
         _max_val = UInt[typemax(UInt)]
-        ms = _methods_by_ftype(box.contents, max_methods, world, _min_val, _max_val)
-        return ms, _min_val[1], _max_val[1]
+        _ambig = Int32[0]
+        ms = _methods_by_ftype(box.contents, max_methods, world, false, _min_val, _max_val, _ambig)
+        return ms, _min_val[1], _max_val[1], _ambig[1] != 0
     end
 end
 
-function matching_methods(@nospecialize(atype), cache::IdDict{Any, Tuple{Any, UInt, UInt}}, max_methods::Int, world::UInt, min_valid::Vector{UInt}, max_valid::Vector{UInt})
-    ms, minvalid, maxvalid = matching_methods(atype, cache, max_methods, world)
+function matching_methods(@nospecialize(atype), cache::IdDict{Any, Tuple{Any, UInt, UInt, Bool}}, max_methods::Int, world::UInt, min_valid::Vector{UInt}, max_valid::Vector{UInt})
+    ms, minvalid, maxvalid, ambig = matching_methods(atype, cache, max_methods, world)
     min_valid[1] = max(min_valid[1], minvalid)
     max_valid[1] = min(max_valid[1], maxvalid)
     return ms

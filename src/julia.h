@@ -284,11 +284,6 @@ typedef struct _jl_method_t {
     // method's type signature. redundant with TypeMapEntry->specTypes
     jl_value_t *sig;
 
-    // list of potentially-ambiguous methods (nothing = none, Vector{Any} of TypeMapEntry otherwise)
-    jl_value_t *ambig;
-    // forward references to later items (typemap entries) which might sort before this one
-    jl_value_t *resorted;
-
     // table of all jl_method_instance_t specializations we have
     jl_svec_t *specializations; // allocated as [hashable, ..., NULL, linear, ....]
     jl_array_t *speckeyset; // index lookup by hash into specializations
