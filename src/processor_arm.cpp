@@ -11,13 +11,13 @@
 #include <algorithm>
 
 // This nesting is required to allow compilation on musl
-#define DYN_GETAUXVAL
+#define USE_DYN_GETAUXVAL
 #if defined(_CPU_AARCH64_)
-#  undef DYN_GETAUXVAL
+#  undef USE_DYN_GETAUXVAL
 #  include <sys/auxv.h>
 #elif defined(__GLIBC_PREREQ)
 #  if __GLIBC_PREREQ(2, 16)
-#    undef DYN_GETAUXVAL
+#    undef USE_DYN_GETAUXVAL
 #    include <sys/auxv.h>
 #  endif
 #endif
@@ -504,7 +504,7 @@ static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 #  define AT_HWCAP2 26
 #endif
 
-#if defined(DYN_GETAUXVAL)
+#if defined(USE_DYN_GETAUXVAL)
 static unsigned long getauxval_procfs(unsigned long type)
 {
     int fd = open("/proc/self/auxv", O_RDONLY);
