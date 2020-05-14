@@ -2,7 +2,7 @@
 
 # Date/DateTime Ranges
 
-(::Type{StepRange{<:Dates.DatePeriod,<:Real}})(start, step, stop) =
+StepRange{<:Dates.DatePeriod,<:Real}(start, step, stop) =
     throw(ArgumentError("must specify step as a Period when constructing Dates ranges"))
 
 # Given a start and end date, how many steps/periods are in between
