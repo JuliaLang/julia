@@ -1009,94 +1009,99 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
             continue
         end
 
-        # Regular case: Retrieve matching methods from cache (or compute them)
-        (meth, min_valid, max_valid) = get(sv.matching_methods_cache, sig.atype) do
-            # World age does not need to be taken into account in the cache
-            # because it is forwarded from type inference through `sv.params`
-            # in the case that the cache is nonempty, so it should be unchanged
-            # The max number of methods should be the same as in inference most
-            # of the time, and should not affect correctness otherwise.
-            min_val = UInt[typemin(UInt)]
-            max_val = UInt[typemax(UInt)]
-            ms = _methods_by_ftype(sig.atype, sv.params.MAX_METHODS,
-                                   sv.world, min_val, max_val)
-            return (ms, min_val[1], max_val[1])
+        nu = countunionsplit(sig.atypes)
+        if nu == 1 || nu > sv.params.MAX_UNION_SPLITTING
+            splits = Any[sig.atype]
+        else
+            splits = Any[]
+            for union_sig in UnionSplitSignature(sig.atypes)
+                push!(splits, argtypes_to_type(union_sig))
+            end
         end
-        if meth === false || length(meth) == 0
-            # No applicable method, or too many applicable methods
-            continue
-        end
-        update_valid_age!(min_valid, max_valid, sv)
 
         cases = Pair{Any, Any}[]
-        # TODO: This could be better
-        signature_union = Union{Any[match[1]::Type for match in meth]...}
+        signature_union = Union{}
+        only_method = nothing  # keep track of whether there is one matching method
+        too_many = false
+        local meth
+        local fully_covered = true
+        for atype in splits
+            # Regular case: Retrieve matching methods from cache (or compute them)
+            (meth, min_valid, max_valid) = get(sv.matching_methods_cache, atype) do
+                # World age does not need to be taken into account in the cache
+                # because it is forwarded from type inference through `sv.params`
+                # in the case that the cache is nonempty, so it should be unchanged
+                # The max number of methods should be the same as in inference most
+                # of the time, and should not affect correctness otherwise.
+                min_val = UInt[typemin(UInt)]
+                max_val = UInt[typemax(UInt)]
+                ms = _methods_by_ftype(atype, sv.params.MAX_METHODS,
+                    sv.world, min_val, max_val)
+                return (ms, min_val[1], max_val[1])
+            end
+            if meth === false
+                # Too many applicable methods
+                too_many = true
+                break
+            elseif length(meth) == 0
+                # No applicable methods; try next union split
+                continue
+            elseif length(meth) == 1 && only_method !== false
+                if only_method === nothing
+                    only_method = meth[1][3]
+                elseif only_method !== meth[1][3]
+                    only_method = false
+                end
+            else
+                only_method = false
+            end
+            update_valid_age!(min_valid, max_valid, sv)
+
+            for match in meth::Vector{Any}
+                (metharg, methsp, method) = (match[1]::Type, match[2]::SimpleVector, match[3]::Method)
+                # TODO: This could be better
+                signature_union = Union{signature_union, metharg}
+                if !isdispatchtuple(metharg)
+                    fully_covered = false
+                    continue
+                end
+                case_sig = Signature(sig.f, sig.ft, sig.atypes, metharg)
+                case = analyze_method!(idx, case_sig, metharg, methsp, method,
+                    stmt, sv, false, nothing, calltype)
+                if case === nothing
+                    fully_covered = false
+                    continue
+                elseif _any(p->p[1] === metharg, cases)
+                    continue
+                end
+                push!(cases, Pair{Any,Any}(metharg, case))
+            end
+        end
+
+        too_many && continue
+
         signature_fully_covered = sig.atype <: signature_union
-        fully_covered = signature_fully_covered
-        split_out_sigs = Any[]
-
-        # For any method match that's a dispatch tuple, extract those cases first
-        for (i, match) in enumerate(meth)
-            (metharg, methsp, method) = (match[1]::Type, match[2]::SimpleVector, match[3]::Method)
-            if !isdispatchtuple(metharg)
-                fully_covered = false
-                continue
-            end
-            case_sig = Signature(sig.f, sig.ft, sig.atypes, metharg)
-            case = analyze_method!(idx, case_sig, metharg, methsp, method,
-                stmt, sv, false, nothing, calltype)
-            if case === nothing
-                fully_covered = false
-                continue
-            end
-            push!(cases, Pair{Any,Any}(metharg, case))
-            push!(split_out_sigs, metharg)
-        end
-
-        # Now, if profitable union split the atypes into dispatch tuples and match the appropriate method
-        nu = countunionsplit(sig.atypes)
-        if nu != 1 && nu <= sv.params.MAX_UNION_SPLITTING
-            fully_covered = true
-            for union_sig in UnionSplitSignature(sig.atypes)
-                metharg′ = argtypes_to_type(union_sig)
-                if !isdispatchtuple(metharg′)
-                    fully_covered = false
-                    continue
-                elseif _any(x->x === metharg′, split_out_sigs)
-                    continue
-                end
-                # `meth` is in specificity order, so find the first applicable method
-                found_any = false
-                for (i, match) in enumerate(meth)
-                    (metharg, methsp, method) = (match[1]::Type, match[2]::SimpleVector, match[3]::Method)
-                    metharg′ <: method.sig || continue
-                    case_sig = Signature(sig.f, sig.ft, sig.atypes, metharg′)
-                    case = analyze_method!(idx, case_sig, metharg′, methsp, method, stmt, sv, false, nothing,
-                                           calltype)
-                    if case !== nothing
-                        found_any = true
-                        push!(cases, Pair{Any,Any}(metharg′, case))
-                    end
-                    break
-                end
-                if !found_any
-                    fully_covered = false
-                    continue
-                end
-            end
-        end
-
         # If we're fully covered and there's only one applicable method,
         # we inline, even if the signature is not a dispatch tuple
-        if signature_fully_covered && length(cases) == 0 && length(meth) == 1
-            metharg = meth[1][1]::Type
-            methsp = meth[1][2]::SimpleVector
-            method = meth[1][3]::Method
+        if signature_fully_covered && length(cases) == 0 && only_method isa Method
+            if length(splits) > 1
+                # get match information for a single overall match instead of union splits
+                meth = get(sv.matching_methods_cache, sig.atype) do
+                    ms = _methods_by_ftype(sig.atype, sv.params.MAX_METHODS,
+                        sv.world, UInt[typemin(UInt)], UInt[typemin(UInt)])
+                    return ms
+                end
+                @assert length(meth) == 1
+            end
+            (metharg, methsp, method) = (meth[1][1]::Type, meth[1][2]::SimpleVector, meth[1][3]::Method)
             fully_covered = true
             case = analyze_method!(idx, sig, metharg, methsp, method,
                 stmt, sv, false, nothing, calltype)
             case === nothing && continue
             push!(cases, Pair{Any,Any}(metharg, case))
+        end
+        if !signature_fully_covered
+            fully_covered = false
         end
 
         # If we only have one case and that case is fully covered, we may either
