@@ -59,8 +59,6 @@ static int endswith_extension(const char *path)
 
 #define PATHBUF 4096
 
-extern char *julia_bindir;
-
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
 
 #ifdef _OS_WINDOWS_
@@ -136,7 +134,7 @@ JL_DLLEXPORT int jl_dlclose(void *handle)
 
 JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, int throw_err)
 {
-    char path[PATHBUF];
+    char path[PATHBUF], relocated[PATHBUF];
     int i;
 #ifdef _OS_WINDOWS_
     int err;
@@ -173,6 +171,9 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
       this branch permutes all base paths in DL_LOAD_PATH with all extensions
       note: skip when !jl_base_module to avoid UndefVarError(:DL_LOAD_PATH),
             and also skip for absolute paths
+      We also do simple string replacement here for elements starting with `@executable_path/`.
+      While these exist as OS concepts on Darwin, we want to use them on other platforms
+      such as Windows, so we emulate them here.
     */
     if (!abspath && jl_base_module != NULL) {
         jl_array_t *DL_LOAD_PATH = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("DL_LOAD_PATH"));
@@ -183,13 +184,21 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
                 size_t len = strlen(dl_path);
                 if (len == 0)
                     continue;
+
+                // Is this entry supposed to be relative to the bindir?
+                if (len >= 16 && strncmp(dl_path, "@executable_path", 16) == 0) {
+                    snprintf(relocated, PATHBUF, "%s%s", jl_options.julia_bindir, dl_path + 16);
+                    len = len - 16 + strlen(jl_options.julia_bindir);
+                } else {
+                    strncpy(relocated, dl_path, len);
+                }
                 for (i = 0; i < n_extensions; i++) {
                     const char *ext = extensions[i];
                     path[0] = '\0';
-                    if (dl_path[len-1] == PATHSEPSTRING[0])
-                        snprintf(path, PATHBUF, "%s%s%s", dl_path, modname, ext);
+                    if (relocated[len-1] == PATHSEPSTRING[0])
+                        snprintf(path, PATHBUF, "%s%s%s", relocated, modname, ext);
                     else
-                        snprintf(path, PATHBUF, "%s" PATHSEPSTRING "%s%s", dl_path, modname, ext);
+                        snprintf(path, PATHBUF, "%s" PATHSEPSTRING "%s%s", relocated, modname, ext);
 #ifdef _OS_WINDOWS_
                     if (i == 0) { // LoadLibrary already tested the extensions, we just need to check the `stat` result
 #endif
