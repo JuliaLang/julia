@@ -36,7 +36,7 @@ const namespace_oid  = UUID(0x6ba7b8129dad11d180b400c04fd430c8) # 6ba7b812-9dad-
 const namespace_x500 = UUID(0x6ba7b8149dad11d180b400c04fd430c8) # 6ba7b814-9dad-11d1-80b4-00c04fd430c8
 
 """
-    uuid1([rng::AbstractRNG=GLOBAL_RNG]) -> UUID
+    uuid1([rng::AbstractRNG=Random.RandomDevice()]) -> UUID
 
 Generates a version 1 (time-based) universally unique identifier (UUID), as specified
 by RFC 4122. Note that the Node ID is randomly generated (does not identify the host)
@@ -74,7 +74,7 @@ function uuid1(rng::AbstractRNG=Random.RandomDevice())
 end
 
 """
-    uuid4([rng::AbstractRNG=GLOBAL_RNG]) -> UUID
+    uuid4([rng::AbstractRNG=Random.RandomDevice()]) -> UUID
 
 Generates a version 4 (random or pseudo-random) universally unique identifier (UUID),
 as specified by RFC 4122.
