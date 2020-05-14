@@ -136,6 +136,8 @@ end
 
 # keys of a generator for find* and arg* (see #34678)
 @test keys(x^2 for x in -1:0.5:1) == 1:5
+@test findall(!iszero, x^2 for x in -1:0.5:1) == [1, 2, 4, 5]
+@test argmin(x^2 for x in -1:0.5:1) == 3
 
 # inference on vararg generator of a type (see #22907 comments)
 let f(x) = collect(Base.Generator(=>, x, x))
