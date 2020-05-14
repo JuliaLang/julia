@@ -70,6 +70,7 @@ julia> signed(UInt64)
 Int64
 ```
 """
+signed(::Type{Bool}) = Int
 signed(::Type{UInt8}) = Int8
 signed(::Type{UInt16}) = Int16
 signed(::Type{UInt32}) = Int32
