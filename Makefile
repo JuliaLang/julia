@@ -459,12 +459,6 @@ ifeq ($(OS), Linux)
 	# Copy over any bundled ca certs we picked up from the system during buildi
 	-cp $(build_datarootdir)/julia/cert.pem $(DESTDIR)$(datarootdir)/julia/
 endif
-	# Copy in startup.jl files per-platform for binary distributions as well
-	# Note that we don't install to sysconfdir: we always install to $(DESTDIR)$(prefix)/etc.
-	# If you want to make a distribution with a hardcoded path, you take care of installation
-ifeq ($(OS), Darwin)
-	-cat $(JULIAHOME)/contrib/mac/startup.jl >> $(DESTDIR)$(prefix)/etc/julia/startup.jl
-endif
 ifeq ($(OS), WINNT)
 	cd $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 endif
