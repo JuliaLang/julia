@@ -969,7 +969,8 @@ end
     b = UInt48(0x00000002);
     c = UInt48(0x00000003);
     let arrayOfUInt48 = [a, b, c]
-        @test sizeof(arrayOfUInt48) == 24
+        f35884(x) = sizeof(x)
+        @test f35884(arrayOfUInt48) == 24
         @test Core.sizeof(arrayOfUInt48) == 24
     end
 end
