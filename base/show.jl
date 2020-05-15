@@ -1135,6 +1135,7 @@ end
 
 function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, prec::Int, quote_level::Int)
     if isa(value, Symbol) && !(value in quoted_syms)
+        value = value::Symbol
         s = string(value)
         if isidentifier(s) || (isoperator(value) && value !== Symbol("'"))
             print(io, ":")
@@ -1144,6 +1145,7 @@ function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, pre
         end
     else
         if isa(value,Expr) && value.head === :block
+            value = value::Expr
             show_block(IOContext(io, beginsym=>false), "quote", value, indent, quote_level)
             print(io, "end")
         else
