@@ -46,6 +46,8 @@ end
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
 @test reduce(+, 1:5; init=1000) == (1000 + 1 + 2 + 3 + 4 + 5)
 @test reduce(+, 1) == 1
+@test_throws ArgumentError reduce(*, ())
+@test_throws ArgumentError reduce(*, Union{}[])
 
 # mapreduce
 @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
