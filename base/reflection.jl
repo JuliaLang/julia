@@ -933,6 +933,23 @@ function visit(f, d::Core.TypeMapEntry)
     end
     nothing
 end
+function visit(f, d::SimpleVector)
+    for i = 1:length(d)
+        if isassigned(d, i)
+            f(d[i])
+        end
+    end
+end
+function visit(f, d::Core.MethodInstance)
+    if isdefined(d, :cache)
+        ci = d.cache
+        f(ci)
+        while isdefined(ci, :next)
+            ci = ci.next
+            f(ci)
+        end
+    end
+end
 
 function length(mt::Core.MethodTable)
     n = 0
