@@ -722,7 +722,8 @@ import Base.ImmutableDict
     v = [k1 => v1, k2 => v2]
     d5 = ImmutableDict(v...)
     @test d5 == d2
-    @test collect(d5) == v
+    @test reverse(collect(d5)) == v
+    @test ImmutableDict(:a => 1, :a => 2)[:a] == 2
 
     @test !haskey(ImmutableDict(-0.0=>1), 0.0)
 end
