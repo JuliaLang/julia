@@ -105,6 +105,12 @@ Severity/verbosity of a log record.
 The log level provides a key against which potential log records may be
 filtered, before any other work is done to construct the log record data
 structure itself.
+
+# Examples
+```
+julia> Logging.LogLevel(0) == Logging.Info
+true
+```
 """
 struct LogLevel
     level::Int32
@@ -420,6 +426,11 @@ end
 Disable all log messages at log levels equal to or less than `level`.  This is
 a *global* setting, intended to make debug logging extremely cheap when
 disabled.
+
+# Examples
+```
+Logging.disable_logging(Logging.Info) # Disable debug and info
+```
 """
 function disable_logging(level::LogLevel)
     _min_enabled_level[] = level + 1
