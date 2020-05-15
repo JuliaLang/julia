@@ -322,8 +322,14 @@ B33163(x) = x
 
 # Issue #14637
 @test (@which Base.Base.Base.nothing) == Core
-@test_throws ErrorException (@functionloc Base.nothing)
+@test (@functionloc Base.nothing)[2] isa Integer
 @test (@code_typed (3//4).num)[2] == Int
+
+struct A14637
+    x
+end
+a14637 = A14637(0)
+@test (@which a14637.x).name == :getproperty
 
 # Issue #28615
 @test_throws ErrorException (@which [1, 2] .+ [3, 4])
