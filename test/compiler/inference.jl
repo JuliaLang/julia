@@ -1144,7 +1144,8 @@ function get_linfo(@nospecialize(f), @nospecialize(t))
 end
 
 function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val))
-    linfo = Core.Compiler.inf_for_methodinstance(get_linfo(f, t), Core.Compiler.get_world_counter())::Core.CodeInstance
+    interp = Core.Compiler.NativeInterpreter()
+    linfo = Core.Compiler.inf_for_methodinstance(interp, get_linfo(f, t), Core.Compiler.get_world_counter())::Core.CodeInstance
     # If coverage is not enabled, make the check strict by requiring constant ABI
     # Otherwise, check the typed AST to make sure we return a constant.
     if Base.JLOptions().code_coverage == 0
@@ -1444,7 +1445,8 @@ gg13183(x::X...) where {X} = (_false13183 ? gg13183(x, x) : 0)
 # test the external OptimizationState constructor
 let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     world = UInt(23) # some small-numbered world that should be valid
-    opt = Core.Compiler.OptimizationState(linfo, Core.Compiler.Params(world))
+    interp = Core.Compiler.NativeInterpreter()
+    opt = Core.Compiler.OptimizationState(linfo, Core.Compiler.OptimizationParams(interp), interp)
     # make sure the state of the properties look reasonable
     @test opt.src !== linfo.def.source
     @test length(opt.src.slotflags) == linfo.def.nargs <= length(opt.src.slotnames)

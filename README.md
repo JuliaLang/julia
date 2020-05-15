@@ -61,7 +61,7 @@ for OS and platform combinations.
 If everything works correctly, you will see a Julia banner and an
 interactive prompt into which you can enter expressions for
 evaluation.  You can read about [getting
-started](https://julialang.org/manual/getting-started) in the manual.
+started](https://docs.julialang.org/en/v1/manual/getting-started/) in the manual.
 
 **Note**: Although some system package managers provide Julia, such
 installations are neither maintained nor endorsed by the Julia

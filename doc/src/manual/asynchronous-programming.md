@@ -10,7 +10,7 @@ This sort of scenario falls in the domain of asynchronous programming, sometimes
 also referred to as concurrent programming (since, conceptually, multiple things
 are happening at once).
 
-To address these scenarios, Julia provides `Task`s (also known by several other
+To address these scenarios, Julia provides [`Task`](@ref)s (also known by several other
 names, such as symmetric coroutines, lightweight threads, cooperative multitasking,
 or one-shot continuations).
 When a piece of computing work (in practice, executing a particular function) is designated as
@@ -26,7 +26,7 @@ calls, where the called function must finish executing before control returns to
 You can think of a `Task` as a handle to a unit of computational work to be performed.
 It has a create-start-run-finish lifecycle.
 Tasks are created by calling the `Task` constructor on a 0-argument function to run,
-or using the `@task` macro:
+or using the [`@task`](@ref) macro:
 
 ```
 julia> t = @task begin; sleep(5); println("done"); end
@@ -36,7 +36,7 @@ Task (runnable) @0x00007f13a40c0eb0
 `@task x` is equivalent to `Task(()->x)`.
 
 This task will wait for five seconds, and then print `done`. However, it has not
-started running yet. We can run it whenever we're ready by calling `schedule`:
+started running yet. We can run it whenever we're ready by calling [`schedule`](@ref):
 
 ```
 julia> schedule(t);
@@ -47,12 +47,12 @@ That is because it simply adds `t` to an internal queue of tasks to run.
 Then, the REPL will print the next prompt and wait for more input.
 Waiting for keyboard input provides an opportunity for other tasks to run,
 so at that point `t` will start.
-`t` calls `sleep`, which sets a timer and stops execution.
+`t` calls [`sleep`](@ref), which sets a timer and stops execution.
 If other tasks have been scheduled, they could run then.
 After five seconds, the timer fires and restarts `t`, and you will see `done`
 printed. `t` is then finished.
 
-The `wait` function blocks the calling task until some other task finishes.
+The [`wait`](@ref) function blocks the calling task until some other task finishes.
 So for example if you type
 
 ```
@@ -63,8 +63,8 @@ instead of only calling `schedule`, you will see a five second pause before
 the next input prompt appears. That is because the REPL is waiting for `t`
 to finish before proceeding.
 
-It is common to want to create a task and schedule it right away, so a
-macro called `@async` is provided for that purpose --- `@async x` is
+It is common to want to create a task and schedule it right away, so the
+macro [`@async`](@ref) is provided for that purpose --- `@async x` is
 equivalent to `schedule(@task x)`.
 
 ## Communicating with Channels

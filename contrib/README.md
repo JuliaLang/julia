@@ -14,7 +14,7 @@ Installation
 |[ julia-config.jl ](https://github.com/JuliaLang/julia/blob/master/contrib/julia-config.jl) | Determines build parameters required by an embedded Julia |
 |[ julia.desktop ](https://github.com/JuliaLang/julia/blob/master/contrib/julia.desktop) | GNOME desktop config file |
 |[ mac/ ](https://github.com/JuliaLang/julia/blob/master/contrib/mac/) | Mac install files |
-|[ relative_path.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/relative_path.sh) | Convert absolute path into   relative path script |
+|[ relative_path.py ](https://github.com/JuliaLang/julia/blob/master/contrib/relative_path.py) | Convert absolute paths into   relative paths |
 |[ repackage_system_suitesparse4.make ](https://github.com/JuliaLang/julia/blob/master/contrib/repackage_system_suitesparse4.make) | Links shared    libraries from static-library for suitesparse4 |
 |[ stringreplace.c ](https://github.com/JuliaLang/julia/blob/master/contrib/stringreplace.c) | Replace strings to hardcoded paths in binaries during `make install` |
 |[ travis_fastfail.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/travis_fastfail.sh ) |  Checks for queued build tests in Travis |

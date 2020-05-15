@@ -8,7 +8,7 @@ using ..Terminals
 import ..Terminals: raw!, width, height, cmove, getX,
                        getY, clear_line, beep
 
-import Base: ensureroom, peek, show, AnyDict, position
+import Base: ensureroom, show, AnyDict, position
 using Base: something
 
 abstract type TextInterface end

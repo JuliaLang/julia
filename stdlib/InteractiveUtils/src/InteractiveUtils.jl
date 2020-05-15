@@ -363,13 +363,14 @@ function report_bug(kind)
         let Pkg = Base.require(Base.PkgId(
             Base.UUID((0x44cfe95a_1eb2_52ea,0xb672_e2afdf69b78f)), "Pkg"))
             mktempdir() do tmp
-                prev_active = Base.ACTIVE_PROJECT[]
-                env_path = joinpath(tmp, "TmpForBugReporting")
-                Pkg.generate(env_path)
-                Pkg.activate(env_path)
+                old_load_path = copy(LOAD_PATH)
+                push!(empty!(LOAD_PATH), joinpath(tmp, "Project.toml"))
+                old_home_project = Base.HOME_PROJECT[]
+                Base.HOME_PROJECT[] = nothing
                 Pkg.add(Pkg.PackageSpec(BugReportingId.name, BugReportingId.uuid))
                 BugReporting = Base.require(BugReportingId)
-                Base.ACTIVE_PROJECT[] = prev_active
+                append!(empty!(LOAD_PATH), old_load_path)
+                Base.HOME_PROJECT[] = old_home_project
             end
         end
     else

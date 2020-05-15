@@ -989,15 +989,21 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         // Do not enable update debug info since it runs the verifier on the whole module
         // and will error on the function we are currently emitting.
         ModuleSummaryIndex index = ModuleSummaryIndex(true);
-        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string, "llvmcall"),
-                                        jl_Module, &index, Err, nullptr, /* UpdateDebugInfo */ false);
-        if (failed) {
-            std::string message = "Failed to parse LLVM Assembly: \n";
-            llvm::raw_string_ostream stream(message);
-            Err.print("julia",stream,true);
-            jl_error(stream.str().c_str());
-        }
+        bool failed = parseAssemblyInto(MemoryBufferRef(ir_string, "llvmcall"),
+                                        jl_Module, &index, Err, nullptr,
+                                        /* UpdateDebugInfo */ false);
         f = jl_Module->getFunction(ir_name);
+        if (failed) {
+            // try to get the module in a workable state again
+            if (f)
+                f->eraseFromParent();
+
+            std::string message = "Failed to parse LLVM assembly: \n";
+            raw_string_ostream stream(message);
+            Err.print("", stream, true);
+            emit_error(ctx, stream.str());
+            return jl_cgval_t();
+        }
     }
     else {
         assert(isPtr);
@@ -1015,11 +1021,11 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
             f = mover.CloneFunction(f);
         }
 
-        //f->dump();
-        llvm::raw_fd_ostream out(1,false);
-        if (verifyFunction(*f,&out)) {
-            llvm_dump(f);
-            jl_error("Malformed LLVM Function");
+        std::string message = "Malformed LLVM function: \n";
+        raw_string_ostream stream(message);
+        if (verifyFunction(*f, &stream)) {
+            emit_error(ctx, stream.str());
+            return jl_cgval_t();
         }
     }
 
@@ -1046,7 +1052,12 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     JL_GC_POP();
 
     if (inst->getType() != rettype) {
-        jl_error("Return type of llvmcall'ed function does not match declared return type");
+        std::string message;
+        raw_string_ostream stream(message);
+        stream << "llvmcall return type " << *inst->getType()
+               << " does not match declared return type" << *rettype;
+        emit_error(ctx, stream.str());
+        return jl_cgval_t();
     }
 
     return mark_julia_type(ctx, inst, retboxed, rtt);
@@ -1864,13 +1875,16 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     Value *llvmf;
     if (llvmcall) {
         if (symarg.jl_ptr != NULL) {
-            jl_error("llvmcall doesn't support dynamic pointers");
+            emit_error(ctx, "llvmcall doesn't support dynamic pointers");
+            return jl_cgval_t();
         }
         else if (symarg.fptr != NULL) {
-            jl_error("llvmcall doesn't support static pointers");
+            emit_error(ctx, "llvmcall doesn't support static pointers");
+            return jl_cgval_t();
         }
         else if (symarg.f_lib != NULL) {
-            jl_error("llvmcall doesn't support dynamic libraries");
+            emit_error(ctx, "llvmcall doesn't support dynamic libraries");
+            return jl_cgval_t();
         }
         else {
             assert(symarg.f_name != NULL);
@@ -1884,10 +1898,12 @@ jl_cgval_t function_sig_t::emit_a_ccall(
 #else
                 ;
 #endif
-            if (!f_extern &&
-                (!isa<Function>(llvmf) ||
-                 cast<Function>(llvmf)->getIntrinsicID() == Intrinsic::not_intrinsic))
-                jl_error("llvmcall only supports intrinsic calls");
+            if (!f_extern && (!isa<Function>(llvmf) ||
+                              cast<Function>(llvmf)->getIntrinsicID() ==
+                                      Intrinsic::not_intrinsic)) {
+                emit_error(ctx, "llvmcall only supports intrinsic calls");
+                return jl_cgval_t();
+            }
         }
     }
     else if (symarg.jl_ptr != NULL) {

@@ -99,6 +99,11 @@ between shared libraries.
 
 If the library cannot be found, this method throws an error, unless the keyword argument
 `throw_error` is set to `false`, in which case this method returns `nothing`.
+
+!!! note
+     From Julia 1.6 on, this method replaces paths starting with `@executable_path/` with
+     the path to the Julia executable, allowing for relocatable relative-path loads. In
+     Julia 1.5 and earlier, this only worked on macOS.
 """
 function dlopen end
 

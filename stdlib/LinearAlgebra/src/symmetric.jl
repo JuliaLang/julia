@@ -1007,22 +1007,27 @@ end
 
 
 for func in (:log, :sqrt)
+    # sqrt has rtol arg to handle matrices that are semidefinite up to roundoff errors
+    rtolarg = func === :sqrt ? Any[Expr(:kw, :(rtol::Real), :(eps(real(float(one(T))))*size(A,1)))] : Any[]
+    rtolval = func === :sqrt ? :(-maximum(abs, F.values) * rtol) : 0
     @eval begin
-        function ($func)(A::HermOrSym{<:Real})
+        function ($func)(A::HermOrSym{T}; $(rtolarg...)) where {T<:Real}
             F = eigen(A)
-            if all(λ -> λ ≥ 0, F.values)
-                retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
+            λ₀ = $rtolval # treat λ ≥ λ₀ as "zero" eigenvalues up to roundoff
+            if all(λ -> λ ≥ λ₀, F.values)
+                retmat = (F.vectors * Diagonal(($func).(max.(0, F.values)))) * F.vectors'
             else
                 retmat = (F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors'
             end
             return Symmetric(retmat)
         end
 
-        function ($func)(A::Hermitian{<:Complex})
+        function ($func)(A::Hermitian{T}; $(rtolarg...)) where {T<:Complex}
             n = checksquare(A)
             F = eigen(A)
-            if all(λ -> λ ≥ 0, F.values)
-                retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
+            λ₀ = $rtolval # treat λ ≥ λ₀ as "zero" eigenvalues up to roundoff
+            if all(λ -> λ ≥ λ₀, F.values)
+                retmat = (F.vectors * Diagonal(($func).(max.(0, F.values)))) * F.vectors'
                 for i = 1:n
                     retmat[i,i] = real(retmat[i,i])
                 end

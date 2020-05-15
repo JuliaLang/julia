@@ -2192,7 +2192,7 @@ end
 
 # Syntax desugaring pass errors contain line numbers
 @test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(101, :some_file), :(f(x,x)=1))) ==
-    Expr(:error, "function argument names not unique around some_file:101")
+    Expr(:error, "function argument name not unique: \"x\" around some_file:101")
 
 # Ensure file names don't leak between `eval`s
 eval(LineNumberNode(11, :incorrect_file))

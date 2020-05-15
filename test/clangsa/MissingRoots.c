@@ -72,20 +72,6 @@ void root_value_data3() {
     JL_GC_PUSH1(&val); // expected-note{{GC frame changed here}}
                        // expected-note@-1{{Value was rooted here}}
     jl_gc_safepoint();
-    look_at_value(**&data);
-    JL_GC_POP(); // expected-note{{GC frame changed here}}
-                 // expected-note@-1{{Root was released here}}
-    jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
-    **&data; // expected-warning{{Creating derivative of value that may have been GCed}}
-             // expected-note@-1{{Creating derivative of value that may have been GCed}}
-};
-
-void root_value_data4() {
-    jl_svec_t *val = jl_svec1(NULL); // expected-note{{Started tracking value here}}
-    jl_value_t **data = jl_svec_data(val);
-    JL_GC_PUSH1(&val); // expected-note{{GC frame changed here}}
-                       // expected-note@-1{{Value was rooted here}}
-    jl_gc_safepoint();
     look_at_value(*&data[0]);
     JL_GC_POP(); // expected-note{{GC frame changed here}}
                  // expected-note@-1{{Root was released here}}
@@ -267,6 +253,25 @@ void global_array3() {
   tm = call_cache[1];
   val = (jl_value_t*)tm->func.linfo;
   look_at_value(val);
+}
+
+void nonconst_loads(jl_svec_t *v)
+{
+    size_t i = jl_svec_len(v);
+    jl_method_instance_t **data = (jl_method_instance_t**)jl_svec_data(v);
+    jl_method_instance_t *mi = data[i];
+    look_at_value(mi->specTypes);
+}
+
+void nonconst_loads2()
+{
+    jl_svec_t *v = jl_svec1(NULL); // expected-note{{Started tracking value here}}
+    size_t i = jl_svec_len(v);
+    jl_method_instance_t **data = (jl_method_instance_t**)jl_svec_data(v);
+    jl_method_instance_t *mi = data[i]; // expected-note{{No Root to propagate. Tracking}}
+    look_at_value(mi->specTypes); //expected-warning{{Passing non-rooted value as argument to function that may GC}}
+                                  //expected-note@-1{{Passing non-rooted value as argument to function that may GC}}
+                                  //expected-note@-2{{No Root to propagate. Tracking}}
 }
 
 static inline void look_at_value2(jl_value_t *v) {

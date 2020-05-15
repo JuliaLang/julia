@@ -17,9 +17,9 @@
 """
     @deprecate old new [ex=true]
 
-The first argument `old` is the signature of the deprecated method, the second one
-`new` is the call which replaces it. `@deprecate` exports `old` unless the optional
-third argument is `false`.
+Deprecate method `old` and specify the replacement call `new`. Prevent `@deprecate` from
+exporting `old` by setting `ex` to `false`. `@deprecate` defines a new method with the same
+signature as `old`.
 
 !!! compat "Julia 1.5"
     As of Julia 1.5, functions defined by `@deprecate` do not print warning when `julia`

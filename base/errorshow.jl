@@ -260,12 +260,9 @@ function showerror(io::IO, ex::MethodError)
                 isdefined(ft.name.module, name) &&
                 ft == typeof(getfield(ft.name.module, name))
             f_is_function = true
-            print(io, "no method matching ", name)
-        elseif isa(f, Type)
-            print(io, "no method matching ", f)
-        else
-            print(io, "no method matching (::", ft, ")")
         end
+        print(io, "no method matching ")
+        show_signature_function(io, isa(f, Type) ? Type{f} : typeof(f))
         print(io, "(")
         for (i, typ) in enumerate(arg_types_param)
             print(io, "::", typ)
@@ -339,7 +336,9 @@ striptype(::Type{T}) where {T} = T
 striptype(::Any) = nothing
 
 function showerror_ambiguous(io::IO, meth, f, args)
-    print(io, "MethodError: ", f, "(")
+    print(io, "MethodError: ")
+    show_signature_function(io, isa(f, Type) ? Type{f} : typeof(f))
+    print(io, "(")
     p = args.parameters
     for (i,a) in enumerate(p)
         print(io, "::", a)
@@ -415,9 +414,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # function itself doesn't match
                 continue
             else
-                # TODO: use the methodshow logic here
-                use_constructor_syntax = isa(func, Type)
-                print(iob, use_constructor_syntax ? func : typeof(func).name.mt.name)
+                show_signature_function(iob, s1)
             end
             print(iob, "(")
             t_i = copy(arg_types_param)
@@ -681,6 +678,41 @@ function is_kw_sorter_name(name::Symbol)
     return !startswith(sn, '#') && endswith(sn, "##kw")
 end
 
+# For improved user experience, filter out frames for include() implementation
+# - see #33065. See also #35371 for extended discussion of internal frames.
+function _simplify_include_frames(trace)
+    i = length(trace)
+    kept_frames = trues(i)
+    first_ignored = nothing
+    while i >= 1
+        frame, _ = trace[i]
+        mod = parentmodule(frame)
+        if isnothing(first_ignored)
+            if mod === Base && frame.func === :_include
+                # Hide include() machinery by default
+                first_ignored = i
+            end
+        else
+            # Hack: allow `mod==nothing` as a workaround for inlined functions.
+            # TODO: Fix this by improving debug info.
+            if mod in (Base,Core,nothing) && 1+first_ignored-i <= 5
+                if frame.func == :eval
+                    kept_frames[i:first_ignored] .= false
+                    first_ignored = nothing
+                end
+            else
+                # Bail out to avoid hiding frames in unexpected circumstances
+                first_ignored = nothing
+            end
+        end
+        i -= 1
+    end
+    if !isnothing(first_ignored)
+        kept_frames[i:first_ignored] .= false
+    end
+    return trace[kept_frames]
+end
+
 function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     n = 0
     last_frame = StackTraces.UNKNOWN
@@ -721,7 +753,7 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     if n > 0
         push!(ret, (last_frame, n))
     end
-    return ret
+    return _simplify_include_frames(ret)
 end
 
 function show_exception_stack(io::IO, stack::Vector)

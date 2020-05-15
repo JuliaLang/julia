@@ -525,6 +525,10 @@ end
 
 ## peek ##
 
-function peek(s::IOStream)
-    @_lock_ios s ccall(:ios_peekc, Cint, (Ptr{Cvoid},), s)
+function peek(s::IOStream, ::Type{UInt8})
+    b = @_lock_ios s ccall(:ios_peekc, Cint, (Ptr{Cvoid},), s.ios)
+    if b == -1
+        throw(EOFError())
+    end
+    return b % UInt8
 end

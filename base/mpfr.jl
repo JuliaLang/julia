@@ -348,7 +348,7 @@ big(::Type{<:AbstractFloat}) = BigFloat
 
 big(x::AbstractFloat) = convert(BigFloat, x)
 
-function (::Type{Rational{BigInt}})(x::AbstractFloat)
+function Rational{BigInt}(x::AbstractFloat)
     isnan(x) && return zero(BigInt) // zero(BigInt)
     isinf(x) && return copysign(one(BigInt),x) // zero(BigInt)
     iszero(x) && return zero(BigInt) // one(BigInt)

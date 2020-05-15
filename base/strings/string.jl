@@ -70,9 +70,9 @@ String(s::AbstractString) = print_to_string(s)
 
 unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 
-(::Type{Vector{UInt8}})(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(undef, length(s)), s)
-(::Type{Vector{UInt8}})(s::String) = Vector{UInt8}(codeunits(s))
-(::Type{Array{UInt8}})(s::String)  = Vector{UInt8}(codeunits(s))
+Vector{UInt8}(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(undef, length(s)), s)
+Vector{UInt8}(s::String) = Vector{UInt8}(codeunits(s))
+Array{UInt8}(s::String)  = Vector{UInt8}(codeunits(s))
 
 String(s::CodeUnits{UInt8,String}) = s.s
 
@@ -144,8 +144,8 @@ end
     @inbounds l = codeunit(s, i)
     (l < 0x80) | (0xf8 ≤ l) && return i+1
     if l < 0xc0
-        i′ = thisind(s, i)
-        return i′ < i ? nextind(s, i′) : i+1
+        i′ = @inbounds thisind(s, i)
+        return i′ < i ? @inbounds(nextind(s, i′)) : i+1
     end
     # first continuation byte
     (i += 1) > n && return i
@@ -176,9 +176,9 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
 
 ## required core functionality ##
 
-@propagate_inbounds function iterate(s::String, i::Int=firstindex(s))
-    i > ncodeunits(s) && return nothing
-    b = codeunit(s, i)
+@inline function iterate(s::String, i::Int=firstindex(s))
+    (i % UInt) - 1 < ncodeunits(s) || return nothing
+    b = @inbounds codeunit(s, i)
     u = UInt32(b) << 24
     between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
     return iterate_continued(s, i, u)
