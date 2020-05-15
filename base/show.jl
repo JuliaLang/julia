@@ -49,7 +49,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
     summary(io, iter)
     isempty(iter) && return
     print(io, ". ", isa(iter,KeySet) ? "Keys" : "Values", ":")
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
     if limit
         sz = displaysize(io)
         rows, cols = sz[1] - 3, sz[2]
@@ -79,7 +79,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     isempty(t) && return show(io, t)
     # show more descriptively, with one line per key/value pair
     recur_io = IOContext(io, :SHOWN_SET => t)
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
     if !haskey(io, :compact)
         recur_io = IOContext(recur_io, :compact => true)
     end
@@ -149,7 +149,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractSet{T}) where T
     isempty(t) && return show(io, t)
     # show more descriptively, with one line per value
     recur_io = IOContext(io, :SHOWN_SET => t)
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
 
     summary(io, t)
     isempty(t) && return
@@ -450,11 +450,11 @@ function show_function(io::IO, f::Function, compact::Bool)
     end
 end
 
-show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false))
+show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false)::Bool)
 print(io::IO, f::Function) = show_function(io, f, true)
 
 function show(io::IO, f::Core.IntrinsicFunction)
-    if !get(io, :compact, false)
+    if !(get(io, :compact, false)::Bool)
         print(io, "Core.Intrinsics.")
     end
     print(io, nameof(f))
@@ -564,7 +564,7 @@ function show_type_name(io::IO, tn::Core.TypeName)
     sym = (globfunc ? globname : tn.name)::Symbol
     globfunc && print(io, "typeof(")
     quo = false
-    if !get(io, :compact, false)
+    if !(get(io, :compact, false)::Bool)
         # Print module prefix unless type is visible from module passed to
         # IOContext If :module is not set, default to Main. nothing can be used
         # to force printing prefix
@@ -2129,7 +2129,7 @@ function alignment(io::IO, x::Pair)
         ctx = IOContext(io, :typeinfo => gettypeinfos(io, x)[1])
         left = length(sprint(show, x.first, context=ctx, sizehint=0))
         left += 2 * !isdelimited(ctx, x.first) # for parens around p.first
-        left += !get(io, :compact, false) # spaces are added around "=>"
+        left += !(get(io, :compact, false)::Bool) # spaces are added around "=>"
         (left+1, length(s)-left-1) # +1 for the "=" part of "=>"
     else
         (0, length(s)) # as for x::Any
