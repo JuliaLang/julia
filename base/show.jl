@@ -1742,6 +1742,31 @@ function demangle_function_name(name::AbstractString)
     return name
 end
 
+# show the called object in a signature, given its type `ft`
+# `io` should contain the UnionAll env of the signature
+function show_signature_function(io::IO, @nospecialize(ft), demangle=false, fargname="", html=false)
+    uw = unwrap_unionall(ft)
+    if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) &&
+        isdefined(uw.name.module, uw.name.mt.name) &&
+        ft == typeof(getfield(uw.name.module, uw.name.mt.name))
+        print(io, (demangle ? demangle_function_name : identity)(uw.name.mt.name))
+    elseif isa(ft, DataType) && ft.name === Type.body.name &&
+        (f = ft.parameters[1]; !isa(f, TypeVar))
+        uwf = unwrap_unionall(f)
+        parens = isa(f, UnionAll) && !(isa(uwf, DataType) && f === uwf.name.wrapper)
+        parens && print(io, "(")
+        show(io, f)
+        parens && print(io, ")")
+    else
+        if html
+            print(io, "($fargname::<b>", ft, "</b>)")
+        else
+            print(io, "($fargname::", ft, ")")
+        end
+    end
+    nothing
+end
+
 function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwargs=nothing)
     # print a method signature tuple for a lambda definition
     color = get(io, :color, false) && get(io, :backtrace, false) ? stackframe_function_color() : :nothing
@@ -1758,18 +1783,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
     end
     sig = sig.parameters
     with_output_color(color, env_io) do io
-        ft = sig[1]
-        uw = unwrap_unionall(ft)
-        if ft <: Function && isa(uw,DataType) && isempty(uw.parameters) &&
-                isdefined(uw.name.module, uw.name.mt.name) &&
-                ft == typeof(getfield(uw.name.module, uw.name.mt.name))
-            print(io, (demangle ? demangle_function_name : identity)(uw.name.mt.name))
-        elseif isa(ft, DataType) && ft.name === Type.body.name && !Core.Compiler.has_free_typevars(ft)
-            f = ft.parameters[1]
-            print(io, f)
-        else
-            print(io, "(::", ft, ")")
-        end
+        show_signature_function(io, sig[1], demangle)
     end
     first = true
     print_style = get(io, :color, false) && get(io, :backtrace, false) ? :bold : :nothing
