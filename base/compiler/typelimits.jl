@@ -268,8 +268,11 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     return true
 end
 
+union_count_abstract(x::Union) = union_count_abstract(x.a) + union_count_abstract(x.b)
+union_count_abstract(@nospecialize(x)) = !isdispatchelem(x)
+
 function issimpleenoughtype(@nospecialize t)
-    return unionlen(t) <= MAX_TYPEUNION_LENGTH && unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
+    return unionlen(t)+union_count_abstract(t) <= MAX_TYPEUNION_LENGTH && unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
 end
 
 # pick a wider type that contains both typea and typeb,
