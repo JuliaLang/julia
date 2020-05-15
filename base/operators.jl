@@ -199,7 +199,13 @@ julia> "foo" ≠ "foo"
 false
 ```
 """
-!=(x, y) = !(x == y)
+function !=(x, y)
+    cmp = x == y
+    isa(cmp, Bool) && return !cmp
+    isa(cmp, Missing) && return !cmp
+    # Due to bootstrap we can't yet make use of `@invoke`
+    return invoke(!, Tuple{typeof(cmp)}, cmp)
+end
 const ≠ = !=
 
 """

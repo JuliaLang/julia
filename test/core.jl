@@ -7221,3 +7221,78 @@ struct AVL35416{K,V}
     avl:: Union{Nothing,Node35416{AVL35416{K,V},<:K,<:V}}
 end
 @test AVL35416(Node35416{AVL35416{Integer,AbstractString},Int,String}()) isa AVL35416{Integer,AbstractString}
+
+# @invoke
+function count_instances(m::Method)
+    nmi, nci = 0, 0
+    Base.visit(m.specializations) do mi
+        nmi += 1
+        Base.visit(mi) do ci
+            nci += 1
+        end
+    end
+    return nmi, nci
+end
+not(x::Bool) = !x
+notzero(x) = (cmp = x[1] == 0; isa(cmp, Bool) ? not(cmp) : Base.@invoke not(cmp))
+notzero_noinvoke(x) = (cmp = x[1] == 0; isa(cmp, Bool) ? not(cmp) : not(cmp))
+
+@test notzero(Any[5]) === true
+@test notzero_noinvoke(Any[5]) === true
+not(x::Missing) = !x
+@test notzero(Any[missing]) === (missing != 0)
+@test notzero_noinvoke(Any[missing]) === (missing != 0)
+@test count_instances(which(notzero, (Any,))) == (1, 1)
+@test count_instances(which(notzero_noinvoke, (Any,))) == (1, 2)
+
+function notequal(@nospecialize(x), @nospecialize(y))
+    cmp = x == y
+    if isa(cmp, Bool)
+        return !cmp
+    elseif isa(cmp, Missing)
+        return !cmp
+    end
+    return Base.@invoke !cmp
+end
+notequal_noinvoke(@nospecialize(x), @nospecialize(y)) = !(x == y)
+function notequal_spec(x, y)
+    cmp = x == y
+    if isa(cmp, Bool)
+        return !cmp
+    elseif isa(cmp, Missing)
+        return !cmp
+    end
+    return Base.@invoke !cmp
+end
+notequal_spec_simple(x, y) = Base.@invoke !(x == y)
+notequal_noinvoke_spec(x, y) = !(x == y)
+
+
+for f in (notequal, notequal_noinvoke, notequal_spec, notequal_noinvoke_spec)
+    @test f(1, 2)
+    @test !f(1, 1)
+end
+struct Not end
+Base.:(!)(::Not) = true
+Base.:(==)(::Not, ::Not) = true
+Base.:(==)(x, ::Not) = Not()
+for f in (notequal, notequal_noinvoke, notequal_spec, notequal_noinvoke_spec)
+    @test f(1, 2)
+    @test f(1, Not())
+    @test !f(Not(), Not())
+end
+@test ==(count_instances(which(notequal, (Any, Any)))...)
+@test ==(count_instances(which(notequal_spec, (Any, Any)))...)
+@test <(count_instances(which(notequal_noinvoke, (Any, Any)))...)
+@test ==(count_instances(which(notequal_noinvoke_spec, (Any, Any)))...)
+
+function invokerefs!(A, @nospecialize(idx1), @nospecialize(idx2), @nospecialize(idx3), @nospecialize(idx4), @nospecialize(idx5))
+    Base.@invoke A[idx1] = -1
+    Base.@invoke A[idx2] = A[idx3]
+    Base.@invoke x = A[idx4]
+    return x, Base.@invoke A[idx5]
+end
+a = [1,2,3,4,5]
+@test invokerefs!(a, 1, 2, 3, 4, 5) == (4, 5)
+@test a[1] == -1
+@test a[2] == 3

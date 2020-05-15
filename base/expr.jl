@@ -430,3 +430,119 @@ macro generated(f)
         error("invalid syntax; @generated must be used with a function definition")
     end
 end
+
+"""
+    @invoke f(args...)
+
+`@invoke` is used to force runtime dispatch, preventing Julia's compiler from attempting to optimize the call to `f(args...)`. This can be useful in preventing invalidation of compiled methods that may be later extended.
+
+# Example
+
+Julia's fallback `!=` operator might be defined as
+
+```julia
+!=(x, y) = !(x == y)
+```
+
+and the compiler automatically specializes this for `x == y` returning either `Bool` or `Missing`:
+
+```julia
+julia> code_typed(!=, (Any, Any))[end]
+CodeInfo(
+1 ─ %1  = (x == y)::Any
+│   %2  = (isa)(%1, Missing)::Bool
+└──       goto #3 if not %2
+2 ─       goto #6
+3 ─ %5  = (isa)(%1, Bool)::Bool
+└──       goto #5 if not %5
+4 ─ %7  = π (%1, Bool)
+│   %8  = Base.not_int(%7)::Bool
+└──       goto #6
+5 ─ %10 = !%1::Union{Missing, Bool, Base.var"#64#65"{_A} where _A}
+└──       goto #6
+6 ┄ %12 = φ (#2 => $(QuoteNode(missing)), #4 => %8, #5 => %10)::Union{Missing, Bool, Base.var"#64#65"{_A} where _A}
+└──       return %12
+) => Union{Missing, Bool, Base.var"#64#65"{_A} where _A}
+```
+
+However, if a package defines a new `!` method for a new type, this
+compiled definition needs to be invalidated and a broader variant
+produced. This in turn leads to recompilation of all code that uses
+this instance of `!=`, which is quite a lot of code.
+
+One can prevent this invalidation by instead defining `!=` as
+
+```julia
+!=(x, y) = @invoke !(x == y)
+```
+
+or, if you want to "manually union-split" known cases,
+
+```julia
+function !=(x, y)
+    cmp = x == y
+    isa(cmp, Bool) && return !cmp
+    isa(cmp, Missing) && return !cmp
+    return @invoke !cmp
+end
+```
+
+These two differ only if `x` and/or `y` is not concretely inferred, so
+that the return type from `==` is not inferred.  In such cases,
+`@invoke !cmp` will occur by runtime dispatch.  In any case where the
+types of `x` and `y` are such that the value returned by `==` can be
+inferred to be `Bool` or `Missing`, dispatch still occurs at compile
+time.
+
+`@invoke` is often used in conjunction with arguments annotated with [`@nospecialize`](@ref):
+
+```julia
+function somekeymethod(@nospecialize(str::AbstractString))
+    if @invoke isempty(str)
+        ...
+```
+
+will prevent invalidation of `somekeymethod` if a package introduces a new subtype of
+`AbstractString`.
+"""
+macro invoke(ex)
+    isa(ex, Expr) || error("@invoke requires an expression")
+    head = ex.head
+    if head === :call || head === :ref
+        ex = wrapinvoke(ex)
+    elseif head === :(=)
+        rhs = ex.args[2]
+        rhs = isa(rhs, Expr) ? wrapinvoke(rhs) : rhs
+        lhs = ex.args[1]
+        ex = isa(lhs, Expr) ? wrapinvoke(ex.args[1], rhs) : Expr(:(=), lhs, rhs)
+    else
+        error("expression with head ", ex.head, " not recognized")
+    end
+    return esc(ex)
+end
+
+function wrapinvoke(ex::Expr, value=nothing)
+    startidx = ex.head === :call ? 2 : 1
+    callargs = ex.args[startidx:end]
+    n = length(callargs)
+    localnames = [gensym() for i = 1:n]
+    localargs = [Expr(:(=), localnames[i], callargs[i]) for i = 1:n]
+    typeofs = [Expr(:call, :typeof, x) for x ∈ localnames]
+    ttex = Expr(:curly, :Tuple, typeofs...)
+    if ex.head === :call
+        exinv = Expr(:call, :invoke, ex.args[1], ttex, localnames...)
+    elseif ex.head === :ref
+        if value === nothing
+            exinv = Expr(:call, :invoke, :getindex, ttex, localnames...)
+        else
+            rhsname = gensym()
+            insert!(localnames, 2, rhsname)
+            insert!(localargs, 2, Expr(:(=), rhsname, value))
+            insert!(ttex.args, 3, Expr(:call, :typeof, rhsname))
+            exinv = Expr(:call, :invoke, :setindex!, ttex, localnames...)
+        end
+    else
+        error("expression with head ", ex.head, " not recognized")
+    end
+    return Expr(:block, localargs..., exinv)
+end

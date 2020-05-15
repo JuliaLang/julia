@@ -34,6 +34,10 @@ Build system changes
 New library functions
 ---------------------
 
+* A new `Base.@invoke f(args...)` makes it easier to achieve
+  runtime-dispatch without union-splitting on the types of
+  `args...`. This can be useful to prevent invalidation of
+  partially-specified code when new methods of dependencies are added.
 
 New library features
 --------------------

@@ -254,6 +254,7 @@ Base.@inline
 Base.@noinline
 Base.@nospecialize
 Base.@specialize
+Base.@invoke
 Base.gensym
 Base.@gensym
 var"name"
