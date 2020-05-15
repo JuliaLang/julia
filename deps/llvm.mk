@@ -156,6 +156,10 @@ ifeq ($(fPIC),)
 LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
 endif
 
+# disable ABI breaking checks: by default only enabled for asserts build, in which case
+# it is then impossible to call non-asserts LLVM libraries (like out-of-tree backends)
+LLVM_CMAKE += -DLLVM_ABI_BREAKING_CHECKS=FORCE_OFF
+
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LLVM_LDFLAGS += -Wl,-rpath,$(build_libdir)
 LLVM_CPPFLAGS += -I$(build_includedir)
@@ -400,6 +404,7 @@ ifeq ($(LLVM_VER_SHORT),9.0)
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
 $(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
 $(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
+$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
 $(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
 $(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
@@ -416,6 +421,7 @@ ifeq ($(LLVM_VER_SHORT),10.0)
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
 $(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
 $(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
+$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
 $(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
 $(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
