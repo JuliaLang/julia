@@ -687,12 +687,18 @@ stripmd(x::Markdown.Table) =
 
 # Apropos searches through all available documentation for some string or regex
 """
-    apropos(string)
+    apropos([io::IO], string)
 
 Search through all documentation for a string, ignoring case.
 """
 apropos(string) = apropos(stdout, string)
 apropos(io::IO, string) = apropos(io, Regex("\\Q$string", "i"))
+
+"""
+    apropos([io::IO], regex)
+
+Search through all documentation for `regex`.
+"""
 function apropos(io::IO, needle::Regex)
     for mod in modules
         # Module doc might be in README.md instead of the META dict
