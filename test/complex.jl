@@ -1657,3 +1657,138 @@ end
         end
     end
 end
+
+@testset "gcdx for Gaussian integers" begin
+    # This is mainly useful when x and y can have mutable types too.
+    # This is similar to === of immutable types, but for mutable types.
+    ≟(x, y) = (typeof(x) == typeof(y)) && (x == y)
+
+    for T in (Int8, Int16, Int32, Int64, Int128, BigInt)
+        # Special cases
+        @test gcdx(complex(T(3), T(1)), complex(T(0), T(0))) ≟
+            (complex(T(3), T(1)), complex(T(1), T(0)), complex(T(0), T(0)))
+        @test gcdx(complex(T(0), T(0)), complex(T(3), T(1))) ≟
+            (complex(T(3), T(1)), complex(T(0), T(0)), complex(T(1), T(0)))
+        @test gcdx(complex(T(0), T(0)), complex(T(0), T(0))) ≟
+            (complex(T(0), T(0)), complex(T(1), T(0)), complex(T(0), T(0)))
+
+        # Regular cases
+        @test gcdx(complex(T(-25), T(0)), complex(T(-4), T(0))) ≟
+            (complex(T(1), T(0)), complex(T(-1), T(0)), complex(T(6), T(0)))
+
+        @test gcdx(complex(T(5), T(1)), complex(T(8), T(1))) ≟
+            (complex(T(1), T(0)), complex(T(-5), T(-6)), complex(T(3), T(4)))
+        @test gcdx(complex(T(1), T(1)), complex(T(2), T(2))) ≟
+            (complex(T(1), T(1)), complex(T(1), T(0)), complex(T(0), T(0)))
+        @test gcdx(complex(T(1), T(1)), complex(T(-2), T(2))) ≟
+            (complex(T(1), T(1)), complex(T(1), T(0)), complex(T(0), T(0)))
+        @test gcdx(complex(T(1), T(1)), complex(T(0), T(0))) ≟
+            (complex(T(1), T(1)), complex(T(1), T(0)), complex(T(0), T(0)))
+
+        @test gcdx(complex(T(3), T(1)), complex(T(1), T(-1))) ≟
+            (complex(T(1), T(1)), complex(T(0), T(0)), complex(T(0), T(1)))
+        @test gcdx(complex(T(5), T(3)), complex(T(2), T(-8))) ≟
+            (complex(T(1), T(1)), complex(T(2), T(1)), complex(T(1), T(-1)))
+        @test gcdx(complex(T(3), T(13)), complex(T(4), T(3))) ≟
+            (complex(T(1), T(0)), complex(T(4), T(0)), complex(T(-8), T(-7)))
+        @test gcdx(complex(T(5), T(1)), complex(T(3), T(5))) ≟
+            (complex(T(1), T(1)), complex(T(1), T(1)), complex(T(-1), T(0)))
+        @test gcdx(complex(T(5), T(3)), complex(T(2), T(8))) ≟
+            (complex(T(5), T(3)), complex(T(1), T(0)), complex(T(0), T(0)))
+        if T != Int8
+            @test gcdx(complex(T(5), T(0)), complex(T(12), T(0))) ≟
+                (complex(T(1), T(0)), complex(T(5), T(0)), complex(T(-2), T(0)))
+            @test gcdx(complex(T(5), T(0)), complex(T(-12), T(0))) ≟
+                (complex(T(1), T(0)), complex(T(5), T(0)), complex(T(2), T(0)))
+
+            @test gcdx(complex(T(11), T(7)), complex(T(18), T(-1))) ≟
+                (complex(T(1), T(0)), complex(T(-11), T(13)), complex(T(12), T(-3)))
+            @test gcdx(complex(T(135), T(-14)), complex(T(155), T(34))) ≟
+                (complex(T(5), T(12)), complex(T(3), T(6)), complex(T(-4), T(-4)))
+            @test gcdx(complex(T(4), T(22)), complex(T(17), T(1))) ≟
+                (complex(T(1), T(3)), complex(T(2), T(2)), complex(T(2), T(-3)))
+            @test gcdx(complex(T(85), T(0)), complex(T(1), T(13))) ≟
+                (complex(T(7), T(6)), complex(T(1), T(0)), complex(T(0), T(6)))
+            @test gcdx(complex(T(0), T(0)), complex(T(1), T(13))) ≟
+                (complex(T(1), T(13)), complex(T(0), T(0)), complex(T(1), T(0)))
+        end
+        @test gcdx(complex(T(7), T(1)), complex(T(5), T(3))) ≟
+            (complex(T(1), T(1)), complex(T(2), T(0)), complex(T(-2), T(1)))
+        @test gcdx(complex(T(2), T(2)), complex(T(-1), T(1))) ≟
+            (complex(T(1), T(1)), complex(T(0), T(0)), complex(T(0), T(-1)))
+
+        @test gcdx(complex(T(1), T(3)), complex(T(3), T(9))) ≟
+            (complex(T(1), T(3)), complex(T(1), T(0)), complex(T(0), T(0)))
+        @test gcdx(complex(T(1), T(3)), complex(T(-9), T(3))) ≟
+            (complex(T(1), T(3)), complex(T(1), T(0)), complex(T(0), T(0)))
+        @test gcdx(complex(T(1), T(3)), complex(T(-3), T(-9))) ≟
+            (complex(T(1), T(3)), complex(T(1), T(0)), complex(T(0), T(0)))
+        @test gcdx(complex(T(1), T(3)), complex(T(9), T(-3))) ≟
+            (complex(T(1), T(3)), complex(T(1), T(0)), complex(T(0), T(0)))
+        @test gcdx(complex(T(-3), T(-9)), complex(T(1), T(3))) ≟
+            (complex(T(1), T(3)), complex(T(0), T(0)), complex(T(1), T(0)))
+
+        @test gcdx(complex(T(3), T(0)), complex(T(5), T(0))) ≟
+            (complex(T(1), T(0)), complex(T(2), T(0)), complex(T(-1), T(0)))
+        @test gcdx(complex(T(0), T(3)), complex(T(0), T(5))) ≟
+            (complex(T(1), T(0)), complex(T(0), T(-2)), complex(T(0), T(1)))
+        @test gcdx(complex(T(-3), T(0)), complex(T(5), T(0))) ≟
+            (complex(T(1), T(0)), complex(T(-2), T(0)), complex(T(-1), T(0)))
+        @test gcdx(complex(T(0), T(-3)), complex(T(0), T(-5))) ≟
+            (complex(T(1), T(0)), complex(T(0), T(2)), complex(T(0), T(-1)))
+
+        if T != BigInt
+            for s in (T(-1), T(1))
+                let x = typemax(T)
+                    @test gcdx(complex(s*x, s*x), complex(T(1), T(0))) === (complex(T(1), T(0)), complex(T(0), T(0)), complex(T(1), T(0)))
+                    @test gcdx(complex(s*x, s*x), complex(T(-1), T(0))) === (complex(T(1), T(0)), complex(T(0), T(0)), complex(T(-1), T(0)))
+                    @test gcdx(complex(s*x, s*x), complex(T(0), T(1))) === (complex(T(1), T(0)), complex(T(0), T(0)), complex(T(0), T(-1)))
+                    @test gcdx(complex(s*x, s*x), complex(T(0), T(-1))) === (complex(T(1), T(0)), complex(T(0), T(0)), complex(T(0), T(1)))
+
+                    # These tests are failing because in div(z1/z2) = z1*conj(z2)/abs2(z2),
+                    # abs2(z2) overflows for these z2.
+                    @test_broken gcdx(complex(T(1), T(0)), complex(s*x, s*x)) === (complex(T(1), T(0)), complex(T(1), T(0)), complex(T(0), T(0)))
+                    @test_broken gcdx(complex(T(-1), T(0)), complex(s*x, s*x)) === (complex(T(1), T(0)), complex(T(-1), T(0)), complex(T(0), T(0)))
+                    @test_broken gcdx(complex(T(0), T(1)), complex(s*x, s*x)) === (complex(T(1), T(0)), complex(T(0), T(-1)), complex(T(0), T(0)))
+                    @test_broken gcdx(complex(T(0), T(-1)), complex(s*x, s*x)) === (complex(T(1), T(0)), complex(T(0), T(1)), complex(T(0), T(0)))
+
+                    # These tests are failing because in div(z1/z2) = z1*conj(z2)/abs2(z2),
+                    # z1*conj(z2) overflows for these.
+                    @test_broken gcdx(complex(s*x, T(0)), complex(T(2), T(0))) === (complex(T(1), T(0)), complex(T(1), T(0)), complex(T(-x÷2), T(0)))
+                    @test_broken gcdx(complex(T(2), T(0)), complex(s*x, T(0))) === (complex(T(1), T(0)), complex(T(-x÷2), T(0)), complex(T(1), T(0)))
+                    @test_broken gcdx(complex(s*x, s*x), complex(T(2), T(0))) === (complex(T(1), T(1)), complex(T(1), T(0)), complex(T(-x÷2), T(-x÷2)))
+                    @test_broken gcdx(complex(T(2), T(0)), complex(s*x, s*x)) === (complex(T(1), T(1)), complex(T(-x÷2), T(-x÷2)), complex(T(1), T(0)))
+                end
+                let x = typemin(T)
+                    @test gcdx(complex(s*x, s*x), complex(T(1), T(0))) === (complex(T(1), T(0)), complex(T(0), T(0)), complex(T(1), T(0)))
+
+                    # These tests are failing because in div(z1/z2) = z1*conj(z2)/abs2(z2),
+                    # z1*conj(z2) overflows.
+                    @test_broken gcdx(complex(s*x, s*x), complex(T(-1), T(0))) === (complex(T(1), T(0)), complex(T(0), T(0)), complex(T(-1), T(0)))
+                    @test_broken gcdx(complex(s*x, s*x), complex(T(0), T(1))) === (complex(T(1), T(0)), complex(T(0), T(0)), complex(T(0), T(-1)))
+                    @test_broken gcdx(complex(s*x, s*x), complex(T(0), T(-1))) === (complex(T(1), T(0)), complex(T(0), T(0)), complex(T(0), T(1)))
+
+                    # These tests are failing because in div(z1/z2) = z1*conj(z2)/abs2(z2),
+                    # abs2(z2) overflows for these z2.
+                    @test_broken gcdx(complex(T(1), T(0)), complex(s*x, s*x)) === (complex(T(1), T(0)), complex(T(1), T(0)), complex(T(0), T(0)))
+                    @test_broken gcdx(complex(T(-1), T(0)), complex(s*x, s*x)) === (complex(T(1), T(0)), complex(T(-1), T(0)), complex(T(0), T(0)))
+                    @test_broken gcdx(complex(T(0), T(1)), complex(s*x, s*x)) === (complex(T(1), T(0)), complex(T(0), T(-1)), complex(T(0), T(0)))
+                    @test_broken gcdx(complex(T(0), T(-1)), complex(s*x, s*x)) === (complex(T(1), T(0)), complex(T(0), T(1)), complex(T(0), T(0)))
+
+                    # These tests are failing because in div(z1/z2) = z1*conj(z2)/abs2(z2),
+                    # z1*conj(z2) overflows.
+                    @test_broken gcdx(complex(s*x, T(0)), complex(T(2), T(0))) === (complex(T(2), T(0)), complex(T(0), T(0)), complex(T(1), T(0)))
+                    @test_broken gcdx(complex(T(2), T(0)), complex(s*x, T(0))) === (complex(T(2), T(0)), complex(T(1), T(0)), complex(T(0), T(0)))
+                    @test_broken gcdx(complex(s*x, s*x), complex(T(2), T(0))) === (complex(T(2), T(0)), complex(T(0), T(0)), complex(T(1), T(0)))
+                    @test_broken gcdx(complex(T(2), T(0)), complex(s*x, s*x)) === (complex(T(2), T(0)), complex(T(1), T(0)), complex(T(0), T(0)))
+                end
+            end
+        end
+    end
+
+    @test_broken gcdx(complex(Int32(10)^5, Int32(10)^5), complex(-Int32(10)^5, -Int32(10)^5)) === (complex(Int32(10)^5, Int32(10)^5), complex(Int32(0), Int32(0)), complex(Int32(-1), Int32(0)))
+    @test_broken gcdx(complex(Int32(10)^5, Int32(0)), complex(Int32(10)^5, Int32(0))) === (complex(Int32(10)^5, Int32(0)), complex(Int32(0), Int32(0)), complex(Int32(1), Int32(0)))
+
+    @test_broken gcdx(complex(Int64(10)^10, Int64(10)^10), complex(-Int64(10)^10, -Int64(10)^10)) === (complex(Int64(10)^10, Int64(10)^10), complex(Int64(0), Int64(0)), complex(Int64(-1), Int64(0)))
+    @test_broken gcdx(complex(Int64(10)^10, Int64(0)), complex(Int64(10)^10, Int64(0))) === (complex(Int64(10)^10, Int64(0)), complex(Int64(0), Int64(0)), complex(Int64(1), Int64(0)))
+end

@@ -1150,8 +1150,8 @@ rem(a::Complex{T}, b::Complex{V}, rr::RoundingMode{:Up}, ri::RoundingMode=rr) wh
     divrem(z1::Complex, z2::Complex[, RoundingModeReal=RoundNearest[, RoundingModeImaginary=RoundingModeReal]])
 
 The quotient and remainder from Euclidean division.
-Equivalent to `(div(x, y, rr, ri), rem(x, y, rr, ri))`. Equivalently, with the default
-value of `rr` and `ri`, this call is equivalent to `(x÷y, x%y)`.
+Equivalent to `(div(z1, z2, rr, ri), rem(z1, z2, rr, ri))`. Equivalently, with the default
+value of `rr` and `ri`, this call is equivalent to `(z1÷z2, z1%z2)`.
 The first [`RoundingMode`](@ref) is used for rounding the real components while the
 second is used for rounding the imaginary components.
 Throws a `DivideError` if z2 is 0+0im.
@@ -1166,7 +1166,8 @@ divrem(a::Complex{T}, b::Complex{T}, rr::RoundingMode=RoundNearest, ri::Rounding
 
 divrem(a::Complex{T}, b::Complex{V}, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr) where {T<:Integer, V<:Integer} = divrem(promote(a, b)..., rr, ri)
 
-function _first_quadrant(a::Complex{T}) where T<:Integer
+# Returns the coefficient to rotate `a` into first quadrant.
+function _first_quadrant_coeff(a::Complex{T}) where T<:Integer
     ar, ai = reim(a)
     if (T <: Base.BitSigned) && ((ar === typemin(ar)) || (ai === typemin(ai)))
         # if ar or ai is typemin(T), we have to throw an error.
@@ -1174,25 +1175,30 @@ function _first_quadrant(a::Complex{T}) where T<:Integer
         throw(OverflowError("Cannot rotate $a into first quadrant."))
     end
 
-    if iszero(ar)
-        Complex(abs(ai), zero(ar))
+    if iszero(a)
+        Complex(T(1), T(0))
+    elseif iszero(ar)
+        Complex(T(0), -sign(ai))
     elseif iszero(ai)
-        Complex(abs(ar), zero(ai))
+        Complex(sign(ar), T(0))
     elseif ar > 0 && ai > 0     # The complex number is already in the first quadrant
-        a
+        Complex(T(1), T(0))
     elseif ar < 0 && ai > 0     # In the second quadrant
-        Complex(ai, -ar)
+        Complex(T(0), T(-1))
     elseif ar < 0 && ai < 0     # In the third quadrant
-        -a
+        Complex(T(-1), T(0))
     else                        # In the fourth quadrant
-        Complex(-ai, ar)
+        Complex(T(0), T(1))
     end
 end
+
+# Rotates `a` into first quadrant.
+_first_quadrant(a::Complex{T}) where T<:Integer = _first_quadrant_coeff(a)*a
 
 """
     gcd(z1, z2)
 
-Greatest common divisor (or zero if `x` and `y` are both zero).
+Greatest common divisor (or zero if `z1` and `z2` are both zero).
 The phase angle of GCD will be in [0, π/2) (i.e. in first quadrant).
 The arguments may be Gaussian integers (complex numbers with both real and imaginary parts integer).
 
@@ -1210,6 +1216,10 @@ julia> gcd(1 + 1im, 0 + 0im)
 """
 function gcd(a::Complex{T}, b::Complex{T}) where T<:Integer
     while b != 0
+        # It is necessary to use RoundNearest as the rounding method for the Euclidean
+        # algorithm to converge for complex numbers.
+        # This ensures that |r| ≤ |a|/2.
+        # Ref: https://davidlowryduda.com/math-420-supplement-on-gaussian-integers/
         r = rem(a, b, RoundNearest, RoundNearest)
         a = b
         b = r
@@ -1220,3 +1230,46 @@ end
 gcd(z1::Complex{T}, z2::Complex{V}) where {T<:Integer, V<:Integer} = gcd(promote(z1, z2)...)
 
 gcd(a::Complex{<:Integer}, b::Complex{<:Integer}, c::Complex{<:Integer}...) = gcd(a, gcd(b, c...))
+
+"""
+    gcdx(z1::Complex{<:Integer}, z2::Complex{<:Integer})
+
+Computes the greatest common divisor of `z1` and `z2` and their Bézout
+coefficients, i.e. the integer coefficients `u` and `v` that satisfy
+``ux + vy = d = gcd(x, y)``. ``gcdx(x, y)`` returns ``(d, u, v)``.
+
+The phase angle of GCD will be in [0, π/2) (i.e. in first quadrant).
+The arguments may be Gaussian integers (complex numbers with both real and imaginary parts integer).
+
+# Examples
+```jldoctest
+julia> gcdx(1 + 1im, 2 + 2im)
+(1 + 1im, -1 + 0im, 1 + 0im)
+
+julia> gcdx(1 + 1im, -2 + 2im)
+(1 + 1im, -1 + 0im, 1 + 0im)
+
+julia> gcdx(1 + 1im, 0 + 0im)
+(1 + 1im, 1 + 0im, 0 + 0im)
+```
+"""
+function gcdx(a::Complex{T}, b::Complex{T}) where T<:Integer
+    # a0, b0 = a, b
+    s0, s1 = complex(T(1), T(0)), complex(T(0), T(0))
+    t0, t1 = s1, s0
+    # The loop invariant is: s0*a0 + t0*b0 == a
+    while b != 0
+        # It is necessary to use RoundNearest as the rounding method for the Euclidean
+        # algorithm to converge for complex numbers.
+        # This ensures that |r| ≤ |a|/2.
+        # Ref: https://davidlowryduda.com/math-420-supplement-on-gaussian-integers/
+        q = div(a, b, RoundNearest, RoundNearest)
+        a, b = b, rem(a, b, RoundNearest, RoundNearest)
+        s0, s1 = s1, s0 - q*s1
+        t0, t1 = t1, t0 - q*t1
+    end
+    c = _first_quadrant_coeff(a)
+    (c*a, c*s0, c*t0)
+end
+
+gcdx(z1::Complex{T}, z2::Complex{V}) where {T<:Integer, V<:Integer} = gcdx(promote(z1, z2)...)
