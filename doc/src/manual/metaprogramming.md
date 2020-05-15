@@ -783,7 +783,7 @@ end
 Here, we want `t0`, `t1`, and `val` to be private temporary variables, and we want `time_ns` to refer
 to the [`time_ns`](@ref) function in Julia Base, not to any `time_ns` variable the user
 might have (the same applies to `println`). Imagine the problems that could occur if the user
-expression `ex` also contained assignments to a variable called `t0`, or defined its own `time`
+expression `ex` also contained assignments to a variable called `t0`, or defined its own `time_ns`
 variable. We might get errors, or mysteriously incorrect behavior.
 
 Julia's macro expander solves these problems in the following way. First, variables within a macro
