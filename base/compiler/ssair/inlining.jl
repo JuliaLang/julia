@@ -1039,6 +1039,9 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
         too_many = false
         local meth
         local fully_covered = true
+        # keep track of whether each split signature either has no matches, or
+        # is fully covered by one.
+        local each_covered = true
         for atype in splits
             # Regular case: Retrieve matching methods from cache (or compute them)
             (meth, min_valid, max_valid) = get(sv.matching_methods_cache, atype) do
@@ -1071,8 +1074,12 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
             end
             update_valid_age!(min_valid, max_valid, sv)
 
+            cover_exists = false
             for match in meth::Vector{Any}
                 (metharg, methsp, method) = (match[1]::Type, match[2]::SimpleVector, match[3]::Method)
+                if each_covered && !cover_exists && atype <: method.sig
+                    cover_exists = true
+                end
                 # TODO: This could be better
                 signature_union = Union{signature_union, metharg}
                 if !isdispatchtuple(metharg)
@@ -1089,6 +1096,9 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
                     continue
                 end
                 push!(cases, Pair{Any,Any}(metharg, case))
+            end
+            if each_covered && !cover_exists
+                each_covered = false
             end
         end
 
@@ -1126,6 +1136,7 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
             continue
         end
         length(cases) == 0 && continue
+        each_covered || signature_fully_covered || continue
         push!(todo, UnionSplit(idx, fully_covered, sig.atype, cases))
     end
     todo
