@@ -220,7 +220,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     the function `f(x=rand()) = x` returns a new random number every time it is invoked without argument.
     On the other hand, the function `g(x=[1,2]) = push!(x,3)` returns `[1,2,3]` every time it is called
     as `g()`.
-  * In Julia, keyword arguments must be passed using keywords, unlike python in which it is usually possible
+  * In Julia, keyword arguments must be passed using keywords, unlike Python in which it is usually possible
     to pass them positionally. Attempting to pass a keyword argument positionally alters the method
     signature leading to a `MethodError` or calling of the wrong method.
   * In Julia `%` is the remainder operator, whereas in Python it is the modulus.
