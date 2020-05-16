@@ -23,7 +23,7 @@ size(@nospecialize(t::Tuple), d::Integer) = (d == 1) ? length(t) : throw(Argumen
 axes(@nospecialize t::Tuple) = (OneTo(length(t)),)
 @eval getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, $(Expr(:boundscheck)))
 @eval getindex(@nospecialize(t::Tuple), i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
-getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...,)
+getindex(t::Tuple, r::AbstractArray{<:Any,1}) = (eltype(t)[t[ri] for ri in r]...,)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
 getindex(t::Tuple, c::Colon) = t
 

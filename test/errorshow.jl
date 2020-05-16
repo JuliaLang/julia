@@ -74,7 +74,7 @@ Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, 1)))
 # matches the implicit constructor -> convert method
 Base.show_method_candidates(buf, Base.MethodError(Tuple{}, (1, 1, 1)))
 let mc = String(take!(buf))
-    @test occursin("\nClosest candidates are:\n  Tuple{}", mc)
+    @test occursin("\nClosest candidates are:\n  (::Type{T})", mc)
     @test !occursin(cfile, mc)
 end
 
@@ -124,10 +124,13 @@ PR16155line2 = @__LINE__() + 1
 (::Type{T})(arg::Any) where {T<:PR16155} = "replace call-to-convert method from sysimg"
 
 Base.show_method_candidates(buf, MethodError(PR16155,(1.0, 2.0, Int64(3))))
-@test String(take!(buf)) == "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(!Matched::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2"
+@test String(take!(buf)) == "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(!Matched::Int64, ::Any)$cfile$PR16155line\n  (::Type{T})(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2"
 
 Base.show_method_candidates(buf, MethodError(PR16155,(Int64(3), 2.0, Int64(3))))
-@test String(take!(buf)) == "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2"
+@test String(take!(buf)) == "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  (::Type{T})(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2"
+
+Base.show_method_candidates(buf, MethodError(Complex{T} where T<:Integer, (1.2,)))
+@test startswith(String(take!(buf)), "\nClosest candidates are:\n  (::Type{T})(::T) where T<:Number")
 
 c6line = @__LINE__
 method_c6(; x=1) = x
@@ -396,6 +399,9 @@ EightBitTypeT{T}() where {T} = throw(ErrorException("6"))
 (::EightBitTypeT)() = throw(ErrorException("7"))
 (::FunctionLike)() = throw(ErrorException("8"))
 
+struct StructWithUnionAllMethodDefs{T}
+end
+(::Type{StructWithUnionAllMethodDefs{T} where T<:Integer})(x) = x
 
 let err_str,
     i = reinterpret(EightBitType, 0x54),
@@ -412,15 +418,19 @@ let err_str,
     @test sprint(show, which(reinterpret(EightBitType, 0x54), Tuple{})) ==
         "(::$(curmod_prefix)EightBitType)() in $curmod_str at $sp:$(method_defs_lineno + 3)"
     @test sprint(show, which(EightBitTypeT, Tuple{})) ==
-        "(::Type{$(curmod_prefix)EightBitTypeT})() in $curmod_str at $sp:$(method_defs_lineno + 4)"
+        "$(curmod_prefix)EightBitTypeT() in $curmod_str at $sp:$(method_defs_lineno + 4)"
     @test sprint(show, which(EightBitTypeT{Int32}, Tuple{})) ==
-        "(::Type{$(curmod_prefix)EightBitTypeT{T}})() where T in $curmod_str at $sp:$(method_defs_lineno + 5)"
+        "$(curmod_prefix)EightBitTypeT{T}() where T in $curmod_str at $sp:$(method_defs_lineno + 5)"
     @test sprint(show, which(reinterpret(EightBitTypeT{Int32}, 0x54), Tuple{})) ==
         "(::$(curmod_prefix)EightBitTypeT)() in $curmod_str at $sp:$(method_defs_lineno + 6)"
+    @test startswith(sprint(show, which(Complex{Int}, Tuple{Int})),
+                     "Complex{T}(")
     @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{LineNumberNode, Module, Vararg{Any}})),
                      "@doc(__source__::LineNumberNode, __module__::Module, x...) in Core at boot.jl:")
     @test startswith(sprint(show, which(FunctionLike(), Tuple{})),
                      "(::$(curmod_prefix)FunctionLike)() in $curmod_str at $sp:$(method_defs_lineno + 7)")
+    @test startswith(sprint(show, which(StructWithUnionAllMethodDefs{<:Integer}, (Any,))),
+                     "($(curmod_prefix)StructWithUnionAllMethodDefs{T} where T<:Integer)(x)")
     @test repr("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 1 method)"
     @test repr("text/plain", Core.arraysize) == "arraysize (built-in function)"
 
@@ -597,7 +607,7 @@ function recommend_oneunit(io, ex, arg_types, kwargs)
         end
     end
 end
-@test register_error_hint(recommend_oneunit, MethodError) === nothing
+@test Base.Experimental.register_error_hint(recommend_oneunit, MethodError) === nothing
 let err_str
     err_str = @except_str one(HasNoOne()) MethodError
     @test occursin(r"MethodError: no method matching one\(::.*HasNoOne\)", err_str)
@@ -606,19 +616,19 @@ let err_str
     @test occursin(r"MethodError: no method matching one\(::.*HasNoOne; value=2\)", err_str)
     @test occursin("`one` doesn't take keyword arguments, that would be silly", err_str)
 end
-pop!(Base._hint_handlers[MethodError])  # order is undefined, don't copy this
+pop!(Base.Experimental._hint_handlers[MethodError])  # order is undefined, don't copy this
 
 function busted_hint(io, exc, notarg)  # wrong number of args
     print(io, "\nI don't have a hint for you, sorry")
 end
-@test register_error_hint(busted_hint, DomainError) === nothing
+@test Base.Experimental.register_error_hint(busted_hint, DomainError) === nothing
 try
     sqrt(-2)
 catch ex
     io = IOBuffer()
     @test_logs (:error, "Hint-handler busted_hint for DomainError in $(@__MODULE__) caused an error") showerror(io, ex)
 end
-pop!(Base._hint_handlers[DomainError])  # order is undefined, don't copy this
+pop!(Base.Experimental._hint_handlers[DomainError])  # order is undefined, don't copy this
 
 
 # issue #28442
@@ -703,4 +713,15 @@ for (func,str) in ((TestMethodShadow.:+,":+"), (TestMethodShadow.:(==),":(==)"),
        e
     end::MethodError
     @test occursin("You may have intended to import Base.$str", sprint(Base.showerror, ex))
+end
+
+# Test that implementation detail of include() is hidden from the user by default
+let bt = try
+        include("testhelpers/include_error.jl")
+    catch
+        catch_backtrace()
+    end
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin(" include(", bt_str)
+    @test !occursin(" _include(", bt_str)
 end

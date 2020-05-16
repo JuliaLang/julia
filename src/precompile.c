@@ -362,6 +362,8 @@ static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *c
                 precompile_enq_specialization_(mi, closure);
         }
     }
+    if (m->ccallable)
+        jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)m->ccallable);
     return 1;
 }
 
@@ -386,16 +388,24 @@ void *jl_precompile(int all)
     jl_foreach_reachable_mtable(precompile_enq_all_specializations_, m);
     m2 = jl_alloc_vec_any(0);
     for (size_t i = 0; i < jl_array_len(m); i++) {
-        mi = (jl_method_instance_t*)jl_array_ptr_ref(m, i);
-        size_t min_world = 0;
-        size_t max_world = ~(size_t)0;
-        if (!jl_isa_compileable_sig((jl_tupletype_t*)mi->specTypes, mi->def.method))
-            mi = jl_get_specialization1((jl_tupletype_t*)mi->specTypes, jl_world_counter, &min_world, &max_world, 0);
-        if (mi)
-            jl_array_ptr_1d_push(m2, (jl_value_t*)mi);
+        jl_value_t *item = jl_array_ptr_ref(m, i);
+        if (jl_is_method_instance(item)) {
+            mi = (jl_method_instance_t*)item;
+            size_t min_world = 0;
+            size_t max_world = ~(size_t)0;
+            if (!jl_isa_compileable_sig((jl_tupletype_t*)mi->specTypes, mi->def.method))
+                mi = jl_get_specialization1((jl_tupletype_t*)mi->specTypes, jl_world_counter, &min_world, &max_world, 0);
+            if (mi)
+                jl_array_ptr_1d_push(m2, (jl_value_t*)mi);
+        }
+        else {
+            assert(jl_is_simplevector(item));
+            assert(jl_svec_len(item) == 2);
+            jl_array_ptr_1d_push(m2, item);
+        }
     }
     m = NULL;
-    void *native_code = jl_create_native(m2, jl_default_cgparams);
+    void *native_code = jl_create_native(m2, jl_default_cgparams, 0);
     JL_GC_POP();
     return native_code;
 }

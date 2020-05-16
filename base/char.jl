@@ -46,7 +46,7 @@ represents a valid Unicode character.
 Char
 
 (::Type{T})(x::Number) where {T<:AbstractChar} = T(UInt32(x))
-(::Type{AbstractChar})(x::Number) = Char(x)
+AbstractChar(x::Number) = Char(x)
 (::Type{T})(x::AbstractChar) where {T<:Union{Number,AbstractChar}} = T(codepoint(x))
 (::Type{T})(x::T) where {T<:AbstractChar} = x
 

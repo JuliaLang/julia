@@ -18,7 +18,27 @@ on [`threadid()`](@ref).
 """
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
-function _threadsfor(iter,lbody)
+function threading_run(func)
+    ccall(:jl_enter_threaded_region, Cvoid, ())
+    n = nthreads()
+    tasks = Vector{Task}(undef, n)
+    for i = 1:n
+        t = Task(func)
+        t.sticky = true
+        ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, i-1)
+        tasks[i] = t
+        schedule(t)
+    end
+    try
+        for i = 1:n
+            wait(tasks[i])
+        end
+    finally
+        ccall(:jl_exit_threaded_region, Cvoid, ())
+    end
+end
+
+function _threadsfor(iter, lbody, schedule)
     lidx = iter.args[1]         # index
     range = iter.args[2]
     quote
@@ -62,42 +82,65 @@ function _threadsfor(iter,lbody)
             end
         end
         end
-        if threadid() != 1
-            # only thread 1 can enter/exit _threadedregion
-            Base.invokelatest(threadsfor_fun, true)
+        if threadid() != 1 || ccall(:jl_in_threaded_region, Cint, ()) != 0
+            $(if schedule === :static
+              :(error("`@threads :static` can only be used from thread 1 and not nested"))
+              else
+              # only use threads when called from thread 1, outside @threads
+              :(Base.invokelatest(threadsfor_fun, true))
+              end)
         else
-            ccall(:jl_threading_run, Cvoid, (Any,), threadsfor_fun)
+            threading_run(threadsfor_fun)
         end
         nothing
     end
 end
 
 """
-    Threads.@threads
+    Threads.@threads [schedule] for ... end
 
-A macro to parallelize a for-loop to run with multiple threads. This spawns [`nthreads()`](@ref)
-number of threads, splits the iteration space amongst them, and iterates in parallel.
-A barrier is placed at the end of the loop which waits for all the threads to finish
-execution, and the loop returns.
+A macro to parallelize a `for` loop to run with multiple threads. Splits the iteration
+space among multiple tasks and runs those tasks on threads according to a scheduling
+policy.
+A barrier is placed at the end of the loop which waits for all tasks to finish
+execution.
+
+The `schedule` argument can be used to request a particular scheduling policy.
+The only currently supported value is `:static`, which creates one task per thread
+and divides the iterations equally among them. Specifying `:static` is an error
+if used from inside another `@threads` loop or from a thread other than 1.
+
+The default schedule (used when no `schedule` argument is present) is subject to change.
+
+!!! compat "Julia 1.5"
+    The `schedule` argument is available as of Julia 1.5.
 """
 macro threads(args...)
     na = length(args)
-    if na != 1
+    if na == 2
+        sched, ex = args
+        if sched isa QuoteNode
+            sched = sched.value
+        elseif sched isa Symbol
+            # for now only allow quoted symbols
+            sched = nothing
+        end
+        if sched !== :static
+            throw(ArgumentError("unsupported schedule argument in @threads"))
+        end
+    elseif na == 1
+        sched = :default
+        ex = args[1]
+    else
         throw(ArgumentError("wrong number of arguments in @threads"))
     end
-    ex = args[1]
-    if !isa(ex, Expr)
-        throw(ArgumentError("need an expression argument to @threads"))
+    if !(isa(ex, Expr) && ex.head === :for)
+        throw(ArgumentError("@threads requires a `for` loop expression"))
     end
-    if ex.head === :for
-        if ex.args[1] isa Expr && ex.args[1].head === :(=)
-            return _threadsfor(ex.args[1], ex.args[2])
-        else
-            throw(ArgumentError("nested outer loops are not currently supported by @threads"))
-        end
-    else
-        throw(ArgumentError("unrecognized argument to @threads"))
+    if !(ex.args[1] isa Expr && ex.args[1].head === :(=))
+        throw(ArgumentError("nested outer loops are not currently supported by @threads"))
     end
+    return _threadsfor(ex.args[1], ex.args[2], sched)
 end
 
 """
@@ -112,7 +155,7 @@ constructed underlying closure. This allows you to insert the _value_ of a varia
 isolating the aysnchronous code from changes to the variable's value in the current task.
 
 !!! note
-    This feature is currently considered experimental.
+    See the manual chapter on threading for important caveats.
 
 !!! compat "Julia 1.3"
     This macro is available as of Julia 1.3.
@@ -130,7 +173,7 @@ macro spawn(expr)
             local task = Task($thunk)
             task.sticky = false
             if $(Expr(:islocal, var))
-                push!($var, task)
+                put!($var, task)
             end
             schedule(task)
             task

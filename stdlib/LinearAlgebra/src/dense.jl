@@ -341,11 +341,12 @@ end
 
 Kronecker tensor product of two vectors or two matrices.
 
-For vectors v and w, the Kronecker product is related to the outer product by
-`kron(v,w) == vec(w*transpose(v))` or
-`w*transpose(v) == reshape(kron(v,w), (length(w), length(v)))`.
+For real vectors `v` and `w`, the Kronecker product is related to the outer product by
+`kron(v,w) == vec(w * transpose(v))` or
+`w * transpose(v) == reshape(kron(v,w), (length(w), length(v)))`.
 Note how the ordering of `v` and `w` differs on the left and right
 of these expressions (due to column-major storage).
+For complex vectors, the outer product `w * v'` also differs by conjugation of `v`.
 
 # Examples
 ```jldoctest
@@ -399,6 +400,9 @@ kron(a::AbstractVecOrMat, b::Number) = a * b
 kron(a::AbstractVector, b::AbstractVector) = vec(kron(reshape(a ,length(a), 1), reshape(b, length(b), 1)))
 kron(a::AbstractMatrix, b::AbstractVector) = kron(a, reshape(b, length(b), 1))
 kron(a::AbstractVector, b::AbstractMatrix) = kron(reshape(a, length(a), 1), b)
+
+kron(a::AdjointAbsVec, b::AdjointAbsVec) = adjoint(kron(adjoint(a), adjoint(b)))
+kron(a::AdjOrTransAbsVec, b::AdjOrTransAbsVec) = transpose(kron(transpose(a), transpose(b)))
 
 # Matrix power
 (^)(A::AbstractMatrix, p::Integer) = p < 0 ? power_by_squaring(inv(A), -p) : power_by_squaring(A, p)
@@ -706,8 +710,15 @@ If `A` has no negative real eigenvalues, compute the principal matrix square roo
 that is the unique matrix ``X`` with eigenvalues having positive real part such that
 ``X^2 = A``. Otherwise, a nonprincipal square root is returned.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is
-used to compute the square root. Otherwise, the square root is determined by means of the
+If `A` is real-symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is
+used to compute the square root.   For such matrices, eigenvalues λ that
+appear to be slightly negative due to roundoff errors are treated as if they were zero
+More precisely, matrices with all eigenvalues `≥ -rtol*(max |λ|)` are treated as semidefinite
+(yielding a Hermitian square root), with negative eigenvalues taken to be zero.
+`rtol` is a keyword argument to `sqrt` (in the Hermitian/real-symmetric case only) that
+defaults to machine precision scaled by `size(A,1)`.
+
+Otherwise, the square root is determined by means of the
 Björck-Hammarling method [^BH83], which computes the complex Schur form ([`schur`](@ref))
 and then the complex square root of the triangular factor.
 

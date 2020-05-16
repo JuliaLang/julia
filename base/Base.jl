@@ -216,11 +216,12 @@ end
 
 include("env.jl")
 
-# Scheduling
+# Concurrency
 include("linked_list.jl")
 include("condition.jl")
 include("threads.jl")
 include("lock.jl")
+include("channels.jl")
 include("task.jl")
 include("weakkeydict.jl")
 
@@ -315,9 +316,6 @@ using .MathConstants: ℯ, π, pi
 # metaprogramming
 include("meta.jl")
 
-# concurrency and parallelism
-include("channels.jl")
-
 # utilities
 include("deepcopy.jl")
 include("download.jl")
@@ -367,31 +365,8 @@ for m in methods(include)
 end
 # These functions are duplicated in client.jl/include(::String) for
 # nicer stacktraces. Modifications here have to be backported there
-include(mod::Module, _path::AbstractString) = include(identity, mod, _path)
-function include(mapexpr::Function, mod::Module, _path::AbstractString)
-    path, prev = _include_dependency(mod, _path)
-    for callback in include_callbacks # to preserve order, must come before Core.include
-        invokelatest(callback, mod, path)
-    end
-    tls = task_local_storage()
-    tls[:SOURCE_PATH] = path
-    local result
-    try
-        # result = Core.include(mod, path)
-        if mapexpr === identity
-            result = ccall(:jl_load, Any, (Any, Cstring), mod, path)
-        else
-            result = ccall(:jl_load_rewrite, Any, (Any, Cstring, Any), mod, path, mapexpr)
-        end
-    finally
-        if prev === nothing
-            delete!(tls, :SOURCE_PATH)
-        else
-            tls[:SOURCE_PATH] = prev
-        end
-    end
-    return result
-end
+include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
+include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
 
 end_base_include = time_ns()
 

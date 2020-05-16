@@ -154,8 +154,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
 end
 
 function _parse_input_line_core(s::String, filename::String)
-    ex = ccall(:jl_parse_all, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
-               s, sizeof(s), filename, sizeof(filename))
+    ex = Meta.parseall(s, filename=filename)
     if ex isa Expr && ex.head === :toplevel
         if isempty(ex.args)
             return nothing
@@ -237,6 +236,13 @@ function exec_options(opts)
             repl = false
         elseif cmd == 'L'
             # nothing
+        elseif cmd == 'B' # --bug-report
+            # If we're doing a bug report, don't load anything else. We will
+            # spawn a child in which to execute these options.
+            let InteractiveUtils = load_InteractiveUtils()
+                InteractiveUtils.report_bug(arg)
+            end
+            return nothing
         else
             @warn "Unexpected command -$cmd'$arg'"
         end
@@ -283,7 +289,7 @@ function exec_options(opts)
     if arg_is_program
         # program
         if !is_interactive
-            ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
+            exit_on_sigint(true)
         end
         try
             include(Main, PROGRAM_FILE)
@@ -349,20 +355,28 @@ _atreplinit(repl) = invokelatest(__atreplinit, repl)
 # The REPL stdlib hooks into Base using this Ref
 const REPL_MODULE_REF = Ref{Module}()
 
-# run the requested sort of evaluation loop on stdio
-function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
-    global active_repl
+function load_InteractiveUtils()
     # load interactive-only libraries
     if !isdefined(Main, :InteractiveUtils)
         try
             let InteractiveUtils = require(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
                 Core.eval(Main, :(const InteractiveUtils = $InteractiveUtils))
                 Core.eval(Main, :(using .InteractiveUtils))
+                return InteractiveUtils
             end
         catch ex
             @warn "Failed to import InteractiveUtils into module Main" exception=(ex, catch_backtrace())
         end
+        return nothing
     end
+    return getfield(Main, :InteractiveUtils)
+end
+
+# run the requested sort of evaluation loop on stdio
+function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
+    global active_repl
+
+    load_InteractiveUtils()
 
     if interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
@@ -424,30 +438,12 @@ end
 # MainInclude exists to hide Main.include and eval from `names(Main)`.
 baremodule MainInclude
 using ..Base
-include(mapexpr::Function, fname::AbstractString) = Base.include(mapexpr, Main, fname)
-# We inline the definition of include from loading.jl/include_relative to get one-frame stacktraces
-# for the common case of include(fname).  Otherwise we would use:
-#    include(fname::AbstractString) = Base.include(Main, fname)
+# These definitions calls Base._include rather than Base.include to get
+# one-frame stacktraces for the common case of using include(fname) in Main.
+include(mapexpr::Function, fname::AbstractString) = Base._include(mapexpr, Main, fname)
 function include(fname::AbstractString)
-    mod = Main
     isa(fname, String) || (fname = Base.convert(String, fname)::String)
-    path, prev = Base._include_dependency(mod, fname)
-    for callback in Base.include_callbacks # to preserve order, must come before Core.include
-        Base.invokelatest(callback, mod, path)
-    end
-    tls = Base.task_local_storage()
-    tls[:SOURCE_PATH] = path
-    local result
-    try
-        result = ccall(:jl_load, Any, (Any, Cstring), mod, path)
-    finally
-        if prev === nothing
-            Base.delete!(tls, :SOURCE_PATH)
-        else
-            tls[:SOURCE_PATH] = prev
-        end
-    end
-    return result
+    Base._include(identity, Main, fname)
 end
 eval(x) = Core.eval(Main, x)
 end

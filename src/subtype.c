@@ -1152,9 +1152,12 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
     }
 
     param = (param == 0 ? 1 : param);
-    env.lastx = env.lasty=NULL;
-    env.vtx = env.vty=NULL;
-    return subtype_tuple_tail(&env, 0, e, param);
+    env.lastx = env.lasty = NULL;
+    env.vtx = env.vty = NULL;
+    JL_GC_PUSH2(&env.vtx, &env.vty);
+    int ans = subtype_tuple_tail(&env, 0, e, param);
+    JL_GC_POP();
+    return ans;
 }
 
 static int subtype_naked_vararg(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, int param)
@@ -3846,6 +3849,8 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
 JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
 {
     if (obviously_disjoint(a, b, 1))
+        return 0;
+    if (jl_has_free_typevars(a) || jl_has_free_typevars(b))
         return 0;
     if (jl_subtype(b, a))
         return 0;

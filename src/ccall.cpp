@@ -236,7 +236,9 @@ static GlobalVariable *emit_plt_thunk(
     SmallVector<Value*, 16> args;
     for (Function::arg_iterator arg = plt->arg_begin(), arg_e = plt->arg_end(); arg != arg_e; ++arg)
         args.push_back(&*arg);
-    CallInst *ret = irbuilder.CreateCall(ptr, ArrayRef<Value*>(args));
+    CallInst *ret = irbuilder.CreateCall(
+        cast<FunctionType>(ptr->getType()->getPointerElementType()),
+        ptr, ArrayRef<Value*>(args));
     ret->setAttributes(attrs);
     if (cc != CallingConv::C)
         ret->setCallingConv(cc);
@@ -987,15 +989,21 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         // Do not enable update debug info since it runs the verifier on the whole module
         // and will error on the function we are currently emitting.
         ModuleSummaryIndex index = ModuleSummaryIndex(true);
-        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string, "llvmcall"),
-                                        jl_Module, &index, Err, nullptr, /* UpdateDebugInfo */ false);
-        if (failed) {
-            std::string message = "Failed to parse LLVM Assembly: \n";
-            llvm::raw_string_ostream stream(message);
-            Err.print("julia",stream,true);
-            jl_error(stream.str().c_str());
-        }
+        bool failed = parseAssemblyInto(MemoryBufferRef(ir_string, "llvmcall"),
+                                        jl_Module, &index, Err, nullptr,
+                                        /* UpdateDebugInfo */ false);
         f = jl_Module->getFunction(ir_name);
+        if (failed) {
+            // try to get the module in a workable state again
+            if (f)
+                f->eraseFromParent();
+
+            std::string message = "Failed to parse LLVM assembly: \n";
+            raw_string_ostream stream(message);
+            Err.print("", stream, true);
+            emit_error(ctx, stream.str());
+            return jl_cgval_t();
+        }
     }
     else {
         assert(isPtr);
@@ -1013,11 +1021,11 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
             f = mover.CloneFunction(f);
         }
 
-        //f->dump();
-        llvm::raw_fd_ostream out(1,false);
-        if (verifyFunction(*f,&out)) {
-            llvm_dump(f);
-            jl_error("Malformed LLVM Function");
+        std::string message = "Malformed LLVM function: \n";
+        raw_string_ostream stream(message);
+        if (verifyFunction(*f, &stream)) {
+            emit_error(ctx, stream.str());
+            return jl_cgval_t();
         }
     }
 
@@ -1029,7 +1037,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         std::stringstream name;
         name << "jl_llvmcall" << llvmcallnumbering++;
         f->setName(name.str());
-        f = cast<Function>(prepare_call(function_proto(f)));
+        f = cast<Function>(prepare_call(function_proto(f)).getCallee());
     }
     else {
         f->setLinkage(GlobalValue::LinkOnceODRLinkage);
@@ -1044,7 +1052,12 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     JL_GC_POP();
 
     if (inst->getType() != rettype) {
-        jl_error("Return type of llvmcall'ed function does not match declared return type");
+        std::string message;
+        raw_string_ostream stream(message);
+        stream << "llvmcall return type " << *inst->getType()
+               << " does not match declared return type" << *rettype;
+        emit_error(ctx, stream.str());
+        return jl_cgval_t();
     }
 
     return mark_julia_type(ctx, inst, retboxed, rtt);
@@ -1617,6 +1630,16 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(pct)),
             retboxed, rt, unionall, static_rt);
     }
+    else if (is_libjulia_func(jl_set_next_task)) {
+        assert(lrt == T_void);
+        assert(!isVa && !llvmcall && nccallargs == 1);
+        JL_GC_POP();
+        Value *ptls_pv = emit_bitcast(ctx, ctx.ptlsStates, T_ppjlvalue);
+        const int nt_offset = offsetof(jl_tls_states_t, next_task);
+        Value *pnt = ctx.builder.CreateGEP(ptls_pv, ConstantInt::get(T_size, nt_offset / sizeof(void*)));
+        ctx.builder.CreateStore(emit_pointer_from_objref(ctx, boxed(ctx, argv[0])), pnt);
+        return ghostValue(jl_nothing_type);
+    }
     else if (is_libjulia_func(jl_sigatomic_begin)) {
         assert(lrt == T_void);
         assert(!isVa && !llvmcall && nccallargs == 0);
@@ -1710,11 +1733,19 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 
         ctx.builder.CreateMemCpy(
                 ctx.builder.CreateIntToPtr(destp, T_pint8),
+#if JL_LLVM_VERSION >= 110000
+                MaybeAlign(1),
+#else
                 1,
+#endif
                 ctx.builder.CreateIntToPtr(
                     emit_unbox(ctx, T_size, src, (jl_value_t*)jl_voidpointer_type),
                     T_pint8),
+#if JL_LLVM_VERSION >= 110000
+                MaybeAlign(0),
+#else
                 0,
+#endif
                 emit_unbox(ctx, T_size, n, (jl_value_t*)jl_ulong_type),
                 false);
         JL_GC_POP();
@@ -1844,13 +1875,16 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     Value *llvmf;
     if (llvmcall) {
         if (symarg.jl_ptr != NULL) {
-            jl_error("llvmcall doesn't support dynamic pointers");
+            emit_error(ctx, "llvmcall doesn't support dynamic pointers");
+            return jl_cgval_t();
         }
         else if (symarg.fptr != NULL) {
-            jl_error("llvmcall doesn't support static pointers");
+            emit_error(ctx, "llvmcall doesn't support static pointers");
+            return jl_cgval_t();
         }
         else if (symarg.f_lib != NULL) {
-            jl_error("llvmcall doesn't support dynamic libraries");
+            emit_error(ctx, "llvmcall doesn't support dynamic libraries");
+            return jl_cgval_t();
         }
         else {
             assert(symarg.f_name != NULL);
@@ -1864,10 +1898,12 @@ jl_cgval_t function_sig_t::emit_a_ccall(
 #else
                 ;
 #endif
-            if (!f_extern &&
-                (!isa<Function>(llvmf) ||
-                 cast<Function>(llvmf)->getIntrinsicID() == Intrinsic::not_intrinsic))
-                jl_error("llvmcall only supports intrinsic calls");
+            if (!f_extern && (!isa<Function>(llvmf) ||
+                              cast<Function>(llvmf)->getIntrinsicID() ==
+                                      Intrinsic::not_intrinsic)) {
+                emit_error(ctx, "llvmcall only supports intrinsic calls");
+                return jl_cgval_t();
+            }
         }
     }
     else if (symarg.jl_ptr != NULL) {

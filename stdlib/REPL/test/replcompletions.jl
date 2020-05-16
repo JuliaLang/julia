@@ -132,7 +132,7 @@ end
 let s = "Main.CompletionFoo."
     c, r = test_complete(s)
     @test "bar" in c
-    @test r == 20:19
+    @test r === UnitRange{Int64}(20:19)
     @test s[r] == ""
 end
 
@@ -592,7 +592,12 @@ end
 
 # The return type is of importance, before #8995 it would return nothing
 # which would raise an error in the repl code.
-@test (String[], 0:-1, false) == test_scomplete("\$a")
+let c, r, res
+    c, r, res = test_scomplete("\$a")
+    @test c == String[]
+    @test r === UnitRange{Int64}(0:-1)
+    @test res === false
+end
 
 if Sys.isunix()
 let s, c, r
@@ -640,7 +645,7 @@ let s, c, r
         s = "/tmp/"
         c,r = test_scomplete(s)
         @test !("tmp/" in c)
-        @test r == 6:5
+        @test r === UnitRange{Int64}(6:5)
         @test s[r] == ""
     end
 
@@ -657,7 +662,7 @@ let s, c, r
         file = joinpath(path, "repl completions")
         s = "/tmp "
         c,r = test_scomplete(s)
-        @test r == 6:5
+        @test r === UnitRange{Int64}(6:5)
     end
 
     # Test completing paths with an escaped trailing space
@@ -971,7 +976,7 @@ end
 let s = ""
     c, r = test_complete_context(s)
     @test "bar" in c
-    @test r == 1:0
+    @test r === UnitRange{Int64}(1:0)
     @test s[r] == ""
 end
 

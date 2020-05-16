@@ -29,86 +29,12 @@ ERROR: MyException: test exception
 """
 showerror(io::IO, ex) = show(io, ex)
 
-"""
-    register_error_hint(handler, exceptiontype)
+show_index(io::IO, x::Any) = show(io, x)
+show_index(io::IO, x::Slice) = show_index(io, x.indices)
+show_index(io::IO, x::LogicalIndex) = show_index(io, x.mask)
+show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
+show_index(io::IO, x::Colon) = print(io, ':')
 
-Register a "hinting" function `handler(io, exception)` that can
-suggest potential ways for users to circumvent errors.  `handler`
-should examine `exception` to see whether the conditions appropriate
-for a hint are met, and if so generate output to `io`.
-Packages should call `register_error_hint` from within their
-`__init__` function.
-
-For specific exception types, `handler` is required to accept additional arguments:
-
-- `MethodError`: provide `handler(io, exc::MethodError, argtypes, kwargs)`,
-  which splits the combined arguments into positional and keyword arguments.
-
-When issuing a hint, the output should typically start with `\\n`.
-
-If you define custom exception types, your `showerror` method can
-support hints by calling [`show_error_hints`](@ref).
-
-# Example
-
-```
-julia> module Hinter
-
-       only_int(x::Int)      = 1
-       any_number(x::Number) = 2
-
-       function __init__()
-           register_error_hint(MethodError) do io, exc, argtypes, kwargs
-               if exc.f == only_int
-                    # Color is not necessary, this is just to show it's possible.
-                    print(io, "\\nDid you mean to call ")
-                    printstyled(io, "`any_number`?", color=:cyan)
-               end
-           end
-       end
-
-       end
-```
-
-Then if you call `Hinter.only_int` on something that isn't an `Int` (thereby triggering a `MethodError`), it issues the hint:
-
-```
-julia> Hinter.only_int(1.0)
-ERROR: MethodError: no method matching only_int(::Float64)
-Did you mean to call `any_number`?
-Closest candidates are:
-    ...
-```
-
-!!! compat "Julia 1.5"
-    Custom error hints are available as of Julia 1.5.
-"""
-function register_error_hint(handler, exct::Type)
-    list = get!(()->[], _hint_handlers, exct)
-    push!(list, handler)
-    return nothing
-end
-
-const _hint_handlers = IdDict{Type,Vector{Any}}()
-
-"""
-    show_error_hints(io, ex, args...)
-
-Invoke all handlers from [`register_error_hint`](@ref) for the particular
-exception type `typeof(ex)`. `args` must contain any other arguments expected by
-the handler for that type.
-"""
-function show_error_hints(io, ex, args...)
-    hinters = get!(()->[], _hint_handlers, typeof(ex))
-    for handler in hinters
-        try
-            Base.invokelatest(handler, io, ex, args...)
-        catch err
-            tn = typeof(handler).name
-            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error"
-        end
-    end
-end
 
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
@@ -118,15 +44,20 @@ function showerror(io::IO, ex::BoundsError)
         if isdefined(ex, :i)
             !isa(ex.a, AbstractArray) && print(io, "\n ")
             print(io, " at index [")
-            if isa(ex.i, AbstractRange)
+            if ex.i isa AbstractRange
                 print(io, ex.i)
+            elseif ex.i isa AbstractString
+                show(io, ex.i)
             else
-                join(io, ex.i, ", ")
+                for (i, x) in enumerate(ex.i)
+                    i > 1 && print(io, ", ")
+                    show_index(io, x)
+                end
             end
             print(io, ']')
         end
     end
-    show_error_hints(io, ex)
+    Experimental.show_error_hints(io, ex)
 end
 
 function showerror(io::IO, ex::TypeError)
@@ -150,7 +81,7 @@ function showerror(io::IO, ex::TypeError)
         end
         print(io, ctx, ", expected ", ex.expected, ", got ", targs...)
     end
-    show_error_hints(io, ex)
+    Experimental.show_error_hints(io, ex)
 end
 
 function showerror(io::IO, ex, bt; backtrace=true)
@@ -189,7 +120,7 @@ function showerror(io::IO, ex::DomainError)
     if isdefined(ex, :msg)
         print(io, ":\n", ex.msg)
     end
-    show_error_hints(io, ex)
+    Experimental.show_error_hints(io, ex)
     nothing
 end
 
@@ -245,7 +176,7 @@ function showerror(io::IO, ex::InexactError)
     print(io, "InexactError: ", ex.func, '(')
     nameof(ex.T) === ex.func || print(io, ex.T, ", ")
     print(io, ex.val, ')')
-    show_error_hints(io, ex)
+    Experimental.show_error_hints(io, ex)
 end
 
 typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
@@ -329,12 +260,9 @@ function showerror(io::IO, ex::MethodError)
                 isdefined(ft.name.module, name) &&
                 ft == typeof(getfield(ft.name.module, name))
             f_is_function = true
-            print(io, "no method matching ", name)
-        elseif isa(f, Type)
-            print(io, "no method matching ", f)
-        else
-            print(io, "no method matching (::", ft, ")")
         end
+        print(io, "no method matching ")
+        show_signature_function(io, isa(f, Type) ? Type{f} : typeof(f))
         print(io, "(")
         for (i, typ) in enumerate(arg_types_param)
             print(io, "::", typ)
@@ -396,7 +324,7 @@ function showerror(io::IO, ex::MethodError)
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
-    show_error_hints(io, ex, arg_types_param, kwargs)
+    Experimental.show_error_hints(io, ex, arg_types_param, kwargs)
     try
         show_method_candidates(io, ex, kwargs)
     catch ex
@@ -408,7 +336,9 @@ striptype(::Type{T}) where {T} = T
 striptype(::Any) = nothing
 
 function showerror_ambiguous(io::IO, meth, f, args)
-    print(io, "MethodError: ", f, "(")
+    print(io, "MethodError: ")
+    show_signature_function(io, isa(f, Type) ? Type{f} : typeof(f))
+    print(io, "(")
     p = args.parameters
     for (i,a) in enumerate(p)
         print(io, "::", a)
@@ -484,9 +414,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # function itself doesn't match
                 continue
             else
-                # TODO: use the methodshow logic here
-                use_constructor_syntax = isa(func, Type)
-                print(iob, use_constructor_syntax ? func : typeof(func).name.mt.name)
+                show_signature_function(iob, s1)
             end
             print(iob, "(")
             t_i = copy(arg_types_param)
@@ -750,6 +678,41 @@ function is_kw_sorter_name(name::Symbol)
     return !startswith(sn, '#') && endswith(sn, "##kw")
 end
 
+# For improved user experience, filter out frames for include() implementation
+# - see #33065. See also #35371 for extended discussion of internal frames.
+function _simplify_include_frames(trace)
+    i = length(trace)
+    kept_frames = trues(i)
+    first_ignored = nothing
+    while i >= 1
+        frame, _ = trace[i]
+        mod = parentmodule(frame)
+        if isnothing(first_ignored)
+            if mod === Base && frame.func === :_include
+                # Hide include() machinery by default
+                first_ignored = i
+            end
+        else
+            # Hack: allow `mod==nothing` as a workaround for inlined functions.
+            # TODO: Fix this by improving debug info.
+            if mod in (Base,Core,nothing) && 1+first_ignored-i <= 5
+                if frame.func == :eval
+                    kept_frames[i:first_ignored] .= false
+                    first_ignored = nothing
+                end
+            else
+                # Bail out to avoid hiding frames in unexpected circumstances
+                first_ignored = nothing
+            end
+        end
+        i -= 1
+    end
+    if !isnothing(first_ignored)
+        kept_frames[i:first_ignored] .= false
+    end
+    return trace[kept_frames]
+end
+
 function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     n = 0
     last_frame = StackTraces.UNKNOWN
@@ -790,7 +753,7 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     if n > 0
         push!(ret, (last_frame, n))
     end
-    return ret
+    return _simplify_include_frames(ret)
 end
 
 function show_exception_stack(io::IO, stack::Vector)

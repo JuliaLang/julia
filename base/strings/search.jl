@@ -125,16 +125,18 @@ findfirst(ch::AbstractChar, string::AbstractString) = findfirst(==(ch), string)
 
 # AbstractString implementation of the generic findnext interface
 function findnext(testf::Function, s::AbstractString, i::Integer)
+    i = Int(i)
     z = ncodeunits(s) + 1
-    1 ≤ i ≤ z || throw(BoundsError(s, i))
+    1 ≤ i ≤ z || throw(BoundsError(s, i))
     @inbounds i == z || isvalid(s, i) || string_index_err(s, i)
-    for (j, d) in pairs(SubString(s, i))
-        if testf(d)
-            return i + j - 1
-        end
+    e = lastindex(s)
+    while i <= e
+        testf(@inbounds s[i]) && return i
+        i = @inbounds nextind(s, i)
     end
     return nothing
 end
+
 
 in(c::AbstractChar, s::AbstractString) = (findfirst(isequal(c),s)!==nothing)
 
@@ -272,7 +274,7 @@ julia> findnext("Lang", "JuliaLang", 2)
 6:9
 ```
 """
-findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, i)
+findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, Int(i))
 
 """
     findnext(ch::AbstractChar, string::AbstractString, start::Integer)
@@ -333,18 +335,16 @@ findlast(ch::AbstractChar, string::AbstractString) = findlast(==(ch), string)
 
 # AbstractString implementation of the generic findprev interface
 function findprev(testf::Function, s::AbstractString, i::Integer)
-    if i < 1
-        return i == 0 ? nothing : throw(BoundsError(s, i))
+    i = Int(i)
+    z = ncodeunits(s) + 1
+    0 ≤ i ≤ z || throw(BoundsError(s, i))
+    i == z && return nothing
+    @inbounds i == 0 || isvalid(s, i) || string_index_err(s, i)
+    while i >= 1
+        testf(@inbounds s[i]) && return i
+        i = @inbounds prevind(s, i)
     end
-    n = ncodeunits(s)
-    if i > n
-        return i == n+1 ? nothing : throw(BoundsError(s, i))
-    end
-    # r[reverseind(r,i)] == reverse(r)[i] == s[i]
-    # s[reverseind(s,j)] == reverse(s)[j] == r[j]
-    r = reverse(s)
-    j = findnext(testf, r, reverseind(r, i))
-    j === nothing ? nothing : reverseind(s, j)
+    return nothing
 end
 
 function _rsearchindex(s::AbstractString,
@@ -484,7 +484,7 @@ julia> findprev("Julia", "JuliaLang", 6)
 1:5
 ```
 """
-findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, i)
+findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, Int(i))
 
 """
     findprev(ch::AbstractChar, string::AbstractString, start::Integer)

@@ -900,8 +900,13 @@ static void jl_dump_asm_internal(
             if (pass != 0 && nextLineAddr != (uint64_t)-1 && Index + Fptr + slide == nextLineAddr) {
                 if (di_ctx) {
                     std::string buf;
-                    DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::Default,
-                                                 DILineInfoSpecifier::FunctionNameKind::ShortName);
+                    DILineInfoSpecifier infoSpec(
+#if JL_LLVM_VERSION >= 110000
+                        DILineInfoSpecifier::FileLineInfoKind::RawValue,
+#else
+                        DILineInfoSpecifier::FileLineInfoKind::Default,
+#endif
+                        DILineInfoSpecifier::FunctionNameKind::ShortName);
                     DIInliningInfo dbg = di_ctx->getInliningInfoForAddress(makeAddress(Section, Index + Fptr + slide), infoSpec);
                     if (dbg.getNumberOfFrames()) {
                         dbgctx.emit_lineinfo(buf, dbg);

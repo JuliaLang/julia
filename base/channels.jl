@@ -118,7 +118,7 @@ julia> chnl = Channel{Char}(1, spawn=true) do ch
                put!(ch, c)
            end
        end
-Channel{Char}(sz_max:1,sz_curr:1)
+Channel{Char}(1) (1 item available)
 
 julia> String(collect(chnl))
 "hello world"
@@ -228,15 +228,16 @@ false
 ```jldoctest
 julia> c = Channel(0);
 
-julia> task = @async (put!(c,1);error("foo"));
+julia> task = @async (put!(c, 1); error("foo"));
 
-julia> bind(c,task);
+julia> bind(c, task);
 
 julia> take!(c)
 1
 
-julia> put!(c,1);
-ERROR: foo
+julia> put!(c, 1);
+ERROR: TaskFailedException:
+foo
 Stacktrace:
 [...]
 ```
@@ -278,12 +279,9 @@ function close_chnl_on_taskdone(t::Task, c::Channel)
     lock(c)
     try
         isopen(c) || return
-        if istaskfailed(t)
-            excp = task_result(t)
-            if excp isa Exception
-                close(c, excp)
-                return
-            end
+        if istaskfailed(t) && task_result(t) isa Exception
+            close(c, TaskFailedException(t))
+            return
         end
         close(c)
     finally
@@ -442,7 +440,24 @@ end
 
 eltype(::Type{Channel{T}}) where {T} = T
 
-show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(n_avail(c)))")
+show(io::IO, c::Channel) = print(io, typeof(c), "(", c.sz_max, ")")
+
+function show(io::IO, ::MIME"text/plain", c::Channel)
+    show(io, c)
+    if !get(io, :compact, false)
+        if !isopen(c)
+            print(io, " (closed)")
+        else
+            n = n_avail(c)
+            if n == 0
+                print(io, " (empty)")
+            else
+                s = n == 1 ? "" : "s"
+                print(io, " (", n_avail(c), " item$s available)")
+            end
+        end
+    end
+end
 
 function iterate(c::Channel, state=nothing)
     try

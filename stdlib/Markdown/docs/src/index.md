@@ -365,12 +365,21 @@ They can be defined using the following `!!!` syntax:
     This warning admonition has a custom title: `"Beware!"`.
 ```
 
-The type of the admonition can be any word, but some types produce special styling,
-namely (in order of decreasing severity): `danger`, `warning`, `info`/`note`, and `tip`.
+The type of the admonition can be any word made up of only lowercase Latin characters (a-z), but some types produce special styling,
+namely (in order of decreasing severity): `danger`, `warning`, `info`, `note`, and `tip`.
 
 A custom title for the box can be provided as a string (in double quotes) after the admonition type.
-If no title text is specified after the admonition type, then the title used will be the type of the block,
-i.e. `"Note"` in the case of the `note` admonition.
+For that standard types (`danger`, `warning`... etc_, if no title text is specified after the
+admonition type, then the type title used will be the type of the block.
+E.g. `"Note"` in the case of the `note` admonition.
+
+If you would like to define your own block, for example a `terminology`  block
+used like so:
+```
+!!! terminology "julia vs Julia"
+    Strictly speaking, Julia refers to the language,
+    and julia the standard implementation.
+```
 
 Admonitions, like most other toplevel elements, can contain other toplevel elements.
 

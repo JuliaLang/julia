@@ -1144,7 +1144,8 @@ function get_linfo(@nospecialize(f), @nospecialize(t))
 end
 
 function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val))
-    linfo = Core.Compiler.inf_for_methodinstance(get_linfo(f, t), Core.Compiler.get_world_counter())::Core.CodeInstance
+    interp = Core.Compiler.NativeInterpreter()
+    linfo = Core.Compiler.inf_for_methodinstance(interp, get_linfo(f, t), Core.Compiler.get_world_counter())::Core.CodeInstance
     # If coverage is not enabled, make the check strict by requiring constant ABI
     # Otherwise, check the typed AST to make sure we return a constant.
     if Base.JLOptions().code_coverage == 0
@@ -1444,7 +1445,8 @@ gg13183(x::X...) where {X} = (_false13183 ? gg13183(x, x) : 0)
 # test the external OptimizationState constructor
 let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     world = UInt(23) # some small-numbered world that should be valid
-    opt = Core.Compiler.OptimizationState(linfo, Core.Compiler.Params(world))
+    interp = Core.Compiler.NativeInterpreter()
+    opt = Core.Compiler.OptimizationState(linfo, Core.Compiler.OptimizationParams(interp), interp)
     # make sure the state of the properties look reasonable
     @test opt.src !== linfo.def.source
     @test length(opt.src.slotflags) == linfo.def.nargs <= length(opt.src.slotnames)
@@ -2545,3 +2547,44 @@ end
 @test only(Base.code_typed(pickvarnames, (Vector{Any},), optimize=false))[2] == Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple}}}}}}
 
 @test map(>:, [Int], [Int]) == [true]
+
+# issue 35566
+module Issue35566
+function step(acc, x)
+    xs, = acc
+    y = x > 0.0 ? x : missing
+    if y isa eltype(xs)
+        ys = push!(xs, y)
+    else
+        ys = vcat(xs, [y])
+    end
+    return (ys,)
+end
+
+function probe(y)
+    if y isa Tuple{Vector{Missing}}
+        return Val(:missing)
+    else
+        return Val(:expected)
+    end
+end
+
+function _foldl_iter(rf, val::T, iter, state) where {T}
+    while true
+        ret = iterate(iter, state)
+        ret === nothing && break
+        x, state = ret
+        y = rf(val, x)
+        if y isa T
+            val = y
+        else
+            return probe(y)
+        end
+    end
+    return Val(:expected)
+end
+
+f() = _foldl_iter(step, (Missing[],), [0.0], 1)
+end
+@test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}) == Tuple{Int}
+@test Base.return_types(Issue35566.f) == [Val{:expected}]

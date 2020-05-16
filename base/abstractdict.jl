@@ -424,22 +424,9 @@ Dict{Int64,String} with 1 entry:
 function filter(f, d::AbstractDict)
     # don't just do filter!(f, copy(d)): avoid making a whole copy of d
     df = empty(d)
-    try
-        for pair in d
-            if f(pair)
-                df[pair.first] = pair.second
-            end
-        end
-    catch e
-        if isa(e, MethodError) && e.f === f
-            depwarn("In `filter(f, dict)`, `f` is now passed a single pair instead of two arguments.", :filter)
-            for (k, v) in d
-                if f(k, v)
-                    df[k] = v
-                end
-            end
-        else
-            rethrow()
+    for pair in d
+        if f(pair)
+            df[pair.first] = pair.second
         end
     end
     return df

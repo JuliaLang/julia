@@ -10,7 +10,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              sum, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             sign, hastypemax
+             sign, hastypemax, isodd
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -341,6 +341,8 @@ function rem(x::BigInt, ::Type{T}) where T<:Union{Base.BitUnsigned,Base.BitSigne
 end
 
 rem(x::Integer, ::Type{BigInt}) = BigInt(x)
+
+isodd(x::BigInt) = MPZ.tstbit(x, 0)
 
 function (::Type{T})(x::BigInt) where T<:Base.BitUnsigned
     if sizeof(T) < sizeof(Limb)

@@ -1298,7 +1298,7 @@ cd(dirwalk) do
     @test files == ["file1", "file2"]
 
     rm(joinpath("sub_dir1"), recursive=true)
-    @test_throws SystemError take!(chnl_error) # throws an error because sub_dir1 do not exist
+    @test_throws TaskFailedException take!(chnl_error) # throws an error because sub_dir1 do not exist
 
     root, dirs, files = take!(chnl_noerror)
     @test root == "."
@@ -1508,5 +1508,29 @@ end
                 @test_throws Base.IOError readdir(join=true)
             end
         end
+    end
+end
+
+@testset "chmod/isexecutable" begin
+    mktempdir() do dir
+        mkdir(joinpath(dir, "subdir"))
+        fpath = joinpath(dir, "subdir", "foo")
+
+        # Test that we can actually set the executable bit on all platforms.
+        touch(fpath)
+        chmod(fpath, 0o644)
+        @test !Sys.isexecutable(fpath)
+        chmod(fpath, 0o755)
+        @test Sys.isexecutable(fpath)
+
+        # Ensure that, on Windows, where inheritance is default,
+        # chmod still behaves as we expect.
+        if Sys.iswindows()
+            chmod(joinpath(dir, "subdir"), 0o666)
+            @test Sys.isexecutable(fpath)
+        end
+
+        # Reset permissions to all at the end, so it can be deleted properly.
+        chmod(dir, 0o777; recursive=true)
     end
 end

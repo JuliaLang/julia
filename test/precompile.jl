@@ -170,6 +170,9 @@ try
               const layout1 = Ptr{Int8}[Ptr{Int8}(0), Ptr{Int8}(1), Ptr{Int8}(-1)]
               const layout2 = Any[Ptr{Int8}(0), Ptr{Int16}(1), Ptr{Int32}(-1)]
               const layout3 = collect(x.match for x in eachmatch(r"..", "abcdefghijk"))::Vector{SubString{String}}
+
+              # check that @ccallable works from precompiled modules
+              Base.@ccallable Cint f35014(x::Cint) = x+Cint(1)
           end
           """)
     # make sure `sin` didn't have a kwfunc (which would invalidate the attempted test)
@@ -216,6 +219,17 @@ try
         @test Foo.layout2 == Any[Ptr{Int8}(0), Ptr{Int16}(0), Ptr{Int32}(-1)]
         @test typeof.(Foo.layout2) == [Ptr{Int8}, Ptr{Int16}, Ptr{Int32}]
         @test Foo.layout3 == ["ab", "cd", "ef", "gh", "ij"]
+    end
+
+    @eval begin function ccallable_test()
+        Base.llvmcall(
+        (""" declare i32 @f35014(i32)""",
+         """
+         %1 = call i32 @f35014(i32 3)
+         ret i32 %1
+         """), Cint, Tuple{})
+    end
+    @test ccallable_test() == 4
     end
 
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")

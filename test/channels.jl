@@ -143,8 +143,9 @@ using Distributed
 
     # Error exception in task
     c = Channel(N)
-    bind(c, @async (GC.gc(); yield(); error("foo")))
-    @test_throws ErrorException take!(c)
+    task = @async (GC.gc(); yield(); error("foo"))
+    bind(c, task)
+    @test_throws TaskFailedException(task) take!(c)
     @test !isopen(c)
 
     # Multiple channels closed by the same bound task
@@ -170,10 +171,11 @@ using Distributed
         while isopen(cs[i])
             yield()
         end
-        @test_throws ErrorException wait(cs[i])
-        @test_throws ErrorException take!(cs[i])
-        @test_throws ErrorException put!(cs[i], 1)
-        @test_throws ErrorException fetch(cs[i])
+        @test_throws TaskFailedException(task) wait(cs[i])
+        @test_throws TaskFailedException(task) take!(cs[i])
+        @test_throws TaskFailedException(task) put!(cs[i], 1)
+        N == 0 || @test_throws TaskFailedException(task) fetch(cs[i])
+        N == 0 && @test_throws ErrorException fetch(cs[i])
     end
 
     # Multiple tasks, first one to terminate closes the channel
@@ -245,10 +247,10 @@ using Distributed
         chnl = Channel{T}(tf6, N, taskref=taskref)
         put!(chnl, 2)
         yield()
-        @test_throws ErrorException wait(chnl)
+        @test_throws TaskFailedException(taskref[]) wait(chnl)
         @test istaskdone(taskref[])
         @test !isopen(chnl)
-        @test_throws ErrorException take!(chnl)
+        @test_throws TaskFailedException(taskref[]) take!(chnl)
     end
 end
 
@@ -496,4 +498,16 @@ end
 let t = @async nothing
     wait(t)
     @test_throws ErrorException("schedule: Task not runnable") schedule(t, nothing)
+end
+
+# Channel `show`
+let c = Channel(3)
+    @test repr(c) == "Channel{Any}(3)"
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (empty)"
+    put!(c, 0)
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (1 item available)"
+    put!(c, 1)
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (2 items available)"
+    close(c)
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (closed)"
 end

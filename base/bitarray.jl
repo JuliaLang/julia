@@ -15,6 +15,11 @@ over `Array{Bool, N}` and allowing some operations to work on 64 values at once.
 By default, Julia returns `BitArrays` from [broadcasting](@ref Broadcasting) operations
 that generate boolean elements (including dotted-comparisons like `.==`) as well as from
 the functions [`trues`](@ref) and [`falses`](@ref).
+
+!!! note
+    Due to its packed storage format, concurrent access to the elements of a `BitArray`
+    where at least one of them is a write is not thread safe.
+
 """
 mutable struct BitArray{N} <: AbstractArray{Bool, N}
     chunks::Vector{UInt64}
@@ -1374,7 +1379,7 @@ end
 
 count(B::BitArray) = bitcount(B.chunks)
 
-function unsafe_bitfindnext(Bc::Vector{UInt64}, start::Integer)
+function unsafe_bitfindnext(Bc::Vector{UInt64}, start::Int)
     chunk_start = _div64(start-1)+1
     within_chunk_start = _mod64(start-1)
     mask = _msk64 << within_chunk_start
@@ -1397,13 +1402,14 @@ end
 function findnext(B::BitArray, start::Integer)
     start > 0 || throw(BoundsError(B, start))
     start > length(B) && return nothing
-    unsafe_bitfindnext(B.chunks, start)
+    unsafe_bitfindnext(B.chunks, Int(start))
 end
 
 #findfirst(B::BitArray) = findnext(B, 1)  ## defined in array.jl
 
 # aux function: same as findnext(~B, start), but performed without temporaries
 function findnextnot(B::BitArray, start::Integer)
+    start = Int(start)
     start > 0 || throw(BoundsError(B, start))
     start > length(B) && return nothing
 
@@ -1458,7 +1464,7 @@ function findnext(testf::Function, B::BitArray, start::Integer)
 end
 #findfirst(testf::Function, B::BitArray) = findnext(testf, B, 1)  ## defined in array.jl
 
-function unsafe_bitfindprev(Bc::Vector{UInt64}, start::Integer)
+function unsafe_bitfindprev(Bc::Vector{UInt64}, start::Int)
     chunk_start = _div64(start-1)+1
     mask = _msk_end(start)
 
@@ -1480,10 +1486,11 @@ end
 function findprev(B::BitArray, start::Integer)
     start > 0 || return nothing
     start > length(B) && throw(BoundsError(B, start))
-    unsafe_bitfindprev(B.chunks, start)
+    unsafe_bitfindprev(B.chunks, Int(start))
 end
 
 function findprevnot(B::BitArray, start::Integer)
+    start = Int(start)
     start > 0 || return nothing
     start > length(B) && throw(BoundsError(B, start))
 

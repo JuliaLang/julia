@@ -19,6 +19,7 @@ Base.read!
 Base.readbytes!
 Base.unsafe_read
 Base.unsafe_write
+Base.peek
 Base.position
 Base.seek
 Base.seekstart

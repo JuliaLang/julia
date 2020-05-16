@@ -386,21 +386,20 @@ a symbol, then an assignment `(x, y) = argument` will be inserted for you:
 ```julia
 julia> minmax(x, y) = (y < x) ? (y, x) : (x, y)
 
-julia> range((min, max)) = max - min
+julia> gap((min, max)) = max - min
 
-julia> range(minmax(10, 2))
+julia> gap(minmax(10, 2))
 8
 ```
 
-Notice the extra set of parentheses in the definition of `range`.
-Without those, `range` would be a two-argument function, and this example would
-not work.
+Notice the extra set of parentheses in the definition of `gap`. Without those, `gap`
+would be a two-argument function, and this example would not work.
 
 ## Varargs Functions
 
 It is often convenient to be able to write functions taking an arbitrary number of arguments.
 Such functions are traditionally known as "varargs" functions, which is short for "variable number
-of arguments". You can define a varargs function by following the last argument with an ellipsis:
+of arguments". You can define a varargs function by following the last positional argument with an ellipsis:
 
 ```jldoctest barfunc
 julia> bar(a,b,x...) = (a,b,x)
@@ -583,6 +582,14 @@ The types of keyword arguments can be made explicit as follows:
 
 ```julia
 function f(;x::Int=1)
+    ###
+end
+```
+
+Keyword arguments can also be used in varargs functions:
+
+```julia
+function plot(x...; style="solid")
     ###
 end
 ```
