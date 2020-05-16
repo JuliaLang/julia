@@ -175,10 +175,14 @@ end
     @test (@view x[4:end]) isa SubString
 
     # We don't (at present) make non-contiguous SubStrings with views
-    @test_throws MethodError (@view x[[1,3,5]]) == "ace"
+    @test_throws MethodError (@view x[[1,3,5]])
     @test (@views (x[[1,3,5]])) isa String
 
-    @test (@views (x[1], x[1:2], x[[1,4]])) isa Tuple{Char, SubString, String}
+    # We don't (at present) make single character SubStrings with views
+    @test_throws MethodError (@view x[3])
+    @test (@views (x[3])) isa Char
+
+    @test (@views (x[3], x[1:2], x[[1,4]])) isa Tuple{Char, SubString, String}
 end
 
 
