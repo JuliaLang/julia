@@ -35,6 +35,8 @@ const namespace_url  = UUID(0x6ba7b8119dad11d180b400c04fd430c8) # 6ba7b811-9dad-
 const namespace_oid  = UUID(0x6ba7b8129dad11d180b400c04fd430c8) # 6ba7b812-9dad-11d1-80b4-00c04fd430c8
 const namespace_x500 = UUID(0x6ba7b8149dad11d180b400c04fd430c8) # 6ba7b814-9dad-11d1-80b4-00c04fd430c8
 
+uuid_rng = Random.RandomDevice()
+
 """
     uuid1([rng::AbstractRNG=Random.RandomDevice()]) -> UUID
 
@@ -53,7 +55,7 @@ UUID("cfc395e8-590f-11e8-1f13-43a2532b2fa8")
 !!! compat "Julia 1.6"
     The default rng has been changed to use Random.RandomDevice as of Julia 1.6
 """
-function uuid1(rng::AbstractRNG=Random.RandomDevice())
+function uuid1(rng::AbstractRNG=uuid_rng)
     u = rand(rng, UInt128)
 
     # mask off clock sequence and node
@@ -92,7 +94,7 @@ UUID("196f2941-2d58-45ba-9f13-43a2532b2fa8")
 !!! compat "Julia 1.6"
     The default rng has been changed to use Random.RandomDevice as of Julia 1.6
 """
-function uuid4(rng::AbstractRNG=Random.RandomDevice())
+function uuid4(rng::AbstractRNG=uuid_rng)
     u = rand(rng, UInt128)
     u &= 0xffffffffffff0fff3fffffffffffffff
     u |= 0x00000000000040008000000000000000
