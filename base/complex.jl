@@ -1244,10 +1244,10 @@ The arguments may be Gaussian integers (complex numbers with both real and imagi
 # Examples
 ```jldoctest
 julia> gcdx(1 + 1im, 2 + 2im)
-(1 + 1im, -1 + 0im, 1 + 0im)
+(1 + 1im, 1 + 0im, 0 + 0im)
 
 julia> gcdx(1 + 1im, -2 + 2im)
-(1 + 1im, -1 + 0im, 1 + 0im)
+(1 + 1im, 1 + 0im, 0 + 0im)
 
 julia> gcdx(1 + 1im, 0 + 0im)
 (1 + 1im, 1 + 0im, 0 + 0im)
