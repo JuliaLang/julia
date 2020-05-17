@@ -80,12 +80,23 @@ Return a list of strings to be displayed as options in the current page.
 options(m::AbstractMenu) = error("unimplemented")
 
 """
-    writeline(buf::IOBuffer, m::AbstractMenu, idx, showcursor::Bool)
+    writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cursor::Union{Char,Nothing})
 
-Write the option at index `idx` to the buffer. If `showcursor` is `true` display the cursor.
+Write the option at index `idx` to the buffer. If `isa(cursor, Char)`, it should be printed.
+
+!!! compat "Julia 1.6"
+    `writeline` requires Julia 1.6 or higher.
+
+    On older versions of Julia, this was
+        `writeLine(buf::IOBuffer, m::AbstractMenu, idx, cursor::Bool)`
+    and if `cursor` is `true`, the cursor obtained from `TerminalMenus.CONFIG[:cursor]`
+    should be printed.
+
+    This older function is supported on all Julia 1.x versions but will be dropped in Julia 2.0.
 """
-function writeline(buf::IOBuffer, m::AbstractMenu, idx, showcursor::Bool)
-    error("unimplemented")
+function writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cursor::Union{Char,Nothing})
+    # error("unimplemented")    # TODO: use this in Julia 2.0
+    writeLine(buf, m, idx, isa(cursor, Char))
 end
 
 
@@ -226,6 +237,12 @@ end
     printmenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
 
 Display the state of a menu.
+
+!!! compat "Julia 1.6"
+    `printmenu` requires Julia 1.6 or higher.
+
+    On older versions of Julia, this was called `printMenu`.
+    This older function is supported on all Julia 1.x versions but will be dropped in Julia 2.0.
 """
 function printmenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
     CONFIG[:suppress_output] && return
@@ -256,7 +273,7 @@ function printmenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
             print(buf, " ")
         end
 
-        writeline(buf, m, i, i == cursor)
+        writeline(buf, m, i, i == cursor ? CONFIG[:cursor] : nothing)
 
         i != lastline && print(buf, "\r\n")
     end

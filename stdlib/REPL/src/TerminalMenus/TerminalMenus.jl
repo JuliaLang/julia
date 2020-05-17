@@ -26,6 +26,8 @@ export
 # TODO: remove Julia 2.0
 # While not exported, AbstractMenu documented these as an extension interface
 const printMenu = printmenu
-const writeLine = writeline
+function writeLine(buf::IOBuffer, m::AbstractMenu, idx::Int, cursor::Bool)
+    error("unimplemented")
+end
 
 end # module
