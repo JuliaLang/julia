@@ -36,7 +36,7 @@ These functions must be implemented for all subtypes of AbstractMenu.
   - `pick(m::AbstractMenu, cursor::Int)`
   - `cancel(m::AbstractMenu)`
   - `options(m::AbstractMenu)`
-  - `writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool)`
+  - `writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, showcursor::Bool)`
 
 ## Optional Functions
 
@@ -60,6 +60,7 @@ abstract type AbstractMenu end
 
 Defines what happens when a user presses the Enter key while the menu is open.
 If `true` is returned, `request()` will exit.
+`cursor` indexes the position of the selection.
 """
 pick(m::AbstractMenu, cursor::Int) = error("unimplemented")
 
@@ -79,11 +80,11 @@ Return a list of strings to be displayed as options in the current page.
 options(m::AbstractMenu) = error("unimplemented")
 
 """
-    writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool)
+    writeline(buf::IOBuffer, m::AbstractMenu, idx, showcursor::Bool)
 
-Write the option at index `idx` to the buffer. If cursor is `true` display the cursor.
+Write the option at index `idx` to the buffer. If `showcursor` is `true` display the cursor.
 """
-function writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool)
+function writeline(buf::IOBuffer, m::AbstractMenu, idx, showcursor::Bool)
     error("unimplemented")
 end
 
