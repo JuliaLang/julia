@@ -445,6 +445,16 @@ function Symbol(a::Array{UInt8,1})
 end
 Symbol(s::Symbol) = s
 
+# for closures
+function _typeof_prefer_singleton(@nospecialize x)
+    if x isa DataType
+        if x.layout === Ptr{Nothing}(0)  # we don't have C_NULL yet
+            return DataType
+        end
+    end
+    return Typeof(x)
+end
+
 # module providing the IR object model
 module IR
 export CodeInfo, MethodInstance, CodeInstance, GotoNode,

@@ -611,6 +611,10 @@ end
 @test foo21900 == 10
 @test bar21900 == 11
 
+let f = x -> g -> g(x)
+    @test fieldtype(typeof(f(Int)), 1) === Type{Int}
+end
+
 # ? syntax
 @test (true ? 1 : false ? 2 : 3) == 1
 
