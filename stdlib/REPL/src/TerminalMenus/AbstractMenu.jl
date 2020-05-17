@@ -26,7 +26,7 @@ Details can be found in
 
 # Subtypes
 
-All subtypes must contain the fields `pagesize::Int` and
+All subtypes must be mutable, and must contain the fields `pagesize::Int` and
 `pageoffset::Int`. They must also implement the following functions.
 
 ## Necessary Functions
@@ -36,7 +36,9 @@ These functions must be implemented for all subtypes of AbstractMenu.
   - `pick(m::AbstractMenu, cursor::Int)`
   - `cancel(m::AbstractMenu)`
   - `options(m::AbstractMenu)`
-  - `writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, showcursor::Bool)`
+  - `writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cursor)`
+
+If `m` does not have a field called `selected`, then you must also implement `selected(m)`.
 
 ## Optional Functions
 
@@ -45,7 +47,8 @@ subtypes.
 
   - `header(m::AbstractMenu)`
   - `keypress(m::AbstractMenu, i::UInt32)`
-  - `noptions(m::AbstractMenu)`
+  - `numoptions(m::AbstractMenu)`
+  - `selected(m::AbstractMenu)`
 
 """
 abstract type AbstractMenu end
@@ -78,28 +81,35 @@ cancel(m::AbstractMenu) = error("unimplemented")
 
 Return a list of strings to be displayed as options in the current page.
 
-Alternatively, implement `noptions`, in which case `options` is not needed.
+Alternatively, implement `numoptions`, in which case `options` is not needed.
 """
 options(m::AbstractMenu) = error("unimplemented")
 
 """
-    writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cursor::Union{Char,Nothing})
+    writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cursor::Bool, indicators::Indicators)
 
-Write the option at index `idx` to the buffer. If `isa(cursor, Char)`, it should be printed.
+Write the option at index `idx` to the buffer. If `indicators !== nothing`, the current line
+corresponds to the cursor position. The method is responsible for displaying visual indicator(s)
+about the state of this menu item; the configured characters are returned in `indicators`
+in fields with the following names:
+    `cursor::Char`: the character used to indicate the cursor position
+    `checked::String`: a string used to indicate this option has been marked
+    `unchecked::String`: a string used to indicate this option has not been marked
+The latter two are relevant only for menus that support multiple selection.
 
 !!! compat "Julia 1.6"
     `writeline` requires Julia 1.6 or higher.
 
     On older versions of Julia, this was
         `writeLine(buf::IOBuffer, m::AbstractMenu, idx, cursor::Bool)`
-    and if `cursor` is `true`, the cursor obtained from `TerminalMenus.CONFIG[:cursor]`
-    should be printed.
+    and the indicators can be obtained from `TerminalMenus.CONFIG`, a Dict indexed by `Symbol`
+    keys with the same names as the fields of `indicators`.
 
     This older function is supported on all Julia 1.x versions but will be dropped in Julia 2.0.
 """
-function writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cursor::Union{Char,Nothing})
+function writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cursor::Bool, indicators)
     # error("unimplemented")    # TODO: use this in Julia 2.0
-    writeLine(buf, m, idx, isa(cursor, Char))
+    writeLine(buf, m, idx, cursor)
 end
 
 
@@ -111,6 +121,7 @@ end
     header(m::AbstractMenu)
 
 Displays the header above the menu when it is rendered to the screen.
+Defaults to "".
 """
 header(m::AbstractMenu) = ""
 
@@ -119,22 +130,31 @@ header(m::AbstractMenu) = ""
 
 Send any non-standard keypress event to this function.
 If `true` is returned, `request()` will exit.
+Defaults to `false`.
 """
 keypress(m::AbstractMenu, i::UInt32) = false
 
 """
-    noptions(m::AbstractMenu)
+    numoptions(m::AbstractMenu)
 
 Return the number of options in menu `m`. Defaults to `length(options(m))`.
 """
-noptions(m::AbstractMenu) = length(options(m))
+numoptions(m::AbstractMenu) = length(options(m))
 
+"""
+    selected(m::AbstractMenu)
+
+Return information about the user-selected option. Defaults to `m.selected`.
+"""
+selected(m::AbstractMenu) = m.selected
 
 """
     request(m::AbstractMenu; cursor=1)
 
-Display the menu and enter interactive mode. Returns `m.selected` which
-varies based on menu type.
+Display the menu and enter interactive mode. `cursor` indicates the initial item
+for the cursor.
+
+Returns `selected(m)` which varies based on menu type.
 """
 request(m::AbstractMenu; kwargs...) = request(terminal, m; kwargs...)
 
@@ -147,7 +167,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Int=
     raw_mode_enabled = REPL.Terminals.raw!(term, true)
     raw_mode_enabled && print(term.out_stream, "\x1b[?25l") # hide the cursor
 
-    lastoption = noptions(m)
+    lastoption = numoptions(m)
     try
         while true
             c = readkey(term.in_stream)
@@ -223,7 +243,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Int=
     end
     println(term.out_stream)
 
-    return m.selected
+    return selected(m)
 end
 
 
@@ -255,6 +275,7 @@ function printmenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
     CONFIG[:suppress_output] && return
 
     buf = IOBuffer()
+    indicators = Indicators()
 
     lines = m.pagesize-1
 
@@ -274,13 +295,13 @@ function printmenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
 
         if i == firstline && m.pageoffset > 0
             print(buf, CONFIG[:up_arrow])
-        elseif i == lastline && i != noptions(m)
+        elseif i == lastline && i != numoptions(m)
             print(buf, CONFIG[:down_arrow])
         else
             print(buf, " ")
         end
 
-        writeline(buf, m, i, i == cursor ? CONFIG[:cursor] : nothing)
+        writeline(buf, m, i, i == cursor, indicators)
 
         i != lastline && print(buf, "\r\n")
     end

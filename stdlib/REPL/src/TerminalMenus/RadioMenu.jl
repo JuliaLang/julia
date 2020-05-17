@@ -71,9 +71,9 @@ function pick(menu::RadioMenu, cursor::Int)
     return true #break out of the menu
 end
 
-function writeline(buf::IOBuffer, menu::RadioMenu, idx::Int, cursor::Union{Char,Nothing})
+function writeline(buf::IOBuffer, menu::RadioMenu, idx::Int, cursor::Bool, indicators)
     # print a ">" on the selected entry
-    isa(cursor, Char) ? print(buf, cursor ," ") : print(buf, "  ")
+    cursor ? print(buf, indicators.cursor ," ") : print(buf, "  ")
 
     print(buf, replace(menu.options[idx], "\n" => "\\n"))
 end

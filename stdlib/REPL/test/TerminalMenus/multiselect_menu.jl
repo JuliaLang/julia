@@ -23,15 +23,18 @@ CONFIG = TerminalMenus.CONFIG
 
 multi_menu = MultiSelectMenu(string.(1:10))
 buf = IOBuffer()
-TerminalMenus.writeline(buf, multi_menu, 1, true)
-@test String(take!(buf)) == string(CONFIG[:cursor], " ", CONFIG[:unchecked], " 1")
+TerminalMenus.writeline(buf, multi_menu, 1, true, TerminalMenus.Indicators('@',"c","u"))
+@test String(take!(buf)) == "@ u 1"
 TerminalMenus.config(cursor='+')
-TerminalMenus.writeline(buf, multi_menu, 1, true)
-@test String(take!(buf)) == string("+ ", CONFIG[:unchecked], " 1")
+TerminalMenus.printmenu(buf, multi_menu, 1; init=true)
+@test startswith(String(take!(buf)), string("\e[2K + ", CONFIG[:unchecked], " 1"))
 TerminalMenus.config(charset=:unicode)
-TerminalMenus.writeline(buf, multi_menu, 1, true)
-@test String(take!(buf)) == string(CONFIG[:cursor], " ", CONFIG[:unchecked], " 1")
+push!(multi_menu.selected, 1)
+TerminalMenus.printmenu(buf, multi_menu, 2; init=true)
+@test startswith(String(take!(buf)), string("\e[2K   ", CONFIG[:checked], " 1\r\n\e[2K ", CONFIG[:cursor], " ", CONFIG[:unchecked], " 2"))
 
 # Test SDTIN
 multi_menu = MultiSelectMenu(string.(1:10))
+CONFIG[:suppress_output] = true
 @test simulate_input(Set([1,2]), multi_menu, :enter, :down, :enter, 'd')
+CONFIG[:suppress_output] = false

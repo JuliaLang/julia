@@ -3,6 +3,14 @@
 """global menu configuration parameters"""
 const CONFIG = Dict{Symbol,Union{Char,String,Bool}}()
 
+struct Indicators
+    cursor::Char
+    checked::String
+    unchecked::String
+end
+Indicators() = Indicators(CONFIG)
+Indicators(settings) = Indicators(settings[:cursor], settings[:checked], settings[:unchecked])
+
 """
     config( <see arguments> )
 

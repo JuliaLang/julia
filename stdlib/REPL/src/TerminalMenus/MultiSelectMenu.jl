@@ -87,13 +87,13 @@ function pick(menu::MultiSelectMenu, cursor::Int)
     return false #break out of the menu
 end
 
-function writeline(buf::IOBuffer, menu::MultiSelectMenu, idx::Int, cursor::Union{Char,Nothing})
+function writeline(buf::IOBuffer, menu::MultiSelectMenu, idx::Int, cursor::Bool, indicators)
     # print a ">" on the selected entry
-    isa(cursor, Char) ? print(buf, cursor ," ") : print(buf, "  ")
+    cursor ? print(buf, indicators.cursor ," ") : print(buf, "  ")
     if idx in menu.selected
-        print(buf, CONFIG[:checked], " ")
+        print(buf, indicators.checked, " ")
     else
-        print(buf, CONFIG[:unchecked], " ")
+        print(buf, indicators.unchecked, " ")
     end
 
     print(buf, replace(menu.options[idx], "\n" => "\\n"))
