@@ -127,7 +127,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu)
 
     printmenu(term.out_stream, m, cursor, init=true)
 
-    raw_mode_enabled = raw!(term, true)
+    raw_mode_enabled = REPL.Terminals.raw!(term, true)
     raw_mode_enabled && print(term.out_stream, "\x1b[?25l") # hide the cursor
 
     lastoption = length(options(m))
@@ -201,7 +201,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu)
     finally # always disable raw mode
         if raw_mode_enabled
             print(term.out_stream, "\x1b[?25h") # unhide cursor
-            raw!(term, false)
+            REPL.Terminals.raw!(term, false)
         end
     end
     println(term.out_stream)

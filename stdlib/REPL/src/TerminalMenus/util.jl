@@ -12,19 +12,6 @@
     PAGE_UP,
     PAGE_DOWN)
 
-# Set `term` mode; raw=true intercepts keyboard inputs directly
-function raw!(term, raw::Bool)
-    try
-        REPL.Terminals.raw!(term, raw)
-        return true
-    catch err
-        raw ? @warn("TerminalMenus: Unable to enter raw mode: $err") :
-              @warn("TerminalMenus: Unable to disable raw mode: $err")
-    end
-    return false
-end
-
-
 readbyte(stream::IO=stdin) = Char(read(stream,1)[1])
 
 # Read the next key from stdin. It is also able to read several bytes for
