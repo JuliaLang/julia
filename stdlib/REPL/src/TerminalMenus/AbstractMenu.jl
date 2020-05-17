@@ -123,16 +123,14 @@ keypress(m::AbstractMenu, i::UInt32) = false
 
 
 """
-    request(m::AbstractMenu)
+    request(m::AbstractMenu; cursor=1)
 
 Display the menu and enter interactive mode. Returns `m.selected` which
 varies based on menu type.
 """
-request(m::AbstractMenu) = request(terminal, m)
+request(m::AbstractMenu; kwargs...) = request(terminal, m; kwargs...)
 
-function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu)
-    cursor = 1
-
+function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Int=1)
     menu_header = header(m)
     !CONFIG[:suppress_output] && menu_header != "" && println(term.out_stream, menu_header)
 
