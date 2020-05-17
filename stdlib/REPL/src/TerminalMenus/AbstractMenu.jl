@@ -45,6 +45,7 @@ subtypes.
 
   - `header(m::AbstractMenu)`
   - `keypress(m::AbstractMenu, i::UInt32)`
+  - `noptions(m::AbstractMenu)`
 
 """
 abstract type AbstractMenu end
@@ -76,6 +77,8 @@ cancel(m::AbstractMenu) = error("unimplemented")
     options(m::AbstractMenu)
 
 Return a list of strings to be displayed as options in the current page.
+
+Alternatively, implement `noptions`, in which case `options` is not needed.
 """
 options(m::AbstractMenu) = error("unimplemented")
 
@@ -119,7 +122,12 @@ If `true` is returned, `request()` will exit.
 """
 keypress(m::AbstractMenu, i::UInt32) = false
 
+"""
+    noptions(m::AbstractMenu)
 
+Return the number of options in menu `m`. Defaults to `length(options(m))`.
+"""
+noptions(m::AbstractMenu) = length(options(m))
 
 
 """
@@ -139,7 +147,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Int=
     raw_mode_enabled = REPL.Terminals.raw!(term, true)
     raw_mode_enabled && print(term.out_stream, "\x1b[?25l") # hide the cursor
 
-    lastoption = length(options(m))
+    lastoption = noptions(m)
     try
         while true
             c = readkey(term.in_stream)
@@ -221,6 +229,7 @@ end
 
 """
     request([term,] msg::AbstractString, m::AbstractMenu)
+
 Shorthand for `println(msg); request(m)`.
 """
 request(msg::AbstractString, m::AbstractMenu) = request(terminal, msg, m)
@@ -265,7 +274,7 @@ function printmenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
 
         if i == firstline && m.pageoffset > 0
             print(buf, CONFIG[:up_arrow])
-        elseif i == lastline && i != length(options(m))
+        elseif i == lastline && i != noptions(m)
             print(buf, CONFIG[:down_arrow])
         else
             print(buf, " ")
