@@ -311,7 +311,7 @@ diagm_container(size, kv::Pair{<:Integer,<:BitVector}...) =
     diagm(m::Integer, n::Integer, v::AbstractVector)
 
 Construct a matrix with elements of the vector as diagonal elements.
-By default (if `size=nothing`), the matrix is square and its size is given by
+By default, the matrix is square and its size is given by
 `length(v)`, but a non-square size `m`×`n` can be specified
 by passing `m,n` as the first arguments.
 
