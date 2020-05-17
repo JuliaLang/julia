@@ -23,4 +23,9 @@ export
     MultiSelectMenu,
     request
 
+# TODO: remove Julia 2.0
+# While not exported, AbstractMenu documented these as an extension interface
+const printMenu = printmenu
+const writeLine = writeline
+
 end # module

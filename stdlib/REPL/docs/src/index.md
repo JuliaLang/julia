@@ -556,7 +556,7 @@ All interface customization is done through the keyword only
  - `checked::String="[X]"|"✓"`: string to use for checked
  - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
  - `scroll::Symbol=:na`: If `:wrap` then wrap the cursor around top and bottom, if :`nowrap` do not wrap cursor
- - `supress_output::Bool=false`: For testing. If true, menu will not be printed to console.
+ - `suppress_output::Bool=false`: For testing. If true, menu will not be printed to console.
  - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
 
 #### Examples

@@ -23,15 +23,15 @@ CONFIG = TerminalMenus.CONFIG
 
 multi_menu = MultiSelectMenu(string.(1:10))
 buf = IOBuffer()
-TerminalMenus.writeLine(buf, multi_menu, 1, true)
+TerminalMenus.writeline(buf, multi_menu, 1, true)
 @test String(take!(buf)) == string(CONFIG[:cursor], " ", CONFIG[:unchecked], " 1")
 TerminalMenus.config(cursor='+')
-TerminalMenus.writeLine(buf, multi_menu, 1, true)
+TerminalMenus.writeline(buf, multi_menu, 1, true)
 @test String(take!(buf)) == string("+ ", CONFIG[:unchecked], " 1")
 TerminalMenus.config(charset=:unicode)
-TerminalMenus.writeLine(buf, multi_menu, 1, true)
+TerminalMenus.writeline(buf, multi_menu, 1, true)
 @test String(take!(buf)) == string(CONFIG[:cursor], " ", CONFIG[:unchecked], " 1")
 
 # Test SDTIN
 multi_menu = MultiSelectMenu(string.(1:10))
-@test simulateInput(Set([1,2]), multi_menu, :enter, :down, :enter, 'd')
+@test simulate_input(Set([1,2]), multi_menu, :enter, :down, :enter, 'd')

@@ -87,7 +87,7 @@ function pick(menu::MultiSelectMenu, cursor::Int)
     return false #break out of the menu
 end
 
-function writeLine(buf::IOBuffer, menu::MultiSelectMenu, idx::Int, cursor::Bool)
+function writeline(buf::IOBuffer, menu::MultiSelectMenu, idx::Int, cursor::Bool)
     # print a ">" on the selected entry
     cursor ? print(buf, CONFIG[:cursor]," ") : print(buf, "  ")
     if idx in menu.selected

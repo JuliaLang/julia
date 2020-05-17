@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """global menu configuration parameters"""
-CONFIG = Dict()
+const CONFIG = Dict{Symbol,Union{Char,String,Bool}}()
 
 """
     config( <see arguments> )
@@ -16,7 +16,7 @@ Keyword-only function to configure global menu parameters
  - `checked::String="[X]"|"✓"`: string to use for checked
  - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
  - `scroll::Symbol=:nowrap`: If `:wrap` wrap cursor around top and bottom, if :`nowrap` do not wrap cursor
- - `supress_output::Bool=false`: For testing. If true, menu will not be printed to console.
+ - `suppress_output::Bool=false`: For testing. If true, menu will not be printed to console.
  - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
 """
 function config(;charset::Symbol = :na,
@@ -26,8 +26,17 @@ function config(;charset::Symbol = :na,
                 down_arrow::Char = '\0',
                 checked::String = "",
                 unchecked::String = "",
-                supress_output::Union{Nothing, Bool}=nothing,
+                suppress_output::Union{Nothing, Bool}=nothing,
+                supress_output::Union{Nothing, Bool}=nothing,   # TODO: remove Julia 2.0
                 ctrl_c_interrupt::Union{Nothing, Bool}=nothing)
+
+    if supress_output !== nothing
+        # TODO: remove this whole block for Julia 2.0.
+        # This was a documented option with a typo, so we need to support it throughout Julia 1.x.
+        # During Julia 1.x, the typo `supress_output` takes precedence over `suppress_output`.
+        suppress_output === nothing || @warn "`supress_output` is deprecated, use `suppress_output`"
+        suppress_output = supress_output
+    end
 
     if charset === :ascii
         cursor     = '>'
@@ -55,11 +64,11 @@ function config(;charset::Symbol = :na,
     down_arrow != '\0' && (CONFIG[:down_arrow] = down_arrow)
     checked    != ""   && (CONFIG[:checked]    = checked)
     unchecked  != ""   && (CONFIG[:unchecked]  = unchecked)
-    supress_output isa Bool   && (CONFIG[:supress_output]   = supress_output)
+    suppress_output isa Bool   && (CONFIG[:suppress_output] = suppress_output)
     ctrl_c_interrupt isa Bool && (CONFIG[:ctrl_c_interrupt] = ctrl_c_interrupt)
 
     return nothing
 end
 
 # Set up defaults
-config(charset=:ascii, scroll=:nowrap, supress_output=false, ctrl_c_interrupt=true)
+config(charset=:ascii, scroll=:nowrap, suppress_output=false, ctrl_c_interrupt=true)

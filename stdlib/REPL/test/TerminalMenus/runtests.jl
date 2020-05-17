@@ -4,12 +4,9 @@ import REPL
 using REPL.TerminalMenus
 using Test
 
-TerminalMenus.config(supress_output=true)
+TerminalMenus.config(suppress_output=true)
 
-function simulateInput(expectedResult, menu::TerminalMenus.AbstractMenu, keys...)
-    # If we cannot write to the buffer, skip the test
-    !(:buffer in fieldnames(typeof(stdin))) && return true
-
+function simulate_input(expected, menu::TerminalMenus.AbstractMenu, keys...)
     keydict =  Dict(:up => "\e[A",
                     :down => "\e[B",
                     :enter => "\r")
@@ -22,7 +19,7 @@ function simulateInput(expectedResult, menu::TerminalMenus.AbstractMenu, keys...
         end
     end
 
-    request(menu) == expectedResult
+    request(menu) == expected
 end
 
 include("radio_menu.jl")

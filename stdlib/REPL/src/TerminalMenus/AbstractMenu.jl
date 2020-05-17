@@ -21,7 +21,7 @@ Details can be found in
 
 ## Hidden
 
-  - `printMenu(m::AbstractMenu, cursor::Int; init::Bool=false)`
+  - `printmenu(m::AbstractMenu, cursor::Int; init::Bool=false)`
 
 
 # Subtypes
@@ -36,7 +36,7 @@ These functions must be implemented for all subtypes of AbstractMenu.
   - `pick(m::AbstractMenu, cursor::Int)`
   - `cancel(m::AbstractMenu)`
   - `options(m::AbstractMenu)`
-  - `writeLine(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool)`
+  - `writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool)`
 
 ## Optional Functions
 
@@ -79,11 +79,11 @@ Return a list of strings to be displayed as options in the current page.
 options(m::AbstractMenu) = error("unimplemented")
 
 """
-    writeLine(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool)
+    writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool)
 
 Write the option at index `idx` to the buffer. If cursor is `true` display the cursor.
 """
-function writeLine(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool)
+function writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool)
     error("unimplemented")
 end
 
@@ -122,17 +122,17 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu)
     cursor = 1
 
     menu_header = header(m)
-    !CONFIG[:supress_output] && menu_header != "" && println(term.out_stream, menu_header)
+    !CONFIG[:suppress_output] && menu_header != "" && println(term.out_stream, menu_header)
 
-    printMenu(term.out_stream, m, cursor, init=true)
+    printmenu(term.out_stream, m, cursor, init=true)
 
-    raw_mode_enabled = enableRawMode(term)
+    raw_mode_enabled = raw!(term, true)
     raw_mode_enabled && print(term.out_stream, "\x1b[?25l") # hide the cursor
 
     lastoption = length(options(m))
     try
         while true
-            c = readKey(term.in_stream)
+            c = readkey(term.in_stream)
 
             if c == Int(ARROW_UP)
                 if cursor > 1
@@ -195,12 +195,12 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu)
                 keypress(m, c) && break
             end
 
-            printMenu(term.out_stream, m, cursor)
+            printmenu(term.out_stream, m, cursor)
         end
     finally # always disable raw mode
         if raw_mode_enabled
             print(term.out_stream, "\x1b[?25h") # unhide cursor
-            disableRawMode(term)
+            raw!(term, false)
         end
     end
     println(term.out_stream)
@@ -222,12 +222,12 @@ end
 
 
 """
-    printMenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
+    printmenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
 
 Display the state of a menu.
 """
-function printMenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
-    CONFIG[:supress_output] && return
+function printmenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
+    CONFIG[:suppress_output] && return
 
     buf = IOBuffer()
 
@@ -255,7 +255,7 @@ function printMenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
             print(buf, " ")
         end
 
-        writeLine(buf, m, i, i == cursor)
+        writeline(buf, m, i, i == cursor)
 
         i != lastline && print(buf, "\r\n")
     end
