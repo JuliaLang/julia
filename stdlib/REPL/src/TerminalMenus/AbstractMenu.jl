@@ -167,9 +167,9 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Int=
     raw_mode_enabled = REPL.Terminals.raw!(term, true)
     raw_mode_enabled && print(term.out_stream, "\x1b[?25l") # hide the cursor
 
-    lastoption = numoptions(m)
     try
         while true
+            lastoption = numoptions(m)
             c = readkey(term.in_stream)
 
             if c == Int(ARROW_UP)
@@ -276,8 +276,12 @@ function printmenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
 
     buf = IOBuffer()
     indicators = Indicators()
+    lastoption = numoptions(m)
 
-    lines = m.pagesize-1
+    firstline = m.pageoffset+1
+    lastline = min(m.pagesize+m.pageoffset, lastoption)
+
+    lines = lastline - firstline
 
     if init
         m.pageoffset = 0
@@ -286,16 +290,13 @@ function printmenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
         print(buf, "\x1b[999D\x1b[$(lines)A")
     end
 
-    firstline = m.pageoffset+1
-    lastline = m.pagesize+m.pageoffset
-
     for i in firstline:lastline
         # clearline
         print(buf, "\x1b[2K")
 
         if i == firstline && m.pageoffset > 0
             print(buf, CONFIG[:up_arrow])
-        elseif i == lastline && i != numoptions(m)
+        elseif i == lastline && i != lastoption
             print(buf, CONFIG[:down_arrow])
         else
             print(buf, " ")
