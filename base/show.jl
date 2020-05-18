@@ -1198,7 +1198,7 @@ function show_import_path(io::IO, ex, quote_level)
             if i > 1 && ex.args[i-1] !== :(.)
                 print(io, '.')
             end
-            show_sym(io, ex.args[i], allow_macroname=(i==length(ex.args)))
+            show_sym(io, ex.args[i]::Symbol, allow_macroname=(i==length(ex.args)))
         end
     else
         show_unquoted(io, ex, 0, 0, quote_level)

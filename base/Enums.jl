@@ -159,6 +159,7 @@ macro enum(T, syms...)
         else
             throw(ArgumentError(string("invalid argument for Enum ", typename, ": ", s)))
         end
+        s = s::Symbol
         if !Base.isidentifier(s)
             throw(ArgumentError("invalid name for Enum $typename; \"$s\" is not a valid identifier"))
         end

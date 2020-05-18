@@ -290,7 +290,7 @@ julia> cmp("b", "β")
 function cmp(a::AbstractString, b::AbstractString)
     a === b && return 0
     a, b = Iterators.Stateful(a), Iterators.Stateful(b)
-    for (c, d) in zip(a, b)
+    for (c::AbstractChar, d::AbstractChar) in zip(a, b)
         c ≠ d && return ifelse(c < d, -1, 1)
     end
     isempty(a) && return ifelse(isempty(b), 0, -1)
