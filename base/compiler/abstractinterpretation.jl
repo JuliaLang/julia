@@ -36,6 +36,9 @@ end
 
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState,
                                   max_methods::Int = InferenceParams(interp).MAX_METHODS)
+    if sv.currpc in sv.throw_blocks
+        return Any
+    end
     mt = ccall(:jl_method_table_for, Any, (Any,), atype)
     if mt === nothing
         add_remark!(interp, sv, "Could not identify method table for call")
