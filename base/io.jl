@@ -387,7 +387,7 @@ it is always safe to read one byte after seeing `eof` return `false`. `eof` will
 `false` as long as buffered data is still available, even if the remote end of a connection
 is closed.
 """
-eof(io::AbstractPipe) = eof(pipe_reader(io))
+eof(io::AbstractPipe) = eof(pipe_reader(io)::IO)::Bool
 reseteof(io::AbstractPipe) = reseteof(pipe_reader(io))
 
 
