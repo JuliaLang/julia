@@ -34,7 +34,7 @@ function Threads.foreach(f, channel::Channel; ntasks=Threads.nthreads(),
     @sync for _ in 1:ntasks
         Threads.@spawn try
             for item in channel
-                apply(f, item)
+                $apply(f, item)
                 # do `stop[] && break` after `f(item)` to avoid losing `item`.
                 # this isn't super comprehensive since a task could still get
                 # stuck on `take!` at `for item in channel`. We should think
