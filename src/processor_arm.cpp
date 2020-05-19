@@ -10,10 +10,16 @@
 #include <fstream>
 #include <algorithm>
 
-#if defined(_CPU_AARCH64_) || __GLIBC_PREREQ(2, 16)
+// This nesting is required to allow compilation on musl
+#define USE_DYN_GETAUXVAL
+#if defined(_CPU_AARCH64_)
+#  undef USE_DYN_GETAUXVAL
 #  include <sys/auxv.h>
-#else
-#  define DYN_GETAUXVAL
+#elif defined(__GLIBC_PREREQ)
+#  if __GLIBC_PREREQ(2, 16)
+#    undef USE_DYN_GETAUXVAL
+#    include <sys/auxv.h>
+#  endif
 #endif
 
 namespace ARM {
@@ -498,7 +504,7 @@ static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 #  define AT_HWCAP2 26
 #endif
 
-#if defined(DYN_GETAUXVAL)
+#if defined(USE_DYN_GETAUXVAL)
 static unsigned long getauxval_procfs(unsigned long type)
 {
     int fd = open("/proc/self/auxv", O_RDONLY);
