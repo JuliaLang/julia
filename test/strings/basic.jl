@@ -168,22 +168,32 @@ end
 
 @testset "SubStrings and Views" begin
     x = "abcdefg"
-    @test SubString(x, 2:4) == "bcd"
-    @test view(x, 2:4) == "bcd"
-    @test view(x, 2:4) isa SubString
-    @test (@view x[4:end]) == "defg"
-    @test (@view x[4:end]) isa SubString
+    @testset "basic unit range" begin
+        @test SubString(x, 2:4) == "bcd"
+        @test view(x, 2:4) == "bcd"
+        @test view(x, 2:4) isa SubString
+        @test (@view x[4:end]) == "defg"
+        @test (@view x[4:end]) isa SubString
+    end
 
-    # We don't (at present) make non-contiguous SubStrings with views
-    @test_throws MethodError (@view x[[1,3,5]])
-    @test (@views (x[[1,3,5]])) isa String
+    @testset "other AbstractUnitRanges" begin
+        @test SubString(x, Base.OneTo(3)) == "abc"
+        @test view(x, Base.OneTo(4)) == "abcd"
+        @test view(x, Base.OneTo(4)) isa SubString
+    end
 
-    # We don't (at present) make single character SubStrings with views
-    @test_throws MethodError (@view x[3])
-    @test (@views (x[3])) isa Char
+    @testset "views but not view" begin
+        # We don't (at present) make non-contiguous SubStrings with views
+        @test_throws MethodError (@view x[[1,3,5]])
+        @test (@views (x[[1,3,5]])) isa String
 
-    @test (@views (x[3], x[1:2], x[[1,4]])) isa Tuple{Char, SubString, String}
-    @test (@views (x[3], x[1:2], x[[1,4]])) == ('c', "ab", "ad")
+        # We don't (at present) make single character SubStrings with views
+        @test_throws MethodError (@view x[3])
+        @test (@views (x[3])) isa Char
+
+        @test (@views (x[3], x[1:2], x[[1,4]])) isa Tuple{Char, SubString, String}
+        @test (@views (x[3], x[1:2], x[[1,4]])) == ('c', "ab", "ad")
+    end
 end
 
 
