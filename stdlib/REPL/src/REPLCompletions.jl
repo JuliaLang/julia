@@ -554,23 +554,11 @@ end
 
 function project_deps_get_completion_candidates(pkgstarts::String, project_file::String)::Vector{Completion}
     loading_candidates = String[]
-    open(project_file) do io
-        state = :top
-        for line in eachline(io)
-            if occursin(Base.re_section, line)
-                state = occursin(Base.re_section_deps, line) ? :deps : :other
-            elseif state === :top
-                if (m = match(Base.re_name_to_string, line)) !== nothing
-                    root_name = String(m.captures[1])
-                    startswith(root_name, pkgstarts) && push!(loading_candidates, root_name)
-                end
-            elseif state === :deps
-                if (m = match(Base.re_key_to_string, line)) !== nothing
-                    dep_name = m.captures[1]
-                    startswith(dep_name, pkgstarts) && push!(loading_candidates, dep_name)
-                end
-            end
-        end
+    p = Base.TOML.Parser()
+    Base.TOML.reinit!(p, read(project_file, String); filepath=project_file)
+    d = Base.TOML.parse(p)
+    for (pkg, uuid) in get(d, "deps", [])
+        startswith(pkg, pkgstarts) && push!(loading_candidates, pkg)
     end
     return Completion[PackageCompletion(name) for name in loading_candidates]
 end
