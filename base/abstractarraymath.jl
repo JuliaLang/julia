@@ -270,30 +270,8 @@ julia> repeat([1, 2, 3], 2, 3)
  3  3  3
 ```
 """
-repeat(a::AbstractArray, counts::Integer...) = repeat(a, outer = counts)
-
-function repeat(a::AbstractVecOrMat, m::Integer, n::Integer=1)
-    o, p = size(a,1), size(a,2)
-    b = similar(a, o*m, p*n)
-    for j=1:n
-        d = (j-1)*p+1
-        R = d:d+p-1
-        for i=1:m
-            c = (i-1)*o+1
-            b[c:c+o-1, R] = a
-        end
-    end
-    return b
-end
-
-function repeat(a::AbstractVector, m::Integer)
-    o = length(a)
-    b = similar(a, o*m)
-    for i=1:m
-        c = (i-1)*o+1
-        b[c:c+o-1] = a
-    end
-    return b
+function repeat(A::AbstractArray, counts...)
+    return _RepeatInnerOuter.repeat(A, outer=counts)
 end
 
 """
@@ -330,88 +308,170 @@ julia> repeat([1 2; 3 4], inner=(2, 1), outer=(1, 3))
 ```
 """
 function repeat(A::AbstractArray; inner = nothing, outer = nothing)
-    return _repeat_inner_outer(A, inner, outer)
+    return _RepeatInnerOuter.repeat(A, inner=inner, outer=outer)
 end
 
-# we have optimized implementations of these cases above
-_repeat_inner_outer(A::AbstractVecOrMat, ::Nothing, r::Union{Tuple{Integer},Tuple{Integer,Integer}}) = repeat(A, r...)
-_repeat_inner_outer(A::AbstractVecOrMat, ::Nothing, r::Integer) = repeat(A, r)
+module _RepeatInnerOuter
 
-_repeat_inner_outer(A, ::Nothing, ::Nothing) = A
-_repeat_inner_outer(A, ::Nothing, outer) = _repeat(A, ntuple(n->1, Val(ndims(A))), rep_kw2tup(outer))
-_repeat_inner_outer(A, inner, ::Nothing) = _repeat(A, rep_kw2tup(inner), ntuple(n->1, Val(ndims(A))))
-_repeat_inner_outer(A, inner, outer)     = _repeat(A, rep_kw2tup(inner), rep_kw2tup(outer))
+function repeat(arr; inner=nothing, outer=nothing)
+    check(arr, inner, outer)
+    arr, inner, outer = resolve(arr, inner, outer)
+    repeat_inner_outer(arr, inner, outer)
+end
 
-rep_kw2tup(n::Integer) = (n,)
-rep_kw2tup(v::AbstractArray{<:Integer}) = (v...,)
-rep_kw2tup(t::Tuple) = t
+to_tuple(t::Tuple) = t
+to_tuple(x::Integer) = (x,)
+to_tuple(itr) = tuple(itr...)
 
-rep_shapes(A, i, o) = _rshps((), (), size(A), i, o)
+filltuple(val, N) = ntuple(_->val, N)
 
-_rshps(shp, shp_i, ::Tuple{}, ::Tuple{}, ::Tuple{}) = (shp, shp_i)
-@inline _rshps(shp, shp_i, ::Tuple{}, ::Tuple{}, o) =
-    _rshps((shp..., o[1]), (shp_i..., 1), (), (), tail(o))
-@inline _rshps(shp, shp_i, ::Tuple{}, i, ::Tuple{}) = (n = i[1];
-    _rshps((shp..., n), (shp_i..., n), (), tail(i), ()))
-@inline _rshps(shp, shp_i, ::Tuple{}, i, o) = (n = i[1];
-    _rshps((shp..., n * o[1]), (shp_i..., n), (), tail(i), tail(o)))
-@inline _rshps(shp, shp_i, sz, i, o) = (n = sz[1] * i[1];
-    _rshps((shp..., n * o[1]), (shp_i..., n), tail(sz), tail(i), tail(o)))
-_rshps(shp, shp_i, sz, ::Tuple{}, ::Tuple{}) =
-    (n = length(shp); N = n + length(sz); _reperr("inner", n, N))
-_rshps(shp, shp_i, sz, ::Tuple{}, o) =
-    (n = length(shp); N = n + length(sz); _reperr("inner", n, N))
-_rshps(shp, shp_i, sz, i, ::Tuple{}) =
-    (n = length(shp); N = n + length(sz); _reperr("outer", n, N))
-_reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
-    "($n) cannot be less than number of dimensions of input ($N)"))
+function pad(a::Tuple, b::Tuple, c::Tuple)
+    a1,b1 = pad(a,b)
+    b2,c2 = pad(b1, c)
+    a2,c3  = pad(a1, c2)
+    return a2, b2, c2
+end
+function pad(a::Tuple{}, b::NTuple{N, Any}) where {N}
+    filltuple(1, Val(N)), b
+end
+function pad(a::NTuple{N, Any}, b::Tuple{}) where {N}
+    (a, filltuple(1, Val(N)))
+end
+function pad(a::NTuple{N,Any}, b::NTuple{N,Any}) where {N}
+    (a,b)
+end
+function pad(a::Tuple{}, b::Tuple{})
+    (a,b)
+end
+function pad(a::Tuple, b::Tuple)
+    a1 = first(a)
+    b1 = first(b)
+    a_tail, b_tail = pad(Base.tail(a), Base.tail(b))
+    tuple(a1, a_tail...), tuple(b1, b_tail...)
+end
 
-_negreperr(n) = throw(ArgumentError("number of $n repetitions" *
-    "cannot be negative"))
+function resolve(arr::AbstractArray{<:Any, N}, inner::NTuple{N, Any}, outer::NTuple{N,Any}) where {N}
+    arr, inner, outer
+end
+function resolve(arr, inner, outer)
+    dims, inner, outer = pad(size(arr), to_tuple(inner), to_tuple(outer))
+    reshape(arr, dims), inner, outer
+end
+function resolve(arr, inner::Nothing, outer::Nothing)
+    return arr, inner, outer
+end
+function resolve(arr, inner::Nothing, outer)
+    dims, outer = pad(size(arr), to_tuple(outer))
+    reshape(arr, dims), inner, outer
+end
+function resolve(arr, inner, outer::Nothing)
+    dims, inner = pad(size(arr), to_tuple(inner))
+    reshape(arr, dims), inner, outer
+end
 
-@noinline function _repeat(A::AbstractArray, inner, outer)
-    any(<(0), inner) && _negreperr("inner")
-    any(<(0), outer) && _negreperr("outer")
-
-    shape, inner_shape = rep_shapes(A, inner, outer)
-
-    R = similar(A, shape)
-    if any(iszero, shape)
-        return R
+function check(arr, inner, outer)
+    if inner != nothing
+        if any(<(0), inner)
+            msg = """
+            Error calling repeat. all(inner . >= 0) must hold. Got
+            inner = $inner
+            """
+            throw(ArgumentError(msg))
+        end
+        if length(inner) < ndims(arr)
+            msg = """
+            Error calling repeat. length(inner) >= ndims(arr) must hold. Got
+            inner = $inner
+            size(arr) = $(size(arr))
+            """
+            throw(ArgumentError(msg))
+        end
     end
+    if outer != nothing
+        if any(<(0), outer)
+            msg = """
+            Error calling repeat. all(outer . >= 0) must hold. Got
+            outer = $outer
+            """
+            throw(ArgumentError(msg))
+        end
+        if (length(outer) < ndims(arr)) && (inner != nothing)
+            msg = """
+            Error calling repeat. length(outer) >= ndims(arr) must hold. Got
+            outer = $outer
+            size(arr) = $(size(arr))
+            """
+            throw(ArgumentError(msg))
+        end
+    end
+end
 
-    # fill the first inner block
-    if all(isequal(1), inner)
-        idxs = (axes(A)..., ntuple(n->OneTo(1), ndims(R)-ndims(A))...) # keep dimension consistent
-        R[idxs...] = A
-    else
-        inner_indices = [1:n for n in inner]
-        for c in CartesianIndices(axes(A))
-            for i in 1:ndims(A)
-                n = inner[i]
-                inner_indices[i] = (1:n) .+ ((c[i] - 1) * n)
+repeat_inner_outer(arr, inner::Nothing, outer::Nothing) = arr
+repeat_inner_outer(arr, ::Nothing, outer) = repeat_outer(arr, outer)
+repeat_inner_outer(arr, inner, ::Nothing) = repeat_inner(arr, inner)
+repeat_inner_outer(arr, inner, outer) = repeat_outer(repeat_inner(arr, inner), outer)
+
+function repeat_outer(a::AbstractMatrix, (m,n)::NTuple{2, Any})
+    o, p = size(a,1), size(a,2)
+    b = similar(a, o*m, p*n)
+    for j=1:n
+        d = (j-1)*p+1
+        R = d:d+p-1
+        for i=1:m
+            c = (i-1)*o+1
+            @inbounds b[c:c+o-1, R] = a
+        end
+    end
+    return b
+end
+
+function repeat_outer(a::AbstractVector, (m,)::Tuple{Any})
+    o = length(a)
+    b = similar(a, o*m)
+    for i=1:m
+        c = (i-1)*o+1
+        @inbounds b[c:c+o-1] = a
+    end
+    return b
+end
+
+function repeat_outer(arr::AbstractArray{<:Any,N}, dims::NTuple{N,Any}) where {N}
+    repeat_outer_generic(arr, dims)
+end
+
+function repeat_outer_generic(arr, dims)
+    insize  = size(arr)
+    outsize = map(*, insize, dims)
+    out = similar(arr, outsize)
+    for I in CartesianIndices(arr)
+        for J in CartesianIndices(dims)
+            TIJ = map(Tuple(I), Tuple(J), insize) do i, j, d
+                i + d * (j-1)
             end
-            fill!(view(R, inner_indices...), A[c])
+            IJ = CartesianIndex(TIJ)
+            @inbounds out[IJ] = arr[I]
         end
     end
-
-    # fill the outer blocks along each dimension
-    if all(isequal(1), outer)
-        return R
-    end
-    src_indices  = [1:n for n in inner_shape]
-    dest_indices = copy(src_indices)
-    for i in eachindex(outer)
-        B = view(R, src_indices...)
-        for j in 2:outer[i]
-            dest_indices[i] = dest_indices[i] .+ inner_shape[i]
-            R[dest_indices...] = B
-        end
-        src_indices[i] = dest_indices[i] = 1:shape[i]
-    end
-
-    return R
+    return out
 end
+
+function repeat_inner(arr, inner)
+    basedims = size(arr)
+    outsize = map(*, size(arr), inner)
+    out = similar(arr, outsize)
+    for I in CartesianIndices(arr)
+        for J in CartesianIndices(inner)
+            TIJ = map(Tuple(I), Tuple(J), inner) do i, j, d
+                (i-1) * d + j
+            end
+            IJ = CartesianIndex(TIJ)
+            @inbounds out[IJ] = arr[I]
+        end
+    end
+    return out
+end
+
+end#module
 
 """
     eachrow(A::AbstractVecOrMat)
