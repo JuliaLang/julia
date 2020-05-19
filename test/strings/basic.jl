@@ -183,6 +183,7 @@ end
     @test (@views (x[3])) isa Char
 
     @test (@views (x[3], x[1:2], x[[1,4]])) isa Tuple{Char, SubString, String}
+    @test (@views (x[3], x[1:2], x[[1,4]])) == ('c', "ab", "ad")
 end
 
 
