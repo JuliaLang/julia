@@ -258,6 +258,13 @@ keys(itr::SkipMissing) =
     v === missing && throw(MissingException("the value at index $I is missing"))
     v
 end
+function length(itr::SkipMissing)
+    i = 0
+    for _ in itr
+        i += 1
+    end
+    return i
+end
 
 function show(io::IO, s::SkipMissing)
     print(io, "skipmissing(")

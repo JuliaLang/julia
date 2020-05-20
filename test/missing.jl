@@ -363,6 +363,7 @@ end
 @testset "skipmissing" begin
     x = skipmissing([1, 2, missing, 4])
     @test eltype(x) === Int
+    @test length(x) == 3
     @test collect(x) == [1, 2, 4]
     @test collect(x) isa Vector{Int}
 
