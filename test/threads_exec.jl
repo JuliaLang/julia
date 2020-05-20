@@ -853,7 +853,7 @@ function jitter_channel(f, k, delay, ntasks, schedule)
             iseven(i) && sleep(delay)
             put!(ch, f(i))
         end
-        Threads.foreach(g, x; ntasks=ntasks, schedule=schedule)
+        Threads.foreach(g, x, schedule; ntasks=ntasks)
     end
     return y
 end
@@ -862,13 +862,13 @@ end
     k = 50
     delay = 0.01
     expected = sin.(1:k)
-    ordered_fair = collect(jitter_channel(sin, k, delay, 1, :fair))
-    ordered_static = collect(jitter_channel(sin, k, delay, 1, :static))
+    ordered_fair = collect(jitter_channel(sin, k, delay, 1, Threads.FairSchedule()))
+    ordered_static = collect(jitter_channel(sin, k, delay, 1, Threads.StaticSchedule()))
     @test expected == ordered_fair
     @test expected == ordered_static
 
-    unordered_fair = collect(jitter_channel(sin, k, delay, 10, :fair))
-    unordered_static = ccollect(jitter_channel(sin, k, delay, 10, :static))
+    unordered_fair = collect(jitter_channel(sin, k, delay, 10, Threads.FairSchedule()))
+    unordered_static = collect(jitter_channel(sin, k, delay, 10, Threads.StaticSchedule()))
     @test expected != unordered_fair
     @test expected != unordered_static
     @test Set(expected) == Set(unordered_fair)
