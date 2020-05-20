@@ -8,15 +8,17 @@ Similar to `foreach(f, channel)`, but iteration over `channel` and calls to
 `f` are split across `ntasks` tasks spawned by `Threads.@spawn`. This function
 will wait for all internally spawned tasks to complete before returning.
 
-If `schedule` is `:fair`, `Threads.foreach` will spawn a new task for each work
-item, allowing Julia's scheduler to more freely load-balance work items across
-threads. Technically, in `:fair` mode, `Threads.foreach` may execute up to
-`2 * ntasks` tasks concurrently.
+If `schedule` is `:fair`, `Threads.foreach` will attempt to spawn tasks in a
+manner that enables Julia's scheduler to more freely load-balance work items across
+threads. This approach generally has higher per-item overhead, but may perform
+better than the `:static` schedule in concurrence with other multithreaded
+workloads.
 
-If `schedule` is `:static`, `Threads.foreach` will simply spawn `ntasks` tasks
-such that each task is locked to the thread it was spawned on. This approach has
-lower scheduling overhead and thus may be more suitable for more uniform,
-fine-grained workloads.
+If `schedule` is `:static`, `Threads.foreach` will spawn tasks in a manner that
+incurs lower per-item overhead than the `:fair` schedule, but is less amenable
+to load-balancing. This approach thus may be more suitable for fine-grained,
+uniform workloads, but may perform worse than the `:fair` schedule in
+concurrence with other multithreaded workloads.
 
 !!! compat "Julia 1.6"
     This function requires Julia 1.6 or later.
