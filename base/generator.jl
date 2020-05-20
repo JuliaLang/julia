@@ -97,6 +97,18 @@ IteratorSize(::Type{Any}) = SizeUnknown()
 
 haslength(iter) = IteratorSize(iter) isa Union{HasShape, HasLength}
 
+function length(iter)
+    if IteratorSize(iter) isa SizeUnknown
+        i = 0
+        for _ in iter
+            i += 1
+        end
+        return i
+    else
+        throw(MethodError(length, (iter,)))
+    end
+end
+
 abstract type IteratorEltype end
 struct EltypeUnknown <: IteratorEltype end
 struct HasEltype <: IteratorEltype end

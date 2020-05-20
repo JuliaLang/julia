@@ -43,6 +43,7 @@ Standard library changes
 ------------------------
 * The `nextprod` function now accepts tuples and other array types for its first argument ([#35791]).
 * The function `isapprox(x,y)` now accepts the `norm` keyword argument also for numeric (i.e., non-array) arguments `x` and `y` ([#35883]).
+* There is a default implementation of `length` for all iterables with `IteratorSize` of `SizeUnknown` (using simple iteration) ([#35947]).
 
 #### LinearAlgebra
 
