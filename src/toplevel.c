@@ -793,6 +793,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         jl_eval_errorf(m, "malformed \"thunk\" statement");
     }
     body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops);
+
     jl_value_t *result;
     if (has_intrinsics || (!has_defs && fast && has_loops &&
                            jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF &&
