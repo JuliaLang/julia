@@ -20,6 +20,10 @@ end
     @test clamp(3.0, 1, 3) == 3.0
     @test clamp(4.0, 1, 3) == 3.0
 
+    @test clamp(NaN, 1, 2) === NaN
+    @test clamp(0, NaN, 2) === NaN
+    @test clamp(0, 1, NaN) === NaN
+
     @test clamp.([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
     @test clamp.([0 1; 2 3], 1.0, 3.0) == [1.0 1.0; 2.0 3.0]
 

@@ -45,7 +45,7 @@ end
     clamp(x, lo, hi)
 
 Return `x` if `lo <= x <= hi`. If `x > hi`, return `hi`. If `x < lo`, return `lo`. Arguments
-are promoted to a common type.
+are promoted to a common type. If any of the arguments is a NaN, the result is also a NaN.
 
 # Examples
 ```jldoctest
@@ -62,11 +62,7 @@ julia> clamp.([11,8,5],10,6) # an example where lo > hi
  10
 ```
 """
-clamp(x::X, lo::L, hi::H) where {X,L,H} =
-    ifelse(x > hi, convert(promote_type(X,L,H), hi),
-           ifelse(x < lo,
-                  convert(promote_type(X,L,H), lo),
-                  convert(promote_type(X,L,H), x)))
+clamp(x, lo, hi) = max(lo, min(hi, x))
 
 """
     clamp(x, T)::T
