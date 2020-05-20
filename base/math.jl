@@ -62,7 +62,18 @@ julia> clamp.([11,8,5],10,6) # an example where lo > hi
  10
 ```
 """
-clamp(x, lo, hi) = max(lo, min(hi, x))
+function clamp(x, lo, hi)
+    ismissing(x) && return x
+    let (x, lo, hi) = promote(x, lo, hi)
+        if x isa AbstractFloat
+            x = ifelse((x < lo) | isnan(lo), lo, x)
+            x = ifelse((x > hi) | isnan(hi), hi, x)
+            return x
+        else
+            return ifelse(x > hi, hi, ifelse(x < lo, lo, x))
+        end
+    end
+end
 
 """
     clamp(x, T)::T
