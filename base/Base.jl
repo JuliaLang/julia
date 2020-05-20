@@ -223,7 +223,7 @@ include("threads.jl")
 include("lock.jl")
 include("channels.jl")
 include("task.jl")
-include("threadfuncs.jl")
+include("threads_overloads.jl")
 include("weakkeydict.jl")
 
 # Logging

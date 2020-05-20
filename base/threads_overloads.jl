@@ -33,7 +33,7 @@ function Threads.foreach(f, channel::Channel,
             for item in channel
                 $apply(f, item)
                 # do `stop[] && break` after `f(item)` to avoid losing `item`.
-                # this isn't super comprehensive since a task could still get
+                # this isn't super comprehenfsive since a task could still get
                 # stuck on `take!` at `for item in channel`. We should think
                 # about a more robust mechanism to avoid dropping items. See also:
                 # https://github.com/JuliaLang/julia/pull/34543#discussion_r422695217
