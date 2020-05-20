@@ -37,7 +37,7 @@ end
 
 @propagate_inbounds SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
 @propagate_inbounds SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i), Int(j))
-@propagate_inbounds SubString(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, first(r), last(r))
+@propagate_inbounds SubString(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, first(r), last(r))
 
 @propagate_inbounds function SubString(s::SubString, i::Int, j::Int)
     @boundscheck i ≤ j && checkbounds(s, i:j)
@@ -46,6 +46,10 @@ end
 
 SubString(s::AbstractString) = SubString(s, 1, lastindex(s))
 SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s))
+
+@propagate_inbounds view(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, r)
+@propagate_inbounds maybeview(s::AbstractString, r::AbstractUnitRange{<:Integer}) = view(s, r)
+@propagate_inbounds maybeview(s::AbstractString, args...) = getindex(s, args...)
 
 convert(::Type{SubString{S}}, s::AbstractString) where {S<:AbstractString} =
     SubString(convert(S, s))
