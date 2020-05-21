@@ -99,6 +99,11 @@ isvalid(s::SubString{String}) = isvalid(String, s)
 thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
 nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
 
+function ==(a::Union{String, SubString{String}}, b::Union{String, SubString{String}})
+    s = sizeof(a)
+    s == sizeof(b) && 0 == _memcmp(a, b, s)
+end
+
 function cmp(a::SubString{String}, b::SubString{String})
     na = sizeof(a)
     nb = sizeof(b)
