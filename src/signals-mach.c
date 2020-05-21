@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+// Note that this file is `#include`d by "signals-unix.c"
+
 #include <mach/clock.h>
 #include <mach/clock_types.h>
 #include <mach/clock_reply.h>
@@ -491,8 +493,10 @@ void *mach_profile_listener(void *arg)
         int keymgr_locked = _keymgr_get_and_lock_processwide_ptr_2(KEYMGR_GCC3_DW2_OBJ_LIST, &unused) == 0;
         for (i = jl_n_threads; i-- > 0; ) {
             // if there is no space left, break early
-            if (bt_size_cur >= bt_size_max - 1)
+            if (jl_profile_is_buffer_full()) {
+                jl_profile_stop_timer();
                 break;
+            }
 
             unw_context_t *uc;
             jl_thread_suspend_and_get_state(i, &uc);
