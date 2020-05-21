@@ -2588,3 +2588,16 @@ f() = _foldl_iter(step, (Missing[],), [0.0], 1)
 end
 @test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}) == Tuple{Int}
 @test Base.return_types(Issue35566.f) == [Val{:expected}]
+
+# constant prop through keyword arguments
+_unstable_kw(;x=1,y=2) = x == 1 ? 0 : ""
+_use_unstable_kw_1() = _unstable_kw(x = 2)
+_use_unstable_kw_2() = _unstable_kw(x = 2, y = rand())
+@test Base.return_types(_use_unstable_kw_1) == Any[String]
+@test Base.return_types(_use_unstable_kw_2) == Any[String]
+@eval struct StructWithSplatNew
+    x::Int
+    StructWithSplatNew(t) = $(Expr(:splatnew, :StructWithSplatNew, :t))
+end
+_construct_structwithsplatnew() = StructWithSplatNew(("",))
+@test Base.return_types(_construct_structwithsplatnew) == Any[StructWithSplatNew]
