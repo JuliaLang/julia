@@ -7,7 +7,7 @@ export BigInt
 import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, nand, nor,
              binomial, cmp, convert, div, divrem, factorial, cld, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
-             sum, prod, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
+             sum, prod, trailing_zeros, trailing_ones, count_ones,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
              sign, hastypemax, isodd, iseven, digits!, hash, hash_integer
@@ -262,24 +262,29 @@ Signed(x::BigInt) = x
 
 hastypemax(::Type{BigInt}) = false
 
-function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
-    # don't make a copy in the common case where we are parsing a whole String
-    bstr = startpos == firstindex(s) && endpos == lastindex(s) ? String(s) : String(SubString(s,startpos,endpos))
+function Base.parse(::Type{BigInt}, s::AbstractString; base::Union{Nothing,Integer}=nothing)
+    Base.check_valid_base(base)
+    parse_bigint(s, base===nothing ? 0 : Int(base), true)
+end
 
-    sgn, base, i = Base.parseint_preamble(true,Int(base_),bstr,firstindex(bstr),lastindex(bstr))
-    if !(2 <= base <= 62)
-        raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
-        return nothing
-    end
-    if i == 0
-        raise && throw(ArgumentError("premature end of integer: $(repr(bstr))"))
+function Base.tryparse(::Type{BigInt}, s::AbstractString; base::Union{Nothing,Integer}=nothing)
+    Base.check_valid_base(base)
+    parse_bigint(s, base===nothing ? 0 : Int(base), false)
+end
+function parse_bigint(s::AbstractString, base::Integer, raise)
+    bstr = s isa Union{String, SubString{String}} ? s : String(s)
+
+    c, sgn, base, state = Base.parseint_preamble(s, #=signed=# true, base)
+    Base.check_valid_base(base)
+    if state === nothing && base != 10
+        raise && throw(ArgumentError("premature end of integer: $(repr(s))"))
         return nothing
     end
     z = BigInt()
     if Base.containsnul(bstr)
         err = -1 # embedded NUL char (not handled correctly by GMP)
     else
-        err = GC.@preserve bstr MPZ.set_str!(z, pointer(bstr)+(i-firstindex(bstr)), base)
+        err = GC.@preserve bstr MPZ.set_str!(z, pointer(bstr, state-1), base)
     end
     if err != 0
         raise && throw(ArgumentError("invalid BigInt: $(repr(bstr))"))
