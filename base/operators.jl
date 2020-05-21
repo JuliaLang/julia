@@ -893,8 +893,6 @@ function show(io::IO, c::ComposedFunction)
     show(io, c.g)
 end
 
-show(io::IO, ::MIME"text/plain", c::ComposedFunction) = show(io, c)
-
 """
     !f::Function
 
