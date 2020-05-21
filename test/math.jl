@@ -22,6 +22,11 @@ end
 
     @test clamp.([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
     @test clamp.([0 1; 2 3], 1.0, 3.0) == [1.0 1.0; 2.0 3.0]
+
+    @test clamp(-200, Int8) === typemin(Int8)
+    @test clamp(100, Int8) === Int8(100)
+    @test clamp(200, Int8) === typemax(Int8)
+
     begin
         x = [0.0, 1.0, 2.0, 3.0, 4.0]
         clamp!(x, 1, 3)
@@ -434,6 +439,9 @@ end
             T == Rational{Int} && @test sinpi(5//6) == 0.5
         end
     end
+    scdm = sincosd(missing)
+    @test ismissing(scdm[1])
+    @test ismissing(scdm[2])
 end
 
 @testset "Integer args to sinpi/cospi/sinc/cosc" begin
@@ -528,6 +536,9 @@ end
         @test modf( convert(elty,1.2) )[2] ≈ convert(elty,1.0)
         @test modf( convert(elty,1.0) )[1] ≈ convert(elty,0.0)
         @test modf( convert(elty,1.0) )[2] ≈ convert(elty,1.0)
+        @test isequal(modf( convert(elty,-Inf) ), (-0.0, -Inf))
+        @test isequal(modf( convert(elty,Inf) ), (0.0, Inf))
+        @test isequal(modf( convert(elty,NaN) ), (NaN, NaN))
     end
 end
 
@@ -659,10 +670,16 @@ end
     @test exp10(Float16(1.0)) === Float16(exp10(1.0))
 end
 
-# #22742: updated isapprox semantics
-@test !isapprox(1.0, 1.0+1e-12, atol=1e-14)
-@test isapprox(1.0, 1.0+0.5*sqrt(eps(1.0)))
-@test !isapprox(1.0, 1.0+1.5*sqrt(eps(1.0)), atol=sqrt(eps(1.0)))
+@testset "isapprox" begin
+  # #22742: updated isapprox semantics
+  @test !isapprox(1.0, 1.0+1e-12, atol=1e-14)
+  @test isapprox(1.0, 1.0+0.5*sqrt(eps(1.0)))
+  @test !isapprox(1.0, 1.0+1.5*sqrt(eps(1.0)), atol=sqrt(eps(1.0)))
+
+  # #13132: Use of `norm` kwarg for scalar arguments
+  @test isapprox(1, 1+1.0e-12, norm=abs)
+  @test !isapprox(1, 1+1.0e-12, norm=x->1)
+end
 
 # test AbstractFloat fallback pr22716
 struct Float22716{T<:AbstractFloat} <: AbstractFloat
@@ -1030,10 +1047,17 @@ end
     end
 end
 
-isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
-using .Main.Furlongs
-@test hypot(Furlong(0), Furlong(0)) == Furlong(0.0)
-@test hypot(Furlong(3), Furlong(4)) == Furlong(5.0)
-@test hypot(Furlong(NaN), Furlong(Inf)) == Furlong(Inf)
-@test hypot(Furlong(Inf), Furlong(NaN)) == Furlong(Inf)
-@test hypot(Furlong(Inf), Furlong(Inf)) == Furlong(Inf)
+@testset "hypot" begin
+    @test hypot(0, 0) == 0.0
+    @test hypot(3, 4) == 5.0
+    @test hypot(NaN, Inf) == Inf
+    @test hypot(Inf, NaN) == Inf
+    @test hypot(Inf, Inf) == Inf
+
+    isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
+    using .Main.Furlongs
+    @test hypot(Furlong(0), Furlong(0)) == Furlong(0.0)
+    @test hypot(Furlong(3), Furlong(4)) == Furlong(5.0)
+    @test hypot(Complex(3), Complex(4)) === 5.0
+    @test hypot(Complex(6, 8), Complex(8, 6)) === 10.0*sqrt(2)
+end

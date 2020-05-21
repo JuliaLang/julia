@@ -128,6 +128,8 @@ function handle_message(logger::ConsoleLogger, level, message, _module, group, i
     # Format lines as text with appropriate indentation and with a box
     # decoration on the left.
     color,prefix,suffix = logger.meta_formatter(level, _module, group, id, filepath, line)
+    color = convert(Symbol, color)::Symbol
+    prefix, suffix = convert(String, prefix)::String, convert(String, suffix)::String
     minsuffixpad = 2
     buf = IOBuffer()
     iob = IOContext(buf, logger.stream)
@@ -161,4 +163,3 @@ function handle_message(logger::ConsoleLogger, level, message, _module, group, i
     write(logger.stream, take!(buf))
     nothing
 end
-

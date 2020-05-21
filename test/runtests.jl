@@ -5,6 +5,7 @@ using Distributed
 using Dates
 import REPL
 using Printf: @sprintf
+using Base: Experimental
 
 include("choosetests.jl")
 include("testenv.jl")
@@ -63,6 +64,13 @@ move_to_node1("stress")
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
+# Shuffle LinearAlgebra tests to the front, because they take a while, so we might
+# as well get them all started early.
+linalg_test_ids = findall(x->occursin("LinearAlgebra", x), tests)
+linalg_tests = tests[linalg_test_ids]
+deleteat!(tests, linalg_test_ids)
+prepend!(tests, linalg_tests)
+
 import LinearAlgebra
 cd(@__DIR__) do
     n = 1
@@ -79,6 +87,11 @@ cd(@__DIR__) do
         @everywhere begin
             Revise.track(Core.Compiler)
             Revise.track(Base)
+            for (id, mod) in Base.loaded_modules
+                if id.name in STDLIBS
+                    Revise.track(mod)
+                end
+            end
             Revise.revise()
         end
     end
@@ -155,6 +168,7 @@ cd(@__DIR__) do
     try
         # Monitor stdin and kill this task on ^C
         # but don't do this on Windows, because it may deadlock in the kernel
+        running_tests = Dict{String, DateTime}()
         if !Sys.iswindows() && isa(stdin, Base.TTY)
             t = current_task()
             stdin_monitor = @async begin
@@ -162,9 +176,16 @@ cd(@__DIR__) do
                 try
                     REPL.Terminals.raw!(term, true)
                     while true
-                        if read(term, Char) == '\x3'
+                        c = read(term, Char)
+                        if c == '\x3'
                             Base.throwto(t, InterruptException())
                             break
+                        elseif c == '?'
+                            println("Currently running: ")
+                            tests = sort(collect(running_tests), by=x->x[2])
+                            foreach(tests) do (test, date)
+                                println(test, " (running for ", round(now()-date, Minute), ")")
+                            end
                         end
                     end
                 catch e
@@ -174,12 +195,13 @@ cd(@__DIR__) do
                 end
             end
         end
-        @sync begin
+        @Experimental.sync begin
             for p in workers()
                 @async begin
                     push!(all_tasks, current_task())
                     while length(tests) > 0
                         test = popfirst!(tests)
+                        running_tests[test] = now()
                         local resp
                         wrkr = p
                         try
@@ -188,6 +210,7 @@ cd(@__DIR__) do
                             isa(e, InterruptException) && return
                             resp = Any[e]
                         end
+                        delete!(running_tests, test)
                         push!(results, (test, resp))
                         if resp[1] isa Exception
                             print_testworker_errored(test, wrkr)

@@ -232,9 +232,8 @@ If you supply more than one `AbstractArray` argument, `eachindex` will create an
 iterable object that is fast for all arguments (a [`UnitRange`](@ref)
 if all inputs have fast linear indexing, a [`CartesianIndices`](@ref)
 otherwise).
-If the arrays have different sizes and/or dimensionalities, `eachindex` will return an
-iterable that spans the largest range along each dimension.
-
+If the arrays have different sizes and/or dimensionalities, a DimensionMismatch exception
+will be thrown.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4];
@@ -685,10 +684,10 @@ Create an empty vector similar to `v`, optionally changing the `eltype`.
 
 ```jldoctest
 julia> empty([1.0, 2.0, 3.0])
-0-element Array{Float64,1}
+Float64[]
 
 julia> empty([1.0, 2.0, 3.0], String)
-0-element Array{String,1}
+String[]
 ```
 """
 empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
@@ -711,7 +710,15 @@ See also [`copyto!`](@ref).
     This method requires at least Julia 1.1. In Julia 1.0 this method
     is available from the `Future` standard library as `Future.copy!`.
 """
-copy!(dst::AbstractVector, src::AbstractVector) = append!(empty!(dst), src)
+function copy!(dst::AbstractVector, src::AbstractVector)
+    if length(dst) != length(src)
+        resize!(dst, length(src))
+    end
+    for i in eachindex(dst, src)
+        @inbounds dst[i] = src[i]
+    end
+    dst
+end
 
 function copy!(dst::AbstractArray, src::AbstractArray)
     axes(dst) == axes(src) || throw(ArgumentError(
@@ -801,26 +808,81 @@ end
 ## copy between abstract arrays - generally more efficient
 ## since a single index variable can be used.
 
-copyto!(dest::AbstractArray, src::AbstractArray) =
-    copyto!(IndexStyle(dest), dest, IndexStyle(src), src)
+"""
+    copyto!(dest::AbstractArray, src) -> dest
 
-function copyto!(::IndexStyle, dest::AbstractArray, ::IndexStyle, src::AbstractArray)
-    destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    isempty(srcinds) || (checkbounds(Bool, destinds, first(srcinds)) && checkbounds(Bool, destinds, last(srcinds))) ||
-        throw(BoundsError(dest, srcinds))
-    @inbounds for i in srcinds
-        dest[i] = src[i]
-    end
-    return dest
+
+Copy all elements from collection `src` to array `dest`, whose length must be greater than
+or equal to the length `n` of `src`. The first `n` elements of `dest` are overwritten,
+the other elements are left untouched.
+
+# Examples
+```jldoctest
+julia> x = [1., 0., 3., 0., 5.];
+
+julia> y = zeros(7);
+
+julia> copyto!(y, x);
+
+julia> y
+7-element Array{Float64,1}:
+ 1.0
+ 0.0
+ 3.0
+ 0.0
+ 5.0
+ 0.0
+ 0.0
+```
+"""
+function copyto!(dest::AbstractArray, src::AbstractArray)
+    isempty(src) && return dest
+    src′ = unalias(dest, src)
+    copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(src′), src′)
 end
 
-function copyto!(::IndexStyle, dest::AbstractArray, ::IndexCartesian, src::AbstractArray)
+function copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+    isempty(src) && return dest
+    src′ = unalias(dest, src)
+    copyto_unaliased!(deststyle, dest, srcstyle, src′)
+end
+
+function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+    isempty(src) && return dest
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    isempty(srcinds) || (checkbounds(Bool, destinds, first(srcinds)) && checkbounds(Bool, destinds, last(srcinds))) ||
+    idf, isf = first(destinds), first(srcinds)
+    Δi = idf - isf
+    (checkbounds(Bool, destinds, isf+Δi) & checkbounds(Bool, destinds, last(srcinds)+Δi)) ||
         throw(BoundsError(dest, srcinds))
-    i = 0
-    @inbounds for a in src
-        dest[i+=1] = a
+    if deststyle isa IndexLinear
+        if srcstyle isa IndexLinear
+            # Single-index implementation
+            @inbounds for i in srcinds
+                dest[i + Δi] = src[i]
+            end
+        else
+            # Dual-index implementation
+            i = idf - 1
+            @inbounds for a in src
+                dest[i+=1] = a
+            end
+        end
+    else
+        iterdest, itersrc = eachindex(dest), eachindex(src)
+        if iterdest == itersrc
+            # Shared-iterator implementation
+            for I in iterdest
+                @inbounds dest[I] = src[I]
+            end
+        else
+            # Dual-iterator implementation
+            ret = iterate(iterdest)
+            @inbounds for a in src
+                idx, state = ret
+                dest[idx] = a
+                ret = iterate(iterdest, state)
+            end
+        end
     end
     return dest
 end
@@ -1118,8 +1180,9 @@ end
 """
     parent(A)
 
-Returns the "parent array" of an array view type (e.g., `SubArray`), or the array itself if
-it is not a view.
+Return the underlying "parent array”. This parent array of objects of types `SubArray`, `ReshapedArray`
+or `LinearAlgebra.Transpose` is what was passed as an argument to `view`, `reshape`, `transpose`, etc.
+during object creation. If the input is not a wrapped object, return the input itself.
 
 # Examples
 ```jldoctest
@@ -1545,6 +1608,15 @@ julia> hcat(c...)
  1  4
  2  5
  3  6
+
+julia> x = Matrix(undef, 3, 0)  # x = [] would have created an Array{Any, 1}, but need an Array{Any, 2}
+3×0 Array{Any,2}
+
+julia> hcat(x, [1; 2; 3])
+3×1 Array{Any,2}:
+ 1
+ 2
+ 3
 ```
 """
 hcat(X...) = cat(X...; dims=Val(2))
@@ -2154,7 +2226,11 @@ julia> a
  6.0
 ```
 """
-map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F} = map_n!(f, dest, As)
+function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
+    isempty(As) && throw(ArgumentError(
+        """map! requires at least one "source" argument"""))
+    map_n!(f, dest, As)
+end
 
 map(f) = f()
 map(f, iters...) = collect(Generator(f, iters...))
@@ -2201,6 +2277,7 @@ function hash(A::AbstractArray, h::UInt)
     keyidx = last(ks)
     linidx = key_to_linear[keyidx]
     fibskip = prevfibskip = oneunit(linidx)
+    first_linear = first(LinearIndices(linear_to_key))
     n = 0
     while true
         n += 1
@@ -2210,7 +2287,7 @@ function hash(A::AbstractArray, h::UInt)
 
         # Skip backwards a Fibonacci number of indices -- this is a linear index operation
         linidx = key_to_linear[keyidx]
-        linidx <= fibskip && break
+        linidx < fibskip + first_linear && break
         linidx -= fibskip
         keyidx = linear_to_key[linidx]
 

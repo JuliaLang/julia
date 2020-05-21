@@ -13,6 +13,14 @@ CTRL_C = '\x03'
 UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
 
+hardcoded_precompile_statements = """
+precompile(Tuple{typeof(Base.stale_cachefile), String, String})
+precompile(Tuple{typeof(push!), Set{Module}, Module})
+precompile(Tuple{typeof(push!), Set{Method}, Method})
+precompile(Tuple{typeof(push!), Set{Base.PkgId}, Base.PkgId})
+precompile(Tuple{typeof(setindex!), Dict{String,Base.PkgId}, Base.PkgId, String})
+"""
+
 precompile_script = """
 2+2
 print("")
@@ -57,7 +65,7 @@ if Pkg !== nothing
 end
 
 function generate_precompile_statements()
-    start_time = time()
+    start_time = time_ns()
     debug_output = devnull # or stdout
 
     # Precompile a package
@@ -152,6 +160,10 @@ function generate_precompile_statements()
             push!(statements, statement)
         end
 
+        for statement in split(hardcoded_precompile_statements, '\n')
+            push!(statements, statement)
+        end
+
         # Create a staging area where all the loaded packages are available
         PrecompileStagingArea = Module()
         for (_pkgid, _mod) in Base.loaded_modules
@@ -175,13 +187,13 @@ function generate_precompile_statements()
         if have_repl
             # Seems like a reasonable number right now, adjust as needed
             # comment out if debugging script
-            @assert n_succeeded > 3500
+            @assert n_succeeded > 1500
         end
 
         print(" $(length(statements)) generated in ")
-        tot_time = time() - start_time
-        Base.time_print(tot_time * 10^9)
-        print(" (overhead "); Base.time_print((tot_time - include_time) * 10^9); println(")")
+        tot_time = time_ns() - start_time
+        Base.time_print(tot_time)
+        print(" (overhead "); Base.time_print(tot_time - (include_time * 1e9)); println(")")
     end
 
     return

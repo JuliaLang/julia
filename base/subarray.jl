@@ -43,14 +43,6 @@ check_parent_index_match(parent::AbstractArray{T,N}, ::NTuple{N, Bool}) where {T
 check_parent_index_match(parent, ::NTuple{N, Bool}) where {N} =
     throw(ArgumentError("number of indices ($N) must match the parent dimensionality ($(ndims(parent)))"))
 
-# This makes it possible to elide view allocation in cases where the
-# view is indexed with a boundscheck but otherwise all its uses
-# are inlined
-@inline Base.throw_boundserror(A::SubArray, I) =
-    __subarray_throw_boundserror(typeof(A), A.parent, A.indices, A.offset1, A.stride1, I)
-@noinline __subarray_throw_boundserror(::Type{T}, parent, indices, offset1, stride1, I) where {T} =
-    throw(BoundsError(T(parent, indices, offset1, stride1), I))
-
 # This computes the linear indexing compatibility for a given tuple of indices
 viewindexing(I::Tuple{}) = IndexLinear()
 # Leading scalar indices simply increase the stride
@@ -72,7 +64,7 @@ size(V::SubArray) = (@_inline_meta; map(n->Int(unsafe_length(n)), axes(V)))
 
 similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 
-sizeof(V::SubArray) = length(V) * sizeof(eltype(V))
+sizeof(V::SubArray) = length(V) * elsize(V.parent)
 
 copy(V::SubArray) = V.parent[V.indices...]
 
@@ -162,6 +154,32 @@ function view(A::AbstractArray, I::Vararg{Any,N}) where {N}
     J = map(i->unalias(A,i), to_indices(A, I))
     @boundscheck checkbounds(A, J...)
     unsafe_view(_maybe_reshape_parent(A, index_ndims(J...)), J...)
+end
+
+# Ranges implement getindex to return recomputed ranges; use that for views, too (when possible)
+function view(r1::OneTo, r2::OneTo)
+    @_propagate_inbounds_meta
+    getindex(r1, r2)
+end
+function view(r1::AbstractUnitRange, r2::AbstractUnitRange{<:Integer})
+    @_propagate_inbounds_meta
+    getindex(r1, r2)
+end
+function view(r1::AbstractUnitRange, r2::StepRange{<:Integer})
+    @_propagate_inbounds_meta
+    getindex(r1, r2)
+end
+function view(r1::StepRange, r2::AbstractRange{<:Integer})
+    @_propagate_inbounds_meta
+    getindex(r1, r2)
+end
+function view(r1::StepRangeLen, r2::OrdinalRange{<:Integer})
+    @_propagate_inbounds_meta
+    getindex(r1, r2)
+end
+function view(r1::LinRange, r2::OrdinalRange{<:Integer})
+    @_propagate_inbounds_meta
+    getindex(r1, r2)
 end
 
 function unsafe_view(A::AbstractArray, I::Vararg{ViewIndex,N}) where {N}
@@ -407,22 +425,4 @@ _indices_sub() = ()
 function _indices_sub(i1::AbstractArray, I...)
     @_inline_meta
     (unsafe_indices(i1)..., _indices_sub(I...)...)
-end
-
-## Compatibility
-# deprecate?
-function parentdims(s::SubArray)
-    nd = ndims(s)
-    dimindex = Vector{Int}(undef, nd)
-    sp = strides(s.parent)
-    sv = strides(s)
-    j = 1
-    for i = 1:ndims(s.parent)
-        r = s.indices[i]
-        if j <= nd && (isa(r,AbstractRange) ? sp[i]*step(r) : sp[i]) == sv[j]
-            dimindex[j] = i
-            j += 1
-        end
-    end
-    dimindex
 end

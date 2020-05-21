@@ -1,7 +1,8 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#include "../src/support/platform.h"
-#include "../src/support/dtypes.h"
+#include "llvm-version.h"
+#include "support/platform.h"
+#include "support/dtypes.h"
 
 #include "llvm/Config/llvm-config.h"
 #include "llvm/IR/IRBuilder.h"

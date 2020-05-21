@@ -46,7 +46,7 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: | $(BUILDDIR)/objconv/build-comp
 endif
 endif
 
-OPENBLAS_FFLAGS := $(JFFLAGS)
+OPENBLAS_FFLAGS := $(JFFLAGS) $(USE_BLAS_FFLAGS)
 OPENBLAS_CFLAGS := -O2
 
 # Decide whether to build for 32-bit or 64-bit arch
@@ -94,12 +94,22 @@ OPENBLAS_BUILD_OPTS += MAKE_NB_JOBS=0
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS), 1)
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-skylakexdgemm.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-fix-initialization-to-zero-arm64.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
 	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
-		patch -p1 -f < $(SRCDIR)/patches/openblas-skylakexdgemm.patch
+		patch -p1 -f < $(SRCDIR)/patches/openblas-fix-initialization-to-zero-arm64.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-skylakexdgemm.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-fix-initialization-to-zero-arm64.patch-applied
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/openblas-winexit.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/openblas-ofast-power.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured
@@ -204,7 +214,7 @@ check-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/build-checked
 else # USE_BINARYBUILDER_OPENBLAS
 
 
-OPENBLAS_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/OpenBLAS-v$(OPENBLAS_VER)-$(OPENBLAS_BB_REL)
+OPENBLAS_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/OpenBLAS_jll.jl/releases/download/OpenBLAS-v$(OPENBLAS_VER)+$(OPENBLAS_BB_REL)
 OPENBLAS_BB_NAME := OpenBLAS.v$(OPENBLAS_VER)
 
 $(eval $(call bb-install,openblas,OPENBLAS,true))

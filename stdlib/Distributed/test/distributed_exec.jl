@@ -720,6 +720,14 @@ if Sys.isunix() # aka have ssh
     @test length(new_pids) == num_workers
     test_n_remove_pids(new_pids)
 
+    print("\nssh addprocs with tunnel (SSH multiplexing)\n")
+    new_pids = addprocs_with_testenv([("localhost", num_workers)]; tunnel=true, multiplex=true, sshflags=sshflags)
+    @test length(new_pids) == num_workers
+    controlpath = joinpath(homedir(), ".ssh", "julia-$(ENV["USER"])@localhost:22")
+    @test issocket(controlpath)
+    test_n_remove_pids(new_pids)
+    @test :ok == timedwait(()->!issocket(controlpath), 10.0; pollint=0.5)
+
     print("\nAll supported formats for hostname\n")
     h1 = "localhost"
     user = ENV["USER"]
@@ -826,6 +834,7 @@ remote_do(fut->put!(fut, myid()), id_other, f)
 
 # Github issue #29932
 rc_unbuffered = RemoteChannel(()->Channel{Vector{Float64}}(0))
+@test eltype(rc_unbuffered) == Vector{Float64}
 
 @async begin
     # Trigger direct write (no buffering) of largish array
@@ -1074,6 +1083,7 @@ end
 test_add_procs_threaded_blas()
 
 #19687
+if false ### TODO: The logic that is supposed to implement this is racy - Disabled for now
 # ensure no race conditions between rmprocs and addprocs
 for i in 1:5
     p = addprocs_with_testenv(1)[1]
@@ -1102,6 +1112,7 @@ if DoFullTest
     while any(in(procs()), pids)
         sleep(0.1)
     end
+end
 end
 
 # Test addprocs/rmprocs from master node only
@@ -1472,12 +1483,18 @@ let
         mkdir(tmp_dir2)
         write(tmp_file, "23.32 + 32 + myid() + include(\"testfile2\")")
         write(tmp_file2, "myid() * 2")
-        @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "testfile"))"),
-                     include("testfile"))
-        @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "testfile2"))"),
-                     include("testfile2"))
-        @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "2", "testfile"))"),
-                     include("2/testfile"))
+        function test_include_fails_to_open_file(fname)
+            try
+                include(fname)
+            catch exc
+                path = joinpath(@__DIR__, fname)
+                @test exc isa SystemError
+                @test exc.prefix == "opening file $(repr(path))"
+            end
+        end
+        test_include_fails_to_open_file("testfile")
+        test_include_fails_to_open_file("testfile2")
+        test_include_fails_to_open_file(joinpath("2", "testfile2"))
         @test include(tmp_file) == 58.32
         @test remotecall_fetch(include, proc[1], joinpath("2", "testfile")) == 55.32 + proc[1] * 3
     finally
@@ -1557,7 +1574,7 @@ nprocs()>1 && rmprocs(workers())
 cluster_cookie("")
 
 for close_stdin in (true, false), stderr_to_stdout in (true, false)
-    npids = addprocs_with_testenv(RetainStdioTester(close_stdin,stderr_to_stdout))
+    local npids = addprocs_with_testenv(RetainStdioTester(close_stdin,stderr_to_stdout))
     @test remotecall_fetch(myid, npids[1]) == npids[1]
     @test close_stdin != remotecall_fetch(()->isopen(stdin), npids[1])
     @test stderr_to_stdout == remotecall_fetch(()->(stderr === stdout), npids[1])
@@ -1621,7 +1638,7 @@ a27933 = :_not_defined_27933
 
 # PR #28651
 for T in (UInt8, Int8, UInt16, Int16, UInt32, Int32, UInt64)
-    n = @distributed (+) for i in Base.OneTo(T(10))
+    local n = @distributed (+) for i in Base.OneTo(T(10))
         i
     end
     @test n == 55
@@ -1664,6 +1681,8 @@ let (h, t) = Distributed.head_and_tail(Int[], 0)
     @test h == []
     @test collect(t) == []
 end
+
+include("splitrange.jl")
 
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.

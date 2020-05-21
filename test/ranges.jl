@@ -301,6 +301,12 @@ end
         end
     end
     @testset "findfirst" begin
+        @test findfirst(isequal(3), Base.OneTo(10)) == 3
+        @test findfirst(==(0), Base.OneTo(10)) == nothing
+        @test findfirst(==(11), Base.OneTo(10)) == nothing
+        @test findfirst(==(4), Int16(3):Int16(7)) === Int(2)
+        @test findfirst(==(2), Int16(3):Int16(7)) == nothing
+        @test findfirst(isequal(8), 3:7) == nothing
         @test findfirst(isequal(7), 1:2:10) == 4
         @test findfirst(==(7), 1:2:10) == 4
         @test findfirst(==(10), 1:2:10) == nothing
@@ -387,6 +393,11 @@ end
         @test !issubset(Base.OneTo(10), Base.OneTo(5))
         @test issubset(1:3:10, 1:10)
         @test !issubset(1:10, 1:3:10)
+        # with empty ranges
+        @test issubset(2:1, 3:4) #35225
+        @test issubset(2:1, 3:2)
+        @test issubset(Base.OneTo(0), Base.OneTo(3))
+        @test issubset(Base.OneTo(0), Base.OneTo(-3))
     end
     @testset "sort/sort!/partialsort" begin
         @test sort(UnitRange(1,2)) == UnitRange(1,2)
@@ -448,10 +459,10 @@ end
     end
 end
 @testset "indexing range with empty range (#4309)" begin
-    @test (3:6)[5:4] == 7:6
+    @test (3:6)[5:4] === 7:6
     @test_throws BoundsError (3:6)[5:5]
     @test_throws BoundsError (3:6)[5]
-    @test (0:2:10)[7:6] == 12:2:10
+    @test (0:2:10)[7:6] === 12:2:10
     @test_throws BoundsError (0:2:10)[7:7]
 end
 # indexing with negative ranges (#8351)
@@ -572,24 +583,40 @@ end
     @test sum(0:0.000001:1) == 500000.5
     @test sum(0:0.1:10) == 505.
 end
-@testset "broadcasted operations with scalars" begin
-    @test broadcast(-, 1:3) === -1:-1:-3
-    @test broadcast(-, 1:3, 2) === -1:1
-    @test broadcast(-, 1:3, 0.25) === 1-0.25:3-0.25
-    @test broadcast(+, 1:3) === 1:3
-    @test broadcast(+, 1:3, 2) === 3:5
-    @test broadcast(+, 1:3, 0.25) === 1+0.25:3+0.25
-    @test broadcast(+, 1:2:6, 1) === 2:2:6
-    @test broadcast(+, 1:2:6, 0.3) === 1+0.3:2:5+0.3
-    @test broadcast(-, 1:2:6, 1) === 0:2:4
-    @test broadcast(-, 1:2:6, 0.3) === 1-0.3:2:5-0.3
-    @test broadcast(-, 2, 1:3) === 1:-1:-1
+@testset "broadcasted operations with scalars" for T in (Int, UInt, Int128)
+    @test broadcast(-, T(1):3, 2) === T(1)-2:1
+    @test broadcast(-, T(1):3, 0.25) === T(1)-0.25:3-0.25
+    @test broadcast(+, T(1):3) === T(1):3
+    @test broadcast(+, T(1):3, 2) === T(3):5
+    @test broadcast(+, T(1):3, 0.25) === T(1)+0.25:3+0.25
+    @test broadcast(+, T(1):2:6, 1) === T(2):2:6
+    @test broadcast(+, T(1):2:6, 0.3) === T(1)+0.3:2:5+0.3
+    @test broadcast(-, T(1):2:6, 1) === T(0):2:4
+    @test broadcast(-, T(1):2:6, 0.3) === T(1)-0.3:2:5-0.3
+    if T <: Unsigned
+        @test_broken broadcast(-, T(1):3) == -T(1):-1:-T(3)
+        @test_broken broadcast(-, 2, T(1):3) == T(1):-1:-T(1)
+    else
+        @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2)
+        @test broadcast(-, T(1):3) == -T(1):-1:-T(3)
+        @test broadcast(-, 2, T(1):3) == T(1):-1:-T(1)
+    end
 end
-@testset "operations between ranges and arrays" begin
-    @test all(([1:5;] + (5:-1:1)) .== 6)
-    @test all(((5:-1:1) + [1:5;]) .== 6)
-    @test all(([1:5;] - (1:5)) .== 0)
-    @test all(((1:5) - [1:5;]) .== 0)
+@testset "operations between ranges and arrays" for T in (Int, UInt, Int128)
+    @test all(([T(1):5;] + (T(5):-1:1)) .=== T(6))
+    @test all(((T(5):-1:1) + [T(1):5;]) .=== T(6))
+    @test all(([T(1):5;] - (T(1):5)) .=== T(0))
+    @test all(((T(1):5) - [T(1):5;]) .=== T(0))
+end
+@testset "issue #32442: Broadcasting over views with non-`Int` indices" begin
+    a=rand(UInt32,20)
+    c=rand(UInt64,5)
+    @test reinterpret(UInt64,view(a,UInt64.(11:20))) .- c ==
+          reinterpret(UInt64,view(a,(11:20))) .- c ==
+          reinterpret(UInt64,view(a,(UInt64(11):UInt64(20)))) .- c ==
+          copy(reinterpret(UInt64,view(a,(UInt64(11):UInt64(20))))) .- c
+
+    @test view(a,(Int32(11):Int32(20))) .+ [1] == a[11:20] .+ 1
 end
 @testset "tricky floating-point ranges" begin
     for (start, step, stop, len) in ((1, 1, 3, 3), (0, 1, 3, 4),
@@ -791,7 +818,8 @@ end
                        map(Int32,1:3:17), map(Int64,1:3:17), 1:0, 1:-1:0, 17:-3:0,
                        0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),map(Float32,LinRange(0.0, 1.0, 11)),
                        1.0:eps():1.0 .+ 10eps(), 9007199254740990.:1.0:9007199254740994,
-                       range(0, stop=1, length=20), map(Float32, range(0, stop=1, length=20))]
+                       range(0, stop=1, length=20), map(Float32, range(0, stop=1, length=20)),
+                       3:2, 5:-2:7, range(0.0, step=2.0, length=0), 3//2:3//2:0//1, LinRange(2,3,0)]
     for r in Rs
         local r
         ar = Vector(r)
@@ -811,6 +839,7 @@ end
     @test 1:1:10 == 1:10 == 1:10 == Base.OneTo(10) == Base.OneTo(10)
     @test 1:10 != 2:10 != 2:11 != Base.OneTo(11)
     @test Base.OneTo(10) != Base.OneTo(11) != 1:10
+    @test Base.OneTo(0) == 5:4
 end
 # issue #2959
 @test 1.0:1.5 == 1.0:1.0:1.5 == 1.0:1.0
@@ -1205,6 +1234,7 @@ end
             @test i == (k += 1)
         end
         @test intersect(r, Base.OneTo(2)) == Base.OneTo(2)
+        @test union(r, Base.OneTo(4)) == Base.OneTo(4)
         @test intersect(r, 0:5) == 1:3
         @test intersect(r, 2) === intersect(2, r) === 2:2
         @test findall(in(r), r) === findall(in(1:length(r)), r) ===
@@ -1310,6 +1340,16 @@ using .Main.Furlongs
           Vector(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)
 end
 
+@testset "sum arbitrary types" begin
+    @test sum(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong{1,Float64}(104.5)
+    @test sum(StepRangeLen(Furlong(1), Furlong(0.5), 19)) == Furlong{1,Float64}(104.5)
+    @test sum(0f0:0.001f0:1f0) == 500.5
+    @test sum(0f0:0.000001f0:1f0) == 500000.5
+    @test sum(0f0:0.1f0:10f0) == 505.
+    @test sum(Float16(0):Float16(0.001):Float16(1)) ≈ 500.5
+    @test sum(Float16(0):Float16(0.1):Float16(10)) == 505.
+end
+
 @testset "issue #22270" begin
     linsp = range(1.0, stop=2.0, length=10)
     @test typeof(linsp.ref) == Base.TwicePrecision{Float64}
@@ -1361,6 +1401,22 @@ end
     x = range(3, stop=3, length=5)
     @test step(x) == 0.0
     @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+end
+
+@testset "Views of ranges" begin
+    @test view(Base.OneTo(10), Base.OneTo(5)) === Base.OneTo(5)
+    @test view(1:10, 1:5) === 1:5
+    @test view(1:10, 1:2:5) === 1:2:5
+    @test view(1:2:9, 1:5) === 1:2:9
+
+    # Ensure we don't hit a fallback `view` if there's a better `getindex` implementation
+    vmt = collect(methods(view, Tuple{AbstractRange, AbstractRange}))
+    for m in methods(getindex, Tuple{AbstractRange, AbstractRange})
+        tt = Base.tuple_type_tail(m.sig)
+        tt == Tuple{AbstractArray,Vararg{Any,N}} where N && continue
+        vm = findfirst(sig->tt <: Base.tuple_type_tail(sig.sig), vmt)
+        @test vmt[vm].sig != Tuple{typeof(view),AbstractArray,Vararg{Any,N}} where N
+    end
 end
 
 @testset "Issue #26608" begin
@@ -1501,11 +1557,11 @@ end
         for stops in [-2, 0, 2, 100]
             for lengths in [2, 10, 100]
                 if stops >= starts
-                    @test range(starts, stops, length=lengths) == range(starts, stop=stops, length=lengths)
+                    @test range(starts, stops, length=lengths) === range(starts, stop=stops, length=lengths)
                 end
             end
             for steps in [0.01, 1, 2]
-                @test range(starts, stops, step=steps) == range(starts, stop=stops, step=steps)
+                @test range(starts, stops, step=steps) === range(starts, stop=stops, step=steps)
             end
         end
     end
@@ -1543,4 +1599,16 @@ end
     @test_throws MethodError mod(3, UnitRange(1.0,5.0))
     @test_throws MethodError mod(3, 1:2:7)
     @test_throws DivideError mod(3, 1:0)
+end
+
+@testset "issue #33882" begin
+    r = StepRangeLen('a',2,4)
+    @test step(r) === 2
+    @test collect(r) == ['a','c','e','g']
+end
+
+@testset "Return type of indexing with ranges" begin
+    for T = (Base.OneTo{Int}, UnitRange{Int}, StepRange{Int,Int}, StepRangeLen{Int}, LinRange{Int})
+        @test eltype(T(1:5)) === eltype(T(1:5)[1:2])
+    end
 end

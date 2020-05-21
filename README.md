@@ -5,10 +5,6 @@
 </a>
 </div>
 
-Build status:
-[![travis][travis-img]](https://travis-ci.org/JuliaLang/julia)
-[![appveyor][appveyor-img]](https://ci.appveyor.com/project/JuliaLang/julia/branch/master)
-
 Code coverage:
 [![coveralls][coveralls-img]](https://coveralls.io/r/JuliaLang/julia?branch=master)
 [![codecov][codecov-img]](https://codecov.io/github/JuliaLang/julia?branch=master)
@@ -35,7 +31,7 @@ and installing Julia, below.
 - **Homepage:** <https://julialang.org>
 - **Binaries:** <https://julialang.org/downloads/>
 - **Source code:** <https://github.com/JuliaLang/julia>
-- **Documentation:** <https://docs.julialang.org/>
+- **Documentation:** <https://docs.julialang.org>
 - **Packages:** <https://pkg.julialang.org/>
 - **Discussion forum:** <https://discourse.julialang.org>
 - **Slack:** <https://julialang.slack.com> (get an invite from <https://slackinvite.julialang.org>)
@@ -51,6 +47,7 @@ helpful to start contributing to the Julia codebase.
 - [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
 - [**Twitter**](https://twitter.com/JuliaLanguage)
 - [**Meetup**](https://julia.meetup.com/)
+- [**Learning resources**](https://julialang.org/learning/)
 
 ## Binary Installation
 
@@ -64,7 +61,7 @@ for OS and platform combinations.
 If everything works correctly, you will see a Julia banner and an
 interactive prompt into which you can enter expressions for
 evaluation.  You can read about [getting
-started](https://julialang.org/manual/getting-started) in the manual.
+started](https://docs.julialang.org/en/v1/manual/getting-started/) in the manual.
 
 **Note**: Although some system package managers provide Julia, such
 installations are neither maintained nor endorsed by the Julia
@@ -84,7 +81,7 @@ Julia. However, most users should use the most recent stable version
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
-    git checkout v1.2.0
+    git checkout v1.3.0
 
 Now run `make` to build the `julia` executable.
 
@@ -134,7 +131,7 @@ The Julia source code is organized as follows:
 ## Terminal, Editors and IDEs
 
 The Julia REPL is quite powerful.  See the section in the manual on
-[the Julia REPL](https://docs.julialang.org/en/latest/stdlib/REPL/)
+[the Julia REPL](https://docs.julialang.org/en/v1/stdlib/REPL/)
 for more details.
 
 Support for editing Julia is available for many

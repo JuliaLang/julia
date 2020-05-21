@@ -311,7 +311,7 @@ diagm_container(size, kv::Pair{<:Integer,<:BitVector}...) =
     diagm(m::Integer, n::Integer, v::AbstractVector)
 
 Construct a matrix with elements of the vector as diagonal elements.
-By default (if `size=nothing`), the matrix is square and its size is given by
+By default, the matrix is square and its size is given by
 `length(v)`, but a non-square size `m`×`n` can be specified
 by passing `m,n` as the first arguments.
 
@@ -337,15 +337,39 @@ function tr(A::Matrix{T}) where T
 end
 
 """
+    kron!(C, A, B)
+
+`kron!` is the in-place version of [`kron`](@ref). Computes `kron(A, B)` and stores the result in `C`
+overwriting the existing value of `C`.
+
+!!! tip
+    Bounds checking can be disabled by [`@inbounds`](@ref), but you need to take care of the shape
+    of `C`, `A`, `B` yourself.
+"""
+@inline function kron!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractMatrix)
+    require_one_based_indexing(A, B)
+    @boundscheck (size(C) == (size(A,1)*size(B,1), size(A,2)*size(B,2))) || throw(DimensionMismatch())
+    m = 0
+    @inbounds for j = 1:size(A,2), l = 1:size(B,2), i = 1:size(A,1)
+        Aij = A[i,j]
+        for k = 1:size(B,1)
+            C[m += 1] = Aij*B[k,l]
+        end
+    end
+    return C
+end
+
+"""
     kron(A, B)
 
 Kronecker tensor product of two vectors or two matrices.
 
-For vectors v and w, the Kronecker product is related to the outer product by
-`kron(v,w) == vec(w*transpose(v))` or
-`w*transpose(v) == reshape(kron(v,w), (length(w), length(v)))`.
+For real vectors `v` and `w`, the Kronecker product is related to the outer product by
+`kron(v,w) == vec(w * transpose(v))` or
+`w * transpose(v) == reshape(kron(v,w), (length(w), length(v)))`.
 Note how the ordering of `v` and `w` differs on the left and right
 of these expressions (due to column-major storage).
+For complex vectors, the outer product `w * v'` also differs by conjugation of `v`.
 
 # Examples
 ```jldoctest
@@ -382,23 +406,31 @@ julia> reshape(kron(v,w), (length(w), length(v)))
 ```
 """
 function kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
-    require_one_based_indexing(a, b)
     R = Matrix{promote_op(*,T,S)}(undef, size(a,1)*size(b,1), size(a,2)*size(b,2))
-    m = 0
-    @inbounds for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
-        aij = a[i,j]
-        for k = 1:size(b,1)
-            R[m += 1] = aij*b[k,l]
-        end
-    end
-    R
+    return @inbounds kron!(R, a, b)
 end
+
+kron!(c::AbstractVecOrMat, a::AbstractVecOrMat, b::Number) = mul!(c, a, b)
+
+Base.@propagate_inbounds function kron!(c::AbstractVector, a::AbstractVector, b::AbstractVector)
+    C = reshape(c, length(a)*length(b), 1)
+    A = reshape(a ,length(a), 1)
+    B = reshape(b, length(b), 1)
+    kron!(C, A, B)
+    return c
+end
+
+Base.@propagate_inbounds kron!(C::AbstractMatrix, a::AbstractMatrix, b::AbstractVector) = kron!(C, a, reshape(b, length(b), 1))
+Base.@propagate_inbounds kron!(C::AbstractMatrix, a::AbstractVector, b::AbstractMatrix) = kron!(C, reshape(a, length(a), 1), b)
 
 kron(a::Number, b::Union{Number, AbstractVecOrMat}) = a * b
 kron(a::AbstractVecOrMat, b::Number) = a * b
 kron(a::AbstractVector, b::AbstractVector) = vec(kron(reshape(a ,length(a), 1), reshape(b, length(b), 1)))
 kron(a::AbstractMatrix, b::AbstractVector) = kron(a, reshape(b, length(b), 1))
 kron(a::AbstractVector, b::AbstractMatrix) = kron(reshape(a, length(a), 1), b)
+
+kron(a::AdjointAbsVec, b::AdjointAbsVec) = adjoint(kron(adjoint(a), adjoint(b)))
+kron(a::AdjOrTransAbsVec, b::AdjOrTransAbsVec) = transpose(kron(transpose(a), transpose(b)))
 
 # Matrix power
 (^)(A::AbstractMatrix, p::Integer) = p < 0 ? power_by_squaring(inv(A), -p) : power_by_squaring(A, p)
@@ -706,8 +738,15 @@ If `A` has no negative real eigenvalues, compute the principal matrix square roo
 that is the unique matrix ``X`` with eigenvalues having positive real part such that
 ``X^2 = A``. Otherwise, a nonprincipal square root is returned.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is
-used to compute the square root. Otherwise, the square root is determined by means of the
+If `A` is real-symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is
+used to compute the square root.   For such matrices, eigenvalues λ that
+appear to be slightly negative due to roundoff errors are treated as if they were zero
+More precisely, matrices with all eigenvalues `≥ -rtol*(max |λ|)` are treated as semidefinite
+(yielding a Hermitian square root), with negative eigenvalues taken to be zero.
+`rtol` is a keyword argument to `sqrt` (in the Hermitian/real-symmetric case only) that
+defaults to machine precision scaled by `size(A,1)`.
+
+Otherwise, the square root is determined by means of the
 Björck-Hammarling method [^BH83], which computes the complex Schur form ([`schur`](@ref))
 and then the complex square root of the triangular factor.
 

@@ -69,7 +69,7 @@ function bytesavailable end
     readavailable(stream)
 
 Read all available data on the stream, blocking the task only if no data is available. The
-result is a `Vector{UInt8,1}`.
+result is a `Vector{UInt8}`.
 """
 function readavailable end
 
@@ -126,6 +126,9 @@ function eof end
 
 Read a single value of type `T` from `io`, in canonical binary representation.
 
+Note that Julia does not convert the endianness for you. Use [`ntoh`](@ref) or
+[`ltoh`](@ref) for this purpose.
+
     read(io::IO, String)
 
 Read the entirety of `io`, as a `String`.
@@ -150,8 +153,12 @@ read(stream, t)
     write(filename::AbstractString, x)
 
 Write the canonical binary representation of a value to the given I/O stream or file.
-Return the number of bytes written into the stream.   See also [`print`](@ref) to
+Return the number of bytes written into the stream. See also [`print`](@ref) to
 write a text representation (with an encoding that may depend upon `io`).
+
+The endianness of the written value depends on the endianness of the host system.
+Convert to/from a fixed endianness when writing/reading (e.g. using  [`htol`](@ref) and
+[`ltoh`](@ref)) to get results that are consistent across platforms.
 
 You can write multiple values with the same `write` call. i.e. the following are equivalent:
 
@@ -159,6 +166,24 @@ You can write multiple values with the same `write` call. i.e. the following are
     write(io, x) + write(io, y...)
 
 # Examples
+Consistent serialization:
+```jldoctest
+julia> fname = tempname(); # random temporary filename
+
+julia> open(fname,"w") do f
+           # Make sure we write 64bit integer in little-endian byte order
+           write(f,htol(Int64(42)))
+       end
+8
+
+julia> open(fname,"r") do f
+           # Convert back to host byte order and host integer type
+           Int(ltoh(read(f,Int64)))
+       end
+42
+```
+
+Merging write calls:
 ```jldoctest
 julia> io = IOBuffer();
 
@@ -226,13 +251,15 @@ function unsafe_read(s::IO, p::Ptr{UInt8}, n::UInt)
     nothing
 end
 
-function peek(s::IO)
+function peek(s::IO, ::Type{T}) where T
     mark(s)
-    try read(s, UInt8)
+    try read(s, T)
     finally
         reset(s)
     end
 end
+
+peek(s) = peek(s, UInt8)
 
 # Generic `open` methods
 
@@ -319,14 +346,16 @@ readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io
 readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io), target, keep, out)
+readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = readbytes!(pipe_reader(io), target, n)
 
 for f in (
         # peek/mark interface
-        :peek, :mark, :unmark, :reset, :ismarked,
+        :mark, :unmark, :reset, :ismarked,
         # Simple reader functions
         :readavailable, :isreadable)
     @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io))
 end
+peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io), T)
 
 iswritable(io::AbstractPipe) = iswritable(pipe_writer(io))
 isopen(io::AbstractPipe) = isopen(pipe_writer(io)) || isopen(pipe_reader(io))
@@ -381,8 +410,8 @@ read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
 read(filename::AbstractString, ::Type{T}) where {T} = open(io->read(io, T), filename)
 
 """
-    read!(stream::IO, array::Union{Array, BitArray})
-    read!(filename::AbstractString, array::Union{Array, BitArray})
+    read!(stream::IO, array::AbstractArray)
+    read!(filename::AbstractString, array::AbstractArray)
 
 Read binary data from an I/O stream or file, filling in `array`.
 """
@@ -682,8 +711,8 @@ function read!(s::IO, a::Array{UInt8})
     return a
 end
 
-function read!(s::IO, a::Array{T}) where T
-    if isbitstype(T)
+function read!(s::IO, a::AbstractArray{T}) where T
+    if isbitstype(T) && (a isa Array || a isa FastContiguousSubArray{T,<:Any,<:Array{T}})
         GC.@preserve a unsafe_read(s, pointer(a), sizeof(a))
     else
         for i in eachindex(a)

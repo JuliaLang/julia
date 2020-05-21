@@ -372,12 +372,18 @@ end
     end
 end
 
-@testset "copysign" begin
+@testset "copysign / sign" begin
     x = BigFloat(1)
     y = BigFloat(-1)
     @test copysign(x, y) == y
     @test copysign(y, x) == x
     @test copysign(1.0, BigFloat(NaN)) == 1.0
+
+    @test sign(BigFloat(-3.0)) == -1.0
+    @test sign(BigFloat( 3.0)) == 1.0
+    @test isequal(sign(BigFloat(-0.0)), BigFloat(-0.0))
+    @test isequal(sign(BigFloat( 0.0)), BigFloat( 0.0))
+    @test isnan(sign(BigFloat(NaN)))
 end
 @testset "isfinite / isinf / isnan" begin
     x = BigFloat(Inf)
@@ -451,7 +457,7 @@ end
         @test BigFloat(nextfloat(12.12)) == nextfloat(x)
         @test BigFloat(prevfloat(12.12)) == prevfloat(x)
     end
-    x = BigFloat(12.12, 100)
+    x = BigFloat(12.12, precision = 100)
     @test nextfloat(x, 0) === x
     @test prevfloat(x, 0) === x
     @test nextfloat(x).prec == x.prec
@@ -487,6 +493,9 @@ end
     x = BigFloat(12)
     @test precision(x) == old_precision
     @test_throws DomainError setprecision(1)
+    @test_throws DomainError BigFloat(1, precision = 0)
+    @test_throws DomainError BigFloat(big(1.1), precision = 0)
+    @test_throws DomainError BigFloat(2.5, precision = -900)
     # issue 15659
     @test (setprecision(53) do; big(1/3); end) < 1//3
 end
@@ -562,9 +571,8 @@ end
     @test modf(x+y) == (y, x)
     x = BigFloat(NaN)
     @test map(isnan, modf(x)) == (true, true)
-    x = BigFloat(Inf)
-    y = modf(x)
-    @test (isnan(y[1]), isinf(y[2])) == (true, true)
+    @test isequal(modf(BigFloat(-Inf)), (BigFloat(-0.0), BigFloat(-Inf)))
+    @test isequal(modf(BigFloat(Inf)), (BigFloat(0.0), BigFloat(Inf)))
 end
 @testset "rem" begin
     setprecision(53) do
@@ -845,6 +853,10 @@ end
     @test typeof(floor(UInt128,a)) == UInt128
     @test trunc(UInt128,a) == b
     @test typeof(trunc(UInt128,a)) == UInt128
+
+    # Issue #33676
+    @test trunc(UInt8, parse(BigFloat,"255.1")) == UInt8(255)
+    @test_throws InexactError trunc(UInt8, parse(BigFloat,"256.1"))
 end
 @testset "div" begin
     @test div(big"1.0",big"0.1") == 9
@@ -895,9 +907,9 @@ end
         serialize(b, x)
         @test deserialize(b) == x
     end
-    let x = BigFloat(Inf, 46)
+    let x = BigFloat(Inf, precision = 46)
         serialize(b, x)
-        @test deserialize(b) == x == BigFloat(Inf, 2)
+        @test deserialize(b) == x == BigFloat(Inf, precision = 2)
     end
 end
 @test isnan(sqrt(BigFloat(NaN)))
@@ -908,10 +920,10 @@ end
     for prec in (10, 100, 1000)
         for val in ("3.1", pi, "-1.3", 3.1, 1//10)
             let a = BigFloat(val),
-                b = BigFloat(val, prec),
+                b = BigFloat(val, precision = prec),
                 c = BigFloat(val, RoundUp),
-                d = BigFloat(val, prec, RoundDown),
-                e = BigFloat(val, prec, RoundUp)
+                d = BigFloat(val, RoundDown, precision = prec),
+                e = BigFloat(val, RoundUp, precision = prec)
 
                 @test precision(a) == precision(BigFloat)
                 @test precision(b) == prec

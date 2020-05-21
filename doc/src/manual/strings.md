@@ -169,6 +169,9 @@ julia> """Contains "quote" characters"""
 If you want to extract a character from a string, you index into it:
 
 ```jldoctest helloworldstring
+julia> str[begin]
+'H': ASCII/Unicode U+0048 (category Lu: Letter, uppercase)
+
 julia> str[1]
 'H': ASCII/Unicode U+0048 (category Lu: Letter, uppercase)
 
@@ -181,8 +184,8 @@ julia> str[end]
 
 Many Julia objects, including strings, can be indexed with integers. The index of the first
 element (the first character of a string) is returned by [`firstindex(str)`](@ref), and the index of the last element (character)
-with [`lastindex(str)`](@ref). The keyword `end` can be used inside an indexing
-operation as shorthand for the last index along the given dimension.
+with [`lastindex(str)`](@ref). The keywords `begin` and `end` can be used inside an indexing
+operation as shorthand for the first and last indices, respectively, along the given dimension.
 String indexing, like most indexing in Julia, is 1-based: `firstindex` always returns `1` for any `AbstractString`.
 As we will see below, however, `lastindex(str)` is *not* in general the same as `length(str)` for a string,
 because some Unicode characters can occupy multiple "code units".
@@ -198,10 +201,10 @@ julia> str[end÷2]
 ' ': ASCII/Unicode U+0020 (category Zs: Separator, space)
 ```
 
-Using an index less than 1 or greater than `end` raises an error:
+Using an index less than `begin` (`1`) or greater than `end` raises an error:
 
 ```jldoctest helloworldstring
-julia> str[0]
+julia> str[begin-1]
 ERROR: BoundsError: attempt to access String
   at index [0]
 [...]
@@ -639,7 +642,7 @@ julia> """
 
 Trailing whitespace is left unaltered.
 
-Triple-quoted string literals can contain `"` symbols without escaping.
+Triple-quoted string literals can contain `"` characters without escaping.
 
 Note that line breaks in literal strings, whether single- or triple-quoted, result in a newline
 (LF) character `\n` in the string, even if your editor uses a carriage return `\r` (CR) or CRLF

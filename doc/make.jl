@@ -73,6 +73,9 @@ const PAGES = [
         "manual/missing.md",
         "manual/networking-and-streams.md",
         "manual/parallel-computing.md",
+        "manual/asynchronous-programming.md",
+        "manual/multi-threading.md",
+        "manual/distributed-computing.md",
         "manual/running-external-programs.md",
         "manual/calling-c-and-fortran-code.md",
         "manual/handling-operating-system-variation.md",
@@ -172,6 +175,8 @@ else
         canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/v1/" : nothing,
         assets = ["assets/julia-manual.css", ],
         analytics = "UA-28835595-6",
+        collapselevel = 1,
+        sidebar_sitename = false,
     )
 end
 
@@ -202,11 +207,13 @@ function Documenter.deploy_folder(::BuildBotConfig; devurl, kwargs...)
     return nothing
 end
 
+const devurl = "v$(VERSION.major).$(VERSION.minor)-dev"
+
 deploydocs(
     repo = "github.com/JuliaLang/docs.julialang.org.git",
     deploy_config = BuildBotConfig(),
     target = joinpath(buildroot, "doc", "_build", "html", "en"),
     dirname = "en",
-    devurl = "v1.4-dev",
-    versions = ["v#.#", "v1.4-dev" => "v1.4-dev"]
+    devurl = devurl,
+    versions = ["v#.#", devurl => devurl]
 )

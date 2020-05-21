@@ -1,7 +1,7 @@
 # [Functions](@id man-functions)
 
 In Julia, a function is an object that maps a tuple of argument values to a return value. Julia
-functions are not pure mathematical functions, in the sense that functions can alter and be affected
+functions are not pure mathematical functions, because they can alter and be affected
 by the global state of the program. The basic syntax for defining functions in Julia is:
 
 ```jldoctest
@@ -35,7 +35,7 @@ julia> f(2,3)
 ```
 
 Without parentheses, the expression `f` refers to the function object, and can be passed around
-like any value:
+like any other value:
 
 ```jldoctest fofxy
 julia> g = f;
@@ -241,7 +241,7 @@ as arguments. A classic example is [`map`](@ref), which applies a function to ea
 an array and returns a new array containing the resulting values:
 
 ```jldoctest
-julia> map(round, [1.2,3.5,1.7])
+julia> map(round, [1.2, 3.5, 1.7])
 3-element Array{Float64,1}:
  1.0
  4.0
@@ -254,7 +254,7 @@ situations, the anonymous function construct allows easy creation of a single-us
 without needing a name:
 
 ```jldoctest
-julia> map(x -> x^2 + 2x - 1, [1,3,-1])
+julia> map(x -> x^2 + 2x - 1, [1, 3, -1])
 3-element Array{Int64,1}:
   2
  14
@@ -317,15 +317,19 @@ The components of tuples can optionally be named, in which case a *named tuple* 
 constructed:
 
 ```jldoctest
-julia> x = (a=1, b=1+1)
-(a = 1, b = 2)
+julia> x = (a=2, b=1+2)
+(a = 2, b = 3)
+
+julia> x[1]
+2
 
 julia> x.a
-1
+2
 ```
 
 Named tuples are very similar to tuples, except that fields can additionally be accessed by name
-using dot syntax (`x.a`).
+using dot syntax (`x.a`) in addition to the regular indexing syntax
+(`x[1]`).
 
 ## Multiple Return Values
 
@@ -363,7 +367,7 @@ julia> y
 6
 ```
 
-You can also return multiple values via an explicit usage of the `return` keyword:
+You can also return multiple values using the `return` keyword:
 
 ```julia
 function foo(a,b)
@@ -382,21 +386,20 @@ a symbol, then an assignment `(x, y) = argument` will be inserted for you:
 ```julia
 julia> minmax(x, y) = (y < x) ? (y, x) : (x, y)
 
-julia> range((min, max)) = max - min
+julia> gap((min, max)) = max - min
 
-julia> range(minmax(10, 2))
+julia> gap(minmax(10, 2))
 8
 ```
 
-Notice the extra set of parentheses in the definition of `range`.
-Without those, `range` would be a two-argument function, and this example would
-not work.
+Notice the extra set of parentheses in the definition of `gap`. Without those, `gap`
+would be a two-argument function, and this example would not work.
 
 ## Varargs Functions
 
 It is often convenient to be able to write functions taking an arbitrary number of arguments.
 Such functions are traditionally known as "varargs" functions, which is short for "variable number
-of arguments". You can define a varargs function by following the last argument with an ellipsis:
+of arguments". You can define a varargs function by following the last positional argument with an ellipsis:
 
 ```jldoctest barfunc
 julia> bar(a,b,x...) = (a,b,x)
@@ -508,8 +511,9 @@ call will fail, just as it would if too many arguments were given explicitly.
 
 ## Optional Arguments
 
-In many cases, function arguments have sensible default values and therefore might not need to
-be passed explicitly in every call. For example, the function [`Date(y, [m, d])`](@ref)
+It is often possible to provide sensible default values for function arguments.
+This can save users from having to pass every argument on every call.
+For example, the function [`Date(y, [m, d])`](@ref)
 from `Dates` module constructs a `Date` type for a given year `y`, month `m` and day `d`.
 However, `m` and `d` arguments are optional and their default value is `1`.
 This behavior can be expressed concisely as:
@@ -522,11 +526,11 @@ function Date(y::Int64, m::Int64=1, d::Int64=1)
 end
 ```
 
-Observe, that this definition calls another method of `Date` function that takes one argument
-of `UTInstant{Day}` type.
+Observe, that this definition calls another method of the `Date` function that takes one argument
+of type `UTInstant{Day}`.
 
 With this definition, the function can be called with either one, two or three arguments, and
-`1` is automatically passed when any of the arguments is not specified:
+`1` is automatically passed when only one or two of the arguments are specified:
 
 ```jldoctest
 julia> using Dates
@@ -582,6 +586,14 @@ function f(;x::Int=1)
 end
 ```
 
+Keyword arguments can also be used in varargs functions:
+
+```julia
+function plot(x...; style="solid")
+    ###
+end
+```
+
 Extra keyword arguments can be collected using `...`, as in varargs functions:
 
 ```julia
@@ -608,6 +620,10 @@ f(3)      # throws UndefKeywordError(:y)
 One can also pass `key => value` expressions after a semicolon. For example, `plot(x, y; :width => 2)`
 is equivalent to `plot(x, y, width=2)`. This is useful in situations where the keyword name is computed
 at runtime.
+
+When a bare identifier or dot expression occurs after a semicolon, the keyword argument name is
+implied by the identifier or field name. For example `plot(x, y; width)` is equivalent to
+`plot(x, y; width=width)` and `plot(x, y; options.width)` is equivalent to `plot(x, y; width=options.width)`.
 
 The nature of keyword arguments makes it possible to specify the same argument more than once.
 For example, in the call `plot(x, y; options..., width=2)` it is possible that the `options` structure
@@ -707,7 +723,7 @@ the arguments of the user function are initialized.
 A `do` block, like any other inner function, can "capture" variables from its
 enclosing scope. For example, the variable `data` in the above example of
 `open...do` is captured from the outer scope. Captured variables
-can create performance challenges as discussed in [performance tips](@ref man-performance-tips).
+can create performance challenges as discussed in [performance tips](@ref man-performance-captured).
 
 ## Function composition and piping
 
@@ -732,12 +748,12 @@ The next example composes three functions and maps the result over an array of s
 ```jldoctest
 julia> map(first ∘ reverse ∘ uppercase, split("you can compose functions like this"))
 6-element Array{Char,1}:
- 'U'
- 'N'
- 'E'
- 'S'
- 'E'
- 'S'
+ 'U': ASCII/Unicode U+0055 (category Lu: Letter, uppercase)
+ 'N': ASCII/Unicode U+004E (category Lu: Letter, uppercase)
+ 'E': ASCII/Unicode U+0045 (category Lu: Letter, uppercase)
+ 'S': ASCII/Unicode U+0053 (category Lu: Letter, uppercase)
+ 'E': ASCII/Unicode U+0045 (category Lu: Letter, uppercase)
+ 'S': ASCII/Unicode U+0053 (category Lu: Letter, uppercase)
 ```
 
 Function chaining (sometimes called "piping" or "using a pipe" to send data to a subsequent function) is when you apply a function to the previous function's output:
@@ -792,8 +808,8 @@ julia> sin.(A)
 ```
 
 Of course, you can omit the dot if you write a specialized "vector" method of `f`, e.g. via `f(A::AbstractArray) = map(f, A)`,
-and this is just as efficient as `f.(A)`. But that approach requires you to decide in advance
-which functions you want to vectorize.
+and this is just as efficient as `f.(A)`. The advantage of the `f.(A)` syntax is that which functions are vectorizable need not be decided upon
+in advance by the library writer.
 
 More generally, `f.(args...)` is actually equivalent to `broadcast(f, args...)`, which allows
 you to operate on multiple arrays (even of different shapes), or a mix of arrays and scalars (see
@@ -838,8 +854,8 @@ the results (see [Pre-allocating outputs](@ref)). A convenient syntax for this i
 is equivalent to `broadcast!(identity, X, ...)` except that, as above, the `broadcast!` loop is
 fused with any nested "dot" calls. For example, `X .= sin.(Y)` is equivalent to `broadcast!(sin, X, Y)`,
 overwriting `X` with `sin.(Y)` in-place. If the left-hand side is an array-indexing expression,
-e.g. `X[2:end] .= sin.(Y)`, then it translates to `broadcast!` on a `view`, e.g.
-`broadcast!(sin, view(X, 2:lastindex(X)), Y)`,
+e.g. `X[begin+1:end] .= sin.(Y)`, then it translates to `broadcast!` on a `view`, e.g.
+`broadcast!(sin, view(X, firstindex(X)+1:lastindex(X)), Y)`,
 so that the left-hand side is updated in-place.
 
 Since adding dots to many operations and function calls in an expression

@@ -52,6 +52,8 @@ false
 """
 issparse(A::AbstractArray) = false
 issparse(S::AbstractSparseArray) = true
+issparse(S::LinearAlgebra.Adjoint{<:Any,<:AbstractSparseArray}) = true
+issparse(S::LinearAlgebra.Transpose{<:Any,<:AbstractSparseArray}) = true
 
 issparse(S::LinearAlgebra.Symmetric{<:Any,<:AbstractSparseMatrix}) = true
 issparse(S::LinearAlgebra.Hermitian{<:Any,<:AbstractSparseMatrix}) = true

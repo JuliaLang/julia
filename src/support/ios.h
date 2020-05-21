@@ -20,7 +20,7 @@ typedef enum { bm_none=UV_HANDLE_TYPE_MAX+1, bm_line, bm_block, bm_mem } bufmode
 typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 
 #define IOS_INLSIZE 54
-#define IOS_BUFSIZE 131072
+#define IOS_BUFSIZE 32768
 
 #ifdef _P64
 #define ON_P64(x) x
@@ -86,19 +86,19 @@ JL_DLLEXPORT size_t ios_read(ios_t *s, char *dest, size_t n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t ios_readall(ios_t *s, char *dest, size_t n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t ios_write(ios_t *s, const char *data, size_t n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int64_t ios_seek(ios_t *s, int64_t pos) JL_NOTSAFEPOINT; // absolute seek
-JL_DLLEXPORT int64_t ios_seek_end(ios_t *s);
+JL_DLLEXPORT int64_t ios_seek_end(ios_t *s) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int64_t ios_skip(ios_t *s, int64_t offs);  // relative seek
 JL_DLLEXPORT int64_t ios_pos(ios_t *s) JL_NOTSAFEPOINT;  // get current position
 JL_DLLEXPORT int ios_trunc(ios_t *s, size_t size) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int ios_eof(ios_t *s);
 JL_DLLEXPORT int ios_eof_blocking(ios_t *s);
 JL_DLLEXPORT int ios_flush(ios_t *s);
-JL_DLLEXPORT void ios_close(ios_t *s);
+JL_DLLEXPORT int ios_close(ios_t *s) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int ios_isopen(ios_t *s);
-JL_DLLEXPORT char *ios_take_buffer(ios_t *s, size_t *psize);  // release buffer to caller
+JL_DLLEXPORT char *ios_take_buffer(ios_t *s, size_t *psize);  // nul terminate and release buffer to caller
 // set buffer space to use
 JL_DLLEXPORT int ios_setbuf(ios_t *s, char *buf, size_t size, int own) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int ios_bufmode(ios_t *s, bufmode_t mode);
+JL_DLLEXPORT int ios_bufmode(ios_t *s, bufmode_t mode) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int ios_get_readable(ios_t *s);
 JL_DLLEXPORT int ios_get_writable(ios_t *s);
 JL_DLLEXPORT void ios_set_readonly(ios_t *s);

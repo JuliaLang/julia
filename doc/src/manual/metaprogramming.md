@@ -268,7 +268,7 @@ end))
 end
 ```
 
-Notice that the result contains `Expr(:$, :x)`, which means that `x` has not been
+Notice that the result contains `$x`, which means that `x` has not been
 evaluated yet.
 In other words, the `$` expression "belongs to" the inner quote expression, and
 so its argument is only evaluated when the inner quote expression is:
@@ -296,7 +296,7 @@ end))
 end
 ```
 
-Notice that `:(1 + 2)` now appears in the result instead of the symbol `:x`.
+Notice that `(1 + 2)` now appears in the result instead of the symbol `x`.
 Evaluating this expression yields an interpolated `3`:
 
 ```jldoctest interp1
@@ -553,7 +553,7 @@ julia> macro twostep(arg)
 @twostep (macro with 1 method)
 
 julia> ex = macroexpand(Main, :(@twostep :(1, 2, 3)) );
-I execute at parse time. The argument is: $(Expr(:quote, :((1, 2, 3))))
+I execute at parse time. The argument is: :((1, 2, 3))
 ```
 
 The first call to [`println`](@ref) is executed when [`macroexpand`](@ref) is called. The
@@ -771,19 +771,19 @@ final value. The macro might look like this:
 ```julia
 macro time(ex)
     return quote
-        local t0 = time()
+        local t0 = time_ns()
         local val = $ex
-        local t1 = time()
-        println("elapsed time: ", t1-t0, " seconds")
+        local t1 = time_ns()
+        println("elapsed time: ", (t1-t0)/1e9, " seconds")
         val
     end
 end
 ```
 
-Here, we want `t0`, `t1`, and `val` to be private temporary variables, and we want `time` to refer
-to the [`time`](@ref) function in Julia Base, not to any `time` variable the user
+Here, we want `t0`, `t1`, and `val` to be private temporary variables, and we want `time_ns` to refer
+to the [`time_ns`](@ref) function in Julia Base, not to any `time_ns` variable the user
 might have (the same applies to `println`). Imagine the problems that could occur if the user
-expression `ex` also contained assignments to a variable called `t0`, or defined its own `time`
+expression `ex` also contained assignments to a variable called `t0`, or defined its own `time_ns`
 variable. We might get errors, or mysteriously incorrect behavior.
 
 Julia's macro expander solves these problems in the following way. First, variables within a macro
@@ -792,7 +792,7 @@ to (and not declared global), declared local, or used as a function argument nam
 it is considered global. Local variables are then renamed to be unique (using the [`gensym`](@ref)
 function, which generates new symbols), and global variables are resolved within the macro definition
 environment. Therefore both of the above concerns are handled; the macro's locals will not conflict
-with any user variables, and `time` and `println` will refer to the Julia Base definitions.
+with any user variables, and `time_ns` and `println` will refer to the Julia Base definitions.
 
 One problem remains however. Consider the following use of this macro:
 
@@ -800,14 +800,14 @@ One problem remains however. Consider the following use of this macro:
 module MyModule
 import Base.@time
 
-time() = ... # compute something
+time_ns() = ... # compute something
 
-@time time()
+@time time_ns()
 end
 ```
 
-Here the user expression `ex` is a call to `time`, but not the same `time` function that the macro
-uses. It clearly refers to `MyModule.time`. Therefore we must arrange for the code in `ex` to
+Here the user expression `ex` is a call to `time_ns`, but not the same `time_ns` function that the macro
+uses. It clearly refers to `MyModule.time_ns`. Therefore we must arrange for the code in `ex` to
 be resolved in the macro call environment. This is done by "escaping" the expression with [`esc`](@ref):
 
 ```julia
@@ -857,10 +857,10 @@ macro time(expr)
     return :(timeit(() -> $(esc(expr))))
 end
 function timeit(f)
-    t0 = time()
+    t0 = time_ns()
     val = f()
-    t1 = time()
-    println("elapsed time: ", t1-t0, " seconds")
+    t1 = time_ns()
+    println("elapsed time: ", (t1-t0)/1e9, " seconds")
     return val
 end
 ```
@@ -1102,7 +1102,7 @@ When defining generated functions, there are five main differences to ordinary f
 3. Instead of calculating something or performing some action, you return a *quoted expression* which,
    when evaluated, does what you want.
 4. Generated functions are only permitted to call functions that were defined *before* the definition of the generated
-   function. (Failure to follow this my result on getting `MethodErrors` referring to functions from a future world-age.)
+   function. (Failure to follow this may result in getting `MethodErrors` referring to functions from a future world-age.)
 5. Generated functions must not *mutate* or *observe* any non-constant global state (including,
    for example, IO, locks, non-local dictionaries, or using [`hasmethod`](@ref)).
    This means they can only read global constants, and cannot have any side effects.

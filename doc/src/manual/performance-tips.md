@@ -151,7 +151,7 @@ the performance of your code:
   * `@code_warntype` generates a representation of your code that can be helpful in finding expressions
     that result in type uncertainty. See [`@code_warntype`](@ref) below.
 
-## Avoid containers with abstract type parameters
+## [Avoid containers with abstract type parameters](@id man-performance-abstract-container)
 
 When working with parameterized types, including arrays, it is best to avoid parameterizing with
 abstract types where possible.
@@ -160,13 +160,13 @@ Consider the following:
 
 ```jldoctest
 julia> a = Real[]
-0-element Array{Real,1}
+Real[]
 
 julia> push!(a, 1); push!(a, 2.0); push!(a, π)
 3-element Array{Real,1}:
  1
  2.0
- π
+ π = 3.1415926535897...
 ```
 
 Because `a` is a an array of abstract type [`Real`](@ref), it must be able to hold any
@@ -177,7 +177,7 @@ efficiently:
 
 ```jldoctest
 julia> a = Float64[]
-0-element Array{Float64,1}
+Float64[]
 
 julia> push!(a, 1); push!(a, 2.0); push!(a,  π)
 3-element Array{Float64,1}:
@@ -534,6 +534,11 @@ but this will:
 g_vararg(x::Vararg{Int, N}) where {N} = tuple(x...)
 ```
 
+One only needs to introduce a single type parameter to force specialization, even if the other types are unconstrained. For example, this will also specialize, and is useful when the arguments are not all of the same type:
+```julia
+h_vararg(x::Vararg{Any, N}) where {N} = tuple(x...)
+```
+
 Note that [`@code_typed`](@ref) and friends will always show you specialized code, even if Julia
 would not normally specialize that method call. You need to check the
 [method internals](@ref ast-lowered-method) if you want to see whether specializations are generated
@@ -611,8 +616,8 @@ number (the result of [`/`](@ref) operator). This makes it more difficult for th
 optimize the body of the loop. There are several possible fixes:
 
   * Initialize `x` with `x = 1.0`
-  * Declare the type of `x`: `x::Float64 = 1`
-  * Use an explicit conversion: `x = oneunit(Float64)`
+  * Declare the type of `x` explicitly as `x::Float64 = 1`
+  * Use an explicit conversion by `x = oneunit(Float64)`
   * Initialize with the first loop iteration, to `x = 1 / rand()`, then loop `for i = 2:10`
 
 ## [Separate kernel functions (aka, function barriers)](@id kernel-functions)
@@ -674,7 +679,7 @@ or the [`fill!`](@ref) function, which we could have used instead of writing our
 Functions like `strange_twos` occur when dealing with data of uncertain type, for example data
 loaded from an input file that might contain either integers, floats, strings, or something else.
 
-## Types with values-as-parameters
+## [Types with values-as-parameters](@id man-performance-value-type)
 
 Let's say you want to create an `N`-dimensional array that has size 3 along each axis. Such arrays
 can be created like this:
@@ -811,7 +816,7 @@ or thousands of variants compiled for it. Each of these increases the size of th
 code, the length of internal lists of methods, etc. Excess enthusiasm for values-as-parameters
 can easily waste enormous resources.
 
-## Access arrays in memory order, along columns
+## [Access arrays in memory order, along columns](@id man-performance-column-major)
 
 Multidimensional arrays in Julia are stored in column-major order. This means that arrays are
 stacked one column at a time. This can be verified using the `vec` function or the syntax `[:]`
@@ -837,6 +842,7 @@ adopted by C and Python (`numpy`) among other languages. Remembering the orderin
 have significant performance effects when looping over arrays. A rule of thumb to keep in mind
 is that with column-major arrays, the first index changes most rapidly. Essentially this means
 that looping will be faster if the inner-most loop index is the first to appear in a slice expression.
+Keep in mind that indexing an array with `:` is an implicit loop that iteratively accesses all elements within a particular dimension; it can be faster to extract columns than rows, for example.
 
 Consider the following contrived example. Imagine we wanted to write a function that accepts a
 [`Vector`](@ref) and returns a square [`Matrix`](@ref) with either the rows or the columns filled with copies
@@ -1013,7 +1019,7 @@ example, but in many contexts it is more convenient to just sprinkle
 some dots in your expressions rather than defining a separate function
 for each vectorized operation.)
 
-## Consider using views for slices
+## [Consider using views for slices](@id man-performance-views)
 
 In Julia, an array "slice" expression like `array[1:5, :]` creates
 a copy of that data (except on the left-hand side of an assignment,
@@ -1188,7 +1194,7 @@ Sometimes you can enable better optimization by promising certain program proper
 
 The common idiom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing,
 and may cause a segmentation fault if bounds checking is turned off. Use `LinearIndices(x)` or `eachindex(x)`
-instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays/)).
+instead (see also [Arrays with custom indices](@ref man-custom-indices)).
 
 !!! note
     While `@simd` needs to be placed directly in front of an innermost `for` loop, both `@inbounds` and `@fastmath`
@@ -1428,7 +1434,7 @@ julia> @code_warntype f(3.2)
 Variables
   #self#::Core.Compiler.Const(f, false)
   x::Float64
-  y::Union{Float64, Int64}
+  y::UNION{FLOAT64, INT64}
 
 Body::Float64
 1 ─      (y = Main.pos(x))
@@ -1443,8 +1449,8 @@ Interpreting the output of [`@code_warntype`](@ref), like that of its cousins [`
 Your code is being presented in form that has been heavily digested on its way to generating
 compiled machine code. Most of the expressions are annotated by a type, indicated by the `::T`
 (where `T` might be [`Float64`](@ref), for example). The most important characteristic of [`@code_warntype`](@ref)
-is that non-concrete types are displayed in red; in the above example, such output is shown in
-uppercase.
+is that non-concrete types are displayed in red; since this document is written in Markdown, which has no color,
+in this document, red text is denoted by uppercase.
 
 At the top, the inferred return type of the function is shown as `Body::Float64`.
 The next lines represent the body of `f` in Julia's SSA IR form.

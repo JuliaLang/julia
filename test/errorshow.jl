@@ -5,6 +5,50 @@ using Random, LinearAlgebra
 # For curmod_*
 include("testenv.jl")
 
+
+@testset "SystemError" begin
+    err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, "SystemError: reason: ")
+
+    err = try; systemerror("reason", Cint(0), extrainfo="addend"); false; catch ex; ex; end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, "SystemError (with addend): reason: ")
+
+    err = try
+            Libc.errno(0xc0ffee)
+            systemerror("reason", true)
+            false
+        catch ex
+            ex
+        end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, "SystemError: reason: ")
+
+    err = try; Base.windowserror("reason", UInt32(0)); false; catch ex; ex; end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, Sys.iswindows() ? "SystemError: reason: " :
+        "SystemError (with Base.WindowsErrorInfo(0x00000000, nothing)): reason: ")
+
+    err = try; Base.windowserror("reason", UInt32(0); extrainfo="addend"); false; catch ex; ex; end::SystemError
+    errs = sprint(Base.showerror, err)
+    @test startswith(errs, Sys.iswindows() ? "SystemError (with addend): reason: " :
+        "SystemError (with Base.WindowsErrorInfo(0x00000000, \"addend\")): reason: ")
+
+    @static if Sys.iswindows()
+        err = try
+                ccall(:SetLastError, stdcall, Cvoid, (UInt32,), 0x00000000)
+                Base.windowserror("reason", true)
+                false
+            catch ex
+                ex
+            end::SystemError
+        errs = sprint(Base.showerror, err)
+        @test startswith(errs, "SystemError: reason: ")
+    end
+end
+
+
 cfile = " at $(@__FILE__):"
 c1line = @__LINE__() + 1
 method_c1(x::Float64, s::AbstractString...) = true
@@ -30,7 +74,7 @@ Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, 1)))
 # matches the implicit constructor -> convert method
 Base.show_method_candidates(buf, Base.MethodError(Tuple{}, (1, 1, 1)))
 let mc = String(take!(buf))
-    @test occursin("\nClosest candidates are:\n  Tuple{}", mc)
+    @test occursin("\nClosest candidates are:\n  (::Type{T})", mc)
     @test !occursin(cfile, mc)
 end
 
@@ -80,10 +124,13 @@ PR16155line2 = @__LINE__() + 1
 (::Type{T})(arg::Any) where {T<:PR16155} = "replace call-to-convert method from sysimg"
 
 Base.show_method_candidates(buf, MethodError(PR16155,(1.0, 2.0, Int64(3))))
-@test String(take!(buf)) == "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(!Matched::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2"
+@test String(take!(buf)) == "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(!Matched::Int64, ::Any)$cfile$PR16155line\n  (::Type{T})(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2"
 
 Base.show_method_candidates(buf, MethodError(PR16155,(Int64(3), 2.0, Int64(3))))
-@test String(take!(buf)) == "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2"
+@test String(take!(buf)) == "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  (::Type{T})(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2"
+
+Base.show_method_candidates(buf, MethodError(Complex{T} where T<:Integer, (1.2,)))
+@test startswith(String(take!(buf)), "\nClosest candidates are:\n  (::Type{T})(::T) where T<:Number")
 
 c6line = @__LINE__
 method_c6(; x=1) = x
@@ -257,15 +304,15 @@ let undefvar
     err_str = @except_str 0::Bool TypeError
     @test err_str == "TypeError: non-boolean ($Int) used in boolean context"
     err_str = @except_str 0::AbstractFloat TypeError
-    @test err_str == "TypeError: in typeassert, expected AbstractFloat, got $Int"
+    @test err_str == "TypeError: in typeassert, expected AbstractFloat, got a value of type $Int"
     err_str = @except_str 0::7 TypeError
-    @test err_str == "TypeError: in typeassert, expected Type, got $Int"
+    @test err_str == "TypeError: in typeassert, expected Type, got a value of type $Int"
     err_str = @except_str "" <: AbstractString TypeError
-    @test err_str == "TypeError: in <:, expected Type, got String"
+    @test err_str == "TypeError: in <:, expected Type, got a value of type String"
     err_str = @except_str AbstractString <: "" TypeError
-    @test err_str == "TypeError: in <:, expected Type, got String"
+    @test err_str == "TypeError: in <:, expected Type, got a value of type String"
     err_str = @except_str Type{""} TypeError
-    @test err_str == "TypeError: in Type, in parameter, expected Type, got String"
+    @test err_str == "TypeError: in Type, in parameter, expected Type, got a value of type String"
     err_str = @except_str TypeWithIntParam{Any} TypeError
     @test err_str == "TypeError: in TypeWithIntParam, in T, expected T<:Integer, got Type{Any}"
     err_str = @except_str Type{Vararg} TypeError
@@ -331,6 +378,17 @@ end
 @test repr("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 0 methods)"
 @test occursin(r"^@doc \(macro with \d+ method[s]?\)$", repr("text/plain", getfield(Base, Symbol("@doc"))))
 
+# Issue 34636
+let err_str
+    err_str = @except_str 1 + rand(5) MethodError
+    @test occursin("MethodError: no method matching +(::$Int, ::Array{Float64,1})", err_str)
+    @test occursin("For element-wise addition, use broadcasting with dot syntax: scalar .+ array", err_str)
+    err_str = @except_str rand(5) - 1//3 MethodError
+    @test occursin("MethodError: no method matching -(::Array{Float64,1}, ::Rational{$Int})", err_str)
+    @test occursin("For element-wise subtraction, use broadcasting with dot syntax: array .- scalar", err_str)
+end
+
+
 method_defs_lineno = @__LINE__() + 1
 String() = throw(ErrorException("1"))
 (::String)() = throw(ErrorException("2"))
@@ -341,6 +399,9 @@ EightBitTypeT{T}() where {T} = throw(ErrorException("6"))
 (::EightBitTypeT)() = throw(ErrorException("7"))
 (::FunctionLike)() = throw(ErrorException("8"))
 
+struct StructWithUnionAllMethodDefs{T}
+end
+(::Type{StructWithUnionAllMethodDefs{T} where T<:Integer})(x) = x
 
 let err_str,
     i = reinterpret(EightBitType, 0x54),
@@ -357,15 +418,19 @@ let err_str,
     @test sprint(show, which(reinterpret(EightBitType, 0x54), Tuple{})) ==
         "(::$(curmod_prefix)EightBitType)() in $curmod_str at $sp:$(method_defs_lineno + 3)"
     @test sprint(show, which(EightBitTypeT, Tuple{})) ==
-        "(::Type{$(curmod_prefix)EightBitTypeT})() in $curmod_str at $sp:$(method_defs_lineno + 4)"
+        "$(curmod_prefix)EightBitTypeT() in $curmod_str at $sp:$(method_defs_lineno + 4)"
     @test sprint(show, which(EightBitTypeT{Int32}, Tuple{})) ==
-        "(::Type{$(curmod_prefix)EightBitTypeT{T}})() where T in $curmod_str at $sp:$(method_defs_lineno + 5)"
+        "$(curmod_prefix)EightBitTypeT{T}() where T in $curmod_str at $sp:$(method_defs_lineno + 5)"
     @test sprint(show, which(reinterpret(EightBitTypeT{Int32}, 0x54), Tuple{})) ==
         "(::$(curmod_prefix)EightBitTypeT)() in $curmod_str at $sp:$(method_defs_lineno + 6)"
+    @test startswith(sprint(show, which(Complex{Int}, Tuple{Int})),
+                     "Complex{T}(")
     @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{LineNumberNode, Module, Vararg{Any}})),
                      "@doc(__source__::LineNumberNode, __module__::Module, x...) in Core at boot.jl:")
     @test startswith(sprint(show, which(FunctionLike(), Tuple{})),
                      "(::$(curmod_prefix)FunctionLike)() in $curmod_str at $sp:$(method_defs_lineno + 7)")
+    @test startswith(sprint(show, which(StructWithUnionAllMethodDefs{<:Integer}, (Any,))),
+                     "($(curmod_prefix)StructWithUnionAllMethodDefs{T} where T<:Integer)(x)")
     @test repr("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 1 method)"
     @test repr("text/plain", Core.arraysize) == "arraysize (built-in function)"
 
@@ -531,6 +596,41 @@ end
     end
 end
 
+# Custom hints
+struct HasNoOne end
+function recommend_oneunit(io, ex, arg_types, kwargs)
+    if ex.f === Base.one && length(arg_types) == 1 && arg_types[1] === HasNoOne
+        if isempty(kwargs)
+            print(io, "\nHasNoOne does not support `one`; did you mean `oneunit`?")
+        else
+            print(io, "\n`one` doesn't take keyword arguments, that would be silly")
+        end
+    end
+end
+@test Base.Experimental.register_error_hint(recommend_oneunit, MethodError) === nothing
+let err_str
+    err_str = @except_str one(HasNoOne()) MethodError
+    @test occursin(r"MethodError: no method matching one\(::.*HasNoOne\)", err_str)
+    @test occursin("HasNoOne does not support `one`; did you mean `oneunit`?", err_str)
+    err_str = @except_str one(HasNoOne(); value=2) MethodError
+    @test occursin(r"MethodError: no method matching one\(::.*HasNoOne; value=2\)", err_str)
+    @test occursin("`one` doesn't take keyword arguments, that would be silly", err_str)
+end
+pop!(Base.Experimental._hint_handlers[MethodError])  # order is undefined, don't copy this
+
+function busted_hint(io, exc, notarg)  # wrong number of args
+    print(io, "\nI don't have a hint for you, sorry")
+end
+@test Base.Experimental.register_error_hint(busted_hint, DomainError) === nothing
+try
+    sqrt(-2)
+catch ex
+    io = IOBuffer()
+    @test_logs (:error, "Hint-handler busted_hint for DomainError in $(@__MODULE__) caused an error") showerror(io, ex)
+end
+pop!(Base.Experimental._hint_handlers[DomainError])  # order is undefined, don't copy this
+
+
 # issue #28442
 @testset "Long stacktrace printing" begin
     f28442(c) = g28442(c + 1)
@@ -550,6 +650,26 @@ end
         @test occursin("the last 2 lines are repeated 5000 more times", output[5])
         @test output[6][1:8] == " [10003]"
     end
+end
+
+@testset "Line number correction" begin
+    getbt() = backtrace()
+    bt = getbt()
+    Base.update_stackframes_callback[] = function(list)
+        modify((sf, n)) = sf.func == :getbt ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
+        map!(modify, list, list)
+    end
+    io = IOBuffer()
+    Base.show_backtrace(io, bt)
+    outputc = split(String(take!(io)), '\n')
+    Base.update_stackframes_callback[] = identity
+    Base.show_backtrace(io, bt)
+    output0 = split(String(take!(io)), '\n')
+    function getline(output)
+        idx = findfirst(str->occursin("getbt", str), output)
+        return parse(Int, match(r":(\d*)$", output[idx]).captures[1])
+    end
+    @test getline(outputc) == getline(output0) + 2
 end
 
 # issue #30633
@@ -593,4 +713,15 @@ for (func,str) in ((TestMethodShadow.:+,":+"), (TestMethodShadow.:(==),":(==)"),
        e
     end::MethodError
     @test occursin("You may have intended to import Base.$str", sprint(Base.showerror, ex))
+end
+
+# Test that implementation detail of include() is hidden from the user by default
+let bt = try
+        include("testhelpers/include_error.jl")
+    catch
+        catch_backtrace()
+    end
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin(" include(", bt_str)
+    @test !occursin(" _include(", bt_str)
 end

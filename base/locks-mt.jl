@@ -56,7 +56,7 @@ import Base.Sys.WORD_SIZE
 
 # Note: this cannot assert that the lock is held by the correct thread, because we do not
 # track which thread locked it. Users beware.
-Base.assert_havelock(l::SpinLock) = islocked(l) ? nothing : concurrency_violation()
+Base.assert_havelock(l::SpinLock) = islocked(l) ? nothing : Base.concurrency_violation()
 
 function lock(l::SpinLock)
     while true

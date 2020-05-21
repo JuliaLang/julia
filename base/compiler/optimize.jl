@@ -5,32 +5,38 @@
 #####################
 
 mutable struct OptimizationState
+    params::OptimizationParams
     linfo::MethodInstance
     calledges::Vector{Any}
     src::CodeInfo
     mod::Module
     nargs::Int
+    world::UInt
     min_valid::UInt
     max_valid::UInt
-    params::Params
     sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
     const_api::Bool
-    function OptimizationState(frame::InferenceState)
+    # cached results of calling `_methods_by_ftype` from inference, including
+    # `min_valid` and `max_valid`
+    matching_methods_cache::IdDict{Any, Tuple{Any, UInt, UInt}}
+    # TODO: This will be eliminated once optimization no longer needs to do method lookups
+    interp::AbstractInterpreter
+    function OptimizationState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
         s_edges = frame.stmt_edges[1]
         if s_edges === nothing
             s_edges = []
             frame.stmt_edges[1] = s_edges
         end
         src = frame.src
-        return new(frame.linfo,
+        return new(params, frame.linfo,
                    s_edges::Vector{Any},
                    src, frame.mod, frame.nargs,
-                   frame.min_valid, frame.max_valid,
-                   frame.params, frame.sptypes, frame.slottypes, false)
+                   frame.world, frame.min_valid, frame.max_valid,
+                   frame.sptypes, frame.slottypes, false,
+                   frame.matching_methods_cache, interp)
     end
-    function OptimizationState(linfo::MethodInstance, src::CodeInfo,
-                               params::Params)
+    function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams, interp::AbstractInterpreter)
         # prepare src for running optimization passes
         # if it isn't already
         nssavalues = src.ssavaluetypes
@@ -53,18 +59,19 @@ mutable struct OptimizationState
             inmodule = linfo.def::Module
             nargs = 0
         end
-        return new(linfo,
+        return new(params, linfo,
                    s_edges::Vector{Any},
                    src, inmodule, nargs,
-                   UInt(1), get_world_counter(),
-                   params, sptypes_from_meth_instance(linfo), slottypes, false)
+                   get_world_counter(), UInt(1), get_world_counter(),
+                   sptypes_from_meth_instance(linfo), slottypes, false,
+                   IdDict{Any, Tuple{Any, UInt, UInt}}(), interp)
         end
 end
 
-function OptimizationState(linfo::MethodInstance, params::Params)
+function OptimizationState(linfo::MethodInstance, params::OptimizationParams, interp::AbstractInterpreter)
     src = retrieve_code_info(linfo)
     src === nothing && return nothing
-    return OptimizationState(linfo, src, params)
+    return OptimizationState(linfo, src, params, interp)
 end
 
 
@@ -104,7 +111,7 @@ _topmod(sv::OptimizationState) = _topmod(sv.mod)
 function update_valid_age!(min_valid::UInt, max_valid::UInt, sv::OptimizationState)
     sv.min_valid = max(sv.min_valid, min_valid)
     sv.max_valid = min(sv.max_valid, max_valid)
-    @assert(sv.min_valid <= sv.params.world <= sv.max_valid,
+    @assert(sv.min_valid <= sv.world <= sv.max_valid,
             "invalid age range update")
     nothing
 end
@@ -122,10 +129,10 @@ function add_backedge!(li::CodeInstance, caller::OptimizationState)
     nothing
 end
 
-function isinlineable(m::Method, me::OptimizationState, bonus::Int=0)
+function isinlineable(m::Method, me::OptimizationState, params::OptimizationParams, bonus::Int=0)
     # compute the cost (size) of inlining this code
     inlineable = false
-    cost_threshold = me.params.inline_cost_threshold
+    cost_threshold = params.inline_cost_threshold
     if m.module === _topmod(m.module)
         # a few functions get special treatment
         name = m.name
@@ -140,7 +147,7 @@ function isinlineable(m::Method, me::OptimizationState, bonus::Int=0)
         end
     end
     if !inlineable
-        inlineable = inline_worthy(me.src.code, me.src, me.sptypes, me.slottypes, me.params, cost_threshold + bonus)
+        inlineable = inline_worthy(me.src.code, me.src, me.sptypes, me.slottypes, params, cost_threshold + bonus)
     end
     return inlineable
 end
@@ -163,7 +170,7 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
 end
 
 # run the optimization work
-function optimize(opt::OptimizationState, @nospecialize(result))
+function optimize(opt::OptimizationState, params::OptimizationParams, @nospecialize(result))
     def = opt.linfo.def
     nargs = Int(opt.nargs) - 1
     @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
@@ -198,7 +205,7 @@ function optimize(opt::OptimizationState, @nospecialize(result))
             opt.src.pure = true
         end
 
-        if proven_pure && !coverage_enabled()
+        if proven_pure
             # use constant calling convention
             # Do not emit `jl_fptr_const_return` if coverage is enabled
             # so that we don't need to add coverage support
@@ -242,13 +249,13 @@ function optimize(opt::OptimizationState, @nospecialize(result))
         else
             bonus = 0
             if result ⊑ Tuple && !isbitstype(widenconst(result))
-                bonus = opt.params.inline_tupleret_bonus
+                bonus = params.inline_tupleret_bonus
             end
             if opt.src.inlineable
                 # For functions declared @inline, increase the cost threshold 20x
-                bonus += opt.params.inline_cost_threshold*19
+                bonus += params.inline_cost_threshold*19
             end
-            opt.src.inlineable = isinlineable(def, opt, bonus)
+            opt.src.inlineable = isinlineable(def, opt, params, bonus)
         end
     end
     nothing
@@ -275,9 +282,9 @@ intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref || is_pure_int
 plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 
 # known return type
-isknowntype(@nospecialize T) = (T === Union{}) || isconcretetype(T)
+isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetype(widenconst(T))
 
-function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any}, params::Params)
+function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any}, params::OptimizationParams)
     head = ex.head
     if is_meta_expr_head(head)
         return 0
@@ -367,7 +374,7 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}
 end
 
 function inline_worthy(body::Array{Any,1}, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any},
-                       params::Params, cost_threshold::Integer=params.inline_cost_threshold)
+                       params::OptimizationParams, cost_threshold::Integer=params.inline_cost_threshold)
     bodycost::Int = 0
     for line = 1:length(body)
         stmt = body[line]
@@ -408,7 +415,9 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             ssachangemap[i] += ssachangemap[i - 1]
         end
     end
-    (labelchangemap[end] != 0 && ssachangemap[end] != 0) || return
+    if labelchangemap[end] == 0 && ssachangemap[end] == 0
+        return
+    end
     for i = 1:length(body)
         el = body[i]
         if isa(el, GotoNode)
@@ -416,6 +425,9 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
         elseif isa(el, SSAValue)
             body[i] = SSAValue(el.id + ssachangemap[el.id])
         elseif isa(el, Expr)
+            if el.head === :(=) && el.args[2] isa Expr
+                el = el.args[2]::Expr
+            end
             if el.head === :gotoifnot
                 cond = el.args[1]
                 if isa(cond, SSAValue)
@@ -427,9 +439,6 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
                 tgt = el.args[1]::Int
                 el.args[1] = tgt + labelchangemap[tgt]
             elseif !is_meta_expr_head(el.head)
-                if el.head === :(=) && el.args[2] isa Expr && !is_meta_expr_head(el.args[2].head)
-                    el = el.args[2]::Expr
-                end
                 args = el.args
                 for i = 1:length(args)
                     el = args[i]

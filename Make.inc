@@ -96,11 +96,28 @@ WITH_GC_DEBUG_ENV := 0
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
 
+# We need python for things like BB triplet recognition and relative path computation.
+# We don't really care about version, generally, so just find something that works:
+PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)"
+PYTHON_SYSTEM := $(shell $(PYTHON) -c 'from __future__ import print_function; import platform; print(platform.system())')
+
+# If we're running on Cygwin, but using a native-windows Python, we need to use cygpath -w
+ifneq ($(and $(filter $(PYTHON_SYSTEM),Windows),$(findstring CYGWIN,$(shell uname))),)
+python_cygpath = `cygpath -w $(1)`
+else
+python_cygpath = $(1)
+endif
+
+# Get a relative path easily
+define rel_path
+$(shell $(PYTHON) $(call python_cygpath,$(JULIAHOME)/contrib/relative_path.py) $(call python_cygpath,$(1)) $(call python_cygpath,$(2)))
+endef
+
 # pick up BUILDROOT from O= if it isn't already set (from recursive make)
 ifeq ($(BUILDROOT),)
 ifeq ("$(origin O)", "command line")
   BUILDROOT := $(abspath $O)
-  BUILDDIR := $(abspath $(BUILDROOT)/$(shell $(JULIAHOME)/contrib/relative_path.sh $(JULIAHOME) $(SRCDIR)))
+  BUILDDIR := $(abspath $(BUILDROOT)/$(call rel_path,$(JULIAHOME),$(SRCDIR)))
   $(info $(shell printf '\033[32;1mBuilding into $(BUILDROOT)\033[0m')) # use printf to expand the escape sequences
 else
   BUILDROOT:=$(JULIAHOME)
@@ -277,16 +294,32 @@ private_libdir := $(libdir)/julia
 endif
 build_private_libdir := $(build_libdir)/julia
 
+# A helper functions for dealing with lazily-evaluated, expensive operations..  Spinning
+# up a python process to, for exaxmple, parse a TOML file is expensive, and we must wait
+# until the TOML files are on-disk before we can parse them.  This means that we cannot
+# use `:=` (since we do not want to evaluate these rules now, we want to evaluate them
+# when we use them, so we use `=`) however we also do not want to re-evaluate them
+# multiple times.  So we define a caching mechanism where the rules are still lazily
+# evaluated, but we cache the value such that the second time around we don't have to
+# re-evaluate them.  Usage example:
+#
+# EXPENSIVE_OPERATION = $(shell prog args...)
+# CACHED_RESULT = $(call hit_cache,EXPENSIVE_OPERATION)
+#
+# The first time you use `$(CACHED_RESULT)`, it will invoke `$(EXPENSIVE_OPERATION)`,
+# but after that point, it will not, unless `$(EXPENSIVE_OPERATION)` evaluated to the
+# empty string, in which case it will be re-evaluated.
+define hit_cache
+$(if $(_CACHE-$(1)),,$(eval _CACHE-$(1) := $($(1))))$(_CACHE-$(1))
+endef
+
 # Calculate relative paths to libdir, private_libdir, datarootdir, and sysconfdir
-build_libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_libdir))
-libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libdir))
-build_private_libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_private_libdir))
-private_libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(private_libdir))
-datarootdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(datarootdir))
-libexecdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libexecdir))
-docdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(docdir))
-sysconfdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(sysconfdir))
-includedir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(includedir))
+define cache_rel_path
+$(1)_rel_eval = $(call rel_path,$(2),$($(1)))
+$(1)_rel = $$(call hit_cache,$(1)_rel_eval)
+endef
+$(foreach D,libdir private_libdir datarootdir libexecdir docdir sysconfdir includedir,$(eval $(call cache_rel_path,$(D),$(bindir))))
+$(foreach D,build_libdir build_private_libdir,$(eval $(call cache_rel_path,$(D),$(build_bindir))))
 
 INSTALL_F := $(JULIAHOME)/contrib/install.sh 644
 INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
@@ -475,7 +508,7 @@ endif
 ifeq ($(USECLANG),1)
 CC := $(CROSS_COMPILE)clang
 CXX := $(CROSS_COMPILE)clang++
-JCFLAGS := -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
 JCPPFLAGS := -fasynchronous-unwind-tables
 JCXXFLAGS := -pipe $(fPIC) -fno-rtti -pedantic
@@ -686,7 +719,11 @@ override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
 else
 ifneq ($(XC_HOST),)
 XC_HOST := $(ARCH)$(shell echo $(XC_HOST) | sed "s/[^-]*\(.*\)$$/\1/")
+ifneq ($(findstring arm, $(ARCH))$(findstring aarch64, $(ARCH)),)
+MCPU := $(subst _,-,$(ARCH)) # Arm prefers MCPU over MARCH
+else
 MARCH := $(subst _,-,$(ARCH))
+endif
 else # insert ARCH into HOST
 XC_HOST := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
 endif
@@ -821,6 +858,17 @@ CC += -march=$(MARCH)
 CXX += -march=$(MARCH)
 FC += -march=$(MARCH)
 JULIA_CPU_TARGET ?= $(MARCH)
+endif
+
+# Set MCPU-specific flags
+ifneq ($(MCPU),)
+CC += -mcpu=$(MCPU)
+CXX += -mcpu=$(MCPU)
+FC += -mcpu=$(MCPU)
+JULIA_CPU_TARGET ?= $(MCPU)
+endif
+
+ifneq ($(MARCH)$(MCPU),)
 ifeq ($(OS),Darwin)
 # on Darwin, the standalone `as` program doesn't know
 # how to handle AVX instructions, but it does know how
@@ -940,7 +988,7 @@ endif
 # explicitly tell it to use this large page size so that when we rewrite rpaths and
 # such, we don't accidentally create incorrectly-aligned sections in our ELF files.
 ifneq (,$(filter $(ARCH),aarch64 powerpc64le))
-PATCHELF += --page-size=65536
+PATCHELF += --page-size 65536
 endif
 
 # Use ILP64 BLAS interface when building openblas from source on 64-bit architectures
@@ -1010,13 +1058,29 @@ else
   UTF8PROC_INC := $(build_includedir)
 endif
 
+# We need python for things like BB triplet recognition.  We don't really care
+# about version, generally, so just find something that works:
+PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)"
+PYTHON_SYSTEM := $(shell $(PYTHON) -c 'from __future__ import print_function; import platform; print(platform.system())')
+
+# If we're running on Cygwin, but using a native-windows Python, we need to use cygpath -w
+ifneq ($(and $(filter $(PYTHON_SYSTEM),Windows),$(findstring CYGWIN,$(BUILD_OS))),)
+define invoke_python
+$(PYTHON) "$$(cygpath -w "$(1)")"
+endef
+else
+define invoke_python
+$(PYTHON) "$(1)"
+endef
+endif
+
 # BinaryBuilder options.  We default to "on" for all the projects listed in BB_PROJECTS,
 # but only if contrib/normalize_triplet.py works for our requested triplet.
-ifeq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) >/dev/null 2>/dev/null; echo $$?),0)
+ifeq ($(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) >/dev/null 2>/dev/null; echo $$?),0)
 USE_BINARYBUILDER ?= 1
 else
-ifneq ($(shell python $(JULIAHOME)/contrib/normalize_triplet.py x86_64-linux-gnu),x86_64-linux-gnu)
-$(warning python normalize_triplet.py appears to be non-functional, so BinaryBuilder disabled)
+ifneq ($(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) x86_64-linux-gnu),x86_64-linux-gnu)
+$(warning normalize_triplet.py appears to be non-functional (used python interpreter "$(PYTHON)"), so BinaryBuilder disabled)
 endif
 USE_BINARYBUILDER ?= 0
 endif
@@ -1285,6 +1349,25 @@ ifeq ($(USE_SYSTEM_LIBM),1)
 USE_BINARYBUILDER_OPENLIBM := 0
 endif
 
+
+# Note: we're passing *FLAGS here computed based on your system compiler to
+# clang. If that causes you problems, you might want to build and/or run
+# specific clang-sa-* files with clang explicitly selected:
+#   make CC=~+/../usr/tools/clang CXX=~+/../usr/tools/clang USECLANG=1 analyzegc
+#   make USECLANG=1 clang-sa-*
+CLANGSA_FLAGS :=
+CLANGSA_CXXFLAGS :=
+ifeq ($(OS), Darwin) # on new XCode, the files are hidden
+CLANGSA_FLAGS += -isysroot $(shell xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+CLANGSA_CXXFLAGS += -isystem $(shell xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1
+endif
+ifeq ($(USEGCC),1)
+# try to help clang find the c++ files for CC by guessing the value for --prefix
+# by dropping lib/gcc/<platform>/<version> from the install directory it reports
+CLANGSA_CXXFLAGS += --gcc-toolchain="$(abspath $(shell LANG=C $(CC) -print-search-dirs | grep '^install: ' | sed -e "s/^install: //")/../../../..)"
+endif
+
+
 # Make tricks
 
 define dir_target
@@ -1340,17 +1423,19 @@ endif
 exec = $(shell $(call spawn,$(1)))
 
 JULIA_BUILD_MODE := release
-JULIA_LIBSUFFIX:=
 ifeq (,$(findstring release,$(MAKECMDGOALS)))
 ifneq (,$(findstring debug,$(MAKECMDGOALS)))
 JULIA_BUILD_MODE := debug
-JULIA_LIBSUFFIX:=-debug
 endif
 endif
 
 JULIA_EXECUTABLE_debug := $(build_bindir)/julia-debug$(EXE)
 JULIA_EXECUTABLE_release := $(build_bindir)/julia$(EXE)
 JULIA_EXECUTABLE := $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
+
+JULIA_SYSIMG_debug := $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
+JULIA_SYSIMG_release := $(build_private_libdir)/sys.$(SHLIB_EXT)
+JULIA_SYSIMG := $(JULIA_SYSIMG_$(JULIA_BUILD_MODE))
 
 # Colors for make
 ifndef VERBOSE

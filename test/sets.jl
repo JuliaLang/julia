@@ -96,7 +96,8 @@ end
     @test ===(eltype(s3), Float32)
 end
 @testset "show" begin
-    @test sprint(show, Set()) == "Set(Any[])"
+    @test sprint(show, Set()) == "Set{Any}()"
+    @test repr([Set(),Set()]) == "Set{Any}[Set(), Set()]"
     @test sprint(show, Set(['a'])) == "Set(['a'])"
 end
 @testset "isempty, length, in, push, pop, delete" begin
@@ -151,6 +152,9 @@ end
     s = Set([1])
     @test isequal(sizehint!(s, 10), Set([1]))
     @test isequal(empty!(s), Set())
+    s2 = GenericSet(s)
+    sizehint!(s2, 10)
+    @test s2 == GenericSet(s)
 end
 @testset "rehash!" begin
     # Use a pointer type to have defined behavior for uninitialized
@@ -213,6 +217,9 @@ end
     # union must uniquify
     @test union([1, 2, 1]) == union!([1, 2, 1]) == [1, 2]
     @test union([1, 2, 1], [2, 2]) == union!([1, 2, 1], [2, 2]) == [1, 2]
+    s2 = Set([nothing])
+    union!(s2, [nothing])
+    @test s2 == Set([nothing])
 end
 
 @testset "intersect" begin
@@ -301,13 +308,15 @@ end
     @test !(Set([1,2,3]) <= Set([1,2,4]))
 end
 
-@testset "issubset, symdiff" begin
+@testset "issubset, symdiff, isdisjoint" begin
     for S in (Set, BitSet, Vector)
         for (l,r) in ((S([1,2]),     S([3,4])),
                       (S([5,6,7,8]), S([7,8,9])),
                       (S([1,2]),     S([3,4])),
                       (S([5,6,7,8]), S([7,8,9])),
                       (S([1,2,3]),   S()),
+                      (S(),          S()),
+                      (S(),          S([1,2,3])),
                       (S([1,2,3]),   S([1])),
                       (S([1,2,3]),   S([1,2])),
                       (S([1,2,3]),   S([1,2,3])),
@@ -317,6 +326,8 @@ end
             @test issubset(intersect(l,r), r)
             @test issubset(l, union(l,r))
             @test issubset(r, union(l,r))
+            @test isdisjoint(l,l) == isempty(l)
+            @test isdisjoint(l,r) == isempty(intersect(l,r))
             if S === Vector
                 @test sort(union(intersect(l,r),symdiff(l,r))) == sort(union(l,r))
             else
@@ -365,6 +376,11 @@ end
     @test !issubset(d3, d2)
     @test issubset(d1, d3)
     @test issubset(d2, d3)
+
+    # no fast in, long enough container
+    @test issubset(Set(Bool[]), rand(Bool, 100)) == true
+    # neither has a fast in, right doesn't have a length
+    @test isdisjoint([1, 3, 5, 7, 9], Iterators.filter(iseven, 1:10))
 end
 
 @testset "unique" begin
@@ -437,6 +453,7 @@ end
     @test allunique(7:-1:1)       # negative step
     @test allunique(Date(2018, 8, 7):Day(1):Date(2018, 8, 11))  # JuliaCon 2018
     @test allunique(DateTime(2018, 8, 7):Hour(1):DateTime(2018, 8, 11))
+    @test allunique(('a':1:'c')[1:2]) == true
 end
 @testset "filter(f, ::$S)" for S = (Set, BitSet)
     s = S([1,2,3,4])
@@ -575,8 +592,12 @@ end
     @test s == Set([2, 3])
     @test replace!(x->2x, s, count=0x1) in [Set([4, 3]), Set([2, 6])]
 
-    for count = (0, 0x0, big(0))
-        @test replace([1, 2], 1=>0, 2=>0, count=count) == [1, 2] # count=0 --> no replacements
+    for count = (0, 0x0, big(0)) # count == 0 --> no replacements
+        @test replace([1, 2], 1=>0, 2=>0; count) == [1, 2]
+        for dict = (Dict(1=>2, 2=>3), IdDict(1=>2, 2=>3))
+            @test replace(dict, (1=>2) => (1=>3); count) == dict
+        end
+        @test replace(Set([1, 2]), 2=>-1; count) == Set([1, 2])
     end
 
     # test collisions with AbstractSet/AbstractDict
@@ -649,6 +670,10 @@ end
             @test B >  A
         end
     end
+    # first doesn't have length
+    @test issetequal(Iterators.filter(iseven, 1:10), [2, 4, 6, 8, 10])
+    # both don't have length
+    @test issetequal(Iterators.filter(iseven, 1:10), Iterators.filter(iseven, 1:10))
 end
 
 @testset "optimized union! with max_values" begin

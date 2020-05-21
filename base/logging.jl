@@ -71,6 +71,15 @@ logger type.
 catch_exceptions(logger) = true
 
 
+# Prevent invalidation when packages define custom loggers
+# Using invoke in combination with @nospecialize eliminates backedges to these methods
+function _invoked_shouldlog(logger, level, _module, group, id)
+    @nospecialize
+    invoke(shouldlog, Tuple{typeof(logger), typeof(level), typeof(_module), typeof(group), typeof(id)}, logger, level, _module, group, id)
+end
+
+_invoked_min_enabled_level(@nospecialize(logger)) = invoke(min_enabled_level, Tuple{typeof(logger)}, logger)
+
 
 """
     NullLogger()
@@ -96,6 +105,12 @@ Severity/verbosity of a log record.
 The log level provides a key against which potential log records may be
 filtered, before any other work is done to construct the log record data
 structure itself.
+
+# Examples
+```
+julia> Logging.LogLevel(0) == Logging.Info
+true
+```
 """
 struct LogLevel
     level::Int32
@@ -204,7 +219,7 @@ end
 macro _sourceinfo()
     esc(quote
         (__module__,
-         __source__.file === nothing ? "?" : String(__source__.file),
+         __source__.file === nothing ? "?" : String(__source__.file::Symbol),
          __source__.line)
     end)
 end
@@ -247,6 +262,8 @@ function log_record_id(_module, level, message, log_kws)
         h += 1
     end
 end
+
+default_group(file) = Symbol(splitext(basename(file))[1])
 
 # Generate code for logging macros
 function logmsg_code(_module, file, line, level, message, exs...)
@@ -293,12 +310,12 @@ function logmsg_code(_module, file, line, level, message, exs...)
     if group === nothing
         group = if isdefined(Base, :basename) && isa(file, String)
             # precompute if we can
-            QuoteNode(splitext(basename(file))[1])
+            QuoteNode(default_group(file))
         else
             # memoized run-time execution
             ref = Ref{Symbol}()
             :(isassigned($ref) ? $ref[]
-                               : $ref[] = Symbol(splitext(basename(something($file, "")))[1]))
+                               : $ref[] = default_group(something($file, "")))
         end
     end
 
@@ -313,7 +330,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
                 id = $id
                 # Second chance at an early bail-out (before computing the message),
                 # based on arbitrary logger-specific logic.
-                if shouldlog(logger, level, _module, group, id)
+                if _invoked_shouldlog(logger, level, _module, group, id)
                     file = $file
                     line = $line
                     try
@@ -372,7 +389,7 @@ struct LogState
     logger::AbstractLogger
 end
 
-LogState(logger) = LogState(LogLevel(min_enabled_level(logger)), logger)
+LogState(logger) = LogState(LogLevel(_invoked_min_enabled_level(logger)), logger)
 
 function current_logstate()
     logstate = current_task().logstate
@@ -389,6 +406,7 @@ end
 end
 
 function with_logstate(f::Function, logstate)
+    @nospecialize
     t = current_task()
     old = t.logstate
     try
@@ -399,7 +417,6 @@ function with_logstate(f::Function, logstate)
     end
 end
 
-
 #-------------------------------------------------------------------------------
 # Control of the current logger and early log filtering
 
@@ -409,6 +426,11 @@ end
 Disable all log messages at log levels equal to or less than `level`.  This is
 a *global* setting, intended to make debug logging extremely cheap when
 disabled.
+
+# Examples
+```
+Logging.disable_logging(Logging.Info) # Disable debug and info
+```
 """
 function disable_logging(level::LogLevel)
     _min_enabled_level[] = level + 1
@@ -500,7 +522,7 @@ with_logger(logger) do
 end
 ```
 """
-with_logger(f::Function, logger::AbstractLogger) = with_logstate(f, LogState(logger))
+with_logger(@nospecialize(f::Function), logger::AbstractLogger) = with_logstate(f, LogState(logger))
 
 """
     current_logger()

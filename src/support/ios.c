@@ -198,14 +198,12 @@ static char *_buf_realloc(ios_t *s, size_t sz)
 
     if (s->ownbuf && s->buf != &s->local[0]) {
         // if we own the buffer we're free to resize it
-        // always allocate 1 bigger in case user wants to add a NUL
-        // terminator after taking over the buffer
-        temp = (char*)LLT_REALLOC(s->buf, sz+1);
+        temp = (char*)LLT_REALLOC(s->buf, sz);
         if (temp == NULL)
             return NULL;
     }
     else {
-        temp = (char*)LLT_ALLOC(sz+1);
+        temp = (char*)LLT_ALLOC(sz);
         if (temp == NULL)
             return NULL;
         s->ownbuf = 1;
@@ -648,17 +646,21 @@ int ios_flush(ios_t *s)
     return 0;
 }
 
-void ios_close(ios_t *s)
+int ios_close(ios_t *s)
 {
-    ios_flush(s);
-    if (s->fd != -1 && s->ownfd)
-        close(s->fd);
+    int err = ios_flush(s);
+    if (s->fd != -1 && s->ownfd) {
+        int err2 = close(s->fd);
+        if (err2 != 0)
+            err = err2;
+    }
     s->fd = -1;
     if (s->buf!=NULL && s->ownbuf && s->buf!=&s->local[0]) {
         LLT_FREE(s->buf);
     }
     s->buf = NULL;
     s->size = s->maxsize = s->bpos = 0;
+    return err;
 }
 
 int ios_isopen(ios_t *s)
@@ -687,22 +689,24 @@ char *ios_take_buffer(ios_t *s, size_t *psize)
 
     ios_flush(s);
 
-    if (s->buf == &s->local[0]) {
+    if (s->buf == &s->local[0] || s->buf == NULL || (!s->ownbuf && s->size == s->maxsize)) {
         buf = (char*)LLT_ALLOC((size_t)s->size + 1);
         if (buf == NULL)
             return NULL;
         if (s->size)
             memcpy(buf, s->buf, (size_t)s->size);
     }
+    else if (s->size == s->maxsize) {
+        buf = (char*)LLT_REALLOC(s->buf, (size_t)s->size + 1);
+        if (buf == NULL)
+            return NULL;
+    }
     else {
-        if (s->buf == NULL)
-            buf = (char*)LLT_ALLOC((size_t)s->size + 1);
-        else
-            buf = s->buf;
+        buf = s->buf;
     }
     buf[s->size] = '\0';
 
-    *psize = s->size+1;  // buffer is actually 1 bigger for terminating NUL
+    *psize = s->size + 1;
 
     /* empty stream and reinitialize */
     _buf_init(s, s->bm);
@@ -1111,17 +1115,22 @@ int ios_getutf8(ios_t *s, uint32_t *pwc)
             s->u_colno += utf8proc_charwidth(*pwc);
         return 1;
     }
-    sz = u8_seqlen(&c0);
     if (ios_ungetc(c, s) == IOS_EOF)
         return IOS_EOF;
+    sz = u8_seqlen(&c0);
+    if (!isutf(c0) || sz > 4)
+        return 0;
     if (ios_readprep(s, sz) < sz)
         // NOTE: this can return EOF even if some bytes are available
         return IOS_EOF;
-    size_t i = s->bpos;
-    *pwc = u8_nextchar(s->buf, &i);
-    s->u_colno += utf8proc_charwidth(*pwc);
-    ios_read(s, buf, sz);
-    return 1;
+    int valid = u8_isvalid(&s->buf[s->bpos], sz);
+    if (valid) {
+        size_t i = s->bpos;
+        *pwc = u8_nextchar(s->buf, &i);
+        s->u_colno += utf8proc_charwidth(*pwc);
+        ios_read(s, buf, sz);
+    }
+    return valid;
 }
 
 int ios_peekutf8(ios_t *s, uint32_t *pwc)
@@ -1139,11 +1148,16 @@ int ios_peekutf8(ios_t *s, uint32_t *pwc)
         return 1;
     }
     sz = u8_seqlen(&c0);
+    if (!isutf(c0) || sz > 4)
+        return 0;
     if (ios_readprep(s, sz) < sz)
         return IOS_EOF;
-    size_t i = s->bpos;
-    *pwc = u8_nextchar(s->buf, &i);
-    return 1;
+    int valid = u8_isvalid(&s->buf[s->bpos], sz);
+    if (valid) {
+        size_t i = s->bpos;
+        *pwc = u8_nextchar(s->buf, &i);
+    }
+    return valid;
 }
 
 int ios_pututf8(ios_t *s, uint32_t wc)
@@ -1189,10 +1203,14 @@ int ios_vprintf(ios_t *s, const char *format, va_list args)
         char *start = s->buf + s->bpos;
         c = vsnprintf(start, avail, format, args);
         if (c < 0) {
+#if defined(_OS_WINDOWS_)
+            // on windows this can mean not enough space was available
+#else
             va_end(al);
             return c;
+#endif
         }
-        if (c < avail) {
+        else if (c < avail) {
             s->bpos += (size_t)c;
             _write_update_pos(s);
             // TODO: only works right if newline is at end

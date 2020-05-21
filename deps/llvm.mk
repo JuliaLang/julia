@@ -56,8 +56,7 @@ endif
 endif # LLVM_VER != svn
 
 # Figure out which targets to build
-LLVM_TARGETS := host;NVPTX;AMDGPU
-LLVM_EXPERIMENTAL_TARGETS := WebAssembly
+LLVM_TARGETS := host;NVPTX;AMDGPU;WebAssembly
 
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
@@ -75,13 +74,13 @@ LLVM_CFLAGS += $(CFLAGS)
 LLVM_CXXFLAGS += $(CXXFLAGS)
 LLVM_CPPFLAGS += $(CPPFLAGS)
 LLVM_LDFLAGS += $(LDFLAGS)
-LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="$(LLVM_EXPERIMENTAL_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
+LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
 LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_HOST_TRIPLE="$(or $(XC_HOST),$(BUILD_MACHINE))"
 ifeq ($(USE_POLLY_ACC),1)
 LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
 endif
-LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(shell $(JULIAHOME)/contrib/relative_path.sh $(build_prefix) $(build_depsbindir))
-LLVM_CMAKE += -DLLVM_UTILS_INSTALL_DIR=$(shell $(JULIAHOME)/contrib/relative_path.sh $(build_prefix) $(build_depsbindir))
+LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
+LLVM_CMAKE += -DLLVM_UTILS_INSTALL_DIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
 LLVM_CMAKE += -DLLVM_INCLUDE_UTILS=ON -DLLVM_INSTALL_UTILS=ON
 LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_HISTEDIT_H=Off -DHAVE_LIBEDIT=Off
 ifeq ($(LLVM_ASSERTIONS), 1)
@@ -129,7 +128,9 @@ endif # LLDB_DISABLE_PYTHON
 endif # BUILD_LLDB
 
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
+ifeq (${USECLANG},0)
 LLVM_CXXFLAGS += -mminimal-toc
+endif
 endif
 
 ifeq ($(LLVM_SANITIZE),1)
@@ -154,6 +155,10 @@ endif # LLVM_LTO
 ifeq ($(fPIC),)
 LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
 endif
+
+# disable ABI breaking checks: by default only enabled for asserts build, in which case
+# it is then impossible to call non-asserts LLVM libraries (like out-of-tree backends)
+LLVM_CMAKE += -DLLVM_ABI_BREAKING_CHECKS=FORCE_OFF
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LLVM_LDFLAGS += -Wl,-rpath,$(build_libdir)
@@ -183,11 +188,7 @@ endif
 
 ifneq ($(LLVM_VER),svn)
 ifeq (,$(findstring rc,$(LLVM_VER)))
-ifeq ($(shell [ x"$(LLVM_VER)" = x"8.0.1" ]; echo $$?),0)
 LLVM_SRC_URL := https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVM_VER)
-else
-LLVM_SRC_URL := http://releases.llvm.org/$(LLVM_VER)
-endif
 else
 LLVM_VER_SPLIT := $(subst rc, ,$(LLVM_VER))
 LLVM_SRC_URL := https://prereleases.llvm.org/$(word 1,$(LLVM_VER_SPLIT))/rc$(word 2,$(LLVM_VER_SPLIT))
@@ -376,113 +377,63 @@ $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(LLVM_SRC_DIR)/$1.patch-applied
 LLVM_PATCH_PREV := $$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
-ifeq ($(LLVM_VER_SHORT),6.0)
-ifeq ($(LLVM_VER_PATCH), 0)
-$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_4.0))
-else
-$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
-endif
-$(eval $(call LLVM_PATCH,llvm-D34078-vectorize-fdiv))
-$(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX
-$(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1)) # remove for 7.0
-$(eval $(call LLVM_PATCH,llvm-PPC-addrspaces)) # remove for 7.0
-ifeq ($(LLVM_VER_PATCH), 0)
-$(eval $(call LLVM_PATCH,llvm-D42260)) # remove for 7.0
-$(eval $(call LLVM_PATCH,llvm-rL326843-missing-header)) # remove for 7.0
-$(eval $(call LLVM_PATCH,llvm-6.0-r327540)) # remove for 7.0
-endif
-$(eval $(call LLVM_PATCH,llvm-6.0.0_D27296-libssp)) # remove for 7.0
-$(eval $(call LLVM_PATCH,llvm-6.0-D44650)) # mingw32 build fix
-ifeq ($(LLVM_VER_PATCH), 0)
-$(eval $(call LLVM_PATCH,llvm-D45008)) # remove for 7.0
-$(eval $(call LLVM_PATCH,llvm-D45070)) # remove for 7.0
-$(eval $(call LLVM_PATCH,llvm-6.0.0-ifconv-D45819)) # remove for 7.0
-endif
-$(eval $(call LLVM_PATCH,llvm-D46460))
-ifeq ($(LLVM_VER_PATCH), 0)
-$(eval $(call LLVM_PATCH,llvm-rL332680)) # remove for 7.0
-$(eval $(call LLVM_PATCH,llvm-rL332682)) # remove for 7.0
-$(eval $(call LLVM_PATCH,llvm-rL332302)) # remove for 7.0
-$(eval $(call LLVM_PATCH,llvm-rL332694)) # remove for 7.0
-endif
-$(eval $(call LLVM_PATCH,llvm-rL327898)) # remove for 7.0
-$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
-$(eval $(call LLVM_PATCH,llvm-OProfile-line-num))
-$(eval $(call LLVM_PATCH,llvm-D44892-Perf-integration))
-$(eval $(call LLVM_PATCH,llvm-D49832-SCEVPred)) # Remove for 7.0
-$(eval $(call LLVM_PATCH,llvm-rL323946-LSRTy)) # Remove for 7.0
-$(eval $(call LLVM_PATCH,llvm-D50010-VNCoercion-ni))
-$(eval $(call LLVM_PATCH,llvm-D50167-scev-umin))
-$(eval $(call LLVM_PATCH,llvm-rL326967-aligned-load)) # remove for 7.0
-ifeq ($(LLVM_VER_PATCH), 0)
-$(eval $(call LLVM_PATCH,llvm-windows-race))
-endif
-$(eval $(call LLVM_PATCH,llvm-D51842-win64-byval-cc))
-$(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
-$(eval $(call LLVM_PATCH,llvm-r355582-avxminmax)) # remove for 8.0
-$(eval $(call LLVM_PATCH,llvm-rL349068-llvm-config)) # remove for 8.0
-$(eval $(call LLVM_PATCH,llvm-6.0-D63688-wasm-isLocal))
-$(eval $(call LLVM_PATCH,llvm-6.0-D64032-cmake-cross))
-$(eval $(call LLVM_PATCH,llvm-6.0-D64225-cmake-cross2))
-$(eval $(call LLVM_PATCH,llvm6-WASM-addrspaces)) # WebAssembly
-endif # LLVM_VER 6.0
-
-ifeq ($(LLVM_VER_SHORT),7.0)
-$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
-$(eval $(call LLVM_PATCH,llvm-D34078-vectorize-fdiv))
-$(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX -- warning: this fails check-llvm-codegen-nvptx
-$(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
-$(eval $(call LLVM_PATCH,llvm-D46460))
-$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
-$(eval $(call LLVM_PATCH,llvm7-D50010-VNCoercion-ni))
-$(eval $(call LLVM_PATCH,llvm-7.0-D50167-scev-umin))
-$(eval $(call LLVM_PATCH,llvm7-windows-race))
-$(eval $(call LLVM_PATCH,llvm7-D51842-win64-byval-cc)) # remove for 8.0
-$(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
-$(eval $(call LLVM_PATCH,llvm-rL349068-llvm-config)) # remove for 8.0
-$(eval $(call LLVM_PATCH,llvm7-WASM-addrspaces)) # WebAssembly
-$(eval $(call LLVM_PATCH,llvm7-revert-D44485))
-endif # LLVM_VER 7.0
-
 ifeq ($(LLVM_VER_SHORT),8.0)
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
 $(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
-$(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX -- warning: this fails check-llvm-codegen-nvptx
 $(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
 $(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
 $(eval $(call LLVM_PATCH,llvm7-D50010-VNCoercion-ni))
 $(eval $(call LLVM_PATCH,llvm-8.0-D50167-scev-umin))
 $(eval $(call LLVM_PATCH,llvm7-windows-race))
 $(eval $(call LLVM_PATCH,llvm-D57118-powerpc)) # remove for 9.0
-$(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
 $(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-8.0-D66401-mingw-reloc)) # remove for 9.0
 $(eval $(call LLVM_PATCH,llvm7-revert-D44485))
+$(eval $(call LLVM_PATCH,llvm-8.0-D63688-wasm-isLocal)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-8.0-D55758-tablegen-cond)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-8.0-D59389-refactor-wmma)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-8.0-D59393-mma-ptx63-fix)) # remove for 9.0
+$(eval $(call LLVM_PATCH,llvm-8.0-D66657-codegen-degenerate)) # remove for 10.0
+$(eval $(call LLVM_PATCH,llvm-8.0-D71495-vectorize-freduce)) # remove for 10.0
+$(eval $(call LLVM_PATCH,llvm-8.0-D75072-SCEV-add-type))
+$(eval $(call LLVM_PATCH,llvm-8.0-D65174-limit-merge-stores)) # remove for 10.0
 endif # LLVM_VER 8.0
 
 ifeq ($(LLVM_VER_SHORT),9.0)
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
 $(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
-$(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX -- warning: this fails check-llvm-codegen-nvptx
 $(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
 $(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
-#$(eval $(call LLVM_PATCH,llvm7-D50010-VNCoercion-ni)) # TODO
-#$(eval $(call LLVM_PATCH,llvm7-windows-race)) # TODO
-$(eval $(call LLVM_PATCH,llvm8-WASM-addrspaces)) # WebAssembly
+$(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
 $(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm7-revert-D44485))
+$(eval $(call LLVM_PATCH,llvm-8.0-D66657-codegen-degenerate)) # remove for 10.0
+$(eval $(call LLVM_PATCH,llvm-8.0-D71495-vectorize-freduce)) # remove for 10.0
+$(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
+$(eval $(call LLVM_PATCH,llvm-9.0-D65174-limit-merge-stores)) # remove for 10.0
+$(eval $(call LLVM_PATCH,llvm9-D71443-PPC-MC-redef-symbol)) # remove for 10.0
+$(eval $(call LLVM_PATCH,llvm-9.0-D78196)) # remove for 11.0
 endif # LLVM_VER 9.0
 
+ifeq ($(LLVM_VER_SHORT),10.0)
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
+$(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
+$(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
+$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
+$(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
+$(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
+$(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
+$(eval $(call LLVM_PATCH,llvm7-revert-D44485))
+$(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
+$(eval $(call LLVM_PATCH,llvm-10.0-PPC_SELECT_CC)) # delete for LLVM 11
+$(eval $(call LLVM_PATCH,llvm-10.0-PPC-LI-Elimination)) # delete for LLVM 11
+endif # LLVM_VER 10.0
 
 # Add a JL prefix to the version map. DO NOT REMOVE
 ifneq ($(LLVM_VER), svn)
-ifeq ($(LLVM_VER_SHORT), 6.0)
-$(eval $(call LLVM_PATCH,llvm-symver-jlprefix))
-else
 $(eval $(call LLVM_PATCH,llvm7-symver-jlprefix))
-endif
 endif
 
 # declare that all patches must be applied before running ./configure
@@ -554,16 +505,19 @@ check-llvm: $(LLVM_BUILDDIR_withtype)/build-checked
 
 ifeq ($(LLVM_VER),svn)
 update-llvm:
-	(cd $(LLVM_MONOSRC_DIR); git pull --ff-only)
+	cd $(LLVM_MONOSRC_DIR) && \
+		git pull --ff-only
 endif
 else # USE_BINARYBUILDER_LLVM
-LLVM_BB_URL_BASE := https://github.com/staticfloat/LLVMBuilder/releases/download/v$(LLVM_VER)+$(LLVM_BB_REL)
 ifneq ($(BINARYBUILDER_LLVM_ASSERTS), 1)
-LLVM_BB_NAME := LLVM.v$(LLVM_VER)
+LLVM_BB_REPO_NAME := LLVM_full
 else
+LLVM_BB_REPO_NAME := LLVM_full_assert
 LLVM_BB_NAME := LLVM.asserts.v$(LLVM_VER)
 endif
+LLVM_BB_NAME := $(LLVM_BB_REPO_NAME).v$(LLVM_VER)
+LLVM_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/$(LLVM_BB_REPO_NAME)_jll.jl/releases/download/$(LLVM_BB_REPO_NAME)-v$(LLVM_VER)+$(LLVM_BB_REL)
 
-$(eval $(call bb-install,llvm,LLVM,true))
+$(eval $(call bb-install,llvm,LLVM,false,true))
 
 endif # USE_BINARYBUILDER_LLVM

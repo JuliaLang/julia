@@ -47,7 +47,7 @@ end
 const undef_ref_alignment = (3,3)
 
 """
-`alignment(X, rows, cols, cols_if_complete, cols_otherwise, sep)` returns the
+`alignment(io, X, rows, cols, cols_if_complete, cols_otherwise, sep)` returns the
 alignment for specified parts of array `X`, returning the (left,right) info.
 It will look in X's `rows`, `cols` (both lists of indices)
 and figure out what's needed to be fully aligned, for example looking all
@@ -101,7 +101,14 @@ function print_matrix_row(io::IO,
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
             x = X[i,j]
             a = alignment(io, x)
-            sx = sprint(show, x, context=io, sizehint=0)
+
+            # First try 3-arg show
+            sx = sprint(show, "text/plain", x, context=io, sizehint=0)
+
+            # If the output contains line breaks, try 2-arg show instead.
+            if occursin('\n', sx)
+                sx = sprint(show, x, context=io, sizehint=0)
+            end
         else
             a = undef_ref_alignment
             sx = undef_ref_str
@@ -122,7 +129,7 @@ but it also repeated every M elements if desired.
 """
 function print_matrix_vdots(io::IO, vdots::AbstractString,
                             A::Vector, sep::AbstractString, M::Integer, m::Integer,
-                            pad_right::Bool)
+                            pad_right::Bool = true)
     for k = 1:length(A)
         w = A[k][1] + A[k][2]
         if k % M == m
@@ -313,10 +320,14 @@ print_array(io::IO, X::AbstractArray) = show_nd(io, X, print_matrix, true)
 # typeinfo aware
 # implements: show(io::IO, ::MIME"text/plain", X::AbstractArray)
 function show(io::IO, ::MIME"text/plain", X::AbstractArray)
+    if isempty(X) && (get(io, :compact, false) || X isa Vector)
+        return show(io, X)
+    end
     # 0) show summary before setting :compact
     summary(io, X)
     isempty(X) && return
     print(io, ":")
+    show_circular(io, X) && return
 
     # 1) compute new IOContext
     if !haskey(io, :compact) && length(axes(X, 2)) > 1
@@ -343,7 +354,8 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     io = IOContext(io, :typeinfo => eltype(X))
 
     # 2) show actual content
-    print_array(io, X)
+    recur_io = IOContext(io, :SHOWN_SET => X)
+    print_array(recur_io, X)
 end
 
 ## printing with `show`
@@ -412,14 +424,16 @@ _show_nonempty(io::IO, X::AbstractArray{T,0} where T, prefix::String) = print_ar
 
 # NOTE: it's not clear how this method could use the :typeinfo attribute
 _show_empty(io::IO, X::Array{T}) where {T} = print(io, "Array{", T, "}(undef,", join(size(X),','), ')')
-_show_empty(io, X) = nothing # by default, we don't know this constructor
+_show_empty(io, X::AbstractArray) = summary(io, X)
 
 # typeinfo aware (necessarily)
 function show(io::IO, X::AbstractArray)
     ndims(X) == 0 && return show_zero_dim(io, X)
     ndims(X) == 1 && return show_vector(io, X)
-    prefix = typeinfo_prefix(io, X)
-    io = IOContext(io, :typeinfo => eltype(X))
+    prefix, implicit = typeinfo_prefix(io, X)
+    if !implicit
+        io = IOContext(io, :typeinfo => eltype(X))
+    end
     isempty(X) ?
         _show_empty(io, X) :
         _show_nonempty(io, X, prefix)
@@ -432,7 +446,7 @@ function show_zero_dim(io::IO, X::AbstractArray{T, 0}) where T
         print(io, "fill(")
         show(io, X[])
     else
-        print(io, "Array{$T,0}(")
+        print(io, "Array{", T, ",0}(")
         show(io, undef)
     end
     print(io, ")")
@@ -444,10 +458,14 @@ end
 # NOTE: v is not constrained to be a vector, as this function can work with iterables
 # in general (it's used e.g. by show(::IO, ::Set))
 function show_vector(io::IO, v, opn='[', cls=']')
-    print(io, typeinfo_prefix(io, v))
+    prefix, implicit = typeinfo_prefix(io, v)
+    print(io, prefix)
     # directly or indirectly, the context now knows about eltype(v)
-    io = IOContext(io, :typeinfo => eltype(v))
+    if !implicit
+        io = IOContext(io, :typeinfo => eltype(v))
+    end
     limited = get(io, :limit, false)
+
     if limited && length(v) > 20
         axs1 = axes1(v)
         f, l = first(axs1), last(axs1)
@@ -487,6 +505,7 @@ end
 # X not constrained, can be any iterable (cf. show_vector)
 function typeinfo_prefix(io::IO, X)
     typeinfo = get(io, :typeinfo, Any)::Type
+
     if !(X isa typeinfo)
         typeinfo = Any
     end
@@ -496,19 +515,23 @@ function typeinfo_prefix(io::IO, X)
     eltype_X = eltype(X)
 
     if X isa AbstractDict
-        if eltype_X == eltype_ctx || (!isempty(X) && typeinfo_implicit(keytype(X)) && typeinfo_implicit(valtype(X)))
-            string(typeof(X).name)
+        if eltype_X == eltype_ctx
+            string(typeof(X).name), false
+        elseif !isempty(X) && typeinfo_implicit(keytype(X)) && typeinfo_implicit(valtype(X))
+            string(typeof(X).name), true
         else
-            string(typeof(X))
+            string(typeof(X)), false
         end
     else
         # Types hard-coded here are those which are created by default for a given syntax
-        if eltype_X == eltype_ctx || (!isempty(X) && typeinfo_implicit(eltype_X))
-            ""
+        if eltype_X == eltype_ctx
+            "", false
+        elseif !isempty(X) && typeinfo_implicit(eltype_X)
+            "", true
         elseif print_without_params(eltype_X)
-            string(unwrap_unionall(eltype_X).name) # Print "Array" rather than "Array{T,N}"
+            string(unwrap_unionall(eltype_X).name), false # Print "Array" rather than "Array{T,N}"
         else
-            string(eltype_X)
+            string(eltype_X), false
         end
     end
 end

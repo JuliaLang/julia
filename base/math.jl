@@ -69,6 +69,22 @@ clamp(x::X, lo::L, hi::H) where {X,L,H} =
                   convert(promote_type(X,L,H), x)))
 
 """
+    clamp(x, T)::T
+
+Clamp `x` between `typemin(T)` and `typemax(T)` and convert the result to type `T`.
+
+# Examples
+```jldoctest
+julia> clamp(200, Int8)
+127
+julia> clamp(-200, Int8)
+-128
+```
+"""
+clamp(x, ::Type{T}) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
+
+
+"""
     clamp!(array::AbstractArray, lo, hi)
 
 Restrict values in `array` to the specified range, in-place.
@@ -85,7 +101,7 @@ end
 """
     evalpoly(x, p)
 
-Evaluate the polynomial ``\\sum_k p[k] x^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
+Evaluate the polynomial ``\\sum_k x^{k-1} p[k]`` for the coefficients `p[1]`, `p[2]`, ...;
 that is, the coefficients are given in ascending order by power of `x`.
 Loops are unrolled at compile time if the number of coefficients is statically known, i.e.
 when `p` is a `Tuple`.
@@ -137,7 +153,7 @@ function evalpoly(z::Complex, p::Tuple)
             ai = Symbol("a", i)
             push!(as, :($ai = $a))
             a = :(muladd(r, $ai, $b))
-            b = :(p[$i] - s * $ai)
+            b = :(muladd(-s, $ai, p[$i]))
         end
         ai = :a0
         push!(as, :($ai = $a))
@@ -170,7 +186,7 @@ function _evalpoly(z::Complex, p)
     for i in N-2:-1:1
         ai = a
         a = muladd(r, ai, b)
-        b = p[i] - s * ai
+        b = muladd(-s, ai, p[i])
     end
     ai = a
     muladd(ai, z, b)
@@ -194,7 +210,7 @@ end
 """
     @evalpoly(z, c...)
 
-Evaluate the polynomial ``\\sum_k c[k] z^{k-1}`` for the coefficients `c[1]`, `c[2]`, ...;
+Evaluate the polynomial ``\\sum_k z^{k-1} c[k]`` for the coefficients `c[1]`, `c[2]`, ...;
 that is, the coefficients are given in ascending order by power of `z`.  This macro expands
 to efficient inline code that uses either Horner's method or, for complex `z`, a more
 efficient Goertzel-like algorithm.
@@ -613,8 +629,19 @@ julia> hypot(3, 4im)
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
 hypot(x::Complex, y::Complex) = hypot(abs(x), abs(y))
 hypot(x::T, y::T) where {T<:Real} = hypot(float(x), float(y))
+function hypot(x::T, y::T) where {T<:Number}
+    if !iszero(x)
+        z = y/x
+        z2 = z*z
+
+        abs(x) * sqrt(oneunit(z2) + z2)
+    else
+        abs(y)
+    end
+end
+
 function hypot(x::T, y::T) where T<:AbstractFloat
-    #Return Inf if either or both imputs is Inf (Compliance with IEEE754)
+    # Return Inf if either or both inputs is Inf (Compliance with IEEE754)
     if isinf(x) || isinf(y)
         return T(Inf)
     end
@@ -841,7 +868,7 @@ julia> modf(-3.5)
 (-0.5, -3.0)
 ```
 """
-modf(x) = rem(x,one(x)), trunc(x)
+modf(x) = isinf(x) ? (flipsign(zero(x), x), x) : (rem(x, one(x)), trunc(x))
 
 function modf(x::Float32)
     temp = Ref{Float32}()
@@ -869,8 +896,22 @@ end
     end
     z
 end
-@inline ^(x::Float64, y::Integer) = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
-@inline ^(x::Float32, y::Integer) = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
+@inline function ^(x::Float64, y::Integer)
+    y == -1 && return inv(x)
+    y == 0 && return one(x)
+    y == 1 && return x
+    y == 2 && return x*x
+    y == 3 && return x*x*x
+    ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
+end
+@inline function ^(x::Float32, y::Integer)
+    y == -1 && return inv(x)
+    y == 0 && return one(x)
+    y == 1 && return x
+    y == 2 && return x*x
+    y == 3 && return x*x*x
+    ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
+end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
 @inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
 
@@ -1056,6 +1097,12 @@ Modulus after division by `2π`, returning in the range ``[0,2π)``.
 This function computes a floating point representation of the modulus after division by
 numerically exact `2π`, and is therefore not exactly the same as `mod(x,2π)`, which would
 compute the modulus of `x` relative to division by the floating-point number `2π`.
+
+!!! note
+    Depending on the format of the input value, the closest representable value to 2π may
+    be less than 2π. For example, the expression `mod2pi(2π)` will not return `0`, because
+    the intermediate value of `2*π` is a `Float64` and `2*Float64(π) < 2*big(π)`. See
+    [`rem2pi`](@ref) for more refined control of this behavior.
 
 # Examples
 ```jldoctest

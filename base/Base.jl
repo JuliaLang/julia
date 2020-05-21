@@ -105,6 +105,8 @@ include("baseext.jl")
 include("ntuple.jl")
 
 include("abstractdict.jl")
+include("iddict.jl")
+include("idset.jl")
 
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
@@ -214,11 +216,12 @@ end
 
 include("env.jl")
 
-# Scheduling
+# Concurrency
 include("linked_list.jl")
 include("condition.jl")
 include("threads.jl")
 include("lock.jl")
+include("channels.jl")
 include("task.jl")
 include("weakkeydict.jl")
 
@@ -239,6 +242,7 @@ include("filesystem.jl")
 using .Filesystem
 include("cmd.jl")
 include("process.jl")
+include("ttyhascolor.jl")
 include("grisu/grisu.jl")
 include("secretbuffer.jl")
 
@@ -312,9 +316,6 @@ using .MathConstants: ℯ, π, pi
 # metaprogramming
 include("meta.jl")
 
-# concurrency and parallelism
-include("channels.jl")
-
 # utilities
 include("deepcopy.jl")
 include("download.jl")
@@ -335,6 +336,7 @@ include("uuid.jl")
 include("loading.jl")
 
 # misc useful functions & macros
+include("timing.jl")
 include("util.jl")
 
 include("asyncmap.jl")
@@ -363,27 +365,8 @@ for m in methods(include)
 end
 # These functions are duplicated in client.jl/include(::String) for
 # nicer stacktraces. Modifications here have to be backported there
-include(mod::Module, path::AbstractString) = include(mod, convert(String, path))
-function include(mod::Module, _path::String)
-    path, prev = _include_dependency(mod, _path)
-    for callback in include_callbacks # to preserve order, must come before Core.include
-        invokelatest(callback, mod, path)
-    end
-    tls = task_local_storage()
-    tls[:SOURCE_PATH] = path
-    local result
-    try
-        # result = Core.include(mod, path)
-        result = ccall(:jl_load_, Any, (Any, Any), mod, path)
-    finally
-        if prev === nothing
-            delete!(tls, :SOURCE_PATH)
-        else
-            tls[:SOURCE_PATH] = prev
-        end
-    end
-    return result
-end
+include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
+include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
 
 end_base_include = time_ns()
 

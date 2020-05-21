@@ -186,7 +186,7 @@ end
 if opt_level > 0
     @test !occursin("%gcframe", get_llvm(pointer_not_safepoint, Tuple{}))
     compare_large_struct_ir = get_llvm(compare_large_struct, Tuple{typeof(create_ref_struct())})
-    @test occursin("call i32 @memcmp", compare_large_struct_ir)
+    @test occursin("call i32 @memcmp(", compare_large_struct_ir) || occursin("call i32 @bcmp(", compare_large_struct_ir)
     @test !occursin("%gcframe", compare_large_struct_ir)
 
     @test occursin("jl_gc_pool_alloc", get_llvm(MutableStruct, Tuple{}))
@@ -426,3 +426,21 @@ function f33590(b, x)
 end
 @test f33590(true, (3,)) == (3,)
 @test f33590(false, (3,)) == (4,)
+
+# issue 29864
+const c29864 = VecElement{Union{Int,Nothing}}(2)
+@noinline f29864() = c29864
+@noinline g29864() = VecElement{Union{Int,Nothing}}(3)
+@test f29864().value === 2
+@test g29864().value === 3
+
+# test sret pointing into a struct containing a tracked pointer
+# reduced from TerminalLoggers/ProgressLogging
+const _PROGRESS_LOGGING_UUID_NS_test = Base.UUID("1e962757-ea70-431a-b9f6-aadf988dcb7f")
+_asuuid_test(id) = Base.uuid5(_PROGRESS_LOGGING_UUID_NS_test, repr(id))
+@noinline _handle_progress_test(progress) = progress
+function _handle_message_test()
+    progress = (_asuuid_test(:id), "name")
+    return _handle_progress_test(progress)
+end
+@test _handle_message_test() isa Tuple{Base.UUID, String}

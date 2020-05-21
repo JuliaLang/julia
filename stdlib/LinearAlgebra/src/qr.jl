@@ -256,7 +256,7 @@ qr!(A::StridedMatrix{<:BlasFloat}, ::Val{true}) = QRPivoted(LAPACK.geqp3!(A)...)
     qr!(A, pivot=Val(false); blocksize)
 
 `qr!` is the same as [`qr`](@ref) when `A` is a subtype of
-`StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
+[`StridedMatrix`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
 An [`InexactError`](@ref) exception is thrown if the factorization produces a number not
 representable by the element type of `A`, e.g. for integer types.
 
@@ -466,6 +466,8 @@ Base.propertynames(F::QRPivoted, private::Bool=false) =
     (:R, :Q, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
 
 abstract type AbstractQ{T} <: AbstractMatrix{T} end
+
+inv(Q::AbstractQ) = Q'
 
 """
     QRPackedQ <: AbstractMatrix

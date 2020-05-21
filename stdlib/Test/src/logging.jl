@@ -136,6 +136,11 @@ If we also wanted to test the debug messages, these need to be enabled with the
 
     @test_logs (:info,"Doing foo with n=2") (:debug,"Iteration 1") (:debug,"Iteration 2") min_level=Debug foo(2)
 
+If you want to test that some particular messages are generated while ignoring the rest,
+you can set the keyword `match_mode=:any`:
+
+    @test_logs (:info,) (:debug,"Iteration 42") min_level=Debug match_mode=:any foo(100)
+
 The macro may be chained with `@test` to also test the returned value:
 
     @test (@test_logs (:info,"Doing foo with n=2") foo(2)) == 42

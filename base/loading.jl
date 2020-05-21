@@ -117,7 +117,14 @@ end
 
 const ns_dummy_uuid = UUID("fe0723d6-3a44-4c41-8065-ee0f42c8ceab")
 
-dummy_uuid(project_file::String) = uuid5(ns_dummy_uuid, realpath(project_file))
+function dummy_uuid(project_file::String)
+    project_path = try
+        realpath(project_file)
+    catch
+        project_file
+    end
+    return uuid5(ns_dummy_uuid, project_path)
+end
 
 ## package path slugs: turning UUID + SHA1 into a pair of 4-byte "slugs" ##
 
@@ -708,6 +715,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64, modpath::U
                 invokelatest(callback, modkey)
             end
             for M in mod::Vector{Any}
+                M = M::Module
                 if PkgId(M) == modkey && module_build_id(M) === build_id
                     return M
                 end
@@ -1066,21 +1074,49 @@ end
 # relative-path load
 
 """
-    include_string(m::Module, code::AbstractString, filename::AbstractString="string")
+    include_string([mapexpr::Function,] m::Module, code::AbstractString, filename::AbstractString="string")
 
 Like [`include`](@ref), except reads code from the given string rather than from a file.
+
+The optional first argument `mapexpr` can be used to transform the included code before
+it is evaluated: for each parsed expression `expr` in `code`, the `include_string` function
+actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
 """
-include_string(m::Module, txt::String, fname::String) =
-    ccall(:jl_load_file_string, Any, (Ptr{UInt8}, Csize_t, Cstring, Any),
-          txt, sizeof(txt), fname, m)
+function include_string(mapexpr::Function, mod::Module, code::AbstractString,
+                        filename::AbstractString="string")
+    loc = LineNumberNode(1, Symbol(filename))
+    try
+        ast = Meta.parseall(code, filename=filename)
+        @assert Meta.isexpr(ast, :toplevel)
+        result = nothing
+        line_and_ex = Expr(:toplevel, loc, nothing)
+        for ex in ast.args
+            if ex isa LineNumberNode
+                loc = ex
+                line_and_ex.args[1] = ex
+                continue
+            end
+            ex = mapexpr(ex)
+            # Wrap things to be eval'd in a :toplevel expr to carry line
+            # information as part of the expr.
+            line_and_ex.args[2] = ex
+            result = Core.eval(mod, line_and_ex)
+        end
+        return result
+    catch exc
+        # TODO: Now that stacktraces are more reliable we should remove
+        # LoadError and expose the real error type directly.
+        rethrow(LoadError(filename, loc.line, exc))
+    end
+end
 
 include_string(m::Module, txt::AbstractString, fname::AbstractString="string") =
-    include_string(m, String(txt), String(fname))
+    include_string(identity, m, txt, fname)
 
 function source_path(default::Union{AbstractString,Nothing}="")
     s = current_task().storage
-    if s !== nothing && haskey(s, :SOURCE_PATH)
-        return s[:SOURCE_PATH]
+    if s !== nothing && haskey(s::IdDict{Any,Any}, :SOURCE_PATH)
+        return s[:SOURCE_PATH]::Union{Nothing,String}
     end
     return default
 end
@@ -1091,17 +1127,42 @@ function source_dir()
 end
 
 """
-    Base.include([m::Module,] path::AbstractString)
+    Base.include([mapexpr::Function,] [m::Module,] path::AbstractString)
 
 Evaluate the contents of the input source file in the global scope of module `m`.
-Every module (except those defined with [`baremodule`](@ref)) has its own 1-argument
-definition of `include`, which evaluates the file in that module.
+Every module (except those defined with [`baremodule`](@ref)) has its own
+definition of `include` omitting the `m` argument, which evaluates the file in that module.
 Returns the result of the last evaluated expression of the input file. During including,
 a task-local include path is set to the directory containing the file. Nested calls to
 `include` will search relative to that path. This function is typically used to load source
 interactively, or to combine files in packages that are broken into multiple source files.
+
+The optional first argument `mapexpr` can be used to transform the included code before
+it is evaluated: for each parsed expression `expr` in `path`, the `include` function
+actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
 """
-Base.include # defined in sysimg.jl
+Base.include # defined in Base.jl
+
+# Full include() implementation which is used after bootstrap
+function _include(mapexpr::Function, mod::Module, _path::AbstractString)
+    @_noinline_meta # Workaround for module availability in _simplify_include_frames
+    path, prev = _include_dependency(mod, _path)
+    for callback in include_callbacks # to preserve order, must come before eval in include_string
+        invokelatest(callback, mod, path)
+    end
+    code = read(path, String)
+    tls = task_local_storage()
+    tls[:SOURCE_PATH] = path
+    try
+        return include_string(mapexpr, mod, code, path)
+    finally
+        if prev === nothing
+            delete!(tls, :SOURCE_PATH)
+        else
+            tls[:SOURCE_PATH] = prev
+        end
+    end
+end
 
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])
@@ -1115,6 +1176,7 @@ function evalfile(path::AbstractString, args::Vector{String}=String[])
              :(const ARGS = $args),
              :(eval(x) = $(Expr(:core, :eval))(__anon__, x)),
              :(include(x) = $(Expr(:top, :include))(__anon__, x)),
+             :(include(mapexpr::Function, x) = $(Expr(:top, :include))(mapexpr, __anon__, x)),
              :(include($path))))
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
@@ -1146,10 +1208,11 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
             eval(Meta.parse(code))
         end
         """
+
     io = open(pipeline(`$(julia_cmd()) -O0
                        --output-ji $output --output-incremental=yes
                        --startup-file=no --history-file=no --warn-overwrite=yes
-                       --color=$(have_color ? "yes" : "no")
+                       --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
                        --eval $code_object`, stderr=stderr),
               "w", stdout)
     in = io.in
@@ -1257,6 +1320,8 @@ function compilecache(pkg::PkgId, path::String)
         open(cachefile, "a+") do f
             write(f, _crc32c(seekstart(f)))
         end
+        # inherit permission from the source file
+        chmod(cachefile, filemode(path) & 0o777)
     elseif p.exitcode == 125
         return PrecompilableError()
     else
@@ -1478,7 +1543,7 @@ Alternatively see [`PROGRAM_FILE`](@ref).
 """
 macro __FILE__()
     __source__.file === nothing && return nothing
-    return String(__source__.file)
+    return String(__source__.file::Symbol)
 end
 
 """
@@ -1490,6 +1555,6 @@ Return the current working directory if run from a REPL or if evaluated by `juli
 """
 macro __DIR__()
     __source__.file === nothing && return nothing
-    _dirname = dirname(String(__source__.file))
+    _dirname = dirname(String(__source__.file::Symbol))
     return isempty(_dirname) ? pwd() : abspath(_dirname)
 end

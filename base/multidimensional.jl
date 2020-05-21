@@ -4,10 +4,10 @@
 module IteratorsMD
     import .Base: eltype, length, size, first, last, in, getindex,
                  setindex!, IndexStyle, min, max, zero, oneunit, isless, eachindex,
-                 ndims, IteratorSize, convert, show, iterate, promote_rule
+                 ndims, IteratorSize, convert, show, iterate, promote_rule, to_indices
 
     import .Base: +, -, *, (:)
-    import .Base: simd_outer_range, simd_inner_length, simd_index
+    import .Base: simd_outer_range, simd_inner_length, simd_index, setindex
     using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail,
         ReshapedArray, ReshapedArrayLF, OneTo
     using .Base.Iterators: Reverse, PartitionIterator
@@ -95,6 +95,8 @@ module IteratorsMD
 
     # access to index tuple
     Tuple(index::CartesianIndex) = index.I
+
+    Base.setindex(x::CartesianIndex,i,j) = CartesianIndex(Base.setindex(Tuple(x),i,j))
 
     # equality
     Base.:(==)(a::CartesianIndex{N}, b::CartesianIndex{N}) where N = a.I == b.I
@@ -308,6 +310,11 @@ module IteratorsMD
     convert(::Type{CartesianIndices{N,R}}, inds::CartesianIndices{N}) where {N,R} =
         CartesianIndices(convert(R, inds.indices))
 
+    # equality
+    Base.:(==)(a::CartesianIndices{N}, b::CartesianIndices{N}) where N =
+        all(map(==, a.indices, b.indices))
+    Base.:(==)(a::CartesianIndices, b::CartesianIndices) = false
+
     # AbstractArray implementation
     Base.axes(iter::CartesianIndices{N,R}) where {N,R} = map(Base.axes1, iter.indices)
     Base.IndexStyle(::Type{CartesianIndices{N,R}}) where {N,R} = IndexCartesian()
@@ -380,6 +387,13 @@ module IteratorsMD
 
     first(iter::CartesianIndices) = CartesianIndex(map(first, iter.indices))
     last(iter::CartesianIndices)  = CartesianIndex(map(last, iter.indices))
+
+    # When used as indices themselves, CartesianIndices can simply become its tuple of ranges
+    @inline to_indices(A, inds, I::Tuple{CartesianIndices, Vararg{Any}}) =
+        to_indices(A, inds, (I[1].indices..., tail(I)...))
+    # but preserve CartesianIndices{0} as they consume a dimension.
+    @inline to_indices(A, inds, I::Tuple{CartesianIndices{0},Vararg{Any}}) =
+        (first(I), to_indices(A, inds, tail(I))...)
 
     @inline function in(i::CartesianIndex{N}, r::CartesianIndices{N}) where {N}
         _in(true, i.I, first(r).I, last(r).I)
@@ -573,6 +587,7 @@ function checkindex(::Type{Bool}, inds::Tuple, I::AbstractArray{<:CartesianIndex
     end
     b
 end
+checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndices) = all(checkindex.(Bool, inds, I.indices))
 
 # combined count of all indices, including CartesianIndex and
 # AbstractArray{CartesianIndex}
@@ -622,11 +637,12 @@ struct LogicalIndex{T, A<:AbstractArray{Bool}} <: AbstractVector{T}
 end
 LogicalIndex(mask::AbstractVector{Bool}) = LogicalIndex{Int, typeof(mask)}(mask)
 LogicalIndex(mask::AbstractArray{Bool, N}) where {N} = LogicalIndex{CartesianIndex{N}, typeof(mask)}(mask)
-(::Type{LogicalIndex{Int}})(mask::AbstractArray) = LogicalIndex{Int, typeof(mask)}(mask)
+LogicalIndex{Int}(mask::AbstractArray) = LogicalIndex{Int, typeof(mask)}(mask)
 size(L::LogicalIndex) = (L.sum,)
 length(L::LogicalIndex) = L.sum
 collect(L::LogicalIndex) = [i for i in L]
-show(io::IO, r::LogicalIndex) = print(io, "Base.LogicalIndex(", r.mask, ")")
+show(io::IO, r::LogicalIndex) = print(io,collect(r))
+print_array(io::IO, X::LogicalIndex) = print_array(io, collect(X))
 # Iteration over LogicalIndex is very performance-critical, but it also must
 # support arbitrary AbstractArray{Bool}s with both Int and CartesianIndex.
 # Thus the iteration state contains an index iterator and its state. We also
@@ -926,44 +942,6 @@ function fill!(A::AbstractArray{T}, x) where T
     A
 end
 
-"""
-    copyto!(dest::AbstractArray, src) -> dest
-
-
-Copy all elements from collection `src` to array `dest`, whose length must be greater than
-or equal to the length `n` of `src`. The first `n` elements of `dest` are overwritten,
-the other elements are left untouched.
-
-# Examples
-```jldoctest
-julia> x = [1., 0., 3., 0., 5.];
-
-julia> y = zeros(7);
-
-julia> copyto!(y, x);
-
-julia> y
-7-element Array{Float64,1}:
- 1.0
- 0.0
- 3.0
- 0.0
- 5.0
- 0.0
- 0.0
-```
-"""
-copyto!(dest, src)
-
-function copyto!(dest::AbstractArray{T1,N}, src::AbstractArray{T2,N}) where {T1,T2,N}
-    checkbounds(dest, axes(src)...)
-    src′ = unalias(dest, src)
-    for I in eachindex(IndexStyle(src′,dest), src′)
-        @inbounds dest[I] = src′[I]
-    end
-    dest
-end
-
 function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
                   src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
     isempty(Rdest) && return dest
@@ -1037,7 +1015,7 @@ circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt
 #       _circshift!(dest, src, ("second half of dim1", "second half of dim2")) --> copyto!
 @inline function _circshift!(dest, rdest, src, rsrc,
                              inds::Tuple{AbstractUnitRange,Vararg{Any}},
-                             shiftamt::Tuple{Integer,Vararg{Any}})
+                             shiftamt::Tuple{Integer,Vararg{Any}})::typeof(dest)
     ind1, d = inds[1], shiftamt[1]
     s = mod(d, length(ind1))
     sf, sl = first(ind1)+s, last(ind1)-s
@@ -1097,7 +1075,7 @@ end
 
 # This uses the same strategy described above for _circshift!
 @inline function _circcopy!(dest, rdest, indsdest::Tuple{AbstractUnitRange,Vararg{Any}},
-                            src,  rsrc,  indssrc::Tuple{AbstractUnitRange,Vararg{Any}})
+                            src,  rsrc,  indssrc::Tuple{AbstractUnitRange,Vararg{Any}})::typeof(dest)
     indd1, inds1 = indsdest[1], indssrc[1]
     l = length(indd1)
     s = mod(first(inds1)-first(indd1), l)

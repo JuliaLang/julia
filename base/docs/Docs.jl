@@ -18,22 +18,20 @@ module Docs
 
 Functions, methods and types can be documented by placing a string before the definition:
 
-    \"""
+    \"\"\"
     # The Foo Function
     `foo(x)`: Foo the living hell out of `x`.
-    \"""
+    \"\"\"
     foo(x) = ...
 
-The `@doc` macro can be used directly to both set and retrieve documentation / metadata. By
-default, documentation is written as Markdown, but any object can be placed before the
-arrow. For example:
+The `@doc` macro can be used directly to both set and retrieve documentation / metadata.
+The macro has special parsing so that the documented object may occur on the next line:
 
-    @doc "blah" ->
+    @doc "blah"
     function foo() ...
 
-The `->` is not required if the object is on the same line, e.g.
-
-    @doc "foo" foo
+By default, documentation is written as Markdown, but any object can be used as
+the first argument.
 
 ## Documenting objects after they are defined
 You can document an object after its definition by
@@ -120,6 +118,12 @@ signature(@nospecialize other) = signature!([], other)
 function argtype(expr::Expr)
     isexpr(expr, :(::))  && return expr.args[end]
     isexpr(expr, :(...)) && return :(Vararg{$(argtype(expr.args[1]))})
+    if isexpr(expr, :meta) && length(expr.args) == 2
+        a1 = expr.args[1]
+        if a1 === :nospecialize || a1 === :specialize
+            return argtype(expr.args[2])
+        end
+    end
     return argtype(expr.args[1])
 end
 argtype(@nospecialize other) = :Any

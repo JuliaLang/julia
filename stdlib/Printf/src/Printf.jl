@@ -56,7 +56,7 @@ function parse(s::AbstractString)
             '\'' in flags && error("printf format flag ' not yet supported")
             conversion == 'n'    && error("printf feature %n not supported")
             push!(list, conversion == '%' ? "%" : (flags,width,precision,conversion))
-            lastparse = isempty(a) ? lastindex(s)+1 : Base.peek(a)[1]
+            lastparse = isempty(a) ? lastindex(s)+1 : peek(a)[1]
         end
         lastidx = idx
     end

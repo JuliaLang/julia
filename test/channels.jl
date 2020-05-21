@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Random
+using Base: Experimental
 
 @testset "single-threaded Condition usage" begin
     a = Condition()
@@ -142,8 +143,9 @@ using Distributed
 
     # Error exception in task
     c = Channel(N)
-    bind(c, @async (GC.gc(); yield(); error("foo")))
-    @test_throws ErrorException take!(c)
+    task = @async (GC.gc(); yield(); error("foo"))
+    bind(c, task)
+    @test_throws TaskFailedException(task) take!(c)
     @test !isopen(c)
 
     # Multiple channels closed by the same bound task
@@ -169,10 +171,11 @@ using Distributed
         while isopen(cs[i])
             yield()
         end
-        @test_throws ErrorException wait(cs[i])
-        @test_throws ErrorException take!(cs[i])
-        @test_throws ErrorException put!(cs[i], 1)
-        @test_throws ErrorException fetch(cs[i])
+        @test_throws TaskFailedException(task) wait(cs[i])
+        @test_throws TaskFailedException(task) take!(cs[i])
+        @test_throws TaskFailedException(task) put!(cs[i], 1)
+        N == 0 || @test_throws TaskFailedException(task) fetch(cs[i])
+        N == 0 && @test_throws ErrorException fetch(cs[i])
     end
 
     # Multiple tasks, first one to terminate closes the channel
@@ -244,16 +247,56 @@ using Distributed
         chnl = Channel{T}(tf6, N, taskref=taskref)
         put!(chnl, 2)
         yield()
-        @test_throws ErrorException wait(chnl)
+        @test_throws TaskFailedException(taskref[]) wait(chnl)
         @test istaskdone(taskref[])
         @test !isopen(chnl)
-        @test_throws ErrorException take!(chnl)
+        @test_throws TaskFailedException(taskref[]) take!(chnl)
     end
 end
 
-using Dates
+@testset "timedwait" begin
+    @test timedwait(() -> true, 0) === :ok
+    @test timedwait(() -> false, 0) === :timed_out
+    @test_throws ArgumentError timedwait(() -> true, 0; pollint=0)
+
+    # Allowing a smaller positive `pollint` results in `timewait` hanging
+    @test_throws ArgumentError timedwait(() -> true, 0, pollint=1e-4)
+
+    # Callback passed in raises an exception
+    failure_cb = function (fail_on_call=1)
+        i = 0
+        function ()
+            i += 1
+            i >= fail_on_call && error("callback failed")
+            return false
+        end
+    end
+
+    try
+        timedwait(failure_cb(1), 0)
+        @test false
+    catch e
+        @test e isa CapturedException
+        @test e.ex isa ErrorException
+    end
+
+    try
+        timedwait(failure_cb(2), 0)
+        @test false
+    catch e
+        @test e isa CapturedException
+        @test e.ex isa ErrorException
+    end
+
+    duration = @elapsed timedwait(() -> false, 1)  # Using default pollint of 0.1
+    @test duration ≈ 1 atol=0.4
+
+    duration = @elapsed timedwait(() -> false, 0; pollint=1)
+    @test duration ≈ 1 atol=0.4
+end
+
 @testset "timedwait on multiple channels" begin
-    @sync begin
+    @Experimental.sync begin
         rr1 = Channel(1)
         rr2 = Channel(1)
         rr3 = Channel(1)
@@ -261,13 +304,13 @@ using Dates
         callback() = all(map(isready, [rr1, rr2, rr3]))
         # precompile functions which will be tested for execution time
         @test !callback()
-        @test timedwait(callback, 0.0) === :timed_out
+        @test timedwait(callback, 0) === :timed_out
 
         @async begin sleep(0.5); put!(rr1, :ok) end
         @async begin sleep(1.0); put!(rr2, :ok) end
         @async begin sleep(2.0); put!(rr3, :ok) end
 
-        et = @elapsed timedwait(callback, Dates.Second(1))
+        et = @elapsed timedwait(callback, 1)
 
         # assuming that 0.5 seconds is a good enough buffer on a typical modern CPU
         try
@@ -455,4 +498,16 @@ end
 let t = @async nothing
     wait(t)
     @test_throws ErrorException("schedule: Task not runnable") schedule(t, nothing)
+end
+
+# Channel `show`
+let c = Channel(3)
+    @test repr(c) == "Channel{Any}(3)"
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (empty)"
+    put!(c, 0)
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (1 item available)"
+    put!(c, 1)
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (2 items available)"
+    close(c)
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (closed)"
 end

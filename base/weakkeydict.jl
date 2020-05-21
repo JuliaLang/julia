@@ -69,6 +69,7 @@ function WeakKeyDict(kv)
     end
 end
 
+sizehint!(d::WeakKeyDict, newsz) = sizehint!(d.ht, newsz)
 empty(d::WeakKeyDict, ::Type{K}, ::Type{V}) where {K, V} = WeakKeyDict{K, V}()
 
 islocked(wkh::WeakKeyDict) = islocked(wkh.lock)
@@ -105,7 +106,7 @@ function get!(default::Callable, wkh::WeakKeyDict{K}, key) where {K}
 end
 pop!(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> pop!(wkh.ht, key), wkh)
 pop!(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> pop!(wkh.ht, key, default), wkh)
-delete!(wkh::WeakKeyDict, key) = lock(() -> delete!(wkh.ht, key), wkh)
+delete!(wkh::WeakKeyDict, key) = (lock(() -> delete!(wkh.ht, key), wkh); wkh)
 empty!(wkh::WeakKeyDict) = (lock(() -> empty!(wkh.ht), wkh); wkh)
 haskey(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> haskey(wkh.ht, key), wkh)
 getindex(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> getindex(wkh.ht, key), wkh)

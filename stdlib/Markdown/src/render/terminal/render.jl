@@ -110,6 +110,10 @@ function term(io::IO, md::Code, columns)
     end
 end
 
+function term(io::IO, tex::LaTeX, columns)
+    printstyled(io, ' '^margin, tex.formula, color=:magenta)
+end
+
 term(io::IO, br::LineBreak, columns) = nothing # line breaks already printed between subsequent elements
 
 function term(io::IO, br::HorizontalRule, columns)
@@ -160,6 +164,10 @@ end
 
 function terminline(io::IO, code::Code)
     printstyled(io, code.code, color=:cyan)
+end
+
+function terminline(io::IO, tex::LaTeX)
+    printstyled(io, tex.formula, color=:magenta)
 end
 
 terminline(io::IO, x) = show(io, MIME"text/plain"(), x)

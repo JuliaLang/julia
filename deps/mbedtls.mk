@@ -90,7 +90,7 @@ check-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-checked
 
 else # USE_BINARYBUILDER_MBEDTLS
 
-MBEDTLS_BB_URL_BASE := https://github.com/JuliaWeb/MbedTLSBuilder/releases/download/$(MBEDTLS_BB_REL)
+MBEDTLS_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/MbedTLS_jll.jl/releases/download/MbedTLS-v$(MBEDTLS_VER)+$(MBEDTLS_BB_REL)
 MBEDTLS_BB_NAME := MbedTLS.v$(MBEDTLS_VER)
 
 $(eval $(call bb-install,mbedtls,MBEDTLS,false))

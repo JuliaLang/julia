@@ -26,7 +26,7 @@ Extended documentation for mathematical symbols & functions is [here](@ref math-
 | `()`        | parentheses with no arguments constructs an empty [`Tuple`](@ref)                           |
 | `(a,...)`   | parentheses with comma-separated arguments constructs a tuple containing its arguments      |
 | `(a=1,...)` | parentheses with comma-separated assignments constructs a [`NamedTuple`](@ref)              |
-| `(;)`       | parentheses can also be used to group one or more semicolon separated expressions           |
+| `(x;y)`     | parentheses can also be used to group one or more semicolon separated expressions           |
 | `a[]`       | [array indexing](@ref man-array-indexing) (calling [`getindex`](@ref) or [`setindex!`](@ref)) |
 | `[,]`       | [vector literal constructor](@ref man-array-literals) (calling [`vect`](@ref Base.vect))    |
 | `[;]`       | [vertical concatenation](@ref man-array-concatenation) (calling [`vcat`](@ref) or [`hvcat`](@ref)) |

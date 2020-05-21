@@ -220,6 +220,8 @@ export
     atanh,
     big,
     binomial,
+    bitreverse,
+    bitrotate,
     bswap,
     cbrt,
     ceil,
@@ -437,6 +439,7 @@ export
     zeros,
 
 # search, find, match and related functions
+    contains,
     eachmatch,
     endswith,
     findall,
@@ -456,9 +459,11 @@ export
     startswith,
 
 # linear algebra
+    var"'", # to enable syntax a' for adjoint
     adjoint,
     transpose,
     kron,
+    kron!,
 
 # bitarrays
     falses,
@@ -482,6 +487,7 @@ export
     any,
     firstindex,
     collect,
+    count!,
     count,
     delete!,
     deleteat!,
@@ -502,6 +508,7 @@ export
     in,
     intersect!,
     intersect,
+    isdisjoint,
     isempty,
     issubset,
     issetequal,
@@ -514,7 +521,9 @@ export
     mapfoldr,
     mapreduce,
     merge!,
+    mergewith!,
     merge,
+    mergewith,
     pairs,
     reduce,
     setdiff!,
@@ -638,7 +647,7 @@ export
     identity,
     isbits,
     isequal,
-    isimmutable,
+    ismutable,
     isless,
     ifelse,
     objectid,
@@ -787,6 +796,7 @@ export
     bytesavailable,
     ntoh,
     open,
+    peek,
     pipeline,
     Pipe,
     PipeBuffer,
@@ -906,6 +916,7 @@ export
 
 # C interface
     @cfunction,
+    @ccall,
     cglobal,
     disable_sigint,
     pointer,
@@ -939,6 +950,7 @@ export
     @s_str,    # regex substitution string
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
+    @NamedTuple,
 
     # documentation
     @text_str,

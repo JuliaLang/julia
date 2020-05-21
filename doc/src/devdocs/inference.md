@@ -13,9 +13,16 @@ posts
 
 You can start a Julia session, edit `compiler/*.jl` (for example to
 insert `print` statements), and then replace `Core.Compiler` in your
-running session by navigating to `base/compiler` and executing
-`include("compiler.jl")`. This trick typically leads to much faster
+running session by navigating to `base` and executing
+`include("compiler/compiler.jl")`. This trick typically leads to much faster
 development than if you rebuild Julia for each change.
+
+Alternatively, you can use the [Revise.jl](https://github.com/timholy/Revise.jl)
+package to track the compiler changes by using the command
+`Revise.track(Core.Compiler)` at the beginning of your Julia session. As
+explained in the [Revise documentation](https://timholy.github.io/Revise.jl/stable/),
+the modifications to the compiler will be reflected when the modified files
+are saved.
 
 A convenient entry point into inference is `typeinf_code`. Here's a
 demo running inference on `convert(Int, UInt(1))`:
@@ -27,12 +34,12 @@ mths = methods(convert, atypes)  # worth checking that there is only one
 m = first(mths)
 
 # Create variables needed to call `typeinf_code`
-params = Core.Compiler.Params(typemax(UInt))  # parameter is the world age,
-                                                        #   typemax(UInt) -> most recent
+interp = Core.Compiler.NativeInterpreter()
 sparams = Core.svec()      # this particular method doesn't have type-parameters
 optimize = true            # run all inference optimizations
 cached = false             # force inference to happen (do not use cached results)
-Core.Compiler.typeinf_code(m, atypes, sparams, optimize, cached, params)
+types = Tuple{typeof(convert), atypes.parameters...} # Tuple{typeof(convert), Type{Int}, UInt}
+Core.Compiler.typeinf_code(interp, types, sparams, optimize, cached)
 ```
 
 If your debugging adventures require a `MethodInstance`, you can look it up by
@@ -94,14 +101,15 @@ Each statement gets analyzed for its total cost in a function called
 where `f` is your function and `tt` is the Tuple-type of the arguments:
 
 ```jldoctest
-# A demo on `fill(3.5, (2, 3))
+# A demo on `fill(3.5, (2, 3))`
 f = fill
 tt = Tuple{Float64, Tuple{Int,Int}}
 # Create the objects we need to interact with the compiler
-params = Core.Compiler.Params(typemax(UInt))
+opt_params = Core.Compiler.OptimizationParams()
 mi = Base.method_instances(f, tt)[1]
 ci = code_typed(f, tt)[1][1]
-opt = Core.Compiler.OptimizationState(mi, params)
+interp = Core.Compiler.NativeInterpreter()
+opt = Core.Compiler.OptimizationState(mi, opt_params, interp)
 # Calculate cost of each statement
 cost(stmt::Expr) = Core.Compiler.statement_cost(stmt, -1, ci, opt.sptypes, opt.slottypes, opt.params)
 cost(stmt) = 0
@@ -109,11 +117,26 @@ cst = map(cost, ci.code)
 
 # output
 
-5-element Array{Int64,1}:
+31-element Array{Int64,1}:
   0
   0
  20
- 20
+  4
+  1
+  1
+  1
+  0
+  0
+  0
+  ⋮
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
   0
 ```
 

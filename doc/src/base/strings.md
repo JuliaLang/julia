@@ -53,6 +53,7 @@ Base.lstrip
 Base.rstrip
 Base.startswith
 Base.endswith
+Base.contains
 Base.first(::AbstractString, ::Integer)
 Base.last(::AbstractString, ::Integer)
 Base.uppercase
