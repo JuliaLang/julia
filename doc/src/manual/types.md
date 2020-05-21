@@ -41,11 +41,8 @@ up front are:
     type when the program is running. This is called a "run-time type" in object-oriented languages
     where the combination of static compilation with polymorphism makes this distinction significant.
   * Only values, not variables, have types -- variables are simply names bound to values.
-  * Both abstract and concrete types can be parameterized by other types. They can also be parameterized
-    by symbols, by values of any type for which [`isbits`](@ref) returns true (essentially, things
-    like numbers and bools that are stored like C types or `struct`s with no pointers to other objects),
-    and also by tuples thereof. Type parameters may be omitted when they do not need to be referenced
-    or restricted.
+  * Both abstract and concrete types can be parameterized by types, symbols, numbers and a [few other objects](@ref man-parametric-types). Type parameters may be omitted when they do not need to be referenced or 
+    restricted.
 
 Julia's type system is designed to be powerful and expressive, yet clear, intuitive and unobtrusive.
 Many Julia programmers may never feel the need to write code that explicitly uses types. Some
@@ -529,7 +526,7 @@ types in other languages. Declaring a function argument or a field as `Union{T, 
 setting it either to a value of type `T`, or to `nothing` to indicate that there is no value.
 See [this FAQ entry](@ref faq-nothing) for more information.
 
-## Parametric Types
+## [Parametric Types](@id man-parametric-types)
 
 An important and powerful feature of Julia's type system is that it is parametric: types can take
 parameters, so that type declarations actually introduce a whole family of new types -- one for
@@ -546,8 +543,14 @@ because Julia is a dynamically typed language and doesn't need to make all type 
 time, many traditional difficulties encountered in static parametric type systems can be relatively
 easily handled.
 
-All declared types (the `DataType` variety) can be parameterized, with the same syntax in each
-case. We will discuss them in the following order: first, parametric composite types, then parametric
+All declared types (the `DataType` variety) can be parameterized by the following objects. 
+
+  * A type, e.g. `Foo{Int}`.
+  * Symbols, e.g. `Foo{:bar}`.
+  * Objects of `isbits` type, e.g. `Foo{42}` or `Foo{3.14}`.
+  * Tuples of the above, e.g. `Foo{(Int,:bar,42)}`. 
+
+We will discuss parametric types in the following order: first, parametric composite types, then parametric
 abstract types, and finally parametric primitive types.
 
 ### Parametric Composite Types
