@@ -70,14 +70,11 @@ The following [boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#
 | Expression | Name                                  |
 |:---------- |:--------------------------------------|
 | `!x`       | not                                   |
-| `x & y`    | and                                   |
-| `x \| y`   | or                                    |
-| `x ⊻ y`    | xor (exclusive or)                    |
 | `x && y`   | [short-circuiting and][short-circuit] |
 | `x \|\| y` | [short-circuiting or][short-circuit]  |
 | `x == y`   | equivalence                           |
 
-Note that Bool is an integer type and all the usual promotions rules and numeric operators are also defined on it (in fact, `&`, `|`, and `⊻` *are* bitwise operators).
+Note that Bool is an integer type and all the usual promotion rules and numeric operators are also defined on it.
 
 ## Bitwise Operators
 
