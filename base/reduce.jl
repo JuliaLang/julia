@@ -573,10 +573,11 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
     simdstop  = start + chunk_len - 4
     while simdstop <= last - 3
         # short circuit in case of NaN
-        v1 == v1 || return v1
-        v2 == v2 || return v2
-        v3 == v3 || return v3
-        v4 == v4 || return v4
+        # === true is there to ignore missing
+        (v1 == v1) === true || return v1
+        (v2 == v2) === true || return v2
+        (v3 == v3) === true || return v3
+        (v4 == v4) === true || return v4
         @inbounds for i in start:4:simdstop
             v1 = _fast(op, v1, f(A[i+0]))
             v2 = _fast(op, v2, f(A[i+1]))
