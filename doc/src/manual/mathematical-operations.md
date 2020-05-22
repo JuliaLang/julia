@@ -63,6 +63,22 @@ julia> false * Inf
 
 This is useful for preventing the propagation of `NaN` values in quantities that are known to be zero. See [Knuth (1992)](https://arxiv.org/abs/math/9205211) for motivation.
 
+## Boolean Operators
+
+The following [boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#Operations) are supported on Bool:
+
+| Expression | Name                                  |
+|:---------- |:--------------------------------------|
+| `!x`       | not                                   |
+| `x & y`    | and                                   |
+| `x \| y`   | or                                    |
+| `x ⊻ y`    | xor (exclusive or)                    |
+| `x && y`   | [short-circuiting and][short-circuit] |
+| `x \|\| y` | [short-circuiting or][short-circuit]  |
+| `x == y`   | equivalence                           |
+
+Note that Bool is an integer type and all the usual promotions rules and numeric operators are also defined on it (in fact, `&`, `|`, and `⊻` *are* bitwise operators).
+
 ## Bitwise Operators
 
 The following [bitwise operators](https://en.wikipedia.org/wiki/Bitwise_operation#Bitwise_operators)
