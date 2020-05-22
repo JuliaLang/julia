@@ -55,4 +55,4 @@ Extended documentation for mathematical symbols & functions is [here](@ref math-
 | [`==`](@ref)| double equals sign is value equality comparison                                             |
 | [`===`](@ref) | triple equals sign is programmatically identical equality comparison.                     |
 | [`=>`](@ref) | right arrow using an equals sign defines a [pair](@ref Base.pair) typically used to populate [dictionaries](@ref Dictionaries) |
-| [`->`](@ref) | right arrow using a hyphen defines an [`anonymous function`](@ref man-anonymous-funcitons) on a single line         |
+| [`->`](@ref) | right arrow using a hyphen defines an [anonymous function](@ref man-anonymous-funcitons) on a single line         |
