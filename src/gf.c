@@ -1819,40 +1819,7 @@ void JL_NORETURN jl_method_error(jl_function_t *f, jl_value_t **args, size_t na,
 
 jl_tupletype_t *arg_type_tuple(jl_value_t *arg1, jl_value_t **args, size_t nargs)
 {
-    jl_tupletype_t *tt;
-    size_t i;
-    int onstack = (nargs * sizeof(jl_value_t*) < jl_page_size);
-    jl_value_t **roots;
-    jl_value_t **types;
-    JL_GC_PUSHARGS(roots, onstack ? nargs : 1);
-    if (onstack) {
-        types = roots;
-    }
-    else {
-        roots[0] = (jl_value_t*)jl_alloc_svec(nargs);
-        types = jl_svec_data(roots[0]);
-    }
-    for (i = 0; i < nargs; i++) {
-        jl_value_t *ai = (i == 0 ? arg1 : args[i - 1]);
-        if (jl_is_type(ai)) {
-            // if `ai` has free type vars this will not be a valid (concrete) type.
-            // TODO: it would be really nice to only dispatch and cache those as
-            // `jl_typeof(ai)`, but that will require some redesign of the caching
-            // logic.
-            types[i] = (jl_value_t*)jl_wrap_Type(ai);
-            if (!onstack)
-                jl_gc_wb(roots[0], types[i]);
-        }
-        else {
-            types[i] = jl_typeof(ai);
-        }
-    }
-    if (onstack)
-        tt = jl_apply_tuple_type_v(types, nargs);
-    else
-        tt = jl_apply_tuple_type((jl_svec_t*)roots[0]);
-    JL_GC_POP();
-    return tt;
+    return jl_inst_arg_tuple_type(arg1, args, nargs, 1);
 }
 
 jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, int cache, size_t world)
