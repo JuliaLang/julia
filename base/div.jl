@@ -80,7 +80,7 @@ See also: [`div`](@ref)
 julia> fld(7.3,5.5)
 1.0
 ```
-Because of floating-point rounding `fld(x,y)` can lead to an *alleged* violation of the `fld(x,y) == x/y` condition:
+Because `fld(x, y)` implements strictly correct floored rounding based on the true of floating-point numbers, unintuitive situations can arise. For example:
 ```jldoctest
 julia> fld(6.0,0.1)
 59.0
