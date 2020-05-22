@@ -1038,18 +1038,19 @@ JL_CALLABLE(jl_f_invoke_kwsorter)
         size_t i, nt = jl_nparams(argtypes) + 2;
         if (nt < jl_page_size/sizeof(jl_value_t*)) {
             jl_value_t **types = (jl_value_t**)alloca(nt*sizeof(jl_value_t*));
-            types[0] = (jl_value_t*)jl_namedtuple_type; types[1] = jl_typeof(func);
-            for(i=2; i < nt; i++)
-                types[i] = jl_tparam(argtypes,i-2);
+            types[0] = (jl_value_t*)jl_namedtuple_type;
+            types[1] = jl_typeof(func);
+            for (i = 2; i < nt; i++)
+                types[i] = jl_tparam(argtypes, i - 2);
             argtypes = (jl_value_t*)jl_apply_tuple_type_v(types, nt);
         }
         else {
             jl_svec_t *types = jl_alloc_svec_uninit(nt);
             JL_GC_PUSH1(&types);
-            jl_svecset(types, 0, jl_array_any_type);
+            jl_svecset(types, 0, jl_namedtuple_type);
             jl_svecset(types, 1, jl_typeof(func));
-            for(i=2; i < nt; i++)
-                jl_svecset(types, i, jl_tparam(argtypes,i-2));
+            for (i = 2; i < nt; i++)
+                jl_svecset(types, i, jl_tparam(argtypes, i - 2));
             argtypes = (jl_value_t*)jl_apply_tuple_type(types);
             JL_GC_POP();
         }
