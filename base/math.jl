@@ -62,17 +62,14 @@ julia> clamp.([11,8,5],10,6) # an example where lo > hi
  10
 ```
 """
-function clamp(x, lo, hi)
-    ismissing(x) && return x
-    let (x, lo, hi) = promote(x, lo, hi)
-        if x isa AbstractFloat
-            x = ifelse((x < lo) | isnan(lo), lo, x)
-            x = ifelse((x > hi) | isnan(hi), hi, x)
-            return x
-        else
-            return ifelse(x > hi, hi, ifelse(x < lo, lo, x))
-        end
-    end
+clamp(x, lo, hi) = ismissing(x) ? missing : clamp(promote(x, lo, hi)...)
+
+clamp(x::T, lo::T, hi::T) where T = ifelse(x > hi, hi, ifelse(x < lo, lo, x))
+
+function clamp(x::T, lo::T, hi::T) where T <: AbstractFloat
+    x = ifelse((x < lo) | isnan(lo), lo, x)
+    x = ifelse((x > hi) | isnan(hi), hi, x)
+    return x
 end
 
 """
