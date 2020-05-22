@@ -221,7 +221,10 @@ end
 
 function filesize(s::IOStream)
     sz = @_lock_ios s ccall(:ios_filesize, Int64, (Ptr{Cvoid},), s.ios)
-    systemerror("filesize", sz == -1)
+    if sz == -1
+        err = Libc.errno()
+        throw(IOError(string("filesize: ", Libc.strerror(err), " for ", s.name), err))
+    end
     return sz
 end
 
