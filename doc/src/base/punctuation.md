@@ -12,7 +12,7 @@ Extended documentation for mathematical symbols & functions is [here](@ref math-
 | `=#`        | end a multi-line comment by immediately preceding the number sign with an equals sign       |
 | `$`         | the dollar sign is used for [string](@ref string-interpolation) and [expression](@ref man-expression-interpolation) interpolation |
 | [`%`](@ref rem) | the percent symbol is the remainder operator                                            |
-| [`^`](@ref) | the caret is the exponentiation operator.                                                   |
+| [`^`](@ref) | the caret is the exponentiation operator                                                  |
 | [`&`](@ref) | single ampersand is bitwise and                                                             |
 | [`&&`](@ref)| double ampersands is short-circuiting boolean and                                           |
 | [`\|`](@ref)| single pipe character is bitwise or                                                         |
@@ -53,6 +53,6 @@ Extended documentation for mathematical symbols & functions is [here](@ref math-
 | [`>:`](@ref)| supertype operator (reverse of subtype operator)                                            |
 | `=`         | single equals sign is [assignment](@ref man-variables)                                      |
 | [`==`](@ref)| double equals sign is value equality comparison                                             |
-| [`===`](@ref) | triple equals sign is programmatically identical equality comparison.                     |
+| [`===`](@ref) | triple equals sign is programmatically identical equality comparison                      |
 | [`=>`](@ref Pair) | right arrow using an equals sign defines a [`Pair`](@ref) typically used to populate [dictionaries](@ref Dictionaries) |
 | `->` | right arrow using a hyphen defines an [anonymous function](@ref man-anonymous-functions) on a single line         |
