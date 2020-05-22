@@ -134,7 +134,7 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
     @test ∘(FreeMagma(1), FreeMagma(2), FreeMagma(3)) === FreeMagma(((1,2), 3))
     @test ∘(FreeMagma(1), FreeMagma(2), FreeMagma(3), FreeMagma(4)) === FreeMagma((((1,2), 3), 4))
 
-    @test fieldtypes(typeof(Float64 ∘ Int)) == (Type{Float64}, Type{Int64})
+    @test fieldtypes(typeof(Float64 ∘ Int)) == (Type{Float64}, Type{Int})
 end
 
 @testset "function negation" begin
