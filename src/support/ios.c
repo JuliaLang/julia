@@ -548,8 +548,6 @@ int64_t ios_pos(ios_t *s)
 
 int64_t ios_filesize(ios_t *s)
 {
-    if (s->fd == -1)
-        return -1;
     int64_t fdpos = s->fpos;
     if (fdpos == (int64_t)-1) {
         fdpos = lseek(s->fd, 0, SEEK_CUR);
