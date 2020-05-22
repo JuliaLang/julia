@@ -341,18 +341,6 @@ test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
            @X19861
            """)::Expr) == 23341
 
-# test parse_input_line for a streaming IO input
-let b = IOBuffer("""
-                 let x = x
-                     x
-                 end
-                 f()
-                 """)
-    @test Base.parse_input_line(b).args[end] == Expr(:let, Expr(:(=), :x, :x), Expr(:block, LineNumberNode(2, :none), :x))
-    @test Base.parse_input_line(b).args[end] == Expr(:call, :f)
-    @test Base.parse_input_line(b) === nothing
-end
-
 # issue #15763
 test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
 test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
