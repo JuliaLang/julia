@@ -689,7 +689,7 @@ step(r::StepRangeLen) = r.step
 step(r::StepRangeLen{T}) where {T<:AbstractFloat} = T(r.step)
 step(r::LinRange) = (last(r)-first(r))/r.lendiv
 
-# high-precision step
+# high-precision step (of type `S`, if different from `step(r)::T`)
 step_hp(r::StepRangeLen) = r.step
 step_hp(r::AbstractRange) = step(r)
 
@@ -923,14 +923,16 @@ function getindex(v::OneTo{T}, i::Integer) where T
     convert(T, i)
 end
 
-function getindex(v::AbstractRange{T}, i::Integer) where T
+function getindex(v::StepRange{T}, i::Integer) where T
     @inline
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    ret = convert(T, first(v) + (i - oneunit(i))*step_hp(v))
-    ok = ifelse(step(v) > zero(step(v)),
-                (ret <= last(v)) & (ret >= first(v)),
-                (ret <= first(v)) & (ret >= last(v)))
-    @boundscheck ((i > 0) & ok) || throw_boundserror(v, i)
+    ret = convert(T, first(v) + (i - oneunit(i))*step(v))
+    @boundscheck begin
+        ok = ifelse(step(v) > zero(step(v)),
+                    (ret <= last(v)) & (ret >= first(v)),
+                    (ret <= first(v)) & (ret >= last(v)))
+        ((i > 0) & ok) || throw_boundserror(v, i)
+    end
     ret
 end
 
