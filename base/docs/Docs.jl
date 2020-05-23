@@ -71,12 +71,13 @@ export doc
 
 const modules = Module[]
 const META    = gensym(:meta)
+const METAType = IdDict{Any,Any}
 
-meta(m::Module) = isdefined(m, META) ? getfield(m, META) : IdDict()
+meta(m::Module) = isdefined(m, META) ? getfield(m, META)::METAType : METAType()
 
 function initmeta(m::Module)
     if !isdefined(m, META)
-        Core.eval(m, :(const $META = $(IdDict())))
+        Core.eval(m, :(const $META = $(METAType())))
         push!(modules, m)
     end
     nothing
@@ -204,9 +205,9 @@ mutable struct MultiDoc
     "Ordered (via definition order) vector of object signatures."
     order::Vector{Type}
     "Documentation for each object. Keys are signatures."
-    docs::IdDict{Any,Any}
+    docs::METAType
 
-    MultiDoc() = new(Type[], IdDict())
+    MultiDoc() = new(Type[], METAType())
 end
 
 # Docstring registration.
