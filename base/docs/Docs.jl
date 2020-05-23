@@ -62,7 +62,7 @@ include("bindings.jl")
 
 import .Base.Meta: quot, isexpr
 import .Base: Callable, with_output_color
-using .Base: RefValue
+using .Base: RefValue, mapany
 import ..CoreDocs: lazy_iterpolate
 
 export doc
@@ -96,7 +96,7 @@ function signature!(tv, expr::Expr)
             push!(sig.args[end].args, argtype(arg))
         end
         if isexpr(expr.args[1], :curly) && isempty(tv)
-            append!(tv, tvar.(expr.args[1].args[2:end]))
+            append!(tv, mapany(tvar, expr.args[1].args[2:end]))
         end
         for i = length(tv):-1:1
             push!(sig.args, :(Tuple{$(tv[i].args[1])}))
@@ -106,7 +106,7 @@ function signature!(tv, expr::Expr)
         end
         return sig
     elseif isexpr(expr, :where)
-        append!(tv, tvar.(expr.args[2:end]))
+        append!(tv, mapany(tvar, expr.args[2:end]))
         return signature!(tv, expr.args[1])
     else
         return signature!(tv, expr.args[1])
@@ -332,13 +332,14 @@ function metadata(__source__, __module__, expr, ismodule)
     end
     if isexpr(expr, :struct)
         # Field docs for concrete types.
-        fields = []
+        P = Pair{Any,Any}
+        fields = P[]
         last_docstr = nothing
         for each in expr.args[3].args
             if isa(each, Symbol) || isexpr(each, :(::))
                 # a field declaration
                 if last_docstr !== nothing
-                    push!(fields, (namify(each), last_docstr))
+                    push!(fields, P(namify(each), last_docstr))
                     last_docstr = nothing
                 end
             elseif isexpr(each, :function) || isexpr(each, :(=))
@@ -349,7 +350,7 @@ function metadata(__source__, __module__, expr, ismodule)
                 last_docstr = each
             end
         end
-        dict = :($(Dict)($([:($(Pair)($(quot(f)), $d)) for (f, d) in fields]...)))
+        dict = :($(Dict)($([(:($(P)($(quot(f)), $d)))::Expr for (f, d) in fields]...)))
         push!(args, :($(Pair)(:fields, $dict)))
     end
     return :($(Dict)($(args...)))

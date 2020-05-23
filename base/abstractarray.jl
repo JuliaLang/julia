@@ -2150,6 +2150,8 @@ end
 # map on collections
 map(f, A::AbstractArray) = collect_similar(A, Generator(f,A))
 
+mapany(f, itr) = map!(f, Vector{Any}(undef, length(itr)), itr)  # convenient for Expr.args
+
 # default to returning an Array for `map` on general iterators
 """
     map(f, c...) -> collection
