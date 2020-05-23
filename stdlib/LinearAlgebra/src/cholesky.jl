@@ -447,7 +447,7 @@ end
 Base.propertynames(F::CholeskyPivoted, private::Bool=false) =
     (:U, :L, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
 
-issuccess(C::Cholesky) = C.info == 0
+issuccess(C::Union{Cholesky,CholeskyPivoted}) = C.info == 0
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:AbstractMatrix})
     if issuccess(C)
