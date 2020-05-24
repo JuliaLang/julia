@@ -36,11 +36,20 @@ const namespace_oid  = UUID(0x6ba7b8129dad11d180b400c04fd430c8) # 6ba7b812-9dad-
 const namespace_x500 = UUID(0x6ba7b8149dad11d180b400c04fd430c8) # 6ba7b814-9dad-11d1-80b4-00c04fd430c8
 
 """
-    uuid1([rng::AbstractRNG=Random.RandomDevice()]) -> UUID
+    uuid1([rng::AbstractRNG]) -> UUID
 
 Generates a version 1 (time-based) universally unique identifier (UUID), as specified
 by RFC 4122. Note that the Node ID is randomly generated (does not identify the host)
 according to section 4.5 of the RFC.
+
+The default rng used by `uuid1` is not `GLOBAL_RNG` and every invocation of `uuid1()` without
+an argument should be expected to return a unique identifier. Importantly, the outputs of
+`uuid1` do not repeat even when `Random.seed!(seed)` is called. Currently (as of Julia 1.6),
+`uuid1` uses `Random.RandomDevice` as the default rng. However, this is an implementation
+detail that may change in the future.
+
+!!! compat "Julia 1.6"
+    The output of `uuid1` does not dependent on `GLOBAL_RNG` as of Julia 1.6.
 
 # Examples
 ```jldoctest; filter = r"[a-z0-9]{8}-([a-z0-9]{4}-){3}[a-z0-9]{12}"
@@ -49,9 +58,6 @@ julia> rng = MersenneTwister(1234);
 julia> uuid1(rng)
 UUID("cfc395e8-590f-11e8-1f13-43a2532b2fa8")
 ```
-
-!!! compat "Julia 1.6"
-    The default rng has been changed to use Random.RandomDevice as of Julia 1.6
 """
 function uuid1(rng::AbstractRNG=Random.RandomDevice())
     u = rand(rng, UInt128)
@@ -77,10 +83,19 @@ function uuid1(rng::AbstractRNG=Random.RandomDevice())
 end
 
 """
-    uuid4([rng::AbstractRNG=Random.RandomDevice()]) -> UUID
+    uuid4([rng::AbstractRNG]) -> UUID
 
 Generates a version 4 (random or pseudo-random) universally unique identifier (UUID),
 as specified by RFC 4122.
+
+The default rng used by `uuid4` is not `GLOBAL_RNG` and every invocation of `uuid4()` without
+an argument should be expected to return a unique identifier. Importantly, the outputs of
+`uuid4` do not repeat even when `Random.seed!(seed)` is called. Currently (as of Julia 1.6),
+`uuid4` uses `Random.RandomDevice` as the default rng. However, this is an implementation
+detail that may change in the future.
+
+!!! compat "Julia 1.6"
+    The output of `uuid4` does not dependent on `GLOBAL_RNG` as of Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -89,8 +104,6 @@ julia> rng = MersenneTwister(1234);
 julia> uuid4(rng)
 UUID("196f2941-2d58-45ba-9f13-43a2532b2fa8")
 ```
-!!! compat "Julia 1.6"
-    The default rng has been changed to use Random.RandomDevice as of Julia 1.6
 """
 function uuid4(rng::AbstractRNG=Random.RandomDevice())
     u = rand(rng, UInt128)
