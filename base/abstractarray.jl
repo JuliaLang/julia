@@ -412,6 +412,11 @@ function isassigned(a::AbstractArray, i::Integer...)
     end
 end
 
+function isstored(A::AbstractArray{<:Any,N}, I::Vararg{Integer,N}) where {N}
+    @boundscheck checkbounds(A, I...)
+    return true
+end
+
 # used to compute "end" for last index
 function trailingsize(A, n)
     s = 1

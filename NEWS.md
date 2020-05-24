@@ -60,6 +60,7 @@ Standard library changes
 
 #### SparseArrays
 
+* Display large sparse matrices with a Unicode "spy" plot of their nonzero patterns, and display small sparse matrices by an `Matrix`-like 2d layout of their contents.
 
 #### Dates
 
