@@ -72,7 +72,6 @@ The following [boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#
 | `!x`       | not                                   |
 | `x && y`   | [short-circuiting and][short-circuit] |
 | `x \|\| y` | [short-circuiting or][short-circuit]  |
-| `x == y`   | equivalence                           |
 
 Note that Bool is an integer type and all the usual promotion rules and numeric operators are also defined on it.
 
