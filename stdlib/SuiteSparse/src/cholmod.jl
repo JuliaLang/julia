@@ -1415,8 +1415,8 @@ true
 
 julia> P = sparse(1:3, C.p, ones(3))
 3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
- ⋅    ⋅   1.0
- ⋅   1.0   ⋅
+  ⋅    ⋅   1.0
+  ⋅   1.0   ⋅
  1.0   ⋅    ⋅
 
 julia> P' * L * L' * P ≈ A

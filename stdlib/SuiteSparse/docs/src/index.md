@@ -1,5 +1,9 @@
 # Sparse Linear Algebra
 
+```@meta
+DocTestSetup = :(using LinearAlgebra, SparseArrays, SuiteSparse)
+```
+
 Sparse matrix solvers call functions from [SuiteSparse](http://suitesparse.com). The following factorizations are available:
 
 | Type                              | Description                                   |
@@ -22,4 +26,9 @@ SuiteSparse.CHOLMOD.lowrankupdate!
 SuiteSparse.CHOLMOD.lowrankdowndate
 SuiteSparse.CHOLMOD.lowrankdowndate!
 SuiteSparse.CHOLMOD.lowrankupdowndate!
+```
+
+
+```@meta
+DocTestSetup = nothing
 ```
