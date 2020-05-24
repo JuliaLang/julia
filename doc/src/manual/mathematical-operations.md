@@ -65,7 +65,7 @@ This is useful for preventing the propagation of `NaN` values in quantities that
 
 ## Boolean Operators
 
-The following [boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#Operations) are supported on Bool:
+The following [Boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#Operations) are supported on `Bool`:
 
 | Expression | Name                                  |
 |:---------- |:--------------------------------------|
@@ -73,7 +73,7 @@ The following [boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#
 | `x && y`   | [short-circuiting and][short-circuit] |
 | `x \|\| y` | [short-circuiting or][short-circuit]  |
 
-Note that Bool is an integer type and all the usual promotion rules and numeric operators are also defined on it.
+Note that `Bool` is an integer type and all the usual promotion rules and numeric operators are also defined on it.
 
 [short-circuit]: https://docs.julialang.org/en/v1/manual/control-flow/#Short-Circuit-Evaluation-1
 ## Bitwise Operators
