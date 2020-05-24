@@ -3318,6 +3318,8 @@ julia> blockdiag(sparse(2I, 3, 3), sparse(4I, 2, 2))
  ⋅  ⋅  ⋅  ⋅  4
 ```
 """
+blockdiag() = spzeros(0, 0)
+
 function blockdiag(X::AbstractSparseMatrixCSC{Tv, Ti}...) where {Tv, Ti <: Integer}
     blockdiag(Tv, Ti, X...)
 end
