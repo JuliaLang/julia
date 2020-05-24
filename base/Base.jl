@@ -331,6 +331,11 @@ include("initdefs.jl")
 # worker threads
 include("threadcall.jl")
 
+module TOML
+const HAVE_DATES = false
+include("toml_parser.jl")
+end # module
+
 # code loading
 include("uuid.jl")
 include("loading.jl")
