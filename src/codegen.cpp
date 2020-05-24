@@ -7583,6 +7583,22 @@ extern "C" void jl_dump_llvm_debugloc(void *v)
     llvm_dump((DebugLoc*)v);
 }
 
+namespace llvm {
+    class MachineBasicBlock;
+    class MachineFunction;
+    raw_ostream& operator<<(raw_ostream &OS, const MachineBasicBlock &MBB);
+    void printMIR(raw_ostream &OS, const MachineFunction &MF);
+}
+extern "C" void jl_dump_llvm_mbb(void *v)
+{
+    errs() << *(llvm::MachineBasicBlock*)v;
+}
+extern "C" void jl_dump_llvm_mfunction(void *v)
+{
+    llvm::printMIR(errs(), *(llvm::MachineFunction*)v);
+}
+
+
 extern void jl_write_bitcode_func(void *F, char *fname) {
     std::error_code EC;
     raw_fd_ostream OS(fname, EC, sys::fs::F_None);

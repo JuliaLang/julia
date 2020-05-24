@@ -828,6 +828,11 @@ end
 
 getindex(x::AbstractSparseVector, ::Colon) = copy(x)
 
+function Base.isstored(x::AbstractSparseVector, i::Integer)
+    @boundscheck checkbounds(x, i)
+    return i in nonzeroinds(x)
+end
+
 ### show and friends
 
 function show(io::IO, ::MIME"text/plain", x::AbstractSparseVector)

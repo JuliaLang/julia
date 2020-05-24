@@ -1682,6 +1682,7 @@ let (h, t) = Distributed.head_and_tail(Int[], 0)
     @test collect(t) == []
 end
 
+
 # issue #34333 test remotecall with Function-like objects
 let
     id = 1
@@ -1702,6 +1703,19 @@ let
     result = p(2)
     @test fetch(remotecall(p, id, 2)) == result
     @test fetch(remotecall_wait(p, id, 2)) == result
+end
+
+# issue #35937
+let e
+    try
+        pmap(1) do _
+            wait(@async error(42))
+        end
+    catch ex
+        e = ex
+    end
+    # check that the inner TaskFailedException is correctly formed & can be printed
+    @test sprint(showerror, e) isa String
 end
 
 include("splitrange.jl")

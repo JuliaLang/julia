@@ -320,6 +320,15 @@ Copy `N` elements from collection `src` starting at offset `so`, to array `dest`
 offset `do`. Return `dest`.
 """
 function copyto!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
+    return _copyto_impl!(dest, doffs, src, soffs, n)
+end
+
+# this is only needed to avoid possible ambiguities with methods added in some packages
+function copyto!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where T
+    return _copyto_impl!(dest, doffs, src, soffs, n)
+end
+
+function _copyto_impl!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
     n == 0 && return dest
     n > 0 || _throw_argerror()
     if soffs < 1 || doffs < 1 || soffs+n-1 > length(src) || doffs+n-1 > length(dest)
@@ -338,6 +347,9 @@ function _throw_argerror()
 end
 
 copyto!(dest::Array, src::Array) = copyto!(dest, 1, src, 1, length(src))
+
+# also to avoid ambiguities in packages
+copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, length(src))
 
 # N.B: The generic definition in multidimensional.jl covers, this, this is just here
 # for bootstrapping purposes.
@@ -1762,8 +1774,8 @@ CartesianIndex(1, 1)
 ```
 """
 function findnext(testf::Function, A, start)
+    i = oftype(first(keys(A)), start)
     l = last(keys(A))
-    i = oftype(l, start)
     i > l && return nothing
     while true
         testf(A[i]) && return i
