@@ -1699,9 +1699,10 @@ let
     end
 
     p = Polynomial([1,10,100])
+    args = 2
     result = p(2)
-    @test fetch(remotecall(p, id, 2)) == result
-    @test fetch(remotecall_wait(p, id, 2)) == result
+    @test fetch(remotecall(p, id, args)) == result
+    @test fetch(remotecall_wait(p, id, args)) == result
 end
 
 include("splitrange.jl")
