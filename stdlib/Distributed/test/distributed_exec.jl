@@ -1682,6 +1682,28 @@ let (h, t) = Distributed.head_and_tail(Int[], 0)
     @test collect(t) == []
 end
 
+# issue #34333 test remotecall with Function-like objects
+let
+    id = 1
+
+    struct Polynomial{R}
+        coeffs::Vector{R}
+    end
+
+    function (p::Polynomial)(x)
+        v = p.coeffs[end]
+        for i = (length(p.coeffs)-1):-1:1
+            v = v*x + p.coeffs[i]
+        end
+        return v
+    end
+
+    p = Polynomial([1,10,100])
+    result = p(2)
+    @test fetch(remotecall(p, id, 2)) == result
+    @test fetch(remotecall_wait(p, id, 2)) == result
+end
+
 include("splitrange.jl")
 
 # Run topology tests last after removing all workers, since a given
