@@ -1,7 +1,12 @@
 module TOML
 
 module Internals
-    include("parser.jl")
+    # The parser is defined in Base
+    using Base.TOML: Parser, parse, tryparse, ParserError, isvalid_barekey_char, reinit!
+    # Put the error instances in this module
+    for errtype in instances(Base.TOML.ErrorType)
+        @eval using Base.TOML: $(Symbol(errtype))
+    end
     # We put the printing functionality in a separate module since It
     # defines a function `print` and we don't want that to collide with normal
     # usage of `(Base.)print` in other files

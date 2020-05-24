@@ -1,3 +1,5 @@
+module TOML
+
 using Base: IdSet
 
 # In case we do not have the Dates stdlib available
@@ -96,7 +98,7 @@ function Parser(str::String; filepath=nothing)
             String[],             # dotted_keys
             UnitRange{Int}[],     # chunks
             IdSet{TOMLDict}(),    # inline_tables
-            IdSet{Any}(),   # static_arrays
+            IdSet{Any}(),         # static_arrays
             IdSet{TOMLDict}(),    # defined_tables
             root,
             filepath,
@@ -1163,4 +1165,6 @@ function take_chunks(l::Parser, unescape::Bool)::String
     end
     empty!(l.chunks)
     return unescape ? unescape_string(str) : str
+end
+
 end

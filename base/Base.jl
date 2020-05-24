@@ -340,6 +340,8 @@ include("threadcall.jl")
 
 # code loading
 include("uuid.jl")
+include("pkgid.jl")
+include("toml_parser.jl")
 include("loading.jl")
 
 # misc useful functions & macros
