@@ -47,7 +47,7 @@ Standard library changes
 * All `AbstractUnitRange{<:Integer}`s now work with `SubString`, `view`, `@view` and `@views` on strings ([#35879]).
 
 #### LinearAlgebra
-
+* New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).
 
 #### Markdown
 
