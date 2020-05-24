@@ -193,7 +193,7 @@ function rmul!(A::AbstractMatrix, D::Diagonal)
     return A
 end
 
-function lmul!(D::Diagonal, B::AbstractMatrix)
+function lmul!(D::Diagonal, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     B .= D.diag .* B
     return B
