@@ -75,6 +75,7 @@ The following [boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#
 
 Note that Bool is an integer type and all the usual promotion rules and numeric operators are also defined on it.
 
+[short-circuit]: https://docs.julialang.org/en/v1/manual/control-flow/#Short-Circuit-Evaluation-1
 ## Bitwise Operators
 
 The following [bitwise operators](https://en.wikipedia.org/wiki/Bitwise_operation#Bitwise_operators)
