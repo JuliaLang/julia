@@ -126,8 +126,11 @@ getalladdrinfo(host::AbstractString) = getalladdrinfo(String(host))
 Gets the first IP address of the `host` of the specified `IPAddr` type.
 Uses the operating system's underlying getaddrinfo implementation, which may do a DNS lookup.
 """
-function getaddrinfo(host::String, T::Type{<:IPAddr})
+function getaddrinfo(host::String, T::Union{Type{<:IPAddr}, Nothing})
     addrs = getalladdrinfo(host)
+    if T isa Nothing && !isempty(addrs)
+        return addrs[1]
+    end
     for addr in addrs
         if addr isa T
             return addr
@@ -136,7 +139,7 @@ function getaddrinfo(host::String, T::Type{<:IPAddr})
     throw(DNSError(host, UV_EAI_NONAME))
 end
 getaddrinfo(host::AbstractString, T::Type{<:IPAddr}) = getaddrinfo(String(host), T)
-getaddrinfo(host::AbstractString) = getaddrinfo(String(host), IPv4)
+getaddrinfo(host::AbstractString) = getaddrinfo(String(host), nothing)
 
 function uv_getnameinfocb(req::Ptr{Cvoid}, status::Cint, hostname::Cstring, service::Cstring)
     data = uv_req_data(req)
