@@ -222,7 +222,7 @@ end
 
 ### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
-    cholesky!(A, Val(false); check = true) -> Cholesky
+    cholesky!(A::StridedMatrix, Val(false); check = true) -> Cholesky
 
 The same as [`cholesky`](@ref), but saves space by overwriting the input `A`,
 instead of creating a copy. An [`InexactError`](@ref) exception is thrown if
@@ -269,7 +269,7 @@ cholesky!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; tol = 0.0, check::Bool
 
 ### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
-    cholesky!(A, Val(true); tol = 0.0, check = true) -> CholeskyPivoted
+    cholesky!(A::StridedMatrix, Val(true); tol = 0.0, check = true) -> CholeskyPivoted
 
 The same as [`cholesky`](@ref), but saves space by overwriting the input `A`,
 instead of creating a copy. An [`InexactError`](@ref) exception is thrown if the

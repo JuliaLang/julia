@@ -149,7 +149,7 @@ _default_tol(A::SparseMatrixCSC) =
     20*sum(size(A))*eps(real(eltype(A)))*maximum(norm(view(A, :, i)) for i in 1:size(A, 2))
 
 """
-    qr(A) -> QRSparse
+    qr(A::SparseMatrixCSC; tol=_default_tol(A), ordering=ORDERING_DEFAULT) -> QRSparse
 
 Compute the `QR` factorization of a sparse matrix `A`. Fill-reducing row and column permutations
 are used such that `F.R = F.Q'*A[F.prow,F.pcol]`. The main application of this type is to
@@ -171,9 +171,9 @@ julia> A = sparse([1,2,3,4], [1,1,2,2], [1.0,1.0,1.0,1.0])
   ⋅   1.0
 
 julia> qr(A)
-Base.SparseArrays.SPQR.QRSparse{Float64,Int64}
+SuiteSparse.SPQR.QRSparse{Float64,Int64}
 Q factor:
-4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:
+4×4 SuiteSparse.SPQR.QRSparseQ{Float64,Int64}:
  -0.707107   0.0        0.0       -0.707107
   0.0       -0.707107  -0.707107   0.0
   0.0       -0.707107   0.707107   0.0
@@ -302,7 +302,7 @@ Extract factors of a QRSparse factorization. Possible values of `d` are
 julia> F = qr(sparse([1,3,2,3,4], [1,1,2,3,4], [1.0,2.0,3.0,4.0,5.0]));
 
 julia> F.Q
-4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:
+4×4 SuiteSparse.SPQR.QRSparseQ{Float64,Int64}:
  1.0  0.0  0.0  0.0
  0.0  1.0  0.0  0.0
  0.0  0.0  1.0  0.0
