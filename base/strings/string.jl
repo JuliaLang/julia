@@ -348,16 +348,3 @@ function repeat(c::Char, r::Integer)
     end
     return s
 end
-
-function filter(f, s::String)
-    out = StringVector(sizeof(s))
-    offset = 1
-    for c in s
-        if f(c)
-            offset += __unsafe_string!(out, c, offset)
-        end
-    end
-    resize!(out, offset-1)
-    sizehint!(out, offset-1)
-    return String(out)
-end

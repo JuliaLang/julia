@@ -222,4 +222,17 @@ function repeat(s::Union{String, SubString{String}}, r::Integer)
     return out
 end
 
+function filter(f, s::Union{String, SubString{String}})
+    out = StringVector(sizeof(s))
+    offset = 1
+    for c in s
+        if f(c)
+            offset += __unsafe_string!(out, c, offset)
+        end
+    end
+    resize!(out, offset-1)
+    sizehint!(out, offset-1)
+    return String(out)
+end
+
 getindex(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, r)
