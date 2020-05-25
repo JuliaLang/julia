@@ -173,11 +173,11 @@ Random.seed!(1)
             @test Array(D*a) ≈ DM*a
             @test Array(D/a) ≈ DM/a
             if relty <: BlasFloat
-                b = rand(elty,n,n)
-                b = sparse(b)
-                @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
-                @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
-                @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
+                for b in (rand(elty,n,n), sparse(rand(elty,n,n)), rand(elty,n), sparse(rand(elty,n)))
+                    @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
+                    @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
+                    @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
+                end
             end
         end
 
