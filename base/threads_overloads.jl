@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    Threads.foreach(f, channel::Channel,
-                    schedule::Threads.AbstractSchedule=Threads.FairSchedule();
+    Threads.foreach(f, channel::Channel;
+                    schedule::Threads.AbstractSchedule=Threads.FairSchedule(),
                     ntasks=Threads.nthreads())
 
 Similar to `foreach(f, channel)`, but iteration over `channel` and calls to
@@ -23,8 +23,8 @@ with other multithreaded workloads.
 !!! compat "Julia 1.6"
     This function requires Julia 1.6 or later.
 """
-function Threads.foreach(f, channel::Channel,
-                         schedule::Threads.AbstractSchedule=Threads.FairSchedule();
+function Threads.foreach(f, channel::Channel;
+                         schedule::Threads.AbstractSchedule=Threads.FairSchedule(),
                          ntasks=Threads.nthreads())
     apply = _apply_for_schedule(schedule)
     stop = Threads.Atomic{Bool}(false)

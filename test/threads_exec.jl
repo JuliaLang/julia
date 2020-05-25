@@ -853,7 +853,7 @@ function jitter_channel(f, k, delay, ntasks, schedule)
             iseven(i) && sleep(delay)
             put!(ch, f(i))
         end
-        Threads.foreach(g, x, schedule; ntasks=ntasks)
+        Threads.foreach(g, x; schedule=schedule, ntasks=ntasks)
     end
     return y
 end
@@ -873,4 +873,10 @@ end
     @test expected != unordered_static
     @test Set(expected) == Set(unordered_fair)
     @test Set(expected) == Set(unordered_static)
+
+    ys = Channel() do ys
+        inner = Channel(xs -> foreach(i -> put!(xs, i), 1:3))
+        Threads.foreach(x -> put!(ys, x), inner)
+    end
+    @test sort!(collect(ys)) == 1:3
 end
