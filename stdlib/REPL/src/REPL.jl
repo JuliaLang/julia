@@ -212,8 +212,23 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
         io = foldl(IOContext, d.repl.options.iocontext,
                    init=IOContext(io, :limit => true, :module => Main))
     end
+
+    if isdefined(d.repl, :last_shown_line_infos)
+        infos = d.repl.last_shown_line_infos
+        io = IOContext(io, :LAST_SHOWN_LINE_INFOS => infos)
+    end
+
     show(io, mime, x)
     println(io)
+
+    if !isempty(get(io, :last_shown_line_infos, Tuple{String,Int}[]))
+        println(
+            io,
+            "\nTo edit a specific method, type the corresponding number into the " *
+            "REPL and press Ctrl+Q",
+        )
+    end
+
     nothing
 end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
@@ -433,9 +448,10 @@ mutable struct LineEditREPL <: AbstractREPL
     mistate::Union{MIState,Nothing}
     interface::ModalInterface
     backendref::REPLBackendRef
+    last_shown_line_infos::Vector{Tuple{String,Int}}
     LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors) =
         new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
-            in_help,envcolors,false,nothing, Options(), nothing)
+            in_help,envcolors,false,nothing, Options(), nothing, Tuple{String,Int}[])
 end
 outstream(r::LineEditREPL) = r.t
 specialdisplay(r::LineEditREPL) = r.specialdisplay
@@ -1096,7 +1112,7 @@ function setup_interface(
         # This is accessing a global variable that gets set in
         # the show_backtrace and show_method_table functions.
         "^Q" => (s, o...) -> begin
-            linfos = Base.LAST_SHOWN_LINE_INFOS
+            linfos = repl.last_shown_line_infos
             str = String(take!(LineEdit.buffer(s)))
             n = tryparse(Int, str)
             n === nothing && @goto writeback

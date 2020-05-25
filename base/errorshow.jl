@@ -541,13 +541,10 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     end
 end
 
-# Contains file name and file number. Gets set when a backtrace
-# or methodlist is shown. Used by the REPL to make it possible to open
-# the location of a stackframe/method in the editor.
-global LAST_SHOWN_LINE_INFOS = Tuple{String, Int}[]
-
 function show_trace_entry(io, frame, n; prefix = "")
-    push!(LAST_SHOWN_LINE_INFOS, (string(frame.file), frame.line))
+    if haskey(io, :LAST_SHOWN_LINE_INFOS)
+        push!(io[:LAST_SHOWN_LINE_INFOS], (string(frame.file), frame.line))
+    end
     print(io, "\n", prefix)
     show(io, frame, full_path=true)
     n > 1 && print(io, " (repeats ", n, " times)")
@@ -634,7 +631,9 @@ function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
 end
 
 function show_backtrace(io::IO, t::Vector)
-    resize!(LAST_SHOWN_LINE_INFOS, 0)
+    if haskey(io, :LAST_SHOWN_LINE_INFOS)
+        resize!(io[:LAST_SHOWN_LINE_INFOS], 0)
+    end
     filtered = process_backtrace(t)
     isempty(filtered) && return
 
