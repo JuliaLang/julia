@@ -464,7 +464,7 @@ function inv(w::ComplexF64)
     return ComplexF64(p*s,q*s) # undo scaling
 end
 
-function ssqs(x::T, y::T) where T<:AbstractFloat
+function ssqs(x::T, y::T) where T
     k::Int = 0
     ρ = x*x + y*y
     if !isfinite(ρ) && (isinf(x) || isinf(y))
@@ -478,7 +478,8 @@ function ssqs(x::T, y::T) where T<:AbstractFloat
     ρ, k
 end
 
-function sqrt(z::Complex{<:AbstractFloat})
+function sqrt(z::Complex)
+    z = float(z)
     x, y = reim(z)
     if x==y==0
         return Complex(zero(x),y)
@@ -503,7 +504,6 @@ function sqrt(z::Complex{<:AbstractFloat})
     end
     Complex(ξ,η)
 end
-sqrt(z::Complex) = sqrt(float(z))
 
 # function sqrt(z::Complex)
 #     rz = float(real(z))
@@ -560,10 +560,12 @@ julia> rad2deg(angle(-1 - im))
 """
 angle(z::Complex) = atan(imag(z), real(z))
 
-function log(z::Complex{T}) where T<:AbstractFloat
-    T1::T  = 1.25
-    T2::T  = 3
-    ln2::T = log(convert(T,2))  #0.6931471805599453
+function log(z::Complex)
+    z = float(z)
+    T = typeof(real(z))
+    T1  = convert(T,5)/convert(T,4)
+    T2  = convert(T,3)
+    ln2 = log(convert(T,2))  #0.6931471805599453
     x, y = reim(z)
     ρ, k = ssqs(x,y)
     ax = abs(x)
@@ -580,7 +582,6 @@ function log(z::Complex{T}) where T<:AbstractFloat
     end
     Complex(ρρ, angle(z))
 end
-log(z::Complex) = log(float(z))
 
 # function log(z::Complex)
 #     ar = abs(real(z))
@@ -633,7 +634,7 @@ function exp(z::Complex)
     end
 end
 
-function expm1(z::Complex{T}) where T<:Real
+function expm1(z::Complex{T}) where T
     Tf = float(T)
     zr,zi = reim(z)
     if isnan(zr)
@@ -681,24 +682,26 @@ function log1p(z::Complex{T}) where T
     end
 end
 
-function exp2(z::Complex{T}) where T<:AbstractFloat
+function exp2(z::Complex{T}) where T
+    z = float(z)
     er = exp2(real(z))
     theta = imag(z) * log(convert(T, 2))
     s, c = sincos(theta)
     Complex(er * c, er * s)
 end
-exp2(z::Complex) = exp2(float(z))
 
-function exp10(z::Complex{T}) where T<:AbstractFloat
+function exp10(z::Complex{T}) where T
+    z = float(z)
     er = exp10(real(z))
     theta = imag(z) * log(convert(T, 10))
     s, c = sincos(theta)
     Complex(er * c, er * s)
 end
-exp10(z::Complex) = exp10(float(z))
 
 # _cpow helper function to avoid method ambiguity with ^(::Complex,::Real)
-function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:AbstractFloat}
+function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where T
+    z = float(z)
+    p = float(p)
     if isreal(p)
         pᵣ = real(p)
         if isinteger(pᵣ) && abs(pᵣ) < typemax(Int32)
@@ -777,7 +780,6 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where {T<:Abstrac
         return Complex(T(NaN),T(NaN)) # non-finite phase angle or NaN input
     end
 end
-_cpow(z, p) = _cpow(float(z), float(p))
 ^(z::Complex{T}, p::Complex{T}) where T<:Real = _cpow(z, p)
 ^(z::Complex{T}, p::T) where T<:Real = _cpow(z, p)
 ^(z::T, p::Complex{T}) where T<:Real = _cpow(z, p)
@@ -859,7 +861,8 @@ function asin(z::Complex)
     Complex(ξ,η)
 end
 
-function acos(z::Complex{<:AbstractFloat})
+function acos(z::Complex)
+    z = float(z)
     zr, zi = reim(z)
     if isnan(zr)
         if isinf(zi) return Complex(zr, -zi)
@@ -880,7 +883,6 @@ function acos(z::Complex{<:AbstractFloat})
     if isinf(zr) && isinf(zi) ξ -= oftype(η,pi)/4 * sign(zr) end
     Complex(ξ,η)
 end
-acos(z::Complex) = acos(float(z))
 
 function atan(z::Complex)
     w = atanh(Complex(-imag(z),real(z)))
@@ -898,7 +900,8 @@ function cosh(z::Complex)
     cos(Complex(zi,-zr))
 end
 
-function tanh(z::Complex{T}) where T<:AbstractFloat
+function tanh(z::Complex{T}) where T
+    z = float(z)
     Ω = prevfloat(typemax(T))
     ξ, η = reim(z)
     if isnan(ξ) && η==0 return Complex(ξ, η) end
@@ -917,7 +920,6 @@ function tanh(z::Complex{T}) where T<:AbstractFloat
         end
     end
 end
-tanh(z::Complex) = tanh(float(z))
 
 function asinh(z::Complex)
     w = asin(Complex(-imag(z),real(z)))
@@ -943,7 +945,8 @@ function acosh(z::Complex)
     Complex(ξ, η)
 end
 
-function atanh(z::Complex{T}) where T<:AbstractFloat
+function atanh(z::Complex{T}) where T
+    z = float(z)
     Ω = prevfloat(typemax(T))
     θ = sqrt(Ω)/4
     ρ = 1/θ
@@ -986,7 +989,6 @@ function atanh(z::Complex{T}) where T<:AbstractFloat
     end
     β * Complex(ξ, η)
 end
-atanh(z::Complex) = atanh(float(z))
 
 #Rounding complex numbers
 #Requires two different RoundingModes for the real and imaginary components
