@@ -236,7 +236,11 @@ The base Julia installation has in-built support for two types of clusters:
 
   * A local cluster specified with the `-p` option as shown above.
   * A cluster spanning machines using the `--machine-file` option. This uses a passwordless `ssh` login
-    to start Julia worker processes (from the same path as the current host) on the specified machines.
+    to start Julia worker processes (from the same path as the current host) on the specified machines. Each machine definition
+    takes the form `[count*][user@]host[:port] [bind_addr[:port]]`. `user` defaults to current user,
+    `port` to the standard ssh port. `count` is the number of workers to spawn on the node, and defaults
+    to 1. The optional `bind-to bind_addr[:port]` specifies the IP address and port that other workers
+    should use to connect to this worker.
 
 Functions [`addprocs`](@ref), [`rmprocs`](@ref), [`workers`](@ref), and others are available
 as a programmatic means of adding, removing and querying the processes in a cluster.
