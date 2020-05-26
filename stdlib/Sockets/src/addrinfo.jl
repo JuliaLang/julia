@@ -135,15 +135,14 @@ function getaddrinfo(host::String, T::Type{<:IPAddr})
     end
     throw(DNSError(host, UV_EAI_NONAME))
 end
-function getaddrinfo(host::String, ::Nothing)
-    addrs = getalladdrinfo(host)
+getaddrinfo(host::AbstractString, T::Type{<:IPAddr}) = getaddrinfo(String(host), T)
+function getaddrinfo(host::AbstractString)
+    addrs = getalladdrinfo(String(host))
     if !isempty(addrs)
         return addrs[1]
     end
     throw(DNSError(host, UV_EAI_NONAME))
 end
-getaddrinfo(host::AbstractString, T::Type{<:IPAddr}) = getaddrinfo(String(host), T)
-getaddrinfo(host::AbstractString) = getaddrinfo(String(host), nothing)
 
 function uv_getnameinfocb(req::Ptr{Cvoid}, status::Cint, hostname::Cstring, service::Cstring)
     data = uv_req_data(req)

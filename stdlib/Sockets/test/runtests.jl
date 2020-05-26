@@ -218,6 +218,8 @@ end
 end
 
 @testset "getaddrinfo" begin
+    @test getaddrinfo("127.0.0.1") == ip"127.0.0.1"
+    @test getaddrinfo("::1") == ip"::1"
     let localhost = getnameinfo(ip"127.0.0.1")::String
         @test !isempty(localhost) && localhost != "127.0.0.1"
         @test !isempty(getalladdrinfo(localhost)::Vector{IPAddr})
@@ -227,8 +229,6 @@ end
         catch ex
             isa(ex, Sockets.DNSError) && ex.code == Base.UV_EAI_NONAME && ex.host == localhost
         end
-        @test getaddrinfo("127.0.0.1") == ip"127.0.0.1"
-        @test getaddrinfo("::1") == ip"::1"
     end
     @test_throws Sockets.DNSError getaddrinfo(".invalid")
     @test_throws ArgumentError getaddrinfo("localhost\0") # issue #10994
