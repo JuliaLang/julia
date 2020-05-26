@@ -1686,24 +1686,9 @@ end
 # issue #34333 test remotecall with Function-like objects
 let
     id = 1
-
-    struct Polynomial{R}
-        coeffs::Vector{R}
-    end
-
-    function (p::Polynomial)(x)
-        v = p.coeffs[end]
-        for i = (length(p.coeffs)-1):-1:1
-            v = v*x + p.coeffs[i]
-        end
-        return v
-    end
-
-    p = Polynomial([1,10,100])
-    args = 2
-    result = p(2)
-    @test fetch(remotecall(p, id, args)) == result
-    @test fetch(remotecall_wait(p, id, args)) == result
+    @test fetch(remotecall(Float64, id, 1)) == Float64(1)
+    @test fetch(remotecall_wait(Float64, id, 1)) == Float64(1)
+    @test remotecall_fetch(Float64, id, 1) == Float64(1)
 end
 
 # issue #35937
