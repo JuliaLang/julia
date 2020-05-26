@@ -25,7 +25,7 @@ function show(io::IO, t::AbstractDict{K,V}) where V where K
     recur_io = IOContext(io, :SHOWN_SET => t,
                              :typeinfo => eltype(t))
 
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
     # show in a Julia-syntax-like form: Dict(k=>v, ...)
     print(io, typeinfo_prefix(io, t)[1])
     print(io, '(')

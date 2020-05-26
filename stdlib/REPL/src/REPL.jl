@@ -1161,7 +1161,7 @@ StreamREPL(stream::IO) = StreamREPL(stream, Base.text_colors[:green], Base.input
 run_repl(stream::IO) = run_repl(StreamREPL(stream))
 
 outstream(s::StreamREPL) = s.stream
-hascolor(s::StreamREPL) = get(s.stream, :color, false)
+hascolor(s::StreamREPL) = get(s.stream, :color, false)::Bool
 
 answer_color(r::LineEditREPL) = r.envcolors ? Base.answer_color() : r.answer_color
 answer_color(r::StreamREPL) = r.answer_color

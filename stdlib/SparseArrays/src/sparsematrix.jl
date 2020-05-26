@@ -275,7 +275,7 @@ function _show_with_braille_patterns(io::IOContext, S::AbstractSparseMatrixCSC)
 end
 
 function Base.show(io::IOContext, S::AbstractSparseMatrixCSC)
-    if max(size(S)...) < 16 && !get(io, :compact, false)
+    if max(size(S)...) < 16 && !(get(io, :compact, false)::Bool)
         ioc = IOContext(io, :compact => true)
         println(ioc)
         Base.print_matrix(ioc, S)

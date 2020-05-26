@@ -96,8 +96,8 @@ disable_bracketed_paste(t::TextTerminal) = nothing
 
 abstract type UnixTerminal <: TextTerminal end
 
-pipe_reader(t::UnixTerminal) = t.in_stream
-pipe_writer(t::UnixTerminal) = t.out_stream
+pipe_reader(t::UnixTerminal) = t.in_stream::IO
+pipe_writer(t::UnixTerminal) = t.out_stream::IO
 
 mutable struct TerminalBuffer <: UnixTerminal
     out_stream::IO

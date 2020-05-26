@@ -444,7 +444,7 @@ show(io::IO, c::Channel) = print(io, typeof(c), "(", c.sz_max, ")")
 
 function show(io::IO, ::MIME"text/plain", c::Channel)
     show(io, c)
-    if !get(io, :compact, false)
+    if !(get(io, :compact, false)::Bool)
         if !isopen(c)
             print(io, " (closed)")
         else
