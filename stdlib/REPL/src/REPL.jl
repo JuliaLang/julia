@@ -214,15 +214,13 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
     end
 
     infos = Tuple{String,Int}[]
-    if isdefined(d.repl, :last_shown_line_infos)
-        infos = d.repl.last_shown_line_infos
-        io = IOContext(io, :LAST_SHOWN_LINE_INFOS => infos)
-    end
+    io = IOContext(io, :LAST_SHOWN_LINE_INFOS => infos)
 
     show(io, mime, x)
     println(io)
 
     if !isempty(infos)
+        d.repl.last_shown_line_infos = infos
         println(
             io,
             "\nTo edit a specific method, type the corresponding number into the " *
