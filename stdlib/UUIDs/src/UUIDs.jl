@@ -49,7 +49,7 @@ an argument should be expected to return a unique identifier. Importantly, the o
 detail that may change in the future.
 
 !!! compat "Julia 1.6"
-    The output of `uuid1` does not dependent on `GLOBAL_RNG` as of Julia 1.6.
+    The output of `uuid1` does not depend on `GLOBAL_RNG` as of Julia 1.6.
 
 # Examples
 ```jldoctest; filter = r"[a-z0-9]{8}-([a-z0-9]{4}-){3}[a-z0-9]{12}"
