@@ -133,12 +133,12 @@ julia> rng = MersenneTwister(1234);
 julia> S = Int64[];
 
 julia> randsubseq!(rng, S, 1:8, 0.3)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  7
  8
 
 julia> S
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  7
  8
 ```
@@ -161,7 +161,7 @@ large.) Technically, this process is known as "Bernoulli sampling" of `A`.
 julia> rng = MersenneTwister(1234);
 
 julia> randsubseq(rng, 1:8, 0.3)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  7
  8
 ```
@@ -187,7 +187,7 @@ optionally supplying the random-number generator `rng`.
 julia> rng = MersenneTwister(1234);
 
 julia> shuffle!(rng, Vector(1:16))
-16-element Array{Int64,1}:
+16-element Vector{Int64}:
   2
  15
   5
@@ -235,7 +235,7 @@ indices, see [`randperm`](@ref).
 julia> rng = MersenneTwister(1234);
 
 julia> shuffle(rng, Vector(1:10))
-10-element Array{Int64,1}:
+10-element Vector{Int64}:
   6
   1
  10
@@ -272,7 +272,7 @@ To randomly permute an arbitrary vector, see [`shuffle`](@ref) or
 # Examples
 ```jldoctest
 julia> randperm(MersenneTwister(1234), 4)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  2
  1
  4
@@ -293,7 +293,7 @@ optional `rng` argument specifies a random number generator (see
 # Examples
 ```jldoctest
 julia> randperm!(MersenneTwister(1234), Vector{Int}(undef, 4))
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  2
  1
  4
@@ -336,7 +336,7 @@ The element type of the result is the same as the type of `n`.
 # Examples
 ```jldoctest
 julia> randcycle(MersenneTwister(1234), 6)
-6-element Array{Int64,1}:
+6-element Vector{Int64}:
  3
  5
  4
@@ -358,7 +358,7 @@ The optional `rng` argument specifies a random number generator, see
 # Examples
 ```jldoctest
 julia> randcycle!(MersenneTwister(1234), Vector{Int}(undef, 6))
-6-element Array{Int64,1}:
+6-element Vector{Int64}:
  3
  5
  4

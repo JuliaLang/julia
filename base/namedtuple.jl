@@ -37,12 +37,12 @@ julia> values(x)
 (1, 2)
 
 julia> collect(x)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
 julia> collect(pairs(x))
-2-element Array{Pair{Symbol,Int64},1}:
+2-element Vector{Pair{Symbol,Int64}}:
  :a => 1
  :b => 2
 ```

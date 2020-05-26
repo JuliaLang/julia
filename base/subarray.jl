@@ -81,7 +81,7 @@ Return the indices in the [`parent`](@ref) which correspond to the array view `A
 julia> A = [1 2; 3 4];
 
 julia> V = view(A, 1, :)
-2-element view(::Array{Int64,2}, 1, :) with eltype Int64:
+2-element view(::Matrix{Int64}, 1, :) with eltype Int64:
  1
  2
 
@@ -129,22 +129,22 @@ indices to the parent array on the fly without checking bounds.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> b = view(A, :, 1)
-2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
+2-element view(::Matrix{Int64}, :, 1) with eltype Int64:
  1
  3
 
 julia> fill!(b, 0)
-2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
+2-element view(::Matrix{Int64}, :, 1) with eltype Int64:
  0
  0
 
 julia> A # Note A has changed even though we modified b
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  0  2
  0  4
 ```

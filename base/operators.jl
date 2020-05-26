@@ -563,12 +563,12 @@ julia> inv(3) * 6
 julia> A = [4 3; 2 1]; x = [5, 6];
 
 julia> A \\ x
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   6.5
  -7.0
 
 julia> inv(A) * x
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   6.5
  -7.0
 ```
@@ -856,7 +856,7 @@ and splatting `∘(fs...)` for composing an iterable collection of functions.
 # Examples
 ```jldoctest
 julia> map(uppercase∘first, ["apple", "banana", "carrot"])
-3-element Array{Char,1}:
+3-element Vector{Char}:
  'A': ASCII/Unicode U+0041 (category Lu: Letter, uppercase)
  'B': ASCII/Unicode U+0042 (category Lu: Letter, uppercase)
  'C': ASCII/Unicode U+0043 (category Lu: Letter, uppercase)
@@ -1033,7 +1033,7 @@ passes a tuple as that single argument.
 # Example usage:
 ```jldoctest
 julia> map(Base.splat(+), zip(1:3,4:6))
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  5
  7
  9

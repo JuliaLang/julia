@@ -423,7 +423,10 @@ _show_nonempty(::IO, ::AbstractVector, ::String) =
 _show_nonempty(io::IO, X::AbstractArray{T,0} where T, prefix::String) = print_array(io, X)
 
 # NOTE: it's not clear how this method could use the :typeinfo attribute
-_show_empty(io::IO, X::Array{T}) where {T} = print(io, "Array{", T, "}(undef,", join(size(X),','), ')')
+function _show_empty(io::IO, X::Array)
+    show_datatype(io, typeof(X))
+    print(io, "(undef, ", join(size(X),", "), ')')
+end
 _show_empty(io, X::AbstractArray) = summary(io, X)
 
 # typeinfo aware (necessarily)

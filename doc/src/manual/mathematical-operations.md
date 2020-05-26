@@ -156,7 +156,7 @@ applies the operator elementwise.
 
 ```jldoctest
 julia> [1,2,3] .^ 3
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   1
   8
  27

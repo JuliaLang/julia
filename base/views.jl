@@ -89,22 +89,22 @@ to switch an entire block of code to use views for slicing.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> b = @view A[:, 1]
-2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
+2-element view(::Matrix{Int64}, :, 1) with eltype Int64:
  1
  3
 
 julia> fill!(b, 0)
-2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
+2-element view(::Matrix{Int64}, :, 1) with eltype Int64:
  0
  0
 
 julia> A
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  0  2
  0  4
 ```
@@ -217,7 +217,7 @@ julia> @views for row in 1:3
        end
 
 julia> A
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.0  1.0  1.0
  2.0  2.0  2.0
  3.0  3.0  3.0

@@ -1101,10 +1101,10 @@ consider the two types created by the following declarations:
 
 ```jldoctest
 julia> const T1 = Array{Array{T,1} where T, 1}
-Array{Array{T,1} where T,1}
+Vector{Vector{T} where T}
 
 julia> const T2 = Array{Array{T,1}, 1} where T
-Array{Array{T,1},1} where T
+Vector{Vector{T}} where T
 ```
 
 Type `T1` defines a 1-dimensional array of 1-dimensional arrays; each
@@ -1284,7 +1284,7 @@ Polar{Float64} complex number:
    3.0 * exp(4.0im)
 
 julia> [Polar(3, 4.0), Polar(4.0,5.3)]
-2-element Array{Polar{Float64},1}:
+2-element Vector{Polar{Float64}}:
  3.0 * exp(4.0im)
  4.0 * exp(5.3im)
 ```
@@ -1389,7 +1389,7 @@ julia> show(IOContext(stdout, :compact=>true), Polar(3, 4.0))
 3.0ℯ4.0im
 
 julia> [Polar(3, 4.0) Polar(4.0,5.3)]
-1×2 Array{Polar{Float64},2}:
+1×2 Matrix{Polar{Float64}}:
  3.0ℯ4.0im  4.0ℯ5.3im
 ```
 

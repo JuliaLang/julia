@@ -151,13 +151,13 @@ julia> rand(MersenneTwister(0), Die)
 Die(16)
 
 julia> rand(Die, 3)
-3-element Array{Die,1}:
+3-element Vector{Die}:
  Die(5)
  Die(20)
  Die(9)
 
 julia> a = Vector{Die}(undef, 3); rand!(a)
-3-element Array{Die,1}:
+3-element Vector{Die}:
  Die(11)
  Die(20)
  Die(10)
@@ -176,7 +176,7 @@ julia> rand(Die(4))
 2
 
 julia> rand(Die(4), 3)
-3-element Array{Any,1}:
+3-element Vector{Any}:
  1
  4
  2

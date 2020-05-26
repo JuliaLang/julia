@@ -233,7 +233,7 @@ julia> zero(big"2.0")
 0.0
 
 julia> zero(rand(2,2))
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.0  0.0
  0.0  0.0
 ```

@@ -76,17 +76,17 @@ omitted it will default to [`Float64`](@ref).
 To see the various ways we can pass dimensions to these functions, consider the following examples:
 ```jldoctest
 julia> zeros(Int8, 2, 3)
-2×3 Array{Int8,2}:
+2×3 Matrix{Int8}:
  0  0  0
  0  0  0
 
 julia> zeros(Int8, (2, 3))
-2×3 Array{Int8,2}:
+2×3 Matrix{Int8}:
  0  0  0
  0  0  0
 
 julia> zeros((2, 3))
-2×3 Array{Float64,2}:
+2×3 Matrix{Float64}:
  0.0  0.0  0.0
  0.0  0.0  0.0
 ```
@@ -106,7 +106,7 @@ where no arguments are given.
 
 ```jldoctest
 julia> [1,2,3] # An array of `Int`s
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -115,7 +115,7 @@ julia> promote(1, 2.3, 4//5) # This combination of Int, Float64 and Rational pro
 (1.0, 2.3, 0.8)
 
 julia> [1, 2.3, 4//5] # Thus that's the element type of this Array
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  1.0
  2.3
  0.8
@@ -132,12 +132,12 @@ the arguments being used as elements themselves.
 
 ```jldoctest
 julia> [1:2, 4:5] # Has a comma, so no concatenation occurs. The ranges are themselves the elements
-2-element Array{UnitRange{Int64},1}:
+2-element Vector{UnitRange{Int64}}:
  1:2
  4:5
 
 julia> [1:2; 4:5]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  4
@@ -146,7 +146,7 @@ julia> [1:2; 4:5]
 julia> [1:2
         4:5
         6]
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  4
@@ -159,17 +159,17 @@ _horizontally concatenated_ together.
 
 ```jldoctest
 julia> [1:2  4:5  7:8]
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  4  7
  2  5  8
 
 julia> [[1,2]  [4,5]  [7,8]]
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  4  7
  2  5  8
 
 julia> [1 2 3] # Numbers can also be horizontally concatenated
-1×3 Array{Int64,2}:
+1×3 Matrix{Int64}:
  1  2  3
 ```
 
@@ -179,13 +179,13 @@ both horizontally and vertically at the same time.
 ```jldoctest
 julia> [1 2
         3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> [zeros(Int, 2, 2) [1; 2]
         [3 4]            5]
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  0  0  1
  0  0  2
  3  4  5
@@ -212,11 +212,11 @@ result.
 
 ```jldoctest
 julia> [[1 2] [3 4]]
-1×4 Array{Int64,2}:
+1×4 Matrix{Int64}:
  1  2  3  4
 
 julia> Int8[[1 2] [3 4]]
-1×4 Array{Int8,2}:
+1×4 Matrix{Int8}:
  1  2  3  4
 ```
 
@@ -293,7 +293,7 @@ us add a third argument to [`map`](@ref):
 
 ```jldoctest
 julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
-2×2 Array{Tuple{Float64,Int64},2}:
+2×2 Matrix{Tuple{Float64,Int64}}:
  (0.5, 1)       (0.333333, 3)
  (0.333333, 2)  (0.25, 4)
 ```
@@ -311,7 +311,7 @@ keywords:
 
 ```jldoctest
 julia> [(i,j) for i=1:3 for j=1:i]
-6-element Array{Tuple{Int64,Int64},1}:
+6-element Vector{Tuple{Int64,Int64}}:
  (1, 1)
  (2, 1)
  (2, 2)
@@ -326,7 +326,7 @@ Generated values can be filtered using the `if` keyword:
 
 ```jldoctest
 julia> [(i,j) for i=1:3 for j=1:i if i+j == 4]
-2-element Array{Tuple{Int64,Int64},1}:
+2-element Vector{Tuple{Int64,Int64}}:
  (2, 2)
  (3, 1)
 ```
@@ -408,12 +408,12 @@ Example:
 julia> A = reshape(collect(1:16), (2, 2, 2, 2));
 
 julia> A[[1 2; 1 2]]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  1  2
 
 julia> A[[1 2; 1 2], 1, 2, 1]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  5  6
  5  6
 ```
@@ -441,12 +441,12 @@ julia> x = reshape(1:16, 4, 4)
  4  8  12  16
 
 julia> x[2:3, 2:end-1]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  6  10
  7  11
 
 julia> x[1, [2 3; 4 1]]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
   5  9
  13  1
 ```
@@ -496,7 +496,7 @@ Example:
 
 ```jldoctest
 julia> x = collect(reshape(1:9, 3, 3))
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1  4  7
  2  5  8
  3  6  9
@@ -506,7 +506,7 @@ julia> x[3, 3] = -9;
 julia> x[1:2, 1:2] = [-1 -4; -2 -5];
 
 julia> x
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  -1  -4   7
  -2  -5   8
   3   6  -9
@@ -534,7 +534,7 @@ indices and can be converted to such by [`to_indices`](@ref):
 Some examples:
 ```jldoctest
 julia> A = reshape(collect(1:2:18), (3, 3))
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1   7  13
  3   9  15
  5  11  17
@@ -543,13 +543,13 @@ julia> A[4]
 7
 
 julia> A[[2, 5, 8]]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   3
   9
  15
 
 julia> A[[1 4; 3 8]]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1   7
  5  15
 
@@ -557,19 +557,19 @@ julia> A[[]]
 Int64[]
 
 julia> A[1:2:5]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  5
  9
 
 julia> A[2, :]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   3
   9
  15
 
 julia> A[:, 3]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  13
  15
  17
@@ -605,7 +605,7 @@ accessing the diagonal elements from the first "page" of `A` from above:
 
 ```jldoctest cartesianindex
 julia> page = A[:,:,1]
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  5   9  13
  2  6  10  14
  3  7  11  15
@@ -615,7 +615,7 @@ julia> page[[CartesianIndex(1,1),
              CartesianIndex(2,2),
              CartesianIndex(3,3),
              CartesianIndex(4,4)]]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
   1
   6
  11
@@ -629,14 +629,14 @@ to extract both diagonals from the two pages at the same time:
 
 ```jldoctest cartesianindex
 julia> A[CartesianIndex.(axes(A, 1), axes(A, 2)), 1]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
   1
   6
  11
  16
 
 julia> A[CartesianIndex.(axes(A, 1), axes(A, 2)), :]
-4×2 Array{Int64,2}:
+4×2 Matrix{Int64}:
   1  17
   6  22
  11  27
@@ -671,19 +671,19 @@ julia> x = reshape(1:16, 4, 4)
  4  8  12  16
 
 julia> x[[false, true, true, false], :]
-2×4 Array{Int64,2}:
+2×4 Matrix{Int64}:
  2  6  10  14
  3  7  11  15
 
 julia> mask = map(ispow2, x)
-4×4 Array{Bool,2}:
+4×4 Matrix{Bool}:
  1  0  0  0
  1  0  0  0
  0  0  0  0
  1  1  0  1
 
 julia> x[mask]
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
   1
   2
   4
@@ -710,7 +710,7 @@ one-dimensional vector with [`vec`](@ref).
 
 ```jldoctest linindexing
 julia> A = [2 6; 4 7; 3 1]
-3×2 Array{Int64,2}:
+3×2 Matrix{Int64}:
  2  6
  4  7
  3  1
@@ -795,7 +795,7 @@ allows vectors to be indexed like one-column matrices, for example:
 
 ```jldoctest
 julia> A = [8,6,7]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  8
  6
  7
@@ -929,17 +929,17 @@ iterated over or indexed into elementwise.
 
 ```jldoctest
 julia> convert.(Float32, [1, 2])
-2-element Array{Float32,1}:
+2-element Vector{Float32}:
  1.0
  2.0
 
 julia> ceil.(UInt8, [1.2 3.4; 5.6 6.7])
-2×2 Array{UInt8,2}:
+2×2 Matrix{UInt8}:
  0x02  0x04
  0x06  0x07
 
 julia> string.(1:3, ". ", ["First", "Second", "Third"])
-3-element Array{String,1}:
+3-element Vector{String}:
  "1. First"
  "2. Second"
  "3. Third"

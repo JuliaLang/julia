@@ -588,12 +588,16 @@ end
 
 function show_datatype(io::IO, x::DataType)
     istuple = x.name === Tuple.name
+    isarray = x.name === Array{TypeVar(:T), TypeVar(:N)}.name
     if (!isempty(x.parameters) || istuple) && x !== Tuple
         n = length(x.parameters)::Int
 
         # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
         if istuple && n > 3 && all(i -> (x.parameters[1] === i), x.parameters)
             print(io, "NTuple{", n, ',', x.parameters[1], "}")
+        elseif isarray && (x.parameters[2] == 1 || x.parameters[2] == 2)
+            name = x.parameters[2] == 1 ? "Vector" : "Matrix"
+            print(io, name, '{', x.parameters[1], '}')
         else
             show_type_name(io, x.name)
             # Do not print the type parameters for the primary type if we are
@@ -2155,7 +2159,7 @@ julia> summary(1)
 "Int64"
 
 julia> summary(zeros(2))
-"2-element Array{Float64,1}"
+"2-element Vector{Float64}"
 ```
 """
 summary(io::IO, x) = print(io, typeof(x))

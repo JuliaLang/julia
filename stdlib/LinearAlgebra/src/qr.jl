@@ -266,23 +266,23 @@ representable by the element type of `A`, e.g. for integer types.
 # Examples
 ```jldoctest
 julia> a = [1. 2.; 3. 4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
 julia> qr!(a)
-LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}}
+LinearAlgebra.QRCompactWY{Float64,Matrix{Float64}}
 Q factor:
-2×2 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
+2×2 LinearAlgebra.QRCompactWYQ{Float64,Matrix{Float64}}:
  -0.316228  -0.948683
  -0.948683   0.316228
 R factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  -3.16228  -4.42719
   0.0      -0.632456
 
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
@@ -349,20 +349,20 @@ It is ignored when `blocksize > minimum(size(A))`.  See [`QRCompactWY`](@ref).
 # Examples
 ```jldoctest
 julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
-3×2 Array{Float64,2}:
+3×2 Matrix{Float64}:
  3.0  -6.0
  4.0  -8.0
  0.0   1.0
 
 julia> F = qr(A)
-LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}}
+LinearAlgebra.QRCompactWY{Float64,Matrix{Float64}}
 Q factor:
-3×3 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
+3×3 LinearAlgebra.QRCompactWYQ{Float64,Matrix{Float64}}:
  -0.6   0.0   0.8
  -0.8   0.0  -0.6
   0.0  -1.0   0.0
 R factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  -5.0  10.0
   0.0  -1.0
 

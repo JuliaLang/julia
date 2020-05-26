@@ -665,12 +665,12 @@ julia> pointer.([s1, s2], 1)
 However, for mutable objects the warning is printed as expected:
 ```jldoctest
 julia> const a = [1]
-1-element Array{Int64,1}:
+1-element Vector{Int64}:
  1
 
 julia> a = [1]
 WARNING: redefinition of constant a. This may fail, cause incorrect answers, or produce other errors.
-1-element Array{Int64,1}:
+1-element Vector{Int64}:
  1
 ```
 

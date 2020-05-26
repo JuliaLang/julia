@@ -22,12 +22,12 @@ This type is intended for linear algebra usage - for general data manipulation s
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 
 julia> adjoint(A)
-2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:
+2×2 Adjoint{Complex{Int64},Matrix{Complex{Int64}}}:
  3-2im  8-7im
  9-2im  4-6im
 ```
@@ -53,12 +53,12 @@ This type is intended for linear algebra usage - for general data manipulation s
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 
 julia> transpose(A)
-2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:
+2×2 Transpose{Complex{Int64},Matrix{Complex{Int64}}}:
  3+2im  8+7im
  9+2im  4+6im
 ```
@@ -115,17 +115,17 @@ This operation is intended for linear algebra usage - for general data manipulat
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 
 julia> adjoint(A)
-2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:
+2×2 Adjoint{Complex{Int64},Matrix{Complex{Int64}}}:
  3-2im  8-7im
  9-2im  4-6im
 
 julia> x = [3, 4im]
-2-element Array{Complex{Int64},1}:
+2-element Vector{Complex{Int64}}:
  3 + 0im
  0 + 4im
 
@@ -148,12 +148,12 @@ This operation is intended for linear algebra usage - for general data manipulat
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 
 julia> transpose(A)
-2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:
+2×2 Transpose{Complex{Int64},Matrix{Complex{Int64}}}:
  3+2im  8+7im
  9+2im  4+6im
 ```

@@ -16,24 +16,24 @@ regions.
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 
 julia> B = zeros(Complex{Int64}, 2, 2)
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  0+0im  0+0im
  0+0im  0+0im
 
 julia> transpose!(B, A);
 
 julia> B
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  8+7im
  9+2im  4+6im
 
 julia> A
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 ```
@@ -51,24 +51,24 @@ regions.
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 
 julia> B = zeros(Complex{Int64}, 2, 2)
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  0+0im  0+0im
  0+0im  0+0im
 
 julia> adjoint!(B, A);
 
 julia> B
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3-2im  8-7im
  9-2im  4-6im
 
 julia> A
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 ```
@@ -158,17 +158,17 @@ This operation is intended for linear algebra usage - for general data manipulat
 # Examples
 ```jldoctest
 julia> A = [1 2im; -3im 4]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  1+0im  0+2im
  0-3im  4+0im
 
 julia> T = transpose(A)
-2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:
+2×2 Transpose{Complex{Int64},Matrix{Complex{Int64}}}:
  1+0im  0-3im
  0+2im  4+0im
 
 julia> copy(T)
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  1+0im  0-3im
  0+2im  4+0im
 ```

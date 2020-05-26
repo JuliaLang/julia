@@ -182,7 +182,7 @@ and `a`, `b`, and `c` all integers creates a `StepRange`.
 # Examples
 ```jldoctest
 julia> collect(StepRange(1, Int8(2), 10))
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  3
  5
@@ -265,7 +265,7 @@ The syntax `a:b` with `a` and `b` both `Integer`s creates a `UnitRange`.
 # Examples
 ```jldoctest
 julia> collect(UnitRange(2.3, 5.2))
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  2.3
  3.3
  4.3

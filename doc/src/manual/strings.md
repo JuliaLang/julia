@@ -380,7 +380,7 @@ You can also use the [`eachindex`](@ref) function to iterate over the valid char
 
 ```jldoctest unicodestring
 julia> collect(eachindex(s))
-7-element Array{Int64,1}:
+7-element Vector{Int64}:
   1
   4
   5
@@ -549,7 +549,7 @@ they are entered as literal expressions:
 
 ```jldoctest
 julia> v = [1,2,3]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -843,7 +843,7 @@ julia> m.match
 "acd"
 
 julia> m.captures
-3-element Array{Union{Nothing, SubString{String}},1}:
+3-element Vector{Union{Nothing, SubString{String}}}:
  "a"
  "c"
  "d"
@@ -852,7 +852,7 @@ julia> m.offset
 1
 
 julia> m.offsets
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -864,7 +864,7 @@ julia> m.match
 "ad"
 
 julia> m.captures
-3-element Array{Union{Nothing, SubString{String}},1}:
+3-element Vector{Union{Nothing, SubString{String}}}:
  "a"
  nothing
  "d"
@@ -873,7 +873,7 @@ julia> m.offset
 1
 
 julia> m.offsets
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  0
  2
@@ -1069,7 +1069,7 @@ ERROR: setindex! not defined for Base.CodeUnits{UInt8,String}
 [...]
 
 julia> Vector{UInt8}(x)
-3-element Array{UInt8,1}:
+3-element Vector{UInt8}:
  0x31
  0x32
  0x33

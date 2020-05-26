@@ -292,18 +292,18 @@ faster because the intermediate array is avoided.
 # Examples
 ```jldoctest
 julia> a = reshape(Vector(1:16), (4,4))
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  5   9  13
  2  6  10  14
  3  7  11  15
  4  8  12  16
 
 julia> mapreduce(isodd, *, a, dims=1)
-1×4 Array{Bool,2}:
+1×4 Matrix{Bool}:
  0  0  0  0
 
 julia> mapreduce(isodd, |, a, dims=1)
-1×4 Array{Bool,2}:
+1×4 Matrix{Bool}:
  1  1  1  1
 ```
 """
@@ -338,21 +338,21 @@ associativity, e.g. left-to-right, you should write your own loop or consider us
 # Examples
 ```jldoctest
 julia> a = reshape(Vector(1:16), (4,4))
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  5   9  13
  2  6  10  14
  3  7  11  15
  4  8  12  16
 
 julia> reduce(max, a, dims=2)
-4×1 Array{Int64,2}:
+4×1 Matrix{Int64}:
  13
  14
  15
  16
 
 julia> reduce(max, a, dims=1)
-1×4 Array{Int64,2}:
+1×4 Matrix{Int64}:
  4  8  12  16
 ```
 """
@@ -372,16 +372,16 @@ dimensions.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> count(<=(2), A, dims=1)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  1  1
 
 julia> count(<=(2), A, dims=2)
-2×1 Array{Int64,2}:
+2×1 Matrix{Int64}:
  2
  0
 ```
@@ -402,16 +402,16 @@ If `init` is `true`, values in `r` are initialized to zero.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> count!(<=(2), [1 1], A)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  1  1
 
 julia> count!(<=(2), [1; 1], A)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  2
  0
 ```
@@ -428,16 +428,16 @@ Sum elements of an array over the given dimensions.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> sum(A, dims=1)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  4  6
 
 julia> sum(A, dims=2)
-2×1 Array{Int64,2}:
+2×1 Matrix{Int64}:
  3
  7
 ```
@@ -452,17 +452,17 @@ Sum elements of `A` over the singleton dimensions of `r`, and write results to `
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> sum!([1; 1], A)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  3
  7
 
 julia> sum!([1 1], A)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  4  6
 ```
 """
@@ -476,16 +476,16 @@ Multiply elements of an array over the given dimensions.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> prod(A, dims=1)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  3  8
 
 julia> prod(A, dims=2)
-2×1 Array{Int64,2}:
+2×1 Matrix{Int64}:
   2
  12
 ```
@@ -500,17 +500,17 @@ Multiply elements of `A` over the singleton dimensions of `r`, and write results
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> prod!([1; 1], A)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
   2
  12
 
 julia> prod!([1 1], A)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  3  8
 ```
 """
@@ -526,16 +526,16 @@ which can be applied elementwise to arrays via `max.(a,b)`.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> maximum(A, dims=1)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  3  4
 
 julia> maximum(A, dims=2)
-2×1 Array{Int64,2}:
+2×1 Matrix{Int64}:
  2
  4
 ```
@@ -550,17 +550,17 @@ Compute the maximum value of `A` over the singleton dimensions of `r`, and write
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> maximum!([1; 1], A)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  2
  4
 
 julia> maximum!([1 1], A)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  3  4
 ```
 """
@@ -576,16 +576,16 @@ which can be applied elementwise to arrays via `min.(a,b)`.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> minimum(A, dims=1)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  1  2
 
 julia> minimum(A, dims=2)
-2×1 Array{Int64,2}:
+2×1 Matrix{Int64}:
  1
  3
 ```
@@ -600,17 +600,17 @@ Compute the minimum value of `A` over the singleton dimensions of `r`, and write
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> minimum!([1; 1], A)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  3
 
 julia> minimum!([1 1], A)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  1  2
 ```
 """
@@ -624,16 +624,16 @@ Test whether all values along the given dimensions of an array are `true`.
 # Examples
 ```jldoctest
 julia> A = [true false; true true]
-2×2 Array{Bool,2}:
+2×2 Matrix{Bool}:
  1  0
  1  1
 
 julia> all(A, dims=1)
-1×2 Array{Bool,2}:
+1×2 Matrix{Bool}:
  1  0
 
 julia> all(A, dims=2)
-2×1 Array{Bool,2}:
+2×1 Matrix{Bool}:
  0
  1
 ```
@@ -648,17 +648,17 @@ Test whether all values in `A` along the singleton dimensions of `r` are `true`,
 # Examples
 ```jldoctest
 julia> A = [true false; true false]
-2×2 Array{Bool,2}:
+2×2 Matrix{Bool}:
  1  0
  1  0
 
 julia> all!([1; 1], A)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  0
  0
 
 julia> all!([1 1], A)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  1  0
 ```
 """
@@ -672,16 +672,16 @@ Test whether any values along the given dimensions of an array are `true`.
 # Examples
 ```jldoctest
 julia> A = [true false; true false]
-2×2 Array{Bool,2}:
+2×2 Matrix{Bool}:
  1  0
  1  0
 
 julia> any(A, dims=1)
-1×2 Array{Bool,2}:
+1×2 Matrix{Bool}:
  1  0
 
 julia> any(A, dims=2)
-2×1 Array{Bool,2}:
+2×1 Matrix{Bool}:
  1
  1
 ```
@@ -697,17 +697,17 @@ results to `r`.
 # Examples
 ```jldoctest
 julia> A = [true false; true false]
-2×2 Array{Bool,2}:
+2×2 Matrix{Bool}:
  1  0
  1  0
 
 julia> any!([1; 1], A)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  1
 
 julia> any!([1 1], A)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  1  0
 ```
 """
@@ -822,7 +822,7 @@ For an array input, returns the value and index of the minimum over the given di
 # Examples
 ```jldoctest
 julia> A = [1.0 2; 3 4]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
@@ -871,7 +871,7 @@ For an array input, returns the value and index of the maximum over the given di
 # Examples
 ```jldoctest
 julia> A = [1.0 2; 3 4]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
@@ -908,16 +908,16 @@ For an array input, return the indices of the minimum elements over the given di
 # Examples
 ```jldoctest
 julia> A = [1.0 2; 3 4]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
 julia> argmin(A, dims=1)
-1×2 Array{CartesianIndex{2},2}:
+1×2 Matrix{CartesianIndex{2}}:
  CartesianIndex(1, 1)  CartesianIndex(1, 2)
 
 julia> argmin(A, dims=2)
-2×1 Array{CartesianIndex{2},2}:
+2×1 Matrix{CartesianIndex{2}}:
  CartesianIndex(1, 1)
  CartesianIndex(2, 1)
 ```
@@ -933,16 +933,16 @@ For an array input, return the indices of the maximum elements over the given di
 # Examples
 ```jldoctest
 julia> A = [1.0 2; 3 4]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
 julia> argmax(A, dims=1)
-1×2 Array{CartesianIndex{2},2}:
+1×2 Matrix{CartesianIndex{2}}:
  CartesianIndex(2, 1)  CartesianIndex(2, 2)
 
 julia> argmax(A, dims=2)
-2×1 Array{CartesianIndex{2},2}:
+2×1 Matrix{CartesianIndex{2}}:
  CartesianIndex(1, 2)
  CartesianIndex(2, 2)
 ```
