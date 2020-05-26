@@ -95,7 +95,7 @@ an argument should be expected to return a unique identifier. Importantly, the o
 detail that may change in the future.
 
 !!! compat "Julia 1.6"
-    The output of `uuid4` does not dependent on `GLOBAL_RNG` as of Julia 1.6.
+    The output of `uuid4` does not depend on `GLOBAL_RNG` as of Julia 1.6.
 
 # Examples
 ```jldoctest
