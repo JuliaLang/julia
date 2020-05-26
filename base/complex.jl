@@ -685,7 +685,7 @@ end
 function exp2(z::Complex{T}) where T
     z = float(z)
     er = exp2(real(z))
-    theta = imag(z) * log(convert(T, 2))
+    theta = imag(z) * log(convert(float(T), 2))
     s, c = sincos(theta)
     Complex(er * c, er * s)
 end
@@ -693,7 +693,7 @@ end
 function exp10(z::Complex{T}) where T
     z = float(z)
     er = exp10(real(z))
-    theta = imag(z) * log(convert(T, 10))
+    theta = imag(z) * log(convert(float(T), 10))
     s, c = sincos(theta)
     Complex(er * c, er * s)
 end
@@ -702,6 +702,7 @@ end
 function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where T
     z = float(z)
     p = float(p)
+    Tf = float(T)
     if isreal(p)
         pᵣ = real(p)
         if isinteger(pᵣ) && abs(pᵣ) < typemax(Int32)
@@ -709,14 +710,14 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where T
             # when converting p to Int, and it also turns out to be roughly
             # the crossover point for exp(p*log(z)) or similar to be faster.
             if iszero(pᵣ) # fix signs of imaginary part for z^0
-                zer = flipsign(copysign(zero(T),pᵣ), imag(z))
-                return Complex(one(T), zer)
+                zer = flipsign(copysign(zero(Tf),pᵣ), imag(z))
+                return Complex(one(Tf), zer)
             end
             ip = convert(Int, pᵣ)
             if isreal(z)
                 zᵣ = real(z)
                 if ip < 0
-                    iszero(z) && return Complex(T(NaN),T(NaN))
+                    iszero(z) && return Complex(Tf(NaN),Tf(NaN))
                     re = power_by_squaring(inv(zᵣ), -ip)
                     im = -imag(z)
                 else
@@ -732,7 +733,7 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where T
             # (note: if both z and p are complex with ±0.0 imaginary parts,
             #  the sign of the ±0.0 imaginary part of the result is ambiguous)
             if iszero(real(z))
-                return pᵣ > 0 ? complex(z) : Complex(T(NaN),T(NaN)) # 0 or NaN+NaN*im
+                return pᵣ > 0 ? complex(z) : Complex(Tf(NaN),Tf(NaN)) # 0 or NaN+NaN*im
             elseif real(z) > 0
                 return Complex(real(z)^pᵣ, z isa Real ? ifelse(real(z) < 1, -imag(p), imag(p)) : flipsign(imag(z), pᵣ))
             else
@@ -744,8 +745,8 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where T
                     # improved here, but it's not clear if it's worth it…
                     return rᵖ * complex(cospi(pᵣ), flipsign(sinpi(pᵣ),imag(z)))
                 else
-                    iszero(rᵖ) && return zero(Complex{T}) # no way to get correct signs of 0.0
-                    return Complex(T(NaN),T(NaN)) # non-finite phase angle or NaN input
+                    iszero(rᵖ) && return zero(Complex{Tf}) # no way to get correct signs of 0.0
+                    return Complex(Tf(NaN),Tf(NaN)) # non-finite phase angle or NaN input
                 end
             end
         else
@@ -753,7 +754,7 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where T
             ϕ = pᵣ*angle(z)
         end
     elseif isreal(z)
-        iszero(z) && return real(p) > 0 ? complex(z) : Complex(T(NaN),T(NaN)) # 0 or NaN+NaN*im
+        iszero(z) && return real(p) > 0 ? complex(z) : Complex(Tf(NaN),Tf(NaN)) # 0 or NaN+NaN*im
         zᵣ = real(z)
         pᵣ, pᵢ = reim(p)
         if zᵣ > 0
@@ -761,7 +762,7 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where T
             ϕ = pᵢ*log(zᵣ)
         else
             r = -zᵣ
-            θ = copysign(T(π),imag(z))
+            θ = copysign(Tf(π),imag(z))
             rᵖ = r^pᵣ * exp(-pᵢ*θ)
             ϕ = pᵣ*θ + pᵢ*log(r)
         end
@@ -776,8 +777,8 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where T
     if isfinite(ϕ)
         return rᵖ * cis(ϕ)
     else
-        iszero(rᵖ) && return zero(Complex{T}) # no way to get correct signs of 0.0
-        return Complex(T(NaN),T(NaN)) # non-finite phase angle or NaN input
+        iszero(rᵖ) && return zero(Complex{Tf}) # no way to get correct signs of 0.0
+        return Complex(Tf(NaN),Tf(NaN)) # non-finite phase angle or NaN input
     end
 end
 ^(z::Complex{T}, p::Complex{T}) where T<:Real = _cpow(z, p)
@@ -902,12 +903,13 @@ end
 
 function tanh(z::Complex{T}) where T
     z = float(z)
-    Ω = prevfloat(typemax(T))
+    Tf = float(T)
+    Ω = prevfloat(typemax(Tf))
     ξ, η = reim(z)
     if isnan(ξ) && η==0 return Complex(ξ, η) end
     if 4*abs(ξ) > asinh(Ω) #Overflow?
-        Complex(copysign(one(T),ξ),
-                copysign(zero(T),η*(isfinite(η) ? sin(2*abs(η)) : one(η))))
+        Complex(copysign(one(Tf),ξ),
+                copysign(zero(Tf),η*(isfinite(η) ? sin(2*abs(η)) : one(η))))
     else
         t = tan(η)
         β = 1+t*t #sec(η)^2
@@ -947,7 +949,8 @@ end
 
 function atanh(z::Complex{T}) where T
     z = float(z)
-    Ω = prevfloat(typemax(T))
+    Tf = float(T)
+    Ω = prevfloat(typemax(Tf))
     θ = sqrt(Ω)/4
     ρ = 1/θ
     x, y = reim(z)
@@ -966,7 +969,7 @@ function atanh(z::Complex{T}) where T
         end
         return Complex(real(1/z), copysign(oftype(y,pi)/2, y))
     end
-    β = copysign(one(T), x)
+    β = copysign(one(Tf), x)
     z *= β
     x, y = reim(z)
     if x == 1
