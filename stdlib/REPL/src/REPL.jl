@@ -213,6 +213,7 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
                    init=IOContext(io, :limit => true, :module => Main))
     end
 
+    infos = Tuple{String,Int}[]
     if isdefined(d.repl, :last_shown_line_infos)
         infos = d.repl.last_shown_line_infos
         io = IOContext(io, :LAST_SHOWN_LINE_INFOS => infos)
@@ -221,7 +222,7 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
     show(io, mime, x)
     println(io)
 
-    if !isempty(get(io, :last_shown_line_infos, Tuple{String,Int}[]))
+    if !isempty(infos)
         println(
             io,
             "\nTo edit a specific method, type the corresponding number into the " *
@@ -446,9 +447,9 @@ mutable struct LineEditREPL <: AbstractREPL
     specialdisplay::Union{Nothing,AbstractDisplay}
     options::Options
     mistate::Union{MIState,Nothing}
+    last_shown_line_infos::Vector{Tuple{String,Int}}
     interface::ModalInterface
     backendref::REPLBackendRef
-    last_shown_line_infos::Vector{Tuple{String,Int}}
     LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors) =
         new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
             in_help,envcolors,false,nothing, Options(), nothing, Tuple{String,Int}[])
