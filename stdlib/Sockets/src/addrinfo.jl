@@ -139,7 +139,7 @@ getaddrinfo(host::AbstractString, T::Type{<:IPAddr}) = getaddrinfo(String(host),
 function getaddrinfo(host::AbstractString)
     addrs = getalladdrinfo(String(host))
     if !isempty(addrs)
-        return addrs[1]
+        return addrs[end]
     end
     throw(DNSError(host, UV_EAI_NONAME))
 end
