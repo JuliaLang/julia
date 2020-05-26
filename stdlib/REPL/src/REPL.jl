@@ -206,7 +206,6 @@ end
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     io = outstream(d.repl)
     get(io, :color, false) && write(io, answer_color(d.repl))
-    io = IOContext(io, :interactive => true)
     if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
         # this can override the :limit property set initially
         io = foldl(IOContext, d.repl.options.iocontext,
