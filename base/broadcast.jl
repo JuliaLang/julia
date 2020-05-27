@@ -677,10 +677,9 @@ Base.RefValue{String}("hello")
 """
 broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,Regex,Pair}) = Ref(x)
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
-broadcastable(x::Union{AbstractArray,Number,Ref,Tuple,Broadcasted}) = x
+broadcastable(x::Union{AbstractArray,Number,Ref,Tuple,Broadcasted,AbstractDict, NamedTuple}) = x
 # Default to collecting iterables — which will error for non-iterables
 broadcastable(x) = collect(x)
-broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
 
 ## Computation of inferred result type, for empty and concretely inferred cases only
 _broadcast_getindex_eltype(bc::Broadcasted) = Base._return_type(bc.f, eltypes(bc.args))
@@ -1263,5 +1262,53 @@ end
     broadcasted(combine_styles(arg1′, arg2′, args′...), f, arg1′, arg2′, args′...)
 end
 @inline broadcasted(::S, f, args...) where S<:BroadcastStyle = Broadcasted{S}(f, args)
+
+
+## Reserved broadcasting
+
+"""
+    Experimental.ReservedStyle
+
+`ReservedStyle` is a broadcasting style for collections without an
+implementation of broadcasting.  This is currently used for
+dictionaries and `NamedTuple`s.
+
+!!! warning
+    A different broadcast style may be assigned to the collections with
+    `ReservedStyle` in the future.
+
+It is an implementation detail that this style is a concrete `struct`.
+Use `Broadcasted{<:ReservedStyle}` to dispatch on the `Broadcasted`
+object that contains collections with reserved broadcasting.
+
+# Examples
+```jldoctest
+julia> using Base.Experimental: ReservedStyle
+       using Base.Broadcast: Broadcasted, broadcasted
+
+julia> function aspairs end;
+
+julia> function Broadcast.broadcasted(::typeof(aspairs), bc::Broadcasted{<:ReservedStyle})
+           broadcasted(bc.f, collect.(pairs.(bc.args))...)
+       end;
+
+julia> aspairs.(tuple.(Dict(:a => 1), Dict(:b => 2)))
+1-element Array{Tuple{Pair{Symbol,Int64},Pair{Symbol,Int64}},1}:
+ (:a => 1, :b => 2)
+```
+"""
+struct ReservedStyle <: BroadcastStyle end
+
+BroadcastStyle(s::ReservedStyle, ::BroadcastStyle) = s
+instantiate(bc::Broadcasted{ReservedStyle}) = bc
+
+copy(::Broadcasted{ReservedStyle}) =
+    throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
+
+materialize!(_, ::Broadcasted{ReservedStyle}) =
+    throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
+
+BroadcastStyle(::Type{<:AbstractDict}) = ReservedStyle()
+BroadcastStyle(::Type{<:NamedTuple}) = ReservedStyle()
 
 end # module

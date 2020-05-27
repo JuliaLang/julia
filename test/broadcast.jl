@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Random
+using Base.Broadcast: BroadcastStyle, ReservedStyle, broadcasted
 
 module TestBroadcastInternals
 
@@ -595,12 +596,35 @@ end
     @test_throws ArgumentError broadcast(identity, Dict(1=>2))
     @test_throws ArgumentError broadcast(identity, (a=1, b=2))
     @test_throws ArgumentError length.(Dict(1 => BitSet(1:2), 2 => BitSet(1:3)))
+    @test_throws ArgumentError Dict() .+ []
+    @test_throws ArgumentError [] .+ Dict()
+    @test_throws ArgumentError Dict() .+ NamedTuple()
+    @test_throws ArgumentError NamedTuple() .+ Dict()
+    @test_throws ArgumentError NamedTuple() .+ []
+    @test_throws ArgumentError [] .+ NamedTuple()
+    @test_throws ArgumentError Dict() .+ NamedTuple() .+ []
+    @test_throws ArgumentError [] .= Dict()
+    @test_throws ArgumentError [] .= NamedTuple()
+    @test_throws ArgumentError Dict() .= Dict()
+    @test_throws ArgumentError Dict() .= NamedTuple()
     @test_throws MethodError broadcast(identity, Base)
 
     @test broadcast(identity, Iterators.filter(iseven, 1:10)) == 2:2:10
     d = Dict([1,2] => 1.1, [3,2] => 0.1)
     @test length.(keys(d)) == [2,2]
     @test Set(exp.(Set([1,2,3]))) == Set(exp.([1,2,3]))
+end
+
+@testset "ReservedStyle" begin
+    dict = Dict()
+    @test Broadcast.broadcastable(dict) === dict
+    nt = (a=1,)
+    @test Broadcast.broadcastable(nt) === nt
+    @test Broadcast.broadcastable(nt) === nt
+    @test BroadcastStyle(typeof(broadcasted(+, dict))) isa ReservedStyle
+    @test BroadcastStyle(typeof(broadcasted(+, nt))) isa ReservedStyle
+    @test BroadcastStyle(typeof(broadcasted(+, dict, []))) isa ReservedStyle
+    @test BroadcastStyle(typeof(broadcasted(+, nt, []))) isa ReservedStyle
 end
 
 # Test that broadcasting identity where the input and output Array shapes do not match
