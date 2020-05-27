@@ -788,6 +788,34 @@ end
     @test isequal(cumsum(A,dims=2),A2)
     @test isequal(cumsum(A,dims=3),A3)
 
+    R = repeat([1, 2, 3], 1:3)
+    @test R == [1, 2, 2, 3, 3, 3]
+    R = repeat(1:3, 0:2)
+    @test R == [2, 3, 3]
+    R = repeat([1 2 3], 2, 1:3)
+    @test R == [1 2 2 3 3 3;
+                1 2 2 3 3 3]
+    R = repeat([1 2;
+                3 4], 2, 1:2)
+    @test R == [1 2 2;
+                3 4 4;
+                1 2 2;
+                3 4 4]
+    R = repeat([1 2;
+                3 4], 1:2, 2)
+    @test R == [1 2 1 2;
+                3 4 3 4;
+                3 4 3 4]
+    R = repeat([1 2;
+                3 4], 1:2, 1:2)
+    @test R == [1 2 2;
+                3 4 4;
+                3 4 4]
+    R = repeat([1 2;
+                3 4], [0, 2], [0, 2])
+    @test R == [4 4;
+                4 4]
+
     # issue 20112
     A3 = reshape(repeat([1 2 3 4],UInt32(6),UInt32(1)),2,3,4)
     @test isequal(cumsum(A,dims=3),A3)
