@@ -575,7 +575,9 @@ end
     for (rng, flg) in ((0x00:0x9f, false), (0xa0:0xbf, true), (0xc0:0xff, false))
         for cont in rng
             @test isvalid(String, UInt8[0xe0, cont]) == false
-            @test isvalid(String, UInt8[0xe0, cont, 0x80]) == flg
+            bytes = UInt8[0xe0, cont, 0x80]
+            @test isvalid(String, bytes) == flg
+            @test isvalid(String, @view(bytes[1:end])) == flg # contiguous subarray support
         end
     end
     # Check three-byte sequences
