@@ -24,7 +24,7 @@ Julia supports these four categories of concurrent and parallel programming:
     computer or multiple computers. The `Distributed` standard library provides the capability for remote execution
     of a Julia function. With this basic building block, it is possible to build many different kinds of
     distributed computing abstractions. Packages like [`DistributedArrays.jl`](https://github.com/JuliaParallel/DistributedArrays.jl)
-    are an example of such an abstraction. On the other hadn, packages like [`MPI.jl`](https://github.com/JuliaParallel/MPI.jl) and
+    are an example of such an abstraction. On the other hand, packages like [`MPI.jl`](https://github.com/JuliaParallel/MPI.jl) and
     [`Elemental.jl`](https://github.com/JuliaParallel/Elemental.jl) provide access to the existing MPI ecosystem of libraries.
 
 4. **GPU computing**:
