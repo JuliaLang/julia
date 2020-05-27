@@ -12,7 +12,7 @@ Julia supports four main categories of features for concurrent and parallel prog
 
 2. **Multi-threading**:
 
-    Julia's [multi-threading](@ref man-multithreading) provides the ability to schedule Tasks 
+    Julia's [multi-threading](@ref man-multithreading) provides the ability to schedule Tasks
     simultaneously on more than one thread or CPU core, sharing memory. This is usually the easiest way
     to get parallelism on one's PC or on a single large multi-core server. Julia's multi-threading
     is composable. When one multi-threaded function calls another multi-threaded function, Julia
