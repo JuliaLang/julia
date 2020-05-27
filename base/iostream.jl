@@ -379,6 +379,10 @@ bytesavailable(s::IOStream) = @_lock_ios s ccall(:jl_nb_available, Int32, (Ptr{C
 function readavailable(s::IOStream)
     lock(s.lock)
     nb = ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
+    if nb == 0
+        ccall(:ios_fillbuf, Cssize_t, (Ptr{Cvoid},), s.ios)
+        nb = ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
+    end
     a = Vector{UInt8}(undef, nb)
     nr = ccall(:ios_readall, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), s, a, nb)
     if nr != nb
