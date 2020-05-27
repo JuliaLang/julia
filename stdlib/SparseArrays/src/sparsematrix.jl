@@ -3318,15 +3318,24 @@ julia> blockdiag(sparse(2I, 3, 3), sparse(4I, 2, 2))
  ⋅  ⋅  ⋅  ⋅  4
 ```
 """
+blockdiag() = spzeros(promote_type(), Int, 0, 0)
+
+function blockdiag(X::AbstractSparseMatrixCSC{Tv, Ti}...) where {Tv, Ti <: Integer}
+    _blockdiag(Tv, Ti, X...)
+end
+
 function blockdiag(X::AbstractSparseMatrixCSC...)
+    Tv = promote_type(map(x->eltype(nonzeros(x)), X)...)
+    Ti = promote_type(map(x->eltype(rowvals(x)), X)...)
+    _blockdiag(Tv, Ti, X...)
+end
+
+function _blockdiag(::Type{Tv}, ::Type{Ti}, X::AbstractSparseMatrixCSC...) where {Tv, Ti <: Integer}
     num = length(X)
     mX = Int[ size(x, 1) for x in X ]
     nX = Int[ size(x, 2) for x in X ]
     m = sum(mX)
     n = sum(nX)
-
-    Tv = promote_type(map(x->eltype(nonzeros(x)), X)...)
-    Ti = isempty(X) ? Int : promote_type(map(x->eltype(rowvals(x)), X)...)
 
     colptr = Vector{Ti}(undef, n+1)
     nnzX = Int[ nnz(x) for x in X ]
