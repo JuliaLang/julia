@@ -12,16 +12,20 @@ Julia supports four main categories of features for concurrent and parallel prog
 
 2. **Multi-threading**:
 
-    [Multi-threading](@ref man-multithreading) functionality builds on tasks by allowing them to run simultaneously
-    on more than one thread or CPU core, sharing memory. This is usually the easiest way
-    to get parallelism on one's PC or on a single large multi-core server.
+    Julia's [multi-threading](@ref man-multithreading) provides the ability to schedule Tasks 
+    simultaneously on more than one thread or CPU core, sharing memory. This is usually the easiest way
+    to get parallelism on one's PC or on a single large multi-core server. Julia's multi-threading
+    is composable. When one multi-threaded function calls another multi-threaded function, Julia
+    will schedule all the threads globally on available resources, without oversubscribing.
 
 3. **Distributed computing**:
 
-    Finally, distributed computing runs multiple processes with separate memory spaces,
-    potentially on different machines. This functionality is provided by the `Distributed`
-    standard library as well as external packages like [`MPI.jl`](https://github.com/JuliaParallel/MPI.jl) and
-    [`DistributedArrays.jl`](https://github.com/JuliaParallel/DistributedArrays.jl).
+    Distributed computing runs multiple Julia processes with separate memory spaces. These can be on the same
+    computer or multiple computers. The `Distributed` standard library provides the capability for remote execution
+    of a Julia function. With this basic building block, it is possible to build many different kinds of
+    distributed computing abstractions. Packages like [`DistributedArrays.jl`](https://github.com/JuliaParallel/DistributedArrays.jl)
+    are an example of such an abstraction. On the other hadn, packages like [`MPI.jl`](https://github.com/JuliaParallel/MPI.jl) and
+    [`Elemental.jl`](https://github.com/JuliaParallel/Elemental.jl) provide access to the existing MPI ecosystem of libraries.
 
 4. **GPU computing**:
 
