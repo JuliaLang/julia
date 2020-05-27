@@ -942,9 +942,10 @@ function decode_0ct(x::BigInt, digits)
     pt = Base.ndigits0z(x, 8) + 1
     length(digits) < pt+1 && resize!(digits, pt+1)
     neg && (x.size = -x.size)
-    GMP.MPZ.get_str!(pointer(digits, 2), 8, x)
+    p = convert(Ptr{UInt8}, digits) + 1
+    GMP.MPZ.get_str!(p, 8, x)
     neg && (x.size = -x.size)
-    return Int32(pt), Int32(pt), neg
+    return neg, Int32(pt), Int32(pt)
 end
 
 ### decoding functions directly used by printf generated code ###
@@ -1058,15 +1059,13 @@ function ini_dec(x::BigInt, n::Int, digits)
     end
     d = Base.ndigits0z(x)
     if d <= n
-        len,pt,neg = decode_dec(x, digits)
-        if d < n
-            ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), pointer(digits, pt+1), '0', n - pt)
-        end
-        return (len,pt,neg)
-    else
-        _,_,neg = decode_dec(round(BigInt,x/big(10)^(d-n)), digits)
-        return (n, d, neg)
+        info = decode_dec(x)
+        d == n && return info
+        p = convert(Ptr{Cvoid}, digits) + info[2]
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), p, '0', n - info[2])
+        return info
     end
+    return (n, d, decode_dec(round(BigInt,x/big(10)^(d-n)))[3])
 end
 
 
