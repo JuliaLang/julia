@@ -464,7 +464,7 @@ function inv(w::ComplexF64)
     return ComplexF64(p*s,q*s) # undo scaling
 end
 
-function ssqs(x::T, y::T) where T
+function ssqs(x::T, y::T) where T<:Real
     k::Int = 0
     ρ = x*x + y*y
     if !isfinite(ρ) && (isinf(x) || isinf(y))
@@ -634,7 +634,7 @@ function exp(z::Complex)
     end
 end
 
-function expm1(z::Complex{T}) where T
+function expm1(z::Complex{T}) where T<:Real
     Tf = float(T)
     zr,zi = reim(z)
     if isnan(zr)
