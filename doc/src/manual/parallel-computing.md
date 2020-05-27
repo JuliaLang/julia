@@ -1,6 +1,6 @@
 # Parallel Computing
 
-Julia supports three main categories of features for concurrent and parallel programming:
+Julia supports four main categories of features for concurrent and parallel programming:
 
 1. **Asynchronous "tasks", or coroutines**:
 
