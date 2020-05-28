@@ -1226,7 +1226,7 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
         const char *fename_str = fename.name;
         bool enable = test_nbit(features, fename.bit);
         bool disable = test_nbit(data.dis.features, fename.bit);
-#ifdef _CPU_ARM_
+#if defined(_CPU_ARM_) && JL_LLVM_VERSION < 90000
         if (fename.bit == Feature::d32) {
             if (enable) {
                 feature_strs.push_back("-d16");

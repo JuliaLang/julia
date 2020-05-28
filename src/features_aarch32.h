@@ -4,11 +4,11 @@
 // hwcap
 JL_FEATURE_DEF(neon, 12, 0)
 JL_FEATURE_DEF(vfp3, 13, 0)
-// JL_FEATURE_DEF(vfpv3d16, 14, 0) // d16
+// JL_FEATURE_DEF(vfpv3d16, 14, 0) // -d32
 JL_FEATURE_DEF(vfp4, 16, 0)
 JL_FEATURE_DEF_NAME(hwdiv_arm, 17, 0, "hwdiv-arm")
 JL_FEATURE_DEF(hwdiv, 18, 0)
-JL_FEATURE_DEF(d32, 19, 0) // -d16
+JL_FEATURE_DEF(d32, 19, 0)
 
 // hwcap2
 JL_FEATURE_DEF(crypto, 32 + 0, 0)
