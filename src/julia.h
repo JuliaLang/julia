@@ -1089,6 +1089,7 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 #define jl_is_string(v)      jl_typeis(v,jl_string_type)
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
+#define jl_is_addrspace_pointer(v) jl_is_addrspace_ptr_type(jl_typeof(v))
 #define jl_is_uint8pointer(v)jl_typeis(v,jl_uint8pointer_type)
 #define jl_is_intrinsic(v)   jl_typeis(v,jl_intrinsic_type)
 #define jl_array_isbitsunion(a) (!(((jl_array_t*)(a))->flags.ptrarray) && jl_is_uniontype(jl_tparam0(jl_typeof(a))))

@@ -34,7 +34,21 @@ JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
 // run time version of pointerref intrinsic (warning: i is not rooted)
 JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align)
 {
-    JL_TYPECHK(pointerref, pointer, p);
+    if (!jl_is_cpointer(p) && !jl_is_addrspace_pointer(p))
+        jl_error("pointerref: invalid pointer type");
+    if (jl_is_addrspace_pointer(p)) {
+        // address-spaces are a compile-time construct, so only load from generic pointers
+        jl_value_t *as_param = jl_tparam1(jl_typeof(p));
+        int as;
+        if (jl_is_int32(as_param))
+            as = jl_unbox_int32(as_param);
+        else if (jl_is_int64(as_param))
+            as = jl_unbox_int64(as_param);
+        else
+            jl_error("pointerref: invalid pointer address space");
+        if (as != 0)
+            jl_error("pointerref: unsupported pointer address space for run-time operation");
+    }
     JL_TYPECHK(pointerref, long, i)
     JL_TYPECHK(pointerref, long, align);
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
@@ -54,7 +68,21 @@ JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t 
 // run time version of pointerset intrinsic (warning: x is not gc-rooted)
 JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *i, jl_value_t *align)
 {
-    JL_TYPECHK(pointerset, pointer, p);
+    if (!jl_is_cpointer(p) && !jl_is_addrspace_pointer(p))
+        jl_error("pointerref: invalid pointer type");
+    if (jl_is_addrspace_pointer(p)) {
+        // address-spaces are a compile-time construct, so only load from generic pointers
+        jl_value_t *as_param = jl_tparam1(jl_typeof(p));
+        int as;
+        if (jl_is_int32(as_param))
+            as = jl_unbox_int32(as_param);
+        else if (jl_is_int64(as_param))
+            as = jl_unbox_int64(as_param);
+        else
+            jl_error("pointerref: invalid pointer address space");
+        if (as != 0)
+            jl_error("pointerref: unsupported pointer address space for run-time operation");
+    }
     JL_TYPECHK(pointerset, long, i);
     JL_TYPECHK(pointerref, long, align);
     jl_value_t *ety = jl_tparam0(jl_typeof(p));

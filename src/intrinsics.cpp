@@ -569,7 +569,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
     if (i.typ != (jl_value_t*)jl_long_type)
         return emit_runtime_pointerref(ctx, argv);
     jl_value_t *aty = e.typ;
-    if (!jl_is_cpointer_type(aty))
+    if (!jl_is_cpointer_type(aty) && !jl_is_addrspace_ptr_type(aty))
         return emit_runtime_pointerref(ctx, argv);
     jl_value_t *ety = jl_tparam0(aty);
     if (jl_is_typevar(ety))
@@ -639,7 +639,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
     if (i.typ != (jl_value_t*)jl_long_type)
         return emit_runtime_pointerset(ctx, argv);
     jl_value_t *aty = e.typ;
-    if (!jl_is_cpointer_type(aty))
+    if (!jl_is_cpointer_type(aty) && !jl_is_addrspace_ptr_type(aty))
         return emit_runtime_pointerset(ctx, argv);
     jl_value_t *ety = jl_tparam0(aty);
     if (jl_is_typevar(ety))

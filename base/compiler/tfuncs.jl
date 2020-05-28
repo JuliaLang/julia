@@ -405,7 +405,7 @@ add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecialize(x)->Int, 4)
 add_tfunc(arraysize, 2, 2, (@nospecialize(a), @nospecialize(d))->Int, 4)
 function pointer_eltype(@nospecialize(ptr))
     a = widenconst(ptr)
-    if a <: Ptr
+    if a <: Ptr || a <: Core.AddrSpacePtr
         if isa(a,DataType) && isa(a.parameters[1],Type)
             return a.parameters[1]
         elseif isa(a,UnionAll) && !has_free_typevars(a)
@@ -1434,7 +1434,8 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
         # modeled here, but can cause errors (e.g. ReadOnlyMemoryError). We follow LLVM here
         # in that it is legal to remove unused non-volatile loads.
         length(argtypes) == 3 || return false
-        return argtypes[1] ⊑ Ptr && argtypes[2] ⊑ Int && argtypes[3] ⊑ Int
+        return (argtypes[1] ⊑ Ptr || argtypes[1] ⊑ Core.AddrSpacePtr) &&
+               argtypes[2] ⊑ Int && argtypes[3] ⊑ Int
     end
     if f === Intrinsics.pointerset
         eT = pointer_eltype(argtypes[1])

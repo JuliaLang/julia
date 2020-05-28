@@ -106,3 +106,24 @@ end
 @test unsafe_load(Ptr{Nothing}(0)) === nothing
 struct GhostStruct end
 @test unsafe_load(Ptr{GhostStruct}(rand(Int))) === GhostStruct()
+
+# pointerref/set with address spaces
+using InteractiveUtils: code_llvm
+let a = [42]
+    ptr = pointer(a)
+    generic_ptr = reinterpret(Core.AddrSpacePtr{Int,0}, ptr)
+    specific_ptr = reinterpret(Core.AddrSpacePtr{Int,1}, ptr)   # can only be compiled
+
+    # pointerref
+    @test Base.pointerref(generic_ptr, 1, 1) == 42
+    @test_throws ErrorException Base.pointerref(specific_ptr, 1, 1) == 42
+    compiled_ptrref(ptr) = Base.pointerref(ptr, 1, 1)
+    @test !occursin("load float, float addrspace(3)* %1", sprint(code_llvm, compiled_ptrref, Tuple{typeof(specific_ptr)}))
+
+    # pointerset
+    Base.pointerset(generic_ptr, 43, 1, 1)
+    @test a == [43]
+    @test_throws ErrorException Base.pointerset(specific_ptr, 0, 1, 1)
+    compiled_ptrset(ptr) = Base.pointerset(ptr, 0, 1, 1)
+    @test !occursin("store i32 0, i32 addrspace(3)* %1", sprint(code_llvm, compiled_ptrset, Tuple{typeof(specific_ptr)}))
+end
