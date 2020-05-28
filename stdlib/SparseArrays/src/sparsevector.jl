@@ -57,7 +57,9 @@ nnz(x::SparseVectorView) = nnz(x.parent)
 Give the range of indices to the structural nonzero values of a sparse vector.
 The column index `col` is ignored (assumed to be `1`).
 """
-nzrange(x::SparseVectorUnion, ::Integer) = 1:nnz(x)
+function nzrange(x::SparseVectorUnion, j::Integer)
+    j == 1 ? (1:nnz(x)) : throw(BoundsError(x, (":", j)))
+end
 
 nonzeros(x::SparseVector) = getfield(x, :nzval)
 function nonzeros(x::SparseColumnView)
