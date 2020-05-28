@@ -418,11 +418,11 @@ static void foreach_mtable_in_module(
         jl_module_t *m,
         void (*visit)(jl_methtable_t *mt, void *env),
         void *env,
-        jl_array_t *visited)
+        jl_array_t **visited)
 {
     size_t i;
     void **table = m->bindings.table;
-    jl_eqtable_put(visited, (jl_value_t*)m, jl_true, NULL);
+    *visited = jl_eqtable_put(*visited, (jl_value_t*)m, jl_true, NULL);
     for (i = 1; i < m->bindings.size; i += 2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
@@ -440,7 +440,7 @@ static void foreach_mtable_in_module(
                 else if (jl_is_module(v)) {
                     jl_module_t *child = (jl_module_t*)v;
                     if (child != m && child->parent == m && child->name == b->name &&
-                        !jl_eqtable_get(visited, v, NULL)) {
+                        !jl_eqtable_get(*visited, v, NULL)) {
                         // this is the original/primary binding for the submodule
                         foreach_mtable_in_module(child, visit, env, visited);
                     }
@@ -463,11 +463,11 @@ void jl_foreach_reachable_mtable(void (*visit)(jl_methtable_t *mt, void *env), v
             jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_array, i);
             assert(jl_is_module(m));
             if (!jl_eqtable_get(visited, (jl_value_t*)m, NULL))
-                foreach_mtable_in_module(m, visit, env, visited);
+                foreach_mtable_in_module(m, visit, env, &visited);
         }
     }
     else {
-        foreach_mtable_in_module(jl_main_module, visit, env, visited);
+        foreach_mtable_in_module(jl_main_module, visit, env, &visited);
     }
     JL_GC_POP();
 }
