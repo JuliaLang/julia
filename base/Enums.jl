@@ -106,7 +106,8 @@ end
 
 `BaseType`, which defaults to [`Int32`](@ref), must be a primitive subtype of `Integer`.
 Member values can be converted between the enum type and `BaseType`. `read` and `write`
-perform these conversions automatically.
+perform these conversions automatically. In case, the default `BaseType` is not used,
+the `Base.Enums.basetype(EnumName)` function returns the `BaseType` for `EnumName`.
 
 To list all the instances of an enum use `instances`, e.g.
 
