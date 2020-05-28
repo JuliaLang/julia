@@ -47,6 +47,9 @@ true
 julia> isvalid(Char, 0xd799)
 true
 ```
+
+!!! compat "Julia 1.6"
+    Support for subarray values was added in Julia 1.6.
 """
 isvalid(T,value)
 
