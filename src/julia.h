@@ -537,6 +537,7 @@ typedef struct _jl_methtable_t {
     JL_DATA_TYPE
     jl_sym_t *name; // sometimes a hack used by serialization to handle kwsorter
     jl_typemap_t *defs;
+    jl_array_t *leafcache;
     jl_typemap_t *cache;
     intptr_t max_args;  // max # of non-vararg arguments in a signature
     jl_value_t *kwsorter;  // keyword argument sorter function

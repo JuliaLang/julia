@@ -49,6 +49,7 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
     mt->name = jl_demangle_typename(name);
     mt->module = module;
     mt->defs = jl_nothing;
+    mt->leafcache = (jl_array_t*)jl_an_empty_vec_any;
     mt->cache = jl_nothing;
     mt->max_args = 0;
     mt->kwsorter = NULL;

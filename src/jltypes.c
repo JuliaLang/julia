@@ -822,17 +822,9 @@ static void cache_insert_type_linear(jl_datatype_t *type, ssize_t insert_at)
 #ifndef NDEBUG
 static int is_cacheable(jl_datatype_t *type)
 {
-    // only cache types whose behavior will not depend on the identities
-    // of contained TypeVars
-    assert(jl_is_datatype(type));
-    jl_svec_t *t = type->parameters;
-    if (jl_svec_len(t) == 0 && jl_emptytuple_type != NULL) // Tuple{} is the only type eligible for this that doesn't have parameters
-        return 0;
-    // cache abstract types with no free type vars
-    if (jl_is_abstracttype(type))
-        return !jl_has_free_typevars((jl_value_t*)type);
-    // ... or concrete types
-    return jl_is_concrete_type((jl_value_t*)type);
+    // ensure cache only contains types whose behavior will not depend on the
+    // identities of contained TypeVars
+    return !jl_has_free_typevars((jl_value_t*)type);
 }
 #endif
 
@@ -1943,18 +1935,19 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_methtable_type->name->mt = jl_nonfunction_mt;
     jl_methtable_type->super = jl_any_type;
     jl_methtable_type->parameters = jl_emptysvec;
-    jl_methtable_type->name->names = jl_perm_symsvec(11, "name", "defs",
-                                                     "cache", "max_args",
+    jl_methtable_type->name->names = jl_perm_symsvec(12, "name", "defs",
+                                                     "leafcache", "cache", "max_args",
                                                      "kwsorter", "module",
                                                      "backedges", "", "", "offs", "");
-    jl_methtable_type->types = jl_svec(11, jl_symbol_type, jl_any_type, jl_any_type, jl_any_type/*jl_long*/,
+    jl_methtable_type->types = jl_svec(12, jl_symbol_type, jl_any_type, jl_any_type,
+                                       jl_any_type, jl_any_type/*jl_long*/,
                                        jl_any_type, jl_any_type/*module*/,
                                        jl_any_type/*any vector*/, jl_any_type/*long*/, jl_any_type/*int32*/,
                                        jl_any_type/*uint8*/, jl_any_type/*uint8*/);
     jl_methtable_type->instance = NULL;
     jl_methtable_type->abstract = 0;
     jl_methtable_type->mutabl = 1;
-    jl_methtable_type->ninitialized = 4;
+    jl_methtable_type->ninitialized = 5;
     jl_precompute_memoized_dt(jl_methtable_type, 1);
 
     jl_symbol_type->name = jl_new_typename_in(jl_symbol("Symbol"), core);
@@ -2152,6 +2145,9 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_array_symbol_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_symbol_type, jl_box_long(1));
     jl_array_uint8_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_uint8_type, jl_box_long(1));
     jl_array_int32_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_int32_type, jl_box_long(1));
+    jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0); // used internally
+    jl_nonfunction_mt->leafcache = (jl_array_t*)jl_an_empty_vec_any;
+    jl_type_type_mt->leafcache = (jl_array_t*)jl_an_empty_vec_any;
 
     jl_expr_type =
         jl_new_datatype(jl_symbol("Expr"), core,
@@ -2466,18 +2462,18 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_typename_type->types, 1, jl_module_type);
     jl_svecset(jl_typename_type->types, 6, jl_long_type);
     jl_svecset(jl_typename_type->types, 3, jl_type_type);
-    jl_svecset(jl_methtable_type->types, 3, jl_long_type);
-    jl_svecset(jl_methtable_type->types, 5, jl_module_type);
-    jl_svecset(jl_methtable_type->types, 6, jl_array_any_type);
+    jl_svecset(jl_methtable_type->types, 4, jl_long_type);
+    jl_svecset(jl_methtable_type->types, 6, jl_module_type);
+    jl_svecset(jl_methtable_type->types, 7, jl_array_any_type);
 #ifdef __LP64__
-    jl_svecset(jl_methtable_type->types, 7, jl_int64_type); // unsigned long
-    jl_svecset(jl_methtable_type->types, 8, jl_int64_type); // uint32_t plus alignment
+    jl_svecset(jl_methtable_type->types, 8, jl_int64_type); // unsigned long
+    jl_svecset(jl_methtable_type->types, 9, jl_int64_type); // uint32_t plus alignment
 #else
-    jl_svecset(jl_methtable_type->types, 7, jl_int32_type); // DWORD
-    jl_svecset(jl_methtable_type->types, 8, jl_int32_type); // uint32_t
+    jl_svecset(jl_methtable_type->types, 8, jl_int32_type); // DWORD
+    jl_svecset(jl_methtable_type->types, 9, jl_int32_type); // uint32_t
 #endif
-    jl_svecset(jl_methtable_type->types, 9, jl_uint8_type);
     jl_svecset(jl_methtable_type->types, 10, jl_uint8_type);
+    jl_svecset(jl_methtable_type->types, 11, jl_uint8_type);
     jl_svecset(jl_method_type->types, 13, jl_method_instance_type);
     jl_svecset(jl_method_instance_type->types, 5, jl_code_instance_type);
     jl_svecset(jl_code_instance_type->types, 8, jl_voidpointer_type);
