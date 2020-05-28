@@ -182,17 +182,6 @@ function parse_input_line(s::String; filename::String="none", depwarn=true)
 end
 parse_input_line(s::AbstractString) = parse_input_line(String(s))
 
-function parse_input_line(io::IO)
-    s = ""
-    while !eof(io)
-        s *= readline(io, keep=true)
-        e = parse_input_line(s)
-        if !(isa(e,Expr) && e.head === :incomplete)
-            return e
-        end
-    end
-end
-
 # detect the reason which caused an :incomplete expression
 # from the error message
 # NOTE: the error messages are defined in src/julia-parser.scm
@@ -424,7 +413,16 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
                         flush(stdout)
                     end
                     try
-                        eval_user_input(stderr, parse_input_line(input), true)
+                        line = ""
+                        ex = nothing
+                        while !eof(input)
+                            line *= readline(input, keep=true)
+                            ex = parse_input_line(line)
+                            if !(isa(ex, Expr) && ex.head === :incomplete)
+                                break
+                            end
+                        end
+                        eval_user_input(stderr, ex, true)
                     catch err
                         isa(err, InterruptException) ? print("\n\n") : rethrow()
                     end
