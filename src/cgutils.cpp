@@ -590,7 +590,7 @@ static Type *bitstype_to_llvm(jl_value_t *bt, bool llvmcall = false)
         return T_float32;
     if (bt == (jl_value_t*)jl_float64_type)
         return T_float64;
-    if (jl_is_addrspace_ptr_type(bt)) {
+    if (jl_is_llvmpointer_type(bt)) {
         jl_value_t *as_param = jl_tparam1(bt);
         int as;
         if (jl_is_int32(as_param))
