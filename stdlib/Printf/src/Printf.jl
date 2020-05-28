@@ -943,7 +943,7 @@ function decode_0ct(x::BigInt, digits)
     length(digits) < pt+1 && resize!(digits, pt+1)
     neg && (x.size = -x.size)
     GC.@preserve digits begin
-        p = convert(Ptr{UInt8}, pointer(digits)) + 1
+        p = pointer(digits,2)
         GMP.MPZ.get_str!(p, 8, x)
     end
     neg && (x.size = -x.size)
@@ -1061,16 +1061,16 @@ function ini_dec(x::BigInt, n::Int, digits)
     end
     d = Base.ndigits0z(x)
     if d <= n
-        info = decode_dec(x, digits)
-        d == n && return info
+        len,pt,neg = decode_dec(x, digits)
+        d == n && return (len,pt,neg)
 
         GC.@preserve digits begin
-            p = convert(Ptr{Cvoid}, pointer(digits)) + info[2]
-            ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), p, '0', n - info[2])
+            ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), pointer(digits, pt+1), '0', n - pt)
         end
-        return info
+        return (len,pt,neg)
     end
-    return (n, d, decode_dec(round(BigInt,x/big(10)^(d-n)), digits)[3])
+    _, _, neg = decode_dec(round(BigInt,x/big(10)^(d-n)), digits)
+    return (n, d, neg)
 end
 
 
