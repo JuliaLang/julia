@@ -3,7 +3,7 @@
 Julia installation is straightforward, whether using precompiled binaries or compiling from source.
 Download and install Julia by following the instructions at [https://julialang.org/downloads/](https://julialang.org/downloads/).
 
-If you are coming to Julia from one of the following languages, then you should start by reading the section on noteworthy differences from [Matlab](@ref Noteworthy differences from MATLAB), [R](@ref Noteworthy differences from R), [Python](@ref Noteworthy differences from Python), [C/C++](@ref Noteworthy differences from C/C++) or [Common Lisp](@ref Noteworthy differences from Common Lisp). This will help you avoid some common pitfalls since Julia differs from those languages in many subtle ways.
+If you are coming to Julia from one of the following languages, then you should start by reading the section on noteworthy differences from [MATLAB](@ref Noteworthy-differences-from-MATLAB), [R](@ref Noteworthy-differences-from-R), [Python](@ref Noteworthy-differences-from-Python), [C/C++](@ref Noteworthy-differences-from-C/C) or [Common Lisp](@ref Noteworthy-differences-from-Common-Lisp). This will help you avoid some common pitfalls since Julia differs from those languages in many subtle ways.
 
 The easiest way to learn and experiment with Julia is by starting an interactive session (also
 known as a read-eval-print loop or "REPL") by double-clicking the Julia executable or running
