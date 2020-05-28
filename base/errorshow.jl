@@ -86,9 +86,7 @@ end
 
 function showerror(io::IO, ex, bt; backtrace=true)
     try
-        with_output_color(get(io, :color, false) ? error_color() : :nothing, io) do io
-            showerror(io, ex)
-        end
+        showerror(io, ex)
     finally
         backtrace && show_backtrace(io, bt)
     end
