@@ -591,6 +591,7 @@ static Type *bitstype_to_llvm(jl_value_t *bt, bool llvmcall = false)
     if (bt == (jl_value_t*)jl_float64_type)
         return T_float64;
     if (jl_is_addrspace_ptr_type(bt)) {
+        jl_value_t *ety = jl_tparam0(bt);
         jl_value_t *as_param = jl_tparam1(bt);
         int as;
         if (jl_is_int32(as_param))
@@ -599,7 +600,7 @@ static Type *bitstype_to_llvm(jl_value_t *bt, bool llvmcall = false)
             as = jl_unbox_int64(as_param);
         else
             jl_error("invalid pointer address space");
-        return PointerType::get(T_int8, as);
+        return PointerType::get(bitstype_to_llvm(ety, llvmcall), as);
     }
     int nb = jl_datatype_size(bt);
     return Type::getIntNTy(jl_LLVMContext, nb * 8);

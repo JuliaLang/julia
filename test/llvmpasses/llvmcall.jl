@@ -22,7 +22,7 @@ emit(foo, NTuple{2, Float16})
 # CHECK: call <2 x half> @foo(<2 x half> %{{[0-9]+}})
 emit(foo, NTuple{2, VecElement{Float16}})
 
-# CHECK: call i8 addrspace(3)* @foo(i8 addrspace(3)* %{{[0-9]+}})
+# CHECK: call float addrspace(3)* @foo(float addrspace(3)* %{{[0-9]+}})
 emit(foo, Core.AddrSpacePtr{Float32, 3})
 
 # CHECK: call { i32, i32 } @foo({ i32, i32 } %{{[0-9]+}})
