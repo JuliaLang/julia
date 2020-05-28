@@ -1074,3 +1074,12 @@ let x = SubString("ab", 1, 1)
     @test y === x
     chop("ab") === chop.(["ab"])[1]
 end
+
+@testset "show StringIndexError" begin
+    str = "abcdefghκijklmno"
+    e = StringIndexError(str, 10)
+    @test sprint(showerror, e) == "StringIndexError: invalid index [10], valid previous index [9] ('κ'), valid next index [11] ('i')"
+    str = "κ"
+    e = StringIndexError(str, 2)
+    @test sprint(showerror, e) == "StringIndexError: invalid index [2], valid previous index [1] ('κ')"
+end

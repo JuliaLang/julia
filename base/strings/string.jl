@@ -11,6 +11,15 @@ struct StringIndexError <: Exception
 end
 @noinline string_index_err(s::AbstractString, i::Integer) =
     throw(StringIndexError(s, Int(i)))
+function Base.showerror(io::IO, exc::StringIndexError)
+    s = exc.string
+    i = thisind(s, exc.index)
+    print(io, "StringIndexError: ", "invalid index [$(exc.index)], valid previous index [$i] ('$(s[i])')")
+    inext = nextind(s, i)
+    if !(inext > ncodeunits(s))
+        print(io, ", valid next index [$(inext)] ('$(s[inext])')")
+    end
+end
 
 const ByteArray = Union{Vector{UInt8},Vector{Int8}}
 
