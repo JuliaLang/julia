@@ -3820,7 +3820,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         std::vector<Value*> vals;
         for (size_t i = 0; i < nargs; ++i) {
             const jl_cgval_t &ai = argv[i];
-            if (ai.constant)
+            if (ai.constant || ai.typ == jl_bottom_type)
                 continue;
             if (ai.isboxed) {
                 vals.push_back(ai.Vboxed);
