@@ -98,6 +98,16 @@ axes1(iter) = OneTo(length(iter))
 unsafe_indices(A) = axes(A)
 unsafe_indices(r::AbstractRange) = (OneTo(unsafe_length(r)),) # Ranges use checked_sub for size
 
+"""
+    keys(a::AbstractArray)
+
+Return the tuple of valid indices for array `a`. This is equivalent to
+[`LinearIndices(a)`](@ref) for vectors, and to [`CartesianIndices(axes(a))`](@ref)
+for higher-dimensional arrays.
+
+This may not return the most efficient indices type to iterate over `a`:
+use [`eachindex`](@ref) instead for maximum performance.
+"""
 keys(a::AbstractArray) = CartesianIndices(axes(a))
 keys(a::AbstractVector) = LinearIndices(a)
 
