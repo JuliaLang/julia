@@ -858,47 +858,43 @@ end
     @test trunc(UInt8, parse(BigFloat,"255.1")) == UInt8(255)
     @test_throws InexactError trunc(UInt8, parse(BigFloat,"256.1"))
 
-    # Test `InexactError` limits
-    for T in Base.BitInteger_types
-        # Use `@eval` and interpolate `$T` to make failed tests easy to read.
-        @eval begin
-            typemin_and_half = BigFloat(typemin($T)) - 0.5
-            typemax_and_half = BigFloat(typemax($T)) + 0.5
-            typemin_and_one = BigFloat(typemin($T)) - 1
-            typemax_and_one = BigFloat(typemax($T)) + 1
+    @testset "inexact limits ($T)" for T in Base.BitInteger_types
+        typemin_and_half = BigFloat(typemin(T)) - 0.5
+        typemax_and_half = BigFloat(typemax(T)) + 0.5
+        typemin_and_one = BigFloat(typemin(T)) - 1
+        typemax_and_one = BigFloat(typemax(T)) + 1
 
-            @test trunc($T, typemin_and_half) == typemin($T)
-            @test trunc($T, typemax_and_half) == typemax($T)
-            @test_throws InexactError trunc($T, typemin_and_one)
-            @test_throws InexactError trunc($T, typemax_and_one)
+        @test trunc(T, typemin_and_half) == typemin(T)
+        @test trunc(T, typemax_and_half) == typemax(T)
+        @test_throws InexactError trunc(T, typemin_and_one)
+        @test_throws InexactError trunc(T, typemax_and_one)
 
-            @test_throws InexactError floor($T, typemin_and_half)
-            @test floor($T, typemax_and_half) == typemax($T)
-            @test_throws InexactError floor($T, typemin_and_one)
-            @test_throws InexactError floor($T, typemax_and_one)
+        @test_throws InexactError floor(T, typemin_and_half)
+        @test floor(T, typemax_and_half) == typemax(T)
+        @test_throws InexactError floor(T, typemin_and_one)
+        @test_throws InexactError floor(T, typemax_and_one)
 
-            @test ceil($T, typemin_and_half) == typemin($T)
-            @test_throws InexactError ceil($T, typemax_and_half)
-            @test_throws InexactError ceil($T, typemin_and_one)
-            @test_throws InexactError ceil($T, typemax_and_one)
+        @test ceil(T, typemin_and_half) == typemin(T)
+        @test_throws InexactError ceil(T, typemax_and_half)
+        @test_throws InexactError ceil(T, typemin_and_one)
+        @test_throws InexactError ceil(T, typemax_and_one)
 
-            if iseven(typemin($T))
-                @test round($T, typemin_and_half) == typemin($T)
-            else
-                @test_throws InexactError round($T, typemin_and_half)
-            end
-
-            if iseven(typemax($T))
-                @test round($T, typemax_and_half) == typemax($T)
-            else
-                @test_throws InexactError round($T, typemax_and_half)
-            end
-
-            @test round($T, BigFloat(typemin($T)) - 0.4) == typemin($T)
-            @test round($T, BigFloat(typemax($T)) + 0.4) == typemax($T)
-            @test_throws InexactError round($T, typemin_and_one)
-            @test_throws InexactError round($T, typemax_and_one)
+        if iseven(typemin(T))
+            @test round(T, typemin_and_half) == typemin(T)
+        else
+            @test_throws InexactError round(T, typemin_and_half)
         end
+
+        if iseven(typemax(T))
+            @test round(T, typemax_and_half) == typemax(T)
+        else
+            @test_throws InexactError round(T, typemax_and_half)
+        end
+
+        @test round(T, BigFloat(typemin(T)) - 0.4) == typemin(T)
+        @test round(T, BigFloat(typemax(T)) + 0.4) == typemax(T)
+        @test_throws InexactError round(T, typemin_and_one)
+        @test_throws InexactError round(T, typemax_and_one)
     end
 end
 @testset "div" begin
