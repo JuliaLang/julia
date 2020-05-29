@@ -2601,3 +2601,25 @@ _use_unstable_kw_2() = _unstable_kw(x = 2, y = rand())
 end
 _construct_structwithsplatnew() = StructWithSplatNew(("",))
 @test Base.return_types(_construct_structwithsplatnew) == Any[StructWithSplatNew]
+
+# case where a call cycle can be broken by constant propagation
+struct NotQRSparse
+    x::Matrix{Float64}
+    n::Int
+end
+@inline function getprop(F::NotQRSparse, d::Symbol)
+    if d === :Q
+        return NotQRSparse(getprop(F, :B), _size_ish(F, 2))
+    elseif d === :A
+        return Dict()
+    elseif d === :B
+        return rand(2,2)
+    elseif d === :C
+        return ""
+    else
+        error()
+    end
+end
+_size_ish(F::NotQRSparse, i::Integer) = size(getprop(F, :B), 1)
+_call_size_ish(x) = _size_ish(x,1)
+@test Base.return_types(_call_size_ish, (NotQRSparse,)) == Any[Int]
