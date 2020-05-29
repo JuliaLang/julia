@@ -135,7 +135,7 @@ round(::Type{T}, ::Missing, ::RoundingMode=RoundNearest) where {T} =
     throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
 round(::Type{T}, x::Any, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
 # to fix ambiguities
-round(::Type{T}, x::Rational, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
+round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {T>:Missing,Tr} = round(nonmissingtype_checked(T), x, r)
 round(::Type{T}, x::Rational{Bool}, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
 
 # Handle ceil, floor, and trunc separately as they have no RoundingMode argument
@@ -283,7 +283,7 @@ function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
         i += 1
     end
     i > ilast && return mapreduce_empty(f, op, eltype(itr))
-    a1 = ai
+    a1::eltype(itr) = ai
     i += 1
     while i <= ilast
         @inbounds ai = A[i]

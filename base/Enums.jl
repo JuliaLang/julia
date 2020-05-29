@@ -29,7 +29,7 @@ Base.print(io::IO, x::Enum) = print(io, Symbol(x))
 
 function Base.show(io::IO, x::Enum)
     sym = Symbol(x)
-    if !get(io, :compact, false)
+    if !(get(io, :compact, false)::Bool)
         from = get(io, :module, Main)
         def = typeof(x).name.module
         if from === nothing || !Base.isvisible(sym, def, from)
@@ -159,6 +159,7 @@ macro enum(T, syms...)
         else
             throw(ArgumentError(string("invalid argument for Enum ", typename, ": ", s)))
         end
+        s = s::Symbol
         if !Base.isidentifier(s)
             throw(ArgumentError("invalid name for Enum $typename; \"$s\" is not a valid identifier"))
         end

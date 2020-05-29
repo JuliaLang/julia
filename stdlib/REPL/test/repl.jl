@@ -65,7 +65,7 @@ function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_
 end
 
 # Writing ^C to the repl will cause sigint, so let's not die on that
-ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 0)
+Base.exit_on_sigint(false)
 
 # make sure `run_interface` can normally handle `eof`
 # without any special handling by the user
@@ -764,7 +764,7 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
-ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
+Base.exit_on_sigint(true)
 
 let exename = Base.julia_cmd()
     # Test REPL in dumb mode
@@ -1142,6 +1142,18 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "?;\n")
     readline(stdout_read)
     @test endswith(readline(stdout_read),";")
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
+end
+
+# issue #35771
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "global x\n")
+    readline(stdout_read)
+    @test !occursin("ERROR", readline(stdout_read))
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end

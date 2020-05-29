@@ -16,8 +16,9 @@ mutable struct IOStream <: IO
     name::AbstractString
     mark::Int64
     lock::ReentrantLock
+    _dolock::Bool
 
-    IOStream(name::AbstractString, buf::Array{UInt8,1}) = new(pointer(buf), buf, name, -1, ReentrantLock())
+    IOStream(name::AbstractString, buf::Array{UInt8,1}) = new(pointer(buf), buf, name, -1, ReentrantLock(), true)
 end
 
 function IOStream(name::AbstractString, finalize::Bool)
@@ -33,6 +34,18 @@ IOStream(name::AbstractString) = IOStream(name, true)
 unsafe_convert(T::Type{Ptr{Cvoid}}, s::IOStream) = convert(T, pointer(s.ios))
 show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
 
+macro _lock_ios(s, expr)
+    s = esc(s)
+    quote
+        l = ($s)._dolock
+        temp = ($s).lock
+        l && lock(temp)
+        val = $(esc(expr))
+        l && unlock(temp)
+        val
+    end
+end
+
 """
     fd(stream)
 
@@ -46,13 +59,13 @@ stat(s::IOStream) = stat(fd(s))
 isopen(s::IOStream) = ccall(:ios_isopen, Cint, (Ptr{Cvoid},), s.ios) != 0
 
 function close(s::IOStream)
-    bad = @lock_nofail s.lock ccall(:ios_close, Cint, (Ptr{Cvoid},), s.ios) != 0
+    bad = @_lock_ios s ccall(:ios_close, Cint, (Ptr{Cvoid},), s.ios) != 0
     systemerror("close", bad)
 end
 
 function flush(s::IOStream)
     sigatomic_begin()
-    bad = @lock_nofail s.lock ccall(:ios_flush, Cint, (Ptr{Cvoid},), s.ios) != 0
+    bad = @_lock_ios s ccall(:ios_flush, Cint, (Ptr{Cvoid},), s.ios) != 0
     sigatomic_end()
     systemerror("flush", bad)
 end
@@ -91,7 +104,7 @@ julia> String(take!(io))
 ```
 """
 function truncate(s::IOStream, n::Integer)
-    err = @lock_nofail s.lock ccall(:ios_trunc, Cint, (Ptr{Cvoid}, Csize_t), s.ios, n) != 0
+    err = @_lock_ios s ccall(:ios_trunc, Cint, (Ptr{Cvoid}, Csize_t), s.ios, n) != 0
     systemerror("truncate", err)
     return s
 end
@@ -112,7 +125,7 @@ julia> read(io, Char)
 ```
 """
 function seek(s::IOStream, n::Integer)
-    ret = @lock_nofail s.lock ccall(:ios_seek, Int64, (Ptr{Cvoid}, Int64), s.ios, n)
+    ret = @_lock_ios s ccall(:ios_seek, Int64, (Ptr{Cvoid}, Int64), s.ios, n)
     systemerror("seek", ret == -1)
     ret < -1 && error("seek failed")
     return s
@@ -146,7 +159,7 @@ seekstart(s::IO) = seek(s,0)
 Seek a stream to its end.
 """
 function seekend(s::IOStream)
-    err = @lock_nofail s.lock ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0
+    err = @_lock_ios s ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0
     systemerror("seekend", err)
     return s
 end
@@ -169,7 +182,7 @@ julia> read(io, Char)
 ```
 """
 function skip(s::IOStream, delta::Integer)
-    ret = @lock_nofail s.lock ccall(:ios_skip, Int64, (Ptr{Cvoid}, Int64), s.ios, delta)
+    ret = @_lock_ios s ccall(:ios_skip, Int64, (Ptr{Cvoid}, Int64), s.ios, delta)
     systemerror("skip", ret == -1)
     ret < -1 && error("skip failed")
     return s
@@ -201,13 +214,22 @@ julia> position(io)
 ```
 """
 function position(s::IOStream)
-    pos = @lock_nofail s.lock ccall(:ios_pos, Int64, (Ptr{Cvoid},), s.ios)
+    pos = @_lock_ios s ccall(:ios_pos, Int64, (Ptr{Cvoid},), s.ios)
     systemerror("position", pos == -1)
     return pos
 end
 
+function filesize(s::IOStream)
+    sz = @_lock_ios s ccall(:ios_filesize, Int64, (Ptr{Cvoid},), s.ios)
+    if sz == -1
+        err = Libc.errno()
+        throw(IOError(string("filesize: ", Libc.strerror(err), " for ", s.name), err))
+    end
+    return sz
+end
+
 _eof_nolock(s::IOStream) = ccall(:ios_eof_blocking, Cint, (Ptr{Cvoid},), s.ios) != 0
-eof(s::IOStream) = @lock_nofail s.lock _eof_nolock(s)
+eof(s::IOStream) = @_lock_ios s _eof_nolock(s)
 
 ## constructing and opening streams ##
 
@@ -229,7 +251,7 @@ end
 fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
 
 """
-    open(filename::AbstractString; keywords...) -> IOStream
+    open(filename::AbstractString; lock = true, keywords...) -> IOStream
 
 Open a file in a mode specified by five boolean keyword arguments:
 
@@ -243,8 +265,14 @@ Open a file in a mode specified by five boolean keyword arguments:
 
 The default when no keywords are passed is to open files for reading only.
 Returns a stream for accessing the opened file.
+
+The `lock` keyword argument controls whether operations will be locked for
+safe multi-threaded access.
+
+!!! compat "Julia 1.5"
+    The `lock` argument is available as of Julia 1.5.
 """
-function open(fname::AbstractString;
+function open(fname::AbstractString; lock = true,
     read     :: Union{Bool,Nothing} = nothing,
     write    :: Union{Bool,Nothing} = nothing,
     create   :: Union{Bool,Nothing} = nothing,
@@ -259,6 +287,9 @@ function open(fname::AbstractString;
         append = append,
     )
     s = IOStream(string("<file ",fname,">"))
+    if !lock
+        s._dolock = false
+    end
     systemerror("opening file $(repr(fname))",
                 ccall(:ios_file, Ptr{Cvoid},
                       (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
@@ -270,7 +301,7 @@ function open(fname::AbstractString;
 end
 
 """
-    open(filename::AbstractString, [mode::AbstractString]) -> IOStream
+    open(filename::AbstractString, [mode::AbstractString]; lock = true) -> IOStream
 
 Alternate syntax for open, where a string-based mode specifier is used instead of the five
 booleans. The values of `mode` correspond to those from `fopen(3)` or Perl `open`, and are
@@ -284,6 +315,9 @@ equivalent to setting the following boolean groups:
 | `r+` | read, write                   | `read = true, write = true`         |
 | `w+` | read, write, create, truncate | `truncate = true, read = true`      |
 | `a+` | read, write, create, append   | `append = true, read = true`        |
+
+The `lock` keyword argument controls whether operations will be locked for
+safe multi-threaded access.
 
 # Examples
 ```jldoctest
@@ -313,14 +347,17 @@ julia> close(io)
 
 julia> rm("myfile.txt")
 ```
+
+!!! compat "Julia 1.5"
+    The `lock` argument is available as of Julia 1.5.
 """
-function open(fname::AbstractString, mode::AbstractString)
-    mode == "r"  ? open(fname, read = true)                  :
-    mode == "r+" ? open(fname, read = true, write = true)    :
-    mode == "w"  ? open(fname, truncate = true)              :
-    mode == "w+" ? open(fname, truncate = true, read = true) :
-    mode == "a"  ? open(fname, append = true)                :
-    mode == "a+" ? open(fname, append = true, read = true)   :
+function open(fname::AbstractString, mode::AbstractString; lock = true)
+    mode == "r"  ? open(fname, lock = lock, read = true)                  :
+    mode == "r+" ? open(fname, lock = lock, read = true, write = true)    :
+    mode == "w"  ? open(fname, lock = lock, truncate = true)              :
+    mode == "w+" ? open(fname, lock = lock, truncate = true, read = true) :
+    mode == "a"  ? open(fname, lock = lock, append = true)                :
+    mode == "a+" ? open(fname, lock = lock, append = true, read = true)   :
     throw(ArgumentError("invalid open mode: $mode"))
 end
 
@@ -328,20 +365,24 @@ end
 
 function write(s::IOStream, b::UInt8)
     iswritable(s) || throw(ArgumentError("write failed, IOStream is not writeable"))
-    Int(@lock_nofail s.lock ccall(:ios_putc, Cint, (Cint, Ptr{Cvoid}), b, s.ios))
+    Int(@_lock_ios s ccall(:ios_putc, Cint, (Cint, Ptr{Cvoid}), b, s.ios))
 end
 
 function unsafe_write(s::IOStream, p::Ptr{UInt8}, nb::UInt)
     iswritable(s) || throw(ArgumentError("write failed, IOStream is not writeable"))
-    return Int(@lock_nofail s.lock ccall(:ios_write, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), s.ios, p, nb))
+    return Int(@_lock_ios s ccall(:ios_write, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), s.ios, p, nb))
 end
 
 # num bytes available without blocking
-bytesavailable(s::IOStream) = @lock_nofail s.lock ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
+bytesavailable(s::IOStream) = @_lock_ios s ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
 
 function readavailable(s::IOStream)
     lock(s.lock)
     nb = ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
+    if nb == 0
+        ccall(:ios_fillbuf, Cssize_t, (Ptr{Cvoid},), s.ios)
+        nb = ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
+    end
     a = Vector{UInt8}(undef, nb)
     nr = ccall(:ios_readall, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), s, a, nb)
     if nr != nb
@@ -353,7 +394,7 @@ function readavailable(s::IOStream)
 end
 
 function read(s::IOStream, ::Type{UInt8})
-    b = @lock_nofail s.lock ccall(:ios_getc, Cint, (Ptr{Cvoid},), s.ios)
+    b = @_lock_ios s ccall(:ios_getc, Cint, (Ptr{Cvoid},), s.ios)
     if b == -1
         throw(EOFError())
     end
@@ -379,7 +420,7 @@ read(s::IOStream, ::Type{Float64}) = reinterpret(Float64, read(s, Int64))
 end
 
 function unsafe_read(s::IOStream, p::Ptr{UInt8}, nb::UInt)
-    nr = @lock_nofail s.lock ccall(:ios_readall, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), s, p, nb)
+    nr = @_lock_ios s ccall(:ios_readall, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), s, p, nb)
     if nr != nb
         throw(EOFError())
     end
@@ -389,33 +430,34 @@ end
 ## text I/O ##
 
 take!(s::IOStream) =
-    @lock_nofail s.lock ccall(:jl_take_buffer, Vector{UInt8}, (Ptr{Cvoid},), s.ios)
+    @_lock_ios s ccall(:jl_take_buffer, Vector{UInt8}, (Ptr{Cvoid},), s.ios)
 
 function readuntil(s::IOStream, delim::UInt8; keep::Bool=false)
-    @lock_nofail s.lock ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 0, !keep)
+    @_lock_ios s ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 0, !keep)
 end
 
 # like readuntil, above, but returns a String without requiring a copy
 function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
-    @lock_nofail s.lock ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, !keep)
+    @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, !keep)
 end
 
 function readline(s::IOStream; keep::Bool=false)
-    @lock_nofail s.lock ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
+    @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
 end
 
 function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
     olb = lb = length(b)
     nr = 0
-    @lock_nofail s.lock begin
+    @_lock_ios s begin
     GC.@preserve b while nr < nb
         if lb < nr+1
             lb = max(65536, (nr+1) * 2)
             resize!(b, lb)
         end
-        nr += Int(ccall(:ios_readall, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
-                        s.ios, pointer(b, nr+1), min(lb-nr, nb-nr)))
-        _eof_nolock(s) && break
+        thisr = Int(ccall(:ios_readall, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
+                          s.ios, pointer(b, nr+1), min(lb-nr, nb-nr)))
+        nr += thisr
+        (nr == nb || thisr == 0 || _eof_nolock(s)) && break
     end
     end
     if lb > olb && lb > nr
@@ -430,7 +472,7 @@ function readbytes_some!(s::IOStream, b::Array{UInt8}, nb)
         resize!(b, nb)
     end
     local nr
-    @lock_nofail s.lock begin
+    @_lock_ios s begin
     nr = GC.@preserve b Int(ccall(:ios_read, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
                                   s.ios, pointer(b), nb))
     end
@@ -458,21 +500,33 @@ function readbytes!(s::IOStream, b::Array{UInt8}, nb=length(b); all::Bool=true)
 end
 
 function read(s::IOStream)
-    sz = try # filesize is just a hint, so ignore if `fstat` fails
-            filesize(s)
-        catch ex
-            ex isa IOError || rethrow()
-            Int64(0)
-        end
-    if sz > 0
-        pos = position(s)
-        if pos > 0
-            sz -= pos
+    # First we try to fill the buffer. If that gives us the whole file,
+    # copy it out and return. Otherwise look at the file size and use it
+    # to prealloate space. Determining the size requires extra syscalls,
+    # which we want to avoid for small files.
+    @_lock_ios s begin
+        nb = ccall(:ios_fillbuf, Cssize_t, (Ptr{Cvoid},), s.ios)
+        if nb != -1
+            b = StringVector(nb)
+            readbytes_all!(s, b, nb)
+        else
+            sz = try # filesize is just a hint, so ignore if it fails
+                filesize(s)
+            catch ex
+                ex isa IOError || rethrow()
+                Int64(-1)
+            end
+            if sz > 0
+                pos = position(s)
+                if pos > 0
+                    sz -= pos
+                end
+            end
+            b = StringVector(sz < 0 ? 1024 : sz)
+            nr = readbytes_all!(s, b, sz < 0 ? typemax(Int) : sz)
+            resize!(b, nr)
         end
     end
-    b = StringVector(sz <= 0 ? 1024 : sz)
-    nr = readbytes_all!(s, b, typemax(Int))
-    resize!(b, nr)
     return b
 end
 
@@ -497,6 +551,10 @@ end
 
 ## peek ##
 
-function peek(s::IOStream)
-    @lock_nofail s.lock ccall(:ios_peekc, Cint, (Ptr{Cvoid},), s)
+function peek(s::IOStream, ::Type{UInt8})
+    b = @_lock_ios s ccall(:ios_peekc, Cint, (Ptr{Cvoid},), s.ios)
+    if b == -1
+        throw(EOFError())
+    end
+    return b % UInt8
 end

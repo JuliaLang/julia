@@ -129,8 +129,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 jl_exprargset(e, 0, resolve_globals(jl_exprarg(e, 0), module, sparam_vals, binding_effects, 1));
                 i++;
             }
-            if (e->head == method_sym || e->head == abstracttype_sym || e->head == structtype_sym ||
-                     e->head == primtype_sym || e->head == module_sym) {
+            if (e->head == method_sym || e->head == module_sym) {
                 i++;
             }
             for (; i < nargs; i++) {
@@ -593,6 +592,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->ambig = jl_nothing;
     m->resorted = jl_nothing;
     m->roots = NULL;
+    m->ccallable = NULL;
     m->module = module;
     m->source = NULL;
     m->unspecialized = NULL;

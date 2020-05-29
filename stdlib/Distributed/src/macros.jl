@@ -49,7 +49,7 @@ macro spawn(expr)
     quote
         local ref = spawn_somewhere($thunk)
         if $(Expr(:islocal, var))
-            push!($var, ref)
+            put!($var, ref)
         end
         ref
     end
@@ -94,7 +94,7 @@ macro spawnat(p, expr)
     quote
         local ref = $spawncall
         if $(Expr(:islocal, var))
-            push!($var, ref)
+            put!($var, ref)
         end
         ref
     end
@@ -175,7 +175,8 @@ Errors on any of the processes are collected into a
 
     @everywhere bar = 1
 
-will define `Main.bar` on all processes.
+will define `Main.bar` on all current processes. Any processes added later
+(say with [`addprocs()`](@ref)) will not have the expression defined.
 
 Unlike [`@spawnat`](@ref), `@everywhere` does not capture any local variables.
 Instead, local variables can be broadcast using interpolation:
@@ -345,7 +346,7 @@ macro distributed(args...)
         return quote
             local ref = pfor($(make_pfor_body(var, body)), $(esc(r)))
             if $(Expr(:islocal, syncvar))
-                push!($syncvar, ref)
+                put!($syncvar, ref)
             end
             ref
         end

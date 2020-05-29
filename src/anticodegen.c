@@ -66,5 +66,3 @@ JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION(void)
 {
     return 0;
 }
-
-jl_array_t *jl_cfunction_list;

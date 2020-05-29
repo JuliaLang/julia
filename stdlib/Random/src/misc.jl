@@ -52,14 +52,14 @@ number generator, see [Random Numbers](@ref).
 
 # Examples
 ```jldoctest
-julia> Random.seed!(0); randstring()
-"0IPrGg0J"
+julia> Random.seed!(3); randstring()
+"4zSHdXlw"
 
-julia> randstring(MersenneTwister(0), 'a':'z', 6)
-"aszvqk"
+julia> randstring(MersenneTwister(3), 'a':'z', 6)
+"bzlhqn"
 
 julia> randstring("ACGT")
-"TATCGGTC"
+"AGGACATT"
 ```
 
 !!! note

@@ -73,6 +73,9 @@ const PAGES = [
         "manual/missing.md",
         "manual/networking-and-streams.md",
         "manual/parallel-computing.md",
+        "manual/asynchronous-programming.md",
+        "manual/multi-threading.md",
+        "manual/distributed-computing.md",
         "manual/running-external-programs.md",
         "manual/calling-c-and-fortran-code.md",
         "manual/handling-operating-system-variation.md",
@@ -153,6 +156,7 @@ end
 # A few standard libraries need more than just the module itself in the DocTestSetup.
 # This overwrites the existing ones from above though, hence the warn=false.
 DocMeta.setdocmeta!(SparseArrays, :DocTestSetup, :(using SparseArrays, LinearAlgebra), recursive=true, warn=false)
+DocMeta.setdocmeta!(SuiteSparse, :DocTestSetup, :(using SparseArrays, LinearAlgebra, SuiteSparse), recursive=true, warn=false)
 DocMeta.setdocmeta!(UUIDs, :DocTestSetup, :(using UUIDs, Random), recursive=true, warn=false)
 DocMeta.setdocmeta!(Pkg, :DocTestSetup, :(using Pkg, Pkg.Artifacts), recursive=true, warn=false)
 DocMeta.setdocmeta!(Pkg.BinaryPlatforms, :DocTestSetup, :(using Pkg, Pkg.BinaryPlatforms), recursive=true, warn=false)

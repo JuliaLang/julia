@@ -3,7 +3,7 @@
 const LineNum = Int
 
 mutable struct InferenceState
-    params::Params # describes how to compute the result
+    params::InferenceParams
     result::InferenceResult # remember where to put the result
     linfo::MethodInstance
     sptypes::Vector{Any}    # types of static parameter
@@ -13,6 +13,7 @@ mutable struct InferenceState
 
     # info on the state of inference and the linfo
     src::CodeInfo
+    world::UInt
     min_valid::UInt
     max_valid::UInt
     nargs::Int
@@ -47,7 +48,7 @@ mutable struct InferenceState
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(result::InferenceResult, src::CodeInfo,
-                            cached::Bool, params::Params)
+                            cached::Bool, interp::AbstractInterpreter)
         linfo = result.linfo
         code = src.code::Array{Any,1}
         toplevel = !isa(linfo.def, Method)
@@ -95,9 +96,9 @@ mutable struct InferenceState
         max_valid = src.max_world == typemax(UInt) ?
             get_world_counter() : src.max_world
         frame = new(
-            params, result, linfo,
+            InferenceParams(interp), result, linfo,
             sp, slottypes, inmodule, 0,
-            src, min_valid, max_valid,
+            src, get_world_counter(interp), min_valid, max_valid,
             nargs, s_types, s_edges,
             Union{}, W, 1, n,
             cur_hand, handler_at, n_handlers,
@@ -108,17 +109,17 @@ mutable struct InferenceState
             cached, false, false, false,
             IdDict{Any, Tuple{Any, UInt, UInt}}())
         result.result = frame
-        cached && push!(params.cache, result)
+        cached && push!(get_inference_cache(interp), result)
         return frame
     end
 end
 
-function InferenceState(result::InferenceResult, cached::Bool, params::Params)
+function InferenceState(result::InferenceResult, cached::Bool, interp::AbstractInterpreter)
     # prepare an InferenceState object for inferring lambda
     src = retrieve_code_info(result.linfo)
     src === nothing && return nothing
     validate_code_in_debug_mode(result.linfo, src, "lowered")
-    return InferenceState(result, src, cached, params)
+    return InferenceState(result, src, cached, interp)
 end
 
 function sptypes_from_meth_instance(linfo::MethodInstance)
@@ -195,8 +196,7 @@ _topmod(sv::InferenceState) = _topmod(sv.mod)
 function update_valid_age!(min_valid::UInt, max_valid::UInt, sv::InferenceState)
     sv.min_valid = max(sv.min_valid, min_valid)
     sv.max_valid = min(sv.max_valid, max_valid)
-    @assert(sv.min_valid <= sv.params.world <= sv.max_valid,
-            "invalid age range update")
+    @assert(sv.min_valid <= sv.world <= sv.max_valid, "invalid age range update")
     nothing
 end
 

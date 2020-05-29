@@ -223,6 +223,9 @@ end
     push_negotiation::Ptr{Cvoid}       = C_NULL
     transport::Ptr{Cvoid}              = C_NULL
     payload::Ptr{Cvoid}                = C_NULL
+    @static if LibGit2.VERSION >= v"0.99.0"
+        resolve_url::Ptr{Cvoid}        = C_NULL
+    end
 end
 
 """

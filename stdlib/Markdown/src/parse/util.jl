@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base: peek
-
 macro dotimes(n, body)
     quote
         for i = 1:$(esc(n))
@@ -16,7 +14,7 @@ const whitespace = " \t\r"
 Skip any leading whitespace. Returns io.
 """
 function skipwhitespace(io::IO; newlines = true)
-    while !eof(io) && (Char(peek(io)) in whitespace || (newlines && peek(io) == UInt8('\n')))
+    while !eof(io) && (peek(io, Char) in whitespace || (newlines && peek(io) == UInt8('\n')))
         read(io, Char)
     end
     return io
@@ -182,7 +180,7 @@ function parse_inline_wrapper(stream::IO, delimiter::AbstractString; rep = false
         startswith(stream, delimiter^n) || return nothing
         while startswith(stream, delimiter); n += 1; end
         !rep && n > nmin && return nothing
-        !eof(stream) && Char(peek(stream)) in whitespace && return nothing
+        !eof(stream) && peek(stream, Char) in whitespace && return nothing
 
         buffer = IOBuffer()
         while !eof(stream)

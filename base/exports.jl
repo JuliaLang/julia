@@ -439,6 +439,7 @@ export
     zeros,
 
 # search, find, match and related functions
+    contains,
     eachmatch,
     endswith,
     findall,
@@ -458,9 +459,11 @@ export
     startswith,
 
 # linear algebra
+    var"'", # to enable syntax a' for adjoint
     adjoint,
     transpose,
     kron,
+    kron!,
 
 # bitarrays
     falses,
@@ -484,6 +487,7 @@ export
     any,
     firstindex,
     collect,
+    count!,
     count,
     delete!,
     deleteat!,
@@ -695,10 +699,8 @@ export
     backtrace,
     catch_backtrace,
     error,
-    register_error_hint,
     rethrow,
     retry,
-    show_error_hints,
     systemerror,
 
 # stack traces
@@ -794,6 +796,7 @@ export
     bytesavailable,
     ntoh,
     open,
+    peek,
     pipeline,
     Pipe,
     PipeBuffer,

@@ -91,6 +91,15 @@ Return the code unit value in the string `s` at index `i`. Note that
 I.e. the value returned by `codeunit(s, i)` is of the type returned by
 `codeunit(s)`.
 
+# Examples
+```jldoctest
+julia> a = codeunit("Hello", 2)
+0x65
+
+julia> typeof(a)
+UInt8
+```
+
 See also: [`ncodeunits`](@ref), [`checkbounds`](@ref)
 """
 @propagate_inbounds codeunit(s::AbstractString, i::Integer) = typeof(i) === Int ?
@@ -210,9 +219,9 @@ checkbounds(s::AbstractString, I::Union{Integer,AbstractArray}) =
 string() = ""
 string(s::AbstractString) = s
 
-(::Type{Vector{UInt8}})(s::AbstractString) = unsafe_wrap(Vector{UInt8}, String(s))
-(::Type{Array{UInt8}})(s::AbstractString) = unsafe_wrap(Vector{UInt8}, String(s))
-(::Type{Vector{T}})(s::AbstractString) where {T<:AbstractChar} = collect(T, s)
+Vector{UInt8}(s::AbstractString) = unsafe_wrap(Vector{UInt8}, String(s))
+Array{UInt8}(s::AbstractString) = unsafe_wrap(Vector{UInt8}, String(s))
+Vector{T}(s::AbstractString) where {T<:AbstractChar} = collect(T, s)
 
 Symbol(s::AbstractString) = Symbol(String(s))
 Symbol(x...) = Symbol(string(x...))
@@ -281,7 +290,7 @@ julia> cmp("b", "β")
 function cmp(a::AbstractString, b::AbstractString)
     a === b && return 0
     a, b = Iterators.Stateful(a), Iterators.Stateful(b)
-    for (c, d) in zip(a, b)
+    for (c::AbstractChar, d::AbstractChar) in zip(a, b)
         c ≠ d && return ifelse(c < d, -1, 1)
     end
     isempty(a) && return ifelse(isempty(b), 0, -1)
@@ -337,14 +346,21 @@ isless(a::Symbol, b::Symbol) = cmp(a, b) < 0
     length(s::AbstractString) -> Int
     length(s::AbstractString, i::Integer, j::Integer) -> Int
 
-The number of characters in string `s` from indices `i` through `j`. This is
-computed as the number of code unit indices from `i` to `j` which are valid
-character indices. With only a single string argument, this computes the
-number of characters in the entire string. With `i` and `j` arguments it
+Return the number of characters in string `s` from indices `i` through `j`.
+
+This is computed as the number of code unit indices from `i` to `j` which are
+valid character indices. With only a single string argument, this computes
+the number of characters in the entire string. With `i` and `j` arguments it
 computes the number of indices between `i` and `j` inclusive that are valid
 indices in the string `s`. In addition to in-bounds values, `i` may take the
 out-of-bounds value `ncodeunits(s) + 1` and `j` may take the out-of-bounds
 value `0`.
+
+!!! note
+    The time complexity of this operation is linear in general. That is, it
+    will take the time proportional to the number of bytes or characters in
+    the string because it counts the value on the fly. This is in contrast to
+    the method for arrays, which is a constant-time operation.
 
 See also: [`isvalid`](@ref), [`ncodeunits`](@ref), [`lastindex`](@ref),
 [`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref)
@@ -412,7 +428,7 @@ function thisind(s::AbstractString, i::Int)
     z = ncodeunits(s) + 1
     i == z && return i
     @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
-    @inbounds while 1 < i && !isvalid(s, i)
+    @inbounds while 1 < i && !(isvalid(s, i)::Bool)
         i -= 1
     end
     return i

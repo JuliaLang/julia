@@ -12,6 +12,9 @@ else
     const SmallUnsigned = Union{UInt8,UInt16,UInt32}
 end
 
+abstract type AbstractBroadcasted end
+const AbstractArrayOrBroadcasted = Union{AbstractArray, AbstractBroadcasted}
+
 """
     Base.add_sum(x, y)
 
@@ -227,7 +230,8 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
 
 # This is a generic implementation of `mapreduce_impl()`,
 # certain `op` (e.g. `min` and `max`) may have their own specialized versions.
-@noinline function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer, blksize::Int)
+@noinline function mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted,
+                                  ifirst::Integer, ilast::Integer, blksize::Int)
     if ifirst == ilast
         @inbounds a1 = A[ifirst]
         return mapreduce_first(f, op, a1)
@@ -250,7 +254,7 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
     end
 end
 
-mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer) =
+mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer) =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
 """
@@ -302,25 +306,29 @@ with reduction `op` over an empty array with element type of `T`.
 
 If not defined, this will throw an `ArgumentError`.
 """
-reduce_empty(op, T) = _empty_reduce_error()
-reduce_empty(::typeof(+), T) = zero(T)
+reduce_empty(op, ::Type{T}) where {T} = _empty_reduce_error()
+reduce_empty(::typeof(+), ::Type{Union{}}) = _empty_reduce_error()
+reduce_empty(::typeof(+), ::Type{T}) where {T} = zero(T)
 reduce_empty(::typeof(+), ::Type{Bool}) = zero(Int)
-reduce_empty(::typeof(*), T) = one(T)
+reduce_empty(::typeof(*), ::Type{Union{}}) = _empty_reduce_error()
+reduce_empty(::typeof(*), ::Type{T}) where {T} = one(T)
 reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
-reduce_empty(::typeof(add_sum), T) = reduce_empty(+, T)
+reduce_empty(::typeof(add_sum), ::Type{Union{}}) = _empty_reduce_error()
+reduce_empty(::typeof(add_sum), ::Type{T}) where {T} = reduce_empty(+, T)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallSigned}  = zero(Int)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallUnsigned} = zero(UInt)
-reduce_empty(::typeof(mul_prod), T) = reduce_empty(*, T)
+reduce_empty(::typeof(mul_prod), ::Type{Union{}}) = _empty_reduce_error()
+reduce_empty(::typeof(mul_prod), ::Type{T}) where {T} = reduce_empty(*, T)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
 
-reduce_empty(op::BottomRF, T) = reduce_empty(op.rf, T)
-reduce_empty(op::MappingRF, T) = mapreduce_empty(op.f, op.rf, T)
-reduce_empty(op::FilteringRF, T) = reduce_empty(op.rf, T)
-reduce_empty(op::FlipArgs, T) = reduce_empty(op.f, T)
+reduce_empty(op::BottomRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
+reduce_empty(op::MappingRF, ::Type{T}) where {T} = mapreduce_empty(op.f, op.rf, T)
+reduce_empty(op::FilteringRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
+reduce_empty(op::FlipArgs, ::Type{T}) where {T} = reduce_empty(op.f, T)
 
 """
     Base.mapreduce_empty(f, op, T)
@@ -383,13 +391,13 @@ The default is `reduce_first(op, f(x))`.
 """
 mapreduce_first(f, op, x) = reduce_first(op, f(x))
 
-_mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
+_mapreduce(f, op, A::AbstractArrayOrBroadcasted) = _mapreduce(f, op, IndexStyle(A), A)
 
-function _mapreduce(f, op, ::IndexLinear, A::AbstractArray{T}) where T
+function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted)
     inds = LinearIndices(A)
     n = length(inds)
     if n == 0
-        return mapreduce_empty(f, op, T)
+        return mapreduce_empty_iter(f, op, A, IteratorEltype(A))
     elseif n == 1
         @inbounds a1 = A[first(inds)]
         return mapreduce_first(f, op, a1)
@@ -410,7 +418,7 @@ end
 
 mapreduce(f, op, a::Number) = mapreduce_first(f, op, a)
 
-_mapreduce(f, op, ::IndexCartesian, A::AbstractArray) = mapfoldl(f, op, A)
+_mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted) = mapfoldl(f, op, A)
 
 """
     reduce(op, itr; [init])
@@ -560,7 +568,7 @@ isgoodzero(::typeof(max), x) = isbadzero(min, x)
 isgoodzero(::typeof(min), x) = isbadzero(max, x)
 
 function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
-                        A::AbstractArray, first::Int, last::Int)
+                        A::AbstractArrayOrBroadcasted, first::Int, last::Int)
     a1 = @inbounds A[first]
     v1 = mapreduce_first(f, op, a1)
     v2 = v3 = v4 = v1
@@ -832,6 +840,8 @@ end
 
 ## count
 
+_bool(f::Function) = x->f(x)::Bool
+
 """
     count(p, itr) -> Integer
     count(itr) -> Integer
@@ -849,21 +859,9 @@ julia> count([true, false, true, true])
 3
 ```
 """
-function count(pred, itr)
-    n = 0
-    for x in itr
-        n += pred(x)::Bool
-    end
-    return n
-end
-function count(pred, a::AbstractArray)
-    n = 0
-    for i in eachindex(a)
-        @inbounds n += pred(a[i])::Bool
-    end
-    return n
-end
 count(itr) = count(identity, itr)
+
+count(f, itr) = mapreduce(_bool(f), add_sum, itr, init=0)
 
 function count(::typeof(identity), x::Array{Bool})
     n = 0

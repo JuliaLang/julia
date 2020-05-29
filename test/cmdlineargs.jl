@@ -141,6 +141,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     # --eval --interactive (replaced --post-boot)
     @test  success(`$exename -i -e "exit(0)"`)
     @test !success(`$exename -i -e "exit(1)"`)
+    # issue #34924
+    @test  success(`$exename -e 'const LOAD_PATH=1'`)
 
     # --print
     @test read(`$exename -E "1+1"`, String) == "2\n"
@@ -683,6 +685,17 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
             rm(infile)
         end
     end
+end
+
+# incomplete inputs to stream REPL
+let exename = `$(Base.julia_cmd()) --startup-file=no`
+    in = Pipe(); out = Pipe(); err = Pipe()
+    proc = run(pipeline(exename, stdin = in, stdout = out, stderr = err), wait=false)
+    write(in, "f(\n")
+    close(in)
+    close(err.in)
+    txt = readline(err)
+    @test startswith(txt, "ERROR: syntax: incomplete")
 end
 
 # Issue #29855

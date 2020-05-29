@@ -20,3 +20,7 @@
 /julia_version.h
 /flisp/host
 /support/host
+
+# Clang compilation database
+/compile_commands*.json
+.clangd/

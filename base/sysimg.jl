@@ -99,7 +99,7 @@ Base.@eval Base let
     if isfile("userimg.jl")
     print("Userimg: ──── "); time_print(tot_time_userimg       * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_userimg       / tot_time) * 100); println("%")
     end
-end
 
-Base.empty!(LOAD_PATH)
-Base.empty!(DEPOT_PATH)
+    empty!(LOAD_PATH)
+    empty!(DEPOT_PATH)
+end

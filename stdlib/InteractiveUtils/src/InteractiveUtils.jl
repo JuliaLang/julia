@@ -351,4 +351,32 @@ function peakflops(n::Integer=2000; parallel::Bool=false)
     end
 end
 
+function report_bug(kind)
+    @info "Loading BugReporting package..."
+    BugReportingId = Base.PkgId(
+        Base.UUID((0xbcf9a6e7_4020_453c,0xb88e_690564246bb8)), "BugReporting")
+    # Check if the BugReporting package exists in the current environment
+    local BugReporting
+    if Base.locate_package(BugReportingId) === nothing
+        @info "Package `BugReporting` not found - attempting temporary installation"
+        # Create a temporary environment and add BugReporting
+        let Pkg = Base.require(Base.PkgId(
+            Base.UUID((0x44cfe95a_1eb2_52ea,0xb672_e2afdf69b78f)), "Pkg"))
+            mktempdir() do tmp
+                old_load_path = copy(LOAD_PATH)
+                push!(empty!(LOAD_PATH), joinpath(tmp, "Project.toml"))
+                old_home_project = Base.HOME_PROJECT[]
+                Base.HOME_PROJECT[] = nothing
+                Pkg.add(Pkg.PackageSpec(BugReportingId.name, BugReportingId.uuid))
+                BugReporting = Base.require(BugReportingId)
+                append!(empty!(LOAD_PATH), old_load_path)
+                Base.HOME_PROJECT[] = old_home_project
+            end
+        end
+    else
+        BugReporting = Base.require(BugReportingId)
+    end
+    return Base.invokelatest(BugReporting.make_interactive_report, kind)
+end
+
 end

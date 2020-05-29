@@ -536,6 +536,9 @@ end
         @test modf( convert(elty,1.2) )[2] ≈ convert(elty,1.0)
         @test modf( convert(elty,1.0) )[1] ≈ convert(elty,0.0)
         @test modf( convert(elty,1.0) )[2] ≈ convert(elty,1.0)
+        @test isequal(modf( convert(elty,-Inf) ), (-0.0, -Inf))
+        @test isequal(modf( convert(elty,Inf) ), (0.0, Inf))
+        @test isequal(modf( convert(elty,NaN) ), (NaN, NaN))
     end
 end
 
@@ -667,10 +670,16 @@ end
     @test exp10(Float16(1.0)) === Float16(exp10(1.0))
 end
 
-# #22742: updated isapprox semantics
-@test !isapprox(1.0, 1.0+1e-12, atol=1e-14)
-@test isapprox(1.0, 1.0+0.5*sqrt(eps(1.0)))
-@test !isapprox(1.0, 1.0+1.5*sqrt(eps(1.0)), atol=sqrt(eps(1.0)))
+@testset "isapprox" begin
+  # #22742: updated isapprox semantics
+  @test !isapprox(1.0, 1.0+1e-12, atol=1e-14)
+  @test isapprox(1.0, 1.0+0.5*sqrt(eps(1.0)))
+  @test !isapprox(1.0, 1.0+1.5*sqrt(eps(1.0)), atol=sqrt(eps(1.0)))
+
+  # #13132: Use of `norm` kwarg for scalar arguments
+  @test isapprox(1, 1+1.0e-12, norm=abs)
+  @test !isapprox(1, 1+1.0e-12, norm=x->1)
+end
 
 # test AbstractFloat fallback pr22716
 struct Float22716{T<:AbstractFloat} <: AbstractFloat

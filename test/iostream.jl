@@ -109,3 +109,24 @@ end
         @test y == [x; 0]
     end
 end
+
+@testset "peek(::IOStream)" begin
+    mktemp() do _, file
+        @test_throws EOFError peek(file)
+        mark(file)
+        write(file, "Lávate las manos")
+        flush(file)
+        reset(file)
+        @test peek(file) == 0x4c
+    end
+end
+
+@testset "issue #36004" begin
+    f = tempname()
+    open(f, "w") do io
+        write(io, "test")
+    end
+    open(f, "r") do io
+        @test length(readavailable(io)) > 0
+    end
+end

@@ -135,6 +135,43 @@ julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 shell> echo hello
 hello
 ```
+!!! note
+    For Windows users, Julia's shell mode does not expose windows shell commands.
+    Hence, this will fail:
+
+```julia-repl
+julia> ; # upon typing ;, the prompt changes (in place) to: shell>
+
+shell> dir
+ERROR: IOError: could not spawn `dir`: no such file or directory (ENOENT)
+Stacktrace!
+.......
+```
+However, you can get access to `PowerShell` like this:
+```julia-repl
+julia> ; # upon typing ;, the prompt changes (in place) to: shell>
+
+shell> powershell
+Windows PowerShell
+Copyright (C) Microsoft Corporation. All rights reserved.
+PS C:\Users\elm>
+```
+... and to `cmd.exe` like that (see the `dir` command):
+```julia-repl
+julia> ; # upon typing ;, the prompt changes (in place) to: shell>
+
+shell> cmd
+Microsoft Windows [version 10.0.17763.973]
+(c) 2018 Microsoft Corporation. All rights reserved.
+C:\Users\elm>dir
+ Volume in drive C has no label
+ Volume Serial Number is 1643-0CD7
+  Directory of C:\Users\elm
+
+29/01/2020  22:15    <DIR>          .
+29/01/2020  22:15    <DIR>          ..
+02/02/2020  08:06    <DIR>          .atom
+```
 
 ### Search modes
 
@@ -230,7 +267,7 @@ const mykeys = Dict{Any,Any}(
     # Up Arrow
     "\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),
     # Down Arrow
-    "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
+    "\e[B" => (s,o...)->(LineEdit.edit_move_down(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
 )
 
 function customize_keys(repl)
@@ -413,11 +450,11 @@ ENV["JULIA_WARN_COLOR"] = :yellow
 ENV["JULIA_INFO_COLOR"] = :cyan
 ```
 
-# TerminalMenus
+## TerminalMenus
 
 TerminalMenus is a submodule of the Julia REPL and enables small, low-profile interactive menus in the terminal.
 
-## Examples
+### Examples
 
 ```julia
 import REPL
@@ -428,7 +465,7 @@ options = ["apple", "orange", "grape", "strawberry",
 
 ```
 
-### RadioMenu
+#### RadioMenu
 
 The RadioMenu allows the user to select one option from the list. The `request`
 function displays the interactive menu and returns the index of the selected
@@ -464,7 +501,7 @@ v  peach
 Your favorite fruit is blueberry!
 ```
 
-### MultiSelectMenu
+#### MultiSelectMenu
 
 The MultiSelectMenu allows users to select many choices from a list.
 
@@ -505,12 +542,12 @@ You like the following fruits:
   - peach
 ```
 
-## Customization / Configuration
+### Customization / Configuration
 
 All interface customization is done through the keyword only
 `TerminalMenus.config()` function.
 
-### Arguments
+#### Arguments
 
  - `charset::Symbol=:na`: ui characters to use (`:ascii` or `:unicode`); overridden by other arguments
  - `cursor::Char='>'|'→'`: character to use for cursor
@@ -522,7 +559,7 @@ All interface customization is done through the keyword only
  - `supress_output::Bool=false`: For testing. If true, menu will not be printed to console.
  - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
 
-### Examples
+#### Examples
 
 ```julia
 julia> menu = MultiSelectMenu(options, pagesize=5);
@@ -560,7 +597,7 @@ Set([4, 2])
 
 ```
 
-# References
+## References
 
 ```@docs
 Base.atreplinit

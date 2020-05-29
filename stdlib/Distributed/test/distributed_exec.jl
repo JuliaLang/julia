@@ -1083,6 +1083,7 @@ end
 test_add_procs_threaded_blas()
 
 #19687
+if false ### TODO: The logic that is supposed to implement this is racy - Disabled for now
 # ensure no race conditions between rmprocs and addprocs
 for i in 1:5
     p = addprocs_with_testenv(1)[1]
@@ -1111,6 +1112,7 @@ if DoFullTest
     while any(in(procs()), pids)
         sleep(0.1)
     end
+end
 end
 
 # Test addprocs/rmprocs from master node only
@@ -1481,12 +1483,18 @@ let
         mkdir(tmp_dir2)
         write(tmp_file, "23.32 + 32 + myid() + include(\"testfile2\")")
         write(tmp_file2, "myid() * 2")
-        @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "testfile"))"),
-                     include("testfile"))
-        @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "testfile2"))"),
-                     include("testfile2"))
-        @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "2", "testfile"))"),
-                     include("2/testfile"))
+        function test_include_fails_to_open_file(fname)
+            try
+                include(fname)
+            catch exc
+                path = joinpath(@__DIR__, fname)
+                @test exc isa SystemError
+                @test exc.prefix == "opening file $(repr(path))"
+            end
+        end
+        test_include_fails_to_open_file("testfile")
+        test_include_fails_to_open_file("testfile2")
+        test_include_fails_to_open_file(joinpath("2", "testfile2"))
         @test include(tmp_file) == 58.32
         @test remotecall_fetch(include, proc[1], joinpath("2", "testfile")) == 55.32 + proc[1] * 3
     finally
@@ -1672,6 +1680,19 @@ end
 let (h, t) = Distributed.head_and_tail(Int[], 0)
     @test h == []
     @test collect(t) == []
+end
+
+# issue #35937
+let e
+    try
+        pmap(1) do _
+            wait(@async error(42))
+        end
+    catch ex
+        e = ex
+    end
+    # check that the inner TaskFailedException is correctly formed & can be printed
+    @test sprint(showerror, e) isa String
 end
 
 include("splitrange.jl")

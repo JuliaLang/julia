@@ -1,7 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function show(io::IO, ::MIME"text/plain", u::UndefInitializer)
-    print(io, u, ": array initializer with undefined values")
+    show(io, u)
+    get(io, :compact, false) && return
+    print(io, ": array initializer with undefined values")
 end
 
 # first a few multiline show functions for types defined before the MIME type:
@@ -9,18 +11,18 @@ end
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
 
 function show(io::IO, ::MIME"text/plain", r::LinRange)
+    isempty(r) && return show(io, r)
     # show for LinRange, e.g.
     # range(1, stop=3, length=7)
     # 7-element LinRange{Float64}:
     #   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
     summary(io, r)
-    if !isempty(r)
-        println(io, ":")
-        print_range(io, r)
-    end
+    println(io, ":")
+    print_range(io, r)
 end
 
 function show(io::IO, ::MIME"text/plain", f::Function)
+    get(io, :compact, false) && return show(io, f)
     ft = typeof(f)
     mt = ft.name.mt
     if isa(f, Core.IntrinsicFunction)
@@ -42,11 +44,14 @@ function show(io::IO, ::MIME"text/plain", f::Function)
     end
 end
 
+show(io::IO, ::MIME"text/plain", c::ComposedFunction) = show(io, c)
+
 function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
+    isempty(iter) && get(io, :compact, false) && return show(io, iter)
     summary(io, iter)
     isempty(iter) && return
     print(io, ". ", isa(iter,KeySet) ? "Keys" : "Values", ":")
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
     if limit
         sz = displaysize(io)
         rows, cols = sz[1] - 3, sz[2]
@@ -73,9 +78,10 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
 end
 
 function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
+    isempty(t) && return show(io, t)
     # show more descriptively, with one line per key/value pair
     recur_io = IOContext(io, :SHOWN_SET => t)
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
     if !haskey(io, :compact)
         recur_io = IOContext(recur_io, :compact => true)
     end
@@ -142,9 +148,10 @@ function summary(io::IO, t::AbstractSet)
 end
 
 function show(io::IO, ::MIME"text/plain", t::AbstractSet{T}) where T
+    isempty(t) && return show(io, t)
     # show more descriptively, with one line per value
     recur_io = IOContext(io, :SHOWN_SET => t)
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
 
     summary(io, t)
     isempty(t) && return
@@ -197,7 +204,7 @@ function show(io::IO, ::MIME"text/plain", t::Task)
     show(io, t)
     if t.state === :failed
         println(io)
-        showerror(io, CapturedException(t.result, t.backtrace))
+        show_task_exception(io, t)
     end
 end
 
@@ -445,11 +452,11 @@ function show_function(io::IO, f::Function, compact::Bool)
     end
 end
 
-show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false))
+show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false)::Bool)
 print(io::IO, f::Function) = show_function(io, f, true)
 
 function show(io::IO, f::Core.IntrinsicFunction)
-    if !get(io, :compact, false)
+    if !(get(io, :compact, false)::Bool)
         print(io, "Core.Intrinsics.")
     end
     print(io, nameof(f))
@@ -485,6 +492,22 @@ function show(io::IO, @nospecialize(x::Type))
         show_datatype(io, x)
         return
     elseif x isa Union
+        if x.a isa DataType && Core.Compiler.typename(x.a) === Core.Compiler.typename(DenseArray)
+            T, N = x.a.parameters
+            if x == StridedArray{T,N}
+                print(io, "StridedArray")
+                show_delim_array(io, (T,N), '{', ',', '}', false)
+                return
+            elseif x == StridedVecOrMat{T}
+                print(io, "StridedVecOrMat")
+                show_delim_array(io, (T,), '{', ',', '}', false)
+                return
+            elseif StridedArray{T,N} <: x
+                print(io, "Union")
+                show_delim_array(io, vcat(StridedArray{T,N}, uniontypes(Core.Compiler.typesubtract(x, StridedArray{T,N}))), '{', ',', '}', false)
+                return
+            end
+        end
         print(io, "Union")
         show_delim_array(io, uniontypes(x), '{', ',', '}', false)
         return
@@ -543,7 +566,7 @@ function show_type_name(io::IO, tn::Core.TypeName)
     sym = (globfunc ? globname : tn.name)::Symbol
     globfunc && print(io, "typeof(")
     quo = false
-    if !get(io, :compact, false)
+    if !(get(io, :compact, false)::Bool)
         # Print module prefix unless type is visible from module passed to
         # IOContext If :module is not set, default to Main. nothing can be used
         # to force printing prefix
@@ -1114,6 +1137,7 @@ end
 
 function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, prec::Int, quote_level::Int)
     if isa(value, Symbol) && !(value in quoted_syms)
+        value = value::Symbol
         s = string(value)
         if isidentifier(s) || (isoperator(value) && value !== Symbol("'"))
             print(io, ":")
@@ -1123,6 +1147,7 @@ function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, pre
         end
     else
         if isa(value,Expr) && value.head === :block
+            value = value::Expr
             show_block(IOContext(io, beginsym=>false), "quote", value, indent, quote_level)
             print(io, "end")
         else
@@ -1175,7 +1200,7 @@ function show_import_path(io::IO, ex, quote_level)
             if i > 1 && ex.args[i-1] !== :(.)
                 print(io, '.')
             end
-            show_sym(io, ex.args[i], allow_macroname=(i==length(ex.args)))
+            show_sym(io, ex.args[i]::Symbol, allow_macroname=(i==length(ex.args)))
         end
     else
         show_unquoted(io, ex, 0, 0, quote_level)
@@ -1207,13 +1232,7 @@ function show_unquoted_expr_fallback(io::IO, ex::Expr, indent::Int, quote_level:
     show(io, ex.head)
     for arg in ex.args
         print(io, ", ")
-        if isa(arg, Expr)
-            print(io, ":(")
-            show_unquoted(io, arg, indent, 0, quote_level+1)
-            print(io, ")")
-        else
-            show(io, arg)
-        end
+        show(io, arg)
     end
     print(io, "))")
 end
@@ -1600,17 +1619,19 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     elseif head === :quote && nargs == 1 && isa(args[1], Symbol)
         show_unquoted_quote_expr(IOContext(io, beginsym=>false), args[1]::Symbol, indent, 0, quote_level+1)
-    elseif head === :quote && nargs == 1 && is_expr(args[1], :block)
-        show_block(IOContext(io, beginsym=>false), "quote", Expr(:quote, args[1].args...), indent,
-                   quote_level+1)
-        print(io, "end")
-    elseif head === :quote && nargs == 1
-        print(io, ":(")
-        show_unquoted(IOContext(io, beginsym=>false), args[1], indent+2, 0, quote_level+1)
-        print(io, ")")
-    elseif head === :quote
-        show_block(IOContext(io, beginsym=>false), "quote", ex, indent, quote_level+1)
-        print(io, "end")
+    elseif head === :quote && !get(io, :unquote_fallback, true)
+        if nargs == 1 && is_expr(args[1], :block)
+            show_block(IOContext(io, beginsym=>false), "quote", Expr(:quote, args[1].args...), indent,
+                       quote_level+1)
+            print(io, "end")
+        elseif nargs == 1
+            print(io, ":(")
+            show_unquoted(IOContext(io, beginsym=>false), args[1], indent+2, 0, quote_level+1)
+            print(io, ")")
+        else
+            show_block(IOContext(io, beginsym=>false), "quote", ex, indent, quote_level+1)
+            print(io, "end")
+        end
 
     elseif head === :gotoifnot && nargs == 2 && isa(args[2], Int)
         print(io, "unless ")
@@ -1645,7 +1666,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         if head === :$
             quote_level -= 1
         end
-        if head === :$ && quote_level < 0 && get(io, :unquote_fallback, true)
+        if head === :$ && get(io, :unquote_fallback, true)
             unhandled = true
         else
             print(io, head)
@@ -1725,6 +1746,31 @@ function demangle_function_name(name::AbstractString)
     return name
 end
 
+# show the called object in a signature, given its type `ft`
+# `io` should contain the UnionAll env of the signature
+function show_signature_function(io::IO, @nospecialize(ft), demangle=false, fargname="", html=false)
+    uw = unwrap_unionall(ft)
+    if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) &&
+        isdefined(uw.name.module, uw.name.mt.name) &&
+        ft == typeof(getfield(uw.name.module, uw.name.mt.name))
+        print(io, (demangle ? demangle_function_name : identity)(uw.name.mt.name))
+    elseif isa(ft, DataType) && ft.name === Type.body.name &&
+        (f = ft.parameters[1]; !isa(f, TypeVar))
+        uwf = unwrap_unionall(f)
+        parens = isa(f, UnionAll) && !(isa(uwf, DataType) && f === uwf.name.wrapper)
+        parens && print(io, "(")
+        show(io, f)
+        parens && print(io, ")")
+    else
+        if html
+            print(io, "($fargname::<b>", ft, "</b>)")
+        else
+            print(io, "($fargname::", ft, ")")
+        end
+    end
+    nothing
+end
+
 function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwargs=nothing)
     # print a method signature tuple for a lambda definition
     color = get(io, :color, false) && get(io, :backtrace, false) ? stackframe_function_color() : :nothing
@@ -1741,18 +1787,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
     end
     sig = sig.parameters
     with_output_color(color, env_io) do io
-        ft = sig[1]
-        uw = unwrap_unionall(ft)
-        if ft <: Function && isa(uw,DataType) && isempty(uw.parameters) &&
-                isdefined(uw.name.module, uw.name.mt.name) &&
-                ft == typeof(getfield(uw.name.module, uw.name.mt.name))
-            print(io, (demangle ? demangle_function_name : identity)(uw.name.mt.name))
-        elseif isa(ft, DataType) && ft.name === Type.body.name && !Core.Compiler.has_free_typevars(ft)
-            f = ft.parameters[1]
-            print(io, f)
-        else
-            print(io, "(::", ft, ")")
-        end
+        show_signature_function(io, sig[1], demangle)
     end
     first = true
     print_style = get(io, :color, false) && get(io, :backtrace, false) ? :bold : :nothing
@@ -1879,6 +1914,20 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
         show(lambda_io, body)
     end
     print(io, ")")
+end
+
+function show(io::IO, inferred::Core.Compiler.InferenceResult)
+    tt = inferred.linfo.specTypes.parameters[2:end]
+    tts = join(["::$(t)" for t in tt], ", ")
+    rettype = inferred.result
+    if isa(rettype, Core.Compiler.InferenceState)
+        rettype = rettype.bestguess
+    end
+    print(io, "$(inferred.linfo.def.name)($(tts)) => $(rettype)")
+end
+
+function show(io::IO, ::Core.Compiler.NativeInterpreter)
+    print(io, "Core.Compiler.NativeInterpreter")
 end
 
 
@@ -2051,20 +2100,29 @@ end
 
 
 """
-`alignment(X)` returns a tuple (left,right) showing how many characters are
+`alignment(io, X)` returns a tuple (left,right) showing how many characters are
 needed on either side of an alignment feature such as a decimal point.
+
+# Examples
+```jldoctest
+julia> Base.alignment(stdout, 42)
+(2, 0)
+
+julia> Base.alignment(stdout, 4.23)
+(1, 3)
+
+julia> Base.alignment(stdout, 1 + 10im)
+(3, 5)
+```
 """
 alignment(io::IO, x::Any) = (0, length(sprint(show, x, context=io, sizehint=0)))
 alignment(io::IO, x::Number) = (length(sprint(show, x, context=io, sizehint=0)), 0)
-"`alignment(42)` yields (2,0)"
 alignment(io::IO, x::Integer) = (length(sprint(show, x, context=io, sizehint=0)), 0)
-"`alignment(4.23)` yields (1,3) for `4` and `.23`"
 function alignment(io::IO, x::Real)
     m = match(r"^(.*?)((?:[\.eEfF].*)?)$", sprint(show, x, context=io, sizehint=0))
     m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
-"`alignment(1 + 10im)` yields (3,5) for `1 +` and `_10im` (plus sign on left, space on right)"
 function alignment(io::IO, x::Complex)
     m = match(r"^(.*[^ef][\+\-])(.*)$", sprint(show, x, context=io, sizehint=0))
     m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
@@ -2082,7 +2140,7 @@ function alignment(io::IO, x::Pair)
         ctx = IOContext(io, :typeinfo => gettypeinfos(io, x)[1])
         left = length(sprint(show, x.first, context=ctx, sizehint=0))
         left += 2 * !isdelimited(ctx, x.first) # for parens around p.first
-        left += !get(io, :compact, false) # spaces are added around "=>"
+        left += !(get(io, :compact, false)::Bool) # spaces are added around "=>"
         (left+1, length(s)-left-1) # +1 for the "=" part of "=>"
     else
         (0, length(s)) # as for x::Any

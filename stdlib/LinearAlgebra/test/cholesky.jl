@@ -39,7 +39,7 @@ end
     n1 = div(n, 2)
     n2 = 2*n1
 
-    Random.seed!(1234321)
+    Random.seed!(12343)
 
     areal = randn(n,n)/2
     aimg  = randn(n,n)/2
@@ -266,6 +266,8 @@ end
         @test_throws RankDeficientException cholesky!(copy(M), Val(true))
         @test_throws RankDeficientException cholesky(M, Val(true); check = true)
         @test_throws RankDeficientException cholesky!(copy(M), Val(true); check = true)
+        @test !LinearAlgebra.issuccess(cholesky(M, Val(true); check = false))
+        @test !LinearAlgebra.issuccess(cholesky!(copy(M), Val(true); check = false))
         C = cholesky(M, Val(true); check = false)
         @test_throws RankDeficientException chkfullrank(C)
         C = cholesky!(copy(M), Val(true); check = false)

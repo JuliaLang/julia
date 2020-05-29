@@ -50,15 +50,6 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 // list of modules being deserialized with __init__ methods
 jl_array_t *jl_module_init_order;
 
-#ifdef JL_ASAN_ENABLED
-JL_DLLEXPORT const char* __asan_default_options() {
-    return "allow_user_segv_handler=1:detect_leaks=0";
-    // FIXME: enable LSAN after fixing leaks & defining __lsan_default_suppressions(),
-    //        or defining __lsan_default_options = exitcode=0 once publicly available
-    //        (here and in flisp/flmain.c)
-}
-#endif
-
 size_t jl_page_size;
 
 void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
@@ -299,6 +290,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 #ifdef ENABLE_TIMINGS
     jl_print_timings();
 #endif
+
+    jl_teardown_codegen();
 }
 
 static void post_boot_hooks(void);
@@ -625,6 +618,8 @@ static void jl_set_io_wait(int v)
     ptls->io_wait = v;
 }
 
+extern jl_mutex_t jl_modules_mutex;
+
 void _julia_init(JL_IMAGE_SEARCH rel)
 {
     jl_init_timing();
@@ -635,6 +630,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_safepoint_init();
     libsupport_init();
     htable_new(&jl_current_modules, 0);
+    JL_MUTEX_INIT(&jl_modules_mutex);
     ios_set_io_wait_func = jl_set_io_wait;
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
@@ -719,7 +715,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
 
-    arraylist_new(&partial_inst, 0);
     if (jl_options.image_file) {
         jl_restore_system_image(jl_options.image_file);
     }
@@ -734,7 +729,8 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 #ifdef ENABLE_TIMINGS
     jl_root_task->timing_stack = jl_root_timing;
 #endif
-    jl_init_frontend();
+    jl_init_common_symbols();
+    jl_init_flisp();
     jl_init_serializer();
 
     if (!jl_options.image_file) {

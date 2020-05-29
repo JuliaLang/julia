@@ -37,9 +37,18 @@ emptymutable(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 _similar_for(c::AbstractSet, ::Type{T}, itr, isz) where {T} = empty(c, T)
 
 function show(io::IO, s::Set)
-    print(io, "Set(")
-    show_vector(io, s)
-    print(io, ')')
+    if isempty(s)
+        if get(io, :typeinfo, Any) == typeof(s)
+            print(io, "Set()")
+        else
+            show(io, typeof(s))
+            print(io, "()")
+        end
+    else
+        print(io, "Set(")
+        show_vector(io, s)
+        print(io, ')')
+    end
 end
 
 isempty(s::Set) = isempty(s.dict)
@@ -58,6 +67,7 @@ delete!(s::Set, x) = (delete!(s.dict, x); s)
 
 copy(s::Set) = copymutable(s)
 
+copymutable(s::Set{T}) where {T} = Set{T}(s)
 # Set is the default mutable fall-back
 copymutable(s::AbstractSet{T}) where {T} = Set{T}(s)
 
@@ -590,6 +600,7 @@ askey(k, ::AbstractSet) = k
 
 function _replace!(new::Callable, res::T, A::T,
                    count::Int) where T<:Union{AbstractDict,AbstractSet}
+    count == 0 && return res
     c = 0
     if res === A # cannot replace elements while iterating over A
         repl = Pair{eltype(A),eltype(A)}[]
@@ -598,8 +609,8 @@ function _replace!(new::Callable, res::T, A::T,
             if x !== y
                 push!(repl, x => y)
                 c += 1
+                c == count && break
             end
-            c == count && break
         end
         for oldnew in repl
             pop!(res, askey(first(oldnew), res))
@@ -614,8 +625,8 @@ function _replace!(new::Callable, res::T, A::T,
                 pop!(res, askey(x, res))
                 push!(res, y)
                 c += 1
+                c == count && break
             end
-            c == count && break
         end
     end
     res
@@ -626,10 +637,18 @@ end
 function _replace!(new::Callable, res::AbstractArray, A::AbstractArray, count::Int)
     c = 0
     if count >= length(A) # simpler loop allows for SIMD
-        for i in eachindex(A)
-            @inbounds Ai = A[i]
-            y = new(Ai)
-            @inbounds res[i] = y
+        if res === A # for optimization only
+            for i in eachindex(A)
+                @inbounds Ai = A[i]
+                y = new(Ai)
+                @inbounds A[i] = y
+            end
+        else
+            for i in eachindex(A)
+                @inbounds Ai = A[i]
+                y = new(Ai)
+                @inbounds res[i] = y
+            end
         end
     else
         for i in eachindex(A)

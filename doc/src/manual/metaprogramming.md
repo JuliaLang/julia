@@ -261,10 +261,10 @@ julia> x = :(1 + 2);
 julia> e = quote quote $x end end
 quote
     #= none:1 =#
-    quote
-        #= none:1 =#
-        $x
-    end
+    $(Expr(:quote, quote
+    #= none:1 =#
+    $(Expr(:$, :x))
+end))
 end
 ```
 
@@ -289,10 +289,10 @@ This is done with multiple `$`s:
 julia> e = quote quote $$x end end
 quote
     #= none:1 =#
-    quote
-        #= none:1 =#
-        $(1 + 2)
-    end
+    $(Expr(:quote, quote
+    #= none:1 =#
+    $(Expr(:$, :(1 + 2)))
+end))
 end
 ```
 
@@ -780,10 +780,10 @@ macro time(ex)
 end
 ```
 
-Here, we want `t0`, `t1`, and `val` to be private temporary variables, and we want `time` to refer
-to the [`time`](@ref) function in Julia Base, not to any `time` variable the user
+Here, we want `t0`, `t1`, and `val` to be private temporary variables, and we want `time_ns` to refer
+to the [`time_ns`](@ref) function in Julia Base, not to any `time_ns` variable the user
 might have (the same applies to `println`). Imagine the problems that could occur if the user
-expression `ex` also contained assignments to a variable called `t0`, or defined its own `time`
+expression `ex` also contained assignments to a variable called `t0`, or defined its own `time_ns`
 variable. We might get errors, or mysteriously incorrect behavior.
 
 Julia's macro expander solves these problems in the following way. First, variables within a macro
@@ -792,7 +792,7 @@ to (and not declared global), declared local, or used as a function argument nam
 it is considered global. Local variables are then renamed to be unique (using the [`gensym`](@ref)
 function, which generates new symbols), and global variables are resolved within the macro definition
 environment. Therefore both of the above concerns are handled; the macro's locals will not conflict
-with any user variables, and `time` and `println` will refer to the Julia Base definitions.
+with any user variables, and `time_ns` and `println` will refer to the Julia Base definitions.
 
 One problem remains however. Consider the following use of this macro:
 
@@ -800,14 +800,14 @@ One problem remains however. Consider the following use of this macro:
 module MyModule
 import Base.@time
 
-time() = ... # compute something
+time_ns() = ... # compute something
 
-@time time()
+@time time_ns()
 end
 ```
 
-Here the user expression `ex` is a call to `time`, but not the same `time` function that the macro
-uses. It clearly refers to `MyModule.time`. Therefore we must arrange for the code in `ex` to
+Here the user expression `ex` is a call to `time_ns`, but not the same `time_ns` function that the macro
+uses. It clearly refers to `MyModule.time_ns`. Therefore we must arrange for the code in `ex` to
 be resolved in the macro call environment. This is done by "escaping" the expression with [`esc`](@ref):
 
 ```julia
@@ -1102,7 +1102,7 @@ When defining generated functions, there are five main differences to ordinary f
 3. Instead of calculating something or performing some action, you return a *quoted expression* which,
    when evaluated, does what you want.
 4. Generated functions are only permitted to call functions that were defined *before* the definition of the generated
-   function. (Failure to follow this my result on getting `MethodErrors` referring to functions from a future world-age.)
+   function. (Failure to follow this may result in getting `MethodErrors` referring to functions from a future world-age.)
 5. Generated functions must not *mutate* or *observe* any non-constant global state (including,
    for example, IO, locks, non-local dictionaries, or using [`hasmethod`](@ref)).
    This means they can only read global constants, and cannot have any side effects.

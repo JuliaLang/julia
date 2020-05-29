@@ -236,6 +236,14 @@ of function arguments that are containers of abstract types; see [Performance Ti
 
 ## Primitive Types
 
+!!! warning
+  It is almost always preferable to wrap an existing primitive type in a new
+  composite type than to define your own primitive type.
+
+  This functionality exists to allow Julia to bootstrap the standard primitive
+  types that LLVM supports. Once they are defined, there is very little reason
+  to define more.
+
 A primitive type is a concrete type whose data consists of plain old bits. Classic examples of primitive
 types are integers and floating-point values. Unlike most languages, Julia lets you declare your
 own primitive types, rather than providing only a fixed set of built-in ones. In fact, the standard
@@ -273,8 +281,9 @@ a name. A primitive type can optionally be declared to be a subtype of some supe
 is omitted, then the type defaults to having `Any` as its immediate supertype. The declaration
 of [`Bool`](@ref) above therefore means that a boolean value takes eight bits to store, and has
 [`Integer`](@ref) as its immediate supertype. Currently, only sizes that are multiples of
-8 bits are supported. Therefore, boolean values, although they really need just a single bit,
-cannot be declared to be any smaller than eight bits.
+8 bits are supported and you are likely to experience LLVM bugs with sizes other than those used above.
+Therefore, boolean values, although they really need just a single bit, cannot be declared to be any
+smaller than eight bits.
 
 The types [`Bool`](@ref), [`Int8`](@ref) and [`UInt8`](@ref) all have identical representations:
 they are eight-bit chunks of memory. Since Julia's type system is nominative, however, they
@@ -396,6 +405,18 @@ true
 
 The [`===`](@ref) function confirms that the "two" constructed instances of `NoFields` are actually one
 and the same. Singleton types are described in further detail [below](@ref man-singleton-types).
+More generally, if all the fields of an immutable structure are indistinguishable (`===`) then two
+immutable values containing those fields are also indistinguishable:
+
+```jldoctest
+julia> struct X
+           a::Int
+           b::Float64
+       end
+
+julia> X(1, 2) === X(1, 2)
+true
+```
 
 There is much more to say about how instances of composite types are created, but that discussion
 depends on both [Parametric Types](@ref) and on [Methods](@ref), and is sufficiently important
@@ -1415,7 +1436,7 @@ julia> firstlast(Val(false))
 "Last"
 ```
 
-For consistency across Julia, the call site should always pass a `Val`*instance* rather than using
+For consistency across Julia, the call site should always pass a `Val` *instance* rather than using
 a *type*, i.e., use `foo(Val(:bar))` rather than `foo(Val{:bar})`.
 
 It's worth noting that it's extremely easy to mis-use parametric "value" types, including `Val`;

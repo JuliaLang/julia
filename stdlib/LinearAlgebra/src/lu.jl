@@ -140,9 +140,9 @@ function generic_lufact!(A::StridedMatrix{T}, ::Val{Pivot} = Val(true);
             # find index max
             kp = k
             if Pivot
-                amax = abs(zero(T))
+                amax = norm(zero(T))
                 for i = k:m
-                    absi = abs(A[i,k])
+                    absi = norm(A[i,k])
                     if absi > amax
                         kp = i
                         amax = absi

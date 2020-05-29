@@ -1969,7 +1969,12 @@ mktempdir() do dir
             end
 
             LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
-                @test length(collect(LibGit2.GitConfigIter(cfg, r"credential.*"))) == 3
+                iter = LibGit2.GitConfigIter(cfg, r"credential.*\.helper")
+                @test LibGit2.split_cfg_entry.(iter) == [
+                    ("credential", "", "helper", "!echo first"),
+                    ("credential", "https://mygithost", "helper", ""),
+                    ("credential", "", "helper", "!echo second"),
+                ]
 
                 expected = [
                     GitCredentialHelper(`echo first`),
@@ -3043,7 +3048,7 @@ mktempdir() do dir
                             deserialize(f)
                         end
                         @test err.code == LibGit2.Error.ERROR
-                        @test lowercase(err.msg) == lowercase("invalid Content-Type: text/plain")
+                        @test occursin(r"invalid content-type: '?text/plain'?"i, err.msg)
                     end
 
                     # OpenSSL s_server should still be running

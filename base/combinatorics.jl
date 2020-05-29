@@ -290,27 +290,30 @@ invperm(P::Any16) = Tuple(invperm(collect(P)))
 
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
 """
-    nextprod([k_1, k_2,...], n)
+    nextprod(factors::Union{Tuple,AbstractVector}, n)
 
 Next integer greater than or equal to `n` that can be written as ``\\prod k_i^{p_i}`` for integers
-``p_1``, ``p_2``, etc.
+``p_1``, ``p_2``, etcetera, for factors ``k_i`` in `factors`.
 
 # Examples
 ```jldoctest
-julia> nextprod([2, 3], 105)
+julia> nextprod((2, 3), 105)
 108
 
 julia> 2^2 * 3^3
 108
 ```
+
+!!! compat "Julia 1.6"
+    The method that accepts a tuple requires Julia 1.6 or later.
 """
-function nextprod(a::Vector{Int}, x)
+function nextprod(a::Union{Tuple{Vararg{<:Integer}},AbstractVector{<:Integer}}, x::Real)
     if x > typemax(Int)
         throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end
     k = length(a)
     v = fill(1, k)                    # current value of each counter
-    mx = [nextpow(ai,x) for ai in a]  # maximum value of each counter
+    mx = map(a -> nextpow(a,x), a)   # maximum value of each counter
     v[1] = mx[1]                      # start at first case that is >= x
     p::widen(Int) = mx[1]             # initial value of product in this case
     best = p

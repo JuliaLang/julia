@@ -341,18 +341,6 @@ test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
            @X19861
            """)::Expr) == 23341
 
-# test parse_input_line for a streaming IO input
-let b = IOBuffer("""
-                 let x = x
-                     x
-                 end
-                 f()
-                 """)
-    @test Base.parse_input_line(b).args[end] == Expr(:let, Expr(:(=), :x, :x), Expr(:block, LineNumberNode(2, :none), :x))
-    @test Base.parse_input_line(b).args[end] == Expr(:call, :f)
-    @test Base.parse_input_line(b) === nothing
-end
-
 # issue #15763
 test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
 test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
@@ -2192,7 +2180,7 @@ end
 
 # Syntax desugaring pass errors contain line numbers
 @test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(101, :some_file), :(f(x,x)=1))) ==
-    Expr(:error, "function argument names not unique around some_file:101")
+    Expr(:error, "function argument name not unique: \"x\" around some_file:101")
 
 # Ensure file names don't leak between `eval`s
 eval(LineNumberNode(11, :incorrect_file))
@@ -2249,3 +2237,30 @@ macro a35391(b)
     :(GC.@preserve ($(esc(b)),) )
 end
 @test @a35391(0) === (0,)
+
+# global declarations from the top level are not inherited by functions.
+# don't allow such a declaration to override an outer local, since it's not
+# clear what it should do.
+@test Meta.lower(Main, :(let
+                           x = 1
+                           let
+                             global x
+                           end
+                         end)) == Expr(:error, "`global x`: x is a local variable in its enclosing scope")
+# note: this `begin` block must be at the top level
+_temp_33553 = begin
+    global _x_this_remains_undefined
+    let
+        local _x_this_remains_undefined = 2
+        _x_this_remains_undefined
+    end
+end
+@test _temp_33553 == 2
+@test !@isdefined(_x_this_remains_undefined)
+
+# lowering of adjoint
+@test (1 + im)' == 1 - im
+x = let var"'"(x) = 2x
+    3'
+end
+@test x == 6

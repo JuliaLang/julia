@@ -222,6 +222,11 @@ end
 f_identity_splat(t) = (t...,)
 @test length(code_typed(f_identity_splat, (Tuple{Int,Int},))[1][1].code) == 1
 
+# splatting one tuple into (,) plus zero or more empties should reduce
+# this pattern appears for example in `fill_to_length`
+f_splat_with_empties(t) = (()..., t..., ()..., ()...)
+@test length(code_typed(f_splat_with_empties, (NTuple{200,UInt8},))[1][1].code) == 1
+
 # check that <: can be fully eliminated
 struct SomeArbitraryStruct; end
 function f_subtype()

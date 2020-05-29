@@ -101,7 +101,6 @@ static const char opts[]  =
     // parallel options
     " -t, --threads {N|auto}    Enable N threads; \"auto\" currently sets N to the number of local\n"
     "                           CPU threads but this might change in the future\n"
-    " -t, --threads {N|auto}    Enable N threads. \"auto\" sets N to the number of local CPU threads.\n"
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
     "                           \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
     " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
@@ -141,7 +140,11 @@ static const char opts[]  =
     "                           Append coverage information to the LCOV tracefile (filename supports format tokens).\n"
 // TODO: These TOKENS are defined in `runtime_ccall.cpp`. A more verbose `--help` should include that list here.
     " --track-allocation={none|user|all}, --track-allocation\n"
-    "                           Count bytes allocated by each source line (omitting setting is equivalent to \"user\")\n\n"
+    "                           Count bytes allocated by each source line (omitting setting is equivalent to \"user\")\n"
+    " --bug-report=KIND         Launch a bug report session. It can be used to start a REPL, run a script, or evaluate\n"
+    "                           expressions. It first tries to use BugReporting.jl installed in current environment and\n"
+    "                           fallbacks to the latest compatible BugReporting.jl if not. For more information, see\n"
+    "                           --bug-report=help.\n\n"
 ;
 
 static const char opts_hidden[]  =
@@ -196,6 +199,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_compiled_modules,
            opt_machine_file,
            opt_project,
+           opt_bug_report
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
@@ -211,6 +215,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "eval",            required_argument, 0, 'e' },
         { "print",           required_argument, 0, 'E' },
         { "load",            required_argument, 0, 'L' },
+        { "bug-report",      required_argument, 0, opt_bug_report },
         { "sysimage",        required_argument, 0, 'J' },
         { "sysimage-native-code", required_argument, 0, opt_sysimage_native_code },
         { "compiled-modules",    required_argument, 0, opt_compiled_modules },
@@ -341,11 +346,12 @@ restart_switch:
         case 'e': // eval
         case 'E': // print
         case 'L': // load
+        case opt_bug_report: // bug
         {
             size_t sz = strlen(optarg) + 1;
             char *arg = (char*)malloc_s(sz + 1);
             const char **newcmds;
-            arg[0] = c;
+            arg[0] = c == opt_bug_report ? 'B' : c;
             memcpy(arg + 1, optarg, sz);
             newcmds = (const char**)realloc_s(cmds, (ncmds + 2) * sizeof(char*));
             cmds = newcmds;
