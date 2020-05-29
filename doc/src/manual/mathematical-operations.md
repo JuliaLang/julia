@@ -22,12 +22,6 @@ are supported on all primitive numeric types:
 | `x ^ y`    | power          | raises `x` to the `y`th power          |
 | `x % y`    | remainder      | equivalent to `rem(x,y)`               |
 
-as well as the negation on [`Bool`](@ref) types:
-
-| Expression | Name     | Description                              |
-|:---------- |:-------- |:---------------------------------------- |
-| `!x`       | negation | changes `true` to `false` and vice versa |
-
 A numeric literal placed directly before an identifier or parentheses, e.g. `2x` or `2(x+y)`, is treated as a multiplication, except with higher precedence than other binary operations.  See [Numeric Literal Coefficients](@ref man-numeric-literal-coefficients) for details.
 
 Julia's promotion system makes arithmetic operations on mixtures of argument types "just work"
@@ -65,17 +59,20 @@ This is useful for preventing the propagation of `NaN` values in quantities that
 
 ## Boolean Operators
 
-The following [Boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#Operations) are supported on `Bool`:
+The following [Boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#Operations) are supported on [`Bool`](@ref) types:
 
 | Expression | Name                                  |
 |:---------- |:--------------------------------------|
-| `!x`       | not                                   |
+| `!x`       | negation                              |
 | `x && y`   | [short-circuiting and][short-circuit] |
 | `x \|\| y` | [short-circuiting or][short-circuit]  |
+
+Negation changes `true` to `false` and vice versa. The short-circuiting opeations are explained on the linked page.
 
 Note that `Bool` is an integer type and all the usual promotion rules and numeric operators are also defined on it.
 
 [short-circuit]: https://docs.julialang.org/en/v1/manual/control-flow/#Short-Circuit-Evaluation-1
+
 ## Bitwise Operators
 
 The following [bitwise operators](https://en.wikipedia.org/wiki/Bitwise_operation#Bitwise_operators)
