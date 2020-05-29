@@ -134,17 +134,17 @@ julia> c = [9 10; 11 12];
 julia> d = [13 14; 15 16];
 
 julia> X = [[a] [b]; [c] [d]]
-2×2 Array{Array{Int64,2},2}:
+2×2 Matrix{Matrix{Int64}}:
  [1 2; 3 4]     [5 6; 7 8]
  [9 10; 11 12]  [13 14; 15 16]
 
 julia> permutedims(X)
-2×2 Array{Array{Int64,2},2}:
+2×2 Matrix{Matrix{Int64}}:
  [1 2; 3 4]  [9 10; 11 12]
  [5 6; 7 8]  [13 14; 15 16]
 
 julia> transpose(X)
-2×2 Transpose{Transpose{Int64,Array{Int64,2}},Array{Array{Int64,2},2}}:
+2×2 Transpose{Transpose{Int64,Matrix{Int64}},Matrix{Matrix{Int64}}}:
  [1 3; 2 4]  [9 11; 10 12]
  [5 7; 6 8]  [13 15; 14 16]
 ```
@@ -161,20 +161,20 @@ the operation is not recursive.
 # Examples
 ```jldoctest; setup = :(using LinearAlgebra)
 julia> permutedims([1, 2, 3, 4])
-1×4 Array{Int64,2}:
+1×4 Matrix{Int64}:
  1  2  3  4
 
 julia> V = [[[1 2; 3 4]]; [[5 6; 7 8]]]
-2-element Array{Array{Int64,2},1}:
+2-element Vector{Matrix{Int64}}:
  [1 2; 3 4]
  [5 6; 7 8]
 
 julia> permutedims(V)
-1×2 Array{Array{Int64,2},2}:
+1×2 Matrix{Matrix{Int64}}:
  [1 2; 3 4]  [5 6; 7 8]
 
 julia> transpose(V)
-1×2 Transpose{Transpose{Int64,Array{Int64,2}},Array{Array{Int64,2},1}}:
+1×2 Transpose{Transpose{Int64,Matrix{Int64}},Vector{Matrix{Int64}}}:
  [1 3; 2 4]  [5 7; 6 8]
 ```
 """

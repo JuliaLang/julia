@@ -473,13 +473,13 @@ end
         for (sinpi, cospi) in ((sinpi, cospi), (x->sincospi(x)[1], x->sincospi(x)[2]))
             @test sinpi(x) ≈ Float64(sinpi(big(x)))
             @test cospi(x) ≈ Float64(cospi(big(x)))
-            @test sinpi(complex(x, x)) ≈ Complex{Float64}(sinpi(complex(big(x), big(x))))
-            @test cospi(complex(x, x)) ≈ Complex{Float64}(cospi(complex(big(x), big(x))))
+            @test sinpi(complex(x, x)) ≈ ComplexF64(sinpi(complex(big(x), big(x))))
+            @test cospi(complex(x, x)) ≈ ComplexF64(cospi(complex(big(x), big(x))))
         end
         @test sinc(x)  ≈ Float64(sinc(big(x)))
         @test cosc(x)  ≈ Float64(cosc(big(x)))
-        @test sinc(complex(x, x))  ≈ Complex{Float64}(sinc(complex(big(x),  big(x))))
-        @test cosc(complex(x, x))  ≈ Complex{Float64}(cosc(complex(big(x),  big(x))))
+        @test sinc(complex(x, x))  ≈ ComplexF64(sinc(complex(big(x),  big(x))))
+        @test cosc(complex(x, x))  ≈ ComplexF64(cosc(complex(big(x),  big(x))))
     end
 end
 

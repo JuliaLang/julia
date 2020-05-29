@@ -121,14 +121,14 @@ See the [`seed!`](@ref) function for reseeding an already existing
 julia> rng = MersenneTwister(1234);
 
 julia> x1 = rand(rng, 2)
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
  0.5908446386657102
  0.7667970365022592
 
 julia> rng = MersenneTwister(1234);
 
 julia> x2 = rand(rng, 2)
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
  0.5908446386657102
  0.7667970365022592
 

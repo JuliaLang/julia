@@ -147,7 +147,7 @@ but you *can* change its content. For example:
 
 ```jldoctest
 julia> x = [1,2,3]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -161,7 +161,7 @@ julia> change_array!(x)
 5
 
 julia> x
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  5
  2
  3
@@ -253,7 +253,7 @@ julia> function threeargs(a, b, c)
 threeargs (generic function with 1 method)
 
 julia> x = [1, 2, 3]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -308,7 +308,7 @@ julia> threetup()
 (3, 3)
 
 julia> threearr()
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  3
  3
 ```

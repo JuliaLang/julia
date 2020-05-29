@@ -183,13 +183,13 @@ R factor:
  -1.41421    ⋅
    ⋅       -1.41421
 Row permutation:
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  3
  4
  2
 Column permutation:
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 ```
@@ -316,14 +316,14 @@ julia> F.R
   ⋅    ⋅    ⋅   1.0
 
 julia> F.prow
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  2
  3
  4
  1
 
 julia> F.pcol
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  2
  3
  4
@@ -448,7 +448,7 @@ julia> A = sparse([1,2,4], [1,1,1], [1.0,1.0,1.0], 4, 2)
  1.0   ⋅
 
 julia> qr(A)\\fill(1.0, 4)
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
  1.0
  0.0
 ```

@@ -531,12 +531,12 @@ julia> open("my_file.txt", "w") do io
 57
 
 julia> readlines("my_file.txt")
-2-element Array{String,1}:
+2-element Vector{String}:
  "JuliaLang is a GitHub organization."
  "It has many members."
 
 julia> readlines("my_file.txt", keep=true)
-2-element Array{String,1}:
+2-element Vector{String}:
  "JuliaLang is a GitHub organization.\\n"
  "It has many members.\\n"
 

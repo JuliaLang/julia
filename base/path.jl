@@ -214,7 +214,7 @@ the path, including the root directory if present.
 # Examples
 ```jldoctest
 julia> splitpath("/home/myuser/example.jl")
-4-element Array{String,1}:
+4-element Vector{String}:
  "/"
  "home"
  "myuser"

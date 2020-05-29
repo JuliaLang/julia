@@ -30,20 +30,20 @@ subdiagonal are (materialized) transpose of the corresponding superdiagonal bloc
 # Examples
 ```jldoctest
 julia> dv = [1, 2, 3, 4]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  3
  4
 
 julia> ev = [7, 8, 9]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  7
  8
  9
 
 julia> SymTridiagonal(dv, ev)
-4×4 SymTridiagonal{Int64,Array{Int64,1}}:
+4×4 SymTridiagonal{Int64,Vector{Int64}}:
  1  7  ⋅  ⋅
  7  2  8  ⋅
  ⋅  8  3  9
@@ -52,17 +52,17 @@ julia> SymTridiagonal(dv, ev)
 julia> A = SymTridiagonal(fill([1 2; 3 4], 3), fill([1 2; 3 4], 2));
 
 julia> A[1,1]
-2×2 Symmetric{Int64,Array{Int64,2}}:
+2×2 Symmetric{Int64,Matrix{Int64}}:
  1  2
  2  4
 
 julia> A[1,2]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> A[2,1]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  3
  2  4
 ```
@@ -83,13 +83,13 @@ of the symmetric matrix `A`.
 # Examples
 ```jldoctest
 julia> A = [1 2 3; 2 4 5; 3 5 6]
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1  2  3
  2  4  5
  3  5  6
 
 julia> SymTridiagonal(A)
-3×3 SymTridiagonal{Int64,Array{Int64,1}}:
+3×3 SymTridiagonal{Int64,Vector{Int64}}:
  1  2  ⋅
  2  4  5
  ⋅  5  6
@@ -97,7 +97,7 @@ julia> SymTridiagonal(A)
 julia> B = reshape([[1 2; 2 3], [1 2; 3 4], [1 3; 2 4], [1 2; 2 3]], 2, 2);
 
 julia> SymTridiagonal(B)
-2×2 SymTridiagonal{Array{Int64,2},Array{Array{Int64,2},1}}:
+2×2 SymTridiagonal{Matrix{Int64},Vector{Matrix{Int64}}}:
  [1 2; 2 3]  [1 3; 2 4]
  [1 2; 3 4]  [1 2; 2 3]
 ```
@@ -321,25 +321,25 @@ returns the specific corresponding eigenvectors.
 # Examples
 ```jldoctest
 julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
-3×3 SymTridiagonal{Float64,Array{Float64,1}}:
+3×3 SymTridiagonal{Float64,Vector{Float64}}:
  1.0  2.0   ⋅
  2.0  2.0  3.0
   ⋅   3.0  1.0
 
 julia> eigvals(A)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  -2.1400549446402604
   1.0000000000000002
   5.140054944640259
 
 julia> eigvecs(A)
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
   0.418304  -0.83205      0.364299
  -0.656749  -7.39009e-16  0.754109
   0.627457   0.5547       0.546448
 
 julia> eigvecs(A, [1.])
-3×1 Array{Float64,2}:
+3×1 Matrix{Float64}:
   0.8320502943378438
   4.263514128092366e-17
  -0.5547001962252291
@@ -507,7 +507,7 @@ julia> du = [4, 5, 6];
 julia> d = [7, 8, 9, 0];
 
 julia> Tridiagonal(dl, d, du)
-4×4 Tridiagonal{Int64,Array{Int64,1}}:
+4×4 Tridiagonal{Int64,Vector{Int64}}:
  7  4  ⋅  ⋅
  1  8  5  ⋅
  ⋅  2  9  6
@@ -529,14 +529,14 @@ diagonal and first super-diagonal of the matrix `A`.
 # Examples
 ```jldoctest
 julia> A = [1 2 3 4; 1 2 3 4; 1 2 3 4; 1 2 3 4]
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  2  3  4
  1  2  3  4
  1  2  3  4
  1  2  3  4
 
 julia> Tridiagonal(A)
-4×4 Tridiagonal{Int64,Array{Int64,1}}:
+4×4 Tridiagonal{Int64,Vector{Int64}}:
  1  2  ⋅  ⋅
  1  2  3  ⋅
  ⋅  2  3  4

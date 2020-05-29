@@ -71,17 +71,17 @@ the output (e.g. to avoid overflow).
 # Examples
 ```jldoctest
 julia> a = [1 2 3; 4 5 6]
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  2  3
  4  5  6
 
 julia> cumsum(a, dims=1)
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  2  3
  5  7  9
 
 julia> cumsum(a, dims=2)
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  3   6
  4  9  15
 ```
@@ -94,12 +94,12 @@ julia> cumsum(a, dims=2)
 
     ```jldoctest
     julia> cumsum(Int8[100, 28])
-    2-element Array{Int64,1}:
+    2-element Vector{Int64}:
      100
      128
 
     julia> accumulate(+,Int8[100, 28])
-    2-element Array{Int8,1}:
+    2-element Vector{Int8}:
       100
      -128
     ```
@@ -126,13 +126,13 @@ output (e.g. to avoid overflow).
 # Examples
 ```jldoctest
 julia> cumsum([1, 1, 1])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
 
 julia> cumsum([fill(1, 2) for i in 1:3])
-3-element Array{Array{Int64,1},1}:
+3-element Vector{Vector{Int64}}:
  [1, 1]
  [2, 2]
  [3, 3]
@@ -141,7 +141,7 @@ julia> cumsum((1, 1, 1))
 (1, 2, 3)
 
 julia> cumsum(x^2 for x in 1:3)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   1
   5
  14
@@ -178,17 +178,17 @@ to control the precision of the output (e.g. to avoid overflow).
 # Examples
 ```jldoctest
 julia> a = [1 2 3; 4 5 6]
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  2  3
  4  5  6
 
 julia> cumprod(a, dims=1)
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1   2   3
  4  10  18
 
 julia> cumprod(a, dims=2)
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1   2    6
  4  20  120
 ```
@@ -210,13 +210,13 @@ to control the precision of the output (e.g. to avoid overflow).
 # Examples
 ```jldoctest
 julia> cumprod(fill(1//2, 3))
-3-element Array{Rational{Int64},1}:
+3-element Vector{Rational{Int64}}:
  1//2
  1//4
  1//8
 
 julia> cumprod([fill(1//3, 2, 2) for i in 1:3])
-3-element Array{Array{Rational{Int64},2},1}:
+3-element Vector{Matrix{Rational{Int64}}}:
  [1//3 1//3; 1//3 1//3]
  [2//9 2//9; 2//9 2//9]
  [4//27 4//27; 4//27 4//27]
@@ -225,7 +225,7 @@ julia> cumprod((1, 2, 1))
 (1, 2, 2)
 
 julia> cumprod(x^2 for x in 1:3)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   1
   4
  36
@@ -250,37 +250,37 @@ there are specialized variants of `accumulate`, see: [`cumsum`](@ref), [`cumprod
 # Examples
 ```jldoctest
 julia> accumulate(+, [1,2,3])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  3
  6
 
 julia> accumulate(*, [1,2,3])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  6
 
 julia> accumulate(+, [1,2,3]; init=100)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  101
  103
  106
 
 julia> accumulate(min, [1,2,-1]; init=0)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   0
   0
  -1
 
 julia> accumulate(+, fill(1, 3, 3), dims=1)
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1  1  1
  2  2  2
  3  3  3
 
 julia> accumulate(+, fill(1, 3, 3), dims=2)
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1  2  3
  1  2  3
  1  2  3
@@ -327,7 +327,7 @@ julia> y = [0, 0, 0, 0, 0];
 julia> accumulate!(+, y, x);
 
 julia> y
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  1
  3
@@ -341,14 +341,14 @@ julia> B = [0 0; 0 0];
 julia> accumulate!(-, B, A, dims=1);
 
 julia> B
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
   1   2
  -2  -2
 
 julia> accumulate!(-, B, A, dims=2);
 
 julia> B
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  -1
  3  -1
 ```

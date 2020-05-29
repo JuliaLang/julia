@@ -365,7 +365,7 @@ but without allocating a new array.
 julia> rng = MersenneTwister(1234);
 
 julia> rand!(rng, zeros(5))
-5-element Array{Float64,1}:
+5-element Vector{Float64}:
  0.5908446386657102
  0.7667970365022592
  0.5662374165061859

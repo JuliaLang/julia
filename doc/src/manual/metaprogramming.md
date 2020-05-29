@@ -47,7 +47,7 @@ julia> ex1.head
 
 ```jldoctest prog
 julia> ex1.args
-3-element Array{Any,1}:
+3-element Vector{Any}:
   :+
  1
  1

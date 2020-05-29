@@ -114,7 +114,7 @@ Let's work a simple example using our native threads. Let us create an array of 
 
 ```jldoctest
 julia> a = zeros(10)
-10-element Array{Float64,1}:
+10-element Vector{Float64}:
  0.0
  0.0
  0.0

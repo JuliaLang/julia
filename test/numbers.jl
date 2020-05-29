@@ -460,7 +460,7 @@ end
     @test sign(-1//0) == -1
     @test isa(sign(2//3), Rational{Int})
     @test isa(2//3 + 2//3im, Complex{Rational{Int}})
-    @test isa(sign(2//3 + 2//3im), Complex{Float64})
+    @test isa(sign(2//3 + 2//3im), ComplexF64)
     @test sign(one(UInt)) == 1
     @test sign(zero(UInt)) == 0
 
@@ -2535,7 +2535,7 @@ Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
     @test x^p == 1
     @test x^2 == 2
     @test [x, x, x].^2 == [2, 2, 2]
-    for T in (Float16, Float32, Float64, BigFloat, Int8, Int, BigInt, Complex{Int}, Complex{Float64})
+    for T in (Float16, Float32, Float64, BigFloat, Int8, Int, BigInt, Complex{Int}, ComplexF64)
         for p in -4:4
             v = eval(:($T(2)^$p))
             @test 2.0^p == v

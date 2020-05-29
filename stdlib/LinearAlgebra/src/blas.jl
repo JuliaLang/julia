@@ -539,7 +539,7 @@ julia> x = [1; 2; 3];
 julia> y = [4; 5; 6];
 
 julia> BLAS.axpy!(2, x, y)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   6
   9
  12
@@ -608,7 +608,7 @@ julia> x = [1., 2, 3];
 julia> y = [4., 5, 6];
 
 julia> BLAS.axpby!(2., x, 3., y)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  14.0
  19.0
  24.0

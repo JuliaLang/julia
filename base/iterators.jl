@@ -36,7 +36,7 @@ Create a lazy mapping.  This is another syntax for writing
 # Examples
 ```jldoctest
 julia> collect(Iterators.map(x -> x^2, 1:3))
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  4
  9
@@ -300,7 +300,7 @@ julia> a = 1:5
 1:5
 
 julia> b = ["e","d","b","c","a"]
-5-element Array{String,1}:
+5-element Vector{String}:
  "e"
  "d"
  "b"
@@ -435,7 +435,7 @@ See [`Base.filter`](@ref) for an eager implementation of filtering for arrays.
 # Examples
 ```jldoctest
 julia> f = Iterators.filter(isodd, [1, 2, 3, 4, 5])
-Base.Iterators.Filter{typeof(isodd),Array{Int64,1}}(isodd, [1, 2, 3, 4, 5])
+Base.Iterators.Filter{typeof(isodd),Vector{Int64}}(isodd, [1, 2, 3, 4, 5])
 
 julia> foreach(println, f)
 1
@@ -541,7 +541,7 @@ An iterator that yields the same elements as `iter`, but starting at the given `
 # Examples
 ```jldoctest
 julia> collect(Iterators.rest([1,2,3,4], 2))
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  2
  3
  4
@@ -564,7 +564,7 @@ julia> a
 'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 
 julia> collect(rest)
-2-element Array{Char,1}:
+2-element Vector{Char}:
  'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
  'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
 ```
@@ -640,7 +640,7 @@ julia> a = 1:2:11
 1:2:11
 
 julia> collect(a)
-6-element Array{Int64,1}:
+6-element Vector{Int64}:
   1
   3
   5
@@ -649,7 +649,7 @@ julia> collect(a)
  11
 
 julia> collect(Iterators.take(a,3))
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  3
  5
@@ -697,7 +697,7 @@ julia> a = 1:2:11
 1:2:11
 
 julia> collect(a)
-6-element Array{Int64,1}:
+6-element Vector{Int64}:
   1
   3
   5
@@ -706,7 +706,7 @@ julia> collect(a)
  11
 
 julia> collect(Iterators.drop(a,4))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
   9
  11
 ```
@@ -755,7 +755,7 @@ afterwards, drops every element.
 
 ```jldoctest
 julia> s = collect(1:5)
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  3
@@ -763,7 +763,7 @@ julia> s = collect(1:5)
  5
 
 julia> collect(Iterators.takewhile(<(3),s))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 ```
@@ -802,7 +802,7 @@ afterwards, returns every element.
 
 ```jldoctest
 julia> s = collect(1:5)
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  3
@@ -810,7 +810,7 @@ julia> s = collect(1:5)
  5
 
 julia> collect(Iterators.dropwhile(<(3),s))
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  3
  4
  5
@@ -889,7 +889,7 @@ many times (equivalent to `take(repeated(x), n)`).
 julia> a = Iterators.repeated([1 2], 4);
 
 julia> collect(a)
-4-element Array{Array{Int64,2},1}:
+4-element Vector{Matrix{Int64}}:
  [1 2]
  [1 2]
  [1 2]
@@ -922,7 +922,7 @@ changes the fastest.
 # Examples
 ```jldoctest
 julia> collect(Iterators.product(1:2, 3:5))
-2×3 Array{Tuple{Int64,Int64},2}:
+2×3 Matrix{Tuple{Int64,Int64}}:
  (1, 3)  (1, 4)  (1, 5)
  (2, 3)  (2, 4)  (2, 5)
 ```
@@ -1044,7 +1044,7 @@ Put differently, the elements of the argument iterator are concatenated.
 # Examples
 ```jldoctest
 julia> collect(Iterators.flatten((1:2, 8:9)))
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  8
@@ -1106,7 +1106,7 @@ Iterate over a collection `n` elements at a time.
 # Examples
 ```jldoctest
 julia> collect(Iterators.partition([1,2,3,4,5], 2))
-3-element Array{SubArray{Int64,1,Array{Int64,1},Tuple{UnitRange{Int64}},true},1}:
+3-element Vector{SubArray{Int64,1,Vector{Int64},Tuple{UnitRange{Int64}},true}}:
  [1, 2]
  [3, 4]
  [5]
@@ -1209,13 +1209,13 @@ julia> popfirst!(a)
 'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 
 julia> collect(Iterators.take(a, 3))
-3-element Array{Char,1}:
+3-element Vector{Char}:
  'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
  'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
  'd': ASCII/Unicode U+0064 (category Ll: Letter, lowercase)
 
 julia> collect(a)
-2-element Array{Char,1}:
+2-element Vector{Char}:
  'e': ASCII/Unicode U+0065 (category Ll: Letter, lowercase)
  'f': ASCII/Unicode U+0066 (category Ll: Letter, lowercase)
 ```

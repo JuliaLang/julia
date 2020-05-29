@@ -10,7 +10,7 @@ and [`inv`](@ref) are all supported:
 
 ```jldoctest
 julia> A = [1 2 3; 4 1 6; 7 8 1]
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1  2  3
  4  1  6
  7  8  1
@@ -22,7 +22,7 @@ julia> det(A)
 104.0
 
 julia> inv(A)
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  -0.451923   0.211538    0.0865385
   0.365385  -0.192308    0.0576923
   0.240385   0.0576923  -0.0673077
@@ -32,17 +32,17 @@ As well as other useful operations, such as finding eigenvalues or eigenvectors:
 
 ```jldoctest
 julia> A = [-4. -17.; 2. 2.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  -4.0  -17.0
   2.0    2.0
 
 julia> eigvals(A)
-2-element Array{Complex{Float64},1}:
+2-element Vector{ComplexF64}:
  -1.0 - 5.0im
  -1.0 + 5.0im
 
 julia> eigvecs(A)
-2×2 Array{Complex{Float64},2}:
+2×2 Matrix{ComplexF64}:
   0.945905-0.0im        0.945905+0.0im
  -0.166924+0.278207im  -0.166924-0.278207im
 ```
@@ -54,20 +54,20 @@ for more information. As an example:
 
 ```jldoctest
 julia> A = [1.5 2 -4; 3 -1 -6; -10 2.3 4]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
    1.5   2.0  -4.0
    3.0  -1.0  -6.0
  -10.0   2.3   4.0
 
 julia> factorize(A)
-LU{Float64,Array{Float64,2}}
+LU{Float64,Matrix{Float64}}
 L factor:
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
   1.0    0.0       0.0
  -0.15   1.0       0.0
  -0.3   -0.132196  1.0
 U factor:
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  -10.0  2.3     4.0
    0.0  2.345  -3.4
    0.0  0.0    -5.24947
@@ -78,25 +78,25 @@ best we can do. Compare with:
 
 ```jldoctest
 julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
   1.5   2.0  -4.0
   2.0  -1.0  -3.0
  -4.0  -3.0   5.0
 
 julia> factorize(B)
-BunchKaufman{Float64,Array{Float64,2}}
+BunchKaufman{Float64,Matrix{Float64}}
 D factor:
-3×3 Tridiagonal{Float64,Array{Float64,1}}:
+3×3 Tridiagonal{Float64,Vector{Float64}}:
  -1.64286   0.0   ⋅
   0.0      -2.8  0.0
    ⋅        0.0  5.0
 U factor:
-3×3 UnitUpperTriangular{Float64,Array{Float64,2}}:
+3×3 UnitUpperTriangular{Float64,Matrix{Float64}}:
  1.0  0.142857  -0.8
   ⋅   1.0       -0.6
   ⋅    ⋅         1.0
 permutation:
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -109,13 +109,13 @@ these properties. For instance:
 
 ```jldoctest
 julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
   1.5   2.0  -4.0
   2.0  -1.0  -3.0
  -4.0  -3.0   5.0
 
 julia> sB = Symmetric(B)
-3×3 Symmetric{Float64,Array{Float64,2}}:
+3×3 Symmetric{Float64,Matrix{Float64}}:
   1.5   2.0  -4.0
   2.0  -1.0  -3.0
  -4.0  -3.0   5.0
@@ -127,25 +127,25 @@ half of it. For example:
 
 ```jldoctest
 julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
   1.5   2.0  -4.0
   2.0  -1.0  -3.0
  -4.0  -3.0   5.0
 
 julia> sB = Symmetric(B)
-3×3 Symmetric{Float64,Array{Float64,2}}:
+3×3 Symmetric{Float64,Matrix{Float64}}:
   1.5   2.0  -4.0
   2.0  -1.0  -3.0
  -4.0  -3.0   5.0
 
 julia> x = [1; 2; 3]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
 
 julia> sB\x
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  -1.7391304347826084
  -1.1086956521739126
  -1.4565217391304346
@@ -241,27 +241,27 @@ To see the `UniformScaling` operator in action:
 julia> U = UniformScaling(2);
 
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> a + U
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  3  2
  3  6
 
 julia> a * U
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  2  4
  6  8
 
 julia> [a U]
-2×4 Array{Int64,2}:
+2×4 Matrix{Int64}:
  1  2  2  0
  3  4  0  2
 
 julia> b = [1 2 3; 4 5 6]
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  2  3
  4  5  6
 

@@ -154,7 +154,7 @@ julia> A = reshape(1:4*2, 4, 2)
  4  8
 
 julia> diff(A[2:2:4,:][:])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  2
  2
  2
@@ -174,7 +174,7 @@ julia> A = reshape(1:5*2, 5, 2)
  5  10
 
 julia> diff(A[2:2:4,:][:])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  2
  3
  2

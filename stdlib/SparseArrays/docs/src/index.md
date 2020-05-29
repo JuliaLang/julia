@@ -127,7 +127,7 @@ julia> findnz(S)
 ([1, 4, 5, 3], [4, 7, 9, 18], [1, 2, 3, -5])
 
 julia> findall(!iszero, S)
-4-element Array{CartesianIndex{2},1}:
+4-element Vector{CartesianIndex{2}}:
  CartesianIndex(1, 4)
  CartesianIndex(4, 7)
  CartesianIndex(5, 9)
@@ -137,7 +137,7 @@ julia> findnz(R)
 ([1, 3, 4, 5], [1, -5, 2, 3])
 
 julia> findall(!iszero, R)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  3
  4

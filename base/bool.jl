@@ -26,7 +26,7 @@ julia> !missing
 missing
 
 julia> .![true false true]
-1×3 BitArray{2}:
+1×3 BitMatrix:
  0  1  0
 ```
 """
@@ -66,7 +66,7 @@ julia> false ⊻ false
 false
 
 julia> [true; true; false] .⊻ [true; false; false]
-3-element BitArray{1}:
+3-element BitVector:
  0
  1
  0

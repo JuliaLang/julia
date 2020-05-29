@@ -21,17 +21,17 @@ UniformScaling{Float64}
 2.0*I
 
 julia> A = [1. 2.; 3. 4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
 julia> J*A
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  2.0  4.0
  6.0  8.0
 
 julia> J[1:2, 1:2]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  2.0  0.0
  0.0  2.0
 ```
@@ -51,7 +51,7 @@ julia> fill(1, (5,6)) * I == fill(1, (5,6))
 true
 
 julia> [1 2im 3; 1im 2 3] * I
-2×3 Array{Complex{Int64},2}:
+2×3 Matrix{Complex{Int64}}:
  1+0im  0+2im  3+0im
  0+1im  2+0im  3+0im
 ```
@@ -69,13 +69,13 @@ Construct a `Diagonal` matrix from a `UniformScaling`.
 # Examples
 ```jldoctest
 julia> I(3)
-3×3 Diagonal{Bool,Array{Bool,1}}:
+3×3 Diagonal{Bool,Vector{Bool}}:
  1  ⋅  ⋅
  ⋅  1  ⋅
  ⋅  ⋅  1
 
 julia> (0.7*I)(3)
-3×3 Diagonal{Float64,Array{Float64,1}}:
+3×3 Diagonal{Float64,Vector{Float64}}:
  0.7   ⋅    ⋅
   ⋅   0.7   ⋅
   ⋅    ⋅   0.7

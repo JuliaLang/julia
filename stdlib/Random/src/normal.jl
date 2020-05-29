@@ -30,7 +30,7 @@ julia> randn(rng, ComplexF64)
 0.6133070881429037 - 0.6376291670853887im
 
 julia> randn(rng, ComplexF32, (2, 3))
-2×3 Array{Complex{Float32},2}:
+2×3 Matrix{ComplexF32}:
  -0.349649-0.638457im  0.376756-0.192146im  -0.396334-0.0136413im
   0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im
 ```
@@ -91,7 +91,7 @@ julia> randexp(rng, Float32)
 2.4835055f0
 
 julia> randexp(rng, 3, 3)
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.5167    1.30652   0.344435
  0.604436  2.78029   0.418516
  0.695867  0.693292  0.643644
@@ -133,7 +133,7 @@ Also see the [`rand`](@ref) function.
 julia> rng = MersenneTwister(1234);
 
 julia> randn!(rng, zeros(5))
-5-element Array{Float64,1}:
+5-element Vector{Float64}:
   0.8673472019512456
  -0.9017438158568171
  -0.4944787535042339
@@ -154,7 +154,7 @@ Fill the array `A` with random numbers following the exponential distribution
 julia> rng = MersenneTwister(1234);
 
 julia> randexp!(rng, zeros(5))
-5-element Array{Float64,1}:
+5-element Vector{Float64}:
  2.4835053723904896
  1.516703605376473
  0.6044364871025417

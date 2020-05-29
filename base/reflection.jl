@@ -604,7 +604,7 @@ use it in the following manner to summarize information about a struct:
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];
 
 julia> structinfo(Base.Filesystem.StatStruct)
-12-element Array{Tuple{UInt64,Symbol,DataType},1}:
+12-element Vector{Tuple{UInt64,Symbol,DataType}}:
  (0x0000000000000000, :device, UInt64)
  (0x0000000000000008, :inode, UInt64)
  (0x0000000000000010, :mode, UInt64)

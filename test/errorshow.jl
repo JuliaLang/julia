@@ -294,9 +294,9 @@ let undefvar
     @test err_str == "BoundsError: attempt to access (1, 2, 3) at index [4]"
 
     err_str = @except_str [5, 4, 3][-2, 1] BoundsError
-    @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [-2, 1]"
+    @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [-2, 1]"
     err_str = @except_str [5, 4, 3][1:5] BoundsError
-    @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [1:5]"
+    @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [1:5]"
 
     err_str = @except_str Bounded(2)[3] BoundsError
     @test err_str == "BoundsError: attempt to access 2-size Bounded at index [3]"
@@ -370,10 +370,10 @@ let err_str,
     err_str = @except_str FunctionLike()() MethodError
     @test occursin("MethodError: no method matching (::$(curmod_prefix)FunctionLike)()", err_str)
     err_str = @except_str [1,2](1) MethodError
-    @test occursin("MethodError: objects of type Array{$Int,1} are not callable\nUse square brackets [] for indexing an Array.", err_str)
+    @test occursin("MethodError: objects of type Vector{$Int} are not callable\nUse square brackets [] for indexing an Array.", err_str)
     # Issue 14940
     err_str = @except_str randn(1)() MethodError
-    @test occursin("MethodError: objects of type Array{Float64,1} are not callable", err_str)
+    @test occursin("MethodError: objects of type Vector{Float64} are not callable", err_str)
 end
 @test repr("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 0 methods)"
 @test occursin(r"^@doc \(macro with \d+ method[s]?\)$", repr("text/plain", getfield(Base, Symbol("@doc"))))
@@ -381,10 +381,10 @@ end
 # Issue 34636
 let err_str
     err_str = @except_str 1 + rand(5) MethodError
-    @test occursin("MethodError: no method matching +(::$Int, ::Array{Float64,1})", err_str)
+    @test occursin("MethodError: no method matching +(::$Int, ::Vector{Float64})", err_str)
     @test occursin("For element-wise addition, use broadcasting with dot syntax: scalar .+ array", err_str)
     err_str = @except_str rand(5) - 1//3 MethodError
-    @test occursin("MethodError: no method matching -(::Array{Float64,1}, ::Rational{$Int})", err_str)
+    @test occursin("MethodError: no method matching -(::Vector{Float64}, ::Rational{$Int})", err_str)
     @test occursin("For element-wise subtraction, use broadcasting with dot syntax: array .- scalar", err_str)
 end
 

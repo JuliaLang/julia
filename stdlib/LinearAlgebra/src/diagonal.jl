@@ -21,13 +21,13 @@ Construct a matrix from the diagonal of `A`.
 # Examples
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1  2  3
  4  5  6
  7  8  9
 
 julia> Diagonal(A)
-3×3 Diagonal{Int64,Array{Int64,1}}:
+3×3 Diagonal{Int64,Vector{Int64}}:
  1  ⋅  ⋅
  ⋅  5  ⋅
  ⋅  ⋅  9
@@ -43,12 +43,12 @@ Construct a matrix with `V` as its diagonal.
 # Examples
 ```jldoctest
 julia> V = [1, 2]
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
 julia> Diagonal(V)
-2×2 Diagonal{Int64,Array{Int64,1}}:
+2×2 Diagonal{Int64,Vector{Int64}}:
  1  ⋅
  ⋅  2
 ```

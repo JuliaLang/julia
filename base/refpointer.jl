@@ -24,7 +24,7 @@ a `ccall` Ref argument.
 
 ```jldoctest
 julia> isa.(Ref([1,2,3]), [Array, Dict, Int])
-3-element BitArray{1}:
+3-element BitVector:
  1
  0
  0
