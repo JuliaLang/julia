@@ -969,7 +969,7 @@ be quite different from conventional arrays. For example, elements might be comp
 rather than stored. However, any concrete `AbstractArray{T,N}` type should generally implement
 at least [`size(A)`](@ref) (returning an `Int` tuple), [`getindex(A,i)`](@ref) and [`getindex(A,i1,...,iN)`](@ref getindex);
 mutable arrays should also implement [`setindex!`](@ref). It is recommended that these operations
-have nearly constant time complexity, or technically Õ(1) complexity, as otherwise some array
+have nearly constant time complexity, as otherwise some array
 functions may be unexpectedly slow. Concrete types should also typically provide a [`similar(A,T=eltype(A),dims=size(A))`](@ref)
 method, which is used to allocate a similar array for [`copy`](@ref) and other out-of-place
 operations. No matter how an `AbstractArray{T,N}` is represented internally, `T` is the type of
