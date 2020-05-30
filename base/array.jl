@@ -1158,6 +1158,8 @@ end
 
 Remove the item at the given `i` and return it. Subsequent items
 are shifted to fill the resulting gap.
+When `i` is not a valid index for `a`, return `default`, or throw an error if
+`default` is not specified.
 See also [`deleteat!`](@ref) and [`splice!`](@ref).
 
 !!! compat "Julia 1.5"
@@ -1176,6 +1178,10 @@ julia> a
 
 julia> popat!(a, 4, missing)
 missing
+
+julia> popat!(a, 4)
+ERROR: BoundsError: attempt to access 3-element Array{Int64,1} at index [4]
+[...]
 ```
 """
 function popat!(a::Vector, i::Integer)
