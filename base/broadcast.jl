@@ -1307,8 +1307,7 @@ _reserved_style_error() =
     throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
 
 copy(::Broadcasted{ReservedStyle}) = _reserved_style_error()
-copyto!(_, ::Broadcasted{ReservedStyle}) = _reserved_style_error()
-copyto!(::AbstractArray, ::Broadcasted{ReservedStyle}) = _reserved_style_error()
+materialize!(::ReservedStyle, _, ::Broadcasted{ReservedStyle}) = _reserved_style_error()
 
 BroadcastStyle(::Type{<:AbstractDict}) = ReservedStyle()
 BroadcastStyle(::Type{<:NamedTuple}) = ReservedStyle()
