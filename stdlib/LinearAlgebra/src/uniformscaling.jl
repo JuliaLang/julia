@@ -78,7 +78,7 @@ ndims(J::UniformScaling) = 2
 Base.has_offset_axes(::UniformScaling) = false
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
-getindex(x::UniformScaling, n::Integer, m::AbstractRange{<:Integer}) where T = getindex(x, m, n)
+getindex(x::UniformScaling, n::Integer, m::AbstractRange{<:Integer}) = getindex(x, m, n)
 function getindex(x::UniformScaling{T}, n::AbstractRange{<:Integer}, m::Integer) where T
     v = zeros(T, length(n))
     @inbounds for (i,ii) in enumerate(n)
