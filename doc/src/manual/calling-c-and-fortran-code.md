@@ -142,19 +142,24 @@ function gethostname()
                 hostname, sizeof(hostname))
     Base.systemerror("gethostname", err != 0)
     hostname[end] = 0 # ensure null-termination
-    return unsafe_string(pointer(hostname))
+    return GC.@preserve hostname unsafe_string(pointer(hostname))
 end
 ```
 
 This example first allocates an array of bytes. It then calls the C library function `gethostname`
-to populate the array with the hostname. Finally, it takes a pointer to the hostname buffer, and converts the
-pointer to a Julia string, assuming that it is a NUL-terminated C string. It is common for C libraries
-to use this pattern of requiring the caller to allocate memory to be passed to the callee and
-populated. Allocation of memory from Julia like this is generally accomplished by creating an
-uninitialized array and passing a pointer to its data to the C function. This is why we don't
-use the `Cstring` type here: as the array is uninitialized, it could contain NUL bytes. Converting
-to a `Cstring` as part of the [`ccall`](@ref) checks for contained NUL bytes and could therefore
-throw a conversion error.
+to populate the array with the hostname. Finally, it takes a pointer to the hostname buffer, and
+converts the pointer to a Julia string, assuming that it is a NUL-terminated C string.
+
+It is common for C libraries to use this pattern of requiring the caller to allocate memory to be
+passed to the callee and populated. Allocation of memory from Julia like this is generally
+accomplished by creating an uninitialized array and passing a pointer to its data to the C function.
+This is why we don't use the `Cstring` type here: as the array is uninitialized, it could contain
+NUL bytes. Converting to a `Cstring` as part of the [`ccall`](@ref) checks for contained NUL bytes
+and could therefore throw a conversion error.
+
+Deferencing `pointer(hostname)` with `unsafe_string` is an unsafe operation as it requires access to
+the memory allocated for `hostname` that may have been in the meanwhile garbage collected. The macro
+[`GC.@preserve`](@ref) prevents this from happening and therefore accessing an invalid memory location.
 
 ## Creating C-Compatible Julia Function Pointers
 
