@@ -79,26 +79,25 @@ Base.has_offset_axes(::UniformScaling) = false
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
 function getindex(x::UniformScaling{T}, n::AbstractRange{<:Integer}, m::AbstractRange{<:Integer}) where T
-    if length(n) == length(m) && step(n) == step(m)
-        k = first(n) - first(m)
-        if k % step(n) == 0 && length(n) - abs(k) > 0
-            v = fill(x.λ, length(n) - abs(k))
-            return spdiagm(k => v)
+    if step(n) == step(m)
+        k = (first(n) - first(m))
+        if k % step(n) == 0
+            k = div(k, step(n))
+            p = abs(length(n) - length(m))
+            c = abs(p) < abs(k) ? abs(k) - abs(p) : 0
+            v = fill(x.λ, min(length(n), length(m)) - c)
+            return diagm(length(n), length(m), k => v)
         else
-            return spzeros(T, length(n), length(m))
+            return zeros(T, length(n), length(m))
         end
     end
-    I = Int[]
-    J = Int[]
-    V = T[]
-    @inbounds for (i,ii) in enumerate(n), (j,jj) in enumerate(m)
+    A = zeros(T, length(n), length(m))
+    @inbounds for (j,jj) in enumerate(m), (i,ii) in enumerate(n)
         if ii == jj
-            push!(I, i)
-            push!(J, j)
-            push!(V, x.λ)
+            A[i,j] = x.λ
         end
     end
-    return sparse(I, J, V, length(n), length(m))
+    return A
 end
 
 function show(io::IO, ::MIME"text/plain", J::UniformScaling)
