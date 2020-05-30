@@ -334,8 +334,8 @@ end
     @test [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]] ≈ [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
 end
 
-# Minimal modulo number type - but not subtyping Number
-struct ModInt{n}
+# Minimal modulo number type
+struct ModInt{n} <: Number
     k
     ModInt{n}(k) where {n} = new(mod(k,n))
     ModInt{n}(k::ModInt{n}) where {n} = k
@@ -356,20 +356,16 @@ Base.adjoint(a::ModInt{n}) where {n} = ModInt{n}(conj(a))
 Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
 LinearAlgebra.Adjoint(a::ModInt{n}) where {n} = adjoint(a)
 LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
+# Needed for pivoting:
+Base.abs(a::ModInt{n}) where {n} = a
+Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
 
 @testset "Issue 22042" begin
     A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]
     b = [ModInt{2}(1), ModInt{2}(0)]
 
     @test A*(lu(A, Val(false))\b) == b
-
-    # Needed for pivoting:
-    Base.abs(a::ModInt{n}) where {n} = a
-    LinearAlgebra.norm(a::ModInt{n}) where {n} = a
-
-    Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
-
-    @test A*(lu(A, Val(true))\b) == b
+    @test A*(lu(A, Val(true)) \b) == b
 end
 
 @testset "Issue 18742" begin

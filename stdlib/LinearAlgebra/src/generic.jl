@@ -621,31 +621,31 @@ end
 """
     norm(x::Number, p::Real=2)
 
-For numbers, return ``\\left( |x|^p \\right)^{1/p}``.
+For numbers, return ``abs(x)`` when ``p>0``. When `p==0`, return one if ``x!=0`` otherwise return zero.
 
 # Examples
 ```jldoctest
 julia> norm(2, 1)
-2.0
+2
 
 julia> norm(-2, 1)
-2.0
+2
 
 julia> norm(2, 2)
-2.0
+2
 
 julia> norm(-2, 2)
-2.0
+2
 
 julia> norm(2, Inf)
-2.0
+2
 
 julia> norm(-2, Inf)
-2.0
+2
 ```
 """
 @inline function norm(x::Number, p::Real=2)
-    afx = abs(float(x))
+    afx = abs(x)
     if p == 0
         if x == 0
             return zero(afx)
