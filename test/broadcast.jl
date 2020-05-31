@@ -251,6 +251,30 @@ let x = [1:4;]
     @test sin.(f17300kw.(x, y=1)) == sin.(f17300kw.(x; y=1)) == sin.(x .+ 1)
 end
 
+function lazybc end
+struct LazyBC{T}
+    value::T
+end
+Broadcast.broadcasted(::typeof(lazybc), x) = LazyBC(x)
+Broadcast.materialize(x::LazyBC) = x.value
+
+@testset "FixKwargs" begin
+    function f end
+    bc = lazybc.(f.(1, 2, a = 3, b = 4))
+    @test bc.f isa Base.Broadcast.FixKwargs
+    @test bc.f.f === f
+    @test (; bc.f.kwargs...) === (a = 3, b = 4)
+    @test bc.args == (1, 2)
+end
+
+struct TypeWithKwargs end
+TypeWithKwargs(a, args...; kwargs...) = TypeWithKwargs()
+
+@testset "type inference with a type with kwargs" begin
+    f() = last.(tuple.([1], TypeWithKwargs.(1, 2; a = 3, b = 4)))[1]
+    @test @inferred(f()) === TypeWithKwargs()
+end
+
 # issue #23236
 let X = [[true,false],[false,true]]
     @test [.!x for x in X] == [[false,true],[true,false]]

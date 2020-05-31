@@ -1242,7 +1242,31 @@ macro __dot__(x)
     esc(__dot__(x))
 end
 
-@inline broadcasted_kwsyntax(f, args...; kwargs...) = broadcasted((args...)->f(args...; kwargs...), args...)
+"""
+    Base.Broadcast.FixKwargs{F,K} <: Function
+
+An instance `c` of `FixKwargs` is a function that takes positional
+arguments.  `c(args...)` is equivalent to `c.f(args...; c.kwargs...)`.
+
+The callables of type `FixKwargs` are created when function calls with
+keyword arguments are used in the dot-call syntax.  The dot-call
+sub-expression `f.(args...; kwargs...)` is lowered to a form that is
+equivalent to `broadcasted(FixKwargs(f, kwargs), args...)`.
+
+# Properties
+- `f::F`: a callable
+- `kwargs::K`: the keyword arguments passed to `f`
+"""
+struct FixKwargs{F,K} <: Function
+    f::F
+    kwargs::K
+end
+
+FixKwargs(::Type{T}, kwargs::K) where {T,K} = FixKwargs{Type{T},K}(T, kwargs)
+
+(f::FixKwargs)(args...) = f.f(args...; f.kwargs...)
+
+@inline broadcasted_kwsyntax(f, args...; kwargs...) = broadcasted(FixKwargs(f, kwargs), args...)
 @inline function broadcasted(f, args...)
     args′ = map(broadcastable, args)
     broadcasted(combine_styles(args′...), f, args′...)
