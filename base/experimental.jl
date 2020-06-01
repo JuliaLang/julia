@@ -11,8 +11,9 @@ module Experimental
 
 using Base: Threads, sync_varname
 
-# Not using `using` so that tab completion shows `ReservedStyle`:
+# Not using `using` so that tab completion shows them:
 const ReservedStyle = Base.Broadcast.ReservedStyle
+const ReservedCollection = Base.Broadcast.ReservedCollection
 
 """
     Const(A::Array)

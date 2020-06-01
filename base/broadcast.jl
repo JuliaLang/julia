@@ -1273,23 +1273,26 @@ end
 implementation of broadcasting.  This is currently used for
 dictionaries and `NamedTuple`s.
 
+These collections are wrapped in [`ReservedCollection`](@ref) and
+stored in `args` property of `Broadcasted`, to avoid accidentally used
+in broadcasting implementations that are not aware of `ReservedStyle`.
+The dictionaries and `NamedTuple`s wrapped in `ReservedCollection` can
+be unwrapped by `get(::ReservedCollection)`.
+
 !!! warning
     A different broadcast style may be assigned to the collections with
     `ReservedStyle` in the future.
 
-It is an implementation detail that this style is a concrete `struct`.
-Use `Broadcasted{<:ReservedStyle}` to dispatch on the `Broadcasted`
-object that contains collections with reserved broadcasting.
-
 # Examples
 ```jldoctest
-julia> using Base.Experimental: ReservedStyle
+julia> using Base.Experimental: ReservedStyle, ReservedCollection
        using Base.Broadcast: Broadcasted, broadcasted
 
 julia> function aspairs end;
 
 julia> function Broadcast.broadcasted(::typeof(aspairs), bc::Broadcasted{<:ReservedStyle})
-           broadcasted(bc.f, collect.(pairs.(bc.args))...)
+           args = map(a -> a isa ReservedCollection ? get(a) : a , bc.args)
+           broadcasted(bc.f, collect.(pairs.(args))...)
        end;
 
 julia> aspairs.(tuple.(Dict(:a => 1), Dict(:b => 2)))
@@ -1309,7 +1312,25 @@ _reserved_style_error() =
 copy(::Broadcasted{ReservedStyle}) = _reserved_style_error()
 materialize!(::ReservedStyle, _, ::Broadcasted{ReservedStyle}) = _reserved_style_error()
 
-BroadcastStyle(::Type{<:AbstractDict}) = ReservedStyle()
-BroadcastStyle(::Type{<:NamedTuple}) = ReservedStyle()
+"""
+    Experimental.ReservedCollection(collection)
+
+`ReservedCollection` wraps a `collection` that does not support
+broadcasting.  A custom broadcasting implementations can obtain
+wrapped `collection` by `get(::ReservedCollection)`.
+
+See also [`ReservedStyle`](@ref).
+"""
+struct ReservedCollection{T}
+    value::T
+end
+
+get(r::ReservedCollection) = r.value
+
+broadcastable(x::Union{AbstractDict,NamedTuple}) = ReservedCollection(x)
+BroadcastStyle(::Type{<:ReservedCollection}) = ReservedStyle()
+BroadcastStyle(::Type{<:Union{AbstractDict,NamedTuple}}) = ReservedStyle()
+# `BroadcastStyle` for `AbstractDict` and `NamedTuple` are necessary
+# for case when they are used as the destination.
 
 end # module

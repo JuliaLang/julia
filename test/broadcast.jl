@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Random
-using Base.Broadcast: BroadcastStyle, ReservedStyle, broadcasted
+using Base.Broadcast: BroadcastStyle, ReservedStyle, ReservedCollection, broadcasted
 
 module TestBroadcastInternals
 
@@ -617,10 +617,9 @@ end
 
 @testset "ReservedStyle" begin
     dict = Dict()
-    @test Broadcast.broadcastable(dict) === dict
+    @test Broadcast.broadcastable(dict) === ReservedCollection(dict)
     nt = (a=1,)
-    @test Broadcast.broadcastable(nt) === nt
-    @test Broadcast.broadcastable(nt) === nt
+    @test Broadcast.broadcastable(nt) === ReservedCollection(nt)
     @test BroadcastStyle(typeof(broadcasted(+, dict))) isa ReservedStyle
     @test BroadcastStyle(typeof(broadcasted(+, nt))) isa ReservedStyle
     @test BroadcastStyle(typeof(broadcasted(+, dict, []))) isa ReservedStyle
