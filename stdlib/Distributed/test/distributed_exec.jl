@@ -1682,6 +1682,19 @@ let (h, t) = Distributed.head_and_tail(Int[], 0)
     @test collect(t) == []
 end
 
+# issue #35937
+let e
+    try
+        pmap(1) do _
+            wait(@async error(42))
+        end
+    catch ex
+        e = ex
+    end
+    # check that the inner TaskFailedException is correctly formed & can be printed
+    @test sprint(showerror, e) isa String
+end
+
 include("splitrange.jl")
 
 # Run topology tests last after removing all workers, since a given

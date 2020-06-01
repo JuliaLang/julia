@@ -134,6 +134,9 @@ The Julia REPL is quite powerful.  See the section in the manual on
 [the Julia REPL](https://docs.julialang.org/en/v1/stdlib/REPL/)
 for more details.
 
+On Windows we highly recommend running Julia using a modern terminal,
+such as installing the [Windows Terminal from the Microsoft Store](https://aka.ms/terminal).
+
 Support for editing Julia is available for many
 [widely used editors](https://github.com/JuliaEditorSupport):
 [Emacs](https://github.com/JuliaEditorSupport/julia-emacs),

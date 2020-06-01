@@ -828,6 +828,11 @@ end
 
 getindex(x::AbstractSparseVector, ::Colon) = copy(x)
 
+function Base.isstored(x::AbstractSparseVector, i::Integer)
+    @boundscheck checkbounds(x, i)
+    return i in nonzeroinds(x)
+end
+
 ### show and friends
 
 function show(io::IO, ::MIME"text/plain", x::AbstractSparseVector)
@@ -849,7 +854,7 @@ function show(io::IOContext, x::AbstractSparseVector)
     if isempty(nzind)
         return show(io, MIME("text/plain"), x)
     end
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
     half_screen_rows = limit ? div(displaysize(io)[1] - 8, 2) : typemax(Int)
     pad = ndigits(n)
     if !haskey(io, :compact)

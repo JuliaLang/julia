@@ -80,6 +80,7 @@ end
 
 _invoked_min_enabled_level(@nospecialize(logger)) = invoke(min_enabled_level, Tuple{typeof(logger)}, logger)
 
+_invoked_catch_exceptions(@nospecialize(logger)) = invoke(catch_exceptions, Tuple{typeof(logger)}, logger)
 
 """
     NullLogger()
@@ -349,7 +350,7 @@ end
 # Report an error in log message creation (or in the logger itself).
 @noinline function logging_error(logger, level, _module, group, id,
                                  filepath, line, @nospecialize(err))
-    if !catch_exceptions(logger)
+    if !_invoked_catch_exceptions(logger)
         rethrow(err)
     end
     try

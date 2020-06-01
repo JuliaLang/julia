@@ -463,6 +463,7 @@ export
     adjoint,
     transpose,
     kron,
+    kron!,
 
 # bitarrays
     falses,

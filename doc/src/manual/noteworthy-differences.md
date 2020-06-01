@@ -254,7 +254,7 @@ For users coming to Julia from R, these are some noteworthy differences:
 
   * Julia arrays are indexed with square brackets, and can have more than one dimension `A[i,j]`.
     This syntax is not just syntactic sugar for a reference to a pointer or address as in C/C++. See
-    the Julia documentation for the syntax for array construction (it has changed between versions).
+    [the manual entry about array construction](@ref man-multi-dim-arrays).
   * In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
   * Julia arrays are not copied when assigned to another variable. After `A = B`, changing elements of `B` will modify `A`
     as well. Updating operators like `+=` do not operate in-place, they are equivalent to `A = A + B`

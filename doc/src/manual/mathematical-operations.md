@@ -63,6 +63,19 @@ julia> false * Inf
 
 This is useful for preventing the propagation of `NaN` values in quantities that are known to be zero. See [Knuth (1992)](https://arxiv.org/abs/math/9205211) for motivation.
 
+## Boolean Operators
+
+The following [Boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#Operations) are supported on `Bool`:
+
+| Expression | Name                                  |
+|:---------- |:--------------------------------------|
+| `!x`       | not                                   |
+| `x && y`   | [short-circuiting and][short-circuit] |
+| `x \|\| y` | [short-circuiting or][short-circuit]  |
+
+Note that `Bool` is an integer type and all the usual promotion rules and numeric operators are also defined on it.
+
+[short-circuit]: https://docs.julialang.org/en/v1/manual/control-flow/#Short-Circuit-Evaluation-1
 ## Bitwise Operators
 
 The following [bitwise operators](https://en.wikipedia.org/wiki/Bitwise_operation#Bitwise_operators)

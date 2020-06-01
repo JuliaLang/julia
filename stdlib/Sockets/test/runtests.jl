@@ -218,6 +218,8 @@ end
 end
 
 @testset "getaddrinfo" begin
+    @test getaddrinfo("127.0.0.1") == ip"127.0.0.1"
+    @test getaddrinfo("::1") == ip"::1"
     let localhost = getnameinfo(ip"127.0.0.1")::String
         @test !isempty(localhost) && localhost != "127.0.0.1"
         @test !isempty(getalladdrinfo(localhost)::Vector{IPAddr})
@@ -255,10 +257,10 @@ end
 end
 
 # test connecting to a named port
-let localhost = getaddrinfo("localhost")
+let localhost = ip"127.0.0.1"
     global randport
     randport, server = listenany(localhost, defaultport)
-    @async connect("localhost", randport)
+    @async connect(localhost, randport)
     s1 = accept(server)
     @test_throws ErrorException("client TCPSocket is not in initialization state") accept(server, s1)
     @test_throws Base._UVError("listen", Base.UV_EADDRINUSE) listen(randport)

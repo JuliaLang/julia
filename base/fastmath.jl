@@ -118,7 +118,7 @@ function make_fastmath(expr::Expr)
             end
         end
     end
-    Expr(make_fastmath(expr.head), map(make_fastmath, expr.args)...)
+    Expr(make_fastmath(expr.head), Base.mapany(make_fastmath, expr.args)...)
 end
 function make_fastmath(symb::Symbol)
     fast_symb = get(fast_op, symb, :nothing)

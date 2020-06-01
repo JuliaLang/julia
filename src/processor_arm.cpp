@@ -10,10 +10,16 @@
 #include <fstream>
 #include <algorithm>
 
-#if defined(_CPU_AARCH64_) || __GLIBC_PREREQ(2, 16)
+// This nesting is required to allow compilation on musl
+#define USE_DYN_GETAUXVAL
+#if defined(_CPU_AARCH64_)
+#  undef USE_DYN_GETAUXVAL
 #  include <sys/auxv.h>
-#else
-#  define DYN_GETAUXVAL
+#elif defined(__GLIBC_PREREQ)
+#  if __GLIBC_PREREQ(2, 16)
+#    undef USE_DYN_GETAUXVAL
+#    include <sys/auxv.h>
+#  endif
 #endif
 
 namespace ARM {
@@ -498,7 +504,7 @@ static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 #  define AT_HWCAP2 26
 #endif
 
-#if defined(DYN_GETAUXVAL)
+#if defined(USE_DYN_GETAUXVAL)
 static unsigned long getauxval_procfs(unsigned long type)
 {
     int fd = open("/proc/self/auxv", O_RDONLY);
@@ -1220,7 +1226,7 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
         const char *fename_str = fename.name;
         bool enable = test_nbit(features, fename.bit);
         bool disable = test_nbit(data.dis.features, fename.bit);
-#ifdef _CPU_ARM_
+#if defined(_CPU_ARM_) && JL_LLVM_VERSION < 90000
         if (fename.bit == Feature::d32) {
             if (enable) {
                 feature_strs.push_back("-d16");

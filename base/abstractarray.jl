@@ -412,6 +412,11 @@ function isassigned(a::AbstractArray, i::Integer...)
     end
 end
 
+function isstored(A::AbstractArray{<:Any,N}, I::Vararg{Integer,N}) where {N}
+    @boundscheck checkbounds(A, I...)
+    return true
+end
+
 # used to compute "end" for last index
 function trailingsize(A, n)
     s = 1
@@ -1059,6 +1064,7 @@ _getindex(::IndexStyle, A::AbstractArray, I...) =
     error("getindex for $(typeof(A)) with types $(typeof(I)) is not supported")
 
 ## IndexLinear Scalar indexing: canonical method is one Int
+_getindex(::IndexLinear, A::AbstractVector, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))  # ambiguity resolution in case packages specialize this (to be avoided if at all possible, but see Interpolations.jl)
 _getindex(::IndexLinear, A::AbstractArray, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
 function _getindex(::IndexLinear, A::AbstractArray, I::Vararg{Int,M}) where M
     @_inline_meta
@@ -2143,6 +2149,8 @@ end
 
 # map on collections
 map(f, A::AbstractArray) = collect_similar(A, Generator(f,A))
+
+mapany(f, itr) = map!(f, Vector{Any}(undef, length(itr)), itr)  # convenient for Expr.args
 
 # default to returning an Array for `map` on general iterators
 """

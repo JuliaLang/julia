@@ -937,3 +937,40 @@ end
 @testset "vcat with mixed elements" begin
     @test vcat(Nothing[], [missing], [1.0], [Int8(1)]) isa Vector{Union{Missing, Nothing, Float64}}
 end
+
+@testset "sizeof" begin
+    let arrUInt8 = zeros(UInt8, 10)
+        @test sizeof(arrUInt8) == 10
+        @test Core.sizeof(arrUInt8) == 10
+    end
+
+    let arrUInt32 = zeros(UInt32, 10)
+        @test sizeof(arrUInt32) == 40
+        @test Core.sizeof(arrUInt32) == 40
+    end
+
+    let arrFloat64 = zeros(Float64, 10, 10)
+        @test sizeof(arrFloat64) == 800
+        @test Core.sizeof(arrFloat64) == 800
+    end
+
+    # Test union arrays (Issue #23321)
+    let arrUnion = Union{Int64, Cvoid}[rand(Bool) ? k : nothing for k = 1:10]
+        @test sizeof(arrUnion) == 80
+        @test Core.sizeof(arrUnion) == 80
+    end
+
+    # Test non-power of 2 types (Issue #35884)
+    primitive type UInt48 48 end
+    UInt48(x::UInt64) = Core.Intrinsics.trunc_int(UInt48, x)
+    UInt48(x::UInt32) = Core.Intrinsics.zext_int(UInt48, x)
+
+    a = UInt48(0x00000001);
+    b = UInt48(0x00000002);
+    c = UInt48(0x00000003);
+    let arrayOfUInt48 = [a, b, c]
+        f35884(x) = sizeof(x)
+        @test f35884(arrayOfUInt48) == 24
+        @test Core.sizeof(arrayOfUInt48) == 24
+    end
+end
