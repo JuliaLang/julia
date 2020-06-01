@@ -733,7 +733,7 @@ findall(p::Base.Fix2{typeof(in)}, x::SparseVector{<:Any,Ti}) where {Ti} =
     invoke(findall, Tuple{Base.Fix2{typeof(in)}, AbstractArray}, p, x)
 
 """
-    findnz(x)
+    findnz(x::SparseVector)
 
 Return a tuple `(I, V)`  where `I` is the indices of the stored ("structurally non-zero")
 values in sparse vector `x` and `V` is a vector of the values.

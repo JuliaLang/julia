@@ -103,7 +103,7 @@ function findprev(f::Function, v::AbstractSparseArray, i)
 end
 
 """
-    findnz(A)
+    findnz(A::SparseMatrix)
 
 Return a tuple `(I, J, V)` where `I` and `J` are the row and column indices of the stored
 ("structurally non-zero") values in sparse matrix `A`, and `V` is a vector of the values.
