@@ -7221,3 +7221,11 @@ struct AVL35416{K,V}
     avl:: Union{Nothing,Node35416{AVL35416{K,V},<:K,<:V}}
 end
 @test AVL35416(Node35416{AVL35416{Integer,AbstractString},Int,String}()) isa AVL35416{Integer,AbstractString}
+
+# issue #36104
+module M36104
+struct T36104
+    v::Vector{M36104.T36104}
+end
+end
+@test fieldtypes(M36104.T36104) == (Vector{M36104.T36104},)

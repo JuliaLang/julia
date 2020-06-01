@@ -903,7 +903,22 @@
                         (call (core svec) ,@(map quotify field-names))
                         ,mut ,min-initialized))
          (call (core _setsuper!) ,name ,super)
-         (call (core _typebody!) ,name (call (core svec) ,@field-types))
+         (call (core _typebody!) ,name
+               (call (core svec)
+                     ;; Replace A.B expressions with references to the local new struct `B`
+                     ;; if A refers to the enclosing module. TODO: Remove. This is a
+                     ;; compatibility shim (issue #36104).
+                     ,@(map (lambda (x)
+                              (expr-replace (lambda (y)
+                                              (and (length= y 3) (eq? (car y) '|.|)
+                                                   (or (equal? (caddr y) `(quote ,name))
+                                                       (equal? (caddr y) `(inert ,name)))))
+                                            x
+                                            (lambda (y)
+                                              `(call (core struct_name_shim)
+                                                     ,(cadr y) ,(caddr y)
+                                                     (thismodule) ,name))))
+                            field-types)))
          (if (&& (isdefined (outerref ,name))
                  (call (core _equiv_typedef) (outerref ,name) ,name))
              (null)

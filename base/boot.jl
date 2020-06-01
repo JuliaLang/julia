@@ -741,6 +741,14 @@ Unsigned(x::Union{Float32, Float64, Bool}) = UInt(x)
 Integer(x::Integer) = x
 Integer(x::Union{Float32, Float64}) = Int(x)
 
+# During definition of struct type `B`, if an `A.B` expression refers to
+# the eventual global name of the struct, then return the partially-initialized
+# type object.
+# TODO: remove. This is a shim for backwards compatibility.
+function struct_name_shim(@nospecialize(x), name::Symbol, mod::Module, @nospecialize(t))
+    return x === mod ? t : getfield(x, name)
+end
+
 # Binding for the julia parser, called as
 #
 #    Core._parse(text, filename, offset, options)
