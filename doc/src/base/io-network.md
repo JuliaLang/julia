@@ -55,7 +55,7 @@ Base.IOContext(::IO, ::IOContext)
 ## Text I/O
 
 ```@docs
-Base.show(::Any)
+Base.show(::IO, ::Any)
 Base.summary
 Base.print
 Base.println
@@ -93,7 +93,7 @@ Base.AbstractDisplay
 Base.Multimedia.display
 Base.Multimedia.redisplay
 Base.Multimedia.displayable
-Base.show(::Any, ::Any, ::Any)
+Base.show(::IO, ::Any, ::Any)
 Base.Multimedia.showable
 Base.repr(::MIME, ::Any)
 Base.MIME
