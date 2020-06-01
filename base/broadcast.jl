@@ -1300,7 +1300,7 @@ julia> aspairs.(tuple.(Dict(:a => 1), Dict(:b => 2)))
 struct ReservedStyle <: BroadcastStyle end
 
 BroadcastStyle(s::ReservedStyle, ::BroadcastStyle) = s
-BroadcastStyle(::ReservedStyle, s::Unknown) = s
+BroadcastStyle(s::ReservedStyle, ::Unknown) = s
 instantiate(bc::Broadcasted{ReservedStyle}) = bc
 
 _reserved_style_error() =
