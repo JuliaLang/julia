@@ -948,6 +948,33 @@ end
 (f::Fix2)(y) = f.f(y, f.x)
 
 """
+    Base.FixKwargs(f; kwargs...)
+    Base.FixKwargs(f, kwargs)
+
+A type representing a partially-applied version of the keyword argument function
+`f`, with all keyword arguments fixed to those passed. In other words,
+`FixKwargs(f; kwargs...)` behaves similarly to `(args...) -> f(args...; kwargs...)`.
+
+The callables of type `FixKwargs` are created when function calls with
+keyword arguments are used in the dot-call syntax.  The dot-call
+sub-expression `f.(args...; kwargs...)` is lowered to a form that is
+equivalent to `broadcasted(FixKwargs(f, kwargs), args...)`.
+
+# Properties
+- `f::F`: a callable
+- `kwargs::K`: the keyword arguments passed to `f`
+"""
+struct FixKwargs{F,K} <: Function
+    f::F
+    kwargs::K
+end
+
+FixKwargs(::Type{T}, kwargs::K) where {T,K} = FixKwargs{Type{T},K}(T, kwargs)
+FixKwargs(f; kwargs...) = FixKwargs(f, kwargs)
+
+(f::FixKwargs)(args...) = f.f(args...; f.kwargs...)
+
+"""
     isequal(x)
 
 Create a function that compares its argument to `x` using [`isequal`](@ref), i.e.

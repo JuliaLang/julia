@@ -261,7 +261,7 @@ Broadcast.materialize(x::LazyBC) = x.value
 @testset "FixKwargs" begin
     function f end
     bc = lazybc.(f.(1, 2, a = 3, b = 4))
-    @test bc.f isa Base.Broadcast.FixKwargs
+    @test bc.f isa Base.FixKwargs
     @test bc.f.f === f
     @test (; bc.f.kwargs...) === (a = 3, b = 4)
     @test bc.args == (1, 2)
