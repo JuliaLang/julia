@@ -41,5 +41,5 @@ mktempdir() do dir
   @test Base.Filesystem.cp(filename_big, filename_big_copy) == filename_big_copy
   Base.Filesystem.rm(filename_big)
   Base.Filesystem.rm(filename_big_copy)
-    
+
 end
