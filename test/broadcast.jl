@@ -618,8 +618,10 @@ end
 @testset "ReservedStyle" begin
     dict = Dict()
     @test Broadcast.broadcastable(dict) === ReservedCollection(dict)
+    @test get(Broadcast.broadcastable(dict)) === dict
     nt = (a=1,)
     @test Broadcast.broadcastable(nt) === ReservedCollection(nt)
+    @test get(Broadcast.broadcastable(nt)) === nt
     @test BroadcastStyle(typeof(broadcasted(+, dict))) isa ReservedStyle
     @test BroadcastStyle(typeof(broadcasted(+, nt))) isa ReservedStyle
     @test BroadcastStyle(typeof(broadcasted(+, dict, []))) isa ReservedStyle

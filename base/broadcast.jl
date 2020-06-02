@@ -1282,7 +1282,7 @@ struct ReservedCollection{T}
     value::T
 end
 
-get(r::ReservedCollection) = r.value
+Base.get(r::ReservedCollection) = r.value
 
 broadcastable(x::Union{AbstractDict,NamedTuple}) = ReservedCollection(x)
 BroadcastStyle(::Type{<:ReservedCollection}) = ReservedStyle()
