@@ -544,8 +544,75 @@ You like the following fruits:
 
 ### Customization / Configuration
 
-All interface customization is done through the keyword only
-`TerminalMenus.config()` function.
+#### ConfiguredMenu subtypes
+
+Starting with Julia 1.6, the recommended way to configure menus is via the constructor.
+For instance, the default multiple-selection menu
+
+```
+julia> menu = MultiSelectMenu(options, pagesize=5);
+
+julia> request(menu) # ASCII is used by default
+[press: d=done, a=all, n=none]
+   [ ] apple
+   [X] orange
+   [ ] grape
+ > [X] strawberry
+v  [ ] blueberry
+Set([4, 2])
+```
+
+can instead be rendered with Unicode selection and navigation characters with
+
+```julia
+julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode);
+
+julia> request(menu)
+[press: d=done, a=all, n=none]
+   ⬚ apple
+   ✓ orange
+   ⬚ grape
+ → ✓ strawberry
+↓  ⬚ blueberry
+Set([4, 2])
+```
+
+More fine-grained configuration is also possible:
+
+```julia
+julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode, checked="YEP!", unchecked="NOPE", cursor='⧐');
+
+julia> request(menu)
+julia> request(menu)
+[press: d=done, a=all, n=none]
+   NOPE apple
+   YEP! orange
+   NOPE grape
+ ⧐ YEP! strawberry
+↓  NOPE blueberry
+Set([4, 2])
+```
+
+Aside from the overall `charset` option, for `RadioMenu` the configurable options are:
+
+ - `cursor::Char='>'|'→'`: character to use for cursor
+ - `up_arrow::Char='^'|'↑'`: character to use for up arrow
+ - `down_arrow::Char='v'|'↓'`: character to use for down arrow
+ - `scroll_wrap::Bool=false`: optionally wrap-around at the beginning/end of a menu
+ - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
+
+`MultiSelectMenu` adds:
+
+ - `checked::String="[X]"|"✓"`: string to use for checked
+ - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
+
+You can create new menu types of your own.
+Types that are derived from `TerminalMenus.ConfiguredMenu` configure the menu options at construction time.
+
+#### Legacy interface
+
+Prior to Julia 1.6, and still supported throughout Julia 1.x, one can also configure menus by calling
+`TerminalMenus.config()`.
 
 #### Arguments
 
@@ -558,44 +625,6 @@ All interface customization is done through the keyword only
  - `scroll::Symbol=:na`: If `:wrap` then wrap the cursor around top and bottom, if :`nowrap` do not wrap cursor
  - `suppress_output::Bool=false`: For testing. If true, menu will not be printed to console.
  - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
-
-#### Examples
-
-```julia
-julia> menu = MultiSelectMenu(options, pagesize=5);
-
-julia> request(menu) # ASCII is used by default
-[press: d=done, a=all, n=none]
-   [ ] apple
-   [X] orange
-   [ ] grape
- > [X] strawberry
-v  [ ] blueberry
-Set([4, 2])
-
-julia> TerminalMenus.config(charset=:unicode)
-
-julia> request(menu)
-[press: d=done, a=all, n=none]
-   ⬚ apple
-   ✓ orange
-   ⬚ grape
- → ✓ strawberry
-↓  ⬚ blueberry
-Set([4, 2])
-
-julia> TerminalMenus.config(checked="YEP!", unchecked="NOPE", cursor='⧐')
-
-julia> request(menu)
-[press: d=done, a=all, n=none]
-   NOPE apple
-   YEP! orange
-   NOPE grape
- ⧐ YEP! strawberry
-↓  NOPE blueberry
-Set([4, 2])
-
-```
 
 ## References
 
