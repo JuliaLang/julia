@@ -652,7 +652,7 @@ remotecalls and when data is stored to a[`RemoteChannel`](@ref) / [`Future`](@re
 a different node. As expected, this results in a copy of the serialized objects
 on the remote node. However, when the destination node is the local node, i.e.
 the calling process id is the same as the remote node id, it is executed
-as a local call. It is usually(not always) executed in a different task - but there is no
+as a local call. It is usually (not always) executed in a different task - but there is no
 serialization/deserialization of data. Consequently, the call refers to the same object instances
 as passed - no copies are created. This behavior is highlighted below:
 
