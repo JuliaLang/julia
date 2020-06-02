@@ -576,9 +576,6 @@ end
 Delete and return the mapping for `key` if it exists in `collection`, otherwise return
 `default`, or throw an error if `default` is not specified.
 
-!!! compat "Julia 1.5"
-    For `collection::Vector`, this method requires at least Julia 1.5.
-
 # Examples
 ```jldoctest
 julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
