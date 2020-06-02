@@ -193,6 +193,7 @@ end
     @test_throws ErrorException("Int is incommensurate with PhysQuantity") x*2   # not a MethodError for convert
     @test x.hi/2 === PhysQuantity{1}(2.0)
     @test_throws ErrorException("Int is incommensurate with PhysQuantity") x/2
+    @test zero(typeof(x)) === Base.TwicePrecision(PhysQuantity{1}(0.0))
 end
 @testset "ranges" begin
     @test size(10:1:0) == (0,)
