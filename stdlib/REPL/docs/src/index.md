@@ -469,7 +469,7 @@ options = ["apple", "orange", "grape", "strawberry",
 
 The RadioMenu allows the user to select one option from the list. The `request`
 function displays the interactive menu and returns the index of the selected
-choice. If a user presses 'q' or `ctrl-c`, `request` will return a `-1`.
+choice. If a user presses 'q' `request` will return a `-1`.
 
 
 ```julia
@@ -510,7 +510,7 @@ The MultiSelectMenu allows users to select many choices from a list.
 menu = MultiSelectMenu(options)
 
 # `request` returns a `Set` of selected indices
-# if the menu us canceled (ctrl-c or q), return an empty set
+# if the menu is canceled by pressing 'q' return an empty set
 choices = request("Select the fruits you like:", menu)
 
 if length(choices) > 0
