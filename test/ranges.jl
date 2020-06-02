@@ -1610,6 +1610,7 @@ end
 @testset "diff of ranges, #36116" begin
     for r in (0:2, 0:1:2, 0.0:1.0:2.0, LinRange(0,2,3))
         @test diff(r) == diff(collect(r)) == fill(1, 2)
+        @test_throws ArgumentError diff(r, dims=2)
     end
     for r in (0:2:5, 0.1:0.1:2.0, LinRange(0,2,33))
         @test diff(r) == diff(collect(r)) == [r[i+1] - r[i] for i in 1:length(r)-1]
