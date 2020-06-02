@@ -1934,7 +1934,7 @@ function show(io::IO, inferred::Core.Compiler.InferenceResult)
 end
 
 function show(io::IO, ::Core.Compiler.NativeInterpreter)
-    print(io, "Core.Compiler.NativeInterpreter")
+    print(io, "Core.Compiler.NativeInterpreter(...)")
 end
 
 

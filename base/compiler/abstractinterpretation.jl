@@ -4,8 +4,6 @@
 # constants #
 #############
 
-const DEFAULT_INTERPRETER = NativeInterpreter(UInt(0))
-
 const CoreNumType = Union{Int32, Int64, Float32, Float64}
 
 const _REF_NAME = Ref.body.name
