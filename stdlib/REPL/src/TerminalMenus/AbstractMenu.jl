@@ -5,8 +5,6 @@
     AbstractMenu
 
 The supertype for all Menu types.
-See AbstractMenu.jl for descriptions of functions mentioned in this
-doc string.
 
 
 # Functions

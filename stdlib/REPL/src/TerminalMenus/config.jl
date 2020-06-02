@@ -42,7 +42,7 @@ function config(;charset::Symbol = :na,
         # TODO: remove this whole block for Julia 2.0.
         # This was a documented option with a typo, so we need to support it throughout Julia 1.x.
         # During Julia 1.x, the typo `supress_output` takes precedence over `suppress_output`.
-        suppress_output === nothing || @warn "`supress_output` is deprecated, use `suppress_output`"
+        suppress_output === nothing || Base.depwarn("`supress_output` is deprecated, use `suppress_output`", :config)
         suppress_output = supress_output
     end
 
