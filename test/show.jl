@@ -138,6 +138,10 @@ end
 # basic expressions
 @test_repr "x + y"
 @test_repr "2e"
+@test_repr "2*e1"
+@test_repr "2*E1"
+@test_repr "2*f1"
+@test_repr "0x00*a"
 @test_repr "!x"
 @test_repr "f(1, 2, 3)"
 @test_repr "x = ~y"
