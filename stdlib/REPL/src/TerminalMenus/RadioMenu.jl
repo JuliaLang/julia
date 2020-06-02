@@ -19,17 +19,18 @@ Your favorite fruit is blueberry!
 ```
 
 """
-mutable struct RadioMenu <: AbstractMenu
+mutable struct RadioMenu <: ConfiguredMenu
     options::Array{String,1}
     pagesize::Int
     pageoffset::Int
     selected::Int
+    config::Config
 end
 
 
 """
 
-    RadioMenu(options::Array{String,1}; pagesize::Int=10)
+    RadioMenu(options::Array{String,1}; pagesize::Int=10, kwargs...)
 
 Create a RadioMenu object. Use `request(menu::RadioMenu)` to get user input.
 `request()` returns an `Int` which is the index of the option selected by the
@@ -39,8 +40,10 @@ user.
 
   - `options::Array{String, 1}`: Options to be displayed
   - `pagesize::Int=10`: The number of options to be displayed at one time, the menu will scroll if length(options) > pagesize
+
+Any additional keyword arguments will be passed to [`TerminalMenus.Config`](@ref).
 """
-function RadioMenu(options::Array{String,1}; pagesize::Int=10)
+function RadioMenu(options::Array{String,1}; pagesize::Int=10, kwargs...)
     length(options) < 2 && error("RadioMenu must have at least two options")
 
     # if pagesize is -1, use automatic paging
@@ -53,7 +56,7 @@ function RadioMenu(options::Array{String,1}; pagesize::Int=10)
     pageoffset = 0
     selected = -1 # none
 
-    RadioMenu(options, pagesize, pageoffset, selected)
+    RadioMenu(options, pagesize, pageoffset, selected, Config(; kwargs...))
 end
 
 
@@ -71,9 +74,6 @@ function pick(menu::RadioMenu, cursor::Int)
     return true #break out of the menu
 end
 
-function writeline(buf::IOBuffer, menu::RadioMenu, idx::Int, cursor::Bool, indicators)
-    # print a ">" on the selected entry
-    cursor ? print(buf, indicators.cursor ," ") : print(buf, "  ")
-
+function writeline(buf::IOBuffer, menu::RadioMenu, idx::Int, cursor::Bool)
     print(buf, replace(menu.options[idx], "\n" => "\\n"))
 end

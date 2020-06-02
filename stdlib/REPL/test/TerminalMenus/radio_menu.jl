@@ -21,22 +21,21 @@ TerminalMenus.cancel(radio_menu)
 @test TerminalMenus.header(radio_menu) == ""
 
 # Output
-TerminalMenus.config() # Use default chars
-CONFIG = TerminalMenus.CONFIG
-
-radio_menu = RadioMenu(string.(1:10))
-buf = IOBuffer()
-TerminalMenus.writeline(buf, radio_menu, 1, true, TerminalMenus.Indicators('@',"",""))
-@test String(take!(buf)) == "@ 1"
-TerminalMenus.config(cursor='+')
-TerminalMenus.printmenu(buf, radio_menu, 1; init=true)
-@test startswith(String(take!(buf)), "\e[2K + 1")
-TerminalMenus.config(charset=:unicode)
-TerminalMenus.printmenu(buf, radio_menu, 2; init=true)
-@test startswith(String(take!(buf)), string("\e[2K   1\r\n\e[2K ", CONFIG[:cursor], " 2"))
+for kws in ((charset=:ascii,),
+            (charset=:unicode,),
+            (cursor='@',))
+    local radio_menu
+    radio_menu = RadioMenu(string.(1:10); kws...)
+    c = isdefined(kws, :cursor) ? kws.cursor : (kws.charset === :ascii ? '>' : '→')
+    buf = IOBuffer()
+    TerminalMenus.writeline(buf, radio_menu, 1, true)
+    @test String(take!(buf)) == "1"
+    TerminalMenus.printmenu(buf, radio_menu, 1; init=true)
+    @test startswith(String(take!(buf)), "\e[2K $c 1")
+    TerminalMenus.printmenu(buf, radio_menu, 2; init=true)
+    @test startswith(String(take!(buf)), string("\e[2K   1\r\n\e[2K $c 2"))
+end
 
 # Test using stdin
 radio_menu = RadioMenu(string.(1:10))
-CONFIG[:suppress_output] = true
 @test simulate_input(3, radio_menu, :down, :down, :enter)
-CONFIG[:suppress_output] = false

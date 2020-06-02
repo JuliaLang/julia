@@ -17,12 +17,11 @@ function simulate_input(expected, menu::TerminalMenus.AbstractMenu, keys...)
         end
     end
 
-    request(menu) == expected
+    request(menu; suppress_output=true) == expected
 end
 
 include("radio_menu.jl")
 include("multiselect_menu.jl")
-println("done")
 
 # Other test
 
@@ -38,3 +37,7 @@ TerminalMenus.config(charset=:ascii)
 @test TerminalMenus.CONFIG[:scroll_wrap] == true
 TerminalMenus.config(scroll=:nowrap)
 @test TerminalMenus.CONFIG[:scroll_wrap] == false
+
+# Legacy tests
+include("legacytests/old_radio_menu.jl")
+include("legacytests/old_multiselect_menu.jl")

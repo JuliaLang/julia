@@ -27,17 +27,18 @@ You like the following fruits:
 ```
 
 """
-mutable struct MultiSelectMenu <: AbstractMenu
+mutable struct MultiSelectMenu <: ConfiguredMenu
     options::Array{String,1}
     pagesize::Int
     pageoffset::Int
     selected::Set{Int}
+    config::MultiSelectConfig
 end
 
 
 """
 
-    MultiSelectMenu(options::Array{String,1}; pagesize::Int=10)
+    MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, kwargs...)
 
 Create a MultiSelectMenu object. Use `request(menu::MultiSelectMenu)` to get
 user input. `request()` returns a `Set` containing the indices of options that
@@ -47,8 +48,10 @@ were selected by the user.
 
   - `options::Array{String, 1}`: Options to be displayed
   - `pagesize::Int=10`: The number of options to be displayed at one time, the menu will scroll if length(options) > pagesize
+
+Any additional keyword arguments will be passed to [`TerminalMenus.MultiSelectConfig`](@ref).
 """
-function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10)
+function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, kwargs...)
     length(options) < 2 && error("MultiSelectMenu must have at least two options")
 
     # if pagesize is -1, use automatic paging
@@ -61,7 +64,7 @@ function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10)
     pageoffset = 0
     selected = Set{Int}() # none
 
-    MultiSelectMenu(options, pagesize, pageoffset, selected)
+    MultiSelectMenu(options, pagesize, pageoffset, selected, MultiSelectConfig(; kwargs...))
 end
 
 
@@ -87,13 +90,11 @@ function pick(menu::MultiSelectMenu, cursor::Int)
     return false #break out of the menu
 end
 
-function writeline(buf::IOBuffer, menu::MultiSelectMenu, idx::Int, cursor::Bool, indicators)
-    # print a ">" on the selected entry
-    cursor ? print(buf, indicators.cursor ," ") : print(buf, "  ")
+function writeline(buf::IOBuffer, menu::MultiSelectMenu, idx::Int, cursor::Bool)
     if idx in menu.selected
-        print(buf, indicators.checked, " ")
+        print(buf, menu.config.checked, " ")
     else
-        print(buf, indicators.unchecked, " ")
+        print(buf, menu.config.unchecked, " ")
     end
 
     print(buf, replace(menu.options[idx], "\n" => "\\n"))

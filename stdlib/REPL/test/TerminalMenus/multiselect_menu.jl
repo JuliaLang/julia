@@ -18,23 +18,25 @@ multi_menu = MultiSelectMenu(string.(1:20))
 @test TerminalMenus.header(multi_menu) == "[press: d=done, a=all, n=none]"
 
 # Output
-TerminalMenus.config() # Use default chars
-CONFIG = TerminalMenus.CONFIG
+for kws in ((charset=:ascii,),
+            (charset=:unicode,),
+            (cursor='@', checked="c", unchecked="u",))
+    local multi_menu
+    multi_menu = MultiSelectMenu(string.(1:10); kws...)
+    cur = isdefined(kws, :cursor) ? kws.cursor : (kws.charset === :ascii ? '>' : '→')
+    chk = isdefined(kws, :checked) ? kws.checked : (kws.charset === :ascii ? "[X]" : "✓")
+    uck = isdefined(kws, :unchecked) ? kws.unchecked : (kws.charset === :ascii ? "[ ]" : "⬚")
 
-multi_menu = MultiSelectMenu(string.(1:10))
-buf = IOBuffer()
-TerminalMenus.writeline(buf, multi_menu, 1, true, TerminalMenus.Indicators('@',"c","u"))
-@test String(take!(buf)) == "@ u 1"
-TerminalMenus.config(cursor='+')
-TerminalMenus.printmenu(buf, multi_menu, 1; init=true)
-@test startswith(String(take!(buf)), string("\e[2K + ", CONFIG[:unchecked], " 1"))
-TerminalMenus.config(charset=:unicode)
-push!(multi_menu.selected, 1)
-TerminalMenus.printmenu(buf, multi_menu, 2; init=true)
-@test startswith(String(take!(buf)), string("\e[2K   ", CONFIG[:checked], " 1\r\n\e[2K ", CONFIG[:cursor], " ", CONFIG[:unchecked], " 2"))
+    buf = IOBuffer()
+    TerminalMenus.writeline(buf, multi_menu, 1, true)
+    @test String(take!(buf)) == "$uck 1"
+    TerminalMenus.printmenu(buf, multi_menu, 1; init=true)
+    @test startswith(String(take!(buf)), string("\e[2K $cur $uck 1"))
+    push!(multi_menu.selected, 1)
+    TerminalMenus.printmenu(buf, multi_menu, 2; init=true)
+    @test startswith(String(take!(buf)), string("\e[2K   $chk 1\r\n\e[2K $cur $uck 2"))
+end
 
 # Test SDTIN
 multi_menu = MultiSelectMenu(string.(1:10))
-CONFIG[:suppress_output] = true
 @test simulate_input(Set([1,2]), multi_menu, :enter, :down, :enter, 'd')
-CONFIG[:suppress_output] = false

@@ -6,6 +6,11 @@
 
 The supertype for all Menu types.
 
+    ConfiguredMenu <: AbstractMenu
+
+A subtype indicating that the menu stores its own configuration and requests that
+TerminalMenus print the cursor indicator. Recommended for all new menu types.
+
 
 # Functions
 
@@ -33,7 +38,7 @@ These functions must be implemented for all subtypes of AbstractMenu.
 
   - `pick(m::AbstractMenu, cursor::Int)`
   - `cancel(m::AbstractMenu)`
-  - `options(m::AbstractMenu)`
+  - `options(m::AbstractMenu)`   # `numoptions` is an alternative
   - `writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cursor)`
 
 If `m` does not have a field called `selected`, then you must also implement `selected(m)`.
@@ -51,7 +56,7 @@ subtypes.
 """
 abstract type AbstractMenu end
 
-
+abstract type ConfiguredMenu <: AbstractMenu end
 
 # NECESSARY FUNCTIONS
 # These functions must be implemented for all subtypes of AbstractMenu
@@ -84,28 +89,25 @@ Alternatively, implement `numoptions`, in which case `options` is not needed.
 options(m::AbstractMenu) = error("unimplemented")
 
 """
-    writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cursor::Bool, indicators::Indicators)
+    writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cursor::Bool)
 
-Write the option at index `idx` to the buffer. If `indicators !== nothing`, the current line
-corresponds to the cursor position. The method is responsible for displaying visual indicator(s)
-about the state of this menu item; the configured characters are returned in `indicators`
-in fields with the following names:
-    `cursor::Char`: the character used to indicate the cursor position
-    `checked::String`: a string used to indicate this option has been marked
-    `unchecked::String`: a string used to indicate this option has not been marked
-The latter two are relevant only for menus that support multiple selection.
+Write the option at index `idx` to the buffer. `cursor`, if `true`, indicates that this
+item is at the current cursor position (the one that will be selected by hitting "Enter").
+
+If `m` is a `ConfiguredMenu`, `TerminalMenus` will print the cursor indicator.
+Otherwise the callee is expected to handle such printing.
 
 !!! compat "Julia 1.6"
     `writeline` requires Julia 1.6 or higher.
 
     On older versions of Julia, this was
         `writeLine(buf::IOBuffer, m::AbstractMenu, idx, cursor::Bool)`
-    and the indicators can be obtained from `TerminalMenus.CONFIG`, a Dict indexed by `Symbol`
-    keys with the same names as the fields of `indicators`.
+    and `m` is assumed to be unconfigured. The selection and cursor indicators can be
+    obtained from `TerminalMenus.CONFIG`.
 
     This older function is supported on all Julia 1.x versions but will be dropped in Julia 2.0.
 """
-function writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cursor::Bool, indicators)
+function writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cursor::Bool)
     # error("unimplemented")    # TODO: use this in Julia 2.0
     writeLine(buf, m, idx, cursor)
 end
@@ -116,24 +118,24 @@ end
 ##################################################################
 
 """
-    header(m::AbstractMenu)
+    header(m::AbstractMenu) -> String
 
-Displays the header above the menu when it is rendered to the screen.
+Returns a header string to be printed above the menu.
 Defaults to "".
 """
 header(m::AbstractMenu) = ""
 
 """
-    keypress(m::AbstractMenu, i::UInt32)
+    keypress(m::AbstractMenu, i::UInt32) -> Bool
 
-Send any non-standard keypress event to this function.
-If `true` is returned, `request()` will exit.
+Handle any non-standard keypress event.
+If `true` is returned, [`TerminalMenus.request`](@ref) will exit.
 Defaults to `false`.
 """
 keypress(m::AbstractMenu, i::UInt32) = false
 
 """
-    numoptions(m::AbstractMenu)
+    numoptions(m::AbstractMenu) -> Int
 
 Return the number of options in menu `m`. Defaults to `length(options(m))`.
 """
@@ -142,28 +144,33 @@ numoptions(m::AbstractMenu) = length(options(m))
 """
     selected(m::AbstractMenu)
 
-Return information about the user-selected option. Defaults to `m.selected`.
+Return information about the user-selected option.
+By defaults it returns `m.selected`.
 """
 selected(m::AbstractMenu) = m.selected
 
 """
     request(m::AbstractMenu; cursor=1)
 
-Display the menu and enter interactive mode. `cursor` indicates the initial item
-for the cursor.
+Display the menu and enter interactive mode. `cursor` indicates the item
+number used for the initial cursor position.
 
-Returns `selected(m)` which varies based on menu type.
+Returns `selected(m)`.
 """
 request(m::AbstractMenu; kwargs...) = request(terminal, m; kwargs...)
 
-function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Int=1)
+function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Int=1, suppress_output=false)
     menu_header = header(m)
-    !CONFIG[:suppress_output] && menu_header != "" && println(term.out_stream, menu_header)
+    !suppress_output && !isempty(menu_header) && println(term.out_stream, menu_header)
 
-    state = printmenu(term.out_stream, m, cursor, init=true)
+    state = nothing
+    if !suppress_output
+        state = printmenu(term.out_stream, m, cursor, init=true)
+    end
 
     raw_mode_enabled = REPL.Terminals.raw!(term, true)
-    raw_mode_enabled && print(term.out_stream, "\x1b[?25l") # hide the cursor
+     # hide the cursor
+    raw_mode_enabled && !suppress_output && print(term.out_stream, "\x1b[?25l")
 
     try
         while true
@@ -176,7 +183,8 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Int=
                     if cursor < (2+m.pageoffset) && m.pageoffset > 0
                         m.pageoffset -= 1 # scroll page up
                     end
-                elseif CONFIG[:scroll_wrap] # wrap to bottom
+                elseif scroll_wrap(m)
+                    # wrap to bottom
                     cursor = lastoption
                     m.pageoffset = lastoption - m.pagesize
                 end
@@ -187,7 +195,8 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Int=
                     if m.pagesize + m.pageoffset <= cursor < lastoption
                         m.pageoffset += 1 # scroll page down
                     end
-                elseif CONFIG[:scroll_wrap] # wrap to top
+                elseif scroll_wrap(m)
+                    # wrap to top
                     cursor = 1
                     m.pageoffset = 0
                 end
@@ -224,14 +233,16 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Int=
 
             elseif c == 3 # ctrl-c
                 cancel(m)
-                CONFIG[:ctrl_c_interrupt] ? throw(InterruptException()) : break
+                ctrl_c_interrupt(m) ? throw(InterruptException()) : break
 
             else
                 # will break if keypress returns true
                 keypress(m, c) && break
             end
 
-            state = printmenu(term.out_stream, m, cursor, oldstate=state)
+            if !suppress_output
+                state = printmenu(term.out_stream, m, cursor, oldstate=state)
+            end
         end
     finally # always disable raw mode
         if raw_mode_enabled
@@ -250,16 +261,16 @@ end
 
 Shorthand for `println(msg); request(m)`.
 """
-request(msg::AbstractString, m::AbstractMenu) = request(terminal, msg, m)
+request(msg::AbstractString, m::AbstractMenu; kwargs...) = request(terminal, msg, m; kwargs...)
 
-function request(term::REPL.Terminals.TTYTerminal, msg::AbstractString, m::AbstractMenu)
+function request(term::REPL.Terminals.TTYTerminal, msg::AbstractString, m::AbstractMenu; kwargs...)
     println(term.out_stream, msg)
-    request(term, m)
+    request(term, m; kwargs...)
 end
 
 
 """
-    printmenu(out, m::AbstractMenu, cursor::Int; init::Bool=false, oldstate=nothing) -> newstate
+    printmenu(out, m::AbstractMenu, cursoridx::Int; init::Bool=false, oldstate=nothing) -> newstate
 
 Display the state of a menu. `init=true` causes `m.pageoffset` to be initialized to zero,
 and starts printing at the current cursor location; when `init` is false, the terminal will
@@ -273,12 +284,9 @@ overwriting of the previous display.
     On older versions of Julia, this was called `printMenu` and it lacked the `state` argument/return value.
     This older function is supported on all Julia 1.x versions but will be dropped in Julia 2.0.
 """
-function printmenu(out, m::AbstractMenu, cursor::Int; oldstate=nothing, init::Bool=false)
+function printmenu(out, m::AbstractMenu, cursoridx::Int; oldstate=nothing, init::Bool=false)
     # TODO Julia 2.0?: get rid of `init` and just use `oldstate`
-    CONFIG[:suppress_output] && return
-
     buf = IOBuffer()
-    indicators = Indicators()
     lastoption = numoptions(m)
     ncleared = oldstate === nothing ? m.pagesize-1 : oldstate
 
@@ -296,14 +304,14 @@ function printmenu(out, m::AbstractMenu, cursor::Int; oldstate=nothing, init::Bo
         print(buf, "\x1b[2K")
 
         if i == firstline && m.pageoffset > 0
-            print(buf, CONFIG[:up_arrow])
+            print_arrow(buf, m, up_arrow(m))
         elseif i == lastline && i != lastoption
-            print(buf, CONFIG[:down_arrow])
+            print_arrow(buf, m, down_arrow(m))
         else
-            print(buf, " ")
+            printcursor(buf, m, i == cursoridx)
         end
 
-        writeline(buf, m, i, i == cursor, indicators)
+        writeline(buf, m, i, i == cursoridx)
 
         i != lastline && print(buf, "\r\n")
     end
@@ -321,3 +329,31 @@ function printmenu(out, m::AbstractMenu, cursor::Int; oldstate=nothing, init::Bo
 
     return newstate
 end
+
+scroll_wrap(m::ConfiguredMenu) = scroll_wrap(m.config)
+scroll_wrap(c::AbstractConfig) = scroll_wrap(c.config)
+scroll_wrap(c::Config) = c.scroll_wrap
+scroll_wrap(::AbstractMenu) = CONFIG[:scroll_wrap]
+
+ctrl_c_interrupt(m::ConfiguredMenu) = ctrl_c_interrupt(m.config)
+ctrl_c_interrupt(c::AbstractConfig) = ctrl_c_interrupt(c.config)
+ctrl_c_interrupt(c::Config) = c.ctrl_c_interrupt
+ctrl_c_interrupt(::AbstractMenu) = CONFIG[:ctrl_c_interrupt]
+
+up_arrow(m::ConfiguredMenu) = up_arrow(m.config)
+up_arrow(c::AbstractConfig) = up_arrow(c.config)
+up_arrow(c::Config) = c.up_arrow
+up_arrow(::AbstractMenu) = CONFIG[:up_arrow]
+
+down_arrow(m::ConfiguredMenu) = down_arrow(m.config)
+down_arrow(c::AbstractConfig) = down_arrow(c.config)
+down_arrow(c::Config) = c.down_arrow
+down_arrow(::AbstractMenu) = CONFIG[:down_arrow]
+
+print_arrow(buf, ::ConfiguredMenu, c::Char) = print(buf, c, "  ")
+print_arrow(buf, ::AbstractMenu, c::Char) = print(buf, c)
+
+printcursor(buf, m::ConfiguredMenu, iscursor::Bool) = print(buf, ' ', iscursor ? cursor(m.config) : ' ', ' ')
+cursor(c::AbstractConfig) = cursor(c.config)
+cursor(c::Config) = c.cursor
+printcursor(buf, ::AbstractMenu, ::Bool) = print(buf, ' ')   # `writeLine` is expected to do the printing (get from CONFIG[:cursor])
