@@ -263,6 +263,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
     if inf_result === nothing
         inf_result = InferenceResult(mi, argtypes)
         frame = InferenceState(inf_result, #=cache=#false, interp)
+        frame === nothing && return Any # this is probably a bad generated function (unsound), but just ignore it
         frame.limited = true
         frame.parent = sv
         push!(inf_cache, inf_result)
