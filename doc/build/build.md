@@ -165,7 +165,7 @@ sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cma
 Julia uses the following external libraries, which are automatically
 downloaded (or in a few cases, included in the Julia source
 repository) and then compiled from source the first time you run
-`make`. The specific version numbers of these libraries that Julia 
+`make`. The specific version numbers of these libraries that Julia
 uses are listed in [`deps/Versions.make`](https://github.com/JuliaLang/julia/blob/master/deps/Versions.make):
 
 - **[LLVM]** (9.0 + [patches](https://github.com/JuliaLang/julia/tree/master/deps/patches)) — compiler infrastructure (see [note below](#llvm)).
