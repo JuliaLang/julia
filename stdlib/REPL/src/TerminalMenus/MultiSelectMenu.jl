@@ -90,7 +90,7 @@ function pick(menu::MultiSelectMenu, cursor::Int)
     return false #break out of the menu
 end
 
-function writeline(buf::IOBuffer, menu::MultiSelectMenu, idx::Int, cursor::Bool)
+function writeline(buf::IOBuffer, menu::MultiSelectMenu, idx::Int, iscursor::Bool)
     if idx in menu.selected
         print(buf, menu.config.checked, " ")
     else

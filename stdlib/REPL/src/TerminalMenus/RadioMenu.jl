@@ -74,6 +74,6 @@ function pick(menu::RadioMenu, cursor::Int)
     return true #break out of the menu
 end
 
-function writeline(buf::IOBuffer, menu::RadioMenu, idx::Int, cursor::Bool)
+function writeline(buf::IOBuffer, menu::RadioMenu, idx::Int, iscursor::Bool)
     print(buf, replace(menu.options[idx], "\n" => "\\n"))
 end

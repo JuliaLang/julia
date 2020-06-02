@@ -39,7 +39,7 @@ These functions must be implemented for all subtypes of AbstractMenu.
   - `pick(m::AbstractMenu, cursor::Int)`
   - `cancel(m::AbstractMenu)`
   - `options(m::AbstractMenu)`   # `numoptions` is an alternative
-  - `writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cursor)`
+  - `writeline(buf::IO, m::AbstractMenu, idx::Int, iscursor::Bool)`
 
 If `m` does not have a field called `selected`, then you must also implement `selected(m)`.
 
@@ -89,9 +89,9 @@ Alternatively, implement `numoptions`, in which case `options` is not needed.
 options(m::AbstractMenu) = error("unimplemented")
 
 """
-    writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cursor::Bool)
+    writeline(buf::IO, m::AbstractMenu, idx::Int, iscursor::Bool)
 
-Write the option at index `idx` to the buffer. `cursor`, if `true`, indicates that this
+Write the option at index `idx` to `buf`. `iscursor`, if `true`, indicates that this
 item is at the current cursor position (the one that will be selected by hitting "Enter").
 
 If `m` is a `ConfiguredMenu`, `TerminalMenus` will print the cursor indicator.
@@ -101,15 +101,15 @@ Otherwise the callee is expected to handle such printing.
     `writeline` requires Julia 1.6 or higher.
 
     On older versions of Julia, this was
-        `writeLine(buf::IOBuffer, m::AbstractMenu, idx, cursor::Bool)`
+        `writeLine(buf::IO, m::AbstractMenu, idx, iscursor::Bool)`
     and `m` is assumed to be unconfigured. The selection and cursor indicators can be
     obtained from `TerminalMenus.CONFIG`.
 
     This older function is supported on all Julia 1.x versions but will be dropped in Julia 2.0.
 """
-function writeline(buf::IOBuffer, m::AbstractMenu, idx::Int, cursor::Bool)
+function writeline(buf::IO, m::AbstractMenu, idx::Int, iscursor::Bool)
     # error("unimplemented")    # TODO: use this in Julia 2.0
-    writeLine(buf, m, idx, cursor)
+    writeLine(buf, m, idx, iscursor)
 end
 
 
@@ -145,7 +145,7 @@ numoptions(m::AbstractMenu) = length(options(m))
     selected(m::AbstractMenu)
 
 Return information about the user-selected option.
-By defaults it returns `m.selected`.
+By default it returns `m.selected`.
 """
 selected(m::AbstractMenu) = m.selected
 
