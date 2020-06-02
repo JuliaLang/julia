@@ -714,21 +714,8 @@ JL_CALLABLE(jl_f_tuple)
     size_t i;
     if (nargs == 0)
         return (jl_value_t*)jl_emptytuple;
-    jl_datatype_t *tt;
-    if (nargs < jl_page_size / sizeof(jl_value_t*)) {
-        jl_value_t **types = (jl_value_t**)alloca(nargs * sizeof(jl_value_t*));
-        for (i = 0; i < nargs; i++)
-            types[i] = jl_typeof(args[i]);
-        tt = jl_inst_concrete_tupletype_v(types, nargs);
-    }
-    else {
-        jl_svec_t *types = jl_alloc_svec_uninit(nargs);
-        JL_GC_PUSH1(&types);
-        for (i = 0; i < nargs; i++)
-            jl_svecset(types, i, jl_typeof(args[i]));
-        tt = jl_inst_concrete_tupletype(types);
-        JL_GC_POP();
-    }
+    jl_datatype_t *tt = jl_inst_arg_tuple_type(args[0], &args[1], nargs, 0);
+    JL_GC_PROMISE_ROOTED(tt); // it is a concrete type
     if (tt->instance != NULL)
         return tt->instance;
     jl_ptls_t ptls = jl_get_ptls_states();
