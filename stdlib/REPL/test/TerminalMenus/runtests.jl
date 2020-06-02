@@ -22,6 +22,7 @@ end
 
 include("radio_menu.jl")
 include("multiselect_menu.jl")
+include("dynamic_menu.jl")
 
 # Legacy tests
 include("legacytests/old_radio_menu.jl")

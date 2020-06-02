@@ -178,63 +178,28 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Int=
             c = readkey(term.in_stream)
 
             if c == Int(ARROW_UP)
-                if cursor > 1
-                    cursor -= 1 # move selection up
-                    if cursor < (2+m.pageoffset) && m.pageoffset > 0
-                        m.pageoffset -= 1 # scroll page up
-                    end
-                elseif scroll_wrap(m)
-                    # wrap to bottom
-                    cursor = lastoption
-                    m.pageoffset = lastoption - m.pagesize
-                end
-
+                cursor = move_up!(m, cursor, lastoption)
             elseif c == Int(ARROW_DOWN)
-                if cursor < lastoption
-                    cursor += 1 # move selection down
-                    if m.pagesize + m.pageoffset <= cursor < lastoption
-                        m.pageoffset += 1 # scroll page down
-                    end
-                elseif scroll_wrap(m)
-                    # wrap to top
-                    cursor = 1
-                    m.pageoffset = 0
-                end
-
+                cursor = move_down!(m, cursor, lastoption)
             elseif c == Int(PAGE_UP)
-                # If we're at the bottom, move the page 1 less to move the cursor up from
-                # the bottom entry, since we try to avoid putting the cursor at bounds.
-                m.pageoffset -= m.pagesize - (cursor == lastoption ? 1 : 0)
-                m.pageoffset = max(m.pageoffset, 0)
-                cursor -= m.pagesize
-                cursor = max(cursor, 1)
-
+                cursor = page_up!(m, cursor, lastoption)
             elseif c == Int(PAGE_DOWN)
-                m.pageoffset += m.pagesize - (cursor == 1 ? 1 : 0)
-                m.pageoffset = min(m.pageoffset, lastoption - m.pagesize)
-                cursor += m.pagesize
-                cursor = min(cursor, lastoption)
-
+                cursor = page_down!(m, cursor, lastoption)
             elseif c == Int(HOME_KEY)
                 cursor = 1
                 m.pageoffset = 0
-
             elseif c == Int(END_KEY)
                 cursor = lastoption
                 m.pageoffset = lastoption - m.pagesize
-
             elseif c == 13 # <enter>
                 # will break if pick returns true
                 pick(m, cursor) && break
-
             elseif c == UInt32('q')
                 cancel(m)
                 break
-
             elseif c == 3 # ctrl-c
                 cancel(m)
                 ctrl_c_interrupt(m) ? throw(InterruptException()) : break
-
             else
                 # will break if keypress returns true
                 keypress(m, c) && break
@@ -268,6 +233,48 @@ function request(term::REPL.Terminals.TTYTerminal, msg::AbstractString, m::Abstr
     request(term, m; kwargs...)
 end
 
+
+function move_up!(m::AbstractMenu, cursor::Int, lastoption::Int=numoptions(m))
+    if cursor > 1
+        cursor -= 1 # move selection up
+        if cursor < (2+m.pageoffset) && m.pageoffset > 0
+            m.pageoffset -= 1 # scroll page up
+        end
+    elseif scroll_wrap(m)
+        # wrap to bottom
+        cursor = lastoption
+        m.pageoffset = lastoption - m.pagesize
+    end
+    return cursor
+end
+
+function move_down!(m::AbstractMenu, cursor::Int, lastoption::Int=numoptions(m))
+    if cursor < lastoption
+        cursor += 1 # move selection down
+        if m.pagesize + m.pageoffset <= cursor < lastoption
+            m.pageoffset += 1 # scroll page down
+        end
+    elseif scroll_wrap(m)
+        # wrap to top
+        cursor = 1
+        m.pageoffset = 0
+    end
+    return cursor
+end
+
+function page_up!(m::AbstractMenu, cursor::Int, lastoption::Int=numoptions(m))
+    # If we're at the bottom, move the page 1 less to move the cursor up from
+    # the bottom entry, since we try to avoid putting the cursor at bounds.
+    m.pageoffset -= m.pagesize - (cursor == lastoption ? 1 : 0)
+    m.pageoffset = max(m.pageoffset, 0)
+    return max(cursor - m.pagesize, 1)
+end
+
+function page_down!(m::AbstractMenu, cursor::Int, lastoption::Int=numoptions(m))
+    m.pageoffset += m.pagesize - (cursor == 1 ? 1 : 0)
+    m.pageoffset = min(m.pageoffset, lastoption - m.pagesize)
+    return min(cursor + m.pagesize, lastoption)
+end
 
 """
     printmenu(out, m::AbstractMenu, cursoridx::Int; init::Bool=false, oldstate=nothing) -> newstate
