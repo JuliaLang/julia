@@ -208,7 +208,7 @@ in(x::AbstractChar, y::AbstractChar) = x == y
 ==(x::Char, y::Char) = reinterpret(UInt32, x) == reinterpret(UInt32, y)
 isless(x::Char, y::Char) = reinterpret(UInt32, x) < reinterpret(UInt32, y)
 hash(x::Char, h::UInt) =
-    hash_uint64(((reinterpret(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h))
+    hash_uint(((reinterpret(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h))
 
 first_utf8_byte(c::Char) = (reinterpret(UInt32, c) >> 24) % UInt8
 

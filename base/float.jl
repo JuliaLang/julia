@@ -565,7 +565,7 @@ isinf(x::Real) = !isnan(x) & !isfinite(x)
 
 ## hashing small, built-in numeric types ##
 
-hx(a::UInt64, b::Float64, h::UInt) = hash_uint64((3a + reinterpret(UInt64,b)) - h)
+hx(a::UInt64, b::Float64, h::UInt) = hash_uint((3a + reinterpret(UInt64,b)) - h)
 const hx_NaN = hx(UInt64(0), NaN, UInt(0  ))
 
 hash(x::UInt64,  h::UInt) = hx(x, Float64(x), h)
