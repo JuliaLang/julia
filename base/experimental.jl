@@ -11,10 +11,6 @@ module Experimental
 
 using Base: Threads, sync_varname
 
-# Not using `using` so that tab completion shows them:
-const ReservedStyle = Base.Broadcast.ReservedStyle
-const ReservedCollection = Base.Broadcast.ReservedCollection
-
 """
     Const(A::Array)
 
@@ -215,5 +211,52 @@ function show_error_hints(io, ex, args...)
         end
     end
 end
+
+"""
+    Experimental.ReservedStyle
+
+`ReservedStyle` is a broadcasting style for collections without an
+implementation of broadcasting.  This is currently used for
+dictionaries and `NamedTuple`s.
+
+These collections are wrapped in [`ReservedCollection`](@ref) and
+stored in `args` property of `Broadcasted`, to avoid accidentally used
+in broadcasting implementations that are not aware of `ReservedStyle`.
+The dictionaries and `NamedTuple`s wrapped in `ReservedCollection` can
+be unwrapped by `get(::ReservedCollection)`.
+
+!!! warning
+    A different broadcast style may be assigned to the collections with
+    `ReservedStyle` in the future.
+
+# Examples
+```jldoctest
+julia> using Base.Experimental: ReservedStyle, ReservedCollection
+       using Base.Broadcast: Broadcasted, broadcasted
+
+julia> function aspairs end;
+
+julia> function Broadcast.broadcasted(::typeof(aspairs), bc::Broadcasted{<:ReservedStyle})
+           args = map(a -> a isa ReservedCollection ? get(a) : a , bc.args)
+           broadcasted(bc.f, collect.(pairs.(args))...)
+       end;
+
+julia> aspairs.(tuple.(Dict(:a => 1), Dict(:b => 2)))
+1-element Array{Tuple{Pair{Symbol,Int64},Pair{Symbol,Int64}},1}:
+ (:a => 1, :b => 2)
+```
+"""
+const ReservedStyle = Base.Broadcast.ReservedStyle
+
+"""
+    Experimental.ReservedCollection(collection)
+
+`ReservedCollection` wraps a `collection` that does not support
+broadcasting.  A custom broadcasting implementations can obtain
+wrapped `collection` by `get(::ReservedCollection)`.
+
+See also [`ReservedStyle`](@ref).
+"""
+const ReservedCollection = Base.Broadcast.ReservedCollection
 
 end
