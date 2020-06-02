@@ -21,7 +21,7 @@ Details can be found in
 
 ## Hidden
 
-  - `printmenu(m::AbstractMenu, cursor::Int; init::Bool=false)`
+  - `printmenu(m::AbstractMenu, cursor::Int; init::Bool=false, oldstate=nothing)`
 
 
 # Subtypes
@@ -162,7 +162,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Int=
     menu_header = header(m)
     !CONFIG[:suppress_output] && menu_header != "" && println(term.out_stream, menu_header)
 
-    printmenu(term.out_stream, m, cursor, init=true)
+    state = printmenu(term.out_stream, m, cursor, init=true)
 
     raw_mode_enabled = REPL.Terminals.raw!(term, true)
     raw_mode_enabled && print(term.out_stream, "\x1b[?25l") # hide the cursor
@@ -233,7 +233,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Int=
                 keypress(m, c) && break
             end
 
-            printmenu(term.out_stream, m, cursor)
+            state = printmenu(term.out_stream, m, cursor, oldstate=state)
         end
     finally # always disable raw mode
         if raw_mode_enabled
@@ -261,34 +261,37 @@ end
 
 
 """
-    printmenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
+    printmenu(out, m::AbstractMenu, cursor::Int; init::Bool=false, oldstate=nothing) -> newstate
 
-Display the state of a menu.
+Display the state of a menu. `init=true` causes `m.pageoffset` to be initialized to zero,
+and starts printing at the current cursor location; when `init` is false, the terminal will
+preserve the current setting of `m.pageoffset` and overwrite the previous display.
+Returns `newstate`, which can be passed in as `oldstate` on the next call to allow accurate
+overwriting of the previous display.
 
 !!! compat "Julia 1.6"
     `printmenu` requires Julia 1.6 or higher.
 
-    On older versions of Julia, this was called `printMenu`.
+    On older versions of Julia, this was called `printMenu` and it lacked the `state` argument/return value.
     This older function is supported on all Julia 1.x versions but will be dropped in Julia 2.0.
 """
-function printmenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
+function printmenu(out, m::AbstractMenu, cursor::Int; oldstate=nothing, init::Bool=false)
+    # TODO Julia 2.0?: get rid of `init` and just use `oldstate`
     CONFIG[:suppress_output] && return
 
     buf = IOBuffer()
     indicators = Indicators()
     lastoption = numoptions(m)
-
-    firstline = m.pageoffset+1
-    lastline = min(m.pagesize+m.pageoffset, lastoption)
-
-    lines = lastline - firstline
+    ncleared = oldstate === nothing ? m.pagesize-1 : oldstate
 
     if init
         m.pageoffset = 0
     else
-        # Move the cursor to the beginning of where it should print
-        print(buf, "\x1b[999D\x1b[$(lines)A")
+        print(buf, "\x1b[999D\x1b[$(ncleared)A")   # move left 999 spaces and up `ncleared` lines
     end
+
+    firstline = m.pageoffset+1
+    lastline = min(m.pagesize+m.pageoffset, lastoption)
 
     for i in firstline:lastline
         # clearline
@@ -307,5 +310,16 @@ function printmenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
         i != lastline && print(buf, "\r\n")
     end
 
+    newstate = lastline-firstline  # final line doesn't have `\n`
+    if newstate < ncleared && oldstate !== nothing
+        # we printed fewer lines than last time. Erase the leftovers.
+        for i = newstate+1:ncleared
+            print(buf, "\r\n\x1b[2K")
+        end
+        print(buf, "\x1b[$(ncleared-newstate)A")
+    end
+
     print(out, String(take!(buf)))
+
+    return newstate
 end
