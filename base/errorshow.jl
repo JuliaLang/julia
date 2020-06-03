@@ -624,10 +624,15 @@ function show_reduced_backtrace(io::IO, t::Vector)
         end
         modulecolor = modulecolordict[modul]
         
-        print_frame(io, frame_counter, getfunc(frame), getfield(frame, :inlined), getmodule(frame),
-            getfile(frame, stacktrace_expand_basepaths(), stacktrace_contract_userdir()),
-            getline(frame), getsigtypes(frame), getvarnames(frame),
-            ndigits, modulecolor)
+        file = getfile(frame, stacktrace_expand_basepaths(), stacktrace_contract_userdir())
+        line = getline(frame)
+        varnames = getvarnames(frame)
+        func = getfunc(frame)
+        sigtypes = getsigtypes(frame)
+        inlined = getfield(frame, :inlined)
+
+        push!(LAST_SHOWN_LINE_INFOS, (file, line))
+        print_frame(io, i, func, inlined, modul, file, line, sigtypes, varnames, ndigits, modulecolor)
         
         if i < length(displayed_stackframes)
             println(io)
@@ -820,19 +825,6 @@ function show_backtrace(io::IO, t::Vector)
     print_trace(io, t; print_linebreaks = stacktrace_linebreaks())
 end
 
-# I think this is not needed anymore?
-
-# function show_backtrace(io::IO, t::Vector{Any})
-#     # t is a pre-processed backtrace (ref #12856)
-#     if length(t) < BIG_STACKTRACE_SIZE
-#         try invokelatest(update_stackframes_callback[], t) catch end
-#         for entry in t
-#             show_trace_entry(io, entry...)
-#         end
-#     else
-#         show_reduced_backtrace(io, t, false)
-#     end
-# end
 
 function is_kw_sorter_name(name::Symbol)
     sn = string(name)
