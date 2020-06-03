@@ -629,13 +629,13 @@ function show_reduced_backtrace(io::IO, t::Vector)
         modulecolor = modulecolordict[modul]
         
         print_frame(io, frame_counter, getfunc(frame), getfield(frame, :inlined), getmodule(frame),
-            getfile(frame, STACKTRACE_EXPAND_BASE_PATHS, STACKTRACE_CONTRACT_USER_DIR),
+            getfile(frame, stacktrace_expand_basepaths(), stacktrace_contract_userdir()),
             getline(frame), getsigtypes(frame), getvarnames(frame),
             ndigits, modulecolor)
         
         if i < length(displayed_stackframes)
             println(io)
-            STACKTRACE_LINEBREAKS && println(io)
+            stacktrace_linebreaks() && println(io)
         end
 
         while repeated_cycle[1][1] == i # never empty because of the initial (0,0,0)
@@ -645,17 +645,12 @@ function show_reduced_backtrace(io::IO, t::Vector)
             printstyled(io,
                 "--- the last ", cycle_length, " lines are repeated ",
                   repetitions, " more time", repetitions>1 ? "s" : "", " ---\n", color = :light_black)
-            STACKTRACE_LINEBREAKS && println(io)
+            stacktrace_linebreaks() && println(io)
             frame_counter += cycle_length * repetitions
         end
         frame_counter += 1
     end
 end
-
-const STACKTRACE_MODULECOLORS = [:light_blue, :light_yellow, :light_red, :light_green,:light_magenta, :light_cyan, :blue, :yellow, :red, :green, :magenta, :cyan]
-const STACKTRACE_EXPAND_BASE_PATHS = true
-const STACKTRACE_CONTRACT_USER_DIR = true
-const STACKTRACE_LINEBREAKS = true
 
 function expandbasepath(str)
 
@@ -706,6 +701,15 @@ function getvarnames(frame)
     end
 end
 
+const STACKTRACE_MODULECOLORS = [:light_blue, :light_yellow, :light_red,
+        :light_green,:light_magenta, :light_cyan,
+        :blue, :yellow, :red, :green, :magenta, :cyan]
+stacktrace_expand_basepaths()::Bool = parse(Bool,
+    get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "true"))
+stacktrace_contract_userdir()::Bool = parse(Bool,
+    get(ENV, "JULIA_STACKTRACE_CONTRACT_USERDIR", "true"))
+stacktrace_linebreaks()::Bool = parse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "true"))
+
 function print_trace(io::IO, trace; print_linebreaks::Bool)
 
     n = length(trace)
@@ -722,7 +726,7 @@ function print_trace(io::IO, trace; print_linebreaks::Bool)
         end
         modulecolor = modulecolordict[modul]
 
-        file = getfile(frame, STACKTRACE_EXPAND_BASE_PATHS, STACKTRACE_CONTRACT_USER_DIR)
+        file = getfile(frame, stacktrace_expand_basepaths(), stacktrace_contract_userdir())
         line = getline(frame)
         varnames = getvarnames(frame)
         func = getfunc(frame)
@@ -814,7 +818,7 @@ function show_backtrace(io::IO, t::Vector)
     # process_backtrace returns a Tuple{Frame, Int}
     frames = first.(filtered)
 
-    print_trace(io, t; print_linebreaks = STACKTRACE_LINEBREAKS)
+    print_trace(io, t; print_linebreaks = stacktrace_linebreaks())
 end
 
 # I think this is not needed anymore?
