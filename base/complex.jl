@@ -278,8 +278,8 @@ inv(z::Complex{<:Integer}) = inv(float(z))
                                     real(z) * imag(w) + imag(z) * real(w))
 
 muladd(z::Complex, w::Complex, x::Complex) =
-    Complex(muladd(real(z), real(w), real(x)) - imag(z)*imag(w), # TODO: use mulsub given #15985
-            muladd(real(z), imag(w), muladd(imag(z), real(w), imag(x))))
+    Complex(muladd(real(z), real(w), -muladd(imag(z), imag(w), -real(x))),
+            muladd(real(z), imag(w),  muladd(imag(z), real(w),  imag(x))))
 
 # handle Bool and Complex{Bool}
 # avoid type signature ambiguity warnings
@@ -326,7 +326,7 @@ muladd(z::Complex, x::Real, w::Complex) =
     Complex(muladd(real(z),x,real(w)), muladd(imag(z),x,imag(w)))
 muladd(x::Real, y::Real, z::Complex) = Complex(muladd(x,y,real(z)), imag(z))
 muladd(z::Complex, w::Complex, x::Real) =
-    Complex(muladd(real(z), real(w), x) - imag(z)*imag(w), # TODO: use mulsub given #15985
+    Complex(muladd(real(z), real(w), -muladd(imag(z), imag(w), -x)),
             muladd(real(z), imag(w), imag(z) * real(w)))
 
 /(a::R, z::S) where {R<:Real,S<:Complex} = (T = promote_type(R,S); a*inv(T(z)))
