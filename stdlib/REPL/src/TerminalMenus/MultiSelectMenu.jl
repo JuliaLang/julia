@@ -38,20 +38,21 @@ end
 
 """
 
-    MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, kwargs...)
+    MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, selected=[], kwargs...)
 
 Create a MultiSelectMenu object. Use `request(menu::MultiSelectMenu)` to get
-user input. `request()` returns a `Set` containing the indices of options that
+user input. It returns a `Set` containing the indices of options that
 were selected by the user.
 
 # Arguments
 
   - `options::Array{String, 1}`: Options to be displayed
   - `pagesize::Int=10`: The number of options to be displayed at one time, the menu will scroll if length(options) > pagesize
+  - `selected=[]`: pre-selected items. `i ∈ selected` means that `options[i]` is preselected.
 
 Any additional keyword arguments will be passed to [`TerminalMenus.MultiSelectConfig`](@ref).
 """
-function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, warn::Bool=true, kwargs...)
+function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, selected=Int[], warn::Bool=true, kwargs...)
     length(options) < 2 && error("MultiSelectMenu must have at least two options")
 
     # if pagesize is -1, use automatic paging
@@ -62,13 +63,16 @@ function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, warn::Bool=
     pagesize < 2 && error("pagesize must be >= 2")
 
     pageoffset = 0
-    selected = Set{Int}() # none
+    _selected = Set{Int}()
+    for item in selected
+        push!(_selected, item)
+    end
 
     if !isempty(kwargs)
-        MultiSelectMenu(options, pagesize, pageoffset, selected, MultiSelectConfig(; kwargs...))
+        MultiSelectMenu(options, pagesize, pageoffset, _selected, MultiSelectConfig(; kwargs...))
     else
         warn && Base.depwarn("Legacy `MultiSelectMenu` interface is deprecated, set a configuration option such as `MultiSelectMenu(options; charset=:ascii)` to trigger the new interface.", :MultiSelectMenu)
-        MultiSelectMenu(options, pagesize, pageoffset, selected, CONFIG)
+        MultiSelectMenu(options, pagesize, pageoffset, _selected, CONFIG)
     end
 
 end

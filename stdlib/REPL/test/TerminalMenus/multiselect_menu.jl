@@ -40,6 +40,20 @@ for kws in ((charset=:ascii,),
     @test startswith(String(take!(buf)), string("\e[2K   $chk 1\r\n\e[2K $cur $uck 2"))
 end
 
+# Preselection
+sel = [2,5]
+multi_menu = MultiSelectMenu(string.(1:20), pagesize=6, selected=sel, charset=:ascii)
+buf = IOBuffer()
+TerminalMenus.printmenu(buf, multi_menu, 1; init=true)
+str = String(take!(buf))
+for i = 1:multi_menu.pagesize
+    if i ∈ sel
+        @test occursin("[X] $i", str)
+    else
+        @test occursin("[ ] $i", str)
+    end
+end
+
 # Test SDTIN
 multi_menu = MultiSelectMenu(string.(1:10), charset=:ascii)
 @test simulate_input(Set([1,2]), multi_menu, :enter, :down, :enter, 'd')
