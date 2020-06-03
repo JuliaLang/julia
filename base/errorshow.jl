@@ -733,6 +733,7 @@ function print_trace(io::IO, trace; print_linebreaks::Bool)
         sigtypes = getsigtypes(frame)
         inlined = getfield(frame, :inlined)
 
+        push!(LAST_SHOWN_LINE_INFOS, (file, line))
         print_frame(io, i, func, inlined, modul, file, line, sigtypes, varnames, ndigits, modulecolor)
         if i < n
             println(io)
