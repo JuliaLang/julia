@@ -1204,3 +1204,21 @@ end
 end
 @test M27832.xs == ":(\$(Expr(:\$, :fn)))"
 Core.atdoc!(_last_atdoc)
+
+# Replacing docstrings
+module Revise309
+"""
+A docstring
+"""
+c = 0
+end
+let b = Binding(Revise309, :c)
+    dstr = meta(Revise309)[b].docs[Union{}]
+    logs = Test.collect_test_logs() do
+        Base.Docs.doc!(Revise309, b, dstr, Union{}, false)
+    end
+    @test isempty(logs[1])
+    @test_logs (:warn, r"^Replacing docs for .*Revise309\.c") begin
+        Base.Docs.doc!(Revise309, b, dstr)
+    end
+end
