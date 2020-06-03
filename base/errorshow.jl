@@ -560,11 +560,13 @@ const update_stackframes_callback = Ref{Function}(identity)
 
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
 
-function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
+function show_reduced_backtrace(io::IO, t::Vector)
     recorded_positions = IdDict{UInt, Vector{Int}}()
     #= For each frame of hash h, recorded_positions[h] is the list of indices i
     such that hash(t[i-1]) == h, ie the list of positions in which the
     frame appears just before. =#
+
+    modulecolordict = Dict("" => :default)
 
     displayed_stackframes = []
     repeated_cycle = Tuple{Int,Int,Int}[]
@@ -606,21 +608,40 @@ function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
 
     try invokelatest(update_stackframes_callback[], displayed_stackframes) catch end
 
+    println(io, "\nStacktrace:")
+    numstr_width = length(digits(length(t))) + 2
+
+    modulecolorcycler = Iterators.cycle(STACKTRACE_MODULECOLORS)
+
     push!(repeated_cycle, (0,0,0)) # repeated_cycle is never empty
     frame_counter = 1
     for i in 1:length(displayed_stackframes)
         (frame, n) = displayed_stackframes[i]
-        if with_prefix
-            show_trace_entry(io, frame, n, prefix = string(" [", frame_counter, "] "))
-        else
-            show_trace_entry(io, frame, n)
+
+        modul = getmodule(frame)
+        if !haskey(modulecolordict, modul)
+            modulecolordict[modul] = iterate(modulecolorcycler)[1]
         end
+        modulecolor = modulecolordict[modul]
+        
+        print_frame(io, frame_counter, getfunc(frame), getfield(frame, :inlined), getmodule(frame),
+            getfile(frame, STACKTRACE_EXPAND_BASE_PATHS, STACKTRACE_CONTRACT_USER_DIR),
+            getline(frame), getsigtypes(frame), getvarnames(frame),
+            numstr_width, modulecolor)
+        
+        if i < length(displayed_stackframes)
+            println(io)
+            STACKTRACE_LINEBREAKS && println(io)
+        end
+
         while repeated_cycle[1][1] == i # never empty because of the initial (0,0,0)
             cycle_length = repeated_cycle[1][2]
             repetitions = repeated_cycle[1][3]
             popfirst!(repeated_cycle)
-            print(io, "\n ... (the last ", cycle_length, " lines are repeated ",
-                  repetitions, " more time", repetitions>1 ? "s)" : ")")
+            printstyled(io,
+                "--- the last ", cycle_length, " lines are repeated ",
+                  repetitions, " more time", repetitions>1 ? "s" : "", " ---\n", color = :light_black)
+            STACKTRACE_LINEBREAKS && println(io)
             frame_counter += cycle_length * repetitions
         end
         frame_counter += 1
@@ -668,70 +689,44 @@ end
 getfunc(frame) = string(frame.func)
 getmodule(frame) = try; string(frame.linfo.def.module) catch; "" end
 getsigtypes(frame) = try;  frame.linfo.specTypes.parameters[2:end] catch; "" end
-
-
-function convert_trace(trace)
-    files = getfile.(trace, STACKTRACE_EXPAND_BASE_PATHS, STACKTRACE_CONTRACT_USER_DIR)
-    lines = getline.(trace)
-
-    methodss = map(trace) do t
-        try
-            t.linfo.def
-        catch
-            nothing
-        end
+getmethod(frame) = try;  frame.linfo.def catch; nothing end
+function getvarnames(frame)
+    m = getmethod(frame)
+    if isnothing(m)
+        []
+    else
+        tv, decls, file, line = arg_decl_parts(m)
+        # this is a list of tuples (variable name, variable type)
+        # we take only the variable names
+        first.(decls[2:end])
     end
-
-    varnames = map(methodss) do m
-        if isnothing(m)
-            []
-        else
-            tv, decls, file, line = arg_decl_parts(m)
-            # this is a list of tuples (variable name, variable type)
-            # we take only the variable names
-            first.(decls[2:end])
-        end
-    end
-
-    funcs = getfunc.(trace)
-    moduls = getmodule.(trace)
-    sigtypes = getsigtypes.(trace)
-    inlineds = getfield.(trace, :inlined)
-
-    # replace empty modules if there is another frame from the same file
-    for (i_this, mo) in enumerate(moduls)
-        if mo == ""
-            for i_other in 1:length(trace)
-                if files[i_this] == files[i_other] && moduls[i_other] != ""
-                    moduls[i_this] = moduls[i_other]
-                end
-            end
-        end
-    end
-
-    (files = files, lines = lines, funcs = funcs,
-        moduls = moduls, sigtypes = sigtypes, inlineds = inlineds, varnames = varnames)
 end
 
+function print_trace(io::IO, trace; print_linebreaks::Bool)
 
-
-function printtrace(io::IO, converted_stacktrace; print_linebreaks::Bool)
-
-    files, lines, funcs, moduls, sigtypes, inlineds, varnames = converted_stacktrace
-
-    n = length(files)
+    n = length(trace)
     ndigits = length(digits(n))
     length_numstr = ndigits + 2
 
-    uniquemodules = setdiff(unique(moduls), [""])
-    modulecolors = Dict(u => c for (u, c) in
-        Iterators.zip(uniquemodules, Iterators.cycle(STACKTRACE_MODULECOLORS)))
+    modulecolordict = Dict("" => :default)
+    modulecolorcycler = Iterators.cycle(STACKTRACE_MODULECOLORS)
 
-    for (i, (func, inlined, modul, file, line, stypes, vnames)) in enumerate(
-            zip(funcs, inlineds, moduls, files, lines, sigtypes, varnames))
+    for (i, frame) in enumerate(trace)
 
-        modulecolor = get(modulecolors, modul, :default)
-        print_frame(io, i, func, inlined, modul, file, line, stypes, vnames, length_numstr, modulecolor)
+        modul = getmodule(frame)
+        if !haskey(modulecolordict, modul)
+            modulecolordict[modul] = iterate(modulecolorcycler)[1]
+        end
+        modulecolor = modulecolordict[modul]
+
+        file = getfile(frame, STACKTRACE_EXPAND_BASE_PATHS, STACKTRACE_CONTRACT_USER_DIR)
+        line = getline(frame)
+        varnames = getvarnames(frame)
+        func = getfunc(frame)
+        sigtypes = getsigtypes(frame)
+        inlined = getfield(frame, :inlined)
+
+        print_frame(io, i, func, inlined, modul, file, line, sigtypes, varnames, length_numstr, modulecolor)
         if i < n
             println(io)
             print_linebreaks && println(io)
@@ -809,7 +804,7 @@ function show_backtrace(io::IO, t::Vector)
     end
 
     if length(filtered) > BIG_STACKTRACE_SIZE
-        show_reduced_backtrace(IOContext(io, :backtrace => true), filtered, true)
+        show_reduced_backtrace(IOContext(io, :backtrace => true), filtered)
         return
     end
 
@@ -818,22 +813,22 @@ function show_backtrace(io::IO, t::Vector)
     # process_backtrace returns a Tuple{Frame, Int}
     frames = first.(filtered)
 
-    converted_stacktrace = convert_trace(frames)
-
-    printtrace(io, converted_stacktrace; print_linebreaks = STACKTRACE_LINEBREAKS)
+    print_trace(io, t; print_linebreaks = STACKTRACE_LINEBREAKS)
 end
 
-function show_backtrace(io::IO, t::Vector{Any})
-    # t is a pre-processed backtrace (ref #12856)
-    if length(t) < BIG_STACKTRACE_SIZE
-        try invokelatest(update_stackframes_callback[], t) catch end
-        for entry in t
-            show_trace_entry(io, entry...)
-        end
-    else
-        show_reduced_backtrace(io, t, false)
-    end
-end
+# I think this is not needed anymore?
+
+# function show_backtrace(io::IO, t::Vector{Any})
+#     # t is a pre-processed backtrace (ref #12856)
+#     if length(t) < BIG_STACKTRACE_SIZE
+#         try invokelatest(update_stackframes_callback[], t) catch end
+#         for entry in t
+#             show_trace_entry(io, entry...)
+#         end
+#     else
+#         show_reduced_backtrace(io, t, false)
+#     end
+# end
 
 function is_kw_sorter_name(name::Symbol)
     sn = string(name)
