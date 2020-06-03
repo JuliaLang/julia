@@ -111,7 +111,7 @@ function _threadsfor_nested(a, body, schedule)
                 :(Base.invokelatest(threadsfor_fun, true))
             end)
         else
-            ccall(:jl_threading_run, Cvoid, (Any,), threadsfor_fun)
+            threading_run(threadsfor_fun)
         end
         nothing
     end
