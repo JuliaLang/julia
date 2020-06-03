@@ -609,7 +609,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
     try invokelatest(update_stackframes_callback[], displayed_stackframes) catch end
 
     println(io, "\nStacktrace:")
-    numstr_width = length(digits(length(t))) + 2
+    ndigits = length(digits(length(t)))
 
     modulecolorcycler = Iterators.cycle(STACKTRACE_MODULECOLORS)
 
@@ -627,7 +627,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
         print_frame(io, frame_counter, getfunc(frame), getfield(frame, :inlined), getmodule(frame),
             getfile(frame, STACKTRACE_EXPAND_BASE_PATHS, STACKTRACE_CONTRACT_USER_DIR),
             getline(frame), getsigtypes(frame), getvarnames(frame),
-            numstr_width, modulecolor)
+            ndigits, modulecolor)
         
         if i < length(displayed_stackframes)
             println(io)
@@ -706,7 +706,6 @@ function print_trace(io::IO, trace; print_linebreaks::Bool)
 
     n = length(trace)
     ndigits = length(digits(n))
-    length_numstr = ndigits + 2
 
     modulecolordict = Dict("" => :default)
     modulecolorcycler = Iterators.cycle(STACKTRACE_MODULECOLORS)
@@ -726,7 +725,7 @@ function print_trace(io::IO, trace; print_linebreaks::Bool)
         sigtypes = getsigtypes(frame)
         inlined = getfield(frame, :inlined)
 
-        print_frame(io, i, func, inlined, modul, file, line, sigtypes, varnames, length_numstr, modulecolor)
+        print_frame(io, i, func, inlined, modul, file, line, sigtypes, varnames, ndigits, modulecolor)
         if i < n
             println(io)
             print_linebreaks && println(io)
@@ -735,10 +734,10 @@ function print_trace(io::IO, trace; print_linebreaks::Bool)
 end
 
 function print_frame(io, i, func, inlined, modul, file, line, stypes,
-    vnames, length_numstr, modulecolor)
+    vnames, width_digits, modulecolor)
 
     # frame number
-    print(io, lpad("[" * string(i) * "]", length_numstr))
+    print(io, lpad("[" * string(i) * "]", width_digits + 2))
     print(io, " ")
     
     # function name
@@ -763,7 +762,7 @@ function print_frame(io, i, func, inlined, modul, file, line, stypes,
     println(io)
     
     # @
-    printstyled(io, " " ^ (length_numstr - 1) * "@ ", color = :light_black)
+    printstyled(io, " " ^ (width_digits + 1) * "@ ", color = :light_black)
 
     # module
     if !isempty(modul)
