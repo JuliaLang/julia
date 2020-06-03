@@ -80,6 +80,7 @@ end
 
 _invoked_min_enabled_level(@nospecialize(logger)) = invoke(min_enabled_level, Tuple{typeof(logger)}, logger)
 
+_invoked_catch_exceptions(@nospecialize(logger)) = invoke(catch_exceptions, Tuple{typeof(logger)}, logger)
 
 """
     NullLogger()
@@ -105,6 +106,12 @@ Severity/verbosity of a log record.
 The log level provides a key against which potential log records may be
 filtered, before any other work is done to construct the log record data
 structure itself.
+
+# Examples
+```
+julia> Logging.LogLevel(0) == Logging.Info
+true
+```
 """
 struct LogLevel
     level::Int32
@@ -343,7 +350,7 @@ end
 # Report an error in log message creation (or in the logger itself).
 @noinline function logging_error(logger, level, _module, group, id,
                                  filepath, line, @nospecialize(err))
-    if !catch_exceptions(logger)
+    if !_invoked_catch_exceptions(logger)
         rethrow(err)
     end
     try
@@ -420,6 +427,11 @@ end
 Disable all log messages at log levels equal to or less than `level`.  This is
 a *global* setting, intended to make debug logging extremely cheap when
 disabled.
+
+# Examples
+```
+Logging.disable_logging(Logging.Info) # Disable debug and info
+```
 """
 function disable_logging(level::LogLevel)
     _min_enabled_level[] = level + 1

@@ -467,17 +467,17 @@ end
     @test_throws BoundsError insert!(v, 5, 5)
 end
 
-@testset "pop!(::Vector, i, [default])" begin
+@testset "popat!(::Vector, i, [default])" begin
     a = [1, 2, 3, 4]
-    @test_throws BoundsError pop!(a, 0)
-    @test pop!(a, 0, "default") == "default"
+    @test_throws BoundsError popat!(a, 0)
+    @test popat!(a, 0, "default") == "default"
     @test a == 1:4
-    @test_throws BoundsError pop!(a, 5)
-    @test pop!(a, 1) == 1
+    @test_throws BoundsError popat!(a, 5)
+    @test popat!(a, 1) == 1
     @test a == [2, 3, 4]
-    @test pop!(a, 2) == 3
+    @test popat!(a, 2) == 3
     @test a == [2, 4]
-    badpop() = @inbounds pop!([1], 2)
+    badpop() = @inbounds popat!([1], 2)
     @test_throws BoundsError badpop()
 end
 

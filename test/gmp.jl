@@ -412,6 +412,9 @@ end
 # Issue #24298
 @test mod(BigInt(6), UInt(5)) == mod(6, 5)
 
+@test iseven(zero(BigInt))
+@test isodd(BigInt(typemax(UInt)))
+
 @testset "cmp has values in [-1, 0, 1], issue #28780" begin
     # _rand produces values whose log2 is better distributed than rand
     _rand(::Type{BigInt}, n=1000) = let x = big(2)^rand(1:rand(1:n))

@@ -2484,7 +2484,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             *ret = mark_julia_type(ctx, len, false, jl_long_type);
             return true;
         }
-        else if (jl_is_datatype(sty) && sty->name == jl_array_typename) {
+        else if (jl_is_array_type(sty)) {
             auto len = emit_arraylen(ctx, obj);
             jl_value_t *ety = jl_tparam0(sty);
             Value *elsize;
@@ -2494,6 +2494,11 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             if (!jl_has_free_typevars(ety)) {
                 if (isboxed) {
                     elsize = ConstantInt::get(T_size, sizeof(void*));
+                }
+                else if (jl_is_primitivetype(ety)) {
+                    // Primitive types should use the array element size, but
+                    // this can be different from the type's size
+                    elsize = ConstantInt::get(T_size, LLT_ALIGN(elsz, al));
                 }
                 else {
                     elsize = ConstantInt::get(T_size, elsz);
@@ -3815,7 +3820,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         std::vector<Value*> vals;
         for (size_t i = 0; i < nargs; ++i) {
             const jl_cgval_t &ai = argv[i];
-            if (ai.constant)
+            if (ai.constant || ai.typ == jl_bottom_type)
                 continue;
             if (ai.isboxed) {
                 vals.push_back(ai.Vboxed);
@@ -7577,6 +7582,22 @@ extern "C" void jl_dump_llvm_debugloc(void *v)
 {
     llvm_dump((DebugLoc*)v);
 }
+
+namespace llvm {
+    class MachineBasicBlock;
+    class MachineFunction;
+    raw_ostream& operator<<(raw_ostream &OS, const MachineBasicBlock &MBB);
+    void printMIR(raw_ostream &OS, const MachineFunction &MF);
+}
+extern "C" void jl_dump_llvm_mbb(void *v)
+{
+    errs() << *(llvm::MachineBasicBlock*)v;
+}
+extern "C" void jl_dump_llvm_mfunction(void *v)
+{
+    llvm::printMIR(errs(), *(llvm::MachineFunction*)v);
+}
+
 
 extern void jl_write_bitcode_func(void *F, char *fname) {
     std::error_code EC;

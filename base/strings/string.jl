@@ -70,9 +70,9 @@ String(s::AbstractString) = print_to_string(s)
 
 unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 
-(::Type{Vector{UInt8}})(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(undef, length(s)), s)
-(::Type{Vector{UInt8}})(s::String) = Vector{UInt8}(codeunits(s))
-(::Type{Array{UInt8}})(s::String)  = Vector{UInt8}(codeunits(s))
+Vector{UInt8}(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(undef, length(s)), s)
+Vector{UInt8}(s::String) = Vector{UInt8}(codeunits(s))
+Array{UInt8}(s::String)  = Vector{UInt8}(codeunits(s))
 
 String(s::CodeUnits{UInt8,String}) = s.s
 
@@ -347,17 +347,4 @@ function repeat(c::Char, r::Integer)
         end
     end
     return s
-end
-
-function filter(f, s::String)
-    out = StringVector(sizeof(s))
-    offset = 1
-    for c in s
-        if f(c)
-            offset += __unsafe_string!(out, c, offset)
-        end
-    end
-    resize!(out, offset-1)
-    sizehint!(out, offset-1)
-    return String(out)
 end

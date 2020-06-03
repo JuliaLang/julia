@@ -54,3 +54,11 @@ for (init_uuid, next_uuid) in standard_namespace_uuids
     result = uuid5(init_uuid, "julia")
     @test next_uuid == result
 end
+
+# Issue 35860
+Random.seed!(Random.GLOBAL_RNG, 10)
+u1 = uuid1()
+u4 = uuid4()
+Random.seed!(Random.GLOBAL_RNG, 10)
+@test u1 != uuid1()
+@test u4 != uuid4()

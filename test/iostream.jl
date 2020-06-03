@@ -120,3 +120,13 @@ end
         @test peek(file) == 0x4c
     end
 end
+
+@testset "issue #36004" begin
+    f = tempname()
+    open(f, "w") do io
+        write(io, "test")
+    end
+    open(f, "r") do io
+        @test length(readavailable(io)) > 0
+    end
+end

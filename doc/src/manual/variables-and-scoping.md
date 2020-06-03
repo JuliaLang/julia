@@ -641,7 +641,7 @@ julia> const z = 100
 julia> z = 100
 100
 ```
-The last rule applies for immutable objects even if the variable binding would change, e.g.:
+The last rule applies to immutable objects even if the variable binding would change, e.g.:
 ```julia-repl
 julia> const s1 = "1"
 "1"

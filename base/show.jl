@@ -44,12 +44,14 @@ function show(io::IO, ::MIME"text/plain", f::Function)
     end
 end
 
+show(io::IO, ::MIME"text/plain", c::ComposedFunction) = show(io, c)
+
 function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
     isempty(iter) && get(io, :compact, false) && return show(io, iter)
     summary(io, iter)
     isempty(iter) && return
     print(io, ". ", isa(iter,KeySet) ? "Keys" : "Values", ":")
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
     if limit
         sz = displaysize(io)
         rows, cols = sz[1] - 3, sz[2]
@@ -79,7 +81,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     isempty(t) && return show(io, t)
     # show more descriptively, with one line per key/value pair
     recur_io = IOContext(io, :SHOWN_SET => t)
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
     if !haskey(io, :compact)
         recur_io = IOContext(recur_io, :compact => true)
     end
@@ -149,7 +151,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractSet{T}) where T
     isempty(t) && return show(io, t)
     # show more descriptively, with one line per value
     recur_io = IOContext(io, :SHOWN_SET => t)
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
 
     summary(io, t)
     isempty(t) && return
@@ -202,7 +204,7 @@ function show(io::IO, ::MIME"text/plain", t::Task)
     show(io, t)
     if t.state === :failed
         println(io)
-        showerror(io, CapturedException(t.result, t.backtrace))
+        show_task_exception(io, t)
     end
 end
 
@@ -263,9 +265,9 @@ the properties of that stream (note that `io` can itself be an `IOContext`).
 
 The following properties are in common use:
 
- - `:compact`: Boolean specifying that small values should be printed more compactly, e.g.
+ - `:compact`: Boolean specifying that values should be printed more compactly, e.g.
    that numbers should be printed with fewer digits. This is set when printing array
-   elements.
+   elements. `:compact` output should not contain line breaks.
  - `:limit`: Boolean specifying that containers should be truncated, e.g. showing `…` in
    place of most elements.
  - `:displaysize`: A `Tuple{Int,Int}` giving the size in rows and columns to use for text
@@ -356,13 +358,20 @@ function show_circular(io::IOContext, @nospecialize(x))
 end
 
 """
-    show(x)
+    show([io::IO = stdout], x)
 
-Write an informative text representation of a value to the current output stream. New types
-should overload `show(io::IO, x)` where the first argument is a stream. The representation used
-by `show` generally includes Julia-specific formatting and type information.
+Write a text representation of a value `x` to the output stream `io`. New types `T`
+should overload `show(io::IO, x::T)`. The representation used by `show` generally
+includes Julia-specific formatting and type information, and should be parseable
+Julia code when possible.
 
 [`repr`](@ref) returns the output of `show` as a string.
+
+To customize human-readable text output for objects of type `T`, define
+`show(io::IO, ::MIME"text/plain", ::T)` instead. Checking the `:compact`
+[`IOContext`](@ref) property of `io` in such methods is recommended,
+since some containers show their elements by calling this method with
+`:compact => true`.
 
 See also [`print`](@ref), which writes un-decorated representations.
 
@@ -374,9 +383,9 @@ julia> print("Hello World!")
 Hello World!
 ```
 """
-show(x) = show(stdout::IO, x)
-
 show(io::IO, @nospecialize(x)) = show_default(io, x)
+
+show(x) = show(stdout::IO, x)
 
 # avoid inferring show_default on the type of `x`
 show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x))
@@ -450,11 +459,11 @@ function show_function(io::IO, f::Function, compact::Bool)
     end
 end
 
-show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false))
+show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false)::Bool)
 print(io::IO, f::Function) = show_function(io, f, true)
 
 function show(io::IO, f::Core.IntrinsicFunction)
-    if !get(io, :compact, false)
+    if !(get(io, :compact, false)::Bool)
         print(io, "Core.Intrinsics.")
     end
     print(io, nameof(f))
@@ -564,7 +573,7 @@ function show_type_name(io::IO, tn::Core.TypeName)
     sym = (globfunc ? globname : tn.name)::Symbol
     globfunc && print(io, "typeof(")
     quo = false
-    if !get(io, :compact, false)
+    if !(get(io, :compact, false)::Bool)
         # Print module prefix unless type is visible from module passed to
         # IOContext If :module is not set, default to Main. nothing can be used
         # to force printing prefix
@@ -1135,6 +1144,7 @@ end
 
 function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, prec::Int, quote_level::Int)
     if isa(value, Symbol) && !(value in quoted_syms)
+        value = value::Symbol
         s = string(value)
         if isidentifier(s) || (isoperator(value) && value !== Symbol("'"))
             print(io, ":")
@@ -1144,6 +1154,7 @@ function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, pre
         end
     else
         if isa(value,Expr) && value.head === :block
+            value = value::Expr
             show_block(IOContext(io, beginsym=>false), "quote", value, indent, quote_level)
             print(io, "end")
         else
@@ -1196,7 +1207,7 @@ function show_import_path(io::IO, ex, quote_level)
             if i > 1 && ex.args[i-1] !== :(.)
                 print(io, '.')
             end
-            show_sym(io, ex.args[i], allow_macroname=(i==length(ex.args)))
+            show_sym(io, ex.args[i]::Symbol, allow_macroname=(i==length(ex.args)))
         end
     else
         show_unquoted(io, ex, 0, 0, quote_level)
@@ -1742,6 +1753,31 @@ function demangle_function_name(name::AbstractString)
     return name
 end
 
+# show the called object in a signature, given its type `ft`
+# `io` should contain the UnionAll env of the signature
+function show_signature_function(io::IO, @nospecialize(ft), demangle=false, fargname="", html=false)
+    uw = unwrap_unionall(ft)
+    if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) &&
+        isdefined(uw.name.module, uw.name.mt.name) &&
+        ft == typeof(getfield(uw.name.module, uw.name.mt.name))
+        print(io, (demangle ? demangle_function_name : identity)(uw.name.mt.name))
+    elseif isa(ft, DataType) && ft.name === Type.body.name &&
+        (f = ft.parameters[1]; !isa(f, TypeVar))
+        uwf = unwrap_unionall(f)
+        parens = isa(f, UnionAll) && !(isa(uwf, DataType) && f === uwf.name.wrapper)
+        parens && print(io, "(")
+        show(io, f)
+        parens && print(io, ")")
+    else
+        if html
+            print(io, "($fargname::<b>", ft, "</b>)")
+        else
+            print(io, "($fargname::", ft, ")")
+        end
+    end
+    nothing
+end
+
 function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwargs=nothing)
     # print a method signature tuple for a lambda definition
     color = get(io, :color, false) && get(io, :backtrace, false) ? stackframe_function_color() : :nothing
@@ -1758,18 +1794,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
     end
     sig = sig.parameters
     with_output_color(color, env_io) do io
-        ft = sig[1]
-        uw = unwrap_unionall(ft)
-        if ft <: Function && isa(uw,DataType) && isempty(uw.parameters) &&
-                isdefined(uw.name.module, uw.name.mt.name) &&
-                ft == typeof(getfield(uw.name.module, uw.name.mt.name))
-            print(io, (demangle ? demangle_function_name : identity)(uw.name.mt.name))
-        elseif isa(ft, DataType) && ft.name === Type.body.name && !Core.Compiler.has_free_typevars(ft)
-            f = ft.parameters[1]
-            print(io, f)
-        else
-            print(io, "(::", ft, ")")
-        end
+        show_signature_function(io, sig[1], demangle)
     end
     first = true
     print_style = get(io, :color, false) && get(io, :backtrace, false) ? :bold : :nothing
@@ -2084,18 +2109,27 @@ end
 """
 `alignment(io, X)` returns a tuple (left,right) showing how many characters are
 needed on either side of an alignment feature such as a decimal point.
+
+# Examples
+```jldoctest
+julia> Base.alignment(stdout, 42)
+(2, 0)
+
+julia> Base.alignment(stdout, 4.23)
+(1, 3)
+
+julia> Base.alignment(stdout, 1 + 10im)
+(3, 5)
+```
 """
 alignment(io::IO, x::Any) = (0, length(sprint(show, x, context=io, sizehint=0)))
 alignment(io::IO, x::Number) = (length(sprint(show, x, context=io, sizehint=0)), 0)
-"`alignment(stdout, 42)` yields (2, 0)"
 alignment(io::IO, x::Integer) = (length(sprint(show, x, context=io, sizehint=0)), 0)
-"`alignment(stdout, 4.23)` yields (1, 3) for `4` and `.23`"
 function alignment(io::IO, x::Real)
     m = match(r"^(.*?)((?:[\.eEfF].*)?)$", sprint(show, x, context=io, sizehint=0))
     m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
-"`alignment(stdout, 1 + 10im)` yields (3, 5) for `1 +` and `_10im` (plus sign on left, space on right)"
 function alignment(io::IO, x::Complex)
     m = match(r"^(.*[^ef][\+\-])(.*)$", sprint(show, x, context=io, sizehint=0))
     m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
@@ -2113,7 +2147,7 @@ function alignment(io::IO, x::Pair)
         ctx = IOContext(io, :typeinfo => gettypeinfos(io, x)[1])
         left = length(sprint(show, x.first, context=ctx, sizehint=0))
         left += 2 * !isdelimited(ctx, x.first) # for parens around p.first
-        left += !get(io, :compact, false) # spaces are added around "=>"
+        left += !(get(io, :compact, false)::Bool) # spaces are added around "=>"
         (left+1, length(s)-left-1) # +1 for the "=" part of "=>"
     else
         (0, length(s)) # as for x::Any

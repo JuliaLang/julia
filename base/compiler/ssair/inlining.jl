@@ -895,6 +895,26 @@ function inline_apply!(ir::IRCode, idx::Int, sig::Signature, params::Optimizatio
         if arg_start > length(atypes)
             return nothing
         end
+        ft = atypes[arg_start]
+        if ft isa Const && ft.val === Core.tuple
+            # if one argument is a tuple already, and the rest are empty, we can just return it
+            # e.g. rewrite `((t::Tuple)...,)` to `t`
+            nonempty_idx = 0
+            for i = (arg_start + 1):length(atypes)
+                ti = atypes[i]
+                ti ⊑ Tuple{} && continue
+                if ti ⊑ Tuple && nonempty_idx == 0
+                    nonempty_idx = i
+                    continue
+                end
+                nonempty_idx = 0
+                break
+            end
+            if nonempty_idx != 0
+                ir.stmts[idx] = stmt.args[nonempty_idx]
+                return nothing
+            end
+        end
         # Try to figure out the signature of the function being called
         # and if rewrite_apply_exprargs can deal with this form
         for i = (arg_start + 1):length(atypes)
@@ -905,12 +925,6 @@ function inline_apply!(ir::IRCode, idx::Int, sig::Signature, params::Optimizatio
         end
         # Independent of whether we can inline, the above analysis allows us to rewrite
         # this apply call to a regular call
-        ft = atypes[arg_start]
-        if length(atypes) == arg_start+1 && ft isa Const && ft.val === Core.tuple && atypes[arg_start+1] ⊑ Tuple
-            # rewrite `((t::Tuple)...,)` to `t`
-            ir.stmts[idx] = stmt.args[arg_start+1]
-            return nothing
-        end
         stmt.args, atypes = rewrite_apply_exprargs!(ir, idx, stmt.args, atypes, arg_start)
         has_free_typevars(ft) && return nothing
         f = singleton_type(ft)

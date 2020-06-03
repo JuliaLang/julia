@@ -714,21 +714,8 @@ JL_CALLABLE(jl_f_tuple)
     size_t i;
     if (nargs == 0)
         return (jl_value_t*)jl_emptytuple;
-    jl_datatype_t *tt;
-    if (nargs < jl_page_size / sizeof(jl_value_t*)) {
-        jl_value_t **types = (jl_value_t**)alloca(nargs * sizeof(jl_value_t*));
-        for (i = 0; i < nargs; i++)
-            types[i] = jl_typeof(args[i]);
-        tt = jl_inst_concrete_tupletype_v(types, nargs);
-    }
-    else {
-        jl_svec_t *types = jl_alloc_svec_uninit(nargs);
-        JL_GC_PUSH1(&types);
-        for (i = 0; i < nargs; i++)
-            jl_svecset(types, i, jl_typeof(args[i]));
-        tt = jl_inst_concrete_tupletype(types);
-        JL_GC_POP();
-    }
+    jl_datatype_t *tt = jl_inst_arg_tuple_type(args[0], &args[1], nargs, 0);
+    JL_GC_PROMISE_ROOTED(tt); // it is a concrete type
     if (tt->instance != NULL)
         return tt->instance;
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -1038,18 +1025,19 @@ JL_CALLABLE(jl_f_invoke_kwsorter)
         size_t i, nt = jl_nparams(argtypes) + 2;
         if (nt < jl_page_size/sizeof(jl_value_t*)) {
             jl_value_t **types = (jl_value_t**)alloca(nt*sizeof(jl_value_t*));
-            types[0] = (jl_value_t*)jl_namedtuple_type; types[1] = jl_typeof(func);
-            for(i=2; i < nt; i++)
-                types[i] = jl_tparam(argtypes,i-2);
+            types[0] = (jl_value_t*)jl_namedtuple_type;
+            types[1] = jl_typeof(func);
+            for (i = 2; i < nt; i++)
+                types[i] = jl_tparam(argtypes, i - 2);
             argtypes = (jl_value_t*)jl_apply_tuple_type_v(types, nt);
         }
         else {
             jl_svec_t *types = jl_alloc_svec_uninit(nt);
             JL_GC_PUSH1(&types);
-            jl_svecset(types, 0, jl_array_any_type);
+            jl_svecset(types, 0, jl_namedtuple_type);
             jl_svecset(types, 1, jl_typeof(func));
-            for(i=2; i < nt; i++)
-                jl_svecset(types, i, jl_tparam(argtypes,i-2));
+            for (i = 2; i < nt; i++)
+                jl_svecset(types, i, jl_tparam(argtypes, i - 2));
             argtypes = (jl_value_t*)jl_apply_tuple_type(types);
             JL_GC_POP();
         }
@@ -1570,7 +1558,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("CodeInfo", (jl_value_t*)jl_code_info_type);
     add_builtin("Ref", (jl_value_t*)jl_ref_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
-    add_builtin("AddrSpacePtr", (jl_value_t*)jl_addrspace_pointer_type);
+    add_builtin("LLVMPtr", (jl_value_t*)jl_llvmpointer_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
 
     add_builtin("AbstractArray", (jl_value_t*)jl_abstractarray_type);

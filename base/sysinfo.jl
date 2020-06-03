@@ -438,16 +438,18 @@ const WINDOWS_VISTA_VER = v"6.0"
     Sys.isexecutable(path::String)
 
 Return `true` if the given `path` has executable permissions.
+
+!!! note
+    Prior to Julia 1.6, this did not correctly interrogate filesystem
+    ACLs on Windows, therefore it would return `true` for any
+    file.  From Julia 1.6 on, it correctly determines whether the
+    file is marked as executable or not.
 """
 function isexecutable(path::String)
-    if iswindows()
-        return isfile(path)
-    else
-        # We use `access()` and `X_OK` to determine if a given path is
-        # executable by the current user.  `X_OK` comes from `unistd.h`.
-        X_OK = 0x01
-        ccall(:access, Cint, (Ptr{UInt8}, Cint), path, X_OK) == 0
-    end
+    # We use `access()` and `X_OK` to determine if a given path is
+    # executable by the current user.  `X_OK` comes from `unistd.h`.
+    X_OK = 0x01
+    return ccall(:jl_fs_access, Cint, (Ptr{UInt8}, Cint), path, X_OK) == 0
 end
 isexecutable(path::AbstractString) = isexecutable(String(path))
 

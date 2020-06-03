@@ -687,6 +687,17 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     end
 end
 
+# incomplete inputs to stream REPL
+let exename = `$(Base.julia_cmd()) --startup-file=no`
+    in = Pipe(); out = Pipe(); err = Pipe()
+    proc = run(pipeline(exename, stdin = in, stdout = out, stderr = err), wait=false)
+    write(in, "f(\n")
+    close(in)
+    close(err.in)
+    txt = readline(err)
+    @test startswith(txt, "ERROR: syntax: incomplete")
+end
+
 # Issue #29855
 for yn in ("no", "yes")
     exename = `$(Base.julia_cmd()) --inline=no --startup-file=no --inline=$yn`

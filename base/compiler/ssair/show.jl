@@ -662,17 +662,14 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
     end
 end
 
-function show_ir(io::IO, code::CodeInfo, line_info_preprinter=DILineInfoPrinter(code.linetable), line_info_postprinter=default_expr_type_printer)
-    cols = displaysize(io)[2]
-    used = BitSet()
+# Show a single statement, code.code[idx], in the context of the whole CodeInfo.
+# Returns the updated value of bb_idx.
+function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, line_info_postprinter, used::BitSet, cfg::CFG, bb_idx::Int)
+    ds = get(io, :displaysize, (24, 80))::Tuple{Int,Int}
+    cols = ds[2]
     stmts = code.code
     types = code.ssavaluetypes
-    cfg = compute_basic_blocks(stmts)
     max_bb_idx_size = length(string(length(cfg.blocks)))
-    for stmt in stmts
-        scan_ssa_use!(push!, used, stmt)
-    end
-    bb_idx = 1
 
     if isempty(used)
         maxlength_idx = 0
@@ -680,73 +677,88 @@ function show_ir(io::IO, code::CodeInfo, line_info_preprinter=DILineInfoPrinter(
         maxused = maximum(used)
         maxlength_idx = length(string(maxused))
     end
-    for idx in eachindex(stmts)
-        if !isassigned(stmts, idx)
-            # This is invalid, but do something useful rather
-            # than erroring, to make debugging easier
-            printstyled(io, "#UNDEF\n", color=:red)
-            continue
-        end
-        stmt = stmts[idx]
-        # Compute BB guard rail
-        if bb_idx > length(cfg.blocks)
-            # If invariants are violated, print a special leader
-            linestart = " "^(max_bb_idx_size + 2) # not inside a basic block bracket
-            inlining_indent = line_info_preprinter(io, linestart, code.codelocs[idx])
-            printstyled(io, "!!! ", "─"^max_bb_idx_size, color=:light_black)
+
+    if !isassigned(stmts, idx)
+        # This is invalid, but do something useful rather
+        # than erroring, to make debugging easier
+        printstyled(io, "#UNDEF\n", color=:red)
+        return bb_idx
+    end
+    stmt = stmts[idx]
+    # Compute BB guard rail
+    if bb_idx > length(cfg.blocks)
+        # If invariants are violated, print a special leader
+        linestart = " "^(max_bb_idx_size + 2) # not inside a basic block bracket
+        inlining_indent = line_info_preprinter(io, linestart, code.codelocs[idx])
+        printstyled(io, "!!! ", "─"^max_bb_idx_size, color=:light_black)
+    else
+        bbrange = cfg.blocks[bb_idx].stmts
+        bbrange = bbrange.start:bbrange.stop
+        # Print line info update
+        linestart = idx == first(bbrange) ? "  " : sprint(io -> printstyled(io, "│ ", color=:light_black), context=io)
+        linestart *= " "^max_bb_idx_size
+        inlining_indent = line_info_preprinter(io, linestart, code.codelocs[idx])
+        if idx == first(bbrange)
+            bb_idx_str = string(bb_idx)
+            bb_pad = max_bb_idx_size - length(bb_idx_str)
+            bb_type = length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄"
+            printstyled(io, bb_idx_str, " ", bb_type, "─"^bb_pad, color=:light_black)
+        elseif idx == last(bbrange) # print separator
+            printstyled(io, "└", "─"^(1 + max_bb_idx_size), color=:light_black)
         else
-            bbrange = cfg.blocks[bb_idx].stmts
-            bbrange = bbrange.start:bbrange.stop
-            # Print line info update
-            linestart = idx == first(bbrange) ? "  " : sprint(io -> printstyled(io, "│ ", color=:light_black), context=io)
-            linestart *= " "^max_bb_idx_size
-            inlining_indent = line_info_preprinter(io, linestart, code.codelocs[idx])
-            if idx == first(bbrange)
-                bb_idx_str = string(bb_idx)
-                bb_pad = max_bb_idx_size - length(bb_idx_str)
-                bb_type = length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄"
-                printstyled(io, bb_idx_str, " ", bb_type, "─"^bb_pad, color=:light_black)
-            elseif idx == last(bbrange) # print separator
-                printstyled(io, "└", "─"^(1 + max_bb_idx_size), color=:light_black)
-            else
-                printstyled(io, "│ ", " "^max_bb_idx_size, color=:light_black)
-            end
-            if idx == last(bbrange)
-                bb_idx += 1
-            end
+            printstyled(io, "│ ", " "^max_bb_idx_size, color=:light_black)
         end
-        print(io, inlining_indent, " ")
-        # convert statement index to labels, as expected by print_stmt
-        if stmt isa Expr
-            if stmt.head === :gotoifnot && length(stmt.args) == 2 && stmt.args[2] isa Int
-                stmt = GotoIfNot(stmt.args[1], block_for_inst(cfg, stmt.args[2]::Int))
-            elseif stmt.head === :enter && length(stmt.args) == 1 && stmt.args[1] isa Int
-                stmt = Expr(:enter, block_for_inst(cfg, stmt.args[1]::Int))
-            end
-        elseif isa(stmt, GotoIfNot)
-            stmt = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
-        elseif stmt isa GotoNode
-            stmt = GotoNode(block_for_inst(cfg, stmt.label))
-        elseif stmt isa PhiNode
-            e = stmt.edges
-            stmt = PhiNode(Any[block_for_inst(cfg, e[i]) for i in 1:length(e)], stmt.values)
+        if idx == last(bbrange)
+            bb_idx += 1
         end
-        show_type = types isa Vector{Any} && should_print_ssa_type(stmt)
-        print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
-        if types isa Vector{Any} # ignore types for pre-inference code
-            if !isassigned(types, idx)
-                # This is an error, but can happen if passes don't update their type information
-                printstyled(io, "::#UNDEF", color=:red)
-            elseif show_type
-                typ = types[idx]
-                line_info_postprinter(io, typ, idx in used)
-            end
-        end
-        println(io)
     end
-    let linestart = " "^(max_bb_idx_size + 2)
-        line_info_preprinter(io, linestart, typemin(Int32))
+    print(io, inlining_indent, " ")
+    # convert statement index to labels, as expected by print_stmt
+    if stmt isa Expr
+        if stmt.head === :gotoifnot && length(stmt.args) == 2 && stmt.args[2] isa Int
+            stmt = GotoIfNot(stmt.args[1], block_for_inst(cfg, stmt.args[2]::Int))
+        elseif stmt.head === :enter && length(stmt.args) == 1 && stmt.args[1] isa Int
+            stmt = Expr(:enter, block_for_inst(cfg, stmt.args[1]::Int))
+        end
+    elseif isa(stmt, GotoIfNot)
+        stmt = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
+    elseif stmt isa GotoNode
+        stmt = GotoNode(block_for_inst(cfg, stmt.label))
+    elseif stmt isa PhiNode
+        e = stmt.edges
+        stmt = PhiNode(Any[block_for_inst(cfg, e[i]) for i in 1:length(e)], stmt.values)
     end
+    show_type = types isa Vector{Any} && should_print_ssa_type(stmt)
+    print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
+    if types isa Vector{Any} # ignore types for pre-inference code
+        if !isassigned(types, idx)
+            # This is an error, but can happen if passes don't update their type information
+            printstyled(io, "::#UNDEF", color=:red)
+        elseif show_type
+            typ = types[idx]
+            line_info_postprinter(io, typ, idx in used)
+        end
+    end
+    println(io)
+    return bb_idx
+end
+
+function show_ir(io::IO, code::CodeInfo, line_info_preprinter=DILineInfoPrinter(code.linetable), line_info_postprinter=default_expr_type_printer)
+    ioctx = IOContext(io, :displaysize => displaysize(io))
+    stmts = code.code
+    used = BitSet()
+    cfg = compute_basic_blocks(stmts)
+    for stmt in stmts
+        scan_ssa_use!(push!, used, stmt)
+    end
+    bb_idx = 1
+
+    for idx in eachindex(code.code)
+        bb_idx = show_ir_stmt(ioctx, code, idx, line_info_preprinter, line_info_postprinter, used, cfg, bb_idx)
+    end
+
+    max_bb_idx_size = length(string(length(cfg.blocks)))
+    line_info_preprinter(io, " "^(max_bb_idx_size + 2), typemin(Int32))
     nothing
 end
 

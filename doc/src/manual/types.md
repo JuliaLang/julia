@@ -405,6 +405,18 @@ true
 
 The [`===`](@ref) function confirms that the "two" constructed instances of `NoFields` are actually one
 and the same. Singleton types are described in further detail [below](@ref man-singleton-types).
+More generally, if all the fields of an immutable structure are indistinguishable (`===`) then two
+immutable values containing those fields are also indistinguishable:
+
+```jldoctest
+julia> struct X
+           a::Int
+           b::Float64
+       end
+
+julia> X(1, 2) === X(1, 2)
+true
+```
 
 There is much more to say about how instances of composite types are created, but that discussion
 depends on both [Parametric Types](@ref) and on [Methods](@ref), and is sufficiently important

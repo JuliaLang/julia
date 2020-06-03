@@ -589,6 +589,18 @@ end
     @test sizeof(view(zeros(UInt8, 10), 1:4)) == 4
     @test sizeof(view(zeros(UInt8, 10), 1:3)) == 3
     @test sizeof(view(zeros(Float64, 10, 10), 1:3, 2:6)) == 120
+
+    # Test non-power of 2 types (Issue #35884)
+    primitive type UInt48 48 end
+    UInt48(x::UInt64) = Core.Intrinsics.trunc_int(UInt48, x)
+    UInt48(x::UInt32) = Core.Intrinsics.zext_int(UInt48, x)
+
+    a = UInt48(0x00000001);
+    b = UInt48(0x00000002);
+    c = UInt48(0x00000003);
+    arrayOfUInt48 = [a, b, c];
+
+    @test sizeof(view(arrayOfUInt48, 1:2)) == 16
 end
 
 
