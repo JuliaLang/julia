@@ -1,19 +1,22 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# This file tests the new Julia 1.6+ extension interface of TerminalMenus
+# To trigger the new interface, at least one configuration keyword argument must be supplied.
+
 # Check to make sure types are imported properly
-@test MultiSelectMenu <: TerminalMenus.AbstractMenu
+@test MultiSelectMenu{TerminalMenus.MultiSelectConfig} <: TerminalMenus.ConfiguredMenu  # TODO Julia 2.0: delete parameter
 
 # Invalid Menu Params
-@test_throws ErrorException MultiSelectMenu(["one"])
-@test_throws ErrorException MultiSelectMenu(["one", "two", "three"], pagesize=1)
+@test_throws ErrorException MultiSelectMenu(["one"], charset=:ascii)
+@test_throws ErrorException MultiSelectMenu(["one", "two", "three"], pagesize=1, charset=:ascii)
 
 # Constructor
-@test MultiSelectMenu(["one", "two", "three"]).pagesize == 3
-@test MultiSelectMenu(string.(1:30), pagesize=-1).pagesize == 30
-@test MultiSelectMenu(string.(1:4), pagesize=10).pagesize == 4
-@test MultiSelectMenu(string.(1:100)).pagesize == 10
+@test MultiSelectMenu(["one", "two", "three"], charset=:ascii).pagesize == 3
+@test MultiSelectMenu(string.(1:30), pagesize=-1, charset=:ascii).pagesize == 30
+@test MultiSelectMenu(string.(1:4), pagesize=10, charset=:ascii).pagesize == 4
+@test MultiSelectMenu(string.(1:100), charset=:ascii).pagesize == 10
 
-multi_menu = MultiSelectMenu(string.(1:20))
+multi_menu = MultiSelectMenu(string.(1:20), charset=:ascii)
 @test TerminalMenus.options(multi_menu) == string.(1:20)
 @test TerminalMenus.header(multi_menu) == "[press: d=done, a=all, n=none]"
 
@@ -38,5 +41,5 @@ for kws in ((charset=:ascii,),
 end
 
 # Test SDTIN
-multi_menu = MultiSelectMenu(string.(1:10))
+multi_menu = MultiSelectMenu(string.(1:10), charset=:ascii)
 @test simulate_input(Set([1,2]), multi_menu, :enter, :down, :enter, 'd')

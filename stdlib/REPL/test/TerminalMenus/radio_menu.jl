@@ -1,19 +1,22 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# This file tests the new Julia 1.6+ extension interface of TerminalMenus
+# To trigger the new interface, at least one configuration keyword argument must be supplied.
+
 # Check to make sure types are imported properly
-@test RadioMenu <: TerminalMenus.AbstractMenu
+@test RadioMenu{TerminalMenus.Config} <: TerminalMenus.ConfiguredMenu  # TODO Julia 2.0: delete parameter
 
 # Invalid Menu Params
-@test_throws ErrorException RadioMenu(["one"])
-@test_throws ErrorException RadioMenu(["one", "two", "three"], pagesize=1)
+@test_throws ErrorException RadioMenu(["one"]; charset=:ascii)
+@test_throws ErrorException RadioMenu(["one", "two", "three"], pagesize=1, charset=:ascii)
 
 # Constructor
-@test RadioMenu(["one", "two", "three"]).pagesize == 3
-@test RadioMenu(string.(1:30), pagesize=-1).pagesize == 30
-@test RadioMenu(string.(1:4), pagesize=10).pagesize == 4
-@test RadioMenu(string.(1:100)).pagesize == 10
+@test RadioMenu(["one", "two", "three"]; charset=:ascii).pagesize == 3
+@test RadioMenu(string.(1:30), pagesize=-1, charset=:ascii).pagesize == 30
+@test RadioMenu(string.(1:4), pagesize=10, charset=:ascii).pagesize == 4
+@test RadioMenu(string.(1:100); charset=:ascii).pagesize == 10
 
-radio_menu = RadioMenu(string.(1:20))
+radio_menu = RadioMenu(string.(1:20); charset=:ascii)
 @test TerminalMenus.options(radio_menu) == string.(1:20)
 radio_menu.selected = 2
 TerminalMenus.cancel(radio_menu)
@@ -37,5 +40,5 @@ for kws in ((charset=:ascii,),
 end
 
 # Test using stdin
-radio_menu = RadioMenu(string.(1:10))
+radio_menu = RadioMenu(string.(1:10); charset=:ascii)
 @test simulate_input(3, radio_menu, :down, :down, :enter)

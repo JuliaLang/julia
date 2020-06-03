@@ -27,12 +27,12 @@ You like the following fruits:
 ```
 
 """
-mutable struct MultiSelectMenu <: ConfiguredMenu
+mutable struct MultiSelectMenu{C} <: _ConfiguredMenu{C}
     options::Array{String,1}
     pagesize::Int
     pageoffset::Int
     selected::Set{Int}
-    config::MultiSelectConfig
+    config::C
 end
 
 
@@ -51,7 +51,7 @@ were selected by the user.
 
 Any additional keyword arguments will be passed to [`TerminalMenus.MultiSelectConfig`](@ref).
 """
-function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, kwargs...)
+function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, warn::Bool=true, kwargs...)
     length(options) < 2 && error("MultiSelectMenu must have at least two options")
 
     # if pagesize is -1, use automatic paging
@@ -64,7 +64,13 @@ function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, kwargs...)
     pageoffset = 0
     selected = Set{Int}() # none
 
-    MultiSelectMenu(options, pagesize, pageoffset, selected, MultiSelectConfig(; kwargs...))
+    if !isempty(kwargs)
+        MultiSelectMenu(options, pagesize, pageoffset, selected, MultiSelectConfig(; kwargs...))
+    else
+        warn && Base.depwarn("Legacy `MultiSelectMenu` interface is deprecated, set a configuration option such as `MultiSelectMenu(options; charset=:ascii)` to trigger the new interface.", :MultiSelectMenu)
+        MultiSelectMenu(options, pagesize, pageoffset, selected, CONFIG)
+    end
+
 end
 
 
@@ -90,7 +96,7 @@ function pick(menu::MultiSelectMenu, cursor::Int)
     return false #break out of the menu
 end
 
-function writeline(buf::IOBuffer, menu::MultiSelectMenu, idx::Int, iscursor::Bool)
+function writeline(buf::IOBuffer, menu::MultiSelectMenu{MultiSelectConfig}, idx::Int, iscursor::Bool)
     if idx in menu.selected
         print(buf, menu.config.checked, " ")
     else
@@ -112,4 +118,18 @@ function keypress(menu::MultiSelectMenu, key::UInt32)
         menu.selected = Set{Int}()
     end
     false # don't break
+end
+
+
+## Legacy interface
+function TerminalMenus.writeLine(buf::IOBuffer, menu::MultiSelectMenu{<:Dict}, idx::Int, cursor::Bool)
+    # print a ">" on the selected entry
+    cursor ? print(buf, menu.config[:cursor]," ") : print(buf, "  ")
+    if idx in menu.selected
+        print(buf, menu.config[:checked], " ")
+    else
+        print(buf, menu.config[:unchecked], " ")
+    end
+
+    print(buf, replace(menu.options[idx], "\n" => "\\n"))
 end

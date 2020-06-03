@@ -2,7 +2,7 @@
 
 using REPL.TerminalMenus, Test
 
-mutable struct DynamicMenu <: TerminalMenus.ConfiguredMenu
+mutable struct DynamicMenu <: TerminalMenus._ConfiguredMenu{TerminalMenus.Config}
     pagesize::Int
     pageoffset::Int
     selected::Int

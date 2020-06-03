@@ -6,11 +6,6 @@
 
 The supertype for all Menu types.
 
-    ConfiguredMenu <: AbstractMenu
-
-A subtype indicating that the menu stores its own configuration and requests that
-TerminalMenus print the cursor indicator. Recommended for all new menu types.
-
 
 # Functions
 
@@ -56,7 +51,11 @@ subtypes.
 """
 abstract type AbstractMenu end
 
-abstract type ConfiguredMenu <: AbstractMenu end
+# TODO Julia2.0: get rid of parametric intermediate, making it just
+#   abstract type ConfiguredMenu <: AbstractMenu end
+# Or perhaps just make all menus ConfiguredMenus
+abstract type _ConfiguredMenu{C} <: AbstractMenu end
+const ConfiguredMenu = _ConfiguredMenu{<:AbstractConfig}
 
 # NECESSARY FUNCTIONS
 # These functions must be implemented for all subtypes of AbstractMenu

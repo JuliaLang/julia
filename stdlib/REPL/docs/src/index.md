@@ -559,7 +559,6 @@ julia> request(menu) # ASCII is used by default
    [ ] grape
  > [X] strawberry
 v  [ ] blueberry
-Set([4, 2])
 ```
 
 can instead be rendered with Unicode selection and navigation characters with
@@ -574,7 +573,6 @@ julia> request(menu)
    ⬚ grape
  → ✓ strawberry
 ↓  ⬚ blueberry
-Set([4, 2])
 ```
 
 More fine-grained configuration is also possible:
@@ -590,7 +588,6 @@ julia> request(menu)
    NOPE grape
  ⧐ YEP! strawberry
 ↓  NOPE blueberry
-Set([4, 2])
 ```
 
 Aside from the overall `charset` option, for `RadioMenu` the configurable options are:
@@ -614,20 +611,18 @@ Types that are derived from `TerminalMenus.ConfiguredMenu` configure the menu op
 Prior to Julia 1.6, and still supported throughout Julia 1.x, one can also configure menus by calling
 `TerminalMenus.config()`.
 
-#### Arguments
-
- - `charset::Symbol=:na`: ui characters to use (`:ascii` or `:unicode`); overridden by other arguments
- - `cursor::Char='>'|'→'`: character to use for cursor
- - `up_arrow::Char='^'|'↑'`: character to use for up arrow
- - `down_arrow::Char='v'|'↓'`: character to use for down arrow
- - `checked::String="[X]"|"✓"`: string to use for checked
- - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
- - `scroll::Symbol=:na`: If `:wrap` then wrap the cursor around top and bottom, if :`nowrap` do not wrap cursor
- - `suppress_output::Bool=false`: For testing. If true, menu will not be printed to console.
- - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
-
 ## References
+
+### REPL
 
 ```@docs
 Base.atreplinit
+```
+
+### TerminalMenus
+
+```@docs
+TerminalMenus.Config
+TerminalMenus.MultiSelectConfig
+TerminalMenus.config
 ```

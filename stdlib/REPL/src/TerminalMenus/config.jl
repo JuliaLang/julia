@@ -99,7 +99,14 @@ end
 ## Below is the old-style CONFIG interface, kept for backwards compatibility.
 ## Not recommended for any new menu types.
 
-"""global menu configuration parameters"""
+"""
+    CONFIG
+
+Global menu configuration parameters
+
+!!! compat Julia 1.6
+    `CONFIG` is deprecated, instead configure menus via their constructors.
+"""
 const CONFIG = Dict{Symbol,Union{Char,String,Bool}}()
 
 """
@@ -115,8 +122,11 @@ Keyword-only function to configure global menu parameters
  - `checked::String="[X]"|"✓"`: string to use for checked
  - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
  - `scroll::Symbol=:nowrap`: If `:wrap` wrap cursor around top and bottom, if :`nowrap` do not wrap cursor
- - `suppress_output::Bool=false`: For testing. If true, menu will not be printed to console.
+ - `supress_output::Bool=false`: Ignored legacy argument, pass `suppress_output` as a keyword argument to `request` instead.
  - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
+
+!!! compat Julia 1.6
+    As of Julia 1.6, `config` is deprecated. Use `Config` or `MultiSelectConfig` instead.
 """
 function config(;charset::Symbol = :na,
                 scroll::Symbol = :na,

@@ -1,22 +1,21 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-# This file tests the Julia 1.0-1.5 extension interface of TerminalMenus
-
-include("OldMultiSelectMenu.jl")
+# This file tests the legacy Julia 1.0-1.5 extension interface of TerminalMenus
+# They are run with `warn=false` to avoid triggering test failures.
 
 # Check to make sure types are imported properly
-@test OldMultiSelectMenu <: TerminalMenus.AbstractMenu
+@test MultiSelectMenu <: TerminalMenus.AbstractMenu
 
 # Invalid Menu Params
-@test_throws ErrorException OldMultiSelectMenu(["one"])
-@test_throws ErrorException OldMultiSelectMenu(["one", "two", "three"], pagesize=1)
+@test_throws ErrorException MultiSelectMenu(["one"], warn=false)
+@test_throws ErrorException MultiSelectMenu(["one", "two", "three"], pagesize=1, warn=false)
 
 # Constructor
-@test OldMultiSelectMenu(["one", "two", "three"]).pagesize == 3
-@test OldMultiSelectMenu(string.(1:30), pagesize=-1).pagesize == 30
-@test OldMultiSelectMenu(string.(1:4), pagesize=10).pagesize == 4
-@test OldMultiSelectMenu(string.(1:100)).pagesize == 10
+@test MultiSelectMenu(["one", "two", "three"], warn=false).pagesize == 3
+@test MultiSelectMenu(string.(1:30), pagesize=-1, warn=false).pagesize == 30
+@test MultiSelectMenu(string.(1:4), pagesize=10, warn=false).pagesize == 4
+@test MultiSelectMenu(string.(1:100), warn=false).pagesize == 10
 
-multi_menu = OldMultiSelectMenu(string.(1:20))
+multi_menu = MultiSelectMenu(string.(1:20), warn=false)
 @test TerminalMenus.options(multi_menu) == string.(1:20)
 @test TerminalMenus.header(multi_menu) == "[press: d=done, a=all, n=none]"
 
@@ -24,7 +23,7 @@ multi_menu = OldMultiSelectMenu(string.(1:20))
 TerminalMenus.config() # Use default chars
 CONFIG = TerminalMenus.CONFIG
 
-multi_menu = OldMultiSelectMenu(string.(1:10))
+multi_menu = MultiSelectMenu(string.(1:10), warn=false)
 buf = IOBuffer()
 TerminalMenus.writeLine(buf, multi_menu, 1, true)
 @test String(take!(buf)) == string(CONFIG[:cursor], " ", CONFIG[:unchecked], " 1")
@@ -36,5 +35,5 @@ TerminalMenus.writeLine(buf, multi_menu, 1, true)
 @test String(take!(buf)) == string(CONFIG[:cursor], " ", CONFIG[:unchecked], " 1")
 
 # Test SDTIN
-multi_menu = OldMultiSelectMenu(string.(1:10))
+multi_menu = MultiSelectMenu(string.(1:10), warn=false)
 @test simulate_input(Set([1,2]), multi_menu, :enter, :down, :enter, 'd')
