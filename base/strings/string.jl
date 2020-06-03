@@ -13,11 +13,15 @@ end
     throw(StringIndexError(s, Int(i)))
 function Base.showerror(io::IO, exc::StringIndexError)
     s = exc.string
-    i = thisind(s, exc.index)
-    print(io, "StringIndexError: ", "invalid index [$(exc.index)], valid previous index [$i] ('$(s[i])')")
-    inext = nextind(s, i)
-    if !(inext > ncodeunits(s))
-        print(io, ", valid next index [$(inext)] ('$(s[inext])')")
+    print(io, "StringIndexError: ", "invalid index [$(exc.index)]")
+    if firstindex(s) <= exc.index <= ncodeunits(s)
+        iprev = thisind(s, exc.index)
+        inext = nextind(s, iprev)
+        if inext <= ncodeunits(s)
+            print(io, ", valid nearby indices [$iprev]=>'$(s[iprev])', [$inext]=>'$(s[inext])'")
+        else
+            print(io, ", valid nearby index [$iprev]=>'$(s[iprev])'")
+        end
     end
 end
 

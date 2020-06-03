@@ -1078,8 +1078,8 @@ end
 @testset "show StringIndexError" begin
     str = "abcdefghκijklmno"
     e = StringIndexError(str, 10)
-    @test sprint(showerror, e) == "StringIndexError: invalid index [10], valid previous index [9] ('κ'), valid next index [11] ('i')"
+    @test sprint(showerror, e) == "StringIndexError: invalid index [10], valid nearby indices [9]=>'κ', [11]=>'i'"
     str = "κ"
     e = StringIndexError(str, 2)
-    @test sprint(showerror, e) == "StringIndexError: invalid index [2], valid previous index [1] ('κ')"
+    @test sprint(showerror, e) == "StringIndexError: invalid index [2], valid nearby index [1]=>'κ'"
 end
