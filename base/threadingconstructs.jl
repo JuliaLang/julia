@@ -40,35 +40,51 @@ end
 
 
 
-function _threadsfor_nested(a, body, schedule)
+function _threadsfor(a, body, schedule)
     rang = map(x-> x.args[2], a) #extract the ranges from the expression
     lidx = map(x-> x.args[1], a) #extract the variable names from the expression
-    acce = [ :( @inbounds range[($x)][currentiteration[($x)]]  ) for x in eachindex(rang)] #for each range create an expression that accesses it with the variable `currentiteration` declared later
-    lidx = ((x, y) -> :( $(esc(x)) = $(y))).(lidx, acce) #join all expressions together, setting the variables to their corresponding `currentiteration`
     rangelen = length(rang)
-    loops = (rangelen == 1) ? nothing :  quote #emulate the outer nested loop
-        inv = lr
-        @inbounds while currentiteration[inv] > lidx[inv]
-            currentiteration[inv] = fidx[inv]
-            inv -= 1
-            currentiteration[inv] += 1
+    #create variables to store information about each iterator
+    starts = [Meta.parse("start__" * string(x)) for x in lidx]
+    ends = [Meta.parse("end__" * string(x)) for x in lidx]
+    ranges = [Meta.parse("range__" * string(x)) for x in lidx]
+    values = [Meta.parse("val__" * string(x)) for x in lidx]
+    #create expressions initializing these variables
+    initranges = [:($(ranges[x]) = range[$x]) for x in 1:rangelen]
+    initstarts = ((x, y) -> :($x = firstindex($y) ) ).(starts, ranges)
+    initends = ((x, y) -> :($x = lastindex($y) ) ).(ends, ranges)
+    initstartingindecies = ((x, y) -> :($x += $y)).(values, starts) #to increase compatibility, instead of adding 1 we will add firstindex()
+    #updates to variables
+    updatevalues = [:( @inbounds( $(esc(lidx[x])) = $(initranges[x])[$(values[x])] )) for x in 1:rangelen]
+    initvalues = [ :($(values[1]) = (tid - 1) * len + min(tid - 1, rem))] #initial calculation of the first dimension
+    for x in 2:rangelen
+        push!(initvalues, :(($(values[x]), $(values[x - 1])) = divrem($(values[x - 1]), length($(initranges[x - 1]))))) #initial calculation for every dimension
+    end
+    checks = nothing #checks are not necesseary when there is only one variable
+    for x in rangelen:-1:2
+        checks =
+        quote
+            if $(values[x - 1]) > $(ends[x - 1]) #check the bounds of the values, starting from the end, if a bound is crossed, reset the previous value, increase the current one, and check the next
+                $(values[x - 1]) = $(starts[x - 1]) #set value to firstindex() of that range
+                $(values[x]) += 1
+                $checks
+                $(updatevalues[x]) #only update variable if it changes
+            end
         end
+    end
+    eachloop = quote #these actions will be performed each loop
+        $(values[1]) += 1
+        $checks
+        $(updatevalues[1])
     end
     quote
         local threadsfor_fun
-        let
-            range = [$(esc.(rang)...)]
-            #calculate variables which are the same across the threads
+        let range = [$(esc.(rang)...)]
             totallength = reduce(*, length.(range))
-            firstindecies = firstindex.(range)
-            lastindecies = lastindex.(range)
             function threadsfor_fun(onethread=false)
                 #Load into local variables
-                lr = $rangelen
-                r = range
+                $(initranges...)
                 tlen = totallength
-                fidx = firstindecies
-                lidx = lastindecies
                 #calculate the iteration length for the current thread
                 if onethread
                     tid = 1
@@ -77,28 +93,23 @@ function _threadsfor_nested(a, body, schedule)
                     tid = threadid()
                     len, rem = divrem(tlen, nthreads())
                 end
-                currentiteration = fill(0, lr) #operation on lengths not, so set everything to 0
-                currentiteration[end] = (tid - 1) * len + min(tid - 1, rem) #calculate the index
-                #convert the index to lr-dimensional starting coordinate
-                @inbounds for cur in lr:-1:2
-                    if currentiteration[cur] == 0
-                        break
-                    end
-                    currentiteration[cur - 1], currentiteration[cur] = divrem(currentiteration[cur], length(r[cur]) )
+                if len == 0 && rem < tid #no iterations abvilable for this thread
+                    return
                 end
-                #from now on operations on indices
-                currentiteration .+= fidx
+                #inits
+                $(initstarts...)
+                $(initends...)
+                $(initvalues...)
+                $(initstartingindecies...)
                 #distribute the remainder across the threads
                 if tid <= rem
                     len += 1
                 end
-                #run this thread's iterations
+                $(updatevalues...) #set all variables to their initial values, they will be updated later in the loop
+                $(values[begin]) -=1 #reduce code duplicaiton by "ommiting" the first increment
                 for i in 1:len
-                    $(loops)
-                    $(lidx...)
+                    $(eachloop)
                     $(esc(body))
-                    #increment currentiteration
-                    currentiteration[end] += 1
                 end
             end
         end
@@ -110,66 +121,6 @@ function _threadsfor_nested(a, body, schedule)
                 # only use threads when called from thread 1, outside @threads
                 :(Base.invokelatest(threadsfor_fun, true))
             end)
-        else
-            threading_run(threadsfor_fun)
-        end
-        nothing
-    end
-end
-
-
-
-function _threadsfor(iter, lbody, schedule)
-    lidx = iter.args[1]         # index
-    range = iter.args[2]
-    quote
-        local threadsfor_fun
-        let range = $(esc(range))
-        function threadsfor_fun(onethread=false)
-            r = range # Load into local variable
-            lenr = length(r)
-            # divide loop iterations among threads
-            if onethread
-                tid = 1
-                len, rem = lenr, 0
-            else
-                tid = threadid()
-                len, rem = divrem(lenr, nthreads())
-            end
-            # not enough iterations for all the threads?
-            if len == 0
-                if tid > rem
-                    return
-                end
-                len, rem = 1, 0
-            end
-            # compute this thread's iterations
-            f = firstindex(r) + ((tid-1) * len)
-            l = f + len - 1
-            # distribute remaining iterations evenly
-            if rem > 0
-                if tid <= rem
-                    f = f + (tid-1)
-                    l = l + tid
-                else
-                    f = f + rem
-                    l = l + rem
-                end
-            end
-            # run this thread's iterations
-            for i = f:l
-                local $(esc(lidx)) = @inbounds r[i]
-                $(esc(lbody))
-            end
-        end
-        end
-        if threadid() != 1 || ccall(:jl_in_threaded_region, Cint, ()) != 0
-            $(if schedule === :static
-              :(error("`@threads :static` can only be used from thread 1 and not nested"))
-              else
-              # only use threads when called from thread 1, outside @threads
-              :(Base.invokelatest(threadsfor_fun, true))
-              end)
         else
             threading_run(threadsfor_fun)
         end
@@ -219,9 +170,9 @@ macro threads(args...)
         throw(ArgumentError("@threads requires a `for` loop expression"))
     end
     if !(ex.args[1] isa Expr && ex.args[1].head === :(=))
-        return _threadsfor_nested(ex.args[1].args, ex.args[2], sched)
+        return _threadsfor(ex.args[1].args, ex.args[2], sched)
     end
-    return _threadsfor(ex.args[1], ex.args[2], sched)
+    return _threadsfor([ex.args[1]], ex.args[2], sched)
 end
 
 """
