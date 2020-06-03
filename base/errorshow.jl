@@ -737,8 +737,8 @@ function print_trace(io::IO, trace; print_linebreaks::Bool)
     end
 end
 
-function print_frame(io, i, func, inlined, modul, file, line, stypes,
-    vnames, width_digits, modulecolor)
+function print_frame(io, i, func, inlined, modul, file, line, specialization_types,
+    variable_names, width_digits, modulecolor)
 
     # frame number
     print(io, lpad("[" * string(i) * "]", width_digits + 2))
@@ -747,11 +747,11 @@ function print_frame(io, i, func, inlined, modul, file, line, stypes,
     # function name
     printstyled(io, func, bold = true)
    
-    if !isempty(vnames)
+    if !isempty(variable_names)
         # type signature
         printstyled(io, "(", color = :light_black)
 
-        for (i, (stype, varname)) in enumerate(zip(stypes, vnames))
+        for (i, (stype, varname)) in enumerate(zip(specialization_types, variable_names))
             if i > 1
                 printstyled(io, ", ", color = :light_black)
             end
