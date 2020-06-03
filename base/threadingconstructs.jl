@@ -60,7 +60,7 @@ function _threadsfor(a, body, schedule)
     for x in 2:rangelen
         push!(initvalues, :(($(values[x]), $(values[x - 1])) = divrem($(values[x - 1]), length($(initranges[x - 1]))))) #initial calculation for every dimension
     end
-    checks = nothing #checks are not necesseary when there is only one variable
+    checks = nothing #checks are not necessary when there is only one variable
     for x in rangelen:-1:2
         checks =
         quote
@@ -82,7 +82,7 @@ function _threadsfor(a, body, schedule)
         let range = [$(esc.(rang)...)]
             totallength = reduce(*, length.(range))
             function threadsfor_fun(onethread=false)
-                #Load into local variables
+                #load into local variables
                 $(initranges...)
                 tlen = totallength
                 #calculate the iteration length for the current thread
@@ -93,7 +93,7 @@ function _threadsfor(a, body, schedule)
                     tid = threadid()
                     len, rem = divrem(tlen, nthreads())
                 end
-                if len == 0 && rem < tid #no iterations abvilable for this thread
+                if len == 0 && rem < tid #no iterations available for this thread
                     return
                 end
                 #inits
@@ -106,21 +106,20 @@ function _threadsfor(a, body, schedule)
                     len += 1
                 end
                 $(updatevalues...) #set all variables to their initial values, they will be updated later in the loop
-                $(values[begin]) -=1 #reduce code duplicaiton by "ommiting" the first increment
+                $(values[begin]) -=1 #reduce code duplication by "omitting" the first increment
                 for i in 1:len
                     $(eachloop)
                     $(esc(body))
                 end
             end
         end
-        if threadid() != 1
-            $(
-            if schedule === :static
-                :(error("`@threads :static` can only be used from thread 1 and not nested"))
-            else
-                # only use threads when called from thread 1, outside @threads
-                :(Base.invokelatest(threadsfor_fun, true))
-            end)
+        if threadid() != 1 || ccall(:jl_in_threaded_region, Cint, ()) != 0
+            $(if schedule === :static
+              :(error("`@threads :static` can only be used from thread 1 and not nested"))
+              else
+              # only use threads when called from thread 1, outside @threads
+              :(Base.invokelatest(threadsfor_fun, true))
+              end)
         else
             threading_run(threadsfor_fun)
         end
