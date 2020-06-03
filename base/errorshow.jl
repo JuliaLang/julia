@@ -632,7 +632,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
         inlined = getfield(frame, :inlined)
 
         push!(LAST_SHOWN_LINE_INFOS, (file, line))
-        print_frame(io, i, func, inlined, modul, file, line, sigtypes, varnames, ndigits, modulecolor)
+        print_frame(io, frame_counter, func, inlined, modul, file, line, sigtypes, varnames, ndigits, modulecolor)
         
         if i < length(displayed_stackframes)
             println(io)
