@@ -627,6 +627,172 @@ function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
     end
 end
 
+const STACKTRACE_MODULECOLORS = [:light_blue, :light_yellow, :light_red, :light_green,:light_magenta, :light_cyan, :blue, :yellow, :red, :green, :magenta, :cyan]
+const STACKTRACE_EXPAND_BASE_PATHS = true
+const STACKTRACE_CONTRACT_USER_DIR = true
+const STACKTRACE_LINEBREAKS = true
+
+function expandbasepath(str)
+
+    basefileregex = if Sys.iswindows()
+        r"^\.\\\w+\.jl$"
+    else
+        r"^\./\w+\.jl$"
+    end
+
+    if !isnothing(match(basefileregex, str))
+        sourcestring = find_source_file(str[3:end]) # cut off ./
+    else
+        str
+    end
+end
+
+function replaceuserpath(str)
+    str1 = replace(str, homedir() => "~")
+    # seems to be necessary for some paths with small letter drive c:// etc
+    replace(str1, lowercasefirst(homedir()) => "~")
+end
+
+getline(frame) = frame.line
+function getfile(frame, expandbase::Bool, contractuser::Bool)
+    file = string(frame.file)
+    if expandbase
+        file = expandbasepath(file)
+    end
+    if contractuser
+        file = replaceuserpath(file)
+    end
+
+    file
+end
+getfunc(frame) = string(frame.func)
+getmodule(frame) = try; string(frame.linfo.def.module) catch; "" end
+getsigtypes(frame) = try;  frame.linfo.specTypes.parameters[2:end] catch; "" end
+
+
+function convert_trace(trace)
+    files = getfile.(trace, STACKTRACE_EXPAND_BASE_PATHS, STACKTRACE_CONTRACT_USER_DIR)
+    lines = getline.(trace)
+
+    methodss = map(trace) do t
+        try
+            t.linfo.def
+        catch
+            nothing
+        end
+    end
+
+    varnames = map(methodss) do m
+        if isnothing(m)
+            []
+        else
+            tv, decls, file, line = arg_decl_parts(m)
+            # this is a list of tuples (variable name, variable type)
+            # we take only the variable names
+            first.(decls[2:end])
+        end
+    end
+
+    funcs = getfunc.(trace)
+    moduls = getmodule.(trace)
+    sigtypes = getsigtypes.(trace)
+    inlineds = getfield.(trace, :inlined)
+
+    # replace empty modules if there is another frame from the same file
+    for (i_this, mo) in enumerate(moduls)
+        if mo == ""
+            for i_other in 1:length(trace)
+                if files[i_this] == files[i_other] && moduls[i_other] != ""
+                    moduls[i_this] = moduls[i_other]
+                end
+            end
+        end
+    end
+
+    (files = files, lines = lines, funcs = funcs,
+        moduls = moduls, sigtypes = sigtypes, inlineds = inlineds, varnames = varnames)
+end
+
+
+
+function printtrace(io::IO, converted_stacktrace; print_linebreaks::Bool)
+
+    files, lines, funcs, moduls, sigtypes, inlineds, varnames = converted_stacktrace
+
+    n = length(files)
+    ndigits = length(digits(n))
+    length_numstr = ndigits + 2
+
+    uniquemodules = setdiff(unique(moduls), [""])
+    modulecolors = Dict(u => c for (u, c) in
+        Iterators.zip(uniquemodules, Iterators.cycle(STACKTRACE_MODULECOLORS)))
+
+    for (i, (func, inlined, modul, file, line, stypes, vnames)) in enumerate(
+            zip(funcs, inlineds, moduls, files, lines, sigtypes, varnames))
+
+        modulecolor = get(modulecolors, modul, :default)
+        print_frame(io, i, func, inlined, modul, file, line, stypes, vnames, length_numstr, modulecolor)
+        if i < n
+            println(io)
+            print_linebreaks && println(io)
+        end
+    end
+end
+
+function print_frame(io, i, func, inlined, modul, file, line, stypes,
+    vnames, length_numstr, modulecolor)
+
+    # frame number
+    print(io, lpad("[" * string(i) * "]", length_numstr))
+    print(io, " ")
+    
+    # function name
+    printstyled(io, func, bold = true)
+   
+    if !isempty(vnames)
+        # type signature
+        printstyled(io, "(", color = :light_black)
+
+        for (i, (stype, varname)) in enumerate(zip(stypes, vnames))
+            if i > 1
+                printstyled(io, ", ", color = :light_black)
+            end
+            printstyled(io, string(varname), color = :light_black, bold = true)
+            printstyled(io, "::")
+            printstyled(io, string(stype), color = :light_black)
+        end
+
+        printstyled(io, ")", color = :light_black)
+    end
+
+    println(io)
+    
+    # @
+    printstyled(io, " " ^ (length_numstr - 1) * "@ ", color = :light_black)
+
+    # module
+    if !isempty(modul)
+        printstyled(io, modul, color = modulecolor)
+        print(io, " ")
+    end
+
+    # filepath
+    pathparts = splitpath(file)
+    folderparts = pathparts[1:end-1]
+    if !isempty(folderparts)
+        printstyled(io, joinpath(folderparts...) * (Sys.iswindows() ? "\\" : "/"), color = :light_black)
+    end
+
+    # filename, separator, line
+    # use escape codes for formatting, printstyled can't do underlined and color
+    # codes are bright black (90) and underlined (4)
+    print(io, "\033[90;4m$(pathparts[end] * ":" * string(line))\033[0m")
+
+    # inlined
+    printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
+end
+
+
 function show_backtrace(io::IO, t::Vector)
     if haskey(io, :LAST_SHOWN_LINE_INFOS)
         resize!(io[:LAST_SHOWN_LINE_INFOS], 0)
@@ -642,19 +808,19 @@ function show_backtrace(io::IO, t::Vector)
         end
     end
 
-    print(io, "\nStacktrace:")
-    if length(filtered) < BIG_STACKTRACE_SIZE
-        # Fast track: no duplicate stack frame detection.
-        try invokelatest(update_stackframes_callback[], filtered) catch end
-        frame_counter = 0
-        for (last_frame, n) in filtered
-            frame_counter += 1
-            show_trace_entry(IOContext(io, :backtrace => true), last_frame, n, prefix = string(" [", frame_counter, "] "))
-        end
+    if length(filtered) > BIG_STACKTRACE_SIZE
+        show_reduced_backtrace(IOContext(io, :backtrace => true), filtered, true)
         return
     end
 
-    show_reduced_backtrace(IOContext(io, :backtrace => true), filtered, true)
+    println(io, "\nStacktrace:")
+
+    # process_backtrace returns a Tuple{Frame, Int}
+    frames = first.(filtered)
+
+    converted_stacktrace = convert_trace(frames)
+
+    printtrace(io, converted_stacktrace; print_linebreaks = STACKTRACE_LINEBREAKS)
 end
 
 function show_backtrace(io::IO, t::Vector{Any})
