@@ -40,74 +40,68 @@ end
 
 
 
-
-
 function _threadsfor_nested(a, body, schedule)
-        
-    rang = map(x-> x.args[2], a) #extract the ranges from the expression 
-    lidx = map(x-> x.args[1], a) #extract the variable names from the expression 
-
-    acce = [ :( @inbounds range[($x)][currentiteration[($x)]]  ) for x in eachindex(rang)] #for each range create an expression that accesses it with the variable `currentiteration` declared later 
+    rang = map(x-> x.args[2], a) #extract the ranges from the expression
+    lidx = map(x-> x.args[1], a) #extract the variable names from the expression
+    acce = [ :( @inbounds range[($x)][currentiteration[($x)]]  ) for x in eachindex(rang)] #for each range create an expression that accesses it with the variable `currentiteration` declared later
     lidx = ((x, y) -> :( $(esc(x)) = $(y))).(lidx, acce) #join all expressions together, setting the variables to their corresponding `currentiteration`
     rangelen = length(rang)
-
-    loops = (rangelen == 1) ? nothing : 
-    quote #emulate the outer nested loop     
+    loops = (rangelen == 1) ? nothing :  quote #emulate the outer nested loop
         inv = lr
-        @inbounds while currentiteration[inv] > lidx[inv]      
-            currentiteration[inv] = fidx[inv]            
-            inv -= 1                                                  
+        @inbounds while currentiteration[inv] > lidx[inv]
+            currentiteration[inv] = fidx[inv]
+            inv -= 1
             currentiteration[inv] += 1
-        end         
-    end   
-    quote              
+        end
+    end
+    quote
         local threadsfor_fun
         let 
             range = [$(esc.(rang)...)]
-            #calculate variables which are the same across the threads        
+            #calculate variables which are the same across the threads
             totallength = reduce(*, length.(range)) 
-            firstindecies = firstindex.(range) 
-            lastindecies = lastindex.(range)         
-            function threadsfor_fun(onethread=false)              
-                #Load into local variables                
-                lr = $rangelen             
-                r = range               
-                tlen = totallength                 
+            firstindecies = firstindex.(range)
+            lastindecies = lastindex.(range)
+            function threadsfor_fun(onethread=false)
+                #Load into local variables
+                lr = $rangelen
+                r = range
+                tlen = totallength
                 fidx = firstindecies
-                lidx = lastindecies                                    
+                lidx = lastindecies
                 #calculate the iteration length for the current thread
-                if onethread                
+                if onethread
                     tid = 1
-                    len, rem = tlen, 0                
+                    len, rem = tlen, 0
                 else
                     tid = threadid()
-                    len, rem = divrem(tlen, nthreads())                
-                end                               
+                    len, rem = divrem(tlen, nthreads())
+                end
                 currentiteration = fill(0, lr) #operation on lengths not, so set everything to 0
                 currentiteration[end] = (tid - 1) * len + min(tid - 1, rem) #calculate the index
                 #convert the index to lr-dimensional starting coordinate
-                @inbounds for cur in lr:-1:2                
+                @inbounds for cur in lr:-1:2
                     if currentiteration[cur] == 0
                         break
-                    end                 
-                    currentiteration[cur - 1], currentiteration[cur] = divrem(currentiteration[cur], length(r[cur]) )                       
-                end             
+                    end
+                    currentiteration[cur - 1], currentiteration[cur] = divrem(currentiteration[cur], length(r[cur]) )
+                end
                 #from now on operations on indices
-                currentiteration .+= fidx                               
+                currentiteration .+= fidx
                 #distribute the remainder across the threads
-                if tid <= rem 
+                if tid <= rem
                     len += 1
                 end
                 #run this thread's iterations
-                for i in 1:len                             
-                    $(loops)                 
-                    $(lidx...)                    
-                    $(esc(body))                 
+                for i in 1:len
+                    $(loops)
+                    $(lidx...)
+                    $(esc(body))
                     #increment currentiteration
-                    currentiteration[end] += 1                    
-                end                                
-            end             
-        end     
+                    currentiteration[end] += 1
+                end
+            end
+        end
         if threadid() != 1
             $(
             if schedule === :static
