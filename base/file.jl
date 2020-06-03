@@ -228,7 +228,7 @@ function mkpath(path::AbstractString; mode::Integer = 0o777)
     catch err
         # If there is a problem with making the directory, but the directory
         # does in fact exist, then ignore the error. Else re-throw it.
-        if !isa(err, SystemError) || !isdir(path)
+        if !isa(err, IOError) || !isdir(path)
             rethrow()
         end
     end
