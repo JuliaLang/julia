@@ -621,8 +621,48 @@ Base.atreplinit
 
 ### TerminalMenus
 
+#### Configuration
+
 ```@docs
-TerminalMenus.Config
-TerminalMenus.MultiSelectConfig
-TerminalMenus.config
+REPL.TerminalMenus.Config
+REPL.TerminalMenus.MultiSelectConfig
+REPL.TerminalMenus.config
+```
+
+#### User interaction
+
+```@docs
+REPL.TerminalMenus.request
+```
+
+#### AbstractMenu extension interface
+
+Any subtype of `AbstractMenu` must be mutable, and must contain the fields `pagesize::Int` and
+`pageoffset::Int`.
+Any subtype must also implement the following functions:
+
+```@docs
+REPL.TerminalMenus.pick
+REPL.TerminalMenus.cancel
+REPL.TerminalMenus.writeline
+```
+
+It must also implement either `options` or `numoptions`:
+
+```@docs
+REPL.TerminalMenus.options
+REPL.TerminalMenus.numoptions
+```
+
+If the subtype does not have a field named `selected`, it must also implement
+
+```@docs
+REPL.TerminalMenus.selected
+```
+
+The following are optional but can allow additional customization:
+
+```@docs
+REPL.TerminalMenus.header
+REPL.TerminalMenus.keypress
 ```
