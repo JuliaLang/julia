@@ -624,7 +624,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
 
         modul = getmodule(frame)
         if !haskey(modulecolordict, modul)
-            modulecolordict[modul] = popfirst!(modulecolorcycler)[1]
+            modulecolordict[modul] = popfirst!(modulecolorcycler)
         end
         modulecolor = modulecolordict[modul]
         
