@@ -56,10 +56,10 @@ function _threadsfor_nested(a, body, schedule)
     end
     quote
         local threadsfor_fun
-        let 
+        let
             range = [$(esc.(rang)...)]
             #calculate variables which are the same across the threads
-            totallength = reduce(*, length.(range)) 
+            totallength = reduce(*, length.(range))
             firstindecies = firstindex.(range)
             lastindecies = lastindex.(range)
             function threadsfor_fun(onethread=false)
