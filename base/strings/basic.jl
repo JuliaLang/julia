@@ -229,6 +229,12 @@ Symbol(x...) = Symbol(string(x...))
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
 convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
 
+## summary ##
+
+function summary(io::IO, s::AbstractString)
+    print(io, ncodeunits(s), "-codeunit ", typeof(s))
+end
+
 ## string & character concatenation ##
 
 """
