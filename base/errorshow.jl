@@ -615,7 +615,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
     println(io, "\nStacktrace:")
     ndigits = length(digits(length(t)))
 
-    modulecolorcycler = Iterators.cycle(STACKTRACE_MODULECOLORS)
+    modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
     push!(repeated_cycle, (0,0,0)) # repeated_cycle is never empty
     frame_counter = 1
@@ -624,7 +624,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
 
         modul = getmodule(frame)
         if !haskey(modulecolordict, modul)
-            modulecolordict[modul] = iterate(modulecolorcycler)[1]
+            modulecolordict[modul] = popfirst!(modulecolorcycler)[1]
         end
         modulecolor = modulecolordict[modul]
         
@@ -721,13 +721,13 @@ function print_trace(io::IO, trace; print_linebreaks::Bool)
     ndigits = length(digits(n))
 
     modulecolordict = Dict("" => :default)
-    modulecolorcycler = Iterators.cycle(STACKTRACE_MODULECOLORS)
+    modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
     for (i, frame) in enumerate(trace)
 
         modul = getmodule(frame)
         if !haskey(modulecolordict, modul)
-            modulecolordict[modul] = iterate(modulecolorcycler)[1]
+            modulecolordict[modul] = popfirst!(modulecolorcycler)
         end
         modulecolor = modulecolordict[modul]
 
