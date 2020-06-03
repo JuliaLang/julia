@@ -1510,7 +1510,6 @@ static void invalidate_method_instance(jl_method_instance_t *replaced, size_t ma
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)replaced);
         boxeddepth = jl_box_int32(depth);
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, boxeddepth);
-        jl_gc_wb(_jl_debug_method_invalidation, boxeddepth);
         JL_GC_POP();
     }
     if (!jl_is_method(replaced->def.method))
@@ -1643,7 +1642,6 @@ static int invalidate_mt_cache(jl_typemap_entry_t *oldentry, void *closure0)
                 JL_GC_PUSH1(&loctag);
                 jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)mi);
                 loctag = jl_cstr_to_string("invalidate_mt_cache");
-                jl_gc_wb(_jl_debug_method_invalidation, loctag);
                 jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
                 JL_GC_POP();
             }
@@ -1703,20 +1701,16 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
             invalidated = 1;
             if (invalidate_backedges(mi, methodentry->max_world))
                 if (_jl_debug_method_invalidation) {
-                    if (!loctag) {
+                    if (!loctag)
                         loctag = jl_cstr_to_string("jl_method_table_disable");
-                        jl_gc_wb(_jl_debug_method_invalidation, loctag);
-                    }
                     jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
                 }
         }
     }
     if (invalidated && _jl_debug_method_invalidation) {
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)method);
-        if (!loctag) {
+        if (!loctag)
             loctag = jl_cstr_to_string("jl_method_table_disable");
-            jl_gc_wb(_jl_debug_method_invalidation, loctag);
-        }
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
     }
     JL_GC_POP();
@@ -1815,10 +1809,8 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                         invalidated = 1;
                         if (_jl_debug_method_invalidation) {
                             jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)mi);
-                            if (!loctag) {
+                            if (!loctag)
                                 loctag = jl_cstr_to_string("jl_method_table_insert");
-                                jl_gc_wb(_jl_debug_method_invalidation, loctag);
-                            }
                             jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
                         }
                     }
@@ -1827,10 +1819,8 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     }
     if (invalidated && _jl_debug_method_invalidation) {
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)method);
-        if (!loctag) {
+        if (!loctag)
             loctag = jl_cstr_to_string("jl_method_table_insert");
-            jl_gc_wb(_jl_debug_method_invalidation, loctag);
-        }
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
     }
     update_max_args(mt, type);
