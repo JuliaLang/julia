@@ -355,14 +355,13 @@ function check(arr, inner, outer)
     if inner !== nothing
         if any(<(0), inner)
             msg = """
-            Error calling repeat. all(inner . >= 0) must hold. Got
-            inner = $inner
+            Number of repetitions cannot be negative. Got inner = $inner
             """
             throw(ArgumentError(msg))
         end
         if length(inner) < ndims(arr)
             msg = """
-            Error calling repeat. length(inner) >= ndims(arr) must hold. Got
+            Number of dimensions of repetitions and array must match. Got
             inner = $inner
             size(arr) = $(size(arr))
             """
@@ -372,14 +371,13 @@ function check(arr, inner, outer)
     if outer != nothing
         if any(<(0), outer)
             msg = """
-            Error calling repeat. all(outer . >= 0) must hold. Got
-            outer = $outer
+            Number of repetitions cannot be negative. Got outer = $outer
             """
             throw(ArgumentError(msg))
         end
         if (length(outer) < ndims(arr)) && (inner != nothing)
             msg = """
-            Error calling repeat. length(outer) >= ndims(arr) must hold. Got
+            Number of dimensions of repetitions and array must match. Got
             outer = $outer
             size(arr) = $(size(arr))
             """
