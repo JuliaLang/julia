@@ -323,31 +323,13 @@ to_tuple(t::Tuple) = t
 to_tuple(x::Integer) = (x,)
 to_tuple(itr) = tuple(itr...)
 
-filltuple(val, N) = ntuple(_->val, N)
-
-function pad(a::Tuple, b::Tuple, c::Tuple)
-    a1,b1 = pad(a,b)
-    b2,c2 = pad(b1, c)
-    a2,c3  = pad(a1, c2)
-    return a2, b2, c2
+function pad(a, b)
+    N = max(length(a), length(b))
+    Base.fill_to_length(a, 1, Val(N)), Base.fill_to_length(b, 1, Val(N))
 end
-function pad(a::Tuple{}, b::NTuple{N, Any}) where {N}
-    filltuple(1, Val(N)), b
-end
-function pad(a::NTuple{N, Any}, b::Tuple{}) where {N}
-    (a, filltuple(1, Val(N)))
-end
-function pad(a::NTuple{N,Any}, b::NTuple{N,Any}) where {N}
-    (a,b)
-end
-function pad(a::Tuple{}, b::Tuple{})
-    (a,b)
-end
-function pad(a::Tuple, b::Tuple)
-    a1 = first(a)
-    b1 = first(b)
-    a_tail, b_tail = pad(Base.tail(a), Base.tail(b))
-    tuple(a1, a_tail...), tuple(b1, b_tail...)
+function pad(a, b, c)
+    N = max(max(length(a), length(b)), length(c))
+    Base.fill_to_length(a, 1, Val(N)), Base.fill_to_length(b, 1, Val(N)), Base.fill_to_length(c, 1, Val(N))
 end
 
 function resolve(arr::AbstractArray{<:Any, N}, inner::NTuple{N, Any}, outer::NTuple{N,Any}) where {N}
