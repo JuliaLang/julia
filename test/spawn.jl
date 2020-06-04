@@ -259,7 +259,13 @@ end
 @testset "redirect to devnull" begin
     @test redirect_stdout(devnull) do; println("Hello") end === nothing
     @test redirect_stderr(devnull) do; println(stderr, "Hello") end === nothing
-    @test redirect_stdin(devnull) do; read(stdin, String) end == ""
+    # stdin is unavailable on the workers. Run test on master.
+    ret = Core.eval(Main, quote
+                remotecall_fetch(1) do
+                    redirect_stdin(devnull) do; read(stdin, String) end
+                end
+            end)
+    @test ret == ""
 end
 
 # Test that redirecting an IOStream does not crash the process
