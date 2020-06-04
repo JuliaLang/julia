@@ -392,7 +392,8 @@ STATIC_INLINE jl_value_t *undefref_check(jl_datatype_t *dt, jl_value_t *v) JL_NO
 
 // -- functions -- //
 
-jl_code_info_t *jl_type_infer(jl_method_instance_t *li, size_t world, int force);
+jl_value_t *jl_native_interpreter(size_t world);
+jl_code_info_t *jl_type_infer(jl_method_instance_t *li, jl_value_t *interp, int force);
 jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *meth JL_PROPAGATES_ROOT, size_t world);
 jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world);
 void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec);

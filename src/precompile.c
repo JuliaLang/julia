@@ -264,7 +264,7 @@ static void _compile_all_deq(jl_array_t *found)
         src = m->source;
         assert(src);
         // TODO: we could now enable storing inferred function pointers in the `unspecialized` cache
-        //src = jl_type_infer(mi, jl_world_counter, 1);
+        //src = jl_type_infer(mi, jl_native_interpreter(jl_world_counter), 1);
         //if (ucache->invoke != NULL)
         //    continue;
 

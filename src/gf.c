@@ -274,18 +274,17 @@ jl_value_t *jl_native_interpreter(size_t world)
 // returns the inferred source, and may cache the result in mi
 // if successful, also updates the mi argument to describe the validity of this src
 // if inference doesn't occur (or can't finish), returns NULL instead
-jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
+jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, jl_value_t *interp, int force)
 {
     JL_TIMING(INFERENCE);
+    if (interp == NULL)
+        return NULL;
     if (jl_typeinf_func == NULL)
         return NULL;
     if (jl_is_method(mi->def.method) && mi->def.method->unspecialized == mi)
         return NULL; // avoid inferring the unspecialized method
     static int in_inference;
     if (in_inference > 2)
-        return NULL;
-    jl_value_t *interp = jl_native_interpreter(world);
-    if (interp == NULL)
         return NULL;
 
     jl_code_info_t *src = NULL;
@@ -536,7 +535,7 @@ JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *typeinf_func, jl_value_t *inte
         for (i = 0, l = jl_array_len(unspec); i < l; i++) {
             jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(unspec, i);
             if (jl_rettype_inferred(mi, jl_world_counter, jl_world_counter) == jl_nothing)
-                jl_type_infer(mi, jl_world_counter, 1);
+                jl_type_infer(mi, jl_native_interpreter(jl_world_counter), 1);
         }
         JL_GC_POP();
     }
@@ -2115,7 +2114,7 @@ static void _generate_from_hint(jl_method_instance_t *mi, size_t world)
     // If we are saving ji files (e.g. package pre-compilation or intermediate sysimg build steps),
     // don't bother generating anything since it won't be saved.
     if (jl_rettype_inferred(mi, world, world) == jl_nothing)
-        (void)jl_type_infer(mi, world, 1);
+        (void)jl_type_infer(mi, jl_native_interpreter(world), 1);
     // If we are saving ji files (e.g. package pre-compilation or intermediate sysimg build steps),
     // don't bother generating output in the current environment
     if (generating_llvm) {
@@ -2165,10 +2164,10 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
             jl_method_instance_t *li2 = jl_specializations_get_linfo(mi->def.method, (jl_value_t*)types2, tpenv2);
             JL_GC_POP();
             if (jl_rettype_inferred(li2, world, world) == jl_nothing)
-                (void)jl_type_infer(li2, world, 1);
+                (void)jl_type_infer(li2, jl_native_interpreter(world), 1);
             if (jl_typeinf_func && mi->def.method->primary_world <= tworld) {
                 if (jl_rettype_inferred(li2, tworld, tworld) == jl_nothing)
-                    (void)jl_type_infer(li2, tworld, 1);
+                    (void)jl_type_infer(li2, jl_native_interpreter(tworld), 1);
             }
         }
     }

@@ -266,7 +266,7 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
         if (cgparams.lookup != jl_rettype_inferred) {
             jl_error("Refusing to automatically run type inference with custom cache lookup.");
         } else {
-            *src_out = jl_type_infer(mi, world, 0);
+            *src_out = jl_type_infer(mi, jl_native_interpreter(world), 0);
             codeinst = jl_get_method_inferred(mi, (*src_out)->rettype, (*src_out)->min_world, (*src_out)->max_world);
             if ((*src_out)->inferred && !codeinst->inferred)
                 codeinst->inferred = jl_nothing;
@@ -852,7 +852,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         jlrettype = codeinst->rettype;
     }
     if (!src || (jl_value_t*)src == jl_nothing) {
-        src = jl_type_infer(mi, world, 0);
+        src = jl_type_infer(mi, jl_native_interpreter(world), 0);
         if (src)
             jlrettype = src->rettype;
         else if (jl_is_method(mi->def.method)) {

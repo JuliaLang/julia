@@ -287,7 +287,7 @@ jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT
         // If the caller didn't provide the source,
         // see if it is inferred, or try to infer it for ourself.
         // (but don't bother with typeinf on macros or toplevel thunks)
-        src = jl_type_infer(mi, world, 0);
+        src = jl_type_infer(mi, jl_native_interpreter(world), 0);
     }
     jl_code_instance_t *compiled = jl_method_compiled(mi, world);
     if (compiled) {
@@ -364,7 +364,7 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
             JL_LOCK(&codegen_lock); // also disables finalizers, to prevent any unexpected recursion
             specfptr = (uintptr_t)codeinst->specptr.fptr;
             if (specfptr == 0) {
-                jl_code_info_t *src = jl_type_infer(mi, world, 0);
+                jl_code_info_t *src = jl_type_infer(mi, jl_native_interpreter(world), 0);
                 JL_GC_PUSH1(&src);
                 jl_method_t *def = mi->def.method;
                 if (jl_is_method(def)) {

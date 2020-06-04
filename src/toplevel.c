@@ -829,7 +829,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         size_t world = jl_world_counter;
         ptls->world_age = world;
         if (!has_defs) {
-            (void)jl_type_infer(mfunc, world, 0);
+            (void)jl_type_infer(mfunc, jl_native_interpreter(world), 0);
         }
         result = jl_invoke(/*func*/NULL, /*args*/NULL, /*nargs*/0, mfunc);
         ptls->world_age = last_age;
@@ -898,7 +898,8 @@ JL_DLLEXPORT jl_value_t *jl_infer_thunk(jl_code_info_t *thk, jl_module_t *m)
     jl_method_instance_t *li = method_instance_for_thunk(thk, m);
     JL_GC_PUSH1(&li);
     jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
-    jl_code_info_t *src = jl_type_infer(li, jl_get_ptls_states()->world_age, 0);
+    jl_code_info_t *src =
+        jl_type_infer(li, jl_native_interpreter(jl_get_ptls_states()->world_age), 0);
     JL_GC_POP();
     if (src)
         return src->rettype;

@@ -6571,7 +6571,8 @@ void jl_compile_workqueue(
                 // method body. See #34993
                 if (policy == CompilationPolicy::Extern &&
                     codeinst->inferred && codeinst->inferred == jl_nothing) {
-                    src = jl_type_infer(codeinst->def, jl_world_counter, 0);
+                    src = jl_type_infer(codeinst->def,
+                                        jl_native_interpreter(jl_world_counter), 0);
                     if (src)
                         result = jl_emit_code(codeinst->def, src, src->rettype, params);
                 }
