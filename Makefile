@@ -469,6 +469,14 @@ exe:
 	$(call spawn,$(JULIAHOME)/dist-extras/inno/iscc.exe /DAppVersion=$(JULIA_VERSION) /DSourceDir="$(call cygpath_w,$(BUILDROOT)/julia-$(JULIA_COMMIT))" /DRepoDir="$(call cygpath_w,$(JULIAHOME))" /F"$(JULIA_BINARYDIST_FILENAME)" /O"$(call cygpath_w,$(BUILDROOT))" $(call cygpath_w,$(JULIAHOME)/contrib/windows/build-installer.iss))
 	chmod a+x "$(BUILDROOT)/$(JULIA_BINARYDIST_FILENAME).exe"
 
+msix:
+	# Create msix setup package
+	sed 's/0.0.0.0/$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION).0/g' $(JULIAHOME)/contrib/windows/msix/AppXManifest.xml $(BUILDROOT)/julia-$(JULIA_COMMIT)/AppXManifest.xml
+	cp $(JULIAHOME)/contrib/windows/msix/Assets $(BUILDROOT)/julia-$(JULIA_COMMIT)
+	"C:\Program Files (x86)\Windows Kits\10\bin\<build number>\x64\makeappx.exe" pack /d $(BUILDROOT)/julia-$(JULIA_COMMIT) /p $(JULIA_BINARYDIST_FILENAME).msix
+	rm -rf $(BUILDROOT)/julia-$(JULIA_COMMIT)/Assets
+	rm $(BUILDROOT)/julia-$(JULIA_COMMIT)/AppXManifest.xml
+
 app:
 	$(MAKE) -C contrib/mac/app
 	@mv contrib/mac/app/$(JULIA_BINARYDIST_FILENAME).dmg $(BUILDROOT)
