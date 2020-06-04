@@ -253,6 +253,23 @@ jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_a
     return dt;
 }
 
+// creates a abstract interpreter for inferring native code in `world`
+// returns NULL if that can't happen yet (e.g. when bootstrapping inference)
+jl_value_t *jl_native_interpreter(size_t world)
+{
+    // calling the interpreter constructor might trigger inference,
+    // which would then try to construct the interpreter again.
+    static int recursion;
+    if (recursion > 2)
+        return NULL;
+
+    recursion++;
+    jl_value_t *interp = jl_call1(jl_interp_ctor, jl_box_ulong(world));
+    recursion--;
+
+    return interp;
+}
+
 // run type inference on lambda "mi" for given argument types.
 // returns the inferred source, and may cache the result in mi
 // if successful, also updates the mi argument to describe the validity of this src
@@ -267,6 +284,9 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
     static int in_inference;
     if (in_inference > 2)
         return NULL;
+    jl_value_t *interp = jl_native_interpreter(world);
+    if (interp == NULL)
+        return NULL;
 
     jl_code_info_t *src = NULL;
 #ifdef ENABLE_INFERENCE
@@ -278,8 +298,8 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
     jl_value_t **fargs;
     JL_GC_PUSHARGS(fargs, 3);
     fargs[0] = (jl_value_t*)jl_typeinf_func;
-    fargs[1] = (jl_value_t*)mi;
-    fargs[2] = jl_box_ulong(world);
+    fargs[1] = interp;
+    fargs[2] = (jl_value_t*)mi;
 #ifdef TRACE_INFERENCE
     if (mi->specTypes != (jl_value_t*)jl_emptytuple_type) {
         jl_printf(JL_STDERR,"inference on ");
@@ -497,11 +517,13 @@ static void reset_mt_caches(jl_methtable_t *mt, void *env)
 
 
 jl_function_t *jl_typeinf_func = NULL;
+jl_function_t *jl_interp_ctor = NULL;
 size_t jl_typeinf_world = 0;
 
-JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
+JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *typeinf_func, jl_value_t *interp_ctor)
 {
-    jl_typeinf_func = (jl_function_t*)f;
+    jl_typeinf_func = (jl_function_t*)typeinf_func;
+    jl_interp_ctor = (jl_function_t*)interp_ctor;
     jl_typeinf_world = jl_get_tls_world_age();
     ++jl_world_counter; // make type-inference the only thing in this world
     if (jl_typeinf_world == 0) {

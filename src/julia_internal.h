@@ -159,6 +159,7 @@ void jl_call_tracer(tracer_cb callback, jl_value_t *tracee);
 
 extern size_t jl_page_size;
 extern jl_function_t *jl_typeinf_func;
+extern jl_function_t *jl_interp_ctor;
 extern size_t jl_typeinf_world;
 
 JL_DLLEXPORT extern int jl_lineno;

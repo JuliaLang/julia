@@ -615,7 +615,6 @@ function typeinf_type(interp::AbstractInterpreter, method::Method, @nospecialize
 end
 
 # This is a bridge for the C code calling `jl_typeinf_func()`
-typeinf_ext_toplevel(mi::MethodInstance, world::UInt) = typeinf_ext_toplevel(NativeInterpreter(world), mi)
 function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance)
     if isa(linfo.def, Method)
         # method lambda - infer this specialization via the method cache
