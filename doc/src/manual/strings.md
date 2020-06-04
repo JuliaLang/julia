@@ -1013,6 +1013,8 @@ julia> match(regex_name,"[Jon]") === nothing
 true
 ```
 
+There are a number of handy online tools such as [regex101.com](https://regex101.com/) or [extendsclass.com](https://extendsclass.com/regex-tester.html), which allows you to test your regular expressions.
+
 ## [Byte Array Literals](@id man-byte-array-literals)
 
 Another useful non-standard string literal is the byte-array string literal: `b"..."`. This
