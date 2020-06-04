@@ -878,7 +878,8 @@
           (defs2 (if (null? defs)
                      (default-inner-ctors name field-names field-types params bounds locs)
                      defs))
-          (min-initialized (min (ctors-min-initialized defs) (length fields))))
+          (min-initialized (min (ctors-min-initialized defs) (length fields)))
+          (prev (make-ssavalue)))
      (let ((dups (has-dups field-names)))
        (if dups (error (string "duplicate field name: \"" (car dups) "\" is not unique"))))
      (for-each (lambda (v)
@@ -892,16 +893,29 @@
          (local-def ,name)
          ,@(map (lambda (v) `(local ,v)) params)
          ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
-         (toplevel-only struct)
+         (toplevel-only struct (outerref ,name))
          (= ,name (call (core _structtype) (thismodule) (inert ,name) (call (core svec) ,@params)
                         (call (core svec) ,@(map quotify field-names))
                         ,mut ,min-initialized))
          (call (core _setsuper!) ,name ,super)
-         (call (core _typebody!) ,name (call (core svec) ,@field-types))
-         (if (&& (isdefined (outerref ,name))
-                 (call (core _equiv_typedef) (outerref ,name) ,name))
-             (null)
+         (if (isdefined (outerref ,name))
+             (block
+              (= ,prev (outerref ,name))
+              (if (call (core _equiv_typedef) ,prev ,name)
+                  ;; if this is compatible with an old definition, use the existing type object
+                  ;; and its parameters
+                  (block (= ,name ,prev)
+                         ,@(if (pair? params)
+                               `((= (tuple ,@params) (|.|
+                                                      ,(foldl (lambda (_ x) `(|.| ,x (quote body)))
+                                                              prev
+                                                              params)
+                                                      (quote parameters))))
+                               '()))
+                  ;; otherwise do an assignment to trigger an error
+                  (= (outerref ,name) ,name)))
              (= (outerref ,name) ,name))
+         (call (core _typebody!) ,name (call (core svec) ,@field-types))
          (null)))
        ;; "inner" constructors
        (scope-block
@@ -3345,7 +3359,12 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core globalref outerref thismodule toplevel-only line break inert module toplevel null true false meta) e)
+          ((quote top core globalref outerref thismodule line break inert module toplevel null true false meta) e)
+          ((toplevel-only)
+           ;; hack to avoid generating a (method x) expr for struct types
+           (if (eq? (cadr e) 'struct)
+               (put! defined (caddr e) #t))
+           e)
           ((=)
            (let ((var (cadr e))
                  (rhs (cl-convert (caddr e) fname lam namemap defined toplevel interp)))
