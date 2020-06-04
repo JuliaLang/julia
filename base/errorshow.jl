@@ -538,15 +538,6 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     end
 end
 
-function show_trace_entry(io, frame, n; prefix = "")
-    if haskey(io, :LAST_SHOWN_LINE_INFOS)
-        push!(io[:LAST_SHOWN_LINE_INFOS], (string(frame.file), frame.line))
-    end
-    print(io, "\n", prefix)
-    show(io, frame, full_path=true)
-    n > 1 && print(io, " (repeats ", n, " times)")
-end
-
 # In case the line numbers in the source code have changed since the code was compiled,
 # allow packages to set a callback function that corrects them.
 # (Used by Revise and perhaps other packages.)
@@ -719,8 +710,11 @@ function print_frame(io, i, frame, width_digits, modulecolordict, modulecolorcyc
     file = getfile(frame, stacktrace_expand_basepaths(), stacktrace_contract_userdir())
     line = getline(frame)
 
-    # add file and line info for accessing frame locations from the repl
-    push!(LAST_SHOWN_LINE_INFOS, (file, line))
+    # Used by the REPL to make it possible to open
+    # the location of a stackframe/method in the editor.
+    if haskey(io, :LAST_SHOWN_LINE_INFOS)
+        push!(io[:LAST_SHOWN_LINE_INFOS], (string(frame.file), frame.line))
+    end
 
     variable_names = getvarnames(frame)
     func = getfunc(frame)
