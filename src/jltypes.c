@@ -1492,7 +1492,7 @@ static jl_tupletype_t *jl_apply_tuple_type_v_(jl_value_t **p, size_t np, jl_svec
     int cacheable = 1;
     for (size_t i = 0; i < np; i++) {
         assert(p[i]);
-        if (!jl_is_concrete_type(p[i]))
+        if (!jl_is_concrete_type(p[i]) && p[i] != jl_bottom_type)
             cacheable = 0;
     }
     return (jl_datatype_t*)inst_datatype_inner(jl_anytuple_type, params, p, np, cacheable, NULL, NULL);
