@@ -300,6 +300,12 @@ for (name, f) in l
 
         cleanup()
 
+        verbose && println("$name eachof...")
+        @test collect(eachof(io(), Char)) == Vector{Char}(text)
+        @test collect(eachof(io(), UInt8)) == Vector{UInt8}(text)
+
+        cleanup()
+
         verbose && println("$name countlines...")
         @test countlines(io()) == countlines(IOBuffer(text))
 

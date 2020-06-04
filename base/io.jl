@@ -1003,6 +1003,46 @@ eltype(::Type{<:EachLine}) = String
 
 IteratorSize(::Type{<:EachLine}) = SizeUnknown()
 
+struct EachOfIO{T, IOT <: IO}
+    stream::IOT
+end
+
+"""
+    eachof(io::IO, T)
+
+Return an iterable object yielding [`read(io, T)`](@ref).
+
+See also: [`skipchars`](@ref), [`eachline`](@ref), [`readuntil`](@ref)
+
+!!! compat "Julia 1.6"
+    `eachof` requires Julia 1.6 or later.
+
+# Examples
+```jldoctest
+julia> open("my_file.txt", "w") do io
+           write(io, "JuliaLang is a GitHub organization.\\n It has many members.\\n");
+       end;
+
+julia> open("my_file.txt") do io
+           for c in eachof(io, Char)
+               c == '\\n' && break
+               print(c)
+           end
+       end
+JuliaLang is a GitHub organization.
+
+julia> rm("my_file.txt");
+```
+"""
+eachof(stream::IOT, T::Type) where IOT<:IO = EachOfIO{T,IOT}(stream)
+
+iterate(itr::EachOfIO{T}, state=nothing) where T =
+    eof(itr.stream) ? nothing : (read(itr.stream, T), nothing)
+
+eltype(::Type{EachOfIO{T}}) where T = T
+
+IteratorSize(::Type{<:EachOfIO}) = SizeUnknown()
+
 # IOStream Marking
 # Note that these functions expect that io.mark exists for
 # the concrete IO type. This may not be true for IO types
