@@ -739,6 +739,8 @@ Create a new entry in the `ImmutableDict` for a `key => value` pair
 ImmutableDict
 ImmutableDict(KV::Pair{K,V}) where {K,V} = ImmutableDict{K,V}(KV[1], KV[2])
 ImmutableDict(t::ImmutableDict{K,V}, KV::Pair) where {K,V} = ImmutableDict{K,V}(t, KV[1], KV[2])
+ImmutableDict(t::ImmutableDict{K,V}, KV::Pair, rest::Pair...) where {K,V} =
+    ImmutableDict(ImmutableDict(t, KV), rest...)
 ImmutableDict(KV::Pair, rest::Pair...) = ImmutableDict(ImmutableDict(KV), rest...)
 
 function in(key_value::Pair, dict::ImmutableDict, valcmp=(==))
