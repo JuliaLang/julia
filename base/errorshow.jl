@@ -544,12 +544,6 @@ end
 # the location of a stackframe/method in the editor.
 global LAST_SHOWN_LINE_INFOS = Tuple{String, Int}[]
 
-function show_trace_entry(io, frame, n; prefix = "")
-    push!(LAST_SHOWN_LINE_INFOS, (string(frame.file), frame.line))
-    print(io, "\n", prefix)
-    show(io, frame, full_path=true)
-    n > 1 && print(io, " (repeats ", n, " times)")
-end
 
 # In case the line numbers in the source code have changed since the code was compiled,
 # allow packages to set a callback function that corrects them.
