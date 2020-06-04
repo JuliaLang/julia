@@ -568,7 +568,7 @@ is_dt_const_field(fld::Int) = (
 function const_datatype_getfield_tfunc(@nospecialize(sv), fld::Int)
     if fld == DATATYPE_INSTANCE_FIELDINDEX
         return isdefined(sv, fld) ? Const(getfield(sv, fld)) : Union{}
-    elseif is_dt_const_field(fld)
+    elseif is_dt_const_field(fld) && isdefined(sv, fld)
         return Const(getfield(sv, fld))
     end
     return nothing

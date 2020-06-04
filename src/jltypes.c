@@ -1773,6 +1773,9 @@ JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_RO
     assert(n > 0 && "expected empty case to be handled during construction");
     //if (n == 0)
     //    return ((st->types = jl_emptysvec));
+    if (wt->types == NULL)
+        jl_errorf("cannot determine field types of incomplete type %s",
+                  jl_symbol_name(st->name->name));
     jl_typeenv_t *env = (jl_typeenv_t*)alloca(n * sizeof(jl_typeenv_t));
     for (i = 0; i < n; i++) {
         env[i].var = (jl_tvar_t*)jl_svecref(wt->parameters, i);
