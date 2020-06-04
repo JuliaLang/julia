@@ -352,7 +352,7 @@ function resolve(arr, inner, outer::Nothing)
 end
 
 function check(arr, inner, outer)
-    if inner != nothing
+    if inner !== nothing
         if any(<(0), inner)
             msg = """
             Error calling repeat. all(inner . >= 0) must hold. Got
