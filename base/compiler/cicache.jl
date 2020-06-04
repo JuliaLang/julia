@@ -27,7 +27,7 @@ struct WorldView{Cache}
 end
 WorldView(cache, r::UnitRange) = WorldView(cache, first(r), last(r))
 WorldView(cache, world::UInt) = WorldView(cache, world, world)
-WorldView(wvc::WorldView{InternalCodeCache}, min_world::UInt, max_world::UInt) =
+WorldView(wvc::WorldView, min_world::UInt, max_world::UInt) =
     WorldView(wvc.cache, min_world, max_world)
 
 function haskey(wvc::WorldView{InternalCodeCache}, mi::MethodInstance)
