@@ -609,7 +609,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
     try invokelatest(update_stackframes_callback[], displayed_stackframes) catch end
 
     println(io, "\nStacktrace:")
-    ndigits = length(digits(length(t)))
+    ndigits_max = ndigits(length(t))
 
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
@@ -632,7 +632,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
         inlined = getfield(frame, :inlined)
 
         push!(LAST_SHOWN_LINE_INFOS, (file, line))
-        print_frame(io, frame_counter, func, inlined, modul, file, line, sigtypes, varnames, ndigits, modulecolor)
+        print_frame(io, frame_counter, func, inlined, modul, file, line, sigtypes, varnames, ndigits_max, modulecolor)
         
         if i < length(displayed_stackframes)
             println(io)
@@ -714,7 +714,7 @@ stacktrace_linebreaks()::Bool = parse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAK
 function print_trace(io::IO, trace; print_linebreaks::Bool)
 
     n = length(trace)
-    ndigits = length(digits(n))
+    ndigits_max = ndigits(n)
 
     modulecolordict = Dict("" => :default)
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
@@ -735,7 +735,7 @@ function print_trace(io::IO, trace; print_linebreaks::Bool)
         inlined = getfield(frame, :inlined)
 
         push!(LAST_SHOWN_LINE_INFOS, (file, line))
-        print_frame(io, i, func, inlined, modul, file, line, sigtypes, varnames, ndigits, modulecolor)
+        print_frame(io, i, func, inlined, modul, file, line, sigtypes, varnames, ndigits_max, modulecolor)
         if i < n
             println(io)
             print_linebreaks && println(io)
