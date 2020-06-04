@@ -255,6 +255,13 @@ end
     end
 end
 
+# issue #36136
+@testset "redirect to devnull" begin
+    @test redirect_stdout(devnull) do; println("Hello") end === nothing
+    @test redirect_stderr(devnull) do; println(stderr, "Hello") end === nothing
+    @test redirect_stdin(devnull) do; read(stdin, String) end == ""
+end
+
 # Test that redirecting an IOStream does not crash the process
 let fname = tempname(), p
     cmd = """
