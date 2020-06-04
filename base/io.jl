@@ -754,8 +754,7 @@ function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
         return readuntil_string(s, delim % UInt8, keep)
     end
     out = IOBuffer()
-    while !eof(s)
-        c = read(s, Char)
+    for c in eachof(s, Char)
         if c == delim
             keep && write(out, c)
             break
@@ -767,8 +766,7 @@ end
 
 function readuntil(s::IO, delim::T; keep::Bool=false) where T
     out = (T === UInt8 ? StringVector(0) : Vector{T}())
-    while !eof(s)
-        c = read(s, T)
+    for c in eachof(s, T)
         if c == delim
             keep && push!(out, c)
             break
@@ -804,8 +802,7 @@ function readuntil_vector!(io::IO, target::AbstractVector{T}, keep::Bool, out) w
     max_pos = 1 # array-offset in cache
     local cache # will be lazy initialized when needed
     output! = (isa(out, IO) ? write : push!)
-    while !eof(io)
-        c = read(io, T)
+    for c in eachof(io, T)
         # Backtrack until the next target character matches what was found
         while true
             c1 = target[pos + first]
