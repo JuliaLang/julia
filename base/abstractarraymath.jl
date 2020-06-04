@@ -418,10 +418,6 @@ function repeat_outer(a::AbstractVector, (m,)::Tuple{Any})
 end
 
 function repeat_outer(arr::AbstractArray{<:Any,N}, dims::NTuple{N,Any}) where {N}
-    repeat_outer_generic(arr, dims)
-end
-
-function repeat_outer_generic(arr, dims)
     insize  = size(arr)
     outsize = map(*, insize, dims)
     out = similar(arr, outsize)
