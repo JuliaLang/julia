@@ -1926,7 +1926,6 @@ static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
             if (_jl_debug_method_invalidation) {
                 jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)caller);
                 loctag = jl_cstr_to_string("insert_backedges");
-                jl_gc_wb(_jl_debug_method_invalidation, loctag);
                 jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
             }
         }

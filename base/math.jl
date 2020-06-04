@@ -344,7 +344,8 @@ For one argument, this is the angle in radians between the positive *x*-axis and
 
 For two arguments, this is the angle in radians between the positive *x*-axis and the
 point (*x*, *y*), returning a value in the interval ``[-\\pi, \\pi]``. This corresponds to a
-standard [`atan2`](https://en.wikipedia.org/wiki/Atan2) function.
+standard [`atan2`](https://en.wikipedia.org/wiki/Atan2) function. Note that by convention
+`atan(0.0,x)` is defined as ``\\pi`` and `atan(-0.0,x)` is defined as ``-\\pi`` when `x < 0`.
 """
 atan(x::Number)
 
