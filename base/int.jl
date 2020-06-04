@@ -60,7 +60,7 @@ julia> signed(Int64)
 Int64
 ```
 """
-function signed(::Type{<:Integer}) end
+signed(::Type{<:Integer})
 
 signed(::Type{UInt8}) = Int8
 signed(::Type{UInt16}) = Int16
