@@ -819,10 +819,10 @@ function show_backtrace(io::IO, t::Vector)
 
     println(io, "\nStacktrace:")
 
-    # process_backtrace returns a Tuple{Frame, Int}
+    # process_backtrace returns a Vector{Tuple{Frame, Int}}
     frames = first.(filtered)
 
-    print_trace(io, t; print_linebreaks = stacktrace_linebreaks())
+    print_trace(io, frames; print_linebreaks = stacktrace_linebreaks())
 end
 
 
