@@ -176,6 +176,7 @@ include("iobuffer.jl")
 include("intfuncs.jl")
 include("strings/strings.jl")
 include("parse.jl")
+using .Parse
 include("shell.jl")
 include("regex.jl")
 include("show.jl")
