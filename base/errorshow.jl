@@ -570,8 +570,6 @@ function show_reduced_backtrace(io::IO, t::Vector)
     such that hash(t[i-1]) == h, ie the list of positions in which the
     frame appears just before. =#
 
-    modulecolordict = Dict("" => :default)
-
     displayed_stackframes = []
     repeated_cycle = Tuple{Int,Int,Int}[]
     # First:  line to introuce the "cycle repetition" message
@@ -615,6 +613,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
     println(io, "\nStacktrace:")
     ndigits_max = ndigits(length(t))
 
+    modulecolordict = Dict("" => :default)
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
     push!(repeated_cycle, (0,0,0)) # repeated_cycle is never empty
@@ -622,21 +621,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
     for i in 1:length(displayed_stackframes)
         (frame, n) = displayed_stackframes[i]
 
-        modul = getmodule(frame)
-        if !haskey(modulecolordict, modul)
-            modulecolordict[modul] = popfirst!(modulecolorcycler)
-        end
-        modulecolor = modulecolordict[modul]
-        
-        file = getfile(frame, stacktrace_expand_basepaths(), stacktrace_contract_userdir())
-        line = getline(frame)
-        varnames = getvarnames(frame)
-        func = getfunc(frame)
-        sigtypes = getsigtypes(frame)
-        inlined = getfield(frame, :inlined)
-
-        push!(LAST_SHOWN_LINE_INFOS, (file, line))
-        print_frame(io, frame_counter, func, inlined, modul, file, line, sigtypes, varnames, ndigits_max, modulecolor)
+        print_frame(io, frame_counter, frame, ndigits_max, modulecolordict, modulecolorcycler)
         
         if i < length(displayed_stackframes)
             println(io)
@@ -725,21 +710,7 @@ function print_trace(io::IO, trace; print_linebreaks::Bool)
 
     for (i, frame) in enumerate(trace)
 
-        modul = getmodule(frame)
-        if !haskey(modulecolordict, modul)
-            modulecolordict[modul] = popfirst!(modulecolorcycler)
-        end
-        modulecolor = modulecolordict[modul]
-
-        file = getfile(frame, stacktrace_expand_basepaths(), stacktrace_contract_userdir())
-        line = getline(frame)
-        varnames = getvarnames(frame)
-        func = getfunc(frame)
-        sigtypes = getsigtypes(frame)
-        inlined = getfield(frame, :inlined)
-
-        push!(LAST_SHOWN_LINE_INFOS, (file, line))
-        print_frame(io, i, func, inlined, modul, file, line, sigtypes, varnames, ndigits_max, modulecolor)
+        print_frame(io, i, frame, ndigits_max, modulecolordict, modulecolorcycler)
         if i < n
             println(io)
             print_linebreaks && println(io)
@@ -747,8 +718,23 @@ function print_trace(io::IO, trace; print_linebreaks::Bool)
     end
 end
 
-function print_frame(io, i, func, inlined, modul, file, line, specialization_types,
-    variable_names, width_digits, modulecolor)
+function print_frame(io, i, frame, width_digits, modulecolordict, modulecolorcycler)
+
+    file = getfile(frame, stacktrace_expand_basepaths(), stacktrace_contract_userdir())
+    line = getline(frame)
+
+    # add file and line info for accessing frame locations from the repl
+    push!(LAST_SHOWN_LINE_INFOS, (file, line))
+
+    variable_names = getvarnames(frame)
+    func = getfunc(frame)
+    specialization_types = getsigtypes(frame)
+    inlined = getfield(frame, :inlined)
+    modul = getmodule(frame)
+    if !haskey(modulecolordict, modul)
+        modulecolordict[modul] = popfirst!(modulecolorcycler)
+    end
+    modulecolor = modulecolordict[modul]
 
     # frame number
     print(io, lpad("[" * string(i) * "]", width_digits + 2))
