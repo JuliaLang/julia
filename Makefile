@@ -473,7 +473,7 @@ msix:
 	# Create msix setup package
 	sed 's/0.0.0.0/$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION).0/g' $(JULIAHOME)/contrib/windows/msix/AppXManifest.xml > $(BUILDROOT)/julia-$(JULIA_COMMIT)/AppXManifest.xml
 	cp -r $(JULIAHOME)/contrib/windows/msix/Assets $(BUILDROOT)/julia-$(JULIA_COMMIT)
-	"C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64\makeappx.exe" pack /d $(BUILDROOT)/julia-$(JULIA_COMMIT) /p $(JULIA_BINARYDIST_FILENAME).msix
+	C:/Program\ Files\ \(x86\)/Windows\ Kits/10/bin/10.0.18362.0/x64/makeappx.exe pack /d $(call cygpath_w,$(BUILDROOT)/julia-$(JULIA_COMMIT)) /p $(JULIA_BINARYDIST_FILENAME).msix
 	rm -rf $(BUILDROOT)/julia-$(JULIA_COMMIT)/Assets
 	rm $(BUILDROOT)/julia-$(JULIA_COMMIT)/AppXManifest.xml
 
