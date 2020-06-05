@@ -458,14 +458,33 @@ Base.setindex!(A::WrappedArray, v, i::Int) = setindex!(A.A, v, i)
 Base.setindex!(A::WrappedArray{T, N}, v, I::Vararg{Int, N}) where {T, N} = setindex!(A.A, v, I...)
 Base.unsafe_convert(::Type{Ptr{T}}, A::WrappedArray{T}) where T = Base.unsafe_convert(Ptr{T}, A.A)
 
-Base.stride(A::WrappedArray, i::Int) = stride(A.A, i)
+Base.strides(A::WrappedArray) = strides(A.A)
 
 @testset "strided interface adjtrans" begin
     x = WrappedArray([1, 2, 3, 4])
     @test strides(x') == strides(transpose(x)) == (1,1)
+    @test pointer(x') == pointer(transpose(x)) == pointer(x)
+
     A = WrappedArray([1 2; 3 4; 5 6])
     @test strides(A') == strides(transpose(A)) == (3,1)
     @test pointer(A') == pointer(transpose(A)) == pointer(A)
+
+    y = WrappedArray([1+im, 2, 3, 4])
+    @test strides(transpose(y)) == (1,1)
+    @test pointer(transpose(y)) == pointer(y)
+    @test_throws MethodError strides(y')
+    @test_throws ErrorException pointer(y')
+    
+    B = WrappedArray([1+im 2; 3 4; 5 6])
+    @test strides(transpose(B)) == (3,1)
+    @test pointer(transpose(B)) == pointer(B)
+    @test_throws MethodError strides(B')
+    @test_throws ErrorException pointer(B')
+
+    @test_throws MethodError strides(transpose(1:5))
+    @test_throws MethodError strides((1:5)')
+    @test_throws ErrorException pointer(transpose(1:5))
+    @test_throws ErrorException pointer((1:5)')
 end
 
 @testset "strided interface blas" begin

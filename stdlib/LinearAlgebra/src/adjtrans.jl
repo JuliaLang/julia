@@ -199,8 +199,8 @@ convert(::Type{Adjoint{T,S}}, A::Adjoint) where {T,S} = Adjoint{T,S}(convert(S, 
 convert(::Type{Transpose{T,S}}, A::Transpose) where {T,S} = Transpose{T,S}(convert(S, A.parent))
 
 # Strides and pointer for transposed strided arrays — but only if the elements are actually stored in memory
-Base.strides(A::Adjoint{<:Real, <:AbstractVector}) = (stride(A.parent, 2), stride(A.parent, 1))
-Base.strides(A::Transpose{<:Any, <:AbstractVector}) = (stride(A.parent, 2), stride(A.parent, 1))
+Base.strides(A::Adjoint{<:Real, <:AbstractVector}) = (1, stride(A.parent, 1))
+Base.strides(A::Transpose{<:Any, <:AbstractVector}) = (1, stride(A.parent, 1))
 # For matrices it's slightly faster to use reverse and avoid calling stride twice
 Base.strides(A::Adjoint{<:Real, <:AbstractMatrix}) = reverse(strides(A.parent))
 Base.strides(A::Transpose{<:Any, <:AbstractMatrix}) = reverse(strides(A.parent))
