@@ -1072,26 +1072,15 @@ static jl_method_instance_t *cache_method(
         temp2 = (jl_value_t*)simplett;
     }
 
-    // short-circuit if this exact entry is already present
-    // to avoid adding a new duplicate copy of it
-    if (cachett != tt && simplett == NULL) {
-        struct jl_typemap_assoc search = {(jl_value_t*)cachett, min_valid, NULL, 0, ~(size_t)0};
+    // short-circuit if an existing entry is already present
+    // that satisfies our requirements
+    if (cachett != tt) {
+        struct jl_typemap_assoc search = {(jl_value_t*)cachett, world, NULL, 0, ~(size_t)0};
         jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(*cache, &search, offs, /*subtype*/1);
-        if (entry && (jl_value_t*)entry->simplesig == jl_nothing) {
-            if (jl_egal((jl_value_t*)guardsigs, (jl_value_t*)entry->guardsigs)) {
-                // just update the existing entry to reflect new knowledge
-                if (entry->min_world > min_valid)
-                    entry->min_world = min_valid;
-                if (entry->max_world < max_valid)
-                    entry->max_world = max_valid;
-                if (entry->func.linfo == NULL) {
-                    entry->func.linfo = newmeth;
-                    jl_gc_wb(entry, newmeth);
-                }
-                assert(entry->func.linfo == newmeth);
-                JL_GC_POP();
-                return newmeth;
-            }
+        if (entry && jl_egal((jl_value_t*)entry->simplesig, simplett ? (jl_value_t*)simplett : jl_nothing) &&
+                jl_egal((jl_value_t*)guardsigs, (jl_value_t*)entry->guardsigs)) {
+            JL_GC_POP();
+            return entry->func.linfo;
         }
     }
 
