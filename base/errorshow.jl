@@ -549,6 +549,86 @@ end
 # replace `sf` as needed.
 const update_stackframes_callback = Ref{Function}(identity)
 
+
+function expandbasepath(str)
+
+    basefileregex = if Sys.iswindows()
+        r"^\.\\\w+\.jl$"
+    else
+        r"^\./\w+\.jl$"
+    end
+
+    if !isnothing(match(basefileregex, str))
+        sourcestring = find_source_file(str[3:end]) # cut off ./
+    else
+        str
+    end
+end
+
+function replaceuserpath(str)
+    str1 = replace(str, homedir() => "~")
+    # seems to be necessary for some paths with small letter drive c:// etc
+    replace(str1, lowercasefirst(homedir()) => "~")
+end
+
+getline(frame) = frame.line
+function getfile(frame, expandbase::Bool, contractuser::Bool)
+    file = string(frame.file)
+    if expandbase
+        file = expandbasepath(file)
+    end
+    if contractuser
+        file = replaceuserpath(file)
+    end
+
+    file
+end
+getfunc(frame) = string(frame.func)
+getmodule(frame) = try; string(frame.linfo.def.module) catch; "" end
+getsigtypes(frame) = try;  frame.linfo.specTypes.parameters[2:end] catch; "" end
+getmethod(frame) = try;  frame.linfo.def catch; nothing end
+function getvarnames(frame)
+    m = getmethod(frame)
+    if isnothing(m)
+        []
+    else
+        tv, decls, file, line = arg_decl_parts(m)
+        # this is a list of tuples (variable name, variable type)
+        # we take only the variable names
+        first.(decls[2:end])
+    end
+end
+
+const STACKTRACE_MODULECOLORS = [:light_blue, :light_yellow, :light_red,
+        :light_green,:light_magenta, :light_cyan,
+        :blue, :yellow, :red, :green, :magenta, :cyan]
+stacktrace_expand_basepaths()::Bool = parse(Bool,
+    get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "true"))
+stacktrace_contract_userdir()::Bool = parse(Bool,
+    get(ENV, "JULIA_STACKTRACE_CONTRACT_USERDIR", "true"))
+stacktrace_linebreaks()::Bool = parse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "true"))
+
+function show_full_backtrace(io::IO, trace; print_linebreaks::Bool)
+
+    n = length(trace)
+    ndigits_max = ndigits(n)
+
+    modulecolordict = Dict("" => :default)
+    modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
+
+    println(io, "\n--- STACKTRACE ---")
+    stacktrace_linebreaks() && println(io)
+
+    for (i, frame) in enumerate(trace)
+
+        print_stackframe(io, i, frame, ndigits_max, modulecolordict, modulecolorcycler)
+        if i < n
+            println(io)
+            print_linebreaks && println(io)
+        end
+    end
+end
+
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
 
 function show_reduced_backtrace(io::IO, t::Vector)
@@ -628,85 +708,6 @@ function show_reduced_backtrace(io::IO, t::Vector)
             frame_counter += cycle_length * repetitions
         end
         frame_counter += 1
-    end
-end
-
-function expandbasepath(str)
-
-    basefileregex = if Sys.iswindows()
-        r"^\.\\\w+\.jl$"
-    else
-        r"^\./\w+\.jl$"
-    end
-
-    if !isnothing(match(basefileregex, str))
-        sourcestring = find_source_file(str[3:end]) # cut off ./
-    else
-        str
-    end
-end
-
-function replaceuserpath(str)
-    str1 = replace(str, homedir() => "~")
-    # seems to be necessary for some paths with small letter drive c:// etc
-    replace(str1, lowercasefirst(homedir()) => "~")
-end
-
-getline(frame) = frame.line
-function getfile(frame, expandbase::Bool, contractuser::Bool)
-    file = string(frame.file)
-    if expandbase
-        file = expandbasepath(file)
-    end
-    if contractuser
-        file = replaceuserpath(file)
-    end
-
-    file
-end
-getfunc(frame) = string(frame.func)
-getmodule(frame) = try; string(frame.linfo.def.module) catch; "" end
-getsigtypes(frame) = try;  frame.linfo.specTypes.parameters[2:end] catch; "" end
-getmethod(frame) = try;  frame.linfo.def catch; nothing end
-function getvarnames(frame)
-    m = getmethod(frame)
-    if isnothing(m)
-        []
-    else
-        tv, decls, file, line = arg_decl_parts(m)
-        # this is a list of tuples (variable name, variable type)
-        # we take only the variable names
-        first.(decls[2:end])
-    end
-end
-
-const STACKTRACE_MODULECOLORS = [:light_blue, :light_yellow, :light_red,
-        :light_green,:light_magenta, :light_cyan,
-        :blue, :yellow, :red, :green, :magenta, :cyan]
-stacktrace_expand_basepaths()::Bool = parse(Bool,
-    get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "true"))
-stacktrace_contract_userdir()::Bool = parse(Bool,
-    get(ENV, "JULIA_STACKTRACE_CONTRACT_USERDIR", "true"))
-stacktrace_linebreaks()::Bool = parse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "true"))
-
-function show_full_backtrace(io::IO, trace; print_linebreaks::Bool)
-
-    n = length(trace)
-    ndigits_max = ndigits(n)
-
-    modulecolordict = Dict("" => :default)
-    modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
-
-    println(io, "\n--- STACKTRACE ---")
-    stacktrace_linebreaks() && println(io)
-
-    for (i, frame) in enumerate(trace)
-
-        print_stackframe(io, i, frame, ndigits_max, modulecolordict, modulecolorcycler)
-        if i < n
-            println(io)
-            print_linebreaks && println(io)
-        end
     end
 end
 
