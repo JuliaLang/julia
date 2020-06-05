@@ -953,7 +953,7 @@ static jl_method_instance_t *cache_method(
         jl_methtable_t *mt, jl_typemap_t **cache, jl_value_t *parent JL_PROPAGATES_ROOT,
         jl_tupletype_t *tt, // the original tupletype of the signature
         jl_method_t *definition,
-        size_t world,
+        size_t world, size_t min_valid, size_t max_valid,
         jl_svec_t *sparams)
 {
     // caller must hold the mt->writelock
@@ -996,12 +996,12 @@ static jl_method_instance_t *cache_method(
 
     jl_tupletype_t *cachett = tt;
     jl_svec_t* guardsigs = jl_emptysvec;
-    size_t min_valid = 1;
-    size_t max_valid = ~(size_t)0;
     if (!cache_with_orig && mt) {
         // now examine what will happen if we chose to use this sig in the cache
         // TODO: should we first check `compilationsig <: definition`?
-        temp = ml_matches(mt, 0, compilationsig, MAX_UNSPECIALIZED_CONFLICTS, 1, world, &min_valid, &max_valid, 0);
+        size_t min_valid2 = 1;
+        size_t max_valid2 = ~(size_t)0;
+        temp = ml_matches(mt, 0, compilationsig, MAX_UNSPECIALIZED_CONFLICTS, 1, world, &min_valid2, &max_valid2, 0);
         int guards = 0;
         if (temp == jl_false) {
             cache_with_orig = 1;
@@ -1052,21 +1052,13 @@ static jl_method_instance_t *cache_method(
                 }
             }
         }
-        if (cache_with_orig) {
-            min_valid = 1;
-            max_valid = ~(size_t)0;
-        }
-        else {
+        if (!cache_with_orig) {
             // determined above that there's no ambiguity in also using compilationsig as the cacheablesig
+            min_valid = min_valid2;
+            max_valid = max_valid2;
             cachett = compilationsig;
         }
     }
-
-    if (cache_with_orig && mt) {
-        // now examine defs to determine the min/max-valid range for this lookup result
-        (void)ml_matches(mt, 0, cachett, -1, 0, world, &min_valid, &max_valid, 0);
-    }
-    assert(mt == NULL || min_valid > 1);
 
     // now scan `cachett` and ensure that `Type{T}` in the cache will be matched exactly by `typeof(T)`
     // and also reduce the complexity of rejecting this entry in the cache
@@ -1229,7 +1221,7 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
         entry = jl_typemap_morespecific_by_type(entry, (jl_value_t*)tt, &search.env, world);
         if (entry != NULL) {
             jl_method_t *m = entry->func.method;
-            nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, tt, m, world, search.env);
+            nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, tt, m, world, search.min_valid, search.max_valid, search.env);
         }
     }
     JL_GC_POP();
@@ -2088,7 +2080,13 @@ jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES
         return NULL;
 
     // find if exactly 1 method matches (issue #7302)
-    jl_value_t *matches = jl_matching_methods(types, 1, 1, world, min_valid, max_valid);
+    size_t min_valid2 = 1;
+    size_t max_valid2 = ~(size_t)0;
+    jl_value_t *matches = jl_matching_methods(types, 1, 1, world, &min_valid2, &max_valid2);
+    if (*min_valid < min_valid2)
+        *min_valid = min_valid2;
+    if (*max_valid > max_valid2)
+        *max_valid = max_valid2;
     if (matches == jl_false || jl_array_len(matches) != 1)
         return NULL;
     jl_tupletype_t *tt = NULL;
@@ -2109,7 +2107,7 @@ jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES
                 // inject it there now if we think it will be
                 // used via dispatch later (e.g. because it was hinted via a call to `precompile`)
                 JL_LOCK(&mt->writelock);
-                nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, ti, m, world, env);
+                nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, ti, m, world, min_valid2, max_valid2, env);
                 JL_UNLOCK(&mt->writelock);
             }
             else {
@@ -2538,7 +2536,7 @@ static jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, j
         if (method->invokes == NULL)
             method->invokes = jl_nothing;
 
-        mfunc = cache_method(NULL, &method->invokes, (jl_value_t*)method, tt, method, 1, tpenv);
+        mfunc = cache_method(NULL, &method->invokes, (jl_value_t*)method, tt, method, 1, 1, ~(size_t)0, tpenv);
         JL_UNLOCK(&method->writelock);
         JL_GC_POP();
         if (jl_options.malloc_log)
@@ -2588,7 +2586,7 @@ JL_DLLEXPORT jl_value_t *jl_get_invoke_lambda(jl_typemap_entry_t *entry, jl_valu
         method->invokes = jl_nothing;
 
     jl_method_instance_t *mfunc = cache_method(NULL, &method->invokes, (jl_value_t*)method,
-                                               (jl_tupletype_t*)tt, method, 1, tpenv);
+                                               (jl_tupletype_t*)tt, method, 1, 1, ~(size_t)0, tpenv);
     JL_GC_POP();
     JL_UNLOCK(&method->writelock);
     return (jl_value_t*)mfunc;
@@ -2930,7 +2928,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
             env.matc = (jl_svec_t*)jl_array_ptr_ref(env.t, 0);
             jl_method_t *meth = (jl_method_t*)jl_svecref(env.matc, 2);
             jl_svec_t *tpenv = (jl_svec_t*)jl_svecref(env.matc, 1);
-            cache_method(mt, &mt->cache, (jl_value_t*)mt, type, meth, world, tpenv);
+            cache_method(mt, &mt->cache, (jl_value_t*)mt, type, meth, world, env.min_valid, env.max_valid, tpenv);
         }
     }
     JL_GC_POP();
