@@ -137,7 +137,7 @@ already_inferred_quick_test(interp::AbstractInterpreter, mi::MethodInstance) =
     false
 
 # inference completed on `me`
-# update the MethodInstance and notify the edges
+# update the MethodInstance
 function cache_result!(interp::AbstractInterpreter, result::InferenceResult, min_valid::UInt, max_valid::UInt)
     # check if the existing linfo metadata is also sufficient to describe the current inference result
     # to decide if it is worth caching this

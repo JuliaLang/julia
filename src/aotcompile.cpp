@@ -265,7 +265,8 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
     if (*src_out == NULL || !jl_is_code_info(*src_out)) {
         if (cgparams.lookup != jl_rettype_inferred) {
             jl_error("Refusing to automatically run type inference with custom cache lookup.");
-        } else {
+        }
+        else {
             *src_out = jl_type_infer(mi, world, 0);
             codeinst = jl_get_method_inferred(mi, (*src_out)->rettype, (*src_out)->min_world, (*src_out)->max_world);
             if ((*src_out)->inferred && !codeinst->inferred)

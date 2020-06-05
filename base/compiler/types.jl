@@ -181,15 +181,7 @@ code_cache(ni::NativeInterpreter) = WorldView(GLOBAL_CI_CACHE, ni.world)
 """
     lock_mi_inference(ni::NativeInterpreter, mi::MethodInstance)
 
-Locks `mi`'s inference flag to prevent infinite recursion inside inference.
-While running inference, we must occaisionally compile additional code, which
-may in turn request additional code to be inferred. This can happen during
-bootstrap (for part of inference itself), but also during regular execution (e.g.
-to expand generated functions). The inference flag lets the runtime know that
-it should not attempt to re-infer the requested functions as it is being worked
-on higher in the stack. Not that inference itself does not look at this flag,
-instead checking its own working caches - it is only used for locking the C
-runtime.
+Hint that `mi` is in inference to help accelerate bootstrapping. This helps limit the amount of wasted work we might do when inference is working on initially inferring itself by letting us detect when inference is already in progress and not running a second copy on it. This creates a data-race, but the entry point into this code from C (jl_type_infer) already includes detection and restriction on recursion, so it is hopefully mostly a benign problem (since it should really only happen during the first phase of bootstrapping that we encounter this flag).
 """
 lock_mi_inference(ni::NativeInterpreter, mi::MethodInstance) = (mi.inInference = true; nothing)
 
