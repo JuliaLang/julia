@@ -53,7 +53,7 @@ function _threadsfor(a, body, schedule)
     initranges = [:($(ranges[x]) = range[$x]) for x in 1:rangelen]
     initstarts = ((x, y) -> :($x = firstindex($y) ) ).(starts, ranges)
     initends = ((x, y) -> :($x = lastindex($y) ) ).(ends, ranges)
-    initstartingindecies = ((x, y) -> :($x += $y)).(values, starts)
+    initstartingindices  = ((x, y) -> :($x += $y)).(values, starts)
     #updates to variables
     updatevalues = [:( $(esc(lidx[x])) = @inbounds $(ranges[x])[$(values[x])] ) for x in 1:rangelen]
     initvalues = [ :($(values[1]) = (tid - 1) * len + min(tid - 1, rem))] #initial calculation of the first dimension
@@ -95,7 +95,7 @@ function _threadsfor(a, body, schedule)
                 $(initstarts...)
                 $(initends...)
                 $(initvalues...)
-                $(initstartingindecies...)
+                $(initstartingindices...)
                 #distribute the remainder across the threads
                 if tid <= rem
                     len += 1
