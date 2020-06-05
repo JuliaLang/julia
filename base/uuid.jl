@@ -37,7 +37,7 @@ let
     d = __convert_digit(_c, UInt32(16))
     d >= 16 && throw_malformed_uuid(s)
     u <<= 4
-    u |= d
+    u | d
 end
 
 global UUID
