@@ -604,7 +604,9 @@ function show_reduced_backtrace(io::IO, t::Vector)
 
     try invokelatest(update_stackframes_callback[], displayed_stackframes) catch end
 
-    println(io, "\nStacktrace:")
+    println(io, "\n--- STACKTRACE ---")
+    stacktrace_linebreaks() && println(io)
+
     ndigits_max = ndigits(length(t))
 
     modulecolordict = Dict("" => :default)
@@ -701,6 +703,9 @@ function print_trace(io::IO, trace; print_linebreaks::Bool)
 
     modulecolordict = Dict("" => :default)
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
+
+    println(io, "\n--- STACKTRACE ---")
+    stacktrace_linebreaks() && println(io)
 
     for (i, frame) in enumerate(trace)
 
@@ -817,8 +822,6 @@ function show_backtrace(io::IO, t::Vector)
         show_reduced_backtrace(IOContext(io, :backtrace => true), filtered)
         return
     end
-
-    println(io, "\nStacktrace:")
 
     # process_backtrace returns a Vector{Tuple{Frame, Int}}
     frames = first.(filtered)
