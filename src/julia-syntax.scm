@@ -2196,13 +2196,17 @@
    'do
    (lambda (e)
      (let* ((call (cadr e))
+            (dot? (eq? (car call) '|.|))
             (f    (cadr call))
-            (argl (cddr call))
-            (af   (caddr e)))
+            (argl (if dot? (cdaddr call) (cddr call)))
+            (af   (caddr e))
+            (args (if (has-parameters? argl)
+                      `(,(car argl) ,af ,@(cdr argl))
+                      `(,af ,@argl))))
        (expand-forms
-        (if (has-parameters? argl)
-            `(call ,f ,(car argl) ,af ,@(cdr argl))
-            `(call ,f ,af ,@argl)))))
+        (if dot?
+            `(|.| ,f (tuple ,@args))
+            `(call ,f ,@args)))))
 
    'tuple
    (lambda (e)

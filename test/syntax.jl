@@ -2264,3 +2264,51 @@ x = let var"'"(x) = 2x
     3'
 end
 @test x == 6
+
+@testset "parsing dot-call with do" begin
+    @test Meta.parse("f.(x) do; end") == Expr(
+        :do,
+        Expr(:., :f, Expr(:tuple, :x)),
+        Expr(:->, Expr(:tuple), Expr(:block, LineNumberNode(1, :none))),
+    )
+    @test Meta.parse("f.(x; y = 1) do; end") == Expr(
+        :do,
+        Expr(:., :f, Expr(:tuple, Expr(:parameters, Expr(:kw, :y, 1)), :x)),
+        Expr(:->, Expr(:tuple), Expr(:block, LineNumberNode(1, :none))),
+    )
+end
+
+@testset "lowering `f.(x) do`" begin
+    assignments = Meta.lower(Main, Meta.parse("f.(x) do; end")).args[1].code
+    @test count(assignments) do ex
+        Meta.isexpr(ex, :call) &&
+            get(ex.args, 1, nothing) == GlobalRef(Base, :broadcasted)
+    end == 1
+end
+
+@testset "lowering `f.(x; y = 1) do`" begin
+    assignments = Meta.lower(Main, Meta.parse("f.(x; y = 1) do; end")).args[1].code
+    @test count(assignments) do ex
+        Meta.isexpr(ex, :call) &&
+            get(ex.args, 1, nothing) == GlobalRef(Base, :broadcasted)
+    end == 0
+    @test count(assignments) do ex
+        ex == GlobalRef(Base, :broadcasted_kwsyntax)
+    end == 1
+end
+
+@testset "`f.(x) do`" begin
+    @test foldl.([[1, 2], [3, 4, 5]]) do acc, x
+        if isodd(x)
+            acc += x
+        end
+        return acc
+    end == [1, 8]
+
+    @test foldl.([[1, 2], [3, 4, 5]]; init = 100) do acc, x
+        if isodd(x)
+            acc += x
+        end
+        return acc
+    end == [101, 108]
+end

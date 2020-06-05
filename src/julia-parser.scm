@@ -1215,7 +1215,12 @@
                        (if (ts:space? s)
                            (disallow-space s `(|.| ,ex (quote ||)) #\())
                        (take-token s)
-                       `(|.| ,ex (tuple ,@(parse-call-arglist s #\) )))))
+                       (let ((dotcall `(|.| ,ex (tuple ,@(parse-call-arglist s #\) )))))
+                         (if (eqv? (peek-token s) 'do)
+                             (begin
+                               (take-token s)
+                               `(do ,dotcall ,(parse-do s)))
+                             dotcall))))
                     ((eqv? (peek-token s) ':)
                      (begin
                        (take-token s)
