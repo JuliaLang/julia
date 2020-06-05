@@ -892,6 +892,19 @@ julia> [1:5;] .|> [x->x^2, inv, x->2*x, -, isodd]
  true
 ```
 
+Dot calls can be combined with the [`do`](@ref) block syntax:
+```jldoctest
+julia> prod.([["a", "b", "c"], ["d", "e"]]) do str
+           str === "b" ? "" : str
+       end
+2-element Array{String,1}:
+ "ac"
+ "de"
+```
+
+!!! compat "Julia 1.6"
+    Dot calls with the `do` block syntax requires at least Julia 1.6.
+
 ## Further Reading
 
 We should mention here that this is far from a complete picture of defining functions. Julia has

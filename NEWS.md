@@ -10,6 +10,7 @@ New language features
 Language changes
 ----------------
 
+* Broadcasting (dot-call) syntax can now be used with `do` blocks ([#36156]).
 
 Compiler/Runtime improvements
 -----------------------------
