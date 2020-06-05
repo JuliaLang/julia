@@ -419,11 +419,11 @@ julia> thisind("α", 3)
 3
 
 julia> thisind("α", 4)
-ERROR: BoundsError: attempt to access String at index [4]
+ERROR: BoundsError: attempt to access 2-codeunit String at index [4]
 [...]
 
 julia> thisind("α", -1)
-ERROR: BoundsError: attempt to access String at index [-1]
+ERROR: BoundsError: attempt to access 2-codeunit String at index [-1]
 [...]
 ```
 """
@@ -473,7 +473,7 @@ julia> prevind("α", 1)
 0
 
 julia> prevind("α", 0)
-ERROR: BoundsError: attempt to access String at index [0]
+ERROR: BoundsError: attempt to access 2-codeunit String at index [0]
 [...]
 
 julia> prevind("α", 2, 2)
@@ -532,7 +532,7 @@ julia> nextind("α", 1)
 3
 
 julia> nextind("α", 3)
-ERROR: BoundsError: attempt to access String at index [3]
+ERROR: BoundsError: attempt to access 2-codeunit String at index [3]
 [...]
 
 julia> nextind("α", 0, 2)
