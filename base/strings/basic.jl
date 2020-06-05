@@ -232,7 +232,8 @@ convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
 ## summary ##
 
 function summary(io::IO, s::AbstractString)
-    print(io, ncodeunits(s), "-codeunit ", typeof(s))
+    prefix = isempty(s) ? "empty" : string(ncodeunits(s), "-codeunit")
+    print(io, prefix, " ", typeof(s))
 end
 
 ## string & character concatenation ##

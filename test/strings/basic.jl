@@ -1089,4 +1089,5 @@ end
 @testset "summary" begin
     @test sprint(summary, "foα") == "4-codeunit String"
     @test sprint(summary, SubString("foα", 2)) == "3-codeunit SubString{String}"
+    @test sprint(summary, "") == "empty String"
 end
