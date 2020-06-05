@@ -353,35 +353,22 @@ end
 
 function check(arr, inner, outer)
     if inner !== nothing
+        # TODO: Currently one based indexing is demanded for inner !== nothing,
+        # but not for outer !== nothing. Decide for something consistent.
+        Base.require_one_based_indexing(arr)
         if any(<(0), inner)
-            msg = """
-            Number of repetitions cannot be negative. Got inner = $inner
-            """
-            throw(ArgumentError(msg))
+            throw(ArgumentError("no inner repetition count may be negative; got $inner"))
         end
         if length(inner) < ndims(arr)
-            msg = """
-            Number of dimensions of repetitions and array must match. Got
-            inner = $inner
-            size(arr) = $(size(arr))
-            """
-            throw(ArgumentError(msg))
+            throw(ArgumentError("number of inner repetitions ($(length(inner))) cannot be less than number of dimensions of input array ($(ndims(arr)))"))
         end
     end
-    if outer != nothing
+    if outer !== nothing
         if any(<(0), outer)
-            msg = """
-            Number of repetitions cannot be negative. Got outer = $outer
-            """
-            throw(ArgumentError(msg))
+            throw(ArgumentError("no outer repetition count may be negative; got $outer"))
         end
-        if (length(outer) < ndims(arr)) && (inner != nothing)
-            msg = """
-            Number of dimensions of repetitions and array must match. Got
-            outer = $outer
-            size(arr) = $(size(arr))
-            """
-            throw(ArgumentError(msg))
+        if (length(outer) < ndims(arr)) && (inner !== nothing)
+            throw(ArgumentError("number of outer repetitions ($(length(outer))) cannot be less than number of dimensions of input array ($(ndims(arr)))"))
         end
     end
 end
