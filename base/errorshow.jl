@@ -176,7 +176,7 @@ function showerror(io::IO, ex::InexactError)
     Experimental.show_error_hints(io, ex)
 end
 
-typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
+typesof(@nospecialize args...) = Tuple{Any[ Core.Typeof(args[i]) for i in 1:length(args) ]...}
 
 function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b::DataType), color::Symbol)
     if a.name === b.name
