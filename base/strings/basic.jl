@@ -133,7 +133,7 @@ julia> isvalid(str, 2)
 false
 
 julia> str[2]
-ERROR: StringIndexError("αβγdef", 2)
+ERROR: StringIndexError: invalid index [2], valid nearby indices [1]=>'α', [3]=>'β'
 Stacktrace:
 [...]
 ```
