@@ -208,22 +208,6 @@ Base.strides(A::Transpose{<:Any, <:AbstractMatrix}) = reverse(strides(A.parent))
 Base.unsafe_convert(::Type{Ptr{T}}, A::Adjoint{<:Real, <:AbstractVecOrMat}) where {T} = Base.unsafe_convert(Ptr{T}, A.parent)
 Base.unsafe_convert(::Type{Ptr{T}}, A::Transpose{<:Any, <:AbstractVecOrMat}) where {T} = Base.unsafe_convert(Ptr{T}, A.parent)
 
-"""
-    ConjPtr{T}
-
-A memory address referring to the complex conjugate of data of type T. However, there is no guarantee that the memory is actually valid, or that it actually represents data of the specified type.
-"""
-struct ConjPtr{T} 
-    ptr::Ptr{T}
-end
-
-Base.unsafe_convert(::Type{ConjPtr{T}}, Ac::Adjoint{<:Complex}) where T<:Complex = Base.unsafe_convert(Ptr{T}, parent(Ac))    
-Base.unsafe_convert(::Type{Ptr{T}}, Ac::Adjoint{<:Complex}) where T<:Complex = Base.unsafe_convert(ConjPtr{T}, parent(Ac))    
-function Base.unsafe_convert(::Type{ConjPtr{T}}, V::SubArray{T,2}) where {T,N,P}
-    kr, jr = parentindices(V)
-    Base.unsafe_convert(Ptr{T}, view(parent(V)', jr, kr))
-end
-
 # for vectors, the semantics of the wrapped and unwrapped types differ
 # so attempt to maintain both the parent and wrapper type insofar as possible
 similar(A::AdjOrTransAbsVec) = wrapperop(A)(similar(A.parent))
