@@ -731,7 +731,7 @@ size(s::CodeUnits) = (length(s),)
 elsize(s::CodeUnits{T}) where {T} = sizeof(T)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
-@inline iterate(s::CodeUnits, i=1) = (@_inline_meta; (i % UInt) - 1 < length(s) ? (@inbounds s[i], i + 1) : nothing)
+@inline iterate(s::CodeUnits, i=1) = (i % UInt) - 1 < length(s) ? (@inbounds s[i], i + 1) : nothing
 
 
 write(io::IO, s::CodeUnits) = write(io, s.s)
