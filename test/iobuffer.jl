@@ -275,28 +275,30 @@ let io = IOBuffer()
     @test Base.buffer_writes(io) === io
 end
 
-@testset "skipchars" begin
-    io = IOBuffer("")
-    @test eof(skipchars(isspace, io))
+@static if Base.JLOptions().depwarn != 2
+    @testset "skipchars" begin
+        io = IOBuffer("")
+        @test eof(@test_deprecated(skipchars(isspace, io)))
 
-    io = IOBuffer("   ")
-    @test eof(skipchars(isspace, io))
+        io = IOBuffer("   ")
+        @test eof(@test_deprecated(skipchars(isspace, io)))
 
-    io = IOBuffer("#    \n     ")
-    @test eof(skipchars(isspace, io, linecomment='#'))
+        io = IOBuffer("#    \n     ")
+        @test eof(@test_deprecated(skipchars(isspace, io, linecomment='#')))
 
-    io = IOBuffer("      text")
-    skipchars(isspace, io)
-    @test String(readavailable(io)) == "text"
+        io = IOBuffer("      text")
+        @test_deprecated skipchars(isspace, io)
+        @test String(readavailable(io)) == "text"
 
-    io = IOBuffer("   # comment \n    text")
-    skipchars(isspace, io, linecomment='#')
-    @test String(readavailable(io)) == "text"
+        io = IOBuffer("   # comment \n    text")
+        @test_deprecated skipchars(isspace, io, linecomment='#')
+        @test String(readavailable(io)) == "text"
 
-    for char in ['@','߷','࿊','𐋺']
-        io = IOBuffer("alphabeticalstuff$char")
-        @test !eof(skipchars(isletter, io))
-        @test read(io, Char) == char
+        for char in ['@','߷','࿊','𐋺']
+            io = IOBuffer("alphabeticalstuff$char")
+            @test !eof(@test_deprecated(skipchars(isletter, io)))
+            @test read(io, Char) == char
+        end
     end
 end
 

@@ -208,3 +208,9 @@ macro get!(h, key0, default)
 end
 
 # END 1.5 deprecations
+
+# BEGIN 1.6 deprecations
+
+@deprecate skipchars(pred, io::IO; linecomment=nothing) skipuntil(!pred, io::IO; linecomment=linecomment)
+
+# END 1.6 deprecations
