@@ -300,6 +300,31 @@ end
     end
 end
 
+@testset "skipuntil" begin
+    io = IOBuffer("")
+    @test eof(skipuntil(isspace, io))
+
+    io = IOBuffer("   ")
+    @test eof(skipuntil(!isspace, io))
+
+    io = IOBuffer("#    \n     ")
+    @test eof(skipuntil(!isspace, io, linecomment='#'))
+
+    io = IOBuffer("      text")
+    skipuntil(!isspace, io)
+    @test String(readavailable(io)) == "text"
+
+    io = IOBuffer("   # comment \n    text")
+    skipuntil(!isspace, io, linecomment='#')
+    @test String(readavailable(io)) == "text"
+
+    for char in ['@','߷','࿊','𐋺']
+        io = IOBuffer("alphabeticalstuff$char")
+        @test !eof(skipuntil(!isletter, io))
+        @test read(io, Char) == char
+    end
+end
+
 @testset "Test constructor with a generic type argument." begin
     io = IOBuffer(maxsize=Int16(10))
     @test io isa IOBuffer

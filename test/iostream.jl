@@ -39,6 +39,45 @@
     end
 end
 
+@testset "skipuntil for IOStream" begin
+    mktemp() do path, file
+        function append_to_file(str)
+            mark(file)
+            print(file, str)
+            flush(file)
+            reset(file)
+        end
+        # test it doesn't error on eof
+        @test eof(skipuntil(isspace, file))
+
+        # test it correctly skips
+        append_to_file("    ")
+        @test eof(skipuntil(!isspace, file))
+
+        # test it correctly detects comment lines
+        append_to_file("#    \n   ")
+        @test eof(skipuntil(!isspace, file, linecomment='#'))
+
+        # test it stops at the appropriate time
+        append_to_file("   not a space")
+        @test !eof(skipuntil(!isspace, file))
+        @test read(file, Char) == 'n'
+
+        # test it correctly ignores the contents of comment lines
+        append_to_file("  #not a space \n   not a space")
+        @test !eof(skipuntil(!isspace, file, linecomment='#'))
+        @test read(file, Char) == 'n'
+
+        # test it correctly handles unicode
+        for (byte, char) in zip(1:4, ('@','߷','࿊','𐋺'))
+            append_to_file("abcdef$char")
+            @test ncodeunits(char) == byte
+            @test !eof(skipuntil(!isletter, file))
+            @test read(file, Char) == char
+        end
+    end
+end
+
 @testset "readbytes_some! via readbytes!" begin
     mktemp() do path, file
         function append_to_file(str)

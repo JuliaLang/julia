@@ -433,6 +433,8 @@ The delimiter can be a `UInt8`, `AbstractChar`, string, or vector.
 Keyword argument `keep` controls whether the delimiter is included in the result.
 The text is assumed to be encoded in UTF-8.
 
+See also: [`skipuntil`](@ref)
+
 # Examples
 ```jldoctest
 julia> open("my_file.txt", "w") do io
@@ -1097,6 +1099,47 @@ function skipchars(predicate, io::IO; linecomment=nothing)
         end
     end
     return io
+end
+
+"""
+    skipuntil(predicate, io::IO; linecomment=nothing)
+
+Advance `io` until `predicate(peek(c)) === true`.
+
+If the keyword argument `linecomment` is specified, all characters
+from that character until the start of the next line are ignored.
+
+!!! compat "Julia 1.6"
+    `skipuntil` was added to replace `skipchars` in Julia 1.6. In
+    Julia 1.0-1.5 use `skipchars(!predicate, io::IO; linecomment=nothing)` in
+    place of `skipuntil(predicate, io::IO; linecomment=nothing)`.
+
+See also: [`readuntil`](@ref)
+
+# Examples
+```jldoctest
+julia> buf = IOBuffer("    text")
+IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=1, mark=-1)
+
+julia> skipuntil(!isspace, buf)
+IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=5, mark=-1)
+
+julia> String(readavailable(buf))
+"text"
+```
+"""
+function skipuntil(predicate, io::IO; linecomment=nothing)
+    while !eof(io)
+        c = read(io, Char)
+        if c === linecomment
+            skipuntil(c -> c === '\n', io)
+            read(io, Char)
+        elseif predicate(c)
+            skip(io, -ncodeunits(c))
+            break
+        end
+    end
+    io
 end
 
 """

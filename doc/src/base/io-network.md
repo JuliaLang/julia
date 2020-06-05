@@ -44,6 +44,7 @@ Base.redirect_stdin(::Function, ::Any)
 Base.readchomp
 Base.truncate
 Base.skipchars
+Base.skipuntil
 Base.countlines
 Base.PipeBuffer
 Base.readavailable
