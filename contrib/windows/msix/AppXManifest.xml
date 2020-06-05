@@ -4,10 +4,10 @@
     xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
     xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
     xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3" IgnorableNamespaces="uap3">
-    <Identity Name="Julia" Version="0.0.0.0" Publisher="CN=Julia Computing, Inc." ProcessorArchitecture="x64" />
+    <Identity Name="Julia" Version="0.0.0.0" Publisher="CN=Julialang." ProcessorArchitecture="x64" />
     <Properties>
         <DisplayName>Julia</DisplayName>
-        <PublisherDisplayName>Julia Computing, Inc.</PublisherDisplayName>
+        <PublisherDisplayName>Julialang</PublisherDisplayName>
         <Description>Julia is a high-level, high-performance, dynamic programming language</Description>
         <Logo>Assets/StoreLogo.png</Logo>
     </Properties>
