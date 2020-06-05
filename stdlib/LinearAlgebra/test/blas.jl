@@ -460,6 +460,14 @@ Base.unsafe_convert(::Type{Ptr{T}}, A::WrappedArray{T}) where T = Base.unsafe_co
 
 Base.stride(A::WrappedArray, i::Int) = stride(A.A, i)
 
+@testset "strided interface adjtrans" begin
+    x = WrappedArray([1, 2, 3, 4])
+    @test strides(x') == strides(transpose(x)) == (1,1)
+    A = WrappedArray([1 2; 3 4; 5 6])
+    @test strides(A') == strides(transpose(A)) == (3,1)
+    @test pointer(A') == pointer(transpose(A)) == pointer(A)
+end
+
 @testset "strided interface blas" begin
     for elty in (Float32, Float64, ComplexF32, ComplexF64)
     # Level 1
