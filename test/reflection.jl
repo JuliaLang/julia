@@ -507,7 +507,6 @@ f18888() = nothing
 let
     world = Core.Compiler.get_world_counter()
     m = first(methods(f18888, Tuple{}))
-    @test isempty(m.specializations)
     ft = typeof(f18888)
 
     code_typed(f18888, Tuple{}; optimize=false)

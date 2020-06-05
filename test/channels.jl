@@ -390,6 +390,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
+        Libc.systemsleep(0.005)
         @test isopen(t)
         Base.process_events()
         @test !isopen(t)
@@ -402,6 +403,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
+        Libc.systemsleep(0.005)
         @test isopen(t)
         close(t)
         @test !isopen(t)
