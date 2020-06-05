@@ -712,7 +712,30 @@ function print_trace(io::IO, trace; print_linebreaks::Bool)
     end
 end
 
-function print_frame(io, i, frame, width_digits, modulecolordict, modulecolorcycler)
+"""
+    print_frame(io, i, frame, digit_align_width, modulecolordict::Dict, modulecolorcycler)
+
+Print a stack frame where the module color is determined by looking up the parent module in
+`modulecolordict`. If the module does not have a color, yet, a new one can be drawn
+from `modulecolorcycler`.
+"""
+function print_frame(io, i, frame, digit_align_width, modulecolordict, modulecolorcycler)
+    modul = getmodule(frame)
+    parentmodule = split(modul, ".")[1]
+    if !haskey(modulecolordict, parentmodule)
+        modulecolordict[parentmodule] = popfirst!(modulecolorcycler)
+    end
+    modulecolor = modulecolordict[parentmodule]
+
+    print_frame(io, i, frame, digit_align_width, modulecolor)
+end
+
+"""
+    print_frame(io, i, frame, digit_align_width, modulecolordict::Dict, modulecolorcycler)
+
+Print a stack frame where the module color is set manually with `modulecolor`.
+"""
+function print_frame(io, i, frame, digit_align_width, modulecolor)
 
     file = getfile(frame, stacktrace_expand_basepaths(), stacktrace_contract_userdir())
     line = getline(frame)
@@ -725,13 +748,9 @@ function print_frame(io, i, frame, width_digits, modulecolordict, modulecolorcyc
     specialization_types = getsigtypes(frame)
     inlined = getfield(frame, :inlined)
     modul = getmodule(frame)
-    if !haskey(modulecolordict, modul)
-        modulecolordict[modul] = popfirst!(modulecolorcycler)
-    end
-    modulecolor = modulecolordict[modul]
 
     # frame number
-    print(io, lpad("[" * string(i) * "]", width_digits + 2))
+    print(io, lpad("[" * string(i) * "]", digit_align_width + 2))
     print(io, " ")
     
     # function name
@@ -756,7 +775,7 @@ function print_frame(io, i, frame, width_digits, modulecolordict, modulecolorcyc
     println(io)
     
     # @
-    printstyled(io, " " ^ (width_digits + 1) * "@ ", color = :light_black)
+    printstyled(io, " " ^ (digit_align_width + 1) * "@ ", color = :light_black)
 
     # module
     if !isempty(modul)
