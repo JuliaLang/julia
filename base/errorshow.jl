@@ -617,7 +617,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
     for i in 1:length(displayed_stackframes)
         (frame, n) = displayed_stackframes[i]
 
-        print_frame(io, frame_counter, frame, ndigits_max, modulecolordict, modulecolorcycler)
+        print_stackframe(io, frame_counter, frame, ndigits_max, modulecolordict, modulecolorcycler)
         
         if i < length(displayed_stackframes)
             println(io)
@@ -696,7 +696,7 @@ stacktrace_contract_userdir()::Bool = parse(Bool,
     get(ENV, "JULIA_STACKTRACE_CONTRACT_USERDIR", "true"))
 stacktrace_linebreaks()::Bool = parse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "true"))
 
-function print_trace(io::IO, trace; print_linebreaks::Bool)
+function show_full_backtrace(io::IO, trace; print_linebreaks::Bool)
 
     n = length(trace)
     ndigits_max = ndigits(n)
@@ -709,7 +709,7 @@ function print_trace(io::IO, trace; print_linebreaks::Bool)
 
     for (i, frame) in enumerate(trace)
 
-        print_frame(io, i, frame, ndigits_max, modulecolordict, modulecolorcycler)
+        print_stackframe(io, i, frame, ndigits_max, modulecolordict, modulecolorcycler)
         if i < n
             println(io)
             print_linebreaks && println(io)
@@ -718,13 +718,13 @@ function print_trace(io::IO, trace; print_linebreaks::Bool)
 end
 
 """
-    print_frame(io, i, frame, digit_align_width, modulecolordict::Dict, modulecolorcycler)
+    print_stackframe(io, i, frame, digit_align_width, modulecolordict::Dict, modulecolorcycler)
 
 Print a stack frame where the module color is determined by looking up the parent module in
 `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
 from `modulecolorcycler`.
 """
-function print_frame(io, i, frame, digit_align_width, modulecolordict, modulecolorcycler)
+function print_stackframe(io, i, frame, digit_align_width, modulecolordict, modulecolorcycler)
     modul = getmodule(frame)
     parentmodule = split(modul, ".")[1]
     if !haskey(modulecolordict, parentmodule)
@@ -732,15 +732,15 @@ function print_frame(io, i, frame, digit_align_width, modulecolordict, modulecol
     end
     modulecolor = modulecolordict[parentmodule]
 
-    print_frame(io, i, frame, digit_align_width, modulecolor)
+    print_stackframe(io, i, frame, digit_align_width, modulecolor)
 end
 
 """
-    print_frame(io, i, frame, digit_align_width, modulecolordict::Dict, modulecolorcycler)
+    print_stackframe(io, i, frame, digit_align_width, modulecolordict::Dict, modulecolorcycler)
 
 Print a stack frame where the module color is set manually with `modulecolor`.
 """
-function print_frame(io, i, frame, digit_align_width, modulecolor)
+function print_stackframe(io, i, frame, digit_align_width, modulecolor)
 
     file = getfile(frame, stacktrace_expand_basepaths(), stacktrace_contract_userdir())
     line = getline(frame)
@@ -826,7 +826,7 @@ function show_backtrace(io::IO, t::Vector)
     # process_backtrace returns a Vector{Tuple{Frame, Int}}
     frames = first.(filtered)
 
-    print_trace(io, frames; print_linebreaks = stacktrace_linebreaks())
+    show_full_backtrace(io, frames; print_linebreaks = stacktrace_linebreaks())
 end
 
 
