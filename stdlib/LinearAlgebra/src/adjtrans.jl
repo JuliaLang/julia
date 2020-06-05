@@ -199,14 +199,30 @@ convert(::Type{Adjoint{T,S}}, A::Adjoint) where {T,S} = Adjoint{T,S}(convert(S, 
 convert(::Type{Transpose{T,S}}, A::Transpose) where {T,S} = Transpose{T,S}(convert(S, A.parent))
 
 # Strides and pointer for transposed strided arrays — but only if the elements are actually stored in memory
-Base.strides(A::Adjoint{<:Real, <:AbstractVector}) = (1, stride(A.parent, 1))
-Base.strides(A::Transpose{<:Any, <:AbstractVector}) = (1, stride(A.parent, 1))
+Base.strides(A::Adjoint{<:Real, <:AbstractVector}) = (stride(A.parent, 2), stride(A.parent, 1))
+Base.strides(A::Transpose{<:Any, <:AbstractVector}) = (stride(A.parent, 2), stride(A.parent, 1))
 # For matrices it's slightly faster to use reverse and avoid calling stride twice
 Base.strides(A::Adjoint{<:Real, <:AbstractMatrix}) = reverse(strides(A.parent))
 Base.strides(A::Transpose{<:Any, <:AbstractMatrix}) = reverse(strides(A.parent))
 
 Base.unsafe_convert(::Type{Ptr{T}}, A::Adjoint{<:Real, <:AbstractVecOrMat}) where {T} = Base.unsafe_convert(Ptr{T}, A.parent)
 Base.unsafe_convert(::Type{Ptr{T}}, A::Transpose{<:Any, <:AbstractVecOrMat}) where {T} = Base.unsafe_convert(Ptr{T}, A.parent)
+
+"""
+    ConjPtr{T}
+
+A memory address referring to the complex conjugate of data of type T. However, there is no guarantee that the memory is actually valid, or that it actually represents data of the specified type.
+"""
+struct ConjPtr{T} 
+    ptr::Ptr{T}
+end
+
+Base.unsafe_convert(::Type{ConjPtr{T}}, Ac::Adjoint{<:Complex}) where T<:Complex = Base.unsafe_convert(Ptr{T}, parent(Ac))    
+Base.unsafe_convert(::Type{Ptr{T}}, Ac::Adjoint{<:Complex}) where T<:Complex = Base.unsafe_convert(ConjPtr{T}, parent(Ac))    
+function Base.unsafe_convert(::Type{ConjPtr{T}}, V::SubArray{T,2}) where {T,N,P}
+    kr, jr = parentindices(V)
+    Base.unsafe_convert(Ptr{T}, view(parent(V)', jr, kr))
+end
 
 # for vectors, the semantics of the wrapped and unwrapped types differ
 # so attempt to maintain both the parent and wrapper type insofar as possible

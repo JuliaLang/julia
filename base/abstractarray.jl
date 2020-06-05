@@ -392,7 +392,11 @@ julia> stride(A,3)
 12
 ```
 """
-stride(A::AbstractArray, k::Integer) = strides(A)[k]
+function stride(A::AbstractArray, k::Integer) 
+    k < 1 && return 1
+    k ≤ ndims(A) && return strides(A)[k] 
+    length(A)
+end
 
 @inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
 size_to_strides(s, d) = (s,)
