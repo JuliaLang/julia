@@ -61,17 +61,15 @@ This is useful for preventing the propagation of `NaN` values in quantities that
 
 The following [Boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#Operations) are supported on [`Bool`](@ref) types:
 
-| Expression | Name                                  |
-|:---------- |:--------------------------------------|
-| `!x`       | negation                              |
-| `x && y`   | [short-circuiting and][short-circuit] |
-| `x \|\| y` | [short-circuiting or][short-circuit]  |
+| Expression | Name                                                    |
+|:---------- |:--------------------------------------------------------|
+| `!x`       | negation                                                |
+| `x && y`   | [short-circuiting and](@ref man-conditional-evaluation) |
+| `x \|\| y` | [short-circuiting or](@ref man-conditional-evaluation)  |
 
 Negation changes `true` to `false` and vice versa. The short-circuiting opeations are explained on the linked page.
 
 Note that `Bool` is an integer type and all the usual promotion rules and numeric operators are also defined on it.
-
-[short-circuit]: https://docs.julialang.org/en/v1/manual/control-flow/#Short-Circuit-Evaluation-1
 
 ## Bitwise Operators
 
