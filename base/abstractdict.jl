@@ -69,6 +69,16 @@ in(k, v::KeySet) = get(v.dict, k, secret_table_token) !== secret_table_token
 
 For an iterator or collection that has keys and values (e.g. arrays and dictionaries),
 return an iterator over the keys.
+
+# Implementation
+
+It is highly recommended that each `collection` that implements `keys`
+to satisfy the following relationship between [`values`](@ref) and
+[`getindex`](@ref):
+
+```julia
+isequal(collect(values(collection)), [collection[k] for k in keys(collection)])
+```
 """
 function keys end
 
@@ -130,6 +140,18 @@ values(a::AbstractDict) = ValueIterator(a)
 Return an iterator over `key => value` pairs for any
 collection that maps a set of keys to a set of values.
 This includes arrays, where the keys are the array indices.
+
+# Implementation
+
+It is highly recommended that each implementation of `pairs` satisfies
+the following relationships:
+
+```julia
+isequal(map(first, paris(collection)), keys(collection))
+isequal(map(last, paris(collection)), values(collection))
+```
+
+The fallback generic implementation satisfy this invariance.
 """
 pairs(collection) = Generator(=>, keys(collection), values(collection))
 

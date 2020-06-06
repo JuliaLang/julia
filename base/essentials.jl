@@ -758,6 +758,11 @@ julia> values([2])
 1-element Array{Int64,1}:
  2
 ```
+
+# Implementation
+
+Implementation of `values` should satisfy the invariance explained in
+[`keys`](@ref).
 """
 values(itr) = itr
 

@@ -804,6 +804,11 @@ Dict{String,Int64} with 2 entries:
 julia> getindex(A, "a")
 1
 ```
+
+# Implementation
+
+Implementation of `getindex` should satisfy the invariance explained
+in [`keys`](@ref).
 """
 function getindex end
 
