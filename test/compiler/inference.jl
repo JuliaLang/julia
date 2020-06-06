@@ -2623,3 +2623,27 @@ end
 _size_ish(F::NotQRSparse, i::Integer) = size(getprop(F, :B), 1)
 _call_size_ish(x) = _size_ish(x,1)
 @test Base.return_types(_call_size_ish, (NotQRSparse,)) == Any[Int]
+
+module TestConstPropRecursion
+mutable struct Node
+    data
+    child::Node
+    sibling::Node
+end
+
+function Base.iterate(n::Node, state::Node = n.child)
+    n === state && return nothing
+    return state, state === state.sibling ? n : state.sibling
+end
+
+@inline function depth(node::Node, d)
+    childd = d + 1
+    for c in node
+        d = max(d, depth(c, childd))
+    end
+    return d
+end
+
+f(n) = depth(n, 1)
+end
+@test Base.return_types(TestConstPropRecursion.f, (TestConstPropRecursion.Node,)) == Any[Int]
