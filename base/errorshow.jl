@@ -592,18 +592,33 @@ function getfile(frame, expandbase::Bool, contractuser::Bool)
 end
 getfunc(frame) = string(frame.func)
 getmodule(frame) = try; string(frame.linfo.def.module) catch; "" end
-getsigtypes(frame) = try;  frame.linfo.specTypes.parameters[2:end] catch; "" end
 getmethod(frame) = try;  frame.linfo.def catch; nothing end
-function getvarnames(frame)
-    m = getmethod(frame)
-    if isnothing(m)
-        []
-    else
-        tv, decls, file, line = arg_decl_parts(m)
-        # this is a list of tuples (variable name, variable type)
-        # we take only the variable names
-        first.(decls[2:end])
+
+function getarguments(frame)
+
+    meth = getmethod(frame)
+    if isnothing(meth)
+        return (([], []), ([], []))
     end
+
+    tv, decls, file, line = arg_decl_parts(meth)
+    # this is a list of tuples (variable name, variable type)
+    # we take only the variable names
+    varnames = first.(decls)[2:end]
+    sigtypes = frame.linfo.specTypes.parameters[2:end]
+
+    n_keywords = meth.nkw
+    keyword_offset = 1
+    # if there are no keywords, the positional arguments start immediately
+    # if there are keywords, there is another argument between keywords and positional args (the original function of the keyword shim)
+    positional_offset = keyword_offset + n_keywords + (n_keywords > 0 ? 1 : 0)
+    varnames_keywords = varnames[keyword_offset:n_keywords]
+    varnames_positional = varnames[positional_offset:end]
+
+    sigtypes_keywords = sigtypes[keyword_offset:n_keywords]
+    sigtypes_positional = sigtypes[positional_offset:end]
+
+    ((varnames_positional, varnames_keywords), (sigtypes_positional, sigtypes_keywords))
 end
 
 const STACKTRACE_MODULECOLORS = [:light_blue, :light_yellow, :light_red,
@@ -752,9 +767,7 @@ function print_stackframe(io, i, frame, digit_align_width, modulecolor)
     # add file and line info for accessing frame locations from the repl
     push!(LAST_SHOWN_LINE_INFOS, (file, line))
 
-    variable_names = getvarnames(frame)
     func = getfunc(frame)
-    specialization_types = getsigtypes(frame)
     inlined = getfield(frame, :inlined)
     modul = getmodule(frame)
 
@@ -765,11 +778,27 @@ function print_stackframe(io, i, frame, digit_align_width, modulecolor)
     # function name
     printstyled(io, func, bold = true)
    
-    if !isempty(variable_names)
-        # type signature
+
+    (varnames_positional, varnames_kw), (sigtypes_positional, sigtypes_kw) = getarguments(frame)
+
+    if !(isempty(varnames_positional) && isempty(varnames_kw))
+
         printstyled(io, "(", color = :light_black)
 
-        for (i, (stype, varname)) in enumerate(zip(specialization_types, variable_names))
+        for (i, (stype, varname)) in enumerate(zip(sigtypes_positional, varnames_positional))
+            if i > 1
+                printstyled(io, ", ", color = :light_black)
+            end
+            printstyled(io, string(varname), color = :light_black, bold = true)
+            printstyled(io, "::")
+            printstyled(io, string(stype), color = :light_black)
+        end
+
+        if !isempty(varnames_kw)
+            print(io, "; ")
+        end
+
+        for (i, (stype, varname)) in enumerate(zip(sigtypes_kw, varnames_kw))
             if i > 1
                 printstyled(io, ", ", color = :light_black)
             end
@@ -782,7 +811,7 @@ function print_stackframe(io, i, frame, digit_align_width, modulecolor)
     end
 
     println(io)
-    
+
     # @
     printstyled(io, " " ^ (digit_align_width + 1) * "@ ", color = :light_black)
 
