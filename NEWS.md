@@ -50,6 +50,7 @@ Standard library changes
 
 #### LinearAlgebra
 * New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).
+* `UniformScaling` can now be indexed into using ranges to return dense matrices and vectors ([#24359]).
 
 #### Markdown
 
