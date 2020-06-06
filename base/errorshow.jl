@@ -703,8 +703,11 @@ function show_reduced_backtrace(io::IO, t::Vector)
             popfirst!(repeated_cycle)
             printstyled(io,
                 "--- the last ", cycle_length, " lines are repeated ",
-                  repetitions, " more time", repetitions>1 ? "s" : "", " ---\n", color = :light_black)
-            stacktrace_linebreaks() && println(io)
+                  repetitions, " more time", repetitions>1 ? "s" : "", " ---", color = :light_black)
+            if i < length(displayed_stackframes)
+                println(io)
+                stacktrace_linebreaks() && println(io)
+            end
             frame_counter += cycle_length * repetitions
         end
         frame_counter += 1
