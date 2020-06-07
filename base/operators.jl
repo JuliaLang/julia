@@ -949,7 +949,6 @@ end
 (f::Fix2)(y) = f.f(y, f.x)
 =#
 
-
 interleave(bind::Tuple{}, args::Tuple{}) = ()
 interleave(bind::Tuple{}, args::Tuple) = error("more args than positions")
 interleave(bind, args) = _interleave(first(bind), tail(bind), args)
@@ -974,20 +973,13 @@ function (c::Bind)(args...)
   c.f(interleave(c.a, args)...)
 end
 
-c = Bind(==, (3, nothing))
-isnothing2 = Bind(===, (Some(nothing), nothing))
-
 const Fix1{F, X} =  Bind{F, Tuple{Some{X}, Nothing}}
 const Fix2{F, X} =  Bind{F, Tuple{Nothing, Some{X}}}
 Fix1(f, x) = Bind(f, (Some(x), nothing))
 Fix2(f, x) = Bind(f, (nothing, Some(x)))
 
-Base.getproperty(f::Fix1, s::Symbol) = s === :x ? something(f.a[1]) : getfield(f, s)
-Base.getproperty(f::Fix2, s::Symbol) = s === :x ? something(f.a[2]) : getfield(f, s)
-
-
-
-
+getx(f::Fix1) = something(f.a[1])
+getx(f::Fix2) = something(f.a[2])
 
 
 """

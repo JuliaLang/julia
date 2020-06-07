@@ -40,6 +40,9 @@ include("range.jl")
 include("expr.jl")
 include("error.jl")
 
+# Some type
+include("some.jl")
+
 # core numeric operations & types
 include("bool.jl")
 include("number.jl")

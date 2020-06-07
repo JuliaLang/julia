@@ -83,11 +83,19 @@ include("traits.jl")
 include("range.jl")
 include("error.jl")
 
+# Some type
+include("some.jl")
+
 # core numeric operations & types
 include("bool.jl")
 include("number.jl")
 include("int.jl")
 include("operators.jl")
+
+# The following definitions are not in `operators.jl` so they are not seen by bootstrapping (`compiler.jl`)
+getproperty(f::Fix1, s::Symbol) = s === :x ? getx(f) : getfield(f, s)
+getproperty(f::Fix2, s::Symbol) = s === :x ? getx(f) : getfield(f, s)
+
 include("pointer.jl")
 include("refvalue.jl")
 include("refpointer.jl")
@@ -149,8 +157,6 @@ end
 include("multimedia.jl")
 using .Multimedia
 
-# Some type
-include("some.jl")
 
 include("dict.jl")
 include("abstractset.jl")
