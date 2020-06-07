@@ -69,6 +69,33 @@ convert(::Type{T}, x::T) where {T>:Union{Missing, Nothing}} = x
 convert(::Type{T}, x) where {T>:Missing} = convert(nonmissingtype_checked(T), x)
 convert(::Type{T}, x) where {T>:Union{Missing, Nothing}} = convert(nonmissingtype_checked(nonnothingtype_checked(T)), x)
 
+for Cs in ((:Missing,), (:Nothing,), (:Missing, :Nothing))
+    @eval function Base.reinterpret(
+        ::Type{<:T},  # Note this is effectively same as Type{T} since will error if T is abstract
+        xs::Array{Union{T, $(Cs...)},N}
+    ) where {T,N}
+        isbitstype(T) || throw(ArgumentError("cannot reinterpret `$(eltype(xs))`, type `$(T)` is not a bits type"))
+        return unsafe_wrap(Array{T,N}, Ptr{T}(pointer(xs)), length(xs))
+    end
+
+    #==
+    @eval function Base.convert(
+        ::Type{Array{Q,N}},
+        xs::Array{Union{T, $(Cs...)},N}
+        ) where {N} where {T<:Q} where Q
+
+        all(x->x isa T, xs) || throw(ArgumentError("cannot convert $(eltype(xs)) to $T"))
+        if isbitstype(T) &&
+            reinterpret(T, xs)
+        else
+            T[x for x in xs]
+        end
+    end
+    ==#
+end
+# Resolve ambiguity
+#Base.convert(::Type{Array{Any,1}}, xs::Array{Any,1}) = xs
+
 
 # Comparison operators
 ==(::Missing, ::Missing) = missing

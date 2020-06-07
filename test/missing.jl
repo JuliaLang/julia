@@ -23,6 +23,48 @@ end
     @test_throws MethodError convert(Union{Int, Missing}, "a")
 end
 
+mutable struct NotABitsType a end
+==(n1::NotABitsType,n2::NotABitsType) = n1.a == n2.a
+
+@testset "convert/reinterpret Arrays of Unions" begin
+    unions(T) = (Union{T, Missing}, Union{T, Nothing}, Union{T, Missing, Nothing})
+    corrupters(::Type{T}) where T = (x for x in (missing, nothing) if x isa T)
+
+    @testset "bits type ($U)" for U in unions(Int)
+        xo = U[1, 2, 3]
+        xr = reinterpret(Int, xo)
+        #xc = convert(Vector{Int}, xo)
+        #@test xc isa Vector{Int}
+        @test xr isa Vector{Int}
+        @test xr == xo
+        #@test xc == xo
+        # should not have allocated new memory
+        #@test pointer(xc) == pointer(xo)
+        @test pointer(xr) == pointer(xo)
+
+        @test_throws ArgumentError reinterpret(Integer, xo)
+
+        @testset "With non-target type values" begin
+            yo = U[1, 2, 3, corrupters(U)...]
+            #@test_throws ArgumentError convert(Vector{Int}, yo)
+            yr = reinterpret(Int, yo)
+            @test yr isa Vector{Int}
+            # No comment on what happens for the nonInt values, unspecified behavour
+            @test yr[1:3] == yo[1:3]
+            @test length(yo) == length(yr)
+        end
+    end
+    @testset "non-bits type ($U)" for U in unions(NotABitsType)
+        xo = U[NotABitsType(1), NotABitsType(2), NotABitsType(3)]
+        @test_throws ArgumentError reinterpret(Int, xo)
+        #xc = convert(Vector{NotABitsType}, x)
+        #@test xc isa Vector{Int}
+        #@test xc == xo
+        # should have allocated new memory
+        #@test pointer(xc) != pointer(xo)
+    end
+end
+
 @testset "promote rules" begin
     @test promote_type(Missing, Missing) == Missing
     @test promote_type(Missing, Int) == Union{Missing, Int}
