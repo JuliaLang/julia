@@ -113,7 +113,7 @@ julia> Base.length(S::Squares) = S.count
 ```
 
 Now, when we ask Julia to [`collect`](@ref) all the elements into an array it can preallocate a `Vector{Int}`
-of the right size instead of blindly [`push!`](@ref)ing each element into a `Vector{Any}`:
+of the right size instead of naively [`push!`](@ref)ing each element into a `Vector{Any}`:
 
 ```jldoctest squaretype
 julia> collect(Squares(4))
