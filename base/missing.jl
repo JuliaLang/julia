@@ -85,10 +85,10 @@ for Cs in ((:Missing,), (:Nothing,), (:Missing, :Nothing))
         ) where {N} where {T<:Q} where Q
 
         all(x->x isa T, xs) || throw(ArgumentError("cannot convert $(eltype(xs)) to $T"))
-        if isbitstype(T) &&
+        if isbitstype(T) && T===Q
             reinterpret(T, xs)
         else
-            T[x for x in xs]
+            Q[x for x in xs]
         end
     end
     ==#
