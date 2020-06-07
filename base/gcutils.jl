@@ -36,7 +36,7 @@ mutable struct MyMutableStruct
     bar
     function MyMutableStruct(bar)
         x = new(bar)
-        f(t) = @async println("Finalizing \$x.")
+        f(t) = @async println("Finalizing \$t.")
         finalizer(f, x)
     end
 end
