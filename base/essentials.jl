@@ -205,7 +205,7 @@ ERROR: ArgumentError: Cannot call tail on an empty tuple.
 tail(x::Tuple) = argtail(x...)
 tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
 
-tuple_type_head(T::Type) = (@_pure_meta; fieldtype(T::Type{<:Tuple}, 1))
+tuple_type_head(T::Type) = (@_pure_meta; fieldtype(T, 1))
 
 function tuple_type_tail(T::Type)
     @_pure_meta
