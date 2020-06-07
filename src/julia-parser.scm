@@ -1542,16 +1542,29 @@
           (list 'module (if (eq? word 'module) '(true) '(false)) name
                 `(block ,loc ,@(cdr body)))))
        ((export)
-        (let ((es (map macrocall-to-atsym
-                       (parse-comma-separated s parse-unary-prefix))))
-          (if (not (every symbol-or-interpolate? es))
-              (error "invalid \"export\" statement"))
-          `(export ,@es)))
+        (parse-export s))
        ((import using)
         (parse-imports s word))
        ((do)
         (error "invalid \"do\" syntax"))
        (else (error "unhandled reserved word")))))))
+
+(define (parse-export s)
+  (let ((tok (peek-token s)))
+    (case tok
+      ((function macro)
+       (let* ((ex (parse-unary-prefix s))
+              (name (peek-token s))
+              (def (parse-resword s ex)))
+         (if (not (symbol-or-interpolate? name))
+             (error "invalid \"export\" statement"))
+         `(block (export ,name) (block (meta doc) ,def))))
+      (else
+       (let ((es (map macrocall-to-atsym
+                      (parse-comma-separated s parse-unary-prefix))))
+         (if (not (every symbol-or-interpolate? es))
+             (error "invalid \"export\" statement"))
+         `(export ,@es))))))
 
 (define (parse-do s)
   (with-bindings
