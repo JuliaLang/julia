@@ -32,14 +32,14 @@ it.
 
 # Example
 ```julia
-
-mutable struct my_mutable_struct
+mutable struct MyMutableStruct
     bar
-    function my_mutable_struct(bar)
+    function MyMutableStruct(bar)
         x = new(bar)
         f(t) = @async println("Finalizing \$x.")
         finalizer(f, x)
     end
+end
 ```
 """
 function finalizer(@nospecialize(f), @nospecialize(o))
