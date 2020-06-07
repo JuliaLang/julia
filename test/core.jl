@@ -4708,6 +4708,11 @@ let ft = Base.datatype_fieldtypes
     @test !isdefined(ft(B12238.body.body)[1], :instance)  # has free type vars
 end
 
+# `where` syntax in constructor definitions
+(A12238{T} where T<:Real)(x) = 0
+@test A12238{<:Real}(0) == 0
+@test_throws MethodError A12238{<:Integer}(0)
+
 # issue #16315
 let a = Any[]
     @noinline f() = a[end]
@@ -5961,6 +5966,16 @@ let a33709 = A33709(A33709(nothing))
     @test isnothing(a33709.a.a)
 end
 
+# issue #35793
+struct A35793
+    x::Union{Nothing, Missing}
+end
+let x = A35793(nothing), y = A35793(missing)
+    @test x isa A35793
+    @test x.x === nothing
+    @test y.x === missing
+end
+
 # issue 31583
 a31583 = "a"
 f31583() = a31583 === "a"
@@ -6796,7 +6811,7 @@ function f27597(y)
     return y
 end
 @test f27597([1]) == [1]
-@test f27597([]) == 1:0
+@test f27597([]) === 1:0
 
 # issue #22291
 wrap22291(ind) = (ind...,)
@@ -7206,3 +7221,20 @@ struct AVL35416{K,V}
     avl:: Union{Nothing,Node35416{AVL35416{K,V},<:K,<:V}}
 end
 @test AVL35416(Node35416{AVL35416{Integer,AbstractString},Int,String}()) isa AVL35416{Integer,AbstractString}
+
+# issue #36104
+module M36104
+struct T36104
+    v::Vector{M36104.T36104}
+end
+struct T36104   # check that redefining it works, issue #21816
+    v::Vector{T36104}
+end
+end
+@test fieldtypes(M36104.T36104) == (Vector{M36104.T36104},)
+@test_throws ErrorException("expected") @eval(struct X36104; x::error("expected"); end)
+@test @isdefined(X36104)
+struct X36104; x::Int; end
+@test fieldtypes(X36104) == (Int,)
+primitive type P36104 8 end
+@test_throws ErrorException("invalid redefinition of constant P36104") @eval(primitive type P36104 16 end)

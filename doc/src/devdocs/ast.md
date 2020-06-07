@@ -392,6 +392,10 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
     A 4-argument expression that defines a new primitive type. Arguments 1, 2, and 4
     are the same as `struct_type`. Argument 3 is the number of bits.
 
+    !!! compat "Julia 1.5"
+        `struct_type`, `abstract_type`, and `primitive_type` were removed in Julia 1.5
+        and replaced by calls to new builtins.
+
   * `global`
 
     Declares a global binding.

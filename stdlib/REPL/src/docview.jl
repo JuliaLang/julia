@@ -43,7 +43,8 @@ function _helpmode(io::IO, line::AbstractString)
     x = Meta.parse(line, raise = false, depwarn = false)
     assym = Symbol(line)
     expr =
-        if haskey(keywords, assym) || Base.isoperator(assym) || isexpr(x, :error) || isexpr(x, :invalid)
+        if haskey(keywords, Symbol(line)) || Base.isoperator(assym) || isexpr(x, :error) ||
+            isexpr(x, :invalid) || isexpr(x, :incomplete)
             # Docs for keywords must be treated separately since trying to parse a single
             # keyword such as `function` would throw a parse error due to the missing `end`.
             assym
@@ -606,9 +607,9 @@ moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 filtervalid(names) = filter(x->!occursin(r"#", x), map(string, names))
 
 accessible(mod::Module) =
-    [filter!(s -> !Base.isdeprecated(mod, s), names(mod, all = true, imported = true));
-     map(names, moduleusings(mod))...;
-     collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
+    Symbol[filter!(s -> !Base.isdeprecated(mod, s), names(mod, all=true, imported=true));
+           map(names, moduleusings(mod))...;
+           collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
 
 doc_completions(name) = fuzzysort(name, accessible(Main))
 doc_completions(name::Symbol) = doc_completions(string(name))

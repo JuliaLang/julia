@@ -100,10 +100,14 @@ Base.unaliascopy(A::Union{Adjoint,Transpose}) = typeof(A)(Base.unaliascopy(A.par
 
 # wrapping lowercase quasi-constructors
 """
+    A'
     adjoint(A)
 
-Lazy adjoint (conjugate transposition) (also postfix `'`).
-Note that `adjoint` is applied recursively to elements.
+Lazy adjoint (conjugate transposition). Note that `adjoint` is applied recursively to
+elements.
+
+For number types, `adjoint` returns the complex conjugate, and therefore it is equivalent to
+the identity function for real numbers.
 
 This operation is intended for linear algebra usage - for general data manipulation see
 [`permutedims`](@ref Base.permutedims).
@@ -119,6 +123,14 @@ julia> adjoint(A)
 2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:
  3-2im  8-7im
  9-2im  4-6im
+
+julia> x = [3, 4im]
+2-element Array{Complex{Int64},1}:
+ 3 + 0im
+ 0 + 4im
+
+julia> x'x
+25 + 0im
 ```
 """
 adjoint(A::AbstractVecOrMat) = Adjoint(A)
@@ -186,6 +198,16 @@ IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
 convert(::Type{Adjoint{T,S}}, A::Adjoint) where {T,S} = Adjoint{T,S}(convert(S, A.parent))
 convert(::Type{Transpose{T,S}}, A::Transpose) where {T,S} = Transpose{T,S}(convert(S, A.parent))
 
+# Strides and pointer for transposed strided arrays — but only if the elements are actually stored in memory
+Base.strides(A::Adjoint{<:Real, <:StridedVector}) = (stride(A.parent, 2), stride(A.parent, 1))
+Base.strides(A::Transpose{<:Any, <:StridedVector}) = (stride(A.parent, 2), stride(A.parent, 1))
+# For matrices it's slightly faster to use reverse and avoid calling stride twice
+Base.strides(A::Adjoint{<:Real, <:StridedMatrix}) = reverse(strides(A.parent))
+Base.strides(A::Transpose{<:Any, <:StridedMatrix}) = reverse(strides(A.parent))
+
+Base.unsafe_convert(::Type{Ptr{T}}, A::Adjoint{<:Real, <:StridedVecOrMat}) where {T} = Base.unsafe_convert(Ptr{T}, A.parent)
+Base.unsafe_convert(::Type{Ptr{T}}, A::Transpose{<:Any, <:StridedVecOrMat}) where {T} = Base.unsafe_convert(Ptr{T}, A.parent)
+
 # for vectors, the semantics of the wrapped and unwrapped types differ
 # so attempt to maintain both the parent and wrapper type insofar as possible
 similar(A::AdjOrTransAbsVec) = wrapperop(A)(similar(A.parent))
@@ -199,6 +221,7 @@ similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent,
 # sundry basic definitions
 parent(A::AdjOrTrans) = A.parent
 vec(v::TransposeAbsVec) = parent(v)
+vec(v::AdjointAbsVec{<:Real}) = parent(v)
 
 ### concatenation
 # preserve Adjoint/Transpose wrapper around vectors

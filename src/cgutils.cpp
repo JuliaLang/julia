@@ -590,17 +590,15 @@ static Type *bitstype_to_llvm(jl_value_t *bt, bool llvmcall = false)
         return T_float32;
     if (bt == (jl_value_t*)jl_float64_type)
         return T_float64;
-    if (jl_is_addrspace_ptr_type(bt)) {
-        int as = 0;
-
-        jl_datatype_t *typ = (jl_datatype_t*)bt;
-        jl_value_t *as_param = jl_svecref(typ->parameters, 1);
-
+    if (jl_is_llvmpointer_type(bt)) {
+        jl_value_t *as_param = jl_tparam1(bt);
+        int as;
         if (jl_is_int32(as_param))
             as = jl_unbox_int32(as_param);
         else if (jl_is_int64(as_param))
             as = jl_unbox_int64(as_param);
-
+        else
+            jl_error("invalid pointer address space");
         return PointerType::get(T_int8, as);
     }
     int nb = jl_datatype_size(bt);
@@ -702,7 +700,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
                 Type *AlignmentType = IntegerType::get(jl_LLVMContext, 8 * al);
                 unsigned NumATy = fsz / al;
                 unsigned remainder = fsz % al;
-                assert(NumATy > 0);
+                assert(al == 1 || NumATy > 0);
                 while (NumATy--)
                     latypes.push_back(AlignmentType);
                 while (remainder--)
@@ -772,6 +770,13 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
 static Type *julia_struct_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, jl_unionall_t *ua, bool *isboxed)
 {
     return _julia_struct_to_llvm(&ctx.emission_context, jt, ua, isboxed);
+}
+
+bool jl_type_mappable_to_c(jl_value_t *ty)
+{
+    jl_codegen_params_t params;
+    bool toboxed;
+    return _julia_struct_to_llvm(&params, ty, NULL, &toboxed) != NULL;
 }
 
 static bool is_datatype_all_pointers(jl_datatype_t *dt)

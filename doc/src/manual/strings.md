@@ -205,13 +205,11 @@ Using an index less than `begin` (`1`) or greater than `end` raises an error:
 
 ```jldoctest helloworldstring
 julia> str[begin-1]
-ERROR: BoundsError: attempt to access String
-  at index [0]
+ERROR: BoundsError: attempt to access 14-codeunit String at index [0]
 [...]
 
 julia> str[end+1]
-ERROR: BoundsError: attempt to access String
-  at index [15]
+ERROR: BoundsError: attempt to access 14-codeunit String at index [15]
 [...]
 ```
 
@@ -281,11 +279,12 @@ julia> s[1]
 '∀': Unicode U+2200 (category Sm: Symbol, math)
 
 julia> s[2]
-ERROR: StringIndexError("∀ x ∃ y", 2)
+ERROR: StringIndexError: invalid index [2], valid nearby indices [1]=>'∀', [4]=>' '
+Stacktrace:
 [...]
 
 julia> s[3]
-ERROR: StringIndexError("∀ x ∃ y", 3)
+ERROR: StringIndexError: invalid index [3], valid nearby indices [1]=>'∀', [4]=>' '
 Stacktrace:
 [...]
 
@@ -305,7 +304,7 @@ julia> s[end-1]
 ' ': ASCII/Unicode U+0020 (category Zs: Separator, space)
 
 julia> s[end-2]
-ERROR: StringIndexError("∀ x ∃ y", 9)
+ERROR: StringIndexError: invalid index [9], valid nearby indices [7]=>'∃', [10]=>' '
 Stacktrace:
 [...]
 
@@ -325,7 +324,7 @@ julia> s[1:1]
 "∀"
 
 julia> s[1:2]
-ERROR: StringIndexError("∀ x ∃ y", 2)
+ERROR: StringIndexError: invalid index [2], valid nearby indices [1]=>'∀', [4]=>' '
 Stacktrace:
 [...]
 

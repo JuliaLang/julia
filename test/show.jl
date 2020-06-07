@@ -138,6 +138,10 @@ end
 # basic expressions
 @test_repr "x + y"
 @test_repr "2e"
+@test_repr "2*e1"
+@test_repr "2*E1"
+@test_repr "2*f1"
+@test_repr "0x00*a"
 @test_repr "!x"
 @test_repr "f(1, 2, 3)"
 @test_repr "x = ~y"
@@ -693,11 +697,11 @@ Base.zero(x::T12960) = T12960()
 let
     A = sparse(1.0I, 3, 3)
     B = similar(A, T12960)
-    @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
-    @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
+    @test sprint(show, B)  == "\n #undef             ⋅            ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
+    @test sprint(print, B) == "\n #undef             ⋅            ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
     B[1,2] = T12960()
-    @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [1, 2]  =  T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
-    @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [1, 2]  =  T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
+    @test sprint(show, B)  == "\n #undef          T12960()        ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
+    @test sprint(print, B) == "\n #undef          T12960()        ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
 end
 
 # issue #13127

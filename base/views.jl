@@ -148,10 +148,10 @@ function _views(ex::Expr)
         # but still use views for the args of the ref:
         lhs = ex.args[1]
         Expr(ex.head, Meta.isexpr(lhs, :ref) ?
-                      Expr(:ref, _views.(lhs.args)...) : _views(lhs),
+                      Expr(:ref, mapany(_views, lhs.args)...) : _views(lhs),
              _views(ex.args[2]))
     elseif ex.head === :ref
-        Expr(:call, maybeview, _views.(ex.args)...)
+        Expr(:call, maybeview, mapany(_views, ex.args)...)
     else
         h = string(ex.head)
         # don't use view on the lhs of an op-assignment a[i...] += ...
@@ -182,9 +182,9 @@ function _views(ex::Expr)
                  Expr(first(h) == '.' ? :(.=) : :(=), :($a[$(I...)]),
                       Expr(:call, Symbol(h[1:end-1]),
                            :($maybeview($a, $(I...))),
-                           _views.(ex.args[2:end])...)))
+                           mapany(_views, ex.args[2:end])...)))
         else
-            Expr(ex.head, _views.(ex.args)...)
+            Expr(ex.head, mapany(_views, ex.args)...)
         end
     end
 end

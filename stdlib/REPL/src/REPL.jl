@@ -104,6 +104,8 @@ function softscope(@nospecialize ex)
             return ex′
         elseif h in (:meta, :import, :using, :export, :module, :error, :incomplete, :thunk)
             return ex
+        elseif h === :global && all(x->isa(x, Symbol), ex.args)
+            return ex
         else
             return Expr(:block, Expr(:softscope, true), ex)
         end
@@ -542,7 +544,7 @@ function hist_from_file(hp, file, path)
         while !isempty(line)
             push!(lines, chomp(line[2:end]))
             eof(file) && break
-            ch = Char(Base.peek(file))
+            ch = peek(file, Char)
             ch == ' '  && error(munged_history_message(path), countlines)
             ch != '\t' && break
             line = hist_getline(file)
@@ -1159,7 +1161,7 @@ StreamREPL(stream::IO) = StreamREPL(stream, Base.text_colors[:green], Base.input
 run_repl(stream::IO) = run_repl(StreamREPL(stream))
 
 outstream(s::StreamREPL) = s.stream
-hascolor(s::StreamREPL) = get(s.stream, :color, false)
+hascolor(s::StreamREPL) = get(s.stream, :color, false)::Bool
 
 answer_color(r::LineEditREPL) = r.envcolors ? Base.answer_color() : r.answer_color
 answer_color(r::StreamREPL) = r.answer_color

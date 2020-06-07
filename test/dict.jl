@@ -722,7 +722,10 @@ import Base.ImmutableDict
     v = [k1 => v1, k2 => v2]
     d5 = ImmutableDict(v...)
     @test d5 == d2
-    @test collect(d5) == v
+    @test reverse(collect(d5)) == v
+    d6 = ImmutableDict(:a => 1, :b => 3, :a => 2)
+    @test d6[:a] == 2
+    @test d6[:b] == 3
 
     @test !haskey(ImmutableDict(-0.0=>1), 0.0)
 end
@@ -841,7 +844,10 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test isa(WeakKeyDict(A=>2, B=>3, C=>4), WeakKeyDict{Array{Int,1},Int})
     @test WeakKeyDict(a=>i+1 for (i,a) in enumerate([A,B,C]) ) == wkd
     @test WeakKeyDict([(A,2), (B,3), (C,4)]) == wkd
+    @test WeakKeyDict{typeof(A), Int64}(Pair(A,2), Pair(B,3), Pair(C,4)) == wkd
     @test WeakKeyDict(Pair(A,2), Pair(B,3), Pair(C,4)) == wkd
+    D = [[4.0]]
+    @test WeakKeyDict(Pair(A,2), Pair(B,3), Pair(D,4.0)) isa WeakKeyDict{Any, Any}
     @test isa(WeakKeyDict(Pair(A,2), Pair(B,3.0), Pair(C,4)), WeakKeyDict{Array{Int,1},Any})
     @test isa(WeakKeyDict(Pair(convert(Vector{Number}, A),2), Pair(B,3), Pair(C,4)), WeakKeyDict{Any,Int})
     @test copy(wkd) == wkd
@@ -850,6 +856,9 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test !isempty(wkd)
     res = pop!(wkd, C)
     @test res == 4
+    @test length(wkd) == 2
+    res = pop!(wkd, C, 3)
+    @test res == 3
     @test C ∉ keys(wkd)
     @test 4 ∉ values(wkd)
     @test length(wkd) == 2
@@ -892,6 +901,20 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test wkd[[1.0]] == 2
     @test haskey(wkd, [1.0])
     @test pop!(wkd, [1.0]) == 2
+    @test get(()->3, wkd, [2.0]) == 3
+
+    # map! on values of WKD
+    wkd = WeakKeyDict(A=>2, B=>3)
+    map!(v->v-1, values(wkd))
+    @test wkd == WeakKeyDict(A=>1, B=>2)
+
+    # get!
+    wkd = WeakKeyDict(A=>2)
+    get!(wkd, B, 3)
+    @test wkd == WeakKeyDict(A=>2, B=>3)
+    get!(()->4, wkd, C)
+    @test wkd == WeakKeyDict(A=>2, B=>3, C=>4)
+    @test_throws ArgumentError get!(()->5, wkd, [1.0])
 end
 
 @testset "issue #19995, hash of dicts" begin

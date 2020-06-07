@@ -467,17 +467,17 @@ end
     @test_throws BoundsError insert!(v, 5, 5)
 end
 
-@testset "pop!(::Vector, i, [default])" begin
+@testset "popat!(::Vector, i, [default])" begin
     a = [1, 2, 3, 4]
-    @test_throws BoundsError pop!(a, 0)
-    @test pop!(a, 0, "default") == "default"
+    @test_throws BoundsError popat!(a, 0)
+    @test popat!(a, 0, "default") == "default"
     @test a == 1:4
-    @test_throws BoundsError pop!(a, 5)
-    @test pop!(a, 1) == 1
+    @test_throws BoundsError popat!(a, 5)
+    @test popat!(a, 1) == 1
     @test a == [2, 3, 4]
-    @test pop!(a, 2) == 3
+    @test popat!(a, 2) == 3
     @test a == [2, 4]
-    badpop() = @inbounds pop!([1], 2)
+    badpop() = @inbounds popat!([1], 2)
     @test_throws BoundsError badpop()
 end
 
@@ -728,9 +728,18 @@ end
     a = [1:5;]
     @test_throws ArgumentError Base.circshift!(a, a, 1)
     b = copy(a)
-    @test Base.circshift!(b, a, 1) == [5,1,2,3,4]
+    @test @inferred(Base.circshift!(b, a, 1) == [5,1,2,3,4])
+    src=rand(3,4,5)
+    dst=similar(src)
+    s=(1,2,3)
+    @inferred Base.circshift!(dst,src,s)
 end
 
+@testset "circcopy" begin
+    src=rand(3,4,5)
+    dst=similar(src)
+    @inferred Base.circcopy!(dst,src)
+end
 # unique across dim
 
 # With hash collisions
@@ -1229,6 +1238,12 @@ end
     R = reshape(A, 2, 2)
     A[R] .= reshape((1:4) .+ 2^30, 2, 2)
     @test A == [2,1,4,3] .+ 2^30
+
+    # unequal dimensionality (see comment in #35714)
+    a = [1 3; 2 4]
+    b = [3, 1, 4, 2]
+    copyto!(view(a, b), a)
+    @test a == [2 1; 4 3]
 end
 
 @testset "Base.mightalias unit tests" begin

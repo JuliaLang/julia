@@ -68,8 +68,13 @@ function bytesavailable end
 """
     readavailable(stream)
 
-Read all available data on the stream, blocking the task only if no data is available. The
-result is a `Vector{UInt8}`.
+Read available buffered data from a stream. Actual I/O is performed only if no
+data has already been buffered. The result is a `Vector{UInt8}`.
+
+!!! warning
+    The amount of data returned is implementation-dependent; for example it can
+depend on the internal choice of buffer size. Other functions such as [`read`](@ref)
+should generally be used instead.
 """
 function readavailable end
 
@@ -251,13 +256,15 @@ function unsafe_read(s::IO, p::Ptr{UInt8}, n::UInt)
     nothing
 end
 
-function peek(s::IO)
+function peek(s::IO, ::Type{T}) where T
     mark(s)
-    try read(s, UInt8)
+    try read(s, T)
     finally
         reset(s)
     end
 end
+
+peek(s) = peek(s, UInt8)
 
 # Generic `open` methods
 
@@ -344,14 +351,16 @@ readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io
 readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io), target, keep, out)
+readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = readbytes!(pipe_reader(io), target, n)
 
 for f in (
         # peek/mark interface
-        :peek, :mark, :unmark, :reset, :ismarked,
+        :mark, :unmark, :reset, :ismarked,
         # Simple reader functions
         :readavailable, :isreadable)
     @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io))
 end
+peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io), T)
 
 iswritable(io::AbstractPipe) = iswritable(pipe_writer(io))
 isopen(io::AbstractPipe) = isopen(pipe_writer(io)) || isopen(pipe_reader(io))
@@ -383,7 +392,7 @@ it is always safe to read one byte after seeing `eof` return `false`. `eof` will
 `false` as long as buffered data is still available, even if the remote end of a connection
 is closed.
 """
-eof(io::AbstractPipe) = eof(pipe_reader(io))
+eof(io::AbstractPipe) = eof(pipe_reader(io)::IO)::Bool
 reseteof(io::AbstractPipe) = reseteof(pipe_reader(io))
 
 

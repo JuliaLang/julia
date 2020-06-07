@@ -923,3 +923,9 @@ k4 = similar(u)
 f(a,b,c,d,e) = @. a = a + 1*(b+c+d+e)
 @allocated f(u,k1,k2,k3,k4)
 @test (@allocated f(u,k1,k2,k3,k4)) == 0
+
+ret =  @macroexpand @.([Int, Number] <: Real)
+@test ret == :([Int, Number] .<: Real)
+
+ret =  @macroexpand @.([Int, Number] >: Real)
+@test ret == :([Int, Number] .>: Real)

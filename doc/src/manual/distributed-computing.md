@@ -1,4 +1,4 @@
-# Multi-process and Distributed Processing
+# Multi-processing and Distributed Computing
 
 An implementation of distributed memory parallel computing is provided by module `Distributed`
 as part of the standard library shipped with Julia.
@@ -236,7 +236,11 @@ The base Julia installation has in-built support for two types of clusters:
 
   * A local cluster specified with the `-p` option as shown above.
   * A cluster spanning machines using the `--machine-file` option. This uses a passwordless `ssh` login
-    to start Julia worker processes (from the same path as the current host) on the specified machines.
+    to start Julia worker processes (from the same path as the current host) on the specified machines. Each machine definition
+    takes the form `[count*][user@]host[:port] [bind_addr[:port]]`. `user` defaults to current user,
+    `port` to the standard ssh port. `count` is the number of workers to spawn on the node, and defaults
+    to 1. The optional `bind-to bind_addr[:port]` specifies the IP address and port that other workers
+    should use to connect to this worker.
 
 Functions [`addprocs`](@ref), [`rmprocs`](@ref), [`workers`](@ref), and others are available
 as a programmatic means of adding, removing and querying the processes in a cluster.
@@ -648,7 +652,7 @@ remotecalls and when data is stored to a[`RemoteChannel`](@ref) / [`Future`](@re
 a different node. As expected, this results in a copy of the serialized objects
 on the remote node. However, when the destination node is the local node, i.e.
 the calling process id is the same as the remote node id, it is executed
-as a local call. It is usually(not always) executed in a different task - but there is no
+as a local call. It is usually (not always) executed in a different task - but there is no
 serialization/deserialization of data. Consequently, the call refers to the same object instances
 as passed - no copies are created. This behavior is highlighted below:
 
@@ -760,7 +764,7 @@ SharedArray{T,N}(dims::NTuple; init=false, pids=Int[])
 which creates an `N`-dimensional shared array of a bits type `T` and size `dims` across the processes specified
 by `pids`. Unlike distributed arrays, a shared array is accessible only from those participating
 workers specified by the `pids` named argument (and the creating process too, if it is on the
-same host).
+same host). Note that only elements that are [`isbits`](@ref) are supported in a SharedArray.
 
 If an `init` function, of signature `initfn(S::SharedArray)`, is specified, it is called on all
 the participating workers. You can specify that each worker runs the `init` function on a distinct

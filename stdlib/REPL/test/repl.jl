@@ -1146,6 +1146,18 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
+# issue #35771
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "global x\n")
+    readline(stdout_read)
+    @test !occursin("ERROR", readline(stdout_read))
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
+end
+
 
 fake_repl() do stdin_write, stdout_read, repl
     repltask = @async begin

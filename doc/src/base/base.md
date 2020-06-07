@@ -147,6 +147,8 @@ Base.identity
 
 ```@docs
 Base.supertype
+Core.Type
+Core.DataType
 Core.:(<:)
 Base.:(>:)
 Base.typejoin
@@ -335,8 +337,8 @@ Base.backtrace
 Base.catch_backtrace
 Base.catch_stack
 Base.@assert
-Base.register_error_hint
-Base.show_error_hints
+Base.Experimental.register_error_hint
+Base.Experimental.show_error_hints
 Base.ArgumentError
 Base.AssertionError
 Core.BoundsError

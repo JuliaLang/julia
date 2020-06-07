@@ -542,6 +542,10 @@ for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
     end
 end
 
+function kron! end
+
+const var"'" = adjoint
+
 """
     \\(x, y)
 
@@ -869,9 +873,25 @@ julia> ∘(fs...)(3)
 ```
 """
 function ∘ end
+
+struct ComposedFunction{F,G} <: Function
+    f::F
+    g::G
+    ComposedFunction{F, G}(f, g) where {F, G} = new{F, G}(f, g)
+    ComposedFunction(f, g) = new{Core.Typeof(f),Core.Typeof(g)}(f, g)
+end
+
+(c::ComposedFunction)(x...) = c.f(c.g(x...))
+
 ∘(f) = f
-∘(f, g) = (x...)->f(g(x...))
+∘(f, g) = ComposedFunction(f, g)
 ∘(f, g, h...) = ∘(f ∘ g, h...)
+
+function show(io::IO, c::ComposedFunction)
+    show(io, c.f)
+    print(io, " ∘ ")
+    show(io, c.g)
+end
 
 """
     !f::Function

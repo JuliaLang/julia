@@ -728,7 +728,7 @@ function merge!(repo::GitRepo;
                                "There is no fetch reference for this branch."))
             end
             Base.map(fh->GitAnnotated(repo,fh), fheads)
-        else # merge commitish
+        else # merge committish
             [GitAnnotated(repo, committish)]
         end
     else

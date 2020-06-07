@@ -365,8 +365,6 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
 
     # Needed for pivoting:
     Base.abs(a::ModInt{n}) where {n} = a
-    LinearAlgebra.norm(a::ModInt{n}) where {n} = a
-
     Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
 
     @test A*(lu(A, Val(true))\b) == b

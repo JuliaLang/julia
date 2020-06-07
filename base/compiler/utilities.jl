@@ -118,7 +118,7 @@ function retrieve_code_info(linfo::MethodInstance)
     end
 end
 
-function inf_for_methodinstance(mi::MethodInstance, min_world::UInt, max_world::UInt=min_world)
+function inf_for_methodinstance(interp::AbstractInterpreter, mi::MethodInstance, min_world::UInt, max_world::UInt=min_world)
     return ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt), mi, min_world, max_world)::Union{Nothing, CodeInstance}
 end
 

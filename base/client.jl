@@ -154,8 +154,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
 end
 
 function _parse_input_line_core(s::String, filename::String)
-    ex = ccall(:jl_parse_all, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
-               s, sizeof(s), filename, sizeof(filename))
+    ex = Meta.parseall(s, filename=filename)
     if ex isa Expr && ex.head === :toplevel
         if isempty(ex.args)
             return nothing
@@ -182,17 +181,6 @@ function parse_input_line(s::String; filename::String="none", depwarn=true)
     return ex
 end
 parse_input_line(s::AbstractString) = parse_input_line(String(s))
-
-function parse_input_line(io::IO)
-    s = ""
-    while !eof(io)
-        s *= readline(io, keep=true)
-        e = parse_input_line(s)
-        if !(isa(e,Expr) && e.head === :incomplete)
-            return e
-        end
-    end
-end
 
 # detect the reason which caused an :incomplete expression
 # from the error message
@@ -425,7 +413,16 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
                         flush(stdout)
                     end
                     try
-                        eval_user_input(stderr, parse_input_line(input), true)
+                        line = ""
+                        ex = nothing
+                        while !eof(input)
+                            line *= readline(input, keep=true)
+                            ex = parse_input_line(line)
+                            if !(isa(ex, Expr) && ex.head === :incomplete)
+                                break
+                            end
+                        end
+                        eval_user_input(stderr, ex, true)
                     catch err
                         isa(err, InterruptException) ? print("\n\n") : rethrow()
                     end
@@ -439,30 +436,12 @@ end
 # MainInclude exists to hide Main.include and eval from `names(Main)`.
 baremodule MainInclude
 using ..Base
-include(mapexpr::Function, fname::AbstractString) = Base.include(mapexpr, Main, fname)
-# We inline the definition of include from loading.jl/include_relative to get one-frame stacktraces
-# for the common case of include(fname).  Otherwise we would use:
-#    include(fname::AbstractString) = Base.include(Main, fname)
+# These definitions calls Base._include rather than Base.include to get
+# one-frame stacktraces for the common case of using include(fname) in Main.
+include(mapexpr::Function, fname::AbstractString) = Base._include(mapexpr, Main, fname)
 function include(fname::AbstractString)
-    mod = Main
     isa(fname, String) || (fname = Base.convert(String, fname)::String)
-    path, prev = Base._include_dependency(mod, fname)
-    for callback in Base.include_callbacks # to preserve order, must come before Core.include
-        Base.invokelatest(callback, mod, path)
-    end
-    tls = Base.task_local_storage()
-    tls[:SOURCE_PATH] = path
-    local result
-    try
-        result = ccall(:jl_load, Any, (Any, Cstring), mod, path)
-    finally
-        if prev === nothing
-            Base.delete!(tls, :SOURCE_PATH)
-        else
-            tls[:SOURCE_PATH] = prev
-        end
-    end
-    return result
+    Base._include(identity, Main, fname)
 end
 eval(x) = Core.eval(Main, x)
 end

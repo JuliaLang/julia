@@ -166,6 +166,37 @@ end
     @test endswith(z)(z)
 end
 
+@testset "SubStrings and Views" begin
+    x = "abcdefg"
+    @testset "basic unit range" begin
+        @test SubString(x, 2:4) == "bcd"
+        @test view(x, 2:4) == "bcd"
+        @test view(x, 2:4) isa SubString
+        @test (@view x[4:end]) == "defg"
+        @test (@view x[4:end]) isa SubString
+    end
+
+    @testset "other AbstractUnitRanges" begin
+        @test SubString(x, Base.OneTo(3)) == "abc"
+        @test view(x, Base.OneTo(4)) == "abcd"
+        @test view(x, Base.OneTo(4)) isa SubString
+    end
+
+    @testset "views but not view" begin
+        # We don't (at present) make non-contiguous SubStrings with views
+        @test_throws MethodError (@view x[[1,3,5]])
+        @test (@views (x[[1,3,5]])) isa String
+
+        # We don't (at present) make single character SubStrings with views
+        @test_throws MethodError (@view x[3])
+        @test (@views (x[3])) isa Char
+
+        @test (@views (x[3], x[1:2], x[[1,4]])) isa Tuple{Char, SubString, String}
+        @test (@views (x[3], x[1:2], x[[1,4]])) == ('c', "ab", "ad")
+    end
+end
+
+
 @testset "filter specialization on String issue #32460" begin
      @test filter(x -> x ∉ ['작', 'Ï', 'z', 'ξ'],
                   GenericString("J'étais n작작é pour plaiÏre à toute âξme un peu fière")) ==
@@ -544,7 +575,9 @@ end
     for (rng, flg) in ((0x00:0x9f, false), (0xa0:0xbf, true), (0xc0:0xff, false))
         for cont in rng
             @test isvalid(String, UInt8[0xe0, cont]) == false
-            @test isvalid(String, UInt8[0xe0, cont, 0x80]) == flg
+            bytes = UInt8[0xe0, cont, 0x80]
+            @test isvalid(String, bytes) == flg
+            @test isvalid(String, @view(bytes[1:end])) == flg # contiguous subarray support
         end
     end
     # Check three-byte sequences
@@ -1042,4 +1075,19 @@ let x = SubString("ab", 1, 1)
     y = convert(SubString{String}, x)
     @test y === x
     chop("ab") === chop.(["ab"])[1]
+end
+
+@testset "show StringIndexError" begin
+    str = "abcdefghκijklmno"
+    e = StringIndexError(str, 10)
+    @test sprint(showerror, e) == "StringIndexError: invalid index [10], valid nearby indices [9]=>'κ', [11]=>'i'"
+    str = "κ"
+    e = StringIndexError(str, 2)
+    @test sprint(showerror, e) == "StringIndexError: invalid index [2], valid nearby index [1]=>'κ'"
+end
+
+@testset "summary" begin
+    @test sprint(summary, "foα") == "4-codeunit String"
+    @test sprint(summary, SubString("foα", 2)) == "3-codeunit SubString{String}"
+    @test sprint(summary, "") == "empty String"
 end

@@ -487,26 +487,6 @@ Expr
 Expr
 
 """
-    '
-
-The conjugate transposition operator, see [`adjoint`](@ref).
-
-# Examples
-```jldoctest
-julia> A = [1.0 -2.0im; 4.0im 2.0]
-2×2 Array{Complex{Float64},2}:
- 1.0+0.0im  -0.0-2.0im
- 0.0+4.0im   2.0+0.0im
-
-julia> A'
-2×2 Array{Complex{Float64},2}:
-  1.0-0.0im  0.0-4.0im
- -0.0+2.0im  2.0-0.0im
-```
-"""
-kw"'"
-
-"""
     \$
 
 Interpolation operator for interpolating into e.g. [strings](@ref string-interpolation)
@@ -1149,6 +1129,56 @@ nothing
 The singleton type containing only the value `Union{}` (which represents the empty type).
 """
 Core.TypeofBottom
+
+"""
+    Core.Type{T}
+
+`Core.Type` is an abstract type which has all type objects as its instances.
+The only instance of the singleton type `Core.Type{T}` is the object
+`T`.
+
+# Examples
+```jldoctest
+julia> isa(Type{Float64}, Type)
+true
+
+julia> isa(Float64, Type)
+true
+
+julia> isa(Real, Type{Float64})
+false
+
+julia> isa(Real, Type{Real})
+true
+```
+"""
+Core.Type
+
+"""
+    DataType <: Type{T}
+
+`DataType` represents explicitly declared types that have names, explicitly
+declared supertypes, and, optionally, parameters.  Every concrete value in the
+system is an instance of some `DataType`.
+
+# Examples
+```jldoctest
+julia> typeof(Real)
+DataType
+
+julia> typeof(Int)
+DataType
+
+julia> struct Point
+           x::Int
+           y
+       end
+
+julia> typeof(Point)
+DataType
+```
+"""
+Core.DataType
 
 """
     Function

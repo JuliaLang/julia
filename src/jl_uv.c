@@ -392,6 +392,14 @@ JL_DLLEXPORT int jl_fs_chown(char *path, int uid, int gid)
     return ret;
 }
 
+JL_DLLEXPORT int jl_fs_access(char *path, int mode)
+{
+    uv_fs_t req;
+    int ret = uv_fs_access(unused_uv_loop_arg, &req, path, mode, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
 JL_DLLEXPORT int jl_fs_write(uv_os_fd_t handle, const char *data, size_t len,
                              int64_t offset) JL_NOTSAFEPOINT
 {

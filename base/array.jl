@@ -249,6 +249,30 @@ function unsafe_copyto!(dest::Ptr{T}, src::Ptr{T}, n) where T
     return dest
 end
 
+
+function _unsafe_copyto!(dest, doffs, src, soffs, n)
+    destp = pointer(dest, doffs)
+    srcp = pointer(src, soffs)
+    @inbounds if destp < srcp || destp > srcp + n
+        for i = 1:n
+            if isassigned(src, soffs + i - 1)
+                dest[doffs + i - 1] = src[soffs + i - 1]
+            else
+                _unsetindex!(dest, doffs + i - 1)
+            end
+        end
+    else
+        for i = n:-1:1
+            if isassigned(src, soffs + i - 1)
+                dest[doffs + i - 1] = src[soffs + i - 1]
+            else
+                _unsetindex!(dest, doffs + i - 1)
+            end
+        end
+    end
+    return dest
+end
+
 """
     unsafe_copyto!(dest::Array, do, src::Array, so, N)
 
@@ -279,29 +303,15 @@ function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
               ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), src) + soffs - 1,
               n)
     else
-        # handle base-case: everything else above was just optimizations
-        @inbounds if destp < srcp || destp > srcp + n
-            for i = 1:n
-                if isassigned(src, soffs + i - 1)
-                    dest[doffs + i - 1] = src[soffs + i - 1]
-                else
-                    _unsetindex!(dest, doffs + i - 1)
-                end
-            end
-        else
-            for i = n:-1:1
-                if isassigned(src, soffs + i - 1)
-                    dest[doffs + i - 1] = src[soffs + i - 1]
-                else
-                    _unsetindex!(dest, doffs + i - 1)
-                end
-            end
-        end
+        _unsafe_copyto!(dest, doffs, src, soffs, n)
     end
     @_gc_preserve_end t2
     @_gc_preserve_end t1
     return dest
 end
+
+unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n) =
+    _unsafe_copyto!(dest, doffs, src, soffs, n)
 
 """
     copyto!(dest, do, src, so, N)
@@ -309,7 +319,16 @@ end
 Copy `N` elements from collection `src` starting at offset `so`, to array `dest` starting at
 offset `do`. Return `dest`.
 """
+function copyto!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
+    return _copyto_impl!(dest, doffs, src, soffs, n)
+end
+
+# this is only needed to avoid possible ambiguities with methods added in some packages
 function copyto!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where T
+    return _copyto_impl!(dest, doffs, src, soffs, n)
+end
+
+function _copyto_impl!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
     n == 0 && return dest
     n > 0 || _throw_argerror()
     if soffs < 1 || doffs < 1 || soffs+n-1 > length(src) || doffs+n-1 > length(dest)
@@ -327,6 +346,9 @@ function _throw_argerror()
     throw(ArgumentError("Number of elements to copy must be nonnegative."))
 end
 
+copyto!(dest::Array, src::Array) = copyto!(dest, 1, src, 1, length(src))
+
+# also to avoid ambiguities in packages
 copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, length(src))
 
 # N.B: The generic definition in multidimensional.jl covers, this, this is just here
@@ -1131,13 +1153,44 @@ function pop!(a::Vector)
     return item
 end
 
-function pop!(a::Vector, i::Integer)
+"""
+    popat!(a::Vector, i::Integer, [default])
+
+Remove the item at the given `i` and return it. Subsequent items
+are shifted to fill the resulting gap.
+When `i` is not a valid index for `a`, return `default`, or throw an error if
+`default` is not specified.
+See also [`deleteat!`](@ref) and [`splice!`](@ref).
+
+!!! compat "Julia 1.5"
+    This function is available as of Julia 1.5.
+
+# Examples
+```jldoctest
+julia> a = [4, 3, 2, 1]; popat!(a, 2)
+3
+
+julia> a
+3-element Array{Int64,1}:
+ 4
+ 2
+ 1
+
+julia> popat!(a, 4, missing)
+missing
+
+julia> popat!(a, 4)
+ERROR: BoundsError: attempt to access 3-element Array{Int64,1} at index [4]
+[...]
+```
+"""
+function popat!(a::Vector, i::Integer)
     x = a[i]
     _deleteat!(a, i, 1)
     x
 end
 
-function pop!(a::Vector, i::Integer, default)
+function popat!(a::Vector, i::Integer, default)
     if 1 <= i <= length(a)
         x = @inbounds a[i]
         _deleteat!(a, i, 1)
@@ -1752,8 +1805,8 @@ CartesianIndex(1, 1)
 ```
 """
 function findnext(testf::Function, A, start)
+    i = oftype(first(keys(A)), start)
     l = last(keys(A))
-    i = oftype(l, start)
     i > l && return nothing
     while true
         testf(A[i]) && return i

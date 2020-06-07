@@ -1144,7 +1144,8 @@ function get_linfo(@nospecialize(f), @nospecialize(t))
 end
 
 function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val))
-    linfo = Core.Compiler.inf_for_methodinstance(get_linfo(f, t), Core.Compiler.get_world_counter())::Core.CodeInstance
+    interp = Core.Compiler.NativeInterpreter()
+    linfo = Core.Compiler.inf_for_methodinstance(interp, get_linfo(f, t), Core.Compiler.get_world_counter())::Core.CodeInstance
     # If coverage is not enabled, make the check strict by requiring constant ABI
     # Otherwise, check the typed AST to make sure we return a constant.
     if Base.JLOptions().code_coverage == 0
@@ -1444,7 +1445,8 @@ gg13183(x::X...) where {X} = (_false13183 ? gg13183(x, x) : 0)
 # test the external OptimizationState constructor
 let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     world = UInt(23) # some small-numbered world that should be valid
-    opt = Core.Compiler.OptimizationState(linfo, Core.Compiler.Params(world))
+    interp = Core.Compiler.NativeInterpreter()
+    opt = Core.Compiler.OptimizationState(linfo, Core.Compiler.OptimizationParams(interp), interp)
     # make sure the state of the properties look reasonable
     @test opt.src !== linfo.def.source
     @test length(opt.src.slotflags) == linfo.def.nargs <= length(opt.src.slotnames)
@@ -2586,3 +2588,62 @@ f() = _foldl_iter(step, (Missing[],), [0.0], 1)
 end
 @test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}) == Tuple{Int}
 @test Base.return_types(Issue35566.f) == [Val{:expected}]
+
+# constant prop through keyword arguments
+_unstable_kw(;x=1,y=2) = x == 1 ? 0 : ""
+_use_unstable_kw_1() = _unstable_kw(x = 2)
+_use_unstable_kw_2() = _unstable_kw(x = 2, y = rand())
+@test Base.return_types(_use_unstable_kw_1) == Any[String]
+@test Base.return_types(_use_unstable_kw_2) == Any[String]
+@eval struct StructWithSplatNew
+    x::Int
+    StructWithSplatNew(t) = $(Expr(:splatnew, :StructWithSplatNew, :t))
+end
+_construct_structwithsplatnew() = StructWithSplatNew(("",))
+@test Base.return_types(_construct_structwithsplatnew) == Any[StructWithSplatNew]
+
+# case where a call cycle can be broken by constant propagation
+struct NotQRSparse
+    x::Matrix{Float64}
+    n::Int
+end
+@inline function getprop(F::NotQRSparse, d::Symbol)
+    if d === :Q
+        return NotQRSparse(getprop(F, :B), _size_ish(F, 2))
+    elseif d === :A
+        return Dict()
+    elseif d === :B
+        return rand(2,2)
+    elseif d === :C
+        return ""
+    else
+        error()
+    end
+end
+_size_ish(F::NotQRSparse, i::Integer) = size(getprop(F, :B), 1)
+_call_size_ish(x) = _size_ish(x,1)
+@test Base.return_types(_call_size_ish, (NotQRSparse,)) == Any[Int]
+
+module TestConstPropRecursion
+mutable struct Node
+    data
+    child::Node
+    sibling::Node
+end
+
+function Base.iterate(n::Node, state::Node = n.child)
+    n === state && return nothing
+    return state, state === state.sibling ? n : state.sibling
+end
+
+@inline function depth(node::Node, d)
+    childd = d + 1
+    for c in node
+        d = max(d, depth(c, childd))
+    end
+    return d
+end
+
+f(n) = depth(n, 1)
+end
+@test Base.return_types(TestConstPropRecursion.f, (TestConstPropRecursion.Node,)) == Any[Int]

@@ -412,6 +412,11 @@ function isassigned(a::AbstractArray, i::Integer...)
     end
 end
 
+function isstored(A::AbstractArray{<:Any,N}, I::Vararg{Integer,N}) where {N}
+    @boundscheck checkbounds(A, I...)
+    return true
+end
+
 # used to compute "end" for last index
 function trailingsize(A, n)
     s = 1
@@ -803,26 +808,81 @@ end
 ## copy between abstract arrays - generally more efficient
 ## since a single index variable can be used.
 
-copyto!(dest::AbstractArray, src::AbstractArray) =
-    copyto!(IndexStyle(dest), dest, IndexStyle(src), src)
+"""
+    copyto!(dest::AbstractArray, src) -> dest
 
-function copyto!(::IndexStyle, dest::AbstractArray, ::IndexStyle, src::AbstractArray)
-    destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    isempty(srcinds) || (checkbounds(Bool, destinds, first(srcinds)) && checkbounds(Bool, destinds, last(srcinds))) ||
-        throw(BoundsError(dest, srcinds))
-    @inbounds for i in srcinds
-        dest[i] = src[i]
-    end
-    return dest
+
+Copy all elements from collection `src` to array `dest`, whose length must be greater than
+or equal to the length `n` of `src`. The first `n` elements of `dest` are overwritten,
+the other elements are left untouched.
+
+# Examples
+```jldoctest
+julia> x = [1., 0., 3., 0., 5.];
+
+julia> y = zeros(7);
+
+julia> copyto!(y, x);
+
+julia> y
+7-element Array{Float64,1}:
+ 1.0
+ 0.0
+ 3.0
+ 0.0
+ 5.0
+ 0.0
+ 0.0
+```
+"""
+function copyto!(dest::AbstractArray, src::AbstractArray)
+    isempty(src) && return dest
+    src′ = unalias(dest, src)
+    copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(src′), src′)
 end
 
-function copyto!(::IndexStyle, dest::AbstractArray, ::IndexCartesian, src::AbstractArray)
+function copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+    isempty(src) && return dest
+    src′ = unalias(dest, src)
+    copyto_unaliased!(deststyle, dest, srcstyle, src′)
+end
+
+function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+    isempty(src) && return dest
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    isempty(srcinds) || (checkbounds(Bool, destinds, first(srcinds)) && checkbounds(Bool, destinds, last(srcinds))) ||
+    idf, isf = first(destinds), first(srcinds)
+    Δi = idf - isf
+    (checkbounds(Bool, destinds, isf+Δi) & checkbounds(Bool, destinds, last(srcinds)+Δi)) ||
         throw(BoundsError(dest, srcinds))
-    i = 0
-    @inbounds for a in src
-        dest[i+=1] = a
+    if deststyle isa IndexLinear
+        if srcstyle isa IndexLinear
+            # Single-index implementation
+            @inbounds for i in srcinds
+                dest[i + Δi] = src[i]
+            end
+        else
+            # Dual-index implementation
+            i = idf - 1
+            @inbounds for a in src
+                dest[i+=1] = a
+            end
+        end
+    else
+        iterdest, itersrc = eachindex(dest), eachindex(src)
+        if iterdest == itersrc
+            # Shared-iterator implementation
+            for I in iterdest
+                @inbounds dest[I] = src[I]
+            end
+        else
+            # Dual-iterator implementation
+            ret = iterate(iterdest)
+            @inbounds for a in src
+                idx, state = ret
+                dest[idx] = a
+                ret = iterate(iterdest, state)
+            end
+        end
     end
     return dest
 end
@@ -1004,6 +1064,7 @@ _getindex(::IndexStyle, A::AbstractArray, I...) =
     error("getindex for $(typeof(A)) with types $(typeof(I)) is not supported")
 
 ## IndexLinear Scalar indexing: canonical method is one Int
+_getindex(::IndexLinear, A::AbstractVector, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))  # ambiguity resolution in case packages specialize this (to be avoided if at all possible, but see Interpolations.jl)
 _getindex(::IndexLinear, A::AbstractArray, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
 function _getindex(::IndexLinear, A::AbstractArray, I::Vararg{Int,M}) where M
     @_inline_meta
@@ -2088,6 +2149,8 @@ end
 
 # map on collections
 map(f, A::AbstractArray) = collect_similar(A, Generator(f,A))
+
+mapany(f, itr) = map!(f, Vector{Any}(undef, length(itr)), itr)  # convenient for Expr.args
 
 # default to returning an Array for `map` on general iterators
 """

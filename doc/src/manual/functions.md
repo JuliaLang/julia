@@ -399,7 +399,7 @@ would be a two-argument function, and this example would not work.
 
 It is often convenient to be able to write functions taking an arbitrary number of arguments.
 Such functions are traditionally known as "varargs" functions, which is short for "variable number
-of arguments". You can define a varargs function by following the last argument with an ellipsis:
+of arguments". You can define a varargs function by following the last positional argument with an ellipsis:
 
 ```jldoctest barfunc
 julia> bar(a,b,x...) = (a,b,x)
@@ -586,6 +586,14 @@ function f(;x::Int=1)
 end
 ```
 
+Keyword arguments can also be used in varargs functions:
+
+```julia
+function plot(x...; style="solid")
+    ###
+end
+```
+
 Extra keyword arguments can be collected using `...`, as in varargs functions:
 
 ```julia
@@ -594,9 +602,9 @@ function f(x; y=0, kwargs...)
 end
 ```
 
-Inside `f`, `kwargs` will be a key-value iterator over a named tuple. Named
-tuples (as well as dictionaries with keys of `Symbol`) can be passed as keyword
-arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
+Inside `f`, `kwargs` will be an immutable key-value iterator over a named tuple.
+Named tuples (as well as dictionaries with keys of `Symbol`) can be passed as
+keyword arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
 
 If a keyword argument is not assigned a default value in the method definition,
 then it is *required*: an [`UndefKeywordError`](@ref) exception will be thrown

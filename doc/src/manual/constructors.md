@@ -465,7 +465,7 @@ and `den::T` indicate that the data held in a `OurRational{T}` object are a pair
 `T`, one representing the rational value's numerator and the other representing its denominator.
 
 Now things get interesting. `OurRational` has a single inner constructor method which checks that
-both of `num` and `den` aren't zero and ensures that every rational is constructed in "lowest
+`num` and `den` aren't both zero and ensures that every rational is constructed in "lowest
 terms" with a non-negative denominator. This is accomplished by dividing the given numerator and
 denominator values by their greatest common divisor, computed using the `gcd` function. Since
 `gcd` returns the greatest common divisor of its arguments with sign matching the first argument
