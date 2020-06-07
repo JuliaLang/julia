@@ -75,12 +75,20 @@ catch_exceptions(logger) = true
 # Using invoke in combination with @nospecialize eliminates backedges to these methods
 function _invoked_shouldlog(logger, level, _module, group, id)
     @nospecialize
-    invoke(shouldlog, Tuple{typeof(logger), typeof(level), typeof(_module), typeof(group), typeof(id)}, logger, level, _module, group, id)
+    return invoke(
+        shouldlog,
+        Tuple{typeof(logger), typeof(level), typeof(_module), typeof(group), typeof(id)},
+        logger, level, _module, group, id
+    )
 end
 
-_invoked_min_enabled_level(@nospecialize(logger)) = invoke(min_enabled_level, Tuple{typeof(logger)}, logger)
+function _invoked_min_enabled_level(@nospecialize(logger))
+    return invoke(min_enabled_level, Tuple{typeof(logger)}, logger)
+end
 
-_invoked_catch_exceptions(@nospecialize(logger)) = invoke(catch_exceptions, Tuple{typeof(logger)}, logger)
+function _invoked_catch_exceptions(@nospecialize(logger))
+    return invoke(catch_exceptions, Tuple{typeof(logger)}, logger)
+end
 
 """
     NullLogger()
@@ -247,7 +255,7 @@ _log_record_ids = Set{Symbol}()
 # statement itself doesn't change.
 function log_record_id(_module, level, message, log_kws)
     modname = _module === nothing ?  "" : join(fullname(_module), "_")
-    # Use an arbitriraly chosen eight hex digits here. TODO: Figure out how to
+    # Use an arbitrarily chosen eight hex digits here. TODO: Figure out how to
     # make the id exactly the same on 32 and 64 bit systems.
     h = UInt32(hash(string(modname, level, message, log_kws)) & 0xFFFFFFFF)
     while true
@@ -351,7 +359,10 @@ end
     end
     try
         msg = "Exception while generating log record in module $_module at $filepath:$line"
-        handle_message(logger, Error, msg, _module, :logevent_error, id, filepath, line; exception=(err,catch_backtrace()))
+        handle_message(
+            logger, Error, msg, _module, :logevent_error, id, filepath, line; 
+            exception=(err,catch_backtrace())
+        )
     catch err2
         try
             # Give up and write to stderr, in three independent calls to
@@ -375,12 +386,10 @@ function logmsg_shim(level, message, _module, group, id, file, line, kwargs)
             _file=String(file), _line=line, real_kws...)
 end
 
-# Global log limiting mechanism for super fast but inflexible global log
-# limiting.
+# Global log limiting mechanism for super fast but inflexible global log limiting.
 const _min_enabled_level = Ref(Debug)
 
-# LogState - a concretely typed cache of data extracted from the logger, plus
-# the logger itself.
+# LogState - a cache of data extracted from the logger, plus the logger itself.
 struct LogState
     min_enabled_level::LogLevel
     logger::AbstractLogger
@@ -519,7 +528,9 @@ with_logger(logger) do
 end
 ```
 """
-with_logger(@nospecialize(f::Function), logger::AbstractLogger) = with_logstate(f, LogState(logger))
+function with_logger(@nospecialize(f::Function), logger::AbstractLogger)
+    with_logstate(f, LogState(logger))
+end
 
 """
     current_logger()
