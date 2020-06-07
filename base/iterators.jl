@@ -30,8 +30,8 @@ export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle,
 Create a lazy mapping.  This is another syntax for writing
 `(f(args...) for args in zip(iterators...))`.
 
-!!! compat "Julia 1.5"
-    This function requires at least Julia 1.5.
+!!! compat "Julia 1.6"
+    This function requires at least Julia 1.6.
 
 # Examples
 ```jldoctest
