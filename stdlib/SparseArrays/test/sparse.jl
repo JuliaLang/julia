@@ -2309,22 +2309,70 @@ end
     for c in unstored_indices
         @test Base.isstored(A, c[1], c[2]) == false
     end
+
+    # `isstored` for adjoint and tranposed matrices:
+    for trans in (adjoint, transpose)
+        B = trans(A)
+        stored_indices = [CartesianIndex(j, i) for (j, i) in zip(J, I)]
+        unstored_indices = [c for c in CartesianIndices((n, m)) if !(c in stored_indices)]
+        for c in stored_indices
+            @test Base.isstored(B, c[1], c[2]) == true
+        end
+        for c in unstored_indices
+            @test Base.isstored(B, c[1], c[2]) == false
+        end
+    end
 end
 
 @testset "show" begin
     io = IOBuffer()
-    show(io, MIME"text/plain"(), spzeros(Float64, Int64, 0, 0))
-    @test String(take!(io)) == "0×0 SparseArrays.SparseMatrixCSC{Float64, Int64} with 0 stored entries"
-    show(io, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
-    @test String(take!(io)) == "1×1 SparseArrays.SparseMatrixCSC{Float64, Int64} with 1 stored entry:\n 1.0"
-    show(io, MIME"text/plain"(), spzeros(Float32, Int64, 2, 2))
-    @test String(take!(io)) == "2×2 SparseArrays.SparseMatrixCSC{Float32, Int64} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ "
+
+    A = spzeros(Float64, Int64, 0, 0)
+    for (transform, showstring) in zip(
+        (identity, adjoint, transpose), (
+        "0×0 SparseArrays.SparseMatrixCSC{Float64, Int64} with 0 stored entries",
+        "0×0 LinearAlgebra.Adjoint{Float64, SparseArrays.SparseMatrixCSC{Float64, Int64}} with 0 stored entries",
+        "0×0 LinearAlgebra.Transpose{Float64, SparseArrays.SparseMatrixCSC{Float64, Int64}} with 0 stored entries"
+        ))
+        show(io, MIME"text/plain"(), transform(A))
+        @test String(take!(io)) == showstring
+    end
+
+    A = sparse(Int64[1], Int64[1], [1.0])
+    for (transform, showstring) in zip(
+        (identity, adjoint, transpose), (
+        "1×1 SparseArrays.SparseMatrixCSC{Float64, Int64} with 1 stored entry:\n 1.0",
+        "1×1 LinearAlgebra.Adjoint{Float64, SparseArrays.SparseMatrixCSC{Float64, Int64}} with 1 stored entry:\n 1.0",
+        "1×1 LinearAlgebra.Transpose{Float64, SparseArrays.SparseMatrixCSC{Float64, Int64}} with 1 stored entry:\n 1.0",
+        ))
+        show(io, MIME"text/plain"(), transform(A))
+        @test String(take!(io)) == showstring
+    end
+
+    A = spzeros(Float32, Int64, 2, 2)
+    for (transform, showstring) in zip(
+        (identity, adjoint, transpose), (
+        "2×2 SparseArrays.SparseMatrixCSC{Float32, Int64} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ ",
+        "2×2 LinearAlgebra.Adjoint{Float32, SparseArrays.SparseMatrixCSC{Float32, Int64}} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ ",
+        "2×2 LinearAlgebra.Transpose{Float32, SparseArrays.SparseMatrixCSC{Float32, Int64}} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ ",
+        ))
+        show(io, MIME"text/plain"(), transform(A))
+        @test String(take!(io)) == showstring
+    end
 
     A = sparse(Int64[1, 1], Int64[1, 2], [1.0, 2.0])
-    show(io, MIME"text/plain"(), A)
-    @test String(take!(io)) == "1×2 SparseArrays.SparseMatrixCSC{Float64, Int64} with 2 stored entries:\n 1.0  2.0"
-    _show_with_braille_patterns(convert(IOContext, io), A)
-    @test String(take!(io)) == "⠉"
+    for (transform, showstring, braille) in zip(
+        (identity, adjoint, transpose), (
+        "1×2 SparseArrays.SparseMatrixCSC{Float64, Int64} with 2 stored entries:\n 1.0  2.0",
+        "2×1 LinearAlgebra.Adjoint{Float64, SparseArrays.SparseMatrixCSC{Float64, Int64}} with 2 stored entries:\n 1.0\n 2.0",
+        "2×1 LinearAlgebra.Transpose{Float64, SparseArrays.SparseMatrixCSC{Float64, Int64}} with 2 stored entries:\n 1.0\n 2.0",
+        ),
+        ("⠉", "⠃", "⠃"))
+        show(io, MIME"text/plain"(), transform(A))
+        @test String(take!(io)) == showstring
+        _show_with_braille_patterns(convert(IOContext, io), transform(A))
+        @test String(take!(io)) == braille
+    end
 
     # every 1-dot braille pattern
     for (i, b) in enumerate(split("⠁⠂⠄⡀⠈⠐⠠⢀", ""))
@@ -2336,25 +2384,47 @@ end
 
     # empty braille pattern Char(10240)
     A = spzeros(Int64, Int64, 4, 2)
-    _show_with_braille_patterns(convert(IOContext, io), A)
-    @test String(take!(io)) == "" * Char(10240)
+    for (transform, braille) in zip(
+        (identity, adjoint, transpose),
+        ("" * Char(10240), "" * Char(10240)^2, "" * Char(10240)^2))
+        _show_with_braille_patterns(convert(IOContext, io), transform(A))
+        @test String(take!(io)) == braille
+    end
 
     A = sparse(Int64[1, 2, 4, 2, 3], Int64[1, 1, 1, 2, 2], Int64[1, 1, 1, 1, 1], 4, 2)
-    show(io, MIME"text/plain"(), A)
-    @test String(take!(io)) == "4×2 SparseArrays.SparseMatrixCSC{Int64, Int64} with 5 stored entries:\n 1  ⋅\n 1  1\n ⋅  1\n 1  ⋅"
-    _show_with_braille_patterns(convert(IOContext, io), A)
-    @test String(take!(io)) == "⡳"
+    for (transform, showstring, braille) in zip(
+        (identity, adjoint, transpose), (
+        "4×2 SparseArrays.SparseMatrixCSC{Int64, Int64} with 5 stored entries:\n 1  ⋅\n 1  1\n ⋅  1\n 1  ⋅",
+        "2×4 LinearAlgebra.Adjoint{Int64, SparseArrays.SparseMatrixCSC{Int64, Int64}} with 5 stored entries:\n 1  1  ⋅  1\n ⋅  1  1  ⋅",
+        "2×4 LinearAlgebra.Transpose{Int64, SparseArrays.SparseMatrixCSC{Int64, Int64}} with 5 stored entries:\n 1  1  ⋅  1\n ⋅  1  1  ⋅",
+        ),
+        ("⡳", "⠙⠊", "⠙⠊"))
+        show(io, MIME"text/plain"(), transform(A))
+        @test String(take!(io)) == showstring
+        _show_with_braille_patterns(convert(IOContext, io), transform(A))
+        @test String(take!(io)) == braille
+    end
 
     A = sparse(Int64[1, 3, 2, 4], Int64[1, 1, 2, 2], Int64[1, 1, 1, 1], 7, 3)
-    show(io, MIME"text/plain"(), A)
-    @test String(take!(io)) == "7×3 SparseArrays.SparseMatrixCSC{Int64, Int64} with 4 stored entries:\n 1  ⋅  ⋅\n ⋅  1  ⋅\n 1  ⋅  ⋅\n ⋅  1  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅"
-    _show_with_braille_patterns(convert(IOContext, io), A)
-    @test String(take!(io)) == "⢕" * Char(10240) * "\n" * Char(10240)^2
+    for (transform, showstring, braille) in zip(
+        (identity, adjoint, transpose), (
+        "7×3 SparseArrays.SparseMatrixCSC{Int64, Int64} with 4 stored entries:\n 1  ⋅  ⋅\n ⋅  1  ⋅\n 1  ⋅  ⋅\n ⋅  1  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅",
+        "3×7 LinearAlgebra.Adjoint{Int64, SparseArrays.SparseMatrixCSC{Int64, Int64}} with 4 stored entries:\n 1  ⋅  1  ⋅  ⋅  ⋅  ⋅\n ⋅  1  ⋅  1  ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅  ⋅  ⋅  ⋅  ⋅",
+        "3×7 LinearAlgebra.Transpose{Int64, SparseArrays.SparseMatrixCSC{Int64, Int64}} with 4 stored entries:\n 1  ⋅  1  ⋅  ⋅  ⋅  ⋅\n ⋅  1  ⋅  1  ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅  ⋅  ⋅  ⋅  ⋅",
+        ),
+        ("⢕" * Char(10240) * "\n" * Char(10240)^2, "⠑⠑" * Char(10240)^2, "⠑⠑" * Char(10240)^2))
+        show(io, MIME"text/plain"(), transform(A))
+        @test String(take!(io)) == showstring
+        _show_with_braille_patterns(convert(IOContext, io), transform(A))
+        @test String(take!(io)) == braille
+    end
 
     A = sparse(Int64[1:10;], Int64[1:10;], fill(Float64(1), 10))
-    _show_with_braille_patterns(convert(IOContext, io), A)
     brailleString = "⠑⢄" * Char(10240)^3 * "\n" * Char(10240)^2 * "⠑⢄" * Char(10240) * "\n" * Char(10240)^4 * "⠑"
-    @test String(take!(io)) == brailleString
+    for transform in (identity, adjoint, transpose)
+        _show_with_braille_patterns(convert(IOContext, io), transform(A))
+        @test String(take!(io)) == brailleString
+    end
 
     # Issue #30589
     @test repr("text/plain", sparse([true true])) == "1×2 SparseArrays.SparseMatrixCSC{Bool, $Int} with 2 stored entries:\n 1  1"
