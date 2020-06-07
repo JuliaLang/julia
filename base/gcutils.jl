@@ -27,7 +27,7 @@ end
 ```
 
 A finalizer can be registered at object constuction. In the following example note that
-it is not necessary to returned the newly created object because the finalizer returns
+it is not necessary to return the newly created object because the finalizer returns
 it.
 
 # Example
