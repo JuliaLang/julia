@@ -268,75 +268,27 @@ default_group(file) = Symbol(splitext(basename(file))[1])
 
 # Generate code for logging macros
 function logmsg_code(_module, file, line, level, message, exs...)
-    id = Expr(:quote, log_record_id(_module, level, message, exs))
-    group = nothing
-    kwargs = Any[]
-    for ex in exs
-        if ex isa Expr && ex.head === :(=) && ex.args[1] isa Symbol
-            k,v = ex.args
-            if !(k isa Symbol)
-                throw(ArgumentError("Expected symbol for key in key value pair `$ex`"))
-            end
-            k = ex.args[1]
-            # Recognize several special keyword arguments
-            if k === :_id
-                # id may be overridden if you really want several log
-                # statements to share the same id (eg, several pertaining to
-                # the same progress step).  In those cases it may be wise to
-                # manually call log_record_id to get a unique id in the same
-                # format.
-                id = esc(v)
-            elseif k === :_module
-                _module = esc(v)
-            elseif k === :_line
-                line = esc(v)
-            elseif k === :_file
-                file = esc(v)
-            elseif k === :_group
-                group = esc(v)
-            else
-                # Copy across key value pairs for structured log records
-                push!(kwargs, Expr(:kw, k, esc(v)))
-            end
-        elseif ex isa Expr && ex.head === :...
-            # Keyword splatting
-            push!(kwargs, esc(ex))
-        else
-            # Positional arguments - will be converted to key value pairs
-            # automatically.
-            push!(kwargs, Expr(:kw, Symbol(ex), esc(ex)))
-        end
-    end
-
-    if group === nothing
-        group = if isdefined(Base, :basename) && isa(file, String)
-            # precompute if we can
-            QuoteNode(default_group(file))
-        else
-            # memoized run-time execution
-            ref = Ref{Symbol}()
-            :(isassigned($ref) ? $ref[]
-                               : $ref[] = default_group(something($file, "")))
-        end
-    end
-
+    log_data = process_logmsg_exs(_module, file, line, level, message, exs...)
     quote
         level = $level
         std_level = convert(LogLevel, level)
         if std_level >= getindex(_min_enabled_level)
-            group = $group
-            _module = $_module
+            group = $(log_data._group)
+            _module = $(log_data._module)
             logger = current_logger_for_env(std_level, group, _module)
             if !(logger === nothing)
-                id = $id
+                id = $(log_data._id)
                 # Second chance at an early bail-out (before computing the message),
                 # based on arbitrary logger-specific logic.
                 if _invoked_shouldlog(logger, level, _module, group, id)
-                    file = $file
-                    line = $line
+                    file = $(log_data._file)
+                    line = $(log_data._line)
                     try
                         msg = $(esc(message))
-                        handle_message(logger, level, msg, _module, group, id, file, line; $(kwargs...))
+                        handle_message(
+                            logger, level, msg, _module, group, id, file, line;
+                            $(log_data.kwargs...)
+                        )
                     catch err
                         logging_error(logger, level, _module, group, id, file, line, err)
                     end
@@ -346,6 +298,50 @@ function logmsg_code(_module, file, line, level, message, exs...)
         nothing
     end
 end
+
+function process_logmsg_exs(_module, _file, _line, level, message, exs...)
+    log_data = (;_module, _file, _line, kwargs=Any[])
+    for ex in exs
+        if ex isa Expr && ex.head === :(=) && ex.args[1] isa Symbol
+            k,v = ex.args
+            if !(k isa Symbol)
+                throw(ArgumentError("Expected symbol for key in key value pair `$ex`"))
+            end
+
+            # Recognize several special keyword arguments
+            if k ∈ (:_group, :_id, :_module, :_file, :_line)
+                log_data = Base.setindex(log_data, esc(v), k)
+            else
+                # Copy across key value pairs for structured log records
+                push!(log_data.kwargs, Expr(:kw, k, esc(v)))
+            end
+        elseif ex isa Expr && ex.head === :... # Keyword splatting
+            push!(log_data.kwargs, esc(ex))
+        else # Positional arguments - will be converted to key value pairs automatically.
+            push!(log_data.kwargs, Expr(:kw, Symbol(ex), esc(ex)))
+        end
+    end
+
+    if !haskey(log_data, :_group)
+        # use potentially overridden _file
+        log_data = Base.setindex(log_data, default_group_code(log_data._file), :_group)
+    end
+    if !haskey(log_data, :_id)
+        default_id = log_record_id(_module, level, message, exs)   # use original _module
+        log_data = Base.setindex(log_data, Expr(:quote, default_id), :_id)
+    end
+    return log_data
+end
+
+function default_group_code(file)
+    if file isa String && isdefined(Base, :basename)
+        QuoteNode(default_group(file))  # precompute if we can
+    else
+        ref = Ref{Symbol}()  # memoized run-time execution
+        :(isassigned($ref) ? $ref[] : $ref[] = default_group(something($file, "")))
+    end
+end
+
 
 # Report an error in log message creation (or in the logger itself).
 @noinline function logging_error(logger, level, _module, group, id,
