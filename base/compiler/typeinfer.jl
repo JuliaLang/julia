@@ -81,7 +81,7 @@ end
 
 
 function CodeInstance(result::InferenceResult, min_valid::UInt, max_valid::UInt,
-                      may_compress=true, always_cache_tree=false)
+                      may_compress=true, allow_discard_tree=true)
     inferred_result = result.src
     local const_flags::Int32
     if inferred_result isa Const
@@ -103,7 +103,7 @@ function CodeInstance(result::InferenceResult, min_valid::UInt, max_valid::UInt,
             def = result.linfo.def
             toplevel = !isa(def, Method)
             if !toplevel
-                cache_the_tree = always_cache_tree || (result.src.inferred &&
+                cache_the_tree = !allow_discard_tree || (result.src.inferred &&
                     (result.src.inlineable ||
                     ccall(:jl_isa_compileable_sig, Int32, (Any, Any), result.linfo.specTypes, def) != 0))
                 if cache_the_tree
