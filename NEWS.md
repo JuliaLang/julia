@@ -79,6 +79,7 @@ Standard library changes
 
 #### UUIDs
 * Change `uuid1` and `uuid4` to use `Random.RandomDevice()` as default random number generator ([#35872]).
+* Added `parse(::Type{UUID}, ::AbstractString)` method
 
 Deprecated or removed
 ---------------------
