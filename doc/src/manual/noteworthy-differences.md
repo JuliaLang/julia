@@ -249,6 +249,13 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Be careful with non-constant global variables in Julia, especially in tight loops. Since you can write close-to-metal code in Julia (unlike Python), the effect of globals can be drastic (see [Performance Tips](@ref man-performance-tips)).
   * In Python, the majority of values can be used in logical contexts (e.g. `if "a":` means the following block is executed, and `if "":` means it is not). In Julia, you need explicit conversion to `Bool` (e.g. `if "a"` throws an exception). If you want to test for a non-empty string in Julia, you would explicitly write `if !isempty("")`.
   * In Julia, a new local scope is introduced by most code blocks, including loops and `try` — `catch` — `finally`. Note that comprehensions (list, generator, etc.) introduce a new local scope both in Python and Julia, whereas `if` blocks do not introduce a new local scope in both languages.
+  * Julia's built-in function readline() does not offer an optional prompt, which can be used with Python's input(). The below lines in Julia:
+print("Please give me your name.\n")
+name = readline()
+
+do the same job as Pythons:
+name = input("Please give me your name.\n")
+
 
 ## Noteworthy differences from C/C++
 
