@@ -84,7 +84,6 @@ function generate_precompile_statements()
         empty!(DEPOT_PATH)
     end
 
-    print("Generating precompile statements...")
     mktemp() do precompile_file, precompile_file_h
         # Run a repl process and replay our script
         pty_slave, pty_master = open_fake_pty()
@@ -132,8 +131,12 @@ function generate_precompile_statements()
         readavailable(output_copy)
         # Input our script
         if have_repl
-            for l in split(precompile_script, '\n'; keepempty=false)
+            precompile_lines = split(precompile_script, '\n'; keepempty=false)
+            curr = 0
+            for l in precompile_lines
                 sleep(0.1)
+                curr += 1
+                print("\rGenerating precompile statements... $curr/$(length(precompile_lines))")
                 # consume any other output
                 bytesavailable(output_copy) > 0 && readavailable(output_copy)
                 # push our input
@@ -145,6 +148,7 @@ function generate_precompile_statements()
                 readuntil(output_copy, "\n")
                 readuntil(output_copy, "> ")
             end
+            println()
         end
         write(pty_master, "exit()\n")
         wait(tee)
@@ -179,11 +183,13 @@ function generate_precompile_statements()
             try
                 Base.include_string(PrecompileStagingArea, statement)
                 n_succeeded += 1
+                print("\rExecuting precompile statements... $n_succeeded/$(length(statements))")
             catch
                 # See #28808
                 # @error "Failed to precompile $statement"
             end
         end
+        println()
         if have_repl
             # Seems like a reasonable number right now, adjust as needed
             # comment out if debugging script
