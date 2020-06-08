@@ -523,9 +523,8 @@ julia> sum(1:20)
 ```
 """
 sum(a; kw...) = sum(identity, a; kw...)
-sum(a::AbstractArray{Bool}; kw...) = count(a)
-# Note: It is OK to ignore `init` to `sum(::AbstractArray{Bool})`
-# because it is unspecified if the value of `init` is used or not.
+sum(a::AbstractArray{Bool}; kw...) =
+    kw === NamedTuple() ? count(a) : reduce(add_sum, a; kw...)
 
 ## prod
 """
