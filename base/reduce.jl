@@ -692,8 +692,12 @@ minimum(f, a; kw...) = mapreduce(f, min, a; kw...)
     maximum(itr; [init])
 
 Returns the largest element in a collection.
-If provided, `init` must be a neutral element for `max` that will be returned
-for empty collections.
+
+If provided, `init` must be a neutral element for `max` (i.e. which is less
+than or equal to any other element) that will be returned for empty collections.
+
+!!! compat "Julia 1.6"
+    Keyword argument `init` requires Julia 1.6 or later.
 
 # Examples
 ```jldoctest
@@ -718,8 +722,12 @@ maximum(a; kw...) = mapreduce(identity, max, a; kw...)
     minimum(itr; [init])
 
 Returns the smallest element in a collection.
-If provided, `init` must be a neutral element for `min` that will be returned
-for empty collections.
+
+If provided, `init` must be a neutral element for `min` (i.e. which is greater
+than or equal to any other element) that will be returned for empty collections.
+
+!!! compat "Julia 1.6"
+    Keyword argument `init` requires Julia 1.6 or later.
 
 # Examples
 ```jldoctest
