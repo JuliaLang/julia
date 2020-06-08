@@ -69,6 +69,8 @@ function UUID(s::AbstractString)
 end
 end
 
+parse(::Type{UUID}, s::AbstractString) = UUID(s)
+
 
 let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
     global string
