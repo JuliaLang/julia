@@ -26,9 +26,8 @@ finalizer(my_mutable_struct) do x
 end
 ```
 
-A finalizer can be registered at object construction. In the following example note that
-it is not necessary to return the newly created object because the finalizer returns
-it.
+A finalizer may be registered at object construction. In the following example note that
+we implicitly rely on the finalizer returning the newly created mutable struct `x`.
 
 # Example
 ```julia
