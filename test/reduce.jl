@@ -4,6 +4,9 @@ using Random
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
+==ₜ(::Any, ::Any) = false
+==ₜ(a::T, b::T) where {T} = isequal(a, b)
+
 # fold(l|r) & mapfold(l|r)
 @test foldl(+, Int64[]) === Int64(0) # In reference to issues #7465/#20144 (PR #20160)
 @test foldl(+, Int16[]) === Int16(0) # In reference to issues #21536
@@ -172,6 +175,19 @@ for f in (sum3, sum4, sum7, sum8)
 end
 @test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
 
+@testset "`sum` of empty collections with `init`" begin
+    @testset for init in [0, 0.0]
+        @test sum([]; init = init) === init
+        @test sum((x for x in [123] if false); init = init) === init
+        @test sum(nothing, []; init = init) === init
+        @test sum(nothing, (x for x in [123] if false); init = init) === init
+        @test sum(Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
+              zeros(typeof(init), 1, 2, 0)
+        @test sum(nothing, Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
+              zeros(typeof(init), 1, 2, 0)
+    end
+end
+
 # check sum(abs, ...) for support of empty collections
 @testset "sum(abs, [])" begin
     @test @inferred(sum(abs, Float64[])) === 0.0
@@ -198,6 +214,19 @@ end
 @test prod(big(typemax(Int64)):big(typemax(Int64))+16) == parse(BigInt,"25300281663413827620486300433089141956148633919452440329174083959168114253708467653081909888307573358090001734956158476311046124934597861626299416732205795533726326734482449215730132757595422510465791525610410023802664753402501982524443370512346073948799084936298007821432734720004795146875180123558814648586972474376192000")
 
 @test typeof(prod(Array(trues(10)))) == Bool
+
+@testset "`prod` of empty collections with `init`" begin
+    @testset for init in [1, 1.0, ""]
+        @test prod([]; init = init) === init
+        @test prod((x for x in [123] if false); init = init) === init
+        @test prod(nothing, []; init = init) === init
+        @test prod(nothing, (x for x in [123] if false); init = init) === init
+        @test prod(Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
+              ones(typeof(init), 1, 2, 0)
+        @test prod(nothing, Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
+              ones(typeof(init), 1, 2, 0)
+    end
+end
 
 # check type-stability
 prod2(itr) = invoke(prod, Tuple{Any}, itr)
