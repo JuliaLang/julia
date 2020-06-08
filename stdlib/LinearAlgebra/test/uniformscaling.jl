@@ -23,6 +23,7 @@ Random.seed!(123)
     @test sparse(3I,4,5) == sparse(1:4, 1:4, 3, 4, 5)
     @test sparse(3I,5,4) == sparse(1:4, 1:4, 3, 5, 4)
     @test opnorm(UniformScaling(1+im)) ≈ sqrt(2)
+    @test convert(UniformScaling{Float64}, 2I) === 2.0I
 end
 
 @testset "getindex" begin
