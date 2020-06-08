@@ -160,4 +160,49 @@ end
     @test L .+ UnitL .+ UnitU .+ U .+ D == L + UnitL + UnitU + U + D
     @test L .+ U .+ D .+ D .+ D .+ D == L + U + D + D + D + D
 end
+@testset "Broadcast Returned Types" begin
+    # Issue 35245
+    N = 3
+    dV = rand(N)
+    evu = rand(N-1)
+    evl = rand(N-1)
+
+    Bu = Bidiagonal(dV, evu, :U)
+    Bl = Bidiagonal(dV, evl, :L)
+    T = Tridiagonal(evl, dV * 2, evu)
+
+    @test typeof(Bu .+ Bl) <: Tridiagonal
+    @test typeof(Bl .+ Bu) <: Tridiagonal
+    @test typeof(Bu .+ Bu) <: Bidiagonal
+    @test typeof(Bl .+ Bl) <: Bidiagonal
+    @test Bu .+ Bl == T
+    @test Bl .+ Bu == T
+    @test Bu .+ Bu == Bidiagonal(dV * 2, evu * 2, :U)
+    @test Bl .+ Bl == Bidiagonal(dV * 2, evl * 2, :L)
+
+
+    @test typeof(Bu .* Bl) <: Tridiagonal
+    @test typeof(Bl .* Bu) <: Tridiagonal
+    @test typeof(Bu .* Bu) <: Bidiagonal
+    @test typeof(Bl .* Bl) <: Bidiagonal
+
+    @test Bu .* Bl == Tridiagonal(zeros(N-1), dV .* dV, zeros(N-1))
+    @test Bl .* Bu == Tridiagonal(zeros(N-1), dV .* dV, zeros(N-1))
+    @test Bu .* Bu == Bidiagonal(dV .* dV, evu .* evu, :U)
+    @test Bl .* Bl == Bidiagonal(dV .* dV, evl .* evl, :L)
+
+    Bu2 =  Bu .* 2
+    @test typeof(Bu2) <: Bidiagonal && Bu2.uplo == 'U'
+    Bu2 = 2 .* Bu
+    @test typeof(Bu2) <: Bidiagonal && Bu2.uplo == 'U'
+    Bl2 =  Bl .* 2
+    @test typeof(Bl2) <: Bidiagonal && Bl2.uplo == 'L'
+    Bu2 = 2 .* Bl
+    @test typeof(Bl2) <: Bidiagonal && Bl2.uplo == 'L'
+
+    # Example of Nested Brodacasts
+    tmp = (1 .* 2) .* (Bidiagonal(1:3, 1:2, 'U') .* (3 .* 4)) .* (5 .* Bidiagonal(1:3, 1:2, 'L'))
+    @test typeof(tmp) <: Tridiagonal
+
+end
 end
