@@ -682,8 +682,8 @@ than or equal to any other element) that will be returned for empty collections.
 julia> minimum(length, ["Julion", "Julia", "Jule"])
 4
 
-julia> minimum(length, []; init=-1)
--1
+julia> minimum(length, []; init=Inf)
+Inf
 ```
 """
 minimum(f, a; kw...) = mapreduce(f, min, a; kw...)
@@ -742,8 +742,8 @@ ERROR: ArgumentError: reducing over an empty collection is not allowed
 Stacktrace:
 [...]
 
-julia> minimum([]; init=-1)
--1
+julia> minimum([]; init=Inf)
+Inf
 ```
 """
 minimum(a; kw...) = mapreduce(identity, min, a; kw...)
