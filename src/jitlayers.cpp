@@ -173,6 +173,8 @@ static jl_callptr_t _jl_compile_codeinst(
                 const char* t = jl_options.trace_compile;
                 if (!strncmp(t, "stderr", 6))
                     s_precompile = JL_STDERR;
+                else if(!strncmp(t, "stdout", 6))
+                    s_precompile = JL_STDOUT;
                 else {
                     if (ios_file(&f_precompile, t, 1, 1, 1, 1) == NULL)
                         jl_errorf("cannot open precompile statement file \"%s\" for writing", t);
