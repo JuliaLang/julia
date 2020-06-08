@@ -470,9 +470,9 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
-The value returned for empty `itr` can be specified by `init` which must be the
-additive identity.  It is unspecified whether `init` is used for non-empty
-collections.
+The value returned for empty `itr` can be specified by `init`. It must be
+the additive identity (i.e. zero) as it is unspecified whether `init` is used
+for non-empty collections.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
@@ -642,8 +642,9 @@ end
     maximum(f, itr; [init])
 
 Returns the largest result of calling function `f` on each element of `itr`.
-If provided, `init` must be a neutral element for `max` that will be returned
-for empty collections.
+
+If provided, `init` must be a neutral element for `max` (i.e. which is less
+than any other element) that will be returned for empty collections.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.

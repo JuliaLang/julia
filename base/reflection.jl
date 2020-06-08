@@ -1218,9 +1218,9 @@ See also [`applicable`](@ref).
 julia> hasmethod(length, Tuple{Array})
 true
 
-julia> f(; orange) = orange;
+julia> f(; oranges=0) = oranges;
 
-julia> hasmethod(f, Tuple{}, (:orange,))
+julia> hasmethod(f, Tuple{}, (:oranges,))
 true
 
 julia> hasmethod(f, Tuple{}, (:apples, :bananas))
