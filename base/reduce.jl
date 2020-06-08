@@ -45,7 +45,7 @@ function mapfoldl_impl(f::F, op::OP, nt, itr) where {F,OP}
 end
 
 function foldl_impl(op::OP, nt, itr) where {OP}
-    v = _foldl_impl(op, get(nt, :init, _InitialValue()), itr)
+    v = _foldl_impl(op, nt, itr)
     v isa _InitialValue && return reduce_empty_iter(op, itr)
     return v
 end
@@ -157,7 +157,7 @@ Like [`mapreduce`](@ref), but with guaranteed left associativity, as in [`foldl`
 If provided, the keyword argument `init` will be used exactly once. In general, it will be
 necessary to provide `init` to work with empty collections.
 """
-mapfoldl(f, op, itr; kw...) = mapfoldl_impl(f, op, kw.data, itr)
+mapfoldl(f, op, itr; init=_InitialValue()) = mapfoldl_impl(f, op, init, itr)
 
 """
     foldl(op, itr; [init])
@@ -200,7 +200,7 @@ Like [`mapreduce`](@ref), but with guaranteed right associativity, as in [`foldr
 provided, the keyword argument `init` will be used exactly once. In general, it will be
 necessary to provide `init` to work with empty collections.
 """
-mapfoldr(f, op, itr; kw...) = mapfoldr_impl(f, op, kw.data, itr)
+mapfoldr(f, op, itr; init=_InitialValue()) = mapfoldr_impl(f, op, init, itr)
 
 
 """
@@ -640,35 +640,47 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
 end
 
 """
-    maximum(f, itr)
+    maximum(f, itr; [init])
 
 Returns the largest result of calling function `f` on each element of `itr`.
+If provided, `init` must be a neutral element for `max` that will be returned
+for empty collections.
 
 # Examples
 ```jldoctest
 julia> maximum(length, ["Julion", "Julia", "Jule"])
 6
+
+julia> maximum(length, []; init=-1)
+-1
 ```
 """
-maximum(f, a) = mapreduce(f, max, a)
+maximum(f, a; kw...) = mapreduce(f, max, a; kw...)
 
 """
-    minimum(f, itr)
+    minimum(f, itr; [init])
 
 Returns the smallest result of calling function `f` on each element of `itr`.
+If provided, `init` must be a neutral element for `min` that will be returned
+for empty collections.
 
 # Examples
 ```jldoctest
 julia> minimum(length, ["Julion", "Julia", "Jule"])
 4
+
+julia> minimum(length, []; init=-1)
+-1
 ```
 """
-minimum(f, a) = mapreduce(f, min, a)
+minimum(f, a; kw...) = mapreduce(f, min, a; kw...)
 
 """
-    maximum(itr)
+    maximum(itr; [init])
 
 Returns the largest element in a collection.
+If provided, `init` must be a neutral element for `max` that will be returned
+for empty collections.
 
 # Examples
 ```jldoctest
@@ -677,14 +689,24 @@ julia> maximum(-20.5:10)
 
 julia> maximum([1,2,3])
 3
+
+julia> maximum(())
+ERROR: ArgumentError: reducing over an empty collection is not allowed
+Stacktrace:
+[...]
+
+julia> maximum((); init=-1)
+-1
 ```
 """
-maximum(a) = mapreduce(identity, max, a)
+maximum(a; kw...) = mapreduce(identity, max, a; kw...)
 
 """
-    minimum(itr)
+    minimum(itr; [init])
 
 Returns the smallest element in a collection.
+If provided, `init` must be a neutral element for `min` that will be returned
+for empty collections.
 
 # Examples
 ```jldoctest
@@ -693,9 +715,17 @@ julia> minimum(-20.5:10)
 
 julia> minimum([1,2,3])
 1
+
+julia> minimum([])
+ERROR: ArgumentError: reducing over an empty collection is not allowed
+Stacktrace:
+[...]
+
+julia> minimum([]; init=-1)
+-1
 ```
 """
-minimum(a) = mapreduce(identity, min, a)
+minimum(a; kw...) = mapreduce(identity, min, a; kw...)
 
 ## all & any
 
