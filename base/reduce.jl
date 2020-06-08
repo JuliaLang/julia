@@ -462,7 +462,7 @@ reduce(op, a::Number) = a  # Do we want this?
 ## sum
 
 """
-    sum(f, itr; init)
+    sum(f, itr; [init])
 
 Sum the results of calling function `f` on each element of `itr`.
 
@@ -501,7 +501,7 @@ overflow results in -128.
 sum(f, a; kw...) = mapreduce(f, add_sum, a; kw...)
 
 """
-    sum(itr; init)
+    sum(itr; [init])
 
 Returns the sum of all elements in a collection.
 
@@ -529,7 +529,7 @@ sum(a::AbstractArray{Bool}; kw...) = count(a)
 
 ## prod
 """
-    prod(f, itr; init)
+    prod(f, itr; [init])
 
 Returns the product of `f` applied to each element of `itr`.
 
@@ -553,7 +553,7 @@ julia> prod(abs2, [2; 3; 4])
 prod(f, a; kw...) = mapreduce(f, mul_prod, a; kw...)
 
 """
-    prod(itr; init)
+    prod(itr; [init])
 
 Returns the product of all elements of a collection.
 
