@@ -964,7 +964,7 @@ _interleave(firstbind::Some{T}, tailbind::Tuple, args::Tuple) where T = (
 _interleave(firstbind::T, tailbind::Tuple, args::Tuple) where T = (
   firstbind, interleave(tailbind, args)...)
 
-struct Bind{F, A}
+struct Bind{F, A} <: Function
   f::F
   a::A
 end
