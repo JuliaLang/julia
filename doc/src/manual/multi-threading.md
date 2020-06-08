@@ -73,19 +73,20 @@ can be observed from multiple threads. For example, in most cases you should
 use the following code pattern:
 
 ```julia-repl
-julia> lock(a) do
+julia> lock(lk) do
            use(a)
        end
 
 julia> begin
-           lock(a)
+           lock(lk)
            try
                use(a)
            finally
-               unlock(a)
+               unlock(lk)
            end
        end
 ```
+where `lk` is a lock (e.g. `ReentrantLock()`) and `a` data.
 
 Additionally, Julia is not memory safe in the presence of a data race. Be very
 careful about reading a global variable (or closure variable) if another thread
