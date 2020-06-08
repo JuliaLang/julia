@@ -186,6 +186,8 @@ end
         @test sum(nothing, Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
               zeros(typeof(init), 1, 2, 0)
     end
+    # Note: We are using `nothing` in place of the callable to make
+    # sure that it's not actually called.
 end
 
 # check sum(abs, ...) for support of empty collections
@@ -226,6 +228,8 @@ end
         @test prod(nothing, Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
               ones(typeof(init), 1, 2, 0)
     end
+    # Note: We are using `nothing` in place of the callable to make
+    # sure that it's not actually called.
 end
 
 # check type-stability
