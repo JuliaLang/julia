@@ -104,9 +104,7 @@ function isstructurepreserving(::typeof(Base.literal_pow), ::Ref{typeof(^)}, ::S
 end
 isstructurepreserving(f, args...) = false
 
-_iszero(n::Number) = iszero(n)
-_iszero(x) = x == 0
-fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && _iszero(v))
+fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && iszero(v))
 # Like sparse matrices, we assume that the zero-preservation property of a broadcasted
 # expression is stable.  We can test the zero-preservability by applying the function
 # in cases where all other arguments are known scalars against a zero from the structured
