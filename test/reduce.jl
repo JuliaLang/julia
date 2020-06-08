@@ -176,18 +176,17 @@ end
 @test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
 
 @testset "`sum` of empty collections with `init`" begin
+    function noncallable end  # should not be called
     @testset for init in [0, 0.0]
         @test sum([]; init = init) === init
         @test sum((x for x in [123] if false); init = init) === init
-        @test sum(nothing, []; init = init) === init
-        @test sum(nothing, (x for x in [123] if false); init = init) === init
+        @test sum(noncallable, []; init = init) === init
+        @test sum(noncallable, (x for x in [123] if false); init = init) === init
         @test sum(Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
               zeros(typeof(init), 1, 2, 0)
-        @test sum(nothing, Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
+        @test sum(noncallable, Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
               zeros(typeof(init), 1, 2, 0)
     end
-    # Note: We are using `nothing` in place of the callable to make
-    # sure that it's not actually called.
 end
 
 # check sum(abs, ...) for support of empty collections
@@ -218,18 +217,17 @@ end
 @test typeof(prod(Array(trues(10)))) == Bool
 
 @testset "`prod` of empty collections with `init`" begin
+    function noncallable end  # should not be called
     @testset for init in [1, 1.0, ""]
         @test prod([]; init = init) === init
         @test prod((x for x in [123] if false); init = init) === init
-        @test prod(nothing, []; init = init) === init
-        @test prod(nothing, (x for x in [123] if false); init = init) === init
+        @test prod(noncallable, []; init = init) === init
+        @test prod(noncallable, (x for x in [123] if false); init = init) === init
         @test prod(Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
               ones(typeof(init), 1, 2, 0)
-        @test prod(nothing, Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
+        @test prod(noncallable, Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
               ones(typeof(init), 1, 2, 0)
     end
-    # Note: We are using `nothing` in place of the callable to make
-    # sure that it's not actually called.
 end
 
 # check type-stability
