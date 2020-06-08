@@ -646,6 +646,9 @@ Returns the largest result of calling function `f` on each element of `itr`.
 If provided, `init` must be a neutral element for `max` that will be returned
 for empty collections.
 
+!!! compat "Julia 1.6"
+    Keyword argument `init` requires Julia 1.6 or later.
+
 # Examples
 ```jldoctest
 julia> maximum(length, ["Julion", "Julia", "Jule"])
@@ -663,6 +666,9 @@ maximum(f, a; kw...) = mapreduce(f, max, a; kw...)
 Returns the smallest result of calling function `f` on each element of `itr`.
 If provided, `init` must be a neutral element for `min` that will be returned
 for empty collections.
+
+!!! compat "Julia 1.6"
+    Keyword argument `init` requires Julia 1.6 or later.
 
 # Examples
 ```jldoctest
