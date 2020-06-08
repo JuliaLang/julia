@@ -520,6 +520,9 @@ for non-empty collections.
 ```jldoctest
 julia> sum(1:20)
 210
+
+julia> sum(1:20; init = 0.0)
+210.0
 ```
 """
 sum(a; kw...) = sum(identity, a; kw...)
@@ -569,8 +572,11 @@ for non-empty collections.
 
 # Examples
 ```jldoctest
-julia> prod(1:20)
-2432902008176640000
+julia> prod(1:5)
+120
+
+julia> prod(1:5; init = 1.0)
+120.0
 ```
 """
 prod(a; kw...) = mapreduce(identity, mul_prod, a; kw...)
