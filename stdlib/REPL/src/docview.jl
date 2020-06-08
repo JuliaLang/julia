@@ -685,20 +685,16 @@ stripmd(x::Markdown.Footnote) = "$(stripmd(x.id)) $(stripmd(x.text))"
 stripmd(x::Markdown.Table) =
     join([join(map(stripmd, r), " ") for r in x.rows], " ")
 
-# Apropos searches through all available documentation for some string or regex
 """
-    apropos([io::IO], string)
+    apropos([io::IO=stdout], pattern::Union{AbstractString,Regex})
 
-Search through all documentation for a string, ignoring case.
+Search available docstrings for entries containing `pattern`.
+
+When `pattern` is a string, case is ignored. Results are printed to `io`.
 """
 apropos(string) = apropos(stdout, string)
 apropos(io::IO, string) = apropos(io, Regex("\\Q$string", "i"))
 
-"""
-    apropos([io::IO], regex)
-
-Search through all documentation for `regex`.
-"""
 function apropos(io::IO, needle::Regex)
     for mod in modules
         # Module doc might be in README.md instead of the META dict
