@@ -14,7 +14,7 @@ io = IOBuffer()
 Base.banner(io)
 banner = String(take!(io))
 import Markdown
-Markdown.parse("```\n\$ julia\n\n$(banner)\njulia> 1 + 2\n3\n```")
+Markdown.parse("```\n\$ julia\n\n$(banner)\njulia> 1 + 2\n3\n\njulia> ans\n3\n```")
 ```
 
 To exit the interactive session, type `CTRL-D` (press the Control/`^` key together with the `d` key), or type
