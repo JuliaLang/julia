@@ -509,9 +509,9 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
-The value returned for empty `itr` can be specified by `init` which must be the
-additive identity.  It is unspecified whether `init` is used for non-empty
-collections.
+The value returned for empty `itr` can be specified by `init`. It must be
+the additive identity (i.e. zero) as it is unspecified whether `init` is used
+for non-empty collections.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
@@ -536,9 +536,9 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
-The value returned for empty `itr` can be specified by `init` which must be the
-multiplicative identity.  It is unspecified whether `init` is used for non-empty
-collections.
+The value returned for empty `itr` can be specified by `init`. It must be the
+multiplicative identity (i.e. one) as it is unspecified whether `init` is used
+for non-empty collections.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
@@ -560,9 +560,9 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
-The value returned for empty `itr` can be specified by `init` which must be the
-multiplicative identity.  It is unspecified whether `init` is used for non-empty
-collections.
+The value returned for empty `itr` can be specified by `init`. It must be the
+multiplicative identity (i.e. one) as it is unspecified whether `init` is used
+for non-empty collections.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
@@ -644,7 +644,7 @@ end
 Returns the largest result of calling function `f` on each element of `itr`.
 
 If provided, `init` must be a neutral element for `max` (i.e. which is less
-than any other element) that will be returned for empty collections.
+than or equal to any other element) that will be returned for empty collections.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
@@ -664,8 +664,9 @@ maximum(f, a; kw...) = mapreduce(f, max, a; kw...)
     minimum(f, itr; [init])
 
 Returns the smallest result of calling function `f` on each element of `itr`.
-If provided, `init` must be a neutral element for `min` that will be returned
-for empty collections.
+
+If provided, `init` must be a neutral element for `min` (i.e. which is greater
+than or equal to any other element) that will be returned for empty collections.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
