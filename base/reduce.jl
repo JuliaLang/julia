@@ -462,13 +462,20 @@ reduce(op, a::Number) = a  # Do we want this?
 ## sum
 
 """
-    sum(f, itr)
+    sum(f, itr; init)
 
 Sum the results of calling function `f` on each element of `itr`.
 
 The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
+
+The value returned for empty `itr` can be specified by `init` which must be the
+additive identity.  It is unspecified whether `init` is used for non-empty
+collections.
+
+!!! compat "Julia 1.6"
+    Keyword argument `init` requires Julia 1.6 or later.
 
 # Examples
 ```jldoctest
@@ -491,10 +498,10 @@ In the former case, the integers are widened to system word size and therefore
 the result is 128. In the latter case, no such widening happens and integer
 overflow results in -128.
 """
-sum(f, a) = mapreduce(f, add_sum, a)
+sum(f, a; kw...) = mapreduce(f, add_sum, a; kw...)
 
 """
-    sum(itr)
+    sum(itr; init)
 
 Returns the sum of all elements in a collection.
 
@@ -502,18 +509,27 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
+The value returned for empty `itr` can be specified by `init` which must be the
+additive identity.  It is unspecified whether `init` is used for non-empty
+collections.
+
+!!! compat "Julia 1.6"
+    Keyword argument `init` requires Julia 1.6 or later.
+
 # Examples
 ```jldoctest
 julia> sum(1:20)
 210
 ```
 """
-sum(a) = sum(identity, a)
-sum(a::AbstractArray{Bool}) = count(a)
+sum(a; kw...) = sum(identity, a; kw...)
+sum(a::AbstractArray{Bool}; kw...) = count(a)
+# Note: It is OK to ignore `init` to `sum(::AbstractArray{Bool})`
+# because it is unspecified if the value of `init` is used or not.
 
 ## prod
 """
-    prod(f, itr)
+    prod(f, itr; init)
 
 Returns the product of `f` applied to each element of `itr`.
 
@@ -521,16 +537,23 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
+The value returned for empty `itr` can be specified by `init` which must be the
+multiplicative identity.  It is unspecified whether `init` is used for non-empty
+collections.
+
+!!! compat "Julia 1.6"
+    Keyword argument `init` requires Julia 1.6 or later.
+
 # Examples
 ```jldoctest
 julia> prod(abs2, [2; 3; 4])
 576
 ```
 """
-prod(f, a) = mapreduce(f, mul_prod, a)
+prod(f, a; kw...) = mapreduce(f, mul_prod, a; kw...)
 
 """
-    prod(itr)
+    prod(itr; init)
 
 Returns the product of all elements of a collection.
 
@@ -538,13 +561,20 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
+The value returned for empty `itr` can be specified by `init` which must be the
+multiplicative identity.  It is unspecified whether `init` is used for non-empty
+collections.
+
+!!! compat "Julia 1.6"
+    Keyword argument `init` requires Julia 1.6 or later.
+
 # Examples
 ```jldoctest
 julia> prod(1:20)
 2432902008176640000
 ```
 """
-prod(a) = mapreduce(identity, mul_prod, a)
+prod(a; kw...) = mapreduce(identity, mul_prod, a; kw...)
 
 ## maximum & minimum
 _fast(::typeof(min),x,y) = min(x,y)
