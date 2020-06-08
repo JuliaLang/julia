@@ -840,7 +840,7 @@ end
 
 ## count
 
-_bool(f::Function) = x->f(x)::Bool
+_bool(f) = x->f(x)::Bool
 
 """
     count(p, itr) -> Integer
