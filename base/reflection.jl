@@ -1218,10 +1218,12 @@ See also [`applicable`](@ref).
 julia> hasmethod(length, Tuple{Array})
 true
 
-julia> hasmethod(sum, Tuple{Function, Array}, (:dims,))
+julia> f(; orange) = orange;
+
+julia> hasmethod(f, Tuple{}, (:orange,))
 true
 
-julia> hasmethod(sum, Tuple{Function, Array}, (:apples, :bananas))
+julia> hasmethod(f, Tuple{}, (:apples, :bananas))
 false
 
 julia> g(; xs...) = 4;
