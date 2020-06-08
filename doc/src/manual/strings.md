@@ -51,24 +51,24 @@ other subtypes of `AbstractChar`, e.g. to optimize operations for other
 input and shown:
 
 ```jldoctest
-julia> 'x'
+julia> c = 'x'
 'x': ASCII/Unicode U+0078 (category Ll: Letter, lowercase)
 
-julia> typeof(ans)
+julia> typeof(c)
 Char
 ```
 
 You can easily convert a `Char` to its integer value, i.e. code point:
 
 ```jldoctest
-julia> Int('x')
+julia> c = Int('x')
 120
 
-julia> typeof(ans)
+julia> typeof(c)
 Int64
 ```
 
-On 32-bit architectures, [`typeof(ans)`](@ref) will be [`Int32`](@ref). You can convert an
+On 32-bit architectures, [`typeof(c)`](@ref) will be [`Int32`](@ref). You can convert an
 integer value back to a `Char` just as easily:
 
 ```jldoctest
@@ -756,10 +756,10 @@ using non-standard string literals prefixed with various identifiers beginning w
 basic regular expression literal without any options turned on just uses `r"..."`:
 
 ```jldoctest
-julia> r"^\s*(?:#|$)"
+julia> re = r"^\s*(?:#|$)"
 r"^\s*(?:#|$)"
 
-julia> typeof(ans)
+julia> typeof(re)
 Regex
 ```
 

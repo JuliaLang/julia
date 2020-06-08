@@ -360,10 +360,10 @@ and then delegates construction to the general constructor for the case where bo
 successfully creates a point of type `Point{Float64}`:
 
 ```jldoctest parametric2
-julia> Point(1,2.5)
+julia> p = Point(1,2.5)
 Point{Float64}(1.0, 2.5)
 
-julia> typeof(ans)
+julia> typeof(p)
 Point{Float64}
 ```
 

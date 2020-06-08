@@ -410,16 +410,16 @@ is bounded and wraps around at either end so that adding, subtracting and multip
 can overflow or underflow, leading to some results that can be unsettling at first:
 
 ```jldoctest
-julia> typemax(Int)
+julia> m = typemax(Int)
 9223372036854775807
 
-julia> ans+1
+julia> m+1
 -9223372036854775808
 
-julia> -ans
+julia> -m
 -9223372036854775808
 
-julia> 2*ans
+julia> 2*m
 0
 ```
 
