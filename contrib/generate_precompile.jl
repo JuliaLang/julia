@@ -196,10 +196,13 @@ function generate_precompile_statements()
             @assert n_succeeded > 1500
         end
 
-        print(" $(length(statements)) generated in ")
         tot_time = time_ns() - start_time
-        Base.time_print(tot_time)
-        print(" (overhead "); Base.time_print(tot_time - (include_time * 1e9)); println(")")
+        include_time *= 1e9
+        gen_time = tot_time - include_time
+        println("Precompilation complete. Summary:")
+        print("Total ─────── "); Base.time_print(tot_time); println()
+        print("Generation ── "); Base.time_print(gen_time);     print(" "); show(IOContext(stdout, :compact=>true), gen_time / tot_time * 100); println("%")
+        print("Execution ─── "); Base.time_print(include_time); print(" "); show(IOContext(stdout, :compact=>true), include_time / tot_time * 100); println("%")
     end
 
     return
