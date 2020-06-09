@@ -544,24 +544,12 @@ You like the following fruits:
 
 ### Customization / Configuration
 
-All interface customization is done through the keyword only
-`TerminalMenus.config()` function.
+#### ConfiguredMenu subtypes
 
-#### Arguments
+Starting with Julia 1.6, the recommended way to configure menus is via the constructor.
+For instance, the default multiple-selection menu
 
- - `charset::Symbol=:na`: ui characters to use (`:ascii` or `:unicode`); overridden by other arguments
- - `cursor::Char='>'|'→'`: character to use for cursor
- - `up_arrow::Char='^'|'↑'`: character to use for up arrow
- - `down_arrow::Char='v'|'↓'`: character to use for down arrow
- - `checked::String="[X]"|"✓"`: string to use for checked
- - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
- - `scroll::Symbol=:na`: If `:wrap` then wrap the cursor around top and bottom, if :`nowrap` do not wrap cursor
- - `supress_output::Bool=false`: For testing. If true, menu will not be printed to console.
- - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
-
-#### Examples
-
-```julia
+```
 julia> menu = MultiSelectMenu(options, pagesize=5);
 
 julia> request(menu) # ASCII is used by default
@@ -571,9 +559,12 @@ julia> request(menu) # ASCII is used by default
    [ ] grape
  > [X] strawberry
 v  [ ] blueberry
-Set([4, 2])
+```
 
-julia> TerminalMenus.config(charset=:unicode)
+can instead be rendered with Unicode selection and navigation characters with
+
+```julia
+julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode);
 
 julia> request(menu)
 [press: d=done, a=all, n=none]
@@ -582,10 +573,14 @@ julia> request(menu)
    ⬚ grape
  → ✓ strawberry
 ↓  ⬚ blueberry
-Set([4, 2])
+```
 
-julia> TerminalMenus.config(checked="YEP!", unchecked="NOPE", cursor='⧐')
+More fine-grained configuration is also possible:
 
+```julia
+julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode, checked="YEP!", unchecked="NOPE", cursor='⧐');
+
+julia> request(menu)
 julia> request(menu)
 [press: d=done, a=all, n=none]
    NOPE apple
@@ -593,12 +588,81 @@ julia> request(menu)
    NOPE grape
  ⧐ YEP! strawberry
 ↓  NOPE blueberry
-Set([4, 2])
-
 ```
+
+Aside from the overall `charset` option, for `RadioMenu` the configurable options are:
+
+ - `cursor::Char='>'|'→'`: character to use for cursor
+ - `up_arrow::Char='^'|'↑'`: character to use for up arrow
+ - `down_arrow::Char='v'|'↓'`: character to use for down arrow
+ - `scroll_wrap::Bool=false`: optionally wrap-around at the beginning/end of a menu
+ - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
+
+`MultiSelectMenu` adds:
+
+ - `checked::String="[X]"|"✓"`: string to use for checked
+ - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
+
+You can create new menu types of your own.
+Types that are derived from `TerminalMenus.ConfiguredMenu` configure the menu options at construction time.
+
+#### Legacy interface
+
+Prior to Julia 1.6, and still supported throughout Julia 1.x, one can also configure menus by calling
+`TerminalMenus.config()`.
 
 ## References
 
+### REPL
+
 ```@docs
 Base.atreplinit
+```
+
+### TerminalMenus
+
+#### Configuration
+
+```@docs
+REPL.TerminalMenus.Config
+REPL.TerminalMenus.MultiSelectConfig
+REPL.TerminalMenus.config
+```
+
+#### User interaction
+
+```@docs
+REPL.TerminalMenus.request
+```
+
+#### AbstractMenu extension interface
+
+Any subtype of `AbstractMenu` must be mutable, and must contain the fields `pagesize::Int` and
+`pageoffset::Int`.
+Any subtype must also implement the following functions:
+
+```@docs
+REPL.TerminalMenus.pick
+REPL.TerminalMenus.cancel
+REPL.TerminalMenus.writeline
+```
+
+It must also implement either `options` or `numoptions`:
+
+```@docs
+REPL.TerminalMenus.options
+REPL.TerminalMenus.numoptions
+```
+
+If the subtype does not have a field named `selected`, it must also implement
+
+```@docs
+REPL.TerminalMenus.selected
+```
+
+The following are optional but can allow additional customization:
+
+```@docs
+REPL.TerminalMenus.header
+REPL.TerminalMenus.keypress
 ```

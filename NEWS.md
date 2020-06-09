@@ -60,6 +60,11 @@ Standard library changes
 
 #### REPL
 
+* The `AbstractMenu` extension interface of `REPL.TerminalMenus` has been extensively
+  overhauled. The new interface does not rely on global configuration variables, is more
+  consistent in delegating printing of the navigation/selection markers, and provides
+  improved support for dynamic menus.  These changes are compatible with the previous
+  (deprecated) interface, so are non-breaking.
 
 #### SparseArrays
 
