@@ -71,7 +71,7 @@ julia> t = ccall(:clock, Int32, ())
 julia> t
 2292761
 
-julia> typeof(ans)
+julia> typeof(t)
 Int32
 ```
 
