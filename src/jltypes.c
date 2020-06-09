@@ -1231,6 +1231,88 @@ static jl_value_t *normalize_vararg(jl_value_t *va)
     return va;
 }
 
+int _may_substitute_ub(jl_value_t *v, jl_tvar_t *var, int inside_inv, int *cov_count) JL_NOTSAFEPOINT
+{
+    if (v == (jl_value_t*)var) {
+        if (inside_inv) {
+            return 0;
+        } else {
+            (*cov_count)++;
+            return *cov_count <= 1 || jl_is_concrete_type(var->ub);
+        }
+    }
+    else if (jl_is_uniontype(v)) {
+        return _may_substitute_ub(((jl_uniontype_t*)v)->a, var, inside_inv, cov_count) &&
+            _may_substitute_ub(((jl_uniontype_t*)v)->b, var, inside_inv, cov_count);
+    }
+    else if (jl_is_unionall(v)) {
+        jl_unionall_t *ua = (jl_unionall_t*)v;
+        if (ua->var == var)
+            return 1;
+        return _may_substitute_ub(ua->var->lb, var, inside_inv, cov_count) &&
+            _may_substitute_ub(ua->var->ub, var, inside_inv, cov_count) &&
+            _may_substitute_ub(ua->body, var, inside_inv, cov_count);
+    }
+    else if (jl_is_datatype(v)) {
+        int istuple = jl_is_tuple_type(v);
+        int isva = jl_is_vararg_type(v);
+        for (size_t i = 0; i < jl_nparams(v); i++) {
+            int invar = isva ? i == 1 : !istuple;
+            int ins_i = inside_inv || invar;
+            int old_count = *cov_count;
+            if (!_may_substitute_ub(jl_tparam(v,i), var, ins_i, cov_count))
+                return 0;
+            if (isva && i == 0 && *cov_count > old_count && !jl_is_concrete_type(var->ub))
+                return 0;
+        }
+        return 1;
+    }
+    return 1;
+}
+
+// Check whether `var` may be replaced with its upper bound `ub` in `v where var<:ub`
+// Conditions:
+//  * `var` does not appear in invariant position
+//  * `var` appears at most once (in covariant position) and not in a `Vararg`
+//    unless the upper bound is concrete (diagonal rule)
+int may_substitute_ub(jl_value_t *v, jl_tvar_t *var) JL_NOTSAFEPOINT
+{
+    int cov_count = 0;
+    return _may_substitute_ub(v, var, 0, &cov_count);
+}
+
+jl_value_t *normalize_unionalls(jl_value_t *t)
+{
+    JL_GC_PUSH1(&t);
+    if (jl_is_uniontype(t)) {
+        jl_uniontype_t *u = (jl_uniontype_t *) t;
+        jl_value_t *a = NULL;
+        jl_value_t *b = NULL;
+        JL_GC_PUSH2(&a, &b);
+        a = normalize_unionalls(u->a);
+        b = normalize_unionalls(u->b);
+        if (a != u->a || b != u->b) {
+            t = jl_new_struct(jl_uniontype_type, a, b);
+        }
+        JL_GC_POP();
+    }
+    else if (jl_is_unionall(t)) {
+        jl_unionall_t *u = (jl_unionall_t *) t;
+        jl_value_t *body = normalize_unionalls(u->body);
+        if (body != u->body) {
+            JL_GC_PUSH1(&body);
+            t = jl_new_struct(jl_unionall_type, u->var, body);
+            JL_GC_POP();
+            u = (jl_unionall_t *) t;
+        }
+
+        if (u->var->lb == u->var->ub || may_substitute_ub(body, u->var))
+            t = jl_instantiate_unionall(u, u->var->ub);
+    }
+    JL_GC_POP();
+    return t;
+}
+
 static jl_value_t *_jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals, jl_typeenv_t *prev, jl_typestack_t *stack);
 
 static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
@@ -1240,6 +1322,11 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     jl_typename_t *tn = dt->name;
     int istuple = (tn == jl_tuple_typename);
     int isnamedtuple = (tn == jl_namedtuple_typename);
+    if (dt->name != jl_type_typename) {
+        for (size_t i = 0; i < ntp; i++)
+            iparams[i] = normalize_unionalls(iparams[i]);
+    }
+
     // check type cache
     if (cacheable) {
         size_t i;
