@@ -7560,3 +7560,12 @@ function f18621()
 end
 @test f18621() == 1:5
 @test [_ for _ in 1:5] == 1:5
+
+# issue #35130
+const T35130 = Tuple{Vector{Int}, <:Any}
+@eval struct A35130
+    x::Vector{Tuple{Vector{Int}, Any}}
+    A35130(x) = $(Expr(:new, :A35130, :x))
+end
+h35130(x) = A35130(Any[x][1]::Vector{T35130})
+@test h35130(T35130[([1],1)]) isa A35130
