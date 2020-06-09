@@ -664,6 +664,9 @@ julia> maximum(length, ["Julion", "Julia", "Jule"])
 
 julia> maximum(length, []; init=-1)
 -1
+
+julia> maximum(tanh, Real[]; init=-1.0)
+-1.0
 ```
 """
 maximum(f, a; kw...) = mapreduce(f, max, a; kw...)
