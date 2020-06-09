@@ -649,8 +649,10 @@ end
 
 Returns the largest result of calling function `f` on each element of `itr`.
 
-If provided, `init` must be a neutral element for `max` (i.e. which is less
-than or equal to any other element) that will be returned for empty collections.
+The value returned for empty `itr` can be specified by `init`. It must be the
+a neutral element for `max` (i.e. which is less than or equal to any
+other element) as it is unspecified whether `init` is used
+for non-empty collections.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
@@ -660,8 +662,8 @@ than or equal to any other element) that will be returned for empty collections.
 julia> maximum(length, ["Julion", "Julia", "Jule"])
 6
 
-julia> maximum(length, []; init=-1)
--1
+julia> maximum(length, []; init=-Inf)
+-Inf
 ```
 """
 maximum(f, a; kw...) = mapreduce(f, max, a; kw...)
@@ -671,8 +673,10 @@ maximum(f, a; kw...) = mapreduce(f, max, a; kw...)
 
 Returns the smallest result of calling function `f` on each element of `itr`.
 
-If provided, `init` must be a neutral element for `min` (i.e. which is greater
-than or equal to any other element) that will be returned for empty collections.
+The value returned for empty `itr` can be specified by `init`. It must be the
+a neutral element for `min` (i.e. which is greater than or equal to any
+other element) as it is unspecified whether `init` is used
+for non-empty collections.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
@@ -693,8 +697,10 @@ minimum(f, a; kw...) = mapreduce(f, min, a; kw...)
 
 Returns the largest element in a collection.
 
-If provided, `init` must be a neutral element for `max` (i.e. which is less
-than or equal to any other element) that will be returned for empty collections.
+The value returned for empty `itr` can be specified by `init`. It must be the
+a neutral element for `max` (i.e. which is less than or equal to any
+other element) as it is unspecified whether `init` is used
+for non-empty collections.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
@@ -712,8 +718,8 @@ ERROR: ArgumentError: reducing over an empty collection is not allowed
 Stacktrace:
 [...]
 
-julia> maximum((); init=-1)
--1
+julia> maximum((); init=-Inf)
+-Inf
 ```
 """
 maximum(a; kw...) = mapreduce(identity, max, a; kw...)
@@ -723,8 +729,10 @@ maximum(a; kw...) = mapreduce(identity, max, a; kw...)
 
 Returns the smallest element in a collection.
 
-If provided, `init` must be a neutral element for `min` (i.e. which is greater
-than or equal to any other element) that will be returned for empty collections.
+The value returned for empty `itr` can be specified by `init`. It must be the
+a neutral element for `min` (i.e. which is greater than or equal to any
+other element) as it is unspecified whether `init` is used
+for non-empty collections.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
