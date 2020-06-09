@@ -307,8 +307,10 @@ function logmsg_code(_module, file, line, level, message, exs...)
     end
 end
 
-function process_logmsg_exs(_module, _file, _line, level, message, exs...)
-    log_data = (;_module, _file, _line, kwargs=Any[])
+function process_logmsg_exs(_orig_module, _file, _line, level, message, exs...)
+    local _group, _id
+    _module = _orig_module
+    kwargs = Any[]
     for ex in exs
         if ex isa Expr && ex.head === :(=) && ex.args[1] isa Symbol
             k,v = ex.args
@@ -317,28 +319,34 @@ function process_logmsg_exs(_module, _file, _line, level, message, exs...)
             end
 
             # Recognize several special keyword arguments
-            if k ∈ (:_group, :_id, :_module, :_file, :_line)
-                log_data = Base.setindex(log_data, esc(v), k)
+            if k === :_group
+                _group = esc(v)
+            elseif k === :_id
+                _id = esc(v)
+            elseif k === :_module
+                _module = esc(v)
+            elseif k === :_file
+                _file = esc(v)
+            elseif k === :_line
+                _line = esc(v)
             else
                 # Copy across key value pairs for structured log records
-                push!(log_data.kwargs, Expr(:kw, k, esc(v)))
+                push!(kwargs, Expr(:kw, k, esc(v)))
             end
         elseif ex isa Expr && ex.head === :... # Keyword splatting
-            push!(log_data.kwargs, esc(ex))
+            push!(kwargs, esc(ex))
         else # Positional arguments - will be converted to key value pairs automatically.
-            push!(log_data.kwargs, Expr(:kw, Symbol(ex), esc(ex)))
+            push!(kwargs, Expr(:kw, Symbol(ex), esc(ex)))
         end
     end
 
-    if !haskey(log_data, :_group)
-        # use potentially overridden _file
-        log_data = Base.setindex(log_data, default_group_code(log_data._file), :_group)
+    if !@isdefined(_group)
+        _group = default_group_code(_file)
     end
-    if !haskey(log_data, :_id)
-        default_id = log_record_id(_module, level, message, exs)   # use original _module
-        log_data = Base.setindex(log_data, Expr(:quote, default_id), :_id)
+    if !@isdefined(_id)
+        _id = Expr(:quote, log_record_id(_orig_module, level, message, exs))
     end
-    return log_data
+    return (;_module, _group, _id, _file, _line, kwargs)
 end
 
 function default_group_code(file)
@@ -360,7 +368,7 @@ end
     try
         msg = "Exception while generating log record in module $_module at $filepath:$line"
         handle_message(
-            logger, Error, msg, _module, :logevent_error, id, filepath, line; 
+            logger, Error, msg, _module, :logevent_error, id, filepath, line;
             exception=(err,catch_backtrace())
         )
     catch err2
