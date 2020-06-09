@@ -51,24 +51,24 @@ other subtypes of `AbstractChar`, e.g. to optimize operations for other
 input and shown:
 
 ```jldoctest
-julia> 'x'
+julia> c = 'x'
 'x': ASCII/Unicode U+0078 (category Ll: Letter, lowercase)
 
-julia> typeof(ans)
+julia> typeof(c)
 Char
 ```
 
 You can easily convert a `Char` to its integer value, i.e. code point:
 
 ```jldoctest
-julia> Int('x')
+julia> c = Int('x')
 120
 
-julia> typeof(ans)
+julia> typeof(c)
 Int64
 ```
 
-On 32-bit architectures, [`typeof(ans)`](@ref) will be [`Int32`](@ref). You can convert an
+On 32-bit architectures, [`typeof(c)`](@ref) will be [`Int32`](@ref). You can convert an
 integer value back to a `Char` just as easily:
 
 ```jldoctest
@@ -205,11 +205,11 @@ Using an index less than `begin` (`1`) or greater than `end` raises an error:
 
 ```jldoctest helloworldstring
 julia> str[begin-1]
-ERROR: BoundsError: attempt to access String at index [0]
+ERROR: BoundsError: attempt to access 14-codeunit String at index [0]
 [...]
 
 julia> str[end+1]
-ERROR: BoundsError: attempt to access String at index [15]
+ERROR: BoundsError: attempt to access 14-codeunit String at index [15]
 [...]
 ```
 
@@ -756,10 +756,10 @@ using non-standard string literals prefixed with various identifiers beginning w
 basic regular expression literal without any options turned on just uses `r"..."`:
 
 ```jldoctest
-julia> r"^\s*(?:#|$)"
+julia> re = r"^\s*(?:#|$)"
 r"^\s*(?:#|$)"
 
-julia> typeof(ans)
+julia> typeof(re)
 Regex
 ```
 

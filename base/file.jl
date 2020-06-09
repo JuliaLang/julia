@@ -470,18 +470,18 @@ function temp_cleanup_later(path::AbstractString; asap::Bool=false)
     # still be using the path, don't delete it until process exit
     TEMP_CLEANUP[path] = get(TEMP_CLEANUP, path, true) & asap
     if length(TEMP_CLEANUP) > TEMP_CLEANUP_MAX[]
-        temp_cleanup_purge(false)
+        temp_cleanup_purge()
         TEMP_CLEANUP_MAX[] = max(TEMP_CLEANUP_MIN[], 2*length(TEMP_CLEANUP))
     end
     unlock(TEMP_CLEANUP_LOCK)
     return nothing
 end
 
-function temp_cleanup_purge(all::Bool=true)
+function temp_cleanup_purge(; force::Bool=false)
     need_gc = Sys.iswindows()
     for (path, asap) in TEMP_CLEANUP
         try
-            if (all || asap) && ispath(path)
+            if (force || asap) && ispath(path)
                 need_gc && GC.gc(true)
                 need_gc = false
                 rm(path, recursive=true, force=true)

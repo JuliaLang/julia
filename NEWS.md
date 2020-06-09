@@ -51,6 +51,7 @@ Standard library changes
 
 #### LinearAlgebra
 * New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).
+* `UniformScaling` can now be indexed into using ranges to return dense matrices and vectors ([#24359]).
 
 #### Markdown
 
@@ -60,6 +61,11 @@ Standard library changes
 
 #### REPL
 
+* The `AbstractMenu` extension interface of `REPL.TerminalMenus` has been extensively
+  overhauled. The new interface does not rely on global configuration variables, is more
+  consistent in delegating printing of the navigation/selection markers, and provides
+  improved support for dynamic menus.  These changes are compatible with the previous
+  (deprecated) interface, so are non-breaking.
 
 #### SparseArrays
 
@@ -79,6 +85,7 @@ Standard library changes
 
 #### UUIDs
 * Change `uuid1` and `uuid4` to use `Random.RandomDevice()` as default random number generator ([#35872]).
+* Added `parse(::Type{UUID}, ::AbstractString)` method
 
 Deprecated or removed
 ---------------------

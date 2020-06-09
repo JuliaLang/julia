@@ -366,7 +366,8 @@ extern "C" {
 #else
         1,
 #endif
-        jl_default_debug_info_kind, NULL, NULL, NULL, NULL, NULL};
+        jl_default_debug_info_kind, NULL, NULL, NULL, NULL, NULL,
+        jl_rettype_inferred };
 }
 
 template<typename T>
@@ -2799,7 +2800,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
             }
         }
         else {
-            jl_value_t *ci = jl_rettype_inferred(mi, ctx.world, ctx.world); // TODO: need to use the right pair world here
+            jl_value_t *ci = ctx.params->lookup(mi, ctx.world, ctx.world); // TODO: need to use the right pair world here
             jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
             if (ci != jl_nothing && codeinst->invoke != jl_fptr_sparam) { // check if we know we definitely can't handle this specptr
                 if (codeinst->invoke == jl_fptr_const_return) {

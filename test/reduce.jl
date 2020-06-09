@@ -341,6 +341,18 @@ A = circshift(reshape(1:24,2,3,4), (0,1,1))
 @test size(extrema(A,dims=(1,2,3))) == size(maximum(A,dims=(1,2,3)))
 @test extrema(x->div(x, 2), A, dims=(2,3)) == reshape([(0,11),(1,12)],2,1,1)
 
+@testset "maximum/minimum/extrema with missing values" begin
+    for x in (Vector{Union{Int,Missing}}(missing, 10),
+              Vector{Union{Int,Missing}}(missing, 257))
+        @test maximum(x) === minimum(x) === missing
+        @test extrema(x) === (missing, missing)
+        fill!(x, 1)
+        x[1] = missing
+        @test maximum(x) === minimum(x) === missing
+        @test extrema(x) === (missing, missing)
+    end
+end
+
 # any & all
 
 @test @inferred any([]) == false
@@ -468,6 +480,11 @@ end
 @test count(!iszero, Int[1]) == 1
 @test count(!iszero, [1, 0, 2, 0, 3, 0, 4]) == 4
 
+struct NonFunctionIsZero end
+(::NonFunctionIsZero)(x) = iszero(x)
+@test count(NonFunctionIsZero(), []) == 0
+@test count(NonFunctionIsZero(), [0]) == 1
+@test count(NonFunctionIsZero(), [1]) == 0
 
 ## cumsum, cummin, cummax
 

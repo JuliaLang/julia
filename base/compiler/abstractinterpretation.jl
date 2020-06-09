@@ -132,7 +132,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # if there's a possibility we could constant-propagate a better result
         # (hopefully without doing too much work), try to do that now
         # TODO: it feels like this could be better integrated into abstract_call_method / typeinf_edge
-        const_rettype = abstract_call_method_with_const_args(interp, rettype, f, argtypes, applicable[nonbot]::SimpleVector, sv)
+        const_rettype = abstract_call_method_with_const_args(interp, rettype, f, argtypes, applicable[nonbot]::SimpleVector, sv, edgecycle)
         if const_rettype ⊑ rettype
             # use the better result, if it's a refinement of rettype
             rettype = const_rettype
@@ -185,7 +185,7 @@ function const_prop_profitable(@nospecialize(arg))
     return false
 end
 
-function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nospecialize(rettype), @nospecialize(f), argtypes::Vector{Any}, match::SimpleVector, sv::InferenceState)
+function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nospecialize(rettype), @nospecialize(f), argtypes::Vector{Any}, match::SimpleVector, sv::InferenceState, edgecycle::Bool)
     method = match[3]::Method
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
@@ -241,7 +241,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
     mi = mi::MethodInstance
     # decide if it's likely to be worthwhile
     if !force_inference
-        code = inf_for_methodinstance(interp, mi, get_world_counter(interp))
+        code = get(code_cache(interp), mi, nothing)
         declared_inline = isdefined(method, :source) && ccall(:jl_ir_flag_inlineable, Bool, (Any,), method.source)
         cache_inlineable = declared_inline
         if isdefined(code, :inferred) && !cache_inlineable
@@ -259,6 +259,24 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
     inf_cache = get_inference_cache(interp)
     inf_result = cache_lookup(mi, argtypes, inf_cache)
     if inf_result === nothing
+        if edgecycle
+            # if there might be a cycle, check to make sure we don't end up
+            # calling ourselves here.
+            infstate = sv
+            cyclei = 0
+            while !(infstate === nothing)
+                if method === infstate.linfo.def && any(infstate.result.overridden_by_const)
+                    return Any
+                end
+                if cyclei < length(infstate.callers_in_cycle)
+                    cyclei += 1
+                    infstate = infstate.callers_in_cycle[cyclei]
+                else
+                    cyclei = 0
+                    infstate = infstate.parent
+                end
+            end
+        end
         inf_result = InferenceResult(mi, argtypes)
         frame = InferenceState(inf_result, #=cache=#false, interp)
         frame === nothing && return Any # this is probably a bad generated function (unsound), but just ignore it

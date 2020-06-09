@@ -2312,3 +2312,7 @@ end
         return acc
     end == [101, 108]
 end
+
+# issue #36196
+@test_throws ParseError("\"for\" at none:1 expected \"end\", got \")\"") Meta.parse("(for i=1; println())")
+@test_throws ParseError("\"try\" at none:1 expected \"end\", got \")\"") Meta.parse("(try i=1; println())")

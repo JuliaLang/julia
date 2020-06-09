@@ -60,13 +60,21 @@ structured_broadcast_alloc(bc, ::Type{<:Diagonal}, ::Type{ElType}, n) where {ElT
 # Bidiagonal is tricky as we need to know if it's upper or lower. The promotion
 # system will return Tridiagonal when there's more than one Bidiagonal, but when
 # there's only one, we need to make figure out upper or lower
-find_bidiagonal() = throw(ArgumentError("could not find Bidiagonal within broadcast expression"))
-find_bidiagonal(a::Bidiagonal, rest...) = a
-find_bidiagonal(bc::Broadcast.Broadcasted, rest...) = find_bidiagonal(find_bidiagonal(bc.args...), rest...)
-find_bidiagonal(x, rest...) = find_bidiagonal(rest...)
+merge_uplos(::Nothing, ::Nothing) = nothing
+merge_uplos(a, ::Nothing) = a
+merge_uplos(::Nothing, b) = b
+merge_uplos(a, b) = a == b ? a : 'T'
+
+find_uplo(a::Bidiagonal) = a.uplo
+find_uplo(a) = nothing
+find_uplo(bc::Broadcasted) = mapreduce(find_uplo, merge_uplos, bc.args, init=nothing)
+
 function structured_broadcast_alloc(bc, ::Type{<:Bidiagonal}, ::Type{ElType}, n) where {ElType}
-    ex = find_bidiagonal(bc)
-    return Bidiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n-1), ex.uplo)
+    uplo = find_uplo(bc)
+    if uplo == 'T'
+        return Tridiagonal(Array{ElType}(undef, n-1), Array{ElType}(undef, n), Array{ElType}(undef, n-1))
+    end
+    return Bidiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n-1), uplo)
 end
 structured_broadcast_alloc(bc, ::Type{<:SymTridiagonal}, ::Type{ElType}, n) where {ElType} =
     SymTridiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n-1))

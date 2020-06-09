@@ -100,6 +100,7 @@ include("compiler/validation.jl")
 
 include("compiler/inferenceresult.jl")
 include("compiler/inferencestate.jl")
+include("compiler/cicache.jl")
 
 include("compiler/typeutils.jl")
 include("compiler/typelimits.jl")

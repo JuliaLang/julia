@@ -229,6 +229,13 @@ Symbol(x...) = Symbol(string(x...))
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
 convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
 
+## summary ##
+
+function summary(io::IO, s::AbstractString)
+    prefix = isempty(s) ? "empty" : string(ncodeunits(s), "-codeunit")
+    print(io, prefix, " ", typeof(s))
+end
+
 ## string & character concatenation ##
 
 """
@@ -412,11 +419,11 @@ julia> thisind("α", 3)
 3
 
 julia> thisind("α", 4)
-ERROR: BoundsError: attempt to access String at index [4]
+ERROR: BoundsError: attempt to access 2-codeunit String at index [4]
 [...]
 
 julia> thisind("α", -1)
-ERROR: BoundsError: attempt to access String at index [-1]
+ERROR: BoundsError: attempt to access 2-codeunit String at index [-1]
 [...]
 ```
 """
@@ -466,7 +473,7 @@ julia> prevind("α", 1)
 0
 
 julia> prevind("α", 0)
-ERROR: BoundsError: attempt to access String at index [0]
+ERROR: BoundsError: attempt to access 2-codeunit String at index [0]
 [...]
 
 julia> prevind("α", 2, 2)
@@ -525,7 +532,7 @@ julia> nextind("α", 1)
 3
 
 julia> nextind("α", 3)
-ERROR: BoundsError: attempt to access String at index [3]
+ERROR: BoundsError: attempt to access 2-codeunit String at index [3]
 [...]
 
 julia> nextind("α", 0, 2)
@@ -727,7 +734,8 @@ size(s::CodeUnits) = (length(s),)
 elsize(s::CodeUnits{T}) where {T} = sizeof(T)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
-iterate(s::CodeUnits, i=1) = (@_propagate_inbounds_meta; i == length(s)+1 ? nothing : (s[i], i+1))
+@inline iterate(s::CodeUnits, i=1) = (i % UInt) - 1 < length(s) ? (@inbounds s[i], i + 1) : nothing
+
 
 write(io::IO, s::CodeUnits) = write(io, s.s)
 
