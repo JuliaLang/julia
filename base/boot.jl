@@ -381,6 +381,11 @@ eval(Core, :(UpsilonNode(val) = $(Expr(:new, :UpsilonNode, :val))))
 eval(Core, :(UpsilonNode() = $(Expr(:new, :UpsilonNode))))
 eval(Core, :(LineInfoNode(@nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
              $(Expr(:new, :LineInfoNode, :method, :file, :line, :inlined_at))))
+eval(Core, :(CodeInstance(mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
+                          @nospecialize(inferred), const_flags::Int32,
+                          min_world::UInt, max_world::UInt) =
+                ccall(:jl_new_codeinst, Ref{CodeInstance}, (Any, Any, Any, Any, Int32, UInt, UInt),
+                    mi, rettype, inferred_const, inferred, const_flags, min_world, max_world)))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 

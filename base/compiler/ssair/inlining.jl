@@ -798,7 +798,7 @@ function iterate(split::UnionSplitSignature, state::Vector{Int}...)
     return (sig, state)
 end
 
-function handle_single_case!(ir::IRCode, stmt::Expr, idx::Int, @nospecialize(case), isinvoke::Bool, todo::Vector{Any}, sv::OptimizationState)
+function handle_single_case!(ir::IRCode, stmt::Expr, idx::Int, @nospecialize(case), isinvoke::Bool, todo::Vector{Any})
     if isa(case, ConstantCase)
         ir[SSAValue(idx)] = case.val
     elseif isa(case, MethodInstance)
@@ -949,7 +949,7 @@ function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, invoke_data::Invok
     methsp = methsp::SimpleVector
     result = analyze_method!(idx, sig, metharg, methsp, method, stmt, sv, true, invoke_data,
                              calltype)
-    handle_single_case!(ir, stmt, idx, result, true, todo, sv)
+    handle_single_case!(ir, stmt, idx, result, true, todo)
     update_valid_age!(invoke_data.min_valid, invoke_data.max_valid, sv)
     return nothing
 end
@@ -1117,7 +1117,7 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
         # be able to do the inlining now (for constant cases), or push it directly
         # onto the todo list
         if fully_covered && length(cases) == 1
-            handle_single_case!(ir, stmt, idx, cases[1][2], false, todo, sv)
+            handle_single_case!(ir, stmt, idx, cases[1][2], false, todo)
             continue
         end
         length(cases) == 0 && continue
@@ -1332,7 +1332,7 @@ function find_inferred(mi::MethodInstance, @nospecialize(atypes), sv::Optimizati
         end
     end
 
-    linfo = inf_for_methodinstance(sv.interp, mi, sv.world)
+    linfo = get(WorldView(code_cache(sv.interp), sv.world), mi, nothing)
     if linfo isa CodeInstance
         if invoke_api(linfo) == 2
             # in this case function can be inlined to a constant

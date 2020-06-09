@@ -209,10 +209,12 @@ JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_value_t *typ
 // ----- MethodInstance specialization instantiation ----- //
 
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t*);
-JL_DLLEXPORT jl_code_instance_t* jl_set_method_inferred(
+JL_DLLEXPORT jl_code_instance_t* jl_new_codeinst(
         jl_method_instance_t *mi, jl_value_t *rettype,
         jl_value_t *inferred_const, jl_value_t *inferred,
         int32_t const_flags, size_t min_world, size_t max_world);
+JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMENT,
+                                     jl_code_instance_t *ci JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED);
 
 jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr) JL_GC_DISABLED
 {
@@ -236,8 +238,10 @@ jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_a
     m->unspecialized = mi;
     jl_gc_wb(m, mi);
 
-    jl_code_instance_t *codeinst = jl_set_method_inferred(mi, (jl_value_t*)jl_any_type, jl_nothing, jl_nothing,
+    jl_code_instance_t *codeinst = jl_new_codeinst(mi,
+        (jl_value_t*)jl_any_type, jl_nothing, jl_nothing,
         0, 1, ~(size_t)0);
+    jl_mi_cache_insert(mi, codeinst);
     codeinst->specptr.fptr1 = fptr;
     codeinst->invoke = jl_fptr_args;
 
@@ -344,7 +348,7 @@ JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_method_instance_t *mi, size_t mi
 
 
 JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
-        jl_method_instance_t *mi, jl_value_t *rettype,
+        jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_value_t *rettype,
         size_t min_world, size_t max_world)
 {
     jl_code_instance_t *codeinst = mi->cache;
@@ -356,13 +360,15 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
         }
         codeinst = codeinst->next;
     }
-    return jl_set_method_inferred(
+    codeinst = jl_new_codeinst(
         mi, rettype, NULL, NULL,
         0, min_world, max_world);
+    jl_mi_cache_insert(mi, codeinst);
+    return codeinst;
 }
 
-JL_DLLEXPORT jl_code_instance_t *jl_set_method_inferred(
-        jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_value_t *rettype,
+JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
+        jl_method_instance_t *mi, jl_value_t *rettype,
         jl_value_t *inferred_const, jl_value_t *inferred,
         int32_t const_flags, size_t min_world, size_t max_world
         /*, jl_array_t *edges, int absolute_max*/)
@@ -388,15 +394,24 @@ JL_DLLEXPORT jl_code_instance_t *jl_set_method_inferred(
     }
     codeinst->specptr.fptr = NULL;
     codeinst->isspecsig = 0;
+    codeinst->next = NULL;
+    JL_GC_POP();
+    return codeinst;
+}
+
+JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMENT,
+                                     jl_code_instance_t *ci JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED)
+{
+    JL_GC_PUSH1(&ci);
     if (jl_is_method(mi->def.method))
         JL_LOCK(&mi->def.method->writelock);
-    codeinst->next = mi->cache;
-    mi->cache = codeinst;
-    jl_gc_wb(mi, codeinst);
+    ci->next = mi->cache;
+    mi->cache = ci;
+    jl_gc_wb(mi, ci);
     if (jl_is_method(mi->def.method))
         JL_UNLOCK(&mi->def.method->writelock);
     JL_GC_POP();
-    return codeinst;
+    return;
 }
 
 static int get_method_unspec_list(jl_typemap_entry_t *def, void *closure)
@@ -1949,20 +1964,24 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         if (jl_is_method(def) && def->unspecialized) {
             jl_code_instance_t *unspec = def->unspecialized->cache;
             if (unspec && unspec->invoke != NULL) {
-                jl_code_instance_t *codeinst = jl_set_method_inferred(mi, (jl_value_t*)jl_any_type, NULL, NULL,
+                jl_code_instance_t *codeinst = jl_new_codeinst(mi,
+                    (jl_value_t*)jl_any_type, NULL, NULL,
                     0, 1, ~(size_t)0);
                 codeinst->isspecsig = 0;
                 codeinst->specptr = unspec->specptr;
                 codeinst->rettype_const = unspec->rettype_const;
                 jl_atomic_store_release(&codeinst->invoke, unspec->invoke);
+                jl_mi_cache_insert(mi, codeinst);
                 return codeinst;
             }
         }
         jl_code_info_t *src = jl_code_for_interpreter(mi);
         if (!jl_code_requires_compiler(src)) {
-            jl_code_instance_t *codeinst = jl_set_method_inferred(mi, (jl_value_t*)jl_any_type, NULL, NULL,
+            jl_code_instance_t *codeinst = jl_new_codeinst(mi,
+                (jl_value_t*)jl_any_type, NULL, NULL,
                 0, 1, ~(size_t)0);
             jl_atomic_store_release(&codeinst->invoke, jl_fptr_interpret_call);
+            jl_mi_cache_insert(mi, codeinst);
             return codeinst;
         }
         if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF) {
@@ -1983,12 +2002,13 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
             ucache->invoke != jl_fptr_interpret_call) {
             return ucache;
         }
-        codeinst = jl_set_method_inferred(mi, (jl_value_t*)jl_any_type, NULL, NULL,
+        codeinst = jl_new_codeinst(mi, (jl_value_t*)jl_any_type, NULL, NULL,
             0, 1, ~(size_t)0);
         codeinst->isspecsig = 0;
         codeinst->specptr = ucache->specptr;
         codeinst->rettype_const = ucache->rettype_const;
         jl_atomic_store_release(&codeinst->invoke, ucache->invoke);
+        jl_mi_cache_insert(mi, codeinst);
     }
     return codeinst;
 }
