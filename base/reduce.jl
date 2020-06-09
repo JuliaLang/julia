@@ -662,8 +662,8 @@ for non-empty collections.
 julia> maximum(length, ["Julion", "Julia", "Jule"])
 6
 
-julia> maximum(length, []; init=-Inf)
--Inf
+julia> maximum(length, []; init=-1)
+-1
 ```
 """
 maximum(f, a; kw...) = mapreduce(f, max, a; kw...)
