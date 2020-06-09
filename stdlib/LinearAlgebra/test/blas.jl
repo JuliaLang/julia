@@ -481,7 +481,7 @@ Base.strides(A::WrappedArray) = strides(A.A)
     @test pointer(transpose(y)) == pointer(y)
     @test_throws MethodError strides(y')
     @test_throws ErrorException pointer(y')
-    
+
     B = WrappedArray([1+im 2; 3 4; 5 6])
     @test strides(transpose(B)) == (3,1)
     @test pointer(transpose(B)) == pointer(B)
