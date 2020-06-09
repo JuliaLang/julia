@@ -725,3 +725,14 @@ let bt = try
     @test occursin(" include(", bt_str)
     @test !occursin(" _include(", bt_str)
 end
+
+# Issue 35191
+using Test
+let st() = try
+    rand(4)*rand(4, 5)
+catch
+    stacktrace(catch_backtrace())
+end
+@test occursin(Sys.STDLIB, string(st()[2].file))
+@test occursin(Sys.STDLIB, string(st()[3].file))
+end
