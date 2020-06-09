@@ -395,7 +395,7 @@ julia> stride(A,3)
 function stride(A::AbstractArray, k::Integer)
     st = strides(A)
     k < 1 && return 1
-    k ≤ ndims(A) && return st[k] 
+    k ≤ ndims(A) && return st[k]
     length(A)
 end
 
