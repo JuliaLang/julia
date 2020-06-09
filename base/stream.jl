@@ -1075,7 +1075,7 @@ for (x, writable, unix_fd, c_symbol) in
     f = Symbol("redirect_", lowercase(string(x)))
     _f = Symbol("_", f)
     @eval begin
-        function ($_f)(stream; isnull=false)
+        function ($_f)(stream)
             global $x
             posix_fd = _fd(stream)
             @static if Sys.iswindows()
@@ -1083,8 +1083,7 @@ for (x, writable, unix_fd, c_symbol) in
                     $(-10 - unix_fd), Libc._get_osfhandle(posix_fd))
             end
             dup(posix_fd, RawFD($unix_fd))
-            isnull && close(stream)
-            $x = isnull ? devnull : stream
+            $x = stream
             nothing
         end
         function ($f)(handle::Union{LibuvStream, IOStream})
@@ -1102,7 +1101,9 @@ for (x, writable, unix_fd, c_symbol) in
         function ($f)(::DevNull)
             nulldev = @static Sys.iswindows() ? "NUL" : "/dev/null"
             handle = open(nulldev, write=$writable)
-            $(_f)(handle, isnull=true)
+            $(_f)(handle)
+            close(handle) # handle has been dup'ed in $(_f)
+            $x = devnull
             return devnull
         end
     end
