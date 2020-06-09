@@ -688,6 +688,9 @@ julia> minimum(length, ["Julion", "Julia", "Jule"])
 
 julia> minimum(length, []; init=typemax(Int64))
 9223372036854775807
+
+julia> minimum(tanh, Real[]; init=1.0)
+1.0
 ```
 """
 minimum(f, a; kw...) = mapreduce(f, min, a; kw...)
