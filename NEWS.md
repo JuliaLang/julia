@@ -65,9 +65,9 @@ Standard library changes
   consistent in delegating printing of the navigation/selection markers, and provides
   improved support for dynamic menus.  These changes are compatible with the previous
   (deprecated) interface, so are non-breaking.
-  
+
   The new API offers several enhancements:
-  
+
   + Menus are configured in their constructors via keyword arguments
   + For custom menu types, the new `Config` and `MultiSelectConfig` replace the global `CONFIG` Dict
   + `request(menu; cursor=1)` allows you to control the initial cursor position in the menu (defaults to first item)
