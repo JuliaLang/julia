@@ -686,8 +686,8 @@ for non-empty collections.
 julia> minimum(length, ["Julion", "Julia", "Jule"])
 4
 
-julia> minimum(length, []; init=Inf)
-Inf
+julia> minimum(length, []; init=typemax(Int64))
+9223372036854775807
 ```
 """
 minimum(f, a; kw...) = mapreduce(f, min, a; kw...)
