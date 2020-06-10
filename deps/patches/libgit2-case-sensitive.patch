@@ -1,0 +1,22 @@
+From 44d5e47d8c486e149c262974bfab808737ac85c1 Mon Sep 17 00:00:00 2001
+From: Dan Skorupski <boardwalk@ersatsz.com>
+Date: Sat, 24 Aug 2019 10:39:56 -0500
+Subject: [PATCH] Fix include casing for case-sensitive filesystems.
+
+---
+ src/path.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/path.c b/src/path.c
+index 150e09eb60..732834fbef 100644
+--- a/src/path.c
++++ b/src/path.c
+@@ -14,7 +14,7 @@
+ #include "win32/w32_buffer.h"
+ #include "win32/w32_util.h"
+ #include "win32/version.h"
+-#include <AclAPI.h>
++#include <aclapi.h>
+ #else
+ #include <dirent.h>
+ #endif
