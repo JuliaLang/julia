@@ -75,12 +75,20 @@ catch_exceptions(logger) = true
 # Using invoke in combination with @nospecialize eliminates backedges to these methods
 function _invoked_shouldlog(logger, level, _module, group, id)
     @nospecialize
-    invoke(shouldlog, Tuple{typeof(logger), typeof(level), typeof(_module), typeof(group), typeof(id)}, logger, level, _module, group, id)
+    return invoke(
+        shouldlog,
+        Tuple{typeof(logger), typeof(level), typeof(_module), typeof(group), typeof(id)},
+        logger, level, _module, group, id
+    )
 end
 
-_invoked_min_enabled_level(@nospecialize(logger)) = invoke(min_enabled_level, Tuple{typeof(logger)}, logger)
+function _invoked_min_enabled_level(@nospecialize(logger))
+    return invoke(min_enabled_level, Tuple{typeof(logger)}, logger)
+end
 
-_invoked_catch_exceptions(@nospecialize(logger)) = invoke(catch_exceptions, Tuple{typeof(logger)}, logger)
+function _invoked_catch_exceptions(@nospecialize(logger))
+    return invoke(catch_exceptions, Tuple{typeof(logger)}, logger)
+end
 
 """
     NullLogger()
@@ -247,7 +255,7 @@ _log_record_ids = Set{Symbol}()
 # statement itself doesn't change.
 function log_record_id(_module, level, message, log_kws)
     modname = _module === nothing ?  "" : join(fullname(_module), "_")
-    # Use an arbitriraly chosen eight hex digits here. TODO: Figure out how to
+    # Use an arbitrarily chosen eight hex digits here. TODO: Figure out how to
     # make the id exactly the same on 32 and 64 bit systems.
     h = UInt32(hash(string(modname, level, message, log_kws)) & 0xFFFFFFFF)
     while true
@@ -268,75 +276,27 @@ default_group(file) = Symbol(splitext(basename(file))[1])
 
 # Generate code for logging macros
 function logmsg_code(_module, file, line, level, message, exs...)
-    id = Expr(:quote, log_record_id(_module, level, message, exs))
-    group = nothing
-    kwargs = Any[]
-    for ex in exs
-        if ex isa Expr && ex.head === :(=) && ex.args[1] isa Symbol
-            k,v = ex.args
-            if !(k isa Symbol)
-                throw(ArgumentError("Expected symbol for key in key value pair `$ex`"))
-            end
-            k = ex.args[1]
-            # Recognize several special keyword arguments
-            if k === :_id
-                # id may be overridden if you really want several log
-                # statements to share the same id (eg, several pertaining to
-                # the same progress step).  In those cases it may be wise to
-                # manually call log_record_id to get a unique id in the same
-                # format.
-                id = esc(v)
-            elseif k === :_module
-                _module = esc(v)
-            elseif k === :_line
-                line = esc(v)
-            elseif k === :_file
-                file = esc(v)
-            elseif k === :_group
-                group = esc(v)
-            else
-                # Copy across key value pairs for structured log records
-                push!(kwargs, Expr(:kw, k, esc(v)))
-            end
-        elseif ex isa Expr && ex.head === :...
-            # Keyword splatting
-            push!(kwargs, esc(ex))
-        else
-            # Positional arguments - will be converted to key value pairs
-            # automatically.
-            push!(kwargs, Expr(:kw, Symbol(ex), esc(ex)))
-        end
-    end
-
-    if group === nothing
-        group = if isdefined(Base, :basename) && isa(file, String)
-            # precompute if we can
-            QuoteNode(default_group(file))
-        else
-            # memoized run-time execution
-            ref = Ref{Symbol}()
-            :(isassigned($ref) ? $ref[]
-                               : $ref[] = default_group(something($file, "")))
-        end
-    end
-
+    log_data = process_logmsg_exs(_module, file, line, level, message, exs...)
     quote
         level = $level
         std_level = convert(LogLevel, level)
         if std_level >= getindex(_min_enabled_level)
-            group = $group
-            _module = $_module
+            group = $(log_data._group)
+            _module = $(log_data._module)
             logger = current_logger_for_env(std_level, group, _module)
             if !(logger === nothing)
-                id = $id
+                id = $(log_data._id)
                 # Second chance at an early bail-out (before computing the message),
                 # based on arbitrary logger-specific logic.
                 if _invoked_shouldlog(logger, level, _module, group, id)
-                    file = $file
-                    line = $line
+                    file = $(log_data._file)
+                    line = $(log_data._line)
                     try
                         msg = $(esc(message))
-                        handle_message(logger, level, msg, _module, group, id, file, line; $(kwargs...))
+                        handle_message(
+                            logger, level, msg, _module, group, id, file, line;
+                            $(log_data.kwargs...)
+                        )
                     catch err
                         logging_error(logger, level, _module, group, id, file, line, err)
                     end
@@ -347,6 +307,58 @@ function logmsg_code(_module, file, line, level, message, exs...)
     end
 end
 
+function process_logmsg_exs(_orig_module, _file, _line, level, message, exs...)
+    local _group, _id
+    _module = _orig_module
+    kwargs = Any[]
+    for ex in exs
+        if ex isa Expr && ex.head === :(=) && ex.args[1] isa Symbol
+            k,v = ex.args
+            if !(k isa Symbol)
+                throw(ArgumentError("Expected symbol for key in key value pair `$ex`"))
+            end
+
+            # Recognize several special keyword arguments
+            if k === :_group
+                _group = esc(v)
+            elseif k === :_id
+                _id = esc(v)
+            elseif k === :_module
+                _module = esc(v)
+            elseif k === :_file
+                _file = esc(v)
+            elseif k === :_line
+                _line = esc(v)
+            else
+                # Copy across key value pairs for structured log records
+                push!(kwargs, Expr(:kw, k, esc(v)))
+            end
+        elseif ex isa Expr && ex.head === :... # Keyword splatting
+            push!(kwargs, esc(ex))
+        else # Positional arguments - will be converted to key value pairs automatically.
+            push!(kwargs, Expr(:kw, Symbol(ex), esc(ex)))
+        end
+    end
+
+    if !@isdefined(_group)
+        _group = default_group_code(_file)
+    end
+    if !@isdefined(_id)
+        _id = Expr(:quote, log_record_id(_orig_module, level, message, exs))
+    end
+    return (;_module, _group, _id, _file, _line, kwargs)
+end
+
+function default_group_code(file)
+    if file isa String && isdefined(Base, :basename)
+        QuoteNode(default_group(file))  # precompute if we can
+    else
+        ref = Ref{Symbol}()  # memoized run-time execution
+        :(isassigned($ref) ? $ref[] : $ref[] = default_group(something($file, "")))
+    end
+end
+
+
 # Report an error in log message creation (or in the logger itself).
 @noinline function logging_error(logger, level, _module, group, id,
                                  filepath, line, @nospecialize(err))
@@ -355,7 +367,10 @@ end
     end
     try
         msg = "Exception while generating log record in module $_module at $filepath:$line"
-        handle_message(logger, Error, msg, _module, :logevent_error, id, filepath, line; exception=(err,catch_backtrace()))
+        handle_message(
+            logger, Error, msg, _module, :logevent_error, id, filepath, line;
+            exception=(err,catch_backtrace())
+        )
     catch err2
         try
             # Give up and write to stderr, in three independent calls to
@@ -379,12 +394,10 @@ function logmsg_shim(level, message, _module, group, id, file, line, kwargs)
             _file=String(file), _line=line, real_kws...)
 end
 
-# Global log limiting mechanism for super fast but inflexible global log
-# limiting.
+# Global log limiting mechanism for super fast but inflexible global log limiting.
 const _min_enabled_level = Ref(Debug)
 
-# LogState - a concretely typed cache of data extracted from the logger, plus
-# the logger itself.
+# LogState - a cache of data extracted from the logger, plus the logger itself.
 struct LogState
     min_enabled_level::LogLevel
     logger::AbstractLogger
@@ -523,7 +536,9 @@ with_logger(logger) do
 end
 ```
 """
-with_logger(@nospecialize(f::Function), logger::AbstractLogger) = with_logstate(f, LogState(logger))
+function with_logger(@nospecialize(f::Function), logger::AbstractLogger)
+    with_logstate(f, LogState(logger))
+end
 
 """
     current_logger()
