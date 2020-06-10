@@ -607,6 +607,11 @@ end
     @test_throws ArgumentError [] .= NamedTuple()
     @test_throws ArgumentError Dict() .= Dict()
     @test_throws ArgumentError Dict() .= NamedTuple()
+    @test_throws ArgumentError axes(ReservedCollection(Dict()))
+    @test_throws ArgumentError axes(ReservedCollection(NamedTuple()))
+    @test_throws ArgumentError ndims(ReservedCollection)
+    @test_throws ArgumentError ndims(typeof(ReservedCollection(Dict())))
+    @test_throws ArgumentError ndims(typeof(ReservedCollection(NamedTuple())))
     @test_throws MethodError broadcast(identity, Base)
 
     @test broadcast(identity, Iterators.filter(iseven, 1:10)) == 2:2:10

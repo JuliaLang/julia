@@ -1283,6 +1283,8 @@ struct ReservedCollection{T}
 end
 
 Base.get(r::ReservedCollection) = r.value
+axes(::ReservedCollection) = _reserved_style_error()
+Base.ndims(::Type{<:ReservedCollection}) = _reserved_style_error()
 
 broadcastable(x::Union{AbstractDict,NamedTuple}) = ReservedCollection(x)
 BroadcastStyle(::Type{<:ReservedCollection}) = ReservedStyle()
