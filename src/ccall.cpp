@@ -3,6 +3,12 @@
 // --- the ccall, cglobal, and llvm intrinsics ---
 #include "llvm/Support/Path.h" // for llvm::sys::path
 
+// somewhat unusual variable, in that aotcompile wants to get the address of this for a sanity check
+GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
+{
+    return prepare_global_in(M, jlRTLD_DEFAULT_var);
+}
+
 // Find or create the GVs for the library and symbol lookup.
 // Return `runtime_lib` (whether the library name is a string)
 // The `lib` and `sym` GV returned may not be in the current module.
@@ -15,17 +21,17 @@ static bool runtime_sym_gvs(jl_codegen_params_t &emission_context, const char *f
     jl_codegen_params_t::SymMapGV *symMap;
 #ifdef _OS_WINDOWS_
     if ((intptr_t)f_lib == 1) {
-        libptrgv = jlexe_var;
+        libptrgv = prepare_global_in(M, jlexe_var);
         symMap = &emission_context.symMapExe;
     }
     else if ((intptr_t)f_lib == 2) {
-        libptrgv = jldll_var;
+        libptrgv = prepare_global_in(M, jldll_var);
         symMap = &emission_context.symMapDl;
     }
     else
 #endif
     if (f_lib == NULL) {
-        libptrgv = jlRTLD_DEFAULT_var;
+        libptrgv = jl_emit_RTLD_DEFAULT_var(M);
         symMap = &emission_context.symMapDefault;
     }
     else {
@@ -636,6 +642,39 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     return mark_julia_type(ctx, res, false, rt);
 }
 
+static Function *llvmcall_proto(Function *F, Module *M = nullptr)
+{
+    // Copy the declaration characteristics of the Function (not the body)
+    Function *NewF = Function::Create(F->getFunctionType(),
+                                      Function::ExternalLinkage,
+                                      F->getName(),
+                                      M);
+
+    // Declarations are not allowed to have personality routines, but
+    // copyAttributesFrom sets them anyway. Temporarily unset the personality
+    // routine from `F`, since copying it and then resetting is more expensive
+    // as well as introducing an extra use from this unowned function, which
+    // can cause crashes in the LLVMContext's global destructor.
+    llvm::Constant *OldPersonalityFn = nullptr;
+    if (F->hasPersonalityFn()) {
+        OldPersonalityFn = F->getPersonalityFn();
+        F->setPersonalityFn(nullptr);
+    }
+
+    // FunctionType does not include any attributes. Copy them over manually
+    // as codegen may make decisions based on the presence of certain attributes
+    NewF->copyAttributesFrom(F);
+
+    if (OldPersonalityFn)
+        F->setPersonalityFn(OldPersonalityFn);
+
+    // DLLImport only needs to be set for the shadow module
+    // it just gets annoying in the JIT
+    NewF->setDLLStorageClass(GlobalValue::DefaultStorageClass);
+
+    return NewF;
+}
+
 class FunctionMover final : public ValueMaterializer
 {
 public:
@@ -699,7 +738,7 @@ public:
     {
         Function *NewF = destModule->getFunction(F->getName());
         if (!NewF) {
-            NewF = function_proto(F);
+            NewF = llvmcall_proto(F);
             NewF->setComdat(nullptr);
             destModule->getFunctionList().push_back(NewF);
         }
@@ -775,6 +814,15 @@ public:
         return NULL;
     };
 };
+
+static Function *prepare_llvmcall(Module *M, Function *Callee)
+{
+    GlobalValue *local = M->getNamedValue(Callee->getName());
+    if (!local)
+        local = llvmcall_proto(Callee, M);
+    return cast<Function>(local);
+}
+
 
 // llvmcall(ir, (rettypes...), (argtypes...), args...)
 static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
@@ -954,7 +1002,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         std::stringstream name;
         name << "jl_llvmcall" << llvmcallnumbering++;
         f->setName(name.str());
-        f = cast<Function>(prepare_call(function_proto(f)).getCallee());
+        f = prepare_llvmcall(jl_Module, llvmcall_proto(f));
     }
     else {
         f->setLinkage(GlobalValue::LinkOnceODRLinkage);
@@ -1862,9 +1910,9 @@ jl_cgval_t function_sig_t::emit_a_ccall(
 
     OperandBundleDef OpBundle("jl_roots", gc_uses);
     // the actual call
-    Value *ret = ctx.builder.CreateCall(prepare_call(llvmf),
-                                    ArrayRef<Value*>(&argvals[0], nccallargs + sret),
-                                    ArrayRef<OperandBundleDef>(&OpBundle, gc_uses.empty() ? 0 : 1));
+    CallInst *ret = ctx.builder.CreateCall(functype, llvmf,
+            ArrayRef<Value*>(&argvals[0], nccallargs + sret),
+            ArrayRef<OperandBundleDef>(&OpBundle, gc_uses.empty() ? 0 : 1));
     ((CallInst*)ret)->setAttributes(attributes);
 
     if (cc != CallingConv::C)

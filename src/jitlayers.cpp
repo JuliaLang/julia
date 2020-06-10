@@ -618,14 +618,10 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
 
 void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
 {
-    bool successful = GlobalSymbolTable.insert(std::make_pair(Name, (void*)Addr)).second;
+    std::string MangleName = getMangledName(Name);
+    bool successful = GlobalSymbolTable.insert(std::make_pair(MangleName, (void*)Addr)).second;
     (void)successful;
     assert(successful);
-}
-
-void JuliaOJIT::addGlobalMapping(const GlobalValue *GV, void *Addr)
-{
-    addGlobalMapping(getMangledName(GV), (uintptr_t)Addr);
 }
 
 void *JuliaOJIT::getPointerToGlobalIfAvailable(StringRef S)
@@ -991,16 +987,7 @@ static uint64_t getAddressForFunction(StringRef fname)
 }
 
 // helper function for adding a DLLImport (dlsym) address to the execution engine
-void add_named_global(GlobalObject *gv, void *addr, bool dllimport)
+void add_named_global(StringRef name, void *addr)
 {
-#ifdef _OS_WINDOWS_
-    // setting JL_DLLEXPORT correctly only matters when building a binary
-    if (dllimport && imaging_mode) {
-        assert(gv->getLinkage() == GlobalValue::ExternalLinkage);
-        // add the __declspec(dllimport) attribute
-        gv->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
-    }
-#endif // _OS_WINDOWS_
-
-    jl_ExecutionEngine->addGlobalMapping(gv, addr);
+    jl_ExecutionEngine->addGlobalMapping(name, (uint64_t)(uintptr_t)addr);
 }

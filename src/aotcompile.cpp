@@ -536,7 +536,7 @@ void jl_dump_native(void *native_code,
 
         // reflect the address of the jl_RTLD_DEFAULT_handle variable
         // back to the caller, so that we can check for consistency issues
-        GlobalValue *jlRTLD_DEFAULT_var = data->M->getNamedValue("jl_RTLD_DEFAULT_handle");
+        GlobalValue *jlRTLD_DEFAULT_var = jl_emit_RTLD_DEFAULT_var(data->M.get());
         addComdat(new GlobalVariable(*data->M,
                                      jlRTLD_DEFAULT_var->getType(),
                                      true,

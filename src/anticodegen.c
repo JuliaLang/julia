@@ -27,7 +27,6 @@ JL_DLLEXPORT size_t jl_LLVMDisasmInstruction(void *DC, uint8_t *Bytes, uint64_t 
 int32_t jl_assign_functionID(const char *fname) UNAVAILABLE
 
 void jl_init_codegen(void) { }
-void jl_fptr_to_llvm(void *fptr, jl_method_instance_t *lam, int specsig) { }
 
 int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline)
 {
