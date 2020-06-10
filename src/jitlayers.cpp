@@ -42,7 +42,7 @@ void jl_dump_compiles(void *s)
     dump_compiles_stream = (JL_STREAM*)s;
 }
 
-static void jl_add_to_ee();
+static void jl_add_to_ee(std::unique_ptr<Module> m);
 static void jl_add_to_ee(std::unique_ptr<Module> &M, StringMap<std::unique_ptr<Module>*> &NewExports);
 static uint64_t getAddressForFunction(StringRef fname);
 
@@ -61,6 +61,26 @@ void jl_jit_globals(std::map<void *, GlobalVariable*> &globals)
         jl_link_global(global.second, global.first);
     }
 }
+
+// turn long strings into memoized copies, instead of making a copy per object file of output.
+void jl_jit_strings(jl_codegen_params_t::SymMapGV &stringConstants)
+{
+    for (auto &it : stringConstants) {
+        GlobalVariable *GV = it.second;
+        Constant *CDA = GV->getInitializer();
+        StringRef data = cast<ConstantDataSequential>(CDA)->getRawDataValues();
+        if (data.size() > 8) { // only for long strings: keep short ones as values
+            Type *T_size = Type::getIntNTy(GV->getContext(), sizeof(void*) * 8);
+            Constant *v = ConstantExpr::getIntToPtr(
+                ConstantInt::get(T_size, (uintptr_t)data.data()),
+                GV->getType());
+            GV->replaceAllUsesWith(v);
+            GV->eraseFromParent();
+            it.second = nullptr;
+        }
+    }
+}
+
 
 // this generates llvm code for the lambda info
 // and adds the result to the jitlayers
@@ -99,7 +119,9 @@ static jl_callptr_t _jl_compile_codeinst(
             emitted[codeinst] = std::move(result);
         jl_compile_workqueue(emitted, params, CompilationPolicy::Default);
 
-        jl_add_to_ee();
+        jl_jit_strings(params.stringConstants);
+        if (params._shared_module)
+            jl_add_to_ee(std::unique_ptr<Module>(params._shared_module));
         StringMap<std::unique_ptr<Module>*> NewExports;
         StringMap<void*> NewGlobals;
         for (auto &global : params.globals) {
@@ -197,7 +219,7 @@ static jl_callptr_t _jl_compile_codeinst(
     return fptr;
 }
 
-Function *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
+void jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
 
 // compile a C-callable alias
 extern "C" JL_DLLEXPORT
@@ -208,14 +230,20 @@ void jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declr
     jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
     if (pparams == NULL)
         pparams = &params;
-    jl_generate_ccallable(llvmmod, sysimg, declrt, sigt, *pparams);
+    Module *into = (Module*)llvmmod;
+    if (into == NULL)
+        into = jl_create_llvm_module("cextern");
+    jl_generate_ccallable(into, sysimg, declrt, sigt, *pparams);
     if (!sysimg) {
         if (p == NULL) {
             jl_jit_globals(params.globals);
+            jl_jit_strings(params.stringConstants);
             assert(params.workqueue.empty());
+            if (params._shared_module)
+                jl_add_to_ee(std::unique_ptr<Module>(params._shared_module));
         }
         if (llvmmod == NULL)
-            jl_add_to_ee();
+            jl_add_to_ee(std::unique_ptr<Module>(into));
     }
     JL_UNLOCK(&codegen_lock);
 }
@@ -804,7 +832,8 @@ void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
                 continue;
             }
             else {
-                assert(dG->isDeclaration() || dG->getInitializer() == sG->getInitializer());
+                assert(dG->isDeclaration() || (dG->getInitializer() == sG->getInitializer() &&
+                            dG->isConstant() && sG->isConstant()));
                 dG->replaceAllUsesWith(sG);
                 dG->eraseFromParent();
             }
@@ -870,11 +899,6 @@ void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
     }
 }
 
-// this is a unique_ptr, but we don't want
-// C++ to attempt to run out finalizer on exit
-// since it also owned by jl_LLVMContext
-static Module *ready_to_emit;
-
 static void jl_add_to_ee(std::unique_ptr<Module> m)
 {
     JL_TIMING(LLVM_EMIT);
@@ -891,24 +915,6 @@ static void jl_add_to_ee(std::unique_ptr<Module> m)
 #endif
     assert(jl_ExecutionEngine);
     jl_ExecutionEngine->addModule(std::move(m));
-}
-
-static void jl_add_to_ee()
-{
-    std::unique_ptr<Module> m(ready_to_emit);
-    ready_to_emit = NULL;
-    if (m)
-        jl_add_to_ee(std::move(m));
-}
-
-// this passes ownership of a module to the JIT after code emission is complete
-// TODO: this should be deprecated
-void jl_finalize_module(std::unique_ptr<Module> m)
-{
-    if (ready_to_emit)
-        jl_merge_module(ready_to_emit, std::move(m));
-    else
-        ready_to_emit = m.release();
 }
 
 static int jl_add_to_ee(
@@ -989,7 +995,6 @@ void add_named_global(GlobalObject *gv, void *addr, bool dllimport)
 {
 #ifdef _OS_WINDOWS_
     // setting JL_DLLEXPORT correctly only matters when building a binary
-    // (global_proto will strip this from the JIT)
     if (dllimport && imaging_mode) {
         assert(gv->getLinkage() == GlobalValue::ExternalLinkage);
         // add the __declspec(dllimport) attribute

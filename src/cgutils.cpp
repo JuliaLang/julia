@@ -137,40 +137,30 @@ static inline void _hook_call(jl_value_t *hook, std::array<jl_value_t*,N> args) 
 
 
 // --- string constants ---
-static StringMap<GlobalVariable*> stringConstants;
-static Value *stringConstPtr(IRBuilder<> &irbuilder, const std::string &txt)
+static Value *stringConstPtr(
+        jl_codegen_params_t &emission_context,
+        IRBuilder<> &irbuilder,
+        const std::string &txt)
 {
-    StringRef ctxt(txt.c_str(), strlen(txt.c_str()) + 1);
+    StringRef ctxt(txt.c_str(), txt.size() + 1);
     StringMap<GlobalVariable*>::iterator pooledval =
-        stringConstants.insert(std::pair<StringRef, GlobalVariable*>(ctxt, NULL)).first;
-    StringRef pooledtxt = pooledval->getKey();
-    if (imaging_mode) {
-        if (pooledval->second == NULL) {
-            static int strno = 0;
-            std::stringstream ssno;
-            ssno << "_j_str" << strno++;
-            GlobalVariable *gv = get_pointer_to_constant(
-                                    ConstantDataArray::get(jl_LLVMContext,
-                                                           ArrayRef<unsigned char>(
-                                                           (const unsigned char*)pooledtxt.data(),
-                                                           pooledtxt.size())),
-                                    ssno.str(),
-                                    *shadow_output);
-            pooledval->second = gv;
-            jl_ExecutionEngine->addGlobalMapping(gv, (void*)(uintptr_t)pooledtxt.data());
-        }
-
-        GlobalVariable *v = prepare_global_in(jl_builderModule(irbuilder), pooledval->second);
-        Value *zero = ConstantInt::get(Type::getInt32Ty(jl_LLVMContext), 0);
-        Value *Args[] = { zero, zero };
-        return irbuilder.CreateInBoundsGEP(v->getValueType(), v, Args);
+        emission_context.stringConstants.insert(std::pair<StringRef, GlobalVariable*>(ctxt, NULL)).first;
+    Module *M = jl_builderModule(irbuilder);
+    if (pooledval->second == NULL) {
+        static int strno = 0;
+        std::stringstream ssno;
+        ssno << "_j_str" << strno++;
+        GlobalVariable *gv = get_pointer_to_constant(
+                ConstantDataArray::get(jl_LLVMContext, ArrayRef<char>(ctxt.data(), ctxt.size())),
+                ssno.str(), *M);
+        pooledval->second = gv;
     }
-    else {
-        Value *v = ConstantExpr::getIntToPtr(
-                ConstantInt::get(T_size, (uintptr_t)pooledtxt.data()),
-                T_pint8);
-        return v;
-    }
+    GlobalVariable *v = prepare_global_in(M, pooledval->second);
+    if (v != pooledval->second)
+        v->setInitializer(pooledval->second->getInitializer());
+    Value *zero = ConstantInt::get(Type::getInt32Ty(jl_LLVMContext), 0);
+    Value *Args[] = { zero, zero };
+    return irbuilder.CreateInBoundsGEP(v->getValueType(), v, Args);
 }
 
 // --- MDNode ---
@@ -356,8 +346,8 @@ static Value *literal_pointer_val_slot(jl_codectx_t &ctx, jl_value_t *p)
         return gv;
     }
     if (GlobalVariable *gv = julia_const_gv(p)) {
-        // if this is a known object, use the existing GlobalValue
-        return prepare_global(gv);
+        // if this is a known special object, use the existing GlobalValue
+        return prepare_global_in(jl_Module, gv);
     }
     if (jl_is_datatype(p)) {
         jl_datatype_t *addr = (jl_datatype_t*)p;
@@ -1091,7 +1081,7 @@ static Value *emit_datatype_name(jl_codectx_t &ctx, Value *dt)
 
 static void just_emit_error(jl_codectx_t &ctx, const std::string &txt)
 {
-    ctx.builder.CreateCall(prepare_call(jlerror_func), stringConstPtr(ctx.builder, txt));
+    ctx.builder.CreateCall(prepare_call(jlerror_func), stringConstPtr(ctx.emission_context, ctx.builder, txt));
 }
 
 static void emit_error(jl_codectx_t &ctx, const std::string &txt)
@@ -1154,7 +1144,7 @@ static void null_pointer_check(jl_codectx_t &ctx, Value *v)
 
 static void emit_type_error(jl_codectx_t &ctx, const jl_cgval_t &x, Value *type, const std::string &msg)
 {
-    Value *msg_val = stringConstPtr(ctx.builder, msg);
+    Value *msg_val = stringConstPtr(ctx.emission_context, ctx.builder, msg);
     ctx.builder.CreateCall(prepare_call(jltypeerror_func),
                        { msg_val, maybe_decay_untracked(type), mark_callee_rooted(boxed(ctx, x))});
 }

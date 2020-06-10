@@ -153,7 +153,6 @@ bool imaging_mode = false;
 // shared llvm state
 JL_DLLEXPORT LLVMContext &jl_LLVMContext = *(new LLVMContext());
 TargetMachine *jl_TargetMachine;
-Module *shadow_output;
 static DataLayout &jl_data_layout = *(new DataLayout(""));
 #define jl_Module ctx.f->getParent()
 #define jl_builderModule(builder) (builder).GetInsertBlock()->getParent()->getParent()
@@ -606,7 +605,6 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, Value *theFptr, Value *theF,
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p);
 static GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G);
-#define prepare_global(G) prepare_global_in(jl_Module, (G))
 static Instruction *tbaa_decorate(MDNode *md, Instruction *load_or_store);
 
 // --- convenience functions for tagging llvm values with julia types ---
@@ -617,7 +615,7 @@ static GlobalVariable *get_pointer_to_constant(Constant *val, StringRef name, Mo
             M,
             val->getType(),
             true,
-            GlobalVariable::PrivateLinkage,
+            GlobalVariable::ExternalLinkage,
             val,
             name);
     gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
@@ -1096,6 +1094,13 @@ static void jl_setup_module(Module *m, const jl_cgparams_t *params = &jl_default
             llvm::DEBUG_METADATA_VERSION);
     m->setDataLayout(jl_data_layout);
     m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
+}
+
+Module *jl_create_llvm_module(StringRef name)
+{
+    Module *M = new Module(name, jl_LLVMContext);
+    jl_setup_module(M);
+    return M;
 }
 
 static void jl_init_function(Function *F)
@@ -3542,7 +3547,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     else {
         if (!jl_is_method(ctx.linfo->def.method)) {
             // TODO: inference is invalid if this has an effect
-            Value *world = ctx.builder.CreateLoad(prepare_global(jlgetworld_global));
+            Value *world = ctx.builder.CreateLoad(prepare_global_in(jl_Module, jlgetworld_global));
             ctx.builder.CreateStore(world, ctx.world_age_field);
         }
         assert(ssaval_result != -1);
@@ -4024,6 +4029,7 @@ static Function* gen_cfun_wrapper(
     jl_unionall_t *unionall_env, jl_svec_t *sparam_vals, jl_array_t **closure_types)
 {
     // Generate a c-callable wrapper
+    assert(into);
     size_t nargs = sig.nccallargs;
     const char *name = "cfunction";
     size_t world = jl_world_counter;
@@ -4067,10 +4073,6 @@ static Function* gen_cfun_wrapper(
     funcName << "jlcapi_" << name << "_" << globalUnique++;
 
     Module *M = into;
-    if (!M) {
-        M = new Module(name, jl_LLVMContext);
-        jl_setup_module(M);
-    }
     AttributeList attributes = sig.attributes;
     FunctionType *functype;
     if (nest) {
@@ -4089,7 +4091,6 @@ static Function* gen_cfun_wrapper(
             funcName.str(), M);
     cw->setAttributes(attributes);
     jl_init_function(cw);
-    Function *cw_proto = into ? cw : function_proto(cw);
 
     jl_codectx_t ctx(jl_LLVMContext, params);
     ctx.f = cw;
@@ -4113,7 +4114,7 @@ static Function* gen_cfun_wrapper(
     Value *valid_tls = ctx.builder.CreateIsNotNull(last_age);
     have_tls = ctx.builder.CreateAnd(have_tls, valid_tls);
     ctx.world_age_field = ctx.builder.CreateSelect(valid_tls, ctx.world_age_field, dummy_world);
-    Value *world_v = ctx.builder.CreateLoad(prepare_global(jlgetworld_global));
+    Value *world_v = ctx.builder.CreateLoad(prepare_global_in(jl_Module, jlgetworld_global));
 
     Value *age_ok = NULL;
     if (calltype) {
@@ -4482,6 +4483,11 @@ static Function* gen_cfun_wrapper(
     ctx.builder.SetCurrentDebugLocation(noDbg);
     ctx.builder.ClearInsertionPoint();
 
+    if (aliasname) {
+        GlobalAlias::create(cw->getType()->getElementType(), cw->getType()->getAddressSpace(),
+                            GlobalValue::ExternalLinkage, aliasname, cw, M);
+    }
+
     if (nest) {
         funcName << "make";
         Function *cw_make = Function::Create(
@@ -4502,17 +4508,10 @@ static Function* gen_cfun_wrapper(
                 cwbuilder.CreateBitCast(NVal, T_pint8)
             });
         cwbuilder.CreateRet(cwbuilder.CreateCall(adjust_trampoline, { Tramp }));
-        cw_proto = into ? cw_make : function_proto(cw_make);
+        cw = cw_make;
     }
 
-    if (aliasname) {
-        GlobalAlias::create(cw->getType()->getElementType(), cw->getType()->getAddressSpace(),
-                            GlobalValue::ExternalLinkage, aliasname, cw, M);
-    }
-    if (!into)
-        jl_finalize_module(std::unique_ptr<Module>(M));
-
-    return cw_proto;
+    return cw;
 }
 
 // Get the LLVM Function* for the C-callable entry point for a certain function
@@ -4685,7 +4684,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
 
 // do codegen to create a C-callable alias/wrapper, or if sysimg_handle is set,
 // restore one from a loaded system image.
-Function *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params)
+void jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params)
 {
     jl_datatype_t *ft = (jl_datatype_t*)jl_tparam0(sigt);
     jl_value_t *ff = ft->instance;
@@ -4715,24 +4714,23 @@ Function *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *
             size_t world = jl_world_counter;
             size_t min_valid = 0;
             size_t max_valid = ~(size_t)0;
-            Function *F = NULL;
             if (sysimg_handle) {
                 // restore a ccallable from the system image
                 void *addr;
                 int found = jl_dlsym(sysimg_handle, name, &addr, 0);
                 if (found) {
                     FunctionType *ftype = sig.functype();
-                    F = Function::Create(ftype, GlobalVariable::ExternalLinkage,
-                                         name, shadow_output);
+                    Function *F = Function::Create(ftype, GlobalVariable::ExternalLinkage, name);
                     add_named_global(F, addr);
+                    delete F;
                 }
             }
             else {
                 jl_method_instance_t *lam = jl_get_specialization1((jl_tupletype_t*)sigt, world, &min_valid, &max_valid, 0);
-                F = gen_cfun_wrapper((Module*)llvmmod, params, sig, ff, name, declrt, lam, NULL, NULL, NULL);
+                gen_cfun_wrapper((Module*)llvmmod, params, sig, ff, name, declrt, lam, NULL, NULL, NULL);
             }
             JL_GC_POP();
-            return F;
+            return;
         }
         err = jl_get_exceptionf(jl_errorexception_type, "%s", sig.err_msg.c_str());
     }
@@ -7530,7 +7528,6 @@ extern "C" void jl_init_codegen(void)
     // Now that the execution engine exists, initialize all modules
     jl_init_jit();
     Module *m = new Module("julia", jl_LLVMContext);
-    shadow_output = m;
     jl_setup_module(m);
     init_julia_llvm_env(m);
 

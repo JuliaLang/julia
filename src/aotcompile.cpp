@@ -294,6 +294,7 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
     JL_LOCK(&codegen_lock);
 
     CompilationPolicy policy = (CompilationPolicy) _policy;
+    std::unique_ptr<Module> clone(jl_create_llvm_module("text"));
 
     // compile all methods for the current world and type-inference world
     size_t compile_for[] = { jl_typeinf_world, jl_world_counter };
@@ -311,7 +312,7 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
             jl_value_t *item = jl_array_ptr_ref(methods, i);
             if (jl_is_simplevector(item)) {
                 if (worlds == 1)
-                    jl_compile_extern_c(shadow_output, &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+                    jl_compile_extern_c(clone.get(), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
                 continue;
             }
             mi = (jl_method_instance_t*)item;
@@ -348,8 +349,6 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
 
     // clones the contents of the module `m` to the shadow_output collector
     // while examining and recording what kind of function pointer we have
-    ValueToValueMapTy VMap;
-    std::unique_ptr<Module> clone(CloneModule(*shadow_output, VMap));
     for (auto &def : emitted) {
         jl_merge_module(clone.get(), std::move(std::get<0>(def.second)));
         jl_code_instance_t *this_code = def.first;
@@ -373,6 +372,11 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
             cfunc_id = data->jl_sysimg_fvars.size();
         }
         data->jl_fvar_map[this_code] = std::make_tuple(func_id, cfunc_id);
+    }
+    if (params._shared_module) {
+        std::unique_ptr<Module> shared(params._shared_module);
+        params._shared_module = NULL;
+        jl_merge_module(clone.get(), std::move(shared));
     }
 
     // now get references to the globals in the merged module
@@ -596,15 +600,6 @@ void jl_dump_native(void *native_code,
                     Kind, true, false), reportWriterError);
 
     delete data;
-}
-
-// clones the contents of the module `m` to the shadow_output collector
-// TODO: this should be deprecated
-void jl_add_to_shadow(Module *m)
-{
-    ValueToValueMapTy VMap;
-    std::unique_ptr<Module> clone(CloneModule(*m, VMap));
-    jl_merge_module(shadow_output, std::move(clone));
 }
 
 
