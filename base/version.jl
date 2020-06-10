@@ -300,3 +300,39 @@ function banner(io::IO = stdout)
         """)
     end
 end
+
+"""
+    julia_versionnumber(v::String)
+    julia_versionnumber(v::VersionNumber)
+
+returns the Julia version number by following the same specifications as VersionNumber.
+
+`julia_versionnumber` will fetch the latest nightly version number if `"nightly"` or `"latest"` is given as the input.
+
+# Examples
+```julia
+julia> julia_versionnumber("nightly")
+v"1.6.0-DEV"
+```
+
+```jldoctest
+julia> julia_versionnumber("1.2.3")
+v"1.2.3"
+
+julia> julia_versionnumber(v"1.2.3")
+v"1.2.3"
+```
+"""
+julia_versionnumber(v::VersionNumber) = v
+function julia_versionnumber(v::String)
+    if in(v, ["nightly", "latest"])
+        version_path = download(
+            "https://raw.githubusercontent.com/JuliaLang/julia/master/VERSION",
+            joinpath(tempdir(), "VERSION.txt"),
+        )
+        version_str = replace(Base.read(version_path, String), "\n" => "")
+        return VersionNumber(version_str)
+    else
+        return VersionNumber(v)
+    end
+end
