@@ -231,6 +231,5 @@ io = IOBuffer()
 # julia_versionnumber
 @test julia_versionnumber("nightly") ==
       VersionNumber(replace(Base.read("VERSION", String), "\n" => ""))
-@test thispatch(julia_versionnumber("nightly")) == thispatch(VERSION)
 @test julia_versionnumber("1.2.3") == v"1.2.3"
 @test julia_versionnumber(v"1.2.3") == v"1.2.3"
