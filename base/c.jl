@@ -417,14 +417,14 @@ end
 function unsafe_string(p::Ptr{T}, length::Integer) where {T<:Union{UInt16,UInt32,Cwchar_t}}
     transcode(String, unsafe_wrap(Array, p, length; own=false))
 end
-function unsafe_string(p::Ptr{T}) where {T<:Union{UInt16,UInt32,Cwchar_t}}
+function unsafe_string(cw::Cwstring)
+    p = convert(Ptr{Cwchar_t}, cw)
     n = 1
     while unsafe_load(p, n) != 0
         n += 1
     end
     return unsafe_string(p, n - 1)
 end
-unsafe_string(cw::Cwstring) = unsafe_string(convert(Ptr{Cwchar_t}, cw))
 
 # deferring (or un-deferring) ctrl-c handler for external C code that
 # is not interrupt safe (see also issue #2622).  The sigatomic_begin/end
