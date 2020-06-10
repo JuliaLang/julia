@@ -665,7 +665,7 @@ julia> maximum(length, ["Julion", "Julia", "Jule"])
 julia> maximum(length, []; init=-1)
 -1
 
-julia> maximum(tanh, Real[]; init=-1.0)
+julia> maximum(tanh, Real[]; init=-1.0)  # good, since output of tanh is >= -1
 -1.0
 ```
 """
@@ -692,7 +692,7 @@ julia> minimum(length, ["Julion", "Julia", "Jule"])
 julia> minimum(length, []; init=typemax(Int64))
 9223372036854775807
 
-julia> minimum(tanh, Real[]; init=1.0)
+julia> minimum(tanh, Real[]; init=1.0)  # good, since output of tanh is <= 1
 1.0
 ```
 """
