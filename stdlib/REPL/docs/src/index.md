@@ -120,6 +120,21 @@ search: Int32 UInt32
   32-bit signed integer type.
 ```
 
+A string or regex literal searches all docstrings using [`apropos`](@ref):
+
+```
+help?> "aprop"
+REPL.stripmd
+Base.Docs.apropos
+
+help?> r"ap..p"
+Base.:∘
+Base.shell_escape_posixly
+Distributed.CachingPool
+REPL.stripmd
+Base.Docs.apropos
+```
+
 Help mode can be exited by pressing backspace at the beginning of the line.
 
 ### [Shell mode](@id man-shell-mode)
