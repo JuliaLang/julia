@@ -28,4 +28,5 @@ $(addprefix version-check-,$(DEP_LIBS_STAGED)) : version-check-% : install-%
 			[ "$(UNINSTALL_$*)" != "`cat $(build_prefix)/manifest/$*`" ]) ; then \
 		echo "WARNING: using mismatched version for $$(cat $(build_prefix)/manifest/$*):" ; \
 		echo "  want $(UNINSTALL_$*)" ; \
+		echo "  Try deleting the usr directory." ; \
 	fi
