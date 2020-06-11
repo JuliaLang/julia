@@ -333,8 +333,27 @@ function open(f::Function, args...; kwargs...)
     end
 end
 
-# Generic wrappers around other IO objects
+"""
+    AbstractPipe
+
+`AbstractPipe` is the abstract supertype for IO pipes that provide for communication between processes.
+
+If `pipe isa AbstractPipe`, it must obey the following interface:
+
+- `pipe.in` or `pipe.in_stream`, if present, must be of type `IO` and be used to provide input to the pipe
+- `pipe.out` or `pipe.out_stream`, if present, must be of type `IO` and be used for output from the pipe
+- `pipe.err` or `pipe.err_stream`, if present, must be of type `IO` and be used for writing errors from the pipe
+"""
 abstract type AbstractPipe <: IO end
+
+function getproperty(pipe::AbstractPipe, name::Symbol)
+    if name === :in || name === :in_stream || name === :out || name === :out_stream ||
+       name === :err || name === :err_stream
+        return getfield(pipe, name)::IO
+    end
+    return getfield(pipe, name)
+end
+
 function pipe_reader end
 function pipe_writer end
 
