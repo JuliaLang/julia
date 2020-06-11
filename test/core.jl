@@ -5178,6 +5178,12 @@ end
 @test let_Box5()() == 46
 @test let_noBox()() == 21
 
+function _assigns_and_captures_arg(a)
+    a = a
+    return ()->a
+end
+@test !any(contains_Box, code_lowered(_assigns_and_captures_arg,(Any,))[1].code)
+
 module TestModuleAssignment
 using Test
 @eval $(GlobalRef(TestModuleAssignment, :x)) = 1
