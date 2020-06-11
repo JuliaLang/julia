@@ -172,7 +172,7 @@ end
 #    rand(Float64) "fast enough".
 #    The tradeoff is faster creation of the sampler, but more consumption of entropy bits.
 # 2) "Slow" (SamplerRangeInt) which tries to use as few entropy bits as possible, at the
-#    cost of a a bigger upfront price associated with the creation of the sampler.
+#    cost of a bigger upfront price associated with the creation of the sampler.
 #    This sampler is most appropriate for slower random generators.
 # 3) "Nearly Division Less" (NDL) which is generally the fastest algorithm for types of size
 #    up to 64 bits. This is the default for these types since Julia 1.5.
