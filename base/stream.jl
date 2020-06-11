@@ -1099,6 +1099,7 @@ for (x, writable, unix_fd, c_symbol) in
             return (read, write)
         end
         function ($f)(::DevNull)
+            global $x
             nulldev = @static Sys.iswindows() ? "NUL" : "/dev/null"
             handle = open(nulldev, write=$writable)
             $(_f)(handle)
@@ -1123,7 +1124,7 @@ elsewhere.
 If called with the optional `stream` argument, then returns `stream` itself.
 
 !!! note
-    `stream` must be a `IOStream`, a `TTY`, a `Pipe`, a socket, or `devnull`.
+    `stream` must be an `IOStream`, a `TTY`, a `Pipe`, a socket, or `devnull`.
 """
 redirect_stdout
 
@@ -1133,7 +1134,7 @@ redirect_stdout
 Like [`redirect_stdout`](@ref), but for [`stderr`](@ref).
 
 !!! note
-    `stream` must be a `IOStream`, a `TTY`, a `Pipe`, a socket, or `devnull`.
+    `stream` must be an `IOStream`, a `TTY`, a `Pipe`, a socket, or `devnull`.
 """
 redirect_stderr
 
@@ -1145,7 +1146,7 @@ Note that the order of the return tuple is still `(rd, wr)`,
 i.e. data to be read from [`stdin`](@ref) may be written to `wr`.
 
 !!! note
-    `stream` must be a `IOStream`, a `TTY`, a `Pipe`, a socket, or `devnull`.
+    `stream` must be an `IOStream`, a `TTY`, a `Pipe`, a socket, or `devnull`.
 """
 redirect_stdin
 
