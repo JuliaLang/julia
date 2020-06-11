@@ -217,7 +217,7 @@ print(io::IO, s::Symbol) = (write(io,s); nothing)
 `IOContext` provides a mechanism for passing output configuration settings among [`show`](@ref) methods.
 
 In short, it is an immutable dictionary that is a subclass of `IO`. It supports standard
-dictionary operations such as [`getindex`](@ref), and can also be used as an I/O stream.
+dictionary operations such as [`getindex`](@ref) and [`push`](@ref), and can also be used as an I/O stream.
 """
 struct IOContext{IO_t <: IO} <: AbstractPipe
     io::IO_t
@@ -323,6 +323,15 @@ short
 ```
 """
 IOContext(io::IO, KV::Pair, KVs::Pair...) = IOContext(IOContext(io, KV), KVs...)
+
+"""
+    push(io::IO, KV::Pair...)
+
+Create an `IOContext` that wraps a given stream, adding the specified `key=>value` pairs to
+the properties of that stream (note that `io` can itself be an `IOContext`).
+This is equivalent to [`IOContext(io, KV...)`](@ref).
+"""
+push(io::IO, KV::Pair...) = IOContext(io, KVs...)
 
 show(io::IO, ctx::IOContext) = (print(io, "IOContext("); show(io, ctx.io); print(io, ")"))
 

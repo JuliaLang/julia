@@ -743,6 +743,15 @@ ImmutableDict(t::ImmutableDict{K,V}, KV::Pair, rest::Pair...) where {K,V} =
     ImmutableDict(ImmutableDict(t, KV), rest...)
 ImmutableDict(KV::Pair, rest::Pair...) = ImmutableDict(ImmutableDict(KV), rest...)
 
+"""
+    push(coll, items...)
+
+Create a new collection containing all the elements from `coll` (in the same order
+for ordered collections) plus the provided new `items` (inserted at the end
+for ordered collections).
+"""
+push(dict::ImmutableDict, KV::Pair...) = ImmutableDict(dict, KV...)
+
 function in(key_value::Pair, dict::ImmutableDict, valcmp=(==))
     key, value = key_value
     while isdefined(dict, :parent)

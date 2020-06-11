@@ -661,9 +661,13 @@ import Base.ImmutableDict
     v1 = "value1"
     v2 = "value2"
     d1 = ImmutableDict(d, k1 => v1)
+    @test d1 == push(d, k1 => v1)
     d2 = ImmutableDict(d1, k2 => v2)
     d3 = ImmutableDict(d2, k1 => v2)
     d4 = ImmutableDict(d3, k2 => v1)
+    d4′ = push(d, k1 => v1, k2 => v2, k1 => v2, k2 => v1)
+    @test d4 == d4′
+    @test typeof(d4) == typeof(d4′)
     dnan = ImmutableDict{String, Float64}(k2, NaN)
     dnum = ImmutableDict(dnan, k2 => 1)
 
