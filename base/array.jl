@@ -944,19 +944,23 @@ function push!(a::Array{Any,1}, @nospecialize item)
 end
 
 """
-    append!(collection, collection2) -> collection.
+    append!(collection, collections...) -> collection.
 
-For an ordered container `collection`, add the elements of `collection2` to the end of it.
+For an ordered container `collection`, add the elements of each `collections`
+to the end of it.
+
+!!! compat "Julia 1.6"
+    Specifying multiple collections to be appended requires at least Julia 1.6.
 
 # Examples
 ```jldoctest
-julia> append!([1],[2,3])
+julia> append!([1], [2, 3])
 3-element Vector{Int64}:
  1
  2
  3
 
-julia> append!([1, 2, 3], [4, 5, 6])
+julia> append!([1, 2, 3], [4, 5], [6])
 6-element Vector{Int64}:
  1
  2
@@ -981,6 +985,8 @@ end
 append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
 push!(a::AbstractVector, iter...) = append!(a, iter)
 
+append!(a::AbstractVector, iter...) = foldl(append!, iter, init=a)
+
 function _append!(a, ::Union{HasLength,HasShape}, iter)
     n = length(a)
     i = lastindex(a)
@@ -999,17 +1005,32 @@ function _append!(a, ::IteratorSize, iter)
 end
 
 """
-    prepend!(a::Vector, items) -> collection
+    prepend!(a::Vector, collections...) -> collection
 
-Insert the elements of `items` to the beginning of `a`.
+Insert the elements of each `collections` to the beginning of `a`.
+
+When `collections` specifies multiple collections, order is maintained:
+elements of `collections[1]` will appear leftmost in `a`, and so on.
+
+!!! compat "Julia 1.6"
+    Specifying multiple collections to be prepended requires at least Julia 1.6.
 
 # Examples
 ```jldoctest
-julia> prepend!([3],[1,2])
+julia> prepend!([3], [1, 2])
 3-element Vector{Int64}:
  1
  2
  3
+
+julia> prepend!([6], [1, 2], [3, 4, 5])
+6-element Vector{Int64}:
+ 1
+ 2
+ 3
+ 4
+ 5
+ 6
 ```
 """
 function prepend! end
@@ -1028,6 +1049,8 @@ end
 
 prepend!(a::Vector, iter) = _prepend!(a, IteratorSize(iter), iter)
 pushfirst!(a::Vector, iter...) = prepend!(a, iter)
+
+prepend!(a::AbstractVector, iter...) = foldr((v, a) -> prepend!(a, v), iter, init=a)
 
 function _prepend!(a, ::Union{HasLength,HasShape}, iter)
     require_one_based_indexing(a)
