@@ -4,6 +4,9 @@ using Random
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
+==ₜ(::Any, ::Any) = false
+==ₜ(a::T, b::T) where {T} = isequal(a, b)
+
 # fold(l|r) & mapfold(l|r)
 @test foldl(+, Int64[]) === Int64(0) # In reference to issues #7465/#20144 (PR #20160)
 @test foldl(+, Int16[]) === Int16(0) # In reference to issues #21536
@@ -172,6 +175,20 @@ for f in (sum3, sum4, sum7, sum8)
 end
 @test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
 
+@testset "`sum` of empty collections with `init`" begin
+    function noncallable end  # should not be called
+    @testset for init in [0, 0.0]
+        @test sum([]; init = init) === init
+        @test sum((x for x in [123] if false); init = init) === init
+        @test sum(noncallable, []; init = init) === init
+        @test sum(noncallable, (x for x in [123] if false); init = init) === init
+        @test sum(Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
+              zeros(typeof(init), 1, 2, 0)
+        @test sum(noncallable, Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
+              zeros(typeof(init), 1, 2, 0)
+    end
+end
+
 # check sum(abs, ...) for support of empty collections
 @testset "sum(abs, [])" begin
     @test @inferred(sum(abs, Float64[])) === 0.0
@@ -199,6 +216,20 @@ end
 
 @test typeof(prod(Array(trues(10)))) == Bool
 
+@testset "`prod` of empty collections with `init`" begin
+    function noncallable end  # should not be called
+    @testset for init in [1, 1.0, ""]
+        @test prod([]; init = init) === init
+        @test prod((x for x in [123] if false); init = init) === init
+        @test prod(noncallable, []; init = init) === init
+        @test prod(noncallable, (x for x in [123] if false); init = init) === init
+        @test prod(Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
+              ones(typeof(init), 1, 2, 0)
+        @test prod(noncallable, Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
+              ones(typeof(init), 1, 2, 0)
+    end
+end
+
 # check type-stability
 prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test prod(Int[]) === prod2(Int[]) === 1
@@ -210,6 +241,9 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 
 @test_throws ArgumentError maximum(Int[])
 @test_throws ArgumentError minimum(Int[])
+
+@test maximum(Int[]; init=-1) == -1
+@test minimum(Int[]; init=-1) == -1
 
 @test maximum(5) == 5
 @test minimum(5) == 5
