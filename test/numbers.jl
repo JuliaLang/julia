@@ -2507,6 +2507,14 @@ end
     @test rem2pi(T(-4), RoundNearest) ≈ 2pi-4
     @test rem2pi(T(-4), RoundDown)    ≈ 2pi-4
     @test rem2pi(T(-4), RoundUp)      == -4
+    @test rem2pi(T(8), RoundToZero)  ≈ 8-2pi
+    @test rem2pi(T(8), RoundNearest) ≈ 8-2pi
+    @test rem2pi(T(8), RoundDown)    ≈ 8-2pi
+    @test rem2pi(T(8), RoundUp)      ≈ 8-4pi
+    @test rem2pi(T(-8), RoundToZero)  ≈ -8+2pi
+    @test rem2pi(T(-8), RoundNearest) ≈ -8+2pi
+    @test rem2pi(T(-8), RoundDown)    ≈ -8+4pi
+    @test rem2pi(T(-8), RoundUp)      ≈ -8+2pi
 end
 
 import Base.^
