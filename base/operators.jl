@@ -443,58 +443,6 @@ julia> minmax('c','b')
 """
 minmax(x,y) = isless(y, x) ? (y, x) : (x, y)
 
-"""
-    extrema(itr) -> Tuple
-
-Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
-
-# Examples
-```jldoctest
-julia> extrema(2:10)
-(2, 10)
-
-julia> extrema([9,pi,4.5])
-(3.141592653589793, 9.0)
-```
-"""
-extrema(itr) = _extrema_itr(identity, itr)
-
-"""
-    extrema(f, itr) -> Tuple
-
-Compute both the minimum and maximum of `f` applied to each element in `itr` and return
-them as a 2-tuple. Only one pass is made over `itr`.
-
-!!! compat "Julia 1.2"
-    This method requires Julia 1.2 or later.
-
-# Examples
-```jldoctest
-julia> extrema(sin, 0:π)
-(0.0, 0.9092974268256817)
-```
-"""
-extrema(f, itr) = _extrema_itr(f, itr)
-
-function _extrema_itr(f, itr)
-    y = iterate(itr)
-    y === nothing && throw(ArgumentError("collection must be non-empty"))
-    (v, s) = y
-    vmin = vmax = f(v)
-    while true
-        y = iterate(itr, s)
-        y === nothing && break
-        (x, s) = y
-        fx = f(x)
-        vmax = max(fx, vmax)
-        vmin = min(fx, vmin)
-    end
-    return (vmin, vmax)
-end
-
-extrema(x::Real) = (x, x)
-extrema(f, x::Real) = (y = f(x); (y, y))
-
 ## definitions providing basic traits of arithmetic operators ##
 
 """

@@ -1566,9 +1566,13 @@ _unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
 end
 
 """
-    extrema(A::AbstractArray; dims) -> Array{Tuple}
+    extrema([f,] A::AbstractArray; dims, [init]) -> Array{Tuple}
 
-Compute the minimum and maximum elements of an array over the given dimensions.
+Compute the minimum and maximum of `f` applied to each element (if given) in the given
+dimensions of `A`.
+
+!!! compat "Julia 1.2"
+    2-argument `extrema` method requires Julia 1.2 or later.
 
 # Examples
 ```jldoctest
@@ -1591,22 +1595,19 @@ julia> extrema(A, dims = (1,2))
  (9, 15)
 ```
 """
-extrema(A::AbstractArray; dims = :) = _extrema_dims(identity, A, dims)
+extrema(f::F, A::AbstractArray; dims=:, init=_InitialValue()) where {F} =
+    _extrema_dims(f, A, dims, init)
 
-"""
-    extrema(f, A::AbstractArray; dims) -> Array{Tuple}
+_extrema_dims(f::F, A::AbstractArray, ::Colon, init) where {F} =
+    mapreduce(_DupY(f), _extrema_rf, A; init = init)
+_extrema_dims(f::F, A::AbstractArray, ::Colon, ::_InitialValue) where {F} =
+    mapreduce(_DupY(f), _extrema_rf, A)
+# Note: not passing `init = _InitialValue()` since user-defined
+# `reduce`/`foldl` could cannot be aware of `Base._InitialValue`.
 
-Compute the minimum and maximum of `f` applied to each element in the given dimensions
-of `A`.
-
-!!! compat "Julia 1.2"
-    This method requires Julia 1.2 or later.
-"""
-extrema(f, A::AbstractArray; dims=:) = _extrema_dims(f, A, dims)
-
-_extrema_dims(f, A::AbstractArray, ::Colon) = _extrema_itr(f, A)
-
-function _extrema_dims(f, A::AbstractArray, dims)
+_extrema_dims(f::F, A::AbstractArray, dims, init) where {F} =
+    mapreduce(_DupY(f), _extrema_rf, A; dims = dims, init = init)
+function _extrema_dims(f::F, A::AbstractArray, dims, ::_InitialValue) where {F}
     sz = [size(A)...]
     for d in dims
         sz[d] = 1

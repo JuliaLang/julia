@@ -581,7 +581,7 @@ julia> prod(1:5; init = 1.0)
 """
 prod(a; kw...) = mapreduce(identity, mul_prod, a; kw...)
 
-## maximum & minimum
+## maximum, minimum, & extrema
 _fast(::typeof(min),x,y) = min(x,y)
 _fast(::typeof(max),x,y) = max(x,y)
 function _fast(::typeof(max), x::AbstractFloat, y::AbstractFloat)
@@ -761,6 +761,75 @@ Inf
 ```
 """
 minimum(a; kw...) = mapreduce(identity, min, a; kw...)
+
+"""
+    extrema(itr; [init]) -> Tuple
+
+Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
+
+The value returned for empty `itr` can be specified by `init`. It must be a 2-tuple whose
+first/second element is a neutral element for `min`/`max` (i.e. which is greater/less than
+or equal to any other element). This is required because it is unspecified whether `init`
+is used for non-empty collections. Note: it implies that, for empty `itr`, the first
+element is typically _greater_ than the last element. This is a "paradoxical" but yet
+expected result.
+
+!!! compat "Julia 1.6"
+    Keyword argument `init` requires Julia 1.6 or later.
+
+# Examples
+```jldoctest
+julia> extrema(2:10)
+(2, 10)
+
+julia> extrema([9,pi,4.5])
+(3.141592653589793, 9.0)
+
+julia> extrema([]; init = (Inf, -Inf))
+(Inf, -Inf)
+```
+"""
+extrema(itr; kw...) = extrema(identity, itr; kw...)
+
+"""
+    extrema(f, itr; [init]) -> Tuple
+
+Compute both the minimum and maximum of `f` applied to each element in `itr` and return
+them as a 2-tuple. Only one pass is made over `itr`.
+
+The value returned for empty `itr` can be specified by `init`. It must be a 2-tuple whose
+first/second element is a neutral element for `min`/`max` (i.e. which is greater/less than
+or equal to any other element). This is required because it is unspecified whether `init`
+is used for non-empty collections. Note: it implies that, for empty `itr`, the first
+element is typically _greater_ than the last element. This is a "paradoxical" but yet
+expected result.
+
+!!! compat "Julia 1.2"
+    This method requires Julia 1.2 or later.
+
+!!! compat "Julia 1.6"
+    Keyword argument `init` requires Julia 1.6 or later.
+
+# Examples
+```jldoctest
+julia> extrema(sin, 0:π)
+(0.0, 0.9092974268256817)
+
+julia> extrema(sin, Real[]; init = (1.0, -1.0))  # good, since -1 ≤ sin(::Real) ≤ 1
+(1.0, -1.0)
+```
+"""
+extrema(f, itr; kw...) = mapreduce(_DupY(f), _extrema_rf, itr; kw...)
+
+# Not using closure since `extrema(type, itr)` is a very likely use-case and it's better
+# to avoid type-instability (#23618).
+struct _DupY{F} <: Function
+    f::F
+end
+_DupY(f::Type{T}) where {T} = _DupY{Type{T}}(f)
+@inline (f::_DupY)(x) = (y = f.f(x); (y, y))
+
+@inline _extrema_rf((min1, max1), (min2, max2)) = (min(min1, min2), max(max1, max2))
 
 ## all & any
 

@@ -48,6 +48,24 @@ include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
 
+# required for bootstrap
+extrema(itr) = extrema(identity, itr)
+function extrema(f, itr)
+    y = iterate(itr)
+    y === nothing && throw(ArgumentError("collection must be non-empty"))
+    (v, s) = y
+    vmin = vmax = f(v)
+    while true
+        y = iterate(itr, s)
+        y === nothing && break
+        (x, s) = y
+        fx = f(x)
+        vmax = max(fx, vmax)
+        vmin = min(fx, vmin)
+    end
+    return (vmin, vmax)
+end
+
 # checked arithmetic
 const checked_add = +
 const checked_sub = -

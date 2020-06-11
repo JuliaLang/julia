@@ -241,9 +241,15 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 
 @test_throws ArgumentError maximum(Int[])
 @test_throws ArgumentError minimum(Int[])
+@test_throws ArgumentError extrema(Int[])
 
 @test maximum(Int[]; init=-1) == -1
 @test minimum(Int[]; init=-1) == -1
+@test extrema(Int[]; init=(1, -1)) == (1, -1)
+
+@test maximum(sin, []; init=-1) == -1
+@test minimum(sin, []; init=1) == 1
+@test extrema(sin, []; init=(1, -1)) == (1, -1)
 
 @test maximum(5) == 5
 @test minimum(5) == 5
