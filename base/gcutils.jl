@@ -25,6 +25,21 @@ finalizer(my_mutable_struct) do x
     ccall(:jl_safe_printf, Cvoid, (Cstring, Cstring), "Finalizing %s.", repr(x))
 end
 ```
+
+A finalizer may be registered at object construction. In the following example note that
+we implicitly rely on the finalizer returning the newly created mutable struct `x`.
+
+# Example
+```julia
+mutable struct MyMutableStruct
+    bar
+    function MyMutableStruct(bar)
+        x = new(bar)
+        f(t) = @async println("Finalizing \$t.")
+        finalizer(f, x)
+    end
+end
+```
 """
 function finalizer(@nospecialize(f), @nospecialize(o))
     if !ismutable(o)
