@@ -205,4 +205,22 @@ end
     @test typeof(tmp) <: Tridiagonal
 
 end
+
+struct Zero end
+Base.iszero(::Zero) = true
+Base.zero(::Type{Zero}) = Zero()
+@testset "PR #36193" begin
+    z = Zero()
+    Z = [z z
+         z z]
+    zz = [z, z]
+    U = UpperTriangular(Z)
+    L = LowerTriangular(Z)
+    D = Diagonal(zz)
+    for a in [U, L, D]
+        @test identity.(a) isa typeof(a)
+        @test map(identity, a) isa typeof(a)
+    end
+end
+
 end
