@@ -1000,7 +1000,7 @@ function rem2pi(x::Float64, ::RoundingMode{:ToZero})
     ax = abs(x)
     ax <= 2*Float64(pi,RoundDown) && return x
 
-    n,y = rem_pio2_kernel(x)
+    n,y = rem_pio2_kernel(ax)
 
     if iseven(n)
         if n & 2 == 2 # n % 4 == 2: add pi
