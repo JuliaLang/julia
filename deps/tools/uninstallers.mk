@@ -30,5 +30,5 @@ $(addprefix version-check-,$(DEP_LIBS_STAGED)) : version-check-% : install-%
 		echo "  want $(UNINSTALL_$*)" ; \
 		echo "  To resolve this warning, you could try either of the following suggestions: " ; \
 		echo "  1. Run the following command: make -C deps uninstall" ; \
-		echo "  2. Remove the JULIA_HOME/usr directory, where you replace JULIA_HOME with the path of the directory in which you are building Julia " ; \
+		echo "  2. Remove the following directory: $(JULIAHOME)/usr" ; \
 	fi
