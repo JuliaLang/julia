@@ -299,11 +299,15 @@ function diagm_size(size::Tuple{Int,Int}, kv::Pair{<:Integer,<:AbstractVector}..
     (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch("invalid size=$size"))
     return m, n
 end
+# For some type `T`, `zero(T)` is not a `T` and `zeros(T, ...)` fails.
+# `zero_type(T::Type) = typeof(zero(T))` would not work for types such
+# as `Array` for which `zero(::T)` is defined but not `zero(::Type{T})`
+# so we use `promote_op` instead.
+zero_type(T::Type) = promote_op(zero, T)
+promote_with_zero(T::Type) = promote_type(T, zero_type(T))
 function diagm_container(size, kv::Pair{<:Integer,<:AbstractVector}...)
     T = promote_type(map(x -> eltype(x.second), kv)...)
-    # For some type `T`, `zero(T)` is not a `T` and `zeros(T, ...)` fails.
-    U = promote_type(T, typeof(zero(T)))
-    return zeros(U, diagm_size(size, kv...)...)
+    return zeros(promote_with_zero(T), diagm_size(size, kv...)...)
 end
 diagm_container(size, kv::Pair{<:Integer,<:BitVector}...) =
     falses(diagm_size(size, kv...)...)

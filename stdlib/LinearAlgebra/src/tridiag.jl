@@ -138,7 +138,7 @@ function Matrix{T}(M::SymTridiagonal) where T
     end
     return Mf
 end
-Matrix(M::SymTridiagonal{T}) where {T} = Matrix{T}(M)
+Matrix(M::SymTridiagonal{T}) where {T} = Matrix{promote_with_zero(T)}(M)
 Array(M::SymTridiagonal) = Matrix(M)
 
 size(A::SymTridiagonal) = (length(A.dv), length(A.dv))
@@ -579,7 +579,7 @@ function Matrix{T}(M::Tridiagonal{T}) where T
     end
     A
 end
-Matrix(M::Tridiagonal{T}) where {T} = Matrix{T}(M)
+Matrix(M::Tridiagonal{T}) where {T} = Matrix{promote_with_zero(T)}(M)
 Array(M::Tridiagonal) = Matrix(M)
 
 # For M<:Tridiagonal, similar(M[, neweltype]) should yield a Tridiagonal matrix.

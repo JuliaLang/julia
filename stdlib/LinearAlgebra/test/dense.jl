@@ -940,14 +940,29 @@ end
 end
 
 struct TypeWithoutZero end
-Base.zero(::Type{TypeWithoutZero}) = TypeWithZero()
+Base.zero(::Union{TypeWithoutZero, Type{TypeWithoutZero}}) = TypeWithZero()
 struct TypeWithZero end
 Base.promote_rule(::Type{TypeWithoutZero}, ::Type{TypeWithZero}) = TypeWithZero
-Base.zero(::Type{<:Union{TypeWithoutZero, TypeWithZero}}) = TypeWithZero()
+Base.convert(::Type{TypeWithZero}, ::TypeWithoutZero) = TypeWithZero()
+Base.zero(::Union{TypeWithZero, Type{<:Union{TypeWithoutZero, TypeWithZero}}}) = TypeWithZero()
 Base.:+(x::TypeWithZero, ::TypeWithoutZero) = x
 
-@testset "diagm for type with no zero" begin
-    @test diagm(0 => [TypeWithoutZero()]) isa Matrix{TypeWithZero}
+@testset "diagm and Matrix for type with no zero" begin
+    x = TypeWithoutZero()
+    @test (@inferred diagm(0 => [x])) isa Matrix{TypeWithZero}
+    diag = [x, x, x]
+    offdiag = [x, x]
+    X = [x x
+         x x]
+    for A in [
+        Bidiagonal(diag, offdiag, :U),
+        Tridiagonal(offdiag, diag, offdiag),
+        SymTridiagonal(diag, offdiag),
+        LowerTriangular(X),
+        UpperTriangular(X)
+    ]
+        @test (@inferred Matrix(A)) isa Matrix{TypeWithZero}
+    end
 end
 
 end # module TestDense

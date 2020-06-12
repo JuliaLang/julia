@@ -163,7 +163,7 @@ function Matrix{T}(A::Bidiagonal) where T
     B[n,n] = A.dv[n]
     return B
 end
-Matrix(A::Bidiagonal{T}) where {T} = Matrix{T}(A)
+Matrix(A::Bidiagonal{T}) where {T} = Matrix{promote_with_zero(T)}(A)
 Array(A::Bidiagonal) = Matrix(A)
 promote_rule(::Type{Matrix{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} =
     @isdefined(T) && @isdefined(S) ? Matrix{promote_type(T,S)} : Matrix
