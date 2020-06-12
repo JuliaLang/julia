@@ -1,0 +1,4 @@
+{
+    "julia.executablePath": "/usr/local/julia/bin/julia",
+    "julia.NumThreads": 4
+}
