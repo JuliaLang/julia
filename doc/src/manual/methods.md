@@ -906,7 +906,7 @@ f(x::Int, y::Int) = 3
 ```
 
 This is often the right strategy; however, there are circumstances
-where following this advice blindly can be counterproductive. In
+where following this advice mindlessly can be counterproductive. In
 particular, the more methods a generic function has, the more
 possibilities there are for ambiguities. When your method hierarchies
 get more complicated than this simple example, it can be worth your

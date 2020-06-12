@@ -2260,7 +2260,7 @@ function hash(A::AbstractArray, h::UInt)
     # hashes will often subsequently be compared by equality -- and equality between arrays
     # works elementwise forwards and is short-circuiting. This means that a collision
     # between arrays that differ by elements at the beginning is cheaper than one where the
-    # difference is towards the end. Furthermore, blindly choosing log(N) entries from a
+    # difference is towards the end. Furthermore, choosing `log(N)` arbitrary entries from a
     # sparse array will likely only choose the same element repeatedly (zero in this case).
 
     # To achieve this, we work backwards, starting by hashing the last element of the
