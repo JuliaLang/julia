@@ -332,6 +332,15 @@ B33163(x) = x
 @test (@code_typed max.(Ref(true).x))[2] == Bool
 @test !isempty(@code_typed optimize=false max.(Ref.([5, 6])...))
 
+# Issue #36261
+@test (@code_typed max.(1 .+ 3, 5 - 7))[2] == Int
+f36261(x,y) = 3x + 4y
+A36261 = Float64[1.0, 2.0, 3.0]
+@test (@code_typed f36261.(A36261, pi))[1].inferred
+@test (@code_typed f36261.(A36261, 1 .+ pi))[1].inferred
+@test (@code_typed f36261.(A36261, 1 + pi))[1].inferred
+
+
 module ReflectionTest
 using Test, Random, InteractiveUtils
 
