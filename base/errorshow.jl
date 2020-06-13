@@ -636,8 +636,8 @@ function show_backtrace(io::IO, t::Vector)
     isempty(filtered) && return
 
     if length(filtered) == 1 && StackTraces.is_top_level_frame(filtered[1][1])
-        f = filtered[1][1]
-        if f.line == 0 && f.file == Symbol("")
+        f = filtered[1][1]::StackFrame
+        if f.line == 0 && f.file === Symbol("")
             # don't show a single top-level frame with no location info
             return
         end
@@ -693,7 +693,7 @@ function _simplify_include_frames(trace)
             # Hack: allow `mod==nothing` as a workaround for inlined functions.
             # TODO: Fix this by improving debug info.
             if mod in (Base,Core,nothing) && 1+first_ignored-i <= 5
-                if frame.func == :eval
+                if frame.func === :eval
                     kept_frames[i:first_ignored] .= false
                     first_ignored = nothing
                 end
