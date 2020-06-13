@@ -965,7 +965,7 @@ function operator_associativity(s::Symbol)
 end
 
 is_expr(@nospecialize(ex), head::Symbol)         = isa(ex, Expr) && (ex.head === head)
-is_expr(@nospecialize(ex), head::Symbol, n::Int) = is_expr(ex, head) && length(ex.args) == n
+is_expr(@nospecialize(ex), head::Symbol, n::Int) = is_expr(ex, head) && length((ex::Expr).args) == n
 
 is_quoted(ex)            = false
 is_quoted(ex::QuoteNode) = true
@@ -1031,13 +1031,15 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, quote_level::In
         !first && print(io, sep)
         parens = !is_quoted(item) &&
             (first && prec >= prec_power &&
-             ((item isa Expr && item.head === :call && item.args[1] in uni_ops) ||
+             ((item isa Expr && item.head === :call && (callee = item.args[1]; isa(callee, Symbol) && callee in uni_ops)) ||
               (item isa Real && item < 0))) ||
               (enclose_operators && item isa Symbol && isoperator(item))
         parens && print(io, '(')
         if kw && is_expr(item, :kw, 2)
+            item = item::Expr
             show_unquoted(io, Expr(:(=), item.args[1], item.args[2]), indent, parens ? 0 : prec, quote_level)
         elseif kw && is_expr(item, :(=), 2)
+            item = item::Expr
             show_unquoted_expr_fallback(io, item, indent, quote_level)
         else
             show_unquoted(io, item, indent, parens ? 0 : prec, quote_level)
@@ -1261,7 +1263,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             # .
             print(io, '.')
             # item
-            parens = !(field isa Symbol) || (field in quoted_syms)
+            parens = !(field isa Symbol) || (field::Symbol in quoted_syms)
             quoted = parens || isoperator(field)
             quoted && print(io, ':')
             parens && print(io, '(')
@@ -1284,13 +1286,14 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif head === :tuple
         print(io, "(")
         if nargs > 0 && is_expr(args[1], :parameters)
+            arg1 = args[1]::Expr
             show_list(io, args[2:end], ", ", indent, 0, quote_level)
             nargs == 2 && print(io, ',')
             print(io, ";")
-            if !isempty(args[1].args)
+            if !isempty(arg1.args)
                 print(io, " ")
             end
-            show_list(io, args[1].args, ", ", indent, 0, quote_level, false, true)
+            show_list(io, arg1.args, ", ", indent, 0, quote_level, false, true)
         else
             show_list(io, args, ", ", indent, 0, quote_level)
             nargs == 1 && print(io, ',')
@@ -1331,7 +1334,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         func = args[1]
         fname = isa(func, GlobalRef) ? func.name : func
         func_prec = operator_precedence(fname)
-        if func_prec > 0 || fname in uni_ops
+        if func_prec > 0 || (isa(fname, Symbol) && fname in uni_ops)
             func = fname
         end
         func_args = args[2:end]
@@ -1343,7 +1346,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         # scalar multiplication (i.e. "100x")
         elseif (func === :* &&
             length(func_args) == 2 && isa(func_args[1], Union{Int, Int64, Float32, Float64}) &&
-            isa(func_args[2], Symbol) && !in(string(func_args[2])[1], ('e', 'E', 'f')))
+            isa(func_args[2], Symbol) && !in(string(func_args[2]::Symbol)[1], ('e', 'E', 'f')))
             if func_prec <= prec
                 show_enclosed_list(io, '(', func_args, "", ')', indent, func_prec, quote_level)
             else
@@ -1363,7 +1366,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         # binary operator (i.e. "x + y")
         elseif func_prec > 0 # is a binary operator
             na = length(func_args)
-            if (na == 2 || (na > 2 && func in (:+, :++, :*)) || (na == 3 && func === :(:))) &&
+            if (na == 2 || (na > 2 && isa(func, Symbol) && func in (:+, :++, :*)) || (na == 3 && func === :(:))) &&
                     all(!isa(a, Expr) || a.head !== :... for a in func_args)
                 sep = func === :(:) ? "$func" : " $func "
 
@@ -1431,7 +1434,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     # function calls need to transform the function from :call to :calldecl
     # so that operators are printed correctly
     elseif head === :function && nargs==2 && is_expr(args[1], :call)
-        show_block(IOContext(io, beginsym=>false), head, Expr(:calldecl, args[1].args...), args[2], indent, quote_level)
+        show_block(IOContext(io, beginsym=>false), head, Expr(:calldecl, (args[1]::Expr).args...), args[2], indent, quote_level)
         print(io, "end")
 
     elseif (head === :function || head === :macro) && nargs == 1
@@ -1443,8 +1446,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         iob = IOContext(io, beginsym=>false)
         show_unquoted(iob, args[1], indent, -1, quote_level)
         print(io, " do ")
-        show_list(iob, args[2].args[1].args, ", ", 0, 0, quote_level)
-        for stmt in args[2].args[2].args
+        show_list(iob, (((args[2]::Expr).args[1])::Expr).args, ", ", 0, 0, quote_level)
+        for stmt in (((args[2]::Expr).args[2])::Expr).args
             print(io, '\n', " "^(indent + indent_width))
             show_unquoted(iob, stmt, indent + indent_width, -1, quote_level)
         end
@@ -1463,10 +1466,11 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif (head === :if || head === :elseif) && nargs == 3
         iob = IOContext(io, beginsym=>false)
         show_block(iob, head, args[1], args[2], indent, quote_level)
-        if isa(args[3],Expr) && args[3].head === :elseif
-            show_unquoted(iob, args[3], indent, prec, quote_level)
+        arg3 = args[3]
+        if isa(arg3, Expr) && arg3.head === :elseif
+            show_unquoted(iob, arg3::Expr, indent, prec, quote_level)
         else
-            show_block(iob, "else", args[3], indent, quote_level)
+            show_block(iob, "else", arg3, indent, quote_level)
             print(io, "end")
         end
 
@@ -1562,7 +1566,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             show_sym(io, arg1, allow_macroname=true)
         elseif arg1 isa GlobalRef
             show_globalref(io, arg1, allow_macroname=true)
-        elseif is_expr(arg1, :(.)) && length(arg1.args) == 2
+        elseif is_expr(arg1, :(.)) && length((arg1::Expr).args) == 2
+            arg1 = arg1::Expr
             m = arg1.args[1]
             if m isa Symbol || m isa GlobalRef || is_expr(m, :(.), 2)
                 show_unquoted(io, m)
@@ -1573,9 +1578,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             end
             print(io, '.')
             if is_expr(arg1.args[2], :quote)
-                mname = arg1.args[2].args[1]
+                mname = (arg1.args[2]::Expr).args[1]
             else
-                mname = arg1.args[2].value
+                mname = (arg1.args[2]::QuoteNode).value
             end
             if mname isa Symbol
                 show_sym(io, mname, allow_macroname=true)
@@ -1593,10 +1598,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         iob = IOContext(io, beginsym=>false)
         show_block(iob, "try", args[1], indent, quote_level)
         if is_expr(args[3], :block)
-            show_block(iob, "catch", args[2] === false ? Any[] : args[2], args[3], indent, quote_level)
+            show_block(iob, "catch", args[2] === false ? Any[] : args[2], args[3]::Expr, indent, quote_level)
         end
         if nargs >= 4 && is_expr(args[4], :block)
-            show_block(iob, "finally", Any[], args[4], indent, quote_level)
+            show_block(iob, "finally", Any[], args[4]::Expr, indent, quote_level)
         end
         print(io, "end")
 
@@ -1627,9 +1632,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     elseif head === :quote && nargs == 1 && isa(args[1], Symbol)
         show_unquoted_quote_expr(IOContext(io, beginsym=>false), args[1]::Symbol, indent, 0, quote_level+1)
-    elseif head === :quote && !get(io, :unquote_fallback, true)
+    elseif head === :quote && !(get(io, :unquote_fallback, true)::Bool)
         if nargs == 1 && is_expr(args[1], :block)
-            show_block(IOContext(io, beginsym=>false), "quote", Expr(:quote, args[1].args...), indent,
+            show_block(IOContext(io, beginsym=>false), "quote", Expr(:quote, (args[1]::Expr).args...), indent,
                        quote_level+1)
             print(io, "end")
         elseif nargs == 1

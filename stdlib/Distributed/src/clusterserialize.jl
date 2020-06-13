@@ -143,7 +143,7 @@ end
 # d) is a bits type
 function syms_2b_sent(s::ClusterSerializer, identifier)
     lst = Symbol[]
-    check_syms = get(s.glbs_in_tnobj, identifier, [])
+    check_syms = get(s.glbs_in_tnobj, identifier, Symbol[])
     for sym in check_syms
         v = getfield(Main, sym)
 

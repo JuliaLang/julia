@@ -378,7 +378,7 @@ prompt_string(f::Function) = Base.invokelatest(f)
 
 refresh_multi_line(s::ModeState; kw...) = refresh_multi_line(terminal(s), s; kw...)
 refresh_multi_line(termbuf::TerminalBuffer, s::ModeState; kw...) = refresh_multi_line(termbuf, terminal(s), s; kw...)
-refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState; kw...) = (@assert term == terminal(s); refresh_multi_line(termbuf,s; kw...))
+refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState; kw...) = (@assert term === terminal(s); refresh_multi_line(termbuf,s; kw...))
 
 function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf::IOBuffer,
                             state::InputAreaState, prompt = "";
@@ -777,7 +777,7 @@ function edit_insert_newline(s::PromptState, align::Int = 0 - options(s).auto_in
     #else
     #    align = 0
     end
-	align < 0 && (align = 0)
+    align < 0 && (align = 0)
     edit_insert(buf, '\n' * ' '^align)
     refresh_line(s)
     # updating s.last_newline should happen after refresh_line(s) which can take
