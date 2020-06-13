@@ -1107,7 +1107,7 @@ function setup_interface(
         end,
 
         # Open the editor at the location of a stackframe or method
-        # This is accessing a global variable that gets set in
+        # This is accessing a contextual variable that gets set in
         # the show_backtrace and show_method_table functions.
         "^Q" => (s, o...) -> begin
             linfos = repl.last_shown_line_infos
