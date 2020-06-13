@@ -136,18 +136,23 @@ reverse-order iteration without making a copy. Custom string types must implemen
 and encoding. If they return a string with a different encoding, they must also override
 `reverseind` for that string type to satisfy `s[reverseind(s,i)] == reverse(s)[i]`.
 
+!!! note
+    The examples below may be rendered differently on different systems.
+    The comments indicate how they're supposed to be rendered.
+
 # Examples
 ```jldoctest
 julia> reverse("JuliaLang")
 "gnaLailuJ"
 
-julia> reverse("ax̂e") # combining characters can lead to surprising results
-"êxa"
+# combining characters can lead to surprising results
+julia> reverse("ax̂e") # hat above the x
+"êxa" # hat above the e
 
 julia> using Unicode
 
 julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
-"ex̂a"
+"ex̂a" # hat above the x
 ```
 """
 function reverse(s::Union{String,SubString{String}})::String
