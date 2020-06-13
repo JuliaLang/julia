@@ -1603,7 +1603,8 @@ _extrema_dims(f::F, A::AbstractArray, ::Colon, init) where {F} =
 _extrema_dims(f::F, A::AbstractArray, ::Colon, ::_InitialValue) where {F} =
     mapreduce(_DupY(f), _extrema_rf, A)
 # Note: not passing `init = _InitialValue()` since user-defined
-# `reduce`/`foldl` cannot be aware of `Base._InitialValue`.
+# `reduce`/`foldl` cannot be aware of `Base._InitialValue` that is an
+# internal implementation detail.
 
 _extrema_dims(f::F, A::AbstractArray, dims, init) where {F} =
     mapreduce(_DupY(f), _extrema_rf, A; dims = dims, init = init)
