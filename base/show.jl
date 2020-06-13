@@ -388,12 +388,18 @@ show(io::IO, @nospecialize(x)) = show_default(io, x)
 show(x) = show(stdout::IO, x)
 
 # avoid inferring show_default on the type of `x`
-show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x))
+show_default(io::IO, @nospecialize(x); f_type=identity) = _show_default(io, inferencebarrier(x), inferencebarrier(f_type))
 
-function _show_default(io::IO, @nospecialize(x))
+function _show_default(io::IO, @nospecialize(x), @nospecialize(f_type))
     t = typeof(x)
-    show(io, inferencebarrier(t))
+    show(io, inferencebarrier(f_type(t)))
     print(io, '(')
+    _show_default_body(io, x)
+    print(io, ')')
+end
+
+function _show_default_body(io::IO, @nospecialize(x))
+    t = typeof(x)
     nf = nfields(x)
     nb = sizeof(x)
     if nf != 0 || nb == 0
@@ -422,7 +428,6 @@ function _show_default(io::IO, @nospecialize(x))
             end
         end
     end
-    print(io,')')
 end
 
 # Check if a particular symbol is exported from a standard library module
