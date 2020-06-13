@@ -86,7 +86,6 @@ Julia's documentation source files are stored in the `doc/` directory and all do
 make docs
 ```
 
-
 from Julia's root directory. This will rebuild the Julia system image, then install or update the package dependencies required to build the documentation, and finally build the HTML documentation and place the resulting files in `doc/_build/html/`.
 
 > **Note**
