@@ -593,6 +593,7 @@ function show_type_name(io::IO, tn::Core.TypeName)
     show_sym(io, sym)
     quo      && print(io, ")")
     globfunc && print(io, ")")
+    nothing
 end
 
 function show_datatype(io::IO, x::DataType)
