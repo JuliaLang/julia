@@ -682,7 +682,7 @@ function _simplify_include_frames(trace)
     kept_frames = trues(i)
     first_ignored = nothing
     while i >= 1
-        frame, _ = trace[i]
+        frame::StackFrame, _ = trace[i]
         mod = parentmodule(frame)
         if isnothing(first_ignored)
             if mod === Base && frame.func === :_include
