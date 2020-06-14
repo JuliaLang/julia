@@ -131,7 +131,9 @@ function complete_symbol(sym, ffunc, context_module=Main)::Vector{Completion}
         # We will exclude the results that the user does not want, as well
         # as excluding Main.Main.Main, etc., because that's most likely not what
         # the user wants
-        p = s->(!Base.isdeprecated(mod, s) && s != nameof(mod) && ffunc(mod, s))
+        p = let mod=mod, modname=nameof(mod)
+            s->(!Base.isdeprecated(mod, s) && s != modname && ffunc(mod, s))
+        end
         # Looking for a binding in a module
         if mod == context_module
             # Also look in modules we got through `using`
