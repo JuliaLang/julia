@@ -626,7 +626,7 @@ function completions(string, pos, context_module=Main)::Completions
         if isa(ex, Expr)
             if ex.head==:call
                 return complete_methods(ex, context_module), first(frange):method_name_end, false
-            elseif ex.head==:. && ex.args[2] isa Expr && ex.args[2].head==:tuple
+            elseif ex.head==:. && ex.args[2] isa Expr && (ex.args[2]::Expr).head==:tuple
                 return complete_methods(ex, context_module), first(frange):(method_name_end - 1), false
             end
         end

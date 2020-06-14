@@ -225,7 +225,7 @@ function doc!(__module__::Module, b::Binding, str::DocStr, @nospecialize sig = U
         # We allow for docstrings to be updated, but print a warning since it is possible
         # that over-writing a docstring *may* have been accidental.  The warning
         # is suppressed for symbols in Main, for interactive use (#23011).
-        __module__ == Main || @warn "Replacing docs for `$b :: $sig` in module `$(__module__)`"
+        __module__ === Main || @warn "Replacing docs for `$b :: $sig` in module `$(__module__)`"
     else
         # The ordering of docstrings for each Binding is defined by the order in which they
         # are initially added. Replacing a specific docstring does not change it's ordering.
