@@ -240,6 +240,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     end
     n = rest = 0
     local last
+    LAST_SHOWN_LINE_INFOS = get(io, :LAST_SHOWN_LINE_INFOS, Tuple{String,Int}[])
 
     resize!(LAST_SHOWN_LINE_INFOS, 0)
     for meth in ms
@@ -373,6 +374,7 @@ show(io::IO, mime::MIME"text/html", mt::Core.MethodTable) = show(io, mime, Metho
 
 # pretty-printing of AbstractVector{Method}
 function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
+    LAST_SHOWN_LINE_INFOS = get(io, :LAST_SHOWN_LINE_INFOS, Tuple{String,Int}[])
     resize!(LAST_SHOWN_LINE_INFOS, 0)
     first = true
     for (i, m) in enumerate(mt)
