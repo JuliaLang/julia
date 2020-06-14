@@ -577,6 +577,14 @@ end
 end
 
 @testset "Promotions on binary operations with Rationals (#36277)" begin
+    inttypes = (Base.BitInteger_types..., BigInt)
+    for T in inttypes, S in inttypes
+        U = Rational{promote_type(T, S)}
+        @test typeof(one(Rational{T}) + one(S)) == typeof(one(S) + one(Rational{T})) == typeof(one(Rational{T}) + one(Rational{S})) == U
+        @test typeof(one(Rational{T}) - one(S)) == typeof(one(S) - one(Rational{T})) == typeof(one(Rational{T}) - one(Rational{S})) == U
+        @test typeof(one(Rational{T}) * one(S)) == typeof(one(S) * one(Rational{T})) == typeof(one(Rational{T}) * one(Rational{S})) == U
+        @test typeof(one(Rational{T}) // one(S)) == typeof(one(S) // one(Rational{T})) == typeof(one(Rational{T}) // one(Rational{S})) == U
+    end
     @test (-40//3) // 0x5 == 0x5 // (-15//8) == -8//3
     @test (-4//7) // (0x1//0x3) == (0x4//0x7) // (-1//3) == -12//7
     @test -3//2 + 0x1//0x1 == -3//2 + 0x1 == 0x1//0x1 + (-3//2) == 0x1 + (-3//2) == -1//2
