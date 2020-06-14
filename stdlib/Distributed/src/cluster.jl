@@ -767,7 +767,7 @@ end
 mutable struct ProcessGroup
     name::AbstractString
     workers::Array{Any,1}
-    refs::Dict                  # global references
+    refs::Dict{RRID,Any}                  # global references
     topology::Symbol
     lazy::Union{Bool, Nothing}
 
