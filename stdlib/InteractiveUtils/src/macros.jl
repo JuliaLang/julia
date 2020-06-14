@@ -68,12 +68,20 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                 end
                 fully_qualified_symbol &= ex1 isa Symbol
                 if fully_qualified_symbol
-                    if string(fcn) == "which"
-                        return quote $(fcn)($(esc(ex0.args[1])), $(ex0.args[2])) end
-                    else
-                        return Expr(:call, :error, "expression is not a function call or symbol")
+                    return quote
+                        local arg1 = $(esc(ex0.args[1]))
+                        if isa(arg1, Module)
+                            $(if string(fcn) == "which"
+                                  :(which(arg1, $(ex0.args[2])))
+                              else
+                                  :(error("expression is not a function call"))
+                              end)
+                        else
+                            local args = typesof($(map(esc, ex0.args)...))
+                            $(fcn)(Base.getproperty, args)
+                        end
                     end
-                elseif ex0.args[2] isa Expr
+                else
                     return Expr(:call, :error, "dot expressions are not lowered to "
                                 * "a single function call, so @$fcn cannot analyze "
                                 * "them. You may want to use Meta.@lower to identify "
