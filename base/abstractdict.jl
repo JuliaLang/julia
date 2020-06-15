@@ -311,7 +311,7 @@ merge(d::AbstractDict, others::AbstractDict...) =
 """
     mergewith(combine, d, others...)
     mergewith(combine)
-    merge(combine, d, others...)
+    merge(combine::Union{Function,Type}, d::AbstractDict, others::AbstractDict...)
 
 Construct a merged collection from the given collections. If necessary, the
 types of the resulting collection will be promoted to accommodate the types of
