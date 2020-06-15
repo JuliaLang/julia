@@ -36,6 +36,8 @@ import Base:
 include("Terminals.jl")
 using .Terminals
 
+abstract type AbstractREPL end
+
 include("LineEdit.jl")
 using .LineEdit
 import ..LineEdit:
@@ -65,8 +67,6 @@ include("docview.jl")
 function __init__()
     Base.REPL_MODULE_REF[] = REPL
 end
-
-abstract type AbstractREPL end
 
 answer_color(::AbstractREPL) = ""
 
@@ -496,15 +496,15 @@ function complete_line(c::LatexCompletions, s)
 end
 
 mutable struct REPLHistoryProvider <: HistoryProvider
-    history::Array{String,1}
+    history::Vector{String}
     history_file::Union{Nothing,IO}
     start_idx::Int
     cur_idx::Int
     last_idx::Int
     last_buffer::IOBuffer
     last_mode::Union{Nothing,Prompt}
-    mode_mapping::Dict
-    modes::Array{Symbol,1}
+    mode_mapping::Dict{Symbol,Prompt}
+    modes::Vector{Symbol}
 end
 REPLHistoryProvider(mode_mapping) =
     REPLHistoryProvider(String[], nothing, 0, 0, -1, IOBuffer(),
