@@ -356,7 +356,7 @@ function exprresolve_arith(ex::Expr)
     if ex.head === :call
         callee = ex.args[1]
         if isa(callee, Symbol)
-            if haskey(exprresolve_arith_dict, callee) && all([isa(ex.args[i], Number) for i = 2:length(ex.args)])
+            if haskey(exprresolve_arith_dict, callee) && all(Bool[isa(ex.args[i], Number) for i = 2:length(ex.args)])
                 return true, exprresolve_arith_dict[callee](ex.args[2:end]...)
             end
         end
