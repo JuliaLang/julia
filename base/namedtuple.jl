@@ -187,6 +187,26 @@ function map(f, nt::NamedTuple{names}, nts::NamedTuple...) where names
     NamedTuple{names}(map(f, map(Tuple, (nt, nts...))...))
 end
 
+@generated function _foldl_impl(
+    op,
+    init,
+    itr::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple{names}},
+) where {names}
+    ex = :init
+    for (i, n) in enumerate(names)
+        ex = :(op($ex, $(QuoteNode(n)) => vals[$i]))
+    end
+    quote
+        @_inline_meta
+        vals = Tuple(itr.data)
+        $ex
+    end
+end
+
+# dispatch to the generic method with longer named tuple
+_foldl_impl(op, init, itr::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple{<:Any,<:Any16}}) =
+    invoke(_foldl_impl, Tuple{Any,Any,Any}, op, init, itr)
+
 # a version of `in` for the older world these generated functions run in
 @pure function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
     for y in itr
@@ -220,6 +240,8 @@ leftmost named tuple. However, values are taken from matching fields in the righ
 contains that field. Fields present in only the rightmost named tuple of a pair are appended at the end.
 A fallback is implemented for when only a single named tuple is supplied,
 with signature `merge(a::NamedTuple)`.
+
+See also [`mergewith`](@ref).
 
 !!! compat "Julia 1.1"
     Merging 3 or more `NamedTuple` requires at least Julia 1.1.
@@ -284,6 +306,17 @@ function merge(a::NamedTuple, itr)
     end
     merge(a, NamedTuple{(names...,)}((vals...,)))
 end
+
+mergewith(combine, a::NamedTuple, b::NamedTuple) = mergewith(combine, a, pairs(b))
+function mergewith(combine, a::NamedTuple, b)
+    return _foldl_impl(a, b) do nt, (k, v)
+        @_inline_meta
+        merge(nt, (; k => haskey(nt, k) ? combine(nt[k], v) : v))
+    end
+end
+
+mergewith(combine, nt::NamedTuple, others...) =
+    foldl(mergewith(combine), others; init = nt)
 
 keys(nt::NamedTuple{names}) where {names} = names
 values(nt::NamedTuple) = Tuple(nt)
