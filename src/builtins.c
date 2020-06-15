@@ -669,6 +669,14 @@ JL_CALLABLE(jl_f__apply)
     return do_apply(F, args, nargs, NULL);
 }
 
+JL_CALLABLE(jl_f__invoke_codeinst)
+{
+    JL_NARGSV(_invoke_codeinst, 2);
+    JL_TYPECHK(_invoke_codeinst, code_instance, args[0]);
+    jl_code_instance_t *inst = (jl_code_instance_t*)args[0];
+    return inst->invoke(args[1], &args[2], nargs-2, inst);
+}
+
 // this is like `_apply`, but with quasi-exact checks to make sure it is pure
 JL_CALLABLE(jl_f__apply_pure)
 {
@@ -1523,6 +1531,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_apply_type = add_builtin_func("apply_type", jl_f_apply_type);
     jl_builtin__apply = add_builtin_func("_apply", jl_f__apply);
     jl_builtin__apply_iterate = add_builtin_func("_apply_iterate", jl_f__apply_iterate);
+    jl_builtin__invoke_codeinst = add_builtin_func("_invoke_codeinst", jl_f__invoke_codeinst);
     jl_builtin__expr = add_builtin_func("_expr", jl_f__expr);
     jl_builtin_svec = add_builtin_func("svec", jl_f_svec);
     add_builtin_func("_apply_pure", jl_f__apply_pure);
