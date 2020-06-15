@@ -46,6 +46,10 @@ mutable struct InferenceState
     # `max_valid`, to be used in inlining
     matching_methods_cache::IdDict{Any, Tuple{Any, UInt, UInt}}
 
+    # The interpreter that created this inference state. Not looked at by
+    # NativeInterpreter. But other interpreters may use this to detect cycles
+    interp::AbstractInterpreter
+
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(result::InferenceResult, src::CodeInfo,
                             cached::Bool, interp::AbstractInterpreter)
@@ -107,7 +111,8 @@ mutable struct InferenceState
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
             cached, false, false, false,
-            IdDict{Any, Tuple{Any, UInt, UInt}}())
+            IdDict{Any, Tuple{Any, UInt, UInt}}(),
+            interp)
         result.result = frame
         cached && push!(get_inference_cache(interp), result)
         return frame
