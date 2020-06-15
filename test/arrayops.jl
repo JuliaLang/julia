@@ -974,6 +974,8 @@ end
                                         3 4], inner=(2, 2), outer=(2,))
     @test_throws ArgumentError repeat([1, 2], inner=(1, -1), outer=(1, -1))
 
+    @test_throws ArgumentError repeat(OffsetArray(rand(2), 1), inner=(2,))
+
     A = reshape(1:8, 2, 2, 2)
     R = repeat(A, inner = (1, 1, 2), outer = (1, 1, 1))
     T = reshape([1:4; 1:4; 5:8; 5:8], 2, 2, 4)
