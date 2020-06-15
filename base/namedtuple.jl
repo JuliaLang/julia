@@ -187,19 +187,23 @@ function map(f, nt::NamedTuple{names}, nts::NamedTuple...) where names
     NamedTuple{names}(map(f, map(Tuple, (nt, nts...))...))
 end
 
-@generated function _foldl_impl(
+function _foldl_impl(
     op,
     init,
     itr::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple{names}},
 ) where {names}
-    ex = :init
-    for (i, n) in enumerate(names)
-        ex = :(op($ex, $(QuoteNode(n)) => vals[$i]))
-    end
-    quote
-        @_inline_meta
-        vals = Tuple(itr.data)
-        $ex
+    if @generated
+        ex = :init
+        for (i, n) in enumerate(names)
+            ex = :(op($ex, $(QuoteNode(n)) => vals[$i]))
+        end
+        quote
+            @_inline_meta
+            vals = Tuple(itr.data)
+            $ex
+        end
+    else
+        return invoke(_foldl_impl, Tuple{Any,Any,Any}, op, init, itr)
     end
 end
 
