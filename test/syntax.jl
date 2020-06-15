@@ -2276,3 +2276,9 @@ x = let var"'"(x) = 2x
     3'
 end
 @test x == 6
+
+# issue #36272
+macro m36272()
+    :((a, b=1) -> a*b)
+end
+@test @m36272()(1) == 1
