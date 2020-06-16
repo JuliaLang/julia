@@ -8,9 +8,13 @@ using Test, Printf
     if Sys.WORD_SIZE == 64
         @test (Printf.@sprintf "%20p" 0) == "  0x0000000000000000"
         @test (Printf.@sprintf "%-20p" 0) == "0x0000000000000000  "
+        @test (Printf.@sprintf "%20p" C_NULL) == "  0x0000000000000000"
+        @test (@sprintf "%-20p" C_NULL) == "0x0000000000000000  "
     elseif Sys.WORD_SIZE == 32
         @test (Printf.@sprintf "%20p" 0) == "          0x00000000"
         @test (Printf.@sprintf "%-20p" 0) == "0x00000000          "
+        @test (@sprintf "%20p" C_NULL) == "          0x00000000"
+        @test (@sprintf "%-20p" C_NULL) == "0x00000000          "
     end
 
 end
