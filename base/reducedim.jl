@@ -390,11 +390,10 @@ count(A::AbstractArrayOrBroadcasted; dims=:) = count(identity, A, dims=dims)
 count(f, A::AbstractArrayOrBroadcasted; dims=:) = mapreduce(_bool(f), add_sum, A, dims=dims, init=0)
 
 """
-    count!([f=identity,] r, A; init=true)
+    count!([f=identity,] r, A)
 
 Count the number of elements in `A` for which `f` returns `true` over the
 singleton dimensions of `r`, writing the result into `r` in-place.
-If `init` is `true`, values in `r` are initialized to zero.
 
 !!! compat "Julia 1.5"
     inplace `count!` was added in Julia 1.5.
