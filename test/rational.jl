@@ -575,3 +575,22 @@ end
     @test -Int32(1) // typemax(Int32) - Int32(1) == typemin(Int32) // typemax(Int32)
     @test 1 // (typemax(Int128) + BigInt(1)) - 2 == (1 + BigInt(2)*typemin(Int128)) // (BigInt(1) + typemax(Int128))
 end
+
+@testset "Promotions on binary operations with Rationals (#36277)" begin
+    inttypes = (Base.BitInteger_types..., BigInt)
+    for T in inttypes, S in inttypes
+        U = Rational{promote_type(T, S)}
+        @test typeof(one(Rational{T}) + one(S)) == typeof(one(S) + one(Rational{T})) == typeof(one(Rational{T}) + one(Rational{S})) == U
+        @test typeof(one(Rational{T}) - one(S)) == typeof(one(S) - one(Rational{T})) == typeof(one(Rational{T}) - one(Rational{S})) == U
+        @test typeof(one(Rational{T}) * one(S)) == typeof(one(S) * one(Rational{T})) == typeof(one(Rational{T}) * one(Rational{S})) == U
+        @test typeof(one(Rational{T}) // one(S)) == typeof(one(S) // one(Rational{T})) == typeof(one(Rational{T}) // one(Rational{S})) == U
+    end
+    @test (-40//3) // 0x5 == 0x5 // (-15//8) == -8//3
+    @test (-4//7) // (0x1//0x3) == (0x4//0x7) // (-1//3) == -12//7
+    @test -3//2 + 0x1//0x1 == -3//2 + 0x1 == 0x1//0x1 + (-3//2) == 0x1 + (-3//2) == -1//2
+    @test 0x3//0x5 - 2//3 == 3//5 - 0x2//0x3 == -1//15
+    @test rem(-12//5, 0x2//0x1) == rem(-12//5, 0x2) == -2//5
+    @test mod(0x3//0x1, -4//7) == mod(0x3, -4//7) == -3//7
+    @test -1//5 * 0x3//0x2 == 0x3//0x2 * -1//5 == -3//10
+    @test -2//3 * 0x1 == 0x1 * -2//3 == -2//3
+end
