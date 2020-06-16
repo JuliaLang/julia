@@ -50,7 +50,6 @@ write(joinpath(@__DIR__, "src", "NEWS.md"), replaced_links)
 
 const PAGES = [
     "Home" => "index.md",
-    hide("NEWS.md"),
     "Manual" => [
         "manual/getting-started.md",
         "manual/variables.md",
