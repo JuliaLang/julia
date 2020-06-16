@@ -1062,20 +1062,20 @@ end
     @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry: …"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys: …"
+        "KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys: …"
 
     io = IOContext(io, :displaysize => (5, 80))
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry:\n  1 => 2"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys:\n  1"
+        "KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys:\n  1"
     d = Base.ImmutableDict(d, 3=>4)
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  ⋮ => ⋮"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  ⋮"
+        "KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  ⋮"
 
     io = IOContext(io, :displaysize => (6, 80))
     show(io, MIME"text/plain"(), d)
@@ -1083,14 +1083,14 @@ end
         "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  3 => 4\n  1 => 2"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  3\n  1"
+        "KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  3\n  1"
     d = Base.ImmutableDict(d, 5=>6)
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) ==
         "Base.ImmutableDict{$Int,$Int} with 3 entries:\n  5 => 6\n  ⋮ => ⋮"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
+        "KeySet for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
 end
 
 @testset "copy!" begin

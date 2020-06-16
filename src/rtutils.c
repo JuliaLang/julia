@@ -813,6 +813,11 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, " where ");
         n += jl_static_show_x(out, (jl_value_t*)ua->var, depth->prev);
     }
+    else if (vt == jl_typename_type) {
+        n += jl_printf(out, "typename(");
+        n += jl_static_show_x(out, jl_unwrap_unionall(((jl_typename_t*)v)->wrapper), depth);
+        n += jl_printf(out, ")");
+    }
     else if (vt == jl_tvar_type) {
         // show type-var bounds only if they aren't going to be printed by UnionAll later
         jl_tvar_t *var = (jl_tvar_t*)v;

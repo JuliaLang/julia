@@ -499,7 +499,7 @@ function show(io::IO, @nospecialize(x::Type))
         show_datatype(io, x)
         return
     elseif x isa Union
-        if x.a isa DataType && Core.Compiler.typename(x.a) === Core.Compiler.typename(DenseArray)
+        if x.a isa DataType && x.a.name === typename(DenseArray)
             T, N = x.a.parameters
             if x == StridedArray{T,N}
                 print(io, "StridedArray")
@@ -522,7 +522,7 @@ function show(io::IO, @nospecialize(x::Type))
     x::UnionAll
 
     if print_without_params(x)
-        return show(io, unwrap_unionall(x).name)
+        return show_type_name(io, unwrap_unionall(x).name)
     end
 
     if x.var.name === :_ || io_has_tvar_name(io, x.var.name, x)
@@ -593,6 +593,7 @@ function show_type_name(io::IO, tn::Core.TypeName)
     show_sym(io, sym)
     quo      && print(io, ")")
     globfunc && print(io, ")")
+    nothing
 end
 
 function show_datatype(io::IO, x::DataType)
@@ -647,7 +648,9 @@ macro show(exs...)
 end
 
 function show(io::IO, tn::Core.TypeName)
+    print(io, "typename(")
     show_type_name(io, tn)
+    print(io, ")")
 end
 
 show(io::IO, ::Nothing) = print(io, "nothing")
