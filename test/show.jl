@@ -1983,3 +1983,8 @@ end
     @test sprint(show, skipmissing([1,2,missing])) == "skipmissing(Union{Missing, $Int}[1, 2, missing])"
     @test sprint(show, skipmissing((missing,1.0,'a'))) == "skipmissing((missing, 1.0, 'a'))"
 end
+
+@testset "show_fields" begin
+    @test sprint(Base.show_fields, (:a, :b)) == ":a, :b"
+    @test sprint(Base.show_fields, (a=:a, b=:b)) == ":a, :b"
+end
