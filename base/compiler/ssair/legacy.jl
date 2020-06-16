@@ -42,21 +42,21 @@ function inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
             code[i] = stmt
         end
     end
+    ssavaluetypes = ci.ssavaluetypes
+    nstmts = length(code)
     ssavaluetypes = ci.ssavaluetypes isa Vector{Any} ? copy(ci.ssavaluetypes) : Any[ Any for i = 1:(ci.ssavaluetypes::Int) ]
-    ir = IRCode(code, ssavaluetypes, copy(ci.codelocs), copy(ci.ssaflags), cfg, collect(LineInfoNode, ci.linetable),
-                argtypes, Any[], sptypes)
+    stmts = InstructionStream(code, ssavaluetypes, copy(ci.codelocs), copy(ci.ssaflags))
+    ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable), argtypes, Any[], sptypes)
     return ir
 end
 
 function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
     @assert isempty(ir.new_nodes)
     # All but the first `nargs` slots will now be unused
-    resize!(ci.slotflags, nargs+1)
-    ci.code = ir.stmts
-    ci.codelocs = ir.lines
-    ci.linetable = ir.linetable
-    ci.ssavaluetypes = ir.types
-    ci.ssaflags = ir.flags
+    resize!(ci.slotflags, nargs + 1)
+    stmts = ir.stmts
+    ci.code, ci.ssavaluetypes, ci.codelocs, ci.ssaflags, ci.linetable =
+        stmts.inst, stmts.type, stmts.line, stmts.flag, ir.linetable
     for metanode in ir.meta
         push!(ci.code, metanode)
         push!(ci.codelocs, 1)
@@ -76,23 +76,21 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
         end
         stmt = urs[]
         if isa(stmt, GotoNode)
-            ci.code[i] = GotoNode(first(ir.cfg.blocks[stmt.label].stmts))
+            stmt = GotoNode(first(ir.cfg.blocks[stmt.label].stmts))
         elseif isa(stmt, GotoIfNot)
-            ci.code[i] = Expr(:gotoifnot, stmt.cond, first(ir.cfg.blocks[stmt.dest].stmts))
+            stmt = Expr(:gotoifnot, stmt.cond, first(ir.cfg.blocks[stmt.dest].stmts))
         elseif isa(stmt, PhiNode)
-            ci.code[i] = PhiNode(Any[last(ir.cfg.blocks[edge].stmts) for edge in stmt.edges], stmt.values)
+            stmt = PhiNode(Any[last(ir.cfg.blocks[edge::Int].stmts) for edge in stmt.edges], stmt.values)
         elseif isa(stmt, ReturnNode)
             if isdefined(stmt, :val)
-                ci.code[i] = Expr(:return, stmt.val)
+                stmt = Expr(:return, stmt.val)
             else
-                ci.code[i] = Expr(:unreachable)
+                stmt = Expr(:unreachable)
             end
         elseif isa(stmt, Expr) && stmt.head === :enter
-            stmt.args[1] = first(ir.cfg.blocks[stmt.args[1]].stmts)
-            ci.code[i] = stmt
-        else
-            ci.code[i] = stmt
+            stmt.args[1] = first(ir.cfg.blocks[stmt.args[1]::Int].stmts)
         end
+        ci.code[i] = stmt
     end
 end
 

@@ -116,14 +116,16 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
     end
     strip_trailing_junk!(ci, code, flags)
     cfg = compute_basic_blocks(code)
-    ir = IRCode(code, Any[], ci.codelocs, flags, cfg, collect(LineInfoNode, ci.linetable), sv.slottypes, meta, sv.sptypes)
+    types = Any[]
+    stmts = InstructionStream(code, types, ci.codelocs, flags)
+    ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable), sv.slottypes, meta, sv.sptypes)
     return ir
 end
 
 function slot2reg(ir::IRCode, ci::CodeInfo, nargs::Int, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
     @timeit "domtree 1" domtree = construct_domtree(ir.cfg)
-    defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts)
+    defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.inst)
     @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, nargs, sv.sptypes, sv.slottypes) # consumes `ir`
     return ir
 end

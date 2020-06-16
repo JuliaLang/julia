@@ -303,19 +303,19 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                          boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
     # Ok, do the inlining here
     inline_cfg = item.ir.cfg
-    stmt = compact.result[idx]
-    linetable_offset = length(linetable)
+    stmt = compact.result[idx][:inst]
+    linetable_offset::Int32 = length(linetable)
     # Append the linetable of the inlined function to our line table
-    inlined_at = Int(compact.result_lines[idx])
+    inlined_at = Int(compact.result[idx][:line])
     for entry in item.linetable
         push!(linetable, LineInfoNode(entry.method, entry.file, entry.line,
             (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset : inlined_at)))
     end
     if item.isva
-        vararg = mk_tuplecall!(compact, argexprs[item.na:end], compact.result_lines[idx])
+        vararg = mk_tuplecall!(compact, argexprs[item.na:end], compact.result[idx][:line])
         argexprs = Any[argexprs[1:(item.na - 1)]..., vararg]
     end
-    flag = compact.result_flags[idx]
+    flag = compact.result[idx][:flag]
     boundscheck_idx = boundscheck
     if boundscheck_idx === :default || boundscheck_idx === :propagate
         if (flag & IR_FLAG_INBOUNDS) != 0
@@ -341,7 +341,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 return_value = SSAValue(idx′)
                 inline_compact[idx′] = stmt′.val
                 val = stmt′.val
-                inline_compact.result_types[idx′] = (isa(val, Argument) || isa(val, Expr)) ?
+                inline_compact.result[idx′][:type] = (isa(val, Argument) || isa(val, Expr)) ?
                     compact_exprtype(compact, stmt′.val) :
                     compact_exprtype(inline_compact, stmt′.val)
                 break
@@ -371,11 +371,11 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                     push!(pn.edges, inline_compact.active_result_bb-1)
                     if isa(val, GlobalRef) || isa(val, Expr)
                         stmt′ = val
-                        inline_compact.result_types[idx′] = (isa(val, Argument) || isa(val, Expr)) ?
+                        inline_compact.result[idx′][:type] = (isa(val, Argument) || isa(val, Expr)) ?
                             compact_exprtype(compact, val) :
                             compact_exprtype(inline_compact, val)
                         insert_node_here!(inline_compact, GotoNode(post_bb_id),
-                                          Any, compact.result_lines[idx′],
+                                          Any, compact.result[idx′][:line],
                                           true)
                         push!(pn.values, SSAValue(idx′))
                     else
@@ -407,7 +407,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         if length(pn.edges) == 1
             return_value = pn.values[1]
         else
-            return_value = insert_node_here!(compact, pn, compact_exprtype(compact, SSAValue(idx)), compact.result_lines[idx])
+            return_value = insert_node_here!(compact, pn, compact_exprtype(compact, SSAValue(idx)), compact.result[idx][:line])
         end
     end
     return_value
@@ -418,7 +418,7 @@ const fatal_type_bound_error = ErrorException("fatal error in type inference (ty
 function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
                                argexprs::Vector{Any}, linetable::Vector{LineInfoNode},
                                item::UnionSplit, boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
-    stmt, typ, line = compact.result[idx], compact.result_types[idx], compact.result_lines[idx]
+    stmt, typ, line = compact.result[idx][:inst], compact.result[idx][:type], compact.result[idx][:line]
     atype = item.atype
     generic_bb = item.bbs[end-1]
     join_bb = item.bbs[end]
@@ -541,12 +541,13 @@ function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{LineInfo
                 for aidx in 1:length(argexprs)
                     aexpr = argexprs[aidx]
                     if isa(aexpr, GlobalRef) || isa(aexpr, Expr)
-                        argexprs[aidx] = insert_node_here!(compact, aexpr, compact_exprtype(compact, aexpr), compact.result_lines[idx])
+                        argexprs[aidx] = insert_node_here!(compact, aexpr, compact_exprtype(compact, aexpr), compact.result[idx][:line])
                     end
                 end
                 if isinvoke(item)
-                    argexprs = rewrite_invoke_exprargs!((node, typ)->insert_node_here!(compact, node, typ, compact.result_lines[idx]),
-                                                argexprs)
+                    argexprs = rewrite_invoke_exprargs!(argexprs) do node, typ
+                            insert_node_here!(compact, node, typ, compact.result[idx][:line])
+                        end
                 end
                 if isa(item, InliningTodo)
                     compact.ssa_rename[compact.idx-1] = ir_inline_item!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs)
@@ -841,8 +842,8 @@ function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::Optimizatio
 end
 
 function inline_splatnew!(ir::IRCode, idx::Int)
-    stmt = ir.stmts[idx]
-    ty = ir.types[idx]
+    stmt = ir.stmts[idx][:inst]
+    ty = ir.stmts[idx][:type]
     nf = nfields_tfunc(ty)
     if nf isa Const
         eargs = stmt.args
@@ -874,7 +875,6 @@ function call_sig(ir::IRCode, stmt::Expr)
     f = singleton_type(ft)
     f === Core.Intrinsics.llvmcall && return nothing
     f === Core.Intrinsics.cglobal && return nothing
-
     atypes = Vector{Any}(undef, length(stmt.args))
     atypes[1] = ft
     ok = true
@@ -888,7 +888,7 @@ function call_sig(ir::IRCode, stmt::Expr)
 end
 
 function inline_apply!(ir::IRCode, idx::Int, sig::Signature, params::OptimizationParams)
-    stmt = ir.stmts[idx]
+    stmt = ir.stmts[idx][:inst]
     while sig.f === Core._apply || sig.f === Core._apply_iterate
         arg_start = sig.f === Core._apply ? 2 : 3
         atypes = sig.atypes
@@ -911,7 +911,7 @@ function inline_apply!(ir::IRCode, idx::Int, sig::Signature, params::Optimizatio
                 break
             end
             if nonempty_idx != 0
-                ir.stmts[idx] = stmt.args[nonempty_idx]
+                ir.stmts[idx][:inst] = stmt.args[nonempty_idx]
                 return nothing
             end
         end
@@ -941,8 +941,8 @@ is_builtin(s::Signature) =
     s.ft ⊑ Builtin
 
 function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, invoke_data::InvokeData, sv::OptimizationState, todo::Vector{Any})
-    stmt = ir.stmts[idx]
-    calltype = ir.types[idx]
+    stmt = ir.stmts[idx][:inst]
+    calltype = ir.stmts[idx][:type]
     method = invoke_data.entry.func
     (metharg, methsp) = ccall(:jl_type_intersection_with_env, Any, (Any, Any),
                             sig.atype, method.sig)::SimpleVector
@@ -958,7 +958,7 @@ end
 # this method does not access the method table or otherwise process generic
 # functions.
 function process_simple!(ir::IRCode, idx::Int, params::OptimizationParams, world::UInt)
-    stmt = ir.stmts[idx]
+    stmt = ir.stmts[idx][:inst]
     stmt isa Expr || return nothing
     if stmt.head === :splatnew
         inline_splatnew!(ir, idx)
@@ -975,10 +975,10 @@ function process_simple!(ir::IRCode, idx::Int, params::OptimizationParams, world
     sig === nothing && return nothing
 
     # Check if we match any of the early inliners
-    calltype = ir.types[idx]
+    calltype = ir.stmts[idx][:type]
     res = early_inline_special_case(ir, sig, stmt, params, calltype)
     if res !== nothing
-        ir.stmts[idx] = res
+        ir.stmts[idx][:inst] = res
         return nothing
     end
 
@@ -1013,8 +1013,8 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
         r = process_simple!(ir, idx, sv.params, sv.world)
         r === nothing && continue
 
-        stmt = ir.stmts[idx]
-        calltype = ir.types[idx]
+        stmt = ir.stmts[idx][:inst]
+        calltype = ir.stmts[idx][:type]
         (sig, invoke_data) = r
 
         # Ok, now figure out what method to call
@@ -1213,8 +1213,8 @@ function early_inline_special_case(ir::IRCode, s::Signature, e::Expr, params::Op
 end
 
 function late_inline_special_case!(ir::IRCode, sig::Signature, idx::Int, stmt::Expr, params::OptimizationParams)
-    typ = ir.types[idx]
     f, ft, atypes = sig.f, sig.ft, sig.atypes
+    typ = ir.stmts[idx][:type]
     if params.inlining && length(atypes) == 3 && istopfunction(f, :!==)
         # special-case inliner for !== that precedes _methods_by_ftype union splitting
         # and that works, even though inference generally avoids inferring the `!==` Method
@@ -1251,9 +1251,9 @@ end
 
 function ssa_substitute!(idx::Int, @nospecialize(val), arg_replacements::Vector{Any},
                          @nospecialize(spsig), spvals::Vector{Any},
-                         linetable_offset::Int, boundscheck::Symbol, compact::IncrementalCompact)
-    compact.result_flags[idx] &= ~IR_FLAG_INBOUNDS
-    compact.result_lines[idx] += linetable_offset
+                         linetable_offset::Int32, boundscheck::Symbol, compact::IncrementalCompact)
+    compact.result[idx][:flag] &= ~IR_FLAG_INBOUNDS
+    compact.result[idx][:line] += linetable_offset
     return ssa_substitute_op!(val, arg_replacements, spsig, spvals, boundscheck)
 end
 
