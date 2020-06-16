@@ -1509,7 +1509,7 @@ _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
     catdims = dims2cat(dims)
     shape = cat_shape(catdims, (), map(cat_size, X)...)
     A = cat_similar(X[1], T, shape)
-    if T <: Number && count(!iszero, catdims) > 1
+    if count(!iszero, catdims) > 1
         fill!(A, zero(T))
     end
     return __cat(A, shape, catdims, X...)
