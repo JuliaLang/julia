@@ -15,7 +15,7 @@ function recursive_dotcalls!(ex, args, i=1)
     if !(ex isa Expr) || ((ex.head !== :. || !(ex.args[2] isa Expr)) &&
                           (ex.head !== :call || string(ex.args[1])[1] != '.'))
         newarg = Symbol('x', i)
-        if ex.head === :...
+        if Meta.isexpr(ex, :...)
             push!(args, only(ex.args))
             return Expr(:..., newarg), i+1
         else
