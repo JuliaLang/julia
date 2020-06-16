@@ -2,18 +2,6 @@
 
 abstract type AbstractMsg end
 
-const REF_ID = Ref(1)
-next_ref_id() = (id = REF_ID[]; REF_ID[] = id+1; id)
-
-struct RRID
-    whence::Int
-    id::Int
-
-    RRID() = RRID(myid(),next_ref_id())
-    RRID(whence, id) = new(whence,id)
-end
-hash(r::RRID, h::UInt) = hash(r.whence, hash(r.id, h))
-==(r::RRID, s::RRID) = (r.whence==s.whence && r.id==s.id)
 
 ## Wire format description
 #
