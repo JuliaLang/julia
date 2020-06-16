@@ -2405,6 +2405,7 @@ end
     @test_throws BoundsError firstindex(1,0)
     @test lastindex(1) == 1
     @test lastindex(1, 1) == 1
+    @test 1[end,end] == 1
     @test_throws BoundsError lastindex(1,0)
     @test eltype(Integer) == Integer
 end
