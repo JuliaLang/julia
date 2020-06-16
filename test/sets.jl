@@ -384,27 +384,30 @@ end
 end
 
 @testset "unique" begin
-    u = unique([1, 1, 2])
+    u = @inferred(unique([1, 1, 2]))
     @test in(1, u)
     @test in(2, u)
     @test length(u) == 2
-    @test unique(iseven, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6]) == [5, 8]
-    @test unique(n -> n % 3, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6]) == [5, 1, 9]
+    @test @inferred(unique(iseven, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6])) == [5, 8]
+    @test @inferred(unique(x->x^2, Integer[3, -4, 5, 4])) == Integer[3, -4, 5]
+    @test @inferred(unique(iseven, Integer[3, -4, 5, 4]; seen=Set{Bool}())) == Integer[3, -4]
+    @test @inferred(unique(n -> n % 3, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6])) == [5, 1, 9]
 end
 
 @testset "issue 20105" begin
     @test @inferred(unique(x for x in 1:1)) == [1]
     @test unique(x for x in Any[1, 1.0])::Vector{Real} == [1]
     @test unique(x for x in Real[1, 1.0])::Vector{Real} == [1]
-    @test unique(Integer[1, 1, 2])::Vector{Integer} == [1, 2]
+    @test @inferred(unique(Integer[1, 1, 2]))::Vector{Integer} == [1, 2]
+    @test unique(x for x in []) isa Vector{Any}
 end
 
 @testset "unique!" begin
     u = [1,1,3,2,1]
-    unique!(u)
+    @inferred(unique!(u))
     @test u == [1,3,2]
-    @test unique!([]) == []
-    @test unique!(Float64[]) == Float64[]
+    @test @inferred(unique!([])) == []
+    @test @inferred(unique!(Float64[])) == Float64[]
     u = [1,2,2,3,5,5]
     @test unique!(u) === u
     @test u == [1,2,3,5]
@@ -434,8 +437,9 @@ end
     u = [1,2,5,1,3,2]
     @test unique!(x -> x ^ 2, [1, -1, 3, -3, 5, -5]) == [1, 3, 5]
     @test unique!(n -> n % 3, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6]) == [5, 1, 9]
-    @test unique!(iseven, [2, 3, 5, 7, 9]) == [2, 3]
-    @test unique!(x -> x % 2 == 0 ? :even : :odd, [1, 2, 3, 4, 2, 2, 1]) == [1, 2]
+    @test @inferred(unique!(iseven, [2, 3, 5, 7, 9])) == [2, 3]
+    @test @inferred(unique!(x -> x % 2 == 0 ? :even : :odd, [1, 2, 3, 4, 2, 2, 1])) == [1, 2]
+    @test @inferred(unique!(x -> x % 2 == 0 ? :even : "odd", [1, 2, 3, 4, 2, 2, 1]; seen=Set{Union{Symbol,String}}())) == [1, 2]
 end
 
 @testset "allunique" begin
