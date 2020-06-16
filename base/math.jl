@@ -360,6 +360,14 @@ asinh(x::Number)
     expm1(x)
 
 Accurately compute ``e^x-1``.
+# Examples
+```jldoctest
+julia> expm1(2)
+6.38905609893065
+
+julia> expm1(-Inf)
+-1
+```
 """
 expm1(x)
 for f in (:exp2, :expm1)
@@ -779,6 +787,14 @@ ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
     exponent(x) -> Int
 
 Get the exponent of a normalized floating-point number.
+# Examples
+```jldoctest
+julia> exponent(6.5)
+2
+
+julia> exponent(16.0)
+4
+```
 """
 function exponent(x::T) where T<:IEEEFloat
     @noinline throw1(x) = throw(DomainError(x, "Cannot be NaN or Inf."))
@@ -829,6 +845,11 @@ end
 
 Return `(x,exp)` such that `x` has a magnitude in the interval ``[1/2, 1)`` or 0,
 and `val` is equal to ``x \\times 2^{exp}``.
+# Examples
+```jldoctest
+julia> frexp(12.8)
+(0.625, 8)
+```
 """
 function frexp(x::T) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
