@@ -610,6 +610,10 @@ function test_cat(::Type{TestAbstractArray})
     # 29172
     @test_throws ArgumentError cat([1], [2], dims=0)
     @test_throws ArgumentError cat([1], [2], dims=[5, -3])
+
+    # 36041
+    @test_throws MethodError cat(["a"], ["b"], dims=[1, 2])
+    @test cat([1], [1], dims=[1, 2]) == I(2)
 end
 
 function test_ind2sub(::Type{TestAbstractArray})
