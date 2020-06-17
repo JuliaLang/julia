@@ -131,7 +131,9 @@ function complete_symbol(sym, ffunc, context_module=Main)::Vector{Completion}
         # We will exclude the results that the user does not want, as well
         # as excluding Main.Main.Main, etc., because that's most likely not what
         # the user wants
-        p = s->(!Base.isdeprecated(mod, s) && s != nameof(mod) && ffunc(mod, s))
+        p = let mod=mod, modname=nameof(mod)
+            s->(!Base.isdeprecated(mod, s) && s != modname && ffunc(mod, s))
+        end
         # Looking for a binding in a module
         if mod == context_module
             # Also look in modules we got through `using`
@@ -624,9 +626,9 @@ function completions(string, pos, context_module=Main)::Completions
         ex = Meta.parse(s * ")", raise=false, depwarn=false)
 
         if isa(ex, Expr)
-            if ex.head==:call
+            if ex.head === :call
                 return complete_methods(ex, context_module), first(frange):method_name_end, false
-            elseif ex.head==:. && ex.args[2] isa Expr && ex.args[2].head==:tuple
+            elseif ex.head === :. && ex.args[2] isa Expr && (ex.args[2]::Expr).head === :tuple
                 return complete_methods(ex, context_module), first(frange):(method_name_end - 1), false
             end
         end

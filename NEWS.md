@@ -17,6 +17,7 @@ Compiler/Runtime improvements
 * All platforms can now use `@executable_path` within `jl_load_dynamic_library()`.
   This allows executable-relative paths to be embedded within executables on all
   platforms, not just MacOS, which the syntax is borrowed from. ([#35627])
+* Constant propogation now occurs through keyword arguments ([#35976])
 
 Command-line option changes
 ---------------------------
@@ -48,6 +49,8 @@ Standard library changes
 * `view`, `@view`, and `@views` now work on `AbstractString`s, returning a `SubString` when appropriate ([#35879]).
 * All `AbstractUnitRange{<:Integer}`s now work with `SubString`, `view`, `@view` and `@views` on strings ([#35879]).
 * `sum`, `prod`, `maximum`, `minimum`, and `extrema` now support `init` keyword argument ([#36188], [#35839], [#36265]).
+* `unique(f, itr; seen=Set{T}())` now allows you to declare the container type used for
+  keeping track of values returned by `f` on elements of `itr` ([#36280]).
 
 #### LinearAlgebra
 * New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).

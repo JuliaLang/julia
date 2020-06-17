@@ -37,7 +37,8 @@ let m = Meta.@lower 1 + 1
     domtree = Core.Compiler.construct_domtree(ir.cfg)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
-    @test isa(ir.stmts[3], Core.PhiNode) && length(ir.stmts[3].edges) == 1
+    phi = ir.stmts.inst[3]
+    @test isa(phi, Core.PhiNode) && length(phi.edges) == 1
 end
 
 # test that we don't stack-overflow in SNCA with large functions.
@@ -224,7 +225,7 @@ let m = Meta.@lower 1 + 1
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     ir = Core.Compiler.compact!(ir)
-    @test length(ir.cfg.blocks) == 1 && length(ir.stmts) == 1
+    @test length(ir.cfg.blocks) == 1 && Core.Compiler.length(ir.stmts) == 1
 end
 
 let m = Meta.@lower 1 + 1
@@ -252,7 +253,7 @@ let m = Meta.@lower 1 + 1
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     @test length(ir.cfg.blocks) == 5
-    ret_2 = ir.stmts[ir.cfg.blocks[3].stmts[end]]
+    ret_2 = ir.stmts.inst[ir.cfg.blocks[3].stmts[end]]
     @test isa(ret_2, Core.Compiler.ReturnNode) && ret_2.val == 2
 end
 

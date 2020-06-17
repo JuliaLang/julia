@@ -36,6 +36,8 @@ import Base:
 include("Terminals.jl")
 using .Terminals
 
+abstract type AbstractREPL end
+
 include("LineEdit.jl")
 using .LineEdit
 import ..LineEdit:
@@ -65,8 +67,6 @@ include("docview.jl")
 function __init__()
     Base.REPL_MODULE_REF[] = REPL
 end
-
-abstract type AbstractREPL end
 
 answer_color(::AbstractREPL) = ""
 
@@ -211,8 +211,22 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
         io = foldl(IOContext, d.repl.options.iocontext,
                    init=IOContext(io, :limit => true, :module => Main))
     end
+
+    infos = Tuple{String,Int}[]
+    io = IOContext(io, :LAST_SHOWN_LINE_INFOS => infos)
+
     show(io, mime, x)
     println(io)
+
+    if !isempty(infos)
+        d.repl.last_shown_line_infos = infos
+        println(
+            io,
+            "\nTo edit a specific method, type the corresponding number into the " *
+            "REPL and press Ctrl+Q",
+        )
+    end
+
     nothing
 end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
@@ -430,11 +444,12 @@ mutable struct LineEditREPL <: AbstractREPL
     specialdisplay::Union{Nothing,AbstractDisplay}
     options::Options
     mistate::Union{MIState,Nothing}
+    last_shown_line_infos::Vector{Tuple{String,Int}}
     interface::ModalInterface
     backendref::REPLBackendRef
     LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors) =
         new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
-            in_help,envcolors,false,nothing, Options(), nothing)
+            in_help,envcolors,false,nothing, Options(), nothing, Tuple{String,Int}[])
 end
 outstream(r::LineEditREPL) = r.t
 specialdisplay(r::LineEditREPL) = r.specialdisplay
@@ -481,15 +496,15 @@ function complete_line(c::LatexCompletions, s)
 end
 
 mutable struct REPLHistoryProvider <: HistoryProvider
-    history::Array{String,1}
+    history::Vector{String}
     history_file::Union{Nothing,IO}
     start_idx::Int
     cur_idx::Int
     last_idx::Int
     last_buffer::IOBuffer
     last_mode::Union{Nothing,Prompt}
-    mode_mapping::Dict
-    modes::Array{Symbol,1}
+    mode_mapping::Dict{Symbol,Prompt}
+    modes::Vector{Symbol}
 end
 REPLHistoryProvider(mode_mapping) =
     REPLHistoryProvider(String[], nothing, 0, 0, -1, IOBuffer(),
@@ -1092,10 +1107,10 @@ function setup_interface(
         end,
 
         # Open the editor at the location of a stackframe or method
-        # This is accessing a global variable that gets set in
+        # This is accessing a contextual variable that gets set in
         # the show_backtrace and show_method_table functions.
         "^Q" => (s, o...) -> begin
-            linfos = Base.LAST_SHOWN_LINE_INFOS
+            linfos = repl.last_shown_line_infos
             str = String(take!(LineEdit.buffer(s)))
             n = tryparse(Int, str)
             n === nothing && @goto writeback

@@ -768,43 +768,43 @@ Base.exit_on_sigint(true)
 
 let exename = Base.julia_cmd()
     # Test REPL in dumb mode
-    with_fake_pty() do pty_slave, pty_master
+    with_fake_pty() do pts, ptm
         nENV = copy(ENV)
         nENV["TERM"] = "dumb"
-        p = run(detach(setenv(`$exename --startup-file=no -q`, nENV)), pty_slave, pty_slave, pty_slave, wait=false)
-        Base.close_stdio(pty_slave)
-        output = readuntil(pty_master, "julia> ", keep=true)
+        p = run(detach(setenv(`$exename --startup-file=no -q`, nENV)), pts, pts, pts, wait=false)
+        Base.close_stdio(pts)
+        output = readuntil(ptm, "julia> ", keep=true)
         if ccall(:jl_running_on_valgrind, Cint,()) == 0
             # If --trace-children=yes is passed to valgrind, we will get a
             # valgrind banner here, not just the prompt.
             @test output == "julia> "
         end
-        write(pty_master, "1\nexit()\n")
+        write(ptm, "1\nexit()\n")
 
-        output = readuntil(pty_master, ' ', keep=true)
+        output = readuntil(ptm, ' ', keep=true)
         if Sys.iswindows()
 	    # Our fake pty is actually a pipe, and thus lacks the input echo feature of posix
             @test output == "1\n\njulia> "
         else
             @test output == "1\r\nexit()\r\n1\r\n\r\njulia> "
         end
-        @test bytesavailable(pty_master) == 0
+        @test bytesavailable(ptm) == 0
         @test if Sys.iswindows() || Sys.isbsd()
-                eof(pty_master)
+                eof(ptm)
             else
                 # Some platforms (such as linux) report EIO instead of EOF
                 # possibly consume child-exited notification
                 # for example, see discussion in https://bugs.python.org/issue5380
                 try
-                    eof(pty_master) && !Sys.islinux()
+                    eof(ptm) && !Sys.islinux()
                 catch ex
                     (ex isa Base.IOError && ex.code == Base.UV_EIO) || rethrow()
-                    @test_throws ex eof(pty_master) # make sure the error is sticky
-                    pty_master.readerror = nothing
-                    eof(pty_master)
+                    @test_throws ex eof(ptm) # make sure the error is sticky
+                    ptm.readerror = nothing
+                    eof(ptm)
                 end
             end
-        @test read(pty_master, String) == ""
+        @test read(ptm, String) == ""
         wait(p)
     end
 

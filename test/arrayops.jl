@@ -974,6 +974,8 @@ end
                                         3 4], inner=(2, 2), outer=(2,))
     @test_throws ArgumentError repeat([1, 2], inner=(1, -1), outer=(1, -1))
 
+    @test_throws ArgumentError repeat(OffsetArray(rand(2), 1), inner=(2,))
+
     A = reshape(1:8, 2, 2, 2)
     R = repeat(A, inner = (1, 1, 2), outer = (1, 1, 1))
     T = reshape([1:4; 1:4; 5:8; 5:8], 2, 2, 4)
@@ -1446,11 +1448,15 @@ end
     @test deleteat!(a, [1,3,5,7:10...]) == [2,4,6]
     @test_throws BoundsError deleteat!(a, 13)
     @test_throws BoundsError deleteat!(a, [1,13])
-    @test_throws ArgumentError deleteat!(a, [5,3])
+    @test_throws ArgumentError deleteat!(a, [3,2]) # not sorted
     @test_throws BoundsError deleteat!(a, 5:20)
     @test_throws BoundsError deleteat!(a, Bool[])
     @test_throws BoundsError deleteat!(a, [true])
     @test_throws BoundsError deleteat!(a, falses(11))
+    @test_throws BoundsError deleteat!(a, [0])
+    @test_throws BoundsError deleteat!(a, [4])
+    @test_throws BoundsError deleteat!(a, [5])
+    @test_throws BoundsError deleteat!(a, [5, 3])
 
     @test_throws BoundsError deleteat!([], 1)
     @test_throws BoundsError deleteat!([], [1])

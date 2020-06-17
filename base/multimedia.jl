@@ -327,7 +327,7 @@ function display(@nospecialize x)
             try
                 return display(displays[i], x)
             catch e
-                isa(e, MethodError) && e.f in (display, show) ||
+                isa(e, MethodError) && (e.f === display || e.f === show) ||
                     rethrow()
             end
         end

@@ -7,8 +7,8 @@ using Core.Intrinsics, Core.IR
 import Core: print, println, show, write, unsafe_write, stdout, stderr,
              _apply, _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction, MethodInstance, CodeInstance
 
-const getproperty = getfield
-const setproperty! = setfield!
+const getproperty = Core.getfield
+const setproperty! = Core.setfield!
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Compiler, false)
 

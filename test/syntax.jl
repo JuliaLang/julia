@@ -2268,3 +2268,9 @@ end
 # issue #36196
 @test_throws ParseError("\"for\" at none:1 expected \"end\", got \")\"") Meta.parse("(for i=1; println())")
 @test_throws ParseError("\"try\" at none:1 expected \"end\", got \")\"") Meta.parse("(try i=1; println())")
+
+# issue #36272
+macro m36272()
+    :((a, b=1) -> a*b)
+end
+@test @m36272()(1) == 1

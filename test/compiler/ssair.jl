@@ -63,11 +63,12 @@ let cfg = CFG(BasicBlock[
         # the answer doesn't change (it does change the which node is chosen
         # as the semi-dominator, since it changes the DFS numbering).
         for (a, b, c, d) in Iterators.product(((true, false) for _ = 1:4)...)
-            let cfg′ = Compiler.copy(cfg)
-                a && reverse!(cfg′.blocks[1].succs)
-                b && reverse!(cfg′.blocks[2].succs)
-                c && reverse!(cfg′.blocks[4].preds)
-                d && reverse!(cfg′.blocks[5].preds)
+            let blocks = copy(cfg.blocks)
+                a && (blocks[1] = make_bb(blocks[1].preds, reverse(blocks[1].succs)))
+                b && (blocks[2] = make_bb(blocks[2].preds, reverse(blocks[2].succs)))
+                c && (blocks[4] = make_bb(reverse(blocks[4].preds), blocks[4].succs))
+                d && (blocks[5] = make_bb(reverse(blocks[5].preds), blocks[5].succs))
+                cfg′ = CFG(blocks, cfg.index)
                 @test Compiler.SNCA(cfg′) == correct_idoms
             end
         end
@@ -107,8 +108,8 @@ let cfg = CFG(BasicBlock[
     make_bb([0, 1, 2] , [5]   ), # 0 predecessor should be preserved
     make_bb([2, 3]    , []    ),
 ], Int[])
-    code = Compiler.IRCode(
-        [], [], Int32[], UInt8[], cfg, LineInfoNode[], [], [], [])
+    insts = Compiler.InstructionStream([], [], Int32[], UInt8[])
+    code = Compiler.IRCode(insts, cfg, LineInfoNode[], [], [], [])
     compact = Compiler.IncrementalCompact(code, true)
     @test length(compact.result_bbs) == 4 && 0 in compact.result_bbs[3].preds
 end

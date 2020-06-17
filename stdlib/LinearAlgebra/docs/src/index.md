@@ -317,6 +317,7 @@ LinearAlgebra.SingularException
 LinearAlgebra.PosDefException
 LinearAlgebra.ZeroPivotException
 LinearAlgebra.dot
+LinearAlgebra.dot(::Any, ::Any, ::Any)
 LinearAlgebra.cross
 LinearAlgebra.factorize
 LinearAlgebra.Diagonal
