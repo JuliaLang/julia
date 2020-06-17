@@ -38,29 +38,35 @@ safe_minabs(A::Array{T}, region) where {T} = safe_mapslices(minimum, abs.(A), re
     @test minimum!(abs, r, Areduc) ≈ safe_minabs(Areduc, region)
     @test count!(!, r, Breduc) ≈ safe_count(.!Breduc, region)
 
-    # With init=false
+    # With reset=false
     r2 = similar(r)
     fill!(r, 1)
-    @test sum!(r, Areduc, init=false) ≈ safe_sum(Areduc, region) .+ 1
+    @test sum!(r, Areduc, reset=false) ≈ safe_sum(Areduc, region) .+ 1
     fill!(r, 2.2)
-    @test prod!(r, Areduc, init=false) ≈ safe_prod(Areduc, region)*2.2
+    @test prod!(r, Areduc, reset=false) ≈ safe_prod(Areduc, region)*2.2
     fill!(r, 1.8)
-    @test maximum!(r, Areduc, init=false) ≈ fill!(r2, 1.8)
+    @test maximum!(r, Areduc, reset=false) ≈ fill!(r2, 1.8)
     fill!(r, -0.2)
-    @test minimum!(r, Areduc, init=false) ≈ fill!(r2, -0.2)
+    @test minimum!(r, Areduc, reset=false) ≈ fill!(r2, -0.2)
     fill!(r, 1)
-    @test count!(r, Breduc, init=false) ≈ safe_count(Breduc, region) .+ 1
+    @test count!(r, Breduc, reset=false) ≈ safe_count(Breduc, region) .+ 1
 
     fill!(r, 8.1)
-    @test sum!(abs, r, Areduc, init=false) ≈ safe_sumabs(Areduc, region) .+ 8.1
+    @test sum!(abs, r, Areduc, reset=false) ≈ safe_sumabs(Areduc, region) .+ 8.1
     fill!(r, 8.1)
-    @test sum!(abs2, r, Areduc, init=false) ≈ safe_sumabs2(Areduc, region) .+ 8.1
+    @test sum!(abs2, r, Areduc, reset=false) ≈ safe_sumabs2(Areduc, region) .+ 8.1
     fill!(r, 1.5)
-    @test maximum!(abs, r, Areduc, init=false) ≈ fill!(r2, 1.5)
+    @test maximum!(abs, r, Areduc, reset=false) ≈ fill!(r2, 1.5)
     fill!(r, -1.5)
-    @test minimum!(abs, r, Areduc, init=false) ≈ fill!(r2, -1.5)
+    @test minimum!(abs, r, Areduc, reset=false) ≈ fill!(r2, -1.5)
     fill!(r, 1)
-    @test count!(!, r, Breduc, init=false) ≈ safe_count(.!Breduc, region) .+ 1
+    @test count!(!, r, Breduc, reset=false) ≈ safe_count(.!Breduc, region) .+ 1
+
+    # Backward compatibility:
+    fill!(r, 1)
+    @test sum!(r, Areduc, init=false) ≈ safe_sum(Areduc, region) .+ 1
+    fill!(r, 1)
+    @test count!(r, Breduc, init=false) ≈ safe_count(Breduc, region) .+ 1
 
     @test @inferred(sum(Areduc, dims=region)) ≈ safe_sum(Areduc, region)
     @test @inferred(prod(Areduc, dims=region)) ≈ safe_prod(Areduc, region)
@@ -92,22 +98,22 @@ r = fill(NaN, map(length, Base.reduced_indices(axes(Breduc), 1)))
 @test sum(abs2, Breduc, dims=1) ≈ safe_sumabs2(Breduc, 1)
 
 fill!(r, 4.2)
-@test sum!(r, Breduc, init=false) ≈ safe_sum(Breduc, 1) .+ 4.2
+@test sum!(r, Breduc, reset=false) ≈ safe_sum(Breduc, 1) .+ 4.2
 fill!(r, -6.3)
-@test sum!(abs, r, Breduc, init=false) ≈ safe_sumabs(Breduc, 1) .- 6.3
+@test sum!(abs, r, Breduc, reset=false) ≈ safe_sumabs(Breduc, 1) .- 6.3
 fill!(r, -1.1)
-@test sum!(abs2, r, Breduc, init=false) ≈ safe_sumabs2(Breduc, 1) .- 1.1
+@test sum!(abs2, r, Breduc, reset=false) ≈ safe_sumabs2(Breduc, 1) .- 1.1
 
 # Small arrays with init=false
 let A = reshape(1:15, 3, 5)
     R = fill(1, 3)
-    @test sum!(R, A, init=false) == [36,41,46]
+    @test sum!(R, A, reset=false) == [36,41,46]
     R = fill(1, 1, 5)
-    @test sum!(R, A, init=false) == [7 16 25 34 43]
+    @test sum!(R, A, reset=false) == [7 16 25 34 43]
 end
 let R = [2]
     A = reshape(1:6, 3, 2)
-    @test prod!(R, A, init=false) == [1440]
+    @test prod!(R, A, reset=false) == [1440]
 
     # min/max
     @test reduce(max, A, dims=1) == [3 6]
@@ -193,7 +199,7 @@ for (tup, rval, rind) in [((1,), [1.0 2.0 4.0], [CartesianIndex(1,1) CartesianIn
     @test findmin!(similar(rval), similar(rind), A) == (rval, rind)
     @test isequal(minimum(A, dims=tup), rval)
     @test isequal(minimum!(similar(rval), A), rval)
-    @test isequal(minimum!(copy(rval), A, init=false), rval)
+    @test isequal(minimum!(copy(rval), A, reset=false), rval)
 end
 
 for (tup, rval, rind) in [((1,), [5.0 5.0 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
@@ -203,7 +209,25 @@ for (tup, rval, rind) in [((1,), [5.0 5.0 6.0], [CartesianIndex(2,1) CartesianIn
     @test findmax!(similar(rval), similar(rind), A) == (rval, rind)
     @test isequal(maximum(A, dims=tup), rval)
     @test isequal(maximum!(similar(rval), A), rval)
-    @test isequal(maximum!(copy(rval), A, init=false), rval)
+    @test isequal(maximum!(copy(rval), A, reset=false), rval)
+end
+
+@testset "findmin! and findmax! with reset = false" begin
+    A = [1.0 5.0 6.0;
+         5.0 2.0 4.0]
+    rind = [CartesianIndex(-1, -1), CartesianIndex(-1, -1)]
+    @test findmin!([0.0, 0.0], copy(rind), A; reset=false) == ([0.0, 0.0], rind)
+    @test findmax!([9.0, 9.0], copy(rind), A; reset=false) == ([9.0, 9.0], rind)
+    # Backward compatibility (`init` is ignored if `A` is non-empty):
+    @test findmin!([0.0, 0.0], copy(rind), A; init = false) ==
+        ([1.0, 2.0], [CartesianIndex(1, 1), CartesianIndex(2, 2)])
+    @test findmax!([9.0, 9.0], copy(rind), A; init=false) ==
+        ([6.0, 5.0], [CartesianIndex(1, 3), CartesianIndex(2, 1)])
+    # Backward compatibility (indices are filled with zeros if `A` is empty):
+    @test findmin!([0.0, 0.0], copy(rind), A[:, 1:0]; init=false) ==
+        ([0.0, 0.0], zero(rind))
+    @test findmax!([9.0, 9.0], copy(rind), A[:, 1:0]; init=false) ==
+        ([9.0, 9.0], zero(rind))
 end
 
 #issue #23209
@@ -217,7 +241,7 @@ for (tup, rval, rind) in [((1,), [NaN 2.0 4.0], [CartesianIndex(2,1) CartesianIn
     @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
     @test isequal(minimum(A, dims=tup), rval)
     @test isequal(minimum!(similar(rval), A), rval)
-    @test isequal(minimum!(copy(rval), A, init=false), rval)
+    @test isequal(minimum!(copy(rval), A, reset=false), rval)
     @test isequal(Base.reducedim!(min, copy(rval), A), rval)
 end
 
@@ -228,7 +252,7 @@ for (tup, rval, rind) in [((1,), [NaN 3.0 6.0], [CartesianIndex(2,1) CartesianIn
     @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
     @test isequal(maximum(A, dims=tup), rval)
     @test isequal(maximum!(similar(rval), A), rval)
-    @test isequal(maximum!(copy(rval), A, init=false), rval)
+    @test isequal(maximum!(copy(rval), A, reset=false), rval)
     @test isequal(Base.reducedim!(max, copy(rval), A), rval)
 end
 
@@ -252,7 +276,7 @@ for (tup, rval, rind) in [((1,), [NaN NaN 4.0], [CartesianIndex(2,1) CartesianIn
     @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
     @test isequal(minimum(A, dims=tup), rval)
     @test isequal(minimum!(similar(rval), A), rval)
-    @test isequal(minimum!(copy(rval), A, init=false), rval)
+    @test isequal(minimum!(copy(rval), A, reset=false), rval)
 end
 
 for (tup, rval, rind) in [((1,), [NaN NaN 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
@@ -262,7 +286,7 @@ for (tup, rval, rind) in [((1,), [NaN NaN 6.0], [CartesianIndex(2,1) CartesianIn
     @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
     @test isequal(maximum(A, dims=tup), rval)
     @test isequal(maximum!(similar(rval), A), rval)
-    @test isequal(maximum!(copy(rval), A, init=false), rval)
+    @test isequal(maximum!(copy(rval), A, reset=false), rval)
 end
 
 A = [Inf -Inf Inf  -Inf;
@@ -274,7 +298,7 @@ for (tup, rval, rind) in [((1,), [Inf -Inf -Inf -Inf], [CartesianIndex(1,1) Cart
     @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
     @test isequal(minimum(A, dims=tup), rval)
     @test isequal(minimum!(similar(rval), A), rval)
-    @test isequal(minimum!(copy(rval), A, init=false), rval)
+    @test isequal(minimum!(copy(rval), A, reset=false), rval)
 end
 
 for (tup, rval, rind) in [((1,), [Inf Inf Inf -Inf], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(1,3) CartesianIndex(1,4)]),
@@ -284,7 +308,7 @@ for (tup, rval, rind) in [((1,), [Inf Inf Inf -Inf], [CartesianIndex(1,1) Cartes
     @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
     @test isequal(maximum(A, dims=tup), rval)
     @test isequal(maximum!(similar(rval), A), rval)
-    @test isequal(maximum!(copy(rval), A, init=false), rval)
+    @test isequal(maximum!(copy(rval), A, reset=false), rval)
 end
 
 A = [BigInt(10)]
@@ -293,7 +317,7 @@ for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
     @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
     @test isequal(minimum(A, dims=tup), rval)
     @test isequal(minimum!(similar(rval), A), rval)
-    @test isequal(minimum!(copy(rval), A, init=false), rval)
+    @test isequal(minimum!(copy(rval), A, reset=false), rval)
 end
 
 for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
@@ -301,7 +325,7 @@ for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
     @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
     @test isequal(maximum(A, dims=tup), rval)
     @test isequal(maximum!(similar(rval), A), rval)
-    @test isequal(maximum!(copy(rval), A, init=false), rval)
+    @test isequal(maximum!(copy(rval), A, reset=false), rval)
 end
 
 A = [BigInt(-10)]
@@ -310,7 +334,7 @@ for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
     @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
     @test isequal(minimum(A, dims=tup), rval)
     @test isequal(minimum!(similar(rval), A), rval)
-    @test isequal(minimum!(copy(rval), A, init=false), rval)
+    @test isequal(minimum!(copy(rval), A, reset=false), rval)
 end
 
 for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
@@ -318,7 +342,7 @@ for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
     @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
     @test isequal(maximum(A, dims=tup), rval)
     @test isequal(maximum!(similar(rval), A), rval)
-    @test isequal(maximum!(copy(rval), A, init=false), rval)
+    @test isequal(maximum!(copy(rval), A, reset=false), rval)
 end
 
 A = [BigInt(10) BigInt(-10)]
@@ -327,7 +351,7 @@ for (tup, rval, rind) in [((2,), reshape([BigInt(-10)], 1, 1), reshape([Cartesia
     @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
     @test isequal(minimum(A, dims=tup), rval)
     @test isequal(minimum!(similar(rval), A), rval)
-    @test isequal(minimum!(copy(rval), A, init=false), rval)
+    @test isequal(minimum!(copy(rval), A, reset=false), rval)
 end
 
 for (tup, rval, rind) in [((2,), reshape([BigInt(10)], 1, 1), reshape([CartesianIndex(1,1)], 1, 1))]
@@ -335,7 +359,7 @@ for (tup, rval, rind) in [((2,), reshape([BigInt(10)], 1, 1), reshape([Cartesian
     @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
     @test isequal(maximum(A, dims=tup), rval)
     @test isequal(maximum!(similar(rval), A), rval)
-    @test isequal(maximum!(copy(rval), A, init=false), rval)
+    @test isequal(maximum!(copy(rval), A, reset=false), rval)
 end
 
 A = ["a", "b"]
@@ -344,7 +368,7 @@ for (tup, rval, rind) in [((1,), ["a"], [1])]
     @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
     @test isequal(minimum(A, dims=tup), rval)
     @test isequal(minimum!(similar(rval), A), rval)
-    @test isequal(minimum!(copy(rval), A, init=false), rval)
+    @test isequal(minimum!(copy(rval), A, reset=false), rval)
 end
 
 for (tup, rval, rind) in [((1,), ["b"], [2])]
@@ -352,7 +376,7 @@ for (tup, rval, rind) in [((1,), ["b"], [2])]
     @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
     @test isequal(maximum(A, dims=tup), rval)
     @test isequal(maximum!(similar(rval), A), rval)
-    @test isequal(maximum!(copy(rval), A, init=false), rval)
+    @test isequal(maximum!(copy(rval), A, reset=false), rval)
 end
 
 # issue #6672

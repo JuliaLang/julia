@@ -390,13 +390,18 @@ count(A::AbstractArrayOrBroadcasted; dims=:) = count(identity, A, dims=dims)
 count(f, A::AbstractArrayOrBroadcasted; dims=:) = mapreduce(_bool(f), add_sum, A, dims=dims, init=0)
 
 """
-    count!([f=identity,] r, A)
+    count!([f=identity,] r, A; [reset::Bool = true])
 
 Count the number of elements in `A` for which `f` returns `true` over the
 singleton dimensions of `r`, writing the result into `r` in-place.
+If `reset` is `true`, values in `r` are discarded.  Otherwise, they are used as the initial
+value of the accumulation.
 
 !!! compat "Julia 1.5"
     inplace `count!` was added in Julia 1.5.
+
+!!! compat "Julia 1.6"
+    keyword argument `reset` is added in Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -413,11 +418,17 @@ julia> count!(<=(2), [1; 1], A)
 2-element Array{Int64,1}:
  2
  0
+
+julia> count!(<=(2), [1; 1], A; reset = false)
+2-element Array{Int64,1}:
+ 3
+ 1
 ```
 """
-count!(r::AbstractArray, A::AbstractArrayOrBroadcasted; init::Bool=true) = count!(identity, r, A; init=init)
-count!(f, r::AbstractArray, A::AbstractArrayOrBroadcasted; init::Bool=true) =
-    mapreducedim!(_bool(f), add_sum, initarray!(r, add_sum, init, A), A)
+count!(r::AbstractArray, A::AbstractArrayOrBroadcasted; kw...) =
+    count!(identity, r, A; kw...)
+count!(f, r::AbstractArray, A::AbstractArrayOrBroadcasted; kw...) =
+    mapreducedim!(_bool(f), add_sum, initarray!(r, add_sum, _kw_reset(kw), A), A)
 
 """
     sum(A::AbstractArray; dims)
@@ -444,9 +455,14 @@ julia> sum(A, dims=2)
 sum(A::AbstractArray; dims)
 
 """
-    sum!(r, A)
+    sum!(r, A; [reset::Bool = true])
 
 Sum elements of `A` over the singleton dimensions of `r`, and write results to `r`.
+If `reset` is `true`, values in `r` are discarded.  Otherwise, they are used as the initial
+value of the accumulation.
+
+!!! compat "Julia 1.6"
+    keyword argument `reset` is added in Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -463,6 +479,10 @@ julia> sum!([1; 1], A)
 julia> sum!([1 1], A)
 1×2 Array{Int64,2}:
  4  6
+
+julia> sum!([1 1], A; reset = false)
+1×2 Array{Int64,2}:
+ 5  7
 ```
 """
 sum!(r, A)
@@ -492,9 +512,14 @@ julia> prod(A, dims=2)
 prod(A::AbstractArray; dims)
 
 """
-    prod!(r, A)
+    prod!(r, A; [reset::Bool = true])
 
 Multiply elements of `A` over the singleton dimensions of `r`, and write results to `r`.
+If `reset` is `true`, values in `r` are discarded.  Otherwise, they are used as the initial
+value of the accumulation.
+
+!!! compat "Julia 1.6"
+    keyword argument `reset` is added in Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -503,14 +528,18 @@ julia> A = [1 2; 3 4]
  1  2
  3  4
 
-julia> prod!([1; 1], A)
+julia> prod!([0; 0], A)
 2-element Array{Int64,1}:
   2
  12
 
-julia> prod!([1 1], A)
+julia> prod!([0 0], A)
 1×2 Array{Int64,2}:
  3  8
+
+julia> prod!([0 0], A; reset = true)
+1×2 Array{Int64,2}:
+ 0  0
 ```
 """
 prod!(r, A)
@@ -542,9 +571,14 @@ julia> maximum(A, dims=2)
 maximum(A::AbstractArray; dims)
 
 """
-    maximum!(r, A)
+    maximum!(r, A; [reset::Bool = true])
 
 Compute the maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
+If `reset` is `true`, values in `r` are discarded.  Otherwise, they are used as the initial
+value of the accumulation.
+
+!!! compat "Julia 1.6"
+    keyword argument `reset` is added in Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -553,12 +587,20 @@ julia> A = [1 2; 3 4]
  1  2
  3  4
 
-julia> maximum!([1; 1], A)
+julia> maximum!([4; 5], A)
 2-element Array{Int64,1}:
  2
  4
 
-julia> maximum!([1 1], A)
+julia> maximum!([4 5], A)
+1×2 Array{Int64,2}:
+ 3  4
+
+julia> maximum!([4 5], A; reset = false)  # initial values "win"
+1×2 Array{Int64,2}:
+ 4  5
+
+julia> maximum!([1 1], A; reset = false)
 1×2 Array{Int64,2}:
  3  4
 ```
@@ -592,9 +634,14 @@ julia> minimum(A, dims=2)
 minimum(A::AbstractArray; dims)
 
 """
-    minimum!(r, A)
+    minimum!(r, A; [reset::Bool = true])
 
 Compute the minimum value of `A` over the singleton dimensions of `r`, and write results to `r`.
+If `reset` is `true`, values in `r` are discarded.  Otherwise, they are used as the initial
+value of the accumulation.
+
+!!! compat "Julia 1.6"
+    keyword argument `reset` is added in Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -603,12 +650,20 @@ julia> A = [1 2; 3 4]
  1  2
  3  4
 
-julia> minimum!([1; 1], A)
+julia> minimum!([0; 1], A)
 2-element Array{Int64,1}:
  1
  3
 
-julia> minimum!([1 1], A)
+julia> minimum!([0 1], A)
+1×2 Array{Int64,2}:
+ 1  2
+
+julia> minimum!([0 1], A; reset = false)  # initial values "win"
+1×2 Array{Int64,2}:
+ 0  1
+
+julia> minimum!([4, 4], A; reset = false)
 1×2 Array{Int64,2}:
  1  2
 ```
@@ -640,9 +695,14 @@ julia> all(A, dims=2)
 all(A::AbstractArray; dims)
 
 """
-    all!(r, A)
+    all!(r, A; [reset::Bool = true])
 
 Test whether all values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
+If `reset` is `true`, values in `r` are discarded.  Otherwise, they are used as the initial
+value of the accumulation.
+
+!!! compat "Julia 1.6"
+    keyword argument `reset` is added in Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -651,14 +711,18 @@ julia> A = [true false; true false]
  1  0
  1  0
 
-julia> all!([1; 1], A)
-2-element Array{Int64,1}:
+julia> all!([false; false], A)  # initial values are ignored
+2-element Array{Bool,1}:
  0
  0
 
-julia> all!([1 1], A)
-1×2 Array{Int64,2}:
+julia> all!([false false], A)  # initial values are ignored
+1×2 Array{Bool,2}:
  1  0
+
+julia> all!([false false], A; reset = false)  # initial values are used
+1×2 Array{Bool,2}:
+ 0  0
 ```
 """
 all!(r, A)
@@ -688,10 +752,15 @@ julia> any(A, dims=2)
 any(::AbstractArray; dims)
 
 """
-    any!(r, A)
+    any!(r, A; [reset::Bool = true])
 
 Test whether any values in `A` along the singleton dimensions of `r` are `true`, and write
 results to `r`.
+If `reset` is `true`, values in `r` are discarded.  Otherwise, they are used as the initial
+value of the accumulation.
+
+!!! compat "Julia 1.6"
+    keyword argument `reset` is added in Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -700,14 +769,18 @@ julia> A = [true false; true false]
  1  0
  1  0
 
-julia> any!([1; 1], A)
-2-element Array{Int64,1}:
+julia> any!([true; true], A)  # initial values are ignored
+2-element Array{Bool,1}:
  1
  1
 
-julia> any!([1 1], A)
-1×2 Array{Int64,2}:
+julia> any!([true true], A)  # initial values are ignored
+1×2 Array{Bool,2}:
  1  0
+
+julia> any!([true true], A; reset = false)  # initial values are used
+1×2 Array{Bool,2}:
+ 1  1
 ```
 """
 any!(r, A)
@@ -732,15 +805,39 @@ all(a::AbstractArray; dims=:)              = _all(a, dims)
 all(f::Function, a::AbstractArray; dims=:) = _all(f, a, dims)
 _all(a, ::Colon)                           = _all(identity, a, :)
 
+"""
+    _kw_reset((init = bool,)) -> bool
+    _kw_reset((reset = bool,)) -> bool
+
+Extract a keyword argument `reset` from the keyword arguments.  Throw an error
+if unsupported.  For backward compatibility, allow `init` as an alias.
+"""
+_kw_reset(kw::Iterators.Pairs) = _kw_reset(kw.data)
+_kw_reset(::NamedTuple{(), Tuple{}}) = true
+_kw_reset(kw::NamedTuple{(:reset,), Tuple{Bool}}) = kw.reset
+_kw_reset(kw::NamedTuple{(:init,), Tuple{Bool}}) = kw.init
+
+function _kw_reset(kw::NamedTuple)
+    if haskey(kw, :reset) && haskey(kw, :init)
+        throw(ArgumentError(
+            "keyword arguments `reset` and `init` cannot be specified " *
+            "at the same time; use `reset` in Julia >= 1.6",
+        ))
+    else
+        throw(ArgumentError("unknown keyword arguments or unsupported type: $kw"))
+    end
+end
+
 for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
                     (:maximum, :max), (:minimum, :min),
                     (:all, :&),       (:any, :|)]
     fname! = Symbol(fname, '!')
     _fname = Symbol('_', fname)
     @eval begin
-        $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
-            mapreducedim!(f, $(op), initarray!(r, $(op), init, A), A)
-        $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
+        $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; kw...) =
+            mapreducedim!(f, $(op), initarray!(r, $(op), _kw_reset(kw), A), A)
+        $(fname!)(r::AbstractArray, A::AbstractArray; kw...) =
+            $(fname!)(identity, r, A; kw...)
 
         $(_fname)(A, dims; kw...)    = $(_fname)(identity, A, dims; kw...)
         $(_fname)(f, A, dims; kw...) = mapreduce(f, $(op), A; dims=dims, kw...)
@@ -801,15 +898,44 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
 end
 
 """
-    findmin!(rval, rind, A) -> (minval, index)
+    findmin!(rval, rind, A; [reset::Bool = true]) -> (minval, index)
 
 Find the minimum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 `NaN` is treated as less than all other values.
+If `reset` is `true`, values in `rval` and `rind` are discarded.  Otherwise, they are used
+as the initial value of the accumulation.
+
+!!! compat "Julia 1.6"
+    keyword argument `reset` is added in Julia 1.6.
+
+# Examples
+```jldoctest
+julia> A = [1.0 2; 3 4]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> findmin!([0.0; 0.0], [CartesianIndex(-1, -1); CartesianIndex(-1, -1)], A)
+([1.0; 3.0], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 1)])
+
+julia> findmin!([0.0  0.0], [CartesianIndex(-1, -1) CartesianIndex(-1, -1)], A)
+([1.0 2.0], CartesianIndex{2}[CartesianIndex(1, 1) CartesianIndex(1, 2)])
+
+julia> findmin!([0.0  0.0], [CartesianIndex(-1, -1) CartesianIndex(-1, -1)], A; reset = false)
+([0.0 0.0], CartesianIndex{2}[CartesianIndex(-1, -1) CartesianIndex(-1, -1)])
+```
 """
 function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
-                  init::Bool=true)
-    findminmax!(isless, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
+                  kw...)
+    if haskey(kw, :init)  # backward compatibility
+        _kw_reset(kw) && !isempty(A) && fill!(rval, first(A))
+        fill!(rind, zero(eltype(keys(A))))
+    elseif _kw_reset(kw)
+        fill!(rval, first(A))
+        fill!(rind, zero(eltype(keys(A))))
+    end
+    return findminmax!(isless, rval, rind, A)
 end
 
 """
@@ -850,15 +976,44 @@ end
 isgreater(a, b) = isless(b,a)
 
 """
-    findmax!(rval, rind, A) -> (maxval, index)
+    findmax!(rval, rind, A; [reset::Bool = true]) -> (maxval, index)
 
 Find the maximum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 `NaN` is treated as greater than all other values.
+If `reset` is `true`, values in `rval` and `rind` are discarded.  Otherwise, they are used
+as the initial value of the accumulation.
+
+!!! compat "Julia 1.6"
+    keyword argument `reset` is added in Julia 1.6.
+
+# Examples
+```jldoctest
+julia> A = [1.0 2; 3 4]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> findmax!([5.0; 5.0], [CartesianIndex(-1, -1); CartesianIndex(-1, -1)], A)
+([2.0; 4.0], CartesianIndex{2}[CartesianIndex(1, 2); CartesianIndex(2, 2)])
+
+julia> findmin!([5.0  5.0], [CartesianIndex(-1, -1) CartesianIndex(-1, -1)], A)
+([3.0 4.0], CartesianIndex{2}[CartesianIndex(2, 1) CartesianIndex(2, 2)])
+
+julia> findmax!([5.0  5.0], [CartesianIndex(-1, -1) CartesianIndex(-1, -1)], A; reset = false)
+([5.0 5.0], CartesianIndex{2}[CartesianIndex(-1, -1) CartesianIndex(-1, -1)])
+```
 """
 function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
-                  init::Bool=true)
-    findminmax!(isgreater, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
+                  kw...)
+    if haskey(kw, :init)  # backward compatibility
+        _kw_reset(kw) && !isempty(A) && fill!(rval, first(A))
+        fill!(rind, zero(eltype(keys(A))))
+    elseif _kw_reset(kw)
+        fill!(rval, first(A))
+        fill!(rind, zero(eltype(keys(A))))
+    end
+    return findminmax!(isgreater, rval, rind, A)
 end
 
 """
