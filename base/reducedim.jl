@@ -932,7 +932,7 @@ function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
         _kw_reset(kw) && !isempty(A) && fill!(rval, first(A))
         fill!(rind, zero(eltype(keys(A))))
     elseif _kw_reset(kw)
-        fill!(rval, first(A))
+        !isempty(A) && fill!(rval, first(A))
         fill!(rind, zero(eltype(keys(A))))
     end
     return findminmax!(isless, rval, rind, A)
@@ -1010,7 +1010,7 @@ function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
         _kw_reset(kw) && !isempty(A) && fill!(rval, first(A))
         fill!(rind, zero(eltype(keys(A))))
     elseif _kw_reset(kw)
-        fill!(rval, first(A))
+        !isempty(A) && fill!(rval, first(A))
         fill!(rind, zero(eltype(keys(A))))
     end
     return findminmax!(isgreater, rval, rind, A)
