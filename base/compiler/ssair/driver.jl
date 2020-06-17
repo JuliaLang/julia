@@ -20,18 +20,6 @@ include("compiler/ssair/verify.jl")
 include("compiler/ssair/legacy.jl")
 #@isdefined(Base) && include("compiler/ssair/show.jl")
 
-function normalize_expr(stmt::Expr)
-    if stmt.head === :gotoifnot
-        return GotoIfNot(stmt.args[1], stmt.args[2]::Int)
-    elseif stmt.head === :return
-        return (length(stmt.args) == 0) ? ReturnNode(nothing) : ReturnNode(stmt.args[1])
-    elseif stmt.head === :unreachable
-        return ReturnNode()
-    else
-        return stmt
-    end
-end
-
 function normalize(@nospecialize(stmt), meta::Vector{Any})
     if isa(stmt, Expr)
         if stmt.head === :meta
@@ -40,10 +28,6 @@ function normalize(@nospecialize(stmt), meta::Vector{Any})
                 push!(meta, stmt)
             end
             return nothing
-        elseif stmt.head === :line
-            return nothing # deprecated - we shouldn't encounter this
-        else
-            return normalize_expr(stmt)
         end
     end
     return stmt
@@ -72,7 +56,7 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
             prevloc = codeloc
         end
         if code[idx] isa Expr && ci.ssavaluetypes[idx] === Union{}
-            if !(idx < length(code) && isexpr(code[idx + 1], :unreachable))
+            if !(idx < length(code) && isa(code[idx + 1], ReturnNode) && !isdefined((code[idx + 1]::ReturnNode), :val))
                 # insert unreachable in the same basic block after the current instruction (splitting it)
                 insert!(code, idx + 1, ReturnNode())
                 insert!(ci.codelocs, idx + 1, ci.codelocs[idx])

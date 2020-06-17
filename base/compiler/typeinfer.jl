@@ -251,6 +251,15 @@ function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, unde
     end
 end
 
+function annotate_slot_load(@nospecialize(e), vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
+    if isa(e, Expr)
+        annotate_slot_load!(e, vtypes, sv, undefs)
+    elseif isa(e, Slot)
+        return visit_slot_load!(e, vtypes, sv, undefs)
+    end
+    return e
+end
+
 function visit_slot_load!(sl::Slot, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
     id = slot_id(sl)
     s = vtypes[id]
@@ -330,13 +339,12 @@ function type_annotate!(sv::InferenceState)
     body = src.code::Array{Any,1}
     nexpr = length(body)
 
-    # replace gotoifnot with its condition if the branch target is unreachable
+    # replace GotoIfNot with its condition if the branch target is unreachable
     for i = 1:nexpr
         expr = body[i]
-        if isa(expr, Expr) && expr.head === :gotoifnot
-            tgt = expr.args[2]::Int
-            if !isa(states[tgt], VarTable)
-                body[i] = expr.args[1]
+        if isa(expr, GotoIfNot)
+            if !isa(states[expr.dest], VarTable)
+                body[i] = expr.cond
             end
         end
     end
@@ -353,6 +361,10 @@ function type_annotate!(sv::InferenceState)
             # st_i === nothing  =>  unreached statement  (see issue #7836)
             if isa(expr, Expr)
                 annotate_slot_load!(expr, st_i, sv, undefs)
+            elseif isa(expr, ReturnNode) && isdefined(expr, :val)
+                body[i] = ReturnNode(annotate_slot_load(expr.val, st_i, sv, undefs))
+            elseif isa(expr, GotoIfNot)
+                body[i] = GotoIfNot(annotate_slot_load(expr.cond, st_i, sv, undefs), expr.dest)
             elseif isa(expr, Slot)
                 body[i] = visit_slot_load!(expr, st_i, sv, undefs)
             end
@@ -549,7 +561,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
             if invoke_api(code) == 2
                 i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                 tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
-                tree.code = Any[ Expr(:return, quoted(code.rettype_const)) ]
+                tree.code = Any[ ReturnNode(quoted(code.rettype_const)) ]
                 nargs = Int(method.nargs)
                 tree.slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), method.slot_syms)
                 tree.slotflags = fill(0x00, nargs)

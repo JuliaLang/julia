@@ -2573,7 +2573,7 @@ void jl_init_serializer(void)
 
     void *vals[] = { jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
                      call_sym, invoke_sym, goto_ifnot_sym, return_sym, jl_symbol("tuple"),
-                     unreachable_sym, jl_an_empty_string, jl_an_empty_vec_any,
+                     jl_an_empty_string, jl_an_empty_vec_any,
 
                      // empirical list of very common symbols
                      #include "common_symbols1.inc"
@@ -2585,7 +2585,6 @@ void jl_init_serializer(void)
                      jl_box_int32(12), jl_box_int32(13), jl_box_int32(14),
                      jl_box_int32(15), jl_box_int32(16), jl_box_int32(17),
                      jl_box_int32(18), jl_box_int32(19), jl_box_int32(20),
-                     jl_box_int32(21),
 
                      jl_box_int64(0), jl_box_int64(1), jl_box_int64(2),
                      jl_box_int64(3), jl_box_int64(4), jl_box_int64(5),
@@ -2594,7 +2593,7 @@ void jl_init_serializer(void)
                      jl_box_int64(12), jl_box_int64(13), jl_box_int64(14),
                      jl_box_int64(15), jl_box_int64(16), jl_box_int64(17),
                      jl_box_int64(18), jl_box_int64(19), jl_box_int64(20),
-                     jl_box_int64(21), jl_box_int64(22),
+                     jl_box_int64(21),
 
                      jl_bool_type, jl_linenumbernode_type, jl_pinode_type,
                      jl_upsilonnode_type, jl_type_type, jl_bottom_type, jl_ref_type,
@@ -2644,6 +2643,9 @@ void jl_init_serializer(void)
     deser_tag[TAG_UNIONALL] = (jl_value_t*)jl_unionall_type;
     deser_tag[TAG_GOTONODE] = (jl_value_t*)jl_gotonode_type;
     deser_tag[TAG_QUOTENODE] = (jl_value_t*)jl_quotenode_type;
+    deser_tag[TAG_GOTOIFNOT] = (jl_value_t*)jl_gotoifnot_type;
+    deser_tag[TAG_RETURNNODE] = (jl_value_t*)jl_returnnode_type;
+    deser_tag[TAG_ARGUMENT] = (jl_value_t*)jl_argument_type;
 
     intptr_t i = 0;
     while (vals[i] != NULL) {

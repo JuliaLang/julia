@@ -4,23 +4,6 @@
 @eval Core.UpsilonNode() = $(Expr(:new, Core.UpsilonNode))
 Core.PhiNode() = Core.PhiNode(Any[], Any[])
 
-struct Argument
-    n::Int
-end
-
-struct GotoIfNot
-    cond::Any
-    dest::Int
-    GotoIfNot(@nospecialize(cond), dest::Int) = new(cond, dest)
-end
-
-struct ReturnNode
-    val::Any
-    ReturnNode(@nospecialize(val)) = new(val)
-    # unassigned val indicates unreachable
-    ReturnNode() = new()
-end
-
 """
 Like UnitRange{Int}, but can handle the `last` field, being temporarily
 < first (this can happen during compacting)
@@ -85,14 +68,6 @@ function basic_blocks_starts(stmts::Vector{Any})
                 push!(jump_dests, idx+1)
                 # The catch block is a jump dest
                 push!(jump_dests, stmt.args[1]::Int)
-            elseif stmt.head === :gotoifnot
-                # also tolerate expr form of IR
-                push!(jump_dests, idx+1)
-                push!(jump_dests, stmt.args[2]::Int)
-            elseif stmt.head === :return
-                # also tolerate expr form of IR
-                # This is a fake dest to force the next stmt to start a bb
-                idx < length(stmts) && push!(jump_dests, idx+1)
             end
         end
         if isa(stmt, PhiNode)
@@ -129,7 +104,7 @@ function compute_basic_blocks(stmts::Vector{Any})
     # Compute successors/predecessors
     for (num, b) in enumerate(blocks)
         terminator = stmts[last(b.stmts)]
-        if isa(terminator, ReturnNode) || isexpr(terminator, :return)
+        if isa(terminator, ReturnNode)
             # return never has any successors
             continue
         end
@@ -161,15 +136,6 @@ function compute_basic_blocks(stmts::Vector{Any})
                 push!(blocks[block′].preds, num)
                 push!(blocks[block′].preds, 0)
                 push!(b.succs, block′)
-            elseif terminator.head === :gotoifnot
-                block′ = block_for_inst(basic_block_index, terminator.args[2]::Int)
-                if block′ == num + 1
-                    # This GotoIfNot acts like a noop - treat it as such.
-                    # We will drop it during SSA renaming
-                else
-                    push!(blocks[block′].preds, num)
-                    push!(b.succs, block′)
-                end
             end
         end
         # statement fall-through
@@ -396,8 +362,7 @@ function is_relevant_expr(e::Expr)
                       :gc_preserve_begin, :gc_preserve_end,
                       :foreigncall, :isdefined, :copyast,
                       :undefcheck, :throw_undef_if_not,
-                      :cfunction, :method, :pop_exception,
-                      #=legacy IR format support=# :gotoifnot, :return)
+                      :cfunction, :method, :pop_exception)
 end
 
 function setindex!(x::UseRef, @nospecialize(v))

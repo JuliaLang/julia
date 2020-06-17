@@ -103,6 +103,15 @@
 #    label::Int
 #end
 
+#struct GotoIfNot
+#    cond::Any
+#    dest::Int
+#end
+
+#struct ReturnNode
+#    val::Any
+#end
+
 #struct PiNode
 #    val
 #    typ
@@ -368,6 +377,10 @@ _new(:GotoNode, :Int)
 _new(:NewvarNode, :SlotNumber)
 _new(:QuoteNode, :Any)
 _new(:SSAValue, :Int)
+_new(:Argument, :Int)
+_new(:ReturnNode, :Any)
+eval(Core, :(ReturnNode() = $(Expr(:new, :ReturnNode)))) # unassigned val indicates unreachable
+eval(Core, :(GotoIfNot(@nospecialize(cond), dest::Int) = $(Expr(:new, :GotoIfNot, :cond, :dest))))
 eval(Core, :(LineNumberNode(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))))
 eval(Core, :(LineNumberNode(l::Int, @nospecialize(f)) = $(Expr(:new, :LineNumberNode, :l, :f))))
 LineNumberNode(l::Int, f::String) = LineNumberNode(l, Symbol(f))
@@ -453,12 +466,12 @@ Symbol(s::Symbol) = s
 
 # module providing the IR object model
 module IR
-export CodeInfo, MethodInstance, CodeInstance, GotoNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
+export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
+    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode
 
-import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
+import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
+    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode
 
 end
