@@ -12,9 +12,9 @@
 TRIPLETS="i686-linux-gnu x86_64-linux-gnu aarch64-linux-gnu armv7l-linux-gnueabihf powerpc64le-linux-gnu i686-linux-musl x86_64-linux-musl aarch64-linux-musl armv7l-linux-musleabihf x86_64-apple-darwin14 x86_64-unknown-freebsd11.1 i686-w64-mingw32 x86_64-w64-mingw32"
 
 # These are the projects currently using BinaryBuilder; both GCC-expanded and non-GCC-expanded:
-BB_PROJECTS="mbedtls libssh2 mpfr curl libgit2 pcre libuv unwind osxunwind dsfmt objconv p7zip zlib suitesparse openlibm"
+BB_PROJECTS="gmp mbedtls libssh2 mpfr curl libgit2 pcre libuv unwind osxunwind dsfmt objconv p7zip zlib suitesparse openlibm"
 BB_GCC_EXPANDED_PROJECTS="openblas"
-BB_CXX_EXPANDED_PROJECTS="gmp llvm"
+BB_CXX_EXPANDED_PROJECTS="llvm"
 
 # If we've been given a project name, filter down to that one:
 if [ -n "${1}" ]; then
