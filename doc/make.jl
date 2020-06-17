@@ -155,15 +155,17 @@ const PAGES = [
     "Manual" => ["index.md", Manual...],
     "Base" => BaseDocs,
     "Standard Library" => StdlibDocs,
-    "Developer Documentation" => DevDocs
+    "Developer Documentation" => DevDocs,
+    hide("NEWS.md"),
 ]
 else
 const PAGES = [
     "Julia Documentation" => "index.md",
+    hide("NEWS.md"),
     "Manual" => Manual,
     "Base" => BaseDocs,
     "Standard Library" => StdlibDocs,
-    "Developer Documentation" => DevDocs
+    "Developer Documentation" => DevDocs,
 ]
 end
 
