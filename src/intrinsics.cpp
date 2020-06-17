@@ -7,32 +7,28 @@ namespace JL_I {
 #include "ccall.cpp"
 
 using namespace JL_I;
-static Function *runtime_func[num_intrinsics];
-static bool float_func[num_intrinsics];
-static void jl_init_intrinsic_functions_codegen(Module *m)
-{
-    std::vector<Type *> args1(0); \
-    args1.push_back(T_prjlvalue); \
-    std::vector<Type *> args2(0); \
-    args2.push_back(T_prjlvalue); \
-    args2.push_back(T_prjlvalue); \
-    std::vector<Type *> args3(0); \
-    args3.push_back(T_prjlvalue); \
-    args3.push_back(T_prjlvalue); \
-    args3.push_back(T_prjlvalue); \
-    std::vector<Type *> args4(0); \
-    args4.push_back(T_prjlvalue); \
-    args4.push_back(T_prjlvalue); \
-    args4.push_back(T_prjlvalue); \
-    args4.push_back(T_prjlvalue);
 
-#define ADD_I(name, nargs) do { \
-        Function *func = Function::Create(FunctionType::get(T_prjlvalue, args##nargs, false), \
-                                          Function::ExternalLinkage, "jl_"#name, m); \
-        runtime_func[name] = func; \
-        add_named_global(func, &jl_##name); \
-    } while (0);
+FunctionType *get_intr_args1(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue}, false); }
+FunctionType *get_intr_args2(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue, T_prjlvalue}, false); }
+FunctionType *get_intr_args3(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue, T_prjlvalue, T_prjlvalue}, false); }
+FunctionType *get_intr_args4(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue, T_prjlvalue, T_prjlvalue, T_prjlvalue}, false); }
+
+static JuliaFunction *runtime_func[num_intrinsics] = {
+#define ADD_I(name, nargs) new JuliaFunction{"jl_"#name, get_intr_args##nargs},
 #define ADD_HIDDEN ADD_I
+#define ALIAS(alias, base) nullptr,
+    INTRINSICS
+#undef ADD_I
+#undef ADD_HIDDEN
+#undef ALIAS
+};
+
+static bool float_func[num_intrinsics];
+
+static void jl_init_intrinsic_functions_codegen(void)
+{
+#define ADD_I(name, nargs)
+#define ADD_HIDDEN(name, nargs)
 #define ALIAS(alias, base) runtime_func[alias] = runtime_func[base];
     INTRINSICS
 #undef ADD_I
@@ -414,7 +410,7 @@ static jl_value_t *staticeval_bitstype(const jl_cgval_t &targ)
 
 static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, const jl_cgval_t *argv, size_t nargs)
 {
-    FunctionCallee func = prepare_call(runtime_func[f]);
+    Function *func = prepare_call(runtime_func[f]);
     Value **argvalues = (Value**)alloca(sizeof(Value*) * nargs);
     for (size_t i = 0; i < nargs; ++i) {
         argvalues[i] = boxed(ctx, argv[i]);
@@ -1283,28 +1279,4 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         abort();
     }
     assert(0 && "unreachable");
-}
-
-#define BOX_F(ct,jl_ct,rt)                                      \
-    box_##ct##_func = boxfunc_llvm(ft1arg(rt, T_##jl_ct),       \
-                                   "jl_box_"#ct, &jl_box_##ct, m);
-
-#define SBOX_F(ct,jl_ct) BOX_F(ct,jl_ct,T_prjlvalue); box_##ct##_func->addAttribute(1, Attribute::SExt);
-#define UBOX_F(ct,jl_ct) BOX_F(ct,jl_ct,T_prjlvalue); box_##ct##_func->addAttribute(1, Attribute::ZExt);
-#define SBOX_F_PERM(ct,jl_ct) BOX_F(ct,jl_ct,T_pjlvalue); box_##ct##_func->addAttribute(1, Attribute::SExt);
-#define UBOX_F_PERM(ct,jl_ct) BOX_F(ct,jl_ct,T_pjlvalue); box_##ct##_func->addAttribute(1, Attribute::ZExt);
-
-template<typename T>
-static Function *boxfunc_llvm(FunctionType *ft, const std::string &cname,
-                              T *addr, Module *m)
-{
-    Function *f =
-        Function::Create(ft, Function::ExternalLinkage, cname, m);
-    add_named_global(f, addr);
-    return f;
-}
-
-static FunctionType *ft1arg(Type *ret, Type *arg)
-{
-    return FunctionType::get(ret, { arg }, false);
 }

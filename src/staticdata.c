@@ -1189,7 +1189,6 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
             else {
                 codeinst->invoke = (jl_callptr_t)fptr;
             }
-            jl_fptr_to_llvm(fptr, codeinst, specfunc);
         }
     }
     jl_register_fptrs(sysimage_base, &fvars, linfos, sysimg_fvars_max);
