@@ -20,8 +20,16 @@ $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted: $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2
 	echo 1 > $@
 
 $(SRCCACHE)/gmp-$(GMP_VER)/build-patched: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted
+	cp $(SRCDIR)/patches/config.sub $(SRCCACHE)/gmp-$(GMP_VER)/configfsf.sub
+	cd $(dir $@) && patch < $(SRCDIR)/patches/gmp-exception.patch
 	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/gmp_alloc_overflow_func.patch
 	echo 1 > $@
+
+$(SRCCACHE)/gmp-$(GMP_VER)/gmp-config-ldflags.patch-applied: | $(SRCCACHE)/gmp-$(GMP_VER)/build-patched
+	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/gmp-config-ldflags.patch
+	echo 1 > $@
+
+$(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/gmp-config-ldflags.patch-applied
 
 $(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted
 	mkdir -p $(dir $@)
@@ -73,5 +81,5 @@ else # USE_BINARYBUILDER_GMP
 GMP_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/GMP_jll.jl/releases/download/GMP-v$(GMP_VER)+$(GMP_BB_REL)
 GMP_BB_NAME := GMP.v$(GMP_VER)
 
-$(eval $(call bb-install,gmp,GMP,false,true))
+$(eval $(call bb-install,gmp,GMP,false))
 endif
