@@ -350,15 +350,9 @@ tofloat(x::BigFloat) = x
         x = Float64(x)
     end
     if T <: Union{Val{'e'}, Val{'E'}}
-<<<<<<< HEAD
-        newpos = Ryu.writeexp(buf, pos, x, prec, plus, space, hash, char(T), UInt8('.'), false)
-    elseif T <: Union{Val{'f'}, Val{'F'}}
-        newpos = Ryu.writefixed(buf, pos, x, prec, plus, space, hash, UInt8('.'), false)
-=======
         newpos = Ryu.writeexp(buf, pos, x, prec, plus, space, hash, char(T), UInt8('.'))
     elseif T <: Union{Val{'f'}, Val{'F'}}
         newpos = Ryu.writefixed(buf, pos, x, prec, plus, space, hash, UInt8('.'))
->>>>>>> Rebase fixups
     elseif T <: Union{Val{'g'}, Val{'G'}}
         prec = prec == 0 ? 1 : prec
         x = round(x, sigdigits=prec)
