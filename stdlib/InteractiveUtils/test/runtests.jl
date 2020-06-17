@@ -325,6 +325,13 @@ B33163(x) = x
 @test_throws ErrorException (@functionloc Base.nothing)
 @test (@code_typed (3//4).num)[2] == Int
 
+struct A14637
+    x
+end
+a14637 = A14637(0)
+@test (@which a14637.x).name == :getproperty
+@test (@functionloc a14637.x)[2] isa Integer
+
 # Issue #28615
 @test_throws ErrorException (@which [1, 2] .+ [3, 4])
 @test (@code_typed optimize=true max.([1,7], UInt.([4])))[2] == Vector{UInt}
