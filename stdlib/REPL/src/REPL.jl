@@ -234,7 +234,20 @@ display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 function print_response(repl::AbstractREPL, @nospecialize(response), show_value::Bool, have_color::Bool)
     repl.waserror = response[2]
     io = IOContext(outstream(repl), :module => Main)
+
+    infos = Tuple{String,Int}[]
+    io = IOContext(io, :LAST_SHOWN_LINE_INFOS => infos)
+
     print_response(io, response, show_value, have_color, specialdisplay(repl))
+
+    if repl isa LineEditREPL && !isempty(infos)
+        repl.last_shown_line_infos = infos
+        println(
+            io,
+            "\nTo edit a specific method, type the corresponding number into the " *
+            "REPL and press Ctrl+Q",
+        )
+    end
     nothing
 end
 function print_response(errio::IO, @nospecialize(response), show_value::Bool, have_color::Bool, specialdisplay=nothing)
