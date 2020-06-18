@@ -537,7 +537,7 @@ julia> prod!([0 0], A)
 1×2 Array{Int64,2}:
  3  8
 
-julia> prod!([0 0], A; reset = true)
+julia> prod!([0 0], A; reset = false)
 1×2 Array{Int64,2}:
  0  0
 ```
@@ -663,7 +663,7 @@ julia> minimum!([0 1], A; reset = false)  # initial values "win"
 1×2 Array{Int64,2}:
  0  1
 
-julia> minimum!([4, 4], A; reset = false)
+julia> minimum!([4 4], A; reset = false)
 1×2 Array{Int64,2}:
  1  2
 ```
@@ -917,7 +917,7 @@ julia> A = [1.0 2; 3 4]
  3.0  4.0
 
 julia> findmin!([0.0; 0.0], [CartesianIndex(-1, -1); CartesianIndex(-1, -1)], A)
-([1.0; 3.0], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 1)])
+([1.0, 3.0], CartesianIndex{2}[CartesianIndex(1, 1), CartesianIndex(2, 1)])
 
 julia> findmin!([0.0  0.0], [CartesianIndex(-1, -1) CartesianIndex(-1, -1)], A)
 ([1.0 2.0], CartesianIndex{2}[CartesianIndex(1, 1) CartesianIndex(1, 2)])
@@ -995,9 +995,9 @@ julia> A = [1.0 2; 3 4]
  3.0  4.0
 
 julia> findmax!([5.0; 5.0], [CartesianIndex(-1, -1); CartesianIndex(-1, -1)], A)
-([2.0; 4.0], CartesianIndex{2}[CartesianIndex(1, 2); CartesianIndex(2, 2)])
+([2.0, 4.0], CartesianIndex{2}[CartesianIndex(1, 2), CartesianIndex(2, 2)])
 
-julia> findmin!([5.0  5.0], [CartesianIndex(-1, -1) CartesianIndex(-1, -1)], A)
+julia> findmax!([5.0  5.0], [CartesianIndex(-1, -1) CartesianIndex(-1, -1)], A)
 ([3.0 4.0], CartesianIndex{2}[CartesianIndex(2, 1) CartesianIndex(2, 2)])
 
 julia> findmax!([5.0  5.0], [CartesianIndex(-1, -1) CartesianIndex(-1, -1)], A; reset = false)
