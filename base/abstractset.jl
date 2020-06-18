@@ -119,7 +119,15 @@ Set{Int64} with 1 element:
 """
 intersect(s::AbstractSet, itr, itrs...) = intersect!(intersect(s, itr), itrs...)
 intersect(s) = union(s)
-intersect(s::AbstractSet, itr) = mapfilter(_in(s), push!, itr, emptymutable(s))
+function intersect(s::AbstractSet, itr) 
+    if haslength(itr) && hasfastin(itr)
+        if length(s) > length(itr) 
+            return mapfilter(_in(s), push!, itr, emptymutable(s)) 
+        else
+            return mapfilter(_in(itr), push!, s, emptymutable(s))
+        end
+    end
+end
 
 const ∩ = intersect
 
