@@ -140,13 +140,21 @@ and encoding. If they return a string with a different encoding, they must also 
 ```jldoctest
 julia> reverse("JuliaLang")
 "gnaLailuJ"
+```
 
-julia> reverse("ax̂e") # combining characters can lead to surprising results
+!!! note
+    The examples below may be rendered differently on different systems.
+    The comments indicate how they're supposed to be rendered
+
+Combining characters can lead to surprising results:
+
+```jldoctest
+julia> reverse("ax̂e") # hat is above x in the input, above e in the output
 "êxa"
 
 julia> using Unicode
 
-julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
+julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes; hat is above x in both in- and output
 "ex̂a"
 ```
 """

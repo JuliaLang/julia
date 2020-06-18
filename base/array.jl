@@ -1352,9 +1352,9 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
     n = length(a)
     y = iterate(inds)
     y === nothing && return a
-    n == 0 && throw(BoundsError(a, inds))
     (p, s) = y
-    p <= n && push!(dltd, @inbounds a[p])
+    checkbounds(a, p)
+    push!(dltd, @inbounds a[p])
     q = p+1
     while true
         y = iterate(inds, s)

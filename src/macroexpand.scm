@@ -210,7 +210,7 @@
         ((atom? v) '())
         (else
          (case (car v)
-           ((... kw |::|) (try-arg-name (cadr v)))
+           ((... kw |::| =) (try-arg-name (cadr v)))
            ((escape) (list v))
            ((hygienic-scope) (try-arg-name (cadr v)))
            ((meta)  ;; allow certain per-argument annotations
@@ -275,6 +275,9 @@
                     ,@(map (lambda (x)
                              (resolve-expansion-vars-with-new-env x env m parent-scope #t))
                            (cddr e))))
+    ((tuple) `(tuple ,@(map (lambda (x)
+                              (resolve-expansion-vars-with-new-env x env m parent-scope #t))
+                            (cdr e))))
     (else (other e))))
 
 (define (new-expansion-env-for x env (outermost #f))
@@ -367,7 +370,7 @@
                            (resolve-expansion-vars- x env m parent-scope #f)))
                        (cdr e))))
 
-           ((= function)
+           ((= function ->)
             (if (and (pair? (cadr e)) (function-def? e))
                 ;; in (kw x 1) inside an arglist, the x isn't actually a kwarg
                 `(,(car e) ,(resolve-in-function-lhs (cadr e) env m parent-scope inarg)

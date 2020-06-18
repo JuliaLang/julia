@@ -69,7 +69,7 @@ function verify_ir(ir::IRCode)
             error()
         end
         last_end = last(block.stmts)
-        terminator = ir.stmts[last_end]
+        terminator = ir.stmts[last_end][:inst]
 
         bb_unreachable(domtree, idx) && continue
         for p in block.preds
@@ -114,7 +114,8 @@ function verify_ir(ir::IRCode)
             if length(block.succs) != 1 || block.succs[1] != idx + 1
                 # As a special case, we allow extra statements in the BB of an :enter
                 # statement, until we can do proper CFG manipulations during compaction.
-                for stmt in ir.stmts[first(block.stmts):last(block.stmts)]
+                for idx in first(block.stmts):last(block.stmts)
+                    stmt = ir.stmts[idx][:inst]
                     if isexpr(stmt, :enter)
                         terminator = stmt
                         @goto enter_check
@@ -139,7 +140,7 @@ function verify_ir(ir::IRCode)
         # We allow invalid IR in dead code to avoid passes having to detect when
         # they're generating dead code.
         bb_unreachable(domtree, bb) && continue
-        stmt = ir.stmts[idx]
+        stmt = ir.stmts[idx][:inst]
         stmt === nothing && continue
         if isa(stmt, PhiNode)
             @assert length(stmt.edges) == length(stmt.values)
@@ -154,13 +155,13 @@ function verify_ir(ir::IRCode)
                 edge == 0 && continue
                 isassigned(stmt.values, i) || continue
                 val = stmt.values[i]
-                phiT = ir.types[idx]
+                phiT = ir.stmts[idx][:type]
                 if isa(val, SSAValue)
                     if !(types(ir)[val] ⊑ phiT)
                         #@verify_error """
                         #    PhiNode $idx, has operand $(val.id), whose type is not a sub lattice element.
                         #    PhiNode type was $phiT
-                        #    Value type was $(ir.types[val.id])
+                        #    Value type was $(ir.stmts[val.id][:type])
                         #"""
                         #error()
                     end
@@ -185,7 +186,7 @@ function verify_ir(ir::IRCode)
         else
             if isa(stmt, Expr) || isa(stmt, ReturnNode) # TODO: make sure everything has line info
                 if !(stmt isa ReturnNode && !isdefined(stmt, :val)) # not actually a return node, but an unreachable marker
-                    if ir.lines[idx] <= 0
+                    if ir.stmts[idx][:line] <= 0
                         #@verify_error "Missing line number information for statement $idx of $ir"
                     end
                 end

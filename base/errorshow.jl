@@ -380,7 +380,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     ft = typeof(f)
     lines = []
     # These functions are special cased to only show if first argument is matched.
-    special = f in [convert, getindex, setindex!]
+    special = f === convert || f === getindex || f === setindex!
     funcs = Any[(f, arg_types_param)]
 
     # An incorrect call method produces a MethodError for convert.
@@ -681,7 +681,7 @@ function _simplify_include_frames(trace)
     kept_frames = trues(i)
     first_ignored = nothing
     while i >= 1
-        frame, _ = trace[i]
+        frame::StackFrame, _ = trace[i]
         mod = parentmodule(frame)
         if isnothing(first_ignored)
             if mod === Base && frame.func === :_include

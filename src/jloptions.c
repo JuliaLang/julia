@@ -161,8 +161,8 @@ static const char opts_hidden[]  =
     " --output-bc name          Generate LLVM bitcode (.bc)\n"
     " --output-asm name         Generate an assembly file (.s)\n"
     " --output-incremental=no   Generate an incremental output file (rather than complete)\n"
-    " --trace-compile={stdout,stderr}\n"
-    "                           Print precompile statements for methods compiled during execution.\n\n"
+    " --trace-compile={stderr,name}\n"
+    "                           Print precompile statements for methods compiled during execution or save to a path\n\n"
 ;
 
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)

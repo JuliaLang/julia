@@ -1058,9 +1058,6 @@ function abstract_eval(interp::AbstractInterpreter, @nospecialize(e), vtypes::Va
                 t = PartialStruct(t, at.fields)
             end
         end
-    elseif e.head === :&
-        abstract_eval(interp, e.args[1], vtypes, sv)
-        t = Any
     elseif e.head === :foreigncall
         abstract_eval(interp, e.args[1], vtypes, sv)
         t = sp_type_rewrap(e.args[2], sv.linfo, true)

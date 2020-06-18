@@ -1778,8 +1778,8 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     @test isempty(pop!(lines1))
     Core.Compiler.insert_node!(ir, 1, Val{1}, QuoteNode(1), false)
     Core.Compiler.insert_node!(ir, 1, Val{2}, QuoteNode(2), true)
-    Core.Compiler.insert_node!(ir, length(ir.stmts), Val{3}, QuoteNode(3), false)
-    Core.Compiler.insert_node!(ir, length(ir.stmts), Val{4}, QuoteNode(4), true)
+    Core.Compiler.insert_node!(ir, length(ir.stmts.inst), Val{3}, QuoteNode(3), false)
+    Core.Compiler.insert_node!(ir, length(ir.stmts.inst), Val{4}, QuoteNode(4), true)
     lines2 = split(repr(ir), '\n')
     @test isempty(pop!(lines2))
     @test popfirst!(lines2) == "2  1 ──       $(QuoteNode(1))"
@@ -1806,7 +1806,7 @@ end
 # with as unnamed "!" BB.
 let src = code_typed(gcd, (Int, Int), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
-    push!(ir.stmts, Core.Compiler.ReturnNode())
+    push!(ir.stmts.inst, Core.Compiler.ReturnNode())
     lines = split(sprint(show, ir), '\n')
     @test isempty(pop!(lines))
     @test pop!(lines) == "   ! ──       unreachable::#UNDEF"
