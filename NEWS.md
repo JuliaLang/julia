@@ -35,7 +35,7 @@ New library functions
 
 * New function `Base.kron!` and corresponding overloads for various matrix types for performing Kronecker product in-place. ([#31069]).
 * New function `Base.Threads.foreach(f, channel::Channel)` for multithreaded `Channel` consumption. ([#34543]).
-* New function `Base.eachof(io, T)` for iteratively performing `read(io, T)`. ([#36150])
+* New function `Base.readeach(io, T)` for iteratively performing `read(io, T)`. ([#36150])
 
 New library features
 --------------------

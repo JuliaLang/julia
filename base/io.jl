@@ -754,7 +754,7 @@ function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
         return readuntil_string(s, delim % UInt8, keep)
     end
     out = IOBuffer()
-    for c in eachof(s, Char)
+    for c in readeach(s, Char)
         if c == delim
             keep && write(out, c)
             break
@@ -766,7 +766,7 @@ end
 
 function readuntil(s::IO, delim::T; keep::Bool=false) where T
     out = (T === UInt8 ? StringVector(0) : Vector{T}())
-    for c in eachof(s, T)
+    for c in readeach(s, T)
         if c == delim
             keep && push!(out, c)
             break
@@ -802,7 +802,7 @@ function readuntil_vector!(io::IO, target::AbstractVector{T}, keep::Bool, out) w
     max_pos = 1 # array-offset in cache
     local cache # will be lazy initialized when needed
     output! = (isa(out, IO) ? write : push!)
-    for c in eachof(io, T)
+    for c in readeach(io, T)
         # Backtrack until the next target character matches what was found
         while true
             c1 = target[pos + first]
@@ -1005,14 +1005,14 @@ struct EachOfIO{T, IOT <: IO}
 end
 
 """
-    eachof(io::IO, T)
+    readeach(io::IO, T)
 
 Return an iterable object yielding [`read(io, T)`](@ref).
 
 See also: [`skipchars`](@ref), [`eachline`](@ref), [`readuntil`](@ref)
 
 !!! compat "Julia 1.6"
-    `eachof` requires Julia 1.6 or later.
+    `readeach` requires Julia 1.6 or later.
 
 # Examples
 ```jldoctest
@@ -1021,7 +1021,7 @@ julia> open("my_file.txt", "w") do io
        end;
 
 julia> open("my_file.txt") do io
-           for c in eachof(io, Char)
+           for c in readeach(io, Char)
                c == '\\n' && break
                print(c)
            end
@@ -1031,7 +1031,7 @@ JuliaLang is a GitHub organization.
 julia> rm("my_file.txt");
 ```
 """
-eachof(stream::IOT, T::Type) where IOT<:IO = EachOfIO{T,IOT}(stream)
+readeach(stream::IOT, T::Type) where IOT<:IO = EachOfIO{T,IOT}(stream)
 
 iterate(itr::EachOfIO{T}, state=nothing) where T =
     eof(itr.stream) ? nothing : (read(itr.stream, T), nothing)
@@ -1124,7 +1124,7 @@ julia> String(readavailable(buf))
 ```
 """
 function skipchars(predicate, io::IO; linecomment=nothing)
-    for c in eachof(io, Char)
+    for c in readeach(io, Char)
         if c === linecomment
             skipchars(c -> c !== '\n', io)
             read(io, Char)

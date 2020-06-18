@@ -300,9 +300,9 @@ for (name, f) in l
 
         cleanup()
 
-        verbose && println("$name eachof...")
-        @test collect(eachof(io(), Char)) == Vector{Char}(text)
-        @test collect(eachof(io(), UInt8)) == Vector{UInt8}(text)
+        verbose && println("$name readeach...")
+        @test collect(readeach(io(), Char)) == Vector{Char}(text)
+        @test collect(readeach(io(), UInt8)) == Vector{UInt8}(text)
 
         cleanup()
 

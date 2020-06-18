@@ -782,7 +782,7 @@ export
     close,
     countlines,
     eachline,
-    eachof,
+    readeach,
     eof,
     fd,
     fdio,
