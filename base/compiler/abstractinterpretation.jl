@@ -970,7 +970,7 @@ function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
 end
 
 function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::VarTable, sv::InferenceState)
-    f = abstract_eval(interp, e.args[2], vtypes, sv)
+    f = abstract_eval_value(interp, e.args[2], vtypes, sv)
     # rt = sp_type_rewrap(e.args[3], sv.linfo, true)
     at = Any[ sp_type_rewrap(argt, sv.linfo, false) for argt in e.args[4]::SimpleVector ]
     pushfirst!(at, f)
@@ -981,7 +981,21 @@ function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::V
     nothing
 end
 
-function abstract_eval(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
+function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::VarTable, sv::InferenceState)
+    if e.head === :static_parameter
+        n = e.args[1]
+        t = Any
+        if 1 <= n <= length(sv.sptypes)
+            t = sv.sptypes[n]
+        end
+    elseif e.head === :boundscheck
+        return Bool
+    else
+        return Any
+    end
+end
+
+function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if isa(e, QuoteNode)
         return AbstractEvalConstant((e::QuoteNode).value)
     elseif isa(e, SSAValue)
@@ -992,16 +1006,29 @@ function abstract_eval(interp::AbstractInterpreter, @nospecialize(e), vtypes::Va
         return abstract_eval_global(e.mod, e.name)
     end
 
-    if !isa(e, Expr)
-        return AbstractEvalConstant(e)
+    return AbstractEvalConstant(e)
+end
+
+function abstract_eval_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
+    if isa(e, Expr)
+        return abstract_eval_value_expr(interp, e, vtypes, sv)
+    else
+        return abstract_eval_special_value(interp, e, vtypes, sv)
     end
+end
+
+function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
+    if !isa(e, Expr)
+        return abstract_eval_special_value(interp, e, vtypes, sv)
+    end
+
     e = e::Expr
     if e.head === :call
         ea = e.args
         n = length(ea)
         argtypes = Vector{Any}(undef, n)
         @inbounds for i = 1:n
-            ai = abstract_eval(interp, ea[i], vtypes, sv)
+            ai = abstract_eval_value(interp, ea[i], vtypes, sv)
             if ai === Bottom
                 return Bottom
             end
@@ -1009,14 +1036,14 @@ function abstract_eval(interp::AbstractInterpreter, @nospecialize(e), vtypes::Va
         end
         t = abstract_call(interp, ea, argtypes, vtypes, sv)
     elseif e.head === :new
-        t = instanceof_tfunc(abstract_eval(interp, e.args[1], vtypes, sv))[1]
+        t = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))[1]
         if isconcretetype(t) && !t.mutable
             args = Vector{Any}(undef, length(e.args)-1)
             ats = Vector{Any}(undef, length(e.args)-1)
             anyconst = false
             allconst = true
             for i = 2:length(e.args)
-                at = abstract_eval(interp, e.args[i], vtypes, sv)
+                at = abstract_eval_value(interp, e.args[i], vtypes, sv)
                 if !anyconst
                     anyconst = has_nontrivial_const_info(at)
                 end
@@ -1046,9 +1073,9 @@ function abstract_eval(interp::AbstractInterpreter, @nospecialize(e), vtypes::Va
             end
         end
     elseif e.head === :splatnew
-        t = instanceof_tfunc(abstract_eval(interp, e.args[1], vtypes, sv))[1]
+        t = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))[1]
         if length(e.args) == 2 && isconcretetype(t) && !t.mutable
-            at = abstract_eval(interp, e.args[2], vtypes, sv)
+            at = abstract_eval_value(interp, e.args[2], vtypes, sv)
             n = fieldcount(t)
             if isa(at, Const) && isa(at.val, Tuple) && n == length(at.val) &&
                     _all(i->at.val[i] isa fieldtype(t, i), 1:n)
@@ -1059,10 +1086,10 @@ function abstract_eval(interp::AbstractInterpreter, @nospecialize(e), vtypes::Va
             end
         end
     elseif e.head === :foreigncall
-        abstract_eval(interp, e.args[1], vtypes, sv)
+        abstract_eval_value(interp, e.args[1], vtypes, sv)
         t = sp_type_rewrap(e.args[2], sv.linfo, true)
         for i = 3:length(e.args)
-            if abstract_eval(interp, e.args[i], vtypes, sv) === Bottom
+            if abstract_eval_value(interp, e.args[i], vtypes, sv) === Bottom
                 t = Bottom
             end
         end
@@ -1070,24 +1097,16 @@ function abstract_eval(interp::AbstractInterpreter, @nospecialize(e), vtypes::Va
         t = e.args[1]
         isa(t, Type) || (t = Any)
         abstract_eval_cfunction(interp, e, vtypes, sv)
-    elseif e.head === :static_parameter
-        n = e.args[1]
-        t = Any
-        if 1 <= n <= length(sv.sptypes)
-            t = sv.sptypes[n]
-        end
     elseif e.head === :method
         t = (length(e.args) == 1) ? Any : Nothing
     elseif e.head === :copyast
-        t = abstract_eval(interp, e.args[1], vtypes, sv)
+        t = abstract_eval_value(interp, e.args[1], vtypes, sv)
         if t isa Const && t.val isa Expr
             # `copyast` makes copies of Exprs
             t = Expr
         end
     elseif e.head === :invoke
         error("type inference data-flow error: tried to double infer a function")
-    elseif e.head === :boundscheck
-        return Bool
     elseif e.head === :isdefined
         sym = e.args[1]
         t = Bool
@@ -1116,7 +1135,7 @@ function abstract_eval(interp::AbstractInterpreter, @nospecialize(e), vtypes::Va
             end
         end
     else
-        t = Any
+        return abstract_eval_value_expr(interp, e, vtypes, sv)
     end
     @assert !isa(t, TypeVar)
     if isa(t, DataType) && isdefined(t, :instance)
@@ -1175,7 +1194,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             elseif isa(stmt, GotoNode)
                 pc´ = (stmt::GotoNode).label
             elseif isa(stmt, GotoIfNot)
-                condt = abstract_eval(interp, stmt.cond, s[pc], frame)
+                condt = abstract_eval_value(interp, stmt.cond, s[pc], frame)
                 if condt === Bottom
                     break
                 end
@@ -1209,7 +1228,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 end
             elseif isa(stmt, ReturnNode)
                 pc´ = n + 1
-                rt = widenconditional(abstract_eval(interp, stmt.val, s[pc], frame))
+                rt = widenconditional(abstract_eval_value(interp, stmt.val, s[pc], frame))
                 if !isa(rt, Const) && !isa(rt, Type) && !isa(rt, PartialStruct)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally
@@ -1254,7 +1273,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 end
             else
                 if hd === :(=)
-                    t = abstract_eval(interp, stmt.args[2], changes, frame)
+                    t = abstract_eval_statement(interp, stmt.args[2], changes, frame)
                     t === Bottom && break
                     frame.src.ssavaluetypes[pc] = t
                     lhs = stmt.args[1]
@@ -1269,7 +1288,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 elseif hd === :inbounds || hd === :meta || hd === :loopinfo || hd == :code_coverage_effect
                     # these do not generate code
                 else
-                    t = abstract_eval(interp, stmt, changes, frame)
+                    t = abstract_eval_statement(interp, stmt, changes, frame)
                     t === Bottom && break
                     if !isempty(frame.ssavalue_uses[pc])
                         record_ssa_assign(pc, t, frame)
