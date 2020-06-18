@@ -156,7 +156,15 @@ function intersect(s::AbstractSet, itr, itrs...)
     return intersect!(out, itrs...)
 end
 intersect(s) = union(s)
-intersect(s::AbstractSet, itr) = mapfilter(in(s), push!, itr, emptymutable(s, promote_eltype(s, itr)))
+function intersect(s::AbstractSet, itr) 
+    if haslength(itr) && hasfastin(itr)
+        if length(s) > length(itr) 
+            return mapfilter(_in(s), push!, itr, emptymutable(s)) 
+        else
+            return mapfilter(_in(itr), push!, s, emptymutable(s))
+        end
+    end
+end
 
 const ∩ = intersect
 
