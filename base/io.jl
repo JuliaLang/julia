@@ -1000,7 +1000,7 @@ eltype(::Type{<:EachLine}) = String
 
 IteratorSize(::Type{<:EachLine}) = SizeUnknown()
 
-struct EachOfIO{T, IOT <: IO}
+struct ReadEachIterator{T, IOT <: IO}
     stream::IOT
 end
 
@@ -1031,14 +1031,14 @@ JuliaLang is a GitHub organization.
 julia> rm("my_file.txt");
 ```
 """
-readeach(stream::IOT, T::Type) where IOT<:IO = EachOfIO{T,IOT}(stream)
+readeach(stream::IOT, T::Type) where IOT<:IO = ReadEachIterator{T,IOT}(stream)
 
-iterate(itr::EachOfIO{T}, state=nothing) where T =
+iterate(itr::ReadEachIterator{T}, state=nothing) where T =
     eof(itr.stream) ? nothing : (read(itr.stream, T), nothing)
 
-eltype(::Type{EachOfIO{T}}) where T = T
+eltype(::Type{ReadEachIterator{T}}) where T = T
 
-IteratorSize(::Type{<:EachOfIO}) = SizeUnknown()
+IteratorSize(::Type{<:ReadEachIterator}) = SizeUnknown()
 
 # IOStream Marking
 # Note that these functions expect that io.mark exists for
