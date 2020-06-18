@@ -36,6 +36,8 @@ New library functions
 
 * New function `Base.kron!` and corresponding overloads for various matrix types for performing Kronecker product in-place. ([#31069]).
 * New function `Base.Threads.foreach(f, channel::Channel)` for multithreaded `Channel` consumption. ([#34543]).
+* `Iterators.map` is added. It provides another syntax `Iterators.map(f, iterators...)`
+  for writing `(f(args...) for args in zip(iterators...))`, i.e. a lazy `map` ([#34352]).
 
 New library features
 --------------------
