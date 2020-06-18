@@ -939,8 +939,10 @@ function setup_interface(
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
         repl = repl,
         complete = replc,
-        # When we're done transform the entered line into a call to help("$line")
-        on_done = respond(helpmode, repl, julia_prompt, pass_empty=true, suppress_on_semicolon=false))
+        # When we're done transform the entered line into a call to helpmode function
+        on_done = respond(line->helpmode(outstream(repl), line), repl, julia_prompt,
+                          pass_empty=true, suppress_on_semicolon=false))
+
 
     # Set up shell mode
     shell_mode = Prompt("shell> ";
