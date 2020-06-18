@@ -289,7 +289,7 @@ function _unique!(f, A::AbstractVector, seen::Set, current::Integer, i::Integer)
         end
         i += 1
     end
-    return resize!(A, current - firstindex(A) + 1)
+    return resize!(A, current - firstindex(A) + 1)::typeof(A)
 end
 
 
@@ -315,7 +315,7 @@ function _groupedunique!(A::AbstractVector)
             it = iterate(idxs, it[2])
         end
     end
-    resize!(A, count)
+    resize!(A, count)::typeof(A)
 end
 
 """
@@ -352,24 +352,14 @@ julia> unique!(B)
  42
 ```
 """
-function unique!(A::Union{AbstractVector{<:Real}, AbstractVector{<:AbstractString},
-                          AbstractVector{<:Symbol}})
-    if isempty(A)
-        return A
-    elseif issorted(A) || issorted(A, rev=true)
-        return _groupedunique!(A)
-    else
-        return _unique!(A)
+function unique!(itr)
+    if isa(itr, AbstractVector)
+        if OrderStyle(eltype(itr)) === Ordered()
+            (issorted(itr) || issorted(itr, rev=true)) && return _groupedunique!(itr)
+        end
     end
-end
-# issorted fails for some element types, so the method above has to be restricted to
-# elements with isless/< defined.
-function unique!(A)
-    if isempty(A)
-        return A
-    else
-        return _unique!(A)
-    end
+    isempty(itr) && return itr
+    return _unique!(itr)
 end
 
 """
