@@ -750,7 +750,7 @@ of a general iterator are normally considered its "values".
 julia> d = Dict("a"=>1, "b"=>2);
 
 julia> values(d)
-Base.ValueIterator for a Dict{String,Int64} with 2 entries. Values:
+ValueIterator for a Dict{String,Int64} with 2 entries. Values:
   2
   1
 

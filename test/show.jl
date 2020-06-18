@@ -616,6 +616,8 @@ end
 @test_repr "Array{<:Real}"
 @test_repr "Array{>:Real}"
 
+@test repr(Base.typename(Array)) == "typename(Array)"
+
 let oldout = stdout, olderr = stderr
     local rdout, wrout, rderr, wrerr, out, err, rd, wr, io
     try
