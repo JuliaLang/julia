@@ -462,19 +462,19 @@ Base.strides(A::WrappedArray) = strides(A.A)
 
 @testset "strided interface adjtrans" begin
     x = WrappedArray([1, 2, 3, 4])
-    @test stride(x,0) == 1
     @test stride(x,1) == 1
     @test stride(x,2) == stride(x,3) == 4
     @test strides(x') == strides(transpose(x)) == (4,1)
     @test pointer(x') == pointer(transpose(x)) == pointer(x)
+    @test_throws BoundsError stride(x,0)
 
     A = WrappedArray([1 2; 3 4; 5 6])
-    @test stride(A,0) == 1
     @test stride(A,1) == 1
     @test stride(A,2) == 3
     @test stride(A,3) == stride(A,4) == 6
     @test strides(A') == strides(transpose(A)) == (3,1)
     @test pointer(A') == pointer(transpose(A)) == pointer(A)
+    @test_throws BoundsError stride(A,0)
 
     y = WrappedArray([1+im, 2, 3, 4])
     @test strides(transpose(y)) == (4,1)
