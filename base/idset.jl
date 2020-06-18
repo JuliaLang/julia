@@ -8,6 +8,7 @@ end
 
 IdSet{T}(itr) where {T} = union!(IdSet{T}(), itr)
 IdSet() = IdSet{Any}()
+IdSet(itr) = IdSet{Any}(itr)
 
 copymutable(s::IdSet) = typeof(s)(s)
 copy(s::IdSet) = typeof(s)(s)

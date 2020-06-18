@@ -133,6 +133,8 @@ Base.tail
 Base.step
 Base.collect(::Any)
 Base.collect(::Type, ::Any)
+Base.into
+Base.__into__
 Base.filter
 Base.filter!
 Base.replace(::Any, ::Pair...)

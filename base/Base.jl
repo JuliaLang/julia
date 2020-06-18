@@ -328,6 +328,9 @@ include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
 
+# Collections API
+include("collections.jl")
+
 # Stack frames and traces
 include("stacktraces.jl")
 using .StackTraces

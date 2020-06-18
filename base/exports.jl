@@ -510,6 +510,7 @@ export
     in,
     intersect!,
     intersect,
+    into,
     isdisjoint,
     isempty,
     issubset,
