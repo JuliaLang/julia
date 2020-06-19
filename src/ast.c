@@ -962,7 +962,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     jl_value_t *result;
     JL_TRY {
         margs[0] = jl_toplevel_eval(*ctx, margs[0]);
-        jl_method_instance_t *mfunc = jl_method_lookup(margs, nargs, 1, world);
+        jl_method_instance_t *mfunc = jl_method_lookup(margs, nargs, world);
         JL_GC_PROMISE_ROOTED(mfunc);
         if (mfunc == NULL) {
             jl_method_error(margs[0], &margs[1], nargs, world);

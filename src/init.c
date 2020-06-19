@@ -721,7 +721,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     else {
         jl_init_types();
         jl_init_codegen();
-        jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0); // used internally
     }
 
     jl_init_tasks();

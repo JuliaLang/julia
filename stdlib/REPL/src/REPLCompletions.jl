@@ -397,7 +397,7 @@ end
 # Returns the return type. example: get_type(:(Base.strip("", ' ')), Main) returns (String, true)
 function try_get_type(sym::Expr, fn::Module)
     val, found = get_value(sym, fn)
-    found && return Base.typesof(val).parameters[1], found
+    found && return Core.Typeof(val), found
     if sym.head === :call
         # getfield call is special cased as the evaluation of getfield provides good type information,
         # is inexpensive and it is also performed in the complete_symbol function.
@@ -405,7 +405,7 @@ function try_get_type(sym::Expr, fn::Module)
         if isa(a1,GlobalRef) && isconst(a1.mod,a1.name) && isdefined(a1.mod,a1.name) &&
             eval(a1) === Core.getfield
             val, found = get_value_getfield(sym, Main)
-            return found ? Base.typesof(val).parameters[1] : Any, found
+            return found ? Core.Typeof(val) : Any, found
         end
         return get_type_call(sym)
     elseif sym.head === :thunk
@@ -432,7 +432,7 @@ end
 
 function get_type(sym, fn::Module)
     val, found = get_value(sym, fn)
-    return found ? Base.typesof(val).parameters[1] : Any, found
+    return found ? Core.Typeof(val) : Any, found
 end
 
 # Method completion on function call expression that look like :(max(1))
