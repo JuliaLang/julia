@@ -58,7 +58,7 @@ struct OptimizationParams
             inline_cost_threshold::Int = 100,
             inline_nonleaf_penalty::Int = 1000,
             inline_tupleret_bonus::Int = 400,
-            max_methods::Int = 4,
+            max_methods::Int = 3,
             tuple_splat::Int = 32,
             union_splitting::Int = 4,
         )
@@ -107,7 +107,7 @@ struct InferenceParams
     function InferenceParams(;
             ipo_constant_propagation::Bool = true,
             aggressive_constant_propagation::Bool = false,
-            max_methods::Int = 4,
+            max_methods::Int = 3,
             union_splitting::Int = 4,
             apply_union_enum::Int = 8,
             tupletype_depth::Int = 3,

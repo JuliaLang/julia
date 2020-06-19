@@ -391,7 +391,20 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
                         widen = tuplemerge(unwrap_unionall(ti)::DataType, unwrap_unionall(tj)::DataType)
                         widen = rewrap_unionall(rewrap_unionall(widen, ti), tj)
                     else
-                        widen = typenames[i].wrapper
+                        wr = typenames[i].wrapper
+                        uw = unwrap_unionall(wr)::DataType
+                        ui = unwrap_unionall(ti)::DataType
+                        uj = unwrap_unionall(tj)::DataType
+                        merged = wr
+                        for k = 1:length(uw.parameters)
+                            ui_k = ui.parameters[k]
+                            if ui_k === uj.parameters[k] && !has_free_typevars(ui_k)
+                                merged = merged{ui_k}
+                            else
+                                merged = merged{uw.parameters[k]}
+                            end
+                        end
+                        widen = rewrap_unionall(merged, wr)
                     end
                     types[i] = Union{}
                     typenames[i] = Any.name

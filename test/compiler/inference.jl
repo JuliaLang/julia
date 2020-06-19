@@ -95,6 +95,7 @@ tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
     Union{Nothing, Tuple{Vararg{ComplexF32}}}
 @test Core.Compiler.tmerge(Union{Nothing, Tuple{ComplexF32}}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
     Union{Nothing, Tuple{Vararg{ComplexF32}}}
+@test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Vector{Bool})) == Vector
 
 # issue 9770
 @noinline x9770() = false

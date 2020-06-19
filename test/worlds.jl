@@ -275,11 +275,12 @@ applyf35855(Any[1])
 wany3 = worlds(instance(applyf35855, (Vector{Any},)))
 src3 = code_typed(applyf35855, (Vector{Any},))[1]
 @test (wany3 == wany2) == equal(src3, src2)   # don't invalidate unless you also change the code
-f35855(::AbstractVector) = 4         # next test would pass if this were ::Vector{Int}
+f35855(::AbstractVector) = 4
 applyf35855(Any[1])
 wany4 = worlds(instance(applyf35855, (Vector{Any},)))
 src4 = code_typed(applyf35855, (Vector{Any},))[1]
-@test_broken (wany4 == wany3) == equal(src4, src3)
+# this passes when max_methods == 3, fails when set to 4
+@test (wany4 == wany3) == equal(src4, src3)
 f35855(::Dict) = 5
 applyf35855(Any[1])
 wany5 = worlds(instance(applyf35855, (Vector{Any},)))
@@ -290,6 +291,18 @@ applyf35855(Any[1])
 wany6 = worlds(instance(applyf35855, (Vector{Any},)))
 src6 = code_typed(applyf35855, (Vector{Any},))[1]
 @test (wany6 == wany5) == equal(src6, src5)
+
+applyf35855_2(c) = f35855_2(c[1])
+f35855_2(::Int) = 1
+f35855_2(::Float64) = 2
+applyf35855_2(Any[1])
+wany3 = worlds(instance(applyf35855_2, (Vector{Any},)))
+src3 = code_typed(applyf35855_2, (Vector{Any},))[1]
+f35855_2(::AbstractVector) = 4         # next test would pass if this were ::Vector{Int}
+applyf35855_2(Any[1])
+wany4 = worlds(instance(applyf35855_2, (Vector{Any},)))
+src4 = code_typed(applyf35855_2, (Vector{Any},))[1]
+@test_broken (wany4 == wany3) == equal(src4, src3)
 
 ## ambiguities do not trigger invalidation
 using Printf
