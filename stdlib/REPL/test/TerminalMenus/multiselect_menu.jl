@@ -6,10 +6,6 @@
 # Check to make sure types are imported properly
 @test MultiSelectMenu{TerminalMenus.MultiSelectConfig} <: TerminalMenus.ConfiguredMenu  # TODO Julia 2.0: delete parameter
 
-# Invalid Menu Params
-@test_throws ErrorException MultiSelectMenu(["one"], charset=:ascii)
-@test_throws ErrorException MultiSelectMenu(["one", "two", "three"], pagesize=1, charset=:ascii)
-
 # Constructor
 @test MultiSelectMenu(["one", "two", "three"], charset=:ascii).pagesize == 3
 @test MultiSelectMenu(string.(1:30), pagesize=-1, charset=:ascii).pagesize == 30
@@ -57,3 +53,5 @@ end
 # Test SDTIN
 multi_menu = MultiSelectMenu(string.(1:10), charset=:ascii)
 @test simulate_input(Set([1,2]), multi_menu, :enter, :down, :enter, 'd')
+multi_menu = MultiSelectMenu(["single option"])
+@test simulate_input(Set([1]), multi_menu, :up, :up, :down, :enter, 'd')

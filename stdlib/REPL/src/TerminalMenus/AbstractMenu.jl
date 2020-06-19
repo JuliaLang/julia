@@ -325,7 +325,7 @@ function printmenu(out, m::AbstractMenu, cursoridx::Int; oldstate=nothing, init:
 
         writeline(buf, m, i, i == cursoridx)
 
-        i != lastline && print(buf, "\r\n")
+        (firstline == lastline || i != lastline) && print(buf, "\r\n")
     end
 
     newstate = lastline-firstline  # final line doesn't have `\n`
