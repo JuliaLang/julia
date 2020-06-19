@@ -768,8 +768,8 @@ minimum(a; kw...) = mapreduce(identity, min, a; kw...)
 Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
 
 The value returned for empty `itr` can be specified by `init`. It must be a 2-tuple whose
-first/second element is a neutral element for `min`/`max` (i.e. which is greater/less than
-or equal to any other element). This is required because it is unspecified whether `init`
+first and second elements are neutral elements for `min` and `max` respectively
+(i.e. which are greater/less than or equal to any other element).
 is used for non-empty collections. Note: it implies that, for empty `itr`, the first
 element is typically _greater_ than the last element. This is a "paradoxical" but yet
 expected result.
@@ -798,8 +798,8 @@ Compute both the minimum and maximum of `f` applied to each element in `itr` and
 them as a 2-tuple. Only one pass is made over `itr`.
 
 The value returned for empty `itr` can be specified by `init`. It must be a 2-tuple whose
-first/second element is a neutral element for `min`/`max` (i.e. which is greater/less than
-or equal to any other element). This is required because it is unspecified whether `init`
+first and second elements are neutral elements for `min` and `max` respectively
+(i.e. which are greater/less than or equal to any other element).
 is used for non-empty collections. Note: it implies that, for empty `itr`, the first
 element is typically _greater_ than the last element. This is a "paradoxical" but yet
 expected result.

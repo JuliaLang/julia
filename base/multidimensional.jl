@@ -1568,11 +1568,11 @@ end
 """
     extrema([f,] A::AbstractArray; dims, [init]) -> Array{Tuple}
 
-Compute the minimum and maximum of `f` applied to each element (if given) in the given
-dimensions of `A`.
+Compute the minimum and maximum elements of `A` over dimensions `dims`.
+If `f` is provided, return the minimum and maximum elements after applying `f` to them.
 
 !!! compat "Julia 1.2"
-    2-argument `extrema` method requires Julia 1.2 or later.
+    The `extrema(f, A)` method requires Julia 1.2 or later.
 
 # Examples
 ```jldoctest
