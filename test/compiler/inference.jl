@@ -2678,3 +2678,10 @@ partial_return_2(x) = Val{partial_return_1(x)[2]}
 # Precision of abstract_iteration
 f_splat(x) = (x...,)
 @test Base.return_types(f_splat, (Pair{Int,Int},)) == Any[Tuple{Int, Int}]
+
+# issue #32699
+f32699(a) = (id = a[1],).id
+@test Base.return_types(f32699, (Vector{Union{Int,Missing}},)) == Any[Union{Int,Missing}]
+g32699(a) = Tuple{a}
+@test Base.return_types(g32699, (Type{<:Integer},))[1] == Type{<:Tuple{Any}}
+@test Base.return_types(g32699, (Type,))[1] == Type{<:Tuple}
