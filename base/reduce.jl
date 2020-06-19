@@ -769,10 +769,9 @@ Compute both the minimum and maximum element in a single pass, and return them a
 
 The value returned for empty `itr` can be specified by `init`. It must be a 2-tuple whose
 first and second elements are neutral elements for `min` and `max` respectively
-(i.e. which are greater/less than or equal to any other element).
-is used for non-empty collections. Note: it implies that, for empty `itr`, the first
-element is typically _greater_ than the last element. This is a "paradoxical" but yet
-expected result.
+(i.e. which are greater/less than or equal to any other element). It is used for non-empty
+collections. Note: it implies that, for empty `itr`, the first element is typically
+_greater_ than the last element. This is a "paradoxical" but yet expected result.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
@@ -799,10 +798,9 @@ them as a 2-tuple. Only one pass is made over `itr`.
 
 The value returned for empty `itr` can be specified by `init`. It must be a 2-tuple whose
 first and second elements are neutral elements for `min` and `max` respectively
-(i.e. which are greater/less than or equal to any other element).
-is used for non-empty collections. Note: it implies that, for empty `itr`, the first
-element is typically _greater_ than the last element. This is a "paradoxical" but yet
-expected result.
+(i.e. which are greater/less than or equal to any other element). It is used for non-empty
+collections. Note: it implies that, for empty `itr`, the first element is typically
+_greater_ than the last element. This is a "paradoxical" but yet expected result.
 
 !!! compat "Julia 1.2"
     This method requires Julia 1.2 or later.
