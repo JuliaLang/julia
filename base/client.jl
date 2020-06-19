@@ -303,7 +303,42 @@ function exec_options(opts)
     nothing
 end
 
+split_env_path(paths) = split(paths, Sys.iswindows() ? ';' : ':')
+
 function load_julia_startup()
+    # We'll check the JULIA_STARTUP_FILE environment variable for user-specified startup
+    # files.
+    JULIA_STARTUP_FILE = get(ENV, "JULIA_STARTUP_FILE", nothing)
+    if JULIA_STARTUP_FILE !== nothing
+        # We need to store the startup files we've already included, to make sure that
+        # we don't include it twice.
+        startup_files_loaded = String[]
+        for path in split(JULIA_STARTUP_FILE, Sys.iswindows() ? ';' : ':')
+            path = expanduser(path)
+            path in startup_files_loaded && continue
+            push!(startup_files_loaded, path)
+            # If an empty path is passed, e.g. by tucking a `:` at the beginning/end, or
+            # `::` in the middle, we'll load the Julia default startup files.
+            if isempty(path)
+                load_julia_startup_defaults()
+                continue
+            end
+            # If the startup file exists (relative to pwd), then include it. Otherwise,
+            # _print_ an error. Julia will not exit/error if a file is missing.
+            fullpath = abspath(path)
+            if isfile(fullpath)
+                include(Main, fullpath)
+            else
+                @error "User-specified startup file not found: $path"
+            end
+        end
+    else
+        load_julia_startup_defaults()
+    end
+    return nothing
+end
+
+function load_julia_startup_defaults()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a startup.jl file
     #   If it is not found, then continue on to the relative path based on Sys.BINDIR
     BINDIR = Sys.BINDIR::String
