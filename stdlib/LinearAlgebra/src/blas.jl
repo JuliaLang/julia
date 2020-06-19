@@ -118,11 +118,11 @@ function set_num_threads(n::Integer)
     elseif blas === :mkl
         # MKL may let us set the number of threads in several ways
         return ccall((:MKL_Set_Num_Threads, libblas), Cvoid, (Cint,), n)
-    end
-
-    # OSX BLAS looks at an environment variable
-    @static if Sys.isapple()
+    elseif Sys.isapple()
+        # OSX BLAS looks at an environment variable
         ENV["VECLIB_MAXIMUM_THREADS"] = n
+    else
+        @warn "Failed to set number of BLAS threads."
     end
 
     return nothing
@@ -139,11 +139,18 @@ function get_num_threads()
         return ccall((@blasfunc(openblas_get_num_threads), libblas), Cint, ())
     elseif blas == :mkl
         return ccall((:mkl_get_max_threads, libblas), Cint, ())
+    elseif Sys.isapple()
+        key = "VECLIB_MAXIMUM_THREADS"
+        s = get(ENV, key, "")
+        nt = Base.tryparse(Cint, s)
+        if nt === nothing
+            @warn "Failed to read environment variable $key"
+        else
+            return nt
+        end
     end
-    @static if Sys.isapple()
-        return Base.parse(Cint, ENV["VECLIB_MAXIMUM_THREADS"])
-    end
-    error("Unknown BLAS") # better error? return nothing?
+    @warn "Could not get number of BLAS threads. Returning Sys.CPU_THREADS instead."
+    return Sys.CPU_THREADS
 end
 
 const _testmat = [1.0 0.0; 0.0 -1.0]
