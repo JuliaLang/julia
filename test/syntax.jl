@@ -678,8 +678,8 @@ function count_meta_loc(exprs)
     return push_count
 end
 
-function is_return_ssavalue(ex::Expr)
-    ex.head === :return && isa(ex.args[1], Core.SSAValue)
+function is_return_ssavalue(ex)
+    ex isa Core.ReturnNode && ex.val isa Core.SSAValue
 end
 
 function is_pop_loc(ex::Expr)

@@ -1142,7 +1142,7 @@ extern jl_sym_t *export_sym;  extern jl_sym_t *import_sym;
 extern jl_sym_t *toplevel_sym; extern jl_sym_t *quote_sym;
 extern jl_sym_t *line_sym;    extern jl_sym_t *jl_incomplete_sym;
 extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
-extern jl_sym_t *return_sym;  extern jl_sym_t *unreachable_sym;
+extern jl_sym_t *return_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
 extern jl_sym_t *globalref_sym; extern jl_sym_t *do_sym;
 extern jl_sym_t *method_sym;  extern jl_sym_t *core_sym;

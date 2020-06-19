@@ -43,7 +43,6 @@ function lift_defuse(cfg::CFG, defuse)
     end
 end
 
-@inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id : (s::TypedSlot).id
 function scan_slot_def_use(nargs::Int, ci::CodeInfo, code::Vector{Any})
     nslots = length(ci.slotflags)
     result = SlotInfo[SlotInfo() for i = 1:nslots]
@@ -821,7 +820,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
         elseif isexpr(stmt, :enter)
             new_code[idx] = Expr(:enter, block_for_inst(cfg, stmt.args[1]))
             ssavalmap[idx] = SSAValue(idx) # Slot to store token for pop_exception
-        elseif isexpr(stmt, :leave) || isexpr(stmt, :(=)) || isexpr(stmt, :return) ||
+        elseif isexpr(stmt, :leave) || isexpr(stmt, :(=)) || isa(stmt, ReturnNode) ||
             isexpr(stmt, :meta) || isa(stmt, NewvarNode)
             new_code[idx] = stmt
         else

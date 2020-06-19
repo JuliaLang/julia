@@ -276,7 +276,7 @@ let m = which(f_broken_code, ())
    let src = Base.uncompressed_ast(m)
        src.code = Any[
            Expr(:meta, :noinline)
-           Expr(:return, Expr(:invalid))
+           Core.ReturnNode(Expr(:invalid))
        ]
        m.source = src
    end

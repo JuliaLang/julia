@@ -34,6 +34,7 @@ jl_datatype_t *jl_ssavalue_type;
 jl_datatype_t *jl_abstractslot_type;
 jl_datatype_t *jl_slotnumber_type;
 jl_datatype_t *jl_typedslot_type;
+jl_datatype_t *jl_argument_type;
 jl_datatype_t *jl_simplevector_type;
 jl_typename_t *jl_tuple_typename;
 jl_datatype_t *jl_anytuple_type;
@@ -93,6 +94,8 @@ jl_datatype_t *jl_expr_type;
 jl_datatype_t *jl_globalref_type;
 jl_datatype_t *jl_linenumbernode_type;
 jl_datatype_t *jl_gotonode_type;
+jl_datatype_t *jl_gotoifnot_type;
+jl_datatype_t *jl_returnnode_type;
 jl_datatype_t *jl_pinode_type;
 jl_datatype_t *jl_phinode_type;
 jl_datatype_t *jl_phicnode_type;
@@ -2059,6 +2062,10 @@ void jl_init_types(void) JL_GC_DISABLED
                                         jl_perm_symsvec(2, "id", "typ"),
                                         jl_svec(2, jl_long_type, jl_any_type), 0, 0, 2);
 
+    jl_argument_type = jl_new_datatype(jl_symbol("Argument"), core, jl_any_type, jl_emptysvec,
+                                       jl_perm_symsvec(1, "n"),
+                                       jl_svec1(jl_long_type), 0, 0, 1);
+
     jl_init_int32_int64_cache();
 
     jl_bool_type = NULL;
@@ -2176,6 +2183,16 @@ void jl_init_types(void) JL_GC_DISABLED
         jl_new_datatype(jl_symbol("GotoNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(1, "label"),
                         jl_svec(1, jl_long_type), 0, 0, 1);
+
+    jl_gotoifnot_type =
+        jl_new_datatype(jl_symbol("GotoIfNot"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(2, "cond", "dest"),
+                        jl_svec(2, jl_any_type, jl_long_type), 0, 0, 2);
+
+    jl_returnnode_type =
+        jl_new_datatype(jl_symbol("ReturnNode"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(1, "val"),
+                        jl_svec(1, jl_any_type), 0, 0, 0);
 
     jl_pinode_type =
         jl_new_datatype(jl_symbol("PiNode"), core, jl_any_type, jl_emptysvec,
@@ -2484,13 +2501,6 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_compute_field_offsets(jl_uniontype_type);
     jl_compute_field_offsets(jl_tvar_type);
     jl_compute_field_offsets(jl_methtable_type);
-    jl_compute_field_offsets(jl_expr_type);
-    jl_compute_field_offsets(jl_linenumbernode_type);
-    jl_compute_field_offsets(jl_lineinfonode_type);
-    jl_compute_field_offsets(jl_gotonode_type);
-    jl_compute_field_offsets(jl_quotenode_type);
-    jl_compute_field_offsets(jl_pinode_type);
-    jl_compute_field_offsets(jl_phinode_type);
     jl_compute_field_offsets(jl_module_type);
     jl_compute_field_offsets(jl_method_instance_type);
     jl_compute_field_offsets(jl_code_instance_type);

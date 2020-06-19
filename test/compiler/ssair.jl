@@ -5,11 +5,11 @@ const Compiler = Core.Compiler
 
 # TODO: this test is broken
 #let code = Any[
-#        Expr(:gotoifnot, SlotNumber(2), 4),
+#        GotoIfNot(SlotNumber(2), 4),
 #        Expr(:(=), SlotNumber(3), 2),
 #        # Test a SlotNumber as a value of a PhiNode
 #        PhiNode(Any[2,3], Any[1, SlotNumber(3)]),
-#        Expr(:return, SSAValue(3))
+#        ReturnNode(SSAValue(3))
 #    ]
 #
 #    ci = eval(Expr(:new, CodeInfo,

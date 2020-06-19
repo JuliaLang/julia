@@ -141,7 +141,7 @@ end
 
 function should_print_ssa_type(@nospecialize node)
     if isa(node, Expr)
-        return !(node.head in (:gc_preserve_begin, :gc_preserve_end, :meta, :return, :enter, :leave))
+        return !(node.head in (:gc_preserve_begin, :gc_preserve_end, :meta, :enter, :leave))
     end
     return !isa(node, PiNode)   && !isa(node, GotoIfNot) &&
            !isa(node, GotoNode) && !isa(node, ReturnNode) &&
@@ -722,9 +722,7 @@ function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, li
     print(io, inlining_indent, " ")
     # convert statement index to labels, as expected by print_stmt
     if stmt isa Expr
-        if stmt.head === :gotoifnot && length(stmt.args) == 2 && stmt.args[2] isa Int
-            stmt = GotoIfNot(stmt.args[1], block_for_inst(cfg, stmt.args[2]::Int))
-        elseif stmt.head === :enter && length(stmt.args) == 1 && stmt.args[1] isa Int
+        if stmt.head === :enter && length(stmt.args) == 1 && stmt.args[1] isa Int
             stmt = Expr(:enter, block_for_inst(cfg, stmt.args[1]::Int))
         end
     elseif isa(stmt, GotoIfNot)

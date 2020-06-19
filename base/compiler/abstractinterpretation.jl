@@ -1174,13 +1174,13 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 changes[sn] = VarState(Bottom, true)
             elseif isa(stmt, GotoNode)
                 pc´ = (stmt::GotoNode).label
-            elseif hd === :gotoifnot
-                condt = abstract_eval(interp, stmt.args[1], s[pc], frame)
+            elseif isa(stmt, GotoIfNot)
+                condt = abstract_eval(interp, stmt.cond, s[pc], frame)
                 if condt === Bottom
                     break
                 end
                 condval = maybe_extract_const_bool(condt)
-                l = stmt.args[2]::Int
+                l = stmt.dest::Int
                 # constant conditions
                 if condval === true
                 elseif condval === false
@@ -1207,9 +1207,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         s[l] = newstate_else
                     end
                 end
-            elseif hd === :return
+            elseif isa(stmt, ReturnNode)
                 pc´ = n + 1
-                rt = widenconditional(abstract_eval(interp, stmt.args[1], s[pc], frame))
+                rt = widenconditional(abstract_eval(interp, stmt.val, s[pc], frame))
                 if !isa(rt, Const) && !isa(rt, Type) && !isa(rt, PartialStruct)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally

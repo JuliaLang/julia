@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests for Core.Compiler correctness and precision
-import Core.Compiler: Const, Conditional, ⊑
+import Core.Compiler: Const, Conditional, ⊑, ReturnNode, GotoIfNot
 isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(x)
 
 using Random, Core.IR
@@ -886,9 +886,8 @@ end
 f21175() = 902221
 @test code_typed(f21175, ())[1].second === Int
 # call again, so that the AST is built on-demand
-let e = code_typed(f21175, ())[1].first.code[1]::Expr
-    @test e.head === :return
-    @test e.args[1] ∈ (902221, Core.QuoteNode(902221))
+let e = code_typed(f21175, ())[1].first.code[1]::ReturnNode
+    @test e.val ∈ (902221, Core.QuoteNode(902221))
 end
 
 # issue #10207
@@ -1165,16 +1164,16 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
     for ex in ast.code::Vector{Any}
         if isa(ex, LineNumberNode)
             continue
+        elseif isa(ex, ReturnNode)
+            # multiple returns
+            @test !ret_found
+            ret_found = true
+            ret = ex.val
+            # return value mismatch
+            @test ret === val || (isa(ret, QuoteNode) && (ret::QuoteNode).value === val)
+            continue
         elseif isa(ex, Expr)
             if Core.Compiler.is_meta_expr_head(ex.head)
-                continue
-            elseif ex.head === :return
-                # multiple returns
-                @test !ret_found
-                ret_found = true
-                ret = ex.args[1]
-                # return value mismatch
-                @test ret === val || (isa(ret, QuoteNode) && (ret::QuoteNode).value === val)
                 continue
             end
         end
@@ -1660,7 +1659,7 @@ end
 opt25261 = code_typed(foo25261, Tuple{}, optimize=false)[1].first.code
 i = 1
 # Skip to after the branch
-while !Meta.isexpr(opt25261[i], :gotoifnot); global i += 1; end
+while !isa(opt25261[i], GotoIfNot); global i += 1; end
 foundslot = false
 for expr25261 in opt25261[i:end]
     if expr25261 isa TypedSlot && expr25261.typ === Tuple{Int, Int}
@@ -2033,7 +2032,7 @@ worklist = Int[]
 let i
     for i in 1:length(code28279)
         stmt = code28279[i]
-        if Meta.isexpr(stmt, :gotoifnot)
+        if isa(stmt, GotoIfNot)
             push!(worklist, i)
             ssachangemap[i] = 1
             if i < length(code28279)
@@ -2048,13 +2047,13 @@ offset = 1
 let i
     for i in 1:length(code28279)
         if i == length(code28279)
-            @test Meta.isexpr(code28279[i], :return)
-            @test Meta.isexpr(oldcode28279[i], :return)
-            @test code28279[i].args[1].id == (oldcode28279[i].args[1].id + offset - 1)
-        elseif Meta.isexpr(code28279[i], :gotoifnot)
-            @test Meta.isexpr(oldcode28279[i], :gotoifnot)
-            @test code28279[i].args[1] == oldcode28279[i].args[1]
-            @test code28279[i].args[2] == (oldcode28279[i].args[2] + offset)
+            @test isa(code28279[i], ReturnNode)
+            @test isa(oldcode28279[i], ReturnNode)
+            @test code28279[i].val.id == (oldcode28279[i].val.id + offset - 1)
+        elseif isa(code28279[i], GotoIfNot)
+            @test isa(oldcode28279[i], GotoIfNot)
+            @test code28279[i].cond == oldcode28279[i].cond
+            @test code28279[i].dest == (oldcode28279[i].dest + offset)
             global offset += 1
         else
             @test code28279[i] == oldcode28279[i]

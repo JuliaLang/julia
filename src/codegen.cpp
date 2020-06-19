@@ -1934,7 +1934,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex, int sparams=tr
             return jl_get_global(ctx.module, sym);
         return NULL;
     }
-    if (jl_is_slot(ex))
+    if (jl_is_slot(ex) || jl_is_argument(ex))
         return NULL;
     if (jl_is_ssavalue(ex)) {
         ssize_t idx = ((jl_ssavalue_t*)ex)->id - 1;
@@ -2030,7 +2030,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex, int sparams=tr
 
 static bool slot_eq(jl_value_t *e, int sl)
 {
-    return jl_is_slot(e) && jl_slot_number(e)-1 == sl;
+    return (jl_is_slot(e) || jl_is_argument(e)) && jl_slot_number(e)-1 == sl;
 }
 
 // --- code gen for intrinsic functions ---
@@ -2053,6 +2053,14 @@ static bool local_var_occurs(jl_value_t *e, int sl)
             if (local_var_occurs(jl_exprarg(ex,i),sl))
                 return true;
         }
+    }
+    else if (jl_is_returnnode(e)) {
+        jl_value_t *retexpr = jl_returnnode_value(e);
+        if (retexpr != NULL)
+            return local_var_occurs(retexpr, sl);
+    }
+    else if (jl_is_gotoifnot(e)) {
+        return local_var_occurs(jl_gotoifnot_cond(e), sl);
     }
     return false;
 }
@@ -2105,7 +2113,7 @@ static void mark_volatile_vars(jl_array_t *stmts, std::vector<jl_varinfo_t> &slo
 // to eagerly remove slot assignments that are never read from
 static void simple_use_analysis(jl_codectx_t &ctx, jl_value_t *expr)
 {
-    if (jl_is_slot(expr)) {
+    if (jl_is_slot(expr) || jl_is_argument(expr)) {
         int i = jl_slot_number(expr) - 1;
         ctx.slots[i].used = true;
     }
@@ -2128,6 +2136,14 @@ static void simple_use_analysis(jl_codectx_t &ctx, jl_value_t *expr)
                 simple_use_analysis(ctx, jl_exprarg(e, i));
             }
         }
+    }
+    else if (jl_is_returnnode(expr)) {
+        jl_value_t *retexpr = jl_returnnode_value(expr);
+        if (retexpr != NULL)
+            simple_use_analysis(ctx, retexpr);
+    }
+    else if (jl_is_gotoifnot(expr)) {
+        simple_use_analysis(ctx, jl_gotoifnot_cond(expr));
     }
     else if (jl_is_pinode(expr)) {
         simple_use_analysis(ctx, jl_fieldref_noalloc(expr, 0));
@@ -3519,7 +3535,7 @@ static jl_cgval_t emit_global(jl_codectx_t &ctx, jl_sym_t *sym)
 static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
 {
     Value *isnull = NULL;
-    if (jl_is_slot(sym)) {
+    if (jl_is_slot(sym) || jl_is_argument(sym)) {
         size_t sl = jl_slot_number(sym) - 1;
         jl_varinfo_t &vi = ctx.slots[sl];
         if (!vi.usedUndef)
@@ -3997,6 +4013,9 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
             (void)emit_expr(ctx, expr);
         return;
     }
+    if (jl_is_argument(expr) && ssaval_result == -1) {
+        return;
+    }
     if (jl_is_newvarnode(expr)) {
         jl_value_t *var = jl_fieldref(expr, 0);
         assert(jl_is_slot(var));
@@ -4055,7 +4074,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         jl_sym_t *sym = (jl_sym_t*)expr;
         return emit_global(ctx, sym);
     }
-    if (jl_is_slot(expr)) {
+    if (jl_is_slot(expr) || jl_is_argument(expr)) {
         return emit_local(ctx, expr);
     }
     if (jl_is_ssavalue(expr)) {
@@ -4077,6 +4096,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
     }
     if (jl_is_gotonode(expr)) {
         jl_error("GotoNode in value position");
+    }
+    if (jl_is_gotoifnot(expr)) {
+        jl_error("GotoIfNot in value position");
     }
     if (jl_is_pinode(expr)) {
         return convert_julia_type(ctx, emit_expr(ctx, jl_fieldref_noalloc(expr, 0)), jl_fieldref_noalloc(expr, 1));
@@ -4202,7 +4224,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
             bp = julia_binding_gv(ctx, bnd);
             bp_owner = literal_pointer_val(ctx, (jl_value_t*)mod);
         }
-        else if (jl_is_slot(mn)) {
+        else if (jl_is_slot(mn) || jl_is_argument(mn)) {
             int sl = jl_slot_number(mn)-1;
             jl_varinfo_t &vi = ctx.slots[sl];
             bp = vi.boxroot;
@@ -4301,7 +4323,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         I->setMetadata("julia.loopinfo", MD);
         return jl_cgval_t();
     }
-    else if (head == goto_ifnot_sym || head == leave_sym || head == coverageeffect_sym
+    else if (head == leave_sym || head == coverageeffect_sym
             || head == pop_exception_sym || head == enter_sym || head == inbounds_sym
             || head == aliasscope_sym || head == popaliasscope_sym) {
         jl_errorf("Expr(:%s) in value position", jl_symbol_name(head));
@@ -5517,8 +5539,6 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     JL_GC_PUSH2(&ctx.code, &ctx.roots);
     ctx.code = src->code;
 
-    //jl_static_show(JL_STDOUT, (jl_value_t*)ast);
-    //jl_printf(JL_STDOUT, "\n");
     std::map<int, BasicBlock*> labels;
     ctx.module = jl_is_method(lam->def.method) ? lam->def.method->module : lam->def.module;
     ctx.linfo = lam;
@@ -5667,9 +5687,11 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             int retarg = -1;
             for (size_t i = 0; i < jl_array_len(stmts); ++i) {
                 jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
-                if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == return_sym) {
-                    stmt = jl_exprarg(stmt, 0);
-                    if (!jl_is_slot(stmt))
+                if (jl_is_returnnode(stmt)) {
+                    stmt = jl_returnnode_value(stmt);
+                    if (stmt == NULL)
+                        continue;
+                    if (!jl_is_argument(stmt))
                         return -1;
                     unsigned sl = jl_slot_number(stmt) - 1;
                     if (sl >= nreq)
@@ -6359,23 +6381,20 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     {
         for (size_t i = 0; i < stmtslen; ++i) {
             jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
-            if (jl_is_expr(stmt)) {
-                if (((jl_expr_t*)stmt)->head == goto_ifnot_sym) {
-                    int dest = jl_unbox_long(jl_array_ptr_ref(((jl_expr_t*)stmt)->args, 1));
-                    branch_targets.insert(dest);
-                    // The next 1-indexed statement
+            if (jl_is_gotoifnot(stmt)) {
+                int dest = jl_gotoifnot_label(stmt);
+                branch_targets.insert(dest);
+                // The next 1-indexed statement
+                branch_targets.insert(i + 2);
+            } else if (jl_is_returnnode(stmt)) {
+                // We don't do dead branch elimination before codegen
+                // so we need to make sure to start a BB after any
+                // return node, even if they aren't otherwise branch
+                // targets.
+                if (i + 2 <= stmtslen)
                     branch_targets.insert(i + 2);
-                } else if (((jl_expr_t*)stmt)->head == return_sym) {
-                    // We don't do dead branch elimination before codegen
-                    // so we need to make sure to start a BB after any
-                    // return node, even if they aren't otherwise branch
-                    // targets.
-                    if (i + 2 <= stmtslen)
-                        branch_targets.insert(i + 2);
-                } else if (((jl_expr_t*)stmt)->head == unreachable_sym) {
-                    if (i + 2 <= stmtslen)
-                        branch_targets.insert(i + 2);
-                } else if (((jl_expr_t*)stmt)->head == enter_sym) {
+            } else if (jl_is_expr(stmt)) {
+                if (((jl_expr_t*)stmt)->head == enter_sym) {
                     branch_targets.insert(i + 1);
                     if (i + 2 <= stmtslen)
                         branch_targets.insert(i + 2);
@@ -6419,15 +6438,16 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         ctx.aliasscope = aliasscopes[cursor];
         jl_value_t *stmt = jl_array_ptr_ref(stmts, cursor);
         jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
-        if (expr && expr->head == unreachable_sym) {
-            ctx.builder.CreateUnreachable();
-            find_next_stmt(-1);
-            continue;
-        }
-        if (expr && expr->head == return_sym) {
+        if (jl_is_returnnode(stmt)) {
+            jl_value_t *retexpr = jl_returnnode_value(stmt);
+            if (retexpr == NULL) {
+                ctx.builder.CreateUnreachable();
+                find_next_stmt(-1);
+                continue;
+            }
             // this is basically a copy of emit_assignment,
             // but where the assignment slot is the retval
-            jl_cgval_t retvalinfo = emit_expr(ctx, jl_exprarg(expr, 0));
+            jl_cgval_t retvalinfo = emit_expr(ctx, retexpr);
             retvalinfo = convert_julia_type(ctx, retvalinfo, jlrettype);
             if (retvalinfo.typ == jl_bottom_type) {
                 ctx.builder.CreateUnreachable();
@@ -6557,10 +6577,9 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             find_next_stmt(cursor + 1);
             continue;
         }
-        if (expr && expr->head == goto_ifnot_sym) {
-            jl_value_t **args = (jl_value_t**)jl_array_data(expr->args);
-            jl_value_t *cond = args[0];
-            int lname = jl_unbox_long(args[1]);
+        if (jl_is_gotoifnot(stmt)) {
+            jl_value_t *cond = jl_gotoifnot_cond(stmt);
+            int lname = jl_gotoifnot_label(stmt);
             Value *isfalse = emit_condition(ctx, cond, "if");
             mallocVisitStmt(debuginfoloc, nullptr);
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();

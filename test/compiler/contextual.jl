@@ -5,7 +5,7 @@ module MiniCassette
     # fancy features, but sufficient to exercise this code path in the compiler.
 
     using Core.Compiler: method_instances, retrieve_code_info, CodeInfo,
-        MethodInstance, SSAValue, GotoNode, Slot, SlotNumber, quoted,
+        MethodInstance, SSAValue, GotoNode, GotoIfNot, ReturnNode, Slot, SlotNumber, quoted,
         signature_type
     using Base: _methods_by_ftype
     using Base.Meta: isexpr
@@ -20,10 +20,12 @@ module MiniCassette
         transform(expr) = transform_expr(expr, map_slot_number, map_ssa_value, sparams)
         if isexpr(expr, :call)
             return Expr(:call, overdub, SlotNumber(2), map(transform, expr.args)...)
-        elseif isexpr(expr, :gotoifnot)
-            return Expr(:gotoifnot, transform(expr.args[1]), map_ssa_value(SSAValue(expr.args[2])).id)
+        elseif isa(expr, GotoIfNot)
+            return GotoIfNot(transform(expr.cond), map_ssa_value(SSAValue(expr.dest)).id)
         elseif isexpr(expr, :static_parameter)
             return quoted(sparams[expr.args[1]])
+        elseif isa(expr, ReturnNode)
+            return ReturnNode(transform(expr.val))
         elseif isa(expr, Expr)
             return Expr(expr.head, map(transform, expr.args)...)
         elseif isa(expr, GotoNode)
