@@ -255,15 +255,18 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test minimum(5) == 5
 @test extrema(5) == (5, 5)
 @test extrema(abs2, 5) == (25, 25)
+@test Core.Compiler.extrema(abs2, 5) == (25, 25)
 
 let x = [4,3,5,2]
     @test maximum(x) == 5
     @test minimum(x) == 2
     @test extrema(x) == (2, 5)
+    @test Core.Compiler.extrema(x) == (2, 5)
 
     @test maximum(abs2, x) == 25
     @test minimum(abs2, x) == 4
     @test extrema(abs2, x) == (4, 25)
+    @test Core.Compiler.extrema(abs2, x) == (4, 25)
 end
 
 @test maximum([-0.,0.]) === 0.0
