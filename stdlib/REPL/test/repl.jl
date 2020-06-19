@@ -332,6 +332,13 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=false)) do stdin_wr
     @test endswith(s2, " 0x321\r\e[13C|||") # should have a space (from Meta-rightarrow) and not
                                             # have a spurious C before ||| (the one here is not spurious!)
 
+    # "pass through" for ^x^x
+    write(stdin_write, "\x030x4321\n") # \x03 == ^c
+    readuntil(stdout_read, "0x4321")
+    write(stdin_write, "\e[A\x18\x18||\x18\x18||||") # uparrow, ^x^x||^x^x||||
+    s3 = readuntil(stdout_read, "||||", keep=true)
+    @test endswith(s3, "||0x4321\r\e[15C||||")
+
     # Delete line (^U) and close REPL (^D)
     write(stdin_write, "\x15\x04")
     Base.wait(repltask)
