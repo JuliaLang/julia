@@ -113,10 +113,8 @@ Set the number of threads the BLAS library should use.
 """
 function set_num_threads(n::Integer)
     blas = vendor()
-    if blas === :openblas
-        return ccall((:openblas_set_num_threads, libblas), Cvoid, (Int32,), n)
-    elseif blas === :openblas64
-        return ccall((:openblas_set_num_threads64_, libblas), Cvoid, (Int32,), n)
+    if blas === :openblas || blas == :openblas64
+        return ccall((@blasfunc(openblas_set_num_threads), libblas), Cvoid, (Int32,), n)
     elseif blas === :mkl
         # MKL may let us set the number of threads in several ways
         return ccall((:MKL_Set_Num_Threads, libblas), Cvoid, (Cint,), n)
@@ -128,6 +126,24 @@ function set_num_threads(n::Integer)
     end
 
     return nothing
+end
+
+"""
+    get_num_threads()
+
+Get the number of threads the BLAS library is using.
+"""
+function get_num_threads()
+    blas = LinearAlgebra.BLAS.vendor()
+    if blas === :openblas || blas === :openblas64
+        return ccall((@blasfunc(openblas_get_num_threads), libblas), Cint, ())
+    elseif blas == :mkl
+        return ccall((:MKL_Get_Max_Num_Threads, libblas), Cint, ())
+    elseif Sys.isapple()
+        return Base.parse(Cint, ENV["VECLIB_MAXIMUM_THREADS"])
+    else
+        error("Unknown BLAS") # better error? return nothing
+    end
 end
 
 const _testmat = [1.0 0.0; 0.0 -1.0]

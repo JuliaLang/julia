@@ -553,4 +553,15 @@ Base.stride(A::WrappedArray, i::Int) = stride(A.A, i)
     end
 end
 
+@testset "get_set_num_threads" begin
+    default = BLAS.get_num_threads()
+    @test default isa Integer
+    @test default > 0
+    new = rand(1:10)
+    BLAS.set_num_threads(net)
+    @test BLAS.get_num_threads() == new
+    BLAS.set_num_threads(default)
+    @test BLAS.get_num_threads() == default
+end
+
 end # module TestBLAS
