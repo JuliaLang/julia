@@ -1895,6 +1895,13 @@
                 (else
                  (error (string "invalid " syntax-str " \"" (deparse el) "\""))))))))
 
+(define (expand-if e)
+  (if (and (pair? (cadr e)) (eq? (car (cadr e)) '&&))
+      (let ((clauses (cdr (flatten-ex '&& (cadr e)))))
+        `(if (&& ,@(map expand-forms clauses))
+             ,@(map expand-forms (cddr e))))
+      (cons (car e) (map expand-forms (cdr e)))))
+
 ;; move an assignment into the last statement of a block to keep more statements at top level
 (define (sink-assignment lhs rhs)
   (if (and (pair? rhs) (eq? (car rhs) 'block))
@@ -2229,6 +2236,9 @@
          `(call (core typeassert)
                 ,(expand-forms (cadr e)) ,(expand-forms (caddr e)))
          (map expand-forms e)))
+
+   'if expand-if
+   'elseif expand-if
 
    'while
    (lambda (e)
@@ -3709,7 +3719,8 @@ f(x) = yt(x)
         (handler-level 0)     ;; exception handler nesting depth
         (catch-token-stack '())) ;; tokens identifying handler enter for current catch blocks
     (define (emit c)
-      (set! code (cons c code)))
+      (set! code (cons c code))
+      c)
     (define (make-label)
       (begin0 label-counter
               (set! label-counter (+ 1 label-counter))))
@@ -3957,15 +3968,21 @@ f(x) = yt(x)
                  (compile (cadr e) break-labels value tail)
                  #f))
             ((if elseif)
-             (let ((test `(gotoifnot ,(compile-cond (cadr e) break-labels) _))
+             (let ((tests (map (lambda (clause)
+                                 (emit `(gotoifnot ,(compile-cond clause break-labels) _)))
+                               (if (and (pair? (cadr e)) (eq? (car (cadr e)) '&&))
+                                   (cdadr e)
+                                   (list (cadr e)))))
                    (end-jump `(goto _))
                    (val (if (and value (not tail)) (new-mutable-var) #f)))
-               (emit test)
                (let ((v1 (compile (caddr e) break-labels value tail)))
                  (if val (emit-assignment val v1))
                  (if (and (not tail) (or (length> e 3) val))
                      (emit end-jump))
-                 (set-car! (cddr test) (make&mark-label))
+                 (let ((elselabel (make&mark-label)))
+                   (for-each (lambda (test)
+                               (set-car! (cddr test) elselabel))
+                             tests))
                  (let ((v2 (if (length> e 3)
                                (compile (cadddr e) break-labels value tail)
                                '(null))))

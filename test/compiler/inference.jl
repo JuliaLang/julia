@@ -2650,3 +2650,13 @@ end
 f(n) = depth(n, 1)
 end
 @test Base.return_types(TestConstPropRecursion.f, (TestConstPropRecursion.Node,)) == Any[Int]
+
+# issue #36230, keeping implications of all conditions in a && chain
+function symcmp36230(vec)
+    a, b = vec[1], vec[2]
+    if isa(a, Symbol) && isa(b, Symbol)
+        return a == b
+    end
+    return false
+end
+@test Base.return_types(symcmp36230, (Vector{Any},)) == Any[Bool]
