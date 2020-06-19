@@ -139,11 +139,11 @@ function get_num_threads()
         return ccall((@blasfunc(openblas_get_num_threads), libblas), Cint, ())
     elseif blas == :mkl
         return ccall((:mkl_get_max_threads, libblas), Cint, ())
-    elseif Sys.isapple()
-        return Base.parse(Cint, ENV["VECLIB_MAXIMUM_THREADS"])
-    else
-        error("Unknown BLAS") # better error? return nothing
     end
+    @static if Sys.isapple()
+        return Base.parse(Cint, ENV["VECLIB_MAXIMUM_THREADS"])
+    end
+    error("Unknown BLAS") # better error? return nothing?
 end
 
 const _testmat = [1.0 0.0; 0.0 -1.0]
