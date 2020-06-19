@@ -99,10 +99,7 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
 end
 function Dict{K,V}(kv) where V where K
     h = Dict{K,V}()
-    chklen = IteratorSize(kv)
-    if (chklen isa HasLength) || (chklen isa HasShape)
-        sizehint!(h, length(kv))
-    end
+    haslength(kv) && sizehint!(h, length(kv))
     for (k,v) in kv
         h[k] = v
     end
