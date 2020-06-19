@@ -117,6 +117,8 @@ let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     uuid2 = UUID(uuidstr2)
     uuids = [uuid, uuid2]
     @test (uuids .== uuid) == [true, false]
+
+    @test parse(UUID, uuidstr2) == uuid2
 end
 @test_throws ArgumentError UUID("@"^4 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^6)
 
@@ -570,7 +572,11 @@ end
 end
 
 # normalization of paths by include (#26424)
-@test_throws ErrorException("could not open file $(joinpath(@__DIR__, "notarealfile.jl"))") include("./notarealfile.jl")
+@test begin
+    exc = try; include("./notarealfile.jl"); "unexpectedly reached!"; catch exc; exc; end
+    @test exc isa SystemError
+    exc.prefix
+end == "opening file $(repr(joinpath(@__DIR__, "notarealfile.jl")))"
 
 old_act_proj = Base.ACTIVE_PROJECT[]
 pushfirst!(LOAD_PATH, "@")

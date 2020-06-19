@@ -1,7 +1,7 @@
-# Linear Algebra
+# [Linear Algebra](@id man-linalg)
 
 ```@meta
-DocTestSetup = :(using LinearAlgebra)
+DocTestSetup = :(using LinearAlgebra, SparseArrays, SuiteSparse)
 ```
 
 In addition to (and as part of) its support for multi-dimensional arrays, Julia provides native implementations
@@ -306,12 +306,9 @@ of the Linear Algebra documentation.
 | `Schur`            | [Schur decomposition](https://en.wikipedia.org/wiki/Schur_decomposition)                                       |
 | `GeneralizedSchur` | [Generalized Schur decomposition](https://en.wikipedia.org/wiki/Schur_decomposition#Generalized_Schur_decomposition) |
 
-
-
 ## Standard functions
 
-Linear algebra functions in Julia are largely implemented by calling functions from [LAPACK](http://www.netlib.org/lapack/).
- Sparse factorizations call functions from [SuiteSparse](http://faculty.cse.tamu.edu/davis/suitesparse.html).
+Linear algebra functions in Julia are largely implemented by calling functions from [LAPACK](http://www.netlib.org/lapack/). Sparse matrix factorizations call functions from [SuiteSparse](http://suitesparse.com). Other sparse solvers are available as Julia packages.
 
 ```@docs
 Base.:*(::AbstractMatrix, ::AbstractMatrix)
@@ -320,6 +317,7 @@ LinearAlgebra.SingularException
 LinearAlgebra.PosDefException
 LinearAlgebra.ZeroPivotException
 LinearAlgebra.dot
+LinearAlgebra.dot(::Any, ::Any, ::Any)
 LinearAlgebra.cross
 LinearAlgebra.factorize
 LinearAlgebra.Diagonal
@@ -409,6 +407,7 @@ Base.inv(::AbstractMatrix)
 LinearAlgebra.pinv
 LinearAlgebra.nullspace
 Base.kron
+Base.kron!
 LinearAlgebra.exp(::StridedMatrix{<:LinearAlgebra.BlasFloat})
 Base.:^(::AbstractMatrix, ::Number)
 Base.:^(::Number, ::AbstractMatrix)

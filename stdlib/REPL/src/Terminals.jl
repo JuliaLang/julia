@@ -96,8 +96,8 @@ disable_bracketed_paste(t::TextTerminal) = nothing
 
 abstract type UnixTerminal <: TextTerminal end
 
-pipe_reader(t::UnixTerminal) = t.in_stream
-pipe_writer(t::UnixTerminal) = t.out_stream
+pipe_reader(t::UnixTerminal) = t.in_stream::IO
+pipe_writer(t::UnixTerminal) = t.out_stream::IO
 
 mutable struct TerminalBuffer <: UnixTerminal
     out_stream::IO
@@ -160,6 +160,6 @@ Base.haskey(t::TTYTerminal, key) = haskey(pipe_writer(t), key)
 Base.getindex(t::TTYTerminal, key) = getindex(pipe_writer(t), key)
 Base.get(t::TTYTerminal, key, default) = get(pipe_writer(t), key, default)
 
-Base.peek(t::TTYTerminal) = Base.peek(t.in_stream)
+Base.peek(t::TTYTerminal, ::Type{T}) where {T} = peek(t.in_stream, T)
 
 end # module

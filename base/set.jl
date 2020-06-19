@@ -67,6 +67,7 @@ delete!(s::Set, x) = (delete!(s.dict, x); s)
 
 copy(s::Set) = copymutable(s)
 
+copymutable(s::Set{T}) where {T} = Set{T}(s)
 # Set is the default mutable fall-back
 copymutable(s::AbstractSet{T}) where {T} = Set{T}(s)
 
@@ -119,19 +120,25 @@ julia> unique(Real[1, 1.0, 2])
 ```
 """
 function unique(itr)
-    T = @default_eltype(itr)
-    out = Vector{T}()
-    seen = Set{T}()
-    y = iterate(itr)
-    y === nothing && return out
-    x, i = y
-    if !isconcretetype(T) && IteratorEltype(itr) == EltypeUnknown()
-        S = typeof(x)
-        return _unique_from(itr, S[x], Set{S}((x,)), i)
+    if isa(IteratorEltype(itr), HasEltype)
+        T = eltype(itr)
+        out = Vector{T}()
+        seen = Set{T}()
+        for x in itr
+            if !in(x, seen)
+                push!(seen, x)
+                push!(out, x)
+            end
+        end
+        return out
     end
-    push!(seen, x)
-    push!(out, x)
-    return unique_from(itr, out, seen, i)
+    T = @default_eltype(itr)
+    y = iterate(itr)
+    y === nothing && return T[]
+    x, i = y
+    S = typeof(x)
+    R = isconcretetype(T) ? T : S
+    return _unique_from(itr, R[x], Set{R}((x,)), i)
 end
 
 _unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
@@ -174,8 +181,18 @@ julia> unique(x -> x^2, [1, -1, 3, -3, 4])
  4
 ```
 """
-function unique(f, C)
+function unique(f, C; seen::Union{Nothing,Set}=nothing)
     out = Vector{eltype(C)}()
+    if seen !== nothing
+        for x in C
+            y = f(x)
+            if y ∉ seen
+                push!(out, x)
+                push!(seen, y)
+            end
+        end
+        return out
+    end
 
     s = iterate(C)
     if s === nothing
@@ -240,7 +257,7 @@ julia> unique!(iseven, [2, 3, 5, 7, 9])
  3
 ```
 """
-function unique!(f, A::AbstractVector)
+function unique!(f, A::AbstractVector; seen::Union{Nothing,Set}=nothing)
     if length(A) <= 1
         return A
     end
@@ -248,7 +265,9 @@ function unique!(f, A::AbstractVector)
     i = firstindex(A)
     x = @inbounds A[i]
     y = f(x)
-    seen = Set{typeof(y)}()
+    if seen === nothing
+        seen = Set{typeof(y)}()
+    end
     push!(seen, y)
     return _unique!(f, A, seen, i, i+1)
 end

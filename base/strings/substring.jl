@@ -37,7 +37,7 @@ end
 
 @propagate_inbounds SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
 @propagate_inbounds SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i), Int(j))
-@propagate_inbounds SubString(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, first(r), last(r))
+@propagate_inbounds SubString(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, first(r), last(r))
 
 @propagate_inbounds function SubString(s::SubString, i::Int, j::Int)
     @boundscheck i ≤ j && checkbounds(s, i:j)
@@ -46,6 +46,10 @@ end
 
 SubString(s::AbstractString) = SubString(s, 1, lastindex(s))
 SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s))
+
+@propagate_inbounds view(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, r)
+@propagate_inbounds maybeview(s::AbstractString, r::AbstractUnitRange{<:Integer}) = view(s, r)
+@propagate_inbounds maybeview(s::AbstractString, args...) = getindex(s, args...)
 
 convert(::Type{SubString{S}}, s::AbstractString) where {S<:AbstractString} =
     SubString(convert(S, s))
@@ -95,6 +99,11 @@ isvalid(s::SubString{String}) = isvalid(String, s)
 thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
 nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
 
+function ==(a::Union{String, SubString{String}}, b::Union{String, SubString{String}})
+    s = sizeof(a)
+    s == sizeof(b) && 0 == _memcmp(a, b, s)
+end
+
 function cmp(a::SubString{String}, b::SubString{String})
     na = sizeof(a)
     nb = sizeof(b)
@@ -131,13 +140,21 @@ and encoding. If they return a string with a different encoding, they must also 
 ```jldoctest
 julia> reverse("JuliaLang")
 "gnaLailuJ"
+```
 
-julia> reverse("ax̂e") # combining characters can lead to surprising results
+!!! note
+    The examples below may be rendered differently on different systems.
+    The comments indicate how they're supposed to be rendered
+
+Combining characters can lead to surprising results:
+
+```jldoctest
+julia> reverse("ax̂e") # hat is above x in the input, above e in the output
 "êxa"
 
 julia> using Unicode
 
-julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
+julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes; hat is above x in both in- and output
 "ex̂a"
 ```
 """
@@ -211,6 +228,19 @@ function repeat(s::Union{String, SubString{String}}, r::Integer)
         end
     end
     return out
+end
+
+function filter(f, s::Union{String, SubString{String}})
+    out = StringVector(sizeof(s))
+    offset = 1
+    for c in s
+        if f(c)
+            offset += __unsafe_string!(out, c, offset)
+        end
+    end
+    resize!(out, offset-1)
+    sizehint!(out, offset-1)
+    return String(out)
 end
 
 getindex(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, r)

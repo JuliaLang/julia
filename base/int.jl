@@ -70,6 +70,7 @@ julia> signed(UInt64)
 Int64
 ```
 """
+signed(::Type{Bool}) = Int
 signed(::Type{UInt8}) = Int8
 signed(::Type{UInt16}) = Int16
 signed(::Type{UInt32}) = Int32
@@ -287,7 +288,8 @@ false
     x & y
 
 Bitwise and. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
-returning [`missing`](@ref) if one operand is `missing` and the other is `true`.
+returning [`missing`](@ref) if one operand is `missing` and the other is `true`. Add parentheses for
+function application form: `(&)(x, y)`.
 
 # Examples
 ```jldoctest

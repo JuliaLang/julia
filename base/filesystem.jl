@@ -42,7 +42,7 @@ import .Base:
     IOError, _UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
     bytesavailable, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
-    rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror
+    rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize
 
 import .Base.RefValue
 

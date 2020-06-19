@@ -11,6 +11,19 @@ struct StringIndexError <: Exception
 end
 @noinline string_index_err(s::AbstractString, i::Integer) =
     throw(StringIndexError(s, Int(i)))
+function Base.showerror(io::IO, exc::StringIndexError)
+    s = exc.string
+    print(io, "StringIndexError: ", "invalid index [$(exc.index)]")
+    if firstindex(s) <= exc.index <= ncodeunits(s)
+        iprev = thisind(s, exc.index)
+        inext = nextind(s, iprev)
+        if inext <= ncodeunits(s)
+            print(io, ", valid nearby indices [$iprev]=>'$(s[iprev])', [$inext]=>'$(s[inext])'")
+        else
+            print(io, ", valid nearby index [$iprev]=>'$(s[iprev])'")
+        end
+    end
+end
 
 const ByteArray = Union{Vector{UInt8},Vector{Int8}}
 
@@ -70,9 +83,9 @@ String(s::AbstractString) = print_to_string(s)
 
 unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 
-(::Type{Vector{UInt8}})(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(undef, length(s)), s)
-(::Type{Vector{UInt8}})(s::String) = Vector{UInt8}(codeunits(s))
-(::Type{Array{UInt8}})(s::String)  = Vector{UInt8}(codeunits(s))
+Vector{UInt8}(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(undef, length(s)), s)
+Vector{UInt8}(s::String) = Vector{UInt8}(codeunits(s))
+Array{UInt8}(s::String)  = Vector{UInt8}(codeunits(s))
 
 String(s::CodeUnits{UInt8,String}) = s.s
 
@@ -144,8 +157,8 @@ end
     @inbounds l = codeunit(s, i)
     (l < 0x80) | (0xf8 ≤ l) && return i+1
     if l < 0xc0
-        i′ = thisind(s, i)
-        return i′ < i ? nextind(s, i′) : i+1
+        i′ = @inbounds thisind(s, i)
+        return i′ < i ? @inbounds(nextind(s, i′)) : i+1
     end
     # first continuation byte
     (i += 1) > n && return i
@@ -163,22 +176,22 @@ end
 
 ## checking UTF-8 & ACSII validity ##
 
-byte_string_classify(s::Union{String,Vector{UInt8}}) =
+byte_string_classify(s::Union{String,Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}}}) =
     ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), s, sizeof(s))
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII
     # 2: valid UTF-8
 
-isvalid(::Type{String}, s::Union{Vector{UInt8},String}) = byte_string_classify(s) ≠ 0
+isvalid(::Type{String}, s::Union{Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}},String}) = byte_string_classify(s) ≠ 0
 isvalid(s::String) = isvalid(String, s)
 
 is_valid_continuation(c) = c & 0xc0 == 0x80
 
 ## required core functionality ##
 
-@propagate_inbounds function iterate(s::String, i::Int=firstindex(s))
-    i > ncodeunits(s) && return nothing
-    b = codeunit(s, i)
+@inline function iterate(s::String, i::Int=firstindex(s))
+    (i % UInt) - 1 < ncodeunits(s) || return nothing
+    b = @inbounds codeunit(s, i)
     u = UInt32(b) << 24
     between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
     return iterate_continued(s, i, u)
@@ -347,17 +360,4 @@ function repeat(c::Char, r::Integer)
         end
     end
     return s
-end
-
-function filter(f, s::String)
-    out = StringVector(sizeof(s))
-    offset = 1
-    for c in s
-        if f(c)
-            offset += __unsafe_string!(out, c, offset)
-        end
-    end
-    resize!(out, offset-1)
-    sizehint!(out, offset-1)
-    return String(out)
 end

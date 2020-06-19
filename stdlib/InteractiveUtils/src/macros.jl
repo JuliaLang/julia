@@ -6,6 +6,31 @@ import Base: typesof, insert!
 
 separate_kwargs(args...; kwargs...) = (args, kwargs.data)
 
+"""
+Transform a dot expression into one where each argument has been replaced by a
+variable "xj" (with j an integer from 1 to the returned i).
+The list `args` contains the original arguments that have been replaced.
+"""
+function recursive_dotcalls!(ex, args, i=1)
+    if !(ex isa Expr) || ((ex.head !== :. || !(ex.args[2] isa Expr)) &&
+                          (ex.head !== :call || string(ex.args[1])[1] != '.'))
+        newarg = Symbol('x', i)
+        if Meta.isexpr(ex, :...)
+            push!(args, only(ex.args))
+            return Expr(:..., newarg), i+1
+        else
+            push!(args, ex)
+            return newarg, i+1
+        end
+    end
+    (start, branches) = ex.head === :. ? (1, ex.args[2].args) : (2, ex.args)
+    for j in start:length(branches)
+        branch, i = recursive_dotcalls!(branches[j], args, i)
+        branches[j] = branch
+    end
+    return ex, i
+end
+
 function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
     if isa(ex0, Expr)
         if ex0.head === :do && Meta.isexpr(get(ex0.args, 1, nothing), :call)
@@ -16,6 +41,53 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             args = copy(ex0.args[1].args)
             insert!(args, (isnothing(i) ? 2 : i+1), ex0.args[2])
             ex0 = Expr(:call, args...)
+        end
+        if ex0.head === :. || (ex0.head === :call && string(ex0.args[1])[1] == '.')
+            codemacro = startswith(string(fcn), "code_")
+            if codemacro && ex0.args[2] isa Expr
+                # Manually wrap a dot call in a function
+                args = Any[]
+                ex, i = recursive_dotcalls!(copy(ex0), args)
+                xargs = [Symbol('x', j) for j in 1:i-1]
+                dotfuncname = gensym("dotfunction")
+                dotfuncdef = Expr(:local, Expr(:(=), Expr(:call, dotfuncname, xargs...), ex))
+                return quote
+                    $(esc(dotfuncdef))
+                    local args = typesof($(map(esc, args)...))
+                    $(fcn)($(esc(dotfuncname)), args; $(kws...))
+                end
+            elseif !codemacro
+                fully_qualified_symbol = true # of the form A.B.C.D
+                ex1 = ex0
+                while ex1 isa Expr && ex1.head === :.
+                    fully_qualified_symbol = (length(ex1.args) == 2 &&
+                                              ex1.args[2] isa QuoteNode &&
+                                              ex1.args[2].value isa Symbol)
+                    fully_qualified_symbol || break
+                    ex1 = ex1.args[1]
+                end
+                fully_qualified_symbol &= ex1 isa Symbol
+                if fully_qualified_symbol
+                    return quote
+                        local arg1 = $(esc(ex0.args[1]))
+                        if isa(arg1, Module)
+                            $(if string(fcn) == "which"
+                                  :(which(arg1, $(ex0.args[2])))
+                              else
+                                  :(error("expression is not a function call"))
+                              end)
+                        else
+                            local args = typesof($(map(esc, ex0.args)...))
+                            $(fcn)(Base.getproperty, args)
+                        end
+                    end
+                else
+                    return Expr(:call, :error, "dot expressions are not lowered to "
+                                * "a single function call, so @$fcn cannot analyze "
+                                * "them. You may want to use Meta.@lower to identify "
+                                * "which function call to target.")
+                end
+            end
         end
         if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
             return quote
@@ -34,10 +106,10 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             if isa(lhs, Expr)
                 if lhs.head === :(.)
                     return Expr(:call, fcn, Base.setproperty!,
-                                Expr(:call, typesof, map(esc, lhs.args)..., esc(rhs)))
+                                Expr(:call, typesof, map(esc, lhs.args)..., esc(rhs)), kws...)
                 elseif lhs.head === :ref
                     return Expr(:call, fcn, Base.setindex!,
-                                Expr(:call, typesof, esc(lhs.args[1]), esc(rhs), map(esc, lhs.args[2:end])...))
+                                Expr(:call, typesof, esc(lhs.args[1]), esc(rhs), map(esc, lhs.args[2:end])...), kws...)
                 end
             end
         elseif ex0.head === :vcat || ex0.head === :typed_vcat
@@ -55,22 +127,22 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                             Expr(:call, typesof,
                                  (ex0.head === :vcat ? [] : Any[esc(ex0.args[1])])...,
                                  Expr(:tuple, lens...),
-                                 map(esc, vcat(rows...))...))
+                                 map(esc, vcat(rows...))...), kws...)
             else
                 return Expr(:call, fcn, f,
-                            Expr(:call, typesof, map(esc, ex0.args)...))
+                            Expr(:call, typesof, map(esc, ex0.args)...), kws...)
             end
         else
             for (head, f) in (:ref => Base.getindex, :hcat => Base.hcat, :(.) => Base.getproperty, :vect => Base.vect, Symbol("'") => Base.adjoint, :typed_hcat => Base.typed_hcat, :string => string)
                 if ex0.head === head
                     return Expr(:call, fcn, f,
-                                Expr(:call, typesof, map(esc, ex0.args)...))
+                                Expr(:call, typesof, map(esc, ex0.args)...), kws...)
                 end
             end
         end
     end
     if isa(ex0, Expr) && ex0.head === :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
-        return Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...})
+        return Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...}, kws...)
     end
 
     ex = Meta.lower(__module__, ex0)
@@ -89,13 +161,14 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                             Expr(:call, typesof, map(esc, ex.args[3:end])...)))
         else
             exret = Expr(:call, fcn, esc(ex.args[1]),
-                         Expr(:call, typesof, map(esc, ex.args[2:end])...))
+                         Expr(:call, typesof, map(esc, ex.args[2:end])...), kws...)
         end
     end
     if ex.head === :thunk || exret.head === :none
         exret = Expr(:call, :error, "expression is not a function call, "
                                   * "or is too complex for @$fcn to analyze; "
-                                  * "break it down to simpler parts if possible")
+                                  * "break it down to simpler parts if possible. "
+                                  * "In some cases, you may want to use Meta.@lower.")
     end
     return exret
 end

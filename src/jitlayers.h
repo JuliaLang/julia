@@ -21,13 +21,14 @@ extern "C" {
     extern int globalUnique;
 }
 extern TargetMachine *jl_TargetMachine;
-extern Module *shadow_output;
 extern bool imaging_mode;
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false);
 void jl_finalize_module(std::unique_ptr<Module>  m);
 void jl_merge_module(Module *dest, std::unique_ptr<Module> src);
+Module *jl_create_llvm_module(StringRef name);
+GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
 
 typedef struct _jl_llvm_functions_t {
     std::string functionObject;     // jlcall llvm Function name
@@ -53,11 +54,36 @@ typedef std::vector<std::tuple<jl_code_instance_t*, jl_returninfo_t::CallingConv
 typedef std::tuple<std::unique_ptr<Module>, jl_llvm_functions_t> jl_compile_result_t;
 
 typedef struct {
+    typedef StringMap<GlobalVariable*> SymMapGV;
     // outputs
     jl_codegen_call_targets_t workqueue;
     std::map<void*, GlobalVariable*> globals;
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;
+    SymMapGV stringConstants;
+    // Map from symbol name (in a certain library) to its GV in sysimg and the
+    // DL handle address in the current session.
+    StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;
+#ifdef _OS_WINDOWS_
+    SymMapGV symMapExe;
+    SymMapGV symMapDl;
+#endif
+    SymMapGV symMapDefault;
+    // Map from distinct callee's to its GOT entry.
+    // In principle the attribute, function type and calling convention
+    // don't need to be part of the key but it seems impossible to forward
+    // all the arguments without writing assembly directly.
+    // This doesn't matter too much in reality since a single function is usually
+    // not called with multiple signatures.
+    DenseMap<AttributeList, std::map<
+        std::tuple<GlobalVariable*, FunctionType*, CallingConv::ID>,
+        GlobalVariable*>> allPltMap;
+    Module *_shared_module = NULL;
+    Module *shared_module(LLVMContext &context) {
+        if (!_shared_module)
+            _shared_module = jl_create_llvm_module("globals");
+        return _shared_module;
+    }
     // inputs
     size_t world = 0;
     const jl_cgparams_t *params = &jl_default_cgparams;
@@ -75,48 +101,20 @@ jl_compile_result_t jl_emit_codeinst(
         jl_code_info_t *src,
         jl_codegen_params_t &params);
 
+enum CompilationPolicy {
+    Default = 0,
+    Extern = 1
+};
+
 void jl_compile_workqueue(
     std::map<jl_code_instance_t*, jl_compile_result_t> &emitted,
-    jl_codegen_params_t &params);
+    jl_codegen_params_t &params,
+    CompilationPolicy policy);
 
 Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *argt,
     jl_codegen_params_t &params);
 
-// Connect Modules via prototypes, each owned by module `M`
-static inline GlobalVariable *global_proto(GlobalVariable *G, Module *M = NULL)
-{
-    // Copy the GlobalVariable, but without the initializer, so it becomes a declaration
-    GlobalVariable *proto = new GlobalVariable(G->getType()->getElementType(),
-            G->isConstant(), GlobalVariable::ExternalLinkage,
-            NULL, G->getName(),  G->getThreadLocalMode());
-    proto->copyAttributesFrom(G);
-    // DLLImport only needs to be set for the shadow module
-    // it just gets annoying in the JIT
-    proto->setDLLStorageClass(GlobalValue::DefaultStorageClass);
-    if (M)
-        M->getGlobalList().push_back(proto);
-    return proto;
-}
-
-static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
-{
-    if (G->getParent() == M)
-        return G;
-    GlobalValue *local = M->getNamedValue(G->getName());
-    if (!local) {
-        local = global_proto(G, M);
-    }
-    return cast<GlobalVariable>(local);
-}
-
-void add_named_global(GlobalObject *gv, void *addr, bool dllimport);
-template<typename T>
-static inline void add_named_global(GlobalObject *gv, T *addr, bool dllimport = true)
-{
-    // cast through integer to avoid c++ pedantic warning about casting between
-    // data and code pointers
-    add_named_global(gv, (void*)(uintptr_t)addr, dllimport);
-}
+void add_named_global(StringRef name, void *addr);
 
 static inline Constant *literal_static_pointer_val(const void *p, Type *T)
 {
@@ -189,7 +187,6 @@ public:
                          const object::ObjectFile &Obj,
                          const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo);
     void addGlobalMapping(StringRef Name, uint64_t Addr);
-    void addGlobalMapping(const GlobalValue *GV, void *Addr);
     void *getPointerToGlobalIfAvailable(StringRef S);
     void *getPointerToGlobalIfAvailable(const GlobalValue *GV);
     void addModule(std::unique_ptr<Module> M);
@@ -240,6 +237,7 @@ Pass *createLateLowerGCFramePass();
 Pass *createLowerExcHandlersPass();
 Pass *createGCInvariantVerifierPass(bool Strong);
 Pass *createPropagateJuliaAddrspaces();
+Pass *createRemoveJuliaAddrspacesPass();
 Pass *createMultiVersioningPass();
 Pass *createAllocOptPass();
 // Whether the Function is an llvm or julia intrinsic.

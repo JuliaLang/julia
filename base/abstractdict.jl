@@ -45,7 +45,7 @@ struct ValueIterator{T<:AbstractDict}
 end
 
 function summary(io::IO, iter::T) where {T<:Union{KeySet,ValueIterator}}
-    print(io, T.name, " for a ")
+    print(io, T.name.name, " for a ")
     summary(io, iter.dict)
 end
 
@@ -424,22 +424,9 @@ Dict{Int64,String} with 1 entry:
 function filter(f, d::AbstractDict)
     # don't just do filter!(f, copy(d)): avoid making a whole copy of d
     df = empty(d)
-    try
-        for pair in d
-            if f(pair)
-                df[pair.first] = pair.second
-            end
-        end
-    catch e
-        if isa(e, MethodError) && e.f === f
-            depwarn("In `filter(f, dict)`, `f` is now passed a single pair instead of two arguments.", :filter)
-            for (k, v) in d
-                if f(k, v)
-                    df[k] = v
-                end
-            end
-        else
-            rethrow()
+    for pair in d
+        if f(pair)
+            df[pair.first] = pair.second
         end
     end
     return df
@@ -571,7 +558,7 @@ Dict{Symbol,Int64} with 2 entries:
   :b => 2
 
 julia> map!(v -> v-1, values(d))
-Base.ValueIterator for a Dict{Symbol,Int64} with 2 entries. Values:
+ValueIterator for a Dict{Symbol,Int64} with 2 entries. Values:
   0
   1
 ```

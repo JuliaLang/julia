@@ -22,12 +22,6 @@ are supported on all primitive numeric types:
 | `x ^ y`    | power          | raises `x` to the `y`th power          |
 | `x % y`    | remainder      | equivalent to `rem(x,y)`               |
 
-as well as the negation on [`Bool`](@ref) types:
-
-| Expression | Name     | Description                              |
-|:---------- |:-------- |:---------------------------------------- |
-| `!x`       | negation | changes `true` to `false` and vice versa |
-
 A numeric literal placed directly before an identifier or parentheses, e.g. `2x` or `2(x+y)`, is treated as a multiplication, except with higher precedence than other binary operations.  See [Numeric Literal Coefficients](@ref man-numeric-literal-coefficients) for details.
 
 Julia's promotion system makes arithmetic operations on mixtures of argument types "just work"
@@ -50,6 +44,32 @@ julia> 3*2/12
 (By convention, we tend to space operators more tightly if they get applied before other nearby
 operators. For instance, we would generally write `-x + 2` to reflect that first `x` gets negated,
 and then `2` is added to that result.)
+
+When used in multiplication, `false` acts as a *strong zero*:
+
+```jldoctest
+julia> NaN * false
+0.0
+
+julia> false * Inf
+0.0
+```
+
+This is useful for preventing the propagation of `NaN` values in quantities that are known to be zero. See [Knuth (1992)](https://arxiv.org/abs/math/9205211) for motivation.
+
+## Boolean Operators
+
+The following [Boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#Operations) are supported on [`Bool`](@ref) types:
+
+| Expression | Name                                                    |
+|:---------- |:--------------------------------------------------------|
+| `!x`       | negation                                                |
+| `x && y`   | [short-circuiting and](@ref man-conditional-evaluation) |
+| `x \|\| y` | [short-circuiting or](@ref man-conditional-evaluation)  |
+
+Negation changes `true` to `false` and vice versa. The short-circuiting opeations are explained on the linked page.
+
+Note that `Bool` is an integer type and all the usual promotion rules and numeric operators are also defined on it.
 
 ## Bitwise Operators
 

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests for Core.Compiler correctness and precision
-import Core.Compiler: Const, Conditional, ⊑
+import Core.Compiler: Const, Conditional, ⊑, ReturnNode, GotoIfNot
 isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(x)
 
 using Random, Core.IR
@@ -91,10 +91,10 @@ tmerge_test(Tuple{ComplexF64, ComplexF64, ComplexF32}, Tuple{Vararg{Union{Comple
     Tuple{Vararg{Complex}}, false)
 tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Complex}})
-@test Core.Compiler.tmerge(Tuple{}, Union{Int16, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
-    Union{Int16, Nothing, Tuple{Vararg{ComplexF32}}}
-@test Core.Compiler.tmerge(Union{Int32, Nothing, Tuple{ComplexF32}}, Union{Int32, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
-    Union{Int32, Nothing, Tuple{Vararg{ComplexF32}}}
+@test Core.Compiler.tmerge(Tuple{}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Nothing, Tuple{Vararg{ComplexF32}}}
+@test Core.Compiler.tmerge(Union{Nothing, Tuple{ComplexF32}}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Nothing, Tuple{Vararg{ComplexF32}}}
 
 # issue 9770
 @noinline x9770() = false
@@ -655,6 +655,9 @@ let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
     @test fieldtype_nothrow(Union{Type{Base.RefValue{<:Real}}, Type{Base.RefValue{Any}}}, Const(:x))
     @test fieldtype_nothrow(Const(Union{Base.RefValue{<:Real}, Base.RefValue{Any}}), Const(:x))
     @test fieldtype_nothrow(Type{Union{Base.RefValue{T}, Base.RefValue{Any}}} where {T<:Real}, Const(:x))
+    @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(1))
+    @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(42))
+    @test !fieldtype_nothrow(Type{<:Tuple{Vararg{Int}}}, Const(1))
 end
 
 # issue #11480
@@ -883,9 +886,8 @@ end
 f21175() = 902221
 @test code_typed(f21175, ())[1].second === Int
 # call again, so that the AST is built on-demand
-let e = code_typed(f21175, ())[1].first.code[1]::Expr
-    @test e.head === :return
-    @test e.args[1] ∈ (902221, Core.QuoteNode(902221))
+let e = code_typed(f21175, ())[1].first.code[1]::ReturnNode
+    @test e.val ∈ (902221, Core.QuoteNode(902221))
 end
 
 # issue #10207
@@ -1144,7 +1146,8 @@ function get_linfo(@nospecialize(f), @nospecialize(t))
 end
 
 function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val))
-    linfo = Core.Compiler.inf_for_methodinstance(get_linfo(f, t), Core.Compiler.get_world_counter())::Core.CodeInstance
+    interp = Core.Compiler.NativeInterpreter()
+    linfo = Core.Compiler.getindex(Core.Compiler.code_cache(interp), get_linfo(f, t))
     # If coverage is not enabled, make the check strict by requiring constant ABI
     # Otherwise, check the typed AST to make sure we return a constant.
     if Base.JLOptions().code_coverage == 0
@@ -1161,16 +1164,16 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
     for ex in ast.code::Vector{Any}
         if isa(ex, LineNumberNode)
             continue
+        elseif isa(ex, ReturnNode)
+            # multiple returns
+            @test !ret_found
+            ret_found = true
+            ret = ex.val
+            # return value mismatch
+            @test ret === val || (isa(ret, QuoteNode) && (ret::QuoteNode).value === val)
+            continue
         elseif isa(ex, Expr)
             if Core.Compiler.is_meta_expr_head(ex.head)
-                continue
-            elseif ex.head === :return
-                # multiple returns
-                @test !ret_found
-                ret_found = true
-                ret = ex.args[1]
-                # return value mismatch
-                @test ret === val || (isa(ret, QuoteNode) && (ret::QuoteNode).value === val)
                 continue
             end
         end
@@ -1444,7 +1447,8 @@ gg13183(x::X...) where {X} = (_false13183 ? gg13183(x, x) : 0)
 # test the external OptimizationState constructor
 let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     world = UInt(23) # some small-numbered world that should be valid
-    opt = Core.Compiler.OptimizationState(linfo, Core.Compiler.Params(world))
+    interp = Core.Compiler.NativeInterpreter()
+    opt = Core.Compiler.OptimizationState(linfo, Core.Compiler.OptimizationParams(interp), interp)
     # make sure the state of the properties look reasonable
     @test opt.src !== linfo.def.source
     @test length(opt.src.slotflags) == linfo.def.nargs <= length(opt.src.slotnames)
@@ -1655,7 +1659,7 @@ end
 opt25261 = code_typed(foo25261, Tuple{}, optimize=false)[1].first.code
 i = 1
 # Skip to after the branch
-while !Meta.isexpr(opt25261[i], :gotoifnot); global i += 1; end
+while !isa(opt25261[i], GotoIfNot); global i += 1; end
 foundslot = false
 for expr25261 in opt25261[i:end]
     if expr25261 isa TypedSlot && expr25261.typ === Tuple{Int, Int}
@@ -2028,7 +2032,7 @@ worklist = Int[]
 let i
     for i in 1:length(code28279)
         stmt = code28279[i]
-        if Meta.isexpr(stmt, :gotoifnot)
+        if isa(stmt, GotoIfNot)
             push!(worklist, i)
             ssachangemap[i] = 1
             if i < length(code28279)
@@ -2043,13 +2047,13 @@ offset = 1
 let i
     for i in 1:length(code28279)
         if i == length(code28279)
-            @test Meta.isexpr(code28279[i], :return)
-            @test Meta.isexpr(oldcode28279[i], :return)
-            @test code28279[i].args[1].id == (oldcode28279[i].args[1].id + offset - 1)
-        elseif Meta.isexpr(code28279[i], :gotoifnot)
-            @test Meta.isexpr(oldcode28279[i], :gotoifnot)
-            @test code28279[i].args[1] == oldcode28279[i].args[1]
-            @test code28279[i].args[2] == (oldcode28279[i].args[2] + offset)
+            @test isa(code28279[i], ReturnNode)
+            @test isa(oldcode28279[i], ReturnNode)
+            @test code28279[i].val.id == (oldcode28279[i].val.id + offset - 1)
+        elseif isa(code28279[i], GotoIfNot)
+            @test isa(oldcode28279[i], GotoIfNot)
+            @test code28279[i].cond == oldcode28279[i].cond
+            @test code28279[i].dest == (oldcode28279[i].dest + offset)
             global offset += 1
         else
             @test code28279[i] == oldcode28279[i]
@@ -2545,3 +2549,103 @@ end
 @test only(Base.code_typed(pickvarnames, (Vector{Any},), optimize=false))[2] == Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple}}}}}}
 
 @test map(>:, [Int], [Int]) == [true]
+
+# issue 35566
+module Issue35566
+function step(acc, x)
+    xs, = acc
+    y = x > 0.0 ? x : missing
+    if y isa eltype(xs)
+        ys = push!(xs, y)
+    else
+        ys = vcat(xs, [y])
+    end
+    return (ys,)
+end
+
+function probe(y)
+    if y isa Tuple{Vector{Missing}}
+        return Val(:missing)
+    else
+        return Val(:expected)
+    end
+end
+
+function _foldl_iter(rf, val::T, iter, state) where {T}
+    while true
+        ret = iterate(iter, state)
+        ret === nothing && break
+        x, state = ret
+        y = rf(val, x)
+        if y isa T
+            val = y
+        else
+            return probe(y)
+        end
+    end
+    return Val(:expected)
+end
+
+f() = _foldl_iter(step, (Missing[],), [0.0], 1)
+end
+@test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}) == Tuple{Int}
+@test Base.return_types(Issue35566.f) == [Val{:expected}]
+
+# constant prop through keyword arguments
+_unstable_kw(;x=1,y=2) = x == 1 ? 0 : ""
+_use_unstable_kw_1() = _unstable_kw(x = 2)
+_use_unstable_kw_2() = _unstable_kw(x = 2, y = rand())
+@test Base.return_types(_use_unstable_kw_1) == Any[String]
+@test Base.return_types(_use_unstable_kw_2) == Any[String]
+@eval struct StructWithSplatNew
+    x::Int
+    StructWithSplatNew(t) = $(Expr(:splatnew, :StructWithSplatNew, :t))
+end
+_construct_structwithsplatnew() = StructWithSplatNew(("",))
+@test Base.return_types(_construct_structwithsplatnew) == Any[StructWithSplatNew]
+
+# case where a call cycle can be broken by constant propagation
+struct NotQRSparse
+    x::Matrix{Float64}
+    n::Int
+end
+@inline function getprop(F::NotQRSparse, d::Symbol)
+    if d === :Q
+        return NotQRSparse(getprop(F, :B), _size_ish(F, 2))
+    elseif d === :A
+        return Dict()
+    elseif d === :B
+        return rand(2,2)
+    elseif d === :C
+        return ""
+    else
+        error()
+    end
+end
+_size_ish(F::NotQRSparse, i::Integer) = size(getprop(F, :B), 1)
+_call_size_ish(x) = _size_ish(x,1)
+@test Base.return_types(_call_size_ish, (NotQRSparse,)) == Any[Int]
+
+module TestConstPropRecursion
+mutable struct Node
+    data
+    child::Node
+    sibling::Node
+end
+
+function Base.iterate(n::Node, state::Node = n.child)
+    n === state && return nothing
+    return state, state === state.sibling ? n : state.sibling
+end
+
+@inline function depth(node::Node, d)
+    childd = d + 1
+    for c in node
+        d = max(d, depth(c, childd))
+    end
+    return d
+end
+
+f(n) = depth(n, 1)
+end
+@test Base.return_types(TestConstPropRecursion.f, (TestConstPropRecursion.Node,)) == Any[Int]

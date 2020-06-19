@@ -173,11 +173,11 @@ Random.seed!(1)
             @test Array(D*a) ≈ DM*a
             @test Array(D/a) ≈ DM/a
             if relty <: BlasFloat
-                b = rand(elty,n,n)
-                b = sparse(b)
-                @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
-                @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
-                @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
+                for b in (rand(elty,n,n), sparse(rand(elty,n,n)), rand(elty,n), sparse(rand(elty,n)))
+                    @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
+                    @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
+                    @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
+                end
             end
         end
 
@@ -709,6 +709,12 @@ end
     d1, s1 = logabsdet(D)
     @test d1 ≈ sum(log ∘ abs, d)
     @test s1 == prod(sign, d)
+end
+
+@testset "Empty (#35424)" begin
+    @test zeros(0)'*Diagonal(zeros(0))*zeros(0) === 0.0
+    @test transpose(zeros(0))*Diagonal(zeros(Complex{Int}, 0))*zeros(0) === 0.0 + 0.0im
+    @test dot(zeros(Int32, 0), Diagonal(zeros(Int, 0)), zeros(Int16, 0)) === 0
 end
 
 end # module TestDiagonal

@@ -348,7 +348,7 @@ big(::Type{<:AbstractFloat}) = BigFloat
 
 big(x::AbstractFloat) = convert(BigFloat, x)
 
-function (::Type{Rational{BigInt}})(x::AbstractFloat)
+function Rational{BigInt}(x::AbstractFloat)
     isnan(x) && return zero(BigInt) // zero(BigInt)
     isinf(x) && return copysign(one(BigInt),x) // zero(BigInt)
     iszero(x) && return zero(BigInt) // one(BigInt)
@@ -691,7 +691,6 @@ function min(x::BigFloat, y::BigFloat)
 end
 
 function modf(x::BigFloat)
-    isinf(x) && return (BigFloat(NaN), x)
     zint = BigFloat()
     zfloat = BigFloat()
     ccall((:mpfr_modf, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), zint, zfloat, x, ROUNDING_MODE[])

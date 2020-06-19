@@ -532,7 +532,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
     for (int32_t i = _dyld_image_count() - 1; i >= 0 ; i--) {
         // dlopen() each image, check handle
         const char *image_name = _dyld_get_image_name(i);
-        void *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT, 0);
+        void *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT | JL_RTLD_NOLOAD, 0);
         jl_dlclose(probe_lib);
 
         // If the handle is the same as what was passed in (modulo mode bits), return this image name

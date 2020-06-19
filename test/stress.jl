@@ -76,7 +76,7 @@ end  # !Sys.iswindows
 
 # sig 2 is SIGINT per the POSIX.1-1990 standard
 if !Sys.iswindows()
-    ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 0)
+    Base.exit_on_sigint(false)
     @test_throws InterruptException begin
         ccall(:kill, Cvoid, (Cint, Cint,), getpid(), 2)
         for i in 1:10
@@ -84,5 +84,5 @@ if !Sys.iswindows()
             ccall(:jl_gc_safepoint, Cvoid, ()) # wait for SIGINT to arrive
         end
     end
-    ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
+    Base.exit_on_sigint(true)
 end

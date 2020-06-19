@@ -289,7 +289,7 @@ function open(h::OS_HANDLE)
             if ccall(:jl_ispty, Cint, (Ptr{Cvoid},), io.handle) != 0
                 # replace the Julia `PipeEndpoint` type with a `TTY` type,
                 # if we detect that this is a cygwin pty object
-                pipe_handle, pipe_status = io.handle, pipe.status
+                pipe_handle, pipe_status = io.handle, io.status
                 io.status = StatusClosed
                 io.handle = C_NULL
                 io = TTY(pipe_handle, pipe_status)
@@ -320,7 +320,7 @@ function isopen(x::Union{LibuvStream, LibuvServer})
     if x.status == StatusUninit || x.status == StatusInit
         throw(ArgumentError("$x is not initialized"))
     end
-    return x.status != StatusClosed && x.status != StatusEOF
+    return x.status::Int != StatusClosed && x.status::Int != StatusEOF
 end
 
 function check_open(x::Union{LibuvStream, LibuvServer})
@@ -395,7 +395,7 @@ function close(stream::Union{LibuvStream, LibuvServer})
         stream.status = StatusClosing
     elseif isopen(stream) || stream.status == StatusEOF
         should_wait = uv_handle_data(stream) != C_NULL
-        if stream.status != StatusClosing
+        if stream.status::Int != StatusClosing
             ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
             stream.status = StatusClosing
         end
@@ -410,7 +410,7 @@ function uvfinalize(uv::Union{LibuvStream, LibuvServer})
     iolock_begin()
     if uv.handle != C_NULL
         disassociate_julia_struct(uv.handle) # not going to call the usual close hooks
-        if uv.status != StatusUninit
+        if uv.status::Int != StatusUninit
             close(uv)
         else
             Libc.free(uv.handle)
@@ -455,6 +455,9 @@ displaysize() = (parse(Int, get(ENV, "LINES",   "24")),
                  parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}
 
 function displaysize(io::TTY)
+    # A workaround for #34620 and #26687 (this still has the TOCTOU problem).
+    check_open(io)
+
     local h::Int, w::Int
     default_size = displaysize()
 
@@ -492,7 +495,7 @@ end
 function alloc_request(buffer::IOBuffer, recommended_size::UInt)
     ensureroom(buffer, Int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
-    nb = length(buffer.data) - ptr + 1
+    nb = min(length(buffer.data), buffer.maxsize) - ptr + 1
     return (pointer(buffer.data, ptr), nb)
 end
 
@@ -521,7 +524,7 @@ function uv_alloc_buf(handle::Ptr{Cvoid}, size::Csize_t, buf::Ptr{Cvoid})
     stream = unsafe_pointer_to_objref(hd)::LibuvStream
 
     local data::Ptr{Cvoid}, newsize::Csize_t
-    if stream.status != StatusActive
+    if stream.status::Int != StatusActive
         data = C_NULL
         newsize = 0
     else
@@ -554,7 +557,7 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
                     if isa(stream, TTY)
                         stream.status = StatusEOF # libuv called uv_stop_reading already
                         notify(stream.cond)
-                    elseif stream.status != StatusClosing
+                    elseif stream.status::Int != StatusClosing
                         # begin shutdown of the stream
                         ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
                         stream.status = StatusClosing
@@ -664,7 +667,7 @@ show(io::IO, stream::Pipe) = print(io,
 
 function open_pipe!(p::PipeEndpoint, handle::OS_HANDLE)
     iolock_begin()
-    if p.status != StatusInit
+    if p.status::Int != StatusInit
         error("pipe is already in use or has been closed")
     end
     err = ccall(:uv_pipe_open, Int32, (Ptr{Cvoid}, OS_HANDLE), p.handle, handle)
@@ -1058,7 +1061,7 @@ _fd(x::Union{OS_HANDLE, RawFD}) = x
 
 function _fd(x::Union{LibuvStream, LibuvServer})
     fd = Ref{OS_HANDLE}(INVALID_OS_HANDLE)
-    if x.status != StatusUninit && x.status != StatusClosed
+    if x.status::Int != StatusUninit && x.status::Int != StatusClosed
         err = ccall(:uv_fileno, Int32, (Ptr{Cvoid}, Ptr{OS_HANDLE}), x.handle, fd)
         # handle errors by returning INVALID_OS_HANDLE
     end
@@ -1095,6 +1098,15 @@ for (x, writable, unix_fd, c_symbol) in
             ($f)($(writable ? :write : :read))
             return (read, write)
         end
+        function ($f)(::DevNull)
+            global $x
+            nulldev = @static Sys.iswindows() ? "NUL" : "/dev/null"
+            handle = open(nulldev, write=$writable)
+            $(_f)(handle)
+            close(handle) # handle has been dup'ed in $(_f)
+            $x = devnull
+            return devnull
+        end
     end
 end
 
@@ -1112,7 +1124,7 @@ elsewhere.
 If called with the optional `stream` argument, then returns `stream` itself.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
+    `stream` must be an `IOStream`, a `TTY`, a `Pipe`, a socket, or `devnull`.
 """
 redirect_stdout
 
@@ -1122,7 +1134,7 @@ redirect_stdout
 Like [`redirect_stdout`](@ref), but for [`stderr`](@ref).
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
+    `stream` must be an `IOStream`, a `TTY`, a `Pipe`, a socket, or `devnull`.
 """
 redirect_stderr
 
@@ -1134,7 +1146,7 @@ Note that the order of the return tuple is still `(rd, wr)`,
 i.e. data to be read from [`stdin`](@ref) may be written to `wr`.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
+    `stream` must be an `IOStream`, a `TTY`, a `Pipe`, a socket, or `devnull`.
 """
 redirect_stdin
 
@@ -1190,9 +1202,9 @@ unmark(x::LibuvStream)   = unmark(x.buffer)
 reset(x::LibuvStream)    = reset(x.buffer)
 ismarked(x::LibuvStream) = ismarked(x.buffer)
 
-function peek(s::LibuvStream)
+function peek(s::LibuvStream, ::Type{T}) where T
     mark(s)
-    try read(s, UInt8)
+    try read(s, T)
     finally
         reset(s)
     end

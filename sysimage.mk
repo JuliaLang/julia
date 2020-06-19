@@ -55,7 +55,7 @@ BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl -and -not -name s
                     $(shell find $(BUILDROOT)/base -name \*.jl  -and -not -name sysimg.jl))
 STDLIB_SRCS := $(JULIAHOME)/base/sysimg.jl $(shell find $(build_datarootdir)/julia/stdlib/$(VERSDIR)/*/src -name \*.jl) \
                     $(build_prefix)/manifest/Pkg
-RELBUILDROOT := $(shell $(JULIAHOME)/contrib/relative_path.sh "$(JULIAHOME)/base" "$(BUILDROOT)/base/")
+RELBUILDROOT := $(call rel_path,$(JULIAHOME)/base,$(BUILDROOT)/base)/ # <-- make sure this always has a trailing slash
 
 $(build_private_libdir)/corecompiler.ji: $(COMPILER_SRCS)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \

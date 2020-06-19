@@ -32,6 +32,7 @@ JL_DLLEXPORT int jl_lineno = 0; // need to update jl_critical_error if this is T
 JL_DLLEXPORT const char *jl_filename = "none"; // need to update jl_critical_error if this is TLS
 
 htable_t jl_current_modules;
+jl_mutex_t jl_modules_mutex;
 
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 {
@@ -135,7 +136,9 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     jl_module_t *newm = jl_new_module(name);
     jl_value_t *form = (jl_value_t*)newm;
     JL_GC_PUSH1(&form);
+    JL_LOCK(&jl_modules_mutex);
     ptrhash_put(&jl_current_modules, (void*)newm, (void*)((uintptr_t)HT_NOTFOUND + 1));
+    JL_UNLOCK(&jl_modules_mutex);
 
     // copy parent environment info into submodule
     newm->uuid = parent_module->uuid;
@@ -144,23 +147,27 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
         jl_register_root_module(newm);
     }
     else {
+        newm->parent = parent_module;
         jl_binding_t *b = jl_get_binding_wr(parent_module, name, 1);
         jl_declare_constant(b);
-        if (b->value != NULL) {
-            if (!jl_is_module(b->value)) {
+        jl_value_t *old = jl_atomic_compare_exchange(&b->value, NULL, (jl_value_t*)newm);
+        if (old != NULL) {
+            if (!jl_is_module(old)) {
                 jl_errorf("invalid redefinition of constant %s", jl_symbol_name(name));
             }
-            if (jl_generating_output()) {
+            if (jl_generating_output())
                 jl_errorf("cannot replace module %s during compilation", jl_symbol_name(name));
-            }
             jl_printf(JL_STDERR, "WARNING: replacing module %s.\n", jl_symbol_name(name));
-            // create a hidden gc root for the old module
-            uintptr_t *refcnt = (uintptr_t*)ptrhash_bp(&jl_current_modules, (void*)b->value);
-            *refcnt += 1;
+            old = jl_atomic_exchange(&b->value, (jl_value_t*)newm);
         }
-        newm->parent = parent_module;
-        b->value = (jl_value_t*)newm;
         jl_gc_wb_binding(b, newm);
+        if (old != NULL) {
+            // create a hidden gc root for the old module
+            JL_LOCK(&jl_modules_mutex);
+            uintptr_t *refcnt = (uintptr_t*)ptrhash_bp(&jl_current_modules, (void*)old);
+            *refcnt += 1;
+            JL_UNLOCK(&jl_modules_mutex);
+        }
     }
 
     if (parent_module == jl_main_module && name == jl_symbol("Base")) {
@@ -213,6 +220,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     }
 #endif
 
+    JL_LOCK(&jl_modules_mutex);
     uintptr_t *refcnt = (uintptr_t*)ptrhash_bp(&jl_current_modules, (void*)newm);
     assert(*refcnt > (uintptr_t)HT_NOTFOUND);
     *refcnt -= 1;
@@ -225,6 +233,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     // defer init of children until parent is done being defined
     // then initialize all in definition-finished order
     // at build time, don't run them at all (defer for runtime)
+    form = NULL;
     if (!jl_generating_output()) {
         if (!ptrhash_has(&jl_current_modules, (void*)newm->parent)) {
             size_t i, l = jl_array_len(jl_module_init_order);
@@ -241,12 +250,16 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
             }
             if (ns < l)
                 jl_array_del_end(jl_module_init_order, l - ns);
-            l = jl_array_len(form);
-            for (i = 0; i < l; i++) {
-                jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(form, i);
-                JL_GC_PROMISE_ROOTED(m);
-                jl_module_run_initializer(m);
-            }
+        }
+    }
+    JL_UNLOCK(&jl_modules_mutex);
+
+    if (form) {
+        size_t i, l = jl_array_len(form);
+        for (i = 0; i < l; i++) {
+            jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(form, i);
+            JL_GC_PROMISE_ROOTED(m);
+            jl_module_run_initializer(m);
         }
     }
 
@@ -312,8 +325,7 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
         *has_defs = 1;
         return;
     }
-    else if (head == method_sym || head == abstracttype_sym || head == primtype_sym ||
-             head == structtype_sym || jl_is_toplevel_only_expr(v)) {
+    else if (head == method_sym || jl_is_toplevel_only_expr(v)) {
         *has_defs = 1;
     }
     else if (head == cfunction_sym) {
@@ -339,10 +351,15 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
         else if (jl_is_quotenode(f)) {
             called = jl_quotenode_value(f);
         }
-        if (called && jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall) {
-            *has_intrinsics = 1;
-            return;
+        if (called) {
+            if (jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall) {
+                *has_intrinsics = 1;
+            }
+            if (called == jl_builtin__typebody) {
+                *has_defs = 1;
+            }
         }
+        return;
     }
     int i;
     for (i = 0; i < jl_array_len(e->args); i++) {
@@ -378,11 +395,9 @@ static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs
                 if (jl_gotonode_label(stmt) <= i)
                     *has_loops = 1;
             }
-            else if (jl_is_expr(stmt)) {
-                if (((jl_expr_t*)stmt)->head == goto_ifnot_sym) {
-                    if (jl_unbox_long(jl_exprarg(stmt,1)) <= i)
-                        *has_loops = 1;
-                }
+            else if (jl_is_gotoifnot(stmt)) {
+                if (jl_gotoifnot_label(stmt) <= i)
+                    *has_loops = 1;
             }
         }
         expr_attributes(stmt, has_intrinsics, has_defs);
@@ -836,8 +851,11 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v)
 void jl_check_open_for(jl_module_t *m, const char* funcname)
 {
     if (jl_options.incremental && jl_generating_output()) {
-        if (!ptrhash_has(&jl_current_modules, (void*)m) && !jl_is__toplevel__mod(m)) {
-            if (m != jl_main_module) { // TODO: this was grand-fathered in
+        if (m != jl_main_module) { // TODO: this was grand-fathered in
+            JL_LOCK(&jl_modules_mutex);
+            int open = ptrhash_has(&jl_current_modules, (void*)m);
+            JL_UNLOCK(&jl_modules_mutex);
+            if (!open && !jl_is__toplevel__mod(m)) {
                 const char* name = jl_symbol_name(m->name);
                 jl_errorf("Evaluation into the closed module `%s` breaks incremental compilation "
                           "because the side effects will not be permanent. "
@@ -885,26 +903,138 @@ JL_DLLEXPORT jl_value_t *jl_infer_thunk(jl_code_info_t *thk, jl_module_t *m)
     return (jl_value_t*)jl_any_type;
 }
 
-JL_DLLEXPORT jl_value_t *jl_load_rewrite(jl_module_t *module, const char *fname, jl_value_t *mapexpr)
+
+//------------------------------------------------------------------------------
+// Code loading: combined parse+eval for include()
+
+// Parse julia code from the string `text` at top level, attributing it to
+// `filename`. This is used during bootstrap, but the real Base.include() is
+// implemented in Julia code.
+jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
+                              jl_value_t *filename)
 {
-    uv_stat_t stbuf;
-    if (jl_stat(fname, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
-        jl_errorf("could not open file %s", fname);
+    if (!jl_is_string(text) || !jl_is_string(filename)) {
+        jl_errorf("Expected `String`s for `text` and `filename`");
     }
-    return jl_parse_eval_all(fname, NULL, 0, module, mapexpr);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (ptls->in_pure_callback)
+        jl_error("cannot use include inside a generated function");
+    jl_check_open_for(module, "include");
+
+    jl_value_t *result = jl_nothing;
+    jl_value_t *ast = NULL;
+    jl_value_t *expression = NULL;
+    JL_GC_PUSH3(&ast, &result, &expression);
+
+    ast = jl_svecref(jl_parse(jl_string_data(text), jl_string_len(text),
+                              filename, 0, (jl_value_t*)all_sym), 0);
+    if (!jl_is_expr(ast) || ((jl_expr_t*)ast)->head != toplevel_sym) {
+        jl_errorf("jl_parse_all() must generate a top level expression");
+    }
+
+    int last_lineno = jl_lineno;
+    const char *last_filename = jl_filename;
+    size_t last_age = jl_get_ptls_states()->world_age;
+    int lineno = 0;
+    jl_lineno = 0;
+    jl_filename = jl_string_data(filename);
+    int err = 0;
+
+    JL_TRY {
+        for (size_t i = 0; i < jl_expr_nargs(ast); i++) {
+            expression = jl_exprarg(ast, i);
+            if (jl_is_linenode(expression)) {
+                // filename is already set above.
+                lineno = jl_linenode_line(expression);
+                jl_lineno = lineno;
+                continue;
+            }
+            expression = jl_expand_with_loc_warn(expression, module,
+                                                 jl_string_data(filename), lineno);
+            jl_get_ptls_states()->world_age = jl_world_counter;
+            result = jl_toplevel_eval_flex(module, expression, 1, 1);
+        }
+    }
+    JL_CATCH {
+        result = jl_box_long(jl_lineno); // (ab)use result to root error line
+        err = 1;
+        goto finally; // skip jl_restore_excstack
+    }
+finally:
+    jl_get_ptls_states()->world_age = last_age;
+    jl_lineno = last_lineno;
+    jl_filename = last_filename;
+    if (err) {
+        if (jl_loaderror_type == NULL)
+            jl_rethrow();
+        else
+            jl_rethrow_other(jl_new_struct(jl_loaderror_type, filename, result,
+                                           jl_current_exception()));
+    }
+    JL_GC_POP();
+    return result;
 }
 
-JL_DLLEXPORT jl_value_t *jl_load(jl_module_t *module, const char *fname)
+// Synchronously read content of entire file into a julia String
+static jl_value_t *jl_file_content_as_string(jl_value_t *filename)
 {
-    return jl_load_rewrite(module, fname, NULL);
+    const char *fname = jl_string_data(filename);
+    ios_t f;
+    if (ios_file(&f, fname, 1, 0, 0, 0) == NULL)
+        jl_errorf("File \"%s\" not found", fname);
+    ios_bufmode(&f, bm_none);
+    ios_seek_end(&f);
+    size_t len = ios_pos(&f);
+    jl_value_t *text = jl_alloc_string(len);
+    ios_seek(&f, 0);
+    if (ios_readall(&f, jl_string_data(text), len) != len)
+        jl_errorf("Error reading file \"%s\"", fname);
+    ios_close(&f);
+    return text;
 }
 
-// load from filename given as a String object
-JL_DLLEXPORT jl_value_t *jl_load_(jl_module_t *module, jl_value_t *str)
+// Load and parse julia code from the file `filename`. Eval the resulting
+// statements into `module` after applying `mapexpr` to each one.
+JL_DLLEXPORT jl_value_t *jl_load_(jl_module_t *module, jl_value_t *filename)
 {
-    // assume String has a hidden '\0' at the end
-    return jl_load(module, (const char*)jl_string_data(str));
+    jl_value_t *text = jl_file_content_as_string(filename);
+    JL_GC_PUSH1(&text);
+    jl_value_t *result = jl_parse_eval_all(module, text, filename);
+    JL_GC_POP();
+    return result;
 }
+
+// Code loading - julia.h C API with native C types
+
+// Parse julia code from `filename` and eval into `module`.
+JL_DLLEXPORT jl_value_t *jl_load(jl_module_t *module, const char *filename)
+{
+    jl_value_t *filename_ = NULL;
+    JL_GC_PUSH1(&filename_);
+    filename_ = jl_cstr_to_string(filename);
+    jl_value_t *result = jl_load_(module, filename_);
+    JL_GC_POP();
+    return result;
+}
+
+// Parse julia code from the string `text` of length `len`, attributing it to
+// `filename`. Eval the resulting statements into `module`.
+JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
+                                             char *filename, jl_module_t *module)
+{
+    jl_value_t *text_ = NULL;
+    jl_value_t *filename_ = NULL;
+    JL_GC_PUSH2(&text_, &filename_);
+    text_ = jl_pchar_to_string(text, len);
+    filename_ = jl_cstr_to_string(filename);
+    jl_value_t *result = jl_parse_eval_all(module, text_, filename_);
+    JL_GC_POP();
+    return result;
+}
+
+
+//--------------------------------------------------
+// Code loading helpers for bootstrap
 
 JL_DLLEXPORT jl_value_t *jl_prepend_cwd(jl_value_t *str)
 {

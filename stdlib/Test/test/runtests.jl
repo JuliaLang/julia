@@ -916,3 +916,17 @@ end
     end
 end
 
+# Issue 20620
+@test @inferred(.![true, false]) == [false, true]
+@test @inferred([3, 4] .- [1, 2] .+ [-2, -2]) == [0, 0]
+
+@testset "push/pop_testset invariance (Issue 32937)" begin
+    io = IOBuffer()
+    path = joinpath(@__DIR__(), "test_pop_testset_exec.jl")
+    cmd = `$(Base.julia_cmd()) $path`
+    ok = !success(pipeline(cmd; stdout = io, stderr = io))
+    if !ok
+        @error "push/pop_testset invariance test failed" cmd Text(String(take!(io)))
+    end
+    @test ok
+end

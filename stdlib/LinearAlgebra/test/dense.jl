@@ -395,6 +395,17 @@ end
     @test kron(b',2) == [8 10 12]
 end
 
+@testset "kron adjoint" begin
+    a = [1+im, 2, 3]
+    b = [4, 5, 6+7im]
+    @test kron(a', b') isa Adjoint
+    @test kron(a', b') == kron(a, b)'
+    @test kron(transpose(a), b') isa Transpose
+    @test kron(transpose(a), b') == kron(permutedims(a), collect(b'))
+    @test kron(transpose(a), transpose(b)) isa Transpose
+    @test kron(transpose(a), transpose(b)) == transpose(kron(a, b))
+end
+
 @testset "issue #4796" begin
     dim=2
     S=zeros(Complex,dim,dim)
@@ -926,6 +937,17 @@ end
     # case where no sqrt is needed (s=0)
     A2 = [1.01 0.01 0.01; 0 1.01 0.01; 0 0 1.01]
     @test exp(log(A2)) ≈ A2
+end
+
+struct TypeWithoutZero end
+Base.zero(::Type{TypeWithoutZero}) = TypeWithZero()
+struct TypeWithZero end
+Base.promote_rule(::Type{TypeWithoutZero}, ::Type{TypeWithZero}) = TypeWithZero
+Base.zero(::Type{<:Union{TypeWithoutZero, TypeWithZero}}) = TypeWithZero()
+Base.:+(x::TypeWithZero, ::TypeWithoutZero) = x
+
+@testset "diagm for type with no zero" begin
+    @test diagm(0 => [TypeWithoutZero()]) isa Matrix{TypeWithZero}
 end
 
 end # module TestDense

@@ -507,20 +507,20 @@ f18888() = nothing
 let
     world = Core.Compiler.get_world_counter()
     m = first(methods(f18888, Tuple{}))
-    @test isempty(m.specializations)
     ft = typeof(f18888)
 
     code_typed(f18888, Tuple{}; optimize=false)
     @test !isempty(m.specializations) # uncached, but creates the specializations entry
     mi = Core.Compiler.specialize_method(m, Tuple{ft}, Core.svec())
-    @test Core.Compiler.inf_for_methodinstance(mi, world) === nothing
+    interp = Core.Compiler.NativeInterpreter(world)
+    @test !Core.Compiler.haskey(Core.Compiler.code_cache(interp), mi)
     @test !isdefined(mi, :cache)
 
     code_typed(f18888, Tuple{}; optimize=true)
     @test !isdefined(mi, :cache)
 
     Base.return_types(f18888, Tuple{})
-    @test Core.Compiler.inf_for_methodinstance(mi, world) === mi.cache
+    @test Core.Compiler.getindex(Core.Compiler.code_cache(interp), mi) === mi.cache
     @test mi.cache isa Core.CodeInstance
     @test !isdefined(mi.cache, :next)
 end

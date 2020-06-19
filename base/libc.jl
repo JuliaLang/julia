@@ -38,6 +38,8 @@ dup(src::RawFD, target::RawFD) = systemerror("dup", -1 ==
     ccall((@static Sys.iswindows() ? :_dup2 : :dup2), Int32,
                 (RawFD, RawFD), src, target))
 
+show(io::IO, fd::RawFD) = print(io, "RawFD(", bitcast(UInt32, fd), ')')  # avoids invalidation via show_default
+
 # Wrapper for an OS file descriptor (for Windows)
 if Sys.iswindows()
     primitive type WindowsRawSocket sizeof(Ptr) * 8 end # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows

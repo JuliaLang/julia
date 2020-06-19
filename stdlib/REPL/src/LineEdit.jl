@@ -3,16 +3,19 @@
 module LineEdit
 
 import ..REPL
-using ..Terminals
+using REPL: AbstractREPL
 
+using ..Terminals
 import ..Terminals: raw!, width, height, cmove, getX,
                        getY, clear_line, beep
 
-import Base: ensureroom, peek, show, AnyDict, position
+import Base: ensureroom, show, AnyDict, position
 using Base: something
 
 abstract type TextInterface end
 abstract type ModeState end
+abstract type HistoryProvider end
+abstract type CompletionProvider end
 
 export run_interface, Prompt, ModalInterface, transition, reset_state, edit_insert, keymap
 
@@ -31,11 +34,11 @@ mutable struct Prompt <: TextInterface
     # Same as prefix except after the prompt
     prompt_suffix::Union{String,Function}
     keymap_dict::Dict{Char}
-    repl # ::AbstractREPL
-    complete # ::REPLCompletionProvider
+    repl::Union{AbstractREPL,Nothing}
+    complete::CompletionProvider
     on_enter::Function
     on_done::Function
-    hist # ::REPLHistoryProvider
+    hist::HistoryProvider
     sticky::Bool
 end
 
@@ -140,9 +143,6 @@ function input_string_newlines_aftercursor(s::PromptState)
     rest = str[nextind(str, position(s)):end]
     return count(c->(c == '\n'), rest)
 end
-
-abstract type HistoryProvider end
-abstract type CompletionProvider end
 
 struct EmptyCompletionProvider <: CompletionProvider end
 struct EmptyHistoryProvider <: HistoryProvider end
@@ -378,7 +378,7 @@ prompt_string(f::Function) = Base.invokelatest(f)
 
 refresh_multi_line(s::ModeState; kw...) = refresh_multi_line(terminal(s), s; kw...)
 refresh_multi_line(termbuf::TerminalBuffer, s::ModeState; kw...) = refresh_multi_line(termbuf, terminal(s), s; kw...)
-refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState; kw...) = (@assert term == terminal(s); refresh_multi_line(termbuf,s; kw...))
+refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState; kw...) = (@assert term === terminal(s); refresh_multi_line(termbuf,s; kw...))
 
 function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf::IOBuffer,
                             state::InputAreaState, prompt = "";
@@ -480,7 +480,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     return InputAreaState(cur_row, curs_row)
 end
 
-function highlight_region(lwrite::String, regstart::Int, regstop::Int, written::Int, slength::Int)
+function highlight_region(lwrite::AbstractString, regstart::Int, regstop::Int, written::Int, slength::Int)
     if written <= regstop <= written+slength
         i = thisind(lwrite, regstop-written)
         lwrite = lwrite[1:i] * Base.disable_text_style[:reverse] * lwrite[nextind(lwrite, i):end]
@@ -777,7 +777,7 @@ function edit_insert_newline(s::PromptState, align::Int = 0 - options(s).auto_in
     #else
     #    align = 0
     end
-	align < 0 && (align = 0)
+    align < 0 && (align = 0)
     edit_insert(buf, '\n' * ' '^align)
     refresh_line(s)
     # updating s.last_newline should happen after refresh_line(s) which can take
@@ -1602,9 +1602,16 @@ const escape_defaults = merge!(
     AnyDict("\e[$(c)l" => nothing for c in 1:20)
     )
 
+mutable struct HistoryPrompt <: TextInterface
+    hp::HistoryProvider
+    complete::CompletionProvider
+    keymap_dict::Dict{Char,Any}
+    HistoryPrompt(hp) = new(hp, EmptyCompletionProvider())
+end
+
 mutable struct SearchState <: ModeState
     terminal::AbstractTerminal
-    histprompt # ::HistoryPrompt
+    histprompt::HistoryPrompt
     #rsearch (true) or ssearch (false)
     backward::Bool
     query_buffer::IOBuffer
@@ -1616,6 +1623,8 @@ mutable struct SearchState <: ModeState
     SearchState(terminal, histprompt, backward, query_buffer, response_buffer) =
         new(terminal, histprompt, backward, query_buffer, response_buffer, false, InputAreaState(0,0))
 end
+
+init_state(terminal, p::HistoryPrompt) = SearchState(terminal, p, true, IOBuffer(), IOBuffer())
 
 terminal(s::SearchState) = s.terminal
 
@@ -1654,18 +1663,20 @@ function reset_state(s::SearchState)
     nothing
 end
 
-mutable struct HistoryPrompt <: TextInterface
-    hp # ::HistoryProvider
-    complete # ::CompletionProvider
+# a meta-prompt that presents itself as parent_prompt, but which has an independent keymap
+# for prefix searching
+mutable struct PrefixHistoryPrompt <: TextInterface
+    hp::HistoryProvider
+    parent_prompt::Prompt
+    complete::CompletionProvider
     keymap_dict::Dict{Char,Any}
-    HistoryPrompt(hp) = new(hp, EmptyCompletionProvider())
+    PrefixHistoryPrompt(hp, parent_prompt) =
+        new(hp, parent_prompt, EmptyCompletionProvider())
 end
-
-init_state(terminal, p::HistoryPrompt) = SearchState(terminal, p, true, IOBuffer(), IOBuffer())
 
 mutable struct PrefixSearchState <: ModeState
     terminal::AbstractTerminal
-    histprompt # ::HistoryPrompt
+    histprompt::PrefixHistoryPrompt
     prefix::String
     response_buffer::IOBuffer
     ias::InputAreaState
@@ -1677,6 +1688,8 @@ mutable struct PrefixSearchState <: ModeState
     PrefixSearchState(terminal, histprompt, prefix, response_buffer) =
         new(terminal, histprompt, prefix, response_buffer, InputAreaState(0,0), 0)
 end
+
+init_state(terminal, p::PrefixHistoryPrompt) = PrefixSearchState(terminal, p, "", IOBuffer())
 
 function show(io::IO, s::PrefixSearchState)
     print(io, "PrefixSearchState ", isdefined(s,:parent) ?
@@ -1695,19 +1708,6 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal,
 end
 
 input_string(s::PrefixSearchState) = String(take!(copy(s.response_buffer)))
-
-# a meta-prompt that presents itself as parent_prompt, but which has an independent keymap
-# for prefix searching
-mutable struct PrefixHistoryPrompt <: TextInterface
-    hp # ::HistoryProvider
-    parent_prompt::Prompt
-    complete # ::CompletionProvider
-    keymap_dict::Dict{Char,Any}
-    PrefixHistoryPrompt(hp, parent_prompt) =
-        new(hp, parent_prompt, EmptyCompletionProvider())
-end
-
-init_state(terminal, p::PrefixHistoryPrompt) = PrefixSearchState(terminal, p, "", IOBuffer())
 
 write_prompt(terminal, s::PrefixSearchState) = write_prompt(terminal, s.histprompt.parent_prompt)
 prompt_string(s::PrefixSearchState) = prompt_string(s.histprompt.parent_prompt.prompt)

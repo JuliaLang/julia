@@ -289,16 +289,19 @@ unitrange_last(start::T, stop::T) where {T} =
                           convert(T,start-oneunit(stop-start)))
 
 if isdefined(Main, :Base)
-    function getindex(t::Tuple, r::AbstractUnitRange{<:Real})
-        n = length(r)
-        n == 0 && return ()
-        a = Vector{eltype(t)}(undef, n)
-        o = first(r) - 1
-        for i = 1:n
-            el = t[o + i]
-            @inbounds a[i] = el
+    # Constant-fold-able indexing into tuples to functionally expose Base.tail and Base.front
+    function getindex(@nospecialize(t::Tuple), r::UnitRange)
+        @_inline_meta
+        r.start > r.stop && return ()
+        if r.start == 1
+            r.stop == length(t)   && return t
+            r.stop == length(t)-1 && return front(t)
+            r.stop == length(t)-2 && return front(front(t))
+        elseif r.stop == length(t)
+            r.start == 2 && return tail(t)
+            r.start == 3 && return tail(tail(t))
         end
-        (a...,)
+        return (eltype(t)[t[ri] for ri in r]...,)
     end
 end
 
@@ -454,7 +457,6 @@ function print_range(io::IO, r::AbstractRange,
                      hdots::AbstractString = ",\u2026,") # horiz ellipsis
     # This function borrows from print_matrix() in show.jl
     # and should be called by show and display
-    limit = get(io, :limit, false)
     sz = displaysize(io)
     if !haskey(io, :compact)
         io = IOContext(io, :compact => true)
@@ -739,19 +741,36 @@ show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), '
 show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
 
-==(r::T, s::T) where {T<:AbstractRange} =
+function ==(r::T, s::T) where {T<:AbstractRange}
+    isempty(r) && return isempty(s)
+    _has_length_one(r) && return _has_length_one(s) & (first(r) == first(s))
     (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
-==(r::OrdinalRange, s::OrdinalRange) =
+end
+
+function ==(r::OrdinalRange, s::OrdinalRange)
+    isempty(r) && return isempty(s)
+    _has_length_one(r) && return _has_length_one(s) & (first(r) == first(s))
     (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
+end
+
 ==(r::T, s::T) where {T<:Union{StepRangeLen,LinRange}} =
-    (first(r) == first(s)) & (length(r) == length(s)) & (last(r) == last(s))
-==(r::Union{StepRange{T},StepRangeLen{T,T}}, s::Union{StepRange{T},StepRangeLen{T,T}}) where {T} =
-    (first(r) == first(s)) & (last(r) == last(s)) & (step(r) == step(s))
+    (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (length(r) == length(s)) & (last(r) == last(s)))
+
+function ==(r::Union{StepRange{T},StepRangeLen{T,T}}, s::Union{StepRange{T},StepRangeLen{T,T}}) where {T}
+    isempty(r) && return isempty(s)
+    _has_length_one(r) && return _has_length_one(s) & (first(r) == first(s))
+    (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
+end
+
+_has_length_one(r::OrdinalRange) = first(r) == last(r)
+_has_length_one(r::AbstractRange) = isone(length(r))
 
 function ==(r::AbstractRange, s::AbstractRange)
     lr = length(r)
     if lr != length(s)
         return false
+    elseif iszero(lr)
+        return true
     end
     yr, ys = iterate(r), iterate(s)
     while yr !== nothing
@@ -762,6 +781,7 @@ function ==(r::AbstractRange, s::AbstractRange)
 end
 
 intersect(r::OneTo, s::OneTo) = OneTo(min(r.stop,s.stop))
+union(r::OneTo, s::OneTo) = OneTo(max(r.stop,s.stop))
 
 intersect(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) = max(first(r),first(s)):min(last(r),last(s))
 
@@ -924,7 +944,7 @@ StepRange{T1,T2}(r::AbstractRange) where {T1,T2} =
     StepRange{T1,T2}(convert(T1, first(r)), convert(T2, step(r)), convert(T1, last(r)))
 StepRange(r::AbstractUnitRange{T}) where {T} =
     StepRange{T,T}(first(r), step(r), last(r))
-(::Type{StepRange{T1,T2} where T1})(r::AbstractRange) where {T2} = StepRange{eltype(r),T2}(r)
+(StepRange{T1,T2} where T1)(r::AbstractRange) where {T2} = StepRange{eltype(r),T2}(r)
 
 promote_rule(::Type{StepRangeLen{T1,R1,S1}},::Type{StepRangeLen{T2,R2,S2}}) where {T1,T2,R1,R2,S1,S2} =
     el_same(promote_type(T1,T2),

@@ -138,6 +138,10 @@ end
 # basic expressions
 @test_repr "x + y"
 @test_repr "2e"
+@test_repr "2*e1"
+@test_repr "2*E1"
+@test_repr "2*f1"
+@test_repr "0x00*a"
 @test_repr "!x"
 @test_repr "f(1, 2, 3)"
 @test_repr "x = ~y"
@@ -612,6 +616,8 @@ end
 @test_repr "Array{<:Real}"
 @test_repr "Array{>:Real}"
 
+@test repr(Base.typename(Array)) == "typename(Array)"
+
 let oldout = stdout, olderr = stderr
     local rdout, wrout, rderr, wrerr, out, err, rd, wr, io
     try
@@ -693,11 +699,11 @@ Base.zero(x::T12960) = T12960()
 let
     A = sparse(1.0I, 3, 3)
     B = similar(A, T12960)
-    @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
-    @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
+    @test sprint(show, B)  == "\n #undef             ⋅            ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
+    @test sprint(print, B) == "\n #undef             ⋅            ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
     B[1,2] = T12960()
-    @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [1, 2]  =  T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
-    @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [1, 2]  =  T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
+    @test sprint(show, B)  == "\n #undef          T12960()        ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
+    @test sprint(print, B) == "\n #undef          T12960()        ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
 end
 
 # issue #13127
@@ -1774,8 +1780,8 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     @test isempty(pop!(lines1))
     Core.Compiler.insert_node!(ir, 1, Val{1}, QuoteNode(1), false)
     Core.Compiler.insert_node!(ir, 1, Val{2}, QuoteNode(2), true)
-    Core.Compiler.insert_node!(ir, length(ir.stmts), Val{3}, QuoteNode(3), false)
-    Core.Compiler.insert_node!(ir, length(ir.stmts), Val{4}, QuoteNode(4), true)
+    Core.Compiler.insert_node!(ir, length(ir.stmts.inst), Val{3}, QuoteNode(3), false)
+    Core.Compiler.insert_node!(ir, length(ir.stmts.inst), Val{4}, QuoteNode(4), true)
     lines2 = split(repr(ir), '\n')
     @test isempty(pop!(lines2))
     @test popfirst!(lines2) == "2  1 ──       $(QuoteNode(1))"
@@ -1802,7 +1808,7 @@ end
 # with as unnamed "!" BB.
 let src = code_typed(gcd, (Int, Int), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
-    push!(ir.stmts, Core.Compiler.ReturnNode())
+    push!(ir.stmts.inst, Core.Compiler.ReturnNode())
     lines = split(sprint(show, ir), '\n')
     @test isempty(pop!(lines))
     @test pop!(lines) == "   ! ──       unreachable::#UNDEF"
@@ -1907,6 +1913,16 @@ end
     @test count(==('\n'), str) == 20
 
     @test replstr(Set(['a'^100])) == "Set{String} with 1 element:\n  \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa…"
+end
+
+@testset "Simple printing of StridedArray" begin
+    @test startswith(sprint(show, StridedArray), "StridedArray")
+    @test startswith(sprint(show, StridedVecOrMat), "StridedVecOrMat")
+    @test startswith(sprint(show, StridedVector), "Strided")
+    @test startswith(sprint(show, StridedMatrix), "Strided")
+    @test occursin("StridedArray", sprint(show, SubArray{T, N, A} where {T,N,A<:StridedArray}))
+    @test !occursin("Strided", sprint(show, Union{DenseArray, SubArray}))
+    @test !occursin("Strided", sprint(show, Union{DenseArray, Base.ReinterpretArray, Base.ReshapedArray, SubArray}))
 end
 
 @testset "0-dimensional Array. Issue #31481" begin

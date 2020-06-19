@@ -22,6 +22,8 @@ export
     recv,
     recvfrom,
     send,
+    join_multicast_group,
+    leave_multicast_group,
     TCPSocket,
     UDPSocket,
     @ip_str,
@@ -726,6 +728,56 @@ function listenany(host::IPAddr, default_port)
 end
 
 listenany(default_port) = listenany(localhost, default_port)
+
+function udp_set_membership(sock::UDPSocket, group_addr::String,
+                            interface_addr::Union{Nothing, String}, operation)
+    if interface_addr === nothing
+        interface_addr = C_NULL
+    end
+    r = ccall(:uv_udp_set_membership, Cint,
+              (Ptr{Cvoid}, Cstring, Cstring, Cint),
+              sock.handle, group_addr, interface_addr, operation)
+    uv_error("uv_udp_set_membership", r)
+    return
+end
+
+"""
+    join_multicast_group(sock::UDPSocket, group_addr, interface_addr = nothing)
+
+Join a socket to a particular multicast group defined by `group_addr`.
+If `interface_addr` is given, specifies a particular interface for multi-homed
+systems.  Use `leave_multicast_group()` to disable reception of a group.
+"""
+function join_multicast_group(sock::UDPSocket, group_addr::String,
+                              interface_addr::Union{Nothing, String} = nothing)
+    return udp_set_membership(sock, group_addr, interface_addr, 1)
+end
+function join_multicast_group(sock::UDPSocket, group_addr::IPAddr,
+                              interface_addr::Union{Nothing, IPAddr} = nothing)
+    if interface_addr !== nothing
+        interface_addr = string(interface_addr)
+    end
+    return join_multicast_group(sock, string(group_addr), interface_addr)
+end
+
+"""
+    leave_multicast_group(sock::UDPSocket, group_addr, interface_addr = nothing)
+
+Remove a socket from  a particular multicast group defined by `group_addr`.
+If `interface_addr` is given, specifies a particular interface for multi-homed
+systems.  Use `join_multicast_group()` to enable reception of a group.
+"""
+function leave_multicast_group(sock::UDPSocket, group_addr::String,
+                               interface_addr::Union{Nothing, String} = nothing)
+    return udp_set_membership(sock, group_addr, interface_addr, 0)
+end
+function leave_multicast_group(sock::UDPSocket, group_addr::IPAddr,
+                               interface_addr::Union{Nothing, IPAddr} = nothing)
+    if interface_addr !== nothing
+        interface_addr = string(interface_addr)
+    end
+    return leave_multicast_group(sock, string(group_addr), interface_addr)
+end
 
 """
     getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr, UInt16)

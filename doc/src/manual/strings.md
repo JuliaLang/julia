@@ -51,24 +51,24 @@ other subtypes of `AbstractChar`, e.g. to optimize operations for other
 input and shown:
 
 ```jldoctest
-julia> 'x'
+julia> c = 'x'
 'x': ASCII/Unicode U+0078 (category Ll: Letter, lowercase)
 
-julia> typeof(ans)
+julia> typeof(c)
 Char
 ```
 
 You can easily convert a `Char` to its integer value, i.e. code point:
 
 ```jldoctest
-julia> Int('x')
+julia> c = Int('x')
 120
 
-julia> typeof(ans)
+julia> typeof(c)
 Int64
 ```
 
-On 32-bit architectures, [`typeof(ans)`](@ref) will be [`Int32`](@ref). You can convert an
+On 32-bit architectures, [`typeof(c)`](@ref) will be [`Int32`](@ref). You can convert an
 integer value back to a `Char` just as easily:
 
 ```jldoctest
@@ -205,13 +205,11 @@ Using an index less than `begin` (`1`) or greater than `end` raises an error:
 
 ```jldoctest helloworldstring
 julia> str[begin-1]
-ERROR: BoundsError: attempt to access String
-  at index [0]
+ERROR: BoundsError: attempt to access 14-codeunit String at index [0]
 [...]
 
 julia> str[end+1]
-ERROR: BoundsError: attempt to access String
-  at index [15]
+ERROR: BoundsError: attempt to access 14-codeunit String at index [15]
 [...]
 ```
 
@@ -281,11 +279,12 @@ julia> s[1]
 '∀': Unicode U+2200 (category Sm: Symbol, math)
 
 julia> s[2]
-ERROR: StringIndexError("∀ x ∃ y", 2)
+ERROR: StringIndexError: invalid index [2], valid nearby indices [1]=>'∀', [4]=>' '
+Stacktrace:
 [...]
 
 julia> s[3]
-ERROR: StringIndexError("∀ x ∃ y", 3)
+ERROR: StringIndexError: invalid index [3], valid nearby indices [1]=>'∀', [4]=>' '
 Stacktrace:
 [...]
 
@@ -305,7 +304,7 @@ julia> s[end-1]
 ' ': ASCII/Unicode U+0020 (category Zs: Separator, space)
 
 julia> s[end-2]
-ERROR: StringIndexError("∀ x ∃ y", 9)
+ERROR: StringIndexError: invalid index [9], valid nearby indices [7]=>'∃', [10]=>' '
 Stacktrace:
 [...]
 
@@ -325,7 +324,7 @@ julia> s[1:1]
 "∀"
 
 julia> s[1:2]
-ERROR: StringIndexError("∀ x ∃ y", 2)
+ERROR: StringIndexError: invalid index [2], valid nearby indices [1]=>'∀', [4]=>' '
 Stacktrace:
 [...]
 
@@ -757,10 +756,10 @@ using non-standard string literals prefixed with various identifiers beginning w
 basic regular expression literal without any options turned on just uses `r"..."`:
 
 ```jldoctest
-julia> r"^\s*(?:#|$)"
+julia> re = r"^\s*(?:#|$)"
 r"^\s*(?:#|$)"
 
-julia> typeof(ans)
+julia> typeof(re)
 Regex
 ```
 

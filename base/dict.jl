@@ -25,7 +25,7 @@ function show(io::IO, t::AbstractDict{K,V}) where V where K
     recur_io = IOContext(io, :SHOWN_SET => t,
                              :typeinfo => eltype(t))
 
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
     # show in a Julia-syntax-like form: Dict(k=>v, ...)
     print(io, typeinfo_prefix(io, t)[1])
     print(io, '(')
@@ -99,6 +99,10 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
 end
 function Dict{K,V}(kv) where V where K
     h = Dict{K,V}()
+    chklen = IteratorSize(kv)
+    if (chklen isa HasLength) || (chklen isa HasShape)
+        sizehint!(h, length(kv))
+    end
     for (k,v) in kv
         h[k] = v
     end
@@ -739,7 +743,9 @@ Create a new entry in the `ImmutableDict` for a `key => value` pair
 ImmutableDict
 ImmutableDict(KV::Pair{K,V}) where {K,V} = ImmutableDict{K,V}(KV[1], KV[2])
 ImmutableDict(t::ImmutableDict{K,V}, KV::Pair) where {K,V} = ImmutableDict{K,V}(t, KV[1], KV[2])
-ImmutableDict(KV::Pair, rest::Pair...) = ImmutableDict(ImmutableDict(rest...), KV)
+ImmutableDict(t::ImmutableDict{K,V}, KV::Pair, rest::Pair...) where {K,V} =
+    ImmutableDict(ImmutableDict(t, KV), rest...)
+ImmutableDict(KV::Pair, rest::Pair...) = ImmutableDict(ImmutableDict(KV), rest...)
 
 function in(key_value::Pair, dict::ImmutableDict, valcmp=(==))
     key, value = key_value

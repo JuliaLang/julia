@@ -101,7 +101,7 @@ end
 """
     evalpoly(x, p)
 
-Evaluate the polynomial ``\\sum_k p[k] x^{k-1}`` for the coefficients `p[1]`, `p[2]`, ...;
+Evaluate the polynomial ``\\sum_k x^{k-1} p[k]`` for the coefficients `p[1]`, `p[2]`, ...;
 that is, the coefficients are given in ascending order by power of `x`.
 Loops are unrolled at compile time if the number of coefficients is statically known, i.e.
 when `p` is a `Tuple`.
@@ -210,7 +210,7 @@ end
 """
     @evalpoly(z, c...)
 
-Evaluate the polynomial ``\\sum_k c[k] z^{k-1}`` for the coefficients `c[1]`, `c[2]`, ...;
+Evaluate the polynomial ``\\sum_k z^{k-1} c[k]`` for the coefficients `c[1]`, `c[2]`, ...;
 that is, the coefficients are given in ascending order by power of `z`.  This macro expands
 to efficient inline code that uses either Horner's method or, for complex `z`, a more
 efficient Goertzel-like algorithm.
@@ -344,7 +344,8 @@ For one argument, this is the angle in radians between the positive *x*-axis and
 
 For two arguments, this is the angle in radians between the positive *x*-axis and the
 point (*x*, *y*), returning a value in the interval ``[-\\pi, \\pi]``. This corresponds to a
-standard [`atan2`](https://en.wikipedia.org/wiki/Atan2) function.
+standard [`atan2`](https://en.wikipedia.org/wiki/Atan2) function. Note that by convention
+`atan(0.0,x)` is defined as ``\\pi`` and `atan(-0.0,x)` is defined as ``-\\pi`` when `x < 0`.
 """
 atan(x::Number)
 
@@ -868,7 +869,7 @@ julia> modf(-3.5)
 (-0.5, -3.0)
 ```
 """
-modf(x) = rem(x,one(x)), trunc(x)
+modf(x) = isinf(x) ? (flipsign(zero(x), x), x) : (rem(x, one(x)), trunc(x))
 
 function modf(x::Float32)
     temp = Ref{Float32}()
@@ -896,8 +897,22 @@ end
     end
     z
 end
-@inline ^(x::Float64, y::Integer) = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
-@inline ^(x::Float32, y::Integer) = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
+@inline function ^(x::Float64, y::Integer)
+    y == -1 && return inv(x)
+    y == 0 && return one(x)
+    y == 1 && return x
+    y == 2 && return x*x
+    y == 3 && return x*x*x
+    ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
+end
+@inline function ^(x::Float32, y::Integer)
+    y == -1 && return inv(x)
+    y == 0 && return one(x)
+    y == 1 && return x
+    y == 2 && return x*x
+    y == 3 && return x*x*x
+    ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
+end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
 @inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
 
@@ -986,7 +1001,7 @@ function rem2pi(x::Float64, ::RoundingMode{:ToZero})
     ax = abs(x)
     ax <= 2*Float64(pi,RoundDown) && return x
 
-    n,y = rem_pio2_kernel(x)
+    n,y = rem_pio2_kernel(ax)
 
     if iseven(n)
         if n & 2 == 2 # n % 4 == 2: add pi

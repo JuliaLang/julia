@@ -23,7 +23,8 @@ const extended_help_on = Ref{Any}(nothing)
 
 function _helpmode(io::IO, line::AbstractString)
     line = strip(line)
-    if startswith(line, '?')
+    ternary_operator_help = (line == "?" || line == "?:")
+    if startswith(line, '?') && !ternary_operator_help
         line = line[2:end]
         extended_help_on[] = line
         brief = false
@@ -42,7 +43,8 @@ function _helpmode(io::IO, line::AbstractString)
     x = Meta.parse(line, raise = false, depwarn = false)
     assym = Symbol(line)
     expr =
-        if haskey(keywords, assym) || Base.isoperator(assym) || isexpr(x, :error) || isexpr(x, :invalid)
+        if haskey(keywords, Symbol(line)) || Base.isoperator(assym) || isexpr(x, :error) ||
+            isexpr(x, :invalid) || isexpr(x, :incomplete)
             # Docs for keywords must be treated separately since trying to parse a single
             # keyword such as `function` would throw a parse error due to the missing `end`.
             assym
@@ -605,9 +607,9 @@ moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 filtervalid(names) = filter(x->!occursin(r"#", x), map(string, names))
 
 accessible(mod::Module) =
-    [filter!(s -> !Base.isdeprecated(mod, s), names(mod, all = true, imported = true));
-     map(names, moduleusings(mod))...;
-     collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
+    Symbol[filter!(s -> !Base.isdeprecated(mod, s), names(mod, all=true, imported=true));
+           map(names, moduleusings(mod))...;
+           collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
 
 doc_completions(name) = fuzzysort(name, accessible(Main))
 doc_completions(name::Symbol) = doc_completions(string(name))
@@ -683,14 +685,16 @@ stripmd(x::Markdown.Footnote) = "$(stripmd(x.id)) $(stripmd(x.text))"
 stripmd(x::Markdown.Table) =
     join([join(map(stripmd, r), " ") for r in x.rows], " ")
 
-# Apropos searches through all available documentation for some string or regex
 """
-    apropos(string)
+    apropos([io::IO=stdout], pattern::Union{AbstractString,Regex})
 
-Search through all documentation for a string, ignoring case.
+Search available docstrings for entries containing `pattern`.
+
+When `pattern` is a string, case is ignored. Results are printed to `io`.
 """
 apropos(string) = apropos(stdout, string)
 apropos(io::IO, string) = apropos(io, Regex("\\Q$string", "i"))
+
 function apropos(io::IO, needle::Regex)
     for mod in modules
         # Module doc might be in README.md instead of the META dict

@@ -105,10 +105,10 @@ an [interned string](https://en.wikipedia.org/wiki/String_interning) used as one
 of expressions:
 
 ```jldoctest
-julia> :foo
+julia> s = :foo
 :foo
 
-julia> typeof(ans)
+julia> typeof(s)
 Symbol
 ```
 
@@ -354,10 +354,10 @@ Given an expression object, one can cause Julia to evaluate (execute) it at glob
 [`eval`](@ref):
 
 ```jldoctest interp1
-julia> :(1 + 2)
+julia> ex1 = :(1 + 2)
 :(1 + 2)
 
-julia> eval(ans)
+julia> eval(ex1)
 3
 
 julia> ex = :(a + b)
@@ -780,10 +780,10 @@ macro time(ex)
 end
 ```
 
-Here, we want `t0`, `t1`, and `val` to be private temporary variables, and we want `time` to refer
-to the [`time`](@ref) function in Julia Base, not to any `time` variable the user
+Here, we want `t0`, `t1`, and `val` to be private temporary variables, and we want `time_ns` to refer
+to the [`time_ns`](@ref) function in Julia Base, not to any `time_ns` variable the user
 might have (the same applies to `println`). Imagine the problems that could occur if the user
-expression `ex` also contained assignments to a variable called `t0`, or defined its own `time`
+expression `ex` also contained assignments to a variable called `t0`, or defined its own `time_ns`
 variable. We might get errors, or mysteriously incorrect behavior.
 
 Julia's macro expander solves these problems in the following way. First, variables within a macro
@@ -792,7 +792,7 @@ to (and not declared global), declared local, or used as a function argument nam
 it is considered global. Local variables are then renamed to be unique (using the [`gensym`](@ref)
 function, which generates new symbols), and global variables are resolved within the macro definition
 environment. Therefore both of the above concerns are handled; the macro's locals will not conflict
-with any user variables, and `time` and `println` will refer to the Julia Base definitions.
+with any user variables, and `time_ns` and `println` will refer to the Julia Base definitions.
 
 One problem remains however. Consider the following use of this macro:
 
@@ -800,14 +800,14 @@ One problem remains however. Consider the following use of this macro:
 module MyModule
 import Base.@time
 
-time() = ... # compute something
+time_ns() = ... # compute something
 
-@time time()
+@time time_ns()
 end
 ```
 
-Here the user expression `ex` is a call to `time`, but not the same `time` function that the macro
-uses. It clearly refers to `MyModule.time`. Therefore we must arrange for the code in `ex` to
+Here the user expression `ex` is a call to `time_ns`, but not the same `time_ns` function that the macro
+uses. It clearly refers to `MyModule.time_ns`. Therefore we must arrange for the code in `ex` to
 be resolved in the macro call environment. This is done by "escaping" the expression with [`esc`](@ref):
 
 ```julia

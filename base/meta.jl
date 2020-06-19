@@ -63,7 +63,7 @@ true
 """
 isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
 isexpr(@nospecialize(ex), heads::Union{Set,Vector,Tuple}) = isa(ex, Expr) && in(ex.head, heads)
-isexpr(@nospecialize(ex), heads, n::Int) = isexpr(ex, heads) && length(ex.args) == n
+isexpr(@nospecialize(ex), heads, n::Int) = isexpr(ex, heads) && length((ex::Expr).args) == n
 
 """
     Meta.show_sexpr([io::IO,], ex)
@@ -149,6 +149,15 @@ struct ParseError <: Exception
     msg::AbstractString
 end
 
+function _parse_string(text::AbstractString, filename::AbstractString,
+                       index::Integer, options)
+    if index < 1 || index > ncodeunits(text) + 1
+        throw(BoundsError(text, index))
+    end
+    ex, offset = Core._parse(text, filename, index-1, options)
+    ex, offset+1
+end
+
 """
     parse(str, start; greedy=true, raise=true, depwarn=true)
 
@@ -171,19 +180,11 @@ julia> Meta.parse("x = 3, y = 5", 5)
 """
 function parse(str::AbstractString, pos::Integer; greedy::Bool=true, raise::Bool=true,
                depwarn::Bool=true)
-    # pos is one based byte offset.
-    # returns (expr, end_pos). expr is () in case of parse error.
-    bstr = String(str)
-    # For now, assume all parser warnings are depwarns
-    ex, pos = with_logger(depwarn ? current_logger() : NullLogger()) do
-        ccall(:jl_parse_string, Any,
-              (Ptr{UInt8}, Csize_t, Int32, Int32),
-              bstr, sizeof(bstr), pos-1, greedy ? 1 : 0)
-    end
+    ex, pos = _parse_string(str, "none", pos, greedy ? :statement : :atom)
     if raise && isa(ex,Expr) && ex.head === :error
         throw(ParseError(ex.args[1]))
     end
-    return ex, pos+1 # C is zero-based, Julia is 1-based
+    return ex, pos
 end
 
 """
@@ -220,6 +221,15 @@ function parse(str::AbstractString; raise::Bool=true, depwarn::Bool=true)
         raise && throw(ParseError("extra token after end of expression"))
         return Expr(:error, "extra token after end of expression")
     end
+    return ex
+end
+
+function parseatom(text::AbstractString, pos::Integer; filename="none")
+    return _parse_string(text, filename, pos, :atom)
+end
+
+function parseall(text::AbstractString; filename="none")
+    ex,_ = _parse_string(text, filename, 1, :all)
     return ex
 end
 

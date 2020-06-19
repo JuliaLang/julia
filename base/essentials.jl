@@ -205,7 +205,7 @@ ERROR: ArgumentError: Cannot call tail on an empty tuple.
 tail(x::Tuple) = argtail(x...)
 tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
 
-tuple_type_head(T::Type) = (@_pure_meta; fieldtype(T::Type{<:Tuple}, 1))
+tuple_type_head(T::Type) = (@_pure_meta; fieldtype(T, 1))
 
 function tuple_type_tail(T::Type)
     @_pure_meta
@@ -750,7 +750,7 @@ of a general iterator are normally considered its "values".
 julia> d = Dict("a"=>1, "b"=>2);
 
 julia> values(d)
-Base.ValueIterator for a Dict{String,Int64} with 2 entries. Values:
+ValueIterator for a Dict{String,Int64} with 2 entries. Values:
   2
   1
 
@@ -785,6 +785,31 @@ ismissing(::Any) = false
 ismissing(::Missing) = true
 
 function popfirst! end
+
+"""
+    peek(stream[, T=UInt8])
+
+Read and return a value of type `T` from a stream without advancing the current position
+in the stream.
+
+# Examples
+
+```jldoctest
+julia> b = IOBuffer("julia");
+
+julia> peek(b)
+0x6a
+
+julia> position(b)
+0
+
+julia> peek(b, Char)
+'j': ASCII/Unicode U+006A (category Ll: Letter, lowercase)
+```
+
+!!! compat "Julia 1.5"
+    The method which accepts a type requires Julia 1.5 or later.
+"""
 function peek end
 
 """

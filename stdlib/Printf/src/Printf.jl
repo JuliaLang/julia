@@ -56,7 +56,7 @@ function parse(s::AbstractString)
             '\'' in flags && error("printf format flag ' not yet supported")
             conversion == 'n'    && error("printf feature %n not supported")
             push!(list, conversion == '%' ? "%" : (flags,width,precision,conversion))
-            lastparse = isempty(a) ? lastindex(s)+1 : Base.peek(a)[1]
+            lastparse = isempty(a) ? lastindex(s)+1 : peek(a)[1]
         end
         lastidx = idx
     end
@@ -942,10 +942,12 @@ function decode_0ct(x::BigInt, digits)
     pt = Base.ndigits0z(x, 8) + 1
     length(digits) < pt+1 && resize!(digits, pt+1)
     neg && (x.size = -x.size)
-    p = convert(Ptr{UInt8}, digits) + 1
-    GMP.MPZ.get_str!(p, 8, x)
+    GC.@preserve digits begin
+        p = pointer(digits,2)
+        GMP.MPZ.get_str!(p, 8, x)
+    end
     neg && (x.size = -x.size)
-    return neg, Int32(pt), Int32(pt)
+    return Int32(pt), Int32(pt), neg
 end
 
 ### decoding functions directly used by printf generated code ###
@@ -1059,13 +1061,16 @@ function ini_dec(x::BigInt, n::Int, digits)
     end
     d = Base.ndigits0z(x)
     if d <= n
-        info = decode_dec(x)
-        d == n && return info
-        p = convert(Ptr{Cvoid}, digits) + info[2]
-        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), p, '0', n - info[2])
-        return info
+        len,pt,neg = decode_dec(x, digits)
+        d == n && return (len,pt,neg)
+
+        GC.@preserve digits begin
+            ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), pointer(digits, pt+1), '0', n - pt)
+        end
+        return (len,pt,neg)
     end
-    return (n, d, decode_dec(round(BigInt,x/big(10)^(d-n)))[3])
+    _, _, neg = decode_dec(round(BigInt,x/big(10)^(d-n)), digits)
+    return (n, d, neg)
 end
 
 

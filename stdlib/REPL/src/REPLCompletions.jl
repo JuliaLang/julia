@@ -131,7 +131,9 @@ function complete_symbol(sym, ffunc, context_module=Main)::Vector{Completion}
         # We will exclude the results that the user does not want, as well
         # as excluding Main.Main.Main, etc., because that's most likely not what
         # the user wants
-        p = s->(!Base.isdeprecated(mod, s) && s != nameof(mod) && ffunc(mod, s))
+        p = let mod=mod, modname=nameof(mod)
+            s->(!Base.isdeprecated(mod, s) && s != modname && ffunc(mod, s))
+        end
         # Looking for a binding in a module
         if mod == context_module
             # Also look in modules we got through `using`
@@ -386,8 +388,8 @@ function get_type_call(expr::Expr)
     length(mt) == 1 || return (Any, false)
     m = first(mt)
     # Typeinference
-    params = Core.Compiler.Params(world)
-    return_type = Core.Compiler.typeinf_type(m[3], m[1], m[2], params)
+    interp = Core.Compiler.NativeInterpreter()
+    return_type = Core.Compiler.typeinf_type(interp, m[3], m[1], m[2])
     return_type === nothing && return (Any, false)
     return (return_type, true)
 end
@@ -395,7 +397,7 @@ end
 # Returns the return type. example: get_type(:(Base.strip("", ' ')), Main) returns (String, true)
 function try_get_type(sym::Expr, fn::Module)
     val, found = get_value(sym, fn)
-    found && return Base.typesof(val).parameters[1], found
+    found && return Core.Typeof(val), found
     if sym.head === :call
         # getfield call is special cased as the evaluation of getfield provides good type information,
         # is inexpensive and it is also performed in the complete_symbol function.
@@ -403,7 +405,7 @@ function try_get_type(sym::Expr, fn::Module)
         if isa(a1,GlobalRef) && isconst(a1.mod,a1.name) && isdefined(a1.mod,a1.name) &&
             eval(a1) === Core.getfield
             val, found = get_value_getfield(sym, Main)
-            return found ? Base.typesof(val).parameters[1] : Any, found
+            return found ? Core.Typeof(val) : Any, found
         end
         return get_type_call(sym)
     elseif sym.head === :thunk
@@ -430,7 +432,7 @@ end
 
 function get_type(sym, fn::Module)
     val, found = get_value(sym, fn)
-    return found ? Base.typesof(val).parameters[1] : Any, found
+    return found ? Core.Typeof(val) : Any, found
 end
 
 # Method completion on function call expression that look like :(max(1))
@@ -624,9 +626,9 @@ function completions(string, pos, context_module=Main)::Completions
         ex = Meta.parse(s * ")", raise=false, depwarn=false)
 
         if isa(ex, Expr)
-            if ex.head==:call
+            if ex.head === :call
                 return complete_methods(ex, context_module), first(frange):method_name_end, false
-            elseif ex.head==:. && ex.args[2] isa Expr && ex.args[2].head==:tuple
+            elseif ex.head === :. && ex.args[2] isa Expr && (ex.args[2]::Expr).head === :tuple
                 return complete_methods(ex, context_module), first(frange):(method_name_end - 1), false
             end
         end

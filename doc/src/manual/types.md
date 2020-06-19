@@ -90,10 +90,10 @@ julia> function foo()
        end
 foo (generic function with 1 method)
 
-julia> foo()
+julia> x = foo()
 100
 
-julia> typeof(ans)
+julia> typeof(x)
 Int8
 ```
 
@@ -237,12 +237,12 @@ of function arguments that are containers of abstract types; see [Performance Ti
 ## Primitive Types
 
 !!! warning
-  It is almost always preferable to wrap an existing primitive type in a new
-  composite type than to define your own primitive type.
+    It is almost always preferable to wrap an existing primitive type in a new
+    composite type than to define your own primitive type.
 
-  This functionality exists to allow Julia to bootstrap the standard primitive
-  types that LLVM supports. Once they are defined, there is very little reason
-  to define more.
+    This functionality exists to allow Julia to bootstrap the standard primitive
+    types that LLVM supports. Once they are defined, there is very little reason
+    to define more.
 
 A primitive type is a concrete type whose data consists of plain old bits. Classic examples of primitive
 types are integers and floating-point values. Unlike most languages, Julia lets you declare your
@@ -405,6 +405,18 @@ true
 
 The [`===`](@ref) function confirms that the "two" constructed instances of `NoFields` are actually one
 and the same. Singleton types are described in further detail [below](@ref man-singleton-types).
+More generally, if all the fields of an immutable structure are indistinguishable (`===`) then two
+immutable values containing those fields are also indistinguishable:
+
+```jldoctest
+julia> struct X
+           a::Int
+           b::Float64
+       end
+
+julia> X(1, 2) === X(1, 2)
+true
+```
 
 There is much more to say about how instances of composite types are created, but that discussion
 depends on both [Parametric Types](@ref) and on [Methods](@ref), and is sufficiently important
@@ -655,10 +667,10 @@ Since the type `Point{Float64}` is a concrete type equivalent to `Point` declare
 in place of `T`, it can be applied as a constructor accordingly:
 
 ```jldoctest pointtype
-julia> Point{Float64}(1.0, 2.0)
+julia> p = Point{Float64}(1.0, 2.0)
 Point{Float64}(1.0, 2.0)
 
-julia> typeof(ans)
+julia> typeof(p)
 Point{Float64}
 ```
 
@@ -683,16 +695,16 @@ that reason, you can also apply `Point` itself as a constructor, provided that t
 of the parameter type `T` is unambiguous:
 
 ```jldoctest pointtype
-julia> Point(1.0,2.0)
+julia> p1 = Point(1.0,2.0)
 Point{Float64}(1.0, 2.0)
 
-julia> typeof(ans)
+julia> typeof(p1)
 Point{Float64}
 
-julia> Point(1,2)
+julia> p2 = Point(1,2)
 Point{Int64}(1, 2)
 
-julia> typeof(ans)
+julia> typeof(p2)
 Point{Int64}
 ```
 

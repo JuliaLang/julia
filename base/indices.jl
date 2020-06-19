@@ -373,8 +373,7 @@ struct IdentityUnitRange{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
     indices::T
 end
 IdentityUnitRange(S::IdentityUnitRange) = S
-# IdentityUnitRanges are offset and thus have offset axes, so they are their own axes... but
-# we need to strip the wholedim marker because we don't know how they'll be used
+# IdentityUnitRanges are offset and thus have offset axes, so they are their own axes
 axes(S::IdentityUnitRange) = (S,)
 unsafe_indices(S::IdentityUnitRange) = (S,)
 axes1(S::IdentityUnitRange) = S

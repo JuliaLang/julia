@@ -288,7 +288,7 @@
        (symbol? (cadr e))))
 
 (define (lam:args x) (cadr x))
-(define (lam:vars x) (llist-vars (lam:args x)))
+(define (lam:argnames x) (llist-vars (lam:args x)))
 (define (lam:vinfo x) (caddr x))
 (define (lam:body x) (cadddr x))
 (define (lam:sp x) (cadddr (lam:vinfo x)))
@@ -358,12 +358,15 @@
 (define (globalref? e)
   (and (pair? e) (eq? (car e) 'globalref)))
 
+(define (outerref? e)
+  (and (pair? e) (eq? (car e) 'outerref)))
+
 (define (symbol-like? e)
   (or (symbol? e) (ssavalue? e)))
 
 (define (simple-atom? x)
   (or (number? x) (string? x) (char? x)
-      (and (pair? x) (memq (car x) '(ssavalue null true false)))
+      (and (pair? x) (memq (car x) '(ssavalue null true false thismodule)))
       (eq? (typeof x) 'julia_value)))
 
 ;; identify some expressions that are safe to repeat

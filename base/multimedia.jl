@@ -77,7 +77,7 @@ showable(::MIME{mime}, @nospecialize x) where {mime} = hasmethod(show, Tuple{IO,
 showable(m::AbstractString, @nospecialize x) = showable(MIME(m), x)
 
 """
-    show(io, mime, x)
+    show(io::IO, mime, x)
 
 The [`display`](@ref) functions ultimately call `show` in order to write an object `x` as a
 given `mime` type to a given I/O stream `io` (usually a memory buffer), if possible. In order
@@ -94,18 +94,20 @@ your images to be displayed on any PNG-capable `AbstractDisplay` (such as IJulia
 to `import Base.show` in order to add new methods to the built-in Julia function
 `show`.
 
-The default MIME type is `MIME"text/plain"`. There is a fallback definition for `text/plain`
-output that calls `show` with 2 arguments. Therefore, this case should be handled by
-defining a 2-argument `show(io::IO, x::MyType)` method.
-
 Technically, the `MIME"mime"` macro defines a singleton type for the given `mime` string,
 which allows us to exploit Julia's dispatch mechanisms in determining how to display objects
 of any given type.
 
-The first argument to `show` can be an [`IOContext`](@ref) specifying output format properties.
-See [`IOContext`](@ref) for details.
+The default MIME type is `MIME"text/plain"`. There is a fallback definition for `text/plain`
+output that calls `show` with 2 arguments, so it is not always necessary to add a method
+for that case. If a type benefits from custom human-readable output though,
+`show(::IO, ::MIME"text/plain", ::T)` should be defined. For example, the `Day` type uses
+`1 day` as the output for the `text/plain` MIME type, and `Day(1)` as the output of 2-argument `show`.
+
+Container types generally implement 3-argument `show` by calling `show(io, MIME"text/plain"(), x)`
+for elements `x`, with `:compact => true` set in an [`IOContext`](@ref) passed as the first argument.
 """
-show(stream, mime, x)
+show(stream::IO, mime, x)
 show(io::IO, m::AbstractString, x) = show(io, MIME(m), x)
 
 """
@@ -317,7 +319,7 @@ variants, one can also supply the "raw" data in the requested MIME type by passi
 application/postscript) or `x::Vector{UInt8}` (for binary MIME types).
 
 To customize how instances of a type are displayed, overload [`show`](@ref) rather than `display`,
-as explained in the manual section on [custom pretty-printing](@id man-custom-pretty-printing).
+as explained in the manual section on [custom pretty-printing](@ref man-custom-pretty-printing).
 """
 function display(@nospecialize x)
     for i = length(displays):-1:1
@@ -325,7 +327,7 @@ function display(@nospecialize x)
             try
                 return display(displays[i], x)
             catch e
-                isa(e, MethodError) && e.f in (display, show) ||
+                isa(e, MethodError) && (e.f === display || e.f === show) ||
                     rethrow()
             end
         end

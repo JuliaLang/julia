@@ -47,7 +47,7 @@ end
 const undef_ref_alignment = (3,3)
 
 """
-`alignment(X, rows, cols, cols_if_complete, cols_otherwise, sep)` returns the
+`alignment(io, X, rows, cols, cols_if_complete, cols_otherwise, sep)` returns the
 alignment for specified parts of array `X`, returning the (left,right) info.
 It will look in X's `rows`, `cols` (both lists of indices)
 and figure out what's needed to be fully aligned, for example looking all
@@ -166,7 +166,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                       vdots::AbstractString = "\u22ee",
                       ddots::AbstractString = "  \u22f1  ",
                       hmod::Integer = 5, vmod::Integer = 5)
-    if !get(io, :limit, false)
+    if !(get(io, :limit, false)::Bool)
         screenheight = screenwidth = typemax(Int)
     else
         sz = displaysize(io)
@@ -516,9 +516,9 @@ function typeinfo_prefix(io::IO, X)
 
     if X isa AbstractDict
         if eltype_X == eltype_ctx
-            string(typeof(X).name), false
+            sprint(show_type_name, typeof(X).name), false
         elseif !isempty(X) && typeinfo_implicit(keytype(X)) && typeinfo_implicit(valtype(X))
-            string(typeof(X).name), true
+            sprint(show_type_name, typeof(X).name), true
         else
             string(typeof(X)), false
         end
@@ -529,7 +529,7 @@ function typeinfo_prefix(io::IO, X)
         elseif !isempty(X) && typeinfo_implicit(eltype_X)
             "", true
         elseif print_without_params(eltype_X)
-            string(unwrap_unionall(eltype_X).name), false # Print "Array" rather than "Array{T,N}"
+            sprint(show_type_name, unwrap_unionall(eltype_X).name), false # Print "Array" rather than "Array{T,N}"
         else
             string(eltype_X), false
         end

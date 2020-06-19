@@ -39,16 +39,16 @@ static void *const _tags[] = {
          &jl_expr_type, &jl_globalref_type, &jl_string_type,
          &jl_module_type, &jl_tvar_type, &jl_method_instance_type, &jl_method_type, &jl_code_instance_type,
          &jl_linenumbernode_type, &jl_lineinfonode_type,
-         &jl_gotonode_type, &jl_quotenode_type,
+         &jl_gotonode_type, &jl_quotenode_type, &jl_gotoifnot_type, &jl_argument_type, &jl_returnnode_type,
          &jl_pinode_type, &jl_phinode_type, &jl_phicnode_type, &jl_upsilonnode_type,
-         &jl_type_type, &jl_bottom_type, &jl_ref_type, &jl_pointer_type, &jl_addrspace_pointer_type,
+         &jl_type_type, &jl_bottom_type, &jl_ref_type, &jl_pointer_type, &jl_llvmpointer_type,
          &jl_vararg_type, &jl_abstractarray_type,
          &jl_densearray_type, &jl_nothing_type, &jl_function_type, &jl_typeofbottom_type,
          &jl_unionall_type, &jl_typename_type, &jl_builtin_type, &jl_code_info_type,
          &jl_task_type, &jl_uniontype_type, &jl_typetype_type, &jl_abstractstring_type,
          &jl_array_any_type, &jl_intrinsic_type, &jl_abstractslot_type,
          &jl_methtable_type, &jl_typemap_level_type, &jl_typemap_entry_type,
-         &jl_voidpointer_type, &jl_newvarnode_type,
+         &jl_voidpointer_type, &jl_uint8pointer_type, &jl_newvarnode_type,
          &jl_anytuple_type_type, &jl_anytuple_type, &jl_namedtuple_type, &jl_emptytuple_type,
          &jl_array_symbol_type, &jl_array_uint8_type, &jl_array_int32_type,
          &jl_int32_type, &jl_int64_type, &jl_bool_type, &jl_uint8_type,
@@ -57,7 +57,7 @@ static void *const _tags[] = {
          &jl_float16_type, &jl_float32_type, &jl_float64_type, &jl_floatingpoint_type,
          &jl_number_type, &jl_signed_type,
          // special typenames
-         &jl_tuple_typename, &jl_pointer_typename, &jl_addrspace_pointer_typename, &jl_array_typename, &jl_type_typename,
+         &jl_tuple_typename, &jl_pointer_typename, &jl_llvmpointer_typename, &jl_array_typename, &jl_type_typename,
          &jl_vararg_typename, &jl_namedtuple_typename,
          &jl_vecelement_typename,
          // special exceptions
@@ -83,7 +83,7 @@ static void *const _tags[] = {
          &jl_builtin_getfield, &jl_builtin_setfield, &jl_builtin_fieldtype, &jl_builtin_arrayref,
          &jl_builtin_const_arrayref, &jl_builtin_arrayset, &jl_builtin_arraysize,
          &jl_builtin_apply_type, &jl_builtin_applicable, &jl_builtin_invoke,
-         &jl_builtin__expr, &jl_builtin_ifelse,
+         &jl_builtin__expr, &jl_builtin_ifelse, &jl_builtin__typebody,
          NULL };
 static jl_value_t **const*const tags = (jl_value_t**const*const)_tags;
 
@@ -105,6 +105,9 @@ static arraylist_t builtin_typenames;
 // during deserialization later
 static arraylist_t reinit_list;
 
+// @ccallable entry points to install
+static arraylist_t ccallable_list;
+
 // hash of definitions for predefined function pointers
 static htable_t fptr_to_id;
 void *native_functions;
@@ -119,7 +122,8 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_getfield, &jl_f_setfield, &jl_f_fieldtype, &jl_f_nfields,
     &jl_f_arrayref, &jl_f_const_arrayref, &jl_f_arrayset, &jl_f_arraysize, &jl_f_apply_type,
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
-    &jl_f_ifelse,
+    &jl_f_ifelse, &jl_f__structtype, &jl_f__abstracttype, &jl_f__primitivetype,
+    &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef,
     NULL };
 
 typedef struct {
@@ -783,6 +787,10 @@ static void jl_write_values(jl_serializer_state *s)
 
             if (jl_is_method(v)) {
                 write_padding(s->s, sizeof(jl_method_t) - tot);
+                if (((jl_method_t*)v)->ccallable) {
+                    arraylist_push(&ccallable_list, (void*)item);
+                    arraylist_push(&ccallable_list, (void*)3);
+                }
             }
             else if (jl_is_code_instance(v)) {
                 jl_code_instance_t *m = (jl_code_instance_t*)v;
@@ -1181,7 +1189,6 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
             else {
                 codeinst->invoke = (jl_callptr_t)fptr;
             }
-            jl_fptr_to_llvm(fptr, codeinst, specfunc);
         }
     }
     jl_register_fptrs(sysimage_base, &fvars, linfos, sysimg_fvars_max);
@@ -1208,18 +1215,18 @@ static void jl_update_all_gvars(jl_serializer_state *s)
 }
 
 
-static void jl_finalize_serializer(jl_serializer_state *s)
+static void jl_finalize_serializer(jl_serializer_state *s, arraylist_t *list)
 {
     size_t i, l;
 
     // record list of reinitialization functions
-    l = reinit_list.len;
+    l = list->len;
     for (i = 0; i < l; i += 2) {
-        size_t item = (size_t)reinit_list.items[i];
+        size_t item = (size_t)list->items[i];
         size_t reloc_offset = (size_t)layout_table.items[item];
         assert(reloc_offset != 0);
         write_uint32(s->s, (uint32_t)reloc_offset);
-        write_uint32(s->s, (uint32_t)((uintptr_t)reinit_list.items[i + 1]));
+        write_uint32(s->s, (uint32_t)((uintptr_t)list->items[i + 1]));
     }
     write_uint32(s->s, 0);
 }
@@ -1256,6 +1263,11 @@ static void jl_reinit_item(jl_value_t *v, int how)
                 memcpy(newitems, mod->usings.items, mod->usings.len * sizeof(void*));
                 mod->usings.items = newitems;
             }
+            break;
+        }
+        case 3: { // install ccallable entry point in JIT
+            jl_svec_t *sv = ((jl_method_t*)v)->ccallable;
+            jl_compile_extern_c(NULL, NULL, jl_sysimg_handle, jl_svecref(sv, 0), jl_svecref(sv, 1));
             break;
         }
         default:
@@ -1319,6 +1331,7 @@ static void jl_save_system_image_to_stream(ios_t *f)
     jl_init_serializer2(1);
     htable_reset(&backref_table, 250000);
     arraylist_new(&reinit_list, 0);
+    arraylist_new(&ccallable_list, 0);
     backref_table_numel = 0;
     ios_t sysimg, const_data, symbols, relocs, gvar_record, fptr_record;
     ios_mem(&sysimg,     1000000);
@@ -1424,11 +1437,13 @@ static void jl_save_system_image_to_stream(ios_t *f)
         write_uint32(f, jl_get_gs_ctr());
         write_uint32(f, jl_world_counter);
         write_uint32(f, jl_typeinf_world);
-        jl_finalize_serializer(&s);
+        jl_finalize_serializer(&s, &reinit_list);
+        jl_finalize_serializer(&s, &ccallable_list);
     }
 
     arraylist_free(&layout_table);
     arraylist_free(&reinit_list);
+    arraylist_free(&ccallable_list);
     arraylist_free(&s.relocs_list);
     arraylist_free(&s.gctags_list);
     jl_cleanup_serializer2();
@@ -1576,6 +1591,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     s.s = NULL;
 
     s.s = f;
+    // reinit items except ccallables
     jl_finalize_deserializer(&s);
     s.s = NULL;
 
@@ -1600,6 +1616,10 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     s.s = &sysimg;
     jl_init_codegen();
     jl_update_all_fptrs(&s); // fptr relocs and registration
+    // reinit ccallables, which require codegen to be initialized
+    s.s = f;
+    jl_finalize_deserializer(&s);
+
     ios_close(&fptr_record);
     ios_close(&sysimg);
     s.s = NULL;

@@ -154,7 +154,7 @@ bytesavailable(io::SecretBuffer) = io.size - io.ptr + 1
 position(io::SecretBuffer) = io.ptr-1
 eof(io::SecretBuffer) = io.ptr > io.size
 isempty(io::SecretBuffer) = io.size == 0
-function peek(io::SecretBuffer)
+function peek(io::SecretBuffer, ::Type{UInt8})
     eof(io) && throw(EOFError())
     return io.data[io.ptr]
 end

@@ -276,7 +276,7 @@ let m = which(f_broken_code, ())
    let src = Base.uncompressed_ast(m)
        src.code = Any[
            Expr(:meta, :noinline)
-           Expr(:return, Expr(:invalid))
+           Core.ReturnNode(Expr(:invalid))
        ]
        m.source = src
    end
@@ -317,6 +317,36 @@ B33163(x) = x
 @test (@code_typed A33163(1, y=2))[1].inferred
 @test !(@code_typed optimize=false A33163(1, y=2))[1].inferred
 @test !(@code_typed optimize=false B33163(1))[1].inferred
+
+@test_throws MethodError (@code_lowered wrongkeyword=true 3 + 4)
+
+# Issue #14637
+@test (@which Base.Base.Base.nothing) == Core
+@test_throws ErrorException (@functionloc Base.nothing)
+@test (@code_typed (3//4).num)[2] == Int
+
+struct A14637
+    x
+end
+a14637 = A14637(0)
+@test (@which a14637.x).name == :getproperty
+@test (@functionloc a14637.x)[2] isa Integer
+
+# Issue #28615
+@test_throws ErrorException (@which [1, 2] .+ [3, 4])
+@test (@code_typed optimize=true max.([1,7], UInt.([4])))[2] == Vector{UInt}
+@test (@code_typed Ref.([1,2])[1].x)[2] == Int
+@test (@code_typed max.(Ref(true).x))[2] == Bool
+@test !isempty(@code_typed optimize=false max.(Ref.([5, 6])...))
+
+# Issue #36261
+@test (@code_typed max.(1 .+ 3, 5 - 7))[2] == Int
+f36261(x,y) = 3x + 4y
+A36261 = Float64[1.0, 2.0, 3.0]
+@test (@code_typed f36261.(A36261, pi))[1].inferred
+@test (@code_typed f36261.(A36261, 1 .+ pi))[1].inferred
+@test (@code_typed f36261.(A36261, 1 + pi))[1].inferred
+
 
 module ReflectionTest
 using Test, Random, InteractiveUtils

@@ -310,6 +310,11 @@ module IteratorsMD
     convert(::Type{CartesianIndices{N,R}}, inds::CartesianIndices{N}) where {N,R} =
         CartesianIndices(convert(R, inds.indices))
 
+    # equality
+    Base.:(==)(a::CartesianIndices{N}, b::CartesianIndices{N}) where N =
+        all(map(==, a.indices, b.indices))
+    Base.:(==)(a::CartesianIndices, b::CartesianIndices) = false
+
     # AbstractArray implementation
     Base.axes(iter::CartesianIndices{N,R}) where {N,R} = map(Base.axes1, iter.indices)
     Base.IndexStyle(::Type{CartesianIndices{N,R}}) where {N,R} = IndexCartesian()
@@ -632,7 +637,7 @@ struct LogicalIndex{T, A<:AbstractArray{Bool}} <: AbstractVector{T}
 end
 LogicalIndex(mask::AbstractVector{Bool}) = LogicalIndex{Int, typeof(mask)}(mask)
 LogicalIndex(mask::AbstractArray{Bool, N}) where {N} = LogicalIndex{CartesianIndex{N}, typeof(mask)}(mask)
-(::Type{LogicalIndex{Int}})(mask::AbstractArray) = LogicalIndex{Int, typeof(mask)}(mask)
+LogicalIndex{Int}(mask::AbstractArray) = LogicalIndex{Int, typeof(mask)}(mask)
 size(L::LogicalIndex) = (L.sum,)
 length(L::LogicalIndex) = L.sum
 collect(L::LogicalIndex) = [i for i in L]
@@ -753,8 +758,7 @@ function _unsafe_getindex(::IndexStyle, A::AbstractArray, I::Vararg{Union{Real, 
     return dest
 end
 
-# Always index with the exactly indices provided.
-@generated function _unsafe_getindex!(dest::AbstractArray, src::AbstractArray, I::Vararg{Union{Real, AbstractArray}, N}) where N
+function _generate_unsafe_getindex!_body(N::Int)
     quote
         @_inline_meta
         D = eachindex(dest)
@@ -771,6 +775,20 @@ end
     end
 end
 
+# Always index with the exactly indices provided.
+@generated function _unsafe_getindex!(dest::AbstractArray, src::AbstractArray, I::Vararg{Union{Real, AbstractArray}, N}) where N
+    _generate_unsafe_getindex!_body(N)
+end
+
+# manually written-out specializations for 1 and 2 arguments to save compile time
+@eval function _unsafe_getindex!(dest::AbstractArray, src::AbstractArray, I::Vararg{Union{Real, AbstractArray},1})
+    $(_generate_unsafe_getindex!_body(1))
+end
+
+@eval function _unsafe_getindex!(dest::AbstractArray, src::AbstractArray, I::Vararg{Union{Real, AbstractArray},2})
+    $(_generate_unsafe_getindex!_body(2))
+end
+
 @noinline throw_checksize_error(A, sz) = throw(DimensionMismatch("output array is the wrong size; expected $sz, got $(size(A))"))
 
 ## setindex! ##
@@ -781,8 +799,7 @@ function _setindex!(l::IndexStyle, A::AbstractArray, x, I::Union{Real, AbstractA
     A
 end
 
-@generated function _unsafe_setindex!(::IndexStyle, A::AbstractArray, x, I::Union{Real,AbstractArray}...)
-    N = length(I)
+function _generate_unsafe_setindex!_body(N::Int)
     quote
         x′ = unalias(A, x)
         @nexprs $N d->(I_d = unalias(A, I[d]))
@@ -799,6 +816,18 @@ end
         end
         A
     end
+end
+
+@generated function _unsafe_setindex!(::IndexStyle, A::AbstractArray, x, I::Vararg{Union{Real,AbstractArray}, N}) where N
+    _generate_unsafe_setindex!_body(N)
+end
+
+@eval function _unsafe_setindex!(::IndexStyle, A::AbstractArray, x, I::Vararg{Union{Real,AbstractArray},1})
+    $(_generate_unsafe_setindex!_body(1))
+end
+
+@eval function _unsafe_setindex!(::IndexStyle, A::AbstractArray, x, I::Vararg{Union{Real,AbstractArray},2})
+    $(_generate_unsafe_setindex!_body(2))
 end
 
 diff(a::AbstractVector) = diff(a, dims=1)
@@ -842,6 +871,10 @@ function diff(a::AbstractArray{T,N}; dims::Integer) where {T,N}
     r1 = ntuple(i -> i == dims ? UnitRange(2, last(r[i])) : UnitRange(r[i]), N)
 
     return view(a, r1...) .- view(a, r0...)
+end
+function diff(r::AbstractRange{T}; dims::Integer=1) where {T}
+    dims == 1 || throw(ArgumentError("dimension $dims out of range (1:1)"))
+    return T[@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
 end
 
 ### from abstractarray.jl
@@ -937,56 +970,6 @@ function fill!(A::AbstractArray{T}, x) where T
     A
 end
 
-"""
-    copyto!(dest::AbstractArray, src) -> dest
-
-
-Copy all elements from collection `src` to array `dest`, whose length must be greater than
-or equal to the length `n` of `src`. The first `n` elements of `dest` are overwritten,
-the other elements are left untouched.
-
-# Examples
-```jldoctest
-julia> x = [1., 0., 3., 0., 5.];
-
-julia> y = zeros(7);
-
-julia> copyto!(y, x);
-
-julia> y
-7-element Array{Float64,1}:
- 1.0
- 0.0
- 3.0
- 0.0
- 5.0
- 0.0
- 0.0
-```
-"""
-copyto!(dest, src)
-
-function copyto!(dest::AbstractArray{T1,N}, src::AbstractArray{T2,N}) where {T1,T2,N}
-    isempty(src) && return dest
-    src′ = unalias(dest, src)
-    # fastpath for equal axes (#34025)
-    if axes(dest) == axes(src)
-        for I in eachindex(IndexStyle(src′,dest), src′)
-            @inbounds dest[I] = src′[I]
-        end
-    # otherwise enforce linear indexing
-    else
-        isrc = eachindex(IndexLinear(), src)
-        idest = eachindex(IndexLinear(), dest)
-        ΔI = first(idest) - first(isrc)
-        checkbounds(dest, last(isrc) + ΔI)
-        for I in isrc
-            @inbounds dest[I + ΔI] = src′[I]
-        end
-    end
-    return dest
-end
-
 function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
                   src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
     isempty(Rdest) && return dest
@@ -1060,7 +1043,7 @@ circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt
 #       _circshift!(dest, src, ("second half of dim1", "second half of dim2")) --> copyto!
 @inline function _circshift!(dest, rdest, src, rsrc,
                              inds::Tuple{AbstractUnitRange,Vararg{Any}},
-                             shiftamt::Tuple{Integer,Vararg{Any}})
+                             shiftamt::Tuple{Integer,Vararg{Any}})::typeof(dest)
     ind1, d = inds[1], shiftamt[1]
     s = mod(d, length(ind1))
     sf, sl = first(ind1)+s, last(ind1)-s
@@ -1120,7 +1103,7 @@ end
 
 # This uses the same strategy described above for _circshift!
 @inline function _circcopy!(dest, rdest, indsdest::Tuple{AbstractUnitRange,Vararg{Any}},
-                            src,  rsrc,  indssrc::Tuple{AbstractUnitRange,Vararg{Any}})
+                            src,  rsrc,  indssrc::Tuple{AbstractUnitRange,Vararg{Any}})::typeof(dest)
     indd1, inds1 = indsdest[1], indssrc[1]
     l = length(indd1)
     s = mod(first(inds1)-first(indd1), l)

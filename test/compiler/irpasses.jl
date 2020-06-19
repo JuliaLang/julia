@@ -2,7 +2,7 @@
 
 using Test
 using Base.Meta
-using Core: PhiNode, SSAValue, GotoNode, PiNode, QuoteNode
+using Core: PhiNode, SSAValue, GotoNode, PiNode, QuoteNode, ReturnNode, GotoIfNot
 
 # Tests for domsort
 
@@ -13,20 +13,20 @@ let m = Meta.@lower 1 + 1
     src.code = Any[
         # block 1
         Expr(:call, :opaque),
-        Expr(:gotoifnot, Core.SSAValue(1), 10),
+        GotoIfNot(Core.SSAValue(1), 10),
         # block 2
         Core.PhiNode(Any[8], Any[Core.SSAValue(7)]), # <- This phi must not get replaced by %7
         Core.PhiNode(Any[2, 8], Any[true, false]),
-        Expr(:gotoifnot, Core.SSAValue(1), 7),
+        GotoIfNot(Core.SSAValue(1), 7),
         # block 3
         Expr(:call, :+, Core.SSAValue(3), 1),
         # block 4
         Core.PhiNode(Any[5, 6], Any[0, Core.SSAValue(6)]),
         Expr(:call, >, Core.SSAValue(7), 10),
-        Expr(:gotoifnot, Core.SSAValue(8), 3),
+        GotoIfNot(Core.SSAValue(8), 3),
         # block 5
         Core.PhiNode(Any[2, 8], Any[0, Core.SSAValue(7)]),
-        Expr(:return, Core.SSAValue(10)),
+        ReturnNode(Core.SSAValue(10)),
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = nstmts
@@ -37,7 +37,8 @@ let m = Meta.@lower 1 + 1
     domtree = Core.Compiler.construct_domtree(ir.cfg)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
-    @test isa(ir.stmts[3], Core.PhiNode) && length(ir.stmts[3].edges) == 1
+    phi = ir.stmts.inst[3]
+    @test isa(phi, Core.PhiNode) && length(phi.edges) == 1
 end
 
 # test that we don't stack-overflow in SNCA with large functions.
@@ -48,11 +49,11 @@ let m = Meta.@lower 1 + 1
     N = 2^15
     for i in 1:2:N
         push!(code, Expr(:call, :opaque))
-        push!(code, Expr(:gotoifnot, Core.SSAValue(i), N+2)) # skip one block
+        push!(code, GotoIfNot(Core.SSAValue(i), N+2)) # skip one block
     end
     # all goto here
     push!(code, Expr(:call, :opaque))
-    push!(code, Expr(:return))
+    push!(code, ReturnNode(nothing))
     src.code = code
 
     nstmts = length(src.code)
@@ -135,7 +136,7 @@ struct FooPartial
     f_partial(x) = new(x, 2).x
 end
 let ci = code_typed(f_partial, Tuple{Float64})[1].first
-    @test length(ci.code) == 1 && isexpr(ci.code[1], :return)
+    @test length(ci.code) == 1 && isa(ci.code[1], ReturnNode)
 end
 
 # A SSAValue after the compaction line
@@ -146,9 +147,9 @@ let m = Meta.@lower 1 + 1
         # block 1
         nothing,
         # block 2
-        PhiNode(Any[1, 7], Any[Core.SlotNumber(2), SSAValue(9)]),
+        PhiNode(Any[1, 7], Any[Core.Argument(2), SSAValue(9)]),
         Expr(:call, isa, SSAValue(2), UnionAll),
-        Expr(:gotoifnot, Core.SSAValue(3), 11),
+        GotoIfNot(Core.SSAValue(3), 11),
         # block 3
         nothing,
         nothing,
@@ -159,7 +160,7 @@ let m = Meta.@lower 1 + 1
                      # the phinode here
         GotoNode(2),
         # block 5
-        Expr(:return, Core.SSAValue(2)),
+        ReturnNode(Core.SSAValue(2)),
     ]
     src.ssavaluetypes = Any[
         Nothing,
@@ -213,7 +214,7 @@ let m = Meta.@lower 1 + 1
         Core.Compiler.GotoNode(5),
         Core.Compiler.GotoNode(6),
         Core.Compiler.GotoNode(7),
-        Expr(:return, 2)
+        ReturnNode(2)
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = nstmts
@@ -224,7 +225,7 @@ let m = Meta.@lower 1 + 1
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     ir = Core.Compiler.compact!(ir)
-    @test length(ir.cfg.blocks) == 1 && length(ir.stmts) == 1
+    @test length(ir.cfg.blocks) == 1 && Core.Compiler.length(ir.stmts) == 1
 end
 
 let m = Meta.@lower 1 + 1
@@ -234,14 +235,14 @@ let m = Meta.@lower 1 + 1
     src.code = Any[
         Core.Compiler.GotoIfNot(Core.Compiler.Argument(2), 3),
         Core.Compiler.GotoNode(4),
-        Expr(:return, 1),
+        ReturnNode(1),
         Core.Compiler.GotoNode(5),
         Core.Compiler.GotoIfNot(Core.Compiler.Argument(2), 7),
         # This fall through block of the previous GotoIfNot
         # must be moved up along with it, when we merge it
         # into the goto 4 block.
-        Expr(:return, 2),
-        Expr(:return, 3)
+        ReturnNode(2),
+        ReturnNode(3)
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = nstmts
@@ -252,7 +253,7 @@ let m = Meta.@lower 1 + 1
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     @test length(ir.cfg.blocks) == 5
-    ret_2 = ir.stmts[ir.cfg.blocks[3].stmts[end]]
+    ret_2 = ir.stmts.inst[ir.cfg.blocks[3].stmts[end]]
     @test isa(ret_2, Core.Compiler.ReturnNode) && ret_2.val == 2
 end
 

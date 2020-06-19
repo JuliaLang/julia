@@ -12,6 +12,7 @@ safe_sum(A::Array{T}, region) where {T} = safe_mapslices(sum, A, region)
 safe_prod(A::Array{T}, region) where {T} = safe_mapslices(prod, A, region)
 safe_maximum(A::Array{T}, region) where {T} = safe_mapslices(maximum, A, region)
 safe_minimum(A::Array{T}, region) where {T} = safe_mapslices(minimum, A, region)
+safe_count(A::AbstractArray{T}, region) where {T} = safe_mapslices(count, A, region)
 safe_sumabs(A::Array{T}, region) where {T} = safe_mapslices(sum, abs.(A), region)
 safe_sumabs2(A::Array{T}, region) where {T} = safe_mapslices(sum, abs2.(A), region)
 safe_maxabs(A::Array{T}, region) where {T} = safe_mapslices(maximum, abs.(A), region)
@@ -21,15 +22,21 @@ safe_minabs(A::Array{T}, region) where {T} = safe_mapslices(minimum, abs.(A), re
     1, 2, 3, 4, 5, (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4),
     (1, 2, 3), (1, 3, 4), (2, 3, 4), (1, 2, 3, 4)]
     Areduc = rand(3, 4, 5, 6)
+    Breduc = rand(Bool, 3, 4, 5, 6)
+    @assert axes(Areduc) == axes(Breduc)
+
     r = fill(NaN, map(length, Base.reduced_indices(axes(Areduc), region)))
     @test sum!(r, Areduc) ≈ safe_sum(Areduc, region)
     @test prod!(r, Areduc) ≈ safe_prod(Areduc, region)
     @test maximum!(r, Areduc) ≈ safe_maximum(Areduc, region)
     @test minimum!(r, Areduc) ≈ safe_minimum(Areduc, region)
+    @test count!(r, Breduc) ≈ safe_count(Breduc, region)
+
     @test sum!(abs, r, Areduc) ≈ safe_sumabs(Areduc, region)
     @test sum!(abs2, r, Areduc) ≈ safe_sumabs2(Areduc, region)
     @test maximum!(abs, r, Areduc) ≈ safe_maxabs(Areduc, region)
     @test minimum!(abs, r, Areduc) ≈ safe_minabs(Areduc, region)
+    @test count!(!, r, Breduc) ≈ safe_count(.!Breduc, region)
 
     # With init=false
     r2 = similar(r)
@@ -41,6 +48,9 @@ safe_minabs(A::Array{T}, region) where {T} = safe_mapslices(minimum, abs.(A), re
     @test maximum!(r, Areduc, init=false) ≈ fill!(r2, 1.8)
     fill!(r, -0.2)
     @test minimum!(r, Areduc, init=false) ≈ fill!(r2, -0.2)
+    fill!(r, 1)
+    @test count!(r, Breduc, init=false) ≈ safe_count(Breduc, region) .+ 1
+
     fill!(r, 8.1)
     @test sum!(abs, r, Areduc, init=false) ≈ safe_sumabs(Areduc, region) .+ 8.1
     fill!(r, 8.1)
@@ -49,16 +59,26 @@ safe_minabs(A::Array{T}, region) where {T} = safe_mapslices(minimum, abs.(A), re
     @test maximum!(abs, r, Areduc, init=false) ≈ fill!(r2, 1.5)
     fill!(r, -1.5)
     @test minimum!(abs, r, Areduc, init=false) ≈ fill!(r2, -1.5)
+    fill!(r, 1)
+    @test count!(!, r, Breduc, init=false) ≈ safe_count(.!Breduc, region) .+ 1
 
     @test @inferred(sum(Areduc, dims=region)) ≈ safe_sum(Areduc, region)
     @test @inferred(prod(Areduc, dims=region)) ≈ safe_prod(Areduc, region)
     @test @inferred(maximum(Areduc, dims=region)) ≈ safe_maximum(Areduc, region)
     @test @inferred(minimum(Areduc, dims=region)) ≈ safe_minimum(Areduc, region)
+    @test @inferred(count(Breduc, dims=region)) ≈ safe_count(Breduc, region)
+
     @test @inferred(sum(abs, Areduc, dims=region)) ≈ safe_sumabs(Areduc, region)
     @test @inferred(sum(abs2, Areduc, dims=region)) ≈ safe_sumabs2(Areduc, region)
     @test @inferred(maximum(abs, Areduc, dims=region)) ≈ safe_maxabs(Areduc, region)
     @test @inferred(minimum(abs, Areduc, dims=region)) ≈ safe_minabs(Areduc, region)
+    @test @inferred(count(!, Breduc, dims=region)) ≈ safe_count(.!Breduc, region)
 end
+
+# Combining dims and init
+A = Array{Int}(undef, 0, 3)
+@test_throws ArgumentError maximum(A; dims=1)
+@test maximum(A; dims=1, init=-1) == reshape([-1,-1,-1], 1, 3)
 
 # Test reduction along first dimension; this is special-cased for
 # size(A, 1) >= 16
@@ -415,4 +435,10 @@ end
     Base.:(==)(a::AffExpr, b::AffExpr) = a.vars == b.vars
 
     @test sum([Variable(:x), Variable(:y)], dims=1) == [AffExpr([Variable(:x), Variable(:y)])]
+end
+
+# count
+@testset "count: throw on non-bool types" begin
+    @test_throws TypeError count([1], dims=1)
+    @test_throws TypeError count!([1], [1])
 end
