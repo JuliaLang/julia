@@ -558,7 +558,7 @@ end
     @test default isa Integer
     @test default > 0
     new = rand(1:10)
-    BLAS.set_num_threads(net)
+    BLAS.set_num_threads(new)
     @test BLAS.get_num_threads() == new
     BLAS.set_num_threads(default)
     @test BLAS.get_num_threads() == default

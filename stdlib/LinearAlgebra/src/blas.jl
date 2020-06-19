@@ -138,7 +138,7 @@ function get_num_threads()
     if blas === :openblas || blas === :openblas64
         return ccall((@blasfunc(openblas_get_num_threads), libblas), Cint, ())
     elseif blas == :mkl
-        return ccall((:MKL_Get_Max_Num_Threads, libblas), Cint, ())
+        return ccall((:mkl_get_max_threads, libblas), Cint, ())
     elseif Sys.isapple()
         return Base.parse(Cint, ENV["VECLIB_MAXIMUM_THREADS"])
     else
