@@ -557,9 +557,8 @@ end
     default = BLAS.get_num_threads()
     @test default isa Integer
     @test default > 0
-    new=rand(1:Sys.CPU_THREADS)
-    BLAS.set_num_threads(new)
-    @test BLAS.get_num_threads() == new
+    BLAS.set_num_threads(1)
+    @test BLAS.get_num_threads() == 1
     BLAS.set_num_threads(default)
     @test BLAS.get_num_threads() == default
 end
