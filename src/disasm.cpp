@@ -63,9 +63,11 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include "llvm/IR/AssemblyAnnotationWriter.h"
+#include "llvm/IR/LegacyPassManager.h"
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "jitlayers.h"
 #include "processor.h"
 
 using namespace llvm;
@@ -431,6 +433,13 @@ void jl_strip_llvm_debug(Module *m)
     jl_strip_llvm_debug(m, false, NULL);
 }
 
+void jl_strip_llvm_addrspaces(Module *m)
+{
+    legacy::PassManager PM;
+    PM.add(createRemoveJuliaAddrspacesPass());
+    PM.run(*m);
+}
+
 // print an llvm IR acquired from jl_get_llvmf
 // warning: this takes ownership of, and destroys, f->getParent()
 extern "C" JL_DLLEXPORT
@@ -452,8 +461,13 @@ jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_modul
     }
     else {
         Module *m = llvmf->getParent();
-        if (strip_ir_metadata)
+        if (strip_ir_metadata) {
+            std::string llvmfn = llvmf->getName();
             jl_strip_llvm_debug(m, true, &AAW);
+            jl_strip_llvm_addrspaces(m);
+            // rewriting the function type creates a new function, so look it up again
+            llvmf = m->getFunction(llvmfn);
+        }
         if (dump_module) {
             m->print(stream, &AAW);
         }

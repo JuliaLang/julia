@@ -17,6 +17,8 @@
 #include <llvm/Target/TargetMachine.h>
 #include "julia_assert.h"
 
+using namespace llvm;
+
 extern "C" {
     extern int globalUnique;
 }
