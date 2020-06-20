@@ -6,6 +6,7 @@ struct Config <: AbstractConfig
     cursor::Char
     up_arrow::Char
     down_arrow::Char
+    updown_arrow::Char
     scroll_wrap::Bool
     ctrl_c_interrupt::Bool
 end
@@ -46,6 +47,7 @@ function Config(;
                 cursor::Char = '\0',
                 up_arrow::Char = '\0',
                 down_arrow::Char = '\0',
+                updown_arrow::Char = '\0',
                 scroll_wrap::Bool = false,
                 ctrl_c_interrupt::Bool = true)
     charset === :ascii || charset === :unicode ||
@@ -59,7 +61,10 @@ function Config(;
     if down_arrow == '\0'
         down_arrow = charset === :ascii ? 'v' : '↓'
     end
-    return Config(cursor, up_arrow, down_arrow, scroll_wrap, ctrl_c_interrupt)
+    if updown_arrow == '\0'
+        updown_arrow = charset === :ascii ? 'I' : '↕'
+    end
+    return Config(cursor, up_arrow, down_arrow, updown_arrow, scroll_wrap, ctrl_c_interrupt)
 end
 
 """
@@ -133,6 +138,7 @@ function config(;charset::Symbol = :na,
                 cursor::Char = '\0',
                 up_arrow::Char = '\0',
                 down_arrow::Char = '\0',
+                updown_arrow::Char = '\0',
                 checked::String = "",
                 unchecked::String = "",
                 supress_output::Union{Nothing, Bool}=nothing,   # typo was documented, unfortunately
@@ -142,12 +148,14 @@ function config(;charset::Symbol = :na,
         cursor     = '>'
         up_arrow   = '^'
         down_arrow = 'v'
+        updown_arrow = 'I'
         checked    = "[X]"
         unchecked  = "[ ]"
     elseif charset === :unicode
         cursor     = '→'
         up_arrow   = '↑'
         down_arrow = '↓'
+        updown_arrow = '↕'
         checked    = "✓"
         unchecked  = "⬚"
     elseif charset === :na
@@ -162,6 +170,7 @@ function config(;charset::Symbol = :na,
     cursor     != '\0' && (CONFIG[:cursor]     = cursor)
     up_arrow   != '\0' && (CONFIG[:up_arrow]   = up_arrow)
     down_arrow != '\0' && (CONFIG[:down_arrow] = down_arrow)
+    updown_arrow != '\0' && (CONFIG[:updown_arrow] = updown_arrow)
     checked    != ""   && (CONFIG[:checked]    = checked)
     unchecked  != ""   && (CONFIG[:unchecked]  = unchecked)
     supress_output isa Bool   && (CONFIG[:supress_output] = supress_output)

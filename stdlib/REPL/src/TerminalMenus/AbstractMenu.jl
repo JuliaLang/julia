@@ -315,9 +315,14 @@ function printmenu(out, m::AbstractMenu, cursoridx::Int; oldstate=nothing, init:
         # clearline
         print(buf, "\x1b[2K")
 
-        if i == firstline && m.pageoffset > 0
+        upscrollable = i == firstline && m.pageoffset > 0
+        downscrollable = i == lastline && i != lastoption
+
+        if upscrollable && downscrollable
+            print_arrow(buf, m, updown_arrow(m))
+        elseif upscrollable
             print_arrow(buf, m, up_arrow(m))
-        elseif i == lastline && i != lastoption
+        elseif downscrollable
             print_arrow(buf, m, down_arrow(m))
         else
             print_arrow(buf, m, ' ')
@@ -362,6 +367,11 @@ down_arrow(m::ConfiguredMenu) = down_arrow(m.config)
 down_arrow(c::AbstractConfig) = down_arrow(c.config)
 down_arrow(c::Config) = c.down_arrow
 down_arrow(::AbstractMenu) = CONFIG[:down_arrow]
+
+updown_arrow(m::ConfiguredMenu) = updown_arrow(m.config)
+updown_arrow(m::AbstractConfig) = updown_arrow(c.config)
+updown_arrow(c::Config) = c.updown_arrow
+updown_arrow(::AbstractMenu) = CONFIG[:updown_arrow]
 
 print_arrow(buf, ::ConfiguredMenu, c::Char) = print(buf, c)
 print_arrow(buf, ::AbstractMenu, c::Char) = print(buf, c)
