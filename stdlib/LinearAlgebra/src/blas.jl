@@ -122,7 +122,7 @@ function set_num_threads(n::Integer)
         # OSX BLAS looks at an environment variable
         ENV["VECLIB_MAXIMUM_THREADS"] = n
     else
-        @warn "Failed to set number of BLAS threads."
+        @warn "Failed to set number of BLAS threads." maxlog=1
     end
 
     return nothing
