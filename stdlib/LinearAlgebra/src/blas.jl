@@ -158,8 +158,7 @@ function get_num_threads()::Union{Int, Nothing}
         return Int(ccall((:mkl_get_max_threads, libblas), Cint, ()))
     elseif Sys.isapple()
         key = "VECLIB_MAXIMUM_THREADS"
-        s = get(ENV, key, "")
-        nt = Base.tryparse(Int, s)
+        nt = _tryparse_env_int(key)
         if nt === nothing
             @warn "Failed to read environment variable $key" maxlog=1
         else
