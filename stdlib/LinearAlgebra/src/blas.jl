@@ -132,7 +132,7 @@ function set_num_threads(n::Integer)::Nothing
     return nothing
 end
 
-_tryparse_env_cint(key) = tryparse(Cint, get(ENV, key, ""))
+_tryparse_env_int(key) = tryparse(Int, get(ENV, key, ""))
 
 function set_num_threads(::Nothing)
     n = something(
