@@ -167,9 +167,8 @@ function get_num_threads()
             return nt
         end
     end
-    ret = nothing
-    @warn "Could not get number of BLAS threads. Returning `$ret` instead." maxlog=1
-    return ret
+    @warn "Could not get number of BLAS threads. Returning `nothing` instead." maxlog=1
+    return nothing
 end
 
 const _testmat = [1.0 0.0; 0.0 -1.0]
