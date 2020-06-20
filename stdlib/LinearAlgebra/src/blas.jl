@@ -107,9 +107,14 @@ end
 openblas_get_config() = strip(unsafe_string(ccall((@blasfunc(openblas_get_config), libblas), Ptr{UInt8}, () )))
 
 """
-    set_num_threads(n)
+    set_num_threads(n::Integer)
+    set_num_threads(::Nothing)
 
-Set the number of threads the BLAS library should use.
+Set the number of threads the BLAS library should use equal to `n::Integer`.
+If `nothing` is passed to this function, julia tries to figure out the optimial number of threads.
+The exact heuristic is an implementation detail.
+
+On exotic variants of `BLAS` this function can fail, which is indicated by returning `nothing`.
 """
 function set_num_threads(n::Integer)
     blas = vendor()
@@ -128,10 +133,17 @@ function set_num_threads(n::Integer)
     return nothing
 end
 
+function set_num_threads(::Nothing)
+    n = max(1, Sys.CPU_THREADS ÷ 2)
+    set_num_threads(n)
+end
+
 """
     get_num_threads()
 
 Get the number of threads the BLAS library is using.
+
+On exotic variants of `BLAS` this function can fail, which is indicated by returning `nothing`.
 """
 function get_num_threads()
     blas = LinearAlgebra.BLAS.vendor()
@@ -149,8 +161,9 @@ function get_num_threads()
             return nt
         end
     end
-    @warn "Could not get number of BLAS threads. Returning Sys.CPU_THREADS instead." maxlog=1
-    return Sys.CPU_THREADS
+    ret = nothing
+    @warn "Could not get number of BLAS threads. Returning $ret instead." maxlog=1
+    return ret
 end
 
 const _testmat = [1.0 0.0; 0.0 -1.0]
