@@ -151,7 +151,7 @@ Get the number of threads the BLAS library is using.
 On exotic variants of `BLAS` this function can fail, which is indicated by returning `nothing`.
 """
 function get_num_threads()::Union{Int, Nothing}
-    blas = LinearAlgebra.BLAS.vendor()
+    blas = vendor()
     if blas === :openblas || blas === :openblas64
         return Int(ccall((@blasfunc(openblas_get_num_threads), libblas), Cint, ()))
     elseif blas == :mkl
