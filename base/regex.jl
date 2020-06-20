@@ -582,8 +582,8 @@ end
 """
     eachmatch(r::Regex, s::AbstractString; overlap::Bool=false)
 
-Search for all matches of a the regular expression `r` in `s` and return a iterator over the
-matches. If overlap is `true`, the matching sequences are allowed to overlap indices in the
+Search for all matches of the regular expression `r` in `s` and return an iterator over the
+matches. If `overlap` is `true`, the matching sequences are allowed to overlap indices in the
 original string, otherwise they must be from distinct character ranges.
 
 # Examples
