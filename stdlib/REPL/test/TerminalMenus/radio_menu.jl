@@ -38,7 +38,7 @@ end
 # Test using stdin
 radio_menu = RadioMenu(string.(1:10); charset=:ascii)
 @test simulate_input(3, radio_menu, :down, :down, :enter)
-radio_menu = RadioMenu(["single option"])
+radio_menu = RadioMenu(["single option"], charset=:ascii)
 @test simulate_input(1, radio_menu, :up, :up, :down, :up, :enter)
-radio_menu = RadioMenu(string.(1:3), pagesize=1)
+radio_menu = RadioMenu(string.(1:3), pagesize=1, charset=:ascii)
 @test simulate_input(3, radio_menu, :down, :down, :down, :down, :enter)

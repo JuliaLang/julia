@@ -53,5 +53,5 @@ end
 # Test SDTIN
 multi_menu = MultiSelectMenu(string.(1:10), charset=:ascii)
 @test simulate_input(Set([1,2]), multi_menu, :enter, :down, :enter, 'd')
-multi_menu = MultiSelectMenu(["single option"])
+multi_menu = MultiSelectMenu(["single option"], charset=:ascii)
 @test simulate_input(Set([1]), multi_menu, :up, :up, :down, :enter, 'd')
