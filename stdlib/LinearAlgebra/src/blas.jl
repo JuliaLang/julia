@@ -162,7 +162,7 @@ function get_num_threads()
         end
     end
     ret = nothing
-    @warn "Could not get number of BLAS threads. Returning $ret instead." maxlog=1
+    @warn "Could not get number of BLAS threads. Returning `$ret` instead." maxlog=1
     return ret
 end
 
