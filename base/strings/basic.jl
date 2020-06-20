@@ -113,7 +113,7 @@ character in `s` or not. If `isvalid(s, i)` is true then `s[i]` will return the
 character whose encoding starts at that index, if it's false, then `s[i]` will
 raise an invalid index error or a bounds error depending on if `i` is in bounds.
 In order for `isvalid(s, i)` to be an O(1) function, the encoding of `s` must be
-[self-synchronizing](https://en.wikipedia.org/wiki/Self-synchronizing_code) this
+[self-synchronizing](https://en.wikipedia.org/wiki/Self-synchronizing_code). This
 is a basic assumption of Julia's generic string support.
 
 See also: [`getindex`](@ref), [`iterate`](@ref), [`thisind`](@ref),
