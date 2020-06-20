@@ -319,13 +319,13 @@ function printmenu(out, m::AbstractMenu, cursoridx::Int; oldstate=nothing, init:
         downscrollable = i == lastline && i != lastoption
 
         if upscrollable && downscrollable
-            print_arrow(buf, m, updown_arrow(m))
+            print(buf, updown_arrow(m))
         elseif upscrollable
-            print_arrow(buf, m, up_arrow(m))
+            print(buf, up_arrow(m))
         elseif downscrollable
-            print_arrow(buf, m, down_arrow(m))
+            print(buf, down_arrow(m))
         else
-            print_arrow(buf, m, ' ')
+            print(buf, ' ')
         end
 
         printcursor(buf, m, i == cursoridx)
@@ -372,9 +372,6 @@ updown_arrow(m::ConfiguredMenu) = updown_arrow(m.config)
 updown_arrow(c::AbstractConfig) = updown_arrow(c.config)
 updown_arrow(c::Config) = c.updown_arrow
 updown_arrow(::AbstractMenu) = CONFIG[:updown_arrow]
-
-print_arrow(buf, ::ConfiguredMenu, c::Char) = print(buf, c)
-print_arrow(buf, ::AbstractMenu, c::Char) = print(buf, c)
 
 printcursor(buf, m::ConfiguredMenu, iscursor::Bool) = print(buf, iscursor ? cursor(m.config) : ' ', ' ')
 cursor(c::AbstractConfig) = cursor(c.config)
