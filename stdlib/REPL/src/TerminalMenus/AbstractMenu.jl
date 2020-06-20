@@ -320,9 +320,10 @@ function printmenu(out, m::AbstractMenu, cursoridx::Int; oldstate=nothing, init:
         elseif i == lastline && i != lastoption
             print_arrow(buf, m, down_arrow(m))
         else
-            printcursor(buf, m, i == cursoridx)
+            print_arrow(buf, m, ' ')
         end
 
+        printcursor(buf, m, i == cursoridx)
         writeline(buf, m, i, i == cursoridx)
 
         (firstline == lastline || i != lastline) && print(buf, "\r\n")
@@ -362,10 +363,10 @@ down_arrow(c::AbstractConfig) = down_arrow(c.config)
 down_arrow(c::Config) = c.down_arrow
 down_arrow(::AbstractMenu) = CONFIG[:down_arrow]
 
-print_arrow(buf, ::ConfiguredMenu, c::Char) = print(buf, c, "  ")
+print_arrow(buf, ::ConfiguredMenu, c::Char) = print(buf, c)
 print_arrow(buf, ::AbstractMenu, c::Char) = print(buf, c)
 
-printcursor(buf, m::ConfiguredMenu, iscursor::Bool) = print(buf, ' ', iscursor ? cursor(m.config) : ' ', ' ')
+printcursor(buf, m::ConfiguredMenu, iscursor::Bool) = print(buf, iscursor ? cursor(m.config) : ' ', ' ')
 cursor(c::AbstractConfig) = cursor(c.config)
 cursor(c::Config) = c.cursor
-printcursor(buf, ::AbstractMenu, ::Bool) = print(buf, ' ')   # `writeLine` is expected to do the printing (get from CONFIG[:cursor])
+printcursor(buf, ::AbstractMenu, ::Bool) = nothing   # `writeLine` is expected to do the printing (get from CONFIG[:cursor])
