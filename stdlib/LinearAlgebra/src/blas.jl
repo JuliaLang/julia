@@ -144,7 +144,7 @@ function get_num_threads()
         s = get(ENV, key, "")
         nt = Base.tryparse(Cint, s)
         if nt === nothing
-            @warn "Failed to read environment variable $key"
+            @warn "Failed to read environment variable $key" maxlog=1
         else
             return nt
         end
