@@ -114,12 +114,12 @@ Set the number of threads the BLAS library should use equal to `n::Integer`.
 If `nothing` is passed to this function, julia tries to figure out the optimial number of threads.
 The exact heuristic is an implementation detail.
 
-On exotic variants of `BLAS` this function can fail, which is indicated by returning `nothing`.
+On exotic variants of `BLAS` this function can fail.
 """
-function set_num_threads(n::Integer)
+function set_num_threads(n::Integer)::Nothing
     blas = vendor()
     if blas === :openblas || blas == :openblas64
-        return ccall((@blasfunc(openblas_set_num_threads), libblas), Cvoid, (Int32,), n)
+        return ccall((@blasfunc(openblas_set_num_threads), libblas), Cvoid, (Cint,), n)
     elseif blas === :mkl
         # MKL may let us set the number of threads in several ways
         return ccall((:MKL_Set_Num_Threads, libblas), Cvoid, (Cint,), n)
@@ -129,7 +129,6 @@ function set_num_threads(n::Integer)
     else
         @warn "Failed to set number of BLAS threads." maxlog=1
     end
-
     return nothing
 end
 
@@ -151,16 +150,16 @@ Get the number of threads the BLAS library is using.
 
 On exotic variants of `BLAS` this function can fail, which is indicated by returning `nothing`.
 """
-function get_num_threads()
+function get_num_threads()::Union{Int, Nothing}
     blas = LinearAlgebra.BLAS.vendor()
     if blas === :openblas || blas === :openblas64
-        return ccall((@blasfunc(openblas_get_num_threads), libblas), Cint, ())
+        return Int(ccall((@blasfunc(openblas_get_num_threads), libblas), Cint, ()))
     elseif blas == :mkl
-        return ccall((:mkl_get_max_threads, libblas), Cint, ())
+        return Int(ccall((:mkl_get_max_threads, libblas), Cint, ()))
     elseif Sys.isapple()
         key = "VECLIB_MAXIMUM_THREADS"
         s = get(ENV, key, "")
-        nt = Base.tryparse(Cint, s)
+        nt = Base.tryparse(Int, s)
         if nt === nothing
             @warn "Failed to read environment variable $key" maxlog=1
         else
