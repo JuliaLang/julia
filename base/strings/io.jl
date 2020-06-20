@@ -256,7 +256,7 @@ IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.stri
 
 Join an array of `strings` into a single string, inserting the given delimiter (if any) between
 adjacent strings. If `last` is given, it will be used instead of `delim` between the last
-two strings. If `io` is given, the result is written to `io` rather than returned as
+two strings. If `io` is given, the result is written to `io` rather than returned 
 as a `String`.
 
 `strings` can be any iterable over elements `x` which are convertible to strings
