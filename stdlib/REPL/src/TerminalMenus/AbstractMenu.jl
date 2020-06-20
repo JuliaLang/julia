@@ -256,7 +256,8 @@ end
 function move_down!(m::AbstractMenu, cursor::Int, lastoption::Int=numoptions(m))
     if cursor < lastoption
         cursor += 1 # move selection down
-        if m.pagesize + m.pageoffset <= cursor
+        pagepos = m.pagesize + m.pageoffset
+        if pagepos <= cursor && pagepos < lastoption
             m.pageoffset += 1 # scroll page down
         end
     elseif scroll_wrap(m)
