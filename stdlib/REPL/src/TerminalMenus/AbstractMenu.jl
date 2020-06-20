@@ -369,7 +369,7 @@ down_arrow(c::Config) = c.down_arrow
 down_arrow(::AbstractMenu) = CONFIG[:down_arrow]
 
 updown_arrow(m::ConfiguredMenu) = updown_arrow(m.config)
-updown_arrow(m::AbstractConfig) = updown_arrow(c.config)
+updown_arrow(c::AbstractConfig) = updown_arrow(c.config)
 updown_arrow(c::Config) = c.updown_arrow
 updown_arrow(::AbstractMenu) = CONFIG[:updown_arrow]
 
