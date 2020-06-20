@@ -149,7 +149,7 @@ function get_num_threads()
             return nt
         end
     end
-    @warn "Could not get number of BLAS threads. Returning Sys.CPU_THREADS instead."
+    @warn "Could not get number of BLAS threads. Returning Sys.CPU_THREADS instead." maxlog=1
     return Sys.CPU_THREADS
 end
 
