@@ -136,8 +136,8 @@ _tryparse_env_int(key) = tryparse(Int, get(ENV, key, ""))
 
 function set_num_threads(::Nothing)
     n = something(
-        _tryparse_env_cint("OPENBLAS_NUM_THREADS"),
-        _tryparse_env_cint("OMP_NUM_THREADS"),
+        _tryparse_env_int("OPENBLAS_NUM_THREADS"),
+        _tryparse_env_int("OMP_NUM_THREADS"),
         max(1, Sys.CPU_THREADS ÷ 2),
     )
     set_num_threads(n)
