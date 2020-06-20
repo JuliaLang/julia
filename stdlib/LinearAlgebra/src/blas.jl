@@ -133,8 +133,14 @@ function set_num_threads(n::Integer)
     return nothing
 end
 
+_tryparse_env_cint(key) = tryparse(Cint, get(ENV, key, ""))
+
 function set_num_threads(::Nothing)
-    n = max(1, Sys.CPU_THREADS ÷ 2)
+    n = something(
+        _tryparse_env_cint("OPENBLAS_NUM_THREADS"),
+        _tryparse_env_cint("OMP_NUM_THREADS"),
+        max(1, Sys.CPU_THREADS ÷ 2),
+    )
     set_num_threads(n)
 end
 
