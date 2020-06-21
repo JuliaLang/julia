@@ -146,6 +146,16 @@ Set{Float64} with 1 element:
 ```
 """
 function intersect(s::AbstractSet, itr, itrs...)
+    # determine if swap order is useful and viable
+    if haslength(itr) && all(haslength, itrs)
+        itrs_lengths = length.(itrs)
+        # do nothing if itr is already the shortest
+        if length(itr) > minimum(itrs_lengths)
+            min_idx = argmin(itrs_lengths)
+            new_itrs = (itrs[1:min_idx-1]..., itr, itrs[min_idx+1:end]...)
+            return intersect(s, itrs[min_idx], new_itrs...)
+        end
+    end
     T = promote_eltype(s, itr, itrs...)
     if T == promote_eltype(s, itr)
         out = intersect(s, itr)
