@@ -117,7 +117,19 @@ Set{Int64} with 1 element:
   2
 ```
 """
-intersect(s::AbstractSet, itr, itrs...) = intersect!(intersect(s, itr), itrs...)
+function intersect(s::AbstractSet, itr, itrs...)
+    # determine if swap order is useful and viable
+    if haslength(itr) && all(haslength.(itrs))
+        itrs_lengths = length.(itrs)
+        # do nothing if itr is already the shortest
+        if length(itr) > minimum(itrs_lengths)
+            min_idx = argmin(itrs_lengths)
+            new_itrs = (itrs[1:min_idx-1]..., itr, itrs[min_idx+1:end]...)
+            return intersect!(intersect(s, itrs[min_idx]), new_itrs...)
+        end
+    end
+    intersect!(intersect(s, itr), itrs...)
+end
 intersect(s) = union(s)
 function intersect(s::AbstractSet, itr)
     if haslength(itr) && hasfastin(itr) && length(s) < length(itr)
