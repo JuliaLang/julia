@@ -359,14 +359,15 @@ asinh(x::Number)
 """
     expm1(x)
 
-Accurately compute ``e^x-1``.
+Accurately compute ``e^x-1``. It avoids the loss of precision involved in the direct
+evaluation of exp(x)-1 for small values of x
 # Examples
 ```jldoctest
-julia> exp(1e-16) - 1 ≈ expm1(1e-16)
-false
+julia> expm1(1e-16)
+1.0e-16
 
-julia> expm1(-Inf)
--1
+julia> exp(1e-16) - 1
+0.0
 ```
 """
 expm1(x)
