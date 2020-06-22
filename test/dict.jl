@@ -554,7 +554,8 @@ end
     @test delete!(d, "a") === d
     @test !haskey(d, "a")
     @test_throws ArgumentError get!(IdDict{Symbol,Any}(), 2, "b")
-
+    @test get!(IdDict{Int,Int}(), 1, 2.0) === 2
+    @test get!(()->2.0, IdDict{Int,Int}(), 1) === 2
 
     # sizehint! & rehash!
     d = IdDict()
