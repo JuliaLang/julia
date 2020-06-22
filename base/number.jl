@@ -135,6 +135,22 @@ julia> abs2(-3)
 abs2(x::Real) = x*x
 
 """
+    isfinite(f) -> Bool
+
+Test whether a number is finite.
+
+# Examples
+```jldoctest
+julia> isfinite(5)
+true
+
+julia> isfinite(NaN32)
+false
+```
+"""
+isfinite(x) = iszero(x - x)
+
+"""
     flipsign(x, y)
 
 Return `x` with its sign flipped if `y` is negative. For example `abs(x) = flipsign(x,x)`.
