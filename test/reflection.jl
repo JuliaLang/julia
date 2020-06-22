@@ -909,3 +909,19 @@ end
 
     @test length(methods(g, ())) == 1
 end
+
+module BodyFunctionLookup
+f1(x, y; a=1) = error("oops")
+f2(f::Function, args...; kwargs...) = f1(args...; kwargs...)
+end
+
+@testset "bodyfunction" begin
+    m = first(methods(BodyFunctionLookup.f1))
+    f = Base.bodyfunction(m)
+    @test occursin("f1#", String(nameof(f)))
+    m = first(methods(BodyFunctionLookup.f2))
+    f = Base.bodyfunction(m)
+    @test f !== Core._apply_iterate
+    @test f !== Core._apply
+    @test occursin("f2#", String(nameof(f)))
+end
