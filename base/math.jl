@@ -362,8 +362,8 @@ asinh(x::Number)
 Accurately compute ``e^x-1``.
 # Examples
 ```jldoctest
-julia> expm1(2)
-6.38905609893065
+julia> exp(1e-16) - 1 ≈ expm1(1e-16)
+false
 
 julia> expm1(-Inf)
 -1
