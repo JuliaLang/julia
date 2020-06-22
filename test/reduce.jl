@@ -468,6 +468,11 @@ end
 @test count(!iszero, Int[1]) == 1
 @test count(!iszero, [1, 0, 2, 0, 3, 0, 4]) == 4
 
+struct NonFunctionIsZero end
+(::NonFunctionIsZero)(x) = iszero(x)
+@test count(NonFunctionIsZero(), []) == 0
+@test count(NonFunctionIsZero(), [0]) == 1
+@test count(NonFunctionIsZero(), [1]) == 0
 
 ## cumsum, cummin, cummax
 

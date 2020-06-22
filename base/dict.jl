@@ -576,9 +576,6 @@ end
 Delete and return the mapping for `key` if it exists in `collection`, otherwise return
 `default`, or throw an error if `default` is not specified.
 
-!!! compat "Julia 1.5"
-    For `collection::Vector`, this method requires at least Julia 1.5.
-
 # Examples
 ```jldoctest
 julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
@@ -742,6 +739,8 @@ Create a new entry in the `ImmutableDict` for a `key => value` pair
 ImmutableDict
 ImmutableDict(KV::Pair{K,V}) where {K,V} = ImmutableDict{K,V}(KV[1], KV[2])
 ImmutableDict(t::ImmutableDict{K,V}, KV::Pair) where {K,V} = ImmutableDict{K,V}(t, KV[1], KV[2])
+ImmutableDict(t::ImmutableDict{K,V}, KV::Pair, rest::Pair...) where {K,V} =
+    ImmutableDict(ImmutableDict(t, KV), rest...)
 ImmutableDict(KV::Pair, rest::Pair...) = ImmutableDict(ImmutableDict(KV), rest...)
 
 function in(key_value::Pair, dict::ImmutableDict, valcmp=(==))

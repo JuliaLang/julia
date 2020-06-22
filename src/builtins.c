@@ -1262,6 +1262,27 @@ JL_CALLABLE(jl_f__setsuper)
 
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
 
+static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
+{
+    size_t nf = jl_svec_len(ft);
+    if (jl_svec_len(old) != nf)
+        return 0;
+    size_t i;
+    for (i = 0; i < nf; i++) {
+        jl_value_t *ta = jl_svecref(old, i);
+        jl_value_t *tb = jl_svecref(ft, i);
+        if (jl_has_free_typevars(ta)) {
+            if (!jl_has_free_typevars(tb) || !jl_egal(ta, tb))
+                return 0;
+        }
+        else if (jl_has_free_typevars(tb) || jl_typeof(ta) != jl_typeof(tb) ||
+                 !jl_types_equal(ta, tb)) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 JL_CALLABLE(jl_f__typebody)
 {
     JL_NARGS(_typebody!, 1, 2);
@@ -1270,15 +1291,22 @@ JL_CALLABLE(jl_f__typebody)
     if (nargs == 2) {
         jl_value_t *ft = args[1];
         JL_TYPECHK(_typebody!, simplevector, ft);
-        dt->types = (jl_svec_t*)ft;
-        jl_gc_wb(dt, ft);
-        for (size_t i = 0; i < jl_svec_len(dt->types); i++) {
-            jl_value_t *elt = jl_svecref(dt->types, i);
+        size_t nf = jl_svec_len(ft);
+        for (size_t i = 0; i < nf; i++) {
+            jl_value_t *elt = jl_svecref(ft, i);
             if ((!jl_is_type(elt) && !jl_is_typevar(elt)) || jl_is_vararg_type(elt)) {
                 jl_type_error_rt(jl_symbol_name(dt->name->name),
                                  "type definition",
                                  (jl_value_t*)jl_type_type, elt);
             }
+        }
+        if (dt->types != NULL) {
+            if (!equiv_field_types((jl_value_t*)dt->types, ft))
+                jl_errorf("invalid redefinition of type %s", jl_symbol_name(dt->name->name));
+        }
+        else {
+            dt->types = (jl_svec_t*)ft;
+            jl_gc_wb(dt, ft);
         }
     }
 
@@ -1306,15 +1334,13 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
           dta->name->name == dtb->name->name &&
           dta->abstract == dtb->abstract &&
           dta->mutabl == dtb->mutabl &&
-          dta->size == dtb->size &&
+          (jl_svec_len(jl_field_names(dta)) != 0 || dta->size == dtb->size) &&
           dta->ninitialized == dtb->ninitialized &&
           jl_egal((jl_value_t*)jl_field_names(dta), (jl_value_t*)jl_field_names(dtb)) &&
-          jl_nparams(dta) == jl_nparams(dtb) &&
-          jl_svec_len(dta->types) == jl_svec_len(dtb->types)))
+          jl_nparams(dta) == jl_nparams(dtb)))
         return 0;
     jl_value_t *a=NULL, *b=NULL;
     int ok = 1;
-    size_t i, nf = jl_svec_len(dta->types);
     JL_GC_PUSH2(&a, &b);
     a = jl_rewrap_unionall((jl_value_t*)dta->super, dta->name->wrapper);
     b = jl_rewrap_unionall((jl_value_t*)dtb->super, dtb->name->wrapper);
@@ -1339,21 +1365,6 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
             goto no;
         a = jl_instantiate_unionall(ua, (jl_value_t*)ub->var);
         b = ub->body;
-    }
-    assert(jl_is_datatype(a) && jl_is_datatype(b));
-    a = (jl_value_t*)jl_get_fieldtypes((jl_datatype_t*)a);
-    b = (jl_value_t*)jl_get_fieldtypes((jl_datatype_t*)b);
-    for (i = 0; i < nf; i++) {
-        jl_value_t *ta = jl_svecref(a, i);
-        jl_value_t *tb = jl_svecref(b, i);
-        if (jl_has_free_typevars(ta)) {
-            if (!jl_has_free_typevars(tb) || !jl_egal(ta, tb))
-                goto no;
-        }
-        else if (jl_has_free_typevars(tb) || jl_typeof(ta) != jl_typeof(tb) ||
-                 !jl_types_equal(ta, tb)) {
-            goto no;
-        }
     }
     JL_GC_POP();
     return 1;
@@ -1570,7 +1581,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("CodeInfo", (jl_value_t*)jl_code_info_type);
     add_builtin("Ref", (jl_value_t*)jl_ref_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
-    add_builtin("AddrSpacePtr", (jl_value_t*)jl_addrspace_pointer_type);
+    add_builtin("LLVMPtr", (jl_value_t*)jl_llvmpointer_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
 
     add_builtin("AbstractArray", (jl_value_t*)jl_abstractarray_type);

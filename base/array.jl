@@ -1153,13 +1153,44 @@ function pop!(a::Vector)
     return item
 end
 
-function pop!(a::Vector, i::Integer)
+"""
+    popat!(a::Vector, i::Integer, [default])
+
+Remove the item at the given `i` and return it. Subsequent items
+are shifted to fill the resulting gap.
+When `i` is not a valid index for `a`, return `default`, or throw an error if
+`default` is not specified.
+See also [`deleteat!`](@ref) and [`splice!`](@ref).
+
+!!! compat "Julia 1.5"
+    This function is available as of Julia 1.5.
+
+# Examples
+```jldoctest
+julia> a = [4, 3, 2, 1]; popat!(a, 2)
+3
+
+julia> a
+3-element Array{Int64,1}:
+ 4
+ 2
+ 1
+
+julia> popat!(a, 4, missing)
+missing
+
+julia> popat!(a, 4)
+ERROR: BoundsError: attempt to access 3-element Array{Int64,1} at index [4]
+[...]
+```
+"""
+function popat!(a::Vector, i::Integer)
     x = a[i]
     _deleteat!(a, i, 1)
     x
 end
 
-function pop!(a::Vector, i::Integer, default)
+function popat!(a::Vector, i::Integer, default)
     if 1 <= i <= length(a)
         x = @inbounds a[i]
         _deleteat!(a, i, 1)
@@ -1321,9 +1352,9 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
     n = length(a)
     y = iterate(inds)
     y === nothing && return a
-    n == 0 && throw(BoundsError(a, inds))
     (p, s) = y
-    p <= n && push!(dltd, @inbounds a[p])
+    checkbounds(a, p)
+    push!(dltd, @inbounds a[p])
     q = p+1
     while true
         y = iterate(inds, s)

@@ -119,8 +119,8 @@ jl_datatype_t *jl_lineinfonode_type;
 jl_unionall_t *jl_ref_type;
 jl_unionall_t *jl_pointer_type;
 jl_typename_t *jl_pointer_typename;
-jl_unionall_t *jl_addrspace_pointer_type;
-jl_typename_t *jl_addrspace_pointer_typename;
+jl_unionall_t *jl_llvmpointer_type;
+jl_typename_t *jl_llvmpointer_typename;
 jl_datatype_t *jl_void_type; // deprecated
 jl_datatype_t *jl_nothing_type;
 jl_datatype_t *jl_voidpointer_type;
@@ -1379,7 +1379,7 @@ static jl_tupletype_t *jl_apply_tuple_type_v_(jl_value_t **p, size_t np, jl_svec
     int cacheable = 1;
     for (size_t i = 0; i < np; i++) {
         assert(p[i]);
-        if (!jl_is_concrete_type(p[i]))
+        if (!jl_is_concrete_type(p[i]) && p[i] != jl_bottom_type)
             cacheable = 0;
     }
     return (jl_datatype_t*)inst_datatype_inner(jl_anytuple_type, params, p, np, cacheable, NULL, NULL);
@@ -1631,6 +1631,9 @@ JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_RO
     assert(n > 0 && "expected empty case to be handled during construction");
     //if (n == 0)
     //    return ((st->types = jl_emptysvec));
+    if (wt->types == NULL)
+        jl_errorf("cannot determine field types of incomplete type %s",
+                  jl_symbol_name(st->name->name));
     jl_typeenv_t *env = (jl_typeenv_t*)alloca(n * sizeof(jl_typeenv_t));
     for (i = 0; i < n; i++) {
         env[i].var = (jl_tvar_t*)jl_svecref(wt->parameters, i);
@@ -2237,14 +2240,14 @@ void jl_init_types(void) JL_GC_DISABLED
                              sizeof(void*)*8)->name->wrapper;
     jl_pointer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_pointer_type))->name;
 
-    // AddrSpacePtr{T, AS} where {T, AS}
+    // LLVMPtr{T, AS} where {T, AS}
     tv = jl_svec2(tvar("T"), tvar("AS"));
     jl_svec_t *tv_base = jl_svec1(tvar("T"));
-    jl_addrspace_pointer_type = (jl_unionall_t*)
-        jl_new_primitivetype((jl_value_t*)jl_symbol("AddrSpacePtr"), core,
+    jl_llvmpointer_type = (jl_unionall_t*)
+        jl_new_primitivetype((jl_value_t*)jl_symbol("LLVMPtr"), core,
                              (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_ref_type, jl_svec_data(tv_base), 1), tv,
                              sizeof(void*)*8)->name->wrapper;
-    jl_addrspace_pointer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_addrspace_pointer_type))->name;
+    jl_llvmpointer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_llvmpointer_type))->name;
 
     // Type{T} where T<:Tuple
     tttvar = jl_new_typevar(jl_symbol("T"),

@@ -116,6 +116,7 @@ New library functions
 * New function `contains(haystack, needle)` and its one argument partially applied form have been added, it acts like `occursin(needle, haystack)` ([#35132]).
 * New function `Base.exit_on_sigint` is added to control if `InterruptException` is
   thrown by Ctrl-C ([#29411]).
+* New function `popat!(vector, index, [default])` for removing an element at an arbitrary index from a `Vector` ([#35513], [#36070]).
 
 New library features
 --------------------
@@ -128,7 +129,6 @@ New library features
 * `x::Signed % Unsigned` and `x::Unsigned % Signed` are supported for integer bitstypes.
 * `signed(unsigned_type)` is supported for integer bitstypes, `unsigned(signed_type)` has been supported.
 * `accumulate`, `cumsum`, and `cumprod` now support `Tuple` ([#34654]) and arbitrary iterators ([#34656]).
-* `pop!(collection, key, [default])` now has a method for `Vector` to remove an element at an arbitrary index ([#35513]).
 * In `splice!` with no replacement, values to be removed can now be specified with an
   arbitrary iterable (instead of a `UnitRange`) ([#34524]).
 * The `@view` and `@views` macros now support the `a[begin]` syntax that was introduced in Julia 1.4 ([#35289]).

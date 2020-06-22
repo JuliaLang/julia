@@ -263,9 +263,9 @@ the properties of that stream (note that `io` can itself be an `IOContext`).
 
 The following properties are in common use:
 
- - `:compact`: Boolean specifying that small values should be printed more compactly, e.g.
+ - `:compact`: Boolean specifying that values should be printed more compactly, e.g.
    that numbers should be printed with fewer digits. This is set when printing array
-   elements.
+   elements. `:compact` output should not contain line breaks.
  - `:limit`: Boolean specifying that containers should be truncated, e.g. showing `…` in
    place of most elements.
  - `:displaysize`: A `Tuple{Int,Int}` giving the size in rows and columns to use for text
@@ -356,13 +356,20 @@ function show_circular(io::IOContext, @nospecialize(x))
 end
 
 """
-    show(x)
+    show([io::IO = stdout], x)
 
-Write an informative text representation of a value to the current output stream. New types
-should overload `show(io::IO, x)` where the first argument is a stream. The representation used
-by `show` generally includes Julia-specific formatting and type information.
+Write a text representation of a value `x` to the output stream `io`. New types `T`
+should overload `show(io::IO, x::T)`. The representation used by `show` generally
+includes Julia-specific formatting and type information, and should be parseable
+Julia code when possible.
 
 [`repr`](@ref) returns the output of `show` as a string.
+
+To customize human-readable text output for objects of type `T`, define
+`show(io::IO, ::MIME"text/plain", ::T)` instead. Checking the `:compact`
+[`IOContext`](@ref) property of `io` in such methods is recommended,
+since some containers show their elements by calling this method with
+`:compact => true`.
 
 See also [`print`](@ref), which writes un-decorated representations.
 
@@ -374,9 +381,9 @@ julia> print("Hello World!")
 Hello World!
 ```
 """
-show(x) = show(stdout::IO, x)
-
 show(io::IO, @nospecialize(x)) = show_default(io, x)
+
+show(x) = show(stdout::IO, x)
 
 # avoid inferring show_default on the type of `x`
 show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x))
@@ -1331,7 +1338,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
         # scalar multiplication (i.e. "100x")
         elseif (func === :* &&
-            length(func_args)==2 && isa(func_args[1], Real) && isa(func_args[2], Symbol))
+            length(func_args) == 2 && isa(func_args[1], Union{Int, Int64, Float32, Float64}) &&
+            isa(func_args[2], Symbol) && !in(string(func_args[2])[1], ('e', 'E', 'f')))
             if func_prec <= prec
                 show_enclosed_list(io, '(', func_args, "", ')', indent, func_prec, quote_level)
             else

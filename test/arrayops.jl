@@ -467,17 +467,17 @@ end
     @test_throws BoundsError insert!(v, 5, 5)
 end
 
-@testset "pop!(::Vector, i, [default])" begin
+@testset "popat!(::Vector, i, [default])" begin
     a = [1, 2, 3, 4]
-    @test_throws BoundsError pop!(a, 0)
-    @test pop!(a, 0, "default") == "default"
+    @test_throws BoundsError popat!(a, 0)
+    @test popat!(a, 0, "default") == "default"
     @test a == 1:4
-    @test_throws BoundsError pop!(a, 5)
-    @test pop!(a, 1) == 1
+    @test_throws BoundsError popat!(a, 5)
+    @test popat!(a, 1) == 1
     @test a == [2, 3, 4]
-    @test pop!(a, 2) == 3
+    @test popat!(a, 2) == 3
     @test a == [2, 4]
-    badpop() = @inbounds pop!([1], 2)
+    badpop() = @inbounds popat!([1], 2)
     @test_throws BoundsError badpop()
 end
 
@@ -1446,11 +1446,15 @@ end
     @test deleteat!(a, [1,3,5,7:10...]) == [2,4,6]
     @test_throws BoundsError deleteat!(a, 13)
     @test_throws BoundsError deleteat!(a, [1,13])
-    @test_throws ArgumentError deleteat!(a, [5,3])
+    @test_throws ArgumentError deleteat!(a, [3,2]) # not sorted
     @test_throws BoundsError deleteat!(a, 5:20)
     @test_throws BoundsError deleteat!(a, Bool[])
     @test_throws BoundsError deleteat!(a, [true])
     @test_throws BoundsError deleteat!(a, falses(11))
+    @test_throws BoundsError deleteat!(a, [0])
+    @test_throws BoundsError deleteat!(a, [4])
+    @test_throws BoundsError deleteat!(a, [5])
+    @test_throws BoundsError deleteat!(a, [5, 3])
 
     @test_throws BoundsError deleteat!([], 1)
     @test_throws BoundsError deleteat!([], [1])
