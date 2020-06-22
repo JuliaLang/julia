@@ -491,6 +491,28 @@ See also [`eachrow`](@ref), [`eachcol`](@ref), and [`selectdim`](@ref).
 
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
+
+# Example
+
+```jldoctest
+julia> M = [1 2 3; 4 5 6; 7 8 9]
+3×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+ 7  8  9
+
+julia> first(eachslice(M, dims=1))
+3-element view(::Array{Int64,2}, 1, :) with eltype Int64:
+ 1
+ 2
+ 3
+
+julia> first(eachslice(M, dims=2))
+3-element view(::Array{Int64,2}, :, 1) with eltype Int64:
+ 1
+ 4
+ 7
+```
 """
 @inline function eachslice(A::AbstractArray; dims)
     length(dims) == 1 || throw(ArgumentError("only single dimensions are supported"))
