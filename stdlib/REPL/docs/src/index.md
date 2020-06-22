@@ -610,6 +610,7 @@ Aside from the overall `charset` option, for `RadioMenu` the configurable option
  - `cursor::Char='>'|'→'`: character to use for cursor
  - `up_arrow::Char='^'|'↑'`: character to use for up arrow
  - `down_arrow::Char='v'|'↓'`: character to use for down arrow
+ - `updown_arrow::Char='I'|'↕'`: character to use for up/down arrow in one-line page
  - `scroll_wrap::Bool=false`: optionally wrap-around at the beginning/end of a menu
  - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
 

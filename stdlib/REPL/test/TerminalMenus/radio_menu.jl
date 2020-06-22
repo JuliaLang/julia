@@ -6,10 +6,6 @@
 # Check to make sure types are imported properly
 @test RadioMenu{TerminalMenus.Config} <: TerminalMenus.ConfiguredMenu  # TODO Julia 2.0: delete parameter
 
-# Invalid Menu Params
-@test_throws ErrorException RadioMenu(["one"]; charset=:ascii)
-@test_throws ErrorException RadioMenu(["one", "two", "three"], pagesize=1, charset=:ascii)
-
 # Constructor
 @test RadioMenu(["one", "two", "three"]; charset=:ascii).pagesize == 3
 @test RadioMenu(string.(1:30), pagesize=-1, charset=:ascii).pagesize == 30
@@ -42,3 +38,7 @@ end
 # Test using stdin
 radio_menu = RadioMenu(string.(1:10); charset=:ascii)
 @test simulate_input(3, radio_menu, :down, :down, :enter)
+radio_menu = RadioMenu(["single option"], charset=:ascii)
+@test simulate_input(1, radio_menu, :up, :up, :down, :up, :enter)
+radio_menu = RadioMenu(string.(1:3), pagesize=1, charset=:ascii)
+@test simulate_input(3, radio_menu, :down, :down, :down, :down, :enter)

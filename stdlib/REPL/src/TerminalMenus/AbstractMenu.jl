@@ -256,7 +256,8 @@ end
 function move_down!(m::AbstractMenu, cursor::Int, lastoption::Int=numoptions(m))
     if cursor < lastoption
         cursor += 1 # move selection down
-        if m.pagesize + m.pageoffset <= cursor < lastoption
+        pagepos = m.pagesize + m.pageoffset
+        if pagepos <= cursor && pagepos < lastoption
             m.pageoffset += 1 # scroll page down
         end
     elseif scroll_wrap(m)
@@ -315,17 +316,23 @@ function printmenu(out, m::AbstractMenu, cursoridx::Int; oldstate=nothing, init:
         # clearline
         print(buf, "\x1b[2K")
 
-        if i == firstline && m.pageoffset > 0
-            print_arrow(buf, m, up_arrow(m))
-        elseif i == lastline && i != lastoption
-            print_arrow(buf, m, down_arrow(m))
+        upscrollable = i == firstline && m.pageoffset > 0
+        downscrollable = i == lastline && i != lastoption
+
+        if upscrollable && downscrollable
+            print(buf, updown_arrow(m))
+        elseif upscrollable
+            print(buf, up_arrow(m))
+        elseif downscrollable
+            print(buf, down_arrow(m))
         else
-            printcursor(buf, m, i == cursoridx)
+            print(buf, ' ')
         end
 
+        printcursor(buf, m, i == cursoridx)
         writeline(buf, m, i, i == cursoridx)
 
-        i != lastline && print(buf, "\r\n")
+        (firstline == lastline || i != lastline) && print(buf, "\r\n")
     end
 
     newstate = lastline-firstline  # final line doesn't have `\n`
@@ -362,10 +369,12 @@ down_arrow(c::AbstractConfig) = down_arrow(c.config)
 down_arrow(c::Config) = c.down_arrow
 down_arrow(::AbstractMenu) = CONFIG[:down_arrow]
 
-print_arrow(buf, ::ConfiguredMenu, c::Char) = print(buf, c, "  ")
-print_arrow(buf, ::AbstractMenu, c::Char) = print(buf, c)
+updown_arrow(m::ConfiguredMenu) = updown_arrow(m.config)
+updown_arrow(c::AbstractConfig) = updown_arrow(c.config)
+updown_arrow(c::Config) = c.updown_arrow
+updown_arrow(::AbstractMenu) = CONFIG[:updown_arrow]
 
-printcursor(buf, m::ConfiguredMenu, iscursor::Bool) = print(buf, ' ', iscursor ? cursor(m.config) : ' ', ' ')
+printcursor(buf, m::ConfiguredMenu, iscursor::Bool) = print(buf, iscursor ? cursor(m.config) : ' ', ' ')
 cursor(c::AbstractConfig) = cursor(c.config)
 cursor(c::Config) = c.cursor
-printcursor(buf, ::AbstractMenu, ::Bool) = print(buf, ' ')   # `writeLine` is expected to do the printing (get from CONFIG[:cursor])
+printcursor(buf, ::AbstractMenu, ::Bool) = nothing   # `writeLine` is expected to do the printing (get from CONFIG[:cursor])

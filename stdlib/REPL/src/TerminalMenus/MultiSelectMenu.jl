@@ -53,14 +53,14 @@ were selected by the user.
 Any additional keyword arguments will be passed to [`TerminalMenus.MultiSelectConfig`](@ref).
 """
 function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, selected=Int[], warn::Bool=true, kwargs...)
-    length(options) < 2 && error("MultiSelectMenu must have at least two options")
+    length(options) < 1 && error("MultiSelectMenu must have at least one option")
 
     # if pagesize is -1, use automatic paging
     pagesize = pagesize == -1 ? length(options) : pagesize
     # pagesize shouldn't be bigger than options
     pagesize = min(length(options), pagesize)
     # after other checks, pagesize must be greater than 2
-    pagesize < 2 && error("pagesize must be >= 2")
+    pagesize < 1 && error("pagesize must be >= 1")
 
     pageoffset = 0
     _selected = Set{Int}()
