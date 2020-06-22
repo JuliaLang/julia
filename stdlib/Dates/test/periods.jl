@@ -30,6 +30,7 @@ using Test
     @test sign(t) == sign(t2) == 1
     @test sign(-t) == sign(-t2) == -1
     @test sign(Dates.Year(0)) == 0
+    @test isfinite(t) == true
 end
 @testset "div/mod/gcd/lcm/rem" begin
     @test Dates.Year(10) % Dates.Year(4) == Dates.Year(2)
