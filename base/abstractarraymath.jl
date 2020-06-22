@@ -507,11 +507,11 @@ julia> first(eachslice(M, dims=1))
  2
  3
 
-julia> first(eachslice(M, dims=2))
-3-element view(::Array{Int64,2}, :, 1) with eltype Int64:
- 1
- 4
- 7
+julia> collect(eachslice(M, dims=2))
+3-element Array{SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true},1}:
+ [1, 4, 7]
+ [2, 5, 8]
+ [3, 6, 9]
 ```
 """
 @inline function eachslice(A::AbstractArray; dims)
