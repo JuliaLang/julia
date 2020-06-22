@@ -555,19 +555,19 @@ end
 
 @testset "get_set_num_threads" begin
     default = BLAS.get_num_threads()
-    @test default isa Integer
+    @test default isa Int
     @test default > 0
     BLAS.set_num_threads(1)
-    @test BLAS.get_num_threads() == 1
+    @test BLAS.get_num_threads() === 1
     BLAS.set_num_threads(default)
-    @test BLAS.get_num_threads() == default
+    @test BLAS.get_num_threads() === default
 
     if BLAS.guess_vendor() !== :osxblas
         # test osxblas which is not covered by CI
-        BLAS.set_num_threads(1, :osxblas)
-        @test BLAS.get_num_threads(:osxblas) === 1
-        BLAS.set_num_threads(2, :osxblas)
-        @test BLAS.get_num_threads(:osxblas) === 2
+        BLAS.set_num_threads(1, _blas=:osxblas)
+        @test BLAS.get_num_threads(_blas=:osxblas) === 1
+        BLAS.set_num_threads(2, _blas=:osxblas)
+        @test BLAS.get_num_threads(_blas=:osxblas) === 2
     end
 end
 

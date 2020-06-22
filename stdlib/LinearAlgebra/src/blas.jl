@@ -127,7 +127,7 @@ The exact heuristic is an implementation detail.
 
 On exotic variants of `BLAS` this function can fail.
 """
-function set_num_threads(n::Integer, _blas=guess_vendor())::Nothing
+function set_num_threads(n::Integer; _blas=guess_vendor())::Nothing
     if _blas === :openblas || _blas == :openblas64
         return ccall((@blasfunc(openblas_set_num_threads), libblas), Cvoid, (Cint,), n)
     elseif _blas === :mkl
@@ -145,13 +145,13 @@ end
 
 _tryparse_env_int(key) = tryparse(Int, get(ENV, key, ""))
 
-function set_num_threads(::Nothing, _blas=guess_vendor())
+function set_num_threads(::Nothing; _blas=guess_vendor())
     n = something(
         _tryparse_env_int("OPENBLAS_NUM_THREADS"),
         _tryparse_env_int("OMP_NUM_THREADS"),
         max(1, Sys.CPU_THREADS ÷ 2),
     )
-    set_num_threads(n, _blas)
+    set_num_threads(n; _blas)
 end
 
 """
@@ -161,7 +161,7 @@ Get the number of threads the BLAS library is using.
 
 On exotic variants of `BLAS` this function can fail, which is indicated by returning `nothing`.
 """
-function get_num_threads(_blas=guess_vendor())::Union{Int, Nothing}
+function get_num_threads(;_blas=guess_vendor())::Union{Int, Nothing}
     if _blas === :openblas || _blas === :openblas64
         return Int(ccall((@blasfunc(openblas_get_num_threads), libblas), Cint, ()))
     elseif _blas === :mkl
