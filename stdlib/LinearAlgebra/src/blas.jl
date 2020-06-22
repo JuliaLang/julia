@@ -106,6 +106,17 @@ end
 
 openblas_get_config() = strip(unsafe_string(ccall((@blasfunc(openblas_get_config), libblas), Ptr{UInt8}, () )))
 
+function guess_vendor()
+    # like determine_vendor, but guesses blas in some cases
+    # where determine_vendor returns :unknown
+    ret = vendor()
+    if Sys.isapple() && (ret == :unknown )
+        ret = :osxblas
+    end
+    ret
+end
+
+
 """
     set_num_threads(n::Integer)
     set_num_threads(::Nothing)
@@ -116,17 +127,17 @@ The exact heuristic is an implementation detail.
 
 On exotic variants of `BLAS` this function can fail.
 """
-function set_num_threads(n::Integer)::Nothing
-    blas = vendor()
-    if blas === :openblas || blas == :openblas64
+function set_num_threads(n::Integer, _blas=guess_vendor())::Nothing
+    if _blas === :openblas || _blas == :openblas64
         return ccall((@blasfunc(openblas_set_num_threads), libblas), Cvoid, (Cint,), n)
-    elseif blas === :mkl
+    elseif _blas === :mkl
         # MKL may let us set the number of threads in several ways
         return ccall((:MKL_Set_Num_Threads, libblas), Cvoid, (Cint,), n)
-    elseif Sys.isapple()
+    elseif _blas === :osxblas
         # OSX BLAS looks at an environment variable
         ENV["VECLIB_MAXIMUM_THREADS"] = n
     else
+        @assert _blas === :unknown
         @warn "Failed to set number of BLAS threads." maxlog=1
     end
     return nothing
@@ -134,13 +145,13 @@ end
 
 _tryparse_env_int(key) = tryparse(Int, get(ENV, key, ""))
 
-function set_num_threads(::Nothing)
+function set_num_threads(::Nothing, _blas=guess_vendor())
     n = something(
         _tryparse_env_int("OPENBLAS_NUM_THREADS"),
         _tryparse_env_int("OMP_NUM_THREADS"),
         max(1, Sys.CPU_THREADS ÷ 2),
     )
-    set_num_threads(n)
+    set_num_threads(n, _blas)
 end
 
 """
@@ -150,13 +161,12 @@ Get the number of threads the BLAS library is using.
 
 On exotic variants of `BLAS` this function can fail, which is indicated by returning `nothing`.
 """
-function get_num_threads()::Union{Int, Nothing}
-    blas = vendor()
-    if blas === :openblas || blas === :openblas64
+function get_num_threads(_blas=guess_vendor())::Union{Int, Nothing}
+    if _blas === :openblas || _blas === :openblas64
         return Int(ccall((@blasfunc(openblas_get_num_threads), libblas), Cint, ()))
-    elseif blas == :mkl
+    elseif _blas === :mkl
         return Int(ccall((:mkl_get_max_threads, libblas), Cint, ()))
-    elseif Sys.isapple()
+    elseif _blas === :osxblas
         key = "VECLIB_MAXIMUM_THREADS"
         nt = _tryparse_env_int(key)
         if nt === nothing
@@ -164,6 +174,8 @@ function get_num_threads()::Union{Int, Nothing}
         else
             return nt
         end
+    else
+        @assert _blas === :unknown
     end
     @warn "Could not get number of BLAS threads. Returning `nothing` instead." maxlog=1
     return nothing

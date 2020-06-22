@@ -561,6 +561,14 @@ end
     @test BLAS.get_num_threads() == 1
     BLAS.set_num_threads(default)
     @test BLAS.get_num_threads() == default
+
+    if BLAS.guess_vendor() !== :osxblas
+        # test osxblas which is not covered by CI
+        BLAS.set_num_threads(1, :osxblas)
+        @test BLAS.get_num_threads(:osxblas) === 1
+        BLAS.set_num_threads(2, :osxblas)
+        @test BLAS.get_num_threads(:osxblas) === 2
+    end
 end
 
 end # module TestBLAS
