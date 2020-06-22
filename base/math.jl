@@ -849,7 +849,7 @@ and `val` is equal to ``x \\times 2^{exp}``.
 # Examples
 ```jldoctest
 julia> frexp(12.8)
-(0.625, 8)
+(0.8, 4)
 ```
 """
 function frexp(x::T) where T<:IEEEFloat
