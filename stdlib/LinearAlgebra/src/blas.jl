@@ -110,7 +110,7 @@ function guess_vendor()
     # like determine_vendor, but guesses blas in some cases
     # where determine_vendor returns :unknown
     ret = vendor()
-    if Sys.isapple() && (ret == :unknown )
+    if Sys.isapple() && (ret == :unknown)
         ret = :osxblas
     end
     ret
