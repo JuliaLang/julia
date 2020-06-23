@@ -13,7 +13,7 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
     s = string(n)
     i = findfirst(isequal('#'), s)
     if i !== nothing
-        s = s[1:i-1]
+        s = s[1:prevind(s, i)]
     end
     if t === Any && !isempty(s)
         return s, ""

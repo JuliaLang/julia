@@ -1985,3 +1985,12 @@ end
     @test sprint(show, skipmissing([1,2,missing])) == "skipmissing(Union{Missing, $Int}[1, 2, missing])"
     @test sprint(show, skipmissing((missing,1.0,'a'))) == "skipmissing((missing, 1.0, 'a'))"
 end
+
+@testset "unicode in method table" begin
+    αsym = gensym(:α)
+    ℓsym = gensym(:ℓ)
+    eval(:(foo($αsym) = $αsym))
+    eval(:(bar($ℓsym) = $ℓsym))
+    @test contains(string(methods(foo)), "foo(α)")
+    @test contains(string(methods(bar)), "bar(ℓ)")
+end
