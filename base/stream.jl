@@ -13,9 +13,67 @@ end
 
 ## types ##
 abstract type IOServer end
+"""
+    LibuvServer
+
+An abstract type for IOServers handled by libuv.
+
+If `server isa LibuvServer`, it must obey the following interface:
+
+- `server.handle` must be a `Ptr{Cvoid}`
+- `server.status` must be an `Int`
+- `server.cond` must be a `GenericCondition`
+"""
 abstract type LibuvServer <: IOServer end
+
+function getproperty(server::LibuvServer, name::Symbol)
+    if name === :handle
+        return getfield(server, :handle)::Ptr{Cvoid}
+    elseif name === :status
+        return getfield(server, :status)::Int
+    elseif name === :cond
+        return getfield(server, :cond)::GenericCondition
+    else
+        return getfield(server, name)
+    end
+end
+
+"""
+    LibuvStream
+
+An abstract type for IO streams handled by libuv.
+
+If`stream isa LibuvStream`, it must obey the following interface:
+
+- `stream.handle`, if present, must be a `Ptr{Cvoid}`
+- `stream.status`, if present, must be an `Int`
+- `stream.buffer`, if present, must be an `IOBuffer`
+- `stream.sendbuf`, if present, must be a `Union{Nothing,IOBuffer}`
+- `stream.cond`, if present, must be a `GenericCondition`
+- `stream.lock`, if present, must be an `AbstractLock`
+- `stream.throttle`, if present, must be an `Int`
+"""
 abstract type LibuvStream <: IO end
 
+function getproperty(stream::LibuvStream, name::Symbol)
+    if name === :handle
+        return getfield(stream, :handle)::Ptr{Cvoid}
+    elseif name === :status
+        return getfield(stream, :status)::Int
+    elseif name === :buffer
+        return getfield(stream, :buffer)::IOBuffer
+    elseif name === :sendbuf
+        return getfield(stream, :sendbuf)::Union{Nothing,IOBuffer}
+    elseif name === :cond
+        return getfield(stream, :cond)::GenericCondition
+    elseif name === :lock
+        return getfield(stream, :lock)::AbstractLock
+    elseif name === :throttle
+        return getfield(stream, :throttle)::Int
+    else
+        return getfield(stream, name)
+    end
+end
 
 # IO
 # +- GenericIOBuffer{T<:AbstractArray{UInt8,1}} (not exported)
@@ -320,7 +378,7 @@ function isopen(x::Union{LibuvStream, LibuvServer})
     if x.status == StatusUninit || x.status == StatusInit
         throw(ArgumentError("$x is not initialized"))
     end
-    return x.status::Int != StatusClosed && x.status::Int != StatusEOF
+    return x.status != StatusClosed && x.status != StatusEOF
 end
 
 function check_open(x::Union{LibuvStream, LibuvServer})
@@ -395,7 +453,7 @@ function close(stream::Union{LibuvStream, LibuvServer})
         stream.status = StatusClosing
     elseif isopen(stream) || stream.status == StatusEOF
         should_wait = uv_handle_data(stream) != C_NULL
-        if stream.status::Int != StatusClosing
+        if stream.status != StatusClosing
             ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
             stream.status = StatusClosing
         end
@@ -410,7 +468,7 @@ function uvfinalize(uv::Union{LibuvStream, LibuvServer})
     iolock_begin()
     if uv.handle != C_NULL
         disassociate_julia_struct(uv.handle) # not going to call the usual close hooks
-        if uv.status::Int != StatusUninit
+        if uv.status != StatusUninit
             close(uv)
         else
             Libc.free(uv.handle)
@@ -524,7 +582,7 @@ function uv_alloc_buf(handle::Ptr{Cvoid}, size::Csize_t, buf::Ptr{Cvoid})
     stream = unsafe_pointer_to_objref(hd)::LibuvStream
 
     local data::Ptr{Cvoid}, newsize::Csize_t
-    if stream.status::Int != StatusActive
+    if stream.status != StatusActive
         data = C_NULL
         newsize = 0
     else
@@ -557,7 +615,7 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
                     if isa(stream, TTY)
                         stream.status = StatusEOF # libuv called uv_stop_reading already
                         notify(stream.cond)
-                    elseif stream.status::Int != StatusClosing
+                    elseif stream.status != StatusClosing
                         # begin shutdown of the stream
                         ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
                         stream.status = StatusClosing
@@ -667,7 +725,7 @@ show(io::IO, stream::Pipe) = print(io,
 
 function open_pipe!(p::PipeEndpoint, handle::OS_HANDLE)
     iolock_begin()
-    if p.status::Int != StatusInit
+    if p.status != StatusInit
         error("pipe is already in use or has been closed")
     end
     err = ccall(:uv_pipe_open, Int32, (Ptr{Cvoid}, OS_HANDLE), p.handle, handle)
@@ -1061,7 +1119,7 @@ _fd(x::Union{OS_HANDLE, RawFD}) = x
 
 function _fd(x::Union{LibuvStream, LibuvServer})
     fd = Ref{OS_HANDLE}(INVALID_OS_HANDLE)
-    if x.status::Int != StatusUninit && x.status::Int != StatusClosed
+    if x.status != StatusUninit && x.status != StatusClosed
         err = ccall(:uv_fileno, Int32, (Ptr{Cvoid}, Ptr{OS_HANDLE}), x.handle, fd)
         # handle errors by returning INVALID_OS_HANDLE
     end
