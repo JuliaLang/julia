@@ -127,7 +127,9 @@ The exact heuristic is an implementation detail.
 
 On exotic variants of `BLAS` this function can fail.
 """
-function set_num_threads(n::Integer; _blas=guess_vendor())::Nothing
+set_num_threads(n)::Nothing = _set_num_threads(n)
+
+function _set_num_threads(n::Integer; _blas = guess_vendor())
     if _blas === :openblas || _blas == :openblas64
         return ccall((@blasfunc(openblas_set_num_threads), libblas), Cvoid, (Cint,), n)
     elseif _blas === :mkl
