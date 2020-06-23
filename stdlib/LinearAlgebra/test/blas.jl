@@ -564,10 +564,22 @@ end
 
     if BLAS.guess_vendor() !== :osxblas
         # test osxblas which is not covered by CI
-        BLAS.set_num_threads(1, _blas=:osxblas)
-        @test BLAS.get_num_threads(_blas=:osxblas) === 1
-        BLAS.set_num_threads(2, _blas=:osxblas)
-        @test BLAS.get_num_threads(_blas=:osxblas) === 2
+        withenv() do
+            @test_logs (:warn,) match_mode=:any BLAS._set_num_threads(1, _blas=:osxblas)
+            @test @test_logs(
+                (:warn,),
+                (:warn,),
+                match_mode=:any,
+                BLAS._get_num_threads(_blas=:osxblas),
+            ) === 1
+            @test_logs (:warn,) match_mode=:any BLAS._set_num_threads(2, _blas=:osxblas)
+            @test @test_logs(
+                (:warn,),
+                (:warn,),
+                match_mode=:any,
+                BLAS._get_num_threads(_blas=:osxblas),
+            ) === 2
+        end
     end
 end
 
