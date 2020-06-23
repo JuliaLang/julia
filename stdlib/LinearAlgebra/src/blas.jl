@@ -147,7 +147,7 @@ end
 
 _tryparse_env_int(key) = tryparse(Int, get(ENV, key, ""))
 
-function set_num_threads(::Nothing; _blas=guess_vendor())
+function _set_num_threads(::Nothing; _blas = guess_vendor())
     n = something(
         _tryparse_env_int("OPENBLAS_NUM_THREADS"),
         _tryparse_env_int("OMP_NUM_THREADS"),
