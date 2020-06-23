@@ -951,13 +951,34 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
     return 1;
 }
 
+
+static int concretesig_equal(jl_value_t *tt, jl_value_t *simplesig) JL_NOTSAFEPOINT
+{
+    jl_value_t **types = jl_svec_data(((jl_datatype_t*)tt)->parameters);
+    jl_value_t **sigs = jl_svec_data(((jl_datatype_t*)simplesig)->parameters);
+    size_t i, lensig = jl_nparams(simplesig);
+    assert(lensig == jl_nparams(tt));
+    assert(lensig > 0 && !jl_is_vararg_type(jl_tparam(simplesig, lensig - 1)));
+    for (i = 0; i < lensig; i++) {
+        jl_value_t *decl = sigs[i];
+        jl_value_t *a = types[i];
+        if (a != decl && decl != (jl_value_t*)jl_any_type) {
+            if (!jl_is_type_type(a) && jl_typeof(jl_tparam0(a)) == decl)
+                return 0;
+        }
+    }
+    return 1;
+}
+
 static inline jl_typemap_entry_t *lookup_leafcache(jl_array_t *leafcache JL_PROPAGATES_ROOT, jl_value_t *tt, size_t world) JL_NOTSAFEPOINT
 {
     jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_eqtable_get(leafcache, (jl_value_t*)tt, NULL);
     if (entry) {
         do {
-            if (entry->min_world <= world && world <= entry->max_world)
-                return entry;
+            if (entry->min_world <= world && world <= entry->max_world) {
+                if (entry->simplesig == (void*)jl_nothing || concretesig_equal(tt, (jl_value_t*)entry->simplesig))
+                    return entry;
+            }
             entry = entry->next;
         } while ((jl_value_t*)entry != jl_nothing);
     }
@@ -1118,7 +1139,7 @@ static jl_method_instance_t *cache_method(
 
     jl_typemap_entry_t *newentry = jl_typemap_alloc(cachett, simplett, guardsigs, (jl_value_t*)newmeth, min_valid, max_valid);
     temp = (jl_value_t*)newentry;
-    if (mt && cachett == tt && simplett == NULL && jl_svec_len(guardsigs) == 0) {
+    if (mt && cachett == tt && jl_svec_len(guardsigs) == 0) {
         if (!jl_has_free_typevars((jl_value_t*)tt) && jl_lookup_cache_type_(tt) == NULL) {
             // if this type isn't normally in the cache, force it in there now
             // anyways so that we can depend on it as a token (especially since
@@ -1729,9 +1750,13 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
     jl_array_t *leafcache = mt->leafcache;
     size_t i, l = jl_array_len(leafcache);
     for (i = 1; i < l; i += 2) {
-        jl_value_t *l = jl_array_ptr_ref(leafcache, i);
-        if (l && l != jl_nothing)
-            invalidate_mt_cache((jl_typemap_entry_t*)l, (void*)&mt_cache_env);
+        jl_typemap_entry_t *oldentry = (jl_typemap_entry_t*)jl_array_ptr_ref(leafcache, i);
+        if (oldentry) {
+            while ((jl_value_t*)oldentry != jl_nothing) {
+                invalidate_mt_cache(oldentry, (void*)&mt_cache_env);
+                oldentry = oldentry->next;
+            }
+        }
     }
     // Invalidate the backedges
     int invalidated = 0;
@@ -1828,9 +1853,13 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
         jl_array_t *leafcache = mt->leafcache;
         size_t i, l = jl_array_len(leafcache);
         for (i = 1; i < l; i += 2) {
-            jl_value_t *l = jl_array_ptr_ref(leafcache, i);
-            if (l && l != jl_nothing)
-                invalidate_mt_cache((jl_typemap_entry_t*)l, (void*)&mt_cache_env);
+            jl_value_t *entry = jl_array_ptr_ref(leafcache, i);
+            if (entry) {
+                while (entry != jl_nothing) {
+                    invalidate_mt_cache((jl_typemap_entry_t*)entry, (void*)&mt_cache_env);
+                    entry = (jl_value_t*)((jl_typemap_entry_t*)entry)->next;
+                }
+            }
         }
         //TODO: if it's small, might it be better to drop it all?
         //if (mt != jl_type_type_mt) {
