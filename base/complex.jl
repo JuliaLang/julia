@@ -541,9 +541,7 @@ function cis(z::Complex)
     Complex(v * c, v * s)
 end
 
-cispi(sign::Bool) = sign ? -1 : 1
-cispi(sign::Integer) = oftype(sign, cispi(isodd(sign)))
-cispi(theta::Real) = Complex(cospi(theta), sinpi(theta))
+cispi(theta::Real) = Complex(reverse(sincospi(theta))...)
 
 """
     cispi(z)
@@ -572,7 +570,8 @@ true
     This function requires Julia 1.6 or later.
 """
 function cispi(z::Complex)
-    cospi(z) + im*sinpi(z)
+    sipi, copi = sincospi(z)
+    return complex(real(copi) - imag(sipi), imag(copi) + real(sipi))
 end
 
 """
