@@ -122,10 +122,26 @@ end
     set_num_threads(::Nothing)
 
 Set the number of threads the BLAS library should use equal to `n::Integer`.
-If `nothing` is passed to this function, julia tries to figure out the optimial number of threads.
-The exact heuristic is an implementation detail.
 
-On exotic variants of `BLAS` this function can fail.
+Also accepts `nothing`, in which case julia tries to guess the default number of threads.
+Passing `nothing` is discouraged and mainly exists for the following reason:
+
+On exotic variants of BLAS, `nothing` may be returned by `get_num_threads()`.
+Thus on exotic variants of BLAS, the following pattern may fail to set the number of threads:
+
+```julia
+old = get_num_threads()
+set_num_threads(1)
+@threads for i in 1:10
+    # single-threaded BLAS calls
+end
+set_num_threads(old)
+```
+Because `set_num_threads` accepts `nothing`, this code can still run
+on exotic variants of BLAS without error. Warnings will be raised instead.
+
+!!! compat "Julia 1.6"
+    `set_num_threads(::Nothing)` requires at least Julia 1.6.
 """
 set_num_threads(n)::Nothing = _set_num_threads(n)
 
@@ -162,6 +178,9 @@ end
 Get the number of threads the BLAS library is using.
 
 On exotic variants of `BLAS` this function can fail, which is indicated by returning `nothing`.
+
+!!! compat "Julia 1.6"
+    `get_num_threads` requires at least Julia 1.6.
 """
 get_num_threads(;_blas=guess_vendor())::Union{Int, Nothing} = _get_num_threads()
 
