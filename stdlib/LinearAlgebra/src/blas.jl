@@ -153,7 +153,7 @@ function _set_num_threads(::Nothing; _blas = guess_vendor())
         _tryparse_env_int("OMP_NUM_THREADS"),
         max(1, Sys.CPU_THREADS ÷ 2),
     )
-    set_num_threads(n; _blas)
+    _set_num_threads(n; _blas)
 end
 
 """
