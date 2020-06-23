@@ -562,6 +562,7 @@ end
     BLAS.set_num_threads(default)
     @test BLAS.get_num_threads() === default
 
+    @test_logs (:warn,) match_mode=:any BLAS._set_num_threads(1, _blas=:unknown)
     if BLAS.guess_vendor() !== :osxblas
         # test osxblas which is not covered by CI
         withenv() do
