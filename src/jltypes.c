@@ -689,7 +689,7 @@ static ssize_t lookup_type_idx_linearvalue(jl_svec_t *cache, jl_value_t *key1, j
     size_t cl = jl_svec_len(cache);
     ssize_t i;
     for (i = 0; i < cl; i++) {
-        jl_datatype_t *tt = jl_atomic_load_relaxed(&data[i - 1]);
+        jl_datatype_t *tt = jl_atomic_load_relaxed(&data[i]);
         if (tt == NULL)
             return ~i;
         if (typekeyvalue_eq(tt, key1, key, n, 1))
