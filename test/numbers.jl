@@ -2675,6 +2675,13 @@ end
     @test rem2pi(T(-8), RoundUp)      ≈ -8+2pi
 end
 
+@testset "PR #36420 $T" for T in (Float16, Float32, Float64)
+    @test rem2pi(T(NaN), RoundToZero)  === T(NaN)
+    @test rem2pi(T(NaN), RoundNearest) === T(NaN)
+    @test rem2pi(T(NaN), RoundDown)    === T(NaN)
+    @test rem2pi(T(NaN), RoundUp)      === T(NaN)
+end
+
 import Base.^
 struct PR20530; end
 struct PR20889; x; end
