@@ -394,6 +394,7 @@ function __init__()
     # initialize loading
     init_depot_path()
     init_load_path()
+    init_active_project()
     nothing
 end
 

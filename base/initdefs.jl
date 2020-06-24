@@ -101,7 +101,7 @@ function init_depot_path()
     end
 end
 
-## LOAD_PATH, HOME_PROJECT & ACTIVE_PROJECT ##
+## LOAD_PATH & ACTIVE_PROJECT ##
 
 # JULIA_LOAD_PATH: split on `:` (or `;` on Windows)
 # first empty entry is replaced with DEFAULT_LOAD_PATH, the rest are skipped
@@ -155,6 +155,7 @@ See also:
 [Code Loading](@ref Code-Loading).
 """
 const LOAD_PATH = copy(DEFAULT_LOAD_PATH)
+# HOME_PROJECT is no longer used, here just to avoid breaking things
 const HOME_PROJECT = Ref{Union{String,Nothing}}(nothing)
 const ACTIVE_PROJECT = Ref{Union{String,Nothing}}(nothing)
 
@@ -211,14 +212,17 @@ function init_load_path()
         paths = filter!(env -> env !== nothing,
             [env == "@." ? current_project() : env for env in DEFAULT_LOAD_PATH])
     end
+    append!(empty!(LOAD_PATH), paths)
+end
+
+function init_active_project()
     project = (JLOptions().project != C_NULL ?
         unsafe_string(Base.JLOptions().project) :
         get(ENV, "JULIA_PROJECT", nothing))
-    HOME_PROJECT[] =
+    ACTIVE_PROJECT[] =
         project === nothing ? nothing :
         project == "" ? nothing :
         project == "@." ? current_project() : abspath(expanduser(project))
-    append!(empty!(LOAD_PATH), paths)
 end
 
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
@@ -262,7 +266,7 @@ end
 load_path_expand(::Nothing) = nothing
 
 function active_project(search_load_path::Bool=true)
-    for project in (ACTIVE_PROJECT[], HOME_PROJECT[])
+    for project in (ACTIVE_PROJECT[],)
         project == "@" && continue
         project = load_path_expand(project)
         project === nothing && continue

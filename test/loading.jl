@@ -183,12 +183,10 @@ end
 
 saved_load_path = copy(LOAD_PATH)
 saved_depot_path = copy(DEPOT_PATH)
-saved_home_project = Base.HOME_PROJECT[]
 saved_active_project = Base.ACTIVE_PROJECT[]
 
 push!(empty!(LOAD_PATH), "project")
 push!(empty!(DEPOT_PATH), "depot")
-Base.HOME_PROJECT[] = nothing
 Base.ACTIVE_PROJECT[] = nothing
 
 @test load_path() == [abspath("project","Project.toml")]
@@ -667,7 +665,6 @@ end
 
 append!(empty!(LOAD_PATH), saved_load_path)
 append!(empty!(DEPOT_PATH), saved_depot_path)
-Base.HOME_PROJECT[] = saved_home_project
 Base.ACTIVE_PROJECT[] = saved_active_project
 
 # issue #28190
