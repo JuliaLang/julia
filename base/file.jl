@@ -710,7 +710,7 @@ back, call `readdir` with an absolute directory path and `join` set to true.
 
 By default, `readdir` sorts the list of names it returns. If you want to skip
 sorting the names and get them in the order that the file system lists them,
-you can use `readir(dir, sort=false)` to opt out of sorting.
+you can use `readdir(dir, sort=false)` to opt out of sorting.
 
 !!! compat "Julia 1.4"
     The `join` and `sort` keyword arguments require at least Julia 1.4.
