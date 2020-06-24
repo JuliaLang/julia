@@ -2913,18 +2913,23 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
     struct jl_typemap_assoc search = {(jl_value_t*)type, world, jl_emptysvec, 1, ~(size_t)0};
     JL_GC_PUSH5(&env.t, &env.matc, &env.match.env, &search.env, &env.match.ti);
 
+    // check the leaf cache if this type can be in there
     if (((jl_datatype_t*)unw)->isdispatchtuple) {
         jl_array_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
         jl_typemap_entry_t *entry = lookup_leafcache(leafcache, (jl_value_t*)type, world);
         if (entry) {
             jl_method_instance_t *mi = entry->func.linfo;
             jl_method_t *meth = mi->def.method;
-            if (jl_egal((jl_value_t*)type, mi->specTypes)) {
+            if (!jl_is_unionall(meth->sig)) {
+                env.match.env = jl_emptysvec;
+                env.match.ti = unw;
+            }
+            else if (jl_egal((jl_value_t*)type, mi->specTypes)) {
                 env.match.env = mi->sparam_vals;
                 env.match.ti = mi->specTypes;
             }
             else {
-                // TODO: should we use jl_subtype_env instead (since we know that `type <: meth->sig` by transitivity)
+                // this just calls jl_subtype_env (since we know that `type <: meth->sig` by transitivity)
                 env.match.ti = jl_type_intersection_env((jl_value_t*)type, (jl_value_t*)meth->sig, &env.match.env);
             }
             env.matc = jl_svec(3, env.match.ti, env.match.env, meth);
@@ -2938,13 +2943,20 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
             return env.t;
         }
     }
+    // then check the full cache if it seems profitable
     if (((jl_datatype_t*)unw)->isdispatchtuple) {
         jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->cache, &search, jl_cachearg_offset(mt), /*subtype*/1);
         if (entry && (((jl_datatype_t*)unw)->isdispatchtuple || entry->guardsigs == jl_emptysvec)) {
             jl_method_instance_t *mi = entry->func.linfo;
             jl_method_t *meth = mi->def.method;
-            // TODO: should we use jl_subtype_env instead (since we know that `type <: meth->sig` by transitivity)
-            env.match.ti = jl_type_intersection_env((jl_value_t*)type, (jl_value_t*)meth->sig, &env.match.env);
+            if (!jl_is_unionall(meth->sig) && ((jl_datatype_t*)unw)->isdispatchtuple) {
+                env.match.env = jl_emptysvec;
+                env.match.ti = unw;
+            }
+            else {
+                // this just calls jl_subtype_env (since we know that `type <: meth->sig` by transitivity)
+                env.match.ti = jl_type_intersection_env((jl_value_t*)type, (jl_value_t*)meth->sig, &env.match.env);
+            }
             env.matc = jl_svec(3, env.match.ti, env.match.env, meth);
             env.t = (jl_value_t*)jl_alloc_vec_any(1);
             jl_array_ptr_set(env.t, 0, env.matc);
