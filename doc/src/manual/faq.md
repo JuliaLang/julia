@@ -935,6 +935,22 @@ Julia compiles and uses its own copy of OpenBLAS, with threads currently capped 
 
 Modifying OpenBLAS settings or compiling Julia with a different BLAS library, eg [Intel MKL](https://software.intel.com/en-us/mkl), may provide performance improvements. You can use [MKL.jl](https://github.com/JuliaComputing/MKL.jl), a package that makes Julia's linear algebra use Intel MKL BLAS and LAPACK instead of OpenBLAS, or search the discussion forum for suggestions on how to set this up manually. Note that Intel MKL cannot be bundled with Julia, as it is not open source.
 
+## Computing cluster
+
+### How do I manage precompilation caches in distributed file systems?
+
+When using `julia` in high-performance computing (HPC) facilities, invoking
+_n_ `julia` processes simultaneously creates at most _n_ temporary copies of
+precompilation cache files. If this is an issue (slow and/or small distributed
+file system), you may:
+
+1. Use `julia` with `--compiled-modules=no` flag to turn off precompilation.
+2. Configure a private writable depot using `pushfirst!(DEPOT_PATH, private_path)`
+   where `private_path` is a path unique to this `julia` process.  This
+   can also be done by setting environment variable `JULIA_DEPOT_PATH` to
+   `$private_path:$HOME/.julia`.
+3. Create a symlink from `~/.julia/compiled` to a directory in a scratch space.
+
 ## Julia Releases
 
 ### Do I want to use the Stable, LTS, or nightly version of Julia?

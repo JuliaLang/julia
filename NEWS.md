@@ -18,6 +18,8 @@ Compiler/Runtime improvements
   This allows executable-relative paths to be embedded within executables on all
   platforms, not just MacOS, which the syntax is borrowed from. ([#35627])
 * Constant propogation now occurs through keyword arguments ([#35976])
+* The precompilation cache is now created atomically ([#36416]). Invoking _n_
+  Julia processes simultaneously may create _n_ temporary caches.
 
 Command-line option changes
 ---------------------------
