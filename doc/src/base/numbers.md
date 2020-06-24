@@ -51,7 +51,12 @@ Base.signed
 Base.unsigned
 Base.float(::Any)
 Base.Math.significand
+
 Base.Math.exponent
+exponent(x::BigFloat)
+exponent(x::T) where T<:Union{Float16, Float32, Float64}
+returns the x for 2^y which is closest to x rounded toward zero
+
 Base.complex(::Complex)
 Base.bswap
 Base.hex2bytes
