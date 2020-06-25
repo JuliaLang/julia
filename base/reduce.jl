@@ -270,6 +270,10 @@ In general, it will be necessary to provide `init` to work with empty collection
 intermediate collection needs to be created. See documentation for [`reduce`](@ref) and
 [`map`](@ref).
 
+Known commutativity of the operation `op` such as `+` and `max` may be exploited in the
+implementation.  It means that the elements of `itr` may be accessed out of order and
+the order in which `f` is called is implementation-defined.
+
 !!! compat "Julia 1.2"
     `mapreduce` with multiple iterators requires Julia 1.2 or later.
 
@@ -439,6 +443,9 @@ The associativity of the reduction is implementation dependent. This means that 
 use non-associative operations like `-` because it is undefined whether `reduce(-,[1,2,3])`
 should be evaluated as `(1-2)-3` or `1-(2-3)`. Use [`foldl`](@ref) or
 [`foldr`](@ref) instead for guaranteed left or right associativity.
+
+Known commutativity of the operation `op` such as `+` and `max` may be exploited in the
+implementation.  It means that the elements of `itr` may be accessed out of order.
 
 Some operations accumulate error. Parallelism will be easier if the reduction can be
 executed in groups. Future versions of Julia might change the algorithm. Note that the
