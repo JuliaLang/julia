@@ -2352,7 +2352,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
                 nroots++;
             if ((gc_uses[nroots] = get_gc_root_for(arg2)))
                 nroots++;
-            OperandBundleDef OpBundle("jl_roots", gc_uses);
+            OperandBundleDef OpBundle("jl_roots", makeArrayRef(gc_uses, nroots));
             Value *answer = ctx.builder.CreateCall(prepare_call(memcmp_func), {
                         ctx.builder.CreateBitCast(varg1, T_pint8),
                         ctx.builder.CreateBitCast(varg2, T_pint8),
