@@ -271,7 +271,7 @@ intermediate collection needs to be created. See documentation for [`reduce`](@r
 [`map`](@ref).
 
 Known commutativity of the operation `op` such as `+` and `max` may be exploited in the
-implementation.  It means that the elements of `itr` may be accessed out of order and
+implementation. This means that the elements of `itr` may be accessed out of order and
 the order in which `f` is called is implementation-defined.
 
 !!! compat "Julia 1.2"
@@ -445,7 +445,7 @@ should be evaluated as `(1-2)-3` or `1-(2-3)`. Use [`foldl`](@ref) or
 [`foldr`](@ref) instead for guaranteed left or right associativity.
 
 Known commutativity of the operation `op` such as `+` and `max` may be exploited in the
-implementation.  It means that the elements of `itr` may be accessed out of order.
+implementation. This means that the elements of `itr` may be accessed out of order.
 
 Some operations accumulate error. Parallelism will be easier if the reduction can be
 executed in groups. Future versions of Julia might change the algorithm. Note that the
