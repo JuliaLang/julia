@@ -776,9 +776,10 @@ end
 ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 
 """
-    exponent(x) -> Int
+    exponent(x::BigFloat)
+    exponent(x::T) where T<:Union{Float16, Float32, Float64}
 
-Get the exponent of a normalized floating-point number.
+Returns the x for 2^y which is closest to x rounded toward zero
 """
 function exponent(x::T) where T<:IEEEFloat
     @noinline throw1(x) = throw(DomainError(x, "Cannot be NaN or Inf."))
