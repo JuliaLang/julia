@@ -288,7 +288,7 @@ let undefvar
     @test occursin("DomainError with [0.0 -1.0 …", err_str)
 
     err_str = @except_str (1, 2, 3)[4] BoundsError
-    @test err_str == "BoundsError: attempt to access (1, 2, 3)\n  at index [4]"
+    @test err_str == "BoundsError: attempt to access Tuple{Int64,Int64,Int64}\n  at index [4]"
 
     err_str = @except_str [5, 4, 3][-2, 1] BoundsError
     @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [-2, 1]"
