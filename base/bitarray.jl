@@ -967,11 +967,11 @@ function deleteat!(B::BitVector, inds)
     n = new_l = length(B)
     y = iterate(inds)
     y === nothing && return B
-    n == 0 && throw(BoundsError(B, inds))
 
     Bc = B.chunks
 
     (p, s) = y
+    checkbounds(B, p)
     q = p+1
     new_l -= 1
     y = iterate(inds, s)
