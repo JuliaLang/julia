@@ -963,7 +963,7 @@ static int concretesig_equal(jl_value_t *tt, jl_value_t *simplesig) JL_NOTSAFEPO
         jl_value_t *decl = sigs[i];
         jl_value_t *a = types[i];
         if (a != decl && decl != (jl_value_t*)jl_any_type) {
-            if (!jl_is_type_type(a) && jl_typeof(jl_tparam0(a)) == decl)
+            if (!(jl_is_type_type(a) && jl_typeof(jl_tparam0(a)) == decl))
                 return 0;
         }
     }
