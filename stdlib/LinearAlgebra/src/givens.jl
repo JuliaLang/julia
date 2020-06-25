@@ -248,6 +248,14 @@ function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
     return cs, sn, r
 end
 
+# enable for unitful quantities
+function givensAlgorithm(f::T, g::T) where T
+    fs = f / oneunit(T)
+    gs = g / oneunit(T)
+    c, s, r = givensAlgorithm(fs, gs)
+    c, s, r * oneunit(T)
+end
+
 givensAlgorithm(f, g) = givensAlgorithm(promote(float(f), float(g))...)
 
 """
