@@ -1139,8 +1139,11 @@ static jl_method_instance_t *cache_method(
 
     jl_typemap_entry_t *newentry = jl_typemap_alloc(cachett, simplett, guardsigs, (jl_value_t*)newmeth, min_valid, max_valid);
     temp = (jl_value_t*)newentry;
-    if (mt && cachett == tt && jl_svec_len(guardsigs) == 0) {
-        if (!jl_has_free_typevars((jl_value_t*)tt) && jl_lookup_cache_type_(tt) == NULL) {
+    if (mt && cachett == tt && jl_svec_len(guardsigs) == 0 && tt->hash && !tt->hasfreetypevars) {
+        // we check `tt->hash` exists, since otherwise the NamedTuple
+        // constructor and `structdiff` method pollutes this lookup with a lot
+        // of garbage in the linear table search
+        if (jl_lookup_cache_type_(tt) == NULL) {
             // if this type isn't normally in the cache, force it in there now
             // anyways so that we can depend on it as a token (especially since
             // we just cached it in memory as this method signature anyways)
@@ -1948,6 +1951,11 @@ jl_tupletype_t *arg_type_tuple(jl_value_t *arg1, jl_value_t **args, size_t nargs
     return jl_inst_arg_tuple_type(arg1, args, nargs, 1);
 }
 
+jl_tupletype_t *lookup_arg_type_tuple(jl_value_t *arg1 JL_PROPAGATES_ROOT, jl_value_t **args, size_t nargs)
+{
+    return jl_lookup_arg_tuple_type(arg1, args, nargs, 1);
+}
+
 jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t world)
 {
     assert(nargs > 0 && "expected caller to handle this case");
@@ -2449,14 +2457,25 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
         // if no method was found in the associative cache, check the full cache
         JL_TIMING(METHOD_LOOKUP_FAST);
         mt = jl_gf_mtable(F);
-        entry = jl_typemap_assoc_exact(mt->cache, F, args, nargs, jl_cachearg_offset(mt), world);
-        if (entry == NULL) {
-            last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
-            tt = arg_type_tuple(F, args, nargs);
-            jl_array_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
-            entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
+        jl_array_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
+        entry = NULL;
+        if (leafcache != (jl_array_t*)jl_an_empty_vec_any && jl_typeis(mt->cache, jl_typemap_level_type)) {
+            // hashing args is expensive, but looking at mt->cache is probably even more expensive
+            tt = lookup_arg_type_tuple(F, args, nargs);
+            if (tt != NULL)
+                entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
         }
-        if (entry && entry->isleafsig && entry->simplesig == (void*)jl_nothing && entry->guardsigs == jl_emptysvec) {
+        if (entry == NULL) {
+            entry = jl_typemap_assoc_exact(mt->cache, F, args, nargs, jl_cachearg_offset(mt), world);
+            if (entry == NULL) {
+                last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
+                if (tt == NULL) {
+                    tt = arg_type_tuple(F, args, nargs);
+                    entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
+                }
+            }
+        }
+        if (entry != NULL && entry->isleafsig && entry->simplesig == (void*)jl_nothing && entry->guardsigs == jl_emptysvec) {
             // put the entry into the cache if it's valid for a leafsig lookup,
             // using pick_which to slightly randomize where it ends up
             call_cache[cache_idx[++pick_which[cache_idx[0]] & 3]] = entry;
