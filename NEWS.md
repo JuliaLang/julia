@@ -38,6 +38,8 @@ New library functions
 * New function `Base.Threads.foreach(f, channel::Channel)` for multithreaded `Channel` consumption. ([#34543]).
 * `Iterators.map` is added. It provides another syntax `Iterators.map(f, iterators...)`
   for writing `(f(args...) for args in zip(iterators...))`, i.e. a lazy `map` ([#34352]).
+* New function `sincospi` for simultaneously computing `sinpi(x)` and `cospi(x)` more
+  efficiently ([#35816]).
 
 New library features
 --------------------
