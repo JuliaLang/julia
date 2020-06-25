@@ -347,6 +347,10 @@ cmp(a::Symbol, b::Symbol) = Int(sign(ccall(:strcmp, Int32, (Cstring, Cstring), a
 
 isless(a::Symbol, b::Symbol) = cmp(a, b) < 0
 
+# hashing
+
+hash(s::AbstractString, h::UInt) = hash(String(s), h)
+
 ## character index arithmetic ##
 
 """
