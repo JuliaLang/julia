@@ -222,15 +222,35 @@ let dl = C_NULL
     @test_skip !Libdl.dlclose(dl)   # Syscall doesn't fail on Win32
 end
 
-# test @executable_path expansion
+# test DL_LOAD_PATH handling and @executable_path expansion
 mktempdir() do dir
     # Create a `libdcalltest` in a directory that is not on our load path
     src_path = joinpath(private_libdir, "libccalltest.$(Libdl.dlext)")
     dst_path = joinpath(dir, "libdcalltest.$(Libdl.dlext)")
     cp(src_path, dst_path)
 
+    # Add an absurdly long entry to the load path to verify it doesn't lead to a buffer overflow
+    push!(Base.DL_LOAD_PATH, joinpath(dir, join(rand('a':'z', 10000))))
+
     # Add this temporary directory to our load path, using `@executable_path` to do so.
     push!(Base.DL_LOAD_PATH, joinpath("@executable_path", relpath(dir, Sys.BINDIR)))
+
+    # Test that we can now open that file
+    Libdl.dlopen("libdcalltest") do dl
+        fptr = Libdl.dlsym(dl, :set_verbose)
+        @test fptr !== nothing
+        @test_throws ErrorException Libdl.dlsym(dl, :foo)
+
+        fptr = Libdl.dlsym_e(dl, :set_verbose)
+        @test fptr != C_NULL
+        fptr = Libdl.dlsym_e(dl, :foo)
+        @test fptr == C_NULL
+    end
+
+    # Now use the absolute path
+    empty!(Base.DL_LOAD_PATH)
+    push!(Base.DL_LOAD_PATH, joinpath(dir, join(rand('a':'z', 10000))))
+    push!(Base.DL_LOAD_PATH, dir)
 
     # Test that we can now open that file
     Libdl.dlopen("libdcalltest") do dl
