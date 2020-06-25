@@ -129,6 +129,7 @@ include("abstractarraymath.jl")
 include("arraymath.jl")
 
 # SIMD loops
+@pure sizeof(s::String) = Core.sizeof(s)  # needed by gensym as called from simdloop
 include("simdloop.jl")
 using .SimdLoop
 

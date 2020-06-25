@@ -224,7 +224,7 @@ julia> lstrip(a)
 """
 function lstrip(f, s::AbstractString)
     e = lastindex(s)
-    for (i, c) in pairs(s)
+    for (i::Int, c::AbstractChar) in pairs(s)
         !f(c) && return @inbounds SubString(s, i, e)
     end
     SubString(s, e+1, e)
