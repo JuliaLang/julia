@@ -16,8 +16,25 @@ const _REF_NAME = Ref.body.name
 call_result_unused(frame::InferenceState, pc::LineNum=frame.currpc) =
     isexpr(frame.src.code[frame.currpc], :call) && isempty(frame.ssavalue_uses[pc])
 
+function matching_methods(@nospecialize(atype), cache::IdDict{Any, Tuple{Any, UInt, UInt}}, max_methods::Int, world::UInt)
+    box = Core.Box(atype)
+    return get!(cache, atype) do
+        _min_val = UInt[typemin(UInt)]
+        _max_val = UInt[typemax(UInt)]
+        ms = _methods_by_ftype(box.contents, max_methods, world, _min_val, _max_val)
+        return ms, _min_val[1], _max_val[1]
+    end
+end
+
+function matching_methods(@nospecialize(atype), cache::IdDict{Any, Tuple{Any, UInt, UInt}}, max_methods::Int, world::UInt, min_valid::Vector{UInt}, max_valid::Vector{UInt})
+    ms, minvalid, maxvalid = matching_methods(atype, cache, max_methods, world)
+    min_valid[1] = max(min_valid[1], minvalid)
+    max_valid[1] = min(max_valid[1], maxvalid)
+    return ms
+end
+
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState,
-                                  max_methods = InferenceParams(interp).MAX_METHODS)
+                                  max_methods::Int = InferenceParams(interp).MAX_METHODS)
     atype_params = unwrap_unionall(atype).parameters
     ft = unwrap_unionall(atype_params[1]) # TODO: ccall jl_method_table_for here
     isa(ft, DataType) || return Any # the function being called is unknown. can't properly handle this backedge right now
@@ -42,22 +59,14 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         splitsigs = switchtupleunion(atype)
         applicable = Any[]
         for sig_n in splitsigs
-            (xapplicable, min_valid[1], max_valid[1]) =
-                get!(sv.matching_methods_cache, sig_n) do
-                    ms = _methods_by_ftype(sig_n, max_methods,
-                            get_world_counter(interp), min_valid, max_valid)
-                    return (ms, min_valid[1], max_valid[1])
-                end
+            xapplicable = matching_methods(sig_n, sv.matching_methods_cache, max_methods,
+                                           get_world_counter(interp), min_valid, max_valid)
             xapplicable === false && return Any
             append!(applicable, xapplicable)
         end
     else
-        (applicable, min_valid[1], max_valid[1]) =
-            get!(sv.matching_methods_cache, atype) do
-                ms = _methods_by_ftype(atype, max_methods,
-                        get_world_counter(interp), min_valid, max_valid)
-                return (ms, min_valid[1], max_valid[1])
-            end
+        applicable = matching_methods(atype, sv.matching_methods_cache, max_methods,
+                                      get_world_counter(interp), min_valid, max_valid)
         if applicable === false
             # this means too many methods matched
             # (assume this will always be true, so we don't compute / update valid age in this case)
@@ -595,7 +604,7 @@ end
 
 # do apply(af, fargs...), where af is a function value
 function abstract_apply(interp::AbstractInterpreter, @nospecialize(itft), @nospecialize(aft), aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState,
-                        max_methods = InferenceParams(interp).MAX_METHODS)
+                        max_methods::Int = InferenceParams(interp).MAX_METHODS)
     aftw = widenconst(aft)
     if !isa(aft, Const) && (!isType(aftw) || has_free_typevars(aftw))
         if !isconcretetype(aftw) || (aftw <: Builtin)
@@ -694,7 +703,7 @@ function argtype_tail(argtypes::Vector{Any}, i::Int)
 end
 
 # call where the function is known exactly
-function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f), fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState, max_methods = InferenceParams(interp).MAX_METHODS)
+function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f), fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState, max_methods::Int = InferenceParams(interp).MAX_METHODS)
     la = length(argtypes)
 
     if isa(f, Builtin)
@@ -911,7 +920,7 @@ end
 
 # call where the function is any lattice element
 function abstract_call(interp::AbstractInterpreter, fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any},
-                       vtypes::VarTable, sv::InferenceState, max_methods = InferenceParams(interp).MAX_METHODS)
+                       vtypes::VarTable, sv::InferenceState, max_methods::Int = InferenceParams(interp).MAX_METHODS)
     #print("call ", e.args[1], argtypes, "\n\n")
     ft = argtypes[1]
     if isa(ft, Const)

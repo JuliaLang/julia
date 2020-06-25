@@ -1041,18 +1041,13 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
         local fully_covered = true
         for atype in splits
             # Regular case: Retrieve matching methods from cache (or compute them)
-            (meth, min_valid, max_valid) = get(sv.matching_methods_cache, atype) do
-                # World age does not need to be taken into account in the cache
-                # because it is forwarded from type inference through `sv.params`
-                # in the case that the cache is nonempty, so it should be unchanged
-                # The max number of methods should be the same as in inference most
-                # of the time, and should not affect correctness otherwise.
-                min_val = UInt[typemin(UInt)]
-                max_val = UInt[typemax(UInt)]
-                ms = _methods_by_ftype(atype, sv.params.MAX_METHODS,
-                    sv.world, min_val, max_val)
-                return (ms, min_val[1], max_val[1])
-            end
+            # World age does not need to be taken into account in the cache
+            # because it is forwarded from type inference through `sv.params`
+            # in the case that the cache is nonempty, so it should be unchanged
+            # The max number of methods should be the same as in inference most
+            # of the time, and should not affect correctness otherwise.
+            (meth, min_valid, max_valid) =
+                matching_methods(atype, sv.matching_methods_cache, sv.params.MAX_METHODS, sv.world)
             if meth === false
                 # Too many applicable methods
                 too_many = true
@@ -1100,12 +1095,10 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
         if signature_fully_covered && length(cases) == 0 && only_method isa Method
             if length(splits) > 1
                 # get match information for a single overall match instead of union splits
-                meth = get(sv.matching_methods_cache, sig.atype) do
-                    ms = _methods_by_ftype(sig.atype, sv.params.MAX_METHODS,
-                        sv.world, UInt[typemin(UInt)], UInt[typemin(UInt)])
-                    return ms
-                end
+                (meth, min_valid, max_valid) =
+                    matching_methods(sig.atype, sv.matching_methods_cache, sv.params.MAX_METHODS, sv.world)
                 @assert length(meth) == 1
+                update_valid_age!(min_valid, max_valid, sv)
             end
             (metharg, methsp, method) = (meth[1][1]::Type, meth[1][2]::SimpleVector, meth[1][3]::Method)
             fully_covered = true
