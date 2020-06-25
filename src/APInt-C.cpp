@@ -122,7 +122,7 @@ extern "C" JL_DLLEXPORT
 int LLVMICmpSLT(unsigned numbits, integerPart *pa, integerPart *pb) {
     CREATE(a)
     CREATE(b)
-    return a.slt(b);
+    return a.slt(b);                  
 }
 
 extern "C" JL_DLLEXPORT
