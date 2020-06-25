@@ -1016,13 +1016,14 @@ Base.unsafe_convert(::Type{Ptr{T}}, S::Strider{T}) where {T} = pointer(S.data, S
                  (2:2:sz[1]-1, sz[2]:-1:1, sz[3]:-2:2),
                  (sz[1]:-1:1, sz[2]:-1:1, sz[3]:-1:1),
                  (sz[1]-1:-3:1, sz[2]:-2:3, 1:sz[3]),)
+        Ai = A[idxs...]
         Av = view(A, idxs...)
         Sv = view(S, idxs...)
         Ss = Strider{Int, 3}(vec(A), sum((first.(idxs).-1).*strides(A))+1, strides(Av), length.(idxs))
         @test pointer(Av) == pointer(Sv) == pointer(Ss)
         for i in 1:length(Av)
             @test pointer(Av, i) == pointer(Sv, i) == pointer(Ss, i)
-            @test Av[i] == Sv[i] == Ss[i]
+            @test Ai[i] == Av[i] == Sv[i] == Ss[i]
         end
         for perm in ((3, 2, 1), (2, 1, 3), (3, 1, 2))
             P = permutedims(A, perm)
@@ -1036,22 +1037,24 @@ Base.unsafe_convert(::Type{Ptr{T}}, S::Strider{T}) where {T} = pointer(S.data, S
                 @test P[i] == Ap[i] == Sp[i] == Ps[i]
             end
             Pv = view(P, idxs[collect(perm)]...)
+            Pi = P[idxs[collect(perm)]...]
             Apv = view(Ap, idxs[collect(perm)]...)
             Spv = view(Sp, idxs[collect(perm)]...)
             Pvs = Strider{Int, 3}(vec(A), sum((first.(idxs).-1).*strides(A))+1, strides(Apv), size(Apv))
             @test pointer(Apv) == pointer(Spv) == pointer(Pvs)
             for i in 1:length(Apv)
                 @test pointer(Apv, i) == pointer(Spv, i) == pointer(Pvs, i)
-                @test Pv[i] == Apv[i] == Spv[i] == Pvs[i]
+                @test Pi[i] == Pv[i] == Apv[i] == Spv[i] == Pvs[i]
             end
             Vp = permutedims(Av, perm)
+            Ip = permutedims(Ai, perm)
             Avp = Base.PermutedDimsArray(Av, perm)
             Svp = Base.PermutedDimsArray(Sv, perm)
             @test pointer(Avp) == pointer(Svp)
             for i in 1:length(Avp)
                 # This is intentionally disabled due to ambiguity
                 @test_broken pointer(Avp, i) == pointer(Svp, i)
-                @test Vp[i] == Avp[i] == Svp[i]
+                @test Ip[i] == Vp[i] == Avp[i] == Svp[i]
             end
         end
     end
