@@ -3,7 +3,7 @@
 module TestGivens
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: rmul!, lmul!
+using LinearAlgebra: rmul!, lmul!, Givens
 
 # Test givens rotations
 @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
@@ -68,6 +68,25 @@ using LinearAlgebra: rmul!, lmul!
             @test abs((G*x)[2]) < eps(real(elty))
         end
     end
+end
+
+# 36430
+
+struct MockUnitful <: Number
+    data
+end
+import Base: *, /, one, oneunit
+*(a::MockUnitful, b::Number) = MockUnitful(a.data * b)
+*(a::Number, b::MockUnitful) = MockUnitful(a * b.data)
+/(a::MockUnitful, b::MockUnitful) = a.data / b.data
+one(::Type{<:MockUnitful}) = 1.0
+oneunit(::Type{<:MockUnitful}) = MockUnitful(1.0)
+
+@testset "unitful givens rotation" begin
+    g, r = givens(MockUnitful(3.0), MockUnitful(4.0), 1, 2)
+    @test g.c ≈ 3/5
+    @test g.s ≈ 4/5
+    @test r.data ≈ 5.0
 end
 
 end # module TestGivens
