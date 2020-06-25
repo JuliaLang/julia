@@ -686,7 +686,7 @@ reverseind(s::AbstractString, i::Integer) = thisind(s, ncodeunits(s)-i+1)
 
 Repeat a string `r` times. This can be written as `s^r`.
 
-See also: [`^`](@ref)
+See also: [`^`](@ref :^(::Union{AbstractString, AbstractChar}, ::Integer))
 
 # Examples
 ```jldoctest
