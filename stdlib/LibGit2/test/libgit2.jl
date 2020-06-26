@@ -47,9 +47,9 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
         return "Process output found:\n\"\"\"\n$str\n\"\"\""
     end
     out = IOBuffer()
-    with_fake_pty() do pty_slave, pty_master
-        p = run(detach(cmd), pty_slave, pty_slave, pty_slave, wait=false)
-        Base.close_stdio(pty_slave)
+    with_fake_pty() do pts, ptm
+        p = run(detach(cmd), pts, pts, pts, wait=false)
+        Base.close_stdio(pts)
 
         # Kill the process if it takes too long. Typically occurs when process is waiting
         # for input.
@@ -79,17 +79,17 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
         end
 
         for (challenge, response) in challenges
-            write(out, readuntil(pty_master, challenge, keep=true))
-            if !isopen(pty_master)
+            write(out, readuntil(ptm, challenge, keep=true))
+            if !isopen(ptm)
                 error("Could not locate challenge: \"$challenge\". ",
                       format_output(out))
             end
-            write(pty_master, response)
+            write(ptm, response)
         end
 
-        # Capture output from process until `pty_slave` is closed
+        # Capture output from process until `pts` is closed
         try
-            write(out, pty_master)
+            write(out, ptm)
         catch ex
             if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
                 rethrow() # ignore EIO from master after slave dies
@@ -97,7 +97,7 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
         end
 
         status = fetch(timer)
-        close(pty_master)
+        close(ptm)
         if status != :success
             if status == :timeout
                 error("Process timed out possibly waiting for a response. ",
@@ -3048,7 +3048,7 @@ mktempdir() do dir
                             deserialize(f)
                         end
                         @test err.code == LibGit2.Error.ERROR
-                        @test lowercase(err.msg) == lowercase("invalid Content-Type: text/plain")
+                        @test occursin(r"invalid content-type: '?text/plain'?"i, err.msg)
                     end
 
                     # OpenSSL s_server should still be running

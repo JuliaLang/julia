@@ -247,7 +247,7 @@ types exist in lowered form:
     Has a node type indicated by the `head` field, and an `args` field which is a `Vector{Any}` of
     subexpressions.
     While almost every part of a surface AST is represented by an `Expr`, the IR uses only a
-    limited number of `Expr`s, mostly for calls, conditional branches (`gotoifnot`), and returns.
+    limited number of `Expr`s, mostly for calls and some top-level-only forms.
 
   * `Slot`
 
@@ -258,6 +258,11 @@ types exist in lowered form:
     Slots that require per-use type annotations are represented with `TypedSlot`, which has a `typ`
     field.
 
+  * `Argument`
+
+    The same as `SlotNumber`, but appears only post-optimization. Indicates that the
+    referenced slot is an argument of the enclosing function.
+
   * `CodeInfo`
 
     Wraps the IR of a group of statements. Its `code` field is an array of expressions to execute.
@@ -266,6 +271,16 @@ types exist in lowered form:
 
     Unconditional branch. The argument is the branch target, represented as an index in
     the code array to jump to.
+
+  * `GotoIfNot`
+
+    Conditional branch. If the `cond` field evaluates to false, goes to the index identified
+    by the `dest` field.
+
+  * `ReturnNode`
+
+    Returns its argument (the `val` field) as the value of the enclosing function.
+    If the `val` field is undefined, then this represents an unreachable statement.
 
   * `QuoteNode`
 
@@ -304,10 +319,6 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `static_parameter`
 
     Reference a static parameter by index.
-
-  * `gotoifnot`
-
-    Conditional branch. If `args[1]` is false, goes to the index identified in `args[2]`.
 
   * `=`
 
@@ -414,10 +425,6 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
     Similar to `new`, except field values are passed as a single tuple. Works similarly to
     `Base.splat(new)` if `new` were a first-class function, hence the name.
-
-  * `return`
-
-    Returns its argument as the value of the enclosing function.
 
   * `isdefined`
 

@@ -13,7 +13,7 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
     s = string(n)
     i = findfirst(isequal('#'), s)
     if i !== nothing
-        s = s[1:i-1]
+        s = s[1:prevind(s, i)]
     end
     if t === Any && !isempty(s)
         return s, ""
@@ -240,6 +240,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     end
     n = rest = 0
     local last
+    LAST_SHOWN_LINE_INFOS = get(io, :LAST_SHOWN_LINE_INFOS, Tuple{String,Int}[])
 
     resize!(LAST_SHOWN_LINE_INFOS, 0)
     for meth in ms
@@ -373,6 +374,7 @@ show(io::IO, mime::MIME"text/html", mt::Core.MethodTable) = show(io, mime, Metho
 
 # pretty-printing of AbstractVector{Method}
 function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
+    LAST_SHOWN_LINE_INFOS = get(io, :LAST_SHOWN_LINE_INFOS, Tuple{String,Int}[])
     resize!(LAST_SHOWN_LINE_INFOS, 0)
     first = true
     for (i, m) in enumerate(mt)

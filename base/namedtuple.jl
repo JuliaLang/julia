@@ -248,7 +248,9 @@ function merge(a::NamedTuple{an}, b::NamedTuple{bn}) where {an, bn}
     end
 end
 
-merge(a::NamedTuple{()}, b::NamedTuple) = b
+merge(a::NamedTuple,     b::NamedTuple{()}) = a
+merge(a::NamedTuple{()}, b::NamedTuple{()}) = a
+merge(a::NamedTuple{()}, b::NamedTuple)     = b
 
 merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, b.data)
 
@@ -319,6 +321,8 @@ function structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn}, Type{NamedTuple{
         NamedTuple{names,types}(map(n->getfield(a, n), names))
     end
 end
+
+structdiff(a::NamedTuple{an}, b::Union{NamedTuple{an}, Type{NamedTuple{an}}}) where {an} = (;)
 
 """
     setindex(nt::NamedTuple, val, key::Symbol)

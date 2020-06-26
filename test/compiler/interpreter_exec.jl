@@ -2,6 +2,7 @@
 
 # tests that interpreter matches codegen
 using Test
+using Core: GotoIfNot, ReturnNode
 
 # test that interpreter correctly handles PhiNodes (#29262)
 let m = Meta.@lower 1 + 1
@@ -12,11 +13,11 @@ let m = Meta.@lower 1 + 1
         QuoteNode(:a),
         QuoteNode(:b),
         GlobalRef(@__MODULE__, :test29262),
-        Expr(:gotoifnot, Core.SSAValue(3), 6),
+        GotoIfNot(Core.SSAValue(3), 6),
         # block 2
         Core.PhiNode(Any[4], Any[Core.SSAValue(1)]),
         Core.PhiNode(Any[4, 5], Any[Core.SSAValue(2), Core.SSAValue(5)]),
-        Expr(:return, Core.SSAValue(6)),
+        ReturnNode(Core.SSAValue(6)),
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
@@ -51,12 +52,12 @@ let m = Meta.@lower 1 + 1
         Core.PhiNode(Any[], Any[]), # NULL, NULL
         Core.PhiNode(Any[17, 8], Any[Core.SSAValue(2), Core.SSAValue(8)]), # NULL, :c, [:b]
         Core.PhiNode(Any[], Any[]), # NULL, NULL
-        Expr(:gotoifnot, Core.SSAValue(5), 5),
+        GotoIfNot(Core.SSAValue(5), 5),
         # block 4
-        Expr(:gotoifnot, Core.SSAValue(10), 9),
+        GotoIfNot(Core.SSAValue(10), 9),
         # block 5
         Expr(:call, GlobalRef(Core, :tuple), Core.SSAValue(6), Core.SSAValue(7), Core.SSAValue(8), Core.SSAValue(14)),
-        Expr(:return, Core.SSAValue(18)),
+        ReturnNode(Core.SSAValue(18)),
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
@@ -83,7 +84,7 @@ let m = Meta.@lower 1 + 1
         Core.UpsilonNode(),
         Core.UpsilonNode(),
         Core.UpsilonNode(Core.SSAValue(2)),
-        Expr(:gotoifnot, Core.SSAValue(3), 10),
+        GotoIfNot(Core.SSAValue(3), 10),
         # block 4
         Core.UpsilonNode(Core.SSAValue(1)),
         # block 5
@@ -93,7 +94,7 @@ let m = Meta.@lower 1 + 1
         Core.PhiCNode(Any[Core.SSAValue(6)]), # NULL
         Expr(:leave, 1),
         # block 7
-        Expr(:return, Core.SSAValue(11)),
+        ReturnNode(Core.SSAValue(11)),
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]

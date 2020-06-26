@@ -68,8 +68,13 @@ function bytesavailable end
 """
     readavailable(stream)
 
-Read all available data on the stream, blocking the task only if no data is available. The
-result is a `Vector{UInt8}`.
+Read available buffered data from a stream. Actual I/O is performed only if no
+data has already been buffered. The result is a `Vector{UInt8}`.
+
+!!! warning
+    The amount of data returned is implementation-dependent; for example it can
+depend on the internal choice of buffer size. Other functions such as [`read`](@ref)
+should generally be used instead.
 """
 function readavailable end
 
@@ -328,8 +333,27 @@ function open(f::Function, args...; kwargs...)
     end
 end
 
-# Generic wrappers around other IO objects
+"""
+    AbstractPipe
+
+`AbstractPipe` is the abstract supertype for IO pipes that provide for communication between processes.
+
+If `pipe isa AbstractPipe`, it must obey the following interface:
+
+- `pipe.in` or `pipe.in_stream`, if present, must be of type `IO` and be used to provide input to the pipe
+- `pipe.out` or `pipe.out_stream`, if present, must be of type `IO` and be used for output from the pipe
+- `pipe.err` or `pipe.err_stream`, if present, must be of type `IO` and be used for writing errors from the pipe
+"""
 abstract type AbstractPipe <: IO end
+
+function getproperty(pipe::AbstractPipe, name::Symbol)
+    if name === :in || name === :in_stream || name === :out || name === :out_stream ||
+       name === :err || name === :err_stream
+        return getfield(pipe, name)::IO
+    end
+    return getfield(pipe, name)
+end
+
 function pipe_reader end
 function pipe_writer end
 
@@ -387,7 +411,7 @@ it is always safe to read one byte after seeing `eof` return `false`. `eof` will
 `false` as long as buffered data is still available, even if the remote end of a connection
 is closed.
 """
-eof(io::AbstractPipe) = eof(pipe_reader(io))
+eof(io::AbstractPipe) = eof(pipe_reader(io)::IO)::Bool
 reseteof(io::AbstractPipe) = reseteof(pipe_reader(io))
 
 

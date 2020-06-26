@@ -105,10 +105,10 @@ an [interned string](https://en.wikipedia.org/wiki/String_interning) used as one
 of expressions:
 
 ```jldoctest
-julia> :foo
+julia> s = :foo
 :foo
 
-julia> typeof(ans)
+julia> typeof(s)
 Symbol
 ```
 
@@ -354,10 +354,10 @@ Given an expression object, one can cause Julia to evaluate (execute) it at glob
 [`eval`](@ref):
 
 ```jldoctest interp1
-julia> :(1 + 2)
+julia> ex1 = :(1 + 2)
 :(1 + 2)
 
-julia> eval(ans)
+julia> eval(ex1)
 3
 
 julia> ex = :(a + b)

@@ -154,7 +154,7 @@ end
 size(a::Array, d::Integer) = arraysize(a, convert(Int, d))
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
-size(a::Array{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val(N)))
+size(a::Array{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val(N))::Dims)
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
@@ -320,6 +320,15 @@ Copy `N` elements from collection `src` starting at offset `so`, to array `dest`
 offset `do`. Return `dest`.
 """
 function copyto!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
+    return _copyto_impl!(dest, doffs, src, soffs, n)
+end
+
+# this is only needed to avoid possible ambiguities with methods added in some packages
+function copyto!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where T
+    return _copyto_impl!(dest, doffs, src, soffs, n)
+end
+
+function _copyto_impl!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
     n == 0 && return dest
     n > 0 || _throw_argerror()
     if soffs < 1 || doffs < 1 || soffs+n-1 > length(src) || doffs+n-1 > length(dest)
@@ -338,6 +347,9 @@ function _throw_argerror()
 end
 
 copyto!(dest::Array, src::Array) = copyto!(dest, 1, src, 1, length(src))
+
+# also to avoid ambiguities in packages
+copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, length(src))
 
 # N.B: The generic definition in multidimensional.jl covers, this, this is just here
 # for bootstrapping purposes.
@@ -549,8 +561,8 @@ promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(p
 
 if nameof(@__MODULE__) === :Base  # avoid method overwrite
 # constructors should make copies
-Array{T,N}(x::AbstractArray{S,N})         where {T,N,S} = copyto!(Array{T,N}(undef, size(x)), x)
-AbstractArray{T,N}(A::AbstractArray{S,N}) where {T,N,S} = copyto!(similar(A,T), A)
+Array{T,N}(x::AbstractArray{S,N})         where {T,N,S} = copyto_axcheck!(Array{T,N}(undef, size(x)), x)
+AbstractArray{T,N}(A::AbstractArray{S,N}) where {T,N,S} = copyto_axcheck!(similar(A,T), A)
 end
 
 ## copying iterators to containers
@@ -1141,13 +1153,44 @@ function pop!(a::Vector)
     return item
 end
 
-function pop!(a::Vector, i::Integer)
+"""
+    popat!(a::Vector, i::Integer, [default])
+
+Remove the item at the given `i` and return it. Subsequent items
+are shifted to fill the resulting gap.
+When `i` is not a valid index for `a`, return `default`, or throw an error if
+`default` is not specified.
+See also [`deleteat!`](@ref) and [`splice!`](@ref).
+
+!!! compat "Julia 1.5"
+    This function is available as of Julia 1.5.
+
+# Examples
+```jldoctest
+julia> a = [4, 3, 2, 1]; popat!(a, 2)
+3
+
+julia> a
+3-element Array{Int64,1}:
+ 4
+ 2
+ 1
+
+julia> popat!(a, 4, missing)
+missing
+
+julia> popat!(a, 4)
+ERROR: BoundsError: attempt to access 3-element Array{Int64,1} at index [4]
+[...]
+```
+"""
+function popat!(a::Vector, i::Integer)
     x = a[i]
     _deleteat!(a, i, 1)
     x
 end
 
-function pop!(a::Vector, i::Integer, default)
+function popat!(a::Vector, i::Integer, default)
     if 1 <= i <= length(a)
         x = @inbounds a[i]
         _deleteat!(a, i, 1)
@@ -1309,9 +1352,9 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
     n = length(a)
     y = iterate(inds)
     y === nothing && return a
-    n == 0 && throw(BoundsError(a, inds))
     (p, s) = y
-    p <= n && push!(dltd, @inbounds a[p])
+    checkbounds(a, p)
+    push!(dltd, @inbounds a[p])
     q = p+1
     while true
         y = iterate(inds, s)
@@ -1762,8 +1805,8 @@ CartesianIndex(1, 1)
 ```
 """
 function findnext(testf::Function, A, start)
+    i = oftype(first(keys(A)), start)
     l = last(keys(A))
-    i = oftype(l, start)
     i > l && return nothing
     while true
         testf(A[i]) && return i

@@ -758,8 +758,7 @@ function _unsafe_getindex(::IndexStyle, A::AbstractArray, I::Vararg{Union{Real, 
     return dest
 end
 
-# Always index with the exactly indices provided.
-@generated function _unsafe_getindex!(dest::AbstractArray, src::AbstractArray, I::Vararg{Union{Real, AbstractArray}, N}) where N
+function _generate_unsafe_getindex!_body(N::Int)
     quote
         @_inline_meta
         D = eachindex(dest)
@@ -776,6 +775,20 @@ end
     end
 end
 
+# Always index with the exactly indices provided.
+@generated function _unsafe_getindex!(dest::AbstractArray, src::AbstractArray, I::Vararg{Union{Real, AbstractArray}, N}) where N
+    _generate_unsafe_getindex!_body(N)
+end
+
+# manually written-out specializations for 1 and 2 arguments to save compile time
+@eval function _unsafe_getindex!(dest::AbstractArray, src::AbstractArray, I::Vararg{Union{Real, AbstractArray},1})
+    $(_generate_unsafe_getindex!_body(1))
+end
+
+@eval function _unsafe_getindex!(dest::AbstractArray, src::AbstractArray, I::Vararg{Union{Real, AbstractArray},2})
+    $(_generate_unsafe_getindex!_body(2))
+end
+
 @noinline throw_checksize_error(A, sz) = throw(DimensionMismatch("output array is the wrong size; expected $sz, got $(size(A))"))
 
 ## setindex! ##
@@ -786,8 +799,7 @@ function _setindex!(l::IndexStyle, A::AbstractArray, x, I::Union{Real, AbstractA
     A
 end
 
-@generated function _unsafe_setindex!(::IndexStyle, A::AbstractArray, x, I::Union{Real,AbstractArray}...)
-    N = length(I)
+function _generate_unsafe_setindex!_body(N::Int)
     quote
         x′ = unalias(A, x)
         @nexprs $N d->(I_d = unalias(A, I[d]))
@@ -804,6 +816,18 @@ end
         end
         A
     end
+end
+
+@generated function _unsafe_setindex!(::IndexStyle, A::AbstractArray, x, I::Vararg{Union{Real,AbstractArray}, N}) where N
+    _generate_unsafe_setindex!_body(N)
+end
+
+@eval function _unsafe_setindex!(::IndexStyle, A::AbstractArray, x, I::Vararg{Union{Real,AbstractArray},1})
+    $(_generate_unsafe_setindex!_body(1))
+end
+
+@eval function _unsafe_setindex!(::IndexStyle, A::AbstractArray, x, I::Vararg{Union{Real,AbstractArray},2})
+    $(_generate_unsafe_setindex!_body(2))
 end
 
 diff(a::AbstractVector) = diff(a, dims=1)
@@ -847,6 +871,10 @@ function diff(a::AbstractArray{T,N}; dims::Integer) where {T,N}
     r1 = ntuple(i -> i == dims ? UnitRange(2, last(r[i])) : UnitRange(r[i]), N)
 
     return view(a, r1...) .- view(a, r0...)
+end
+function diff(r::AbstractRange{T}; dims::Integer=1) where {T}
+    dims == 1 || throw(ArgumentError("dimension $dims out of range (1:1)"))
+    return T[@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
 end
 
 ### from abstractarray.jl

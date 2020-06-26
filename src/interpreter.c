@@ -168,7 +168,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         else
             return s->locals[jl_source_nslots(src) + id];
     }
-    if (jl_is_slot(e)) {
+    if (jl_is_slot(e) || jl_is_argument(e)) {
         ssize_t n = jl_slot_number(e);
         if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
             jl_error("access to invalid slot number");
@@ -211,7 +211,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == isdefined_sym) {
         jl_value_t *sym = args[0];
         int defined = 0;
-        if (jl_is_slot(sym)) {
+        if (jl_is_slot(sym) || jl_is_argument(sym)) {
             ssize_t n = jl_slot_number(sym);
             if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
                 jl_error("access to invalid slot number");
@@ -407,6 +407,18 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         if (jl_is_gotonode(stmt)) {
             next_ip = jl_gotonode_label(stmt) - 1;
         }
+        else if (jl_is_gotoifnot(stmt)) {
+            jl_value_t *cond = eval_value(jl_gotoifnot_cond(stmt), s);
+            if (cond == jl_false) {
+                next_ip = jl_gotoifnot_label(stmt) - 1;
+            }
+            else if (cond != jl_true) {
+                jl_type_error("if", (jl_value_t*)jl_bool_type, cond);
+            }
+        }
+        else if (jl_is_returnnode(stmt)) {
+            return eval_value(jl_returnnode_value(stmt), s);
+        }
         else if (jl_is_upsilonnode(stmt)) {
             jl_value_t *val = jl_fieldref_noalloc(stmt, 0);
             if (val)
@@ -419,11 +431,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         else if (jl_is_expr(stmt)) {
             // Most exprs are allowed to end a BB by fall through
             jl_sym_t *head = ((jl_expr_t*)stmt)->head;
-            assert(head != unreachable_sym);
-            if (head == return_sym) {
-                return eval_value(jl_exprarg(stmt, 0), s);
-            }
-            else if (head == assign_sym) {
+            if (head == assign_sym) {
                 jl_value_t *lhs = jl_exprarg(stmt, 0);
                 jl_value_t *rhs = eval_value(jl_exprarg(stmt, 1), s);
                 if (jl_is_slot(lhs)) {
@@ -447,15 +455,6 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     jl_binding_t *b = jl_get_binding_wr(modu, sym, 1);
                     jl_checked_assignment(b, rhs);
                     JL_GC_POP();
-                }
-            }
-            else if (head == goto_ifnot_sym) {
-                jl_value_t *cond = eval_value(jl_exprarg(stmt, 0), s);
-                if (cond == jl_false) {
-                    next_ip = jl_unbox_long(jl_exprarg(stmt, 1)) - 1;
-                }
-                else if (cond != jl_true) {
-                    jl_type_error("if", (jl_value_t*)jl_bool_type, cond);
                 }
             }
             else if (head == enter_sym) {

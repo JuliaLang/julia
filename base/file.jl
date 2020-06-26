@@ -228,7 +228,7 @@ function mkpath(path::AbstractString; mode::Integer = 0o777)
     catch err
         # If there is a problem with making the directory, but the directory
         # does in fact exist, then ignore the error. Else re-throw it.
-        if !isa(err, SystemError) || !isdir(path)
+        if !isa(err, IOError) || !isdir(path)
             rethrow()
         end
     end
@@ -470,18 +470,18 @@ function temp_cleanup_later(path::AbstractString; asap::Bool=false)
     # still be using the path, don't delete it until process exit
     TEMP_CLEANUP[path] = get(TEMP_CLEANUP, path, true) & asap
     if length(TEMP_CLEANUP) > TEMP_CLEANUP_MAX[]
-        temp_cleanup_purge(false)
+        temp_cleanup_purge()
         TEMP_CLEANUP_MAX[] = max(TEMP_CLEANUP_MIN[], 2*length(TEMP_CLEANUP))
     end
     unlock(TEMP_CLEANUP_LOCK)
     return nothing
 end
 
-function temp_cleanup_purge(all::Bool=true)
+function temp_cleanup_purge(; force::Bool=false)
     need_gc = Sys.iswindows()
     for (path, asap) in TEMP_CLEANUP
         try
-            if (all || asap) && ispath(path)
+            if (force || asap) && ispath(path)
                 need_gc && GC.gc(true)
                 need_gc = false
                 rm(path, recursive=true, force=true)
@@ -710,7 +710,7 @@ back, call `readdir` with an absolute directory path and `join` set to true.
 
 By default, `readdir` sorts the list of names it returns. If you want to skip
 sorting the names and get them in the order that the file system lists them,
-you can use `readir(dir, sort=false)` to opt out of sorting.
+you can use `readdir(dir, sort=false)` to opt out of sorting.
 
 !!! compat "Julia 1.4"
     The `join` and `sort` keyword arguments require at least Julia 1.4.

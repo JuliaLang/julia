@@ -101,6 +101,13 @@ end
 @test length(zip(1:3,product(1:7,cycle(1:3)))) == 3
 @test length(zip(1:3,product(1:7,cycle(1:3)),8)) == 1
 
+# map
+# ----
+@testset "Iterators.map" begin
+    @test collect(Iterators.map(string, 1:3)::Base.Generator) == map(string, 1:3)
+    @test collect(Iterators.map(tuple, 1:3, 4:6)::Base.Generator) == map(tuple, 1:3, 4:6)
+end
+
 # rest
 # ----
 let s = "hello"

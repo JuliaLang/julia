@@ -118,11 +118,6 @@ function retrieve_code_info(linfo::MethodInstance)
     end
 end
 
-function inf_for_methodinstance(interp::AbstractInterpreter, mi::MethodInstance, min_world::UInt, max_world::UInt=min_world)
-    return ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt), mi, min_world, max_world)::Union{Nothing, CodeInstance}
-end
-
-
 # get a handle to the unique specialization object representing a particular instantiation of a call
 function specialize_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, preexisting::Bool=false)
     if preexisting
@@ -171,7 +166,9 @@ function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vecto
     elseif isa(x, SSAValue)
         return abstract_eval_ssavalue(x::SSAValue, src)
     elseif isa(x, Argument)
-        return isa(src, IncrementalCompact) ? src.ir.argtypes[x.n] : src.argtypes[x.n]
+        return isa(src, IncrementalCompact) ? src.ir.argtypes[x.n] :
+            isa(src, IRCode) ? src.argtypes[x.n] :
+            slottypes[x.n]
     elseif isa(x, QuoteNode)
         return AbstractEvalConstant((x::QuoteNode).value)
     elseif isa(x, GlobalRef)
@@ -193,6 +190,11 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
     uses = BitSet[ BitSet() for i = 1:nvals ]
     for line in 1:length(body)
         e = body[line]
+        if isa(e, ReturnNode)
+            e = e.val
+        elseif isa(e, GotoIfNot)
+            e = e.cond
+        end
         if isa(e, SSAValue)
             push!(uses[e.id], line)
         elseif isa(e, Expr)
@@ -218,7 +220,8 @@ function find_ssavalue_uses(e::Expr, uses::Vector{BitSet}, line::Int)
 end
 
 # using a function to ensure we can infer this
-@inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id : (s::TypedSlot).id
+@inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id :
+    isa(s, Argument) ? (s::Argument).n : (s::TypedSlot).id
 
 ###########
 # options #

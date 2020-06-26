@@ -291,7 +291,7 @@ let undefvar
     @test occursin("DomainError with [0.0 -1.0 …", err_str)
 
     err_str = @except_str (1, 2, 3)[4] BoundsError
-    @test err_str == "BoundsError: attempt to access (1, 2, 3)\n  at index [4]"
+    @test err_str == "BoundsError: attempt to access (1, 2, 3) at index [4]"
 
     err_str = @except_str [5, 4, 3][-2, 1] BoundsError
     @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [-2, 1]"
@@ -299,7 +299,7 @@ let undefvar
     @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [1:5]"
 
     err_str = @except_str Bounded(2)[3] BoundsError
-    @test err_str == "BoundsError: attempt to access 2-size Bounded\n  at index [3]"
+    @test err_str == "BoundsError: attempt to access 2-size Bounded at index [3]"
 
     err_str = @except_str 0::Bool TypeError
     @test err_str == "TypeError: non-boolean ($Int) used in boolean context"

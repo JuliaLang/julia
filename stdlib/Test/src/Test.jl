@@ -1100,6 +1100,7 @@ function testset_beginend(args, tests, source)
     # action (such as reporting the results)
     ex = quote
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
+        local ret
         local ts = $(testsettype)($desc; $options...)
         push_testset(ts)
         # we reproduce the logic of guardseed, but this function
@@ -1120,9 +1121,10 @@ function testset_beginend(args, tests, source)
             record(ts, Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), $(QuoteNode(source))))
         finally
             copy!(RNG, oldrng)
+            pop_testset()
+            ret = finish(ts)
         end
-        pop_testset()
-        finish(ts)
+        ret
     end
     # preserve outer location if possible
     if tests isa Expr && tests.head === :block && !isempty(tests.args) && tests.args[1] isa LineNumberNode

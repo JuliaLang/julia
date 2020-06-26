@@ -580,9 +580,9 @@ end
 # show
 function Base.print(io::IO, dt::DateTime)
     str = if millisecond(dt) == 0
-        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS", 24)
+        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS", 19)
     else
-        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS.s", 26)
+        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS.sss", 23)
     end
     print(io, str)
 end

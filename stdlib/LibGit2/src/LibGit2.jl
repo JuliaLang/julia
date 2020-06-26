@@ -289,7 +289,7 @@ function fetch(repo::GitRepo; remote::AbstractString="origin",
         fo = FetchOptions(callbacks=remote_callbacks)
         fetch(rmt, refspecs, msg="from $(url(rmt))", options=fo)
     catch err
-        if isa(err, GitError) && err.code == Error.EAUTH
+        if isa(err, GitError) && err.code === Error.EAUTH
             reject(cred_payload)
         else
             Base.shred!(cred_payload)
@@ -345,7 +345,7 @@ function push(repo::GitRepo; remote::AbstractString="origin",
         push_opts = PushOptions(callbacks=remote_callbacks)
         push(rmt, refspecs, force=force, options=push_opts)
     catch err
-        if isa(err, GitError) && err.code == Error.EAUTH
+        if isa(err, GitError) && err.code === Error.EAUTH
             reject(cred_payload)
         else
             Base.shred!(cred_payload)
@@ -579,7 +579,7 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
         repo = try
             clone(repo_url, repo_path, clone_opts)
         catch err
-            if isa(err, GitError) && err.code == Error.EAUTH
+            if isa(err, GitError) && err.code === Error.EAUTH
                 reject(cred_payload)
             else
                 Base.shred!(cred_payload)
@@ -728,7 +728,7 @@ function merge!(repo::GitRepo;
                                "There is no fetch reference for this branch."))
             end
             Base.map(fh->GitAnnotated(repo,fh), fheads)
-        else # merge commitish
+        else # merge committish
             [GitAnnotated(repo, committish)]
         end
     else

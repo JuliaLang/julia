@@ -507,24 +507,28 @@ f18888() = nothing
 let
     world = Core.Compiler.get_world_counter()
     m = first(methods(f18888, Tuple{}))
-    @test isempty(m.specializations)
     ft = typeof(f18888)
 
     code_typed(f18888, Tuple{}; optimize=false)
     @test !isempty(m.specializations) # uncached, but creates the specializations entry
     mi = Core.Compiler.specialize_method(m, Tuple{ft}, Core.svec())
     interp = Core.Compiler.NativeInterpreter(world)
-    @test Core.Compiler.inf_for_methodinstance(interp, mi, world) === nothing
+    @test !Core.Compiler.haskey(Core.Compiler.code_cache(interp), mi)
     @test !isdefined(mi, :cache)
 
     code_typed(f18888, Tuple{}; optimize=true)
     @test !isdefined(mi, :cache)
 
     Base.return_types(f18888, Tuple{})
-    @test Core.Compiler.inf_for_methodinstance(interp, mi, world) === mi.cache
+    @test Core.Compiler.getindex(Core.Compiler.code_cache(interp), mi) === mi.cache
     @test mi.cache isa Core.CodeInstance
     @test !isdefined(mi.cache, :next)
 end
+
+# code_typed_by_type
+@test Base.code_typed_by_type(Tuple{Type{<:Val}})[1][2] == Val
+@test Base.code_typed_by_type(Tuple{typeof(sin), Float64})[1][2] === Float64
+@test_throws ErrorException("signature does not correspond to a generic function") Base.code_typed_by_type(Tuple{Any})
 
 # New reflection methods in 0.6
 struct ReflectionExample{T<:AbstractFloat, N}
@@ -821,6 +825,7 @@ f20872(::Val, ::Val) = false
 @test which(f20872, Tuple{Val,Val}).sig == Tuple{typeof(f20872), Val, Val}
 @test which(f20872, Tuple{Val,Val{N}} where N).sig == Tuple{typeof(f20872), Val, Val}
 @test_throws ErrorException which(f20872, Tuple{Any,Val{N}} where N)
+@test which(Tuple{typeof(f20872), Val{1}, Val{2}}).sig == Tuple{typeof(f20872), Val, Val}
 
 module M29962 end
 # make sure checking if a binding is deprecated does not resolve it

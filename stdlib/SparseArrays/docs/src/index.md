@@ -52,15 +52,15 @@ remove stored zeros from the sparse matrix.
 ```jldoctest
 julia> A = sparse([1, 1, 2, 3], [1, 3, 2, 3], [0, 1, 2, 0])
 3×3 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
-  [1, 1]  =  0
-  [2, 2]  =  2
-  [1, 3]  =  1
-  [3, 3]  =  0
+ 0  ⋅  1
+ ⋅  2  ⋅
+ ⋅  ⋅  0
 
 julia> dropzeros(A)
 3×3 SparseMatrixCSC{Int64,Int64} with 2 stored entries:
-  [2, 2]  =  2
-  [1, 3]  =  1
+ ⋅  ⋅  1
+ ⋅  2  ⋅
+ ⋅  ⋅  ⋅
 ```
 
 ## Sparse Vector Storage
@@ -106,10 +106,8 @@ julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
 julia> S = sparse(I,J,V)
 5×18 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
-  [1,  4]  =  1
-  [4,  7]  =  2
-  [5,  9]  =  3
-  [3, 18]  =  -5
+⠀⠈⠀⡀⠀⠀⠀⠀⠠
+⠀⠀⠀⠀⠁⠀⠀⠀⠀
 
 julia> R = sparsevec(I,V)
 5-element SparseVector{Int64,Int64} with 4 stored entries:
@@ -152,11 +150,11 @@ the [`sparse`](@ref) function:
 ```jldoctest
 julia> sparse(Matrix(1.0I, 5, 5))
 5×5 SparseMatrixCSC{Float64,Int64} with 5 stored entries:
-  [1, 1]  =  1.0
-  [2, 2]  =  1.0
-  [3, 3]  =  1.0
-  [4, 4]  =  1.0
-  [5, 5]  =  1.0
+ 1.0   ⋅    ⋅    ⋅    ⋅
+  ⋅   1.0   ⋅    ⋅    ⋅
+  ⋅    ⋅   1.0   ⋅    ⋅
+  ⋅    ⋅    ⋅   1.0   ⋅
+  ⋅    ⋅    ⋅    ⋅   1.0
 
 julia> sparse([1.0, 0.0, 1.0])
 3-element SparseVector{Float64,Int64} with 2 stored entries:

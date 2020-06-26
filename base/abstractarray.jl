@@ -416,6 +416,11 @@ function isassigned(a::AbstractArray, i::Integer...)
     end
 end
 
+function isstored(A::AbstractArray{<:Any,N}, I::Vararg{Integer,N}) where {N}
+    @boundscheck checkbounds(A, I...)
+    return true
+end
+
 # used to compute "end" for last index
 function trailingsize(A, n)
     s = 1
@@ -939,6 +944,12 @@ function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::A
     return B
 end
 
+function copyto_axcheck!(dest, src)
+    @noinline checkaxs(axd, axs) = axd == axs || throw(DimensionMismatch("axes must agree, got $axd and $axs"))
+
+    checkaxs(axes(dest), axes(src))
+    copyto!(dest, src)
+end
 
 """
     copymutable(a)
@@ -1000,7 +1011,14 @@ end
 pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, x)
 function pointer(x::AbstractArray{T}, i::Integer) where T
     @_inline_meta
-    unsafe_convert(Ptr{T}, x) + (i - first(LinearIndices(x)))*elsize(x)
+    unsafe_convert(Ptr{T}, x) + _memory_offset(x, i)
+end
+
+# The distance from pointer(x) to the element at x[I...] in bytes
+_memory_offset(x::DenseArray, I...) = (_to_linear_index(x, I...) - first(LinearIndices(x)))*elsize(x)
+function _memory_offset(x::AbstractArray, I...)
+    J = _to_subscript_indices(x, I...)
+    return sum(map((i, s, o)->s*(i-o), J, strides(x), Tuple(first(CartesianIndices(x)))))*elsize(x)
 end
 
 ## Approach:
@@ -1063,6 +1081,7 @@ _getindex(::IndexStyle, A::AbstractArray, I...) =
     error("getindex for $(typeof(A)) with types $(typeof(I)) is not supported")
 
 ## IndexLinear Scalar indexing: canonical method is one Int
+_getindex(::IndexLinear, A::AbstractVector, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))  # ambiguity resolution in case packages specialize this (to be avoided if at all possible, but see Interpolations.jl)
 _getindex(::IndexLinear, A::AbstractArray, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
 function _getindex(::IndexLinear, A::AbstractArray, I::Vararg{Int,M}) where M
     @_inline_meta
@@ -1070,10 +1089,10 @@ function _getindex(::IndexLinear, A::AbstractArray, I::Vararg{Int,M}) where M
     @inbounds r = getindex(A, _to_linear_index(A, I...))
     r
 end
-_to_linear_index(A::AbstractArray, i::Int) = i
-_to_linear_index(A::AbstractVector, i::Int, I::Int...) = i
+_to_linear_index(A::AbstractArray, i::Integer) = i
+_to_linear_index(A::AbstractVector, i::Integer, I::Integer...) = i
 _to_linear_index(A::AbstractArray) = 1
-_to_linear_index(A::AbstractArray, I::Int...) = (@_inline_meta; _sub2ind(A, I...))
+_to_linear_index(A::AbstractArray, I::Integer...) = (@_inline_meta; _sub2ind(A, I...))
 
 ## IndexCartesian Scalar indexing: Canonical method is full dimensionality of Ints
 function _getindex(::IndexCartesian, A::AbstractArray, I::Vararg{Int,M}) where M
@@ -1086,12 +1105,12 @@ function _getindex(::IndexCartesian, A::AbstractArray{T,N}, I::Vararg{Int, N}) w
     @_propagate_inbounds_meta
     getindex(A, I...)
 end
-_to_subscript_indices(A::AbstractArray, i::Int) = (@_inline_meta; _unsafe_ind2sub(A, i))
+_to_subscript_indices(A::AbstractArray, i::Integer) = (@_inline_meta; _unsafe_ind2sub(A, i))
 _to_subscript_indices(A::AbstractArray{T,N}) where {T,N} = (@_inline_meta; fill_to_length((), 1, Val(N)))
 _to_subscript_indices(A::AbstractArray{T,0}) where {T} = ()
-_to_subscript_indices(A::AbstractArray{T,0}, i::Int) where {T} = ()
-_to_subscript_indices(A::AbstractArray{T,0}, I::Int...) where {T} = ()
-function _to_subscript_indices(A::AbstractArray{T,N}, I::Int...) where {T,N}
+_to_subscript_indices(A::AbstractArray{T,0}, i::Integer) where {T} = ()
+_to_subscript_indices(A::AbstractArray{T,0}, I::Integer...) where {T} = ()
+function _to_subscript_indices(A::AbstractArray{T,N}, I::Integer...) where {T,N}
     @_inline_meta
     J, Jrem = IteratorsMD.split(I, Val(N))
     _to_subscript_indices(A, J, Jrem)
@@ -1507,7 +1526,7 @@ _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
     catdims = dims2cat(dims)
     shape = cat_shape(catdims, (), map(cat_size, X)...)
     A = cat_similar(X[1], T, shape)
-    if T <: Number && count(!iszero, catdims) > 1
+    if count(!iszero, catdims) > 1
         fill!(A, zero(T))
     end
     return __cat(A, shape, catdims, X...)
@@ -2148,6 +2167,8 @@ end
 # map on collections
 map(f, A::AbstractArray) = collect_similar(A, Generator(f,A))
 
+mapany(f, itr) = map!(f, Vector{Any}(undef, length(itr)), itr)  # convenient for Expr.args
+
 # default to returning an Array for `map` on general iterators
 """
     map(f, c...) -> collection
@@ -2256,7 +2277,7 @@ function hash(A::AbstractArray, h::UInt)
     # hashes will often subsequently be compared by equality -- and equality between arrays
     # works elementwise forwards and is short-circuiting. This means that a collision
     # between arrays that differ by elements at the beginning is cheaper than one where the
-    # difference is towards the end. Furthermore, blindly choosing log(N) entries from a
+    # difference is towards the end. Furthermore, choosing `log(N)` arbitrary entries from a
     # sparse array will likely only choose the same element repeatedly (zero in this case).
 
     # To achieve this, we work backwards, starting by hashing the last element of the

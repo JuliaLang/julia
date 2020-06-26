@@ -666,6 +666,8 @@ timesofar("indexing")
     b1 = bitrand(v1)
     @test_throws ArgumentError deleteat!(b1, [1, 1, 2])
     @test_throws BoundsError deleteat!(b1, [1, length(b1)+1])
+    @test_throws BoundsError deleteat!(b1, [length(b1)+rand(1:100)])
+    @test_throws BoundsError deleteat!(bitrand(1), [-1, 0, 1])
 
     @test_throws BoundsError deleteat!(BitVector(), 1)
     @test_throws BoundsError deleteat!(BitVector(), [1])

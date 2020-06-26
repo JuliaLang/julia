@@ -67,17 +67,19 @@ struct TaskFailedException <: Exception
 end
 
 function showerror(io::IO, ex::TaskFailedException)
-    stacks = []
-    while isa(ex.task.exception, TaskFailedException)
-        pushfirst!(stacks, ex.task.backtrace)
-        ex = ex.task.exception
-    end
     println(io, "TaskFailedException:")
-    showerror(io, ex.task.exception, ex.task.backtrace)
-    if !isempty(stacks)
-        for bt in stacks
-            show_backtrace(io, bt)
-        end
+    show_task_exception(io, ex.task)
+end
+
+function show_task_exception(io::IO, t::Task)
+    stacks = []
+    while isa(t.exception, TaskFailedException)
+        pushfirst!(stacks, t.backtrace)
+        t = t.exception.task
+    end
+    showerror(io, t.exception, t.backtrace)
+    for bt in stacks
+        show_backtrace(io, bt)
     end
 end
 

@@ -545,7 +545,14 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu(void)
     unset_bits(features, 32 + 27);
     if (!hasavx)
         features_disable_avx(features);
+#ifdef _OS_DARWIN_
+    // See https://github.com/llvm/llvm-project/commit/82921bf2baed96b700f90b090d5dc2530223d9c0
+    // and https://github.com/apple/darwin-xnu/blob/a449c6a3b8014d9406c2ddbdc81795da24aa7443/osfmk/i386/fpu.c#L174
+    // Darwin lazily saves the AVX512 context on first use
+    bool hasavx512save = hasavx;
+#else
     bool hasavx512save = hasavx && test_all_bits(xcr0, 0xe0);
+#endif
     if (!hasavx512save)
         features_disable_avx512(features);
     // Ignore feature bits that we are not interested in.

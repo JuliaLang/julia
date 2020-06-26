@@ -444,3 +444,10 @@ function _handle_message_test()
     return _handle_progress_test(progress)
 end
 @test _handle_message_test() isa Tuple{Base.UUID, String}
+
+@testset "#30739" begin
+    ifelsetuple(n::Integer, k::Integer, f, g) = ntuple(i -> (i <= k ? f : g), n)
+    f(x) = x^2; g(x) = x^3;
+    a = [1]; b = [2]
+    @test ifelsetuple(5, 3, a, b) == ([1], [1], [1], [2], [2])
+end

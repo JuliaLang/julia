@@ -42,7 +42,6 @@ function showerror(io::IO, ex::BoundsError)
         print(io, ": attempt to access ")
         summary(io, ex.a)
         if isdefined(ex, :i)
-            !isa(ex.a, AbstractArray) && print(io, "\n ")
             print(io, " at index [")
             if ex.i isa AbstractRange
                 print(io, ex.i)
@@ -86,9 +85,7 @@ end
 
 function showerror(io::IO, ex, bt; backtrace=true)
     try
-        with_output_color(get(io, :color, false) ? error_color() : :nothing, io) do io
-            showerror(io, ex)
-        end
+        showerror(io, ex)
     finally
         backtrace && show_backtrace(io, bt)
     end
@@ -179,7 +176,7 @@ function showerror(io::IO, ex::InexactError)
     Experimental.show_error_hints(io, ex)
 end
 
-typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
+typesof(@nospecialize args...) = Tuple{Any[ Core.Typeof(args[i]) for i in 1:length(args) ]...}
 
 function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b::DataType), color::Symbol)
     if a.name === b.name
@@ -383,7 +380,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     ft = typeof(f)
     lines = []
     # These functions are special cased to only show if first argument is matched.
-    special = f in [convert, getindex, setindex!]
+    special = f === convert || f === getindex || f === setindex!
     funcs = Any[(f, arg_types_param)]
 
     # An incorrect call method produces a MethodError for convert.
@@ -541,13 +538,10 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     end
 end
 
-# Contains file name and file number. Gets set when a backtrace
-# or methodlist is shown. Used by the REPL to make it possible to open
-# the location of a stackframe/method in the editor.
-global LAST_SHOWN_LINE_INFOS = Tuple{String, Int}[]
-
 function show_trace_entry(io, frame, n; prefix = "")
-    push!(LAST_SHOWN_LINE_INFOS, (string(frame.file), frame.line))
+    if haskey(io, :LAST_SHOWN_LINE_INFOS)
+        push!(io[:LAST_SHOWN_LINE_INFOS], (string(frame.file), frame.line))
+    end
     print(io, "\n", prefix)
     show(io, frame, full_path=true)
     n > 1 && print(io, " (repeats ", n, " times)")
@@ -634,13 +628,15 @@ function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
 end
 
 function show_backtrace(io::IO, t::Vector)
-    resize!(LAST_SHOWN_LINE_INFOS, 0)
+    if haskey(io, :LAST_SHOWN_LINE_INFOS)
+        resize!(io[:LAST_SHOWN_LINE_INFOS], 0)
+    end
     filtered = process_backtrace(t)
     isempty(filtered) && return
 
     if length(filtered) == 1 && StackTraces.is_top_level_frame(filtered[1][1])
-        f = filtered[1][1]
-        if f.line == 0 && f.file == Symbol("")
+        f = filtered[1][1]::StackFrame
+        if f.line == 0 && f.file === Symbol("")
             # don't show a single top-level frame with no location info
             return
         end
@@ -685,7 +681,7 @@ function _simplify_include_frames(trace)
     kept_frames = trues(i)
     first_ignored = nothing
     while i >= 1
-        frame, _ = trace[i]
+        frame::StackFrame, _ = trace[i]
         mod = parentmodule(frame)
         if isnothing(first_ignored)
             if mod === Base && frame.func === :_include
@@ -696,7 +692,7 @@ function _simplify_include_frames(trace)
             # Hack: allow `mod==nothing` as a workaround for inlined functions.
             # TODO: Fix this by improving debug info.
             if mod in (Base,Core,nothing) && 1+first_ignored-i <= 5
-                if frame.func == :eval
+                if frame.func === :eval
                     kept_frames[i:first_ignored] .= false
                     first_ignored = nothing
                 end

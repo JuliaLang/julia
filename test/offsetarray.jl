@@ -21,6 +21,7 @@ h = OffsetArray([-1,1,-2,2,0], (-3,))
 @test axes(v) == (-2:1,)
 @test size(v) == (4,)
 @test size(v, 1) == 4
+@test_throws DimensionMismatch Array(v)
 
 A0 = [1 3; 2 4]
 A = OffsetArray(A0, (-1,2))                   # IndexLinear

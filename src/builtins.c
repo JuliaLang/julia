@@ -714,21 +714,8 @@ JL_CALLABLE(jl_f_tuple)
     size_t i;
     if (nargs == 0)
         return (jl_value_t*)jl_emptytuple;
-    jl_datatype_t *tt;
-    if (nargs < jl_page_size / sizeof(jl_value_t*)) {
-        jl_value_t **types = (jl_value_t**)alloca(nargs * sizeof(jl_value_t*));
-        for (i = 0; i < nargs; i++)
-            types[i] = jl_typeof(args[i]);
-        tt = jl_inst_concrete_tupletype_v(types, nargs);
-    }
-    else {
-        jl_svec_t *types = jl_alloc_svec_uninit(nargs);
-        JL_GC_PUSH1(&types);
-        for (i = 0; i < nargs; i++)
-            jl_svecset(types, i, jl_typeof(args[i]));
-        tt = jl_inst_concrete_tupletype(types);
-        JL_GC_POP();
-    }
+    jl_datatype_t *tt = jl_inst_arg_tuple_type(args[0], &args[1], nargs, 0);
+    JL_GC_PROMISE_ROOTED(tt); // it is a concrete type
     if (tt->instance != NULL)
         return tt->instance;
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -1003,8 +990,7 @@ JL_CALLABLE(jl_f_applicable)
 {
     JL_NARGSV(applicable, 1);
     size_t world = jl_get_ptls_states()->world_age;
-    return jl_method_lookup(args, nargs, 1, world) != NULL ?
-        jl_true : jl_false;
+    return jl_method_lookup(args, nargs, world) != NULL ? jl_true : jl_false;
 }
 
 JL_CALLABLE(jl_f_invoke)
@@ -1038,18 +1024,19 @@ JL_CALLABLE(jl_f_invoke_kwsorter)
         size_t i, nt = jl_nparams(argtypes) + 2;
         if (nt < jl_page_size/sizeof(jl_value_t*)) {
             jl_value_t **types = (jl_value_t**)alloca(nt*sizeof(jl_value_t*));
-            types[0] = (jl_value_t*)jl_namedtuple_type; types[1] = jl_typeof(func);
-            for(i=2; i < nt; i++)
-                types[i] = jl_tparam(argtypes,i-2);
+            types[0] = (jl_value_t*)jl_namedtuple_type;
+            types[1] = jl_typeof(func);
+            for (i = 2; i < nt; i++)
+                types[i] = jl_tparam(argtypes, i - 2);
             argtypes = (jl_value_t*)jl_apply_tuple_type_v(types, nt);
         }
         else {
             jl_svec_t *types = jl_alloc_svec_uninit(nt);
             JL_GC_PUSH1(&types);
-            jl_svecset(types, 0, jl_array_any_type);
+            jl_svecset(types, 0, jl_namedtuple_type);
             jl_svecset(types, 1, jl_typeof(func));
-            for(i=2; i < nt; i++)
-                jl_svecset(types, i, jl_tparam(argtypes,i-2));
+            for (i = 2; i < nt; i++)
+                jl_svecset(types, i, jl_tparam(argtypes, i - 2));
             argtypes = (jl_value_t*)jl_apply_tuple_type(types);
             JL_GC_POP();
         }
@@ -1262,6 +1249,27 @@ JL_CALLABLE(jl_f__setsuper)
 
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
 
+static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
+{
+    size_t nf = jl_svec_len(ft);
+    if (jl_svec_len(old) != nf)
+        return 0;
+    size_t i;
+    for (i = 0; i < nf; i++) {
+        jl_value_t *ta = jl_svecref(old, i);
+        jl_value_t *tb = jl_svecref(ft, i);
+        if (jl_has_free_typevars(ta)) {
+            if (!jl_has_free_typevars(tb) || !jl_egal(ta, tb))
+                return 0;
+        }
+        else if (jl_has_free_typevars(tb) || jl_typeof(ta) != jl_typeof(tb) ||
+                 !jl_types_equal(ta, tb)) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 JL_CALLABLE(jl_f__typebody)
 {
     JL_NARGS(_typebody!, 1, 2);
@@ -1270,15 +1278,22 @@ JL_CALLABLE(jl_f__typebody)
     if (nargs == 2) {
         jl_value_t *ft = args[1];
         JL_TYPECHK(_typebody!, simplevector, ft);
-        dt->types = (jl_svec_t*)ft;
-        jl_gc_wb(dt, ft);
-        for (size_t i = 0; i < jl_svec_len(dt->types); i++) {
-            jl_value_t *elt = jl_svecref(dt->types, i);
+        size_t nf = jl_svec_len(ft);
+        for (size_t i = 0; i < nf; i++) {
+            jl_value_t *elt = jl_svecref(ft, i);
             if ((!jl_is_type(elt) && !jl_is_typevar(elt)) || jl_is_vararg_type(elt)) {
                 jl_type_error_rt(jl_symbol_name(dt->name->name),
                                  "type definition",
                                  (jl_value_t*)jl_type_type, elt);
             }
+        }
+        if (dt->types != NULL) {
+            if (!equiv_field_types((jl_value_t*)dt->types, ft))
+                jl_errorf("invalid redefinition of type %s", jl_symbol_name(dt->name->name));
+        }
+        else {
+            dt->types = (jl_svec_t*)ft;
+            jl_gc_wb(dt, ft);
         }
     }
 
@@ -1306,15 +1321,13 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
           dta->name->name == dtb->name->name &&
           dta->abstract == dtb->abstract &&
           dta->mutabl == dtb->mutabl &&
-          dta->size == dtb->size &&
+          (jl_svec_len(jl_field_names(dta)) != 0 || dta->size == dtb->size) &&
           dta->ninitialized == dtb->ninitialized &&
           jl_egal((jl_value_t*)jl_field_names(dta), (jl_value_t*)jl_field_names(dtb)) &&
-          jl_nparams(dta) == jl_nparams(dtb) &&
-          jl_svec_len(dta->types) == jl_svec_len(dtb->types)))
+          jl_nparams(dta) == jl_nparams(dtb)))
         return 0;
     jl_value_t *a=NULL, *b=NULL;
     int ok = 1;
-    size_t i, nf = jl_svec_len(dta->types);
     JL_GC_PUSH2(&a, &b);
     a = jl_rewrap_unionall((jl_value_t*)dta->super, dta->name->wrapper);
     b = jl_rewrap_unionall((jl_value_t*)dtb->super, dtb->name->wrapper);
@@ -1339,21 +1352,6 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
             goto no;
         a = jl_instantiate_unionall(ua, (jl_value_t*)ub->var);
         b = ub->body;
-    }
-    assert(jl_is_datatype(a) && jl_is_datatype(b));
-    a = (jl_value_t*)jl_get_fieldtypes((jl_datatype_t*)a);
-    b = (jl_value_t*)jl_get_fieldtypes((jl_datatype_t*)b);
-    for (i = 0; i < nf; i++) {
-        jl_value_t *ta = jl_svecref(a, i);
-        jl_value_t *tb = jl_svecref(b, i);
-        if (jl_has_free_typevars(ta)) {
-            if (!jl_has_free_typevars(tb) || !jl_egal(ta, tb))
-                goto no;
-        }
-        else if (jl_has_free_typevars(tb) || jl_typeof(ta) != jl_typeof(tb) ||
-                 !jl_types_equal(ta, tb)) {
-            goto no;
-        }
     }
     JL_GC_POP();
     return 1;
@@ -1563,6 +1561,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Slot", (jl_value_t*)jl_abstractslot_type);
     add_builtin("SlotNumber", (jl_value_t*)jl_slotnumber_type);
     add_builtin("TypedSlot", (jl_value_t*)jl_typedslot_type);
+    add_builtin("Argument", (jl_value_t*)jl_argument_type);
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);
     add_builtin("Builtin", (jl_value_t*)jl_builtin_type);
@@ -1570,7 +1569,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("CodeInfo", (jl_value_t*)jl_code_info_type);
     add_builtin("Ref", (jl_value_t*)jl_ref_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
-    add_builtin("AddrSpacePtr", (jl_value_t*)jl_addrspace_pointer_type);
+    add_builtin("LLVMPtr", (jl_value_t*)jl_llvmpointer_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
 
     add_builtin("AbstractArray", (jl_value_t*)jl_abstractarray_type);
@@ -1581,6 +1580,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("LineNumberNode", (jl_value_t*)jl_linenumbernode_type);
     add_builtin("LineInfoNode", (jl_value_t*)jl_lineinfonode_type);
     add_builtin("GotoNode", (jl_value_t*)jl_gotonode_type);
+    add_builtin("GotoIfNot", (jl_value_t*)jl_gotoifnot_type);
+    add_builtin("ReturnNode", (jl_value_t*)jl_returnnode_type);
     add_builtin("PiNode", (jl_value_t*)jl_pinode_type);
     add_builtin("PhiNode", (jl_value_t*)jl_phinode_type);
     add_builtin("PhiCNode", (jl_value_t*)jl_phicnode_type);

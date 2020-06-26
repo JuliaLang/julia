@@ -5,7 +5,7 @@
 
 An abstract base class that allows multiple dispatch to determine the method of
 executing Julia code.  The native Julia LLVM pipeline is enabled by using the
-`TypeInference` concrete instantiatoin of this abstract class, others can be
+`NativeInterpreter` concrete instantiation of this abstract class, others can be
 swapped in as long as they follow the AbstractInterpreter API.
 
 All AbstractInterpreters are expected to provide at least the following methods:
@@ -58,7 +58,7 @@ struct OptimizationParams
             inline_cost_threshold::Int = 100,
             inline_nonleaf_penalty::Int = 1000,
             inline_tupleret_bonus::Int = 400,
-            max_methods::Int = 4,
+            max_methods::Int = 3,
             tuple_splat::Int = 32,
             union_splitting::Int = 4,
         )
@@ -107,7 +107,7 @@ struct InferenceParams
     function InferenceParams(;
             ipo_constant_propagation::Bool = true,
             aggressive_constant_propagation::Bool = false,
-            max_methods::Int = 4,
+            max_methods::Int = 3,
             union_splitting::Int = 4,
             apply_union_enum::Int = 8,
             tupletype_depth::Int = 3,
@@ -175,3 +175,17 @@ InferenceParams(ni::NativeInterpreter) = ni.inf_params
 OptimizationParams(ni::NativeInterpreter) = ni.opt_params
 get_world_counter(ni::NativeInterpreter) = ni.world
 get_inference_cache(ni::NativeInterpreter) = ni.cache
+
+code_cache(ni::NativeInterpreter) = WorldView(GLOBAL_CI_CACHE, ni.world)
+
+"""
+    lock_mi_inference(ni::NativeInterpreter, mi::MethodInstance)
+
+Hint that `mi` is in inference to help accelerate bootstrapping. This helps limit the amount of wasted work we might do when inference is working on initially inferring itself by letting us detect when inference is already in progress and not running a second copy on it. This creates a data-race, but the entry point into this code from C (jl_type_infer) already includes detection and restriction on recursion, so it is hopefully mostly a benign problem (since it should really only happen during the first phase of bootstrapping that we encounter this flag).
+"""
+lock_mi_inference(ni::NativeInterpreter, mi::MethodInstance) = (mi.inInference = true; nothing)
+
+"""
+    See lock_mi_inference
+"""
+unlock_mi_inference(ni::NativeInterpreter, mi::MethodInstance) = (mi.inInference = false; nothing)

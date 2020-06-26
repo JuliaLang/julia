@@ -10,54 +10,6 @@ static Instruction *tbaa_decorate(MDNode *md, Instruction *load_or_store)
     return load_or_store;
 }
 
-static Function *function_proto(Function *F, Module *M = nullptr)
-{
-    // Copy the declaration characteristics of the Function (not the body)
-    Function *NewF = Function::Create(F->getFunctionType(),
-                                      Function::ExternalLinkage,
-                                      F->getName(),
-                                      M);
-
-    // Declarations are not allowed to have personality routines, but
-    // copyAttributesFrom sets them anyway. Temporarily unset the personality
-    // routine from `F`, since copying it and then resetting is more expensive
-    // as well as introducing an extra use from this unowned function, which
-    // can cause crashes in the LLVMContext's global destructor.
-    llvm::Constant *OldPersonalityFn = nullptr;
-    if (F->hasPersonalityFn()) {
-        OldPersonalityFn = F->getPersonalityFn();
-        F->setPersonalityFn(nullptr);
-    }
-
-    // FunctionType does not include any attributes. Copy them over manually
-    // as codegen may make decisions based on the presence of certain attributes
-    NewF->copyAttributesFrom(F);
-
-    if (OldPersonalityFn)
-        F->setPersonalityFn(OldPersonalityFn);
-
-    // DLLImport only needs to be set for the shadow module
-    // it just gets annoying in the JIT
-    NewF->setDLLStorageClass(GlobalValue::DefaultStorageClass);
-
-    return NewF;
-}
-
-#define prepare_call(Callee) prepare_call_in(jl_Module, (Callee))
-static FunctionCallee prepare_call_in(Module *M, Value *Callee)
-{
-    if (Function *F = dyn_cast<Function>(Callee)) {
-        GlobalValue *local = M->getNamedValue(Callee->getName());
-        if (!local) {
-            local = function_proto(F, M);
-        }
-        Callee = local;
-    }
-    FunctionType *FnTy = cast<FunctionType>(
-        Callee->getType()->getPointerElementType());
-    return {FnTy, Callee};
-}
-
 // Take an arbitrary untracked value and make it gc-tracked
 static Value *maybe_decay_untracked(IRBuilder<> &irbuilder, Value *V)
 {
@@ -137,40 +89,30 @@ static inline void _hook_call(jl_value_t *hook, std::array<jl_value_t*,N> args) 
 
 
 // --- string constants ---
-static StringMap<GlobalVariable*> stringConstants;
-static Value *stringConstPtr(IRBuilder<> &irbuilder, const std::string &txt)
+static Value *stringConstPtr(
+        jl_codegen_params_t &emission_context,
+        IRBuilder<> &irbuilder,
+        const std::string &txt)
 {
-    StringRef ctxt(txt.c_str(), strlen(txt.c_str()) + 1);
+    StringRef ctxt(txt.c_str(), txt.size() + 1);
     StringMap<GlobalVariable*>::iterator pooledval =
-        stringConstants.insert(std::pair<StringRef, GlobalVariable*>(ctxt, NULL)).first;
-    StringRef pooledtxt = pooledval->getKey();
-    if (imaging_mode) {
-        if (pooledval->second == NULL) {
-            static int strno = 0;
-            std::stringstream ssno;
-            ssno << "_j_str" << strno++;
-            GlobalVariable *gv = get_pointer_to_constant(
-                                    ConstantDataArray::get(jl_LLVMContext,
-                                                           ArrayRef<unsigned char>(
-                                                           (const unsigned char*)pooledtxt.data(),
-                                                           pooledtxt.size())),
-                                    ssno.str(),
-                                    *shadow_output);
-            pooledval->second = gv;
-            jl_ExecutionEngine->addGlobalMapping(gv, (void*)(uintptr_t)pooledtxt.data());
-        }
-
-        GlobalVariable *v = prepare_global_in(jl_builderModule(irbuilder), pooledval->second);
-        Value *zero = ConstantInt::get(Type::getInt32Ty(jl_LLVMContext), 0);
-        Value *Args[] = { zero, zero };
-        return irbuilder.CreateInBoundsGEP(v->getValueType(), v, Args);
+        emission_context.stringConstants.insert(std::pair<StringRef, GlobalVariable*>(ctxt, NULL)).first;
+    Module *M = jl_builderModule(irbuilder);
+    if (pooledval->second == NULL) {
+        static int strno = 0;
+        std::stringstream ssno;
+        ssno << "_j_str" << strno++;
+        GlobalVariable *gv = get_pointer_to_constant(
+                ConstantDataArray::get(jl_LLVMContext, ArrayRef<char>(ctxt.data(), ctxt.size())),
+                ssno.str(), *M);
+        pooledval->second = gv;
     }
-    else {
-        Value *v = ConstantExpr::getIntToPtr(
-                ConstantInt::get(T_size, (uintptr_t)pooledtxt.data()),
-                T_pint8);
-        return v;
-    }
+    GlobalVariable *v = prepare_global_in(M, pooledval->second);
+    if (v != pooledval->second)
+        v->setInitializer(pooledval->second->getInitializer());
+    Value *zero = ConstantInt::get(Type::getInt32Ty(jl_LLVMContext), 0);
+    Value *Args[] = { zero, zero };
+    return irbuilder.CreateInBoundsGEP(v->getValueType(), v, Args);
 }
 
 // --- MDNode ---
@@ -266,8 +208,9 @@ static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
     Type *T = PointerType::get(T_jlvalue, AddressSpace::Derived);
     if (V->getType() != T)
         V = ctx.builder.CreateBitCast(V, T);
-    CallInst *Call = ctx.builder.CreateCall(prepare_call(pointer_from_objref_func), V);
-    Call->setAttributes(pointer_from_objref_func->getAttributes());
+    Function *F = prepare_call(pointer_from_objref_func);
+    CallInst *Call = ctx.builder.CreateCall(F, V);
+    Call->setAttributes(F->getAttributes());
     return Call;
 }
 
@@ -342,7 +285,7 @@ static Value *julia_pgv(jl_codectx_t &ctx, const char *prefix, jl_sym_t *name, j
     return julia_pgv(ctx, fullname, addr);
 }
 
-static GlobalVariable *julia_const_gv(jl_value_t *val);
+static JuliaVariable *julia_const_gv(jl_value_t *val);
 static Value *literal_pointer_val_slot(jl_codectx_t &ctx, jl_value_t *p)
 {
     // emit a pointer to a jl_value_t* which will allow it to be valid across reloading code
@@ -355,9 +298,9 @@ static Value *literal_pointer_val_slot(jl_codectx_t &ctx, jl_value_t *p)
         gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
         return gv;
     }
-    if (GlobalVariable *gv = julia_const_gv(p)) {
-        // if this is a known object, use the existing GlobalValue
-        return prepare_global(gv);
+    if (JuliaVariable *gv = julia_const_gv(p)) {
+        // if this is a known special object, use the existing GlobalValue
+        return prepare_global_in(jl_Module, gv);
     }
     if (jl_is_datatype(p)) {
         jl_datatype_t *addr = (jl_datatype_t*)p;
@@ -590,17 +533,15 @@ static Type *bitstype_to_llvm(jl_value_t *bt, bool llvmcall = false)
         return T_float32;
     if (bt == (jl_value_t*)jl_float64_type)
         return T_float64;
-    if (jl_is_addrspace_ptr_type(bt)) {
-        int as = 0;
-
-        jl_datatype_t *typ = (jl_datatype_t*)bt;
-        jl_value_t *as_param = jl_svecref(typ->parameters, 1);
-
+    if (jl_is_llvmpointer_type(bt)) {
+        jl_value_t *as_param = jl_tparam1(bt);
+        int as;
         if (jl_is_int32(as_param))
             as = jl_unbox_int32(as_param);
         else if (jl_is_int64(as_param))
             as = jl_unbox_int64(as_param);
-
+        else
+            jl_error("invalid pointer address space");
         return PointerType::get(T_int8, as);
     }
     int nb = jl_datatype_size(bt);
@@ -1093,7 +1034,7 @@ static Value *emit_datatype_name(jl_codectx_t &ctx, Value *dt)
 
 static void just_emit_error(jl_codectx_t &ctx, const std::string &txt)
 {
-    ctx.builder.CreateCall(prepare_call(jlerror_func), stringConstPtr(ctx.builder, txt));
+    ctx.builder.CreateCall(prepare_call(jlerror_func), stringConstPtr(ctx.emission_context, ctx.builder, txt));
 }
 
 static void emit_error(jl_codectx_t &ctx, const std::string &txt)
@@ -1156,7 +1097,7 @@ static void null_pointer_check(jl_codectx_t &ctx, Value *v)
 
 static void emit_type_error(jl_codectx_t &ctx, const jl_cgval_t &x, Value *type, const std::string &msg)
 {
-    Value *msg_val = stringConstPtr(ctx.builder, msg);
+    Value *msg_val = stringConstPtr(ctx.emission_context, ctx.builder, msg);
     ctx.builder.CreateCall(prepare_call(jltypeerror_func),
                        { msg_val, maybe_decay_untracked(type), mark_callee_rooted(boxed(ctx, x))});
 }
@@ -2237,10 +2178,11 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
     return obj;
 }
 
-static Value *call_with_attrs(jl_codectx_t &ctx, Function *func, Value *v)
+static Value *call_with_attrs(jl_codectx_t &ctx, JuliaFunction *intr, Value *v)
 {
-    CallInst *Call = ctx.builder.CreateCall(prepare_call(func), v);
-    Call->setAttributes(func->getAttributes());
+    Function *F = prepare_call(intr);
+    CallInst *Call = ctx.builder.CreateCall(F, v);
+    Call->setAttributes(F->getAttributes());
     return Call;
 }
 
@@ -2619,10 +2561,9 @@ static void emit_cpointercheck(jl_codectx_t &ctx, const jl_cgval_t &x, const std
 static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt)
 {
     Value *ptls_ptr = emit_bitcast(ctx, ctx.ptlsStates, T_pint8);
-    auto call = ctx.builder.CreateCall(prepare_call(jl_alloc_obj_func),
-                                       {ptls_ptr, ConstantInt::get(T_size, static_size),
-                                               maybe_decay_untracked(jt)});
-    call->setAttributes(jl_alloc_obj_func->getAttributes());
+    Function *F = prepare_call(jl_alloc_obj_func);
+    auto call = ctx.builder.CreateCall(F, {ptls_ptr, ConstantInt::get(T_size, static_size), maybe_decay_untracked(jt)});
+    call->setAttributes(F->getAttributes());
     return call;
 }
 
@@ -2630,8 +2571,9 @@ static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt)
 static Value *emit_new_bits(jl_codectx_t &ctx, Value *jt, Value *pval)
 {
     pval = ctx.builder.CreateBitCast(pval, T_pint8);
-    auto call = ctx.builder.CreateCall(prepare_call(jl_newbits_func), { jt, pval });
-    call->setAttributes(jl_newbits_func->getAttributes());
+    Function *F = prepare_call(jl_newbits_func);
+    auto call = ctx.builder.CreateCall(F, { jt, pval });
+    call->setAttributes(F->getAttributes());
     return call;
 }
 

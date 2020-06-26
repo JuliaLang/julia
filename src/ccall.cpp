@@ -3,93 +3,48 @@
 // --- the ccall, cglobal, and llvm intrinsics ---
 #include "llvm/Support/Path.h" // for llvm::sys::path
 
-// Map from symbol name (in a certain library) to its GV in sysimg and the
-// DL handle address in the current session.
-typedef StringMap<GlobalVariable*> SymMapGV;
-static StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;
-#ifdef _OS_WINDOWS_
-static SymMapGV symMapExe;
-static SymMapGV symMapDl;
-#endif
-static SymMapGV symMapDefault;
-
-template<typename Func>
-struct LazyModule {
-    Func func;
-    Module *m;
-    template<typename Func2>
-    LazyModule(Func2 &&func)
-        : func(std::forward<Func2>(func)),
-          m(nullptr)
-    {}
-    Module *get()
-    {
-        if (!m)
-            m = func();
-        return m;
-    }
-    Module &operator*()
-    {
-        return *get();
-    }
-};
-
-template<typename Func>
-static LazyModule<typename std::remove_reference<Func>::type>
-lazyModule(Func &&func)
+// somewhat unusual variable, in that aotcompile wants to get the address of this for a sanity check
+GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
 {
-    return LazyModule<typename std::remove_reference<Func>::type>(
-        std::forward<Func>(func));
-}
-
-
-void copy_to_shadow(GlobalVariable *gv)
-{
-    // hack: make a copy of all globals in the shadow_output
-    if (!imaging_mode)
-        return;
-    GlobalVariable *shadowvar = global_proto(gv, shadow_output);
-    shadowvar->setInitializer(gv->getInitializer());
-    shadowvar->setLinkage(GlobalVariable::InternalLinkage);
+    return prepare_global_in(M, jlRTLD_DEFAULT_var);
 }
 
 // Find or create the GVs for the library and symbol lookup.
 // Return `runtime_lib` (whether the library name is a string)
 // The `lib` and `sym` GV returned may not be in the current module.
-template<typename MT>
-static bool runtime_sym_gvs(const char *f_lib, const char *f_name, MT &&M,
+static bool runtime_sym_gvs(jl_codegen_params_t &emission_context, const char *f_lib, const char *f_name,
                             GlobalVariable *&lib, GlobalVariable *&sym)
 {
+    Module *M = emission_context.shared_module(jl_LLVMContext);
     bool runtime_lib = false;
     GlobalVariable *libptrgv;
-    SymMapGV *symMap;
+    jl_codegen_params_t::SymMapGV *symMap;
 #ifdef _OS_WINDOWS_
     if ((intptr_t)f_lib == 1) {
-        libptrgv = jlexe_var;
-        symMap = &symMapExe;
+        libptrgv = prepare_global_in(M, jlexe_var);
+        symMap = &emission_context.symMapExe;
     }
     else if ((intptr_t)f_lib == 2) {
-        libptrgv = jldll_var;
-        symMap = &symMapDl;
+        libptrgv = prepare_global_in(M, jldll_var);
+        symMap = &emission_context.symMapDl;
     }
     else
 #endif
     if (f_lib == NULL) {
-        libptrgv = jlRTLD_DEFAULT_var;
-        symMap = &symMapDefault;
+        libptrgv = jl_emit_RTLD_DEFAULT_var(M);
+        symMap = &emission_context.symMapDefault;
     }
     else {
         std::string name = "ccalllib_";
         name += llvm::sys::path::filename(f_lib);
         name += std::to_string(globalUnique++);
         runtime_lib = true;
-        auto &libgv = libMapGV[f_lib];
+        auto &libgv = emission_context.libMapGV[f_lib];
         if (libgv.first == NULL) {
             libptrgv = new GlobalVariable(*M, T_pint8, false,
                                           GlobalVariable::ExternalLinkage,
                                           Constant::getNullValue(T_pint8), name);
-            copy_to_shadow(libptrgv);
-            libgv.first = global_proto(libptrgv);
+            libgv.first = libptrgv;
         }
         else {
             libptrgv = libgv.first;
@@ -108,8 +63,6 @@ static bool runtime_sym_gvs(const char *f_lib, const char *f_name, MT &&M,
         llvmgv = new GlobalVariable(*M, T_pvoidfunc, false,
                                     GlobalVariable::ExternalLinkage,
                                     Constant::getNullValue(T_pvoidfunc), name);
-        copy_to_shadow(llvmgv);
-        llvmgv = global_proto(llvmgv);
     }
 
     lib = libptrgv;
@@ -118,6 +71,7 @@ static bool runtime_sym_gvs(const char *f_lib, const char *f_name, MT &&M,
 }
 
 static Value *runtime_sym_lookup(
+        jl_codegen_params_t &emission_context,
         IRBuilder<> &irbuilder,
         PointerType *funcptype, const char *f_lib,
         const char *f_name, Function *f,
@@ -154,14 +108,14 @@ static Value *runtime_sym_lookup(
     irbuilder.SetInsertPoint(dlsym_lookup);
     Value *libname;
     if (runtime_lib) {
-        libname = stringConstPtr(irbuilder, f_lib);
+        libname = stringConstPtr(emission_context, irbuilder, f_lib);
     }
     else {
         // f_lib is actually one of the special sentinel values
         libname = ConstantExpr::getIntToPtr(ConstantInt::get(T_size, (uintptr_t)f_lib), T_pint8);
     }
     Value *llvmf = irbuilder.CreateCall(prepare_call_in(jl_builderModule(irbuilder), jldlsym_func),
-            { libname, stringConstPtr(irbuilder, f_name), libptrgv });
+            { libname, stringConstPtr(emission_context, irbuilder, f_name), libptrgv });
     auto store = irbuilder.CreateAlignedStore(llvmf, llvmgv, sizeof(void*));
     store->setAtomic(AtomicOrdering::Release);
     irbuilder.CreateBr(ccall_bb);
@@ -181,35 +135,22 @@ static Value *runtime_sym_lookup(
 {
     GlobalVariable *libptrgv;
     GlobalVariable *llvmgv;
-    bool runtime_lib = runtime_sym_gvs(f_lib, f_name, f->getParent(),
-                                       libptrgv, llvmgv);
-    libptrgv = prepare_global(libptrgv);
-    llvmgv = prepare_global(llvmgv);
-    return runtime_sym_lookup(ctx.builder, funcptype, f_lib, f_name, f, libptrgv, llvmgv,
-                              runtime_lib);
+    bool runtime_lib = runtime_sym_gvs(ctx.emission_context, f_lib, f_name, libptrgv, llvmgv);
+    libptrgv = prepare_global_in(jl_Module, libptrgv);
+    llvmgv = prepare_global_in(jl_Module, llvmgv);
+    return runtime_sym_lookup(ctx.emission_context, ctx.builder, funcptype, f_lib, f_name, f, libptrgv, llvmgv, runtime_lib);
 }
-
-// Map from distinct callee's to its GOT entry.
-// In principle the attribute, function type and calling convention
-// don't need to be part of the key but it seems impossible to forward
-// all the arguments without writing assembly directly.
-// This doesn't matter too much in reality since a single function is usually
-// not called with multiple signatures.
-static DenseMap<AttributeList,
-                std::map<std::tuple<GlobalVariable*,FunctionType*,
-                                    CallingConv::ID>,GlobalVariable*>> allPltMap;
-
-void jl_add_to_shadow(Module *m);
 
 // Emit a "PLT" entry that will be lazily initialized
 // when being called the first time.
 static GlobalVariable *emit_plt_thunk(
-        Module *M, FunctionType *functype,
-        const AttributeList &attrs,
+        jl_codegen_params_t &emission_context,
+        FunctionType *functype, const AttributeList &attrs,
         CallingConv::ID cc, const char *f_lib, const char *f_name,
         GlobalVariable *libptrgv, GlobalVariable *llvmgv,
         bool runtime_lib)
 {
+    Module *M = emission_context.shared_module(jl_LLVMContext);
     PointerType *funcptype = PointerType::get(functype, 0);
     libptrgv = prepare_global_in(M, libptrgv);
     llvmgv = prepare_global_in(M, llvmgv);
@@ -229,7 +170,7 @@ static GlobalVariable *emit_plt_thunk(
                                              ConstantExpr::getBitCast(plt, T_pvoidfunc), gname);
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", plt);
     IRBuilder<> irbuilder(b0);
-    Value *ptr = runtime_sym_lookup(irbuilder, funcptype, f_lib, f_name, plt, libptrgv,
+    Value *ptr = runtime_sym_lookup(emission_context, irbuilder, funcptype, f_lib, f_name, plt, libptrgv,
                                     llvmgv, runtime_lib);
     auto store = irbuilder.CreateAlignedStore(irbuilder.CreateBitCast(ptr, T_pvoidfunc), got, sizeof(void*));
     store->setAtomic(AtomicOrdering::Release);
@@ -265,23 +206,14 @@ static GlobalVariable *emit_plt_thunk(
     }
     irbuilder.ClearInsertionPoint();
 
-    got = global_proto(got); // exchange got for the permanent global before jl_finalize_module destroys it
-    jl_add_to_shadow(M);
-    jl_finalize_module(std::unique_ptr<Module>(M));
-
-    auto shadowgot =
-        cast<GlobalVariable>(shadow_output->getNamedValue(gname));
-    auto shadowplt = cast<Function>(shadow_output->getNamedValue(fname));
-    shadowgot->setInitializer(ConstantExpr::getBitCast(shadowplt,
-                                                       T_pvoidfunc));
     return got;
 }
 
 static Value *emit_plt(
         jl_codectx_t &ctx,
         FunctionType *functype,
-       const AttributeList &attrs,
-       CallingConv::ID cc, const char *f_lib, const char *f_name)
+        const AttributeList &attrs,
+        CallingConv::ID cc, const char *f_lib, const char *f_name)
 {
     assert(imaging_mode);
     // Don't do this for vararg functions so that the `musttail` is only
@@ -289,26 +221,17 @@ static Value *emit_plt(
     assert(!functype->isVarArg());
     GlobalVariable *libptrgv;
     GlobalVariable *llvmgv;
-    auto LM = lazyModule([&] {
-            Module *m = new Module(f_name, jl_LLVMContext);
-            jl_setup_module(m);
-            return m;
-        });
-    bool runtime_lib = runtime_sym_gvs(f_lib, f_name, LM, libptrgv, llvmgv);
+    bool runtime_lib = runtime_sym_gvs(ctx.emission_context, f_lib, f_name, libptrgv, llvmgv);
     PointerType *funcptype = PointerType::get(functype, 0);
 
-    auto &pltMap = allPltMap[attrs];
+    auto &pltMap = ctx.emission_context.allPltMap[attrs];
     auto key = std::make_tuple(llvmgv, functype, cc);
-    GlobalVariable *&shadowgot = pltMap[key];
-    if (!shadowgot) {
-        shadowgot = emit_plt_thunk(LM.get(), functype, attrs, cc, f_lib, f_name, libptrgv, llvmgv, runtime_lib);
+    GlobalVariable *&sharedgot = pltMap[key];
+    if (!sharedgot) {
+        sharedgot = emit_plt_thunk(ctx.emission_context,
+                functype, attrs, cc, f_lib, f_name, libptrgv, llvmgv, runtime_lib);
     }
-    else {
-        // `runtime_sym_gvs` shouldn't have created anything in a new module
-        // if it returns a GV that already exists.
-        assert(!LM.m);
-    }
-    GlobalVariable *got = prepare_global(shadowgot);
+    GlobalVariable *got = prepare_global_in(jl_Module, sharedgot);
     LoadInst *got_val = ctx.builder.CreateAlignedLoad(got, sizeof(void*));
     // See comment in `runtime_sym_lookup` above. This in principle needs a
     // consume ordering too. This is even less likely to cause issues though
@@ -719,6 +642,39 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     return mark_julia_type(ctx, res, false, rt);
 }
 
+static Function *llvmcall_proto(Function *F, Module *M = nullptr)
+{
+    // Copy the declaration characteristics of the Function (not the body)
+    Function *NewF = Function::Create(F->getFunctionType(),
+                                      Function::ExternalLinkage,
+                                      F->getName(),
+                                      M);
+
+    // Declarations are not allowed to have personality routines, but
+    // copyAttributesFrom sets them anyway. Temporarily unset the personality
+    // routine from `F`, since copying it and then resetting is more expensive
+    // as well as introducing an extra use from this unowned function, which
+    // can cause crashes in the LLVMContext's global destructor.
+    llvm::Constant *OldPersonalityFn = nullptr;
+    if (F->hasPersonalityFn()) {
+        OldPersonalityFn = F->getPersonalityFn();
+        F->setPersonalityFn(nullptr);
+    }
+
+    // FunctionType does not include any attributes. Copy them over manually
+    // as codegen may make decisions based on the presence of certain attributes
+    NewF->copyAttributesFrom(F);
+
+    if (OldPersonalityFn)
+        F->setPersonalityFn(OldPersonalityFn);
+
+    // DLLImport only needs to be set for the shadow module
+    // it just gets annoying in the JIT
+    NewF->setDLLStorageClass(GlobalValue::DefaultStorageClass);
+
+    return NewF;
+}
+
 class FunctionMover final : public ValueMaterializer
 {
 public:
@@ -782,7 +738,7 @@ public:
     {
         Function *NewF = destModule->getFunction(F->getName());
         if (!NewF) {
-            NewF = function_proto(F);
+            NewF = llvmcall_proto(F);
             NewF->setComdat(nullptr);
             destModule->getFunctionList().push_back(NewF);
         }
@@ -858,6 +814,15 @@ public:
         return NULL;
     };
 };
+
+static Function *prepare_llvmcall(Module *M, Function *Callee)
+{
+    GlobalValue *local = M->getNamedValue(Callee->getName());
+    if (!local)
+        local = llvmcall_proto(Callee, M);
+    return cast<Function>(local);
+}
+
 
 // llvmcall(ir, (rettypes...), (argtypes...), args...)
 static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
@@ -1037,7 +1002,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         std::stringstream name;
         name << "jl_llvmcall" << llvmcallnumbering++;
         f->setName(name.str());
-        f = cast<Function>(prepare_call(function_proto(f)).getCallee());
+        f = prepare_llvmcall(jl_Module, llvmcall_proto(f));
     }
     else {
         f->setLinkage(GlobalValue::LinkOnceODRLinkage);
@@ -1185,7 +1150,7 @@ std::string generate_func_sig(const char *fname)
             t = T_pint8;
             isboxed = false;
         }
-        else if (llvmcall && jl_is_addrspace_ptr_type(tti)) {
+        else if (llvmcall && jl_is_llvmpointer_type(tti)) {
             t = bitstype_to_llvm(tti, true);
             tti = (jl_value_t*)jl_voidpointer_type;
             isboxed = false;
@@ -1945,9 +1910,9 @@ jl_cgval_t function_sig_t::emit_a_ccall(
 
     OperandBundleDef OpBundle("jl_roots", gc_uses);
     // the actual call
-    Value *ret = ctx.builder.CreateCall(prepare_call(llvmf),
-                                    ArrayRef<Value*>(&argvals[0], nccallargs + sret),
-                                    ArrayRef<OperandBundleDef>(&OpBundle, gc_uses.empty() ? 0 : 1));
+    CallInst *ret = ctx.builder.CreateCall(functype, llvmf,
+            ArrayRef<Value*>(&argvals[0], nccallargs + sret),
+            ArrayRef<OperandBundleDef>(&OpBundle, gc_uses.empty() ? 0 : 1));
     ((CallInst*)ret)->setAttributes(attributes);
 
     if (cc != CallingConv::C)

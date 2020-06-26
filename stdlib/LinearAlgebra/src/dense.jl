@@ -301,7 +301,9 @@ function diagm_size(size::Tuple{Int,Int}, kv::Pair{<:Integer,<:AbstractVector}..
 end
 function diagm_container(size, kv::Pair{<:Integer,<:AbstractVector}...)
     T = promote_type(map(x -> eltype(x.second), kv)...)
-    return zeros(T, diagm_size(size, kv...)...)
+    # For some type `T`, `zero(T)` is not a `T` and `zeros(T, ...)` fails.
+    U = promote_type(T, typeof(zero(T)))
+    return zeros(U, diagm_size(size, kv...)...)
 end
 diagm_container(size, kv::Pair{<:Integer,<:BitVector}...) =
     falses(diagm_size(size, kv...)...)
@@ -334,6 +336,29 @@ function tr(A::Matrix{T}) where T
         t += A[i,i]
     end
     t
+end
+
+"""
+    kron!(C, A, B)
+
+`kron!` is the in-place version of [`kron`](@ref). Computes `kron(A, B)` and stores the result in `C`
+overwriting the existing value of `C`.
+
+!!! tip
+    Bounds checking can be disabled by [`@inbounds`](@ref), but you need to take care of the shape
+    of `C`, `A`, `B` yourself.
+"""
+@inline function kron!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractMatrix)
+    require_one_based_indexing(A, B)
+    @boundscheck (size(C) == (size(A,1)*size(B,1), size(A,2)*size(B,2))) || throw(DimensionMismatch())
+    m = 0
+    @inbounds for j = 1:size(A,2), l = 1:size(B,2), i = 1:size(A,1)
+        Aij = A[i,j]
+        for k = 1:size(B,1)
+            C[m += 1] = Aij*B[k,l]
+        end
+    end
+    return C
 end
 
 """
@@ -383,17 +408,22 @@ julia> reshape(kron(v,w), (length(w), length(v)))
 ```
 """
 function kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
-    require_one_based_indexing(a, b)
     R = Matrix{promote_op(*,T,S)}(undef, size(a,1)*size(b,1), size(a,2)*size(b,2))
-    m = 0
-    @inbounds for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
-        aij = a[i,j]
-        for k = 1:size(b,1)
-            R[m += 1] = aij*b[k,l]
-        end
-    end
-    R
+    return @inbounds kron!(R, a, b)
 end
+
+kron!(c::AbstractVecOrMat, a::AbstractVecOrMat, b::Number) = mul!(c, a, b)
+
+Base.@propagate_inbounds function kron!(c::AbstractVector, a::AbstractVector, b::AbstractVector)
+    C = reshape(c, length(a)*length(b), 1)
+    A = reshape(a ,length(a), 1)
+    B = reshape(b, length(b), 1)
+    kron!(C, A, B)
+    return c
+end
+
+Base.@propagate_inbounds kron!(C::AbstractMatrix, a::AbstractMatrix, b::AbstractVector) = kron!(C, a, reshape(b, length(b), 1))
+Base.@propagate_inbounds kron!(C::AbstractMatrix, a::AbstractVector, b::AbstractMatrix) = kron!(C, reshape(a, length(a), 1), b)
 
 kron(a::Number, b::Union{Number, AbstractVecOrMat}) = a * b
 kron(a::AbstractVecOrMat, b::Number) = a * b

@@ -58,6 +58,7 @@ Note that many editors are already defined. All of the following commands should
 already work:
 
 - emacs
+- emacsclient
 - vim
 - nvim
 - nano
@@ -113,13 +114,14 @@ function define_default_editors()
     define_editor(r".*") do cmd, path, line
         `$cmd $path`
     end
+    define_editor([r"\bemacs", "gedit", r"\bgvim"]) do cmd, path, line
+        `$cmd +$line $path`
+    end
+    # Must check that emacs not running in -t/-nw before regex match for general emacs
     define_editor([
         "vim", "vi", "nvim", "mvim", "nano",
         r"\bemacs\b.*\s(-nw|--no-window-system)\b",
         r"\bemacsclient\b.\s*-(-?nw|t|-?tty)\b"], wait=true) do cmd, path, line
-        `$cmd +$line $path`
-    end
-    define_editor([r"\bemacs", "gedit", r"\bgvim"]) do cmd, path, line
         `$cmd +$line $path`
     end
     define_editor(["textmate", "mate", "kate"]) do cmd, path, line
@@ -186,7 +188,7 @@ Edit a file or directory optionally providing a line number to edit the file at.
 Return to the `julia` prompt when you quit the editor. The editor can be changed
 by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 
-See also: (`define_editor`)[@ref]
+See also: [`define_editor`](@ref)
 """
 function edit(path::AbstractString, line::Integer=0)
     isempty(EDITOR_CALLBACKS) && define_default_editors()

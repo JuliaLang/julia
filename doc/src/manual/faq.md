@@ -410,16 +410,16 @@ is bounded and wraps around at either end so that adding, subtracting and multip
 can overflow or underflow, leading to some results that can be unsettling at first:
 
 ```jldoctest
-julia> typemax(Int)
+julia> x = typemax(Int)
 9223372036854775807
 
-julia> ans+1
+julia> y = x+1
 -9223372036854775808
 
-julia> -ans
+julia> z = -y
 -9223372036854775808
 
-julia> 2*ans
+julia> 2*z
 0
 ```
 
@@ -934,6 +934,22 @@ Since operations like this are very thin wrappers over the relevant BLAS functio
 Julia compiles and uses its own copy of OpenBLAS, with threads currently capped at `8` (or the number of your cores).
 
 Modifying OpenBLAS settings or compiling Julia with a different BLAS library, eg [Intel MKL](https://software.intel.com/en-us/mkl), may provide performance improvements. You can use [MKL.jl](https://github.com/JuliaComputing/MKL.jl), a package that makes Julia's linear algebra use Intel MKL BLAS and LAPACK instead of OpenBLAS, or search the discussion forum for suggestions on how to set this up manually. Note that Intel MKL cannot be bundled with Julia, as it is not open source.
+
+## Computing cluster
+
+### How do I manage precompilation caches in distributed file systems?
+
+When using `julia` in high-performance computing (HPC) facilities, invoking
+_n_ `julia` processes simultaneously creates at most _n_ temporary copies of
+precompilation cache files. If this is an issue (slow and/or small distributed
+file system), you may:
+
+1. Use `julia` with `--compiled-modules=no` flag to turn off precompilation.
+2. Configure a private writable depot using `pushfirst!(DEPOT_PATH, private_path)`
+   where `private_path` is a path unique to this `julia` process.  This
+   can also be done by setting environment variable `JULIA_DEPOT_PATH` to
+   `$private_path:$HOME/.julia`.
+3. Create a symlink from `~/.julia/compiled` to a directory in a scratch space.
 
 ## Julia Releases
 

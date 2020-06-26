@@ -939,4 +939,15 @@ end
     @test exp(log(A2)) ≈ A2
 end
 
+struct TypeWithoutZero end
+Base.zero(::Type{TypeWithoutZero}) = TypeWithZero()
+struct TypeWithZero end
+Base.promote_rule(::Type{TypeWithoutZero}, ::Type{TypeWithZero}) = TypeWithZero
+Base.zero(::Type{<:Union{TypeWithoutZero, TypeWithZero}}) = TypeWithZero()
+Base.:+(x::TypeWithZero, ::TypeWithoutZero) = x
+
+@testset "diagm for type with no zero" begin
+    @test diagm(0 => [TypeWithoutZero()]) isa Matrix{TypeWithZero}
+end
+
 end # module TestDense

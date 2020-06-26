@@ -981,17 +981,20 @@ struct CodegenParams
     emit_function::Any
     emitted_function::Any
 
+    lookup::Ptr{Cvoid}
+
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    static_alloc::Bool=true, prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
                    module_setup=nothing, module_activation=nothing, raise_exception=nothing,
-                   emit_function=nothing, emitted_function=nothing)
+                   emit_function=nothing, emitted_function=nothing,
+                   lookup::Ptr{Cvoid}=cglobal(:jl_rettype_inferred))
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(static_alloc), Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             module_setup, module_activation, raise_exception,
-            emit_function, emitted_function)
+            emit_function, emitted_function, lookup)
     end
 end
 
@@ -1078,10 +1081,31 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
                     debuginfo::Symbol=:default,
                     world = get_world_counter(),
                     interp = Core.Compiler.NativeInterpreter(world))
-    ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
+    ft = Core.Typeof(f)
+    if isa(types, Type)
+        u = unwrap_unionall(types)
+        tt = rewrap_unionall(Tuple{ft, u.parameters...}, types)
+    else
+        tt = Tuple{ft, types...}
+    end
+    return code_typed_by_type(tt; optimize, debuginfo, world, interp)
+end
+
+"""
+    code_typed_by_type(types::Type{<:Tuple}; ...)
+
+Similar to [`code_typed`](@ref), except the argument is a tuple type describing
+a full signature to query.
+"""
+function code_typed_by_type(@nospecialize(tt::Type);
+                            optimize=true,
+                            debuginfo::Symbol=:default,
+                            world = get_world_counter(),
+                            interp = Core.Compiler.NativeInterpreter(world))
+    ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if @isdefined(IRShow)
         debuginfo = IRShow.debuginfo(debuginfo)
     elseif debuginfo === :default
@@ -1090,10 +1114,14 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
     if debuginfo !== :source && debuginfo !== :none
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
-    types = to_tuple_type(types)
+    tt = to_tuple_type(tt)
+    meths = _methods_by_ftype(tt, -1, world)
+    if meths === false
+        error("signature does not correspond to a generic function")
+    end
     asts = []
-    for x in _methods(f, types, -1, world)
-        meth = func_for_method_checked(x[3], types, x[2])
+    for x in meths
+        meth = func_for_method_checked(x[3], tt, x[2])
         (code, ty) = Core.Compiler.typeinf_code(interp, meth, x[1], x[2], optimize)
         code === nothing && error("inference not successful") # inference disabled?
         debuginfo === :none && remove_linenums!(code)
@@ -1132,6 +1160,15 @@ function which(@nospecialize(f), @nospecialize(t))
     end
     t = to_tuple_type(t)
     tt = signature_type(f, t)
+    return which(tt)
+end
+
+"""
+    which(types::Type{<:Tuple})
+
+Returns the method that would be called by the given type signature (as a tuple type).
+"""
+function which(@nospecialize(tt::Type))
     m = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tt, typemax(UInt))
     if m === nothing
         error("no unique matching method found for the specified argument types")
@@ -1218,10 +1255,12 @@ See also [`applicable`](@ref).
 julia> hasmethod(length, Tuple{Array})
 true
 
-julia> hasmethod(sum, Tuple{Function, Array}, (:dims,))
+julia> f(; oranges=0) = oranges;
+
+julia> hasmethod(f, Tuple{}, (:oranges,))
 true
 
-julia> hasmethod(sum, Tuple{Function, Array}, (:apples, :bananas))
+julia> hasmethod(f, Tuple{}, (:apples, :bananas))
 false
 
 julia> g(; xs...) = 4;
