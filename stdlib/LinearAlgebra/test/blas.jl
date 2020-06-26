@@ -471,7 +471,7 @@ Base.strides(A::WrappedArray) = strides(A.A)
     A = WrappedArray([1 2; 3 4; 5 6])
     @test stride(A,1) == 1
     @test stride(A,2) == 3
-    @test stride(A,3) == stride(A,4) == 6
+    @test stride(A,3) == stride(A,4) >= 6
     @test strides(A') == strides(transpose(A)) == (3,1)
     @test pointer(A') == pointer(transpose(A)) == pointer(A)
     @test_throws BoundsError stride(A,0)
