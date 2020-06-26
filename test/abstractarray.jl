@@ -1086,36 +1086,43 @@ end
         Ap = Base.PermutedDimsArray(A, perm)
         At = transpose(A)
         Aa = adjoint(A)
+        St = transpose(A)
+        Sa = adjoint(A)
         Sp = Base.PermutedDimsArray(S, perm)
         Ps = Strider{Int, 2}(vec(A), 1, strides(A)[collect(perm)], sz[collect(perm)])
         @test pointer(Ap) == pointer(Sp) == pointer(Ps) == pointer(At) == pointer(Aa)
         for i in 1:length(Ap)
             # This is intentionally disabled due to ambiguity
-            @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i) == pointer(At, i) == pointer(Aa, i)
-            @test pointer(Ps, i) == pointer(At, i) == pointer(Aa, i)
-            @test P[i] == Ap[i] == Sp[i] == Ps[i] == At[i] == Aa[i]
+            @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i) == pointer(At, i) == pointer(Aa, i) == pointer(St, i) == pointer(Sa, i)
+            @test pointer(Ps, i) == pointer(At, i) == pointer(Aa, i) == pointer(St, i) == pointer(Sa, i)
+            @test P[i] == Ap[i] == Sp[i] == Ps[i] == At[i] == Aa[i] == St[i] == Sa[i]
         end
         Pv = view(P, idxs[collect(perm)]...)
         Apv = view(Ap, idxs[collect(perm)]...)
         Atv = view(At, idxs[collect(perm)]...)
         Ata = view(Aa, idxs[collect(perm)]...)
+        Stv = view(St, idxs[collect(perm)]...)
+        Sta = view(Sa, idxs[collect(perm)]...)
         Spv = view(Sp, idxs[collect(perm)]...)
         Pvs = Strider{Int, 2}(vec(A), sum((first.(idxs).-1).*strides(A))+1, strides(Apv), size(Apv))
         @test pointer(Apv) == pointer(Spv) == pointer(Pvs) == pointer(Atv) == pointer(Ata)
         for i in 1:length(Apv)
-            @test pointer(Apv, i) == pointer(Spv, i) == pointer(Pvs, i) == pointer(Atv, i) == pointer(Ata, i)
-            @test Pv[i] == Apv[i] == Spv[i] == Pvs[i] == Atv[i] == Ata[i]
+            @test pointer(Apv, i) == pointer(Spv, i) == pointer(Pvs, i) == pointer(Atv, i) == pointer(Ata, i) == pointer(Stv, i) == pointer(Sta, i)
+            @test Pv[i] == Apv[i] == Spv[i] == Pvs[i] == Atv[i] == Ata[i] == Stv[i] == Sta[i]
         end
         Vp = permutedims(Av, perm)
         Avp = Base.PermutedDimsArray(Av, perm)
         Avt = transpose(Av)
         Ava = adjoint(Av)
+        Svt = transpose(Sv)
+        Sva = adjoint(Sv)
         Svp = Base.PermutedDimsArray(Sv, perm)
         @test pointer(Avp) == pointer(Svp) == pointer(Avt) == pointer(Ava)
         for i in 1:length(Avp)
             # This is intentionally disabled due to ambiguity
-            @test_broken pointer(Avp, i) == pointer(Svp, i) == pointer(Avt, i) == pointer(Ava, i)
-            @test Vp[i] == Avp[i] == Svp[i] == Avt[i] == Ava[i]
+            @test_broken pointer(Avp, i) == pointer(Svp, i) == pointer(Avt, i) == pointer(Ava, i) == pointer(Svt, i) == pointer(Sva, i)
+            @test pointer(Avt, i) == pointer(Ava, i) == pointer(Svt, i) == pointer(Sva, i)
+            @test Vp[i] == Avp[i] == Svp[i] == Avt[i] == Ava[i] == Svt[i] == Sva[i]
         end
     end
 end
