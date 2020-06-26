@@ -2,7 +2,7 @@
 
 if !isdefined(@__MODULE__, Symbol("@verify_error"))
     macro verify_error(arg)
-        arg isa String && return esc(:(println(stderr, $arg)))
+        arg isa String && return esc(:(print && println(stderr, $arg)))
         (arg isa Expr && arg.head === :string) || error("verify_error macro expected a string expression")
         pushfirst!(arg.args, GlobalRef(Core, :stderr))
         pushfirst!(arg.args, :println)
@@ -11,7 +11,7 @@ if !isdefined(@__MODULE__, Symbol("@verify_error"))
     end
 end
 
-function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int)
+function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, print::Bool)
     if isa(op, SSAValue)
         if op.id > length(ir.stmts)
             def_bb = block_for_inst(ir.cfg, ir.new_nodes[op.id - length(ir.stmts)].pos)
@@ -35,6 +35,11 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
                 error()
             end
         end
+    elseif isa(op, GlobalRef)
+        if !isdefined(op.mod, op.name)
+            @verify_error "Unbound GlobalRef not allowed in value position"
+            error()
+        end
     elseif isa(op, Union{OldSSAValue, NewSSAValue})
         #@Base.show ir
         @verify_error "Left over SSA marker"
@@ -55,7 +60,7 @@ function count_int(val::Int, arr::Vector{Int})
     n
 end
 
-function verify_ir(ir::IRCode)
+function verify_ir(ir::IRCode, print::Bool=true)
     # For now require compact IR
     # @assert isempty(ir.new_nodes)
     # Verify CFG
@@ -169,7 +174,7 @@ function verify_ir(ir::IRCode)
                     @verify_error "GlobalRefs and Exprs are not allowed as PhiNode values"
                     error()
                 end
-                check_op(ir, domtree, val, edge, last(ir.cfg.blocks[stmt.edges[i]].stmts)+1)
+                check_op(ir, domtree, val, edge, last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, print)
             end
         elseif isa(stmt, PhiCNode)
             for i = 1:length(stmt.values)
@@ -206,17 +211,18 @@ function verify_ir(ir::IRCode)
             end
             for op in userefs(stmt)
                 op = op[]
-                check_op(ir, domtree, op, bb, idx)
+                check_op(ir, domtree, op, bb, idx, print)
             end
         end
     end
 end
 
-function verify_linetable(linetable::Vector{LineInfoNode})
+function verify_linetable(linetable::Vector{LineInfoNode}, print::Bool=true)
     for i in 1:length(linetable)
         line = linetable[i]
         if i <= line.inlined_at
             @verify_error "Misordered linetable"
+            error()
         end
     end
 end

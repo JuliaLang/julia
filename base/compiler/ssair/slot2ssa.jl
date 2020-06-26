@@ -168,6 +168,8 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
                 return nothing
             end
             op[] = x
+        elseif isa(val, GlobalRef) && !isdefined(val.mod, val.name)
+            op[] = NewSSAValue(insert_node!(ir, idx, Any, val).id - length(ir.stmts))
         end
     end
     return urs[]
