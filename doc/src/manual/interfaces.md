@@ -50,7 +50,7 @@ is translated into:
 
 ```julia
 next = iterate(iter)
-while next !== nothing
+while !isnothing(next)
     (i, state) = next
     # body
     next = iterate(iter, state)
