@@ -108,6 +108,8 @@ function Markdown.term(io::IO, msg::Message, columns)
     printstyled(io, msg.msg; msg.fmt...)
 end
 
+trimdocs(doc, brief::Bool) = doc
+
 function trimdocs(md::Markdown.MD, brief::Bool)
     brief || return md
     md, trimmed = _trimdocs(md, brief)
