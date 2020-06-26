@@ -1002,7 +1002,14 @@ end
 pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, x)
 function pointer(x::AbstractArray{T}, i::Integer) where T
     @_inline_meta
-    unsafe_convert(Ptr{T}, x) + (i - first(LinearIndices(x)))*elsize(x)
+    unsafe_convert(Ptr{T}, x) + _memory_offset(x, i)
+end
+
+# The distance from pointer(x) to the element at x[I...] in bytes
+_memory_offset(x::DenseArray, I...) = (_to_linear_index(x, I...) - first(LinearIndices(x)))*elsize(x)
+function _memory_offset(x::AbstractArray, I...)
+    J = _to_subscript_indices(x, I...)
+    return sum(map((i, s, o)->s*(i-o), J, strides(x), Tuple(first(CartesianIndices(x)))))*elsize(x)
 end
 
 ## Approach:
@@ -1072,10 +1079,10 @@ function _getindex(::IndexLinear, A::AbstractArray, I::Vararg{Int,M}) where M
     @inbounds r = getindex(A, _to_linear_index(A, I...))
     r
 end
-_to_linear_index(A::AbstractArray, i::Int) = i
-_to_linear_index(A::AbstractVector, i::Int, I::Int...) = i
+_to_linear_index(A::AbstractArray, i::Integer) = i
+_to_linear_index(A::AbstractVector, i::Integer, I::Integer...) = i
 _to_linear_index(A::AbstractArray) = 1
-_to_linear_index(A::AbstractArray, I::Int...) = (@_inline_meta; _sub2ind(A, I...))
+_to_linear_index(A::AbstractArray, I::Integer...) = (@_inline_meta; _sub2ind(A, I...))
 
 ## IndexCartesian Scalar indexing: Canonical method is full dimensionality of Ints
 function _getindex(::IndexCartesian, A::AbstractArray, I::Vararg{Int,M}) where M
@@ -1088,12 +1095,12 @@ function _getindex(::IndexCartesian, A::AbstractArray{T,N}, I::Vararg{Int, N}) w
     @_propagate_inbounds_meta
     getindex(A, I...)
 end
-_to_subscript_indices(A::AbstractArray, i::Int) = (@_inline_meta; _unsafe_ind2sub(A, i))
+_to_subscript_indices(A::AbstractArray, i::Integer) = (@_inline_meta; _unsafe_ind2sub(A, i))
 _to_subscript_indices(A::AbstractArray{T,N}) where {T,N} = (@_inline_meta; fill_to_length((), 1, Val(N)))
 _to_subscript_indices(A::AbstractArray{T,0}) where {T} = ()
-_to_subscript_indices(A::AbstractArray{T,0}, i::Int) where {T} = ()
-_to_subscript_indices(A::AbstractArray{T,0}, I::Int...) where {T} = ()
-function _to_subscript_indices(A::AbstractArray{T,N}, I::Int...) where {T,N}
+_to_subscript_indices(A::AbstractArray{T,0}, i::Integer) where {T} = ()
+_to_subscript_indices(A::AbstractArray{T,0}, I::Integer...) where {T} = ()
+function _to_subscript_indices(A::AbstractArray{T,N}, I::Integer...) where {T,N}
     @_inline_meta
     J, Jrem = IteratorsMD.split(I, Val(N))
     _to_subscript_indices(A, J, Jrem)
