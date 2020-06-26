@@ -224,11 +224,6 @@ end
 
 # test DL_LOAD_PATH handling and @executable_path expansion
 mktempdir() do dir
-    # Skip these tests if the temporary directory is not on the same filesystem
-    # as the BINDIR, as in that case, a relative path will never work.
-    if Base.Filesystem.splitdrive(dir)[1] != Base.Filesystem.splitdrive(Sys.BINDIR)[1]
-        return
-    end
     # Create a `libdcalltest` in a directory that is not on our load path
     src_path = joinpath(private_libdir, "libccalltest.$(Libdl.dlext)")
     dst_path = joinpath(dir, "libdcalltest.$(Libdl.dlext)")
@@ -237,8 +232,8 @@ mktempdir() do dir
     # Add an absurdly long entry to the load path to verify it doesn't lead to a buffer overflow
     push!(Base.DL_LOAD_PATH, joinpath(dir, join(rand('a':'z', 10000))))
 
-    # Add this temporary directory to our load path, using `@executable_path` to do so.
-    push!(Base.DL_LOAD_PATH, joinpath("@executable_path", relpath(dir, Sys.BINDIR)))
+    # Add the temporary directors to load path by absolute path
+    push!(Base.DL_LOAD_PATH, dir)
 
     # Test that we can now open that file
     Libdl.dlopen("libdcalltest") do dl
@@ -252,10 +247,17 @@ mktempdir() do dir
         @test fptr == C_NULL
     end
 
-    # Now use the absolute path
+    # Skip these tests if the temporary directory is not on the same filesystem
+    # as the BINDIR, as in that case, a relative path will never work.
+    if Base.Filesystem.splitdrive(dir)[1] != Base.Filesystem.splitdrive(Sys.BINDIR)[1]
+        return
+    end
+
     empty!(Base.DL_LOAD_PATH)
     push!(Base.DL_LOAD_PATH, joinpath(dir, join(rand('a':'z', 10000))))
-    push!(Base.DL_LOAD_PATH, dir)
+
+    # Add this temporary directory to our load path, now using `@executable_path` to do so.
+    push!(Base.DL_LOAD_PATH, joinpath("@executable_path", relpath(dir, Sys.BINDIR)))
 
     # Test that we can now open that file
     Libdl.dlopen("libdcalltest") do dl
