@@ -72,18 +72,18 @@ end
 
 # 36430
 
-struct MockUnitful <: Number
-    data
+struct MockUnitful{T<:Number} <: Number
+    data::T
 end
 import Base: *, /, one, oneunit
 *(a::MockUnitful, b::Number) = MockUnitful(a.data * b)
 *(a::Number, b::MockUnitful) = MockUnitful(a * b.data)
 /(a::MockUnitful, b::MockUnitful) = a.data / b.data
-one(::Type{<:MockUnitful}) = 1.0
-oneunit(::Type{<:MockUnitful}) = MockUnitful(1.0)
+one(::Type{<:MockUnitful{T}}) where T = one(T)
+oneunit(::Type{<:MockUnitful{T}}) where T = MockUnitful(one(T))
 
-@testset "unitful givens rotation" begin
-    g, r = givens(MockUnitful(3.0), MockUnitful(4.0), 1, 2)
+@testset "unitful givens rotation unitful $T " for T in (Float64, ComplexF64)
+    g, r = givens(MockUnitful(T(3)), MockUnitful(T(4)), 1, 2)
     @test g.c ≈ 3/5
     @test g.s ≈ 4/5
     @test r.data ≈ 5.0
