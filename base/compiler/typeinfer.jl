@@ -439,6 +439,10 @@ function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, chi
     end
 end
 
+function is_same_frame(interp::AbstractInterpreter, linfo::MethodInstance, frame::InferenceState)
+    return linfo === frame.linfo
+end
+
 # Walk through `linfo`'s upstream call chain, starting at `parent`. If a parent
 # frame matching `linfo` is encountered, then there is a cycle in the call graph
 # (i.e. `linfo` is a descendant callee of itself). Upon encountering this cycle,
@@ -446,14 +450,14 @@ end
 # frame's `callers_in_cycle` field and adding the appropriate backedges. Finally,
 # we return `linfo`'s pre-existing frame. If no cycles are found, `nothing` is
 # returned instead.
-function resolve_call_cycle!(linfo::MethodInstance, parent::InferenceState)
+function resolve_call_cycle!(interp::AbstractInterpreter, linfo::MethodInstance, parent::InferenceState)
     frame = parent
     uncached = false
     limited = false
     while isa(frame, InferenceState)
         uncached |= !frame.cached # ensure we never add an uncached frame to a cycle
         limited |= frame.limited
-        if frame.linfo === linfo
+        if is_same_frame(interp, linfo, frame)
             if uncached
                 # our attempt to speculate into a constant call lead to an undesired self-cycle
                 # that cannot be converged: poison our call-stack (up to the discovered duplicate frame)
@@ -465,7 +469,7 @@ function resolve_call_cycle!(linfo::MethodInstance, parent::InferenceState)
             return frame
         end
         for caller in frame.callers_in_cycle
-            if caller.linfo === linfo
+            if is_same_frame(interp, linfo, caller)
                 if uncached
                     poison_callstack(parent, frame, false)
                     return true
@@ -496,7 +500,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         # (if we asked resolve_call_cyle, it might instead detect that there is a cycle that it can't merge)
         frame = false
     else
-        frame = resolve_call_cycle!(mi, caller)
+        frame = resolve_call_cycle!(interp, mi, caller)
     end
     if frame === false
         # completely new
