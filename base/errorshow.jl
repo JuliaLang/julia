@@ -549,94 +549,34 @@ end
 # replace `sf` as needed.
 const update_stackframes_callback = Ref{Function}(identity)
 
-
-function expandbasepath(str)
-
-    basefileregex = if Sys.iswindows()
-        r"^\.\\\w+\.jl$"
-    else
-        r"^\./\w+\.jl$"
-    end
-
-    if !isnothing(match(basefileregex, str))
-        sourcestring = find_source_file(str[3:end]) # cut off ./
-    else
-        str
-    end
-end
-
 function replaceuserpath(str)
-    str1 = replace(str, homedir() => "~")
+    str = replace(str, homedir() => "~")
     # seems to be necessary for some paths with small letter drive c:// etc
-    replace(str1, lowercasefirst(homedir()) => "~")
+    replace(str, lowercasefirst(homedir()) => "~")
+    return str
 end
 
-getline(frame) = frame.line
-function getfile(frame, expandbase::Bool, contractuser::Bool)
-    file = string(frame.file)
-    if expandbase
-        file = expandbasepath(file)
-    end
-    if contractuser
-        file = replaceuserpath(file)
-    end
-
-    file
-end
-getfunc(frame) = string(frame.func)
-getmodule(frame) = try; string(frame.linfo.def.module) catch; "" end
-getmethod(frame) = try;  frame.linfo.def catch; nothing end
-
-function getarguments(frame)
-
-    meth = getmethod(frame)
-    if isnothing(meth)
-        return (([], []), ([], []))
-    end
-
-    tv, decls, file, line = arg_decl_parts(meth)
-    # this is a list of tuples (variable name, variable type)
-    # we take only the variable names
-    varnames = first.(decls)[2:end]
-    sigtypes = frame.linfo.specTypes.parameters[2:end]
-
-    n_keywords = meth.nkw
-    keyword_offset = 1
-    # if there are no keywords, the positional arguments start immediately
-    # if there are keywords, there is another argument between keywords and positional args (the original function of the keyword shim)
-    positional_offset = keyword_offset + n_keywords + (n_keywords > 0 ? 1 : 0)
-    varnames_keywords = varnames[keyword_offset:n_keywords]
-    varnames_positional = varnames[positional_offset:end]
-
-    sigtypes_keywords = sigtypes[keyword_offset:n_keywords]
-    sigtypes_positional = sigtypes[positional_offset:end]
-
-    ((varnames_positional, varnames_keywords), (sigtypes_positional, sigtypes_keywords))
-end
-
-const STACKTRACE_MODULECOLORS = [:light_blue, :light_yellow, :light_red,
-        :light_green,:light_magenta, :light_cyan,
-        :blue, :yellow, :red, :green, :magenta, :cyan]
-stacktrace_expand_basepaths()::Bool = parse(Bool,
-    get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "true"))
-stacktrace_contract_userdir()::Bool = parse(Bool,
-    get(ENV, "JULIA_STACKTRACE_CONTRACT_USERDIR", "true"))
-stacktrace_linebreaks()::Bool = parse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "true"))
+const STACKTRACE_MODULECOLORS = [:light_blue, :light_yellow,
+        :light_magenta, :light_green, :light_cyan, :light_red,
+        :blue, :yellow, :magenta, :green, :cyan, :red]
+stacktrace_expand_basepaths()::Bool =
+    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "false")) === true
+stacktrace_contract_userdir()::Bool =
+    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_CONTRACT_USERDIR", "true")) === true
+stacktrace_linebreaks()::Bool =
+    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "false")) === true
 
 function show_full_backtrace(io::IO, trace; print_linebreaks::Bool)
-
     n = length(trace)
     ndigits_max = ndigits(n)
 
-    modulecolordict = Dict("" => :default)
+    modulecolordict = Dict{Module, Symbol}()
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
-    println(io, "\n--- STACKTRACE ---")
-    stacktrace_linebreaks() && println(io)
+    println(io, "\nStacktrace:")
 
     for (i, frame) in enumerate(trace)
-
-        print_stackframe(io, i, frame, ndigits_max, modulecolordict, modulecolorcycler)
+        print_stackframe(io, i, frame, 1, ndigits_max, modulecolordict, modulecolorcycler)
         if i < n
             println(io)
             print_linebreaks && println(io)
@@ -692,12 +632,11 @@ function show_reduced_backtrace(io::IO, t::Vector)
 
     try invokelatest(update_stackframes_callback[], displayed_stackframes) catch end
 
-    println(io, "\n--- STACKTRACE ---")
-    stacktrace_linebreaks() && println(io)
+    println(io, "\nStacktrace:")
 
     ndigits_max = ndigits(length(t))
 
-    modulecolordict = Dict("" => :default)
+    modulecolordict = Dict{Module, Symbol}()
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
     push!(repeated_cycle, (0,0,0)) # repeated_cycle is never empty
@@ -705,8 +644,8 @@ function show_reduced_backtrace(io::IO, t::Vector)
     for i in 1:length(displayed_stackframes)
         (frame, n) = displayed_stackframes[i]
 
-        print_stackframe(io, frame_counter, frame, ndigits_max, modulecolordict, modulecolorcycler)
-        
+        print_stackframe(io, frame_counter, frame, n, ndigits_max, modulecolordict, modulecolorcycler)
+
         if i < length(displayed_stackframes)
             println(io)
             stacktrace_linebreaks() && println(io)
@@ -729,33 +668,34 @@ function show_reduced_backtrace(io::IO, t::Vector)
     end
 end
 
-"""
-    print_stackframe(io, i, frame, digit_align_width, modulecolordict::Dict, modulecolorcycler)
 
-Print a stack frame where the module color is determined by looking up the parent module in
-`modulecolordict`. If the module does not have a color, yet, a new one can be drawn
-from `modulecolorcycler`.
-"""
-function print_stackframe(io, i, frame, digit_align_width, modulecolordict, modulecolorcycler)
-    modul = getmodule(frame)
-    parentmodule = split(modul, ".")[1]
-    if !haskey(modulecolordict, parentmodule)
-        modulecolordict[parentmodule] = popfirst!(modulecolorcycler)
+# Print a stack frame where the module color is determined by looking up the parent module in
+# `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
+# from `modulecolorcycler`.
+function print_stackframe(io, i, frame, n, digit_align_width, modulecolordict, modulecolorcycler)
+    m = Base.parentmodule(frame)
+    if m !== nothing
+        while parentmodule(m) !== m
+            pm = parentmodule(m)
+            pm == Main && break
+            m = pm
+        end
+        if !haskey(modulecolordict, m)
+            modulecolordict[m] = popfirst!(modulecolorcycler)
+        end
+        modulecolor = modulecolordict[m]
+    else
+        modulecolor = :default
     end
-    modulecolor = modulecolordict[parentmodule]
-
-    print_stackframe(io, i, frame, digit_align_width, modulecolor)
+    print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
 end
 
-"""
-    print_stackframe(io, i, frame, digit_align_width, modulecolordict::Dict, modulecolorcycler)
 
-Print a stack frame where the module color is set manually with `modulecolor`.
-"""
-function print_stackframe(io, i, frame, digit_align_width, modulecolor)
-
-    file = getfile(frame, stacktrace_expand_basepaths(), stacktrace_contract_userdir())
-    line = getline(frame)
+# Print a stack frame where the module color is set manually with `modulecolor`.
+function print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
+    file, line = string(frame.file), frame.line
+    stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
+    stacktrace_contract_userdir() && (file = replaceuserpath(file))
 
     # Used by the REPL to make it possible to open
     # the location of a stackframe/method in the editor.
@@ -763,56 +703,24 @@ function print_stackframe(io, i, frame, digit_align_width, modulecolor)
         push!(io[:LAST_SHOWN_LINE_INFOS], (string(frame.file), frame.line))
     end
 
-    func = getfunc(frame)
     inlined = getfield(frame, :inlined)
-    modul = getmodule(frame)
+    modul = parentmodule(frame)
 
     # frame number
-    print(io, lpad("[" * string(i) * "]", digit_align_width + 2))
+    print(io, " ", lpad("[" * string(i) * "]", digit_align_width + 2))
     print(io, " ")
-    
-    # function name
-    printstyled(io, func, bold = true)
-   
 
-    (varnames_positional, varnames_kw), (sigtypes_positional, sigtypes_kw) = getarguments(frame)
-
-    if !(isempty(varnames_positional) && isempty(varnames_kw))
-
-        printstyled(io, "(", color = :light_black)
-
-        for (i, (stype, varname)) in enumerate(zip(sigtypes_positional, varnames_positional))
-            if i > 1
-                printstyled(io, ", ", color = :light_black)
-            end
-            printstyled(io, string(varname), color = :light_black, bold = true)
-            printstyled(io, "::")
-            printstyled(io, string(stype), color = :light_black)
-        end
-
-        if !isempty(varnames_kw)
-            print(io, "; ")
-        end
-
-        for (i, (stype, varname)) in enumerate(zip(sigtypes_kw, varnames_kw))
-            if i > 1
-                printstyled(io, ", ", color = :light_black)
-            end
-            printstyled(io, string(varname), color = :light_black, bold = true)
-            printstyled(io, "::")
-            printstyled(io, string(stype), color = :light_black)
-        end
-
-        printstyled(io, ")", color = :light_black)
+    StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
+    if n > 1
+        printstyled(io, " (repeats $n times)"; color=:light_black)
     end
-
     println(io)
 
     # @
-    printstyled(io, " " ^ (digit_align_width + 1) * "@ ", color = :light_black)
+    printstyled(io, " " ^ (digit_align_width + 2) * "@ ", color = :light_black)
 
     # module
-    if !isempty(modul)
+    if modul !== nothing
         printstyled(io, modul, color = modulecolor)
         print(io, " ")
     end
@@ -827,7 +735,13 @@ function print_stackframe(io, i, frame, digit_align_width, modulecolor)
     # filename, separator, line
     # use escape codes for formatting, printstyled can't do underlined and color
     # codes are bright black (90) and underlined (4)
-    print(io, "\033[90;4m$(pathparts[end] * ":" * string(line))\033[0m")
+    function print_underlined(io::IO, s...)
+        colored = get(io, :color, false)::Bool
+        start_s = colored ? "\033[90;4m" : ""
+        end_s   = colored ? "\033[0m"    : ""
+        print(io, start_s, s..., end_s)
+    end
+    print_underlined(io, pathparts[end], ":", line)
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
@@ -854,10 +768,11 @@ function show_backtrace(io::IO, t::Vector)
         return
     end
 
+    try invokelatest(update_stackframes_callback[], filtered) catch end
     # process_backtrace returns a Vector{Tuple{Frame, Int}}
     frames = first.(filtered)
-
     show_full_backtrace(io, frames; print_linebreaks = stacktrace_linebreaks())
+    return
 end
 
 

@@ -549,8 +549,10 @@ let
     @test !occursin("where T at sysimg.jl", sprint(showerror, method_error))
 
     # Test that tab-completion will not show the 'default' sysimg.jl method.
-    for method_string in REPL.REPLCompletions.complete_methods(:(EnclosingModule.AbstractTypeNoConstructors()))
-        @test !startswith(method_string, "(::Type{T})(arg) where T in Base at sysimg.jl")
+    completions = REPL.REPLCompletions.complete_methods(:(EnclosingModule.AbstractTypeNoConstructors()), @__MODULE__)
+    @test !isempty(completions)
+    for method_string in completions
+        @test !startswith(REPL.REPLCompletions.completion_text(method_string), "(::Type{T})(arg) where T in Base at sysimg.jl")
     end
 end
 
@@ -639,16 +641,16 @@ pop!(Base.Experimental._hint_handlers[DomainError])  # order is undefined, don't
     io = IOBuffer()
     Base.show_backtrace(io, bt)
     output = split(String(take!(io)), '\n')
-    @test output[3][1:4] == " [1]"
+    @test lstrip(output[3])[1:3] == "[1]"
     @test occursin("g28442", output[3])
-    @test output[4][1:4] == " [2]"
-    @test occursin("f28442", output[4])
+    @test lstrip(output[5])[1:3] == "[2]"
+    @test occursin("f28442", output[5])
     # Issue #30233
     # Note that we can't use @test_broken on FreeBSD here, because the tests actually do
     # pass with some compilation options, e.g. with assertions enabled
     if !Sys.isfreebsd()
-        @test occursin("the last 2 lines are repeated 5000 more times", output[5])
-        @test output[6][1:8] == " [10003]"
+        @test occursin("the last 2 lines are repeated 5000 more times", output[7])
+        @test lstrip(output[8])[1:7] == "[10003]"
     end
 end
 
@@ -667,7 +669,7 @@ end
     output0 = split(String(take!(io)), '\n')
     function getline(output)
         idx = findfirst(str->occursin("getbt", str), output)
-        return parse(Int, match(r":(\d*)$", output[idx]).captures[1])
+        return parse(Int, match(r":(\d*)$", output[idx+1]).captures[1])
     end
     @test getline(outputc) == getline(output0) + 2
 end
@@ -696,7 +698,7 @@ let t1 = @async(error(1)),
     showerror(buf, e)
     s = String(take!(buf))
     @test length(findall("Stacktrace:", s)) == 2
-    @test occursin("[1] error(::Int", s)
+    @test occursin("[1] error(s::Int", s)
 end
 
 module TestMethodShadow
@@ -724,4 +726,27 @@ let bt = try
     bt_str = sprint(Base.show_backtrace, bt)
     @test occursin(" include(", bt_str)
     @test !occursin(" _include(", bt_str)
+end
+
+# Test backtrace printing
+module B
+    module C
+        f(x; y=2) = error()
+    end
+    module D
+        import ..C: f
+        g() = f(2; y=3)
+    end
+end
+
+@testset "backtrace" begin
+    bt = try B.D.g()
+    catch
+        catch_backtrace()
+    end
+    bt_str = sprint(Base.show_backtrace, bt)
+    m = @__MODULE__
+    @test contains(bt_str, "f(x::Int64; y::Int64)")
+    @test contains(bt_str, "@ $m.B.C")
+    @test contains(bt_str, "@ $m.B.D")
 end
