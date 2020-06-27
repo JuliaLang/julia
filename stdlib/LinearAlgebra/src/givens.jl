@@ -253,6 +253,10 @@ end
 function givensAlgorithm(f::T, g::T) where T
     fs = f / oneunit(T)
     gs = g / oneunit(T)
+    typeof(fs) === T && typeof(gs) === T &&
+    !isa(fs, Union{AbstractFloat,Complex{<:AbstractFloat}}) &&
+    throw(MethodError(givensAlgorithm, (fs, gs)))
+
     c, s, r = givensAlgorithm(fs, gs)
     c, s, r * oneunit(T)
 end
