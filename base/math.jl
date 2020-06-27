@@ -779,7 +779,7 @@ ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
     exponent(x::AbstractFloat) -> Int
 
 Get the exponent of a normalized floating-point number.
-Returns the `y` for `2^y` which is closest to `x` rounded toward zero
+Returns the integer `y` for which `2^y` is closest to `x` rounded toward zero.
 """
 function exponent(x::T) where T<:IEEEFloat
     @noinline throw1(x) = throw(DomainError(x, "Cannot be NaN or Inf."))
