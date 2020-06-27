@@ -130,13 +130,13 @@ if Sys.iswindows()
                 t.in_stream, t.out_stream, t.err_stream)
             true
         else
-            ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle, raw) != -1
+            ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle::Ptr{Cvoid}, raw) != -1
         end
     end
 else
     function raw!(t::TTYTerminal, raw::Bool)
         check_open(t.in_stream)
-        ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle, raw) != -1
+        ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle::Ptr{Cvoid}, raw) != -1
     end
 end
 
