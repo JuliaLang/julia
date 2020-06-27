@@ -1315,7 +1315,7 @@ end
 const wildcard = '\U10f7ff' # "Private Use" Char
 
 normalize_key(key::AbstractChar) = string(key)
-normalize_key(key::Integer) = normalize_key(Char(key))
+normalize_key(key::Union{Int,UInt8}) = normalize_key(Char(key))
 function normalize_key(key::AbstractString)
     wildcard in key && error("Matching '\U10f7ff' not supported.")
     buf = IOBuffer()
@@ -2029,9 +2029,9 @@ function commit_line(s)
     nothing
 end
 
-function bracketed_paste(s; tabwidth=options(s).tabwidth)
+function bracketed_paste(s; tabwidth::Int=options(s).tabwidth::Int)
     options(s).auto_indent_bracketed_paste = true
-    ps = state(s, mode(s))
+    ps = state(s, mode(s))::PromptState
     input = readuntil(ps.terminal, "\e[201~")
     input = replace(input, '\r' => '\n')
     if position(buffer(s)) == 0

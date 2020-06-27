@@ -422,11 +422,11 @@ struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T
 end
 
-ncodeunits(s::SubstitutionString) = ncodeunits(s.string)
-codeunit(s::SubstitutionString) = codeunit(s.string)
-codeunit(s::SubstitutionString, i::Integer) = codeunit(s.string, i)
-isvalid(s::SubstitutionString, i::Integer) = isvalid(s.string, i)
-iterate(s::SubstitutionString, i::Integer...) = iterate(s.string, i...)
+ncodeunits(s::SubstitutionString) = ncodeunits(s.string)::Int
+codeunit(s::SubstitutionString) = codeunit(s.string)::Type{<:Union{UInt8, UInt16, UInt32}}
+codeunit(s::SubstitutionString, i::Integer) = codeunit(s.string, i)::Union{UInt8, UInt16, UInt32}
+isvalid(s::SubstitutionString, i::Integer) = isvalid(s.string, i)::Bool
+iterate(s::SubstitutionString, i::Integer...) = iterate(s.string, i...)::Union{Nothing,Tuple{AbstractChar,Int}}
 
 function show(io::IO, s::SubstitutionString)
     print(io, "s")

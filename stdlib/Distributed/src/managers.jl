@@ -443,7 +443,7 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 
     # master connecting to workers
     if config.io !== nothing
-        (bind_addr, port) = read_worker_host_port(config.io)
+        (bind_addr, port::Int) = read_worker_host_port(config.io)
         pubhost = something(config.host, bind_addr)
         config.host = pubhost
         config.port = port
@@ -503,7 +503,7 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 end
 
 function connect_w2w(pid::Int, config::WorkerConfig)
-    (rhost, rport) = notnothing(config.connect_at)
+    (rhost, rport) = notnothing(config.connect_at)::Tuple{AbstractString, Int}
     config.host = rhost
     config.port = rport
     (s, bind_addr) = connect_to_worker(rhost, rport)

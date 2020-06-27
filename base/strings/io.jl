@@ -343,11 +343,11 @@ julia> escape_string(string('\\u2135','\\0','0')) # \\0 would be ambiguous
 """
 function escape_string(io::IO, s::AbstractString, esc="")
     a = Iterators.Stateful(s)
-    for c in a
+    for c::AbstractChar in a
         if c in esc
             print(io, '\\', c)
         elseif isascii(c)
-            c == '\0'          ? print(io, escape_nul(peek(a))) :
+            c == '\0'          ? print(io, escape_nul(peek(a)::Union{AbstractChar,Nothing})) :
             c == '\e'          ? print(io, "\\e") :
             c == '\\'          ? print(io, "\\\\") :
             '\a' <= c <= '\r'  ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
@@ -356,10 +356,10 @@ function escape_string(io::IO, s::AbstractString, esc="")
         elseif !isoverlong(c) && !ismalformed(c)
             isprint(c)         ? print(io, c) :
             c <= '\x7f'        ? print(io, "\\x", string(UInt32(c), base = 16, pad = 2)) :
-            c <= '\uffff'      ? print(io, "\\u", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)) ? 4 : 2)) :
-                                 print(io, "\\U", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)) ? 8 : 4))
+            c <= '\uffff'      ? print(io, "\\u", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 4 : 2)) :
+                                 print(io, "\\U", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 8 : 4))
         else # malformed or overlong
-            u = bswap(reinterpret(UInt32, c))
+            u = bswap(reinterpret(UInt32, c)::UInt32)
             while true
                 print(io, "\\x", string(u % UInt8, base = 16, pad = 2))
                 (u >>= 8) == 0 && break

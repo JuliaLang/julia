@@ -264,7 +264,7 @@ function unique!(f, A::AbstractVector; seen::Union{Nothing,Set}=nothing)
         return A
     end
 
-    i = firstindex(A)
+    i = firstindex(A)::Int
     x = @inbounds A[i]
     y = f(x)
     if seen === nothing
@@ -291,7 +291,7 @@ function _unique!(f, A::AbstractVector, seen::Set, current::Integer, i::Integer)
         end
         i += 1
     end
-    return resize!(A, current - firstindex(A) + 1)::typeof(A)
+    return resize!(A, current - firstindex(A)::Int + 1)::typeof(A)
 end
 
 
