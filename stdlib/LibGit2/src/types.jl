@@ -966,10 +966,42 @@ function split_cfg_entry(ce::ConfigEntry)
 end
 
 # Abstract object types
+
+"""
+    AbstractGitObject
+
+`AbstractGitObject`s must obey the following interface:
+- `obj.owner`, if present, must be a `Union{Nothing,GitRepo,GitTree}`
+- `obj.ptr`, if present, must be a `Union{Ptr{Cvoid},Ptr{SignatureStruct}}`
+"""
 abstract type AbstractGitObject end
+
+function Base.getproperty(obj::AbstractGitObject, name::Symbol)
+    if name === :owner
+        return getfield(obj, :owner)::Union{Nothing,GitRepo,GitTree}
+    elseif name === :ptr
+        return getfield(obj, :ptr)::Union{Ptr{Cvoid},Ptr{SignatureStruct}}
+    else
+        return getfield(obj, name)
+    end
+end
+
 Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
 
+# `GitObject`s must obey the following interface:
+# - `obj.owner` must be a `GitRepo`
+# - `obj.ptr` must be a Ptr{Cvoid}
 abstract type GitObject <: AbstractGitObject end
+
+function Base.getproperty(obj::GitObject, name::Symbol)
+    if name === :owner
+        return getfield(obj, :owner)::GitRepo
+    elseif name === :ptr
+        return getfield(obj, :ptr)::Ptr{Cvoid}
+    else
+        return getfield(obj, name)
+    end
+end
 
 for (typ, owntyp, sup, cname) in [
     (:GitRepo,           nothing,                 :AbstractGitObject, :git_repository),
