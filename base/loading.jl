@@ -648,7 +648,7 @@ end
 function find_source_file(path::AbstractString)
     (isabspath(path) || isfile(path)) && return path
     base_path = joinpath(Sys.BINDIR::String, DATAROOTDIR, "julia", "base", path)
-    return isfile(base_path) ? base_path : nothing
+    return isfile(base_path) ? normpath(base_path) : nothing
 end
 
 cache_file_entry(pkg::PkgId) = joinpath(

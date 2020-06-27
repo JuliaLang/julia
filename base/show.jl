@@ -1778,11 +1778,17 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
     nothing
 end
 
-function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwargs=nothing)
+function printstacktrace(io, s...; color, bold=false)
+    if get(io, :backtrace, false)::Bool
+        printstyled(io, s...; color, bold)
+    else
+        print(io, s...)
+    end
+end
+function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwargs=nothing, argnames=nothing)
     # print a method signature tuple for a lambda definition
-    color = get(io, :color, false) && get(io, :backtrace, false) ? stackframe_function_color() : :nothing
     if sig === Tuple
-        printstyled(io, demangle ? demangle_function_name(name) : name, "(...)", color=color)
+        print(io, demangle ? demangle_function_name(name) : name, "(...)")
         return
     end
     tv = Any[]
@@ -1793,16 +1799,17 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
         sig = sig.body
     end
     sig = sig.parameters
-    with_output_color(color, env_io) do io
-        show_signature_function(io, sig[1], demangle)
-    end
+    show_signature_function(env_io, sig[1], demangle)
     first = true
-    print_style = get(io, :color, false) && get(io, :backtrace, false) ? :bold : :nothing
-    printstyled(io, "(", color=print_style)
+    printstacktrace(io, "(", color=:light_black)
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
         first = false
-        print(env_io, "::", sig[i])
+        if argnames !== nothing
+            printstacktrace(io, argnames[i]; bold=true, color=:light_black)
+        end
+        print(io, "::")
+        printstacktrace(env_io, sig[i]; color=:light_black)
     end
     if kwargs !== nothing
         print(io, "; ")
@@ -1810,11 +1817,12 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
         for (k, t) in kwargs
             first || print(io, ", ")
             first = false
-            print(io, k, "::")
-            show(io, t)
+            printstacktrace(io, k; bold=true, color=:light_black)
+            print(io, "::")
+            printstacktrace(io, t; color=:light_black)
         end
     end
-    printstyled(io, ")", color=print_style)
+    printstacktrace(io, ")", color=:light_black)
     show_method_params(io, tv)
     nothing
 end
