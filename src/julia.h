@@ -355,6 +355,7 @@ typedef struct _jl_code_instance_t {
 
     // compilation state cache
     uint8_t isspecsig; // if specptr is a specialized function signature for specTypes->rettype
+    uint8_t precompile;  // if set, this will be added to the output system image
     jl_callptr_t invoke; // jlcall entry point
     jl_generic_specptr_t specptr; // private data for `jlcall entry point`
 } jl_code_instance_t;
