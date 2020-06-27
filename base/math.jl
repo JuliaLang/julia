@@ -778,7 +778,7 @@ ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 """
     exponent(x::AbstractFloat) -> Int
 
-Get the exponent of a normalized floating-point number
+Get the exponent of a normalized floating-point number.
 Returns the `y` for `2^y` which is closest to `x` rounded toward zero
 """
 function exponent(x::T) where T<:IEEEFloat
