@@ -593,6 +593,25 @@ static jl_module_t *eval_import_from(jl_module_t *m JL_PROPAGATES_ROOT, jl_expr_
     return NULL;
 }
 
+static jl_sym_t *get_exportable_sym(jl_value_t *e, int allow_call)
+{
+    jl_expr_t *ex = (jl_expr_t*)e;
+    jl_sym_t *head = ex->head;
+
+    if (head == jl_symbol("=") || head == jl_symbol("function"))
+        return get_exportable_sym(jl_array_ptr_ref(ex->args, 0), 1);
+
+    if (head == jl_symbol("struct"))
+        return get_exportable_sym(jl_array_ptr_ref(ex->args, 1), 1);
+
+    if (head == jl_symbol("abstract") || head == jl_symbol("primitive") ||
+        (allow_call && head == call_sym)) {
+        return get_exportable_sym(jl_array_ptr_ref(ex->args, 0), 0);
+    }
+
+    return (jl_sym_t*)e;
+}
+
 // Format msg and eval `throw(ErrorException(msg)))` in module `m`.
 // Used in `jl_toplevel_eval_flex` instead of `jl_errorf` so that the error
 // location in julia code gets into the backtrace.
@@ -733,14 +752,23 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         return jl_nothing;
     }
     else if (head == export_sym) {
+        jl_value_t *res = jl_nothing;
+
         for (size_t i = 0; i < jl_array_len(ex->args); i++) {
-            jl_sym_t *name = (jl_sym_t*)jl_array_ptr_ref(ex->args, i);
+            jl_value_t *el = jl_array_ptr_ref(ex->args, i);
+            jl_sym_t *name = (jl_sym_t*)el;
+            if (jl_is_expr(el)) {
+                name = get_exportable_sym(el, 0);
+                res = jl_toplevel_eval_flex(m, el, fast, 0);
+            }
+
             if (!jl_is_symbol(name))
                 jl_eval_errorf(m, "syntax: malformed \"export\" statement");
             jl_module_export(m, name);
+            jl_printf(JL_STDERR, "exporting: %s\n", jl_symbol_name(name));
         }
         JL_GC_POP();
-        return jl_nothing;
+        return res;
     }
     else if (head == global_sym) {
         // create uninitialized mutable binding for "global x" decl
