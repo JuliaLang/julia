@@ -1240,3 +1240,46 @@ frontend_task = @async begin
 end
 REPL.start_repl_backend(backend)
 Base.wait(frontend_task)
+
+macro throw_with_linenumbernode(err)
+    Expr(:block, LineNumberNode(42, Symbol("test.jl")), :(() -> throw($err)))
+end
+
+@testset "last shown line infos" begin
+    out_stream = IOBuffer()
+    term = REPL.TTYTerminal("dumb", IOBuffer(), out_stream, IOBuffer());
+    repl = REPL.LineEditREPL(term, false);
+    repl.specialdisplay = REPL.REPLDisplay(repl);
+
+    REPL.print_response(repl, (methods(+), false), true, false)
+    seekstart(out_stream)
+    #dump(collect(eachline(out_stream)))
+    @test count(
+        contains(
+            "To edit a specific method, type the corresponding number into the REPL and " *
+            "press Ctrl+Q"
+        ),
+        eachline(out_stream),
+    ) == 1
+
+    take!(out_stream)
+    err = ErrorException("Foo")
+    bt = try
+        @throw_with_linenumbernode(err)()
+    catch e
+        Base.catch_stack
+    end
+
+    repl.backendref = REPL.REPLBackendRef(Channel(1), Channel(1))
+    put!(repl.backendref.response_channel, (bt, true))
+
+    REPL.print_response(repl, (err, true), true, false)
+    seekstart(out_stream)
+    @test count(
+        contains(
+            "To edit a specific method, type the corresponding number into the REPL and " *
+            "press Ctrl+Q"
+        ),
+        eachline(out_stream),
+    ) == 1
+end
