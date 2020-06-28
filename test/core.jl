@@ -7244,3 +7244,23 @@ struct X36104; x::Int; end
 @test fieldtypes(X36104) == (Int,)
 primitive type P36104 8 end
 @test_throws ErrorException("invalid redefinition of constant P36104") @eval(primitive type P36104 16 end)
+
+# inline exports (issue #8005)
+module Issue8005
+export abstract type Abs8005 end
+export struct Foo8005 <: Abs8005 end
+export function f8005 end
+export macro m8005(x) x end
+export g8005(x) = x
+export const C8005 = 4
+export global const G8005 = 6
+end
+
+using .Issue8005
+@test @isdefined(Abs8005)
+@test @isdefined(Foo8005)
+@test @isdefined(f8005)
+@test isdefined(@__MODULE__, Symbol("@m8005"))
+@test @isdefined(g8005)
+@test @isdefined(C8005)
+@test @isdefined(G8005)
