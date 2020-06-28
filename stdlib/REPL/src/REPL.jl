@@ -486,6 +486,7 @@ end
 
 with_methodtable_hint(f, repl) = f(outstream(repl))
 function with_methodtable_hint(f, repl::LineEditREPL)
+    linfos = Tuple{String,Int}[]
     io = IOContext(outstream(repl), :last_shown_line_infos => linfos)
     f(io)
     if !isempty(linfos)

@@ -1247,13 +1247,12 @@ end
 
 @testset "last shown line infos" begin
     out_stream = IOBuffer()
-    term = REPL.TTYTerminal("dumb", IOBuffer(), out_stream, IOBuffer());
-    repl = REPL.LineEditREPL(term, false);
-    repl.specialdisplay = REPL.REPLDisplay(repl);
+    term = REPL.TTYTerminal("dumb", IOBuffer(), out_stream, IOBuffer())
+    repl = REPL.LineEditREPL(term, false)
+    repl.specialdisplay = REPL.REPLDisplay(repl)
 
     REPL.print_response(repl, (methods(+), false), true, false)
     seekstart(out_stream)
-    #dump(collect(eachline(out_stream)))
     @test count(
         contains(
             "To edit a specific method, type the corresponding number into the REPL and " *
@@ -1261,13 +1260,13 @@ end
         ),
         eachline(out_stream),
     ) == 1
-
     take!(out_stream)
+
     err = ErrorException("Foo")
     bt = try
         @throw_with_linenumbernode(err)()
-    catch e
-        Base.catch_stack
+    catch
+        Base.catch_stack()
     end
 
     repl.backendref = REPL.REPLBackendRef(Channel(1), Channel(1))
