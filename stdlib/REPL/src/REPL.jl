@@ -486,7 +486,7 @@ end
 
 with_methodtable_hint(f, repl) = f(outstream(repl))
 function with_methodtable_hint(f, repl::LineEditREPL)
-    io = IOContext(outstream(repl), :LAST_SHOWN_LINE_INFOS => linfos)
+    io = IOContext(outstream(repl), :last_shown_line_infos => linfos)
     f(io)
     if !isempty(linfos)
         repl.last_shown_line_infos = linfos
