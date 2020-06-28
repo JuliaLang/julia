@@ -204,32 +204,25 @@ end
 ==(a::REPLDisplay, b::REPLDisplay) = a.repl === b.repl
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
-    io = outstream(d.repl)
-    get(io, :color, false) && write(io, answer_color(d.repl))
-    if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
-        # this can override the :limit property set initially
-        io = foldl(IOContext, d.repl.options.iocontext,
-                   init=IOContext(io, :limit => true, :module => Main))
+    with_methodtable_hint(d.repl) do io
+        get(io, :color, false) && write(io, answer_color(d.repl))
+        if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
+            # this can override the :limit property set initially
+            io = foldl(IOContext, d.repl.options.iocontext,
+                       init=IOContext(io, :limit => true, :module => Main))
+        end
+        show(io, mime, x)
+        println(io)
     end
-
-    show(io, mime, x)
-    println(io)
     nothing
 end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
 function print_response(repl::AbstractREPL, @nospecialize(response), show_value::Bool, have_color::Bool)
     repl.waserror = response[2]
-    io = IOContext(outstream(repl), :module => Main)
-
-    print_response(io, response, show_value, have_color, specialdisplay(repl))
-
-    if repl isa LineEditREPL && !isempty(repl.last_shown_line_infos)
-        println(
-            io,
-            "\nTo edit a specific method, type the corresponding number into the " *
-            "REPL and press Ctrl+Q",
-        )
+    with_methodtable_hint(repl) do io
+        io = IOContext(io, :module => Main)
+        print_response(io, response, show_value, have_color, specialdisplay(repl))
     end
     nothing
 end
@@ -447,11 +440,7 @@ mutable struct LineEditREPL <: AbstractREPL
         new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
             in_help,envcolors,false,nothing, Options(), nothing, Tuple{String,Int}[])
 end
-function outstream(r::LineEditREPL)
-    linfos = r.last_shown_line_infos
-    empty!(linfos)
-    IOContext(r.t, :LAST_SHOWN_LINE_INFOS => linfos)
-end
+outstream(r::LineEditREPL) = r.t
 specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t
@@ -493,6 +482,21 @@ function complete_line(c::LatexCompletions, s)
     full = LineEdit.input_string(s)
     ret, range, should_complete = bslash_completions(full, lastindex(partial))[2]
     return unique!(map(completion_text, ret)), partial[range], should_complete
+end
+
+with_methodtable_hint(f, repl) = f(outstream(repl))
+function with_methodtable_hint(f, repl::LineEditREPL)
+    io = IOContext(outstream(repl), :LAST_SHOWN_LINE_INFOS => linfos)
+    f(io)
+    if !isempty(linfos)
+        repl.last_shown_line_infos = linfos
+        println(
+            io,
+            "\nTo edit a specific method, type the corresponding number into the " *
+            "REPL and press Ctrl+Q",
+        )
+    end
+    nothing
 end
 
 mutable struct REPLHistoryProvider <: HistoryProvider
