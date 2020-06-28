@@ -2872,5 +2872,6 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
            // hooks
            (a->module_setup == b->module_setup) &&
            (a->module_activation == b->module_activation) &&
-           (a->raise_exception == b->raise_exception);
+           (a->raise_exception == b->raise_exception) &&
+           (a->generic_context == b->generic_context);
 }

@@ -983,18 +983,22 @@ struct CodegenParams
 
     lookup::Ptr{Cvoid}
 
+    generic_context::Any
+
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    static_alloc::Bool=true, prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
                    module_setup=nothing, module_activation=nothing, raise_exception=nothing,
                    emit_function=nothing, emitted_function=nothing,
-                   lookup::Ptr{Cvoid}=cglobal(:jl_rettype_inferred))
+                   lookup::Ptr{Cvoid}=cglobal(:jl_rettype_inferred),
+                   generic_context = nothing)
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(static_alloc), Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             module_setup, module_activation, raise_exception,
-            emit_function, emitted_function, lookup)
+            emit_function, emitted_function, lookup,
+            generic_context)
     end
 end
 
