@@ -549,8 +549,10 @@ let
     @test !occursin("where T at sysimg.jl", sprint(showerror, method_error))
 
     # Test that tab-completion will not show the 'default' sysimg.jl method.
-    for method_string in REPL.REPLCompletions.complete_methods(:(EnclosingModule.AbstractTypeNoConstructors()))
-        @test !startswith(method_string, "(::Type{T})(arg) where T in Base at sysimg.jl")
+    completions = REPL.REPLCompletions.complete_methods(:(EnclosingModule.AbstractTypeNoConstructors()), @__MODULE__)
+    @test !isempty(completions)
+    for method_string in completions
+        @test !startswith(REPL.REPLCompletions.completion_text(method_string), "(::Type{T})(arg) where T in Base at sysimg.jl")
     end
 end
 
