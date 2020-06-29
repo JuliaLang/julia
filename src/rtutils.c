@@ -649,20 +649,14 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_method_type) {
         jl_method_t *m = (jl_method_t*)v;
-        n += jl_static_show_x(out, (jl_value_t*)m->module, depth);
-        n += jl_printf(out, ".%s(...)", jl_symbol_name(m->name));
+        n += jl_static_show_func_sig(out, m->sig);
     }
     else if (vt == jl_method_instance_type) {
         jl_method_instance_t *li = (jl_method_instance_t*)v;
         if (jl_is_method(li->def.method)) {
-            if (li->specTypes) {
-                n += jl_static_show_func_sig(out, li->specTypes);
-            }
-            else {
-                jl_method_t *m = li->def.method;
-                n += jl_static_show_x(out, (jl_value_t*)m->module, depth);
-                n += jl_printf(out, ".%s(?)", jl_symbol_name(m->name));
-            }
+            n += jl_static_show_func_sig(out, li->specTypes);
+            n += jl_printf(out, " from ");
+            n += jl_static_show_func_sig(out, li->def.method->sig);
         }
         else {
             n += jl_static_show_x(out, (jl_value_t*)li->def.module, depth);
