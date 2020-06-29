@@ -7304,7 +7304,7 @@ static void init_julia_llvm_env(Module *m)
     jl_di_func_null_sig = dbuilder.createSubroutineType(
         dbuilder.getOrCreateTypeArray(None));
 
-    T_jlvalue = StructType::create(jl_LLVMContext, "jl_value_t");
+    T_jlvalue = StructType::get(jl_LLVMContext);
     T_pjlvalue = PointerType::get(T_jlvalue, 0);
     T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
     T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
@@ -7331,8 +7331,7 @@ static void init_julia_llvm_env(Module *m)
     };
     static_assert(sizeof(jl_array_flags_t) == sizeof(int16_t),
                   "Size of jl_array_flags_t is not the same as int16_t");
-    jl_array_llvmt =
-        StructType::create(jl_LLVMContext, makeArrayRef(vaelts), "jl_array_t");
+    jl_array_llvmt = StructType::get(jl_LLVMContext, makeArrayRef(vaelts));
     jl_parray_llvmt = PointerType::get(jl_array_llvmt, 0);
 }
 
