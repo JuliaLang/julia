@@ -160,7 +160,7 @@ static DIType *_julia_type_to_di(jl_codegen_params_t *ctx, jl_value_t *jt, DIBui
         }
         DINodeArray ElemArray = dbuilder->getOrCreateArray(Elements);
         std::string unique_name;
-        llvm::raw_string_ostream(unique_name) << (uintptr_t)jdt;
+        raw_string_ostream(unique_name) << (uintptr_t)jdt;
         ditype = dbuilder->createStructType(
                 NULL,                       // Scope
                 tname,                      // Name
@@ -234,7 +234,7 @@ static Value *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
     StringRef localname;
     std::string gvname;
     if (!gv) {
-        llvm::raw_string_ostream(gvname) << cname << ctx.global_targets.size();
+        raw_string_ostream(gvname) << cname << ctx.global_targets.size();
         localname = StringRef(gvname);
     }
     else {

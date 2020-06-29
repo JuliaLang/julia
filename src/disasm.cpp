@@ -17,13 +17,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include <cstdio>
-#include <cstring>
-#include <iomanip>
-#include <iostream>
 #include <map>
 #include <set>
-#include <sstream>
 #include <string>
 
 #include "llvm-version.h"
@@ -446,7 +441,7 @@ extern "C" JL_DLLEXPORT
 jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_module, const char *debuginfo)
 {
     std::string code;
-    llvm::raw_string_ostream stream(code);
+    raw_string_ostream stream(code);
 
     Function *llvmf = dyn_cast_or_null<Function>((Function*)f);
     if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
@@ -528,7 +523,7 @@ jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant,
     assert(fptr != 0);
     jl_ptls_t ptls = jl_get_ptls_states();
     std::string code;
-    llvm::raw_string_ostream stream(code);
+    raw_string_ostream stream(code);
 
     // Find debug info (line numbers) to print alongside
     object::SectionRef Section;
@@ -658,9 +653,9 @@ void SymbolTable::createSymbols()
         uintptr_t rel = isymb->first - ip;
         uintptr_t addr = isymb->first;
         if (Fptr <= addr && addr < Fptr + Fsize) {
-            std::ostringstream name;
-            name << "L" << rel;
-            isymb->second = name.str();
+            std::string name;
+            raw_string_ostream(name) << "L" << rel;
+            isymb->second = name;
         }
         else {
             const char *global = lookupLocalPC(addr);
@@ -682,8 +677,8 @@ const char *SymbolTable::lookupSymbolName(uint64_t addr)
         if (local_name.empty()) {
             const char *global = lookupLocalPC(addr);
             if (global) {
-                //std::ostringstream name;
-                //name << global << "@0x" << std::hex
+                //std::string name;
+                //raw_string_ostream(name) << global << "@0x" << std::hex
                 //     << std::setfill('0') << std::setw(2 * sizeof(void*))
                 //     << addr;
                 //Sym->second = name.str();
@@ -972,23 +967,23 @@ static void jl_dump_asm_internal(
                     insSize = 1; // attempt to slide 1 byte forward
 #endif
                 if (pass != 0) {
-                    std::ostringstream buf;
+                    std::string _buf;
+                    raw_string_ostream buf(_buf);
                     if (insSize == 4) {
-                        buf << "\t.long\t0x" << std::hex
-                            << std::setfill('0') << std::setw(8)
-                            << *(uint32_t*)(Fptr+Index);
-                    } else {
-                        for (uint64_t i=0; i<insSize; ++i) {
-                            buf << "\t.byte\t0x" << std::hex
-                                << std::setfill('0') << std::setw(2)
-                                << (int)*(uint8_t*)(Fptr+Index+i);
+                        buf << "\t.long\t";
+                        llvm::write_hex(buf, *(uint32_t*)(Fptr + Index), HexPrintStyle::PrefixLower, 8);
+                    }
+                    else {
+                        for (uint64_t i = 0; i < insSize; ++i) {
+                            buf << "\t.byte\t";
+                            llvm::write_hex(buf, *(uint8_t*)(Fptr + Index + i), HexPrintStyle::PrefixLower, 2);
                         }
+                    }
 #if JL_LLVM_VERSION >= 110000
                     Streamer->emitRawText(StringRef(buf.str()));
 #else
                     Streamer->EmitRawText(StringRef(buf.str()));
 #endif
-                    }
                 }
                 break;
 

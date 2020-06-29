@@ -22,14 +22,11 @@
 
 #include <setjmp.h>
 #include <string>
-#include <sstream>
 #include <fstream>
 #include <map>
 #include <array>
 #include <vector>
 #include <set>
-#include <cstdio>
-#include <iostream>
 #include <functional>
 
 // target machine computation
@@ -1886,17 +1883,17 @@ extern "C" void jl_write_coverage_data(const char *output)
             write_lcov_data(coverageData, jl_format_filename(output_pattern));
     }
     else {
-        std::ostringstream stm;
-        stm << "." << jl_getpid() << ".cov";
-        write_log_data(coverageData, stm.str().c_str());
+        std::string stm;
+        raw_string_ostream(stm) << "." << jl_getpid() << ".cov";
+        write_log_data(coverageData, stm.c_str());
     }
 }
 
 extern "C" void jl_write_malloc_log(void)
 {
-    std::ostringstream stm;
-    stm << "." << jl_getpid() << ".mem";
-    write_log_data(mallocData, stm.str().c_str());
+    std::string stm;
+    raw_string_ostream(stm) << "." << jl_getpid() << ".mem";
+    write_log_data(mallocData, stm.c_str());
 }
 
 // --- constant determination ---
@@ -3354,9 +3351,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
                         }
                     }
                     if (need_to_emit) {
-                        std::stringstream namestream;
-                        namestream << (specsig ? "j_" : "j1_") << name_from_method_instance(mi) << "_" << globalUnique++;
-                        name = namestream.str();
+                        raw_string_ostream(name) << (specsig ? "j_" : "j1_") << name_from_method_instance(mi) << "_" << globalUnique++;
                         protoname = StringRef(name);
                     }
                     jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
@@ -4433,11 +4428,11 @@ static void emit_last_age_field(jl_codectx_t &ctx)
 static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_codegen_params_t &params)
 {
     jl_codectx_t ctx(jl_LLVMContext, params);
-    std::stringstream name;
-    name << "tojlinvoke" << globalUnique++;
+    std::string name;
+    raw_string_ostream(name) << "tojlinvoke" << globalUnique++;
     Function *f = Function::Create(jl_func_sig,
             GlobalVariable::PrivateLinkage,
-            name.str(), M);
+            name, M);
     jl_init_function(f);
     f->addFnAttr(Thunk);
     //f->setAlwaysInline();
@@ -4618,8 +4613,8 @@ static Function* gen_cfun_wrapper(
         }
     }
 
-    std::stringstream funcName;
-    funcName << "jlcapi_" << name << "_" << globalUnique++;
+    std::string funcName;
+    raw_string_ostream(funcName) << "jlcapi_" << name << "_" << globalUnique++;
 
     Module *M = into;
     AttributeList attributes = sig.attributes;
@@ -4637,7 +4632,7 @@ static Function* gen_cfun_wrapper(
     }
     Function *cw = Function::Create(functype,
             GlobalVariable::ExternalLinkage,
-            funcName.str(), M);
+            funcName, M);
     cw->setAttributes(attributes);
     jl_init_function(cw);
 
@@ -4948,9 +4943,9 @@ static Function* gen_cfun_wrapper(
         Value *theFptr = returninfo.decl;
         assert(theFptr);
         if (age_ok) {
-            funcName << "_gfthunk";
+            funcName += "_gfthunk";
             Function *gf_thunk = Function::Create(returninfo.decl->getFunctionType(),
-                    GlobalVariable::InternalLinkage, funcName.str(), M);
+                    GlobalVariable::InternalLinkage, funcName, M);
             gf_thunk->setAttributes(returninfo.decl->getAttributes());
             jl_init_function(gf_thunk);
             // build a  specsig -> jl_apply_generic converter thunk
@@ -5038,11 +5033,11 @@ static Function* gen_cfun_wrapper(
     }
 
     if (nest) {
-        funcName << "make";
+        funcName += "make";
         Function *cw_make = Function::Create(
                 FunctionType::get(T_pint8, { T_pint8, T_ppjlvalue }, false),
                 GlobalVariable::ExternalLinkage,
-                funcName.str(), M);
+                funcName, M);
         jl_init_function(cw_make);
         BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", cw_make);
         IRBuilder<> cwbuilder(b0);
@@ -5671,7 +5666,8 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     if (!specsig)
         ctx.nReqArgs--;  // function not part of argArray in jlcall
 
-    std::stringstream funcName;
+    std::string _funcName;
+    raw_string_ostream funcName(_funcName);
     // try to avoid conflicts in the global symbol table
     if (specsig)
         funcName << "julia_"; // api 5
@@ -5723,9 +5719,9 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             return retarg;
         }();
 
-        std::stringstream wrapName;
-        wrapName << "jfptr_" << unadorned_name << "_" << globalUnique;
-        declarations.functionObject = wrapName.str();
+        std::string wrapName;
+        raw_string_ostream(wrapName) << "jfptr_" << unadorned_name << "_" << globalUnique++;
+        declarations.functionObject = wrapName;
         (void)gen_invoke_wrapper(lam, jlrettype, returninfo, retarg, declarations.functionObject, M, ctx.emission_context);
     }
     else {

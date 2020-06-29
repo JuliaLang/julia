@@ -6,7 +6,6 @@
 #include <sys/utsname.h>
 #include <fcntl.h>
 #include <set>
-#include <sstream>
 #include <fstream>
 #include <algorithm>
 
@@ -573,9 +572,9 @@ static inline void get_cpuinfo_sysfs(std::set<CPUID> &res)
             continue;
         if (strncmp(entry->d_name, "cpu", 3) != 0)
             continue;
-        std::stringstream stm;
-        stm << "/sys/devices/system/cpu/" << entry->d_name << "/regs/identification/midr_el1";
-        std::ifstream file(stm.str());
+        std::string stm;
+        llvm::raw_string_ostream(stm) << "/sys/devices/system/cpu/" << entry->d_name << "/regs/identification/midr_el1";
+        std::ifstream file(stm);
         if (!file)
             continue;
         uint64_t val = 0;

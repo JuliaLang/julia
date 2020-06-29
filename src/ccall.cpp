@@ -152,20 +152,19 @@ static GlobalVariable *emit_plt_thunk(
     PointerType *funcptype = PointerType::get(functype, 0);
     libptrgv = prepare_global_in(M, libptrgv);
     llvmgv = prepare_global_in(M, llvmgv);
-    std::stringstream funcName;
-    funcName << "jlplt_" << f_name << "_" << globalUnique++;
-    auto fname = funcName.str();
+    std::string fname;
+    raw_string_ostream(fname) << "jlplt_" << f_name << "_" << globalUnique++;
     Function *plt = Function::Create(functype,
                                      GlobalVariable::ExternalLinkage,
                                      fname, M);
     plt->setAttributes(attrs);
     if (cc != CallingConv::C)
         plt->setCallingConv(cc);
-    funcName << "_got";
-    auto gname = funcName.str();
+    fname += "_got";
     GlobalVariable *got = new GlobalVariable(*M, T_pvoidfunc, false,
                                              GlobalVariable::ExternalLinkage,
-                                             ConstantExpr::getBitCast(plt, T_pvoidfunc), gname);
+                                             ConstantExpr::getBitCast(plt, T_pvoidfunc),
+                                             fname);
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", plt);
     IRBuilder<> irbuilder(b0);
     Value *ptr = runtime_sym_lookup(emission_context, irbuilder, funcptype, f_lib, f_name, plt, libptrgv,
@@ -381,7 +380,8 @@ static Value *runtime_apply_type_env(jl_codectx_t &ctx, jl_value_t *ty)
 
 static const std::string make_errmsg(const char *fname, int n, const char *err)
 {
-    std::stringstream msg;
+    std::string _msg;
+    raw_string_ostream msg(_msg);
     msg << fname;
     if (n > 0)
         msg << " argument " << n;
@@ -864,11 +864,12 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     JL_TYPECHK(llvmcall, type, rt);
     JL_TYPECHK(llvmcall, type, at);
 
-    std::stringstream ir_stream;
+    std::string ir_string;
+    raw_string_ostream ir_stream(ir_string);
 
     // Generate arguments
     std::string arguments;
-    llvm::raw_string_ostream argstream(arguments);
+    raw_string_ostream argstream(arguments);
     jl_svec_t *tt = ((jl_datatype_t*)at)->parameters;
     jl_value_t *rtt = rt;
     size_t nargt = jl_svec_len(tt);
@@ -903,9 +904,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         // Make sure to find a unique name
         std::string ir_name;
         while (true) {
-            std::stringstream name;
-            name << (ctx.f->getName().str()) << "u" << globalUnique++;
-            ir_name = name.str();
+            raw_string_ostream(ir_name) << (ctx.f->getName().str()) << "u" << globalUnique++;
             if (jl_Module->getFunction(ir_name) == NULL)
                 break;
         }
@@ -921,25 +920,25 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         }
 
         std::string rstring;
-        llvm::raw_string_ostream rtypename(rstring);
+        raw_string_ostream rtypename(rstring);
         rettype->print(rtypename);
         std::map<uint64_t,std::string> localDecls;
 
         if (decl != NULL) {
-            std::stringstream declarations(jl_string_data(decl));
-
             // parse string line by line
-            std::string declstr;
-            while (std::getline(declarations, declstr, '\n')) {
+            StringRef declarations(jl_string_data(decl), jl_string_len(decl));
+            while (!declarations.empty()) {
+                StringRef declstr;
+                std::tie(declstr, declarations) = declarations.split('\n');
                 // Find name of declaration by searching for '@'
-                std::string::size_type atpos = declstr.find('@') + 1;
+                size_t atpos = declstr.find('@') + 1;
                 // Find end of declaration by searching for '('
-                std::string::size_type bracepos = declstr.find('(', atpos);
+                size_t bracepos = declstr.find('(', atpos);
                 // Declaration name is the string between @ and (
-                std::string declname = declstr.substr(atpos, bracepos - atpos);
+                StringRef declname = declstr.substr(atpos, bracepos - atpos);
 
                 // Check if declaration already present in module
-                if(jl_Module->getNamedValue(declname) == NULL) {
+                if (jl_Module->getNamedValue(declname) == NULL) {
                     ir_stream << "; Declarations\n" << declstr << "\n";
                 }
             }
@@ -948,11 +947,10 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         << "define "<<rtypename.str()<<" @\"" << ir_name << "\"("<<argstream.str()<<") {\n"
         << jl_string_data(ir) << "\n}";
         SMDiagnostic Err = SMDiagnostic();
-        std::string ir_string = ir_stream.str();
         // Do not enable update debug info since it runs the verifier on the whole module
         // and will error on the function we are currently emitting.
         ModuleSummaryIndex index = ModuleSummaryIndex(true);
-        bool failed = parseAssemblyInto(MemoryBufferRef(ir_string, "llvmcall"),
+        bool failed = parseAssemblyInto(MemoryBufferRef(ir_stream.str(), "llvmcall"),
                                         jl_Module, &index, Err, nullptr,
                                         /* UpdateDebugInfo */ false);
         f = jl_Module->getFunction(ir_name);
@@ -997,9 +995,9 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     // a regular call
     if (!isString) {
         static int llvmcallnumbering = 0;
-        std::stringstream name;
-        name << "jl_llvmcall" << llvmcallnumbering++;
-        f->setName(name.str());
+        std::string name;
+        llvm::raw_string_ostream(name) << "jl_llvmcall" << llvmcallnumbering++;
+        f->setName(name);
         f = prepare_llvmcall(jl_Module, llvmcall_proto(f));
     }
     else {

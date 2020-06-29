@@ -6,9 +6,6 @@
 #include "platform.h"
 #include "options.h"
 
-#include <iostream>
-#include <sstream>
-
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/Support/DynamicLibrary.h>
 
@@ -636,9 +633,9 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
                        findUnmangledSymbol(F->getName()) ||
                        SectionMemoryManager::getSymbolAddressInProcess(
                            getMangledName(F->getName())))) {
-                std::cerr << "FATAL ERROR: "
-                          << "Symbol \"" << F->getName().str() << "\""
-                          << "not found";
+                llvm::errs() << "FATAL ERROR: "
+                             << "Symbol \"" << F->getName().str() << "\""
+                             << "not found";
                 abort();
             }
         }
@@ -724,7 +721,8 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
 {
     auto &fname = ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
     if (fname.empty()) {
-        std::stringstream stream_fname;
+        std::string string_fname;
+        raw_string_ostream stream_fname(string_fname);
         // try to pick an appropriate name that describes it
         if (Addr == (uintptr_t)codeinst->invoke) {
             stream_fname << "jsysw_";
@@ -740,8 +738,7 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
         }
         const char* unadorned_name = jl_symbol_name(codeinst->def->def.method->name);
         stream_fname << unadorned_name << "_" << globalUniqueGeneratedNames++;
-        std::string string_fname = stream_fname.str();
-        fname = strdup(string_fname.c_str());
+        fname = strdup(stream_fname.str().c_str());
         LocalSymbolTable[getMangledName(string_fname)] = (void*)(uintptr_t)Addr;
     }
     return fname;

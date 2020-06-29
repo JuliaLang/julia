@@ -12,8 +12,6 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 
-#include <iostream>
-
 #include "codegen_shared.h"
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
