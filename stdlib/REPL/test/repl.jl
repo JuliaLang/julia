@@ -194,8 +194,8 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=false)) do stdin_wr
         @test occursin("shell> ", s) # check for the echo of the prompt
         @test occursin("'", s) # check for the echo of the input
         s = readuntil(stdout_read, "\n\n")
-        @test startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n [1] ") ||
-              startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n [1] ")
+        @test startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n  [1] ") ||
+              startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n  [1] ")
     end
 
     # issue #27293
