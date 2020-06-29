@@ -147,14 +147,14 @@ let ci = (Meta.@lower 1 + 1).args[1]
         Core.PhiNode(),
         Core.Compiler.ReturnNode(),
         # block 4
-        Expr(:call,
-             GlobalRef(Main, :something),
-             GlobalRef(Main, :somethingelse)),
-        Core.Compiler.GotoIfNot(Core.SSAValue(6), 9),
+        GlobalRef(Main, :something),
+        GlobalRef(Main, :somethingelse),
+        Expr(:call, Core.SSAValue(6), Core.SSAValue(7)),
+        Core.Compiler.GotoIfNot(Core.SSAValue(8), 11),
         # block 5
-        Core.Compiler.ReturnNode(Core.SSAValue(6)),
+        Core.Compiler.ReturnNode(Core.SSAValue(8)),
         # block 6
-        Core.Compiler.ReturnNode(Core.SSAValue(6))
+        Core.Compiler.ReturnNode(Core.SSAValue(8))
     ]
     nstmts = length(ci.code)
     ci.ssavaluetypes = nstmts
@@ -163,4 +163,20 @@ let ci = (Meta.@lower 1 + 1).args[1]
     ir = Core.Compiler.inflate_ir(ci)
     ir = Core.Compiler.compact!(ir, true)
     @test Core.Compiler.verify_ir(ir) == nothing
+end
+
+# Test that GlobalRef in value position is non-canonical
+using Base.Meta
+let ci = (Meta.@lower 1 + 1).args[1]
+    ci.code = [
+        Expr(:call, GlobalRef(Main, :something_not_defined_please))
+        ReturnNode(SSAValue(1))
+    ]
+    nstmts = length(ci.code)
+    ci.ssavaluetypes = nstmts
+    ci.codelocs = fill(Int32(1), nstmts)
+    ci.ssaflags = fill(Int32(0), nstmts)
+    ir = Core.Compiler.inflate_ir(ci)
+    ir = Core.Compiler.compact!(ir, true)
+    @test_throws ErrorException Core.Compiler.verify_ir(ir, false)
 end
