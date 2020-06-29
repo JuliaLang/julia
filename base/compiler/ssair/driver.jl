@@ -41,6 +41,7 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
     changemap = fill(0, length(code))
     labelmap = coverage ? fill(0, length(code)) : changemap
     prevloc = zero(eltype(ci.codelocs))
+    stmtinfo = sv.stmt_info
     while idx <= length(code)
         codeloc = ci.codelocs[idx]
         if coverage && codeloc != prevloc && codeloc != 0
@@ -48,6 +49,7 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
             insert!(code, idx, Expr(:code_coverage_effect))
             insert!(ci.codelocs, idx, codeloc)
             insert!(ci.ssavaluetypes, idx, Nothing)
+            insert!(stmtinfo, idx, nothing)
             changemap[oldidx] += 1
             if oldidx < length(labelmap)
                 labelmap[oldidx + 1] += 1
@@ -61,6 +63,7 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
                 insert!(code, idx + 1, ReturnNode())
                 insert!(ci.codelocs, idx + 1, ci.codelocs[idx])
                 insert!(ci.ssavaluetypes, idx + 1, Union{})
+                insert!(stmtinfo, idx + 1, nothing)
                 if oldidx < length(changemap)
                     changemap[oldidx + 1] += 1
                     coverage && (labelmap[oldidx + 1] += 1)
@@ -98,10 +101,10 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
             end
         end
     end
-    strip_trailing_junk!(ci, code, flags)
+    strip_trailing_junk!(ci, code, stmtinfo, flags)
     cfg = compute_basic_blocks(code)
     types = Any[]
-    stmts = InstructionStream(code, types, ci.codelocs, flags)
+    stmts = InstructionStream(code, types, stmtinfo, ci.codelocs, flags)
     ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable), sv.slottypes, meta, sv.sptypes)
     return ir
 end
