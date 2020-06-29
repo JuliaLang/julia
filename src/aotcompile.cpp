@@ -565,13 +565,6 @@ void jl_dump_native(void *native_code,
     sysimage->setDataLayout(data->M->getDataLayout());
     data->M.reset(); // free memory for data->M
 
-    addComdat(new GlobalVariable(*sysimage,
-                                 T_size,
-                                 true,
-                                 GlobalVariable::ExternalLinkage,
-                                 ConstantInt::get(T_size, globalUnique + 1),
-                                 "jl_globalUnique"));
-
     if (sysimg_data) {
         Constant *data = ConstantDataArray::get(Context,
             ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));

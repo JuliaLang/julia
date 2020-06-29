@@ -19,9 +19,6 @@
 
 using namespace llvm;
 
-extern "C" {
-    extern int globalUnique;
-}
 extern TargetMachine *jl_TargetMachine;
 extern bool imaging_mode;
 
@@ -62,7 +59,7 @@ typedef struct {
     std::map<void*, GlobalVariable*> globals;
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;
-    SymMapGV stringConstants;
+    DenseMap<Constant*, GlobalVariable*> mergedConstants;
     // Map from symbol name (in a certain library) to its GV in sysimg and the
     // DL handle address in the current session.
     StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;

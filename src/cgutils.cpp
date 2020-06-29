@@ -94,26 +94,15 @@ static Value *stringConstPtr(
         IRBuilder<> &irbuilder,
         const std::string &txt)
 {
-    StringRef ctxt(txt.c_str(), txt.size() + 1);
-    StringMap<GlobalVariable*>::iterator pooledval =
-        emission_context.stringConstants.insert(std::pair<StringRef, GlobalVariable*>(ctxt, NULL)).first;
     Module *M = jl_builderModule(irbuilder);
-    if (pooledval->second == NULL) {
-        static int strno = 0;
-        std::stringstream ssno;
-        ssno << "_j_str" << strno++;
-        GlobalVariable *gv = get_pointer_to_constant(
-                ConstantDataArray::get(jl_LLVMContext, ArrayRef<char>(ctxt.data(), ctxt.size())),
-                ssno.str(), *M);
-        pooledval->second = gv;
-    }
-    GlobalVariable *v = prepare_global_in(M, pooledval->second);
-    if (v != pooledval->second)
-        v->setInitializer(pooledval->second->getInitializer());
+    StringRef ctxt(txt.c_str(), txt.size() + 1);
+    Constant *Data = ConstantDataArray::get(jl_LLVMContext, arrayRefFromStringRef(ctxt));
+    GlobalVariable *gv = get_pointer_to_constant(emission_context, Data, "_j_str", *M);
     Value *zero = ConstantInt::get(Type::getInt32Ty(jl_LLVMContext), 0);
     Value *Args[] = { zero, zero };
-    return irbuilder.CreateInBoundsGEP(v->getValueType(), v, Args);
+    return irbuilder.CreateInBoundsGEP(gv->getValueType(), gv, Args);
 }
+
 
 // --- MDNode ---
 Metadata *to_md_tree(jl_value_t *val) {
@@ -170,8 +159,8 @@ static DIType *_julia_type_to_di(jl_codegen_params_t *ctx, jl_value_t *jt, DIBui
             Elements[i] = di;
         }
         DINodeArray ElemArray = dbuilder->getOrCreateArray(Elements);
-        std::stringstream unique_name;
-        unique_name << (uintptr_t)jdt;
+        std::string unique_name;
+        llvm::raw_string_ostream(unique_name) << (uintptr_t)jdt;
         ditype = dbuilder->createStructType(
                 NULL,                       // Scope
                 tname,                      // Name
@@ -184,7 +173,7 @@ static DIType *_julia_type_to_di(jl_codegen_params_t *ctx, jl_value_t *jt, DIBui
                 ElemArray,                  // Elements
                 dwarf::DW_LANG_Julia,       // RuntimeLanguage
                 nullptr,                    // VTableHolder
-                unique_name.str()           // UniqueIdentifier
+                unique_name                 // UniqueIdentifier
                 );
     }
     else {
@@ -237,23 +226,28 @@ static inline Constant *literal_static_pointer_val(const void *p, Type *T = T_pj
 
 static Value *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
 {
-    // first see if there already is a GlobalVariable for this address
+    // emit a GlobalVariable for a jl_value_t named "cname"
+    // store the name given so we can reuse it (facilitating merging later)
+    // so first see if there already is a GlobalVariable for this address
     GlobalVariable* &gv = ctx.global_targets[addr];
     Module *M = jl_Module;
+    StringRef localname;
+    std::string gvname;
     if (!gv) {
-        // otherwise emit a new GlobalVariable for a jl_value_t named "cname"
-        std::stringstream gvname;
-        gvname << cname << globalUnique++;
-        // no existing GlobalVariable, create one and store it
+        llvm::raw_string_ostream(gvname) << cname << ctx.global_targets.size();
+        localname = StringRef(gvname);
+    }
+    else {
+        localname = gv->getName();
+        if (gv->getParent() != M)
+            gv = cast_or_null<GlobalVariable>(M->getNamedValue(localname));
+    }
+    if (gv == nullptr)
         gv = new GlobalVariable(*M, T_pjlvalue,
-                                false, GlobalVariable::ExternalLinkage,
-                                NULL, gvname.str());
-    }
-    else if (gv->getParent() != M) {
-        // re-use the same name, but move it to the new module
-        // this will help simplify merging them later
-        gv = prepare_global_in(M, gv);
-    }
+                                false, GlobalVariable::PrivateLinkage,
+                                NULL, localname);
+    assert(localname == gv->getName());
+    assert(!gv->hasInitializer());
     return gv;
 }
 
@@ -291,6 +285,8 @@ static Value *literal_pointer_val_slot(jl_codectx_t &ctx, jl_value_t *p)
     // emit a pointer to a jl_value_t* which will allow it to be valid across reloading code
     // also, try to give it a nice name for gdb, for easy identification
     if (!imaging_mode) {
+        // TODO: this is an optimization, but is it useful or premature
+        // (it'll block any attempt to cache these, but can be simply deleted)
         Module *M = jl_Module;
         GlobalVariable *gv = new GlobalVariable(
                 *M, T_pjlvalue, true, GlobalVariable::PrivateLinkage,
@@ -1423,12 +1419,10 @@ static Value *data_pointer(jl_codectx_t &ctx, const jl_cgval_t &x)
     Value *data = x.V;
     if (x.constant) {
         Constant *val = julia_const_to_llvm(ctx, x.constant);
-        if (val) {
-            data = get_pointer_to_constant(val, "", *jl_Module);
-        }
-        else {
+        if (val)
+            data = get_pointer_to_constant(ctx.emission_context, val, "_j_const", *jl_Module);
+        else
             data = literal_pointer_val(ctx, x.constant);
-        }
     }
     return data;
 }

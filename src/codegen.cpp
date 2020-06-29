@@ -809,10 +809,10 @@ static const std::map<jl_fptr_args_t, JuliaFunction*> builtin_func_map = {
     { &jl_f_apply_type,         new JuliaFunction{"jl_f_apply_type", get_func_sig, get_func_attrs} },
 };
 
+static int globalUnique = 0;
 
 // --- code generation ---
 extern "C" {
-    int globalUnique = 0;
     int jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
     jl_cgparams_t jl_default_cgparams = {1, 1, 1, 0,
 #ifdef _OS_WINDOWS_
@@ -1100,16 +1100,32 @@ static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
 
 // --- convenience functions for tagging llvm values with julia types ---
 
-static GlobalVariable *get_pointer_to_constant(Constant *val, StringRef name, Module &M)
+static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_context, Constant *val, StringRef name, Module &M)
 {
-    GlobalVariable *gv = new GlobalVariable(
-            M,
-            val->getType(),
-            true,
-            GlobalVariable::ExternalLinkage,
-            val,
-            name);
-    gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+    GlobalVariable *&gv = emission_context.mergedConstants[val];
+    StringRef localname;
+    std::string ssno;
+    if (gv == nullptr) {
+        raw_string_ostream(ssno) << name << emission_context.mergedConstants.size();
+        localname = StringRef(ssno);
+    }
+    else {
+        localname = gv->getName();
+        if (gv->getParent() != &M)
+            gv = cast_or_null<GlobalVariable>(M.getNamedValue(localname));
+    }
+    if (gv == nullptr) {
+        gv = new GlobalVariable(
+                M,
+                val->getType(),
+                true,
+                GlobalVariable::PrivateLinkage,
+                val,
+                localname);
+        gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+    }
+    assert(localname == gv->getName());
+    assert(val == gv->getInitializer());
     return gv;
 }
 
@@ -1198,7 +1214,7 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_
 {
     Value *loc;
     if (valid_as_globalinit(v)) { // llvm can't handle all the things that could be inside a ConstantExpr
-        loc = get_pointer_to_constant(cast<Constant>(v), "", *jl_Module);
+        loc = get_pointer_to_constant(ctx.emission_context, cast<Constant>(v), "_j_const", *jl_Module);
     }
     else {
         loc = emit_static_alloca(ctx, v->getType());
@@ -3454,12 +3470,9 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         b = jl_get_binding(m, s);
         if (b == NULL) {
             // var not found. switch to delayed lookup.
-            std::stringstream name;
-            name << "delayedvar" << globalUnique++;
             Constant *initnul = V_null;
             GlobalVariable *bindinggv = new GlobalVariable(*ctx.f->getParent(), T_pjlvalue,
-                    false, GlobalVariable::InternalLinkage,
-                    initnul, name.str());
+                    false, GlobalVariable::PrivateLinkage, initnul);
             Value *cachedval = ctx.builder.CreateLoad(T_pjlvalue, bindinggv);
             BasicBlock *have_val = BasicBlock::Create(jl_LLVMContext, "found"),
                 *not_found = BasicBlock::Create(jl_LLVMContext, "notfound");
@@ -5175,13 +5188,10 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             }
             jl_add_method_root(ctx, (jl_value_t*)fill);
         }
-        std::stringstream cname;
-        cname << "trampolines" << globalUnique++;
         Type *T_htable = ArrayType::get(T_size, sizeof(htable_t) / sizeof(void*));
         Value *cache = new GlobalVariable(*jl_Module, T_htable, false,
-                               GlobalVariable::InternalLinkage,
-                               ConstantAggregateZero::get(T_htable),
-                               cname.str());
+                               GlobalVariable::PrivateLinkage,
+                               ConstantAggregateZero::get(T_htable));
         F = ctx.builder.CreateCall(prepare_call(jlgetcfunctiontrampoline_func), {
                  fobj,
                  literal_pointer_val(ctx, output_type),

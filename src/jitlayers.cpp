@@ -62,26 +62,6 @@ void jl_jit_globals(std::map<void *, GlobalVariable*> &globals)
     }
 }
 
-// turn long strings into memoized copies, instead of making a copy per object file of output.
-void jl_jit_strings(jl_codegen_params_t::SymMapGV &stringConstants)
-{
-    for (auto &it : stringConstants) {
-        GlobalVariable *GV = it.second;
-        Constant *CDA = GV->getInitializer();
-        StringRef data = cast<ConstantDataSequential>(CDA)->getRawDataValues();
-        if (data.size() > 8) { // only for long strings: keep short ones as values
-            Type *T_size = Type::getIntNTy(GV->getContext(), sizeof(void*) * 8);
-            Constant *v = ConstantExpr::getIntToPtr(
-                ConstantInt::get(T_size, (uintptr_t)data.data()),
-                GV->getType());
-            GV->replaceAllUsesWith(v);
-            GV->eraseFromParent();
-            it.second = nullptr;
-        }
-    }
-}
-
-
 // this generates llvm code for the lambda info
 // and adds the result to the jitlayers
 // (and the shadow module),
@@ -119,7 +99,6 @@ static jl_callptr_t _jl_compile_codeinst(
             emitted[codeinst] = std::move(result);
         jl_compile_workqueue(emitted, params, CompilationPolicy::Default);
 
-        jl_jit_strings(params.stringConstants);
         if (params._shared_module)
             jl_add_to_ee(std::unique_ptr<Module>(params._shared_module));
         StringMap<std::unique_ptr<Module>*> NewExports;
@@ -237,7 +216,6 @@ void jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declr
     if (!sysimg) {
         if (p == NULL) {
             jl_jit_globals(params.globals);
-            jl_jit_strings(params.stringConstants);
             assert(params.workqueue.empty());
             if (params._shared_module)
                 jl_add_to_ee(std::unique_ptr<Module>(params._shared_module));
@@ -741,6 +719,7 @@ uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
     return addr ? addr.get() : 0;
 }
 
+static int globalUniqueGeneratedNames;
 StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst)
 {
     auto &fname = ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
@@ -760,7 +739,7 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
             stream_fname << "jlsys_";
         }
         const char* unadorned_name = jl_symbol_name(codeinst->def->def.method->name);
-        stream_fname << unadorned_name << "_" << globalUnique++;
+        stream_fname << unadorned_name << "_" << globalUniqueGeneratedNames++;
         std::string string_fname = stream_fname.str();
         fname = strdup(string_fname.c_str());
         LocalSymbolTable[getMangledName(string_fname)] = (void*)(uintptr_t)Addr;
@@ -895,6 +874,31 @@ void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
     }
 }
 
+// optimize memory by turning long strings into memoized copies, instead of
+// making a copy per object file of output.
+void jl_jit_share_data(Module &M)
+{
+    std::vector<GlobalVariable*> erase;
+    for (auto &GV : M.globals()) {
+        if (!GV.hasInitializer() || !GV.isConstant())
+            continue;
+        ConstantDataSequential *CDS = dyn_cast<ConstantDataSequential>(GV.getInitializer());
+        if (CDS == nullptr)
+            continue;
+        StringRef data = CDS->getRawDataValues();
+        if (data.size() > 16) { // only for long strings: keep short ones as values
+            Type *T_size = Type::getIntNTy(GV.getContext(), sizeof(void*) * 8);
+            Constant *v = ConstantExpr::getIntToPtr(
+                ConstantInt::get(T_size, (uintptr_t)data.data()),
+                GV.getType());
+            GV.replaceAllUsesWith(v);
+            erase.push_back(&GV);
+        }
+    }
+    for (auto GV : erase)
+        GV->eraseFromParent();
+}
+
 static void jl_add_to_ee(std::unique_ptr<Module> m)
 {
     JL_TIMING(LLVM_EMIT);
@@ -909,6 +913,7 @@ static void jl_add_to_ee(std::unique_ptr<Module> m)
         false, GlobalVariable::InternalLinkage,
         ConstantAggregateZero::get(atype), "__catchjmp"))->setSection(".text");
 #endif
+    jl_jit_share_data(*m);
     assert(jl_ExecutionEngine);
     jl_ExecutionEngine->addModule(std::move(m));
 }

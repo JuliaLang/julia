@@ -54,8 +54,6 @@ static bool runtime_sym_gvs(jl_codegen_params_t &emission_context, const char *f
 
     GlobalVariable *&llvmgv = (*symMap)[f_name];
     if (llvmgv == NULL) {
-        // MCJIT forces this to have external linkage eventually, so we would clobber
-        // the symbol of the actual function.
         std::string name = "ccall_";
         name += f_name;
         name += "_";

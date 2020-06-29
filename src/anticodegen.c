@@ -5,8 +5,6 @@
 
 #include "intrinsics.h"
 
-int globalUnique = 0;
-
 #define UNAVAILABLE { jl_errorf("%s: not available in this build of Julia", __func__); }
 
 void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname, const char *sysimg_data, size_t sysimg_len) UNAVAILABLE
