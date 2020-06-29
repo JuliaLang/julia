@@ -66,7 +66,7 @@ Printing with the color `:nothing` will print the string without modifications.
 """
 text_colors
 
-function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
+function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
     buf = IOBuffer()
     iscolor = get(io, :color, false)::Bool
     try f(IOContext(buf, io), args...)

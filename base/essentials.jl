@@ -172,6 +172,8 @@ convert(::Type{T}, x::T) where {T} = x
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled
                                    # (due to fields typed as `Type`, which is generally a bad idea)
+# These end up being called during bootstrap and then would be invalidated if not for the following:
+convert(::Type{String}, x::String) = x
 
 """
     @eval [mod,] ex

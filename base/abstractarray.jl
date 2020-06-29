@@ -1060,6 +1060,9 @@ function getindex(A::AbstractArray, I...)
     error_if_canonical_getindex(IndexStyle(A), A, I...)
     _getindex(IndexStyle(A), A, to_indices(A, I)...)
 end
+# To avoid invalidations from multidimensional.jl: getindex(A::Array, i1::Union{Integer, CartesianIndex}, I::Union{Integer, CartesianIndex}...)
+getindex(A::Array, i1::Integer, I::Integer...) = A[to_indices(A, (i1, I...))...]
+
 function unsafe_getindex(A::AbstractArray, I...)
     @_inline_meta
     @inbounds r = getindex(A, I...)
@@ -2163,7 +2166,7 @@ end
 # map on collections
 map(f, A::AbstractArray) = collect_similar(A, Generator(f,A))
 
-mapany(f, itr) = map!(f, Vector{Any}(undef, length(itr)), itr)  # convenient for Expr.args
+mapany(f, itr) = map!(f, Vector{Any}(undef, length(itr)::Int), itr)  # convenient for Expr.args
 
 # default to returning an Array for `map` on general iterators
 """

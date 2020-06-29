@@ -155,7 +155,7 @@ function _parse_string(text::AbstractString, filename::AbstractString,
     if index < 1 || index > ncodeunits(text) + 1
         throw(BoundsError(text, index))
     end
-    ex, offset = Core._parse(text, filename, index-1, options)
+    ex, offset::Int = Core._parse(text, filename, index-1, options)
     ex, offset+1
 end
 

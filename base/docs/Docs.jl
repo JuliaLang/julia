@@ -96,7 +96,7 @@ function signature!(tv, expr::Expr)
             push!(sig.args[end].args, argtype(arg))
         end
         if isexpr(expr.args[1], :curly) && isempty(tv)
-            append!(tv, mapany(tvar, expr.args[1].args[2:end]))
+            append!(tv, mapany(tvar, (expr.args[1]::Expr).args[2:end]))
         end
         for i = length(tv):-1:1
             push!(sig.args, :(Tuple{$(tv[i].args[1])}))

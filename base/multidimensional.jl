@@ -701,7 +701,6 @@ ensure_indexable(I::Tuple{}) = ()
 
 # In simple cases, we know that we don't need to use axes(A). Optimize those
 # until Julia gets smart enough to elide the call on its own:
-to_indices(A, I::Tuple{}) = ()
 @inline to_indices(A, I::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = to_indices(A, (), I)
 # But some index types require more context spanning multiple indices
 # CartesianIndexes are simple; they just splat out

@@ -266,6 +266,9 @@ function active_project(search_load_path::Bool=true)
         project == "@" && continue
         project = load_path_expand(project)
         project === nothing && continue
+        # while this seems well-inferred, nevertheless without the type annotation below
+        # there are backedges here from abspath(::AbstractString, ::String)
+        project = project::String
         if !isfile_casesensitive(project) && basename(project) ∉ project_names
             project = abspath(project, "Project.toml")
         end
