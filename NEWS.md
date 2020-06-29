@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/NEWS.md"
+```
+
 Julia v1.6 Release Notes
 ========================
 
