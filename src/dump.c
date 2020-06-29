@@ -662,6 +662,8 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         int flags = validate << 0;
         if (codeinst->invoke == jl_fptr_const_return)
             flags |= 1 << 2;
+        if (codeinst->precompile)
+            flags |= 1 << 3;
         write_uint8(s->s, flags);
         jl_serialize_value(s, (jl_value_t*)codeinst->def);
         if (validate || codeinst->min_world == 0) {
@@ -1494,6 +1496,8 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
     jl_gc_wb(codeinst, codeinst->rettype);
     if (constret)
         codeinst->invoke = jl_fptr_const_return;
+    if ((flags >> 3) & 1)
+        codeinst->precompile = 1;
     codeinst->next = (jl_code_instance_t*)jl_deserialize_value(s, (jl_value_t**)&codeinst->next);
     jl_gc_wb(codeinst, codeinst->next);
     if (validate)

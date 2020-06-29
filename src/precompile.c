@@ -326,7 +326,7 @@ static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closur
                 !jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred)) {
                 do_compile = 1;
             }
-            else if (codeinst->invoke != NULL) {
+            else if (codeinst->invoke != NULL || codeinst->precompile) {
                 do_compile = 1;
             }
         }

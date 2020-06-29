@@ -397,6 +397,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     }
     codeinst->specptr.fptr = NULL;
     codeinst->isspecsig = 0;
+    codeinst->precompile = 0;
     codeinst->next = NULL;
     JL_GC_POP();
     return codeinst;
@@ -2089,6 +2090,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         jl_atomic_store_release(&codeinst->invoke, ucache->invoke);
         jl_mi_cache_insert(mi, codeinst);
     }
+    codeinst->precompile = 1;
     return codeinst;
 }
 
@@ -2194,9 +2196,11 @@ static void _generate_from_hint(jl_method_instance_t *mi, size_t world)
     // don't bother generating output in the current environment
     if (generating_llvm) {
         jl_value_t *codeinst = jl_rettype_inferred(mi, world, world);
-        if (codeinst != jl_nothing)
+        if (codeinst != jl_nothing) {
             if (((jl_code_instance_t*)codeinst)->invoke == jl_fptr_const_return)
                 return; // probably not a good idea to generate code
+            ((jl_code_instance_t*)codeinst)->precompile = 1;
+        }
         // If we are saving LLVM or native code, generate the LLVM IR so that it'll
         // be included in the saved LLVM module.
         // TODO: compilation is now stateless
