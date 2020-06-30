@@ -752,7 +752,13 @@ function show_backtrace(io::IO, t::Vector)
     if haskey(io, :LAST_SHOWN_LINE_INFOS)
         resize!(io[:LAST_SHOWN_LINE_INFOS], 0)
     end
-    filtered = process_backtrace(t)
+
+    # t is a pre-processed backtrace (ref #12856)
+    if t isa Vector{Any}
+        filtered = t
+    else
+        filtered = process_backtrace(t)
+    end
     isempty(filtered) && return
 
     if length(filtered) == 1 && StackTraces.is_top_level_frame(filtered[1][1])
