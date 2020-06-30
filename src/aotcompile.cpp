@@ -612,6 +612,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createVerifierPass());
 #endif
 
+    PM->add(createConstantMergePass());
     if (opt_level < 2) {
         PM->add(createCFGSimplificationPass());
         if (opt_level == 1) {
