@@ -155,7 +155,7 @@ mutable struct Error <: Result
             bt = scrub_exc_stack(bt)
         end
         if test_type === :test_error || test_type === :nontest_error
-            bt_str = sprint(Base.show_exception_stack, bt)
+            bt_str = sprint(Base.show_exception_stack, bt; context=stdout)
         else
             bt_str = ""
         end
