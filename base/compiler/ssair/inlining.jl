@@ -1094,13 +1094,13 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
         # we inline, even if the signature is not a dispatch tuple
         if signature_fully_covered && length(cases) == 0 && only_method isa Method
             if length(splits) > 1
-                # get match information for a single overall match instead of union splits
-                (meth, min_valid, max_valid) =
-                    matching_methods(sig.atype, sv.matching_methods_cache, sv.params.MAX_METHODS, sv.world)
+                method = only_method
+                (metharg, methsp) = ccall(:jl_type_intersection_with_env, Any, (Any, Any),
+                    sig.atype, method.sig)::SimpleVector
+            else
                 @assert length(meth) == 1
-                update_valid_age!(min_valid, max_valid, sv)
+                (metharg, methsp, method) = (meth[1][1]::Type, meth[1][2]::SimpleVector, meth[1][3]::Method)
             end
-            (metharg, methsp, method) = (meth[1][1]::Type, meth[1][2]::SimpleVector, meth[1][3]::Method)
             fully_covered = true
             case = analyze_method!(idx, sig, metharg, methsp, method,
                 stmt, sv, false, nothing, calltype)
