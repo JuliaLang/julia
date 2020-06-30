@@ -731,11 +731,11 @@ end
 # Test backtrace printing
 module B
     module C
-        f(x; y=2) = error()
+        f(x; y=2.0) = error()
     end
     module D
         import ..C: f
-        g() = f(2; y=3)
+        g() = f(2.0; y=3.0)
     end
 end
 
@@ -746,7 +746,7 @@ end
     end
     bt_str = sprint(Base.show_backtrace, bt)
     m = @__MODULE__
-    @test contains(bt_str, "f(x::Int64; y::Int64)")
+    @test contains(bt_str, "f(x::Float64; y::Float64)")
     @test contains(bt_str, "@ $m.B.C")
     @test contains(bt_str, "@ $m.B.D")
 end
