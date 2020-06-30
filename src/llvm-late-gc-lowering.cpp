@@ -673,6 +673,8 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
                     ConstantInt::get(Type::getInt32Ty(Cond->getContext()), i),
                     "", SI);
         }
+        if (FalseElem->getType() != TrueElem->getType())
+            FalseElem = new BitCastInst(FalseElem, TrueElem->getType(), "", SI);
         SelectInst *SelectBase = SelectInst::Create(Cond, TrueElem, FalseElem, "gclift", SI);
         int Number = ++S.MaxPtrNumber;
         S.AllPtrNumbering[SelectBase] = Number;
@@ -737,13 +739,12 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
         for (unsigned i = 0; i < NumRoots; ++i) {
             PHINode *lift = lifted[i];
             Value *BaseElem;
-            if (isa<PointerType>(Base->getType())) {
+            if (isa<PointerType>(Base->getType()))
                 BaseElem = Base;
-                if (BaseElem->getType() != T_prjlvalue)
-                    BaseElem = new BitCastInst(BaseElem, T_prjlvalue, "", Terminator);
-            } else {
+            else
                 BaseElem = IncomingBases[i];
-            }
+            if (BaseElem->getType() != T_prjlvalue)
+                BaseElem = new BitCastInst(BaseElem, T_prjlvalue, "", Terminator);
             lift->addIncoming(BaseElem, IncomingBB);
         }
     }
@@ -2385,6 +2386,8 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
                 slotAddress->insertAfter(gcframe);
                 auto ValExpr = std::make_pair(Base, isa<PointerType>(Base->getType()) ? -1 : i);
                 auto Elem = MaybeExtractScalar(S, ValExpr, SI);
+                if (Elem->getType() != T_prjlvalue)
+                    Elem = new BitCastInst(Elem, T_prjlvalue, "", SI);
                 //auto Idxs = makeArrayRef(Tracked[i]);
                 //Value *Elem = ExtractScalar(Base, true, Idxs, SI);
                 Value *shadowStore = new StoreInst(Elem, slotAddress, SI);
