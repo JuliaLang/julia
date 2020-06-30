@@ -758,10 +758,20 @@ static CPU get_cpu_name(CPUID cpuid)
     }
 }
 
-static std::pair<int,char> get_elf_arch(void)
+namespace {
+
+struct arm_arch {
+    int version;
+    char klass;
+    constexpr bool mclass() const { return klass == 'M'; }
+};
+
+}
+
+static arm_arch get_elf_arch(void)
 {
 #ifdef _CPU_AARCH64_
-    return std::make_pair(8, 'A');
+    return {8, 'A'};
 #else
     int ver = 0;
     char profile = 0;
@@ -787,7 +797,7 @@ static std::pair<int,char> get_elf_arch(void)
 #  if __ARM_ARCH > 6 && defined(__ARM_ARCH_PROFILE)
     profile = __ARM_ARCH_PROFILE;
 #  endif
-    return std::make_pair(ver, profile);
+    return {ver, profile};
 #endif
 }
 
@@ -806,20 +816,35 @@ static inline const char *find_cpu_name(uint32_t cpu)
     return ::find_cpu_name(cpu, cpus, ncpu_names);
 }
 
-static std::pair<int,bool> feature_arch_version(const FeatureList<feature_sz> &feature)
+static arm_arch feature_arch_version(const FeatureList<feature_sz> &feature)
 {
 #ifdef _CPU_AARCH64_
-    return std::make_pair(8, false);
+    return {8, 'A'};
 #else
-    if (test_nbit(feature, Feature::v8))
-        return std::make_pair(8, test_nbit(feature, Feature::mclass));
-    if (test_nbit(feature, Feature::v7))
-        return std::make_pair(7, test_nbit(feature, Feature::mclass));
-    return std::make_pair(6, false);
+    int ver;
+    if (test_nbit(feature, Feature::v8)) {
+        ver = 8;
+    }
+    else if (test_nbit(feature, Feature::v7)) {
+        ver = 7;
+    }
+    else {
+        return {6, 0};
+    }
+    if (test_nbit(feature, Feature::mclass)) {
+        return {ver, 'M'};
+    }
+    else if (test_nbit(feature, Feature::rclass)) {
+        return {ver, 'R'};
+    }
+    else if (test_nbit(feature, Feature::aclass)) {
+        return {ver, 'A'};
+    }
+    return {ver, 0};
 #endif
 }
 
-static CPU generic_for_arch(std::pair<int,bool> arch)
+static CPU generic_for_arch(arm_arch arch)
 {
 #ifdef _CPU_AARCH64_
     return CPU::generic;
@@ -827,9 +852,9 @@ static CPU generic_for_arch(std::pair<int,bool> arch)
 #  if defined(__ARM_ARCH_PROFILE)
     char klass = __ARM_ARCH_PROFILE;
 #  else
-    char klass = arch.second ? 'M' : 'A';
+    char klass = arch.klass;
 #  endif
-    if (arch.first >= 8) {
+    if (arch.version >= 8) {
         if (klass == 'M') {
             return CPU::armv8_m_base;
         }
@@ -840,7 +865,7 @@ static CPU generic_for_arch(std::pair<int,bool> arch)
             return CPU::armv8_a;
         }
     }
-    else if (arch.first == 7) {
+    else if (arch.version == 7) {
         if (klass == 'M') {
             return CPU::armv7_m;
         }
@@ -855,16 +880,16 @@ static CPU generic_for_arch(std::pair<int,bool> arch)
 #endif
 }
 
-static bool check_cpu_arch_ver(uint32_t cpu, std::pair<int,bool> arch)
+static bool check_cpu_arch_ver(uint32_t cpu, arm_arch arch)
 {
     auto spec = find_cpu(cpu);
     // This happens on AArch64 and indicates that the cpu name isn't a valid aarch64 CPU
     if (!spec)
         return false;
-    auto cpu_arch = feature_arch_version(spec->features);
-    if (arch.second != cpu_arch.second)
+    auto feature_arch = feature_arch_version(spec->features);
+    if (arch.mclass() != feature_arch.mclass())
         return false;
-    if (arch.first > cpu_arch.first)
+    if (arch.version > feature_arch.version)
         return false;
     return true;
 }
@@ -906,18 +931,18 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
     auto cpuinfo = get_cpuinfo();
     auto arch = get_elf_arch();
 #ifdef _CPU_ARM_
-    if (arch.first >= 7) {
-        if (arch.second == 'M') {
+    if (arch.version >= 7) {
+        if (arch.klass == 'M') {
             set_bit(features, Feature::mclass, true);
         }
-        else if (arch.second == 'R') {
+        else if (arch.klass == 'R') {
             set_bit(features, Feature::rclass, true);
         }
-        else if (arch.second == 'A') {
+        else if (arch.klass == 'A') {
             set_bit(features, Feature::aclass, true);
         }
     }
-    switch (arch.first) {
+    switch (arch.version) {
     case 8:
     set_bit(features, Feature::v8, true);
     JL_FALLTHROUGH;
@@ -1304,18 +1329,18 @@ static FeatureList<feature_sz> get_max_feature(void)
 #ifdef _CPU_ARM_
     auto arch = get_elf_arch();
     auto features = real_feature_masks;
-    if (arch.second == 0)
-        arch.second = 'A';
+    if (arch.klass == 0)
+        arch.klass = 'A';
     set_bit(features, Feature::v7, true);
     set_bit(features, Feature::v8, true);
-    if (arch.second == 'M') {
+    if (arch.klass == 'M') {
         set_bit(features, Feature::mclass, true);
         set_bit(features, Feature::v8_m_main, true);
     }
-    else if (arch.second == 'R') {
+    else if (arch.klass == 'R') {
         set_bit(features, Feature::rclass, true);
     }
-    else if (arch.second == 'A') {
+    else if (arch.klass == 'A') {
         set_bit(features, Feature::aclass, true);
         set_bit(features, Feature::v8_1a, true);
         set_bit(features, Feature::v8_2a, true);
