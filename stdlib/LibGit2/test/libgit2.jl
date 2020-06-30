@@ -92,7 +92,7 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
             write(out, ptm)
         catch ex
             if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
-                rethrow() # ignore EIO from master after slave dies
+                rethrow() # ignore EIO from `ptm` after `pts` dies
             end
         end
 
