@@ -423,7 +423,11 @@ nrm2(x::Union{AbstractVector,DenseArray}) = nrm2(length(x), x, stride1(x))
 """
     asum(n, X, incx)
 
-Sum of the absolute values of the first `n` elements of array `X` with stride `incx`.
+Sum of the magnitudes of the first `n` elements of array `X` with stride `incx`.
+
+For a real array, the magnitude is the absolute value. For a complex array, the
+magnitude is the sum of the absolute value of the real part and the absolute value
+of the imaginary part.
 
 # Examples
 ```jldoctest
