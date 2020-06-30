@@ -228,7 +228,6 @@ Partially implemented by:
 
   * [`BitSet`](@ref)
   * [`Set`](@ref)
-  * [`EnvDict`](@ref Base.EnvDict)
   * [`Array`](@ref)
   * [`BitArray`](@ref)
   * [`ImmutableDict`](@ref Base.ImmutableDict)

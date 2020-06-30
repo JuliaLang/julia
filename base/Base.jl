@@ -397,6 +397,7 @@ function __init__()
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
     # initialize loading
+    init_env()
     init_depot_path()
     init_load_path()
     nothing

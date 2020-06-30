@@ -91,7 +91,7 @@ const SpawnIOs = Vector{Any} # convenience name for readability
         file, cmd.exec, loop, handle,
         iohandles, length(iohandles),
         cmd.flags,
-        cmd.env === nothing ? C_NULL : cmd.env,
+        cmd.env === nothing ? ["$k=$v" for (k, v) in ENV] : cmd.env,
         isempty(cmd.dir) ? C_NULL : cmd.dir,
         uv_jl_return_spawn::Ptr{Cvoid})
     if err != 0

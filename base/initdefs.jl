@@ -19,6 +19,67 @@ An array of the command line arguments passed to Julia, as strings.
 const ARGS = String[]
 
 """
+    ENV
+
+A dictionary that is populated from the initial process environment and whose contents
+are used to populate the environments of spawned subprocesses.
+
+!!! note
+    As of Julia 1.6, this is a plain `Dict` rather than a special type. When you modify
+    it, the process environment is not modified directly, rather when a child process
+    is started, the value of the `ENV` dict is used to initialize the environment of
+    the child process. This means that `ENV` cannot be used to communicate via the
+    current proccess's environment with libraries.
+"""
+const ENV = Dict{String,String}()
+
+if !Sys.iswindows()
+    function init_env()
+        empty!(ENV)
+        idx = 0
+        while true
+            entry = ccall(:jl_environ, Any, (Int32,), idx)
+            entry === nothing && break
+            entry = entry::String
+            m = match(r"^(.*?)=(.*)$"s, entry)
+            m === nothing && error("malformed environment entry: $entry")
+            ENV[m.captures[1]] = m.captures[2]
+            idx += 1
+        end
+    end
+else
+    function winuppercase(s::AbstractString)
+        isempty(s) && return s
+        LOCALE_INVARIANT = 0x0000007f
+        LCMAP_UPPERCASE  = 0x00000200
+        ws = transcode(UInt16, String(s))
+        result = ccall(:LCMapStringW, stdcall, Cint,
+            (UInt32, UInt32, Ptr{UInt16}, Cint, Ptr{UInt16}, Cint),
+            LOCALE_INVARIANT, LCMAP_UPPERCASE, ws, length(ws), ws, length(ws))
+        systemerror(:LCMapStringW, iszero(result))
+        return transcode(String, ws)
+    end
+
+    function init_env()
+        env = ccall(:GetEnvironmentStringsW, stdcall, Ptr{UInt16}, ())
+        try pos = env
+            while !iszero(unsafe_load(pos))
+                len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)
+                buf = Vector{UInt16}(undef, len)
+                GC.@preserve buf unsafe_copyto!(pointer(buf), pos, len)
+                entry = transcode(String, buf)
+                m = match(r"^(.*?)=(.*)$"s, entry)
+                m === nothing && error("malformed environment entry: $entry")
+                ENV[winuppercase(m.captures[1])] = m.captures[2]
+                pos += 2(len+1) # 2-byte code units
+            end
+        finally
+            ccall(:FreeEnvironmentStringsW, stdcall, Int32, (Ptr{UInt16},), env)
+        end
+    end
+end
+
+"""
     exit(code=0)
 
 Stop the program with an exit code. The default exit code is zero, indicating that the

@@ -303,7 +303,6 @@ Base.@timev
 Base.@timed
 Base.@elapsed
 Base.@allocated
-Base.EnvDict
 Base.ENV
 Base.Sys.isunix
 Base.Sys.isapple
