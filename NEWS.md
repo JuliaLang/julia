@@ -61,6 +61,7 @@ Standard library changes
 #### LinearAlgebra
 * New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).
 * `UniformScaling` can now be indexed into using ranges to return dense matrices and vectors ([#24359]).
+* New function `LinearAlgebra.BLAS.get_num_threads()` for getting the number of BLAS threads. ([#36360])
 
 #### Markdown
 

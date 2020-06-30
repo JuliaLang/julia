@@ -553,4 +553,31 @@ Base.stride(A::WrappedArray, i::Int) = stride(A.A, i)
     end
 end
 
+@testset "get_set_num_threads" begin
+    default = BLAS.get_num_threads()
+    @test default isa Int
+    @test default > 0
+    BLAS.set_num_threads(1)
+    @test BLAS.get_num_threads() === 1
+    BLAS.set_num_threads(default)
+    @test BLAS.get_num_threads() === default
+
+    @test_logs (:warn,) match_mode=:any BLAS._set_num_threads(1, _blas=:unknown)
+    if BLAS.guess_vendor() !== :osxblas
+        # test osxblas which is not covered by CI
+        withenv("VECLIB_MAXIMUM_THREADS" => nothing) do
+            @test @test_logs(
+                (:warn,),
+                (:warn,),
+                match_mode=:any,
+                BLAS._get_num_threads(_blas=:osxblas),
+            ) === nothing
+            @test_logs BLAS._set_num_threads(1, _blas=:osxblas)
+            @test @test_logs(BLAS._get_num_threads(_blas=:osxblas)) === 1
+            @test_logs BLAS._set_num_threads(2, _blas=:osxblas)
+            @test @test_logs(BLAS._get_num_threads(_blas=:osxblas)) === 2
+        end
+    end
+end
+
 end # module TestBLAS
