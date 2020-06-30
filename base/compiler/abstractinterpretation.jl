@@ -40,18 +40,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     isa(ft, DataType) || return Any # the function being called is unknown. can't properly handle this backedge right now
     ftname = ft.name
     isdefined(ftname, :mt) || return Any # not callable. should be Bottom, but can't track this backedge right now
-    if ftname === _TYPE_NAME
-        tname = ft.parameters[1]
-        if isa(tname, TypeVar)
-            tname = tname.ub
-        end
-        tname = unwrap_unionall(tname)
-        if !isa(tname, DataType)
-            # can't track the backedge to the ctor right now
-            # for things like Union
-            return Any
-        end
-    end
     min_valid = UInt[typemin(UInt)]
     max_valid = UInt[typemax(UInt)]
     splitunions = 1 < countunionsplit(atype_params) <= InferenceParams(interp).MAX_UNION_SPLITTING
