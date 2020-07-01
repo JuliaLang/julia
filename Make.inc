@@ -339,6 +339,9 @@ USE_POLLY := 0
 USE_POLLY_OPENMP := 0  # Enable OpenMP code-generation
 USE_POLLY_ACC := 0     # Enable GPU code-generation
 
+# Options to use MLIR
+USE_MLIR := 0
+
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
 #XC_HOST := x86_64-w64-mingw32
