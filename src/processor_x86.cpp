@@ -143,7 +143,10 @@ static constexpr FeatureDep deps[] = {
     {sse4a, sse3},
     {xop, fma4},
     {fma4, avx},
-    {fma4, sse4a}
+    {fma4, sse4a},
+    {xsaveopt, xsave},
+    {xsavec, xsave},
+    {xsaves, xsave},
 };
 
 // We require cx16 on 64bit by default. This can be overwritten with `-cx16`
@@ -152,7 +155,7 @@ constexpr auto generic = get_feature_masks(cx16);
 constexpr auto bonnell = get_feature_masks(sse3, ssse3, cx16, movbe, sahf);
 constexpr auto silvermont = bonnell | get_feature_masks(sse41, sse42, popcnt,
                                                         pclmul, aes, prfchw);
-constexpr auto goldmont = silvermont | get_feature_masks(mpx, sha, rdrnd, rdseed, xsave,
+constexpr auto goldmont = silvermont | get_feature_masks(sha, rdrnd, rdseed, xsave,
                                                          xsaveopt, xsavec, xsaves, clflushopt);
 constexpr auto yonah = get_feature_masks(sse3);
 constexpr auto prescott = yonah;
@@ -165,7 +168,7 @@ constexpr auto sandybridge = westmere | get_feature_masks(avx, xsave, xsaveopt);
 constexpr auto ivybridge = sandybridge | get_feature_masks(rdrnd, f16c, fsgsbase);
 constexpr auto haswell = ivybridge | get_feature_masks(avx2, bmi, bmi2, fma, lzcnt, movbe);
 constexpr auto broadwell = haswell | get_feature_masks(adx, rdseed, prfchw);
-constexpr auto skylake = broadwell | get_feature_masks(mpx, rtm, xsavec, xsaves,
+constexpr auto skylake = broadwell | get_feature_masks(rtm, xsavec, xsaves,
                                                        clflushopt); // ignore sgx; hle
 constexpr auto knl = broadwell | get_feature_masks(avx512f, avx512er, avx512cd, avx512pf,
                                                    prefetchwt1);
@@ -184,7 +187,7 @@ constexpr auto bdver1 = amdfam10 | get_feature_masks(xop, fma4, avx, ssse3, sse4
                                                      prfchw, pclmul, xsave, lwp);
 constexpr auto bdver2 = bdver1 | get_feature_masks(f16c, bmi, tbm, fma);
 constexpr auto bdver3 = bdver2 | get_feature_masks(xsaveopt, fsgsbase);
-constexpr auto bdver4 = bdver3 | get_feature_masks(avx2, bmi2, mwaitx);
+constexpr auto bdver4 = bdver3 | get_feature_masks(avx2, bmi2, mwaitx, movbe, rdrnd);
 
 constexpr auto znver1 = haswell | get_feature_masks(adx, clflushopt, clzero, mwaitx, prfchw,
                                                     rdseed, sha, sse4a, xsavec, xsaves);

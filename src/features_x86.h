@@ -33,10 +33,9 @@ JL_FEATURE_DEF(bmi, 32 * 2 + 3, 0)
 // JL_FEATURE_DEF(hle, 32 * 2 + 4, 0) // Not used and gone in LLVM 5.0
 JL_FEATURE_DEF(avx2, 32 * 2 + 5, 0)
 JL_FEATURE_DEF(bmi2, 32 * 2 + 8, 0)
-// JL_FEATURE_DEF(invpcid, 32 * 2 + 10, 0) // Not used and gone in LLVM 5.0
+// JL_FEATURE_DEF(invpcid, 32 * 2 + 10, 0) // Priviledged instruction
 JL_FEATURE_DEF(rtm, 32 * 2 + 11, 0)
-JL_FEATURE_DEF(mpx, 32 * 2 + 14, 0)
-// Disable avx512 pre-5.0 since it can't handle address space
+// JL_FEATURE_DEF(mpx, 32 * 2 + 14, 0) // Deprecated in LLVM 10.0
 JL_FEATURE_DEF(avx512f, 32 * 2 + 16, 0)
 JL_FEATURE_DEF(avx512dq, 32 * 2 + 17, 0)
 JL_FEATURE_DEF(rdseed, 32 * 2 + 18, 0)
@@ -60,8 +59,8 @@ JL_FEATURE_DEF(pku, 32 * 3 + 4, 0) // ospke
 JL_FEATURE_DEF(avx512vpopcntdq, 32 * 3 + 14, 0)
 
 // EAX=7,ECX=0: EDX
-// JL_FEATURE_DEF(avx512_4vnniw, 32 * 4 + 2, ?????)
-// JL_FEATURE_DEF(avx512_4fmaps, 32 * 4 + 3, ?????)
+// JL_FEATURE_DEF(avx5124vnniw, 32 * 4 + 2, ?????)
+// JL_FEATURE_DEF(avx5124fmaps, 32 * 4 + 3, ?????)
 
 // EAX=0x80000001: ECX
 // ignore sahf on 32bit x86 since it is required
