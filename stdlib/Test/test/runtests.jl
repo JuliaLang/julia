@@ -233,7 +233,6 @@ let fails = @testset NoThrowTestSet begin
     end
 end
 
-
 let errors = @testset NoThrowTestSet begin
         # 1 - Error - unexpected pass
         @test_broken true
