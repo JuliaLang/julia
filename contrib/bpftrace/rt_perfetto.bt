@@ -1,0 +1,149 @@
+#!/usr/bin/env bpftrace
+
+BEGIN
+{
+    @gc_num = 1;
+    printf("{\"displayTimeUnit\":\"ns\",\"traceEvents\":[\n");
+}
+
+END
+{
+    clear(@gc_num);
+    printf("]}");
+}
+
+// GC events
+usdt:usr/lib/libjulia-internal.so:julia:gc__begin
+{
+    printf("{\"name\":\"GC\",\"cat\":\"gc\",\"id\":%-d,\"ph\":\"B\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", @gc_num, pid, tid, elapsed);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:gc__end
+{
+    printf("{\"name\":\"GC\",\"cat\":\"gc\",\"id\":%-d,\"ph\":\"E\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", @gc_num, pid, tid, elapsed);
+    @gc_num++;
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:gc__stop_the_world
+{
+    printf("{\"name\":\"StopTheWorld\",\"cat\":\"gc\",\"ph\":\"i\",\"s\":\"t\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", pid, tid, elapsed);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:gc__mark__begin
+{
+    printf("{\"name\":\"Mark\",\"cat\":\"gc\",\"id\":%-d,\"ph\":\"B\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", @gc_num, pid, tid, elapsed);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:gc__mark__end
+{
+    //printf("{\"name\":\"Mark\",\"cat\":\"gc\",\"ph\":\"E\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu,\"args\":{\"scanned_bytes\":%ld,\"perm_scanned_bytes\":%ld}},\n", pid, tid, elapsed, arg0, arg1);
+    printf("{\"name\":\"Mark\",\"cat\":\"gc\",\"id\":%-d,\"ph\":\"E\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", @gc_num, pid, tid, elapsed);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:gc__sweep__begin
+{
+    printf("{\"name\":\"Sweep\",\"cat\":\"gc\",\"id\":%-d,\"ph\":\"B\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu,\"args\":{\"full\":%d}},\n", @gc_num, pid, tid, elapsed, arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:gc__sweep__end
+{
+    printf("{\"name\":\"Sweep\",\"cat\":\"gc\",\"id\":%-d,\"ph\":\"E\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", @gc_num, pid, tid, elapsed);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:gc__finalizer
+{
+    printf("{\"name\":\"Finalizer\",\"cat\":\"gc\",\"ph\":\"i\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", pid, tid, elapsed);
+}
+
+// Task events
+usdt:usr/lib/libjulia-internal.so:julia:rt__new__task
+{
+    $ptr0 = arg0 + 48;
+    $ptr1 = arg1 + 48;
+    printf("{\"name\":\"TaskNew\",\"cat\":\"task\",\"ph\":\"i\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu,\"args\":{\"task\":\"0x%x\",\"parent\":\"0x%x\"}},\n", pid, tid, elapsed, *$ptr1, *$ptr0);
+    printf("{\"name\":\"TaskEnqueue\",\"cat\":\"task\",\"id\":\"0x%x\",\"ph\":\"s\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu,\"args\":{\"task\":\"0x%x\"}},\n", arg1, pid, tid, elapsed, arg1);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__start__task
+{
+    $ptr0 = arg0 + 48;
+    printf("{\"name\":\"TaskEnqueue\",\"cat\":\"task\",\"id\":\"0x%x\",\"ph\":\"f\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu,\"args\":{\"queue_duration\":2,\"task\":\"0x%x\"}},\n", arg0, pid, tid, elapsed, arg0);
+    printf("{\"name\":\"TaskRun\",\"cat\":\"task\",\"id\":\"0x%x\",\"ph\":\"B\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", *$ptr0, pid, tid, elapsed);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__finish__task
+{
+    $ptr0 = arg0 + 48;
+    printf("{\"name\":\"TaskFinish\",\"cat\":\"task\",\"ph\":\"i\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu,\"args\":{\"task\":\"0x%x\"}},\n", pid, tid, elapsed, *$ptr0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__run__task
+{
+    $ptr0 = arg0 + 48;
+    printf("{\"name\":\"TaskRun\",\"cat\":\"task\",\"id\":\"0x%x\",\"ph\":\"B\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", *$ptr0, pid, tid, elapsed);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__pause__task
+{
+    $ptr0 = arg0 + 48;
+    printf("{\"name\":\"TaskRun\",\"cat\":\"task\",\"id\":\"0x%x\",\"ph\":\"E\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", *$ptr0, pid, tid, elapsed);
+}
+
+/*
+// IO loop events: MANY events
+usdt:usr/lib/libjulia-internal.so:julia:rt__start__process__events
+{
+    printf("{\"name\":\"ProcessEvents\",\"cat\":\"task\",\"ph\":\"B\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu,\"args\":{\"task\":\"0x%x\"}},\n", pid, tid, elapsed, arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__finish__process__events
+{
+    printf("{\"name\":\"ProcessEvents\",\"cat\":\"task\",\"ph\":\"E\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu,\"args\":{\"task\":\"0x%x\"}},\n", pid, tid, elapsed, arg0);
+}
+*/
+
+/*
+// Task queues: for scheduler profiling
+usdt:usr/lib/libjulia-internal.so:julia:rt__taskq__insert
+{
+    printf("{\"name\":\"Enqueue\",\"cat\":\"task\",\"ph\":\"i\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu,\"args\":{\"task\":\"0x%x\"}},\n", pid, tid, elapsed, arg1);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__taskq__get
+{
+    printf("{\"name\":\"Dequeue\",\"cat\":\"task\",\"ph\":\"i\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu,\"args\":{\"task\":\"0x%x\"}},\n", pid, tid, elapsed, arg1);
+}
+*/
+
+/*
+// Thread sleep logic: for debugging
+usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__wake
+{
+    printf("Thread waking: 0x%x (was sleeping?: %d)\n", arg0, arg1);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__wakeup
+{
+    printf("Thread wakeup: 0x%x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__sleep
+{
+    printf("Thread trying to sleep: 0x%x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__taskq__wake
+{
+    printf("Thread waking due to non-empty task queue: 0x%x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__task__wake
+{
+    printf("Thread waking due to popped task: 0x%x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__uv__wake
+{
+    printf("Thread waking due to libuv: 0x%x\n", arg0);
+}
+*/
