@@ -35,25 +35,12 @@ end
 
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState,
                                   max_methods::Int = InferenceParams(interp).MAX_METHODS)
-    atype_params = unwrap_unionall(atype).parameters
-    ft = unwrap_unionall(atype_params[1]) # TODO: ccall jl_method_table_for here
-    isa(ft, DataType) || return Any # the function being called is unknown. can't properly handle this backedge right now
-    ftname = ft.name
-    isdefined(ftname, :mt) || return Any # not callable. should be Bottom, but can't track this backedge right now
-    if ftname === _TYPE_NAME
-        tname = ft.parameters[1]
-        if isa(tname, TypeVar)
-            tname = tname.ub
-        end
-        tname = unwrap_unionall(tname)
-        if !isa(tname, DataType)
-            # can't track the backedge to the ctor right now
-            # for things like Union
-            return Any
-        end
-    end
+    mt = ccall(:jl_method_table_for, Any, (Any,), atype)
+    mt === nothing && return Any
+    mt = mt::Core.MethodTable
     min_valid = UInt[typemin(UInt)]
     max_valid = UInt[typemax(UInt)]
+    atype_params = unwrap_unionall(atype).parameters
     splitunions = 1 < countunionsplit(atype_params) <= InferenceParams(interp).MAX_UNION_SPLITTING
     if splitunions
         splitsigs = switchtupleunion(atype)
@@ -172,7 +159,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         if !fullmatch
             # also need an edge to the method table in case something gets
             # added that did not intersect with any existing method
-            add_mt_backedge!(ftname.mt, atype, sv)
+            add_mt_backedge!(mt, atype, sv)
         end
     end
     #print("=> ", rettype, "\n")
