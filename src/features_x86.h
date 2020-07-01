@@ -56,11 +56,31 @@ JL_FEATURE_DEF(avx512vl, 32 * 2 + 31, 0)
 JL_FEATURE_DEF(prefetchwt1, 32 * 3 + 0, 0)
 JL_FEATURE_DEF(avx512vbmi, 32 * 3 + 1, 0)
 JL_FEATURE_DEF(pku, 32 * 3 + 4, 0) // ospke
+JL_FEATURE_DEF(waitpkg, 32 * 3 + 5, 0)
+JL_FEATURE_DEF(avx512vbmi2, 32 * 3 + 6, 0)
+JL_FEATURE_DEF(shstk, 32 * 3 + 7, 0)
+JL_FEATURE_DEF(gfni, 32 * 3 + 8, 0)
+JL_FEATURE_DEF(vaes, 32 * 3 + 9, 0)
+JL_FEATURE_DEF(vpclmulqdq, 32 * 3 + 10, 0)
+JL_FEATURE_DEF(avx512vnni, 32 * 3 + 11, 0)
+JL_FEATURE_DEF(avx512bitalg, 32 * 3 + 12, 0)
 JL_FEATURE_DEF(avx512vpopcntdq, 32 * 3 + 14, 0)
+JL_FEATURE_DEF(rdpid, 32 * 3 + 22, 0)
+JL_FEATURE_DEF(cldemote, 32 * 3 + 25, 0)
+JL_FEATURE_DEF(movdiri, 32 * 3 + 27, 0)
+JL_FEATURE_DEF(movdir64b, 32 * 3 + 28, 0)
+JL_FEATURE_DEF(enqcmd, 32 * 3 + 29, 90000)
 
 // EAX=7,ECX=0: EDX
 // JL_FEATURE_DEF(avx5124vnniw, 32 * 4 + 2, ?????)
 // JL_FEATURE_DEF(avx5124fmaps, 32 * 4 + 3, ?????)
+JL_FEATURE_DEF(avx512vp2intersect, 32 * 4 + 8, 90000)
+JL_FEATURE_DEF(serialize, 32 * 4 + 14, 110000)
+JL_FEATURE_DEF(tsxldtrk, 32 * 4 + 16, 110000)
+JL_FEATURE_DEF(pconfig, 32 * 4 + 18, 0)
+JL_FEATURE_DEF_NAME(amx_bf16, 32 * 4 + 22, 110000, "amx-bf16")
+JL_FEATURE_DEF_NAME(amx_tile, 32 * 4 + 24, 110000, "amx-tile")
+JL_FEATURE_DEF_NAME(amx_int8, 32 * 4 + 25, 110000, "amx-int8")
 
 // EAX=0x80000001: ECX
 // ignore sahf on 32bit x86 since it is required
@@ -85,5 +105,12 @@ JL_FEATURE_DEF(xsaves, 32 * 7 + 3, 0)
 
 // EAX=0x80000008: EBX
 JL_FEATURE_DEF(clzero, 32 * 8 + 0, 0)
+JL_FEATURE_DEF(wbnoinvd, 32 * 8 + 9, 0)
+
+// EAX=7,ECX=1: EAX
+JL_FEATURE_DEF(avx512bf16, 32 * 9 + 5, 90000)
+
+// EAX=0x14,ECX=0: EBX
+JL_FEATURE_DEF(ptwrite, 32 * 10 + 4, 0)
 
 #undef JL_X86_64ONLY_VER
