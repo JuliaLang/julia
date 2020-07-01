@@ -195,7 +195,7 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"generic", CPU::generic, CPU::generic, 0, Feature::generic},
     {"bonnell", CPU::intel_atom_bonnell, CPU::generic, 0, Feature::bonnell},
     {"silvermont", CPU::intel_atom_silvermont, CPU::generic, 0, Feature::silvermont},
-    {"goldmont", CPU::intel_atom_goldmont, CPU::generic, 50000, Feature::goldmont},
+    {"goldmont", CPU::intel_atom_goldmont, CPU::generic, 0, Feature::goldmont},
     {"core2", CPU::intel_core2, CPU::generic, 0, Feature::core2},
     {"yonah", CPU::intel_yonah, CPU::generic, 0, Feature::yonah},
     {"prescott", CPU::intel_prescott, CPU::generic, 0, Feature::prescott},
@@ -210,8 +210,7 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"skylake", CPU::intel_corei7_skylake, CPU::generic, 0, Feature::skylake},
     {"knl", CPU::intel_knights_landing, CPU::generic, 0, Feature::knl},
     {"skylake-avx512", CPU::intel_corei7_skylake_avx512, CPU::generic, 0, Feature::skx},
-    {"cannonlake", CPU::intel_corei7_cannonlake, CPU::intel_corei7_skylake_avx512, 40000,
-     Feature::cannonlake},
+    {"cannonlake", CPU::intel_corei7_cannonlake, CPU::generic, 0, Feature::cannonlake},
 
     {"athlon64", CPU::amd_athlon_64, CPU::generic, 0, Feature::generic},
     {"athlon-fx", CPU::amd_athlon_fx, CPU::generic, 0, Feature::generic},
