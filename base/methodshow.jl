@@ -240,9 +240,10 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     end
     n = rest = 0
     local last
-    last_shown_line_infos = get(io, :last_shown_line_infos, Tuple{String,Int}[])
 
-    resize!(last_shown_line_infos, 0)
+    last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
+    last_shown_line_infos === nothing || empty!(last_shown_line_infos)
+
     for meth in ms
         if max==-1 || n<max
             n += 1
@@ -250,7 +251,9 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
             print(io, "[$n] ")
             show(io, meth)
             file, line = updated_methodloc(meth)
-            push!(last_shown_line_infos, (string(file), line))
+            if last_shown_line_infos !== nothing
+                push!(last_shown_line_infos, (string(file), line))
+            end
         else
             rest += 1
             last = meth
@@ -374,8 +377,8 @@ show(io::IO, mime::MIME"text/html", mt::Core.MethodTable) = show(io, mime, Metho
 
 # pretty-printing of AbstractVector{Method}
 function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
-    last_shown_line_infos = get(io, :last_shown_line_infos, Tuple{String,Int}[])
-    resize!(last_shown_line_infos, 0)
+    last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
+    last_shown_line_infos === nothing || empty!(last_shown_line_infos)
     first = true
     for (i, m) in enumerate(mt)
         first || println(io)
@@ -383,7 +386,9 @@ function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
         print(io, "[$(i)] ")
         show(io, m)
         file, line = updated_methodloc(m)
-        push!(last_shown_line_infos, (string(file), line))
+        if last_shown_line_infos !== nothing
+            push!(last_shown_line_infos, (string(file), line))
+        end
     end
 end
 

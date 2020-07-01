@@ -759,7 +759,7 @@ end
 
 function show_backtrace(io::IO, t::Vector)
     if haskey(io, :last_shown_line_infos)
-        resize!(io[:last_shown_line_infos], 0)
+        empty!(io[:last_shown_line_infos])
     end
 
     # t is a pre-processed backtrace (ref #12856)
