@@ -34,7 +34,7 @@ Any
 ```
 
 !!! compat "Julia 1.3"
-  This function is exported as of Julia 1.3.
+    This function is exported as of Julia 1.3.
 """
 nonmissingtype(::Type{T}) where {T} = Core.Compiler.typesubtract(T, Missing)
 
