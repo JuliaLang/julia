@@ -228,13 +228,23 @@ end
 
 # setup_stdio for AbstractPipe
 let out = Pipe(),
-    proc = run(pipeline(`$exename --startup-file=no -e 'println(getpid())'`, stdout=IOContext(out, :foo => :bar)), wait=false)
-    # < don't block here before getpid call >
-    pid = getpid(proc)
+    proc = run(pipeline(`$echocmd "Hello World"`, stdout=IOContext(out,stdout)), wait=false)
     close(out.in)
-    @test parse(Int32, read(out, String)) === pid > 1
+    @test read(out, String) == "Hello World\n"
     @test success(proc)
-    @test_throws Base.IOError getpid(proc)
+end
+
+# Test `getpid()` on processes, but not on Windows, since our exe wrapper interferes with this test
+if !Sys.iswindows()
+    let out = Pipe(),
+        proc = run(pipeline(`$exename --startup-file=no -e 'println(getpid())'`, stdout=IOContext(out, :foo => :bar)), wait=false)
+        # < don't block here before getpid call >
+        pid = getpid(proc)
+        close(out.in)
+        @test parse(Int32, read(out, String)) === pid > 1
+        @test success(proc)
+        @test_throws Base.IOError getpid(proc)
+    end
 end
 
 # issue #5904
