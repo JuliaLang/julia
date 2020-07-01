@@ -178,10 +178,77 @@ end
     end
 end
 
+@testset "Finally handling with exception stacks" begin
+    # The lowering of finally is quite subtle when combined with break or
+    # return because each finally block may be entered via multiple code paths
+    # (eg, different occurrences of return), and these code paths must diverge
+    # again once the finally block has completed. To complicate matters
+    # further, the return code path must thread through every nested finally
+    # block before actually returning, all the while preserving the information
+    # about which variable to return.
+
+    # Issue #34579
+    (()-> begin
+        try
+            throw("err")
+        catch
+            # Explicit return => exception should be popped before finally block
+            return
+        finally
+            @test length(Base.catch_stack()) == 0
+        end
+    end)()
+    @test length(Base.catch_stack()) == 0
+
+    while true
+        try
+            error("err1")
+        catch
+            try
+                # Break target is outside catch block, but finally is inside =>
+                # exception should not be popped inside finally block
+                break
+            finally
+                @test length(Base.catch_stack()) == 1
+            end
+        end
+    end
+    @test length(Base.catch_stack()) == 0
+
+    # Nested finally handling with `return`: each finally block should observe
+    # only the active exceptions as according to its nesting depth.
+    (() -> begin
+        try
+            try
+                error("err1")
+            catch
+                try
+                    try
+                        error("err2")
+                    catch
+                        # This return needs to thread control flow through
+                        # multiple finally blocks in the linearized IR.
+                        return
+                    end
+                finally
+                    # At this point err2 is dealt with
+                    @test length(Base.catch_stack()) == 1
+                    @test Base.catch_stack()[1][1] == ErrorException("err1")
+                end
+            end
+        finally
+            # At this point err1 is dealt with
+            @test length(Base.catch_stack()) == 0
+        end
+    end)()
+    @test length(Base.catch_stack()) == 0
+end
+
 @testset "Deep exception stacks" begin
-    # Generate deep exception stack with recursive handlers Note that if you
-    # let this overflow the program stack (not the exception stack) julia will
-    # crash. See #28577
+    # Generate deep exception stack with recursive handlers.
+    #
+    # (Note that if you let this overflow the program stack (not the exception
+    # stack) julia will crash. See #28577.)
     function test_exc_stack_deep(n)
         n != 1 || error("RootCause")
         try
