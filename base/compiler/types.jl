@@ -189,3 +189,7 @@ lock_mi_inference(ni::NativeInterpreter, mi::MethodInstance) = (mi.inInference =
     See lock_mi_inference
 """
 unlock_mi_inference(ni::NativeInterpreter, mi::MethodInstance) = (mi.inInference = false; nothing)
+
+may_optimize(ni::NativeInterpreter) = true
+may_compress(ni::NativeInterpreter) = true
+may_discard_trees(ni::NativeInterpreter) = true
