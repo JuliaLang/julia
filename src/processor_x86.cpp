@@ -60,6 +60,8 @@ enum class CPU : uint32_t {
     intel_atom_bonnell,
     intel_atom_silvermont,
     intel_atom_goldmont,
+    intel_atom_goldmont_plus,
+    intel_atom_tremont,
     intel_core2,
     intel_core2_penryn,
     intel_yonah,
@@ -71,8 +73,14 @@ enum class CPU : uint32_t {
     intel_corei7_broadwell,
     intel_corei7_skylake,
     intel_corei7_skylake_avx512,
+    intel_corei7_cascadelake,
+    intel_corei7_cooperlake,
     intel_corei7_cannonlake,
+    intel_corei7_icelake_client,
+    intel_corei7_icelake_server,
+    intel_corei7_tigerlake,
     intel_knights_landing,
+    intel_knights_mill,
 
     amd_fam10h,
     amd_athlon_fx,
@@ -90,6 +98,7 @@ enum class CPU : uint32_t {
     amd_opteron_sse3,
     amd_barcelona,
     amd_znver1,
+    amd_znver2,
 };
 
 static constexpr size_t feature_sz = 11;
@@ -165,27 +174,41 @@ static constexpr FeatureDep deps[] = {
 constexpr auto generic = get_feature_masks(cx16);
 constexpr auto bonnell = get_feature_masks(sse3, ssse3, cx16, movbe, sahf);
 constexpr auto silvermont = bonnell | get_feature_masks(sse41, sse42, popcnt,
-                                                        pclmul, aes, prfchw);
-constexpr auto goldmont = silvermont | get_feature_masks(sha, rdrnd, rdseed, xsave,
-                                                         xsaveopt, xsavec, xsaves, clflushopt);
+                                                        pclmul, prfchw, rdrnd);
+constexpr auto goldmont = silvermont | get_feature_masks(aes, sha, rdseed, xsave, xsaveopt,
+                                                         xsavec, xsaves, clflushopt, fsgsbase);
+constexpr auto goldmont_plus = goldmont | get_feature_masks(ptwrite, rdpid); // sgx
+constexpr auto tremont = goldmont_plus | get_feature_masks(clwb, gfni);
+constexpr auto knl = get_feature_masks(sse3, ssse3, sse41, sse42, cx16, sahf, popcnt,
+                                       aes, pclmul, avx, xsave, xsaveopt, rdrnd, f16c, fsgsbase,
+                                       avx2, bmi, bmi2, fma, lzcnt, movbe, adx, rdseed, prfchw,
+                                       avx512f, avx512er, avx512cd, avx512pf, prefetchwt1);
+constexpr auto knm = knl | get_feature_masks(avx512vpopcntdq);
 constexpr auto yonah = get_feature_masks(sse3);
 constexpr auto prescott = yonah;
 constexpr auto core2 = get_feature_masks(sse3, ssse3, cx16, sahf);
 constexpr auto nocona = get_feature_masks(sse3, cx16);
 constexpr auto penryn = nocona | get_feature_masks(ssse3, sse41, sahf);
 constexpr auto nehalem = penryn | get_feature_masks(sse42, popcnt);
-constexpr auto westmere = nehalem | get_feature_masks(aes, pclmul);
+constexpr auto westmere = nehalem | get_feature_masks(pclmul);
 constexpr auto sandybridge = westmere | get_feature_masks(avx, xsave, xsaveopt);
 constexpr auto ivybridge = sandybridge | get_feature_masks(rdrnd, f16c, fsgsbase);
 constexpr auto haswell = ivybridge | get_feature_masks(avx2, bmi, bmi2, fma, lzcnt, movbe);
 constexpr auto broadwell = haswell | get_feature_masks(adx, rdseed, prfchw);
-constexpr auto skylake = broadwell | get_feature_masks(rtm, xsavec, xsaves,
-                                                       clflushopt); // ignore sgx; hle
-constexpr auto knl = broadwell | get_feature_masks(avx512f, avx512er, avx512cd, avx512pf,
-                                                   prefetchwt1);
+constexpr auto skylake = broadwell | get_feature_masks(aes, xsavec, xsaves, clflushopt); // sgx
 constexpr auto skx = skylake | get_feature_masks(avx512f, avx512cd, avx512dq, avx512bw, avx512vl,
                                                  pku, clwb);
-constexpr auto cannonlake = skx | get_feature_masks(avx512vbmi, avx512ifma, sha);
+constexpr auto cascadelake = skx | get_feature_masks(avx512vnni);
+constexpr auto cooperlake = cascadelake | get_feature_masks(avx512bf16);
+constexpr auto cannonlake = skylake | get_feature_masks(avx512f, avx512cd, avx512dq, avx512bw,
+                                                        avx512vl, pku, avx512vbmi, avx512ifma,
+                                                        sha); // sgx
+constexpr auto icelake = cannonlake | get_feature_masks(avx512bitalg, vaes, avx512vbmi2,
+                                                        vpclmulqdq, avx512vpopcntdq,
+                                                        gfni, clwb, rdpid);
+constexpr auto icelake_server = icelake | get_feature_masks(pconfig, wbnoinvd);
+constexpr auto tigerlake = icelake | get_feature_masks(avx512vp2intersect, movdiri,
+                                                       movdir64b, shstk);
 
 constexpr auto k8_sse3 = get_feature_masks(sse3, cx16);
 constexpr auto amdfam10 = k8_sse3 | get_feature_masks(sse4a, lzcnt, popcnt, sahf);
@@ -200,8 +223,9 @@ constexpr auto bdver2 = bdver1 | get_feature_masks(f16c, bmi, tbm, fma);
 constexpr auto bdver3 = bdver2 | get_feature_masks(xsaveopt, fsgsbase);
 constexpr auto bdver4 = bdver3 | get_feature_masks(avx2, bmi2, mwaitx, movbe, rdrnd);
 
-constexpr auto znver1 = haswell | get_feature_masks(adx, clflushopt, clzero, mwaitx, prfchw,
+constexpr auto znver1 = haswell | get_feature_masks(adx, aes, clflushopt, clzero, mwaitx, prfchw,
                                                     rdseed, sha, sse4a, xsavec, xsaves);
+constexpr auto znver2 = znver1 | get_feature_masks(clwb, rdpid, wbnoinvd);
 
 }
 
@@ -210,6 +234,8 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"bonnell", CPU::intel_atom_bonnell, CPU::generic, 0, Feature::bonnell},
     {"silvermont", CPU::intel_atom_silvermont, CPU::generic, 0, Feature::silvermont},
     {"goldmont", CPU::intel_atom_goldmont, CPU::generic, 0, Feature::goldmont},
+    {"goldmont-plus", CPU::intel_atom_goldmont_plus, CPU::generic, 0, Feature::goldmont_plus},
+    {"tremont", CPU::intel_atom_tremont, CPU::generic, 0, Feature::tremont},
     {"core2", CPU::intel_core2, CPU::generic, 0, Feature::core2},
     {"yonah", CPU::intel_yonah, CPU::generic, 0, Feature::yonah},
     {"prescott", CPU::intel_prescott, CPU::generic, 0, Feature::prescott},
@@ -223,8 +249,17 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"broadwell", CPU::intel_corei7_broadwell, CPU::generic, 0, Feature::broadwell},
     {"skylake", CPU::intel_corei7_skylake, CPU::generic, 0, Feature::skylake},
     {"knl", CPU::intel_knights_landing, CPU::generic, 0, Feature::knl},
+    {"knm", CPU::intel_knights_mill, CPU::generic, 0, Feature::knm},
     {"skylake-avx512", CPU::intel_corei7_skylake_avx512, CPU::generic, 0, Feature::skx},
+    {"cascadelake", CPU::intel_corei7_cascadelake, CPU::generic, 0, Feature::cascadelake},
+    {"cooperlake", CPU::intel_corei7_cooperlake, CPU::intel_corei7_cascadelake,
+     90000, Feature::cooperlake},
     {"cannonlake", CPU::intel_corei7_cannonlake, CPU::generic, 0, Feature::cannonlake},
+    {"icelake-client", CPU::intel_corei7_icelake_client, CPU::generic, 0, Feature::icelake},
+    {"icelake-server", CPU::intel_corei7_icelake_server, CPU::generic, 0,
+     Feature::icelake_server},
+    {"tigerlake", CPU::intel_corei7_tigerlake, CPU::intel_corei7_icelake_client, 100000,
+     Feature::tigerlake},
 
     {"athlon64", CPU::amd_athlon_64, CPU::generic, 0, Feature::generic},
     {"athlon-fx", CPU::amd_athlon_fx, CPU::generic, 0, Feature::generic},
@@ -247,6 +282,7 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"bdver4", CPU::amd_bdver4, CPU::generic, 0, Feature::bdver4},
 
     {"znver1", CPU::amd_znver1, CPU::generic, 0, Feature::znver1},
+    {"znver2", CPU::amd_znver2, CPU::amd_znver1, 90000, Feature::znver2},
 };
 static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 
@@ -351,11 +387,37 @@ static CPU get_intel_processor_name(uint32_t family, uint32_t model, uint32_t br
         case 0x5e: // Skylake desktop
         case 0x8e: // Kaby Lake mobile
         case 0x9e: // Kaby Lake desktop
+        case 0xa5: // Comet Lake-H/S
+        case 0xa6: // Comet Lake-U
             return CPU::intel_corei7_skylake;
 
             // Skylake Xeon:
         case 0x55:
-            return CPU::intel_corei7_skylake;
+            if (test_nbit(features, Feature::avx512bf16))
+                return CPU::intel_corei7_cooperlake;
+            if (test_nbit(features, Feature::avx512vnni))
+                return CPU::intel_corei7_cascadelake;
+            return CPU::intel_corei7_skylake_avx512;
+
+            // Cannonlake:
+        case 0x66:
+            return CPU::intel_corei7_cannonlake;
+
+            // Icelake:
+        case 0x7d:
+        case 0x7e:
+        case 0x9d:
+            return CPU::intel_corei7_icelake_client;
+
+            // Icelake Xeon:
+        case 0x6a:
+        case 0x6c:
+            return CPU::intel_corei7_icelake_server;
+
+            // Tiger Lake
+        case 0x8c:
+        case 0x8d:
+            return CPU::intel_corei7_tigerlake;
 
         case 0x1c: // Most 45 nm Intel Atom processors
         case 0x26: // 45 nm Atom Lincroft
@@ -368,18 +430,29 @@ static CPU get_intel_processor_name(uint32_t family, uint32_t model, uint32_t br
         case 0x37:
         case 0x4a:
         case 0x4d:
-        case 0x5a:
         case 0x5d:
-        case 0x4c: // really airmont
+            // Airmont
+        case 0x4c:
+        case 0x5a:
+        case 0x75:
             return CPU::intel_atom_silvermont;
 
             // Goldmont:
         case 0x5c:
         case 0x5f:
             return CPU::intel_atom_goldmont;
+        case 0x7a:
+            return CPU::intel_atom_goldmont_plus;
+        case 0x86:
+        case 0x96:
+        case 0x9c:
+            return CPU::intel_atom_tremont;
 
         case 0x57:
             return CPU::intel_knights_landing;
+
+        case 0x85:
+            return CPU::intel_knights_mill;
 
         default:
             return CPU::generic;
@@ -454,8 +527,6 @@ static CPU get_amd_processor_name(uint32_t family, uint32_t model, const uint32_
     case 20:
         return CPU::amd_btver1;
     case 21:
-        if (!test_nbit(features, Feature::avx))
-            return CPU::amd_btver1;
         if (model >= 0x50 && model <= 0x6f)
             return CPU::amd_bdver4;
         if (model >= 0x30 && model <= 0x3f)
@@ -466,11 +537,11 @@ static CPU get_amd_processor_name(uint32_t family, uint32_t model, const uint32_
             return CPU::amd_bdver1;
         return CPU::amd_btver1; // fallback
     case 22:
-        if (!test_nbit(features, Feature::avx))
-            return CPU::amd_btver1;
         return CPU::amd_btver2;
     case 23:
-        if (test_nbit(features, Feature::adx))
+        if ((model >= 0x30 && model <= 0x3f) || model == 0x71)
+            return CPU::amd_znver2;
+        if (model <= 0x0f)
             return CPU::amd_znver1;
         return CPU::amd_btver1;
     }
@@ -810,9 +881,10 @@ static void ensure_jit_target(bool imaging)
         // The most useful one in general...
         t.en.flags |= JL_TARGET_CLONE_LOOP;
         auto &features0 = jit_targets[t.base].en.features;
-        // Special case for KNL since it's so different
+        // Special case for KNL/KNM since they're so different
         if (!(t.dis.flags & JL_TARGET_CLONE_ALL)) {
-            if (t.name == "knl" && jit_targets[t.base].name != "knl") {
+            if ((t.name == "knl" || t.name == "knm") &&
+                jit_targets[t.base].name != "knl" && jit_targets[t.base].name != "knm") {
                 t.en.flags |= JL_TARGET_CLONE_ALL;
                 break;
             }
