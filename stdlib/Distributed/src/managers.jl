@@ -51,8 +51,7 @@ end
 """
     addprocs(machines; tunnel=false, sshflags=\`\`, max_parallel=10, kwargs...) -> List of process identifiers
 
-Add processes on remote machines via SSH. Requires `julia` to be installed in the same
-location on each node, or to be available via a shared file system.
+Add processes on remote machines via SSH. See `exename` to set the path to the `julia` installation on remote machines.
 
 `machines` is a vector of machine specifications. Workers are started for each specification.
 
