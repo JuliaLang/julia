@@ -1070,7 +1070,6 @@ end
     sort!(A; dims::Integer, alg::Algorithm=defalg(A), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort the multidimensional array `A` along dimension `dims`.
-See [`sort!`](@ref) for a description of possible keyword arguments.
 
 To sort slices of an array, refer to [`sortslices`](@ref).
 
