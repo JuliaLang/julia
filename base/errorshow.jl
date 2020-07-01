@@ -552,7 +552,7 @@ const update_stackframes_callback = Ref{Function}(identity)
 function replaceuserpath(str)
     str = replace(str, homedir() => "~")
     # seems to be necessary for some paths with small letter drive c:// etc
-    replace(str, lowercasefirst(homedir()) => "~")
+    str = replace(str, lowercasefirst(homedir()) => "~")
     return str
 end
 
@@ -562,7 +562,7 @@ const STACKTRACE_MODULECOLORS = [:light_blue, :light_yellow,
 stacktrace_expand_basepaths()::Bool =
     tryparse(Bool, get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "false")) === true
 stacktrace_contract_userdir()::Bool =
-    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_CONTRACT_USERDIR", "true")) === true
+    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_CONTRACT_HOMEDIR", "true")) === true
 stacktrace_linebreaks()::Bool =
     tryparse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "false")) === true
 

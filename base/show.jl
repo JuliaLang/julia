@@ -1787,7 +1787,7 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
     nothing
 end
 
-function printstacktrace(io, s...; color, bold=false)
+function print_within_stacktrace(io, s...; color, bold=false)
     if get(io, :backtrace, false)::Bool
         printstyled(io, s...; color, bold)
     else
@@ -1810,16 +1810,16 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
     sig = sig.parameters
     show_signature_function(env_io, sig[1], demangle)
     first = true
-    printstacktrace(io, "(", color=:light_black)
+    print_within_stacktrace(io, "(", color=:light_black)
     show_argnames = argnames !== nothing && length(argnames) == length(sig)
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
         first = false
         if show_argnames
-            printstacktrace(io, argnames[i]; bold=true, color=:light_black)
+            print_within_stacktrace(io, argnames[i]; bold=true, color=:light_black)
         end
         print(io, "::")
-        printstacktrace(env_io, sig[i]; color=:light_black)
+        print_within_stacktrace(env_io, sig[i]; color=:light_black)
     end
     if kwargs !== nothing
         print(io, "; ")
@@ -1827,12 +1827,12 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
         for (k, t) in kwargs
             first || print(io, ", ")
             first = false
-            printstacktrace(io, k; bold=true, color=:light_black)
+            print_within_stacktrace(io, k; bold=true, color=:light_black)
             print(io, "::")
-            printstacktrace(io, t; color=:light_black)
+            print_within_stacktrace(io, t; color=:light_black)
         end
     end
-    printstacktrace(io, ")", color=:light_black)
+    print_within_stacktrace(io, ")", color=:light_black)
     show_method_params(io, tv)
     nothing
 end
