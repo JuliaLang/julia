@@ -79,7 +79,6 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     return true
 end
 
-
 function CodeInstance(result::InferenceResult, min_valid::UInt, max_valid::UInt,
                       may_compress=true, allow_discard_tree=true)
     inferred_result = result.src
@@ -148,7 +147,8 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult, min
 
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
-        code_cache(interp)[result.linfo] = CodeInstance(result, min_valid, max_valid)
+        code_cache(interp)[result.linfo] = CodeInstance(result, min_valid, max_valid,
+            may_compress(interp), may_discard_trees(interp))
     end
     unlock_mi_inference(interp, result.linfo)
     nothing
@@ -165,12 +165,15 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     else
         # annotate fulltree with type information
         type_annotate!(me)
-        run_optimizer = (me.cached || me.parent !== nothing)
+        can_optimize = may_optimize(interp)
+        run_optimizer = (me.cached || me.parent !== nothing) && can_optimize
         if run_optimizer
             # construct the optimizer for later use, if we're building this IR to cache it
             # (otherwise, we'll run the optimization passes later, outside of inference)
             opt = OptimizationState(me, OptimizationParams(interp), interp)
             me.result.src = opt
+        elseif !can_optimize
+            me.result.src = me.src
         end
     end
     me.result.result = me.bestguess
