@@ -840,6 +840,12 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
     features.push_back("+sse2");
     features.push_back("+mmx");
     features.push_back("+fxsr");
+#ifdef _CPU_X86_64_
+    // This is required to make LLVM happy if LLVM's feature based CPU arch guess
+    // returns a value that may not have 64bit support.
+    // This can happen with virtualization.
+    features.push_back("+64bit");
+#endif
     return std::make_pair(std::move(name), std::move(features));
 }
 
