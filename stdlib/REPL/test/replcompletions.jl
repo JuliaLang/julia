@@ -101,6 +101,9 @@ test_scomplete(s) =  map_completion_text(shell_completions(s,lastindex(s)))
 test_bslashcomplete(s) =  map_completion_text(bslash_completions(s,lastindex(s))[2])
 test_complete_context(s) =  map_completion_text(completions(s,lastindex(s),Main.CompletionFoo))
 
+module M32377 end
+test_complete_32377(s) = map_completion_text(completions(s,lastindex(s), M32377))
+
 let s = ""
     c, r = test_complete(s)
     @test "CompletionFoo" in c
@@ -109,10 +112,10 @@ let s = ""
 end
 
 let s = "using REP"
-    c, r = test_complete(s)
+    c, r = test_complete_32377(s)
     @test count(isequal("REPL"), c) == 1
     # issue #30234
-    @test !Base.isbindingresolved(Main, :tanh)
+    @test !Base.isbindingresolved(M32377, :tanh)
 end
 
 let s = "Comp"
