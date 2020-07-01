@@ -258,7 +258,7 @@ function givensAlgorithm(f::T, g::T) where T
     throw(MethodError(givensAlgorithm, (fs, gs)))
 
     c, s, r = givensAlgorithm(fs, gs)
-    c, s, r * oneunit(T)
+    return c, s, r * oneunit(T)
 end
 
 givensAlgorithm(f, g) = givensAlgorithm(promote(float(f), float(g))...)
