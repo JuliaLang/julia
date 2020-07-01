@@ -79,7 +79,6 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     return true
 end
 
-
 function CodeInstance(result::InferenceResult, min_valid::UInt, max_valid::UInt,
                       may_compress=true, allow_discard_tree=true)
     inferred_result = result.src
