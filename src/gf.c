@@ -2507,6 +2507,7 @@ struct ml_matches_env {
     struct typemap_intersection_env match;
     int intersections;
     size_t world;
+    int lim;
     // results:
     jl_value_t *t; // array of svec(argtypes, params, Method, fully-covers)
     size_t min_valid;
@@ -2540,6 +2541,11 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
             closure->max_valid = ml->max_world;
     }
     jl_method_t *meth = ml->func.method;
+    if (closure->lim >= 0 && jl_is_dispatch_tupletype(meth->sig)) {
+        if (closure->lim == 0)
+            return 0;
+        closure->lim--;
+    }
     closure->matc = jl_svec(4, closure->match.ti, closure->match.env, meth, closure->match.issubty ? jl_true : jl_false);
     size_t len = jl_array_len(closure->t);
     if (len == 0) {
@@ -2576,7 +2582,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
         else
             va = NULL;
     }
-    struct ml_matches_env env = {{ml_matches_visitor, (jl_value_t*)type, va}, intersections, world};
+    struct ml_matches_env env = {{ml_matches_visitor, (jl_value_t*)type, va}, intersections, world, lim};
     env.match.ti = NULL;
     env.match.env = jl_emptysvec;
     env.t = jl_an_empty_vec_any;
@@ -2639,7 +2645,10 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
             return env.t;
         }
     }
-    jl_typemap_intersection_visitor(defs, offs, &env.match);
+    if (!jl_typemap_intersection_visitor(defs, offs, &env.match)) {
+        JL_GC_POP();
+        return jl_false;
+    }
     *min_valid = env.min_valid;
     *max_valid = env.max_valid;
     // done with many of these values now
