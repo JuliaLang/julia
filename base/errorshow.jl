@@ -538,15 +538,6 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     end
 end
 
-function show_trace_entry(io, frame, n; prefix = "")
-    if haskey(io, :LAST_SHOWN_LINE_INFOS)
-        push!(io[:LAST_SHOWN_LINE_INFOS], (string(frame.file), frame.line))
-    end
-    print(io, "\n", prefix)
-    show(io, frame, full_path=true)
-    n > 1 && print(io, " (repeats ", n, " times)")
-end
-
 # In case the line numbers in the source code have changed since the code was compiled,
 # allow packages to set a callback function that corrects them.
 # (Used by Revise and perhaps other packages.)
@@ -558,9 +549,44 @@ end
 # replace `sf` as needed.
 const update_stackframes_callback = Ref{Function}(identity)
 
+function replaceuserpath(str)
+    str = replace(str, homedir() => "~")
+    # seems to be necessary for some paths with small letter drive c:// etc
+    str = replace(str, lowercasefirst(homedir()) => "~")
+    return str
+end
+
+const STACKTRACE_MODULECOLORS = [:light_blue, :light_yellow,
+        :light_magenta, :light_green, :light_cyan, :light_red,
+        :blue, :yellow, :magenta, :green, :cyan, :red]
+stacktrace_expand_basepaths()::Bool =
+    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "false")) === true
+stacktrace_contract_userdir()::Bool =
+    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_CONTRACT_HOMEDIR", "true")) === true
+stacktrace_linebreaks()::Bool =
+    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "false")) === true
+
+function show_full_backtrace(io::IO, trace; print_linebreaks::Bool)
+    n = length(trace)
+    ndigits_max = ndigits(n)
+
+    modulecolordict = Dict{Module, Symbol}()
+    modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
+
+    println(io, "\nStacktrace:")
+
+    for (i, frame) in enumerate(trace)
+        print_stackframe(io, i, frame, 1, ndigits_max, modulecolordict, modulecolorcycler)
+        if i < n
+            println(io)
+            print_linebreaks && println(io)
+        end
+    end
+end
+
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
 
-function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
+function show_reduced_backtrace(io::IO, t::Vector)
     recorded_positions = IdDict{UInt, Vector{Int}}()
     #= For each frame of hash h, recorded_positions[h] is the list of indices i
     such that hash(t[i-1]) == h, ie the list of positions in which the
@@ -606,32 +632,133 @@ function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
 
     try invokelatest(update_stackframes_callback[], displayed_stackframes) catch end
 
+    println(io, "\nStacktrace:")
+
+    ndigits_max = ndigits(length(t))
+
+    modulecolordict = Dict{Module, Symbol}()
+    modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
+
     push!(repeated_cycle, (0,0,0)) # repeated_cycle is never empty
     frame_counter = 1
     for i in 1:length(displayed_stackframes)
         (frame, n) = displayed_stackframes[i]
-        if with_prefix
-            show_trace_entry(io, frame, n, prefix = string(" [", frame_counter, "] "))
-        else
-            show_trace_entry(io, frame, n)
+
+        print_stackframe(io, frame_counter, frame, n, ndigits_max, modulecolordict, modulecolorcycler)
+
+        if i < length(displayed_stackframes)
+            println(io)
+            stacktrace_linebreaks() && println(io)
         end
+
         while repeated_cycle[1][1] == i # never empty because of the initial (0,0,0)
             cycle_length = repeated_cycle[1][2]
             repetitions = repeated_cycle[1][3]
             popfirst!(repeated_cycle)
-            print(io, "\n ... (the last ", cycle_length, " lines are repeated ",
-                  repetitions, " more time", repetitions>1 ? "s)" : ")")
+            printstyled(io,
+                "--- the last ", cycle_length, " lines are repeated ",
+                  repetitions, " more time", repetitions>1 ? "s" : "", " ---", color = :light_black)
+            if i < length(displayed_stackframes)
+                println(io)
+                stacktrace_linebreaks() && println(io)
+            end
             frame_counter += cycle_length * repetitions
         end
         frame_counter += 1
     end
 end
 
+
+# Print a stack frame where the module color is determined by looking up the parent module in
+# `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
+# from `modulecolorcycler`.
+function print_stackframe(io, i, frame, n, digit_align_width, modulecolordict, modulecolorcycler)
+    m = Base.parentmodule(frame)
+    if m !== nothing
+        while parentmodule(m) !== m
+            pm = parentmodule(m)
+            pm == Main && break
+            m = pm
+        end
+        if !haskey(modulecolordict, m)
+            modulecolordict[m] = popfirst!(modulecolorcycler)
+        end
+        modulecolor = modulecolordict[m]
+    else
+        modulecolor = :default
+    end
+    print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
+end
+
+
+# Print a stack frame where the module color is set manually with `modulecolor`.
+function print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
+    file, line = string(frame.file), frame.line
+    stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
+    stacktrace_contract_userdir() && (file = replaceuserpath(file))
+
+    # Used by the REPL to make it possible to open
+    # the location of a stackframe/method in the editor.
+    if haskey(io, :LAST_SHOWN_LINE_INFOS)
+        push!(io[:LAST_SHOWN_LINE_INFOS], (string(frame.file), frame.line))
+    end
+
+    inlined = getfield(frame, :inlined)
+    modul = parentmodule(frame)
+
+    # frame number
+    print(io, " ", lpad("[" * string(i) * "]", digit_align_width + 2))
+    print(io, " ")
+
+    StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
+    if n > 1
+        printstyled(io, " (repeats $n times)"; color=:light_black)
+    end
+    println(io)
+
+    # @
+    printstyled(io, " " ^ (digit_align_width + 2) * "@ ", color = :light_black)
+
+    # module
+    if modul !== nothing
+        printstyled(io, modul, color = modulecolor)
+        print(io, " ")
+    end
+
+    # filepath
+    pathparts = splitpath(file)
+    folderparts = pathparts[1:end-1]
+    if !isempty(folderparts)
+        printstyled(io, joinpath(folderparts...) * (Sys.iswindows() ? "\\" : "/"), color = :light_black)
+    end
+
+    # filename, separator, line
+    # use escape codes for formatting, printstyled can't do underlined and color
+    # codes are bright black (90) and underlined (4)
+    function print_underlined(io::IO, s...)
+        colored = get(io, :color, false)::Bool
+        start_s = colored ? "\033[90;4m" : ""
+        end_s   = colored ? "\033[0m"    : ""
+        print(io, start_s, s..., end_s)
+    end
+    print_underlined(io, pathparts[end], ":", line)
+
+    # inlined
+    printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
+end
+
+
 function show_backtrace(io::IO, t::Vector)
     if haskey(io, :LAST_SHOWN_LINE_INFOS)
         resize!(io[:LAST_SHOWN_LINE_INFOS], 0)
     end
-    filtered = process_backtrace(t)
+
+    # t is a pre-processed backtrace (ref #12856)
+    if t isa Vector{Any}
+        filtered = t
+    else
+        filtered = process_backtrace(t)
+    end
     isempty(filtered) && return
 
     if length(filtered) == 1 && StackTraces.is_top_level_frame(filtered[1][1])
@@ -642,32 +769,18 @@ function show_backtrace(io::IO, t::Vector)
         end
     end
 
-    print(io, "\nStacktrace:")
-    if length(filtered) < BIG_STACKTRACE_SIZE
-        # Fast track: no duplicate stack frame detection.
-        try invokelatest(update_stackframes_callback[], filtered) catch end
-        frame_counter = 0
-        for (last_frame, n) in filtered
-            frame_counter += 1
-            show_trace_entry(IOContext(io, :backtrace => true), last_frame, n, prefix = string(" [", frame_counter, "] "))
-        end
+    if length(filtered) > BIG_STACKTRACE_SIZE
+        show_reduced_backtrace(IOContext(io, :backtrace => true), filtered)
         return
     end
 
-    show_reduced_backtrace(IOContext(io, :backtrace => true), filtered, true)
+    try invokelatest(update_stackframes_callback[], filtered) catch end
+    # process_backtrace returns a Vector{Tuple{Frame, Int}}
+    frames = first.(filtered)
+    show_full_backtrace(io, frames; print_linebreaks = stacktrace_linebreaks())
+    return
 end
 
-function show_backtrace(io::IO, t::Vector{Any})
-    # t is a pre-processed backtrace (ref #12856)
-    if length(t) < BIG_STACKTRACE_SIZE
-        try invokelatest(update_stackframes_callback[], t) catch end
-        for entry in t
-            show_trace_entry(io, entry...)
-        end
-    else
-        show_reduced_backtrace(io, t, false)
-    end
-end
 
 function is_kw_sorter_name(name::Symbol)
     sn = string(name)

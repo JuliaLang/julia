@@ -216,30 +216,28 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         elseif frame.func === top_level_scope_sym
             print(io, "top-level scope")
         else
-            color = get(io, :color, false) && get(io, :backtrace, false) ?
-                        Base.stackframe_function_color() :
-                        :nothing
-            printstyled(io, Base.demangle_function_name(string(frame.func)), color=color)
+            print(io, Base.demangle_function_name(string(frame.func)))
         end
     elseif frame.linfo isa MethodInstance
         def = frame.linfo.def
         if isa(def, Method)
             sig = frame.linfo.specTypes
+            argnames = Base.method_argnames(def)
             if def.nkw > 0
                 # rearrange call kw_impl(kw_args..., func, pos_args...) to func(pos_args...)
                 kwarg_types = Any[ fieldtype(sig, i) for i = 2:(1+def.nkw) ]
                 uw = Base.unwrap_unionall(sig)
                 pos_sig = Base.rewrap_unionall(Tuple{uw.parameters[(def.nkw+2):end]...}, sig)
-                kwnames = Base.method_argnames(def)[2:(def.nkw+1)]
+                kwnames = argnames[2:(def.nkw+1)]
                 for i = 1:length(kwnames)
                     str = string(kwnames[i])
                     if endswith(str, "...")
                         kwnames[i] = Symbol(str[1:end-3])
                     end
                 end
-                Base.show_tuple_as_call(io, def.name, pos_sig, true, zip(kwnames, kwarg_types))
+                Base.show_tuple_as_call(io, def.name, pos_sig, true, zip(kwnames, kwarg_types), argnames[def.nkw+2:end])
             else
-                Base.show_tuple_as_call(io, def.name, sig, true)
+                Base.show_tuple_as_call(io, def.name, sig, true, nothing, argnames)
             end
         else
             Base.show(io, frame.linfo)
@@ -249,18 +247,16 @@ function show_spec_linfo(io::IO, frame::StackFrame)
     end
 end
 
-function show(io::IO, frame::StackFrame; full_path::Bool=false)
+function show(io::IO, frame::StackFrame)
     show_spec_linfo(io, frame)
     if frame.file !== empty_sym
-        file_info = full_path ? string(frame.file) : basename(string(frame.file))
+        file_info = basename(string(frame.file))
         print(io, " at ")
-        Base.with_output_color(get(io, :color, false) && get(io, :backtrace, false) ? Base.stackframe_lineinfo_color() : :nothing, io) do io
-            print(io, file_info, ":")
-            if frame.line >= 0
-                print(io, frame.line)
-            else
-                print(io, "?")
-            end
+        print(io, file_info, ":")
+        if frame.line >= 0
+            print(io, frame.line)
+        else
+            print(io, "?")
         end
     end
     if frame.inlined

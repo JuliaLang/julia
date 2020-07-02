@@ -245,16 +245,6 @@ should have at the terminal.
 The formatting `Base.answer_color()` (default: normal, `"\033[0m"`) that output
 should have at the terminal.
 
-### `JULIA_STACKFRAME_LINEINFO_COLOR`
-
-The formatting `Base.stackframe_lineinfo_color()` (default: bold, `"\033[1m"`)
-that line info should have during a stack trace at the terminal.
-
-### `JULIA_STACKFRAME_FUNCTION_COLOR`
-
-The formatting `Base.stackframe_function_color()` (default: bold, `"\033[1m"`)
-that function calls should have during a stack trace at the terminal.
-
 ## Debugging and profiling
 
 ### `JULIA_DEBUG`
