@@ -731,9 +731,9 @@ end
 
 # Records nothing, and throws an error immediately whenever a Fail or
 # Error occurs. Takes no action in the event of a Pass or Broken result
-record(ts::FallbackTestSet, res::Union{Pass,Broken}) = res
-function record(ts::FallbackTestSet, res::Union{Fail,Error})
-    println(res)
+record(ts::FallbackTestSet, t::Union{Pass,Broken}) = t
+function record(ts::FallbackTestSet, t::Union{Fail,Error})
+    println(t)
     throw(FallbackTestSetException("There was an error during testing"))
 end
 # We don't need to do anything as we don't record anything
@@ -757,33 +757,33 @@ end
 DefaultTestSet(desc) = DefaultTestSet(desc, [], 0, false)
 
 # For a broken result, simply store the result
-record(ts::DefaultTestSet, res::Broken) = (push!(ts.results, res); res)
+record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
 # For a passed result, do not store the result since it uses a lot of memory
-record(ts::DefaultTestSet, res::Pass) = (ts.n_passed += 1; res)
+record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
 
 # For the other result types, immediately print the error message
 # but do not terminate. Print a backtrace.
-function record(ts::DefaultTestSet, res::Union{Fail, Error})
+function record(ts::DefaultTestSet, t::Union{Fail, Error})
     if myid() == 1
         printstyled(ts.description, ": ", color=:white)
         # don't print for interrupted tests
-        if !(res isa Error) || res.test_type !== :test_interrupted
-            print(res)
-            if !isa(res, Error) # if not gets printed in the show method
+        if !(t isa Error) || t.test_type !== :test_interrupted
+            print(t)
+            if !isa(t, Error) # if not gets printed in the show method
                 Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
             end
             println()
         end
     end
-    push!(ts.results, res)
-    isa(res, Error) || backtrace()
-    return res
+    push!(ts.results, t)
+    isa(t, Error) || backtrace()
+    return t
 end
 
 # When a DefaultTestSet finishes, it records itself to its parent
 # testset, if there is one. This allows for recursive printing of
 # the results at the end of the tests
-record(ts::DefaultTestSet, res::AbstractTestSet) = push!(ts.results, res)
+record(ts::DefaultTestSet, t::AbstractTestSet) = push!(ts.results, t)
 
 @specialize
 
