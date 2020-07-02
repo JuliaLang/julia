@@ -22,14 +22,11 @@
 
 #include <setjmp.h>
 #include <string>
-#include <sstream>
 #include <fstream>
 #include <map>
 #include <array>
 #include <vector>
 #include <set>
-#include <cstdio>
-#include <iostream>
 #include <functional>
 
 // target machine computation
@@ -809,10 +806,10 @@ static const std::map<jl_fptr_args_t, JuliaFunction*> builtin_func_map = {
     { &jl_f_apply_type,         new JuliaFunction{"jl_f_apply_type", get_func_sig, get_func_attrs} },
 };
 
+static int globalUnique = 0;
 
 // --- code generation ---
 extern "C" {
-    int globalUnique = 0;
     int jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
     jl_cgparams_t jl_default_cgparams = {1, 1, 1, 0,
 #ifdef _OS_WINDOWS_
@@ -1100,16 +1097,32 @@ static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
 
 // --- convenience functions for tagging llvm values with julia types ---
 
-static GlobalVariable *get_pointer_to_constant(Constant *val, StringRef name, Module &M)
+static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_context, Constant *val, StringRef name, Module &M)
 {
-    GlobalVariable *gv = new GlobalVariable(
-            M,
-            val->getType(),
-            true,
-            GlobalVariable::ExternalLinkage,
-            val,
-            name);
-    gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+    GlobalVariable *&gv = emission_context.mergedConstants[val];
+    StringRef localname;
+    std::string ssno;
+    if (gv == nullptr) {
+        raw_string_ostream(ssno) << name << emission_context.mergedConstants.size();
+        localname = StringRef(ssno);
+    }
+    else {
+        localname = gv->getName();
+        if (gv->getParent() != &M)
+            gv = cast_or_null<GlobalVariable>(M.getNamedValue(localname));
+    }
+    if (gv == nullptr) {
+        gv = new GlobalVariable(
+                M,
+                val->getType(),
+                true,
+                GlobalVariable::PrivateLinkage,
+                val,
+                localname);
+        gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+    }
+    assert(localname == gv->getName());
+    assert(val == gv->getInitializer());
     return gv;
 }
 
@@ -1198,7 +1211,7 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_
 {
     Value *loc;
     if (valid_as_globalinit(v)) { // llvm can't handle all the things that could be inside a ConstantExpr
-        loc = get_pointer_to_constant(cast<Constant>(v), "", *jl_Module);
+        loc = get_pointer_to_constant(ctx.emission_context, cast<Constant>(v), "_j_const", *jl_Module);
     }
     else {
         loc = emit_static_alloca(ctx, v->getType());
@@ -1870,17 +1883,17 @@ extern "C" void jl_write_coverage_data(const char *output)
             write_lcov_data(coverageData, jl_format_filename(output_pattern));
     }
     else {
-        std::ostringstream stm;
-        stm << "." << jl_getpid() << ".cov";
-        write_log_data(coverageData, stm.str().c_str());
+        std::string stm;
+        raw_string_ostream(stm) << "." << jl_getpid() << ".cov";
+        write_log_data(coverageData, stm.c_str());
     }
 }
 
 extern "C" void jl_write_malloc_log(void)
 {
-    std::ostringstream stm;
-    stm << "." << jl_getpid() << ".mem";
-    write_log_data(mallocData, stm.str().c_str());
+    std::string stm;
+    raw_string_ostream(stm) << "." << jl_getpid() << ".mem";
+    write_log_data(mallocData, stm.c_str());
 }
 
 // --- constant determination ---
@@ -3338,9 +3351,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
                         }
                     }
                     if (need_to_emit) {
-                        std::stringstream namestream;
-                        namestream << (specsig ? "j_" : "j1_") << name_from_method_instance(mi) << "_" << globalUnique++;
-                        name = namestream.str();
+                        raw_string_ostream(name) << (specsig ? "j_" : "j1_") << name_from_method_instance(mi) << "_" << globalUnique++;
                         protoname = StringRef(name);
                     }
                     jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
@@ -3454,12 +3465,9 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         b = jl_get_binding(m, s);
         if (b == NULL) {
             // var not found. switch to delayed lookup.
-            std::stringstream name;
-            name << "delayedvar" << globalUnique++;
             Constant *initnul = V_null;
             GlobalVariable *bindinggv = new GlobalVariable(*ctx.f->getParent(), T_pjlvalue,
-                    false, GlobalVariable::InternalLinkage,
-                    initnul, name.str());
+                    false, GlobalVariable::PrivateLinkage, initnul);
             Value *cachedval = ctx.builder.CreateLoad(T_pjlvalue, bindinggv);
             BasicBlock *have_val = BasicBlock::Create(jl_LLVMContext, "found"),
                 *not_found = BasicBlock::Create(jl_LLVMContext, "notfound");
@@ -4420,11 +4428,11 @@ static void emit_last_age_field(jl_codectx_t &ctx)
 static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_codegen_params_t &params)
 {
     jl_codectx_t ctx(jl_LLVMContext, params);
-    std::stringstream name;
-    name << "tojlinvoke" << globalUnique++;
+    std::string name;
+    raw_string_ostream(name) << "tojlinvoke" << globalUnique++;
     Function *f = Function::Create(jl_func_sig,
             GlobalVariable::PrivateLinkage,
-            name.str(), M);
+            name, M);
     jl_init_function(f);
     f->addFnAttr(Thunk);
     //f->setAlwaysInline();
@@ -4605,8 +4613,8 @@ static Function* gen_cfun_wrapper(
         }
     }
 
-    std::stringstream funcName;
-    funcName << "jlcapi_" << name << "_" << globalUnique++;
+    std::string funcName;
+    raw_string_ostream(funcName) << "jlcapi_" << name << "_" << globalUnique++;
 
     Module *M = into;
     AttributeList attributes = sig.attributes;
@@ -4624,7 +4632,7 @@ static Function* gen_cfun_wrapper(
     }
     Function *cw = Function::Create(functype,
             GlobalVariable::ExternalLinkage,
-            funcName.str(), M);
+            funcName, M);
     cw->setAttributes(attributes);
     jl_init_function(cw);
 
@@ -4935,9 +4943,9 @@ static Function* gen_cfun_wrapper(
         Value *theFptr = returninfo.decl;
         assert(theFptr);
         if (age_ok) {
-            funcName << "_gfthunk";
+            funcName += "_gfthunk";
             Function *gf_thunk = Function::Create(returninfo.decl->getFunctionType(),
-                    GlobalVariable::InternalLinkage, funcName.str(), M);
+                    GlobalVariable::InternalLinkage, funcName, M);
             gf_thunk->setAttributes(returninfo.decl->getAttributes());
             jl_init_function(gf_thunk);
             // build a  specsig -> jl_apply_generic converter thunk
@@ -5025,11 +5033,11 @@ static Function* gen_cfun_wrapper(
     }
 
     if (nest) {
-        funcName << "make";
+        funcName += "make";
         Function *cw_make = Function::Create(
                 FunctionType::get(T_pint8, { T_pint8, T_ppjlvalue }, false),
                 GlobalVariable::ExternalLinkage,
-                funcName.str(), M);
+                funcName, M);
         jl_init_function(cw_make);
         BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", cw_make);
         IRBuilder<> cwbuilder(b0);
@@ -5175,13 +5183,10 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             }
             jl_add_method_root(ctx, (jl_value_t*)fill);
         }
-        std::stringstream cname;
-        cname << "trampolines" << globalUnique++;
         Type *T_htable = ArrayType::get(T_size, sizeof(htable_t) / sizeof(void*));
         Value *cache = new GlobalVariable(*jl_Module, T_htable, false,
-                               GlobalVariable::InternalLinkage,
-                               ConstantAggregateZero::get(T_htable),
-                               cname.str());
+                               GlobalVariable::PrivateLinkage,
+                               ConstantAggregateZero::get(T_htable));
         F = ctx.builder.CreateCall(prepare_call(jlgetcfunctiontrampoline_func), {
                  fobj,
                  literal_pointer_val(ctx, output_type),
@@ -5661,7 +5666,8 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     if (!specsig)
         ctx.nReqArgs--;  // function not part of argArray in jlcall
 
-    std::stringstream funcName;
+    std::string _funcName;
+    raw_string_ostream funcName(_funcName);
     // try to avoid conflicts in the global symbol table
     if (specsig)
         funcName << "julia_"; // api 5
@@ -5713,9 +5719,9 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             return retarg;
         }();
 
-        std::stringstream wrapName;
-        wrapName << "jfptr_" << unadorned_name << "_" << globalUnique;
-        declarations.functionObject = wrapName.str();
+        std::string wrapName;
+        raw_string_ostream(wrapName) << "jfptr_" << unadorned_name << "_" << globalUnique++;
+        declarations.functionObject = wrapName;
         (void)gen_invoke_wrapper(lam, jlrettype, returninfo, retarg, declarations.functionObject, M, ctx.emission_context);
     }
     else {
@@ -7294,7 +7300,7 @@ static void init_julia_llvm_env(Module *m)
     jl_di_func_null_sig = dbuilder.createSubroutineType(
         dbuilder.getOrCreateTypeArray(None));
 
-    T_jlvalue = StructType::create(jl_LLVMContext, "jl_value_t");
+    T_jlvalue = StructType::get(jl_LLVMContext);
     T_pjlvalue = PointerType::get(T_jlvalue, 0);
     T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
     T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
@@ -7321,8 +7327,7 @@ static void init_julia_llvm_env(Module *m)
     };
     static_assert(sizeof(jl_array_flags_t) == sizeof(int16_t),
                   "Size of jl_array_flags_t is not the same as int16_t");
-    jl_array_llvmt =
-        StructType::create(jl_LLVMContext, makeArrayRef(vaelts), "jl_array_t");
+    jl_array_llvmt = StructType::get(jl_LLVMContext, makeArrayRef(vaelts));
     jl_parray_llvmt = PointerType::get(jl_array_llvmt, 0);
 }
 

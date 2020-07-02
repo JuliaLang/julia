@@ -400,7 +400,7 @@ g33829() # warm up
 @test called33829 # make sure there was a global side effect so it's hard for this call to simply be removed
 let src = get_llvm(f33829, Tuple{Float64}, true, true)
     @test occursin(r"call [^(]*double @", src)
-    @test !occursin(r"call [^(]*\%jl_value_t", src)
+    @test !occursin(r"call [^(]*\{}", src)
 end
 
 let io = IOBuffer()

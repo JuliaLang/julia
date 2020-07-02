@@ -6,10 +6,8 @@
 #include "platform.h"
 #include "options.h"
 
-#include <iostream>
-#include <sstream>
-
 #include <llvm/Transforms/Utils/Cloning.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Support/DynamicLibrary.h>
 
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
@@ -62,26 +60,6 @@ void jl_jit_globals(std::map<void *, GlobalVariable*> &globals)
     }
 }
 
-// turn long strings into memoized copies, instead of making a copy per object file of output.
-void jl_jit_strings(jl_codegen_params_t::SymMapGV &stringConstants)
-{
-    for (auto &it : stringConstants) {
-        GlobalVariable *GV = it.second;
-        Constant *CDA = GV->getInitializer();
-        StringRef data = cast<ConstantDataSequential>(CDA)->getRawDataValues();
-        if (data.size() > 8) { // only for long strings: keep short ones as values
-            Type *T_size = Type::getIntNTy(GV->getContext(), sizeof(void*) * 8);
-            Constant *v = ConstantExpr::getIntToPtr(
-                ConstantInt::get(T_size, (uintptr_t)data.data()),
-                GV->getType());
-            GV->replaceAllUsesWith(v);
-            GV->eraseFromParent();
-            it.second = nullptr;
-        }
-    }
-}
-
-
 // this generates llvm code for the lambda info
 // and adds the result to the jitlayers
 // (and the shadow module),
@@ -119,7 +97,6 @@ static jl_callptr_t _jl_compile_codeinst(
             emitted[codeinst] = std::move(result);
         jl_compile_workqueue(emitted, params, CompilationPolicy::Default);
 
-        jl_jit_strings(params.stringConstants);
         if (params._shared_module)
             jl_add_to_ee(std::unique_ptr<Module>(params._shared_module));
         StringMap<std::unique_ptr<Module>*> NewExports;
@@ -237,7 +214,6 @@ void jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declr
     if (!sysimg) {
         if (p == NULL) {
             jl_jit_globals(params.globals);
-            jl_jit_strings(params.stringConstants);
             assert(params.workqueue.empty());
             if (params._shared_module)
                 jl_add_to_ee(std::unique_ptr<Module>(params._shared_module));
@@ -658,9 +634,9 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
                        findUnmangledSymbol(F->getName()) ||
                        SectionMemoryManager::getSymbolAddressInProcess(
                            getMangledName(F->getName())))) {
-                std::cerr << "FATAL ERROR: "
-                          << "Symbol \"" << F->getName().str() << "\""
-                          << "not found";
+                llvm::errs() << "FATAL ERROR: "
+                             << "Symbol \"" << F->getName().str() << "\""
+                             << "not found";
                 abort();
             }
         }
@@ -741,11 +717,13 @@ uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
     return addr ? addr.get() : 0;
 }
 
+static int globalUniqueGeneratedNames;
 StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst)
 {
     auto &fname = ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
     if (fname.empty()) {
-        std::stringstream stream_fname;
+        std::string string_fname;
+        raw_string_ostream stream_fname(string_fname);
         // try to pick an appropriate name that describes it
         if (Addr == (uintptr_t)codeinst->invoke) {
             stream_fname << "jsysw_";
@@ -760,9 +738,8 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
             stream_fname << "jlsys_";
         }
         const char* unadorned_name = jl_symbol_name(codeinst->def->def.method->name);
-        stream_fname << unadorned_name << "_" << globalUnique++;
-        std::string string_fname = stream_fname.str();
-        fname = strdup(string_fname.c_str());
+        stream_fname << unadorned_name << "_" << globalUniqueGeneratedNames++;
+        fname = strdup(stream_fname.str().c_str());
         LocalSymbolTable[getMangledName(string_fname)] = (void*)(uintptr_t)Addr;
     }
     return fname;
@@ -827,6 +804,28 @@ void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
                 sG->eraseFromParent();
                 continue;
             }
+            //// If we start using llvm.used, we need to enable and test this
+            //else if (!dG->isDeclaration() && dG->hasAppendingLinkage() && sG->hasAppendingLinkage()) {
+            //    auto *dCA = cast<ConstantArray>(dG->getInitializer());
+            //    auto *sCA = cast<ConstantArray>(sG->getInitializer());
+            //    SmallVector<Constant *, 16> Init;
+            //    for (auto &Op : dCA->operands())
+            //        Init.push_back(cast_or_null<Constant>(Op));
+            //    for (auto &Op : sCA->operands())
+            //        Init.push_back(cast_or_null<Constant>(Op));
+            //    Type *Int8PtrTy = Type::getInt8PtrTy(dest.getContext());
+            //    ArrayType *ATy = ArrayType::get(Int8PtrTy, Init.size());
+            //    GlobalVariable *GV = new GlobalVariable(dest, ATy, dG->isConstant(),
+            //            GlobalValue::AppendingLinkage, ConstantArray::get(ATy, Init), "",
+            //            dG->getThreadLocalMode(), dG->getType()->getAddressSpace());
+            //    GV->copyAttributesFrom(dG);
+            //    sG->replaceAllUsesWith(GV);
+            //    dG->replaceAllUsesWith(GV);
+            //    GV->takeName(sG);
+            //    sG->eraseFromParent();
+            //    dG->eraseFromParent();
+            //    continue;
+            //}
             else {
                 assert(dG->isDeclaration() || (dG->getInitializer() == sG->getInitializer() &&
                             dG->isConstant() && sG->isConstant()));
@@ -895,6 +894,31 @@ void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
     }
 }
 
+// optimize memory by turning long strings into memoized copies, instead of
+// making a copy per object file of output.
+void jl_jit_share_data(Module &M)
+{
+    std::vector<GlobalVariable*> erase;
+    for (auto &GV : M.globals()) {
+        if (!GV.hasInitializer() || !GV.isConstant())
+            continue;
+        ConstantDataSequential *CDS = dyn_cast<ConstantDataSequential>(GV.getInitializer());
+        if (CDS == nullptr)
+            continue;
+        StringRef data = CDS->getRawDataValues();
+        if (data.size() > 16) { // only for long strings: keep short ones as values
+            Type *T_size = Type::getIntNTy(GV.getContext(), sizeof(void*) * 8);
+            Constant *v = ConstantExpr::getIntToPtr(
+                ConstantInt::get(T_size, (uintptr_t)data.data()),
+                GV.getType());
+            GV.replaceAllUsesWith(v);
+            erase.push_back(&GV);
+        }
+    }
+    for (auto GV : erase)
+        GV->eraseFromParent();
+}
+
 static void jl_add_to_ee(std::unique_ptr<Module> m)
 {
     JL_TIMING(LLVM_EMIT);
@@ -902,13 +926,18 @@ static void jl_add_to_ee(std::unique_ptr<Module> m)
     // Add special values used by debuginfo to build the UnwindData table registration for Win64
     Type *T_uint32 = Type::getInt32Ty(m->getContext());
     ArrayType *atype = ArrayType::get(T_uint32, 3); // want 4-byte alignment of 12-bytes of data
-    (new GlobalVariable(*m, atype,
-        false, GlobalVariable::InternalLinkage,
-        ConstantAggregateZero::get(atype), "__UnwindData"))->setSection(".text");
-    (new GlobalVariable(*m, atype,
-        false, GlobalVariable::InternalLinkage,
-        ConstantAggregateZero::get(atype), "__catchjmp"))->setSection(".text");
+    GlobalVariable *gvs[2] = {
+        new GlobalVariable(*m, atype,
+            false, GlobalVariable::InternalLinkage,
+            ConstantAggregateZero::get(atype), "__UnwindData"),
+        new GlobalVariable(*m, atype,
+            false, GlobalVariable::InternalLinkage,
+            ConstantAggregateZero::get(atype), "__catchjmp") };
+    gvs[0]->setSection(".text");
+    gvs[1]->setSection(".text");
+    appendToUsed(*m, makeArrayRef((GlobalValue**)gvs, 2));
 #endif
+    jl_jit_share_data(*m);
     assert(jl_ExecutionEngine);
     jl_ExecutionEngine->addModule(std::move(m));
 }

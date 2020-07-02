@@ -34,12 +34,9 @@ using llvm_file_magic = file_magic;
 #include "processor.h"
 
 #include <string>
-#include <sstream>
-#include <fstream>
 #include <map>
 #include <vector>
 #include <set>
-#include <cstdio>
 #include "julia_assert.h"
 
 #ifdef _OS_DARWIN_
