@@ -180,7 +180,7 @@ basename(path::AbstractString) = splitdir(path)[2]
 
 If the last component of a path contains a dot, split the path into everything before the
 dot and everything including and after the dot. Otherwise, return a tuple of the argument
-unmodified and the empty string.
+unmodified and the empty string. "splitext" is short for "split extension".
 
 # Examples
 ```jldoctest
