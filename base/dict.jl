@@ -498,12 +498,12 @@ end
 Return the value stored for the given key, or if no mapping for the key is present, return
 `f()`.  Use [`get!`](@ref) to also store the default value in the dictionary.
 
-This is intended to be called using `do` block syntax
+This is intended to be called using `do` block syntax, when the first argument
+`f::Function` of `get!` is longer than one-liner, for readability.
 
 ```julia
 get(dict, key) do
-    # default value calculated here
-    time()
+    compute_default_value()
 end
 ```
 """
