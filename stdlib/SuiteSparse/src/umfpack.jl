@@ -208,7 +208,7 @@ julia> B = sparse(Float64[1.0 1.0; 0.0 1.0]);
 julia> lu!(F, B);
 
 julia> F \\ ones(2)
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
  0.0
  1.0
 ```

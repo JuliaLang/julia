@@ -409,7 +409,7 @@ julia> reinterpret(Float32, UInt32(7))
 1.0f-44
 
 julia> reinterpret(Float32, UInt32[1 2 3 4 5])
-1×5 reinterpret(Float32, ::Array{UInt32,2}):
+1×5 reinterpret(Float32, ::Matrix{UInt32}):
  1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
 ```
 """
@@ -636,7 +636,7 @@ false
 julia> mutable struct Foo end
 
 julia> v = similar(rand(3), Foo)
-3-element Array{Foo,1}:
+3-element Vector{Foo}:
  #undef
  #undef
  #undef
@@ -757,7 +757,7 @@ ValueIterator for a Dict{String,Int64} with 2 entries. Values:
   1
 
 julia> values([2])
-1-element Array{Int64,1}:
+1-element Vector{Int64}:
  2
 ```
 """

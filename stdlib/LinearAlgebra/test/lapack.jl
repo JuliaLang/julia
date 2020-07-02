@@ -668,7 +668,7 @@ end
 
 @testset "Julia vs LAPACK" begin
     # Test our own linear algebra functionality against LAPACK
-    @testset for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         for nn in (5,10,15)
             if elty <: Real
                 A = convert(Matrix{elty}, randn(10,nn))

@@ -113,7 +113,7 @@ array.
 # Examples
 ```jldoctest
 julia> a = [1, 2, 4, 3, 4]
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  4
@@ -124,7 +124,7 @@ julia> partialsort!(a, 4)
 4
 
 julia> a
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  3
@@ -132,7 +132,7 @@ julia> a
  4
 
 julia> a = [1, 2, 4, 3, 4]
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  4
@@ -143,7 +143,7 @@ julia> partialsort!(a, 4, rev=true)
 2
 
 julia> a
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  4
  4
  3
@@ -688,25 +688,25 @@ and `lt` are specified, the `lt` function is applied to the result of the `by` f
 # Examples
 ```jldoctest
 julia> v = [3, 1, 2]; sort!(v); v
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
 
 julia> v = [3, 1, 2]; sort!(v, rev = true); v
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  3
  2
  1
 
 julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[1]); v
-3-element Array{Tuple{Int64,String},1}:
+3-element Vector{Tuple{Int64,String}}:
  (1, "c")
  (2, "b")
  (3, "a")
 
 julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[2]); v
-3-element Array{Tuple{Int64,String},1}:
+3-element Vector{Tuple{Int64,String}}:
  (3, "a")
  (2, "b")
  (1, "c")
@@ -765,13 +765,13 @@ Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself 
 julia> v = [3, 1, 2];
 
 julia> sort(v)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
 
 julia> v
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  3
  1
  2
@@ -800,13 +800,13 @@ julia> v[partialsortperm(v, 1)]
 1
 
 julia> p = partialsortperm(v, 1:3)
-3-element view(::Array{Int64,1}, 1:3) with eltype Int64:
+3-element view(::Vector{Int64}, 1:3) with eltype Int64:
  2
  4
  3
 
 julia> v[p]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  1
  2
@@ -855,7 +855,7 @@ julia> partialsortperm!(ix, v, 1)
 julia> ix = [1:4;];
 
 julia> partialsortperm!(ix, v, 2:3, initialized=true)
-2-element view(::Array{Int64,1}, 2:3) with eltype Int64:
+2-element view(::Vector{Int64}, 2:3) with eltype Int64:
  4
  3
 ```
@@ -900,13 +900,13 @@ See also [`sortperm!`](@ref).
 julia> v = [3, 1, 2];
 
 julia> p = sortperm(v)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  2
  3
  1
 
 julia> v[p]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -950,13 +950,13 @@ Like [`sortperm`](@ref), but accepts a preallocated index vector `ix`.  If `init
 julia> v = [3, 1, 2]; p = zeros(Int, 3);
 
 julia> sortperm!(p, v); p
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  2
  3
  1
 
 julia> v[p]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -1020,17 +1020,17 @@ To sort slices of an array, refer to [`sortslices`](@ref).
 # Examples
 ```jldoctest
 julia> A = [4 3; 1 2]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  1  2
 
 julia> sort(A, dims = 1)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  4  3
 
 julia> sort(A, dims = 2)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  3  4
  1  2
 ```
@@ -1080,17 +1080,17 @@ To sort slices of an array, refer to [`sortslices`](@ref).
 # Examples
 ```jldoctest
 julia> A = [4 3; 1 2]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  1  2
 
 julia> sort!(A, dims = 1); A
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  4  3
 
 julia> sort!(A, dims = 2); A
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 ```

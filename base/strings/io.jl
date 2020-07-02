@@ -94,7 +94,7 @@ julia> sprint(show, 66.66666; context=:compact => true)
 "66.6667"
 
 julia> sprint(showerror, BoundsError([1], 100))
-"BoundsError: attempt to access 1-element Array{Int64,1} at index [100]"
+"BoundsError: attempt to access 1-element Vector{Int64} at index [100]"
 ```
 """
 function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)

@@ -234,12 +234,12 @@ end
 mutable struct A3890{T1}
     x::Matrix{Complex{T1}}
 end
-@test A3890{Float64}.types[1] === Array{Complex{Float64},2}
+@test A3890{Float64}.types[1] === Array{ComplexF64,2}
 # make sure the field type Matrix{Complex{T1}} isn't cached
 mutable struct B3890{T2}
     x::Matrix{Complex{T2}}
 end
-@test B3890{Float64}.types[1] === Array{Complex{Float64},2}
+@test B3890{Float64}.types[1] === Array{ComplexF64,2}
 
 # issue #786
 mutable struct Node{T}
@@ -301,7 +301,7 @@ function bar(x::T) where T
 end
 @test bar(3.0) == Complex(3.0,0.0)
 
-z = convert(Complex{Float64},2)
+z = convert(ComplexF64,2)
 @test z == Complex(2.0,0.0)
 
 function typeassert_instead_of_decl()
@@ -2263,7 +2263,7 @@ end
 @test ttt7049(init="a") == "init=a"
 
 # issue #7074
-let z(A::StridedMatrix{T}) where {T<:Union{Float64,Complex{Float64},Float32,Complex{Float32}}} = T,
+let z(A::StridedMatrix{T}) where {T<:Union{Float64,ComplexF64,Float32,ComplexF32}} = T,
     S = zeros(Complex,2,2)
     @test_throws MethodError z(S)
 end

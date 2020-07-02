@@ -217,8 +217,8 @@ cmp_showf(Base.print_matrix, io, OffsetArray(reshape(range(-0.212121212121, stop
 cmp_showf(show, io, OffsetArray(collect(1:100), (100,)))   # issue #31641
 
 targets1 = ["0-dimensional $OAs_name.OffsetArray{Float64,0,Array{Float64,0}}:\n1.0",
-            "1-element $OAs_name.OffsetArray{Float64,1,Array{Float64,1}} with indices 2:2:\n 1.0",
-            "1×1 $OAs_name.OffsetArray{Float64,2,Array{Float64,2}} with indices 2:2×3:3:\n 1.0",
+            "1-element $OAs_name.OffsetArray{Float64,1,Vector{Float64}} with indices 2:2:\n 1.0",
+            "1×1 $OAs_name.OffsetArray{Float64,2,Matrix{Float64}} with indices 2:2×3:3:\n 1.0",
             "1×1×1 $OAs_name.OffsetArray{Float64,3,Array{Float64,3}} with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
             "1×1×1×1 $OAs_name.OffsetArray{Float64,4,Array{Float64,4}} with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
 targets2 = ["(fill(1.0), fill(1.0))",

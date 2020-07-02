@@ -54,8 +54,8 @@ StridedReshapedArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray,Strid
 StridedSubArray{T,N,A<:Union{DenseArray,StridedReshapedArray,StridedReinterpretArray},
     I<:Tuple{Vararg{Union{RangeIndex, ReshapedUnitRange, AbstractCartesianIndex}}}} = SubArray{T,N,A,I}
 StridedArray{T,N} = Union{DenseArray{T,N}, StridedSubArray{T,N}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N}}
-StridedVector{T} = Union{DenseArray{T,1}, StridedSubArray{T,1}, StridedReshapedArray{T,1}, StridedReinterpretArray{T,1}}
-StridedMatrix{T} = Union{DenseArray{T,2}, StridedSubArray{T,2}, StridedReshapedArray{T,2}, StridedReinterpretArray{T,2}}
+StridedVector{T} = StridedArray{T,1}
+StridedMatrix{T} = StridedArray{T,2}
 StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 
 # the definition of strides for Array{T,N} is tuple() if N = 0, otherwise it is

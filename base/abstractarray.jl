@@ -614,7 +614,7 @@ elements since `BitArray`s are both mutable and can support 1-dimensional arrays
 
 ```julia-repl
 julia> similar(trues(10,10), 2)
-2-element BitArray{1}:
+2-element BitVector:
  0
  0
 ```
@@ -829,7 +829,7 @@ julia> y = zeros(7);
 julia> copyto!(y, x);
 
 julia> y
-7-element Array{Float64,1}:
+7-element Vector{Float64}:
  1.0
  0.0
  3.0
@@ -965,7 +965,7 @@ julia> tup = (1, 2, 3)
 (1, 2, 3)
 
 julia> Base.copymutable(tup)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -1040,7 +1040,7 @@ Return a subset of array `A` as specified by `inds`, where each `ind` may be an
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
@@ -1048,12 +1048,12 @@ julia> getindex(A, 1)
 1
 
 julia> getindex(A, [2, 1])
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  3
  1
 
 julia> getindex(A, 2:4)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  3
  2
  4
@@ -1151,7 +1151,7 @@ julia> setindex!(A, [10, 20], [1, 2]);
 julia> A[[3, 4]] = [30, 40];
 
 julia> A
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  10.0  30.0
  20.0  40.0
 ```
@@ -1208,17 +1208,17 @@ during object creation. If the input is not a wrapped object, return the input i
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> V = view(A, 1:2, :)
-2×2 view(::Array{Int64,2}, 1:2, :) with eltype Int64:
+2×2 view(::Matrix{Int64}, 1:2, :) with eltype Int64:
  1  2
  3  4
 
 julia> parent(V)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 ```
@@ -1566,16 +1566,16 @@ Concatenate along dimension 1.
 # Examples
 ```jldoctest
 julia> a = [1 2 3 4 5]
-1×5 Array{Int64,2}:
+1×5 Matrix{Int64}:
  1  2  3  4  5
 
 julia> b = [6 7 8 9 10; 11 12 13 14 15]
-2×5 Array{Int64,2}:
+2×5 Matrix{Int64}:
   6   7   8   9  10
  11  12  13  14  15
 
 julia> vcat(a,b)
-3×5 Array{Int64,2}:
+3×5 Matrix{Int64}:
   1   2   3   4   5
   6   7   8   9  10
  11  12  13  14  15
@@ -1584,7 +1584,7 @@ julia> c = ([1 2 3], [4 5 6])
 ([1 2 3], [4 5 6])
 
 julia> vcat(c...)
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  2  3
  4  5  6
 ```
@@ -1598,7 +1598,7 @@ Concatenate along dimension 2.
 # Examples
 ```jldoctest
 julia> a = [1; 2; 3; 4; 5]
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  3
@@ -1606,7 +1606,7 @@ julia> a = [1; 2; 3; 4; 5]
  5
 
 julia> b = [6 7; 8 9; 10 11; 12 13; 14 15]
-5×2 Array{Int64,2}:
+5×2 Matrix{Int64}:
   6   7
   8   9
  10  11
@@ -1614,7 +1614,7 @@ julia> b = [6 7; 8 9; 10 11; 12 13; 14 15]
  14  15
 
 julia> hcat(a,b)
-5×3 Array{Int64,2}:
+5×3 Matrix{Int64}:
  1   6   7
  2   8   9
  3  10  11
@@ -1625,16 +1625,16 @@ julia> c = ([1; 2; 3], [4; 5; 6])
 ([1, 2, 3], [4, 5, 6])
 
 julia> hcat(c...)
-3×2 Array{Int64,2}:
+3×2 Matrix{Int64}:
  1  4
  2  5
  3  6
 
 julia> x = Matrix(undef, 3, 0)  # x = [] would have created an Array{Any, 1}, but need an Array{Any, 2}
-3×0 Array{Any,2}
+3×0 Matrix{Any}
 
 julia> hcat(x, [1; 2; 3])
-3×1 Array{Any,2}:
+3×1 Matrix{Any}:
  1
  2
  3
@@ -1703,23 +1703,23 @@ julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
 (1, 2, 3, 4, 5, 6)
 
 julia> [a b c; d e f]
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  2  3
  4  5  6
 
 julia> hvcat((3,3), a,b,c,d,e,f)
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  2  3
  4  5  6
 
 julia> [a b;c d; e f]
-3×2 Array{Int64,2}:
+3×2 Matrix{Int64}:
  1  2
  3  4
  5  6
 
 julia> hvcat((2,2,2), a,b,c,d,e,f)
-3×2 Array{Int64,2}:
+3×2 Matrix{Int64}:
  1  2
  3  4
  5  6
@@ -2184,13 +2184,13 @@ See also: [`mapslices`](@ref)
 # Examples
 ```jldoctest
 julia> map(x -> x * 2, [1, 2, 3])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  2
  4
  6
 
 julia> map(+, [1, 2, 3], [10, 20, 30])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  11
  22
  33
@@ -2243,7 +2243,7 @@ julia> a = zeros(3);
 julia> map!(x -> x * 2, a, [1, 2, 3]);
 
 julia> a
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  2.0
  4.0
  6.0

@@ -101,7 +101,7 @@ end
     @test conj(UniformScaling(1))::UniformScaling{Int} == UniformScaling(1)
     @test conj(UniformScaling(1.0))::UniformScaling{Float64} == UniformScaling(1.0)
     @test conj(UniformScaling(1+1im))::UniformScaling{Complex{Int}} == UniformScaling(1-1im)
-    @test conj(UniformScaling(1.0+1.0im))::UniformScaling{Complex{Float64}} == UniformScaling(1.0-1.0im)
+    @test conj(UniformScaling(1.0+1.0im))::UniformScaling{ComplexF64} == UniformScaling(1.0-1.0im)
 end
 
 @testset "isdiag, istriu, istril, issymmetric, ishermitian, isposdef, isapprox" begin
@@ -167,9 +167,9 @@ end
 end
 
 @test copy(UniformScaling(one(Float64))) == UniformScaling(one(Float64))
-@test sprint(show,MIME"text/plain"(),UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{Complex{Float64}}\n(1.0 + 0.0im)*I"
+@test sprint(show,MIME"text/plain"(),UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{ComplexF64}\n(1.0 + 0.0im)*I"
 @test sprint(show,MIME"text/plain"(),UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}\n1.0*I"
-@test sprint(show,UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{Complex{Float64}}(1.0 + 0.0im)"
+@test sprint(show,UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{ComplexF64}(1.0 + 0.0im)"
 @test sprint(show,UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}(1.0f0)"
 
 let

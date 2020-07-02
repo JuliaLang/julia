@@ -777,7 +777,7 @@ values are `false` (or equivalently, if the input contains no `true` value), fol
 # Examples
 ```jldoctest
 julia> a = [true,false,false,true]
-4-element Array{Bool,1}:
+4-element Vector{Bool}:
  1
  0
  0
@@ -812,7 +812,7 @@ values are `true` (or equivalently, if the input contains no `false` value), fol
 # Examples
 ```jldoctest
 julia> a = [true,false,false,true]
-4-element Array{Bool,1}:
+4-element Vector{Bool}:
  1
  0
  0

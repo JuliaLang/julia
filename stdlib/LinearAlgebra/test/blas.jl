@@ -431,7 +431,7 @@ Random.seed!(100)
     end
 end
 
-@testset "syr for eltype $elty" for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
+@testset "syr for eltype $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
     A = rand(elty, 5, 5)
     @test triu(A[1,:] * transpose(A[1,:])) ≈ BLAS.syr!('U', one(elty), A[1,:], zeros(elty, 5, 5))
     @test tril(A[1,:] * transpose(A[1,:])) ≈ BLAS.syr!('L', one(elty), A[1,:], zeros(elty, 5, 5))
@@ -439,7 +439,7 @@ end
     @test tril(A[1,:] * transpose(A[1,:])) ≈ BLAS.syr!('L', one(elty), view(A, 1, :), zeros(elty, 5, 5))
 end
 
-@testset "her for eltype $elty" for elty in (Complex{Float32}, Complex{Float64})
+@testset "her for eltype $elty" for elty in (ComplexF32, ComplexF64)
     A = rand(elty, 5, 5)
     @test triu(A[1,:] * A[1,:]') ≈ BLAS.her!('U', one(real(elty)), A[1,:], zeros(elty, 5, 5))
     @test tril(A[1,:] * A[1,:]') ≈ BLAS.her!('L', one(real(elty)), A[1,:], zeros(elty, 5, 5))

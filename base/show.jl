@@ -475,11 +475,8 @@ show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
 show(io::IO, ::MIME"text/plain", ::Core.TypeofBottom) = print(io, "Union{}")
 
 function print_without_params(@nospecialize(x))
-    if isa(x,UnionAll)
-        b = unwrap_unionall(x)
-        return isa(b,DataType) && b.name.wrapper === x
-    end
-    return false
+    b = unwrap_unionall(x)
+    return isa(b, DataType) && b.name.wrapper === x
 end
 
 has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v)!=0
@@ -494,37 +491,265 @@ function io_has_tvar_name(io::IOContext, name::Symbol, @nospecialize(x))
 end
 io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
-function show(io::IO, @nospecialize(x::Type))
+modulesof!(s::Set{Any}, x::TypeVar) = modulesof!(s, x.ub)
+function modulesof!(s::Set{Any}, x::Type)
+    x = unwrap_unionall(x)
     if x isa DataType
+        push!(s, x.name.module)
+    elseif x isa Union
+        modulesof!(s, x.a)
+        modulesof!(s, x.b)
+    end
+    s
+end
+
+# given an IO context for printing a type, reconstruct the proper type that
+# we're attempting to represent.
+# Union{T} where T is a degenerate case and is equal to T.ub, but we don't want
+# to print them that way, so filter those out from our aliases completely.
+function makeproper(io::IO, x::Type)
+    properx = x
+    x = unwrap_unionall(x)
+    if io isa IOContext
+        for (key, val) in io.dict
+            if key === :unionall_env && val isa TypeVar
+                properx = UnionAll(val, properx)
+            end
+        end
+    end
+    if x isa Union
+        y = []
+        normal = true
+        for typ in uniontypes(x)
+            if isa(typ, TypeVar)
+                normal = false
+            else
+                push!(y, typ)
+            end
+        end
+        normal || (x = Union{y...})
+        properx = rewrap_unionall(x, properx)
+    end
+    has_free_typevars(properx) && return Any
+    return properx
+end
+
+function make_typealias(x::Type)
+    Any <: x && return
+    x <: Tuple && return
+    mods = modulesof!(Set(), x)
+    Core in mods && push!(mods, Base)
+    aliases = Tuple{GlobalRef,SimpleVector}[]
+    xenv = UnionAll[]
+    for p in uniontypes(unwrap_unionall(x))
+        p isa UnionAll && push!(xenv, p)
+    end
+    x isa UnionAll && push!(xenv, x)
+    for mod in mods
+        for name in names(mod)
+            if isdefined(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
+                alias = getfield(mod, name)
+                if alias isa Type && !has_free_typevars(alias) && !isvarargtype(alias) && !print_without_params(alias) && x <: alias
+                    if alias isa UnionAll
+                        (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
+                        # ti === Union{} && continue # impossible, since we already checked that x <: alias
+                        env = env::SimpleVector
+                        # TODO: In some cases (such as the following), the `env` is over-approximated.
+                        #       We'd like to disable `fix_inferred_var_bound` since we'll already do that fix-up here.
+                        #       (or detect and reverse the compution of it here).
+                        #   T = Array{Array{T,1}, 1} where T
+                        #   (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), T, Vector)
+                        #   env[1].ub.var == T.var
+                        applied = alias{env...}
+                        for p in xenv
+                            applied = rewrap_unionall(applied, p)
+                        end
+                        has_free_typevars(applied) && continue
+                        applied == x || continue # it couldn't figure out the parameter matching
+                    elseif alias <: x
+                        env = Core.svec()
+                    else
+                        continue # not a complete match
+                    end
+                    push!(aliases, (GlobalRef(mod, name), env))
+                end
+            end
+        end
+    end
+    if length(aliases) == 1 # TODO: select the type with the "best" (shortest?) environment
+        return aliases[1]
+    end
+end
+
+function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector)
+    if !(get(io, :compact, false)::Bool)
+        # Print module prefix unless alias is visible from module passed to
+        # IOContext. If :module is not set, default to Main. nothing can be used
+        # to force printing prefix.
+        from = get(io, :module, Main)
+        if (from === nothing || !isvisible(name.name, name.mod, from))
+            show(io, name.mod)
+            print(io, ".")
+        end
+    end
+    print(io, name.name)
+    n = length(env)
+    n == 0 && return
+
+    print(io, "{")
+    let io = IOContext(io)
+        for i = n:-1:1
+            p = env[i]
+            if p isa TypeVar
+                io = IOContext(io, :unionall_env => p)
+            end
+        end
+        for i = 1:n
+            p = env[i]
+            show(io, p)
+            i < n && print(io, ",")
+        end
+    end
+    print(io, "}")
+    for i = n:-1:1
+        p = env[i]
+        if p isa TypeVar && !io_has_tvar_name(io, p.name, x)
+            print(io, " where ")
+            show(io, p)
+        end
+    end
+end
+
+function show_typealias(io::IO, x::Type)
+    properx = makeproper(io, x)
+    alias = make_typealias(properx)
+    alias === nothing && return false
+    show_typealias(io, alias[1], x, alias[2])
+    return true
+end
+
+function make_typealiases(x::Type)
+    Any <: x && return Core.svec(), Union{}
+    x <: Tuple && return Core.svec(), Union{}
+    mods = modulesof!(Set(), x)
+    Core in mods && push!(mods, Base)
+    aliases = SimpleVector[]
+    vars = Dict{Symbol,TypeVar}()
+    xenv = UnionAll[]
+    for p in uniontypes(unwrap_unionall(x))
+        p isa UnionAll && push!(xenv, p)
+    end
+    x isa UnionAll && push!(xenv, x)
+    for mod in mods
+        for name in names(mod)
+            if isdefined(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
+                alias = getfield(mod, name)
+                if alias isa Type && !has_free_typevars(alias) && !isvarargtype(alias) && !print_without_params(alias) && !(alias <: Tuple)
+                    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
+                    ti === Union{} && continue
+                    mod in modulesof!(Set(), alias) || continue # make sure this alias wasn't from an unrelated part of the Union
+                    env = env::SimpleVector
+                    applied = isempty(env) ? alias : alias{env...}
+                    ul = unionlen(applied)
+                    for p in xenv
+                        applied = rewrap_unionall(applied, p)
+                    end
+                    has_free_typevars(applied) && continue
+                    applied <: x || continue # parameter matching didn't make a subtype
+                    print_without_params(x) && (env = Core.svec())
+                    push!(aliases, Core.svec(GlobalRef(mod, name), env, applied, (ul, -length(env))))
+                end
+            end
+        end
+    end
+    if isempty(aliases)
+        return Core.svec(), Union{}
+    end
+    sort!(aliases, by = x -> x[4], rev = true) # heuristic sort by "best" environment
+    let applied = Union{}
+        applied1 = Union{}
+        keep = SimpleVector[]
+        prev = (0, 0)
+        for alias in aliases
+            if alias[4][1] < 2
+                if !(alias[3] <: applied)
+                    applied1 = Union{applied1, alias[3]}
+                    push!(keep, alias)
+                end
+            elseif alias[4] == prev || !(alias[3] <: applied)
+                applied = applied1 = Union{applied1, alias[3]}
+                push!(keep, alias)
+                prev = alias[4]
+            end
+        end
+        return keep, applied1
+    end
+end
+
+function show_unionaliases(io::IO, x::Union)
+    properx = makeproper(io, x)
+    aliases, applied = make_typealiases(properx)
+    first = true
+    for typ in uniontypes(x)
+        if !isa(typ, TypeVar) && rewrap_unionall(typ, properx) <: applied
+            continue
+        end
+        print(io, first ? "Union{" : ", ")
+        first = false
+        show(io, typ)
+    end
+    if first && length(aliases) == 1
+        alias = aliases[1]
+        show_typealias(io, alias[1], x, alias[2])
+    else
+        for alias in aliases
+            print(io, first ? "Union{" : ", ")
+            first = false
+            env = alias[2]
+            show_typealias(io, alias[1], x, alias[2])
+        end
+        print(io, "}")
+    end
+end
+
+function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
+    show(io, x)
+    if !print_without_params(x) && get(io, :compact, true)
+        properx = makeproper(io, x)
+        if make_typealias(properx) !== nothing || x <: make_typealiases(properx)[2]
+            print(io, " = ")
+            show(IOContext(io, :compact => false), x)
+        end
+    end
+
+    #s1 = sprint(show, x, context = io)
+    #s2 = sprint(show, x, context = IOContext(io, :compact => false))
+    #print(io, s1)
+    #if s1 != s2
+    #    print(io, " = ", s2)
+    #end
+end
+
+function show(io::IO, @nospecialize(x::Type))
+    if print_without_params(x)
+        show_type_name(io, unwrap_unionall(x).name)
+        return
+    elseif get(io, :compact, true) && show_typealias(io, x)
+        return
+    elseif x isa DataType
         show_datatype(io, x)
         return
     elseif x isa Union
-        if x.a isa DataType && x.a.name === typename(DenseArray)
-            T, N = x.a.parameters
-            if x == StridedArray{T,N}
-                print(io, "StridedArray")
-                show_delim_array(io, (T,N), '{', ',', '}', false)
-                return
-            elseif x == StridedVecOrMat{T}
-                print(io, "StridedVecOrMat")
-                show_delim_array(io, (T,), '{', ',', '}', false)
-                return
-            elseif StridedArray{T,N} <: x
-                print(io, "Union")
-                show_delim_array(io, vcat(StridedArray{T,N}, uniontypes(Core.Compiler.typesubtract(x, StridedArray{T,N}))), '{', ',', '}', false)
-                return
-            end
+        if get(io, :compact, true)
+            show_unionaliases(io, x)
+        else
+            print(io, "Union")
+            show_delim_array(io, uniontypes(x), '{', ',', '}', false)
         end
-        print(io, "Union")
-        show_delim_array(io, uniontypes(x), '{', ',', '}', false)
         return
     end
-    x::UnionAll
 
-    if print_without_params(x)
-        return show_type_name(io, unwrap_unionall(x).name)
-    end
-
+    x = x::UnionAll
     if x.var.name === :_ || io_has_tvar_name(io, x.var.name, x)
         counter = 1
         while true
@@ -598,27 +823,26 @@ end
 
 function show_datatype(io::IO, x::DataType)
     istuple = x.name === Tuple.name
-    if (!isempty(x.parameters) || istuple) && x !== Tuple
-        n = length(x.parameters)::Int
+    n = length(x.parameters)::Int
 
-        # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
-        if istuple && n > 3 && all(i -> (x.parameters[1] === i), x.parameters)
-            print(io, "NTuple{", n, ',', x.parameters[1], "}")
-        else
-            show_type_name(io, x.name)
+    # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
+    if istuple && n > 3 && all(i -> (x.parameters[1] === i), x.parameters)
+        print(io, "NTuple{", n, ',', x.parameters[1], "}")
+    else
+        show_type_name(io, x.name)
+        if (n > 0 || istuple) && x !== Tuple
             # Do not print the type parameters for the primary type if we are
             # printing a method signature or type parameter.
             # Always print the type parameter if we are printing the type directly
             # since this information is still useful.
             print(io, '{')
-            for (i, p) in enumerate(x.parameters)
+            for i = 1:n
+                p = x.parameters[i]
                 show(io, p)
                 i < n && print(io, ',')
             end
             print(io, '}')
         end
-    else
-        show_type_name(io, x.name)
     end
 end
 
@@ -2186,7 +2410,7 @@ julia> summary(1)
 "Int64"
 
 julia> summary(zeros(2))
-"2-element Array{Float64,1}"
+"2-element Vector{Float64}"
 ```
 """
 summary(io::IO, x) = print(io, typeof(x))

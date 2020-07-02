@@ -225,10 +225,10 @@ end
     @test sprint(show, [1 missing]) == "$(Union{Int, Missing})[1 missing]"
     b = IOBuffer()
     display(TextDisplay(b), [missing])
-    @test String(take!(b)) == "1-element Array{$Missing,1}:\n missing"
+    @test String(take!(b)) == "1-element Vector{$Missing}:\n missing"
     b = IOBuffer()
     display(TextDisplay(b), [1 missing])
-    @test String(take!(b)) == "1×2 Array{$(Union{Int, Missing}),2}:\n 1  missing"
+    @test String(take!(b)) == "1×2 Matrix{$(Union{Int, Missing})}:\n 1  missing"
 end
 
 @testset "arrays with missing values" begin

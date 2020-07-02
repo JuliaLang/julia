@@ -44,7 +44,7 @@ bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
     @test write(io,"boston\ncambridge\n") > 0
     @test String(take!(io)) == "boston\ncambridge\n"
     @test String(take!(io)) == ""
-    @test write(io, Complex{Float64}(0)) === 16
+    @test write(io, ComplexF64(0)) === 16
     @test write(io, Rational{Int64}(1//2)) === 16
     close(io)
     @test_throws ArgumentError write(io,UInt8[0])

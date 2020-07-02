@@ -379,7 +379,7 @@ Random.seed!(1)
         @test factorize(T) === T
     end
     BD = Bidiagonal(dv, ev, :U)
-    @test Matrix{Complex{Float64}}(BD) == BD
+    @test Matrix{ComplexF64}(BD) == BD
 end
 
 # Issue 10742 and similar

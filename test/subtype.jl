@@ -1108,7 +1108,7 @@ f18348(::Type{T}, x::T) where {T<:Any} = 2
 # Issue #13165
 @test Symmetric{Float64,Matrix{Float64}} <: LinearAlgebra.RealHermSymComplexHerm
 @test Hermitian{Float64,Matrix{Float64}} <: LinearAlgebra.RealHermSymComplexHerm
-@test Hermitian{Complex{Float64},Matrix{Complex{Float64}}} <: LinearAlgebra.RealHermSymComplexHerm
+@test Hermitian{ComplexF64,Matrix{ComplexF64}} <: LinearAlgebra.RealHermSymComplexHerm
 
 # Issue #12721
 f12721(::T) where {T<:Type{Int}} = true

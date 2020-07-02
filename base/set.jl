@@ -108,13 +108,13 @@ input is preserved.
 # Examples
 ```jldoctest
 julia> unique([1, 2, 6, 2])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  6
 
 julia> unique(Real[1, 1.0, 2])
-2-element Array{Real,1}:
+2-element Vector{Real}:
  1
  2
 ```
@@ -175,7 +175,7 @@ applied to elements of `itr`.
 # Examples
 ```jldoctest
 julia> unique(x -> x^2, [1, -1, 3, -3, 4])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  3
  4
@@ -240,19 +240,19 @@ elements of `A`, then return the modified A.
 # Examples
 ```jldoctest
 julia> unique!(x -> x^2, [1, -1, 3, -3, 4])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  3
  4
 
 julia> unique!(n -> n%3, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  5
  1
  9
 
 julia> unique!(iseven, [2, 3, 5, 7, 9])
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  2
  3
 ```
@@ -329,13 +329,13 @@ more efficient as long as the elements of `A` can be sorted.
 # Examples
 ```jldoctest
 julia> unique!([1, 1, 1])
-1-element Array{Int64,1}:
+1-element Vector{Int64}:
  1
 
 julia> A = [7, 3, 2, 3, 7, 5];
 
 julia> unique!(A)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  7
  3
  2
@@ -346,7 +346,7 @@ julia> B = [7, 6, 42, 6, 7, 42];
 julia> sort!(B);  # unique! is able to process sorted data much more efficiently.
 
 julia> unique!(B)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   6
   7
  42
@@ -380,7 +380,7 @@ Return `true` if all values from `itr` are distinct when compared with [`isequal
 # Examples
 ```jldoctest
 julia> a = [1; 2; 3]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -461,7 +461,7 @@ See also [`replace`](@ref replace(A, old_new::Pair...)).
 # Examples
 ```jldoctest
 julia> replace!([1, 2, 1, 3], 1=>0, 2=>4, count=2)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  0
  4
  1
@@ -497,7 +497,7 @@ If `count` is specified, then replace at most `count` values in total
 # Examples
 ```jldoctest
 julia> replace!(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  2
  2
  6
@@ -539,14 +539,14 @@ See also [`replace!`](@ref).
 # Examples
 ```jldoctest
 julia> replace([1, 2, 1, 3], 1=>0, 2=>4, count=2)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  0
  4
  1
  3
 
 julia> replace([1, missing], missing=>0)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  0
 ```
@@ -587,7 +587,7 @@ If `count` is specified, then replace at most `count` values in total
 # Examples
 ```jldoctest
 julia> replace(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  2
  2
  6

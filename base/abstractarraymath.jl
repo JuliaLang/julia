@@ -19,12 +19,12 @@ mutable, in which case modifying one will also modify the other.
 # Examples
 ```jldoctest
 julia> a = [1 2 3; 4 5 6]
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  2  3
  4  5  6
 
 julia> vec(a)
-6-element Array{Int64,1}:
+6-element Vector{Int64}:
  1
  4
  2
@@ -109,12 +109,12 @@ Equivalent to `view(A,:,:,...,i,:,:,...)` where `i` is in position `d`.
 # Examples
 ```jldoctest
 julia> A = [1 2 3 4; 5 6 7 8]
-2×4 Array{Int64,2}:
+2×4 Matrix{Int64}:
  1  2  3  4
  5  6  7  8
 
 julia> selectdim(A, 2, 3)
-2-element view(::Array{Int64,2}, :, 3) with eltype Int64:
+2-element view(::Matrix{Int64}, :, 3) with eltype Int64:
  3
  7
 ```
@@ -135,12 +135,12 @@ Reverse `A` in dimension `dims`.
 # Examples
 ```jldoctest
 julia> b = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> reverse(b, dims=2)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  2  1
  4  3
 ```
@@ -191,28 +191,28 @@ first dimension.
 # Examples
 ```jldoctest
 julia> b = reshape(Vector(1:16), (4,4))
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  5   9  13
  2  6  10  14
  3  7  11  15
  4  8  12  16
 
 julia> circshift(b, (0,2))
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
   9  13  1  5
  10  14  2  6
  11  15  3  7
  12  16  4  8
 
 julia> circshift(b, (-1,0))
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  2  6  10  14
  3  7  11  15
  4  8  12  16
  1  5   9  13
 
 julia> a = BitArray([true, true, false, false, true])
-5-element BitArray{1}:
+5-element BitVector:
  1
  1
  0
@@ -220,7 +220,7 @@ julia> a = BitArray([true, true, false, false, true])
  1
 
 julia> circshift(a, 1)
-5-element BitArray{1}:
+5-element BitVector:
  1
  1
  1
@@ -228,7 +228,7 @@ julia> circshift(a, 1)
  0
 
 julia> circshift(a, -1)
-5-element BitArray{1}:
+5-element BitVector:
  1
  0
  0
@@ -252,7 +252,7 @@ Construct an array by repeating array `A` a given number of times in each dimens
 # Examples
 ```jldoctest
 julia> repeat([1, 2, 3], 2)
-6-element Array{Int64,1}:
+6-element Vector{Int64}:
  1
  2
  3
@@ -261,7 +261,7 @@ julia> repeat([1, 2, 3], 2)
  3
 
 julia> repeat([1, 2, 3], 2, 3)
-6×3 Array{Int64,2}:
+6×3 Matrix{Int64}:
  1  1  1
  2  2  2
  3  3  3
@@ -286,21 +286,21 @@ is performed.
 # Examples
 ```jldoctest
 julia> repeat(1:2, inner=2)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  1
  2
  2
 
 julia> repeat(1:2, outer=2)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  1
  2
 
 julia> repeat([1 2; 3 4], inner=(2, 1), outer=(1, 3))
-4×6 Array{Int64,2}:
+4×6 Matrix{Int64}:
  1  2  1  2  1  2
  1  2  1  2  1  2
  3  4  3  4  3  4
@@ -451,17 +451,17 @@ See also [`eachcol`](@ref) and [`eachslice`](@ref).
 
 ```jldoctest
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> first(eachrow(a))
-2-element view(::Array{Int64,2}, 1, :) with eltype Int64:
+2-element view(::Matrix{Int64}, 1, :) with eltype Int64:
  1
  2
 
 julia> collect(eachrow(a))
-2-element Array{SubArray{Int64,1,Array{Int64,2},Tuple{Int64,Base.Slice{Base.OneTo{Int64}}},true},1}:
+2-element Vector{SubArray{Int64,1,Matrix{Int64},Tuple{Int64,Base.Slice{Base.OneTo{Int64}}},true}}:
  [1, 2]
  [3, 4]
 ```
@@ -484,17 +484,17 @@ See also [`eachrow`](@ref) and [`eachslice`](@ref).
 
 ```jldoctest
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> first(eachcol(a))
-2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
+2-element view(::Matrix{Int64}, :, 1) with eltype Int64:
  1
  3
 
 julia> collect(eachcol(a))
-2-element Array{SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true},1}:
+2-element Vector{SubArray{Int64,1,Matrix{Int64},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}}:
  [1, 3]
  [2, 4]
 ```
@@ -519,19 +519,19 @@ See also [`eachrow`](@ref), [`eachcol`](@ref), and [`selectdim`](@ref).
 
 ```jldoctest
 julia> M = [1 2 3; 4 5 6; 7 8 9]
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1  2  3
  4  5  6
  7  8  9
 
 julia> first(eachslice(M, dims=1))
-3-element view(::Array{Int64,2}, 1, :) with eltype Int64:
+3-element view(::Matrix{Int64}, 1, :) with eltype Int64:
  1
  2
  3
 
 julia> collect(eachslice(M, dims=2))
-3-element Array{SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true},1}:
+3-element Vector{SubArray{Int64,1,Matrix{Int64},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}}:
  [1, 4, 7]
  [2, 5, 8]
  [3, 6, 9]
