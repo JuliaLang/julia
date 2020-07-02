@@ -336,7 +336,7 @@ ERROR: MethodError: no method matching myappend(::Vector{Int64}, ::Float64)
 Closest candidates are:
   myappend(::Vector{T}, !Matched::T) where T at none:1
 Stacktrace:
- [1] top-level scope at none:1
+[...]
 
 julia> myappend([1.0,2.0,3.0],4.0)
 4-element Vector{Float64}:
@@ -350,7 +350,7 @@ ERROR: MethodError: no method matching myappend(::Vector{Float64}, ::Int64)
 Closest candidates are:
   myappend(::Vector{T}, !Matched::T) where T at none:1
 Stacktrace:
- [1] top-level scope at none:1
+[...]
 ```
 
 As you can see, the type of the appended element must match the element type of the vector it

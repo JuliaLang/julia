@@ -552,7 +552,7 @@ ERROR: MethodError: no method matching SummedArray(::Vector{Int32}, ::Int32)
 Closest candidates are:
   SummedArray(::Vector{T}) where T at none:4
 Stacktrace:
- [1] top-level scope at none:1
+[...]
 ```
 
 This constructor will be invoked by the syntax `SummedArray(a)`. The syntax `new{T,S}` allows
