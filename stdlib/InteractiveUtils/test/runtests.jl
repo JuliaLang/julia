@@ -193,8 +193,11 @@ end
         @test occursin("Environment:", ver)
     end
     let exename = `$(Base.julia_cmd()) --startup-file=no`
-        @test !occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
-                                                    String[]), String))
+        # Windows wrapper .exe unconditionally adds a JULIA_BINDIR environment mapping
+        if !Sys.iswindows()
+            @test !occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
+                                                        String[]), String))
+        end
         @test  occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
                                                     String["JULIA_CPU_THREADS=1"]), String))
     end
