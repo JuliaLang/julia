@@ -2218,6 +2218,7 @@ const prefix_history_keymap = merge!(
             match_input(map, s, IOBuffer(c))(s, keymap_data(ps, mode(s)))
         end,
         # match escape sequences for pass through
+        "^x*" => "*",
         "\e*" => "*",
         "\e[*" => "*",
         "\eO*"  => "*",
