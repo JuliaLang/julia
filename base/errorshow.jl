@@ -538,15 +538,6 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     end
 end
 
-function show_trace_entry(io, frame, n; prefix = "")
-    if haskey(io, :last_shown_line_infos)
-        push!(io[:last_shown_line_infos], (string(frame.file), frame.line))
-    end
-    print(io, "\n", prefix)
-    show(io, frame, full_path=true)
-    n > 1 && print(io, " (repeats ", n, " times)")
-end
-
 # In case the line numbers in the source code have changed since the code was compiled,
 # allow packages to set a callback function that corrects them.
 # (Used by Revise and perhaps other packages.)
