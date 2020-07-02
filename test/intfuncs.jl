@@ -304,6 +304,7 @@ end
     @test string(3, base = 2) == "11"
     @test string(3, pad = 2, base = 2) == "11"
     @test string(3, pad = Int32(2), base = Int32(2)) == "11"
+    @test string(3, pad = typemin(Int128) + 3, base = 0x2) == "11"
     @test string(3, pad = 3, base = 2) == "011"
     @test string(-3, base = 2) == "-11"
     @test string(-3, pad = 3, base = 2) == "-011"

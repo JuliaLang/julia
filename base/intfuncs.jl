@@ -615,9 +615,9 @@ ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, ba
 
 ## integer to string functions ##
 
-function bin(x::Unsigned, pad::Integer, neg::Bool)
+function bin(x::Unsigned, pad::Int, neg::Bool)
     m = 8sizeof(x) - leading_zeros(x)::Int
-    n = neg + max((pad % Int)::Int, m)
+    n = neg + max(pad, m)
     a = StringVector(n)
     # for i in 0x0:UInt(n-1) # automatic vectorization produces redundant codes
     #     @inbounds a[n - i] = 0x30 + (((x >> i) % UInt8)::UInt8 & 0x1)
@@ -642,9 +642,9 @@ function bin(x::Unsigned, pad::Integer, neg::Bool)
     String(a)
 end
 
-function oct(x::Unsigned, pad::Integer, neg::Bool)
+function oct(x::Unsigned, pad::Int, neg::Bool)
     m = div(8sizeof(x) - leading_zeros(x)::Int + 2, 3)
-    n = neg + max((pad % Int)::Int, m)
+    n = neg + max(pad, m)
     a = StringVector(n)
     i = n
     while i > neg
@@ -659,8 +659,8 @@ end
 # 2-digit decimal characters ("00":"99")
 const _dec_d100 = UInt16[(0x30 + i % 10) << 0x8 + (0x30 + i ÷ 10) for i = 0:99]
 
-function dec(x::Unsigned, pad::Integer, neg::Bool)
-    n = neg + ndigits(x, base=10, pad=(pad % Int)::Int)::Int
+function dec(x::Unsigned, pad::Int, neg::Bool)
+    n = neg + (ndigits(x, base=10, pad=pad) % Int)::Int
     a = StringVector(n)
     i = n
     @inbounds while i >= 2
@@ -678,9 +678,9 @@ function dec(x::Unsigned, pad::Integer, neg::Bool)
     String(a)
 end
 
-function hex(x::Unsigned, pad::Integer, neg::Bool)
+function hex(x::Unsigned, pad::Int, neg::Bool)
     m = 2sizeof(x) - (leading_zeros(x)::Int >> 2)
-    n = neg + max((pad % Int)::Int, m)
+    n = neg + max(pad, m)
     a = StringVector(n)
     i = n
     while i >= 2
@@ -702,12 +702,12 @@ end
 const base36digits = UInt8['0':'9';'a':'z']
 const base62digits = UInt8['0':'9';'A':'Z';'a':'z']
 
-function _base(base::Integer, x::Integer, pad::Integer, neg::Bool)
+function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
+    (x >= 0) | (base < 0) || throw(DomainError(x, "For negative `x`, `base` must be negative."))
+    2 <= abs(base) <= 62 || throw(DomainError(base, "base must satisfy 2 ≤ abs(base) ≤ 62"))
     b = (base % Int)::Int
-    (x >= 0) | (b < 0) || throw(DomainError(x, "For negative `x`, `base` must be negative."))
-    2 <= abs(b) <= 62 || throw(DomainError(b, "base must satisfy 2 ≤ abs(base) ≤ 62"))
     digits = abs(b) <= 36 ? base36digits : base62digits
-    n = neg + ndigits(x, base=b, pad=(pad % Int)::Int)::Int
+    n = neg + (ndigits(x, base=b, pad=pad) % Int)::Int
     a = StringVector(n)
     i = n
     @inbounds while i > neg
@@ -742,6 +742,7 @@ julia> string(13, base = 5, pad = 4)
 ```
 """
 function string(n::Integer; base::Integer = 10, pad::Integer = 1)
+    pad = (min(max(pad, typemin(Int)), typemax(Int)) % Int)::Int
     if base == 2
         (n_positive, neg) = split_sign(n)
         bin(n_positive, pad, neg)
