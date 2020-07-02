@@ -36,7 +36,8 @@ export BINDIR,
        isreadable,
        iswritable,
        username,
-       which
+       which,
+       detectwsl
 
 import ..Base: show
 
@@ -532,7 +533,18 @@ including e.g. a WebAssembly JavaScript embedding in a web browser.
 """
 isjsvm(os::Symbol) = (os === :Emscripten)
 
-for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
+"""
+    Sys.detectwsl([os])
+
+Runtime Predicate for testing if Julia is running inside WSL.
+"""
+function detectwsl(os::Symbol)
+    islinux(os) &&
+    isfile("/proc/sys/kernel/osrelease") &&
+    contains(read("/proc/sys/kernel/osrelease", String), r"Microsoft|WSL"i)
+end
+
+for f in (:detectwsl, :isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
     @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
 end
 
