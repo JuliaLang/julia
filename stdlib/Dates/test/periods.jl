@@ -202,6 +202,31 @@ end
         @test fld(x, y) * y + mod(x, y) == x
     end
 end
+@testset "CompoundPeriod-Real arithmetic" begin
+    p1 = Dates.CompoundPeriod(Dates.Month(1), Dates.Day(2), Dates.Second(3))
+    p2 = Dates.CompoundPeriod(Dates.Month(2), Dates.Day(4), Dates.Second(6))
+    p3 = Dates.CompoundPeriod(Dates.Month(3), Dates.Day(6), Dates.Second(9))
+    @test p1 * 2 == p2
+    @test 0.5 * p2 == p1
+    @test p3 * (2//3) == p2
+    @test 1.5f0 * p2 == p3
+    @test p1 * 0 == emptyperiod
+    @test 0.0 * p2 == emptyperiod
+    @test emptyperiod * 2 == emptyperiod
+    @test 0.5 * emptyperiod == emptyperiod
+    @test_throws InexactError p3 * 0.5
+    @test_throws InexactError (3//2) * p1
+    @test p2 / 2 == p1
+    @test p3 / 3.0 == p1
+    @test p2 / (2//3) == p3
+    @test p3 / 1.5f0 == p2
+    @test p1 / Inf == emptyperiod
+    @test p2 / (1//0) == emptyperiod
+    @test emptyperiod / 3 == emptyperiod
+    @test_throws InexactError p1 / 2
+    @test (1:3) * p1 == [p1, p2, p3]
+    @test p1 * (3:-1:1) == [p3, p2, p1]
+end
 @testset "Associativity" begin
     dt = Dates.DateTime(2012, 12, 21)
     test = ((((((((dt + y) - m) + w) - d) + h) - mi) + s) - ms)
@@ -238,6 +263,10 @@ end
     @test zero(Dates.Second(10)) == Dates.Second(0)
     @test zero(Dates.Millisecond) == Dates.Millisecond(0)
     @test zero(Dates.Millisecond(10)) == Dates.Millisecond(0)
+    @test zero(Dates.CompoundPeriod) == emptyperiod
+    @test zero(Dates.CompoundPeriod(Dates.Year(1), Dates.Day(1))) == emptyperiod
+    @test one(Dates.CompoundPeriod) == 1
+    @test one(Dates.CompoundPeriod(Dates.Year(1), Dates.Day(1))) == 1
     @test Dates.Year(-1) < Dates.Year(1)
     @test !(Dates.Year(-1) > Dates.Year(1))
     @test Dates.Year(1) == Dates.Year(1)
