@@ -2668,3 +2668,9 @@ end
 f36531(args...) = tuple((args...)...)
 @test @inferred(f36531(1,2,3)) == (1,2,3)
 @test code_typed(f36531, Tuple{Vararg{Int}}) isa Vector
+
+# PartialStruct results on typeinf edges
+partial_return_1(x) = (x, 1)
+partial_return_2(x) = Val{partial_return_1(x)[2]}
+
+@test Base.return_types(partial_return_2, (Int,)) == Any[Type{Val{1}}]
