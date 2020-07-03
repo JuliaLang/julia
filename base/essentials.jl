@@ -742,8 +742,7 @@ of [`invokelatest`](@ref).
     This is because precompilation generates a "parallel universe" where the
     world age refers to system state unrelated to the main Julia session.
 """
-function invoke_in_world(world::Integer, @nospecialize(f), @nospecialize args...; kwargs...)
-    world = convert(UInt, world)
+function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; kwargs...)
     if isempty(kwargs)
         return Core._apply_in_world(world, f, args)
     end
