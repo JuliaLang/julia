@@ -2674,3 +2674,7 @@ partial_return_1(x) = (x, 1)
 partial_return_2(x) = Val{partial_return_1(x)[2]}
 
 @test Base.return_types(partial_return_2, (Int,)) == Any[Type{Val{1}}]
+
+# Precision of abstract_iteration
+f_splat(x) = (x...,)
+@test Base.return_types(f_splat, (Pair{Int,Int},)) == Any[Tuple{Int, Int}]

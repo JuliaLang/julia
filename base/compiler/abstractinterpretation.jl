@@ -223,9 +223,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
             end
         elseif istopfunction(f, :iterate)
             itrty = argtypes[2]
-            if itrty isa Type && !issingletontype(itrty)
-                return Any
-            elseif itrty ⊑ Array
+            if itrty ⊑ Array
                 return Any
             end
         end
@@ -569,37 +567,51 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     stateordonet === Bottom && return Any[Bottom]
     valtype = statetype = Bottom
     ret = Any[]
-    stateordonet = widenconst(stateordonet)
-    while !(Nothing <: stateordonet) && length(ret) < InferenceParams(interp).MAX_TUPLE_SPLAT
-        if !isa(stateordonet, DataType) || !(stateordonet <: Tuple) || isvatuple(stateordonet) || length(stateordonet.parameters) != 2
+    # Try to unroll the iteration up to MAX_TUPLE_SPLAT, which covers any finite
+    # length iterators, or interesting prefix
+    while true
+        stateordonet_widened = widenconst(stateordonet)
+        if stateordonet_widened === Nothing
+            return ret
+        end
+        if Nothing <: stateordonet_widened || length(ret) >= InferenceParams(interp).MAX_TUPLE_SPLAT
             break
         end
-        if stateordonet.parameters[2] <: statetype
-            # infinite (or failing) iterator
+        if !isa(stateordonet_widened, DataType) || !(stateordonet_widened <: Tuple) || isvatuple(stateordonet_widened) || length(stateordonet_widened.parameters) != 2
+            break
+        end
+        nstatetype = getfield_tfunc(stateordonet, Const(2))
+        # If there's no new information in this statetype, don't bother continuing,
+        # the iterator won't be finite.
+        if nstatetype ⊑ statetype
             return Any[Bottom]
         end
-        valtype = stateordonet.parameters[1]
-        statetype = stateordonet.parameters[2]
+        valtype = getfield_tfunc(stateordonet, Const(1))
         push!(ret, valtype)
+        statetype = nstatetype
+        stateordonet = abstract_call_known(interp, iteratef, nothing, Any[Const(iteratef), itertype, statetype], vtypes, sv)
+    end
+    # From here on, we start asking for results on the widened types, rather than
+    # the precise (potentially const) state type
+    statetype = widenconst(statetype)
+    valtype = widenconst(valtype)
+    while valtype !== Any
         stateordonet = abstract_call_known(interp, iteratef, nothing, Any[Const(iteratef), itertype, statetype], vtypes, sv)
         stateordonet = widenconst(stateordonet)
-    end
-    if stateordonet === Nothing
-        return ret
-    end
-    while valtype !== Any
         nounion = typesubtract(stateordonet, Nothing)
         if !isa(nounion, DataType) || !(nounion <: Tuple) || isvatuple(nounion) || length(nounion.parameters) != 2
             valtype = Any
             break
         end
         if nounion.parameters[1] <: valtype && nounion.parameters[2] <: statetype
+            if typeintersect(stateordonet, Nothing) === Union{}
+                # Reached a fixpoint, but Nothing is not possible => iterator is infinite or failing
+                return Any[Bottom]
+            end
             break
         end
         valtype = tmerge(valtype, nounion.parameters[1])
         statetype = tmerge(statetype, nounion.parameters[2])
-        stateordonet = abstract_call_known(interp, iteratef, nothing, Any[Const(iteratef), itertype, statetype], vtypes, sv)
-        stateordonet = widenconst(stateordonet)
     end
     push!(ret, Vararg{valtype})
     return ret
