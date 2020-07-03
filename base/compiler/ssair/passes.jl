@@ -224,7 +224,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                     end
                     val = new_def
                 end
-                if def == val
+                if def === val
                     # This shouldn't really ever happen, but
                     # patterns like this can occur in dead code,
                     # so bail out.

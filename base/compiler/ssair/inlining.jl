@@ -839,9 +839,9 @@ function inline_splatnew!(ir::IRCode, idx::Int)
         tup = eargs[2]
         tt = argextype(tup, ir, ir.sptypes)
         tnf = nfields_tfunc(tt)
-        # TODO: hoisting this tnf.val == nf.val check into codegen
+        # TODO: hoisting this tnf.val === nf.val check into codegen
         # would enable us to almost always do this transform
-        if tnf isa Const && tnf.val == nf.val
+        if tnf isa Const && tnf.val === nf.val
             n = tnf.val
             new_argexprs = Any[eargs[1]]
             for j = 1:n

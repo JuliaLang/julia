@@ -84,6 +84,7 @@ include("range.jl")
 include("error.jl")
 
 # core numeric operations & types
+==(x, y) = x === y
 include("bool.jl")
 include("number.jl")
 include("int.jl")

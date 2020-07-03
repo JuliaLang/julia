@@ -894,7 +894,7 @@ function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
     if isa(s0, Const) && (!(isa(s0.val, DataType) || isa(s0.val, UnionAll) || isa(s0.val, Union)) || s0.val === Module)
         return Bottom
     end
-    if s0 == Type{Module} || s0 == Type{Union{}} || isa(s0, Conditional)
+    if (s0 isa Type && (s0 == Type{Module} || s0 == Type{Union{}})) || isa(s0, Conditional)
         return Bottom
     end
 
@@ -1458,7 +1458,7 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
     end
     # The remaining intrinsics are math/bits/comparison intrinsics. They work on all
     # primitive types of the same type.
-    isshift = f == shl_int || f == lshr_int || f == ashr_int
+    isshift = f === shl_int || f === lshr_int || f === ashr_int
     argtype1 = widenconst(argtypes[1])
     isprimitivetype(argtype1) || return false
     for i = 2:length(argtypes)

@@ -184,7 +184,7 @@ Return a boolean indicating whether `T` has `name` as one of its own fields.
 !!! compat "Julia 1.2"
      This function requires at least Julia 1.2.
 """
-function hasfield(::Type{T}, name::Symbol) where T
+function hasfield(T::Type, name::Symbol)
     @_pure_meta
     return fieldindex(T, name, false) > 0
 end
@@ -339,7 +339,7 @@ function datatype_alignment(dt::DataType)
 end
 
 # amount of total space taken by T when stored in a container
-function aligned_sizeof(T)
+function aligned_sizeof(T::Type)
     @_pure_meta
     if isbitsunion(T)
         sz = Ref{Csize_t}(0)

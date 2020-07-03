@@ -110,6 +110,7 @@ end
 eltype(t::Type{<:Tuple}) = _compute_eltype(t)
 function _compute_eltype(t::Type{<:Tuple})
     @_pure_meta
+    @nospecialize t
     t isa Union && return promote_typejoin(eltype(t.a), eltype(t.b))
     t´ = unwrap_unionall(t)
     r = Union{}
@@ -419,6 +420,22 @@ function _tuple_any(f::Function, tf::Bool, a, b...)
     _tuple_any(f, tf | f(a), b...)
 end
 _tuple_any(f::Function, tf::Bool) = tf
+
+
+# a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
+function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
+    @nospecialize itr
+    @_pure_meta
+    for y in itr
+        y === x && return true
+    end
+    return false
+end
+function in(x::Symbol, itr::Tuple{Vararg{Symbol}})
+    @nospecialize itr
+    return sym_in(x, itr)
+end
+
 
 """
     empty(x::Tuple)

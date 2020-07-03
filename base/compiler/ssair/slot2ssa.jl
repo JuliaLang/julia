@@ -692,13 +692,13 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
         for (idx, slot) in Iterators.enumerate(phi_slots[item])
             ssaval, node = phi_nodes[item][idx]
             incoming_val = incoming_vals[slot]
-            if incoming_val == SSAValue(-1)
+            if incoming_val === SSAValue(-1)
                 # Optimistically omit this path.
                 # Liveness analysis would probably have prevented us from inserting this phi node
                 continue
             end
             push!(node.edges, pred)
-            if incoming_val == undef_token
+            if incoming_val === undef_token
                 resize!(node.values, length(node.values)+1)
             else
                 push!(node.values, incoming_val)
@@ -708,7 +708,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             if isa(incoming_val, NewSSAValue)
                 push!(type_refine_phi, ssaval.id)
             end
-            typ = incoming_val == undef_token ? MaybeUndef(Union{}) : typ_for_val(incoming_val, ci, sptypes, -1, slottypes)
+            typ = incoming_val === undef_token ? MaybeUndef(Union{}) : typ_for_val(incoming_val, ci, sptypes, -1, slottypes)
             old_entry = new_nodes.stmts[ssaval.id]
             if isa(typ, DelayedTyp)
                 push!(type_refine_phi, ssaval.id)

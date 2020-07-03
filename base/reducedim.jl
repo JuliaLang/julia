@@ -221,7 +221,7 @@ Extract first entry of slices of array A into existing array R.
 """
 copyfirst!(R::AbstractArray, A::AbstractArray) = mapfirst!(identity, R, A)
 
-function mapfirst!(f, R::AbstractArray, A::AbstractArray{<:Any,N}) where {N}
+function mapfirst!(f::F, R::AbstractArray, A::AbstractArray{<:Any,N}) where {N, F}
     lsiz = check_reducedims(R, A)
     t = _firstreducedslice(axes(R), axes(A))
     map!(f, R, view(A, t...))
