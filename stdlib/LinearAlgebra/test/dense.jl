@@ -399,12 +399,12 @@ end
     a = [1.0, 0.0]
     b = [0.0, 1.0]
     @test kron!([1.0, 0.0], b, 0.5) == [0.0; 0.5]
-    b = [0.0, 1.0]
+    @test kron!([1.0, 0.0], 0.5, b) == [0.0; 0.5]
     c = Vector{Float64}(undef, 4)
-    c = kron!(c, a, b)
+    kron!(c, a, b)
     @test c == [0.0; 1.0; 0.0; 0.0]
     c = Matrix{Float64}(undef, 2, 2)
-    c = kron!(c, a, b')
+    kron!(c, a, b')
     @test c == [0.0 1.0; 0.0 0.0]
 end
 
