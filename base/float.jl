@@ -903,6 +903,17 @@ end
 uinttype(::Type{Float64}) = UInt64
 uinttype(::Type{Float32}) = UInt32
 uinttype(::Type{Float16}) = UInt16
+inttype(::Type{Float64}) = Int64
+inttype(::Type{Float32}) = Int32
+inttype(::Type{Float16}) = Int16
+# float size of integer
+floattype(::Type{UInt64}) = Float64
+floattype(::Type{UInt32}) = Float32
+floattype(::Type{UInt16}) = Float16
+floattype(::Type{Int64}) = Float64
+floattype(::Type{Int32}) = Float32
+floattype(::Type{Int16}) = Float16
+
 
 Base.iszero(x::Float16) = reinterpret(UInt16, x) & ~sign_mask(Float16) == 0x0000
 
