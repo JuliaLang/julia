@@ -275,8 +275,11 @@ function getindex(x::IRCode, s::SSAValue)
 end
 
 function setindex!(x::IRCode, @nospecialize(repl), s::SSAValue)
-    @assert s.id <= length(x.stmts)
-    x.stmts[s.id][:inst] = repl
+    if s.id <= length(x.stmts)
+        x.stmts[s.id][:inst] = repl
+    else
+        x.new_nodes.stmts[s.id - length(x.stmts)][:inst] = repl
+    end
     return x
 end
 
@@ -1074,7 +1077,9 @@ function process_newnode!(compact::IncrementalCompact, new_idx::Int, new_node_en
         finish_current_bb!(compact, active_bb, old_result_idx)
     end
     (old_result_idx == result_idx) && return iterate(compact, (idx, active_bb))
-    return Pair{Int, Any}(old_result_idx, compact.result[old_result_idx][:inst]), (idx, active_bb)
+    return Pair{Pair{Int, Int}, Any}(
+        Pair{Int,Int}(new_idx,old_result_idx),
+        compact.result[old_result_idx][:inst]), (idx, active_bb)
 end
 
 struct CompactPeekIterator
@@ -1141,9 +1146,9 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         # Move to next block
         compact.idx += 1
         if finish_current_bb!(compact, active_bb, old_result_idx, true)
-            return iterate(compact, (compact.idx, active_bb + 1))
+            return iterate(compact, (compact.idx-1, active_bb + 1))
         else
-            return Pair{Int, Any}(old_result_idx, compact.result[old_result_idx][:inst]), (compact.idx, active_bb + 1)
+            return Pair{Pair{Int, Int}, Any}(Pair{Int,Int}(compact.idx-1, old_result_idx), compact.result[old_result_idx][:inst]), (compact.idx, active_bb + 1)
         end
     end
     if compact.new_nodes_idx <= length(compact.perm) &&
@@ -1180,7 +1185,8 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         @goto restart
     end
     @assert isassigned(compact.result.inst, old_result_idx)
-    return Pair{Int, Any}(old_result_idx, compact.result[old_result_idx][:inst]), (compact.idx, active_bb)
+    return Pair{Pair{Int,Int}, Any}(Pair{Int,Int}(compact.idx-1, old_result_idx),
+        compact.result[old_result_idx][:inst]), (compact.idx, active_bb)
 end
 
 function maybe_erase_unused!(extra_worklist, compact, idx, callback = x->nothing)
