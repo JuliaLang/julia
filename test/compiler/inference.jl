@@ -32,6 +32,9 @@ let ref = Tuple{T, Val{T}} where T<:(Val{T} where T<:(Val{T} where T<:(Val{T} wh
     @test Core.Compiler.limit_type_size(ref, sig, Union{}, 100, 100) == ref
 end
 
+let t = Tuple{Ref{T},T,T} where T, c = Tuple{Ref, T, T} where T # #36407
+    @test t <: Core.Compiler.limit_type_size(t, c, Union{}, 1, 100)
+end
 
 @test Core.Compiler.unionlen(Union{}) == 1
 @test Core.Compiler.unionlen(Int8) == 1
