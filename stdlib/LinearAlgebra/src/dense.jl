@@ -413,6 +413,7 @@ function kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
 end
 
 kron!(c::AbstractVecOrMat, a::AbstractVecOrMat, b::Number) = mul!(c, a, b)
+kron!(c::AbstractVecOrMat, a::Number, b::AbstractVecOrMat) = mul!(c, a, b)
 
 Base.@propagate_inbounds function kron!(c::AbstractVector, a::AbstractVector, b::AbstractVector)
     C = reshape(c, length(a)*length(b), 1)
