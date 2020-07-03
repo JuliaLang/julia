@@ -1492,18 +1492,21 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, v
                     if isa(rt, Const)
                         # output was computed to be constant
                         return Const(typeof(rt.val))
-                    elseif hasuniquerep(rt) || rt === Bottom
-                        # output type was known for certain
-                        return Const(rt)
-                    elseif (isa(tt, Const) || isconstType(tt)) &&
-                           (isa(aft, Const) || isconstType(aft))
-                        # input arguments were known for certain
-                        # XXX: this doesn't imply we know anything about rt
-                        return Const(rt)
-                    elseif isType(rt)
-                        return Type{rt}
                     else
-                        return Type{<:widenconst(rt)}
+                        rt = widenconst(rt)
+                        if hasuniquerep(rt) || rt === Bottom
+                            # output type was known for certain
+                            return Const(rt)
+                        elseif (isa(tt, Const) || isconstType(tt)) &&
+                            (isa(aft, Const) || isconstType(aft))
+                            # input arguments were known for certain
+                            # XXX: this doesn't imply we know anything about rt
+                            return Const(rt)
+                        elseif isType(rt)
+                            return Type{rt}
+                        else
+                            return Type{<:rt}
+                        end
                     end
                 end
             end
