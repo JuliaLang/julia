@@ -423,14 +423,6 @@ get!(collection, key, default)
 
 Return the value stored for the given key, or if no mapping for the key is present, store
 `key => f()`, and return `f()`.
-
-This is intended to be called using `do` block syntax:
-```julia
-get!(dict, key) do
-    # default value calculated here
-    time()
-end
-```
 """
 get!(f::Function, collection, key)
 
