@@ -324,3 +324,17 @@ w = worlds(mi)
 abstract type Colorant35855 end
 Base.convert(::Type{C}, c) where C<:Colorant35855 = false
 @test_broken worlds(mi) == w
+
+# invoke_in_world
+f_inworld(x) = "world one; x=$x"
+g_inworld(x; y) = "world one; x=$x, y=$y"
+wc_aiw1 = get_world_counter()
+# redefine f_inworld, g_inworld, and check that we can invoke both versions
+f_inworld(x) = "world two; x=$x"
+g_inworld(x; y) = "world two; x=$x, y=$y"
+wc_aiw2 = get_world_counter()
+@test Base.invoke_in_world(wc_aiw1, f_inworld, 2) == "world one; x=2"
+@test Base.invoke_in_world(wc_aiw2, f_inworld, 2) == "world two; x=2"
+@test Base.invoke_in_world(wc_aiw1, g_inworld, 2, y=3) == "world one; x=2, y=3"
+@test Base.invoke_in_world(wc_aiw2, g_inworld, 2, y=3) == "world two; x=2, y=3"
+
