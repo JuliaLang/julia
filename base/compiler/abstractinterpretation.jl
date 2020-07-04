@@ -550,6 +550,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     else
         return Any[Vararg{Any}]
     end
+    @assert !isvarargtype(itertype)
     stateordonet = abstract_call_known(interp, iteratef, nothing, Any[itft, itertype], vtypes, sv)
     # Return Bottom if this is not an iterator.
     # WARNING: Changes to the iteration protocol must be reflected here,
@@ -612,7 +613,22 @@ function abstract_apply(interp::AbstractInterpreter, @nospecialize(itft), @nospe
     for i = 1:nargs
         ctypes´ = []
         for ti in (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
-            cti = precise_container_type(interp, itft, ti, vtypes, sv)
+            if !isvarargtype(ti)
+                cti = precise_container_type(interp, itft, ti, vtypes, sv)
+            else
+                cti = precise_container_type(interp, itft, unwrapva(ti), vtypes, sv)
+                # We can't represent a repeating sequence of the same types,
+                # so tmerge everything together to get one type that represents
+                # everything.
+                argt = cti[end]
+                if isvarargtype(argt)
+                    argt = unwrapva(argt)
+                end
+                for i in 1:(length(cti)-1)
+                    argt = tmerge(argt, cti[i])
+                end
+                cti = Any[Vararg{argt}]
+            end
             if _any(t -> t === Bottom, cti)
                 continue
             end

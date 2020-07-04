@@ -2660,3 +2660,8 @@ function symcmp36230(vec)
     return false
 end
 @test Base.return_types(symcmp36230, (Vector{Any},)) == Any[Bool]
+
+# Issue #36531, double varargs in abstract_iteration
+f36531(args...) = tuple((args...)...)
+@test @inferred(f36531(1,2,3)) == (1,2,3)
+@test code_typed(f36531, Tuple{Vararg{Int}}) isa Vector
