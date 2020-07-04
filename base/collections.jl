@@ -25,7 +25,7 @@ Unary form `into(T::Type)` returns a callable `iterable -> into(T, iterable)`.
 
 ```jldoctest
 julia> into(Array{Int}, BitVector([0, 1, 0, 0]))
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  0
  1
  0
@@ -38,7 +38,7 @@ julia> into(Array{Int}, BitVector([0, 1, 0, 0]))
 julia> xs = Ref.([1, 2, 3]);
 
 julia> ys = into(Vector, xs)
-3-element Array{Base.RefValue{Int64},1}:
+3-element Vector{Base.RefValue{Int64}}:
  Base.RefValue{Int64}(1)
  Base.RefValue{Int64}(2)
  Base.RefValue{Int64}(3)
@@ -46,7 +46,7 @@ julia> ys = into(Vector, xs)
 julia> ys[1] = Ref(100);
 
 julia> xs
-3-element Array{Base.RefValue{Int64},1}:
+3-element Vector{Base.RefValue{Int64}}:
  Base.RefValue{Int64}(1)
  Base.RefValue{Int64}(2)
  Base.RefValue{Int64}(3)
@@ -54,7 +54,7 @@ julia> xs
 julia> ys[2][] = 200;
 
 julia> xs
-3-element Array{Base.RefValue{Int64},1}:
+3-element Vector{Base.RefValue{Int64}}:
  Base.RefValue{Int64}(1)
  Base.RefValue{Int64}(200)
  Base.RefValue{Int64}(3)
