@@ -67,6 +67,12 @@ julia> C.L
 
 julia> C.L * C.U == A
 true
+
+julia> l, u = C; # destructuring via iteration
+
+julia> l == C.L && u == C.U
+true
+
 ```
 """
 struct Cholesky{T,S<:AbstractMatrix} <: Factorization{T}
@@ -83,6 +89,13 @@ Cholesky(A::AbstractMatrix{T}, uplo::Symbol, info::Integer) where {T} =
     Cholesky{T,typeof(A)}(A, char_uplo(uplo), info)
 Cholesky(A::AbstractMatrix{T}, uplo::AbstractChar, info::Integer) where {T} =
     Cholesky{T,typeof(A)}(A, uplo, info)
+
+
+# iteration for destructuring into components
+Base.iterate(C::Cholesky) = (C.L, Val(:U))
+Base.iterate(C::Cholesky, ::Val{:U}) = (C.U, Val(:done))
+Base.iterate(C::Cholesky, ::Val{:done}) = nothing
+
 
 """
     CholeskyPivoted
