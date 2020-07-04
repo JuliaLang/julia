@@ -72,7 +72,6 @@ julia> l, u = C; # destructuring via iteration
 
 julia> l == C.L && u == C.U
 true
-
 ```
 """
 struct Cholesky{T,S<:AbstractMatrix} <: Factorization{T}
@@ -127,6 +126,11 @@ permutation:
  3
  2
  1
+
+julia> l, u = C; # destructuring via iteration
+
+julia> l == C.l && u == C.U
+true
 ```
 """
 struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
@@ -146,6 +150,13 @@ function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{<
                             rank::Integer, tol::Real, info::Integer) where T
     CholeskyPivoted{T,typeof(A)}(A, uplo, piv, rank, tol, info)
 end
+
+
+# iteration for destructuring into components
+Base.iterate(C::CholeskyPivoted) = (C.L, Val(:U))
+Base.iterate(C::CholeskyPivoted, ::Val{:U}) = (C.U, Val(:done))
+Base.iterate(C::CholeskyPivoted, ::Val{:done}) = nothing
+
 
 # make a copy that allow inplace Cholesky factorization
 @inline choltype(A) = promote_type(typeof(sqrt(oneunit(eltype(A)))), Float32)
