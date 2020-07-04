@@ -129,7 +129,7 @@ permutation:
 
 julia> l, u = C; # destructuring via iteration
 
-julia> l == C.l && u == C.U
+julia> l == C.L && u == C.U
 true
 ```
 """
