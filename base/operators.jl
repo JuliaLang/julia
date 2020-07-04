@@ -913,6 +913,9 @@ julia> filter(!isletter, str)
 """
 !(f::Function) = (x...)->!f(x...)
 
+_typeof(::T) where {T} = T
+_typeof(::Type{T}) where {T} = Type{T}
+
 """
     Fix1(f, x)
 
@@ -923,10 +926,10 @@ A type representing a partially-applied version of the two-argument function
 struct Fix1{F,T} <: Function
     f::F
     x::T
-
-    Fix1(f::F, x::T) where {F,T} = new{F,T}(f, x)
-    Fix1(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
+    Fix1{F,T}(f::F, x::T) where {F,T} = new{F,T}(f, x)
 end
+
+Fix1(f::F, x::T) where {F,T} = Fix1{_typeof(f),_typeof(x)}(f, x)
 
 (f::Fix1)(y) = f.f(f.x, y)
 
@@ -940,10 +943,10 @@ A type representing a partially-applied version of the two-argument function
 struct Fix2{F,T} <: Function
     f::F
     x::T
-
-    Fix2(f::F, x::T) where {F,T} = new{F,T}(f, x)
-    Fix2(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
+    Fix2{F,T}(f::F, x::T) where {F,T} = new{F,T}(f, x)
 end
+
+Fix2(f::F, x::T) where {F,T} = Fix2{_typeof(f),_typeof(x)}(f, x)
 
 (f::Fix2)(y) = f.f(y, f.x)
 

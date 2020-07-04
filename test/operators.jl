@@ -226,6 +226,14 @@ end
     fy = Base.Fix2(/, y)
     @test fx(y) == x / y
     @test fy(x) == x / y
+
+    convert_Int = Base.Fix1(convert, Int)
+    @test convert_Int isa Base.Fix1{typeof(convert),Type{Int}}
+    @test @inferred(convert_Int(1.0)) === 1
+
+    read_String = Base.Fix2(read, String)
+    @test read_String isa Base.Fix2{typeof(read),Type{String}}
+    @test @inferred(read_String(devnull)) === ""
 end
 
 @testset "curried comparisons" begin
