@@ -320,6 +320,7 @@ end
         pop!(need_to_handle_undef_sparam, which(Base.oneunit, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{}}))
         pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{Int8}}))
+        pop!(need_to_handle_undef_sparam, which(Base.__into__, Tuple{Type{Tuple{Vararg{T,N}} where {N}},Any} where {T}))
         @test need_to_handle_undef_sparam == Set()
     end
 end
