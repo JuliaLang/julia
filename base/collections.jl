@@ -9,8 +9,6 @@ Construct a new `collection` of type `T` that contains the elements in `iterable
 
 If `T` has `eltype`, `keytype`, or `valtype` information, all elements in `collection` are
 converted to the destination type to guarantee the constraint `collection isa T`.
-Otherwise, if `IteratorEltype(collection)` is `HasEltype()` and type `T` can specify element
-type in the type domain, `eltype(typeof(collection)) == eltype(typeof(iterable))` holds.
 
 If `T` has size or length information (e.g., `NTuple` and `StaticArray`), providing
 `collection` with unmatched size or length throws an error.
@@ -109,9 +107,6 @@ overload `__into__` (resp. `__from__`) by documenting specific type bounds for
 `__into__(T, iterable)`.
 
 ## Implementation
-
-If `IteratorEltype(collection)` is `HasEltype()` and type `T` can specify element type in
-the type domain, `eltype(typeof(collection)) == eltype(typeof(iterable))` must hold.
 
 If `T` is a subtype of `AbstractArray`,
 
