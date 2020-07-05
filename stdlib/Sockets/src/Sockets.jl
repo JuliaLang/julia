@@ -247,7 +247,7 @@ function _bind(sock::UDPSocket, host::Union{IPv4, IPv6}, port::UInt16, flags::UI
 end
 
 """
-    bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)
+    bind(socket::Union{TCPServer, UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)
 
 Bind `socket` to the given `host:port`. Note that `0.0.0.0` will listen on all devices.
 
