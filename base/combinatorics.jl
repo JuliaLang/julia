@@ -37,7 +37,7 @@ end
 # Basic functions for working with permutations
 
 @inline function _foldoneto(op, acc, ::Val{N}) where N
-    @assert N::Integer > 0
+    @assert N::Integer >= 0
     if @generated
         quote
             acc_0 = acc

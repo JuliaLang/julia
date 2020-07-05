@@ -72,7 +72,7 @@ end
 
 @testset "into(Tuple, _)" begin
     @test @inferred(into(Tuple{}, 1:0)) === ()
-
+    @test @inferred(into(NTuple{1,Int}, [10])) === (10,)
     @test @inferred(into(NTuple{2,Int}, [10, 20])) === (10, 20)
     @test @inferred(into(NTuple{2}, [10, 20])) === (10, 20)
     @test @inferred(into(NTuple{2,Float64}, [10, 20])) === (10.0, 20.0)
