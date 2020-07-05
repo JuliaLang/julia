@@ -702,6 +702,26 @@ top:
    ret i8 %val
 }
 
+define i8 @gather_arrayptrs_alltrue() {
+; CHECK-LABEL: @gather_arrayptrs
+; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3
+; CHECK: %arrayptrs = call <2 x i8 addrspace(13)*> @llvm.masked.gather.v2p13i8.v2p11p13i8(<2 x i8 addrspace(13)* addrspace(11)*> %arrayptrptrs, i32 16, <2 x i1> <i1 true, i1 true>, <2 x i8 addrspace(13)*> zeroinitializer)
+; CHECK: [[GEP0:%.*]] = getelementptr {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 2
+; CHECK: store {} addrspace(10)* %obj1, {} addrspace(10)** [[GEP0]]
+;
+top:
+   %ptls = call {}*** @julia.ptls_states()
+   %obj1 = call {} addrspace(10) *@alloc()
+   %decayed = addrspacecast {} addrspace(10) *%obj1 to {} addrspace(11)*
+   %arrayptrptr = bitcast {} addrspace(11) *%decayed to i8 addrspace(13)* addrspace(11)*
+   %arrayptrptrs = insertelement <2 x i8 addrspace(13)* addrspace(11)*> zeroinitializer, i8 addrspace(13)* addrspace(11)* %arrayptrptr, i32 0
+   %arrayptrs = call <2 x i8 addrspace(13)*> @llvm.masked.gather.v2p13i8.v2p11p13i8(<2 x i8 addrspace(13)* addrspace(11)*> %arrayptrptrs, i32 16, <2 x i1> <i1 true, i1 true>, <2 x i8 addrspace(13)*> zeroinitializer)
+   %arrayptr = extractelement <2 x i8 addrspace(13)*> %arrayptrs, i32 0
+   call void @jl_safepoint()
+   %val = load i8, i8 addrspace(13)* %arrayptr
+   ret i8 %val
+}
+
 define i8 @lost_select_decayed(i1 %arg1) {
 ; CHECK-LABEL: @lost_select_decayed
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3

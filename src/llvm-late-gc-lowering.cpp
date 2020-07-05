@@ -510,7 +510,12 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                 if (auto VTy = dyn_cast<VectorType>(II->getType())) {
                     if (auto PtrT = dyn_cast<PointerType>(VTy->getElementType())) {
                         if (PtrT->getAddressSpace() == AddressSpace::Loaded) {
-                            assert(isa<UndefValue>(II->getOperand(3)) && "unimplemented");
+                            Value *Mask = II->getOperand(2);
+                            Value *Passthrough = II->getOperand(3);
+                            if (!isa<Constant>(Mask) || !cast<Constant>(Mask)->isAllOnesValue()) {
+                                assert(isa<UndefValue>(Passthrough) && "unimplemented");
+                                (void)Passthrough;
+                            }
                             CurrentV = II->getOperand(0);
                             if (II->getIntrinsicID() == Intrinsic::masked_load) {
                                 fld_idx = -1;
