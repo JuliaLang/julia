@@ -79,6 +79,8 @@ end
     @test into(NTuple{3}, (1, 2.0, 3im)) === (1.0 + 0.0im, 2.0 + 0.0im, 0.0 + 3.0im)
     @test @inferred(into(Tuple{Int,Float64}, 1:2)) === (1, 2.0)
     @test into(NTuple{<:Any,Float64}, 1:3) === (1.0, 2.0, 3.0)
+    @test into(Tuple, Any[1, 2.0]) === (1, 2.0)
+    @test into(NTuple, Any[1, 2.0]) === (1.0, 2.0)
 
     @test @inferred(into(NTuple{2,Int})([10, 20])) === (10, 20)
     @test @inferred(into(NTuple{2})([10, 20])) === (10, 20)

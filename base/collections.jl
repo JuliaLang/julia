@@ -187,10 +187,9 @@ function __into__(::Type{NTuple{N,Any}}, iterable) where {N}
     _too_many_items_error(N, y[1])
 end
 
-_tuple_length(::Type{<:NTuple{N,Any}}) where {N} = N
-
-__into__(::Type{T}, iterable) where {T <: Tuple} =
-    convert(T, __into__(NTuple{_tuple_length(T),Any}, iterable))
+__into__(::Type{T}, iterable) where {T<:Tuple} = convert(T, Tuple(iterable))
+__into__(::Type{T}, iterable) where {N,T<:NTuple{N,Any}} =
+    convert(T, __into__(NTuple{N,Any}, iterable))
 
 function __into__(::Type{NTuple{<:Any,T}}, iterable) where {T}
     collection = Tuple(iterable)
@@ -199,3 +198,4 @@ end
 
 __into__(::Type{NTuple{N}}, iterable) where {N} =
     promote(__into__(NTuple{N,Any}, iterable)...)
+__into__(::Type{NTuple}, iterable) = promote(iterable...)
