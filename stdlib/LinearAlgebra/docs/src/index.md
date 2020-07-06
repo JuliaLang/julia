@@ -333,6 +333,7 @@ LinearAlgebra.UnitUpperTriangular
 LinearAlgebra.UpperHessenberg
 LinearAlgebra.UniformScaling
 LinearAlgebra.I
+LinearAlgebra.UniformScaling(::Integer)
 LinearAlgebra.Factorization
 LinearAlgebra.LU
 LinearAlgebra.lu
