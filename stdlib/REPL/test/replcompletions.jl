@@ -116,6 +116,10 @@ let s = "using REP"
     @test count(isequal("REPL"), c) == 1
     # issue #30234
     @test !Base.isbindingresolved(M32377, :tanh)
+    # check what happens if REPL is already imported
+    M32377.eval(:(using REPL))
+    c, r = test_complete_32377(s)
+    @test count(isequal("REPL"), c) == 1
 end
 
 let s = "Comp"
