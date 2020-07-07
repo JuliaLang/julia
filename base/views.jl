@@ -131,7 +131,7 @@ end
 # (while remaining equivalent to getindex for scalar indices and non-array types)
 @propagate_inbounds maybeview(A, args...) = getindex(A, args...)
 @propagate_inbounds maybeview(A::AbstractArray, args...) = view(A, args...)
-@propagate_inbounds maybeview(A::AbstractArray, args::Union{Number,CartesianIndex}...) = getindex(A, args...)
+@propagate_inbounds maybeview(A::AbstractArray, args::Union{Number,AbstractCartesianIndex}...) = getindex(A, args...)
 @propagate_inbounds maybeview(A) = getindex(A)
 @propagate_inbounds maybeview(A::AbstractArray) = getindex(A)
 
