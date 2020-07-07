@@ -14,7 +14,7 @@ using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
 
-using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
+using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing, DimOrInd, DimsOrInds
 
 import Base: copymutable, copy, copy!, ==, hash, convert,
              rand, randn
@@ -276,17 +276,17 @@ end
 rand(r::AbstractRNG, dims::Integer...) = rand(r, Float64, Dims(dims))
 rand(                dims::Integer...) = rand(Float64, Dims(dims))
 
-rand(r::AbstractRNG, X, dims::Dims)  = rand!(r, Array{gentype(X)}(undef, dims), X)
-rand(                X, dims::Dims)  = rand(default_rng(), X, dims)
+rand(r::AbstractRNG, X, dims::DimsOrInds)  = rand!(r, similar(Array{gentype(X)}, dims), X)
+rand(                X, dims::DimsOrInds)  = rand(default_rng(), X, dims)
 
 rand(r::AbstractRNG, X, d::Integer, dims::Integer...) = rand(r, X, Dims((d, dims...)))
 rand(                X, d::Integer, dims::Integer...) = rand(X, Dims((d, dims...)))
 # note: the above methods would trigger an ambiguity warning if d was not separated out:
-# rand(r, ()) would match both this method and rand(r, dims::Dims)
+# rand(r, ()) would match both this method and rand(r, dims::DimsOrInds)
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
 
-rand(r::AbstractRNG, ::Type{X}, dims::Dims) where {X} = rand!(r, Array{X}(undef, dims), X)
-rand(                ::Type{X}, dims::Dims) where {X} = rand(default_rng(), X, dims)
+rand(r::AbstractRNG, ::Type{X}, dims::DimsOrInds) where {X} = rand!(r, similar(Array{X}, dims), X)
+rand(                ::Type{X}, dims::DimsOrInds) where {X} = rand(default_rng(), X, dims)
 
 rand(r::AbstractRNG, ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(r, X, Dims((d, dims...)))
 rand(                ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(X, Dims((d, dims...)))

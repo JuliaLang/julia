@@ -801,3 +801,18 @@ end
 @testset "RNGs broadcast as scalars: T" for T in (MersenneTwister, RandomDevice)
     @test length.(rand.(T(), 1:3)) == 1:3
 end
+
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+
+@testset "OffsetArrays" begin
+    # axes as tuple
+    @test axes(rand(Bool, (Base.OneTo(3), Base.OneTo(3)))) === (Base.OneTo(3), Base.OneTo(3))
+    @test axes(rand(Bool, (Base.OneTo(3), 3))) === (Base.OneTo(3), Base.OneTo(3))
+    @test axes(rand(Bool, (0:2, 0:2))) == (0:2, 0:2)
+
+    # 1D axes
+    @test axes(rand(Bool, Base.OneTo(3))) === (Base.OneTo(3), )
+    @test axes(rand(Bool, 3)) === (Base.OneTo(3), )
+    @test axes(rand(Bool, 0:2)) == (0:2, )
+end
