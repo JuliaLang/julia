@@ -643,6 +643,8 @@ Dates.TimeType
 Dates.DateTime
 Dates.Date
 Dates.Time
+Dates.TimeZone
+Dates.UTC
 ```
 
 ## Dates Functions
