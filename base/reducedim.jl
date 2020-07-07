@@ -647,16 +647,16 @@ Determine whether predicate p returns true for all elements along the given dime
 # Examples
 ```jldoctest
 julia> A = [1 -1; 2 2]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  -1
  2   2
 
 julia> all(i -> i > 0, A, dims=1)
-1×2 Array{Bool,2}:
+1×2 Matrix{Bool}:
  1  0
 
 julia> all(i -> i > 0, A, dims=2)
-2×1 Array{Bool,2}:
+2×1 Matrix{Bool}:
  0
  1
 ```
@@ -719,16 +719,16 @@ Determine whether predicate p returns true for any elements along the given dime
 # Examples
 ```jldoctest
 julia> A = [1 -1; 2 -2]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  -1
  2  -2
 
 julia> any(i -> i > 0, A, dims=1)
-1×2 Array{Bool,2}:
+1×2 Matrix{Bool}:
  1  0
 
 julia> any(i -> i > 0, A, dims=2)
-2×1 Array{Bool,2}:
+2×1 Matrix{Bool}:
  1
  1
 ```
