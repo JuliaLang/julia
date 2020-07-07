@@ -357,8 +357,7 @@ static inline void maybe_mark_argument_dereferenceable(Argument *A, jl_value_t *
     size_t size = dereferenceable_size(jt);
     if (size) {
         B.addDereferenceableAttr(size);
-        if (!A->getType()->getPointerElementType()->isSized()) // mimic LLVM Loads.cpp isAligned
-            B.addAlignmentAttr(julia_alignment(jt));
+        B.addAlignmentAttr(julia_alignment(jt));
     }
     A->addAttrs(B);
 }
@@ -374,7 +373,7 @@ static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool
             Metadata *OP = ConstantAsMetadata::get(ConstantInt::get(T_int64, size));
             LI->setMetadata(can_be_null ? LLVMContext::MD_dereferenceable_or_null : LLVMContext::MD_dereferenceable,
                             MDNode::get(jl_LLVMContext, { OP }));
-            if (align > 1 && !LI->getType()->getPointerElementType()->isSized()) { // mimic LLVM Loads.cpp isAligned
+            if (align >= 1) {
                 Metadata *OP = ConstantAsMetadata::get(ConstantInt::get(T_int64, align));
                 LI->setMetadata(LLVMContext::MD_align, MDNode::get(jl_LLVMContext, { OP }));
             }
