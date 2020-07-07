@@ -1,5 +1,8 @@
 # [Multi-Threading](@id man-multithreading)
 
+Visit this [blog post](https://julialang.org/blog/2019/07/multithreading/) for a presentation
+of Julia multi-threading features.
+
 ## Starting Julia with multiple threads
 
 By default, Julia starts up with a single thread of execution. This can be verified by using the
