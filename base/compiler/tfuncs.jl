@@ -1160,14 +1160,14 @@ function invoke_tfunc(interp::AbstractInterpreter, @nospecialize(ft), @nospecial
     isdispatchelem(ft) || return Any # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
     types = rewrap_unionall(Tuple{ft, unwrap_unionall(types).parameters...}, types)
     argtype = Tuple{ft, argtype.parameters...}
-    entry = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), types, get_world_counter(interp))
-    if entry === nothing
+    meth = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), types, get_world_counter(interp))
+    if meth === nothing
         return Any
     end
     # XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
-    meth = entry.func
+    meth = meth::Method
     (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), argtype, meth.sig)::SimpleVector
-    rt, edge = typeinf_edge(interp, meth::Method, ti, env, sv)
+    rt, edge = typeinf_edge(interp, meth, ti, env, sv)
     edge !== nothing && add_backedge!(edge::MethodInstance, sv)
     return rt
 end
