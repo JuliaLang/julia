@@ -45,12 +45,13 @@ const disable_text_style = Dict{Symbol,String}(
 
 # Create a docstring with an automatically generated list
 # of colors.
-available_text_colors = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors)))
-const possible_formatting_symbols = [:normal, :bold, :default]
-available_text_colors = cat(
-    sort!(intersect(available_text_colors, possible_formatting_symbols), rev=true),
-    sort!(setdiff(  available_text_colors, possible_formatting_symbols));
-    dims=1)
+let color_syms = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors))),
+    formatting_syms = [:normal, :bold, :default]
+    global const available_text_colors = cat(
+        sort!(intersect(color_syms, formatting_syms), rev=true),
+        sort!(setdiff(  color_syms, formatting_syms));
+        dims=1)
+end
 
 const available_text_colors_docstring =
     string(join([string("`:", key,"`")

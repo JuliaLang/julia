@@ -791,7 +791,8 @@ function start_reading(stream::LibuvStream)
         # for a TTY on Windows, so ensure the status is set first
         stream.status = StatusActive
         ret = ccall(:uv_read_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
-                    stream, uv_jl_alloc_buf::Ptr{Cvoid}, uv_jl_readcb::Ptr{Cvoid})
+                    stream, @cfunction(uv_alloc_buf, Cvoid, (Ptr{Cvoid}, Csize_t, Ptr{Cvoid})),
+                    @cfunction(uv_readcb, Cvoid, (Ptr{Cvoid}, Cssize_t, Ptr{Cvoid})))
     elseif stream.status == StatusPaused
         stream.status = StatusActive
         ret = Int32(0)
@@ -1024,7 +1025,7 @@ function uv_write_async(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
                     Int32,
                     (Ptr{Cvoid}, Ptr{Cvoid}, UInt, Ptr{Cvoid}, Ptr{Cvoid}),
                     s, p, nwrite, uvw,
-                    uv_jl_writecb_task::Ptr{Cvoid})
+                    @cfunction(uv_writecb_task, Cvoid, (Ptr{Cvoid}, Cint)))
         if err < 0
             Libc.free(uvw)
             uv_error("write", err)

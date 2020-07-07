@@ -329,6 +329,8 @@ function recv(sock::UDPSocket)
     return data
 end
 
+function uv_recvcb end
+
 """
     recvfrom(socket::UDPSocket) -> (host_port, data)
 
@@ -347,7 +349,9 @@ function recvfrom(sock::UDPSocket)
     end
     if ccall(:uv_is_active, Cint, (Ptr{Cvoid},), sock.handle) == 0
         err = ccall(:uv_udp_recv_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
-                    sock, Base.uv_jl_alloc_buf::Ptr{Cvoid}, uv_jl_recvcb::Ptr{Cvoid})
+                    sock,
+                    @cfunction(Base.uv_alloc_buf, Cvoid, (Ptr{Cvoid}, Csize_t, Ptr{Cvoid})),
+                    @cfunction(uv_recvcb, Cvoid, (Ptr{Cvoid}, Cssize_t, Ptr{Cvoid}, Ptr{Cvoid}, Cuint)))
         uv_error("recv_start", err)
     end
     sock.status = StatusActive
@@ -417,7 +421,9 @@ function _send_async(sock::UDPSocket, ipaddr::Union{IPv4, IPv6}, port::UInt16, b
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
     host_in = Ref(hton(ipaddr.host))
     err = ccall(:jl_udp_send, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, UInt16, Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Ptr{Cvoid}, Cint),
-            req, sock, hton(port), host_in, buf, sizeof(buf), Base.uv_jl_writecb_task::Ptr{Cvoid}, ipaddr isa IPv6)
+                req, sock, hton(port), host_in, buf, sizeof(buf),
+                @cfunction(Base.uv_writecb_task, Cvoid, (Ptr{Cvoid}, Cint)),
+                ipaddr isa IPv6)
     if err < 0
         Libc.free(req)
         uv_error("send", err)
@@ -500,7 +506,8 @@ function connect!(sock::TCPSocket, host::Union{IPv4, IPv6}, port::Integer)
     end
     host_in = Ref(hton(host.host))
     uv_error("connect", ccall(:jl_tcp_connect, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, UInt16, Ptr{Cvoid}, Cint),
-                              sock, host_in, hton(UInt16(port)), uv_jl_connectcb::Ptr{Cvoid}, host isa IPv6))
+                              sock, host_in, hton(UInt16(port)), @cfunction(uv_connectcb, Cvoid, (Ptr{Cvoid}, Cint)),
+                              host isa IPv6))
     sock.status = StatusConnecting
     iolock_end()
     nothing
@@ -643,7 +650,7 @@ function trylisten(sock::LibuvServer; backlog::Integer=BACKLOG_DEFAULT)
     iolock_begin()
     check_open(sock)
     err = ccall(:uv_listen, Cint, (Ptr{Cvoid}, Cint, Ptr{Cvoid}),
-                sock, backlog, uv_jl_connectioncb::Ptr{Cvoid})
+                sock, backlog, @cfunction(uv_connectioncb, Cvoid, (Ptr{Cvoid}, Cint)))
     sock.status = StatusActive
     iolock_end()
     return err
@@ -841,15 +848,5 @@ end
 # domain sockets
 
 include("PipeServer.jl")
-
-# libuv callback handles
-
-function __init__()
-    global uv_jl_getaddrinfocb = @cfunction(uv_getaddrinfocb, Cvoid, (Ptr{Cvoid}, Cint, Ptr{Cvoid}))
-    global uv_jl_getnameinfocb = @cfunction(uv_getnameinfocb, Cvoid, (Ptr{Cvoid}, Cint, Cstring, Cstring))
-    global uv_jl_recvcb        = @cfunction(uv_recvcb, Cvoid, (Ptr{Cvoid}, Cssize_t, Ptr{Cvoid}, Ptr{Cvoid}, Cuint))
-    global uv_jl_connectioncb  = @cfunction(uv_connectioncb, Cvoid, (Ptr{Cvoid}, Cint))
-    global uv_jl_connectcb     = @cfunction(uv_connectcb, Cvoid, (Ptr{Cvoid}, Cint))
-end
 
 end

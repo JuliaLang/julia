@@ -402,9 +402,6 @@ function __init__()
     nothing
 end
 
-
 end
-
-const tot_time_stdlib = RefValue(0.0)
 
 end # baremodule Base

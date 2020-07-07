@@ -4,13 +4,13 @@
 ##             and REPL
 
 have_color = nothing
-default_color_warn = :yellow
-default_color_error = :light_red
-default_color_info = :cyan
-default_color_debug = :blue
-default_color_input = :normal
-default_color_answer = :normal
-color_normal = text_colors[:normal]
+const default_color_warn = :yellow
+const default_color_error = :light_red
+const default_color_info = :cyan
+const default_color_debug = :blue
+const default_color_input = :normal
+const default_color_answer = :normal
+const color_normal = text_colors[:normal]
 
 function repl_color(key, default)
     env_str = get(ENV, key, "")
