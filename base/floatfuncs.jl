@@ -99,7 +99,7 @@ julia> round(357.913; sigdigits=4, base=2)
     value represented by `1.15` is actually *less* than 1.15, yet will be
     rounded to 1.2.
 
-    # Examples
+# Examples
     ```jldoctest; setup = :(using Printf)
     julia> x = 1.15
     1.15
