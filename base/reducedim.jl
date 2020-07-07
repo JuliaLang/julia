@@ -640,6 +640,30 @@ julia> all(A, dims=2)
 all(A::AbstractArray; dims)
 
 """
+    all(p, A; dims)
+
+Determine whether predicate p returns true for all elements along the given dimensions of an array.
+
+# Examples
+```jldoctest
+julia> A = [1 -1; 2 2]
+2×2 Array{Int64,2}:
+ 1  -1
+ 2   2
+
+julia> all(i -> i > 0, A, dims=1)
+1×2 Array{Bool,2}:
+ 1  0
+
+julia> all(i -> i > 0, A, dims=2)
+2×1 Array{Bool,2}:
+ 0
+ 1
+```
+"""
+all(::Function, ::AbstractArray; dims)
+
+"""
     all!(r, A)
 
 Test whether all values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
@@ -686,6 +710,30 @@ julia> any(A, dims=2)
 ```
 """
 any(::AbstractArray; dims)
+
+"""
+    any(p, A; dims)
+
+Determine whether predicate p returns true for any elements along the given dimensions of an array.
+
+# Examples
+```jldoctest
+julia> A = [1 -1; 2 -2]
+2×2 Array{Int64,2}:
+ 1  -1
+ 2  -2
+
+julia> any(i -> i > 0, A, dims=1)
+1×2 Array{Bool,2}:
+ 1  0
+
+julia> any(i -> i > 0, A, dims=2)
+2×1 Array{Bool,2}:
+ 1
+ 1
+```
+"""
+any(::Function, ::AbstractArray; dims)
 
 """
     any!(r, A)
