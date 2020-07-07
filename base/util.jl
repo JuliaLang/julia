@@ -502,6 +502,50 @@ function _kwdef!(blk, params_args, call_args)
     blk
 end
 
+
+"""
+    @overwrite
+
+This is a helper macro that temporarily disables the method overwrite warning.
+
+!!! compat "Julia 1.6"
+        `Base.@overwrite` requires at least Julia 1.6.
+
+# Examples
+```
+julia> f(x) = 1
+ f (generic function with 1 method)
+
+julia> f(x) = x
+WARNING: Method definition f(Any) in module Main at REPL[1]:1 overwritten at REPL[2]:1.
+ f (generic function with 1 method)
+
+julia> Base.@overwrite f(x) = x * 3
+ f (generic function with 1 method)
+
+julia> f(1)
+ 3
+```
+"""
+macro overwrite(expr)
+    overwrite_macro_(expr)
+end
+
+function overwrite_macro_(expr)
+    if expr.head == :function || Base.is_short_function_def(expr)
+        quote
+            warn_ow = JLOptions().warn_overwrite == 1
+            warn_ow && ccall(:jl_options_flip_warn_overwrite, Cvoid, ())
+            local fx = $(esc(expr))
+            warn_ow && ccall(:jl_options_flip_warn_overwrite, Cvoid, ())
+            fx
+        end
+    else
+        error("expression is not a method definition")
+    end
+end
+
+
 # testing
 
 """

@@ -54,7 +54,7 @@ jl_options_t jl_options = { 0,    // quiet
 #endif
                             JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
                             JL_OPTIONS_DEPWARN_OFF,    // deprecation warning
-                            0,    // method overwrite warning
+                            JL_OPTIONS_WARN_OVERWRITE_ON,    // method overwrite warning
                             1,    // can_inline
                             JL_OPTIONS_POLLY_ON, // polly
                             NULL, // trace_compile
@@ -663,4 +663,10 @@ restart_switch:
 JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void)
 {
     return sizeof(jl_options_t);
+}
+
+
+JL_DLLEXPORT void jl_options_flip_warn_overwrite(void)
+{
+    jl_options.warn_overwrite ^= 1;
 }

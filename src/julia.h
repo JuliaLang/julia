@@ -1960,6 +1960,7 @@ typedef struct {
 
 extern JL_DLLEXPORT jl_options_t jl_options;
 JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void);
+JL_DLLEXPORT void jl_options_flip_warn_overwrite(void);
 
 // Parse an argc/argv pair to extract general julia options, passing back out
 // any arguments that should be passed on to the script.
