@@ -824,6 +824,7 @@ isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH),
     # edge cases
     @test rand(3) isa Array{Float64, 1}
     @test rand(1:3) isa Integer
-    @test rand(1:3, 1:3) isa OffsetArrays.OffsetArray
+    @test rand(1:3, 1:4) isa OffsetArrays.OffsetArray
+    @test axes(rand(1:3, 1:4)) === (1:4, )
     @test axes(rand(1:3, 10)) === (Base.OneTo(10),)
 end
