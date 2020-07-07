@@ -252,7 +252,7 @@ rand(rng::AbstractRNG, ::UniformT{T}) where {T} = rand(rng, T)
 
 rand(rng::AbstractRNG, X)                                           = rand(rng, Sampler(rng, X, Val(1)))
 # this is needed to disambiguate
-rand(rng::AbstractRNG, X::Dims)                                     = rand(rng, Sampler(rng, X, Val(1)))
+rand(rng::AbstractRNG, X::DimsOrInds)                                     = rand(rng, Sampler(rng, X, Val(1)))
 rand(rng::AbstractRNG=default_rng(), ::Type{X}=Float64) where {X} = rand(rng, Sampler(rng, X, Val(1)))::X
 
 rand(X)                   = rand(default_rng(), X)
@@ -273,14 +273,14 @@ function rand!(rng::AbstractRNG, A::AbstractArray{T}, sp::Sampler) where T
     A
 end
 
-rand(r::AbstractRNG, dims::Integer...) = rand(r, Float64, Dims(dims))
-rand(                dims::Integer...) = rand(Float64, Dims(dims))
+rand(r::AbstractRNG, dims::DimOrInd...) = rand(r, Float64, DimsOrInds(dims))
+rand(                dims::DimOrInd...) = rand(Float64, DimsOrInds(dims))
 
 rand(r::AbstractRNG, X, dims::DimsOrInds)  = rand!(r, similar(Array{gentype(X)}, dims), X)
 rand(                X, dims::DimsOrInds)  = rand(default_rng(), X, dims)
 
-rand(r::AbstractRNG, X, d::Integer, dims::Integer...) = rand(r, X, Dims((d, dims...)))
-rand(                X, d::Integer, dims::Integer...) = rand(X, Dims((d, dims...)))
+rand(r::AbstractRNG, X, d::DimOrInd, dims::DimOrInd...) = rand(r, X, DimsOrInds((d, dims...)))
+rand(                X, d::DimOrInd, dims::DimOrInd...) = rand(X, DimsOrInds((d, dims...)))
 # note: the above methods would trigger an ambiguity warning if d was not separated out:
 # rand(r, ()) would match both this method and rand(r, dims::DimsOrInds)
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
@@ -288,9 +288,15 @@ rand(                X, d::Integer, dims::Integer...) = rand(X, Dims((d, dims...
 rand(r::AbstractRNG, ::Type{X}, dims::DimsOrInds) where {X} = rand!(r, similar(Array{X}, dims), X)
 rand(                ::Type{X}, dims::DimsOrInds) where {X} = rand(default_rng(), X, dims)
 
-rand(r::AbstractRNG, ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(r, X, Dims((d, dims...)))
-rand(                ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(X, Dims((d, dims...)))
+rand(r::AbstractRNG, ::Type{X}, d::DimOrInd, dims::DimOrInd...) where {X} = rand(r, X, DimsOrInds((d, dims...)))
+rand(                ::Type{X}, d::DimOrInd, dims::DimOrInd...) where {X} = rand(X, DimsOrInds((d, dims...)))
 
+# edge cases
+rand(rng::AbstractRNG, domain::AbstractUnitRange) = rand(rng, Sampler(rng, domain, Val(1)))
+rand(                  domain::AbstractUnitRange) = rand(default_rng(), domain)
+
+rand(rng::AbstractRNG, domain::AbstractUnitRange, dims::DimOrInd...) = rand(rng, domain, dims)
+rand(                  domain::AbstractUnitRange, dims::DimOrInd...) = rand(default_rng(), domain, dims)
 
 include("RNGs.jl")
 include("generation.jl")
