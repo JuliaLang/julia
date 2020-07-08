@@ -1194,7 +1194,7 @@ function load_path_setup_code(load_path::Bool=true)
         code *= """
         append!(empty!(Base.LOAD_PATH), $(repr(load_path)))
         ENV["JULIA_LOAD_PATH"] = $(repr(join(load_path, Sys.iswindows() ? ';' : ':')))
-        Base.HOME_PROJECT[] = Base.ACTIVE_PROJECT[] = nothing
+        Base.ACTIVE_PROJECT[] = nothing
         """
     end
     return code
@@ -1206,7 +1206,7 @@ function include_package_for_output(input::String, depot_path::Vector{String}, d
     append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
     append!(empty!(Base.LOAD_PATH), load_path)
     ENV["JULIA_LOAD_PATH"] = join(load_path, Sys.iswindows() ? ';' : ':')
-    Base.HOME_PROJECT[] = Base.ACTIVE_PROJECT[] = nothing
+    Base.ACTIVE_PROJECT[] = nothing
     Base._track_dependencies[] = true
     append!(empty!(Base._concrete_dependencies), concrete_deps)
 

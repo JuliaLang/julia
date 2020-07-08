@@ -24,6 +24,13 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+* There is no longer a concept of "home project": starting `julia --project=dir`
+  is now exactly equivalent to starting `julia` and then doing `pkg> activate
+  $dir` and `julia --project` is exactly equivalent to doing that where
+  `dir = Base.current_project()`. In particular, this means that if you do
+  `pkg> activate` after starting `julia` with the `--project` option (or with
+  `JULIA_PROJECT` set) it will take you to the default active project, which is
+  `@v1.5` unless you have modified `LOAD_PATH`. ([#36434])
 
 Multi-threading changes
 -----------------------
