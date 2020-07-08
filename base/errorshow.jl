@@ -699,8 +699,8 @@ function print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
 
     # Used by the REPL to make it possible to open
     # the location of a stackframe/method in the editor.
-    if haskey(io, :LAST_SHOWN_LINE_INFOS)
-        push!(io[:LAST_SHOWN_LINE_INFOS], (string(frame.file), frame.line))
+    if haskey(io, :last_shown_line_infos)
+        push!(io[:last_shown_line_infos], (string(frame.file), frame.line))
     end
 
     inlined = getfield(frame, :inlined)
@@ -749,8 +749,8 @@ end
 
 
 function show_backtrace(io::IO, t::Vector)
-    if haskey(io, :LAST_SHOWN_LINE_INFOS)
-        resize!(io[:LAST_SHOWN_LINE_INFOS], 0)
+    if haskey(io, :last_shown_line_infos)
+        empty!(io[:last_shown_line_infos])
     end
 
     # t is a pre-processed backtrace (ref #12856)
