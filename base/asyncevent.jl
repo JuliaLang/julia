@@ -22,7 +22,7 @@ mutable struct AsyncCondition
         iolock_begin()
         associate_julia_struct(this.handle, this)
         err = ccall(:uv_async_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
-            eventloop(), this, uv_jl_asynccb::Ptr{Cvoid})
+            eventloop(), this, @cfunction(uv_asynccb, Cvoid, (Ptr{Cvoid},)))
         if err != 0
             #TODO: this codepath is currently not tested
             Libc.free(this.handle)
@@ -83,7 +83,8 @@ mutable struct Timer
         finalizer(uvfinalize, this)
         ccall(:uv_update_time, Cvoid, (Ptr{Cvoid},), loop)
         err = ccall(:uv_timer_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
-            this, uv_jl_timercb::Ptr{Cvoid}, timeout, interval)
+            this, @cfunction(uv_timercb, Cvoid, (Ptr{Cvoid},)),
+            timeout, interval)
         @assert err == 0
         iolock_end()
         return this
