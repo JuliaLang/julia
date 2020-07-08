@@ -87,7 +87,7 @@ static Value *runtime_sym_lookup(
     BasicBlock *dlsym_lookup = BasicBlock::Create(jl_LLVMContext, "dlsym");
     BasicBlock *ccall_bb = BasicBlock::Create(jl_LLVMContext, "ccall");
     Constant *initnul = ConstantPointerNull::get((PointerType*)T_pvoidfunc);
-    LoadInst *llvmf_orig = irbuilder.CreateAlignedLoad(llvmgv, sizeof(void*));
+    LoadInst *llvmf_orig = irbuilder.CreateAlignedLoad(T_pvoidfunc, llvmgv, sizeof(void*));
     // This in principle needs a consume ordering so that load from
     // this pointer sees a valid value. However, this is not supported by
     // LLVM (or agreed on in the C/C++ standard FWIW) and should be
@@ -95,7 +95,7 @@ static Value *runtime_sym_lookup(
     // ordering is enforced by the hardware and LLVM has to speculate an
     // invalid load from the `cglobal` but doesn't depend on the `cglobal`
     // value for this to happen.
-    // llvmf_orig->setAtomic(AtomicOrdering::Consume);
+    llvmf_orig->setAtomic(AtomicOrdering::Unordered);
     irbuilder.CreateCondBr(
             irbuilder.CreateICmpNE(llvmf_orig, initnul),
             ccall_bb,
@@ -114,7 +114,7 @@ static Value *runtime_sym_lookup(
     }
     Value *llvmf = irbuilder.CreateCall(prepare_call_in(jl_builderModule(irbuilder), jldlsym_func),
             { libname, stringConstPtr(emission_context, irbuilder, f_name), libptrgv });
-    auto store = irbuilder.CreateAlignedStore(llvmf, llvmgv, sizeof(void*));
+    StoreInst *store = irbuilder.CreateAlignedStore(llvmf, llvmgv, sizeof(void*));
     store->setAtomic(AtomicOrdering::Release);
     irbuilder.CreateBr(ccall_bb);
 
@@ -169,7 +169,7 @@ static GlobalVariable *emit_plt_thunk(
     IRBuilder<> irbuilder(b0);
     Value *ptr = runtime_sym_lookup(emission_context, irbuilder, funcptype, f_lib, f_name, plt, libptrgv,
                                     llvmgv, runtime_lib);
-    auto store = irbuilder.CreateAlignedStore(irbuilder.CreateBitCast(ptr, T_pvoidfunc), got, sizeof(void*));
+    StoreInst *store = irbuilder.CreateAlignedStore(irbuilder.CreateBitCast(ptr, T_pvoidfunc), got, sizeof(void*));
     store->setAtomic(AtomicOrdering::Release);
     SmallVector<Value*, 16> args;
     for (Function::arg_iterator arg = plt->arg_begin(), arg_e = plt->arg_end(); arg != arg_e; ++arg)
@@ -234,7 +234,7 @@ static Value *emit_plt(
     // consume ordering too. This is even less likely to cause issues though
     // since the only thing we do to this loaded pointer is to call it
     // immediately.
-    // got_val->setAtomic(AtomicOrdering::Consume);
+    got_val->setAtomic(AtomicOrdering::Unordered);
     return ctx.builder.CreateBitCast(got_val, funcptype);
 }
 
@@ -349,17 +349,19 @@ static Value *llvm_type_rewrite(
     Value *from;
     Value *to;
     const DataLayout &DL = jl_data_layout;
+    unsigned align = std::max(DL.getPrefTypeAlignment(target_type), DL.getPrefTypeAlignment(from_type));
     if (DL.getTypeAllocSize(target_type) >= DL.getTypeAllocSize(from_type)) {
         to = emit_static_alloca(ctx, target_type);
+        cast<AllocaInst>(to)->setAlignment(Align(align));
         from = emit_bitcast(ctx, to, from_type->getPointerTo());
     }
     else {
         from = emit_static_alloca(ctx, from_type);
+        cast<AllocaInst>(from)->setAlignment(Align(align));
         to = emit_bitcast(ctx, from, target_type->getPointerTo());
     }
-    // XXX: deal with possible alignment issues
-    ctx.builder.CreateStore(v, from);
-    return ctx.builder.CreateLoad(to);
+    ctx.builder.CreateAlignedStore(v, from, align);
+    return ctx.builder.CreateAlignedLoad(to, align);
 }
 
 // --- argument passing and scratch space utilities ---
@@ -1576,9 +1578,9 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         Value *ptls_i16 = emit_bitcast(ctx, ctx.ptlsStates, T_pint16);
         const int tid_offset = offsetof(jl_tls_states_t, tid);
         Value *ptid = ctx.builder.CreateGEP(ptls_i16, ConstantInt::get(T_size, tid_offset / 2));
-        return mark_or_box_ccall_result(ctx,
-            tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(ptid)),
-            retboxed, rt, unionall, static_rt);
+        LoadInst *tid = ctx.builder.CreateAlignedLoad(ptid, sizeof(int16_t));
+        tbaa_decorate(tbaa_const, tid);
+        return mark_or_box_ccall_result(ctx, tid, retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_get_current_task)) {
         assert(lrt == T_prjlvalue);
@@ -1587,9 +1589,9 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         Value *ptls_pv = emit_bitcast(ctx, ctx.ptlsStates, T_pprjlvalue);
         const int ct_offset = offsetof(jl_tls_states_t, current_task);
         Value *pct = ctx.builder.CreateGEP(ptls_pv, ConstantInt::get(T_size, ct_offset / sizeof(void*)));
-        return mark_or_box_ccall_result(ctx,
-            tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(pct)),
-            retboxed, rt, unionall, static_rt);
+        LoadInst *ct = ctx.builder.CreateAlignedLoad(pct, sizeof(void*));
+        tbaa_decorate(tbaa_const, ct);
+        return mark_or_box_ccall_result(ctx, ct, retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_set_next_task)) {
         assert(lrt == T_void);
@@ -1608,8 +1610,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         ctx.builder.CreateCall(prepare_call(gcroot_flush_func));
         Value *pdefer_sig = emit_defer_signal(ctx);
         Value *defer_sig = ctx.builder.CreateLoad(pdefer_sig);
-        defer_sig = ctx.builder.CreateAdd(defer_sig,
-                                      ConstantInt::get(T_sigatomic, 1));
+        defer_sig = ctx.builder.CreateAdd(defer_sig, ConstantInt::get(T_sigatomic, 1));
         ctx.builder.CreateStore(defer_sig, pdefer_sig);
         emit_signal_fence(ctx);
         return ghostValue(jl_nothing_type);
@@ -1671,7 +1672,9 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                     idx = ctx.builder.CreateAdd(idx, ConstantInt::get(T_size, ((jl_datatype_t*)ety)->layout->first_ptr));
                 }
                 Value *slot_addr = ctx.builder.CreateInBoundsGEP(T_prjlvalue, arrayptr, idx);
-                Value *load = tbaa_decorate(tbaa_ptrarraybuf, ctx.builder.CreateLoad(T_prjlvalue, slot_addr));
+                LoadInst *load = ctx.builder.CreateAlignedLoad(T_prjlvalue, slot_addr, sizeof(void*));
+                load->setAtomic(AtomicOrdering::Unordered);
+                tbaa_decorate(tbaa_ptrarraybuf, load);
                 Value *res = ctx.builder.CreateZExt(ctx.builder.CreateICmpNE(load, Constant::getNullValue(T_prjlvalue)), T_int32);
                 JL_GC_POP();
                 return mark_or_box_ccall_result(ctx, res, retboxed, rt, unionall, static_rt);

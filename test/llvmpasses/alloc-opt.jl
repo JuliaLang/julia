@@ -11,7 +11,7 @@ println("""
 # CHECK-LABEL: @return_obj
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK: %v = call noalias nonnull {} addrspace(10)* @jl_gc_pool_alloc
-# CHECK: store {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}}, !tbaa !0
+# CHECK: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}} unordered, align 8, !tbaa !0
 println("""
 define {} addrspace(10)* @return_obj() {
   %ptls = call {}*** @julia.ptls_states()
@@ -48,7 +48,7 @@ define i64 @return_load(i64 %i) {
 # CHECK: call {}*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK: @jl_gc_pool_alloc
-# CHECK: store {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}}, !tbaa !0
+# CHECK: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}} unordered, align 8, !tbaa !0
 println("""
 define void @ccall_obj(i8* %fptr) {
   %ptls = call {}*** @julia.ptls_states()
@@ -90,7 +90,7 @@ define void @ccall_ptr(i8* %fptr) {
 # CHECK: call {}*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK: @jl_gc_pool_alloc
-# CHECK: store {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}}, !tbaa !0
+# CHECK: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}} unordered, align 8, !tbaa !0
 println("""
 define void @ccall_unknown_bundle(i8* %fptr) {
   %ptls = call {}*** @julia.ptls_states()
@@ -152,7 +152,7 @@ L3:
 # CHECK: call {}*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK-NOT: @jl_gc_pool_alloc
-# CHECK-NOT: store {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}}, !tbaa !0
+# CHECK-NOT: store {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}}, align 8, !tbaa !0
 println("""
 define void @object_field({} addrspace(10)* %field) {
   %ptls = call {}*** @julia.ptls_states()
@@ -160,7 +160,7 @@ define void @object_field({} addrspace(10)* %field) {
   %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, {} addrspace(10)* @tag)
   %va = addrspacecast {} addrspace(10)* %v to {} addrspace(11)*
   %vab = bitcast {} addrspace(11)* %va to {} addrspace(10)* addrspace(11)*
-  store {} addrspace(10)* %field, {} addrspace(10)* addrspace(11)* %vab
+  store {} addrspace(10)* %field, {} addrspace(10)* addrspace(11)* %vab, align 8
   ret void
 }
 """)
