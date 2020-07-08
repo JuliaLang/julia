@@ -4,13 +4,23 @@
 # structs/constants #
 #####################
 
-# The type of a value might be constant
-struct Const
-    val
-    actual::Bool  # if true, we obtained `val` by actually calling a @pure function
-    Const(@nospecialize(v)) = new(v, false)
-    Const(@nospecialize(v), a::Bool) = new(v, a)
-end
+# N.B.: Const/PartialStruct are defined in Core, to allow them to be used
+# inside the global code cache.
+#
+# # The type of a value might be constant
+# struct Const
+#     val
+#     actual::Bool  # if true, we obtained `val` by actually calling a @pure function
+#     Const(@nospecialize(v)) = new(v, false)
+#     Const(@nospecialize(v), a::Bool) = new(v, a)
+# end
+#
+# struct PartialStruct
+#     typ
+#     fields::Vector{Any} # elements are other type lattice members
+# end
+import Core: Const, PartialStruct
+
 
 # The type of this value might be Bool.
 # However, to enable a limited amount of back-propagagation,
@@ -68,11 +78,6 @@ struct StateUpdate
     var::Union{Slot,SSAValue}
     vtype::VarState
     state::VarTable
-end
-
-struct PartialStruct
-    typ
-    fields::Vector{Any} # elements are other type lattice members
 end
 
 struct NotFound end

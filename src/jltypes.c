@@ -35,6 +35,8 @@ jl_datatype_t *jl_abstractslot_type;
 jl_datatype_t *jl_slotnumber_type;
 jl_datatype_t *jl_typedslot_type;
 jl_datatype_t *jl_argument_type;
+jl_datatype_t *jl_const_type;
+jl_datatype_t *jl_partial_struct_type;
 jl_datatype_t *jl_simplevector_type;
 jl_typename_t *jl_tuple_typename;
 jl_datatype_t *jl_anytuple_type;
@@ -2378,6 +2380,14 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type, jl_any_type), // fptrs
                         0, 1, 1);
     jl_svecset(jl_code_instance_type->types, 1, jl_code_instance_type);
+
+    jl_const_type = jl_new_datatype(jl_symbol("Const"), core, jl_any_type, jl_emptysvec,
+                                       jl_perm_symsvec(2, "val", "actual"),
+                                       jl_svec2(jl_any_type, jl_bool_type), 0, 0, 2);
+
+    jl_partial_struct_type = jl_new_datatype(jl_symbol("PartialStruct"), core, jl_any_type, jl_emptysvec,
+                                       jl_perm_symsvec(2, "typ", "fields"),
+                                       jl_svec2(jl_any_type, jl_array_any_type), 0, 0, 2);
 
     // all Kinds share the Type method table (not the nonfunction one)
     jl_unionall_type->name->mt = jl_uniontype_type->name->mt = jl_datatype_type->name->mt =
