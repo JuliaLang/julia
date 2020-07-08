@@ -1581,6 +1581,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("SlotNumber", (jl_value_t*)jl_slotnumber_type);
     add_builtin("TypedSlot", (jl_value_t*)jl_typedslot_type);
     add_builtin("Argument", (jl_value_t*)jl_argument_type);
+    add_builtin("Const", (jl_value_t*)jl_const_type);
+    add_builtin("PartialStruct", (jl_value_t*)jl_partial_struct_type);
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);
     add_builtin("Builtin", (jl_value_t*)jl_builtin_type);

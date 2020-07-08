@@ -1432,7 +1432,7 @@ julia> function f(x)
 
 julia> @code_warntype f(3.2)
 Variables
-  #self#::Core.Compiler.Const(f, false)
+  #self#::Core.Const(f, false)
   x::Float64
   y::UNION{FLOAT64, INT64}
 

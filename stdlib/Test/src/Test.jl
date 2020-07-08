@@ -1322,7 +1322,7 @@ Int64
 
 julia> @code_warntype f(2)
 Variables
-  #self#::Core.Compiler.Const(f, false)
+  #self#::Core.Const(f, false)
   a::Int64
 
 Body::UNION{FLOAT64, INT64}
