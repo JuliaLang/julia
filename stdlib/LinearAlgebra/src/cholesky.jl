@@ -37,6 +37,8 @@ the corresponding matrix factorization function.
 The triangular Cholesky factor can be obtained from the factorization `F::Cholesky`
 via `F.L` and `F.U`.
 
+Iterating the decomposition produces the components `L` and `U`.
+
 # Examples
 ```jldoctest
 julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
@@ -105,6 +107,8 @@ the corresponding matrix factorization function.
 
 The triangular Cholesky factor can be obtained from the factorization `F::CholeskyPivoted`
 via `F.L` and `F.U`.
+
+Iterating the decomposition produces the components `L` and `U`.
 
 # Examples
 ```jldoctest
