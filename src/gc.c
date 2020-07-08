@@ -2230,6 +2230,7 @@ excstack: {
                         goto mark;
                     }
                 }
+                jlval_index = 0;
             }
             // The exception comes last - mark it
             new_obj = jl_excstack_exception(excstack, itr);
