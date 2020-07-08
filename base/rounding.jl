@@ -151,8 +151,8 @@ See [`RoundingMode`](@ref) for available modes.
 """
 :rounding
 
-setrounding_raw(::Type{<:Union{Float32,Float64}}, i::Integer) = ccall(:fesetround, Int32, (Int32,), i)
-rounding_raw(::Type{<:Union{Float32,Float64}}) = ccall(:fegetround, Int32, ())
+setrounding_raw(::Type{<:Union{Float32,Float64}}, i::Integer) = ccall((:fesetround, Base.libm_name), Int32, (Int32,), i)
+rounding_raw(::Type{<:Union{Float32,Float64}}) = ccall((:fegetround, Base.libm_name), Int32, ())
 
 rounding(::Type{T}) where {T<:Union{Float32,Float64}} = from_fenv(rounding_raw(T))
 

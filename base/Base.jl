@@ -115,6 +115,20 @@ using .Iterators: Flatten, Filter, product  # for generators
 
 include("namedtuple.jl")
 
+# For OS specific stuff
+# We need to strcat things here, before strings are really defined
+function strcat(x::String, y::String)
+    out = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), Core.sizeof(x) + Core.sizeof(y))
+    GC.@preserve x y out begin
+        out_ptr = unsafe_convert(Ptr{UInt8}, out)
+        unsafe_copyto!(out_ptr, unsafe_convert(Ptr{UInt8}, x), Core.sizeof(x))
+        unsafe_copyto!(out_ptr + Core.sizeof(x), unsafe_convert(Ptr{UInt8}, y), Core.sizeof(y))
+    end
+    return out
+end
+include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
+include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
+
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
@@ -162,10 +176,6 @@ include("char.jl")
 include("strings/basic.jl")
 include("strings/string.jl")
 include("strings/substring.jl")
-
-# For OS specific stuff
-include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
-include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
 
 # Initialize DL_LOAD_PATH as early as possible.  We are defining things here in
 # a slightly more verbose fashion than usual, because we're running so early.
