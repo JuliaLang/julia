@@ -1388,6 +1388,15 @@ let egal_tfunc
     @test egal_tfunc(Union{Int64, Float64}, Integer) === Bool
     @test egal_tfunc(Union{Int64, Float64}, AbstractArray) === Const(false)
 end
+egal_conditional_lattice1(x, y) = x === y ? "" : 1
+egal_conditional_lattice2(x, y) = x + x === y ? "" : 1
+egal_conditional_lattice3(x, y) = x === y + y ? "" : 1
+@test Base.return_types(egal_conditional_lattice1, (Int64, Int64)) == Any[Union{Int, String}]
+@test Base.return_types(egal_conditional_lattice1, (Int32, Int64)) == Any[Int]
+@test Base.return_types(egal_conditional_lattice2, (Int64, Int64)) == Any[Union{Int, String}]
+@test Base.return_types(egal_conditional_lattice2, (Int32, Int64)) == Any[Int]
+@test Base.return_types(egal_conditional_lattice3, (Int64, Int64)) == Any[Union{Int, String}]
+@test Base.return_types(egal_conditional_lattice3, (Int32, Int64)) == Any[Int]
 
 using Core.Compiler: PartialStruct, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
 @test sizeof_tfunc(Const(Ptr)) === sizeof_tfunc(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}}) === Const(Sys.WORD_SIZE ÷ 8)
