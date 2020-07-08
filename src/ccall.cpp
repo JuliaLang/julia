@@ -2,6 +2,7 @@
 
 // --- the ccall, cglobal, and llvm intrinsics ---
 #include "llvm/Support/Path.h" // for llvm::sys::path
+#include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
 
 // somewhat unusual variable, in that aotcompile wants to get the address of this for a sanity check
@@ -691,9 +692,13 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         if (!jl_is_string(entry))
             jl_error("Function name passed to llvmcall must be a string");
         ir = jl_fieldref(ir, 0);
+
+        if (!jl_is_string(ir) && !jl_typeis(ir, jl_array_uint8_type))
+            jl_error("Module IR passed to llvmcall must be a string or an array of bytes");
     }
-    if (!jl_is_string(ir)) {
-        jl_error("IR passed to llvmcall must be a string or a tuple of two strings");
+    else {
+        if (!jl_is_string(ir))
+            jl_error("Function IR passed to llvmcall must be a string");
     }
 
     JL_TYPECHK(llvmcall, type, rt);
@@ -780,16 +785,36 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         f->addFnAttr(Attribute::AlwaysInline);
     }
     else {
-        // we have the IR of an entire module, which we can parse directly
+        // we have the IR or bitcode of an entire module, which we can parse directly
 
-        SMDiagnostic Err = SMDiagnostic();
-        Mod = parseAssemblyString(jl_string_data(ir), Err, jl_LLVMContext);
-        if (!Mod) {
-            std::string message = "Failed to parse LLVM assembly: \n";
-            raw_string_ostream stream(message);
-            Err.print("", stream, true);
-            emit_error(ctx, stream.str());
-            return jl_cgval_t();
+        if (jl_is_string(ir)) {
+            SMDiagnostic Err = SMDiagnostic();
+            Mod = parseAssemblyString(jl_string_data(ir), Err, jl_LLVMContext);
+            if (!Mod) {
+                std::string message = "Failed to parse LLVM assembly: \n";
+                raw_string_ostream stream(message);
+                Err.print("", stream, true);
+                emit_error(ctx, stream.str());
+                return jl_cgval_t();
+            }
+        }
+        else {
+            auto Buf = MemoryBuffer::getMemBuffer(
+                StringRef((char *)jl_array_data(ir), jl_array_len(ir)), "llvmcall",
+                /*RequiresNullTerminator*/ false);
+            Expected<std::unique_ptr<Module>> ModuleOrErr =
+                parseBitcodeFile(*Buf, jl_LLVMContext);
+            if (Error Err = ModuleOrErr.takeError()) {
+                std::string Message;
+                handleAllErrors(std::move(Err),
+                                [&](ErrorInfoBase &EIB) { Message = EIB.message(); });
+                std::string message = "Failed to parse LLVM bitcode: \n";
+                raw_string_ostream stream(message);
+                stream << Message;
+                emit_error(ctx, stream.str());
+                return jl_cgval_t();
+            }
+            Mod = std::move(ModuleOrErr.get());
         }
 
         Function *f = Mod->getFunction(jl_string_data(entry));
