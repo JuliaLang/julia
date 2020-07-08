@@ -365,23 +365,26 @@ They can be defined using the following `!!!` syntax:
     This warning admonition has a custom title: `"Beware!"`.
 ```
 
-The type of the admonition can be any word made up of only lowercase Latin characters (a-z), but some types produce special styling,
-namely (in order of decreasing severity): `danger`, `warning`, `info`, `note`, and `tip`.
+The first word after `!!!` declares the type of the admonition.
+There are standard admonition types that should produce special styling.
+Namely (in order of decreasing severity): `danger`, `warning`, `info`/`note`, and `tip`.
 
-A custom title for the box can be provided as a string (in double quotes) after the admonition type.
-For that standard types (`danger`, `warning`... etc_, if no title text is specified after the
-admonition type, then the type title used will be the type of the block.
-E.g. `"Note"` in the case of the `note` admonition.
+You can also use your own admonition types, as long as the type name only contains lowercase Latin characters (a-z).
+For example, you could have a `terminology` block like this:
 
-If you would like to define your own block, for example a `terminology`  block
-used like so:
 ```
 !!! terminology "julia vs Julia"
+
     Strictly speaking, Julia refers to the language,
     and julia the standard implementation.
 ```
 
-Admonitions, like most other toplevel elements, can contain other toplevel elements.
+However, unless the code rendering the Markdown special-cases that particular admonition type, it will get the default styling.
+
+A custom title for the box can be provided as a string (in double quotes) after the admonition type.
+If no title text is specified after the admonition type, then the type name will be used as the title (e.g. `"Note"` for the `note` admonition).
+
+Admonitions, like most other toplevel elements, can contain other toplevel elements (e.g. lists, images).
 
 ## Markdown Syntax Extensions
 
