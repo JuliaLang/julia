@@ -399,9 +399,9 @@ eval(Core, :(CodeInstance(mi::MethodInstance, @nospecialize(rettype), @nospecial
                           min_world::UInt, max_world::UInt) =
                 ccall(:jl_new_codeinst, Ref{CodeInstance}, (Any, Any, Any, Any, Int32, UInt, UInt),
                     mi, rettype, inferred_const, inferred, const_flags, min_world, max_world)))
-eval(Core, :(Const(@nospecialize(v)) = $(Expr(:new, Const, :v, false))))
-eval(Core, :(Const(@nospecialize(v), actual::Bool) = $(Expr(:new, Const, :v, :actual))))
-eval(Core, :(PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, PartialStruct, :typ, :fields))))
+eval(Core, :(Const(@nospecialize(v)) = $(Expr(:new, :Const, :v, false))))
+eval(Core, :(Const(@nospecialize(v), actual::Bool) = $(Expr(:new, :Const, :v, :actual))))
+eval(Core, :(PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
