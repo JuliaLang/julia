@@ -1059,7 +1059,6 @@ end
 @test Const(false) ⊑ isdefined_tfunc(Const(:x), Const(:y))
 @test isdefined_tfunc(Vector{Int}, Const(1)) == Const(false)
 @test isdefined_tfunc(Vector{Any}, Const(1)) == Const(false)
-@test isdefined_tfunc(Module, Any, Any) === Union{}
 @test isdefined_tfunc(Module, Int) === Union{}
 @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(0)) === Const(false)
 @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(1)) === Const(true)
@@ -1403,6 +1402,20 @@ let PT = PartialStruct(Tuple{Int64,UInt64}, Any[Const(10, false), UInt64])
     @test nfields_tfunc(PT) === Const(2)
     @test sizeof_nothrow(PT)
 end
+@test nfields_tfunc(Type) === Int
+@test nfields_tfunc(Number) === Int
+@test nfields_tfunc(Int) === Const(0)
+@test nfields_tfunc(Complex) === Const(2)
+@test nfields_tfunc(Type{Type{Int}}) === Const(nfields(DataType))
+@test nfields_tfunc(UnionAll) === Const(2)
+@test nfields_tfunc(DataType) === Const(nfields(DataType))
+@test nfields_tfunc(Type{Int}) === Const(nfields(DataType))
+@test nfields_tfunc(Type{Integer}) === Const(nfields(DataType))
+@test nfields_tfunc(Type{Complex}) === Int
+@test nfields_tfunc(typeof(Union{})) === Const(0)
+@test nfields_tfunc(Type{Union{}}) === Const(0)
+@test nfields_tfunc(Tuple{Int, Vararg{Int}}) === Int
+@test nfields_tfunc(Tuple{Int, Integer}) === Const(2)
 
 using Core.Compiler: typeof_tfunc
 @test typeof_tfunc(Tuple{Vararg{Int}}) == Type{Tuple{Vararg{Int,N}}} where N

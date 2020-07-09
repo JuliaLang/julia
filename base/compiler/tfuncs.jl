@@ -247,8 +247,7 @@ function isdefined_nothrow(argtypes::Array{Any, 1})
         (argtypes[2] ⊑ Symbol || argtypes[2] ⊑ Int) :
          argtypes[2] ⊑ Symbol
 end
-function isdefined_tfunc(@nospecialize(args...))
-    arg1 = args[1]
+function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
     if isa(arg1, Const)
         a1 = typeof(arg1.val)
     else
@@ -260,17 +259,14 @@ function isdefined_tfunc(@nospecialize(args...))
     a1 = unwrap_unionall(a1)
     if isa(a1, DataType) && !a1.abstract
         if a1 === Module
-            length(args) == 2 || return Bottom
-            sym = args[2]
             Symbol <: widenconst(sym) || return Bottom
             if isa(sym, Const) && isa(sym.val, Symbol) && isa(arg1, Const) && isdefined(arg1.val, sym.val)
                 return Const(true)
             end
-        elseif length(args) == 2 && isa(args[2], Const)
-            val = args[2].val
-            idx::Int = 0
+        elseif isa(sym, Const)
+            val = sym.val
             if isa(val, Symbol)
-                idx = fieldindex(a1, val, false)
+                idx = fieldindex(a1, val, false)::Int
             elseif isa(val, Int)
                 idx = val
             else
@@ -294,10 +290,10 @@ function isdefined_tfunc(@nospecialize(args...))
             end
         end
     end
-    Bool
+    return Bool
 end
+add_tfunc(isdefined, 2, 2, isdefined_tfunc, 1)
 
-add_tfunc(isdefined, 1, 2, isdefined_tfunc, 1)
 function sizeof_nothrow(@nospecialize(x))
     if isa(x, Const)
         x = x.val
@@ -342,19 +338,21 @@ function sizeof_tfunc(@nospecialize(x),)
     isprimitivetype(x) && return _const_sizeof(x)
     return Int
 end
-add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 0)
+add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 1)
 function nfields_tfunc(@nospecialize(x))
     isa(x, Const) && return Const(nfields(x.val))
     isa(x, Conditional) && return Const(0)
-    x = widenconst(x)
-    if isa(x, DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x))
-        if !(x.name === _NAMEDTUPLE_NAME && !isconcretetype(x))
+    x = unwrap_unionall(widenconst(x))
+    isconstType(x) && return Const(nfields(x.parameters[1]))
+    if isa(x, DataType) && !x.abstract
+        if !(x.name === Tuple.name && isvatuple(x)) &&
+           !(x.name === _NAMEDTUPLE_NAME && !isconcretetype(x))
             return Const(isdefined(x, :types) ? length(x.types) : length(x.name.names))
         end
     end
     return Int
 end
-add_tfunc(nfields, 1, 1, nfields_tfunc, 0)
+add_tfunc(nfields, 1, 1, nfields_tfunc, 1)
 add_tfunc(Core._expr, 1, INT_INF, (@nospecialize args...)->Expr, 100)
 function typevar_tfunc(@nospecialize(n), @nospecialize(lb_arg), @nospecialize(ub_arg))
     lb = Union{}
