@@ -1289,7 +1289,11 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 val = newload;
             }
             // TODO: should we use `load->clone()`, or manually copy any other metadata?
+#if JL_LLVM_VERSION >= 100000
+            newload->setAlignment(MaybeAlign(load->getAlignment()));
+#else
             newload->setAlignment(load->getAlignment());
+#endif
             // since we're moving heap-to-stack, it is safe to downgrade the atomic level to NotAtomic
             newload->setOrdering(AtomicOrdering::NotAtomic);
             load->replaceAllUsesWith(val);
@@ -1329,7 +1333,11 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 newstore = builder.CreateStore(store_val, slot_gep(slot, offset, store_ty, builder));
             }
             // TODO: should we use `store->clone()`, or manually copy any other metadata?
+#if JL_LLVM_VERSION >= 100000
+            newstore->setAlignment(MaybeAlign(store->getAlignment()));
+#else
             newstore->setAlignment(store->getAlignment());
+#endif
             // since we're moving heap-to-stack, it is safe to downgrade the atomic level to NotAtomic
             newstore->setOrdering(AtomicOrdering::NotAtomic);
             store->eraseFromParent();
