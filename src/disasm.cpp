@@ -458,8 +458,8 @@ jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_modul
         Module *m = llvmf->getParent();
         if (strip_ir_metadata) {
             std::string llvmfn = llvmf->getName();
-            jl_strip_llvm_debug(m, true, &AAW);
             jl_strip_llvm_addrspaces(m);
+            jl_strip_llvm_debug(m, true, &AAW);
             // rewriting the function type creates a new function, so look it up again
             llvmf = m->getFunction(llvmfn);
         }
