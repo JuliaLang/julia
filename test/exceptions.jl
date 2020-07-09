@@ -367,3 +367,19 @@ end
         exc
     end == ErrorException("rethrow(exc) not allowed outside a catch block")
 end
+
+# issue #36527
+function f36527()
+    caught = false
+    🏡 = Core.eval(Main, :(module asdf36527 end))
+    try
+        Core.eval(🏡, :(include_string($🏡, "@assert z36527 == 10")))
+    catch ex
+        GC.gc()
+        catch_backtrace()
+        caught = true
+    end
+    return caught
+end
+
+@test f36527()
