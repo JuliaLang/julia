@@ -630,8 +630,10 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     if (jl_is_ssavalue(ir_arg))
         ir_arg = jl_arrayref((jl_array_t*)ctx.source->code, ((jl_ssavalue_t*)ir_arg)->id - 1);
     ir = static_eval(ctx, ir_arg, true, true);
-    if (!ir)
-        jl_error("error statically evaluating llvm IR argument");
+    if (!ir) {
+        emit_error(ctx, "error statically evaluating llvm IR argument");
+        return jl_cgval_t();
+    }
     if (jl_is_ssavalue(args[2]) && !jl_is_long(ctx.source->ssavaluetypes)) {
         jl_value_t *rtt = jl_arrayref((jl_array_t*)ctx.source->ssavaluetypes, ((jl_ssavalue_t*)args[2])->id - 1);
         if (jl_is_type_type(rtt))
@@ -639,8 +641,10 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     }
     if (!rt) {
         rt = static_eval(ctx, args[2], true, true);
-        if (!rt)
-            jl_error("error statically evaluating llvmcall return type");
+        if (!rt) {
+            emit_error(ctx, "error statically evaluating llvmcall return type");
+            return jl_cgval_t();
+        }
     }
     if (jl_is_ssavalue(args[3]) && !jl_is_long(ctx.source->ssavaluetypes)) {
         jl_value_t *att = jl_arrayref((jl_array_t*)ctx.source->ssavaluetypes, ((jl_ssavalue_t*)args[3])->id - 1);
@@ -649,24 +653,34 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     }
     if (!at) {
         at = static_eval(ctx, args[3], true, true);
-        if (!at)
-            jl_error("error statically evaluating llvmcall argument tuple");
+        if (!at) {
+            emit_error(ctx, "error statically evaluating llvmcall argument tuple");
+            return jl_cgval_t();
+        }
     }
     if (jl_is_tuple(ir)) {
         // if the IR is a tuple, we expect (mod, fn)
-        if (jl_nfields(ir) != 2)
-            jl_error("Tuple as first argument to llvmcall must have exactly two children");
+        if (jl_nfields(ir) != 2) {
+            emit_error(ctx, "Tuple as first argument to llvmcall must have exactly two children");
+            return jl_cgval_t();
+        }
         entry = jl_fieldref(ir, 1);
-        if (!jl_is_string(entry))
-            jl_error("Function name passed to llvmcall must be a string");
+        if (!jl_is_string(entry)) {
+            emit_error(ctx, "Function name passed to llvmcall must be a string");
+            return jl_cgval_t();
+        }
         ir = jl_fieldref(ir, 0);
 
-        if (!jl_is_string(ir) && !jl_typeis(ir, jl_array_uint8_type))
-            jl_error("Module IR passed to llvmcall must be a string or an array of bytes");
+        if (!jl_is_string(ir) && !jl_typeis(ir, jl_array_uint8_type)) {
+            emit_error(ctx, "Module IR passed to llvmcall must be a string or an array of bytes");
+            return jl_cgval_t();
+        }
     }
     else {
-        if (!jl_is_string(ir))
-            jl_error("Function IR passed to llvmcall must be a string");
+        if (!jl_is_string(ir)) {
+            emit_error(ctx, "Function IR passed to llvmcall must be a string");
+            return jl_cgval_t();
+        }
     }
 
     JL_TYPECHK(llvmcall, type, rt);
@@ -692,7 +706,8 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         Type *t = julia_type_to_llvm(ctx, tti, &toboxed);
         argtypes.push_back(t);
         if (4 + i > nargs) {
-            jl_error("Missing arguments to llvmcall!");
+            emit_error(ctx, "Missing arguments to llvmcall!");
+            return jl_cgval_t();
         }
         jl_value_t *argi = args[4 + i];
         jl_cgval_t arg = emit_expr(ctx, argi);
