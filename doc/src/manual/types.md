@@ -393,20 +393,7 @@ to point to different objects.
 Where required, mutable composite objects can be declared with the keyword [`mutable struct`](@ref), to be
 discussed in the next section.
 
-Immutable composite types with no fields are singletons; there can be only one instance of such types:
-
-```jldoctest
-julia> struct NoFields
-       end
-
-julia> NoFields() === NoFields()
-true
-```
-
-The [`===`](@ref) function confirms that the "two" constructed instances of `NoFields` are actually one
-and the same. Singleton types are described in further detail [below](@ref man-singleton-types).
-More generally, if all the fields of an immutable structure are indistinguishable (`===`) then two
-immutable values containing those fields are also indistinguishable:
+If all the fields of an immutable structure are indistinguishable (`===`) then two immutable values containing those fields are also indistinguishable:
 
 ```jldoctest
 julia> struct X
@@ -550,7 +537,7 @@ All declared types (the `DataType` variety) can be parameterized, with the same 
 case. We will discuss them in the following order: first, parametric composite types, then parametric
 abstract types, and finally parametric primitive types.
 
-### Parametric Composite Types
+### [Parametric Composite Types](@id man-parametric-composite-types)
 
 Type parameters are introduced immediately after the type name, surrounded by curly braces:
 
@@ -973,62 +960,6 @@ julia> NamedTuple{(:a, :b)}((1,""))
 If field types are specified, the arguments are converted. Otherwise the types of the arguments
 are used directly.
 
-### [Singleton Types](@id man-singleton-types)
-
-There is a special kind of abstract parametric type that must be mentioned here: singleton types.
-For each type, `T`, the "singleton type" `Type{T}` is an abstract type whose only instance is
-the object `T`. Since the definition is a little difficult to parse, let's look at some examples:
-
-```jldoctest
-julia> isa(Float64, Type{Float64})
-true
-
-julia> isa(Real, Type{Float64})
-false
-
-julia> isa(Real, Type{Real})
-true
-
-julia> isa(Float64, Type{Real})
-false
-```
-
-In other words, [`isa(A,Type{B})`](@ref) is true if and only if `A` and `B` are the same object
-and that object is a type. Without the parameter, `Type` is simply an abstract type which has
-all type objects as its instances, including, of course, singleton types:
-
-```jldoctest
-julia> isa(Type{Float64}, Type)
-true
-
-julia> isa(Float64, Type)
-true
-
-julia> isa(Real, Type)
-true
-```
-
-Any object that is not a type is not an instance of `Type`:
-
-```jldoctest
-julia> isa(1, Type)
-false
-
-julia> isa("foo", Type)
-false
-```
-
-Until we discuss [Parametric Methods](@ref) and [conversions](@ref conversion-and-promotion), it is difficult to explain
-the utility of the singleton type construct, but in short, it allows one to specialize function
-behavior on specific type *values*. This is useful for writing methods (especially parametric
-ones) whose behavior depends on a type that is given as an explicit argument rather than implied
-by the type of one of its arguments.
-
-A few popular languages have singleton types, including Haskell, Scala and Ruby. In general usage,
-the term "singleton type" refers to a type whose only instance is a single value. This meaning
-applies to Julia's singleton types, but with that caveat that only type objects have singleton
-types.
-
 ### Parametric Primitive Types
 
 Primitive types can also be declared parametrically. For example, pointers are represented as
@@ -1126,6 +1057,123 @@ dimensions -- is 1, regardless of what the element type is. In languages where p
 must always be specified in full, this is not especially helpful, but in Julia, this allows one
 to write just `Vector` for the abstract type including all one-dimensional dense arrays of any
 element type.
+
+## [Singleton types](@id man-singleton-types)
+
+Immutable composite types with no fields are called *singletons*. Formally, if 
+`a isa T && b isa T` implies `a === b`, then `T` is a singleton type. [^2]
+[`Base.issingletontype`](@ref) can be used to check if a type is a singleton type.
+
+From the definition, it follows that there can be only one instance of such types:
+
+```jldoctest
+julia> struct NoFields
+       end
+
+julia> NoFields() === NoFields()
+true
+
+julia> Base.issingletontype(NoFields)
+true
+```
+
+The [`===`](@ref) function confirms that the constructed instances of `NoFields` are actually one
+and the same.
+
+Parametric types can be singleton types when the above condition holds. For example,
+```jldoctest
+julia> struct NoFieldsParam{T}
+       end
+
+julia> Base.issingletontype(NoFieldsParam) # can't be a singleton type ...
+false
+
+julia> NoFieldsParam{Int}() isa NoFieldsParam # ... because it has ...
+true
+
+julia> NoFieldsParam{Bool}() isa NoFieldsParam # ... multiple instances
+true
+
+julia> Base.issingletontype(NoFieldsParam{Int}) # parametrized, it is a singleton
+true
+
+julia> NoFieldsParam{Int}() === NoFieldsParam{Int}()
+true
+```
+
+## [`Type{T}` types](@id man-typet-type)
+
+For each type `T`, the `Type{T}` is an abstract parametric type whose only instance is the
+object `T`. Until we discuss [Parametric Methods](@ref) and [conversions](@ref
+conversion-and-promotion), it is difficult to explain the utility of this construct, but in
+short, it allows one to specialize function behavior on specific types as *values*. This is
+useful for writing methods (especially parametric ones) whose behavior depends on a type
+that is given as an explicit argument rather than implied by the type of one of its
+arguments.
+
+Since the definition is a little difficult to parse, let's look at some examples:
+
+```jldoctest
+julia> isa(Float64, Type{Float64})
+true
+
+julia> isa(Real, Type{Float64})
+false
+
+julia> isa(Real, Type{Real})
+true
+
+julia> isa(Float64, Type{Real})
+false
+```
+
+In other words, [`isa(A,Type{B})`](@ref) is true if and only if `A` and `B` are the same object
+and that object is a type.
+
+In particular, since parametric types are [invariant](@ref man-parametric-composite-types),
+
+```jldoctest
+julia> struct TypeParamExample{T}
+           x::T
+       end
+
+julia> TypeParamExample isa Type{TypeParamExample}
+true
+
+julia> TypeParamExample{Int} isa Type{TypeParamExample}
+false
+
+julia> TypeParamExample{Int} isa Type{TypeParamExample{Int}}
+true
+```
+
+Without the parameter, `Type` is simply an abstract type which has
+all type objects as its instances:
+
+```jldoctest
+julia> isa(Type{Float64}, Type)
+true
+
+julia> isa(Float64, Type)
+true
+
+julia> isa(Real, Type)
+true
+```
+
+Any object that is not a type is not an instance of `Type`:
+
+```jldoctest
+julia> isa(1, Type)
+false
+
+julia> isa("foo", Type)
+false
+```
+
+Finally, while `Type` is part of Julia's type hierarchy like any other abstract parametric
+type, it is not commonly used outside method signatures. If you find that you are frequently
+dealing with standalone `Type{T}` objects, there may be an opportunity to reorganize your code.
 
 ## Type Aliases
 
@@ -1445,3 +1493,4 @@ in unfavorable cases, you can easily end up making the performance of your code 
 about the proper (and improper) uses of `Val`, please read [the more extensive discussion in the performance tips](@ref man-performance-value-type).
 
 [^1]: "Small" is defined by the `MAX_UNION_SPLITTING` constant, which is currently set to 4.
+[^2]: A few popular languages have singleton types, including Haskell, Scala and Ruby.

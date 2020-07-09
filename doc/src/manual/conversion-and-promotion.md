@@ -168,7 +168,7 @@ Such a definition might look like this:
 convert(::Type{MyType}, x) = MyType(x)
 ```
 
-The type of the first argument of this method is a [singleton type](@ref man-singleton-types),
+The type of the first argument of this method is a [`Type{T}`](@ref man-typet-type),
 `Type{MyType}`, the only instance of which is `MyType`. Thus, this method is only invoked
 when the first argument is the type value `MyType`. Notice the syntax used for the first
 argument: the argument name is omitted prior to the `::` symbol, and only the type is given.
