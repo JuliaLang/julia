@@ -544,46 +544,6 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
     }
 }
 
-
-static void jl_rethrow_with_add(const char *fmt, ...)
-{
-    jl_value_t *exc = jl_current_exception();
-    if (jl_typeis(exc, jl_errorexception_type)) {
-        char *str = jl_string_data(jl_fieldref(exc, 0));
-        char buf[1024];
-        va_list args;
-        va_start(args, fmt);
-        int nc = vsnprintf(buf, sizeof(buf), fmt, args);
-        va_end(args);
-        nc += snprintf(buf + nc, sizeof(buf) - nc, ": %s", str);
-        jl_value_t *msg = jl_pchar_to_string(buf, nc);
-        JL_GC_PUSH1(&msg);
-        jl_throw(jl_new_struct(jl_errorexception_type, msg));
-    }
-    jl_rethrow();
-}
-
-static jl_value_t* try_eval(jl_codectx_t &ctx, jl_value_t *ex, const char *failure)
-{
-    jl_value_t *constant = static_eval(ctx, ex, true, true);
-    if (jl_is_ssavalue(ex) && !constant)
-        jl_error(failure);
-    else if (constant)
-        return constant;
-
-    JL_TRY {
-        size_t last_age = jl_get_ptls_states()->world_age;
-        jl_get_ptls_states()->world_age = ctx.world;
-        constant = jl_interpret_toplevel_expr_in(ctx.module, ex, ctx.source, ctx.linfo->sparam_vals);
-        jl_get_ptls_states()->world_age = last_age;
-    }
-    JL_CATCH {
-        jl_rethrow_with_add(failure);
-    }
-
-    return constant;
-}
-
 // --- code generator for cglobal ---
 
 static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, const jl_cgval_t *argv, size_t nargs);
@@ -669,21 +629,29 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     JL_GC_PUSH4(&ir, &rt, &at, &entry);
     if (jl_is_ssavalue(ir_arg))
         ir_arg = jl_arrayref((jl_array_t*)ctx.source->code, ((jl_ssavalue_t*)ir_arg)->id - 1);
-    ir = try_eval(ctx, ir_arg, "error statically evaluating llvm IR argument");
+    ir = static_eval(ctx, ir_arg, true, true);
+    if (!ir)
+        jl_error("error statically evaluating llvm IR argument");
     if (jl_is_ssavalue(args[2]) && !jl_is_long(ctx.source->ssavaluetypes)) {
         jl_value_t *rtt = jl_arrayref((jl_array_t*)ctx.source->ssavaluetypes, ((jl_ssavalue_t*)args[2])->id - 1);
         if (jl_is_type_type(rtt))
             rt = jl_tparam0(rtt);
     }
-    if (rt == NULL)
-        rt = try_eval(ctx, args[2], "error statically evaluating llvmcall return type");
+    if (!rt) {
+        rt = static_eval(ctx, args[2], true, true);
+        if (!rt)
+            jl_error("error statically evaluating llvmcall return type");
+    }
     if (jl_is_ssavalue(args[3]) && !jl_is_long(ctx.source->ssavaluetypes)) {
         jl_value_t *att = jl_arrayref((jl_array_t*)ctx.source->ssavaluetypes, ((jl_ssavalue_t*)args[3])->id - 1);
         if (jl_is_type_type(att))
             at = jl_tparam0(att);
     }
-    if (at == NULL)
-        at = try_eval(ctx, args[3], "error statically evaluating llvmcall argument tuple");
+    if (!at) {
+        at = static_eval(ctx, args[3], true, true);
+        if (!at)
+            jl_error("error statically evaluating llvmcall argument tuple");
+    }
     if (jl_is_tuple(ir)) {
         // if the IR is a tuple, we expect (mod, fn)
         if (jl_nfields(ir) != 2)
