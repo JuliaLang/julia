@@ -458,7 +458,7 @@ To recap, two essential properties define immutability in Julia:
       functions as pointers to heap-allocated values except in cases where the compiler
       is sure that there's no way to tell that this is not what is happening.
 
-## Declared Types
+## [Declared Types](@id man-declared-types)
 
 The three kinds of types (abstract, primitive, composite) discussed in the previous
 sections are actually all closely related. They share the same key properties:
@@ -1061,8 +1061,13 @@ element type.
 ## [Singleton types](@id man-singleton-types)
 
 Immutable composite types with no fields are called *singletons*. Formally, if 
-`a isa T && b isa T` implies `a === b`, then `T` is a singleton type. [^2]
-[`Base.issingletontype`](@ref) can be used to check if a type is a singleton type.
+
+1. `T` is an immutable composite type (ie defined with `struct`),
+1. `a isa T && b isa T` implies `a === b`,
+
+then `T` is a singleton type.[^2] [`Base.issingletontype`](@ref) can be used to check if a
+type is a singleton type. [Abstract types](@ref man-abstract-types) cannot be singleton
+types by construction.
 
 From the definition, it follows that there can be only one instance of such types:
 
@@ -1101,7 +1106,7 @@ julia> NoFieldsParam{Int}() === NoFieldsParam{Int}()
 true
 ```
 
-## [`Type{T}` types](@id man-typet-type)
+## [`Type{T}` type selectors](@id man-typet-type)
 
 For each type `T`, the `Type{T}` is an abstract parametric type whose only instance is the
 object `T`. Until we discuss [Parametric Methods](@ref) and [conversions](@ref
@@ -1171,9 +1176,27 @@ julia> isa("foo", Type)
 false
 ```
 
-Finally, while `Type` is part of Julia's type hierarchy like any other abstract parametric
-type, it is not commonly used outside method signatures. If you find that you are frequently
-dealing with standalone `Type{T}` objects, there may be an opportunity to reorganize your code.
+While `Type` is part of Julia's type hierarchy like any other abstract parametric type, it
+is not commonly used outside method signatures except in some special cases. Another
+important use case for `Type` is sharpening field types which would otherwise be captured
+less precisely, eg as [`DataType`](@ref man-declared-types) in the example below where the
+default constuctor could lead to performance problems in code relying on the precise wrapped
+type (similarly to [abstract type parameters](@ref man-performance-abstract-container)).
+
+```jldoctest
+julia> struct WrapType{T}
+       value::T
+       end
+
+julia> WrapType(Float64) # default constructor, note DataType
+WrapType{DataType}(Float64)
+
+julia> WrapType(::Type{T}) where T = WrapType{Type{T}}(T)
+WrapType
+
+julia> WrapType(Float64) # sharpened constructor, note more precise Type{Float64}
+WrapType{Type{Float64}}(Float64)
+```
 
 ## Type Aliases
 

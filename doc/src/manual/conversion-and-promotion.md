@@ -173,8 +173,7 @@ The type of the first argument of this method is a [`Type{T}`](@ref man-typet-ty
 when the first argument is the type value `MyType`. Notice the syntax used for the first
 argument: the argument name is omitted prior to the `::` symbol, and only the type is given.
 This is the syntax in Julia for a function argument whose type is specified but whose value
-does not need to be referenced by name. In this example, since the type is a singleton, we
-already know its value without referring to an argument name.
+does not need to be referenced by name.
 
 All instances of some abstract types are by default considered "sufficiently similar"
 that a universal `convert` definition is provided in Julia Base.
