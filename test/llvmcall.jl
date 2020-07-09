@@ -229,3 +229,7 @@ module LLVMCallFunctionTest
 
     @test global_value_address1() != global_value_address2()
 end
+
+# issue 34166
+f34166(x) = Base.llvmcall("ret i$(Sys.WORD_SIZE) %0", Int, (Int,), x)
+@test_throws ErrorException f34166(1)

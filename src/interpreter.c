@@ -126,7 +126,7 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     JL_GC_PUSHARGS(argv, nargs - 1);
     size_t i;
     for (i = 1; i < nargs; i++)
-        argv[i - 1] = eval_value(args[i], s);
+        argv[i] = eval_value(args[i], s);
     jl_method_instance_t *meth = (jl_method_instance_t*)args[0];
     assert(jl_is_method_instance(meth));
     jl_value_t *result = jl_invoke(argv[1], &argv[2], nargs - 2, meth);
