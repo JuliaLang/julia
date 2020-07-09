@@ -1272,8 +1272,29 @@ function write_prompt(terminal, p::Prompt)
     return width
 end
 
+# On Windows, when launching external processes, we cannot control what assumption they make on the
+# console mode. We thus forcibly reset the console mode at the start of the prompt to ensure they do
+# not leave the console mode in a corrupt state.
+if Sys.iswindows()
+function _console_mode()
+    hOutput = ccall(:GetStdHandle, Int32, (Int32,), -11)
+    dwMode = Ref{UInt32}(0)
+    ccall(:GetConsoleMode, Int32, (Int32, Ptr{Nothing}), hOutput, dwMode)
+    dwMode[]
+end
+const default_console_mode = _console_mode()
+function _reset_console_mode()
+    ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x004
+    newMode = default_console_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING
+    hOutput = ccall(:GetStdHandle, Int32, (Int32,), -11)
+    ccall(:SetConsoleMode, Int32, (Int32, Int32), hOutput, newMode)
+    nothing
+end
+end
+
 # returns the width of the written prompt
 function write_prompt(terminal, s::Union{AbstractString,Function})
+    @static Sys.iswindows() && _reset_console_mode()
     promptstr = prompt_string(s)
     write(terminal, promptstr)
     return textwidth(promptstr)
