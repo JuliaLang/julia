@@ -10,7 +10,6 @@
 #include "julia_assert.h"
 
 #define MAX_METHLIST_COUNT 12 // this can strongly affect the sysimg size and speed!
-#define INIT_CACHE_SIZE 8 // must be a power-of-two
 
 #ifdef __cplusplus
 extern "C" {
@@ -354,7 +353,7 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
     //}
     if (jl_typeof(map) == (jl_value_t *)jl_typemap_level_type) {
         jl_typemap_level_t *cache = (jl_typemap_level_t*)map;
-        jl_value_t *ty = NULL;
+        jl_value_t *ty;
         size_t l = jl_nparams(ttypes);
         if (closure->va && l <= offs + 1) {
             ty = closure->va;
@@ -362,6 +361,11 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
         else if (l > offs) {
             ty = jl_tparam(ttypes, offs);
         }
+        else {
+            ty = NULL;
+        }
+        if (ty == (jl_value_t*)jl_typeofbottom_type)
+            ty = (jl_value_t*)jl_assume(jl_typeofbottom_type)->super;
         if (ty) {
             while (jl_is_typevar(ty))
                 ty = ((jl_tvar_t*)ty)->ub;
@@ -551,7 +555,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
     if (jl_typeof(ml_or_cache) == (jl_value_t *)jl_typemap_level_type) {
         jl_typemap_level_t *cache = (jl_typemap_level_t*)ml_or_cache;
         // called object is the primary key for constructors, otherwise first argument
-        jl_value_t *ty = NULL;
+        jl_value_t *ty;
         jl_value_t *ttypes = jl_unwrap_unionall((jl_value_t*)search->types);
         JL_GC_PROMISE_ROOTED(ttypes);
         assert(jl_is_datatype(ttypes));
@@ -571,9 +575,14 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
         else if (l > offs) {
             ty = jl_tparam(ttypes, offs);
         }
-        // If there is a type at offs, look in the optimized caches
-        if (!subtype) {
-            if (ty && jl_is_any(ty))
+        else {
+            ty = NULL;
+        }
+        if (ty == (jl_value_t*)jl_typeofbottom_type)
+            ty = (jl_value_t*)jl_assume(jl_typeofbottom_type)->super;
+        // If there is a type at offs, look in the optimized leaf type caches
+        if (ty && !subtype) {
+            if (jl_is_any(ty))
                 return jl_typemap_assoc_by_type(cache->any, search, offs + 1, subtype);
             if (isva) // in lookup mode, want to match Vararg exactly, not as a subtype
                 ty = NULL;
@@ -836,7 +845,7 @@ static void jl_typemap_level_insert_(
     jl_value_t *ttypes = jl_unwrap_unionall((jl_value_t*)newrec->sig);
     size_t l = jl_nparams(ttypes);
     // compute the type at offset `offs` into `sig`, which may be a Vararg
-    jl_value_t *t1 = NULL;
+    jl_value_t *t1;
     int isva = 0;
     if (l <= offs + 1) {
         t1 = jl_tparam(ttypes, l - 1);
@@ -851,6 +860,11 @@ static void jl_typemap_level_insert_(
     else if (l > offs) {
         t1 = jl_tparam(ttypes, offs);
     }
+    else {
+        t1 = NULL;
+    }
+    if (t1 == (jl_value_t*)jl_typeofbottom_type)
+        t1 = (jl_value_t*)jl_assume(jl_typeofbottom_type)->super;
     // If the type at `offs` is Any, put it in the Any list
     if (t1 && jl_is_any(t1)) {
         jl_typemap_insert_generic(map, &cache->any, (jl_value_t*)cache, newrec, offs+1, tparams);
