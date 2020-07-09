@@ -837,25 +837,28 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     Mod->setTargetTriple(jl_Module->getTargetTriple());
     Mod->setDataLayout(jl_Module->getDataLayout());
 
-    // verify the IR
-    Function *f = Mod->getFunction(ir_name);
-    assert(f);
+    // verify the definition
+    Function *def = Mod->getFunction(ir_name);
+    assert(def);
     std::string message = "Malformed LLVM function: \n";
     raw_string_ostream stream(message);
-    if (verifyFunction(*f, &stream)) {
+    if (verifyFunction(*def, &stream)) {
         emit_error(ctx, stream.str());
         return jl_cgval_t();
     }
+    def->setLinkage(GlobalVariable::LinkOnceODRLinkage);
 
-    if (Linker::linkModules(*jl_Module, std::move(Mod))) {
-        emit_error(ctx, "Failed to link LLVM bitcode");
-        return jl_cgval_t();
-    }
+    // generate a call
+    FunctionType *decl_typ = FunctionType::get(rettype, argtypes, def->isVarArg());
+    Function *decl = Function::Create(decl_typ, def->getLinkage(), def->getAddressSpace(),
+                                      def->getName(), jl_Module);
+    decl->setAttributes(def->getAttributes());
+    CallInst *inst = ctx.builder.CreateCall(decl, ArrayRef<Value *>(&argvals[0], nargt));
 
-    f = jl_Module->getFunction(ir_name);
-    assert(f);
-    CallInst *inst = ctx.builder.CreateCall(f, ArrayRef<Value*>(&argvals[0], nargt));
-    f->setLinkage(GlobalVariable::PrivateLinkage);
+    // save the module to be linked later.
+    // we cannot do this right now, because linking mutates the destination module,
+    // which might invalidate LLVM values cached in cgval_t's (specifically constant arrays)
+    ctx.llvmcall_modules.push_back(std::move(Mod));
 
     JL_GC_POP();
 
