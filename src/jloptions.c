@@ -149,7 +149,7 @@ static const char opts[]  =
 
 static const char opts_hidden[]  =
     // code generation options
-    " --compile={yes|no|all|min}Enable or disable JIT compiler, or request exhaustive compilation\n"
+    " --compile={yes|no|all|min}Enable or disable JIT compiler, or request exhaustive or minimal compilation\n"
 
     // compiler output options
     " --output-o name           Generate an object file (including system image data)\n"
