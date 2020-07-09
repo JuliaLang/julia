@@ -592,7 +592,7 @@ function isa_tfunc(@nospecialize(v), @nospecialize(tt))
     # TODO: handle non-leaftype(t) by testing against lower and upper bounds
     return Bool
 end
-add_tfunc(isa, 2, 2, isa_tfunc, 0)
+add_tfunc(isa, 2, 2, isa_tfunc, 1)
 
 function subtype_tfunc(@nospecialize(a), @nospecialize(b))
     a, isexact_a = instanceof_tfunc(a)
@@ -610,7 +610,7 @@ function subtype_tfunc(@nospecialize(a), @nospecialize(b))
     end
     return Bool
 end
-add_tfunc(<:, 2, 2, subtype_tfunc, 0)
+add_tfunc(<:, 2, 2, subtype_tfunc, 10)
 
 is_dt_const_field(fld::Int) = (
      fld == DATATYPE_NAME_FIELDINDEX ||
