@@ -258,7 +258,7 @@ function optimize(opt::OptimizationState, params::OptimizationParams, @nospecial
             # obey @inline declaration if a dispatch barrier would not help
         else
             bonus = 0
-            if result ⊑ Tuple && !isbitstype(widenconst(result))
+            if result ⊑ Tuple && !isconcretetype(widenconst(result))
                 bonus = params.inline_tupleret_bonus
             end
             if opt.src.inlineable
