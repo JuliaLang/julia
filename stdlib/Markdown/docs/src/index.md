@@ -375,8 +375,8 @@ For example, you could have a `terminology` block like this:
 ```
 !!! terminology "julia vs Julia"
 
-    Strictly speaking, Julia refers to the language,
-    and julia the standard implementation.
+    Strictly speaking, "Julia" refers to the language,
+    and "julia" the standard implementation.
 ```
 
 However, unless the code rendering the Markdown special-cases that particular admonition type, it will get the default styling.
