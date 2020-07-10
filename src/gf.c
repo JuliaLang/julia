@@ -1197,15 +1197,6 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
     return nf;
 }
 
-void print_func_loc(JL_STREAM *s, jl_method_t *m)
-{
-    long lno = m->line;
-    if (lno > 0) {
-        char *fname = jl_symbol_name((jl_sym_t*)m->file);
-        jl_printf(s, " at %s:%ld", fname, lno);
-    }
-}
-
 struct shadowed_matches_env {
     struct typemap_intersection_env match;
     jl_typemap_entry_t *newentry;
@@ -1291,14 +1282,33 @@ static jl_value_t *check_shadowed_matches(jl_typemap_t *defs, jl_typemap_entry_t
     return env.shadowed;
 }
 
+void print_func_loc(JL_STREAM *s, jl_method_t *m)
+{
+    long lno = m->line;
+    if (lno > 0) {
+        char *fname = jl_symbol_name((jl_sym_t*)m->file);
+        jl_printf(s, " at %s:%ld", fname, lno);
+    }
+}
+
+static int is_anonfn_typename(char *name)
+{
+    if (name[0] != '#' || name[1] == '#')
+        return 0;
+    char *other = strrchr(name, '#');
+    return other > &name[1] && other[1] > '0' && other[1] <= '9';
+}
+
 static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue)
 {
     // method overwritten
+    jl_method_t *method = (jl_method_t*)newentry->func.method;
+    jl_module_t *newmod = method->module;
+    jl_module_t *oldmod = oldvalue->module;
+    jl_datatype_t *dt = jl_first_argument_datatype(oldvalue->sig);
+    int anon = dt && is_anonfn_typename(jl_symbol_name(dt->name->name));
     if ((jl_options.warn_overwrite == JL_OPTIONS_WARN_OVERWRITE_ON) ||
-        (jl_options.incremental && jl_generating_output())) {
-        jl_method_t *method = (jl_method_t*)newentry->func.method;
-        jl_module_t *newmod = method->module;
-        jl_module_t *oldmod = oldvalue->module;
+        (jl_options.incremental && jl_generating_output()) || anon) {
         JL_STREAM *s = JL_STDERR;
         jl_printf(s, "WARNING: Method definition ");
         jl_static_show_func_sig(s, (jl_value_t*)newentry->sig);
@@ -1307,7 +1317,10 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
         jl_printf(s, " overwritten");
         if (oldmod != newmod)
             jl_printf(s, " in module %s", jl_symbol_name(newmod->name));
-        print_func_loc(s, method);
+        if (method->line > 0 && method->line == oldvalue->line && method->file == oldvalue->file)
+            jl_printf(s, anon ? " on the same line" : " on the same line (check for duplicate calls to `include`)");
+        else
+            print_func_loc(s, method);
         jl_printf(s, ".\n");
         jl_uv_flush(s);
     }

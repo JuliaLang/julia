@@ -2341,8 +2341,7 @@ static void jl_recache_types(void) JL_GC_DISABLED
     }
 }
 
-// repeatedly look up older methods until we come to one that existed
-// at the time this module was serialized (e.g. ignoring deletion)
+// look up a method from a previously deserialized dependent module
 static jl_method_t *jl_lookup_method(jl_methtable_t *mt, jl_datatype_t *sig, size_t world)
 {
     if (world < jl_main_module->primary_world)
