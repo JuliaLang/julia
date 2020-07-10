@@ -132,7 +132,7 @@ function show(io::IO, t::NamedTuple)
     n = nfields(t)
     for i = 1:n
         # if field types aren't concrete, show full type
-        if typeof(getfield(t, i)) !== fieldtype(typeof(t), i)
+        if Core.safe_Typeof(getfield(t, i)) !== fieldtype(typeof(t), i)
             show(io, typeof(t))
             print(io, "(")
             show(io, Tuple(t))

@@ -1994,3 +1994,10 @@ end
     @test contains(string(methods(foo)), "foo(α)")
     @test contains(string(methods(bar)), "bar(ℓ)")
 end
+
+@testset "NamedTuple with types (#36614)" begin
+    @test showstr((a = Symbol,)) == "(a = Symbol,)"
+    @test showstr((a = Symbol, b = 1, c = String)) == "(a = Symbol, b = 1, c = String)"
+    @test showstr((a = Vector.body,)) == "(a = Array{T,1},)"
+    @test showstr((a = (Symbol,),)) == "(a = (Symbol,),)"
+end
