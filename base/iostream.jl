@@ -445,7 +445,9 @@ function readline(s::IOStream; keep::Bool=false)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
 end
 
-function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
+function readbytes_all!(s::IOStream,
+                        b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
+                        nb::Integer)
     olb = lb = length(b)
     nr = 0
     @_lock_ios s begin
@@ -466,7 +468,9 @@ function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
     return nr
 end
 
-function readbytes_some!(s::IOStream, b::Array{UInt8}, nb)
+function readbytes_some!(s::IOStream,
+                         b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
+                         nb::Integer)
     olb = length(b)
     if nb > olb
         resize!(b, nb)
@@ -495,7 +499,10 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 `read` call is performed, and the amount of data returned is device-dependent. Note that not
 all stream types support the `all` option.
 """
-function readbytes!(s::IOStream, b::Array{UInt8}, nb=length(b); all::Bool=true)
+function readbytes!(s::IOStream,
+                    b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
+                    nb=length(b);
+                    all::Bool=true)
     return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
 end
 
