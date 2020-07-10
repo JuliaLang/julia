@@ -205,11 +205,11 @@ end
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     with_methodtable_hint(d.repl) do io
+        io = IOContext(io, :limit => true, :module => Main)
         get(io, :color, false) && write(io, answer_color(d.repl))
         if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
             # this can override the :limit property set initially
-            io = foldl(IOContext, d.repl.options.iocontext,
-                       init=IOContext(io, :limit => true, :module => Main))
+            io = foldl(IOContext, d.repl.options.iocontext, init=io)
         end
         show(io, mime, x)
         println(io)
