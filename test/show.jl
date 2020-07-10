@@ -2000,4 +2000,8 @@ end
     @test showstr((a = Symbol, b = 1, c = String)) == "(a = Symbol, b = 1, c = String)"
     @test showstr((a = Vector.body,)) == "(a = Array{T,1},)"
     @test showstr((a = (Symbol,),)) == "(a = (Symbol,),)"
+    @test showstr(NamedTuple{(:a,),Tuple{DataType}}((Symbol,))) ==
+          "NamedTuple{(:a,),Tuple{DataType}}((Symbol,))"
+    @test showstr(NamedTuple{(:a, :b),Tuple{Type{Symbol},DataType}}((Symbol, Symbol))) ==
+          "NamedTuple{(:a, :b),Tuple{Type{Symbol},DataType}}((Symbol, Symbol))"
 end
