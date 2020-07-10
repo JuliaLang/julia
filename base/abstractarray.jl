@@ -344,14 +344,15 @@ function first(itr)
 end
 
 """
-    first(v::AbstractVector, n::Integer)
+    first(itr, n::Integer)
 
-Get the first `n` elements of vector `v`, or fewer elements if `v` is not long enough.
+Get the first `n` elements of the iterable collection `itr`, or fewer elements if `v` is not
+long enough.
 
 # Examples
 ```jldoctest
 julia> first(["foo", "bar", "qux"], 2)
-2-element Array{String,1}:
+2-element Vector{String}:
  "foo"
  "bar"
 
@@ -359,10 +360,15 @@ julia> first(1:6, 10)
 1:6
 
 julia> first(Bool[], 1)
-0-element Array{Bool,1}
+Bool[]
 ```
 """
-first(v::AbstractVector, n::Integer) = @inbounds v[begin:min(begin + n - 1, end)]
+first(itr, n::Integer) = collect(Iterators.take(itr, n))
+# Faster method for vectors
+function first(v::AbstractVector, n::Integer)
+    n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
+    @inbounds v[begin:min(begin + n - 1, end)]
+end
 
 """
     last(coll)
@@ -383,14 +389,15 @@ julia> last([1; 2; 3; 4])
 last(a) = a[end]
 
 """
-    last(v::AbstractVector, n::Integer)
+    last(itr, n::Integer)
 
-Get the last `n` elements of vector `v`, or fewer elements if `v` is not long enough.
+Get the last `n` elements of the iterable collection `itr`, or fewer elements if `v` is not
+long enough.
 
 # Examples
 ```jldoctest
 julia> last(["foo", "bar", "qux"], 2)
-2-element Array{String,1}:
+2-element Vector{String}:
  "bar"
  "qux"
 
@@ -398,10 +405,15 @@ julia> last(1:6, 10)
 1:6
 
 julia> last(Float64[], 1)
-0-element Array{Float64,1}
+Float64[]
 ```
 """
-last(v::AbstractArray, n::Integer) = @inbounds v[max(begin, end - n + 1):end]
+last(itr, n::Integer) = reverse!(collect(Iterators.take(Iterators.reverse(itr), n)))
+# Faster method for arrays
+function last(v::AbstractArray, n::Integer)
+    n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
+    @inbounds v[max(begin, end - n + 1):end]
+end
 
 """
     strides(A)

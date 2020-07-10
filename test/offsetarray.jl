@@ -611,15 +611,16 @@ end
 end
 
 @testset "first/last n elements of vector" begin
-    f = firstindex(v)
-    @test first(v, -2) == []
-    @test first(v, 2) == v[f:f+1]
+    v0 = rand(6)
+    v = OffsetArray(v0, (-3,))
+    @test_throws ArgumentError first(v, -2)
+    @test first(v, 2) == v[begin:begin+1]
     @test first(v, 100) == v0
     @test first(v, 100) !== v
-    @test first(v, 1) != v[f]
-    @test last(v, -2) == []
+    @test first(v, 1) == [v[begin]]
+    @test_throws ArgumentError last(v, -2)
     @test last(v, 2) == v[end-1:end]
     @test last(v, 100) == v0
     @test last(v, 100) !== v
-    @test last(v, 1) != v[end]
+    @test last(v, 1) == [v[end]]
 end

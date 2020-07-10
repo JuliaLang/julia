@@ -65,6 +65,8 @@ Standard library changes
 * `unique(f, itr; seen=Set{T}())` now allows you to declare the container type used for
   keeping track of values returned by `f` on elements of `itr` ([#36280]).
 * `Libdl` has been moved to `Base.Libc.Libdl`, however it is still accessible as an stdlib ([#35628]).
+* `first` and `last` functions now accept an integer as second argument to get that many
+  leading or trailing elements of any iterable ([#34868]).
 
 #### LinearAlgebra
 * New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).
