@@ -16,21 +16,6 @@ using LinearAlgebra, SparseArrays
 # For curmod_*
 include("testenv.jl")
 
-getline(m::Core.TypeMapEntry) = getline(m.func::Method)
-getline(m::Method) = m.line - lineoffset
-
-#ambigs = Any[[], [3], [2, 5], [], [3]]
-#for m in methods(ambig)
-#    ln = getline(m)
-#    atarget = ambigs[ln]
-#    if isempty(atarget)
-#        @test m.ambig === nothing
-#    else
-#        aln = Int[getline(a::Core.TypeMapEntry) for a in m.ambig]
-#        @test sort(aln) == atarget
-#    end
-#end
-
 @test length(methods(ambig)) == 5
 @test length(Base.methods_including_ambiguous(ambig, Tuple)) == 5
 
@@ -329,5 +314,22 @@ end
 @testset "has_bottom_parameter with Union{} in tvar bound" begin
     @test Base.has_bottom_parameter(Ref{<:Union{}})
 end
+
+# test a case where specificity is not transitive over subtyping
+f35983(::T, ::T) where {T} = 1
+f35983(::Type, ::Type) = 2
+@test f35983(10, 12) == 1
+@test f35983(Int32, Int32) == 2
+@test f35983(Int32, Int64) == 2
+@test f35983(Int32, Complex) == 2
+@test only(Base.methods_including_ambiguous(f35983, (Type, Type))).sig == Tuple{typeof(f35983), Type, Type}
+@test only(Base.methods(f35983, (Type, Type))).sig == Tuple{typeof(f35983), Type, Type}
+@test length(Base.methods_including_ambiguous(f35983, (Any, Any))) == 2
+@test first(Base.methods_including_ambiguous(f35983, (Any, Any))).sig == Tuple{typeof(f35983), Type, Type}
+@test length(Base.methods(f35983, (Any, Any))) == 2
+@test first(Base.methods(f35983, (Any, Any))).sig == Tuple{typeof(f35983), Type, Type}
+f35983(::Type{Int16}, ::Any) = 3
+@test length(Base.methods_including_ambiguous(f35983, (Type, Type))) == 3
+@test length(Base.methods(f35983, (Type, Type))) == 2
 
 nothing # don't return a module from the remote include
