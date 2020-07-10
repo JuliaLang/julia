@@ -997,7 +997,9 @@ end
 function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
     # todo = (inline_idx, (isva, isinvoke, na), method, spvals, inline_linetable, inline_ir, lie)
     todo = Any[]
+    skip = find_throw_blocks(ir.stmts.inst, RefValue(ir))
     for idx in 1:length(ir.stmts)
+        idx in skip && continue
         r = process_simple!(ir, idx, sv.params, sv.world)
         r === nothing && continue
 

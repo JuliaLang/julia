@@ -84,8 +84,8 @@ end
 
 module inlined_test
 using Test
-@inline g(x) = (y = throw("a"); y) # the inliner does not insert the proper markers when inlining a single expression
-@inline h(x) = (y = g(x); y)       # this test could be extended to check for that if we switch to linear representation
+@inline g(x) = (x == 3 && throw("a"); x)
+@inline h(x) = (x == 3 && g(x); x)
 f(x) = (y = h(x); y)
 trace = (try; f(3); catch; stacktrace(catch_backtrace()); end)[1:3]
 can_inline = Bool(Base.JLOptions().can_inline)
