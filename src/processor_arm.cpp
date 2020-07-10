@@ -11,7 +11,7 @@
 
 // This nesting is required to allow compilation on musl
 #define USE_DYN_GETAUXVAL
-#if defined(_CPU_AARCH64_)
+#if defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
 #  undef USE_DYN_GETAUXVAL
 #  include <sys/auxv.h>
 #elif defined(__GLIBC_PREREQ)
