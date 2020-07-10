@@ -888,6 +888,13 @@ let term = REPL.Terminals.TTYTerminal("dumb",IOBuffer("1+2\n"),IOContext(IOBuffe
     @test_throws KeyError term[:bar]
 end
 
+# Ensure even the dumb REPL elides content
+let term = REPL.Terminals.TTYTerminal("dumb",IOBuffer("zeros(1000)\n"),IOBuffer(),IOBuffer())
+    r = REPL.BasicREPL(term)
+    REPL.run_repl(r)
+    @test contains(String(take!(term.out_stream)), "⋮")
+end
+
 
 # a small module for alternative keymap tests
 module AltLE
