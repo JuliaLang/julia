@@ -302,3 +302,11 @@ let x = 1, y = 2
     @test Meta.lower(Main, Meta.parse("(; a.y, y)")) == Expr(:error, "field name \"y\" repeated in named tuple")
     @test (; a.y, x) === (y=2, x=1)
 end
+
+@testset "types in fields" begin
+    @test (a = Int,) isa NamedTuple{(:a,),Tuple{Type{Int}}}
+    @test (a = Int, b = :hello, c = Float64) isa
+          NamedTuple{(:a, :b, :c),Tuple{Type{Int},Symbol,Type{Float64}}}
+    @test (a = (Int,),) isa NamedTuple{(:a,),Tuple{Tuple{DataType}}}  # FIXME
+    @test (a = Vector.body,) isa NamedTuple{(:a,),Tuple{DataType}}
+end

@@ -562,7 +562,24 @@ end
 
 NamedTuple() = NamedTuple{(),Tuple{}}(())
 
-NamedTuple{names}(args::Tuple) where {names} = NamedTuple{names,typeof(args)}(args)
+function safe_Typeof(@nospecialize(x))
+    if x isa DataType
+        if x.layout === Ptr{Nothing}(0)  # we don't have C_NULL yet
+            return DataType
+        end
+    end
+    return Typeof(x)
+end
+
+_nt_typeof(@nospecialize(x)) = safe_Typeof(x)
+_nt_typeof(@nospecialize(xs::Tuple)) = Tuple{_nt_typesof_impl(xs...)...}
+_nt_typesof_impl() = ()
+_nt_typesof_impl(@nospecialize(x), @nospecialize xs...) =
+    (safe_Typeof(x), _nt_typesof_impl(xs...)...)
+# It's non-recursive (using `safe_Typeof` instead of `_nt_typeof`) so
+# that `(a = (Int,),)` works.
+
+NamedTuple{names}(args::Tuple) where {names} = NamedTuple{names,_nt_typeof(args)}(args)
 
 using .Intrinsics: sle_int, add_int
 
