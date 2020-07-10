@@ -1715,7 +1715,7 @@ use the `by` or `lt` keyword argument to specify such an order.
 If `dims` is a tuple, the order of the dimensions in `dims` is
 relevant and specifies the linear order of the slices. E.g., if `A` is three
 dimensional and `dims` is `(1, 2)`, the orderings of the first two dimensions
-are re-arranged such such that the slices (of the remaining third dimension) are sorted.
+are re-arranged such that the slices (of the remaining third dimension) are sorted.
 If `dims` is `(2, 1)` instead, the same slices will be taken,
 but the result order will be row-major instead.
 
