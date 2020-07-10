@@ -2561,8 +2561,13 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
 // This is the collect form of calling jl_typemap_intersection_visitor
 // with optimizations to skip fully shadowed methods.
 //
-// Returns a match as an array of svec(argtypes, static_params, Method).
+// Returns a match as an array of svec(argtypes, static_params, Method, fully-covers).
+//
 // See below for the meaning of lim.
+//
+// fully-covers is a Bool indicating subtyping, though temporarily it may be
+// tri-values, with `nothing` indicating a match that is not a subtype, but
+// which is dominated by one which is (and thus should be excluded unless ambiguous)
 static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
                               jl_tupletype_t *type, int lim, int include_ambiguous,
                               int intersections, size_t world, int cache_result,
@@ -2670,6 +2675,9 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
         }
         if (all_subtypes || !include_ambiguous) {
             //   - then find a candidate for the best of these method results
+            //     (If we have a reason to compute this. There's no point in
+            //     finding the minmax now, if we still need to examine all
+            //     methods for ambiguities later.)
             for (i = 0; i < len; i++) {
                 jl_svec_t *matc = (jl_svec_t*)jl_array_ptr_ref(env.t, i);
                 if (jl_svecref(matc, 3) == jl_true) {
@@ -2701,6 +2709,22 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
                     }
                 }
             }
+            //   - it may even dominate some choices that are not subtypes!
+            //     move those into the subtype group, where we're filter them out shortly after
+            if (!all_subtypes && minmax) {
+                jl_method_t *minmaxm = (jl_method_t*)jl_svecref(minmax, 2);
+                all_subtypes = 1;
+                for (i = 0; i < len; i++) {
+                    jl_svec_t *matc = (jl_svec_t*)jl_array_ptr_ref(env.t, i);
+                    if (jl_svecref(matc, 3) != jl_true) {
+                        jl_method_t *m = (jl_method_t*)jl_svecref(matc, 2);
+                        if (jl_type_morespecific((jl_value_t*)minmaxm->sig, (jl_value_t*)m->sig))
+                            jl_svecset(matc, 3, jl_nothing); // put a sentinel value here for sorting
+                        else
+                            all_subtypes = 0;
+                    }
+                }
+            }
             //    - now we might have a fast-return here, if we see that
             //      we've already processed all of the possible outputs
             if (all_subtypes) {
@@ -2728,20 +2752,51 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
         for (i = 1; i < len; i++) {
             env.matc = (jl_svec_t*)jl_array_ptr_ref(env.t, i);
             jl_method_t *m = (jl_method_t*)jl_svecref(env.matc, 2);
-            if (minmax != NULL && jl_svecref(env.matc, 3) == jl_true) {
+            int subt = jl_svecref(env.matc, 3) != jl_false;
+            if (minmax != NULL && subt) {
                 continue; // already the biggest
             }
             for (j = 0; j < i; j++) {
                 jl_value_t *matc2 = jl_array_ptr_ref(env.t, i - j - 1);
                 jl_method_t *m2 = (jl_method_t*)jl_svecref(matc2, 2);
-                if (jl_svecref(matc2, 3) != jl_true && jl_svecref(env.matc, 3) == jl_true)
+                int subt2 = jl_svecref(matc2, 3) != jl_false;
+                if (!subt2 && subt)
                     break;
-                if (jl_svecref(matc2, 3) == jl_svecref(env.matc, 3))
-                    if (!jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig))
-                        break;
+                if (subt == subt2)
+                    if (subt || !jl_has_empty_intersection(m->sig, m2->sig))
+                        if (!jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig))
+                            break;
                 jl_array_ptr_set(env.t, i - j, matc2);
             }
             jl_array_ptr_set(env.t, i - j, env.matc);
+        }
+        // final step to finish sort:
+        // we stopped early with just having all non-subtypes before all
+        // subtypes, but the case on the boundary might be wrongly placed:
+        // check for that now
+        if (!minmax) {
+            for (i = 0; i < len; i++) {
+                jl_svec_t *matc = (jl_svec_t*)jl_array_ptr_ref(env.t, i);
+                if (jl_svecref(matc, 3) == jl_true)
+                    break;
+            }
+            for (; i > 0; i--) {
+                env.matc = (jl_svec_t*)jl_array_ptr_ref(env.t, i - 1);
+                jl_method_t *m = (jl_method_t*)jl_svecref(env.matc, 2);
+                for (j = i; j < len; j++) {
+                    jl_svec_t *matc2 = (jl_svec_t*)jl_array_ptr_ref(env.t, j);
+                    jl_method_t *m2 = (jl_method_t*)jl_svecref(matc2, 2);
+                    if (jl_svecref(matc2, 3) != jl_true)
+                        break;
+                    if (!jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig))
+                        break;
+                    jl_array_ptr_set(env.t, j - 1, matc2);
+                }
+                if (j == i)
+                    break;
+                jl_svecset(env.matc, 3, jl_nothing); // leave behind a sentinel value here for clarity
+                jl_array_ptr_set(env.t, j - 1, env.matc);
+            }
         }
         char *skip = (char*)alloca(len);
         memset(skip, 0, len);
@@ -2749,7 +2804,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
         if (minmax_ambig && !include_ambiguous) {
             for (i = 0; i < len; i++) {
                 jl_svec_t *matc = (jl_svec_t*)jl_array_ptr_ref(env.t, i);
-                if (jl_svecref(matc, 3) == jl_true) {
+                if (jl_svecref(matc, 3) != jl_false) {
                     skip[i] = 1;
                 }
             }
@@ -2758,7 +2813,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
             assert(all_subtypes || !include_ambiguous);
             for (i = 0; i < len; i++) {
                 jl_svec_t *matc = (jl_svec_t*)jl_array_ptr_ref(env.t, i);
-                if (minmax != matc && jl_svecref(matc, 3) == jl_true) {
+                if (minmax != matc && jl_svecref(matc, 3) != jl_false) {
                     skip[i] = 1;
                 }
             }
@@ -2784,7 +2839,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
                 if (skip[j - 1]) {
                     // if there was a minmax method, we can just pretend these are all in the same group
                     // they're all together but unsorted in the list, since we'll drop them all later anyways
-                    assert(subt2);
+                    assert(jl_svecref(matc2, 3) != jl_false);
                     disjoint = 0;
                     ambig_groupid[i] = j - 1; // ambiguity covering range [i:j)
                 }
@@ -2927,8 +2982,12 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
         // cleanup array to remove skipped entries
         for (i = 0, j = 0; i < len; i++) {
             jl_value_t *matc = jl_array_ptr_ref(env.t, i);
-            if (!skip[i])
+            if (!skip[i]) {
                 jl_array_ptr_set(env.t, j++, matc);
+                // remove our sentinel entry markers
+                if (jl_svecref(matc, 3) == jl_nothing)
+                    jl_svecset(matc, 3, jl_false);
+            }
         }
         if (j != len)
             jl_array_del_end((jl_array_t*)env.t, len - j);
