@@ -39,20 +39,22 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     if sv.currpc in sv.throw_blocks
         return Any
     end
-    mt = ccall(:jl_method_table_for, Any, (Any,), atype)
-    if mt === nothing
-        add_remark!(interp, sv, "Could not identify method table for call")
-        return Any
-    end
-    mt = mt::Core.MethodTable
     min_valid = UInt[typemin(UInt)]
     max_valid = UInt[typemax(UInt)]
     atype_params = unwrap_unionall(atype).parameters
     splitunions = 1 < countunionsplit(atype_params) <= InferenceParams(interp).MAX_UNION_SPLITTING
+    mts = Core.MethodTable[]
+    fullmatch = Bool[]
     if splitunions
         splitsigs = switchtupleunion(atype)
         applicable = Any[]
         for sig_n in splitsigs
+            mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
+            if mt === nothing
+                add_remark!(interp, sv, "Could not identify method table for call")
+                return Any
+            end
+            mt = mt::Core.MethodTable
             xapplicable = matching_methods(sig_n, sv.matching_methods_cache, max_methods,
                                            get_world_counter(interp), min_valid, max_valid)
             if xapplicable === false
@@ -60,8 +62,27 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 return Any
             end
             append!(applicable, xapplicable)
+            thisfullmatch = _any(match->match[4], xapplicable)
+            found = false
+            for (i, mt′) in enumerate(mts)
+                if mt′ === mt
+                    fullmatch[i] &= thisfullmatch
+                    found = true
+                    break
+                end
+            end
+            if !found
+                push!(mts, mt)
+                push!(fullmatch, thisfullmatch)
+            end
         end
     else
+        mt = ccall(:jl_method_table_for, Any, (Any,), atype)
+        if mt === nothing
+            add_remark!(interp, sv, "Could not identify method table for call")
+            return Any
+        end
+        mt = mt::Core.MethodTable
         applicable = matching_methods(atype, sv.matching_methods_cache, max_methods,
                                       get_world_counter(interp), min_valid, max_valid)
         if applicable === false
@@ -70,6 +91,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             add_remark!(interp, sv, "Too many methods matched")
             return Any
         end
+        push!(mts, mt)
+        push!(fullmatch, _any(match->match[4], applicable))
     end
     update_valid_age!(min_valid[1], max_valid[1], sv)
     applicable = applicable::Array{Any,1}
@@ -160,19 +183,12 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         for edge in edges
             add_backedge!(edge::MethodInstance, sv)
         end
-        fullmatch = false
-        for i in napplicable:-1:1
-            match = applicable[i]::SimpleVector
-            method = match[3]::Method
-            if atype <: method.sig
-                fullmatch = true
-                break
+        for (thisfullmatch, mt) in zip(fullmatch, mts)
+            if !thisfullmatch
+                # also need an edge to the method table in case something gets
+                # added that did not intersect with any existing method
+                add_mt_backedge!(mt, atype, sv)
             end
-        end
-        if !fullmatch
-            # also need an edge to the method table in case something gets
-            # added that did not intersect with any existing method
-            add_mt_backedge!(mt, atype, sv)
         end
     end
     #print("=> ", rettype, "\n")

@@ -2707,3 +2707,12 @@ f32699(a) = (id = a[1],).id
 g32699(a) = Tuple{a}
 @test Base.return_types(g32699, (Type{<:Integer},))[1] == Type{<:Tuple{Any}}
 @test Base.return_types(g32699, (Type,))[1] == Type{<:Tuple}
+
+# Inference precision of union-split calls
+function f_apply_union_split(fs, x)
+    i = rand(1:length(fs))
+    f = fs[i]
+    f(x)
+end
+
+@test Base.return_types(f_apply_union_split, Tuple{Tuple{typeof(sqrt), typeof(abs)}, Int64}) == Any[Union{Int64, Float64}]
