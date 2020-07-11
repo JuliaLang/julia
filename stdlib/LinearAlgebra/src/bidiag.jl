@@ -68,6 +68,15 @@ function Bidiagonal(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector
     Bidiagonal{T,V}(dv, ev, uplo)
 end
 
+#To allow Bidiagonal's where the "dv" is AbstractVector{T} and "ev" AbstractVector{S},
+#where T and S can be promoted
+function LinearAlgebra.Bidiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}, uplo::Symbol) where {T,S}
+    TS = promote_type(T,S)
+    Bidiagonal(convert(AbstractVector{TS}, dv),
+               convert(AbstractVector{TS}, ev),
+                uplo)
+end
+
 """
     Bidiagonal(A, uplo::Symbol)
 
