@@ -136,6 +136,10 @@ julia [switches] -- [programfile] [args...]
     In Julia 1.0, the default `--project=@.` option did not search up from the root
     directory of a Git repository for the `Project.toml` file. From Julia 1.1 forward, it
     does.
+ 
+## Startup Configuration
+
+  A startup file may be placed in `~/.julia/config/startup.jl` containing Julia commands to be executed each time Julia starts up.  Many people like placing frequently used packages in a startup `using` command such as `using LinearAlgebra, Statistics`.
 
 ## Resources
 
