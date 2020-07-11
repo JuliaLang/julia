@@ -150,17 +150,28 @@ macro fetchfrom(p, expr)
     :(remotecall_fetch($thunk, $(esc(p))))
 end
 
+const _everywhere_import_warning = """
+Import statements not placed at beginning of @everywhere block.
+
+Locally, import statements are run first even if they are not at 
+the beginning of an @everywhere block.  It is therefore recommended
+to place them first.
+"""
+
 # extract a list of modules to import from an expression
-extract_imports!(imports, x) = imports
-function extract_imports!(imports, ex::Expr)
+extract_imports!(imports, ex, isinheader=Ref(true)) = imports
+function extract_imports!(imports, ex::Expr, isinheader=Ref(true))
     if Meta.isexpr(ex, (:import, :using))
+        isinheader[] || @warn _everywhere_import_warning
         push!(imports, ex)
     elseif Meta.isexpr(ex, :let)
-        extract_imports!(imports, ex.args[2])
+        extract_imports!(imports, ex.args[2], isinheader)
     elseif Meta.isexpr(ex, (:toplevel, :block))
         for arg in ex.args
-            extract_imports!(imports, arg)
+            extract_imports!(imports, arg, isinheader)
         end
+    else
+        isinheader[] = false
     end
     return imports
 end
@@ -188,6 +199,13 @@ The optional argument `procs` allows specifying a subset of all
 processes to have execute the expression.
 
 Equivalent to calling `remotecall_eval(Main, procs, expr)`.
+
+!!! note
+
+    before running the expression of the processors, `@everywhere` first
+    runs all import statements (and only those) locally.  Users should beware
+    of this when manipulating paths.
+
 """
 macro everywhere(ex)
     procs = GlobalRef(@__MODULE__, :procs)
