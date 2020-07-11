@@ -360,4 +360,10 @@ end
     end
 end
 
+@testset "more generic ldiv! #35419" begin
+    A = rand(3, 3)
+    b = rand(3)
+    @test A * ldiv!(lu(A), vec(b')) ≈ b
+end
+
 end # module TestLU

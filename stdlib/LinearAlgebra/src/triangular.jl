@@ -816,9 +816,9 @@ end
 inv(A::UnitUpperTriangular{T}) where {T} = UnitUpperTriangular(ldiv!(A, Matrix{T}(I, size(A, 1), size(A, 1))))
 inv(A::UnitLowerTriangular{T}) where {T} = UnitLowerTriangular(ldiv!(A, Matrix{T}(I, size(A, 1), size(A, 1))))
 
-errorbounds(A::AbstractTriangular{T,<:StridedMatrix}, X::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:Union{BigFloat,Complex{BigFloat}}} =
+errorbounds(A::AbstractTriangular{T,<:AbstractMatrix}, X::AbstractVecOrMat{T}, B::AbstractVecOrMat{T}) where {T<:Union{BigFloat,Complex{BigFloat}}} =
     error("not implemented yet! Please submit a pull request.")
-function errorbounds(A::AbstractTriangular{TA,<:StridedMatrix}, X::StridedVecOrMat{TX}, B::StridedVecOrMat{TB}) where {TA<:Number,TX<:Number,TB<:Number}
+function errorbounds(A::AbstractTriangular{TA,<:AbstractMatrix}, X::AbstractVecOrMat{TX}, B::AbstractVecOrMat{TB}) where {TA<:Number,TX<:Number,TB<:Number}
     TAXB = promote_type(TA, TB, TX, Float32)
     errorbounds(convert(AbstractMatrix{TAXB}, A), convert(AbstractArray{TAXB}, X), convert(AbstractArray{TAXB}, B))
 end
@@ -896,7 +896,7 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
 end
 
 ## Generic triangular multiplication
-function lmul!(A::UpperTriangular, B::StridedVecOrMat)
+function lmul!(A::UpperTriangular, B::AbstractVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -913,7 +913,7 @@ function lmul!(A::UpperTriangular, B::StridedVecOrMat)
     B
 end
 
-function lmul!(A::UnitUpperTriangular, B::StridedVecOrMat)
+function lmul!(A::UnitUpperTriangular, B::AbstractVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -930,7 +930,7 @@ function lmul!(A::UnitUpperTriangular, B::StridedVecOrMat)
     B
 end
 
-function lmul!(A::LowerTriangular, B::StridedVecOrMat)
+function lmul!(A::LowerTriangular, B::AbstractVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -946,7 +946,7 @@ function lmul!(A::LowerTriangular, B::StridedVecOrMat)
     end
     B
 end
-function lmul!(A::UnitLowerTriangular, B::StridedVecOrMat)
+function lmul!(A::UnitLowerTriangular, B::AbstractVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -963,7 +963,7 @@ function lmul!(A::UnitLowerTriangular, B::StridedVecOrMat)
     B
 end
 
-function lmul!(adjA::Adjoint{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
+function lmul!(adjA::Adjoint{<:Any,<:UpperTriangular}, B::AbstractVecOrMat)
     A = adjA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -981,7 +981,7 @@ function lmul!(adjA::Adjoint{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
     B
 end
 
-function lmul!(adjA::Adjoint{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMat)
+function lmul!(adjA::Adjoint{<:Any,<:UnitUpperTriangular}, B::AbstractVecOrMat)
     A = adjA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -999,7 +999,7 @@ function lmul!(adjA::Adjoint{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMat)
     B
 end
 
-function lmul!(adjA::Adjoint{<:Any,<:LowerTriangular}, B::StridedVecOrMat)
+function lmul!(adjA::Adjoint{<:Any,<:LowerTriangular}, B::AbstractVecOrMat)
     A = adjA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -1016,7 +1016,7 @@ function lmul!(adjA::Adjoint{<:Any,<:LowerTriangular}, B::StridedVecOrMat)
     end
     B
 end
-function lmul!(adjA::Adjoint{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMat)
+function lmul!(adjA::Adjoint{<:Any,<:UnitLowerTriangular}, B::AbstractVecOrMat)
     A = adjA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -1034,7 +1034,7 @@ function lmul!(adjA::Adjoint{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMat)
     B
 end
 
-function lmul!(transA::Transpose{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
+function lmul!(transA::Transpose{<:Any,<:UpperTriangular}, B::AbstractVecOrMat)
     A = transA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -1051,7 +1051,7 @@ function lmul!(transA::Transpose{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
     end
     B
 end
-function lmul!(transA::Transpose{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMat)
+function lmul!(transA::Transpose{<:Any,<:UnitUpperTriangular}, B::AbstractVecOrMat)
     A = transA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -1069,7 +1069,7 @@ function lmul!(transA::Transpose{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMa
     B
 end
 
-function lmul!(transA::Transpose{<:Any,<:LowerTriangular}, B::StridedVecOrMat)
+function lmul!(transA::Transpose{<:Any,<:LowerTriangular}, B::AbstractVecOrMat)
     A = transA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -1086,7 +1086,7 @@ function lmul!(transA::Transpose{<:Any,<:LowerTriangular}, B::StridedVecOrMat)
     end
     B
 end
-function lmul!(transA::Transpose{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMat)
+function lmul!(transA::Transpose{<:Any,<:UnitLowerTriangular}, B::AbstractVecOrMat)
     A = transA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -1104,7 +1104,7 @@ function lmul!(transA::Transpose{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMa
     B
 end
 
-function rmul!(A::StridedMatrix, B::UpperTriangular)
+function rmul!(A::AbstractMatrix, B::UpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1120,7 +1120,7 @@ function rmul!(A::StridedMatrix, B::UpperTriangular)
     end
     A
 end
-function rmul!(A::StridedMatrix, B::UnitUpperTriangular)
+function rmul!(A::AbstractMatrix, B::UnitUpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1137,7 +1137,7 @@ function rmul!(A::StridedMatrix, B::UnitUpperTriangular)
     A
 end
 
-function rmul!(A::StridedMatrix, B::LowerTriangular)
+function rmul!(A::AbstractMatrix, B::LowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1153,7 +1153,7 @@ function rmul!(A::StridedMatrix, B::LowerTriangular)
     end
     A
 end
-function rmul!(A::StridedMatrix, B::UnitLowerTriangular)
+function rmul!(A::AbstractMatrix, B::UnitLowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1170,7 +1170,7 @@ function rmul!(A::StridedMatrix, B::UnitLowerTriangular)
     A
 end
 
-function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UpperTriangular})
+function rmul!(A::AbstractMatrix, adjB::Adjoint{<:Any,<:UpperTriangular})
     B = adjB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1188,7 +1188,7 @@ function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UpperTriangular})
     A
 end
 
-function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UnitUpperTriangular})
+function rmul!(A::AbstractMatrix, adjB::Adjoint{<:Any,<:UnitUpperTriangular})
     B = adjB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1206,7 +1206,7 @@ function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UnitUpperTriangular})
     A
 end
 
-function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:LowerTriangular})
+function rmul!(A::AbstractMatrix, adjB::Adjoint{<:Any,<:LowerTriangular})
     B = adjB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1224,7 +1224,7 @@ function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:LowerTriangular})
     A
 end
 
-function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UnitLowerTriangular})
+function rmul!(A::AbstractMatrix, adjB::Adjoint{<:Any,<:UnitLowerTriangular})
     B = adjB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1242,7 +1242,7 @@ function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UnitLowerTriangular})
     A
 end
 
-function rmul!(A::StridedMatrix, transB::Transpose{<:Any,<:UpperTriangular})
+function rmul!(A::AbstractMatrix, transB::Transpose{<:Any,<:UpperTriangular})
     B = transB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1259,7 +1259,7 @@ function rmul!(A::StridedMatrix, transB::Transpose{<:Any,<:UpperTriangular})
     end
     A
 end
-function rmul!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitUpperTriangular})
+function rmul!(A::AbstractMatrix, transB::Transpose{<:Any,<:UnitUpperTriangular})
     B = transB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1277,7 +1277,7 @@ function rmul!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitUpperTriangular})
     A
 end
 
-function rmul!(A::StridedMatrix, transB::Transpose{<:Any,<:LowerTriangular})
+function rmul!(A::AbstractMatrix, transB::Transpose{<:Any,<:LowerTriangular})
     B = transB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1295,7 +1295,7 @@ function rmul!(A::StridedMatrix, transB::Transpose{<:Any,<:LowerTriangular})
     A
 end
 
-function rmul!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitLowerTriangular})
+function rmul!(A::AbstractMatrix, transB::Transpose{<:Any,<:UnitLowerTriangular})
     B = transB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1529,7 +1529,7 @@ function ldiv!(adjA::Adjoint{<:Any,<:UnitUpperTriangular}, b::AbstractVector, x:
 end
 ldiv!(adjA::Adjoint{<:Any,<:UnitUpperTriangular}, b::AbstractVector) = ldiv!(adjA, b, b)
 
-function rdiv!(A::StridedMatrix, B::UpperTriangular)
+function rdiv!(A::AbstractMatrix, B::UpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1545,7 +1545,7 @@ function rdiv!(A::StridedMatrix, B::UpperTriangular)
     end
     A
 end
-function rdiv!(A::StridedMatrix, B::UnitUpperTriangular)
+function rdiv!(A::AbstractMatrix, B::UnitUpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1562,7 +1562,7 @@ function rdiv!(A::StridedMatrix, B::UnitUpperTriangular)
     A
 end
 
-function rdiv!(A::StridedMatrix, B::LowerTriangular)
+function rdiv!(A::AbstractMatrix, B::LowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1578,7 +1578,7 @@ function rdiv!(A::StridedMatrix, B::LowerTriangular)
     end
     A
 end
-function rdiv!(A::StridedMatrix, B::UnitLowerTriangular)
+function rdiv!(A::AbstractMatrix, B::UnitLowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1595,7 +1595,7 @@ function rdiv!(A::StridedMatrix, B::UnitLowerTriangular)
     A
 end
 
-function rdiv!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UpperTriangular})
+function rdiv!(A::AbstractMatrix, adjB::Adjoint{<:Any,<:UpperTriangular})
     B = adjB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1612,7 +1612,7 @@ function rdiv!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UpperTriangular})
     end
     A
 end
-function rdiv!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UnitUpperTriangular})
+function rdiv!(A::AbstractMatrix, adjB::Adjoint{<:Any,<:UnitUpperTriangular})
     B = adjB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1630,7 +1630,7 @@ function rdiv!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UnitUpperTriangular})
     A
 end
 
-function rdiv!(A::StridedMatrix, adjB::Adjoint{<:Any,<:LowerTriangular})
+function rdiv!(A::AbstractMatrix, adjB::Adjoint{<:Any,<:LowerTriangular})
     B = adjB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1647,7 +1647,7 @@ function rdiv!(A::StridedMatrix, adjB::Adjoint{<:Any,<:LowerTriangular})
     end
     A
 end
-function rdiv!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UnitLowerTriangular})
+function rdiv!(A::AbstractMatrix, adjB::Adjoint{<:Any,<:UnitLowerTriangular})
     B = adjB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1665,7 +1665,7 @@ function rdiv!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UnitLowerTriangular})
     A
 end
 
-function rdiv!(A::StridedMatrix, transB::Transpose{<:Any,<:UpperTriangular})
+function rdiv!(A::AbstractMatrix, transB::Transpose{<:Any,<:UpperTriangular})
     B = transB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1682,7 +1682,7 @@ function rdiv!(A::StridedMatrix, transB::Transpose{<:Any,<:UpperTriangular})
     end
     A
 end
-function rdiv!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitUpperTriangular})
+function rdiv!(A::AbstractMatrix, transB::Transpose{<:Any,<:UnitUpperTriangular})
     B = transB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1700,7 +1700,7 @@ function rdiv!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitUpperTriangular})
     A
 end
 
-function rdiv!(A::StridedMatrix, transB::Transpose{<:Any,<:LowerTriangular})
+function rdiv!(A::AbstractMatrix, transB::Transpose{<:Any,<:LowerTriangular})
     B = transB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1717,7 +1717,7 @@ function rdiv!(A::StridedMatrix, transB::Transpose{<:Any,<:LowerTriangular})
     end
     A
 end
-function rdiv!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitLowerTriangular})
+function rdiv!(A::AbstractMatrix, transB::Transpose{<:Any,<:UnitLowerTriangular})
     B = transB.parent
     m, n = size(A)
     if size(B, 1) != n

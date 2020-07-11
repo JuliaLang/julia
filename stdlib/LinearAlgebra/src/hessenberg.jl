@@ -503,10 +503,10 @@ lmul!(adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T,true}}, X::StridedVecOrMat{T}) whe
 rmul!(X::StridedMatrix{T}, adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T,true}}) where {T<:BlasFloat} =
     (Q = adjQ.parent; LAPACK.ormtr!('R', Q.uplo, ifelse(T<:Real, 'T', 'C'), Q.factors, Q.τ, X))
 
-lmul!(Q::HessenbergQ{T}, X::Adjoint{T,<:StridedVecOrMat{T}}) where {T} = rmul!(X', Q')'
-rmul!(X::Adjoint{T,<:StridedMatrix{T}}, Q::HessenbergQ{T}) where {T} = lmul!(Q', X')'
-lmul!(adjQ::Adjoint{<:Any,<:HessenbergQ{T}}, X::Adjoint{T,<:StridedVecOrMat{T}}) where {T}  = rmul!(X', adjQ')'
-rmul!(X::Adjoint{T,<:StridedMatrix{T}}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T} = lmul!(adjQ', X')'
+lmul!(Q::HessenbergQ{T}, X::Adjoint{T,<:AbstractVecOrMat{T}}) where {T} = rmul!(X', Q')'
+rmul!(X::Adjoint{T,<:AbstractMatrix{T}}, Q::HessenbergQ{T}) where {T} = lmul!(Q', X')'
+lmul!(adjQ::Adjoint{<:Any,<:HessenbergQ{T}}, X::Adjoint{T,<:AbstractVecOrMat{T}}) where {T}  = rmul!(X', adjQ')'
+rmul!(X::Adjoint{T,<:AbstractMatrix{T}}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T} = lmul!(adjQ', X')'
 
 # multiply x by the entries of M in the upper-k triangle, which contains
 # the entries of the upper-Hessenberg matrix H for k=-1

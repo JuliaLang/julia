@@ -90,7 +90,7 @@ default_svd_alg(A) = DivideAndConquer()
 overwriting the input `A`, instead of creating a copy. See documentation of [`svd`](@ref) for details.
 ```
 """
-function svd!(A::StridedMatrix{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where T<:BlasFloat
+function svd!(A::AbstractMatrix{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where T<:BlasFloat
     m,n = size(A)
     if m == 0 || n == 0
         u,s,vt = (Matrix{T}(I, m, full ? m : n), real(zeros(T,0)), Matrix{T}(I, n, n))
@@ -154,7 +154,7 @@ julia> Uonly == U
 true
 ```
 """
-function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where T
+function svd(A::AbstractVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where T
     svd!(copy_oftype(A, eigtype(T)), full = full, alg = alg)
 end
 function svd(x::Number; full::Bool = false, alg::Algorithm = default_svd_alg(x))
@@ -220,7 +220,7 @@ svdvals(x::Number) = abs(x)
 svdvals(S::SVD{<:Any,T}) where {T} = (S.S)::Vector{T}
 
 # SVD least squares
-function ldiv!(A::SVD{T}, B::StridedVecOrMat) where T
+function ldiv!(A::SVD{T}, B::AbstractVecOrMat) where T
     k = searchsortedlast(A.S, eps(real(T))*A.S[1], rev=true)
     view(A.Vt,1:k,:)' * (view(A.S,1:k) .\ (view(A.U,:,1:k)' * B))
 end
@@ -369,7 +369,7 @@ function svd!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
     end
     GeneralizedSVD(U, V, Q, a, b, Int(k), Int(l), R)
 end
-svd(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} = svd!(copy(A),copy(B))
+svd(A::AbstractMatrix{T}, B::AbstractMatrix{T}) where {T<:BlasFloat} = svd!(copy(A),copy(B))
 
 """
 
@@ -422,7 +422,7 @@ julia> U == Uonly
 true
 ```
 """
-function svd(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
+function svd(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
     S = promote_type(eigtype(TA),TB)
     return svd!(copy_oftype(A, S), copy_oftype(B, S))
 end
@@ -507,7 +507,7 @@ function svdvals!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
     end
     a[1:k + l] ./ b[1:k + l]
 end
-svdvals(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat} = svdvals!(copy(A),copy(B))
+svdvals(A::AbstractMatrix{T}, B::AbstractMatrix{T}) where {T} = svdvals!(copy(A),copy(B))
 
 """
     svdvals(A, B)
@@ -533,7 +533,7 @@ julia> svdvals(A, B)
  1.0
 ```
 """
-function svdvals(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
+function svdvals(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
     return svdvals!(copy_oftype(A, S), copy_oftype(B, S))
 end
