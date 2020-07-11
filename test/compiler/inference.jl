@@ -2716,3 +2716,21 @@ function f_apply_union_split(fs, x)
 end
 
 @test Base.return_types(f_apply_union_split, Tuple{Tuple{typeof(sqrt), typeof(abs)}, Int64}) == Any[Union{Int64, Float64}]
+
+# Precision of typeassert with PartialStruct
+function f_typ_assert(x::Int)
+    y = (x, 1)
+    y = y::Any
+    Val{y[2]}
+end
+@test Base.return_types(f_typ_assert, (Int,)) == Any[Type{Val{1}}]
+
+function f_typ_assert2(x::Any)
+    y = (x::Union{Int, Float64}, 1)
+    y = y::Tuple{Int, Any}
+    (y[1], Val{y[2]}())
+end
+@test Base.return_types(f_typ_assert2, (Any,)) == Any[Tuple{Int, Val{1}}]
+
+f_generator_splat(t::Tuple) = tuple((identity(l) for l in t)...)
+@test Base.return_types(f_generator_splat, (Tuple{Symbol, Int64, Float64},)) == Any[Tuple{Symbol, Int64, Float64}]

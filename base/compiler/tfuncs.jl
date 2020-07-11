@@ -485,18 +485,38 @@ add_tfunc(typeof, 1, 1, typeof_tfunc, 0)
 function typeassert_tfunc(@nospecialize(v), @nospecialize(t))
     t = instanceof_tfunc(t)[1]
     t === Any && return v
-    if isa(v, Const)
-        if !has_free_typevars(t) && !isa(v.val, t)
-            return Bottom
+    function typeassert_type_instance(@nospecialize(v), @nospecialize(t))
+        if isa(v, Const)
+            if !has_free_typevars(t) && !isa(v.val, t)
+                return Bottom
+            end
+            return v
+        elseif isa(v, PartialStruct)
+            has_free_typevars(t) && return v
+            widev = widenconst(v)
+            if widev <: t
+                return v
+            elseif typeintersect(widev, t) === Bottom
+                return Bottom
+            end
+            @assert widev <: Tuple
+            new_fields = Vector{Any}(undef, length(v.fields))
+            for i = 1:length(new_fields)
+                new_fields[i] = typeassert_type_instance(v.fields[i], getfield_tfunc(t, Const(i)))
+                if new_fields[i] === Bottom
+                    return Bottom
+                end
+            end
+            return tuple_tfunc(new_fields)
+        elseif isa(v, Conditional)
+            if !(Bool <: t)
+                return Bottom
+            end
+            return v
         end
-        return v
-    elseif isa(v, Conditional)
-        if !(Bool <: t)
-            return Bottom
-        end
-        return v
+        return typeintersect(widenconst(v), t)
     end
-    return typeintersect(widenconst(v), t)
+    return typeassert_type_instance(v, t)
 end
 add_tfunc(typeassert, 2, 2, typeassert_tfunc, 4)
 
