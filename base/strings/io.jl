@@ -173,6 +173,8 @@ julia> string("a", 1, true)
 """
 string(xs...) = print_to_string(xs...)
 
+string(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
+
 # note: print uses an encoding determined by `io` (defaults to UTF-8), whereas
 #       write uses an encoding determined by `s` (UTF-8 for `String`)
 print(io::IO, s::AbstractString) = for c in s; print(io, c); end
