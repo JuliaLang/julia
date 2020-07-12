@@ -133,6 +133,12 @@ typedef arm_exception_state64_t host_exception_state_t;
 #define THREAD_STATE_COUNT ARM_THREAD_STATE64_COUNT
 #define HOST_EXCEPTION_STATE ARM_EXCEPTION_STATE64
 #define HOST_EXCEPTION_STATE_COUNT ARM_EXCEPTION_STATE64_COUNT
+
+enum aarch64_esr_layout {
+    EC_MASK = ((uint32_t)0b111111) << 25,
+    EC_DATA_ABORT = ((uint32_t)0b100100) << 25,
+    ISR_DA_WnR = ((uint32_t)1) << 6
+};
 #endif
 
 static void jl_call_in_state(jl_ptls_t ptls2, host_thread_state_t *state,
@@ -141,11 +147,11 @@ static void jl_call_in_state(jl_ptls_t ptls2, host_thread_state_t *state,
     uint64_t rsp = (uint64_t)ptls2->signal_stack + sig_stack_size;
     assert(rsp % 16 == 0);
 
+#ifdef _CPU_X86_64_
     // push (null) $RIP onto the stack
     rsp -= sizeof(void*);
     *(void**)rsp = NULL;
 
-#ifdef _CPU_X86_64_
     state->__rsp = rsp; // set stack pointer
     state->__rip = (uint64_t)fptr; // "call" the function
 #else
@@ -253,8 +259,15 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         }
 #endif
         else {
+#ifdef _CPU_X86_64_
             if (!(exc_state.__err & WRITE_FAULT))
                 return KERN_INVALID_ARGUMENT; // rethrow the SEGV since it wasn't an error with writing to read-only memory
+#else
+            uint32_t esr = exc_state.__esr;
+            if ((esr & EC_MASK) != EC_DATA_ABORT || !(esr & ISR_DA_WnR)) {
+                return KERN_INVALID_ARGUMENT;
+            }
+#endif
             excpt = jl_readonlymemory_exception;
         }
         jl_throw_in_thread(tid, thread, excpt);
