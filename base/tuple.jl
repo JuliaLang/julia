@@ -389,15 +389,17 @@ reverse(t::Tuple) = revargs(t...)
 
 ## specialized reduction ##
 
-# TODO: these definitions cannot yet be combined, since +(x...)
-# where x might be any tuple matches too many methods.
-# TODO: this is inconsistent with the regular sum in cases where the arguments
-# require size promotion to system size.
 sum(x::Tuple{Any, Vararg{Any}}) = +(x...)
+# avoid stack overflow with large tuples
+function sum(x::Any16)
+    s = x[1]
+    for i in 2:length(x)
+        s += x[i]
+    end
+    return s
+end
 
 # NOTE: should remove, but often used on array sizes
-# TODO: this is inconsistent with the regular prod in cases where the arguments
-# require size promotion to system size.
 prod(x::Tuple{}) = 1
 prod(x::Tuple{Any, Vararg{Any}}) = *(x...)
 

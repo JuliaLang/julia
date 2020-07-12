@@ -337,6 +337,7 @@ end
 
 @testset "specialized reduction" begin
     @test sum((1,2,3)) === 6
+    @test sum(ntuple(i->[1.0, 1.0], 1600)) == [1600., 1600.]
 
     @test prod(()) === 1
     @test prod((1,2,3)) === 6
