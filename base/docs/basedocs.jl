@@ -136,7 +136,7 @@ module Foo
 is equivalent to
 
 ```julia
-baremodule foo
+baremodule Foo
 
 using Base
 
