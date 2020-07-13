@@ -137,10 +137,9 @@ is equivalent to
 
 ```julia
 baremodule Foo
-
-using Base
-
-eval(ex) = Core.eval(@__MODULE__, ex)
+    using Base
+    eval(ex) = Core.eval(@__MODULE__, ex)
+end
 ```
 """
 kw"baremodule"
