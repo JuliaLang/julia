@@ -166,7 +166,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                       vdots::AbstractString = "\u22ee",
                       ddots::AbstractString = "  \u22f1  ",
                       hmod::Integer = 5, vmod::Integer = 5)
-    if !get(io, :limit, false)
+    if !(get(io, :limit, false)::Bool)
         screenheight = screenwidth = typemax(Int)
     else
         sz = displaysize(io)
@@ -423,7 +423,10 @@ _show_nonempty(::IO, ::AbstractVector, ::String) =
 _show_nonempty(io::IO, X::AbstractArray{T,0} where T, prefix::String) = print_array(io, X)
 
 # NOTE: it's not clear how this method could use the :typeinfo attribute
-_show_empty(io::IO, X::Array{T}) where {T} = print(io, "Array{", T, "}(undef,", join(size(X),','), ')')
+function _show_empty(io::IO, X::Array)
+    show_datatype(io, typeof(X))
+    print(io, "(undef, ", join(size(X),", "), ')')
+end
 _show_empty(io, X::AbstractArray) = summary(io, X)
 
 # typeinfo aware (necessarily)
@@ -516,9 +519,9 @@ function typeinfo_prefix(io::IO, X)
 
     if X isa AbstractDict
         if eltype_X == eltype_ctx
-            string(typeof(X).name), false
+            sprint(show_type_name, typeof(X).name), false
         elseif !isempty(X) && typeinfo_implicit(keytype(X)) && typeinfo_implicit(valtype(X))
-            string(typeof(X).name), true
+            sprint(show_type_name, typeof(X).name), true
         else
             string(typeof(X)), false
         end
@@ -529,7 +532,7 @@ function typeinfo_prefix(io::IO, X)
         elseif !isempty(X) && typeinfo_implicit(eltype_X)
             "", true
         elseif print_without_params(eltype_X)
-            string(unwrap_unionall(eltype_X).name), false # Print "Array" rather than "Array{T,N}"
+            sprint(show_type_name, unwrap_unionall(eltype_X).name), false # Print "Array" rather than "Array{T,N}"
         else
             string(eltype_X), false
         end

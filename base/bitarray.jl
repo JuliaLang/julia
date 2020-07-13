@@ -55,12 +55,12 @@ Behaves identically to the [`Array`](@ref) constructor. See [`undef`](@ref).
 # Examples
 ```julia-repl
 julia> BitArray(undef, 2, 2)
-2×2 BitArray{2}:
+2×2 BitMatrix:
  0  0
  0  0
 
 julia> BitArray(undef, (3, 1))
-3×1 BitArray{2}:
+3×1 BitMatrix:
  0
  0
  0
@@ -74,7 +74,7 @@ BitArray{N}(::UndefInitializer, dims::NTuple{N,Integer}) where {N} = BitArray{N}
 const BitVector = BitArray{1}
 const BitMatrix = BitArray{2}
 
-BitVector() = BitArray{1}(undef, 0)
+BitVector() = BitVector(undef, 0)
 
 """
     BitVector(nt::Tuple{Vararg{Bool}})
@@ -86,7 +86,7 @@ julia> nt = (true, false, true, false)
 (true, false, true, false)
 
 julia> BitVector(nt)
-4-element BitArray{1}:
+4-element BitVector:
  1
  0
  1
@@ -395,7 +395,7 @@ Create a `BitArray` with all values set to `false`.
 # Examples
 ```jldoctest
 julia> falses(2,3)
-2×3 BitArray{2}:
+2×3 BitMatrix:
  0  0  0
  0  0  0
 ```
@@ -413,7 +413,7 @@ Create a `BitArray` with all values set to `true`.
 # Examples
 ```jldoctest
 julia> trues(2,3)
-2×3 BitArray{2}:
+2×3 BitMatrix:
  1  1  1
  1  1  1
 ```
@@ -550,17 +550,17 @@ The shape is inferred from the `itr` object.
 # Examples
 ```jldoctest
 julia> BitArray([1 0; 0 1])
-2×2 BitArray{2}:
+2×2 BitMatrix:
  1  0
  0  1
 
 julia> BitArray(x+y == 3 for x = 1:2, y = 1:3)
-2×3 BitArray{2}:
+2×3 BitMatrix:
  0  1  0
  1  0  0
 
 julia> BitArray(x+y == 3 for x = 1:2 for y = 1:3)
-6-element BitArray{1}:
+6-element BitVector:
  0
  1
  0
@@ -967,11 +967,11 @@ function deleteat!(B::BitVector, inds)
     n = new_l = length(B)
     y = iterate(inds)
     y === nothing && return B
-    n == 0 && throw(BoundsError(B, inds))
 
     Bc = B.chunks
 
     (p, s) = y
+    checkbounds(B, p)
     q = p+1
     new_l -= 1
     y = iterate(inds, s)
@@ -1276,7 +1276,7 @@ values. If `n < 0`, elements are shifted backwards. Equivalent to
 # Examples
 ```jldoctest
 julia> B = BitVector([true, false, true, false, false])
-5-element BitArray{1}:
+5-element BitVector:
  1
  0
  1
@@ -1284,7 +1284,7 @@ julia> B = BitVector([true, false, true, false, false])
  0
 
 julia> B >> 1
-5-element BitArray{1}:
+5-element BitVector:
  0
  1
  0
@@ -1292,7 +1292,7 @@ julia> B >> 1
  0
 
 julia> B >> -1
-5-element BitArray{1}:
+5-element BitVector:
  0
  1
  0
@@ -1314,7 +1314,7 @@ values. If `n < 0`, elements are shifted forwards. Equivalent to
 # Examples
 ```jldoctest
 julia> B = BitVector([true, false, true, false, false])
-5-element BitArray{1}:
+5-element BitVector:
  1
  0
  1
@@ -1322,7 +1322,7 @@ julia> B = BitVector([true, false, true, false, false])
  0
 
 julia> B << 1
-5-element BitArray{1}:
+5-element BitVector:
  0
  1
  0
@@ -1330,7 +1330,7 @@ julia> B << 1
  0
 
 julia> B << -1
-5-element BitArray{1}:
+5-element BitVector:
  0
  1
  0

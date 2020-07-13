@@ -193,6 +193,7 @@ end
     @test_throws ErrorException("Int is incommensurate with PhysQuantity") x*2   # not a MethodError for convert
     @test x.hi/2 === PhysQuantity{1}(2.0)
     @test_throws ErrorException("Int is incommensurate with PhysQuantity") x/2
+    @test zero(typeof(x)) === Base.TwicePrecision(PhysQuantity{1}(0.0))
 end
 @testset "ranges" begin
     @test size(10:1:0) == (0,)
@@ -459,10 +460,10 @@ end
     end
 end
 @testset "indexing range with empty range (#4309)" begin
-    @test (3:6)[5:4] == 7:6
+    @test (3:6)[5:4] === 7:6
     @test_throws BoundsError (3:6)[5:5]
     @test_throws BoundsError (3:6)[5]
-    @test (0:2:10)[7:6] == 12:2:10
+    @test (0:2:10)[7:6] === 12:2:10
     @test_throws BoundsError (0:2:10)[7:7]
 end
 # indexing with negative ranges (#8351)
@@ -818,7 +819,10 @@ end
                        map(Int32,1:3:17), map(Int64,1:3:17), 1:0, 1:-1:0, 17:-3:0,
                        0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),map(Float32,LinRange(0.0, 1.0, 11)),
                        1.0:eps():1.0 .+ 10eps(), 9007199254740990.:1.0:9007199254740994,
-                       range(0, stop=1, length=20), map(Float32, range(0, stop=1, length=20))]
+                       range(0, stop=1, length=20), map(Float32, range(0, stop=1, length=20)),
+                       3:2, 5:-2:7, range(0.0, step=2.0, length=0), 3//2:3//2:0//1, LinRange(2,3,0),
+                       Base.OneTo(1), 1:1, 1:-3:1, 1//1:1//3:1//1, range(1.0, step=2.5, length=1),
+                       LinRange(1,1,1), LinRange(1,1,2)]
     for r in Rs
         local r
         ar = Vector(r)
@@ -838,6 +842,7 @@ end
     @test 1:1:10 == 1:10 == 1:10 == Base.OneTo(10) == Base.OneTo(10)
     @test 1:10 != 2:10 != 2:11 != Base.OneTo(11)
     @test Base.OneTo(10) != Base.OneTo(11) != 1:10
+    @test Base.OneTo(0) == 5:4
 end
 # issue #2959
 @test 1.0:1.5 == 1.0:1.0:1.5 == 1.0:1.0
@@ -1555,11 +1560,11 @@ end
         for stops in [-2, 0, 2, 100]
             for lengths in [2, 10, 100]
                 if stops >= starts
-                    @test range(starts, stops, length=lengths) == range(starts, stop=stops, length=lengths)
+                    @test range(starts, stops, length=lengths) === range(starts, stop=stops, length=lengths)
                 end
             end
             for steps in [0.01, 1, 2]
-                @test range(starts, stops, step=steps) == range(starts, stop=stops, step=steps)
+                @test range(starts, stops, step=steps) === range(starts, stop=stops, step=steps)
             end
         end
     end
@@ -1603,6 +1608,16 @@ end
     r = StepRangeLen('a',2,4)
     @test step(r) === 2
     @test collect(r) == ['a','c','e','g']
+end
+
+@testset "diff of ranges, #36116" begin
+    for r in (0:2, 0:1:2, 0.0:1.0:2.0, LinRange(0,2,3))
+        @test diff(r) == diff(collect(r)) == fill(1, 2)
+        @test_throws ArgumentError diff(r, dims=2)
+    end
+    for r in (0:2:5, 0.1:0.1:2.0, LinRange(0,2,33))
+        @test diff(r) == diff(collect(r)) == [r[i+1] - r[i] for i in 1:length(r)-1]
+    end
 end
 
 @testset "Return type of indexing with ranges" begin

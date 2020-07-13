@@ -32,15 +32,34 @@ SparseVector(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti} =
 
 # Define an alias for a view of a whole column of a SparseMatrixCSC. Many methods can be written for the
 # union of such a view and a SparseVector so we define an alias for such a union as well
-const SparseColumnView{T}  = SubArray{T,1,<:AbstractSparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int}},Int},false}
-const SparseVectorUnion{T} = Union{SparseVector{T}, SparseColumnView{T}}
-const AdjOrTransSparseVectorUnion{T} = LinearAlgebra.AdjOrTrans{T, <:SparseVectorUnion{T}}
+const SparseColumnView{Tv,Ti}  = SubArray{Tv,1,<:AbstractSparseMatrixCSC{Tv,Ti},Tuple{Base.Slice{Base.OneTo{Int}},Int},false}
+const SparseVectorView{Tv,Ti}  = SubArray{Tv,1,<:AbstractSparseVector{Tv,Ti},Tuple{Base.Slice{Base.OneTo{Int}}},false}
+const SparseVectorUnion{Tv,Ti} = Union{SparseVector{Tv,Ti}, SparseColumnView{Tv,Ti}, SparseVectorView{Tv,Ti}}
+const AdjOrTransSparseVectorUnion{Tv,Ti} = LinearAlgebra.AdjOrTrans{Tv, <:SparseVectorUnion{Tv,Ti}}
 
 ### Basic properties
 
 size(x::SparseVector)     = (getfield(x, :n),)
-nnz(x::SparseVector)      = length(nonzeros(x))
 count(f, x::SparseVector) = count(f, nonzeros(x)) + f(zero(eltype(x)))*(length(x) - nnz(x))
+
+# implement the nnz - nzrange - nonzeros - rowvals interface for sparse vectors
+
+nnz(x::SparseVector)      = length(nonzeros(x))
+function nnz(x::SparseColumnView)
+    rowidx, colidx = parentindices(x)
+    return length(nzrange(parent(x), colidx))
+end
+nnz(x::SparseVectorView) = nnz(x.parent)
+
+"""
+    nzrange(x::SparseVectorUnion, col)
+
+Give the range of indices to the structural nonzero values of a sparse vector.
+The column index `col` is ignored (assumed to be `1`).
+"""
+function nzrange(x::SparseVectorUnion, j::Integer)
+    j == 1 ? (1:nnz(x)) : throw(BoundsError(x, (":", j)))
+end
 
 nonzeros(x::SparseVector) = getfield(x, :nzval)
 function nonzeros(x::SparseColumnView)
@@ -49,6 +68,7 @@ function nonzeros(x::SparseColumnView)
     @inbounds y = view(nonzeros(A), nzrange(A, colidx))
     return y
 end
+nonzeros(x::SparseVectorView) = nonzeros(parent(x))
 
 nonzeroinds(x::SparseVector) = getfield(x, :nzind)
 function nonzeroinds(x::SparseColumnView)
@@ -57,12 +77,12 @@ function nonzeroinds(x::SparseColumnView)
     @inbounds y = view(rowvals(A), nzrange(A, colidx))
     return y
 end
+nonzeroinds(x::SparseVectorView) = nonzeroinds(parent(x))
+
+rowvals(x::SparseVectorUnion) = nonzeroinds(x)
 
 indtype(x::SparseColumnView) = indtype(parent(x))
-function nnz(x::SparseColumnView)
-    rowidx, colidx = parentindices(x)
-    return length(nzrange(parent(x), colidx))
-end
+indtype(x::SparseVectorView) = indtype(parent(x))
 
 ## similar
 #
@@ -732,6 +752,25 @@ end
 findall(p::Base.Fix2{typeof(in)}, x::SparseVector{<:Any,Ti}) where {Ti} =
     invoke(findall, Tuple{Base.Fix2{typeof(in)}, AbstractArray}, p, x)
 
+"""
+    findnz(x::SparseVector)
+
+Return a tuple `(I, V)`  where `I` is the indices of the stored ("structurally non-zero")
+values in sparse vector `x` and `V` is a vector of the values.
+
+# Examples
+```jldoctest
+julia> x = sparsevec([1 2 0; 0 0 3; 0 4 0])
+9-element SparseVector{Int64,Int64} with 4 stored entries:
+  [1]  =  1
+  [4]  =  2
+  [6]  =  4
+  [8]  =  3
+
+julia> findnz(x)
+([1, 4, 6, 8], [1, 2, 4, 3])
+```
+"""
 function findnz(x::SparseVector{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(x)
 
@@ -828,6 +867,11 @@ end
 
 getindex(x::AbstractSparseVector, ::Colon) = copy(x)
 
+function Base.isstored(x::AbstractSparseVector, i::Integer)
+    @boundscheck checkbounds(x, i)
+    return i in nonzeroinds(x)
+end
+
 ### show and friends
 
 function show(io::IO, ::MIME"text/plain", x::AbstractSparseVector)
@@ -849,7 +893,7 @@ function show(io::IOContext, x::AbstractSparseVector)
     if isempty(nzind)
         return show(io, MIME("text/plain"), x)
     end
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
     half_screen_rows = limit ? div(displaysize(io)[1] - 8, 2) : typemax(Int)
     pad = ndigits(n)
     if !haskey(io, :compact)

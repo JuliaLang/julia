@@ -89,22 +89,22 @@ to switch an entire block of code to use views for slicing.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> b = @view A[:, 1]
-2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
+2-element view(::Matrix{Int64}, :, 1) with eltype Int64:
  1
  3
 
 julia> fill!(b, 0)
-2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
+2-element view(::Matrix{Int64}, :, 1) with eltype Int64:
  0
  0
 
 julia> A
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  0  2
  0  4
 ```
@@ -131,7 +131,7 @@ end
 # (while remaining equivalent to getindex for scalar indices and non-array types)
 @propagate_inbounds maybeview(A, args...) = getindex(A, args...)
 @propagate_inbounds maybeview(A::AbstractArray, args...) = view(A, args...)
-@propagate_inbounds maybeview(A::AbstractArray, args::Number...) = getindex(A, args...)
+@propagate_inbounds maybeview(A::AbstractArray, args::Union{Number,AbstractCartesianIndex}...) = getindex(A, args...)
 @propagate_inbounds maybeview(A) = getindex(A)
 @propagate_inbounds maybeview(A::AbstractArray) = getindex(A)
 
@@ -148,10 +148,10 @@ function _views(ex::Expr)
         # but still use views for the args of the ref:
         lhs = ex.args[1]
         Expr(ex.head, Meta.isexpr(lhs, :ref) ?
-                      Expr(:ref, _views.(lhs.args)...) : _views(lhs),
+                      Expr(:ref, mapany(_views, lhs.args)...) : _views(lhs),
              _views(ex.args[2]))
     elseif ex.head === :ref
-        Expr(:call, maybeview, _views.(ex.args)...)
+        Expr(:call, maybeview, mapany(_views, ex.args)...)
     else
         h = string(ex.head)
         # don't use view on the lhs of an op-assignment a[i...] += ...
@@ -182,9 +182,9 @@ function _views(ex::Expr)
                  Expr(first(h) == '.' ? :(.=) : :(=), :($a[$(I...)]),
                       Expr(:call, Symbol(h[1:end-1]),
                            :($maybeview($a, $(I...))),
-                           _views.(ex.args[2:end])...)))
+                           mapany(_views, ex.args[2:end])...)))
         else
-            Expr(ex.head, _views.(ex.args)...)
+            Expr(ex.head, mapany(_views, ex.args)...)
         end
     end
 end
@@ -217,7 +217,7 @@ julia> @views for row in 1:3
        end
 
 julia> A
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.0  1.0  1.0
  2.0  2.0  2.0
  3.0  3.0  3.0

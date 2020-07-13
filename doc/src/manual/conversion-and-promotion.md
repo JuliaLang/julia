@@ -60,25 +60,25 @@ julia> x = 12
 julia> typeof(x)
 Int64
 
-julia> convert(UInt8, x)
+julia> xu = convert(UInt8, x)
 0x0c
 
-julia> typeof(ans)
+julia> typeof(xu)
 UInt8
 
-julia> convert(AbstractFloat, x)
+julia> xf = convert(AbstractFloat, x)
 12.0
 
-julia> typeof(ans)
+julia> typeof(xf)
 Float64
 
 julia> a = Any[1 2 3; 4 5 6]
-2×3 Array{Any,2}:
+2×3 Matrix{Any}:
  1  2  3
  4  5  6
 
 julia> convert(Array{Float64}, a)
-2×3 Array{Float64,2}:
+2×3 Matrix{Float64}:
  1.0  2.0  3.0
  4.0  5.0  6.0
 ```
@@ -271,10 +271,10 @@ Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 This allows calls like the following to work:
 
 ```jldoctest
-julia> Rational(Int8(15),Int32(-5))
+julia> x = Rational(Int8(15),Int32(-5))
 -3//1
 
-julia> typeof(ans)
+julia> typeof(x)
 Rational{Int32}
 ```
 

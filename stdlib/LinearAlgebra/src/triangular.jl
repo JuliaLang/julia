@@ -68,13 +68,13 @@ Construct a `LowerTriangular` view of the matrix `A`.
 # Examples
 ```jldoctest
 julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.0  2.0  3.0
  4.0  5.0  6.0
  7.0  8.0  9.0
 
 julia> LowerTriangular(A)
-3×3 LowerTriangular{Float64,Array{Float64,2}}:
+3×3 LowerTriangular{Float64,Matrix{Float64}}:
  1.0   ⋅    ⋅
  4.0  5.0   ⋅
  7.0  8.0  9.0
@@ -89,13 +89,13 @@ Construct an `UpperTriangular` view of the matrix `A`.
 # Examples
 ```jldoctest
 julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.0  2.0  3.0
  4.0  5.0  6.0
  7.0  8.0  9.0
 
 julia> UpperTriangular(A)
-3×3 UpperTriangular{Float64,Array{Float64,2}}:
+3×3 UpperTriangular{Float64,Matrix{Float64}}:
  1.0  2.0  3.0
   ⋅   5.0  6.0
   ⋅    ⋅   9.0
@@ -112,13 +112,13 @@ of `A` on its diagonal.
 # Examples
 ```jldoctest
 julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.0  2.0  3.0
  4.0  5.0  6.0
  7.0  8.0  9.0
 
 julia> UnitLowerTriangular(A)
-3×3 UnitLowerTriangular{Float64,Array{Float64,2}}:
+3×3 UnitLowerTriangular{Float64,Matrix{Float64}}:
  1.0   ⋅    ⋅
  4.0  1.0   ⋅
  7.0  8.0  1.0
@@ -135,13 +135,13 @@ of `A` on its diagonal.
 # Examples
 ```jldoctest
 julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.0  2.0  3.0
  4.0  5.0  6.0
  7.0  8.0  9.0
 
 julia> UnitUpperTriangular(A)
-3×3 UnitUpperTriangular{Float64,Array{Float64,2}}:
+3×3 UnitUpperTriangular{Float64,Matrix{Float64}}:
  1.0  2.0  3.0
   ⋅   1.0  6.0
   ⋅    ⋅   1.0
@@ -2607,7 +2607,9 @@ function sqrt(A::UpperTriangular{T},::Val{realmatrix}) where {T,realmatrix}
             @simd for k = i+1:j-1
                 r -= R[i,k]*R[k,j]
             end
-            iszero(r) || (R[i,j] = sylvester(R[i,i],R[j,j],-r))
+            if !(iszero(r) || (iszero(R[i,i]) && iszero(R[j,j])))
+                R[i,j] = sylvester(R[i,i],R[j,j],-r)
+            end
         end
     end
     return UpperTriangular(R)

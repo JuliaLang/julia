@@ -163,7 +163,7 @@ julia> a = Real[]
 Real[]
 
 julia> push!(a, 1); push!(a, 2.0); push!(a, π)
-3-element Array{Real,1}:
+3-element Vector{Real}:
  1
  2.0
  π = 3.1415926535897...
@@ -180,7 +180,7 @@ julia> a = Float64[]
 Float64[]
 
 julia> push!(a, 1); push!(a, 2.0); push!(a,  π)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  1.0
  2.0
  3.141592653589793
@@ -356,7 +356,7 @@ MySimpleContainer{UnitRange{Int64}}
 julia> c = MySimpleContainer([1:3;]);
 
 julia> typeof(c)
-MySimpleContainer{Array{Int64,1}}
+MySimpleContainer{Vector{Int64}}
 
 julia> b = MyAmbiguousContainer(1:3);
 
@@ -637,7 +637,7 @@ julia> function strange_twos(n)
        end;
 
 julia> strange_twos(3)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  2.0
  2.0
  2.0
@@ -659,7 +659,7 @@ julia> function strange_twos(n)
        end;
 
 julia> strange_twos(3)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  2.0
  2.0
  2.0
@@ -686,7 +686,7 @@ can be created like this:
 
 ```jldoctest
 julia> A = fill(5.0, (3, 3))
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  5.0  5.0  5.0
  5.0  5.0  5.0
  5.0  5.0  5.0
@@ -707,7 +707,7 @@ julia> function array3(fillval, N)
 array3 (generic function with 1 method)
 
 julia> array3(5.0, 2)
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  5.0  5.0  5.0
  5.0  5.0  5.0
  5.0  5.0  5.0
@@ -731,7 +731,7 @@ julia> function array3(fillval, ::Val{N}) where N
 array3 (generic function with 1 method)
 
 julia> array3(5.0, Val(2))
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  5.0  5.0  5.0
  5.0  5.0  5.0
  5.0  5.0  5.0
@@ -824,12 +824,12 @@ as shown below (notice that the array is ordered `[1 3 2 4]`, not `[1 2 3 4]`):
 
 ```jldoctest
 julia> x = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> x[:]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  3
  2
@@ -1432,7 +1432,7 @@ julia> function f(x)
 
 julia> @code_warntype f(3.2)
 Variables
-  #self#::Core.Compiler.Const(f, false)
+  #self#::Core.Const(f, false)
   x::Float64
   y::UNION{FLOAT64, INT64}
 

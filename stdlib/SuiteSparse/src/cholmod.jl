@@ -289,7 +289,7 @@ function Sparse(p::Ptr{C_Sparse{Cvoid}})
                             "unknown reasons. Please submit a bug report."))
     end
     s = unsafe_load(p)
-    Tv = s.xtype == REAL ? Float64 : Complex{Float64}
+    Tv = s.xtype == REAL ? Float64 : ComplexF64
     Sparse(convert(Ptr{C_Sparse{Tv}}, p))
 end
 
@@ -1015,7 +1015,7 @@ function SparseMatrixCSC{Tv,SuiteSparse_long}(A::Sparse{Tv}) where Tv
     end
 end
 
-function (::Type{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}})(A::Sparse{Float64})
+function Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}(A::Sparse{Float64})
     s = unsafe_load(pointer(A))
     if !issymmetric(A)
         throw(ArgumentError("matrix is not symmetric"))
@@ -1060,12 +1060,12 @@ function sparse(A::Sparse{Float64}) # Notice! Cannot be type stable because of s
     end
     return Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}(A)
 end
-function sparse(A::Sparse{Complex{Float64}}) # Notice! Cannot be type stable because of stype
+function sparse(A::Sparse{ComplexF64}) # Notice! Cannot be type stable because of stype
     s = unsafe_load(pointer(A))
     if s.stype == 0
-        return SparseMatrixCSC{Complex{Float64},SuiteSparse_long}(A)
+        return SparseMatrixCSC{ComplexF64,SuiteSparse_long}(A)
     end
-    return Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}(A)
+    return Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,SuiteSparse_long}}(A)
 end
 function sparse(F::Factor)
     s = unsafe_load(pointer(F))
@@ -1310,7 +1310,7 @@ function cholesky!(F::Factor{Tv}, A::Sparse{Tv};
 end
 
 """
-    cholesky!(F::Factor, A; shift = 0.0, check = true) -> CHOLMOD.Factor
+    cholesky!(F::CHOLMOD.Factor, A::SparseMatrixCSC; shift = 0.0, check = true) -> CHOLMOD.Factor
 
 Compute the Cholesky (``LL'``) factorization of `A`, reusing the symbolic
 factorization `F`. `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/
@@ -1349,7 +1349,7 @@ function cholesky(A::Sparse; shift::Real=0.0, check::Bool = true,
 end
 
 """
-    cholesky(A; shift = 0.0, check = true, perm = nothing) -> CHOLMOD.Factor
+    cholesky(A::SparseMatrixCSC; shift = 0.0, check = true, perm = nothing) -> CHOLMOD.Factor
 
 Compute the Cholesky factorization of a sparse positive definite matrix `A`.
 `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
@@ -1383,7 +1383,7 @@ If `perm` is set to `1:3` to enforce no permutation, the number of nonzero
 elements in the factor is 6.
 ```jldoctest
 julia> A = [2 1 1; 1 2 0; 1 0 2]
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  2  1  1
  1  2  0
  1  0  2
@@ -1397,7 +1397,7 @@ nnz:     5
 success: true
 
 julia> C.p
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  3
  2
  1
@@ -1405,7 +1405,7 @@ julia> C.p
 julia> L = sparse(C.L);
 
 julia> Matrix(L)
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.41421   0.0       0.0
  0.0       1.41421   0.0
  0.707107  0.707107  1.0
@@ -1415,9 +1415,9 @@ true
 
 julia> P = sparse(1:3, C.p, ones(3))
 3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
-  [3, 1]  =  1.0
-  [2, 2]  =  1.0
-  [1, 3]  =  1.0
+  ⋅    ⋅   1.0
+  ⋅   1.0   ⋅
+ 1.0   ⋅    ⋅
 
 julia> P' * L * L' * P ≈ A
 true
@@ -1433,7 +1433,7 @@ success: true
 julia> L = sparse(C.L);
 
 julia> Matrix(L)
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.41421    0.0       0.0
  0.707107   1.22474   0.0
  0.707107  -0.408248  1.1547
@@ -1474,7 +1474,7 @@ function ldlt!(F::Factor{Tv}, A::Sparse{Tv};
 end
 
 """
-    ldlt!(F::Factor, A; shift = 0.0, check = true) -> CHOLMOD.Factor
+    ldlt!(F::CHOLMOD.Factor, A::SparseMatrixCSC; shift = 0.0, check = true) -> CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of `A`, reusing the symbolic factorization `F`.
 `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
@@ -1518,7 +1518,7 @@ function ldlt(A::Sparse; shift::Real=0.0, check::Bool = true,
 end
 
 """
-    ldlt(A; shift = 0.0, check = true, perm=nothing) -> CHOLMOD.Factor
+    ldlt(A::SparseMatrixCSC; shift = 0.0, check = true, perm=nothing) -> CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of a sparse matrix `A`.
 `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
@@ -1564,14 +1564,14 @@ ldlt(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}},
 ## Rank updates
 
 """
-    lowrankupdowndate!(F::Factor, C::Sparse, update::Cint)
+    lowrankupdowndate!(F::CHOLMOD.Factor, C::Sparse, update::Cint)
 
 Update an `LDLt` or `LLt` Factorization `F` of `A` to a factorization of `A ± C*C'`.
 
 If sparsity preserving factorization is used, i.e. `L*L' == P*A*P'` then the new
 factor will be `L*L' == P*A*P' + C'*C`
 
-update: `Cint(1)` for `A + CC'`, `Cint(0)` for `A - CC'`
+`update`: `Cint(1)` for `A + CC'`, `Cint(0)` for `A - CC'`
 """
 function lowrankupdowndate!(F::Factor{Tv}, C::Sparse{Tv}, update::Cint) where Tv<:VTypes
     lF = unsafe_load(pointer(F))
@@ -1590,7 +1590,7 @@ lowrank_reorder(V::AbstractArray,p) = Sparse(sparse(V[p,:]))
 lowrank_reorder(V::AbstractSparseArray,p) = Sparse(V[p,:])
 
 """
-    lowrankupdate!(F::Factor, C)
+    lowrankupdate!(F::CHOLMOD.Factor, C::AbstractArray)
 
 Update an `LDLt` or `LLt` Factorization `F` of `A` to a factorization of `A + C*C'`.
 
@@ -1605,7 +1605,7 @@ function lowrankupdate!(F::Factor{Tv}, V::AbstractArray{Tv}) where Tv<:VTypes
 end
 
 """
-    lowrankdowndate!(F::Factor, C)
+    lowrankdowndate!(F::CHOLMOD.Factor, C::AbstractArray)
 
 Update an `LDLt` or `LLt` Factorization `F` of `A` to a factorization of `A - C*C'`.
 
@@ -1620,7 +1620,7 @@ function lowrankdowndate!(F::Factor{Tv}, V::AbstractArray{Tv}) where Tv<:VTypes
 end
 
 """
-    lowrankupdate(F::Factor, C) -> FF::Factor
+    lowrankupdate(F::CHOLMOD.Factor, C::AbstractArray) -> FF::CHOLMOD.Factor
 
 Get an `LDLt` Factorization of `A + C*C'` given an `LDLt` or `LLt` factorization `F` of `A`.
 
@@ -1632,7 +1632,7 @@ lowrankupdate(F::Factor{Tv}, V::AbstractArray{Tv}) where {Tv<:VTypes} =
     lowrankupdate!(copy(F), V)
 
 """
-    lowrankupdate(F::Factor, C) -> FF::Factor
+    lowrankupdate(F::CHOLMOD.Factor, C::AbstractArray) -> FF::CHOLMOD.Factor
 
 Get an `LDLt` Factorization of `A + C*C'` given an `LDLt` or `LLt` factorization `F` of `A`.
 
@@ -1732,7 +1732,7 @@ end
 const RealHermSymComplexHermF64SSL = Union{
     Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
     Hermitian{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
-    Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}
+    Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,SuiteSparse_long}}}
 const StridedVecOrMatInclAdjAndTrans = Union{StridedVecOrMat, Adjoint{<:Any, <:StridedVecOrMat}, Transpose{<:Any, <:StridedVecOrMat}}
 function \(A::RealHermSymComplexHermF64SSL, B::StridedVecOrMatInclAdjAndTrans)
     F = cholesky(A; check = false)
@@ -1840,7 +1840,7 @@ function ishermitian(A::Sparse{Float64})
         return i == MM_SYMMETRIC || i == MM_SYMMETRIC_POSDIAG
     end
 end
-function ishermitian(A::Sparse{Complex{Float64}})
+function ishermitian(A::Sparse{ComplexF64})
     s = unsafe_load(pointer(A))
     if s.stype != 0
         return true
@@ -1856,15 +1856,15 @@ end
 
 (*)(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}},
     B::SparseVecOrMat{Float64,Ti}) where {Ti} = sparse(Sparse(A)*Sparse(B))
-(*)(A::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}},
-    B::SparseVecOrMat{Complex{Float64},Ti}) where {Ti} = sparse(Sparse(A)*Sparse(B))
+(*)(A::Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,Ti}},
+    B::SparseVecOrMat{ComplexF64,Ti}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 (*)(A::Hermitian{Float64,SparseMatrixCSC{Float64,Ti}},
     B::SparseVecOrMat{Float64,Ti}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 
 (*)(A::SparseVecOrMat{Float64,Ti},
     B::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
-(*)(A::SparseVecOrMat{Complex{Float64},Ti},
-    B::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
+(*)(A::SparseVecOrMat{ComplexF64,Ti},
+    B::Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 (*)(A::SparseVecOrMat{Float64,Ti},
     B::Hermitian{Float64,SparseMatrixCSC{Float64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 

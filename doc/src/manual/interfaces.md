@@ -113,11 +113,11 @@ julia> Base.length(S::Squares) = S.count
 ```
 
 Now, when we ask Julia to [`collect`](@ref) all the elements into an array it can preallocate a `Vector{Int}`
-of the right size instead of blindly [`push!`](@ref)ing each element into a `Vector{Any}`:
+of the right size instead of naively [`push!`](@ref)ing each element into a `Vector{Any}`:
 
 ```jldoctest squaretype
 julia> collect(Squares(4))
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
   1
   4
   9
@@ -151,7 +151,7 @@ In our `Squares` example, we would implement `Iterators.Reverse{Squares}` method
 julia> Base.iterate(rS::Iterators.Reverse{Squares}, state=rS.itr.count) = state < 1 ? nothing : (state*state, state-1)
 
 julia> collect(Iterators.reverse(Squares(4)))
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  16
   9
   4
@@ -203,7 +203,7 @@ julia> Base.getindex(S::Squares, i::Number) = S[convert(Int, i)]
 julia> Base.getindex(S::Squares, I) = [S[i] for i in I]
 
 julia> Squares(10)[[3,4.,5]]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   9
  16
  25
@@ -289,19 +289,19 @@ julia> s = SquaresVector(4)
  16
 
 julia> s[s .> 8]
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
   9
  16
 
 julia> s + s
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
   2
   8
  18
  32
 
 julia> sin.(s)
-4-element Array{Float64,1}:
+4-element Vector{Float64}:
   0.8414709848078965
  -0.7568024953079282
   0.4121184852417566

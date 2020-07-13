@@ -20,7 +20,13 @@ function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize
     source[1] === source[2] && (source = svec(source[1]))
     type_more_complex(t, compare, source, 1, allowed_tupledepth, allowed_tuplelen) || return t
     r = _limit_type_size(t, compare, source, 1, allowed_tuplelen)
-    @assert t <: r
+    #@assert t <: r # this may fail if t contains a typevar in invariant and multiple times
+        # in covariant position and r looses the occurence in invariant position (see #36407)
+    if !(t <: r) # ideally, this should never happen
+        # widen to minimum complexity to obtain a valid result
+        r = _limit_type_size(t, Any, source, 1, allowed_tuplelen)
+        t <: r || (r = Any) # final escape hatch
+    end
     #@assert r === _limit_type_size(r, t, source) # this monotonicity constraint is slightly stronger than actually required,
       # since we only actually need to demonstrate that repeated application would reaches a fixed point,
       #not that it is already at the fixed point
@@ -268,8 +274,11 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     return true
 end
 
+union_count_abstract(x::Union) = union_count_abstract(x.a) + union_count_abstract(x.b)
+union_count_abstract(@nospecialize(x)) = !isdispatchelem(x)
+
 function issimpleenoughtype(@nospecialize t)
-    return unionlen(t) <= MAX_TYPEUNION_LENGTH && unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
+    return unionlen(t)+union_count_abstract(t) <= MAX_TYPEUNION_LENGTH && unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
 end
 
 # pick a wider type that contains both typea and typeb,
@@ -341,12 +350,11 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
     end
     # no special type-inference lattice, join the types
     typea, typeb = widenconst(typea), widenconst(typeb)
-    typea == typeb && return typea
-    if !(isa(typea, Type) || isa(typea, TypeVar)) ||
-       !(isa(typeb, Type) || isa(typeb, TypeVar))
+    if !isa(typea, Type) || !isa(typeb, Type)
         # XXX: this should never happen
         return Any
     end
+    typea == typeb && return typea
     # it's always ok to form a Union of two concrete types
     if (isconcretetype(typea) || isType(typea)) && (isconcretetype(typeb) || isType(typeb))
         return Union{typea, typeb}
@@ -388,7 +396,20 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
                         widen = tuplemerge(unwrap_unionall(ti)::DataType, unwrap_unionall(tj)::DataType)
                         widen = rewrap_unionall(rewrap_unionall(widen, ti), tj)
                     else
-                        widen = typenames[i].wrapper
+                        wr = typenames[i].wrapper
+                        uw = unwrap_unionall(wr)::DataType
+                        ui = unwrap_unionall(ti)::DataType
+                        uj = unwrap_unionall(tj)::DataType
+                        merged = wr
+                        for k = 1:length(uw.parameters)
+                            ui_k = ui.parameters[k]
+                            if ui_k === uj.parameters[k] && !has_free_typevars(ui_k)
+                                merged = merged{ui_k}
+                            else
+                                merged = merged{uw.parameters[k]}
+                            end
+                        end
+                        widen = rewrap_unionall(merged, wr)
                     end
                     types[i] = Union{}
                     typenames[i] = Any.name

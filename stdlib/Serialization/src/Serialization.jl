@@ -31,7 +31,7 @@ Serializer(io::IO) = Serializer{typeof(io)}(io)
 
 const n_int_literals = 33
 const n_reserved_slots = 24
-const n_reserved_tags = 10
+const n_reserved_tags = 8
 
 const TAGS = Any[
     Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128,
@@ -58,6 +58,7 @@ const TAGS = Any[
     Symbol, # HEADER_TAG
     Symbol, # IDDICT_TAG
     Symbol, # SHARED_REF_TAG
+    ReturnNode, GotoIfNot,
     fill(Symbol, n_reserved_tags)...,
 
     (), Bool, Any, Bottom, Core.TypeofBottom, Type, svec(), Tuple{}, false, true, nothing,
@@ -77,7 +78,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 10 # do not make changes without bumping the version #!
+const ser_version = 11 # do not make changes without bumping the version #!
 
 const NTAGS = length(TAGS)
 
@@ -1048,7 +1049,20 @@ end
 function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     ci = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
     deserialize_cycle(s, ci)
-    ci.code = deserialize(s)::Vector{Any}
+    code = deserialize(s)::Vector{Any}
+    ci.code = code
+    # allow older-style IR with return and gotoifnot Exprs
+    for i in 1:length(code)
+        stmt = code[i]
+        if isa(stmt, Expr)
+            ex = stmt::Expr
+            if ex.head === :return
+                code[i] = ReturnNode(isempty(ex.args) ? nothing : ex.args[1])
+            elseif ex.head === :gotoifnot
+                code[i] = GotoIfNot(ex.args[1], ex.args[2])
+            end
+        end
+    end
     ci.codelocs = deserialize(s)::Vector{Int32}
     _x = deserialize(s)
     if _x isa Array || _x isa Int

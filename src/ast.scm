@@ -288,7 +288,7 @@
        (symbol? (cadr e))))
 
 (define (lam:args x) (cadr x))
-(define (lam:vars x) (llist-vars (lam:args x)))
+(define (lam:argnames x) (llist-vars (lam:args x)))
 (define (lam:vinfo x) (caddr x))
 (define (lam:body x) (cadddr x))
 (define (lam:sp x) (cadddr (lam:vinfo x)))

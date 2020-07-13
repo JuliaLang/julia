@@ -306,7 +306,7 @@ end
 
 let S = SharedArray(Int64[]) # Issue #26582
     @test sprint(show, S) == "Int64[]"
-    @test sprint(show, "text/plain", S, context = :module=>@__MODULE__) == "0-element SharedArray{Int64,1}:\n"
+    @test sprint(show, "text/plain", S, context = :module=>@__MODULE__) == "0-element SharedVector{Int64}:\n"
 end
 
 #28133

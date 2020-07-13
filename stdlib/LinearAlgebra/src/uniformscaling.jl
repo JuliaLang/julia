@@ -6,8 +6,13 @@ import Base: copy, adjoint, getindex, show, transpose, one, zero, inv,
 """
     UniformScaling{T<:Number}
 
-Generically sized uniform scaling operator defined as a scalar times the
-identity operator, `λ*I`. See also [`I`](@ref).
+Generically sized uniform scaling operator defined as a scalar times
+the identity operator, `λ*I`. Although without an explicit `size`, it
+acts similarly to a matrix in many cases and includes support for some
+indexing. See also [`I`](@ref).
+
+!!! compat "Julia 1.6"
+     Indexing using ranges is available as of Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -16,14 +21,19 @@ UniformScaling{Float64}
 2.0*I
 
 julia> A = [1. 2.; 3. 4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
 julia> J*A
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  2.0  4.0
  6.0  8.0
+
+julia> J[1:2, 1:2]
+2×2 Matrix{Float64}:
+ 2.0  0.0
+ 0.0  2.0
 ```
 """
 struct UniformScaling{T<:Number}
@@ -41,7 +51,7 @@ julia> fill(1, (5,6)) * I == fill(1, (5,6))
 true
 
 julia> [1 2im 3; 1im 2 3] * I
-2×3 Array{Complex{Int64},2}:
+2×3 Matrix{Complex{Int64}}:
  1+0im  0+2im  3+0im
  0+1im  2+0im  3+0im
 ```
@@ -59,13 +69,13 @@ Construct a `Diagonal` matrix from a `UniformScaling`.
 # Examples
 ```jldoctest
 julia> I(3)
-3×3 Diagonal{Bool,Array{Bool,1}}:
+3×3 Diagonal{Bool,Vector{Bool}}:
  1  ⋅  ⋅
  ⋅  1  ⋅
  ⋅  ⋅  1
 
 julia> (0.7*I)(3)
-3×3 Diagonal{Float64,Array{Float64,1}}:
+3×3 Diagonal{Float64,Vector{Float64}}:
  0.7   ⋅    ⋅
   ⋅   0.7   ⋅
   ⋅    ⋅   0.7
@@ -78,6 +88,28 @@ ndims(J::UniformScaling) = 2
 Base.has_offset_axes(::UniformScaling) = false
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
+getindex(x::UniformScaling, n::Integer, m::AbstractRange{<:Integer}) = getindex(x, m, n)
+function getindex(x::UniformScaling{T}, n::AbstractRange{<:Integer}, m::Integer) where T
+    v = zeros(T, length(n))
+    @inbounds for (i,ii) in enumerate(n)
+        if ii == m
+            v[i] = x.λ
+        end
+    end
+    return v
+end
+
+
+function getindex(x::UniformScaling{T}, n::AbstractRange{<:Integer}, m::AbstractRange{<:Integer}) where T
+    A = zeros(T, length(n), length(m))
+    @inbounds for (j,jj) in enumerate(m), (i,ii) in enumerate(n)
+        if ii == jj
+            A[i,j] = x.λ
+        end
+    end
+    return A
+end
+
 function show(io::IO, ::MIME"text/plain", J::UniformScaling)
     s = "$(J.λ)"
     if occursin(r"\w+\s*[\+\-]\s*\w+", s)
@@ -86,6 +118,8 @@ function show(io::IO, ::MIME"text/plain", J::UniformScaling)
     print(io, typeof(J), "\n$s*I")
 end
 copy(J::UniformScaling) = UniformScaling(J.λ)
+
+Base.convert(::Type{UniformScaling{T}}, J::UniformScaling) where {T} = UniformScaling(convert(T, J.λ))
 
 conj(J::UniformScaling) = UniformScaling(conj(J.λ))
 real(J::UniformScaling) = UniformScaling(real(J.λ))

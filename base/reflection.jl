@@ -184,7 +184,7 @@ Return a boolean indicating whether `T` has `name` as one of its own fields.
 !!! compat "Julia 1.2"
      This function requires at least Julia 1.2.
 """
-function hasfield(::Type{T}, name::Symbol) where T
+function hasfield(T::Type, name::Symbol)
     @_pure_meta
     return fieldindex(T, name, false) > 0
 end
@@ -339,7 +339,7 @@ function datatype_alignment(dt::DataType)
 end
 
 # amount of total space taken by T when stored in a container
-function aligned_sizeof(T)
+function aligned_sizeof(T::Type)
     @_pure_meta
     if isbitsunion(T)
         sz = Ref{Csize_t}(0)
@@ -604,7 +604,7 @@ use it in the following manner to summarize information about a struct:
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];
 
 julia> structinfo(Base.Filesystem.StatStruct)
-12-element Array{Tuple{UInt64,Symbol,DataType},1}:
+12-element Vector{Tuple{UInt64,Symbol,DataType}}:
  (0x0000000000000000, :device, UInt64)
  (0x0000000000000008, :inode, UInt64)
  (0x0000000000000010, :mode, UInt64)
@@ -835,10 +835,10 @@ function _methods(@nospecialize(f), @nospecialize(t), lim::Int, world::UInt)
 end
 
 function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt)
-    return _methods_by_ftype(t, lim, world, UInt[typemin(UInt)], UInt[typemax(UInt)])
+    return _methods_by_ftype(t, lim, world, false, UInt[typemin(UInt)], UInt[typemax(UInt)], Cint[0])
 end
-function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt, min::Array{UInt,1}, max::Array{UInt,1})
-    return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), t, lim, 0, world, min, max)
+function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt, ambig::Bool, min::Array{UInt,1}, max::Array{UInt,1}, has_ambig::Array{Int32,1})
+    return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
 end
 
 # high-level, more convenient method lookup functions
@@ -895,7 +895,9 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     world = typemax(UInt)
     min = UInt[typemin(UInt)]
     max = UInt[typemax(UInt)]
-    ms = ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), tt, -1, 1, world, min, max)::Array{Any,1}
+    has_ambig = Int32[0]
+    ms = _methods_by_ftype(tt, -1, world, true, min, max, has_ambig)
+    ms === false && return false
     return MethodList(Method[m[3] for m in ms], typeof(f).name.mt)
 end
 
@@ -981,17 +983,24 @@ struct CodegenParams
     emit_function::Any
     emitted_function::Any
 
+    lookup::Ptr{Cvoid}
+
+    generic_context::Any
+
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    static_alloc::Bool=true, prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
                    module_setup=nothing, module_activation=nothing, raise_exception=nothing,
-                   emit_function=nothing, emitted_function=nothing)
+                   emit_function=nothing, emitted_function=nothing,
+                   lookup::Ptr{Cvoid}=cglobal(:jl_rettype_inferred),
+                   generic_context = nothing)
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(static_alloc), Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             module_setup, module_activation, raise_exception,
-            emit_function, emitted_function)
+            emit_function, emitted_function, lookup,
+            generic_context)
     end
 end
 
@@ -1077,11 +1086,32 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
                     optimize=true,
                     debuginfo::Symbol=:default,
                     world = get_world_counter(),
-                    params = Core.Compiler.Params(world))
-    ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
+                    interp = Core.Compiler.NativeInterpreter(world))
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
+    ft = Core.Typeof(f)
+    if isa(types, Type)
+        u = unwrap_unionall(types)
+        tt = rewrap_unionall(Tuple{ft, u.parameters...}, types)
+    else
+        tt = Tuple{ft, types...}
+    end
+    return code_typed_by_type(tt; optimize, debuginfo, world, interp)
+end
+
+"""
+    code_typed_by_type(types::Type{<:Tuple}; ...)
+
+Similar to [`code_typed`](@ref), except the argument is a tuple type describing
+a full signature to query.
+"""
+function code_typed_by_type(@nospecialize(tt::Type);
+                            optimize=true,
+                            debuginfo::Symbol=:default,
+                            world = get_world_counter(),
+                            interp = Core.Compiler.NativeInterpreter(world))
+    ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if @isdefined(IRShow)
         debuginfo = IRShow.debuginfo(debuginfo)
     elseif debuginfo === :default
@@ -1090,11 +1120,15 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
     if debuginfo !== :source && debuginfo !== :none
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
-    types = to_tuple_type(types)
+    tt = to_tuple_type(tt)
+    meths = _methods_by_ftype(tt, -1, world)
+    if meths === false
+        error("signature does not correspond to a generic function")
+    end
     asts = []
-    for x in _methods(f, types, -1, world)
-        meth = func_for_method_checked(x[3], types, x[2])
-        (code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, params)
+    for x in meths
+        meth = func_for_method_checked(x[3], tt, x[2])
+        (code, ty) = Core.Compiler.typeinf_code(interp, meth, x[1], x[2], optimize)
         code === nothing && error("inference not successful") # inference disabled?
         debuginfo === :none && remove_linenums!(code)
         push!(asts, code => ty)
@@ -1102,7 +1136,7 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
     return asts
 end
 
-function return_types(@nospecialize(f), @nospecialize(types=Tuple))
+function return_types(@nospecialize(f), @nospecialize(types=Tuple), interp=Core.Compiler.NativeInterpreter())
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -1110,10 +1144,9 @@ function return_types(@nospecialize(f), @nospecialize(types=Tuple))
     types = to_tuple_type(types)
     rt = []
     world = get_world_counter()
-    params = Core.Compiler.Params(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types, x[2])
-        ty = Core.Compiler.typeinf_type(meth, x[1], x[2], params)
+        ty = Core.Compiler.typeinf_type(interp, meth, x[1], x[2])
         ty === nothing && error("inference not successful") # inference disabled?
         push!(rt, ty)
     end
@@ -1133,11 +1166,20 @@ function which(@nospecialize(f), @nospecialize(t))
     end
     t = to_tuple_type(t)
     tt = signature_type(f, t)
+    return which(tt)
+end
+
+"""
+    which(types::Type{<:Tuple})
+
+Returns the method that would be called by the given type signature (as a tuple type).
+"""
+function which(@nospecialize(tt::Type))
     m = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tt, typemax(UInt))
     if m === nothing
         error("no unique matching method found for the specified argument types")
     end
-    return m.func::Method
+    return m::Method
 end
 
 """
@@ -1219,10 +1261,12 @@ See also [`applicable`](@ref).
 julia> hasmethod(length, Tuple{Array})
 true
 
-julia> hasmethod(sum, Tuple{Function, Array}, (:dims,))
+julia> f(; oranges=0) = oranges;
+
+julia> hasmethod(f, Tuple{}, (:oranges,))
 true
 
-julia> hasmethod(sum, Tuple{Function, Array}, (:apples, :bananas))
+julia> hasmethod(f, Tuple{}, (:apples, :bananas))
 false
 
 julia> g(; xs...) = 4;
@@ -1252,11 +1296,10 @@ end
 """
     Base.isambiguous(m1, m2; ambiguous_bottom=false) -> Bool
 
-Determine whether two methods `m1` and `m2` (typically of the same
-function) are ambiguous.  This test is performed in the context of
-other methods of the same function; in isolation, `m1` and `m2` might
-be ambiguous, but if a third method resolving the ambiguity has been
-defined, this returns `false`.
+Determine whether two methods `m1` and `m2` may be ambiguous for some call
+signature. This test is performed in the context of other methods of the same
+function; in isolation, `m1` and `m2` might be ambiguous, but if a third method
+resolving the ambiguity has been defined, this returns `false`.
 
 For parametric types, the `ambiguous_bottom` keyword argument controls whether
 `Union{}` counts as an ambiguous intersection of type parameters – when `true`,
@@ -1283,15 +1326,23 @@ false
 ```
 """
 function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
+    # TODO: eagerly returning `morespecific` is wrong, and fails to consider
+    # the possibility of an ambiguity caused by a third method:
+    # see the precise algorithm in ml_matches for a more correct computation
+    if m1 === m2 || morespecific(m1.sig, m2.sig) || morespecific(m2.sig, m1.sig)
+        return false
+    end
     ti = typeintersect(m1.sig, m2.sig)
+    (ti <: m1.sig && ti <: m2.sig) || return false # XXX: completely wrong, obviously
     ti === Bottom && return false
     if !ambiguous_bottom
         has_bottom_parameter(ti) && return false
     end
     ml = _methods_by_ftype(ti, -1, typemax(UInt))
-    isempty(ml) && return true
     for m in ml
-        if ti <: m[3].sig
+        m === m1 && continue
+        m === m2 && continue
+        if ti <: m[3].sig && morespecific(m[3].sig, m1.sig) && morespecific(m[3].sig, m2.sig)
             return false
         end
     end

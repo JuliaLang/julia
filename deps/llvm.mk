@@ -17,6 +17,15 @@ endif
 endif
 endif
 
+ifeq ($(USE_MLIR),1)
+ifeq ($(USE_SYSTEM_LLVM),0)
+ifneq ($(LLVM_VER),svn)
+$(error USE_MLIR=1 requires LLVM_VER=svn)
+endif
+endif
+endif
+
+
 # for Monorepo
 LLVM_ENABLE_PROJECTS :=
 ifeq ($(BUILD_LLVM_CLANG), 1)
@@ -27,6 +36,9 @@ LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);polly
 endif
 ifeq ($(BUILD_LLDB), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);lldb
+endif
+ifeq ($(USE_MLIR), 1)
+LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);mlir
 endif
 
 include $(SRCDIR)/llvm-options.mk
@@ -79,8 +91,8 @@ LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_HOST_TRIPL
 ifeq ($(USE_POLLY_ACC),1)
 LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
 endif
-LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(shell $(JULIAHOME)/contrib/relative_path.sh $(build_prefix) $(build_depsbindir))
-LLVM_CMAKE += -DLLVM_UTILS_INSTALL_DIR=$(shell $(JULIAHOME)/contrib/relative_path.sh $(build_prefix) $(build_depsbindir))
+LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
+LLVM_CMAKE += -DLLVM_UTILS_INSTALL_DIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
 LLVM_CMAKE += -DLLVM_INCLUDE_UTILS=ON -DLLVM_INSTALL_UTILS=ON
 LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_HISTEDIT_H=Off -DHAVE_LIBEDIT=Off
 ifeq ($(LLVM_ASSERTIONS), 1)
@@ -155,6 +167,10 @@ endif # LLVM_LTO
 ifeq ($(fPIC),)
 LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
 endif
+
+# disable ABI breaking checks: by default only enabled for asserts build, in which case
+# it is then impossible to call non-asserts LLVM libraries (like out-of-tree backends)
+LLVM_CMAKE += -DLLVM_ABI_BREAKING_CHECKS=FORCE_OFF
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LLVM_LDFLAGS += -Wl,-rpath,$(build_libdir)
@@ -400,6 +416,7 @@ ifeq ($(LLVM_VER_SHORT),9.0)
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
 $(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
 $(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
+$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
 $(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
 $(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
@@ -416,6 +433,7 @@ ifeq ($(LLVM_VER_SHORT),10.0)
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
 $(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
 $(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
+$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
 $(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
 $(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
 $(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build

@@ -242,7 +242,7 @@ an array and returns a new array containing the resulting values:
 
 ```jldoctest
 julia> map(round, [1.2, 3.5, 1.7])
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  1.0
  4.0
  2.0
@@ -255,7 +255,7 @@ without needing a name:
 
 ```jldoctest
 julia> map(x -> x^2 + 2x - 1, [1, 3, -1])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   2
  14
  -2
@@ -399,7 +399,7 @@ would be a two-argument function, and this example would not work.
 
 It is often convenient to be able to write functions taking an arbitrary number of arguments.
 Such functions are traditionally known as "varargs" functions, which is short for "variable number
-of arguments". You can define a varargs function by following the last argument with an ellipsis:
+of arguments". You can define a varargs function by following the last positional argument with an ellipsis:
 
 ```jldoctest barfunc
 julia> bar(a,b,x...) = (a,b,x)
@@ -462,7 +462,7 @@ Furthermore, the iterable object splatted into a function call need not be a tup
 
 ```jldoctest barfunc
 julia> x = [3,4]
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  3
  4
 
@@ -470,7 +470,7 @@ julia> bar(1,2,x...)
 (1, 2, (3, 4))
 
 julia> x = [1,2,3,4]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  3
@@ -487,7 +487,7 @@ often is):
 julia> baz(a,b) = a + b;
 
 julia> args = [1,2]
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
@@ -495,7 +495,7 @@ julia> baz(args...)
 3
 
 julia> args = [1,2,3]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -586,6 +586,14 @@ function f(;x::Int=1)
 end
 ```
 
+Keyword arguments can also be used in varargs functions:
+
+```julia
+function plot(x...; style="solid")
+    ###
+end
+```
+
 Extra keyword arguments can be collected using `...`, as in varargs functions:
 
 ```julia
@@ -594,9 +602,9 @@ function f(x; y=0, kwargs...)
 end
 ```
 
-Inside `f`, `kwargs` will be a key-value iterator over a named tuple. Named
-tuples (as well as dictionaries with keys of `Symbol`) can be passed as keyword
-arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
+Inside `f`, `kwargs` will be an immutable key-value iterator over a named tuple.
+Named tuples (as well as dictionaries with keys of `Symbol`) can be passed as
+keyword arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
 
 If a keyword argument is not assigned a default value in the method definition,
 then it is *required*: an [`UndefKeywordError`](@ref) exception will be thrown
@@ -739,7 +747,7 @@ The next example composes three functions and maps the result over an array of s
 
 ```jldoctest
 julia> map(first ∘ reverse ∘ uppercase, split("you can compose functions like this"))
-6-element Array{Char,1}:
+6-element Vector{Char}:
  'U': ASCII/Unicode U+0055 (category Lu: Letter, uppercase)
  'N': ASCII/Unicode U+004E (category Lu: Letter, uppercase)
  'E': ASCII/Unicode U+0045 (category Lu: Letter, uppercase)
@@ -766,7 +774,7 @@ The pipe operator can also be used with broadcasting, as `.|>`, to provide a use
 
 ```jldoctest
 julia> ["a", "list", "of", "strings"] .|> [uppercase, reverse, titlecase, length]
-4-element Array{Any,1}:
+4-element Vector{Any}:
   "A"
   "tsil"
   "Of"
@@ -787,13 +795,13 @@ For example, `sin` can be applied to all elements in the vector `A` like so:
 
 ```jldoctest
 julia> A = [1.0, 2.0, 3.0]
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  1.0
  2.0
  3.0
 
 julia> sin.(A)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  0.8414709848078965
  0.9092974268256817
  0.1411200080598672
@@ -818,13 +826,13 @@ julia> A = [1.0, 2.0, 3.0];
 julia> B = [4.0, 5.0, 6.0];
 
 julia> f.(pi, A)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  13.42477796076938
  17.42477796076938
  21.42477796076938
 
 julia> f.(A, B)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  19.0
  26.0
  33.0
@@ -861,7 +869,7 @@ julia> Y = [1.0, 2.0, 3.0, 4.0];
 julia> X = similar(Y); # pre-allocate output array
 
 julia> @. X = sin(cos(Y)) # equivalent to X .= sin.(cos.(Y))
-4-element Array{Float64,1}:
+4-element Vector{Float64}:
   0.5143952585235492
  -0.4042391538522658
  -0.8360218615377305
@@ -876,7 +884,7 @@ they are equivalent to `broadcast` calls and are fused with other nested "dot" c
 You can also combine dot operations with function chaining using [`|>`](@ref), as in this example:
 ```jldoctest
 julia> [1:5;] .|> [x->x^2, inv, x->2*x, -, isodd]
-5-element Array{Real,1}:
+5-element Vector{Real}:
     1
     0.5
     6

@@ -67,17 +67,19 @@ struct TaskFailedException <: Exception
 end
 
 function showerror(io::IO, ex::TaskFailedException)
-    stacks = []
-    while isa(ex.task.exception, TaskFailedException)
-        pushfirst!(stacks, ex.task.backtrace)
-        ex = ex.task.exception
-    end
     println(io, "TaskFailedException:")
-    showerror(io, ex.task.exception, ex.task.backtrace)
-    if !isempty(stacks)
-        for bt in stacks
-            show_backtrace(io, bt)
-        end
+    show_task_exception(io, ex.task)
+end
+
+function show_task_exception(io::IO, t::Task)
+    stacks = []
+    while isa(t.exception, TaskFailedException)
+        pushfirst!(stacks, t.backtrace)
+        t = t.exception.task
+    end
+    showerror(io, t.exception, t.backtrace)
+    for bt in stacks
+        show_backtrace(io, bt)
     end
 end
 
@@ -286,15 +288,14 @@ end
 
 ## lexically-scoped waiting for multiple items
 
-function sync_end(refs)
+function sync_end(c::Channel{Any})
     local c_ex
-    defined = false
-    for r in refs
+    while isready(c)
+        r = take!(c)
         if isa(r, Task)
             _wait(r)
             if istaskfailed(r)
-                if !defined
-                    defined = true
+                if !@isdefined(c_ex)
                     c_ex = CompositeException()
                 end
                 push!(c_ex, TaskFailedException(r))
@@ -303,16 +304,15 @@ function sync_end(refs)
             try
                 wait(r)
             catch e
-                if !defined
-                    defined = true
+                if !@isdefined(c_ex)
                     c_ex = CompositeException()
                 end
                 push!(c_ex, e)
             end
         end
     end
-
-    if defined
+    close(c)
+    if @isdefined(c_ex)
         throw(c_ex)
     end
     nothing
@@ -330,7 +330,7 @@ a `CompositeException`.
 macro sync(block)
     var = esc(sync_varname)
     quote
-        let $var = Any[]
+        let $var = Channel(Inf)
             v = $(esc(block))
             sync_end($var)
             v
@@ -361,7 +361,7 @@ macro async(expr)
         let $(letargs...)
             local task = Task($thunk)
             if $(Expr(:islocal, var))
-                push!($var, task)
+                put!($var, task)
             end
             schedule(task)
             task
@@ -403,7 +403,7 @@ macro sync_add(expr)
     var = esc(sync_varname)
     quote
         local ref = $(esc(expr))
-        push!($var, ref)
+        put!($var, ref)
         ref
     end
 end

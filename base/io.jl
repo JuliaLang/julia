@@ -68,8 +68,13 @@ function bytesavailable end
 """
     readavailable(stream)
 
-Read all available data on the stream, blocking the task only if no data is available. The
-result is a `Vector{UInt8}`.
+Read available buffered data from a stream. Actual I/O is performed only if no
+data has already been buffered. The result is a `Vector{UInt8}`.
+
+!!! warning
+    The amount of data returned is implementation-dependent; for example it can
+depend on the internal choice of buffer size. Other functions such as [`read`](@ref)
+should generally be used instead.
 """
 function readavailable end
 
@@ -251,13 +256,15 @@ function unsafe_read(s::IO, p::Ptr{UInt8}, n::UInt)
     nothing
 end
 
-function peek(s::IO)
+function peek(s::IO, ::Type{T}) where T
     mark(s)
-    try read(s, UInt8)
+    try read(s, T)
     finally
         reset(s)
     end
 end
+
+peek(s) = peek(s, UInt8)
 
 # Generic `open` methods
 
@@ -326,39 +333,59 @@ function open(f::Function, args...; kwargs...)
     end
 end
 
-# Generic wrappers around other IO objects
+"""
+    AbstractPipe
+
+`AbstractPipe` is the abstract supertype for IO pipes that provide for communication between processes.
+
+If `pipe isa AbstractPipe`, it must obey the following interface:
+
+- `pipe.in` or `pipe.in_stream`, if present, must be of type `IO` and be used to provide input to the pipe
+- `pipe.out` or `pipe.out_stream`, if present, must be of type `IO` and be used for output from the pipe
+- `pipe.err` or `pipe.err_stream`, if present, must be of type `IO` and be used for writing errors from the pipe
+"""
 abstract type AbstractPipe <: IO end
+
+function getproperty(pipe::AbstractPipe, name::Symbol)
+    if name === :in || name === :in_stream || name === :out || name === :out_stream ||
+       name === :err || name === :err_stream
+        return getfield(pipe, name)::IO
+    end
+    return getfield(pipe, name)
+end
+
 function pipe_reader end
 function pipe_writer end
 
-write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io), byte)
-unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writer(io), p, nb)
-buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io), args...)
-flush(io::AbstractPipe) = flush(pipe_writer(io))
+write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io)::IO, byte)
+unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writer(io)::IO, p, nb)
+buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io)::IO, args...)
+flush(io::AbstractPipe) = flush(pipe_writer(io)::IO)
 
-read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io), byte)
-unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io), p, nb)
-read(io::AbstractPipe) = read(pipe_reader(io))
-readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io), arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io), arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io), arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io), arg; kw...)
-readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io), target, keep, out)
-readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = readbytes!(pipe_reader(io), target, n)
+read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io)::IO, byte)
+unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io)::IO, p, nb)
+read(io::AbstractPipe) = read(pipe_reader(io)::IO)
+readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
+readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
+readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
+readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
+readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io)::IO, target, keep, out)
+readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = readbytes!(pipe_reader(io)::IO, target, n)
 
 for f in (
         # peek/mark interface
-        :peek, :mark, :unmark, :reset, :ismarked,
+        :mark, :unmark, :reset, :ismarked,
         # Simple reader functions
         :readavailable, :isreadable)
-    @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io))
+    @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io)::IO)
 end
+peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io)::IO, T)
 
-iswritable(io::AbstractPipe) = iswritable(pipe_writer(io))
-isopen(io::AbstractPipe) = isopen(pipe_writer(io)) || isopen(pipe_reader(io))
-close(io::AbstractPipe) = (close(pipe_writer(io)); close(pipe_reader(io)))
-wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io), nb)
-wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)); wait_close(pipe_reader(io)))
+iswritable(io::AbstractPipe) = iswritable(pipe_writer(io)::IO)
+isopen(io::AbstractPipe) = isopen(pipe_writer(io)::IO) || isopen(pipe_reader(io)::IO)
+close(io::AbstractPipe) = (close(pipe_writer(io)::IO); close(pipe_reader(io)::IO))
+wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io)::IO, nb)
+wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)::IO); wait_close(pipe_reader(io)::IO))
 
 """
     bytesavailable(io)
@@ -373,7 +400,7 @@ julia> bytesavailable(io)
 34
 ```
 """
-bytesavailable(io::AbstractPipe) = bytesavailable(pipe_reader(io))
+bytesavailable(io::AbstractPipe) = bytesavailable(pipe_reader(io)::IO)
 
 """
     eof(stream) -> Bool
@@ -384,8 +411,8 @@ it is always safe to read one byte after seeing `eof` return `false`. `eof` will
 `false` as long as buffered data is still available, even if the remote end of a connection
 is closed.
 """
-eof(io::AbstractPipe) = eof(pipe_reader(io))
-reseteof(io::AbstractPipe) = reseteof(pipe_reader(io))
+eof(io::AbstractPipe) = eof(pipe_reader(io)::IO)::Bool
+reseteof(io::AbstractPipe) = reseteof(pipe_reader(io)::IO)
 
 
 # Exception-safe wrappers (io = open(); try f(io) finally close(io))
@@ -476,8 +503,8 @@ function readline(filename::AbstractString; keep::Bool=false)
     end
 end
 
-function readline(s::IO=stdin; keep::Bool=false)::String
-    line = readuntil(s, 0x0a, keep=true)
+function readline(s::IO=stdin; keep::Bool=false)
+    line = readuntil(s, 0x0a, keep=true)::Vector{UInt8}
     i = length(line)
     if keep || i == 0 || line[i] != 0x0a
         return String(line)
@@ -504,12 +531,12 @@ julia> open("my_file.txt", "w") do io
 57
 
 julia> readlines("my_file.txt")
-2-element Array{String,1}:
+2-element Vector{String}:
  "JuliaLang is a GitHub organization."
  "It has many members."
 
 julia> readlines("my_file.txt", keep=true)
-2-element Array{String,1}:
+2-element Vector{String}:
  "JuliaLang is a GitHub organization.\\n"
  "It has many members.\\n"
 
@@ -739,7 +766,7 @@ end
 
 # readuntil_string is useful below since it has
 # an optimized method for s::IOStream
-readuntil_string(s::IO, delim::UInt8, keep::Bool) = String(readuntil(s, delim, keep=keep))
+readuntil_string(s::IO, delim::UInt8, keep::Bool) = String(readuntil(s, delim, keep=keep))::String
 
 function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
     if delim ≤ '\x7f'

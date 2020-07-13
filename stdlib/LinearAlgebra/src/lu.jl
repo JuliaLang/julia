@@ -23,18 +23,18 @@ Iterating the factorization produces the components `F.L`, `F.U`, and `F.p`.
 # Examples
 ```jldoctest
 julia> A = [4 3; 6 3]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  6  3
 
 julia> F = lu(A)
-LU{Float64,Array{Float64,2}}
+LU{Float64,Matrix{Float64}}
 L factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0       0.0
  0.666667  1.0
 U factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  6.0  3.0
  0.0  1.0
 
@@ -101,23 +101,23 @@ element type of `A`, e.g. for integer types.
 # Examples
 ```jldoctest
 julia> A = [4. 3.; 6. 3.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  4.0  3.0
  6.0  3.0
 
 julia> F = lu!(A)
-LU{Float64,Array{Float64,2}}
+LU{Float64,Matrix{Float64}}
 L factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0       0.0
  0.666667  1.0
 U factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  6.0  3.0
  0.0  1.0
 
 julia> iA = [4 3; 6 3]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  6  3
 
@@ -140,9 +140,9 @@ function generic_lufact!(A::StridedMatrix{T}, ::Val{Pivot} = Val(true);
             # find index max
             kp = k
             if Pivot
-                amax = norm(zero(T))
+                amax = abs(zero(T))
                 for i = k:m
-                    absi = norm(A[i,k])
+                    absi = abs(A[i,k])
                     if absi > amax
                         kp = i
                         amax = absi
@@ -243,18 +243,18 @@ The relationship between `F` and `A` is
 # Examples
 ```jldoctest
 julia> A = [4 3; 6 3]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  6  3
 
 julia> F = lu(A)
-LU{Float64,Array{Float64,2}}
+LU{Float64,Matrix{Float64}}
 L factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0       0.0
  0.666667  1.0
 U factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  6.0  3.0
  0.0  1.0
 

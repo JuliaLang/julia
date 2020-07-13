@@ -68,7 +68,9 @@ ndims(x::Number) = 0
 ndims(::Type{<:Number}) = 0
 length(x::Number) = 1
 firstindex(x::Number) = 1
+firstindex(x::Number, d::Int) = d < 1 ? throw(BoundsError()) : 1
 lastindex(x::Number) = 1
+lastindex(x::Number, d::Int) = d < 1 ? throw(BoundsError()) : 1
 IteratorSize(::Type{<:Number}) = HasShape{0}()
 keys(::Number) = OneTo(1)
 
@@ -233,7 +235,7 @@ julia> zero(big"2.0")
 0.0
 
 julia> zero(rand(2,2))
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.0  0.0
  0.0  0.0
 ```

@@ -29,7 +29,7 @@ Base.print(io::IO, x::Enum) = print(io, Symbol(x))
 
 function Base.show(io::IO, x::Enum)
     sym = Symbol(x)
-    if !get(io, :compact, false)
+    if !(get(io, :compact, false)::Bool)
         from = get(io, :module, Main)
         def = typeof(x).name.module
         if from === nothing || !Base.isvisible(sym, def, from)
@@ -106,7 +106,8 @@ end
 
 `BaseType`, which defaults to [`Int32`](@ref), must be a primitive subtype of `Integer`.
 Member values can be converted between the enum type and `BaseType`. `read` and `write`
-perform these conversions automatically.
+perform these conversions automatically. In case the enum is created with a non-default
+`BaseType`, `Integer(value1)` will return the integer `value1` with the type `BaseType`.
 
 To list all the instances of an enum use `instances`, e.g.
 
@@ -159,6 +160,7 @@ macro enum(T, syms...)
         else
             throw(ArgumentError(string("invalid argument for Enum ", typename, ": ", s)))
         end
+        s = s::Symbol
         if !Base.isidentifier(s)
             throw(ArgumentError("invalid name for Enum $typename; \"$s\" is not a valid identifier"))
         end

@@ -5,6 +5,7 @@ abstract type AbstractTime end
 """
     Period
     Year
+    Quarter
     Month
     Week
     Day
@@ -21,7 +22,7 @@ abstract type Period     <: AbstractTime end
 abstract type DatePeriod <: Period end
 abstract type TimePeriod <: Period end
 
-for T in (:Year, :Month, :Week, :Day)
+for T in (:Year, :Quarter, :Month, :Week, :Day)
     @eval struct $T <: DatePeriod
         value::Int64
         $T(v::Number) = new(v)
@@ -36,6 +37,7 @@ end
 
 """
     Year(v)
+    Quarter(v)
     Month(v)
     Week(v)
     Day(v)
@@ -83,7 +85,21 @@ abstract type Calendar <: AbstractTime end
 # ISOCalendar provides interpretation rules for UTInstants to civil date and time parts
 struct ISOCalendar <: Calendar end
 
+"""
+    TimeZone
+
+Geographic zone generally based on longitude determining what the time is at a certain location.
+Some time zones observe daylight savings (eg EST -> EDT).
+For implementations and more support, see the [`TimeZones.jl`](https://github.com/JuliaTime/TimeZones.jl) package
+"""
 abstract type TimeZone end
+
+"""
+    UTC
+
+`UTC`, or Coordinated Universal Time, is the [`TimeZone`](@ref) from which all others are measured.
+It is associated with the time at 0° longitude. It is not adjusted for daylight savings.
+"""
 struct UTC <: TimeZone end
 
 """

@@ -606,13 +606,13 @@ end
 end
 
 @testset "special printing of Lower/UpperTriangular" begin
-    @test occursin(r"3×3 (LinearAlgebra\.)?LowerTriangular{Int64,Array{Int64,2}}:\n 2  ⋅  ⋅\n 2  2  ⋅\n 2  2  2",
+    @test occursin(r"3×3 (LinearAlgebra\.)?LowerTriangular{Int64,Matrix{Int64}}:\n 2  ⋅  ⋅\n 2  2  ⋅\n 2  2  2",
                    sprint(show, MIME"text/plain"(), LowerTriangular(2ones(Int64,3,3))))
-    @test occursin(r"3×3 (LinearAlgebra\.)?UnitLowerTriangular{Int64,Array{Int64,2}}:\n 1  ⋅  ⋅\n 2  1  ⋅\n 2  2  1",
+    @test occursin(r"3×3 (LinearAlgebra\.)?UnitLowerTriangular{Int64,Matrix{Int64}}:\n 1  ⋅  ⋅\n 2  1  ⋅\n 2  2  1",
                    sprint(show, MIME"text/plain"(), UnitLowerTriangular(2ones(Int64,3,3))))
-    @test occursin(r"3×3 (LinearAlgebra\.)?UpperTriangular{Int64,Array{Int64,2}}:\n 2  2  2\n ⋅  2  2\n ⋅  ⋅  2",
+    @test occursin(r"3×3 (LinearAlgebra\.)?UpperTriangular{Int64,Matrix{Int64}}:\n 2  2  2\n ⋅  2  2\n ⋅  ⋅  2",
                    sprint(show, MIME"text/plain"(), UpperTriangular(2ones(Int64,3,3))))
-    @test occursin(r"3×3 (LinearAlgebra\.)?UnitUpperTriangular{Int64,Array{Int64,2}}:\n 1  2  2\n ⋅  1  2\n ⋅  ⋅  1",
+    @test occursin(r"3×3 (LinearAlgebra\.)?UnitUpperTriangular{Int64,Matrix{Int64}}:\n 1  2  2\n ⋅  1  2\n ⋅  ⋅  1",
                    sprint(show, MIME"text/plain"(), UnitUpperTriangular(2ones(Int64,3,3))))
 end
 
@@ -651,4 +651,9 @@ end
     @test_throws ArgumentError LinearAlgebra.powm(A, 2.2)
 end
 
+# Issue 35058
+let A = [0.9999999999999998 4.649058915617843e-16 -1.3149405273715513e-16 9.9959579317056e-17; -8.326672684688674e-16 1.0000000000000004 2.9280733590254494e-16 -2.9993900031619594e-16; 9.43689570931383e-16 -1.339206523454095e-15 1.0000000000000007 -8.550505126287743e-16; -6.245004513516506e-16 -2.0122792321330962e-16 1.183061278035052e-16 1.0000000000000002],
+    B = [0.09648289218436859 0.023497875751503007 0.0 0.0; 0.023497875751503007 0.045787575150300804 0.0 0.0; 0.0 0.0 0.0 0.0; 0.0 0.0 0.0 0.0]
+    @test sqrt(A*B*A')^2 ≈ A*B*A'
+end
 end # module TestTriangular

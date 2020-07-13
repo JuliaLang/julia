@@ -150,6 +150,12 @@ end
         @test Dates.second(dt2) == 45
         @test Dates.millisecond(dt2) == 500
     end
+    @testset "DateTime-Quarter arithmetic" begin
+        dt = Dates.DateTime(1999, 12, 27)
+        @test dt + Dates.Quarter(1) == Dates.DateTime(2000, 3, 27)
+        @test dt + Dates.Quarter(-1) == Dates.DateTime(1999, 9, 27)
+    end
+
     @testset "DateTime-Month arithmetic" begin
         dt = Dates.DateTime(1999, 12, 27)
         @test dt + Dates.Month(1) == Dates.DateTime(2000, 1, 27)
@@ -265,6 +271,11 @@ end
         @test dt - Dates.Year(1) == Dates.Date(1999, 2, 28)
         @test dt + Dates.Year(4) == Dates.Date(2004, 2, 29)
         @test dt - Dates.Year(4) == Dates.Date(1996, 2, 29)
+    end
+    @testset "Date-Quarter arithmetic" begin
+        dt = Dates.Date(1999, 12, 27)
+        @test dt + Dates.Quarter(1) == Dates.Date(2000, 3, 27)
+        @test dt - Dates.Quarter(1) == Dates.Date(1999, 9, 27)
     end
     @testset "Date-Month arithmetic" begin
         dt = Dates.Date(1999, 12, 27)

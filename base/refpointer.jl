@@ -33,7 +33,7 @@ A `C_NULL` instance of `Ptr` can be passed to a `ccall` Ref argument to initiali
 
 ```jldoctest
 julia> isa.(Ref([1,2,3]), [Array, Dict, Int])
-3-element BitArray{1}:
+3-element BitVector:
  1
  0
  0
@@ -165,9 +165,13 @@ setindex!(b::RefArray, x) = (b.x[b.i] = x; b)
 ###
 
 """
-    AddrSpacePtr{T, AS}
+    LLVMPtr{T, AS}
 
-When passed as a `ccall` argument with the `llvmcall` calling convention, an `AddrSpacePtr` will be converted to an LLVM pointer type with the correct address space.
-This type is mainly used to ensure Julia's codegen uses the correct address space when calling LLVM intrinsics.
+A pointer type that more closely resembles LLVM semantics: It includes the pointer address
+space, and will be passed as an actual pointer instead of an integer.
+
+This type is mainly used to interface with code that has strict requirements about pointers,
+e.g., intrinsics that are selected based on the address space, or back-ends that require
+pointers to be identifiable by their types.
 """
-Core.AddrSpacePtr
+Core.LLVMPtr

@@ -93,7 +93,7 @@ const SpawnIOs = Vector{Any} # convenience name for readability
         cmd.flags,
         cmd.env === nothing ? C_NULL : cmd.env,
         isempty(cmd.dir) ? C_NULL : cmd.dir,
-        uv_jl_return_spawn::Ptr{Cvoid})
+        @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32)))
     if err != 0
         ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually
         throw(_UVError("could not spawn " * repr(cmd), err))

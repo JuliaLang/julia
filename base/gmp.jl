@@ -10,7 +10,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              sum, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             sign, hastypemax
+             sign, hastypemax, isodd
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -342,6 +342,8 @@ end
 
 rem(x::Integer, ::Type{BigInt}) = BigInt(x)
 
+isodd(x::BigInt) = MPZ.tstbit(x, 0)
+
 function (::Type{T})(x::BigInt) where T<:Base.BitUnsigned
     if sizeof(T) < sizeof(Limb)
         convert(T, convert(Limb,x))
@@ -458,7 +460,8 @@ promote_rule(::Type{BigInt}, ::Type{<:Integer}) = BigInt
     big(x)
 
 Convert a number to a maximum precision representation (typically [`BigInt`](@ref) or
-`BigFloat`). See [`BigFloat`](@ref) for information about some pitfalls with floating-point numbers.
+`BigFloat`). See [`BigFloat`](@ref BigFloat(::Any, rounding::RoundingMode)) for
+information about some pitfalls with floating-point numbers.
 """
 function big end
 

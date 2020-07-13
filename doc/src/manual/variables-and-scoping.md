@@ -630,7 +630,7 @@ julia> const y = 1.0
 1.0
 
 julia> y = 2.0
-WARNING: redefining constant y
+WARNING: redefinition of constant y. This may fail, cause incorrect answers, or produce other errors.
 2.0
 ```
 * if an assignment would not result in the change of variable value no message is given:
@@ -641,7 +641,7 @@ julia> const z = 100
 julia> z = 100
 100
 ```
-The last rule applies for immutable objects even if the variable binding would change, e.g.:
+The last rule applies to immutable objects even if the variable binding would change, e.g.:
 ```julia-repl
 julia> const s1 = "1"
 "1"
@@ -665,12 +665,12 @@ julia> pointer.([s1, s2], 1)
 However, for mutable objects the warning is printed as expected:
 ```jldoctest
 julia> const a = [1]
-1-element Array{Int64,1}:
+1-element Vector{Int64}:
  1
 
 julia> a = [1]
-WARNING: redefining constant a
-1-element Array{Int64,1}:
+WARNING: redefinition of constant a. This may fail, cause incorrect answers, or produce other errors.
+1-element Vector{Int64}:
  1
 ```
 
@@ -690,7 +690,7 @@ julia> f()
 1
 
 julia> x = 2
-WARNING: redefining constant x
+WARNING: redefinition of constant x. This may fail, cause incorrect answers, or produce other errors.
 2
 
 julia> f()

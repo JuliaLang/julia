@@ -353,8 +353,13 @@ const exprresolve_cond_dict = Dict{Symbol,Function}(:(==) => ==,
     :(<) => <, :(>) => >, :(<=) => <=, :(>=) => >=)
 
 function exprresolve_arith(ex::Expr)
-    if ex.head === :call && haskey(exprresolve_arith_dict, ex.args[1]) && all([isa(ex.args[i], Number) for i = 2:length(ex.args)])
-        return true, exprresolve_arith_dict[ex.args[1]](ex.args[2:end]...)
+    if ex.head === :call
+        callee = ex.args[1]
+        if isa(callee, Symbol)
+            if haskey(exprresolve_arith_dict, callee) && all(Bool[isa(ex.args[i], Number) for i = 2:length(ex.args)])
+                return true, exprresolve_arith_dict[callee](ex.args[2:end]...)
+            end
+        end
     end
     false, 0
 end
@@ -362,8 +367,13 @@ exprresolve_arith(arg) = false, 0
 
 exprresolve_conditional(b::Bool) = true, b
 function exprresolve_conditional(ex::Expr)
-    if ex.head === :call && ex.args[1] ∈ keys(exprresolve_cond_dict) && isa(ex.args[2], Number) && isa(ex.args[3], Number)
-        return true, exprresolve_cond_dict[ex.args[1]](ex.args[2], ex.args[3])
+    if ex.head === :call
+        callee = ex.args[1]
+        if isa(callee, Symbol)
+            if callee ∈ keys(exprresolve_cond_dict) && isa(ex.args[2], Number) && isa(ex.args[3], Number)
+                return true, exprresolve_cond_dict[callee](ex.args[2], ex.args[3])
+            end
+        end
     end
     false, false
 end

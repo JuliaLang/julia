@@ -663,7 +663,7 @@ Further, if `x` defines its own [`BroadcastStyle`](@ref), then it must define it
 # Examples
 ```jldoctest
 julia> Broadcast.broadcastable([1,2,3]) # like `identity` since arrays already support axes and indexing
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -724,7 +724,7 @@ single broadcast loop.
 # Examples
 ```jldoctest
 julia> A = [1, 2, 3, 4, 5]
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  3
@@ -732,7 +732,7 @@ julia> A = [1, 2, 3, 4, 5]
  5
 
 julia> B = [1 2; 3 4; 5 6; 7 8; 9 10]
-5×2 Array{Int64,2}:
+5×2 Matrix{Int64}:
  1   2
  3   4
  5   6
@@ -740,7 +740,7 @@ julia> B = [1 2; 3 4; 5 6; 7 8; 9 10]
  9  10
 
 julia> broadcast(+, A, B)
-5×2 Array{Int64,2}:
+5×2 Matrix{Int64}:
   2   3
   5   6
   8   9
@@ -748,7 +748,7 @@ julia> broadcast(+, A, B)
  14  15
 
 julia> parse.(Int, ["1", "2"])
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
@@ -759,12 +759,12 @@ julia> broadcast(+, 1.0, (0, -2.0))
 (1.0, -1.0)
 
 julia> (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1]))
-2-element Array{Array{Int64,1},1}:
+2-element Vector{Vector{Int64}}:
  [1, 1]
  [2, 2]
 
 julia> string.(("one","two","three","four"), ": ", 1:4)
-4-element Array{String,1}:
+4-element Vector{String}:
  "one: 1"
  "two: 2"
  "three: 3"
@@ -794,19 +794,19 @@ julia> A = [1.0; 0.0]; B = [0.0; 0.0];
 julia> broadcast!(+, B, A, (0, -2.0));
 
 julia> B
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   1.0
  -2.0
 
 julia> A
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
  1.0
  0.0
 
 julia> broadcast!(+, A, A, (0, -2.0));
 
 julia> A
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   1.0
  -2.0
 ```
@@ -1195,6 +1195,9 @@ function __dot__(x::Expr)
     elseif (x.head === :(=) || x.head === :function || x.head === :macro) &&
            Meta.isexpr(x.args[1], :call) # function or macro definition
         Expr(x.head, x.args[1], dotargs[2])
+    elseif x.head === :(<:) || x.head === :(>:)
+        tmp = x.head === :(<:) ? :(.<:) : :(.>:)
+        Expr(:call, tmp, dotargs...)
     else
         if x.head === :&& || x.head === :||
             error("""
@@ -1229,7 +1232,7 @@ If you want to *avoid* adding dots for selected function calls in
 julia> x = 1.0:3.0; y = similar(x);
 
 julia> @. y = x + 3 * sin(x)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  3.5244129544236893
  4.727892280477045
  3.4233600241796016

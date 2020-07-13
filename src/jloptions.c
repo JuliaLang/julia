@@ -149,7 +149,7 @@ static const char opts[]  =
 
 static const char opts_hidden[]  =
     // code generation options
-    " --compile={yes|no|all|min}Enable or disable JIT compiler, or request exhaustive compilation\n"
+    " --compile={yes|no|all|min}Enable or disable JIT compiler, or request exhaustive or minimal compilation\n"
 
     // compiler output options
     " --output-o name           Generate an object file (including system image data)\n"
@@ -161,8 +161,8 @@ static const char opts_hidden[]  =
     " --output-bc name          Generate LLVM bitcode (.bc)\n"
     " --output-asm name         Generate an assembly file (.s)\n"
     " --output-incremental=no   Generate an incremental output file (rather than complete)\n"
-    " --trace-compile={stdout,stderr}\n"
-    "                           Print precompile statements for methods compiled during execution.\n\n"
+    " --trace-compile={stderr,name}\n"
+    "                           Print precompile statements for methods compiled during execution or save to a path\n\n"
 ;
 
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)

@@ -93,6 +93,9 @@ of inputs. In the event a test fails, the default behavior is to throw an except
 However, it is normally preferable to run the rest of the tests first to get a better picture
 of how many errors there are in the code being tested.
 
+!!! note
+    The `@testset` will create a local scope of its own when running the tests in it.
+
 The `@testset` macro can be used to group tests into *sets*. All the tests in a test set will
 be run, and at the end of the test set a summary will be printed. If any of the tests failed,
 or could not be evaluated due to an error, the test set will then throw a `TestSetException`.

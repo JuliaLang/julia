@@ -22,12 +22,12 @@ This type is intended for linear algebra usage - for general data manipulation s
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 
 julia> adjoint(A)
-2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:
+2×2 Adjoint{Complex{Int64},Matrix{Complex{Int64}}}:
  3-2im  8-7im
  9-2im  4-6im
 ```
@@ -53,12 +53,12 @@ This type is intended for linear algebra usage - for general data manipulation s
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 
 julia> transpose(A)
-2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:
+2×2 Transpose{Complex{Int64},Matrix{Complex{Int64}}}:
  3+2im  8+7im
  9+2im  4+6im
 ```
@@ -115,17 +115,17 @@ This operation is intended for linear algebra usage - for general data manipulat
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 
 julia> adjoint(A)
-2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:
+2×2 Adjoint{Complex{Int64},Matrix{Complex{Int64}}}:
  3-2im  8-7im
  9-2im  4-6im
 
 julia> x = [3, 4im]
-2-element Array{Complex{Int64},1}:
+2-element Vector{Complex{Int64}}:
  3 + 0im
  0 + 4im
 
@@ -148,12 +148,12 @@ This operation is intended for linear algebra usage - for general data manipulat
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 
 julia> transpose(A)
-2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:
+2×2 Transpose{Complex{Int64},Matrix{Complex{Int64}}}:
  3+2im  8+7im
  9+2im  4+6im
 ```
@@ -198,6 +198,19 @@ IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
 convert(::Type{Adjoint{T,S}}, A::Adjoint) where {T,S} = Adjoint{T,S}(convert(S, A.parent))
 convert(::Type{Transpose{T,S}}, A::Transpose) where {T,S} = Transpose{T,S}(convert(S, A.parent))
 
+# Strides and pointer for transposed strided arrays — but only if the elements are actually stored in memory
+Base.strides(A::Adjoint{<:Real, <:AbstractVector}) = (stride(A.parent, 2), stride(A.parent, 1))
+Base.strides(A::Transpose{<:Any, <:AbstractVector}) = (stride(A.parent, 2), stride(A.parent, 1))
+# For matrices it's slightly faster to use reverse and avoid calling stride twice
+Base.strides(A::Adjoint{<:Real, <:AbstractMatrix}) = reverse(strides(A.parent))
+Base.strides(A::Transpose{<:Any, <:AbstractMatrix}) = reverse(strides(A.parent))
+
+Base.unsafe_convert(::Type{Ptr{T}}, A::Adjoint{<:Real, <:AbstractVecOrMat}) where {T} = Base.unsafe_convert(Ptr{T}, A.parent)
+Base.unsafe_convert(::Type{Ptr{T}}, A::Transpose{<:Any, <:AbstractVecOrMat}) where {T} = Base.unsafe_convert(Ptr{T}, A.parent)
+
+Base.elsize(::Type{<:Adjoint{<:Real, P}}) where {P<:AbstractVecOrMat} = Base.elsize(P)
+Base.elsize(::Type{<:Transpose{<:Any, P}}) where {P<:AbstractVecOrMat} = Base.elsize(P)
+
 # for vectors, the semantics of the wrapped and unwrapped types differ
 # so attempt to maintain both the parent and wrapper type insofar as possible
 similar(A::AdjOrTransAbsVec) = wrapperop(A)(similar(A.parent))
@@ -211,6 +224,7 @@ similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent,
 # sundry basic definitions
 parent(A::AdjOrTrans) = A.parent
 vec(v::TransposeAbsVec) = parent(v)
+vec(v::AdjointAbsVec{<:Real}) = parent(v)
 
 ### concatenation
 # preserve Adjoint/Transpose wrapper around vectors

@@ -224,7 +224,7 @@ julia> lstrip(a)
 """
 function lstrip(f, s::AbstractString)
     e = lastindex(s)
-    for (i, c) in pairs(s)
+    for (i::Int, c::AbstractChar) in pairs(s)
         !f(c) && return @inbounds SubString(s, i, e)
     end
     SubString(s, e+1, e)
@@ -369,7 +369,7 @@ julia> a = "Ma.rch"
 "Ma.rch"
 
 julia> split(a, ".")
-2-element Array{SubString{String},1}:
+2-element Vector{SubString{String}}:
  "Ma"
  "rch"
 ```
@@ -392,8 +392,8 @@ end
 function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
     i = 1 # firstindex(str)
     n = lastindex(str)
-    r = something(findfirst(splitter,str), 0)
-    if r != 0:-1
+    r = findfirst(splitter,str)
+    if !isnothing(r)
         j, k = first(r), nextind(str,last(r))
         while 0 < j <= n && length(strs) != limit-1
             if i < k
@@ -403,8 +403,8 @@ function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, 
                 i = k
             end
             (k <= j) && (k = nextind(str,j))
-            r = something(findnext(splitter,str,k), 0)
-            r == 0:-1 && break
+            r = findnext(splitter,str,k)
+            isnothing(r) && break
             j, k = first(r), nextind(str,last(r))
         end
     end
@@ -431,7 +431,7 @@ julia> a = "M.a.r.c.h"
 "M.a.r.c.h"
 
 julia> rsplit(a, ".")
-5-element Array{SubString{String},1}:
+5-element Vector{SubString{String}}:
  "M"
  "a"
  "r"
@@ -439,11 +439,11 @@ julia> rsplit(a, ".")
  "h"
 
 julia> rsplit(a, "."; limit=1)
-1-element Array{SubString{String},1}:
+1-element Vector{SubString{String}}:
  "M.a.r.c.h"
 
 julia> rsplit(a, "."; limit=2)
-2-element Array{SubString{String},1}:
+2-element Vector{SubString{String}}:
  "M.a.r.c"
  "h"
 ```
@@ -582,7 +582,7 @@ julia> s = string(12345, base = 16)
 "3039"
 
 julia> hex2bytes(s)
-2-element Array{UInt8,1}:
+2-element Vector{UInt8}:
  0x30
  0x39
 
@@ -596,7 +596,7 @@ julia> a = b"01abEF"
  0x46
 
 julia> hex2bytes(a)
-3-element Array{UInt8,1}:
+3-element Vector{UInt8}:
  0x01
  0xab
  0xef
@@ -651,7 +651,7 @@ julia> a = string(12345, base = 16)
 "3039"
 
 julia> b = hex2bytes(a)
-2-element Array{UInt8,1}:
+2-element Vector{UInt8}:
  0x30
  0x39
 

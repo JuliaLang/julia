@@ -117,6 +117,8 @@ let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     uuid2 = UUID(uuidstr2)
     uuids = [uuid, uuid2]
     @test (uuids .== uuid) == [true, false]
+
+    @test parse(UUID, uuidstr2) == uuid2
 end
 @test_throws ArgumentError UUID("@"^4 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^6)
 
@@ -181,12 +183,10 @@ end
 
 saved_load_path = copy(LOAD_PATH)
 saved_depot_path = copy(DEPOT_PATH)
-saved_home_project = Base.HOME_PROJECT[]
 saved_active_project = Base.ACTIVE_PROJECT[]
 
 push!(empty!(LOAD_PATH), "project")
 push!(empty!(DEPOT_PATH), "depot")
-Base.HOME_PROJECT[] = nothing
 Base.ACTIVE_PROJECT[] = nothing
 
 @test load_path() == [abspath("project","Project.toml")]
@@ -570,7 +570,11 @@ end
 end
 
 # normalization of paths by include (#26424)
-@test_throws ErrorException("could not open file $(joinpath(@__DIR__, "notarealfile.jl"))") include("./notarealfile.jl")
+@test begin
+    exc = try; include("./notarealfile.jl"); "unexpectedly reached!"; catch exc; exc; end
+    @test exc isa SystemError
+    exc.prefix
+end == "opening file $(repr(joinpath(@__DIR__, "notarealfile.jl")))"
 
 old_act_proj = Base.ACTIVE_PROJECT[]
 pushfirst!(LOAD_PATH, "@")
@@ -661,7 +665,6 @@ end
 
 append!(empty!(LOAD_PATH), saved_load_path)
 append!(empty!(DEPOT_PATH), saved_depot_path)
-Base.HOME_PROJECT[] = saved_home_project
 Base.ACTIVE_PROJECT[] = saved_active_project
 
 # issue #28190

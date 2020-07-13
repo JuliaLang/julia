@@ -554,7 +554,8 @@ end
     @test delete!(d, "a") === d
     @test !haskey(d, "a")
     @test_throws ArgumentError get!(IdDict{Symbol,Any}(), 2, "b")
-
+    @test get!(IdDict{Int,Int}(), 1, 2.0) === 2
+    @test get!(()->2.0, IdDict{Int,Int}(), 1) === 2
 
     # sizehint! & rehash!
     d = IdDict()
@@ -722,7 +723,10 @@ import Base.ImmutableDict
     v = [k1 => v1, k2 => v2]
     d5 = ImmutableDict(v...)
     @test d5 == d2
-    @test collect(d5) == v
+    @test reverse(collect(d5)) == v
+    d6 = ImmutableDict(:a => 1, :b => 3, :a => 2)
+    @test d6[:a] == 2
+    @test d6[:b] == 3
 
     @test !haskey(ImmutableDict(-0.0=>1), 0.0)
 end
@@ -841,7 +845,10 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test isa(WeakKeyDict(A=>2, B=>3, C=>4), WeakKeyDict{Array{Int,1},Int})
     @test WeakKeyDict(a=>i+1 for (i,a) in enumerate([A,B,C]) ) == wkd
     @test WeakKeyDict([(A,2), (B,3), (C,4)]) == wkd
+    @test WeakKeyDict{typeof(A), Int64}(Pair(A,2), Pair(B,3), Pair(C,4)) == wkd
     @test WeakKeyDict(Pair(A,2), Pair(B,3), Pair(C,4)) == wkd
+    D = [[4.0]]
+    @test WeakKeyDict(Pair(A,2), Pair(B,3), Pair(D,4.0)) isa WeakKeyDict{Any, Any}
     @test isa(WeakKeyDict(Pair(A,2), Pair(B,3.0), Pair(C,4)), WeakKeyDict{Array{Int,1},Any})
     @test isa(WeakKeyDict(Pair(convert(Vector{Number}, A),2), Pair(B,3), Pair(C,4)), WeakKeyDict{Any,Int})
     @test copy(wkd) == wkd
@@ -850,6 +857,9 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test !isempty(wkd)
     res = pop!(wkd, C)
     @test res == 4
+    @test length(wkd) == 2
+    res = pop!(wkd, C, 3)
+    @test res == 3
     @test C ∉ keys(wkd)
     @test 4 ∉ values(wkd)
     @test length(wkd) == 2
@@ -892,6 +902,20 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test wkd[[1.0]] == 2
     @test haskey(wkd, [1.0])
     @test pop!(wkd, [1.0]) == 2
+    @test get(()->3, wkd, [2.0]) == 3
+
+    # map! on values of WKD
+    wkd = WeakKeyDict(A=>2, B=>3)
+    map!(v->v-1, values(wkd))
+    @test wkd == WeakKeyDict(A=>1, B=>2)
+
+    # get!
+    wkd = WeakKeyDict(A=>2)
+    get!(wkd, B, 3)
+    @test wkd == WeakKeyDict(A=>2, B=>3)
+    get!(()->4, wkd, C)
+    @test wkd == WeakKeyDict(A=>2, B=>3, C=>4)
+    @test_throws ArgumentError get!(()->5, wkd, [1.0])
 end
 
 @testset "issue #19995, hash of dicts" begin
@@ -1039,20 +1063,20 @@ end
     @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry: …"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys: …"
+        "KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys: …"
 
     io = IOContext(io, :displaysize => (5, 80))
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry:\n  1 => 2"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys:\n  1"
+        "KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys:\n  1"
     d = Base.ImmutableDict(d, 3=>4)
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  ⋮ => ⋮"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  ⋮"
+        "KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  ⋮"
 
     io = IOContext(io, :displaysize => (6, 80))
     show(io, MIME"text/plain"(), d)
@@ -1060,14 +1084,14 @@ end
         "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  3 => 4\n  1 => 2"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  3\n  1"
+        "KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  3\n  1"
     d = Base.ImmutableDict(d, 5=>6)
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) ==
         "Base.ImmutableDict{$Int,$Int} with 3 entries:\n  5 => 6\n  ⋮ => ⋮"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
+        "KeySet for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
 end
 
 @testset "copy!" begin

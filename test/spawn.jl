@@ -255,6 +255,19 @@ end
     end
 end
 
+# issue #36136
+@testset "redirect to devnull" begin
+    @test redirect_stdout(devnull) do; println("Hello") end === nothing
+    @test redirect_stderr(devnull) do; println(stderr, "Hello") end === nothing
+    # stdin is unavailable on the workers. Run test on master.
+    ret = Core.eval(Main, quote
+                remotecall_fetch(1) do
+                    redirect_stdin(devnull) do; read(stdin, String) end
+                end
+            end)
+    @test ret == ""
+end
+
 # Test that redirecting an IOStream does not crash the process
 let fname = tempname(), p
     cmd = """
@@ -455,6 +468,13 @@ end
 @test Base.Set([``, ``]) == Base.Set([``])
 @test Set([``, echocmd]) != Set([``, ``])
 @test Set([echocmd, ``, ``, echocmd]) == Set([echocmd, ``])
+
+# env handling (#32454)
+@test Cmd(`foo`, env=Dict("A"=>true)).env == ["A=true"]
+@test Cmd(`foo`, env=["A=true"]).env      == ["A=true"]
+@test Cmd(`foo`, env=("A"=>true,)).env    == ["A=true"]
+@test Cmd(`foo`, env=["A"=>true]).env     == ["A=true"]
+@test Cmd(`foo`, env=nothing).env         == nothing
 
 # test for interpolation of Cmd
 let c = setenv(`x`, "A"=>true)

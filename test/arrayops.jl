@@ -467,17 +467,17 @@ end
     @test_throws BoundsError insert!(v, 5, 5)
 end
 
-@testset "pop!(::Vector, i, [default])" begin
+@testset "popat!(::Vector, i, [default])" begin
     a = [1, 2, 3, 4]
-    @test_throws BoundsError pop!(a, 0)
-    @test pop!(a, 0, "default") == "default"
+    @test_throws BoundsError popat!(a, 0)
+    @test popat!(a, 0, "default") == "default"
     @test a == 1:4
-    @test_throws BoundsError pop!(a, 5)
-    @test pop!(a, 1) == 1
+    @test_throws BoundsError popat!(a, 5)
+    @test popat!(a, 1) == 1
     @test a == [2, 3, 4]
-    @test pop!(a, 2) == 3
+    @test popat!(a, 2) == 3
     @test a == [2, 4]
-    badpop() = @inbounds pop!([1], 2)
+    badpop() = @inbounds popat!([1], 2)
     @test_throws BoundsError badpop()
 end
 
@@ -728,9 +728,18 @@ end
     a = [1:5;]
     @test_throws ArgumentError Base.circshift!(a, a, 1)
     b = copy(a)
-    @test Base.circshift!(b, a, 1) == [5,1,2,3,4]
+    @test @inferred(Base.circshift!(b, a, 1) == [5,1,2,3,4])
+    src=rand(3,4,5)
+    dst=similar(src)
+    s=(1,2,3)
+    @inferred Base.circshift!(dst,src,s)
 end
 
+@testset "circcopy" begin
+    src=rand(3,4,5)
+    dst=similar(src)
+    @inferred Base.circcopy!(dst,src)
+end
 # unique across dim
 
 # With hash collisions
@@ -964,6 +973,8 @@ end
     @test_throws ArgumentError repeat([1 2;
                                         3 4], inner=(2, 2), outer=(2,))
     @test_throws ArgumentError repeat([1, 2], inner=(1, -1), outer=(1, -1))
+
+    @test_throws ArgumentError repeat(OffsetArray(rand(2), 1), inner=(2,))
 
     A = reshape(1:8, 2, 2, 2)
     R = repeat(A, inner = (1, 1, 2), outer = (1, 1, 1))
@@ -1229,6 +1240,12 @@ end
     R = reshape(A, 2, 2)
     A[R] .= reshape((1:4) .+ 2^30, 2, 2)
     @test A == [2,1,4,3] .+ 2^30
+
+    # unequal dimensionality (see comment in #35714)
+    a = [1 3; 2 4]
+    b = [3, 1, 4, 2]
+    copyto!(view(a, b), a)
+    @test a == [2 1; 4 3]
 end
 
 @testset "Base.mightalias unit tests" begin
@@ -1431,11 +1448,15 @@ end
     @test deleteat!(a, [1,3,5,7:10...]) == [2,4,6]
     @test_throws BoundsError deleteat!(a, 13)
     @test_throws BoundsError deleteat!(a, [1,13])
-    @test_throws ArgumentError deleteat!(a, [5,3])
+    @test_throws ArgumentError deleteat!(a, [3,2]) # not sorted
     @test_throws BoundsError deleteat!(a, 5:20)
     @test_throws BoundsError deleteat!(a, Bool[])
     @test_throws BoundsError deleteat!(a, [true])
     @test_throws BoundsError deleteat!(a, falses(11))
+    @test_throws BoundsError deleteat!(a, [0])
+    @test_throws BoundsError deleteat!(a, [4])
+    @test_throws BoundsError deleteat!(a, [5])
+    @test_throws BoundsError deleteat!(a, [5, 3])
 
     @test_throws BoundsError deleteat!([], 1)
     @test_throws BoundsError deleteat!([], [1])
@@ -2776,27 +2797,27 @@ end
     b = IOBuffer()
     showerror(b, err)
     @test String(take!(b)) ==
-        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [10, 1:2]"
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, 1:2]"
 
     err = try x[10, trues(2)]; catch err; err; end
     b = IOBuffer()
     showerror(b, err)
     @test String(take!(b)) ==
-        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [10, Bool[1, 1]]"
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, Bool[1, 1]]"
 
     # Also test : directly for custom types for which it may appear as-is
     err = BoundsError(x, (10, :))
     showerror(b, err)
     @test String(take!(b)) ==
-        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [10, :]"
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, :]"
 
     err = BoundsError(x, "bad index")
     showerror(b, err)
     @test String(take!(b)) ==
-        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [\"bad index\"]"
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [\"bad index\"]"
 
     err = BoundsError(x, (10, "bad index"))
     showerror(b, err)
     @test String(take!(b)) ==
-        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [10, \"bad index\"]"
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, \"bad index\"]"
 end

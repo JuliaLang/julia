@@ -74,6 +74,8 @@ end
         end
         ST = SymTridiagonal{elty}([1,2,3,4], [1,2,3])
         @test eltype(ST) == elty
+        @test SymTridiagonal{elty, Vector{elty}}(ST) === ST
+        @test SymTridiagonal{Int64, Vector{Int64}}(ST) isa SymTridiagonal{Int64, Vector{Int64}}
         TT = Tridiagonal{elty}([1,2,3], [1,2,3,4], [1,2,3])
         @test eltype(TT) == elty
         ST = SymTridiagonal{elty,Vector{elty}}(d, GenericArray(dl))
@@ -138,12 +140,18 @@ end
 
         @test !istril(SymTridiagonal(d,dl))
         @test istril(SymTridiagonal(d,zerosdl))
+        @test !istril(SymTridiagonal(d,dl),-2)
         @test !istriu(SymTridiagonal(d,dl))
         @test istriu(SymTridiagonal(d,zerosdl))
+        @test !istriu(SymTridiagonal(d,dl),2)
         @test istriu(Tridiagonal(zerosdl,d,du))
         @test !istriu(Tridiagonal(dl,d,zerosdu))
+        @test istriu(Tridiagonal(zerosdl,zerosd,du),1)
+        @test !istriu(Tridiagonal(dl,d,zerosdu),2)
         @test istril(Tridiagonal(dl,d,zerosdu))
         @test !istril(Tridiagonal(zerosdl,d,du))
+        @test istril(Tridiagonal(dl,zerosd,zerosdu),-1)
+        @test !istril(Tridiagonal(dl,d,zerosdu),-2)
 
         @test isdiag(SymTridiagonal(d,zerosdl))
         @test !isdiag(SymTridiagonal(d,dl))
@@ -553,6 +561,14 @@ end
 
     @test diag(T + 2I) == zero(d)
     @test diag(S + 2I) == zero(d)
+end
+
+@testset "convert Tridiagonal to SymTridiagonal error" begin
+    du = rand(Float64, 4)
+    d  = rand(Float64, 5)
+    dl = rand(Float64, 4)
+    T = Tridiagonal(dl, d, du)
+    @test_throws ArgumentError SymTridiagonal{Float32}(T)
 end
 
 end # module TestTridiagonal

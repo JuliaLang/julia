@@ -266,6 +266,8 @@ end
         @test_throws RankDeficientException cholesky!(copy(M), Val(true))
         @test_throws RankDeficientException cholesky(M, Val(true); check = true)
         @test_throws RankDeficientException cholesky!(copy(M), Val(true); check = true)
+        @test !LinearAlgebra.issuccess(cholesky(M, Val(true); check = false))
+        @test !LinearAlgebra.issuccess(cholesky!(copy(M), Val(true); check = false))
         C = cholesky(M, Val(true); check = false)
         @test_throws RankDeficientException chkfullrank(C)
         C = cholesky!(copy(M), Val(true); check = false)
@@ -357,7 +359,7 @@ end
     D = complex(D)
     CD = cholesky(D)
     CM = cholesky(Matrix(D))
-    @test CD isa Cholesky{Complex{Float64}}
+    @test CD isa Cholesky{ComplexF64}
     @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0

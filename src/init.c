@@ -618,6 +618,8 @@ static void jl_set_io_wait(int v)
     ptls->io_wait = v;
 }
 
+extern jl_mutex_t jl_modules_mutex;
+
 void _julia_init(JL_IMAGE_SEARCH rel)
 {
     jl_init_timing();
@@ -628,6 +630,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_safepoint_init();
     libsupport_init();
     htable_new(&jl_current_modules, 0);
+    JL_MUTEX_INIT(&jl_modules_mutex);
     ios_set_io_wait_func = jl_set_io_wait;
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
@@ -637,6 +640,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     jl_page_size = jl_getpagesize();
     uint64_t total_mem = uv_get_total_memory();
+    uint64_t constrained_mem = uv_get_constrained_memory();
+    if (constrained_mem > 0 && constrained_mem < total_mem)
+        total_mem = constrained_mem;
     if (total_mem >= (size_t)-1) {
         total_mem = (size_t)-1;
     }
@@ -718,7 +724,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     else {
         jl_init_types();
         jl_init_codegen();
-        jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0); // used internally
     }
 
     jl_init_tasks();
@@ -726,7 +731,8 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 #ifdef ENABLE_TIMINGS
     jl_root_task->timing_stack = jl_root_timing;
 #endif
-    jl_init_frontend();
+    jl_init_common_symbols();
+    jl_init_flisp();
     jl_init_serializer();
 
     if (!jl_options.image_file) {

@@ -390,6 +390,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
+        Libc.systemsleep(0.005)
         @test isopen(t)
         Base.process_events()
         @test !isopen(t)
@@ -402,6 +403,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
+        Libc.systemsleep(0.005)
         @test isopen(t)
         close(t)
         @test !isopen(t)
@@ -498,4 +500,16 @@ end
 let t = @async nothing
     wait(t)
     @test_throws ErrorException("schedule: Task not runnable") schedule(t, nothing)
+end
+
+# Channel `show`
+let c = Channel(3)
+    @test repr(c) == "Channel{Any}(3)"
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (empty)"
+    put!(c, 0)
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (1 item available)"
+    put!(c, 1)
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (2 items available)"
+    close(c)
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (closed)"
 end

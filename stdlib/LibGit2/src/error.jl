@@ -58,7 +58,12 @@ export GitError
              Callback,
              CherryPick,
              Describe,
-             Rebase)
+             Rebase,
+             Filesystem,
+             Patch,
+             WorkTree,
+             SHA1,
+             HTTP)
 
 struct ErrorStruct
     message::Ptr{UInt8}

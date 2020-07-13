@@ -45,7 +45,7 @@ struct ValueIterator{T<:AbstractDict}
 end
 
 function summary(io::IO, iter::T) where {T<:Union{KeySet,ValueIterator}}
-    print(io, T.name, " for a ")
+    print(io, T.name.name, " for a ")
     summary(io, iter.dict)
 end
 
@@ -91,7 +91,7 @@ Dict{Char,Int64} with 2 entries:
   'b' => 3
 
 julia> collect(keys(D))
-2-element Array{Char,1}:
+2-element Vector{Char}:
  'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
  'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
 ```
@@ -117,7 +117,7 @@ Dict{Char,Int64} with 2 entries:
   'b' => 3
 
 julia> collect(values(D))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  2
  3
 ```
@@ -558,7 +558,7 @@ Dict{Symbol,Int64} with 2 entries:
   :b => 2
 
 julia> map!(v -> v-1, values(d))
-Base.ValueIterator for a Dict{Symbol,Int64} with 2 entries. Values:
+ValueIterator for a Dict{Symbol,Int64} with 2 entries. Values:
   0
   1
 ```

@@ -5,11 +5,11 @@ const Compiler = Core.Compiler
 
 # TODO: this test is broken
 #let code = Any[
-#        Expr(:gotoifnot, SlotNumber(2), 4),
+#        GotoIfNot(SlotNumber(2), 4),
 #        Expr(:(=), SlotNumber(3), 2),
 #        # Test a SlotNumber as a value of a PhiNode
 #        PhiNode(Any[2,3], Any[1, SlotNumber(3)]),
-#        Expr(:return, SSAValue(3))
+#        ReturnNode(SSAValue(3))
 #    ]
 #
 #    ci = eval(Expr(:new, CodeInfo,
@@ -63,11 +63,12 @@ let cfg = CFG(BasicBlock[
         # the answer doesn't change (it does change the which node is chosen
         # as the semi-dominator, since it changes the DFS numbering).
         for (a, b, c, d) in Iterators.product(((true, false) for _ = 1:4)...)
-            let cfg′ = Compiler.copy(cfg)
-                a && reverse!(cfg′.blocks[1].succs)
-                b && reverse!(cfg′.blocks[2].succs)
-                c && reverse!(cfg′.blocks[4].preds)
-                d && reverse!(cfg′.blocks[5].preds)
+            let blocks = copy(cfg.blocks)
+                a && (blocks[1] = make_bb(blocks[1].preds, reverse(blocks[1].succs)))
+                b && (blocks[2] = make_bb(blocks[2].preds, reverse(blocks[2].succs)))
+                c && (blocks[4] = make_bb(reverse(blocks[4].preds), blocks[4].succs))
+                d && (blocks[5] = make_bb(reverse(blocks[5].preds), blocks[5].succs))
+                cfg′ = CFG(blocks, cfg.index)
                 @test Compiler.SNCA(cfg′) == correct_idoms
             end
         end
@@ -107,8 +108,8 @@ let cfg = CFG(BasicBlock[
     make_bb([0, 1, 2] , [5]   ), # 0 predecessor should be preserved
     make_bb([2, 3]    , []    ),
 ], Int[])
-    code = Compiler.IRCode(
-        [], [], Int32[], UInt8[], cfg, LineInfoNode[], [], [], [])
+    insts = Compiler.InstructionStream([], [], Int32[], UInt8[])
+    code = Compiler.IRCode(insts, cfg, LineInfoNode[], [], [], [])
     compact = Compiler.IncrementalCompact(code, true)
     @test length(compact.result_bbs) == 4 && 0 in compact.result_bbs[3].preds
 end
@@ -146,14 +147,14 @@ let ci = (Meta.@lower 1 + 1).args[1]
         Core.PhiNode(),
         Core.Compiler.ReturnNode(),
         # block 4
-        Expr(:call,
-             GlobalRef(Main, :something),
-             GlobalRef(Main, :somethingelse)),
-        Core.Compiler.GotoIfNot(Core.SSAValue(6), 9),
+        GlobalRef(Main, :something),
+        GlobalRef(Main, :somethingelse),
+        Expr(:call, Core.SSAValue(6), Core.SSAValue(7)),
+        Core.Compiler.GotoIfNot(Core.SSAValue(8), 11),
         # block 5
-        Core.Compiler.ReturnNode(Core.SSAValue(6)),
+        Core.Compiler.ReturnNode(Core.SSAValue(8)),
         # block 6
-        Core.Compiler.ReturnNode(Core.SSAValue(6))
+        Core.Compiler.ReturnNode(Core.SSAValue(8))
     ]
     nstmts = length(ci.code)
     ci.ssavaluetypes = nstmts
@@ -162,4 +163,20 @@ let ci = (Meta.@lower 1 + 1).args[1]
     ir = Core.Compiler.inflate_ir(ci)
     ir = Core.Compiler.compact!(ir, true)
     @test Core.Compiler.verify_ir(ir) == nothing
+end
+
+# Test that GlobalRef in value position is non-canonical
+using Base.Meta
+let ci = (Meta.@lower 1 + 1).args[1]
+    ci.code = [
+        Expr(:call, GlobalRef(Main, :something_not_defined_please))
+        ReturnNode(SSAValue(1))
+    ]
+    nstmts = length(ci.code)
+    ci.ssavaluetypes = nstmts
+    ci.codelocs = fill(Int32(1), nstmts)
+    ci.ssaflags = fill(Int32(0), nstmts)
+    ir = Core.Compiler.inflate_ir(ci)
+    ir = Core.Compiler.compact!(ir, true)
+    @test_throws ErrorException Core.Compiler.verify_ir(ir, false)
 end

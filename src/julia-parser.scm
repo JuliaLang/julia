@@ -15,7 +15,7 @@
 (define prec-conditional '(?))
 (define prec-arrow       (append!
                           '(-- -->)
-                          (add-dots '(← → ↔ ↚ ↛ ↞ ↠ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔ ⇴ ⇶ ⇷ ⇸ ⇹ ⇺ ⇻ ⇼ ⇽ ⇾ ⇿ ⟵ ⟶ ⟷ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤀ ⤁ ⤂ ⤃ ⤄ ⤅ ⤆ ⤇ ⤌ ⤍ ⤎ ⤏ ⤐ ⤑ ⤔ ⤕ ⤖ ⤗ ⤘ ⤝ ⤞ ⤟ ⤠ ⥄ ⥅ ⥆ ⥇ ⥈ ⥊ ⥋ ⥎ ⥐ ⥒ ⥓ ⥖ ⥗ ⥚ ⥛ ⥞ ⥟ ⥢ ⥤ ⥦ ⥧ ⥨ ⥩ ⥪ ⥫ ⥬ ⥭ ⥰ ⧴ ⬱ ⬰ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⭄ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ￩ ￫ ⇜ ⇝ ↜ ↝ ↩ ↪ ↫ ↬ ↼ ↽ ⇀ ⇁ ⇄ ⇆ ⇇ ⇉ ⇋ ⇌ ⇚ ⇛ ⇠ ⇢ ↷ ↶ ↺ ↻))))
+                          (add-dots '(← → ↔ ↚ ↛ ↞ ↠ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔ ⇴ ⇶ ⇷ ⇸ ⇹ ⇺ ⇻ ⇼ ⇽ ⇾ ⇿ ⟵ ⟶ ⟷ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤀ ⤁ ⤂ ⤃ ⤄ ⤅ ⤆ ⤇ ⤌ ⤍ ⤎ ⤏ ⤐ ⤑ ⤔ ⤕ ⤖ ⤗ ⤘ ⤝ ⤞ ⤟ ⤠ ⥄ ⥅ ⥆ ⥇ ⥈ ⥊ ⥋ ⥎ ⥐ ⥒ ⥓ ⥖ ⥗ ⥚ ⥛ ⥞ ⥟ ⥢ ⥤ ⥦ ⥧ ⥨ ⥩ ⥪ ⥫ ⥬ ⥭ ⥰ ⧴ ⬱ ⬰ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⭄ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ￩ ￫ ⇜ ⇝ ↜ ↝ ↩ ↪ ↫ ↬ ↼ ↽ ⇀ ⇁ ⇄ ⇆ ⇇ ⇉ ⇋ ⇌ ⇚ ⇛ ⇠ ⇢ ↷ ↶ ↺ ↻ <: >:))))
 (define prec-lazy-or     '(|\|\||))
 (define prec-lazy-and    '(&&))
 (define prec-comparison
@@ -662,16 +662,13 @@
                    (first? #t)
                    (t (peek-token s)))
           (if (not (memv t ops))
-              (begin
-                (if (not (or (eof-object? t) (eqv? t #\newline) (closer? t)))
-                    (error (string "extra token \"" t "\" after end of expression")))
-                (if (or (null? ex) (pair? (cdr ex)) (not first?))
-                    ;; () => (head)
-                    ;; (ex2 ex1) => (head ex1 ex2)
-                    ;; (ex1) if operator appeared => (head ex1) (handles "x;")
-                    (cons head (reverse! ex))
-                    ;; (ex1) => ex1
-                    (car ex)))
+              (if (or (null? ex) (pair? (cdr ex)) (not first?))
+                  ;; () => (head)
+                  ;; (ex2 ex1) => (head ex1 ex2)
+                  ;; (ex1) if operator appeared => (head ex1) (handles "x;")
+                  (cons head (reverse! ex))
+                  ;; (ex1) => ex1
+                  (car ex))
               (begin (take-token s)
                      ;; allow input to end with the operator, as in a;b;
                      (if (or (eof-object? (peek-token s))
@@ -1270,15 +1267,18 @@
 
 (define (expect-end s word)
   (let ((t (peek-token s)))
-    (cond ((eq? t 'end) (take-token s))
-          ((eof-object? t)
-           (error (string "incomplete: \"" word "\" at " ; NOTE: changing this may affect code in base/client.jl
-                          current-filename ":" expect-end-current-line
-                          " requires end")))
-          (else
-           (error (string "\"" word "\" at "
-                          current-filename ":" expect-end-current-line
-                          " expected \"end\", got \"" t "\""))))))
+    (if (eq? t 'end)
+        (take-token s)
+        (expect-end-error t word))))
+
+(define (expect-end-error t word)
+  (if (eof-object? t)
+      (error (string "incomplete: \"" word "\" at " ; NOTE: changing this may affect code in base/client.jl
+                     current-filename ":" expect-end-current-line
+                     " requires end"))
+      (error (string "\"" word "\" at "
+                     current-filename ":" expect-end-current-line
+                     " expected \"end\", got \"" t "\""))))
 
 (define (parse-subtype-spec s)
   (parse-comparison s))
@@ -1469,10 +1469,10 @@
                              (expect-end (take-lineendings s) "primitive type"))))))
 
        ((try)
-        (let ((try-block (if (memq (require-token s) '(catch finally))
+        (let ((try-block (if (memq (peek-token s) '(catch finally))
                              '(block)
                              (parse-block s))))
-          (let loop ((nxt    (require-token s))
+          (let loop ((nxt    (peek-token s))
                      (catchb #f)
                      (catchv #f)
                      (finalb #f))
@@ -1519,7 +1519,7 @@
                       catchb
                       catchv
                       fb)))
-             (else    (error (string "unexpected \"" nxt "\"")))))))
+             (else (expect-end-error nxt 'try))))))
        ((return)          (let ((t (peek-token s)))
                             (if (or (eqv? t #\newline) (closing-token? t))
                                 (list 'return '(null))

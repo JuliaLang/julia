@@ -872,18 +872,34 @@ static void jl_typemap_level_insert_(
     jl_typemap_list_insert_(map, &cache->linear, (jl_value_t*)cache, newrec, tparams);
 }
 
-jl_typemap_entry_t *jl_typemap_insert(jl_typemap_t **cache, jl_value_t *parent,
-                                      jl_tupletype_t *type,
-                                      jl_tupletype_t *simpletype, jl_svec_t *guardsigs,
-                                      jl_value_t *newvalue, int8_t offs,
-                                      const struct jl_typemap_info *tparams,
-                                      size_t min_world, size_t max_world)
+jl_typemap_entry_t *jl_typemap_alloc(
+        jl_tupletype_t *type, jl_tupletype_t *simpletype, jl_svec_t *guardsigs,
+        jl_value_t *newvalue, size_t min_world, size_t max_world)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     assert(min_world > 0 && max_world > 0);
     if (!simpletype)
         simpletype = (jl_tupletype_t*)jl_nothing;
     jl_value_t *ttype = jl_unwrap_unionall((jl_value_t*)type);
+    assert(jl_is_tuple_type(ttype));
+    // compute the complexity of this type signature
+    int isva = jl_is_va_tuple((jl_datatype_t*)ttype);
+    int issimplesig = !jl_is_unionall(type); // a TypeVar environment needs a complex matching test
+    int isleafsig = issimplesig && !isva; // entirely leaf types don't need to be sorted
+    size_t i, l;
+    for (i = 0, l = jl_nparams(ttype); i < l && issimplesig; i++) {
+        jl_value_t *decl = jl_tparam(ttype, i);
+        if (jl_is_kind(decl))
+            isleafsig = 0; // Type{} may have a higher priority than a kind
+        else if (jl_is_type_type(decl))
+            isleafsig = 0; // Type{} may need special processing to compute the match
+        else if (jl_is_vararg_type(decl))
+            isleafsig = 0; // makes iteration easier when the endpoints are the same
+        else if (decl == (jl_value_t*)jl_any_type)
+            isleafsig = 0; // Any needs to go in the general cache
+        else if (!jl_is_concrete_type(decl)) // anything else needs to go through the general subtyping test
+            isleafsig = issimplesig = 0;
+    }
 
     jl_typemap_entry_t *newrec =
         (jl_typemap_entry_t*)jl_gc_alloc(ptls, sizeof(jl_typemap_entry_t),
@@ -895,30 +911,17 @@ jl_typemap_entry_t *jl_typemap_insert(jl_typemap_t **cache, jl_value_t *parent,
     newrec->next = (jl_typemap_entry_t*)jl_nothing;
     newrec->min_world = min_world;
     newrec->max_world = max_world;
-    // compute the complexity of this type signature
-    newrec->va = jl_is_va_tuple((jl_datatype_t*)ttype);
-    newrec->issimplesig = !jl_is_unionall(type); // a TypeVar environment needs a complex matching test
-    newrec->isleafsig = newrec->issimplesig && !newrec->va; // entirely leaf types don't need to be sorted
-    JL_GC_PUSH1(&newrec);
-    assert(jl_is_tuple_type(ttype));
-    size_t i, l;
-    for (i = 0, l = jl_nparams(ttype); i < l && newrec->issimplesig; i++) {
-        jl_value_t *decl = jl_tparam(ttype, i);
-        if (jl_is_kind(decl))
-            newrec->isleafsig = 0; // Type{} may have a higher priority than a kind
-        else if (jl_is_type_type(decl))
-            newrec->isleafsig = 0; // Type{} may need special processing to compute the match
-        else if (jl_is_vararg_type(decl))
-            newrec->isleafsig = 0; // makes iteration easier when the endpoints are the same
-        else if (decl == (jl_value_t*)jl_any_type)
-            newrec->isleafsig = 0; // Any needs to go in the general cache
-        else if (!jl_is_concrete_type(decl)) // anything else needs to go through the general subtyping test
-            newrec->isleafsig = newrec->issimplesig = 0;
-    }
-    // TODO: assert that guardsigs == jl_emptysvec && simplesig == jl_nothing if isleafsig and optimize with that knowledge?
-    jl_typemap_insert_generic(*cache, cache, parent, newrec, offs, tparams);
-    JL_GC_POP();
+    newrec->va = isva;
+    newrec->issimplesig = issimplesig;
+    newrec->isleafsig = isleafsig;
     return newrec;
+}
+
+void jl_typemap_insert(jl_typemap_t **cache, jl_value_t *parent,
+        jl_typemap_entry_t *newrec, int8_t offs,
+        const struct jl_typemap_info *tparams)
+{
+    jl_typemap_insert_generic(*cache, cache, parent, newrec, offs, tparams);
 }
 
 static void jl_typemap_list_insert_sorted(

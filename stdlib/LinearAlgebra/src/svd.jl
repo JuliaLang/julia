@@ -16,35 +16,35 @@ Iterating the decomposition produces the components `U`, `S`, and `V`.
 # Examples
 ```jldoctest
 julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
-4×5 Array{Float64,2}:
+4×5 Matrix{Float64}:
  1.0  0.0  0.0  0.0  2.0
  0.0  0.0  3.0  0.0  0.0
  0.0  0.0  0.0  0.0  0.0
  0.0  2.0  0.0  0.0  0.0
 
 julia> F = svd(A)
-SVD{Float64,Float64,Array{Float64,2}}
+SVD{Float64,Float64,Matrix{Float64}}
 U factor:
-4×4 Array{Float64,2}:
+4×4 Matrix{Float64}:
  0.0  1.0  0.0   0.0
  1.0  0.0  0.0   0.0
  0.0  0.0  0.0  -1.0
  0.0  0.0  1.0   0.0
 singular values:
-4-element Array{Float64,1}:
+4-element Vector{Float64}:
  3.0
  2.23606797749979
  2.0
  0.0
 Vt factor:
-4×5 Array{Float64,2}:
+4×5 Matrix{Float64}:
  -0.0       0.0  1.0  -0.0  0.0
   0.447214  0.0  0.0   0.0  0.894427
  -0.0       1.0  0.0  -0.0  0.0
   0.0       0.0  0.0   1.0  0.0
 
 julia> F.U * Diagonal(F.S) * F.Vt
-4×5 Array{Float64,2}:
+4×5 Matrix{Float64}:
  1.0  0.0  0.0  0.0  2.0
  0.0  0.0  3.0  0.0  0.0
  0.0  0.0  0.0  0.0  0.0
@@ -201,14 +201,14 @@ Return the singular values of `A` in descending order.
 # Examples
 ```jldoctest
 julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
-4×5 Array{Float64,2}:
+4×5 Matrix{Float64}:
  1.0  0.0  0.0  0.0  2.0
  0.0  0.0  3.0  0.0  0.0
  0.0  0.0  0.0  0.0  0.0
  0.0  2.0  0.0  0.0  0.0
 
 julia> svdvals(A)
-4-element Array{Float64,1}:
+4-element Vector{Float64}:
  3.0
  2.23606797749979
  2.0
@@ -278,49 +278,49 @@ routine which is called underneath (in LAPACK 3.6.0 and newer).
 # Examples
 ```jldoctest
 julia> A = [1. 0.; 0. -1.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0   0.0
  0.0  -1.0
 
 julia> B = [0. 1.; 1. 0.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.0  1.0
  1.0  0.0
 
 julia> F = svd(A, B)
-GeneralizedSVD{Float64,Array{Float64,2}}
+GeneralizedSVD{Float64,Matrix{Float64}}
 U factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  0.0
  0.0  1.0
 V factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  -0.0  -1.0
   1.0   0.0
 Q factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  0.0
  0.0  1.0
 D1 factor:
 2×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:
-  [1, 1]  =  0.707107
-  [2, 2]  =  0.707107
+ 0.707107   ⋅
+  ⋅        0.707107
 D2 factor:
 2×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:
-  [1, 1]  =  0.707107
-  [2, 2]  =  0.707107
+ 0.707107   ⋅
+  ⋅        0.707107
 R0 factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.41421   0.0
  0.0      -1.41421
 
 julia> F.U*F.D1*F.R0*F.Q'
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0   0.0
  0.0  -1.0
 
 julia> F.V*F.D2*F.R0*F.Q'
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.0  1.0
  1.0  0.0
 ```
@@ -518,17 +518,17 @@ decomposition of `A` and `B`. See also [`svd`](@ref).
 # Examples
 ```jldoctest
 julia> A = [1. 0.; 0. -1.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0   0.0
  0.0  -1.0
 
 julia> B = [0. 1.; 1. 0.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.0  1.0
  1.0  0.0
 
 julia> svdvals(A, B)
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
  1.0
  1.0
 ```

@@ -510,7 +510,12 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                 if (auto VTy = dyn_cast<VectorType>(II->getType())) {
                     if (auto PtrT = dyn_cast<PointerType>(VTy->getElementType())) {
                         if (PtrT->getAddressSpace() == AddressSpace::Loaded) {
-                            assert(isa<UndefValue>(II->getOperand(3)) && "unimplemented");
+                            Value *Mask = II->getOperand(2);
+                            Value *Passthrough = II->getOperand(3);
+                            if (!isa<Constant>(Mask) || !cast<Constant>(Mask)->isAllOnesValue()) {
+                                assert(isa<UndefValue>(Passthrough) && "unimplemented");
+                                (void)Passthrough;
+                            }
                             CurrentV = II->getOperand(0);
                             if (II->getIntrinsicID() == Intrinsic::masked_load) {
                                 fld_idx = -1;
@@ -673,6 +678,8 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
                     ConstantInt::get(Type::getInt32Ty(Cond->getContext()), i),
                     "", SI);
         }
+        if (FalseElem->getType() != TrueElem->getType())
+            FalseElem = new BitCastInst(FalseElem, TrueElem->getType(), "", SI);
         SelectInst *SelectBase = SelectInst::Create(Cond, TrueElem, FalseElem, "gclift", SI);
         int Number = ++S.MaxPtrNumber;
         S.AllPtrNumbering[SelectBase] = Number;
@@ -737,13 +744,12 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
         for (unsigned i = 0; i < NumRoots; ++i) {
             PHINode *lift = lifted[i];
             Value *BaseElem;
-            if (isa<PointerType>(Base->getType())) {
+            if (isa<PointerType>(Base->getType()))
                 BaseElem = Base;
-                if (BaseElem->getType() != T_prjlvalue)
-                    BaseElem = new BitCastInst(BaseElem, T_prjlvalue, "", Terminator);
-            } else {
+            else
                 BaseElem = IncomingBases[i];
-            }
+            if (BaseElem->getType() != T_prjlvalue)
+                BaseElem = new BitCastInst(BaseElem, T_prjlvalue, "", Terminator);
             lift->addIncoming(BaseElem, IncomingBB);
         }
     }
@@ -1554,8 +1560,13 @@ static Value *ExtractScalar(Value *V, Type *VTy, bool isptr, ArrayRef<unsigned> 
             IdxList[j + 1] = ConstantInt::get(T_int32, Idxs[j]);
         }
         Value *GEP = irbuilder.CreateGEP(VTy, V, IdxList);
-        V = irbuilder.CreateLoad(GEP);
-    } else if (isa<PointerType>(V->getType())) {
+        Type *T = GetElementPtrInst::getIndexedType(VTy, IdxList);
+        assert(T->isPointerTy());
+        V = irbuilder.CreateAlignedLoad(T, GEP, sizeof(void*));
+        // since we're doing stack operations, it should be safe do this non-atomically
+        cast<LoadInst>(V)->setOrdering(AtomicOrdering::NotAtomic);
+    }
+    else if (isa<PointerType>(V->getType())) {
         assert(Idxs.empty());
     }
     else if (!Idxs.empty()) {
@@ -1594,9 +1605,10 @@ unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilde
     auto Ptrs = ExtractTrackedValues(Src, STy, isptr, irbuilder);
     for (unsigned i = 0; i < Ptrs.size(); ++i) {
         Value *Elem = Ptrs[i];
+        assert(Elem->getType()->isPointerTy());
         Value *Slot = irbuilder.CreateConstInBoundsGEP1_32(Elem->getType(), Dst, i);
-        Value *shadowStore = irbuilder.CreateStore(Elem, Slot);
-        (void)shadowStore;
+        StoreInst *shadowStore = irbuilder.CreateAlignedStore(Elem, Slot, sizeof(void*));
+        shadowStore->setOrdering(AtomicOrdering::NotAtomic);
         // TODO: shadowStore->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     }
     return Ptrs.size();
@@ -1969,7 +1981,8 @@ Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Value *V)
 Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Value *V)
 {
     auto addr = EmitTagPtr(builder, T_size, V);
-    auto load = builder.CreateLoad(T_size, addr);
+    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, sizeof(size_t));
+    load->setOrdering(AtomicOrdering::Unordered);
     load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
     MDBuilder MDB(load->getContext());
     auto *NullInt = ConstantInt::get(T_size, 0);
@@ -2093,9 +2106,11 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 newI->takeName(CI);
 
                 // Set the tag.
-                auto store = builder.CreateStore(
+                StoreInst *store = builder.CreateAlignedStore(
                     CI->getArgOperand(2),
-                    EmitTagPtr(builder, T_prjlvalue, newI));
+                    EmitTagPtr(builder, T_prjlvalue, newI),
+                    sizeof(size_t));
+                store->setOrdering(AtomicOrdering::Unordered);
                 store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
 
                 // Replace uses of the call to `julia.gc_alloc_obj` with the call to
@@ -2144,8 +2159,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 int slot = 0;
                 IRBuilder<> Builder (CI);
                 for (; arg_it != CI->arg_end(); ++arg_it) {
-                    Builder.CreateStore(*arg_it, Builder.CreateGEP(T_prjlvalue, Frame,
-                        ConstantInt::get(T_int32, slot++)));
+                    Builder.CreateAlignedStore(*arg_it,
+                            Builder.CreateGEP(T_prjlvalue, Frame, ConstantInt::get(T_int32, slot++)),
+                            sizeof(void*));
                 }
                 ReplacementArgs.push_back(nframeargs == 0 ?
                     (llvm::Value*)ConstantPointerNull::get(T_pprjlvalue) :
@@ -2385,6 +2401,8 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
                 slotAddress->insertAfter(gcframe);
                 auto ValExpr = std::make_pair(Base, isa<PointerType>(Base->getType()) ? -1 : i);
                 auto Elem = MaybeExtractScalar(S, ValExpr, SI);
+                if (Elem->getType() != T_prjlvalue)
+                    Elem = new BitCastInst(Elem, T_prjlvalue, "", SI);
                 //auto Idxs = makeArrayRef(Tracked[i]);
                 //Value *Elem = ExtractScalar(Base, true, Idxs, SI);
                 Value *shadowStore = new StoreInst(Elem, slotAddress, SI);

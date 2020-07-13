@@ -173,11 +173,11 @@ Random.seed!(1)
             @test Array(D*a) ≈ DM*a
             @test Array(D/a) ≈ DM/a
             if relty <: BlasFloat
-                b = rand(elty,n,n)
-                b = sparse(b)
-                @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
-                @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
-                @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
+                for b in (rand(elty,n,n), sparse(rand(elty,n,n)), rand(elty,n), sparse(rand(elty,n)))
+                    @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
+                    @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
+                    @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
+                end
             end
         end
 
@@ -466,7 +466,7 @@ end
 @test all(Diagonal(range(1, stop=3, length=3)) .== Diagonal([1.0,2.0,3.0]))
 
 # Issue 12803
-for t in (Float32, Float64, Int, Complex{Float64}, Rational{Int})
+for t in (Float32, Float64, Int, ComplexF64, Rational{Int})
     @test Diagonal(Matrix{t}[fill(t(1), 2, 2), fill(t(1), 3, 3)])[2,1] == zeros(t, 3, 2)
 end
 
@@ -600,7 +600,7 @@ end
 end
 
 @testset "multiplication of transposes of Diagonal (#22428)" begin
-    for T in (Float64, Complex{Float64})
+    for T in (Float64, ComplexF64)
         D = Diagonal(randn(T, 5, 5))
         B = Diagonal(randn(T, 5, 5))
         DD = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])

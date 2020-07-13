@@ -243,8 +243,8 @@ julia> g(2, 3.0)
 
 julia> g(2.0, 3.0)
 ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
-  g(x::Float64, y) in Main at none:1
   g(x, y::Float64) in Main at none:1
+  g(x::Float64, y) in Main at none:1
 Possible fix, define
   g(::Float64, ::Float64)
 ```
@@ -325,28 +325,32 @@ julia> myappend(v::Vector{T}, x::T) where {T} = [v..., x]
 myappend (generic function with 1 method)
 
 julia> myappend([1,2,3],4)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  3
  4
 
 julia> myappend([1,2,3],2.5)
-ERROR: MethodError: no method matching myappend(::Array{Int64,1}, ::Float64)
+ERROR: MethodError: no method matching myappend(::Vector{Int64}, ::Float64)
 Closest candidates are:
-  myappend(::Array{T,1}, !Matched::T) where T at none:1
+  myappend(::Vector{T}, !Matched::T) where T at none:1
+Stacktrace:
+[...]
 
 julia> myappend([1.0,2.0,3.0],4.0)
-4-element Array{Float64,1}:
+4-element Vector{Float64}:
  1.0
  2.0
  3.0
  4.0
 
 julia> myappend([1.0,2.0,3.0],4)
-ERROR: MethodError: no method matching myappend(::Array{Float64,1}, ::Int64)
+ERROR: MethodError: no method matching myappend(::Vector{Float64}, ::Int64)
 Closest candidates are:
-  myappend(::Array{T,1}, !Matched::T) where T at none:1
+  myappend(::Vector{T}, !Matched::T) where T at none:1
+Stacktrace:
+[...]
 ```
 
 As you can see, the type of the appended element must match the element type of the vector it
@@ -906,7 +910,7 @@ f(x::Int, y::Int) = 3
 ```
 
 This is often the right strategy; however, there are circumstances
-where following this advice blindly can be counterproductive. In
+where following this advice mindlessly can be counterproductive. In
 particular, the more methods a generic function has, the more
 possibilities there are for ambiguities. When your method hierarchies
 get more complicated than this simple example, it can be worth your

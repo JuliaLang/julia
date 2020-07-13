@@ -13,6 +13,8 @@ using Base: with_output_color
 
 using InteractiveUtils: subtypes
 
+using Unicode: normalize
+
 ## Help mode ##
 
 # This is split into helpmode and _helpmode to easier unittest _helpmode
@@ -107,6 +109,8 @@ Message(msg) = Message(msg, ())
 function Markdown.term(io::IO, msg::Message, columns)
     printstyled(io, msg.msg; msg.fmt...)
 end
+
+trimdocs(doc, brief::Bool) = doc
 
 function trimdocs(md::Markdown.MD, brief::Bool)
     brief || return md
@@ -326,6 +330,8 @@ function symbol_latex(s::String)
     return get(symbols_latex, s, "")
 end
 function repl_latex(io::IO, s::String)
+    # decompose NFC-normalized identifier to match tab-completion input
+    s = normalize(s, :NFD)
     latex = symbol_latex(s)
     if !isempty(latex)
         print(io, "\"")
@@ -607,9 +613,9 @@ moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 filtervalid(names) = filter(x->!occursin(r"#", x), map(string, names))
 
 accessible(mod::Module) =
-    [filter!(s -> !Base.isdeprecated(mod, s), names(mod, all = true, imported = true));
-     map(names, moduleusings(mod))...;
-     collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
+    Symbol[filter!(s -> !Base.isdeprecated(mod, s), names(mod, all=true, imported=true));
+           map(names, moduleusings(mod))...;
+           collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
 
 doc_completions(name) = fuzzysort(name, accessible(Main))
 doc_completions(name::Symbol) = doc_completions(string(name))
@@ -685,14 +691,16 @@ stripmd(x::Markdown.Footnote) = "$(stripmd(x.id)) $(stripmd(x.text))"
 stripmd(x::Markdown.Table) =
     join([join(map(stripmd, r), " ") for r in x.rows], " ")
 
-# Apropos searches through all available documentation for some string or regex
 """
-    apropos(string)
+    apropos([io::IO=stdout], pattern::Union{AbstractString,Regex})
 
-Search through all documentation for a string, ignoring case.
+Search available docstrings for entries containing `pattern`.
+
+When `pattern` is a string, case is ignored. Results are printed to `io`.
 """
 apropos(string) = apropos(stdout, string)
 apropos(io::IO, string) = apropos(io, Regex("\\Q$string", "i"))
+
 function apropos(io::IO, needle::Regex)
     for mod in modules
         # Module doc might be in README.md instead of the META dict

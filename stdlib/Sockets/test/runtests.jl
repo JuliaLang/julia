@@ -218,6 +218,8 @@ end
 end
 
 @testset "getaddrinfo" begin
+    @test getaddrinfo("127.0.0.1") == ip"127.0.0.1"
+    @test getaddrinfo("::1") == ip"::1"
     let localhost = getnameinfo(ip"127.0.0.1")::String
         @test !isempty(localhost) && localhost != "127.0.0.1"
         @test !isempty(getalladdrinfo(localhost)::Vector{IPAddr})
@@ -255,10 +257,10 @@ end
 end
 
 # test connecting to a named port
-let localhost = getaddrinfo("localhost")
+let localhost = ip"127.0.0.1"
     global randport
     randport, server = listenany(localhost, defaultport)
-    @async connect("localhost", randport)
+    @async connect(localhost, randport)
     s1 = accept(server)
     @test_throws ErrorException("client TCPSocket is not in initialization state") accept(server, s1)
     @test_throws Base._UVError("listen", Base.UV_EADDRINUSE) listen(randport)
@@ -391,17 +393,17 @@ end
 
 @testset "Local-machine broadcast" begin
     let a, b, c
-        # (Mac OS X's loopback interface doesn't support broadcasts)
+        # Apple does not support broadcasting on 127.255.255.255
         bcastdst = Sys.isapple() ? ip"255.255.255.255" : ip"127.255.255.255"
 
-        function create_socket()
+        function create_socket(addr::IPAddr, port)
             s = UDPSocket()
-            bind(s, ip"0.0.0.0", 2000, reuseaddr = true, enable_broadcast = true)
-            s
+            bind(s, addr, port, reuseaddr = true, enable_broadcast = true)
+            return s
         end
 
-        function wait_with_timeout(recvs)
-            TIMEOUT_VAL = 3*1e9 # nanoseconds
+        # Wait for futures to finish with a given timeout
+        function wait_with_timeout(recvs, TIMEOUT_VAL = 3*1e9)
             t0 = time_ns()
             recvs_check = copy(recvs)
             while ((length(filter!(t->!istaskdone(t), recvs_check)) > 0)
@@ -412,23 +414,55 @@ end
             map(wait, recvs)
         end
 
-        a, b, c = [create_socket() for i = 1:3]
+        # First, test IPv4 broadcast
+        port = 2000
+        a, b, c = [create_socket(ip"0.0.0.0", port) for i in 1:3]
         try
-            # bsd family do not allow broadcasting to ip"255.255.255.255"
-            # or ip"127.255.255.255"
+            # bsd family do not allow broadcasting on loopbacks
             @static if !Sys.isbsd() || Sys.isapple()
-                send(c, bcastdst, 2000, "hello")
+                send(c, bcastdst, port, "hello")
                 recvs = [@async @test String(recv(s)) == "hello" for s in (a, b)]
                 wait_with_timeout(recvs)
             end
         catch e
             if isa(e, Base.IOError) && Base.uverrorname(e.code) == "EPERM"
-                @warn "UDP broadcast test skipped (permission denied upon send, restrictive firewall?)"
+                @warn "UDP IPv4 broadcast test skipped (permission denied upon send, restrictive firewall?)"
             else
                 rethrow()
             end
         end
         [close(s) for s in [a, b, c]]
+
+        # Test ipv6 broadcast groups
+        a, b, c = [create_socket(ip"::", port) for i in 1:3]
+        try
+            # Exemplary Interface-local ipv6 multicast group, if we wanted this to actually be routed
+            # to other computers, we should use a link-local or larger address scope group
+            # bsd family and darwin do not allow broadcasting on loopbacks
+            @static if !Sys.isbsd() && !Sys.isapple()
+                group = ip"ff11::6a75:6c69:61"
+                join_multicast_group(a, group)
+                join_multicast_group(b, group)
+
+                send(c, group, port, "hello")
+                recvs = [@async @test String(recv(s)) == "hello" for s in (a, b)]
+                wait_with_timeout(recvs)
+
+                leave_multicast_group(a, group)
+                leave_multicast_group(b, group)
+
+                send(c, group, port, "hello")
+                recvs = [@async @test String(recv(s)) == "hello" for s in (a, b)]
+                # We only wait 200ms since we're pretty sure this is going to time out
+                @test_throws ErrorException wait_with_timeout(recvs, 2e8)
+            end
+        catch e
+            if isa(e, Base.IOError) && Base.uverrorname(e.code) == "EPERM"
+                @warn "UDP IPv6 broadcast test skipped (permission denied upon send, restrictive firewall?)"
+            else
+                rethrow()
+            end
+        end
     end
 end
 

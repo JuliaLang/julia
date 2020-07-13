@@ -96,11 +96,28 @@ WITH_GC_DEBUG_ENV := 0
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
 
+# We need python for things like BB triplet recognition and relative path computation.
+# We don't really care about version, generally, so just find something that works:
+PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)"
+PYTHON_SYSTEM := $(shell $(PYTHON) -c 'from __future__ import print_function; import platform; print(platform.system())')
+
+# If we're running on Cygwin, but using a native-windows Python, we need to use cygpath -w
+ifneq ($(and $(filter $(PYTHON_SYSTEM),Windows),$(findstring CYGWIN,$(shell uname))),)
+python_cygpath = `cygpath -w $(1)`
+else
+python_cygpath = $(1)
+endif
+
+# Get a relative path easily
+define rel_path
+$(shell $(PYTHON) $(call python_cygpath,$(JULIAHOME)/contrib/relative_path.py) $(call python_cygpath,$(1)) $(call python_cygpath,$(2)))
+endef
+
 # pick up BUILDROOT from O= if it isn't already set (from recursive make)
 ifeq ($(BUILDROOT),)
 ifeq ("$(origin O)", "command line")
   BUILDROOT := $(abspath $O)
-  BUILDDIR := $(abspath $(BUILDROOT)/$(shell $(JULIAHOME)/contrib/relative_path.sh $(JULIAHOME) $(SRCDIR)))
+  BUILDDIR := $(abspath $(BUILDROOT)/$(call rel_path,$(JULIAHOME),$(SRCDIR)))
   $(info $(shell printf '\033[32;1mBuilding into $(BUILDROOT)\033[0m')) # use printf to expand the escape sequences
 else
   BUILDROOT:=$(JULIAHOME)
@@ -277,16 +294,32 @@ private_libdir := $(libdir)/julia
 endif
 build_private_libdir := $(build_libdir)/julia
 
+# A helper functions for dealing with lazily-evaluated, expensive operations..  Spinning
+# up a python process to, for exaxmple, parse a TOML file is expensive, and we must wait
+# until the TOML files are on-disk before we can parse them.  This means that we cannot
+# use `:=` (since we do not want to evaluate these rules now, we want to evaluate them
+# when we use them, so we use `=`) however we also do not want to re-evaluate them
+# multiple times.  So we define a caching mechanism where the rules are still lazily
+# evaluated, but we cache the value such that the second time around we don't have to
+# re-evaluate them.  Usage example:
+#
+# EXPENSIVE_OPERATION = $(shell prog args...)
+# CACHED_RESULT = $(call hit_cache,EXPENSIVE_OPERATION)
+#
+# The first time you use `$(CACHED_RESULT)`, it will invoke `$(EXPENSIVE_OPERATION)`,
+# but after that point, it will not, unless `$(EXPENSIVE_OPERATION)` evaluated to the
+# empty string, in which case it will be re-evaluated.
+define hit_cache
+$(if $(_CACHE-$(1)),,$(eval _CACHE-$(1) := $($(1))))$(_CACHE-$(1))
+endef
+
 # Calculate relative paths to libdir, private_libdir, datarootdir, and sysconfdir
-build_libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_libdir))
-libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libdir))
-build_private_libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_private_libdir))
-private_libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(private_libdir))
-datarootdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(datarootdir))
-libexecdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libexecdir))
-docdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(docdir))
-sysconfdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(sysconfdir))
-includedir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(includedir))
+define cache_rel_path
+$(1)_rel_eval = $(call rel_path,$(2),$($(1)))
+$(1)_rel = $$(call hit_cache,$(1)_rel_eval)
+endef
+$(foreach D,libdir private_libdir datarootdir libexecdir docdir sysconfdir includedir,$(eval $(call cache_rel_path,$(D),$(bindir))))
+$(foreach D,build_libdir build_private_libdir,$(eval $(call cache_rel_path,$(D),$(build_bindir))))
 
 INSTALL_F := $(JULIAHOME)/contrib/install.sh 644
 INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
@@ -305,6 +338,9 @@ BUILD_LLDB := 0
 USE_POLLY := 0
 USE_POLLY_OPENMP := 0  # Enable OpenMP code-generation
 USE_POLLY_ACC := 0     # Enable GPU code-generation
+
+# Options to use MLIR
+USE_MLIR := 0
 
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
@@ -741,6 +777,11 @@ ifeq ($(ARCH),amd64)
 override ARCH := x86_64
 endif
 
+# We map arm64 (Apple spelling) to aarch64 to avoid having to deal with both spellings everywhere
+ifeq ($(ARCH),arm64)
+override ARCH := aarch64
+endif
+
 ifeq ($(ARCH),i386)
 BINARY:=32
 ISX86:=1
@@ -817,6 +858,10 @@ endif
 ifneq (,$(findstring aarch64,$(ARCH)))
 OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV8
+ifeq ($(OS),Darwin)
+# Apple Chips are all at least A12Z
+MCPU:=apple-a12
+endif
 endif
 
 # Set MARCH-specific flags

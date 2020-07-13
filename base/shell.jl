@@ -17,7 +17,7 @@ end
 
 function shell_parse(str::AbstractString, interpolate::Bool=true;
                      special::AbstractString="")
-    s::SubString = SubString(str, firstindex(str))
+    s = SubString(str, firstindex(str))
     s = rstrip_shell(lstrip(s))
 
     # N.B.: This is used by REPLCompletions
@@ -37,9 +37,9 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
             push!(arg, x)
         end
     end
-    function consume_upto(j)
+    function consume_upto(s, i, j)
         update_arg(s[i:prevind(s, j)])
-        i = something(peek(st), (lastindex(s)+1,'\0'))[1]
+        something(peek(st), (lastindex(s)+1,'\0'))[1]
     end
     function append_arg()
         if isempty(arg); arg = Any["",]; end
@@ -49,7 +49,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
 
     for (j, c) in st
         if !in_single_quotes && !in_double_quotes && isspace(c)
-            consume_upto(j)
+            i = consume_upto(s, i, j)
             append_arg()
             while !isempty(st)
                 # We've made sure above that we don't end in whitespace,
@@ -59,7 +59,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                 popfirst!(st)
             end
         elseif interpolate && !in_single_quotes && c == '$'
-            consume_upto(j)
+            i = consume_upto(s, i, j)
             isempty(st) && error("\$ right before end of command")
             stpos, c = popfirst!(st)
             isspace(c) && error("space not allowed right after \$")
@@ -79,21 +79,21 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
         else
             if !in_double_quotes && c == '\''
                 in_single_quotes = !in_single_quotes
-                consume_upto(j)
+                i = consume_upto(s, i, j)
             elseif !in_single_quotes && c == '"'
                 in_double_quotes = !in_double_quotes
-                consume_upto(j)
+                i = consume_upto(s, i, j)
             elseif c == '\\'
                 if in_double_quotes
                     isempty(st) && error("unterminated double quote")
                     k, c′ = peek(st)
                     if c′ == '"' || c′ == '$' || c′ == '\\'
-                        consume_upto(j)
+                        i = consume_upto(s, i, j)
                         _ = popfirst!(st)
                     end
                 elseif !in_single_quotes
                     isempty(st) && error("dangling backslash")
-                    consume_upto(j)
+                    i = consume_upto(s, i, j)
                     _ = popfirst!(st)
                 end
             elseif !in_single_quotes && !in_double_quotes && c in special
