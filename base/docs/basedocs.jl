@@ -126,13 +126,13 @@ kw"__init__"
 """
     baremodule
 
-`baremodule` declares a module that does not contain `using Base` or a definition of
-[`eval`](@ref Base.eval). It does still import `Core`. In other words,
+`baremodule` declares a module that does not contain `using Base` or local definitions of
+[`eval`](@ref Base.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
 
 ```julia
-module Foo
+module Mod
 
-    foo() = dostuff()
+...
 
 end
 ```
@@ -140,15 +140,16 @@ end
 is equivalent to
 
 ```julia
-baremodule Foo
+baremodule Mod
 
-    using Base
-    eval(ex) = Core.eval(@__MODULE__, ex)
+using Base
 
-    foo() = dostuff()
+eval(x) = Core.eval(Mod, x)
+include(p) = Base.include(Mod, p)
+
+...
 
 end
-```
 """
 kw"baremodule"
 
