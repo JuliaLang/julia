@@ -1277,7 +1277,7 @@ end
 # not leave the console mode in a corrupt state.
 if Sys.iswindows()
 function _console_mode()
-    hOutput = ccall(:GetStdHandle, Int32, (Int32,), -11) # STD_OUTPUT_HANDLE
+    hOutput = ccall(:GetStdHandle, stdcall, Int32, (Int32,), -11) # STD_OUTPUT_HANDLE
     dwMode = Ref{UInt32}(0)
     ccall(:GetConsoleMode, Int32, (Int32, Ptr{Nothing}), hOutput, dwMode)
     dwMode[]
@@ -1286,8 +1286,8 @@ const default_console_mode = _console_mode()
 function _reset_console_mode()
     mode = _console_mode()
     if mode !== default_console_mode
-        hOutput = ccall(:GetStdHandle, Int32, (Int32,), -11) # STD_OUTPUT_HANDLE
-        ccall(:SetConsoleMode, Int32, (Int32, Int32), hOutput, default_console_mode)
+        hOutput = ccall(:GetStdHandle, stdcall, Int32, (Int32,), -11) # STD_OUTPUT_HANDLE
+        ccall(:SetConsoleMode, stdcall, Int32, (Int32, Int32), hOutput, default_console_mode)
         nothing
     end
 end
