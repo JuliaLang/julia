@@ -654,7 +654,7 @@ static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v)
 
 static void array_to_list(fl_context_t *fl_ctx, jl_array_t *a, value_t *pv)
 {
-    if (jl_array_len(a) > 300000)
+    if (jl_array_len(a) > 650000)
         lerror(fl_ctx, symbol(fl_ctx, "error"), "expression too large");
     value_t temp;
     for(long i=jl_array_len(a)-1; i >= 0; i--) {
