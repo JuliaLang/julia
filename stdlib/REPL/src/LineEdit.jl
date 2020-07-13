@@ -1284,11 +1284,13 @@ function _console_mode()
 end
 const default_console_mode = _console_mode()
 function _reset_console_mode()
-    ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x004
-    newMode = default_console_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING
-    hOutput = ccall(:GetStdHandle, Int32, (Int32,), -11)
-    ccall(:SetConsoleMode, Int32, (Int32, Int32), hOutput, newMode)
-    nothing
+    if _console_mode() !== default_console_mode
+        ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x004
+        newMode = default_console_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING
+        hOutput = ccall(:GetStdHandle, Int32, (Int32,), -11)
+        ccall(:SetConsoleMode, Int32, (Int32, Int32), hOutput, newMode)
+        nothing
+    end
 end
 end
 
