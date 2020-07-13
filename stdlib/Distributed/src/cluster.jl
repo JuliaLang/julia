@@ -411,19 +411,19 @@ if launching workers programmatically, execute `addprocs` in its own task.
 
 # Examples
 
-```
+```julia
 # On busy clusters, call `addprocs` asynchronously
 t = @async addprocs(...)
 ```
 
-```
+```julia
 # Utilize workers as and when they come online
 if nprocs() > 1   # Ensure at least one new worker is available
    ....   # perform distributed execution
 end
 ```
 
-```
+```julia
 # Retrieve newly launched worker IDs, or any error messages
 if istaskdone(t)   # Check if `addprocs` has completed to ensure `fetch` doesn't block
     if nworkers() == N
