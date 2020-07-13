@@ -1059,7 +1059,6 @@ end
 @test Const(false) ⊑ isdefined_tfunc(Const(:x), Const(:y))
 @test isdefined_tfunc(Vector{Int}, Const(1)) == Const(false)
 @test isdefined_tfunc(Vector{Any}, Const(1)) == Const(false)
-@test isdefined_tfunc(Module, Any, Any) === Union{}
 @test isdefined_tfunc(Module, Int) === Union{}
 @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(0)) === Const(false)
 @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(1)) === Const(true)
@@ -1389,6 +1388,15 @@ let egal_tfunc
     @test egal_tfunc(Union{Int64, Float64}, Integer) === Bool
     @test egal_tfunc(Union{Int64, Float64}, AbstractArray) === Const(false)
 end
+egal_conditional_lattice1(x, y) = x === y ? "" : 1
+egal_conditional_lattice2(x, y) = x + x === y ? "" : 1
+egal_conditional_lattice3(x, y) = x === y + y ? "" : 1
+@test Base.return_types(egal_conditional_lattice1, (Int64, Int64)) == Any[Union{Int, String}]
+@test Base.return_types(egal_conditional_lattice1, (Int32, Int64)) == Any[Int]
+@test Base.return_types(egal_conditional_lattice2, (Int64, Int64)) == Any[Union{Int, String}]
+@test Base.return_types(egal_conditional_lattice2, (Int32, Int64)) == Any[Int]
+@test Base.return_types(egal_conditional_lattice3, (Int64, Int64)) == Any[Union{Int, String}]
+@test Base.return_types(egal_conditional_lattice3, (Int32, Int64)) == Any[Int]
 
 using Core.Compiler: PartialStruct, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
 @test sizeof_tfunc(Const(Ptr)) === sizeof_tfunc(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}}) === Const(Sys.WORD_SIZE ÷ 8)
@@ -1403,6 +1411,20 @@ let PT = PartialStruct(Tuple{Int64,UInt64}, Any[Const(10, false), UInt64])
     @test nfields_tfunc(PT) === Const(2)
     @test sizeof_nothrow(PT)
 end
+@test nfields_tfunc(Type) === Int
+@test nfields_tfunc(Number) === Int
+@test nfields_tfunc(Int) === Const(0)
+@test nfields_tfunc(Complex) === Const(2)
+@test nfields_tfunc(Type{Type{Int}}) === Const(nfields(DataType))
+@test nfields_tfunc(UnionAll) === Const(2)
+@test nfields_tfunc(DataType) === Const(nfields(DataType))
+@test nfields_tfunc(Type{Int}) === Const(nfields(DataType))
+@test nfields_tfunc(Type{Integer}) === Const(nfields(DataType))
+@test nfields_tfunc(Type{Complex}) === Int
+@test nfields_tfunc(typeof(Union{})) === Const(0)
+@test nfields_tfunc(Type{Union{}}) === Const(0)
+@test nfields_tfunc(Tuple{Int, Vararg{Int}}) === Int
+@test nfields_tfunc(Tuple{Int, Integer}) === Const(2)
 
 using Core.Compiler: typeof_tfunc
 @test typeof_tfunc(Tuple{Vararg{Int}}) == Type{Tuple{Vararg{Int,N}}} where N

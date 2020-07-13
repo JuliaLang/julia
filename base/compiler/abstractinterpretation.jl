@@ -818,11 +818,12 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f), farg
                     end
                     return Conditional(a, bty, aty)
                 end
+                # narrow the lattice slightly (noting the dependency on one of the slots), to promote more effective smerge
                 if isa(b, Slot)
-                    return Conditional(b, bty, bty)
+                    return Conditional(b, rt === Const(false) ? Union{} : bty, rt === Const(true) ? Union{} : bty)
                 end
                 if isa(a, Slot)
-                    return Conditional(a, aty, aty)
+                    return Conditional(a, rt === Const(false) ? Union{} : aty, rt === Const(true) ? Union{} : aty)
                 end
             elseif f === Core.Compiler.not_int
                 aty = argtypes[2]
@@ -1328,7 +1329,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     if isa(fname, Slot)
                         changes = StateUpdate(fname, VarState(Any, false), changes)
                     end
-                elseif hd === :inbounds || hd === :meta || hd === :loopinfo || hd == :code_coverage_effect
+                elseif hd === :inbounds || hd === :meta || hd === :loopinfo || hd === :code_coverage_effect
                     # these do not generate code
                 else
                     t = abstract_eval_statement(interp, stmt, changes, frame)

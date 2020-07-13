@@ -212,7 +212,10 @@ update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(
 function record_ssa_assign(ssa_id::Int, @nospecialize(new), frame::InferenceState)
     old = frame.src.ssavaluetypes[ssa_id]
     if old === NOT_FOUND || !(new ⊑ old)
-        frame.src.ssavaluetypes[ssa_id] = tmerge(old, new)
+        # typically, we expect that old ⊑ new (that output information only
+        # gets less precise with worse input information), but to actually
+        # guarantee convergence we need to use tmerge here to ensure that is true
+        frame.src.ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(old, new)
         W = frame.ip
         s = frame.stmt_types
         for r in frame.ssavalue_uses[ssa_id]
