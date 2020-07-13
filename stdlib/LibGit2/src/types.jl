@@ -977,6 +977,10 @@ end
 abstract type AbstractGitObject end
 
 function Base.getproperty(obj::AbstractGitObject, name::Symbol)
+    # These type-assertions enforce the interface requirements above.
+    # They assist type-inference in cases where the compiler only knows that it
+    # has an `AbstractGitObject` without being certain about the concrete type.
+    # See detailed explanation in https://github.com/JuliaLang/julia/pull/36452.
     if name === :owner
         return getfield(obj, :owner)::Union{Nothing,GitRepo,GitTree}
     elseif name === :ptr
