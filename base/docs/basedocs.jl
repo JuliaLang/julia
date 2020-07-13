@@ -131,14 +131,22 @@ kw"__init__"
 
 ```julia
 module Foo
+
+    foo() = dostuff()
+
+end
 ```
 
 is equivalent to
 
 ```julia
 baremodule Foo
+
     using Base
     eval(ex) = Core.eval(@__MODULE__, ex)
+
+    foo() = dostuff()
+
 end
 ```
 """
