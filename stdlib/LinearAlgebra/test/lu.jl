@@ -360,4 +360,17 @@ end
     end
 end
 
+@testset "transpose(A) / lu(B)' should not overwrite A (#36657)" begin
+    for elty in (Float16, Float64, ComplexF64)
+        A = randn(elty, 5, 5)
+        B = randn(elty, 5, 5)
+        C = copy(A)
+        a = randn(elty, 5)
+        c = copy(a)
+        @test transpose(A) / lu(B)' ≈ transpose(A) / B
+        @test transpose(a) / lu(B)' ≈ transpose(a) / B        
+        @test A == C
+        @test a == c
+    end
+end
 end # module TestLU
