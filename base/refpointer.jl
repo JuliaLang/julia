@@ -19,7 +19,9 @@ allocated. For a non-bitstype `T`, the value will be `undef` and will result in
 an error, "UndefRefError: access to undefined reference" if the Ref is
 deferenced.
 
-To check if a `Ref` is an undefined reference, use [`isassigned(ref::RefValue)`](@ref). For example, `isassigned(Ref{T}())` is `false` if T is not a bitstype struct. If T is a bitstype, `isassigned(Ref{T}())` will always be true.
+To check if a `Ref` is an undefined reference, use [`isassigned(ref::RefValue)`](@ref).
+For example, `isassigned(Ref{T}())` is `false` if T is not a bitstype struct.
+If T is a bitstype, `isassigned(Ref{T}())` will always be true.
 
 When passed as a `ccall` argument (either as a `Ptr` or `Ref` type), a `Ref`
 object will be converted to a native pointer to the data it references.
