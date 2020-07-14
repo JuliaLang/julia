@@ -486,4 +486,14 @@ end
     @test condskeel(A) ≈ condskeel(A, [8,8,8])
 end
 
+@testset "isapprox on ranges" begin
+    @test 1:10 ≈ 1:10
+    @test 1:10 ≈ Float64.(1:10)
+    @test 1:10 ≈ (1:10) .+ sqrt(eps(Float64))
+    @test !(1:10 ≈ 2:11)
+    @test 1:0 ≈ 2:1
+    @test 1:10 ≈ collect(1:10)
+    @test collect(1:10) ≈ 1:10
+end
+
 end # module TestGeneric

@@ -1628,7 +1628,20 @@ promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_elt
 # isapprox: approximate equality of arrays [like isapprox(Number,Number)]
 # Supports nested arrays; e.g., for `a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]`
 # `a ≈ a` is `true`.
-function isapprox(x::AbstractArray, y::AbstractArray;
+function isapprox(x::AbstractArray, y::AbstractArray; kw...)
+    isapprox_generic_arrays(x,y;kw...)
+end
+function isapprox(x::AbstractRange, y::AbstractRange; kw...)
+    # x - y can throw an error, if their step is equal
+    # but generic version computes norm(x-y)
+    if step(x) == step(y)
+        isapprox(collect(x), y; kw...)
+    else
+        isapprox_generic_arrays(x,y; kw...)
+    end
+end
+
+function isapprox_generic_arrays(x::AbstractArray, y::AbstractArray;
     atol::Real=0,
     rtol::Real=Base.rtoldefault(promote_leaf_eltypes(x),promote_leaf_eltypes(y),atol),
     nans::Bool=false, norm::Function=norm)
