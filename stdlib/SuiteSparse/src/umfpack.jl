@@ -221,7 +221,7 @@ function lu!(F::UmfpackLU, S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes}; check::B
     F.rowval = zerobased ? copy(rowvals(S)) : decrement(rowvals(S))
     F.nzval = copy(nonzeros(S))
 
-    umfpack_numeric!(F)
+    umfpack_numeric!(F, reuse_numeric = false)
     check && (issuccess(F) || throw(LinearAlgebra.SingularException(0)))
     return F
 end
@@ -320,7 +320,8 @@ for itype in UmfpackIndexTypes
             U.symbolic = tmp[1]
             return U
         end
-        function umfpack_numeric!(U::UmfpackLU{Float64,$itype})
+        function umfpack_numeric!(U::UmfpackLU{Float64,$itype}; reuse_numeric = true)
+            if (reuse_numeric && U.numeric != C_NULL) return U end
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
             tmp = Vector{Ptr{Cvoid}}(undef, 1)
             status = ccall(($num_r, :libumfpack), $itype,
@@ -335,7 +336,8 @@ for itype in UmfpackIndexTypes
             U.numeric = tmp[1]
             return U
         end
-        function umfpack_numeric!(U::UmfpackLU{ComplexF64,$itype})
+        function umfpack_numeric!(U::UmfpackLU{ComplexF64,$itype}; reuse_numeric = true)
+            if (reuse_numeric && U.numeric != C_NULL) return U end
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
             tmp = Vector{Ptr{Cvoid}}(undef, 1)
             status = ccall(($num_c, :libumfpack), $itype,
