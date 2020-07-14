@@ -345,8 +345,8 @@ end
 
 Wrap an expression in a [`Task`](@ref) and add it to the local machine's scheduler queue.
 
-Values of a variable `x` can be interpolated into `@async` via `\$x`. This allows you to 
-insert the _value_ of a variable, isolating the aysnchronous code from changes to the 
+Values of a variable `x` can be interpolated into `@async` using `\$x`. This allows you 
+to insert the _value_ of a variable, isolating the aysnchronous code from changes to the 
 variable's value in the current task.
 
 # Examples
