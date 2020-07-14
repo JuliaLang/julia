@@ -367,8 +367,8 @@ end
         C = copy(A)
         a = randn(elty, 5)
         c = copy(a)
-        @test transpose(A) / lu(B)' ≈ transpose(A) / B
-        @test transpose(a) / lu(B)' ≈ transpose(a) / B        
+        @test transpose(A) / lu(B)' ≈ transpose(A) / B'
+        @test transpose(a) / lu(B)' ≈ transpose(a) / B'
         @test A == C
         @test a == c
     end
