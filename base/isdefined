@@ -249,16 +249,19 @@ See also [`isdefined`](@ref).
 
 # Examples
 ```jldoctest
-julia> function f()
-           println(@isdefined x)
-           x = 3
-           println(@isdefined x)
-       end
-f (generic function with 1 method)
-
-julia> f()
+julia> @isdefined newvar
 false
+
+julia> newvar = 1
+1
+
+julia> @isdefined newvar
 true
+
+julia> let # create a new scope 
+       @isdefined newvar
+       end
+false
 ```
 """
 macro isdefined(s::Symbol)
