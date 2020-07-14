@@ -771,22 +771,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             }
             return;
         }
-        if (t == jl_typemap_level_type) {
-            // perform some compression on the typemap levels
-            // (which will need to be rehashed during deserialization anyhow)
-            jl_typemap_level_t *node = (jl_typemap_level_t*)v;
-            assert( // make sure this type has the expected ordering and layout
-                offsetof(jl_typemap_level_t, arg1) == 0 * sizeof(jl_value_t*) &&
-                offsetof(jl_typemap_level_t, targ) == 1 * sizeof(jl_value_t*) &&
-                offsetof(jl_typemap_level_t, linear) == 2 * sizeof(jl_value_t*) &&
-                offsetof(jl_typemap_level_t, any) == 3 * sizeof(jl_value_t*) &&
-                sizeof(jl_typemap_level_t) == 4 * sizeof(jl_value_t*));
-            jl_serialize_value(s, node->arg1);
-            jl_serialize_value(s, node->targ);
-            jl_serialize_value(s, node->linear);
-            jl_serialize_value(s, node->any);
-            return;
-        }
 
         char *data = (char*)jl_data_ptr(v);
         size_t i, j, np = t->layout->npointers;

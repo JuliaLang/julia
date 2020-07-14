@@ -55,7 +55,7 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
     mt->kwsorter = NULL;
     mt->backedges = NULL;
     JL_MUTEX_INIT(&mt->writelock);
-    mt->offs = 1;
+    mt->offs = 0;
     mt->frozen = 0;
     return mt;
 }
@@ -569,8 +569,8 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
             // as an optimization
             tn->mt = jl_new_method_table(name, module);
             jl_gc_wb(tn, tn->mt);
-            if (jl_svec_len(parameters) > 0)
-                tn->mt->offs = 0;
+            if (jl_svec_len(parameters) == 0 && !abstract)
+                tn->mt->offs = 1;
         }
         else {
             // Everything else, gets to use the unified table
