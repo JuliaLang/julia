@@ -444,3 +444,8 @@ function _handle_message_test()
     return _handle_progress_test(progress)
 end
 @test _handle_message_test() isa Tuple{Base.UUID, String}
+
+@testset "#36422" begin
+    str_36422 = "using InteractiveUtils; code_llvm(Base.ht_keyindex, (Dict{NTuple{65,Int64},Nothing}, NTuple{65,Int64}))"
+    @test success(`$(Base.julia_cmd()) --startup-file=no -e $str_36422`)
+end

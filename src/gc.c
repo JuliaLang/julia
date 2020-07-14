@@ -2229,6 +2229,7 @@ excstack: {
                         goto mark;
                     }
                 }
+                jlval_index = 0;
             }
             // The exception comes last - mark it
             new_obj = jl_excstack_exception(excstack, itr);
@@ -3205,7 +3206,11 @@ void jl_gc_init(void)
 
 #ifdef _P64
     // on a big memory machine, set max_collect_interval to totalmem / ncores / 2
-    size_t maxmem = uv_get_total_memory() / jl_cpu_threads() / 2;
+    uint64_t total_mem = uv_get_total_memory();
+    uint64_t constrained_mem = uv_get_constrained_memory();
+    if (constrained_mem > 0 && constrained_mem < total_mem)
+        total_mem = constrained_mem;
+    size_t maxmem = total_mem / jl_cpu_threads() / 2;
     if (maxmem > max_collect_interval)
         max_collect_interval = maxmem;
 #endif

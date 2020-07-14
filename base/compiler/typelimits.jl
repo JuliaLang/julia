@@ -20,7 +20,13 @@ function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize
     source[1] === source[2] && (source = svec(source[1]))
     type_more_complex(t, compare, source, 1, allowed_tupledepth, allowed_tuplelen) || return t
     r = _limit_type_size(t, compare, source, 1, allowed_tuplelen)
-    @assert t <: r
+    #@assert t <: r # this may fail if t contains a typevar in invariant and multiple times
+        # in covariant position and r looses the occurence in invariant position (see #36407)
+    if !(t <: r) # ideally, this should never happen
+        # widen to minimum complexity to obtain a valid result
+        r = _limit_type_size(t, Any, source, 1, allowed_tuplelen)
+        t <: r || (r = Any) # final escape hatch
+    end
     #@assert r === _limit_type_size(r, t, source) # this monotonicity constraint is slightly stronger than actually required,
       # since we only actually need to demonstrate that repeated application would reaches a fixed point,
       #not that it is already at the fixed point

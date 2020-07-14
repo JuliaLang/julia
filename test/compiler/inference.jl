@@ -32,6 +32,9 @@ let ref = Tuple{T, Val{T}} where T<:(Val{T} where T<:(Val{T} where T<:(Val{T} wh
     @test Core.Compiler.limit_type_size(ref, sig, Union{}, 100, 100) == ref
 end
 
+let t = Tuple{Ref{T},T,T} where T, c = Tuple{Ref, T, T} where T # #36407
+    @test t <: Core.Compiler.limit_type_size(t, c, Union{}, 1, 100)
+end
 
 @test Core.Compiler.unionlen(Union{}) == 1
 @test Core.Compiler.unionlen(Int8) == 1
@@ -2599,3 +2602,8 @@ _use_unstable_kw_2() = _unstable_kw(x = 2, y = rand())
 end
 _construct_structwithsplatnew() = StructWithSplatNew(("",))
 @test Base.return_types(_construct_structwithsplatnew) == Any[StructWithSplatNew]
+
+# Issue #36531, double varargs in abstract_iteration
+f36531(args...) = tuple((args...)...)
+@test @inferred(f36531(1,2,3)) == (1,2,3)
+@test code_typed(f36531, Tuple{Vararg{Int}}) isa Vector

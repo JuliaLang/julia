@@ -3689,10 +3689,10 @@ f(x) = yt(x)
         (label-counter 0)     ;; counter for generating label addresses
         (label-map (table))   ;; maps label names to generated addresses
         (label-nesting (table)) ;; exception handler and catch block nesting of each label
-        (finally-handler #f)  ;; `(var label map level)` where `map` is a list of `(tag . action)`.
-                              ;; To exit the current finally block, set `var` to integer `tag`,
-                              ;; jump to `label`, and put `(tag . action)` in the map, where `action`
-                              ;; is `(return x)`, `(break x)`, or a call to rethrow.
+        (finally-handler #f)  ;; Current finally block info: `(var label map level tokens)`
+                              ;; `map` is a list of `(tag . action)` which will
+                              ;; be emitted at the exit of the block. Code
+                              ;; should enter the finally block via `enter-finally-block`.
         (handler-goto-fixups '())  ;; `goto`s that might need `leave` exprs added
         (handler-level 0)     ;; exception handler nesting depth
         (catch-token-stack '())) ;; tokens identifying handler enter for current catch blocks
@@ -3709,14 +3709,27 @@ f(x) = yt(x)
           (let ((l (make-label)))
             (mark-label l)
             l)))
-    (define (leave-finally-block action (need-goto #t))
+    ;; Enter a finally block, either through the landing pad or via a jump if
+    ;; `need-goto` is true. Before entering, the current code path is identified
+    ;; with a tag which labels the action to be taken at finally handler exit.
+    ;; `action` may be `(return x)`, `(break x)`, or a call to rethrow.
+    (define (enter-finally-block action (need-goto #t))
       (let* ((tags (caddr finally-handler))
              (tag  (if (null? tags) 1 (+ 1 (caar tags)))))
+        ;; To enter the current active finally block, set the tag variable
+        ;; to identify the current code path with the action for this code path
+        ;; which will run at finally block exit.
         (set-car! (cddr finally-handler) (cons (cons tag action) tags))
         (emit `(= ,(car finally-handler) ,tag))
         (if need-goto
-            (begin (emit `(leave ,(+ 1 (- handler-level (cadddr finally-handler)))))
-                   (emit `(goto ,(cadr finally-handler)))))
+            (let ((label (cadr finally-handler))
+                  (dest-handler-level (cadddr finally-handler))
+                  (dest-tokens        (caddddr finally-handler)))
+              ;; Leave current exception handling scope and jump to finally block
+              (let ((pexc (pop-exc-expr catch-token-stack dest-tokens)))
+                (if pexc (emit pexc)))
+              (emit `(leave ,(+ 1 (- handler-level dest-handler-level))))
+              (emit `(goto ,label))))
         tag))
     (define (pop-exc-expr src-tokens dest-tokens)
       (if (eq? src-tokens dest-tokens)
@@ -3745,7 +3758,7 @@ f(x) = yt(x)
                                (else             (make-ssavalue)))))
                 (if tmp (emit `(= ,tmp ,x)))
                 (if finally-handler
-                    (leave-finally-block `(return ,(or tmp x)))
+                    (enter-finally-block `(return ,(or tmp x)))
                     (begin (emit `(leave ,handler-level))
                            (actually-return (or tmp x))))
                 (or tmp x))
@@ -3753,11 +3766,11 @@ f(x) = yt(x)
     (define (emit-break labl)
       (let ((lvl (caddr labl))
             (dest-tokens (cadddr labl)))
-        (let ((pexc (pop-exc-expr catch-token-stack dest-tokens)))
-          (if pexc (emit pexc)))
         (if (and finally-handler (> (cadddr finally-handler) lvl))
-            (leave-finally-block `(break ,labl))
+            (enter-finally-block `(break ,labl))
             (begin
+              (let ((pexc (pop-exc-expr catch-token-stack dest-tokens)))
+                (if pexc (emit pexc)))
               (if (> handler-level lvl)
                   (emit `(leave ,(- handler-level lvl))))
               (emit `(goto ,(cadr labl)))))))
@@ -4031,7 +4044,7 @@ f(x) = yt(x)
                ;; handler block entry
                (emit `(= ,handler-token (enter ,catch)))
                (set! handler-level (+ handler-level 1))
-               (if finally (begin (set! my-finally-handler (list finally endl '() handler-level))
+               (if finally (begin (set! my-finally-handler (list finally endl '() handler-level catch-token-stack))
                                   (set! finally-handler my-finally-handler)
                                   (emit `(= ,finally -1))))
                (let* ((v1  (compile (cadr e) break-labels value #f)) ;; emit try block code
@@ -4049,11 +4062,12 @@ f(x) = yt(x)
                  (mark-label catch)
                  (emit `(leave 1))
                  (if finally
-                     (begin (leave-finally-block '(call (top rethrow)) #f)
-                            (if endl (mark-label endl))
+                     (begin (enter-finally-block '(call (top rethrow)) #f) ;; enter block via exception
+                            (mark-label endl) ;; non-exceptional control flow enters here
                             (set! finally-handler last-finally-handler)
                             (compile (caddr e) break-labels #f #f)
-                            ;; emit actions to be taken at exit of finally block
+                            ;; emit actions to be taken at exit of finally
+                            ;; block, depending on the tag variable `finally`
                             (let loop ((actions (caddr my-finally-handler)))
                               (if (pair? actions)
                                   (let ((skip (if (and tail (null? (cdr actions))
