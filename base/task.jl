@@ -345,9 +345,23 @@ end
 
 Wrap an expression in a [`Task`](@ref) and add it to the local machine's scheduler queue.
 
-Values can be interpolated into `@async` via `\$`, which copies the value directly into the
-constructed underlying closure. This allows you to insert the _value_ of a variable,
-isolating the aysnchronous code from changes to the variable's value in the current task.
+Values of a variable `x` can be interpolated into `@async` via `\$x`. This allows you to 
+insert the _value_ of a variable, isolating the aysnchronous code from changes to the 
+variable's value in the current task.
+
+# Examples
+```jldoctest
+julia> x = "original"
+       t = @async begin
+           sleep(0.1) # Wait for change in x
+           println(" x = ", x)
+           println("\$x = ", $x)
+       end
+       x = "changed"
+       wait(t)
+ x = changed
+$x = original
+```
 
 !!! compat "Julia 1.4"
     Interpolating values via `\$` is available as of Julia 1.4.
