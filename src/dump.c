@@ -1179,7 +1179,6 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     assert(pos == backref_list.len - 1 && "nothing should have been deserialized since assigning pos");
     backref_list.items[pos] = dt;
     dt->size = size;
-    dt->instance = NULL;
     dt->abstract = flags & 1;
     dt->mutabl = (flags >> 1) & 1;
     int has_layout = (flags >> 2) & 1;

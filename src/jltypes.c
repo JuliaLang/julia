@@ -1416,7 +1416,6 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     }
     ndt->mutabl = dt->mutabl;
     ndt->abstract = dt->abstract;
-    ndt->instance = NULL;
     ndt->size = 0;
     jl_precompute_memoized_dt(ndt, cacheable);
     if (istuple)
@@ -1912,7 +1911,6 @@ void jl_init_types(void) JL_GC_DISABLED
                                       jl_any_type, jl_any_type, jl_any_type, jl_any_type,
                                       jl_any_type, jl_any_type, jl_any_type, jl_any_type,
                                       jl_any_type);
-    jl_datatype_type->instance = NULL;
     jl_datatype_type->abstract = 0;
     // NOTE: types are not actually mutable, but we want to ensure they are heap-allocated with stable addresses
     jl_datatype_type->mutabl = 1;
@@ -1931,7 +1929,6 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_typename_type->types = jl_svec(9, jl_symbol_type, jl_any_type, jl_simplevector_type,
                                       jl_type_type, jl_simplevector_type, jl_simplevector_type,
                                       jl_any_type, jl_any_type, jl_any_type);
-    jl_typename_type->instance = NULL;
     jl_typename_type->abstract = 0;
     jl_typename_type->mutabl = 1;
     jl_typename_type->ninitialized = 2;
@@ -1951,7 +1948,6 @@ void jl_init_types(void) JL_GC_DISABLED
                                        jl_any_type, jl_any_type/*module*/,
                                        jl_any_type/*any vector*/, jl_any_type/*long*/, jl_any_type/*int32*/,
                                        jl_any_type/*uint8*/, jl_any_type/*uint8*/);
-    jl_methtable_type->instance = NULL;
     jl_methtable_type->abstract = 0;
     jl_methtable_type->mutabl = 1;
     jl_methtable_type->ninitialized = 5;
@@ -1964,7 +1960,6 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_symbol_type->parameters = jl_emptysvec;
     jl_symbol_type->name->names = jl_emptysvec;
     jl_symbol_type->types = jl_emptysvec;
-    jl_symbol_type->instance = NULL;
     jl_symbol_type->size = 0;
     jl_symbol_type->abstract = 0;
     jl_symbol_type->mutabl = 1;
@@ -1978,7 +1973,6 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_simplevector_type->parameters = jl_emptysvec;
     jl_simplevector_type->name->names = jl_emptysvec;
     jl_simplevector_type->types = jl_emptysvec;
-    jl_simplevector_type->instance = NULL;
     jl_simplevector_type->abstract = 0;
     jl_simplevector_type->mutabl = 1;
     jl_simplevector_type->ninitialized = 0;
