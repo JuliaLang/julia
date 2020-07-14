@@ -116,7 +116,7 @@ filtered, before any other work is done to construct the log record data
 structure itself.
 
 # Examples
-```
+```julia
 julia> Logging.LogLevel(0) == Logging.Info
 true
 ```
@@ -202,7 +202,7 @@ There's also some key value pairs which have conventional meaning:
 
 # Examples
 
-```
+```julia
 @debug "Verbose debugging information.  Invisible by default"
 @info  "An informational message"
 @warn  "Something was odd.  You should pay attention"
@@ -442,7 +442,7 @@ a *global* setting, intended to make debug logging extremely cheap when
 disabled.
 
 # Examples
-```
+```julia
 Logging.disable_logging(Logging.Info) # Disable debug and info
 ```
 """
