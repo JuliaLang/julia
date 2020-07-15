@@ -29,7 +29,9 @@ object will be converted to a native pointer to the data it references.
 A `C_NULL` instance of `Ptr` can be passed to a `ccall` `Ref` argument to initialize it.
 
 # Use in broadcasting
-`Ref` is sometimes used in broadcasting in order to treat the referenced values as a scalar:
+`Ref` is sometimes used in broadcasting in order to treat the referenced values as a scalar.
+
+# Examples
 
 ```jldoctest
 julia> Ref(5)
