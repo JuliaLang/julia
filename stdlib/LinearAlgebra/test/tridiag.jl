@@ -294,6 +294,11 @@ end
                 @test_throws DimensionMismatch LinearAlgebra.mul!(Cnm,B,Cnn)
             end
         end
+        @testset "Negation" begin
+            mA = -A
+            @test mA isa mat_type
+            @test -mA == A
+        end
         if mat_type == SymTridiagonal
             @testset "Tridiagonal/SymTridiagonal mixing ops" begin
                 B = convert(Tridiagonal{elty}, A)
