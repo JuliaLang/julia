@@ -11,8 +11,8 @@ RefValue(x::T) where {T} = RefValue{T}(x)
 """
     isassigned(ref::RefValue) -> Bool
 
-Test whether the given [`Ref`](@ref) has been associated with a value.
-This is always true for a [`Ref`](@ref) for a bitstype.
+Test whether the given [`Ref`](@ref) is associated with a value.
+This is always true for a [`Ref`](@ref) of a bitstype object.
 Return `false` if the reference is undefined.
 
 # Examples

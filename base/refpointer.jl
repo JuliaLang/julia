@@ -20,13 +20,13 @@ an error, "UndefRefError: access to undefined reference" if the Ref is
 deferenced.
 
 To check if a `Ref` is an undefined reference, use [`isassigned(ref::RefValue)`](@ref).
-For example, `isassigned(Ref{T}())` is `false` if T is not a bitstype struct.
-If T is a bitstype, `isassigned(Ref{T}())` will always be true.
+For example, `isassigned(Ref{T}())` is `false` if `T` is not a bitstype.
+If `T` is a bitstype, `isassigned(Ref{T}())` will always be true.
 
 When passed as a `ccall` argument (either as a `Ptr` or `Ref` type), a `Ref`
 object will be converted to a native pointer to the data it references.
 
-A `C_NULL` instance of `Ptr` can be passed to a `ccall` Ref argument to initialize it.
+A `C_NULL` instance of `Ptr` can be passed to a `ccall` `Ref` argument to initialize it.
 
 # Use in broadcasting
 `Ref` is sometimes used in broadcasting in order to treat the referenced values as a scalar:
