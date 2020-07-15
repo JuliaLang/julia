@@ -554,7 +554,7 @@ eltype(::Type{AbstractArray{T, N}}) where {T, N} = T
 eltype(::Type{A}) where {A<:AbstractArray} = eltype(supertype(A))
 ```
 
-Another possibility is the following, which could useful to adapt
+Another possibility is the following, which could be useful to adapt
 to cases where the parameter `T` would need to be matched more
 narrowly:
 ```julia
