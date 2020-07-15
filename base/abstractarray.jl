@@ -410,7 +410,7 @@ Float64[]
 """
 last(itr, n::Integer) = reverse!(collect(Iterators.take(Iterators.reverse(itr), n)))
 # Faster method for arrays
-function last(v::AbstractArray, n::Integer)
+function last(v::AbstractVector, n::Integer)
     n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
     @inbounds v[max(begin, end - n + 1):end]
 end
