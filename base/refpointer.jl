@@ -15,8 +15,8 @@ it can be written `Ref(a, i)` for creating a reference to the `i`-th element of 
 
 `Ref{T}()` creates a reference to a value of type `T` without initialization.
 For a bitstype `T`, the value will be whatever currently resides in the memory
-allocated. For a non-bitstype `T`, the value will be `undef` and will result in
-an error, "UndefRefError: access to undefined reference" if the Ref is
+allocated. For a non-bitstype `T`, the reference will be undefined and will result in
+an error, "UndefRefError: access to undefined reference", if the `Ref` is
 deferenced.
 
 To check if a `Ref` is an undefined reference, use [`isassigned(ref::RefValue)`](@ref).
@@ -32,23 +32,33 @@ A `C_NULL` instance of `Ptr` can be passed to a `ccall` `Ref` argument to initia
 `Ref` is sometimes used in broadcasting in order to treat the referenced values as a scalar:
 
 ```jldoctest
-julia> isa.(Ref([1,2,3]), [Array, Dict, Int])
+julia> Ref(5)
+Base.RefValue{Int64}(5)
+
+julia> isa.(Ref([1,2,3]), [Array, Dict, Int]) # Treat reference values as scalar during broadcasting
 3-element BitVector:
  1
  0
  0
 
-julia> Ref{Function}()
+julia> Ref{Function}()  # Undefined reference to a non-bitstype, Function
 Base.RefValue{Function}(#undef)
 
-julia> try Ref{Function}()[] catch e; println(e); end
+julia> try
+           Ref{Function}()[] # Dereferencing an undefined reference will result in an error
+       catch e
+           println(e)
+       end
 UndefRefError()
 
-julia> isassigned(Ref{Int64}())
+julia> Ref{Int64}()[] == 0 # A reference to a bitstype refers to an undetermined value if not given
+false
+
+julia> isassigned(Ref{Int64}()) # A reference to a bitstype is always assigned
 true
 
-julia> Ref(C_NULL)
-Base.RefValue{Ptr{Nothing}}(Ptr{Nothing} @0x0000000000000000)
+julia> Ref{Int64}(0)[] == 0 # Explicitly give a value for a bitstype reference
+true
 ```
 """
 Ref
