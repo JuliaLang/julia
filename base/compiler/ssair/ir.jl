@@ -159,25 +159,25 @@ end
 struct InstructionStream
     inst::Vector{Any}
     type::Vector{Any}
+    info::Vector{Any}
     line::Vector{Int32}
     flag::Vector{UInt8}
 end
 function InstructionStream(len::Int)
     insts = Array{Any}(undef, len)
     types = Array{Any}(undef, len)
+    info = Array{Any}(undef, len)
+    fill!(info, nothing)
     lines = fill(Int32(0), len)
     flags = fill(0x00, len)
-    return InstructionStream(insts, types, lines, flags)
+    return InstructionStream(insts, types, info, lines, flags)
 end
 InstructionStream() = InstructionStream(0)
 length(is::InstructionStream) = length(is.inst)
 isempty(is::InstructionStream) = isempty(is.inst)
 function add!(is::InstructionStream)
     ninst = length(is) + 1
-    resize!(is.inst, ninst)
-    resize!(is.type, ninst)
-    resize!(is.line, ninst)
-    resize!(is.flag, ninst)
+    resize!(is, ninst)
     return ninst
 end
 #function copy(is::InstructionStream) # unused
@@ -191,15 +191,16 @@ function resize!(stmts::InstructionStream, len)
     old_length = length(stmts)
     resize!(stmts.inst, len)
     resize!(stmts.type, len)
+    resize!(stmts.info, len)
     resize!(stmts.line, len)
     resize!(stmts.flag, len)
     for i in (old_length + 1):len
         stmts.line[i] = 0
         stmts.flag[i] = 0x00
+        stmts.info[i] = nothing
     end
     return stmts
 end
-
 
 struct Instruction
     data::InstructionStream
@@ -220,6 +221,7 @@ end
 function setindex!(is::InstructionStream, newval::Instruction, idx::Int)
     is.inst[idx] = newval[:inst]
     is.type[idx] = newval[:type]
+    is.info[idx] = newval[:info]
     is.line[idx] = newval[:line]
     is.flag[idx] = newval[:flag]
     return is

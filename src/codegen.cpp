@@ -6220,6 +6220,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     };
     std::vector<DebugLineTable> linetable;
     {
+        assert(jl_is_array(src->linetable));
         size_t nlocs = jl_array_len(src->linetable);
         std::map<std::tuple<StringRef, StringRef>, DISubprogram*> subprograms;
         linetable.resize(nlocs + 1);

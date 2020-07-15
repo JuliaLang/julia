@@ -9,6 +9,7 @@ mutable struct OptimizationState
     linfo::MethodInstance
     calledges::Vector{Any}
     src::CodeInfo
+    stmt_info::Vector{Any}
     mod::Module
     nargs::Int
     world::UInt
@@ -31,7 +32,7 @@ mutable struct OptimizationState
         src = frame.src
         return new(params, frame.linfo,
                    s_edges::Vector{Any},
-                   src, frame.mod, frame.nargs,
+                   src, frame.stmt_info, frame.mod, frame.nargs,
                    frame.world, frame.min_valid, frame.max_valid,
                    frame.sptypes, frame.slottypes, false,
                    frame.matching_methods_cache, interp)
@@ -49,6 +50,7 @@ mutable struct OptimizationState
             slottypes = Any[ Any for i = 1:nslots ]
         end
         s_edges = []
+        stmt_info = Any[nothing for i = 1:nssavalues]
         # cache some useful state computations
         toplevel = !isa(linfo.def, Method)
         if !toplevel
@@ -61,7 +63,7 @@ mutable struct OptimizationState
         end
         return new(params, linfo,
                    s_edges::Vector{Any},
-                   src, inmodule, nargs,
+                   src, stmt_info, inmodule, nargs,
                    get_world_counter(), UInt(1), get_world_counter(),
                    sptypes_from_meth_instance(linfo), slottypes, false,
                    IdDict{Any, Tuple{Any, UInt, UInt, Bool}}(), interp)

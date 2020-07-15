@@ -994,6 +994,22 @@ function process_simple!(ir::IRCode, idx::Int, params::OptimizationParams, world
     return (sig, invoke_data)
 end
 
+# This is not currently called in the regular course, but may be needed
+# if we ever want to re-run inlining again later in the pass pipeline after
+# additional type information was discovered.
+function recompute_method_matches(atype, sv)
+    # Regular case: Retrieve matching methods from cache (or compute them)
+    # World age does not need to be taken into account in the cache
+    # because it is forwarded from type inference through `sv.params`
+    # in the case that the cache is nonempty, so it should be unchanged
+    # The max number of methods should be the same as in inference most
+    # of the time, and should not affect correctness otherwise.
+    (meth, min_valid, max_valid, ambig) =
+        matching_methods(atype, sv.matching_methods_cache, sv.params.MAX_METHODS, sv.world)
+    update_valid_age!(min_valid, max_valid, sv)
+    MethodMatchInfo(meth, ambig)
+end
+
 function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
     # todo = (inline_idx, (isva, isinvoke, na), method, spvals, inline_linetable, inline_ir, lie)
     todo = Any[]
@@ -1005,7 +1021,14 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
 
         stmt = ir.stmts[idx][:inst]
         calltype = ir.stmts[idx][:type]
+        info = ir.stmts[idx][:info]
+        # Inference determined this couldn't be analyzed. Don't question it.
+        if info === false
+            continue
+        end
+
         (sig, invoke_data) = r
+
 
         # Ok, now figure out what method to call
         if invoke_data !== nothing
@@ -1015,11 +1038,21 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
 
         nu = countunionsplit(sig.atypes)
         if nu == 1 || nu > sv.params.MAX_UNION_SPLITTING
+            if !isa(info, MethodMatchInfo)
+                info = nothing
+            end
+            infos = Any[info]
             splits = Any[sig.atype]
         else
-            splits = Any[]
-            for union_sig in UnionSplitSignature(sig.atypes)
-                push!(splits, argtypes_to_type(union_sig))
+            if !isa(info, UnionSplitInfo)
+                splits = Any[]
+                for union_sig in UnionSplitSignature(sig.atypes)
+                    push!(splits, argtypes_to_type(union_sig))
+                end
+                infos = Any[nothing for i = 1:length(splits)]
+            else
+                splits = info.sigs
+                infos = info.matches
             end
         end
 
@@ -1029,16 +1062,14 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
         too_many = false
         local meth
         local fully_covered = true
-        for atype in splits
-            # Regular case: Retrieve matching methods from cache (or compute them)
-            # World age does not need to be taken into account in the cache
-            # because it is forwarded from type inference through `sv.params`
-            # in the case that the cache is nonempty, so it should be unchanged
-            # The max number of methods should be the same as in inference most
-            # of the time, and should not affect correctness otherwise.
-            (meth, min_valid, max_valid, ambig) =
-                matching_methods(atype, sv.matching_methods_cache, sv.params.MAX_METHODS, sv.world)
-            if meth === false || ambig
+        for i in 1:length(splits)
+            atype = splits[i]
+            info = infos[i]
+            if info === nothing
+                info = recompute_method_matches(atype, sv)
+            end
+            meth = info.applicable
+            if meth === false || info.ambig
                 # Too many applicable methods
                 # Or there is a (partial?) ambiguity
                 too_many = true
@@ -1055,8 +1086,6 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
             else
                 only_method = false
             end
-            update_valid_age!(min_valid, max_valid, sv)
-
             for match in meth::Vector{Any}
                 (metharg, methsp, method) = (match[1]::Type, match[2]::SimpleVector, match[3]::Method)
                 # TODO: This could be better

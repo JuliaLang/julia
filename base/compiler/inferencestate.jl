@@ -19,6 +19,7 @@ mutable struct InferenceState
     nargs::Int
     stmt_types::Vector{Any}
     stmt_edges::Vector{Any}
+    stmt_info::Vector{Any}
     # return type
     bestguess #::Type
     # current active instruction pointers
@@ -62,6 +63,7 @@ mutable struct InferenceState
 
         nssavalues = src.ssavaluetypes::Int
         src.ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
+        stmt_info = Any[ nothing for i = 1:length(code) ]
 
         n = length(code)
         s_edges = Any[ nothing for i = 1:n ]
@@ -105,7 +107,7 @@ mutable struct InferenceState
             InferenceParams(interp), result, linfo,
             sp, slottypes, inmodule, 0,
             src, get_world_counter(interp), min_valid, max_valid,
-            nargs, s_types, s_edges,
+            nargs, s_types, s_edges, stmt_info,
             Union{}, W, 1, n,
             cur_hand, handler_at, n_handlers,
             ssavalue_uses, throw_blocks,
