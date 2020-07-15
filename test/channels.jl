@@ -470,6 +470,45 @@ end
     @test_throws InvalidStateException Base.check_channel_state(c)
 end
 
+# PR #36641
+# Ensure that `isempty()` does not mutate a Channel's state:
+@testset "isempty(::Channel) mutation" begin
+    function isempty_timeout(c::Channel)
+        inner_c = Channel{Union{Bool,Nothing}}()
+        @async put!(inner_c, isempty(c))
+        @async begin
+            sleep(0.01)
+            if isopen(inner_c)
+                put!(inner_c, nothing)
+            end
+        end
+        result = take!(inner_c)
+        if result === nothing
+            error("isempty() timed out!")
+        end
+        return result
+    end
+    # First, with a non-buffered channel
+    c = Channel()
+    @test isempty_timeout(c)
+    t_put = @async put!(c, 1)
+    @test !isempty_timeout(c)
+    # check a second time to ensure `isempty(c)` didn't just consume the element.
+    @test !isempty_timeout(c)
+    @test take!(c) == 1
+    @test isempty_timeout(c)
+    wait(t_put)
+
+    # Next, with a buffered channel:
+    c = Channel(2)
+    @test isempty_timeout(c)
+    t_put = put!(c, 1)
+    @test !isempty_timeout(c)
+    @test !isempty_timeout(c)
+    @test take!(c) == 1
+    @test isempty_timeout(c)
+end
+
 # issue #12473
 # make sure 1-shot timers work
 let a = []
