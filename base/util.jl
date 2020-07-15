@@ -69,7 +69,7 @@ text_colors
 
 function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
     buf = IOBuffer()
-    iscolor = get(io, :color, false)::Bool
+    iscolor = get_have_color()
     try f(IOContext(buf, io), args...)
     finally
         str = String(take!(buf))
