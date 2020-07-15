@@ -479,6 +479,10 @@ module IteratorsMD
 
     Base.LinearIndices(inds::CartesianIndices{N,R}) where {N,R} = LinearIndices{N,R}(inds.indices)
 
+    # array operations
+    Base.intersect(a::CartesianIndices{N}, b::CartesianIndices{N}) where N =
+        CartesianIndices(intersect.(a.indices, b.indices))
+
     # Views of reshaped CartesianIndices are used for partitions — ensure these are fast
     const CartesianPartition{T<:CartesianIndex, P<:CartesianIndices, R<:ReshapedArray{T,1,P}} = SubArray{T,1,R,Tuple{UnitRange{Int}},false}
     eltype(::Type{PartitionIterator{T}}) where {T<:ReshapedArrayLF} = SubArray{eltype(T), 1, T, Tuple{UnitRange{Int}}, true}
