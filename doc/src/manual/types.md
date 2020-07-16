@@ -1108,7 +1108,7 @@ true
 
 ## [`Type{T}` type selectors](@id man-typet-type)
 
-For each type `T`, the `Type{T}` is an abstract parametric type whose only instance is the
+For each type `T`, `Type{T}` is an abstract parametric type whose only instance is the
 object `T`. Until we discuss [Parametric Methods](@ref) and [conversions](@ref
 conversion-and-promotion), it is difficult to explain the utility of this construct, but in
 short, it allows one to specialize function behavior on specific types as *values*. This is
