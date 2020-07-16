@@ -268,12 +268,16 @@ Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) 
 ## multiplication *
 
 function _dot_nonrecursive(u, v)
-    if length(u) != length(v)
+    lu = length(u)
+    if lu != length(v)
         throw(DimensionMismatch("first array has length $(lu) which does not match the length of the second, $(length(v))."))
     end
-    sum(uu*vv for (uu, vv) in zip(u, v); init=(zero(eltype(u)) * zero(eltype(v))))
+    if lu == 0
+        zero(eltype(u)) * zero(eltype(v))
+    else
+        sum(uu*vv for (uu, vv) in zip(u, v))
+    end
 end
-
 
 # Adjoint/Transpose-vector * vector
 *(u::AdjointAbsVec{T}, v::AbstractVector{T}) where {T<:Number} = dot(u.parent, v)
