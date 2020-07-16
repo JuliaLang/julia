@@ -152,7 +152,7 @@ beep(t::UnixTerminal) = write(t.err_stream,"\x7")
 
 Base.displaysize(t::UnixTerminal) = displaysize(t.out_stream)
 
-hascolor(t::TTYTerminal) = Base.ttyhascolor(t.term_type)
+hascolor(t::TTYTerminal) = get(t.out_stream, :color, false)::Bool
 
 # use cached value of have_color
 Base.in(key_value::Pair, t::TTYTerminal) = in(key_value, pipe_writer(t))
