@@ -259,11 +259,11 @@ julia> @isdefined newvar
 true
 
 julia> function f()
-           println(@isdefined x)	
-           x = 3	
-           println(@isdefined x)	
-       end	
-f (generic function with 1 method)	
+           println(@isdefined x)
+           x = 3
+           println(@isdefined x)
+       end
+f (generic function with 1 method)
 
 julia> f()	
 false
