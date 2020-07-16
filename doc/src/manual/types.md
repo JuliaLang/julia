@@ -1060,7 +1060,7 @@ element type.
 
 ## [Singleton types](@id man-singleton-types)
 
-Immutable composite types with no fields are called *singletons*. Formally, if 
+Immutable composite types with no fields are called *singletons*. Formally, if
 
 1. `T` is an immutable composite type (ie defined with `struct`),
 1. `a isa T && b isa T` implies `a === b`,
