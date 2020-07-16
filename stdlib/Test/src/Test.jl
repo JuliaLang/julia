@@ -769,16 +769,15 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error})
         # don't print for interrupted tests
         if !(t isa Error) || t.test_type !== :test_interrupted
             print(t)
-            # don't print the backtrace for Errors because it gets printed in the show
-            # method
-            if !isa(t, Error)
+            if !isa(t, Error) # if not gets printed in the show method
                 Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
             end
             println()
         end
     end
     push!(ts.results, t)
-    t, isa(t, Error) || backtrace()
+    isa(t, Error) || backtrace()
+    return t
 end
 
 # When a DefaultTestSet finishes, it records itself to its parent

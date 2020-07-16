@@ -255,6 +255,22 @@ let errors = @testset NoThrowTestSet begin
     end
 end
 
+let retval_tests = @testset NoThrowTestSet begin
+        ts = Test.DefaultTestSet("Mock for testing retval of record(::DefaultTestSet, ::T <: Result) methods")
+        pass_mock = Test.Pass(:test, 1, 2, LineNumberNode(0, "A Pass Mock"))
+        @test Test.record(ts, pass_mock) isa Test.Pass
+        error_mock = Test.Error(:test, 1, 2, 3, LineNumberNode(0, "An Error Mock"))
+        @test Test.record(ts, error_mock) isa Test.Error
+        fail_mock = Test.Fail(:test, 1, 2, 3, LineNumberNode(0, "A Fail Mock"))
+        @test Test.record(ts, fail_mock) isa Test.Fail
+        broken_mock = Test.Broken(:test, LineNumberNode(0, "A Broken Mock"))
+        @test Test.record(ts, broken_mock) isa Test.Broken
+    end
+    for retval_test in retval_tests
+        @test retval_test isa Test.Pass
+    end
+end
+
 @testset "printing of a TestSetException" begin
     tse_str = sprint(show, Test.TestSetException(1, 2, 3, 4, Vector{Union{Test.Error, Test.Fail}}()))
     @test occursin("1 passed", tse_str)
