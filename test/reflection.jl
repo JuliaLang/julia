@@ -225,6 +225,8 @@ tlayout = TLayout(5,7,11)
 @test fieldnames(TLayout) == (:x, :y, :z) == Base.propertynames(tlayout)
 @test hasfield(TLayout, :y)
 @test !hasfield(TLayout, :a)
+@test hasfield(Complex, :re)
+@test !hasfield(Complex, :qxq)
 @test hasproperty(tlayout, :x)
 @test !hasproperty(tlayout, :p)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
