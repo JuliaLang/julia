@@ -168,8 +168,8 @@ Such a definition might look like this:
 convert(::Type{MyType}, x) = MyType(x)
 ```
 
-The type of the first argument of this method is a [`Type{T}`](@ref man-typet-type),
-`Type{MyType}`, the only instance of which is `MyType`. Thus, this method is only invoked
+The type of the first argument of this method is [`Type{MyType}`](@ref man-typet-type),
+the only instance of which is `MyType`. Thus, this method is only invoked
 when the first argument is the type value `MyType`. Notice the syntax used for the first
 argument: the argument name is omitted prior to the `::` symbol, and only the type is given.
 This is the syntax in Julia for a function argument whose type is specified but whose value
