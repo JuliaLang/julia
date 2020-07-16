@@ -1293,7 +1293,7 @@ function compilecache(pkg::PkgId, path::String)
             chmod(tmppath, filemode(path) & 0o777)
 
             # this is atomic according to POSIX:
-            rename(tmppath, cachefile)
+            rename(tmppath, cachefile; force=true)
             return cachefile
         end
     finally
