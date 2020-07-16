@@ -39,6 +39,10 @@ Multi-threading changes
 Build system changes
 --------------------
 
+* Windows Installer now has the option to 'Add Julia to Path'. To unselect this option
+  from the commandline simply remove the tasks you do not want to be installed: e.g.
+  `./julia-installer.exe /TASKS="desktopicon,startmenu,addtopath"`, adds a desktop
+  icon, a startmenu group icon, and adds Julia to system PATH.
 
 New library functions
 ---------------------
