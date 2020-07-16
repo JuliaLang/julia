@@ -258,9 +258,14 @@ julia> newvar = 1
 julia> @isdefined newvar
 true
 
-julia> let # create a new scope 
-       @isdefined newvar
-       end
+ulia> function f()	julia> @isdefined newvar
+           println(@isdefined x)	
+           x = 3	
+           println(@isdefined x)	
+       end	
+f (generic function with 1 method)	
+
+julia> f()	
 false
 ```
 """
