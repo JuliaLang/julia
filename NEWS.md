@@ -57,6 +57,7 @@ New library functions
 New library features
 --------------------
 
+* The `redirect_*` functions can now be called on `IOContext` objects.
 
 Standard library changes
 ------------------------
