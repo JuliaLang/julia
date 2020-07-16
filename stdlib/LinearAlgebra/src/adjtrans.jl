@@ -267,7 +267,7 @@ Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) 
 
 ## multiplication *
 
-function dot_nonrecursive(u::AbstractVector, v::AbstractVector)
+function _dot_nonrecursive(u, v)
     lu = length(u)
     if length(u) != length(v)
         throw(DimensionMismatch("first array has length $(lu) which does not match the length of the second, $(length(v))."))
