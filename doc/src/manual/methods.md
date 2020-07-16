@@ -184,21 +184,12 @@ meaning that it is unconstrained since all values in Julia are instances of the 
 julia> f(x,y) = println("Whoa there, Nelly.")
 f (generic function with 3 methods)
 
-julia> methods(f)
-# 3 methods for generic function "f":
-[1] f(x::Float64, y::Float64) in Main at none:1
-[2] f(x::Number, y::Number) in Main at none:1
-[3] f(x, y) in Main at none:1
-
 julia> f("foo", 1)
 Whoa there, Nelly.
 ```
 
 This catch-all is less specific than any other possible method definition for a pair of parameter
 values, so it will only be called on pairs of arguments to which no other method definition applies.
-
-Note that in the signature of the third method, there is no type specified for the arguments `x` and `y`.
-This is a shortened way of expressing `f(x::Any, y::Any)`.
 
 Although it seems a simple concept, multiple dispatch on the types of values is perhaps the single
 most powerful and central feature of the Julia language. Core operations typically have dozens
