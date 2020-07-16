@@ -249,6 +249,15 @@ See also [`isdefined`](@ref).
 
 # Examples
 ```jldoctest
+julia> @isdefined newvar
+false
+
+julia> newvar = 1
+1
+
+julia> @isdefined newvar
+true
+
 julia> function f()
            println(@isdefined x)
            x = 3
