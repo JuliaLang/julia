@@ -265,7 +265,7 @@ julia> function f()
        end
 f (generic function with 1 method)
 
-julia> f()	
+julia> f()
 false
 true
 ```
