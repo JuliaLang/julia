@@ -98,6 +98,7 @@ Returns the number of stored (filled) elements in a sparse array.
 
 # Examples
 ```jldoctest
+
 julia> using LinearAlgebra
 julia> A = sparse(2I, 3, 3)
 3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
@@ -131,6 +132,7 @@ modifications to the returned vector will mutate `A` as well. See
 
 # Examples
 ```jldoctest
+
 julia> using LinearAlgebra
 julia> A = sparse(2I, 3, 3)
 3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
@@ -160,6 +162,7 @@ nonzero values. See also [`nonzeros`](@ref) and [`nzrange`](@ref).
 
 # Examples
 ```jldoctest
+
 julia> using LinearAlgebra
 julia> A = sparse(2I, 3, 3)
 3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
@@ -667,6 +670,7 @@ Convert an AbstractMatrix `A` into a sparse matrix.
 
 # Examples
 ```jldoctest
+
 julia> using LinearAlgebra
 julia> A = Matrix(1.0I, 3, 3)
 3×3 Matrix{Float64}:
@@ -3326,6 +3330,7 @@ Concatenate matrices block-diagonally. Currently only implemented for sparse mat
 
 # Examples
 ```jldoctest
+
 julia> using LinearAlgebra
 julia> blockdiag(sparse(2I, 3, 3), sparse(4I, 2, 2))
 5×5 SparseMatrixCSC{Int64,Int64} with 5 stored entries:
