@@ -1132,7 +1132,7 @@ julia> isa(Float64, Type{Real})
 false
 ```
 
-In other words, [`isa(A,Type{B})`](@ref) is true if and only if `A` and `B` are the same object
+In other words, [`isa(A, Type{B})`](@ref) is true if and only if `A` and `B` are the same object
 and that object is a type.
 
 In particular, since parametric types are [invariant](@ref man-parametric-composite-types), we have
