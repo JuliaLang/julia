@@ -258,7 +258,7 @@ julia> newvar = 1
 julia> @isdefined newvar
 true
 
-ulia> function f()	julia> @isdefined newvar
+julia> function f()
            println(@isdefined x)	
            x = 3	
            println(@isdefined x)	
@@ -267,6 +267,7 @@ f (generic function with 1 method)
 
 julia> f()	
 false
+true
 ```
 """
 macro isdefined(s::Symbol)
