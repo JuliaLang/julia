@@ -1166,6 +1166,12 @@ for (x, writable, unix_fd, c_symbol) in
             $x = devnull
             return devnull
         end
+        function ($f)(io::IOContext)
+            io2, _dict = unwrapcontext(io)
+            ($f)(io2)
+            global $x = io
+            return io
+        end
     end
 end
 
