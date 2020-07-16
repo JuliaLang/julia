@@ -278,7 +278,7 @@ end
 # Adjoint/Transpose-vector * vector
 *(u::AdjointAbsVec{T}, v::AbstractVector{T}) where {T<:Number} = dot(u.parent, v)
 *(u::TransposeAbsVec{T}, v::AbstractVector{T}) where {T<:Real} = dot(u.parent, v)
-*(u::AdjOrTransAbsVec, v::AbstractVector) = dot_nonrecursive(u, v)
+*(u::AdjOrTransAbsVec, v::AbstractVector) = _dot_nonrecursive(u, v)
 
 
 # vector * Adjoint/Transpose-vector
@@ -290,10 +290,10 @@ end
 
 # AdjOrTransAbsVec{<:Any,<:AdjOrTransAbsVec} is a lazy conj vectors
 # We need to expand the combinations to avoid ambiguities
-(*)(u::TransposeAbsVec, v::AdjointAbsVec{<:Any,<:TransposeAbsVec}) = dot_nonrecursive(u, v)
-(*)(u::AdjointAbsVec,   v::AdjointAbsVec{<:Any,<:TransposeAbsVec}) = dot_nonrecursive(u, v)
-(*)(u::TransposeAbsVec, v::TransposeAbsVec{<:Any,<:AdjointAbsVec}) = dot_nonrecursive(u, v)
-(*)(u::AdjointAbsVec,   v::TransposeAbsVec{<:Any,<:AdjointAbsVec}) = dot_nonrecursive(u, v)
+(*)(u::TransposeAbsVec, v::AdjointAbsVec{<:Any,<:TransposeAbsVec}) = _dot_nonrecursive(u, v)
+(*)(u::AdjointAbsVec,   v::AdjointAbsVec{<:Any,<:TransposeAbsVec}) = _dot_nonrecursive(u, v)
+(*)(u::TransposeAbsVec, v::TransposeAbsVec{<:Any,<:AdjointAbsVec}) = _dot_nonrecursive(u, v)
+(*)(u::AdjointAbsVec,   v::TransposeAbsVec{<:Any,<:AdjointAbsVec}) = _dot_nonrecursive(u, v)
 
 ## pseudoinversion
 pinv(v::AdjointAbsVec, tol::Real = 0) = pinv(v.parent, tol).parent
