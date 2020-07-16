@@ -1179,7 +1179,7 @@ false
 While `Type` is part of Julia's type hierarchy like any other abstract parametric type, it
 is not commonly used outside method signatures except in some special cases. Another
 important use case for `Type` is sharpening field types which would otherwise be captured
-less precisely, eg as [`DataType`](@ref man-declared-types) in the example below where the
+less precisely, e.g. as [`DataType`](@ref man-declared-types) in the example below where the
 default constuctor could lead to performance problems in code relying on the precise wrapped
 type (similarly to [abstract type parameters](@ref man-performance-abstract-container)).
 
