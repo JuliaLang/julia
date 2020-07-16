@@ -7,7 +7,7 @@ An object that safely references data of type `T`. This type is guaranteed to po
 valid, Julia-allocated memory of the correct type. The underlying data is protected from
 freeing by the garbage collector as long as the `Ref` itself is referenced.
 
-In Julia, `Ref` objects are dereferenced (loaded or stored) with `[]`.
+In Julia, `Ref` objects are dereferenced (loaded or stored) with `[]` or [`only`](@ref).
 
 Creation of a `Ref` to a value `x` of type `T` is usually written `Ref(x)`.
 Additionally, for creating interior pointers to containers (such as Array or Ptr),
