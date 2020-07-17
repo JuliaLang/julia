@@ -1275,10 +1275,10 @@ end
 # On Windows, when launching external processes, we cannot control what assumption they make on the
 # console mode. We thus forcibly reset the console mode at the start of the prompt to ensure they do
 # not leave the console mode in a corrupt state.
-# FIXME: when pseudo-tty are used for child processes
+# FIXME: remove when pseudo-tty are implemented for child processes
 if Sys.iswindows()
 function _console_mode()
-    hOutput = ccall(:GetStdHandle, stdcall, Ptr{Cvoid}, (UInt32,), unsafe_trunc(UInt32,-11)) # STD_OUTPUT_HANDLE
+    hOutput = ccall(:GetStdHandle, stdcall, Ptr{Cvoid}, (UInt32,), -11 % UInt32) # STD_OUTPUT_HANDLE
     dwMode = Ref{UInt32}()
     ccall(:GetConsoleMode, stdcall, Int32, (Ref{Cvoid}, Ref{UInt32}), hOutput, dwMode)
     return dwMode[]
@@ -1295,7 +1295,7 @@ end
 function _reset_console_mode()
     mode = _console_mode()
     if mode !== get_default_console_mode()
-        hOutput = ccall(:GetStdHandle, stdcall, Ptr{Cvoid}, (UInt32,), unsafe_trunc(UInt32,-11)) # STD_OUTPUT_HANDLE
+        hOutput = ccall(:GetStdHandle, stdcall, Ptr{Cvoid}, (UInt32,), -11 % UInt32) # STD_OUTPUT_HANDLE
         ccall(:SetConsoleMode, stdcall, Int32, (Ptr{Cvoid}, UInt32), hOutput, default_console_mode_ref[])
     end
     nothing
