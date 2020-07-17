@@ -559,6 +559,16 @@ typedef struct {
     jl_array_t *args;
 } jl_expr_t;
 
+typedef struct {
+    JL_DATA_TYPE
+    jl_tupletype_t *spec_types;
+    jl_svec_t *sparams;
+    jl_method_t *method;
+    // A bool on the julia side, but can be temporarily 0x2 as a sentinel
+    // during construction.
+    uint8_t fully_covers;
+} jl_method_match_t;
+
 // constants and type objects -------------------------------------------------
 
 // kinds
@@ -581,6 +591,7 @@ extern JL_DLLEXPORT jl_datatype_t *jl_typedslot_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_argument_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_const_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_partial_struct_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_datatype_t *jl_method_match_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_simplevector_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_typename_t *jl_tuple_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_typename_t *jl_vecelement_typename JL_GLOBALLY_ROOTED;

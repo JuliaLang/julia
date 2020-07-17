@@ -1441,9 +1441,9 @@ function detect_ambiguities(mods...;
                 mt = Base.MethodList(f.name.mt)
                 for m in mt
                     ambig = Int32[0]
-                    for m2 in Base._methods_by_ftype(m.sig, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+                    for match2 in Base._methods_by_ftype(m.sig, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
                         ambig[1] == 0 && break
-                        m2 = m2[3]
+                        m2 = match2.method
                         if Base.isambiguous(m, m2, ambiguous_bottom=ambiguous_bottom)
                             push!(ambs, sortdefs(m, m2))
                         end
@@ -1465,9 +1465,9 @@ function detect_ambiguities(mods...;
         for m in mt
             if is_in_mods(m.module)
                 ambig = Int32[0]
-                for m2 in Base._methods_by_ftype(m.sig, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+                for match2 in Base._methods_by_ftype(m.sig, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
                     ambig[1] == 0 && break
-                    m2 = m2[3]
+                    m2 = match2.method
                     if Base.isambiguous(m, m2, ambiguous_bottom=ambiguous_bottom)
                         push!(ambs, sortdefs(m, m2))
                     end

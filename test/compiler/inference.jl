@@ -1553,11 +1553,11 @@ f24852_kernel(x, y::Number) = f24852_kernel3(x, (y,))
 
 function f24852_kernel_cinfo(fsig::Type)
     world = typemax(UInt) # FIXME
-    sig, spvals, method = Base._methods_by_ftype(fsig, -1, world)[1]
-    isdefined(method, :source) || return (nothing, :(f(x, y)))
-    code_info = Base.uncompressed_ir(method)
-    Meta.partially_inline!(code_info.code, Any[], sig, Any[spvals...], 1, 0, :propagate)
-    if startswith(String(method.name), "f24852")
+    match = Base._methods_by_ftype(fsig, -1, world)[1]
+    isdefined(match.method, :source) || return (nothing, :(f(x, y)))
+    code_info = Base.uncompressed_ir(match.method)
+    Meta.partially_inline!(code_info.code, Any[], match.spec_types, Any[match.sparams...], 1, 0, :propagate)
+    if startswith(String(match.method.name), "f24852")
         for a in code_info.code
             if a isa Expr && a.head == :(=)
                 a = a.args[2]
@@ -1569,7 +1569,7 @@ function f24852_kernel_cinfo(fsig::Type)
     end
     pushfirst!(code_info.slotnames, Symbol("#self#"))
     pushfirst!(code_info.slotflags, 0x00)
-    return method, code_info
+    return match.method, code_info
 end
 
 function f24852_gen_cinfo_uninflated(X, Y, _, f, x, y)
