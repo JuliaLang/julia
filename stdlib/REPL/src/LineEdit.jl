@@ -1275,21 +1275,30 @@ end
 # On Windows, when launching external processes, we cannot control what assumption they make on the
 # console mode. We thus forcibly reset the console mode at the start of the prompt to ensure they do
 # not leave the console mode in a corrupt state.
+# FIXME: when pseudo-tty are used for child processes
 if Sys.iswindows()
 function _console_mode()
-    hOutput = ccall(:GetStdHandle, stdcall, Int32, (Int32,), -11) # STD_OUTPUT_HANDLE
-    dwMode = Ref{UInt32}(0)
-    ccall(:GetConsoleMode, stdcall, Int32, (Int32, Ptr{Nothing}), hOutput, dwMode)
-    dwMode[]
+    hOutput = ccall(:GetStdHandle, stdcall, Ptr{Cvoid}, (UInt32,), unsafe_trunc(UInt32,-11)) # STD_OUTPUT_HANDLE
+    dwMode = Ref{UInt32}()
+    ccall(:GetConsoleMode, stdcall, Int32, (Ref{Cvoid}, Ref{UInt32}), hOutput, dwMode)
+    return dwMode[]
 end
-const default_console_mode = _console_mode()
+const default_console_mode_ref = Ref{UInt32}()
+const default_console_mode_assigned = Ref(false)
+function get_default_console_mode()
+    if default_console_mode_assigned[] == false
+        default_console_mode_assigned[] = true
+        default_console_mode_ref[] = _console_mode()
+    end
+    return default_console_mode_ref[]
+end
 function _reset_console_mode()
     mode = _console_mode()
-    if mode !== default_console_mode
-        hOutput = ccall(:GetStdHandle, stdcall, Int32, (Int32,), -11) # STD_OUTPUT_HANDLE
-        ccall(:SetConsoleMode, stdcall, Int32, (Int32, Int32), hOutput, default_console_mode)
-        nothing
+    if mode !== get_default_console_mode()
+        hOutput = ccall(:GetStdHandle, stdcall, Ptr{Cvoid}, (UInt32,), unsafe_trunc(UInt32,-11)) # STD_OUTPUT_HANDLE
+        ccall(:SetConsoleMode, stdcall, Int32, (Ptr{Cvoid}, UInt32), hOutput, default_console_mode_ref[])
     end
+    nothing
 end
 end
 
