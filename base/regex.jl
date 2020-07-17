@@ -167,6 +167,11 @@ function getindex(m::RegexMatch, name::Symbol)
     m[idx]
 end
 getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
+function haskey(m::RegexMatch, name::Symbol)
+    idx = PCRE.substring_number_from_name(m.regex.regex, name)
+    return idx > 0
+end
+haskey(m::RegexMatch, name::AbstractString) = haskey(m, Symbol(name))
 
 function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     compile(r)
