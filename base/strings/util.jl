@@ -465,15 +465,14 @@ end
 
 function _rsplit(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
     n = lastindex(str)
-    r = something(findlast(splitter, str), 0)
-    j, k = first(r), last(r)
-    while j > 0 && k > 0 && length(strs) != limit-1
-        (keepempty || k < n) && pushfirst!(strs, @inbounds SubString(str,nextind(str,k),n))
-        n = prevind(str, j)
-        r = something(findprev(splitter,str,n), 0)
+    r = findlast(splitter, str)
+    while r !== nothing && length(strs) != limit - 1
         j, k = first(r), last(r)
+        (keepempty || k < n) && pushfirst!(strs, @inbounds SubString(str, nextind(str, k), n))
+        n = prevind(str, j)
+        r = findprev(splitter, str, n)
     end
-    (keepempty || n > 0) && pushfirst!(strs, SubString(str,1,n))
+    (keepempty || n > 0) && pushfirst!(strs, SubString(str, 1, n))
     return strs
 end
 rsplit(str::AbstractString;
@@ -501,14 +500,15 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     pattern, repl = pat_repl
     count == 0 && return str
     count < 0 && throw(DomainError(count, "`count` must be non-negative."))
-    n = 1
+    n = 0
     e = lastindex(str)
     i = a = firstindex(str)
     pattern = _pat_replacer(pattern)
-    r = something(findnext(pattern,str,i), 0)
-    j, k = first(r), last(r)
+    r = findnext(pattern, str, i)
+    r === nothing && return str
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
-    while j != 0
+    while r !== nothing && n < count
+        j, k = first(r), last(r)
         if i == a || i <= k
             GC.@preserve str unsafe_write(out, pointer(str, i), UInt(j-i))
             _replace(out, repl, str, r, pattern)
@@ -520,14 +520,12 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
         else
             i = k = nextind(str, k)
         end
-        r = something(findnext(pattern,str,k), 0)
-        r == 0:-1 || n == count && break
-        j, k = first(r), last(r)
+        r = findnext(pattern, str, k)
         n += 1
     end
     _free_pat_replacer(pattern)
-    write(out, SubString(str,i))
-    String(take!(out))
+    write(out, SubString(str, i))
+    return String(take!(out))
 end
 
 """

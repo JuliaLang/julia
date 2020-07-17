@@ -173,7 +173,7 @@ function PkgId(m::Module, name::String = String(nameof(moduleroot(m))))
     UInt128(uuid) == 0 ? PkgId(name) : PkgId(uuid, name)
 end
 
-==(a::PkgId, b::PkgId) = a.uuid == b.uuid && a.name == b.name
+==(a::PkgId, b::PkgId) = a.uuid === b.uuid && a.name === b.name
 
 function hash(pkg::PkgId, h::UInt)
     h += 0xc9f248583a0ca36c % UInt
