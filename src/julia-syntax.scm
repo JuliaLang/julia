@@ -2339,7 +2339,7 @@
                                        (list x)))
                                  a)))
                   `(call (top hvcat)
-                         (tuple ,.(map length rows))
+                         (call (curly (top Val) (tuple ,.(map length rows))))
                          ,.(apply append rows)))
                 `(call (top vcat) ,@a))))))
 
@@ -2366,7 +2366,7 @@
                                    (list x)))
                              a)))
               `(call (top typed_hvcat) ,t
-                     (tuple ,.(map length rows))
+                     (call (curly (top Val) (tuple ,.(map length rows))))
                      ,.(apply append rows)))
             `(call (top typed_vcat) ,t ,@a)))))
 

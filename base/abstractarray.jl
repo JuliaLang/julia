@@ -1744,6 +1744,9 @@ function hvcat(nbc::Integer, as...)
     hvcat(ntuple(i->nbc, nbr), as...)
 end
 
+hvcat(::Val{rows}, values...) where {rows} = hvcat(rows, values...)
+typed_hvcat(T, ::Val{rows}, values...) where {rows} = typed_hvcat(T, rows, values...)
+
 """
     hvcat(rows::Tuple{Vararg{Int}}, values...)
 
