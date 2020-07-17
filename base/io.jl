@@ -1126,8 +1126,7 @@ julia> String(readavailable(buf))
 function skipchars(predicate, io::IO; linecomment=nothing)
     for c in readeach(io, Char)
         if c === linecomment
-            skipchars(c -> c !== '\n', io)
-            read(io, Char)
+            readline(io)
         elseif !predicate(c)
             skip(io, -ncodeunits(c))
             break
