@@ -1016,19 +1016,13 @@ See also: [`skipchars`](@ref), [`eachline`](@ref), [`readuntil`](@ref)
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\n It has many members.\\n");
-       end;
+julia> io = IOBuffer("JuliaLang is a GitHub organization.\\n It has many members.\\n");
 
-julia> open("my_file.txt") do io
-           for c in readeach(io, Char)
-               c == '\\n' && break
-               print(c)
-           end
+julia> for c in readeach(io, Char)
+           c == '\\n' && break
+           print(c)
        end
 JuliaLang is a GitHub organization.
-
-julia> rm("my_file.txt");
 ```
 """
 readeach(stream::IOT, T::Type) where IOT<:IO = ReadEachIterator{T,IOT}(stream)
