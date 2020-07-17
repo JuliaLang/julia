@@ -737,7 +737,7 @@ bitstring(x::Union{Int128,UInt128})            = string(reinterpret(UInt128,x), 
 
 Return an array with element type `T` (default `Int`) of the digits of `n` in the given
 base, optionally padded with zeros to a specified size. More significant digits are at
-higher indices, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)])`.
+higher indices, such that `n == sum(digits[k]*base^(k-1) for k=1:length(digits))`.
 
 # Examples
 ```jldoctest
