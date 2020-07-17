@@ -601,6 +601,10 @@ end
     arrayOfUInt48 = [a, b, c];
 
     @test sizeof(view(arrayOfUInt48, 1:2)) == 16
+
+    @test sizeof(view(Diagonal(zeros(UInt8, 10)), 1:4)) == 4
+    @test sizeof(view(Diagonal(zeros(UInt8, 10)), 1:3)) == 3
+    @test sizeof(view(Diagonal(zeros(Float64, 10)), 1:3, 2:6)) == 120
 end
 
 
