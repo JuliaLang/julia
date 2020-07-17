@@ -280,8 +280,7 @@ function _dot_nonrecursive(u, v)
 end
 
 # Adjoint/Transpose-vector * vector
-*(u::AdjointAbsVec{<:Number}, v::AbstractVector{<:Number}) = dot(u.parent, v)
-*(u::TransposeAbsVec{T}, v::AbstractVector{T}) where {T<:Real} = dot(u.parent, v)
+*(u::AdjOrTransAbsVec{<:Number}, v::AbstractVector{<:Number}) = dot(u.parent, v)
 *(u::AdjOrTransAbsVec, v::AbstractVector) = _dot_nonrecursive(u, v)
 
 
