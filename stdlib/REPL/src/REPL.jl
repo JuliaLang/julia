@@ -87,7 +87,7 @@ mutable struct REPLBackend
     REPLBackend(repl_channel, response_channel, in_eval, ast_transforms=copy(repl_ast_transforms)) =
         new(repl_channel, response_channel, in_eval, ast_transforms)
 end
-REPLBackend() = REPLBackend(Channel(1),Channel(1),false)
+REPLBackend() = REPLBackend(Channel(1), Channel(1), false)
 
 """
     softscope(ex)
@@ -277,7 +277,15 @@ struct REPLBackendRef
     repl_channel::Channel
     response_channel::Channel
 end
-REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel,backend.response_channel)
+REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel, backend.response_channel)
+function destroy(ref::REPLBackendRef, state::Task)
+    if istaskfailed(state) && Base.task_result(state) isa Exception
+        close(ref.repl_channel, TaskFailedException(state))
+        close(ref.response_channel, TaskFailedException(state))
+    end
+    close(ref.repl_channel)
+    close(ref.response_channel)
+end
 
 """
     run_repl(repl::AbstractREPL)
@@ -290,11 +298,20 @@ REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel,backe
 function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task::Bool = true)
     backend = REPLBackend()
     backend_ref = REPLBackendRef(backend)
+    cleanup = @task try
+            destroy(backend_ref, t)
+        catch e
+            Core.print(Core.stderr, "\nINTERNAL ERROR: ")
+            Core.println(Core.stderr, e)
+            Core.println(Core.stderr, catch_backtrace())
+        end
     if backend_on_current_task
-        @async run_frontend(repl, backend_ref)
-        start_repl_backend(backend,consumer)
+        t = @async run_frontend(repl, backend_ref)
+        Base._wait2(t, cleanup)
+        start_repl_backend(backend, consumer)
     else
-        @async start_repl_backend(backend,consumer)
+        t = @async start_repl_backend(backend, consumer)
+        Base._wait2(t, cleanup)
         run_frontend(repl, backend_ref)
     end
     return backend
@@ -820,7 +837,7 @@ backend(r::AbstractREPL) = r.backendref
 
 function eval_with_backend(ast, backend::REPLBackendRef)
     put!(backend.repl_channel, (ast, 1))
-    take!(backend.response_channel) # (val, iserr)
+    return take!(backend.response_channel) # (val, iserr)
 end
 
 function respond(f, repl, main; pass_empty = false, suppress_on_semicolon = true)
