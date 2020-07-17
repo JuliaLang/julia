@@ -115,6 +115,13 @@ To list all the instances of an enum use `instances`, e.g.
 julia> instances(Fruit)
 (apple, orange, kiwi)
 ```
+
+To get the number of instances of an enum use `length`, e.g.
+
+```jldoctest fruitenum
+julia> length(Fruit)
+3
+```
 """
 macro enum(T, syms...)
     if isempty(syms)
@@ -193,6 +200,7 @@ macro enum(T, syms...)
         Base.typemax(x::Type{$(esc(typename))}) = $(esc(typename))($hi)
         let insts = (Any[ $(esc(typename))(v) for v in $values ]...,)
             Base.instances(::Type{$(esc(typename))}) = insts
+            Base.length(::Type{$(esc(typename))}) = length(insts)
         end
     end
     if isa(typename, Symbol)

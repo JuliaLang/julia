@@ -46,6 +46,7 @@ using Main.MacroCalls
 @test Bool(orange) == true
 @test_throws InexactError Bool(kiwi)
 @test instances(Fruit) == (apple, orange, kiwi)
+@test length(Fruit) == 3
 
 f(x::Fruit) = "hey, I'm a Fruit"
 @test f(apple) == "hey, I'm a Fruit"
@@ -97,6 +98,7 @@ end
 @test Test3.size == 1
 @test UInt8(_one_Test3) === 0x01
 @test length(instances(Test3)) == 3
+@test length(Test3) == 3
 
 @enum Test4::UInt16 _one_Test4=0x01 _two_Test4=0x0002 _three_Test4=0x03
 @test Test4.size == 2
