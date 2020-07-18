@@ -1062,7 +1062,7 @@ element type.
 
 Immutable composite types with no fields are called *singletons*. Formally, if
 
-1. `T` is an immutable composite type (ie defined with `struct`),
+1. `T` is an immutable composite type (i.e. defined with `struct`),
 1. `a isa T && b isa T` implies `a === b`,
 
 then `T` is a singleton type.[^2] [`Base.issingletontype`](@ref) can be used to check if a
