@@ -52,8 +52,7 @@ julia> try
        end
 UndefRefError()
 
-julia> Ref{Int64}()[] == 0 # A reference to a bitstype refers to an undetermined value if not given
-false
+julia> Ref{Int64}()[]; # A reference to a bitstype refers to an undetermined value if not given
 
 julia> isassigned(Ref{Int64}()) # A reference to a bitstype is always assigned
 true
