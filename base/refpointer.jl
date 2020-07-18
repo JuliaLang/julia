@@ -15,9 +15,8 @@ it can be written `Ref(a, i)` for creating a reference to the `i`-th element of 
 
 `Ref{T}()` creates a reference to a value of type `T` without initialization.
 For a bitstype `T`, the value will be whatever currently resides in the memory
-allocated. For a non-bitstype `T`, the reference will be undefined and will result in
-an error, "UndefRefError: access to undefined reference", if the `Ref` is
-deferenced.
+allocated. For a non-bitstype `T`, the reference will be undefined and attempting to
+dereference it will result in an error, "UndefRefError: access to undefined reference".
 
 To check if a `Ref` is an undefined reference, use [`isassigned(ref::RefValue)`](@ref).
 For example, `isassigned(Ref{T}())` is `false` if `T` is not a bitstype.
