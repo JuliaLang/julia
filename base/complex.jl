@@ -202,6 +202,27 @@ end
 show(io::IO, z::Complex{Bool}) =
     print(io, z == im ? "im" : "Complex($(z.re),$(z.im))")
 
+function show(io::IO, mime::MIME"text/latex",z::Complex)
+    # complex numbers are displayed with "i" instead of "im" in latex, and with "\cdot" instead of "*"
+    r,i = reim(z)
+    show(io, mime, r)
+    if signbit(i) && !isnan(i)
+        print(io," - ")
+        if isa(i,Signed) && i == typemin(typeof(i))
+            show(io, mime, -widen(i))
+        else
+            show(io, mime, -i)
+        end
+    else
+        print(io, " + ")
+        show(io, mime, i)
+    end
+    if !(isa(i,Integer) && !isa(i,Bool) || isa(i,AbstractFloat) && isfinite(i))
+        print(io, " \\cdot ")
+    end
+    print(io,"i")
+end
+
 function show_unquoted(io::IO, z::Complex, ::Int, prec::Int)
     if operator_precedence(:+) <= prec
         print(io, "(")

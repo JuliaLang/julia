@@ -208,6 +208,8 @@ function show(io::IO, ::MIME"text/plain", t::Task)
     end
 end
 
+# The default representation in latex code is just the same as plain
+show(io::IO, ::MIME"text/latex", x::Any) = show(io, MIME"text/plain"(), x)
 
 print(io::IO, s::Symbol) = (write(io,s); nothing)
 

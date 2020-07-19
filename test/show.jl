@@ -1994,3 +1994,11 @@ end
     @test contains(string(methods(foo)), "foo(α)")
     @test contains(string(methods(bar)), "bar(ℓ)")
 end
+
+@testset "`show` for rational and complex numbers with latex MIME" begin
+    io = IOBuffer()
+    show(io,MIME"text/latex"(),complex(3//2,4//7))
+    @test String(take!(io)) == "\\frac{3}{2} + \\frac{4}{7} \\cdot i"
+    show(io,MIME"text/latex"(),complex(1.0,-2.0))
+    @test String(take!(io)) == "1.0 - 2.0i"
+end

@@ -86,6 +86,14 @@ function show(io::IO, x::Rational)
     show(io, denominator(x))
 end
 
+function show(io::IO,mime::MIME"text/latex",x::Rational)
+    print(io,"\\frac{")
+    show(io,mime,x.num)
+    print(io,"}{")
+    show(io,mime,x.den)
+    print(io,"}")
+end
+
 function read(s::IO, ::Type{Rational{T}}) where T<:Integer
     r = read(s,T)
     i = read(s,T)
