@@ -232,6 +232,13 @@ World""" |> plain == "Hello\n\n---\n\nWorld\n"
 @test sprint(term, md"[x](@ref something)") == "  x"
 @test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)"
 
+# math (LaTeX)
+@test sprint(term, md"""
+```math
+A = Q R
+```
+""") == "  A = Q R"
+
 # enumeration is normalized
 let doc = Markdown.parse(
         """
@@ -510,6 +517,7 @@ let text =
     """,
     table = Markdown.parse(text)
     @test text == Markdown.plain(table)
+    @test Markdown.html(table) == """<table><tr><th align="left">Markdown</th><th align="center">Table</th><th align="right">Test</th></tr><tr><td align="left">foo</td><td align="center"><code>bar</code></td><td align="right"><em>baz</em></td></tr><tr><td align="left"><code>bar</code></td><td align="center">baz</td><td align="right"><em>foo</em></td></tr></table>\n"""
 end
 let text =
     """
@@ -519,6 +527,7 @@ let text =
     """,
     table = Markdown.parse(text)
     @test text == Markdown.plain(table)
+    @test Markdown.html(table) == """<table><tr><th align="left">a</th><th align="right">b</th></tr><tr><td align="left"><code>x | y</code></td><td align="right">2</td></tr></table>\n"""
 end
 
 # LaTeX extension

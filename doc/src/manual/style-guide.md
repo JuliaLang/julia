@@ -86,7 +86,7 @@ One issue here is that if a function inherently requires integers, it might be b
 the caller to decide how non-integers should be converted (e.g. floor or ceiling). Another issue
 is that declaring more specific types leaves more "space" for future method definitions.
 
-## Append `!` to names of functions that modify their arguments
+## [Append `!` to names of functions that modify their arguments](@id bang-convention)
 
 Instead of:
 
@@ -261,7 +261,7 @@ Decide whether the concept in question will be written as `MyType` or `MyType()`
 it.
 
 The preferred style is to use instances by default, and only add methods involving `Type{MyType}`
-later if they become necessary to solve some problem.
+later if they become necessary to solve some problems.
 
 If a type is effectively an enumeration, it should be defined as a single (ideally immutable struct or primitive)
 type, with the enumeration values being instances of it. Constructors and conversions can check

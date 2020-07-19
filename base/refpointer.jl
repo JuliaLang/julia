@@ -20,11 +20,11 @@ There is no invalid (NULL) `Ref` in Julia, but a `C_NULL` instance of `Ptr` can 
 a `ccall` Ref argument.
 
 # Use in broadcasting
+`Ref` is sometimes used in broadcasting in order to treat the referenced values as a scalar:
 
-Broadcasting with `Ref(x)` treats `x` as a scalar:
 ```jldoctest
 julia> isa.(Ref([1,2,3]), [Array, Dict, Int])
-3-element BitArray{1}:
+3-element BitVector:
  1
  0
  0
@@ -74,7 +74,7 @@ RefArray(x::AbstractArray{T}, i::Int=1, roots::Nothing=nothing) where {T} = RefA
 convert(::Type{Ref{T}}, x::AbstractArray{T}) where {T} = RefArray(x, 1)
 
 function unsafe_convert(P::Type{Ptr{T}}, b::RefArray{T}) where T
-    if datatype_pointerfree(RefValue{T})
+    if allocatedinline(T)
         p = pointer(b.x, b.i)
     elseif isconcretetype(T) && T.mutable
         p = pointer_from_objref(b.x[b.i])
@@ -126,9 +126,31 @@ cconvert(::Type{Ref{P}}, a::Array{<:Ptr}) where {P<:Ptr} = a
 cconvert(::Type{Ptr{P}}, a::Array) where {P<:Union{Ptr,Cwstring,Cstring}} = Ref{P}(a)
 cconvert(::Type{Ref{P}}, a::Array) where {P<:Union{Ptr,Cwstring,Cstring}} = Ref{P}(a)
 
+# pass NTuple{N,T} as Ptr{T}/Ref{T}
+cconvert(::Type{Ref{T}}, t::NTuple{N,T}) where {N,T} = Ref{NTuple{N,T}}(t)
+cconvert(::Type{Ref{T}}, r::Ref{NTuple{N,T}}) where {N,T} = r
+unsafe_convert(::Type{Ref{T}}, r::Ref{NTuple{N,T}}) where {N,T} =
+    convert(Ptr{T}, unsafe_convert(Ptr{NTuple{N,T}}, r))
+unsafe_convert(::Type{Ptr{T}}, r::Ref{NTuple{N,T}}) where {N,T} =
+    convert(Ptr{T}, unsafe_convert(Ptr{NTuple{N,T}}, r))
+unsafe_convert(::Type{Ptr{T}}, r::Ptr{NTuple{N,T}}) where {N,T} =
+    convert(Ptr{T}, r)
+
 ###
 
 getindex(b::RefArray) = b.x[b.i]
 setindex!(b::RefArray, x) = (b.x[b.i] = x; b)
 
 ###
+
+"""
+    LLVMPtr{T, AS}
+
+A pointer type that more closely resembles LLVM semantics: It includes the pointer address
+space, and will be passed as an actual pointer instead of an integer.
+
+This type is mainly used to interface with code that has strict requirements about pointers,
+e.g., intrinsics that are selected based on the address space, or back-ends that require
+pointers to be identifiable by their types.
+"""
+Core.LLVMPtr

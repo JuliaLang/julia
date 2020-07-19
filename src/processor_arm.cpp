@@ -6,14 +6,19 @@
 #include <sys/utsname.h>
 #include <fcntl.h>
 #include <set>
-#include <sstream>
 #include <fstream>
 #include <algorithm>
 
-#if defined(_CPU_AARCH64_) || __GLIBC_PREREQ(2, 16)
+// This nesting is required to allow compilation on musl
+#define USE_DYN_GETAUXVAL
+#if defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
+#  undef USE_DYN_GETAUXVAL
 #  include <sys/auxv.h>
-#else
-#  define DYN_GETAUXVAL
+#elif defined(__GLIBC_PREREQ)
+#  if __GLIBC_PREREQ(2, 16)
+#    undef USE_DYN_GETAUXVAL
+#    include <sys/auxv.h>
+#  endif
 #endif
 
 namespace ARM {
@@ -32,7 +37,9 @@ enum class CPU : uint32_t {
     armv8_1_a,
     armv8_2_a,
     armv8_3_a,
-    // armv8_4_a,
+    armv8_4_a,
+    armv8_5_a,
+    armv8_6_a,
 
     // ARM
     // armv6l
@@ -65,13 +72,24 @@ enum class CPU : uint32_t {
     arm_cortex_a32,
     arm_cortex_r52,
     // aarch64
+    arm_cortex_a34,
     arm_cortex_a35,
     arm_cortex_a53,
     arm_cortex_a55,
     arm_cortex_a57,
+    arm_cortex_a65,
+    arm_cortex_a65ae,
     arm_cortex_a72,
     arm_cortex_a73,
     arm_cortex_a75,
+    arm_cortex_a76,
+    arm_cortex_a76ae,
+    arm_cortex_a77,
+    arm_cortex_a78,
+    arm_cortex_x1,
+    arm_neoverse_e1,
+    arm_neoverse_n1,
+    arm_zeus,
 
     // Cavium
     // aarch64
@@ -82,11 +100,30 @@ enum class CPU : uint32_t {
     cavium_thunderx83,
     cavium_thunderx2t99,
     cavium_thunderx2t99p1,
+    cavium_octeontx2,
+    cavium_octeontx2t98,
+    cavium_octeontx2t96,
+    cavium_octeontx2f95,
+    cavium_octeontx2f95n,
+    cavium_octeontx2f95mm,
+
+    // Fujitsu
+    // aarch64
+    fujitsu_a64fx,
+
+    // HiSilicon
+    // aarch64
+    hisilicon_tsv110,
+
+    // Huaxingtong
+    // aarch64
+    hxt_phecda,
 
     // NVIDIA
     // aarch64
     nvidia_denver1,
     nvidia_denver2,
+    nvidia_carmel,
 
     // AppliedMicro
     // aarch64
@@ -108,19 +145,28 @@ enum class CPU : uint32_t {
     samsung_exynos_m1,
     samsung_exynos_m2,
     samsung_exynos_m3,
+    samsung_exynos_m4,
+    samsung_exynos_m5,
 
     // Apple
     // armv7l
     apple_swift,
     // aarch64
-    apple_cyclone,
-    apple_typhoon,
-    apple_twister,
-    apple_hurricane,
+    apple_a7, // cyclone
+    apple_a8, // typhoon
+    apple_a9, // twister
+    apple_a10, // hurricane
+    apple_a11,
+    apple_a12,
+    apple_a13,
+    apple_s4,
+    apple_s5,
 
     // Marvell
     // armv7l
     marvell_pj4,
+    // aarch64
+    marvell_thunderx3t110,
 
     // Intel
     // armv7l
@@ -162,48 +208,137 @@ enum : uint32_t {
 #undef JL_FEATURE_DEF_NAME
 // This does not cover all dependencies (e.g. the ones that depends on arm versions)
 static constexpr FeatureDep deps[] = {
-    {0, 0} // dummy
+    {rcpc_immo, rcpc},
+    {sha3, sha2},
+    // {sha512, sha3},
+    {ccdp, ccpp},
+    {sve, fullfp16},
+    {fp16fml, fullfp16},
+    {altnzcv, fmi},
+    {sve2, sve},
+    {sve2_aes, sve2},
+    {sve2_aes, aes},
+    {sve2_bitperm, sve2},
+    {sve2_sha3, sve2},
+    {sve2_sha3, sha3},
+    {sve2_sm4, sve2},
+    {sve2_sm4, sm4},
+    {f32mm, sve},
+    {f64mm, sve},
 };
 
 constexpr auto generic = get_feature_masks();
 constexpr auto armv8a_crc = get_feature_masks(crc);
-constexpr auto armv8a_crc_crypto = armv8a_crc | get_feature_masks(crypto);
-constexpr auto armv8_1a = armv8a_crc | get_feature_masks(v8_1a, lse, rdm); // lor, hpd
-constexpr auto armv8_2a = armv8_1a | get_feature_masks(v8_2a); // ras
-constexpr auto armv8_2a_crypto = armv8_2a | get_feature_masks(crypto);
-constexpr auto armv8_3a = armv8_2a | get_feature_masks(v8_3a, rcpc);
-constexpr auto armv8_3a_crypto = armv8_3a | get_feature_masks(crypto);
+constexpr auto armv8a_crc_crypto = armv8a_crc | get_feature_masks(aes, sha2);
+constexpr auto armv8_1a = armv8a_crc | get_feature_masks(v8_1a, lse, rdm); // lor
+constexpr auto armv8_1a_crypto = armv8_1a | get_feature_masks(aes, sha2);
+constexpr auto armv8_2a = armv8_1a | get_feature_masks(v8_2a, ccpp);
+constexpr auto armv8_2a_crypto = armv8_2a | get_feature_masks(aes, sha2);
+constexpr auto armv8_3a = armv8_2a | get_feature_masks(v8_3a, jsconv, complxnum, rcpc);
+constexpr auto armv8_3a_crypto = armv8_3a | get_feature_masks(aes, sha2);
+constexpr auto armv8_4a = armv8_3a | get_feature_masks(v8_4a, dit, rcpc_immo, fmi);
+constexpr auto armv8_4a_crypto = armv8_4a | get_feature_masks(aes, sha2);
+constexpr auto armv8_5a = armv8_4a | get_feature_masks(v8_5a, sb, ccdp, altnzcv, fptoint);
+constexpr auto armv8_6a = armv8_5a | get_feature_masks(v8_6a, i8mm, bf16);
 
-constexpr auto arm_cortex_a32 = generic; // TODO? (crc, crypto)
-constexpr auto arm_cortex_a35 = generic; // TODO? (crc, crypto)
+// For ARM cores, the features required can be found in the technical reference manual
+// The relevant register values and the features they are related to are:
+// ID_AA64ISAR0_EL1:
+//     .AES: aes, pmull
+//     .SHA1: sha1
+//     .SHA2: sha2, sha512
+//     .CRC32: crc
+//     .Atomic: les
+//     .RDM: rdm
+//     .SHA3: sha3
+//     .SM3: sm3 (sm4)
+//     .SM4: sm4
+//     .DP: dotprod
+//     .FHM: fp16fml
+//     .TS: fmi, altnzcz
+//     .RNDR: rand
+
+// ID_AA64ISAR1_EL1
+//     .JSCVT: jsconv
+//     .FCMA: complxnum
+//     .LRCPC: rcpc, rcpc_immo
+//     .DPB: ccpp, ccdp
+//     .SB: sb
+//     .APA/.API: paca (pa)
+//     .GPA/.GPI: paga (pa)
+//     .FRINTTS: fptoint
+//     .I8MM: i8mm
+//     .BF16: bf16
+//     .DGH: dgh
+
+// ID_AA64PFR0_EL1
+//     .FP: fullfp16
+//     .SVE: sve
+//     .DIT: dit
+//     .BT: bti
+
+// ID_AA64PFR1_EL1.SSBS: ssbs
+
+// ID_AA64MMFR2_EL1.AT: uscat
+
+// ID_AA64ZFR0_EL1
+//     .SVEVer: sve2
+//     .AES: sve2-aes, sve2-pmull
+//     .BitPerm: sve2-bitperm
+//     .SHA3: sve2-sha3
+//     .SM4: sve2-sm4
+//     .F32MM: f32mm
+//     .F64MM: f64mm
+
+constexpr auto arm_cortex_a34 = armv8a_crc;
+constexpr auto arm_cortex_a35 = armv8a_crc;
 constexpr auto arm_cortex_a53 = armv8a_crc;
-constexpr auto arm_cortex_a55 = armv8_2a_crypto | get_feature_masks(rcpc); // dotprod;
+constexpr auto arm_cortex_a55 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16, ssbs);
 constexpr auto arm_cortex_a57 = armv8a_crc;
+constexpr auto arm_cortex_a65 = armv8_2a | get_feature_masks(rcpc, fullfp16, ssbs);
 constexpr auto arm_cortex_a72 = armv8a_crc;
 constexpr auto arm_cortex_a73 = armv8a_crc;
-constexpr auto arm_cortex_a75 = armv8_2a_crypto | get_feature_masks(rcpc); // dotprod;
+constexpr auto arm_cortex_a75 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16);
+constexpr auto arm_cortex_a76 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16, ssbs);
+constexpr auto arm_cortex_a77 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16, ssbs);
+constexpr auto arm_cortex_a78 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16, ssbs);
+constexpr auto arm_cortex_x1 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16, ssbs);
+constexpr auto arm_neoverse_e1 = armv8_2a | get_feature_masks(rcpc, fullfp16, ssbs);
+constexpr auto arm_neoverse_n1 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16, ssbs);
+constexpr auto arm_zeus = armv8_4a | get_feature_masks(sve, i8mm, bf16, fullfp16, ssbs, rand);
 constexpr auto cavium_thunderx = armv8a_crc_crypto;
 constexpr auto cavium_thunderx88 = armv8a_crc_crypto;
 constexpr auto cavium_thunderx88p1 = armv8a_crc_crypto;
 constexpr auto cavium_thunderx81 = armv8a_crc_crypto;
 constexpr auto cavium_thunderx83 = armv8a_crc_crypto;
-constexpr auto cavium_thunderx2t99 = armv8a_crc_crypto | get_feature_masks(v8_1a);
-constexpr auto cavium_thunderx2t99p1 = armv8a_crc_crypto | get_feature_masks(v8_1a);
+constexpr auto cavium_thunderx2t99 = armv8_1a_crypto;
+constexpr auto cavium_thunderx2t99p1 = cavium_thunderx2t99;
+constexpr auto cavium_octeontx2 = armv8_2a_crypto;
+constexpr auto fujitsu_a64fx = armv8_2a | get_feature_masks(sha2, fullfp16, sve, complxnum);
+constexpr auto hisilicon_tsv110 = armv8_2a_crypto | get_feature_masks(dotprod, fullfp16);
+constexpr auto hxt_phecda = armv8a_crc_crypto;
+constexpr auto marvell_thunderx3t110 = armv8_3a_crypto;
 constexpr auto nvidia_denver1 = generic; // TODO? (crc, crypto)
 constexpr auto nvidia_denver2 = armv8a_crc_crypto;
+constexpr auto nvidia_carmel = armv8_2a_crypto | get_feature_masks(fullfp16);
 constexpr auto apm_xgene1 = generic;
 constexpr auto apm_xgene2 = generic; // TODO?
 constexpr auto apm_xgene3 = generic; // TODO?
 constexpr auto qualcomm_kyro = armv8a_crc_crypto;
-constexpr auto qualcomm_falkor = armv8a_crc_crypto;
-constexpr auto qualcomm_saphira = armv8_3a_crypto;
+constexpr auto qualcomm_falkor = armv8a_crc_crypto | get_feature_masks(rdm);
+constexpr auto qualcomm_saphira = armv8_4a_crypto;
 constexpr auto samsung_exynos_m1 = armv8a_crc_crypto;
 constexpr auto samsung_exynos_m2 = armv8a_crc_crypto;
 constexpr auto samsung_exynos_m3 = armv8a_crc_crypto;
-constexpr auto apple_cyclone = armv8a_crc_crypto;
-constexpr auto apple_typhoon = armv8a_crc_crypto;
-constexpr auto apple_twister = armv8a_crc_crypto;
-constexpr auto apple_hurricane = armv8a_crc_crypto;
+constexpr auto samsung_exynos_m4 = armv8_2a_crypto | get_feature_masks(dotprod, fullfp16);
+constexpr auto samsung_exynos_m5 = samsung_exynos_m4;
+constexpr auto apple_a7 = armv8a_crc_crypto;
+constexpr auto apple_a10 = armv8a_crc_crypto | get_feature_masks(rdm);
+constexpr auto apple_a11 = armv8_2a_crypto | get_feature_masks(fullfp16);
+constexpr auto apple_a12 = armv8_3a_crypto | get_feature_masks(fullfp16);
+constexpr auto apple_a13 = armv8_4a_crypto | get_feature_masks(fullfp16, sha3);
+constexpr auto apple_s4 = apple_a12;
+constexpr auto apple_s5 = apple_a12;
 
 }
 
@@ -212,40 +347,77 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"armv8.1-a", CPU::armv8_1_a, CPU::generic, 0, Feature::armv8_1a},
     {"armv8.2-a", CPU::armv8_2_a, CPU::generic, 0, Feature::armv8_2a},
     {"armv8.3_a", CPU::armv8_3_a, CPU::generic, 0, Feature::armv8_3a},
+    {"armv8.4-a", CPU::armv8_4_a, CPU::generic, 0, Feature::armv8_4a},
+    {"armv8.5-a", CPU::armv8_5_a, CPU::generic, 0, Feature::armv8_5a},
+    {"armv8.6_a", CPU::armv8_6_a, CPU::generic, 0, Feature::armv8_6a},
+    {"cortex-a34", CPU::arm_cortex_a34, CPU::arm_cortex_a35, 110000, Feature::arm_cortex_a34},
     {"cortex-a35", CPU::arm_cortex_a35, CPU::generic, 0, Feature::arm_cortex_a35},
     {"cortex-a53", CPU::arm_cortex_a53, CPU::generic, 0, Feature::arm_cortex_a53},
-    {"cortex-a55", CPU::arm_cortex_a55, CPU::arm_cortex_a53, UINT32_MAX, Feature::arm_cortex_a55},
+    {"cortex-a55", CPU::arm_cortex_a55, CPU::generic, 0, Feature::arm_cortex_a55},
     {"cortex-a57", CPU::arm_cortex_a57, CPU::generic, 0, Feature::arm_cortex_a57},
+    {"cortex-a65", CPU::arm_cortex_a65, CPU::arm_cortex_a75, 100000, Feature::arm_cortex_a65},
+    {"cortex-a65ae", CPU::arm_cortex_a65ae, CPU::arm_cortex_a75, 100000, Feature::arm_cortex_a65},
     {"cortex-a72", CPU::arm_cortex_a72, CPU::generic, 0, Feature::arm_cortex_a72},
     {"cortex-a73", CPU::arm_cortex_a73, CPU::generic, 0, Feature::arm_cortex_a73},
-    {"cortex-a75", CPU::arm_cortex_a75, CPU::arm_cortex_a73, UINT32_MAX, Feature::arm_cortex_a75},
-    {"thunderx", CPU::cavium_thunderx, CPU::generic, 50000, Feature::cavium_thunderx},
-    {"thunderxt88", CPU::cavium_thunderx88, CPU::generic, 50000, Feature::cavium_thunderx88},
+    {"cortex-a75", CPU::arm_cortex_a75, CPU::generic, 0, Feature::arm_cortex_a75},
+    {"cortex-a76", CPU::arm_cortex_a76, CPU::arm_cortex_a75, 90000, Feature::arm_cortex_a76},
+    {"cortex-a76ae", CPU::arm_cortex_a76ae, CPU::arm_cortex_a75, 90000, Feature::arm_cortex_a76},
+    {"cortex-a77", CPU::arm_cortex_a77, CPU::arm_cortex_a76, 110000, Feature::arm_cortex_a77},
+    {"cortex-a78", CPU::arm_cortex_a78, CPU::arm_cortex_a77, UINT32_MAX, Feature::arm_cortex_a78},
+    {"cortex-x1", CPU::arm_cortex_x1, CPU::arm_cortex_a78, UINT32_MAX, Feature::arm_cortex_x1},
+    {"neoverse-e1", CPU::arm_neoverse_e1, CPU::arm_cortex_a76, 100000, Feature::arm_neoverse_e1},
+    {"neoverse-n1", CPU::arm_neoverse_n1, CPU::arm_cortex_a76, 100000, Feature::arm_neoverse_n1},
+    {"zeus", CPU::arm_zeus, CPU::arm_neoverse_n1, UINT32_MAX, Feature::arm_zeus},
+    {"thunderx", CPU::cavium_thunderx, CPU::generic, 0, Feature::cavium_thunderx},
+    {"thunderxt88", CPU::cavium_thunderx88, CPU::generic, 0, Feature::cavium_thunderx88},
     {"thunderxt88p1", CPU::cavium_thunderx88p1, CPU::cavium_thunderx88, UINT32_MAX,
      Feature::cavium_thunderx88p1},
-    {"thunderxt81", CPU::cavium_thunderx81, CPU::generic, 50000, Feature::cavium_thunderx81},
-    {"thunderxt83", CPU::cavium_thunderx83, CPU::generic, 50000, Feature::cavium_thunderx83},
-    {"thunderx2t99", CPU::cavium_thunderx2t99, CPU::generic, 50000,
-     Feature::cavium_thunderx2t99},
+    {"thunderxt81", CPU::cavium_thunderx81, CPU::generic, 0, Feature::cavium_thunderx81},
+    {"thunderxt83", CPU::cavium_thunderx83, CPU::generic, 0, Feature::cavium_thunderx83},
+    {"thunderx2t99", CPU::cavium_thunderx2t99, CPU::generic, 0, Feature::cavium_thunderx2t99},
     {"thunderx2t99p1", CPU::cavium_thunderx2t99p1, CPU::cavium_thunderx2t99, UINT32_MAX,
      Feature::cavium_thunderx2t99p1},
+    {"octeontx2", CPU::cavium_octeontx2, CPU::arm_cortex_a57, UINT32_MAX,
+     Feature::cavium_octeontx2},
+    {"octeontx2t98", CPU::cavium_octeontx2t98, CPU::arm_cortex_a57, UINT32_MAX,
+     Feature::cavium_octeontx2},
+    {"octeontx2t96", CPU::cavium_octeontx2t96, CPU::arm_cortex_a57, UINT32_MAX,
+     Feature::cavium_octeontx2},
+    {"octeontx2f95", CPU::cavium_octeontx2f95, CPU::arm_cortex_a57, UINT32_MAX,
+     Feature::cavium_octeontx2},
+    {"octeontx2f95n", CPU::cavium_octeontx2f95n, CPU::arm_cortex_a57, UINT32_MAX,
+     Feature::cavium_octeontx2},
+    {"octeontx2f95mm", CPU::cavium_octeontx2f95mm, CPU::arm_cortex_a57, UINT32_MAX,
+     Feature::cavium_octeontx2},
+    {"a64fx", CPU::fujitsu_a64fx, CPU::generic, 110000, Feature::fujitsu_a64fx},
+    {"tsv110", CPU::hisilicon_tsv110, CPU::generic, 0, Feature::hisilicon_tsv110},
+    {"phecda", CPU::hxt_phecda, CPU::qualcomm_falkor, UINT32_MAX, Feature::hxt_phecda},
     {"denver1", CPU::nvidia_denver1, CPU::generic, UINT32_MAX, Feature::nvidia_denver1},
     {"denver2", CPU::nvidia_denver2, CPU::generic, UINT32_MAX, Feature::nvidia_denver2},
+    {"carmel", CPU::nvidia_carmel, CPU::generic, 110000, Feature::nvidia_carmel},
     {"xgene1", CPU::apm_xgene1, CPU::generic, UINT32_MAX, Feature::apm_xgene1},
     {"xgene2", CPU::apm_xgene2, CPU::generic, UINT32_MAX, Feature::apm_xgene2},
     {"xgene3", CPU::apm_xgene3, CPU::generic, UINT32_MAX, Feature::apm_xgene3},
     {"kyro", CPU::qualcomm_kyro, CPU::generic, 0, Feature::qualcomm_kyro},
-    {"falkor", CPU::qualcomm_falkor, CPU::generic, 40000, Feature::qualcomm_falkor},
-    {"saphira", CPU::qualcomm_saphira, CPU::qualcomm_falkor, 60000, Feature::qualcomm_saphira},
-    {"exynos-m1", CPU::samsung_exynos_m1, CPU::generic, 0, Feature::samsung_exynos_m1},
-    {"exynos-m2", CPU::samsung_exynos_m2, CPU::samsung_exynos_m1, 40000,
-     Feature::samsung_exynos_m2},
-    {"exynos-m3", CPU::samsung_exynos_m3, CPU::samsung_exynos_m2, 40000,
-     Feature::samsung_exynos_m3},
-    {"cyclone", CPU::apple_cyclone, CPU::generic, 0, Feature::apple_cyclone},
-    {"typhoon", CPU::apple_typhoon, CPU::apple_cyclone, UINT32_MAX, Feature::apple_typhoon},
-    {"twister", CPU::apple_twister, CPU::apple_typhoon, UINT32_MAX, Feature::apple_twister},
-    {"hurricane", CPU::apple_hurricane, CPU::apple_twister, UINT32_MAX, Feature::apple_hurricane},
+    {"falkor", CPU::qualcomm_falkor, CPU::generic, 0, Feature::qualcomm_falkor},
+    {"saphira", CPU::qualcomm_saphira, CPU::generic, 0, Feature::qualcomm_saphira},
+    {"exynos-m1", CPU::samsung_exynos_m1, CPU::generic, UINT32_MAX, Feature::samsung_exynos_m1},
+    {"exynos-m2", CPU::samsung_exynos_m2, CPU::generic, UINT32_MAX, Feature::samsung_exynos_m2},
+    {"exynos-m3", CPU::samsung_exynos_m3, CPU::generic, 0, Feature::samsung_exynos_m3},
+    {"exynos-m4", CPU::samsung_exynos_m4, CPU::generic, 0, Feature::samsung_exynos_m4},
+    {"exynos-m5", CPU::samsung_exynos_m5, CPU::samsung_exynos_m4, 110000,
+     Feature::samsung_exynos_m5},
+    {"apple-a7", CPU::apple_a7, CPU::generic, 100000, Feature::apple_a7},
+    {"apple-a8", CPU::apple_a8, CPU::generic, 100000, Feature::apple_a7},
+    {"apple-a9", CPU::apple_a9, CPU::generic, 100000, Feature::apple_a7},
+    {"apple-a10", CPU::apple_a10, CPU::generic, 100000, Feature::apple_a10},
+    {"apple-a11", CPU::apple_a11, CPU::generic, 100000, Feature::apple_a11},
+    {"apple-a12", CPU::apple_a12, CPU::generic, 100000, Feature::apple_a12},
+    {"apple-a13", CPU::apple_a13, CPU::generic, 100000, Feature::apple_a13},
+    {"apple-s4", CPU::apple_s4, CPU::generic, 100000, Feature::apple_s4},
+    {"apple-s5", CPU::apple_s5, CPU::generic, 100000, Feature::apple_s5},
+    {"thunderx3t110", CPU::marvell_thunderx3t110, CPU::cavium_thunderx2t99, 110000,
+     Feature::marvell_thunderx3t110},
 };
 #else
 static constexpr size_t feature_sz = 3;
@@ -365,23 +537,27 @@ constexpr auto armv8a_crc_crypto = armv8a_crc | get_feature_masks(crypto);
 constexpr auto armv8_2a_crypto = armv8_2a | get_feature_masks(crypto);
 constexpr auto armv8_3a = armv8_2a | get_feature_masks(v8_3a);
 constexpr auto armv8_3a_crypto = armv8_3a | get_feature_masks(crypto);
+constexpr auto armv8_4a = armv8_3a | get_feature_masks(v8_4a);
+constexpr auto armv8_4a_crypto = armv8_4a | get_feature_masks(crypto);
+constexpr auto armv8_5a = armv8_4a | get_feature_masks(v8_5a);
+constexpr auto armv8_5a_crypto = armv8_5a | get_feature_masks(crypto);
+constexpr auto armv8_6a = armv8_5a | get_feature_masks(v8_6a);
+constexpr auto armv8_6a_crypto = armv8_6a | get_feature_masks(crypto);
 
-constexpr auto arm_cortex_a32 = armv8a; // TODO? (crc, crypto)
-constexpr auto arm_cortex_r52 = armv8r; // TODO? (crc, crypto)
-constexpr auto arm_cortex_a35 = armv8a; // TODO? (crc, crypto)
+constexpr auto arm_cortex_a32 = armv8a_crc;
+constexpr auto arm_cortex_r52 = armv8a_crc;
+constexpr auto arm_cortex_a35 = armv8a_crc;
 constexpr auto arm_cortex_a53 = armv8a_crc;
-constexpr auto arm_cortex_a55 = armv8_2a_crypto;
+constexpr auto arm_cortex_a55 = armv8_2a;
 constexpr auto arm_cortex_a57 = armv8a_crc;
 constexpr auto arm_cortex_a72 = armv8a_crc;
 constexpr auto arm_cortex_a73 = armv8a_crc;
-constexpr auto arm_cortex_a75 = armv8_2a_crypto;
-constexpr auto cavium_thunderx = armv8a_crc_crypto;
-constexpr auto cavium_thunderx88 = armv8a_crc_crypto;
-constexpr auto cavium_thunderx88p1 = armv8a_crc_crypto;
-constexpr auto cavium_thunderx81 = armv8a_crc_crypto;
-constexpr auto cavium_thunderx83 = armv8a_crc_crypto;
-constexpr auto cavium_thunderx2t99 = armv8a_crc_crypto | get_feature_masks(v8_1a);
-constexpr auto cavium_thunderx2t99p1 = armv8a_crc_crypto | get_feature_masks(v8_1a);
+constexpr auto arm_cortex_a75 = armv8_2a;
+constexpr auto arm_cortex_a76 = armv8_2a;
+constexpr auto arm_cortex_a77 = armv8_2a;
+constexpr auto arm_cortex_a78 = armv8_2a;
+constexpr auto arm_cortex_x1 = armv8_2a;
+constexpr auto arm_neoverse_n1 = armv8_2a;
 constexpr auto nvidia_denver1 = armv8a; // TODO? (crc, crypto)
 constexpr auto nvidia_denver2 = armv8a_crc_crypto;
 constexpr auto apm_xgene1 = armv8a;
@@ -393,10 +569,9 @@ constexpr auto qualcomm_saphira = armv8_3a_crypto;
 constexpr auto samsung_exynos_m1 = armv8a_crc_crypto;
 constexpr auto samsung_exynos_m2 = armv8a_crc_crypto;
 constexpr auto samsung_exynos_m3 = armv8a_crc_crypto;
-constexpr auto apple_cyclone = armv8a_crc_crypto;
-constexpr auto apple_typhoon = armv8a_crc_crypto;
-constexpr auto apple_twister = armv8a_crc_crypto;
-constexpr auto apple_hurricane = armv8a_crc_crypto;
+constexpr auto samsung_exynos_m4 = armv8_2a_crypto;
+constexpr auto samsung_exynos_m5 = samsung_exynos_m4;
+constexpr auto apple_a7 = armv8a_crc_crypto;
 
 }
 
@@ -438,8 +613,8 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     // armv8ml
     {"armv8-m.base", CPU::armv8_m_base, CPU::generic, 0, Feature::armv8m},
     {"armv8-m.main", CPU::armv8_m_main, CPU::generic, 0, Feature::armv8m},
-    {"cortex-m23", CPU::arm_cortex_m23, CPU::armv8_m_base, 50000, Feature::arm_cortex_m23},
-    {"cortex-m33", CPU::arm_cortex_m33, CPU::armv8_m_main, 50000, Feature::arm_cortex_m33},
+    {"cortex-m23", CPU::arm_cortex_m23, CPU::armv8_m_base, 0, Feature::arm_cortex_m23},
+    {"cortex-m33", CPU::arm_cortex_m33, CPU::armv8_m_main, 0, Feature::arm_cortex_m33},
 
     // armv8l
     {"armv8-a", CPU::armv8_a, CPU::generic, 0, Feature::armv8a},
@@ -447,27 +622,24 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"armv8.1-a", CPU::armv8_1_a, CPU::generic, 0, Feature::armv8_1a},
     {"armv8.2-a", CPU::armv8_2_a, CPU::generic, 0, Feature::armv8_2a},
     {"armv8.3-a", CPU::armv8_3_a, CPU::generic, 0, Feature::armv8_3a},
+    {"armv8.4-a", CPU::armv8_4_a, CPU::generic, 0, Feature::armv8_4a},
+    {"armv8.5-a", CPU::armv8_5_a, CPU::generic, 0, Feature::armv8_5a},
+    {"armv8.6_a", CPU::armv8_6_a, CPU::generic, 0, Feature::armv8_6a},
     {"cortex-a32", CPU::arm_cortex_a32, CPU::generic, 0, Feature::arm_cortex_a32},
-    {"cortex-r52", CPU::arm_cortex_r52, CPU::armv8_r, 40000, Feature::arm_cortex_r52},
+    {"cortex-r52", CPU::arm_cortex_r52, CPU::generic, 0, Feature::arm_cortex_r52},
     {"cortex-a35", CPU::arm_cortex_a35, CPU::generic, 0, Feature::arm_cortex_a35},
     {"cortex-a53", CPU::arm_cortex_a53, CPU::generic, 0, Feature::arm_cortex_a53},
-    {"cortex-a55", CPU::arm_cortex_a55, CPU::arm_cortex_a53, 60000, Feature::arm_cortex_a55},
+    {"cortex-a55", CPU::arm_cortex_a55, CPU::generic, 0, Feature::arm_cortex_a55},
     {"cortex-a57", CPU::arm_cortex_a57, CPU::generic, 0, Feature::arm_cortex_a57},
     {"cortex-a72", CPU::arm_cortex_a72, CPU::generic, 0, Feature::arm_cortex_a72},
     {"cortex-a73", CPU::arm_cortex_a73, CPU::generic, 0, Feature::arm_cortex_a73},
-    {"cortex-a75", CPU::arm_cortex_a75, CPU::arm_cortex_a73, 60000, Feature::arm_cortex_a75},
-    {"thunderx", CPU::cavium_thunderx, CPU::armv8_a, UINT32_MAX, Feature::cavium_thunderx},
-    {"thunderx88", CPU::cavium_thunderx88, CPU::armv8_a, UINT32_MAX, Feature::cavium_thunderx88},
-    {"thunderx88p1", CPU::cavium_thunderx88p1, CPU::armv8_a, UINT32_MAX,
-     Feature::cavium_thunderx88p1},
-    {"thunderx81", CPU::cavium_thunderx81, CPU::armv8_a, UINT32_MAX,
-     Feature::cavium_thunderx81},
-    {"thunderx83", CPU::cavium_thunderx83, CPU::armv8_a, UINT32_MAX,
-     Feature::cavium_thunderx83},
-    {"thunderx2t99", CPU::cavium_thunderx2t99, CPU::armv8_a, UINT32_MAX,
-     Feature::cavium_thunderx2t99},
-    {"thunderx2t99p1", CPU::cavium_thunderx2t99p1, CPU::armv8_a, UINT32_MAX,
-     Feature::cavium_thunderx2t99p1},
+    {"cortex-a75", CPU::arm_cortex_a75, CPU::generic, 0, Feature::arm_cortex_a75},
+    {"cortex-a76", CPU::arm_cortex_a76, CPU::arm_cortex_a75, 90000, Feature::arm_cortex_a76},
+    {"cortex-a76ae", CPU::arm_cortex_a76ae, CPU::arm_cortex_a75, 90000, Feature::arm_cortex_a76},
+    {"cortex-a77", CPU::arm_cortex_a77, CPU::arm_cortex_a76, 110000, Feature::arm_cortex_a77},
+    {"cortex-a78", CPU::arm_cortex_a78, CPU::arm_cortex_a77, UINT32_MAX, Feature::arm_cortex_a78},
+    {"cortex-x1", CPU::arm_cortex_x1, CPU::arm_cortex_a78, UINT32_MAX, Feature::arm_cortex_x1},
+    {"neoverse-n1", CPU::arm_neoverse_n1, CPU::arm_cortex_a76, 100000, Feature::arm_neoverse_n1},
     {"denver1", CPU::nvidia_denver1, CPU::arm_cortex_a53, UINT32_MAX, Feature::nvidia_denver1},
     {"denver2", CPU::nvidia_denver2, CPU::arm_cortex_a57, UINT32_MAX, Feature::nvidia_denver2},
     {"xgene1", CPU::apm_xgene1, CPU::armv8_a, UINT32_MAX, Feature::apm_xgene1},
@@ -476,15 +648,13 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"kyro", CPU::qualcomm_kyro, CPU::armv8_a, UINT32_MAX, Feature::qualcomm_kyro},
     {"falkor", CPU::qualcomm_falkor, CPU::armv8_a, UINT32_MAX, Feature::qualcomm_falkor},
     {"saphira", CPU::qualcomm_saphira, CPU::armv8_a, UINT32_MAX, Feature::qualcomm_saphira},
-    {"exynos-m1", CPU::samsung_exynos_m1, CPU::generic, 0, Feature::samsung_exynos_m1},
-    {"exynos-m2", CPU::samsung_exynos_m2, CPU::samsung_exynos_m1, 40000,
-     Feature::samsung_exynos_m2},
-    {"exynos-m3", CPU::samsung_exynos_m3, CPU::samsung_exynos_m2, 40000,
-     Feature::samsung_exynos_m3},
-    {"cyclone", CPU::apple_cyclone, CPU::generic, 0, Feature::apple_cyclone},
-    {"typhoon", CPU::apple_typhoon, CPU::apple_cyclone, UINT32_MAX, Feature::apple_typhoon},
-    {"twister", CPU::apple_twister, CPU::apple_typhoon, UINT32_MAX, Feature::apple_twister},
-    {"hurricane", CPU::apple_hurricane, CPU::apple_twister, UINT32_MAX, Feature::apple_hurricane},
+    {"exynos-m1", CPU::samsung_exynos_m1, CPU::generic, UINT32_MAX, Feature::samsung_exynos_m1},
+    {"exynos-m2", CPU::samsung_exynos_m2, CPU::generic, UINT32_MAX, Feature::samsung_exynos_m2},
+    {"exynos-m3", CPU::samsung_exynos_m3, CPU::generic, 0, Feature::samsung_exynos_m3},
+    {"exynos-m4", CPU::samsung_exynos_m4, CPU::generic, 0, Feature::samsung_exynos_m4},
+    {"exynos-m5", CPU::samsung_exynos_m5, CPU::samsung_exynos_m4, 110000,
+     Feature::samsung_exynos_m5},
+    {"apple-a7", CPU::apple_a7, CPU::generic, 0, Feature::apple_a7},
 };
 #endif
 static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
@@ -498,7 +668,7 @@ static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 #  define AT_HWCAP2 26
 #endif
 
-#if defined(DYN_GETAUXVAL)
+#if defined(USE_DYN_GETAUXVAL)
 static unsigned long getauxval_procfs(unsigned long type)
 {
     int fd = open("/proc/self/auxv", O_RDONLY);
@@ -567,9 +737,9 @@ static inline void get_cpuinfo_sysfs(std::set<CPUID> &res)
             continue;
         if (strncmp(entry->d_name, "cpu", 3) != 0)
             continue;
-        std::stringstream stm;
-        stm << "/sys/devices/system/cpu/" << entry->d_name << "/regs/identification/midr_el1";
-        std::ifstream file(stm.str());
+        std::string stm;
+        llvm::raw_string_ostream(stm) << "/sys/devices/system/cpu/" << entry->d_name << "/regs/identification/midr_el1";
+        std::ifstream file(stm);
         if (!file)
             continue;
         uint64_t val = 0;
@@ -645,13 +815,6 @@ static CPU get_cpu_name(CPUID cpuid)
         case 0xb36: return CPU::arm_1136jf_s;
         case 0xb56: return CPU::arm_1156t2f_s;
         case 0xb76: return CPU::arm_1176jzf_s;
-        case 0xc20: return CPU::arm_cortex_m0;
-        case 0xc21: return CPU::arm_cortex_m1;
-        case 0xc23: return CPU::arm_cortex_m3;
-        case 0xc24: return CPU::arm_cortex_m4;
-        case 0xc27: return CPU::arm_cortex_m7;
-        case 0xd20: return CPU::arm_cortex_m23;
-        case 0xd21: return CPU::arm_cortex_m33;
         case 0xc05: return CPU::arm_cortex_a5;
         case 0xc07: return CPU::arm_cortex_a7;
         case 0xc08: return CPU::arm_cortex_a8;
@@ -663,19 +826,39 @@ static CPU get_cpu_name(CPUID cpuid)
         case 0xc15: return CPU::arm_cortex_r5;
         case 0xc17: return CPU::arm_cortex_r7;
         case 0xc18: return CPU::arm_cortex_r8;
-        case 0xd13: return CPU::arm_cortex_r52;
+        case 0xc20: return CPU::arm_cortex_m0;
+        case 0xc21: return CPU::arm_cortex_m1;
+        case 0xc23: return CPU::arm_cortex_m3;
+        case 0xc24: return CPU::arm_cortex_m4;
+        case 0xc27: return CPU::arm_cortex_m7;
         case 0xd01: return CPU::arm_cortex_a32;
-        case 0xd04: return CPU::arm_cortex_a35;
+        case 0xd02: return CPU::arm_cortex_a34;
         case 0xd03: return CPU::arm_cortex_a53;
+        case 0xd04: return CPU::arm_cortex_a35;
         case 0xd05: return CPU::arm_cortex_a55;
+        case 0xd06: return CPU::arm_cortex_a65;
         case 0xd07: return CPU::arm_cortex_a57;
         case 0xd08: return CPU::arm_cortex_a72;
         case 0xd09: return CPU::arm_cortex_a73;
         case 0xd0a: return CPU::arm_cortex_a75;
+        case 0xd0b: return CPU::arm_cortex_a76;
+        case 0xd0c: return CPU::arm_neoverse_n1;
+        case 0xd0d: return CPU::arm_cortex_a77;
+        case 0xd0e: return CPU::arm_cortex_a76ae;
+        case 0xd13: return CPU::arm_cortex_r52;
+        case 0xd20: return CPU::arm_cortex_m23;
+        case 0xd21: return CPU::arm_cortex_m33;
+            // case 0xd22: return CPU::arm_cortex_m55;
+        case 0xd40: return CPU::arm_zeus;
+        case 0xd41: return CPU::arm_cortex_a78;
+        case 0xd43: return CPU::arm_cortex_a65ae;
+        case 0xd44: return CPU::arm_cortex_x1;
+        case 0xd4a: return CPU::arm_neoverse_e1;
         default: return CPU::generic;
         }
     case 0x42: // Broadcom (Cavium)
         switch (cpuid.part) {
+            // case 0x100: return CPU::broadcom_brahma_b53;
         case 0x516: return CPU::cavium_thunderx2t99p1;
         default: return CPU::generic;
         }
@@ -689,12 +872,30 @@ static CPU get_cpu_name(CPUID cpuid)
         case 0xa2: return CPU::cavium_thunderx81;
         case 0xa3: return CPU::cavium_thunderx83;
         case 0xaf: return CPU::cavium_thunderx2t99;
+        case 0xb0: return CPU::cavium_octeontx2;
+        case 0xb1: return CPU::cavium_octeontx2t98;
+        case 0xb2: return CPU::cavium_octeontx2t96;
+        case 0xb3: return CPU::cavium_octeontx2f95;
+        case 0xb4: return CPU::cavium_octeontx2f95n;
+        case 0xb5: return CPU::cavium_octeontx2f95mm;
+        case 0xb8: return CPU::marvell_thunderx3t110;
+        default: return CPU::generic;
+        }
+    case 0x46: // Fujitsu
+        switch (cpuid.part) {
+        case 0x1: return CPU::fujitsu_a64fx;
+        default: return CPU::generic;
+        }
+    case 0x48: // HiSilicon
+        switch (cpuid.part) {
+        case 0xd01: return CPU::hisilicon_tsv110;
         default: return CPU::generic;
         }
     case 0x4e: // NVIDIA
         switch (cpuid.part) {
         case 0x000: return CPU::nvidia_denver1;
         case 0x003: return CPU::nvidia_denver2;
+        case 0x004: return CPU::nvidia_carmel;
         default: return CPU::generic;
         }
     case 0x50: // AppliedMicro
@@ -718,6 +919,10 @@ static CPU get_cpu_name(CPUID cpuid)
             return CPU::qualcomm_kyro;
         case 0x800:
         case 0x801:
+        case 0x802:
+        case 0x803:
+        case 0x804:
+        case 0x805:
             return CPU::arm_cortex_a73; // second-generation Kryo
         case 0xc00:
             return CPU::qualcomm_falkor;
@@ -726,10 +931,13 @@ static CPU get_cpu_name(CPUID cpuid)
         default: return CPU::generic;
         }
     case 0x53: // Samsung
-        // exynos-m2
-        // exynos-m3
+        if (cpuid.part == 1)
+            return CPU::samsung_exynos_m1;
+        if (cpuid.variant != 1)
+            return CPU::generic;
         switch (cpuid.part) {
-        case 0x001: return CPU::samsung_exynos_m1;
+        case 0x2: return CPU::samsung_exynos_m3;
+        case 0x3: return CPU::samsung_exynos_m4;
         default: return CPU::generic;
         }
     case 0x56: // Marvell
@@ -739,13 +947,40 @@ static CPU get_cpu_name(CPUID cpuid)
             return CPU::marvell_pj4;
         default: return CPU::generic;
         }
-    case 0x67: // Apple
-        // swift
-        // cyclone
-        // twister
-        // hurricane
+    case 0x61: // Apple
+        // https://opensource.apple.com/source/xnu/xnu-6153.81.5/osfmk/arm/cpuid.h.auto.html
         switch (cpuid.part) {
-        case 0x072: return CPU::apple_typhoon;
+        case 0x0: // Swift
+            return CPU::apple_swift;
+        case 0x1: // Cyclone
+            return CPU::apple_a7;
+        case 0x2: // Typhoon
+        case 0x3: // Typhoo/Capri
+            return CPU::apple_a8;
+        case 0x4: // Twister
+        case 0x5: // Twister/Elba/Malta
+            return CPU::apple_a9;
+        case 0x6: // Hurricane
+        case 0x7: // Hurricane/Myst
+            return CPU::apple_a10;
+        case 0x8: // Monsoon
+        case 0x9: // Mistral
+            return CPU::apple_a11;
+        case 0xB: // Vortex
+        case 0xC: // Tempest
+        case 0x10: // A12X, Vortex Aruba
+        case 0x11: // A12X, Tempest Aruba
+            return CPU::apple_a12;
+        case 0xF: // Tempest M9
+            return CPU::apple_s4;
+        case 0x12: // Lightning
+        case 0x13: // Thunder
+            return CPU::apple_a13;
+        default: return CPU::generic;
+        }
+    case 0x68: // Huaxintong Semiconductor
+        switch (cpuid.part) {
+        case 0x0: return CPU::hxt_phecda;
         default: return CPU::generic;
         }
     case 0x69: // Intel
@@ -758,10 +993,20 @@ static CPU get_cpu_name(CPUID cpuid)
     }
 }
 
-static std::pair<int,char> get_elf_arch(void)
+namespace {
+
+struct arm_arch {
+    int version;
+    char klass;
+    constexpr bool mclass() const { return klass == 'M'; }
+};
+
+}
+
+static arm_arch get_elf_arch(void)
 {
 #ifdef _CPU_AARCH64_
-    return std::make_pair(8, 'A');
+    return {8, 'A'};
 #else
     int ver = 0;
     char profile = 0;
@@ -787,7 +1032,7 @@ static std::pair<int,char> get_elf_arch(void)
 #  if __ARM_ARCH > 6 && defined(__ARM_ARCH_PROFILE)
     profile = __ARM_ARCH_PROFILE;
 #  endif
-    return std::make_pair(ver, profile);
+    return {ver, profile};
 #endif
 }
 
@@ -806,20 +1051,35 @@ static inline const char *find_cpu_name(uint32_t cpu)
     return ::find_cpu_name(cpu, cpus, ncpu_names);
 }
 
-static std::pair<int,bool> feature_arch_version(const FeatureList<feature_sz> &feature)
+static arm_arch feature_arch_version(const FeatureList<feature_sz> &feature)
 {
 #ifdef _CPU_AARCH64_
-    return std::make_pair(8, false);
+    return {8, 'A'};
 #else
-    if (test_nbit(feature, Feature::v8))
-        return std::make_pair(8, test_nbit(feature, Feature::mclass));
-    if (test_nbit(feature, Feature::v7))
-        return std::make_pair(7, test_nbit(feature, Feature::mclass));
-    return std::make_pair(6, false);
+    int ver;
+    if (test_nbit(feature, Feature::v8)) {
+        ver = 8;
+    }
+    else if (test_nbit(feature, Feature::v7)) {
+        ver = 7;
+    }
+    else {
+        return {6, 0};
+    }
+    if (test_nbit(feature, Feature::mclass)) {
+        return {ver, 'M'};
+    }
+    else if (test_nbit(feature, Feature::rclass)) {
+        return {ver, 'R'};
+    }
+    else if (test_nbit(feature, Feature::aclass)) {
+        return {ver, 'A'};
+    }
+    return {ver, 0};
 #endif
 }
 
-static CPU generic_for_arch(std::pair<int,bool> arch)
+static CPU generic_for_arch(arm_arch arch)
 {
 #ifdef _CPU_AARCH64_
     return CPU::generic;
@@ -827,9 +1087,9 @@ static CPU generic_for_arch(std::pair<int,bool> arch)
 #  if defined(__ARM_ARCH_PROFILE)
     char klass = __ARM_ARCH_PROFILE;
 #  else
-    char klass = arch.second ? 'M' : 'A';
+    char klass = arch.klass;
 #  endif
-    if (arch.first >= 8) {
+    if (arch.version >= 8) {
         if (klass == 'M') {
             return CPU::armv8_m_base;
         }
@@ -840,7 +1100,7 @@ static CPU generic_for_arch(std::pair<int,bool> arch)
             return CPU::armv8_a;
         }
     }
-    else if (arch.first == 7) {
+    else if (arch.version == 7) {
         if (klass == 'M') {
             return CPU::armv7_m;
         }
@@ -855,16 +1115,16 @@ static CPU generic_for_arch(std::pair<int,bool> arch)
 #endif
 }
 
-static bool check_cpu_arch_ver(uint32_t cpu, std::pair<int,bool> arch)
+static bool check_cpu_arch_ver(uint32_t cpu, arm_arch arch)
 {
     auto spec = find_cpu(cpu);
     // This happens on AArch64 and indicates that the cpu name isn't a valid aarch64 CPU
     if (!spec)
         return false;
-    auto cpu_arch = feature_arch_version(spec->features);
-    if (arch.second != cpu_arch.second)
+    auto feature_arch = feature_arch_version(spec->features);
+    if (arch.mclass() != feature_arch.mclass())
         return false;
-    if (arch.first > cpu_arch.first)
+    if (arch.version > feature_arch.version)
         return false;
     return true;
 }
@@ -903,29 +1163,33 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
     // high bits that we want to detect).
     features[0] = (uint32_t)jl_getauxval(AT_HWCAP);
     features[1] = (uint32_t)jl_getauxval(AT_HWCAP2);
+#ifdef _CPU_AARCH64_
+    if (test_nbit(features, 31)) // HWCAP_PACG
+        set_bit(features, Feature::pa, true);
+#endif
     auto cpuinfo = get_cpuinfo();
     auto arch = get_elf_arch();
 #ifdef _CPU_ARM_
-    if (arch.first >= 7) {
-        if (arch.second == 'M') {
+    if (arch.version >= 7) {
+        if (arch.klass == 'M') {
             set_bit(features, Feature::mclass, true);
         }
-        else if (arch.second == 'R') {
+        else if (arch.klass == 'R') {
             set_bit(features, Feature::rclass, true);
         }
-        else if (arch.second == 'A') {
+        else if (arch.klass == 'A') {
             set_bit(features, Feature::aclass, true);
         }
     }
-    switch (arch.first) {
+    switch (arch.version) {
     case 8:
-    set_bit(features, Feature::v8, true);
-    JL_FALLTHROUGH;
+        set_bit(features, Feature::v8, true);
+        JL_FALLTHROUGH;
     case 7:
-    set_bit(features, Feature::v7, true);
-    break;
+        set_bit(features, Feature::v7, true);
+        break;
     default:
-    break;
+        break;
     }
 #endif
 
@@ -944,7 +1208,6 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
     }
     // Not all elements/pairs are valid
     static constexpr CPU v8order[] = {
-        CPU::arm_cortex_a32,
         CPU::arm_cortex_a35,
         CPU::arm_cortex_a53,
         CPU::arm_cortex_a55,
@@ -952,8 +1215,15 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
         CPU::arm_cortex_a72,
         CPU::arm_cortex_a73,
         CPU::arm_cortex_a75,
+        CPU::arm_cortex_a76,
+        CPU::arm_neoverse_n1,
         CPU::nvidia_denver2,
-        CPU::samsung_exynos_m1
+        CPU::nvidia_carmel,
+        CPU::samsung_exynos_m1,
+        CPU::samsung_exynos_m2,
+        CPU::samsung_exynos_m3,
+        CPU::samsung_exynos_m4,
+        CPU::samsung_exynos_m5,
     };
     shrink_big_little(list, v8order, sizeof(v8order) / sizeof(CPU));
 #ifdef _CPU_ARM_
@@ -1006,6 +1276,9 @@ static bool is_generic_cpu_name(uint32_t cpu)
     case CPU::armv8_1_a:
     case CPU::armv8_2_a:
     case CPU::armv8_3_a:
+    case CPU::armv8_4_a:
+    case CPU::armv8_5_a:
+    case CPU::armv8_6_a:
         return true;
     default:
         return false;
@@ -1026,9 +1299,30 @@ static inline const std::string &host_cpu_name()
     return name;
 }
 
+static inline const char *normalize_cpu_name(llvm::StringRef name)
+{
+    if (name == "ares")
+        return "neoverse-n1";
+    if (name == "cyclone")
+        return "apple-a7";
+    if (name == "typhoon")
+        return "apple-a8";
+    if (name == "twister")
+        return "apple-a9";
+    if (name == "hurricane")
+        return "apple-a10";
+    return nullptr;
+}
+
 template<size_t n>
 static inline void enable_depends(FeatureList<n> &features)
 {
+    if (test_nbit(features, Feature::v8_6a))
+        set_bit(features, Feature::v8_5a, true);
+    if (test_nbit(features, Feature::v8_5a))
+        set_bit(features, Feature::v8_4a, true);
+    if (test_nbit(features, Feature::v8_4a))
+        set_bit(features, Feature::v8_3a, true);
     if (test_nbit(features, Feature::v8_3a))
         set_bit(features, Feature::v8_2a, true);
     if (test_nbit(features, Feature::v8_2a))
@@ -1055,33 +1349,68 @@ static inline void enable_depends(FeatureList<n> &features)
             set_bit(features, Feature::d32, true);
         }
     }
-    ::enable_depends(features, Feature::deps, sizeof(Feature::deps) / sizeof(FeatureDep));
 #else
     if (test_nbit(features, Feature::v8_1a)) {
         set_bit(features, Feature::lse, true);
         set_bit(features, Feature::rdm, true);
     }
+    if (test_nbit(features, Feature::v8_2a)) {
+        set_bit(features, Feature::ccpp, true);
+    }
+    if (test_nbit(features, Feature::v8_3a)) {
+        set_bit(features, Feature::jsconv, true);
+        set_bit(features, Feature::complxnum, true);
+        set_bit(features, Feature::rcpc, true);
+    }
+    if (test_nbit(features, Feature::v8_4a)) {
+        set_bit(features, Feature::dit, true);
+        set_bit(features, Feature::rcpc_immo, true);
+        set_bit(features, Feature::fmi, true);
+    }
+    if (test_nbit(features, Feature::v8_5a)) {
+        set_bit(features, Feature::sb, true);
+        set_bit(features, Feature::ccdp, true);
+        set_bit(features, Feature::altnzcv, true);
+        set_bit(features, Feature::fptoint, true);
+    }
+    if (test_nbit(features, Feature::v8_6a)) {
+        set_bit(features, Feature::i8mm, true);
+        set_bit(features, Feature::bf16, true);
+    }
 #endif
+    ::enable_depends(features, Feature::deps, sizeof(Feature::deps) / sizeof(FeatureDep));
 }
 
 template<size_t n>
 static inline void disable_depends(FeatureList<n> &features)
 {
-#ifdef _CPU_ARM_
     ::disable_depends(features, Feature::deps, sizeof(Feature::deps) / sizeof(FeatureDep));
-#endif
 }
 
 static const std::vector<TargetData<feature_sz>> &get_cmdline_targets(void)
 {
     auto feature_cb = [] (const char *str, size_t len, FeatureList<feature_sz> &list) {
+#ifdef _CPU_AARCH64_
+        // On AArch64, treat `crypto` as an alias of aes + sha2 just like LLVM
+        if (llvm::StringRef(str, len) == "crypto") {
+            set_bit(list, Feature::aes, true);
+            set_bit(list, Feature::sha2, true);
+            return true;
+        }
+#endif
         auto fbit = find_feature_bit(feature_names, nfeature_names, str, len);
         if (fbit == (uint32_t)-1)
             return false;
         set_bit(list, fbit, true);
         return true;
     };
-    return ::get_cmdline_targets<feature_sz>(feature_cb);
+    auto &targets = ::get_cmdline_targets<feature_sz>(feature_cb);
+    for (auto &t: targets) {
+        if (auto nname = normalize_cpu_name(t.name)) {
+            t.name = nname;
+        }
+    }
+    return targets;
 }
 
 static std::vector<TargetData<feature_sz>> jit_targets;
@@ -1130,7 +1459,10 @@ static int max_vector_size(const FeatureList<feature_sz> &features)
         return 16;
     return 8;
 #else
-    // TODO SVE
+    if (test_nbit(features, Feature::sve2))
+        return 256;
+    if (test_nbit(features, Feature::sve))
+        return 128;
     return 16;
 #endif
 }
@@ -1142,6 +1474,11 @@ static uint32_t sysimg_init_cb(const void *id)
     TargetData<feature_sz> target = arg_target_data(cmdline[0], true);
     // Then find the best match in the sysimg
     auto sysimg = deserialize_target_data<feature_sz>((const uint8_t*)id);
+    for (auto &t: sysimg) {
+        if (auto nname = normalize_cpu_name(t.name)) {
+            t.name = nname;
+        }
+    }
     auto match = match_sysimg_targets(sysimg, target, max_vector_size);
     // Now we've decided on which sysimg version to use.
     // Make sure the JIT target is compatible with it and save the JIT target.
@@ -1211,6 +1548,11 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
             name = "generic";
         }
     }
+#ifdef _CPU_ARM_
+    // We use the name on aarch64 internally but the LLVM ARM backend still use the old name...
+    if (name == "apple-a7")
+        name = "cyclone";
+#endif
     std::vector<std::string> feature_strs;
     for (auto &fename: feature_names) {
         if (fename.llvmver > JL_LLVM_VERSION)
@@ -1220,7 +1562,7 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
         const char *fename_str = fename.name;
         bool enable = test_nbit(features, fename.bit);
         bool disable = test_nbit(data.dis.features, fename.bit);
-#ifdef _CPU_ARM_
+#if defined(_CPU_ARM_) && JL_LLVM_VERSION < 90000
         if (fename.bit == Feature::d32) {
             if (enable) {
                 feature_strs.push_back("-d16");
@@ -1238,6 +1580,16 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
             feature_strs.push_back(std::string("-") + fename_str);
         }
     }
+#if JL_LLVM_VERSION >= 110000
+    if (test_nbit(features, Feature::v8_6a))
+        feature_strs.push_back("+v8.6a");
+#endif
+    if (test_nbit(features, Feature::v8_5a))
+        feature_strs.push_back("+v8.5a");
+    if (test_nbit(features, Feature::v8_4a))
+        feature_strs.push_back("+v8.4a");
+    if (test_nbit(features, Feature::v8_3a))
+        feature_strs.push_back("+v8.3a");
     if (test_nbit(features, Feature::v8_2a))
         feature_strs.push_back("+v8.2a");
     if (test_nbit(features, Feature::v8_1a))
@@ -1304,21 +1656,25 @@ static FeatureList<feature_sz> get_max_feature(void)
 #ifdef _CPU_ARM_
     auto arch = get_elf_arch();
     auto features = real_feature_masks;
-    if (arch.second == 0)
-        arch.second = 'A';
+    if (arch.klass == 0)
+        arch.klass = 'A';
     set_bit(features, Feature::v7, true);
     set_bit(features, Feature::v8, true);
-    if (arch.second == 'M') {
+    if (arch.klass == 'M') {
         set_bit(features, Feature::mclass, true);
         set_bit(features, Feature::v8_m_main, true);
     }
-    else if (arch.second == 'R') {
+    else if (arch.klass == 'R') {
         set_bit(features, Feature::rclass, true);
     }
-    else if (arch.second == 'A') {
+    else if (arch.klass == 'A') {
         set_bit(features, Feature::aclass, true);
         set_bit(features, Feature::v8_1a, true);
         set_bit(features, Feature::v8_2a, true);
+        set_bit(features, Feature::v8_3a, true);
+        set_bit(features, Feature::v8_4a, true);
+        set_bit(features, Feature::v8_5a, true);
+        set_bit(features, Feature::v8_6a, true);
     }
     return features;
 #else
@@ -1358,10 +1714,19 @@ std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging,
 
 const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
 {
-    // RAS is not currently detectable AFAICT
     auto max_feature = get_max_feature();
     static const auto res = get_llvm_target_str(TargetData<feature_sz>{host_cpu_name(),
-                "+dotprod,+ras",
+#ifdef _CPU_AARCH64_
+#  if JL_LLVM_VERSION > 110000
+                "+ecv,"
+#  endif
+#  if JL_LLVM_VERSION > 100000
+                "+tme,"
+#  endif
+                "+am,+specrestrict,+predres,+mte,+lor,+perfmon,+spe,+tracev8.4",
+#else
+                "+dotprod",
+#endif
                 {max_feature, 0}, {feature_masks & ~max_feature, 0}, 0});
     return res;
 }

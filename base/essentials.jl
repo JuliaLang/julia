@@ -19,6 +19,7 @@ abstract type AbstractSet{T} end
 
 Supertype for dictionary-like types with keys of type `K` and values of type `V`.
 [`Dict`](@ref), [`IdDict`](@ref) and other types are subtypes of this.
+An `AbstractDict{K, V}` should be an iterator of `Pair{K, V}`.
 """
 abstract type AbstractDict{K,V} end
 
@@ -166,11 +167,13 @@ true
 function convert end
 
 convert(::Type{Union{}}, x) = throw(MethodError(convert, (Union{}, x)))
-convert(::Type{Any}, @nospecialize(x)) = x
+convert(::Type{Any}, x) = x
 convert(::Type{T}, x::T) where {T} = x
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled
                                    # (due to fields typed as `Type`, which is generally a bad idea)
+# These end up being called during bootstrap and then would be invalidated if not for the following:
+convert(::Type{String}, x::String) = x
 
 """
     @eval [mod,] ex
@@ -204,7 +207,7 @@ ERROR: ArgumentError: Cannot call tail on an empty tuple.
 tail(x::Tuple) = argtail(x...)
 tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
 
-tuple_type_head(T::Type) = (@_pure_meta; fieldtype(T::Type{<:Tuple}, 1))
+tuple_type_head(T::Type) = (@_pure_meta; fieldtype(T, 1))
 
 function tuple_type_tail(T::Type)
     @_pure_meta
@@ -332,9 +335,7 @@ convert(T::Type{Tuple{Vararg{V}}}, x::Tuple) where {V} =
 #convert(_::Type{Tuple{Vararg{S, N}}},
 #        x::Tuple{Vararg{Any, N}}) where
 #       {S, N} = cnvt_all(S, x...)
-# TODO: These currently can't be used since
-#   Type{NTuple} <: (Type{Tuple{Vararg{S}}} where S) is true
-#   even though the value S doesn't exist
+# TODO: These are similar to the methods we currently use but cnvt_all might work better:
 #convert(_::Type{Tuple{Vararg{S}}},
 #        x::Tuple{Any, Vararg{Any}}) where
 #       {S} = cnvt_all(S, x...)
@@ -408,7 +409,7 @@ julia> reinterpret(Float32, UInt32(7))
 1.0f-44
 
 julia> reinterpret(Float32, UInt32[1 2 3 4 5])
-1×5 reinterpret(Float32, ::Array{UInt32,2}):
+1×5 reinterpret(Float32, ::Matrix{UInt32}):
  1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
 ```
 """
@@ -635,7 +636,7 @@ false
 julia> mutable struct Foo end
 
 julia> v = similar(rand(3), Foo)
-3-element Array{Foo,1}:
+3-element Vector{Foo}:
  #undef
  #undef
  #undef
@@ -715,6 +716,40 @@ function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
     Core._apply_latest(inner)
 end
 
+"""
+    invoke_in_world(world, f, args...; kwargs...)
+
+Call `f(args...; kwargs...)` in a fixed world age, `world`.
+
+This is useful for infrastructure running in the user's Julia session which is
+not part of the user's program. For example, things related to the REPL, editor
+support libraries, etc. In these cases it can be useful to prevent unwanted
+method invalidation and recompilation latency, and to prevent the user from
+breaking supporting infrastructure by mistake.
+
+The current world age can be queried using [`Base.get_world_counter()`](@ref)
+and stored for later use within the lifetime of the current Julia session, or
+when serializing and reloading the system image.
+
+Technically, `invoke_in_world` will prevent any function called by `f` from
+being extended by the user during their Julia session. That is, generic
+function method tables seen by `f` (and any functions it calls) will be frozen
+as they existed at the given `world` age. In a sense, this is like the opposite
+of [`invokelatest`](@ref).
+
+!!! note
+    It is not valid to store world ages obtained in precompilation for later use.
+    This is because precompilation generates a "parallel universe" where the
+    world age refers to system state unrelated to the main Julia session.
+"""
+function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; kwargs...)
+    if isempty(kwargs)
+        return Core._apply_in_world(world, f, args)
+    end
+    inner() = f(args...; kwargs...)
+    Core._apply_in_world(world, inner)
+end
+
 # TODO: possibly make this an intrinsic
 inferencebarrier(@nospecialize(x)) = Ref{Any}(x)[]
 
@@ -751,12 +786,12 @@ of a general iterator are normally considered its "values".
 julia> d = Dict("a"=>1, "b"=>2);
 
 julia> values(d)
-Base.ValueIterator for a Dict{String,Int64} with 2 entries. Values:
+ValueIterator for a Dict{String,Int64} with 2 entries. Values:
   2
   1
 
 julia> values([2])
-1-element Array{Int64,1}:
+1-element Vector{Int64}:
  2
 ```
 """
@@ -786,6 +821,31 @@ ismissing(::Any) = false
 ismissing(::Missing) = true
 
 function popfirst! end
+
+"""
+    peek(stream[, T=UInt8])
+
+Read and return a value of type `T` from a stream without advancing the current position
+in the stream.
+
+# Examples
+
+```jldoctest
+julia> b = IOBuffer("julia");
+
+julia> peek(b)
+0x6a
+
+julia> position(b)
+0
+
+julia> peek(b, Char)
+'j': ASCII/Unicode U+006A (category Ll: Letter, lowercase)
+```
+
+!!! compat "Julia 1.5"
+    The method which accepts a type requires Julia 1.5 or later.
+"""
 function peek end
 
 """
@@ -796,11 +856,6 @@ Return `0` if the line number could not be determined.
 """
 macro __LINE__()
     return __source__.line
-end
-
-# Just for bootstrapping purposes below
-macro __FILE_SYMBOL__()
-    return Expr(:quote, __source__.file)
 end
 
 # Iteration

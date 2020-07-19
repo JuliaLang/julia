@@ -194,10 +194,7 @@ JL_DLLEXPORT void JL_NORETURN jl_eof_error(void)
 // get kwsorter field, with appropriate error check and message
 JL_DLLEXPORT jl_value_t *jl_get_keyword_sorter(jl_value_t *f)
 {
-    jl_methtable_t *mt = jl_gf_mtable(f);
-    if (mt->kwsorter == NULL)
-        jl_errorf("function %s does not accept keyword arguments", jl_symbol_name(mt->name));
-    return mt->kwsorter;
+    return jl_get_kwsorter(jl_typeof(f));
 }
 
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t)
@@ -346,6 +343,22 @@ JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a)
     return a;
 }
 
+// optimization of setfield which bypasses boxing of the idx (and checking field type validity)
+JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t idx0, jl_value_t *rhs)
+{
+    jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
+    if (!st->mutabl)
+        jl_errorf("setfield! immutable struct of type %s cannot be changed", jl_symbol_name(st->name->name));
+    if (idx0 >= jl_datatype_nfields(st))
+        jl_bounds_error_int(v, idx0 + 1);
+    //jl_value_t *ft = jl_field_type(st, idx0);
+    //if (!jl_isa(rhs, ft)) {
+    //    jl_type_error("setfield!", ft, rhs);
+    //}
+    set_nth_field(st, (void*)v, idx0, rhs);
+}
+
+
 // parsing --------------------------------------------------------------------
 
 int substr_isspace(char *p, char *pend)
@@ -452,7 +465,7 @@ JL_DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, si
         bstr = newstr;
         pend = bstr+len;
     }
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
     float out = (float)jl_strtod_c(bstr, &p);
 #else
     float out = jl_strtof_c(bstr, &p);
@@ -636,26 +649,24 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_method_type) {
         jl_method_t *m = (jl_method_t*)v;
-        n += jl_static_show_x(out, (jl_value_t*)m->module, depth);
-        n += jl_printf(out, ".%s(...)", jl_symbol_name(m->name));
+        n += jl_static_show_func_sig(out, m->sig);
     }
     else if (vt == jl_method_instance_type) {
         jl_method_instance_t *li = (jl_method_instance_t*)v;
         if (jl_is_method(li->def.method)) {
-            if (li->specTypes) {
-                n += jl_static_show_func_sig(out, li->specTypes);
-            }
-            else {
-                jl_method_t *m = li->def.method;
-                n += jl_static_show_x(out, (jl_value_t*)m->module, depth);
-                n += jl_printf(out, ".%s(?)", jl_symbol_name(m->name));
-            }
+            n += jl_static_show_func_sig(out, li->specTypes);
+            n += jl_printf(out, " from ");
+            n += jl_static_show_func_sig(out, li->def.method->sig);
         }
         else {
             n += jl_static_show_x(out, (jl_value_t*)li->def.module, depth);
             n += jl_printf(out, ".<toplevel thunk> -> ");
             n += jl_static_show_x(out, li->uninferred, depth);
         }
+    }
+    else if (vt == jl_typename_type) {
+        n += jl_static_show_x(out, jl_unwrap_unionall(((jl_typename_t*)v)->wrapper), depth);
+        n += jl_printf(out, ".name");
     }
     else if (vt == jl_simplevector_type) {
         n += jl_show_svec(out, (jl_svec_t*)v, "svec", "(", ")");
@@ -799,6 +810,11 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, ua->body, depth);
         n += jl_printf(out, " where ");
         n += jl_static_show_x(out, (jl_value_t*)ua->var, depth->prev);
+    }
+    else if (vt == jl_typename_type) {
+        n += jl_printf(out, "typename(");
+        n += jl_static_show_x(out, jl_unwrap_unionall(((jl_typename_t*)v)->wrapper), depth);
+        n += jl_printf(out, ")");
     }
     else if (vt == jl_tvar_type) {
         // show type-var bounds only if they aren't going to be printed by UnionAll later

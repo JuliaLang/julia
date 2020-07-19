@@ -5,6 +5,7 @@ using Distributed
 using Dates
 import REPL
 using Printf: @sprintf
+using Base: Experimental
 
 include("choosetests.jl")
 include("testenv.jl")
@@ -14,6 +15,12 @@ tests = unique(tests)
 
 if use_revise
     using Revise
+    # Remote-eval the following to initialize Revise in workers
+    const revise_init_expr = quote
+        using Revise
+        const STDLIBS = $STDLIBS
+        revise_trackall()
+    end
 end
 
 const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
@@ -63,6 +70,13 @@ move_to_node1("stress")
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
+# Shuffle LinearAlgebra tests to the front, because they take a while, so we might
+# as well get them all started early.
+linalg_test_ids = findall(x->occursin("LinearAlgebra", x), tests)
+linalg_tests = tests[linalg_test_ids]
+deleteat!(tests, linalg_test_ids)
+prepend!(tests, linalg_tests)
+
 import LinearAlgebra
 cd(@__DIR__) do
     n = 1
@@ -76,11 +90,8 @@ cd(@__DIR__) do
     @everywhere include("testdefs.jl")
 
     if use_revise
-        @everywhere begin
-            Revise.track(Core.Compiler)
-            Revise.track(Base)
-            Revise.revise()
-        end
+        Base.invokelatest(revise_trackall)
+        Distributed.remotecall_eval(Main, workers(), revise_init_expr)
     end
 
     #pretty print the information about gc and mem usage
@@ -155,6 +166,7 @@ cd(@__DIR__) do
     try
         # Monitor stdin and kill this task on ^C
         # but don't do this on Windows, because it may deadlock in the kernel
+        running_tests = Dict{String, DateTime}()
         if !Sys.iswindows() && isa(stdin, Base.TTY)
             t = current_task()
             stdin_monitor = @async begin
@@ -162,9 +174,16 @@ cd(@__DIR__) do
                 try
                     REPL.Terminals.raw!(term, true)
                     while true
-                        if read(term, Char) == '\x3'
+                        c = read(term, Char)
+                        if c == '\x3'
                             Base.throwto(t, InterruptException())
                             break
+                        elseif c == '?'
+                            println("Currently running: ")
+                            tests = sort(collect(running_tests), by=x->x[2])
+                            foreach(tests) do (test, date)
+                                println(test, " (running for ", round(now()-date, Minute), ")")
+                            end
                         end
                     end
                 catch e
@@ -174,12 +193,13 @@ cd(@__DIR__) do
                 end
             end
         end
-        @sync begin
+        @Experimental.sync begin
             for p in workers()
                 @async begin
                     push!(all_tasks, current_task())
                     while length(tests) > 0
                         test = popfirst!(tests)
+                        running_tests[test] = now()
                         local resp
                         wrkr = p
                         try
@@ -188,6 +208,7 @@ cd(@__DIR__) do
                             isa(e, InterruptException) && return
                             resp = Any[e]
                         end
+                        delete!(running_tests, test)
                         push!(results, (test, resp))
                         if resp[1] isa Exception
                             print_testworker_errored(test, wrkr)
@@ -200,6 +221,9 @@ cd(@__DIR__) do
                                 rmprocs(wrkr, waitfor=30)
                                 p = addprocs_with_testenv(1)[1]
                                 remotecall_fetch(include, p, "testdefs.jl")
+                                if use_revise
+                                    Distributed.remotecall_eval(Main, p, revise_init_expr)
+                                end
                             end
                         else
                             print_testworker_stats(test, wrkr, resp)
@@ -210,6 +234,9 @@ cd(@__DIR__) do
                                     rmprocs(wrkr, waitfor=30)
                                     p = addprocs_with_testenv(1)[1]
                                     remotecall_fetch(include, p, "testdefs.jl")
+                                    if use_revise
+                                        Distributed.remotecall_eval(Main, p, revise_init_expr)
+                                    end
                                 else # single process testing
                                     error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
                                 end

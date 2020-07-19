@@ -2,7 +2,7 @@
 
 Julia provides a variety of control flow constructs:
 
-  * [Compound Expressions](@ref man-compound-expressions): `begin` and `(;)`.
+  * [Compound Expressions](@ref man-compound-expressions): `begin` and `;`.
   * [Conditional Evaluation](@ref man-conditional-evaluation): `if`-`elseif`-`else` and `?:` (ternary operator).
   * [Short-Circuit Evaluation](@ref): `&&`, `||` and chained comparisons.
   * [Repeated Evaluation: Loops](@ref man-loops): `while` and `for`.
@@ -19,7 +19,7 @@ direct usage of tasks, but certain problems can be solved much more easily by us
 
 Sometimes it is convenient to have a single expression which evaluates several subexpressions
 in order, returning the value of the last subexpression as its value. There are two Julia constructs
-that accomplish this: `begin` blocks and `(;)` chains. The value of both compound expression constructs
+that accomplish this: `begin` blocks and `;` chains. The value of both compound expression constructs
 is that of the last subexpression. Here's an example of a `begin` block:
 
 ```jldoctest
@@ -32,7 +32,7 @@ julia> z = begin
 ```
 
 Since these are fairly small, simple expressions, they could easily be placed onto a single line,
-which is where the `(;)` chain syntax comes in handy:
+which is where the `;` chain syntax comes in handy:
 
 ```jldoctest
 julia> z = (x = 1; y = 2; x + y)
@@ -40,8 +40,8 @@ julia> z = (x = 1; y = 2; x + y)
 ```
 
 This syntax is particularly useful with the terse single-line function definition form introduced
-in [Functions](@ref). Although it is typical, there is no requirement that `begin` blocks be multiline
-or that `(;)` chains be single-line:
+in [Functions](@ref man-functions). Although it is typical, there is no requirement that `begin` blocks be multiline
+or that `;` chains be single-line:
 
 ```jldoctest
 julia> begin x = 1; y = 2; x + y end
@@ -655,6 +655,7 @@ julia> Base.showerror(io::IO, e::MyUndefVarError) = print(io, e.var, " not defin
 
 !!! note
     When writing an error message, it is preferred to make the first word lowercase. For example,
+
     `size(A) == size(B) || throw(DimensionMismatch("size of A not equal to size of B"))`
 
     is preferred over
@@ -662,7 +663,9 @@ julia> Base.showerror(io::IO, e::MyUndefVarError) = print(io, e.var, " not defin
     `size(A) == size(B) || throw(DimensionMismatch("Size of A not equal to size of B"))`.
 
     However, sometimes it makes sense to keep the uppercase first letter, for instance if an argument
-    to a function is a capital letter: `size(A,1) == size(B,2) || throw(DimensionMismatch("A has first dimension..."))`.
+    to a function is a capital letter:
+
+    `size(A,1) == size(B,2) || throw(DimensionMismatch("A has first dimension..."))`.
 
 ### Errors
 
@@ -821,167 +824,5 @@ case the `finally` block will run after `catch` has handled the error.
 ## [Tasks (aka Coroutines)](@id man-tasks)
 
 Tasks are a control flow feature that allows computations to be suspended and resumed in a flexible
-manner. This feature is sometimes called by other names, such as symmetric coroutines, lightweight
-threads, cooperative multitasking, or one-shot continuations.
-
-When a piece of computing work (in practice, executing a particular function) is designated as
-a [`Task`](@ref), it becomes possible to interrupt it by switching to another [`Task`](@ref).
-The original [`Task`](@ref) can later be resumed, at which point it will pick up right where it
-left off. At first, this may seem similar to a function call. However there are two key differences.
-First, switching tasks does not use any space, so any number of task switches can occur without
-consuming the call stack. Second, switching among tasks can occur in any order, unlike function
-calls, where the called function must finish executing before control returns to the calling function.
-
-This kind of control flow can make it much easier to solve certain problems. In some problems,
-the various pieces of required work are not naturally related by function calls; there is no obvious
-"caller" or "callee" among the jobs that need to be done. An example is the producer-consumer
-problem, where one complex procedure is generating values and another complex procedure is consuming
-them. The consumer cannot simply call a producer function to get a value, because the producer
-may have more values to generate and so might not yet be ready to return. With tasks, the producer
-and consumer can both run as long as they need to, passing values back and forth as necessary.
-
-Julia provides a [`Channel`](@ref) mechanism for solving this problem.
-A [`Channel`](@ref) is a waitable first-in first-out queue which can have
-multiple tasks reading from and writing to it.
-
-Let's define a producer task, which produces values via the [`put!`](@ref) call.
-To consume values, we need to schedule the producer to run in a new task. A special [`Channel`](@ref)
-constructor which accepts a 1-arg function as an argument can be used to run a task bound to a channel.
-We can then [`take!`](@ref) values repeatedly from the channel object:
-
-```jldoctest producer
-julia> function producer(c::Channel)
-           put!(c, "start")
-           for n=1:4
-               put!(c, 2n)
-           end
-           put!(c, "stop")
-       end;
-
-julia> chnl = Channel(producer);
-
-julia> take!(chnl)
-"start"
-
-julia> take!(chnl)
-2
-
-julia> take!(chnl)
-4
-
-julia> take!(chnl)
-6
-
-julia> take!(chnl)
-8
-
-julia> take!(chnl)
-"stop"
-```
-
-One way to think of this behavior is that `producer` was able to return multiple times. Between
-calls to [`put!`](@ref), the producer's execution is suspended and the consumer has control.
-
-The returned [`Channel`](@ref) can be used as an iterable object in a `for` loop, in which case the
-loop variable takes on all the produced values. The loop is terminated when the channel is closed.
-
-```jldoctest producer
-julia> for x in Channel(producer)
-           println(x)
-       end
-start
-2
-4
-6
-8
-stop
-```
-
-Note that we did not have to explicitly close the channel in the producer. This is because
-the act of binding a [`Channel`](@ref) to a [`Task`](@ref) associates the open lifetime of
-a channel with that of the bound task. The channel object is closed automatically when the task
-terminates. Multiple channels can be bound to a task, and vice-versa.
-
-While the [`Task`](@ref) constructor expects a 0-argument function, the [`Channel`](@ref)
-method which creates a channel bound task expects a function that accepts a single argument of
-type [`Channel`](@ref). A common pattern is for the producer to be parameterized, in which case a partial
-function application is needed to create a 0 or 1 argument [anonymous function](@ref man-anonymous-functions).
-
-For [`Task`](@ref) objects this can be done either directly or by use of a convenience macro:
-
-```julia
-function mytask(myarg)
-    ...
-end
-
-taskHdl = Task(() -> mytask(7))
-# or, equivalently
-taskHdl = @task mytask(7)
-```
-
-To orchestrate more advanced work distribution patterns, [`bind`](@ref) and [`schedule`](@ref)
-can be used in conjunction with [`Task`](@ref) and [`Channel`](@ref)
-constructors to explicitly link a set of channels with a set of producer/consumer tasks.
-
-Note that currently Julia tasks are not scheduled to run on separate CPU cores.
-True kernel threads are discussed under the topic of [Parallel Computing](@ref).
-
-### Core task operations
-
-Let us explore the low level construct [`yieldto`](@ref) to understand how task switching works.
-`yieldto(task,value)` suspends the current task, switches to the specified `task`, and causes
-that task's last [`yieldto`](@ref) call to return the specified `value`. Notice that [`yieldto`](@ref)
-is the only operation required to use task-style control flow; instead of calling and returning
-we are always just switching to a different task. This is why this feature is also called "symmetric
-coroutines"; each task is switched to and from using the same mechanism.
-
-[`yieldto`](@ref) is powerful, but most uses of tasks do not invoke it directly. Consider why
-this might be. If you switch away from the current task, you will probably want to switch back
-to it at some point, but knowing when to switch back, and knowing which task has the responsibility
-of switching back, can require considerable coordination. For example, [`put!`](@ref) and [`take!`](@ref)
-are blocking operations, which, when used in the context of channels maintain state to remember
-who the consumers are. Not needing to manually keep track of the consuming task is what makes [`put!`](@ref)
-easier to use than the low-level [`yieldto`](@ref).
-
-In addition to [`yieldto`](@ref), a few other basic functions are needed to use tasks effectively.
-
-  * [`current_task`](@ref) gets a reference to the currently-running task.
-  * [`istaskdone`](@ref) queries whether a task has exited.
-  * [`istaskstarted`](@ref) queries whether a task has run yet.
-  * [`task_local_storage`](@ref) manipulates a key-value store specific to the current task.
-
-### Tasks and events
-
-Most task switches occur as a result of waiting for events such as I/O requests, and are performed
-by a scheduler included in Julia Base. The scheduler maintains a queue of runnable tasks,
-and executes an event loop that restarts tasks based on external events such as message arrival.
-
-The basic function for waiting for an event is [`wait`](@ref). Several objects implement [`wait`](@ref);
-for example, given a `Process` object, [`wait`](@ref) will wait for it to exit. [`wait`](@ref)
-is often implicit; for example, a [`wait`](@ref) can happen inside a call to [`read`](@ref)
-to wait for data to be available.
-
-In all of these cases, [`wait`](@ref) ultimately operates on a [`Condition`](@ref) object, which
-is in charge of queueing and restarting tasks. When a task calls [`wait`](@ref) on a [`Condition`](@ref),
-the task is marked as non-runnable, added to the condition's queue, and switches to the scheduler.
-The scheduler will then pick another task to run, or block waiting for external events. If all
-goes well, eventually an event handler will call [`notify`](@ref) on the condition, which causes
-tasks waiting for that condition to become runnable again.
-
-A task created explicitly by calling [`Task`](@ref) is initially not known to the scheduler. This
-allows you to manage tasks manually using [`yieldto`](@ref) if you wish. However, when such
-a task waits for an event, it still gets restarted automatically when the event happens, as you
-would expect. It is also possible to make the scheduler run a task whenever it can, without necessarily
-waiting for any events. This is done by calling [`schedule`](@ref), or using the [`@async`](@ref)
-macro (see [Parallel Computing](@ref) for more details).
-
-### Task states
-
-Tasks have a `state` field that describes their execution status. A [`Task`](@ref) `state` is one of the following
-symbols:
-
-| Symbol      | Meaning                                            |
-|:----------- |:-------------------------------------------------- |
-| `:runnable` | Currently running, or able to run                  |
-| `:done`     | Successfully finished executing                    |
-| `:failed`   | Finished with an uncaught exception                |
+manner. We mention them here only for completeness; for a full discussion see
+[Asynchronous Programming](@ref man-asynchronous).

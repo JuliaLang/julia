@@ -1,4 +1,4 @@
-# Markdown
+# [Markdown](@id markdown_stdlib)
 
 This section describes Julia's markdown syntax, which is enabled by the
 Markdown standard library. The following Markdown elements are supported:
@@ -21,7 +21,7 @@ A paragraph containing a **bold** word.
 Surround words with one asterisk, `*`, to display the enclosed text in italics.
 
 ```
-A paragraph containing an *emphasized* word.
+A paragraph containing an *italicized* word.
 ```
 
 ### Literals
@@ -40,7 +40,7 @@ parts of a Julia program.
     the text.
 
     ```
-    A paragraph containing a ``` `backtick` character ```.
+    A paragraph containing ``` `backtick` characters ```.
     ```
 
     By extension any odd number of backticks may be used to enclose a lesser number of backticks.
@@ -70,7 +70,7 @@ A paragraph containing some ``\LaTeX`` markup.
 
 ### Links
 
-Links to either external or internal addresses can be written using the following syntax, where
+Links to either external or internal targets can be written using the following syntax, where
 the text enclosed in square brackets, `[ ]`, is the name of the link and the text enclosed in
 parentheses, `( )`, is the URL.
 
@@ -127,7 +127,7 @@ in the [Inline elements](@ref) section above, with one or more blank lines above
 ```
 This is a paragraph.
 
-And this is *another* one containing some emphasized text.
+And this is *another* paragraph containing some emphasized text.
 A new line, but still part of the same paragraph.
 ```
 
@@ -316,7 +316,8 @@ aside from the `:` character that is appended to the footnote label.
 
 ### Horizontal rules
 
-The equivalent of an `<hr>` HTML tag can be written using the following syntax:
+The equivalent of an `<hr>` HTML tag can be achieved using three hyphens (`---`).
+For example:
 
 ```
 Text above the line.
@@ -364,12 +365,21 @@ They can be defined using the following `!!!` syntax:
     This warning admonition has a custom title: `"Beware!"`.
 ```
 
-The type of the admonition can be any word, but some types produce special styling,
-namely (in order of decreasing severity): `danger`, `warning`, `info`/`note`, and `tip`.
+The type of the admonition can be any word made up of only lowercase Latin characters (a-z), but some types produce special styling,
+namely (in order of decreasing severity): `danger`, `warning`, `info`, `note`, and `tip`.
 
 A custom title for the box can be provided as a string (in double quotes) after the admonition type.
-If no title text is specified after the admonition type, then the title used will be the type of the block,
-i.e. `"Note"` in the case of the `note` admonition.
+For that standard types (`danger`, `warning`... etc_, if no title text is specified after the
+admonition type, then the type title used will be the type of the block.
+E.g. `"Note"` in the case of the `note` admonition.
+
+If you would like to define your own block, for example a `terminology`  block
+used like so:
+```
+!!! terminology "julia vs Julia"
+    Strictly speaking, Julia refers to the language,
+    and julia the standard implementation.
+```
 
 Admonitions, like most other toplevel elements, can contain other toplevel elements.
 

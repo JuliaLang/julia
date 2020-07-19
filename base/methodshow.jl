@@ -13,7 +13,7 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
     s = string(n)
     i = findfirst(isequal('#'), s)
     if i !== nothing
-        s = s[1:i-1]
+        s = s[1:prevind(s, i)]
     end
     if t === Any && !isempty(s)
         return s, ""
@@ -48,7 +48,7 @@ function method_argnames(m::Method)
     return argnames[1:m.nargs]
 end
 
-function arg_decl_parts(m::Method)
+function arg_decl_parts(m::Method, html=false)
     tv = Any[]
     sig = m.sig
     while isa(sig, UnionAll)
@@ -63,17 +63,20 @@ function arg_decl_parts(m::Method)
         for t in tv
             show_env = ImmutableDict(show_env, :unionall_env => t)
         end
-        decls = Any[argtype_decl(show_env, argnames[i], sig, i, m.nargs, m.isva)
+        decls = Tuple{String,String}[argtype_decl(show_env, argnames[i], sig, i, m.nargs, m.isva)
                     for i = 1:m.nargs]
+        decls[1] = ("", sprint(show_signature_function, sig.parameters[1], false, decls[1][1], html,
+                               context = show_env))
     else
-        decls = Any[("", "") for i = 1:length(sig.parameters)]
+        decls = Tuple{String,String}[("", "") for i = 1:length(sig.parameters::SimpleVector)]
     end
     return tv, decls, file, line
 end
 
 const empty_sym = Symbol("")
 
-function kwarg_decl(m::Method)
+# NOTE: second argument is deprecated and is no longer used
+function kwarg_decl(m::Method, kwtype = nothing)
     mt = get_methodtable(m)
     if isdefined(mt, :kwsorter)
         kwtype = typeof(mt.kwsorter)
@@ -179,29 +182,13 @@ end
 function show(io::IO, m::Method)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
-    ft0 = sig.parameters[1]
-    ft = unwrap_unionall(ft0)
-    d1 = decls[1]
     if sig === Tuple
-        print(io, m.name)
-        decls = Any[(), ("...", "")]
-    elseif ft <: Function && isa(ft, DataType) &&
-            isdefined(ft.name.module, ft.name.mt.name) &&
-                # TODO: more accurate test? (tn.name === "#" name)
-            ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
-        print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.body.name
-        f = ft.parameters[1]
-        if isa(f, DataType) && isempty(f.parameters)
-            print(io, f)
-        else
-            print(io, "(", d1[1], "::", d1[2], ")")
-        end
-    else
-        print(io, "(", d1[1], "::", d1[2], ")")
+        # Builtin
+        print(io, m.name, "(...) in ", m.module)
+        return
     end
-    print(io, "(")
-    join(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
+    print(io, decls[1][2], "(")
+    join(io, String[isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
                  ", ", ", ")
     kwargs = kwarg_decl(m)
     if !isempty(kwargs)
@@ -254,15 +241,19 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     n = rest = 0
     local last
 
-    resize!(LAST_SHOWN_LINE_INFOS, 0)
+    last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
+    last_shown_line_infos === nothing || empty!(last_shown_line_infos)
+
     for meth in ms
         if max==-1 || n<max
             n += 1
             println(io)
-            print(io, "[$(n)] ")
+            print(io, "[$n] ")
             show(io, meth)
             file, line = updated_methodloc(meth)
-            push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
+            if last_shown_line_infos !== nothing
+                push!(last_shown_line_infos, (string(file), line))
+            end
         else
             rest += 1
             last = meth
@@ -296,7 +287,7 @@ fileurl(file) = let f = find_source_file(file); f === nothing ? "" : "file://"*f
 
 function url(m::Method)
     M = m.module
-    (m.file == :null || m.file == :string) && return ""
+    (m.file === :null || m.file === :string) && return ""
     file = string(m.file)
     line = m.line
     line <= 0 || occursin(r"In\[[0-9]+\]", file) && return ""
@@ -335,27 +326,15 @@ function url(m::Method)
 end
 
 function show(io::IO, ::MIME"text/html", m::Method)
-    tv, decls, file, line = arg_decl_parts(m)
+    tv, decls, file, line = arg_decl_parts(m, true)
     sig = unwrap_unionall(m.sig)
-    ft0 = sig.parameters[1]
-    ft = unwrap_unionall(ft0)
-    d1 = decls[1]
-    if ft <: Function && isa(ft, DataType) &&
-            isdefined(ft.name.module, ft.name.mt.name) &&
-            ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
-        print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.body.name
-        f = ft.parameters[1]
-        if isa(f, DataType) && isempty(f.parameters)
-            print(io, f)
-        else
-            print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
-        end
-    else
-        print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
+    if sig === Tuple
+        # Builtin
+        print(io, m.name, "(...) in ", m.module)
+        return
     end
-    print(io, "(")
-    join(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
+    print(io, decls[1][2], "(")
+    join(io, String[isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
                       for d in decls[2:end]], ", ", ", ")
     kwargs = kwarg_decl(m)
     if !isempty(kwargs)
@@ -398,7 +377,8 @@ show(io::IO, mime::MIME"text/html", mt::Core.MethodTable) = show(io, mime, Metho
 
 # pretty-printing of AbstractVector{Method}
 function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
-    resize!(LAST_SHOWN_LINE_INFOS, 0)
+    last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
+    last_shown_line_infos === nothing || empty!(last_shown_line_infos)
     first = true
     for (i, m) in enumerate(mt)
         first || println(io)
@@ -406,7 +386,9 @@ function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
         print(io, "[$(i)] ")
         show(io, m)
         file, line = updated_methodloc(m)
-        push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
+        if last_shown_line_infos !== nothing
+            push!(last_shown_line_infos, (string(file), line))
+        end
     end
 end
 

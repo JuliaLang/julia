@@ -15,9 +15,9 @@
               (loop (cdr lst) (cons nxt out)))))))
 
 (define (julia-bq-expand- x d)
-  (cond ((or (eq? x 'true) (eq? x 'false))  x)
-        ((or (symbol? x) (ssavalue? x))     (list 'inert x))
+  (cond ((or (symbol? x) (ssavalue? x))     (list 'inert x))
         ((atom? x)  x)
+        ((memq (car x) '(true false)) x)
         ((and (= d 0) (eq? (car x) '$))
          (if (length= x 2)
              (if (vararg? (cadr x))
@@ -115,7 +115,7 @@
                                    (cons (decl-var (cadar binds)) vars)))
                             ((eventually-call? (cadar binds))
                              ;; f()=c
-                             (let ((asgn (cadr (julia-expand0 (car binds)))))
+                             (let ((asgn (cadr (julia-expand0 (car binds) 'none 0))))
                                (loop (cdr binds)
                                      (cons (cadr asgn) vars))))
                             ((and (pair? (cadar binds))
@@ -206,12 +206,11 @@
 
 ;; get the name from a function formal argument expression, allowing `(escape x)`
 (define (try-arg-name v)
-  (cond ((and (symbol? v) (not (eq? v 'true)) (not (eq? v 'false)))
-         (list v))
+  (cond ((symbol? v) (list v))
         ((atom? v) '())
         (else
          (case (car v)
-           ((... kw |::|) (try-arg-name (cadr v)))
+           ((... kw |::| =) (try-arg-name (cadr v)))
            ((escape) (list v))
            ((hygienic-scope) (try-arg-name (cadr v)))
            ((meta)  ;; allow certain per-argument annotations
@@ -276,6 +275,9 @@
                     ,@(map (lambda (x)
                              (resolve-expansion-vars-with-new-env x env m parent-scope #t))
                            (cddr e))))
+    ((tuple) `(tuple ,@(map (lambda (x)
+                              (resolve-expansion-vars-with-new-env x env m parent-scope #t))
+                            (cdr e))))
     (else (other e))))
 
 (define (new-expansion-env-for x env (outermost #f))
@@ -298,10 +300,9 @@
              (append!
               pairs
               (filter (lambda (v) (not (assq (car v) env)))
-                      (append!
-                       (pair-with-gensyms v)
-                       (map (lambda (v) (cons v v))
-                            (diff (keywords-introduced-by x) globals))))
+                      (pair-with-gensyms v))
+              (map (lambda (v) (cons v v))
+                   (keywords-introduced-by x))
               env)))))))
 
 (define (resolve-expansion-vars-with-new-env x env m parent-scope inarg (outermost #f))
@@ -315,7 +316,7 @@
    m parent-scope inarg))
 
 (define (resolve-expansion-vars- e env m parent-scope inarg)
-  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal))
+  (cond ((or (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal))
          e)
         ((symbol? e)
          (let ((a (assq e env)))
@@ -342,7 +343,7 @@
                                    ,(resolve-expansion-vars-with-new-env (caddr arg) env m parent-scope inarg))))
                              (else
                               `(global ,(resolve-expansion-vars-with-new-env arg env m parent-scope inarg))))))
-           ((using import export meta line inbounds boundscheck loopinfo gc_preserve gc_preserve_end) (map unescape e))
+           ((using import export meta line inbounds boundscheck loopinfo) (map unescape e))
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)
            ((symbolicgoto) e)
@@ -362,10 +363,14 @@
            ((parameters)
             (cons 'parameters
                   (map (lambda (x)
-                         (resolve-expansion-vars- x env m parent-scope #f))
+                         ;; `x` by itself after ; means `x=x`
+                         (let ((x (if (and (not inarg) (symbol? x))
+                                      `(kw ,x ,x)
+                                      x)))
+                           (resolve-expansion-vars- x env m parent-scope #f)))
                        (cdr e))))
 
-           ((= function)
+           ((= function ->)
             (if (and (pair? (cadr e)) (function-def? e))
                 ;; in (kw x 1) inside an arglist, the x isn't actually a kwarg
                 `(,(car e) ,(resolve-in-function-lhs (cadr e) env m parent-scope inarg)

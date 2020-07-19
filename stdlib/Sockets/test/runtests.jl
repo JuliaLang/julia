@@ -1,6 +1,27 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Sockets, Random, Test
+using Base: Experimental
+
+# set up a watchdog alarm for 10 minutes
+# so that we can attempt to get a "friendly" backtrace if something gets stuck
+# (although this'll also terminate any attempted debugging session)
+# expected test duration is about 5-10 seconds
+function killjob(d)
+    Core.print(Core.stderr, d)
+    if Sys.islinux()
+        SIGINFO = 10
+    elseif Sys.isbsd()
+        SIGINFO = 29
+    end
+    if @isdefined(SIGINFO)
+        ccall(:uv_kill, Cint, (Cint, Cint), getpid(), SIGINFO)
+        sleep(1)
+    end
+    ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
+    nothing
+end
+Timer(t -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"), 600)
 
 @testset "parsing" begin
     @test ip"127.0.0.1" == IPv4(127,0,0,1)
@@ -115,7 +136,7 @@ defaultport = rand(2000:4000)
                 write(sock, "Hello World\n")
 
                 # test "locked" println to a socket
-                @sync begin
+                @Experimental.sync begin
                     for i in 1:100
                         @async println(sock, "a", 1)
                     end
@@ -162,6 +183,18 @@ defaultport = rand(2000:4000)
     end
 end
 
+@testset "getsockname errors" begin
+    sock = TCPSocket()
+    serv = Sockets.TCPServer()
+    @test_throws MethodError getpeername(serv)
+    @test_throws Base._UVError("cannot obtain socket name", Base.UV_EBADF) getpeername(sock)
+    @test_throws Base._UVError("cannot obtain socket name", Base.UV_EBADF) getsockname(serv)
+    @test_throws Base._UVError("cannot obtain socket name", Base.UV_EBADF) getsockname(sock)
+    close(sock)
+    close(serv)
+end
+
+
 @testset "getnameinfo on some unroutable IP addresses (RFC 5737)" begin
     @test getnameinfo(ip"192.0.2.1") == "192.0.2.1"
     @test getnameinfo(ip"198.51.100.1") == "198.51.100.1"
@@ -185,6 +218,8 @@ end
 end
 
 @testset "getaddrinfo" begin
+    @test getaddrinfo("127.0.0.1") == ip"127.0.0.1"
+    @test getaddrinfo("::1") == ip"::1"
     let localhost = getnameinfo(ip"127.0.0.1")::String
         @test !isempty(localhost) && localhost != "127.0.0.1"
         @test !isempty(getalladdrinfo(localhost)::Vector{IPAddr})
@@ -222,10 +257,10 @@ end
 end
 
 # test connecting to a named port
-let localhost = getaddrinfo("localhost")
+let localhost = ip"127.0.0.1"
     global randport
     randport, server = listenany(localhost, defaultport)
-    @async connect("localhost", randport)
+    @async connect(localhost, randport)
     s1 = accept(server)
     @test_throws ErrorException("client TCPSocket is not in initialization state") accept(server, s1)
     @test_throws Base._UVError("listen", Base.UV_EADDRINUSE) listen(randport)
@@ -247,7 +282,7 @@ end
         bind(a, ip"127.0.0.1", randport)
         bind(b, ip"127.0.0.1", randport + 1)
 
-        @sync begin
+        @Experimental.sync begin
             let i = 0
                 for _ = 1:30
                     @async let msg = String(recv(a))
@@ -324,69 +359,110 @@ end
         @test addr == gsn_addr
         @test port == gsn_port
 
-        @test_throws MethodError getpeername(listen_sock)
-
         # connect to it
         client_sock = connect(addr, port)
-        server_sock = accept(listen_sock)
+        test_done = false
+        @Experimental.sync begin
+            @async begin
+                Base.wait_readnb(client_sock, 1)
+                test_done || error("Client disconnected prematurely.")
+            end
+            @async begin
+                server_sock = accept(listen_sock)
 
-        self_client_addr, self_client_port = getsockname(client_sock)
-        peer_client_addr, peer_client_port = getpeername(client_sock)
-        self_srvr_addr, self_srvr_port = getsockname(server_sock)
-        peer_srvr_addr, peer_srvr_port = getpeername(server_sock)
+                self_client_addr, self_client_port = getsockname(client_sock)
+                peer_client_addr, peer_client_port = getpeername(client_sock)
+                self_srvr_addr, self_srvr_port = getsockname(server_sock)
+                peer_srvr_addr, peer_srvr_port = getpeername(server_sock)
 
-        @test self_client_addr == peer_client_addr == self_srvr_addr == peer_srvr_addr
+                @test self_client_addr == peer_client_addr == self_srvr_addr == peer_srvr_addr
 
-        @test peer_client_port == self_srvr_port
-        @test peer_srvr_port == self_client_port
-        @test self_srvr_port != self_client_port
+                @test peer_client_port == self_srvr_port
+                @test peer_srvr_port == self_client_port
+                @test self_srvr_port != self_client_port
 
-        close(listen_sock)
-        close(client_sock)
-        close(server_sock)
+                test_done = true
+
+                close(listen_sock)
+                close(client_sock)
+                close(server_sock)
+            end
+        end
     end
 end
 
 @testset "Local-machine broadcast" begin
     let a, b, c
-        # (Mac OS X's loopback interface doesn't support broadcasts)
+        # Apple does not support broadcasting on 127.255.255.255
         bcastdst = Sys.isapple() ? ip"255.255.255.255" : ip"127.255.255.255"
 
-        function create_socket()
+        function create_socket(addr::IPAddr, port)
             s = UDPSocket()
-            bind(s, ip"0.0.0.0", 2000, reuseaddr = true, enable_broadcast = true)
-            s
+            bind(s, addr, port, reuseaddr = true, enable_broadcast = true)
+            return s
         end
 
-        function wait_with_timeout(recvs)
-            TIMEOUT_VAL = 3  # seconds
-            t0 = time()
+        # Wait for futures to finish with a given timeout
+        function wait_with_timeout(recvs, TIMEOUT_VAL = 3*1e9)
+            t0 = time_ns()
             recvs_check = copy(recvs)
             while ((length(filter!(t->!istaskdone(t), recvs_check)) > 0)
-                  && (time() - t0 < TIMEOUT_VAL))
+                  && (time_ns() - t0 < TIMEOUT_VAL))
                 sleep(0.05)
             end
             length(recvs_check) > 0 && error("timeout")
             map(wait, recvs)
         end
 
-        a, b, c = [create_socket() for i = 1:3]
+        # First, test IPv4 broadcast
+        port = 2000
+        a, b, c = [create_socket(ip"0.0.0.0", port) for i in 1:3]
         try
-            # bsd family do not allow broadcasting to ip"255.255.255.255"
-            # or ip"127.255.255.255"
+            # bsd family do not allow broadcasting on loopbacks
             @static if !Sys.isbsd() || Sys.isapple()
-                send(c, bcastdst, 2000, "hello")
+                send(c, bcastdst, port, "hello")
                 recvs = [@async @test String(recv(s)) == "hello" for s in (a, b)]
                 wait_with_timeout(recvs)
             end
         catch e
             if isa(e, Base.IOError) && Base.uverrorname(e.code) == "EPERM"
-                @warn "UDP broadcast test skipped (permission denied upon send, restrictive firewall?)"
+                @warn "UDP IPv4 broadcast test skipped (permission denied upon send, restrictive firewall?)"
             else
                 rethrow()
             end
         end
         [close(s) for s in [a, b, c]]
+
+        # Test ipv6 broadcast groups
+        a, b, c = [create_socket(ip"::", port) for i in 1:3]
+        try
+            # Exemplary Interface-local ipv6 multicast group, if we wanted this to actually be routed
+            # to other computers, we should use a link-local or larger address scope group
+            # bsd family and darwin do not allow broadcasting on loopbacks
+            @static if !Sys.isbsd() && !Sys.isapple()
+                group = ip"ff11::6a75:6c69:61"
+                join_multicast_group(a, group)
+                join_multicast_group(b, group)
+
+                send(c, group, port, "hello")
+                recvs = [@async @test String(recv(s)) == "hello" for s in (a, b)]
+                wait_with_timeout(recvs)
+
+                leave_multicast_group(a, group)
+                leave_multicast_group(b, group)
+
+                send(c, group, port, "hello")
+                recvs = [@async @test String(recv(s)) == "hello" for s in (a, b)]
+                # We only wait 200ms since we're pretty sure this is going to time out
+                @test_throws ErrorException wait_with_timeout(recvs, 2e8)
+            end
+        catch e
+            if isa(e, Base.IOError) && Base.uverrorname(e.code) == "EPERM"
+                @warn "UDP IPv6 broadcast test skipped (permission denied upon send, restrictive firewall?)"
+            else
+                rethrow()
+            end
+        end
     end
 end
 
@@ -485,6 +561,16 @@ end
         @test issubset(getipaddrs(), getipaddrs(loopback=true))
         @test issubset(getipaddrs(IPv6), getipaddrs(IPv6, loopback=true))
     end
+end
+
+@testset "address scope" begin
+    @test islinklocaladdr(ip"169.254.1.0")
+    @test islinklocaladdr(ip"169.254.254.255")
+    @test islinklocaladdr(ip"fe80::")
+    @test islinklocaladdr(ip"febf::")
+    @test !islinklocaladdr(ip"127.0.0.1")
+    @test !islinklocaladdr(ip"2001::")
+
 end
 
 @static if !Sys.iswindows()

@@ -27,8 +27,7 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src, sptypes::
             is_return_type(f) && return true
             if isa(f, IntrinsicFunction)
                 intrinsic_effect_free_if_nothrow(f) || return false
-                return intrinsic_nothrow(f) ||
-                    intrinsic_nothrow(f,
+                return intrinsic_nothrow(f,
                         Any[argextype(ea[i], src, sptypes) for i = 2:length(ea)])
             end
             contains_is(_PURE_BUILTINS, f) && return true

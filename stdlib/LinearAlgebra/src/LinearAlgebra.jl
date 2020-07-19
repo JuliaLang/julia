@@ -11,7 +11,7 @@ import Base: \, /, *, ^, +, -, ==
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
     asin, asinh, atan, atanh, axes, big, broadcast, ceil, conj, convert, copy, copyto!, cos,
     cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
-    getproperty, imag, inv, isapprox, isone, iszero, IndexStyle, kron, length, log, map, ndims,
+    getproperty, imag, inv, isapprox, isone, iszero, IndexStyle, kron, kron!, length, log, map, ndims,
     oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
     setindex!, show, similar, sin, sincos, sinh, size, sqrt,
     strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
@@ -124,6 +124,8 @@ export
     opnorm,
     rank,
     rdiv!,
+    reflect!,
+    rotate!,
     schur,
     schur!,
     svd,
@@ -174,7 +176,7 @@ in dimension 1 in units of element size.
 # Examples
 ```jldoctest
 julia> A = [1,2,3,4]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  3
@@ -184,7 +186,7 @@ julia> LinearAlgebra.stride1(A)
 1
 
 julia> B = view(A, 2:2:4)
-2-element view(::Array{Int64,1}, 2:2:4) with eltype Int64:
+2-element view(::Vector{Int64}, 2:2:4) with eltype Int64:
  2
  4
 
@@ -211,7 +213,7 @@ For multiple arguments, return a vector.
 julia> A = fill(1, (4,4)); B = fill(1, (5,5));
 
 julia> LinearAlgebra.checksquare(A, B)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  4
  5
 ```
@@ -232,9 +234,9 @@ function checksquare(A...)
 end
 
 function char_uplo(uplo::Symbol)
-    if uplo == :U
+    if uplo === :U
         return 'U'
-    elseif uplo == :L
+    elseif uplo === :L
         return 'L'
     else
         throw_uplo()
@@ -278,13 +280,13 @@ julia> Y = zero(X);
 julia> ldiv!(Y, qr(A), X);
 
 julia> Y
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
   0.7128099173553719
  -0.051652892561983674
   0.10020661157024757
 
 julia> A\\X
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
   0.7128099173553719
  -0.05165289256198333
   0.10020661157024785
@@ -315,13 +317,13 @@ julia> Y = copy(X);
 julia> ldiv!(qr(A), X);
 
 julia> X
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
   0.7128099173553719
  -0.051652892561983674
   0.10020661157024757
 
 julia> A\\Y
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
   0.7128099173553719
  -0.05165289256198333
   0.10020661157024785
@@ -422,7 +424,7 @@ end
 
 
 function versioninfo(io::IO=stdout)
-    if Base.libblas_name == "libopenblas" || BLAS.vendor() == :openblas || BLAS.vendor() == :openblas64
+    if Base.libblas_name == "libopenblas" || BLAS.vendor() === :openblas || BLAS.vendor() === :openblas64
         openblas_config = BLAS.openblas_get_config()
         println(io, "BLAS: libopenblas (", openblas_config, ")")
     else
@@ -434,7 +436,7 @@ end
 function __init__()
     try
         BLAS.check()
-        if BLAS.vendor() == :mkl
+        if BLAS.vendor() === :mkl
             ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Cvoid, (Cint,), USE_BLAS64 ? 1 : 0)
         end
         Threads.resize_nthreads!(Abuf)

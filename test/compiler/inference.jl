@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests for Core.Compiler correctness and precision
-import Core.Compiler: Const, Conditional, ⊑
+import Core.Compiler: Const, Conditional, ⊑, ReturnNode, GotoIfNot
 isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(x)
 
 using Random, Core.IR
@@ -31,6 +31,31 @@ let ref = Tuple{T, Val{T}} where T<:(Val{T} where T<:(Val{T} where T<:(Val{T} wh
     @test Core.Compiler.limit_type_size(sig, ref, Union{}, 100, 100) == Tuple{Val, Val}
     @test Core.Compiler.limit_type_size(ref, sig, Union{}, 100, 100) == ref
 end
+
+let t = Tuple{Ref{T},T,T} where T, c = Tuple{Ref, T, T} where T # #36407
+    @test t <: Core.Compiler.limit_type_size(t, c, Union{}, 1, 100)
+end
+
+@test Core.Compiler.unionlen(Union{}) == 1
+@test Core.Compiler.unionlen(Int8) == 1
+@test Core.Compiler.unionlen(Union{Int8, Int16}) == 2
+@test Core.Compiler.unionlen(Union{Int8, Int16, Int32, Int64}) == 4
+@test Core.Compiler.unionlen(Tuple{Union{Int8, Int16, Int32, Int64}}) == 1
+@test Core.Compiler.unionlen(Union{Int8, Int16, Int32, T} where T) == 1
+
+@test Core.Compiler.unioncomplexity(Union{}) == 0
+@test Core.Compiler.unioncomplexity(Int8) == 0
+@test Core.Compiler.unioncomplexity(Val{Union{Int8, Int16, Int32, Int64}}) == 0
+@test Core.Compiler.unioncomplexity(Union{Int8, Int16}) == 1
+@test Core.Compiler.unioncomplexity(Union{Int8, Int16, Int32, Int64}) == 3
+@test Core.Compiler.unioncomplexity(Tuple{Union{Int8, Int16, Int32, Int64}}) == 3
+@test Core.Compiler.unioncomplexity(Union{Int8, Int16, Int32, T} where T) == 3
+@test Core.Compiler.unioncomplexity(Tuple{Val{T}, Union{Int8, Int16}, Int8} where T<:Union{Int8, Int16, Int32, Int64}) == 3
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Tuple{Union{Int8, Int16}}}}) == 1
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Symbol}}) == 0
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}) == 1
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}) == 2
+@test Core.Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}}}}) == 3
 
 
 # PR 22120
@@ -69,10 +94,11 @@ tmerge_test(Tuple{ComplexF64, ComplexF64, ComplexF32}, Tuple{Vararg{Union{Comple
     Tuple{Vararg{Complex}}, false)
 tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Complex}})
-@test Core.Compiler.tmerge(Tuple{}, Union{Int16, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
-    Union{Int16, Nothing, Tuple{Vararg{ComplexF32}}}
-@test Core.Compiler.tmerge(Union{Int32, Nothing, Tuple{ComplexF32}}, Union{Int32, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
-    Union{Int32, Nothing, Tuple{Vararg{ComplexF32}}}
+@test Core.Compiler.tmerge(Tuple{}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Nothing, Tuple{Vararg{ComplexF32}}}
+@test Core.Compiler.tmerge(Union{Nothing, Tuple{ComplexF32}}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Nothing, Tuple{Vararg{ComplexF32}}}
+@test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Vector{Bool})) == Vector
 
 # issue 9770
 @noinline x9770() = false
@@ -633,6 +659,9 @@ let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
     @test fieldtype_nothrow(Union{Type{Base.RefValue{<:Real}}, Type{Base.RefValue{Any}}}, Const(:x))
     @test fieldtype_nothrow(Const(Union{Base.RefValue{<:Real}, Base.RefValue{Any}}), Const(:x))
     @test fieldtype_nothrow(Type{Union{Base.RefValue{T}, Base.RefValue{Any}}} where {T<:Real}, Const(:x))
+    @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(1))
+    @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(42))
+    @test !fieldtype_nothrow(Type{<:Tuple{Vararg{Int}}}, Const(1))
 end
 
 # issue #11480
@@ -861,9 +890,8 @@ end
 f21175() = 902221
 @test code_typed(f21175, ())[1].second === Int
 # call again, so that the AST is built on-demand
-let e = code_typed(f21175, ())[1].first.code[1]::Expr
-    @test e.head === :return
-    @test e.args[1] ∈ (902221, Core.QuoteNode(902221))
+let e = code_typed(f21175, ())[1].first.code[1]::ReturnNode
+    @test e.val ∈ (902221, Core.QuoteNode(902221))
 end
 
 # issue #10207
@@ -979,7 +1007,11 @@ end
 # but which also means we should still be storing the inference result from inferring the cycle
 f21653() = f21653()
 @test code_typed(f21653, Tuple{}, optimize=false)[1] isa Pair{CodeInfo, typeof(Union{})}
-@test which(f21653, ()).specializations.func.cache.rettype === Union{}
+let meth = which(f21653, ())
+    tt = Tuple{typeof(f21653)}
+    mi = ccall(:jl_specializations_lookup, Any, (Any, Any), meth, tt)::Core.MethodInstance
+    @test mi.cache.rettype === Union{}
+end
 
 # issue #22290
 f22290() = return 3
@@ -1027,7 +1059,6 @@ end
 @test Const(false) ⊑ isdefined_tfunc(Const(:x), Const(:y))
 @test isdefined_tfunc(Vector{Int}, Const(1)) == Const(false)
 @test isdefined_tfunc(Vector{Any}, Const(1)) == Const(false)
-@test isdefined_tfunc(Module, Any, Any) === Union{}
 @test isdefined_tfunc(Module, Int) === Union{}
 @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(0)) === Const(false)
 @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(1)) === Const(true)
@@ -1061,11 +1092,9 @@ code_typed(f21933, (Val{1},))
 Base.return_types(f21933, (Val{1},))
 
 function count_specializations(method::Method)
-    n = 0
-    Base.visit(method.specializations) do m
-        n += 1
-    end
-    return n::Int
+    specs = method.specializations
+    n = count(i -> isassigned(specs, i), 1:length(specs))
+    return n
 end
 
 # demonstrate that inference can complete without waiting for MAX_TYPE_DEPTH
@@ -1120,7 +1149,8 @@ function get_linfo(@nospecialize(f), @nospecialize(t))
 end
 
 function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val))
-    linfo = Core.Compiler.inf_for_methodinstance(get_linfo(f, t), Core.Compiler.get_world_counter())::Core.CodeInstance
+    interp = Core.Compiler.NativeInterpreter()
+    linfo = Core.Compiler.getindex(Core.Compiler.code_cache(interp), get_linfo(f, t))
     # If coverage is not enabled, make the check strict by requiring constant ABI
     # Otherwise, check the typed AST to make sure we return a constant.
     if Base.JLOptions().code_coverage == 0
@@ -1137,16 +1167,16 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
     for ex in ast.code::Vector{Any}
         if isa(ex, LineNumberNode)
             continue
+        elseif isa(ex, ReturnNode)
+            # multiple returns
+            @test !ret_found
+            ret_found = true
+            ret = ex.val
+            # return value mismatch
+            @test ret === val || (isa(ret, QuoteNode) && (ret::QuoteNode).value === val)
+            continue
         elseif isa(ex, Expr)
             if Core.Compiler.is_meta_expr_head(ex.head)
-                continue
-            elseif ex.head === :return
-                # multiple returns
-                @test !ret_found
-                ret_found = true
-                ret = ex.args[1]
-                # return value mismatch
-                @test ret === val || (isa(ret, QuoteNode) && (ret::QuoteNode).value === val)
                 continue
             end
         end
@@ -1358,6 +1388,15 @@ let egal_tfunc
     @test egal_tfunc(Union{Int64, Float64}, Integer) === Bool
     @test egal_tfunc(Union{Int64, Float64}, AbstractArray) === Const(false)
 end
+egal_conditional_lattice1(x, y) = x === y ? "" : 1
+egal_conditional_lattice2(x, y) = x + x === y ? "" : 1
+egal_conditional_lattice3(x, y) = x === y + y ? "" : 1
+@test Base.return_types(egal_conditional_lattice1, (Int64, Int64)) == Any[Union{Int, String}]
+@test Base.return_types(egal_conditional_lattice1, (Int32, Int64)) == Any[Int]
+@test Base.return_types(egal_conditional_lattice2, (Int64, Int64)) == Any[Union{Int, String}]
+@test Base.return_types(egal_conditional_lattice2, (Int32, Int64)) == Any[Int]
+@test Base.return_types(egal_conditional_lattice3, (Int64, Int64)) == Any[Union{Int, String}]
+@test Base.return_types(egal_conditional_lattice3, (Int32, Int64)) == Any[Int]
 
 using Core.Compiler: PartialStruct, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
 @test sizeof_tfunc(Const(Ptr)) === sizeof_tfunc(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}}) === Const(Sys.WORD_SIZE ÷ 8)
@@ -1372,6 +1411,20 @@ let PT = PartialStruct(Tuple{Int64,UInt64}, Any[Const(10, false), UInt64])
     @test nfields_tfunc(PT) === Const(2)
     @test sizeof_nothrow(PT)
 end
+@test nfields_tfunc(Type) === Int
+@test nfields_tfunc(Number) === Int
+@test nfields_tfunc(Int) === Const(0)
+@test nfields_tfunc(Complex) === Const(2)
+@test nfields_tfunc(Type{Type{Int}}) === Const(nfields(DataType))
+@test nfields_tfunc(UnionAll) === Const(2)
+@test nfields_tfunc(DataType) === Const(nfields(DataType))
+@test nfields_tfunc(Type{Int}) === Const(nfields(DataType))
+@test nfields_tfunc(Type{Integer}) === Const(nfields(DataType))
+@test nfields_tfunc(Type{Complex}) === Int
+@test nfields_tfunc(typeof(Union{})) === Const(0)
+@test nfields_tfunc(Type{Union{}}) === Const(0)
+@test nfields_tfunc(Tuple{Int, Vararg{Int}}) === Int
+@test nfields_tfunc(Tuple{Int, Integer}) === Const(2)
 
 using Core.Compiler: typeof_tfunc
 @test typeof_tfunc(Tuple{Vararg{Int}}) == Type{Tuple{Vararg{Int,N}}} where N
@@ -1420,7 +1473,8 @@ gg13183(x::X...) where {X} = (_false13183 ? gg13183(x, x) : 0)
 # test the external OptimizationState constructor
 let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     world = UInt(23) # some small-numbered world that should be valid
-    opt = Core.Compiler.OptimizationState(linfo, Core.Compiler.Params(world))
+    interp = Core.Compiler.NativeInterpreter()
+    opt = Core.Compiler.OptimizationState(linfo, Core.Compiler.OptimizationParams(interp), interp)
     # make sure the state of the properties look reasonable
     @test opt.src !== linfo.def.source
     @test length(opt.src.slotflags) == linfo.def.nargs <= length(opt.src.slotnames)
@@ -1501,7 +1555,7 @@ function f24852_kernel_cinfo(fsig::Type)
     world = typemax(UInt) # FIXME
     sig, spvals, method = Base._methods_by_ftype(fsig, -1, world)[1]
     isdefined(method, :source) || return (nothing, :(f(x, y)))
-    code_info = Base.uncompressed_ast(method)
+    code_info = Base.uncompressed_ir(method)
     Meta.partially_inline!(code_info.code, Any[], sig, Any[spvals...], 1, 0, :propagate)
     if startswith(String(method.name), "f24852")
         for a in code_info.code
@@ -1631,7 +1685,7 @@ end
 opt25261 = code_typed(foo25261, Tuple{}, optimize=false)[1].first.code
 i = 1
 # Skip to after the branch
-while !Meta.isexpr(opt25261[i], :gotoifnot); global i += 1; end
+while !isa(opt25261[i], GotoIfNot); global i += 1; end
 foundslot = false
 for expr25261 in opt25261[i:end]
     if expr25261 isa TypedSlot && expr25261.typ === Tuple{Int, Int}
@@ -1711,19 +1765,18 @@ g26826(x) = getfield26826(x, :a, :b)
 # If this test is broken (especially if inference is getting a correct, but loose result,
 # like a Union) then it's potentially an indication that the optimizer isn't hitting the
 # InferenceResult cache properly for varargs methods.
-typed_code = Core.Compiler.code_typed(f26826, (Float64,))[1].first
-found_well_typed_getfield_call = false
-let i
+let ct = Core.Compiler.code_typed(f26826, (Float64,))[1]
+    typed_code, retty = ct.first, ct.second
+    found_poorly_typed_getfield_call = false
     for i = 1:length(typed_code.code)
         stmt = typed_code.code[i]
         rhs = Meta.isexpr(stmt, :(=)) ? stmt.args[2] : stmt
-        if Meta.isexpr(rhs, :call) && rhs.args[1] == GlobalRef(Base, :getfield) && typed_code.ssavaluetypes[i] === Float64
-            global found_well_typed_getfield_call = true
+        if Meta.isexpr(rhs, :call) && rhs.args[1] == GlobalRef(Base, :getfield) && typed_code.ssavaluetypes[i] !== Float64
+            found_poorly_typed_getfield_call = true
         end
     end
+    @test !found_poorly_typed_getfield_call && retty === Float64
 end
-
-@test found_well_typed_getfield_call
 
 # 27059 fix fieldtype vararg and union handling
 
@@ -1913,7 +1966,9 @@ end
 # issue #27316 - inference shouldn't hang on these
 f27316(::Vector) = nothing
 f27316(::Any) = f27316(Any[][1]), f27316(Any[][1])
-@test Tuple{Nothing,Nothing} <: Base.return_types(f27316, Tuple{Int})[1] == Tuple{Union{Nothing, Tuple{Any,Any}},Union{Nothing, Tuple{Any,Any}}} # we may be able to improve this bound in the future
+let expected = NTuple{2, Union{Nothing, NTuple{2, Union{Nothing, Tuple{Any, Any}}}}}
+    @test Tuple{Nothing, Nothing} <: only(Base.return_types(f27316, Tuple{Int})) == expected # we may be able to improve this bound in the future
+end
 function g27316()
     x = nothing
     while rand() < 0.5
@@ -1921,7 +1976,7 @@ function g27316()
     end
     return x
 end
-@test Tuple{Tuple{Nothing}} <: Base.return_types(g27316, Tuple{})[1] == Any # we may be able to improve this bound in the future
+@test Tuple{Tuple{Nothing}} <: only(Base.return_types(g27316, Tuple{})) == Union{Nothing, Tuple{Any}} # we may be able to improve this bound in the future
 const R27316 = Tuple{Tuple{Vector{T}}} where T
 h27316_(x) = (x,)
 h27316_(x::Tuple{Vector}) = (Any[x][1],)::R27316 # a UnionAll of a Tuple, not vice versa!
@@ -1932,7 +1987,7 @@ function h27316()
     end
     return x
 end
-@test Tuple{Tuple{Vector{Int}}} <: Base.return_types(h27316, Tuple{})[1] == Union{Vector{Int}, Tuple{Any}} # we may be able to improve this bound in the future
+@test Tuple{Tuple{Vector{Int}}} <: only(Base.return_types(h27316, Tuple{})) == Union{Vector{Int}, Tuple{Any}} # we may be able to improve this bound in the future
 
 # PR 27434, inference when splatting iterators with type-based state
 splat27434(x) = (x...,)
@@ -2003,7 +2058,7 @@ worklist = Int[]
 let i
     for i in 1:length(code28279)
         stmt = code28279[i]
-        if Meta.isexpr(stmt, :gotoifnot)
+        if isa(stmt, GotoIfNot)
             push!(worklist, i)
             ssachangemap[i] = 1
             if i < length(code28279)
@@ -2018,13 +2073,13 @@ offset = 1
 let i
     for i in 1:length(code28279)
         if i == length(code28279)
-            @test Meta.isexpr(code28279[i], :return)
-            @test Meta.isexpr(oldcode28279[i], :return)
-            @test code28279[i].args[1].id == (oldcode28279[i].args[1].id + offset - 1)
-        elseif Meta.isexpr(code28279[i], :gotoifnot)
-            @test Meta.isexpr(oldcode28279[i], :gotoifnot)
-            @test code28279[i].args[1] == oldcode28279[i].args[1]
-            @test code28279[i].args[2] == (oldcode28279[i].args[2] + offset)
+            @test isa(code28279[i], ReturnNode)
+            @test isa(oldcode28279[i], ReturnNode)
+            @test code28279[i].val.id == (oldcode28279[i].val.id + offset - 1)
+        elseif isa(code28279[i], GotoIfNot)
+            @test isa(oldcode28279[i], GotoIfNot)
+            @test code28279[i].cond == oldcode28279[i].cond
+            @test code28279[i].dest == (oldcode28279[i].dest + offset)
             global offset += 1
         else
             @test code28279[i] == oldcode28279[i]
@@ -2464,3 +2519,218 @@ let N = TypeVar(:N)
         Core.Compiler.PartialTypeVar(N, true, true),
         Core.Compiler.Const(Any)], Type{Tuple{Vararg{Any,N}}})
 end
+
+# issue #33768
+function f33768()
+    Core._apply()
+end
+function g33768()
+    a = Any[iterate, tuple, (1,)]
+    Core._apply_iterate(a...)
+end
+function h33768()
+    Core._apply_iterate()
+end
+@test_throws ArgumentError f33768()
+@test Base.return_types(f33768, ()) == Any[Union{}]
+@test g33768() === (1,)
+@test Base.return_types(g33768, ()) == Any[Any]
+@test_throws ArgumentError h33768()
+@test Base.return_types(h33768, ()) == Any[Union{}]
+
+# constant prop of `Symbol("")`
+f_getf_computed_symbol(p) = getfield(p, Symbol("first"))
+@test Base.return_types(f_getf_computed_symbol, Tuple{Pair{Int8,String}}) == [Int8]
+
+# issue #33954
+struct X33954
+    x::Ptr{X33954}
+end
+f33954(x) = rand(Bool) ? f33954((x,)) : x
+@test Base.return_types(f33954, Tuple{X33954})[1] >: X33954
+
+# issue #34752
+struct a34752{T} end
+function a34752(c, d...)
+    length(d) > 1 || error()
+end
+function h34752()
+    g = Tuple[(42, Any[42][1], 42)][1]
+    a34752(g...)
+end
+@test h34752() === true
+
+# issue 34834
+pickvarnames(x::Symbol) = x
+function pickvarnames(x::Vector{Any})
+    varnames = ()
+    for a in x
+        varnames = (varnames..., pickvarnames(a) )
+    end
+    return varnames
+end
+@test pickvarnames(:a) === :a
+@test pickvarnames(Any[:a, :b]) === (:a, :b)
+@test only(Base.return_types(pickvarnames, (Vector{Any},))) == Tuple{Vararg{Union{Symbol, Tuple}}}
+@test only(Base.code_typed(pickvarnames, (Vector{Any},), optimize=false))[2] == Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple}}}}}}
+
+@test map(>:, [Int], [Int]) == [true]
+
+# issue 35566
+module Issue35566
+function step(acc, x)
+    xs, = acc
+    y = x > 0.0 ? x : missing
+    if y isa eltype(xs)
+        ys = push!(xs, y)
+    else
+        ys = vcat(xs, [y])
+    end
+    return (ys,)
+end
+
+function probe(y)
+    if y isa Tuple{Vector{Missing}}
+        return Val(:missing)
+    else
+        return Val(:expected)
+    end
+end
+
+function _foldl_iter(rf, val::T, iter, state) where {T}
+    while true
+        ret = iterate(iter, state)
+        ret === nothing && break
+        x, state = ret
+        y = rf(val, x)
+        if y isa T
+            val = y
+        else
+            return probe(y)
+        end
+    end
+    return Val(:expected)
+end
+
+f() = _foldl_iter(step, (Missing[],), [0.0], 1)
+end
+@test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}) == Tuple{Int}
+@test Base.return_types(Issue35566.f) == [Val{:expected}]
+
+# constant prop through keyword arguments
+_unstable_kw(;x=1,y=2) = x == 1 ? 0 : ""
+_use_unstable_kw_1() = _unstable_kw(x = 2)
+_use_unstable_kw_2() = _unstable_kw(x = 2, y = rand())
+@test Base.return_types(_use_unstable_kw_1) == Any[String]
+@test Base.return_types(_use_unstable_kw_2) == Any[String]
+@eval struct StructWithSplatNew
+    x::Int
+    StructWithSplatNew(t) = $(Expr(:splatnew, :StructWithSplatNew, :t))
+end
+_construct_structwithsplatnew() = StructWithSplatNew(("",))
+@test Base.return_types(_construct_structwithsplatnew) == Any[StructWithSplatNew]
+
+# case where a call cycle can be broken by constant propagation
+struct NotQRSparse
+    x::Matrix{Float64}
+    n::Int
+end
+@inline function getprop(F::NotQRSparse, d::Symbol)
+    if d === :Q
+        return NotQRSparse(getprop(F, :B), _size_ish(F, 2))
+    elseif d === :A
+        return Dict()
+    elseif d === :B
+        return rand(2,2)
+    elseif d === :C
+        return ""
+    else
+        error()
+    end
+end
+_size_ish(F::NotQRSparse, i::Integer) = size(getprop(F, :B), 1)
+_call_size_ish(x) = _size_ish(x,1)
+@test Base.return_types(_call_size_ish, (NotQRSparse,)) == Any[Int]
+
+module TestConstPropRecursion
+mutable struct Node
+    data
+    child::Node
+    sibling::Node
+end
+
+function Base.iterate(n::Node, state::Node = n.child)
+    n === state && return nothing
+    return state, state === state.sibling ? n : state.sibling
+end
+
+@inline function depth(node::Node, d)
+    childd = d + 1
+    for c in node
+        d = max(d, depth(c, childd))
+    end
+    return d
+end
+
+f(n) = depth(n, 1)
+end
+@test Base.return_types(TestConstPropRecursion.f, (TestConstPropRecursion.Node,)) == Any[Int]
+
+# issue #36230, keeping implications of all conditions in a && chain
+function symcmp36230(vec)
+    a, b = vec[1], vec[2]
+    if isa(a, Symbol) && isa(b, Symbol)
+        return a == b
+    end
+    return false
+end
+@test Base.return_types(symcmp36230, (Vector{Any},)) == Any[Bool]
+
+# Issue #36531, double varargs in abstract_iteration
+f36531(args...) = tuple((args...)...)
+@test @inferred(f36531(1,2,3)) == (1,2,3)
+@test code_typed(f36531, Tuple{Vararg{Int}}) isa Vector
+
+# PartialStruct results on typeinf edges
+partial_return_1(x) = (x, 1)
+partial_return_2(x) = Val{partial_return_1(x)[2]}
+
+@test Base.return_types(partial_return_2, (Int,)) == Any[Type{Val{1}}]
+
+# Precision of abstract_iteration
+f_splat(x) = (x...,)
+@test Base.return_types(f_splat, (Pair{Int,Int},)) == Any[Tuple{Int, Int}]
+
+# issue #32699
+f32699(a) = (id = a[1],).id
+@test Base.return_types(f32699, (Vector{Union{Int,Missing}},)) == Any[Union{Int,Missing}]
+g32699(a) = Tuple{a}
+@test Base.return_types(g32699, (Type{<:Integer},))[1] == Type{<:Tuple{Any}}
+@test Base.return_types(g32699, (Type,))[1] == Type{<:Tuple}
+
+# Inference precision of union-split calls
+function f_apply_union_split(fs, x)
+    i = rand(1:length(fs))
+    f = fs[i]
+    f(x)
+end
+
+@test Base.return_types(f_apply_union_split, Tuple{Tuple{typeof(sqrt), typeof(abs)}, Int64}) == Any[Union{Int64, Float64}]
+
+# Precision of typeassert with PartialStruct
+function f_typ_assert(x::Int)
+    y = (x, 1)
+    y = y::Any
+    Val{y[2]}
+end
+@test Base.return_types(f_typ_assert, (Int,)) == Any[Type{Val{1}}]
+
+function f_typ_assert2(x::Any)
+    y = (x::Union{Int, Float64}, 1)
+    y = y::Tuple{Int, Any}
+    (y[1], Val{y[2]}())
+end
+@test Base.return_types(f_typ_assert2, (Any,)) == Any[Tuple{Int, Val{1}}]
+
+f_generator_splat(t::Tuple) = tuple((identity(l) for l in t)...)
+@test Base.return_types(f_generator_splat, (Tuple{Symbol, Int64, Float64},)) == Any[Tuple{Symbol, Int64, Float64}]

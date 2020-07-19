@@ -203,26 +203,13 @@ JL_DLLEXPORT void *jl_uv_write_handle(uv_write_t *req) { return req->handle; }
 
 extern volatile unsigned _threadedregion;
 
-JL_DLLEXPORT int jl_run_once(uv_loop_t *loop)
+JL_DLLEXPORT int jl_process_events(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
+    uv_loop_t *loop = jl_io_loop;
     if (loop && (_threadedregion || ptls->tid == 0)) {
         jl_gc_safepoint_(ptls);
-        JL_UV_LOCK();
-        loop->stop_flag = 0;
-        int r = uv_run(loop, UV_RUN_ONCE);
-        JL_UV_UNLOCK();
-        return r;
-    }
-    return 0;
-}
-
-JL_DLLEXPORT int jl_process_events(uv_loop_t *loop)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (loop && (_threadedregion || ptls->tid == 0)) {
-        jl_gc_safepoint_(ptls);
-        if (jl_mutex_trylock(&jl_uv_mutex)) {
+        if (jl_atomic_load(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
             loop->stop_flag = 0;
             int r = uv_run(loop, UV_RUN_NOWAIT);
             JL_UV_UNLOCK();
@@ -405,6 +392,14 @@ JL_DLLEXPORT int jl_fs_chown(char *path, int uid, int gid)
     return ret;
 }
 
+JL_DLLEXPORT int jl_fs_access(char *path, int mode)
+{
+    uv_fs_t req;
+    int ret = uv_fs_access(unused_uv_loop_arg, &req, path, mode, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
 JL_DLLEXPORT int jl_fs_write(uv_os_fd_t handle, const char *data, size_t len,
                              int64_t offset) JL_NOTSAFEPOINT
 {
@@ -576,10 +571,10 @@ extern int vasprintf(char **str, const char *fmt, va_list ap);
 
 JL_DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
 {
-    char *str=NULL;
+    char *str = NULL;
     int c;
     va_list al;
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
     al = args;
 #else
     va_copy(al, args);
@@ -685,6 +680,8 @@ JL_DLLEXPORT int jl_tcp_getsockname(uv_tcp_t *handle, uint16_t *port,
     memset(&addr, 0, sizeof(struct sockaddr_storage));
     namelen = sizeof addr;
     int res = uv_tcp_getsockname(handle, (struct sockaddr*)&addr, &namelen);
+    if (res)
+        return res;
     *family = addr.ss_family;
     if (addr.ss_family == AF_INET) {
         struct sockaddr_in *addr4 = (struct sockaddr_in*)&addr;
@@ -695,9 +692,6 @@ JL_DLLEXPORT int jl_tcp_getsockname(uv_tcp_t *handle, uint16_t *port,
         struct sockaddr_in6 *addr6 = (struct sockaddr_in6*)&addr;
         *port = addr6->sin6_port;
         memcpy(host, &(addr6->sin6_addr), 16);
-    }
-    else {
-        return -1;
     }
     return res;
 }
@@ -710,6 +704,8 @@ JL_DLLEXPORT int jl_tcp_getpeername(uv_tcp_t *handle, uint16_t *port,
     memset(&addr, 0, sizeof(struct sockaddr_storage));
     namelen = sizeof addr;
     int res = uv_tcp_getpeername(handle, (struct sockaddr*)&addr, &namelen);
+    if (res)
+        return res;
     *family = addr.ss_family;
     if (addr.ss_family == AF_INET) {
         struct sockaddr_in *addr4 = (struct sockaddr_in*)&addr;
@@ -720,9 +716,6 @@ JL_DLLEXPORT int jl_tcp_getpeername(uv_tcp_t *handle, uint16_t *port,
         struct sockaddr_in6 *addr6 = (struct sockaddr_in6*)&addr;
         *port = addr6->sin6_port;
         memcpy(host, &(addr6->sin6_addr), 16);
-    }
-    else {
-        return -1;
     }
     return res;
 }

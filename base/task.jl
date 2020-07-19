@@ -67,17 +67,19 @@ struct TaskFailedException <: Exception
 end
 
 function showerror(io::IO, ex::TaskFailedException)
-    stacks = []
-    while isa(ex.task.exception, TaskFailedException)
-        pushfirst!(stacks, ex.task.backtrace)
-        ex = ex.task.exception
-    end
     println(io, "TaskFailedException:")
-    showerror(io, ex.task.exception, ex.task.backtrace)
-    if !isempty(stacks)
-        for bt in stacks
-            show_backtrace(io, bt)
-        end
+    show_task_exception(io, ex.task)
+end
+
+function show_task_exception(io::IO, t::Task)
+    stacks = []
+    while isa(t.exception, TaskFailedException)
+        pushfirst!(stacks, t.backtrace)
+        t = t.exception.task
+    end
+    showerror(io, t.exception, t.backtrace)
+    for bt in stacks
+        show_backtrace(io, bt)
     end
 end
 
@@ -141,7 +143,7 @@ julia> istaskdone(b)
 true
 ```
 """
-istaskdone(t::Task) = ((t.state == :done) | istaskfailed(t))
+istaskdone(t::Task) = ((t.state === :done) | istaskfailed(t))
 
 """
     istaskstarted(t::Task) -> Bool
@@ -182,7 +184,7 @@ julia> istaskfailed(b)
 true
 ```
 """
-istaskfailed(t::Task) = (t.state == :failed)
+istaskfailed(t::Task) = (t.state === :failed)
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
 
@@ -244,6 +246,22 @@ function _wait(t::Task)
     nothing
 end
 
+# have `waiter` wait for `t`
+function _wait2(t::Task, waiter::Task)
+    if !istaskdone(t)
+        lock(t.donenotify)
+        if !istaskdone(t)
+            push!(t.donenotify.waitq, waiter)
+            unlock(t.donenotify)
+            return nothing
+        else
+            unlock(t.donenotify)
+        end
+    end
+    schedule(waiter)
+    nothing
+end
+
 function wait(t::Task)
     t === current_task() && error("deadlock detected: cannot wait on current task")
     _wait(t)
@@ -270,15 +288,14 @@ end
 
 ## lexically-scoped waiting for multiple items
 
-function sync_end(refs)
+function sync_end(c::Channel{Any})
     local c_ex
-    defined = false
-    for r in refs
+    while isready(c)
+        r = take!(c)
         if isa(r, Task)
             _wait(r)
             if istaskfailed(r)
-                if !defined
-                    defined = true
+                if !@isdefined(c_ex)
                     c_ex = CompositeException()
                 end
                 push!(c_ex, TaskFailedException(r))
@@ -287,16 +304,15 @@ function sync_end(refs)
             try
                 wait(r)
             catch e
-                if !defined
-                    defined = true
+                if !@isdefined(c_ex)
                     c_ex = CompositeException()
                 end
                 push!(c_ex, e)
             end
         end
     end
-
-    if defined
+    close(c)
+    if @isdefined(c_ex)
         throw(c_ex)
     end
     nothing
@@ -314,7 +330,7 @@ a `CompositeException`.
 macro sync(block)
     var = esc(sync_varname)
     quote
-        let $var = Any[]
+        let $var = Channel(Inf)
             v = $(esc(block))
             sync_end($var)
             v
@@ -328,34 +344,68 @@ end
     @async
 
 Wrap an expression in a [`Task`](@ref) and add it to the local machine's scheduler queue.
+
+Values can be interpolated into `@async` via `\$`, which copies the value directly into the
+constructed underlying closure. This allows you to insert the _value_ of a variable,
+isolating the aysnchronous code from changes to the variable's value in the current task.
+
+!!! compat "Julia 1.4"
+    Interpolating values via `\$` is available as of Julia 1.4.
 """
 macro async(expr)
+    letargs = Base._lift_one_interp!(expr)
+
     thunk = esc(:(()->($expr)))
     var = esc(sync_varname)
     quote
-        local task = Task($thunk)
-        if $(Expr(:isdefined, var))
-            push!($var, task)
+        let $(letargs...)
+            local task = Task($thunk)
+            if $(Expr(:islocal, var))
+                put!($var, task)
+            end
+            schedule(task)
+            task
         end
-        schedule(task)
-        task
     end
 end
+
+# Capture interpolated variables in $() and move them to let-block
+function _lift_one_interp!(e)
+    letargs = Any[]  # store the new gensymed arguments
+    _lift_one_interp_helper(e, false, letargs) # Start out _not_ in a quote context (false)
+    letargs
+end
+_lift_one_interp_helper(v, _, _) = v
+function _lift_one_interp_helper(expr::Expr, in_quote_context, letargs)
+    if expr.head === :$
+        if in_quote_context  # This $ is simply interpolating out of the quote
+            # Now, we're out of the quote, so any _further_ $ is ours.
+            in_quote_context = false
+        else
+            newarg = gensym()
+            push!(letargs, :($(esc(newarg)) = $(esc(expr.args[1]))))
+            return newarg  # Don't recurse into the lifted $() exprs
+        end
+    elseif expr.head === :quote
+        in_quote_context = true   # Don't try to lift $ directly out of quotes
+    elseif expr.head === :macrocall
+        return expr  # Don't recur into macro calls, since some other macros use $
+    end
+    for (i,e) in enumerate(expr.args)
+        expr.args[i] = _lift_one_interp_helper(e, in_quote_context, letargs)
+    end
+    expr
+end
+
 
 # add a wait-able object to the sync pool
 macro sync_add(expr)
     var = esc(sync_varname)
     quote
         local ref = $(esc(expr))
-        push!($var, ref)
+        put!($var, ref)
         ref
     end
-end
-
-function register_taskdone_hook(t::Task, hook)
-    tls = get_task_tls(t)
-    push!(get!(tls, :TASKDONE_HOOKS, []), hook)
-    return t
 end
 
 # runtime system hook called when a task finishes
@@ -381,16 +431,9 @@ function task_done_hook(t::Task)
         end
     end
 
-    # Execute any other hooks registered in the TLS
-    if isa(t.storage, IdDict) && haskey(t.storage, :TASKDONE_HOOKS)
-        foreach(hook -> hook(t), t.storage[:TASKDONE_HOOKS])
-        delete!(t.storage, :TASKDONE_HOOKS)
-        handled = true
-    end
-
     if err && !handled && Threads.threadid() == 1
         if isa(result, InterruptException) && isdefined(Base, :active_repl_backend) &&
-            active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
+            active_repl_backend.backend_task.state === :runnable && isempty(Workqueue) &&
             active_repl_backend.in_eval
             throwto(active_repl_backend.backend_task, result) # this terminates the task
         end
@@ -405,7 +448,7 @@ function task_done_hook(t::Task)
         # issue #19467
         if Threads.threadid() == 1 &&
             isa(e, InterruptException) && isdefined(Base, :active_repl_backend) &&
-            active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
+            active_repl_backend.backend_task.state === :runnable && isempty(Workqueue) &&
             active_repl_backend.in_eval
             throwto(active_repl_backend.backend_task, e)
         else
@@ -482,7 +525,7 @@ function __preinit_threads__()
 end
 
 function enq_work(t::Task)
-    (t.state == :runnable && t.queue === nothing) || error("schedule: Task not runnable")
+    (t.state === :runnable && t.queue === nothing) || error("schedule: Task not runnable")
     tid = Threads.threadid(t)
     # Note there are three reasons a Task might be put into a sticky queue
     # even if t.sticky == false:
@@ -542,13 +585,13 @@ true
 """
 function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
-    t.state == :runnable || Base.error("schedule: Task not runnable")
+    t.state === :runnable || Base.error("schedule: Task not runnable")
     if error
         t.queue === nothing || Base.list_deletefirst!(t.queue, t)
-        t.exception = arg
+        setfield!(t, :exception, arg)
     else
         t.queue === nothing || Base.error("schedule: Task not runnable")
-        t.result = arg
+        setfield!(t, :result, arg)
     end
     enq_work(t)
     return t
@@ -572,6 +615,8 @@ function yield()
     end
 end
 
+@inline set_next_task(t::Task) = ccall(:jl_set_next_task, Cvoid, (Any,), t)
+
 """
     yield(t::Task, arg = nothing)
 
@@ -581,7 +626,8 @@ immediately yields to `t` before calling the scheduler.
 function yield(t::Task, @nospecialize(x=nothing))
     t.result = x
     enq_work(current_task())
-    return try_yieldto(ensure_rescheduled, Ref(t))
+    set_next_task(t)
+    return try_yieldto(ensure_rescheduled)
 end
 
 """
@@ -594,14 +640,15 @@ or scheduling in any way. Its use is discouraged.
 """
 function yieldto(t::Task, @nospecialize(x=nothing))
     t.result = x
-    return try_yieldto(identity, Ref(t))
+    set_next_task(t)
+    return try_yieldto(identity)
 end
 
-function try_yieldto(undo, reftask::Ref{Task})
+function try_yieldto(undo)
     try
-        ccall(:jl_switchto, Cvoid, (Any,), reftask)
+        ccall(:jl_switch, Cvoid, ())
     catch
-        undo(reftask[])
+        undo(ccall(:jl_get_next_task, Ref{Task}, ()))
         rethrow()
     end
     ct = current_task()
@@ -624,7 +671,7 @@ end
 function ensure_rescheduled(othertask::Task)
     ct = current_task()
     W = Workqueues[Threads.threadid()]
-    if ct !== othertask && othertask.state == :runnable
+    if ct !== othertask && othertask.state === :runnable
         # we failed to yield to othertask
         # return it to the head of a queue to be retried later
         tid = Threads.threadid(othertask)
@@ -641,7 +688,7 @@ end
 function trypoptask(W::StickyWorkqueue)
     isempty(W) && return
     t = popfirst!(W)
-    if t.state != :runnable
+    if t.state !== :runnable
         # assume this somehow got queued twice,
         # probably broken now, but try discarding this switch and keep going
         # can't throw here, because it's probably not the fault of the caller to wait
@@ -653,20 +700,20 @@ function trypoptask(W::StickyWorkqueue)
     return t
 end
 
-@noinline function poptaskref(W::StickyWorkqueue)
+@noinline function poptask(W::StickyWorkqueue)
     task = trypoptask(W)
     if !(task isa Task)
-        gettask = () -> trypoptask(W)
-        task = ccall(:jl_task_get_next, Any, (Any,), gettask)::Task
+        task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any), trypoptask, W)
     end
-    return Ref(task)
+    set_next_task(task)
+    nothing
 end
 
 function wait()
     W = Workqueues[Threads.threadid()]
-    reftask = poptaskref(W)
-    result = try_yieldto(ensure_rescheduled, reftask)
-    Sys.isjsvm() || process_events()
+    poptask(W)
+    result = try_yieldto(ensure_rescheduled)
+    process_events()
     # return when we come out of the queue
     return result
 end

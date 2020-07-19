@@ -154,7 +154,7 @@ bytesavailable(io::SecretBuffer) = io.size - io.ptr + 1
 position(io::SecretBuffer) = io.ptr-1
 eof(io::SecretBuffer) = io.ptr > io.size
 isempty(io::SecretBuffer) = io.size == 0
-function peek(io::SecretBuffer)
+function peek(io::SecretBuffer, ::Type{UInt8})
     eof(io) && throw(EOFError())
     return io.data[io.ptr]
 end
@@ -166,7 +166,7 @@ function read(io::SecretBuffer, ::Type{UInt8})
 end
 
 function final_shred!(s::SecretBuffer)
-    !isshredded(s) && @warn("a SecretBuffer was `shred!`ed by the GC; use `shred!` manually after use to minimize exposure.")
+    !isshredded(s) && @async @warn("a SecretBuffer was `shred!`ed by the GC; use `shred!` manually after use to minimize exposure.")
     shred!(s)
 end
 

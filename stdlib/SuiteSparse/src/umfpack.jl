@@ -6,7 +6,7 @@ export UmfpackLU
 
 import Base: (\), getproperty, show, size
 using LinearAlgebra
-import LinearAlgebra: Factorization, det, lu, ldiv!
+import LinearAlgebra: Factorization, det, lu, lu!, ldiv!
 
 using SparseArrays
 using SparseArrays: getcolptr
@@ -176,6 +176,65 @@ lu(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}};
     "dense LU.")))
 lu(A::SparseMatrixCSC; check::Bool = true) = lu(float(A); check = check)
 
+"""
+    lu!(F::UmfpackLU, A::SparseMatrixCSC; check=true) -> F::UmfpackLU
+
+Compute the LU factorization of a sparse matrix `A`, reusing the symbolic
+factorization of an already existing LU factorization stored in `F`. The
+sparse matrix `A` must have an identical nonzero pattern as the matrix used
+to create the LU factorization `F`, otherwise an error is thrown.
+
+When `check = true`, an error is thrown if the decomposition fails.
+When `check = false`, responsibility for checking the decomposition's
+validity (via [`issuccess`](@ref)) lies with the user.
+
+!!! note
+    `lu!(F::UmfpackLU, A::SparseMatrixCSC)` uses the UMFPACK library that is part of
+    SuiteSparse. As this library only supports sparse matrices with [`Float64`](@ref) or
+    `ComplexF64` elements, `lu!` converts `A` into a copy that is of type
+    `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}` as appropriate.
+
+!!! compat "Julia 1.5"
+    `lu!` for `UmfpackLU` requires at least Julia 1.5.
+
+# Examples
+```jldoctest
+julia> A = sparse(Float64[1.0 2.0; 0.0 3.0]);
+
+julia> F = lu(A);
+
+julia> B = sparse(Float64[1.0 1.0; 0.0 1.0]);
+
+julia> lu!(F, B);
+
+julia> F \\ ones(2)
+2-element Vector{Float64}:
+ 0.0
+ 1.0
+```
+"""
+function lu!(F::UmfpackLU, S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes}; check::Bool=true)
+    zerobased = getcolptr(S)[1] == 0
+    F.m = size(S, 1)
+    F.n = size(S, 2)
+    F.colptr = zerobased ? copy(getcolptr(S)) : decrement(getcolptr(S))
+    F.rowval = zerobased ? copy(rowvals(S)) : decrement(rowvals(S))
+    F.nzval = copy(nonzeros(S))
+
+    umfpack_numeric!(F, reuse_numeric = false)
+    check && (issuccess(F) || throw(LinearAlgebra.SingularException(0)))
+    return F
+end
+lu!(F::UmfpackLU, A::SparseMatrixCSC{<:Union{Float16,Float32},Ti};
+   check::Bool = true) where {Ti<:UMFITypes} =
+    lu!(F, convert(SparseMatrixCSC{Float64,Ti}, A); check = check)
+lu!(F::UmfpackLU, A::SparseMatrixCSC{<:Union{ComplexF16,ComplexF32},Ti};
+   check::Bool = true) where {Ti<:UMFITypes} =
+    lu!(F, convert(SparseMatrixCSC{ComplexF64,Ti}, A); check = check)
+lu!(F::UmfpackLU, A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}};
+   check::Bool = true) where {T<:AbstractFloat} =
+    throw(ArgumentError(string("matrix type ", typeof(A), "not supported.")))
+lu!(F::UmfpackLU, A::SparseMatrixCSC; check::Bool = true) = lu!(F, float(A); check = check)
 
 size(F::UmfpackLU) = (F.m, F.n)
 function size(F::UmfpackLU, dim::Integer)
@@ -190,9 +249,18 @@ function size(F::UmfpackLU, dim::Integer)
     end
 end
 
-function show(io::IO, F::UmfpackLU)
-    print(io, "UMFPACK LU Factorization of a $(size(F)) sparse matrix")
-    F.numeric != C_NULL && print(io, '\n', F.numeric)
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::UmfpackLU)
+    if F.numeric != C_NULL
+        if issuccess(F)
+            summary(io, F); println(io)
+            println(io, "L factor:")
+            show(io, mime, F.L)
+            println(io, "\nU factor:")
+            show(io, mime, F.U)
+        else
+            print(io, "Failed factorization of type $(typeof(F))")
+        end
+    end
 end
 
 function deserialize(s::AbstractSerializer, t::Type{UmfpackLU{Tv,Ti}}) where {Tv,Ti}
@@ -214,7 +282,7 @@ end
 ## Wrappers for UMFPACK functions
 
 # generate the name of the C function according to the value and integer types
-umf_nm(nm,Tv,Ti) = "umfpack_" * (Tv == :Float64 ? "d" : "z") * (Ti == :Int64 ? "l_" : "i_") * nm
+umf_nm(nm,Tv,Ti) = "umfpack_" * (Tv === :Float64 ? "d" : "z") * (Ti === :Int64 ? "l_" : "i_") * nm
 
 for itype in UmfpackIndexTypes
     sym_r = umf_nm("symbolic", :Float64, itype)
@@ -252,8 +320,8 @@ for itype in UmfpackIndexTypes
             U.symbolic = tmp[1]
             return U
         end
-        function umfpack_numeric!(U::UmfpackLU{Float64,$itype})
-            if U.numeric != C_NULL return U end
+        function umfpack_numeric!(U::UmfpackLU{Float64,$itype}; reuse_numeric = true)
+            if (reuse_numeric && U.numeric != C_NULL) return U end
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
             tmp = Vector{Ptr{Cvoid}}(undef, 1)
             status = ccall(($num_r, :libumfpack), $itype,
@@ -261,15 +329,15 @@ for itype in UmfpackIndexTypes
                             Ptr{Float64}, Ptr{Float64}),
                            U.colptr, U.rowval, U.nzval, U.symbolic, tmp,
                            umf_ctrl, umf_info)
+            U.status = status
             if status != UMFPACK_WARNING_singular_matrix
                 umferror(status)
             end
             U.numeric = tmp[1]
-            U.status = status
             return U
         end
-        function umfpack_numeric!(U::UmfpackLU{ComplexF64,$itype})
-            if U.numeric != C_NULL return U end
+        function umfpack_numeric!(U::UmfpackLU{ComplexF64,$itype}; reuse_numeric = true)
+            if (reuse_numeric && U.numeric != C_NULL) return U end
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
             tmp = Vector{Ptr{Cvoid}}(undef, 1)
             status = ccall(($num_c, :libumfpack), $itype,
@@ -277,11 +345,11 @@ for itype in UmfpackIndexTypes
                             Ptr{Float64}, Ptr{Float64}),
                            U.colptr, U.rowval, real(U.nzval), imag(U.nzval), U.symbolic, tmp,
                            umf_ctrl, umf_info)
+            U.status = status
             if status != UMFPACK_WARNING_singular_matrix
                 umferror(status)
             end
             U.numeric = tmp[1]
-            U.status = status
             return U
         end
         function solve!(x::StridedVector{Float64}, lu::UmfpackLU{Float64,$itype}, b::StridedVector{Float64}, typ::Integer)
@@ -487,20 +555,20 @@ end
 
 
 @inline function getproperty(lu::UmfpackLU, d::Symbol)
-    if d == :L || d == :U || d == :p || d == :q || d == :Rs || d == :(:)
+    if d === :L || d === :U || d === :p || d === :q || d === :Rs || d === :(:)
         # Guard the call to umf_extract behaind a branch to avoid infinite recursion
         L, U, p, q, Rs = umf_extract(lu)
-        if d == :L
+        if d === :L
             return L
-        elseif d == :U
+        elseif d === :U
             return U
-        elseif d == :p
+        elseif d === :p
             return p
-        elseif d == :q
+        elseif d === :q
             return q
-        elseif d == :Rs
+        elseif d === :Rs
             return Rs
-        elseif d == :(:)
+        elseif d === :(:)
             return (L, U, p, q, Rs)
         end
     else

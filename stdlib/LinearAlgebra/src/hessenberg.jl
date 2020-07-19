@@ -24,14 +24,14 @@ Iterating the decomposition produces the factors `F.Q` and `F.H`.
 # Examples
 ```jldoctest
 julia> A = [1 2 3 4; 5 6 7 8; 9 10 11 12; 13 14 15 16]
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
   1   2   3   4
   5   6   7   8
   9  10  11  12
  13  14  15  16
 
 julia> UpperHessenberg(A)
-4×4 UpperHessenberg{Int64,Array{Int64,2}}:
+4×4 UpperHessenberg{Int64,Matrix{Int64}}:
  1   2   3   4
  5   6   7   8
  ⋅  10  11  12
@@ -388,26 +388,26 @@ Iterating the decomposition produces the factors `F.Q, F.H, F.μ`.
 # Examples
 ```jldoctest
 julia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  4.0  9.0  7.0
  4.0  4.0  1.0
  4.0  3.0  2.0
 
 julia> F = hessenberg(A)
-Hessenberg{Float64,UpperHessenberg{Float64,Array{Float64,2}},Array{Float64,2},Array{Float64,1},Bool}
+Hessenberg{Float64,UpperHessenberg{Float64,Matrix{Float64}},Matrix{Float64},Vector{Float64},Bool}
 Q factor:
-3×3 LinearAlgebra.HessenbergQ{Float64,Array{Float64,2},Array{Float64,1},false}:
+3×3 LinearAlgebra.HessenbergQ{Float64,Matrix{Float64},Vector{Float64},false}:
  1.0   0.0        0.0
  0.0  -0.707107  -0.707107
  0.0  -0.707107   0.707107
 H factor:
-3×3 UpperHessenberg{Float64,Array{Float64,2}}:
+3×3 UpperHessenberg{Float64,Matrix{Float64}}:
   4.0      -11.3137       -1.41421
  -5.65685    5.0           2.0
    ⋅        -8.88178e-16   1.0
 
 julia> F.Q * F.H * F.Q'
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  4.0  9.0  7.0
  4.0  4.0  1.0
  4.0  3.0  2.0
@@ -453,7 +453,7 @@ HessenbergQ(F::Hessenberg{<:Any,<:UpperHessenberg,S,W}) where {S,W} = Hessenberg
 HessenbergQ(F::Hessenberg{<:Any,<:SymTridiagonal,S,W}) where {S,W} = HessenbergQ{eltype(F.factors),S,W,true}(F.uplo, F.factors, F.τ)
 
 function getproperty(F::Hessenberg, d::Symbol)
-    d == :Q && return HessenbergQ(F)
+    d === :Q && return HessenbergQ(F)
     return getfield(F, d)
 end
 

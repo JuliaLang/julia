@@ -5,7 +5,7 @@ module Libc
 Interface to libc, the C standard library.
 """ Libc
 
-import Base: transcode, windowserror
+import Base: transcode, windowserror, show
 import Core.Intrinsics: bitcast
 
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
@@ -37,6 +37,8 @@ dup(x::RawFD) = ccall((@static Sys.iswindows() ? :_dup : :dup), RawFD, (RawFD,),
 dup(src::RawFD, target::RawFD) = systemerror("dup", -1 ==
     ccall((@static Sys.iswindows() ? :_dup2 : :dup2), Int32,
                 (RawFD, RawFD), src, target))
+
+show(io::IO, fd::RawFD) = print(io, "RawFD(", bitcast(UInt32, fd), ')')  # avoids invalidation via show_default
 
 # Wrapper for an OS file descriptor (for Windows)
 if Sys.iswindows()
@@ -313,14 +315,15 @@ function FormatMessage end
 if Sys.iswindows()
     GetLastError() = ccall(:GetLastError, stdcall, UInt32, ())
 
-    function FormatMessage(e=GetLastError())
+    FormatMessage(e) = FormatMessage(UInt32(e))
+    function FormatMessage(e::UInt32=GetLastError())
         FORMAT_MESSAGE_ALLOCATE_BUFFER = UInt32(0x100)
         FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
         FORMAT_MESSAGE_IGNORE_INSERTS = UInt32(0x200)
         FORMAT_MESSAGE_MAX_WIDTH_MASK = UInt32(0xFF)
         lpMsgBuf = Ref{Ptr{UInt16}}()
         lpMsgBuf[] = 0
-        len = ccall(:FormatMessageW, stdcall, UInt32, (Cint, Ptr{Cvoid}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Cvoid}),
+        len = ccall(:FormatMessageW, stdcall, UInt32, (UInt32, Ptr{Cvoid}, UInt32, UInt32, Ptr{Ptr{UInt16}}, UInt32, Ptr{Cvoid}),
                     FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
                     C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
         p = lpMsgBuf[]
@@ -397,6 +400,10 @@ rand(::Type{Float64}) = rand(UInt32) * 2.0^-32
 
 Interface to the C `srand(seed)` function.
 """
-srand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
+srand(seed=floor(Int, time()) % Cuint) = ccall(:srand, Cvoid, (Cuint,), seed)
+
+# Include dlopen()/dlpath() code
+include("libdl.jl")
+using .Libdl
 
 end # module

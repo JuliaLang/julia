@@ -13,9 +13,67 @@ end
 
 ## types ##
 abstract type IOServer end
+"""
+    LibuvServer
+
+An abstract type for IOServers handled by libuv.
+
+If `server isa LibuvServer`, it must obey the following interface:
+
+- `server.handle` must be a `Ptr{Cvoid}`
+- `server.status` must be an `Int`
+- `server.cond` must be a `GenericCondition`
+"""
 abstract type LibuvServer <: IOServer end
+
+function getproperty(server::LibuvServer, name::Symbol)
+    if name === :handle
+        return getfield(server, :handle)::Ptr{Cvoid}
+    elseif name === :status
+        return getfield(server, :status)::Int
+    elseif name === :cond
+        return getfield(server, :cond)::GenericCondition
+    else
+        return getfield(server, name)
+    end
+end
+
+"""
+    LibuvStream
+
+An abstract type for IO streams handled by libuv.
+
+If`stream isa LibuvStream`, it must obey the following interface:
+
+- `stream.handle`, if present, must be a `Ptr{Cvoid}`
+- `stream.status`, if present, must be an `Int`
+- `stream.buffer`, if present, must be an `IOBuffer`
+- `stream.sendbuf`, if present, must be a `Union{Nothing,IOBuffer}`
+- `stream.cond`, if present, must be a `GenericCondition`
+- `stream.lock`, if present, must be an `AbstractLock`
+- `stream.throttle`, if present, must be an `Int`
+"""
 abstract type LibuvStream <: IO end
 
+function getproperty(stream::LibuvStream, name::Symbol)
+    if name === :handle
+        return getfield(stream, :handle)::Ptr{Cvoid}
+    elseif name === :status
+        return getfield(stream, :status)::Int
+    elseif name === :buffer
+        return getfield(stream, :buffer)::IOBuffer
+    elseif name === :sendbuf
+        return getfield(stream, :sendbuf)::Union{Nothing,IOBuffer}
+    elseif name === :cond
+        return getfield(stream, :cond)::GenericCondition
+    elseif name === :lock
+        return getfield(stream, :lock)::AbstractLock
+    elseif name === :throttle
+        return getfield(stream, :throttle)::Int
+    else
+        return getfield(stream, name)
+    end
+end
 
 # IO
 # +- GenericIOBuffer{T<:AbstractArray{UInt8,1}} (not exported)
@@ -23,7 +81,6 @@ abstract type LibuvStream <: IO end
 # .  +- Pipe
 # .  +- Process (not exported)
 # .  +- ProcessChain (not exported)
-# +- BufferStream
 # +- DevNull (not exported)
 # +- Filesystem.File
 # +- LibuvStream (not exported)
@@ -31,6 +88,7 @@ abstract type LibuvStream <: IO end
 # .  +- TCPSocket
 # .  +- TTY (not exported)
 # .  +- UDPSocket
+# .  +- BufferStream (FIXME: 2.0)
 # +- IOBuffer = Base.GenericIOBuffer{Array{UInt8,1}}
 # +- IOStream
 
@@ -51,7 +109,7 @@ function eof(s::LibuvStream)
     # and that we won't return true if there's a readerror pending (it'll instead get thrown).
     # This requires some careful ordering here (TODO: atomic loads)
     bytesavailable(s) > 0 && return false
-    open = isopen(s) # must preceed readerror check
+    open = isopen(s) # must precede readerror check
     s.readerror === nothing || throw(s.readerror)
     return !open
 end
@@ -289,7 +347,7 @@ function open(h::OS_HANDLE)
             if ccall(:jl_ispty, Cint, (Ptr{Cvoid},), io.handle) != 0
                 # replace the Julia `PipeEndpoint` type with a `TTY` type,
                 # if we detect that this is a cygwin pty object
-                pipe_handle, pipe_status = io.handle, pipe.status
+                pipe_handle, pipe_status = io.handle, io.status
                 io.status = StatusClosed
                 io.handle = C_NULL
                 io = TTY(pipe_handle, pipe_status)
@@ -332,7 +390,7 @@ end
 function wait_readnb(x::LibuvStream, nb::Int)
     # fast path before iolock acquire
     bytesavailable(x.buffer) >= nb && return
-    open = isopen(x) # must preceed readerror check
+    open = isopen(x) # must precede readerror check
     x.readerror === nothing || throw(x.readerror)
     open || return
     iolock_begin()
@@ -455,6 +513,9 @@ displaysize() = (parse(Int, get(ENV, "LINES",   "24")),
                  parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}
 
 function displaysize(io::TTY)
+    # A workaround for #34620 and #26687 (this still has the TOCTOU problem).
+    check_open(io)
+
     local h::Int, w::Int
     default_size = displaysize()
 
@@ -485,11 +546,6 @@ function displaysize(io::TTY)
     return h, w
 end
 
-in(key_value::Pair{Symbol,Bool}, ::TTY) = key_value.first === :color && key_value.second === have_color
-haskey(::TTY, key::Symbol) = key === :color
-getindex(::TTY, key::Symbol) = key === :color ? have_color : throw(KeyError(key))
-get(::TTY, key::Symbol, default) = key === :color ? have_color : default
-
 ### Libuv callbacks ###
 
 ## BUFFER ##
@@ -497,7 +553,7 @@ get(::TTY, key::Symbol, default) = key === :color ? have_color : default
 function alloc_request(buffer::IOBuffer, recommended_size::UInt)
     ensureroom(buffer, Int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
-    nb = length(buffer.data) - ptr + 1
+    nb = min(length(buffer.data), buffer.maxsize) - ptr + 1
     return (pointer(buffer.data, ptr), nb)
 end
 
@@ -735,7 +791,8 @@ function start_reading(stream::LibuvStream)
         # for a TTY on Windows, so ensure the status is set first
         stream.status = StatusActive
         ret = ccall(:uv_read_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
-                    stream, uv_jl_alloc_buf::Ptr{Cvoid}, uv_jl_readcb::Ptr{Cvoid})
+                    stream, @cfunction(uv_alloc_buf, Cvoid, (Ptr{Cvoid}, Csize_t, Ptr{Cvoid})),
+                    @cfunction(uv_readcb, Cvoid, (Ptr{Cvoid}, Cssize_t, Ptr{Cvoid})))
     elseif stream.status == StatusPaused
         stream.status = StatusActive
         ret = Int32(0)
@@ -917,7 +974,7 @@ function readuntil(x::LibuvStream, c::UInt8; keep::Bool=false)
     return bytes
 end
 
-uv_write(s::LibuvStream, p::Vector{UInt8}) = uv_write(s, pointer(p), UInt(sizeof(p)))
+uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(p), UInt(sizeof(p)))
 
 # caller must have acquired the iolock
 function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
@@ -968,7 +1025,7 @@ function uv_write_async(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
                     Int32,
                     (Ptr{Cvoid}, Ptr{Cvoid}, UInt, Ptr{Cvoid}, Ptr{Cvoid}),
                     s, p, nwrite, uvw,
-                    uv_jl_writecb_task::Ptr{Cvoid})
+                    @cfunction(uv_writecb_task, Cvoid, (Ptr{Cvoid}, Cint)))
         if err < 0
             Libc.free(uvw)
             uv_error("write", err)
@@ -1036,8 +1093,9 @@ function write(s::LibuvStream, b::UInt8)
     if buf !== nothing
         iolock_begin()
         if bytesavailable(buf) + 1 < buf.maxsize
+            n = write(buf, b)
             iolock_end()
-            return write(buf, b)
+            return n
         end
         iolock_end()
     end
@@ -1099,6 +1157,21 @@ for (x, writable, unix_fd, c_symbol) in
             ($f)($(writable ? :write : :read))
             return (read, write)
         end
+        function ($f)(::DevNull)
+            global $x
+            nulldev = @static Sys.iswindows() ? "NUL" : "/dev/null"
+            handle = open(nulldev, write=$writable)
+            $(_f)(handle)
+            close(handle) # handle has been dup'ed in $(_f)
+            $x = devnull
+            return devnull
+        end
+        function ($f)(io::IOContext)
+            io2, _dict = unwrapcontext(io)
+            ($f)(io2)
+            global $x = io
+            return io
+        end
     end
 end
 
@@ -1116,7 +1189,7 @@ elsewhere.
 If called with the optional `stream` argument, then returns `stream` itself.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
+    `stream` must be an `IOStream`, a `TTY`, a `Pipe`, a socket, or `devnull`.
 """
 redirect_stdout
 
@@ -1126,7 +1199,7 @@ redirect_stdout
 Like [`redirect_stdout`](@ref), but for [`stderr`](@ref).
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
+    `stream` must be an `IOStream`, a `TTY`, a `Pipe`, a socket, or `devnull`.
 """
 redirect_stderr
 
@@ -1138,7 +1211,7 @@ Note that the order of the return tuple is still `(rd, wr)`,
 i.e. data to be read from [`stdin`](@ref) may be written to `wr`.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
+    `stream` must be an `IOStream`, a `TTY`, a `Pipe`, a socket, or `devnull`.
 """
 redirect_stdin
 
@@ -1194,9 +1267,9 @@ unmark(x::LibuvStream)   = unmark(x.buffer)
 reset(x::LibuvStream)    = reset(x.buffer)
 ismarked(x::LibuvStream) = ismarked(x.buffer)
 
-function peek(s::LibuvStream)
+function peek(s::LibuvStream, ::Type{T}) where T
     mark(s)
-    try read(s, UInt8)
+    try read(s, T)
     finally
         reset(s)
     end
@@ -1206,11 +1279,12 @@ end
 mutable struct BufferStream <: LibuvStream
     buffer::IOBuffer
     cond::Threads.Condition
+    readerror::Any
     is_open::Bool
     buffer_writes::Bool
     lock::ReentrantLock # advisory lock
 
-    BufferStream() = new(PipeBuffer(), Threads.Condition(), true, false, ReentrantLock())
+    BufferStream() = new(PipeBuffer(), Threads.Condition(), nothing, true, false, ReentrantLock())
 end
 
 isopen(s::BufferStream) = s.is_open

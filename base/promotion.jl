@@ -104,7 +104,9 @@ function typejoin(@nospecialize(a), @nospecialize(b))
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && ai <: bi && bi <: ai)
                     aprimary = aprimary{ai}
                 else
-                    pushfirst!(vars, aprimary.var)
+                    # pushfirst!(vars, aprimary.var)
+                    _growbeg!(vars, 1)
+                    arrayset(false, vars, aprimary.var, 1)
                     aprimary = aprimary.body
                 end
             end
@@ -328,12 +330,12 @@ julia> 3^5
 243
 
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> A^3
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  37   54
  81  118
 ```

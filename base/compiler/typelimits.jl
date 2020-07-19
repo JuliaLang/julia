@@ -20,7 +20,13 @@ function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize
     source[1] === source[2] && (source = svec(source[1]))
     type_more_complex(t, compare, source, 1, allowed_tupledepth, allowed_tuplelen) || return t
     r = _limit_type_size(t, compare, source, 1, allowed_tuplelen)
-    @assert t <: r
+    #@assert t <: r # this may fail if t contains a typevar in invariant and multiple times
+        # in covariant position and r looses the occurence in invariant position (see #36407)
+    if !(t <: r) # ideally, this should never happen
+        # widen to minimum complexity to obtain a valid result
+        r = _limit_type_size(t, Any, source, 1, allowed_tuplelen)
+        t <: r || (r = Any) # final escape hatch
+    end
     #@assert r === _limit_type_size(r, t, source) # this monotonicity constraint is slightly stronger than actually required,
       # since we only actually need to demonstrate that repeated application would reaches a fixed point,
       #not that it is already at the fixed point
@@ -57,21 +63,6 @@ function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
         for p in cP
             is_derived_type(t, p, mindepth) && return true
         end
-        if isconcretetype(c) && isbitstype(c)
-            # see if it was extracted from a fieldtype
-            # however, only look through types that can be inlined
-            # to ensure monotonicity of derivation
-            # since we know that for immutable, concrete, bits types,
-            # the field types must have been constructed prior to the type,
-            # it cannot have a reference cycle in the type graph
-            cF = c.types
-            for f in cF
-                # often a parameter is also a field type; avoid searching twice
-                if !contains_is(c.parameters, f)
-                    is_derived_type(t, f, mindepth) && return true
-                end
-            end
-        end
     end
     return false
 end
@@ -95,6 +86,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
     else
         ut = unwrap_unionall(t)
         if isa(ut, DataType) && ut.name !== _va_typename && isa(c, Type) && c !== Union{} && c <: t
+            # TODO: need to check that the UnionAll bounds on t are limited enough too
             return t # t is already wider than the comparison in the type lattice
         elseif is_derived_type_from_any(ut, sources, depth)
             return t # t isn't something new
@@ -202,6 +194,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     elseif isa(t, DataType) && isempty(t.parameters)
         return false # fastpath: unparameterized types are always finite
     elseif tupledepth > 0 && isa(unwrap_unionall(t), DataType) && isa(c, Type) && c !== Union{} && c <: t
+        # TODO: need to check that the UnionAll bounds on t are limited enough too
         return false # t is already wider than the comparison in the type lattice
     elseif tupledepth > 0 && is_derived_type_from_any(unwrap_unionall(t), sources, depth)
         return false # t isn't something new
@@ -281,13 +274,24 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     return true
 end
 
+union_count_abstract(x::Union) = union_count_abstract(x.a) + union_count_abstract(x.b)
+union_count_abstract(@nospecialize(x)) = !isdispatchelem(x)
+
+function issimpleenoughtype(@nospecialize t)
+    return unionlen(t)+union_count_abstract(t) <= MAX_TYPEUNION_LENGTH && unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
+end
+
 # pick a wider type that contains both typea and typeb,
 # with some limits on how "large" it can get,
 # but without losing too much precision in common cases
 # and also trying to be mostly associative and commutative
 function tmerge(@nospecialize(typea), @nospecialize(typeb))
-    typea ⊑ typeb && return typeb
-    typeb ⊑ typea && return typea
+    suba = typea ⊑ typeb
+    suba && issimpleenoughtype(typeb) && return typeb
+    subb = typeb ⊑ typea
+    suba && subb && return typea
+    subb && issimpleenoughtype(typea) && return typea
+
     # type-lattice for MaybeUndef wrapper
     if isa(typea, MaybeUndef) || isa(typeb, MaybeUndef)
         return MaybeUndef(tmerge(
@@ -346,12 +350,11 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
     end
     # no special type-inference lattice, join the types
     typea, typeb = widenconst(typea), widenconst(typeb)
-    typea === typeb && return typea
-    if !(isa(typea, Type) || isa(typea, TypeVar)) ||
-       !(isa(typeb, Type) || isa(typeb, TypeVar))
+    if !isa(typea, Type) || !isa(typeb, Type)
         # XXX: this should never happen
         return Any
     end
+    typea == typeb && return typea
     # it's always ok to form a Union of two concrete types
     if (isconcretetype(typea) || isType(typea)) && (isconcretetype(typeb) || isType(typeb))
         return Union{typea, typeb}
@@ -380,6 +383,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
                 tj = types[j]
                 if ti <: tj
                     types[i] = Union{}
+                    typenames[i] = Any.name
                     break
                 elseif tj <: ti
                     types[j] = Union{}
@@ -392,9 +396,23 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
                         widen = tuplemerge(unwrap_unionall(ti)::DataType, unwrap_unionall(tj)::DataType)
                         widen = rewrap_unionall(rewrap_unionall(widen, ti), tj)
                     else
-                        widen = typenames[i].wrapper
+                        wr = typenames[i].wrapper
+                        uw = unwrap_unionall(wr)::DataType
+                        ui = unwrap_unionall(ti)::DataType
+                        uj = unwrap_unionall(tj)::DataType
+                        merged = wr
+                        for k = 1:length(uw.parameters)
+                            ui_k = ui.parameters[k]
+                            if ui_k === uj.parameters[k] && !has_free_typevars(ui_k)
+                                merged = merged{ui_k}
+                            else
+                                merged = merged{uw.parameters[k]}
+                            end
+                        end
+                        widen = rewrap_unionall(merged, wr)
                     end
                     types[i] = Union{}
+                    typenames[i] = Any.name
                     types[j] = widen
                     break
                 end
@@ -402,9 +420,26 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         end
     end
     u = Union{types...}
-    if unionlen(u) <= MAX_TYPEUNION_LENGTH && unioncomplexity(u) <= MAX_TYPEUNION_COMPLEXITY
-        # don't let type unions get too big, if the above didn't reduce it enough
+    # don't let type unions get too big, if the above didn't reduce it enough
+    if issimpleenoughtype(u)
         return u
+    end
+    # don't let the slow widening of Tuple cause the whole type to grow too fast
+    for i in 1:length(types)
+        if typenames[i] === Tuple.name
+            widen = unwrap_unionall(types[i])
+            if isa(widen, DataType) && !isvatuple(widen)
+                widen = NTuple{length(widen.parameters), Any}
+            else
+                widen = Tuple
+            end
+            types[i] = widen
+            u = Union{types...}
+            if issimpleenoughtype(u)
+                return u
+            end
+            break
+        end
     end
     # finally, just return the widest possible type
     return Any
@@ -429,11 +464,7 @@ function tuplemerge(a::DataType, b::DataType)
     p = Vector{Any}(undef, lt + vt)
     for i = 1:lt
         ui = Union{ap[i], bp[i]}
-        if unionlen(ui) <= MAX_TYPEUNION_LENGTH && unioncomplexity(ui) <= MAX_TYPEUNION_COMPLEXITY
-            p[i] = ui
-        else
-            p[i] = Any
-        end
+        p[i] = issimpleenoughtype(ui) ? ui : Any
     end
     # merge the remaining tail into a single, simple Tuple{Vararg{T}} (#22120)
     if vt

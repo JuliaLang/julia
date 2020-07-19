@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "llvm-version.h"
+
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IntrinsicInst.h>
@@ -9,16 +11,12 @@
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 
-#include "llvm-version.h"
 #include "codegen_shared.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "llvm-pass-helpers.h"
 
 #define DEBUG_TYPE "final_gc_lowering"
-#if JL_LLVM_VERSION < 70000
-#define LLVM_DEBUG DEBUG
-#endif
 
 using namespace llvm;
 
@@ -76,7 +74,7 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
         T_prjlvalue,
         0,
         ConstantInt::get(T_int32, nRoots + 2));
-    gcframe->setAlignment(16);
+    gcframe->setAlignment(Align(16));
     gcframe->insertAfter(target);
     gcframe->takeName(target);
 
@@ -85,24 +83,13 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     tempSlot_i8->insertAfter(gcframe);
     Type *argsT[2] = {tempSlot_i8->getType(), T_int32};
     Function *memset = Intrinsic::getDeclaration(F.getParent(), Intrinsic::memset, makeArrayRef(argsT));
-#if JL_LLVM_VERSION >= 70000
-        Value *args[4] = {
-            tempSlot_i8, // dest
-            ConstantInt::get(Type::getInt8Ty(F.getContext()), 0), // val
-            ConstantInt::get(T_int32, sizeof(jl_value_t*) * (nRoots + 2)), // len
-            ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
-#else
-        Value *args[5] = {
-            tempSlot_i8, // dest
-            ConstantInt::get(Type::getInt8Ty(F.getContext()), 0), // val
-            ConstantInt::get(T_int32, sizeof(jl_value_t*) * (nRoots + 2)), // len
-            ConstantInt::get(T_int32, 16), // align
-            ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
-#endif
+    Value *args[4] = {
+        tempSlot_i8, // dest
+        ConstantInt::get(Type::getInt8Ty(F.getContext()), 0), // val
+        ConstantInt::get(T_int32, sizeof(jl_value_t*) * (nRoots + 2)), // len
+        ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
     CallInst *zeroing = CallInst::Create(memset, makeArrayRef(args));
-#if JL_LLVM_VERSION >= 70000
-     cast<MemSetInst>(zeroing)->setDestAlignment(16);
-#endif
+    cast<MemSetInst>(zeroing)->setDestAlignment(16);
     zeroing->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     zeroing->insertAfter(tempSlot_i8);
 
@@ -117,22 +104,25 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
 
     IRBuilder<> builder(target->getContext());
     builder.SetInsertPoint(&*(++BasicBlock::iterator(target)));
-    Instruction *inst =
-        builder.CreateStore(
-            ConstantInt::get(T_size, nRoots << 1),
-            builder.CreateBitCast(
-                builder.CreateConstGEP1_32(gcframe, 0),
-                T_size->getPointerTo()));
+    StoreInst *inst = builder.CreateAlignedStore(
+                ConstantInt::get(T_size, JL_GC_ENCODE_PUSHARGS(nRoots)),
+                builder.CreateBitCast(
+                        builder.CreateConstGEP1_32(gcframe, 0),
+                        T_size->getPointerTo()),
+                sizeof(void*));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     Value *pgcstack = builder.Insert(getPgcstack(ptlsStates));
-    inst = builder.CreateStore(
-        builder.CreateLoad(pgcstack),
-        builder.CreatePointerCast(
-            builder.CreateConstGEP1_32(gcframe, 1),
-            PointerType::get(T_ppjlvalue, 0)));
+    inst = builder.CreateAlignedStore(
+            builder.CreateAlignedLoad(pgcstack, sizeof(void*)),
+            builder.CreatePointerCast(
+                    builder.CreateConstGEP1_32(gcframe, 1),
+                    PointerType::get(T_ppjlvalue, 0)),
+            sizeof(void*));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    builder.CreateStore(gcframe, builder.CreateBitCast(pgcstack,
-        PointerType::get(PointerType::get(T_prjlvalue, 0), 0)));
+    inst = builder.CreateAlignedStore(
+            gcframe,
+            builder.CreateBitCast(pgcstack, PointerType::get(PointerType::get(T_prjlvalue, 0), 0)),
+            sizeof(void*));
 }
 
 void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
@@ -144,13 +134,14 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
     builder.SetInsertPoint(target);
     Instruction *gcpop =
         cast<Instruction>(builder.CreateConstGEP1_32(gcframe, 1));
-    Instruction *inst = builder.CreateLoad(gcpop);
+    Instruction *inst = builder.CreateAlignedLoad(gcpop, sizeof(void*));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    inst = builder.CreateStore(
+    inst = builder.CreateAlignedStore(
         inst,
         builder.CreateBitCast(
             builder.Insert(getPgcstack(ptlsStates)),
-            PointerType::get(T_prjlvalue, 0)));
+            PointerType::get(T_prjlvalue, 0)),
+        sizeof(void*));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
 }
 

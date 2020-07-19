@@ -1,0 +1,794 @@
+From 95135c5a18ee14ca091d3513cc7801521d4eb204 Mon Sep 17 00:00:00 2001
+From: Javed Absar <javed.absar@arm.com>
+Date: Fri, 25 Jan 2019 10:25:25 +0000
+Subject: [PATCH] [TblGen] Extend !if semantics through new feature !cond
+
+This patch extends TableGen language with !cond operator.
+Instead of embedding !if inside !if which can get cumbersome,
+one can now use !cond.
+Below is an example to convert an integer 'x' into a string:
+
+    !cond(!lt(x,0) : "Negative",
+          !eq(x,0) : "Zero",
+          !eq(x,1) : "One,
+          1        : "MoreThanOne")
+
+Reviewed By: hfinkel, simon_tatham, greened
+Differential Revision: https://reviews.llvm.org/D55758
+
+llvm-svn: 352185
+---
+ docs/TableGen/LangIntro.rst          |  14 +++
+ docs/TableGen/LangRef.rst            |  10 +-
+ include/llvm/TableGen/Record.h       |  78 ++++++++++++++++
+ lib/TableGen/Record.cpp              | 131 +++++++++++++++++++++++++++
+ lib/TableGen/TGLexer.cpp             |   1 +
+ lib/TableGen/TGLexer.h               |   2 +-
+ lib/TableGen/TGParser.cpp            |  90 ++++++++++++++++++
+ lib/TableGen/TGParser.h              |   1 +
+ test/TableGen/cond-bitlist.td        |  27 ++++++
+ test/TableGen/cond-default.td        |  11 +++
+ test/TableGen/cond-empty-list-arg.td |   8 ++
+ test/TableGen/cond-inheritance.td    |  22 +++++
+ test/TableGen/cond-let.td            |  36 ++++++++
+ test/TableGen/cond-list.td           |  38 ++++++++
+ test/TableGen/cond-subclass.td       |  27 ++++++
+ test/TableGen/cond-type.td           |  11 +++
+ test/TableGen/cond-usage.td          |  29 ++++++
+ test/TableGen/condsbit.td            |  15 +++
+ 18 files changed, 549 insertions(+), 2 deletions(-)
+ create mode 100644 llvm/test/TableGen/cond-bitlist.td
+ create mode 100644 llvm/test/TableGen/cond-default.td
+ create mode 100644 llvm/test/TableGen/cond-empty-list-arg.td
+ create mode 100644 llvm/test/TableGen/cond-inheritance.td
+ create mode 100644 llvm/test/TableGen/cond-let.td
+ create mode 100644 llvm/test/TableGen/cond-list.td
+ create mode 100644 llvm/test/TableGen/cond-subclass.td
+ create mode 100644 llvm/test/TableGen/cond-type.td
+ create mode 100644 llvm/test/TableGen/cond-usage.td
+ create mode 100644 llvm/test/TableGen/condsbit.td
+
+diff --git a/docs/TableGen/LangIntro.rst b/docs/TableGen/LangIntro.rst
+index ea46550ffc0..390f941f0ca 100644
+--- a/docs/TableGen/LangIntro.rst
++++ b/docs/TableGen/LangIntro.rst
+@@ -258,6 +258,20 @@ supported include:
+ ``!if(a,b,c)``
+   'b' if the result of 'int' or 'bit' operator 'a' is nonzero, 'c' otherwise.
+ 
++``!cond(condition_1 : val1, condition_2 : val2, ..., condition_n : valn)``
++    Instead of embedding !if inside !if which can get cumbersome,
++    one can use !cond. !cond returns 'val1' if the result of 'int' or 'bit'
++    operator 'condition1' is nonzero. Otherwise, it checks 'condition2'.
++    If 'condition2' is nonzero, returns 'val2', and so on.
++    If all conditions are zero, it reports an error.
++
++    Below is an example to convert an integer 'x' into a string:
++
++    !cond(!lt(x,0) : "Negative",
++          !eq(x,0) : "Zero",
++          !eq(x,1) : "One,
++          1        : "MoreThanOne")
++
+ ``!eq(a,b)``
+     'bit 1' if string a is equal to string b, 0 otherwise.  This only operates
+     on string, int and bit objects.  Use !cast<string> to compare other types of
+diff --git a/docs/TableGen/LangRef.rst b/docs/TableGen/LangRef.rst
+index 2efee12ec9d..a3dbf363151 100644
+--- a/docs/TableGen/LangRef.rst
++++ b/docs/TableGen/LangRef.rst
+@@ -102,6 +102,12 @@ wide variety of meanings:
+                :!isa    !dag     !le      !lt        !ge
+                :!gt     !ne
+ 
++TableGen also has !cond operator that needs a slightly different
++syntax compared to other "bang operators":
++
++.. productionlist::
++   CondOperator: !cond
++
+ 
+ Syntax
+ ======
+@@ -140,7 +146,7 @@ considered to define the class if any of the following is true:
+ #. The :token:`Body` in the :token:`ObjectBody` is present and is not empty.
+ #. The :token:`BaseClassList` in the :token:`ObjectBody` is present.
+ 
+-You can declare an empty class by giving and empty :token:`TemplateArgList`
++You can declare an empty class by giving an empty :token:`TemplateArgList`
+ and an empty :token:`ObjectBody`. This can serve as a restricted form of
+ forward declaration: note that records deriving from the forward-declared
+ class will inherit no fields from it since the record expansion is done
+@@ -315,6 +321,8 @@ The initial :token:`DagArg` is called the "operator" of the dag.
+ 
+ .. productionlist::
+    SimpleValue: `BangOperator` ["<" `Type` ">"] "(" `ValueListNE` ")"
++              :| `CondOperator` "(" `CondVal` ("," `CondVal`)* ")"
++   CondVal: `Value` ":" `Value`
+ 
+ Bodies
+ ------
+diff --git a/include/llvm/TableGen/Record.h b/include/llvm/TableGen/Record.h
+index e022bc82b4e..3ca67ec72bd 100644
+--- a/include/llvm/TableGen/Record.h
++++ b/include/llvm/TableGen/Record.h
+@@ -316,6 +316,7 @@ protected:
+     IK_TernOpInit,
+     IK_UnOpInit,
+     IK_LastOpInit,
++    IK_CondOpInit,
+     IK_FoldOpInit,
+     IK_IsAOpInit,
+     IK_StringInit,
+@@ -912,6 +913,83 @@ public:
+   std::string getAsString() const override;
+ };
+ 
++/// !cond(condition_1: value1, ... , condition_n: value)
++/// Selects the first value for which condition is true.
++/// Otherwise reports an error.
++class CondOpInit final : public TypedInit, public FoldingSetNode,
++                      public TrailingObjects<CondOpInit, Init *> {
++  unsigned NumConds;
++  RecTy *ValType;
++
++  CondOpInit(unsigned NC, RecTy *Type)
++    : TypedInit(IK_CondOpInit, Type),
++      NumConds(NC), ValType(Type) {}
++
++  size_t numTrailingObjects(OverloadToken<Init *>) const {
++    return 2*NumConds;
++  }
++
++public:
++  CondOpInit(const CondOpInit &) = delete;
++  CondOpInit &operator=(const CondOpInit &) = delete;
++
++  static bool classof(const Init *I) {
++    return I->getKind() == IK_CondOpInit;
++  }
++
++  static CondOpInit *get(ArrayRef<Init*> C, ArrayRef<Init*> V,
++                        RecTy *Type);
++
++  void Profile(FoldingSetNodeID &ID) const;
++
++  RecTy *getValType() const { return ValType; }
++
++  unsigned getNumConds() const { return NumConds; }
++
++  Init *getCond(unsigned Num) const {
++    assert(Num < NumConds && "Condition number out of range!");
++    return getTrailingObjects<Init *>()[Num];
++  }
++
++  Init *getVal(unsigned Num) const {
++    assert(Num < NumConds && "Val number out of range!");
++    return getTrailingObjects<Init *>()[Num+NumConds];
++  }
++
++  ArrayRef<Init *> getConds() const {
++    return makeArrayRef(getTrailingObjects<Init *>(), NumConds);
++  }
++
++  ArrayRef<Init *> getVals() const {
++    return makeArrayRef(getTrailingObjects<Init *>()+NumConds, NumConds);
++  }
++
++  Init *Fold(Record *CurRec) const;
++
++  Init *resolveReferences(Resolver &R) const override;
++
++  bool isConcrete() const override;
++  bool isComplete() const override;
++  std::string getAsString() const override;
++
++  using const_case_iterator = SmallVectorImpl<Init*>::const_iterator;
++  using const_val_iterator = SmallVectorImpl<Init*>::const_iterator;
++
++  inline const_case_iterator  arg_begin() const { return getConds().begin(); }
++  inline const_case_iterator  arg_end  () const { return getConds().end(); }
++
++  inline size_t              case_size () const { return NumConds; }
++  inline bool                case_empty() const { return NumConds == 0; }
++
++  inline const_val_iterator name_begin() const { return getVals().begin();}
++  inline const_val_iterator name_end  () const { return getVals().end(); }
++
++  inline size_t              val_size () const { return NumConds; }
++  inline bool                val_empty() const { return NumConds == 0; }
++
++  Init *getBit(unsigned Bit) const override;
++};
++
+ /// !foldl (a, b, expr, start, lst) - Fold over a list.
+ class FoldOpInit : public TypedInit, public FoldingSetNode {
+ private:
+diff --git a/lib/TableGen/Record.cpp b/lib/TableGen/Record.cpp
+index cf1685a2e8c..26ffe761b66 100644
+--- a/lib/TableGen/Record.cpp
++++ b/lib/TableGen/Record.cpp
+@@ -1694,6 +1694,137 @@ Init *FieldInit::Fold(Record *CurRec) const {
+   return const_cast<FieldInit *>(this);
+ }
+ 
++static void ProfileCondOpInit(FoldingSetNodeID &ID,
++                             ArrayRef<Init *> CondRange,
++                             ArrayRef<Init *> ValRange,
++                             const RecTy *ValType) {
++  assert(CondRange.size() == ValRange.size() &&
++         "Number of conditions and values must match!");
++  ID.AddPointer(ValType);
++  ArrayRef<Init *>::iterator Case = CondRange.begin();
++  ArrayRef<Init *>::iterator Val = ValRange.begin();
++
++  while (Case != CondRange.end()) {
++    ID.AddPointer(*Case++);
++    ID.AddPointer(*Val++);
++  }
++}
++
++void CondOpInit::Profile(FoldingSetNodeID &ID) const {
++  ProfileCondOpInit(ID,
++      makeArrayRef(getTrailingObjects<Init *>(), NumConds),
++      makeArrayRef(getTrailingObjects<Init *>() + NumConds, NumConds),
++      ValType);
++}
++
++CondOpInit *
++CondOpInit::get(ArrayRef<Init *> CondRange,
++                ArrayRef<Init *> ValRange, RecTy *Ty) {
++  assert(CondRange.size() == ValRange.size() &&
++         "Number of conditions and values must match!");
++
++  static FoldingSet<CondOpInit> ThePool;
++  FoldingSetNodeID ID;
++  ProfileCondOpInit(ID, CondRange, ValRange, Ty);
++
++  void *IP = nullptr;
++  if (CondOpInit *I = ThePool.FindNodeOrInsertPos(ID, IP))
++    return I;
++
++  void *Mem = Allocator.Allocate(totalSizeToAlloc<Init *>(2*CondRange.size()),
++                                 alignof(BitsInit));
++  CondOpInit *I = new(Mem) CondOpInit(CondRange.size(), Ty);
++
++  std::uninitialized_copy(CondRange.begin(), CondRange.end(),
++                          I->getTrailingObjects<Init *>());
++  std::uninitialized_copy(ValRange.begin(), ValRange.end(),
++                          I->getTrailingObjects<Init *>()+CondRange.size());
++  ThePool.InsertNode(I, IP);
++  return I;
++}
++
++Init *CondOpInit::resolveReferences(Resolver &R) const {
++  SmallVector<Init*, 4> NewConds;
++  bool Changed = false;
++  for (const Init *Case : getConds()) {
++    Init *NewCase = Case->resolveReferences(R);
++    NewConds.push_back(NewCase);
++    Changed |= NewCase != Case;
++  }
++
++  SmallVector<Init*, 4> NewVals;
++  for (const Init *Val : getVals()) {
++    Init *NewVal = Val->resolveReferences(R);
++    NewVals.push_back(NewVal);
++    Changed |= NewVal != Val;
++  }
++
++  if (Changed)
++    return (CondOpInit::get(NewConds, NewVals,
++            getValType()))->Fold(R.getCurrentRecord());
++
++  return const_cast<CondOpInit *>(this);
++}
++
++Init *CondOpInit::Fold(Record *CurRec) const {
++  for ( unsigned i = 0; i < NumConds; ++i) {
++    Init *Cond = getCond(i);
++    Init *Val = getVal(i);
++
++    if (IntInit *CondI = dyn_cast_or_null<IntInit>(
++            Cond->convertInitializerTo(IntRecTy::get()))) {
++      if (CondI->getValue())
++        return Val->convertInitializerTo(getValType());
++    } else
++     return const_cast<CondOpInit *>(this);
++  }
++
++  PrintFatalError(CurRec->getLoc(),
++                  CurRec->getName() +
++                  " does not have any true condition in:" +
++                  this->getAsString());
++  return nullptr;
++}
++
++bool CondOpInit::isConcrete() const {
++  for (const Init *Case : getConds())
++    if (!Case->isConcrete())
++      return false;
++
++  for (const Init *Val : getVals())
++    if (!Val->isConcrete())
++      return false;
++
++  return true;
++}
++
++bool CondOpInit::isComplete() const {
++  for (const Init *Case : getConds())
++    if (!Case->isComplete())
++      return false;
++
++  for (const Init *Val : getVals())
++    if (!Val->isConcrete())
++      return false;
++
++  return true;
++}
++
++std::string CondOpInit::getAsString() const {
++  std::string Result = "!cond(";
++  for (unsigned i = 0; i < getNumConds(); i++) {
++    Result += getCond(i)->getAsString() + ": ";
++    Result += getVal(i)->getAsString();
++    if (i != getNumConds()-1)
++      Result += ", ";
++  }
++  return Result + ")";
++}
++
++Init *CondOpInit::getBit(unsigned Bit) const {
++  return VarBitInit::get(const_cast<CondOpInit *>(this), Bit);
++}
++
+ static void ProfileDagInit(FoldingSetNodeID &ID, Init *V, StringInit *VN,
+                            ArrayRef<Init *> ArgRange,
+                            ArrayRef<StringInit *> NameRange) {
+diff --git a/lib/TableGen/TGLexer.cpp b/lib/TableGen/TGLexer.cpp
+index 16aeee56107..f733cc3c134 100644
+--- a/lib/TableGen/TGLexer.cpp
++++ b/lib/TableGen/TGLexer.cpp
+@@ -545,6 +545,7 @@ tgtok::TokKind TGLexer::LexExclaim() {
+     .Case("ge", tgtok::XGe)
+     .Case("gt", tgtok::XGt)
+     .Case("if", tgtok::XIf)
++    .Case("cond", tgtok::XCond)
+     .Case("isa", tgtok::XIsA)
+     .Case("head", tgtok::XHead)
+     .Case("tail", tgtok::XTail)
+diff --git a/lib/TableGen/TGLexer.h b/lib/TableGen/TGLexer.h
+index e9980b36b97..9bdb01cf3dd 100644
+--- a/lib/TableGen/TGLexer.h
++++ b/lib/TableGen/TGLexer.h
+@@ -51,7 +51,7 @@ namespace tgtok {
+ 
+     // !keywords.
+     XConcat, XADD, XAND, XOR, XSRA, XSRL, XSHL, XListConcat, XStrConcat, XCast,
+-    XSubst, XForEach, XFoldl, XHead, XTail, XSize, XEmpty, XIf, XEq, XIsA, XDag,
++    XSubst, XForEach, XFoldl, XHead, XTail, XSize, XEmpty, XIf, XCond, XEq, XIsA, XDag,
+     XNe, XLe, XLt, XGe, XGt,
+ 
+     // Integer value.
+diff --git a/lib/TableGen/TGParser.cpp b/lib/TableGen/TGParser.cpp
+index 1d1f3603c83..200190acd59 100644
+--- a/lib/TableGen/TGParser.cpp
++++ b/lib/TableGen/TGParser.cpp
+@@ -1445,6 +1445,9 @@ Init *TGParser::ParseOperation(Record *CurRec, RecTy *ItemType) {
+     return (TernOpInit::get(Code, LHS, MHS, RHS, Type))->Fold(CurRec);
+   }
+ 
++  case tgtok::XCond:
++    return ParseOperationCond(CurRec, ItemType);
++
+   case tgtok::XFoldl: {
+     // Value ::= !foldl '(' Id ',' Id ',' Value ',' Value ',' Value ')'
+     Lex.Lex(); // eat the operation
+@@ -1603,6 +1606,91 @@ RecTy *TGParser::ParseOperatorType() {
+   return Type;
+ }
+ 
++Init *TGParser::ParseOperationCond(Record *CurRec, RecTy *ItemType) {
++  Lex.Lex();  // eat the operation 'cond'
++
++  if (Lex.getCode() != tgtok::l_paren) {
++     TokError("expected '(' after !cond operator");
++     return nullptr;
++  }
++  Lex.Lex();  // eat the '('
++
++  // Parse through '[Case: Val,]+'
++  SmallVector<Init *, 4> Case;
++  SmallVector<Init *, 4> Val;
++  while (true) {
++    if (Lex.getCode() == tgtok::r_paren) {
++      Lex.Lex(); // eat the ')'
++      break;
++    }
++
++    Init *V = ParseValue(CurRec);
++    if (!V)
++      return nullptr;
++    Case.push_back(V);
++
++    if (Lex.getCode() != tgtok::colon) {
++      TokError("expected ':'  following a condition in !cond operator");
++      return nullptr;
++    }
++    Lex.Lex(); // eat the ':'
++
++    V = ParseValue(CurRec, ItemType);
++    if (!V)
++      return nullptr;
++    Val.push_back(V);
++
++    if (Lex.getCode() == tgtok::r_paren) {
++      Lex.Lex(); // eat the ')'
++      break;
++    }
++
++    if (Lex.getCode() != tgtok::comma) {
++      TokError("expected ',' or ')' following a value in !cond operator");
++      return nullptr;
++    }
++    Lex.Lex();  // eat the ','
++  }
++
++  if (Case.size() < 1) {
++    TokError("there should be at least 1 'condition : value' in the !cond operator");
++    return nullptr;
++  }
++
++  // resolve type
++  RecTy *Type = nullptr;
++  for (Init *V : Val) {
++    RecTy *VTy = nullptr;
++    if (TypedInit *Vt = dyn_cast<TypedInit>(V))
++      VTy = Vt->getType();
++    if (BitsInit *Vbits = dyn_cast<BitsInit>(V))
++      VTy = BitsRecTy::get(Vbits->getNumBits());
++    if (isa<BitInit>(V))
++      VTy = BitRecTy::get();
++
++    if (Type == nullptr) {
++      if (!isa<UnsetInit>(V))
++        Type = VTy;
++    } else {
++      if (!isa<UnsetInit>(V)) {
++        RecTy *RType = resolveTypes(Type, VTy);
++        if (!RType) {
++          TokError(Twine("inconsistent types '") + Type->getAsString() +
++                         "' and '" + VTy->getAsString() + "' for !cond");
++          return nullptr;
++        }
++        Type = RType;
++      }
++    }
++  }
++
++  if (!Type) {
++    TokError("could not determine type for !cond from its arguments");
++    return nullptr;
++  }
++  return CondOpInit::get(Case, Val, Type)->Fold(CurRec);
++}
++
+ /// ParseSimpleValue - Parse a tblgen value.  This returns null on error.
+ ///
+ ///   SimpleValue ::= IDValue
+@@ -1621,6 +1709,7 @@ RecTy *TGParser::ParseOperatorType() {
+ ///   SimpleValue ::= SRLTOK '(' Value ',' Value ')'
+ ///   SimpleValue ::= LISTCONCATTOK '(' Value ',' Value ')'
+ ///   SimpleValue ::= STRCONCATTOK '(' Value ',' Value ')'
++///   SimpleValue ::= COND '(' [Value ':' Value,]+ ')'
+ ///
+ Init *TGParser::ParseSimpleValue(Record *CurRec, RecTy *ItemType,
+                                  IDParseMode Mode) {
+@@ -1933,6 +2022,7 @@ Init *TGParser::ParseSimpleValue(Record *CurRec, RecTy *ItemType,
+   case tgtok::XListConcat:
+   case tgtok::XStrConcat:   // Value ::= !binop '(' Value ',' Value ')'
+   case tgtok::XIf:
++  case tgtok::XCond:
+   case tgtok::XFoldl:
+   case tgtok::XForEach:
+   case tgtok::XSubst: {  // Value ::= !ternop '(' Value ',' Value ',' Value ')'
+diff --git a/lib/TableGen/TGParser.h b/lib/TableGen/TGParser.h
+index e3849043513..215b9dad770 100644
+--- a/lib/TableGen/TGParser.h
++++ b/lib/TableGen/TGParser.h
+@@ -194,6 +194,7 @@ private:  // Parser methods.
+   bool ParseRangePiece(SmallVectorImpl<unsigned> &Ranges);
+   RecTy *ParseType();
+   Init *ParseOperation(Record *CurRec, RecTy *ItemType);
++  Init *ParseOperationCond(Record *CurRec, RecTy *ItemType);
+   RecTy *ParseOperatorType();
+   Init *ParseObjectName(MultiClass *CurMultiClass);
+   Record *ParseClassID();
+diff --git a/test/TableGen/cond-bitlist.td b/test/TableGen/cond-bitlist.td
+new file mode 100644
+index 00000000000..bce615838df
+--- /dev/null
++++ b/test/TableGen/cond-bitlist.td
+@@ -0,0 +1,27 @@
++// RUN: llvm-tblgen %s | FileCheck %s
++// XFAIL: vg_leak
++
++class S<int s> {
++  bits<2> val = !cond(!eq(s, 8):  {0, 0},
++                      !eq(s, 16): 0b01,
++                      !eq(s, 32): 2,
++                      !eq(s, 64): {1, 1},
++                              1 : ?);
++}
++
++def D8  : S<8>;
++def D16 : S<16>;
++def D32 : S<32>;
++def D64 : S<64>;
++def D128: S<128>;
++// CHECK: def D128
++// CHECK-NEXT: bits<2> val = { ?, ? };
++// CHECK: def D16
++// CHECK-NEXT: bits<2> val = { 0, 1 };
++// CHECK: def D32
++// CHECK-NEXT: bits<2> val = { 1, 0 };
++// CHECK: def D64
++// CHECK-NEXT: bits<2> val = { 1, 1 };
++// CHECK: def D8
++// CHECK-NEXT: bits<2> val = { 0, 0 };
++
+diff --git a/test/TableGen/cond-default.td b/test/TableGen/cond-default.td
+new file mode 100644
+index 00000000000..816bf10676f
+--- /dev/null
++++ b/test/TableGen/cond-default.td
+@@ -0,0 +1,11 @@
++// Check that not specifying a valid condition results in error
++
++// RUN: not llvm-tblgen %s 2>&1 | FileCheck %s
++// XFAIL: vg_leak
++
++class C<int x> {
++  string s  = !cond(!lt(x,0) : "negative", !gt(x,0) : "positive");
++}
++
++def Zero : C<0>;
++//CHECK: error: Zero does not have any true condition in:!cond(0: "negative", 0: "positive")
+diff --git a/test/TableGen/cond-empty-list-arg.td b/test/TableGen/cond-empty-list-arg.td
+new file mode 100644
+index 00000000000..5f4ccade169
+--- /dev/null
++++ b/test/TableGen/cond-empty-list-arg.td
+@@ -0,0 +1,8 @@
++// RUN: llvm-tblgen %s
++// XFAIL: vg_leak
++
++class C<bit cond> {
++  bit true = 1;
++  list<int> X = !cond(cond: [1, 2, 3], true : []);
++  list<int> Y = !cond(cond: [], true : [4, 5, 6]);
++}
+diff --git a/test/TableGen/cond-inheritance.td b/test/TableGen/cond-inheritance.td
+new file mode 100644
+index 00000000000..4b4abdf72f3
+--- /dev/null
++++ b/test/TableGen/cond-inheritance.td
+@@ -0,0 +1,22 @@
++// Make sure !cond gets propagated across multiple layers of inheritance.
++// RUN: llvm-tblgen %s | FileCheck %s
++// XFAIL: vg_leak
++
++class getInt<int c> {
++  int ret = !cond(c: 0, 1 : 1);
++}
++
++class I1<int c> {
++  int i = getInt<c>.ret;
++}
++
++class I2<int c> : I1<c>;
++
++def DI1: I1<1>;
++// CHECK: def DI1 {     // I1
++// CHECK-NEXT: int i = 0;
++
++// CHECK: def DI2 {     // I1 I2
++// CHECK-NEXT: int i = 0;
++def DI2: I2<1>;
++
+diff --git a/test/TableGen/cond-let.td b/test/TableGen/cond-let.td
+new file mode 100644
+index 00000000000..044878f2ab8
+--- /dev/null
++++ b/test/TableGen/cond-let.td
+@@ -0,0 +1,36 @@
++// Check support for `!cond' operator as part of a `let' statement.
++// RUN: llvm-tblgen %s | FileCheck %s
++// XFAIL: vg_leak
++
++
++class C<bits<3> x, bits<4> y, bit z> {
++  bits<16> n;
++
++  let n{11}  = !cond(y{3}: 1,
++                     y{2}: x{0},
++                     y{1}: x{1},
++                     y{0}: x{2},
++                     {1} :?);
++  let n{10-9}= !cond(x{2}: y{3-2},
++                     x{1}: y{2-1},
++                     x{1}: y{1-0},
++                     {1} : ?);
++  let n{8-6} = !cond(x{2}: 0b010,  1 : 0b110);
++  let n{5-4} = !cond(x{1}: y{3-2}, 1 :  {0, 1});
++  let n{3-0} = !cond(x{0}: y{3-0}, 1 : {z, y{2}, y{1}, y{0}});
++}
++
++
++def C1 : C<{1, 0, 1}, {0, 1, 0, 1}, 0>;
++def C2 : C<{0, 1, 0}, {1, 0, 1, 0}, 1>;
++def C3 : C<{0, 0, 0}, {1, 0, 1, 0}, 0>;
++def C4 : C<{0, 0, 0}, {0, 0, 0, 0}, 0>;
++
++// CHECK: def C1
++// CHECK-NEXT: bits<16> n = { ?, ?, ?, ?, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1 };
++// CHECK: def C2
++// CHECK-NEXT: bits<16> n = { ?, ?, ?, ?, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0 };
++// CHECK: def C3
++// CHECK-NEXT: bits<16> n = { ?, ?, ?, ?, 1, ?, ?, 1, 1, 0, 0, 1, 0, 0, 1, 0 };
++// CHECK: def C4
++// CHECK-NEXT: bits<16> n = { ?, ?, ?, ?, ?, ?, ?, 1, 1, 0, 0, 1, 0, 0, 0, 0 };
+diff --git a/test/TableGen/cond-list.td b/test/TableGen/cond-list.td
+new file mode 100644
+index 00000000000..aa013cea4e1
+--- /dev/null
++++ b/test/TableGen/cond-list.td
+@@ -0,0 +1,38 @@
++// RUN: llvm-tblgen %s | FileCheck %s
++// XFAIL: vg_leak
++
++
++class A<list<list<int>> vals> {
++  list<int> first = vals[0];
++  list<int> rest  = !cond(!empty(!tail(vals)): vals[0],
++                          1                 : vals[1]);
++}
++
++def A_OneEl : A<[[1,2,3]]>;
++// CHECK:      def A_OneEl {  // A
++// CHECK-NEXT: list<int> first = [1, 2, 3];
++// CHECK-NEXT: list<int> rest = [1, 2, 3];
++// CHECK-NEXT: }
++
++def A_TwoEl : A<[[1,2,3], [4,5,6]]>;
++// CHECK:      def A_TwoEl { // A
++// CHECK-NEXT: list<int> first = [1, 2, 3];
++// CHECK-NEXT: list<int> rest = [4, 5, 6];
++// CHECK-NEXT: }
++
++
++class B<list<int> v> {
++  list<int> vals = v;
++}
++class BB<list<list<int>> vals> : B<!cond(!empty(!tail(vals)): vals[0],  1 : vals[1])>;
++class BBB<list<list<int>> vals> : BB<vals>;
++
++def B_OneEl : BBB<[[1,2,3]]>;
++// CHECK:      def B_OneEl { //  B BB BBB
++// CHECK-NEXT: list<int> vals = [1, 2, 3];
++// CHECK-NEXT: }
++
++def B_TwoEl : BBB<[[1,2,3],[4,5,6]]>;
++// CHECK:      def B_TwoEl { // B BB BBB
++// CHECK-NEXT: list<int> vals = [4, 5, 6];
++// CHECK-NEXT: }
+diff --git a/test/TableGen/cond-subclass.td b/test/TableGen/cond-subclass.td
+new file mode 100644
+index 00000000000..9f6f6e2cb8c
+--- /dev/null
++++ b/test/TableGen/cond-subclass.td
+@@ -0,0 +1,27 @@
++// Check that !cond with operands of different subtypes can
++// initialize a supertype variable.
++// RUN: llvm-tblgen %s | FileCheck %s
++// XFAIL: vg_leak
++
++class E<int dummy> {}
++class E1<int dummy> : E<dummy> {}
++class E2<int dummy> : E<dummy> {}
++
++class EX<int cc, E1 b, E2 c> {
++  E x = !cond(cc: b, 1 : c);
++}
++
++def E1d : E1<0>;
++def E2d : E2<0>;
++
++def EXd1 : EX<1, E1d, E2d>;
++def EXd2 : EX<0, E1d, E2d>;
++
++// CHECK: def EXd1 {
++// CHECK:   E x = E1d;
++// CHECK: }
++//
++// CHECK: def EXd2 {
++// CHECK:   E x = E2d;
++// CHECK: }
++
+diff --git a/test/TableGen/cond-type.td b/test/TableGen/cond-type.td
+new file mode 100644
+index 00000000000..fd2a3cc52b7
+--- /dev/null
++++ b/test/TableGen/cond-type.td
+@@ -0,0 +1,11 @@
++// RUN: not llvm-tblgen %s 2>&1 | FileCheck %s
++// XFAIL: vg_leak
++
++class A<int dummy> {}
++class B<int dummy> : A<dummy> {}
++class C<int dummy> : A<dummy> {}
++
++// CHECK: Value 'x' of type 'C' is incompatible with initializer '{{.*}}' of type 'A'
++class X<int cc, B b, C c> {
++  C x = !cond(cc: b, 1 : c);
++}
+diff --git a/test/TableGen/cond-usage.td b/test/TableGen/cond-usage.td
+new file mode 100644
+index 00000000000..055fd6d7c69
+--- /dev/null
++++ b/test/TableGen/cond-usage.td
+@@ -0,0 +1,29 @@
++// RUN: llvm-tblgen %s | FileCheck %s
++// XFAIL: vg_leak
++
++// Check that !cond picks the first true value
++// CHECK:       class A
++// CHECK-NEXT:  string S = !cond(!eq(A:x, 10): "ten", !eq(A:x, 11): "eleven", !eq(A:x, 10): "TEN", !gt(A:x, 9): "MoreThanNine", 1: "unknown"); 
++// CHECK: B1
++// CHECK-NEXT: string S = "unknown"
++// CHECK: B10
++// CHECK-NEXT: string S = "ten";
++// CHECK: def B11
++// CHECK-NEXT: string S = "eleven";
++// CHECK: def B12
++// CHECK-NEXT:  string S = "MoreThanNine";
++// CHECK: def B9
++// CHECK-NEXT: string S = "unknown"
++
++class A<int x> {
++  string S = !cond(!eq(x,10) : "ten",
++                   !eq(x,11) : "eleven",
++                   !eq(x,10) : "TEN",
++                   !gt(x,9) : "MoreThanNine",
++                   !eq(1,1) : "unknown");
++}
++def B1  : A<1>;
++def B9  : A<9>;
++def B10 : A<10>;
++def B11 : A<11>;
++def B12 : A<12>;
+diff --git a/test/TableGen/condsbit.td b/test/TableGen/condsbit.td
+new file mode 100644
+index 00000000000..e08ac97f68b
+--- /dev/null
++++ b/test/TableGen/condsbit.td
+@@ -0,0 +1,15 @@
++// check that !cond works well with bit conditional values
++// RUN: llvm-tblgen %s | FileCheck %s
++// XFAIL: vg_leak
++// CHECK: a = 6
++// CHECK: a = 5
++
++class A<bit b = 1> {
++  bit true = 1;
++  int a = !cond(b: 5, true : 6);
++  bit c = !cond(b: 0, true : 1);
++  bits<1> d = !cond(b: 0, true : 1);
++}
++
++def X : A<0>;
++def Y : A;
+-- 
+2.17.1
+

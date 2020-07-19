@@ -14,7 +14,7 @@ end
 """
 **Welcome to Julia $(string(VERSION)).** The full manual is available at
 
-    https://docs.julialang.org/
+    https://docs.julialang.org
 
 as well as many great tutorials and learning resources:
 
@@ -24,7 +24,7 @@ For help on a specific function or macro, type `?` followed
 by its name, e.g. `?cos`, or `?@time`, and press enter.
 Type `;` to enter shell mode, `]` to enter package mode.
 """
-kw"help", kw"?", kw"Julia", kw"julia", kw""
+kw"help", kw"Julia", kw"julia", kw""
 
 """
     using
@@ -126,8 +126,30 @@ kw"__init__"
 """
     baremodule
 
-`baremodule` declares a module that does not contain `using Base`
-or a definition of [`eval`](@ref Base.eval). It does still import `Core`.
+`baremodule` declares a module that does not contain `using Base` or local definitions of
+[`eval`](@ref Base.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
+
+```julia
+module Mod
+
+...
+
+end
+```
+
+is equivalent to
+
+```julia
+baremodule Mod
+
+using Base
+
+eval(x) = Core.eval(Mod, x)
+include(p) = Base.include(Mod, p)
+
+...
+
+end
 """
 kw"baremodule"
 
@@ -158,7 +180,8 @@ resulting expression is substituted directly into the program at the point where
 the macro is invoked.
 Macros are a way to run generated code without calling [`eval`](@ref Base.eval), since the generated
 code instead simply becomes part of the surrounding program.
-Macro arguments may include expressions, literal values, and symbols.
+Macro arguments may include expressions, literal values, and symbols. Macros can be defined for
+variable number of arguments (varargs), but do not accept keyword arguments.
 
 # Examples
 ```jldoctest
@@ -169,6 +192,14 @@ julia> macro sayhello(name)
 
 julia> @sayhello "Charlie"
 Hello, Charlie!
+
+julia> macro saylots(x...)
+           return :( println("Say: ", \$(x...)) )
+       end
+@saylots (macro with 1 method)
+
+julia> @saylots "hey " "there " "friend"
+Say: hey there friend
 ```
 """
 kw"macro"
@@ -309,6 +340,56 @@ julia> filter!(x -> x > 1, a) # in-place & thus more efficient than a = a[a .> 1
 kw"="
 
 """
+    .=
+
+Perform broadcasted assignment. The right-side argument is expanded as in
+[`broadcast`](@ref) and then assigned into the left-side argument in-place.
+Fuses with other dotted operators in the same expression; i.e. the whole
+assignment expression is converted into a single loop.
+
+`A .= B` is similar to `broadcast!(identity, A, B)`.
+
+# Examples
+```jldoctest
+julia> A = zeros(4, 4); B = [1, 2, 3, 4];
+
+julia> A .= B
+4×4 Array{Float64,2}:
+ 1.0  1.0  1.0  1.0
+ 2.0  2.0  2.0  2.0
+ 3.0  3.0  3.0  3.0
+ 4.0  4.0  4.0  4.0
+
+julia> A
+4×4 Array{Float64,2}:
+ 1.0  1.0  1.0  1.0
+ 2.0  2.0  2.0  2.0
+ 3.0  3.0  3.0  3.0
+ 4.0  4.0  4.0  4.0
+```
+"""
+kw".="
+
+"""
+    .
+
+The dot operator is used to access fields or properties of objects and access
+variables defined inside modules.
+
+In general, `a.b` calls `getproperty(a, :b)` (see [`getproperty`](@ref Base.getproperty)).
+
+# Examples
+```jldoctest
+julia> z = 1 + 2im; z.im
+2
+
+julia> Iterators.product
+product (generic function with 1 method)
+```
+"""
+kw"."
+
+"""
     let
 
 `let` statements allocate new variable bindings each time they run. Whereas an
@@ -428,24 +509,21 @@ Expr
 Expr
 
 """
-    '
+    \$
 
-The conjugate transposition operator, see [`adjoint`](@ref).
+Interpolation operator for interpolating into e.g. [strings](@ref string-interpolation)
+and [expressions](@ref man-expression-interpolation).
 
 # Examples
 ```jldoctest
-julia> A = [1.0 -2.0im; 4.0im 2.0]
-2×2 Array{Complex{Float64},2}:
- 1.0+0.0im  -0.0-2.0im
- 0.0+4.0im   2.0+0.0im
+julia> name = "Joe"
+"Joe"
 
-julia> A'
-2×2 Array{Complex{Float64},2}:
-  1.0-0.0im  0.0-4.0im
- -0.0+2.0im  2.0-0.0im
+julia> "My name is \$name."
+"My name is Joe."
 ```
 """
-kw"'"
+kw"$"
 
 """
     const
@@ -567,6 +645,28 @@ evaluated. The `elseif` and `else` blocks are optional, and as many `elseif` blo
 desired can be used.
 """
 kw"if", kw"elseif", kw"else"
+
+"""
+    a ? b : c
+
+Short form for conditionals; read "if `a`, evaluate `b` otherwise evaluate `c`".
+Also known as the [ternary operator](https://en.wikipedia.org/wiki/%3F:).
+
+This syntax is equivalent to `if a; b else c end`, but is often used to
+emphasize the value `b`-or-`c` which is being used as part of a larger
+expression, rather than the side effects that evaluating `b` or `c` may have.
+
+See the manual section on [control flow](@ref man-conditional-evaluation) for more details.
+
+# Examples
+```
+julia> x = 1; y = 2;
+
+julia> println(x > y ? "x is larger" : "y is larger")
+y is larger
+```
+"""
+kw"?", kw"?:"
 
 """
     for
@@ -1053,6 +1153,56 @@ The singleton type containing only the value `Union{}` (which represents the emp
 Core.TypeofBottom
 
 """
+    Core.Type{T}
+
+`Core.Type` is an abstract type which has all type objects as its instances.
+The only instance of the singleton type `Core.Type{T}` is the object
+`T`.
+
+# Examples
+```jldoctest
+julia> isa(Type{Float64}, Type)
+true
+
+julia> isa(Float64, Type)
+true
+
+julia> isa(Real, Type{Float64})
+false
+
+julia> isa(Real, Type{Real})
+true
+```
+"""
+Core.Type
+
+"""
+    DataType <: Type{T}
+
+`DataType` represents explicitly declared types that have names, explicitly
+declared supertypes, and, optionally, parameters.  Every concrete value in the
+system is an instance of some `DataType`.
+
+# Examples
+```jldoctest
+julia> typeof(Real)
+DataType
+
+julia> typeof(Int)
+DataType
+
+julia> struct Point
+           x::Int
+           y
+       end
+
+julia> typeof(Point)
+DataType
+```
+"""
+Core.DataType
+
+"""
     Function
 
 Abstract type of all functions.
@@ -1181,24 +1331,18 @@ An indexing operation into an array, `a`, tried to access an out-of-bounds eleme
 julia> A = fill(1.0, 7);
 
 julia> A[8]
-ERROR: BoundsError: attempt to access 7-element Array{Float64,1} at index [8]
-Stacktrace:
- [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:660
- [2] top-level scope
+ERROR: BoundsError: attempt to access 7-element Vector{Float64} at index [8]
+
 
 julia> B = fill(1.0, (2,3));
 
 julia> B[2, 4]
-ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [2, 4]
-Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:661
- [2] top-level scope
+ERROR: BoundsError: attempt to access 2×3 Matrix{Float64} at index [2, 4]
+
 
 julia> B[9]
-ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [9]
-Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:660
- [2] top-level scope
+ERROR: BoundsError: attempt to access 2×3 Matrix{Float64} at index [9]
+
 ```
 """
 BoundsError
@@ -1347,6 +1491,18 @@ TypeError
     InterruptException()
 
 The process was stopped by a terminal interrupt (CTRL+C).
+
+Note that, in Julia script started without `-i` (interactive) option,
+`InterruptException` is not thrown by default.  Calling
+[`Base.exit_on_sigint(false)`](@ref Base.exit_on_sigint) in the script
+can recover the behavior of the REPL.  Alternatively, a Julia script
+can be started with
+
+```sh
+julia -e "include(popfirst!(ARGS))" script.jl
+```
+
+to let `InterruptException` be thrown by CTRL+C during the execution.
 """
 InterruptException
 
@@ -1382,6 +1538,13 @@ This method allows invoking a method other than the most specific matching metho
 when the behavior of a more general definition is explicitly needed (often as part of the
 implementation of a more specific method of the same function).
 
+Be careful when using `invoke` for functions that you don't write.  What definition is used
+for given `argtypes` is an implementation detail unless the function is explicitly states
+that calling with certain `argtypes` is a part of public API.  For example, the change
+between `f1` and `f2` in the example below is usually considered compatible because the
+change is invisible by the caller with a normal (non-`invoke`) call.  However, the change is
+visible if you use `invoke`.
+
 # Examples
 ```jldoctest
 julia> f(x::Real) = x^2;
@@ -1390,6 +1553,25 @@ julia> f(x::Integer) = 1 + invoke(f, Tuple{Real}, x);
 
 julia> f(2)
 5
+
+julia> f1(::Integer) = Integer
+       f1(::Real) = Real;
+
+julia> f2(x::Real) = _f2(x)
+       _f2(::Integer) = Integer
+       _f2(_) = Real;
+
+julia> f1(1)
+Integer
+
+julia> f2(1)
+Integer
+
+julia> invoke(f1, Tuple{Real}, 1)
+Real
+
+julia> invoke(f2, Tuple{Real}, 1)
+Integer
 ```
 """
 invoke
@@ -1505,12 +1687,14 @@ julia> false * NaN
 """
 Bool
 
-for bit in (16, 32, 64)
+for (bit, sign, exp, frac) in ((16, 1, 5, 10), (32, 1, 8, 23), (64, 1, 11, 52))
     @eval begin
         """
             Float$($bit) <: AbstractFloat
 
-        $($bit)-bit floating point number type.
+        $($bit)-bit floating point number type (IEEE 754 standard).
+
+        Binary format: $($sign) sign, $($exp) exponent, $($frac) fraction bits.
         """
         $(Symbol("Float", bit))
     end
@@ -1662,7 +1846,7 @@ Rational{Int64}
 julia> M = [1 2; 3.5 4];
 
 julia> typeof(M)
-Array{Float64,2}
+Matrix{Float64} = Array{Float64,2}
 ```
 """
 typeof
@@ -1731,7 +1915,7 @@ these values, i.e. `Nothing <: T`.
 # Examples
 ```jldoctest
 julia> Vector{Union{Nothing, String}}(nothing, 2)
-2-element Array{Union{Nothing, String},1}:
+2-element Vector{Union{Nothing, String}}:
  nothing
  nothing
 ```
@@ -1748,7 +1932,7 @@ these values, i.e. `Missing <: T`.
 # Examples
 ```jldoctest
 julia> Vector{Union{Missing, String}}(missing, 2)
-2-element Array{Union{Missing, String},1}:
+2-element Vector{Union{Missing, String}}:
  missing
  missing
 ```
@@ -1780,7 +1964,7 @@ these values, i.e. `Nothing <: T`.
 # Examples
 ```jldoctest
 julia> Matrix{Union{Nothing, String}}(nothing, 2, 3)
-2×3 Array{Union{Nothing, String},2}:
+2×3 Matrix{Union{Nothing, String}}:
  nothing  nothing  nothing
  nothing  nothing  nothing
 ```
@@ -1797,7 +1981,7 @@ these values, i.e. `Missing <: T`.
 # Examples
 ```jldoctest
 julia> Matrix{Union{Missing, String}}(missing, 2, 3)
-2×3 Array{Union{Missing, String},2}:
+2×3 Matrix{Union{Missing, String}}:
  missing  missing  missing
  missing  missing  missing
 ```
@@ -1841,12 +2025,12 @@ to hold these values, i.e. `Nothing <: T`.
 # Examples
 ```jldoctest
 julia> Array{Union{Nothing, String}}(nothing, 2)
-2-element Array{Union{Nothing, String},1}:
+2-element Vector{Union{Nothing, String}}:
  nothing
  nothing
 
 julia> Array{Union{Nothing, Int}}(nothing, 2, 3)
-2×3 Array{Union{Nothing, Int64},2}:
+2×3 Matrix{Union{Nothing, Int64}}:
  nothing  nothing  nothing
  nothing  nothing  nothing
 ```
@@ -1865,12 +2049,12 @@ to hold these values, i.e. `Missing <: T`.
 # Examples
 ```jldoctest
 julia> Array{Union{Missing, String}}(missing, 2)
-2-element Array{Union{Missing, String},1}:
+2-element Vector{Union{Missing, String}}:
  missing
  missing
 
 julia> Array{Union{Missing, Int}}(missing, 2, 3)
-2×3 Array{Union{Missing, Int64},2}:
+2×3 Matrix{Union{Missing, Int64}}:
  missing  missing  missing
  missing  missing  missing
 ```
@@ -1950,7 +2134,7 @@ julia> -(2)
 -2
 
 julia> -[1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  -1  -2
  -3  -4
 ```
@@ -2099,7 +2283,7 @@ julia> "Hello!" :: IntOrString
 "Hello!"
 
 julia> 1.0 :: IntOrString
-ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got Float64
+ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got a value of type Float64
 ```
 """
 Union
@@ -2133,7 +2317,7 @@ Outside of declarations `::` is used to assert that expressions and variables in
 # Examples
 ```jldoctest
 julia> (1+2)::AbstractFloat
-ERROR: TypeError: typeassert: expected AbstractFloat, got Int64
+ERROR: TypeError: typeassert: expected AbstractFloat, got a value of type Int64
 
 julia> (1+2)::Int
 3
@@ -2216,7 +2400,7 @@ The syntax `x::type` calls this function.
 # Examples
 ```jldoctest
 julia> typeassert(2.5, Int)
-ERROR: TypeError: in typeassert, expected Int64, got Float64
+ERROR: TypeError: in typeassert, expected Int64, got a value of type Float64
 Stacktrace:
 [...]
 ```
@@ -2269,9 +2453,10 @@ Base.setproperty!
 """
     StridedArray{T, N}
 
-An `N` dimensional *strided* array with elements of type `T`. These arrays follow
-the [strided array interface](@ref man-interface-strided-arrays). If `A` is a
-`StridedArray`, then its elements are stored in memory with offsets, which may
+A hard-coded [`Union`](@ref) of common array types that follow the [strided array interface](@ref man-interface-strided-arrays),
+with elements of type `T` and `N` dimensions.
+
+If `A` is a `StridedArray`, then its elements are stored in memory with offsets, which may
 vary between dimensions but are constant within a dimension. For example, `A` could
 have stride 2 in dimension 1, and stride 3 in dimension 2. Incrementing `A` along
 dimension `d` jumps in memory by [`strides(A, d)`] slots. Strided arrays are

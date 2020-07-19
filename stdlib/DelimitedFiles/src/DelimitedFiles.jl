@@ -38,14 +38,14 @@ julia> open("delim_file.txt", "w") do io
        end;
 
 julia> readdlm("delim_file.txt", Int64)
-4×2 Array{Int64,2}:
+4×2 Matrix{Int64}:
  1  5
  2  6
  3  7
  4  8
 
 julia> readdlm("delim_file.txt", Float64)
-4×2 Array{Float64,2}:
+4×2 Matrix{Float64}:
  1.0  5.0
  2.0  6.0
  3.0  7.0
@@ -74,7 +74,7 @@ julia> open("delim_file.txt", "w") do io
        end;
 
 julia> readdlm("delim_file.txt", ',', Float64)
-4×2 Array{Float64,2}:
+4×2 Matrix{Float64}:
  1.0  1.1
  2.0  2.2
  3.0  3.3
@@ -106,7 +106,7 @@ julia> open("delim_file.txt", "w") do io
        end;
 
 julia> readdlm("delim_file.txt")
-4×2 Array{Any,2}:
+4×2 Matrix{Any}:
  1  "a"
  2  "b"
  3  "c"
@@ -137,7 +137,7 @@ julia> open("delim_file.txt", "w") do io
        end;
 
 julia> readdlm("delim_file.txt", ',')
-4×2 Array{Float64,2}:
+4×2 Matrix{Float64}:
  1.0  1.1
  2.0  2.2
  3.0  3.3
@@ -150,7 +150,7 @@ julia> open("delim_file.txt", "w") do io
        end;
 
 julia> readdlm("delim_file.txt", ',')
-4×2 Array{Any,2}:
+4×2 Matrix{Any}:
  1  "a"
  2  "b"
  3  "c"
@@ -213,7 +213,7 @@ julia> open("delim_file.txt", "w") do io
        end
 
 julia> readdlm("delim_file.txt", '\\t', Int, '\\n')
-4×2 Array{Int64,2}:
+4×2 Matrix{Int64}:
  1  5
  2  6
  3  7
@@ -455,7 +455,7 @@ function readdlm_string(sbuff::String, dlm::AbstractChar, T::Type, eol::Abstract
             dims = dlm_parse(sbuff, eol, dlm, '"', comment_char, ign_empty, quotes, comments, skipstart, skipblanks, offset_handler)
             break
         catch ex
-            if isa(ex, TypeError) && (ex.func == :store_cell)
+            if isa(ex, TypeError) && (ex.func === :store_cell)
                 T = ex.expected
             else
                 rethrow()
@@ -510,7 +510,7 @@ function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integ
         end
         return result(dh)
     catch ex
-        isa(ex, TypeError) && (ex.func == :store_cell) && (return dlm_fill(ex.expected, offarr, dims, has_header, sbuff, auto, eol))
+        isa(ex, TypeError) && (ex.func === :store_cell) && (return dlm_fill(ex.expected, offarr, dims, has_header, sbuff, auto, eol))
         error("at row $row, column $col : $ex")
     end
 end
@@ -712,7 +712,7 @@ function dlm_parse(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
             end
         end
     catch ex
-        if isa(ex, TypeError) && (ex.func == :store_cell)
+        if isa(ex, TypeError) && (ex.func === :store_cell)
             rethrow()
         else
             error("at row $(nrows+1), column $col : $ex)")
@@ -814,7 +814,7 @@ julia> open("delim_file.txt", "w") do io
        end
 
 julia> readdlm("delim_file.txt", '\\t', Int, '\\n')
-4×2 Array{Int64,2}:
+4×2 Matrix{Int64}:
  1  5
  2  6
  3  7

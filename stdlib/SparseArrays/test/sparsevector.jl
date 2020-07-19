@@ -35,6 +35,18 @@ x1_full[SparseArrays.nonzeroinds(spv_x1)] = nonzeros(spv_x1)
     @test count(SparseVector(8, [2, 5, 6], [true,false,true])) == 2
 end
 
+@testset "isstored" begin
+    x = spv_x1
+    stored_inds = [2, 5, 6]
+    nonstored_inds = [1, 3, 4, 7, 8]
+    for i in stored_inds
+        @test Base.isstored(x, i) == true
+    end
+    for i in nonstored_inds
+        @test Base.isstored(x, i) == false
+    end
+end
+
 @testset "conversion to dense Array" begin
     for (x, xf) in [(spv_x1, x1_full)]
         @test isa(Array(x), Vector{Float64})
@@ -174,6 +186,7 @@ end
             @test sprand(r1, 100, .9) == sprand(r2, 100, .9)
             @test sprandn(r1, 100, .9) == sprandn(r2, 100, .9)
             @test sprand(r1, Bool, 100, .9) == sprand(r2,  Bool, 100, .9)
+            @test sprandn(r1, Float16, 100, .9) == sprandn(r2,  Float16, 100, .9)
         end
 
         # test sprand with function inputs
@@ -249,6 +262,14 @@ end
             @test isa(r, SparseVector{Float64,Int})
             @test all(!iszero, nonzeros(r))
             @test Array(r) == Array(x)[bI]
+            bI = falses(length(x), 1) # AbstractArray rather than AbstractVector
+            bI[I, 1] .= true
+            r = x[bI]
+            @test isa(r, SparseVector{Float64,Int})
+            @test all(!iszero, nonzeros(r))
+            bIv = falses(length(x))
+            bIv[I] .= true
+            @test Array(r) == Array(x)[bIv]
         end
     end
 end
@@ -404,6 +425,11 @@ end
         @test x2[10] == 0
         x2 = sparse([1, 2], [2, 2], [1.2, 3.4], 2, 3)
         @test_throws BoundsError copyto!(x2, x1)
+    end
+    let x = 1:6
+        x2 = spzeros(length(x))
+        copyto!(x2, x) # copyto!(SparseVector, AbstractVector)
+        @test Vector(x2) == collect(x)
     end
 end
 @testset "vec/reinterpret/float/complex" begin
@@ -1013,11 +1039,11 @@ end
 
         denseintmat = I*10m + rand(1:m, m, m)
         densefloatmat = I + randn(m, m)/(2m)
-        densecomplexmat = I + randn(Complex{Float64}, m, m)/(4m)
+        densecomplexmat = I + randn(ComplexF64, m, m)/(4m)
 
         inttypes = (Int32, Int64, BigInt)
         floattypes = (Float32, Float64, BigFloat)
-        complextypes = (Complex{Float32}, Complex{Float64})
+        complextypes = (ComplexF32, ComplexF64)
         eltypes = (inttypes..., floattypes..., complextypes...)
 
         for eltypemat in eltypes
@@ -1163,15 +1189,11 @@ end
     for vwithzeros in (vposzeros, vnegzeros, vbothsigns)
         # Basic functionality / dropzeros!
         @test dropzeros!(copy(vwithzeros)) == v
-        @test dropzeros!(copy(vwithzeros), trim = false) == v
         # Basic functionality / dropzeros
         @test dropzeros(vwithzeros) == v
-        @test dropzeros(vwithzeros, trim = false) == v
         # Check trimming works as expected
         @test length(nonzeros(dropzeros!(copy(vwithzeros)))) == length(nonzeros(v))
         @test length(nonzeroinds(dropzeros!(copy(vwithzeros)))) == length(nonzeroinds(v))
-        @test length(nonzeros(dropzeros!(copy(vwithzeros), trim = false))) == length(nonzeros(vwithzeros))
-        @test length(nonzeroinds(dropzeros!(copy(vwithzeros), trim = false))) == length(nonzeroinds(vwithzeros))
     end
 end
 
@@ -1406,6 +1428,33 @@ end
     scv = view(A, :, 1)
     @test SparseArrays.indtype(scv) == SparseArrays.indtype(A)
     @test nnz(scv) == nnz(A[:, 1])
+end
+
+@testset "avoid aliasing of fields during constructing $T (issue #34630)" for T in
+    (SparseVector, SparseVector{Float64}, SparseVector{Float64,Int16})
+
+    A = sparse([1; 0])
+    B = T(A)
+    @test A == B
+    A[2] = 1
+    @test A != B
+    @test nonzeroinds(A) !== nonzeroinds(B)
+    @test nonzeros(A) !== nonzeros(B)
+end
+
+@testset "multiplication of Triangular sparse matrices with sparse vectors #35642" begin
+    n = 10
+    A = sprand(n, n, 5/n)
+    U = UpperTriangular(A)
+    L = LowerTriangular(A)
+    x = sprand(n, 5/n)
+    y = view(A, :, 6)
+    z = view(x, :)
+    ty = typeof
+    @testset "matvec multiplication $(ty(X)) * $(ty(v))" for X in (U, L), v in (x, y, z)
+        @test X * v ≈ Matrix(X) * Vector(v)
+        @test typeof(X * v) == typeof(x)
+    end
 end
 
 end # module

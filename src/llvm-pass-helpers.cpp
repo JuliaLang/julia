@@ -1,17 +1,17 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
+
 //
 // This file implements common functionality that is useful for the late GC frame
 // lowering and final GC intrinsic lowering passes. See the corresponding header
 // for docs.
+
+#include "llvm-version.h"
 
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Metadata.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 
-#include <iostream>
-
-#include "llvm-version.h"
 #include "codegen_shared.h"
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
@@ -62,24 +62,8 @@ void JuliaPassContext::initAll(Module &M)
     T_pint8 = PointerType::get(T_int8, 0);
     T_int32 = Type::getInt32Ty(ctx);
 
-    // Find 'jl_value_t' by searching through the module's
-    // identified struct types. This is a much more robust way
-    // to find 'jl_value_t' than an ad-hoc search through
-    // intrinsics that may or may not be defined in the module.
-    T_jlvalue = nullptr;
-    for (auto type : M.getIdentifiedStructTypes()) {
-        if (type->hasName() && type->getName() == "jl_value_t") {
-            T_jlvalue = type;
-            break;
-        }
-    }
-
-    // If 'jl_value_t' doesn't exist yet then we'll just define it.
-    if (!T_jlvalue) {
-        T_jlvalue = StructType::create(ctx, "jl_value_t");
-    }
-
     // Construct derived types.
+    T_jlvalue = StructType::get(ctx);
     T_pjlvalue = PointerType::get(T_jlvalue, 0);
     T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
     T_ppjlvalue = PointerType::get(T_pjlvalue, 0);

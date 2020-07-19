@@ -10,7 +10,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              sum, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             hastypemax
+             sign, hastypemax, isodd
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -76,6 +76,9 @@ julia> parse(BigInt, "42")
 
 julia> big"313"
 313
+
+julia> BigInt(10)^19
+10000000000000000000
 ```
 """
 BigInt(x)
@@ -188,7 +191,7 @@ for op in (:neg, :com, :sqrt, :set)
         $op!(x::BigInt, a::BigInt) = (ccall($(gmpz(op)), Cvoid, (mpz_t, mpz_t), x, a); x)
         $op(a::BigInt) = $op!(BigInt(), a)
     end
-    op == :set && continue # MPZ.set!(x) would make no sense
+    op === :set && continue # MPZ.set!(x) would make no sense
     @eval $op!(x::BigInt) = $op!(x, x)
 end
 
@@ -339,6 +342,8 @@ end
 
 rem(x::Integer, ::Type{BigInt}) = BigInt(x)
 
+isodd(x::BigInt) = MPZ.tstbit(x, 0)
+
 function (::Type{T})(x::BigInt) where T<:Base.BitUnsigned
     if sizeof(T) < sizeof(Limb)
         convert(T, convert(Limb,x))
@@ -455,7 +460,8 @@ promote_rule(::Type{BigInt}, ::Type{<:Integer}) = BigInt
     big(x)
 
 Convert a number to a maximum precision representation (typically [`BigInt`](@ref) or
-`BigFloat`). See [`BigFloat`](@ref) for information about some pitfalls with floating-point numbers.
+`BigFloat`). See [`BigFloat`](@ref BigFloat(::Any, rounding::RoundingMode)) for
+information about some pitfalls with floating-point numbers.
 """
 function big end
 
@@ -665,6 +671,11 @@ flipsign!(x::BigInt, y::Integer) = (signbit(y) && (x.size = -x.size); x)
 flipsign( x::BigInt, y::Integer) = signbit(y) ? -x : x
 flipsign( x::BigInt, y::BigInt)  = signbit(y) ? -x : x
 # above method to resolving ambiguities with flipsign(::T, ::T) where T<:Signed
+function sign(x::BigInt)
+    isneg(x) && return -one(x)
+    ispos(x) && return one(x)
+    return x
+end
 
 show(io::IO, x::BigInt) = print(io, string(x))
 

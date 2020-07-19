@@ -5,6 +5,7 @@ abstract type AbstractTime end
 """
     Period
     Year
+    Quarter
     Month
     Week
     Day
@@ -21,7 +22,7 @@ abstract type Period     <: AbstractTime end
 abstract type DatePeriod <: Period end
 abstract type TimePeriod <: Period end
 
-for T in (:Year, :Month, :Week, :Day)
+for T in (:Year, :Quarter, :Month, :Week, :Day)
     @eval struct $T <: DatePeriod
         value::Int64
         $T(v::Number) = new(v)
@@ -36,6 +37,7 @@ end
 
 """
     Year(v)
+    Quarter(v)
     Month(v)
     Week(v)
     Day(v)
@@ -83,7 +85,21 @@ abstract type Calendar <: AbstractTime end
 # ISOCalendar provides interpretation rules for UTInstants to civil date and time parts
 struct ISOCalendar <: Calendar end
 
+"""
+    TimeZone
+
+Geographic zone generally based on longitude determining what the time is at a certain location.
+Some time zones observe daylight savings (eg EST -> EDT).
+For implementations and more support, see the [`TimeZones.jl`](https://github.com/JuliaTime/TimeZones.jl) package
+"""
 abstract type TimeZone end
+
+"""
+    UTC
+
+`UTC`, or Coordinated Universal Time, is the [`TimeZone`](@ref) from which all others are measured.
+It is associated with the time at 0° longitude. It is not adjusted for daylight savings.
+"""
 struct UTC <: TimeZone end
 
 """
@@ -374,17 +390,38 @@ calendar(dt::DateTime) = ISOCalendar
 calendar(dt::Date) = ISOCalendar
 
 """
-    eps(::DateTime) -> Millisecond
-    eps(::Date) -> Day
-    eps(::Time) -> Nanosecond
+    eps(::Type{DateTime}) -> Millisecond
+    eps(::Type{Date}) -> Day
+    eps(::Type{Time}) -> Nanosecond
+    eps(::TimeType) -> Period
 
-Returns `Millisecond(1)` for `DateTime` values, `Day(1)` for `Date` values, and `Nanosecond(1)` for `Time` values.
+Return the smallest unit value supported by the `TimeType`.
+
+# Examples
+```jldoctest
+julia> eps(DateTime)
+1 millisecond
+
+julia> eps(Date)
+1 day
+
+julia> eps(Time)
+1 nanosecond
+```
 """
-Base.eps
+Base.eps(::Union{Type{DateTime}, Type{Date}, Type{Time}, TimeType})
 
-Base.eps(dt::DateTime) = Millisecond(1)
-Base.eps(dt::Date) = Day(1)
-Base.eps(t::Time) = Nanosecond(1)
+Base.eps(::Type{DateTime}) = Millisecond(1)
+Base.eps(::Type{Date}) = Day(1)
+Base.eps(::Type{Time}) = Nanosecond(1)
+Base.eps(::T) where T <: TimeType = eps(T)::Period
+
+# zero returns dt::T - dt::T
+Base.zero(::Type{DateTime}) = Millisecond(0)
+Base.zero(::Type{Date}) = Day(0)
+Base.zero(::Type{Time}) = Nanosecond(0)
+Base.zero(::T) where T <: TimeType = zero(T)::Period
+
 
 Base.typemax(::Union{DateTime, Type{DateTime}}) = DateTime(146138512, 12, 31, 23, 59, 59)
 Base.typemin(::Union{DateTime, Type{DateTime}}) = DateTime(-146138511, 1, 1, 0, 0, 0)
@@ -405,11 +442,15 @@ Base.hash(x::Time, h::UInt) =
     hash(hour(x), hash(minute(x), hash(second(x),
         hash(millisecond(x), hash(microsecond(x), hash(nanosecond(x), h))))))
 
-import Base: sleep, Timer, timedwait
-sleep(time::Period) = sleep(toms(time) / 1000)
-Timer(time::Period; interval::Period = Second(0)) =
-    Timer(toms(time) / 1000, interval = toms(interval) / 1000)
-timedwait(testcb::Function, time::Period) = timedwait(testcb, toms(time) / 1000)
+Base.sleep(duration::Period) = sleep(toms(duration) / 1000)
+
+function Base.Timer(delay::Period; interval::Period=Second(0))
+    Timer(toms(delay) / 1000, interval=toms(interval) / 1000)
+end
+
+function Base.timedwait(testcb::Function, timeout::Period; pollint::Period=Millisecond(100))
+    timedwait(testcb, toms(timeout) / 1000, pollint=toms(pollint) / 1000)
+end
 
 Base.OrderStyle(::Type{<:AbstractTime}) = Base.Ordered()
 Base.ArithmeticStyle(::Type{<:AbstractTime}) = Base.ArithmeticWraps()

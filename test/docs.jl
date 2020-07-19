@@ -211,6 +211,13 @@ function returntype(x::Int)::Int
     x
 end
 
+# @nospecialize (issue #34122)
+"`fnospecialize` for Numbers"
+fnospecialize(@nospecialize(x::Number)) = 1
+
+"`fnospecialize` for arrays"
+fnospecialize(@nospecialize(x::AbstractArray)) = 2
+
 end
 
 let md = meta(DocsTest)[@var(DocsTest)]
@@ -282,6 +289,14 @@ end
 let rt = @var(DocsTest.returntype)
     md = meta(DocsTest)[rt]
     @test md.order == [Tuple{Float64}, Tuple{Int}]
+end
+
+let fns = @var(DocsTest.fnospecialize)
+    md = meta(DocsTest)[fns]
+    d = md.docs[Tuple{Number}]
+    @test docstrings_equal(d, doc"`fnospecialize` for Numbers")
+    d = md.docs[Tuple{AbstractArray}]
+    @test docstrings_equal(d, doc"`fnospecialize` for arrays")
 end
 
 @test docstrings_equal(@doc(DocsTest.TA), doc"TA")
@@ -967,10 +982,11 @@ let x = Binding(Main, :⊕)
     @test Meta.parse(string(x)) == :(⊕)
 end
 
-doc_util_path = Symbol(joinpath("docs", "utils.jl"))
-
 @test sprint(repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
 @test sprint(repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
+
+# issue #36378 (\u1e8b and x\u307 are the fully composed and decomposed forms of ẋ, respectively)
+@test sprint(repl_latex, "\u1e8b") == "\"x\u307\" can be typed by x\\dot<tab>\n\n"
 
 # issue #15684
 begin
@@ -996,28 +1012,42 @@ dynamic_test.x = "test 2"
 @test @doc(dynamic_test) == "test 2 Union{}"
 @test @doc(dynamic_test(::String)) == "test 2 Tuple{String}"
 
-let dt1 = _repl(:(dynamic_test(1.0)))
+# For testing purposes, strip off the `trimdocs(expr)` wrapper
+function striptrimdocs(expr)
+    if Meta.isexpr(expr, :call)
+        fex = expr.args[1]
+        if Meta.isexpr(fex, :.) && fex.args[1] == :REPL
+            fmex = fex.args[2]
+            if isa(fmex, QuoteNode) && fmex.value == :trimdocs
+                expr = expr.args[2]
+            end
+        end
+    end
+    return expr
+end
+
+let dt1 = striptrimdocs(_repl(:(dynamic_test(1.0))))
     @test dt1 isa Expr
     @test dt1.args[1] isa Expr
     @test dt1.args[1].head === :macrocall
     @test dt1.args[1].args[1] == Symbol("@doc")
     @test dt1.args[1].args[3] == :(dynamic_test(::typeof(1.0)))
 end
-let dt2 = _repl(:(dynamic_test(::String)))
+let dt2 = striptrimdocs(_repl(:(dynamic_test(::String))))
     @test dt2 isa Expr
     @test dt2.args[1] isa Expr
     @test dt2.args[1].head === :macrocall
     @test dt2.args[1].args[1] == Symbol("@doc")
     @test dt2.args[1].args[3] == :(dynamic_test(::String))
 end
-let dt3 = _repl(:(dynamic_test(a)))
+let dt3 = striptrimdocs(_repl(:(dynamic_test(a))))
     @test dt3 isa Expr
     @test dt3.args[1] isa Expr
     @test dt3.args[1].head === :macrocall
     @test dt3.args[1].args[1] == Symbol("@doc")
     @test dt3.args[1].args[3].args[2].head == :(::) # can't test equality due to line numbers
 end
-let dt4 = _repl(:(dynamic_test(1.0,u=2.0)))
+let dt4 = striptrimdocs(_repl(:(dynamic_test(1.0,u=2.0))))
     @test dt4 isa Expr
     @test dt4.args[1] isa Expr
     @test dt4.args[1].head === :macrocall

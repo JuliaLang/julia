@@ -11,7 +11,8 @@ end
 nested_error_pattern = r"""
     ERROR: DivideError: integer division error
     Stacktrace:.*
-    caused by \[exception 1\]
+
+    caused by:
     UndefVarError: __not_a_binding__ not defined
     Stacktrace:.*
     """s

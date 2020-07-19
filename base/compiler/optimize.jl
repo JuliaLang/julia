@@ -5,32 +5,39 @@
 #####################
 
 mutable struct OptimizationState
+    params::OptimizationParams
     linfo::MethodInstance
     calledges::Vector{Any}
     src::CodeInfo
+    stmt_info::Vector{Any}
     mod::Module
     nargs::Int
+    world::UInt
     min_valid::UInt
     max_valid::UInt
-    params::Params
     sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
     const_api::Bool
-    function OptimizationState(frame::InferenceState)
+    # cached results of calling `_methods_by_ftype` from inference, including
+    # `min_valid` and `max_valid`
+    matching_methods_cache::IdDict{Any, Tuple{Any, UInt, UInt, Bool}}
+    # TODO: This will be eliminated once optimization no longer needs to do method lookups
+    interp::AbstractInterpreter
+    function OptimizationState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
         s_edges = frame.stmt_edges[1]
         if s_edges === nothing
             s_edges = []
             frame.stmt_edges[1] = s_edges
         end
         src = frame.src
-        return new(frame.linfo,
+        return new(params, frame.linfo,
                    s_edges::Vector{Any},
-                   src, frame.mod, frame.nargs,
-                   frame.min_valid, frame.max_valid,
-                   frame.params, frame.sptypes, frame.slottypes, false)
+                   src, frame.stmt_info, frame.mod, frame.nargs,
+                   frame.world, frame.min_valid, frame.max_valid,
+                   frame.sptypes, frame.slottypes, false,
+                   frame.matching_methods_cache, interp)
     end
-    function OptimizationState(linfo::MethodInstance, src::CodeInfo,
-                               params::Params)
+    function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams, interp::AbstractInterpreter)
         # prepare src for running optimization passes
         # if it isn't already
         nssavalues = src.ssavaluetypes
@@ -43,6 +50,7 @@ mutable struct OptimizationState
             slottypes = Any[ Any for i = 1:nslots ]
         end
         s_edges = []
+        stmt_info = Any[nothing for i = 1:nssavalues]
         # cache some useful state computations
         toplevel = !isa(linfo.def, Method)
         if !toplevel
@@ -53,18 +61,19 @@ mutable struct OptimizationState
             inmodule = linfo.def::Module
             nargs = 0
         end
-        return new(linfo,
+        return new(params, linfo,
                    s_edges::Vector{Any},
-                   src, inmodule, nargs,
-                   UInt(1), get_world_counter(),
-                   params, sptypes_from_meth_instance(linfo), slottypes, false)
+                   src, stmt_info, inmodule, nargs,
+                   get_world_counter(), UInt(1), get_world_counter(),
+                   sptypes_from_meth_instance(linfo), slottypes, false,
+                   IdDict{Any, Tuple{Any, UInt, UInt, Bool}}(), interp)
         end
 end
 
-function OptimizationState(linfo::MethodInstance, params::Params)
+function OptimizationState(linfo::MethodInstance, params::OptimizationParams, interp::AbstractInterpreter)
     src = retrieve_code_info(linfo)
     src === nothing && return nothing
-    return OptimizationState(linfo, src, params)
+    return OptimizationState(linfo, src, params, interp)
 end
 
 
@@ -104,7 +113,7 @@ _topmod(sv::OptimizationState) = _topmod(sv.mod)
 function update_valid_age!(min_valid::UInt, max_valid::UInt, sv::OptimizationState)
     sv.min_valid = max(sv.min_valid, min_valid)
     sv.max_valid = min(sv.max_valid, max_valid)
-    @assert(sv.min_valid <= sv.params.world <= sv.max_valid,
+    @assert(sv.min_valid <= sv.world <= sv.max_valid,
             "invalid age range update")
     nothing
 end
@@ -122,10 +131,10 @@ function add_backedge!(li::CodeInstance, caller::OptimizationState)
     nothing
 end
 
-function isinlineable(m::Method, me::OptimizationState, bonus::Int=0)
+function isinlineable(m::Method, me::OptimizationState, params::OptimizationParams, bonus::Int=0)
     # compute the cost (size) of inlining this code
     inlineable = false
-    cost_threshold = me.params.inline_cost_threshold
+    cost_threshold = params.inline_cost_threshold
     if m.module === _topmod(m.module)
         # a few functions get special treatment
         name = m.name
@@ -140,7 +149,7 @@ function isinlineable(m::Method, me::OptimizationState, bonus::Int=0)
         end
     end
     if !inlineable
-        inlineable = inline_worthy(me.src.code, me.src, me.sptypes, me.slottypes, me.params, cost_threshold + bonus)
+        inlineable = inline_worthy(me.src.code, me.src, me.sptypes, me.slottypes, params, cost_threshold + bonus)
     end
     return inlineable
 end
@@ -157,17 +166,17 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
         return !(t ⊑ Bool)
     end
     if isa(stmt, Expr)
-        return stmt.head != :loopinfo && stmt.head != :enter
+        return stmt.head !== :loopinfo && stmt.head !== :enter
     end
     return true
 end
 
 # run the optimization work
-function optimize(opt::OptimizationState, @nospecialize(result))
+function optimize(opt::OptimizationState, params::OptimizationParams, @nospecialize(result))
     def = opt.linfo.def
     nargs = Int(opt.nargs) - 1
     @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
-    force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] == :noinline, ir.meta)
+    force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
     # compute inlining and other related optimizations
     if (isa(result, Const) || isconstType(result))
@@ -179,8 +188,9 @@ function optimize(opt::OptimizationState, @nospecialize(result))
         if length(ir.stmts) < 10
             proven_pure = true
             for i in 1:length(ir.stmts)
-                stmt = ir.stmts[i]
-                if stmt_affects_purity(stmt, ir) && !stmt_effect_free(stmt, ir.types[i], ir, ir.sptypes)
+                node = ir.stmts[i]
+                stmt = node[:inst]
+                if stmt_affects_purity(stmt, ir) && !stmt_effect_free(stmt, node[:type], ir, ir.sptypes)
                     proven_pure = false
                     break
                 end
@@ -198,7 +208,7 @@ function optimize(opt::OptimizationState, @nospecialize(result))
             opt.src.pure = true
         end
 
-        if proven_pure && !coverage_enabled()
+        if proven_pure
             # use constant calling convention
             # Do not emit `jl_fptr_const_return` if coverage is enabled
             # so that we don't need to add coverage support
@@ -242,13 +252,13 @@ function optimize(opt::OptimizationState, @nospecialize(result))
         else
             bonus = 0
             if result ⊑ Tuple && !isbitstype(widenconst(result))
-                bonus = opt.params.inline_tupleret_bonus
+                bonus = params.inline_tupleret_bonus
             end
             if opt.src.inlineable
                 # For functions declared @inline, increase the cost threshold 20x
-                bonus += opt.params.inline_cost_threshold*19
+                bonus += params.inline_cost_threshold*19
             end
-            opt.src.inlineable = isinlineable(def, opt, bonus)
+            opt.src.inlineable = isinlineable(def, opt, params, bonus)
         end
     end
     nothing
@@ -262,6 +272,7 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction)
              f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.arraylen ||   # this one is volatile
              f === Intrinsics.sqrt_llvm ||  # this one may differ at runtime (by a few ulps)
+             f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
              f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
 end
 
@@ -274,9 +285,9 @@ intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref || is_pure_int
 plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 
 # known return type
-isknowntype(@nospecialize T) = (T === Union{}) || isconcretetype(T)
+isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetype(widenconst(T))
 
-function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any}, params::Params)
+function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any}, params::OptimizationParams, error_path::Bool = false)
     head = ex.head
     if is_meta_expr_head(head)
         return 0
@@ -311,7 +322,7 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}
                 return 0
             elseif (f === Main.Core.arrayref || f === Main.Core.const_arrayref) && length(ex.args) >= 3
                 atyp = argextype(ex.args[3], src, sptypes, slottypes)
-                return isknowntype(atyp) ? 4 : params.inline_nonleaf_penalty
+                return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
             end
             fidx = find_tfunc(f)
             if fidx === nothing
@@ -321,7 +332,11 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}
             end
             return T_FFUNC_COST[fidx]
         end
-        return params.inline_nonleaf_penalty
+        extyp = line == -1 ? Any : src.ssavaluetypes[line]
+        if extyp === Union{}
+            return 0
+        end
+        return error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
     elseif head === :foreigncall || head === :invoke
         # Calls whose "return type" is Union{} do not actually return:
         # they are errors. Since these are not part of the typical
@@ -330,12 +345,6 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}
         # prevent inlining.
         extyp = line == -1 ? Any : src.ssavaluetypes[line]
         return extyp === Union{} ? 0 : 20
-    elseif head === :return
-        a = ex.args[1]
-        if a isa Expr
-            return statement_cost(a, -1, src, sptypes, slottypes, params)
-        end
-        return 0
     elseif head === :(=)
         if ex.args[1] isa GlobalRef
             cost = 20
@@ -344,7 +353,7 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}
         end
         a = ex.args[2]
         if a isa Expr
-            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, slottypes, params))
+            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, slottypes, params, error_path))
         end
         return cost
     elseif head === :copyast
@@ -355,28 +364,25 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}
         # since these aren't usually performance-sensitive functions,
         # and llvm is more likely to miscompile them when these functions get large
         return typemax(Int)
-    elseif head === :gotoifnot
-        target = ex.args[2]::Int
-        # loops are generally always expensive
-        # but assume that forward jumps are already counted for from
-        # summing the cost of the not-taken branch
-        return target < line ? 40 : 0
     end
     return 0
 end
 
 function inline_worthy(body::Array{Any,1}, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any},
-                       params::Params, cost_threshold::Integer=params.inline_cost_threshold)
+                       params::OptimizationParams, cost_threshold::Integer=params.inline_cost_threshold)
     bodycost::Int = 0
+    throw_blocks = find_throw_blocks(body)
     for line = 1:length(body)
         stmt = body[line]
         if stmt isa Expr
-            thiscost = statement_cost(stmt, line, src, sptypes, slottypes, params)::Int
+            thiscost = statement_cost(stmt, line, src, sptypes, slottypes, params, line in throw_blocks)::Int
         elseif stmt isa GotoNode
             # loops are generally always expensive
             # but assume that forward jumps are already counted for from
             # summing the cost of the not-taken branch
             thiscost = stmt.label < line ? 40 : 0
+        elseif stmt isa GotoIfNot
+            thiscost = stmt.dest < line ? 40 : 0
         else
             continue
         end
@@ -407,28 +413,33 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             ssachangemap[i] += ssachangemap[i - 1]
         end
     end
-    (labelchangemap[end] != 0 && ssachangemap[end] != 0) || return
+    if labelchangemap[end] == 0 && ssachangemap[end] == 0
+        return
+    end
     for i = 1:length(body)
         el = body[i]
         if isa(el, GotoNode)
             body[i] = GotoNode(el.label + labelchangemap[el.label])
+        elseif isa(el, GotoIfNot)
+            cond = el.cond
+            if isa(cond, SSAValue)
+                cond = SSAValue(cond.id + ssachangemap[cond.id])
+            end
+            body[i] = GotoIfNot(cond, el.dest + labelchangemap[el.dest])
+        elseif isa(el, ReturnNode)
+            if isdefined(el, :val) && isa(el.val, SSAValue)
+                body[i] = ReturnNode(SSAValue(el.val.id + ssachangemap[el.val.id]))
+            end
         elseif isa(el, SSAValue)
             body[i] = SSAValue(el.id + ssachangemap[el.id])
         elseif isa(el, Expr)
-            if el.head === :gotoifnot
-                cond = el.args[1]
-                if isa(cond, SSAValue)
-                    el.args[1] = SSAValue(cond.id + ssachangemap[cond.id])
-                end
-                tgt = el.args[2]::Int
-                el.args[2] = tgt + labelchangemap[tgt]
-            elseif el.head === :enter
+            if el.head === :(=) && el.args[2] isa Expr
+                el = el.args[2]::Expr
+            end
+            if el.head === :enter
                 tgt = el.args[1]::Int
                 el.args[1] = tgt + labelchangemap[tgt]
             elseif !is_meta_expr_head(el.head)
-                if el.head === :(=) && el.args[2] isa Expr && !is_meta_expr_head(el.args[2].head)
-                    el = el.args[2]::Expr
-                end
                 args = el.args
                 for i = 1:length(args)
                     el = args[i]

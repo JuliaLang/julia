@@ -74,6 +74,8 @@ end
         end
         ST = SymTridiagonal{elty}([1,2,3,4], [1,2,3])
         @test eltype(ST) == elty
+        @test SymTridiagonal{elty, Vector{elty}}(ST) === ST
+        @test SymTridiagonal{Int64, Vector{Int64}}(ST) isa SymTridiagonal{Int64, Vector{Int64}}
         TT = Tridiagonal{elty}([1,2,3], [1,2,3,4], [1,2,3])
         @test eltype(TT) == elty
         ST = SymTridiagonal{elty,Vector{elty}}(d, GenericArray(dl))
@@ -138,12 +140,18 @@ end
 
         @test !istril(SymTridiagonal(d,dl))
         @test istril(SymTridiagonal(d,zerosdl))
+        @test !istril(SymTridiagonal(d,dl),-2)
         @test !istriu(SymTridiagonal(d,dl))
         @test istriu(SymTridiagonal(d,zerosdl))
+        @test !istriu(SymTridiagonal(d,dl),2)
         @test istriu(Tridiagonal(zerosdl,d,du))
         @test !istriu(Tridiagonal(dl,d,zerosdu))
+        @test istriu(Tridiagonal(zerosdl,zerosd,du),1)
+        @test !istriu(Tridiagonal(dl,d,zerosdu),2)
         @test istril(Tridiagonal(dl,d,zerosdu))
         @test !istril(Tridiagonal(zerosdl,d,du))
+        @test istril(Tridiagonal(dl,zerosd,zerosdu),-1)
+        @test !istril(Tridiagonal(dl,d,zerosdu),-2)
 
         @test isdiag(SymTridiagonal(d,zerosdl))
         @test !isdiag(SymTridiagonal(d,dl))
@@ -286,6 +294,11 @@ end
                 @test_throws DimensionMismatch LinearAlgebra.mul!(Cnm,B,Cnn)
             end
         end
+        @testset "Negation" begin
+            mA = -A
+            @test mA isa mat_type
+            @test -mA == A
+        end
         if mat_type == SymTridiagonal
             @testset "Tridiagonal/SymTridiagonal mixing ops" begin
                 B = convert(Tridiagonal{elty}, A)
@@ -398,6 +411,21 @@ end
     end
 end
 
+@testset "SymTridiagonal block matrix" begin
+    M = [1 2; 2 4]
+    n = 5
+    A = SymTridiagonal(fill(M, n), fill(M, n-1))
+    @test @inferred A[1,1] == Symmetric(M)
+    @test @inferred A[1,2] == M
+    @test @inferred A[2,1] == transpose(M)
+    @test @inferred diag(A, 1) == fill(M, n-1)
+    @test @inferred diag(A, 0) == fill(Symmetric(M), n)
+    @test @inferred diag(A, -1) == fill(transpose(M), n-1)
+    @test_throws ArgumentError diag(A, -2)
+    @test_throws ArgumentError diag(A, 2)
+    @test_throws ArgumentError diag(A, n+1)
+    @test_throws ArgumentError diag(A, -n-1)
+end
 
 @testset "Issue 12068" begin
     @test SymTridiagonal([1, 2], [0])^3 == [1 0; 0 8]
@@ -461,9 +489,91 @@ end
     @test cond(SymTridiagonal([1,2,3], [0,0])) ≈ 3
 end
 
-@testset "sum" begin
-    @test sum(Tridiagonal([1,2], [1,2,3], [7,8])) == 24
-    @test sum(SymTridiagonal([1,2,3], [1,2])) == 12
+@testset "sum, mapreduce" begin
+    T = Tridiagonal([1,2], [1,2,3], [7,8])
+    Tdense = Matrix(T)
+    S = SymTridiagonal([1,2,3], [1,2])
+    Sdense = Matrix(S)
+    @test sum(T) == 24
+    @test sum(S) == 12
+    @test_throws ArgumentError sum(T, dims=0)
+    @test sum(T, dims=1) == sum(Tdense, dims=1)
+    @test sum(T, dims=2) == sum(Tdense, dims=2)
+    @test sum(T, dims=3) == sum(Tdense, dims=3)
+    @test typeof(sum(T, dims=1)) == typeof(sum(Tdense, dims=1))
+    @test mapreduce(one, min, T, dims=1) == mapreduce(one, min, Tdense, dims=1)
+    @test mapreduce(one, min, T, dims=2) == mapreduce(one, min, Tdense, dims=2)
+    @test mapreduce(one, min, T, dims=3) == mapreduce(one, min, Tdense, dims=3)
+    @test typeof(mapreduce(one, min, T, dims=1)) == typeof(mapreduce(one, min, Tdense, dims=1))
+    @test mapreduce(zero, max, T, dims=1) == mapreduce(zero, max, Tdense, dims=1)
+    @test mapreduce(zero, max, T, dims=2) == mapreduce(zero, max, Tdense, dims=2)
+    @test mapreduce(zero, max, T, dims=3) == mapreduce(zero, max, Tdense, dims=3)
+    @test typeof(mapreduce(zero, max, T, dims=1)) == typeof(mapreduce(zero, max, Tdense, dims=1))
+    @test_throws ArgumentError sum(S, dims=0)
+    @test sum(S, dims=1) == sum(Sdense, dims=1)
+    @test sum(S, dims=2) == sum(Sdense, dims=2)
+    @test sum(S, dims=3) == sum(Sdense, dims=3)
+    @test typeof(sum(S, dims=1)) == typeof(sum(Sdense, dims=1))
+    @test mapreduce(one, min, S, dims=1) == mapreduce(one, min, Sdense, dims=1)
+    @test mapreduce(one, min, S, dims=2) == mapreduce(one, min, Sdense, dims=2)
+    @test mapreduce(one, min, S, dims=3) == mapreduce(one, min, Sdense, dims=3)
+    @test typeof(mapreduce(one, min, S, dims=1)) == typeof(mapreduce(one, min, Sdense, dims=1))
+    @test mapreduce(zero, max, S, dims=1) == mapreduce(zero, max, Sdense, dims=1)
+    @test mapreduce(zero, max, S, dims=2) == mapreduce(zero, max, Sdense, dims=2)
+    @test mapreduce(zero, max, S, dims=3) == mapreduce(zero, max, Sdense, dims=3)
+    @test typeof(mapreduce(zero, max, S, dims=1)) == typeof(mapreduce(zero, max, Sdense, dims=1))
+
+    T = Tridiagonal(Int[], Int[], Int[])
+    Tdense = Matrix(T)
+    S = SymTridiagonal(Int[], Int[])
+    Sdense = Matrix(S)
+    @test sum(T) == 0
+    @test sum(S) == 0
+    @test_throws ArgumentError sum(T, dims=0)
+    @test sum(T, dims=1) == sum(Tdense, dims=1)
+    @test sum(T, dims=2) == sum(Tdense, dims=2)
+    @test sum(T, dims=3) == sum(Tdense, dims=3)
+    @test typeof(sum(T, dims=1)) == typeof(sum(Tdense, dims=1))
+    @test_throws ArgumentError sum(S, dims=0)
+    @test sum(S, dims=1) == sum(Sdense, dims=1)
+    @test sum(S, dims=2) == sum(Sdense, dims=2)
+    @test sum(S, dims=3) == sum(Sdense, dims=3)
+    @test typeof(sum(S, dims=1)) == typeof(sum(Sdense, dims=1))
+
+    T = Tridiagonal(Int[], Int[2], Int[])
+    Tdense = Matrix(T)
+    S = SymTridiagonal(Int[2], Int[])
+    Sdense = Matrix(S)
+    @test sum(T) == 2
+    @test sum(S) == 2
+    @test_throws ArgumentError sum(T, dims=0)
+    @test sum(T, dims=1) == sum(Tdense, dims=1)
+    @test sum(T, dims=2) == sum(Tdense, dims=2)
+    @test sum(T, dims=3) == sum(Tdense, dims=3)
+    @test typeof(sum(T, dims=1)) == typeof(sum(Tdense, dims=1))
+    @test_throws ArgumentError sum(S, dims=0)
+    @test sum(S, dims=1) == sum(Sdense, dims=1)
+    @test sum(S, dims=2) == sum(Sdense, dims=2)
+    @test sum(S, dims=3) == sum(Sdense, dims=3)
+    @test typeof(sum(S, dims=1)) == typeof(sum(Sdense, dims=1))
+end
+
+@testset "Issue #28994 (sum of Tridigonal and UniformScaling)" begin
+    dl = [1., 1.]
+    d = [-2., -2., -2.]
+    T = Tridiagonal(dl, d, dl)
+    S = SymTridiagonal(T)
+
+    @test diag(T + 2I) == zero(d)
+    @test diag(S + 2I) == zero(d)
+end
+
+@testset "convert Tridiagonal to SymTridiagonal error" begin
+    du = rand(Float64, 4)
+    d  = rand(Float64, 5)
+    dl = rand(Float64, 4)
+    T = Tridiagonal(dl, d, du)
+    @test_throws ArgumentError SymTridiagonal{Float32}(T)
 end
 
 end # module TestTridiagonal

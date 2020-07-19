@@ -23,22 +23,22 @@ as appropriate given `S.uplo`, and `S.p`.
 # Examples
 ```jldoctest
 julia> A = [1 2; 2 3]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  2  3
 
 julia> S = bunchkaufman(A) # A gets wrapped internally by Symmetric(A)
-BunchKaufman{Float64,Array{Float64,2}}
+BunchKaufman{Float64,Matrix{Float64}}
 D factor:
-2×2 Tridiagonal{Float64,Array{Float64,1}}:
+2×2 Tridiagonal{Float64,Vector{Float64}}:
  -0.333333  0.0
   0.0       3.0
 U factor:
-2×2 UnitUpperTriangular{Float64,Array{Float64,2}}:
+2×2 UnitUpperTriangular{Float64,Matrix{Float64}}:
  1.0  0.666667
   ⋅   1.0
 permutation:
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
@@ -48,17 +48,17 @@ julia> d == S.D && u == S.U && p == S.p
 true
 
 julia> S = bunchkaufman(Symmetric(A, :L))
-BunchKaufman{Float64,Array{Float64,2}}
+BunchKaufman{Float64,Matrix{Float64}}
 D factor:
-2×2 Tridiagonal{Float64,Array{Float64,1}}:
+2×2 Tridiagonal{Float64,Vector{Float64}}:
  3.0   0.0
  0.0  -0.333333
 L factor:
-2×2 UnitLowerTriangular{Float64,Array{Float64,2}}:
+2×2 UnitLowerTriangular{Float64,Matrix{Float64}}:
  1.0        ⋅
  0.666667  1.0
 permutation:
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  2
  1
 ```
@@ -120,7 +120,7 @@ end
 
 Compute the Bunch-Kaufman [^Bunch1977] factorization of a symmetric or
 Hermitian matrix `A` as `P'*U*D*U'*P` or `P'*L*D*L'*P`, depending on
-which triangle is stored in `A`, and return a `BunchKaufman` object.
+which triangle is stored in `A`, and return a [`BunchKaufman`](@ref) object.
 Note that if `A` is complex symmetric then `U'` and `L'` denote
 the unconjugated transposes, i.e. `transpose(U)` and `transpose(L)`.
 
@@ -143,22 +143,22 @@ The following functions are available for `BunchKaufman` objects:
 # Examples
 ```jldoctest
 julia> A = [1 2; 2 3]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  2  3
 
 julia> S = bunchkaufman(A) # A gets wrapped internally by Symmetric(A)
-BunchKaufman{Float64,Array{Float64,2}}
+BunchKaufman{Float64,Matrix{Float64}}
 D factor:
-2×2 Tridiagonal{Float64,Array{Float64,1}}:
+2×2 Tridiagonal{Float64,Vector{Float64}}:
  -0.333333  0.0
   0.0       3.0
 U factor:
-2×2 UnitUpperTriangular{Float64,Array{Float64,2}}:
+2×2 UnitUpperTriangular{Float64,Matrix{Float64}}:
  1.0  0.666667
   ⋅   1.0
 permutation:
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
@@ -168,17 +168,17 @@ julia> d == S.D && u == S.U && p == S.p
 true
 
 julia> S = bunchkaufman(Symmetric(A, :L))
-BunchKaufman{Float64,Array{Float64,2}}
+BunchKaufman{Float64,Matrix{Float64}}
 D factor:
-2×2 Tridiagonal{Float64,Array{Float64,1}}:
+2×2 Tridiagonal{Float64,Vector{Float64}}:
  3.0   0.0
  0.0  -0.333333
 L factor:
-2×2 UnitLowerTriangular{Float64,Array{Float64,2}}:
+2×2 UnitLowerTriangular{Float64,Matrix{Float64}}:
  1.0        ⋅
  0.666667  1.0
 permutation:
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  2
  1
 ```
@@ -244,31 +244,31 @@ where `P` is a (symmetric) permutation matrix, `L` is a [`UnitLowerTriangular`](
 # Examples
 ```jldoctest
 julia> A = [1 2 3; 2 1 2; 3 2 1]
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1  2  3
  2  1  2
  3  2  1
 
 julia> F = bunchkaufman(Symmetric(A, :L))
-BunchKaufman{Float64,Array{Float64,2}}
+BunchKaufman{Float64,Matrix{Float64}}
 D factor:
-3×3 Tridiagonal{Float64,Array{Float64,1}}:
+3×3 Tridiagonal{Float64,Vector{Float64}}:
  1.0  3.0    ⋅
  3.0  1.0   0.0
   ⋅   0.0  -1.0
 L factor:
-3×3 UnitLowerTriangular{Float64,Array{Float64,2}}:
+3×3 UnitLowerTriangular{Float64,Matrix{Float64}}:
  1.0   ⋅    ⋅
  0.0  1.0   ⋅
  0.5  0.5  1.0
 permutation:
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  3
  2
 
 julia> F.L*F.D*F.L' - A[F.p, F.p]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  0.0  0.0  0.0
  0.0  0.0  0.0
  0.0  0.0  0.0
@@ -276,7 +276,7 @@ julia> F.L*F.D*F.L' - A[F.p, F.p]
 julia> F = bunchkaufman(Symmetric(A));
 
 julia> F.U*F.D*F.U' - F.P*A*F.P'
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  0.0  0.0  0.0
  0.0  0.0  0.0
  0.0  0.0  0.0
@@ -284,17 +284,17 @@ julia> F.U*F.D*F.U' - F.P*A*F.P'
 """
 function getproperty(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
     n = size(B, 1)
-    if d == :p
+    if d === :p
         return _ipiv2perm_bk(getfield(B, :ipiv), n, getfield(B, :uplo), B.rook)
-    elseif d == :P
+    elseif d === :P
         return Matrix{T}(I, n, n)[:,invperm(B.p)]
-    elseif d == :L || d == :U || d == :D
+    elseif d === :L || d === :U || d === :D
         if getfield(B, :rook)
             LUD, od = LAPACK.syconvf_rook!(getfield(B, :uplo), 'C', copy(getfield(B, :LD)), getfield(B, :ipiv))
         else
             LUD, od = LAPACK.syconv!(getfield(B, :uplo), copy(getfield(B, :LD)), getfield(B, :ipiv))
         end
-        if d == :D
+        if d === :D
             if getfield(B, :uplo) == 'L'
                 odl = od[1:n - 1]
                 return Tridiagonal(odl, diag(LUD), getfield(B, :symmetric) ? odl : conj.(odl))
@@ -302,7 +302,7 @@ function getproperty(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
                 odu = od[2:n]
                 return Tridiagonal(getfield(B, :symmetric) ? odu : conj.(odu), diag(LUD), odu)
             end
-        elseif d == :L
+        elseif d === :L
             if getfield(B, :uplo) == 'L'
                 return UnitLowerTriangular(LUD)
             else

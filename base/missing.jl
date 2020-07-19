@@ -34,7 +34,7 @@ Any
 ```
 
 !!! compat "Julia 1.3"
-  This function is exported as of Julia 1.3.
+    This function is exported as of Julia 1.3.
 """
 nonmissingtype(::Type{T}) where {T} = Core.Compiler.typesubtract(T, Missing)
 
@@ -135,7 +135,7 @@ round(::Type{T}, ::Missing, ::RoundingMode=RoundNearest) where {T} =
     throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
 round(::Type{T}, x::Any, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
 # to fix ambiguities
-round(::Type{T}, x::Rational, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
+round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {T>:Missing,Tr} = round(nonmissingtype_checked(T), x, r)
 round(::Type{T}, x::Rational{Bool}, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
 
 # Handle ceil, floor, and trunc separately as they have no RoundingMode argument
@@ -196,7 +196,7 @@ of the input.
 # Examples
 ```jldoctest
 julia> x = skipmissing([1, missing, 2])
-Base.SkipMissing{Array{Union{Missing, Int64},1}}(Union{Missing, Int64}[1, missing, 2])
+skipmissing(Union{Missing, Int64}[1, missing, 2])
 
 julia> sum(x)
 3
@@ -212,17 +212,17 @@ julia> argmax(x)
 3
 
 julia> collect(keys(x))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  3
 
 julia> collect(skipmissing([1, missing, 2]))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
 julia> collect(skipmissing([1 missing; 2 missing]))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 ```
@@ -259,6 +259,12 @@ keys(itr::SkipMissing) =
     v
 end
 
+function show(io::IO, s::SkipMissing)
+    print(io, "skipmissing(")
+    show(io, s.x)
+    print(io, ')')
+end
+
 # Optimized mapreduce implementation
 # The generic method is faster when !(eltype(A) >: Missing) since it does not need
 # additional loops to identify the two first non-missing values of each block
@@ -277,7 +283,7 @@ function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
         i += 1
     end
     i > ilast && return mapreduce_empty(f, op, eltype(itr))
-    a1 = ai
+    a1::eltype(itr) = ai
     i += 1
     while i <= ilast
         @inbounds ai = A[i]
@@ -362,12 +368,12 @@ but with all missing elements and those for which `f` returns `false` removed.
 # Examples
 ```jldoctest
 julia> x = [1 2; missing 4]
-2×2 Array{Union{Missing, Int64},2}:
+2×2 Matrix{Union{Missing, Int64}}:
  1         2
   missing  4
 
 julia> filter(isodd, skipmissing(x))
-1-element Array{Int64,1}:
+1-element Vector{Int64}:
  1
 ```
 """
@@ -386,6 +392,8 @@ end
 
 Return the first value in the arguments which is not equal to [`missing`](@ref),
 if any. Otherwise return `missing`.
+
+See also [`something`](@ref).
 
 # Examples
 

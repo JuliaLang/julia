@@ -60,25 +60,25 @@ julia> x = 12
 julia> typeof(x)
 Int64
 
-julia> convert(UInt8, x)
+julia> xu = convert(UInt8, x)
 0x0c
 
-julia> typeof(ans)
+julia> typeof(xu)
 UInt8
 
-julia> convert(AbstractFloat, x)
+julia> xf = convert(AbstractFloat, x)
 12.0
 
-julia> typeof(ans)
+julia> typeof(xf)
 Float64
 
 julia> a = Any[1 2 3; 4 5 6]
-2×3 Array{Any,2}:
+2×3 Matrix{Any}:
  1  2  3
  4  5  6
 
 julia> convert(Array{Float64}, a)
-2×3 Array{Float64,2}:
+2×3 Matrix{Float64}:
  1.0  2.0  3.0
  4.0  5.0  6.0
 ```
@@ -93,8 +93,8 @@ ERROR: MethodError: Cannot `convert` an object of type String to an object of ty
 ```
 
 Some languages consider parsing strings as numbers or formatting numbers as strings to be conversions
-(many dynamic languages will even perform conversion for you automatically), however Julia does
-not: even though some strings can be parsed as numbers, most strings are not valid representations
+(many dynamic languages will even perform conversion for you automatically). This is not the case in Julia.
+Even though some strings can be parsed as numbers, most strings are not valid representations
 of numbers, and only a very limited subset of them are. Therefore in Julia the dedicated [`parse`](@ref)
 function must be used to perform this operation, making it more explicit.
 
@@ -271,10 +271,10 @@ Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 This allows calls like the following to work:
 
 ```jldoctest
-julia> Rational(Int8(15),Int32(-5))
+julia> x = Rational(Int8(15),Int32(-5))
 -3//1
 
-julia> typeof(ans)
+julia> typeof(x)
 Rational{Int32}
 ```
 
@@ -297,7 +297,7 @@ promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 
 one declares that when 64-bit and 32-bit floating-point values are promoted together, they should
 be promoted to 64-bit floating-point. The promotion type does not need to be one of the argument
-types, however; the following promotion rules both occur in Julia Base:
+types. For example, the following promotion rules both occur in Julia Base:
 
 ```julia
 promote_rule(::Type{BigInt}, ::Type{Float64}) = BigFloat

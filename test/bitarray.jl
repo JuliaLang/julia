@@ -32,12 +32,12 @@ macro check_bit_operation(ex)
     Expr(:call, :check_bitop_call, nothing, map(esc, ex.args)...)
 end
 
-let t0 = time()
+let t0 = time_ns()
     global timesofar
     function timesofar(str)
         return # no-op, comment to see timings
-        t1 = time()
-        println(str, ": ", t1-t0, " seconds")
+        t1 = time_ns()
+        println(str, ": ", (t1-t0)/1e9, " seconds")
         t0 = t1
     end
 end
@@ -197,6 +197,12 @@ timesofar("utils")
                   ((x+y+z+t)%5==2 for x = 1:s2, y = 1:s2, z = 1:s3, t = 1:s4),
                   ((x+y)%5==2 for x = 1:n1 for y = 1:n2))
             @test BitArray(g) == BitArray(collect(g))
+        end
+    end
+
+    @testset "constructor from NTuple" begin
+        for nt in ((true, false, false), NTuple{0,Bool}(), (false,), (true,))
+            @test BitVector(nt) == BitVector(collect(nt))
         end
     end
 
@@ -660,6 +666,8 @@ timesofar("indexing")
     b1 = bitrand(v1)
     @test_throws ArgumentError deleteat!(b1, [1, 1, 2])
     @test_throws BoundsError deleteat!(b1, [1, length(b1)+1])
+    @test_throws BoundsError deleteat!(b1, [length(b1)+rand(1:100)])
+    @test_throws BoundsError deleteat!(bitrand(1), [-1, 0, 1])
 
     @test_throws BoundsError deleteat!(BitVector(), 1)
     @test_throws BoundsError deleteat!(BitVector(), [1])
@@ -1300,6 +1308,21 @@ timesofar("find")
     @test findnext(x->false, b1, 11) == nothing
     @test_throws BoundsError findprev(x->true, b1, 11)
     @test_throws BoundsError findnext(x->true, b1, -1)
+
+    @testset "issue 32568" for T = (UInt, BigInt)
+        for x = (1, 2)
+            @test findnext(evens, T(x)) isa keytype(evens)
+            @test findnext(iseven, evens, T(x)) isa keytype(evens)
+            @test findnext(isequal(true), evens, T(x)) isa keytype(evens)
+            @test findnext(isequal(false), evens, T(x)) isa keytype(evens)
+        end
+        for x = (3, 4)
+            @test findprev(evens, T(x)) isa keytype(evens)
+            @test findprev(iseven, evens, T(x)) isa keytype(evens)
+            @test findprev(isequal(true), evens, T(x)) isa keytype(evens)
+            @test findprev(isequal(false), evens, T(x)) isa keytype(evens)
+        end
+    end
 
     for l = [1, 63, 64, 65, 127, 128, 129]
         f = falses(l)

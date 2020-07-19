@@ -122,19 +122,6 @@ static inline int jl_mutex_trylock(jl_mutex_t *lock)
     }
     return got;
 }
-
-/* Call this function for code that could be called from either a managed
-   or an unmanaged thread */
-static inline void jl_mutex_lock_maybe_nogc(jl_mutex_t *lock)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (ptls->safepoint) {
-        jl_mutex_lock(lock);
-    } else {
-        jl_mutex_lock_nogc(lock);
-    }
-}
-
 static inline void jl_mutex_unlock_nogc(jl_mutex_t *lock) JL_NOTSAFEPOINT
 {
 #ifndef __clang_analyzer__
@@ -154,15 +141,6 @@ static inline void jl_mutex_unlock(jl_mutex_t *lock)
     jl_gc_enable_finalizers(ptls, 1);
     jl_lock_frame_pop();
     JL_SIGATOMIC_END();
-}
-
-static inline void jl_mutex_unlock_maybe_nogc(jl_mutex_t *lock) {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (ptls->safepoint) {
-        jl_mutex_unlock(lock);
-    } else {
-        jl_mutex_unlock_nogc(lock);
-    }
 }
 
 static inline void jl_mutex_init(jl_mutex_t *lock) JL_NOTSAFEPOINT

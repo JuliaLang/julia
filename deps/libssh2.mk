@@ -64,7 +64,7 @@ check-libssh2: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-checked
 
 else # USE_BINARYBUILDER_LIBSSH2
 
-LIBSSH2_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LibSSH2-v$(LIBSSH2_VER)+$(LIBSSH2_BB_REL)
+LIBSSH2_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LibSSH2_jll.jl/releases/download/LibSSH2-v$(LIBSSH2_VER)+$(LIBSSH2_BB_REL)
 LIBSSH2_BB_NAME := LibSSH2.v$(LIBSSH2_VER)
 
 $(eval $(call bb-install,libssh2,LIBSSH2,false))

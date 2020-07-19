@@ -180,7 +180,7 @@ basename(path::AbstractString) = splitdir(path)[2]
 
 If the last component of a path contains a dot, split the path into everything before the
 dot and everything including and after the dot. Otherwise, return a tuple of the argument
-unmodified and the empty string.
+unmodified and the empty string. "splitext" is short for "split extension".
 
 # Examples
 ```jldoctest
@@ -198,6 +198,9 @@ function splitext(path::String)
     a*m.captures[1], String(m.captures[2])
 end
 
+# NOTE: deprecated in 1.4
+pathsep() = path_separator
+
 """
     splitpath(path::AbstractString) -> Vector{String}
 
@@ -211,7 +214,7 @@ the path, including the root directory if present.
 # Examples
 ```jldoctest
 julia> splitpath("/home/myuser/example.jl")
-4-element Array{String,1}:
+4-element Vector{String}:
  "/"
  "home"
  "myuser"
@@ -319,7 +322,7 @@ julia> joinpath("/home/myuser", "example.jl")
 joinpath
 
 """
-    normpath(path::AbstractString) -> AbstractString
+    normpath(path::AbstractString) -> String
 
 Normalize a path, removing "." and ".." entries.
 
@@ -362,10 +365,17 @@ function normpath(path::String)
     end
     string(drive,path)
 end
+
+"""
+    normpath(path::AbstractString, paths::AbstractString...) -> String
+
+Convert a set of paths to a normalized path by joining them together and removing
+"." and ".." entries. Equivalent to `normpath(joinpath(path, paths...))`.
+"""
 normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 
 """
-    abspath(path::AbstractString) -> AbstractString
+    abspath(path::AbstractString) -> String
 
 Convert a path to an absolute path by adding the current directory if necessary.
 Also normalizes the path as in [`normpath`](@ref).
@@ -373,7 +383,7 @@ Also normalizes the path as in [`normpath`](@ref).
 abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
 
 """
-    abspath(path::AbstractString, paths::AbstractString...) -> AbstractString
+    abspath(path::AbstractString, paths::AbstractString...) -> String
 
 Convert a set of paths to an absolute path by joining them together and adding the
 current directory if necessary. Equivalent to `abspath(joinpath(path, paths...))`.

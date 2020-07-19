@@ -12,6 +12,8 @@ struct Some{T}
     value::T
 end
 
+Some(::Type{T}) where {T} = Some{Type{T}}(T)
+
 promote_rule(::Type{Some{T}}, ::Type{Some{S}}) where {T, S<:T} = Some{T}
 
 nonnothingtype(::Type{T}) where {T} = Core.Compiler.typesubtract(T, Nothing)
@@ -71,6 +73,8 @@ isnothing(::Nothing) = true
 Return the first value in the arguments which is not equal to [`nothing`](@ref),
 if any. Otherwise throw an error.
 Arguments of type [`Some`](@ref) are unwrapped.
+
+See also [`coalesce`](@ref).
 
 # Examples
 ```jldoctest

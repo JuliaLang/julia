@@ -131,7 +131,9 @@ function complete_symbol(sym, ffunc, context_module=Main)::Vector{Completion}
         # We will exclude the results that the user does not want, as well
         # as excluding Main.Main.Main, etc., because that's most likely not what
         # the user wants
-        p = s->(!Base.isdeprecated(mod, s) && s != nameof(mod) && ffunc(mod, s))
+        p = let mod=mod, modname=nameof(mod)
+            s->(!Base.isdeprecated(mod, s) && s != modname && ffunc(mod, s))
+        end
         # Looking for a binding in a module
         if mod == context_module
             # Also look in modules we got through `using`
@@ -153,11 +155,18 @@ function complete_symbol(sym, ffunc, context_module=Main)::Vector{Completion}
     else
         # Looking for a member of a type
         if t isa DataType && t != Any
-            fields = fieldnames(t)
-            for field in fields
-                s = string(field)
-                if startswith(s, name)
-                    push!(suggestions, FieldCompletion(t, field))
+            # Check for cases like Type{typeof(+)}
+            if t isa DataType && t.name === Base._TYPE_NAME
+                t = typeof(t.parameters[1])
+            end
+            # Only look for fields if this is a concrete type
+            if isconcretetype(t)
+                fields = fieldnames(t)
+                for field in fields
+                    s = string(field)
+                    if startswith(s, name)
+                        push!(suggestions, FieldCompletion(t, field))
+                    end
                 end
             end
         end
@@ -184,7 +193,7 @@ function complete_keyword(s::Union{String,SubString{String}})::Vector{Completion
     map(KeywordCompletion, sorted_keywords[r])
 end
 
-function complete_path(path::AbstractString, pos; use_envpath=false)::Completions
+function complete_path(path::AbstractString, pos; use_envpath=false, shell_escape=false)::Completions
     if Base.Sys.isunix() && occursin(r"^~(?:/|$)", path)
         # if the path is just "~", don't consider the expanded username as a prefix
         if path == "~"
@@ -259,7 +268,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false)::Completion
         end
     end
 
-    matchList = Completion[PathCompletion(replace(s, r"\s" => "\\ ")) for s in matches]
+    matchList = PathCompletion[PathCompletion(shell_escape ? replace(s, r"\s" => s"\\\0") : s) for s in matches]
     startpos = pos - lastindex(prefix) + 1 - count(isequal(' '), prefix)
     # The pos - lastindex(prefix) + 1 is correct due to `lastindex(prefix)-lastindex(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
@@ -337,7 +346,7 @@ end
 # will show it consist of Expr, QuoteNode's and Symbol's which all needs to
 # be handled differently to iterate down to get the value of whitespace_chars.
 function get_value(sym::Expr, fn)
-    sym.head != :. && return (nothing, false)
+    sym.head !== :. && return (nothing, false)
     for ex in sym.args
         fn, found = get_value(ex, fn)
         !found && return (nothing, false)
@@ -379,8 +388,8 @@ function get_type_call(expr::Expr)
     length(mt) == 1 || return (Any, false)
     m = first(mt)
     # Typeinference
-    params = Core.Compiler.Params(world)
-    return_type = Core.Compiler.typeinf_type(m[3], m[1], m[2], params)
+    interp = Core.Compiler.NativeInterpreter()
+    return_type = Core.Compiler.typeinf_type(interp, m[3], m[1], m[2])
     return_type === nothing && return (Any, false)
     return (return_type, true)
 end
@@ -388,7 +397,7 @@ end
 # Returns the return type. example: get_type(:(Base.strip("", ' ')), Main) returns (String, true)
 function try_get_type(sym::Expr, fn::Module)
     val, found = get_value(sym, fn)
-    found && return Base.typesof(val).parameters[1], found
+    found && return Core.Typeof(val), found
     if sym.head === :call
         # getfield call is special cased as the evaluation of getfield provides good type information,
         # is inexpensive and it is also performed in the complete_symbol function.
@@ -396,7 +405,7 @@ function try_get_type(sym::Expr, fn::Module)
         if isa(a1,GlobalRef) && isconst(a1.mod,a1.name) && isdefined(a1.mod,a1.name) &&
             eval(a1) === Core.getfield
             val, found = get_value_getfield(sym, Main)
-            return found ? Base.typesof(val).parameters[1] : Any, found
+            return found ? Core.Typeof(val) : Any, found
         end
         return get_type_call(sym)
     elseif sym.head === :thunk
@@ -423,7 +432,7 @@ end
 
 function get_type(sym, fn::Module)
     val, found = get_value(sym, fn)
-    return found ? Base.typesof(val).parameters[1] : Any, found
+    return found ? Core.Typeof(val) : Any, found
 end
 
 # Method completion on function call expression that look like :(max(1))
@@ -511,7 +520,7 @@ function bslash_completions(string, pos)::Tuple{Bool, Completions}
     return (false, (Completion[], 0:-1, false))
 end
 
-function dict_identifier_key(str,tag)
+function dict_identifier_key(str, tag, context_module = Main)
     if tag === :string
         str_close = str*"\""
     elseif tag === :cmd
@@ -522,7 +531,7 @@ function dict_identifier_key(str,tag)
 
     frange, end_of_identifier = find_start_brace(str_close, c_start='[', c_end=']')
     isempty(frange) && return (nothing, nothing, nothing)
-    obj = Main
+    obj = context_module
     for name in split(str[frange[1]:end_of_identifier], '.')
         Base.isidentifier(name) || return (nothing, nothing, nothing)
         sym = Symbol(name)
@@ -537,7 +546,7 @@ end
 
 # This needs to be a separate non-inlined function, see #19441
 @noinline function find_dict_matches(identifier, partial_key)
-    matches = []
+    matches = String[]
     for key in keys(identifier)
         rkey = repr(key)
         startswith(rkey,partial_key) && push!(matches,rkey)
@@ -552,12 +561,12 @@ function project_deps_get_completion_candidates(pkgstarts::String, project_file:
         for line in eachline(io)
             if occursin(Base.re_section, line)
                 state = occursin(Base.re_section_deps, line) ? :deps : :other
-            elseif state == :top
+            elseif state === :top
                 if (m = match(Base.re_name_to_string, line)) !== nothing
                     root_name = String(m.captures[1])
                     startswith(root_name, pkgstarts) && push!(loading_candidates, root_name)
                 end
-            elseif state == :deps
+            elseif state === :deps
                 if (m = match(Base.re_key_to_string, line)) !== nothing
                     dep_name = m.captures[1]
                     startswith(dep_name, pkgstarts) && push!(loading_candidates, dep_name)
@@ -574,7 +583,7 @@ function completions(string, pos, context_module=Main)::Completions
     inc_tag = Base.incomplete_tag(Meta.parse(partial, raise=false, depwarn=false))
 
     # if completing a key in a Dict
-    identifier, partial_key, loc = dict_identifier_key(partial,inc_tag)
+    identifier, partial_key, loc = dict_identifier_key(partial, inc_tag, context_module)
     if identifier !== nothing
         matches = find_dict_matches(identifier, partial_key)
         length(matches)==1 && (lastindex(string) <= pos || string[nextind(string,pos)] != ']') && (matches[1]*=']')
@@ -592,7 +601,7 @@ function completions(string, pos, context_module=Main)::Completions
 
         paths, r, success = complete_path(replace(string[r], r"\\ " => " "), pos)
 
-        if inc_tag == :string &&
+        if inc_tag === :string &&
            length(paths) == 1 &&  # Only close if there's a single choice,
            !isdir(expanduser(replace(string[startpos:prevind(string, first(r))] * paths[1].path,
                                      r"\\ " => " "))) &&  # except if it's a directory
@@ -610,23 +619,29 @@ function completions(string, pos, context_module=Main)::Completions
 
     # Make sure that only bslash_completions is working on strings
     inc_tag==:string && return String[], 0:-1, false
-    if inc_tag == :other && should_method_complete(partial)
+    if inc_tag === :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
-        ex = Meta.parse(partial[frange] * ")", raise=false, depwarn=false)
+        # strip preceding ! operator
+        s = replace(partial[frange], r"\!+([^=\(]+)" => s"\1")
+        ex = Meta.parse(s * ")", raise=false, depwarn=false)
 
         if isa(ex, Expr)
-            if ex.head==:call
+            if ex.head === :call
                 return complete_methods(ex, context_module), first(frange):method_name_end, false
-            elseif ex.head==:. && ex.args[2] isa Expr && ex.args[2].head==:tuple
+            elseif ex.head === :. && ex.args[2] isa Expr && (ex.args[2]::Expr).head === :tuple
                 return complete_methods(ex, context_module), first(frange):(method_name_end - 1), false
             end
         end
-    elseif inc_tag == :comment
+    elseif inc_tag === :comment
         return Completion[], 0:-1, false
     end
 
     dotpos = something(findprev(isequal('.'), string, pos), 0)
     startpos = nextind(string, something(findprev(in(non_identifier_chars), string, pos), 0))
+    # strip preceding ! operator
+    if (m = match(r"^\!+", string[startpos:pos])) !== nothing
+        startpos += length(m.match)
+    end
 
     ffunc = (mod,x)->true
     suggestions = Completion[]
@@ -728,7 +743,7 @@ function shell_completions(string, pos)::Completions
         # Also try looking into the env path if the user wants to complete the first argument
         use_envpath = !ignore_last_word && length(args.args) < 2
 
-        return complete_path(prefix, pos, use_envpath=use_envpath)
+        return complete_path(prefix, pos, use_envpath=use_envpath, shell_escape=true)
     elseif isexpr(arg, :incomplete) || isexpr(arg, :error)
         partial = scs[last_parse]
         ret, range = completions(partial, lastindex(partial))

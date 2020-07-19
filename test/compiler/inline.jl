@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+using Base.Meta
+using Core: ReturnNode
 
 """
 Helper to walk the AST and call a function on every node.
@@ -86,11 +88,11 @@ end
 @inline Base.getindex(v::s21074, i::Integer) = v.x[i]
 @eval f21074() = $(s21074((1,2))).x[1]
 let (src, _) = code_typed(f21074, ())[1]
-    @test src.code[end] == Expr(:return, 1)
+    @test src.code[end] == ReturnNode(1)
 end
 @eval g21074() = $(s21074((1,2)))[1]
 let (src, _) = code_typed(g21074, ())[1]
-    @test src.code[end] == Expr(:return, 1)
+    @test src.code[end] == ReturnNode(1)
 end
 
 # issue #21311
@@ -221,6 +223,11 @@ end
 f_identity_splat(t) = (t...,)
 @test length(code_typed(f_identity_splat, (Tuple{Int,Int},))[1][1].code) == 1
 
+# splatting one tuple into (,) plus zero or more empties should reduce
+# this pattern appears for example in `fill_to_length`
+f_splat_with_empties(t) = (()..., t..., ()..., ()...)
+@test length(code_typed(f_splat_with_empties, (NTuple{200,UInt8},))[1][1].code) == 1
+
 # check that <: can be fully eliminated
 struct SomeArbitraryStruct; end
 function f_subtype()
@@ -229,7 +236,7 @@ function f_subtype()
 end
 let code = code_typed(f_subtype, Tuple{})[1][1].code
     @test length(code) == 1
-    @test code[1] == Expr(:return, false)
+    @test code[1] == ReturnNode(false)
 end
 
 # check that pointerref gets deleted if unused
@@ -255,7 +262,7 @@ function foo_apply_apply_type_svec()
     Core.apply_type(A..., B.types...)
 end
 let ci = code_typed(foo_apply_apply_type_svec, Tuple{})[1].first
-    @test length(ci.code) == 1 && ci.code[1] == Expr(:return, NTuple{3, Float32})
+    @test length(ci.code) == 1 && ci.code[1] == ReturnNode(NTuple{3, Float32})
 end
 
 # The that inlining doesn't drop ambiguity errors (#30118)
@@ -265,3 +272,38 @@ b30118(x...) = c30118(x)
 
 @test_throws MethodError c30118((Base.RefValue{Type{Int64}}(), Ref(Int64)))
 @test_throws MethodError b30118(Base.RefValue{Type{Int64}}(), Ref(Int64))
+
+# Issue #34900
+f34900(x::Int, y) = x
+f34900(x, y::Int) = y
+f34900(x::Int, y::Int) = invoke(f34900, Tuple{Int, Any}, x, y)
+let ci = code_typed(f34900, Tuple{Int, Int})[1].first
+    @test length(ci.code) == 1 && isa(ci.code[1], ReturnNode) &&
+        ci.code[1].val.n == 2
+end
+
+@testset "check jl_ir_flag_inlineable for inline macro" begin
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(@inline x -> x)).source)
+    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods( x -> x)).source)
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(@inline function f(x) x end)).source)
+    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(function f(x) x end)).source)
+end
+
+const _a_global_array = [1]
+f_inline_global_getindex() = _a_global_array[1]
+let ci = code_typed(f_inline_global_getindex, Tuple{})[1].first
+    @test any(x->(isexpr(x, :call) && x.args[1] === GlobalRef(Base, :arrayref)), ci.code)
+end
+
+# Issue #29114 & #36087 - Inlining of non-tuple splats
+f_29115(x) = (x...,)
+@test @allocated(f_29115(1)) == 0
+@test @allocated(f_29115(1=>2)) == 0
+let ci = code_typed(f_29115, Tuple{Int64})[1].first
+    @test length(ci.code) == 2 && isexpr(ci.code[1], :call) &&
+        ci.code[1].args[1] === GlobalRef(Core, :tuple)
+end
+let ci = code_typed(f_29115, Tuple{Pair{Int64, Int64}})[1].first
+    @test length(ci.code) == 4 && isexpr(ci.code[1], :call) &&
+        ci.code[end-1].args[1] === GlobalRef(Core, :tuple)
+end

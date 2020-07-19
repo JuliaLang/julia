@@ -9,7 +9,7 @@
 Matrix factorization type of the `LU` factorization of a square matrix `A`. This
 is the return type of [`lu`](@ref), the corresponding matrix factorization function.
 
-The individual components of the factorization `F::LU` can be accessed via `getproperty`:
+The individual components of the factorization `F::LU` can be accessed via [`getproperty`](@ref):
 
 | Component | Description                              |
 |:----------|:-----------------------------------------|
@@ -23,18 +23,18 @@ Iterating the factorization produces the components `F.L`, `F.U`, and `F.p`.
 # Examples
 ```jldoctest
 julia> A = [4 3; 6 3]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  6  3
 
 julia> F = lu(A)
-LU{Float64,Array{Float64,2}}
+LU{Float64,Matrix{Float64}}
 L factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0       0.0
  0.666667  1.0
 U factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  6.0  3.0
  0.0  1.0
 
@@ -101,23 +101,23 @@ element type of `A`, e.g. for integer types.
 # Examples
 ```jldoctest
 julia> A = [4. 3.; 6. 3.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  4.0  3.0
  6.0  3.0
 
 julia> F = lu!(A)
-LU{Float64,Array{Float64,2}}
+LU{Float64,Matrix{Float64}}
 L factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0       0.0
  0.666667  1.0
 U factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  6.0  3.0
  0.0  1.0
 
 julia> iA = [4 3; 6 3]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  6  3
 
@@ -210,10 +210,10 @@ validity (via [`issuccess`](@ref)) lies with the user.
 
 In most cases, if `A` is a subtype `S` of `AbstractMatrix{T}` with an element
 type `T` supporting `+`, `-`, `*` and `/`, the return type is `LU{T,S{T}}`. If
-pivoting is chosen (default) the element type should also support `abs` and
-`<`.
+pivoting is chosen (default) the element type should also support [`abs`](@ref) and
+[`<`](@ref).
 
-The individual components of the factorization `F` can be accessed via `getproperty`:
+The individual components of the factorization `F` can be accessed via [`getproperty`](@ref):
 
 | Component | Description                         |
 |:----------|:------------------------------------|
@@ -243,18 +243,18 @@ The relationship between `F` and `A` is
 # Examples
 ```jldoctest
 julia> A = [4 3; 6 3]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  6  3
 
 julia> F = lu(A)
-LU{Float64,Array{Float64,2}}
+LU{Float64,Matrix{Float64}}
 L factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0       0.0
  0.666667  1.0
 U factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  6.0  3.0
  0.0  1.0
 
@@ -304,15 +304,15 @@ end
 
 function getproperty(F::LU{T,<:StridedMatrix}, d::Symbol) where T
     m, n = size(F)
-    if d == :L
+    if d === :L
         L = tril!(getfield(F, :factors)[1:m, 1:min(m,n)])
         for i = 1:min(m,n); L[i,i] = one(T); end
         return L
-    elseif d == :U
+    elseif d === :U
         return triu!(getfield(F, :factors)[1:min(m,n), 1:n])
-    elseif d == :p
+    elseif d === :p
         return ipiv2perm(getfield(F, :ipiv), m)
-    elseif d == :P
+    elseif d === :P
         return Matrix{T}(I, m, m)[:,invperm(F.p)]
     else
         getfield(F, d)
@@ -432,11 +432,11 @@ end
 (/)(adjA::Adjoint{<:Any,<:AbstractMatrix}, F::Adjoint{<:Any,<:LU}) = adjoint(F.parent \ adjA.parent)
 function (/)(trA::Transpose{<:Any,<:AbstractVector}, F::Adjoint{<:Any,<:LU})
     T = promote_type(eltype(trA), eltype(F))
-    return adjoint(ldiv!(F.parent, convert(AbstractVector{T}, conj(trA.parent))))
+    return adjoint(ldiv!(F.parent, conj!(copy_oftype(trA.parent, T))))
 end
 function (/)(trA::Transpose{<:Any,<:AbstractMatrix}, F::Adjoint{<:Any,<:LU})
     T = promote_type(eltype(trA), eltype(F))
-    return adjoint(ldiv!(F.parent, convert(AbstractMatrix{T}, conj(trA.parent))))
+    return adjoint(ldiv!(F.parent, conj!(copy_oftype(trA.parent, T))))
 end
 
 function det(F::LU{T}) where T
@@ -489,6 +489,9 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true
     dl = A.dl
     d = A.d
     du = A.du
+    if dl === du
+        throw(ArgumentError("off-diagonals of `A` must not alias"))
+    end
     du2 = fill!(similar(d, n-2), 0)::V
 
     @inbounds begin
@@ -553,7 +556,7 @@ factorize(A::Tridiagonal) = lu(A)
 
 function getproperty(F::LU{T,Tridiagonal{T,V}}, d::Symbol) where {T,V}
     m, n = size(F)
-    if d == :L
+    if d === :L
         dl = getfield(getfield(F, :factors), :dl)
         L = Array(Bidiagonal(fill!(similar(dl, n), one(T)), dl, d))
         for i = 2:n
@@ -562,15 +565,15 @@ function getproperty(F::LU{T,Tridiagonal{T,V}}, d::Symbol) where {T,V}
             L[i, 1:i - 1] = tmp
         end
         return L
-    elseif d == :U
+    elseif d === :U
         U = Array(Bidiagonal(getfield(getfield(F, :factors), :d), getfield(getfield(F, :factors), :du), d))
         for i = 1:n - 2
             U[i,i + 2] = getfield(getfield(F, :factors), :du2)[i]
         end
         return U
-    elseif d == :p
+    elseif d === :p
         return ipiv2perm(getfield(F, :ipiv), m)
-    elseif d == :P
+    elseif d === :P
         return Matrix{T}(I, m, m)[:,invperm(F.p)]
     end
     return getfield(F, d)

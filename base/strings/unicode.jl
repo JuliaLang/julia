@@ -33,7 +33,8 @@ isvalid(value)
 
 Returns `true` if the given value is valid for that type. Types currently can
 be either `AbstractChar` or `String`. Values for `AbstractChar` can be of type `AbstractChar` or [`UInt32`](@ref).
-Values for `String` can be of that type, or `Vector{UInt8}` or `SubString{String}`.
+Values for `String` can be of that type, `SubString{String}`, `Vector{UInt8}`,
+or a contiguous subarray thereof.
 
 # Examples
 ```jldoctest
@@ -46,6 +47,9 @@ true
 julia> isvalid(Char, 0xd799)
 true
 ```
+
+!!! compat "Julia 1.6"
+    Support for subarray values was added in Julia 1.6.
 """
 isvalid(T,value)
 
@@ -198,11 +202,11 @@ function normalize(
 end
 
 function normalize(s::AbstractString, nf::Symbol)
-    utf8proc_map(s, nf == :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
-                    nf == :NFD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE) :
-                    nf == :NFKC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE
+    utf8proc_map(s, nf === :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
+                    nf === :NFD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE) :
+                    nf === :NFKC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE
                                    | UTF8PROC_COMPAT) :
-                    nf == :NFKD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE
+                    nf === :NFKD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE
                                    | UTF8PROC_COMPAT) :
                     throw(ArgumentError(":$nf is not one of :NFC, :NFD, :NFKC, :NFKD")))
 end

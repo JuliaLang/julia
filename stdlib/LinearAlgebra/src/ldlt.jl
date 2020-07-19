@@ -21,20 +21,20 @@ The individual components of the factorization `F::LDLt` can be accessed via `ge
 # Examples
 ```jldoctest
 julia> S = SymTridiagonal([3., 4., 5.], [1., 2.])
-3×3 SymTridiagonal{Float64,Array{Float64,1}}:
+3×3 SymTridiagonal{Float64,Vector{Float64}}:
  3.0  1.0   ⋅
  1.0  4.0  2.0
   ⋅   2.0  5.0
 
 julia> F = ldlt(S)
-LDLt{Float64,SymTridiagonal{Float64,Array{Float64,1}}}
+LDLt{Float64,SymTridiagonal{Float64,Vector{Float64}}}
 L factor:
-3×3 UnitLowerTriangular{Float64,SymTridiagonal{Float64,Array{Float64,1}}}:
+3×3 UnitLowerTriangular{Float64,SymTridiagonal{Float64,Vector{Float64}}}:
  1.0        ⋅         ⋅
  0.333333  1.0        ⋅
  0.0       0.545455  1.0
 D factor:
-3×3 Diagonal{Float64,Array{Float64,1}}:
+3×3 Diagonal{Float64,Vector{Float64}}:
  3.0   ⋅        ⋅
   ⋅   3.66667   ⋅
   ⋅    ⋅       3.90909
@@ -64,13 +64,13 @@ Factorization{T}(F::LDLt) where {T} = LDLt{T}(F)
 
 function getproperty(F::LDLt, d::Symbol)
     Fdata = getfield(F, :data)
-    if d == :d
+    if d === :d
         return Fdata.dv
-    elseif d == :D
+    elseif d === :D
         return Diagonal(Fdata.dv)
-    elseif d == :L
+    elseif d === :L
         return UnitLowerTriangular(Fdata)
-    elseif d == :Lt
+    elseif d === :Lt
         return UnitUpperTriangular(Fdata)
     else
         return getfield(F, d)
@@ -94,7 +94,7 @@ Same as [`ldlt`](@ref), but saves space by overwriting the input `S`, instead of
 # Examples
 ```jldoctest
 julia> S = SymTridiagonal([3., 4., 5.], [1., 2.])
-3×3 SymTridiagonal{Float64,Array{Float64,1}}:
+3×3 SymTridiagonal{Float64,Vector{Float64}}:
  3.0  1.0   ⋅
  1.0  4.0  2.0
   ⋅   2.0  5.0
@@ -105,7 +105,7 @@ julia> ldltS === S
 false
 
 julia> S
-3×3 SymTridiagonal{Float64,Array{Float64,1}}:
+3×3 SymTridiagonal{Float64,Vector{Float64}}:
  3.0       0.333333   ⋅
  0.333333  3.66667   0.545455
   ⋅        0.545455  3.90909
@@ -132,7 +132,7 @@ factorization `F = ldlt(S)` is to solve the linear system of equations `Sx = b` 
 # Examples
 ```jldoctest
 julia> S = SymTridiagonal([3., 4., 5.], [1., 2.])
-3×3 SymTridiagonal{Float64,Array{Float64,1}}:
+3×3 SymTridiagonal{Float64,Vector{Float64}}:
  3.0  1.0   ⋅
  1.0  4.0  2.0
   ⋅   2.0  5.0
@@ -142,13 +142,13 @@ julia> ldltS = ldlt(S);
 julia> b = [6., 7., 8.];
 
 julia> ldltS \\ b
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  1.7906976744186047
  0.627906976744186
  1.3488372093023255
 
 julia> S \\ b
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  1.7906976744186047
  0.627906976744186
  1.3488372093023255

@@ -127,8 +127,10 @@ static uintptr_t jl_get_pc_from_ctx(const void *_ctx)
     return ((ucontext_t*)_ctx)->uc_mcontext.gregs[REG_EIP];
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_)
     return ((ucontext_t*)_ctx)->uc_mcontext.mc_eip;
-#elif defined(_OS_DARWIN_)
+#elif defined(_OS_DARWIN_) && defined(_CPU_x86_64_)
     return ((ucontext64_t*)_ctx)->uc_mcontext64->__ss.__rip;
+#elif defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+    return ((ucontext64_t*)_ctx)->uc_mcontext64->__ss.__pc;
 #elif defined(_OS_WINDOWS_) && defined(_CPU_X86_)
     return ((CONTEXT*)_ctx)->Eip;
 #elif defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
@@ -233,7 +235,7 @@ void jl_critical_error(int sig, bt_context_t *context, jl_bt_element_t *bt_data,
     if (context) {
         // Must avoid extended backtrace frames here unless we're sure bt_data
         // is properly rooted.
-        *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context, 0);
+        *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context, NULL, 1);
     }
     for (i = 0; i < n; i += jl_bt_entry_size(bt_data + i)) {
         jl_print_bt_entry_codeloc(bt_data + i);

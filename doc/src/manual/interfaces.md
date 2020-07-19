@@ -113,11 +113,11 @@ julia> Base.length(S::Squares) = S.count
 ```
 
 Now, when we ask Julia to [`collect`](@ref) all the elements into an array it can preallocate a `Vector{Int}`
-of the right size instead of blindly [`push!`](@ref)ing each element into a `Vector{Any}`:
+of the right size instead of naively [`push!`](@ref)ing each element into a `Vector{Any}`:
 
 ```jldoctest squaretype
 julia> collect(Squares(4))
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
   1
   4
   9
@@ -151,7 +151,7 @@ In our `Squares` example, we would implement `Iterators.Reverse{Squares}` method
 julia> Base.iterate(rS::Iterators.Reverse{Squares}, state=rS.itr.count) = state < 1 ? nothing : (state*state, state-1)
 
 julia> collect(Iterators.reverse(Squares(4)))
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  16
   9
   4
@@ -164,8 +164,8 @@ julia> collect(Iterators.reverse(Squares(4)))
 |:-------------------- |:-------------------------------- |
 | `getindex(X, i)`     | `X[i]`, indexed element access   |
 | `setindex!(X, v, i)` | `X[i] = v`, indexed assignment   |
-| `firstindex(X)`      | The first index                  |
-| `lastindex(X)`        | The last index, used in `X[end]` |
+| `firstindex(X)`         | The first index, used in `X[begin]` |
+| `lastindex(X)`           | The last index, used in `X[end]` |
 
 For the `Squares` iterable above, we can easily compute the `i`th element of the sequence by squaring
 it.  We can expose this as an indexing expression `S[i]`. To opt into this behavior, `Squares`
@@ -181,8 +181,8 @@ julia> Squares(100)[23]
 529
 ```
 
-Additionally, to support the syntax `S[end]`, we must define [`lastindex`](@ref) to specify the last
-valid index. It is recommended to also define [`firstindex`](@ref) to specify the first valid index:
+Additionally, to support the syntax `S[begin]` and `S[end]`, we must define [`firstindex`](@ref) and
+[`lastindex`](@ref) to specify the first and last valid indices, respectively:
 
 ```jldoctest squaretype
 julia> Base.firstindex(S::Squares) = 1
@@ -203,7 +203,7 @@ julia> Base.getindex(S::Squares, i::Number) = S[convert(Int, i)]
 julia> Base.getindex(S::Squares, I) = [S[i] for i in I]
 
 julia> Squares(10)[[3,4.,5]]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   9
  16
  25
@@ -226,7 +226,7 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | **Optional methods**                            | **Default definition**                 | **Brief description**                                                                 |
 | `IndexStyle(::Type)`                            | `IndexCartesian()`                     | Returns either `IndexLinear()` or `IndexCartesian()`. See the description below.      |
 | `getindex(A, I...)`                             | defined in terms of scalar `getindex`  | [Multidimensional and nonscalar indexing](@ref man-array-indexing)                    |
-| `setindex!(A, I...)`                            | defined in terms of scalar `setindex!` | [Multidimensional and nonscalar indexed assignment](@ref man-array-indexing)          |
+| `setindex!(A, X, I...)`                            | defined in terms of scalar `setindex!` | [Multidimensional and nonscalar indexed assignment](@ref man-array-indexing)          |
 | `iterate`                                       | defined in terms of scalar `getindex`  | Iteration                                                                             |
 | `length(A)`                                     | `prod(size(A))`                        | Number of elements                                                                    |
 | `similar(A)`                                    | `similar(A, eltype(A), size(A))`       | Return a mutable array with the same shape and element type                           |
@@ -289,19 +289,19 @@ julia> s = SquaresVector(4)
  16
 
 julia> s[s .> 8]
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
   9
  16
 
 julia> s + s
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
   2
   8
  18
  32
 
 julia> sin.(s)
-4-element Array{Float64,1}:
+4-element Vector{Float64}:
   0.8414709848078965
  -0.7568024953079282
   0.4121184852417566
@@ -565,10 +565,11 @@ end
 find_aac(bc::Base.Broadcast.Broadcasted) = find_aac(bc.args)
 find_aac(args::Tuple) = find_aac(find_aac(args[1]), Base.tail(args))
 find_aac(x) = x
+find_aac(::Tuple{}) = nothing
 find_aac(a::ArrayAndChar, rest) = a
 find_aac(::Any, rest) = find_aac(rest)
 # output
-find_aac (generic function with 5 methods)
+find_aac (generic function with 6 methods)
 ```
 
 From these definitions, one obtains the following behavior:

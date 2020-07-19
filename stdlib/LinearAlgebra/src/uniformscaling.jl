@@ -1,13 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base: copy, adjoint, getindex, show, transpose, one, zero, inv,
-             hcat, vcat, hvcat
+             hcat, vcat, hvcat, ^
 
 """
     UniformScaling{T<:Number}
 
-Generically sized uniform scaling operator defined as a scalar times the
-identity operator, `λ*I`. See also [`I`](@ref).
+Generically sized uniform scaling operator defined as a scalar times
+the identity operator, `λ*I`. Although without an explicit `size`, it
+acts similarly to a matrix in many cases and includes support for some
+indexing. See also [`I`](@ref).
+
+!!! compat "Julia 1.6"
+     Indexing using ranges is available as of Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -16,14 +21,19 @@ UniformScaling{Float64}
 2.0*I
 
 julia> A = [1. 2.; 3. 4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
 julia> J*A
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  2.0  4.0
  6.0  8.0
+
+julia> J[1:2, 1:2]
+2×2 Matrix{Float64}:
+ 2.0  0.0
+ 0.0  2.0
 ```
 """
 struct UniformScaling{T<:Number}
@@ -41,7 +51,7 @@ julia> fill(1, (5,6)) * I == fill(1, (5,6))
 true
 
 julia> [1 2im 3; 1im 2 3] * I
-2×3 Array{Complex{Int64},2}:
+2×3 Matrix{Complex{Int64}}:
  1+0im  0+2im  3+0im
  0+1im  2+0im  3+0im
 ```
@@ -59,13 +69,13 @@ Construct a `Diagonal` matrix from a `UniformScaling`.
 # Examples
 ```jldoctest
 julia> I(3)
-3×3 Diagonal{Bool,Array{Bool,1}}:
+3×3 Diagonal{Bool,Vector{Bool}}:
  1  ⋅  ⋅
  ⋅  1  ⋅
  ⋅  ⋅  1
 
 julia> (0.7*I)(3)
-3×3 Diagonal{Float64,Array{Float64,1}}:
+3×3 Diagonal{Float64,Vector{Float64}}:
  0.7   ⋅    ⋅
   ⋅   0.7   ⋅
   ⋅    ⋅   0.7
@@ -78,6 +88,28 @@ ndims(J::UniformScaling) = 2
 Base.has_offset_axes(::UniformScaling) = false
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
+getindex(x::UniformScaling, n::Integer, m::AbstractRange{<:Integer}) = getindex(x, m, n)
+function getindex(x::UniformScaling{T}, n::AbstractRange{<:Integer}, m::Integer) where T
+    v = zeros(T, length(n))
+    @inbounds for (i,ii) in enumerate(n)
+        if ii == m
+            v[i] = x.λ
+        end
+    end
+    return v
+end
+
+
+function getindex(x::UniformScaling{T}, n::AbstractRange{<:Integer}, m::AbstractRange{<:Integer}) where T
+    A = zeros(T, length(n), length(m))
+    @inbounds for (j,jj) in enumerate(m), (i,ii) in enumerate(n)
+        if ii == jj
+            A[i,j] = x.λ
+        end
+    end
+    return A
+end
+
 function show(io::IO, ::MIME"text/plain", J::UniformScaling)
     s = "$(J.λ)"
     if occursin(r"\w+\s*[\+\-]\s*\w+", s)
@@ -87,7 +119,11 @@ function show(io::IO, ::MIME"text/plain", J::UniformScaling)
 end
 copy(J::UniformScaling) = UniformScaling(J.λ)
 
+Base.convert(::Type{UniformScaling{T}}, J::UniformScaling) where {T} = UniformScaling(convert(T, J.λ))
+
 conj(J::UniformScaling) = UniformScaling(conj(J.λ))
+real(J::UniformScaling) = UniformScaling(real(J.λ))
+imag(J::UniformScaling) = UniformScaling(imag(J.λ))
 
 transpose(J::UniformScaling) = J
 adjoint(J::UniformScaling) = UniformScaling(conj(J.λ))
@@ -121,6 +157,21 @@ isposdef(J::UniformScaling) = isposdef(J.λ)
 (-)(B::BitArray{2}, J::UniformScaling)      = Array(B) - J
 (-)(J::UniformScaling, B::BitArray{2})      = J - Array(B)
 (-)(A::AbstractMatrix, J::UniformScaling)   = A + (-J)
+
+# matrix functions
+for f in ( :exp,   :log,
+           :expm1, :log1p,
+           :sqrt,  :cbrt,
+           :sin,   :cos,   :tan,
+           :asin,  :acos,  :atan,
+           :csc,   :sec,   :cot,
+           :acsc,  :asec,  :acot,
+           :sinh,  :cosh,  :tanh,
+           :asinh, :acosh, :atanh,
+           :csch,  :sech,  :coth,
+           :acsch, :asech, :acoth )
+    @eval Base.$f(J::UniformScaling) = UniformScaling($f(J.λ))
+end
 
 # Unit{Lower/Upper}Triangular matrices become {Lower/Upper}Triangular under
 # addition with a UniformScaling
@@ -181,6 +232,10 @@ end
 inv(J::UniformScaling) = UniformScaling(inv(J.λ))
 opnorm(J::UniformScaling, p::Real=2) = opnorm(J.λ, p)
 
+pinv(J::UniformScaling) = ifelse(iszero(J.λ),
+                          UniformScaling(zero(inv(J.λ))),  # type stability
+                          UniformScaling(inv(J.λ)))
+
 function det(J::UniformScaling{T}) where T
     if isone(J.λ)
         one(T)
@@ -191,10 +246,19 @@ function det(J::UniformScaling{T}) where T
     end
 end
 
+function tr(J::UniformScaling{T}) where T
+    if iszero(J.λ)
+        zero(T)
+    else
+        throw(ArgumentError("Trace of UniformScaling is only well-defined when λ = 0"))
+    end
+end
+
 *(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ*J2.λ)
 *(B::BitArray{2}, J::UniformScaling) = *(Array(B), J::UniformScaling)
 *(J::UniformScaling, B::BitArray{2}) = *(J::UniformScaling, Array(B))
 *(A::AbstractMatrix, J::UniformScaling) = A*J.λ
+*(v::AbstractVector, J::UniformScaling) = reshape(v, length(v), 1) * J
 *(J::UniformScaling, A::AbstractVecOrMat) = J.λ*A
 *(x::Number, J::UniformScaling) = UniformScaling(x*J.λ)
 *(J::UniformScaling, x::Number) = UniformScaling(J.λ*x)
@@ -202,14 +266,14 @@ end
 /(J1::UniformScaling, J2::UniformScaling) = J2.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ/J2.λ)
 /(J::UniformScaling, A::AbstractMatrix) = lmul!(J.λ, inv(A))
 /(A::AbstractMatrix, J::UniformScaling) = J.λ == 0 ? throw(SingularException(1)) : A/J.λ
+/(v::AbstractVector, J::UniformScaling) = reshape(v, length(v), 1) / J
 
 /(J::UniformScaling, x::Number) = UniformScaling(J.λ/x)
 
 \(J1::UniformScaling, J2::UniformScaling) = J1.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ\J2.λ)
-\(A::Union{Bidiagonal{T},AbstractTriangular{T}}, J::UniformScaling) where {T<:Number} =
-    rmul!(inv(A), J.λ)
 \(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 0 ? throw(SingularException(1)) : J.λ\A
 \(A::AbstractMatrix, J::UniformScaling) = rmul!(inv(A), J.λ)
+\(F::Factorization, J::UniformScaling) = F \ J(size(F,1))
 
 \(x::Number, J::UniformScaling) = UniformScaling(x\J.λ)
 
@@ -221,11 +285,22 @@ rmul!(A::AbstractMatrix, J::UniformScaling) = rmul!(A, J.λ)
 lmul!(J::UniformScaling, B::AbstractVecOrMat) = lmul!(J.λ, B)
 rdiv!(A::AbstractMatrix, J::UniformScaling) = rdiv!(A, J.λ)
 ldiv!(J::UniformScaling, B::AbstractVecOrMat) = ldiv!(J.λ, B)
+ldiv!(Y::AbstractVecOrMat, J::UniformScaling, B::AbstractVecOrMat) = (Y .= J.λ .\ B)
 
 Broadcast.broadcasted(::typeof(*), x::Number,J::UniformScaling) = UniformScaling(x*J.λ)
 Broadcast.broadcasted(::typeof(*), J::UniformScaling,x::Number) = UniformScaling(J.λ*x)
 
 Broadcast.broadcasted(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
+
+Broadcast.broadcasted(::typeof(\), x::Number,J::UniformScaling) = UniformScaling(x\J.λ)
+
+(^)(J::UniformScaling, x::Number) = UniformScaling((J.λ)^x)
+Base.literal_pow(::typeof(^), J::UniformScaling, x::Val) = UniformScaling(Base.literal_pow(^, J.λ, x))
+
+Broadcast.broadcasted(::typeof(^), J::UniformScaling, x::Number) = UniformScaling(J.λ^x)
+function Broadcast.broadcasted(::typeof(Base.literal_pow), ::typeof(^), J::UniformScaling, x::Val)
+    UniformScaling(Base.literal_pow(^, J.λ, x))
+end
 
 ==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
 

@@ -228,7 +228,7 @@ function mkpath(path::AbstractString; mode::Integer = 0o777)
     catch err
         # If there is a problem with making the directory, but the directory
         # does in fact exist, then ignore the error. Else re-throw it.
-        if !isa(err, SystemError) || !isdir(path)
+        if !isa(err, IOError) || !isdir(path)
             rethrow()
         end
     end
@@ -261,7 +261,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         try
             @static if Sys.iswindows()
                 # is writable on windows actually means "is deletable"
-                if (filemode(path) & 0o222) == 0
+                if (filemode(lstat(path)) & 0o222) == 0
                     chmod(path, 0o777)
                 end
             end
@@ -465,24 +465,31 @@ const TEMP_CLEANUP_LOCK = ReentrantLock()
 
 function temp_cleanup_later(path::AbstractString; asap::Bool=false)
     lock(TEMP_CLEANUP_LOCK)
-    TEMP_CLEANUP[path] = asap
+    # each path should only be inserted here once, but if there
+    # is a collision, let !asap win over asap: if any user might
+    # still be using the path, don't delete it until process exit
+    TEMP_CLEANUP[path] = get(TEMP_CLEANUP, path, true) & asap
     if length(TEMP_CLEANUP) > TEMP_CLEANUP_MAX[]
-        temp_cleanup_purge(false)
+        temp_cleanup_purge()
         TEMP_CLEANUP_MAX[] = max(TEMP_CLEANUP_MIN[], 2*length(TEMP_CLEANUP))
     end
     unlock(TEMP_CLEANUP_LOCK)
     return nothing
 end
 
-function temp_cleanup_purge(all::Bool=true)
+function temp_cleanup_purge(; force::Bool=false)
     need_gc = Sys.iswindows()
     for (path, asap) in TEMP_CLEANUP
-        if (all || asap) && ispath(path)
-            need_gc && GC.gc(true)
-            need_gc = false
-            rm(path, recursive=true, force=true)
+        try
+            if (force || asap) && ispath(path)
+                need_gc && GC.gc(true)
+                need_gc = false
+                rm(path, recursive=true, force=true)
+            end
+            !ispath(path) && delete!(TEMP_CLEANUP, path)
+        catch ex
+            @warn "temp cleanup" _group=:file exception=(ex, catch_backtrace())
         end
-        !ispath(path) && delete!(TEMP_CLEANUP, path)
     end
 end
 
@@ -510,20 +517,29 @@ function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     return (filename, Base.open(filename, "r+"))
 end
 
+# generate a random string from random bytes
+function _rand_string()
+    nchars = 10
+    A = Vector{UInt8}(undef, nchars)
+    windowserror("SystemFunction036 (RtlGenRandom)", 0 == ccall(
+        (:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
+            A, sizeof(A)))
+
+    slug = Base.StringVector(10)
+    chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    for i = 1:nchars
+        slug[i] = chars[(A[i] % length(chars)) + 1]
+    end
+    return name = String(slug)
+end
+
 function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
     isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
-    seed::UInt32 = rand(UInt32)
-    while true
-        if (seed & typemax(UInt16)) == 0
-            seed += 1
-        end
-        filename = _win_tempname(parent, seed)
-        if !ispath(filename)
-            cleanup && temp_cleanup_later(filename)
-            return filename
-        end
-        seed += 1
-    end
+    name = _rand_string()
+    filename = joinpath(parent, temp_prefix * name)
+    @assert !ispath(filename)
+    cleanup && temp_cleanup_later(filename)
+    return filename
 end
 
 else # !windows
@@ -694,7 +710,7 @@ back, call `readdir` with an absolute directory path and `join` set to true.
 
 By default, `readdir` sorts the list of names it returns. If you want to skip
 sorting the names and get them in the order that the file system lists them,
-you can use `readir(dir, sort=false)` to opt out of sorting.
+you can use `readdir(dir, sort=false)` to opt out of sorting.
 
 !!! compat "Julia 1.4"
     The `join` and `sort` keyword arguments require at least Julia 1.4.
@@ -837,10 +853,13 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
     dirs = Vector{eltype(content)}()
     files = Vector{eltype(content)}()
     for name in content
-        if isdir(joinpath(root, name))
-            push!(dirs, name)
-        else
+        path = joinpath(root, name)
+
+        # If we're not following symlinks, then treat all symlinks as files
+        if (!follow_symlinks && islink(path)) || !isdir(path)
             push!(files, name)
+        else
+            push!(dirs, name)
         end
     end
 
@@ -871,12 +890,11 @@ function unlink(p::AbstractString)
 end
 
 # For move command
-function rename(src::AbstractString, dst::AbstractString)
+function rename(src::AbstractString, dst::AbstractString; force::Bool=false)
     err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), src, dst)
     # on error, default to cp && rm
     if err < 0
-        # force: is already done in the mv function
-        cp(src, dst; force=false, follow_symlinks=false)
+        cp(src, dst; force=force, follow_symlinks=false)
         rm(src; recursive=true)
     end
     nothing
@@ -970,6 +988,11 @@ Change the permissions mode of `path` to `mode`. Only integer `mode`s (e.g. `0o7
 currently supported. If `recursive=true` and the path is a directory all permissions in
 that directory will be recursively changed.
 Return `path`.
+
+!!! note
+     Prior to Julia 1.6, this did not correctly manipulate filesystem ACLs
+     on Windows, therefore it would only set read-only bits on files.  It
+     now is able to manipulate ACLs.
 """
 function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
     err = ccall(:jl_fs_chmod, Int32, (Cstring, Cint), path, mode)

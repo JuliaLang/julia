@@ -52,6 +52,7 @@ end
 end
 
 y = Dates.Year(1)
+q = Dates.Quarter(1)
 m = Dates.Month(1)
 w = Dates.Week(1)
 d = Dates.Day(1)
@@ -64,6 +65,7 @@ ns = Dates.Nanosecond(1)
 emptyperiod = ((y + d) - d) - y
 @testset "Period arithmetic" begin
     @test Dates.Year(y) == y
+    @test Dates.Quarter(q) == q
     @test Dates.Month(m) == m
     @test Dates.Week(w) == w
     @test Dates.Day(d) == d
@@ -171,7 +173,22 @@ end
     @test y + Dates.Year(1f0) == Dates.Year(2)
     @test y * 4 == Dates.Year(4)
     @test y * 4f0 == Dates.Year(4)
-    @test_throws InexactError y * 3//4 == Dates.Year(1)
+    @test Dates.Year(2) * 0.5 == y
+    @test Dates.Year(2) * 3//2 == Dates.Year(3)
+    @test_throws InexactError y * 0.5
+    @test_throws InexactError y * 3//4
+    @test (1:1:5)*Second(5) === Second(5)*(1:1:5) === Second(5):Second(5):Second(25) === (1:5)*Second(5)
+    @test collect(1:1:5)*Second(5) == Second(5)*collect(1:1:5) == (1:5)*Second(5)
+    @test (Second(2):Second(2):Second(10))/Second(2) === 1.0:1.0:5.0
+    @test collect(Second(2):Second(2):Second(10))/Second(2) == 1:1:5
+    @test (Second(2):Second(2):Second(10)) / 2 === Second(1):Second(1):Second(5)
+    @test collect(Second(2):Second(2):Second(10)) / 2 == Second(1):Second(1):Second(5)
+    @test Dates.Year(4) / 2 == Dates.Year(2)
+    @test Dates.Year(4) / 2f0 == Dates.Year(2)
+    @test Dates.Year(4) / 0.5 == Dates.Year(8)
+    @test Dates.Year(4) / 2//3 == Dates.Year(6)
+    @test_throws InexactError Dates.Year(4) / 3.0
+    @test_throws InexactError Dates.Year(4) / 3//2
     @test div(y, 2) == Dates.Year(0)
     @test_throws MethodError div(2, y) == Dates.Year(2)
     @test div(y, y) == 1
@@ -274,6 +291,7 @@ end
 
 @testset "basic properties" begin
     @test Dates.Year("1") == y
+    @test Dates.Quarter("1") == q
     @test Dates.Month("1") == m
     @test Dates.Week("1") == w
     @test Dates.Day("1") == d
@@ -288,6 +306,7 @@ end
 
     dt = Dates.DateTime(2014)
     @test typeof(Dates.Year(dt)) <: Dates.Year
+    @test typeof(Dates.Quarter(dt)) <: Dates.Quarter
     @test typeof(Dates.Month(dt)) <: Dates.Month
     @test typeof(Dates.Week(dt)) <: Dates.Week
     @test typeof(Dates.Day(dt)) <: Dates.Day
@@ -298,6 +317,7 @@ end
 end
 @testset "Default values" begin
     @test Dates.default(Dates.Year) == y
+    @test Dates.default(Dates.Quarter) == q
     @test Dates.default(Dates.Month) == m
     @test Dates.default(Dates.Week) == w
     @test Dates.default(Dates.Day) == d
@@ -426,6 +446,16 @@ end
         local x, y, z
         y = Dates.Year(x)
         z = convert(Dates.Month, y)
+        @test y == z
+        @test hash(y) == hash(z)
+
+        y = Dates.Quarter(x)
+        z = convert(Dates.Month, y)
+        @test y == z
+        @test hash(y) == hash(z)
+
+        y = Dates.Year(x)
+        z = convert(Dates.Quarter, y)
         @test y == z
         @test hash(y) == hash(z)
     end

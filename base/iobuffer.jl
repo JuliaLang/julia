@@ -172,7 +172,7 @@ function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     nothing
 end
 
-function read(from::GenericIOBuffer, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
+function peek(from::GenericIOBuffer, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
     from.readable || _throw_not_readable()
     avail = bytesavailable(from)
     nb = sizeof(T)
@@ -183,7 +183,12 @@ function read(from::GenericIOBuffer, T::Union{Type{Int16},Type{UInt16},Type{Int3
         ptr::Ptr{T} = pointer(from.data, from.ptr)
         x = unsafe_load(ptr)
     end
-    from.ptr += nb
+    return x
+end
+
+function read(from::GenericIOBuffer, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
+    x = peek(from, T)
+    from.ptr += sizeof(T)
     return x
 end
 
@@ -216,7 +221,7 @@ end
     return byte
 end
 
-function peek(from::GenericIOBuffer)
+function peek(from::GenericIOBuffer, ::Type{UInt8})
     from.readable || _throw_not_readable()
     if from.ptr > from.size
         throw(EOFError())

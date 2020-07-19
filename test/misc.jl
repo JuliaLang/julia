@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+
 # Tests that do not really go anywhere else
 
 # test @assert macro
@@ -76,13 +78,25 @@ end
 @test GC.enable(true)
 
 # PR #10984
-# Disable on windows because of issue (missing flush) when redirecting stderr.
 let
     redir_err = "redirect_stderr(stdout)"
     exename = Base.julia_cmd()
-    script = "$redir_err; module A; f() = 1; end; A.f() = 1"
+    script = """
+        $redir_err
+        module A; f() = 1; end; A.f() = 1
+        A.f() = 1
+        outer() = (g() = 1; g() = 2; g)
+        """
     warning_str = read(`$exename --warn-overwrite=yes --startup-file=no -e $script`, String)
-    @test occursin("f()", warning_str)
+    @test warning_str == """
+        WARNING: Method definition f() in module A at none:2 overwritten in module Main on the same line (check for duplicate calls to `include`).
+        WARNING: Method definition f() in module Main at none:2 overwritten at none:3.
+        WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
+        """
+    warning_str = read(`$exename --startup-file=no -e $script`, String)
+    @test warning_str == """
+        WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
+        """
 end
 
 # lock / unlock
@@ -158,9 +172,18 @@ let t = @elapsed 1+1
 end
 
 let
-    val, t = @timed sin(1)
-    @test val == sin(1)
-    @test isa(t, Real) && t >= 0
+    stats = @timed sin(1)
+    @test stats.value == sin(1)
+    @test isa(stats.time, Real) && stats.time >= 0
+
+    # The return type of gcstats was changed in Julia 1.4 (# 34147)
+    # Test that the 1.0 API still works
+    val, t, bytes, gctime, gcstats = stats
+    @test val === stats.value
+    @test t === stats.time
+    @test bytes === stats.bytes
+    @test gctime === stats.gctime
+    @test gcstats === stats.gcstats
 end
 
 # problem after #11801 - at global scope
@@ -513,6 +536,15 @@ if stdout isa Base.TTY
     @test_throws KeyError stdout[:bar]
 end
 
+@testset "`displaysize` on closed TTY #34620" begin
+    Main.FakePTYs.with_fake_pty() do rawfd, _
+        tty = open(rawfd)::Base.TTY
+        @test displaysize(tty) isa Tuple{Integer,Integer}
+        close(tty)
+        @test_throws Base.IOError displaysize(tty)
+    end
+end
+
 let
     global c_18711 = 0
     buf = IOContext(IOBuffer(), :hascontext => true)
@@ -645,8 +677,9 @@ end
 
 include("testenv.jl")
 
+
 let flags = Cmd(filter(a->!occursin("depwarn", a), collect(test_exeflags)))
-    local cmd = `$test_exename $flags deprecation_exec.jl`
+    local cmd = `$test_exename $flags --depwarn=yes deprecation_exec.jl`
 
     if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
         error("Deprecation test failed, cmd : $cmd")
@@ -784,6 +817,16 @@ end
 # Pointer 0-arg constructor
 @test Ptr{Cvoid}() == C_NULL
 
+@testset "Pointer to unsigned/signed integer" begin
+    # assuming UInt and Ptr have the same size
+    @assert sizeof(UInt) == sizeof(Ptr{Nothing})
+    uint = UInt(0x12345678)
+    sint = signed(uint)
+    ptr = reinterpret(Ptr{Nothing}, uint)
+    @test unsigned(ptr) === uint
+    @test signed(ptr) === sint
+end
+
 # Finalizer with immutable should throw
 @test_throws ErrorException finalizer(x->nothing, 1)
 @test_throws ErrorException finalizer(C_NULL, 1)
@@ -792,7 +835,10 @@ end
 @testset "GC utilities" begin
     GC.gc()
     GC.gc(true); GC.gc(false)
-    GC.gc(GC.Auto); GC.gc(GC.Full); GC.gc(GC.Incremental)
 
     GC.safepoint()
+end
+
+@testset "fieldtypes Module" begin
+    @test fieldtypes(Module) isa Tuple
 end

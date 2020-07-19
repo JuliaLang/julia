@@ -35,7 +35,7 @@ let
                 @test first(reverse(dr)) < f1
                 @test last(reverse(dr)) >= f1
                 @test issorted(dr)
-                @test sortperm(dr) == 1:1:0
+                @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                 @test !(f1 in dr)
                 @test !(l1 in dr)
                 @test !(f1 - pos_step in dr)
@@ -93,7 +93,7 @@ let
                 @test first(reverse(dr)) > l1
                 @test last(reverse(dr)) <= l1
                 @test issorted(dr)
-                @test sortperm(dr) == 1:1:0
+                @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                 @test !(l1 in dr)
                 @test !(l1 in dr)
                 @test !(l1 - neg_step in dr)
@@ -153,7 +153,7 @@ let
                     @test first(reverse(dr)) < f1
                     @test last(reverse(dr)) >= f1
                     @test issorted(dr)
-                    @test sortperm(dr) == 1:1:0
+                    @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                     @test !(f1 in dr)
                     @test !(l1 in dr)
                     @test !(f1 - pos_step in dr)
@@ -211,7 +211,7 @@ let
                     @test first(reverse(dr)) > l1
                     @test last(reverse(dr)) <= l1
                     @test issorted(dr)
-                    @test sortperm(dr) == 1:1:0
+                    @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                     @test !(l1 in dr)
                     @test !(l1 in dr)
                     @test !(l1 - neg_step in dr)
@@ -582,4 +582,18 @@ a = Dates.Time(23, 1, 1)
       hash([Date("2018-1-03"), Date("2018-1-04"), Date("2018-1-05")]) ==
       hash(Date("2018-1-03"):Day(1):Date("2018-1-05"))
 
+@testset "range overflow" begin
+    # DateTime ranges interactions with overflow. If not handled correctly `Dates.len` could
+    # infinite loop
+    @test length(DateTime(0):typemax(Millisecond):DateTime(0)) == 1
+    @test length(typemax(DateTime):typemax(Millisecond):typemax(DateTime)) == 1
+
+    # Overflow interaction is easier to comprehend with using UTM extremes
+    utm_typemin = DateTime(Dates.UTM(typemin(Int64)))
+    utm_typemax = DateTime(Dates.UTM(typemax(Int64)))
+
+    @test length(utm_typemax:Millisecond(1):utm_typemax) == 1
+    @test length(utm_typemin:-Millisecond(1):utm_typemin) == 1
 end
+
+end  # RangesTest module

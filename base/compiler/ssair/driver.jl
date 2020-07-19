@@ -20,49 +20,53 @@ include("compiler/ssair/verify.jl")
 include("compiler/ssair/legacy.jl")
 #@isdefined(Base) && include("compiler/ssair/show.jl")
 
-function normalize_expr(stmt::Expr)
-    if stmt.head === :gotoifnot
-        return GotoIfNot(stmt.args[1], stmt.args[2]::Int)
-    elseif stmt.head === :return
-        return (length(stmt.args) == 0) ? ReturnNode(nothing) : ReturnNode(stmt.args[1])
-    elseif stmt.head === :unreachable
-        return ReturnNode()
-    else
-        return stmt
-    end
-end
-
 function normalize(@nospecialize(stmt), meta::Vector{Any})
     if isa(stmt, Expr)
-        if stmt.head == :meta
+        if stmt.head === :meta
             args = stmt.args
             if length(args) > 0
                 push!(meta, stmt)
             end
             return nothing
-        elseif stmt.head === :line
-            return nothing # deprecated - we shouldn't encounter this
-        else
-            return normalize_expr(stmt)
         end
     end
     return stmt
 end
 
-function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, sv::OptimizationState)
+function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, nargs::Int, sv::OptimizationState)
     # Go through and add an unreachable node after every
     # Union{} call. Then reindex labels.
     idx = 1
     oldidx = 1
     changemap = fill(0, length(code))
+    labelmap = coverage ? fill(0, length(code)) : changemap
+    prevloc = zero(eltype(ci.codelocs))
+    stmtinfo = sv.stmt_info
     while idx <= length(code)
+        codeloc = ci.codelocs[idx]
+        if coverage && codeloc != prevloc && codeloc != 0
+            # insert a side-effect instruction before the current instruction in the same basic block
+            insert!(code, idx, Expr(:code_coverage_effect))
+            insert!(ci.codelocs, idx, codeloc)
+            insert!(ci.ssavaluetypes, idx, Nothing)
+            insert!(stmtinfo, idx, nothing)
+            changemap[oldidx] += 1
+            if oldidx < length(labelmap)
+                labelmap[oldidx + 1] += 1
+            end
+            idx += 1
+            prevloc = codeloc
+        end
         if code[idx] isa Expr && ci.ssavaluetypes[idx] === Union{}
-            if !(idx < length(code) && isexpr(code[idx+1], :unreachable))
+            if !(idx < length(code) && isa(code[idx + 1], ReturnNode) && !isdefined((code[idx + 1]::ReturnNode), :val))
+                # insert unreachable in the same basic block after the current instruction (splitting it)
                 insert!(code, idx + 1, ReturnNode())
                 insert!(ci.codelocs, idx + 1, ci.codelocs[idx])
                 insert!(ci.ssavaluetypes, idx + 1, Union{})
+                insert!(stmtinfo, idx + 1, nothing)
                 if oldidx < length(changemap)
-                    changemap[oldidx + 1] = 1
+                    changemap[oldidx + 1] += 1
+                    coverage && (labelmap[oldidx + 1] += 1)
                 end
                 idx += 1
             end
@@ -70,7 +74,7 @@ function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, sv::Opt
         idx += 1
         oldidx += 1
     end
-    renumber_ir_elements!(code, changemap)
+    renumber_ir_elements!(code, changemap, labelmap)
 
     inbounds_depth = 0 # Number of stacked inbounds
     meta = Any[]
@@ -97,19 +101,26 @@ function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, sv::Opt
             end
         end
     end
-    strip_trailing_junk!(ci, code, flags)
+    strip_trailing_junk!(ci, code, stmtinfo, flags)
     cfg = compute_basic_blocks(code)
-    defuse_insts = scan_slot_def_use(nargs, ci, code)
-    @timeit "domtree 1" domtree = construct_domtree(cfg)
-    ir = let code = Any[nothing for _ = 1:length(code)]
-            IRCode(code, Any[], ci.codelocs, flags, cfg, collect(LineInfoNode, ci.linetable), sv.slottypes, meta, sv.sptypes)
-        end
-    @timeit "construct_ssa" ir = construct_ssa!(ci, code, ir, domtree, defuse_insts, nargs, sv.sptypes, sv.slottypes)
+    types = Any[]
+    stmts = InstructionStream(code, types, stmtinfo, ci.codelocs, flags)
+    ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable), sv.slottypes, meta, sv.sptypes)
+    return ir
+end
+
+function slot2reg(ir::IRCode, ci::CodeInfo, nargs::Int, sv::OptimizationState)
+    # need `ci` for the slot metadata, IR for the code
+    @timeit "domtree 1" domtree = construct_domtree(ir.cfg)
+    defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.inst)
+    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, nargs, sv.sptypes, sv.slottypes) # consumes `ir`
     return ir
 end
 
 function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
-    ir = just_construct_ssa(ci, copy_exprargs(ci.code), nargs, sv)
+    preserve_coverage = coverage_enabled(sv.mod)
+    ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, nargs, sv)
+    ir = slot2reg(ir, ci, nargs, sv)
     #@Base.show ("after_construct", ir)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)

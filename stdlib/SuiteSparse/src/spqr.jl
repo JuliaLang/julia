@@ -17,6 +17,9 @@ const ORDERING_METIS   = Int32(6) # metis(A'*A)
 const ORDERING_DEFAULT = Int32(7) # SuiteSparseQR default ordering
 const ORDERING_BEST    = Int32(8) # try COLAMD, AMD, and METIS; pick best
 const ORDERING_BESTAMD = Int32(9) # try COLAMD and AMD; pick best#
+const ORDERINGS = [ORDERING_FIXED, ORDERING_NATURAL, ORDERING_COLAMD, ORDERING_CHOLMOD,
+                   ORDERING_AMD, ORDERING_METIS, ORDERING_DEFAULT, ORDERING_BEST,
+                   ORDERING_BESTAMD]
 
 # Let [m n] = size of the matrix after pruning singletons.  The default
 # ordering strategy is to use COLAMD if m <= 2*n.  Otherwise, AMD(A'A) is
@@ -39,6 +42,8 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         H::Union{Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}        , Ptr{Cvoid}} = C_NULL,
         HPinv::Union{Ref{Ptr{CHOLMOD.SuiteSparse_long}}, Ptr{Cvoid}} = C_NULL,
         HTau::Union{Ref{Ptr{CHOLMOD.C_Dense{Tv}}}      , Ptr{Cvoid}} = C_NULL) where {Tv<:CHOLMOD.VTypes}
+
+    ordering ∈ ORDERINGS || error("unknown ordering $ordering")
 
     AA   = unsafe_load(pointer(A))
     m, n = AA.nrow, AA.ncol
@@ -63,7 +68,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         H,              # m-by-nh Householder vectors
         HPinv,          # size m row permutation
         HTau,           # 1-by-nh Householder coefficients
-        CHOLMOD.common_struct) # /* workspace and parameters */
+        CHOLMOD.common_struct[Threads.threadid()]) # /* workspace and parameters */
 
     if rnk < 0
         error("Sparse QR factorization failed")
@@ -82,7 +87,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         # the common struct is updated
         ccall((:cholmod_l_free, :libcholmod), Cvoid,
             (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{Cvoid}),
-            n, sizeof(CHOLMOD.SuiteSparse_long), e, CHOLMOD.common_struct)
+            n, sizeof(CHOLMOD.SuiteSparse_long), e, CHOLMOD.common_struct[Threads.threadid()])
     end
     hpinv = HPinv[]
     if hpinv == C_NULL
@@ -97,7 +102,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         # the common struct is updated
         ccall((:cholmod_l_free, :libcholmod), Cvoid,
             (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{Cvoid}),
-            m, sizeof(CHOLMOD.SuiteSparse_long), hpinv, CHOLMOD.common_struct)
+            m, sizeof(CHOLMOD.SuiteSparse_long), hpinv, CHOLMOD.common_struct[Threads.threadid()])
     end
 
     return rnk, _E, _HPinv
@@ -143,7 +148,53 @@ Matrix{T}(Q::QRSparseQ) where {T} = lmul!(Q, Matrix{T}(I, size(Q, 1), min(size(Q
 _default_tol(A::SparseMatrixCSC) =
     20*sum(size(A))*eps(real(eltype(A)))*maximum(norm(view(A, :, i)) for i in 1:size(A, 2))
 
-function LinearAlgebra.qr(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where {Tv <: CHOLMOD.VTypes}
+"""
+    qr(A::SparseMatrixCSC; tol=_default_tol(A), ordering=ORDERING_DEFAULT) -> QRSparse
+
+Compute the `QR` factorization of a sparse matrix `A`. Fill-reducing row and column permutations
+are used such that `F.R = F.Q'*A[F.prow,F.pcol]`. The main application of this type is to
+solve least squares or underdetermined problems with [`\\`](@ref). The function calls the C library SPQR.
+
+!!! note
+    `qr(A::SparseMatrixCSC)` uses the SPQR library that is part of SuiteSparse.
+    As this library only supports sparse matrices with [`Float64`](@ref) or
+    `ComplexF64` elements, as of Julia v1.4 `qr` converts `A` into a copy that is
+    of type `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}` as appropriate.
+
+# Examples
+```jldoctest
+julia> A = sparse([1,2,3,4], [1,1,2,2], [1.0,1.0,1.0,1.0])
+4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
+ 1.0   ⋅
+ 1.0   ⋅
+  ⋅   1.0
+  ⋅   1.0
+
+julia> qr(A)
+SuiteSparse.SPQR.QRSparse{Float64,Int64}
+Q factor:
+4×4 SuiteSparse.SPQR.QRSparseQ{Float64,Int64}:
+ -0.707107   0.0        0.0       -0.707107
+  0.0       -0.707107  -0.707107   0.0
+  0.0       -0.707107   0.707107   0.0
+ -0.707107   0.0        0.0        0.707107
+R factor:
+2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:
+ -1.41421    ⋅
+   ⋅       -1.41421
+Row permutation:
+4-element Vector{Int64}:
+ 1
+ 3
+ 4
+ 2
+Column permutation:
+2-element Vector{Int64}:
+ 1
+ 2
+```
+"""
+function LinearAlgebra.qr(A::SparseMatrixCSC{Tv}; tol=_default_tol(A), ordering=ORDERING_DEFAULT) where {Tv <: CHOLMOD.VTypes}
     R     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
     E     = Ref{Ptr{CHOLMOD.SuiteSparse_long}}()
     H     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
@@ -151,7 +202,7 @@ function LinearAlgebra.qr(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where {
     HTau  = Ref{Ptr{CHOLMOD.C_Dense{Tv}}}(C_NULL)
 
     # SPQR doesn't accept symmetric matrices so we explicitly set the stype
-    r, p, hpinv = _qr!(ORDERING_DEFAULT, tol, 0, 0, Sparse(A, 0),
+    r, p, hpinv = _qr!(ordering, tol, 0, 0, Sparse(A, 0),
         C_NULL, C_NULL, C_NULL, C_NULL,
         R, E, H, HPinv, HTau)
 
@@ -165,48 +216,17 @@ function LinearAlgebra.qr(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where {
                                     nonzeros(R_)),
                     p, hpinv)
 end
-
-"""
-    qr(A) -> QRSparse
-
-Compute the `QR` factorization of a sparse matrix `A`. Fill-reducing row and column permutations
-are used such that `F.R = F.Q'*A[F.prow,F.pcol]`. The main application of this type is to
-solve least squares or underdetermined problems with [`\\`](@ref). The function calls the C library SPQR.
-
-# Examples
-```jldoctest
-julia> A = sparse([1,2,3,4], [1,1,2,2], [1.0,1.0,1.0,1.0])
-4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
-  [1, 1]  =  1.0
-  [2, 1]  =  1.0
-  [3, 2]  =  1.0
-  [4, 2]  =  1.0
-
-julia> qr(A)
-Base.SparseArrays.SPQR.QRSparse{Float64,Int64}
-Q factor:
-4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:
- -0.707107   0.0        0.0       -0.707107
-  0.0       -0.707107  -0.707107   0.0
-  0.0       -0.707107   0.707107   0.0
- -0.707107   0.0        0.0        0.707107
-R factor:
-2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:
-  [1, 1]  =  -1.41421
-  [2, 2]  =  -1.41421
-Row permutation:
-4-element Array{Int64,1}:
- 1
- 3
- 4
- 2
-Column permutation:
-2-element Array{Int64,1}:
- 1
- 2
-```
-"""
-LinearAlgebra.qr(A::SparseMatrixCSC; tol = _default_tol(A)) = qr(A, Val{true}, tol = tol)
+LinearAlgebra.qr(A::SparseMatrixCSC{<:Union{Float16,Float32}}; tol=_default_tol(A)) =
+    qr(convert(SparseMatrixCSC{Float64}, A); tol=tol)
+LinearAlgebra.qr(A::SparseMatrixCSC{<:Union{ComplexF16,ComplexF32}}; tol=_default_tol(A)) =
+    qr(convert(SparseMatrixCSC{ComplexF64}, A); tol=tol)
+LinearAlgebra.qr(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}};
+   tol=_default_tol(A)) where {T<:AbstractFloat} =
+    throw(ArgumentError(string("matrix type ", typeof(A), "not supported. ",
+    "Try qr(convert(SparseMatrixCSC{Float64/ComplexF64,Int}, A)) for ",
+    "sparse floating point QR using SPQR or qr(Array(A)) for generic ",
+    "dense QR.")))
+LinearAlgebra.qr(A::SparseMatrixCSC; tol=_default_tol(A)) = qr(float(A); tol=tol)
 
 function LinearAlgebra.lmul!(Q::QRSparseQ, A::StridedVecOrMat)
     if size(A, 1) != size(Q, 1)
@@ -282,7 +302,7 @@ Extract factors of a QRSparse factorization. Possible values of `d` are
 julia> F = qr(sparse([1,3,2,3,4], [1,1,2,3,4], [1.0,2.0,3.0,4.0,5.0]));
 
 julia> F.Q
-4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:
+4×4 SuiteSparse.SPQR.QRSparseQ{Float64,Int64}:
  1.0  0.0  0.0  0.0
  0.0  1.0  0.0  0.0
  0.0  0.0  1.0  0.0
@@ -290,21 +310,20 @@ julia> F.Q
 
 julia> F.R
 4×4 SparseMatrixCSC{Float64,Int64} with 5 stored entries:
-  [1, 1]  =  3.0
-  [2, 2]  =  4.0
-  [3, 3]  =  5.0
-  [2, 4]  =  2.0
-  [4, 4]  =  1.0
+ 3.0   ⋅    ⋅    ⋅
+  ⋅   4.0   ⋅   2.0
+  ⋅    ⋅   5.0   ⋅
+  ⋅    ⋅    ⋅   1.0
 
 julia> F.prow
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  2
  3
  4
  1
 
 julia> F.pcol
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  2
  3
  4
@@ -312,11 +331,11 @@ julia> F.pcol
 ```
 """
 @inline function Base.getproperty(F::QRSparse, d::Symbol)
-    if d == :Q
+    if d === :Q
         return QRSparseQ(F.factors, F.τ, size(F, 2))
-    elseif d == :prow
+    elseif d === :prow
         return invperm(F.rpivinv)
-    elseif d == :pcol
+    elseif d === :pcol
         return F.cpiv
     else
         getfield(F, d)
@@ -404,6 +423,10 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
                         view(X0, Base.OneTo(rnk), :))
 
     # Apply right permutation and extract solution from X
+    # NB: cpiv == [] if SPQR was called with ORDERING_FIXED
+    if length(F.cpiv) == 0
+      return getindex(X, ntuple(i -> i == 1 ? (1:size(F,2)) : :, Val(ndims(B)))...)
+    end
     return getindex(X, ntuple(i -> i == 1 ? invperm(F.cpiv) : :, Val(ndims(B)))...)
 end
 
@@ -419,12 +442,13 @@ when the problem is underdetermined.
 ```jldoctest
 julia> A = sparse([1,2,4], [1,1,1], [1.0,1.0,1.0], 4, 2)
 4×2 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
-  [1, 1]  =  1.0
-  [2, 1]  =  1.0
-  [4, 1]  =  1.0
+ 1.0   ⋅
+ 1.0   ⋅
+  ⋅    ⋅
+ 1.0   ⋅
 
 julia> qr(A)\\fill(1.0, 4)
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
  1.0
  0.0
 ```

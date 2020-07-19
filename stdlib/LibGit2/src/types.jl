@@ -223,6 +223,9 @@ end
     push_negotiation::Ptr{Cvoid}       = C_NULL
     transport::Ptr{Cvoid}              = C_NULL
     payload::Ptr{Cvoid}                = C_NULL
+    @static if LibGit2.VERSION >= v"0.99.0"
+        resolve_url::Ptr{Cvoid}        = C_NULL
+    end
 end
 
 """
@@ -963,10 +966,46 @@ function split_cfg_entry(ce::ConfigEntry)
 end
 
 # Abstract object types
+
+"""
+    AbstractGitObject
+
+`AbstractGitObject`s must obey the following interface:
+- `obj.owner`, if present, must be a `Union{Nothing,GitRepo,GitTree}`
+- `obj.ptr`, if present, must be a `Union{Ptr{Cvoid},Ptr{SignatureStruct}}`
+"""
 abstract type AbstractGitObject end
+
+function Base.getproperty(obj::AbstractGitObject, name::Symbol)
+    # These type-assertions enforce the interface requirements above.
+    # They assist type-inference in cases where the compiler only knows that it
+    # has an `AbstractGitObject` without being certain about the concrete type.
+    # See detailed explanation in https://github.com/JuliaLang/julia/pull/36452.
+    if name === :owner
+        return getfield(obj, :owner)::Union{Nothing,GitRepo,GitTree}
+    elseif name === :ptr
+        return getfield(obj, :ptr)::Union{Ptr{Cvoid},Ptr{SignatureStruct}}
+    else
+        return getfield(obj, name)
+    end
+end
+
 Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
 
+# `GitObject`s must obey the following interface:
+# - `obj.owner` must be a `GitRepo`
+# - `obj.ptr` must be a Ptr{Cvoid}
 abstract type GitObject <: AbstractGitObject end
+
+function Base.getproperty(obj::GitObject, name::Symbol)
+    if name === :owner
+        return getfield(obj, :owner)::GitRepo
+    elseif name === :ptr
+        return getfield(obj, :ptr)::Ptr{Cvoid}
+    else
+        return getfield(obj, name)
+    end
+end
 
 for (typ, owntyp, sup, cname) in [
     (:GitRepo,           nothing,                 :AbstractGitObject, :git_repository),
@@ -1007,6 +1046,7 @@ for (typ, owntyp, sup, cname) in [
                 return obj
             end
         end
+        @eval Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::$typ) = x.ptr
     else
         @eval mutable struct $typ <: $sup
             owner::$owntyp
@@ -1021,7 +1061,8 @@ for (typ, owntyp, sup, cname) in [
                 return obj
             end
         end
-        if isa(owntyp, Expr) && owntyp.args[1] == :Union && owntyp.args[3] == :Nothing
+        @eval Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::$typ) = x.ptr
+        if isa(owntyp, Expr) && owntyp.args[1] === :Union && owntyp.args[3] === :Nothing
             @eval begin
                 $typ(ptr::Ptr{Cvoid}, fin::Bool=true) = $typ(nothing, ptr, fin)
             end
@@ -1205,7 +1246,7 @@ mutable struct UserPasswordCredential <: AbstractCredential
 end
 
 function Base.setproperty!(cred::UserPasswordCredential, name::Symbol, value)
-    if name == :pass
+    if name === :pass
         field = getfield(cred, name)
         Base.shred!(field)
     end
@@ -1240,7 +1281,7 @@ mutable struct SSHCredential <: AbstractCredential
 end
 
 function Base.setproperty!(cred::SSHCredential, name::Symbol, value)
-    if name == :pass
+    if name === :pass
         field = getfield(cred, name)
         Base.shred!(field)
     end

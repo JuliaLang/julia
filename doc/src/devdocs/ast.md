@@ -247,7 +247,7 @@ types exist in lowered form:
     Has a node type indicated by the `head` field, and an `args` field which is a `Vector{Any}` of
     subexpressions.
     While almost every part of a surface AST is represented by an `Expr`, the IR uses only a
-    limited number of `Expr`s, mostly for calls, conditional branches (`gotoifnot`), and returns.
+    limited number of `Expr`s, mostly for calls and some top-level-only forms.
 
   * `Slot`
 
@@ -258,6 +258,11 @@ types exist in lowered form:
     Slots that require per-use type annotations are represented with `TypedSlot`, which has a `typ`
     field.
 
+  * `Argument`
+
+    The same as `SlotNumber`, but appears only post-optimization. Indicates that the
+    referenced slot is an argument of the enclosing function.
+
   * `CodeInfo`
 
     Wraps the IR of a group of statements. Its `code` field is an array of expressions to execute.
@@ -266,6 +271,16 @@ types exist in lowered form:
 
     Unconditional branch. The argument is the branch target, represented as an index in
     the code array to jump to.
+
+  * `GotoIfNot`
+
+    Conditional branch. If the `cond` field evaluates to false, goes to the index identified
+    by the `dest` field.
+
+  * `ReturnNode`
+
+    Returns its argument (the `val` field) as the value of the enclosing function.
+    If the `val` field is undefined, then this represents an unreachable statement.
 
   * `QuoteNode`
 
@@ -304,10 +319,6 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `static_parameter`
 
     Reference a static parameter by index.
-
-  * `gotoifnot`
-
-    Conditional branch. If `args[1]` is false, goes to the index identified in `args[2]`.
 
   * `=`
 
@@ -356,20 +367,20 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
       * `args[2]`
 
-        A `call` expression that creates `SimpleVector` specifying its parameters
+        A `call` expression that creates a `SimpleVector` specifying its parameters
 
       * `args[3]`
 
-        A `call` expression that creates `SimpleVector` specifying its fieldnames
+        A `call` expression that creates a `SimpleVector` specifying its fieldnames
 
       * `args[4]`
 
-        A `Symbol` or `GlobalRef` specifying the supertype (e.g., `:Integer` or
-        `GlobalRef(Core, :Any)`)
+        A `Symbol`, `GlobalRef`, or `Expr` specifying the supertype (e.g., `:Integer`,
+        `GlobalRef(Core, :Any)`, or `:(Core.apply_type(AbstractArray, T, N))`)
 
       * `args[5]`
 
-        A `call` expression that creates `SimpleVector` specifying its fieldtypes
+        A `call` expression that creates a `SimpleVector` specifying its fieldtypes
 
       * `args[6]`
 
@@ -392,6 +403,10 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
     A 4-argument expression that defines a new primitive type. Arguments 1, 2, and 4
     are the same as `struct_type`. Argument 3 is the number of bits.
 
+    !!! compat "Julia 1.5"
+        `struct_type`, `abstract_type`, and `primitive_type` were removed in Julia 1.5
+        and replaced by calls to new builtins.
+
   * `global`
 
     Declares a global binding.
@@ -410,10 +425,6 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
     Similar to `new`, except field values are passed as a single tuple. Works similarly to
     `Base.splat(new)` if `new` were a first-class function, hence the name.
-
-  * `return`
-
-    Returns its argument as the value of the enclosing function.
 
   * `isdefined`
 

@@ -9,7 +9,7 @@ end
 
 function interpinner(stream::IO, greedy = false)
     startswith(stream, '$') || return
-    (eof(stream) || Char(peek(stream)) in whitespace) && return
+    (eof(stream) || peek(stream, Char) in whitespace) && return
     try
         return _parse(stream::IOBuffer, greedy = greedy)
     catch e
@@ -39,7 +39,7 @@ end
 
 toexpr(x) = x
 
-toexpr(xs::Vector{Any}) = Expr(:call, GlobalRef(Base,:getindex), Any, map(toexpr, xs)...)
+toexpr(xs::Vector{Any}) = Expr(:call, GlobalRef(Base,:getindex), Any, mapany(toexpr, xs)...)
 
 for T in Any[MD, Paragraph, Header, Link, Bold, Italic]
     @eval function toexpr(md::$T)

@@ -47,7 +47,7 @@ by defining functions and overloading them for different combinations
 of argument types, which can also be user-defined.
 For a more in-depth discussion of the rationale and advantages of Julia
 over other systems, please see the online manual:
-https://docs.julialang.org/en/latest/
+https://docs.julialang.org
 
 If a Julia source file is given as a \fIprogram\fP (optionally followed by
  arguments in \fIargs\fP) Julia will execute the program and exit.
@@ -102,6 +102,10 @@ Evaluate <expr> and display the result
 Load <file> immediately on all processors
 
 .TP
+-t, --threads <n>
+Enable n threads
+
+.TP
 -p, --procs <n>
 Run n local processes
 
@@ -126,8 +130,8 @@ Enable or disable color text
 Load or save history
 
 .TP
---compile={yes|no|all}
-Enable or disable compiler, or request exhaustive compilation
+--compile={yes|no|all|min}
+Enable or disable compiler, or request exhaustive or minimal compilation
 
 .TP
 -C, --cpu-target=<target>

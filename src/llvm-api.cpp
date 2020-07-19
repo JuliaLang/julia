@@ -8,11 +8,13 @@
 // They are not to be considered a stable API, and will be removed
 // when better package build systems are available
 
+#include "llvm-version.h"
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
 #include <llvm/ADT/Triple.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
+#include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/CallSite.h>
 #include <llvm/IR/DebugInfo.h>
@@ -23,9 +25,9 @@
 #include <llvm/IR/Module.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Transforms/IPO.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h>
 
 #include "julia.h"
-#include "llvm-version.h"
 
 using namespace llvm::legacy;
 
@@ -176,37 +178,6 @@ LLVMExtraCreateFunctionPass(const char *Name, jl_value_t *Callback)
     return wrap(new JuliaFunctionPass(Name, Callback));
 }
 
-class JuliaBasicBlockPass : public BasicBlockPass {
-public:
-    JuliaBasicBlockPass(const char *Name, jl_value_t *Callback)
-        : BasicBlockPass(CreatePassID(Name)), Callback(Callback)
-    {
-    }
-
-    bool runOnBasicBlock(BasicBlock &BB)
-    {
-        jl_value_t **argv;
-        JL_GC_PUSHARGS(argv, 2);
-        argv[0] = Callback;
-        argv[1] = jl_box_voidpointer(wrap(&BB));
-
-        jl_value_t *ret = jl_apply(argv, 2);
-        bool changed = jl_unbox_bool(ret);
-
-        JL_GC_POP();
-        return changed;
-    }
-
-private:
-    jl_value_t *Callback;
-};
-
-extern "C" JL_DLLEXPORT LLVMPassRef
-LLVMExtraCreateBasicBlockPass(const char *Name, jl_value_t *Callback)
-{
-    return wrap(new JuliaBasicBlockPass(Name, Callback));
-}
-
 
 // Various missing functions
 
@@ -219,21 +190,6 @@ extern "C" JL_DLLEXPORT LLVMContextRef LLVMExtraGetValueContext(LLVMValueRef V)
 {
     return wrap(&unwrap(V)->getContext());
 }
-
-
-#if JL_LLVM_VERSION < 80000
-extern ModulePass *createNVVMReflectPass();
-extern "C" JL_DLLEXPORT void LLVMExtraAddNVVMReflectPass(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createNVVMReflectPass());
-}
-#else
-FunctionPass *createNVVMReflectPass(unsigned int SmVersion);
-extern "C" JL_DLLEXPORT void LLVMExtraAddNVVMReflectFunctionPass(LLVMPassManagerRef PM, unsigned int SmVersion)
-{
-    unwrap(PM)->add(createNVVMReflectPass(SmVersion));
-}
-#endif
 
 extern "C" JL_DLLEXPORT void
 LLVMExtraAddTargetLibraryInfoByTiple(const char *T, LLVMPassManagerRef PM)
@@ -252,6 +208,28 @@ extern "C" JL_DLLEXPORT void LLVMExtraAddInternalizePassWithExportList(
         return false;
     };
     unwrap(PM)->add(createInternalizePass(PreserveFobj));
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAppendToUsed(LLVMModuleRef Mod,
+                                                   LLVMValueRef* Values,
+                                                   size_t Count) {
+    SmallVector<GlobalValue *, 1> GlobalValues;
+    for (auto *Value : makeArrayRef(Values, Count))
+        GlobalValues.push_back(cast<GlobalValue>(unwrap(Value)));
+    appendToUsed(*unwrap(Mod), GlobalValues);
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAppendToCompilerUsed(LLVMModuleRef Mod,
+                                                           LLVMValueRef* Values,
+                                                           size_t Count) {
+    SmallVector<GlobalValue *, 1> GlobalValues;
+    for (auto *Value : makeArrayRef(Values, Count))
+        GlobalValues.push_back(cast<GlobalValue>(unwrap(Value)));
+    appendToCompilerUsed(*unwrap(Mod), GlobalValues);
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddGenericAnalysisPasses(LLVMPassManagerRef PM) {
+    unwrap(PM)->add(createTargetTransformInfoWrapperPass(TargetIRAnalysis()));
 }
 
 
