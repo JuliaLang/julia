@@ -101,4 +101,9 @@ let
     empty!(LOAD_PATH)
     empty!(DEPOT_PATH)
 end
+
+@eval Sys begin
+    BINDIR = ""
+    STDLIB = ""
+end
 end
