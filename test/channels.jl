@@ -544,7 +544,7 @@ end
 @testset "push!(c, v) -> c" begin
     c = Channel(Inf)
     @test push!(c, nothing) === c
-  end
+end
 
 # Channel `show`
 let c = Channel(3)
